@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Logic Defense: Evolution & Order</title>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #1a1a1a; color: white; font-family: 'Courier New', monospace; user-select: none; }
+        
+        #game-container { position: relative; width: 800px; height: 600px; margin: 20px auto; border: 2px solid #444; background: #222; box-shadow: 0 0 20px rgba(0,0,0,0.5); }
+        canvas { display: block; cursor: crosshair; }
+        
+        #ui-layer { position: absolute; top: 10px; left: 10px; width: 100%; pointer-events: none; display: flex; gap: 10px; }
+        .stat-box { background: rgba(0,0,0,0.8); padding: 8px 15px; border: 1px solid #00ff00; color: #00ff00; font-weight: bold; font-size: 16px; border-radius: 4px; }
+        
+        #next-wave-btn { 
+            display: none; position: absolute; bottom: 30px; right: 30px; 
+            padding: 15px 30px; font-size: 20px; background: #ff0000; color: white; border: 2px solid white; 
+            cursor: pointer; font-weight: bold; z-index: 5; animation: pulse 2s infinite; box-shadow: 0 0 10px #ff0000; border-radius: 5px;
+        }
+        #next-wave-btn:hover { background: #ff4444; transform: scale(1.05); }
+        @keyframes pulse { 0% { box-shadow: 0 0 10px #ff0000; } 50% { box-shadow: 0 0 25px #ff0000; } 100% { box-shadow: 0 0 10px #ff0000; } }
+
+        #math-modal { 
+            display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); 
+            background: rgba(0,0,0,0.95); border: 4px solid #00ff00; padding: 30px; text-align: center; 
+            box-shadow: 0 0 50px #00ff00; z-index: 10; width: 400px; border-radius: 10px;
+        }
+        #math-question { font-size: 48px; margin: 20px 0; color: #fff; font-weight: bold; }
+        .btn-math { 
+            background: #222; color: #00ff00; border: 2px solid #00ff00; padding: 15px; margin: 10px; width: 100px;
+            font-size: 24px; cursor: pointer; font-family: inherit; transition: 0.2s; border-radius: 5px;
+        }
+        .btn-math:hover { background: #00ff00; color: #000; transform: scale(1.1); }
+
+        #build-menu { 
+            position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); 
+            display: flex; gap: 15px; background: rgba(0,0,0,0.8); padding: 10px; border-radius: 10px; border: 1px solid #555;
+        }
+        .tower-btn { 
+            width: 70px; height: 80px; background: #333; border: 2px solid #555; cursor: pointer; 
+            display: flex; flex-direction: column; align-items: center; justify-content: center; 
+            transition: 0.2s; border-radius: 5px; color: #aaa;
+        }
+        .tower-btn:hover { border-color: #fff; background: #444; color: #fff; }
+        .tower-btn.selected { border-color: #00ff00; background: #111; box-shadow: 0 0 15px #00ff00; color: #00ff00; transform: translateY(-5px); }
+        .tower-symbol { font-size: 30px; font-weight: bold; margin-bottom: 5px; }
+        .tower-cost { font-size: 14px; }
+        .tower-desc { font-size: 10px; color: #888; margin-top: 2px; }
+
+        #feedback-msg { 
+            position: absolute; top: 150px; width: 100%; text-align: center; 
+            font-size: 28px; font-weight: bold; opacity: 0; transition: opacity 0.5s; 
+            text-shadow: 2px 2px 4px #000; z-index: 6; pointer-events: none;
+        }
+        
+        /* Tooltip de Upgrade */
+        #upgrade-info {
+            position: absolute; top: 10px; right: 10px; text-align: right; font-size: 12px; color: #aaa; pointer-events: none; display: none;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="game-container">
+        <canvas id="gameCanvas" width="800" height="600"></canvas>
+
+        <div id="ui-layer">
+            <div class="stat-box">💰 Ouro: <span id="gold-display">150</span></div>
+            <div class="stat-box">🌊 Onda: <span id="wave-display">0</span></div>
+            <div class="stat-box">❤️ Vida: <span id="lives-display">20</span></div>
+            <div class="stat-box">⚖️ Bônus: <span id="mult-display">1.0x</span></div>
+        </div>
+        
+        <div id="upgrade-info">CLIQUE NA TORRE PARA EVOLUIR</div>
+
+        <div id="feedback-msg"></div>
+        <button id="next-wave-btn" onclick="startWaveCombat()">MANDAR ONDA!</button>
+
+        <div id="math-modal">
+            <div style="color: #00ff00; font-size: 16px; letter-spacing: 2px;">PROTOCOLOS DE SEGURANÇA</div>
+            <div id="math-question">2 + 2 = ?</div>
+            <div id="math-options"></div>
+        </div>
+
+        <div id="build-menu">
+            <div class="tower-btn" onclick="selectTower(0)" id="tbtn0">
+                <div class="tower-symbol" style="color:#ffeb3b">+</div>
+                <div class="tower-cost">$50</div>
+                <div class="tower-desc">Rápida</div>
+            </div>
+            <div class="tower-btn" onclick="selectTower(1)" id="tbtn1">
+                <div class="tower-symbol" style="color:#03a9f4">-</div>
+                <div class="tower-cost">$120</div>
+                <div class="tower-desc">Slow</div>
+            </div>
+            <div class="tower-btn" onclick="selectTower(2)" id="tbtn2">
+                <div class="tower-symbol" style="color:#f44336">x</div>
+                <div class="tower-cost">$300</div>
+                <div class="tower-desc">Explosão</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        const audioCtx = new AudioContext();
+
+        function playSound(type) {
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            const osc = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+            osc.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+
+            if (type === 'shoot') {
+                osc.type = 'square'; osc.frequency.setValueAtTime(400, audioCtx.currentTime); 
+                osc.frequency.exponentialRampToValueAtTime(100, audioCtx.currentTime + 0.1);
+                gainNode.gain.setValueAtTime(0.05, audioCtx.currentTime); gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
+                osc.start(); osc.stop(audioCtx.currentTime + 0.1);
+            } else if (type === 'hit') {
+                osc.type = 'sawtooth'; osc.frequency.setValueAtTime(100, audioCtx.currentTime);
+                gainNode.gain.setValueAtTime(0.05, audioCtx.currentTime); gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
+                osc.start(); osc.stop(audioCtx.currentTime + 0.1);
+            } else if (type === 'correct') {
+                osc.type = 'sine'; osc.frequency.setValueAtTime(600, audioCtx.currentTime); osc.frequency.setValueAtTime(1200, audioCtx.currentTime + 0.1);
+                gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime); gainNode.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.3);
+                osc.start(); osc.stop(audioCtx.currentTime + 0.3);
+            } else if (type === 'wrong') {
+                osc.type = 'sawtooth'; osc.frequency.setValueAtTime(100, audioCtx.currentTime); osc.frequency.linearRampToValueAtTime(50, audioCtx.currentTime + 0.3);
+                gainNode.gain.setValueAtTime(0.2, audioCtx.currentTime); gainNode.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.3);
+                osc.start(); osc.stop(audioCtx.currentTime + 0.3);
+            } else if (type === 'upgrade') {
+                 osc.type = 'triangle'; osc.frequency.setValueAtTime(300, audioCtx.currentTime); osc.frequency.linearRampToValueAtTime(600, audioCtx.currentTime + 0.2);
+                 gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime); gainNode.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.3);
+                 osc.start(); osc.stop(audioCtx.currentTime + 0.3);
+            }
+        }
+
+        // --- ESTADO ---
+        let gameState = 'START';
+        let gold = 150;
+        let lives = 20;
+        let wave = 0;
+        let goldMultiplier = 1.0;
+        let lastAnswerCorrect = true;
+        
+        let towers = [];
+        let enemies = [];
+        let bullets = [];
+        let particles = [];
+        
+        let mouseX = 0;
+        let mouseY = 0;
+        let canBuild = false; // Controle de colisão
+
+        const path = [
+            {x: 0, y: 150}, {x: 700, y: 150}, {x: 700, y: 350}, 
+            {x: 100, y: 350}, {x: 100, y: 500}, {x: 800, y: 500}
+        ];
+
+        const towerTypes = [
+            { name: "Soma", symbol: "+", cost: 50, range: 120, damage: 25, rate: 25, color: "#ffeb3b" },
+            { name: "Sub", symbol: "-", cost: 120, range: 160, damage: 8, rate: 5, color: "#03a9f4", slow: true },
+            { name: "Mult", symbol: "x", cost: 300, range: 220, damage: 120, rate: 70, color: "#f44336", splash: true }
+        ];
+        let selectedTowerIdx = -1;
+
+        // Converter numero para Romano
+        function toRoman(num) {
+            if (num >= 10) return "X+";
+            const roman = ["", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX"];
+            return roman[num];
+        }
+
+        function gameLoop() {
+            update();
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+
+        window.onload = () => { startMathPhase(); gameLoop(); };
+
+        function startMathPhase() {
+            gameState = 'MATH';
+            wave++;
+            document.getElementById('wave-display').innerText = wave;
+            document.getElementById('next-wave-btn').style.display = 'none';
+            
+            let operations = ['+', '-', 'x'];
+            if (wave % 10 === 0) operations = ['/'];
+            
+            let op = operations[Math.floor(Math.random() * operations.length)];
+            let difficulty = Math.ceil(wave / 2);
+            
+            let n1, n2, answer, questionText;
+
+            if (op === '/') {
+                n2 = Math.floor(Math.random() * 10) + 2; 
+                answer = Math.floor(Math.random() * (5 * difficulty)) + 5; 
+                n1 = n2 * answer; 
+                questionText = `CHEFE! ${n1} ÷ ${n2} = ?`;
+            } else {
+                n1 = Math.floor(Math.random() * (5 * difficulty)) + 2;
+                n2 = Math.floor(Math.random() * (5 * difficulty)) + 2;
+                if(op === '+') answer = n1 + n2;
+                if(op === '-') { if(n1 < n2) {let t=n1; n1=n2; n2=t;} answer = n1 - n2; }
+                if(op === 'x') { n1 = Math.floor(Math.random() * difficulty) + 1; n2 = Math.floor(Math.random() * 10) + 1; answer = n1 * n2; }
+                questionText = `${n1} ${op} ${n2} = ?`;
+            }
+            
+            let options = [answer];
+            while(options.length < 3) {
+                let fake = answer + Math.floor(Math.random() * 10) - 5;
+                if(fake !== answer && fake >= 0 && !options.includes(fake)) options.push(fake);
+            }
+            options.sort(() => Math.random() - 0.5);
+
+            document.getElementById('math-question').innerText = questionText;
+            const optDiv = document.getElementById('math-options');
+            optDiv.innerHTML = '';
+            options.forEach(opt => {
+                let btn = document.createElement('button');
+                btn.className = 'btn-math';
+                btn.innerText = opt;
+                btn.onclick = () => resolveMath(opt === answer);
+                optDiv.appendChild(btn);
+            });
+            document.getElementById('math-modal').style.display = 'block';
+        }
+
+        function resolveMath(isCorrect) {
+            document.getElementById('math-modal').style.display = 'none';
+            const feedback = document.getElementById('feedback-msg');
+            lastAnswerCorrect = isCorrect;
+            
+            if(isCorrect) {
+                goldMultiplier = 1.5; playSound('correct');
+                feedback.innerText = "LÓGICA CORRETA! (1.5x)"; feedback.style.color = "#00ff00";
+            } else {
+                goldMultiplier = 0.5; playSound('wrong');
+                feedback.innerText = "FALHA! (0.5x)"; feedback.style.color = "#888888";
+            }
+            
+            document.getElementById('mult-display').innerText = goldMultiplier + "x";
+            feedback.style.opacity = 1; setTimeout(() => feedback.style.opacity = 0, 3000);
+            gameState = 'BUILD';
+            document.getElementById('next-wave-btn').style.display = 'block';
+            document.getElementById('upgrade-info').style.display = 'block';
+        }
+
+        function startWaveCombat() {
+            gameState = 'COMBAT';
+            document.getElementById('next-wave-btn').style.display = 'none';
+            document.getElementById('upgrade-info').style.display = 'none';
+            selectTower(-1); 
+            spawnEnemies();
+        }
+
+        function spawnEnemies() {
+            let baseCount = 20;
+            let count = baseCount + (wave * 5);
+            if (wave % 10 === 0) count *= 2; 
+
+            // --- HP SCALING: 10% da vida base por onda ---
+            // BaseHP = 30. A cada onda soma +3 (10% de 30).
+            let baseHp = 30;
+            let hpBonus = wave * (baseHp * 0.10); 
+            
+            let spawned = 0;
+            let spawnRate = Math.max(200, 1000 - (wave * 20)); 
+            
+            let interval = setInterval(() => {
+                if(gameState !== 'COMBAT') { clearInterval(interval); return; }
+                enemies.push(new Enemy(baseHp + hpBonus, lastAnswerCorrect));
+                spawned++;
+                if(spawned >= count) clearInterval(interval);
+            }, spawnRate);
+        }
+
+        function update() {
+            if (gameState === 'COMBAT') {
+                if (enemies.length === 0) {
+                    setTimeout(() => { if(gameState === 'COMBAT') startMathPhase(); }, 1000);
+                    return; 
+                }
+            }
+            enemies.forEach(e => e.update());
+            enemies = enemies.filter(e => e.active);
+            towers.forEach(t => t.update());
+            bullets.forEach(b => b.update());
+            bullets = bullets.filter(b => b.active);
+            particles.forEach(p => p.update());
+            particles = particles.filter(p => p.life > 0);
+        }
+
+        function draw() {
+            ctx.fillStyle = '#222'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // GRID
+            if(gameState === 'BUILD') {
+                ctx.strokeStyle = '#333'; ctx.lineWidth = 1;
+                for(let i=0; i<800; i+=50) { ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i,600); ctx.stroke(); }
+                for(let i=0; i<600; i+=50) { ctx.beginPath(); ctx.moveTo(0,i); ctx.lineTo(800,i); ctx.stroke(); }
+            }
+
+            // CAMINHO
+            ctx.strokeStyle = '#111'; ctx.lineWidth = 40; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+            ctx.beginPath(); ctx.moveTo(path[0].x, path[0].y);
+            for(let i=1; i<path.length; i++) ctx.lineTo(path[i].x, path[i].y);
+            ctx.stroke();
+            ctx.strokeStyle = '#333'; ctx.lineWidth = 2; ctx.stroke();
+
+            towers.forEach(t => t.draw());
+            enemies.forEach(e => e.draw());
+            bullets.forEach(b => b.draw());
+            particles.forEach(p => p.draw());
+
+            // GHOST TOWER E LÓGICA DE COLISÃO
+            if(gameState === 'BUILD' && selectedTowerIdx > -1) {
+                const type = towerTypes[selectedTowerIdx];
+                
+                // Checar Colisão
+                canBuild = checkCollision(mouseX, mouseY);
+                const color = canBuild ? 'rgba(0, 255, 0, 0.5)' : 'rgba(255, 0, 0, 0.5)';
+
+                // Alcance
+                ctx.beginPath(); ctx.arc(mouseX, mouseY, type.range, 0, Math.PI * 2);
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.1)'; ctx.fill();
+                ctx.lineWidth = 1; ctx.strokeStyle = color; ctx.stroke();
+
+                // Torre
+                ctx.fillStyle = canBuild ? type.color : '#550000';
+                ctx.fillRect(mouseX - 15, mouseY - 15, 30, 30);
+                
+                // Preço
+                ctx.fillStyle = (gold >= type.cost) ? '#fff' : '#f00';
+                ctx.font = '12px Courier';
+                ctx.fillText(`$${type.cost}`, mouseX, mouseY - 25);
+            }
+        }
+
+        // --- SISTEMA DE COLISÃO ---
+        function checkCollision(x, y) {
+            // 1. Colisão com outras torres (raio de 35px)
+            for(let t of towers) {
+                let dist = Math.sqrt((t.x - x)**2 + (t.y - y)**2);
+                if(dist < 35) return false;
+            }
+            // 2. Colisão com o Caminho (raio de 25px do centro do caminho)
+            // Lógica simples: verificar distancia de cada segmento de linha
+            for(let i=0; i<path.length-1; i++) {
+                let p1 = path[i];
+                let p2 = path[i+1];
+                let dist = distToSegment(x, y, p1.x, p1.y, p2.x, p2.y);
+                if(dist < 30) return false; // 30px de margem (caminho tem 40px largura)
+            }
+            return true;
+        }
+
+        function distToSegment(x, y, x1, y1, x2, y2) {
+            let A = x - x1; let B = y - y1;
+            let C = x2 - x1; let D = y2 - y1;
+            let dot = A * C + B * D;
+            let len_sq = C * C + D * D;
+            let param = -1;
+            if (len_sq != 0) param = dot / len_sq;
+            let xx, yy;
+            if (param < 0) { xx = x1; yy = y1; }
+            else if (param > 1) { xx = x2; yy = y2; }
+            else { xx = x1 + param * C; yy = y1 + param * D; }
+            let dx = x - xx; let dy = y - yy;
+            return Math.sqrt(dx * dx + dy * dy);
+        }
+
+        class Enemy {
+            constructor(maxHp, isGolden) {
+                this.x = path[0].x; this.y = path[0].y;
+                this.pathIndex = 0;
+                this.speed = 1.5 + (wave * 0.05);
+                this.maxHp = maxHp;
+                this.hp = this.maxHp;
+                this.radius = 12; this.frozen = 0; this.active = true;
+                this.isGolden = isGolden;
+            }
+            update() {
+                let target = path[this.pathIndex + 1]; if(!target) return;
+                let actualSpeed = this.frozen > 0 ? this.speed * 0.4 : this.speed;
+                if(this.frozen > 0) this.frozen--;
+                let dx = target.x - this.x; let dy = target.y - this.y;
+                let dist = Math.sqrt(dx*dx + dy*dy);
+                if(dist < actualSpeed) {
+                    this.x = target.x; this.y = target.y; this.pathIndex++;
+                    if(this.pathIndex >= path.length - 1) {
+                        this.active = false; lives--; 
+                        document.getElementById('lives-display').innerText = lives;
+                        if(lives <= 0) { alert("GAME OVER!"); location.reload(); }
+                    }
+                } else { this.x += (dx / dist) * actualSpeed; this.y += (dy / dist) * actualSpeed; }
+            }
+            draw() {
+                ctx.fillStyle = this.isGolden ? (this.frozen>0?'#ccffff':'#ffd700') : (this.frozen>0?'#88ccff':'#555555');
+                ctx.beginPath(); ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2); ctx.fill();
+                ctx.lineWidth = 2; ctx.strokeStyle = '#000'; ctx.stroke();
+                ctx.fillStyle = 'red'; ctx.fillRect(this.x - 12, this.y - 20, 24, 4);
+                ctx.fillStyle = '#00ff00'; ctx.fillRect(this.x - 12, this.y - 20, 24 * (this.hp / this.maxHp), 4);
+            }
+        }
+
+        class Tower {
+            constructor(x, y, typeIdx) {
+                this.x = x; this.y = y;
+                this.type = towerTypes[typeIdx];
+                this.cooldown = 0;
+                this.level = 1;
+                // Preço de upgrade inicial
+                this.upgradeCost = this.type.cost; 
+            }
+            // Mecânica de Upgrade
+            upgrade() {
+                this.level++;
+                this.upgradeCost = this.type.cost * Math.pow(2, this.level - 1); // Custo dobra ou quadruplica
+                // Som de Upgrade
+                playSound('upgrade');
+                // Partículas
+                for(let i=0; i<10; i++) particles.push(new Particle(this.x, this.y, '#fff'));
+            }
+            getDamage() {
+                // +20% por nível (simples)
+                return this.type.damage * (1 + (0.2 * (this.level - 1)));
+            }
+            update() {
+                if(this.cooldown > 0) this.cooldown--;
+                else {
+                    let target = null; let minDst = Infinity;
+                    enemies.forEach(e => {
+                        let dst = Math.sqrt((e.x - this.x)**2 + (e.y - this.y)**2);
+                        if(dst < this.type.range && dst < minDst) { minDst = dst; target = e; }
+                    });
+                    if(target) {
+                        bullets.push(new Bullet(this.x, this.y, target, this.type, this.getDamage()));
+                        this.cooldown = this.type.rate;
+                        playSound('shoot');
+                    }
+                }
+            }
+            draw() {
+                ctx.fillStyle = '#333'; ctx.fillRect(this.x - 18, this.y - 18, 36, 36); // Base
+                
+                // Nível visual (Borda dourada se level alto)
+                if(this.level > 1) {
+                    ctx.strokeStyle = '#ffd700'; ctx.lineWidth = 2; 
+                    ctx.strokeRect(this.x - 18, this.y - 18, 36, 36);
+                }
+
+                ctx.fillStyle = this.type.color; ctx.fillRect(this.x - 15, this.y - 15, 30, 30);
+                ctx.fillStyle = 'black'; ctx.font = 'bold 20px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                ctx.fillText(this.type.symbol, this.x, this.y);
+                
+                // Número Romano do Nível
+                ctx.fillStyle = 'white'; ctx.font = 'bold 10px Arial';
+                ctx.fillText(toRoman(this.level), this.x, this.y - 20);
+            }
+        }
+
+        class Bullet {
+            constructor(x, y, target, type, damage) {
+                this.x = x; this.y = y; this.target = target; this.type = type; 
+                this.damage = damage; this.speed = 12; this.active = true;
+            }
+            update() {
+                if(!this.target || !this.target.active) { this.active = false; return; }
+                let dx = this.target.x - this.x; let dy = this.target.y - this.y;
+                let dist = Math.sqrt(dx*dx + dy*dy);
+                if(dist < this.speed) { this.hit(this.target); this.active = false; } 
+                else { this.x += (dx/dist) * this.speed; this.y += (dy/dist) * this.speed; }
+            }
+            hit(enemy) {
+                enemy.hp -= this.damage;
+                if(this.type.slow) enemy.frozen = 60;
+                for(let i=0; i<3; i++) particles.push(new Particle(enemy.x, enemy.y, this.type.color));
+                playSound('hit');
+                if(enemy.hp <= 0) {
+                    gold += Math.floor(3 * goldMultiplier); // Economia ajustada (3 ou 1)
+                    document.getElementById('gold-display').innerText = gold;
+                    enemy.active = false;
+                    for(let i=0; i<8; i++) particles.push(new Particle(enemy.x, enemy.y, '#fff'));
+                }
+            }
+            draw() {
+                ctx.fillStyle = this.type.color; ctx.beginPath(); ctx.arc(this.x, this.y, 4, 0, Math.PI*2); ctx.fill();
+            }
+        }
+
+        class Particle {
+            constructor(x, y, color) {
+                this.x = x; this.y = y; this.color = color;
+                this.vx = (Math.random() - 0.5) * 4; this.vy = (Math.random() - 0.5) * 4; this.life = 20;
+            }
+            update() { this.x += this.vx; this.y += this.vy; this.life--; }
+            draw() { ctx.globalAlpha = this.life / 20; ctx.fillStyle = this.color; ctx.fillRect(this.x, this.y, 3, 3); ctx.globalAlpha = 1; }
+        }
+
+        function selectTower(idx) {
+            [0,1,2].forEach(i => document.getElementById('tbtn'+i).classList.remove('selected'));
+            if(selectedTowerIdx === idx) { selectedTowerIdx = -1; } 
+            else { selectedTowerIdx = idx; if(idx > -1) document.getElementById('tbtn'+idx).classList.add('selected'); }
+        }
+
+        canvas.addEventListener('mousemove', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            mouseX = e.clientX - rect.left; mouseY = e.clientY - rect.top;
+        });
+
+        // --- CLIQUE INTELIGENTE ---
+        canvas.addEventListener('mousedown', (e) => {
+            if(gameState !== 'BUILD') return;
+            
+            // 1. Verificar se clicou em uma torre existente (UPGRADE)
+            for(let t of towers) {
+                let dist = Math.sqrt((t.x - mouseX)**2 + (t.y - mouseY)**2);
+                if(dist < 20) {
+                    // Tentar Evoluir
+                    if(gold >= t.upgradeCost) {
+                        gold -= t.upgradeCost;
+                        document.getElementById('gold-display').innerText = gold;
+                        t.upgrade();
+                        
+                        // Feedback Visual de Custo
+                        const fb = document.getElementById('feedback-msg');
+                        fb.innerText = "UPGRADE! -" + t.upgradeCost/2; // Mostra custo pago (ajuste visual se quiser)
+                        fb.style.color = "#00ff00"; fb.style.opacity = 1; setTimeout(()=>fb.style.opacity=0, 500);
+                    } else {
+                        const fb = document.getElementById('feedback-msg');
+                        fb.innerText = "FALTA OURO: $" + t.upgradeCost;
+                        fb.style.color = "red"; fb.style.opacity = 1; setTimeout(()=>fb.style.opacity=0, 1000);
+                    }
+                    return; // Se clicou em torre, não constrói
+                }
+            }
+
+            // 2. Construir Nova Torre
+            if(selectedTowerIdx > -1) {
+                if(canBuild) {
+                    const type = towerTypes[selectedTowerIdx];
+                    if(gold >= type.cost) {
+                        towers.push(new Tower(mouseX, mouseY, selectedTowerIdx));
+                        gold -= type.cost;
+                        document.getElementById('gold-display').innerText = gold;
+                        for(let i=0; i<5; i++) particles.push(new Particle(mouseX, mouseY, '#00ff00'));
+                        playSound('correct');
+                    } else {
+                        const fb = document.getElementById('feedback-msg');
+                        fb.innerText = "OURO INSUFICIENTE!";
+                        fb.style.color = "red"; fb.style.opacity = 1; setTimeout(() => fb.style.opacity = 0, 1000);
+                    }
+                } else {
+                    // Feedback de Bloqueio
+                    const fb = document.getElementById('feedback-msg');
+                    fb.innerText = "LOCAL BLOQUEADO!";
+                    fb.style.color = "orange"; fb.style.opacity = 1; setTimeout(() => fb.style.opacity = 0, 1000);
+                    playSound('wrong');
+                }
+            }
+        });
+    </script>
+</body>
+</html>
