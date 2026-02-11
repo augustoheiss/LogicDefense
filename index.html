@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Logic Defense: Stats & Heal</title>
+    <title>Logic Defense: Final Polish</title>
     <style>
         body { margin: 0; overflow: hidden; background-color: #1a1a1a; color: white; font-family: 'Courier New', monospace; user-select: none; }
         
@@ -12,8 +12,6 @@
         
         #ui-layer { position: absolute; top: 10px; left: 10px; width: 100%; pointer-events: none; display: flex; flex-wrap: wrap; gap: 10px; }
         .stat-box { background: rgba(0,0,0,0.8); padding: 8px 12px; border: 1px solid #00ff00; color: #00ff00; font-weight: bold; font-size: 14px; border-radius: 4px; }
-        
-        /* NOVOS PLACARES */
         .score-box { border-color: #fff; color: #fff; }
         
         #speed-btn {
@@ -22,8 +20,9 @@
         }
         #speed-btn.active { background: #ff9800; color: black; border-color: #ff9800; box-shadow: 0 0 10px #ff9800; }
 
+        /* POSIÇÃO CORRIGIDA: MAIS ALTO E MAIS ESQUERDA PARA NÃO COBRIR O MENU */
         #next-wave-btn { 
-            display: none; position: absolute; bottom: 30px; right: 30px; 
+            display: none; position: absolute; bottom: 140px; right: 40px; 
             padding: 15px 30px; font-size: 20px; background: #ff0000; color: white; border: 2px solid white; 
             cursor: pointer; font-weight: bold; z-index: 5; animation: pulse 2s infinite; box-shadow: 0 0 10px #ff0000; border-radius: 5px;
         }
@@ -49,7 +48,21 @@
         #build-menu { 
             position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); 
             display: flex; gap: 15px; background: rgba(0,0,0,0.8); padding: 10px; border-radius: 10px; border: 1px solid #555;
+            transition: 0.3s;
         }
+        
+        /* ANIMAÇÃO DE ATENÇÃO PARA CONSTRUIR */
+        @keyframes attention-pulse {
+            0% { box-shadow: 0 0 0 rgba(0, 255, 0, 0); border-color: #555; }
+            50% { box-shadow: 0 0 20px rgba(0, 255, 0, 0.8); border-color: #00ff00; }
+            100% { box-shadow: 0 0 0 rgba(0, 255, 0, 0); border-color: #555; }
+        }
+        
+        .build-glow {
+            animation: attention-pulse 1.5s infinite;
+            border: 1px solid #00ff00 !important;
+        }
+
         .tower-btn { 
             width: 70px; height: 80px; background: #333; border: 2px solid #555; cursor: pointer; 
             display: flex; flex-direction: column; align-items: center; justify-content: center; 
@@ -84,7 +97,6 @@
             <div class="stat-box">⚖️ <span id="mult-display">1.0x</span></div>
             <div class="stat-box score-box">✅ <span id="score-correct">0</span></div>
             <div class="stat-box score-box" style="border-color: #f00; color: #f00;">❌ <span id="score-wrong">0</span></div>
-            
             <button id="speed-btn" onclick="toggleSpeed()">⏩ 1x</button>
         </div>
         
@@ -170,7 +182,6 @@
             }
         }
 
-        // --- ESTADO ---
         let gameState = 'START';
         let gold = 150;
         let lives = 20;
@@ -239,6 +250,8 @@
             wave++;
             document.getElementById('wave-display').innerText = wave;
             document.getElementById('next-wave-btn').style.display = 'none';
+            // Remove o brilho quando sai da fase de construção
+            document.getElementById('build-menu').classList.remove('build-glow');
             
             timeLeft = TOTAL_TIME;
             document.getElementById('timer-bar').style.width = '100%';
@@ -297,13 +310,10 @@
             const feedback = document.getElementById('feedback-msg');
             lastAnswerCorrect = isCorrect;
             
-            // --- ATUALIZA PLACAR ---
             if(isCorrect && !isTimeout) {
-                totalCorrect++;
-                document.getElementById('score-correct').innerText = totalCorrect;
+                totalCorrect++; document.getElementById('score-correct').innerText = totalCorrect;
             } else {
-                totalWrong++;
-                document.getElementById('score-wrong').innerText = totalWrong;
+                totalWrong++; document.getElementById('score-wrong').innerText = totalWrong;
             }
 
             if(isTimeout) {
@@ -316,15 +326,23 @@
             
             document.getElementById('mult-display').innerText = goldMultiplier + "x";
             feedback.style.opacity = 1; setTimeout(() => feedback.style.opacity = 0, 3000);
+            
             gameState = 'BUILD';
             document.getElementById('next-wave-btn').style.display = 'block';
             document.getElementById('upgrade-info').style.display = 'block';
+            
+            // ATIVA O BRILHO DE ATENÇÃO NO MENU
+            document.getElementById('build-menu').classList.add('build-glow');
         }
 
         function startWaveCombat() {
             gameState = 'COMBAT';
             document.getElementById('next-wave-btn').style.display = 'none';
             document.getElementById('upgrade-info').style.display = 'none';
+            
+            // REMOVE O BRILHO QUANDO O COMBATE COMEÇA
+            document.getElementById('build-menu').classList.remove('build-glow');
+            
             selectTower(-1); 
             spawnEnemies();
         }
@@ -354,20 +372,13 @@
                 if (enemies.length === 0) {
                     if(!this.waitingForMath) {
                         this.waitingForMath = true;
-
-                        // --- SISTEMA DE RECOMPENSA (CURA APÓS CHEFE) ---
                         if(wave % 10 === 0 && lastAnswerCorrect) {
-                             lives += 5;
-                             document.getElementById('lives-display').innerText = lives;
-                             
+                             lives += 5; document.getElementById('lives-display').innerText = lives;
                              const fb = document.getElementById('feedback-msg');
                              fb.innerText = "WAVE PERFEITA! +5 VIDAS";
-                             fb.style.color = "#00ff00";
-                             fb.style.opacity = 1;
-                             setTimeout(()=>fb.style.opacity=0, 2500);
+                             fb.style.color = "#00ff00"; fb.style.opacity = 1; setTimeout(()=>fb.style.opacity=0, 2500);
                              playSound('heal');
                         }
-
                         setTimeout(() => { 
                             if(gameState === 'COMBAT') {
                                 this.waitingForMath = false;
