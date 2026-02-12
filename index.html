@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Logic Defense: Bugfix Edition</title>
+    <title>Logic Defense: Physics Fix</title>
     <style>
         body { margin: 0; overflow: hidden; background-color: #1a1a1a; color: white; font-family: 'Courier New', monospace; user-select: none; }
         
@@ -187,7 +187,7 @@
         let goldMultiplier = 1.0;
         let lastAnswerCorrect = true;
         let gameSpeed = 1;
-        let isGameOver = false; // TRAVA DE SEGURANÇA
+        let isGameOver = false;
         
         let totalCorrect = 0;
         let totalWrong = 0;
@@ -232,6 +232,15 @@
             } else {
                 btn.classList.remove('active'); btn.innerText = "⏩ 1x";
             }
+        }
+
+        // --- COR DO CAMINHO DINÂMICA ---
+        function getPathColor(wave) {
+            if (wave < 50) return '#333'; // Padrão
+            if (wave < 100) return '#004488'; // Gelo/Azul Escuro
+            if (wave < 150) return '#440088'; // Roxo
+            if (wave < 200) return '#880000'; // Vermelho
+            return '#b8860b'; // Dourado (Lenda)
         }
 
         function gameLoop() {
@@ -400,11 +409,15 @@
                 for(let i=0; i<600; i+=50) { ctx.beginPath(); ctx.moveTo(0,i); ctx.lineTo(800,i); ctx.stroke(); }
             }
 
-            ctx.strokeStyle = '#111'; ctx.lineWidth = 40; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+            // --- CAMINHO COLORIDO (Muda a cada 50 ondas) ---
+            ctx.strokeStyle = getPathColor(wave);
+            ctx.lineWidth = 40; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
             ctx.beginPath(); ctx.moveTo(path[0].x, path[0].y);
             for(let i=1; i<path.length; i++) ctx.lineTo(path[i].x, path[i].y);
             ctx.stroke();
-            ctx.strokeStyle = '#333'; ctx.lineWidth = 2; ctx.stroke();
+            
+            // Borda do Caminho (Para contraste)
+            ctx.strokeStyle = '#222'; ctx.lineWidth = 2; ctx.stroke();
 
             towers.forEach(t => t.draw());
             enemies.forEach(e => e.draw());
@@ -469,31 +482,47 @@
         class Enemy {
             constructor(maxHp, isGolden) {
                 this.x = path[0].x; this.y = path[0].y; this.pathIndex = 0;
+                // Velocidade escala infinitamente
                 this.speed = 1.5 + (wave * 0.05);
                 this.maxHp = maxHp; this.hp = this.maxHp; this.radius = 12; this.frozen = 0; this.active = true;
                 this.isGolden = isGolden;
             }
             update() {
                 let target = path[this.pathIndex + 1]; if(!target) return;
+                
+                // --- PHYSICS FIX: Lógica de movimento para não pular curvas ---
                 let actualSpeed = this.frozen > 0 ? this.speed * 0.4 : this.speed;
                 if(this.frozen > 0) this.frozen--;
-                let dx = target.x - this.x; let dy = target.y - this.y;
-                let dist = Math.sqrt(dx*dx + dy*dy);
-                if(dist < actualSpeed) {
-                    this.x = target.x; this.y = target.y; this.pathIndex++;
+
+                let dx = target.x - this.x; 
+                let dy = target.y - this.y;
+                let distToTarget = Math.sqrt(dx*dx + dy*dy);
+                
+                // Se a velocidade é maior que a distância pro ponto, teleporta pro ponto e continua
+                if(distToTarget < actualSpeed) {
+                    this.x = target.x; 
+                    this.y = target.y;
+                    this.pathIndex++;
+                    
+                    // Se acabou o caminho
                     if(this.pathIndex >= path.length - 1) {
                         this.active = false;
                         lives--;
                         document.getElementById('lives-display').innerText = lives;
-                        
-                        // --- BUGFIX: TRAVA DE SEGURANÇA PARA NÃO SPAMMAR GAME OVER ---
                         if(lives <= 0 && !isGameOver) {
                             isGameOver = true;
                             alert("GAME OVER!");
                             location.reload();
                         }
+                    } else {
+                        // Se sobrou movimento, continua pro próximo ponto (simulação simples)
+                        // Para não complicar a física, paramos no waypoint neste frame (perde um pouco de speed na curva, mas evita bugs)
                     }
-                } else { this.x += (dx / dist) * actualSpeed; this.y += (dy / dist) * actualSpeed; }
+                } else {
+                    // Movimento normal
+                    this.x += (dx / distToTarget) * actualSpeed;
+                    this.y += (dy / distToTarget) * actualSpeed;
+                }
             }
             draw() {
                 ctx.fillStyle = this.isGolden ? (this.frozen>0?'#ccffff':'#ffd700') : (this.frozen>0?'#88ccff':'#555555');
@@ -535,7 +564,8 @@
                         if(dst < this.range && dst < minDst) { minDst = dst; target = e; }
                     });
                     if(target) {
-                        bullets.push(new Bullet(this.x, this.y, target, this.type, this.getDamage()));
+                        // --- PHYSICS FIX: Passar a wave para a bala calcular a velocidade ---
+                        bullets.push(new Bullet(this.x, this.y, target, this.type, this.getDamage(), wave));
                         this.cooldown = this.currentRate; 
                         if(this.type.symbol === '÷') playSound('sniper');
                         else playSound('shoot');
@@ -553,16 +583,28 @@
         }
 
         class Bullet {
-            constructor(x, y, target, type, damage) {
+            constructor(x, y, target, type, damage, currentWave) {
                 this.x = x; this.y = y; this.target = target; this.type = type; 
-                this.damage = damage; this.speed = 12; this.active = true;
+                this.damage = damage; 
+                // --- PHYSICS FIX: Bala escala com a onda para sempre ser mais rápida que o monstro ---
+                // Base 25 + Bônus de onda
+                this.speed = 25 + (currentWave * 0.5); 
+                this.active = true;
             }
             update() {
                 if(!this.target || !this.target.active) { this.active = false; return; }
                 let dx = this.target.x - this.x; let dy = this.target.y - this.y;
                 let dist = Math.sqrt(dx*dx + dy*dy);
-                if(dist < this.speed) { this.hit(this.target); this.active = false; } 
-                else { this.x += (dx/dist) * this.speed; this.y += (dy/dist) * this.speed; }
+                
+                // Se a distância for menor que a velocidade, acerta direto (Hitscan no ultimo frame)
+                if(dist <= this.speed) { 
+                    this.hit(this.target); 
+                    this.active = false; 
+                } 
+                else { 
+                    this.x += (dx/dist) * this.speed; 
+                    this.y += (dy/dist) * this.speed; 
+                }
             }
             hit(enemy) {
                 enemy.hp -= this.damage; if(this.type.slow) enemy.frozen = 60;
