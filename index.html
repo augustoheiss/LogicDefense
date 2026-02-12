@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Logic Defense: Math Teacher</title>
+    <title>Logic Defense: Smart Math</title>
     <style>
         body { 
             margin: 0; overflow: hidden; background-color: #1a1a1a; color: white; 
@@ -30,7 +30,7 @@
             position: absolute;
             bottom: 200px; 
             right: 40px;
-            width: 320px; /* Um pouco mais largo para a explicação da divisão */
+            width: 320px; 
             background: rgba(0, 0, 0, 0.95);
             border: 2px solid #00d4ff; 
             padding: 15px;
@@ -42,9 +42,8 @@
             text-align: left;
         }
         .tip-title { color: #00d4ff; font-weight: bold; margin-bottom: 8px; text-transform: uppercase; font-size: 16px; border-bottom: 1px solid #444; padding-bottom: 5px; }
-        .tip-content { font-size: 15px; line-height: 1.5; color: #eee; font-family: 'Verdana', sans-serif; } /* Fonte mais legível para texto longo */
+        .tip-content { font-size: 15px; line-height: 1.5; color: #eee; font-family: 'Verdana', sans-serif; } 
         .tip-highlight { color: #ffff00; font-weight: bold; }
-        .tip-step { display: block; margin-top: 5px; color: #aaa; font-size: 13px; }
 
         #next-wave-btn { 
             display: none; position: absolute; bottom: 140px; right: 40px; 
@@ -367,70 +366,62 @@
             document.getElementById('math-modal').style.display = 'block';
         }
 
-       // --- SISTEMA DE DICAS TÁTICAS V3 (CÉREBRO ADAPTATIVO) ---
+        // --- SISTEMA DE DICAS TÁTICAS V3 (SMART BRAIN) ---
         function generateTip(problem) {
             const { n1, n2, op, answer } = problem;
             let text = "";
 
             if (op === '+') {
-                // CENÁRIO 1: Números pequenos (unidades) que estouram 10 (ex: 8 + 7)
                 if (n1 < 10 && n2 < 10 && answer >= 10) {
-                    // Garante que o maior número seja a base (mais fácil completar o maior)
                     let maior = Math.max(n1, n2);
                     let menor = Math.min(n1, n2);
                     let faltaPara10 = 10 - maior;
                     let sobra = menor - faltaPara10;
-                    
-                    text = `Completa 10:<br>
-                    O <span class="tip-highlight">${maior}</span> está quase no 10 (falta ${faltaPara10}).<br>
-                    Tire ${faltaPara10} do ${menor}. Agora você tem <span class="tip-highlight">10 + ${sobra}</span>.<br>
-                    Resultado: <span class="tip-highlight">${answer}</span>.`;
+                    text = `Completa 10:<br>O <span class="tip-highlight">${maior}</span> está quase no 10 (falta ${faltaPara10}).<br>Tire ${faltaPara10} do ${menor}. Agora você tem <span class="tip-highlight">10 + ${sobra}</span>.<br>Resultado: <span class="tip-highlight">${answer}</span>.`;
                 } 
-                // CENÁRIO 2: Números Grandes (Centenas ou mais)
                 else if (n1 >= 100 || n2 >= 100) {
-                    // Separa Centenas, Dezenas e Unidades
                     let c1 = Math.floor(n1 / 100) * 100;
                     let c2 = Math.floor(n2 / 100) * 100;
                     let d1 = Math.floor((n1 % 100) / 10) * 10;
                     let d2 = Math.floor((n2 % 100) / 10) * 10;
                     let u1 = n1 % 10;
                     let u2 = n2 % 10;
-                    
-                    text = `Por Casas Decimais:<br>
-                    1. Centenas: <span class="tip-highlight">${c1} + ${c2} = ${c1+c2}</span><br>
-                    2. Dezenas: <span class="tip-highlight">${d1} + ${d2} = ${d1+d2}</span><br>
-                    3. Unidades: <span class="tip-highlight">${u1} + ${u2} = ${u1+u2}</span><br>
-                    Junta tudo: <span class="tip-highlight">${answer}</span>.`;
+                    text = `Por Casas Decimais:<br>1. Centenas: <span class="tip-highlight">${c1} + ${c2} = ${c1+c2}</span><br>2. Dezenas: <span class="tip-highlight">${d1} + ${d2} = ${d1+d2}</span><br>3. Unidades: <span class="tip-highlight">${u1} + ${u2} = ${u1+u2}</span><br>Junta tudo: <span class="tip-highlight">${answer}</span>.`;
                 }
-                // CENÁRIO 3: Padrão (Dezenas)
                 else {
                     text = `Decomposição:<br>Separe em partes.<br><span class="tip-highlight">${n1} + ${n2}</span><br>→ <span class="tip-highlight">(${Math.floor(n1/10)*10} + ${Math.floor(n2/10)*10}) + (${n1%10} + ${n2%10})</span>.`;
                 }
             } 
             else if (op === '-') {
-                // Lógica de Arredondamento do Subtraendo (mantida e melhorada)
-                let nextTen = Math.ceil(n2/10)*10;
-                let diff = nextTen - n2;
-                if (diff === 0) diff = 10; // Se já for redondo, arredonda pro próximo pra facilitar visualização ou mantem simples
-                
                 if (n2 < 10) {
                      text = `Distância:<br>Pense na reta numérica.<br>Quanto falta do <span class="tip-highlight">${n2}</span> para chegar no <span class="tip-highlight">${n1}</span>?`;
                 } else {
-                    text = `Arredondamento:<br>Aumente o ${n2} para ${nextTen} (soma +${diff}).<br><span class="tip-highlight">${n1} - ${nextTen} = ${n1-nextTen}</span>.<br>Agora DEVOLVA o que pegou: <span class="tip-highlight">${n1-nextTen} + ${diff} = ${answer}</span>.`;
+                    let unit = n2 % 10;
+                    if (unit <= 5 && unit !== 0) {
+                        // ARREDONDAMENTO PRA BAIXO (Caminho da Decomposição)
+                        let prevTen = Math.floor(n2/10)*10;
+                        let diff = n2 - prevTen;
+                        text = `Decomposição:<br>O <span class="tip-highlight">${n2}</span> é <span class="tip-highlight">${prevTen} + ${diff}</span>.<br>Tire o grande primeiro: <span class="tip-highlight">${n1} - ${prevTen} = ${n1-prevTen}</span>.<br>Agora tire o resto: <span class="tip-highlight">${n1-prevTen} - ${diff} = ${answer}</span>.`;
+                    } else {
+                        // ARREDONDAMENTO PRA CIMA (Caminho da Compensação)
+                        let nextTen = Math.ceil(n2/10)*10;
+                        let diff = nextTen - n2;
+                        if (diff === 0) { // Se for 10, 20, 30...
+                             text = `Conta Redonda:<br>Subtraia as dezenas direto.<br><span class="tip-highlight">${n1} - ${n2} = ${answer}</span>.`;
+                        } else {
+                             text = `Compensação:<br>Arredonde o <span class="tip-highlight">${n2}</span> para <span class="tip-highlight">${nextTen}</span> (emprestou ${diff}).<br><span class="tip-highlight">${n1} - ${nextTen} = ${n1-nextTen}</span>.<br>Agora devolva o que emprestou: <span class="tip-highlight">${n1-nextTen} + ${diff} = ${answer}</span>.`;
+                        }
+                    }
                 }
             } 
             else if (op === 'x') {
-                // Se for muito grande, foca na ordem de grandeza
                 if (n1 > 10 && n2 < 10) {
-                     text = `Distributiva:<br>Multiplique separado.<br><span class="tip-highlight">${n1} x ${n2}</span> vira:<br>
-                     (${Math.floor(n1/10)*10} x ${n2}) + (${n1%10} x ${n2})<br>
-                     <span class="tip-highlight">${Math.floor(n1/10)*10*n2} + ${n1%10*n2} = ${answer}</span>.`;
+                     text = `Distributiva:<br>Multiplique separado.<br><span class="tip-highlight">${n1} x ${n2}</span> vira:<br>(${Math.floor(n1/10)*10} x ${n2}) + (${n1%10} x ${n2})<br><span class="tip-highlight">${Math.floor(n1/10)*10*n2} + ${n1%10*n2} = ${answer}</span>.`;
                 } else {
                     text = `Tabuada Direta:<br>Essa é memória muscular.<br><span class="tip-highlight">${n1} x ${n2} = ${answer}</span>.`;
                 }
             } 
             else if (op === '/') {
-                // LÓGICA DE DIVISÃO (Mantida a V13.1 que ficou ótima)
                 if (n1 <= n2 * 10) {
                     text = `Inversão:<br>Quantas vezes o <span class="tip-highlight">${n2}</span> cabe em <span class="tip-highlight">${n1}</span>?<br>Pense: ${n2} x ? = ${n1}.`;
                 } else {
@@ -445,11 +436,7 @@
                     let restoPart = partVal % n2;
                     let nextPart = restoPart.toString() + sN1.substring(sliceIdx);
                     
-                    text = `Divida por Partes:<br>
-                    1. Pegue o <span class="tip-highlight">${partVal}</span>. Cabe <span class="tip-highlight">${quocientePart}</span> vezes. Sobra <span class="tip-highlight">${restoPart}</span>.<br>
-                    2. Junte o ${restoPart} com o resto (${sN1.substring(sliceIdx)}) virando <span class="tip-highlight">${nextPart}</span>.<br>
-                    3. ${nextPart} dividido por ${n2} dá <span class="tip-highlight">${parseInt(nextPart)/n2}</span>.<br>
-                    Resultado: <span class="tip-highlight">${answer}</span>.`;
+                    text = `Divida por Partes:<br>1. Pegue o <span class="tip-highlight">${partVal}</span>. Cabe <span class="tip-highlight">${quocientePart}</span> vezes. Sobra <span class="tip-highlight">${restoPart}</span>.<br>2. Junte o ${restoPart} com o resto (${sN1.substring(sliceIdx)}) virando <span class="tip-highlight">${nextPart}</span>.<br>3. ${nextPart} dividido por ${n2} dá <span class="tip-highlight">${parseInt(nextPart)/n2}</span>.<br>Resultado: <span class="tip-highlight">${answer}</span>.`;
                 }
             }
             return text;
@@ -478,7 +465,6 @@
             document.getElementById('mult-display').innerText = goldMultiplier + "x";
             feedback.style.opacity = 1; setTimeout(() => feedback.style.opacity = 0, 3000);
             
-            // EXIBIR DICA
             const tipText = generateTip(currentProblem);
             document.getElementById('tip-text').innerHTML = tipText;
             document.getElementById('math-tip-box').style.display = 'block';
