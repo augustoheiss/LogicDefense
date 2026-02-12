@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Logic Defense: War Construction</title>
+    <title>Logic Defense: The Teacher</title>
     <style>
         body { 
             margin: 0; overflow: hidden; background-color: #1a1a1a; color: white; 
@@ -24,6 +24,27 @@
         }
         #speed-btn.active { background: #ff9800; color: black; border-color: #ff9800; box-shadow: 0 0 10px #ff9800; }
 
+        /* ONDE A DICA VAI APARECER */
+        #math-tip-box {
+            display: none;
+            position: absolute;
+            bottom: 200px; /* Acima do botão mandar onda */
+            right: 40px;
+            width: 300px;
+            background: rgba(0, 0, 0, 0.9);
+            border: 2px solid #00d4ff; /* Azul CIÊNCIA */
+            padding: 15px;
+            border-radius: 8px;
+            color: #fff;
+            z-index: 10;
+            pointer-events: none; /* Deixa clicar através se precisar */
+            box-shadow: 0 0 15px rgba(0, 212, 255, 0.3);
+            text-align: left;
+        }
+        .tip-title { color: #00d4ff; font-weight: bold; margin-bottom: 5px; text-transform: uppercase; font-size: 14px; }
+        .tip-content { font-size: 14px; line-height: 1.4; color: #eee; }
+        .tip-highlight { color: #ffff00; font-weight: bold; }
+
         #next-wave-btn { 
             display: none; position: absolute; bottom: 140px; right: 40px; 
             padding: 15px 30px; font-size: 20px; background: #ff0000; color: white; border: 2px solid white; 
@@ -33,26 +54,12 @@
         #next-wave-btn:hover { background: #ff4444; transform: scale(1.05); }
         @keyframes pulse { 0% { box-shadow: 0 0 10px #ff0000; } 50% { box-shadow: 0 0 25px #ff0000; } 100% { box-shadow: 0 0 10px #ff0000; } }
 
-        /* LIXEIRA / CANCELAR - NO CIMÃO */
         #cancel-btn {
-            display: none; 
-            position: absolute; 
-            top: 80px; 
-            left: 50%; 
-            transform: translateX(-50%);
-            padding: 12px 30px; 
-            font-size: 20px; 
-            background: #d32f2f; 
-            color: white; 
-            border: 2px solid white;
-            cursor: pointer; 
-            font-weight: bold; 
-            z-index: 100; 
-            border-radius: 50px;
-            box-shadow: 0 0 20px rgba(255, 0, 0, 0.8); 
-            pointer-events: auto !important;
-            text-transform: uppercase;
-            letter-spacing: 2px;
+            display: none; position: absolute; top: 80px; left: 50%; transform: translateX(-50%);
+            padding: 12px 30px; font-size: 20px; background: #d32f2f; color: white; border: 2px solid white;
+            cursor: pointer; font-weight: bold; z-index: 100; border-radius: 50px;
+            box-shadow: 0 0 20px rgba(255, 0, 0, 0.8); pointer-events: auto !important;
+            text-transform: uppercase; letter-spacing: 2px;
         }
         #cancel-btn:hover { background: #f44336; transform: translateX(-50%) scale(1.1); }
 
@@ -77,13 +84,8 @@
             display: flex; gap: 15px; background: rgba(0,0,0,0.8); padding: 10px; border-radius: 10px; border: 1px solid #555;
             transition: 0.3s;
         }
-        
-        @keyframes attention-pulse {
-            0% { box-shadow: 0 0 0 rgba(0, 255, 0, 0); border-color: #555; }
-            50% { box-shadow: 0 0 20px rgba(0, 255, 0, 0.8); border-color: #00ff00; }
-            100% { box-shadow: 0 0 0 rgba(0, 255, 0, 0); border-color: #555; }
-        }
         .build-glow { animation: attention-pulse 1.5s infinite; border: 1px solid #00ff00 !important; }
+        @keyframes attention-pulse { 0% { box-shadow: 0 0 0 rgba(0,255,0,0); border-color:#555; } 50% { box-shadow: 0 0 20px rgba(0,255,0,0.8); border-color:#00ff00; } 100% { box-shadow: 0 0 0 rgba(0,255,0,0); border-color:#555; } }
 
         .tower-btn { 
             width: 70px; height: 80px; background: #333; border: 2px solid #555; cursor: pointer; 
@@ -104,17 +106,8 @@
         
         #upgrade-info { position: absolute; top: 10px; right: 10px; text-align: right; font-size: 12px; color: #aaa; pointer-events: none; display: none; }
 
-        /* --- MODO FANTASMA (GHOST MODE) CORRIGIDO --- */
-        body.ghost-active #build-menu,
-        body.ghost-active #next-wave-btn,
-        body.ghost-active #ui-layer {
-            opacity: 0.15; 
-            pointer-events: none !important; 
-        }
-        /* CORREÇÃO CRÍTICA: Desativar botões das torres individualmente também */
-        body.ghost-active .tower-btn {
-            pointer-events: none !important;
-        }
+        body.ghost-active #build-menu, body.ghost-active #next-wave-btn, body.ghost-active #ui-layer { opacity: 0.15; pointer-events: none !important; }
+        body.ghost-active .tower-btn { pointer-events: none !important; }
         body.ghost-active #cancel-btn { display: block; }
     </style>
 </head>
@@ -136,8 +129,13 @@
         <div id="upgrade-info">CLIQUE NA TORRE PARA EVOLUIR</div>
 
         <div id="feedback-msg"></div>
-        <button id="next-wave-btn" onclick="startWaveCombat()">MANDAR ONDA!</button>
         
+        <div id="math-tip-box">
+            <div class="tip-title">⚡ HACK LÓGICO</div>
+            <div class="tip-content" id="tip-text">...</div>
+        </div>
+
+        <button id="next-wave-btn" onclick="startWaveCombat()">MANDAR ONDA!</button>
         <button id="cancel-btn" onclick="cancelSelection()">🗑️ CANCELAR</button>
 
         <div id="math-modal">
@@ -245,6 +243,9 @@
         let totalCorrect = 0;
         let totalWrong = 0;
         
+        // --- MEMÓRIA DA CONTA ATUAL ---
+        let currentProblem = { n1: 0, n2: 0, op: '', answer: 0 };
+        
         let mathTimer = null;
         let timeLeft = 10;
         const TOTAL_TIME = 10;
@@ -310,6 +311,7 @@
             wave++;
             document.getElementById('wave-display').innerText = wave;
             document.getElementById('next-wave-btn').style.display = 'none';
+            document.getElementById('math-tip-box').style.display = 'none'; // Esconde a dica na nova onda
             document.getElementById('build-menu').classList.remove('build-glow');
             
             timeLeft = TOTAL_TIME;
@@ -343,6 +345,9 @@
                 questionText = `${n1} ${op} ${n2} = ?`;
             }
             
+            // --- GUARDA OS DADOS PRA GERAR A DICA DEPOIS ---
+            currentProblem = { n1, n2, op, answer };
+
             let options = [answer];
             while(options.length < 3) {
                 let fake = answer + Math.floor(Math.random() * 10) - 5;
@@ -361,6 +366,28 @@
                 optDiv.appendChild(btn);
             });
             document.getElementById('math-modal').style.display = 'block';
+        }
+
+        // --- SISTEMA DE DICAS TÁTICAS ---
+        function generateTip(problem) {
+            const { n1, n2, op, answer } = problem;
+            let text = "";
+
+            if (op === '+') {
+                let rounded = Math.round(n1/10)*10;
+                let diff = n1 - rounded;
+                text = `Decomposição: <br>Separe as dezenas e unidades.<br><span class="tip-highlight">${n1} + ${n2}</span> é igual a <span class="tip-highlight">(${Math.floor(n1/10)*10} + ${Math.floor(n2/10)*10}) + (${n1%10} + ${n2%10})</span>.`;
+            } else if (op === '-') {
+                let nextTen = Math.ceil(n2/10)*10;
+                let diff = nextTen - n2;
+                if (diff === 0) diff = 10; // Se já for 10, joga pro proximo
+                text = `Arredondamento:<br>Aumente o ${n2} para ${nextTen} (soma ${diff}).<br><span class="tip-highlight">${n1} - ${nextTen} = ${n1-nextTen}</span>.<br>Agora DEVOLVA o que pegou: <span class="tip-highlight">${n1-nextTen} + ${diff} = ${answer}</span>.`;
+            } else if (op === 'x') {
+                text = `Distributiva:<br>Multiplique a dezena e a unidade separado.<br><span class="tip-highlight">${n1} x ${n2}</span> vira <span class="tip-highlight">(${Math.floor(n1/10)*10} x ${n2}) + (${n1%10} x ${n2})</span>.<br>Some os resultados.`;
+            } else if (op === '/') {
+                text = `Engenharia Reversa:<br>Pense na multiplicação.<br>Qual número vezes <span class="tip-highlight">${n2}</span> resulta em <span class="tip-highlight">${n1}</span>?<br>Tabuada do ${n2} é a chave.`;
+            }
+            return text;
         }
 
         function resolveMath(isCorrect, isTimeout) {
@@ -386,6 +413,11 @@
             document.getElementById('mult-display').innerText = goldMultiplier + "x";
             feedback.style.opacity = 1; setTimeout(() => feedback.style.opacity = 0, 3000);
             
+            // --- EXIBIR A DICA TÁTICA ---
+            const tipText = generateTip(currentProblem);
+            document.getElementById('tip-text').innerHTML = tipText;
+            document.getElementById('math-tip-box').style.display = 'block';
+
             gameState = 'BUILD';
             document.getElementById('next-wave-btn').style.display = 'block';
             document.getElementById('upgrade-info').style.display = 'block';
@@ -396,6 +428,7 @@
             gameState = 'COMBAT';
             document.getElementById('next-wave-btn').style.display = 'none';
             document.getElementById('upgrade-info').style.display = 'none';
+            document.getElementById('math-tip-box').style.display = 'none'; // Some a dica ao iniciar
             document.getElementById('build-menu').classList.remove('build-glow');
             cancelSelection();
             spawnEnemies();
@@ -455,7 +488,7 @@
         function draw() {
             ctx.fillStyle = '#222'; ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            if(gameState === 'BUILD' || gameState === 'COMBAT') { // MOSTRA GRID TAMBÉM EM COMBATE PRA FACILITAR CONSTRUÇÃO
+            if(gameState === 'BUILD' || gameState === 'COMBAT') {
                 ctx.strokeStyle = '#333'; ctx.lineWidth = 1;
                 for(let i=0; i<800; i+=50) { ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i,600); ctx.stroke(); }
                 for(let i=0; i<600; i+=50) { ctx.beginPath(); ctx.moveTo(0,i); ctx.lineTo(800,i); ctx.stroke(); }
@@ -674,8 +707,6 @@
         canvas.addEventListener('touchend', (e) => { e.preventDefault(); handleInteraction(); });
 
         function handleInteraction() {
-            // --- CONSTRUÇÃO LIBERADA (BUILD OU COMBAT) ---
-            // Só bloqueia se estiver no MATH (modal aberto) ou START (início) ou GAMEOVER
             if(gameState === 'MATH' || gameState === 'START' || isGameOver) return;
             
             for(let t of towers) {
@@ -699,7 +730,6 @@
                         towers.push(new Tower(mouseX, mouseY, selectedTowerIdx));
                         gold -= type.cost; document.getElementById('gold-display').innerText = gold;
                         for(let i=0; i<5; i++) particles.push(new Particle(mouseX, mouseY, '#00ff00')); playSound('correct');
-                        // NÃO CANCELA A SELEÇÃO PRA CONSTRUIR EM CADEIA (RAPIDEZ)
                     } else {
                         const fb = document.getElementById('feedback-msg'); fb.innerText = "OURO INSUFICIENTE!"; fb.style.color = "red"; fb.style.opacity = 1; setTimeout(() => fb.style.opacity = 0, 1000);
                     }
