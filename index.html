@@ -3,19 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Logic Defense: Mobile Precision</title>
+    <title>Logic Defense: Ghost Mode</title>
     <style>
-        /* PREVENIR ZOOM E ROLAGEM NO MOBILE */
         body { 
             margin: 0; overflow: hidden; background-color: #1a1a1a; color: white; 
             font-family: 'Courier New', monospace; user-select: none; 
-            touch-action: none; /* Desativa gestos padrão do navegador */
+            touch-action: none;
         }
         
         #game-container { position: relative; width: 800px; height: 600px; margin: 20px auto; border: 2px solid #444; background: #222; box-shadow: 0 0 20px rgba(0,0,0,0.5); }
         canvas { display: block; cursor: crosshair; }
         
-        #ui-layer { position: absolute; top: 10px; left: 10px; width: 100%; pointer-events: none; display: flex; flex-wrap: wrap; gap: 10px; }
+        #ui-layer { position: absolute; top: 10px; left: 10px; width: 100%; pointer-events: none; display: flex; flex-wrap: wrap; gap: 10px; transition: opacity 0.3s; }
         .stat-box { background: rgba(0,0,0,0.8); padding: 8px 12px; border: 1px solid #00ff00; color: #00ff00; font-weight: bold; font-size: 14px; border-radius: 4px; }
         .score-box { border-color: #fff; color: #fff; }
         
@@ -29,9 +28,19 @@
             display: none; position: absolute; bottom: 140px; right: 40px; 
             padding: 15px 30px; font-size: 20px; background: #ff0000; color: white; border: 2px solid white; 
             cursor: pointer; font-weight: bold; z-index: 5; animation: pulse 2s infinite; box-shadow: 0 0 10px #ff0000; border-radius: 5px;
+            transition: opacity 0.3s;
         }
         #next-wave-btn:hover { background: #ff4444; transform: scale(1.05); }
         @keyframes pulse { 0% { box-shadow: 0 0 10px #ff0000; } 50% { box-shadow: 0 0 25px #ff0000; } 100% { box-shadow: 0 0 10px #ff0000; } }
+
+        /* LIXEIRA / CANCELAR */
+        #cancel-btn {
+            display: none; position: absolute; bottom: 150px; left: 50%; transform: translateX(-50%);
+            padding: 15px 30px; font-size: 24px; background: #d32f2f; color: white; border: 2px solid white;
+            cursor: pointer; font-weight: bold; z-index: 20; border-radius: 50px;
+            box-shadow: 0 0 15px red; pointer-events: auto !important;
+        }
+        #cancel-btn:hover { background: #f44336; transform: translateX(-50%) scale(1.1); }
 
         #math-modal { 
             display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); 
@@ -60,16 +69,12 @@
             50% { box-shadow: 0 0 20px rgba(0, 255, 0, 0.8); border-color: #00ff00; }
             100% { box-shadow: 0 0 0 rgba(0, 255, 0, 0); border-color: #555; }
         }
-        
-        .build-glow {
-            animation: attention-pulse 1.5s infinite;
-            border: 1px solid #00ff00 !important;
-        }
+        .build-glow { animation: attention-pulse 1.5s infinite; border: 1px solid #00ff00 !important; }
 
         .tower-btn { 
             width: 70px; height: 80px; background: #333; border: 2px solid #555; cursor: pointer; 
             display: flex; flex-direction: column; align-items: center; justify-content: center; 
-            transition: 0.2s; border-radius: 5px; color: #aaa;
+            transition: 0.2s; border-radius: 5px; color: #aaa; pointer-events: auto;
         }
         .tower-btn:hover { border-color: #fff; background: #444; color: #fff; }
         .tower-btn.selected { border-color: #00ff00; background: #111; box-shadow: 0 0 15px #00ff00; color: #00ff00; transform: translateY(-5px); }
@@ -83,8 +88,17 @@
             text-shadow: 2px 2px 4px #000; z-index: 6; pointer-events: none;
         }
         
-        #upgrade-info {
-            position: absolute; top: 10px; right: 10px; text-align: right; font-size: 12px; color: #aaa; pointer-events: none; display: none;
+        #upgrade-info { position: absolute; top: 10px; right: 10px; text-align: right; font-size: 12px; color: #aaa; pointer-events: none; display: none; }
+
+        /* --- MODO FANTASMA (GHOST MODE) --- */
+        body.ghost-active #build-menu,
+        body.ghost-active #next-wave-btn,
+        body.ghost-active #ui-layer {
+            opacity: 0.15; /* Transparente */
+            pointer-events: none !important; /* Cliques atravessam */
+        }
+        body.ghost-active #cancel-btn {
+            display: block; /* Mostra o botão de cancelar */
         }
     </style>
 </head>
@@ -107,6 +121,8 @@
 
         <div id="feedback-msg"></div>
         <button id="next-wave-btn" onclick="startWaveCombat()">MANDAR ONDA!</button>
+        
+        <button id="cancel-btn" onclick="cancelSelection()">🗑️ CANCELAR</button>
 
         <div id="math-modal">
             <div id="timer-container"><div id="timer-bar"></div></div>
@@ -145,19 +161,14 @@
         const AudioContext = window.AudioContext || window.webkitAudioContext;
         const audioCtx = new AudioContext();
 
-        // --- SISTEMA DE ESCALA PARA MOBILE ---
-        // Ajusta o tamanho do canvas para caber na tela do celular se precisar
         function resizeCanvas() {
             const container = document.getElementById('game-container');
             const winW = window.innerWidth;
-            const winH = window.innerHeight;
-            
-            // Se a tela for menor que 800px (celular em pé ou tablet pequeno)
             if (winW < 840) {
                 let scale = winW / 820;
                 container.style.transform = `scale(${scale})`;
                 container.style.transformOrigin = 'top left';
-                container.style.marginBottom = '-200px'; // Compensar espaço em branco
+                container.style.marginBottom = '-200px';
             } else {
                 container.style.transform = 'scale(1)';
                 container.style.marginBottom = '20px';
@@ -370,7 +381,7 @@
             document.getElementById('next-wave-btn').style.display = 'none';
             document.getElementById('upgrade-info').style.display = 'none';
             document.getElementById('build-menu').classList.remove('build-glow');
-            selectTower(-1); 
+            cancelSelection(); // Garante que a seleção é limpa
             spawnEnemies();
         }
 
@@ -470,7 +481,6 @@
                         ctx.fillStyle = (gold >= t.upgradeCost) ? '#0f0' : '#f00';
                         ctx.font = 'bold 14px Arial';
                         ctx.fillText(`UPGRADE: $${t.upgradeCost}`, t.x, t.y - 40);
-                        
                         if(t.type.symbol === '÷') {
                             ctx.fillStyle = '#cc88ff'; ctx.font = '10px Arial';
                             ctx.fillText(`(ACELERAR)`, t.x, t.y - 55);
@@ -510,33 +520,18 @@
             }
             update() {
                 let target = path[this.pathIndex + 1]; if(!target) return;
-                
                 let actualSpeed = this.frozen > 0 ? this.speed * 0.4 : this.speed;
                 if(this.frozen > 0) this.frozen--;
-
-                let dx = target.x - this.x; 
-                let dy = target.y - this.y;
-                let distToTarget = Math.sqrt(dx*dx + dy*dy);
-                
-                if(distToTarget < actualSpeed) {
-                    this.x = target.x; 
-                    this.y = target.y;
-                    this.pathIndex++;
-                    
+                let dx = target.x - this.x; let dy = target.y - this.y;
+                let dist = Math.sqrt(dx*dx + dy*dy);
+                if(dist < actualSpeed) {
+                    this.x = target.x; this.y = target.y; this.pathIndex++;
                     if(this.pathIndex >= path.length - 1) {
-                        this.active = false;
-                        lives--;
+                        this.active = false; lives--; 
                         document.getElementById('lives-display').innerText = lives;
-                        if(lives <= 0 && !isGameOver) {
-                            isGameOver = true;
-                            alert("GAME OVER!");
-                            location.reload();
-                        }
+                        if(lives <= 0 && !isGameOver) { isGameOver = true; alert("GAME OVER!"); location.reload(); }
                     }
-                } else {
-                    this.x += (dx / distToTarget) * actualSpeed;
-                    this.y += (dy / distToTarget) * actualSpeed;
-                }
+                } else { this.x += (dx / dist) * actualSpeed; this.y += (dy / dist) * actualSpeed; }
             }
             draw() {
                 ctx.fillStyle = this.isGolden ? (this.frozen>0?'#ccffff':'#ffd700') : (this.frozen>0?'#88ccff':'#555555');
@@ -558,11 +553,7 @@
                 this.level++; 
                 this.upgradeCost = this.type.cost * Math.pow(2, this.level - 1);
                 this.range = this.type.range * (1 + (0.2 * (this.level - 1)));
-                
-                if(this.type.symbol === '÷') {
-                    this.currentRate = Math.max(1, Math.floor(this.currentRate / 2));
-                }
-                
+                if(this.type.symbol === '÷') { this.currentRate = Math.max(1, Math.floor(this.currentRate / 2)); }
                 playSound('upgrade'); for(let i=0; i<10; i++) particles.push(new Particle(this.x, this.y, '#fff'));
             }
             getDamage() { 
@@ -598,23 +589,14 @@
         class Bullet {
             constructor(x, y, target, type, damage, currentWave) {
                 this.x = x; this.y = y; this.target = target; this.type = type; 
-                this.damage = damage; 
-                this.speed = 25 + (currentWave * 0.5); 
-                this.active = true;
+                this.damage = damage; this.speed = 25 + (currentWave * 0.5); this.active = true;
             }
             update() {
                 if(!this.target || !this.target.active) { this.active = false; return; }
                 let dx = this.target.x - this.x; let dy = this.target.y - this.y;
                 let dist = Math.sqrt(dx*dx + dy*dy);
-                
-                if(dist <= this.speed) { 
-                    this.hit(this.target); 
-                    this.active = false; 
-                } 
-                else { 
-                    this.x += (dx/dist) * this.speed; 
-                    this.y += (dy/dist) * this.speed; 
-                }
+                if(dist <= this.speed) { this.hit(this.target); this.active = false; } 
+                else { this.x += (dx/dist) * this.speed; this.y += (dy/dist) * this.speed; }
             }
             hit(enemy) {
                 enemy.hp -= this.damage; if(this.type.slow) enemy.frozen = 60;
@@ -637,49 +619,51 @@
             draw() { ctx.globalAlpha = this.life / 20; ctx.fillStyle = this.color; ctx.fillRect(this.x, this.y, 3, 3); ctx.globalAlpha = 1; }
         }
 
+        // --- SISTEMA DE GHOST MODE ---
         function selectTower(idx) {
+            // Se clicou na mesma torre, deseleciona
+            if(selectedTowerIdx === idx) {
+                cancelSelection();
+                return;
+            }
+
             [0,1,2,3].forEach(i => document.getElementById('tbtn'+i).classList.remove('selected'));
-            if(selectedTowerIdx === idx) { selectedTowerIdx = -1; } 
-            else { selectedTowerIdx = idx; if(idx > -1) document.getElementById('tbtn'+idx).classList.add('selected'); }
+            selectedTowerIdx = idx;
+            
+            if(idx > -1) {
+                document.getElementById('tbtn'+idx).classList.add('selected');
+                document.body.classList.add('ghost-active'); // ATIVA O FANTASMA
+            } else {
+                cancelSelection();
+            }
         }
 
-        // --- SUPORTE MOUSE ---
+        function cancelSelection() {
+            selectedTowerIdx = -1;
+            [0,1,2,3].forEach(i => document.getElementById('tbtn'+i).classList.remove('selected'));
+            document.body.classList.remove('ghost-active'); // DESATIVA O FANTASMA
+        }
+
         canvas.addEventListener('mousemove', (e) => {
             const rect = canvas.getBoundingClientRect();
-            // Precisamos considerar a escala se estiver no mobile
-            const scaleX = canvas.width / rect.width;
-            const scaleY = canvas.height / rect.height;
-            mouseX = (e.clientX - rect.left) * scaleX;
-            mouseY = (e.clientY - rect.top) * scaleY;
+            const scaleX = canvas.width / rect.width; const scaleY = canvas.height / rect.height;
+            mouseX = (e.clientX - rect.left) * scaleX; mouseY = (e.clientY - rect.top) * scaleY;
         });
 
-        canvas.addEventListener('mousedown', (e) => {
-            handleInteraction();
-        });
+        canvas.addEventListener('mousedown', (e) => { handleInteraction(); });
 
-        // --- SUPORTE TOUCH (MOBILE PRECISION) ---
         canvas.addEventListener('touchmove', (e) => {
-            e.preventDefault(); // Evita scroll da tela
-            const rect = canvas.getBoundingClientRect();
-            const touch = e.touches[0];
-            const scaleX = canvas.width / rect.width;
-            const scaleY = canvas.height / rect.height;
-            
-            mouseX = (touch.clientX - rect.left) * scaleX;
-            // OFFSET Y PARA NÃO FICAR EMBAIXO DO DEDO
-            mouseY = ((touch.clientY - rect.top) * scaleY) - 50; 
+            e.preventDefault(); const rect = canvas.getBoundingClientRect(); const touch = e.touches[0];
+            const scaleX = canvas.width / rect.width; const scaleY = canvas.height / rect.height;
+            mouseX = (touch.clientX - rect.left) * scaleX; mouseY = ((touch.clientY - rect.top) * scaleY) - 50; 
         }, {passive: false});
 
-        canvas.addEventListener('touchend', (e) => {
-            e.preventDefault();
-            handleInteraction();
-        });
+        canvas.addEventListener('touchend', (e) => { e.preventDefault(); handleInteraction(); });
 
-        // --- LÓGICA DE CONSTRUÇÃO UNIFICADA ---
         function handleInteraction() {
             if(gameState !== 'BUILD') return;
             
-            // 1. Upgrade
+            // 1. Upgrade (Prioridade se não tiver torre selecionada ou se clicar muito perto de outra)
             for(let t of towers) {
                 let dist = Math.sqrt((t.x - mouseX)**2 + (t.y - mouseY)**2);
                 if(dist < 30) {
@@ -687,6 +671,8 @@
                         gold -= t.upgradeCost; document.getElementById('gold-display').innerText = gold;
                         t.upgrade();
                         const fb = document.getElementById('feedback-msg'); fb.innerText = "UPGRADE! -" + t.upgradeCost/2; fb.style.color = "#00ff00"; fb.style.opacity = 1; setTimeout(()=>fb.style.opacity=0, 500);
+                        // Ao fazer upgrade, cancela seleção para não construir em cima sem querer
+                        cancelSelection();
                     } else {
                         const fb = document.getElementById('feedback-msg'); fb.innerText = "FALTA OURO: $" + t.upgradeCost; fb.style.color = "red"; fb.style.opacity = 1; setTimeout(()=>fb.style.opacity=0, 1000);
                     }
@@ -702,6 +688,8 @@
                         towers.push(new Tower(mouseX, mouseY, selectedTowerIdx));
                         gold -= type.cost; document.getElementById('gold-display').innerText = gold;
                         for(let i=0; i<5; i++) particles.push(new Particle(mouseX, mouseY, '#00ff00')); playSound('correct');
+                        // MANTEMOS O FANTASMA ATIVO PARA CONSTRUÇÃO RÁPIDA (PEDIDO DE EFICIÊNCIA)
+                        // Só sai se clicar na lixeira
                     } else {
                         const fb = document.getElementById('feedback-msg'); fb.innerText = "OURO INSUFICIENTE!"; fb.style.color = "red"; fb.style.opacity = 1; setTimeout(() => fb.style.opacity = 0, 1000);
                     }
