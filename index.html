@@ -2,10 +2,15 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Logic Defense: Physics Fix</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Logic Defense: Mobile Precision</title>
     <style>
-        body { margin: 0; overflow: hidden; background-color: #1a1a1a; color: white; font-family: 'Courier New', monospace; user-select: none; }
+        /* PREVENIR ZOOM E ROLAGEM NO MOBILE */
+        body { 
+            margin: 0; overflow: hidden; background-color: #1a1a1a; color: white; 
+            font-family: 'Courier New', monospace; user-select: none; 
+            touch-action: none; /* Desativa gestos padrão do navegador */
+        }
         
         #game-container { position: relative; width: 800px; height: 600px; margin: 20px auto; border: 2px solid #444; background: #222; box-shadow: 0 0 20px rgba(0,0,0,0.5); }
         canvas { display: block; cursor: crosshair; }
@@ -140,6 +145,27 @@
         const AudioContext = window.AudioContext || window.webkitAudioContext;
         const audioCtx = new AudioContext();
 
+        // --- SISTEMA DE ESCALA PARA MOBILE ---
+        // Ajusta o tamanho do canvas para caber na tela do celular se precisar
+        function resizeCanvas() {
+            const container = document.getElementById('game-container');
+            const winW = window.innerWidth;
+            const winH = window.innerHeight;
+            
+            // Se a tela for menor que 800px (celular em pé ou tablet pequeno)
+            if (winW < 840) {
+                let scale = winW / 820;
+                container.style.transform = `scale(${scale})`;
+                container.style.transformOrigin = 'top left';
+                container.style.marginBottom = '-200px'; // Compensar espaço em branco
+            } else {
+                container.style.transform = 'scale(1)';
+                container.style.marginBottom = '20px';
+            }
+        }
+        window.addEventListener('resize', resizeCanvas);
+        setTimeout(resizeCanvas, 100);
+
         function playSound(type) {
             if (audioCtx.state === 'suspended') audioCtx.resume();
             const osc = audioCtx.createOscillator();
@@ -234,13 +260,12 @@
             }
         }
 
-        // --- COR DO CAMINHO DINÂMICA ---
         function getPathColor(wave) {
-            if (wave < 50) return '#333'; // Padrão
-            if (wave < 100) return '#004488'; // Gelo/Azul Escuro
-            if (wave < 150) return '#440088'; // Roxo
-            if (wave < 200) return '#880000'; // Vermelho
-            return '#b8860b'; // Dourado (Lenda)
+            if (wave < 50) return '#333'; 
+            if (wave < 100) return '#004488';
+            if (wave < 150) return '#440088';
+            if (wave < 200) return '#880000';
+            return '#b8860b';
         }
 
         function gameLoop() {
@@ -409,14 +434,11 @@
                 for(let i=0; i<600; i+=50) { ctx.beginPath(); ctx.moveTo(0,i); ctx.lineTo(800,i); ctx.stroke(); }
             }
 
-            // --- CAMINHO COLORIDO (Muda a cada 50 ondas) ---
             ctx.strokeStyle = getPathColor(wave);
             ctx.lineWidth = 40; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
             ctx.beginPath(); ctx.moveTo(path[0].x, path[0].y);
             for(let i=1; i<path.length; i++) ctx.lineTo(path[i].x, path[i].y);
             ctx.stroke();
-            
-            // Borda do Caminho (Para contraste)
             ctx.strokeStyle = '#222'; ctx.lineWidth = 2; ctx.stroke();
 
             towers.forEach(t => t.draw());
@@ -482,7 +504,6 @@
         class Enemy {
             constructor(maxHp, isGolden) {
                 this.x = path[0].x; this.y = path[0].y; this.pathIndex = 0;
-                // Velocidade escala infinitamente
                 this.speed = 1.5 + (wave * 0.05);
                 this.maxHp = maxHp; this.hp = this.maxHp; this.radius = 12; this.frozen = 0; this.active = true;
                 this.isGolden = isGolden;
@@ -490,7 +511,6 @@
             update() {
                 let target = path[this.pathIndex + 1]; if(!target) return;
                 
-                // --- PHYSICS FIX: Lógica de movimento para não pular curvas ---
                 let actualSpeed = this.frozen > 0 ? this.speed * 0.4 : this.speed;
                 if(this.frozen > 0) this.frozen--;
 
@@ -498,13 +518,11 @@
                 let dy = target.y - this.y;
                 let distToTarget = Math.sqrt(dx*dx + dy*dy);
                 
-                // Se a velocidade é maior que a distância pro ponto, teleporta pro ponto e continua
                 if(distToTarget < actualSpeed) {
                     this.x = target.x; 
                     this.y = target.y;
                     this.pathIndex++;
                     
-                    // Se acabou o caminho
                     if(this.pathIndex >= path.length - 1) {
                         this.active = false;
                         lives--;
@@ -514,12 +532,8 @@
                             alert("GAME OVER!");
                             location.reload();
                         }
-                    } else {
-                        // Se sobrou movimento, continua pro próximo ponto (simulação simples)
-                        // Para não complicar a física, paramos no waypoint neste frame (perde um pouco de speed na curva, mas evita bugs)
                     }
                 } else {
-                    // Movimento normal
                     this.x += (dx / distToTarget) * actualSpeed;
                     this.y += (dy / distToTarget) * actualSpeed;
                 }
@@ -564,7 +578,6 @@
                         if(dst < this.range && dst < minDst) { minDst = dst; target = e; }
                     });
                     if(target) {
-                        // --- PHYSICS FIX: Passar a wave para a bala calcular a velocidade ---
                         bullets.push(new Bullet(this.x, this.y, target, this.type, this.getDamage(), wave));
                         this.cooldown = this.currentRate; 
                         if(this.type.symbol === '÷') playSound('sniper');
@@ -586,8 +599,6 @@
             constructor(x, y, target, type, damage, currentWave) {
                 this.x = x; this.y = y; this.target = target; this.type = type; 
                 this.damage = damage; 
-                // --- PHYSICS FIX: Bala escala com a onda para sempre ser mais rápida que o monstro ---
-                // Base 25 + Bônus de onda
                 this.speed = 25 + (currentWave * 0.5); 
                 this.active = true;
             }
@@ -596,7 +607,6 @@
                 let dx = this.target.x - this.x; let dy = this.target.y - this.y;
                 let dist = Math.sqrt(dx*dx + dy*dy);
                 
-                // Se a distância for menor que a velocidade, acerta direto (Hitscan no ultimo frame)
                 if(dist <= this.speed) { 
                     this.hit(this.target); 
                     this.active = false; 
@@ -633,16 +643,46 @@
             else { selectedTowerIdx = idx; if(idx > -1) document.getElementById('tbtn'+idx).classList.add('selected'); }
         }
 
+        // --- SUPORTE MOUSE ---
         canvas.addEventListener('mousemove', (e) => {
             const rect = canvas.getBoundingClientRect();
-            mouseX = e.clientX - rect.left; mouseY = e.clientY - rect.top;
+            // Precisamos considerar a escala se estiver no mobile
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            mouseX = (e.clientX - rect.left) * scaleX;
+            mouseY = (e.clientY - rect.top) * scaleY;
         });
 
         canvas.addEventListener('mousedown', (e) => {
+            handleInteraction();
+        });
+
+        // --- SUPORTE TOUCH (MOBILE PRECISION) ---
+        canvas.addEventListener('touchmove', (e) => {
+            e.preventDefault(); // Evita scroll da tela
+            const rect = canvas.getBoundingClientRect();
+            const touch = e.touches[0];
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            
+            mouseX = (touch.clientX - rect.left) * scaleX;
+            // OFFSET Y PARA NÃO FICAR EMBAIXO DO DEDO
+            mouseY = ((touch.clientY - rect.top) * scaleY) - 50; 
+        }, {passive: false});
+
+        canvas.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            handleInteraction();
+        });
+
+        // --- LÓGICA DE CONSTRUÇÃO UNIFICADA ---
+        function handleInteraction() {
             if(gameState !== 'BUILD') return;
+            
+            // 1. Upgrade
             for(let t of towers) {
                 let dist = Math.sqrt((t.x - mouseX)**2 + (t.y - mouseY)**2);
-                if(dist < 20) {
+                if(dist < 30) {
                     if(gold >= t.upgradeCost) {
                         gold -= t.upgradeCost; document.getElementById('gold-display').innerText = gold;
                         t.upgrade();
@@ -653,6 +693,8 @@
                     return;
                 }
             }
+            
+            // 2. Build
             if(selectedTowerIdx > -1) {
                 if(canBuild) {
                     const type = towerTypes[selectedTowerIdx];
@@ -667,7 +709,7 @@
                     const fb = document.getElementById('feedback-msg'); fb.innerText = "LOCAL BLOQUEADO!"; fb.style.color = "orange"; fb.style.opacity = 1; setTimeout(() => fb.style.opacity = 0, 1000); playSound('wrong');
                 }
             }
-        });
+        }
     </script>
 </body>
 </html>
