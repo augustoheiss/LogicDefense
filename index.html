@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Logic Defense: Clean UI</title>
+    <title>Logic Defense: War Construction</title>
     <style>
         body { 
             margin: 0; overflow: hidden; background-color: #1a1a1a; color: white; 
@@ -33,11 +33,11 @@
         #next-wave-btn:hover { background: #ff4444; transform: scale(1.05); }
         @keyframes pulse { 0% { box-shadow: 0 0 10px #ff0000; } 50% { box-shadow: 0 0 25px #ff0000; } 100% { box-shadow: 0 0 10px #ff0000; } }
 
-        /* LIXEIRA / CANCELAR - MOVIDO PARA O CIMÃO */
+        /* LIXEIRA / CANCELAR - NO CIMÃO */
         #cancel-btn {
             display: none; 
             position: absolute; 
-            top: 80px; /* BEM NO CIMÃO */
+            top: 80px; 
             left: 50%; 
             transform: translateX(-50%);
             padding: 12px 30px; 
@@ -104,12 +104,16 @@
         
         #upgrade-info { position: absolute; top: 10px; right: 10px; text-align: right; font-size: 12px; color: #aaa; pointer-events: none; display: none; }
 
-        /* GHOST MODE */
+        /* --- MODO FANTASMA (GHOST MODE) CORRIGIDO --- */
         body.ghost-active #build-menu,
         body.ghost-active #next-wave-btn,
         body.ghost-active #ui-layer {
             opacity: 0.15; 
             pointer-events: none !important; 
+        }
+        /* CORREÇÃO CRÍTICA: Desativar botões das torres individualmente também */
+        body.ghost-active .tower-btn {
+            pointer-events: none !important;
         }
         body.ghost-active #cancel-btn { display: block; }
     </style>
@@ -451,7 +455,7 @@
         function draw() {
             ctx.fillStyle = '#222'; ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            if(gameState === 'BUILD') {
+            if(gameState === 'BUILD' || gameState === 'COMBAT') { // MOSTRA GRID TAMBÉM EM COMBATE PRA FACILITAR CONSTRUÇÃO
                 ctx.strokeStyle = '#333'; ctx.lineWidth = 1;
                 for(let i=0; i<800; i+=50) { ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i,600); ctx.stroke(); }
                 for(let i=0; i<600; i+=50) { ctx.beginPath(); ctx.moveTo(0,i); ctx.lineTo(800,i); ctx.stroke(); }
@@ -469,7 +473,7 @@
             bullets.forEach(b => b.draw());
             particles.forEach(p => p.draw());
 
-            if(gameState === 'BUILD' && selectedTowerIdx > -1) {
+            if(selectedTowerIdx > -1) {
                 const type = towerTypes[selectedTowerIdx];
                 canBuild = checkCollision(mouseX, mouseY);
                 const color = canBuild ? 'rgba(0, 255, 0, 0.5)' : 'rgba(255, 0, 0, 0.5)';
@@ -483,7 +487,7 @@
                 ctx.fillText(`$${type.cost}`, mouseX, mouseY - 25);
             }
             
-            if(gameState === 'BUILD' && selectedTowerIdx === -1) {
+            if(selectedTowerIdx === -1) {
                 for(let t of towers) {
                     let dist = Math.sqrt((t.x - mouseX)**2 + (t.y - mouseY)**2);
                     if(dist < 20) {
@@ -670,7 +674,10 @@
         canvas.addEventListener('touchend', (e) => { e.preventDefault(); handleInteraction(); });
 
         function handleInteraction() {
-            if(gameState !== 'BUILD') return;
+            // --- CONSTRUÇÃO LIBERADA (BUILD OU COMBAT) ---
+            // Só bloqueia se estiver no MATH (modal aberto) ou START (início) ou GAMEOVER
+            if(gameState === 'MATH' || gameState === 'START' || isGameOver) return;
+            
             for(let t of towers) {
                 let dist = Math.sqrt((t.x - mouseX)**2 + (t.y - mouseY)**2);
                 if(dist < 30) {
@@ -692,6 +699,7 @@
                         towers.push(new Tower(mouseX, mouseY, selectedTowerIdx));
                         gold -= type.cost; document.getElementById('gold-display').innerText = gold;
                         for(let i=0; i<5; i++) particles.push(new Particle(mouseX, mouseY, '#00ff00')); playSound('correct');
+                        // NÃO CANCELA A SELEÇÃO PRA CONSTRUIR EM CADEIA (RAPIDEZ)
                     } else {
                         const fb = document.getElementById('feedback-msg'); fb.innerText = "OURO INSUFICIENTE!"; fb.style.color = "red"; fb.style.opacity = 1; setTimeout(() => fb.style.opacity = 0, 1000);
                     }
