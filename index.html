@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Logic Defense: Emotional Buffs</title>
+    <title>Logic Defense: Infinite Cycle</title>
     <style>
         body { 
             margin: 0; overflow: hidden; background-color: #1a1a1a; color: white; 
@@ -24,7 +24,7 @@
         }
         #speed-btn.active { background: #ff9800; color: black; border-color: #ff9800; box-shadow: 0 0 10px #ff9800; }
 
-        /* TELA DE INÍCIO (ESCOLHA DE BUFF) */
+        /* TELA DE INÍCIO E RECARGA */
         #start-screen {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(0,0,0,0.95); z-index: 200;
@@ -75,10 +75,9 @@
             box-shadow: 0 0 50px rgba(255,255,255,0.2); z-index: 10; width: 450px; border-radius: 10px; overflow: hidden;
         }
         
-        /* MENSAGEM DO BUFF NO MODAL */
         #buff-message {
-            font-size: 14px; color: #aaa; margin-bottom: 20px; font-style: italic; min-height: 40px;
-            padding: 10px; border-bottom: 1px solid #333;
+            font-size: 16px; color: #ccc; margin-bottom: 20px; font-style: italic; min-height: 40px;
+            padding: 10px; border-bottom: 1px solid #333; line-height: 1.4;
         }
 
         #timer-container { width: 100%; height: 10px; background: #333; position: absolute; top: 0; left: 0; }
@@ -126,8 +125,8 @@
 <body>
 
     <div id="start-screen">
-        <h1 style="font-size: 40px; margin-bottom: 10px; color: #fff;">LOGIC DEFENSE</h1>
-        <p style="font-size: 20px; margin-bottom: 40px; color: #aaa;">ESCOLHA SEU COMBUSTÍVEL</p>
+        <h1 id="start-title" style="font-size: 40px; margin-bottom: 10px; color: #fff;">LOGIC DEFENSE</h1>
+        <p id="start-subtitle" style="font-size: 20px; margin-bottom: 40px; color: #aaa;">ESCOLHA SEU COMBUSTÍVEL</p>
         
         <button class="buff-btn buff-amor" onclick="selectBuff('amor')">❤️ AMOR<br><span style="font-size:12px">"O fogo tá sempre aceso"</span></button>
         <button class="buff-btn buff-odio" onclick="selectBuff('odio')">🔥 ÓDIO<br><span style="font-size:12px">"Vou desligar sua tomada"</span></button>
@@ -161,7 +160,8 @@
 
         <div id="math-modal">
             <div id="timer-container"><div id="timer-bar"></div></div>
-            <div id="buff-message"></div> <div style="color: #00ff00; font-size: 16px; letter-spacing: 2px; margin-top: 10px;">PROTOCOLOS DE SEGURANÇA</div>
+            <div id="buff-message"></div>
+            <div style="color: #00ff00; font-size: 16px; letter-spacing: 2px; margin-top: 10px;">PROTOCOLOS DE SEGURANÇA</div>
             <div id="math-question">2 + 2 = ?</div>
             <div id="math-options"></div>
         </div>
@@ -252,7 +252,7 @@
             }
         }
 
-        let gameState = 'MENU'; // Começa no menu agora
+        let gameState = 'MENU';
         let gold = 150;
         let lives = 20;
         let wave = 0;
@@ -270,8 +270,32 @@
         let timeLeft = 10;
         const TOTAL_TIME = 10;
 
-        // --- SISTEMA DE BUFFS ---
-        let currentBuff = 'cadeira'; // Default
+        let towers = [];
+        let enemies = [];
+        let bullets = [];
+        let particles = [];
+        
+        let mouseX = 0;
+        let mouseY = 0;
+        let canBuild = false;
+
+        const path = [
+            {x: 0, y: 150}, {x: 700, y: 150}, {x: 700, y: 350}, 
+            {x: 100, y: 350}, {x: 100, y: 500}, {x: 800, y: 500}
+        ];
+
+        const towerTypes = [
+            { name: "Soma", symbol: "+", cost: 50, range: 120, damage: 25, rate: 25, color: "#ffeb3b" },
+            { name: "Sub", symbol: "-", cost: 120, range: 160, damage: 8, rate: 5, color: "#03a9f4", slow: true },
+            { name: "Mult", symbol: "x", cost: 300, range: 220, damage: 120, rate: 70, color: "#f44336", splash: true },
+            { name: "Div", symbol: "÷", cost: 450, range: 300, damage: 400, rate: 120, color: "#9c27b0" }
+        ];
+        let selectedTowerIdx = -1;
+
+        // --- SISTEMA DE BUFFS E BARALHO ---
+        let currentBuff = 'cadeira';
+        let phraseQueue = []; // Baralho de frases da sessão atual
+
         const buffPhrases = {
             'amor': [
                 "Pode deixar que o pai paga essa filhão, mas resolve essa aqui pra mim.",
@@ -313,44 +337,27 @@
 
         function selectBuff(type) {
             currentBuff = type;
+            // Carrega o baralho e embaralha (shuffle simples)
+            phraseQueue = [...buffPhrases[type]];
+            phraseQueue.sort(() => Math.random() - 0.5);
+            
             document.getElementById('start-screen').style.display = 'none';
-            // Muda a cor do modal baseado no buff
+            // Muda a cor do modal
             const modal = document.getElementById('math-modal');
             const msg = document.getElementById('buff-message');
             if(type === 'amor') { modal.style.borderColor = '#00ff00'; modal.style.boxShadow = '0 0 50px rgba(0,255,0,0.3)'; msg.style.color = '#88ff88'; }
             if(type === 'odio') { modal.style.borderColor = '#ff0000'; modal.style.boxShadow = '0 0 50px rgba(255,0,0,0.3)'; msg.style.color = '#ff8888'; }
             if(type === 'cadeira') { modal.style.borderColor = '#00d4ff'; modal.style.boxShadow = '0 0 50px rgba(0,212,255,0.3)'; msg.style.color = '#88ccff'; }
             
-            startMathPhase(); // Começa o jogo
+            startMathPhase(); // Começa o jogo ou próxima fase
             gameLoop();
         }
 
-        function getRandomBuffPhrase() {
-            const list = buffPhrases[currentBuff];
-            return list[Math.floor(Math.random() * list.length)];
+        // Tira uma frase do baralho sem reposição
+        function getNextPhrase() {
+            if(phraseQueue.length === 0) return null; // Acabou
+            return phraseQueue.pop(); // Remove e retorna a última
         }
-
-        let towers = [];
-        let enemies = [];
-        let bullets = [];
-        let particles = [];
-        
-        let mouseX = 0;
-        let mouseY = 0;
-        let canBuild = false;
-
-        const path = [
-            {x: 0, y: 150}, {x: 700, y: 150}, {x: 700, y: 350}, 
-            {x: 100, y: 350}, {x: 100, y: 500}, {x: 800, y: 500}
-        ];
-
-        const towerTypes = [
-            { name: "Soma", symbol: "+", cost: 50, range: 120, damage: 25, rate: 25, color: "#ffeb3b" },
-            { name: "Sub", symbol: "-", cost: 120, range: 160, damage: 8, rate: 5, color: "#03a9f4", slow: true },
-            { name: "Mult", symbol: "x", cost: 300, range: 220, damage: 120, rate: 70, color: "#f44336", splash: true },
-            { name: "Div", symbol: "÷", cost: 450, range: 300, damage: 400, rate: 120, color: "#9c27b0" }
-        ];
-        let selectedTowerIdx = -1;
 
         function toRoman(num) {
             if (num >= 10) return "X+";
@@ -387,6 +394,20 @@
         }
 
         function startMathPhase() {
+            // --- VERIFICAÇÃO DE CICLO (RECARGA) ---
+            // Se o baralho acabou, força o menu de seleção
+            const nextPhrase = getNextPhrase();
+            
+            if (!nextPhrase) {
+                gameState = 'MENU';
+                const screen = document.getElementById('start-screen');
+                screen.style.display = 'flex';
+                document.getElementById('start-title').innerText = "CICLO ENCERRADO";
+                document.getElementById('start-subtitle').innerText = "RECARREGUE SEU COMBUSTÍVEL";
+                document.getElementById('start-subtitle').style.color = "#ffeb3b";
+                return; // Para tudo e espera a seleção
+            }
+
             gameState = 'MATH';
             wave++;
             document.getElementById('wave-display').innerText = wave;
@@ -394,8 +415,8 @@
             document.getElementById('math-tip-box').style.display = 'none'; 
             document.getElementById('build-menu').classList.remove('build-glow');
             
-            // --- INJETAR A FRASE DO BUFF ---
-            document.getElementById('buff-message').innerText = getRandomBuffPhrase();
+            // --- INJETAR A FRASE ÚNICA ---
+            document.getElementById('buff-message').innerText = nextPhrase;
 
             timeLeft = TOTAL_TIME;
             document.getElementById('timer-bar').style.width = '100%';
@@ -841,7 +862,7 @@
         canvas.addEventListener('touchend', (e) => { e.preventDefault(); handleInteraction(); });
 
         function handleInteraction() {
-            if(gameState === 'MATH' || gameState === 'START' || isGameOver) return;
+            if(gameState === 'MATH' || gameState === 'START' || isGameOver || gameState === 'MENU') return;
             
             for(let t of towers) {
                 let dist = Math.sqrt((t.x - mouseX)**2 + (t.y - mouseY)**2);
