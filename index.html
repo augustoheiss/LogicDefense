@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Logic Defense: Ghost Mode</title>
+    <title>Logic Defense: Clean UI</title>
     <style>
         body { 
             margin: 0; overflow: hidden; background-color: #1a1a1a; color: white; 
@@ -33,12 +33,26 @@
         #next-wave-btn:hover { background: #ff4444; transform: scale(1.05); }
         @keyframes pulse { 0% { box-shadow: 0 0 10px #ff0000; } 50% { box-shadow: 0 0 25px #ff0000; } 100% { box-shadow: 0 0 10px #ff0000; } }
 
-        /* LIXEIRA / CANCELAR */
+        /* LIXEIRA / CANCELAR - MOVIDO PARA O CIMÃO */
         #cancel-btn {
-            display: none; position: absolute; bottom: 150px; left: 50%; transform: translateX(-50%);
-            padding: 15px 30px; font-size: 24px; background: #d32f2f; color: white; border: 2px solid white;
-            cursor: pointer; font-weight: bold; z-index: 20; border-radius: 50px;
-            box-shadow: 0 0 15px red; pointer-events: auto !important;
+            display: none; 
+            position: absolute; 
+            top: 80px; /* BEM NO CIMÃO */
+            left: 50%; 
+            transform: translateX(-50%);
+            padding: 12px 30px; 
+            font-size: 20px; 
+            background: #d32f2f; 
+            color: white; 
+            border: 2px solid white;
+            cursor: pointer; 
+            font-weight: bold; 
+            z-index: 100; 
+            border-radius: 50px;
+            box-shadow: 0 0 20px rgba(255, 0, 0, 0.8); 
+            pointer-events: auto !important;
+            text-transform: uppercase;
+            letter-spacing: 2px;
         }
         #cancel-btn:hover { background: #f44336; transform: translateX(-50%) scale(1.1); }
 
@@ -90,16 +104,14 @@
         
         #upgrade-info { position: absolute; top: 10px; right: 10px; text-align: right; font-size: 12px; color: #aaa; pointer-events: none; display: none; }
 
-        /* --- MODO FANTASMA (GHOST MODE) --- */
+        /* GHOST MODE */
         body.ghost-active #build-menu,
         body.ghost-active #next-wave-btn,
         body.ghost-active #ui-layer {
-            opacity: 0.15; /* Transparente */
-            pointer-events: none !important; /* Cliques atravessam */
+            opacity: 0.15; 
+            pointer-events: none !important; 
         }
-        body.ghost-active #cancel-btn {
-            display: block; /* Mostra o botão de cancelar */
-        }
+        body.ghost-active #cancel-btn { display: block; }
     </style>
 </head>
 <body>
@@ -381,7 +393,7 @@
             document.getElementById('next-wave-btn').style.display = 'none';
             document.getElementById('upgrade-info').style.display = 'none';
             document.getElementById('build-menu').classList.remove('build-glow');
-            cancelSelection(); // Garante que a seleção é limpa
+            cancelSelection();
             spawnEnemies();
         }
 
@@ -621,18 +633,15 @@
 
         // --- SISTEMA DE GHOST MODE ---
         function selectTower(idx) {
-            // Se clicou na mesma torre, deseleciona
             if(selectedTowerIdx === idx) {
                 cancelSelection();
                 return;
             }
-
             [0,1,2,3].forEach(i => document.getElementById('tbtn'+i).classList.remove('selected'));
             selectedTowerIdx = idx;
-            
             if(idx > -1) {
                 document.getElementById('tbtn'+idx).classList.add('selected');
-                document.body.classList.add('ghost-active'); // ATIVA O FANTASMA
+                document.body.classList.add('ghost-active'); 
             } else {
                 cancelSelection();
             }
@@ -641,7 +650,7 @@
         function cancelSelection() {
             selectedTowerIdx = -1;
             [0,1,2,3].forEach(i => document.getElementById('tbtn'+i).classList.remove('selected'));
-            document.body.classList.remove('ghost-active'); // DESATIVA O FANTASMA
+            document.body.classList.remove('ghost-active'); 
         }
 
         canvas.addEventListener('mousemove', (e) => {
@@ -662,8 +671,6 @@
 
         function handleInteraction() {
             if(gameState !== 'BUILD') return;
-            
-            // 1. Upgrade (Prioridade se não tiver torre selecionada ou se clicar muito perto de outra)
             for(let t of towers) {
                 let dist = Math.sqrt((t.x - mouseX)**2 + (t.y - mouseY)**2);
                 if(dist < 30) {
@@ -671,7 +678,6 @@
                         gold -= t.upgradeCost; document.getElementById('gold-display').innerText = gold;
                         t.upgrade();
                         const fb = document.getElementById('feedback-msg'); fb.innerText = "UPGRADE! -" + t.upgradeCost/2; fb.style.color = "#00ff00"; fb.style.opacity = 1; setTimeout(()=>fb.style.opacity=0, 500);
-                        // Ao fazer upgrade, cancela seleção para não construir em cima sem querer
                         cancelSelection();
                     } else {
                         const fb = document.getElementById('feedback-msg'); fb.innerText = "FALTA OURO: $" + t.upgradeCost; fb.style.color = "red"; fb.style.opacity = 1; setTimeout(()=>fb.style.opacity=0, 1000);
@@ -679,8 +685,6 @@
                     return;
                 }
             }
-            
-            // 2. Build
             if(selectedTowerIdx > -1) {
                 if(canBuild) {
                     const type = towerTypes[selectedTowerIdx];
@@ -688,8 +692,6 @@
                         towers.push(new Tower(mouseX, mouseY, selectedTowerIdx));
                         gold -= type.cost; document.getElementById('gold-display').innerText = gold;
                         for(let i=0; i<5; i++) particles.push(new Particle(mouseX, mouseY, '#00ff00')); playSound('correct');
-                        // MANTEMOS O FANTASMA ATIVO PARA CONSTRUÇÃO RÁPIDA (PEDIDO DE EFICIÊNCIA)
-                        // Só sai se clicar na lixeira
                     } else {
                         const fb = document.getElementById('feedback-msg'); fb.innerText = "OURO INSUFICIENTE!"; fb.style.color = "red"; fb.style.opacity = 1; setTimeout(() => fb.style.opacity = 0, 1000);
                     }
