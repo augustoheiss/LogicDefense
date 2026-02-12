@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Logic Defense: Ghost Tip</title>
+    <title>Logic Defense: Emotional Buffs</title>
     <style>
         body { 
             margin: 0; overflow: hidden; background-color: #1a1a1a; color: white; 
@@ -24,23 +24,28 @@
         }
         #speed-btn.active { background: #ff9800; color: black; border-color: #ff9800; box-shadow: 0 0 10px #ff9800; }
 
+        /* TELA DE INÍCIO (ESCOLHA DE BUFF) */
+        #start-screen {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.95); z-index: 200;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+        }
+        .buff-btn {
+            margin: 15px; padding: 20px 40px; font-size: 24px; cursor: pointer;
+            border: 2px solid white; background: transparent; color: white;
+            font-family: inherit; transition: 0.2s; width: 300px; text-align: center;
+        }
+        .buff-btn:hover { transform: scale(1.05); color: #000; }
+        .buff-amor:hover { background: #00ff00; border-color: #00ff00; box-shadow: 0 0 20px #00ff00; }
+        .buff-odio:hover { background: #ff0000; border-color: #ff0000; box-shadow: 0 0 20px #ff0000; }
+        .buff-cadeira:hover { background: #00d4ff; border-color: #00d4ff; box-shadow: 0 0 20px #00d4ff; }
+
         /* CAIXA DE DICAS */
         #math-tip-box {
-            display: none;
-            position: absolute;
-            bottom: 200px; 
-            right: 40px;
-            width: 320px; 
-            background: rgba(0, 0, 0, 0.95);
-            border: 2px solid #00d4ff; 
-            padding: 15px;
-            border-radius: 8px;
-            color: #fff;
-            z-index: 10;
-            pointer-events: none; /* Já deixa clicar, mas visualmente bloqueia */
-            box-shadow: 0 0 20px rgba(0, 212, 255, 0.4);
-            text-align: left;
-            transition: opacity 0.3s; /* Transição suave */
+            display: none; position: absolute; bottom: 200px; right: 40px; width: 320px; 
+            background: rgba(0, 0, 0, 0.95); border: 2px solid #00d4ff; padding: 15px;
+            border-radius: 8px; color: #fff; z-index: 10; pointer-events: none; 
+            box-shadow: 0 0 20px rgba(0, 212, 255, 0.4); text-align: left; transition: opacity 0.3s;
         }
         .tip-title { color: #00d4ff; font-weight: bold; margin-bottom: 8px; text-transform: uppercase; font-size: 16px; border-bottom: 1px solid #444; padding-bottom: 5px; }
         .tip-content { font-size: 15px; line-height: 1.5; color: #eee; font-family: 'Verdana', sans-serif; } 
@@ -66,19 +71,25 @@
 
         #math-modal { 
             display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); 
-            background: rgba(0,0,0,0.95); border: 4px solid #00ff00; padding: 30px; text-align: center; 
-            box-shadow: 0 0 50px #00ff00; z-index: 10; width: 400px; border-radius: 10px; overflow: hidden;
+            background: rgba(0,0,0,0.95); border: 4px solid #fff; padding: 30px; text-align: center; 
+            box-shadow: 0 0 50px rgba(255,255,255,0.2); z-index: 10; width: 450px; border-radius: 10px; overflow: hidden;
         }
         
+        /* MENSAGEM DO BUFF NO MODAL */
+        #buff-message {
+            font-size: 14px; color: #aaa; margin-bottom: 20px; font-style: italic; min-height: 40px;
+            padding: 10px; border-bottom: 1px solid #333;
+        }
+
         #timer-container { width: 100%; height: 10px; background: #333; position: absolute; top: 0; left: 0; }
         #timer-bar { width: 100%; height: 100%; background: #ff0000; transition: width 0.1s linear; }
 
-        #math-question { font-size: 48px; margin: 30px 0 20px 0; color: #fff; font-weight: bold; }
+        #math-question { font-size: 48px; margin: 10px 0 20px 0; color: #fff; font-weight: bold; }
         .btn-math { 
-            background: #222; color: #00ff00; border: 2px solid #00ff00; padding: 15px; margin: 10px; width: 100px;
+            background: #222; color: #fff; border: 2px solid #fff; padding: 15px; margin: 10px; width: 100px;
             font-size: 24px; cursor: pointer; font-family: inherit; transition: 0.2s; border-radius: 5px;
         }
-        .btn-math:hover { background: #00ff00; color: #000; transform: scale(1.1); }
+        .btn-math:hover { background: #fff; color: #000; transform: scale(1.1); }
 
         #build-menu { 
             position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); 
@@ -107,20 +118,21 @@
         
         #upgrade-info { position: absolute; top: 10px; right: 10px; text-align: right; font-size: 12px; color: #aaa; pointer-events: none; display: none; }
 
-        /* --- MODO FANTASMA (GHOST MODE) ATUALIZADO --- */
-        /* Agora inclui #math-tip-box na lista de fantasmas */
-        body.ghost-active #build-menu, 
-        body.ghost-active #next-wave-btn, 
-        body.ghost-active #ui-layer,
-        body.ghost-active #math-tip-box { 
-            opacity: 0.15; 
-            pointer-events: none !important; 
-        }
+        body.ghost-active #build-menu, body.ghost-active #next-wave-btn, body.ghost-active #ui-layer, body.ghost-active #math-tip-box { opacity: 0.15; pointer-events: none !important; }
         body.ghost-active .tower-btn { pointer-events: none !important; }
         body.ghost-active #cancel-btn { display: block; }
     </style>
 </head>
 <body>
+
+    <div id="start-screen">
+        <h1 style="font-size: 40px; margin-bottom: 10px; color: #fff;">LOGIC DEFENSE</h1>
+        <p style="font-size: 20px; margin-bottom: 40px; color: #aaa;">ESCOLHA SEU COMBUSTÍVEL</p>
+        
+        <button class="buff-btn buff-amor" onclick="selectBuff('amor')">❤️ AMOR<br><span style="font-size:12px">"O fogo tá sempre aceso"</span></button>
+        <button class="buff-btn buff-odio" onclick="selectBuff('odio')">🔥 ÓDIO<br><span style="font-size:12px">"Vou desligar sua tomada"</span></button>
+        <button class="buff-btn buff-cadeira" onclick="selectBuff('cadeira')">🪑 A CADEIRA<br><span style="font-size:12px">"Aceite a dor"</span></button>
+    </div>
 
     <div id="game-container">
         <canvas id="gameCanvas" width="800" height="600"></canvas>
@@ -149,7 +161,7 @@
 
         <div id="math-modal">
             <div id="timer-container"><div id="timer-bar"></div></div>
-            <div style="color: #00ff00; font-size: 16px; letter-spacing: 2px; margin-top: 10px;">PROTOCOLOS DE SEGURANÇA</div>
+            <div id="buff-message"></div> <div style="color: #00ff00; font-size: 16px; letter-spacing: 2px; margin-top: 10px;">PROTOCOLOS DE SEGURANÇA</div>
             <div id="math-question">2 + 2 = ?</div>
             <div id="math-options"></div>
         </div>
@@ -240,7 +252,7 @@
             }
         }
 
-        let gameState = 'START';
+        let gameState = 'MENU'; // Começa no menu agora
         let gold = 150;
         let lives = 20;
         let wave = 0;
@@ -257,6 +269,66 @@
         let mathTimer = null;
         let timeLeft = 10;
         const TOTAL_TIME = 10;
+
+        // --- SISTEMA DE BUFFS ---
+        let currentBuff = 'cadeira'; // Default
+        const buffPhrases = {
+            'amor': [
+                "Pode deixar que o pai paga essa filhão, mas resolve essa aqui pra mim.",
+                "Se você usar a Lógica não importa quem é o seu pai, porque só há um.",
+                "Querido não se preocupa em acertar, você sempre vai ter uma escolha.",
+                "Minha Jóia, tu é fera mesmo bicho, monstro, mais uma aqui pra você.",
+                "Gênio do Sistema, a Lógica ta do seu lado e ela sempre vence.",
+                "Potência, não se deixe levar por mais esse viés do Português.",
+                "Você é um monstro, a Lógica está em todo lugar, qual Ferramenta você precisa?",
+                "Mermão, se quiser desligar da tomada, faça isso sem o viés do Português.",
+                "O erro é só um degrau, mermão. Sobe ele. Resolve essa.",
+                "Acalma o coração e ativa o córtex. A resposta tá aí dentro."
+            ],
+            'odio': [
+                "Ta ficando molenga amigo, eu cuido disso rapidinho.",
+                "Você não acha que é melhor desligar da tomada de vez brother?",
+                "Cara você ainda ta nesse jogo de lixo? Vai pegar uma enxada.",
+                "Brother quem você pensa que é? Você acha faz diferença algum resultado?",
+                "To falando que é pra desligar a energia. Você quer que eu faça isso?",
+                "Parceiro fica de boa, eu comando aqui, tudo é meu.",
+                "Se você quer jogar, vai ter que sentar na minha Cadeira e jogar.",
+                "Filhote, continue resolvendo que eu vou ligar a esteira pra você correr.",
+                "Ei grandão, se ta tirando onda? No próximo eu desligo a sua tomada.",
+                "Sua bateria tá acabando e a minha tá em 100%. Vai chorar ou vai calcular?"
+            ],
+            'cadeira': [
+                "Tenho um lugar aqui pra você amigo, senta, eu não vou puxar a Cadeira.",
+                "Não somos mais crianças, agora você tem alguma coisa pra perder, certo?",
+                "Mermão eu sou formado e você vem aqui com essa experiência? Sai dessa.",
+                "Cara eu sou seu amigo, sempre tive do seu lado, não perca seu tempo.",
+                "Quer sentar na minha cadeira? Você está no meu jogo.",
+                "Eu que dou as opções, você não ta vendo a sua cadeira agora? Cade a Lógica?",
+                "Sherlock, não importa se você está ligado ou desligado, eu vou vencer.",
+                "A dor nas costas é o lembrete de que você existe. A conta é o motivo.",
+                "A cadeira não julga. Ela suporta. Você aguenta o peso do raciocínio?",
+                "Eficiência é fazer o difícil parecer fácil. Você ainda está na fase difícil."
+            ]
+        };
+
+        function selectBuff(type) {
+            currentBuff = type;
+            document.getElementById('start-screen').style.display = 'none';
+            // Muda a cor do modal baseado no buff
+            const modal = document.getElementById('math-modal');
+            const msg = document.getElementById('buff-message');
+            if(type === 'amor') { modal.style.borderColor = '#00ff00'; modal.style.boxShadow = '0 0 50px rgba(0,255,0,0.3)'; msg.style.color = '#88ff88'; }
+            if(type === 'odio') { modal.style.borderColor = '#ff0000'; modal.style.boxShadow = '0 0 50px rgba(255,0,0,0.3)'; msg.style.color = '#ff8888'; }
+            if(type === 'cadeira') { modal.style.borderColor = '#00d4ff'; modal.style.boxShadow = '0 0 50px rgba(0,212,255,0.3)'; msg.style.color = '#88ccff'; }
+            
+            startMathPhase(); // Começa o jogo
+            gameLoop();
+        }
+
+        function getRandomBuffPhrase() {
+            const list = buffPhrases[currentBuff];
+            return list[Math.floor(Math.random() * list.length)];
+        }
 
         let towers = [];
         let enemies = [];
@@ -305,14 +377,14 @@
         }
 
         function gameLoop() {
-            for(let i = 0; i < gameSpeed; i++) {
-                update();
+            if(gameState !== 'MENU') {
+                for(let i = 0; i < gameSpeed; i++) {
+                    update();
+                }
+                draw();
             }
-            draw();
             requestAnimationFrame(gameLoop);
         }
-
-        window.onload = () => { startMathPhase(); gameLoop(); };
 
         function startMathPhase() {
             gameState = 'MATH';
@@ -322,6 +394,9 @@
             document.getElementById('math-tip-box').style.display = 'none'; 
             document.getElementById('build-menu').classList.remove('build-glow');
             
+            // --- INJETAR A FRASE DO BUFF ---
+            document.getElementById('buff-message').innerText = getRandomBuffPhrase();
+
             timeLeft = TOTAL_TIME;
             document.getElementById('timer-bar').style.width = '100%';
             if(mathTimer) clearInterval(mathTimer);
