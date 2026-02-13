@@ -269,6 +269,9 @@
             }
         }
 
+        // ==========================================
+        // VARIÁVEIS PRINCIPAIS (O "Crime" Consertado)
+        // ==========================================
         let gameState = 'MENU';
         let gold = 150;
         let lives = 20;
@@ -282,25 +285,53 @@
         let totalWrong = 0;
         let currentProblem = { n1: 0, n2: 0, op: '', answer: 0 };
         
-        // TEMPO: 30 Segundos
         let mathTimer = null;
-        let timeLeft = 30;
+        let timeLeft = 30; // TEMPO 30 SEGUNDOS
         const TOTAL_TIME = 30;
 
         let totalEnemiesToSpawn = 0;
         let enemiesSpawned = 0;
+        let gameLoopRunning = false;
+
+        // ENTIDADES FÍSICAS DO JOGO
+        let towers = [];
+        let enemies = [];
+        let bullets = [];
+        let particles = [];
+        
+        let mouseX = 0;
+        let mouseY = 0;
+        let canBuild = false;
+        let selectedTowerIdx = -1;
+
+        // CAMINHO DO MAPA
+        const path = [
+            {x: 0, y: 150}, {x: 700, y: 150}, {x: 700, y: 350}, 
+            {x: 100, y: 350}, {x: 100, y: 500}, {x: 800, y: 500}
+        ];
+
+        // TIPOS DE TORRES
+        const towerTypes = [
+            { name: "Soma", symbol: "+", cost: 50, range: 120, damage: 25, rate: 25, color: "#ffeb3b" },
+            { name: "Sub", symbol: "-", cost: 120, range: 160, damage: 8, rate: 5, color: "#03a9f4", slow: true },
+            { name: "Mult", symbol: "x", cost: 300, range: 220, damage: 120, rate: 70, color: "#f44336", splash: true },
+            { name: "Div", symbol: "÷", cost: 450, range: 300, damage: 400, rate: 120, color: "#9c27b0" }
+        ];
+
+        function toRoman(num) {
+            if (num >= 10) return "X+";
+            const roman = ["", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX"];
+            return roman[num];
+        }
 
         // --- SISTEMA MODO IA (AUTO-PLAY) ---
         let aiMode = false;
         const aiBlueprint = [
-            // Grid 3x3 de Somas (Amarelas) 
             {type: 0, x: 200, y: 385}, {type: 0, x: 200, y: 425}, {type: 0, x: 200, y: 465},
             {type: 0, x: 240, y: 385}, {type: 0, x: 240, y: 425}, {type: 0, x: 240, y: 465},
             {type: 0, x: 280, y: 385}, {type: 0, x: 280, y: 425}, {type: 0, x: 280, y: 465},
-            // Torre Azul (Slow)
-            {type: 1, x: 330, y: 385},
-            // Torre Roxa (Divisão)
-            {type: 3, x: 330, y: 320}
+            {type: 1, x: 330, y: 385}, // Torre Azul (Slow)
+            {type: 3, x: 330, y: 320}  // Torre Roxa (Divisão)
         ];
 
         function toggleAIMode() {
@@ -366,7 +397,7 @@
             }
         }
 
-        // --- SISTEMA DE BUFFS ---
+        // --- SISTEMA DE BUFFS E BARALHO ---
         let currentBuff = 'cadeira';
         let phraseQueue = []; 
 
@@ -410,7 +441,7 @@
         };
 
         function selectBuff(type) {
-            initAudio(); // Liga o som com a interação do usuário
+            initAudio(); 
             currentBuff = type;
             phraseQueue = [...buffPhrases[type]];
             phraseQueue.sort(() => Math.random() - 0.5);
@@ -455,7 +486,7 @@
             return '#b8860b';
         }
 
-        // MOTOR PRINCIPAL DO JOGO 
+        // MOTOR PRINCIPAL DO JOGO (COM BLINDAGEM DE ERROS)
         function gameLoop() {
             try {
                 if(gameState !== 'MENU') {
@@ -464,9 +495,9 @@
                     }
                     runAILogic(); 
                 }
-                draw(); // SEMPRE DESENHA, MESMO SE ESTIVER NO MENU 
+                draw(); // DESENHA SEMPRE
             } catch(e) {
-                console.error("Erro no GameLoop:", e);
+                console.error("Sherlock Error: ", e);
             }
             requestAnimationFrame(gameLoop);
         }
@@ -586,11 +617,9 @@
                 let u1 = n1 % 10;
                 let u2 = n2 % 10;
                 
-                // 1. Reta Numérica turbinada para contas próximas
                 if (diff <= 10) {
                      text = `Distância (Reta Numérica):<br>Eles estão muito perto!<br>Pule do <span class="tip-highlight">${n2}</span> para o <span class="tip-highlight">${n1}</span>.<br>São apenas <span class="tip-highlight">${diff}</span> passos.`;
                 } 
-                // 2. Subtração Direta (quando o de baixo é redondo ou as unidades não precisam emprestar)
                 else if (u2 === 0 || u1 >= u2) {
                     let d1 = Math.floor(n1/10)*10;
                     let d2 = Math.floor(n2/10)*10;
@@ -600,26 +629,22 @@
                         text = `Subtração Direta:<br>A unidade de cima é maior, vá direto.<br>Dezenas: <span class="tip-highlight">${d1} - ${d2} = ${d1-d2}</span>.<br>Unidades: <span class="tip-highlight">${u1} - ${u2} = ${u1-u2}</span>.<br>Junte: <span class="tip-highlight">${answer}</span>.`;
                     }
                 }
-                // 3. O Hack do Deslocamento (se os dois são chatos e perto do 10, ex 57 - 28 -> 59 - 30)
                 else if (u1 >= 6 && u2 >= 6) {
                     let shift = 10 - u2;
                     let novoN1 = n1 + shift;
                     let novoN2 = n2 + shift;
                     text = `Deslocamento (Hack Japonês):<br>Para facilitar, some ${shift} aos DOIS números.<br>O ${n1} vira <span class="tip-highlight">${novoN1}</span>.<br>O ${n2} vira <span class="tip-highlight">${novoN2}</span>.<br>A diferença não muda: <span class="tip-highlight">${novoN1} - ${novoN2} = ${answer}</span>.`;
                 }
-                // 4. Arredondar o Subtraendo (O clássico que o usuário pediu de volta)
                 else if (u2 >= 7) {
                     let shift = 10 - u2;
                     let nextTen = n2 + shift;
                     text = `Arredondar o Subtraendo:<br>O ${n2} está perto de ${nextTen}. Empreste ${shift} pra ele.<br>Tire o valor cheio: <span class="tip-highlight">${n1} - ${nextTen} = ${n1 - nextTen}</span>.<br>Agora DEVOLVA os ${shift} ao resultado: <span class="tip-highlight">${n1 - nextTen} + ${shift} = ${answer}</span>.`;
                 }
-                // 5. Arredondar o Minuendo (O que ele sugeriu novo - Dinheiro)
                 else if (u1 >= 7) {
                     let shift = 10 - u1;
                     let nextTen = n1 + shift;
                     text = `Arredondar o Minuendo (O Dinheiro):<br>Deixe seu "dinheiro" redondo: Aumente o ${n1} para ${nextTen} (+${shift}).<br>Faça a conta: <span class="tip-highlight">${nextTen} - ${n2} = ${nextTen - n2}</span>.<br>Como você inventou ${shift}, TIRE eles do resultado final: <span class="tip-highlight">${nextTen - n2} - ${shift} = ${answer}</span>.`;
                 }
-                // 6. Decomposição Básica (Para outros casos como 52 - 14)
                 else {
                     let d2 = Math.floor(n2 / 10) * 10;
                     text = `Decomposição Tática:<br>Quebre o <span class="tip-highlight">${n2}</span> em ${d2} e ${u2}.<br>1º: Tire a dezena grossa: <span class="tip-highlight">${n1} - ${d2} = ${n1 - d2}</span>.<br>2º: Tire a unidade final: <span class="tip-highlight">${n1 - d2} - ${u2} = ${answer}</span>.`;
@@ -785,81 +810,7 @@
             particles = particles.filter(p => p.life > 0);
         }
 
-        function draw() {
-            ctx.fillStyle = '#222'; ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-            if(gameState !== 'MENU') {
-                ctx.strokeStyle = '#333'; ctx.lineWidth = 1;
-                for(let i=0; i<800; i+=50) { ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i,600); ctx.stroke(); }
-                for(let i=0; i<600; i+=50) { ctx.beginPath(); ctx.moveTo(0,i); ctx.lineTo(800,i); ctx.stroke(); }
-            }
-
-            ctx.strokeStyle = getPathColor(wave);
-            ctx.lineWidth = 40; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-            ctx.beginPath(); ctx.moveTo(path[0].x, path[0].y);
-            for(let i=1; i<path.length; i++) ctx.lineTo(path[i].x, path[i].y);
-            ctx.stroke();
-            ctx.strokeStyle = '#222'; ctx.lineWidth = 2; ctx.stroke();
-
-            towers.forEach(t => t.draw());
-            enemies.forEach(e => e.draw());
-            bullets.forEach(b => b.draw());
-            particles.forEach(p => p.draw());
-
-            if(selectedTowerIdx > -1) {
-                const type = towerTypes[selectedTowerIdx];
-                canBuild = checkCollision(mouseX, mouseY);
-                const color = canBuild ? 'rgba(0, 255, 0, 0.5)' : 'rgba(255, 0, 0, 0.5)';
-                ctx.beginPath(); ctx.arc(mouseX, mouseY, type.range, 0, Math.PI * 2);
-                ctx.fillStyle = 'rgba(255, 255, 255, 0.1)'; ctx.fill();
-                ctx.lineWidth = 1; ctx.strokeStyle = color; ctx.stroke();
-                ctx.fillStyle = canBuild ? type.color : '#550000';
-                ctx.fillRect(mouseX - 15, mouseY - 15, 30, 30);
-                ctx.fillStyle = (gold >= type.cost) ? '#fff' : '#f00';
-                ctx.font = '12px Courier';
-                ctx.fillText(`$${type.cost}`, mouseX, mouseY - 25);
-            }
-            
-            if(selectedTowerIdx === -1) {
-                for(let t of towers) {
-                    let dist = Math.sqrt((t.x - mouseX)**2 + (t.y - mouseY)**2);
-                    if(dist < 20) {
-                        ctx.beginPath(); ctx.arc(t.x, t.y, t.range, 0, Math.PI * 2);
-                        ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)'; ctx.lineWidth = 1; ctx.stroke();
-                        ctx.fillStyle = 'rgba(255, 255, 255, 0.05)'; ctx.fill();
-                        ctx.fillStyle = (gold >= t.upgradeCost) ? '#0f0' : '#f00';
-                        ctx.font = 'bold 14px Arial';
-                        ctx.fillText(`UPGRADE: $${t.upgradeCost}`, t.x, t.y - 40);
-                        if(t.type.symbol === '÷') {
-                            ctx.fillStyle = '#cc88ff'; ctx.font = '10px Arial';
-                            ctx.fillText(`(ACELERAR)`, t.x, t.y - 55);
-                        }
-                    }
-                }
-            }
-        }
-
-        function checkCollision(x, y) {
-            for(let t of towers) {
-                let dist = Math.sqrt((t.x - x)**2 + (t.y - y)**2);
-                if(dist < 35) return false;
-            }
-            for(let i=0; i<path.length-1; i++) {
-                let p1 = path[i]; let p2 = path[i+1];
-                let dist = distToSegment(x, y, p1.x, p1.y, p2.x, p2.y);
-                if(dist < 30) return false;
-            }
-            return true;
-        }
-
-        function distToSegment(x, y, x1, y1, x2, y2) {
-            let A = x - x1; let B = y - y1; let C = x2 - x1; let D = y2 - y1;
-            let dot = A * C + B * D; let len_sq = C * C + D * D;
-            let param = -1; if (len_sq != 0) param = dot / len_sq;
-            let xx, yy; if (param < 0) { xx = x1; yy = y1; } else if (param > 1) { xx = x2; yy = y2; } else { xx = x1 + param * C; yy = y1 + param * D; }
-            let dx = x - xx; let dy = y - yy; return Math.sqrt(dx * dx + dy * dy);
-        }
-
+        // --- CLASSES FÍSICAS REINSERIDAS ---
         class Enemy {
             constructor(maxHp, isGolden) {
                 this.x = path[0].x; this.y = path[0].y; this.pathIndex = 0;
@@ -968,6 +919,80 @@
             draw() { ctx.globalAlpha = this.life / 20; ctx.fillStyle = this.color; ctx.fillRect(this.x, this.y, 3, 3); ctx.globalAlpha = 1; }
         }
 
+        function draw() {
+            ctx.fillStyle = '#222'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // A grade aparece sempre, dando aquele tom de Matrix ao fundo do menu
+            ctx.strokeStyle = '#333'; ctx.lineWidth = 1;
+            for(let i=0; i<800; i+=50) { ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i,600); ctx.stroke(); }
+            for(let i=0; i<600; i+=50) { ctx.beginPath(); ctx.moveTo(0,i); ctx.lineTo(800,i); ctx.stroke(); }
+
+            ctx.strokeStyle = getPathColor(wave);
+            ctx.lineWidth = 40; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+            ctx.beginPath(); ctx.moveTo(path[0].x, path[0].y);
+            for(let i=1; i<path.length; i++) ctx.lineTo(path[i].x, path[i].y);
+            ctx.stroke();
+            ctx.strokeStyle = '#222'; ctx.lineWidth = 2; ctx.stroke();
+
+            towers.forEach(t => t.draw());
+            enemies.forEach(e => e.draw());
+            bullets.forEach(b => b.draw());
+            particles.forEach(p => p.draw());
+
+            if(selectedTowerIdx > -1) {
+                const type = towerTypes[selectedTowerIdx];
+                canBuild = checkCollision(mouseX, mouseY);
+                const color = canBuild ? 'rgba(0, 255, 0, 0.5)' : 'rgba(255, 0, 0, 0.5)';
+                ctx.beginPath(); ctx.arc(mouseX, mouseY, type.range, 0, Math.PI * 2);
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.1)'; ctx.fill();
+                ctx.lineWidth = 1; ctx.strokeStyle = color; ctx.stroke();
+                ctx.fillStyle = canBuild ? type.color : '#550000';
+                ctx.fillRect(mouseX - 15, mouseY - 15, 30, 30);
+                ctx.fillStyle = (gold >= type.cost) ? '#fff' : '#f00';
+                ctx.font = '12px Courier';
+                ctx.fillText(`$${type.cost}`, mouseX, mouseY - 25);
+            }
+            
+            if(selectedTowerIdx === -1) {
+                for(let t of towers) {
+                    let dist = Math.sqrt((t.x - mouseX)**2 + (t.y - mouseY)**2);
+                    if(dist < 20) {
+                        ctx.beginPath(); ctx.arc(t.x, t.y, t.range, 0, Math.PI * 2);
+                        ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)'; ctx.lineWidth = 1; ctx.stroke();
+                        ctx.fillStyle = 'rgba(255, 255, 255, 0.05)'; ctx.fill();
+                        ctx.fillStyle = (gold >= t.upgradeCost) ? '#0f0' : '#f00';
+                        ctx.font = 'bold 14px Arial';
+                        ctx.fillText(`UPGRADE: $${t.upgradeCost}`, t.x, t.y - 40);
+                        if(t.type.symbol === '÷') {
+                            ctx.fillStyle = '#cc88ff'; ctx.font = '10px Arial';
+                            ctx.fillText(`(ACELERAR)`, t.x, t.y - 55);
+                        }
+                    }
+                }
+            }
+        }
+
+        function checkCollision(x, y) {
+            for(let t of towers) {
+                let dist = Math.sqrt((t.x - x)**2 + (t.y - y)**2);
+                if(dist < 35) return false;
+            }
+            for(let i=0; i<path.length-1; i++) {
+                let p1 = path[i]; let p2 = path[i+1];
+                let dist = distToSegment(x, y, p1.x, p1.y, p2.x, p2.y);
+                if(dist < 30) return false;
+            }
+            return true;
+        }
+
+        function distToSegment(x, y, x1, y1, x2, y2) {
+            let A = x - x1; let B = y - y1; let C = x2 - x1; let D = y2 - y1;
+            let dot = A * C + B * D; let len_sq = C * C + D * D;
+            let param = -1; if (len_sq != 0) param = dot / len_sq;
+            let xx, yy; if (param < 0) { xx = x1; yy = y1; } else if (param > 1) { xx = x2; yy = y2; } else { xx = x1 + param * C; yy = y1 + param * D; }
+            let dx = x - xx; let dy = y - yy; return Math.sqrt(dx * dx + dy * dy);
+        }
+
         function selectTower(idx) {
             if(selectedTowerIdx === idx) {
                 cancelSelection();
@@ -989,21 +1014,45 @@
             document.body.classList.remove('ghost-active'); 
         }
 
+        // --- SISTEMA DE CLIQUE CORRIGIDO PELO WATSON (CHATGPT) ---
         canvas.addEventListener('mousemove', (e) => {
             const rect = canvas.getBoundingClientRect();
-            const scaleX = canvas.width / rect.width; const scaleY = canvas.height / rect.height;
-            mouseX = (e.clientX - rect.left) * scaleX; mouseY = (e.clientY - rect.top) * scaleY;
+            const scaleX = canvas.width / rect.width; 
+            const scaleY = canvas.height / rect.height;
+            mouseX = (e.clientX - rect.left) * scaleX; 
+            mouseY = (e.clientY - rect.top) * scaleY;
         });
 
-        canvas.addEventListener('mousedown', (e) => { handleInteraction(); });
+        canvas.addEventListener('mousedown', (e) => { 
+            const rect = canvas.getBoundingClientRect();
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            mouseX = (e.clientX - rect.left) * scaleX;
+            mouseY = (e.clientY - rect.top) * scaleY;
+            handleInteraction(); 
+        });
 
+        // O -50 do touch FOI MANTIDO PARA A LÓGICA DO DEDO GORDO (FAT FINGER)
         canvas.addEventListener('touchmove', (e) => {
-            e.preventDefault(); const rect = canvas.getBoundingClientRect(); const touch = e.touches[0];
-            const scaleX = canvas.width / rect.width; const scaleY = canvas.height / rect.height;
-            mouseX = (touch.clientX - rect.left) * scaleX; mouseY = ((touch.clientY - rect.top) * scaleY) - 50; 
+            e.preventDefault(); 
+            const rect = canvas.getBoundingClientRect(); 
+            const touch = e.touches[0];
+            const scaleX = canvas.width / rect.width; 
+            const scaleY = canvas.height / rect.height;
+            mouseX = (touch.clientX - rect.left) * scaleX; 
+            mouseY = ((touch.clientY - rect.top) * scaleY) - 50; 
         }, {passive: false});
 
-        canvas.addEventListener('touchend', (e) => { e.preventDefault(); handleInteraction(); });
+        canvas.addEventListener('touchstart', (e) => { 
+            e.preventDefault(); 
+            const rect = canvas.getBoundingClientRect();
+            const touch = e.touches[0];
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            mouseX = (touch.clientX - rect.left) * scaleX;
+            mouseY = ((touch.clientY - rect.top) * scaleY) - 50; 
+            handleInteraction(); 
+        }, {passive: false});
 
         function handleInteraction() {
             if(gameState === 'MATH' || gameState === 'START' || isGameOver || gameState === 'MENU') return;
@@ -1038,8 +1087,11 @@
             }
         }
 
-        // MOTOR DE ARRANQUE FORÇADO (O Fim da Tela Cinza)
-        gameLoop();
+        // MOTOR DE ARRANQUE INCONDICIONAL
+        window.onload = () => {
+            gameLoop();
+        };
+
     </script>
 </body>
 </html>
