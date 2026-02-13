@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Logic Defense: Automata & Hacker</title>
+    <title>Logic Defense: Automata & Speed</title>
     <style>
         body { 
             margin: 0; overflow: hidden; background-color: #1a1a1a; color: white; 
@@ -14,7 +14,7 @@
         #game-container { position: relative; width: 800px; height: 600px; margin: 20px auto; border: 2px solid #444; background: #222; box-shadow: 0 0 20px rgba(0,0,0,0.5); }
         canvas { display: block; cursor: crosshair; }
         
-        #ui-layer { position: absolute; top: 10px; left: 10px; width: 100%; pointer-events: none; display: flex; flex-wrap: wrap; gap: 10px; transition: opacity 0.3s; align-items: center;}
+        #ui-layer { position: absolute; top: 10px; left: 10px; width: calc(100% - 20px); pointer-events: none; display: flex; flex-wrap: wrap; gap: 10px; transition: opacity 0.3s; align-items: center;}
         .stat-box { background: rgba(0,0,0,0.8); padding: 8px 12px; border: 1px solid #00ff00; color: #00ff00; font-weight: bold; font-size: 14px; border-radius: 4px; }
         .score-box { border-color: #fff; color: #fff; }
         
@@ -29,7 +29,7 @@
         
         #ai-btn.active { background: #00d4ff; color: black; border-color: #00d4ff; box-shadow: 0 0 15px #00d4ff; }
 
-        /* TELA DE INÍCIO E RECARGA */
+        /* TELA DE INÍCIO */
         #start-screen {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(0,0,0,0.95); z-index: 200;
@@ -47,7 +47,7 @@
 
         /* CAIXA DE DICAS */
         #math-tip-box {
-            display: none; position: absolute; bottom: 200px; right: 40px; width: 350px; 
+            display: none; position: absolute; bottom: 200px; right: 40px; width: 360px; 
             background: rgba(0, 0, 0, 0.95); border: 2px solid #00d4ff; padding: 15px;
             border-radius: 8px; color: #fff; z-index: 10; pointer-events: none; 
             box-shadow: 0 0 20px rgba(0, 212, 255, 0.4); text-align: left; transition: opacity 0.3s;
@@ -120,7 +120,13 @@
             text-shadow: 2px 2px 4px #000; z-index: 6; pointer-events: none;
         }
         
-        #upgrade-info { position: absolute; top: 10px; right: 10px; text-align: right; font-size: 12px; color: #aaa; pointer-events: none; display: none; }
+        /* CORRIGIDO O OVERLAP DO UPGRADE INFO */
+        #upgrade-info { 
+            position: absolute; bottom: 20px; left: 20px; text-align: left; 
+            font-size: 14px; color: #aaa; pointer-events: none; display: none; 
+            background: rgba(0,0,0,0.6); padding: 8px 12px; border-radius: 5px;
+            border-left: 3px solid #ffd700;
+        }
 
         body.ghost-active #build-menu, body.ghost-active #next-wave-btn, body.ghost-active #ui-layer, body.ghost-active #math-tip-box { opacity: 0.15; pointer-events: none !important; }
         body.ghost-active .tower-btn { pointer-events: none !important; }
@@ -272,15 +278,19 @@
         
         let currentProblem = { n1: 0, n2: 0, op: '', answer: 0 };
         
-        // TEMPO: 30 Segundos DEFINITIVO
+        // TEMPO: 30 Segundos
         let mathTimer = null;
         let timeLeft = 30;
         const TOTAL_TIME = 30;
 
+        // --- SISTEMA DE CONTROLE DE LOOP ---
+        let totalEnemiesToSpawn = 0;
+        let enemiesSpawned = 0;
+
         // --- SISTEMA MODO IA (AUTO-PLAY) ---
         let aiMode = false;
         const aiBlueprint = [
-            // Grid 3x3 de Somas (Amarelas) - Canto esquerdo inferior ao meio
+            // Grid 3x3 de Somas (Amarelas) - Exatamente entre os caminhos
             {type: 0, x: 200, y: 385}, {type: 0, x: 200, y: 425}, {type: 0, x: 200, y: 465},
             {type: 0, x: 240, y: 385}, {type: 0, x: 240, y: 425}, {type: 0, x: 240, y: 465},
             {type: 0, x: 280, y: 385}, {type: 0, x: 280, y: 425}, {type: 0, x: 280, y: 465},
@@ -306,7 +316,7 @@
             if(!aiMode) return;
             if(gameState === 'MATH' || gameState === 'START' || isGameOver) return;
 
-            // 1. Fase de Construção (Seguindo o Blueprint)
+            // 1. Construir
             for(let bp of aiBlueprint) {
                 let built = towers.find(t => Math.abs(t.x - bp.x) < 5 && Math.abs(t.y - bp.y) < 5);
                 if(!built) {
@@ -318,11 +328,11 @@
                         playSound('correct');
                         for(let i=0; i<5; i++) particles.push(new Particle(bp.x, bp.y, '#00ff00'));
                     }
-                    return; // Construiu uma, espera o próximo tick para não esvaziar o caixa todo num frame e bugar o som
+                    return; 
                 }
             }
 
-            // 2. Fase de Evolução (Upar todas por igual)
+            // 2. Evoluir parelho
             if(towers.length >= aiBlueprint.length) {
                 let minLevel = Infinity;
                 let blueprintTowersBuilt = [];
@@ -344,7 +354,6 @@
                         document.getElementById('gold-display').innerText = gold;
                         target.upgrade();
                         
-                        // Mostra msg visual rápida da IA upando
                         const fb = document.getElementById('feedback-msg');
                         fb.innerText = "🤖 IA EVOLUIU TORRE!"; 
                         fb.style.color = "#00d4ff"; 
@@ -448,10 +457,8 @@
             if(gameState !== 'MENU') {
                 for(let i = 0; i < gameSpeed; i++) {
                     update();
-                    // IA executa apenas 1 vez por frame do navegador pra não bugar, 
-                    // mas se quiser ela super rápida, deixe fora. Vamos deixar ela rodar 1x por frame visual.
                 }
-                runAILogic(); // IA pensa 1x por renderização visual
+                runAILogic(); 
                 draw();
             }
             requestAnimationFrame(gameLoop);
@@ -532,7 +539,7 @@
             document.getElementById('math-modal').style.display = 'block';
         }
 
-        // --- SISTEMA DE DICAS TÁTICAS V6 (MASTER BRAIN - COM NOVO HACK DE SUBTRAÇÃO) ---
+        // --- SISTEMA DE DICAS TÁTICAS V7 (MASTER BRAIN - SUBTRAÇÃO HACKEADA) ---
         function generateTip(problem) {
             const { n1, n2, op, answer } = problem;
             let text = "";
@@ -570,25 +577,33 @@
             else if (op === '-') {
                 let diff = n1 - n2;
                 
-                // NOVO: Reta Numérica turbinada para contas próximas (mesmo que grandes, ex 90-80)
+                // 1. Reta Numérica turbinada para contas próximas (mesmo que grandes, ex 90-80)
                 if (diff <= 10) {
                      text = `Distância (Reta Numérica):<br>Eles estão muito perto!<br>Pule do <span class="tip-highlight">${n2}</span> para o <span class="tip-highlight">${n1}</span>.<br>São apenas <span class="tip-highlight">${diff}</span> passos.`;
                 } 
+                // 2. Subtração Direta
                 else if (n2 % 10 === 0) {
                     text = `Subtração Direta:<br>O segundo número já é redondo.<br><span class="tip-highlight">${n1} - ${n2} = ${answer}</span>.`;
                 }
-                // NOVO: Deslocamento Constante (Hack do Arredondamento Duplo) para finais 6,7,8,9
-                else if (n2 % 10 >= 6) {
+                // 3. Hack Japonês (Arredondando MINUENDO - N1)
+                else if (n1 % 10 >= 7) {
+                    let shift = 10 - (n1 % 10);
+                    let novoN1 = n1 + shift;
+                    let novoN2 = n2 + shift;
+                    text = `Hack Japonês (Deslocamento):<br>Para facilitar, some ${shift} aos DOIS números.<br>O ${n1} vira <span class="tip-highlight">${novoN1}</span>.<br>O ${n2} vira <span class="tip-highlight">${novoN2}</span>.<br>A conta fica redonda: <span class="tip-highlight">${novoN1} - ${novoN2} = ${answer}</span>.`;
+                }
+                // 4. Hack Japonês (Arredondando SUBTRAENDO - N2)
+                else if (n2 % 10 >= 7) {
                     let shift = 10 - (n2 % 10);
                     let novoN1 = n1 + shift;
                     let novoN2 = n2 + shift;
-                    text = `Deslocamento (Hack Japonês):<br>Para facilitar, some ${shift} aos dois números (a diferença não muda!).<br>O ${n1} vira <span class="tip-highlight">${novoN1}</span>.<br>O ${n2} vira <span class="tip-highlight">${novoN2}</span>.<br>A conta mental vira <span class="tip-highlight">${novoN1} - ${novoN2} = ${answer}</span>.`;
+                    text = `Hack Japonês (Deslocamento):<br>Para facilitar, some ${shift} aos DOIS números.<br>O ${n2} vira <span class="tip-highlight">${novoN2}</span>.<br>O ${n1} vira <span class="tip-highlight">${novoN1}</span>.<br>A conta fica redonda: <span class="tip-highlight">${novoN1} - ${novoN2} = ${answer}</span>.`;
                 }
-                // O "burocrático" só quando n1 terminar em número menor que n2 (e não cair no hack acima)
+                // 5. Decomposição Básica ("Burocrático")
                 else if (n1 % 10 < n2 % 10) {
                     let d2 = Math.floor(n2 / 10) * 10;
                     let u2 = n2 % 10;
-                    text = `Decomposição Tática:<br>Quebre o <span class="tip-highlight">${n2}</span> em ${d2} e ${u2}.<br>1º: Tire a dezena grossa: <span class="tip-highlight">${n1} - ${d2} = ${n1 - d2}</span>.<br>2º: Tire o resto da unidade: <span class="tip-highlight">${n1 - d2} - ${u2} = ${answer}</span>.`;
+                    text = `Decomposição Tática:<br>Quebre o <span class="tip-highlight">${n2}</span> em ${d2} e ${u2}.<br>1º: Tire a dezena grossa: <span class="tip-highlight">${n1} - ${d2} = ${n1 - d2}</span>.<br>2º: Tire a unidade final: <span class="tip-highlight">${n1 - d2} - ${u2} = ${answer}</span>.`;
                 }
                 else {
                     let d1 = Math.floor(n1/10)*10;
@@ -649,7 +664,7 @@
                             hasStarted = true;
                         }
                     }
-                    stepStr += `Quociente: <span class="tip-highlight">${answer}</span>.`;
+                    stepStr += `Quociente final: <span class="tip-highlight">${answer}</span>.`;
                     text = stepStr;
                 }
             }
@@ -688,6 +703,13 @@
             document.getElementById('next-wave-btn').style.display = 'block';
             document.getElementById('upgrade-info').style.display = 'block';
             document.getElementById('build-menu').classList.add('build-glow');
+
+            // SE A IA ESTIVER LIGADA, ELA ESPERA 3s PRA VC LER E MANDA A ONDA SOZINHA
+            if(aiMode) {
+                setTimeout(() => {
+                    if(gameState === 'BUILD') startWaveCombat();
+                }, 3000);
+            }
         }
 
         function startWaveCombat() {
@@ -702,27 +724,28 @@
 
         function spawnEnemies() {
             let baseCount = 20;
-            let count = baseCount + (wave * 5);
-            if (wave % 10 === 0) count *= 5; 
+            totalEnemiesToSpawn = baseCount + (wave * 5);
+            if (wave % 10 === 0) totalEnemiesToSpawn *= 5; 
 
             let baseHp = 30;
             let hpBonus = wave * (baseHp * 0.10); 
             
-            let spawned = 0;
+            enemiesSpawned = 0;
             let spawnRate = Math.max(100, 1000 - (wave * 20)); 
             if (wave % 10 === 0) spawnRate = 50; 
             
             let interval = setInterval(() => {
                 if(gameState !== 'COMBAT') { clearInterval(interval); return; }
                 enemies.push(new Enemy(baseHp + hpBonus, lastAnswerCorrect));
-                spawned++;
-                if(spawned >= count) clearInterval(interval);
+                enemiesSpawned++;
+                if(enemiesSpawned >= totalEnemiesToSpawn) clearInterval(interval);
             }, spawnRate);
         }
 
         function update() {
             if (gameState === 'COMBAT') {
-                if (enemies.length === 0) {
+                // CORREÇÃO DA PANE DO LOOP: Só encerra se não houver inimigos E se todos já tiverem nascido
+                if (enemies.length === 0 && enemiesSpawned >= totalEnemiesToSpawn) {
                     if(!this.waitingForMath) {
                         this.waitingForMath = true;
                         if(wave % 10 === 0 && lastAnswerCorrect) {
@@ -934,7 +957,6 @@
             draw() { ctx.globalAlpha = this.life / 20; ctx.fillStyle = this.color; ctx.fillRect(this.x, this.y, 3, 3); ctx.globalAlpha = 1; }
         }
 
-        // --- SISTEMA DE GHOST MODE ---
         function selectTower(idx) {
             if(selectedTowerIdx === idx) {
                 cancelSelection();
