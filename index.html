@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Logic Defense: The Masterpiece</title>
+    <title>Logic Defense: The Masterpiece V22</title>
     <style>
         body { 
             margin: 0; overflow: hidden; background-color: #1a1a1a; color: white; 
@@ -32,7 +32,7 @@
         /* TELA DE INÍCIO */
         #start-screen {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.95); z-index: 200; 
+            background: rgba(0,0,0,0.85); z-index: 200; 
             display: flex; flex-direction: column; align-items: center; justify-content: center;
         }
         .buff-btn {
@@ -197,6 +197,9 @@
     </div>
 
     <script>
+        // ==========================================
+        // CONFIGURAÇÕES DE AUDIO E CANVAS
+        // ==========================================
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
         const AudioContext = window.AudioContext || window.webkitAudioContext;
@@ -286,7 +289,7 @@
         let currentProblem = { n1: 0, n2: 0, op: '', answer: 0 };
         
         let mathTimer = null;
-        let timeLeft = 30; // TEMPO 30 SEGUNDOS
+        let timeLeft = 30; // TEMPO DE 30 SEGUNDOS
         const TOTAL_TIME = 30;
 
         let totalEnemiesToSpawn = 0;
@@ -323,7 +326,9 @@
             return roman[num];
         }
 
-        // --- SISTEMA MODO IA (AUTO-PLAY) ---
+        // ==========================================
+        // SISTEMA MODO IA (AUTO-PLAY / DIRETOR)
+        // ==========================================
         let aiMode = false;
         const aiBlueprint = [
             {type: 0, x: 200, y: 385}, {type: 0, x: 200, y: 425}, {type: 0, x: 200, y: 465},
@@ -365,7 +370,7 @@
                 }
             }
 
-            // 2. Evoluir Torres
+            // 2. Evoluir Torres Pareado
             if(towers.length >= aiBlueprint.length) {
                 let minLevel = Infinity;
                 let blueprintTowersBuilt = [];
@@ -396,7 +401,9 @@
             }
         }
 
-        // --- SISTEMA DE BUFFS ---
+        // ==========================================
+        // SISTEMA DE BUFFS E CÁLCULO MENTAL
+        // ==========================================
         let currentBuff = 'cadeira';
         let phraseQueue = []; 
 
@@ -485,8 +492,83 @@
             return '#b8860b';
         }
 
+        function startMathPhase() {
+            const nextPhrase = getNextPhrase();
+            
+            if (!nextPhrase) {
+                gameState = 'MENU';
+                const screen = document.getElementById('start-screen');
+                screen.style.display = 'flex';
+                document.getElementById('start-title').innerText = "CICLO ENCERRADO";
+                document.getElementById('start-subtitle').innerText = "RECARREGUE SEU COMBUSTÍVEL";
+                document.getElementById('start-subtitle').style.color = "#ffeb3b";
+                return; 
+            }
+
+            gameState = 'MATH';
+            wave++;
+            document.getElementById('wave-display').innerText = wave;
+            document.getElementById('next-wave-btn').style.display = 'none';
+            document.getElementById('math-tip-box').style.display = 'none'; 
+            document.getElementById('build-menu').classList.remove('build-glow');
+            
+            document.getElementById('buff-message').innerText = nextPhrase;
+
+            timeLeft = TOTAL_TIME;
+            document.getElementById('timer-bar').style.width = '100%';
+            if(mathTimer) clearInterval(mathTimer);
+            mathTimer = setInterval(() => {
+                timeLeft -= 0.1;
+                let pct = (timeLeft / TOTAL_TIME) * 100;
+                document.getElementById('timer-bar').style.width = pct + '%';
+                if(timeLeft <= 0) { clearInterval(mathTimer); resolveMath(false, true); }
+            }, 100);
+
+            let operations = ['+', '-', 'x'];
+            if (wave % 10 === 0) operations = ['/'];
+            
+            let op = operations[Math.floor(Math.random() * operations.length)];
+            let difficulty = Math.ceil(wave / 2);
+            let n1, n2, answer, questionText;
+
+            if (op === '/') {
+                n2 = Math.floor(Math.random() * 10) + 2; 
+                answer = Math.floor(Math.random() * (5 * difficulty)) + 5; 
+                n1 = n2 * answer; 
+                questionText = `CHEFE! ${n1} ÷ ${n2} = ?`;
+            } else {
+                n1 = Math.floor(Math.random() * (5 * difficulty)) + 2;
+                n2 = Math.floor(Math.random() * (5 * difficulty)) + 2;
+                if(op === '+') answer = n1 + n2;
+                if(op === '-') { if(n1 < n2) {let t=n1; n1=n2; n2=t;} answer = n1 - n2; }
+                if(op === 'x') { n1 = Math.floor(Math.random() * difficulty) + 1; n2 = Math.floor(Math.random() * 10) + 1; answer = n1 * n2; }
+                questionText = `${n1} ${op} ${n2} = ?`;
+            }
+            
+            currentProblem = { n1, n2, op, answer };
+
+            let options = [answer];
+            while(options.length < 3) {
+                let fake = answer + Math.floor(Math.random() * 10) - 5;
+                if(fake !== answer && fake >= 0 && !options.includes(fake)) options.push(fake);
+            }
+            options.sort(() => Math.random() - 0.5);
+
+            document.getElementById('math-question').innerText = questionText;
+            const optDiv = document.getElementById('math-options');
+            optDiv.innerHTML = '';
+            options.forEach(opt => {
+                let btn = document.createElement('button');
+                btn.className = 'btn-math';
+                btn.innerText = opt;
+                btn.onclick = () => resolveMath(opt === answer, false);
+                optDiv.appendChild(btn);
+            });
+            document.getElementById('math-modal').style.display = 'block';
+        }
+
         // ==========================================
-        // CÉREBRO DE DICAS (V11) E LÓGICA MATEMÁTICA
+        // CÉREBRO DE LÓGICA (O ARSENAL JAPONÊS)
         // ==========================================
         function generateTip(problem) {
             const { n1, n2, op, answer } = problem;
@@ -650,7 +732,6 @@
             document.getElementById('upgrade-info').style.display = 'block';
             document.getElementById('build-menu').classList.add('build-glow');
 
-            // AUTOMAÇÃO DA IA
             if(aiMode) {
                 setTimeout(() => {
                     if(gameState === 'BUILD') startWaveCombat();
@@ -658,83 +739,8 @@
             }
         }
 
-        function startMathPhase() {
-            const nextPhrase = getNextPhrase();
-            
-            if (!nextPhrase) {
-                gameState = 'MENU';
-                const screen = document.getElementById('start-screen');
-                screen.style.display = 'flex';
-                document.getElementById('start-title').innerText = "CICLO ENCERRADO";
-                document.getElementById('start-subtitle').innerText = "RECARREGUE SEU COMBUSTÍVEL";
-                document.getElementById('start-subtitle').style.color = "#ffeb3b";
-                return; 
-            }
-
-            gameState = 'MATH';
-            wave++;
-            document.getElementById('wave-display').innerText = wave;
-            document.getElementById('next-wave-btn').style.display = 'none';
-            document.getElementById('math-tip-box').style.display = 'none'; 
-            document.getElementById('build-menu').classList.remove('build-glow');
-            
-            document.getElementById('buff-message').innerText = nextPhrase;
-
-            timeLeft = TOTAL_TIME;
-            document.getElementById('timer-bar').style.width = '100%';
-            if(mathTimer) clearInterval(mathTimer);
-            mathTimer = setInterval(() => {
-                timeLeft -= 0.1;
-                let pct = (timeLeft / TOTAL_TIME) * 100;
-                document.getElementById('timer-bar').style.width = pct + '%';
-                if(timeLeft <= 0) { clearInterval(mathTimer); resolveMath(false, true); }
-            }, 100);
-
-            let operations = ['+', '-', 'x'];
-            if (wave % 10 === 0) operations = ['/'];
-            
-            let op = operations[Math.floor(Math.random() * operations.length)];
-            let difficulty = Math.ceil(wave / 2);
-            let n1, n2, answer, questionText;
-
-            if (op === '/') {
-                n2 = Math.floor(Math.random() * 10) + 2; 
-                answer = Math.floor(Math.random() * (5 * difficulty)) + 5; 
-                n1 = n2 * answer; 
-                questionText = `CHEFE! ${n1} ÷ ${n2} = ?`;
-            } else {
-                n1 = Math.floor(Math.random() * (5 * difficulty)) + 2;
-                n2 = Math.floor(Math.random() * (5 * difficulty)) + 2;
-                if(op === '+') answer = n1 + n2;
-                if(op === '-') { if(n1 < n2) {let t=n1; n1=n2; n2=t;} answer = n1 - n2; }
-                if(op === 'x') { n1 = Math.floor(Math.random() * difficulty) + 1; n2 = Math.floor(Math.random() * 10) + 1; answer = n1 * n2; }
-                questionText = `${n1} ${op} ${n2} = ?`;
-            }
-            
-            currentProblem = { n1, n2, op, answer };
-
-            let options = [answer];
-            while(options.length < 3) {
-                let fake = answer + Math.floor(Math.random() * 10) - 5;
-                if(fake !== answer && fake >= 0 && !options.includes(fake)) options.push(fake);
-            }
-            options.sort(() => Math.random() - 0.5);
-
-            document.getElementById('math-question').innerText = questionText;
-            const optDiv = document.getElementById('math-options');
-            optDiv.innerHTML = '';
-            options.forEach(opt => {
-                let btn = document.createElement('button');
-                btn.className = 'btn-math';
-                btn.innerText = opt;
-                btn.onclick = () => resolveMath(opt === answer, false);
-                optDiv.appendChild(btn);
-            });
-            document.getElementById('math-modal').style.display = 'block';
-        }
-
         // ==========================================
-        // SISTEMA DE COMBATE (SWARM MODE INTACTO)
+        // COMBATE E ENXAME
         // ==========================================
         function startWaveCombat() {
             gameState = 'COMBAT';
@@ -760,7 +766,7 @@
             let hpBonus = wave * (baseHp * 0.10); 
             
             enemiesSpawned = 0;
-            let spawnRate = 15; // MODO ENXAME
+            let spawnRate = 15; 
             
             let interval = setInterval(() => {
                 if(gameState !== 'COMBAT') { clearInterval(interval); return; }
@@ -802,7 +808,7 @@
         }
 
         // ==========================================
-        // CLASSES (RESTAURADAS E PROTEGIDAS)
+        // CLASSES DE FÍSICA
         // ==========================================
         class Enemy {
             constructor(maxHp, isGolden) {
@@ -913,7 +919,7 @@
         }
 
         // ==========================================
-        // RENDERIZAÇÃO E CLIQUES
+        // EVENTOS E INTERAÇÕES COM USUÁRIO
         // ==========================================
         function draw() {
             ctx.fillStyle = '#222'; ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -1019,6 +1025,7 @@
             mouseY = (e.clientY - rect.top) * scaleY;
         });
 
+        // CORREÇÃO DO CHATGPT IMPLEMENTADA AQUI
         canvas.addEventListener('mousedown', (e) => { 
             const rect = canvas.getBoundingClientRect();
             const scaleX = canvas.width / rect.width;
@@ -1028,6 +1035,7 @@
             handleInteraction(); 
         });
 
+        // MANUTENÇÃO DO "DEDO GORDO" (-50) PARA MOBILE COMO DECIDIMOS
         canvas.addEventListener('touchmove', (e) => {
             e.preventDefault(); 
             const rect = canvas.getBoundingClientRect(); 
