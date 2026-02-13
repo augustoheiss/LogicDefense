@@ -3,67 +3,81 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Logic Defense: The Masterpiece</title>
+    <title>Logic Defense: The Masterpiece V25</title>
     <style>
         body { 
-            margin: 0; overflow: hidden; background-color: #1a1a1a; color: white; 
+            margin: 0; overflow: hidden; background-color: #050505; color: white; 
             font-family: 'Courier New', monospace; user-select: none; 
             touch-action: none;
         }
         
-        #game-container { position: relative; width: 800px; height: 600px; margin: 20px auto; border: 2px solid #444; background: #222; box-shadow: 0 0 20px rgba(0,0,0,0.5); }
-        canvas { display: block; cursor: crosshair; }
+        /* O FUNDO DO UNIVERSO */
+        #game-container { 
+            position: relative; width: 800px; height: 600px; margin: 20px auto; 
+            border: 2px solid #444; border-radius: 10px;
+            background-image: url('https://images.unsplash.com/photo-1462331940025-496dfbfc7564?auto=format&fit=crop&w=1000&q=80');
+            background-size: cover; background-position: center;
+            box-shadow: 0 0 40px rgba(0, 212, 255, 0.3);
+            overflow: hidden;
+        }
         
-        #ui-layer { position: absolute; top: 10px; left: 10px; width: calc(100% - 20px); pointer-events: none; display: flex; flex-wrap: wrap; gap: 10px; transition: opacity 0.3s; align-items: center;}
-        .stat-box { background: rgba(0,0,0,0.8); padding: 8px 12px; border: 1px solid #00ff00; color: #00ff00; font-weight: bold; font-size: 14px; border-radius: 4px; }
-        .score-box { border-color: #fff; color: #fff; }
+        #game-container::before {
+            content: ""; position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 10, 0.6); z-index: 0; pointer-events: none;
+        }
+
+        canvas { display: block; cursor: crosshair; position: relative; z-index: 1; }
+        
+        #ui-layer { position: absolute; top: 10px; left: 10px; width: calc(100% - 20px); pointer-events: none; display: flex; flex-wrap: wrap; gap: 10px; transition: opacity 0.3s; align-items: center; z-index: 2;}
+        .stat-box { background: rgba(0,0,0,0.8); padding: 8px 12px; border: 1px solid #00ff00; color: #00ff00; font-weight: bold; font-size: 14px; border-radius: 4px; box-shadow: 0 0 10px rgba(0,255,0,0.2);}
+        .score-box { border-color: #fff; color: #fff; box-shadow: 0 0 10px rgba(255,255,255,0.2);}
         
         .top-btn {
-            pointer-events: auto; background: #333; border: 2px solid #fff; color: white;
+            pointer-events: auto; background: rgba(0,0,0,0.8); border: 2px solid #fff; color: white;
             padding: 8px 15px; font-weight: bold; cursor: pointer; border-radius: 4px; transition: 0.2s;
         }
         .top-btn:hover { transform: scale(1.05); }
         
-        #speed-btn.active { background: #ff9800; color: black; border-color: #ff9800; box-shadow: 0 0 10px #ff9800; }
+        #speed-btn.active { background: #ff9800; color: black; border-color: #ff9800; box-shadow: 0 0 15px #ff9800; }
         #speed-btn.max { background: #f44336; color: white; border-color: #f44336; box-shadow: 0 0 15px #f44336; }
-        
         #ai-btn.active { background: #00d4ff; color: black; border-color: #00d4ff; box-shadow: 0 0 15px #00d4ff; }
 
         /* TELA DE INÍCIO */
         #start-screen {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.90); z-index: 200; 
+            background: rgba(0,0,0,0.85); z-index: 200; 
             display: flex; flex-direction: column; align-items: center; justify-content: center;
         }
         .buff-btn {
             margin: 15px; padding: 20px 40px; font-size: 24px; cursor: pointer;
-            border: 2px solid white; background: transparent; color: white;
-            font-family: inherit; transition: 0.2s; width: 300px; text-align: center;
+            border: 2px solid white; background: rgba(0,0,0,0.6); color: white;
+            font-family: inherit; transition: 0.2s; width: 320px; text-align: center; border-radius: 8px;
         }
         .buff-btn:hover { transform: scale(1.05); color: #000; }
-        .buff-amor:hover { background: #00ff00; border-color: #00ff00; box-shadow: 0 0 20px #00ff00; }
-        .buff-odio:hover { background: #ff0000; border-color: #ff0000; box-shadow: 0 0 20px #ff0000; }
-        .buff-cadeira:hover { background: #00d4ff; border-color: #00d4ff; box-shadow: 0 0 20px #00d4ff; }
+        .buff-amor:hover { background: #00ff00; border-color: #00ff00; box-shadow: 0 0 30px #00ff00; }
+        .buff-odio:hover { background: #ff0000; border-color: #ff0000; box-shadow: 0 0 30px #ff0000; }
+        .buff-cadeira:hover { background: #00d4ff; border-color: #00d4ff; box-shadow: 0 0 30px #00d4ff; }
 
         /* CAIXA DE DICAS */
         #math-tip-box {
-            display: none; position: absolute; bottom: 200px; right: 40px; width: 380px; 
+            display: none; position: absolute; bottom: 120px; right: 20px; width: 380px; 
             background: rgba(0, 0, 0, 0.95); border: 2px solid #00d4ff; padding: 15px;
             border-radius: 8px; color: #fff; z-index: 10; pointer-events: none; 
-            box-shadow: 0 0 20px rgba(0, 212, 255, 0.4); text-align: left; transition: opacity 0.3s;
+            box-shadow: 0 0 30px rgba(0, 212, 255, 0.5); text-align: left; transition: opacity 0.3s;
         }
         .tip-title { color: #00d4ff; font-weight: bold; margin-bottom: 8px; text-transform: uppercase; font-size: 16px; border-bottom: 1px solid #444; padding-bottom: 5px; }
         .tip-content { font-size: 14px; line-height: 1.5; color: #eee; font-family: 'Verdana', sans-serif; } 
         .tip-highlight { color: #ffff00; font-weight: bold; }
 
+        /* BOTÃO DE ONDA NA ESQUERDA (NOVO) */
         #next-wave-btn { 
-            display: none; position: absolute; bottom: 140px; right: 40px; 
+            display: none; position: absolute; bottom: 140px; left: 40px; /* Alterado de right para left */
             padding: 15px 30px; font-size: 20px; background: #ff0000; color: white; border: 2px solid white; 
-            cursor: pointer; font-weight: bold; z-index: 5; animation: pulse 2s infinite; box-shadow: 0 0 10px #ff0000; border-radius: 5px;
+            cursor: pointer; font-weight: bold; z-index: 5; animation: pulse 2s infinite; box-shadow: 0 0 15px #ff0000; border-radius: 5px;
             transition: opacity 0.3s; pointer-events: auto;
         }
         #next-wave-btn:hover { background: #ff4444; transform: scale(1.05); }
-        @keyframes pulse { 0% { box-shadow: 0 0 10px #ff0000; } 50% { box-shadow: 0 0 25px #ff0000; } 100% { box-shadow: 0 0 10px #ff0000; } }
+        @keyframes pulse { 0% { box-shadow: 0 0 10px #ff0000; } 50% { box-shadow: 0 0 30px #ff0000; } 100% { box-shadow: 0 0 10px #ff0000; } }
 
         #cancel-btn {
             display: none; position: absolute; top: 80px; left: 50%; transform: translateX(-50%);
@@ -77,7 +91,7 @@
         #math-modal { 
             display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); 
             background: rgba(0,0,0,0.95); border: 4px solid #fff; padding: 30px; text-align: center; 
-            box-shadow: 0 0 50px rgba(255,255,255,0.2); z-index: 10; width: 450px; border-radius: 10px; overflow: hidden;
+            box-shadow: 0 0 80px rgba(255,255,255,0.3); z-index: 10; width: 450px; border-radius: 10px; overflow: hidden;
         }
         
         #buff-message {
@@ -88,39 +102,38 @@
         #timer-container { width: 100%; height: 10px; background: #333; position: absolute; top: 0; left: 0; }
         #timer-bar { width: 100%; height: 100%; background: #ff0000; transition: width 0.1s linear; }
 
-        #math-question { font-size: 48px; margin: 10px 0 20px 0; color: #fff; font-weight: bold; }
+        #math-question { font-size: 48px; margin: 10px 0 20px 0; color: #fff; font-weight: bold; text-shadow: 0 0 20px rgba(255,255,255,0.5);}
         .btn-math { 
             background: #222; color: #fff; border: 2px solid #fff; padding: 15px; margin: 10px; width: 100px;
             font-size: 24px; cursor: pointer; font-family: inherit; transition: 0.2s; border-radius: 5px;
         }
-        .btn-math:hover { background: #fff; color: #000; transform: scale(1.1); }
+        .btn-math:hover { background: #fff; color: #000; transform: scale(1.1); box-shadow: 0 0 20px #fff;}
 
         #build-menu { 
             position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); 
-            display: flex; gap: 15px; background: rgba(0,0,0,0.8); padding: 10px; border-radius: 10px; border: 1px solid #555;
-            transition: 0.3s; z-index: 5;
+            display: flex; gap: 15px; background: rgba(0,0,0,0.85); padding: 10px; border-radius: 10px; border: 1px solid #555;
+            transition: 0.3s; z-index: 5; box-shadow: 0 0 20px rgba(0,0,0,0.8);
         }
         .build-glow { animation: attention-pulse 1.5s infinite; border: 1px solid #00ff00 !important; }
-        @keyframes attention-pulse { 0% { box-shadow: 0 0 0 rgba(0,255,0,0); border-color:#555; } 50% { box-shadow: 0 0 20px rgba(0,255,0,0.8); border-color:#00ff00; } 100% { box-shadow: 0 0 0 rgba(0,255,0,0); border-color:#555; } }
 
         .tower-btn { 
-            width: 70px; height: 80px; background: #333; border: 2px solid #555; cursor: pointer; 
+            width: 80px; height: 90px; background: #222; border: 2px solid #555; cursor: pointer; 
             display: flex; flex-direction: column; align-items: center; justify-content: center; 
             transition: 0.2s; border-radius: 5px; color: #aaa; pointer-events: auto;
         }
-        .tower-btn:hover { border-color: #fff; background: #444; color: #fff; }
-        .tower-btn.selected { border-color: #00ff00; background: #111; box-shadow: 0 0 15px #00ff00; color: #00ff00; transform: translateY(-5px); }
-        .tower-symbol { font-size: 30px; font-weight: bold; margin-bottom: 5px; }
-        .tower-cost { font-size: 14px; }
-        .tower-desc { font-size: 10px; color: #888; margin-top: 2px; }
+        .tower-btn:hover { border-color: #fff; background: #333; color: #fff; }
+        .tower-btn.selected { border-color: #00ff00; background: #111; box-shadow: 0 0 20px #00ff00; color: #00ff00; transform: translateY(-5px); }
+        .tower-symbol { font-size: 26px; font-weight: bold; margin-bottom: 2px; }
+        .tower-cost { font-size: 14px; font-weight: bold;}
+        .tower-desc { font-size: 10px; color: #aaa; margin-top: 2px; text-align: center;}
 
         #feedback-msg { 
             position: absolute; top: 150px; width: 100%; text-align: center; 
-            font-size: 28px; font-weight: bold; opacity: 0; transition: opacity 0.5s; 
-            text-shadow: 2px 2px 4px #000; z-index: 6; pointer-events: none;
+            font-size: 32px; font-weight: bold; opacity: 0; transition: opacity 0.5s; 
+            text-shadow: 0 0 10px #000, 0 0 20px #000; z-index: 6; pointer-events: none;
         }
         
-        #upgrade-info { position: absolute; bottom: 20px; left: 20px; text-align: left; font-size: 14px; color: #aaa; pointer-events: none; display: none; background: rgba(0,0,0,0.6); padding: 8px 12px; border-radius: 5px; border-left: 3px solid #ffd700; z-index: 5; }
+        #upgrade-info { position: absolute; bottom: 20px; left: 20px; text-align: left; font-size: 14px; color: #aaa; pointer-events: none; display: none; background: rgba(0,0,0,0.8); padding: 8px 12px; border-radius: 5px; border-left: 3px solid #ffd700; z-index: 5; box-shadow: 0 0 10px rgba(0,0,0,0.5);}
 
         /* GHOST MODE CSS */
         body.ghost-active #build-menu, body.ghost-active #next-wave-btn, body.ghost-active #ui-layer, body.ghost-active #math-tip-box { opacity: 0.15; pointer-events: none !important; }
@@ -131,12 +144,12 @@
 <body>
 
     <div id="start-screen">
-        <h1 id="start-title" style="font-size: 40px; margin-bottom: 10px; color: #fff;">LOGIC DEFENSE</h1>
-        <p id="start-subtitle" style="font-size: 20px; margin-bottom: 40px; color: #aaa;">ESCOLHA SEU COMBUSTÍVEL</p>
+        <h1 id="start-title" style="font-size: 44px; margin-bottom: 5px; color: #fff; text-shadow: 0 0 20px #00d4ff;">LOGIC DEFENSE</h1>
+        <p id="start-subtitle" style="font-size: 20px; margin-bottom: 40px; color: #aaa; letter-spacing: 2px;">ESCOLHA SEU COMBUSTÍVEL CÓSMICO</p>
         
-        <button class="buff-btn buff-amor" onclick="selectBuff('amor')">❤️ AMOR<br><span style="font-size:12px">"O fogo tá sempre aceso"</span></button>
-        <button class="buff-btn buff-odio" onclick="selectBuff('odio')">🔥 ÓDIO<br><span style="font-size:12px">"Vou desligar sua tomada"</span></button>
-        <button class="buff-btn buff-cadeira" onclick="selectBuff('cadeira')">🪑 A CADEIRA<br><span style="font-size:12px">"Aceite a dor"</span></button>
+        <button class="buff-btn buff-amor" onclick="selectBuff('amor')">❤️ AMOR<br><span style="font-size:12px; font-style:italic;">"O fogo tá sempre aceso"</span></button>
+        <button class="buff-btn buff-odio" onclick="selectBuff('odio')">🔥 ÓDIO<br><span style="font-size:12px; font-style:italic;">"Vou desligar sua tomada"</span></button>
+        <button class="buff-btn buff-cadeira" onclick="selectBuff('cadeira')">🪑 A CADEIRA<br><span style="font-size:12px; font-style:italic;">"Aceite a dor"</span></button>
     </div>
 
     <div id="game-container">
@@ -176,22 +189,22 @@
             <div class="tower-btn" onclick="selectTower(0)" id="tbtn0">
                 <div class="tower-symbol" style="color:#ffeb3b">+</div>
                 <div class="tower-cost">$50</div>
-                <div class="tower-desc">Rápida</div>
+                <div class="tower-desc">Metralhadora<br>(Triângulo)</div>
             </div>
             <div class="tower-btn" onclick="selectTower(1)" id="tbtn1">
                 <div class="tower-symbol" style="color:#03a9f4">-</div>
                 <div class="tower-cost">$120</div>
-                <div class="tower-desc">Slow AOE</div>
+                <div class="tower-desc">Slow AOE<br>(Círculo)</div>
             </div>
             <div class="tower-btn" onclick="selectTower(2)" id="tbtn2">
                 <div class="tower-symbol" style="color:#f44336">x</div>
                 <div class="tower-cost">$300</div>
-                <div class="tower-desc">Explosão</div>
+                <div class="tower-desc">Explosão<br>(Quadrado)</div>
             </div>
             <div class="tower-btn" onclick="selectTower(3)" id="tbtn3">
                 <div class="tower-symbol" style="color:#9c27b0">÷</div>
                 <div class="tower-cost">$450</div>
-                <div class="tower-desc">Acelerador</div>
+                <div class="tower-desc">Sniper<br>(Hexágono)</div>
             </div>
         </div>
     </div>
@@ -289,13 +302,13 @@
         let currentProblem = { n1: 0, n2: 0, op: '', answer: 0 };
         
         let mathTimer = null;
-        let timeLeft = 30; // TEMPO DE 30 SEGUNDOS
+        let timeLeft = 30;
         const TOTAL_TIME = 30;
 
         let totalEnemiesToSpawn = 0;
         let enemiesSpawned = 0;
 
-        // ENTIDADES FÍSICAS DO JOGO
+        // ENTIDADES FÍSICAS
         let towers = [];
         let enemies = [];
         let bullets = [];
@@ -312,12 +325,12 @@
             {x: 100, y: 350}, {x: 100, y: 500}, {x: 800, y: 500}
         ];
 
-        // TIPOS DE TORRES (COM SPLASH PARA A DE X)
+        // TIPOS DE TORRES Geometria Sagrada
         const towerTypes = [
-            { name: "Soma", symbol: "+", cost: 50, range: 120, damage: 25, rate: 25, color: "#ffeb3b" },
-            { name: "Sub", symbol: "-", cost: 120, range: 160, damage: 8, rate: 5, color: "#03a9f4", slow: true },
-            { name: "Mult", symbol: "x", cost: 300, range: 220, damage: 120, rate: 70, color: "#f44336", splash: true },
-            { name: "Div", symbol: "÷", cost: 450, range: 300, damage: 400, rate: 120, color: "#9c27b0" }
+            { name: "Soma", symbol: "+", shape: "triangle", cost: 50, range: 120, damage: 25, rate: 25, color: "#ffeb3b" },
+            { name: "Sub", symbol: "-", shape: "circle", cost: 120, range: 160, damage: 8, rate: 5, color: "#03a9f4", slow: true },
+            { name: "Mult", symbol: "x", shape: "square", cost: 300, range: 220, damage: 120, rate: 70, color: "#f44336", splash: true },
+            { name: "Div", symbol: "÷", shape: "hexagon", cost: 450, range: 300, damage: 400, rate: 120, color: "#9c27b0" }
         ];
 
         function toRoman(num) {
@@ -354,7 +367,7 @@
             if(!aiMode) return;
             if(gameState === 'MATH' || gameState === 'START' || isGameOver || gameState === 'MENU') return;
 
-            // 1. Construir Planta Baixa
+            // 1. Construir
             for(let bp of aiBlueprint) {
                 let built = towers.find(t => Math.abs(t.x - bp.x) < 5 && Math.abs(t.y - bp.y) < 5);
                 if(!built) {
@@ -370,7 +383,7 @@
                 }
             }
 
-            // 2. Evoluir Torres Pareado
+            // 2. Evoluir Torres
             if(towers.length >= aiBlueprint.length) {
                 let minLevel = Infinity;
                 let blueprintTowersBuilt = [];
@@ -402,7 +415,7 @@
         }
 
         // ==========================================
-        // SISTEMA DE BUFFS E CÁLCULO MENTAL
+        // SISTEMA DE BUFFS E LÓGICA
         // ==========================================
         let currentBuff = 'cadeira';
         let phraseQueue = []; 
@@ -485,11 +498,7 @@
         }
 
         function getPathColor(wave) {
-            if (wave < 50) return '#0055aa'; 
-            if (wave < 100) return '#004488';
-            if (wave < 150) return '#440088';
-            if (wave < 200) return '#880000';
-            return '#b8860b';
+            return 'rgba(0,0,0,0)'; // O fundo de gás cuida do visual agora
         }
 
         function startMathPhase() {
@@ -732,16 +741,11 @@
             document.getElementById('upgrade-info').style.display = 'block';
             document.getElementById('build-menu').classList.add('build-glow');
 
-            // AUTOMAÇÃO DA IA
-            if(aiMode) {
-                setTimeout(() => {
-                    if(gameState === 'BUILD') startWaveCombat();
-                }, 3000);
-            }
+            // IA NÃO CLICA MAIS EM 'MANDAR ONDA'. O RITMO É SEU.
         }
 
         // ==========================================
-        // COMBATE E LÓGICA DO ENXAME (SWARM)
+        // COMBATE (O ENXAME ESPACIAL)
         // ==========================================
         function startWaveCombat() {
             gameState = 'COMBAT';
@@ -810,7 +814,7 @@
         }
 
         // ==========================================
-        // CLASSES DE ENTIDADES (O CÓDIGO INQUEBRÁVEL)
+        // CLASSES (COM GEOMETRIA SAGRADA)
         // ==========================================
         class Enemy {
             constructor(maxHp, isGolden) {
@@ -835,11 +839,17 @@
                 } else { this.x += (dx / dist) * actualSpeed; this.y += (dy / dist) * actualSpeed; }
             }
             draw() {
-                ctx.fillStyle = this.isGolden ? (this.frozen>0?'#ccffff':'#ffd700') : (this.frozen>0?'#88ccff':'#555555');
+                ctx.save();
+                ctx.shadowBlur = 10;
+                ctx.shadowColor = this.isGolden ? (this.frozen>0?'#00ffff':'#ffd700') : (this.frozen>0?'#00aaff':'#ff5555');
+                ctx.fillStyle = this.isGolden ? (this.frozen>0?'#ccffff':'#ffd700') : (this.frozen>0?'#88ccff':'#ff3333');
+                
                 ctx.beginPath(); ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2); ctx.fill();
-                ctx.lineWidth = 2; ctx.strokeStyle = '#000'; ctx.stroke();
+                
+                ctx.shadowBlur = 0;
                 ctx.fillStyle = 'red'; ctx.fillRect(this.x - 12, this.y - 20, 24, 4);
                 ctx.fillStyle = '#00ff00'; ctx.fillRect(this.x - 12, this.y - 20, 24 * (this.hp / this.maxHp), 4);
+                ctx.restore();
             }
         }
 
@@ -855,11 +865,9 @@
                 this.upgradeCost = this.type.cost * Math.pow(2, this.level - 1);
                 this.range = this.type.range * (1 + (0.2 * (this.level - 1)));
                 if(this.type.symbol === '÷') { this.currentRate = Math.max(1, Math.floor(this.currentRate / 2)); }
+                if(this.type.symbol === '+') { this.currentRate = Math.max(1, Math.floor(this.currentRate / 1.5)); } 
                 
-                // BUFF DA METRALHADORA (SOMA)
-                if(this.type.symbol === '+') { this.currentRate = Math.max(1, Math.floor(this.currentRate / 1.5)); }
-                
-                playSound('upgrade'); for(let i=0; i<10; i++) particles.push(new Particle(this.x, this.y, '#fff'));
+                playSound('upgrade'); for(let i=0; i<15; i++) particles.push(new Particle(this.x, this.y, '#fff'));
             }
             getDamage() { 
                 if(this.type.symbol === '÷') return this.type.damage;
@@ -881,13 +889,62 @@
                     }
                 }
             }
+            
             draw() {
-                ctx.fillStyle = '#333'; ctx.fillRect(this.x - 18, this.y - 18, 36, 36); 
-                if(this.level > 1) { ctx.strokeStyle = '#ffd700'; ctx.lineWidth = 2; ctx.strokeRect(this.x - 18, this.y - 18, 36, 36); }
-                ctx.fillStyle = this.type.color; ctx.fillRect(this.x - 15, this.y - 15, 30, 30);
-                ctx.fillStyle = 'black'; ctx.font = 'bold 20px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-                ctx.fillText(this.type.symbol, this.x, this.y);
-                ctx.fillStyle = 'white'; ctx.font = 'bold 10px Arial'; ctx.fillText(toRoman(this.level), this.x, this.y - 20);
+                ctx.save();
+                
+                if(this.level > 1) { 
+                    ctx.shadowBlur = 15;
+                    ctx.shadowColor = '#ffd700';
+                    ctx.strokeStyle = '#ffd700'; 
+                    ctx.lineWidth = 2; 
+                    ctx.beginPath();
+                    ctx.arc(this.x, this.y, 20 + (this.level), 0, Math.PI * 2);
+                    ctx.stroke();
+                }
+
+                ctx.shadowBlur = 10;
+                ctx.shadowColor = this.type.color;
+                ctx.fillStyle = 'rgba(20,20,20,0.9)'; 
+                ctx.strokeStyle = this.type.color;
+                ctx.lineWidth = 3;
+
+                ctx.beginPath();
+                let r = 16; 
+
+                if(this.type.shape === 'triangle') {
+                    ctx.moveTo(this.x, this.y - r);
+                    ctx.lineTo(this.x + r, this.y + r);
+                    ctx.lineTo(this.x - r, this.y + r);
+                } else if(this.type.shape === 'circle') {
+                    ctx.arc(this.x, this.y, r, 0, Math.PI*2);
+                } else if(this.type.shape === 'square') {
+                    ctx.rect(this.x - r, this.y - r, r*2, r*2);
+                } else if(this.type.shape === 'hexagon') {
+                    for(let i = 0; i < 6; i++) {
+                        let angle = i * Math.PI / 3;
+                        let px = this.x + r * Math.cos(angle);
+                        let py = this.y + r * Math.sin(angle);
+                        if(i === 0) ctx.moveTo(px, py);
+                        else ctx.lineTo(px, py);
+                    }
+                }
+                ctx.closePath();
+                ctx.fill();
+                ctx.stroke();
+
+                ctx.shadowBlur = 0;
+                ctx.fillStyle = '#fff'; 
+                ctx.font = 'bold 20px Courier New'; 
+                ctx.textAlign = 'center'; 
+                ctx.textBaseline = 'middle';
+                ctx.fillText(this.type.symbol, this.x, this.y + 2);
+
+                ctx.fillStyle = 'rgba(255,255,255,0.8)'; 
+                ctx.font = 'bold 10px Arial'; 
+                ctx.fillText(toRoman(this.level), this.x, this.y - 25);
+                
+                ctx.restore();
             }
         }
 
@@ -903,84 +960,100 @@
                 if(dist <= this.speed) { this.hit(this.target); this.active = false; } 
                 else { this.x += (dx/dist) * this.speed; this.y += (dy/dist) * this.speed; }
             }
-            
             hit(enemy) {
-                // Tiro Direto
                 enemy.hp -= this.damage; 
-
-                // 1. AREA OF EFFECT (AOE) SLOW - Torre de Subtração (-)
-                if (this.type.slow) {
+                
+                // AREA OF EFFECT (GELO)
+                if(this.type.slow) { 
+                    enemy.frozen = 60;
                     let slowRadius = 60;
                     enemies.forEach(e => {
-                        if (e.active) {
+                        if(e.active) {
                             let d = Math.sqrt((e.x - enemy.x)**2 + (e.y - enemy.y)**2);
-                            if (d <= slowRadius) {
-                                e.frozen = 60; // Congela todo mundo no raio
-                            }
+                            if(d <= slowRadius) e.frozen = 60;
                         }
                     });
-                    for(let i=0; i<10; i++) particles.push(new Particle(enemy.x, enemy.y, '#00ffff')); // Efeito gelo
+                    for(let i=0; i<15; i++) particles.push(new Particle(enemy.x, enemy.y, '#00ffff'));
                 }
-
-                // 2. AREA OF EFFECT (SPLASH) DAMAGE - Torre de Multiplicação (x)
-                if (this.type.splash) {
+                
+                // AREA OF EFFECT (EXPLOSÃO)
+                if(this.type.splash) {
                     let splashRadius = 50;
                     enemies.forEach(e => {
-                        if (e !== enemy && e.active) {
+                        if(e !== enemy && e.active) {
                             let d = Math.sqrt((e.x - enemy.x)**2 + (e.y - enemy.y)**2);
-                            if (d <= splashRadius) {
-                                e.hp -= this.damage * 0.5; // 50% de dano nos vizinhos
-                            }
+                            if(d <= splashRadius) e.hp -= this.damage * 0.5;
                         }
                     });
-                    for(let i=0; i<10; i++) particles.push(new Particle(enemy.x, enemy.y, '#ff8800')); // Efeito fogo
+                    for(let i=0; i<15; i++) particles.push(new Particle(enemy.x, enemy.y, '#ff8800'));
                 }
 
-                // Partículas do tiro direto
-                for(let i=0; i<3; i++) particles.push(new Particle(enemy.x, enemy.y, this.type.color));
+                for(let i=0; i<5; i++) particles.push(new Particle(enemy.x, enemy.y, this.type.color));
                 playSound('hit');
                 
-                // Checa mortes globais (importante para mortes por splash)
                 enemies.forEach(e => {
-                    if (e.hp <= 0 && e.active) {
-                        gold += Math.floor(3 * goldMultiplier); 
-                        document.getElementById('gold-display').innerText = gold;
-                        e.active = false; 
-                        for(let i=0; i<8; i++) particles.push(new Particle(e.x, e.y, '#fff'));
+                    if(e.hp <= 0 && e.active) {
+                        gold += Math.floor(3 * goldMultiplier); document.getElementById('gold-display').innerText = gold;
+                        e.active = false; for(let i=0; i<10; i++) particles.push(new Particle(e.x, e.y, '#fff'));
                     }
                 });
             }
-            
-            draw() { ctx.fillStyle = this.type.color; ctx.beginPath(); ctx.arc(this.x, this.y, 4, 0, Math.PI*2); ctx.fill(); }
+            draw() { 
+                ctx.save();
+                ctx.shadowBlur = 10;
+                ctx.shadowColor = this.type.color;
+                ctx.fillStyle = '#fff'; 
+                ctx.beginPath(); ctx.arc(this.x, this.y, 4, 0, Math.PI*2); ctx.fill(); 
+                ctx.restore();
+            }
         }
 
         class Particle {
             constructor(x, y, color) {
                 this.x = x; this.y = y; this.color = color;
-                this.vx = (Math.random() - 0.5) * 4; this.vy = (Math.random() - 0.5) * 4; this.life = 20;
+                this.vx = (Math.random() - 0.5) * 6; this.vy = (Math.random() - 0.5) * 6; this.life = 25;
             }
             update() { this.x += this.vx; this.y += this.vy; this.life--; }
-            draw() { ctx.globalAlpha = this.life / 20; ctx.fillStyle = this.color; ctx.fillRect(this.x, this.y, 3, 3); ctx.globalAlpha = 1; }
+            draw() { 
+                ctx.globalAlpha = this.life / 25; 
+                ctx.fillStyle = this.color; 
+                ctx.beginPath(); ctx.arc(this.x, this.y, 2, 0, Math.PI*2); ctx.fill();
+                ctx.globalAlpha = 1; 
+            }
         }
 
         // ==========================================
-        // COLISÕES E RENDERIZAÇÃO 
+        // RENDERIZAÇÃO DO UNIVERSO
         // ==========================================
-        function draw() {
-            ctx.fillStyle = '#222'; ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-            if(gameState !== 'MENU') {
-                ctx.strokeStyle = '#333'; ctx.lineWidth = 1;
-                for(let i=0; i<800; i+=50) { ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i,600); ctx.stroke(); }
-                for(let i=0; i<600; i+=50) { ctx.beginPath(); ctx.moveTo(0,i); ctx.lineTo(800,i); ctx.stroke(); }
-            }
-
-            ctx.strokeStyle = getPathColor(wave);
-            ctx.lineWidth = 40; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+        function drawPath() {
+            ctx.save();
+            ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+            
+            ctx.shadowBlur = 30;
+            ctx.shadowColor = '#8a2be2'; 
+            ctx.strokeStyle = 'rgba(138, 43, 226, 0.15)';
+            ctx.lineWidth = 60;
             ctx.beginPath(); ctx.moveTo(path[0].x, path[0].y);
             for(let i=1; i<path.length; i++) ctx.lineTo(path[i].x, path[i].y);
             ctx.stroke();
-            ctx.strokeStyle = '#222'; ctx.lineWidth = 2; ctx.stroke();
+
+            ctx.shadowBlur = 15;
+            ctx.shadowColor = '#00ffff'; 
+            ctx.strokeStyle = 'rgba(0, 255, 255, 0.3)';
+            ctx.lineWidth = 25;
+            ctx.beginPath(); ctx.moveTo(path[0].x, path[0].y);
+            for(let i=1; i<path.length; i++) ctx.lineTo(path[i].x, path[i].y);
+            ctx.stroke();
+            
+            ctx.restore();
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            if(gameState !== 'MENU') {
+                drawPath(); 
+            }
 
             towers.forEach(t => t.draw());
             enemies.forEach(e => e.draw());
@@ -992,13 +1065,13 @@
                 canBuild = checkCollision(mouseX, mouseY);
                 const color = canBuild ? 'rgba(0, 255, 0, 0.5)' : 'rgba(255, 0, 0, 0.5)';
                 ctx.beginPath(); ctx.arc(mouseX, mouseY, type.range, 0, Math.PI * 2);
-                ctx.fillStyle = 'rgba(255, 255, 255, 0.1)'; ctx.fill();
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.05)'; ctx.fill();
                 ctx.lineWidth = 1; ctx.strokeStyle = color; ctx.stroke();
                 ctx.fillStyle = canBuild ? type.color : '#550000';
-                ctx.fillRect(mouseX - 15, mouseY - 15, 30, 30);
+                ctx.fillRect(mouseX - 5, mouseY - 5, 10, 10);
                 ctx.fillStyle = (gold >= type.cost) ? '#fff' : '#f00';
                 ctx.font = '12px Courier';
-                ctx.fillText(`$${type.cost}`, mouseX, mouseY - 25);
+                ctx.fillText(`$${type.cost}`, mouseX, mouseY - 15);
             }
             
             if(selectedTowerIdx === -1) {
@@ -1011,15 +1084,14 @@
                         ctx.fillStyle = (gold >= t.upgradeCost) ? '#0f0' : '#f00';
                         ctx.font = 'bold 14px Arial';
                         ctx.fillText(`UPGRADE: $${t.upgradeCost}`, t.x, t.y - 40);
-                        if(t.type.symbol === '÷') {
-                            ctx.fillStyle = '#cc88ff'; ctx.font = '10px Arial';
-                            ctx.fillText(`(ACELERAR)`, t.x, t.y - 55);
-                        }
                     }
                 }
             }
         }
 
+        // ==========================================
+        // COLISÕES, CLIQUES E INICIAÇÃO
+        // ==========================================
         function checkCollision(x, y) {
             for(let t of towers) {
                 let dist = Math.sqrt((t.x - x)**2 + (t.y - y)**2);
@@ -1133,25 +1205,18 @@
             }
         }
 
-        // MOTOR DE ARRANQUE INCONDICIONAL (GATILHO FINAL)
         function gameLoop() {
             try {
                 if(gameState !== 'MENU') {
-                    for(let i = 0; i < gameSpeed; i++) {
-                        update();
-                    }
+                    for(let i = 0; i < gameSpeed; i++) { update(); }
                     runAILogic(); 
                 }
                 draw();
-            } catch(e) {
-                console.error("Sherlock Error: ", e);
-            }
+            } catch(e) { console.error("Sherlock Error: ", e); }
             requestAnimationFrame(gameLoop);
         }
 
-        window.onload = () => {
-            gameLoop();
-        };
+        window.onload = () => { gameLoop(); };
 
     </script>
 </body>
