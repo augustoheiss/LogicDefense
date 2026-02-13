@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Logic Defense: Automata & Speed</title>
+    <title>Logic Defense: Automata & Hacker</title>
     <style>
         body { 
             margin: 0; overflow: hidden; background-color: #1a1a1a; color: white; 
@@ -29,7 +29,6 @@
         
         #ai-btn.active { background: #00d4ff; color: black; border-color: #00d4ff; box-shadow: 0 0 15px #00d4ff; }
 
-        /* TELA DE INÍCIO */
         #start-screen {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(0,0,0,0.95); z-index: 200;
@@ -45,9 +44,8 @@
         .buff-odio:hover { background: #ff0000; border-color: #ff0000; box-shadow: 0 0 20px #ff0000; }
         .buff-cadeira:hover { background: #00d4ff; border-color: #00d4ff; box-shadow: 0 0 20px #00d4ff; }
 
-        /* CAIXA DE DICAS */
         #math-tip-box {
-            display: none; position: absolute; bottom: 200px; right: 40px; width: 360px; 
+            display: none; position: absolute; bottom: 200px; right: 40px; width: 350px; 
             background: rgba(0, 0, 0, 0.95); border: 2px solid #00d4ff; padding: 15px;
             border-radius: 8px; color: #fff; z-index: 10; pointer-events: none; 
             box-shadow: 0 0 20px rgba(0, 212, 255, 0.4); text-align: left; transition: opacity 0.3s;
@@ -120,13 +118,7 @@
             text-shadow: 2px 2px 4px #000; z-index: 6; pointer-events: none;
         }
         
-        /* CORRIGIDO O OVERLAP DO UPGRADE INFO */
-        #upgrade-info { 
-            position: absolute; bottom: 20px; left: 20px; text-align: left; 
-            font-size: 14px; color: #aaa; pointer-events: none; display: none; 
-            background: rgba(0,0,0,0.6); padding: 8px 12px; border-radius: 5px;
-            border-left: 3px solid #ffd700;
-        }
+        #upgrade-info { position: absolute; bottom: 20px; left: 20px; text-align: left; font-size: 14px; color: #aaa; pointer-events: none; display: none; background: rgba(0,0,0,0.6); padding: 8px 12px; border-radius: 5px; border-left: 3px solid #ffd700; }
 
         body.ghost-active #build-menu, body.ghost-active #next-wave-btn, body.ghost-active #ui-layer, body.ghost-active #math-tip-box { opacity: 0.15; pointer-events: none !important; }
         body.ghost-active .tower-btn { pointer-events: none !important; }
@@ -159,7 +151,6 @@
         </div>
         
         <div id="upgrade-info">CLIQUE NA TORRE PARA EVOLUIR</div>
-
         <div id="feedback-msg"></div>
         
         <div id="math-tip-box">
@@ -275,7 +266,6 @@
         
         let totalCorrect = 0;
         let totalWrong = 0;
-        
         let currentProblem = { n1: 0, n2: 0, op: '', answer: 0 };
         
         // TEMPO: 30 Segundos
@@ -283,14 +273,15 @@
         let timeLeft = 30;
         const TOTAL_TIME = 30;
 
-        // --- SISTEMA DE CONTROLE DE LOOP ---
+        // --- SISTEMA DE CONTROLE DE LOOP SEGURO ---
         let totalEnemiesToSpawn = 0;
         let enemiesSpawned = 0;
+        let gameLoopRunning = false;
 
         // --- SISTEMA MODO IA (AUTO-PLAY) ---
         let aiMode = false;
         const aiBlueprint = [
-            // Grid 3x3 de Somas (Amarelas) - Exatamente entre os caminhos
+            // Grid 3x3 de Somas (Amarelas) - Canto esquerdo inferior ao meio
             {type: 0, x: 200, y: 385}, {type: 0, x: 200, y: 425}, {type: 0, x: 200, y: 465},
             {type: 0, x: 240, y: 385}, {type: 0, x: 240, y: 425}, {type: 0, x: 240, y: 465},
             {type: 0, x: 280, y: 385}, {type: 0, x: 280, y: 425}, {type: 0, x: 280, y: 465},
@@ -316,7 +307,6 @@
             if(!aiMode) return;
             if(gameState === 'MATH' || gameState === 'START' || isGameOver) return;
 
-            // 1. Construir
             for(let bp of aiBlueprint) {
                 let built = towers.find(t => Math.abs(t.x - bp.x) < 5 && Math.abs(t.y - bp.y) < 5);
                 if(!built) {
@@ -332,7 +322,6 @@
                 }
             }
 
-            // 2. Evoluir parelho
             if(towers.length >= aiBlueprint.length) {
                 let minLevel = Infinity;
                 let blueprintTowersBuilt = [];
@@ -420,7 +409,12 @@
             if(type === 'cadeira') { modal.style.borderColor = '#00d4ff'; modal.style.boxShadow = '0 0 50px rgba(0,212,255,0.3)'; msg.style.color = '#88ccff'; }
             
             startMathPhase(); 
-            gameLoop();
+            
+            // TRAVA DE SEGURANÇA PARA NÃO DUPLICAR O GAME LOOP!
+            if (!gameLoopRunning) {
+                gameLoopRunning = true;
+                gameLoop();
+            }
         }
 
         function getNextPhrase() {
@@ -446,7 +440,8 @@
         }
 
         function getPathColor(wave) {
-            if (wave < 50) return '#333'; 
+            // CORRIGIDO: Azul forte nas primeiras ondas para não ficar invisível
+            if (wave < 50) return '#0055aa'; 
             if (wave < 100) return '#004488';
             if (wave < 150) return '#440088';
             if (wave < 200) return '#880000';
@@ -539,7 +534,7 @@
             document.getElementById('math-modal').style.display = 'block';
         }
 
-        // --- SISTEMA DE DICAS TÁTICAS V7 (MASTER BRAIN - SUBTRAÇÃO HACKEADA) ---
+        // --- SISTEMA DE DICAS TÁTICAS V8 (MASTER BRAIN + HACKS) ---
         function generateTip(problem) {
             const { n1, n2, op, answer } = problem;
             let text = "";
@@ -577,7 +572,7 @@
             else if (op === '-') {
                 let diff = n1 - n2;
                 
-                // 1. Reta Numérica turbinada para contas próximas (mesmo que grandes, ex 90-80)
+                // 1. Reta Numérica turbinada para contas próximas
                 if (diff <= 10) {
                      text = `Distância (Reta Numérica):<br>Eles estão muito perto!<br>Pule do <span class="tip-highlight">${n2}</span> para o <span class="tip-highlight">${n1}</span>.<br>São apenas <span class="tip-highlight">${diff}</span> passos.`;
                 } 
@@ -704,7 +699,7 @@
             document.getElementById('upgrade-info').style.display = 'block';
             document.getElementById('build-menu').classList.add('build-glow');
 
-            // SE A IA ESTIVER LIGADA, ELA ESPERA 3s PRA VC LER E MANDA A ONDA SOZINHA
+            // AUTOMAÇÃO DA IA (MANDA ONDA SOZINHO)
             if(aiMode) {
                 setTimeout(() => {
                     if(gameState === 'BUILD') startWaveCombat();
@@ -744,7 +739,6 @@
 
         function update() {
             if (gameState === 'COMBAT') {
-                // CORREÇÃO DA PANE DO LOOP: Só encerra se não houver inimigos E se todos já tiverem nascido
                 if (enemies.length === 0 && enemiesSpawned >= totalEnemiesToSpawn) {
                     if(!this.waitingForMath) {
                         this.waitingForMath = true;
