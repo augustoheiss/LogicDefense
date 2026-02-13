@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Logic Defense: Automata & Hacker</title>
+    <title>Logic Defense: The Director's Cut</title>
     <style>
         body { 
             margin: 0; overflow: hidden; background-color: #1a1a1a; color: white; 
@@ -29,9 +29,10 @@
         
         #ai-btn.active { background: #00d4ff; color: black; border-color: #00d4ff; box-shadow: 0 0 15px #00d4ff; }
 
+        /* TELA DE INÍCIO E RECARGA */
         #start-screen {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.95); z-index: 200;
+            background: rgba(0,0,0,0.85); z-index: 200; /* Levemente transparente pra ver o jogo atrás */
             display: flex; flex-direction: column; align-items: center; justify-content: center;
         }
         .buff-btn {
@@ -44,8 +45,9 @@
         .buff-odio:hover { background: #ff0000; border-color: #ff0000; box-shadow: 0 0 20px #ff0000; }
         .buff-cadeira:hover { background: #00d4ff; border-color: #00d4ff; box-shadow: 0 0 20px #00d4ff; }
 
+        /* CAIXA DE DICAS */
         #math-tip-box {
-            display: none; position: absolute; bottom: 200px; right: 40px; width: 350px; 
+            display: none; position: absolute; bottom: 200px; right: 40px; width: 360px; 
             background: rgba(0, 0, 0, 0.95); border: 2px solid #00d4ff; padding: 15px;
             border-radius: 8px; color: #fff; z-index: 10; pointer-events: none; 
             box-shadow: 0 0 20px rgba(0, 212, 255, 0.4); text-align: left; transition: opacity 0.3s;
@@ -58,7 +60,7 @@
             display: none; position: absolute; bottom: 140px; right: 40px; 
             padding: 15px 30px; font-size: 20px; background: #ff0000; color: white; border: 2px solid white; 
             cursor: pointer; font-weight: bold; z-index: 5; animation: pulse 2s infinite; box-shadow: 0 0 10px #ff0000; border-radius: 5px;
-            transition: opacity 0.3s;
+            transition: opacity 0.3s; pointer-events: auto;
         }
         #next-wave-btn:hover { background: #ff4444; transform: scale(1.05); }
         @keyframes pulse { 0% { box-shadow: 0 0 10px #ff0000; } 50% { box-shadow: 0 0 25px #ff0000; } 100% { box-shadow: 0 0 10px #ff0000; } }
@@ -96,7 +98,7 @@
         #build-menu { 
             position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); 
             display: flex; gap: 15px; background: rgba(0,0,0,0.8); padding: 10px; border-radius: 10px; border: 1px solid #555;
-            transition: 0.3s;
+            transition: 0.3s; z-index: 5;
         }
         .build-glow { animation: attention-pulse 1.5s infinite; border: 1px solid #00ff00 !important; }
         @keyframes attention-pulse { 0% { box-shadow: 0 0 0 rgba(0,255,0,0); border-color:#555; } 50% { box-shadow: 0 0 20px rgba(0,255,0,0.8); border-color:#00ff00; } 100% { box-shadow: 0 0 0 rgba(0,255,0,0); border-color:#555; } }
@@ -118,8 +120,9 @@
             text-shadow: 2px 2px 4px #000; z-index: 6; pointer-events: none;
         }
         
-        #upgrade-info { position: absolute; bottom: 20px; left: 20px; text-align: left; font-size: 14px; color: #aaa; pointer-events: none; display: none; background: rgba(0,0,0,0.6); padding: 8px 12px; border-radius: 5px; border-left: 3px solid #ffd700; }
+        #upgrade-info { position: absolute; bottom: 20px; left: 20px; text-align: left; font-size: 14px; color: #aaa; pointer-events: none; display: none; background: rgba(0,0,0,0.6); padding: 8px 12px; border-radius: 5px; border-left: 3px solid #ffd700; z-index: 5; }
 
+        /* GHOST MODE CSS */
         body.ghost-active #build-menu, body.ghost-active #next-wave-btn, body.ghost-active #ui-layer, body.ghost-active #math-tip-box { opacity: 0.15; pointer-events: none !important; }
         body.ghost-active .tower-btn { pointer-events: none !important; }
         body.ghost-active #cancel-btn { display: block; }
@@ -273,22 +276,20 @@
         let timeLeft = 30;
         const TOTAL_TIME = 30;
 
-        // --- SISTEMA DE CONTROLE DE LOOP SEGURO ---
         let totalEnemiesToSpawn = 0;
         let enemiesSpawned = 0;
-        let gameLoopRunning = false;
 
         // --- SISTEMA MODO IA (AUTO-PLAY) ---
         let aiMode = false;
         const aiBlueprint = [
-            // Grid 3x3 de Somas (Amarelas) - Canto esquerdo inferior ao meio
+            // Grid 3x3 de Somas (Amarelas) - Posição baseada na screenshot
             {type: 0, x: 200, y: 385}, {type: 0, x: 200, y: 425}, {type: 0, x: 200, y: 465},
             {type: 0, x: 240, y: 385}, {type: 0, x: 240, y: 425}, {type: 0, x: 240, y: 465},
             {type: 0, x: 280, y: 385}, {type: 0, x: 280, y: 425}, {type: 0, x: 280, y: 465},
             // Torre Azul (Slow)
             {type: 1, x: 330, y: 385},
             // Torre Roxa (Divisão)
-            {type: 3, x: 330, y: 300}
+            {type: 3, x: 330, y: 320}
         ];
 
         function toggleAIMode() {
@@ -305,8 +306,9 @@
 
         function runAILogic() {
             if(!aiMode) return;
-            if(gameState === 'MATH' || gameState === 'START' || isGameOver) return;
+            if(gameState === 'MATH' || gameState === 'START' || isGameOver || gameState === 'MENU') return;
 
+            // 1. Construir Planta Baixa
             for(let bp of aiBlueprint) {
                 let built = towers.find(t => Math.abs(t.x - bp.x) < 5 && Math.abs(t.y - bp.y) < 5);
                 if(!built) {
@@ -318,10 +320,11 @@
                         playSound('correct');
                         for(let i=0; i<5; i++) particles.push(new Particle(bp.x, bp.y, '#00ff00'));
                     }
-                    return; 
+                    return; // Retorna para construir só 1 por tick e não bugar som
                 }
             }
 
+            // 2. Evoluir Torres Pareado
             if(towers.length >= aiBlueprint.length) {
                 let minLevel = Infinity;
                 let blueprintTowersBuilt = [];
@@ -335,7 +338,6 @@
                 });
 
                 let upgeadable = blueprintTowersBuilt.filter(t => t.level === minLevel);
-                
                 if(upgeadable.length > 0) {
                     let target = upgeadable[Math.floor(Math.random() * upgeadable.length)];
                     if(gold >= target.upgradeCost) {
@@ -353,7 +355,7 @@
             }
         }
 
-        // --- SISTEMA DE BUFFS E BARALHO ---
+        // --- SISTEMA DE BUFFS ---
         let currentBuff = 'cadeira';
         let phraseQueue = []; 
 
@@ -409,12 +411,6 @@
             if(type === 'cadeira') { modal.style.borderColor = '#00d4ff'; modal.style.boxShadow = '0 0 50px rgba(0,212,255,0.3)'; msg.style.color = '#88ccff'; }
             
             startMathPhase(); 
-            
-            // TRAVA DE SEGURANÇA PARA NÃO DUPLICAR O GAME LOOP!
-            if (!gameLoopRunning) {
-                gameLoopRunning = true;
-                gameLoop();
-            }
         }
 
         function getNextPhrase() {
@@ -440,7 +436,6 @@
         }
 
         function getPathColor(wave) {
-            // CORRIGIDO: Azul forte nas primeiras ondas para não ficar invisível
             if (wave < 50) return '#0055aa'; 
             if (wave < 100) return '#004488';
             if (wave < 150) return '#440088';
@@ -448,13 +443,22 @@
             return '#b8860b';
         }
 
+        // MOTOR DE ARRANQUE ABSOLUTO (Evita a pane cinza)
+        window.onload = () => {
+            gameLoop();
+        };
+
         function gameLoop() {
-            if(gameState !== 'MENU') {
-                for(let i = 0; i < gameSpeed; i++) {
-                    update();
+            try {
+                if(gameState !== 'MENU') {
+                    for(let i = 0; i < gameSpeed; i++) {
+                        update();
+                    }
+                    runAILogic(); 
                 }
-                runAILogic(); 
-                draw();
+                draw(); // SEMPRE desenha, mesmo no menu, pra garantir vida visual
+            } catch(e) {
+                console.error("Sherlock Error: ", e);
             }
             requestAnimationFrame(gameLoop);
         }
@@ -534,7 +538,7 @@
             document.getElementById('math-modal').style.display = 'block';
         }
 
-        // --- SISTEMA DE DICAS TÁTICAS V8 (MASTER BRAIN + HACKS) ---
+        // --- SISTEMA DE DICAS TÁTICAS V9 (MASTER BRAIN - SUBTRAÇÃO JAPONESA E DIVISÃO EXATA) ---
         function generateTip(problem) {
             const { n1, n2, op, answer } = problem;
             let text = "";
@@ -576,25 +580,50 @@
                 if (diff <= 10) {
                      text = `Distância (Reta Numérica):<br>Eles estão muito perto!<br>Pule do <span class="tip-highlight">${n2}</span> para o <span class="tip-highlight">${n1}</span>.<br>São apenas <span class="tip-highlight">${diff}</span> passos.`;
                 } 
-                // 2. Subtração Direta
-                else if (n2 % 10 === 0) {
-                    text = `Subtração Direta:<br>O segundo número já é redondo.<br><span class="tip-highlight">${n1} - ${n2} = ${answer}</span>.`;
+                // 2. Método Japonês (Soroban) para números grandes (Centenas)
+                else if (n1 >= 100) {
+                    let s1 = n1.toString();
+                    let s2 = n2.toString().padStart(s1.length, '0');
+                    let stepStr = `Método Japonês (Esq. para Dir.):<br>`;
+                    let res = "";
+                    
+                    for(let i=0; i<s1.length; i++) {
+                        let v1 = parseInt(s1[i]);
+                        let v2 = parseInt(s2[i]);
+                        
+                        if(i === 0) {
+                            res += (v1 - v2);
+                            stepStr += `1º: ${v1} - ${v2} = ${v1-v2}. (Atual: <span class="tip-highlight">${res}</span>)<br>`;
+                        } else {
+                            if(v1 >= v2) {
+                                res += (v1 - v2);
+                                stepStr += `Próx: ${v1} - ${v2} = ${v1-v2}. (Junta: <span class="tip-highlight">${res}</span>)<br>`;
+                            } else {
+                                let divida = v2 - v1;
+                                let pagou = 10 - divida;
+                                let numRes = parseInt(res) - 1; 
+                                res = numRes.toString() + pagou.toString();
+                                stepStr += `Dívida: ${v1} não tira ${v2} (faltam ${divida}).<br>Tira a dívida de 10: 10 - ${divida} = ${pagou}.<br>Reduz o vizinho pra pagar: (Fica: <span class="tip-highlight">${res}</span>)<br>`;
+                            }
+                        }
+                    }
+                    stepStr += `Resultado final: <span class="tip-highlight">${answer}</span>.`;
+                    text = stepStr;
                 }
-                // 3. Hack Japonês (Arredondando MINUENDO - N1)
+                // 3. Hack do Deslocamento Constante (Contas chatas terminadas em 6,7,8,9)
                 else if (n1 % 10 >= 7) {
                     let shift = 10 - (n1 % 10);
                     let novoN1 = n1 + shift;
                     let novoN2 = n2 + shift;
-                    text = `Hack Japonês (Deslocamento):<br>Para facilitar, some ${shift} aos DOIS números.<br>O ${n1} vira <span class="tip-highlight">${novoN1}</span>.<br>O ${n2} vira <span class="tip-highlight">${novoN2}</span>.<br>A conta fica redonda: <span class="tip-highlight">${novoN1} - ${novoN2} = ${answer}</span>.`;
+                    text = `Deslocamento Mental:<br>Para facilitar, some ${shift} aos DOIS números.<br>O ${n1} vira <span class="tip-highlight">${novoN1}</span>.<br>O ${n2} vira <span class="tip-highlight">${novoN2}</span>.<br>A conta fica redonda: <span class="tip-highlight">${novoN1} - ${novoN2} = ${answer}</span>.`;
                 }
-                // 4. Hack Japonês (Arredondando SUBTRAENDO - N2)
                 else if (n2 % 10 >= 7) {
                     let shift = 10 - (n2 % 10);
                     let novoN1 = n1 + shift;
                     let novoN2 = n2 + shift;
-                    text = `Hack Japonês (Deslocamento):<br>Para facilitar, some ${shift} aos DOIS números.<br>O ${n2} vira <span class="tip-highlight">${novoN2}</span>.<br>O ${n1} vira <span class="tip-highlight">${novoN1}</span>.<br>A conta fica redonda: <span class="tip-highlight">${novoN1} - ${novoN2} = ${answer}</span>.`;
+                    text = `Deslocamento Mental:<br>Para facilitar, some ${shift} aos DOIS números.<br>O ${n2} vira <span class="tip-highlight">${novoN2}</span>.<br>O ${n1} vira <span class="tip-highlight">${novoN1}</span>.<br>A conta fica redonda: <span class="tip-highlight">${novoN1} - ${novoN2} = ${answer}</span>.`;
                 }
-                // 5. Decomposição Básica ("Burocrático")
+                // 4. "O Burocrático"
                 else if (n1 % 10 < n2 % 10) {
                     let d2 = Math.floor(n2 / 10) * 10;
                     let u2 = n2 % 10;
@@ -618,8 +647,8 @@
                     let term5 = (n1 % 10 === 5) ? n1 : n2;
                     let par = (n1 % 10 === 5) ? n2 : n1;
                     let dobro = term5 * 2;
-                    let metade = par / 2;
-                    text = `Dobre e Corte (Halve & Double):<br>Dobre o ${term5} (vira <span class="tip-highlight">${dobro}</span>) e corte o ${par} pela metade (vira <span class="tip-highlight">${metade}</span>).<br>A conta mágica vira: <span class="tip-highlight">${dobro} x ${metade}</span>.<br>Dezenas: ${Math.floor(dobro/10)} x ${metade} = ${Math.floor(dobro/10)*metade} (coloca o zero). Resultado: <span class="tip-highlight">${answer}</span>.`;
+                    let metade = par / 2; // CORRIGIDO MATEMATICAMENTE AQUI
+                    text = `Dobre e Corte (Halve & Double):<br>Dobre o ${term5} (vira <span class="tip-highlight">${dobro}</span>) e corte o ${par} pela metade (vira <span class="tip-highlight">${metade}</span>).<br>A conta mágica vira: <span class="tip-highlight">${dobro} x ${metade} = ${answer}</span>.`;
                 }
                 else if ((n1 % 10 >= 7 && n1 > 10) || (n2 % 10 >= 7 && n2 > 10)) {
                     let proximo = (n1 % 10 >= 7 && n1 > 10) ? n1 : n2;
@@ -641,22 +670,21 @@
                     text = `Inversão:<br>Quantas vezes o <span class="tip-highlight">${n2}</span> cabe em <span class="tip-highlight">${n1}</span>?<br>Pense: ${n2} x ? = ${n1}.`;
                 } else {
                     let sN1 = n1.toString();
-                    let stepStr = `A "Chave" (Passo a Passo):<br>`;
+                    let stepStr = `A "Chave" (Abaixando um por um):<br>`;
                     let curr = 0;
-                    let hasStarted = false;
                     
                     for(let i = 0; i < sN1.length; i++) {
                         curr = curr * 10 + parseInt(sN1[i]);
-                        if (curr >= n2 || hasStarted) {
-                            if (curr < n2) {
-                                stepStr += `Baixa o ${sN1[i]} -> ${curr} é menor, zero no quociente.<br>`;
-                            } else {
-                                let q = Math.floor(curr / n2);
-                                let rem = curr % n2;
-                                stepStr += `Temos <span class="tip-highlight">${curr}</span> ÷ ${n2} = <span class="tip-highlight">${q}</span> (sobra ${rem}).<br>`;
-                                curr = rem;
-                            }
-                            hasStarted = true;
+                        if (curr < n2 && i === 0) {
+                            stepStr += `O ${curr} é menor que ${n2}. Abaixa o próximo.<br>`;
+                        } else if (curr < n2) {
+                            stepStr += `Abaixa o ${sN1[i]} -> fica ${curr}. Menor que ${n2}, 0 no quociente.<br>`;
+                        } else {
+                            let q = Math.floor(curr / n2);
+                            let rem = curr % n2;
+                            let sub = q * n2;
+                            stepStr += `Abaixa o ${sN1[i]} -> fica <span class="tip-highlight">${curr}</span>.<br><span class="tip-highlight">${curr} - ${sub} = ${rem}</span> (quociente ${q}).<br>`;
+                            curr = rem;
                         }
                     }
                     stepStr += `Quociente final: <span class="tip-highlight">${answer}</span>.`;
@@ -699,7 +727,7 @@
             document.getElementById('upgrade-info').style.display = 'block';
             document.getElementById('build-menu').classList.add('build-glow');
 
-            // AUTOMAÇÃO DA IA (MANDA ONDA SOZINHO)
+            // AUTOMAÇÃO DA IA (Diretor)
             if(aiMode) {
                 setTimeout(() => {
                     if(gameState === 'BUILD') startWaveCombat();
@@ -768,10 +796,19 @@
             particles = particles.filter(p => p.life > 0);
         }
 
+        let towers = [];
+        let enemies = [];
+        let bullets = [];
+        let particles = [];
+        let mouseX = 0;
+        let mouseY = 0;
+        let canBuild = false;
+
         function draw() {
             ctx.fillStyle = '#222'; ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            if(gameState === 'BUILD' || gameState === 'COMBAT') {
+            // A grade agora aparece sempre, exceto na tela do Menu inicial
+            if(gameState !== 'MENU') {
                 ctx.strokeStyle = '#333'; ctx.lineWidth = 1;
                 for(let i=0; i<800; i+=50) { ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i,600); ctx.stroke(); }
                 for(let i=0; i<600; i+=50) { ctx.beginPath(); ctx.moveTo(0,i); ctx.lineTo(800,i); ctx.stroke(); }
