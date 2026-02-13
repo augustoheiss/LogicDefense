@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Logic Defense: The Swarm</title>
+    <title>Logic Defense: The Masterpiece</title>
     <style>
         body { 
             margin: 0; overflow: hidden; background-color: #1a1a1a; color: white; 
@@ -29,7 +29,7 @@
         
         #ai-btn.active { background: #00d4ff; color: black; border-color: #00d4ff; box-shadow: 0 0 15px #00d4ff; }
 
-        /* TELA DE INÍCIO E RECARGA */
+        /* TELA DE INÍCIO */
         #start-screen {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(0,0,0,0.95); z-index: 200; 
@@ -270,7 +270,7 @@
         }
 
         // ==========================================
-        // VARIÁVEIS PRINCIPAIS (O Motor)
+        // VARIÁVEIS PRINCIPAIS (MOTOR DO JOGO)
         // ==========================================
         let gameState = 'MENU';
         let gold = 150;
@@ -286,12 +286,11 @@
         let currentProblem = { n1: 0, n2: 0, op: '', answer: 0 };
         
         let mathTimer = null;
-        let timeLeft = 30; // TEMPO 30 SEGUNDOS DEFINITIVO
+        let timeLeft = 30; // TEMPO 30 SEGUNDOS
         const TOTAL_TIME = 30;
 
         let totalEnemiesToSpawn = 0;
         let enemiesSpawned = 0;
-        let gameLoopRunning = false;
 
         // ENTIDADES FÍSICAS DO JOGO
         let towers = [];
@@ -366,7 +365,7 @@
                 }
             }
 
-            // 2. Evoluir Torres Pareado
+            // 2. Evoluir Torres
             if(towers.length >= aiBlueprint.length) {
                 let minLevel = Infinity;
                 let blueprintTowersBuilt = [];
@@ -397,7 +396,7 @@
             }
         }
 
-        // --- SISTEMA DE BUFFS E BARALHO ---
+        // --- SISTEMA DE BUFFS ---
         let currentBuff = 'cadeira';
         let phraseQueue = []; 
 
@@ -486,98 +485,9 @@
             return '#b8860b';
         }
 
-        // MOTOR PRINCIPAL DO JOGO (COM BLINDAGEM DE ERROS)
-        function gameLoop() {
-            try {
-                if(gameState !== 'MENU') {
-                    for(let i = 0; i < gameSpeed; i++) {
-                        update();
-                    }
-                    runAILogic(); 
-                }
-                draw(); // DESENHA SEMPRE
-            } catch(e) {
-                console.error("Sherlock Error: ", e);
-            }
-            requestAnimationFrame(gameLoop);
-        }
-
-        function startMathPhase() {
-            const nextPhrase = getNextPhrase();
-            
-            if (!nextPhrase) {
-                gameState = 'MENU';
-                const screen = document.getElementById('start-screen');
-                screen.style.display = 'flex';
-                document.getElementById('start-title').innerText = "CICLO ENCERRADO";
-                document.getElementById('start-subtitle').innerText = "RECARREGUE SEU COMBUSTÍVEL";
-                document.getElementById('start-subtitle').style.color = "#ffeb3b";
-                return; 
-            }
-
-            gameState = 'MATH';
-            wave++;
-            document.getElementById('wave-display').innerText = wave;
-            document.getElementById('next-wave-btn').style.display = 'none';
-            document.getElementById('math-tip-box').style.display = 'none'; 
-            document.getElementById('build-menu').classList.remove('build-glow');
-            
-            document.getElementById('buff-message').innerText = nextPhrase;
-
-            timeLeft = TOTAL_TIME;
-            document.getElementById('timer-bar').style.width = '100%';
-            if(mathTimer) clearInterval(mathTimer);
-            mathTimer = setInterval(() => {
-                timeLeft -= 0.1;
-                let pct = (timeLeft / TOTAL_TIME) * 100;
-                document.getElementById('timer-bar').style.width = pct + '%';
-                if(timeLeft <= 0) { clearInterval(mathTimer); resolveMath(false, true); }
-            }, 100);
-
-            let operations = ['+', '-', 'x'];
-            if (wave % 10 === 0) operations = ['/'];
-            
-            let op = operations[Math.floor(Math.random() * operations.length)];
-            let difficulty = Math.ceil(wave / 2);
-            let n1, n2, answer, questionText;
-
-            if (op === '/') {
-                n2 = Math.floor(Math.random() * 10) + 2; 
-                answer = Math.floor(Math.random() * (5 * difficulty)) + 5; 
-                n1 = n2 * answer; 
-                questionText = `CHEFE! ${n1} ÷ ${n2} = ?`;
-            } else {
-                n1 = Math.floor(Math.random() * (5 * difficulty)) + 2;
-                n2 = Math.floor(Math.random() * (5 * difficulty)) + 2;
-                if(op === '+') answer = n1 + n2;
-                if(op === '-') { if(n1 < n2) {let t=n1; n1=n2; n2=t;} answer = n1 - n2; }
-                if(op === 'x') { n1 = Math.floor(Math.random() * difficulty) + 1; n2 = Math.floor(Math.random() * 10) + 1; answer = n1 * n2; }
-                questionText = `${n1} ${op} ${n2} = ?`;
-            }
-            
-            currentProblem = { n1, n2, op, answer };
-
-            let options = [answer];
-            while(options.length < 3) {
-                let fake = answer + Math.floor(Math.random() * 10) - 5;
-                if(fake !== answer && fake >= 0 && !options.includes(fake)) options.push(fake);
-            }
-            options.sort(() => Math.random() - 0.5);
-
-            document.getElementById('math-question').innerText = questionText;
-            const optDiv = document.getElementById('math-options');
-            optDiv.innerHTML = '';
-            options.forEach(opt => {
-                let btn = document.createElement('button');
-                btn.className = 'btn-math';
-                btn.innerText = opt;
-                btn.onclick = () => resolveMath(opt === answer, false);
-                optDiv.appendChild(btn);
-            });
-            document.getElementById('math-modal').style.display = 'block';
-        }
-
-        // --- SISTEMA DE DICAS TÁTICAS V11 (MESTRE DA MATEMÁTICA E SOROBAN) ---
+        // ==========================================
+        // CÉREBRO DE DICAS (V11) E LÓGICA MATEMÁTICA
+        // ==========================================
         function generateTip(problem) {
             const { n1, n2, op, answer } = problem;
             let text = "";
@@ -685,7 +595,6 @@
                     let sN1 = n1.toString();
                     let stepStr = `A "Chave" (Abaixando um por um):<br>`;
                     let curr = 0;
-                    let hasStarted = false;
                     
                     for(let i = 0; i < sN1.length; i++) {
                         curr = curr * 10 + parseInt(sN1[i]);
@@ -741,7 +650,7 @@
             document.getElementById('upgrade-info').style.display = 'block';
             document.getElementById('build-menu').classList.add('build-glow');
 
-            // AUTOMAÇÃO DA IA (MANDA ONDA SOZINHO - O ENXAME VEM AUTOMÁTICO)
+            // AUTOMAÇÃO DA IA
             if(aiMode) {
                 setTimeout(() => {
                     if(gameState === 'BUILD') startWaveCombat();
@@ -749,6 +658,84 @@
             }
         }
 
+        function startMathPhase() {
+            const nextPhrase = getNextPhrase();
+            
+            if (!nextPhrase) {
+                gameState = 'MENU';
+                const screen = document.getElementById('start-screen');
+                screen.style.display = 'flex';
+                document.getElementById('start-title').innerText = "CICLO ENCERRADO";
+                document.getElementById('start-subtitle').innerText = "RECARREGUE SEU COMBUSTÍVEL";
+                document.getElementById('start-subtitle').style.color = "#ffeb3b";
+                return; 
+            }
+
+            gameState = 'MATH';
+            wave++;
+            document.getElementById('wave-display').innerText = wave;
+            document.getElementById('next-wave-btn').style.display = 'none';
+            document.getElementById('math-tip-box').style.display = 'none'; 
+            document.getElementById('build-menu').classList.remove('build-glow');
+            
+            document.getElementById('buff-message').innerText = nextPhrase;
+
+            timeLeft = TOTAL_TIME;
+            document.getElementById('timer-bar').style.width = '100%';
+            if(mathTimer) clearInterval(mathTimer);
+            mathTimer = setInterval(() => {
+                timeLeft -= 0.1;
+                let pct = (timeLeft / TOTAL_TIME) * 100;
+                document.getElementById('timer-bar').style.width = pct + '%';
+                if(timeLeft <= 0) { clearInterval(mathTimer); resolveMath(false, true); }
+            }, 100);
+
+            let operations = ['+', '-', 'x'];
+            if (wave % 10 === 0) operations = ['/'];
+            
+            let op = operations[Math.floor(Math.random() * operations.length)];
+            let difficulty = Math.ceil(wave / 2);
+            let n1, n2, answer, questionText;
+
+            if (op === '/') {
+                n2 = Math.floor(Math.random() * 10) + 2; 
+                answer = Math.floor(Math.random() * (5 * difficulty)) + 5; 
+                n1 = n2 * answer; 
+                questionText = `CHEFE! ${n1} ÷ ${n2} = ?`;
+            } else {
+                n1 = Math.floor(Math.random() * (5 * difficulty)) + 2;
+                n2 = Math.floor(Math.random() * (5 * difficulty)) + 2;
+                if(op === '+') answer = n1 + n2;
+                if(op === '-') { if(n1 < n2) {let t=n1; n1=n2; n2=t;} answer = n1 - n2; }
+                if(op === 'x') { n1 = Math.floor(Math.random() * difficulty) + 1; n2 = Math.floor(Math.random() * 10) + 1; answer = n1 * n2; }
+                questionText = `${n1} ${op} ${n2} = ?`;
+            }
+            
+            currentProblem = { n1, n2, op, answer };
+
+            let options = [answer];
+            while(options.length < 3) {
+                let fake = answer + Math.floor(Math.random() * 10) - 5;
+                if(fake !== answer && fake >= 0 && !options.includes(fake)) options.push(fake);
+            }
+            options.sort(() => Math.random() - 0.5);
+
+            document.getElementById('math-question').innerText = questionText;
+            const optDiv = document.getElementById('math-options');
+            optDiv.innerHTML = '';
+            options.forEach(opt => {
+                let btn = document.createElement('button');
+                btn.className = 'btn-math';
+                btn.innerText = opt;
+                btn.onclick = () => resolveMath(opt === answer, false);
+                optDiv.appendChild(btn);
+            });
+            document.getElementById('math-modal').style.display = 'block';
+        }
+
+        // ==========================================
+        // SISTEMA DE COMBATE (SWARM MODE INTACTO)
+        // ==========================================
         function startWaveCombat() {
             gameState = 'COMBAT';
             document.getElementById('next-wave-btn').style.display = 'none';
@@ -760,11 +747,9 @@
         }
 
         function spawnEnemies() {
-            // MODO ENXAME (V20.0): BASE DE 10 INIMIGOS, +1 POR ONDA
             let baseCount = 10;
             let lastWaveCount = baseCount + (wave - 1);
             
-            // DIVISÃO (CHEFE): Multiplica o valor da onda anterior por 5!
             if (wave % 10 === 0) {
                 totalEnemiesToSpawn = lastWaveCount * 5;
             } else {
@@ -775,9 +760,7 @@
             let hpBonus = wave * (baseHp * 0.10); 
             
             enemiesSpawned = 0;
-            
-            // SPAWN RATE TRAVADO EM 15 MILISSEGUNDOS: UM ENXAME SÓLIDO E LETAL
-            let spawnRate = 15; 
+            let spawnRate = 15; // MODO ENXAME
             
             let interval = setInterval(() => {
                 if(gameState !== 'COMBAT') { clearInterval(interval); return; }
@@ -818,6 +801,9 @@
             particles = particles.filter(p => p.life > 0);
         }
 
+        // ==========================================
+        // CLASSES (RESTAURADAS E PROTEGIDAS)
+        // ==========================================
         class Enemy {
             constructor(maxHp, isGolden) {
                 this.x = path[0].x; this.y = path[0].y; this.pathIndex = 0;
@@ -926,6 +912,84 @@
             draw() { ctx.globalAlpha = this.life / 20; ctx.fillStyle = this.color; ctx.fillRect(this.x, this.y, 3, 3); ctx.globalAlpha = 1; }
         }
 
+        // ==========================================
+        // RENDERIZAÇÃO E CLIQUES
+        // ==========================================
+        function draw() {
+            ctx.fillStyle = '#222'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            if(gameState !== 'MENU') {
+                ctx.strokeStyle = '#333'; ctx.lineWidth = 1;
+                for(let i=0; i<800; i+=50) { ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i,600); ctx.stroke(); }
+                for(let i=0; i<600; i+=50) { ctx.beginPath(); ctx.moveTo(0,i); ctx.lineTo(800,i); ctx.stroke(); }
+            }
+
+            ctx.strokeStyle = getPathColor(wave);
+            ctx.lineWidth = 40; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+            ctx.beginPath(); ctx.moveTo(path[0].x, path[0].y);
+            for(let i=1; i<path.length; i++) ctx.lineTo(path[i].x, path[i].y);
+            ctx.stroke();
+            ctx.strokeStyle = '#222'; ctx.lineWidth = 2; ctx.stroke();
+
+            towers.forEach(t => t.draw());
+            enemies.forEach(e => e.draw());
+            bullets.forEach(b => b.draw());
+            particles.forEach(p => p.draw());
+
+            if(selectedTowerIdx > -1) {
+                const type = towerTypes[selectedTowerIdx];
+                canBuild = checkCollision(mouseX, mouseY);
+                const color = canBuild ? 'rgba(0, 255, 0, 0.5)' : 'rgba(255, 0, 0, 0.5)';
+                ctx.beginPath(); ctx.arc(mouseX, mouseY, type.range, 0, Math.PI * 2);
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.1)'; ctx.fill();
+                ctx.lineWidth = 1; ctx.strokeStyle = color; ctx.stroke();
+                ctx.fillStyle = canBuild ? type.color : '#550000';
+                ctx.fillRect(mouseX - 15, mouseY - 15, 30, 30);
+                ctx.fillStyle = (gold >= type.cost) ? '#fff' : '#f00';
+                ctx.font = '12px Courier';
+                ctx.fillText(`$${type.cost}`, mouseX, mouseY - 25);
+            }
+            
+            if(selectedTowerIdx === -1) {
+                for(let t of towers) {
+                    let dist = Math.sqrt((t.x - mouseX)**2 + (t.y - mouseY)**2);
+                    if(dist < 20) {
+                        ctx.beginPath(); ctx.arc(t.x, t.y, t.range, 0, Math.PI * 2);
+                        ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)'; ctx.lineWidth = 1; ctx.stroke();
+                        ctx.fillStyle = 'rgba(255, 255, 255, 0.05)'; ctx.fill();
+                        ctx.fillStyle = (gold >= t.upgradeCost) ? '#0f0' : '#f00';
+                        ctx.font = 'bold 14px Arial';
+                        ctx.fillText(`UPGRADE: $${t.upgradeCost}`, t.x, t.y - 40);
+                        if(t.type.symbol === '÷') {
+                            ctx.fillStyle = '#cc88ff'; ctx.font = '10px Arial';
+                            ctx.fillText(`(ACELERAR)`, t.x, t.y - 55);
+                        }
+                    }
+                }
+            }
+        }
+
+        function checkCollision(x, y) {
+            for(let t of towers) {
+                let dist = Math.sqrt((t.x - x)**2 + (t.y - y)**2);
+                if(dist < 35) return false;
+            }
+            for(let i=0; i<path.length-1; i++) {
+                let p1 = path[i]; let p2 = path[i+1];
+                let dist = distToSegment(x, y, p1.x, p1.y, p2.x, p2.y);
+                if(dist < 30) return false;
+            }
+            return true;
+        }
+
+        function distToSegment(x, y, x1, y1, x2, y2) {
+            let A = x - x1; let B = y - y1; let C = x2 - x1; let D = y2 - y1;
+            let dot = A * C + B * D; let len_sq = C * C + D * D;
+            let param = -1; if (len_sq != 0) param = dot / len_sq;
+            let xx, yy; if (param < 0) { xx = x1; yy = y1; } else if (param > 1) { xx = x2; yy = y2; } else { xx = x1 + param * C; yy = y1 + param * D; }
+            let dx = x - xx; let dy = y - yy; return Math.sqrt(dx * dx + dy * dy);
+        }
+
         function selectTower(idx) {
             if(selectedTowerIdx === idx) {
                 cancelSelection();
@@ -1018,7 +1082,7 @@
             }
         }
 
-        // MOTOR DE ARRANQUE FORÇADO
+        // MOTOR DE ARRANQUE INCONDICIONAL
         window.onload = () => {
             gameLoop();
         };
