@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Logic Defense: The Masterpiece V22</title>
+    <title>Logic Defense: The Masterpiece V23</title>
     <style>
         body { 
             margin: 0; overflow: hidden; background-color: #1a1a1a; color: white; 
@@ -32,7 +32,7 @@
         /* TELA DE INÍCIO */
         #start-screen {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.85); z-index: 200; 
+            background: rgba(0,0,0,0.95); z-index: 200; 
             display: flex; flex-direction: column; align-items: center; justify-content: center;
         }
         .buff-btn {
@@ -197,9 +197,6 @@
     </div>
 
     <script>
-        // ==========================================
-        // CONFIGURAÇÕES DE AUDIO E CANVAS
-        // ==========================================
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
         const AudioContext = window.AudioContext || window.webkitAudioContext;
@@ -273,7 +270,7 @@
         }
 
         // ==========================================
-        // VARIÁVEIS PRINCIPAIS (MOTOR DO JOGO)
+        // VARIÁVEIS PRINCIPAIS (O "Crime" Consertado)
         // ==========================================
         let gameState = 'MENU';
         let gold = 150;
@@ -289,11 +286,12 @@
         let currentProblem = { n1: 0, n2: 0, op: '', answer: 0 };
         
         let mathTimer = null;
-        let timeLeft = 30; // TEMPO DE 30 SEGUNDOS
+        let timeLeft = 30; // TEMPO 30 SEGUNDOS
         const TOTAL_TIME = 30;
 
         let totalEnemiesToSpawn = 0;
         let enemiesSpawned = 0;
+        let gameLoopRunning = false;
 
         // ENTIDADES FÍSICAS DO JOGO
         let towers = [];
@@ -326,9 +324,7 @@
             return roman[num];
         }
 
-        // ==========================================
-        // SISTEMA MODO IA (AUTO-PLAY / DIRETOR)
-        // ==========================================
+        // --- SISTEMA MODO IA (AUTO-PLAY) ---
         let aiMode = false;
         const aiBlueprint = [
             {type: 0, x: 200, y: 385}, {type: 0, x: 200, y: 425}, {type: 0, x: 200, y: 465},
@@ -401,9 +397,7 @@
             }
         }
 
-        // ==========================================
-        // SISTEMA DE BUFFS E CÁLCULO MENTAL
-        // ==========================================
+        // --- SISTEMA DE BUFFS E BARALHO ---
         let currentBuff = 'cadeira';
         let phraseQueue = []; 
 
@@ -492,6 +486,22 @@
             return '#b8860b';
         }
 
+        // MOTOR PRINCIPAL DO JOGO (COM BLINDAGEM DE ERROS)
+        function gameLoop() {
+            try {
+                if(gameState !== 'MENU') {
+                    for(let i = 0; i < gameSpeed; i++) {
+                        update();
+                    }
+                    runAILogic(); 
+                }
+                draw(); // DESENHA SEMPRE
+            } catch(e) {
+                console.error("Sherlock Error: ", e);
+            }
+            requestAnimationFrame(gameLoop);
+        }
+
         function startMathPhase() {
             const nextPhrase = getNextPhrase();
             
@@ -567,9 +577,7 @@
             document.getElementById('math-modal').style.display = 'block';
         }
 
-        // ==========================================
-        // CÉREBRO DE LÓGICA (O ARSENAL JAPONÊS)
-        // ==========================================
+        // --- SISTEMA DE DICAS TÁTICAS V10 (MESTRE DA SUBTRAÇÃO) ---
         function generateTip(problem) {
             const { n1, n2, op, answer } = problem;
             let text = "";
@@ -740,7 +748,7 @@
         }
 
         // ==========================================
-        // COMBATE E ENXAME
+        // COMBATE (O NOVO ENXAME)
         // ==========================================
         function startWaveCombat() {
             gameState = 'COMBAT';
@@ -754,12 +762,13 @@
 
         function spawnEnemies() {
             let baseCount = 10;
-            let lastWaveCount = baseCount + (wave - 1);
+            let normalCount = baseCount + wave;
             
             if (wave % 10 === 0) {
+                let lastWaveCount = baseCount + (wave - 1);
                 totalEnemiesToSpawn = lastWaveCount * 5;
             } else {
-                totalEnemiesToSpawn = baseCount + wave;
+                totalEnemiesToSpawn = normalCount;
             }
 
             let baseHp = 30;
@@ -808,7 +817,7 @@
         }
 
         // ==========================================
-        // CLASSES DE FÍSICA
+        // CLASSES DE ENTIDADES (NÃO CORTADAS!)
         // ==========================================
         class Enemy {
             constructor(maxHp, isGolden) {
@@ -853,6 +862,8 @@
                 this.upgradeCost = this.type.cost * Math.pow(2, this.level - 1);
                 this.range = this.type.range * (1 + (0.2 * (this.level - 1)));
                 if(this.type.symbol === '÷') { this.currentRate = Math.max(1, Math.floor(this.currentRate / 2)); }
+                // BUFF DA METRALHADORA DA SOMA (V23.0)
+                if(this.type.symbol === '+') { this.currentRate = Math.max(1, Math.floor(this.currentRate / 1.5)); }
                 playSound('upgrade'); for(let i=0; i<10; i++) particles.push(new Particle(this.x, this.y, '#fff'));
             }
             getDamage() { 
@@ -919,62 +930,8 @@
         }
 
         // ==========================================
-        // EVENTOS E INTERAÇÕES COM USUÁRIO
+        // COLISÕES E INTERAÇÃO COM MOUSE
         // ==========================================
-        function draw() {
-            ctx.fillStyle = '#222'; ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-            if(gameState !== 'MENU') {
-                ctx.strokeStyle = '#333'; ctx.lineWidth = 1;
-                for(let i=0; i<800; i+=50) { ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i,600); ctx.stroke(); }
-                for(let i=0; i<600; i+=50) { ctx.beginPath(); ctx.moveTo(0,i); ctx.lineTo(800,i); ctx.stroke(); }
-            }
-
-            ctx.strokeStyle = getPathColor(wave);
-            ctx.lineWidth = 40; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-            ctx.beginPath(); ctx.moveTo(path[0].x, path[0].y);
-            for(let i=1; i<path.length; i++) ctx.lineTo(path[i].x, path[i].y);
-            ctx.stroke();
-            ctx.strokeStyle = '#222'; ctx.lineWidth = 2; ctx.stroke();
-
-            towers.forEach(t => t.draw());
-            enemies.forEach(e => e.draw());
-            bullets.forEach(b => b.draw());
-            particles.forEach(p => p.draw());
-
-            if(selectedTowerIdx > -1) {
-                const type = towerTypes[selectedTowerIdx];
-                canBuild = checkCollision(mouseX, mouseY);
-                const color = canBuild ? 'rgba(0, 255, 0, 0.5)' : 'rgba(255, 0, 0, 0.5)';
-                ctx.beginPath(); ctx.arc(mouseX, mouseY, type.range, 0, Math.PI * 2);
-                ctx.fillStyle = 'rgba(255, 255, 255, 0.1)'; ctx.fill();
-                ctx.lineWidth = 1; ctx.strokeStyle = color; ctx.stroke();
-                ctx.fillStyle = canBuild ? type.color : '#550000';
-                ctx.fillRect(mouseX - 15, mouseY - 15, 30, 30);
-                ctx.fillStyle = (gold >= type.cost) ? '#fff' : '#f00';
-                ctx.font = '12px Courier';
-                ctx.fillText(`$${type.cost}`, mouseX, mouseY - 25);
-            }
-            
-            if(selectedTowerIdx === -1) {
-                for(let t of towers) {
-                    let dist = Math.sqrt((t.x - mouseX)**2 + (t.y - mouseY)**2);
-                    if(dist < 20) {
-                        ctx.beginPath(); ctx.arc(t.x, t.y, t.range, 0, Math.PI * 2);
-                        ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)'; ctx.lineWidth = 1; ctx.stroke();
-                        ctx.fillStyle = 'rgba(255, 255, 255, 0.05)'; ctx.fill();
-                        ctx.fillStyle = (gold >= t.upgradeCost) ? '#0f0' : '#f00';
-                        ctx.font = 'bold 14px Arial';
-                        ctx.fillText(`UPGRADE: $${t.upgradeCost}`, t.x, t.y - 40);
-                        if(t.type.symbol === '÷') {
-                            ctx.fillStyle = '#cc88ff'; ctx.font = '10px Arial';
-                            ctx.fillText(`(ACELERAR)`, t.x, t.y - 55);
-                        }
-                    }
-                }
-            }
-        }
-
         function checkCollision(x, y) {
             for(let t of towers) {
                 let dist = Math.sqrt((t.x - x)**2 + (t.y - y)**2);
@@ -1025,7 +982,6 @@
             mouseY = (e.clientY - rect.top) * scaleY;
         });
 
-        // CORREÇÃO DO CHATGPT IMPLEMENTADA AQUI
         canvas.addEventListener('mousedown', (e) => { 
             const rect = canvas.getBoundingClientRect();
             const scaleX = canvas.width / rect.width;
@@ -1035,7 +991,6 @@
             handleInteraction(); 
         });
 
-        // MANUTENÇÃO DO "DEDO GORDO" (-50) PARA MOBILE COMO DECIDIMOS
         canvas.addEventListener('touchmove', (e) => {
             e.preventDefault(); 
             const rect = canvas.getBoundingClientRect(); 
