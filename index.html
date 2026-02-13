@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Logic Defense: The Director's Cut</title>
+    <title>Logic Defense: The Masterpiece</title>
     <style>
         body { 
             margin: 0; overflow: hidden; background-color: #1a1a1a; color: white; 
@@ -29,10 +29,10 @@
         
         #ai-btn.active { background: #00d4ff; color: black; border-color: #00d4ff; box-shadow: 0 0 15px #00d4ff; }
 
-        /* TELA DE INÍCIO E RECARGA */
+        /* TELA DE INÍCIO */
         #start-screen {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.85); z-index: 200; /* Levemente transparente pra ver o jogo atrás */
+            background: rgba(0,0,0,0.95); z-index: 200; 
             display: flex; flex-direction: column; align-items: center; justify-content: center;
         }
         .buff-btn {
@@ -47,7 +47,7 @@
 
         /* CAIXA DE DICAS */
         #math-tip-box {
-            display: none; position: absolute; bottom: 200px; right: 40px; width: 360px; 
+            display: none; position: absolute; bottom: 200px; right: 40px; width: 380px; 
             background: rgba(0, 0, 0, 0.95); border: 2px solid #00d4ff; padding: 15px;
             border-radius: 8px; color: #fff; z-index: 10; pointer-events: none; 
             box-shadow: 0 0 20px rgba(0, 212, 255, 0.4); text-align: left; transition: opacity 0.3s;
@@ -200,7 +200,16 @@
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
         const AudioContext = window.AudioContext || window.webkitAudioContext;
-        const audioCtx = new AudioContext();
+        let audioCtx; 
+
+        function initAudio() {
+            if(!audioCtx) {
+                audioCtx = new AudioContext();
+            }
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+        }
 
         function resizeCanvas() {
             const container = document.getElementById('game-container');
@@ -219,7 +228,9 @@
         setTimeout(resizeCanvas, 100);
 
         function playSound(type) {
+            if (!audioCtx) return; 
             if (audioCtx.state === 'suspended') audioCtx.resume();
+            
             const osc = audioCtx.createOscillator();
             const gainNode = audioCtx.createGain();
             osc.connect(gainNode);
@@ -282,7 +293,7 @@
         // --- SISTEMA MODO IA (AUTO-PLAY) ---
         let aiMode = false;
         const aiBlueprint = [
-            // Grid 3x3 de Somas (Amarelas) - Posição baseada na screenshot
+            // Grid 3x3 de Somas (Amarelas) 
             {type: 0, x: 200, y: 385}, {type: 0, x: 200, y: 425}, {type: 0, x: 200, y: 465},
             {type: 0, x: 240, y: 385}, {type: 0, x: 240, y: 425}, {type: 0, x: 240, y: 465},
             {type: 0, x: 280, y: 385}, {type: 0, x: 280, y: 425}, {type: 0, x: 280, y: 465},
@@ -320,7 +331,7 @@
                         playSound('correct');
                         for(let i=0; i<5; i++) particles.push(new Particle(bp.x, bp.y, '#00ff00'));
                     }
-                    return; // Retorna para construir só 1 por tick e não bugar som
+                    return; 
                 }
             }
 
@@ -399,6 +410,7 @@
         };
 
         function selectBuff(type) {
+            initAudio(); // Liga o som com a interação do usuário
             currentBuff = type;
             phraseQueue = [...buffPhrases[type]];
             phraseQueue.sort(() => Math.random() - 0.5);
@@ -443,11 +455,7 @@
             return '#b8860b';
         }
 
-        // MOTOR DE ARRANQUE ABSOLUTO (Evita a pane cinza)
-        window.onload = () => {
-            gameLoop();
-        };
-
+        // MOTOR PRINCIPAL DO JOGO 
         function gameLoop() {
             try {
                 if(gameState !== 'MENU') {
@@ -456,9 +464,9 @@
                     }
                     runAILogic(); 
                 }
-                draw(); // SEMPRE desenha, mesmo no menu, pra garantir vida visual
+                draw(); // SEMPRE DESENHA, MESMO SE ESTIVER NO MENU 
             } catch(e) {
-                console.error("Sherlock Error: ", e);
+                console.error("Erro no GameLoop:", e);
             }
             requestAnimationFrame(gameLoop);
         }
@@ -538,7 +546,7 @@
             document.getElementById('math-modal').style.display = 'block';
         }
 
-        // --- SISTEMA DE DICAS TÁTICAS V9 (MASTER BRAIN - SUBTRAÇÃO JAPONESA E DIVISÃO EXATA) ---
+        // --- SISTEMA DE DICAS TÁTICAS V10 (MESTRE DA SUBTRAÇÃO) ---
         function generateTip(problem) {
             const { n1, n2, op, answer } = problem;
             let text = "";
@@ -575,66 +583,46 @@
             } 
             else if (op === '-') {
                 let diff = n1 - n2;
+                let u1 = n1 % 10;
+                let u2 = n2 % 10;
                 
                 // 1. Reta Numérica turbinada para contas próximas
                 if (diff <= 10) {
                      text = `Distância (Reta Numérica):<br>Eles estão muito perto!<br>Pule do <span class="tip-highlight">${n2}</span> para o <span class="tip-highlight">${n1}</span>.<br>São apenas <span class="tip-highlight">${diff}</span> passos.`;
                 } 
-                // 2. Método Japonês (Soroban) para números grandes (Centenas)
-                else if (n1 >= 100) {
-                    let s1 = n1.toString();
-                    let s2 = n2.toString().padStart(s1.length, '0');
-                    let stepStr = `Método Japonês (Esq. para Dir.):<br>`;
-                    let res = "";
-                    
-                    for(let i=0; i<s1.length; i++) {
-                        let v1 = parseInt(s1[i]);
-                        let v2 = parseInt(s2[i]);
-                        
-                        if(i === 0) {
-                            res += (v1 - v2);
-                            stepStr += `1º: ${v1} - ${v2} = ${v1-v2}. (Atual: <span class="tip-highlight">${res}</span>)<br>`;
-                        } else {
-                            if(v1 >= v2) {
-                                res += (v1 - v2);
-                                stepStr += `Próx: ${v1} - ${v2} = ${v1-v2}. (Junta: <span class="tip-highlight">${res}</span>)<br>`;
-                            } else {
-                                let divida = v2 - v1;
-                                let pagou = 10 - divida;
-                                let numRes = parseInt(res) - 1; 
-                                res = numRes.toString() + pagou.toString();
-                                stepStr += `Dívida: ${v1} não tira ${v2} (faltam ${divida}).<br>Tira a dívida de 10: 10 - ${divida} = ${pagou}.<br>Reduz o vizinho pra pagar: (Fica: <span class="tip-highlight">${res}</span>)<br>`;
-                            }
-                        }
-                    }
-                    stepStr += `Resultado final: <span class="tip-highlight">${answer}</span>.`;
-                    text = stepStr;
-                }
-                // 3. Hack do Deslocamento Constante (Contas chatas terminadas em 6,7,8,9)
-                else if (n1 % 10 >= 7) {
-                    let shift = 10 - (n1 % 10);
-                    let novoN1 = n1 + shift;
-                    let novoN2 = n2 + shift;
-                    text = `Deslocamento Mental:<br>Para facilitar, some ${shift} aos DOIS números.<br>O ${n1} vira <span class="tip-highlight">${novoN1}</span>.<br>O ${n2} vira <span class="tip-highlight">${novoN2}</span>.<br>A conta fica redonda: <span class="tip-highlight">${novoN1} - ${novoN2} = ${answer}</span>.`;
-                }
-                else if (n2 % 10 >= 7) {
-                    let shift = 10 - (n2 % 10);
-                    let novoN1 = n1 + shift;
-                    let novoN2 = n2 + shift;
-                    text = `Deslocamento Mental:<br>Para facilitar, some ${shift} aos DOIS números.<br>O ${n2} vira <span class="tip-highlight">${novoN2}</span>.<br>O ${n1} vira <span class="tip-highlight">${novoN1}</span>.<br>A conta fica redonda: <span class="tip-highlight">${novoN1} - ${novoN2} = ${answer}</span>.`;
-                }
-                // 4. "O Burocrático"
-                else if (n1 % 10 < n2 % 10) {
-                    let d2 = Math.floor(n2 / 10) * 10;
-                    let u2 = n2 % 10;
-                    text = `Decomposição Tática:<br>Quebre o <span class="tip-highlight">${n2}</span> em ${d2} e ${u2}.<br>1º: Tire a dezena grossa: <span class="tip-highlight">${n1} - ${d2} = ${n1 - d2}</span>.<br>2º: Tire a unidade final: <span class="tip-highlight">${n1 - d2} - ${u2} = ${answer}</span>.`;
-                }
-                else {
+                // 2. Subtração Direta (quando o de baixo é redondo ou as unidades não precisam emprestar)
+                else if (u2 === 0 || u1 >= u2) {
                     let d1 = Math.floor(n1/10)*10;
                     let d2 = Math.floor(n2/10)*10;
-                    let u1 = n1 % 10;
-                    let u2 = n2 % 10;
-                    text = `Subtração Direta:<br>Dezenas: <span class="tip-highlight">${d1} - ${d2} = ${d1-d2}</span>.<br>Unidades: <span class="tip-highlight">${u1} - ${u2} = ${u1-u2}</span>.<br>Junte: <span class="tip-highlight">${answer}</span>.`;
+                    if(u2 === 0) {
+                        text = `Subtração Direta:<br>O segundo número é redondo.<br><span class="tip-highlight">${n1} - ${n2} = ${answer}</span>.`;
+                    } else {
+                        text = `Subtração Direta:<br>A unidade de cima é maior, vá direto.<br>Dezenas: <span class="tip-highlight">${d1} - ${d2} = ${d1-d2}</span>.<br>Unidades: <span class="tip-highlight">${u1} - ${u2} = ${u1-u2}</span>.<br>Junte: <span class="tip-highlight">${answer}</span>.`;
+                    }
+                }
+                // 3. O Hack do Deslocamento (se os dois são chatos e perto do 10, ex 57 - 28 -> 59 - 30)
+                else if (u1 >= 6 && u2 >= 6) {
+                    let shift = 10 - u2;
+                    let novoN1 = n1 + shift;
+                    let novoN2 = n2 + shift;
+                    text = `Deslocamento (Hack Japonês):<br>Para facilitar, some ${shift} aos DOIS números.<br>O ${n1} vira <span class="tip-highlight">${novoN1}</span>.<br>O ${n2} vira <span class="tip-highlight">${novoN2}</span>.<br>A diferença não muda: <span class="tip-highlight">${novoN1} - ${novoN2} = ${answer}</span>.`;
+                }
+                // 4. Arredondar o Subtraendo (O clássico que o usuário pediu de volta)
+                else if (u2 >= 7) {
+                    let shift = 10 - u2;
+                    let nextTen = n2 + shift;
+                    text = `Arredondar o Subtraendo:<br>O ${n2} está perto de ${nextTen}. Empreste ${shift} pra ele.<br>Tire o valor cheio: <span class="tip-highlight">${n1} - ${nextTen} = ${n1 - nextTen}</span>.<br>Agora DEVOLVA os ${shift} ao resultado: <span class="tip-highlight">${n1 - nextTen} + ${shift} = ${answer}</span>.`;
+                }
+                // 5. Arredondar o Minuendo (O que ele sugeriu novo - Dinheiro)
+                else if (u1 >= 7) {
+                    let shift = 10 - u1;
+                    let nextTen = n1 + shift;
+                    text = `Arredondar o Minuendo (O Dinheiro):<br>Deixe seu "dinheiro" redondo: Aumente o ${n1} para ${nextTen} (+${shift}).<br>Faça a conta: <span class="tip-highlight">${nextTen} - ${n2} = ${nextTen - n2}</span>.<br>Como você inventou ${shift}, TIRE eles do resultado final: <span class="tip-highlight">${nextTen - n2} - ${shift} = ${answer}</span>.`;
+                }
+                // 6. Decomposição Básica (Para outros casos como 52 - 14)
+                else {
+                    let d2 = Math.floor(n2 / 10) * 10;
+                    text = `Decomposição Tática:<br>Quebre o <span class="tip-highlight">${n2}</span> em ${d2} e ${u2}.<br>1º: Tire a dezena grossa: <span class="tip-highlight">${n1} - ${d2} = ${n1 - d2}</span>.<br>2º: Tire a unidade final: <span class="tip-highlight">${n1 - d2} - ${u2} = ${answer}</span>.`;
                 }
             } 
             else if (op === 'x') {
@@ -647,8 +635,8 @@
                     let term5 = (n1 % 10 === 5) ? n1 : n2;
                     let par = (n1 % 10 === 5) ? n2 : n1;
                     let dobro = term5 * 2;
-                    let metade = par / 2; // CORRIGIDO MATEMATICAMENTE AQUI
-                    text = `Dobre e Corte (Halve & Double):<br>Dobre o ${term5} (vira <span class="tip-highlight">${dobro}</span>) e corte o ${par} pela metade (vira <span class="tip-highlight">${metade}</span>).<br>A conta mágica vira: <span class="tip-highlight">${dobro} x ${metade} = ${answer}</span>.`;
+                    let metade = par / 2;
+                    text = `Dobre e Corte (Halve & Double):<br>Dobre o ${term5} (vira <span class="tip-highlight">${dobro}</span>) e corte o ${par} pela metade (vira <span class="tip-highlight">${metade}</span>).<br>A conta mágica vira: <span class="tip-highlight">${dobro} x ${metade}</span>.<br>Dezenas: ${Math.floor(dobro/10)} x ${metade} = ${Math.floor(dobro/10)*metade} (coloca o zero). Resultado: <span class="tip-highlight">${answer}</span>.`;
                 }
                 else if ((n1 % 10 >= 7 && n1 > 10) || (n2 % 10 >= 7 && n2 > 10)) {
                     let proximo = (n1 % 10 >= 7 && n1 > 10) ? n1 : n2;
@@ -672,6 +660,7 @@
                     let sN1 = n1.toString();
                     let stepStr = `A "Chave" (Abaixando um por um):<br>`;
                     let curr = 0;
+                    let hasStarted = false;
                     
                     for(let i = 0; i < sN1.length; i++) {
                         curr = curr * 10 + parseInt(sN1[i]);
@@ -767,7 +756,7 @@
 
         function update() {
             if (gameState === 'COMBAT') {
-                if (enemies.length === 0 && enemiesSpawned >= totalEnemiesToSpawn) {
+                if (enemies.length === 0 && enemiesSpawned >= totalEnemiesToSpawn && totalEnemiesToSpawn > 0) {
                     if(!this.waitingForMath) {
                         this.waitingForMath = true;
                         if(wave % 10 === 0 && lastAnswerCorrect) {
@@ -796,18 +785,9 @@
             particles = particles.filter(p => p.life > 0);
         }
 
-        let towers = [];
-        let enemies = [];
-        let bullets = [];
-        let particles = [];
-        let mouseX = 0;
-        let mouseY = 0;
-        let canBuild = false;
-
         function draw() {
             ctx.fillStyle = '#222'; ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            // A grade agora aparece sempre, exceto na tela do Menu inicial
             if(gameState !== 'MENU') {
                 ctx.strokeStyle = '#333'; ctx.lineWidth = 1;
                 for(let i=0; i<800; i+=50) { ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i,600); ctx.stroke(); }
@@ -1057,6 +1037,9 @@
                 }
             }
         }
+
+        // MOTOR DE ARRANQUE FORÇADO (O Fim da Tela Cinza)
+        gameLoop();
     </script>
 </body>
 </html>
