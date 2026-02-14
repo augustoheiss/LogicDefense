@@ -127,7 +127,9 @@
 </head>
 <body>
 
-    <div id="yt-player" style="position: absolute; width: 10px; height: 10px; top: -9999px; left: -9999px;"></div>
+    <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 300px; height: 300px; z-index: -100; opacity: 0.01; pointer-events: none;">
+        <div id="yt-player"></div>
+    </div>
 
     <div id="start-screen">
         <h1 id="start-title" style="font-size: 44px; margin-bottom: 5px; color: #fff; text-shadow: 0 0 20px #00d4ff;">LOGIC DEFENSE</h1>
@@ -256,7 +258,7 @@
         document.getElementById('hs-math-ui').innerText = maxMathSaved;
 
         // ==========================================
-        // YOUTUBE AUDIO API (CORRIGIDO PARA AUTOPLAY)
+        // YOUTUBE AUDIO API (CORRIGIDO PARA AUTOPLAY MOBILE)
         // ==========================================
         let ytPlayer;
         let ytPlayerReady = false;
@@ -268,7 +270,6 @@
             if (!ytPlayerReady) return;
             if (bgMusicPlaying) return;
 
-            // O TRUQUE DE MESTRE: Tocar mudo primeiro, depois desmutar
             ytPlayer.mute();
             ytPlayer.playVideo();
             bgMusicPlaying = true;
@@ -281,7 +282,7 @@
 
         function onYouTubeIframeAPIReady() {
             ytPlayer = new YT.Player('yt-player', {
-                height: '10', width: '10',
+                height: '300', width: '300', // Tamanho Real escondido atrás do CSS
                 playerVars: {
                     listType: 'playlist',
                     list: 'PLh5X0e7-mnI3lh-nb3fwZ8OcndGLfVdZX', 
