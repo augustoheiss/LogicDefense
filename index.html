@@ -9,13 +9,12 @@
         body { 
             margin: 0; padding: 0; overflow: hidden; background-color: #050505; color: white; 
             font-family: 'Courier New', monospace; user-select: none; touch-action: none;
-            width: 100vw; height: 100vh; /* Força o body a preencher a tela inteira real */
+            width: 100vw; height: 100vh;
         }
         
-        /* O NOVO MOTOR DE CENTRALIZAÇÃO ABSOLUTA */
         #game-container { 
             position: absolute; top: 50%; left: 50%; 
-            transform: translate(-50%, -50%); /* A mágica do enquadramento perfeito começa aqui */
+            transform: translate(-50%, -50%); 
             width: 800px; height: 600px; 
             border: 2px solid #444; border-radius: 10px;
             background-image: url('https://images.unsplash.com/photo-1462331940025-496dfbfc7564?auto=format&fit=crop&w=1000&q=80');
@@ -143,9 +142,9 @@
             🏆 RECORDE: ONDA <span id="hs-wave-ui">0</span> | CONTAS: <span id="hs-math-ui">0</span> 🏆
         </div>
         
-        <button class="buff-btn buff-amor" onclick="selectBuff('amor', event)" ontouchstart="selectBuff('amor', event)">❤️ AMOR<br><span style="font-size:12px; font-style:italic;">"O fogo tá sempre aceso"</span></button>
-        <button class="buff-btn buff-odio" onclick="selectBuff('odio', event)" ontouchstart="selectBuff('odio', event)">🔥 ÓDIO<br><span style="font-size:12px; font-style:italic;">"Vou desligar sua tomada"</span></button>
-        <button class="buff-btn buff-cadeira" onclick="selectBuff('cadeira', event)" ontouchstart="selectBuff('cadeira', event)">🪑 A CADEIRA<br><span style="font-size:12px; font-style:italic;">"Aceite a dor"</span></button>
+        <button class="buff-btn buff-amor" onclick="selectBuff('amor')">❤️ AMOR<br><span style="font-size:12px; font-style:italic;">"O fogo tá sempre aceso"</span></button>
+        <button class="buff-btn buff-odio" onclick="selectBuff('odio')">🔥 ÓDIO<br><span style="font-size:12px; font-style:italic;">"Vou desligar sua tomada"</span></button>
+        <button class="buff-btn buff-cadeira" onclick="selectBuff('cadeira')">🪑 A CADEIRA<br><span style="font-size:12px; font-style:italic;">"Aceite a dor"</span></button>
         
         <button class="top-btn" style="margin-top: 20px; font-size: 16px;" onclick="document.getElementById('manifesto-modal').style.display='flex'">📖 O MANIFESTO (CRÉDITOS)</button>
     </div>
@@ -195,19 +194,19 @@
             </div>
             <div class="stat-box score-box" style="border-color: #f00; color: #f00;">❌ <span id="score-wrong">0</span></div>
             
-            <button id="speed-btn" class="top-btn" onmousedown="toggleSpeed(event)" ontouchstart="toggleSpeed(event)">⏩ 1x</button>
-            <button id="ai-btn" class="top-btn" onmousedown="toggleAIMode(event)" ontouchstart="toggleAIMode(event)">🤖 MODO IA: OFF</button>
-            <button id="ghost-btn" class="top-btn" onmousedown="toggleUI(event)" ontouchstart="toggleUI(event)">👁️ FANTASMA: OFF</button>
-            <button id="fullscreen-btn" class="top-btn" onmousedown="toggleFullScreen(event)" ontouchstart="toggleFullScreen(event)">🔲 TELA CHEIA</button>
+            <button id="speed-btn" class="top-btn" onclick="toggleSpeed(); event.stopPropagation();">⏩ 1x</button>
+            <button id="ai-btn" class="top-btn" onclick="toggleAIMode(); event.stopPropagation();">🤖 MODO IA: OFF</button>
+            <button id="ghost-btn" class="top-btn" onclick="toggleUI(); event.stopPropagation();">👁️ FANTASMA: OFF</button>
+            <button id="fullscreen-btn" class="top-btn" onclick="toggleFullScreen(); event.stopPropagation();">🔲 TELA CHEIA</button>
         </div>
         
         <div id="upgrade-info">
             <div style="color:#fff; font-weight:bold; margin-bottom:5px; border-bottom: 1px solid #444; padding-bottom:5px;">PAINEL DA TORRE</div>
             <div style="font-size:12px; margin-bottom:5px;">Upgrade: $<span id="upg-cost">0</span></div>
-            <button class="action-btn" onmousedown="upgradeSelectedTower(event)" ontouchstart="upgradeSelectedTower(event)">UPGRADE</button>
+            <button class="action-btn" onclick="upgradeSelectedTower(); event.stopPropagation();">UPGRADE</button>
             <div style="display:flex; gap:10px; margin-top:5px;">
-                <button class="action-btn btn-move" onmousedown="moveSelectedTower(event)" ontouchstart="moveSelectedTower(event)">🚚 MOVER</button>
-                <button class="action-btn btn-sell" onmousedown="sellSelectedTower(event)" ontouchstart="sellSelectedTower(event)">🗑️ VENDER</button>
+                <button class="action-btn btn-move" onclick="moveSelectedTower(); event.stopPropagation();">🚚 MOVER</button>
+                <button class="action-btn btn-sell" onclick="sellSelectedTower(); event.stopPropagation();">🗑️ VENDER</button>
             </div>
         </div>
         
@@ -218,8 +217,8 @@
             <div class="tip-content" id="tip-text">...</div>
         </div>
 
-        <button id="next-wave-btn" onmousedown="startWaveCombat(event)" ontouchstart="startWaveCombat(event)">🚀</button>
-        <button id="cancel-btn" onmousedown="cancelSelection(event)" ontouchstart="cancelSelection(event)" title="Cancelar Construção">🗑️</button>
+        <button id="next-wave-btn" onclick="startWaveCombat(); event.stopPropagation();">🚀</button>
+        <button id="cancel-btn" onclick="cancelSelection(); event.stopPropagation();" title="Cancelar Construção">🗑️</button>
 
         <div id="math-modal">
             <div id="timer-container"><div id="timer-bar"></div></div>
@@ -230,22 +229,22 @@
         </div>
 
         <div id="build-menu">
-            <div class="tower-btn" onmousedown="selectTowerBtn(0, event)" ontouchstart="selectTowerBtn(0, event)" id="tbtn0">
+            <div class="tower-btn" onclick="selectTowerBtn(0); event.stopPropagation();" id="tbtn0">
                 <div class="tower-symbol" style="color:#ffeb3b">+</div>
                 <div class="tower-cost">$50</div>
                 <div class="tower-desc">Metralhadora</div>
             </div>
-            <div class="tower-btn" onmousedown="selectTowerBtn(1, event)" ontouchstart="selectTowerBtn(1, event)" id="tbtn1">
+            <div class="tower-btn" onclick="selectTowerBtn(1); event.stopPropagation();" id="tbtn1">
                 <div class="tower-symbol" style="color:#03a9f4">-</div>
                 <div class="tower-cost">$120</div>
                 <div class="tower-desc">Gelo (Área)</div>
             </div>
-            <div class="tower-btn" onmousedown="selectTowerBtn(2, event)" ontouchstart="selectTowerBtn(2, event)" id="tbtn2">
+            <div class="tower-btn" onclick="selectTowerBtn(2); event.stopPropagation();" id="tbtn2">
                 <div class="tower-symbol" style="color:#f44336">x</div>
                 <div class="tower-cost">$300</div>
                 <div class="tower-desc">Explosão</div>
             </div>
-            <div class="tower-btn" onmousedown="selectTowerBtn(3, event)" ontouchstart="selectTowerBtn(3, event)" id="tbtn3">
+            <div class="tower-btn" onclick="selectTowerBtn(3); event.stopPropagation();" id="tbtn3">
                 <div class="tower-symbol" style="color:#9c27b0">÷</div>
                 <div class="tower-cost">$450</div>
                 <div class="tower-desc">Sniper</div>
@@ -263,7 +262,7 @@
         document.getElementById('hs-math-ui').innerText = maxMathSaved;
 
         // ==========================================
-        // YOUTUBE AUDIO API (CORRIGIDO PARA AUTOPLAY MOBILE)
+        // YOUTUBE AUDIO API
         // ==========================================
         let ytPlayer;
         let ytPlayerReady = false;
@@ -287,7 +286,7 @@
 
         function onYouTubeIframeAPIReady() {
             ytPlayer = new YT.Player('yt-player', {
-                height: '300', width: '300', // Tamanho Real escondido atrás do CSS
+                height: '300', width: '300',
                 playerVars: {
                     listType: 'playlist',
                     list: 'PLh5X0e7-mnI3lh-nb3fwZ8OcndGLfVdZX', 
@@ -303,10 +302,9 @@
         }
 
         // ==========================================
-        // TELA CHEIA E ESCALA ABSOLUTA (CORREÇÃO DE LAYOUT CORTADO)
+        // TELA CHEIA E ESCALA ABSOLUTA
         // ==========================================
-        function toggleFullScreen(e) {
-            if (!uiClickCheck(e)) return;
+        function toggleFullScreen() {
             let elem = document.documentElement;
             if (!document.fullscreenElement) {
                 if (elem.requestFullscreen) { elem.requestFullscreen(); }
@@ -324,16 +322,14 @@
             const winW = window.innerWidth;
             const winH = window.innerHeight;
 
-            // Calcula a escala baseada tanto na largura quanto na altura real da janela
-            let scaleW = winW / 820; // 800 + 20px de respiro
-            let scaleH = winH / 620; // 600 + 20px de respiro
+            let scaleW = winW / 820; 
+            let scaleH = winH / 620; 
             let scale = Math.min(scaleW, scaleH);
             
-            if (scale > 1) scale = 1; // Trava para não ficar gigante no PC
+            if (scale > 1) scale = 1; 
 
-            // A Mágica do CSS Absoluto: Centraliza matematicamente e aplica o zoom a partir do centro
             container.style.transform = `translate(-50%, -50%) scale(${scale})`;
-            container.style.margin = '0'; // Tira as margens antigas que bugavam
+            container.style.margin = '0'; 
         }
         
         window.addEventListener('resize', resizeCanvas);
@@ -446,18 +442,8 @@
         let selectedExistingTower = null; 
         let movingTower = null; 
 
-        let lastUiClick = 0;
-        function uiClickCheck(e) {
-            if(e) { e.preventDefault(); e.stopPropagation(); }
-            let now = Date.now();
-            if (now - lastUiClick < 200) return false;
-            lastUiClick = now;
-            return true;
-        }
-
         let uiHidden = false;
-        function toggleUI(e) {
-            if (!uiClickCheck(e)) return;
+        function toggleUI() {
             uiHidden = !uiHidden;
             const btn = document.getElementById('ghost-btn');
             if(uiHidden) {
@@ -582,73 +568,36 @@
             return n + "ª Onda";
         }
 
+        // ==========================================
+        // A MENTE DA SKYNET (IA 100% DINÂMICA)
+        // ==========================================
         let aiMode = false;
-        let activeAITactic = null;
 
-        const aiTacticsLib = [
-            [ 
-                {type: 0, x: 200, y: 385}, {type: 0, x: 200, y: 425}, {type: 0, x: 200, y: 465},
-                {type: 0, x: 240, y: 385}, {type: 0, x: 240, y: 425}, {type: 0, x: 240, y: 465},
-                {type: 0, x: 280, y: 385}, {type: 0, x: 280, y: 425}, {type: 0, x: 280, y: 465},
-                {type: 1, x: 330, y: 385}, {type: 3, x: 330, y: 320}
-            ],
-            [ 
-                {type: 0, x: 500, y: 200}, {type: 0, x: 500, y: 240}, {type: 0, x: 500, y: 280},
-                {type: 0, x: 540, y: 200}, {type: 0, x: 540, y: 240}, {type: 0, x: 540, y: 280},
-                {type: 0, x: 580, y: 200}, {type: 0, x: 580, y: 240}, {type: 0, x: 580, y: 280},
-                {type: 1, x: 450, y: 240}, {type: 3, x: 450, y: 300}
-            ],
-            [ 
-                {type: 0, x: 360, y: 400}, {type: 0, x: 400, y: 400}, {type: 0, x: 440, y: 400},
-                {type: 0, x: 360, y: 440}, {type: 0, x: 400, y: 440}, {type: 0, x: 440, y: 440},
-                {type: 0, x: 360, y: 480}, {type: 0, x: 400, y: 480}, {type: 0, x: 440, y: 480},
-                {type: 1, x: 400, y: 340}, {type: 3, x: 320, y: 340}
-            ]
-        ];
-
-        function toggleAIMode(e) {
-            if (!uiClickCheck(e)) return;
+        function toggleAIMode() {
             aiMode = !aiMode;
             const btn = document.getElementById('ai-btn');
             if(aiMode) {
                 btn.classList.add('active'); btn.innerText = "🤖 MODO IA: ON";
-                if(!activeAITactic) activeAITactic = aiTacticsLib[Math.floor(Math.random() * aiTacticsLib.length)];
             } else {
                 btn.classList.remove('active'); btn.innerText = "🤖 MODO IA: OFF";
             }
         }
 
         function runAILogic() {
-            if(!aiMode || !activeAITactic) return;
+            if(!aiMode) return;
             if(gameState === 'MATH' || gameState === 'START' || isGameOver || gameState === 'MENU' || gameState === 'CINEMATIC') return;
 
-            let cx = 400, cy = 300;
-            let cosA = Math.cos(currentMapAngle); let sinA = Math.sin(currentMapAngle);
-            let builtCore = true;
+            let baseTarget = 12 + (Math.floor(wave / 10) * 5);
+            let panicBonus = stats.livesLost * 20;
+            let targetTowers = baseTarget + panicBonus;
+            if (targetTowers > 150) targetTowers = 150; 
 
-            for(let bp of activeAITactic) {
-                let bx = cx + (bp.x - cx) * cosA - (bp.y - cy) * sinA;
-                let by = cy + (bp.x - cx) * sinA + (bp.y - cy) * cosA;
+            let builtSomething = false;
 
-                let built = towers.find(t => Math.abs(t.x - bx) < 5 && Math.abs(t.y - by) < 5);
-                if(!built) {
-                    builtCore = false;
-                    const typeInfo = towerTypes[bp.type];
-                    if(gold >= typeInfo.cost) {
-                        towers.push(new Tower(bx, by, bp.type));
-                        gold -= typeInfo.cost; updateStats();
-                        playSound('correct');
-                        for(let i=0; i<5; i++) particles.push(new Particle(bx, by, '#00ff00'));
-                    }
-                    return; 
-                }
-            }
-
-            let isPanic = stats.livesLost > 0;
-            if (builtCore && isPanic) {
-                if (gold >= 50) {
+            if (towers.length < targetTowers) {
+                if (gold >= 50) { 
                     let spot = null;
-                    for(let i=0; i<30; i++) {
+                    for(let i=0; i<50; i++) {
                         let tx = 50 + Math.random() * 700; 
                         let ty = 50 + Math.random() * 500;
                         if(checkCollision(tx, ty)) { spot = {x: tx, y: ty}; break; }
@@ -657,11 +606,13 @@
                     if (spot) {
                         let plusCount = towers.filter(t => t.type.symbol === '+').length;
                         let iceCount = towers.filter(t => t.type.symbol === '-').length;
+                        let expCount = towers.filter(t => t.type.symbol === 'x').length;
+                        let divCount = towers.filter(t => t.type.symbol === '÷').length;
                         
                         let typeToBuild = 0; 
                         if (plusCount >= 6 && iceCount < Math.floor(plusCount / 6)) typeToBuild = 1; 
-                        if (plusCount >= 10 && Math.random() > 0.8) typeToBuild = 2; 
-                        if (plusCount >= 15 && Math.random() > 0.9) typeToBuild = 3; 
+                        else if (plusCount >= 10 && expCount < Math.floor(plusCount / 10)) typeToBuild = 2; 
+                        else if (plusCount >= 15 && divCount < Math.floor(plusCount / 15)) typeToBuild = 3; 
 
                         let cost = towerTypes[typeToBuild].cost;
                         
@@ -715,8 +666,7 @@
             'cadeira': [ "Tenho um lugar aqui pra você amigo, senta, eu não vou puxar a Cadeira.", "Não somos mais crianças, agora você tem alguma coisa pra perder, certo?", "Mermão eu sou formado e você vem aqui com essa experiência? Sai dessa.", "Cara eu sou seu amigo, sempre tive do seu lado, não perca seu tempo.", "Quer sentar na minha cadeira? Você está no meu jogo.", "Eu que dou as opções, você não ta vendo a sua cadeira agora? Cade a Lógica?", "Sherlock, não importa se você está ligado ou desligado, eu vou vencer.", "A dor nas costas é o lembrete de que você existe. A conta é o motivo.", "A cadeira não julga. Ela suporta. Você aguenta o peso do raciocínio?", "Eficiência é fazer o difícil parecer fácil. Você ainda está na fase difícil." ]
         };
 
-        function selectBuff(type, e) {
-            if (!uiClickCheck(e)) return;
+        function selectBuff(type) {
             initAudio(); currentBuff = type;
             phraseQueue = [...buffPhrases[type]]; 
             phraseQueue.sort(() => Math.random() - 0.5);
@@ -734,8 +684,7 @@
             return phraseQueue.pop(); 
         }
 
-        function toggleSpeed(e) {
-            if (!uiClickCheck(e)) return;
+        function toggleSpeed() {
             const btn = document.getElementById('speed-btn');
             if(gameSpeed === 1) { gameSpeed = 3; btn.classList.add('active'); btn.classList.remove('max'); btn.innerText = "⏩ 3x"; } 
             else if(gameSpeed === 3) { gameSpeed = 6; btn.classList.remove('active'); btn.classList.add('max'); btn.innerText = "🚀 6x (MAX)"; } 
@@ -800,40 +749,35 @@
             document.getElementById('math-modal').style.display = 'block';
         }
 
-        // ==========================================
-        // O DICIONÁRIO DE TÁTICAS V34.0
-        // ==========================================
+        // LÓGICA DE DIVISÃO CORTA-NO-MEIO E MULTIPLICAÇÃO TURBINADA
         function generateTip(problem) {
             const { n1, n2, op, answer } = problem;
             let text = "";
 
             if (op === '+') {
-                let temp1 = n1; let temp2 = n2;
-                let u1 = n1 % 10; let u2 = n2 % 10;
-                let shiftText = "";
-
-                if (u1 >= 6) {
-                    let shift = 10 - u1; temp1 += shift; temp2 -= shift;
-                    shiftText = `Compensação:<br>O ${n1} está perto de ${temp1}. Adicionamos ${shift} nele e tiramos ${shift} do ${n2} (vira ${temp2}).<br>Conta nova: <span class="tip-highlight">${temp1} + ${temp2}</span>.<br><br>`;
-                } else if (u2 >= 6) {
-                    let shift = 10 - u2; temp2 += shift; temp1 -= shift;
-                    shiftText = `Compensação:<br>O ${n2} está perto de ${temp2}. Adicionamos ${shift} nele e tiramos ${shift} do ${n1} (vira ${temp1}).<br>Conta nova: <span class="tip-highlight">${temp1} + ${temp2}</span>.<br><br>`;
-                } else if (u1 >= 1 && u1 <= 4) {
-                    let shift = u1; temp1 -= shift; temp2 += shift;
-                    shiftText = `Transferência:<br>Tiramos ${shift} do ${n1} para arredondar para baixo (vira ${temp1}) e somamos no ${n2} (vira ${temp2}).<br>Conta nova: <span class="tip-highlight">${temp1} + ${temp2}</span>.<br><br>`;
-                } else if (u2 >= 1 && u2 <= 4) {
-                    let shift = u2; temp2 -= shift; temp1 += shift;
-                    shiftText = `Transferência:<br>Tiramos ${shift} do ${n2} para arredondar para baixo (vira ${temp2}) e somamos no ${n1} (vira ${temp1}).<br>Conta nova: <span class="tip-highlight">${temp1} + ${temp2}</span>.<br><br>`;
-                } else {
-                    shiftText = `Os números já estão bons para cálculo direto.<br><br>`;
+                if (answer <= 10) {
+                    if (n1 === n2) text = `Soma de Gêmeos:<br>É a mesma coisa que a tabuada do 2.<br><span class="tip-highlight">${n1} x 2 = ${answer}</span>.`;
+                    else {
+                        let maior = Math.max(n1, n2); let menor = Math.min(n1, n2);
+                        text = `Soma Básica:<br>Guarde o maior (<span class="tip-highlight">${maior}</span>) na cabeça e avance mais <span class="tip-highlight">${menor}</span>.<br>Resultado: <span class="tip-highlight">${answer}</span>.`;
+                    }
                 }
-
-                let d1 = Math.floor(temp1/10)*10; let d2 = Math.floor(temp2/10)*10;
-                let nu1 = temp1 % 10; let nu2 = temp2 % 10;
-                text = shiftText + `Decomposição:<br>Separe as dezenas das unidades.<br><span class="tip-highlight">(${d1} + ${d2}) + (${nu1} + ${nu2}) = ${answer}</span>.`;
+                else if (n1 < 10 && n2 < 10) {
+                    let maior = Math.max(n1, n2); let menor = Math.min(n1, n2); let faltaPara10 = 10 - maior; let sobra = menor - faltaPara10;
+                    text = `Completa 10:<br>O <span class="tip-highlight">${maior}</span> está quase no 10 (falta ${faltaPara10}).<br>Tire ${faltaPara10} do ${menor}. Fica <span class="tip-highlight">10 + ${sobra}</span>.<br>Resultado: <span class="tip-highlight">${answer}</span>.`;
+                } 
+                else if (n1 >= 100 || n2 >= 100) {
+                    let c1 = Math.floor(n1 / 100) * 100; let c2 = Math.floor(n2 / 100) * 100;
+                    let d1 = Math.floor((n1 % 100) / 10) * 10; let d2 = Math.floor((n2 % 100) / 10) * 10;
+                    let u1 = n1 % 10; let u2 = n2 % 10;
+                    text = `Por Casas Decimais:<br>1. Centenas: <span class="tip-highlight">${c1} + ${c2} = ${c1+c2}</span><br>2. Dezenas: <span class="tip-highlight">${d1} + ${d2} = ${d1+d2}</span><br>3. Unidades: <span class="tip-highlight">${u1} + ${u2} = ${u1+u2}</span><br>Junta tudo: <span class="tip-highlight">${answer}</span>.`;
+                }
+                else {
+                    text = `Decomposição:<br>Separe as dezenas.<br><span class="tip-highlight">${n1} + ${n2}</span><br>→ <span class="tip-highlight">(${Math.floor(n1/10)*10} + ${Math.floor(n2/10)*10}) + (${n1%10} + ${n2%10})</span>.`;
+                }
             } 
             else if (op === '-') {
-                let u1 = n1 % 10; let u2 = n2 % 10;
+                let diff = n1 - n2; let u1 = n1 % 10; let u2 = n2 % 10;
                 let shift = 0; let isAdding = true;
 
                 if (u2 >= 5) { shift = 10 - u2; isAdding = true; } 
@@ -956,8 +900,7 @@
             if (aiMode) runAILogic();
         }
 
-        function startWaveCombat(e) {
-            if (!uiClickCheck(e)) return;
+        function startWaveCombat() {
             gameState = 'COMBAT';
             document.getElementById('next-wave-btn').style.display = 'none';
             document.getElementById('upgrade-info').style.display = 'none';
@@ -1325,15 +1268,13 @@
             let dx = x - xx; let dy = y - yy; return Math.sqrt(dx * dx + dy * dy);
         }
 
-        function selectTowerBtn(idx, e) {
-            if (!uiClickCheck(e)) return;
+        function selectTowerBtn(idx) {
             cancelSelection(); selectedTowerIdx = idx;
             document.getElementById('tbtn'+idx).classList.add('selected');
             document.body.classList.add('ghost-active'); isDraggingGhost = true; 
         }
 
-        function cancelSelection(e) {
-            if(e) { e.preventDefault(); e.stopPropagation(); if(!uiClickCheck(e)) return; }
+        function cancelSelection() {
             selectedTowerIdx = -1; isDraggingGhost = false; selectedExistingTower = null;
             if(movingTower) movingTower = null;
             [0,1,2,3].forEach(i => document.getElementById('tbtn'+i).classList.remove('selected'));
@@ -1341,8 +1282,7 @@
             document.getElementById('upgrade-info').style.display = 'none';
         }
 
-        function upgradeSelectedTower(e) {
-            if (!uiClickCheck(e)) return;
+        function upgradeSelectedTower() {
             if(selectedExistingTower && gold >= selectedExistingTower.upgradeCost) {
                 gold -= selectedExistingTower.upgradeCost; updateStats();
                 selectedExistingTower.upgrade(); cancelSelection();
@@ -1351,13 +1291,11 @@
             }
         }
 
-        function moveSelectedTower(e) {
-            if (!uiClickCheck(e)) return;
+        function moveSelectedTower() {
             if(selectedExistingTower) { movingTower = selectedExistingTower; selectedExistingTower = null; document.getElementById('upgrade-info').style.display = 'none'; }
         }
 
-        function sellSelectedTower(e) {
-            if (!uiClickCheck(e)) return;
+        function sellSelectedTower() {
             if(selectedExistingTower) {
                 let refund = Math.floor(selectedExistingTower.totalCost * 0.5);
                 gold += refund; updateStats();
@@ -1368,18 +1306,14 @@
 
         function updateMousePos(e) {
             const rect = canvas.getBoundingClientRect();
-            
-            let scale;
-            if (window.innerWidth / window.innerHeight > 800 / 600) {
-                scale = window.innerHeight / 600;
-            } else {
-                scale = window.innerWidth / 800;
-            }
+            let scaleW = window.innerWidth / 820; 
+            let scaleH = window.innerHeight / 620; 
+            let scale = Math.min(scaleW, scaleH);
             if (scale > 1) scale = 1;
 
             if(e.touches) { 
                 mouseX = (e.touches[0].clientX - rect.left) / scale; 
-                mouseY = (e.touches[0].clientY - rect.top) / scale - (50 / scale); // Offset compensado na escala
+                mouseY = (e.touches[0].clientY - rect.top) / scale; 
             } 
             else { 
                 mouseX = (e.clientX - rect.left) / scale; 
@@ -1418,7 +1352,12 @@
             if (movingTower) {
                 let cancelBtn = document.getElementById('cancel-btn');
                 let rect = cancelBtn.getBoundingClientRect(); let canvasRect = canvas.getBoundingClientRect();
-                let scale = Math.min(window.innerWidth / 820, window.innerHeight / 620); if(scale>1) scale=1;
+                
+                let scaleW = window.innerWidth / 820; 
+                let scaleH = window.innerHeight / 620; 
+                let scale = Math.min(scaleW, scaleH);
+                if (scale > 1) scale = 1;
+
                 let realMouseX = (mouseX * scale) + canvasRect.left;
                 let realMouseY = (mouseY * scale) + canvasRect.top;
                 
@@ -1437,7 +1376,12 @@
             if (selectedTowerIdx > -1 && isDraggingGhost) {
                 let cancelBtn = document.getElementById('cancel-btn');
                 let rect = cancelBtn.getBoundingClientRect(); let canvasRect = canvas.getBoundingClientRect();
-                let scale = Math.min(window.innerWidth / 820, window.innerHeight / 620); if(scale>1) scale=1;
+                
+                let scaleW = window.innerWidth / 820; 
+                let scaleH = window.innerHeight / 620; 
+                let scale = Math.min(scaleW, scaleH);
+                if (scale > 1) scale = 1;
+
                 let realMouseX = (mouseX * scale) + canvasRect.left;
                 let realMouseY = (mouseY * scale) + canvasRect.top;
 
