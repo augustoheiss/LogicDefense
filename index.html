@@ -20,6 +20,7 @@
             background-image: url('https://images.unsplash.com/photo-1462331940025-496dfbfc7564?auto=format&fit=crop&w=1000&q=80');
             background-size: cover; background-position: center;
             box-shadow: 0 0 40px rgba(0, 212, 255, 0.3); overflow: hidden;
+            margin: 0; 
         }
         
         #game-container::before {
@@ -28,7 +29,7 @@
         }
         #game-container.cinematic-mode::before { background: rgba(0, 0, 0, 0.95); }
 
-        canvas { display: block; cursor: crosshair; position: relative; z-index: 1; }
+        canvas { display: block; cursor: crosshair; position: absolute; top:0; left:0; width: 100%; height: 100%; z-index: 1; }
         
         #ui-layer { position: absolute; top: 10px; left: 10px; width: calc(100% - 20px); pointer-events: none; display: flex; flex-wrap: wrap; gap: 10px; transition: opacity 0.3s; align-items: center; z-index: 20;}
         
@@ -142,9 +143,9 @@
             🏆 RECORDE: ONDA <span id="hs-wave-ui">0</span> | CONTAS: <span id="hs-math-ui">0</span> 🏆
         </div>
         
-        <button class="buff-btn buff-amor" onclick="selectBuff('amor')">❤️ AMOR<br><span style="font-size:12px; font-style:italic;">"O fogo tá sempre aceso"</span></button>
-        <button class="buff-btn buff-odio" onclick="selectBuff('odio')">🔥 ÓDIO<br><span style="font-size:12px; font-style:italic;">"Vou desligar sua tomada"</span></button>
-        <button class="buff-btn buff-cadeira" onclick="selectBuff('cadeira')">🪑 A CADEIRA<br><span style="font-size:12px; font-style:italic;">"Aceite a dor"</span></button>
+        <button class="buff-btn buff-amor" onclick="selectBuff('amor')" ontouchstart="selectBuff('amor')">❤️ AMOR<br><span style="font-size:12px; font-style:italic;">"O fogo tá sempre aceso"</span></button>
+        <button class="buff-btn buff-odio" onclick="selectBuff('odio')" ontouchstart="selectBuff('odio')">🔥 ÓDIO<br><span style="font-size:12px; font-style:italic;">"Vou desligar sua tomada"</span></button>
+        <button class="buff-btn buff-cadeira" onclick="selectBuff('cadeira')" ontouchstart="selectBuff('cadeira')">🪑 A CADEIRA<br><span style="font-size:12px; font-style:italic;">"Aceite a dor"</span></button>
         
         <button class="top-btn" style="margin-top: 20px; font-size: 16px;" onclick="document.getElementById('manifesto-modal').style.display='flex'">📖 O MANIFESTO (CRÉDITOS)</button>
     </div>
@@ -442,6 +443,15 @@
         let selectedExistingTower = null; 
         let movingTower = null; 
 
+        let lastUiClick = 0;
+        function uiClickCheck(e) {
+            if(e) { e.preventDefault(); e.stopPropagation(); }
+            let now = Date.now();
+            if (now - lastUiClick < 200) return false;
+            lastUiClick = now;
+            return true;
+        }
+
         let uiHidden = false;
         function toggleUI() {
             uiHidden = !uiHidden;
@@ -569,7 +579,7 @@
         }
 
         // ==========================================
-        // A MENTE DA SKYNET (IA 100% DINÂMICA)
+        // A MENTE DA SKYNET (IA DINÂMICA V40)
         // ==========================================
         let aiMode = false;
 
@@ -597,7 +607,7 @@
             if (towers.length < targetTowers) {
                 if (gold >= 50) { 
                     let spot = null;
-                    for(let i=0; i<50; i++) {
+                    for(let i=0; i<30; i++) {
                         let tx = 50 + Math.random() * 700; 
                         let ty = 50 + Math.random() * 500;
                         if(checkCollision(tx, ty)) { spot = {x: tx, y: ty}; break; }
@@ -606,13 +616,11 @@
                     if (spot) {
                         let plusCount = towers.filter(t => t.type.symbol === '+').length;
                         let iceCount = towers.filter(t => t.type.symbol === '-').length;
-                        let expCount = towers.filter(t => t.type.symbol === 'x').length;
-                        let divCount = towers.filter(t => t.type.symbol === '÷').length;
                         
                         let typeToBuild = 0; 
                         if (plusCount >= 6 && iceCount < Math.floor(plusCount / 6)) typeToBuild = 1; 
-                        else if (plusCount >= 10 && expCount < Math.floor(plusCount / 10)) typeToBuild = 2; 
-                        else if (plusCount >= 15 && divCount < Math.floor(plusCount / 15)) typeToBuild = 3; 
+                        else if (plusCount >= 10 && Math.random() > 0.8) typeToBuild = 2; 
+                        else if (plusCount >= 15 && Math.random() > 0.9) typeToBuild = 3; 
 
                         let cost = towerTypes[typeToBuild].cost;
                         
@@ -715,13 +723,13 @@
             }, 100);
 
             let operations = ['+', '-', 'x'];
-            if (wave % 10 === 0) operations = ['/'];
+            if (wave % 10 === 0) operations = ['÷'];
             
             let op = operations[Math.floor(Math.random() * operations.length)];
             let difficulty = Math.ceil(wave / 2);
             let n1, n2, answer, questionText;
 
-            if (op === '/') {
+            if (op === '÷') {
                 n2 = Math.floor(Math.random() * 10) + 2; answer = Math.floor(Math.random() * (5 * difficulty)) + 5; 
                 n1 = n2 * answer; questionText = `CHEFE! ${n1} ÷ ${n2} = ?`;
             } else {
@@ -749,35 +757,56 @@
             document.getElementById('math-modal').style.display = 'block';
         }
 
-        // LÓGICA DE DIVISÃO CORTA-NO-MEIO E MULTIPLICAÇÃO TURBINADA
+        // ==========================================
+        // O DICIONÁRIO DE TÁTICAS V40.0 (A ADIÇÃO PERFEITA)
+        // ==========================================
         function generateTip(problem) {
             const { n1, n2, op, answer } = problem;
             let text = "";
 
             if (op === '+') {
-                if (answer <= 10) {
-                    if (n1 === n2) text = `Soma de Gêmeos:<br>É a mesma coisa que a tabuada do 2.<br><span class="tip-highlight">${n1} x 2 = ${answer}</span>.`;
-                    else {
-                        let maior = Math.max(n1, n2); let menor = Math.min(n1, n2);
-                        text = `Soma Básica:<br>Guarde o maior (<span class="tip-highlight">${maior}</span>) na cabeça e avance mais <span class="tip-highlight">${menor}</span>.<br>Resultado: <span class="tip-highlight">${answer}</span>.`;
+                if (n1 < 10 && n2 < 10) {
+                    let maior = Math.max(n1, n2); let menor = Math.min(n1, n2);
+                    let faltaPara10 = 10 - maior;
+                    if (faltaPara10 > 0 && faltaPara10 < menor) {
+                        let sobra = menor - faltaPara10;
+                        text = `Completa 10:<br>O <span class="tip-highlight">${maior}</span> precisa de ${faltaPara10} para virar 10. Tire isso do ${menor} (sobra ${sobra}).<br>Conta nova: <span class="tip-highlight">10 + ${sobra} = ${answer}</span>.`;
+                    } else {
+                        text = `Soma Básica:<br>Guarde o maior (<span class="tip-highlight">${maior}</span>) na cabeça e conte mais <span class="tip-highlight">${menor}</span>.<br>Resultado: <span class="tip-highlight">${answer}</span>.`;
                     }
-                }
-                else if (n1 < 10 && n2 < 10) {
-                    let maior = Math.max(n1, n2); let menor = Math.min(n1, n2); let faltaPara10 = 10 - maior; let sobra = menor - faltaPara10;
-                    text = `Completa 10:<br>O <span class="tip-highlight">${maior}</span> está quase no 10 (falta ${faltaPara10}).<br>Tire ${faltaPara10} do ${menor}. Fica <span class="tip-highlight">10 + ${sobra}</span>.<br>Resultado: <span class="tip-highlight">${answer}</span>.`;
                 } 
-                else if (n1 >= 100 || n2 >= 100) {
-                    let c1 = Math.floor(n1 / 100) * 100; let c2 = Math.floor(n2 / 100) * 100;
-                    let d1 = Math.floor((n1 % 100) / 10) * 10; let d2 = Math.floor((n2 % 100) / 10) * 10;
-                    let u1 = n1 % 10; let u2 = n2 % 10;
-                    text = `Por Casas Decimais:<br>1. Centenas: <span class="tip-highlight">${c1} + ${c2} = ${c1+c2}</span><br>2. Dezenas: <span class="tip-highlight">${d1} + ${d2} = ${d1+d2}</span><br>3. Unidades: <span class="tip-highlight">${u1} + ${u2} = ${u1+u2}</span><br>Junta tudo: <span class="tip-highlight">${answer}</span>.`;
-                }
                 else {
-                    text = `Decomposição:<br>Separe as dezenas.<br><span class="tip-highlight">${n1} + ${n2}</span><br>→ <span class="tip-highlight">(${Math.floor(n1/10)*10} + ${Math.floor(n2/10)*10}) + (${n1%10} + ${n2%10})</span>.`;
+                    let temp1 = n1; let temp2 = n2;
+                    let u1 = n1 % 10; let u2 = n2 % 10;
+                    let shiftText = "";
+
+                    // LÓGICA V40.0: Primeiro ele arredonda tudo para "0" usando 6,7,8,9 (sobe) e 1,2,3,4 (desce)
+                    if (u1 >= 6 || u2 >= 6) {
+                        let alvo = u1 >= 6 ? n1 : n2;
+                        let outro = u1 >= 6 ? n2 : n1;
+                        let shift = 10 - (alvo % 10);
+                        temp1 = alvo + shift; 
+                        temp2 = outro - shift; 
+                        shiftText = `Estratégia de Compensação (Finais 6 a 9):<br>O ${alvo} está quase na próxima dezena. Arredondamos para cima (+${shift}) virando ${temp1}, e tiramos ${shift} do outro número (${outro} vira ${temp2}).<br>Conta nova muito mais fácil: <span class="tip-highlight">${temp1} + ${temp2}</span>.<br><br>`;
+                    } 
+                    else if ((u1 >= 1 && u1 <= 4) || (u2 >= 1 && u2 <= 4)) {
+                        let alvo = (u1 >= 1 && u1 <= 4) ? n1 : n2;
+                        let outro = (u1 >= 1 && u1 <= 4) ? n2 : n1;
+                        let shift = alvo % 10;
+                        temp1 = alvo - shift; 
+                        temp2 = outro + shift;
+                        shiftText = `Estratégia de Transferência (Finais 1 a 4):<br>Tiramos ${shift} do ${alvo} para arredondar para baixo (vira ${temp1}), e somamos esses ${shift} no outro número (${outro} vira ${temp2}).<br>Conta nova muito mais fácil: <span class="tip-highlight">${temp1} + ${temp2}</span>.<br><br>`;
+                    }
+
+                    // Depois de arredondar (ou se já tava bom), ele cai na Decomposição
+                    let d1 = Math.floor(temp1/10)*10; let d2 = Math.floor(temp2/10)*10;
+                    let nu1 = temp1 % 10; let nu2 = temp2 % 10;
+                    
+                    text = shiftText + `Explicação Padrão (Decomposição):<br>Agora junte as dezenas e as unidades separadamente:<br><span class="tip-highlight">(${d1} + ${d2}) + (${nu1} + ${nu2}) = ${answer}</span>.`;
                 }
             } 
             else if (op === '-') {
-                let diff = n1 - n2; let u1 = n1 % 10; let u2 = n2 % 10;
+                let u1 = n1 % 10; let u2 = n2 % 10;
                 let shift = 0; let isAdding = true;
 
                 if (u2 >= 5) { shift = 10 - u2; isAdding = true; } 
@@ -811,20 +840,20 @@
                     let outro = (u1 >= 6 && n1 > 10) ? n2 : n1;
                     let baseRedonda = Math.ceil(proximo / 10) * 10;
                     let sobra = baseRedonda - proximo;
-                    text = `Estratégia do Excesso (Finais 6 a 9):<br>O número ${proximo} tá quase virando ${baseRedonda}. Vamos arredondar pra CIMA e calcular grandão e forte!<br><span class="tip-highlight">${baseRedonda} x ${outro} = ${baseRedonda * outro}</span>.<br>Mas pera aí, a gente inventou ${sobra} números a mais. Temos que tirar esse excesso pago: (${sobra} x ${outro} = ${sobra*outro}).<br>Cortando a gordura: <span class="tip-highlight">${baseRedonda * outro} - ${sobra*outro} = ${answer}</span>.`;
+                    text = `Estratégia do Excesso (Finais 6 a 9):<br>O número ${proximo} tá quase virando ${baseRedonda}. Vamos arredondar pra CIMA e calcular grandão e forte!<br><span class="tip-highlight">${baseRedonda} x ${outro} = ${baseRedonda * outro}</span>.<br>Mas pera aí, a gente inventou ${sobra} a mais. Temos que tirar esse excesso pago: (${sobra} x ${outro} = ${sobra*outro}).<br>Cortando a gordura: <span class="tip-highlight">${baseRedonda * outro} - ${sobra*outro} = ${answer}</span>.`;
                 }
                 else if ((u1 >= 1 && u1 <= 4 && n1 > 10) || (u2 >= 1 && u2 <= 4 && n2 > 10)) {
                     let descendo = (u1 >= 1 && u1 <= 4 && n1 > 10) ? n1 : n2;
                     let outro = (u1 >= 1 && u1 <= 4 && n1 > 10) ? n2 : n1;
                     let baseRedonda = Math.floor(descendo / 10) * 10;
                     let resto = descendo - baseRedonda;
-                    text = `Decomposição Tática (Finais 1 a 4):<br>O número ${descendo} é quebrado. Vamos jogar a unidade fora pra ficar redondo no ${baseRedonda}!<br>Atacamos a dezena primeiro: <span class="tip-highlight">${baseRedonda} x ${outro} = ${baseRedonda * outro}</span>.<br>Agora, não podemos esquecer das ${resto} unidades que guardamos no bolso: (${resto} x ${outro} = ${resto*outro}).<br>Somando os dois ataques: <span class="tip-highlight">${baseRedonda * outro} + ${resto*outro} = ${answer}</span>.<br><br><span style="color:#aaa; font-size:10px;">*(Fatoração clássica: ${baseRedonda}x${outro} + ${resto}x${outro})*</span>`;
+                    text = `Decomposição Tática (Finais 1 a 4):<br>O número ${descendo} é quebrado. Vamos jogar a unidade fora pra ficar redondo no ${baseRedonda}!<br>Atacamos a dezena primeiro: <span class="tip-highlight">${baseRedonda} x ${outro} = ${baseRedonda * outro}</span>.<br>Agora, não podemos esquecer daqueles ${resto} que guardamos no bolso: (${resto} x ${outro} = ${resto*outro}).<br>Somando os dois ataques: <span class="tip-highlight">${baseRedonda * outro} + ${resto*outro} = ${answer}</span>.<br><br><span style="color:#aaa; font-size:10px;">*(Fatoração clássica: ${baseRedonda}x${outro} + ${resto}x${outro})*</span>`;
                 }
                 else {
                     text = `Ataque Direto:<br>Para esses números, a memória muscular fala mais alto. Foque no resultado direto ou quebre em dezenas e unidades na mente!<br><span class="tip-highlight">${n1} x ${n2} = ${answer}</span>.`;
                 }
             } 
-            else if (op === '/') {
+            else if (op === '÷') {
                 let temp_n1 = n1; let temp_n2 = n2;
                 let simplificou = false; let stepStr = "";
 
@@ -1304,21 +1333,17 @@
             }
         }
 
+        let physicalX = 0, physicalY = 0;
         function updateMousePos(e) {
             const rect = canvas.getBoundingClientRect();
-            let scaleW = window.innerWidth / 820; 
-            let scaleH = window.innerHeight / 620; 
-            let scale = Math.min(scaleW, scaleH);
-            if (scale > 1) scale = 1;
+            if (e.type === 'touchend') return; 
 
-            if(e.touches) { 
-                mouseX = (e.touches[0].clientX - rect.left) / scale; 
-                mouseY = (e.touches[0].clientY - rect.top) / scale; 
-            } 
-            else { 
-                mouseX = (e.clientX - rect.left) / scale; 
-                mouseY = (e.clientY - rect.top) / scale; 
-            }
+            physicalX = e.touches ? e.touches[0].clientX : e.clientX;
+            physicalY = e.touches ? e.touches[0].clientY : e.clientY;
+
+            mouseX = ((physicalX - rect.left) / rect.width) * 800;
+            let touchOffset = e.touches ? 40 : 0; 
+            mouseY = (((physicalY - rect.top) / rect.height) * 600) - touchOffset;
         }
 
         canvas.addEventListener('mousedown', (e) => { updateMousePos(e); handlePress(); });
@@ -1351,17 +1376,9 @@
 
             if (movingTower) {
                 let cancelBtn = document.getElementById('cancel-btn');
-                let rect = cancelBtn.getBoundingClientRect(); let canvasRect = canvas.getBoundingClientRect();
+                let rectBtn = cancelBtn.getBoundingClientRect(); 
                 
-                let scaleW = window.innerWidth / 820; 
-                let scaleH = window.innerHeight / 620; 
-                let scale = Math.min(scaleW, scaleH);
-                if (scale > 1) scale = 1;
-
-                let realMouseX = (mouseX * scale) + canvasRect.left;
-                let realMouseY = (mouseY * scale) + canvasRect.top;
-                
-                if (realMouseX >= rect.left && realMouseX <= rect.right && realMouseY >= rect.top && realMouseY <= rect.bottom) {
+                if (physicalX >= rectBtn.left && physicalX <= rectBtn.right && physicalY >= rectBtn.top && physicalY <= rectBtn.bottom) {
                     cancelSelection(); return;
                 }
 
@@ -1375,17 +1392,9 @@
 
             if (selectedTowerIdx > -1 && isDraggingGhost) {
                 let cancelBtn = document.getElementById('cancel-btn');
-                let rect = cancelBtn.getBoundingClientRect(); let canvasRect = canvas.getBoundingClientRect();
-                
-                let scaleW = window.innerWidth / 820; 
-                let scaleH = window.innerHeight / 620; 
-                let scale = Math.min(scaleW, scaleH);
-                if (scale > 1) scale = 1;
+                let rectBtn = cancelBtn.getBoundingClientRect(); 
 
-                let realMouseX = (mouseX * scale) + canvasRect.left;
-                let realMouseY = (mouseY * scale) + canvasRect.top;
-
-                if (realMouseX >= rect.left && realMouseX <= rect.right && realMouseY >= rect.top && realMouseY <= rect.bottom) {
+                if (physicalX >= rectBtn.left && physicalX <= rectBtn.right && physicalY >= rectBtn.top && physicalY <= rectBtn.bottom) {
                     cancelSelection(); return;
                 }
 
