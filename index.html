@@ -579,7 +579,7 @@
         }
 
         // ==========================================
-        // A MENTE DA SKYNET (IA DINÂMICA V40)
+        // A MENTE DA SKYNET (IA 100% DINÂMICA)
         // ==========================================
         let aiMode = false;
 
@@ -597,6 +597,7 @@
             if(!aiMode) return;
             if(gameState === 'MATH' || gameState === 'START' || isGameOver || gameState === 'MENU' || gameState === 'CINEMATIC') return;
 
+            // Skynet Turbo: Base 12, +5 a cada década, +20 no pânico
             let baseTarget = 12 + (Math.floor(wave / 10) * 5);
             let panicBonus = stats.livesLost * 20;
             let targetTowers = baseTarget + panicBonus;
@@ -607,7 +608,7 @@
             if (towers.length < targetTowers) {
                 if (gold >= 50) { 
                     let spot = null;
-                    for(let i=0; i<30; i++) {
+                    for(let i=0; i<50; i++) {
                         let tx = 50 + Math.random() * 700; 
                         let ty = 50 + Math.random() * 500;
                         if(checkCollision(tx, ty)) { spot = {x: tx, y: ty}; break; }
@@ -616,11 +617,13 @@
                     if (spot) {
                         let plusCount = towers.filter(t => t.type.symbol === '+').length;
                         let iceCount = towers.filter(t => t.type.symbol === '-').length;
+                        let expCount = towers.filter(t => t.type.symbol === 'x').length;
+                        let divCount = towers.filter(t => t.type.symbol === '÷').length;
                         
                         let typeToBuild = 0; 
                         if (plusCount >= 6 && iceCount < Math.floor(plusCount / 6)) typeToBuild = 1; 
-                        else if (plusCount >= 10 && Math.random() > 0.8) typeToBuild = 2; 
-                        else if (plusCount >= 15 && Math.random() > 0.9) typeToBuild = 3; 
+                        else if (plusCount >= 10 && expCount < Math.floor(plusCount / 10)) typeToBuild = 2; 
+                        else if (plusCount >= 15 && divCount < Math.floor(plusCount / 15)) typeToBuild = 3; 
 
                         let cost = towerTypes[typeToBuild].cost;
                         
@@ -723,6 +726,7 @@
             }, 100);
 
             let operations = ['+', '-', 'x'];
+            // CORREÇÃO: Divisão é o símbolo ÷ agora!
             if (wave % 10 === 0) operations = ['÷'];
             
             let op = operations[Math.floor(Math.random() * operations.length)];
@@ -758,29 +762,38 @@
         }
 
         // ==========================================
-        // O DICIONÁRIO DE TÁTICAS V40.0 (A ADIÇÃO PERFEITA)
+        // O DICIONÁRIO DE TÁTICAS (A PEDAGOGIA PERFEITA)
         // ==========================================
         function generateTip(problem) {
             const { n1, n2, op, answer } = problem;
             let text = "";
 
             if (op === '+') {
-                if (n1 < 10 && n2 < 10) {
-                    let maior = Math.max(n1, n2); let menor = Math.min(n1, n2);
-                    let faltaPara10 = 10 - maior;
-                    if (faltaPara10 > 0 && faltaPara10 < menor) {
-                        let sobra = menor - faltaPara10;
-                        text = `Completa 10:<br>O <span class="tip-highlight">${maior}</span> precisa de ${faltaPara10} para virar 10. Tire isso do ${menor} (sobra ${sobra}).<br>Conta nova: <span class="tip-highlight">10 + ${sobra} = ${answer}</span>.`;
-                    } else {
-                        text = `Soma Básica:<br>Guarde o maior (<span class="tip-highlight">${maior}</span>) na cabeça e conte mais <span class="tip-highlight">${menor}</span>.<br>Resultado: <span class="tip-highlight">${answer}</span>.`;
-                    }
-                } 
-                else {
-                    let temp1 = n1; let temp2 = n2;
-                    let u1 = n1 % 10; let u2 = n2 % 10;
-                    let shiftText = "";
+                let temp1 = n1; let temp2 = n2;
+                let u1 = n1 % 10; let u2 = n2 % 10;
+                let shiftText = "";
 
-                    // LÓGICA V40.0: Primeiro ele arredonda tudo para "0" usando 6,7,8,9 (sobe) e 1,2,3,4 (desce)
+                if (u1 === 0 || u2 === 0) {
+                    let t1 = Math.floor((n1 % 100) / 10);
+                    let t2 = Math.floor((n2 % 100) / 10);
+                    if ((n1 >= 100 || n2 >= 100) && (t1 !== 0 && t2 !== 0)) {
+                        if (t1 >= 6 || t2 >= 6) {
+                            let alvo = t1 >= 6 ? n1 : n2;
+                            let outro = t1 >= 6 ? n2 : n1;
+                            let shift = 100 - (alvo % 100);
+                            temp1 = alvo + shift; temp2 = outro - shift;
+                            shiftText = `Compensação de Centenas:<br>O ${alvo} está quase na próxima centena. Adicionamos ${shift} nele e tiramos ${shift} do ${outro} (vira ${temp2}).<br>Conta nova: <span class="tip-highlight">${temp1} + ${temp2}</span>.<br><br>`;
+                        } else if ((t1 >= 1 && t1 <= 4) || (t2 >= 1 && t2 <= 4)) {
+                            let alvo = (t1 >= 1 && t1 <= 4) ? n1 : n2;
+                            let outro = (t1 >= 1 && t1 <= 4) ? n2 : n1;
+                            let shift = alvo % 100;
+                            temp1 = alvo - shift; temp2 = outro + shift;
+                            shiftText = `Transferência de Centenas:<br>Tiramos ${shift} do ${alvo} (vira ${temp1}) e somamos no ${outro} (vira ${temp2}).<br>Conta nova: <span class="tip-highlight">${temp1} + ${temp2}</span>.<br><br>`;
+                        }
+                    } else {
+                        shiftText = `Como um dos números já termina em 0, não precisamos arredondar. Vai direto!<br><br>`;
+                    }
+                } else {
                     if (u1 >= 6 || u2 >= 6) {
                         let alvo = u1 >= 6 ? n1 : n2;
                         let outro = u1 >= 6 ? n2 : n1;
@@ -788,8 +801,7 @@
                         temp1 = alvo + shift; 
                         temp2 = outro - shift; 
                         shiftText = `Estratégia de Compensação (Finais 6 a 9):<br>O ${alvo} está quase na próxima dezena. Arredondamos para cima (+${shift}) virando ${temp1}, e tiramos ${shift} do outro número (${outro} vira ${temp2}).<br>Conta nova muito mais fácil: <span class="tip-highlight">${temp1} + ${temp2}</span>.<br><br>`;
-                    } 
-                    else if ((u1 >= 1 && u1 <= 4) || (u2 >= 1 && u2 <= 4)) {
+                    } else if ((u1 >= 1 && u1 <= 4) || (u2 >= 1 && u2 <= 4)) {
                         let alvo = (u1 >= 1 && u1 <= 4) ? n1 : n2;
                         let outro = (u1 >= 1 && u1 <= 4) ? n2 : n1;
                         let shift = alvo % 10;
@@ -797,30 +809,36 @@
                         temp2 = outro + shift;
                         shiftText = `Estratégia de Transferência (Finais 1 a 4):<br>Tiramos ${shift} do ${alvo} para arredondar para baixo (vira ${temp1}), e somamos esses ${shift} no outro número (${outro} vira ${temp2}).<br>Conta nova muito mais fácil: <span class="tip-highlight">${temp1} + ${temp2}</span>.<br><br>`;
                     }
-
-                    // Depois de arredondar (ou se já tava bom), ele cai na Decomposição
-                    let d1 = Math.floor(temp1/10)*10; let d2 = Math.floor(temp2/10)*10;
-                    let nu1 = temp1 % 10; let nu2 = temp2 % 10;
-                    
-                    text = shiftText + `Explicação Padrão (Decomposição):<br>Agora junte as dezenas e as unidades separadamente:<br><span class="tip-highlight">(${d1} + ${d2}) + (${nu1} + ${nu2}) = ${answer}</span>.`;
                 }
+
+                let d1 = Math.floor(temp1/10)*10; let d2 = Math.floor(temp2/10)*10;
+                let nu1 = temp1 % 10; let nu2 = temp2 % 10;
+                
+                text = shiftText + `Explicação Padrão (Decomposição):<br>Agora junte as dezenas e as unidades separadamente:<br><span class="tip-highlight">(${d1} + ${d2}) + (${nu1} + ${nu2}) = ${answer}</span>.`;
             } 
             else if (op === '-') {
-                let u1 = n1 % 10; let u2 = n2 % 10;
-                let shift = 0; let isAdding = true;
+                let u2 = n2 % 10;
+                let shift = 0; let isAdding = true; let alvoDesc = "unidade";
 
-                if (u2 >= 5) { shift = 10 - u2; isAdding = true; } 
-                else if (u2 >= 1 && u2 <= 4) { shift = u2; isAdding = false; } 
-                else if (u1 >= 5) { shift = 10 - u1; isAdding = true; } 
-                else if (u1 >= 1 && u1 <= 4) { shift = u1; isAdding = false; }
+                if (u2 !== 0) {
+                    if (u2 >= 5) { shift = 10 - u2; isAdding = true; } 
+                    else { shift = u2; isAdding = false; }
+                } else if (n2 >= 10) {
+                    let t2 = Math.floor((n2 % 100) / 10);
+                    if (t2 !== 0) {
+                        alvoDesc = "dezena";
+                        if (t2 >= 5) { shift = 100 - (n2 % 100); isAdding = true; }
+                        else { shift = n2 % 100; isAdding = false; }
+                    }
+                }
 
                 if (shift > 0) {
                     let novoN1 = isAdding ? n1 + shift : n1 - shift;
                     let novoN2 = isAdding ? n2 + shift : n2 - shift;
                     let operacao = isAdding ? `Somamos ${shift}` : `Tiramos ${shift}`;
-                    text = `Hack Japonês (Diferença Constante):<br>${operacao} dos DOIS números para criar um final zero e não precisar "emprestar".<br>O ${n1} vira <span class="tip-highlight">${novoN1}</span>.<br>O ${n2} vira <span class="tip-highlight">${novoN2}</span>.<br>A distância entre eles é a mesma: <span class="tip-highlight">${novoN1} - ${novoN2} = ${answer}</span>.`;
+                    text = `Hack Japonês (Foco no Subtraendo ${n2}):<br>A regra de ouro é "não precisa emprestar". Olhamos só para o número de baixo (subtraendo): ${operacao} dos DOIS números para zerar a ${alvoDesc} dele.<br>O ${n1} vira <span class="tip-highlight">${novoN1}</span>.<br>O ${n2} vira <span class="tip-highlight">${novoN2}</span>.<br>A distância entre eles é a mesma: <span class="tip-highlight">${novoN1} - ${novoN2} = ${answer}</span>.`;
                 } else {
-                    text = `Hack Japonês:<br>Os números já estão perfeitamente redondos.<br><span class="tip-highlight">${n1} - ${n2} = ${answer}</span>.`;
+                    text = `Hack Japonês:<br>O subtraendo (${n2}) já está perfeitamente redondo. Faça o cálculo direto!<br><span class="tip-highlight">${n1} - ${n2} = ${answer}</span>.`;
                 }
             } 
             else if (op === 'x') {
@@ -866,7 +884,11 @@
                     }
                 }
 
-                if (temp_n2 === 1) {
+                if (temp_n2 === 10) {
+                    let prefix = simplificou ? stepStr + `<br>` : "";
+                    text = prefix + `O campeão do sistema decimal, o 1 com um zero: 10! Nesse caso vamos só mudar a 'vírgula' de lugar no <span class="tip-highlight">${temp_n1}</span> porque o 0 depois do 1 só muda a casa decimal, e sobra o 1. Divisão por 1 é sempre ele mesmo!<br>Resultado: <span class="tip-highlight">${answer}</span>.`;
+                }
+                else if (temp_n2 === 1) {
                     text = simplificou ? stepStr + `<br>Dividir por 1 é o próprio número: <span class="tip-highlight">${temp_n1}</span>.` : `Direto: <span class="tip-highlight">${n1}</span>.`;
                 } else if (temp_n1 <= temp_n2 * 10) { 
                     let prefix = simplificou ? stepStr + `<br>Ficou mais fácil! Inversão:<br>` : `Inversão:<br>`;
