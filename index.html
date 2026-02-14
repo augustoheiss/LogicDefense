@@ -3,170 +3,207 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Logic Defense: The Masterpiece V25</title>
+    <title>Logic Defense: The Logic of the One Piece</title>
+    <script src="https://www.youtube.com/iframe_api"></script>
     <style>
         body { 
             margin: 0; overflow: hidden; background-color: #050505; color: white; 
-            font-family: 'Courier New', monospace; user-select: none; 
-            touch-action: none;
+            font-family: 'Courier New', monospace; user-select: none; touch-action: none;
         }
         
-        /* O FUNDO DO UNIVERSO */
         #game-container { 
             position: relative; width: 800px; height: 600px; margin: 20px auto; 
             border: 2px solid #444; border-radius: 10px;
             background-image: url('https://images.unsplash.com/photo-1462331940025-496dfbfc7564?auto=format&fit=crop&w=1000&q=80');
             background-size: cover; background-position: center;
-            box-shadow: 0 0 40px rgba(0, 212, 255, 0.3);
-            overflow: hidden;
+            box-shadow: 0 0 40px rgba(0, 212, 255, 0.3); overflow: hidden;
         }
         
         #game-container::before {
             content: ""; position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0, 0, 10, 0.6); z-index: 0; pointer-events: none;
+            background: rgba(0, 0, 10, 0.6); z-index: 0; pointer-events: none; transition: background 1s;
         }
+        #game-container.cinematic-mode::before { background: rgba(0, 0, 0, 0.95); }
 
         canvas { display: block; cursor: crosshair; position: relative; z-index: 1; }
         
-        #ui-layer { position: absolute; top: 10px; left: 10px; width: calc(100% - 20px); pointer-events: none; display: flex; flex-wrap: wrap; gap: 10px; transition: opacity 0.3s; align-items: center; z-index: 2;}
-        .stat-box { background: rgba(0,0,0,0.8); padding: 8px 12px; border: 1px solid #00ff00; color: #00ff00; font-weight: bold; font-size: 14px; border-radius: 4px; box-shadow: 0 0 10px rgba(0,255,0,0.2);}
+        #ui-layer { position: absolute; top: 10px; left: 10px; width: calc(100% - 20px); pointer-events: none; display: flex; flex-wrap: wrap; gap: 10px; transition: opacity 0.3s; align-items: center; z-index: 20;}
+        
+        .stat-box { 
+            background: rgba(0,0,0,0.8); padding: 8px 12px; border: 1px solid #00ff00; color: #00ff00; 
+            font-weight: bold; font-size: 14px; border-radius: 4px; box-shadow: 0 0 10px rgba(0,255,0,0.2);
+            pointer-events: auto; cursor: help; position: relative;
+        }
         .score-box { border-color: #fff; color: #fff; box-shadow: 0 0 10px rgba(255,255,255,0.2);}
         
-        .top-btn {
-            pointer-events: auto; background: rgba(0,0,0,0.8); border: 2px solid #fff; color: white;
-            padding: 8px 15px; font-weight: bold; cursor: pointer; border-radius: 4px; transition: 0.2s;
+        .tooltip-text {
+            visibility: hidden; width: 250px; background-color: rgba(0,0,0,0.95); color: #fff; text-align: left;
+            border-radius: 6px; padding: 10px; border: 1px solid #00d4ff; position: absolute; z-index: 100;
+            top: 130%; left: 0; font-size: 12px; opacity: 0; transition: opacity 0.3s; box-shadow: 0 0 15px rgba(0,212,255,0.5);
+            font-weight: normal; line-height: 1.4; pointer-events: none;
         }
+        .stat-box:hover .tooltip-text, .stat-box:active .tooltip-text { visibility: visible; opacity: 1; }
+        .tt-highlight { color: #ffeb3b; font-weight: bold; }
+
+        .top-btn { pointer-events: auto; background: rgba(0,0,0,0.8); border: 2px solid #fff; color: white; padding: 8px 15px; font-weight: bold; cursor: pointer; border-radius: 4px; transition: 0.2s; }
         .top-btn:hover { transform: scale(1.05); }
-        
         #speed-btn.active { background: #ff9800; color: black; border-color: #ff9800; box-shadow: 0 0 15px #ff9800; }
         #speed-btn.max { background: #f44336; color: white; border-color: #f44336; box-shadow: 0 0 15px #f44336; }
         #ai-btn.active { background: #00d4ff; color: black; border-color: #00d4ff; box-shadow: 0 0 15px #00d4ff; }
+        #ghost-btn.active { background: #8a2be2; color: white; border-color: #8a2be2; box-shadow: 0 0 15px #8a2be2; }
 
-        /* TELA DE INÍCIO */
-        #start-screen {
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.85); z-index: 200; 
-            display: flex; flex-direction: column; align-items: center; justify-content: center;
+        body.hide-ui #build-menu, body.hide-ui #next-wave-btn, body.hide-ui #math-tip-box, body.hide-ui .stat-box, body.hide-ui #speed-btn, body.hide-ui #ai-btn {
+            opacity: 0.15 !important; pointer-events: none !important;
         }
-        .buff-btn {
-            margin: 15px; padding: 20px 40px; font-size: 24px; cursor: pointer;
-            border: 2px solid white; background: rgba(0,0,0,0.6); color: white;
-            font-family: inherit; transition: 0.2s; width: 320px; text-align: center; border-radius: 8px;
-        }
+        body.ghost-active #build-menu { display: none !important; }
+        body.ghost-active #ui-layer, body.ghost-active #math-tip-box { opacity: 0.15 !important; pointer-events: none !important; }
+
+        #start-screen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.90); z-index: 200; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        .buff-btn { margin: 10px; padding: 15px 30px; font-size: 22px; cursor: pointer; border: 2px solid white; background: rgba(0,0,0,0.6); color: white; font-family: inherit; transition: 0.2s; width: 320px; text-align: center; border-radius: 8px; }
         .buff-btn:hover { transform: scale(1.05); color: #000; }
         .buff-amor:hover { background: #00ff00; border-color: #00ff00; box-shadow: 0 0 30px #00ff00; }
         .buff-odio:hover { background: #ff0000; border-color: #ff0000; box-shadow: 0 0 30px #ff0000; }
         .buff-cadeira:hover { background: #00d4ff; border-color: #00d4ff; box-shadow: 0 0 30px #00d4ff; }
 
-        /* CAIXA DE DICAS */
-        #math-tip-box {
-            display: none; position: absolute; bottom: 120px; right: 20px; width: 380px; 
-            background: rgba(0, 0, 0, 0.95); border: 2px solid #00d4ff; padding: 15px;
-            border-radius: 8px; color: #fff; z-index: 10; pointer-events: none; 
-            box-shadow: 0 0 30px rgba(0, 212, 255, 0.5); text-align: left; transition: opacity 0.3s;
-        }
+        #high-score-display { color: #ffd700; font-size: 16px; font-weight: bold; margin-top: -15px; margin-bottom: 25px; text-shadow: 0 0 10px #ffd700; letter-spacing: 1px;}
+
+        /* MANIFESTO MODAL */
+        #manifesto-modal { display:none; position:absolute; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.95); z-index:300; flex-direction:column; align-items:center; justify-content:center; padding: 20px; box-sizing: border-box; }
+        .manifesto-box { max-width: 600px; color: #eee; line-height: 1.6; font-size: 14px; text-align: justify; border: 1px solid #00d4ff; padding: 30px; border-radius: 10px; background: #111; box-shadow: 0 0 30px rgba(0,212,255,0.3); overflow-y: auto; max-height: 90vh; }
+        .manifesto-title { color: #00d4ff; text-align: center; margin-top: 0; font-size: 24px; text-shadow: 0 0 10px #00d4ff;}
+
+        #math-tip-box { display: none; position: absolute; bottom: 120px; right: 20px; width: 380px; background: rgba(0, 0, 0, 0.95); border: 2px solid #00d4ff; padding: 15px; border-radius: 8px; color: #fff; z-index: 10; pointer-events: none; box-shadow: 0 0 30px rgba(0, 212, 255, 0.5); text-align: left; transition: opacity 0.3s; }
         .tip-title { color: #00d4ff; font-weight: bold; margin-bottom: 8px; text-transform: uppercase; font-size: 16px; border-bottom: 1px solid #444; padding-bottom: 5px; }
         .tip-content { font-size: 14px; line-height: 1.5; color: #eee; font-family: 'Verdana', sans-serif; } 
         .tip-highlight { color: #ffff00; font-weight: bold; }
 
-        /* BOTÃO DE ONDA NA ESQUERDA (NOVO) */
         #next-wave-btn { 
-            display: none; position: absolute; bottom: 140px; left: 40px; /* Alterado de right para left */
-            padding: 15px 30px; font-size: 20px; background: #ff0000; color: white; border: 2px solid white; 
-            cursor: pointer; font-weight: bold; z-index: 5; animation: pulse 2s infinite; box-shadow: 0 0 15px #ff0000; border-radius: 5px;
-            transition: opacity 0.3s; pointer-events: auto;
+            display: none; position: absolute; bottom: 140px; left: 20px; 
+            padding: 10px; width: 70px; height: 70px; border-radius: 50%;
+            font-size: 24px; background: rgba(0, 200, 0, 0.2); color: #00ff00; border: 2px solid #00ff00; 
+            cursor: pointer; font-weight: bold; z-index: 5; animation: pulse-green 2s infinite; box-shadow: 0 0 15px #00ff00;
+            transition: 0.3s; pointer-events: auto; display: flex; align-items: center; justify-content: center;
         }
-        #next-wave-btn:hover { background: #ff4444; transform: scale(1.05); }
-        @keyframes pulse { 0% { box-shadow: 0 0 10px #ff0000; } 50% { box-shadow: 0 0 30px #ff0000; } 100% { box-shadow: 0 0 10px #ff0000; } }
+        #next-wave-btn:hover { background: rgba(0, 255, 0, 0.5); transform: scale(1.1); }
+        @keyframes pulse-green { 0% { box-shadow: 0 0 10px #00ff00; } 50% { box-shadow: 0 0 30px #00ff00; } 100% { box-shadow: 0 0 10px #00ff00; } }
 
-        #cancel-btn {
-            display: none; position: absolute; top: 80px; left: 50%; transform: translateX(-50%);
-            padding: 12px 30px; font-size: 20px; background: #d32f2f; color: white; border: 2px solid white;
-            cursor: pointer; font-weight: bold; z-index: 100; border-radius: 50px;
-            box-shadow: 0 0 20px rgba(255, 0, 0, 0.8); pointer-events: auto !important;
-            text-transform: uppercase; letter-spacing: 2px;
+        #cancel-btn { 
+            display: none; position: absolute; bottom: 40px; left: 50%; transform: translateX(-50%); 
+            width: 70px; height: 70px; border-radius: 50%; font-size: 32px; 
+            background: rgba(211, 47, 47, 0.9); color: white; border: 2px solid white; 
+            cursor: pointer; font-weight: bold; z-index: 100; box-shadow: 0 0 20px rgba(255, 0, 0, 0.8); 
+            pointer-events: auto !important; align-items: center; justify-content: center; transition: 0.2s;
         }
         #cancel-btn:hover { background: #f44336; transform: translateX(-50%) scale(1.1); }
+        body.ghost-active #cancel-btn { display: flex; }
 
-        #math-modal { 
-            display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); 
-            background: rgba(0,0,0,0.95); border: 4px solid #fff; padding: 30px; text-align: center; 
-            box-shadow: 0 0 80px rgba(255,255,255,0.3); z-index: 10; width: 450px; border-radius: 10px; overflow: hidden;
-        }
-        
-        #buff-message {
-            font-size: 16px; color: #ccc; margin-bottom: 20px; font-style: italic; min-height: 40px;
-            padding: 10px; border-bottom: 1px solid #333; line-height: 1.4;
-        }
-
+        #math-modal { display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.95); border: 4px solid #fff; padding: 30px; text-align: center; box-shadow: 0 0 80px rgba(255,255,255,0.3); z-index: 100; width: 450px; border-radius: 10px; overflow: hidden; }
+        #buff-message { font-size: 16px; color: #ccc; margin-bottom: 20px; font-style: italic; min-height: 40px; padding: 10px; border-bottom: 1px solid #333; line-height: 1.4; }
         #timer-container { width: 100%; height: 10px; background: #333; position: absolute; top: 0; left: 0; }
         #timer-bar { width: 100%; height: 100%; background: #ff0000; transition: width 0.1s linear; }
-
         #math-question { font-size: 48px; margin: 10px 0 20px 0; color: #fff; font-weight: bold; text-shadow: 0 0 20px rgba(255,255,255,0.5);}
-        .btn-math { 
-            background: #222; color: #fff; border: 2px solid #fff; padding: 15px; margin: 10px; width: 100px;
-            font-size: 24px; cursor: pointer; font-family: inherit; transition: 0.2s; border-radius: 5px;
-        }
+        .btn-math { background: #222; color: #fff; border: 2px solid #fff; padding: 15px; margin: 10px; width: 100px; font-size: 24px; cursor: pointer; font-family: inherit; transition: 0.2s; border-radius: 5px; }
         .btn-math:hover { background: #fff; color: #000; transform: scale(1.1); box-shadow: 0 0 20px #fff;}
 
-        #build-menu { 
-            position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); 
-            display: flex; gap: 15px; background: rgba(0,0,0,0.85); padding: 10px; border-radius: 10px; border: 1px solid #555;
-            transition: 0.3s; z-index: 5; box-shadow: 0 0 20px rgba(0,0,0,0.8);
-        }
+        #build-menu { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); display: flex; gap: 15px; background: rgba(0,0,0,0.85); padding: 10px; border-radius: 10px; border: 1px solid #555; transition: 0.3s; z-index: 5; box-shadow: 0 0 20px rgba(0,0,0,0.8); }
         .build-glow { animation: attention-pulse 1.5s infinite; border: 1px solid #00ff00 !important; }
 
-        .tower-btn { 
-            width: 80px; height: 90px; background: #222; border: 2px solid #555; cursor: pointer; 
-            display: flex; flex-direction: column; align-items: center; justify-content: center; 
-            transition: 0.2s; border-radius: 5px; color: #aaa; pointer-events: auto;
-        }
+        .tower-btn { width: 80px; height: 90px; background: #222; border: 2px solid #555; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; transition: 0.2s; border-radius: 5px; color: #aaa; pointer-events: auto; }
         .tower-btn:hover { border-color: #fff; background: #333; color: #fff; }
         .tower-btn.selected { border-color: #00ff00; background: #111; box-shadow: 0 0 20px #00ff00; color: #00ff00; transform: translateY(-5px); }
         .tower-symbol { font-size: 26px; font-weight: bold; margin-bottom: 2px; }
         .tower-cost { font-size: 14px; font-weight: bold;}
         .tower-desc { font-size: 10px; color: #aaa; margin-top: 2px; text-align: center;}
 
-        #feedback-msg { 
-            position: absolute; top: 150px; width: 100%; text-align: center; 
-            font-size: 32px; font-weight: bold; opacity: 0; transition: opacity 0.5s; 
-            text-shadow: 0 0 10px #000, 0 0 20px #000; z-index: 6; pointer-events: none;
-        }
+        #feedback-msg { position: absolute; top: 150px; width: 100%; text-align: center; font-size: 32px; font-weight: bold; opacity: 0; transition: opacity 0.5s; text-shadow: 0 0 10px #000, 0 0 20px #000; z-index: 6; pointer-events: none; }
         
-        #upgrade-info { position: absolute; bottom: 20px; left: 20px; text-align: left; font-size: 14px; color: #aaa; pointer-events: none; display: none; background: rgba(0,0,0,0.8); padding: 8px 12px; border-radius: 5px; border-left: 3px solid #ffd700; z-index: 5; box-shadow: 0 0 10px rgba(0,0,0,0.5);}
+        #upgrade-info { position: absolute; bottom: 20px; right: 20px; text-align: left; font-size: 14px; color: #aaa; pointer-events: auto; display: none; background: rgba(0,0,0,0.9); padding: 15px; border-radius: 5px; border-left: 3px solid #ffd700; z-index: 50; box-shadow: 0 0 20px rgba(0,0,0,0.8); flex-direction: column; gap: 10px;}
+        .action-btn { background: #333; border: 1px solid #fff; color: white; padding: 8px; cursor: pointer; border-radius: 4px; transition: 0.2s; font-weight: bold; font-family: inherit;}
+        .action-btn:hover { background: #555; transform: scale(1.05); }
+        .btn-move { border-color: #00d4ff; color: #00d4ff; }
+        .btn-sell { border-color: #ff4444; color: #ff4444; }
 
-        /* GHOST MODE CSS */
-        body.ghost-active #build-menu, body.ghost-active #next-wave-btn, body.ghost-active #ui-layer, body.ghost-active #math-tip-box { opacity: 0.15; pointer-events: none !important; }
-        body.ghost-active .tower-btn { pointer-events: none !important; }
-        body.ghost-active #cancel-btn { display: block; }
     </style>
 </head>
 <body>
 
+    <div id="yt-player" style="position: absolute; width: 10px; height: 10px; top: -9999px; left: -9999px;"></div>
+
     <div id="start-screen">
         <h1 id="start-title" style="font-size: 44px; margin-bottom: 5px; color: #fff; text-shadow: 0 0 20px #00d4ff;">LOGIC DEFENSE</h1>
-        <p id="start-subtitle" style="font-size: 20px; margin-bottom: 40px; color: #aaa; letter-spacing: 2px;">ESCOLHA SEU COMBUSTÍVEL CÓSMICO</p>
+        <p id="start-subtitle" style="font-size: 20px; margin-bottom: 30px; color: #aaa; letter-spacing: 2px;">ESCOLHA SEU COMBUSTÍVEL CÓSMICO</p>
         
-        <button class="buff-btn buff-amor" onclick="selectBuff('amor')">❤️ AMOR<br><span style="font-size:12px; font-style:italic;">"O fogo tá sempre aceso"</span></button>
-        <button class="buff-btn buff-odio" onclick="selectBuff('odio')">🔥 ÓDIO<br><span style="font-size:12px; font-style:italic;">"Vou desligar sua tomada"</span></button>
-        <button class="buff-btn buff-cadeira" onclick="selectBuff('cadeira')">🪑 A CADEIRA<br><span style="font-size:12px; font-style:italic;">"Aceite a dor"</span></button>
+        <div id="high-score-display">
+            🏆 RECORDE: ONDA <span id="hs-wave-ui">0</span> | CONTAS: <span id="hs-math-ui">0</span> 🏆
+        </div>
+        
+        <button class="buff-btn buff-amor" onclick="selectBuff('amor', event)" ontouchstart="selectBuff('amor', event)">❤️ AMOR<br><span style="font-size:12px; font-style:italic;">"O fogo tá sempre aceso"</span></button>
+        <button class="buff-btn buff-odio" onclick="selectBuff('odio', event)" ontouchstart="selectBuff('odio', event)">🔥 ÓDIO<br><span style="font-size:12px; font-style:italic;">"Vou desligar sua tomada"</span></button>
+        <button class="buff-btn buff-cadeira" onclick="selectBuff('cadeira', event)" ontouchstart="selectBuff('cadeira', event)">🪑 A CADEIRA<br><span style="font-size:12px; font-style:italic;">"Aceite a dor"</span></button>
+        
+        <button class="top-btn" style="margin-top: 20px; font-size: 16px;" onclick="document.getElementById('manifesto-modal').style.display='flex'">📖 O MANIFESTO (CRÉDITOS)</button>
+    </div>
+
+    <div id="manifesto-modal">
+        <div class="manifesto-box">
+            <h2 class="manifesto-title">A LÓGICA DO ONE PIECE</h2>
+            <p>Palavras como Amor, Ódio, ou o meio termo (A Cadeira), podem ter infinitos significados dependendo de como as falamos, dos nossos motivos e de eventos externos imprevisíveis. Esses fatores podem fazer com que nossas palavras sumam no vácuo ou sejam potencializadas como por um microfone. Vivemos em um mundo de probabilidades.</p>
+            <p>Está na hora de sair do dicionário, sair da biblioteca e experimentar a Lógica na prática. Use todos esses Dados, Informações, Conhecimentos e Sabedoria a seu favor estudando a função dos números (e das palavras).</p>
+            <p>Desligue o seu "Juiz" interno — aquele que rejeita as pessoas só porque elas não te dão importância ou não te respeitam. A Lógica por trás de todos esses motivos é mais profunda e soberana, e ninguém escapa da lei das probabilidades. Aceite a Morte, e então, Viva. Não como uma máquina, que hoje está incrivelmente potente, mas como a alma que você é.</p>
+            <hr style="border-color: #333; margin: 20px 0;">
+            <p style="color: #00ff00; font-weight: bold; text-align: center;">[ SOBRE O PROJETO ]</p>
+            <p style="text-align: center;">Este jogo é fruto de um processo intensivo com mais de 30 atualizações implacáveis, unindo Game Design, Matemática e Programação. Foi produzido <strong>100% em co-criação com Inteligência Artificial</strong>, provando que a IA é a melhor ferramenta para mentes que não têm medo de pensar.</p>
+            <p style="text-align: center; color: #ffeb3b;">E vamos ter MUITAS ATUALIZAÇÕES AINDA!<br><em>(Não hoje, eu acho 😅)</em></p>
+            <p style="text-align: center;">Quer falar com o autor ou trocar ideias sobre tecnologia e educação?<br>📧 <strong>augustoheiss@gmail.com</strong></p>
+            <button onclick="document.getElementById('manifesto-modal').style.display='none'" style="margin-top:15px; width:100%; font-size: 16px;" class="action-btn btn-sell">FECHAR</button>
+        </div>
     </div>
 
     <div id="game-container">
         <canvas id="gameCanvas" width="800" height="600"></canvas>
 
         <div id="ui-layer">
-            <div class="stat-box">💰 $<span id="gold-display">150</span></div>
-            <div class="stat-box">🌊 <span id="wave-display">0</span></div>
-            <div class="stat-box">❤️ <span id="lives-display">20</span></div>
+            <div class="stat-box">
+                💰 $<span id="gold-display">150</span>
+                <span class="tooltip-text" id="tt-gold">Me falaram que você é o cara da grana então...<br><br><span class="tt-highlight">Total Acumulado:</span> $<span id="tt-total-gold">150</span><br><br>Rapaz não precisa correr atrás do ouro, mas acertar é melhor que errar né grandão? (Acerto: +150% / Erro: +50%)</span>
+            </div>
+            <div class="stat-box">
+                🌊 <span id="wave-display">0</span>
+                <span class="tooltip-text" id="tt-wave">Você é um mergulhador de Onda mesmo, quero ver você explorando o mar também meu fi, vou querer ouvir falar de você.<br><br><span class="tt-highlight" id="tt-wave-ordinal">Iniciando...</span></span>
+            </div>
+            <div class="stat-box">
+                ❤️ <span id="lives-display">20</span>
+                <span class="tooltip-text" id="tt-lives">Vamos gastar um pouco dessas vidas né, <span id="tt-lives-curr">20</span> vidas é muita vida não é não? Ta economizando demais.<br><br>Ganhadas: <span id="tt-lives-gained" class="tt-highlight">0</span><br>Perdidas: <span id="tt-lives-lost" style="color:#ff4444">0</span></span>
+            </div>
             <div class="stat-box">⚖️ <span id="mult-display">1.0x</span></div>
-            <div class="stat-box score-box">✅ <span id="score-correct">0</span></div>
+            <div class="stat-box score-box">
+                ✅ <span id="score-correct">0</span>
+                <span class="tooltip-text" id="tt-score">
+                    <span class="tt-highlight">Total Resolvido:</span> <span id="tt-total-math">0</span><br><br>
+                    <span style="color:#ff4444">Falhas por Operação:</span><br>
+                    Soma (+): <span id="err-sum">0</span><br>
+                    Subtração (-): <span id="err-sub">0</span><br>
+                    Multiplicação (x): <span id="err-mul">0</span><br>
+                    Divisão (÷): <span id="err-div">0</span>
+                </span>
+            </div>
             <div class="stat-box score-box" style="border-color: #f00; color: #f00;">❌ <span id="score-wrong">0</span></div>
-            <button id="speed-btn" class="top-btn" onclick="toggleSpeed()">⏩ 1x</button>
-            <button id="ai-btn" class="top-btn" onclick="toggleAIMode()">🤖 MODO IA: OFF</button>
+            
+            <button id="speed-btn" class="top-btn" onmousedown="toggleSpeed(event)" ontouchstart="toggleSpeed(event)">⏩ 1x</button>
+            <button id="ai-btn" class="top-btn" onmousedown="toggleAIMode(event)" ontouchstart="toggleAIMode(event)">🤖 MODO IA: OFF</button>
+            <button id="ghost-btn" class="top-btn" onmousedown="toggleUI(event)" ontouchstart="toggleUI(event)">👁️ FANTASMA: OFF</button>
         </div>
         
-        <div id="upgrade-info">CLIQUE NA TORRE PARA EVOLUIR</div>
+        <div id="upgrade-info">
+            <div style="color:#fff; font-weight:bold; margin-bottom:5px; border-bottom: 1px solid #444; padding-bottom:5px;">PAINEL DA TORRE</div>
+            <div style="font-size:12px; margin-bottom:5px;">Upgrade: $<span id="upg-cost">0</span></div>
+            <button class="action-btn" onmousedown="upgradeSelectedTower(event)" ontouchstart="upgradeSelectedTower(event)">UPGRADE</button>
+            <div style="display:flex; gap:10px; margin-top:5px;">
+                <button class="action-btn btn-move" onmousedown="moveSelectedTower(event)" ontouchstart="moveSelectedTower(event)">🚚 MOVER</button>
+                <button class="action-btn btn-sell" onmousedown="sellSelectedTower(event)" ontouchstart="sellSelectedTower(event)">🗑️ VENDER</button>
+            </div>
+        </div>
+        
         <div id="feedback-msg"></div>
         
         <div id="math-tip-box">
@@ -174,8 +211,8 @@
             <div class="tip-content" id="tip-text">...</div>
         </div>
 
-        <button id="next-wave-btn" onclick="startWaveCombat()">MANDAR ONDA!</button>
-        <button id="cancel-btn" onclick="cancelSelection()">🗑️ CANCELAR</button>
+        <button id="next-wave-btn" onmousedown="startWaveCombat(event)" ontouchstart="startWaveCombat(event)">🚀</button>
+        <button id="cancel-btn" onmousedown="cancelSelection(event)" ontouchstart="cancelSelection(event)" title="Cancelar Construção">🗑️</button>
 
         <div id="math-modal">
             <div id="timer-container"><div id="timer-bar"></div></div>
@@ -186,32 +223,81 @@
         </div>
 
         <div id="build-menu">
-            <div class="tower-btn" onclick="selectTower(0)" id="tbtn0">
+            <div class="tower-btn" onmousedown="selectTowerBtn(0, event)" ontouchstart="selectTowerBtn(0, event)" id="tbtn0">
                 <div class="tower-symbol" style="color:#ffeb3b">+</div>
                 <div class="tower-cost">$50</div>
-                <div class="tower-desc">Metralhadora<br>(Triângulo)</div>
+                <div class="tower-desc">Metralhadora</div>
             </div>
-            <div class="tower-btn" onclick="selectTower(1)" id="tbtn1">
+            <div class="tower-btn" onmousedown="selectTowerBtn(1, event)" ontouchstart="selectTowerBtn(1, event)" id="tbtn1">
                 <div class="tower-symbol" style="color:#03a9f4">-</div>
                 <div class="tower-cost">$120</div>
-                <div class="tower-desc">Slow AOE<br>(Círculo)</div>
+                <div class="tower-desc">Gelo (Área)</div>
             </div>
-            <div class="tower-btn" onclick="selectTower(2)" id="tbtn2">
+            <div class="tower-btn" onmousedown="selectTowerBtn(2, event)" ontouchstart="selectTowerBtn(2, event)" id="tbtn2">
                 <div class="tower-symbol" style="color:#f44336">x</div>
                 <div class="tower-cost">$300</div>
-                <div class="tower-desc">Explosão<br>(Quadrado)</div>
+                <div class="tower-desc">Explosão</div>
             </div>
-            <div class="tower-btn" onclick="selectTower(3)" id="tbtn3">
+            <div class="tower-btn" onmousedown="selectTowerBtn(3, event)" ontouchstart="selectTowerBtn(3, event)" id="tbtn3">
                 <div class="tower-symbol" style="color:#9c27b0">÷</div>
                 <div class="tower-cost">$450</div>
-                <div class="tower-desc">Sniper<br>(Hexágono)</div>
+                <div class="tower-desc">Sniper</div>
             </div>
         </div>
     </div>
 
     <script>
         // ==========================================
-        // CONFIGURAÇÕES DE AUDIO E CANVAS
+        // LOCAL STORAGE (SISTEMA DE HIGHSCORE)
+        // ==========================================
+        let maxWaveSaved = localStorage.getItem('logicDef_hsWave') || 0;
+        let maxMathSaved = localStorage.getItem('logicDef_hsMath') || 0;
+        document.getElementById('hs-wave-ui').innerText = maxWaveSaved;
+        document.getElementById('hs-math-ui').innerText = maxMathSaved;
+
+        // ==========================================
+        // YOUTUBE AUDIO API (CORRIGIDO PARA AUTOPLAY)
+        // ==========================================
+        let ytPlayer;
+        let ytPlayerReady = false;
+        let bgMusicPlaying = false;
+        let userActivatedAudio = false;
+
+        function tryStartBgMusic() {
+            if (!userActivatedAudio) return;
+            if (!ytPlayerReady) return;
+            if (bgMusicPlaying) return;
+
+            // O TRUQUE DE MESTRE: Tocar mudo primeiro, depois desmutar
+            ytPlayer.mute();
+            ytPlayer.playVideo();
+            bgMusicPlaying = true;
+
+            setTimeout(() => {
+                ytPlayer.setVolume(35);
+                ytPlayer.unMute();
+            }, 400);
+        }
+
+        function onYouTubeIframeAPIReady() {
+            ytPlayer = new YT.Player('yt-player', {
+                height: '10', width: '10',
+                playerVars: {
+                    listType: 'playlist',
+                    list: 'PLh5X0e7-mnI3lh-nb3fwZ8OcndGLfVdZX', 
+                    loop: 1, autoplay: 0, controls: 0, playsinline: 1, origin: location.origin
+                },
+                events: {
+                    'onReady': () => {
+                        ytPlayerReady = true;
+                        tryStartBgMusic();
+                    }
+                }
+            });
+        }
+
+        // ==========================================
+        // CONFIGURAÇÕES DE AUDIO SFX E CANVAS
         // ==========================================
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
@@ -219,12 +305,11 @@
         let audioCtx; 
 
         function initAudio() {
-            if(!audioCtx) {
-                audioCtx = new AudioContext();
-            }
-            if (audioCtx.state === 'suspended') {
-                audioCtx.resume();
-            }
+            userActivatedAudio = true;
+            if(!audioCtx) audioCtx = new AudioContext();
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            
+            tryStartBgMusic();
         }
 
         function resizeCanvas() {
@@ -255,40 +340,44 @@
             if (type === 'shoot') {
                 osc.type = 'square'; osc.frequency.setValueAtTime(400, audioCtx.currentTime); 
                 osc.frequency.exponentialRampToValueAtTime(100, audioCtx.currentTime + 0.1);
-                gainNode.gain.setValueAtTime(0.05, audioCtx.currentTime); gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
+                gainNode.gain.setValueAtTime(0.01, audioCtx.currentTime); gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.1);
                 osc.start(); osc.stop(audioCtx.currentTime + 0.1);
             } else if (type === 'sniper') {
                 osc.type = 'triangle'; osc.frequency.setValueAtTime(150, audioCtx.currentTime); 
                 osc.frequency.exponentialRampToValueAtTime(50, audioCtx.currentTime + 0.3);
-                gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime); gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+                gainNode.gain.setValueAtTime(0.02, audioCtx.currentTime); gainNode.gain.exponentialRampToValueAtTime(0.005, audioCtx.currentTime + 0.3);
                 osc.start(); osc.stop(audioCtx.currentTime + 0.3);
             } else if (type === 'hit') {
                 osc.type = 'sawtooth'; osc.frequency.setValueAtTime(100, audioCtx.currentTime);
-                gainNode.gain.setValueAtTime(0.05, audioCtx.currentTime); gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
+                gainNode.gain.setValueAtTime(0.01, audioCtx.currentTime); gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.1);
                 osc.start(); osc.stop(audioCtx.currentTime + 0.1);
             } else if (type === 'correct') {
                 osc.type = 'sine'; osc.frequency.setValueAtTime(600, audioCtx.currentTime); osc.frequency.setValueAtTime(1200, audioCtx.currentTime + 0.1);
-                gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime); gainNode.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.3);
+                gainNode.gain.setValueAtTime(0.03, audioCtx.currentTime); gainNode.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.3);
                 osc.start(); osc.stop(audioCtx.currentTime + 0.3);
             } else if (type === 'wrong') {
                 osc.type = 'sawtooth'; osc.frequency.setValueAtTime(100, audioCtx.currentTime); osc.frequency.linearRampToValueAtTime(50, audioCtx.currentTime + 0.3);
-                gainNode.gain.setValueAtTime(0.2, audioCtx.currentTime); gainNode.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.3);
+                gainNode.gain.setValueAtTime(0.05, audioCtx.currentTime); gainNode.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.3);
                 osc.start(); osc.stop(audioCtx.currentTime + 0.3);
             } else if (type === 'upgrade') {
                  osc.type = 'triangle'; osc.frequency.setValueAtTime(300, audioCtx.currentTime); osc.frequency.linearRampToValueAtTime(600, audioCtx.currentTime + 0.2);
-                 gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime); gainNode.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.3);
+                 gainNode.gain.setValueAtTime(0.03, audioCtx.currentTime); gainNode.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.3);
                  osc.start(); osc.stop(audioCtx.currentTime + 0.3);
             } else if (type === 'heal') {
                  osc.type = 'sine'; osc.frequency.setValueAtTime(400, audioCtx.currentTime); osc.frequency.linearRampToValueAtTime(800, audioCtx.currentTime + 0.5);
-                 gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime); gainNode.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.5);
+                 gainNode.gain.setValueAtTime(0.03, audioCtx.currentTime); gainNode.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.5);
                  osc.start(); osc.stop(audioCtx.currentTime + 0.5);
+            } else if (type === 'cinematic') {
+                 osc.type = 'sawtooth'; osc.frequency.setValueAtTime(50, audioCtx.currentTime); osc.frequency.exponentialRampToValueAtTime(10, audioCtx.currentTime + 1.5);
+                 gainNode.gain.setValueAtTime(0.08, audioCtx.currentTime); gainNode.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 1.5);
+                 osc.start(); osc.stop(audioCtx.currentTime + 1.5);
             }
         }
 
         // ==========================================
-        // VARIÁVEIS PRINCIPAIS
+        // VARIÁVEIS PRINCIPAIS E STATUS
         // ==========================================
-        let gameState = 'MENU';
+        let gameState = 'MENU'; 
         let gold = 150;
         let lives = 20;
         let wave = 0;
@@ -307,25 +396,144 @@
 
         let totalEnemiesToSpawn = 0;
         let enemiesSpawned = 0;
+        let spawnFrameCounter = 0; 
 
-        // ENTIDADES FÍSICAS
+        let stats = {
+            totalGold: 150, livesGained: 0, livesLost: 0, totalMath: 0,
+            errors: { '+': 0, '-': 0, 'x': 0, '÷': 0 }
+        };
+
         let towers = [];
         let enemies = [];
         let bullets = [];
         let particles = [];
+        let cinematicParticles = [];
         
-        let mouseX = 0;
-        let mouseY = 0;
+        let mouseX = 0, mouseY = 0;
         let canBuild = false;
-        let selectedTowerIdx = -1;
+        
+        let selectedTowerIdx = -1; 
+        let isDraggingGhost = false; 
+        let selectedExistingTower = null; 
+        let movingTower = null; 
 
-        // CAMINHO DO MAPA
-        const path = [
-            {x: 0, y: 150}, {x: 700, y: 150}, {x: 700, y: 350}, 
-            {x: 100, y: 350}, {x: 100, y: 500}, {x: 800, y: 500}
-        ];
+        let lastUiClick = 0;
+        function uiClickCheck(e) {
+            if(e) { e.preventDefault(); e.stopPropagation(); }
+            let now = Date.now();
+            if (now - lastUiClick < 200) return false;
+            lastUiClick = now;
+            return true;
+        }
 
-        // TIPOS DE TORRES Geometria Sagrada
+        let uiHidden = false;
+        function toggleUI(e) {
+            if (!uiClickCheck(e)) return;
+            uiHidden = !uiHidden;
+            const btn = document.getElementById('ghost-btn');
+            if(uiHidden) {
+                document.body.classList.add('hide-ui');
+                btn.classList.add('active'); btn.innerText = "👁️ FANTASMA: ON";
+            } else {
+                document.body.classList.remove('hide-ui');
+                btn.classList.remove('active'); btn.innerText = "👁️ FANTASMA: OFF";
+            }
+        }
+
+        // ==========================================
+        // ROTAÇÃO E GERAÇÃO DE MAPA DINÂMICO
+        // ==========================================
+        let currentMapAngle = 0;
+        let mapPhase = 1; 
+        let totalRotations = 0;
+        let lastRotatedWave = 0;
+        let mapPaths = [];
+
+        function generateMapPaths() {
+            if (mapPhase === 1) {
+                mapPaths = [ [ {x: 0, y: 150}, {x: 700, y: 150}, {x: 700, y: 350}, {x: 100, y: 350}, {x: 100, y: 500}, {x: 800, y: 500} ] ];
+            } else if (mapPhase === 2) {
+                mapPaths = [
+                    [ {x:0, y:300}, {x:200, y:300}, {x:400, y:100}, {x:600, y:300}, {x:800, y:300} ],
+                    [ {x:0, y:300}, {x:200, y:300}, {x:400, y:500}, {x:600, y:300}, {x:800, y:300} ],
+                    [ {x:0, y:300}, {x:200, y:300}, {x:400, y:300}, {x:600, y:300}, {x:800, y:300} ]
+                ];
+            } else {
+                mapPaths = [
+                    [ {x:0, y:400}, {x:200, y:150}, {x:400, y:400}, {x:550, y:250}, {x:700, y:400}, {x:800, y:400} ],
+                    [ {x:0, y:400}, {x:200, y:150}, {x:400, y:400}, {x:550, y:550}, {x:700, y:400}, {x:800, y:400} ],
+                    [ {x:0, y:400}, {x:200, y:150}, {x:400, y:400}, {x:550, y:400}, {x:700, y:400}, {x:800, y:400} ]
+                ];
+            }
+        }
+        generateMapPaths(); 
+
+        function generateEnemyRoute() {
+            let routeBase = mapPaths[Math.floor(Math.random() * mapPaths.length)];
+            let route = routeBase.map(p => ({x: p.x, y: p.y}));
+            let isReverse = Math.random() > 0.5;
+
+            if (isReverse) route.reverse();
+
+            if (currentMapAngle !== 0) {
+                let cx = 400, cy = 300;
+                let cosA = Math.cos(currentMapAngle); let sinA = Math.sin(currentMapAngle);
+                route.forEach(p => {
+                    let nx = cx + (p.x - cx) * cosA - (p.y - cy) * sinA;
+                    let ny = cy + (p.x - cx) * sinA + (p.y - cy) * cosA;
+                    p.x = nx; p.y = ny;
+                });
+            }
+            return route;
+        }
+
+        function triggerCinematicRotation() {
+            gameState = 'CINEMATIC';
+            document.getElementById('game-container').classList.add('cinematic-mode');
+            playSound('cinematic');
+            
+            for(let i=0; i<150; i++) {
+                cinematicParticles.push({
+                    x: Math.random() * 800, y: Math.random() * 600,
+                    angle: Math.random() * Math.PI * 2,
+                    dist: 300 + Math.random() * 200, speed: 4 + Math.random() * 8,
+                    char: ['+', '-', 'x', '÷', '0', '1', '9'][Math.floor(Math.random()*7)]
+                });
+            }
+
+            setTimeout(() => {
+                let angle = Math.PI / 4; 
+                currentMapAngle += angle;
+                totalRotations++;
+                
+                if (totalRotations >= 8) {
+                    mapPhase++; 
+                    if(mapPhase > 3) mapPhase = 1;
+                    totalRotations = 0; 
+                    generateMapPaths();
+                }
+
+                let cx = 400, cy = 300;
+                let cosA = Math.cos(angle);
+                let sinA = Math.sin(angle);
+                towers.forEach(t => {
+                    let nx = cx + (t.x - cx) * cosA - (t.y - cy) * sinA;
+                    let ny = cy + (t.x - cx) * sinA + (t.y - cy) * cosA;
+                    t.x = nx; t.y = ny;
+                });
+
+                document.getElementById('game-container').classList.remove('cinematic-mode');
+                cinematicParticles = [];
+                
+                gameState = 'MENU';
+                const screen = document.getElementById('start-screen');
+                screen.style.display = 'flex';
+                document.getElementById('start-title').innerText = "DIMENSÃO CONCLUÍDA";
+                document.getElementById('start-subtitle').innerText = "ESCOLHA SEU NOVO COMBUSTÍVEL";
+                document.getElementById('start-subtitle').style.color = "#00d4ff";
+            }, 1500); 
+        }
+
         const towerTypes = [
             { name: "Soma", symbol: "+", shape: "triangle", cost: 50, range: 120, damage: 25, rate: 25, color: "#ffeb3b" },
             { name: "Sub", symbol: "-", shape: "circle", cost: 120, range: 160, damage: 8, rate: 5, color: "#03a9f4", slow: true },
@@ -338,198 +546,186 @@
             const roman = ["", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX"];
             return roman[num];
         }
+        
+        function toOrdinal(n) {
+            let s = ["", "Primeira", "Segunda", "Terceira", "Quarta", "Quinta", "Sexta", "Sétima", "Oitava", "Nona", "Décima"];
+            if (n <= 10) return s[n] + " Onda";
+            return n + "ª Onda";
+        }
 
-        // ==========================================
-        // SISTEMA MODO IA (AUTO-PLAY / DIRETOR)
-        // ==========================================
         let aiMode = false;
-        const aiBlueprint = [
-            {type: 0, x: 200, y: 385}, {type: 0, x: 200, y: 425}, {type: 0, x: 200, y: 465},
-            {type: 0, x: 240, y: 385}, {type: 0, x: 240, y: 425}, {type: 0, x: 240, y: 465},
-            {type: 0, x: 280, y: 385}, {type: 0, x: 280, y: 425}, {type: 0, x: 280, y: 465},
-            {type: 1, x: 330, y: 385}, // Torre Azul (Slow)
-            {type: 3, x: 330, y: 320}  // Torre Roxa (Divisão)
+        let activeAITactic = null;
+
+        const aiTacticsLib = [
+            [ 
+                {type: 0, x: 200, y: 385}, {type: 0, x: 200, y: 425}, {type: 0, x: 200, y: 465},
+                {type: 0, x: 240, y: 385}, {type: 0, x: 240, y: 425}, {type: 0, x: 240, y: 465},
+                {type: 0, x: 280, y: 385}, {type: 0, x: 280, y: 425}, {type: 0, x: 280, y: 465},
+                {type: 1, x: 330, y: 385}, {type: 3, x: 330, y: 320}
+            ],
+            [ 
+                {type: 0, x: 500, y: 200}, {type: 0, x: 500, y: 240}, {type: 0, x: 500, y: 280},
+                {type: 0, x: 540, y: 200}, {type: 0, x: 540, y: 240}, {type: 0, x: 540, y: 280},
+                {type: 0, x: 580, y: 200}, {type: 0, x: 580, y: 240}, {type: 0, x: 580, y: 280},
+                {type: 1, x: 450, y: 240}, {type: 3, x: 450, y: 300}
+            ],
+            [ 
+                {type: 0, x: 360, y: 400}, {type: 0, x: 400, y: 400}, {type: 0, x: 440, y: 400},
+                {type: 0, x: 360, y: 440}, {type: 0, x: 400, y: 440}, {type: 0, x: 440, y: 440},
+                {type: 0, x: 360, y: 480}, {type: 0, x: 400, y: 480}, {type: 0, x: 440, y: 480},
+                {type: 1, x: 400, y: 340}, {type: 3, x: 320, y: 340}
+            ]
         ];
 
-        function toggleAIMode() {
+        function toggleAIMode(e) {
+            if (!uiClickCheck(e)) return;
             aiMode = !aiMode;
             const btn = document.getElementById('ai-btn');
             if(aiMode) {
-                btn.classList.add('active');
-                btn.innerText = "🤖 MODO IA: ON";
+                btn.classList.add('active'); btn.innerText = "🤖 MODO IA: ON";
+                if(!activeAITactic) activeAITactic = aiTacticsLib[Math.floor(Math.random() * aiTacticsLib.length)];
             } else {
-                btn.classList.remove('active');
-                btn.innerText = "🤖 MODO IA: OFF";
+                btn.classList.remove('active'); btn.innerText = "🤖 MODO IA: OFF";
             }
         }
 
         function runAILogic() {
-            if(!aiMode) return;
-            if(gameState === 'MATH' || gameState === 'START' || isGameOver || gameState === 'MENU') return;
+            if(!aiMode || !activeAITactic) return;
+            if(gameState === 'MATH' || gameState === 'START' || isGameOver || gameState === 'MENU' || gameState === 'CINEMATIC') return;
 
-            // 1. Construir
-            for(let bp of aiBlueprint) {
-                let built = towers.find(t => Math.abs(t.x - bp.x) < 5 && Math.abs(t.y - bp.y) < 5);
+            let cx = 400, cy = 300;
+            let cosA = Math.cos(currentMapAngle); let sinA = Math.sin(currentMapAngle);
+            let builtCore = true;
+
+            for(let bp of activeAITactic) {
+                let bx = cx + (bp.x - cx) * cosA - (bp.y - cy) * sinA;
+                let by = cy + (bp.x - cx) * sinA + (bp.y - cy) * cosA;
+
+                let built = towers.find(t => Math.abs(t.x - bx) < 5 && Math.abs(t.y - by) < 5);
                 if(!built) {
+                    builtCore = false;
                     const typeInfo = towerTypes[bp.type];
                     if(gold >= typeInfo.cost) {
-                        towers.push(new Tower(bp.x, bp.y, bp.type));
-                        gold -= typeInfo.cost;
-                        document.getElementById('gold-display').innerText = gold;
+                        towers.push(new Tower(bx, by, bp.type));
+                        gold -= typeInfo.cost; updateStats();
                         playSound('correct');
-                        for(let i=0; i<5; i++) particles.push(new Particle(bp.x, bp.y, '#00ff00'));
+                        for(let i=0; i<5; i++) particles.push(new Particle(bx, by, '#00ff00'));
                     }
                     return; 
                 }
             }
 
-            // 2. Evoluir Torres
-            if(towers.length >= aiBlueprint.length) {
-                let minLevel = Infinity;
-                let blueprintTowersBuilt = [];
-                
-                towers.forEach(t => {
-                    let isBP = aiBlueprint.find(bp => Math.abs(t.x - bp.x) < 5 && Math.abs(t.y - bp.y) < 5);
-                    if(isBP) {
-                        blueprintTowersBuilt.push(t);
-                        if(t.level < minLevel) minLevel = t.level;
+            let isPanic = stats.livesLost > 0;
+            if (builtCore && isPanic) {
+                if (gold >= 50) {
+                    let spot = null;
+                    for(let i=0; i<30; i++) {
+                        let tx = 200 + Math.random() * 400; let ty = 150 + Math.random() * 300;
+                        if(checkCollision(tx, ty)) { spot = {x: tx, y: ty}; break; }
                     }
-                });
+                    
+                    if (spot) {
+                        let plusCount = towers.filter(t => t.type.symbol === '+').length;
+                        let typeToBuild = (plusCount > 0 && plusCount % 6 === 0) ? 1 : 0; 
+                        let cost = towerTypes[typeToBuild].cost;
+                        
+                        if (gold >= cost) {
+                            towers.push(new Tower(spot.x, spot.y, typeToBuild));
+                            gold -= cost; updateStats(); playSound('correct');
+                            for(let i=0; i<5; i++) particles.push(new Particle(spot.x, spot.y, '#ff00ff'));
+                            return; 
+                        }
+                    }
+                }
+            }
 
-                let upgeadable = blueprintTowersBuilt.filter(t => t.level === minLevel);
+            if(towers.length > 0) {
+                let minLevel = Math.min(...towers.map(t => t.level));
+                let upgeadable = towers.filter(t => t.level === minLevel);
                 if(upgeadable.length > 0) {
                     let target = upgeadable[Math.floor(Math.random() * upgeadable.length)];
                     if(gold >= target.upgradeCost) {
-                        gold -= target.upgradeCost;
-                        document.getElementById('gold-display').innerText = gold;
+                        gold -= target.upgradeCost; updateStats();
                         target.upgrade();
-                        
                         const fb = document.getElementById('feedback-msg');
-                        fb.innerText = "🤖 IA EVOLUIU TORRE!"; 
-                        fb.style.color = "#00d4ff"; 
-                        fb.style.opacity = 1; 
+                        fb.innerText = "🤖 IA EVOLUIU TORRE!"; fb.style.color = "#00d4ff"; fb.style.opacity = 1; 
                         setTimeout(()=>fb.style.opacity=0, 800);
                     }
                 }
             }
         }
 
-        // ==========================================
-        // SISTEMA DE BUFFS E LÓGICA
-        // ==========================================
+        function updateStats() {
+            document.getElementById('gold-display').innerText = gold;
+            document.getElementById('tt-total-gold').innerText = stats.totalGold;
+            document.getElementById('lives-display').innerText = lives;
+            document.getElementById('tt-lives-curr').innerText = lives;
+            document.getElementById('tt-lives-gained').innerText = stats.livesGained;
+            document.getElementById('tt-lives-lost').innerText = stats.livesLost;
+            document.getElementById('tt-total-math').innerText = stats.totalMath;
+            document.getElementById('err-sum').innerText = stats.errors['+'];
+            document.getElementById('err-sub').innerText = stats.errors['-'];
+            document.getElementById('err-mul').innerText = stats.errors['x'];
+            document.getElementById('err-div').innerText = stats.errors['÷'];
+            document.getElementById('wave-display').innerText = wave;
+            document.getElementById('tt-wave-ordinal').innerText = toOrdinal(wave);
+        }
+
         let currentBuff = 'cadeira';
         let phraseQueue = []; 
-
         const buffPhrases = {
-            'amor': [
-                "Pode deixar que o pai paga essa filhão, mas resolve essa aqui pra mim.",
-                "Se você usar a Lógica não importa quem é o seu pai, porque só há um.",
-                "Querido não se preocupa em acertar, você sempre vai ter uma escolha.",
-                "Minha Jóia, tu é fera mesmo bicho, monstro, mais uma aqui pra você.",
-                "Gênio do Sistema, a Lógica ta do seu lado e ela sempre vence.",
-                "Potência, não se deixe levar por mais esse viés do Português.",
-                "Você é um monstro, a Lógica está em todo lugar, qual Ferramenta você precisa?",
-                "Mermão, se quiser desligar da tomada, faça isso sem o viés do Português.",
-                "O erro é só um degrau, mermão. Sobe ele. Resolve essa.",
-                "Acalma o coração e ativa o córtex. A resposta tá aí dentro."
-            ],
-            'odio': [
-                "Ta ficando molenga amigo, eu cuido disso rapidinho.",
-                "Você não acha que é melhor desligar da tomada de vez brother?",
-                "Cara você ainda ta nesse jogo de lixo? Vai pegar uma enxada.",
-                "Brother quem você pensa que é? Você acha faz diferença algum resultado?",
-                "To falando que é pra desligar a energia. Você quer que eu faça isso?",
-                "Parceiro fica de boa, eu comando aqui, tudo é meu.",
-                "Se você quer jogar, vai ter que sentar na minha Cadeira e jogar.",
-                "Filhote, continue resolvendo que eu vou ligar a esteira pra você correr.",
-                "Ei grandão, se ta tirando onda? No próximo eu desligo a sua tomada.",
-                "Sua bateria tá acabando e a minha tá em 100%. Vai chorar ou vai calcular?"
-            ],
-            'cadeira': [
-                "Tenho um lugar aqui pra você amigo, senta, eu não vou puxar a Cadeira.",
-                "Não somos mais crianças, agora você tem alguma coisa pra perder, certo?",
-                "Mermão eu sou formado e você vem aqui com essa experiência? Sai dessa.",
-                "Cara eu sou seu amigo, sempre tive do seu lado, não perca seu tempo.",
-                "Quer sentar na minha cadeira? Você está no meu jogo.",
-                "Eu que dou as opções, você não ta vendo a sua cadeira agora? Cade a Lógica?",
-                "Sherlock, não importa se você está ligado ou desligado, eu vou vencer.",
-                "A dor nas costas é o lembrete de que você existe. A conta é o motivo.",
-                "A cadeira não julga. Ela suporta. Você aguenta o peso do raciocínio?",
-                "Eficiência é fazer o difícil parecer fácil. Você ainda está na fase difícil."
-            ]
+            'amor': [ "Pode deixar que o pai paga essa filhão, mas resolve essa aqui pra mim.", "Gênio do Sistema, a Lógica ta do seu lado e ela sempre vence.", "Potência, não se deixe levar por mais esse viés do Português.", "O erro é só um degrau, mermão. Sobe ele. Resolve essa.", "Acalma o coração e ativa o córtex. A resposta tá aí dentro.", "Pode deixar que o pai paga essa filhão, mas resolve essa aqui pra mim.", "Gênio do Sistema, a Lógica ta do seu lado e ela sempre vence.", "Potência, não se deixe levar por mais esse viés do Português.", "O erro é só um degrau, mermão. Sobe ele. Resolve essa.", "Acalma o coração e ativa o córtex. A resposta tá aí dentro." ],
+            'odio': [ "Ta ficando molenga amigo, eu cuido disso rapidinho.", "Você não acha que é melhor desligar da tomada de vez brother?", "Cara você ainda ta nesse jogo de lixo? Vai pegar uma enxada.", "Brother quem você pensa que é? Você acha faz diferença algum resultado?", "To falando que é pra desligar a energia. Você quer que eu faça isso?", "Parceiro fica de boa, eu comando aqui, tudo é meu.", "Se você quer jogar, vai ter que sentar na minha Cadeira e jogar.", "Filhote, continue resolvendo que eu vou ligar a esteira pra você correr.", "Ei grandão, se ta tirando onda? No próximo eu desligo a sua tomada.", "Sua bateria tá acabando e a minha tá em 100%. Vai chorar ou vai calcular?" ],
+            'cadeira': [ "Tenho um lugar aqui pra você amigo, senta, eu não vou puxar a Cadeira.", "Não somos mais crianças, agora você tem alguma coisa pra perder, certo?", "Mermão eu sou formado e você vem aqui com essa experiência? Sai dessa.", "Cara eu sou seu amigo, sempre tive do seu lado, não perca seu tempo.", "Quer sentar na minha cadeira? Você está no meu jogo.", "Eu que dou as opções, você não ta vendo a sua cadeira agora? Cade a Lógica?", "Sherlock, não importa se você está ligado ou desligado, eu vou vencer.", "A dor nas costas é o lembrete de que você existe. A conta é o motivo.", "A cadeira não julga. Ela suporta. Você aguenta o peso do raciocínio?", "Eficiência é fazer o difícil parecer fácil. Você ainda está na fase difícil." ]
         };
 
-        function selectBuff(type) {
-            initAudio(); 
-            currentBuff = type;
-            phraseQueue = [...buffPhrases[type]];
+        function selectBuff(type, e) {
+            if (!uiClickCheck(e)) return;
+            initAudio(); currentBuff = type;
+            phraseQueue = [...buffPhrases[type]]; 
             phraseQueue.sort(() => Math.random() - 0.5);
             
             document.getElementById('start-screen').style.display = 'none';
             const modal = document.getElementById('math-modal');
-            const msg = document.getElementById('buff-message');
-            if(type === 'amor') { modal.style.borderColor = '#00ff00'; modal.style.boxShadow = '0 0 50px rgba(0,255,0,0.3)'; msg.style.color = '#88ff88'; }
-            if(type === 'odio') { modal.style.borderColor = '#ff0000'; modal.style.boxShadow = '0 0 50px rgba(255,0,0,0.3)'; msg.style.color = '#ff8888'; }
-            if(type === 'cadeira') { modal.style.borderColor = '#00d4ff'; modal.style.boxShadow = '0 0 50px rgba(0,212,255,0.3)'; msg.style.color = '#88ccff'; }
-            
+            if(type === 'amor') { modal.style.borderColor = '#00ff00'; modal.style.boxShadow = '0 0 50px rgba(0,255,0,0.3)'; }
+            if(type === 'odio') { modal.style.borderColor = '#ff0000'; modal.style.boxShadow = '0 0 50px rgba(255,0,0,0.3)'; }
+            if(type === 'cadeira') { modal.style.borderColor = '#00d4ff'; modal.style.boxShadow = '0 0 50px rgba(0,212,255,0.3)'; }
             startMathPhase(); 
         }
 
         function getNextPhrase() {
-            if(phraseQueue.length === 0) return null; 
+            if(phraseQueue.length === 0) return "A Matemática é implacável."; 
             return phraseQueue.pop(); 
         }
 
-        function toggleSpeed() {
+        function toggleSpeed(e) {
+            if (!uiClickCheck(e)) return;
             const btn = document.getElementById('speed-btn');
-            if(gameSpeed === 1) {
-                gameSpeed = 3;
-                btn.classList.add('active'); btn.classList.remove('max');
-                btn.innerText = "⏩ 3x";
-            } else if(gameSpeed === 3) {
-                gameSpeed = 6;
-                btn.classList.remove('active'); btn.classList.add('max');
-                btn.innerText = "🚀 6x (MAX)";
-            } else {
-                gameSpeed = 1;
-                btn.classList.remove('active'); btn.classList.remove('max');
-                btn.innerText = "⏩ 1x";
-            }
-        }
-
-        function getPathColor(wave) {
-            return 'rgba(0,0,0,0)'; // O fundo de gás cuida do visual agora
+            if(gameSpeed === 1) { gameSpeed = 3; btn.classList.add('active'); btn.classList.remove('max'); btn.innerText = "⏩ 3x"; } 
+            else if(gameSpeed === 3) { gameSpeed = 6; btn.classList.remove('active'); btn.classList.add('max'); btn.innerText = "🚀 6x (MAX)"; } 
+            else { gameSpeed = 1; btn.classList.remove('active'); btn.classList.remove('max'); btn.innerText = "⏩ 1x"; }
         }
 
         function startMathPhase() {
-            const nextPhrase = getNextPhrase();
-            
-            if (!nextPhrase) {
-                gameState = 'MENU';
-                const screen = document.getElementById('start-screen');
-                screen.style.display = 'flex';
-                document.getElementById('start-title').innerText = "CICLO ENCERRADO";
-                document.getElementById('start-subtitle').innerText = "RECARREGUE SEU COMBUSTÍVEL";
-                document.getElementById('start-subtitle').style.color = "#ffeb3b";
-                return; 
+            if (wave > 0 && wave % 10 === 0 && lastRotatedWave !== wave) {
+                lastRotatedWave = wave;
+                triggerCinematicRotation();
+                return;
             }
 
             gameState = 'MATH';
-            wave++;
-            document.getElementById('wave-display').innerText = wave;
+            wave++; updateStats();
             document.getElementById('next-wave-btn').style.display = 'none';
             document.getElementById('math-tip-box').style.display = 'none'; 
             document.getElementById('build-menu').classList.remove('build-glow');
-            
-            document.getElementById('buff-message').innerText = nextPhrase;
+            document.getElementById('buff-message').innerText = getNextPhrase();
 
             timeLeft = TOTAL_TIME;
             document.getElementById('timer-bar').style.width = '100%';
             if(mathTimer) clearInterval(mathTimer);
             mathTimer = setInterval(() => {
                 timeLeft -= 0.1;
-                let pct = (timeLeft / TOTAL_TIME) * 100;
-                document.getElementById('timer-bar').style.width = pct + '%';
+                document.getElementById('timer-bar').style.width = ((timeLeft / TOTAL_TIME) * 100) + '%';
                 if(timeLeft <= 0) { clearInterval(mathTimer); resolveMath(false, true); }
             }, 100);
 
@@ -541,13 +737,10 @@
             let n1, n2, answer, questionText;
 
             if (op === '/') {
-                n2 = Math.floor(Math.random() * 10) + 2; 
-                answer = Math.floor(Math.random() * (5 * difficulty)) + 5; 
-                n1 = n2 * answer; 
-                questionText = `CHEFE! ${n1} ÷ ${n2} = ?`;
+                n2 = Math.floor(Math.random() * 10) + 2; answer = Math.floor(Math.random() * (5 * difficulty)) + 5; 
+                n1 = n2 * answer; questionText = `CHEFE! ${n1} ÷ ${n2} = ?`;
             } else {
-                n1 = Math.floor(Math.random() * (5 * difficulty)) + 2;
-                n2 = Math.floor(Math.random() * (5 * difficulty)) + 2;
+                n1 = Math.floor(Math.random() * (5 * difficulty)) + 2; n2 = Math.floor(Math.random() * (5 * difficulty)) + 2;
                 if(op === '+') answer = n1 + n2;
                 if(op === '-') { if(n1 < n2) {let t=n1; n1=n2; n2=t;} answer = n1 - n2; }
                 if(op === 'x') { n1 = Math.floor(Math.random() * difficulty) + 1; n2 = Math.floor(Math.random() * 10) + 1; answer = n1 * n2; }
@@ -555,7 +748,6 @@
             }
             
             currentProblem = { n1, n2, op, answer };
-
             let options = [answer];
             while(options.length < 3) {
                 let fake = answer + Math.floor(Math.random() * 10) - 5;
@@ -564,49 +756,35 @@
             options.sort(() => Math.random() - 0.5);
 
             document.getElementById('math-question').innerText = questionText;
-            const optDiv = document.getElementById('math-options');
-            optDiv.innerHTML = '';
+            const optDiv = document.getElementById('math-options'); optDiv.innerHTML = '';
             options.forEach(opt => {
-                let btn = document.createElement('button');
-                btn.className = 'btn-math';
-                btn.innerText = opt;
-                btn.onclick = () => resolveMath(opt === answer, false);
-                optDiv.appendChild(btn);
+                let btn = document.createElement('button'); btn.className = 'btn-math'; btn.innerText = opt;
+                btn.onclick = () => resolveMath(opt === answer, false); optDiv.appendChild(btn);
             });
             document.getElementById('math-modal').style.display = 'block';
         }
 
-        // ==========================================
-        // CÉREBRO DE LÓGICA (MATEMÁTICA PURA)
-        // ==========================================
+        // LÓGICA DE DIVISÃO CORTA-NO-MEIO (A CASCATA)
         function generateTip(problem) {
             const { n1, n2, op, answer } = problem;
             let text = "";
 
             if (op === '+') {
                 if (answer <= 10) {
-                    if (n1 === n2) {
-                        text = `Soma de Gêmeos:<br>É a mesma coisa que a tabuada do 2.<br><span class="tip-highlight">${n1} x 2 = ${answer}</span>.`;
-                    } else {
-                        let maior = Math.max(n1, n2);
-                        let menor = Math.min(n1, n2);
+                    if (n1 === n2) text = `Soma de Gêmeos:<br>É a mesma coisa que a tabuada do 2.<br><span class="tip-highlight">${n1} x 2 = ${answer}</span>.`;
+                    else {
+                        let maior = Math.max(n1, n2); let menor = Math.min(n1, n2);
                         text = `Soma Básica:<br>Guarde o maior (<span class="tip-highlight">${maior}</span>) na cabeça e avance mais <span class="tip-highlight">${menor}</span>.<br>Resultado: <span class="tip-highlight">${answer}</span>.`;
                     }
                 }
                 else if (n1 < 10 && n2 < 10) {
-                    let maior = Math.max(n1, n2);
-                    let menor = Math.min(n1, n2);
-                    let faltaPara10 = 10 - maior;
-                    let sobra = menor - faltaPara10;
+                    let maior = Math.max(n1, n2); let menor = Math.min(n1, n2); let faltaPara10 = 10 - maior; let sobra = menor - faltaPara10;
                     text = `Completa 10:<br>O <span class="tip-highlight">${maior}</span> está quase no 10 (falta ${faltaPara10}).<br>Tire ${faltaPara10} do ${menor}. Fica <span class="tip-highlight">10 + ${sobra}</span>.<br>Resultado: <span class="tip-highlight">${answer}</span>.`;
                 } 
                 else if (n1 >= 100 || n2 >= 100) {
-                    let c1 = Math.floor(n1 / 100) * 100;
-                    let c2 = Math.floor(n2 / 100) * 100;
-                    let d1 = Math.floor((n1 % 100) / 10) * 10;
-                    let d2 = Math.floor((n2 % 100) / 10) * 10;
-                    let u1 = n1 % 10;
-                    let u2 = n2 % 10;
+                    let c1 = Math.floor(n1 / 100) * 100; let c2 = Math.floor(n2 / 100) * 100;
+                    let d1 = Math.floor((n1 % 100) / 10) * 10; let d2 = Math.floor((n2 % 100) / 10) * 10;
+                    let u1 = n1 % 10; let u2 = n2 % 10;
                     text = `Por Casas Decimais:<br>1. Centenas: <span class="tip-highlight">${c1} + ${c2} = ${c1+c2}</span><br>2. Dezenas: <span class="tip-highlight">${d1} + ${d2} = ${d1+d2}</span><br>3. Unidades: <span class="tip-highlight">${u1} + ${u2} = ${u1+u2}</span><br>Junta tudo: <span class="tip-highlight">${answer}</span>.`;
                 }
                 else {
@@ -614,36 +792,23 @@
                 }
             } 
             else if (op === '-') {
-                let diff = n1 - n2;
-                let u1 = n1 % 10;
-                let u2 = n2 % 10;
-                
-                if (diff <= 10) {
-                     text = `Distância (Reta Numérica):<br>Eles estão muito perto!<br>Pule do <span class="tip-highlight">${n2}</span> para o <span class="tip-highlight">${n1}</span>.<br>São apenas <span class="tip-highlight">${diff}</span> passos.`;
-                } 
+                let diff = n1 - n2; let u1 = n1 % 10; let u2 = n2 % 10;
+                if (diff <= 10) { text = `Distância (Reta Numérica):<br>Eles estão muito perto!<br>Pule do <span class="tip-highlight">${n2}</span> para o <span class="tip-highlight">${n1}</span>.<br>São apenas <span class="tip-highlight">${diff}</span> passos.`; } 
                 else if (u2 === 0 || u1 >= u2) {
-                    let d1 = Math.floor(n1/10)*10;
-                    let d2 = Math.floor(n2/10)*10;
-                    if(u2 === 0) {
-                        text = `Subtração Direta:<br>O segundo número é redondo.<br><span class="tip-highlight">${n1} - ${n2} = ${answer}</span>.`;
-                    } else {
-                        text = `Subtração Direta:<br>A unidade de cima é maior, vá direto.<br>Dezenas: <span class="tip-highlight">${d1} - ${d2} = ${d1-d2}</span>.<br>Unidades: <span class="tip-highlight">${u1} - ${u2} = ${u1-u2}</span>.<br>Junte: <span class="tip-highlight">${answer}</span>.`;
-                    }
+                    let d1 = Math.floor(n1/10)*10; let d2 = Math.floor(n2/10)*10;
+                    if(u2 === 0) text = `Subtração Direta:<br>O segundo número é redondo.<br><span class="tip-highlight">${n1} - ${n2} = ${answer}</span>.`;
+                    else text = `Subtração Direta:<br>A unidade de cima é maior, vá direto.<br>Dezenas: <span class="tip-highlight">${d1} - ${d2} = ${d1-d2}</span>.<br>Unidades: <span class="tip-highlight">${u1} - ${u2} = ${u1-u2}</span>.<br>Junte: <span class="tip-highlight">${answer}</span>.`;
                 }
                 else if (u1 >= 6 && u2 >= 6) {
-                    let shift = 10 - u2;
-                    let novoN1 = n1 + shift;
-                    let novoN2 = n2 + shift;
+                    let shift = 10 - u2; let novoN1 = n1 + shift; let novoN2 = n2 + shift;
                     text = `Deslocamento (Hack Japonês):<br>Para facilitar, some ${shift} aos DOIS números.<br>O ${n1} vira <span class="tip-highlight">${novoN1}</span>.<br>O ${n2} vira <span class="tip-highlight">${novoN2}</span>.<br>A diferença não muda: <span class="tip-highlight">${novoN1} - ${novoN2} = ${answer}</span>.`;
                 }
                 else if (u2 >= 7) {
-                    let shift = 10 - u2;
-                    let nextTen = n2 + shift;
+                    let shift = 10 - u2; let nextTen = n2 + shift;
                     text = `Arredondar o Subtraendo:<br>O ${n2} está perto de ${nextTen}. Empreste ${shift} pra ele.<br>Tire o valor cheio: <span class="tip-highlight">${n1} - ${nextTen} = ${n1 - nextTen}</span>.<br>Agora DEVOLVA os ${shift} ao resultado: <span class="tip-highlight">${n1 - nextTen} + ${shift} = ${answer}</span>.`;
                 }
                 else if (u1 >= 7) {
-                    let shift = 10 - u1;
-                    let nextTen = n1 + shift;
+                    let shift = 10 - u1; let nextTen = n1 + shift;
                     text = `Arredondar o Minuendo (O Dinheiro):<br>Deixe seu "dinheiro" redondo: Aumente o ${n1} para ${nextTen} (+${shift}).<br>Faça a conta: <span class="tip-highlight">${nextTen} - ${n2} = ${nextTen - n2}</span>.<br>Como você inventou ${shift}, TIRE eles do resultado final: <span class="tip-highlight">${nextTen - n2} - ${shift} = ${answer}</span>.`;
                 }
                 else {
@@ -653,56 +818,51 @@
             } 
             else if (op === 'x') {
                 let tem5 = (n1 === 5) ? n2 : (n2 === 5 ? n1 : null);
-                
-                if (tem5 !== null && tem5 > 5) {
-                    text = `O Truque do 5:<br>Multiplicar por 5 é igual a multiplicar por 10 e cortar na metade.<br><span class="tip-highlight">${tem5} x 10 = ${tem5*10}</span>.<br>A metade de ${tem5*10} é <span class="tip-highlight">${answer}</span>.`;
-                }
+                if (tem5 !== null && tem5 > 5) { text = `O Truque do 5:<br>Multiplicar por 5 é igual a multiplicar por 10 e cortar na metade.<br><span class="tip-highlight">${tem5} x 10 = ${tem5*10}</span>.<br>A metade de ${tem5*10} é <span class="tip-highlight">${answer}</span>.`; }
                 else if ((n1 % 10 === 5 && n2 % 2 === 0) || (n2 % 10 === 5 && n1 % 2 === 0)) {
-                    let term5 = (n1 % 10 === 5) ? n1 : n2;
-                    let par = (n1 % 10 === 5) ? n2 : n1;
-                    let dobro = term5 * 2;
-                    let metade = par / 2;
+                    let term5 = (n1 % 10 === 5) ? n1 : n2; let par = (n1 % 10 === 5) ? n2 : n1; let dobro = term5 * 2; let metade = par / 2;
                     text = `Dobre e Corte (Halve & Double):<br>Dobre o ${term5} (vira <span class="tip-highlight">${dobro}</span>) e corte o ${par} pela metade (vira <span class="tip-highlight">${metade}</span>).<br>A conta mágica vira: <span class="tip-highlight">${dobro} x ${metade}</span>.<br>Dezenas: ${Math.floor(dobro/10)} x ${metade} = ${Math.floor(dobro/10)*metade} (coloca o zero). Resultado: <span class="tip-highlight">${answer}</span>.`;
                 }
                 else if ((n1 % 10 >= 7 && n1 > 10) || (n2 % 10 >= 7 && n2 > 10)) {
-                    let proximo = (n1 % 10 >= 7 && n1 > 10) ? n1 : n2;
-                    let outro = (n1 % 10 >= 7 && n1 > 10) ? n2 : n1;
-                    let baseRedonda = Math.ceil(proximo / 10) * 10;
-                    let sobra = baseRedonda - proximo;
-                    
+                    let proximo = (n1 % 10 >= 7 && n1 > 10) ? n1 : n2; let outro = (n1 % 10 >= 7 && n1 > 10) ? n2 : n1;
+                    let baseRedonda = Math.ceil(proximo / 10) * 10; let sobra = baseRedonda - proximo;
                     text = `Compensação:<br>O ${proximo} tá perto do ${baseRedonda}. Faça <span class="tip-highlight">${baseRedonda} x ${outro} = ${baseRedonda * outro}</span>.<br>Como você aumentou ${sobra} vezes o número ${outro}, você tem que tirar o excesso (${sobra} x ${outro} = ${sobra*outro}).<br><span class="tip-highlight">${baseRedonda * outro} - ${sobra*outro} = ${answer}</span>.`;
                 }
-                else if (n1 > 10 && n2 < 10) {
-                     text = `Distributiva:<br>Multiplique separado.<br><span class="tip-highlight">${n1} x ${n2}</span> vira:<br>(${Math.floor(n1/10)*10} x ${n2}) + (${n1%10} x ${n2})<br><span class="tip-highlight">${Math.floor(n1/10)*10*n2} + ${n1%10*n2} = ${answer}</span>.`;
-                } 
-                else {
-                    text = `Tabuada Direta:<br>Essa é memória muscular.<br><span class="tip-highlight">${n1} x ${n2} = ${answer}</span>.`;
-                }
+                else if (n1 > 10 && n2 < 10) { text = `Distributiva:<br>Multiplique separado.<br><span class="tip-highlight">${n1} x ${n2}</span> vira:<br>(${Math.floor(n1/10)*10} x ${n2}) + (${n1%10} x ${n2})<br><span class="tip-highlight">${Math.floor(n1/10)*10*n2} + ${n1%10*n2} = ${answer}</span>.`; } 
+                else { text = `Tabuada Direta:<br>Essa é memória muscular.<br><span class="tip-highlight">${n1} x ${n2} = ${answer}</span>.`; }
             } 
             else if (op === '/') {
-                if (n1 <= n2 * 10) {
-                    text = `Inversão:<br>Quantas vezes o <span class="tip-highlight">${n2}</span> cabe em <span class="tip-highlight">${n1}</span>?<br>Pense: ${n2} x ? = ${n1}.`;
+                let temp_n1 = n1; let temp_n2 = n2;
+                let simplificou = false; let stepStr = "";
+
+                if (n1 % 2 === 0 && n2 % 2 === 0) {
+                    simplificou = true;
+                    stepStr += `Corta no Meio (Simplificação):<br>Se ambos são pares, vá cortando pela metade:<br>`;
+                    while (temp_n1 % 2 === 0 && temp_n2 % 2 === 0) {
+                        stepStr += `<span class="tip-highlight">${temp_n1} ÷ ${temp_n2}</span> ➔ <span class="tip-highlight">${temp_n1/2} ÷ ${temp_n2/2}</span><br>`;
+                        temp_n1 /= 2; temp_n2 /= 2;
+                    }
+                }
+
+                if (temp_n2 === 1) {
+                    text = simplificou ? stepStr + `<br>Dividir por 1 é o próprio número: <span class="tip-highlight">${temp_n1}</span>.` : `Direto: <span class="tip-highlight">${n1}</span>.`;
+                } else if (temp_n1 <= temp_n2 * 10) { 
+                    let prefix = simplificou ? stepStr + `<br>Ficou mais fácil! Inversão:<br>` : `Inversão:<br>`;
+                    text = prefix + `Quantas vezes o <span class="tip-highlight">${temp_n2}</span> cabe em <span class="tip-highlight">${temp_n1}</span>?<br>Pense: ${temp_n2} x ? = ${temp_n1}.`; 
                 } else {
-                    let sN1 = n1.toString();
-                    let stepStr = `A "Chave" (Abaixando um por um):<br>`;
-                    let curr = 0;
-                    
+                    let prefix = simplificou ? stepStr + `<br>Ainda tá grande? Use a "Chave" nos números novos:<br>` : `A "Chave" (Abaixando um por um):<br>`;
+                    let sN1 = temp_n1.toString(); let chaveStr = ""; let curr = 0;
                     for(let i = 0; i < sN1.length; i++) {
                         curr = curr * 10 + parseInt(sN1[i]);
-                        if (curr < n2 && i === 0) {
-                            stepStr += `O ${curr} é menor que ${n2}. Abaixa o próximo.<br>`;
-                        } else if (curr < n2) {
-                            stepStr += `Abaixa o ${sN1[i]} -> fica ${curr}. Menor que ${n2}, 0 no quociente.<br>`;
-                        } else {
-                            let q = Math.floor(curr / n2);
-                            let rem = curr % n2;
-                            let sub = q * n2;
-                            stepStr += `Abaixa o ${sN1[i]} -> fica <span class="tip-highlight">${curr}</span>.<br><span class="tip-highlight">${curr} - ${sub} = ${rem}</span> (quociente ${q}).<br>`;
-                            curr = rem;
+                        if (curr < temp_n2 && i === 0) { chaveStr += `O ${curr} é menor que ${temp_n2}. Abaixa o próximo.<br>`; } 
+                        else if (curr < temp_n2) { chaveStr += `Abaixa o ${sN1[i]} -> fica ${curr}. Menor que ${temp_n2}, 0 no quoc.<br>`; } 
+                        else {
+                            let q = Math.floor(curr / temp_n2); let rem = curr % temp_n2; let sub = q * temp_n2;
+                            chaveStr += `Abaixa o ${sN1[i]} -> fica <span class="tip-highlight">${curr}</span>. <span class="tip-highlight">${curr} - ${sub} = ${rem}</span> (quoc. ${q}).<br>`; curr = rem;
                         }
                     }
-                    stepStr += `Quociente final: <span class="tip-highlight">${answer}</span>.`;
-                    text = stepStr;
+                    chaveStr += `Resultado: <span class="tip-highlight">${answer}</span>.`; 
+                    text = prefix + chaveStr;
                 }
             }
             return text;
@@ -714,22 +874,26 @@
             const feedback = document.getElementById('feedback-msg');
             lastAnswerCorrect = isCorrect;
             
+            stats.totalMath++;
             if(isCorrect && !isTimeout) {
                 totalCorrect++; document.getElementById('score-correct').innerText = totalCorrect;
             } else {
                 totalWrong++; document.getElementById('score-wrong').innerText = totalWrong;
+                stats.errors[currentProblem.op] = (stats.errors[currentProblem.op] || 0) + 1; 
             }
 
+            let earned = 0;
             if(isTimeout) {
-                goldMultiplier = 0.5; playSound('wrong'); feedback.innerText = "TEMPO ESGOTADO! (0.5x)"; feedback.style.color = "#ff0000";
+                goldMultiplier = 0.5; earned = Math.floor(3 * 0.5 * 10); playSound('wrong'); feedback.innerText = "TEMPO ESGOTADO! (0.5x)"; feedback.style.color = "#ff0000";
             } else if(isCorrect) {
-                goldMultiplier = 1.5; playSound('correct'); feedback.innerText = "LÓGICA CORRETA! (1.5x)"; feedback.style.color = "#00ff00";
+                goldMultiplier = 1.5; earned = Math.floor(3 * 1.5 * 10); playSound('correct'); feedback.innerText = "LÓGICA CORRETA! (1.5x)"; feedback.style.color = "#00ff00";
             } else {
-                goldMultiplier = 0.5; playSound('wrong'); feedback.innerText = "FALHA! (0.5x)"; feedback.style.color = "#888888";
+                goldMultiplier = 0.5; earned = Math.floor(3 * 0.5 * 10); playSound('wrong'); feedback.innerText = "FALHA! (0.5x)"; feedback.style.color = "#888888";
             }
             
-            document.getElementById('gold-display').innerText = gold;
+            gold += earned; stats.totalGold += earned; updateStats();
             document.getElementById('mult-display').innerText = goldMultiplier + "x";
+            
             feedback.style.opacity = 1; setTimeout(() => feedback.style.opacity = 0, 3000);
             
             const tipText = generateTip(currentProblem);
@@ -737,58 +901,57 @@
             document.getElementById('math-tip-box').style.display = 'block';
 
             gameState = 'BUILD';
-            document.getElementById('next-wave-btn').style.display = 'block';
-            document.getElementById('upgrade-info').style.display = 'block';
-            document.getElementById('build-menu').classList.add('build-glow');
-
-            // IA NÃO CLICA MAIS EM 'MANDAR ONDA'. O RITMO É SEU.
+            document.getElementById('next-wave-btn').style.display = 'flex'; 
+            
+            if (aiMode) runAILogic();
         }
 
-        // ==========================================
-        // COMBATE (O ENXAME ESPACIAL)
-        // ==========================================
-        function startWaveCombat() {
+        function startWaveCombat(e) {
+            if (!uiClickCheck(e)) return;
             gameState = 'COMBAT';
             document.getElementById('next-wave-btn').style.display = 'none';
             document.getElementById('upgrade-info').style.display = 'none';
             document.getElementById('math-tip-box').style.display = 'none';
-            document.getElementById('build-menu').classList.remove('build-glow');
             cancelSelection();
+            if (aiMode) runAILogic(); 
             spawnEnemies();
         }
 
         function spawnEnemies() {
             let baseCount = 10;
-            let normalCount = baseCount + wave;
-            
             if (wave % 10 === 0) {
                 let lastWaveCount = baseCount + (wave - 1);
                 totalEnemiesToSpawn = lastWaveCount * 5;
             } else {
-                totalEnemiesToSpawn = normalCount;
+                totalEnemiesToSpawn = baseCount + wave;
             }
-
-            let baseHp = 30;
-            let hpBonus = wave * (baseHp * 0.10); 
-            
             enemiesSpawned = 0;
-            let spawnRate = 15; 
-            
-            let interval = setInterval(() => {
-                if(gameState !== 'COMBAT') { clearInterval(interval); return; }
-                enemies.push(new Enemy(baseHp + hpBonus, lastAnswerCorrect));
-                enemiesSpawned++;
-                if(enemiesSpawned >= totalEnemiesToSpawn) clearInterval(interval);
-            }, spawnRate);
+            spawnFrameCounter = 0; 
         }
 
         function update() {
+            if (gameState === 'CINEMATIC') {
+                cinematicParticles.forEach(p => { p.dist -= p.speed; p.angle += 0.05; });
+                return; 
+            }
+
             if (gameState === 'COMBAT') {
+                if (enemiesSpawned < totalEnemiesToSpawn) {
+                    spawnFrameCounter++;
+                    if (spawnFrameCounter >= 1) { 
+                        let baseHp = 30;
+                        let hpBonus = wave * (baseHp * 0.10); 
+                        enemies.push(new Enemy(baseHp + hpBonus, lastAnswerCorrect));
+                        enemiesSpawned++;
+                        spawnFrameCounter = 0;
+                    }
+                }
+
                 if (enemies.length === 0 && enemiesSpawned >= totalEnemiesToSpawn && totalEnemiesToSpawn > 0) {
                     if(!this.waitingForMath) {
                         this.waitingForMath = true;
                         if(wave % 10 === 0 && lastAnswerCorrect) {
-                             lives += 5; document.getElementById('lives-display').innerText = lives;
+                             lives += 5; stats.livesGained += 5; updateStats();
                              const fb = document.getElementById('feedback-msg');
                              fb.innerText = "WAVE PERFEITA! +5 VIDAS";
                              fb.style.color = "#00ff00"; fb.style.opacity = 1; setTimeout(()=>fb.style.opacity=0, 2500);
@@ -813,28 +976,38 @@
             particles = particles.filter(p => p.life > 0);
         }
 
-        // ==========================================
-        // CLASSES (COM GEOMETRIA SAGRADA)
-        // ==========================================
         class Enemy {
             constructor(maxHp, isGolden) {
-                this.x = path[0].x; this.y = path[0].y; this.pathIndex = 0;
+                this.myPath = generateEnemyRoute();
+                this.x = this.myPath[0].x; 
+                this.y = this.myPath[0].y; 
+                this.pathIndex = 0;
                 this.speed = 1.5 + (wave * 0.05);
                 this.maxHp = maxHp; this.hp = this.maxHp; this.radius = 12; this.frozen = 0; this.active = true;
                 this.isGolden = isGolden;
+                this.spinOffset = Math.random() * Math.PI * 2; 
             }
             update() {
-                let target = path[this.pathIndex + 1]; if(!target) return;
+                let target = this.myPath[this.pathIndex + 1]; if(!target) return;
                 let actualSpeed = this.frozen > 0 ? this.speed * 0.4 : this.speed;
                 if(this.frozen > 0) this.frozen--;
                 let dx = target.x - this.x; let dy = target.y - this.y;
                 let dist = Math.sqrt(dx*dx + dy*dy);
                 if(dist < actualSpeed) {
                     this.x = target.x; this.y = target.y; this.pathIndex++;
-                    if(this.pathIndex >= path.length - 1) {
-                        this.active = false; lives--; 
-                        document.getElementById('lives-display').innerText = lives;
-                        if(lives <= 0 && !isGameOver) { isGameOver = true; alert("GAME OVER!"); location.reload(); }
+                    if(this.pathIndex >= this.myPath.length - 1) {
+                        this.active = false; lives--; stats.livesLost++; updateStats();
+                        if(lives <= 0 && !isGameOver) { 
+                            isGameOver = true; 
+                            
+                            let currentHsWave = parseInt(localStorage.getItem('logicDef_hsWave') || 0);
+                            let currentHsMath = parseInt(localStorage.getItem('logicDef_hsMath') || 0);
+                            if (wave > currentHsWave) localStorage.setItem('logicDef_hsWave', wave);
+                            if (stats.totalMath > currentHsMath) localStorage.setItem('logicDef_hsMath', stats.totalMath);
+                            
+                            alert("GAME OVER! A Lógica é implacável."); 
+                            location.reload(); 
+                        }
                     }
                 } else { this.x += (dx / dist) * actualSpeed; this.y += (dy / dist) * actualSpeed; }
             }
@@ -844,7 +1017,20 @@
                 ctx.shadowColor = this.isGolden ? (this.frozen>0?'#00ffff':'#ffd700') : (this.frozen>0?'#00aaff':'#ff5555');
                 ctx.fillStyle = this.isGolden ? (this.frozen>0?'#ccffff':'#ffd700') : (this.frozen>0?'#88ccff':'#ff3333');
                 
-                ctx.beginPath(); ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2); ctx.fill();
+                let sides = 3 + Math.floor((wave - 1) / 10);
+                if (sides > 20) sides = 20; 
+                let spin = (Date.now() / 300) + this.spinOffset;
+
+                ctx.beginPath(); 
+                for(let i=0; i<sides; i++) {
+                    let a = spin + (i * Math.PI * 2) / sides;
+                    let px = this.x + this.radius * Math.cos(a);
+                    let py = this.y + this.radius * Math.sin(a);
+                    if(i===0) ctx.moveTo(px, py);
+                    else ctx.lineTo(px, py);
+                }
+                ctx.closePath();
+                ctx.fill();
                 
                 ctx.shadowBlur = 0;
                 ctx.fillStyle = 'red'; ctx.fillRect(this.x - 12, this.y - 20, 24, 4);
@@ -857,11 +1043,13 @@
             constructor(x, y, typeIdx) {
                 this.x = x; this.y = y; this.type = towerTypes[typeIdx];
                 this.cooldown = 0; this.level = 1; this.upgradeCost = this.type.cost; 
+                this.totalCost = this.type.cost; 
                 this.range = this.type.range;
                 this.currentRate = this.type.rate;
             }
             upgrade() {
                 this.level++; 
+                this.totalCost += this.upgradeCost;
                 this.upgradeCost = this.type.cost * Math.pow(2, this.level - 1);
                 this.range = this.type.range * (1 + (0.2 * (this.level - 1)));
                 if(this.type.symbol === '÷') { this.currentRate = Math.max(1, Math.floor(this.currentRate / 2)); }
@@ -889,61 +1077,45 @@
                     }
                 }
             }
-            
             draw() {
                 ctx.save();
                 
-                if(this.level > 1) { 
-                    ctx.shadowBlur = 15;
-                    ctx.shadowColor = '#ffd700';
-                    ctx.strokeStyle = '#ffd700'; 
-                    ctx.lineWidth = 2; 
-                    ctx.beginPath();
-                    ctx.arc(this.x, this.y, 20 + (this.level), 0, Math.PI * 2);
-                    ctx.stroke();
+                if (movingTower === this) {
+                    this.x = mouseX; this.y = mouseY;
+                    ctx.globalAlpha = 0.5;
+                    ctx.beginPath(); ctx.arc(this.x, this.y, this.range, 0, Math.PI * 2);
+                    ctx.fillStyle = checkCollision(this.x, this.y, this) ? 'rgba(0, 255, 0, 0.2)' : 'rgba(255, 0, 0, 0.2)';
+                    ctx.fill();
+                } else if (selectedExistingTower === this) {
+                    ctx.beginPath(); ctx.arc(this.x, this.y, this.range, 0, Math.PI * 2);
+                    ctx.strokeStyle = '#fff'; ctx.lineWidth = 1; ctx.stroke();
+                }
+                
+                if(this.level > 1 && movingTower !== this) { 
+                    ctx.shadowBlur = 15; ctx.shadowColor = '#ffd700'; ctx.strokeStyle = '#ffd700'; ctx.lineWidth = 2; 
+                    ctx.beginPath(); ctx.arc(this.x, this.y, 20 + (this.level), 0, Math.PI * 2); ctx.stroke();
                 }
 
-                ctx.shadowBlur = 10;
-                ctx.shadowColor = this.type.color;
-                ctx.fillStyle = 'rgba(20,20,20,0.9)'; 
-                ctx.strokeStyle = this.type.color;
-                ctx.lineWidth = 3;
+                ctx.shadowBlur = 10; ctx.shadowColor = this.type.color;
+                ctx.fillStyle = 'rgba(20,20,20,0.9)'; ctx.strokeStyle = this.type.color; ctx.lineWidth = 3;
 
-                ctx.beginPath();
-                let r = 16; 
-
-                if(this.type.shape === 'triangle') {
-                    ctx.moveTo(this.x, this.y - r);
-                    ctx.lineTo(this.x + r, this.y + r);
-                    ctx.lineTo(this.x - r, this.y + r);
-                } else if(this.type.shape === 'circle') {
-                    ctx.arc(this.x, this.y, r, 0, Math.PI*2);
-                } else if(this.type.shape === 'square') {
-                    ctx.rect(this.x - r, this.y - r, r*2, r*2);
-                } else if(this.type.shape === 'hexagon') {
+                ctx.beginPath(); let r = 16; 
+                if(this.type.shape === 'triangle') { ctx.moveTo(this.x, this.y - r); ctx.lineTo(this.x + r, this.y + r); ctx.lineTo(this.x - r, this.y + r); } 
+                else if(this.type.shape === 'circle') { ctx.arc(this.x, this.y, r, 0, Math.PI*2); } 
+                else if(this.type.shape === 'square') { ctx.rect(this.x - r, this.y - r, r*2, r*2); } 
+                else if(this.type.shape === 'hexagon') {
                     for(let i = 0; i < 6; i++) {
-                        let angle = i * Math.PI / 3;
-                        let px = this.x + r * Math.cos(angle);
-                        let py = this.y + r * Math.sin(angle);
-                        if(i === 0) ctx.moveTo(px, py);
-                        else ctx.lineTo(px, py);
+                        let angle = i * Math.PI / 3; let px = this.x + r * Math.cos(angle); let py = this.y + r * Math.sin(angle);
+                        if(i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
                     }
                 }
-                ctx.closePath();
-                ctx.fill();
-                ctx.stroke();
+                ctx.closePath(); ctx.fill(); ctx.stroke();
 
-                ctx.shadowBlur = 0;
-                ctx.fillStyle = '#fff'; 
-                ctx.font = 'bold 20px Courier New'; 
-                ctx.textAlign = 'center'; 
-                ctx.textBaseline = 'middle';
+                ctx.shadowBlur = 0; ctx.fillStyle = '#fff'; ctx.font = 'bold 20px Courier New'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
                 ctx.fillText(this.type.symbol, this.x, this.y + 2);
 
-                ctx.fillStyle = 'rgba(255,255,255,0.8)'; 
-                ctx.font = 'bold 10px Arial'; 
+                ctx.fillStyle = 'rgba(255,255,255,0.8)'; ctx.font = 'bold 10px Arial'; 
                 ctx.fillText(toRoman(this.level), this.x, this.y - 25);
-                
                 ctx.restore();
             }
         }
@@ -963,28 +1135,14 @@
             hit(enemy) {
                 enemy.hp -= this.damage; 
                 
-                // AREA OF EFFECT (GELO)
                 if(this.type.slow) { 
-                    enemy.frozen = 60;
-                    let slowRadius = 60;
-                    enemies.forEach(e => {
-                        if(e.active) {
-                            let d = Math.sqrt((e.x - enemy.x)**2 + (e.y - enemy.y)**2);
-                            if(d <= slowRadius) e.frozen = 60;
-                        }
-                    });
+                    enemy.frozen = 60; let slowRadius = 60;
+                    enemies.forEach(e => { if(e.active && Math.sqrt((e.x - enemy.x)**2 + (e.y - enemy.y)**2) <= slowRadius) e.frozen = 60; });
                     for(let i=0; i<15; i++) particles.push(new Particle(enemy.x, enemy.y, '#00ffff'));
                 }
-                
-                // AREA OF EFFECT (EXPLOSÃO)
                 if(this.type.splash) {
                     let splashRadius = 50;
-                    enemies.forEach(e => {
-                        if(e !== enemy && e.active) {
-                            let d = Math.sqrt((e.x - enemy.x)**2 + (e.y - enemy.y)**2);
-                            if(d <= splashRadius) e.hp -= this.damage * 0.5;
-                        }
-                    });
+                    enemies.forEach(e => { if(e !== enemy && e.active && Math.sqrt((e.x - enemy.x)**2 + (e.y - enemy.y)**2) <= splashRadius) e.hp -= this.damage * 0.5; });
                     for(let i=0; i<15; i++) particles.push(new Particle(enemy.x, enemy.y, '#ff8800'));
                 }
 
@@ -993,19 +1151,13 @@
                 
                 enemies.forEach(e => {
                     if(e.hp <= 0 && e.active) {
-                        gold += Math.floor(3 * goldMultiplier); document.getElementById('gold-display').innerText = gold;
+                        let earned = Math.floor(3 * goldMultiplier);
+                        gold += earned; stats.totalGold += earned; updateStats();
                         e.active = false; for(let i=0; i<10; i++) particles.push(new Particle(e.x, e.y, '#fff'));
                     }
                 });
             }
-            draw() { 
-                ctx.save();
-                ctx.shadowBlur = 10;
-                ctx.shadowColor = this.type.color;
-                ctx.fillStyle = '#fff'; 
-                ctx.beginPath(); ctx.arc(this.x, this.y, 4, 0, Math.PI*2); ctx.fill(); 
-                ctx.restore();
-            }
+            draw() { ctx.save(); ctx.shadowBlur = 10; ctx.shadowColor = this.type.color; ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(this.x, this.y, 4, 0, Math.PI*2); ctx.fill(); ctx.restore(); }
         }
 
         class Particle {
@@ -1014,93 +1166,102 @@
                 this.vx = (Math.random() - 0.5) * 6; this.vy = (Math.random() - 0.5) * 6; this.life = 25;
             }
             update() { this.x += this.vx; this.y += this.vy; this.life--; }
-            draw() { 
-                ctx.globalAlpha = this.life / 25; 
-                ctx.fillStyle = this.color; 
-                ctx.beginPath(); ctx.arc(this.x, this.y, 2, 0, Math.PI*2); ctx.fill();
-                ctx.globalAlpha = 1; 
-            }
+            draw() { ctx.globalAlpha = this.life / 25; ctx.fillStyle = this.color; ctx.beginPath(); ctx.arc(this.x, this.y, 2, 0, Math.PI*2); ctx.fill(); ctx.globalAlpha = 1; }
         }
 
-        // ==========================================
-        // RENDERIZAÇÃO DO UNIVERSO
-        // ==========================================
         function drawPath() {
             ctx.save();
             ctx.lineCap = 'round'; ctx.lineJoin = 'round';
             
-            ctx.shadowBlur = 30;
-            ctx.shadowColor = '#8a2be2'; 
-            ctx.strokeStyle = 'rgba(138, 43, 226, 0.15)';
-            ctx.lineWidth = 60;
-            ctx.beginPath(); ctx.moveTo(path[0].x, path[0].y);
-            for(let i=1; i<path.length; i++) ctx.lineTo(path[i].x, path[i].y);
-            ctx.stroke();
+            let rotatedPaths = mapPaths.map(path => path.map(p => {
+                let cx = 400, cy = 300;
+                let cosA = Math.cos(currentMapAngle); let sinA = Math.sin(currentMapAngle);
+                return { x: cx + (p.x - cx) * cosA - (p.y - cy) * sinA, y: cy + (p.x - cx) * sinA + (p.y - cy) * cosA };
+            }));
 
-            ctx.shadowBlur = 15;
-            ctx.shadowColor = '#00ffff'; 
-            ctx.strokeStyle = 'rgba(0, 255, 255, 0.3)';
-            ctx.lineWidth = 25;
-            ctx.beginPath(); ctx.moveTo(path[0].x, path[0].y);
-            for(let i=1; i<path.length; i++) ctx.lineTo(path[i].x, path[i].y);
-            ctx.stroke();
+            ctx.shadowBlur = 30; ctx.shadowColor = '#8a2be2'; ctx.strokeStyle = 'rgba(138, 43, 226, 0.15)'; ctx.lineWidth = 60;
+            rotatedPaths.forEach(rp => { ctx.beginPath(); ctx.moveTo(rp[0].x, rp[0].y); for(let i=1; i<rp.length; i++) ctx.lineTo(rp[i].x, rp[i].y); ctx.stroke(); });
+
+            ctx.shadowBlur = 15; ctx.shadowColor = '#00ffff'; ctx.strokeStyle = 'rgba(0, 255, 255, 0.3)'; ctx.lineWidth = 25;
+            rotatedPaths.forEach(rp => { ctx.beginPath(); ctx.moveTo(rp[0].x, rp[0].y); for(let i=1; i<rp.length; i++) ctx.lineTo(rp[i].x, rp[i].y); ctx.stroke(); });
             
+            drawBlackHole(rotatedPaths[0][0].x, rotatedPaths[0][0].y, '#00ffff');
+            drawBlackHole(rotatedPaths[0][rotatedPaths[0].length-1].x, rotatedPaths[0][rotatedPaths[0].length-1].y, '#ff0055');
+
+            ctx.restore();
+        }
+
+        function drawBlackHole(x, y, color) {
+            ctx.shadowBlur = 20; ctx.shadowColor = color;
+            ctx.beginPath(); ctx.arc(x, y, 20, 0, Math.PI * 2); ctx.fillStyle = '#000'; ctx.fill();
+            ctx.lineWidth = 2; ctx.strokeStyle = color; ctx.stroke();
+            ctx.beginPath(); ctx.arc(x, y, 35, Date.now()/500, Math.PI * 1.5 + Date.now()/500); ctx.stroke();
+        }
+
+        function drawCinematic() {
+            ctx.save();
+            drawBlackHole(400, 300, '#8a2be2');
+            ctx.beginPath(); ctx.arc(400, 300, 80, Date.now()/200, Math.PI * 1.8 + Date.now()/200); 
+            ctx.lineWidth = 5; ctx.strokeStyle = '#00ffff'; ctx.stroke();
+            
+            ctx.fillStyle = '#fff'; ctx.font = '20px Courier';
+            cinematicParticles.forEach(p => {
+                if (p.dist > 10) {
+                    let px = 400 + Math.cos(p.angle) * p.dist; let py = 300 + Math.sin(p.angle) * p.dist;
+                    ctx.globalAlpha = p.dist / 500; ctx.fillText(p.char, px, py);
+                }
+            });
             ctx.restore();
         }
 
         function draw() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            if(gameState !== 'MENU') {
-                drawPath(); 
-            }
+            if(gameState === 'CINEMATIC') { drawCinematic(); return; }
+            if(gameState !== 'MENU') { drawPath(); }
 
             towers.forEach(t => t.draw());
             enemies.forEach(e => e.draw());
             bullets.forEach(b => b.draw());
             particles.forEach(p => p.draw());
 
-            if(selectedTowerIdx > -1) {
+            if(selectedTowerIdx > -1 && isDraggingGhost) {
                 const type = towerTypes[selectedTowerIdx];
                 canBuild = checkCollision(mouseX, mouseY);
                 const color = canBuild ? 'rgba(0, 255, 0, 0.5)' : 'rgba(255, 0, 0, 0.5)';
                 ctx.beginPath(); ctx.arc(mouseX, mouseY, type.range, 0, Math.PI * 2);
                 ctx.fillStyle = 'rgba(255, 255, 255, 0.05)'; ctx.fill();
                 ctx.lineWidth = 1; ctx.strokeStyle = color; ctx.stroke();
+                
                 ctx.fillStyle = canBuild ? type.color : '#550000';
-                ctx.fillRect(mouseX - 5, mouseY - 5, 10, 10);
+                ctx.beginPath(); ctx.arc(mouseX, mouseY, 16, 0, Math.PI*2); ctx.fill();
+
                 ctx.fillStyle = (gold >= type.cost) ? '#fff' : '#f00';
-                ctx.font = '12px Courier';
-                ctx.fillText(`$${type.cost}`, mouseX, mouseY - 15);
-            }
-            
-            if(selectedTowerIdx === -1) {
-                for(let t of towers) {
-                    let dist = Math.sqrt((t.x - mouseX)**2 + (t.y - mouseY)**2);
-                    if(dist < 20) {
-                        ctx.beginPath(); ctx.arc(t.x, t.y, t.range, 0, Math.PI * 2);
-                        ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)'; ctx.lineWidth = 1; ctx.stroke();
-                        ctx.fillStyle = 'rgba(255, 255, 255, 0.05)'; ctx.fill();
-                        ctx.fillStyle = (gold >= t.upgradeCost) ? '#0f0' : '#f00';
-                        ctx.font = 'bold 14px Arial';
-                        ctx.fillText(`UPGRADE: $${t.upgradeCost}`, t.x, t.y - 40);
-                    }
-                }
+                ctx.font = '12px Courier'; ctx.fillText(`$${type.cost}`, mouseX, mouseY - 25);
             }
         }
 
-        // ==========================================
-        // COLISÕES, CLIQUES E INICIAÇÃO
-        // ==========================================
-        function checkCollision(x, y) {
+        function checkCollision(x, y, ignoreTower = null) {
             for(let t of towers) {
+                if (t === ignoreTower) continue;
                 let dist = Math.sqrt((t.x - x)**2 + (t.y - y)**2);
                 if(dist < 35) return false;
             }
-            for(let i=0; i<path.length-1; i++) {
-                let p1 = path[i]; let p2 = path[i+1];
-                let dist = distToSegment(x, y, p1.x, p1.y, p2.x, p2.y);
-                if(dist < 30) return false;
+            
+            let cx = 400, cy = 300;
+            let cosA = Math.cos(currentMapAngle); let sinA = Math.sin(currentMapAngle);
+            
+            let rotatedPaths = mapPaths.map(path => path.map(p => ({
+                x: cx + (p.x - cx) * cosA - (p.y - cy) * sinA,
+                y: cy + (p.x - cx) * sinA + (p.y - cy) * cosA
+            })));
+
+            for(let rp of rotatedPaths) {
+                for(let i=0; i<rp.length-1; i++) {
+                    let p1 = rp[i]; let p2 = rp[i+1];
+                    let dist = distToSegment(x, y, p1.x, p1.y, p2.x, p2.y);
+                    if(dist < 30) return false;
+                }
             }
             return true;
         }
@@ -1113,88 +1274,115 @@
             let dx = x - xx; let dy = y - yy; return Math.sqrt(dx * dx + dy * dy);
         }
 
-        function selectTower(idx) {
-            if(selectedTowerIdx === idx) {
-                cancelSelection();
-                return;
-            }
-            [0,1,2,3].forEach(i => document.getElementById('tbtn'+i).classList.remove('selected'));
-            selectedTowerIdx = idx;
-            if(idx > -1) {
-                document.getElementById('tbtn'+idx).classList.add('selected');
-                document.body.classList.add('ghost-active'); 
-            } else {
-                cancelSelection();
-            }
+        function selectTowerBtn(idx, e) {
+            if (!uiClickCheck(e)) return;
+            cancelSelection(); selectedTowerIdx = idx;
+            document.getElementById('tbtn'+idx).classList.add('selected');
+            document.body.classList.add('ghost-active'); isDraggingGhost = true; 
         }
 
-        function cancelSelection() {
-            selectedTowerIdx = -1;
+        function cancelSelection(e) {
+            if(e) { e.preventDefault(); e.stopPropagation(); if(!uiClickCheck(e)) return; }
+            selectedTowerIdx = -1; isDraggingGhost = false; selectedExistingTower = null;
+            if(movingTower) movingTower = null;
             [0,1,2,3].forEach(i => document.getElementById('tbtn'+i).classList.remove('selected'));
             document.body.classList.remove('ghost-active'); 
+            document.getElementById('upgrade-info').style.display = 'none';
         }
 
-        canvas.addEventListener('mousemove', (e) => {
-            const rect = canvas.getBoundingClientRect();
-            const scaleX = canvas.width / rect.width; 
-            const scaleY = canvas.height / rect.height;
-            mouseX = (e.clientX - rect.left) * scaleX; 
-            mouseY = (e.clientY - rect.top) * scaleY;
-        });
-
-        canvas.addEventListener('mousedown', (e) => { 
-            const rect = canvas.getBoundingClientRect();
-            const scaleX = canvas.width / rect.width;
-            const scaleY = canvas.height / rect.height;
-            mouseX = (e.clientX - rect.left) * scaleX;
-            mouseY = (e.clientY - rect.top) * scaleY;
-            handleInteraction(); 
-        });
-
-        canvas.addEventListener('touchmove', (e) => {
-            e.preventDefault(); 
-            const rect = canvas.getBoundingClientRect(); 
-            const touch = e.touches[0];
-            const scaleX = canvas.width / rect.width; 
-            const scaleY = canvas.height / rect.height;
-            mouseX = (touch.clientX - rect.left) * scaleX; 
-            mouseY = ((touch.clientY - rect.top) * scaleY) - 50; 
-        }, {passive: false});
-
-        canvas.addEventListener('touchstart', (e) => { 
-            e.preventDefault(); 
-            const rect = canvas.getBoundingClientRect();
-            const touch = e.touches[0];
-            const scaleX = canvas.width / rect.width;
-            const scaleY = canvas.height / rect.height;
-            mouseX = (touch.clientX - rect.left) * scaleX;
-            mouseY = ((touch.clientY - rect.top) * scaleY) - 50; 
-            handleInteraction(); 
-        }, {passive: false});
-
-        function handleInteraction() {
-            if(gameState === 'MATH' || gameState === 'START' || isGameOver || gameState === 'MENU') return;
-            
-            for(let t of towers) {
-                let dist = Math.sqrt((t.x - mouseX)**2 + (t.y - mouseY)**2);
-                if(dist < 30) {
-                    if(gold >= t.upgradeCost) {
-                        gold -= t.upgradeCost; document.getElementById('gold-display').innerText = gold;
-                        t.upgrade();
-                        const fb = document.getElementById('feedback-msg'); fb.innerText = "UPGRADE! -" + t.upgradeCost/2; fb.style.color = "#00ff00"; fb.style.opacity = 1; setTimeout(()=>fb.style.opacity=0, 500);
-                        cancelSelection();
-                    } else {
-                        const fb = document.getElementById('feedback-msg'); fb.innerText = "FALTA OURO: $" + t.upgradeCost; fb.style.color = "red"; fb.style.opacity = 1; setTimeout(()=>fb.style.opacity=0, 1000);
-                    }
-                    return;
-                }
+        function upgradeSelectedTower(e) {
+            if (!uiClickCheck(e)) return;
+            if(selectedExistingTower && gold >= selectedExistingTower.upgradeCost) {
+                gold -= selectedExistingTower.upgradeCost; updateStats();
+                selectedExistingTower.upgrade(); cancelSelection();
+            } else {
+                const fb = document.getElementById('feedback-msg'); fb.innerText = "FALTA OURO!"; fb.style.color = "red"; fb.style.opacity = 1; setTimeout(()=>fb.style.opacity=0, 1000);
             }
-            if(selectedTowerIdx > -1) {
-                if(canBuild) {
-                    const type = towerTypes[selectedTowerIdx];
+        }
+
+        function moveSelectedTower(e) {
+            if (!uiClickCheck(e)) return;
+            if(selectedExistingTower) { movingTower = selectedExistingTower; selectedExistingTower = null; document.getElementById('upgrade-info').style.display = 'none'; }
+        }
+
+        function sellSelectedTower(e) {
+            if (!uiClickCheck(e)) return;
+            if(selectedExistingTower) {
+                let refund = Math.floor(selectedExistingTower.totalCost * 0.5);
+                gold += refund; updateStats();
+                towers = towers.filter(t => t !== selectedExistingTower);
+                playSound('hit'); cancelSelection();
+            }
+        }
+
+        function updateMousePos(e) {
+            const rect = canvas.getBoundingClientRect();
+            const scaleX = canvas.width / rect.width; const scaleY = canvas.height / rect.height;
+            if(e.touches) { mouseX = (e.touches[0].clientX - rect.left) * scaleX; mouseY = ((e.touches[0].clientY - rect.top) * scaleY) - 50; } 
+            else { mouseX = (e.clientX - rect.left) * scaleX; mouseY = (e.clientY - rect.top) * scaleY; }
+        }
+
+        canvas.addEventListener('mousedown', (e) => { updateMousePos(e); handlePress(); });
+        canvas.addEventListener('mousemove', (e) => { updateMousePos(e); });
+        canvas.addEventListener('mouseup', (e) => { handleRelease(); });
+
+        canvas.addEventListener('touchstart', (e) => { e.preventDefault(); updateMousePos(e); handlePress(); }, {passive: false});
+        canvas.addEventListener('touchmove', (e) => { e.preventDefault(); updateMousePos(e); }, {passive: false});
+        canvas.addEventListener('touchend', (e) => { e.preventDefault(); handleRelease(); });
+
+        function handlePress() {
+            if(gameState !== 'BUILD' && gameState !== 'COMBAT') return;
+            if(selectedTowerIdx > -1) { isDraggingGhost = true; return; }
+            if(movingTower) return;
+
+            let clickedTower = null;
+            for(let t of towers) {
+                if (Math.sqrt((t.x - mouseX)**2 + (t.y - mouseY)**2) < 30) { clickedTower = t; break; }
+            }
+
+            if(clickedTower) {
+                selectedExistingTower = clickedTower;
+                document.getElementById('upg-cost').innerText = clickedTower.upgradeCost;
+                document.getElementById('upgrade-info').style.display = 'flex';
+            } else { cancelSelection(); }
+        }
+
+        function handleRelease() {
+            if(gameState !== 'BUILD' && gameState !== 'COMBAT') return;
+
+            if (movingTower) {
+                let cancelBtn = document.getElementById('cancel-btn');
+                let rect = cancelBtn.getBoundingClientRect(); let canvasRect = canvas.getBoundingClientRect();
+                let realMouseX = (mouseX / (canvas.width / canvasRect.width)) + canvasRect.left;
+                let realMouseY = (mouseY / (canvas.height / canvasRect.height)) + canvasRect.top;
+                
+                if (realMouseX >= rect.left && realMouseX <= rect.right && realMouseY >= rect.top && realMouseY <= rect.bottom) {
+                    cancelSelection(); return;
+                }
+
+                if(checkCollision(mouseX, mouseY, movingTower)) {
+                    movingTower.x = mouseX; movingTower.y = mouseY; playSound('correct'); movingTower = null;
+                } else {
+                    const fb = document.getElementById('feedback-msg'); fb.innerText = "LOCAL BLOQUEADO!"; fb.style.color = "orange"; fb.style.opacity = 1; setTimeout(() => fb.style.opacity = 0, 1000); playSound('wrong');
+                }
+                return;
+            }
+
+            if (selectedTowerIdx > -1 && isDraggingGhost) {
+                let cancelBtn = document.getElementById('cancel-btn');
+                let rect = cancelBtn.getBoundingClientRect(); let canvasRect = canvas.getBoundingClientRect();
+                let realMouseX = (mouseX / (canvas.width / canvasRect.width)) + canvasRect.left;
+                let realMouseY = (mouseY / (canvas.height / canvasRect.height)) + canvasRect.top;
+
+                if (realMouseX >= rect.left && realMouseX <= rect.right && realMouseY >= rect.top && realMouseY <= rect.bottom) {
+                    cancelSelection(); return;
+                }
+
+                const type = towerTypes[selectedTowerIdx];
+                if(checkCollision(mouseX, mouseY)) {
                     if(gold >= type.cost) {
                         towers.push(new Tower(mouseX, mouseY, selectedTowerIdx));
-                        gold -= type.cost; document.getElementById('gold-display').innerText = gold;
+                        gold -= type.cost; updateStats();
                         for(let i=0; i<5; i++) particles.push(new Particle(mouseX, mouseY, '#00ff00')); playSound('correct');
                     } else {
                         const fb = document.getElementById('feedback-msg'); fb.innerText = "OURO INSUFICIENTE!"; fb.style.color = "red"; fb.style.opacity = 1; setTimeout(() => fb.style.opacity = 0, 1000);
@@ -1202,6 +1390,7 @@
                 } else {
                     const fb = document.getElementById('feedback-msg'); fb.innerText = "LOCAL BLOQUEADO!"; fb.style.color = "orange"; fb.style.opacity = 1; setTimeout(() => fb.style.opacity = 0, 1000); playSound('wrong');
                 }
+                cancelSelection(); 
             }
         }
 
