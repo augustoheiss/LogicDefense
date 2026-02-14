@@ -37,7 +37,7 @@
         .score-box { border-color: #fff; color: #fff; box-shadow: 0 0 10px rgba(255,255,255,0.2);}
         
         .tooltip-text {
-            visibility: hidden; width: 250px; background-color: rgba(0,0,0,0.95); color: #fff; text-align: left;
+            visibility: hidden; width: 280px; background-color: rgba(0,0,0,0.95); color: #fff; text-align: left;
             border-radius: 6px; padding: 10px; border: 1px solid #00d4ff; position: absolute; z-index: 100;
             top: 130%; left: 0; font-size: 12px; opacity: 0; transition: opacity 0.3s; box-shadow: 0 0 15px rgba(0,212,255,0.5);
             font-weight: normal; line-height: 1.4; pointer-events: none;
@@ -72,7 +72,7 @@
         .manifesto-box { max-width: 600px; color: #eee; line-height: 1.6; font-size: 14px; text-align: justify; border: 1px solid #00d4ff; padding: 30px; border-radius: 10px; background: #111; box-shadow: 0 0 30px rgba(0,212,255,0.3); overflow-y: auto; max-height: 90vh; }
         .manifesto-title { color: #00d4ff; text-align: center; margin-top: 0; font-size: 24px; text-shadow: 0 0 10px #00d4ff;}
 
-        #math-tip-box { display: none; position: absolute; bottom: 120px; right: 20px; width: 380px; background: rgba(0, 0, 0, 0.95); border: 2px solid #00d4ff; padding: 15px; border-radius: 8px; color: #fff; z-index: 10; pointer-events: none; box-shadow: 0 0 30px rgba(0, 212, 255, 0.5); text-align: left; transition: opacity 0.3s; }
+        #math-tip-box { display: none; position: absolute; bottom: 120px; right: 20px; width: 420px; background: rgba(0, 0, 0, 0.95); border: 2px solid #00d4ff; padding: 15px; border-radius: 8px; color: #fff; z-index: 10; pointer-events: none; box-shadow: 0 0 30px rgba(0, 212, 255, 0.5); text-align: left; transition: opacity 0.3s; }
         .tip-title { color: #00d4ff; font-weight: bold; margin-bottom: 8px; text-transform: uppercase; font-size: 16px; border-bottom: 1px solid #444; padding-bottom: 5px; }
         .tip-content { font-size: 14px; line-height: 1.5; color: #eee; font-family: 'Verdana', sans-serif; } 
         .tip-highlight { color: #ffff00; font-weight: bold; }
@@ -154,7 +154,7 @@
             <p>Desligue o seu "Juiz" interno — aquele que rejeita as pessoas só porque elas não te dão importância ou não te respeitam. A Lógica por trás de todos esses motivos é mais profunda e soberana, e ninguém escapa da lei das probabilidades. Aceite a Morte, e então, Viva. Não como uma máquina, que hoje está incrivelmente potente, mas como a alma que você é.</p>
             <hr style="border-color: #333; margin: 20px 0;">
             <p style="color: #00ff00; font-weight: bold; text-align: center;">[ SOBRE O PROJETO ]</p>
-            <p style="text-align: center;">Este jogo é fruto de um processo intensivo com mais de 30 atualizações implacáveis, unindo Game Design, Matemática e Programação. Foi produzido <strong>100% em co-criação com Inteligência Artificial</strong>, provando que a IA é a melhor ferramenta para mentes que não têm medo de pensar.</p>
+            <p style="text-align: center;">Este jogo é fruto de um processo intensivo com dezenas de atualizações implacáveis, unindo Game Design, Matemática e Programação. Foi produzido <strong>100% em co-criação com Inteligência Artificial</strong>, provando que a IA é a melhor ferramenta para mentes que não têm medo de pensar.</p>
             <p style="text-align: center; color: #ffeb3b;">E vamos ter MUITAS ATUALIZAÇÕES AINDA!<br><em>(Não hoje, eu acho 😅)</em></p>
             <p style="text-align: center;">Quer falar com o autor ou trocar ideias sobre tecnologia e educação?<br>📧 <strong>augustoheiss@gmail.com</strong></p>
             <button onclick="document.getElementById('manifesto-modal').style.display='none'" style="margin-top:15px; width:100%; font-size: 16px;" class="action-btn btn-sell">FECHAR</button>
@@ -258,7 +258,7 @@
         document.getElementById('hs-math-ui').innerText = maxMathSaved;
 
         // ==========================================
-        // YOUTUBE AUDIO API
+        // YOUTUBE AUDIO API (CORRIGIDO PARA AUTOPLAY MOBILE)
         // ==========================================
         let ytPlayer;
         let ytPlayerReady = false;
@@ -282,7 +282,7 @@
 
         function onYouTubeIframeAPIReady() {
             ytPlayer = new YT.Player('yt-player', {
-                height: '300', width: '300',
+                height: '300', width: '300', 
                 playerVars: {
                     listType: 'playlist',
                     list: 'PLh5X0e7-mnI3lh-nb3fwZ8OcndGLfVdZX', 
@@ -555,9 +555,10 @@
         }
 
         // ==========================================
-        // IA MODO DINÂMICO
+        // A MENTE DA SKYNET (IA DINÂMICA V33)
         // ==========================================
         let aiMode = false;
+
         function toggleAIMode(e) {
             if (!uiClickCheck(e)) return;
             aiMode = !aiMode;
@@ -573,40 +574,51 @@
             if(!aiMode) return;
             if(gameState === 'MATH' || gameState === 'START' || isGameOver || gameState === 'MENU' || gameState === 'CINEMATIC') return;
 
-            let targetTowers = 12 + (stats.livesLost * 2);
-            if (targetTowers > 40) targetTowers = 40; 
+            // Base = 12 torres. Ganha +5 a cada 10 ondas. Ganha +20 para cada vida perdida.
+            let baseTarget = 12 + (Math.floor(wave / 10) * 5);
+            let panicBonus = stats.livesLost * 20;
+            let targetTowers = baseTarget + panicBonus;
+            if (targetTowers > 150) targetTowers = 150; 
+
             let builtSomething = false;
 
+            // EXPANSÃO DO ENXAME
             if (towers.length < targetTowers) {
-                let plusCount = towers.filter(t => t.type.symbol === '+').length;
-                let iceCount = towers.filter(t => t.type.symbol === '-').length;
-                let expCount = towers.filter(t => t.type.symbol === 'x').length;
-                let divCount = towers.filter(t => t.type.symbol === '÷').length;
-
-                let typeToBuild = 0; 
-                if (plusCount >= 6 && iceCount < Math.floor(plusCount / 6)) typeToBuild = 1; 
-                else if (plusCount >= 8 && expCount < Math.floor(plusCount / 8)) typeToBuild = 2; 
-                else if (plusCount >= 12 && divCount < Math.floor(plusCount / 12)) typeToBuild = 3; 
-
-                const typeInfo = towerTypes[typeToBuild];
-
-                if (gold >= typeInfo.cost) {
+                if (gold >= 50) { // O custo mínimo
                     let spot = null;
-                    for(let i = 0; i < 50; i++) {
+                    // Escaneia a tela para achar buracos vazios rapidamente
+                    for(let i=0; i<30; i++) {
                         let tx = 50 + Math.random() * 700; 
                         let ty = 50 + Math.random() * 500;
                         if(checkCollision(tx, ty)) { spot = {x: tx, y: ty}; break; }
                     }
+                    
                     if (spot) {
-                        towers.push(new Tower(spot.x, spot.y, typeToBuild));
-                        gold -= typeInfo.cost; updateStats(); playSound('correct');
-                        for(let i=0; i<5; i++) particles.push(new Particle(spot.x, spot.y, '#00ff00'));
-                        builtSomething = true;
+                        let plusCount = towers.filter(t => t.type.symbol === '+').length;
+                        let iceCount = towers.filter(t => t.type.symbol === '-').length;
+                        
+                        // A Lógica da Defesa: A cada 6 metralhadoras, construa 1 gelo.
+                        let typeToBuild = 0; 
+                        if (plusCount >= 6 && iceCount < Math.floor(plusCount / 6)) typeToBuild = 1; 
+                        
+                        // Diversificação natural
+                        if (plusCount >= 10 && Math.random() > 0.8) typeToBuild = 2; // Explosão
+                        if (plusCount >= 15 && Math.random() > 0.9) typeToBuild = 3; // Sniper
+
+                        let cost = towerTypes[typeToBuild].cost;
+                        
+                        if (gold >= cost) {
+                            towers.push(new Tower(spot.x, spot.y, typeToBuild));
+                            gold -= cost; updateStats(); playSound('correct');
+                            for(let i=0; i<5; i++) particles.push(new Particle(spot.x, spot.y, '#00ff00'));
+                            builtSomething = true;
+                        }
                     }
                 }
             }
 
-            if (towers.length >= 12 && !builtSomething) {
+            // UPGRADE GLOBAL EQUILIBRADO
+            if(towers.length >= 12 && !builtSomething) {
                 let minLevel = Math.min(...towers.map(t => t.level));
                 let upgradable = towers.filter(t => t.level === minLevel);
                 if(upgradable.length > 0) {
@@ -731,56 +743,59 @@
             document.getElementById('math-modal').style.display = 'block';
         }
 
-        // LÓGICA DE DIVISÃO CORTA-NO-MEIO
+        // ==========================================
+        // DICAS MATEMÁTICAS APRIMORADAS (V33)
+        // ==========================================
         function generateTip(problem) {
             const { n1, n2, op, answer } = problem;
             let text = "";
 
             if (op === '+') {
-                if (answer <= 10) {
-                    if (n1 === n2) text = `Soma de Gêmeos:<br>É a mesma coisa que a tabuada do 2.<br><span class="tip-highlight">${n1} x 2 = ${answer}</span>.`;
-                    else {
-                        let maior = Math.max(n1, n2); let menor = Math.min(n1, n2);
-                        text = `Soma Básica:<br>Guarde o maior (<span class="tip-highlight">${maior}</span>) na cabeça e avance mais <span class="tip-highlight">${menor}</span>.<br>Resultado: <span class="tip-highlight">${answer}</span>.`;
-                    }
+                let temp1 = n1; let temp2 = n2;
+                let u1 = n1 % 10; let u2 = n2 % 10;
+                let shiftText = "";
+
+                if (u1 >= 6) {
+                    let shift = 10 - u1; temp1 += shift; temp2 -= shift;
+                    shiftText = `Compensação: O ${n1} está perto de ${temp1}. Adicionamos ${shift} nele e tiramos ${shift} do ${n2} (vira ${temp2}).<br>Conta nova: <span class="tip-highlight">${temp1} + ${temp2}</span>.<br><br>`;
+                } else if (u2 >= 6) {
+                    let shift = 10 - u2; temp2 += shift; temp1 -= shift;
+                    shiftText = `Compensação: O ${n2} está perto de ${temp2}. Adicionamos ${shift} nele e tiramos ${shift} do ${n1} (vira ${temp1}).<br>Conta nova: <span class="tip-highlight">${temp1} + ${temp2}</span>.<br><br>`;
+                } else if (u1 >= 1 && u1 <= 4) {
+                    let shift = u1; temp1 -= shift; temp2 += shift;
+                    shiftText = `Transferência: Tiramos ${shift} do ${n1} para arredondar para baixo (vira ${temp1}) e somamos no ${n2} (vira ${temp2}).<br>Conta nova: <span class="tip-highlight">${temp1} + ${temp2}</span>.<br><br>`;
+                } else if (u2 >= 1 && u2 <= 4) {
+                    let shift = u2; temp2 -= shift; temp1 += shift;
+                    shiftText = `Transferência: Tiramos ${shift} do ${n2} para arredondar para baixo (vira ${temp2}) e somamos no ${n1} (vira ${temp1}).<br>Conta nova: <span class="tip-highlight">${temp1} + ${temp2}</span>.<br><br>`;
+                } else {
+                    shiftText = `Os números já estão bons para cálculo direto.<br><br>`;
                 }
-                else if (n1 < 10 && n2 < 10) {
-                    let maior = Math.max(n1, n2); let menor = Math.min(n1, n2); let faltaPara10 = 10 - maior; let sobra = menor - faltaPara10;
-                    text = `Completa 10:<br>O <span class="tip-highlight">${maior}</span> está quase no 10 (falta ${faltaPara10}).<br>Tire ${faltaPara10} do ${menor}. Fica <span class="tip-highlight">10 + ${sobra}</span>.<br>Resultado: <span class="tip-highlight">${answer}</span>.`;
-                } 
-                else if (n1 >= 100 || n2 >= 100) {
-                    let c1 = Math.floor(n1 / 100) * 100; let c2 = Math.floor(n2 / 100) * 100;
-                    let d1 = Math.floor((n1 % 100) / 10) * 10; let d2 = Math.floor((n2 % 100) / 10) * 10;
-                    let u1 = n1 % 10; let u2 = n2 % 10;
-                    text = `Por Casas Decimais:<br>1. Centenas: <span class="tip-highlight">${c1} + ${c2} = ${c1+c2}</span><br>2. Dezenas: <span class="tip-highlight">${d1} + ${d2} = ${d1+d2}</span><br>3. Unidades: <span class="tip-highlight">${u1} + ${u2} = ${u1+u2}</span><br>Junta tudo: <span class="tip-highlight">${answer}</span>.`;
-                }
-                else {
-                    text = `Decomposição:<br>Separe as dezenas.<br><span class="tip-highlight">${n1} + ${n2}</span><br>→ <span class="tip-highlight">(${Math.floor(n1/10)*10} + ${Math.floor(n2/10)*10}) + (${n1%10} + ${n2%10})</span>.`;
-                }
+
+                let d1 = Math.floor(temp1/10)*10; let d2 = Math.floor(temp2/10)*10;
+                let nu1 = temp1 % 10; let nu2 = temp2 % 10;
+                text = shiftText + `Decomposição:<br>Separe as dezenas das unidades.<br><span class="tip-highlight">(${d1} + ${d2}) + (${nu1} + ${nu2}) = ${answer}</span>.`;
             } 
             else if (op === '-') {
-                let diff = n1 - n2; let u1 = n1 % 10; let u2 = n2 % 10;
-                if (diff <= 10) { text = `Distância (Reta Numérica):<br>Eles estão muito perto!<br>Pule do <span class="tip-highlight">${n2}</span> para o <span class="tip-highlight">${n1}</span>.<br>São apenas <span class="tip-highlight">${diff}</span> passos.`; } 
-                else if (u2 === 0 || u1 >= u2) {
-                    let d1 = Math.floor(n1/10)*10; let d2 = Math.floor(n2/10)*10;
-                    if(u2 === 0) text = `Subtração Direta:<br>O segundo número é redondo.<br><span class="tip-highlight">${n1} - ${n2} = ${answer}</span>.`;
-                    else text = `Subtração Direta:<br>A unidade de cima é maior, vá direto.<br>Dezenas: <span class="tip-highlight">${d1} - ${d2} = ${d1-d2}</span>.<br>Unidades: <span class="tip-highlight">${u1} - ${u2} = ${u1-u2}</span>.<br>Junte: <span class="tip-highlight">${answer}</span>.`;
+                let u1 = n1 % 10; let u2 = n2 % 10;
+                let shift = 0; let isAdding = true;
+
+                if (u2 >= 5) { // 5 a 9 -> completa pra 10
+                    shift = 10 - u2; isAdding = true;
+                } else if (u2 >= 1 && u2 <= 4) { // 1 a 4 -> tira
+                    shift = u2; isAdding = false;
+                } else if (u1 >= 5) { // se u2 é 0, olha o u1
+                    shift = 10 - u1; isAdding = true;
+                } else if (u1 >= 1 && u1 <= 4) {
+                    shift = u1; isAdding = false;
                 }
-                else if (u1 >= 6 && u2 >= 6) {
-                    let shift = 10 - u2; let novoN1 = n1 + shift; let novoN2 = n2 + shift;
-                    text = `Deslocamento (Hack Japonês):<br>Para facilitar, some ${shift} aos DOIS números.<br>O ${n1} vira <span class="tip-highlight">${novoN1}</span>.<br>O ${n2} vira <span class="tip-highlight">${novoN2}</span>.<br>A diferença não muda: <span class="tip-highlight">${novoN1} - ${novoN2} = ${answer}</span>.`;
-                }
-                else if (u2 >= 7) {
-                    let shift = 10 - u2; let nextTen = n2 + shift;
-                    text = `Arredondar o Subtraendo:<br>O ${n2} está perto de ${nextTen}. Empreste ${shift} pra ele.<br>Tire o valor cheio: <span class="tip-highlight">${n1} - ${nextTen} = ${n1 - nextTen}</span>.<br>Agora DEVOLVA os ${shift} ao resultado: <span class="tip-highlight">${n1 - nextTen} + ${shift} = ${answer}</span>.`;
-                }
-                else if (u1 >= 7) {
-                    let shift = 10 - u1; let nextTen = n1 + shift;
-                    text = `Arredondar o Minuendo (O Dinheiro):<br>Deixe seu "dinheiro" redondo: Aumente o ${n1} para ${nextTen} (+${shift}).<br>Faça a conta: <span class="tip-highlight">${nextTen} - ${n2} = ${nextTen - n2}</span>.<br>Como você inventou ${shift}, TIRE eles do resultado final: <span class="tip-highlight">${nextTen - n2} - ${shift} = ${answer}</span>.`;
-                }
-                else {
-                    let d2 = Math.floor(n2 / 10) * 10;
-                    text = `Decomposição Tática:<br>Quebre o <span class="tip-highlight">${n2}</span> em ${d2} e ${u2}.<br>1º: Tire a dezena grossa: <span class="tip-highlight">${n1} - ${d2} = ${n1 - d2}</span>.<br>2º: Tire a unidade final: <span class="tip-highlight">${n1 - d2} - ${u2} = ${answer}</span>.`;
+
+                if (shift > 0) {
+                    let novoN1 = isAdding ? n1 + shift : n1 - shift;
+                    let novoN2 = isAdding ? n2 + shift : n2 - shift;
+                    let operacao = isAdding ? `Somamos ${shift}` : `Tiramos ${shift}`;
+                    text = `Hack Japonês (Diferença Constante):<br>${operacao} dos DOIS números para criar um final zero e não precisar "emprestar".<br>O ${n1} vira <span class="tip-highlight">${novoN1}</span>.<br>O ${n2} vira <span class="tip-highlight">${novoN2}</span>.<br>A distância entre eles é a mesma: <span class="tip-highlight">${novoN1} - ${novoN2} = ${answer}</span>.`;
+                } else {
+                    text = `Hack Japonês:<br>Os números já estão perfeitamente redondos.<br><span class="tip-highlight">${n1} - ${n2} = ${answer}</span>.`;
                 }
             } 
             else if (op === 'x') {
@@ -869,6 +884,7 @@
 
             gameState = 'BUILD';
             document.getElementById('next-wave-btn').style.display = 'flex'; 
+            document.getElementById('build-menu').classList.add('build-glow');
             
             if (aiMode) runAILogic();
         }
@@ -879,6 +895,7 @@
             document.getElementById('next-wave-btn').style.display = 'none';
             document.getElementById('upgrade-info').style.display = 'none';
             document.getElementById('math-tip-box').style.display = 'none';
+            document.getElementById('build-menu').classList.remove('build-glow');
             cancelSelection();
             if (aiMode) runAILogic(); 
             spawnEnemies();
