@@ -7,12 +7,16 @@
     <script src="https://www.youtube.com/iframe_api"></script>
     <style>
         body { 
-            margin: 0; overflow: hidden; background-color: #050505; color: white; 
+            margin: 0; padding: 0; overflow: hidden; background-color: #050505; color: white; 
             font-family: 'Courier New', monospace; user-select: none; touch-action: none;
+            width: 100vw; height: 100vh; /* Força o body a preencher a tela inteira real */
         }
         
+        /* O NOVO MOTOR DE CENTRALIZAÇÃO ABSOLUTA */
         #game-container { 
-            position: relative; width: 800px; height: 600px; margin: 10px auto; 
+            position: absolute; top: 50%; left: 50%; 
+            transform: translate(-50%, -50%); /* A mágica do enquadramento perfeito começa aqui */
+            width: 800px; height: 600px; 
             border: 2px solid #444; border-radius: 10px;
             background-image: url('https://images.unsplash.com/photo-1462331940025-496dfbfc7564?auto=format&fit=crop&w=1000&q=80');
             background-size: cover; background-position: center;
@@ -37,7 +41,7 @@
         .score-box { border-color: #fff; color: #fff; box-shadow: 0 0 10px rgba(255,255,255,0.2);}
         
         .tooltip-text {
-            visibility: hidden; width: 250px; background-color: rgba(0,0,0,0.95); color: #fff; text-align: left;
+            visibility: hidden; width: 280px; background-color: rgba(0,0,0,0.95); color: #fff; text-align: left;
             border-radius: 6px; padding: 10px; border: 1px solid #00d4ff; position: absolute; z-index: 100;
             top: 130%; left: 0; font-size: 12px; opacity: 0; transition: opacity 0.3s; box-shadow: 0 0 15px rgba(0,212,255,0.5);
             font-weight: normal; line-height: 1.4; pointer-events: none;
@@ -72,7 +76,7 @@
         .manifesto-box { max-width: 600px; color: #eee; line-height: 1.6; font-size: 14px; text-align: justify; border: 1px solid #00d4ff; padding: 30px; border-radius: 10px; background: #111; box-shadow: 0 0 30px rgba(0,212,255,0.3); overflow-y: auto; max-height: 90vh; }
         .manifesto-title { color: #00d4ff; text-align: center; margin-top: 0; font-size: 24px; text-shadow: 0 0 10px #00d4ff;}
 
-        #math-tip-box { display: none; position: absolute; bottom: 120px; right: 20px; width: 420px; background: rgba(0, 0, 0, 0.95); border: 2px solid #00d4ff; padding: 15px; border-radius: 8px; color: #fff; z-index: 10; pointer-events: none; box-shadow: 0 0 30px rgba(0, 212, 255, 0.5); text-align: left; transition: opacity 0.3s; }
+        #math-tip-box { display: none; position: absolute; bottom: 120px; right: 20px; width: 420px; background: rgba(0, 0, 0, 0.95); border: 2px solid #00d4ff; padding: 15px; border-radius: 8px; color: #fff; z-index: 10; pointer-events: none; box-shadow: 0 0 30px rgba(0, 212, 255, 0.5); text-align: left; transition: opacity 0.3s; max-height: 60vh; overflow-y: auto;}
         .tip-title { color: #00d4ff; font-weight: bold; margin-bottom: 8px; text-transform: uppercase; font-size: 16px; border-bottom: 1px solid #444; padding-bottom: 5px; }
         .tip-content { font-size: 14px; line-height: 1.5; color: #eee; font-family: 'Verdana', sans-serif; } 
         .tip-highlight { color: #ffff00; font-weight: bold; }
@@ -97,7 +101,7 @@
         #cancel-btn:hover { background: #f44336; transform: translateX(-50%) scale(1.1); }
         body.ghost-active #cancel-btn { display: flex; }
 
-        #math-modal { display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.95); border: 4px solid #fff; padding: 30px; text-align: center; box-shadow: 0 0 80px rgba(255,255,255,0.3); z-index: 100; width: 450px; border-radius: 10px; overflow: hidden; }
+        #math-modal { display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.95); border: 4px solid #fff; padding: 30px; text-align: center; box-shadow: 0 0 80px rgba(255,255,255,0.3); z-index: 100; width: 450px; border-radius: 10px; overflow: hidden; max-width: 90vw;}
         #buff-message { font-size: 16px; color: #ccc; margin-bottom: 20px; font-style: italic; min-height: 40px; padding: 10px; border-bottom: 1px solid #333; line-height: 1.4; }
         #timer-container { width: 100%; height: 10px; background: #333; position: absolute; top: 0; left: 0; }
         #timer-bar { width: 100%; height: 100%; background: #ff0000; transition: width 0.1s linear; }
@@ -259,7 +263,7 @@
         document.getElementById('hs-math-ui').innerText = maxMathSaved;
 
         // ==========================================
-        // YOUTUBE AUDIO API
+        // YOUTUBE AUDIO API (CORRIGIDO PARA AUTOPLAY MOBILE)
         // ==========================================
         let ytPlayer;
         let ytPlayerReady = false;
@@ -283,7 +287,7 @@
 
         function onYouTubeIframeAPIReady() {
             ytPlayer = new YT.Player('yt-player', {
-                height: '300', width: '300',
+                height: '300', width: '300', // Tamanho Real escondido atrás do CSS
                 playerVars: {
                     listType: 'playlist',
                     list: 'PLh5X0e7-mnI3lh-nb3fwZ8OcndGLfVdZX', 
@@ -299,7 +303,7 @@
         }
 
         // ==========================================
-        // TELA CHEIA E ESCALA PERFEITA MOBILE (V34)
+        // TELA CHEIA E ESCALA ABSOLUTA (CORREÇÃO DE LAYOUT CORTADO)
         // ==========================================
         function toggleFullScreen(e) {
             if (!uiClickCheck(e)) return;
@@ -319,16 +323,22 @@
             const container = document.getElementById('game-container');
             const winW = window.innerWidth;
             const winH = window.innerHeight;
-            
-            // O segredo do enquadramento perfeito (Testa largura e altura e usa o menor)
-            let scale = Math.min(winW / 820, winH / 650);
-            if (scale > 1) scale = 1; 
 
-            container.style.transform = `scale(${scale})`;
-            container.style.transformOrigin = 'top center';
-            container.style.margin = '10px auto';
+            // Calcula a escala baseada tanto na largura quanto na altura real da janela
+            let scaleW = winW / 820; // 800 + 20px de respiro
+            let scaleH = winH / 620; // 600 + 20px de respiro
+            let scale = Math.min(scaleW, scaleH);
+            
+            if (scale > 1) scale = 1; // Trava para não ficar gigante no PC
+
+            // A Mágica do CSS Absoluto: Centraliza matematicamente e aplica o zoom a partir do centro
+            container.style.transform = `translate(-50%, -50%) scale(${scale})`;
+            container.style.margin = '0'; // Tira as margens antigas que bugavam
         }
+        
         window.addEventListener('resize', resizeCanvas);
+        document.addEventListener('fullscreenchange', resizeCanvas);
+        document.addEventListener('webkitfullscreenchange', resizeCanvas);
         setTimeout(resizeCanvas, 100);
 
         // ==========================================
@@ -572,10 +582,29 @@
             return n + "ª Onda";
         }
 
-        // ==========================================
-        // A MENTE DA SKYNET (IA DINÂMICA)
-        // ==========================================
         let aiMode = false;
+        let activeAITactic = null;
+
+        const aiTacticsLib = [
+            [ 
+                {type: 0, x: 200, y: 385}, {type: 0, x: 200, y: 425}, {type: 0, x: 200, y: 465},
+                {type: 0, x: 240, y: 385}, {type: 0, x: 240, y: 425}, {type: 0, x: 240, y: 465},
+                {type: 0, x: 280, y: 385}, {type: 0, x: 280, y: 425}, {type: 0, x: 280, y: 465},
+                {type: 1, x: 330, y: 385}, {type: 3, x: 330, y: 320}
+            ],
+            [ 
+                {type: 0, x: 500, y: 200}, {type: 0, x: 500, y: 240}, {type: 0, x: 500, y: 280},
+                {type: 0, x: 540, y: 200}, {type: 0, x: 540, y: 240}, {type: 0, x: 540, y: 280},
+                {type: 0, x: 580, y: 200}, {type: 0, x: 580, y: 240}, {type: 0, x: 580, y: 280},
+                {type: 1, x: 450, y: 240}, {type: 3, x: 450, y: 300}
+            ],
+            [ 
+                {type: 0, x: 360, y: 400}, {type: 0, x: 400, y: 400}, {type: 0, x: 440, y: 400},
+                {type: 0, x: 360, y: 440}, {type: 0, x: 400, y: 440}, {type: 0, x: 440, y: 440},
+                {type: 0, x: 360, y: 480}, {type: 0, x: 400, y: 480}, {type: 0, x: 440, y: 480},
+                {type: 1, x: 400, y: 340}, {type: 3, x: 320, y: 340}
+            ]
+        ];
 
         function toggleAIMode(e) {
             if (!uiClickCheck(e)) return;
@@ -583,24 +612,41 @@
             const btn = document.getElementById('ai-btn');
             if(aiMode) {
                 btn.classList.add('active'); btn.innerText = "🤖 MODO IA: ON";
+                if(!activeAITactic) activeAITactic = aiTacticsLib[Math.floor(Math.random() * aiTacticsLib.length)];
             } else {
                 btn.classList.remove('active'); btn.innerText = "🤖 MODO IA: OFF";
             }
         }
 
         function runAILogic() {
-            if(!aiMode) return;
+            if(!aiMode || !activeAITactic) return;
             if(gameState === 'MATH' || gameState === 'START' || isGameOver || gameState === 'MENU' || gameState === 'CINEMATIC') return;
 
-            let baseTarget = 12 + (Math.floor(wave / 10) * 5);
-            let panicBonus = stats.livesLost * 20;
-            let targetTowers = baseTarget + panicBonus;
-            if (targetTowers > 150) targetTowers = 150; 
+            let cx = 400, cy = 300;
+            let cosA = Math.cos(currentMapAngle); let sinA = Math.sin(currentMapAngle);
+            let builtCore = true;
 
-            let builtSomething = false;
+            for(let bp of activeAITactic) {
+                let bx = cx + (bp.x - cx) * cosA - (bp.y - cy) * sinA;
+                let by = cy + (bp.x - cx) * sinA + (bp.y - cy) * cosA;
 
-            if (towers.length < targetTowers) {
-                if (gold >= 50) { 
+                let built = towers.find(t => Math.abs(t.x - bx) < 5 && Math.abs(t.y - by) < 5);
+                if(!built) {
+                    builtCore = false;
+                    const typeInfo = towerTypes[bp.type];
+                    if(gold >= typeInfo.cost) {
+                        towers.push(new Tower(bx, by, bp.type));
+                        gold -= typeInfo.cost; updateStats();
+                        playSound('correct');
+                        for(let i=0; i<5; i++) particles.push(new Particle(bx, by, '#00ff00'));
+                    }
+                    return; 
+                }
+            }
+
+            let isPanic = stats.livesLost > 0;
+            if (builtCore && isPanic) {
+                if (gold >= 50) {
                     let spot = null;
                     for(let i=0; i<30; i++) {
                         let tx = 50 + Math.random() * 700; 
@@ -661,9 +707,6 @@
             document.getElementById('tt-wave-ordinal').innerText = toOrdinal(wave);
         }
 
-        // ==========================================
-        // SISTEMA DE BUFFS E LÓGICA MENTAL
-        // ==========================================
         let currentBuff = 'cadeira';
         let phraseQueue = []; 
         const buffPhrases = {
@@ -758,57 +801,53 @@
         }
 
         // ==========================================
-        // DICIONÁRIO DE TÁTICAS (MULTIPLICAÇÃO TURBINADA V34)
+        // O DICIONÁRIO DE TÁTICAS V34.0
         // ==========================================
         function generateTip(problem) {
             const { n1, n2, op, answer } = problem;
             let text = "";
 
             if (op === '+') {
-                if (answer <= 10) {
-                    if (n1 === n2) text = `Soma de Gêmeos:<br>É a mesma coisa que a tabuada do 2.<br><span class="tip-highlight">${n1} x 2 = ${answer}</span>.`;
-                    else {
-                        let maior = Math.max(n1, n2); let menor = Math.min(n1, n2);
-                        text = `Soma Básica:<br>Guarde o maior (<span class="tip-highlight">${maior}</span>) na cabeça e avance mais <span class="tip-highlight">${menor}</span>.<br>Resultado: <span class="tip-highlight">${answer}</span>.`;
-                    }
+                let temp1 = n1; let temp2 = n2;
+                let u1 = n1 % 10; let u2 = n2 % 10;
+                let shiftText = "";
+
+                if (u1 >= 6) {
+                    let shift = 10 - u1; temp1 += shift; temp2 -= shift;
+                    shiftText = `Compensação:<br>O ${n1} está perto de ${temp1}. Adicionamos ${shift} nele e tiramos ${shift} do ${n2} (vira ${temp2}).<br>Conta nova: <span class="tip-highlight">${temp1} + ${temp2}</span>.<br><br>`;
+                } else if (u2 >= 6) {
+                    let shift = 10 - u2; temp2 += shift; temp1 -= shift;
+                    shiftText = `Compensação:<br>O ${n2} está perto de ${temp2}. Adicionamos ${shift} nele e tiramos ${shift} do ${n1} (vira ${temp1}).<br>Conta nova: <span class="tip-highlight">${temp1} + ${temp2}</span>.<br><br>`;
+                } else if (u1 >= 1 && u1 <= 4) {
+                    let shift = u1; temp1 -= shift; temp2 += shift;
+                    shiftText = `Transferência:<br>Tiramos ${shift} do ${n1} para arredondar para baixo (vira ${temp1}) e somamos no ${n2} (vira ${temp2}).<br>Conta nova: <span class="tip-highlight">${temp1} + ${temp2}</span>.<br><br>`;
+                } else if (u2 >= 1 && u2 <= 4) {
+                    let shift = u2; temp2 -= shift; temp1 += shift;
+                    shiftText = `Transferência:<br>Tiramos ${shift} do ${n2} para arredondar para baixo (vira ${temp2}) e somamos no ${n1} (vira ${temp1}).<br>Conta nova: <span class="tip-highlight">${temp1} + ${temp2}</span>.<br><br>`;
+                } else {
+                    shiftText = `Os números já estão bons para cálculo direto.<br><br>`;
                 }
-                else if (n1 < 10 && n2 < 10) {
-                    let maior = Math.max(n1, n2); let menor = Math.min(n1, n2); let faltaPara10 = 10 - maior; let sobra = menor - faltaPara10;
-                    text = `Completa 10:<br>O <span class="tip-highlight">${maior}</span> está quase no 10 (falta ${faltaPara10}).<br>Tire ${faltaPara10} do ${menor}. Fica <span class="tip-highlight">10 + ${sobra}</span>.<br>Resultado: <span class="tip-highlight">${answer}</span>.`;
-                } 
-                else if (n1 >= 100 || n2 >= 100) {
-                    let c1 = Math.floor(n1 / 100) * 100; let c2 = Math.floor(n2 / 100) * 100;
-                    let d1 = Math.floor((n1 % 100) / 10) * 10; let d2 = Math.floor((n2 % 100) / 10) * 10;
-                    let u1 = n1 % 10; let u2 = n2 % 10;
-                    text = `Por Casas Decimais:<br>1. Centenas: <span class="tip-highlight">${c1} + ${c2} = ${c1+c2}</span><br>2. Dezenas: <span class="tip-highlight">${d1} + ${d2} = ${d1+d2}</span><br>3. Unidades: <span class="tip-highlight">${u1} + ${u2} = ${u1+u2}</span><br>Junta tudo: <span class="tip-highlight">${answer}</span>.`;
-                }
-                else {
-                    text = `Decomposição:<br>Separe as dezenas.<br><span class="tip-highlight">${n1} + ${n2}</span><br>→ <span class="tip-highlight">(${Math.floor(n1/10)*10} + ${Math.floor(n2/10)*10}) + (${n1%10} + ${n2%10})</span>.`;
-                }
+
+                let d1 = Math.floor(temp1/10)*10; let d2 = Math.floor(temp2/10)*10;
+                let nu1 = temp1 % 10; let nu2 = temp2 % 10;
+                text = shiftText + `Decomposição:<br>Separe as dezenas das unidades.<br><span class="tip-highlight">(${d1} + ${d2}) + (${nu1} + ${nu2}) = ${answer}</span>.`;
             } 
             else if (op === '-') {
-                let diff = n1 - n2; let u1 = n1 % 10; let u2 = n2 % 10;
-                if (diff <= 10) { text = `Distância (Reta Numérica):<br>Eles estão muito perto!<br>Pule do <span class="tip-highlight">${n2}</span> para o <span class="tip-highlight">${n1}</span>.<br>São apenas <span class="tip-highlight">${diff}</span> passos.`; } 
-                else if (u2 === 0 || u1 >= u2) {
-                    let d1 = Math.floor(n1/10)*10; let d2 = Math.floor(n2/10)*10;
-                    if(u2 === 0) text = `Subtração Direta:<br>O segundo número é redondo.<br><span class="tip-highlight">${n1} - ${n2} = ${answer}</span>.`;
-                    else text = `Subtração Direta:<br>A unidade de cima é maior, vá direto.<br>Dezenas: <span class="tip-highlight">${d1} - ${d2} = ${d1-d2}</span>.<br>Unidades: <span class="tip-highlight">${u1} - ${u2} = ${u1-u2}</span>.<br>Junte: <span class="tip-highlight">${answer}</span>.`;
-                }
-                else if (u1 >= 6 && u2 >= 6) {
-                    let shift = 10 - u2; let novoN1 = n1 + shift; let novoN2 = n2 + shift;
-                    text = `Deslocamento (Hack Japonês):<br>Para facilitar, some ${shift} aos DOIS números.<br>O ${n1} vira <span class="tip-highlight">${novoN1}</span>.<br>O ${n2} vira <span class="tip-highlight">${novoN2}</span>.<br>A diferença não muda: <span class="tip-highlight">${novoN1} - ${novoN2} = ${answer}</span>.`;
-                }
-                else if (u2 >= 7) {
-                    let shift = 10 - u2; let nextTen = n2 + shift;
-                    text = `Arredondar o Subtraendo:<br>O ${n2} está perto de ${nextTen}. Empreste ${shift} pra ele.<br>Tire o valor cheio: <span class="tip-highlight">${n1} - ${nextTen} = ${n1 - nextTen}</span>.<br>Agora DEVOLVA os ${shift} ao resultado: <span class="tip-highlight">${n1 - nextTen} + ${shift} = ${answer}</span>.`;
-                }
-                else if (u1 >= 7) {
-                    let shift = 10 - u1; let nextTen = n1 + shift;
-                    text = `Arredondar o Minuendo (O Dinheiro):<br>Deixe seu "dinheiro" redondo: Aumente o ${n1} para ${nextTen} (+${shift}).<br>Faça a conta: <span class="tip-highlight">${nextTen} - ${n2} = ${nextTen - n2}</span>.<br>Como você inventou ${shift}, TIRE eles do resultado final: <span class="tip-highlight">${nextTen - n2} - ${shift} = ${answer}</span>.`;
-                }
-                else {
-                    let d2 = Math.floor(n2 / 10) * 10;
-                    text = `Decomposição Tática:<br>Quebre o <span class="tip-highlight">${n2}</span> em ${d2} e ${u2}.<br>1º: Tire a dezena grossa: <span class="tip-highlight">${n1} - ${d2} = ${n1 - d2}</span>.<br>2º: Tire a unidade final: <span class="tip-highlight">${n1 - d2} - ${u2} = ${answer}</span>.`;
+                let u1 = n1 % 10; let u2 = n2 % 10;
+                let shift = 0; let isAdding = true;
+
+                if (u2 >= 5) { shift = 10 - u2; isAdding = true; } 
+                else if (u2 >= 1 && u2 <= 4) { shift = u2; isAdding = false; } 
+                else if (u1 >= 5) { shift = 10 - u1; isAdding = true; } 
+                else if (u1 >= 1 && u1 <= 4) { shift = u1; isAdding = false; }
+
+                if (shift > 0) {
+                    let novoN1 = isAdding ? n1 + shift : n1 - shift;
+                    let novoN2 = isAdding ? n2 + shift : n2 - shift;
+                    let operacao = isAdding ? `Somamos ${shift}` : `Tiramos ${shift}`;
+                    text = `Hack Japonês (Diferença Constante):<br>${operacao} dos DOIS números para criar um final zero e não precisar "emprestar".<br>O ${n1} vira <span class="tip-highlight">${novoN1}</span>.<br>O ${n2} vira <span class="tip-highlight">${novoN2}</span>.<br>A distância entre eles é a mesma: <span class="tip-highlight">${novoN1} - ${novoN2} = ${answer}</span>.`;
+                } else {
+                    text = `Hack Japonês:<br>Os números já estão perfeitamente redondos.<br><span class="tip-highlight">${n1} - ${n2} = ${answer}</span>.`;
                 }
             } 
             else if (op === 'x') {
@@ -817,7 +856,7 @@
                 
                 if (n1 >= 100 && n2 >= 100) {
                     let c1 = Math.round(n1 / 100) * 100; let c2 = Math.round(n2 / 100) * 100;
-                    text = `Titãs Centenários:<br>Quando a conta é gigante, a gente arredonda as centenas! O ${n1} vira ${c1} e o ${n2} vira ${c2}.<br>Multiplicamos a base pesada: <span class="tip-highlight">${c1} x ${c2} = ${c1*c2}</span>.<br>Depois, ajustamos o que sobrou ou o que emprestamos multiplicando as diferenças e somando no montante final para chegar no <span class="tip-highlight">${answer}</span>. O algoritmo nunca falha.`;
+                    text = `Titãs Centenários:<br>Quando a conta é gigante, a gente arredonda as centenas! O ${n1} vira ${c1} e o ${n2} vira ${c2}.<br>Multiplicamos a base pesada: <span class="tip-highlight">${c1} x ${c2} = ${c1*c2}</span>.<br>Depois, ajustamos o que sobrou multiplicando as diferenças e somando no montante final para chegar no <span class="tip-highlight">${answer}</span>. O algoritmo nunca falha.`;
                 }
                 else if ((n1 === 5 && n2 > 5) || (n2 === 5 && n1 > 5)) {
                      let tem5 = (n1 === 5) ? n2 : n1;
@@ -828,14 +867,14 @@
                     let outro = (u1 >= 6 && n1 > 10) ? n2 : n1;
                     let baseRedonda = Math.ceil(proximo / 10) * 10;
                     let sobra = baseRedonda - proximo;
-                    text = `Estratégia do Excesso (Finais 6, 7, 8, 9):<br>O número ${proximo} tá quase virando ${baseRedonda}. Vamos arredondar pra CIMA e calcular grandão e forte!<br><span class="tip-highlight">${baseRedonda} x ${outro} = ${baseRedonda * outro}</span>.<br>Mas pera aí, a gente inventou ${sobra} números a mais. Temos que tirar esse excesso pago: (${sobra} x ${outro} = ${sobra*outro}).<br>Cortando a gordura: <span class="tip-highlight">${baseRedonda * outro} - ${sobra*outro} = ${answer}</span>.`;
+                    text = `Estratégia do Excesso (Finais 6 a 9):<br>O número ${proximo} tá quase virando ${baseRedonda}. Vamos arredondar pra CIMA e calcular grandão e forte!<br><span class="tip-highlight">${baseRedonda} x ${outro} = ${baseRedonda * outro}</span>.<br>Mas pera aí, a gente inventou ${sobra} números a mais. Temos que tirar esse excesso pago: (${sobra} x ${outro} = ${sobra*outro}).<br>Cortando a gordura: <span class="tip-highlight">${baseRedonda * outro} - ${sobra*outro} = ${answer}</span>.`;
                 }
                 else if ((u1 >= 1 && u1 <= 4 && n1 > 10) || (u2 >= 1 && u2 <= 4 && n2 > 10)) {
                     let descendo = (u1 >= 1 && u1 <= 4 && n1 > 10) ? n1 : n2;
                     let outro = (u1 >= 1 && u1 <= 4 && n1 > 10) ? n2 : n1;
                     let baseRedonda = Math.floor(descendo / 10) * 10;
                     let resto = descendo - baseRedonda;
-                    text = `Decomposição Tática (Finais 1, 2, 3, 4):<br>O número ${descendo} é quebrado. Vamos jogar a unidade fora pra ficar redondo no ${baseRedonda}!<br>Atacamos a dezena primeiro: <span class="tip-highlight">${baseRedonda} x ${outro} = ${baseRedonda * outro}</span>.<br>Agora, não podemos esquecer das ${resto} unidades que guardamos no bolso: (${resto} x ${outro} = ${resto*outro}).<br>Somando os dois ataques: <span class="tip-highlight">${baseRedonda * outro} + ${resto*outro} = ${answer}</span>.<br><br><span style="color:#aaa; font-size:10px;">*(Fatoração clássica: ${baseRedonda}x${outro} + ${resto}x${outro})*</span>`;
+                    text = `Decomposição Tática (Finais 1 a 4):<br>O número ${descendo} é quebrado. Vamos jogar a unidade fora pra ficar redondo no ${baseRedonda}!<br>Atacamos a dezena primeiro: <span class="tip-highlight">${baseRedonda} x ${outro} = ${baseRedonda * outro}</span>.<br>Agora, não podemos esquecer das ${resto} unidades que guardamos no bolso: (${resto} x ${outro} = ${resto*outro}).<br>Somando os dois ataques: <span class="tip-highlight">${baseRedonda * outro} + ${resto*outro} = ${answer}</span>.<br><br><span style="color:#aaa; font-size:10px;">*(Fatoração clássica: ${baseRedonda}x${outro} + ${resto}x${outro})*</span>`;
                 }
                 else {
                     text = `Ataque Direto:<br>Para esses números, a memória muscular fala mais alto. Foque no resultado direto ou quebre em dezenas e unidades na mente!<br><span class="tip-highlight">${n1} x ${n2} = ${answer}</span>.`;
@@ -1329,9 +1368,23 @@
 
         function updateMousePos(e) {
             const rect = canvas.getBoundingClientRect();
-            const scaleX = canvas.width / rect.width; const scaleY = canvas.height / rect.height;
-            if(e.touches) { mouseX = (e.touches[0].clientX - rect.left) * scaleX; mouseY = ((e.touches[0].clientY - rect.top) * scaleY) - 50; } 
-            else { mouseX = (e.clientX - rect.left) * scaleX; mouseY = (e.clientY - rect.top) * scaleY; }
+            
+            let scale;
+            if (window.innerWidth / window.innerHeight > 800 / 600) {
+                scale = window.innerHeight / 600;
+            } else {
+                scale = window.innerWidth / 800;
+            }
+            if (scale > 1) scale = 1;
+
+            if(e.touches) { 
+                mouseX = (e.touches[0].clientX - rect.left) / scale; 
+                mouseY = (e.touches[0].clientY - rect.top) / scale - (50 / scale); // Offset compensado na escala
+            } 
+            else { 
+                mouseX = (e.clientX - rect.left) / scale; 
+                mouseY = (e.clientY - rect.top) / scale; 
+            }
         }
 
         canvas.addEventListener('mousedown', (e) => { updateMousePos(e); handlePress(); });
@@ -1365,8 +1418,9 @@
             if (movingTower) {
                 let cancelBtn = document.getElementById('cancel-btn');
                 let rect = cancelBtn.getBoundingClientRect(); let canvasRect = canvas.getBoundingClientRect();
-                let realMouseX = (mouseX / (canvas.width / canvasRect.width)) + canvasRect.left;
-                let realMouseY = (mouseY / (canvas.height / canvasRect.height)) + canvasRect.top;
+                let scale = Math.min(window.innerWidth / 820, window.innerHeight / 620); if(scale>1) scale=1;
+                let realMouseX = (mouseX * scale) + canvasRect.left;
+                let realMouseY = (mouseY * scale) + canvasRect.top;
                 
                 if (realMouseX >= rect.left && realMouseX <= rect.right && realMouseY >= rect.top && realMouseY <= rect.bottom) {
                     cancelSelection(); return;
@@ -1383,8 +1437,9 @@
             if (selectedTowerIdx > -1 && isDraggingGhost) {
                 let cancelBtn = document.getElementById('cancel-btn');
                 let rect = cancelBtn.getBoundingClientRect(); let canvasRect = canvas.getBoundingClientRect();
-                let realMouseX = (mouseX / (canvas.width / canvasRect.width)) + canvasRect.left;
-                let realMouseY = (mouseY / (canvas.height / canvasRect.height)) + canvasRect.top;
+                let scale = Math.min(window.innerWidth / 820, window.innerHeight / 620); if(scale>1) scale=1;
+                let realMouseX = (mouseX * scale) + canvasRect.left;
+                let realMouseY = (mouseY * scale) + canvasRect.top;
 
                 if (realMouseX >= rect.left && realMouseX <= rect.right && realMouseY >= rect.top && realMouseY <= rect.bottom) {
                     cancelSelection(); return;
