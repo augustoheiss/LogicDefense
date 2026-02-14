@@ -258,7 +258,7 @@
         document.getElementById('hs-math-ui').innerText = maxMathSaved;
 
         // ==========================================
-        // YOUTUBE AUDIO API (CORRIGIDO PARA AUTOPLAY MOBILE)
+        // YOUTUBE AUDIO API
         // ==========================================
         let ytPlayer;
         let ytPlayerReady = false;
@@ -282,7 +282,7 @@
 
         function onYouTubeIframeAPIReady() {
             ytPlayer = new YT.Player('yt-player', {
-                height: '300', width: '300', // Tamanho Real escondido atrás do CSS
+                height: '300', width: '300',
                 playerVars: {
                     listType: 'playlist',
                     list: 'PLh5X0e7-mnI3lh-nb3fwZ8OcndGLfVdZX', 
@@ -554,97 +554,63 @@
             return n + "ª Onda";
         }
 
+        // ==========================================
+        // IA MODO DINÂMICO
+        // ==========================================
         let aiMode = false;
-        let activeAITactic = null;
-
-        const aiTacticsLib = [
-            [ 
-                {type: 0, x: 200, y: 385}, {type: 0, x: 200, y: 425}, {type: 0, x: 200, y: 465},
-                {type: 0, x: 240, y: 385}, {type: 0, x: 240, y: 425}, {type: 0, x: 240, y: 465},
-                {type: 0, x: 280, y: 385}, {type: 0, x: 280, y: 425}, {type: 0, x: 280, y: 465},
-                {type: 1, x: 330, y: 385}, {type: 3, x: 330, y: 320}
-            ],
-            [ 
-                {type: 0, x: 500, y: 200}, {type: 0, x: 500, y: 240}, {type: 0, x: 500, y: 280},
-                {type: 0, x: 540, y: 200}, {type: 0, x: 540, y: 240}, {type: 0, x: 540, y: 280},
-                {type: 0, x: 580, y: 200}, {type: 0, x: 580, y: 240}, {type: 0, x: 580, y: 280},
-                {type: 1, x: 450, y: 240}, {type: 3, x: 450, y: 300}
-            ],
-            [ 
-                {type: 0, x: 360, y: 400}, {type: 0, x: 400, y: 400}, {type: 0, x: 440, y: 400},
-                {type: 0, x: 360, y: 440}, {type: 0, x: 400, y: 440}, {type: 0, x: 440, y: 440},
-                {type: 0, x: 360, y: 480}, {type: 0, x: 400, y: 480}, {type: 0, x: 440, y: 480},
-                {type: 1, x: 400, y: 340}, {type: 3, x: 320, y: 340}
-            ]
-        ];
-
         function toggleAIMode(e) {
             if (!uiClickCheck(e)) return;
             aiMode = !aiMode;
             const btn = document.getElementById('ai-btn');
             if(aiMode) {
                 btn.classList.add('active'); btn.innerText = "🤖 MODO IA: ON";
-                if(!activeAITactic) activeAITactic = aiTacticsLib[Math.floor(Math.random() * aiTacticsLib.length)];
             } else {
                 btn.classList.remove('active'); btn.innerText = "🤖 MODO IA: OFF";
             }
         }
 
         function runAILogic() {
-            if(!aiMode || !activeAITactic) return;
+            if(!aiMode) return;
             if(gameState === 'MATH' || gameState === 'START' || isGameOver || gameState === 'MENU' || gameState === 'CINEMATIC') return;
 
-            let cx = 400, cy = 300;
-            let cosA = Math.cos(currentMapAngle); let sinA = Math.sin(currentMapAngle);
-            let builtCore = true;
+            let targetTowers = 12 + (stats.livesLost * 2);
+            if (targetTowers > 40) targetTowers = 40; 
+            let builtSomething = false;
 
-            for(let bp of activeAITactic) {
-                let bx = cx + (bp.x - cx) * cosA - (bp.y - cy) * sinA;
-                let by = cy + (bp.x - cx) * sinA + (bp.y - cy) * cosA;
+            if (towers.length < targetTowers) {
+                let plusCount = towers.filter(t => t.type.symbol === '+').length;
+                let iceCount = towers.filter(t => t.type.symbol === '-').length;
+                let expCount = towers.filter(t => t.type.symbol === 'x').length;
+                let divCount = towers.filter(t => t.type.symbol === '÷').length;
 
-                let built = towers.find(t => Math.abs(t.x - bx) < 5 && Math.abs(t.y - by) < 5);
-                if(!built) {
-                    builtCore = false;
-                    const typeInfo = towerTypes[bp.type];
-                    if(gold >= typeInfo.cost) {
-                        towers.push(new Tower(bx, by, bp.type));
-                        gold -= typeInfo.cost; updateStats();
-                        playSound('correct');
-                        for(let i=0; i<5; i++) particles.push(new Particle(bx, by, '#00ff00'));
-                    }
-                    return; 
-                }
-            }
+                let typeToBuild = 0; 
+                if (plusCount >= 6 && iceCount < Math.floor(plusCount / 6)) typeToBuild = 1; 
+                else if (plusCount >= 8 && expCount < Math.floor(plusCount / 8)) typeToBuild = 2; 
+                else if (plusCount >= 12 && divCount < Math.floor(plusCount / 12)) typeToBuild = 3; 
 
-            let isPanic = stats.livesLost > 0;
-            if (builtCore && isPanic) {
-                if (gold >= 50) {
+                const typeInfo = towerTypes[typeToBuild];
+
+                if (gold >= typeInfo.cost) {
                     let spot = null;
-                    for(let i=0; i<30; i++) {
-                        let tx = 200 + Math.random() * 400; let ty = 150 + Math.random() * 300;
+                    for(let i = 0; i < 50; i++) {
+                        let tx = 50 + Math.random() * 700; 
+                        let ty = 50 + Math.random() * 500;
                         if(checkCollision(tx, ty)) { spot = {x: tx, y: ty}; break; }
                     }
-                    
                     if (spot) {
-                        let plusCount = towers.filter(t => t.type.symbol === '+').length;
-                        let typeToBuild = (plusCount > 0 && plusCount % 6 === 0) ? 1 : 0; 
-                        let cost = towerTypes[typeToBuild].cost;
-                        
-                        if (gold >= cost) {
-                            towers.push(new Tower(spot.x, spot.y, typeToBuild));
-                            gold -= cost; updateStats(); playSound('correct');
-                            for(let i=0; i<5; i++) particles.push(new Particle(spot.x, spot.y, '#ff00ff'));
-                            return; 
-                        }
+                        towers.push(new Tower(spot.x, spot.y, typeToBuild));
+                        gold -= typeInfo.cost; updateStats(); playSound('correct');
+                        for(let i=0; i<5; i++) particles.push(new Particle(spot.x, spot.y, '#00ff00'));
+                        builtSomething = true;
                     }
                 }
             }
 
-            if(towers.length > 0) {
+            if (towers.length >= 12 && !builtSomething) {
                 let minLevel = Math.min(...towers.map(t => t.level));
-                let upgeadable = towers.filter(t => t.level === minLevel);
-                if(upgeadable.length > 0) {
-                    let target = upgeadable[Math.floor(Math.random() * upgeadable.length)];
+                let upgradable = towers.filter(t => t.level === minLevel);
+                if(upgradable.length > 0) {
+                    let target = upgradable[Math.floor(Math.random() * upgradable.length)];
                     if(gold >= target.upgradeCost) {
                         gold -= target.upgradeCost; updateStats();
                         target.upgrade();
@@ -765,7 +731,7 @@
             document.getElementById('math-modal').style.display = 'block';
         }
 
-        // LÓGICA DE DIVISÃO CORTA-NO-MEIO (A CASCATA)
+        // LÓGICA DE DIVISÃO CORTA-NO-MEIO
         function generateTip(problem) {
             const { n1, n2, op, answer } = problem;
             let text = "";
@@ -1333,6 +1299,7 @@
 
         function handlePress() {
             if(gameState !== 'BUILD' && gameState !== 'COMBAT') return;
+            if(uiHidden) return; 
             if(selectedTowerIdx > -1) { isDraggingGhost = true; return; }
             if(movingTower) return;
 
