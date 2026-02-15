@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Logic Defense: The Logic of the One Piece</title>
+    <title>Logic Defense: O Museu dos Números</title>
     <script src="https://www.youtube.com/iframe_api"></script>
     <style>
         body { 
@@ -11,6 +11,22 @@
             font-family: 'Courier New', monospace; user-select: none; touch-action: none;
             width: 100vw; height: 100vh;
         }
+
+        /* TEXTOS AMBIENTES DO MUSEU (Sussurros da Matemática ao Fundo) */
+        .museum-text {
+            position: absolute; color: rgba(0, 212, 255, 0.08); 
+            font-family: 'Courier New', monospace; font-weight: bold; z-index: -200; 
+            pointer-events: none; white-space: nowrap; text-shadow: 0 0 15px rgba(0,212,255,0.1);
+        }
+        .mt-1 { top: 5%; left: 5%; font-size: 24px; }
+        .mt-2 { bottom: 5%; left: 3%; font-size: 18px; }
+        .mt-3 { top: 10%; right: 5%; font-size: 28px; text-align: right; }
+        .mt-4 { bottom: 10%; right: 5%; font-size: 20px; text-align: right; }
+        .mt-5 { top: 45%; left: 2%; font-size: 22px; transform: rotate(-90deg); transform-origin: left top;}
+        .mt-6 { top: 40%; right: -12%; font-size: 22px; transform: rotate(90deg); transform-origin: left top;}
+
+        /* Oculta os textos do museu em telas pequenas (celulares) para não poluir */
+        @media (max-width: 1100px) { .museum-text { display: none; } }
         
         #game-container { 
             position: absolute; top: 50%; left: 50%; 
@@ -20,7 +36,7 @@
             background-image: url('https://images.unsplash.com/photo-1462331940025-496dfbfc7564?auto=format&fit=crop&w=1000&q=80');
             background-size: cover; background-position: center;
             box-shadow: 0 0 40px rgba(0, 212, 255, 0.3); overflow: hidden;
-            margin: 0; 
+            margin: 0; z-index: 10;
         }
         
         #game-container::before {
@@ -71,10 +87,11 @@
 
         #high-score-display { color: #ffd700; font-size: 16px; font-weight: bold; margin-top: -15px; margin-bottom: 25px; text-shadow: 0 0 10px #ffd700; letter-spacing: 1px;}
 
-        /* MANIFESTO MODAL */
-        #manifesto-modal { display:none; position:absolute; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.95); z-index:300; flex-direction:column; align-items:center; justify-content:center; padding: 20px; box-sizing: border-box; }
-        .manifesto-box { max-width: 600px; color: #eee; line-height: 1.6; font-size: 14px; text-align: justify; border: 1px solid #00d4ff; padding: 30px; border-radius: 10px; background: #111; box-shadow: 0 0 30px rgba(0,212,255,0.3); overflow-y: auto; max-height: 90vh; }
-        .manifesto-title { color: #00d4ff; text-align: center; margin-top: 0; font-size: 24px; text-shadow: 0 0 10px #00d4ff;}
+        /* MODAIS GERAIS (MANIFESTO E VIÉSES) */
+        .info-modal { display:none; position:absolute; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.95); z-index:300; flex-direction:column; align-items:center; justify-content:center; padding: 20px; box-sizing: border-box; }
+        .info-box { max-width: 650px; color: #eee; line-height: 1.6; font-size: 14px; text-align: justify; border: 1px solid #00d4ff; padding: 30px; border-radius: 10px; background: #111; box-shadow: 0 0 30px rgba(0,212,255,0.3); overflow-y: auto; max-height: 90vh; }
+        .info-title { color: #00d4ff; text-align: center; margin-top: 0; font-size: 24px; text-shadow: 0 0 10px #00d4ff;}
+        .info-box h3 { color: #ffeb3b; font-size: 16px; margin-bottom: 5px; border-bottom: 1px solid #444; padding-bottom: 5px; }
 
         #math-tip-box { display: none; position: absolute; bottom: 120px; right: 20px; width: 420px; background: rgba(0, 0, 0, 0.95); border: 2px solid #00d4ff; padding: 15px; border-radius: 8px; color: #fff; z-index: 10; pointer-events: none; box-shadow: 0 0 30px rgba(0, 212, 255, 0.5); text-align: left; transition: opacity 0.3s; max-height: 60vh; overflow-y: auto;}
         .tip-title { color: #00d4ff; font-weight: bold; margin-bottom: 8px; text-transform: uppercase; font-size: 16px; border-bottom: 1px solid #444; padding-bottom: 5px; }
@@ -131,37 +148,79 @@
 </head>
 <body>
 
+    <div class="museum-text mt-1">0 + 0 = O ELEMENTO NEUTRO<br>A MALDIÇÃO E O INÍCIO</div>
+    <div class="museum-text mt-2">7 ÷ 7 = 0.999... = 1<br>A RODA CONCLUÍDA</div>
+    <div class="museum-text mt-3">142857<br>O NÚMERO DA FÊNIX</div>
+    <div class="museum-text mt-4">9 + X ➔ -1 UNIDADE, +1 DEZENA<br>A REGRA DO 9</div>
+    <div class="museum-text mt-5">2 > 4 > 8 (BASE DO UNIVERSO)</div>
+    <div class="museum-text mt-6">A LÓGICA É SOBERANA</div>
+
     <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 300px; height: 300px; z-index: -100; opacity: 0.01; pointer-events: none;">
         <div id="yt-player"></div>
     </div>
 
     <div id="start-screen">
         <h1 id="start-title" style="font-size: 44px; margin-bottom: 5px; color: #fff; text-shadow: 0 0 20px #00d4ff;">LOGIC DEFENSE</h1>
-        <p id="start-subtitle" style="font-size: 20px; margin-bottom: 30px; color: #aaa; letter-spacing: 2px;">ESCOLHA SEU COMBUSTÍVEL CÓSMICO</p>
+        <p id="start-subtitle" style="font-size: 20px; margin-bottom: 30px; color: #aaa; letter-spacing: 2px;">O MUSEU DOS NÚMEROS</p>
         
         <div id="high-score-display">
             🏆 RECORDE: ONDA <span id="hs-wave-ui">0</span> | CONTAS: <span id="hs-math-ui">0</span> 🏆
         </div>
         
-        <button class="buff-btn buff-amor" onclick="selectBuff('amor')" ontouchstart="selectBuff('amor')">❤️ AMOR<br><span style="font-size:12px; font-style:italic;">"O fogo tá sempre aceso"</span></button>
-        <button class="buff-btn buff-odio" onclick="selectBuff('odio')" ontouchstart="selectBuff('odio')">🔥 ÓDIO<br><span style="font-size:12px; font-style:italic;">"Vou desligar sua tomada"</span></button>
-        <button class="buff-btn buff-cadeira" onclick="selectBuff('cadeira')" ontouchstart="selectBuff('cadeira')">🪑 A CADEIRA<br><span style="font-size:12px; font-style:italic;">"Aceite a dor"</span></button>
+        <button class="buff-btn buff-amor" onclick="selectBuff('amor')">❤️ AMOR<br><span style="font-size:12px; font-style:italic;">"O fogo tá sempre aceso"</span></button>
+        <button class="buff-btn buff-odio" onclick="selectBuff('odio')">🔥 ÓDIO<br><span style="font-size:12px; font-style:italic;">"Vou desligar sua tomada"</span></button>
+        <button class="buff-btn buff-cadeira" onclick="selectBuff('cadeira')">🪑 A CADEIRA<br><span style="font-size:12px; font-style:italic;">"Aceite a dor"</span></button>
         
-        <button class="top-btn" style="margin-top: 20px; font-size: 16px;" onclick="document.getElementById('manifesto-modal').style.display='flex'">📖 O MANIFESTO (CRÉDITOS)</button>
+        <div style="display: flex; gap: 10px; margin-top: 20px;">
+            <button class="top-btn" style="font-size: 14px;" onclick="document.getElementById('manifesto-modal').style.display='flex'">📖 O MANIFESTO</button>
+            <button class="top-btn" style="font-size: 14px; border-color: #ffeb3b; color: #ffeb3b;" onclick="document.getElementById('viases-modal').style.display='flex'">🔢 VIÉSES DOS NÚMEROS</button>
+        </div>
     </div>
 
-    <div id="manifesto-modal">
-        <div class="manifesto-box">
-            <h2 class="manifesto-title">A LÓGICA DO ONE PIECE</h2>
+    <div id="manifesto-modal" class="info-modal">
+        <div class="info-box">
+            <h2 class="info-title">A LÓGICA DO ONE PIECE</h2>
             <p>Palavras como Amor, Ódio, ou o meio termo (A Cadeira), podem ter infinitos significados dependendo de como as falamos, dos nossos motivos e de eventos externos imprevisíveis. Esses fatores podem fazer com que nossas palavras sumam no vácuo ou sejam potencializadas como por um microfone. Vivemos em um mundo de probabilidades.</p>
             <p>Está na hora de sair do dicionário, sair da biblioteca e experimentar a Lógica na prática. Use todos esses Dados, Informações, Conhecimentos e Sabedoria a seu favor estudando a função dos números (e das palavras).</p>
             <p>Desligue o seu "Juiz" interno — aquele que rejeita as pessoas só porque elas não te dão importância ou não te respeitam. A Lógica por trás de todos esses motivos é mais profunda e soberana, e ninguém escapa da lei das probabilidades. Aceite a Morte, e então, Viva. Não como uma máquina, que hoje está incrivelmente potente, mas como a alma que você é.</p>
             <hr style="border-color: #333; margin: 20px 0;">
             <p style="color: #00ff00; font-weight: bold; text-align: center;">[ SOBRE O PROJETO ]</p>
-            <p style="text-align: center;">Este jogo é fruto de um processo intensivo com dezenas de atualizações implacáveis, unindo Game Design, Matemática e Programação. Foi produzido <strong>100% em co-criação com Inteligência Artificial</strong>, provando que a IA é a melhor ferramenta para mentes que não têm medo de pensar.</p>
-            <p style="text-align: center; color: #ffeb3b;">E vamos ter MUITAS ATUALIZAÇÕES AINDA!<br><em>(Não hoje, eu acho 😅)</em></p>
+            <p style="text-align: center;">Este jogo é um Museu Vivo. Foi produzido <strong>100% em co-criação com Inteligência Artificial</strong>, provando que a IA é a melhor ferramenta para mentes que não têm medo de pensar e filosofar sobre o código.</p>
             <p style="text-align: center;">Quer falar com o autor ou trocar ideias sobre tecnologia e educação?<br>📧 <strong>augustoheiss@gmail.com</strong></p>
             <button onclick="document.getElementById('manifesto-modal').style.display='none'" style="margin-top:15px; width:100%; font-size: 16px;" class="action-btn btn-sell">FECHAR</button>
+        </div>
+    </div>
+
+    <div id="viases-modal" class="info-modal">
+        <div class="info-box">
+            <h2 class="info-title">OS VIÉSES DOS NÚMEROS</h2>
+            <p style="font-style: italic; color: #aaa; text-align: center;">A matemática não vai sair do lugar. Nós apenas escrevemos problemas diferentes de maneiras que produzam resultados. Explore a Lógica:</p>
+            
+            <h3>0: A Maldição e o Início</h3>
+            <p>O elemento neutro da soma e subtração! Junto com o 9 torna algo completo às vezes sem aparecer. Ele é tão importante que é proibido usar numa balança exata (divisão), porque ele faz parecer que qualquer resultado é a mesma coisa ($2 = 1$). Ele não é neutro na multiplicação, ele é a maldição, o viés necessário. Ele parece antigo, mas é o irmão mais novo dos números.</p>
+
+            <h3>1: A Balança</h3>
+            <p>A sequência dos números naturais. O acréscimo de um. Onde o rótulo da conta começa e a balança dos números entra em ação.</p>
+
+            <h3>2, 4 e 8: A Base do Universo</h3>
+            <p><strong>Tabuada do 2 (2+2):</strong> O Universo que entendemos de verdade é escrito na base 2: Preto e Branco, as cores que prevalecem no Sistema.<br>
+            <strong>Tabuada do 4 (4+4):</strong> O dobro do dobro. $2 > 4 > 8$.<br>
+            <strong>A Grandeza do 8 (8+8):</strong> O cubo de 2 ($2³$), o grande campeão da base 2, presente em todas as máquinas. Sabe como somar 8 rápido? Volta dois números e sobe uma dezena! ($8+5 = 13$). Na subtração é o espelho: sobe dois na unidade e tira uma dezena! ($24 - 8 = 16$).</p>
+
+            <h3>3 e 6: A Fração e a Dúzia</h3>
+            <p><strong>Tabuada do 3:</strong> Uma parte perfeita do número completo, o rei das dízimas periódicas. Sabe quem ele coroa? O 9.<br>
+            <strong>Tabuada do 6:</strong> A meia dúzia. Palavras de um sistema antigo muito útil, porque o 12 se divide perfeitamente por 2, 3, 4 e 6!</p>
+
+            <h3>5: O Tempo</h3>
+            <p>O nosso querido relógio. A tabuada que nos faz inteligentes com a sua facilidade absoluta em transformar o difícil, terminando sempre em 0 ou 5.</p>
+
+            <h3>7: O Número da Fênix (142857)</h3>
+            <p>Ele é aceito como louco. Sua verdade só é encontrada em números muito grandes ou muito pequenos, por isso é rejeitado no dia a dia. Mas o trabalho conjunto da divisão por 7 gera o <strong>142857</strong>. Uma dízima periódica poderosa que gira como uma roleta. Alguns números parecem invisíveis nele, mas eles são partes de algo completo. ($142 + 857 = 999$).</p>
+
+            <h3>9: O Infinito que Completa</h3>
+            <p>O número que não aparece nas dízimas periódicas do 7, porque ele mostra o infinito de qualquer número. Lembra do $7 \div 7$? É a totalidade. É o $0.9999... = 1$. A Morte de uma fração e o Nascimento de algo completo.<br>A regra do 9 é divina: Para somar 9, você volta 1 na unidade e sobe 1 na dezena ($9+7=16$). Para subtrair 9, você avança 1 na unidade e desce 1 na dezena ($36-9=27$).</p>
+
+            <button onclick="document.getElementById('viases-modal').style.display='none'" style="margin-top:15px; width:100%; font-size: 16px;" class="action-btn btn-move">VOLTAR PARA A LÓGICA</button>
         </div>
     </div>
 
@@ -330,7 +389,6 @@
             if (scale > 1) scale = 1; 
 
             container.style.transform = `translate(-50%, -50%) scale(${scale})`;
-            container.style.margin = '0'; 
         }
         
         window.addEventListener('resize', resizeCanvas);
@@ -607,11 +665,13 @@
                     if (spot) {
                         let plusCount = towers.filter(t => t.type.symbol === '+').length;
                         let iceCount = towers.filter(t => t.type.symbol === '-').length;
+                        let expCount = towers.filter(t => t.type.symbol === 'x').length;
+                        let divCount = towers.filter(t => t.type.symbol === '÷').length;
                         
                         let typeToBuild = 0; 
                         if (plusCount >= 6 && iceCount < Math.floor(plusCount / 6)) typeToBuild = 1; 
-                        else if (plusCount >= 10 && Math.random() > 0.8) typeToBuild = 2; 
-                        else if (plusCount >= 15 && Math.random() > 0.9) typeToBuild = 3; 
+                        else if (plusCount >= 10 && expCount < Math.floor(plusCount / 10)) typeToBuild = 2; 
+                        else if (plusCount >= 15 && divCount < Math.floor(plusCount / 15)) typeToBuild = 3; 
 
                         let cost = towerTypes[typeToBuild].cost;
                         
@@ -625,8 +685,8 @@
                 }
             }
 
-            // A MÁGICA DA LINHA DE FRENTE: Upar sempre a torre de menor "custo", ignorando o level igual!
             if(towers.length >= 12 && !builtSomething) {
+                // Skynet V43: Upgrade sempre na mais barata primeiro!
                 let minCost = Math.min(...towers.map(t => t.upgradeCost));
                 let upgradable = towers.filter(t => t.upgradeCost === minCost);
                 if(upgradable.length > 0) {
@@ -635,7 +695,7 @@
                         gold -= target.upgradeCost; updateStats();
                         target.upgrade();
                         const fb = document.getElementById('feedback-msg');
-                        fb.innerText = "🤖 IA EVOLUIU TORRE MAIS BARATA!"; fb.style.color = "#00d4ff"; fb.style.opacity = 1; 
+                        fb.innerText = "🤖 IA EVOLUIU TORRE DA FRENTE!"; fb.style.color = "#00d4ff"; fb.style.opacity = 1; 
                         setTimeout(()=>fb.style.opacity=0, 800);
                     }
                 }
@@ -750,7 +810,7 @@
         }
 
         // ==========================================
-        // O DICIONÁRIO DE TÁTICAS V43.0 (A MATEMÁTICA DEFINITIVA)
+        // O DICIONÁRIO DE TÁTICAS V43.0 (PEDAGOGIA ABSOLUTA)
         // ==========================================
         function generateTip(problem) {
             const { n1, n2, op, answer } = problem;
@@ -769,13 +829,13 @@
                         let outro = tu1 >= 60 ? n2 : n1;
                         let shift = 100 - (alvo % 100);
                         temp1 = alvo + shift; temp2 = outro - shift;
-                        shiftText = `Estratégia de Compensação (Dezenas e Unidades):<br>O ${alvo} está perto da próxima centena. Adicionamos ${shift} nele para criar uma base forte e tiramos o mesmo do outro (${outro} vira ${temp2}).<br>Conta nova: <span class="tip-highlight">${temp1} + ${temp2}</span>.<br><br>`;
+                        shiftText = `Compensação de Centenas:<br>O ${alvo} está perto da próxima centena. Adicionamos ${shift} nele para criar uma base forte e tiramos o mesmo do outro (${outro} vira ${temp2}).<br>Conta nova: <span class="tip-highlight">${temp1} + ${temp2}</span>.<br><br>`;
                     } else if ((tu1 >= 10 && tu1 <= 40) || (tu2 >= 10 && tu2 <= 40)) {
                         let alvo = (tu1 >= 10 && tu1 <= 40) ? n1 : n2;
                         let outro = (tu1 >= 10 && tu1 <= 40) ? n2 : n1;
                         let shift = alvo % 100;
                         temp1 = alvo - shift; temp2 = outro + shift;
-                        shiftText = `Estratégia de Transferência (Dezenas e Unidades):<br>Tiramos ${shift} do ${alvo} (vira ${temp1}) para ficar uma centena redonda, e somamos esse valor no outro (${outro} vira ${temp2}).<br>Conta nova: <span class="tip-highlight">${temp1} + ${temp2}</span>.<br><br>`;
+                        shiftText = `Transferência de Centenas:<br>Tiramos ${shift} do ${alvo} (vira ${temp1}) para ficar uma centena redonda, e somamos esse valor no outro (${outro} vira ${temp2}).<br>Conta nova: <span class="tip-highlight">${temp1} + ${temp2}</span>.<br><br>`;
                     } else {
                         shiftText = `Como um dos números já termina em zero perfeito, não precisamos fazer ajustes na massinha. Vamos direto pro ataque!<br><br>`;
                     }
@@ -849,9 +909,9 @@
                     let mult = isCem ? "100" : "10";
                     
                     if (n1 === 1 || n2 === 1) {
-                        text = `A Regra Campeã (x1):<br>Se multiplicar por 1 é sempre ele mesmo, o elemento NEUTRO!<br>Resultado: <span class="tip-highlight">${answer}</span>.`;
+                        text = `A Regra Campeã (x1):<br>Nosso campeão da multiplicação! Multiplicar por 1 é sempre ele mesmo, o elemento NEUTRO!<br>Resultado: <span class="tip-highlight">${answer}</span>.`;
                     } else {
-                        text = `A Regra Campeã (x${mult}):<br>Nosso campeão da multiplicação! Se multiplicar por 1 é sempre ele mesmo (o elemento NEUTRO), multiplicar por ${mult} é só potencializar a casa decimal para a direita, adicionando ${zeros} porque é ${mult} vezes maior!!<br>Resultado direto: <span class="tip-highlight">${answer}</span>.`;
+                        text = `A Regra Campeã (x${mult}):<br>Nosso campeão da multiplicação! Se multiplicar por 1 é sempre ele mesmo (o elemento NEUTRO), multiplicar por ${mult} é só potencializar a casa decimal para a direita, nesse caso adicionando ${zeros} porque é ${mult} vezes maior!!<br>Resultado direto: <span class="tip-highlight">${answer}</span>.`;
                     }
                 }
                 else if (n1 >= 100 && n2 >= 100) {
@@ -884,21 +944,22 @@
                 let temp_n1 = n1; let temp_n2 = n2;
                 let simplificou = false; let stepStr = "";
 
-                if (n1 % 2 === 0 && n2 % 2 === 0) {
+                if (temp_n2 !== 10 && n1 % 2 === 0 && n2 % 2 === 0) {
                     simplificou = true;
                     stepStr += `Corta no Meio (Simplificação):<br>Se ambos são pares, vá cortando pela metade sem dó:<br>`;
-                    while (temp_n1 % 2 === 0 && temp_n2 % 2 === 0) {
+                    while (temp_n1 % 2 === 0 && temp_n2 % 2 === 0 && temp_n2 !== 10) {
                         stepStr += `<span class="tip-highlight">${temp_n1} ÷ ${temp_n2}</span> ➔ <span class="tip-highlight">${temp_n1/2} ÷ ${temp_n2/2}</span><br>`;
                         temp_n1 /= 2; temp_n2 /= 2;
+                        if (temp_n2 === 10) break;
                     }
                 }
 
                 if (temp_n2 === 10) {
                     let prefix = simplificou ? stepStr + `<br>` : "";
-                    text = prefix + `A Majestade Decimal:<br>O campeão do sistema, o 1 com um zero, o 10! Nesse caso vamos só mudar a 'vírgula' de lugar no <span class="tip-highlight">${temp_n1}</span> porque o 0 depois do 1 só encolhe a casa decimal, e sobra a divisão por 1 (que é sempre o próprio número!).<br>Resultado direto: <span class="tip-highlight">${answer}</span>.`;
+                    text = prefix + `A Majestade Decimal (÷10):<br>O campeão do sistema, o 1 com um zero, o 10! Como a divisão por 1 é o elemento neutro (dá ele mesmo), o 0 atua apenas mudando a 'vírgula' de lugar no <span class="tip-highlight">${temp_n1}</span> para a esquerda!<br>Resultado direto: <span class="tip-highlight">${answer}</span>.`;
                 }
                 else if (temp_n2 === 1) {
-                    text = simplificou ? stepStr + `<br>Dividir por 1 é o próprio número: <span class="tip-highlight">${temp_n1}</span>.` : `Direto: <span class="tip-highlight">${n1}</span>.`;
+                    text = simplificou ? stepStr + `<br>Dividir por 1 é o próprio número (elemento neutro!): <span class="tip-highlight">${temp_n1}</span>.` : `Direto: <span class="tip-highlight">${n1}</span>.`;
                 } else if (temp_n1 <= temp_n2 * 10) { 
                     let prefix = simplificou ? stepStr + `<br>Ficou mais fácil! Inversão:<br>` : `Inversão:<br>`;
                     text = prefix + `Quantas vezes o <span class="tip-highlight">${temp_n2}</span> cabe em <span class="tip-highlight">${temp_n1}</span>?<br>Pense: ${temp_n2} x ? = ${temp_n1}.`; 
