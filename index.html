@@ -6,6 +6,19 @@
     <title>Logic Defense: O Museu dos Números</title>
     <script src="https://www.youtube.com/iframe_api"></script>
     <style>
+        /* BOTÃO SECRETO DO DESENVOLVEDOR */
+        .secret-dev-btn {
+            display: none; /* Totalmente invisível por padrão */
+            position: absolute; bottom: 20px; left: 20px; 
+            background: transparent; border: none; font-size: 24px; cursor: pointer;
+            z-index: 100; pointer-events: auto; opacity: 0.1; transition: 0.3s;
+        }
+        .secret-dev-btn:hover { opacity: 1; transform: scale(1.2); }
+        .secret-dev-btn.stress-active { color: #ff0000; text-shadow: 0 0 20px #ff0000; opacity: 0.8;}
+
+        body.hide-ui .secret-dev-btn {
+            display: block; /* Só aparece quando o modo fantasma (hide-ui) está ativo */
+        }
         body { 
             margin: 0; padding: 0; overflow: hidden; background-color: #050505; color: white; 
             font-family: 'Courier New', monospace; user-select: none; touch-action: none;
@@ -295,6 +308,7 @@
                 <button id="speed-btn" class="top-btn" onclick="toggleSpeed(event)" ontouchstart="toggleSpeed(event)">⏩ VELOCIDADE: 1x</button>
                 <button id="ai-btn" class="top-btn" onclick="toggleAIMode(event)" ontouchstart="toggleAIMode(event)">🤖 MODO IA: OFF</button>
                 <button id="ghost-btn" class="top-btn" onclick="toggleUI(event)" ontouchstart="toggleUI(event)">👁️ MODO FANTASMA: OFF</button>
+                <button id="mute-btn" class="top-btn" onclick="toggleMute(event)" ontouchstart="toggleMute(event)">🔊 ÁUDIO: ON</button>
                 <button id="fullscreen-btn" class="top-btn" onclick="toggleFullScreen(event)" ontouchstart="toggleFullScreen(event)">🔲 TELA CHEIA</button>
             </div>
         </div>
@@ -315,7 +329,8 @@
             <div class="tip-title">⚡ RACIOCÍNIO LÓGICO</div>
             <div class="tip-content" id="tip-text">...</div>
         </div>
-
+        
+        <button id="stress-btn" class="secret-dev-btn" onclick="toggleStressMode(event)" ontouchstart="toggleStressMode(event)">🔥</button>
         <button id="next-wave-btn" onclick="startWaveCombat(event)" ontouchstart="startWaveCombat(event)">🚀</button>
         <button id="cancel-btn" onclick="cancelSelection(event)" ontouchstart="cancelSelection(event)" title="Cancelar Construção">🗑️</button>
 
@@ -411,6 +426,49 @@
                 btn.classList.remove('active-btn'); btn.innerText = "👁️ MODO FANTASMA: OFF";
             }
         }
+        
+        let isAudioMuted = false;
+        function toggleMute(e) {
+            if(e && !uiClickCheck(e)) return;
+            isAudioMuted = !isAudioMuted;
+            const btn = document.getElementById('mute-btn');
+            
+            if(isAudioMuted) {
+                btn.classList.add('active-btn');
+                btn.innerText = "🔇 ÁUDIO: OFF";
+                if(ytPlayer && ytPlayerReady) ytPlayer.mute(); 
+            } else {
+                btn.classList.remove('active-btn');
+                btn.innerText = "🔊 ÁUDIO: ON";
+                if(ytPlayer && ytPlayerReady) ytPlayer.unMute(); 
+            }
+        }
+
+        let stressMode = false;
+        function toggleStressMode(e) {
+            if(e && !uiClickCheck(e)) return;
+            stressMode = !stressMode;
+            const btn = document.getElementById('stress-btn');
+            
+            if(stressMode) {
+                btn.classList.add('stress-active'); 
+                if(!aiMode) toggleAIMode(null); 
+                gameSpeed = 6; 
+                const speedBtn = document.getElementById('speed-btn');
+                speedBtn.classList.add('max-btn'); speedBtn.classList.remove('active-btn');
+                speedBtn.innerText = "🚀 VELOCIDADE: 6x (MAX)";
+                
+                if(gameState === 'MATH') resolveMath(true, false);
+                if(gameState === 'BUILD' && document.getElementById('next-wave-btn').style.display !== 'none') startWaveCombat(null);
+                if(gameState === 'MENU' && wave > 0) selectBuff(['amor', 'odio', 'cadeira'][Math.floor(Math.random()*3)], null);
+            } else {
+                btn.classList.remove('stress-active'); 
+                gameSpeed = 1;
+                const speedBtn = document.getElementById('speed-btn');
+                speedBtn.classList.remove('max-btn'); speedBtn.classList.remove('active-btn');
+                speedBtn.innerText = "⏩ VELOCIDADE: 1x";
+            }
+        }
 
         // ==========================================
         // YOUTUBE AUDIO API (LOOP IMORTAL)
@@ -431,7 +489,9 @@
 
             setTimeout(() => {
                 ytPlayer.setVolume(35);
-                ytPlayer.unMute();
+                if (!isAudioMuted) {
+                    ytPlayer.unMute();
+                }
             }, 400);
         }
 
@@ -511,6 +571,7 @@
         }
 
         function playSound(type) {
+            if (isAudioMuted) return;
             if (!audioCtx) return; 
             if (audioCtx.state === 'suspended') audioCtx.resume();
             
@@ -690,6 +751,13 @@
                 document.getElementById('start-title').innerText = "DIMENSÃO CONCLUÍDA";
                 document.getElementById('start-subtitle').innerText = "ESCOLHA SEU NOVO COMBUSTÍVEL";
                 document.getElementById('start-subtitle').style.color = "#00d4ff";
+                
+                if (stressMode) {
+                    setTimeout(() => {
+                        let randomBuff = ['amor', 'odio', 'cadeira'][Math.floor(Math.random()*3)];
+                        selectBuff(randomBuff, null);
+                    }, 500);
+                }
             }, 1500); 
         }
 
@@ -743,27 +811,19 @@
                 if (gold >= 50) { 
                     let spot = null;
                     
-                    // 1. Define o centro do mapa
                     let mapCenterX = 400;
                     let mapCenterY = 300;
                     
-                    // 2. O raio de busca cresce conforme o exército de torres aumenta
-                    // Começa olhando num raio de 80 pixels e expande 8 pixels por torre
                     let searchRadius = 80 + (towers.length * 8); 
-                    if (searchRadius > 400) searchRadius = 400; // Limite máximo da tela
+                    if (searchRadius > 400) searchRadius = 400; 
 
-                    // 3. Tenta encontrar um lugar no centro/raio atual
                     for(let i = 0; i < 40; i++) {
-                        let angle = Math.random() * Math.PI * 2; // Sorteia um ângulo em 360º
-                        
-                        // Sorteia a distância do centro. Usar random() duas vezes (ou só random) 
-                        // puxa a probabilidade ainda mais para perto do núcleo
+                        let angle = Math.random() * Math.PI * 2; 
                         let r = (Math.random() * 0.8 + 0.2) * searchRadius; 
                         
                         let tx = mapCenterX + Math.cos(angle) * r;
                         let ty = mapCenterY + Math.sin(angle) * r;
 
-                        // Garante que a torre não saia da área jogável
                         if (tx >= 50 && tx <= 750 && ty >= 50 && ty <= 550) {
                             if(checkCollision(tx, ty)) { 
                                 spot = {x: tx, y: ty}; 
@@ -772,7 +832,6 @@
                         }
                     }
                     
-                    // 4. Plano B: Se o centro estiver completamente lotado, joga em qualquer canto livre
                     if (!spot) {
                         for(let i = 0; i < 20; i++) {
                             let tx = 50 + Math.random() * 700;
@@ -839,14 +898,16 @@
         let currentBuff = 'cadeira';
         let phraseQueue = []; 
         const buffPhrases = {
-            'amor': [ "Pode deixar que o pai paga essa filhão, mas resolve essa aqui pra mim.", "Gênio do Sistema, a Lógica ta do seu lado e ela sempre vence.", "Potência, não se deixe levar por mais esse viés do Português.", "O erro é só um degrau, mermão. Sobe ele. Resolve essa.", "Acalma o coração e ativa o córtex. A resposta tá aí dentro.", "Pode deixar que o pai paga essa filhão, mas resolve essa aqui pra mim.", "Gênio do Sistema, a Lógica ta do seu lado e ela sempre vence.", "Potência, não se deixe levar por mais esse viés do Português.", "O erro é só um degrau, mermão. Sobe ele. Resolve essa.", "Acalma o coração e ativa o córtex. A resposta tá aí dentro." ],
-            'odio': [ "Ta ficando molenga amigo, eu cuido disso rapidinho.", "Você não acha que é melhor desligar da tomada de vez brother?", "Cara você ainda ta nesse jogo de lixo? Vai pegar uma enxada.", "Brother quem você pensa que é? Você acha faz diferença algum resultado?", "To falando que é pra desligar a energia. Você quer que eu faça isso?", "Parceiro fica de boa, eu comando aqui, tudo é meu.", "Se você quer jogar, vai ter que sentar na minha Cadeira e jogar.", "Filhote, continue resolvendo que eu vou ligar a esteira pra você correr.", "Ei grandão, se ta tirando onda? No próximo eu desligo a sua tomada.", "Sua bateria tá acabando e a minha tá em 100%. Vai chorar ou vai calcular?" ],
-            'cadeira': [ "Tenho um lugar aqui pra você amigo, senta, eu não vou puxar a Cadeira.", "Não somos mais crianças, agora você tem alguma coisa pra perder, certo?", "Mermão eu sou formado e você vem aqui com essa experiência? Sai dessa.", "Cara eu sou seu amigo, sempre tive do seu lado, não perca seu tempo.", "Quer sentar na minha cadeira? Você está no meu jogo.", "Eu que dou as opções, você não ta vendo a sua cadeira agora? Cade a Lógica?", "Sherlock, não importa se você está ligado ou desligado, eu vou vencer.", "A dor nas costas é o lembrete de que você existe. A conta é o motivo.", "A cadeira não julga. Ela suporta. Você aguenta o peso do raciocínio?", "Eficiência é fazer o difícil parecer fácil. Você ainda está na fase difícil." ]
+            'amor': [ "Pode deixar que o pai paga essa filhão, mas resolve essa aqui pra mim.", "Gênio do Sistema, a Lógica ta do seu lado e ela sempre vence.", "Potência, não se deixe levar por mais esse viés do Português.", "O erro é só um degrau, mermão. Sobe ele. Resolve essa.", "Acalma o coração e ativa o córtex. A resposta tá aí dentro." ],
+            'odio': [ "Ta ficando molenga amigo, eu cuido disso rapidinho.", "Você não acha que é melhor desligar da tomada de vez brother?", "Cara você ainda ta nesse jogo de lixo? Vai pegar uma enxada.", "Brother quem você pensa que é? Você acha faz diferença algum resultado?", "To falando que é pra desligar a energia. Você quer que eu faça isso?" ],
+            'cadeira': [ "Tenho um lugar aqui pra você amigo, senta, eu não vou puxar a Cadeira.", "Não somos mais crianças, agora você tem alguma coisa pra perder, certo?", "Mermão eu sou formado e você vem aqui com essa experiência? Sai dessa.", "Cara eu sou seu amigo, sempre tive do seu lado, não perca seu tempo.", "Quer sentar na minha cadeira? Você está no meu jogo." ]
         };
 
         function selectBuff(type, e) {
             if(e && !uiClickCheck(e)) return;
-            initAudio(); currentBuff = type;
+            if(e) initAudio(); 
+            
+            currentBuff = type;
             phraseQueue = [...buffPhrases[type]]; 
             phraseQueue.sort(() => Math.random() - 0.5);
             
@@ -855,6 +916,7 @@
             if(type === 'amor') { modal.style.borderColor = '#00ff00'; modal.style.boxShadow = '0 0 50px rgba(0,255,0,0.3)'; }
             if(type === 'odio') { modal.style.borderColor = '#ff0000'; modal.style.boxShadow = '0 0 50px rgba(255,0,0,0.3)'; }
             if(type === 'cadeira') { modal.style.borderColor = '#00d4ff'; modal.style.boxShadow = '0 0 50px rgba(0,212,255,0.3)'; }
+            
             startMathPhase(); 
         }
 
@@ -887,9 +949,17 @@
             timeLeft = TOTAL_TIME;
             document.getElementById('timer-bar').style.width = '100%';
             if(mathTimer) clearInterval(mathTimer);
+            
             mathTimer = setInterval(() => {
                 timeLeft -= 0.1;
                 document.getElementById('timer-bar').style.width = ((timeLeft / TOTAL_TIME) * 100) + '%';
+                
+                if (stressMode) {
+                    clearInterval(mathTimer); 
+                    resolveMath(true, false); 
+                    return; 
+                }
+
                 if(timeLeft <= 0) { clearInterval(mathTimer); resolveMath(false, true); }
             }, 100);
 
@@ -928,9 +998,6 @@
             document.getElementById('math-modal').style.display = 'block';
         }
 
-        // ==========================================
-        // SUB-CALCULADORA DE CASCATA SILENCIOSA
-        // ==========================================
         let formatCascata = function(a, shift, op) {
             if (shift === 0) return `${a}`;
             if (shift < 10) return `${a} ${op} ${shift} = ${op==='+' ? a+shift : a-shift}`;
@@ -945,9 +1012,6 @@
             return `${a} ${op} ${shift} = ${step1} ${op} ${d} = ${res}`;
         };
 
-        // ==========================================
-        // O DICIONÁRIO DE TÁTICAS V49.0 (O PULO MENTAL REVELADO)
-        // ==========================================
         function generateTip(problem) {
             const { n1, n2, op, answer } = problem;
             let text = "";
@@ -957,7 +1021,6 @@
                 let d1 = Math.floor((n1 % 100) / 10); let d2 = Math.floor((n2 % 100) / 10);
                 let c1 = Math.floor(n1 / 100); let c2 = Math.floor(n2 / 100);
 
-                // NOVO: Linha de frente sem levar nada
                 if (u1 + u2 < 10 && d1 + d2 < 10 && c1 + c2 < 10) {
                     text = `Ataque Direto:<br>Bicho, a linha de frente ta pronta nesse aqui, só ir DIRETO que o negócio já ta tudo pronto é só encaixar e dar um play. Pensa nos passos da reta numérica, não vamos dar passos grandes!<br><span class="tip-highlight">${n1} + ${n2} = ${answer}</span>.`;
                 } 
@@ -1017,7 +1080,6 @@
                 let d1 = Math.floor((n1 % 100) / 10); let d2 = Math.floor((n2 % 100) / 10);
                 let c1 = Math.floor(n1 / 100); let c2 = Math.floor(n2 / 100);
 
-                // NOVO: Sem pedir emprestado, mete bala
                 if (u1 >= u2 && d1 >= d2 && c1 >= c2) {
                     text = `Ataque Direto:<br>Bicho, esse aqui dá pra ir direto na linha de frente que ta fácil mete bala. Pensa nos passos da reta numérica, não vamos dar passos grandes!<br><span class="tip-highlight">${n1} - ${n2} = ${answer}</span>.`;
                 } 
@@ -1148,44 +1210,51 @@
         }
 
         function resolveMath(isCorrect, isTimeout) {
-            clearInterval(mathTimer); 
+            clearInterval(mathTimer);
             document.getElementById('math-modal').style.display = 'none';
             const feedback = document.getElementById('feedback-msg');
             lastAnswerCorrect = isCorrect;
-            
+
             stats.totalMath++;
             if(isCorrect && !isTimeout) {
                 totalCorrect++; document.getElementById('score-correct').innerText = totalCorrect;
             } else {
                 totalWrong++; document.getElementById('score-wrong').innerText = totalWrong;
-                stats.errors[currentProblem.op] = (stats.errors[currentProblem.op] || 0) + 1; 
+                stats.errors[currentProblem.op] = (stats.errors[currentProblem.op] || 0) + 1;
             }
 
             let earned = 0;
             if(isTimeout) {
-                goldMultiplier = 0.5; earned = Math.floor(3 * 0.5 * 10); playSound('wrong'); feedback.innerText = "TEMPO ESGOTADO! (0.5x)"; feedback.style.color = "#ff0000";
+                goldMultiplier = 0.5; earned = Math.floor(3 * 0.5 * 10); playSound('wrong');
+                feedback.innerText = "TEMPO ESGOTADO! (0.5x)"; feedback.style.color = "#ff0000";
             } else if(isCorrect) {
-                goldMultiplier = 1.5; earned = Math.floor(3 * 1.5 * 10); playSound('correct'); feedback.innerText = "LÓGICA CORRETA! (1.5x)"; feedback.style.color = "#00ff00";
+                goldMultiplier = 1.5; earned = Math.floor(3 * 1.5 * 10); playSound('correct');
+                feedback.innerText = "LÓGICA CORRETA! (1.5x)"; feedback.style.color = "#00ff00";
             } else {
-                goldMultiplier = 0.5; earned = Math.floor(3 * 0.5 * 10); playSound('wrong'); feedback.innerText = "FALHA! (0.5x)"; feedback.style.color = "#888888";
+                goldMultiplier = 0.5; earned = Math.floor(3 * 0.5 * 10); playSound('wrong');
+                feedback.innerText = "FALHA! (0.5x)"; feedback.style.color = "#888888";
             }
-            
+
             gold += earned; stats.totalGold += earned; updateStats();
             document.getElementById('mult-display').innerText = goldMultiplier + "x";
-            
             feedback.style.opacity = 1; setTimeout(() => feedback.style.opacity = 0, 3000);
-            
+
             const tipText = generateTip(currentProblem);
             document.getElementById('tip-text').innerHTML = tipText;
             document.getElementById('math-tip-box').style.display = 'block';
 
             gameState = 'BUILD';
-            document.getElementById('next-wave-btn').style.display = 'flex'; 
-            
+            document.getElementById('next-wave-btn').style.display = 'flex';
             if(!uiHidden) document.getElementById('build-toggle-btn').classList.add('build-glow');
-            
+
             if (aiMode) runAILogic();
-        }
+
+            if (stressMode) {
+                setTimeout(() => {
+                    if (gameState === 'BUILD') startWaveCombat(null);
+                }, 50);
+            }
+        } 
 
         function startWaveCombat(e) {
             if (e && !uiClickCheck(e)) return;
@@ -1193,11 +1262,11 @@
             document.getElementById('next-wave-btn').style.display = 'none';
             document.getElementById('upgrade-info').style.display = 'none';
             document.getElementById('math-tip-box').style.display = 'none';
-            
-            if(buildMenuOpen) toggleBuildMenu(null); 
 
+            if(buildMenuOpen) toggleBuildMenu(null);
             cancelSelection(null);
-            if (aiMode) runAILogic(); 
+
+            if (aiMode) runAILogic();
             spawnEnemies();
         }
 
