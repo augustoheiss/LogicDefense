@@ -58,7 +58,9 @@
 
         canvas { display: block; cursor: crosshair; position: absolute; top:0; left:0; width: 100%; height: 100%; z-index: 1; }
         
+        /* PLACAR */
         #ui-layer { position: absolute; top: 10px; left: 10px; pointer-events: none; display: flex; flex-wrap: wrap; gap: 10px; transition: opacity 0.3s; z-index: 20;}
+        
         .stat-box { 
             background: rgba(0,0,0,0.8); padding: 8px 12px; border: 1px solid #00ff00; color: #00ff00; 
             font-weight: bold; font-size: 14px; border-radius: 4px; box-shadow: 0 0 10px rgba(0,255,0,0.2);
@@ -104,7 +106,7 @@
 
         #high-score-display { color: #ffd700; font-size: 16px; font-weight: bold; margin-top: -15px; margin-bottom: 25px; text-shadow: 0 0 10px #ffd700; letter-spacing: 1px;}
 
-        /* MODAIS GERAIS */
+        /* MODAIS GERAIS (MANIFESTO E VIÉSES) */
         .info-modal { display:none; position:absolute; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.95); z-index:300; flex-direction:column; align-items:center; justify-content:center; padding: 20px; box-sizing: border-box; }
         .info-box { max-width: 700px; color: #eee; line-height: 1.6; font-size: 14px; text-align: justify; border: 1px solid #00d4ff; padding: 30px; border-radius: 10px; background: #111; box-shadow: 0 0 30px rgba(0,212,255,0.3); overflow-y: auto; max-height: 90vh; }
         .info-title { color: #00d4ff; text-align: center; margin-top: 0; font-size: 24px; text-shadow: 0 0 10px #00d4ff;}
@@ -151,6 +153,7 @@
 
         #feedback-msg { position: absolute; top: 150px; width: 100%; text-align: center; font-size: 32px; font-weight: bold; opacity: 0; transition: opacity 0.5s; text-shadow: 0 0 10px #000, 0 0 20px #000; z-index: 6; pointer-events: none; }
         
+        /* PAINEL DE UPGRADE CENTRALIZADO */
         #upgrade-info { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); text-align: left; font-size: 14px; color: #aaa; pointer-events: auto; display: none; background: rgba(0,0,0,0.9); padding: 15px; border-radius: 5px; border-left: 3px solid #ffd700; z-index: 50; box-shadow: 0 0 20px rgba(0,0,0,0.8); flex-direction: column; gap: 10px;}
         .action-btn { background: #333; border: 1px solid #fff; color: white; padding: 8px; cursor: pointer; border-radius: 4px; transition: 0.2s; font-weight: bold; font-family: inherit;}
         .action-btn:hover { background: #555; transform: scale(1.05); }
@@ -191,9 +194,9 @@
             🏆 RECORDE: ONDA <span id="hs-wave-ui">0</span> | CONTAS: <span id="hs-math-ui">0</span> 🏆
         </div>
         
-        <button class="buff-btn buff-amor" onclick="selectBuff('amor')">❤️ AMOR<br><span style="font-size:12px; font-style:italic;">"O fogo tá sempre aceso"</span></button>
-        <button class="buff-btn buff-odio" onclick="selectBuff('odio')">🔥 ÓDIO<br><span style="font-size:12px; font-style:italic;">"Vou desligar sua tomada"</span></button>
-        <button class="buff-btn buff-cadeira" onclick="selectBuff('cadeira')">🪑 A CADEIRA<br><span style="font-size:12px; font-style:italic;">"Aceite a dor"</span></button>
+        <button class="buff-btn buff-amor" onclick="selectBuff('amor', event)" ontouchstart="selectBuff('amor', event)">❤️ AMOR<br><span style="font-size:12px; font-style:italic;">"O fogo tá sempre aceso"</span></button>
+        <button class="buff-btn buff-odio" onclick="selectBuff('odio', event)" ontouchstart="selectBuff('odio', event)">🔥 ÓDIO<br><span style="font-size:12px; font-style:italic;">"Vou desligar sua tomada"</span></button>
+        <button class="buff-btn buff-cadeira" onclick="selectBuff('cadeira', event)" ontouchstart="selectBuff('cadeira', event)">🪑 A CADEIRA<br><span style="font-size:12px; font-style:italic;">"Aceite a dor"</span></button>
         
         <div style="display: flex; gap: 10px; margin-top: 20px;">
             <button class="top-btn" style="font-size: 14px;" onclick="document.getElementById('manifesto-modal').style.display='flex'">📖 O MANIFESTO</button>
@@ -380,7 +383,7 @@
         // ==========================================
         let sysMenuOpen = false;
         function toggleSysMenu(e) {
-            if(!uiClickCheck(e)) return;
+            if(e && !uiClickCheck(e)) return;
             sysMenuOpen = !sysMenuOpen;
             document.getElementById('sys-menu-items').style.display = sysMenuOpen ? 'flex' : 'none';
         }
@@ -395,7 +398,7 @@
 
         let uiHidden = false;
         function toggleUI(e) {
-            if(!uiClickCheck(e)) return;
+            if(e && !uiClickCheck(e)) return;
             uiHidden = !uiHidden;
             const btn = document.getElementById('ghost-btn');
             if(uiHidden) {
@@ -458,7 +461,7 @@
         // TELA CHEIA E ESCALA ABSOLUTA
         // ==========================================
         function toggleFullScreen(e) {
-            if(!uiClickCheck(e)) return;
+            if(e && !uiClickCheck(e)) return;
             let elem = document.documentElement;
             if (!document.fullscreenElement) {
                 if (elem.requestFullscreen) { elem.requestFullscreen(); }
@@ -710,12 +713,12 @@
         }
 
         // ==========================================
-        // A MENTE DA SKYNET (IA LINHA DE FRENTE V45)
+        // A MENTE DA SKYNET (IA LINHA DE FRENTE)
         // ==========================================
         let aiMode = false;
 
         function toggleAIMode(e) {
-            if(!uiClickCheck(e)) return;
+            if(e && !uiClickCheck(e)) return;
             aiMode = !aiMode;
             const btn = document.getElementById('ai-btn');
             if(aiMode) {
@@ -808,7 +811,8 @@
             'cadeira': [ "Tenho um lugar aqui pra você amigo, senta, eu não vou puxar a Cadeira.", "Não somos mais crianças, agora você tem alguma coisa pra perder, certo?", "Mermão eu sou formado e você vem aqui com essa experiência? Sai dessa.", "Cara eu sou seu amigo, sempre tive do seu lado, não perca seu tempo.", "Quer sentar na minha cadeira? Você está no meu jogo.", "Eu que dou as opções, você não ta vendo a sua cadeira agora? Cade a Lógica?", "Sherlock, não importa se você está ligado ou desligado, eu vou vencer.", "A dor nas costas é o lembrete de que você existe. A conta é o motivo.", "A cadeira não julga. Ela suporta. Você aguenta o peso do raciocínio?", "Eficiência é fazer o difícil parecer fácil. Você ainda está na fase difícil." ]
         };
 
-        function selectBuff(type) {
+        function selectBuff(type, e) {
+            if(e && !uiClickCheck(e)) return;
             initAudio(); currentBuff = type;
             phraseQueue = [...buffPhrases[type]]; 
             phraseQueue.sort(() => Math.random() - 0.5);
@@ -827,7 +831,7 @@
         }
 
         function toggleSpeed(e) {
-            if(!uiClickCheck(e)) return;
+            if (e && !uiClickCheck(e)) return;
             const btn = document.getElementById('speed-btn');
             if(gameSpeed === 1) { gameSpeed = 3; btn.classList.add('active-btn'); btn.classList.remove('max-btn'); btn.innerText = "⏩ VELOCIDADE: 3x"; } 
             else if(gameSpeed === 3) { gameSpeed = 6; btn.classList.remove('active-btn'); btn.classList.add('max-btn'); btn.innerText = "🚀 VELOCIDADE: 6x (MAX)"; } 
@@ -892,93 +896,130 @@
         }
 
         // ==========================================
-        // O DICIONÁRIO DE TÁTICAS V45.0 (A FÓRMULA FINAL)
+        // SUB-CALCULADORA DE CASCATA SILENCIOSA
+        // ==========================================
+        let formatCascata = function(a, shift, op) {
+            if (shift === 0) return `${a}`;
+            if (shift < 10) return `${a} ${op} ${shift} = ${op==='+' ? a+shift : a-shift}`;
+            
+            let res = op === '+' ? a + shift : a - shift;
+            let u = shift % 10;
+            let d = shift - u;
+            
+            if (u === 0) return `${a} ${op} ${shift} = ${res}`;
+            
+            let step1 = op === '+' ? a + u : a - u;
+            return `${a} ${op} ${shift} = ${step1} ${op} ${d} = ${res}`;
+        };
+
+        // ==========================================
+        // O DICIONÁRIO DE TÁTICAS V49.0 (O PULO MENTAL REVELADO)
         // ==========================================
         function generateTip(problem) {
             const { n1, n2, op, answer } = problem;
             let text = "";
 
             if (op === '+') {
-                let temp1 = n1; let temp2 = n2;
-                let shiftText = "";
-
-                let tu1 = n1 % 100; let tu2 = n2 % 100;
                 let u1 = n1 % 10; let u2 = n2 % 10;
+                let d1 = Math.floor((n1 % 100) / 10); let d2 = Math.floor((n2 % 100) / 10);
+                let c1 = Math.floor(n1 / 100); let c2 = Math.floor(n2 / 100);
 
-                if (u1 === 0 || u2 === 0) {
-                    if ((tu1 >= 60 || tu2 >= 60) && (n1 >= 100 || n2 >= 100)) {
-                        let alvo = tu1 >= 60 ? n1 : n2;
-                        let outro = tu1 >= 60 ? n2 : n1;
-                        let shift = 100 - (alvo % 100);
-                        temp1 = alvo + shift; temp2 = outro - shift;
-                        shiftText = `A Lei do Menor Esforço (Centenas):<br>O número ${alvo} está precisando de apenas ${shift} passos na reta numérica para fechar uma centena forte. Tiramos ${shift} do outro (${outro} vira ${temp2}) e damos para ele.<br>Nova forma da massinha: <span class="tip-highlight">${temp1} + ${temp2}</span>.<br><br>`;
-                    } else if ((tu1 >= 10 && tu1 <= 40) || (tu2 >= 10 && tu2 <= 40)) {
-                        let alvo = (tu1 >= 10 && tu1 <= 40) ? n1 : n2;
-                        let outro = (tu1 >= 10 && tu1 <= 40) ? n2 : n1;
-                        let shift = alvo % 100;
-                        temp1 = alvo - shift; temp2 = outro + shift;
-                        shiftText = `A Lei do Menor Esforço (Centenas):<br>O número ${alvo} está quebrado, damos ${shift} passos para trás para arredondar para baixo (vira ${temp1}), e jogamos esse peso no outro (${outro} vira ${temp2}).<br>Nova forma da massinha: <span class="tip-highlight">${temp1} + ${temp2}</span>.<br><br>`;
+                // NOVO: Linha de frente sem levar nada
+                if (u1 + u2 < 10 && d1 + d2 < 10 && c1 + c2 < 10) {
+                    text = `Ataque Direto:<br>Bicho, a linha de frente ta pronta nesse aqui, só ir DIRETO que o negócio já ta tudo pronto é só encaixar e dar um play. Pensa na reta numérica, não vamos dar passos grandes! <br><span class="tip-highlight">${n1} + ${n2} = ${answer}</span>.`;
+                } 
+                else {
+                    let temp1 = n1; let temp2 = n2;
+                    let shiftText = "";
+
+                    let tu1 = n1 % 100; let tu2 = n2 % 100;
+
+                    if (u1 === 0 || u2 === 0) {
+                        if ((tu1 >= 60 || tu2 >= 60) && (n1 >= 100 || n2 >= 100)) {
+                            let alvo = tu1 >= 60 ? n1 : n2;
+                            let outro = tu1 >= 60 ? n2 : n1;
+                            let shift = 100 - (alvo % 100);
+                            temp1 = alvo + shift; temp2 = outro - shift;
+                            shiftText = `A Lei do Menor Esforço (Centenas):<br>O número ${alvo} está precisando de apenas ${shift} passos na reta numérica para fechar uma centena forte. Tiramos ${shift} do outro (<span class="tip-highlight">${formatCascata(outro, shift, '-')}</span>) e damos para ele.<br>Nova forma da massinha: <span class="tip-highlight">${temp1} + ${temp2}</span>.<br><br>`;
+                        } else if ((tu1 >= 10 && tu1 <= 40) || (tu2 >= 10 && tu2 <= 40)) {
+                            let alvo = (tu1 >= 10 && tu1 <= 40) ? n1 : n2;
+                            let outro = (tu1 >= 10 && tu1 <= 40) ? n2 : n1;
+                            let shift = alvo % 100;
+                            temp1 = alvo - shift; temp2 = outro + shift;
+                            shiftText = `A Lei do Menor Esforço (Centenas):<br>O número ${alvo} está quebrado, damos ${shift} passos para trás para arredondar para baixo, e jogamos esse peso no outro (<span class="tip-highlight">${formatCascata(outro, shift, '+')}</span>).<br>Nova forma da massinha: <span class="tip-highlight">${temp1} + ${temp2}</span>.<br><br>`;
+                        } else {
+                            shiftText = `Como um dos números já termina em zero perfeito, não precisamos fazer ajustes na massinha. Vamos direto pro ataque final!<br><br>`;
+                        }
                     } else {
-                        shiftText = `Como um dos números já termina em zero perfeito, não precisamos fazer ajustes na massinha. Vamos direto pro ataque final!<br><br>`;
-                    }
-                } else {
-                    if (u1 >= 6 || u2 >= 6) {
-                        let alvo = u1 >= 6 ? n1 : n2;
-                        let outro = u1 >= 6 ? n2 : n1;
-                        let shift = 10 - (alvo % 10);
-                        temp1 = alvo + shift; temp2 = outro - shift;
-                        shiftText = `A Lei do Menor Esforço (Finais 6 a 9):<br>O ${alvo} está a apenas ${shift} passos na reta numérica da próxima dezena. Arredondamos para cima virando ${temp1}, e tiramos os mesmos ${shift} passos do outro (${outro} vira ${temp2}).<br>Nova forma da massinha: <span class="tip-highlight">${temp1} + ${temp2}</span>.<br><br>`;
-                    } else if ((u1 >= 1 && u1 <= 4) || (u2 >= 1 && u2 <= 4)) {
-                        let alvo = (u1 >= 1 && u1 <= 4) ? n1 : n2;
-                        let outro = (u1 >= 1 && u1 <= 4) ? n2 : n1;
-                        let shift = alvo % 10;
-                        temp1 = alvo - shift; temp2 = outro + shift;
-                        shiftText = `A Lei do Menor Esforço (Finais 1 a 4):<br>Damos ${shift} passos para trás no ${alvo} para arredondar para baixo (vira ${temp1}), e andamos esses passos guardados somando no outro (${outro} vira ${temp2}).<br>Nova forma da massinha: <span class="tip-highlight">${temp1} + ${temp2}</span>.<br><br>`;
-                    }
-                }
-
-                let c1_val = Math.floor(temp1/100)*100; let c2_val = Math.floor(temp2/100)*100;
-                let d1_val = Math.floor((temp1%100)/10)*10; let d2_val = Math.floor((temp2%100)/10)*10;
-                let u1_val = temp1 % 10; let u2_val = temp2 % 10;
-                
-                let decompText = `Decomposição Final (Do Maior pro Menor):<br>`;
-                if (temp1 >= 100 || temp2 >= 100) decompText += `Centenas: <span class="tip-highlight">${c1_val} + ${c2_val} = ${c1_val+c2_val}</span><br>`;
-                decompText += `Dezenas: <span class="tip-highlight">${d1_val} + ${d2_val} = ${d1_val+d2_val}</span><br>`;
-                decompText += `Unidades: <span class="tip-highlight">${u1_val} + ${u2_val} = ${u1_val+u2_val}</span><br>`;
-                decompText += `Junta tudo: <span class="tip-highlight">${answer}</span>.`;
-
-                text = shiftText + decompText;
-            } 
-            else if (op === '-') {
-                let shift = 0; let isAdding = true; let alvoDesc = "unidade";
-                let tu2 = n2 % 100;
-                let u2 = n2 % 10;
-
-                if (n2 >= 100 && tu2 !== 0 && tu2 > 10) { 
-                    alvoDesc = "dezena e unidade";
-                    if (tu2 >= 50) { shift = 100 - tu2; isAdding = true; }
-                    else { shift = tu2; isAdding = false; }
-                } else {
-                    if (u2 !== 0) {
-                        if (u2 >= 5) { shift = 10 - u2; isAdding = true; alvoDesc = "unidade"; }
-                        else { shift = u2; isAdding = false; alvoDesc = "unidade"; }
-                    } else if (n2 >= 10 && n2 % 10 === 0) {
-                        let t2 = Math.floor((n2 % 100) / 10);
-                        if (t2 !== 0) {
-                            alvoDesc = "dezena";
-                            if (t2 >= 5) { shift = 100 - (n2 % 100); isAdding = true; }
-                            else { shift = n2 % 100; isAdding = false; }
+                        if (u1 >= 6 || u2 >= 6) {
+                            let alvo = u1 >= 6 ? n1 : n2;
+                            let outro = u1 >= 6 ? n2 : n1;
+                            let shift = 10 - (alvo % 10);
+                            temp1 = alvo + shift; temp2 = outro - shift;
+                            shiftText = `A Lei do Menor Esforço (Finais 6 a 9):<br>O ${alvo} está a apenas ${shift} passos na reta numérica da próxima dezena. Arredondamos para cima virando ${temp1}, e tiramos os mesmos ${shift} passos do outro (<span class="tip-highlight">${formatCascata(outro, shift, '-')}</span>).<br>Nova forma da massinha: <span class="tip-highlight">${temp1} + ${temp2}</span>.<br><br>`;
+                        } else if ((u1 >= 1 && u1 <= 4) || (u2 >= 1 && u2 <= 4)) {
+                            let alvo = (u1 >= 1 && u1 <= 4) ? n1 : n2;
+                            let outro = (u1 >= 1 && u1 <= 4) ? n2 : n1;
+                            let shift = alvo % 10;
+                            temp1 = alvo - shift; temp2 = outro + shift;
+                            shiftText = `A Lei do Menor Esforço (Finais 1 a 4):<br>Damos ${shift} passos para trás no ${alvo} para arredondar para baixo (vira ${temp1}), e andamos esses passos guardados somando no outro (<span class="tip-highlight">${formatCascata(outro, shift, '+')}</span>).<br>Nova forma da massinha: <span class="tip-highlight">${temp1} + ${temp2}</span>.<br><br>`;
                         }
                     }
-                }
 
-                if (shift > 0) {
-                    let novoN1 = isAdding ? n1 + shift : n1 - shift;
-                    let novoN2 = isAdding ? n2 + shift : n2 - shift;
-                    let operacao = isAdding ? `Avançamos ${shift} passos` : `Voltamos ${shift} passos`;
-                    text = `Hack Japonês (O Subtraendo é o Rei: ${n2}):<br>A regra é nunca pedir emprestado! Olhamos SÓ para o número de baixo: ${operacao} na reta numérica dos DOIS números para zerar a ${alvoDesc} dele.<br>O ${n1} vira <span class="tip-highlight">${novoN1}</span>.<br>O ${n2} vira <span class="tip-highlight">${novoN2}</span>.<br>A distância matemática se manteve intacta. O cálculo agora desce reto e sem dor!<br><span class="tip-highlight">${novoN1} - ${novoN2} = ${answer}</span>.`;
-                } else {
-                    text = `Hack Japonês:<br>O subtraendo (${n2}) já está redondo como uma pedra. A distância está perfeita, faça o cálculo direto sem medo de emprestar!<br><span class="tip-highlight">${n1} - ${n2} = ${answer}</span>.`;
+                    let c1_val = Math.floor(temp1/100)*100; let c2_val = Math.floor(temp2/100)*100;
+                    let d1_val = Math.floor((temp1%100)/10)*10; let d2_val = Math.floor((temp2%100)/10)*10;
+                    let u1_val = temp1 % 10; let u2_val = temp2 % 10;
+                    
+                    let decompText = `Decomposição Final (Do Maior pro Menor):<br>`;
+                    if (temp1 >= 100 || temp2 >= 100) decompText += `Centenas: <span class="tip-highlight">${c1_val} + ${c2_val} = ${c1_val+c2_val}</span><br>`;
+                    decompText += `Dezenas: <span class="tip-highlight">${d1_val} + ${d2_val} = ${d1_val+d2_val}</span><br>`;
+                    decompText += `Unidades: <span class="tip-highlight">${u1_val} + ${u2_val} = ${u1_val+u2_val}</span><br>`;
+                    decompText += `Junta tudo: <span class="tip-highlight">${answer}</span>.`;
+
+                    text = shiftText + decompText;
+                }
+            } 
+            else if (op === '-') {
+                let u1 = n1 % 10; let u2 = n2 % 10;
+                let d1 = Math.floor((n1 % 100) / 10); let d2 = Math.floor((n2 % 100) / 10);
+                let c1 = Math.floor(n1 / 100); let c2 = Math.floor(n2 / 100);
+
+                // NOVO: Sem pedir emprestado, mete bala
+                if (u1 >= u2 && d1 >= d2 && c1 >= c2) {
+                    text = `Ataque Direto:<br>Bicho, esse aqui dá pra ir direto na linha de frente que ta fácil mete bala. Pensa nos passos da reta numérica, não vamos dar passos grandes! <br><span class="tip-highlight">${n1} - ${n2} = ${answer}</span>.`;
+                } 
+                else {
+                    let shift = 0; let isAdding = true; let alvoDesc = "unidade";
+                    let tu2 = n2 % 100;
+
+                    if (n2 >= 100 && tu2 !== 0 && tu2 > 10) { 
+                        alvoDesc = "dezena e unidade";
+                        if (tu2 >= 50) { shift = 100 - tu2; isAdding = true; }
+                        else { shift = tu2; isAdding = false; }
+                    } else {
+                        if (u2 !== 0) {
+                            if (u2 >= 5) { shift = 10 - u2; isAdding = true; alvoDesc = "unidade"; }
+                            else { shift = u2; isAdding = false; alvoDesc = "unidade"; }
+                        } else if (n2 >= 10 && n2 % 10 === 0) {
+                            let t2 = Math.floor((n2 % 100) / 10);
+                            if (t2 !== 0) {
+                                alvoDesc = "dezena";
+                                if (t2 >= 5) { shift = 100 - (n2 % 100); isAdding = true; }
+                                else { shift = n2 % 100; isAdding = false; }
+                            }
+                        }
+                    }
+
+                    if (shift > 0) {
+                        let novoN1 = isAdding ? n1 + shift : n1 - shift;
+                        let novoN2 = isAdding ? n2 + shift : n2 - shift;
+                        let operacao = isAdding ? `Avançamos ${shift} passos` : `Voltamos ${shift} passos`;
+                        let opSign = isAdding ? '+' : '-';
+                        
+                        text = `Hack Japonês (O Subtraendo é o Rei: ${n2}):<br>A regra é nunca pedir emprestado! Olhamos SÓ para o número de baixo: ${operacao} na reta numérica dos DOIS números para zerar a ${alvoDesc} dele.<br>O ${n1} acompanha: <span class="tip-highlight">${formatCascata(n1, shift, opSign)}</span>.<br>O ${n2} zera a ${alvoDesc}: <span class="tip-highlight">${formatCascata(n2, shift, opSign)}</span>.<br>A distância matemática se manteve intacta. O cálculo agora desce reto e sem dor!<br><span class="tip-highlight">${novoN1} - ${novoN2} = ${answer}</span>.`;
+                    } else {
+                        text = `Hack Japonês:<br>O subtraendo (${n2}) já está redondo como uma pedra. A distância está perfeita, faça o cálculo direto sem medo de emprestar!<br><span class="tip-highlight">${n1} - ${n2} = ${answer}</span>.`;
+                    }
                 }
             } 
             else if (op === 'x') {
@@ -1022,9 +1063,9 @@
                         
                         if (resto < 0) {
                             let excesso = Math.abs(resto);
-                            text = `Estratégia do Excesso (Do Maior pro Menor):<br>O número ${maior} tá pedindo pra subir. Vamos arredondar para cima dando ${excesso} passos na reta numérica, virando ${baseRedonda}, e calcular grandão!<br><span class="tip-highlight">${baseRedonda} x ${menor} = ${baseRedonda * menor}</span>.<br>Mas pera aí, a gente inventou ${excesso} a mais. Temos que tirar esse excesso pago: (${excesso} x ${menor} = ${excesso*menor}).<br>Cortando a gordura: <span class="tip-highlight">${baseRedonda * menor} - ${excesso*menor} = ${answer}</span>.`;
+                            text = `Estratégia do Excesso (Do Maior pro Menor):<br>O número ${maior} tá pedindo pra subir. Vamos arredondar para cima dando ${excesso} passos na reta numérica, virando ${baseRedonda}, e calcular grandão!<br><span class="tip-highlight">${baseRedonda} x ${menor} = ${baseRedonda * menor}</span>.<br>Mas pera aí, a gente inventou ${excesso} a mais. Temos que tirar esse excesso pago: <span class="tip-highlight">(${excesso} x ${menor} = ${excesso*menor})</span>.<br>Cortando a gordura: <span class="tip-highlight">${formatCascata(baseRedonda * menor, excesso*menor, '-')}</span>.`;
                         } else {
-                            text = `Decomposição Tática (Do Maior pro Menor):<br>O número ${maior} é quebrado. Vamos dar ${resto} passos pra trás e jogar a rebarba fora pra ficar redondo no ${baseRedonda}!<br>Atacamos a base primeiro: <span class="tip-highlight">${baseRedonda} x ${menor} = ${baseRedonda * menor}</span>.<br>Agora, não podemos esquecer daqueles ${resto} que guardamos no bolso: (${resto} x ${menor} = ${resto*menor}).<br>Somando os dois ataques: <span class="tip-highlight">${baseRedonda * menor} + ${resto*menor} = ${answer}</span>.`;
+                            text = `Decomposição Tática (Do Maior pro Menor):<br>O número ${maior} é quebrado. Vamos dar ${resto} passos pra trás e jogar a rebarba fora pra ficar redondo no ${baseRedonda}!<br>Atacamos a base primeiro: <span class="tip-highlight">${baseRedonda} x ${menor} = ${baseRedonda * menor}</span>.<br>Agora, não podemos esquecer daqueles ${resto} que guardamos no bolso: <span class="tip-highlight">(${resto} x ${menor} = ${resto*menor})</span>.<br>Somando os dois ataques: <span class="tip-highlight">${formatCascata(baseRedonda * menor, resto*menor, '+')}</span>.`;
                         }
                     } else {
                         text = `Ataque Direto:<br>Para esses números de unidade, a memória muscular fala mais alto. Foque no resultado direto da tabuada!<br><span class="tip-highlight">${n1} x ${n2} = ${answer}</span>.`;
@@ -1108,8 +1149,7 @@
             gameState = 'BUILD';
             document.getElementById('next-wave-btn').style.display = 'flex'; 
             
-            // Botão do Arsenal pisca pedindo atenção pra comprar torre
-            document.getElementById('build-toggle-btn').classList.add('build-glow');
+            if(!uiHidden) document.getElementById('build-toggle-btn').classList.add('build-glow');
             
             if (aiMode) runAILogic();
         }
@@ -1121,9 +1161,9 @@
             document.getElementById('upgrade-info').style.display = 'none';
             document.getElementById('math-tip-box').style.display = 'none';
             
-            if(buildMenuOpen) toggleBuildMenu(null); // Esconde a prateleira pra limpar a tela no combate
+            if(buildMenuOpen) toggleBuildMenu(null); 
 
-            cancelSelection();
+            cancelSelection(null);
             if (aiMode) runAILogic(); 
             spawnEnemies();
         }
@@ -1486,7 +1526,7 @@
         }
 
         function selectTowerBtn(idx, e) {
-            if(e && !uiClickCheck(e)) return;
+            if (e && !uiClickCheck(e)) return;
             cancelSelection(null); selectedTowerIdx = idx;
             document.getElementById('tbtn'+idx).classList.add('selected');
             document.body.classList.add('ghost-active'); isDraggingGhost = true; 
