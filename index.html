@@ -224,11 +224,11 @@
             <p style="font-style: italic; color: #aaa; text-align: center;">A Matemática não vai sair do lugar. Nós apenas escrevemos problemas diferentes de maneiras que produzam resultados. A regra universal: Manipule sempre do maior para o menor.</p>
             
             <h3>A Lei do Menor Esforço (+) e o Hack Japonês (-)</h3>
-            <p>Na <strong>Adição</strong>, moldamos a "massinha". Identificamos qual número precisa de menos passos na reta numérica para chegar num zero redondo. Tiramos de um lado e compensamos no outro. O que sobra, fazemos por Decomposição (Centena com Centena, Dezena com Dezena). Exemplo: 18 + 7 ➔ Tira 2 do sete e dá para o dezoito ➔ Fica 20 + 5 = 25.<br>
-            Na <strong>Subtração</strong>, o Subtraendo é o Rei. Mexemos nele primeiro dando passos para frente ou para trás na reta numérica até a unidade zerar, e aplicamos o exato mesmo passo no número de cima. O cálculo desce reto, sem nunca precisar "pedir emprestado". Exemplo visual: 42 - 19 ➔ Ande 1 passo para frente nos dois números para zerar a unidade do Rei ➔ 43 - 20 = 23.</p>
+            <p>Na <strong>Adição</strong>, moldamos a "massinha". Identificamos qual número precisa de menos passos na reta numérica para chegar num zero redondo. Tiramos de um lado e compensamos no outro. O que sobra, fazemos por Decomposição (Centena com Centena, Dezena com Dezena).<br>
+            Na <strong>Subtração</strong>, o Subtraendo é o Rei. Mexemos nele primeiro dando passos para frente ou para trás na reta numérica até a unidade zerar, e aplicamos o exato mesmo passo no número de cima. O cálculo desce reto, sem nunca precisar "pedir emprestado".</p>
 
             <h3>A Diferença de Quadrados (x)</h3>
-            <p>Na multiplicação, se houver um valor e uma variável em comum equidistante (ex: 12 x 8, que é (10+2)x(10-2) ou 10x10 - 2x2 (a+b)x(a-b) ou base² - passo²), usamos a diferença de quadrados: a base ao quadrado menos o passo ao quadrado (10² - 2²) = (100 - 4 = 96). Pura geometria mental. </p>
+            <p>Na multiplicação, se houver um valor e uma variável em comum equidistante (ex: 12 x 8, que é 10+2 e 10-2), usamos a diferença de quadrados: a base ao quadrado menos o passo ao quadrado (100 - 4 = 96). Pura geometria mental.</p>
 
             <h3>0: A Maldição e o Início</h3>
             <p>O elemento neutro da soma e subtração! Junto com o 9 torna algo completo às vezes sem aparecer. Ele é tão importante que é proibido usar numa balança exata (divisão), porque ele faz parecer que qualquer resultado é a mesma coisa. Ele não é neutro na multiplicação, ele é a maldição, o viés necessário. Ele parece antigo, mas é o irmão mais novo dos números.</p>
@@ -742,10 +742,43 @@
             if (towers.length < targetTowers) {
                 if (gold >= 50) { 
                     let spot = null;
-                    for(let i=0; i<30; i++) {
-                        let tx = 50 + Math.random() * 700; 
-                        let ty = 50 + Math.random() * 500;
-                        if(checkCollision(tx, ty)) { spot = {x: tx, y: ty}; break; }
+                    
+                    // 1. Define o centro do mapa
+                    let mapCenterX = 400;
+                    let mapCenterY = 300;
+                    
+                    // 2. O raio de busca cresce conforme o exército de torres aumenta
+                    // Começa olhando num raio de 80 pixels e expande 8 pixels por torre
+                    let searchRadius = 80 + (towers.length * 8); 
+                    if (searchRadius > 400) searchRadius = 400; // Limite máximo da tela
+
+                    // 3. Tenta encontrar um lugar no centro/raio atual
+                    for(let i = 0; i < 40; i++) {
+                        let angle = Math.random() * Math.PI * 2; // Sorteia um ângulo em 360º
+                        
+                        // Sorteia a distância do centro. Usar random() duas vezes (ou só random) 
+                        // puxa a probabilidade ainda mais para perto do núcleo
+                        let r = (Math.random() * 0.8 + 0.2) * searchRadius; 
+                        
+                        let tx = mapCenterX + Math.cos(angle) * r;
+                        let ty = mapCenterY + Math.sin(angle) * r;
+
+                        // Garante que a torre não saia da área jogável
+                        if (tx >= 50 && tx <= 750 && ty >= 50 && ty <= 550) {
+                            if(checkCollision(tx, ty)) { 
+                                spot = {x: tx, y: ty}; 
+                                break; 
+                            }
+                        }
+                    }
+                    
+                    // 4. Plano B: Se o centro estiver completamente lotado, joga em qualquer canto livre
+                    if (!spot) {
+                        for(let i = 0; i < 20; i++) {
+                            let tx = 50 + Math.random() * 700;
+                            let ty = 50 + Math.random() * 500;
+                            if(checkCollision(tx, ty)) { spot = {x: tx, y: ty}; break; }
+                        }
                     }
                     
                     if (spot) {
@@ -1671,4 +1704,3 @@
     </script>
 </body>
 </html>
-
