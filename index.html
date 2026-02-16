@@ -12,14 +12,13 @@
             width: 100vw; height: 100vh;
         }
 
-        /* TEXTOS AMBIENTES DO MUSEU (Sussurros da Matemática ao Fundo) - TUDO NA HORIZONTAL */
+        /* TEXTOS AMBIENTES DO MUSEU */
         .museum-text {
             position: absolute; color: rgba(0, 212, 255, 0.08); 
             font-family: 'Courier New', monospace; font-weight: bold; z-index: -200; 
             pointer-events: none; white-space: nowrap; text-shadow: 0 0 15px rgba(0,212,255,0.1);
         }
         
-        /* Espalhando os viéses ao redor do centro (800x600) */
         .mt-1 { top: 3%; left: 2%; font-size: 22px; }
         .mt-2 { top: 12%; left: 15%; font-size: 14px; color: rgba(0, 255, 0, 0.06); }
         .mt-3 { top: 4%; right: 3%; font-size: 20px; text-align: right; }
@@ -36,8 +35,8 @@
         .mt-14 { top: 75%; left: 8%; font-size: 13px; color: rgba(255, 255, 255, 0.05); }
         .mt-15 { top: 65%; right: 3%; font-size: 18px; text-align: right; }
         .mt-16 { top: 80%; right: 15%; font-size: 15px; text-align: right; }
+        .mt-17 { top: 50%; left: 30%; font-size: 20px; color: rgba(0, 255, 255, 0.04); }
 
-        /* Oculta os textos do museu em telas pequenas (celulares verticais) para não poluir por cima do Canvas */
         @media (max-width: 1100px) { .museum-text { display: none; } }
         
         #game-container { 
@@ -59,8 +58,7 @@
 
         canvas { display: block; cursor: crosshair; position: absolute; top:0; left:0; width: 100%; height: 100%; z-index: 1; }
         
-        #ui-layer { position: absolute; top: 10px; left: 10px; width: calc(100% - 20px); pointer-events: none; display: flex; flex-wrap: wrap; gap: 10px; transition: opacity 0.3s; align-items: center; z-index: 20;}
-        
+        #ui-layer { position: absolute; top: 10px; left: 10px; pointer-events: none; display: flex; flex-wrap: wrap; gap: 10px; transition: opacity 0.3s; z-index: 20;}
         .stat-box { 
             background: rgba(0,0,0,0.8); padding: 8px 12px; border: 1px solid #00ff00; color: #00ff00; 
             font-weight: bold; font-size: 14px; border-radius: 4px; box-shadow: 0 0 10px rgba(0,255,0,0.2);
@@ -77,18 +75,25 @@
         .stat-box:hover .tooltip-text, .stat-box:active .tooltip-text { visibility: visible; opacity: 1; }
         .tt-highlight { color: #ffeb3b; font-weight: bold; }
 
-        .top-btn { pointer-events: auto; background: rgba(0,0,0,0.8); border: 2px solid #fff; color: white; padding: 8px 15px; font-weight: bold; cursor: pointer; border-radius: 4px; transition: 0.2s; }
-        .top-btn:hover { transform: scale(1.05); }
-        #speed-btn.active { background: #ff9800; color: black; border-color: #ff9800; box-shadow: 0 0 15px #ff9800; }
-        #speed-btn.max { background: #f44336; color: white; border-color: #f44336; box-shadow: 0 0 15px #f44336; }
-        #ai-btn.active { background: #00d4ff; color: black; border-color: #00d4ff; box-shadow: 0 0 15px #00d4ff; }
-        #ghost-btn.active { background: #8a2be2; color: white; border-color: #8a2be2; box-shadow: 0 0 15px #8a2be2; }
+        /* BOTOES GERAIS */
+        .top-btn { pointer-events: auto; background: rgba(0,0,0,0.9); border: 2px solid #00d4ff; color: #00d4ff; padding: 8px 15px; font-weight: bold; font-family: inherit; cursor: pointer; border-radius: 4px; transition: 0.2s; box-shadow: 0 0 10px rgba(0,212,255,0.2);}
+        .top-btn:hover { background: #00d4ff; color: #000; }
+        .active-btn { background: #ff9800 !important; color: black !important; border-color: #ff9800 !important; box-shadow: 0 0 15px #ff9800 !important; }
+        .max-btn { background: #f44336 !important; color: white !important; border-color: #f44336 !important; box-shadow: 0 0 15px #f44336 !important; }
 
-        body.hide-ui #build-menu, body.hide-ui #next-wave-btn, body.hide-ui #math-tip-box, body.hide-ui .stat-box, body.hide-ui #speed-btn, body.hide-ui #ai-btn, body.hide-ui #fullscreen-btn {
-            opacity: 0.15 !important; pointer-events: none !important;
+        /* MENUS RETRÁTEIS */
+        #sys-menu-container { position: absolute; top: 10px; right: 10px; z-index: 50; display: flex; flex-direction: column; align-items: flex-end; }
+        #sys-menu-items { display: none; flex-direction: column; gap: 8px; margin-top: 10px; align-items: flex-end;}
+        
+        #build-menu-container { position: absolute; bottom: 10px; right: 10px; z-index: 50; display: flex; flex-direction: column-reverse; align-items: flex-end; gap: 10px;}
+        #build-menu { display: none; gap: 15px; background: rgba(0,0,0,0.85); padding: 10px; border-radius: 10px; border: 1px solid #555; box-shadow: 0 0 20px rgba(0,0,0,0.8); margin: 0;}
+        .build-glow { animation: attention-pulse 1.5s infinite; border: 1px solid #00ff00 !important; box-shadow: 0 0 20px #00ff00 !important;}
+
+        body.hide-ui #build-menu-container, body.hide-ui #sys-menu-container, body.hide-ui #next-wave-btn, body.hide-ui #math-tip-box, body.hide-ui #ui-layer {
+            opacity: 0.05 !important; pointer-events: none !important;
         }
-        body.ghost-active #build-menu { display: none !important; }
-        body.ghost-active #ui-layer, body.ghost-active #math-tip-box { opacity: 0.15 !important; pointer-events: none !important; }
+        body.ghost-active #build-menu-container { display: none !important; }
+        body.ghost-active #ui-layer, body.ghost-active #math-tip-box, body.ghost-active #sys-menu-container { opacity: 0.15 !important; pointer-events: none !important; }
 
         #start-screen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.90); z-index: 200; display: flex; flex-direction: column; align-items: center; justify-content: center; }
         .buff-btn { margin: 10px; padding: 15px 30px; font-size: 22px; cursor: pointer; border: 2px solid white; background: rgba(0,0,0,0.6); color: white; font-family: inherit; transition: 0.2s; width: 320px; text-align: center; border-radius: 8px; }
@@ -99,13 +104,13 @@
 
         #high-score-display { color: #ffd700; font-size: 16px; font-weight: bold; margin-top: -15px; margin-bottom: 25px; text-shadow: 0 0 10px #ffd700; letter-spacing: 1px;}
 
-        /* MODAIS GERAIS (MANIFESTO E VIÉSES) */
+        /* MODAIS GERAIS */
         .info-modal { display:none; position:absolute; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.95); z-index:300; flex-direction:column; align-items:center; justify-content:center; padding: 20px; box-sizing: border-box; }
-        .info-box { max-width: 650px; color: #eee; line-height: 1.6; font-size: 14px; text-align: justify; border: 1px solid #00d4ff; padding: 30px; border-radius: 10px; background: #111; box-shadow: 0 0 30px rgba(0,212,255,0.3); overflow-y: auto; max-height: 90vh; }
+        .info-box { max-width: 700px; color: #eee; line-height: 1.6; font-size: 14px; text-align: justify; border: 1px solid #00d4ff; padding: 30px; border-radius: 10px; background: #111; box-shadow: 0 0 30px rgba(0,212,255,0.3); overflow-y: auto; max-height: 90vh; }
         .info-title { color: #00d4ff; text-align: center; margin-top: 0; font-size: 24px; text-shadow: 0 0 10px #00d4ff;}
         .info-box h3 { color: #ffeb3b; font-size: 16px; margin-bottom: 5px; border-bottom: 1px solid #444; padding-bottom: 5px; margin-top: 20px;}
 
-        #math-tip-box { display: none; position: absolute; bottom: 120px; right: 20px; width: 420px; background: rgba(0, 0, 0, 0.95); border: 2px solid #00d4ff; padding: 15px; border-radius: 8px; color: #fff; z-index: 10; pointer-events: none; box-shadow: 0 0 30px rgba(0, 212, 255, 0.5); text-align: left; transition: opacity 0.3s; max-height: 60vh; overflow-y: auto;}
+        #math-tip-box { display: none; position: absolute; bottom: 120px; right: 20px; width: 440px; background: rgba(0, 0, 0, 0.95); border: 2px solid #00d4ff; padding: 15px; border-radius: 8px; color: #fff; z-index: 10; pointer-events: none; box-shadow: 0 0 30px rgba(0, 212, 255, 0.5); text-align: left; transition: opacity 0.3s; max-height: 60vh; overflow-y: auto;}
         .tip-title { color: #00d4ff; font-weight: bold; margin-bottom: 8px; text-transform: uppercase; font-size: 16px; border-bottom: 1px solid #444; padding-bottom: 5px; }
         .tip-content { font-size: 14px; line-height: 1.5; color: #eee; font-family: 'Verdana', sans-serif; } 
         .tip-highlight { color: #ffff00; font-weight: bold; }
@@ -113,12 +118,11 @@
         #next-wave-btn { 
             display: none; position: absolute; bottom: 140px; left: 20px; 
             padding: 10px; width: 70px; height: 70px; border-radius: 50%;
-            font-size: 24px; background: rgba(0, 200, 0, 0.2); color: #00ff00; border: 2px solid #00ff00; 
+            font-size: 32px; background: rgba(0, 200, 0, 0.2); color: #00ff00; border: 2px solid #00ff00; 
             cursor: pointer; font-weight: bold; z-index: 5; animation: pulse-green 2s infinite; box-shadow: 0 0 15px #00ff00;
             transition: 0.3s; pointer-events: auto; display: flex; align-items: center; justify-content: center;
         }
         #next-wave-btn:hover { background: rgba(0, 255, 0, 0.5); transform: scale(1.1); }
-        @keyframes pulse-green { 0% { box-shadow: 0 0 10px #00ff00; } 50% { box-shadow: 0 0 30px #00ff00; } 100% { box-shadow: 0 0 10px #00ff00; } }
 
         #cancel-btn { 
             display: none; position: absolute; bottom: 40px; left: 50%; transform: translateX(-50%); 
@@ -138,9 +142,6 @@
         .btn-math { background: #222; color: #fff; border: 2px solid #fff; padding: 15px; margin: 10px; width: 100px; font-size: 24px; cursor: pointer; font-family: inherit; transition: 0.2s; border-radius: 5px; }
         .btn-math:hover { background: #fff; color: #000; transform: scale(1.1); box-shadow: 0 0 20px #fff;}
 
-        #build-menu { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); display: flex; gap: 15px; background: rgba(0,0,0,0.85); padding: 10px; border-radius: 10px; border: 1px solid #555; transition: 0.3s; z-index: 5; box-shadow: 0 0 20px rgba(0,0,0,0.8); }
-        .build-glow { animation: attention-pulse 1.5s infinite; border: 1px solid #00ff00 !important; }
-
         .tower-btn { width: 80px; height: 90px; background: #222; border: 2px solid #555; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; transition: 0.2s; border-radius: 5px; color: #aaa; pointer-events: auto; }
         .tower-btn:hover { border-color: #fff; background: #333; color: #fff; }
         .tower-btn.selected { border-color: #00ff00; background: #111; box-shadow: 0 0 20px #00ff00; color: #00ff00; transform: translateY(-5px); }
@@ -150,7 +151,7 @@
 
         #feedback-msg { position: absolute; top: 150px; width: 100%; text-align: center; font-size: 32px; font-weight: bold; opacity: 0; transition: opacity 0.5s; text-shadow: 0 0 10px #000, 0 0 20px #000; z-index: 6; pointer-events: none; }
         
-        #upgrade-info { position: absolute; bottom: 20px; right: 20px; text-align: left; font-size: 14px; color: #aaa; pointer-events: auto; display: none; background: rgba(0,0,0,0.9); padding: 15px; border-radius: 5px; border-left: 3px solid #ffd700; z-index: 50; box-shadow: 0 0 20px rgba(0,0,0,0.8); flex-direction: column; gap: 10px;}
+        #upgrade-info { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); text-align: left; font-size: 14px; color: #aaa; pointer-events: auto; display: none; background: rgba(0,0,0,0.9); padding: 15px; border-radius: 5px; border-left: 3px solid #ffd700; z-index: 50; box-shadow: 0 0 20px rgba(0,0,0,0.8); flex-direction: column; gap: 10px;}
         .action-btn { background: #333; border: 1px solid #fff; color: white; padding: 8px; cursor: pointer; border-radius: 4px; transition: 0.2s; font-weight: bold; font-family: inherit;}
         .action-btn:hover { background: #555; transform: scale(1.05); }
         .btn-move { border-color: #00d4ff; color: #00d4ff; }
@@ -161,21 +162,22 @@
 <body>
 
     <div class="museum-text mt-1">0 + 0 = O ELEMENTO NEUTRO<br>A MALDIÇÃO E O INÍCIO</div>
-    <div class="museum-text mt-2">1 + 1 = A SEQUÊNCIA NATURAL<br>ONDE A BALANÇA ENTRA EM AÇÃO</div>
+    <div class="museum-text mt-2">1 + 1 = A SEQUÊNCIA NATURAL<br>A BALANÇA ENTRA EM AÇÃO</div>
     <div class="museum-text mt-3">2 > 4 > 8<br>A BASE DO UNIVERSO</div>
-    <div class="museum-text mt-4">3 x 2 = A PARTE PERFEITA<br>O REI DAS DÍZIMAS E DO 9</div>
+    <div class="museum-text mt-4">3 x 2 = A PARTE PERFEITA<br>O REI DAS DÍZIMAS</div>
     <div class="museum-text mt-5">QUALQUER NÚMERO x 4 =<br>O DOBRO DUAS VEZES</div>
     <div class="museum-text mt-6">5 + 5 = O NOSSO QUERIDO RELÓGIO</div>
-    <div class="museum-text mt-7">6 + 6 = A MEIA DÚZIA<br>O SISTEMA ANTIGO (÷ 2, 3, 4, 6)</div>
+    <div class="museum-text mt-7">6 + 6 = A MEIA DÚZIA<br>SISTEMA ANTIGO (÷ 2, 3, 4, 6)</div>
     <div class="museum-text mt-8">7 ÷ 7 = 0.999... = 1<br>A RODA CONCLUÍDA</div>
     <div class="museum-text mt-9">142857<br>O NÚMERO DA FÊNIX</div>
     <div class="museum-text mt-10">8 + 8 = O CUBO DE 2<br>-2 UNIDADES, +1 DEZENA</div>
-    <div class="museum-text mt-11">9 ÷ 9 = O INFINITO QUE COMPLETA<br>A REGRA: -1 UNIDADE, +1 DEZENA</div>
+    <div class="museum-text mt-11">9 ÷ 9 = O INFINITO<br>A REGRA: -1 UNIDADE, +1 DEZENA</div>
     <div class="museum-text mt-12">142 + 857 = 999<br>A METADE DA RODA</div>
     <div class="museum-text mt-13">14 + 28 + 57 = 99<br>A GEOMETRIA OCULTA</div>
-    <div class="museum-text mt-14">A MORTE DE UMA FRAÇÃO É<br>O NASCIMENTO DO TODO</div>
+    <div class="museum-text mt-14">A MORTE DE UMA FRAÇÃO<br>O NASCIMENTO DO TODO</div>
     <div class="museum-text mt-15">DESLIGUE O SEU JUIZ INTERNO</div>
     <div class="museum-text mt-16">A LÓGICA É SOBERANA</div>
+    <div class="museum-text mt-17">(a+b)(a-b) = a² - b²</div>
 
     <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 300px; height: 300px; z-index: -100; opacity: 0.01; pointer-events: none;">
         <div id="yt-player"></div>
@@ -216,8 +218,15 @@
     <div id="viases-modal" class="info-modal">
         <div class="info-box">
             <h2 class="info-title">OS VIÉSES DOS NÚMEROS</h2>
-            <p style="font-style: italic; color: #aaa; text-align: center;">A matemática não vai sair do lugar. Nós apenas escrevemos problemas diferentes de maneiras que produzam resultados. Explore a Lógica:</p>
+            <p style="font-style: italic; color: #aaa; text-align: center;">A Matemática não vai sair do lugar. Nós apenas escrevemos problemas diferentes de maneiras que produzam resultados. A regra universal: Manipule sempre do maior para o menor.</p>
             
+            <h3>A Lei do Menor Esforço (+) e o Hack Japonês (-)</h3>
+            <p>Na <strong>Adição</strong>, moldamos a "massinha". Identificamos qual número precisa de menos passos na reta numérica para chegar num zero redondo. Tiramos de um lado e compensamos no outro. O que sobra, fazemos por Decomposição (Centena com Centena, Dezena com Dezena).<br>
+            Na <strong>Subtração</strong>, o Subtraendo é o Rei. Mexemos nele primeiro dando passos para frente ou para trás na reta numérica até a unidade zerar, e aplicamos o exato mesmo passo no número de cima. O cálculo desce reto, sem nunca precisar "pedir emprestado".</p>
+
+            <h3>A Diferença de Quadrados (x)</h3>
+            <p>Na multiplicação, se houver um valor e uma variável em comum equidistante (ex: 12 x 8, que é 10+2 e 10-2), usamos a diferença de quadrados: a base ao quadrado menos o passo ao quadrado (100 - 4 = 96). Pura geometria mental.</p>
+
             <h3>0: A Maldição e o Início</h3>
             <p>O elemento neutro da soma e subtração! Junto com o 9 torna algo completo às vezes sem aparecer. Ele é tão importante que é proibido usar numa balança exata (divisão), porque ele faz parecer que qualquer resultado é a mesma coisa. Ele não é neutro na multiplicação, ele é a maldição, o viés necessário. Ele parece antigo, mas é o irmão mais novo dos números.</p>
 
@@ -225,22 +234,22 @@
             <p>A sequência dos números naturais. O acréscimo de um. Onde o rótulo da conta começa e a balança dos números entra em ação.</p>
 
             <h3>2, 4 e 8: A Base do Universo</h3>
-            <p><strong>Tabuada do 2 (2+2):</strong> O Universo que entendemos de verdade é escrito na base 2: Preto e Branco, as cores que prevalecem no Sistema.<br>
-            <strong>Tabuada do 4 (4+4):</strong> O dobro do dobro. Qualquer número multiplicado por 4 é o dobro duas vezes.<br>
-            <strong>A Grandeza do 8 (8+8):</strong> O cubo de 2, os campeões da base 2 nas máquinas. Sabe como somar 8 rápido? Volta dois números e adiciona uma casa à esquerda (a dezena). (8+9 = 17, 8+7 = 15). Na subtração é o espelho: sobe duas unidades e desce a casa da esquerda! (320 -> 312 -> 304).</p>
+            <p><strong>Tabuada do 2:</strong> O Universo que entendemos de verdade é escrito na base 2: Preto e Branco, as cores que prevalecem no Sistema.<br>
+            <strong>Tabuada do 4:</strong> O dobro do dobro. Qualquer número multiplicado por 4 é o dobro duas vezes.<br>
+            <strong>A Grandeza do 8:</strong> O cubo de 2, os campeões da base 2 nas máquinas. Sabe como somar 8 rápido? Volta dois passos e adiciona uma dezena à esquerda. (8+9 = 17, 8+7 = 15). Na subtração é o espelho: avança dois passos na unidade e desce a casa da esquerda! (320 ➔ 312 ➔ 304).</p>
 
             <h3>3 e 6: A Fração e a Dúzia</h3>
-            <p><strong>Tabuada do 3 (3+3):</strong> Uma parte perfeita do número completo, o rei das dízimas periódicas. Sabe quem ele coroa? O 9.<br>
-            <strong>Tabuada do 6 (6+6):</strong> A meia dúzia. Palavras de um sistema antigo muito útil, porque o 12 se divide perfeitamente por 2, 3, 4 e 6!</p>
+            <p><strong>Tabuada do 3:</strong> Uma parte perfeita do número completo, o rei das dízimas periódicas. Sabe quem ele coroa? O 9.<br>
+            <strong>Tabuada do 6:</strong> A meia dúzia. Palavras de um sistema antigo muito útil, porque o 12 se divide perfeitamente por 2, 3, 4 e 6!</p>
 
             <h3>5: O Nosso Relógio</h3>
-            <p>A tabuada que nos faz inteligentes com a sua facilidade absoluta em transformar o difícil. A mágica de cortar na metade.</p>
+            <p>A tabuada que nos faz inteligentes com a sua facilidade absoluta em transformar o difícil. A mágica de cortar na metade e terminar em 0 ou 5.</p>
 
             <h3>7: O Número da Fênix (142857)</h3>
-            <p>A grandeza do número 7. Ele é aceito como louco porque sua verdade é encontrada em números muito grandes ou muito pequenos, sendo rejeitado no dia a dia. Mas em conjunto, gera a poderosa dízima <strong>142857</strong>. Todos os números que trabalham com ele aparecem na dízima; os invisíveis completam as partes perfeitas. Fatorando ele temos a magia completa: (142 + 857 = 999).</p>
+            <p>Ele é aceito como louco porque sua verdade é encontrada em números muito grandes ou muito pequenos. Mas em conjunto, a divisão por 7 gera a poderosa dízima <strong>142857</strong>. Todos os números aparecem nela; os invisíveis completam as partes perfeitas. Fatorando ele temos a magia completa: (142 + 857 = 999).</p>
 
             <h3>9: O Infinito que Completa</h3>
-            <p>O número que não aparece nas dízimas periódicas porque ele mostra o infinito de qualquer número. Se 1 / 9 = 0.111... e 8 / 9 = 0.888..., então 9 / 9 = 0.999... (o Infinito que vira o 1, o Todo!).<br>A regra da tabuada do 9 é divina: diminui uma unidade e soma uma na dezena (9, 18, 27, 36...). Para somar, mesma coisa (9+4=13). Para subtrair 9, você aumenta 1 na unidade e desce a dezena! (450 -> 441 -> 432).</p>
+            <p>O número que não aparece nas dízimas periódicas porque ele mostra o infinito de qualquer número. Se 1 ÷ 9 = 0.111... e 8 ÷ 9 = 0.888..., então 9 ÷ 9 = 0.999... (o Infinito que vira o 1, o Todo!). A morte de uma fração e o nascimento de algo completo.<br>A regra do 9 é divina: diminui uma unidade e soma uma na dezena (9, 18, 27, 36...). Para somar, mesma coisa (9+4=13). Para subtrair 9, você avança 1 passo na unidade e desce a dezena! (450 ➔ 441 ➔ 432).</p>
 
             <button onclick="document.getElementById('viases-modal').style.display='none'" style="margin-top:15px; width:100%; font-size: 16px;" class="action-btn btn-move">VOLTAR PARA A LÓGICA</button>
         </div>
@@ -275,20 +284,25 @@
                 </span>
             </div>
             <div class="stat-box score-box" style="border-color: #f00; color: #f00;">❌ <span id="score-wrong">0</span></div>
-            
-            <button id="speed-btn" class="top-btn" onclick="toggleSpeed(); event.stopPropagation();">⏩ 1x</button>
-            <button id="ai-btn" class="top-btn" onclick="toggleAIMode(); event.stopPropagation();">🤖 MODO IA: OFF</button>
-            <button id="ghost-btn" class="top-btn" onclick="toggleUI(); event.stopPropagation();">👁️ FANTASMA: OFF</button>
-            <button id="fullscreen-btn" class="top-btn" onclick="toggleFullScreen(); event.stopPropagation();">🔲 TELA CHEIA</button>
+        </div>
+
+        <div id="sys-menu-container">
+            <button class="top-btn" onclick="toggleSysMenu(event)" ontouchstart="toggleSysMenu(event)">⚙️ SISTEMA</button>
+            <div id="sys-menu-items">
+                <button id="speed-btn" class="top-btn" onclick="toggleSpeed(event)" ontouchstart="toggleSpeed(event)">⏩ VELOCIDADE: 1x</button>
+                <button id="ai-btn" class="top-btn" onclick="toggleAIMode(event)" ontouchstart="toggleAIMode(event)">🤖 MODO IA: OFF</button>
+                <button id="ghost-btn" class="top-btn" onclick="toggleUI(event)" ontouchstart="toggleUI(event)">👁️ MODO FANTASMA: OFF</button>
+                <button id="fullscreen-btn" class="top-btn" onclick="toggleFullScreen(event)" ontouchstart="toggleFullScreen(event)">🔲 TELA CHEIA</button>
+            </div>
         </div>
         
         <div id="upgrade-info">
             <div style="color:#fff; font-weight:bold; margin-bottom:5px; border-bottom: 1px solid #444; padding-bottom:5px;">PAINEL DA TORRE</div>
             <div style="font-size:12px; margin-bottom:5px;">Upgrade: $<span id="upg-cost">0</span></div>
-            <button class="action-btn" onclick="upgradeSelectedTower(); event.stopPropagation();">UPGRADE</button>
+            <button class="action-btn" onclick="upgradeSelectedTower(event)" ontouchstart="upgradeSelectedTower(event)">UPGRADE</button>
             <div style="display:flex; gap:10px; margin-top:5px;">
-                <button class="action-btn btn-move" onclick="moveSelectedTower(); event.stopPropagation();">🚚 MOVER</button>
-                <button class="action-btn btn-sell" onclick="sellSelectedTower(); event.stopPropagation();">🗑️ VENDER</button>
+                <button class="action-btn btn-move" onclick="moveSelectedTower(event)" ontouchstart="moveSelectedTower(event)">🚚 MOVER</button>
+                <button class="action-btn btn-sell" onclick="sellSelectedTower(event)" ontouchstart="sellSelectedTower(event)">🗑️ VENDER</button>
             </div>
         </div>
         
@@ -299,8 +313,8 @@
             <div class="tip-content" id="tip-text">...</div>
         </div>
 
-        <button id="next-wave-btn" onclick="startWaveCombat(); event.stopPropagation();">🚀</button>
-        <button id="cancel-btn" onclick="cancelSelection(); event.stopPropagation();" title="Cancelar Construção">🗑️</button>
+        <button id="next-wave-btn" onclick="startWaveCombat(event)" ontouchstart="startWaveCombat(event)">🚀</button>
+        <button id="cancel-btn" onclick="cancelSelection(event)" ontouchstart="cancelSelection(event)" title="Cancelar Construção">🗑️</button>
 
         <div id="math-modal">
             <div id="timer-container"><div id="timer-bar"></div></div>
@@ -310,26 +324,29 @@
             <div id="math-options"></div>
         </div>
 
-        <div id="build-menu">
-            <div class="tower-btn" onclick="selectTowerBtn(0); event.stopPropagation();" id="tbtn0">
-                <div class="tower-symbol" style="color:#ffeb3b">+</div>
-                <div class="tower-cost">$50</div>
-                <div class="tower-desc">Metralhadora</div>
-            </div>
-            <div class="tower-btn" onclick="selectTowerBtn(1); event.stopPropagation();" id="tbtn1">
-                <div class="tower-symbol" style="color:#03a9f4">-</div>
-                <div class="tower-cost">$120</div>
-                <div class="tower-desc">Gelo (Área)</div>
-            </div>
-            <div class="tower-btn" onclick="selectTowerBtn(2); event.stopPropagation();" id="tbtn2">
-                <div class="tower-symbol" style="color:#f44336">x</div>
-                <div class="tower-cost">$300</div>
-                <div class="tower-desc">Explosão</div>
-            </div>
-            <div class="tower-btn" onclick="selectTowerBtn(3); event.stopPropagation();" id="tbtn3">
-                <div class="tower-symbol" style="color:#9c27b0">÷</div>
-                <div class="tower-cost">$450</div>
-                <div class="tower-desc">Sniper</div>
+        <div id="build-menu-container">
+            <button class="top-btn" id="build-toggle-btn" onclick="toggleBuildMenu(event)" ontouchstart="toggleBuildMenu(event)">🛠️ ARSENAL</button>
+            <div id="build-menu">
+                <div class="tower-btn" onclick="selectTowerBtn(0, event)" ontouchstart="selectTowerBtn(0, event)" id="tbtn0">
+                    <div class="tower-symbol" style="color:#ffeb3b">+</div>
+                    <div class="tower-cost">$50</div>
+                    <div class="tower-desc">Metralhadora</div>
+                </div>
+                <div class="tower-btn" onclick="selectTowerBtn(1, event)" ontouchstart="selectTowerBtn(1, event)" id="tbtn1">
+                    <div class="tower-symbol" style="color:#03a9f4">-</div>
+                    <div class="tower-cost">$120</div>
+                    <div class="tower-desc">Gelo (Área)</div>
+                </div>
+                <div class="tower-btn" onclick="selectTowerBtn(2, event)" ontouchstart="selectTowerBtn(2, event)" id="tbtn2">
+                    <div class="tower-symbol" style="color:#f44336">x</div>
+                    <div class="tower-cost">$300</div>
+                    <div class="tower-desc">Explosão</div>
+                </div>
+                <div class="tower-btn" onclick="selectTowerBtn(3, event)" ontouchstart="selectTowerBtn(3, event)" id="tbtn3">
+                    <div class="tower-symbol" style="color:#9c27b0">÷</div>
+                    <div class="tower-cost">$450</div>
+                    <div class="tower-desc">Sniper</div>
+                </div>
             </div>
         </div>
     </div>
@@ -344,7 +361,56 @@
         document.getElementById('hs-math-ui').innerText = maxMathSaved;
 
         // ==========================================
-        // YOUTUBE AUDIO API
+        // SHIELD ANTI-GHOST CLICK (DEBOUNCE UNIVERSAL)
+        // ==========================================
+        let lastUiClick = 0;
+        function uiClickCheck(e) {
+            if(e) { 
+                if(e.preventDefault) e.preventDefault(); 
+                if(e.stopPropagation) e.stopPropagation(); 
+            }
+            let now = Date.now();
+            if (now - lastUiClick < 200) return false;
+            lastUiClick = now;
+            return true;
+        }
+
+        // ==========================================
+        // UI CONTROLES (MENUS RETRÁTEIS)
+        // ==========================================
+        let sysMenuOpen = false;
+        function toggleSysMenu(e) {
+            if(!uiClickCheck(e)) return;
+            sysMenuOpen = !sysMenuOpen;
+            document.getElementById('sys-menu-items').style.display = sysMenuOpen ? 'flex' : 'none';
+        }
+
+        let buildMenuOpen = false;
+        function toggleBuildMenu(e) {
+            if(e && !uiClickCheck(e)) return; // Passa liso se chamado internamente sem evento
+            buildMenuOpen = !buildMenuOpen;
+            document.getElementById('build-menu').style.display = buildMenuOpen ? 'flex' : 'none';
+            document.getElementById('build-toggle-btn').classList.remove('build-glow');
+        }
+
+        let uiHidden = false;
+        function toggleUI(e) {
+            if(!uiClickCheck(e)) return;
+            uiHidden = !uiHidden;
+            const btn = document.getElementById('ghost-btn');
+            if(uiHidden) {
+                document.body.classList.add('hide-ui');
+                btn.classList.add('active-btn'); btn.innerText = "👁️ MODO FANTASMA: ON";
+                if(sysMenuOpen) toggleSysMenu(null); 
+                if(buildMenuOpen) toggleBuildMenu(null);
+            } else {
+                document.body.classList.remove('hide-ui');
+                btn.classList.remove('active-btn'); btn.innerText = "👁️ MODO FANTASMA: OFF";
+            }
+        }
+
+        // ==========================================
+        // YOUTUBE AUDIO API (LOOP IMORTAL)
         // ==========================================
         let ytPlayer;
         let ytPlayerReady = false;
@@ -378,6 +444,11 @@
                     'onReady': () => {
                         ytPlayerReady = true;
                         tryStartBgMusic();
+                    },
+                    'onStateChange': (event) => {
+                        if (event.data === YT.PlayerState.ENDED) {
+                            ytPlayer.playVideo(); 
+                        }
                     }
                 }
             });
@@ -386,7 +457,8 @@
         // ==========================================
         // TELA CHEIA E ESCALA ABSOLUTA
         // ==========================================
-        function toggleFullScreen() {
+        function toggleFullScreen(e) {
+            if(!uiClickCheck(e)) return;
             let elem = document.documentElement;
             if (!document.fullscreenElement) {
                 if (elem.requestFullscreen) { elem.requestFullscreen(); }
@@ -411,6 +483,7 @@
             if (scale > 1) scale = 1; 
 
             container.style.transform = `translate(-50%, -50%) scale(${scale})`;
+            container.style.margin = '0'; 
         }
         
         window.addEventListener('resize', resizeCanvas);
@@ -522,19 +595,6 @@
         let isDraggingGhost = false; 
         let selectedExistingTower = null; 
         let movingTower = null; 
-
-        let uiHidden = false;
-        function toggleUI() {
-            uiHidden = !uiHidden;
-            const btn = document.getElementById('ghost-btn');
-            if(uiHidden) {
-                document.body.classList.add('hide-ui');
-                btn.classList.add('active'); btn.innerText = "👁️ FANTASMA: ON";
-            } else {
-                document.body.classList.remove('hide-ui');
-                btn.classList.remove('active'); btn.innerText = "👁️ FANTASMA: OFF";
-            }
-        }
 
         // ==========================================
         // ROTAÇÃO E GERAÇÃO DE MAPA DINÂMICO
@@ -650,17 +710,18 @@
         }
 
         // ==========================================
-        // A MENTE DA SKYNET (IA LINHA DE FRENTE V43)
+        // A MENTE DA SKYNET (IA LINHA DE FRENTE V45)
         // ==========================================
         let aiMode = false;
 
-        function toggleAIMode() {
+        function toggleAIMode(e) {
+            if(!uiClickCheck(e)) return;
             aiMode = !aiMode;
             const btn = document.getElementById('ai-btn');
             if(aiMode) {
-                btn.classList.add('active'); btn.innerText = "🤖 MODO IA: ON";
+                btn.classList.add('active-btn'); btn.innerText = "🤖 MODO IA: ON";
             } else {
-                btn.classList.remove('active'); btn.innerText = "🤖 MODO IA: OFF";
+                btn.classList.remove('active-btn'); btn.innerText = "🤖 MODO IA: OFF";
             }
         }
 
@@ -765,11 +826,12 @@
             return phraseQueue.pop(); 
         }
 
-        function toggleSpeed() {
+        function toggleSpeed(e) {
+            if(!uiClickCheck(e)) return;
             const btn = document.getElementById('speed-btn');
-            if(gameSpeed === 1) { gameSpeed = 3; btn.classList.add('active'); btn.classList.remove('max'); btn.innerText = "⏩ 3x"; } 
-            else if(gameSpeed === 3) { gameSpeed = 6; btn.classList.remove('active'); btn.classList.add('max'); btn.innerText = "🚀 6x (MAX)"; } 
-            else { gameSpeed = 1; btn.classList.remove('active'); btn.classList.remove('max'); btn.innerText = "⏩ 1x"; }
+            if(gameSpeed === 1) { gameSpeed = 3; btn.classList.add('active-btn'); btn.classList.remove('max-btn'); btn.innerText = "⏩ VELOCIDADE: 3x"; } 
+            else if(gameSpeed === 3) { gameSpeed = 6; btn.classList.remove('active-btn'); btn.classList.add('max-btn'); btn.innerText = "🚀 VELOCIDADE: 6x (MAX)"; } 
+            else { gameSpeed = 1; btn.classList.remove('active-btn'); btn.classList.remove('max-btn'); btn.innerText = "⏩ VELOCIDADE: 1x"; }
         }
 
         function startMathPhase() {
@@ -783,7 +845,6 @@
             wave++; updateStats();
             document.getElementById('next-wave-btn').style.display = 'none';
             document.getElementById('math-tip-box').style.display = 'none'; 
-            document.getElementById('build-menu').classList.remove('build-glow');
             document.getElementById('buff-message').innerText = getNextPhrase();
 
             timeLeft = TOTAL_TIME;
@@ -831,7 +892,7 @@
         }
 
         // ==========================================
-        // O DICIONÁRIO DE TÁTICAS V43.0 (A FÓRMULA FINAL)
+        // O DICIONÁRIO DE TÁTICAS V45.0 (A FÓRMULA FINAL)
         // ==========================================
         function generateTip(problem) {
             const { n1, n2, op, answer } = problem;
@@ -850,15 +911,15 @@
                         let outro = tu1 >= 60 ? n2 : n1;
                         let shift = 100 - (alvo % 100);
                         temp1 = alvo + shift; temp2 = outro - shift;
-                        shiftText = `Compensação de Centenas:<br>O ${alvo} está perto da próxima centena. Adicionamos ${shift} nele para criar uma base forte e tiramos o mesmo do outro (${outro} vira ${temp2}).<br>Conta nova: <span class="tip-highlight">${temp1} + ${temp2}</span>.<br><br>`;
+                        shiftText = `A Lei do Menor Esforço (Centenas):<br>O número ${alvo} está precisando de apenas ${shift} passos na reta numérica para fechar uma centena forte. Tiramos ${shift} do outro (${outro} vira ${temp2}) e damos para ele.<br>Nova forma da massinha: <span class="tip-highlight">${temp1} + ${temp2}</span>.<br><br>`;
                     } else if ((tu1 >= 10 && tu1 <= 40) || (tu2 >= 10 && tu2 <= 40)) {
                         let alvo = (tu1 >= 10 && tu1 <= 40) ? n1 : n2;
                         let outro = (tu1 >= 10 && tu1 <= 40) ? n2 : n1;
                         let shift = alvo % 100;
                         temp1 = alvo - shift; temp2 = outro + shift;
-                        shiftText = `Transferência de Centenas:<br>Tiramos ${shift} do ${alvo} (vira ${temp1}) para ficar uma centena redonda, e somamos esse valor no outro (${outro} vira ${temp2}).<br>Conta nova: <span class="tip-highlight">${temp1} + ${temp2}</span>.<br><br>`;
+                        shiftText = `A Lei do Menor Esforço (Centenas):<br>O número ${alvo} está quebrado, damos ${shift} passos para trás para arredondar para baixo (vira ${temp1}), e jogamos esse peso no outro (${outro} vira ${temp2}).<br>Nova forma da massinha: <span class="tip-highlight">${temp1} + ${temp2}</span>.<br><br>`;
                     } else {
-                        shiftText = `Como um dos números já termina em zero perfeito, não precisamos fazer ajustes na massinha. Vamos direto pro ataque!<br><br>`;
+                        shiftText = `Como um dos números já termina em zero perfeito, não precisamos fazer ajustes na massinha. Vamos direto pro ataque final!<br><br>`;
                     }
                 } else {
                     if (u1 >= 6 || u2 >= 6) {
@@ -866,13 +927,13 @@
                         let outro = u1 >= 6 ? n2 : n1;
                         let shift = 10 - (alvo % 10);
                         temp1 = alvo + shift; temp2 = outro - shift;
-                        shiftText = `Estratégia de Compensação (Finais 6 a 9):<br>O ${alvo} está quase na próxima dezena. Arredondamos para cima (+${shift}) virando ${temp1}, e tiramos os mesmos ${shift} do outro (${outro} vira ${temp2}).<br>Conta nova muito mais fácil: <span class="tip-highlight">${temp1} + ${temp2}</span>.<br><br>`;
+                        shiftText = `A Lei do Menor Esforço (Finais 6 a 9):<br>O ${alvo} está a apenas ${shift} passos na reta numérica da próxima dezena. Arredondamos para cima virando ${temp1}, e tiramos os mesmos ${shift} passos do outro (${outro} vira ${temp2}).<br>Nova forma da massinha: <span class="tip-highlight">${temp1} + ${temp2}</span>.<br><br>`;
                     } else if ((u1 >= 1 && u1 <= 4) || (u2 >= 1 && u2 <= 4)) {
                         let alvo = (u1 >= 1 && u1 <= 4) ? n1 : n2;
                         let outro = (u1 >= 1 && u1 <= 4) ? n2 : n1;
                         let shift = alvo % 10;
                         temp1 = alvo - shift; temp2 = outro + shift;
-                        shiftText = `Estratégia de Transferência (Finais 1 a 4):<br>Tiramos ${shift} do ${alvo} para arredondar para baixo (vira ${temp1}), e guardamos somando no outro (${outro} vira ${temp2}).<br>Conta nova muito mais fácil: <span class="tip-highlight">${temp1} + ${temp2}</span>.<br><br>`;
+                        shiftText = `A Lei do Menor Esforço (Finais 1 a 4):<br>Damos ${shift} passos para trás no ${alvo} para arredondar para baixo (vira ${temp1}), e andamos esses passos guardados somando no outro (${outro} vira ${temp2}).<br>Nova forma da massinha: <span class="tip-highlight">${temp1} + ${temp2}</span>.<br><br>`;
                     }
                 }
 
@@ -880,11 +941,11 @@
                 let d1_val = Math.floor((temp1%100)/10)*10; let d2_val = Math.floor((temp2%100)/10)*10;
                 let u1_val = temp1 % 10; let u2_val = temp2 % 10;
                 
-                let decompText = `Explicação Padrão (Decomposição em blocos):<br>`;
+                let decompText = `Decomposição Final (Do Maior pro Menor):<br>`;
                 if (temp1 >= 100 || temp2 >= 100) decompText += `Centenas: <span class="tip-highlight">${c1_val} + ${c2_val} = ${c1_val+c2_val}</span><br>`;
                 decompText += `Dezenas: <span class="tip-highlight">${d1_val} + ${d2_val} = ${d1_val+d2_val}</span><br>`;
                 decompText += `Unidades: <span class="tip-highlight">${u1_val} + ${u2_val} = ${u1_val+u2_val}</span><br>`;
-                decompText += `Resultado: <span class="tip-highlight">${answer}</span>.`;
+                decompText += `Junta tudo: <span class="tip-highlight">${answer}</span>.`;
 
                 text = shiftText + decompText;
             } 
@@ -914,26 +975,30 @@
                 if (shift > 0) {
                     let novoN1 = isAdding ? n1 + shift : n1 - shift;
                     let novoN2 = isAdding ? n2 + shift : n2 - shift;
-                    let operacao = isAdding ? `Somamos ${shift}` : `Tiramos ${shift}`;
-                    text = `Hack Japonês (Foco Total no Subtraendo: ${n2}):<br>A regra é nunca pedir emprestado! Olhamos só para o número de baixo (subtraendo): ${operacao} dos DOIS números para zerar a ${alvoDesc} dele.<br>O ${n1} vira <span class="tip-highlight">${novoN1}</span>.<br>O ${n2} vira <span class="tip-highlight">${novoN2}</span>.<br>A distância é a mesma. O cálculo desce limpo e sem emprestar!<br><span class="tip-highlight">${novoN1} - ${novoN2} = ${answer}</span>.`;
+                    let operacao = isAdding ? `Avançamos ${shift} passos` : `Voltamos ${shift} passos`;
+                    text = `Hack Japonês (O Subtraendo é o Rei: ${n2}):<br>A regra é nunca pedir emprestado! Olhamos SÓ para o número de baixo: ${operacao} na reta numérica dos DOIS números para zerar a ${alvoDesc} dele.<br>O ${n1} vira <span class="tip-highlight">${novoN1}</span>.<br>O ${n2} vira <span class="tip-highlight">${novoN2}</span>.<br>A distância matemática se manteve intacta. O cálculo agora desce reto e sem dor!<br><span class="tip-highlight">${novoN1} - ${novoN2} = ${answer}</span>.`;
                 } else {
-                    text = `Hack Japonês:<br>O subtraendo (${n2}) já está redondo como uma pedra. Faça o cálculo direto sem medo!<br><span class="tip-highlight">${n1} - ${n2} = ${answer}</span>.`;
+                    text = `Hack Japonês:<br>O subtraendo (${n2}) já está redondo como uma pedra. A distância está perfeita, faça o cálculo direto sem medo de emprestar!<br><span class="tip-highlight">${n1} - ${n2} = ${answer}</span>.`;
                 }
             } 
             else if (op === 'x') {
-                let u1 = n1 % 10;
-                let u2 = n2 % 10;
-                
+                let diff = Math.abs(n1 - n2);
+                let mid = Math.min(n1, n2) + (diff / 2);
+
                 if (n1 === 10 || n2 === 10 || n1 === 100 || n2 === 100 || n1 === 1 || n2 === 1) {
                     let isCem = (n1 === 100 || n2 === 100);
                     let zeros = isCem ? "dois 0s" : "um 0";
                     let mult = isCem ? "100" : "10";
                     
                     if (n1 === 1 || n2 === 1) {
-                        text = `A Regra Campeã (x1):<br>Se multiplicar por 1 é sempre ele mesmo, o elemento NEUTRO!<br>Resultado: <span class="tip-highlight">${answer}</span>.`;
+                        text = `A Regra Campeã (x1):<br>Se multiplicar por 1 é sempre ele mesmo, o elemento NEUTRO da multiplicação!<br>Resultado: <span class="tip-highlight">${answer}</span>.`;
                     } else {
                         text = `A Regra Campeã (x${mult}):<br>Nosso campeão da multiplicação! Se multiplicar por 1 é sempre ele mesmo (o elemento NEUTRO), multiplicar por ${mult} é só potencializar a casa decimal para a direita, adicionando ${zeros} porque é ${mult} vezes maior!!<br>Resultado direto: <span class="tip-highlight">${answer}</span>.`;
                     }
+                }
+                else if (diff > 0 && diff % 2 === 0 && mid % 10 === 0) {
+                    let pass = diff / 2;
+                    text = `A Diferença de Quadrados (A Geometria da Mente):<br>Temos um valor em comum! Ambos estão a ${pass} passos de distância do número ${mid}. Isso é (${mid} + ${pass}) x (${mid} - ${pass}).<br>Elevamos os dois ao quadrado e tiramos a diferença:<br><span class="tip-highlight">${mid}x${mid} - ${pass}x${pass}</span><br><span class="tip-highlight">${mid*mid} - ${pass*pass} = ${answer}</span>.`;
                 }
                 else if (n1 >= 100 && n2 >= 100) {
                     let c1 = Math.round(n1 / 100) * 100; let c2 = Math.round(n2 / 100) * 100;
@@ -943,22 +1008,27 @@
                      let tem5 = (n1 === 5) ? n2 : n1;
                      text = `O Truque do 5:<br>Multiplicar por 5 é igual a multiplicar por 10 e cortar na metade. Rápido e letal!<br><span class="tip-highlight">${tem5} x 10 = ${tem5*10}</span>.<br>A metade de ${tem5*10} é <span class="tip-highlight">${answer}</span>.`;
                 }
-                else if ((u1 >= 6 && n1 > 10) || (u2 >= 6 && n2 > 10)) {
-                    let proximo = (u1 >= 6 && n1 > 10) ? n1 : n2;
-                    let outro = (u1 >= 6 && n1 > 10) ? n2 : n1;
-                    let baseRedonda = Math.ceil(proximo / 10) * 10;
-                    let sobra = baseRedonda - proximo;
-                    text = `Estratégia do Excesso (Finais 6 a 9):<br>O número ${proximo} tá quase virando ${baseRedonda}. Vamos arredondar pra CIMA e calcular grandão e forte!<br><span class="tip-highlight">${baseRedonda} x ${outro} = ${baseRedonda * outro}</span>.<br>Mas pera aí, a gente inventou ${sobra} a mais. Temos que tirar esse excesso pago: (${sobra} x ${outro} = ${sobra*outro}).<br>Cortando a gordura: <span class="tip-highlight">${baseRedonda * outro} - ${sobra*outro} = ${answer}</span>.`;
-                }
-                else if ((u1 >= 1 && u1 <= 4 && n1 > 10) || (u2 >= 1 && u2 <= 4 && n2 > 10)) {
-                    let descendo = (u1 >= 1 && u1 <= 4 && n1 > 10) ? n1 : n2;
-                    let outro = (u1 >= 1 && u1 <= 4 && n1 > 10) ? n2 : n1;
-                    let baseRedonda = Math.floor(descendo / 10) * 10;
-                    let resto = descendo - baseRedonda;
-                    text = `Decomposição Tática (Finais 1 a 4):<br>O número ${descendo} é quebrado. Vamos jogar a unidade fora pra ficar redondo no ${baseRedonda}!<br>Atacamos a dezena primeiro: <span class="tip-highlight">${baseRedonda} x ${outro} = ${baseRedonda * outro}</span>.<br>Agora, não podemos esquecer daqueles ${resto} que guardamos no bolso: (${resto} x ${outro} = ${resto*outro}).<br>Somando os dois ataques: <span class="tip-highlight">${baseRedonda * outro} + ${resto*outro} = ${answer}</span>.<br><br><span style="color:#aaa; font-size:10px;">*(Fatoração clássica: ${baseRedonda}x${outro} + ${resto}x${outro})*</span>`;
-                }
                 else {
-                    text = `Ataque Direto:<br>Para esses números, a memória muscular fala mais alto. Foque no resultado direto ou quebre em dezenas e unidades na mente!<br><span class="tip-highlight">${n1} x ${n2} = ${answer}</span>.`;
+                    let maior = Math.max(n1, n2);
+                    let menor = Math.min(n1, n2);
+                    
+                    if (maior >= 10) {
+                        let c = Math.floor(maior/100)*100;
+                        let d = Math.floor((maior%100)/10)*10;
+                        let u = maior % 10;
+                        
+                        let baseRedonda = c > 0 ? (c + (d>50?100:0)) : (Math.floor(maior/10)*10 + (u>=5?10:0));
+                        let resto = maior - baseRedonda;
+                        
+                        if (resto < 0) {
+                            let excesso = Math.abs(resto);
+                            text = `Estratégia do Excesso (Do Maior pro Menor):<br>O número ${maior} tá pedindo pra subir. Vamos arredondar para cima dando ${excesso} passos na reta numérica, virando ${baseRedonda}, e calcular grandão!<br><span class="tip-highlight">${baseRedonda} x ${menor} = ${baseRedonda * menor}</span>.<br>Mas pera aí, a gente inventou ${excesso} a mais. Temos que tirar esse excesso pago: (${excesso} x ${menor} = ${excesso*menor}).<br>Cortando a gordura: <span class="tip-highlight">${baseRedonda * menor} - ${excesso*menor} = ${answer}</span>.`;
+                        } else {
+                            text = `Decomposição Tática (Do Maior pro Menor):<br>O número ${maior} é quebrado. Vamos dar ${resto} passos pra trás e jogar a rebarba fora pra ficar redondo no ${baseRedonda}!<br>Atacamos a base primeiro: <span class="tip-highlight">${baseRedonda} x ${menor} = ${baseRedonda * menor}</span>.<br>Agora, não podemos esquecer daqueles ${resto} que guardamos no bolso: (${resto} x ${menor} = ${resto*menor}).<br>Somando os dois ataques: <span class="tip-highlight">${baseRedonda * menor} + ${resto*menor} = ${answer}</span>.`;
+                        }
+                    } else {
+                        text = `Ataque Direto:<br>Para esses números de unidade, a memória muscular fala mais alto. Foque no resultado direto da tabuada!<br><span class="tip-highlight">${n1} x ${n2} = ${answer}</span>.`;
+                    }
                 }
             } 
             else if (op === '÷') {
@@ -1037,17 +1107,22 @@
 
             gameState = 'BUILD';
             document.getElementById('next-wave-btn').style.display = 'flex'; 
-            document.getElementById('build-menu').classList.add('build-glow');
+            
+            // Botão do Arsenal pisca pedindo atenção pra comprar torre
+            document.getElementById('build-toggle-btn').classList.add('build-glow');
             
             if (aiMode) runAILogic();
         }
 
-        function startWaveCombat() {
+        function startWaveCombat(e) {
+            if (e && !uiClickCheck(e)) return;
             gameState = 'COMBAT';
             document.getElementById('next-wave-btn').style.display = 'none';
             document.getElementById('upgrade-info').style.display = 'none';
             document.getElementById('math-tip-box').style.display = 'none';
-            document.getElementById('build-menu').classList.remove('build-glow');
+            
+            if(buildMenuOpen) toggleBuildMenu(null); // Esconde a prateleira pra limpar a tela no combate
+
             cancelSelection();
             if (aiMode) runAILogic(); 
             spawnEnemies();
@@ -1410,39 +1485,47 @@
             let dx = x - xx; let dy = y - yy; return Math.sqrt(dx * dx + dy * dy);
         }
 
-        function selectTowerBtn(idx) {
-            cancelSelection(); selectedTowerIdx = idx;
+        function selectTowerBtn(idx, e) {
+            if(e && !uiClickCheck(e)) return;
+            cancelSelection(null); selectedTowerIdx = idx;
             document.getElementById('tbtn'+idx).classList.add('selected');
             document.body.classList.add('ghost-active'); isDraggingGhost = true; 
         }
 
-        function cancelSelection() {
+        function cancelSelection(e) {
+            if(e && !uiClickCheck(e)) return;
             selectedTowerIdx = -1; isDraggingGhost = false; selectedExistingTower = null;
             if(movingTower) movingTower = null;
-            [0,1,2,3].forEach(i => document.getElementById('tbtn'+i).classList.remove('selected'));
+            [0,1,2,3].forEach(i => {
+                let el = document.getElementById('tbtn'+i);
+                if(el) el.classList.remove('selected');
+            });
             document.body.classList.remove('ghost-active'); 
             document.getElementById('upgrade-info').style.display = 'none';
         }
 
-        function upgradeSelectedTower() {
+        function upgradeSelectedTower(e) {
+            if(e && !uiClickCheck(e)) return;
             if(selectedExistingTower && gold >= selectedExistingTower.upgradeCost) {
                 gold -= selectedExistingTower.upgradeCost; updateStats();
-                selectedExistingTower.upgrade(); cancelSelection();
+                selectedExistingTower.upgrade(); cancelSelection(null);
             } else {
                 const fb = document.getElementById('feedback-msg'); fb.innerText = "FALTA OURO!"; fb.style.color = "red"; fb.style.opacity = 1; setTimeout(()=>fb.style.opacity=0, 1000);
             }
         }
 
-        function moveSelectedTower() {
+        function moveSelectedTower(e) {
+            if(e && !uiClickCheck(e)) return;
             if(selectedExistingTower) { movingTower = selectedExistingTower; selectedExistingTower = null; document.getElementById('upgrade-info').style.display = 'none'; }
         }
 
-        function sellSelectedTower() {
+        function sellSelectedTower(e) {
+            if(e && !uiClickCheck(e)) return;
             if(selectedExistingTower) {
                 let refund = Math.floor(selectedExistingTower.totalCost * 0.5);
                 gold += refund; updateStats();
                 towers = towers.filter(t => t !== selectedExistingTower);
-                playSound('hit'); cancelSelection();
+                playSound('hit'); cancelSelection(null);
             }
         }
 
@@ -1486,7 +1569,7 @@
                 selectedExistingTower = clickedTower;
                 document.getElementById('upg-cost').innerText = clickedTower.upgradeCost;
                 document.getElementById('upgrade-info').style.display = 'flex';
-            } else { cancelSelection(); }
+            } else { cancelSelection(null); }
         }
 
         function handleRelease() {
@@ -1497,7 +1580,7 @@
                 let rectBtn = cancelBtn.getBoundingClientRect(); 
                 
                 if (physicalX >= rectBtn.left && physicalX <= rectBtn.right && physicalY >= rectBtn.top && physicalY <= rectBtn.bottom) {
-                    cancelSelection(); return;
+                    cancelSelection(null); return;
                 }
 
                 if(checkCollision(mouseX, mouseY, movingTower)) {
@@ -1513,7 +1596,7 @@
                 let rectBtn = cancelBtn.getBoundingClientRect(); 
 
                 if (physicalX >= rectBtn.left && physicalX <= rectBtn.right && physicalY >= rectBtn.top && physicalY <= rectBtn.bottom) {
-                    cancelSelection(); return;
+                    cancelSelection(null); return;
                 }
 
                 const type = towerTypes[selectedTowerIdx];
@@ -1528,7 +1611,7 @@
                 } else {
                     const fb = document.getElementById('feedback-msg'); fb.innerText = "LOCAL BLOQUEADO!"; fb.style.color = "orange"; fb.style.opacity = 1; setTimeout(() => fb.style.opacity = 0, 1000); playSound('wrong');
                 }
-                cancelSelection(); 
+                cancelSelection(null); 
             }
         }
 
@@ -1548,7 +1631,3 @@
     </script>
 </body>
 </html>
-
-
-
-
