@@ -6,19 +6,6 @@
     <title>Logic Defense: O Museu dos Números</title>
     <script src="https://www.youtube.com/iframe_api"></script>
     <style>
-        /* BOTÃO SECRETO DO DESENVOLVEDOR */
-        .secret-dev-btn {
-            display: none; /* Totalmente invisível por padrão */
-            position: absolute; bottom: 20px; left: 20px; 
-            background: transparent; border: none; font-size: 24px; cursor: pointer;
-            z-index: 100; pointer-events: auto; opacity: 0.1; transition: 0.3s;
-        }
-        .secret-dev-btn:hover { opacity: 1; transform: scale(1.2); }
-        .secret-dev-btn.stress-active { color: #ff0000; text-shadow: 0 0 20px #ff0000; opacity: 0.8;}
-
-        body.hide-ui .secret-dev-btn {
-            display: block; /* Só aparece quando o modo fantasma (hide-ui) está ativo */
-        }
         body { 
             margin: 0; padding: 0; overflow: hidden; background-color: #050505; color: white; 
             font-family: 'Courier New', monospace; user-select: none; touch-action: none;
@@ -96,6 +83,20 @@
         .active-btn { background: #ff9800 !important; color: black !important; border-color: #ff9800 !important; box-shadow: 0 0 15px #ff9800 !important; }
         .max-btn { background: #f44336 !important; color: white !important; border-color: #f44336 !important; box-shadow: 0 0 15px #f44336 !important; }
 
+        /* BOTÃO SECRETO DO DESENVOLVEDOR */
+        .secret-dev-btn {
+            display: none; /* Invisível por padrão */
+            position: absolute; bottom: 20px; left: 20px; 
+            background: transparent; border: none; font-size: 24px; cursor: pointer;
+            z-index: 100; pointer-events: auto; opacity: 0.1; transition: 0.3s;
+        }
+        .secret-dev-btn:hover { opacity: 1; transform: scale(1.2); }
+        .secret-dev-btn.stress-active { color: #ff0000; text-shadow: 0 0 20px #ff0000; opacity: 0.8;}
+
+        body.hide-ui .secret-dev-btn {
+            display: block; /* Aparece no modo fantasma */
+        }
+
         /* MENUS RETRÁTEIS */
         #sys-menu-container { position: absolute; top: 10px; right: 10px; z-index: 50; display: flex; flex-direction: column; align-items: flex-end; }
         #sys-menu-items { display: none; flex-direction: column; gap: 8px; margin-top: 10px; align-items: flex-end;}
@@ -172,10 +173,14 @@
         .action-btn:hover { background: #555; transform: scale(1.05); }
         .btn-move { border-color: #00d4ff; color: #00d4ff; }
         .btn-sell { border-color: #ff4444; color: #ff4444; }
-
     </style>
 </head>
 <body>
+
+    <div id="offline-screen" style="display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); z-index: 9999; flex-direction: column; align-items: center; justify-content: center; color: white;">
+        <h1 style="color: #ff4444; font-size: 44px; text-shadow: 0 0 30px #ff0000; text-align: center;">⚠️ SINAL PERDIDO ⚠️</h1>
+        <p style="font-size: 18px; color: #aaa; text-align: center; max-width: 600px; padding: 20px;">O Universo lá fora está sem conexão.<br>A Lógica entrou em suspensão temporal para proteger seus dados.<br><br><span style="color: #00d4ff;">Aguardando retorno da rede...</span></p>
+    </div>
 
     <div class="museum-text mt-1">0 + 0 = O ELEMENTO NEUTRO<br>A MALDIÇÃO E O INÍCIO</div>
     <div class="museum-text mt-2">1 + 1 = A SEQUÊNCIA NATURAL<br>A BALANÇA ENTRA EM AÇÃO</div>
@@ -310,6 +315,7 @@
                 <button id="ghost-btn" class="top-btn" onclick="toggleUI(event)" ontouchstart="toggleUI(event)">👁️ MODO FANTASMA: OFF</button>
                 <button id="mute-btn" class="top-btn" onclick="toggleMute(event)" ontouchstart="toggleMute(event)">🔊 ÁUDIO: ON</button>
                 <button id="fullscreen-btn" class="top-btn" onclick="toggleFullScreen(event)" ontouchstart="toggleFullScreen(event)">🔲 TELA CHEIA</button>
+                <button id="restart-btn" class="top-btn" style="border-color: #ff9800; color: #ff9800; margin-top: 10px;" onclick="restartGame(event)" ontouchstart="restartGame(event)">🔄 REINICIAR</button>
             </div>
         </div>
         
@@ -330,7 +336,7 @@
             <div class="tip-content" id="tip-text">...</div>
         </div>
         
-        <button id="stress-btn" class="secret-dev-btn" onclick="toggleStressMode(event)" ontouchstart="toggleStressMode(event)">🔥</button>
+        <button id="stress-btn" class="secret-dev-btn" onclick="toggleStressMode(event)" ontouchstart="toggleStressMode(event)" title="God Mode Secreto">🔥</button>
         <button id="next-wave-btn" onclick="startWaveCombat(event)" ontouchstart="startWaveCombat(event)">🚀</button>
         <button id="cancel-btn" onclick="cancelSelection(event)" ontouchstart="cancelSelection(event)" title="Cancelar Construção">🗑️</button>
 
@@ -405,7 +411,7 @@
 
         let buildMenuOpen = false;
         function toggleBuildMenu(e) {
-            if(e && !uiClickCheck(e)) return; // Passa liso se chamado internamente sem evento
+            if(e && !uiClickCheck(e)) return; 
             buildMenuOpen = !buildMenuOpen;
             document.getElementById('build-menu').style.display = buildMenuOpen ? 'flex' : 'none';
             document.getElementById('build-toggle-btn').classList.remove('build-glow');
@@ -432,7 +438,6 @@
             if(e && !uiClickCheck(e)) return;
             isAudioMuted = !isAudioMuted;
             const btn = document.getElementById('mute-btn');
-            
             if(isAudioMuted) {
                 btn.classList.add('active-btn');
                 btn.innerText = "🔇 ÁUDIO: OFF";
@@ -449,7 +454,6 @@
             if(e && !uiClickCheck(e)) return;
             stressMode = !stressMode;
             const btn = document.getElementById('stress-btn');
-            
             if(stressMode) {
                 btn.classList.add('stress-active'); 
                 if(!aiMode) toggleAIMode(null); 
@@ -467,6 +471,30 @@
                 const speedBtn = document.getElementById('speed-btn');
                 speedBtn.classList.remove('max-btn'); speedBtn.classList.remove('active-btn');
                 speedBtn.innerText = "⏩ VELOCIDADE: 1x";
+            }
+        }
+
+        // ==========================================
+        // SISTEMA DE REDE E REINÍCIO
+        // ==========================================
+        let isPaused = false; 
+
+        window.addEventListener('offline', () => {
+            document.getElementById('offline-screen').style.display = 'flex';
+            isPaused = true;
+            if (ytPlayer && ytPlayerReady) ytPlayer.pauseVideo();
+        });
+
+        window.addEventListener('online', () => {
+            document.getElementById('offline-screen').style.display = 'none';
+            isPaused = false;
+            if (ytPlayer && ytPlayerReady && !isAudioMuted) ytPlayer.playVideo();
+        });
+
+        function restartGame(e) {
+            if(e && !uiClickCheck(e)) return;
+            if(confirm("A Lógica vai ser totalmente zerada. Tem certeza que deseja reiniciar o ciclo?")) {
+                location.reload(); 
             }
         }
 
@@ -810,17 +838,14 @@
             if (towers.length < targetTowers) {
                 if (gold >= 50) { 
                     let spot = null;
-                    
                     let mapCenterX = 400;
                     let mapCenterY = 300;
-                    
                     let searchRadius = 80 + (towers.length * 8); 
                     if (searchRadius > 400) searchRadius = 400; 
 
                     for(let i = 0; i < 40; i++) {
                         let angle = Math.random() * Math.PI * 2; 
                         let r = (Math.random() * 0.8 + 0.2) * searchRadius; 
-                        
                         let tx = mapCenterX + Math.cos(angle) * r;
                         let ty = mapCenterY + Math.sin(angle) * r;
 
@@ -951,6 +976,8 @@
             if(mathTimer) clearInterval(mathTimer);
             
             mathTimer = setInterval(() => {
+                if (isPaused) return; // Trava contra falta de rede!
+
                 timeLeft -= 0.1;
                 document.getElementById('timer-bar').style.width = ((timeLeft / TOTAL_TIME) * 100) + '%';
                 
@@ -1506,7 +1533,10 @@
                     if(e.hp <= 0 && e.active) {
                         let earned = Math.floor(3 * goldMultiplier);
                         gold += earned; stats.totalGold += earned; updateStats();
-                        e.active = false; for(let i=0; i<10; i++) particles.push(new Particle(e.x, e.y, '#fff'));
+                        e.active = false; 
+                        if (particles.length < 300) { // Trava de partículas para não quebrar o navegador no modo estresse
+                            for(let i=0; i<10; i++) particles.push(new Particle(e.x, e.y, '#fff'));
+                        }
                     }
                 });
             }
@@ -1759,9 +1789,11 @@
 
         function gameLoop() {
             try {
-                if(gameState !== 'MENU') {
-                    for(let i = 0; i < gameSpeed; i++) { update(); }
-                    runAILogic(); 
+                if (!isPaused) {
+                    if(gameState !== 'MENU') {
+                        for(let i = 0; i < gameSpeed; i++) { update(); }
+                        runAILogic(); 
+                    }
                 }
                 draw();
             } catch(e) { console.error("Sherlock Error: ", e); }
