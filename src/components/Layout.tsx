@@ -55,7 +55,7 @@ export function Layout() {
       {/* ── Footer ── */}
       <footer className="footer">
         <p className="footer__msg">
-          Quer fazer uma contribuição ao trabalho do autor? Entre em contato ou faça uma doação.{' '}
+        © 2026 Heiss-Lab | Feito com 💡 para a Educação |{' '}
           <a href="mailto:augustoheiss@gmail.com">augustoheiss@gmail.com</a>
           {' '}
         </p>
