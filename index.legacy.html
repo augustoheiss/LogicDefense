@@ -1,0 +1,1808 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Logic Defense: O Museu dos Números</title>
+    <script src="https://www.youtube.com/iframe_api"></script>
+    <style>
+        body { 
+            margin: 0; padding: 0; overflow: hidden; background-color: #050505; color: white; 
+            font-family: 'Courier New', monospace; user-select: none; touch-action: none;
+            width: 100vw; height: 100vh;
+        }
+
+        /* TEXTOS AMBIENTES DO MUSEU */
+        .museum-text {
+            position: absolute; color: rgba(0, 212, 255, 0.08); 
+            font-family: 'Courier New', monospace; font-weight: bold; z-index: -200; 
+            pointer-events: none; white-space: nowrap; text-shadow: 0 0 15px rgba(0,212,255,0.1);
+        }
+        
+        .mt-1 { top: 3%; left: 2%; font-size: 22px; }
+        .mt-2 { top: 12%; left: 15%; font-size: 14px; color: rgba(0, 255, 0, 0.06); }
+        .mt-3 { top: 4%; right: 3%; font-size: 20px; text-align: right; }
+        .mt-4 { top: 15%; right: 10%; font-size: 16px; text-align: right; color: rgba(255, 235, 59, 0.06); }
+        .mt-5 { top: 25%; left: 3%; font-size: 18px; }
+        .mt-6 { top: 40%; left: 1%; font-size: 14px; color: rgba(255, 68, 68, 0.07); }
+        .mt-7 { top: 30%; right: 2%; font-size: 19px; text-align: right; }
+        .mt-8 { top: 45%; right: 5%; font-size: 15px; text-align: right; color: rgba(156, 39, 176, 0.07); }
+        .mt-9 { bottom: 5%; left: 2%; font-size: 24px; }
+        .mt-10 { bottom: 15%; left: 12%; font-size: 16px; }
+        .mt-11 { bottom: 6%; right: 3%; font-size: 21px; text-align: right; }
+        .mt-12 { bottom: 18%; right: 8%; font-size: 14px; text-align: right; color: rgba(0, 212, 255, 0.06); }
+        .mt-13 { top: 60%; left: 2%; font-size: 17px; }
+        .mt-14 { top: 75%; left: 8%; font-size: 13px; color: rgba(255, 255, 255, 0.05); }
+        .mt-15 { top: 65%; right: 3%; font-size: 18px; text-align: right; }
+        .mt-16 { top: 80%; right: 15%; font-size: 15px; text-align: right; }
+        .mt-17 { top: 50%; left: 30%; font-size: 20px; color: rgba(0, 255, 255, 0.04); }
+
+        @media (max-width: 1100px) { .museum-text { display: none; } }
+        
+        #game-container { 
+            position: absolute; top: 50%; left: 50%; 
+            transform: translate(-50%, -50%); 
+            width: 800px; height: 600px; 
+            border: 2px solid #444; border-radius: 10px;
+            background-image: url('https://images.unsplash.com/photo-1462331940025-496dfbfc7564?auto=format&fit=crop&w=1000&q=80');
+            background-size: cover; background-position: center;
+            box-shadow: 0 0 40px rgba(0, 212, 255, 0.3); overflow: hidden;
+            margin: 0; z-index: 10;
+        }
+        
+        #game-container::before {
+            content: ""; position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 10, 0.6); z-index: 0; pointer-events: none; transition: background 1s;
+        }
+        #game-container.cinematic-mode::before { background: rgba(0, 0, 0, 0.95); }
+
+        canvas { display: block; cursor: crosshair; position: absolute; top:0; left:0; width: 100%; height: 100%; z-index: 1; }
+        
+        /* PLACAR */
+        #ui-layer { position: absolute; top: 10px; left: 10px; pointer-events: none; display: flex; flex-wrap: wrap; gap: 10px; transition: opacity 0.3s; z-index: 20;}
+        
+        .stat-box { 
+            background: rgba(0,0,0,0.8); padding: 8px 12px; border: 1px solid #00ff00; color: #00ff00; 
+            font-weight: bold; font-size: 14px; border-radius: 4px; box-shadow: 0 0 10px rgba(0,255,0,0.2);
+            pointer-events: auto; cursor: help; position: relative;
+        }
+        .score-box { border-color: #fff; color: #fff; box-shadow: 0 0 10px rgba(255,255,255,0.2);}
+        
+        .tooltip-text {
+            visibility: hidden; width: 280px; background-color: rgba(0,0,0,0.95); color: #fff; text-align: left;
+            border-radius: 6px; padding: 10px; border: 1px solid #00d4ff; position: absolute; z-index: 100;
+            top: 130%; left: 0; font-size: 12px; opacity: 0; transition: opacity 0.3s; box-shadow: 0 0 15px rgba(0,212,255,0.5);
+            font-weight: normal; line-height: 1.4; pointer-events: none;
+        }
+        .stat-box:hover .tooltip-text, .stat-box:active .tooltip-text { visibility: visible; opacity: 1; }
+        .tt-highlight { color: #ffeb3b; font-weight: bold; }
+
+        /* BOTOES GERAIS */
+        .top-btn { pointer-events: auto; background: rgba(0,0,0,0.9); border: 2px solid #00d4ff; color: #00d4ff; padding: 8px 15px; font-weight: bold; font-family: inherit; cursor: pointer; border-radius: 4px; transition: 0.2s; box-shadow: 0 0 10px rgba(0,212,255,0.2);}
+        .top-btn:hover { background: #00d4ff; color: #000; }
+        .active-btn { background: #ff9800 !important; color: black !important; border-color: #ff9800 !important; box-shadow: 0 0 15px #ff9800 !important; }
+        .max-btn { background: #f44336 !important; color: white !important; border-color: #f44336 !important; box-shadow: 0 0 15px #f44336 !important; }
+
+        /* BOTÃO SECRETO DO DESENVOLVEDOR */
+        .secret-dev-btn {
+            display: none; /* Invisível por padrão */
+            position: absolute; bottom: 20px; left: 20px; 
+            background: transparent; border: none; font-size: 24px; cursor: pointer;
+            z-index: 100; pointer-events: auto; opacity: 0.1; transition: 0.3s;
+        }
+        .secret-dev-btn:hover { opacity: 1; transform: scale(1.2); }
+        .secret-dev-btn.stress-active { color: #ff0000; text-shadow: 0 0 20px #ff0000; opacity: 0.8;}
+
+        body.hide-ui .secret-dev-btn {
+            display: block; /* Aparece no modo fantasma */
+        }
+
+        /* MENUS RETRÁTEIS */
+        #sys-menu-container { position: absolute; top: 10px; right: 10px; z-index: 50; display: flex; flex-direction: column; align-items: flex-end; }
+        #sys-menu-items { display: none; flex-direction: column; gap: 8px; margin-top: 10px; align-items: flex-end;}
+        
+        #build-menu-container { position: absolute; bottom: 10px; right: 10px; z-index: 50; display: flex; flex-direction: column-reverse; align-items: flex-end; gap: 10px;}
+        #build-menu { display: none; gap: 15px; background: rgba(0,0,0,0.85); padding: 10px; border-radius: 10px; border: 1px solid #555; box-shadow: 0 0 20px rgba(0,0,0,0.8); margin: 0;}
+        .build-glow { animation: attention-pulse 1.5s infinite; border: 1px solid #00ff00 !important; box-shadow: 0 0 20px #00ff00 !important;}
+
+        body.hide-ui #build-menu-container, body.hide-ui #sys-menu-container, body.hide-ui #next-wave-btn, body.hide-ui #math-tip-box, body.hide-ui #ui-layer {
+            opacity: 0.05 !important; pointer-events: none !important;
+        }
+        body.ghost-active #build-menu-container { display: none !important; }
+        body.ghost-active #ui-layer, body.ghost-active #math-tip-box, body.ghost-active #sys-menu-container { opacity: 0.15 !important; pointer-events: none !important; }
+
+        #start-screen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.90); z-index: 200; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        .buff-btn { margin: 10px; padding: 15px 30px; font-size: 22px; cursor: pointer; border: 2px solid white; background: rgba(0,0,0,0.6); color: white; font-family: inherit; transition: 0.2s; width: 320px; text-align: center; border-radius: 8px; }
+        .buff-btn:hover { transform: scale(1.05); color: #000; }
+        .buff-amor:hover { background: #00ff00; border-color: #00ff00; box-shadow: 0 0 30px #00ff00; }
+        .buff-odio:hover { background: #ff0000; border-color: #ff0000; box-shadow: 0 0 30px #ff0000; }
+        .buff-cadeira:hover { background: #00d4ff; border-color: #00d4ff; box-shadow: 0 0 30px #00d4ff; }
+
+        #high-score-display { color: #ffd700; font-size: 16px; font-weight: bold; margin-top: -15px; margin-bottom: 25px; text-shadow: 0 0 10px #ffd700; letter-spacing: 1px;}
+
+        /* MODAIS GERAIS (MANIFESTO E VIÉSES) */
+        .info-modal { display:none; position:absolute; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.95); z-index:300; flex-direction:column; align-items:center; justify-content:center; padding: 20px; box-sizing: border-box; }
+        .info-box { max-width: 700px; color: #eee; line-height: 1.6; font-size: 14px; text-align: justify; border: 1px solid #00d4ff; padding: 30px; border-radius: 10px; background: #111; box-shadow: 0 0 30px rgba(0,212,255,0.3); overflow-y: auto; max-height: 90vh; }
+        .info-title { color: #00d4ff; text-align: center; margin-top: 0; font-size: 24px; text-shadow: 0 0 10px #00d4ff;}
+        .info-box h3 { color: #ffeb3b; font-size: 16px; margin-bottom: 5px; border-bottom: 1px solid #444; padding-bottom: 5px; margin-top: 20px;}
+
+        #math-tip-box { display: none; position: absolute; bottom: 120px; right: 20px; width: 440px; background: rgba(0, 0, 0, 0.95); border: 2px solid #00d4ff; padding: 15px; border-radius: 8px; color: #fff; z-index: 10; pointer-events: none; box-shadow: 0 0 30px rgba(0, 212, 255, 0.5); text-align: left; transition: opacity 0.3s; max-height: 60vh; overflow-y: auto;}
+        .tip-title { color: #00d4ff; font-weight: bold; margin-bottom: 8px; text-transform: uppercase; font-size: 16px; border-bottom: 1px solid #444; padding-bottom: 5px; }
+        .tip-content { font-size: 14px; line-height: 1.5; color: #eee; font-family: 'Verdana', sans-serif; } 
+        .tip-highlight { color: #ffff00; font-weight: bold; }
+
+        #next-wave-btn { 
+            display: none; position: absolute; bottom: 140px; left: 20px; 
+            padding: 10px; width: 70px; height: 70px; border-radius: 50%;
+            font-size: 32px; background: rgba(0, 200, 0, 0.2); color: #00ff00; border: 2px solid #00ff00; 
+            cursor: pointer; font-weight: bold; z-index: 5; animation: pulse-green 2s infinite; box-shadow: 0 0 15px #00ff00;
+            transition: 0.3s; pointer-events: auto; display: flex; align-items: center; justify-content: center;
+        }
+        #next-wave-btn:hover { background: rgba(0, 255, 0, 0.5); transform: scale(1.1); }
+
+        #cancel-btn { 
+            display: none; position: absolute; bottom: 40px; left: 50%; transform: translateX(-50%); 
+            width: 70px; height: 70px; border-radius: 50%; font-size: 32px; 
+            background: rgba(211, 47, 47, 0.9); color: white; border: 2px solid white; 
+            cursor: pointer; font-weight: bold; z-index: 100; box-shadow: 0 0 20px rgba(255, 0, 0, 0.8); 
+            pointer-events: auto !important; align-items: center; justify-content: center; transition: 0.2s;
+        }
+        #cancel-btn:hover { background: #f44336; transform: translateX(-50%) scale(1.1); }
+        body.ghost-active #cancel-btn { display: flex; }
+
+        #math-modal { display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.95); border: 4px solid #fff; padding: 30px; text-align: center; box-shadow: 0 0 80px rgba(255,255,255,0.3); z-index: 100; width: 450px; border-radius: 10px; overflow: hidden; max-width: 90vw;}
+        #buff-message { font-size: 16px; color: #ccc; margin-bottom: 20px; font-style: italic; min-height: 40px; padding: 10px; border-bottom: 1px solid #333; line-height: 1.4; }
+        #timer-container { width: 100%; height: 10px; background: #333; position: absolute; top: 0; left: 0; }
+        #timer-bar { width: 100%; height: 100%; background: #ff0000; transition: width 0.1s linear; }
+        #math-question { font-size: 48px; margin: 10px 0 20px 0; color: #fff; font-weight: bold; text-shadow: 0 0 20px rgba(255,255,255,0.5);}
+        .btn-math { background: #222; color: #fff; border: 2px solid #fff; padding: 15px; margin: 10px; width: 100px; font-size: 24px; cursor: pointer; font-family: inherit; transition: 0.2s; border-radius: 5px; }
+        .btn-math:hover { background: #fff; color: #000; transform: scale(1.1); box-shadow: 0 0 20px #fff;}
+
+        .tower-btn { width: 80px; height: 90px; background: #222; border: 2px solid #555; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; transition: 0.2s; border-radius: 5px; color: #aaa; pointer-events: auto; }
+        .tower-btn:hover { border-color: #fff; background: #333; color: #fff; }
+        .tower-btn.selected { border-color: #00ff00; background: #111; box-shadow: 0 0 20px #00ff00; color: #00ff00; transform: translateY(-5px); }
+        .tower-symbol { font-size: 26px; font-weight: bold; margin-bottom: 2px; }
+        .tower-cost { font-size: 14px; font-weight: bold;}
+        .tower-desc { font-size: 10px; color: #aaa; margin-top: 2px; text-align: center;}
+
+        #feedback-msg { position: absolute; top: 150px; width: 100%; text-align: center; font-size: 32px; font-weight: bold; opacity: 0; transition: opacity 0.5s; text-shadow: 0 0 10px #000, 0 0 20px #000; z-index: 6; pointer-events: none; }
+        
+        /* PAINEL DE UPGRADE CENTRALIZADO */
+        #upgrade-info { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); text-align: left; font-size: 14px; color: #aaa; pointer-events: auto; display: none; background: rgba(0,0,0,0.9); padding: 15px; border-radius: 5px; border-left: 3px solid #ffd700; z-index: 50; box-shadow: 0 0 20px rgba(0,0,0,0.8); flex-direction: column; gap: 10px;}
+        .action-btn { background: #333; border: 1px solid #fff; color: white; padding: 8px; cursor: pointer; border-radius: 4px; transition: 0.2s; font-weight: bold; font-family: inherit;}
+        .action-btn:hover { background: #555; transform: scale(1.05); }
+        .btn-move { border-color: #00d4ff; color: #00d4ff; }
+        .btn-sell { border-color: #ff4444; color: #ff4444; }
+    </style>
+</head>
+<body>
+
+    <div id="offline-screen" style="display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); z-index: 9999; flex-direction: column; align-items: center; justify-content: center; color: white;">
+        <h1 style="color: #ff4444; font-size: 44px; text-shadow: 0 0 30px #ff0000; text-align: center;">⚠️ SINAL PERDIDO ⚠️</h1>
+        <p style="font-size: 18px; color: #aaa; text-align: center; max-width: 600px; padding: 20px;">O Universo lá fora está sem conexão.<br>A Lógica entrou em suspensão temporal para proteger seus dados.<br><br><span style="color: #00d4ff;">Aguardando retorno da rede...</span></p>
+    </div>
+
+    <div class="museum-text mt-1">0 + 0 = O ELEMENTO NEUTRO<br>A MALDIÇÃO E O INÍCIO</div>
+    <div class="museum-text mt-2">1 + 1 = A SEQUÊNCIA NATURAL<br>A BALANÇA ENTRA EM AÇÃO</div>
+    <div class="museum-text mt-3">2 > 4 > 8<br>A BASE DO UNIVERSO</div>
+    <div class="museum-text mt-4">3 x 2 = A PARTE PERFEITA<br>O REI DAS DÍZIMAS</div>
+    <div class="museum-text mt-5">QUALQUER NÚMERO x 4 =<br>O DOBRO DUAS VEZES</div>
+    <div class="museum-text mt-6">5 + 5 = O NOSSO QUERIDO RELÓGIO</div>
+    <div class="museum-text mt-7">6 + 6 = A MEIA DÚZIA<br>SISTEMA ANTIGO (÷ 2, 3, 4, 6)</div>
+    <div class="museum-text mt-8">7 ÷ 7 = 0.999... = 1<br>A RODA CONCLUÍDA</div>
+    <div class="museum-text mt-9">142857<br>O NÚMERO DA FÊNIX</div>
+    <div class="museum-text mt-10">8 + 8 = O CUBO DE 2<br>-2 UNIDADES, +1 DEZENA</div>
+    <div class="museum-text mt-11">9 ÷ 9 = O INFINITO<br>A REGRA: -1 UNIDADE, +1 DEZENA</div>
+    <div class="museum-text mt-12">142 + 857 = 999<br>A METADE DA RODA</div>
+    <div class="museum-text mt-13">14 + 28 + 57 = 99<br>A GEOMETRIA OCULTA</div>
+    <div class="museum-text mt-14">A MORTE DE UMA FRAÇÃO<br>O NASCIMENTO DO TODO</div>
+    <div class="museum-text mt-15">DESLIGUE O SEU JUIZ INTERNO</div>
+    <div class="museum-text mt-16">A LÓGICA É SOBERANA</div>
+    <div class="museum-text mt-17">(a+b)(a-b) = a² - b²</div>
+
+    <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 300px; height: 300px; z-index: -100; opacity: 0.01; pointer-events: none;">
+        <div id="yt-player"></div>
+    </div>
+
+    <div id="start-screen">
+        <h1 id="start-title" style="font-size: 44px; margin-bottom: 5px; color: #fff; text-shadow: 0 0 20px #00d4ff;">LOGIC DEFENSE</h1>
+        <p id="start-subtitle" style="font-size: 20px; margin-bottom: 30px; color: #aaa; letter-spacing: 2px;">O MUSEU DOS NÚMEROS</p>
+        
+        <div id="high-score-display">
+            🏆 RECORDE: ONDA <span id="hs-wave-ui">0</span> | CONTAS: <span id="hs-math-ui">0</span> 🏆
+        </div>
+        
+        <button class="buff-btn buff-amor" onclick="selectBuff('amor', event)" ontouchstart="selectBuff('amor', event)">❤️ AMOR<br><span style="font-size:12px; font-style:italic;">"O fogo tá sempre aceso"</span></button>
+        <button class="buff-btn buff-odio" onclick="selectBuff('odio', event)" ontouchstart="selectBuff('odio', event)">🔥 ÓDIO<br><span style="font-size:12px; font-style:italic;">"Vou desligar sua tomada"</span></button>
+        <button class="buff-btn buff-cadeira" onclick="selectBuff('cadeira', event)" ontouchstart="selectBuff('cadeira', event)">🪑 A CADEIRA<br><span style="font-size:12px; font-style:italic;">"Aceite a dor"</span></button>
+        
+        <div style="display: flex; gap: 10px; margin-top: 20px;">
+            <button class="top-btn" style="font-size: 14px;" onclick="document.getElementById('manifesto-modal').style.display='flex'">📖 O MANIFESTO</button>
+            <button class="top-btn" style="font-size: 14px; border-color: #ffeb3b; color: #ffeb3b;" onclick="document.getElementById('viases-modal').style.display='flex'">🔢 VIÉSES DOS NÚMEROS</button>
+        </div>
+    </div>
+
+    <div id="manifesto-modal" class="info-modal">
+        <div class="info-box">
+            <h2 class="info-title">A LÓGICA DO ONE PIECE</h2>
+            <p>Palavras como Amor, Ódio, ou o meio termo (A Cadeira), podem ter infinitos significados dependendo de como as falamos, dos nossos motivos e de eventos externos imprevisíveis. Esses fatores podem fazer com que nossas palavras sumam no vácuo ou sejam potencializadas como por um microfone. Vivemos em um mundo de probabilidades.</p>
+            <p>Está na hora de sair do dicionário, sair da biblioteca e experimentar a Lógica na prática. Use todos esses Dados, Informações, Conhecimentos e Sabedoria a seu favor estudando a função dos números (e das palavras).</p>
+            <p>Desligue o seu "Juiz" interno — aquele que rejeita as pessoas só porque elas não te dão importância ou não te respeitam. A Lógica por trás de todos esses motivos é mais profunda e soberana, e ninguém escapa da lei das probabilidades. Aceite a Morte, e então, Viva. Não como uma máquina, que hoje está incrivelmente potente, mas como a alma que você é.</p>
+            <hr style="border-color: #333; margin: 20px 0;">
+            <p style="color: #00ff00; font-weight: bold; text-align: center;">[ SOBRE O PROJETO ]</p>
+            <p style="text-align: center;">Este jogo é um Museu Vivo. Foi produzido <strong>100% em co-criação com Inteligência Artificial</strong>, provando que a IA é a melhor ferramenta para mentes que não têm medo de pensar e filosofar sobre o código.</p>
+            <p style="text-align: center;">Quer falar com o autor ou trocar ideias sobre tecnologia e educação?<br>📧 <strong>augustoheiss@gmail.com</strong></p>
+            <button onclick="document.getElementById('manifesto-modal').style.display='none'" style="margin-top:15px; width:100%; font-size: 16px;" class="action-btn btn-sell">FECHAR</button>
+        </div>
+    </div>
+
+    <div id="viases-modal" class="info-modal">
+        <div class="info-box">
+            <h2 class="info-title">OS VIÉSES DOS NÚMEROS</h2>
+            <p style="font-style: italic; color: #aaa; text-align: center;">A Matemática não vai sair do lugar. Nós apenas escrevemos problemas diferentes de maneiras que produzam resultados. A regra universal: Manipule sempre do maior para o menor.</p>
+            
+            <h3>A Lei do Menor Esforço (+) e o Hack Japonês (-)</h3>
+            <p>Na <strong>Adição</strong>, moldamos a "massinha". Identificamos qual número precisa de menos passos na reta numérica para chegar num zero redondo. Tiramos de um lado e compensamos no outro. O que sobra, fazemos por Decomposição (Centena com Centena, Dezena com Dezena). Exemplo: 18 + 7 ➔ Tira 2 do sete e dá para o dezoito ➔ Fica 20 + 5 = 25.<br>
+            Na <strong>Subtração</strong>, o Subtraendo é o Rei. Mexemos nele primeiro dando passos para frente ou para trás na reta numérica até a unidade zerar, e aplicamos o exato mesmo passo no número de cima. O cálculo desce reto, sem nunca precisar "pedir emprestado". Exemplo visual: 42 - 19 ➔ Ande 1 passo para frente nos dois números para zerar a unidade do Rei ➔ 43 - 20 = 23.</p>
+
+            <h3>A Diferença de Quadrados (x)</h3>
+            <p>Na multiplicação, se houver um valor e uma variável em comum equidistante (ex: 12 x 8, que é (10+2)x(10-2) ou 10x10 - 2x2 (a+b)x(a-b) ou base² - passo²), usamos a diferença de quadrados: a base ao quadrado menos o passo ao quadrado (10² - 2²) = (100 - 4 = 96). Pura geometria mental.</p>
+
+            <h3>0: A Maldição e o Início</h3>
+            <p>O elemento neutro da soma e subtração! Junto com o 9 torna algo completo às vezes sem aparecer. Ele é tão importante que é proibido usar numa balança exata (divisão), porque ele faz parecer que qualquer resultado é a mesma coisa. Ele não é neutro na multiplicação, ele é a maldição, o viés necessário. Ele parece antigo, mas é o irmão mais novo dos números.</p>
+
+            <h3>1: A Balança</h3>
+            <p>A sequência dos números naturais. O acréscimo de um. Onde o rótulo da conta começa e a balança dos números entra em ação.</p>
+
+            <h3>2, 4 e 8: A Base do Universo</h3>
+            <p><strong>Tabuada do 2:</strong> O Universo que entendemos de verdade é escrito na base 2: Preto e Branco, as cores que prevalecem no Sistema.<br>
+            <strong>Tabuada do 4:</strong> O dobro do dobro. Qualquer número multiplicado por 4 é o dobro duas vezes.<br>
+            <strong>A Grandeza do 8:</strong> O cubo de 2, os campeões da base 2 nas máquinas. Sabe como somar 8 rápido? Volta dois passos e adiciona uma dezena à esquerda. (8+9 = 17, 8+7 = 15). Na subtração é o espelho: avança dois passos na unidade e desce a casa da esquerda! (320 ➔ 312 ➔ 304).</p>
+
+            <h3>3 e 6: A Fração e a Dúzia</h3>
+            <p><strong>Tabuada do 3:</strong> Uma parte perfeita do número completo, o rei das dízimas periódicas. Sabe quem ele coroa? O 9.<br>
+            <strong>Tabuada do 6:</strong> A meia dúzia. Palavras de um sistema antigo muito útil, porque o 12 se divide perfeitamente por 2, 3, 4 e 6!</p>
+
+            <h3>5: O Nosso Relógio</h3>
+            <p>A tabuada que nos faz inteligentes com a sua facilidade absoluta em transformar o difícil. A mágica de cortar na metade e terminar em 0 ou 5.</p>
+
+            <h3>7: O Número da Fênix (142857)</h3>
+            <p>Ele é aceito como louco porque sua verdade é encontrada em números muito grandes ou muito pequenos. Mas em conjunto, a divisão por 7 gera a poderosa dízima <strong>142857</strong>. Todos os números aparecem nela; os invisíveis completam as partes perfeitas. Fatorando ele temos a magia completa: (142 + 857 = 999).</p>
+
+            <h3>9: O Infinito que Completa</h3>
+            <p>O número que não aparece nas dízimas periódicas porque ele mostra o infinito de qualquer número. Se 1 ÷ 9 = 0.111... e 8 ÷ 9 = 0.888..., então 9 ÷ 9 = 0.999... (o Infinito que vira o 1, o Todo!). A morte de uma fração e o nascimento de algo completo.<br>A regra do 9 é divina: diminui uma unidade e soma uma na dezena (9, 18, 27, 36...). Para somar, mesma coisa (9+4=13). Para subtrair 9, você avança 1 passo na unidade e desce a dezena! (450 ➔ 441 ➔ 432).</p>
+
+            <button onclick="document.getElementById('viases-modal').style.display='none'" style="margin-top:15px; width:100%; font-size: 16px;" class="action-btn btn-move">VOLTAR PARA A LÓGICA</button>
+        </div>
+    </div>
+
+    <div id="game-container">
+        <canvas id="gameCanvas" width="800" height="600"></canvas>
+
+        <div id="ui-layer">
+            <div class="stat-box">
+                💰 $<span id="gold-display">150</span>
+                <span class="tooltip-text" id="tt-gold">Me falaram que você é o cara da grana então...<br><br><span class="tt-highlight">Total Acumulado:</span> $<span id="tt-total-gold">150</span><br><br>Rapaz não precisa correr atrás do ouro, mas acertar é melhor que errar né grandão? (Acerto: +150% / Erro: +50%)</span>
+            </div>
+            <div class="stat-box">
+                🌊 <span id="wave-display">0</span>
+                <span class="tooltip-text" id="tt-wave">Você é um mergulhador de Onda mesmo, quero ver você explorando o mar também meu fi, vou querer ouvir falar de você.<br><br><span class="tt-highlight" id="tt-wave-ordinal">Iniciando...</span></span>
+            </div>
+            <div class="stat-box">
+                ❤️ <span id="lives-display">20</span>
+                <span class="tooltip-text" id="tt-lives">Vamos gastar um pouco dessas vidas né, <span id="tt-lives-curr">20</span> vidas é muita vida não é não? Ta economizando demais.<br><br>Ganhadas: <span id="tt-lives-gained" class="tt-highlight">0</span><br>Perdidas: <span id="tt-lives-lost" style="color:#ff4444">0</span></span>
+            </div>
+            <div class="stat-box">⚖️ <span id="mult-display">1.0x</span></div>
+            <div class="stat-box score-box">
+                ✅ <span id="score-correct">0</span>
+                <span class="tooltip-text" id="tt-score">
+                    <span class="tt-highlight">Total Resolvido:</span> <span id="tt-total-math">0</span><br><br>
+                    <span style="color:#ff4444">Falhas por Operação:</span><br>
+                    Soma (+): <span id="err-sum">0</span><br>
+                    Subtração (-): <span id="err-sub">0</span><br>
+                    Multiplicação (x): <span id="err-mul">0</span><br>
+                    Divisão (÷): <span id="err-div">0</span>
+                </span>
+            </div>
+            <div class="stat-box score-box" style="border-color: #f00; color: #f00;">❌ <span id="score-wrong">0</span></div>
+        </div>
+
+        <div id="sys-menu-container">
+            <button class="top-btn" onclick="toggleSysMenu(event)" ontouchstart="toggleSysMenu(event)">⚙️ SISTEMA</button>
+            <div id="sys-menu-items">
+                <button id="speed-btn" class="top-btn" onclick="toggleSpeed(event)" ontouchstart="toggleSpeed(event)">⏩ VELOCIDADE: 1x</button>
+                <button id="ai-btn" class="top-btn" onclick="toggleAIMode(event)" ontouchstart="toggleAIMode(event)">🤖 MODO IA: OFF</button>
+                <button id="ghost-btn" class="top-btn" onclick="toggleUI(event)" ontouchstart="toggleUI(event)">👁️ MODO FANTASMA: OFF</button>
+                <button id="mute-btn" class="top-btn" onclick="toggleMute(event)" ontouchstart="toggleMute(event)">🔊 ÁUDIO: ON</button>
+                <button id="fullscreen-btn" class="top-btn" onclick="toggleFullScreen(event)" ontouchstart="toggleFullScreen(event)">🔲 TELA CHEIA</button>
+                <button id="restart-btn" class="top-btn" style="border-color: #ff9800; color: #ff9800; margin-top: 10px;" onclick="restartGame(event)" ontouchstart="restartGame(event)">🔄 REINICIAR</button>
+            </div>
+        </div>
+        
+        <div id="upgrade-info">
+            <div style="color:#fff; font-weight:bold; margin-bottom:5px; border-bottom: 1px solid #444; padding-bottom:5px;">PAINEL DA TORRE</div>
+            <div style="font-size:12px; margin-bottom:5px;">Upgrade: $<span id="upg-cost">0</span></div>
+            <button class="action-btn" onclick="upgradeSelectedTower(event)" ontouchstart="upgradeSelectedTower(event)">UPGRADE</button>
+            <div style="display:flex; gap:10px; margin-top:5px;">
+                <button class="action-btn btn-move" onclick="moveSelectedTower(event)" ontouchstart="moveSelectedTower(event)">🚚 MOVER</button>
+                <button class="action-btn btn-sell" onclick="sellSelectedTower(event)" ontouchstart="sellSelectedTower(event)">🗑️ VENDER</button>
+            </div>
+        </div>
+        
+        <div id="feedback-msg"></div>
+        
+        <div id="math-tip-box">
+            <div class="tip-title">⚡ RACIOCÍNIO LÓGICO</div>
+            <div class="tip-content" id="tip-text">...</div>
+        </div>
+        
+        <button id="stress-btn" class="secret-dev-btn" onclick="toggleStressMode(event)" ontouchstart="toggleStressMode(event)" title="God Mode Secreto">🔥</button>
+        <button id="next-wave-btn" onclick="startWaveCombat(event)" ontouchstart="startWaveCombat(event)">🚀</button>
+        <button id="cancel-btn" onclick="cancelSelection(event)" ontouchstart="cancelSelection(event)" title="Cancelar Construção">🗑️</button>
+
+        <div id="math-modal">
+            <div id="timer-container"><div id="timer-bar"></div></div>
+            <div id="buff-message"></div>
+            <div style="color: #00ff00; font-size: 16px; letter-spacing: 2px; margin-top: 10px;">PROTOCOLOS DE SEGURANÇA</div>
+            <div id="math-question">2 + 2 = ?</div>
+            <div id="math-options"></div>
+        </div>
+
+        <div id="build-menu-container">
+            <button class="top-btn" id="build-toggle-btn" onclick="toggleBuildMenu(event)" ontouchstart="toggleBuildMenu(event)">🛠️ ARSENAL</button>
+            <div id="build-menu">
+                <div class="tower-btn" onclick="selectTowerBtn(0, event)" ontouchstart="selectTowerBtn(0, event)" id="tbtn0">
+                    <div class="tower-symbol" style="color:#ffeb3b">+</div>
+                    <div class="tower-cost">$50</div>
+                    <div class="tower-desc">Metralhadora</div>
+                </div>
+                <div class="tower-btn" onclick="selectTowerBtn(1, event)" ontouchstart="selectTowerBtn(1, event)" id="tbtn1">
+                    <div class="tower-symbol" style="color:#03a9f4">-</div>
+                    <div class="tower-cost">$120</div>
+                    <div class="tower-desc">Gelo (Área)</div>
+                </div>
+                <div class="tower-btn" onclick="selectTowerBtn(2, event)" ontouchstart="selectTowerBtn(2, event)" id="tbtn2">
+                    <div class="tower-symbol" style="color:#f44336">x</div>
+                    <div class="tower-cost">$300</div>
+                    <div class="tower-desc">Explosão</div>
+                </div>
+                <div class="tower-btn" onclick="selectTowerBtn(3, event)" ontouchstart="selectTowerBtn(3, event)" id="tbtn3">
+                    <div class="tower-symbol" style="color:#9c27b0">÷</div>
+                    <div class="tower-cost">$450</div>
+                    <div class="tower-desc">Sniper</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ==========================================
+        // LOCAL STORAGE (SISTEMA DE HIGHSCORE)
+        // ==========================================
+        let maxWaveSaved = localStorage.getItem('logicDef_hsWave') || 0;
+        let maxMathSaved = localStorage.getItem('logicDef_hsMath') || 0;
+        document.getElementById('hs-wave-ui').innerText = maxWaveSaved;
+        document.getElementById('hs-math-ui').innerText = maxMathSaved;
+
+        // ==========================================
+        // SHIELD ANTI-GHOST CLICK (DEBOUNCE UNIVERSAL)
+        // ==========================================
+        let lastUiClick = 0;
+        function uiClickCheck(e) {
+            if(e) { 
+                if(e.preventDefault) e.preventDefault(); 
+                if(e.stopPropagation) e.stopPropagation(); 
+            }
+            let now = Date.now();
+            if (now - lastUiClick < 200) return false;
+            lastUiClick = now;
+            return true;
+        }
+
+        // ==========================================
+        // UI CONTROLES (MENUS RETRÁTEIS)
+        // ==========================================
+        let sysMenuOpen = false;
+        function toggleSysMenu(e) {
+            if(e && !uiClickCheck(e)) return;
+            sysMenuOpen = !sysMenuOpen;
+            document.getElementById('sys-menu-items').style.display = sysMenuOpen ? 'flex' : 'none';
+        }
+
+        let buildMenuOpen = false;
+        function toggleBuildMenu(e) {
+            if(e && !uiClickCheck(e)) return; 
+            buildMenuOpen = !buildMenuOpen;
+            document.getElementById('build-menu').style.display = buildMenuOpen ? 'flex' : 'none';
+            document.getElementById('build-toggle-btn').classList.remove('build-glow');
+        }
+
+        let uiHidden = false;
+        function toggleUI(e) {
+            if(e && !uiClickCheck(e)) return;
+            uiHidden = !uiHidden;
+            const btn = document.getElementById('ghost-btn');
+            if(uiHidden) {
+                document.body.classList.add('hide-ui');
+                btn.classList.add('active-btn'); btn.innerText = "👁️ MODO FANTASMA: ON";
+                if(sysMenuOpen) toggleSysMenu(null); 
+                if(buildMenuOpen) toggleBuildMenu(null);
+            } else {
+                document.body.classList.remove('hide-ui');
+                btn.classList.remove('active-btn'); btn.innerText = "👁️ MODO FANTASMA: OFF";
+            }
+        }
+        
+        let isAudioMuted = false;
+        function toggleMute(e) {
+            if(e && !uiClickCheck(e)) return;
+            isAudioMuted = !isAudioMuted;
+            const btn = document.getElementById('mute-btn');
+            if(isAudioMuted) {
+                btn.classList.add('active-btn');
+                btn.innerText = "🔇 ÁUDIO: OFF";
+                if(ytPlayer && ytPlayerReady) ytPlayer.mute(); 
+            } else {
+                btn.classList.remove('active-btn');
+                btn.innerText = "🔊 ÁUDIO: ON";
+                if(ytPlayer && ytPlayerReady) ytPlayer.unMute(); 
+            }
+        }
+
+        let stressMode = false;
+        function toggleStressMode(e) {
+            if(e && !uiClickCheck(e)) return;
+            stressMode = !stressMode;
+            const btn = document.getElementById('stress-btn');
+            if(stressMode) {
+                btn.classList.add('stress-active'); 
+                if(!aiMode) toggleAIMode(null); 
+                gameSpeed = 6; 
+                const speedBtn = document.getElementById('speed-btn');
+                speedBtn.classList.add('max-btn'); speedBtn.classList.remove('active-btn');
+                speedBtn.innerText = "🚀 VELOCIDADE: 6x (MAX)";
+                
+                if(gameState === 'MATH') resolveMath(true, false);
+                if(gameState === 'BUILD' && document.getElementById('next-wave-btn').style.display !== 'none') startWaveCombat(null);
+                if(gameState === 'MENU' && wave > 0) selectBuff(['amor', 'odio', 'cadeira'][Math.floor(Math.random()*3)], null);
+            } else {
+                btn.classList.remove('stress-active'); 
+                gameSpeed = 1;
+                const speedBtn = document.getElementById('speed-btn');
+                speedBtn.classList.remove('max-btn'); speedBtn.classList.remove('active-btn');
+                speedBtn.innerText = "⏩ VELOCIDADE: 1x";
+            }
+        }
+
+        // ==========================================
+        // SISTEMA DE REDE E REINÍCIO
+        // ==========================================
+        let isPaused = false; 
+
+        window.addEventListener('offline', () => {
+            document.getElementById('offline-screen').style.display = 'flex';
+            isPaused = true;
+            if (ytPlayer && ytPlayerReady) ytPlayer.pauseVideo();
+        });
+
+        window.addEventListener('online', () => {
+            document.getElementById('offline-screen').style.display = 'none';
+            isPaused = false;
+            if (ytPlayer && ytPlayerReady && !isAudioMuted) ytPlayer.playVideo();
+        });
+
+        function restartGame(e) {
+            if(e && !uiClickCheck(e)) return;
+            if(confirm("A Lógica vai ser totalmente zerada. Tem certeza que deseja reiniciar o ciclo?")) {
+                location.reload(); 
+            }
+        }
+
+        // ==========================================
+        // YOUTUBE AUDIO API (LOOP IMORTAL)
+        // ==========================================
+        let ytPlayer;
+        let ytPlayerReady = false;
+        let bgMusicPlaying = false;
+        let userActivatedAudio = false;
+
+        function tryStartBgMusic() {
+            if (!userActivatedAudio) return;
+            if (!ytPlayerReady) return;
+            if (bgMusicPlaying) return;
+
+            ytPlayer.mute();
+            ytPlayer.playVideo();
+            bgMusicPlaying = true;
+
+            setTimeout(() => {
+                ytPlayer.setVolume(35);
+                if (!isAudioMuted) {
+                    ytPlayer.unMute();
+                }
+            }, 400);
+        }
+
+        function onYouTubeIframeAPIReady() {
+            ytPlayer = new YT.Player('yt-player', {
+                height: '300', width: '300',
+                playerVars: {
+                    listType: 'playlist',
+                    list: 'PLh5X0e7-mnI3lh-nb3fwZ8OcndGLfVdZX', 
+                    loop: 1, autoplay: 0, controls: 0, playsinline: 1, origin: location.origin
+                },
+                events: {
+                    'onReady': () => {
+                        ytPlayerReady = true;
+                        tryStartBgMusic();
+                    },
+                    'onStateChange': (event) => {
+                        if (event.data === YT.PlayerState.ENDED) {
+                            ytPlayer.playVideo(); 
+                        }
+                    }
+                }
+            });
+        }
+
+        // ==========================================
+        // TELA CHEIA E ESCALA ABSOLUTA
+        // ==========================================
+        function toggleFullScreen(e) {
+            if(e && !uiClickCheck(e)) return;
+            let elem = document.documentElement;
+            if (!document.fullscreenElement) {
+                if (elem.requestFullscreen) { elem.requestFullscreen(); }
+                else if (elem.webkitRequestFullscreen) { elem.webkitRequestFullscreen(); }
+                else if (elem.msRequestFullscreen) { elem.msRequestFullscreen(); }
+            } else {
+                if (document.exitFullscreen) { document.exitFullscreen(); }
+                else if (document.webkitExitFullscreen) { document.webkitExitFullscreen(); }
+                else if (document.msExitFullscreen) { document.msExitFullscreen(); }
+            }
+        }
+
+        function resizeCanvas() {
+            const container = document.getElementById('game-container');
+            const winW = window.innerWidth;
+            const winH = window.innerHeight;
+
+            let scaleW = winW / 820; 
+            let scaleH = winH / 620; 
+            let scale = Math.min(scaleW, scaleH);
+            
+            if (scale > 1) scale = 1; 
+
+            container.style.transform = `translate(-50%, -50%) scale(${scale})`;
+            container.style.margin = '0'; 
+        }
+        
+        window.addEventListener('resize', resizeCanvas);
+        document.addEventListener('fullscreenchange', resizeCanvas);
+        document.addEventListener('webkitfullscreenchange', resizeCanvas);
+        setTimeout(resizeCanvas, 100);
+
+        // ==========================================
+        // CONFIGURAÇÕES DE AUDIO SFX E CANVAS
+        // ==========================================
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        let audioCtx; 
+
+        function initAudio() {
+            userActivatedAudio = true;
+            if(!audioCtx) audioCtx = new AudioContext();
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            
+            tryStartBgMusic();
+        }
+
+        function playSound(type) {
+            if (isAudioMuted) return;
+            if (!audioCtx) return; 
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            
+            const osc = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+            osc.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+
+            if (type === 'shoot') {
+                osc.type = 'square'; osc.frequency.setValueAtTime(400, audioCtx.currentTime); 
+                osc.frequency.exponentialRampToValueAtTime(100, audioCtx.currentTime + 0.1);
+                gainNode.gain.setValueAtTime(0.01, audioCtx.currentTime); gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.1);
+                osc.start(); osc.stop(audioCtx.currentTime + 0.1);
+            } else if (type === 'sniper') {
+                osc.type = 'triangle'; osc.frequency.setValueAtTime(150, audioCtx.currentTime); 
+                osc.frequency.exponentialRampToValueAtTime(50, audioCtx.currentTime + 0.3);
+                gainNode.gain.setValueAtTime(0.02, audioCtx.currentTime); gainNode.gain.exponentialRampToValueAtTime(0.005, audioCtx.currentTime + 0.3);
+                osc.start(); osc.stop(audioCtx.currentTime + 0.3);
+            } else if (type === 'hit') {
+                osc.type = 'sawtooth'; osc.frequency.setValueAtTime(100, audioCtx.currentTime);
+                gainNode.gain.setValueAtTime(0.01, audioCtx.currentTime); gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.1);
+                osc.start(); osc.stop(audioCtx.currentTime + 0.1);
+            } else if (type === 'correct') {
+                osc.type = 'sine'; osc.frequency.setValueAtTime(600, audioCtx.currentTime); osc.frequency.setValueAtTime(1200, audioCtx.currentTime + 0.1);
+                gainNode.gain.setValueAtTime(0.03, audioCtx.currentTime); gainNode.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.3);
+                osc.start(); osc.stop(audioCtx.currentTime + 0.3);
+            } else if (type === 'wrong') {
+                osc.type = 'sawtooth'; osc.frequency.setValueAtTime(100, audioCtx.currentTime); osc.frequency.linearRampToValueAtTime(50, audioCtx.currentTime + 0.3);
+                gainNode.gain.setValueAtTime(0.05, audioCtx.currentTime); gainNode.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.3);
+                osc.start(); osc.stop(audioCtx.currentTime + 0.3);
+            } else if (type === 'upgrade') {
+                 osc.type = 'triangle'; osc.frequency.setValueAtTime(300, audioCtx.currentTime); osc.frequency.linearRampToValueAtTime(600, audioCtx.currentTime + 0.2);
+                 gainNode.gain.setValueAtTime(0.03, audioCtx.currentTime); gainNode.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.3);
+                 osc.start(); osc.stop(audioCtx.currentTime + 0.3);
+            } else if (type === 'heal') {
+                 osc.type = 'sine'; osc.frequency.setValueAtTime(400, audioCtx.currentTime); osc.frequency.linearRampToValueAtTime(800, audioCtx.currentTime + 0.5);
+                 gainNode.gain.setValueAtTime(0.03, audioCtx.currentTime); gainNode.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.5);
+                 osc.start(); osc.stop(audioCtx.currentTime + 0.5);
+            } else if (type === 'cinematic') {
+                 osc.type = 'sawtooth'; osc.frequency.setValueAtTime(50, audioCtx.currentTime); osc.frequency.exponentialRampToValueAtTime(10, audioCtx.currentTime + 1.5);
+                 gainNode.gain.setValueAtTime(0.08, audioCtx.currentTime); gainNode.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 1.5);
+                 osc.start(); osc.stop(audioCtx.currentTime + 1.5);
+            }
+        }
+
+        // ==========================================
+        // VARIÁVEIS PRINCIPAIS E STATUS
+        // ==========================================
+        let gameState = 'MENU'; 
+        let gold = 150;
+        let lives = 20;
+        let wave = 0;
+        let goldMultiplier = 1.0;
+        let lastAnswerCorrect = true;
+        let gameSpeed = 1;
+        let isGameOver = false;
+        
+        let totalCorrect = 0;
+        let totalWrong = 0;
+        let currentProblem = { n1: 0, n2: 0, op: '', answer: 0 };
+        
+        let mathTimer = null;
+        let timeLeft = 30;
+        const TOTAL_TIME = 30;
+
+        let totalEnemiesToSpawn = 0;
+        let enemiesSpawned = 0;
+        let spawnFrameCounter = 0; 
+
+        let stats = {
+            totalGold: 150, livesGained: 0, livesLost: 0, totalMath: 0,
+            errors: { '+': 0, '-': 0, 'x': 0, '÷': 0 }
+        };
+
+        let towers = [];
+        let enemies = [];
+        let bullets = [];
+        let particles = [];
+        let cinematicParticles = [];
+        
+        let mouseX = 0, mouseY = 0;
+        let canBuild = false;
+        
+        let selectedTowerIdx = -1; 
+        let isDraggingGhost = false; 
+        let selectedExistingTower = null; 
+        let movingTower = null; 
+
+        // ==========================================
+        // ROTAÇÃO E GERAÇÃO DE MAPA DINÂMICO
+        // ==========================================
+        let currentMapAngle = 0;
+        let mapPhase = 1; 
+        let totalRotations = 0;
+        let lastRotatedWave = 0;
+        let mapPaths = [];
+
+        function generateMapPaths() {
+            if (mapPhase === 1) {
+                mapPaths = [ [ {x: 0, y: 150}, {x: 700, y: 150}, {x: 700, y: 350}, {x: 100, y: 350}, {x: 100, y: 500}, {x: 800, y: 500} ] ];
+            } else if (mapPhase === 2) {
+                mapPaths = [
+                    [ {x:0, y:300}, {x:200, y:300}, {x:400, y:100}, {x:600, y:300}, {x:800, y:300} ],
+                    [ {x:0, y:300}, {x:200, y:300}, {x:400, y:500}, {x:600, y:300}, {x:800, y:300} ],
+                    [ {x:0, y:300}, {x:200, y:300}, {x:400, y:300}, {x:600, y:300}, {x:800, y:300} ]
+                ];
+            } else {
+                mapPaths = [
+                    [ {x:0, y:400}, {x:200, y:150}, {x:400, y:400}, {x:550, y:250}, {x:700, y:400}, {x:800, y:400} ],
+                    [ {x:0, y:400}, {x:200, y:150}, {x:400, y:400}, {x:550, y:550}, {x:700, y:400}, {x:800, y:400} ],
+                    [ {x:0, y:400}, {x:200, y:150}, {x:400, y:400}, {x:550, y:400}, {x:700, y:400}, {x:800, y:400} ]
+                ];
+            }
+        }
+        generateMapPaths(); 
+
+        function generateEnemyRoute() {
+            let routeBase = mapPaths[Math.floor(Math.random() * mapPaths.length)];
+            let route = routeBase.map(p => ({x: p.x, y: p.y}));
+            let isReverse = Math.random() > 0.5;
+
+            if (isReverse) route.reverse();
+
+            if (currentMapAngle !== 0) {
+                let cx = 400, cy = 300;
+                let cosA = Math.cos(currentMapAngle); let sinA = Math.sin(currentMapAngle);
+                route.forEach(p => {
+                    let nx = cx + (p.x - cx) * cosA - (p.y - cy) * sinA;
+                    let ny = cy + (p.x - cx) * sinA + (p.y - cy) * cosA;
+                    p.x = nx; p.y = ny;
+                });
+            }
+            return route;
+        }
+
+        function triggerCinematicRotation() {
+            gameState = 'CINEMATIC';
+            document.getElementById('game-container').classList.add('cinematic-mode');
+            playSound('cinematic');
+            
+            for(let i=0; i<150; i++) {
+                cinematicParticles.push({
+                    x: Math.random() * 800, y: Math.random() * 600,
+                    angle: Math.random() * Math.PI * 2,
+                    dist: 300 + Math.random() * 200, speed: 4 + Math.random() * 8,
+                    char: ['+', '-', 'x', '÷', '0', '1', '9'][Math.floor(Math.random()*7)]
+                });
+            }
+
+            setTimeout(() => {
+                let angle = Math.PI / 4; 
+                currentMapAngle += angle;
+                totalRotations++;
+                
+                if (totalRotations >= 8) {
+                    mapPhase++; 
+                    if(mapPhase > 3) mapPhase = 1;
+                    totalRotations = 0; 
+                    generateMapPaths();
+                }
+
+                let cx = 400, cy = 300;
+                let cosA = Math.cos(angle);
+                let sinA = Math.sin(angle);
+                towers.forEach(t => {
+                    let nx = cx + (t.x - cx) * cosA - (t.y - cy) * sinA;
+                    let ny = cy + (t.x - cx) * sinA + (t.y - cy) * cosA;
+                    t.x = nx; t.y = ny;
+                });
+
+                document.getElementById('game-container').classList.remove('cinematic-mode');
+                cinematicParticles = [];
+                
+                gameState = 'MENU';
+                const screen = document.getElementById('start-screen');
+                screen.style.display = 'flex';
+                document.getElementById('start-title').innerText = "DIMENSÃO CONCLUÍDA";
+                document.getElementById('start-subtitle').innerText = "ESCOLHA SEU NOVO COMBUSTÍVEL";
+                document.getElementById('start-subtitle').style.color = "#00d4ff";
+                
+                if (stressMode) {
+                    setTimeout(() => {
+                        let randomBuff = ['amor', 'odio', 'cadeira'][Math.floor(Math.random()*3)];
+                        selectBuff(randomBuff, null);
+                    }, 500);
+                }
+            }, 1500); 
+        }
+
+        const towerTypes = [
+            { name: "Soma", symbol: "+", shape: "triangle", cost: 50, range: 120, damage: 25, rate: 25, color: "#ffeb3b" },
+            { name: "Sub", symbol: "-", shape: "circle", cost: 120, range: 160, damage: 8, rate: 5, color: "#03a9f4", slow: true },
+            { name: "Mult", symbol: "x", shape: "square", cost: 300, range: 220, damage: 120, rate: 70, color: "#f44336", splash: true },
+            { name: "Div", symbol: "÷", shape: "hexagon", cost: 450, range: 300, damage: 400, rate: 120, color: "#9c27b0" }
+        ];
+
+        function toRoman(num) {
+            if (num >= 10) return "X+";
+            const roman = ["", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX"];
+            return roman[num];
+        }
+        
+        function toOrdinal(n) {
+            let s = ["", "Primeira", "Segunda", "Terceira", "Quarta", "Quinta", "Sexta", "Sétima", "Oitava", "Nona", "Décima"];
+            if (n <= 10) return s[n] + " Onda";
+            return n + "ª Onda";
+        }
+
+        // ==========================================
+        // A MENTE DA SKYNET (IA LINHA DE FRENTE)
+        // ==========================================
+        let aiMode = false;
+
+        function toggleAIMode(e) {
+            if(e && !uiClickCheck(e)) return;
+            aiMode = !aiMode;
+            const btn = document.getElementById('ai-btn');
+            if(aiMode) {
+                btn.classList.add('active-btn'); btn.innerText = "🤖 MODO IA: ON";
+            } else {
+                btn.classList.remove('active-btn'); btn.innerText = "🤖 MODO IA: OFF";
+            }
+        }
+
+        function runAILogic() {
+            if(!aiMode) return;
+            if(gameState === 'MATH' || gameState === 'START' || isGameOver || gameState === 'MENU' || gameState === 'CINEMATIC') return;
+
+            let baseTarget = 12 + (Math.floor(wave / 10) * 5);
+            let panicBonus = stats.livesLost * 20;
+            let targetTowers = baseTarget + panicBonus;
+            if (targetTowers > 150) targetTowers = 150; 
+
+            let builtSomething = false;
+
+            if (towers.length < targetTowers) {
+                if (gold >= 50) { 
+                    let spot = null;
+                    let mapCenterX = 400;
+                    let mapCenterY = 300;
+                    let searchRadius = 80 + (towers.length * 8); 
+                    if (searchRadius > 400) searchRadius = 400; 
+
+                    for(let i = 0; i < 40; i++) {
+                        let angle = Math.random() * Math.PI * 2; 
+                        let r = (Math.random() * 0.8 + 0.2) * searchRadius; 
+                        let tx = mapCenterX + Math.cos(angle) * r;
+                        let ty = mapCenterY + Math.sin(angle) * r;
+
+                        if (tx >= 50 && tx <= 750 && ty >= 50 && ty <= 550) {
+                            if(checkCollision(tx, ty)) { 
+                                spot = {x: tx, y: ty}; 
+                                break; 
+                            }
+                        }
+                    }
+                    
+                    if (!spot) {
+                        for(let i = 0; i < 20; i++) {
+                            let tx = 50 + Math.random() * 700;
+                            let ty = 50 + Math.random() * 500;
+                            if(checkCollision(tx, ty)) { spot = {x: tx, y: ty}; break; }
+                        }
+                    }
+                    
+                    if (spot) {
+                        let plusCount = towers.filter(t => t.type.symbol === '+').length;
+                        let iceCount = towers.filter(t => t.type.symbol === '-').length;
+                        let expCount = towers.filter(t => t.type.symbol === 'x').length;
+                        let divCount = towers.filter(t => t.type.symbol === '÷').length;
+                        
+                        let typeToBuild = 0; 
+                        if (plusCount >= 6 && iceCount < Math.floor(plusCount / 6)) typeToBuild = 1; 
+                        else if (plusCount >= 10 && Math.random() > 0.8) typeToBuild = 2; 
+                        else if (plusCount >= 15 && Math.random() > 0.9) typeToBuild = 3; 
+
+                        let cost = towerTypes[typeToBuild].cost;
+                        
+                        if (gold >= cost) {
+                            towers.push(new Tower(spot.x, spot.y, typeToBuild));
+                            gold -= cost; updateStats(); playSound('correct');
+                            for(let i=0; i<5; i++) particles.push(new Particle(spot.x, spot.y, '#00ff00'));
+                            builtSomething = true;
+                        }
+                    }
+                }
+            }
+
+            if(towers.length >= 12 && !builtSomething) {
+                let minCost = Math.min(...towers.map(t => t.upgradeCost));
+                let upgradable = towers.filter(t => t.upgradeCost === minCost);
+                if(upgradable.length > 0) {
+                    let target = upgradable[Math.floor(Math.random() * upgradable.length)];
+                    if(gold >= target.upgradeCost) {
+                        gold -= target.upgradeCost; updateStats();
+                        target.upgrade();
+                        const fb = document.getElementById('feedback-msg');
+                        fb.innerText = "🤖 IA EVOLUIU TORRE DA FRENTE!"; fb.style.color = "#00d4ff"; fb.style.opacity = 1; 
+                        setTimeout(()=>fb.style.opacity=0, 800);
+                    }
+                }
+            }
+        }
+
+        function updateStats() {
+            document.getElementById('gold-display').innerText = gold;
+            document.getElementById('tt-total-gold').innerText = stats.totalGold;
+            document.getElementById('lives-display').innerText = lives;
+            document.getElementById('tt-lives-curr').innerText = lives;
+            document.getElementById('tt-lives-gained').innerText = stats.livesGained;
+            document.getElementById('tt-lives-lost').innerText = stats.livesLost;
+            document.getElementById('tt-total-math').innerText = stats.totalMath;
+            document.getElementById('err-sum').innerText = stats.errors['+'];
+            document.getElementById('err-sub').innerText = stats.errors['-'];
+            document.getElementById('err-mul').innerText = stats.errors['x'];
+            document.getElementById('err-div').innerText = stats.errors['÷'];
+            document.getElementById('wave-display').innerText = wave;
+            document.getElementById('tt-wave-ordinal').innerText = toOrdinal(wave);
+        }
+
+        let currentBuff = 'cadeira';
+        let phraseQueue = []; 
+        const buffPhrases = {
+            'amor': [ "Pode deixar que o pai paga essa filhão, mas resolve essa aqui pra mim.", "Gênio do Sistema, a Lógica ta do seu lado e ela sempre vence.", "Potência, não se deixe levar por mais esse viés do Português.", "O erro é só um degrau, mermão. Sobe ele. Resolve essa.", "Acalma o coração e ativa o córtex. A resposta tá aí dentro." ],
+            'odio': [ "Ta ficando molenga amigo, eu cuido disso rapidinho.", "Você não acha que é melhor desligar da tomada de vez brother?", "Cara você ainda ta nesse jogo de lixo? Vai pegar uma enxada.", "Brother quem você pensa que é? Você acha faz diferença algum resultado?", "To falando que é pra desligar a energia. Você quer que eu faça isso?" ],
+            'cadeira': [ "Tenho um lugar aqui pra você amigo, senta, eu não vou puxar a Cadeira.", "Não somos mais crianças, agora você tem alguma coisa pra perder, certo?", "Mermão eu sou formado e você vem aqui com essa experiência? Sai dessa.", "Cara eu sou seu amigo, sempre tive do seu lado, não perca seu tempo.", "Quer sentar na minha cadeira? Você está no meu jogo." ]
+        };
+
+        function selectBuff(type, e) {
+            if(e && !uiClickCheck(e)) return;
+            if(e) initAudio(); 
+            
+            currentBuff = type;
+            phraseQueue = [...buffPhrases[type]]; 
+            phraseQueue.sort(() => Math.random() - 0.5);
+            
+            document.getElementById('start-screen').style.display = 'none';
+            const modal = document.getElementById('math-modal');
+            if(type === 'amor') { modal.style.borderColor = '#00ff00'; modal.style.boxShadow = '0 0 50px rgba(0,255,0,0.3)'; }
+            if(type === 'odio') { modal.style.borderColor = '#ff0000'; modal.style.boxShadow = '0 0 50px rgba(255,0,0,0.3)'; }
+            if(type === 'cadeira') { modal.style.borderColor = '#00d4ff'; modal.style.boxShadow = '0 0 50px rgba(0,212,255,0.3)'; }
+            
+            startMathPhase(); 
+        }
+
+        function getNextPhrase() {
+            if(phraseQueue.length === 0) return "A Matemática é implacável."; 
+            return phraseQueue.pop(); 
+        }
+
+        function toggleSpeed(e) {
+            if (e && !uiClickCheck(e)) return;
+            const btn = document.getElementById('speed-btn');
+            if(gameSpeed === 1) { gameSpeed = 3; btn.classList.add('active-btn'); btn.classList.remove('max-btn'); btn.innerText = "⏩ VELOCIDADE: 3x"; } 
+            else if(gameSpeed === 3) { gameSpeed = 6; btn.classList.remove('active-btn'); btn.classList.add('max-btn'); btn.innerText = "🚀 VELOCIDADE: 6x (MAX)"; } 
+            else { gameSpeed = 1; btn.classList.remove('active-btn'); btn.classList.remove('max-btn'); btn.innerText = "⏩ VELOCIDADE: 1x"; }
+        }
+
+        function startMathPhase() {
+            if (wave > 0 && wave % 10 === 0 && lastRotatedWave !== wave) {
+                lastRotatedWave = wave;
+                triggerCinematicRotation();
+                return;
+            }
+
+            gameState = 'MATH';
+            wave++; updateStats();
+            document.getElementById('next-wave-btn').style.display = 'none';
+            document.getElementById('math-tip-box').style.display = 'none'; 
+            document.getElementById('buff-message').innerText = getNextPhrase();
+
+            timeLeft = TOTAL_TIME;
+            document.getElementById('timer-bar').style.width = '100%';
+            if(mathTimer) clearInterval(mathTimer);
+            
+            mathTimer = setInterval(() => {
+                if (isPaused) return; // Trava contra falta de rede!
+
+                timeLeft -= 0.1;
+                document.getElementById('timer-bar').style.width = ((timeLeft / TOTAL_TIME) * 100) + '%';
+                
+                if (stressMode) {
+                    clearInterval(mathTimer); 
+                    resolveMath(true, false); 
+                    return; 
+                }
+
+                if(timeLeft <= 0) { clearInterval(mathTimer); resolveMath(false, true); }
+            }, 100);
+
+            let operations = ['+', '-', 'x'];
+            if (wave % 10 === 0) operations = ['÷'];
+            
+            let op = operations[Math.floor(Math.random() * operations.length)];
+            let difficulty = Math.ceil(wave / 2);
+            let n1, n2, answer, questionText;
+
+            if (op === '÷') {
+                n2 = Math.floor(Math.random() * 10) + 2; answer = Math.floor(Math.random() * (5 * difficulty)) + 5; 
+                n1 = n2 * answer; questionText = `CHEFE! ${n1} ÷ ${n2} = ?`;
+            } else {
+                n1 = Math.floor(Math.random() * (5 * difficulty)) + 2; n2 = Math.floor(Math.random() * (5 * difficulty)) + 2;
+                if(op === '+') answer = n1 + n2;
+                if(op === '-') { if(n1 < n2) {let t=n1; n1=n2; n2=t;} answer = n1 - n2; }
+                if(op === 'x') { n1 = Math.floor(Math.random() * difficulty) + 1; n2 = Math.floor(Math.random() * 10) + 1; answer = n1 * n2; }
+                questionText = `${n1} ${op} ${n2} = ?`;
+            }
+            
+            currentProblem = { n1, n2, op, answer };
+            let options = [answer];
+            while(options.length < 3) {
+                let fake = answer + Math.floor(Math.random() * 10) - 5;
+                if(fake !== answer && fake >= 0 && !options.includes(fake)) options.push(fake);
+            }
+            options.sort(() => Math.random() - 0.5);
+
+            document.getElementById('math-question').innerText = questionText;
+            const optDiv = document.getElementById('math-options'); optDiv.innerHTML = '';
+            options.forEach(opt => {
+                let btn = document.createElement('button'); btn.className = 'btn-math'; btn.innerText = opt;
+                btn.onclick = () => resolveMath(opt === answer, false); optDiv.appendChild(btn);
+            });
+            document.getElementById('math-modal').style.display = 'block';
+        }
+
+        let formatCascata = function(a, shift, op) {
+            if (shift === 0) return `${a}`;
+            if (shift < 10) return `${a} ${op} ${shift} = ${op==='+' ? a+shift : a-shift}`;
+            
+            let res = op === '+' ? a + shift : a - shift;
+            let u = shift % 10;
+            let d = shift - u;
+            
+            if (u === 0) return `${a} ${op} ${shift} = ${res}`;
+            
+            let step1 = op === '+' ? a + u : a - u;
+            return `${a} ${op} ${shift} = ${step1} ${op} ${d} = ${res}`;
+        };
+
+        function generateTip(problem) {
+            const { n1, n2, op, answer } = problem;
+            let text = "";
+
+            if (op === '+') {
+                let u1 = n1 % 10; let u2 = n2 % 10;
+                let d1 = Math.floor((n1 % 100) / 10); let d2 = Math.floor((n2 % 100) / 10);
+                let c1 = Math.floor(n1 / 100); let c2 = Math.floor(n2 / 100);
+
+                if (u1 + u2 < 10 && d1 + d2 < 10 && c1 + c2 < 10) {
+                    text = `Ataque Direto:<br>Bicho, a linha de frente ta pronta nesse aqui, só ir DIRETO que o negócio já ta tudo pronto é só encaixar e dar um play. Pensa nos passos da reta numérica, não vamos dar passos grandes!<br><span class="tip-highlight">${n1} + ${n2} = ${answer}</span>.`;
+                } 
+                else {
+                    let temp1 = n1; let temp2 = n2;
+                    let shiftText = "";
+
+                    let tu1 = n1 % 100; let tu2 = n2 % 100;
+
+                    if (u1 === 0 || u2 === 0) {
+                        if ((tu1 >= 60 || tu2 >= 60) && (n1 >= 100 || n2 >= 100)) {
+                            let alvo = tu1 >= 60 ? n1 : n2;
+                            let outro = tu1 >= 60 ? n2 : n1;
+                            let shift = 100 - (alvo % 100);
+                            temp1 = alvo + shift; temp2 = outro - shift;
+                            shiftText = `A Lei do Menor Esforço (Centenas):<br>O número ${alvo} está precisando de apenas ${shift} passos na reta numérica para fechar uma centena forte. Tiramos ${shift} do outro (<span class="tip-highlight">${formatCascata(outro, shift, '-')}</span>) e damos para ele.<br>Nova forma da massinha: <span class="tip-highlight">${temp1} + ${temp2}</span>.<br><br>`;
+                        } else if ((tu1 >= 10 && tu1 <= 40) || (tu2 >= 10 && tu2 <= 40)) {
+                            let alvo = (tu1 >= 10 && tu1 <= 40) ? n1 : n2;
+                            let outro = (tu1 >= 10 && tu1 <= 40) ? n2 : n1;
+                            let shift = alvo % 100;
+                            temp1 = alvo - shift; temp2 = outro + shift;
+                            shiftText = `A Lei do Menor Esforço (Centenas):<br>O número ${alvo} está quebrado, damos ${shift} passos para trás para arredondar para baixo, e jogamos esse peso no outro (<span class="tip-highlight">${formatCascata(outro, shift, '+')}</span>).<br>Nova forma da massinha: <span class="tip-highlight">${temp1} + ${temp2}</span>.<br><br>`;
+                        } else {
+                            shiftText = `Como um dos números já termina em zero perfeito, não precisamos fazer ajustes na massinha. Vamos direto pro ataque final!<br><br>`;
+                        }
+                    } else {
+                        if (u1 >= 6 || u2 >= 6) {
+                            let alvo = u1 >= 6 ? n1 : n2;
+                            let outro = u1 >= 6 ? n2 : n1;
+                            let shift = 10 - (alvo % 10);
+                            temp1 = alvo + shift; temp2 = outro - shift;
+                            shiftText = `A Lei do Menor Esforço (Finais 6 a 9):<br>O ${alvo} está a apenas ${shift} passos na reta numérica da próxima dezena. Arredondamos para cima virando ${temp1}, e tiramos os mesmos ${shift} passos do outro (<span class="tip-highlight">${formatCascata(outro, shift, '-')}</span>).<br>Nova forma da massinha: <span class="tip-highlight">${temp1} + ${temp2}</span>.<br><br>`;
+                        } else if ((u1 >= 1 && u1 <= 4) || (u2 >= 1 && u2 <= 4)) {
+                            let alvo = (u1 >= 1 && u1 <= 4) ? n1 : n2;
+                            let outro = (u1 >= 1 && u1 <= 4) ? n2 : n1;
+                            let shift = alvo % 10;
+                            temp1 = alvo - shift; temp2 = outro + shift;
+                            shiftText = `A Lei do Menor Esforço (Finais 1 a 4):<br>Damos ${shift} passos para trás no ${alvo} para arredondar para baixo (vira ${temp1}), e andamos esses passos guardados somando no outro (<span class="tip-highlight">${formatCascata(outro, shift, '+')}</span>).<br>Nova forma da massinha: <span class="tip-highlight">${temp1} + ${temp2}</span>.<br><br>`;
+                        }
+                    }
+
+                    let c1_val = Math.floor(temp1/100)*100; let c2_val = Math.floor(temp2/100)*100;
+                    let d1_val = Math.floor((temp1%100)/10)*10; let d2_val = Math.floor((temp2%100)/10)*10;
+                    let u1_val = temp1 % 10; let u2_val = temp2 % 10;
+                    
+                    let decompText = `Decomposição Final (Do Maior pro Menor):<br>`;
+                    if (temp1 >= 100 || temp2 >= 100) decompText += `Centenas: <span class="tip-highlight">${c1_val} + ${c2_val} = ${c1_val+c2_val}</span><br>`;
+                    decompText += `Dezenas: <span class="tip-highlight">${d1_val} + ${d2_val} = ${d1_val+d2_val}</span><br>`;
+                    decompText += `Unidades: <span class="tip-highlight">${u1_val} + ${u2_val} = ${u1_val+u2_val}</span><br>`;
+                    decompText += `Junta tudo: <span class="tip-highlight">${answer}</span>.`;
+
+                    text = shiftText + decompText;
+                }
+            } 
+            else if (op === '-') {
+                let u1 = n1 % 10; let u2 = n2 % 10;
+                let d1 = Math.floor((n1 % 100) / 10); let d2 = Math.floor((n2 % 100) / 10);
+                let c1 = Math.floor(n1 / 100); let c2 = Math.floor(n2 / 100);
+
+                if (u1 >= u2 && d1 >= d2 && c1 >= c2) {
+                    text = `Ataque Direto:<br>Bicho, esse aqui dá pra ir direto na linha de frente que ta fácil mete bala. Pensa nos passos da reta numérica, não vamos dar passos grandes!<br><span class="tip-highlight">${n1} - ${n2} = ${answer}</span>.`;
+                } 
+                else {
+                    let shift = 0; let isAdding = true; let alvoDesc = "unidade";
+                    let tu2 = n2 % 100;
+
+                    if (n2 >= 100 && tu2 !== 0 && tu2 > 10) { 
+                        alvoDesc = "dezena e unidade";
+                        if (tu2 >= 50) { shift = 100 - tu2; isAdding = true; }
+                        else { shift = tu2; isAdding = false; }
+                    } else {
+                        if (u2 !== 0) {
+                            if (u2 >= 5) { shift = 10 - u2; isAdding = true; alvoDesc = "unidade"; }
+                            else { shift = u2; isAdding = false; alvoDesc = "unidade"; }
+                        } else if (n2 >= 10 && n2 % 10 === 0) {
+                            let t2 = Math.floor((n2 % 100) / 10);
+                            if (t2 !== 0) {
+                                alvoDesc = "dezena";
+                                if (t2 >= 5) { shift = 100 - (n2 % 100); isAdding = true; }
+                                else { shift = n2 % 100; isAdding = false; }
+                            }
+                        }
+                    }
+
+                    if (shift > 0) {
+                        let novoN1 = isAdding ? n1 + shift : n1 - shift;
+                        let novoN2 = isAdding ? n2 + shift : n2 - shift;
+                        let operacao = isAdding ? `Avançamos ${shift} passos` : `Voltamos ${shift} passos`;
+                        let opSign = isAdding ? '+' : '-';
+                        
+                        text = `Hack Japonês (O Subtraendo é o Rei: ${n2}):<br>A regra é nunca pedir emprestado! Olhamos SÓ para o número de baixo: ${operacao} na reta numérica dos DOIS números para zerar a ${alvoDesc} dele.<br>O ${n1} acompanha: <span class="tip-highlight">${formatCascata(n1, shift, opSign)}</span>.<br>O ${n2} zera a ${alvoDesc}: <span class="tip-highlight">${formatCascata(n2, shift, opSign)}</span>.<br>A distância matemática se manteve intacta. O cálculo agora desce reto e sem dor!<br><span class="tip-highlight">${novoN1} - ${novoN2} = ${answer}</span>.`;
+                    } else {
+                        text = `Hack Japonês:<br>O subtraendo (${n2}) já está redondo como uma pedra. A distância está perfeita, faça o cálculo direto sem medo de emprestar!<br><span class="tip-highlight">${n1} - ${n2} = ${answer}</span>.`;
+                    }
+                }
+            } 
+            else if (op === 'x') {
+                let diff = Math.abs(n1 - n2);
+                let mid = Math.min(n1, n2) + (diff / 2);
+
+                if (n1 === 10 || n2 === 10 || n1 === 100 || n2 === 100 || n1 === 1 || n2 === 1) {
+                    let isCem = (n1 === 100 || n2 === 100);
+                    let zeros = isCem ? "dois 0s" : "um 0";
+                    let mult = isCem ? "100" : "10";
+                    
+                    if (n1 === 1 || n2 === 1) {
+                        text = `A Regra Campeã (x1):<br>Se multiplicar por 1 é sempre ele mesmo, o elemento NEUTRO da multiplicação!<br>Resultado: <span class="tip-highlight">${answer}</span>.`;
+                    } else {
+                        text = `A Regra Campeã (x${mult}):<br>Nosso campeão da multiplicação! Se multiplicar por 1 é sempre ele mesmo (o elemento NEUTRO), multiplicar por ${mult} é só potencializar a casa decimal para a direita, adicionando ${zeros} porque é ${mult} vezes maior!!<br>Resultado direto: <span class="tip-highlight">${answer}</span>.`;
+                    }
+                }
+                else if (diff > 0 && diff % 2 === 0 && mid % 10 === 0) {
+                    let pass = diff / 2;
+                    text = `A Diferença de Quadrados (A Geometria da Mente):<br>Temos um valor em comum! Ambos estão a ${pass} passos de distância do número ${mid}. Isso é (${mid} + ${pass}) x (${mid} - ${pass}).<br>Elevamos os dois ao quadrado e tiramos a diferença:<br><span class="tip-highlight">${mid}x${mid} - ${pass}x${pass}</span><br><span class="tip-highlight">${mid*mid} - ${pass*pass} = ${answer}</span>.`;
+                }
+                else if (n1 >= 100 && n2 >= 100) {
+                    let c1 = Math.round(n1 / 100) * 100; let c2 = Math.round(n2 / 100) * 100;
+                    text = `Titãs Centenários:<br>Quando a conta é gigante, a gente arredonda as centenas! O ${n1} vira ${c1} e o ${n2} vira ${c2}.<br>Multiplicamos a base pesada: <span class="tip-highlight">${c1} x ${c2} = ${c1*c2}</span>.<br>Depois, ajustamos o que sobrou multiplicando as diferenças e somando no montante final para chegar no <span class="tip-highlight">${answer}</span>. O algoritmo nunca falha.`;
+                }
+                else if ((n1 === 5 && n2 > 5) || (n2 === 5 && n1 > 5)) {
+                     let tem5 = (n1 === 5) ? n2 : n1;
+                     text = `O Truque do 5:<br>Multiplicar por 5 é igual a multiplicar por 10 e cortar na metade. Rápido e letal!<br><span class="tip-highlight">${tem5} x 10 = ${tem5*10}</span>.<br>A metade de ${tem5*10} é <span class="tip-highlight">${answer}</span>.`;
+                }
+                else {
+                    let maior = Math.max(n1, n2);
+                    let menor = Math.min(n1, n2);
+                    
+                    if (maior >= 10) {
+                        let c = Math.floor(maior/100)*100;
+                        let d = Math.floor((maior%100)/10)*10;
+                        let u = maior % 10;
+                        
+                        let baseRedonda = c > 0 ? (c + (d>50?100:0)) : (Math.floor(maior/10)*10 + (u>=5?10:0));
+                        let resto = maior - baseRedonda;
+                        
+                        if (resto < 0) {
+                            let excesso = Math.abs(resto);
+                            text = `Estratégia do Excesso (Do Maior pro Menor):<br>O número ${maior} tá pedindo pra subir. Vamos arredondar para cima dando ${excesso} passos na reta numérica, virando ${baseRedonda}, e calcular grandão!<br><span class="tip-highlight">${baseRedonda} x ${menor} = ${baseRedonda * menor}</span>.<br>Mas pera aí, a gente inventou ${excesso} a mais. Temos que tirar esse excesso pago: <span class="tip-highlight">(${excesso} x ${menor} = ${excesso*menor})</span>.<br>Cortando a gordura: <span class="tip-highlight">${formatCascata(baseRedonda * menor, excesso*menor, '-')}</span>.`;
+                        } else {
+                            text = `Decomposição Tática (Do Maior pro Menor):<br>O número ${maior} é quebrado. Vamos dar ${resto} passos pra trás e jogar a rebarba fora pra ficar redondo no ${baseRedonda}!<br>Atacamos a base primeiro: <span class="tip-highlight">${baseRedonda} x ${menor} = ${baseRedonda * menor}</span>.<br>Agora, não podemos esquecer daqueles ${resto} que guardamos no bolso: <span class="tip-highlight">(${resto} x ${menor} = ${resto*menor})</span>.<br>Somando os dois ataques: <span class="tip-highlight">${formatCascata(baseRedonda * menor, resto*menor, '+')}</span>.`;
+                        }
+                    } else {
+                        text = `Ataque Direto:<br>Para esses números de unidade, a memória muscular fala mais alto. Foque no resultado direto da tabuada!<br><span class="tip-highlight">${n1} x ${n2} = ${answer}</span>.`;
+                    }
+                }
+            } 
+            else if (op === '÷') {
+                let temp_n1 = n1; let temp_n2 = n2;
+                let simplificou = false; let stepStr = "";
+
+                if (temp_n2 !== 10 && n1 % 2 === 0 && n2 % 2 === 0) {
+                    simplificou = true;
+                    stepStr += `Corta no Meio (Simplificação):<br>Se ambos são pares, vá cortando pela metade sem dó:<br>`;
+                    while (temp_n1 % 2 === 0 && temp_n2 % 2 === 0 && temp_n2 !== 10) {
+                        stepStr += `<span class="tip-highlight">${temp_n1} ÷ ${temp_n2}</span> ➔ <span class="tip-highlight">${temp_n1/2} ÷ ${temp_n2/2}</span><br>`;
+                        temp_n1 /= 2; temp_n2 /= 2;
+                        if (temp_n2 === 10) break;
+                    }
+                }
+
+                if (temp_n2 === 10) {
+                    let prefix = simplificou ? stepStr + `<br>` : "";
+                    text = prefix + `A Majestade Decimal (÷10):<br>O campeão do sistema, o 1 com um zero, o 10! Como a divisão por 1 é o elemento neutro (dá ele mesmo), o 0 atua apenas mudando a 'vírgula' de lugar no <span class="tip-highlight">${temp_n1}</span> para a esquerda!<br>Resultado direto: <span class="tip-highlight">${answer}</span>.`;
+                }
+                else if (temp_n2 === 1) {
+                    text = simplificou ? stepStr + `<br>Dividir por 1 é o próprio número (elemento neutro!): <span class="tip-highlight">${temp_n1}</span>.` : `Direto: <span class="tip-highlight">${n1}</span>.`;
+                } else if (temp_n1 <= temp_n2 * 10) { 
+                    let prefix = simplificou ? stepStr + `<br>Ficou mais fácil! Inversão:<br>` : `Inversão:<br>`;
+                    text = prefix + `Quantas vezes o <span class="tip-highlight">${temp_n2}</span> cabe em <span class="tip-highlight">${temp_n1}</span>?<br>Pense: ${temp_n2} x ? = ${temp_n1}.`; 
+                } else {
+                    let prefix = simplificou ? stepStr + `<br>Ainda tá grande? Use a "Chave" nos números novos:<br>` : `A "Chave" (Abaixando um por um):<br>`;
+                    let sN1 = temp_n1.toString(); let chaveStr = ""; let curr = 0;
+                    for(let i = 0; i < sN1.length; i++) {
+                        curr = curr * 10 + parseInt(sN1[i]);
+                        if (curr < temp_n2 && i === 0) { chaveStr += `O ${curr} é menor que ${temp_n2}. Abaixa o próximo.<br>`; } 
+                        else if (curr < temp_n2) { chaveStr += `Abaixa o ${sN1[i]} -> fica ${curr}. Menor que ${temp_n2}, 0 no quoc.<br>`; } 
+                        else {
+                            let q = Math.floor(curr / temp_n2); let rem = curr % temp_n2; let sub = q * temp_n2;
+                            chaveStr += `Abaixa o ${sN1[i]} -> fica <span class="tip-highlight">${curr}</span>. <span class="tip-highlight">${curr} - ${sub} = ${rem}</span> (quoc. ${q}).<br>`; curr = rem;
+                        }
+                    }
+                    chaveStr += `Resultado: <span class="tip-highlight">${answer}</span>.`; 
+                    text = prefix + chaveStr;
+                }
+            }
+            return text;
+        }
+
+        function resolveMath(isCorrect, isTimeout) {
+            clearInterval(mathTimer);
+            document.getElementById('math-modal').style.display = 'none';
+            const feedback = document.getElementById('feedback-msg');
+            lastAnswerCorrect = isCorrect;
+
+            stats.totalMath++;
+            if(isCorrect && !isTimeout) {
+                totalCorrect++; document.getElementById('score-correct').innerText = totalCorrect;
+            } else {
+                totalWrong++; document.getElementById('score-wrong').innerText = totalWrong;
+                stats.errors[currentProblem.op] = (stats.errors[currentProblem.op] || 0) + 1;
+            }
+
+            let earned = 0;
+            if(isTimeout) {
+                goldMultiplier = 0.5; earned = Math.floor(3 * 0.5 * 10); playSound('wrong');
+                feedback.innerText = "TEMPO ESGOTADO! (0.5x)"; feedback.style.color = "#ff0000";
+            } else if(isCorrect) {
+                goldMultiplier = 1.5; earned = Math.floor(3 * 1.5 * 10); playSound('correct');
+                feedback.innerText = "LÓGICA CORRETA! (1.5x)"; feedback.style.color = "#00ff00";
+            } else {
+                goldMultiplier = 0.5; earned = Math.floor(3 * 0.5 * 10); playSound('wrong');
+                feedback.innerText = "FALHA! (0.5x)"; feedback.style.color = "#888888";
+            }
+
+            gold += earned; stats.totalGold += earned; updateStats();
+            document.getElementById('mult-display').innerText = goldMultiplier + "x";
+            feedback.style.opacity = 1; setTimeout(() => feedback.style.opacity = 0, 3000);
+
+            const tipText = generateTip(currentProblem);
+            document.getElementById('tip-text').innerHTML = tipText;
+            document.getElementById('math-tip-box').style.display = 'block';
+
+            gameState = 'BUILD';
+            document.getElementById('next-wave-btn').style.display = 'flex';
+            if(!uiHidden) document.getElementById('build-toggle-btn').classList.add('build-glow');
+
+            if (aiMode) runAILogic();
+
+            if (stressMode) {
+                setTimeout(() => {
+                    if (gameState === 'BUILD') startWaveCombat(null);
+                }, 50);
+            }
+        } 
+
+        function startWaveCombat(e) {
+            if (e && !uiClickCheck(e)) return;
+            gameState = 'COMBAT';
+            document.getElementById('next-wave-btn').style.display = 'none';
+            document.getElementById('upgrade-info').style.display = 'none';
+            document.getElementById('math-tip-box').style.display = 'none';
+
+            if(buildMenuOpen) toggleBuildMenu(null);
+            cancelSelection(null);
+
+            if (aiMode) runAILogic();
+            spawnEnemies();
+        }
+
+        function spawnEnemies() {
+            let baseCount = 10;
+            if (wave % 10 === 0) {
+                let lastWaveCount = baseCount + (wave - 1);
+                totalEnemiesToSpawn = lastWaveCount * 5;
+            } else {
+                totalEnemiesToSpawn = baseCount + wave;
+            }
+            enemiesSpawned = 0;
+            spawnFrameCounter = 0; 
+        }
+
+        function update() {
+            if (gameState === 'CINEMATIC') {
+                cinematicParticles.forEach(p => { p.dist -= p.speed; p.angle += 0.05; });
+                return; 
+            }
+
+            if (gameState === 'COMBAT') {
+                if (enemiesSpawned < totalEnemiesToSpawn) {
+                    spawnFrameCounter++;
+                    if (spawnFrameCounter >= 1) { 
+                        let baseHp = 30;
+                        let hpBonus = wave * (baseHp * 0.10); 
+                        enemies.push(new Enemy(baseHp + hpBonus, lastAnswerCorrect));
+                        enemiesSpawned++;
+                        spawnFrameCounter = 0;
+                    }
+                }
+
+                if (enemies.length === 0 && enemiesSpawned >= totalEnemiesToSpawn && totalEnemiesToSpawn > 0) {
+                    if(!this.waitingForMath) {
+                        this.waitingForMath = true;
+                        if(wave % 10 === 0 && lastAnswerCorrect) {
+                             lives += 5; stats.livesGained += 5; updateStats();
+                             const fb = document.getElementById('feedback-msg');
+                             fb.innerText = "WAVE PERFEITA! +5 VIDAS";
+                             fb.style.color = "#00ff00"; fb.style.opacity = 1; setTimeout(()=>fb.style.opacity=0, 2500);
+                             playSound('heal');
+                        }
+                        setTimeout(() => { 
+                            if(gameState === 'COMBAT') {
+                                this.waitingForMath = false;
+                                startMathPhase(); 
+                            }
+                        }, 1000);
+                    }
+                    return; 
+                }
+            }
+            enemies.forEach(e => e.update());
+            enemies = enemies.filter(e => e.active);
+            towers.forEach(t => t.update());
+            bullets.forEach(b => b.update());
+            bullets = bullets.filter(b => b.active);
+            particles.forEach(p => p.update());
+            particles = particles.filter(p => p.life > 0);
+        }
+
+        class Enemy {
+            constructor(maxHp, isGolden) {
+                this.myPath = generateEnemyRoute();
+                this.x = this.myPath[0].x; 
+                this.y = this.myPath[0].y; 
+                this.pathIndex = 0;
+                this.speed = 1.5 + (wave * 0.05);
+                this.maxHp = maxHp; this.hp = this.maxHp; this.radius = 12; this.frozen = 0; this.active = true;
+                this.isGolden = isGolden;
+                this.spinOffset = Math.random() * Math.PI * 2; 
+            }
+            update() {
+                let target = this.myPath[this.pathIndex + 1]; if(!target) return;
+                let actualSpeed = this.frozen > 0 ? this.speed * 0.4 : this.speed;
+                if(this.frozen > 0) this.frozen--;
+                let dx = target.x - this.x; let dy = target.y - this.y;
+                let dist = Math.sqrt(dx*dx + dy*dy);
+                if(dist < actualSpeed) {
+                    this.x = target.x; this.y = target.y; this.pathIndex++;
+                    if(this.pathIndex >= this.myPath.length - 1) {
+                        this.active = false; lives--; stats.livesLost++; updateStats();
+                        if(lives <= 0 && !isGameOver) { 
+                            isGameOver = true; 
+                            
+                            let currentHsWave = parseInt(localStorage.getItem('logicDef_hsWave') || 0);
+                            let currentHsMath = parseInt(localStorage.getItem('logicDef_hsMath') || 0);
+                            if (wave > currentHsWave) localStorage.setItem('logicDef_hsWave', wave);
+                            if (stats.totalMath > currentHsMath) localStorage.setItem('logicDef_hsMath', stats.totalMath);
+                            
+                            alert("GAME OVER! A Lógica é implacável."); 
+                            location.reload(); 
+                        }
+                    }
+                } else { this.x += (dx / dist) * actualSpeed; this.y += (dy / dist) * actualSpeed; }
+            }
+            draw() {
+                ctx.save();
+                ctx.shadowBlur = 10;
+                ctx.shadowColor = this.isGolden ? (this.frozen>0?'#00ffff':'#ffd700') : (this.frozen>0?'#00aaff':'#ff5555');
+                ctx.fillStyle = this.isGolden ? (this.frozen>0?'#ccffff':'#ffd700') : (this.frozen>0?'#88ccff':'#ff3333');
+                
+                let sides = 3 + Math.floor((wave - 1) / 10);
+                if (sides > 20) sides = 20; 
+                let spin = (Date.now() / 300) + this.spinOffset;
+
+                ctx.beginPath(); 
+                for(let i=0; i<sides; i++) {
+                    let a = spin + (i * Math.PI * 2) / sides;
+                    let px = this.x + this.radius * Math.cos(a);
+                    let py = this.y + this.radius * Math.sin(a);
+                    if(i===0) ctx.moveTo(px, py);
+                    else ctx.lineTo(px, py);
+                }
+                ctx.closePath();
+                ctx.fill();
+                
+                ctx.shadowBlur = 0;
+                ctx.fillStyle = 'red'; ctx.fillRect(this.x - 12, this.y - 20, 24, 4);
+                ctx.fillStyle = '#00ff00'; ctx.fillRect(this.x - 12, this.y - 20, 24 * (this.hp / this.maxHp), 4);
+                ctx.restore();
+            }
+        }
+
+        class Tower {
+            constructor(x, y, typeIdx) {
+                this.x = x; this.y = y; this.type = towerTypes[typeIdx];
+                this.cooldown = 0; this.level = 1; this.upgradeCost = this.type.cost; 
+                this.totalCost = this.type.cost; 
+                this.range = this.type.range;
+                this.currentRate = this.type.rate;
+            }
+            upgrade() {
+                this.level++; 
+                this.totalCost += this.upgradeCost;
+                this.upgradeCost = this.type.cost * Math.pow(2, this.level - 1);
+                this.range = this.type.range * (1 + (0.2 * (this.level - 1)));
+                if(this.type.symbol === '÷') { this.currentRate = Math.max(1, Math.floor(this.currentRate / 2)); }
+                if(this.type.symbol === '+') { this.currentRate = Math.max(1, Math.floor(this.currentRate / 1.5)); } 
+                
+                playSound('upgrade'); for(let i=0; i<15; i++) particles.push(new Particle(this.x, this.y, '#fff'));
+            }
+            getDamage() { 
+                if(this.type.symbol === '÷') return this.type.damage;
+                return this.type.damage * (1 + (0.2 * (this.level - 1))); 
+            }
+            update() {
+                if(this.cooldown > 0) this.cooldown--;
+                else {
+                    let target = null; let minDst = Infinity;
+                    enemies.forEach(e => {
+                        let dst = Math.sqrt((e.x - this.x)**2 + (e.y - this.y)**2);
+                        if(dst < this.range && dst < minDst) { minDst = dst; target = e; }
+                    });
+                    if(target) {
+                        bullets.push(new Bullet(this.x, this.y, target, this.type, this.getDamage(), wave));
+                        this.cooldown = this.currentRate; 
+                        if(this.type.symbol === '÷') playSound('sniper');
+                        else playSound('shoot');
+                    }
+                }
+            }
+            draw() {
+                ctx.save();
+                
+                if (movingTower === this) {
+                    this.x = mouseX; this.y = mouseY;
+                    ctx.globalAlpha = 0.5;
+                    ctx.beginPath(); ctx.arc(this.x, this.y, this.range, 0, Math.PI * 2);
+                    ctx.fillStyle = checkCollision(this.x, this.y, this) ? 'rgba(0, 255, 0, 0.2)' : 'rgba(255, 0, 0, 0.2)';
+                    ctx.fill();
+                } else if (selectedExistingTower === this) {
+                    ctx.beginPath(); ctx.arc(this.x, this.y, this.range, 0, Math.PI * 2);
+                    ctx.strokeStyle = '#fff'; ctx.lineWidth = 1; ctx.stroke();
+                }
+                
+                if(this.level > 1 && movingTower !== this) { 
+                    ctx.shadowBlur = 15; ctx.shadowColor = '#ffd700'; ctx.strokeStyle = '#ffd700'; ctx.lineWidth = 2; 
+                    ctx.beginPath(); ctx.arc(this.x, this.y, 20 + (this.level), 0, Math.PI * 2); ctx.stroke();
+                }
+
+                ctx.shadowBlur = 10; ctx.shadowColor = this.type.color;
+                ctx.fillStyle = 'rgba(20,20,20,0.9)'; ctx.strokeStyle = this.type.color; ctx.lineWidth = 3;
+
+                ctx.beginPath(); let r = 16; 
+                if(this.type.shape === 'triangle') { ctx.moveTo(this.x, this.y - r); ctx.lineTo(this.x + r, this.y + r); ctx.lineTo(this.x - r, this.y + r); } 
+                else if(this.type.shape === 'circle') { ctx.arc(this.x, this.y, r, 0, Math.PI*2); } 
+                else if(this.type.shape === 'square') { ctx.rect(this.x - r, this.y - r, r*2, r*2); } 
+                else if(this.type.shape === 'hexagon') {
+                    for(let i = 0; i < 6; i++) {
+                        let angle = i * Math.PI / 3; let px = this.x + r * Math.cos(angle); let py = this.y + r * Math.sin(angle);
+                        if(i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+                    }
+                }
+                ctx.closePath(); ctx.fill(); ctx.stroke();
+
+                ctx.shadowBlur = 0; ctx.fillStyle = '#fff'; ctx.font = 'bold 20px Courier New'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                ctx.fillText(this.type.symbol, this.x, this.y + 2);
+
+                ctx.fillStyle = 'rgba(255,255,255,0.8)'; ctx.font = 'bold 10px Arial'; 
+                ctx.fillText(toRoman(this.level), this.x, this.y - 25);
+                ctx.restore();
+            }
+        }
+
+        class Bullet {
+            constructor(x, y, target, type, damage, currentWave) {
+                this.x = x; this.y = y; this.target = target; this.type = type; 
+                this.damage = damage; this.speed = 25 + (currentWave * 0.5); this.active = true;
+            }
+            update() {
+                if(!this.target || !this.target.active) { this.active = false; return; }
+                let dx = this.target.x - this.x; let dy = this.target.y - this.y;
+                let dist = Math.sqrt(dx*dx + dy*dy);
+                if(dist <= this.speed) { this.hit(this.target); this.active = false; } 
+                else { this.x += (dx/dist) * this.speed; this.y += (dy/dist) * this.speed; }
+            }
+            hit(enemy) {
+                enemy.hp -= this.damage; 
+                
+                if(this.type.slow) { 
+                    enemy.frozen = 60; let slowRadius = 60;
+                    enemies.forEach(e => { if(e.active && Math.sqrt((e.x - enemy.x)**2 + (e.y - enemy.y)**2) <= slowRadius) e.frozen = 60; });
+                    for(let i=0; i<15; i++) particles.push(new Particle(enemy.x, enemy.y, '#00ffff'));
+                }
+                if(this.type.splash) {
+                    let splashRadius = 50;
+                    enemies.forEach(e => { if(e !== enemy && e.active && Math.sqrt((e.x - enemy.x)**2 + (e.y - enemy.y)**2) <= splashRadius) e.hp -= this.damage * 0.5; });
+                    for(let i=0; i<15; i++) particles.push(new Particle(enemy.x, enemy.y, '#ff8800'));
+                }
+
+                for(let i=0; i<5; i++) particles.push(new Particle(enemy.x, enemy.y, this.type.color));
+                playSound('hit');
+                
+                enemies.forEach(e => {
+                    if(e.hp <= 0 && e.active) {
+                        let earned = Math.floor(3 * goldMultiplier);
+                        gold += earned; stats.totalGold += earned; updateStats();
+                        e.active = false; 
+                        if (particles.length < 300) { // Trava de partículas para não quebrar o navegador no modo estresse
+                            for(let i=0; i<10; i++) particles.push(new Particle(e.x, e.y, '#fff'));
+                        }
+                    }
+                });
+            }
+            draw() { ctx.save(); ctx.shadowBlur = 10; ctx.shadowColor = this.type.color; ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(this.x, this.y, 4, 0, Math.PI*2); ctx.fill(); ctx.restore(); }
+        }
+
+        class Particle {
+            constructor(x, y, color) {
+                this.x = x; this.y = y; this.color = color;
+                this.vx = (Math.random() - 0.5) * 6; this.vy = (Math.random() - 0.5) * 6; this.life = 25;
+            }
+            update() { this.x += this.vx; this.y += this.vy; this.life--; }
+            draw() { ctx.globalAlpha = this.life / 25; ctx.fillStyle = this.color; ctx.beginPath(); ctx.arc(this.x, this.y, 2, 0, Math.PI*2); ctx.fill(); ctx.globalAlpha = 1; }
+        }
+
+        function drawPath() {
+            ctx.save();
+            ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+            
+            let rotatedPaths = mapPaths.map(path => path.map(p => {
+                let cx = 400, cy = 300;
+                let cosA = Math.cos(currentMapAngle); let sinA = Math.sin(currentMapAngle);
+                return { x: cx + (p.x - cx) * cosA - (p.y - cy) * sinA, y: cy + (p.x - cx) * sinA + (p.y - cy) * cosA };
+            }));
+
+            ctx.shadowBlur = 30; ctx.shadowColor = '#8a2be2'; ctx.strokeStyle = 'rgba(138, 43, 226, 0.15)'; ctx.lineWidth = 60;
+            rotatedPaths.forEach(rp => { ctx.beginPath(); ctx.moveTo(rp[0].x, rp[0].y); for(let i=1; i<rp.length; i++) ctx.lineTo(rp[i].x, rp[i].y); ctx.stroke(); });
+
+            ctx.shadowBlur = 15; ctx.shadowColor = '#00ffff'; ctx.strokeStyle = 'rgba(0, 255, 255, 0.3)'; ctx.lineWidth = 25;
+            rotatedPaths.forEach(rp => { ctx.beginPath(); ctx.moveTo(rp[0].x, rp[0].y); for(let i=1; i<rp.length; i++) ctx.lineTo(rp[i].x, rp[i].y); ctx.stroke(); });
+            
+            drawBlackHole(rotatedPaths[0][0].x, rotatedPaths[0][0].y, '#00ffff');
+            drawBlackHole(rotatedPaths[0][rotatedPaths[0].length-1].x, rotatedPaths[0][rotatedPaths[0].length-1].y, '#ff0055');
+
+            ctx.restore();
+        }
+
+        function drawBlackHole(x, y, color) {
+            ctx.shadowBlur = 20; ctx.shadowColor = color;
+            ctx.beginPath(); ctx.arc(x, y, 20, 0, Math.PI * 2); ctx.fillStyle = '#000'; ctx.fill();
+            ctx.lineWidth = 2; ctx.strokeStyle = color; ctx.stroke();
+            ctx.beginPath(); ctx.arc(x, y, 35, Date.now()/500, Math.PI * 1.5 + Date.now()/500); ctx.stroke();
+        }
+
+        function drawCinematic() {
+            ctx.save();
+            drawBlackHole(400, 300, '#8a2be2');
+            ctx.beginPath(); ctx.arc(400, 300, 80, Date.now()/200, Math.PI * 1.8 + Date.now()/200); 
+            ctx.lineWidth = 5; ctx.strokeStyle = '#00ffff'; ctx.stroke();
+            
+            ctx.fillStyle = '#fff'; ctx.font = '20px Courier';
+            cinematicParticles.forEach(p => {
+                if (p.dist > 10) {
+                    let px = 400 + Math.cos(p.angle) * p.dist; let py = 300 + Math.sin(p.angle) * p.dist;
+                    ctx.globalAlpha = p.dist / 500; ctx.fillText(p.char, px, py);
+                }
+            });
+            ctx.restore();
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            if(gameState === 'CINEMATIC') { drawCinematic(); return; }
+            if(gameState !== 'MENU') { drawPath(); }
+
+            towers.forEach(t => t.draw());
+            enemies.forEach(e => e.draw());
+            bullets.forEach(b => b.draw());
+            particles.forEach(p => p.draw());
+
+            if(selectedTowerIdx > -1 && isDraggingGhost) {
+                const type = towerTypes[selectedTowerIdx];
+                canBuild = checkCollision(mouseX, mouseY);
+                const color = canBuild ? 'rgba(0, 255, 0, 0.5)' : 'rgba(255, 0, 0, 0.5)';
+                ctx.beginPath(); ctx.arc(mouseX, mouseY, type.range, 0, Math.PI * 2);
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.05)'; ctx.fill();
+                ctx.lineWidth = 1; ctx.strokeStyle = color; ctx.stroke();
+                
+                ctx.fillStyle = canBuild ? type.color : '#550000';
+                ctx.beginPath(); ctx.arc(mouseX, mouseY, 16, 0, Math.PI*2); ctx.fill();
+
+                ctx.fillStyle = (gold >= type.cost) ? '#fff' : '#f00';
+                ctx.font = '12px Courier'; ctx.fillText(`$${type.cost}`, mouseX, mouseY - 25);
+            }
+        }
+
+        function checkCollision(x, y, ignoreTower = null) {
+            for(let t of towers) {
+                if (t === ignoreTower) continue;
+                let dist = Math.sqrt((t.x - x)**2 + (t.y - y)**2);
+                if(dist < 35) return false;
+            }
+            
+            let cx = 400, cy = 300;
+            let cosA = Math.cos(currentMapAngle); let sinA = Math.sin(currentMapAngle);
+            
+            let rotatedPaths = mapPaths.map(path => path.map(p => ({
+                x: cx + (p.x - cx) * cosA - (p.y - cy) * sinA,
+                y: cy + (p.x - cx) * sinA + (p.y - cy) * cosA
+            })));
+
+            for(let rp of rotatedPaths) {
+                for(let i=0; i<rp.length-1; i++) {
+                    let p1 = rp[i]; let p2 = rp[i+1];
+                    let dist = distToSegment(x, y, p1.x, p1.y, p2.x, p2.y);
+                    if(dist < 30) return false;
+                }
+            }
+            return true;
+        }
+
+        function distToSegment(x, y, x1, y1, x2, y2) {
+            let A = x - x1; let B = y - y1; let C = x2 - x1; let D = y2 - y1;
+            let dot = A * C + B * D; let len_sq = C * C + D * D;
+            let param = -1; if (len_sq != 0) param = dot / len_sq;
+            let xx, yy; if (param < 0) { xx = x1; yy = y1; } else if (param > 1) { xx = x2; yy = y2; } else { xx = x1 + param * C; yy = y1 + param * D; }
+            let dx = x - xx; let dy = y - yy; return Math.sqrt(dx * dx + dy * dy);
+        }
+
+        function selectTowerBtn(idx, e) {
+            if (e && !uiClickCheck(e)) return;
+            cancelSelection(null); selectedTowerIdx = idx;
+            document.getElementById('tbtn'+idx).classList.add('selected');
+            document.body.classList.add('ghost-active'); isDraggingGhost = true; 
+        }
+
+        function cancelSelection(e) {
+            if(e && !uiClickCheck(e)) return;
+            selectedTowerIdx = -1; isDraggingGhost = false; selectedExistingTower = null;
+            if(movingTower) movingTower = null;
+            [0,1,2,3].forEach(i => {
+                let el = document.getElementById('tbtn'+i);
+                if(el) el.classList.remove('selected');
+            });
+            document.body.classList.remove('ghost-active'); 
+            document.getElementById('upgrade-info').style.display = 'none';
+        }
+
+        function upgradeSelectedTower(e) {
+            if(e && !uiClickCheck(e)) return;
+            if(selectedExistingTower && gold >= selectedExistingTower.upgradeCost) {
+                gold -= selectedExistingTower.upgradeCost; updateStats();
+                selectedExistingTower.upgrade(); cancelSelection(null);
+            } else {
+                const fb = document.getElementById('feedback-msg'); fb.innerText = "FALTA OURO!"; fb.style.color = "red"; fb.style.opacity = 1; setTimeout(()=>fb.style.opacity=0, 1000);
+            }
+        }
+
+        function moveSelectedTower(e) {
+            if(e && !uiClickCheck(e)) return;
+            if(selectedExistingTower) { movingTower = selectedExistingTower; selectedExistingTower = null; document.getElementById('upgrade-info').style.display = 'none'; }
+        }
+
+        function sellSelectedTower(e) {
+            if(e && !uiClickCheck(e)) return;
+            if(selectedExistingTower) {
+                let refund = Math.floor(selectedExistingTower.totalCost * 0.5);
+                gold += refund; updateStats();
+                towers = towers.filter(t => t !== selectedExistingTower);
+                playSound('hit'); cancelSelection(null);
+            }
+        }
+
+        let physicalX = 0, physicalY = 0;
+        function updateMousePos(e) {
+            const rect = canvas.getBoundingClientRect();
+            if (e.type === 'touchend') return; 
+
+            physicalX = e.touches ? e.touches[0].clientX : e.clientX;
+            physicalY = e.touches ? e.touches[0].clientY : e.clientY;
+
+            let scaleW = window.innerWidth / 820; 
+            let scaleH = window.innerHeight / 620; 
+            let scale = Math.min(scaleW, scaleH);
+            if (scale > 1) scale = 1;
+
+            mouseX = (physicalX - rect.left) / scale;
+            let touchOffset = e.touches ? 40 : 0; 
+            mouseY = (physicalY - rect.top) / scale - touchOffset;
+        }
+
+        canvas.addEventListener('mousedown', (e) => { updateMousePos(e); handlePress(); });
+        canvas.addEventListener('mousemove', (e) => { updateMousePos(e); });
+        canvas.addEventListener('mouseup', (e) => { handleRelease(); });
+
+        canvas.addEventListener('touchstart', (e) => { e.preventDefault(); updateMousePos(e); handlePress(); }, {passive: false});
+        canvas.addEventListener('touchmove', (e) => { e.preventDefault(); updateMousePos(e); }, {passive: false});
+        canvas.addEventListener('touchend', (e) => { e.preventDefault(); handleRelease(); });
+
+        function handlePress() {
+            if(gameState !== 'BUILD' && gameState !== 'COMBAT') return;
+            if(selectedTowerIdx > -1) { isDraggingGhost = true; return; }
+            if(movingTower) return;
+
+            let clickedTower = null;
+            for(let t of towers) {
+                if (Math.sqrt((t.x - mouseX)**2 + (t.y - mouseY)**2) < 30) { clickedTower = t; break; }
+            }
+
+            if(clickedTower) {
+                selectedExistingTower = clickedTower;
+                document.getElementById('upg-cost').innerText = clickedTower.upgradeCost;
+                document.getElementById('upgrade-info').style.display = 'flex';
+            } else { cancelSelection(null); }
+        }
+
+        function handleRelease() {
+            if(gameState !== 'BUILD' && gameState !== 'COMBAT') return;
+
+            if (movingTower) {
+                let cancelBtn = document.getElementById('cancel-btn');
+                let rectBtn = cancelBtn.getBoundingClientRect(); 
+                
+                if (physicalX >= rectBtn.left && physicalX <= rectBtn.right && physicalY >= rectBtn.top && physicalY <= rectBtn.bottom) {
+                    cancelSelection(null); return;
+                }
+
+                if(checkCollision(mouseX, mouseY, movingTower)) {
+                    movingTower.x = mouseX; movingTower.y = mouseY; playSound('correct'); movingTower = null;
+                } else {
+                    const fb = document.getElementById('feedback-msg'); fb.innerText = "LOCAL BLOQUEADO!"; fb.style.color = "orange"; fb.style.opacity = 1; setTimeout(() => fb.style.opacity = 0, 1000); playSound('wrong');
+                }
+                return;
+            }
+
+            if (selectedTowerIdx > -1 && isDraggingGhost) {
+                let cancelBtn = document.getElementById('cancel-btn');
+                let rectBtn = cancelBtn.getBoundingClientRect(); 
+
+                if (physicalX >= rectBtn.left && physicalX <= rectBtn.right && physicalY >= rectBtn.top && physicalY <= rectBtn.bottom) {
+                    cancelSelection(null); return;
+                }
+
+                const type = towerTypes[selectedTowerIdx];
+                if(checkCollision(mouseX, mouseY)) {
+                    if(gold >= type.cost) {
+                        towers.push(new Tower(mouseX, mouseY, selectedTowerIdx));
+                        gold -= type.cost; updateStats();
+                        for(let i=0; i<5; i++) particles.push(new Particle(mouseX, mouseY, '#00ff00')); playSound('correct');
+                    } else {
+                        const fb = document.getElementById('feedback-msg'); fb.innerText = "OURO INSUFICIENTE!"; fb.style.color = "red"; fb.style.opacity = 1; setTimeout(() => fb.style.opacity = 0, 1000);
+                    }
+                } else {
+                    const fb = document.getElementById('feedback-msg'); fb.innerText = "LOCAL BLOQUEADO!"; fb.style.color = "orange"; fb.style.opacity = 1; setTimeout(() => fb.style.opacity = 0, 1000); playSound('wrong');
+                }
+                cancelSelection(null); 
+            }
+        }
+
+        function gameLoop() {
+            try {
+                if (!isPaused) {
+                    if(gameState !== 'MENU') {
+                        for(let i = 0; i < gameSpeed; i++) { update(); }
+                        runAILogic(); 
+                    }
+                }
+                draw();
+            } catch(e) { console.error("Sherlock Error: ", e); }
+            requestAnimationFrame(gameLoop);
+        }
+
+        window.onload = () => { gameLoop(); };
+
+    </script>
+</body>
+</html>
+
