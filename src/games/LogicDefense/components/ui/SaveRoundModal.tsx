@@ -9,7 +9,8 @@ interface SaveRoundModalProps {
 
 export function SaveRoundModal({ uiState, onConfirm, onCancel }: SaveRoundModalProps) {
   const [name, setName] = useState('')
-  const { showSaveModal, wave, totalCorrect, totalMath, lives } = uiState
+  const { showSaveModal, wave, totalCorrect, stats, lives } = uiState
+  const totalMath = stats.totalMath
 
   if (!showSaveModal) return null
 
