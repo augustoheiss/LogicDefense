@@ -96,6 +96,26 @@ export const youtubeVideos: YouTubeVideo[] = [
     youtubeId: 'kCbV5S4025Q',
     tag: 'Matemática · História',
   },
+
+  {
+    id: 'vid-11',
+    title: 'Das Pirâmides aos Pixels: O Código-Fonte Oculto dos Números Quebrados',
+    description: `Você já sentiu aquele frio na barriga ao encarar uma conta com frações? E se a gente te dissesse que a matemática escolar, na verdade, esconde uma linguagem de sobrevivência usada há milênios? 🤯
+
+No episódio de hoje, nós vamos hackear a "Arquitetura dos Números Quebrados". Esqueça a decoreba de regras sem sentido! Nós vamos te mostrar como a matemática não é só para passar na prova, mas sim o verdadeiro código-fonte da realidade.`,
+    youtubeId: '-L35Tk_OJZk',
+    tag: 'Matemática · História',
+  },
+
+  {
+    id: 'vid-12',
+    title: 'Das Pirâmides aos Pixels: O Código-Fonte Oculto dos Números Quebrados',
+    description: `Você já sentiu aquele frio na barriga ao encarar uma conta com frações? E se a gente te dissesse que a matemática escolar, na verdade, esconde uma linguagem de sobrevivência usada há milênios? 🤯
+
+No episódio de hoje, nós vamos hackear a "Arquitetura dos Números Quebrados". Esqueça a decoreba de regras sem sentido! Nós vamos te mostrar como a matemática não é só para passar na prova, mas sim o verdadeiro código-fonte da realidade.`,
+    youtubeId: '6oPs6wJaisQ',
+    tag: 'Matemática · História',
+  },
 ];
 
 // ── Lesson Plans ──────────────────────────────────────────────────────────────
