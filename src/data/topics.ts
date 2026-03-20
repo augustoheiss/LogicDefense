@@ -66,6 +66,34 @@ function buildTopics(): Topic[] {
       })),
   }))
 
+  // ── Inject Algebra videos into cat-equacao ───────────────────────────────
+  const equacaoTopic = realTopics.find((t) => t.id === 'cat-equacao')
+  if (equacaoTopic) {
+    const vid13 = youtubeVideos.find((v) => v.id === 'vid-13')
+    const vid14 = youtubeVideos.find((v) => v.id === 'vid-14')
+
+    if (vid13) {
+      equacaoTopic.items.push({
+        id: vid13.id,
+        type: 'video',
+        title: vid13.title,
+        meta: 'YouTube · Episódio 1',
+        description: vid13.description,
+        youtubeId: vid13.youtubeId,
+      })
+    }
+    if (vid14) {
+      equacaoTopic.items.push({
+        id: vid14.id,
+        type: 'video',
+        title: vid14.title,
+        meta: 'YouTube · Episódio 2',
+        description: vid14.description,
+        youtubeId: vid14.youtubeId,
+      })
+    }
+  }
+
   // ── Mock demo topic: Frações (lesson + two video episodes) ────────────────
   const fracaoLesson = lessonPlans.find((p) => p.slug === 'fracoes-operacoes')
   const vid11 = youtubeVideos.find((v) => v.id === 'vid-11')

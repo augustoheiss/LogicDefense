@@ -116,6 +116,24 @@ No episódio de hoje, nós vamos hackear a "Arquitetura dos Números Quebrados".
     youtubeId: '6oPs6wJaisQ',
     tag: 'Matemática · História',
   },
+
+  
+  {
+    id: 'vid-13',
+    title: 'A Álgebra que Cura Ossos e o Verdadeiro Significado do Sinal de Igual (=)',
+    description: `Neste episódio, mergulhamos na fascinante e turbulenta história da matemática para desconstruir a ideia de que ela é feita apenas de regras frias e sem sentido. Em uma verdadeira viagem no tempo, vamos descobrir como o simples ato de resolver uma equação tem tudo a ver com a cura do nosso próprio corpo e da nossa mente.`,
+    youtubeId: '9BasdznhftA',
+    tag: 'Matemática · História',
+  },
+
+  
+  {
+    id: 'vid-14',
+    title: 'A Álgebra que Cura Ossos e o Verdadeiro Significado do Sinal de Igual (=)',
+    description: `Neste episódio, mergulhamos na fascinante e turbulenta história da matemática para desconstruir a ideia de que ela é feita apenas de regras frias e sem sentido. Em uma verdadeira viagem no tempo, vamos descobrir como o simples ato de resolver uma equação tem tudo a ver com a cura do nosso próprio corpo e da nossa mente.`,
+    youtubeId: 'tznZ7rZ3IGA',
+    tag: 'Matemática · História',
+  }
 ];
 
 // ── Lesson Plans ──────────────────────────────────────────────────────────────
