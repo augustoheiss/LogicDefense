@@ -6,6 +6,7 @@ import { LogicDefensePage } from './pages/LogicDefensePage'
 import { LabPage } from './pages/LabPage'
 import { MaterialsPage } from './pages/MaterialsPage'
 import { LessonPage } from './pages/LessonPage'
+import { SobrePage } from './pages/SobrePage'
 import './styles/game.css'
 
 export default function App() {
@@ -21,6 +22,7 @@ export default function App() {
           <Route path="/repositorio"               element={<MaterialsPage />} />
           {/* Dynamic lesson reading page — /repositorio/vieses-dos-numeros etc. */}
           <Route path="/repositorio/:slug"         element={<LessonPage />} />
+          <Route path="/sobre"                     element={<SobrePage />} />
           <Route path="*"                          element={<Navigate to="/" replace />} />
         </Route>
       </Routes>

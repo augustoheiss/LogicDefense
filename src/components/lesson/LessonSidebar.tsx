@@ -1,83 +1,83 @@
-import { useState } from 'react'
-import { lessonCategories, lessonPlans } from '../../data/content'
 import type { LessonPlan } from '../../data/content'
+import type { Topic } from '../../data/topics'
 
 interface LessonSidebarProps {
-  selectedId: string | null
-  onSelect: (lesson: LessonPlan) => void
+  topic: Topic
+  selectedLessonId: string | null
+  onSelectLesson: (lesson: LessonPlan) => void
+  onBack: () => void
 }
 
-export function LessonSidebar({ selectedId, onSelect }: LessonSidebarProps) {
-  const [openCategories, setOpenCategories] = useState<Set<string>>(
-    () => new Set([lessonCategories[0]?.id ?? ''])
-  )
-
-  function toggleCategory(catId: string) {
-    setOpenCategories((prev) => {
-      const next = new Set(prev)
-      if (next.has(catId)) {
-        next.delete(catId)
-      } else {
-        next.add(catId)
-      }
-      return next
-    })
-  }
+export function LessonSidebar({
+  topic,
+  selectedLessonId,
+  onSelectLesson,
+  onBack,
+}: LessonSidebarProps) {
+  const lessonCount = topic.items.filter((i) => i.type === 'lesson').length
+  const videoCount  = topic.items.filter((i) => i.type === 'video').length
 
   return (
-    <aside className="lesson-sidebar" aria-label="Trilhas de aprendizagem">
+    <aside className="lesson-sidebar" aria-label="Materiais da trilha">
+
+      {/* ── Back navigation ── */}
+      <button className="lesson-sidebar__back" onClick={onBack} aria-label="Voltar para todas as trilhas">
+        ‹ Todas as Trilhas
+      </button>
+
+      {/* ── Topic header ── */}
       <div className="lesson-sidebar__header">
-        <span className="lesson-sidebar__header-eyebrow">Repositório Didático</span>
-        <h2 className="lesson-sidebar__header-title">Trilhas de Aprendizagem</h2>
+        <span className="lesson-sidebar__header-eyebrow">
+          {topic.icon} Trilha selecionada
+        </span>
+        <h2 className="lesson-sidebar__header-title">{topic.title}</h2>
+        <p className="lesson-sidebar__header-count">
+          {lessonCount > 0 && `${lessonCount} aula${lessonCount !== 1 ? 's' : ''}`}
+          {lessonCount > 0 && videoCount > 0 && ' · '}
+          {videoCount > 0 && `${videoCount} vídeo${videoCount !== 1 ? 's' : ''}`}
+        </p>
       </div>
 
-      <nav className="lesson-sidebar__nav">
-        {lessonCategories.map((cat) => {
-          const isOpen = openCategories.has(cat.id)
-          const lessons = lessonPlans.filter((p) => cat.slugs.includes(p.slug))
+      {/* ── Items list ── */}
+      <nav className="lesson-sidebar__nav" aria-label="Materiais da trilha">
+        <ul className="lesson-cat__list" role="list">
+          {topic.items.map((item) => {
+            if (item.type === 'video') {
+              return (
+                <li key={item.id}>
+                  <a
+                    href={`https://www.youtube.com/watch?v=${item.youtubeId}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="lesson-cat__item lesson-cat__item--video"
+                    title={item.description}
+                  >
+                    <span className="lesson-cat__item-title">{item.title}</span>
+                    <span className="lesson-cat__item-meta lesson-cat__item-meta--video">
+                      ▶ {item.meta} ↗
+                    </span>
+                  </a>
+                </li>
+              )
+            }
 
-          return (
-            <div key={cat.id} className={`lesson-cat${isOpen ? ' lesson-cat--open' : ''}`}>
-              <button
-                className="lesson-cat__toggle"
-                onClick={() => toggleCategory(cat.id)}
-                aria-expanded={isOpen}
-              >
-                <span className="lesson-cat__icon" aria-hidden="true">{cat.icon}</span>
-                <span className="lesson-cat__title">{cat.title}</span>
-                <span className="lesson-cat__chevron" aria-hidden="true">
-                  {isOpen ? '▾' : '▸'}
-                </span>
-              </button>
-
-              {isOpen && (
-                <div className="lesson-cat__desc">{cat.description}</div>
-              )}
-
-              <ul className="lesson-cat__list" role="list">
-                {lessons.map((lesson) => {
-                  const isSelected = lesson.id === selectedId
-                  return (
-                    <li key={lesson.id}>
-                      <button
-                        className={`lesson-cat__item${isSelected ? ' lesson-cat__item--active' : ''}`}
-                        onClick={() => {
-                          if (!isOpen) toggleCategory(cat.id)
-                          onSelect(lesson)
-                        }}
-                        title={lesson.description}
-                      >
-                        <span className="lesson-cat__item-title">{lesson.title}</span>
-                        <span className="lesson-cat__item-meta">{lesson.grade}</span>
-                      </button>
-                    </li>
-                  )
-                })}
-              </ul>
-            </div>
-          )
-        })}
+            const isActive = item.lessonData?.id === selectedLessonId
+            return (
+              <li key={item.id}>
+                <button
+                  className={`lesson-cat__item${isActive ? ' lesson-cat__item--active' : ''}`}
+                  onClick={() => item.lessonData && onSelectLesson(item.lessonData)}
+                  title={item.description}
+                >
+                  <span className="lesson-cat__item-title">{item.title}</span>
+                  <span className="lesson-cat__item-meta">{item.meta}</span>
+                </button>
+              </li>
+            )
+          })}
+        </ul>
       </nav>
+
     </aside>
   )
 }

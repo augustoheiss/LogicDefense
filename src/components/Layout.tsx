@@ -6,6 +6,7 @@ const NAV_LINKS = [
   { to: '/jogos',      label: 'Jogos',        icon: '🎮'  },
   { to: '/laboratorio',label: 'Laboratório',  icon: '🔬'  },
   { to: '/repositorio',label: 'Repositório',  icon: '📚'  },
+  { to: '/sobre',      label: 'Sobre',        icon: '✦'   },
 ]
 
 export function Layout() {
