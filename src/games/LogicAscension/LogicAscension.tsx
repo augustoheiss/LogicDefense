@@ -68,6 +68,25 @@ const GAME_STYLES = `
 }
 `;
 
+// ── Log item type ──────────────────────────────────────────────────────────────
+interface LogItem {
+  id:         number;
+  text:       string;
+  type:       'combat' | 'oracle' | 'info';
+  explanation?: string;
+  hint?:        string;
+  isCorrect?:   boolean;
+}
+
+let _logId = 0;
+function mkLog(
+  text: string,
+  type: LogItem['type'] = 'info',
+  extra?: Partial<Pick<LogItem, 'explanation' | 'hint' | 'isCorrect'>>,
+): LogItem {
+  return { id: ++_logId, text, type, ...extra };
+}
+
 // ── Visual constants ───────────────────────────────────────────────────────────
 const CELL = 80;   // large tiles — viewport camera handles clipping
 const GAP  = 2;
@@ -193,17 +212,44 @@ function CellContent({ tile, isPlayer }: { tile: Tile; isPlayer: boolean }) {
 }
 
 // ── Sub-components ─────────────────────────────────────────────────────────────
-function LogEntry({ msg, idx }: { msg: string; idx: number }) {
+function LogItemRow({
+  item, isFirst, onCombatClick,
+}: {
+  item: LogItem;
+  isFirst: boolean;
+  onCombatClick?: (item: LogItem) => void;
+}) {
+  const clickable = item.type === 'combat' && !!item.explanation && !!onCombatClick;
+  const accent    = item.type === 'combat'
+    ? (item.isCorrect ? '#00cc55' : '#ff4444')
+    : item.type === 'oracle' ? '#00d4ff' : '#1e293b';
+  const textColor = isFirst
+    ? '#e2e8f0'
+    : item.type === 'combat'
+      ? (item.isCorrect ? '#86efac' : '#fca5a5')
+      : item.type === 'oracle' ? '#93c5fd' : '#64748b';
   return (
-    <div style={{
-      padding:    '4px 8px',
-      borderLeft: `2px solid ${idx === 0 ? '#00d4ff' : '#1e293b'}`,
-      color:      idx === 0 ? '#e2e8f0' : '#64748b',
-      fontSize:   10,
-      fontFamily: "'Courier New', monospace",
-      lineHeight: 1.5,
-    }}>
-      {msg}
+    <div
+      role={clickable ? 'button' : undefined}
+      tabIndex={clickable ? 0 : undefined}
+      onClick={clickable ? () => onCombatClick!(item) : undefined}
+      onKeyDown={clickable ? e => { if (e.key === 'Enter') onCombatClick!(item); } : undefined}
+      style={{
+        padding:    '5px 8px',
+        borderLeft: `2px solid ${isFirst ? '#00d4ff' : accent}`,
+        color:      textColor,
+        fontSize:   11,
+        fontFamily: "'Courier New', monospace",
+        lineHeight: 1.5,
+        cursor:     clickable ? 'pointer' : 'default',
+        transition: 'background 0.15s',
+        display:    'flex', alignItems: 'center', gap: 4,
+      }}
+      onMouseEnter={e => { if (clickable) e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; }}
+      onMouseLeave={e => { if (clickable) e.currentTarget.style.background = 'transparent'; }}
+    >
+      <span style={{ flexGrow: 1 }}>{item.text}</span>
+      {clickable && <span style={{ fontSize: 9, color: '#475569', flexShrink: 0 }}>📖</span>}
     </div>
   );
 }
@@ -322,6 +368,100 @@ function RoomPill({ label, complete, active, roomProgress }: {
   );
 }
 
+// ── Accordion ─────────────────────────────────────────────────────────────────
+type AccordionId = 'rooms' | 'oracle' | 'log' | 'knowledge' | 'legend';
+
+function AccordionHeader({
+  id, label, badge, activePanel, setActivePanel,
+}: {
+  id:             AccordionId;
+  label:          string;
+  badge?:         string;
+  activePanel:    AccordionId | null;
+  setActivePanel: (id: AccordionId | null) => void;
+}) {
+  const open = activePanel === id;
+  return (
+    <button
+      onClick={() => setActivePanel(open ? null : id)}
+      style={{
+        width:          '100%',
+        display:        'flex',
+        alignItems:     'center',
+        justifyContent: 'space-between',
+        padding:        '9px 11px',
+        background:     open ? 'rgba(0,212,255,0.09)' : 'rgba(8,10,20,0.55)',
+        border:         `1px solid ${open ? '#00d4ff33' : '#1e293b'}`,
+        borderRadius:   open ? '8px 8px 0 0' : 8,
+        color:          open ? '#00d4ff' : '#475569',
+        fontSize:       9,
+        fontFamily:     "'Courier New', monospace",
+        textTransform:  'uppercase',
+        letterSpacing:  2,
+        cursor:         'pointer',
+        transition:     'all 0.18s ease',
+        outline:        'none',
+      }}
+    >
+      <span>{label}</span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        {badge && <span style={{ fontSize: 9, color: '#ffd70099' }}>{badge}</span>}
+        <span style={{ fontSize: 9, opacity: 0.6 }}>{open ? '▲' : '▼'}</span>
+      </div>
+    </button>
+  );
+}
+
+// ── Fixed mobile D-pad ─────────────────────────────────────────────────────────
+function FixedDpad({ onMove }: { onMove: (dir: Direction) => void }) {
+  const btn: CSSProperties = {
+    width:                     72,
+    height:                    72,
+    background:                'rgba(0,212,255,0.10)',
+    border:                    '2px solid rgba(0,212,255,0.28)',
+    borderRadius:              14,
+    color:                     '#00d4ff',
+    fontSize:                  30,
+    cursor:                    'pointer',
+    display:                   'flex',
+    alignItems:                'center',
+    justifyContent:            'center',
+    touchAction:               'manipulation',
+    userSelect:                'none',
+    WebkitTapHighlightColor:   'transparent',
+    transition:                'background 0.1s ease',
+    fontFamily:                'system-ui, sans-serif',
+  };
+  const press  = (e: React.MouseEvent<HTMLButtonElement> | React.TouchEvent<HTMLButtonElement>) =>
+    ((e.currentTarget as HTMLButtonElement).style.background = 'rgba(0,212,255,0.30)');
+  const release = (e: React.MouseEvent<HTMLButtonElement> | React.TouchEvent<HTMLButtonElement>) =>
+    ((e.currentTarget as HTMLButtonElement).style.background = 'rgba(0,212,255,0.10)');
+
+  return (
+    <div style={{
+      position:   'fixed',
+      bottom:     24,
+      left:       24,
+      zIndex:     500,
+      display:    'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      gap:        4,
+    }}>
+      <button style={btn} aria-label="Cima"     onClick={() => onMove('UP')}
+        onMouseDown={press} onMouseUp={release} onTouchStart={press} onTouchEnd={release}>↑</button>
+      <div style={{ display: 'flex', gap: 4 }}>
+        <button style={btn} aria-label="Esquerda" onClick={() => onMove('LEFT')}
+          onMouseDown={press} onMouseUp={release} onTouchStart={press} onTouchEnd={release}>←</button>
+        <button style={btn} aria-label="Baixo"    onClick={() => onMove('DOWN')}
+          onMouseDown={press} onMouseUp={release} onTouchStart={press} onTouchEnd={release}>↓</button>
+        <button style={btn} aria-label="Direita"  onClick={() => onMove('RIGHT')}
+          onMouseDown={press} onMouseUp={release} onTouchStart={press} onTouchEnd={release}>→</button>
+      </div>
+    </div>
+  );
+}
+
 // ── Main component ─────────────────────────────────────────────────────────────
 export function LogicAscension() {
   // ── ProcGen map: generate once on mount, regenerate on reset ────────────────
@@ -340,6 +480,8 @@ export function LogicAscension() {
   const [currentStage,   setCurrentStage]   = useState(1);
   /** Sprint 10.5: explanation from the last resolved combat, persists on the map screen. */
   const [lastExplanation, setLastExplanation] = useState<{ text: string; isCorrect: boolean } | null>(null);
+  /** Sprint 10.6: which accordion panel is open in the sidebar. */
+  const [activePanel, setActivePanel] = useState<AccordionId | null>('knowledge');
 
   // ── ProcGen room tracking ────────────────────────────────────────────────────
   // activeRoomIdx[pathId] = current room being played (undefined = not started)
@@ -347,10 +489,10 @@ export function LogicAscension() {
   const [activeRoomIdx, setActiveRoomIdx] = useState<Partial<Record<PathId, number>>>({});
   const [oracleChain,   setOracleChain]   = useState<Partial<Record<PathId, OracleResult[]>>>({});
 
-  const [log, setLog] = useState<string[]>([
-    '👾 Logic Ascension — Sprint 8 · ProcGen',
-    '🗺️  Explore o corredor e entre nas Salas.',
-    '⌨️  WASD ou setas para mover.',
+  const [log, setLog] = useState<LogItem[]>(() => [
+    mkLog('👾 Logic Ascension · Progressão Infinita', 'info'),
+    mkLog('🗺️  Explore o corredor e entre nas Salas.', 'info'),
+    mkLog('⌨️  WASD ou setas para mover.', 'info'),
   ]);
 
   // ── Stable refs (avoid stale closures in callbacks / effects) ────────────────
@@ -375,7 +517,7 @@ export function LogicAscension() {
   activeRoomIdxRef.current  = activeRoomIdx;
   oracleChainRef.current    = oracleChain;
 
-  const addEntries = useCallback((entries: string[]) => {
+  const addEntries = useCallback((entries: LogItem[]) => {
     setLog(prev => [...entries, ...prev].slice(0, 40));
   }, []);
 
@@ -418,8 +560,8 @@ export function LogicAscension() {
     });
 
     addEntries([
-      `🔓 Sala ${roomIdx + 1}/${NUM_ROOMS} revelada (${pathId === 'buff' ? '⚡' : '💀'})`,
-      ...oracle.logLines,
+      mkLog(`🔓 Sala ${roomIdx + 1}/${NUM_ROOMS} revelada (${pathId === 'buff' ? '⚡' : '💀'})`, 'info'),
+      ...oracle.logLines.map(l => mkLog(l, 'oracle')),
     ]);
 
     // Clear buff animation flag after keyframe completes
@@ -449,7 +591,7 @@ export function LogicAscension() {
 
       // Active room cleared!
       addEntries([
-        `🏆 Sala ${activeIdx + 1}/${NUM_ROOMS} concluída! (${pathId === 'buff' ? '⚡ Buff' : '💀 Sac'})`,
+        mkLog(`🏆 Sala ${activeIdx + 1}/${NUM_ROOMS} concluída! (${pathId === 'buff' ? '⚡ Buff' : '💀 Sac'})`, 'info'),
       ]);
 
       if (activeIdx < NUM_ROOMS - 1) {
@@ -458,7 +600,7 @@ export function LogicAscension() {
       } else {
         setCompletedRooms(prev => new Set([...prev, pathId]));
         addEntries([
-          `🏆🏆 ${pathId === 'buff' ? '⚡ Buff' : '💀 Sac'} — Todas ${NUM_ROOMS} Salas Concluídas!`,
+          mkLog(`🏆🏆 ${pathId === 'buff' ? '⚡ Buff' : '💀 Sac'} — Todas ${NUM_ROOMS} Salas Concluídas!`, 'info'),
         ]);
       }
     }
@@ -476,9 +618,9 @@ export function LogicAscension() {
     setBossSpawned(true);
     setGrid(g => setTile(g, BOSS_SPAWN.row, BOSS_SPAWN.col, { type: 'BOSS', level: bossLvl }));
     addEntries([
-      `💥 BOSS FINAL surgiu no corredor! Lv.${bossLvl}`,
-      `📐 Oracle proj. máx (${NUM_ROOMS} salas): ${base} → Boss = 90% = ${bossLvl}`,
-      `⚠️  Derrote o Boss para abrir o PORTAL!`,
+      mkLog(`💥 BOSS FINAL surgiu no corredor! Lv.${bossLvl}`, 'info'),
+      mkLog(`📐 Oracle proj. máx (${NUM_ROOMS} salas): ${base} → Boss = 90% = ${bossLvl}`, 'oracle'),
+      mkLog(`⚠️  Derrote o Boss para abrir o PORTAL!`, 'info'),
     ]);
   }, [completedRooms, addEntries]);
 
@@ -502,7 +644,7 @@ export function LogicAscension() {
 
     let newGrid  = g;
     let newPower = power;
-    const entries: string[] = [];
+    const entries: LogItem[] = [];
 
     // ── PORTAL → victory ─────────────────────────────────────────────────
     if (target.type === 'PORTAL') {
@@ -515,7 +657,7 @@ export function LogicAscension() {
     if (target.type === 'TRICKY_BUFF') {
       const mult = target.multiplier ?? 1;
       newPower   = Math.round(power * mult);
-      entries.push(`⚡ TrickyBuff! ${power} ${target.multiplierLabel} = ${newPower} poder`);
+      entries.push(mkLog(`⚡ TrickyBuff! ${power} ${target.multiplierLabel} = ${newPower} poder`, 'info'));
       newGrid = setTile(newGrid, nr, nc, { type: 'EMPTY' });
     }
 
@@ -527,7 +669,7 @@ export function LogicAscension() {
       // Task 1: Apply MC multiplier IMMEDIATELY
       newPower = Math.round(newPower * mcMult);
       entries.push(
-        `${pathId === 'buff' ? '⚡' : '💀'} Escolha! ${power} ${target.multiplierLabel ?? ''} → ${newPower} poder`
+        mkLog(`${pathId === 'buff' ? '⚡' : '💀'} Escolha! ${power} ${target.multiplierLabel ?? ''} → ${newPower} poder`, 'info')
       );
 
       // Oracle for Room 0 (no overrideBuffMult → Sprint-7 MC punishment/reward)
@@ -558,8 +700,8 @@ export function LogicAscension() {
       setActiveRoomIdx(prev => ({ ...prev, [pathId]: 0 }));
       setOracleChain(prev => ({ ...prev, [pathId]: [oracle0] }));
 
-      entries.push(`🔓 Sala 1/${NUM_ROOMS} revelada (${pathId === 'buff' ? '⚡ Buff' : '💀 Sac'})`);
-      entries.push(...oracle0.logLines);
+      entries.push(mkLog(`🔓 Sala 1/${NUM_ROOMS} revelada (${pathId === 'buff' ? '⚡ Buff' : '💀 Sac'})`, 'info'));
+      entries.push(...oracle0.logLines.map(l => mkLog(l, 'oracle')));
 
       const { row: br, col: bc } = room0.buffPosition;
       setTimeout(() => {
@@ -619,7 +761,11 @@ export function LogicAscension() {
       setGrid(g => setTile(g, c.targetPos.row, c.targetPos.col, { type: 'EMPTY' }));
       setPlayerPos(c.targetPos);
       setPlayerPower(newPower);
-      addEntries([logLine]);
+      addEntries([mkLog(logLine, 'combat', {
+        explanation: c.question.explanation,
+        hint:        c.question.hint,
+        isCorrect:   correct,
+      })]);
     };
 
     const spawnPortal = (newPower: number, logPrefix: string) => {
@@ -631,8 +777,12 @@ export function LogicAscension() {
       setPlayerPos(c.targetPos);
       setPlayerPower(newPower);
       addEntries([
-        `${logPrefix} Boss derrotado! +${c.monsterLevel} poder. Total: ${newPower}`,
-        '🌀 PORTAL aberto! Retorne para vencer!',
+        mkLog(`${logPrefix} Boss derrotado! +${c.monsterLevel} poder. Total: ${newPower}`, 'combat', {
+          explanation: c.question.explanation,
+          hint:        c.question.hint,
+          isCorrect:   correct,
+        }),
+        mkLog('🌀 PORTAL aberto! Retorne para vencer!', 'info'),
       ]);
     };
 
@@ -693,6 +843,16 @@ export function LogicAscension() {
     );
   }, [addEntries]);
 
+  // ── Log-item click: show explanation in Knowledge Box ────────────────────────
+  const handleLogClick = useCallback((item: LogItem) => {
+    const body = [
+      item.hint        ? `💡 ${item.hint}` : '',
+      item.explanation ?? '',
+    ].filter(Boolean).join('\n\n');
+    setLastExplanation({ text: body, isCorrect: item.isCorrect ?? false });
+    setActivePanel('knowledge');
+  }, []);
+
   // ── Keyboard listener ─────────────────────────────────────────────────────────
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -723,7 +883,11 @@ export function LogicAscension() {
     setBossSpawned(false);
     setGameOverReason('');
     setLastExplanation(null);
-    setLog(['🔄 Reiniciado do zero.', '👾 Logic Ascension — Nível 1', '🗺️  Explore o corredor e entre nas Salas.']);
+    setLog([
+      mkLog('🔄 Reiniciado do zero.', 'info'),
+      mkLog('👾 Logic Ascension — Nível 1', 'info'),
+      mkLog('🗺️  Explore o corredor e entre nas Salas.', 'info'),
+    ]);
   }, []);
 
   // ── Advance to next stage (carry-over power) ──────────────────────────────────
@@ -744,8 +908,8 @@ export function LogicAscension() {
     setGameOverReason('');
     setLastExplanation(null);
     setLog([
-      `🆕 Avançando para o próximo nível! Poder herdado: ${powerRef.current}`,
-      '🗺️  Novo mapa — explore e entre nas Salas.',
+      mkLog(`🆕 Avançando para o próximo nível! Poder herdado: ${powerRef.current}`, 'info'),
+      mkLog('🗺️  Novo mapa — explore e entre nas Salas.', 'info'),
     ]);
   }, []);
 
@@ -863,27 +1027,7 @@ export function LogicAscension() {
           </div>
 
           {/* ── Controls ── */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: 12, width: VIEWPORT_W }}>
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
-              <DpadBtn label="↑" onClick={() => move('UP')} />
-              <div style={{ display: 'flex', gap: 3 }}>
-                <DpadBtn label="←" onClick={() => move('LEFT')} />
-                <DpadBtn label="↓" onClick={() => move('DOWN')} />
-                <DpadBtn label="→" onClick={() => move('RIGHT')} />
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-              {[
-                ['👾','Jogador'], ['🔀','Escolha (garfo)'], ['⚡','TrickyBuff'],
-                ['💀','Monstro'], ['░░','Névoa'], ['👹','Boss Final'], ['🌀','Portal'],
-              ].map(([ic, d]) => (
-                <span key={d} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10, color: '#475569', fontFamily: "'Courier New', monospace" }}>
-                  <span>{ic}</span><span>{d}</span>
-                </span>
-              ))}
-            </div>
-
+          <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', marginTop: 10, width: VIEWPORT_W }}>
             <button onClick={resetGame}
               style={{ background: 'transparent', border: '1px solid #ff4444', color: '#ff4444', padding: '8px 14px', borderRadius: 6, cursor: 'pointer', fontFamily: "'Courier New', monospace", fontSize: 11, transition: 'background 0.2s' }}
               onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,68,68,0.15)')}
@@ -894,172 +1038,179 @@ export function LogicAscension() {
           </div>
         </div>
 
-        {/* ── Sidebar ── */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14, width: 260, minWidth: 220, flexShrink: 0 }}>
+        {/* ── Sidebar (accordion) ── */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, width: 270, minWidth: 220, flexShrink: 0 }}>
 
-          {/* Player stats */}
-          <div>
-            <p style={{ margin: '0 0 8px', fontSize: 9, color: '#475569', textTransform: 'uppercase', letterSpacing: 2 }}>
-              — Status —
-            </p>
+          {/* Status — always visible ───────────────────────────────────────────── */}
+          <div style={{
+            padding: '10px 12px',
+            background: 'rgba(0,0,0,0.55)',
+            border: '1px solid #1e293b',
+            borderRadius: 8,
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <span style={{ fontSize: 9, color: '#475569', textTransform: 'uppercase', letterSpacing: 2, fontFamily: "'Courier New', monospace" }}>
+                — Status · Nível {currentStage} —
+              </span>
+            </div>
             <div style={{ display: 'flex', gap: 8 }}>
               <StatBadge label="Poder" value={playerPower} color="#00ff00" />
               <StatBadge label="Posição" value={`${playerPos.row},${playerPos.col}`} color="#00d4ff" />
             </div>
-          </div>
-
-          {/* Room completion status */}
-          <div>
-            <p style={{ margin: '0 0 6px', fontSize: 9, color: '#475569', textTransform: 'uppercase', letterSpacing: 2 }}>
-              — Salas de Puzzle ({NUM_ROOMS} por caminho) —
-            </p>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-              {roomStatus.map(s => (
-                <RoomPill
-                  key={s.pathId}
-                  label={s.pathId === 'buff' ? '⚡ The Buff' : '💀 Sacrifício'}
-                  active={s.active}
-                  complete={s.complete}
-                  roomProgress={s.roomProgress}
-                />
-              ))}
-            </div>
-          </div>
-
-          {/* Boss status */}
-          {bossSpawned && (
-            <div style={{
-              display: 'flex', alignItems: 'center', gap: 8,
-              padding: '8px 12px',
-              background: gamePhase === 'victory' ? 'rgba(168,85,247,0.1)' : 'rgba(200,68,255,0.08)',
-              border: `1px solid ${gamePhase === 'victory' ? '#a855f7' : '#cc44ff'}55`,
-              borderRadius: 8,
-              fontSize: 10,
-              fontFamily: "'Courier New', monospace",
-            }}>
-              <span style={{ fontSize: 16 }}>{gamePhase === 'victory' ? '🏆' : '👹'}</span>
-              <div>
-                <div style={{ color: gamePhase === 'victory' ? '#a855f7' : '#cc44ff', fontWeight: 700 }}>
-                  {gamePhase === 'victory' ? 'Boss Derrotado!' : 'Boss Final — Ativo!'}
-                </div>
-                <div style={{ color: '#475569', fontSize: 9 }}>
-                  {gamePhase === 'victory'
-                    ? 'Portal aberto ✓'
-                    : `Lv. ${bossLevel ?? '—'} · Derrote para vencer`}
-                </div>
+            {bossSpawned && (
+              <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, fontFamily: "'Courier New', monospace" }}>
+                <span>{gamePhase === 'victory' ? '🏆' : '👹'}</span>
+                <span style={{ color: gamePhase === 'victory' ? '#a855f7' : '#cc44ff', fontWeight: 700 }}>
+                  {gamePhase === 'victory' ? 'Boss Derrotado!' : `Boss Lv.${bossLevel ?? '—'} — Ativo!`}
+                </span>
               </div>
-            </div>
-          )}
-
-          {/* Oracle panels (shown once a path is activated) */}
-          {paths.map(pathId => {
-            const entry = currentOracles[pathId];
-            if (!entry) return null;
-            return (
-              <OraclePanel
-                key={pathId}
-                result={entry.result}
-                pathId={pathId}
-                roomIdx={entry.roomIdx}
-              />
-            );
-          })}
-
-          {/* Oracle placeholder before any activation */}
-          {Object.keys(currentOracles).length === 0 && (
-            <div style={{
-              background: 'rgba(0,212,255,0.03)',
-              border: '1px solid #1e3a4a',
-              borderRadius: 8,
-              padding: '12px 14px',
-              fontSize: 10,
-              fontFamily: "'Courier New', monospace",
-              color: '#475569',
-              lineHeight: 1.8,
-            }}>
-              <p style={{ margin: '0 0 6px', color: '#00d4ff88', fontSize: 9, textTransform: 'uppercase', letterSpacing: 2 }}>
-                — Oracle (inativo) —
-              </p>
-              <div>Entre em uma sala para ativar o Oracle e revelar a ordem ótima.</div>
-            </div>
-          )}
-
-          {/* Event log */}
-          <div style={{ background: '#0a0c14', border: '1px solid #1e293b', borderRadius: 8, overflow: 'hidden', flexGrow: 1 }}>
-            <div style={{ padding: '7px 10px', background: '#0d1117', borderBottom: '1px solid #1e293b', fontSize: 9, color: '#475569', textTransform: 'uppercase', letterSpacing: 2 }}>
-              — Log de Eventos —
-            </div>
-            <div style={{ maxHeight: 300, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 2, padding: '5px 0' }}>
-              {log.map((msg, i) => <LogEntry key={i} msg={msg} idx={i} />)}
-            </div>
+            )}
           </div>
 
-          {/* ── Knowledge Box ─────────────────────────────────────────────────────── */}
-          {/* Always rendered so the sidebar doesn't jump when an explanation arrives. */}
-          <div style={{
-            background:   lastExplanation
-              ? (lastExplanation.isCorrect ? 'rgba(0,60,0,0.18)' : 'rgba(60,15,0,0.22)')
-              : 'rgba(8,10,20,0.5)',
-            border:       `1px solid ${
-              lastExplanation
-                ? (lastExplanation.isCorrect ? '#00cc5566' : '#ff660055')
-                : '#1e293b'
-            }`,
-            borderRadius: 8,
-            overflow:     'hidden',
-            transition:   'background 0.5s ease, border-color 0.5s ease',
-          }}>
-            {/* Header bar */}
-            <div style={{
-              display:       'flex',
-              alignItems:    'center',
-              gap:           6,
-              padding:       '6px 10px',
-              background:    lastExplanation
-                ? (lastExplanation.isCorrect ? 'rgba(0,80,0,0.25)' : 'rgba(80,20,0,0.30)')
-                : 'rgba(15,20,35,0.6)',
-              borderBottom:  `1px solid ${
-                lastExplanation
-                  ? (lastExplanation.isCorrect ? '#00cc5533' : '#ff660033')
-                  : '#1e293b'
-              }`,
-              transition:    'background 0.5s ease',
-            }}>
-              <span style={{ fontSize: 12 }}>
-                {lastExplanation ? (lastExplanation.isCorrect ? '✅' : '❌') : '🧠'}
-              </span>
-              <span style={{
-                fontSize:      9,
-                fontFamily:    "'Courier New', monospace",
-                textTransform: 'uppercase',
-                letterSpacing: 2,
-                color:         lastExplanation
-                  ? (lastExplanation.isCorrect ? '#00cc5599' : '#ff884499')
-                  : '#334155',
-              }}>
-                — Caixa de Conhecimento —
-              </span>
-            </div>
+          {/* Rooms accordion ──────────────────────────────────────────────────── */}
+          <div style={{ borderRadius: 8, overflow: 'hidden' }}>
+            <AccordionHeader
+              id="rooms"
+              label={`Salas (${NUM_ROOMS}/caminho)`}
+              badge={`${completedRooms.size}/2 ✓`}
+              activePanel={activePanel}
+              setActivePanel={setActivePanel}
+            />
+            {activePanel === 'rooms' && (
+              <div style={{ background: 'rgba(0,212,255,0.03)', border: '1px solid #00d4ff22', borderTop: 'none', borderRadius: '0 0 8px 8px', padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {roomStatus.map(s => (
+                  <RoomPill
+                    key={s.pathId}
+                    label={s.pathId === 'buff' ? '⚡ The Buff' : '💀 Sacrifício'}
+                    active={s.active}
+                    complete={s.complete}
+                    roomProgress={s.roomProgress}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
 
-            {/* Body — min-height reserved for future long explanations / AI content */}
-            <div style={{
-              padding:   '10px 12px',
-              minHeight: 100,
-            }}>
-              <p style={{
-                margin:     0,
-                fontSize:   11,
-                fontFamily: "'Courier New', monospace",
-                color:      lastExplanation ? '#94a3b8' : '#334155',
-                lineHeight: 1.75,
-                whiteSpace: 'pre-wrap',
-                transition: 'color 0.3s ease',
+          {/* Oracle accordion ─────────────────────────────────────────────────── */}
+          <div style={{ borderRadius: 8, overflow: 'hidden' }}>
+            <AccordionHeader
+              id="oracle"
+              label="Oracle"
+              badge={Object.keys(currentOracles).length ? `${Object.keys(currentOracles).length} ativo` : undefined}
+              activePanel={activePanel}
+              setActivePanel={setActivePanel}
+            />
+            {activePanel === 'oracle' && (
+              <div style={{ background: 'rgba(0,212,255,0.02)', border: '1px solid #00d4ff22', borderTop: 'none', borderRadius: '0 0 8px 8px', padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {Object.keys(currentOracles).length === 0 ? (
+                  <p style={{ margin: 0, fontSize: 12, color: '#475569', fontFamily: "'Courier New', monospace", lineHeight: 1.7 }}>
+                    Entre em uma sala para ativar o Oracle e revelar a ordem ótima.
+                  </p>
+                ) : (
+                  paths.map(pathId => {
+                    const entry = currentOracles[pathId];
+                    if (!entry) return null;
+                    return <OraclePanel key={pathId} result={entry.result} pathId={pathId} roomIdx={entry.roomIdx} />;
+                  })
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Log accordion ────────────────────────────────────────────────────── */}
+          <div style={{ borderRadius: 8, overflow: 'hidden' }}>
+            <AccordionHeader
+              id="log"
+              label="Log de Eventos"
+              badge={`${log.filter(l => l.type === 'combat').length} combates`}
+              activePanel={activePanel}
+              setActivePanel={setActivePanel}
+            />
+            {activePanel === 'log' && (
+              <div style={{
+                background: '#0a0c14',
+                border: '1px solid #1e293b', borderTop: 'none',
+                borderRadius: '0 0 8px 8px',
+                maxHeight: 340, overflowY: 'auto',
+                display: 'flex', flexDirection: 'column', gap: 1,
+                padding: '4px 0',
               }}>
-                {lastExplanation
-                  ? lastExplanation.text
-                  : 'A explicação da última questão de matemática aparecerá aqui após cada combate.'}
-              </p>
-            </div>
+                {log.map((item, i) => (
+                  <LogItemRow key={item.id} item={item} isFirst={i === 0} onCombatClick={handleLogClick} />
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Knowledge accordion ──────────────────────────────────────────────── */}
+          <div style={{ borderRadius: 8, overflow: 'hidden' }}>
+            <AccordionHeader
+              id="knowledge"
+              label={`Caixa de Conhecimento${lastExplanation ? (lastExplanation.isCorrect ? '  ✅' : '  ❌') : ''}`}
+              activePanel={activePanel}
+              setActivePanel={setActivePanel}
+            />
+            {activePanel === 'knowledge' && (
+              <div style={{
+                background:   lastExplanation
+                  ? (lastExplanation.isCorrect ? 'rgba(0,55,0,0.22)' : 'rgba(55,12,0,0.26)')
+                  : 'rgba(8,10,22,0.6)',
+                border:       `1px solid ${lastExplanation ? (lastExplanation.isCorrect ? '#00cc5544' : '#ff664444') : '#1e293b'}`,
+                borderTop:    'none',
+                borderRadius: '0 0 8px 8px',
+                padding:      '14px 14px',
+                minHeight:    120,
+                transition:   'background 0.4s ease, border-color 0.4s ease',
+              }}>
+                <p style={{
+                  margin:     0,
+                  fontSize:   13,
+                  fontFamily: "'Courier New', monospace",
+                  color:      lastExplanation ? '#cbd5e1' : '#334155',
+                  lineHeight: 1.8,
+                  whiteSpace: 'pre-wrap',
+                  transition: 'color 0.3s ease',
+                }}>
+                  {lastExplanation
+                    ? lastExplanation.text
+                    : 'A explicação da última questão de matemática aparecerá aqui após cada combate.\n\nClique em um combate do Log para rever a solução.'}
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* Legend accordion ─────────────────────────────────────────────────── */}
+          <div style={{ borderRadius: 8, overflow: 'hidden' }}>
+            <AccordionHeader
+              id="legend"
+              label="Legenda do Mapa"
+              activePanel={activePanel}
+              setActivePanel={setActivePanel}
+            />
+            {activePanel === 'legend' && (
+              <div style={{
+                background: 'rgba(8,10,22,0.5)',
+                border: '1px solid #1e293b', borderTop: 'none',
+                borderRadius: '0 0 8px 8px',
+                padding: '10px 14px',
+                display: 'flex', flexDirection: 'column', gap: 7,
+              }}>
+                {([
+                  ['👾', 'Jogador'],
+                  ['🔀', 'Escolha (garfo)'],
+                  ['⚡', 'TrickyBuff'],
+                  ['💀', 'Monstro'],
+                  ['░░', 'Névoa'],
+                  ['👹', 'Boss Final'],
+                  ['🌀', 'Portal → Vitória'],
+                ] as [string, string][]).map(([ic, d]) => (
+                  <span key={d} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: '#64748b', fontFamily: "'Courier New', monospace" }}>
+                    <span style={{ fontSize: 16, minWidth: 22 }}>{ic}</span>
+                    <span>{d}</span>
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
 
         </div>
@@ -1068,6 +1219,9 @@ export function LogicAscension() {
       <p style={{ margin: 0, fontSize: 10, color: '#334155', letterSpacing: 1 }}>
         ⌨  WASD ou Setas · Limpe as {NUM_ROOMS} Salas de cada caminho · Derrote o Boss · Entre no Portal
       </p>
+
+      {/* ── Fixed mobile D-pad ── */}
+      {gamePhase === 'playing' && !combat && <FixedDpad onMove={move} />}
 
       {/* ── Combat overlay ── */}
       {combat && (
