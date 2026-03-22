@@ -39,6 +39,29 @@ export function GamesMenu() {
           </div>
         </div>
 
+        {/* ── Logic Ascension card ── */}
+        <div className="game-card" style={{ marginTop: 24 }}>
+          <div className="game-card__thumb">
+            <span style={{ position: 'relative', zIndex: 1 }}>🗺️</span>
+          </div>
+          <div className="game-card__body">
+            <span className="game-card__tag">RPG · Mapa</span>
+            <h2 className="game-card__title">Logic Ascension</h2>
+            <p className="game-card__desc">
+              A Ascensão Lógica. Navegue por uma grade 2D, escolha entre o Caminho do Buff
+              ou o Caminho do Sacrifício, e enfrente monstros cujo nível é gerado dinamicamente
+              pelo Math Engine com base no seu poder atual. Aprenda Ordem das Operações em combate.
+            </p>
+            <div className="game-card__footer">
+              <span className="game-card__badge">🧮 Ordem das operações</span>
+              <span className="game-card__badge">🌫️ Névoa de guerra</span>
+              <Link to="/jogos/logic-ascension" className="btn-primary">
+                ▶ Jogar agora
+              </Link>
+            </div>
+          </div>
+        </div>
+
         {/* ── Coming Soon ── */}
         <div
           style={{

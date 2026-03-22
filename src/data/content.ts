@@ -133,6 +133,20 @@ No episódio de hoje, nós vamos hackear a "Arquitetura dos Números Quebrados".
     description: `Neste episódio, mergulhamos na fascinante e turbulenta história da matemática para desconstruir a ideia de que ela é feita apenas de regras frias e sem sentido. Em uma verdadeira viagem no tempo, vamos descobrir como o simples ato de resolver uma equação tem tudo a ver com a cura do nosso próprio corpo e da nossa mente.`,
     youtubeId: 'tznZ7rZ3IGA',
     tag: 'Matemática · História',
+  },
+  {
+    id: 'vid-15',
+    title: `O Fim do Labirinto Burocrático: A Investigação sobre o Assistente Escola Modelo`,
+    description: `Descubra como a Inteligência Artificial está sendo usada para solucionar um dos maiores mistérios da educação moderna: o desaparecimento do tempo dos professores!`,
+    youtubeId: 'j3sf_kZuDD4',
+    tag: 'IA · Educação',
+  },
+  {
+    id: 'vid-16',
+    title: `O Fim do Labirinto Burocrático: A Investigação sobre o Assistente Escola Modelo`,
+    description: `Descubra como a Inteligência Artificial está sendo usada para solucionar um dos maiores mistérios da educação moderna: o desaparecimento do tempo dos professores!`,
+    youtubeId: 'sLhxml3Lfok',
+    tag: 'IA · Educação',
   }
 ];
 

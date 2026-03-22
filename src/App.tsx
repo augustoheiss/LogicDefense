@@ -3,6 +3,7 @@ import { Layout } from './components/Layout'
 import { Home } from './pages/Home'
 import { GamesMenu } from './pages/GamesMenu'
 import { LogicDefensePage } from './pages/LogicDefensePage'
+import { LogicAscensionPage } from './pages/LogicAscensionPage'
 import { LabPage } from './pages/LabPage'
 import { MaterialsPage } from './pages/MaterialsPage'
 import { LessonPage } from './pages/LessonPage'
@@ -18,6 +19,7 @@ export default function App() {
           <Route path="/"                          element={<Home />} />
           <Route path="/jogos"                     element={<GamesMenu />} />
           <Route path="/jogos/logic-defense"       element={<LogicDefensePage />} />
+          <Route path="/jogos/logic-ascension"    element={<LogicAscensionPage />} />
           <Route path="/laboratorio"               element={<LabPage />} />
           <Route path="/repositorio"               element={<MaterialsPage />} />
           {/* Dynamic lesson reading page — /repositorio/vieses-dos-numeros etc. */}
