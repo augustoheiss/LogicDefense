@@ -1,5 +1,6 @@
 import { useState, useEffect, CSSProperties } from 'react';
 import { Question } from './mathEngine';
+import { formatPower } from './utils';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 export interface ChoiceOption {
@@ -124,7 +125,7 @@ function CombatantCard({
           fontFamily: "'Courier New', monospace",
           lineHeight:  1,
         }}>
-          {statValue}
+          {formatPower(statValue)}
         </span>
       </div>
     </div>

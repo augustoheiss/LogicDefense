@@ -56,8 +56,9 @@ export interface RoomData {
   pathId:   PathId;
   index:    number;       // 0 – NUM_ROOMS-1
   /**
-   * All carved floor tiles (minimum 6 from a 2×3 room).
-   * Monsters and the buff are placed on a random subset of these.
+   * All carved floor tiles (minimum 9 from a 3×3 room).
+   * Entities occupy the 4 corner anchor points; remaining tiles form the
+   * safe hub that guarantees free pathing through the room.
    */
   floorTiles:       { row: number; col: number }[];
   /** Indices match OracleResult.monsterLevels exactly. */
@@ -147,8 +148,8 @@ export function generateRandomMap(): GeneratedMap {
     for (let k = 0; k < NUM_ROOMS; k++) {
       const chunkStart = CHUNK_START_COL + k * CHUNK_COLS;
 
-      // Random room dimensions (min 2×3 = 6 floor tiles so 4 entities always fit)
-      const roomH = randInt(2, 3);                                // rows
+      // Room dimensions — 3×3 minimum guarantees 4 corner anchors + safe hub
+      const roomH = randInt(3, 4);                                // rows
       const roomW = randInt(3, 4);                                // cols
 
       const roomRowStart = randInt(rowMin, rowMax - roomH + 1);   // fits in zone
@@ -183,14 +184,43 @@ export function generateRandomMap(): GeneratedMap {
       }
       accessTiles.push(...spineTiles);
 
-      // ── Random entity placement ───────────────────────────────────────────
-      const shuffled = shuffle([...floorTiles]);
-      const monsterPositions = [shuffled[0], shuffled[1], shuffled[2]] as [
+      // ── Corner-Anchor entity placement ────────────────────────────────────
+      //
+      // Entities always occupy the 4 extreme corners of the room rectangle.
+      // This guarantees that the spine corridor (spineRow) and the centre
+      // of the room remain completely clear, giving the player a safe hub
+      // from which they can freely choose any corner to engage next.
+      //
+      // Anti-softlock rule: if a raw corner lands exactly on spineRow (the
+      // entrance/exit lane) it is shifted 1 tile inward so the doorway is
+      // never blocked.  With roomH ≥ 3 the shifted tile is always valid.
+      const rEnd = roomRowStart + roomH - 1;
+      const cEnd = roomColStart + roomW - 1;
+
+      const rawCorners = [
+        { row: roomRowStart, col: roomColStart },   // Top-Left
+        { row: roomRowStart, col: cEnd         },   // Top-Right
+        { row: rEnd,         col: roomColStart },   // Bottom-Left
+        { row: rEnd,         col: cEnd         },   // Bottom-Right
+      ];
+
+      const safeAnchors = rawCorners.map(({ row, col }) => {
+        if (row !== spineRow) return { row, col };
+        // Doorway tile — step one row inward, away from the room edge
+        return { row: row === roomRowStart ? row + 1 : row - 1, col };
+      });
+
+      const shuffledAnchors = shuffle(safeAnchors);
+      const monsterPositions = [
+        shuffledAnchors[0],
+        shuffledAnchors[1],
+        shuffledAnchors[2],
+      ] as [
         { row: number; col: number },
         { row: number; col: number },
         { row: number; col: number },
       ];
-      const buffPosition = shuffled[3];
+      const buffPosition = shuffledAnchors[3];
 
       const buffMultiplier =
         k === 0

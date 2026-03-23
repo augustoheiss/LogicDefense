@@ -13,6 +13,8 @@ import {
 } from './mapData';
 import { runOracle, generateDynamicQuestion, Question, OracleResult, calculateTheoreticalMax } from './mathEngine';
 import { CombatArena, ChoiceOption } from './CombatArena';
+import { formatPower } from './utils';
+import { saveHighScore } from './leaderboard';
 
 // ── Utilities ──────────────────────────────────────────────────────────────────
 function setTile(grid: Tile[][], row: number, col: number, tile: Tile): Tile[][] {
@@ -98,16 +100,25 @@ const VIEWPORT_TILES = 9;
 const VIEWPORT_W = VIEWPORT_TILES * CELL + (VIEWPORT_TILES - 1) * GAP; // 736 px
 const VIEWPORT_H = VIEWPORT_W;
 
+// ── Biome background helper ────────────────────────────────────────────────────
+function getBackgroundImage(stage: number): string {
+  const index = ((stage - 1) % 9) + 1;
+  return `/images/background-0${index}.jpg`;
+}
+
 const COLOR: Record<TileType | 'PLAYER', { bg: string; border: string; shadow?: string }> = {
-  EMPTY:        { bg: '#0f172a', border: '#1e2d45' },
-  WALL:         { bg: '#06080f', border: '#0e1428' },
-  MONSTER:      { bg: '#1c0808', border: '#ff4444', shadow: 'inset 0 0 10px rgba(255,68,68,0.4)' },
-  TRICKY_BUFF:  { bg: '#1a1400', border: '#ffd700', shadow: 'inset 0 0 10px rgba(255,215,0,0.35)' },
-  MAJOR_CHOICE: { bg: '#001828', border: '#00d4ff', shadow: 'inset 0 0 16px rgba(0,212,255,0.35), 0 0 10px rgba(0,212,255,0.4)' },
-  FOG:          { bg: '#090910', border: '#12122a' },
-  BOSS:         { bg: '#1a0028', border: '#cc44ff', shadow: 'inset 0 0 18px rgba(200,68,255,0.55), 0 0 22px rgba(200,68,255,0.5)' },
-  PORTAL:       { bg: '#0d001e', border: '#a855f7', shadow: 'inset 0 0 16px rgba(168,85,247,0.5), 0 0 18px rgba(168,85,247,0.6)' },
-  PLAYER:       { bg: '#001a00', border: '#00ff00', shadow: 'inset 0 0 16px rgba(0,255,0,0.45), 0 0 14px rgba(0,255,0,0.6)' },
+  // Walls are fully transparent — the biome artwork shows through
+  EMPTY:        { bg: 'rgba(255,255,255,0.05)', border: 'rgba(255,255,255,0.10)' },
+  WALL:         { bg: 'transparent',        border: 'transparent' },
+  // Entity tiles keep their identity colours but with a dark glass base
+  MONSTER:      { bg: 'rgba(60,0,0,0.72)',  border: '#ff4444', shadow: 'inset 0 0 10px rgba(255,68,68,0.45)' },
+  TRICKY_BUFF:  { bg: 'rgba(50,38,0,0.75)', border: '#ffd700', shadow: 'inset 0 0 10px rgba(255,215,0,0.40)' },
+  MAJOR_CHOICE: { bg: 'rgba(0,24,40,0.80)', border: '#00d4ff', shadow: 'inset 0 0 16px rgba(0,212,255,0.35), 0 0 10px rgba(0,212,255,0.4)' },
+  // Fog is intentionally opaque — unknown territory should feel impenetrable
+  FOG:          { bg: 'rgba(4,4,14,0.93)',  border: 'rgba(18,18,42,0.55)' },
+  BOSS:         { bg: 'rgba(26,0,40,0.85)', border: '#cc44ff', shadow: 'inset 0 0 18px rgba(200,68,255,0.55), 0 0 22px rgba(200,68,255,0.5)' },
+  PORTAL:       { bg: 'rgba(13,0,30,0.85)', border: '#a855f7', shadow: 'inset 0 0 16px rgba(168,85,247,0.5), 0 0 18px rgba(168,85,247,0.6)' },
+  PLAYER:       { bg: 'rgba(0,26,0,0.80)',  border: '#00ff00', shadow: 'inset 0 0 16px rgba(0,255,0,0.45), 0 0 14px rgba(0,255,0,0.6)' },
 };
 
 function cellStyle(tile: Tile, isPlayer: boolean): CSSProperties {
@@ -122,8 +133,8 @@ function cellStyle(tile: Tile, isPlayer: boolean): CSSProperties {
     alignItems:     'center',
     justifyContent: 'center',
     borderRadius:   6,
-    border:         `2px solid ${activated ? '#003333' : c.border}`,
-    background:     activated ? '#000f0e' : c.bg,
+    border:         `2px solid ${activated ? 'rgba(0,51,51,0.55)' : c.border}`,
+    background:     activated ? 'rgba(0,15,14,0.65)' : c.bg,
     boxShadow:      activated ? 'none' : (c.shadow ?? 'none'),
     transition:     'box-shadow 0.25s ease, background 0.25s ease',
     userSelect:     'none',
@@ -134,21 +145,33 @@ function cellStyle(tile: Tile, isPlayer: boolean): CSSProperties {
 
 // ── Tile content ───────────────────────────────────────────────────────────────
 function CellContent({ tile, isPlayer }: { tile: Tile; isPlayer: boolean }) {
-  const icon:  CSSProperties = { fontSize: 28, lineHeight: 1 };
-  const lbl:   CSSProperties = {
+  const icon: CSSProperties = {
+    fontSize: 28, lineHeight: 1,
+    filter: 'drop-shadow(0 2px 5px rgba(0,0,0,0.95))',
+  };
+  const lbl: CSSProperties = {
     fontSize: 11, fontFamily: "'Courier New', monospace",
     lineHeight: 1.2, textAlign: 'center', padding: '0 3px',
+    textShadow: '0 1px 4px #000, 0 -1px 4px #000, 1px 0 4px #000, -1px 0 4px #000',
+  };
+  // Pill background for numeric labels to guarantee readability on any biome art
+  const pill: CSSProperties = {
+    background: 'rgba(0,0,0,0.78)',
+    borderRadius: 4,
+    padding: '1px 5px',
   };
 
-  if (isPlayer) return <span style={{ fontSize: 36 }}>👾</span>;
+  if (isPlayer) return (
+    <span style={{ fontSize: 36, filter: 'drop-shadow(0 2px 6px rgba(0,0,0,0.95))' }}>👾</span>
+  );
 
   switch (tile.type) {
     case 'MONSTER':
       return (
         <>
           <span style={icon}>💀</span>
-          <span style={{ ...lbl, color: '#ff6666', fontWeight: 700, marginTop: 3, fontSize: 13 }}>
-            Lv.{tile.level ?? '?'}
+          <span style={{ ...lbl, ...pill, color: '#ff6666', fontWeight: 700, marginTop: 3, fontSize: 13 }}>
+            Lv.{tile.level != null ? formatPower(tile.level) : '?'}
           </span>
         </>
       );
@@ -157,7 +180,7 @@ function CellContent({ tile, isPlayer }: { tile: Tile; isPlayer: boolean }) {
         <>
           <span style={icon}>⚡</span>
           <span style={{
-            ...lbl,
+            ...lbl, ...pill,
             color:      tile.multiplier !== undefined && tile.multiplier >= 1 ? '#ffd700' : '#ff8888',
             fontWeight: 700,
             fontSize:   15,
@@ -176,15 +199,15 @@ function CellContent({ tile, isPlayer }: { tile: Tile; isPlayer: boolean }) {
     case 'MAJOR_CHOICE':
       return (
         <>
-          <span style={{ fontSize: tile.activated ? 18 : 22, lineHeight: 1 }}>
+          <span style={{ fontSize: tile.activated ? 18 : 22, lineHeight: 1, filter: 'drop-shadow(0 2px 5px rgba(0,0,0,0.95))' }}>
             {tile.activated ? '✓' : '🔀'}
           </span>
           {!tile.activated && tile.multiplierLabel && (
-            <span style={{ ...lbl, color: '#ffd700', fontWeight: 700, fontSize: 14, marginTop: 2 }}>
+            <span style={{ ...lbl, ...pill, color: '#ffd700', fontWeight: 700, fontSize: 14, marginTop: 2 }}>
               {tile.multiplierLabel}
             </span>
           )}
-          <span style={{ ...lbl, color: tile.activated ? '#003333' : '#00d4ff', marginTop: 2, fontSize: 10 }}>
+          <span style={{ ...lbl, ...pill, color: tile.activated ? '#4af0d0' : '#00d4ff', marginTop: 2, fontSize: 10 }}>
             {tile.label}
           </span>
         </>
@@ -192,20 +215,20 @@ function CellContent({ tile, isPlayer }: { tile: Tile; isPlayer: boolean }) {
     case 'BOSS':
       return (
         <>
-          <span style={{ fontSize: 30, lineHeight: 1 }}>👹</span>
-          <span style={{ ...lbl, color: '#ff44ff', fontWeight: 700, marginTop: 2 }}>BOSS</span>
-          <span style={{ ...lbl, color: '#cc44ff', marginTop: 1, fontSize: 13 }}>Lv.{tile.level ?? '?'}</span>
+          <span style={{ fontSize: 30, lineHeight: 1, filter: 'drop-shadow(0 2px 6px rgba(0,0,0,0.95))' }}>👹</span>
+          <span style={{ ...lbl, ...pill, color: '#ff44ff', fontWeight: 700, marginTop: 2 }}>BOSS</span>
+          <span style={{ ...lbl, ...pill, color: '#cc44ff', marginTop: 1, fontSize: 13 }}>Lv.{tile.level != null ? formatPower(tile.level) : '?'}</span>
         </>
       );
     case 'PORTAL':
       return (
         <>
-          <span style={{ fontSize: 30, lineHeight: 1 }}>🌀</span>
-          <span style={{ ...lbl, color: '#a855f7', fontWeight: 700, marginTop: 2 }}>PORTAL</span>
+          <span style={{ fontSize: 30, lineHeight: 1, filter: 'drop-shadow(0 2px 6px rgba(168,85,247,0.7))' }}>🌀</span>
+          <span style={{ ...lbl, ...pill, color: '#a855f7', fontWeight: 700, marginTop: 2 }}>PORTAL</span>
         </>
       );
     case 'FOG':
-      return <span style={{ fontSize: 24, color: '#14143a', letterSpacing: -2 }}>░░</span>;
+      return <span style={{ fontSize: 24, color: '#2a2a5a', letterSpacing: -2 }}>░░</span>;
     default:
       return null;
   }
@@ -304,7 +327,7 @@ function OraclePanel({ result, pathId, roomIdx }: { result: OracleResult; pathId
             fontSize: 14,
             fontWeight: 700,
           }}>
-            M{i + 1}={lvl}
+            M{i + 1}={formatPower(lvl)}
           </span>
         ))}
         <span style={{
@@ -445,7 +468,7 @@ function FixedDpad({ onMove }: { onMove: (dir: Direction) => void }) {
 }
 
 // ── Main component ─────────────────────────────────────────────────────────────
-export function LogicAscension() {
+export function LogicAscension({ onGoToMenu }: { onGoToMenu?: () => void } = {}) {
   // ── ProcGen map: generate once on mount, regenerate on reset ────────────────
   const [mapData, setMapData] = useState<GeneratedMap>(generateRandomMap);
   const [grid,    setGrid]    = useState<Tile[][]>(() => mapData.grid);
@@ -464,6 +487,9 @@ export function LogicAscension() {
   const [lastExplanation, setLastExplanation] = useState<{ text: string; isCorrect: boolean } | null>(null);
   /** Sprint 10.6: which accordion panel is open in the sidebar. */
   const [activePanel, setActivePanel] = useState<AccordionId | null>('knowledge');
+  /** Sprint 12: player names for leaderboard save on Victory / Game Over. */
+  const [victoryName,  setVictoryName]  = useState('');
+  const [gameOverName, setGameOverName] = useState('');
 
   // ── ProcGen room tracking ────────────────────────────────────────────────────
   // activeRoomIdx[pathId] = current room being played (undefined = not started)
@@ -761,7 +787,7 @@ export function LogicAscension() {
       setPlayerPos(c.targetPos);
       setPlayerPower(newPower);
       addEntries([
-        mkLog(`${logPrefix} Boss derrotado! +${c.monsterLevel} poder. Total: ${newPower}`, 'combat', {
+        mkLog(`${logPrefix} Boss derrotado! +${formatPower(c.monsterLevel)} poder. Total: ${formatPower(newPower)}`, 'combat', {
           explanation: c.question.explanation,
           hint:        c.question.hint,
           isCorrect:   correct,
@@ -773,8 +799,8 @@ export function LogicAscension() {
     if (c.isImpossibleMode) {
       setGamePhase('gameover');
       setGameOverReason(
-        `⚠️ DIFERENÇA DE PODER ABSURDA! O monstro (Lv.${c.monsterLevel}) te esmagou! ` +
-        `Poder: ${c.powerSnapshot} (mín. necessário: ${Math.ceil(c.monsterLevel / 2)})`
+        `⚠️ DIFERENÇA DE PODER ABSURDA! O monstro (Lv.${formatPower(c.monsterLevel)}) te esmagou! ` +
+        `Poder: ${formatPower(c.powerSnapshot)} (mín. necessário: ${formatPower(Math.ceil(c.monsterLevel / 2))})`
       );
       return;
     }
@@ -791,7 +817,7 @@ export function LogicAscension() {
         const absorbed = Math.round(c.monsterLevel * 0.5);
         const newPower = c.powerSnapshot + absorbed;
         if (c.isBoss) spawnPortal(newPower, '🔥 Milagre Desesperado!');
-        else resolveKill(newPower, `🔥 Milagre! +${absorbed} poder (50% desespero). Total: ${newPower}`);
+        else resolveKill(newPower, `🔥 Milagre! +${formatPower(absorbed)} poder (50% desespero). Total: ${formatPower(newPower)}`);
       } else {
         setGamePhase('gameover');
         setGameOverReason(
@@ -819,15 +845,15 @@ export function LogicAscension() {
     if (newPower <= 0) {
       setGamePhase('gameover');
       setGameOverReason(
-        `Poder chegou a ${newPower}. Resposta: ${c.question.correctAnswer}. ${c.question.explanation}`
+        `Poder chegou a ${formatPower(newPower)}. Resposta: ${c.question.correctAnswer}. ${c.question.explanation}`
       );
       return;
     }
     resolveKill(
       newPower,
       correct
-        ? `✅ Correto! +${delta} poder. Total: ${newPower}`
-        : `❌ Errado! ${delta} poder (dano). Total: ${newPower}`
+        ? `✅ Correto! +${formatPower(delta)} poder. Total: ${formatPower(newPower)}`
+        : `❌ Errado! ${formatPower(delta)} poder (dano). Total: ${formatPower(newPower)}`
     );
   }, [addEntries]);
 
@@ -979,14 +1005,16 @@ export function LogicAscension() {
 
           {/* Fixed clipping window — overflow:hidden hides everything outside */}
           <div style={{
-            position:     'relative',
-            width:        VIEWPORT_W,
-            height:       VIEWPORT_H,
-            overflow:     'hidden',
-            background:   '#0a0a14',
-            border:       '2px solid #1e293b',
-            borderRadius: 8,
-            boxShadow:    '0 0 40px rgba(0,0,0,0.8)',
+            position:           'relative',
+            width:              VIEWPORT_W,
+            height:             VIEWPORT_H,
+            overflow:           'hidden',
+            backgroundImage:    `linear-gradient(rgba(10,10,20,0.85), rgba(10,10,20,0.85)), url('${getBackgroundImage(currentStage)}')`,
+            backgroundSize:     'cover',
+            backgroundPosition: 'center',
+            border:             '2px solid #1e293b',
+            borderRadius:       8,
+            boxShadow:          '0 0 40px rgba(0,0,0,0.8)',
           }}>
 
             {/* Camera layer — translate3d tracks the player */}
@@ -994,6 +1022,7 @@ export function LogicAscension() {
               position:   'absolute',
               top:        0,
               left:       0,
+              zIndex:     0,
               transform:  `translate3d(${camTx}px, ${camTy}px, 0)`,
               transition: 'transform 0.18s ease-out',
               willChange: 'transform',
@@ -1012,6 +1041,16 @@ export function LogicAscension() {
                 })
               )}
             </div>
+
+            {/* Vignette overlay — darkens edges so entities/text stay legible on bright biome art */}
+            <div style={{
+              position:       'absolute',
+              inset:          0,
+              zIndex:         1,
+              pointerEvents:  'none',
+              background:     'radial-gradient(ellipse at center, transparent 35%, rgba(0,0,0,0.60) 100%)',
+              borderRadius:   6,
+            }} />
           </div>
 
           {/* ── Controls ── */}
@@ -1042,14 +1081,14 @@ export function LogicAscension() {
               </span>
             </div>
             <div style={{ display: 'flex', gap: 8 }}>
-              <StatBadge label="Poder" value={playerPower} color="#00ff00" />
+              <StatBadge label="Poder" value={formatPower(playerPower)} color="#00ff00" />
               <StatBadge label="Posição" value={`${playerPos.row},${playerPos.col}`} color="#00d4ff" />
             </div>
             {bossSpawned && (
               <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, fontFamily: "'Courier New', monospace" }}>
                 <span>{gamePhase === 'victory' ? '🏆' : '👹'}</span>
                 <span style={{ color: gamePhase === 'victory' ? '#a855f7' : '#cc44ff', fontWeight: 700 }}>
-                  {gamePhase === 'victory' ? 'Boss Derrotado!' : `Boss Lv.${bossLevel ?? '—'} — Ativo!`}
+                  {gamePhase === 'victory' ? 'Boss Derrotado!' : `Boss Lv.${bossLevel != null ? formatPower(bossLevel) : '—'} — Ativo!`}
                 </span>
               </div>
             )}
@@ -1233,63 +1272,102 @@ export function LogicAscension() {
           display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24,
         }}>
           <div style={{
-            maxWidth: 460, width: '100%',
+            maxWidth: 480, width: '100%',
             background: 'linear-gradient(160deg, #0a0020 0%, #050015 100%)',
             border: '2px solid #a855f7',
             borderRadius: 16, padding: '36px 32px',
             boxShadow: '0 0 80px rgba(168,85,247,0.4), 0 0 30px rgba(168,85,247,0.2)',
             textAlign: 'center', fontFamily: "'Courier New', monospace",
           }}>
-            <div style={{ fontSize: 56, marginBottom: 12 }}>🏆</div>
+            <div style={{ fontSize: 52, marginBottom: 10 }}>🏆</div>
             <p style={{ margin: '0 0 4px', fontSize: 10, color: '#a855f7', letterSpacing: 4, textTransform: 'uppercase' }}>
               Parabéns, Lógico!
             </p>
-            <h2 style={{ margin: '0 0 20px', fontSize: 32, fontWeight: 900, color: '#f1f5f9', letterSpacing: 2 }}>
+            <h2 style={{ margin: '0 0 18px', fontSize: 32, fontWeight: 900, color: '#f1f5f9', letterSpacing: 2 }}>
               VITÓRIA!
             </h2>
             <div style={{
               background: 'rgba(168,85,247,0.08)', border: '1px solid #a855f744',
-              borderRadius: 10, padding: '14px 20px', marginBottom: 24,
+              borderRadius: 10, padding: '12px 20px', marginBottom: 20,
             }}>
-              <p style={{ margin: '0 0 6px', fontSize: 10, color: '#64748b', textTransform: 'uppercase', letterSpacing: 2 }}>
+              <p style={{ margin: '0 0 4px', fontSize: 10, color: '#64748b', textTransform: 'uppercase', letterSpacing: 2 }}>
                 Nível {currentStage} · Poder Final
               </p>
-              <span style={{ fontSize: 40, fontWeight: 900, color: '#a855f7' }}>{playerPower}</span>
-              <p style={{ margin: '8px 0 0', fontSize: 10, color: '#475569' }}>
-                Salas concluídas: {completedRooms.size} × {NUM_ROOMS} · Boss derrotado ✓
+              <span style={{ fontSize: 38, fontWeight: 900, color: '#a855f7' }}>{formatPower(playerPower)}</span>
+              <p style={{ margin: '6px 0 0', fontSize: 10, color: '#475569' }}>
+                Salas: {completedRooms.size} × {NUM_ROOMS} · Boss derrotado ✓
               </p>
             </div>
-            <p style={{ margin: '0 0 24px', fontSize: 12, color: '#64748b', lineHeight: 1.7 }}>
-              Você dominou a Ordem das Operações, seguiu o Oracle e<br />
-              derrotou o Boss do Nível {currentStage}. A Ascensão continua…
-            </p>
+
+            {/* Name input for leaderboard */}
+            <div style={{ marginBottom: 20, textAlign: 'left' }}>
+              <label style={{ fontSize: 10, color: '#64748b', letterSpacing: '0.15em', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>
+                Nome para o placar (opcional):
+              </label>
+              <input
+                type="text"
+                maxLength={12}
+                placeholder="Ex: JOGADOR"
+                value={victoryName}
+                onChange={e => setVictoryName(e.target.value.toUpperCase())}
+                style={{
+                  width: '100%', boxSizing: 'border-box',
+                  background: 'rgba(168,85,247,0.07)', border: '1px solid #a855f755',
+                  color: '#e2e8f0', padding: '10px 14px', borderRadius: 6,
+                  fontFamily: "'Courier New', monospace", fontSize: 16, letterSpacing: '0.12em',
+                  outline: 'none',
+                }}
+              />
+            </div>
 
             {/* Primary: carry-over power to next level */}
             <button onClick={advanceLevel} style={{
               display: 'block', width: '100%',
               background: 'rgba(255,215,0,0.15)', border: '2px solid #ffd700',
-              color: '#ffd700', padding: '14px 32px', borderRadius: 8, marginBottom: 10,
+              color: '#ffd700', padding: '13px 32px', borderRadius: 8, marginBottom: 8,
               cursor: 'pointer', fontFamily: "'Courier New', monospace",
               fontSize: 14, fontWeight: 900, letterSpacing: 1, transition: 'background 0.2s',
             }}
-              onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,215,0,0.3)')}
+              onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,215,0,0.28)')}
               onMouseLeave={e => (e.currentTarget.style.background = 'rgba(255,215,0,0.15)')}
             >
               ⚔️ Avançar para o Nível {currentStage + 1}
             </button>
 
-            {/* Secondary: hard reset */}
-            <button onClick={resetGame} style={{
+            {/* Save score and go to menu */}
+            <button onClick={() => {
+              saveHighScore({
+                name:  victoryName.trim() || 'AAA',
+                power: playerPower,
+                stage: currentStage,
+                date:  new Date().toLocaleDateString('pt-BR'),
+              });
+              onGoToMenu?.();
+            }} style={{
               display: 'block', width: '100%',
-              background: 'transparent', border: '1px solid #475569',
-              color: '#64748b', padding: '10px 32px', borderRadius: 8,
+              background: 'rgba(0,212,255,0.10)', border: '1px solid #00d4ff88',
+              color: '#00d4ff', padding: '11px 32px', borderRadius: 8, marginBottom: 8,
               cursor: 'pointer', fontFamily: "'Courier New', monospace",
-              fontSize: 11, letterSpacing: 1, transition: 'background 0.2s, color 0.2s',
+              fontSize: 12, fontWeight: 700, letterSpacing: 1, transition: 'background 0.2s',
             }}
-              onMouseEnter={e => { e.currentTarget.style.background = 'rgba(100,116,139,0.15)'; e.currentTarget.style.color = '#94a3b8'; }}
-              onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#64748b'; }}
+              onMouseEnter={e => (e.currentTarget.style.background = 'rgba(0,212,255,0.22)')}
+              onMouseLeave={e => (e.currentTarget.style.background = 'rgba(0,212,255,0.10)')}
             >
-              ↺ Reiniciar do Zero (Poder: 10)
+              💾 Salvar e Voltar ao Menu
+            </button>
+
+            {/* Quit without saving */}
+            <button onClick={() => onGoToMenu?.()} style={{
+              display: 'block', width: '100%',
+              background: 'transparent', border: '1px solid #1e293b',
+              color: '#334155', padding: '9px 32px', borderRadius: 8,
+              cursor: 'pointer', fontFamily: "'Courier New', monospace",
+              fontSize: 11, letterSpacing: 1, transition: 'color 0.2s',
+            }}
+              onMouseEnter={e => (e.currentTarget.style.color = '#64748b')}
+              onMouseLeave={e => (e.currentTarget.style.color = '#334155')}
+            >
+              🚪 Desistir (sem salvar)
             </button>
           </div>
         </div>
@@ -1303,48 +1381,94 @@ export function LogicAscension() {
           display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24,
         }}>
           <div style={{
-            maxWidth: 460, width: '100%',
+            maxWidth: 480, width: '100%',
             background: 'linear-gradient(160deg, #1a0000 0%, #0a0000 100%)',
             border: '2px solid #ff2222',
             borderRadius: 16, padding: '36px 32px',
             boxShadow: '0 0 80px rgba(255,34,34,0.4), 0 0 30px rgba(255,34,34,0.2)',
             textAlign: 'center', fontFamily: "'Courier New', monospace",
           }}>
-            <div style={{ fontSize: 56, marginBottom: 12 }}>💀</div>
+            <div style={{ fontSize: 52, marginBottom: 10 }}>💀</div>
             <p style={{ margin: '0 0 4px', fontSize: 10, color: '#ff4444', letterSpacing: 4, textTransform: 'uppercase' }}>
               Derrota
             </p>
-            <h2 style={{ margin: '0 0 20px', fontSize: 32, fontWeight: 900, color: '#f1f5f9', letterSpacing: 2 }}>
+            <h2 style={{ margin: '0 0 16px', fontSize: 32, fontWeight: 900, color: '#f1f5f9', letterSpacing: 2 }}>
               GAME OVER
             </h2>
             <div style={{
               background: 'rgba(255,34,34,0.06)', border: '1px solid #ff222244',
-              borderRadius: 10, padding: '14px 20px', marginBottom: 20,
+              borderRadius: 10, padding: '12px 20px', marginBottom: 16,
             }}>
-              <p style={{ margin: '0 0 6px', fontSize: 10, color: '#64748b', textTransform: 'uppercase', letterSpacing: 2 }}>
-                Poder ao morrer
+              <p style={{ margin: '0 0 4px', fontSize: 10, color: '#64748b', textTransform: 'uppercase', letterSpacing: 2 }}>
+                Poder · Nível {currentStage}
               </p>
-              <span style={{ fontSize: 40, fontWeight: 900, color: '#ff4444' }}>{playerPower}</span>
+              <span style={{ fontSize: 38, fontWeight: 900, color: '#ff4444' }}>{formatPower(playerPower)}</span>
             </div>
             {gameOverReason && (
               <p style={{
-                margin: '0 0 24px', fontSize: 11, color: '#94a3b8', lineHeight: 1.7,
+                margin: '0 0 16px', fontSize: 11, color: '#94a3b8', lineHeight: 1.7,
                 background: 'rgba(255,68,68,0.05)', border: '1px solid #ff44441a',
                 borderRadius: 8, padding: '10px 14px',
               }}>
                 {gameOverReason}
               </p>
             )}
+
+            {/* Name input for leaderboard */}
+            <div style={{ marginBottom: 18, textAlign: 'left' }}>
+              <label style={{ fontSize: 10, color: '#64748b', letterSpacing: '0.15em', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>
+                Nome para o placar (opcional):
+              </label>
+              <input
+                type="text"
+                maxLength={12}
+                placeholder="Ex: JOGADOR"
+                value={gameOverName}
+                onChange={e => setGameOverName(e.target.value.toUpperCase())}
+                style={{
+                  width: '100%', boxSizing: 'border-box',
+                  background: 'rgba(255,34,34,0.06)', border: '1px solid #ff222244',
+                  color: '#e2e8f0', padding: '10px 14px', borderRadius: 6,
+                  fontFamily: "'Courier New', monospace", fontSize: 16, letterSpacing: '0.12em',
+                  outline: 'none',
+                }}
+              />
+            </div>
+
+            {/* Save and go to menu */}
+            <button onClick={() => {
+              saveHighScore({
+                name:  gameOverName.trim() || 'AAA',
+                power: playerPower,
+                stage: currentStage,
+                date:  new Date().toLocaleDateString('pt-BR'),
+              });
+              onGoToMenu?.();
+            }} style={{
+              display: 'block', width: '100%',
+              background: 'rgba(0,212,255,0.08)', border: '1px solid #00d4ff66',
+              color: '#00d4ff', padding: '11px 32px', borderRadius: 8, marginBottom: 8,
+              cursor: 'pointer', fontFamily: "'Courier New', monospace",
+              fontSize: 12, fontWeight: 700, letterSpacing: 1, transition: 'background 0.2s',
+            }}
+              onMouseEnter={e => (e.currentTarget.style.background = 'rgba(0,212,255,0.20)')}
+              onMouseLeave={e => (e.currentTarget.style.background = 'rgba(0,212,255,0.08)')}
+            >
+              💾 Salvar e Voltar ao Menu
+            </button>
+
+            {/* Try again (no save) */}
             <button onClick={resetGame} style={{
-              background: 'rgba(255,68,68,0.12)', border: '2px solid #ff4444',
-              color: '#ff4444', padding: '12px 32px', borderRadius: 8,
+              display: 'block', width: '100%',
+              background: 'rgba(255,68,68,0.10)', border: '2px solid #ff4444',
+              color: '#ff4444', padding: '11px 32px', borderRadius: 8,
               cursor: 'pointer', fontFamily: "'Courier New', monospace",
               fontSize: 13, fontWeight: 700, letterSpacing: 1, transition: 'background 0.2s',
             }}
-              onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,68,68,0.28)')}
-              onMouseLeave={e => (e.currentTarget.style.background = 'rgba(255,68,68,0.12)')}
+              onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,68,68,0.25)')}
+              onMouseLeave={e => (e.currentTarget.style.background = 'rgba(255,68,68,0.10)')}
             >
-              ↺ Tentar Novamente
+              ↺ Tentar Novamente (sem salvar)
             </button>
           </div>
         </div>
