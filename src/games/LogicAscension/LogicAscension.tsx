@@ -254,24 +254,6 @@ function LogItemRow({
   );
 }
 
-function DpadBtn({ label, onClick }: { label: string; onClick: () => void }) {
-  return (
-    <button onClick={onClick} aria-label={`Move ${label}`}
-      style={{
-        width: 40, height: 40,
-        background: 'rgba(0,212,255,0.07)', border: '1px solid #00d4ff33',
-        borderRadius: 6, color: '#00d4ff', fontSize: 16, cursor: 'pointer',
-        fontFamily: "'Courier New', monospace",
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        transition: 'background 0.15s',
-      }}
-      onMouseEnter={e => (e.currentTarget.style.background = 'rgba(0,212,255,0.2)')}
-      onMouseLeave={e => (e.currentTarget.style.background = 'rgba(0,212,255,0.07)')}
-    >
-      {label}
-    </button>
-  );
-}
 
 function StatBadge({ label, value, color = '#00ff00' }: { label: string; value: string | number; color?: string }) {
   return (
