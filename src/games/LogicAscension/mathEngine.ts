@@ -2,103 +2,403 @@ import { PathId } from './types';
 
 // ── Question Interface ─────────────────────────────────────────────────────────
 export interface Question {
-  expression: string;
-  hint: string;
+  expression:    string;
+  hint:          string;
   correctAnswer: number;
-  wrongAnswers: [number, number, number];
-  explanation: string;
+  wrongAnswers:  [number, number, number];
+  explanation:   string;
+  /**
+   * Optional button-label overrides for fraction answers.
+   * Maps numeric value → display string (e.g. 0.75 → "3/4").
+   * When absent the raw number is shown on the button.
+   */
+  answerLabels?: Record<number, string>;
 }
 
-// ── Question Bank ──────────────────────────────────────────────────────────────
-export const QUESTION_BANK: Question[] = [
-  {
-    expression: '2 + 2 × 3',
-    hint: 'Multiplicação antes da adição',
-    correctAnswer: 8,
-    wrongAnswers: [12, 9, 7],
-    explanation: '2 + (2×3) = 2 + 6 = 8   [≠ (2+2)×3 = 12]',
-  },
-  {
-    expression: '5 + 3 × 2',
-    hint: 'Multiplicação antes da adição',
-    correctAnswer: 11,
-    wrongAnswers: [16, 13, 10],
-    explanation: '5 + (3×2) = 5 + 6 = 11   [≠ (5+3)×2 = 16]',
-  },
-  {
-    expression: '10 − 2 × 3',
-    hint: 'Multiplicação antes da subtração',
-    correctAnswer: 4,
-    wrongAnswers: [24, 6, 3],
-    explanation: '10 − (2×3) = 10 − 6 = 4   [≠ (10−2)×3 = 24]',
-  },
-  {
-    expression: '4 × 3 − 2',
-    hint: 'Multiplicação antes da subtração',
-    correctAnswer: 10,
-    wrongAnswers: [4, 12, 9],
-    explanation: '(4×3) − 2 = 12 − 2 = 10   [≠ 4×(3−2) = 4]',
-  },
-  {
-    expression: '6 ÷ 2 + 1',
-    hint: 'Divisão antes da adição',
-    correctAnswer: 4,
-    wrongAnswers: [2, 5, 3],
-    explanation: '(6÷2) + 1 = 3 + 1 = 4   [≠ 6÷(2+1) = 2]',
-  },
-  {
-    expression: '8 − 4 ÷ 2',
-    hint: 'Divisão antes da subtração',
-    correctAnswer: 6,
-    wrongAnswers: [2, 7, 4],
-    explanation: '8 − (4÷2) = 8 − 2 = 6   [≠ (8−4)÷2 = 2]',
-  },
-  {
-    expression: '3 + 2 × 4',
-    hint: 'Multiplicação antes da adição',
-    correctAnswer: 11,
-    wrongAnswers: [20, 12, 10],
-    explanation: '3 + (2×4) = 3 + 8 = 11   [≠ (3+2)×4 = 20]',
-  },
-  {
-    expression: '15 ÷ 3 + 2',
-    hint: 'Divisão antes da adição',
-    correctAnswer: 7,
-    wrongAnswers: [3, 9, 6],
-    explanation: '(15÷3) + 2 = 5 + 2 = 7   [≠ 15÷(3+2) = 3]',
-  },
-  {
-    expression: '2 × 3 + 4 × 2',
-    hint: 'Calcule cada produto separadamente',
-    correctAnswer: 14,
-    wrongAnswers: [20, 16, 18],
-    explanation: '(2×3) + (4×2) = 6 + 8 = 14',
-  },
-  {
-    expression: '1 + 2 × 3 − 1',
-    hint: 'Multiplicação primeiro, depois ±',
-    correctAnswer: 6,
-    wrongAnswers: [8, 5, 7],
-    explanation: '1 + (2×3) − 1 = 1 + 6 − 1 = 6   [≠ (1+2)×3−1 = 8]',
-  },
-  {
-    expression: '12 ÷ 4 − 1',
-    hint: 'Divisão antes da subtração',
-    correctAnswer: 2,
-    wrongAnswers: [3, 4, 1],
-    explanation: '(12÷4) − 1 = 3 − 1 = 2   [≠ 12÷(4−1) = 4]',
-  },
-  {
-    expression: '5 × 2 + 3 × 2',
-    hint: 'Calcule cada produto separadamente',
-    correctAnswer: 16,
-    wrongAnswers: [26, 20, 13],
-    explanation: '(5×2) + (3×2) = 10 + 6 = 16',
-  },
-];
+// ── Fraction arithmetic ────────────────────────────────────────────────────────
+type Frac = { n: number; d: number };
 
-export function getRandomQuestion(): Question {
-  return QUESTION_BANK[Math.floor(Math.random() * QUESTION_BANK.length)];
+function gcd(a: number, b: number): number { return b === 0 ? a : gcd(b, a % b); }
+
+function fSim({ n, d }: Frac): Frac {
+  if (n === 0) return { n: 0, d: 1 };
+  const g = gcd(Math.abs(n), Math.abs(d));
+  return d < 0 ? { n: -n / g, d: -d / g } : { n: n / g, d: d / g };
+}
+function fAdd(a: Frac, b: Frac): Frac { return fSim({ n: a.n * b.d + b.n * a.d, d: a.d * b.d }); }
+function fSub(a: Frac, b: Frac): Frac { return fAdd(a, { n: -b.n, d: b.d }); }
+function fMul(a: Frac, b: Frac): Frac { return fSim({ n: a.n * b.n, d: a.d * b.d }); }
+function fDiv(a: Frac, b: Frac): Frac { return fMul(a, { n: b.d, d: b.n }); }
+function fVal({ n, d }: Frac): number  { return n / d; }
+/** "(3/4)" for use inside expression strings. */
+function fExpr({ n, d }: Frac): string { return d === 1 ? `${n}` : `(${n}/${d})`; }
+/** "3/4" for answer button labels. */
+function fLbl({ n, d }: Frac): string  { return d === 1 ? `${n}` : `${n}/${d}`; }
+
+// ── Generator utilities ────────────────────────────────────────────────────────
+function r(min: number, max: number): number {
+  return min + Math.floor(Math.random() * (max - min + 1));
+}
+
+/** Return exactly 3 distinct wrong answers (none equal to `correct`). */
+function wrongs(correct: number, candidates: number[]): [number, number, number] {
+  const snap = (v: number) => Math.round(v * 100000) / 100000;
+  const seen = new Set<number>([snap(correct)]);
+  const out: number[] = [];
+  for (const raw of candidates) {
+    const v = snap(raw);
+    if (Number.isFinite(v) && !seen.has(v)) { seen.add(v); out.push(v); }
+    if (out.length === 3) break;
+  }
+  for (let delta = 1; out.length < 3 && delta < 50; delta++) {
+    const v = snap(correct + delta);
+    if (!seen.has(v)) { seen.add(v); out.push(v); }
+  }
+  return out as [number, number, number];
+}
+
+/** Build an answerLabels map from Frac values (rounded keys for float safety). */
+function mkFracLabels(fracs: Frac[]): Record<number, string> {
+  const snap = (v: number) => Math.round(v * 100000) / 100000;
+  const rec: Record<number, string> = {};
+  for (const f of fracs) rec[snap(fVal(f))] = fLbl(f);
+  return rec;
+}
+
+// ── Tier 1 — Basic integer PEMDAS (stages 1–2) ────────────────────────────────
+function genTier1(): Question {
+  const t = r(0, 5);
+
+  if (t === 0) {  // A + B × C
+    const A = r(2, 9), B = r(2, 5), C = r(2, 5);
+    const ans = A + B * C, trap = (A + B) * C;
+    return {
+      expression: `${A} + ${B} × ${C}`,
+      hint: 'Multiplicação antes da adição',
+      correctAnswer: ans,
+      wrongAnswers: wrongs(ans, [trap, A + B + C, A * B + C]),
+      explanation:
+        `Passo 1: ${B} × ${C} = ${B * C}\n` +
+        `Passo 2: ${A} + ${B * C} = ${ans}\n` +
+        `[≠ Armadilha esq.→dir.: (${A}+${B})×${C} = ${trap}]`,
+    };
+  }
+  if (t === 1) {  // A − B × C  (A > B×C)
+    const B = r(2, 4), C = r(2, 4), A = B * C + r(1, 8);
+    const ans = A - B * C, trap = (A - B) * C;
+    return {
+      expression: `${A} − ${B} × ${C}`,
+      hint: 'Multiplicação antes da subtração',
+      correctAnswer: ans,
+      wrongAnswers: wrongs(ans, [trap, A + B * C, A - B - C]),
+      explanation:
+        `Passo 1: ${B} × ${C} = ${B * C}\n` +
+        `Passo 2: ${A} − ${B * C} = ${ans}\n` +
+        `[≠ Armadilha: (${A}−${B})×${C} = ${trap} — erro PEMDAS]`,
+    };
+  }
+  if (t === 2) {  // A × B + C
+    const A = r(2, 6), B = r(2, 5), C = r(2, 9);
+    const ans = A * B + C, trap = A * (B + C);
+    return {
+      expression: `${A} × ${B} + ${C}`,
+      hint: 'Multiplicação antes da adição',
+      correctAnswer: ans,
+      wrongAnswers: wrongs(ans, [trap, A * B - C, A + B + C]),
+      explanation:
+        `Passo 1: ${A} × ${B} = ${A * B}\n` +
+        `Passo 2: ${A * B} + ${C} = ${ans}\n` +
+        `[≠ Armadilha: ${A}×(${B}+${C}) = ${trap}]`,
+    };
+  }
+  if (t === 3) {  // A × B − C  (A*B > C)
+    const A = r(2, 6), B = r(2, 5), prod = A * B, C = r(1, prod - 1);
+    const ans = prod - C, trap = A * (B - C);
+    return {
+      expression: `${A} × ${B} − ${C}`,
+      hint: 'Multiplicação antes da subtração',
+      correctAnswer: ans,
+      wrongAnswers: wrongs(ans, [trap, prod + C, A - B]),
+      explanation:
+        `Passo 1: ${A} × ${B} = ${prod}\n` +
+        `Passo 2: ${prod} − ${C} = ${ans}\n` +
+        `[≠ Armadilha: ${A}×(${B}−${C}) = ${trap}]`,
+    };
+  }
+  if (t === 4) {  // (B×M) ÷ B + C
+    const B = r(2, 5), M = r(2, 6), C = r(2, 8), A = B * M;
+    const ans = M + C;
+    return {
+      expression: `${A} ÷ ${B} + ${C}`,
+      hint: 'Divisão antes da adição',
+      correctAnswer: ans,
+      wrongAnswers: wrongs(ans, [M - C, M * C, A + C]),
+      explanation:
+        `Passo 1: ${A} ÷ ${B} = ${M}\n` +
+        `Passo 2: ${M} + ${C} = ${ans}\n` +
+        `[≠ Armadilha: ${M} − ${C} = ${M - C} — trocou + por −]`,
+    };
+  }
+  // t === 5: A × B + C × D
+  const [A5, B5, C5, D5] = [r(2, 5), r(2, 5), r(2, 5), r(2, 5)];
+  const ans5 = A5 * B5 + C5 * D5, trap5 = (A5 * B5 + C5) * D5;
+  return {
+    expression: `${A5} × ${B5} + ${C5} × ${D5}`,
+    hint: 'Calcule cada produto primeiro, depois some',
+    correctAnswer: ans5,
+    wrongAnswers: wrongs(ans5, [trap5, A5 * B5 + C5 + D5, A5 + B5 + C5 * D5]),
+    explanation:
+      `Passo 1: (${A5}×${B5}) = ${A5 * B5}   e   (${C5}×${D5}) = ${C5 * D5}\n` +
+      `Passo 2: ${A5 * B5} + ${C5 * D5} = ${ans5}\n` +
+      `[≠ Armadilha esq.→dir.: (${A5 * B5}+${C5})×${D5} = ${trap5}]`,
+  };
+}
+
+// ── Tier 2 — Negative numbers & sign rules (stages 3–4) ───────────────────────
+function genTier2(): Question {
+  const t = r(0, 3);
+
+  if (t === 0) {  // −A + B × C
+    const A = r(2, 8), B = r(2, 5), C = r(2, 5);
+    const ans = -A + B * C, trap = (-A + B) * C;
+    return {
+      expression: `−${A} + ${B} × ${C}`,
+      hint: 'Multiplicação primeiro; aplique o sinal depois',
+      correctAnswer: ans,
+      wrongAnswers: wrongs(ans, [trap, A + B * C, -(A + B * C)]),
+      explanation:
+        `Passo 1: ${B} × ${C} = ${B * C}\n` +
+        `Passo 2: −${A} + ${B * C} = ${ans}\n` +
+        `[≠ Armadilha: (−${A}+${B})×${C} = ${trap} — erro PEMDAS com negativo]`,
+    };
+  }
+  if (t === 1) {  // A − (−B × C)  → double negative = +
+    const A = r(3, 9), B = r(2, 4), C = r(2, 4), prod = B * C;
+    const ans = A + prod, trap = A - prod;
+    return {
+      expression: `${A} − (−${B} × ${C})`,
+      hint: 'Duplo negativo: −(−x) = +x',
+      correctAnswer: ans,
+      wrongAnswers: wrongs(ans, [trap, A + B + C, prod - A]),
+      explanation:
+        `Passo 1: −${B} × ${C} = −${prod}\n` +
+        `Passo 2: ${A} − (−${prod}) = ${A} + ${prod} = ${ans}\n` +
+        `[≠ Armadilha: ${trap} — erro: ignorou o duplo negativo]`,
+    };
+  }
+  if (t === 2) {  // A × (−B) + C   (C > A×B so result is positive)
+    const A = r(2, 5), B = r(2, 5), C = A * B + r(1, 12);
+    const ans = -A * B + C, trap = A * B + C;
+    return {
+      expression: `${A} × (−${B}) + ${C}`,
+      hint: 'Positivo × Negativo = Negativo',
+      correctAnswer: ans,
+      wrongAnswers: wrongs(ans, [trap, -(A * B + C), A * B - C]),
+      explanation:
+        `Passo 1: ${A} × (−${B}) = −${A * B}\n` +
+        `Passo 2: −${A * B} + ${C} = ${ans}\n` +
+        `[≠ Armadilha: +${trap} — esqueceu o sinal negativo do produto]`,
+    };
+  }
+  // t === 3: −A × B + C × D
+  const [A3, B3, C3, D3] = [r(2, 4), r(2, 4), r(3, 8), r(2, 5)];
+  const ans3 = -A3 * B3 + C3 * D3, trap3 = (-A3 * B3 + C3) * D3;
+  return {
+    expression: `−${A3} × ${B3} + ${C3} × ${D3}`,
+    hint: 'Calcule ambos os produtos com seus sinais',
+    correctAnswer: ans3,
+    wrongAnswers: wrongs(ans3, [trap3, A3 * B3 + C3 * D3, -(A3 * B3 + C3 * D3)]),
+    explanation:
+      `Passo 1: (−${A3}×${B3}) = −${A3 * B3}   e   (${C3}×${D3}) = ${C3 * D3}\n` +
+      `Passo 2: −${A3 * B3} + ${C3 * D3} = ${ans3}\n` +
+      `[≠ Armadilha: (−${A3 * B3}+${C3})×${D3} = ${trap3} — erro PEMDAS]`,
+  };
+}
+
+// ── Tier 3 — Fraction addition & subtraction (stages 5–6) ─────────────────────
+function genTier3(): Question {
+  const t = r(0, 5);
+
+  if (t === 0) {  // (P/Q) + (R/Q)  same denominator
+    const Q = [2, 4, 8][r(0, 2)];
+    const P = r(1, Q - 1), R = r(1, Q - P);
+    const ans  = fSim({ n: P + R,     d: Q });
+    const trap = fSim({ n: P + R,     d: Q + Q }); // sums denominators — common error
+    const d1   = fSim({ n: P,         d: Q });
+    const d2   = fSim({ n: P + R + 1, d: Q });
+    return {
+      expression: `(${P}/${Q}) + (${R}/${Q})`,
+      hint: 'Mesmo denominador: some apenas os numeradores',
+      correctAnswer: fVal(ans),
+      wrongAnswers: wrongs(fVal(ans), [fVal(trap), fVal(d1), fVal(d2)]),
+      answerLabels: mkFracLabels([ans, trap, d1, d2]),
+      explanation:
+        `Passo 1: Denominadores iguais (${Q}) → some os numeradores: ${P}+${R} = ${P + R}\n` +
+        `Passo 2: ${P + R}/${Q} = ${fLbl(ans)}\n` +
+        `[≠ Armadilha: ${fLbl(trap)} — somou os denominadores (${Q}+${Q}=${Q + Q})]`,
+    };
+  }
+  if (t === 1) {  // (P/Q) − (R/Q)  same denominator (P > R, Q ≥ 4)
+    const Q = [4, 8][r(0, 1)];
+    const R = r(1, Q - 2), P = r(R + 1, Q - 1);
+    const ans  = fSim({ n: P - R,     d: Q });
+    const trap = fSim({ n: P + R,     d: Q }); // added instead of subtracted
+    const d1   = fSim({ n: P - R + 1, d: Q });
+    const d2   = fSim({ n: P,         d: Q });
+    return {
+      expression: `(${P}/${Q}) − (${R}/${Q})`,
+      hint: 'Mesmo denominador: subtraia apenas os numeradores',
+      correctAnswer: fVal(ans),
+      wrongAnswers: wrongs(fVal(ans), [fVal(trap), fVal(d1), fVal(d2)]),
+      answerLabels: mkFracLabels([ans, trap, d1, d2]),
+      explanation:
+        `Passo 1: Denominadores iguais (${Q}) → subtraia: ${P}−${R} = ${P - R}\n` +
+        `Passo 2: ${P - R}/${Q} = ${fLbl(ans)}\n` +
+        `[≠ Armadilha: ${fLbl(trap)} — somou em vez de subtrair]`,
+    };
+  }
+  if (t === 2) {  // (1/2) + (A/4)
+    const A = r(1, 3);
+    const ans  = fAdd({ n: 1, d: 2 }, { n: A, d: 4 }); // = (2+A)/4
+    const trap = fSim({ n: 1 + A, d: 6 });              // (1+A)/(2+4)
+    const d1   = fSim({ n: A,     d: 4 });
+    const d2   = fAdd(ans, { n: 1, d: 4 });
+    return {
+      expression: `(1/2) + (${A}/4)`,
+      hint: 'Denominador comum: converta 1/2 → 2/4',
+      correctAnswer: fVal(ans),
+      wrongAnswers: wrongs(fVal(ans), [fVal(trap), fVal(d1), fVal(d2)]),
+      answerLabels: mkFracLabels([ans, trap, d1, d2]),
+      explanation:
+        `Passo 1: 1/2 = 2/4  (denominador comum = 4)\n` +
+        `Passo 2: 2/4 + ${A}/4 = ${2 + A}/4 = ${fLbl(ans)}\n` +
+        `[≠ Armadilha: ${fLbl(trap)} — somou numeradores E denominadores separadamente]`,
+    };
+  }
+  if (t === 3) {  // (A/4) + (1/2)
+    const A = r(1, 3);
+    const ans  = fAdd({ n: A, d: 4 }, { n: 1, d: 2 }); // = (A+2)/4
+    const trap = fSim({ n: A + 1, d: 6 });
+    const d1   = fSim({ n: A,     d: 4 });
+    const d2   = fSub(ans, { n: 1, d: 4 });
+    return {
+      expression: `(${A}/4) + (1/2)`,
+      hint: 'Denominador comum: converta 1/2 → 2/4',
+      correctAnswer: fVal(ans),
+      wrongAnswers: wrongs(fVal(ans), [fVal(trap), fVal(d1), fVal(d2)]),
+      answerLabels: mkFracLabels([ans, trap, d1, d2]),
+      explanation:
+        `Passo 1: 1/2 = 2/4  (denominador comum = 4)\n` +
+        `Passo 2: ${A}/4 + 2/4 = ${A + 2}/4 = ${fLbl(ans)}\n` +
+        `[≠ Armadilha: ${fLbl(trap)} — somou numeradores E denominadores separadamente]`,
+    };
+  }
+  if (t === 4) {  // (A/4) + (B/8)  LCD = 8
+    const A = r(1, 3), B = r(1, 5);
+    const ans  = fAdd({ n: A, d: 4 }, { n: B, d: 8 }); // = (2A+B)/8
+    const trap = fSim({ n: A + B, d: 12 });             // (A+B)/(4+8)
+    const d1   = fSim({ n: 2 * A, d: 8 });              // forgot to add B
+    const d2   = fAdd(ans, { n: 1, d: 8 });
+    return {
+      expression: `(${A}/4) + (${B}/8)`,
+      hint: `Denominador comum: converta ${A}/4 → ${2 * A}/8`,
+      correctAnswer: fVal(ans),
+      wrongAnswers: wrongs(fVal(ans), [fVal(trap), fVal(d1), fVal(d2)]),
+      answerLabels: mkFracLabels([ans, trap, d1, d2]),
+      explanation:
+        `Passo 1: ${A}/4 = ${2 * A}/8  (denominador comum = 8)\n` +
+        `Passo 2: ${2 * A}/8 + ${B}/8 = ${2 * A + B}/8 = ${fLbl(ans)}\n` +
+        `[≠ Armadilha: ${fLbl(trap)} — somou numeradores E denominadores]`,
+    };
+  }
+  // t === 5: (A/8) − (B/8)
+  const B8 = r(1, 5), A8 = r(B8 + 1, 7);
+  const ans8  = fSim({ n: A8 - B8,     d: 8 });
+  const trap8 = fSim({ n: A8 + B8,     d: 8 }); // added instead of subtracted
+  const d1_8  = fSim({ n: A8 - B8 - 1, d: 8 });
+  const d2_8  = fSim({ n: A8,          d: 8 });
+  return {
+    expression: `(${A8}/8) − (${B8}/8)`,
+    hint: 'Mesmo denominador: subtraia apenas os numeradores',
+    correctAnswer: fVal(ans8),
+    wrongAnswers: wrongs(fVal(ans8), [fVal(trap8), fVal(d1_8), fVal(d2_8)]),
+    answerLabels: mkFracLabels([ans8, trap8, d1_8, d2_8]),
+    explanation:
+      `Passo 1: Denominadores iguais (8) → subtraia: ${A8}−${B8} = ${A8 - B8}\n` +
+      `Passo 2: ${A8 - B8}/8 = ${fLbl(ans8)}\n` +
+      `[≠ Armadilha: ${fLbl(trap8)} — somou em vez de subtrair]`,
+  };
+}
+
+// ── Tier 4 — Fraction multiplication & division (stages 7+) ───────────────────
+function genTier4(): Question {
+  const t = r(0, 4);
+
+  if (t <= 1) {  // (A/D) × N → integer result
+    const D = r(0, 1) === 0 ? 2 : 4;
+    const k = r(1, 3), N = D * k, A = r(1, D - 1);
+    const ans:  Frac = { n: A * k,               d: 1 };
+    const trap: Frac = { n: A * N,               d: 1 }; // forgot denominator
+    const d1:   Frac = { n: A * k + 1,           d: 1 };
+    const d2:   Frac = { n: Math.max(0, A * k - 1), d: 1 };
+    return {
+      expression: `(${A}/${D}) × ${N}`,
+      hint: 'Multiplique: (A/D) × N = (A×N) ÷ D',
+      correctAnswer: fVal(ans),
+      wrongAnswers: wrongs(fVal(ans), [fVal(trap), fVal(d1), fVal(d2)]),
+      answerLabels: mkFracLabels([ans, trap, d1, d2]),
+      explanation:
+        `Passo 1: (${A}/${D}) × ${N} = (${A}×${N}) ÷ ${D} = ${A * N}/${D}\n` +
+        `Passo 2: ${A * N} ÷ ${D} = ${fLbl(ans)}\n` +
+        `[≠ Armadilha: ${A * N} — multiplicou sem dividir por ${D}]`,
+    };
+  }
+
+  // t = 2,3,4: (A/D1) ÷ (A/D2) where D2 > D1 → result = D2/D1 (integer)
+  // Trap (reversed division) = D1/D2 — always a clean binary fraction
+  const divPairs: Array<[number, number, number]> = [
+    [2, 4, 2],  // (A/2)÷(A/4) = 2,  trap = 1/2 = 0.5
+    [4, 8, 2],  // (A/4)÷(A/8) = 2,  trap = 1/2 = 0.5
+    [2, 8, 4],  // (A/2)÷(A/8) = 4,  trap = 1/4 = 0.25
+  ];
+  const [D1, D2, correctInt] = divPairs[t - 2];
+  const A      = r(1, Math.max(1, Math.min(D1, D2) - 1));
+  const lhs:     Frac = { n: A,          d: D1 };
+  const rhs:     Frac = { n: A,          d: D2 };
+  const ansF:    Frac = { n: correctInt, d: 1  };
+  const trapF:   Frac = fDiv(rhs, lhs);           // reversed = D1/D2
+  const d1F:     Frac = { n: correctInt + 1, d: 1 };
+  const d2F:     Frac = { n: correctInt + 2, d: 1 };
+  const invRhs:  Frac = { n: D2, d: A };          // inverted rhs for explanation
+  return {
+    expression:    `${fExpr(lhs)} ÷ ${fExpr(rhs)}`,
+    hint:          'Divisão de frações: Keep × Change × Flip (inverta a 2ª e multiplique)',
+    correctAnswer: fVal(ansF),
+    wrongAnswers:  wrongs(fVal(ansF), [fVal(trapF), fVal(d1F), fVal(d2F)]),
+    answerLabels:  mkFracLabels([ansF, trapF, d1F, d2F]),
+    explanation:
+      `Regra KCF: ${fExpr(lhs)} ÷ ${fExpr(rhs)}  →  ${fExpr(lhs)} × ${fExpr(invRhs)}\n` +
+      `= (${A}×${D2}) / (${D1}×${A}) = ${A * D2}/${D1 * A} = ${fLbl(ansF)}\n` +
+      `[≠ Armadilha: ${fLbl(trapF)} — inverteu a fração errada]`,
+  };
+}
+
+// ── Public API — Dynamic Question Generator ────────────────────────────────────
+/**
+ * Generates a fully unique, stage-scaled math question on the fly.
+ *   Tier 1 (stages 1–2): Basic integer PEMDAS.
+ *   Tier 2 (stages 3–4): Negative numbers and sign rules.
+ *   Tier 3 (stages 5–6): Fraction addition & subtraction (LCD method).
+ *   Tier 4 (stages 7+):  Fraction multiplication & division (KCF rule).
+ */
+export function generateDynamicQuestion(stage: number): Question {
+  const tier = stage <= 2 ? 1 : stage <= 4 ? 2 : stage <= 6 ? 3 : 4;
+  switch (tier) {
+    case 1:  return genTier1();
+    case 2:  return genTier2();
+    case 3:  return genTier3();
+    default: return genTier4();
+  }
 }
 
 // ── Oracle Constants ───────────────────────────────────────────────────────────

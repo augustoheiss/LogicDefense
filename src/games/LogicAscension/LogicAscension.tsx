@@ -11,7 +11,7 @@ import {
   GRID_COLS,
   NUM_ROOMS,
 } from './mapData';
-import { runOracle, getRandomQuestion, Question, OracleResult, calculateTheoreticalMax } from './mathEngine';
+import { runOracle, generateDynamicQuestion, Question, OracleResult, calculateTheoreticalMax } from './mathEngine';
 import { CombatArena, ChoiceOption } from './CombatArena';
 
 // ── Utilities ──────────────────────────────────────────────────────────────────
@@ -482,6 +482,8 @@ export function LogicAscension() {
   const posRef            = useRef(playerPos);
   const powerRef          = useRef(playerPower);
   const combatRef         = useRef(combat);
+  const stageRef          = useRef(currentStage);
+  stageRef.current        = currentStage;
   const completedRoomsRef = useRef(completedRooms);
   const gamePhaseRef      = useRef(gamePhase);
   const bossSpawnedRef    = useRef(bossSpawned);
@@ -703,7 +705,7 @@ export function LogicAscension() {
       const isImpossibleMode  = newPower < Math.floor(lvl / 2);
       const isDesperationMode = !isImpossibleMode && newPower < lvl;
 
-      const question = getRandomQuestion();
+      const question = generateDynamicQuestion(stageRef.current);
       const choices  = shuffleArray<ChoiceOption>([
         { value: question.correctAnswer, isCorrect: true },
         ...question.wrongAnswers.map(v => ({ value: v, isCorrect: false })),

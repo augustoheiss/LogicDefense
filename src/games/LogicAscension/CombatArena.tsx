@@ -138,10 +138,12 @@ function ChoiceBtn({
   value,
   state,
   onClick,
+  label,
 }: {
   value: number;
   state: BtnState;
   onClick: () => void;
+  label?: string;
 }) {
   const stateStyle: Record<BtnState, CSSProperties> = {
     idle: {
@@ -215,7 +217,7 @@ function ChoiceBtn({
         }
       }}
     >
-      {value}
+      {label ?? value}
     </button>
   );
 }
@@ -558,6 +560,7 @@ export function CombatArena({
                 <ChoiceBtn
                   key={i}
                   value={opt.value}
+                  label={question.answerLabels?.[opt.value]}
                   state={getBtnState(opt)}
                   onClick={() => { if (picked === null) setPicked(opt.value); }}
                 />
@@ -575,13 +578,16 @@ export function CombatArena({
                 lineHeight:   1.75,
               }}>
                 <div style={{ color: wasCorrect ? '#00ff00' : '#ff4444', fontWeight: 700, fontSize: 16, marginBottom: 8 }}>
-                  {isDesperationMode
-                    ? wasCorrect
-                      ? `🔥 Milagre! +${gainIfCorrect} poder (50%). Sobreviveu contra as probabilidades!`
-                      : `💀 Derrota! Respondeu errado no Ataque Desesperado. Resposta: ${correctAnswer}`
-                    : wasCorrect
-                      ? `✅ Correto! +${gainIfCorrect} poder absorvido.`
-                      : `❌ Errado! −${lossIfWrong} poder (dano). Resposta: ${correctAnswer}`}
+                  {(() => {
+                    const ansLbl = question.answerLabels?.[correctAnswer] ?? correctAnswer;
+                    return isDesperationMode
+                      ? wasCorrect
+                        ? `🔥 Milagre! +${gainIfCorrect} poder (50%). Sobreviveu contra as probabilidades!`
+                        : `💀 Derrota! Respondeu errado no Ataque Desesperado. Resposta: ${ansLbl}`
+                      : wasCorrect
+                        ? `✅ Correto! +${gainIfCorrect} poder absorvido.`
+                        : `❌ Errado! −${lossIfWrong} poder (dano). Resposta: ${ansLbl}`;
+                  })()}
                 </div>
                 <div style={{ color: '#94a3b8', fontSize: 14 }}>
                   {question.explanation}
