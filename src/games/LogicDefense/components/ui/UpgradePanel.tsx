@@ -5,15 +5,18 @@ interface UpgradePanelProps {
   onUpgrade: () => void
   onMove: () => void
   onSell: () => void
+  onClose: () => void
 }
 
-export function UpgradePanel({ uiState, onUpgrade, onMove, onSell }: UpgradePanelProps) {
+export function UpgradePanel({ uiState, onUpgrade, onMove, onSell, onClose }: UpgradePanelProps) {
   const { selectedExistingTower, gameState } = uiState
 
   if (!selectedExistingTower || (gameState !== 'BUILD' && gameState !== 'COMBAT')) return null
 
   return (
     <div id="upgrade-info" style={{ display: 'flex' }}>
+      <button className="btn-close-panel" onClick={onClose} title="Fechar painel">✕</button>
+
       <div style={{ color: '#fff', fontWeight: 'bold', marginBottom: 5, borderBottom: '1px solid #444', paddingBottom: 5 }}>
         PAINEL DA TORRE
       </div>
@@ -21,7 +24,8 @@ export function UpgradePanel({ uiState, onUpgrade, onMove, onSell }: UpgradePane
         Upgrade: ${selectedExistingTower.upgradeCost}
       </div>
       <button className="action-btn" onClick={onUpgrade}>UPGRADE</button>
-      <div style={{ display: 'flex', gap: 10, marginTop: 5 }}>
+
+      <div className="panel-actions-row">
         <button className="action-btn btn-move" onClick={onMove}>🚚 MOVER</button>
         <button className="action-btn btn-sell" onClick={onSell}>🗑️ VENDER</button>
       </div>

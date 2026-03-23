@@ -216,6 +216,7 @@ export function GamePage({ onReset }: GamePageProps = {}) {
             onUpgrade={upgradeSelectedTower}
             onMove={moveSelectedTower}
             onSell={sellSelectedTower}
+            onClose={cancelSelection}
           />
         )}
 
@@ -239,10 +240,10 @@ export function GamePage({ onReset }: GamePageProps = {}) {
           </button>
         )}
 
-        {/* Cancel build button */}
-        {(uiState.selectedTowerIdx > -1 || uiState.selectedExistingTower !== null) && (
+        {/* Cancel build button — only when placing a new tower, not when viewing the upgrade panel */}
+        {uiState.selectedTowerIdx > -1 && (
           <button id="cancel-btn" style={{ display: 'flex' }} onClick={cancelSelection}>
-            🗑️
+            ✕
           </button>
         )}
 

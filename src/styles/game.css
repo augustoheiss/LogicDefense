@@ -199,9 +199,18 @@ body {
 #upgrade-info {
   position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); text-align: left;
   font-size: 14px; color: #aaa; pointer-events: auto; display: none; background: rgba(0,0,0,0.9);
-  padding: 15px; border-radius: 5px; border-left: 3px solid #ffd700; z-index: 50;
-  box-shadow: 0 0 20px rgba(0,0,0,0.8); flex-direction: column; gap: 10px;
+  padding: 15px 15px 15px 15px; border-radius: 5px; border-left: 3px solid #ffd700; z-index: 50;
+  box-shadow: 0 0 20px rgba(0,0,0,0.8); flex-direction: column; gap: 10px; min-width: 200px;
 }
+/* Small X button — top-right corner of the panel */
+.btn-close-panel {
+  position: absolute; top: 8px; right: 8px;
+  background: transparent; border: 1px solid #555; color: #888;
+  width: 22px; height: 22px; border-radius: 4px; font-size: 12px; line-height: 1;
+  cursor: pointer; font-weight: bold; font-family: inherit; transition: 0.2s;
+  display: flex; align-items: center; justify-content: center; padding: 0;
+}
+.btn-close-panel:hover { background: #333; border-color: #ff4444; color: #ff4444; }
 .action-btn {
   background: #333; border: 1px solid #fff; color: white; padding: 8px; cursor: pointer;
   border-radius: 4px; transition: 0.2s; font-weight: bold; font-family: inherit;
@@ -209,6 +218,11 @@ body {
 .action-btn:hover { background: #555; transform: scale(1.05); }
 .btn-move { border-color: #00d4ff; color: #00d4ff; }
 .btn-sell { border-color: #ff4444; color: #ff4444; }
+/* Bottom action row: MOVER on the left, VENDER on the right */
+.panel-actions-row {
+  display: flex; gap: 8px; margin-top: 2px;
+}
+.panel-actions-row .action-btn { flex: 1; text-align: center; }
 
 /* ==========================================
    BUILD GLOW ANIMATION
