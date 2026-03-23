@@ -1,54 +1,29 @@
-# 🔥 Logic Defense: O Protocolo da Dor Eficiente
+# 🧪 Heiss-Lab
 
-> "A ignorância é uma dívida que você paga com juros compostos de sofrimento. A matemática é a única forma de quitar essa dívida."
+Bem-vindo ao **Heiss-Lab**, um portal educacional focado no ensino de Matemática e no desenvolvimento do pensamento lógico. Nascido da evolução do projeto *LogicDefense*, o Heiss-Lab é um ecossistema completo de aprendizado que une materiais tradicionais à tecnologia de ponta.
 
-## ☠️ O Manifesto (Soco Moral)
+🔗 **Acesse o portal:** [heiss-lab.vercel.app](https://heiss-lab.vercel.app)
 
-O Sistema Antropocêntrico quer você confortável. Ele quer você rolando feed, dopado, rindo de vídeo de gato enquanto sua capacidade cognitiva atrofia. Ele vende a ideia de que "aprender deve ser divertido o tempo todo".
+## 🎯 O Propósito
+Este projeto foi elaborado 100% em cocriação com a Inteligência Artificial. No entanto, sua filosofia central é a de que **a IA deve ser uma alavanca para o esforço humano, e não um substituto para o ato de pensar.** Vivemos uma era onde a produção de conteúdo foi banalizada pelos algoritmos. O Heiss-Lab defende o "processo" — a jornada de aprendizado, a pesquisa, o erro e o trabalho árduo. Os jogos e materiais aqui presentes não entregam respostas fáceis; eles exigem cálculo, estratégia e lógica pura.
 
-**Mentira.** Aprender dói. Crescer dói. A cadeira é dura.
+## 🚀 O Ecossistema
+O portal é dividido em três pilares principais, focados no Ensino Fundamental II e adaptáveis ao Ensino Médio:
+1. **Vídeo-Aulas (YouTube):** Explicações visuais e didáticas.
+2. **Materiais Didáticos:** PDFs e recursos prontos para download e uso em sala de aula real.
+3. **Jogos Educacionais:** Aplicações interativas para fixação de conteúdo.
 
-Este jogo não é "educativo" no sentido fofo da palavra. Ele é uma **Simulação de Sobrevivência Lógica**.
-* Você erra a conta? Você perde dinheiro.
-* Você demora pra pensar? O monstro te devora.
-* Você constrói mal? A entropia vence.
+### 🎮 Os Jogos
+* **🛡️ Logic Defense:** Nosso primeiro jogo. Uma abordagem estratégica onde o conhecimento matemático é a única defesa.
+* **🌌 Logic Ascension:** Um RPG *Roguelike* infinito. Apresenta geração procedural de mapas (ProcGen), biomas dinâmicos com *glassmorphism*, e um Motor Matemático em JavaScript que escala desde o PEMDAS básico até operações complexas com frações (incluindo a regra KCF - *Keep, Change, Flip*).
 
-Aqui, aceitamos a **Dor Emocional** do erro como o único combustível real para a **Eficiência Máxima**.
+## 🛠️ Arquitetura Técnica
+Os jogos foram arquitetados com foco em performance, escalabilidade e UX fluida:
+* **Stack:** React, TypeScript, Vite.
+* **Math Engine (Logic Ascension):** Gerador dinâmico de expressões matemáticas em tempo real (sem uso de strings estáticas), contendo "armadilhas pedagógicas" que preveem os erros mais comuns dos alunos (ex: somar denominadores).
+* **UI/UX:** Design responsivo focado em Mobile/Tablets (Accordion UI, Viewport Camera com CSS `translate3d` para aceleração de GPU).
+* **Persistência:** Leaderboard via `localStorage` para retenção de pontuações (New Game+ infinito).
 
-## 🎮 Mecânicas de Resistência
-
-O jogo foi desenhado para testar seu limite de processamento (RAM Mental) contra o caos crescente.
-
-### 1. A Bateria na Cadeira (Tower Defense)
-Não basta saber a resposta. Você tem que saber *rápido*.
-* **Onda 1-10:** O aquecimento. A ilusão de controle.
-* **Onda 200+:** A realidade. Balística relativística, hordas exponenciais e a necessidade de precisão cirúrgica.
-
-### 2. O Arsenal Lógico
-As ferramentas não são "poderes mágicos". São funções matemáticas aplicadas.
-* **Soma (+):** O soldado raso. Acumulação simples.
-* **Subtração (-):** O controle de fluxo. Redução de velocidade.
-* **Multiplicação (x):** O crescimento. Dano em área.
-* **Divisão (÷):** O Acelerador de Partículas. Frequência sobre Força. Transforma tempo em dano.
-
-### 3. O Feedback Brutal
-* **Acertou?** Ouro e dopamina. O mercado te recompensa.
-* **Errou?** Pobreza e humilhação. O mercado te esmaga.
-* **Lento?** Morte. O tempo não negocia.
-
-## 💻 Tecnologia (Ghost Mode & Precision)
-
-O código foi escrito seguindo o princípio da **Ortogonalidade** e UX de Combate.
-* **Ghost Mode UI:** A interface desaparece para você construir. Nada deve ficar entre sua intenção e a execução.
-* **Mobile Precision:** Algoritmo de correção de paralaxe para telas de toque. Porque dedos gordos não podem ser desculpa para falha estratégica.
-* **Physics Fix V9:** Correção de balística para objetos em alta velocidade (Onda 200+), impedindo o tunelamento quântico dos inimigos através das defesas.
-
----
-
-### "Por que números?"
-Porque números não mentem. Palavras podem ser torcidas, sentimentos podem ser manipulados, mas `2 + 2` será `4` mesmo que o mundo acabe.
-
-**Sente na cadeira. Aceite a dor. Calcule ou morra.**
-
----
-*Desenvolvido sob a filosofia da Eficiência Máxima.*
+## 🤝 Contato
+Quer contribuir como autor, educador, ou somar forças com o nosso projeto?
+📧 **Email:** augustoheiss@gmail.com
