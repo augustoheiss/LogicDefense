@@ -235,15 +235,15 @@ function LogItemRow({
       onClick={clickable ? () => onCombatClick!(item) : undefined}
       onKeyDown={clickable ? e => { if (e.key === 'Enter') onCombatClick!(item); } : undefined}
       style={{
-        padding:    '5px 8px',
-        borderLeft: `2px solid ${isFirst ? '#00d4ff' : accent}`,
+        padding:    '8px 10px',
+        borderLeft: `3px solid ${isFirst ? '#00d4ff' : accent}`,
         color:      textColor,
-        fontSize:   11,
+        fontSize:   13,
         fontFamily: "'Courier New', monospace",
-        lineHeight: 1.5,
+        lineHeight: 1.65,
         cursor:     clickable ? 'pointer' : 'default',
         transition: 'background 0.15s',
-        display:    'flex', alignItems: 'center', gap: 4,
+        display:    'flex', alignItems: 'center', gap: 6,
       }}
       onMouseEnter={e => { if (clickable) e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; }}
       onMouseLeave={e => { if (clickable) e.currentTarget.style.background = 'transparent'; }}
@@ -298,28 +298,28 @@ function OraclePanel({ result, pathId, roomIdx }: { result: OracleResult; pathId
       background: `${accent}08`,
       border: `1px solid ${accent}33`,
       borderRadius: 8,
-      padding: '10px 12px',
-      fontSize: 10,
+      padding: '14px 16px',
+      fontSize: 14,
       fontFamily: "'Courier New', monospace",
-      lineHeight: 1.8,
+      lineHeight: 2,
     }}>
-      <p style={{ margin: '0 0 6px', color: accent, fontSize: 9, textTransform: 'uppercase', letterSpacing: 2 }}>
+      <p style={{ margin: '0 0 8px', color: accent, fontSize: 12, textTransform: 'uppercase', letterSpacing: 2 }}>
         ─ Oracle: {pathId === 'buff' ? '⚡ Buff' : '💀 Sac'} · Sala {roomIdx + 1}/{NUM_ROOMS} ─
       </p>
-      <div style={{ color: '#64748b' }}>Ordem ótima:</div>
-      <div style={{ color: '#e2e8f0', fontWeight: 700 }}>
+      <div style={{ color: '#64748b', fontSize: 12 }}>Ordem ótima:</div>
+      <div style={{ color: '#e2e8f0', fontWeight: 700, fontSize: 16 }}>
         {result.optimalOrder.join(' → ')}
       </div>
-      <div style={{ color: '#64748b', marginTop: 4 }}>{result.rationale}</div>
-      <div style={{ marginTop: 6, display: 'flex', gap: 6 }}>
+      <div style={{ color: '#64748b', marginTop: 6, fontSize: 13 }}>{result.rationale}</div>
+      <div style={{ marginTop: 10, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
         {result.monsterLevels.map((lvl, i) => (
           <span key={i} style={{
             background: 'rgba(255,68,68,0.1)',
             border: '1px solid #ff444444',
-            borderRadius: 4,
-            padding: '2px 6px',
+            borderRadius: 6,
+            padding: '4px 10px',
             color: '#ff8888',
-            fontSize: 11,
+            fontSize: 14,
             fontWeight: 700,
           }}>
             M{i + 1}={lvl}
@@ -328,10 +328,10 @@ function OraclePanel({ result, pathId, roomIdx }: { result: OracleResult; pathId
         <span style={{
           background: 'rgba(255,215,0,0.1)',
           border: '1px solid #ffd70044',
-          borderRadius: 4,
-          padding: '2px 6px',
+          borderRadius: 6,
+          padding: '4px 10px',
           color: '#ffd700',
-          fontSize: 11,
+          fontSize: 14,
           fontWeight: 700,
         }}>
           {result.revealedBuffLabel}
@@ -348,22 +348,22 @@ function RoomPill({ label, complete, active, roomProgress }: {
   const color = complete ? '#00ff00' : active ? '#ffd700' : '#334155';
   return (
     <div style={{
-      display: 'flex', alignItems: 'center', gap: 6,
-      padding: '5px 10px',
+      display: 'flex', alignItems: 'center', gap: 10,
+      padding: '10px 14px',
       background: `${color}12`,
       border: `1px solid ${color}55`,
-      borderRadius: 6,
-      fontSize: 10,
+      borderRadius: 8,
+      fontSize: 15,
       fontFamily: "'Courier New', monospace",
     }}>
-      <span style={{ color, fontSize: 12 }}>{complete ? '✓' : active ? '…' : '○'}</span>
-      <span style={{ color: complete ? '#00ff00' : active ? '#ffd700' : '#334155' }}>
+      <span style={{ color, fontSize: 20 }}>{complete ? '✓' : active ? '…' : '○'}</span>
+      <span style={{ color: complete ? '#00ff00' : active ? '#ffd700' : '#334155', fontWeight: 600 }}>
         {label}
       </span>
       {active && !complete && (
-        <span style={{ color: '#ffd700', fontSize: 9 }}>{roomProgress}/{NUM_ROOMS}</span>
+        <span style={{ color: '#ffd700', fontSize: 13, marginLeft: 'auto' }}>{roomProgress}/{NUM_ROOMS}</span>
       )}
-      {complete && <span style={{ color: '#00ff00', fontSize: 9 }}>COMPLETA</span>}
+      {complete && <span style={{ color: '#00ff00', fontSize: 13, marginLeft: 'auto' }}>COMPLETA</span>}
     </div>
   );
 }
@@ -795,8 +795,12 @@ export function LogicAscension() {
       return;
     }
 
-    // Persist the explanation for the Knowledge Box (all non-impossible combats answered a question)
-    setLastExplanation({ text: c.question.explanation, isCorrect: correct });
+    // Persist hint + explanation for the Knowledge Box (always include both)
+    const kbText = [
+      c.question.hint        ? `💡 ${c.question.hint}` : '',
+      c.question.explanation ?? '',
+    ].filter(Boolean).join('\n\n');
+    setLastExplanation({ text: kbText, isCorrect: correct });
 
     if (c.isDesperationMode) {
       if (correct) {
@@ -1158,16 +1162,16 @@ export function LogicAscension() {
                 border:       `1px solid ${lastExplanation ? (lastExplanation.isCorrect ? '#00cc5544' : '#ff664444') : '#1e293b'}`,
                 borderTop:    'none',
                 borderRadius: '0 0 8px 8px',
-                padding:      '14px 14px',
-                minHeight:    120,
+                padding:      '18px 20px',
+                minHeight:    160,
                 transition:   'background 0.4s ease, border-color 0.4s ease',
               }}>
                 <p style={{
                   margin:     0,
-                  fontSize:   13,
+                  fontSize:   16,
                   fontFamily: "'Courier New', monospace",
                   color:      lastExplanation ? '#cbd5e1' : '#334155',
-                  lineHeight: 1.8,
+                  lineHeight: 2,
                   whiteSpace: 'pre-wrap',
                   transition: 'color 0.3s ease',
                 }}>
@@ -1192,8 +1196,8 @@ export function LogicAscension() {
                 background: 'rgba(8,10,22,0.5)',
                 border: '1px solid #1e293b', borderTop: 'none',
                 borderRadius: '0 0 8px 8px',
-                padding: '10px 14px',
-                display: 'flex', flexDirection: 'column', gap: 7,
+                padding: '14px 18px',
+                display: 'flex', flexDirection: 'column', gap: 12,
               }}>
                 {([
                   ['👾', 'Jogador'],
@@ -1204,8 +1208,8 @@ export function LogicAscension() {
                   ['👹', 'Boss Final'],
                   ['🌀', 'Portal → Vitória'],
                 ] as [string, string][]).map(([ic, d]) => (
-                  <span key={d} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: '#64748b', fontFamily: "'Courier New', monospace" }}>
-                    <span style={{ fontSize: 16, minWidth: 22 }}>{ic}</span>
+                  <span key={d} style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: 15, color: '#64748b', fontFamily: "'Courier New', monospace" }}>
+                    <span style={{ fontSize: 22, minWidth: 28 }}>{ic}</span>
                     <span>{d}</span>
                   </span>
                 ))}

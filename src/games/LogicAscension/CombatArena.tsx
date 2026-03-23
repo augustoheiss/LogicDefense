@@ -91,16 +91,16 @@ function CombatantCard({
       display:        'flex',
       flexDirection:  'column',
       alignItems:     'center',
-      gap:            8,
-      padding:        '16px 24px',
+      gap:            10,
+      padding:        '20px 28px',
       background:     `${color}10`,
       border:         `1px solid ${color}44`,
-      borderRadius:   10,
-      minWidth:       120,
+      borderRadius:   12,
+      minWidth:       150,
     }}>
-      <span style={{ fontSize: 40 }}>{emoji}</span>
+      <span style={{ fontSize: 52 }}>{emoji}</span>
       <span style={{
-        fontSize:    10,
+        fontSize:    13,
         color:       `${color}bb`,
         fontFamily:  "'Courier New', monospace",
         textTransform: 'uppercase',
@@ -112,14 +112,14 @@ function CombatantCard({
         display:       'flex',
         flexDirection: 'column',
         alignItems:    'center',
-        gap:           2,
+        gap:           3,
       }}>
-        <span style={{ fontSize: 9, color: '#475569', fontFamily: "'Courier New', monospace" }}>
+        <span style={{ fontSize: 12, color: '#475569', fontFamily: "'Courier New', monospace" }}>
           {statLabel}
         </span>
         <span style={{
-          fontSize:   28,
-          fontWeight: 700,
+          fontSize:   44,
+          fontWeight: 900,
           color,
           fontFamily: "'Courier New', monospace",
           lineHeight:  1,
@@ -360,8 +360,8 @@ export function CombatArena({
 
         /* Panel */
         <div style={{
-          width:         '100%',
-          maxWidth:      560,
+          width:         '90vw',
+          maxWidth:      820,
           background:    isDesperationMode ? '#180404' : '#080c18',
           border:        `2px solid ${isDesperationMode ? '#ff2222' : isBoss ? '#8800cc' : '#1e3a5a'}`,
           borderRadius:  14,
@@ -382,18 +382,18 @@ export function CombatArena({
                 ? 'linear-gradient(135deg, #1a0028 0%, #0f0020 100%)'
                 : 'linear-gradient(135deg, #0d1b2a 0%, #0a1628 100%)',
             borderBottom: `1px solid ${isDesperationMode ? '#ff222255' : isBoss ? '#8800cc' : '#1e3a5a'}`,
-            padding:      '12px 20px',
+            padding:      '14px 24px',
             display:      'flex',
             alignItems:   'center',
             justifyContent: 'space-between',
           }}>
-            <span style={{ fontSize: 11, color: isDesperationMode ? '#ff4444aa' : '#475569', fontFamily: "'Courier New', monospace", letterSpacing: 2, textTransform: 'uppercase' }}>
+            <span style={{ fontSize: 14, color: isDesperationMode ? '#ff4444aa' : '#475569', fontFamily: "'Courier New', monospace", letterSpacing: 2, textTransform: 'uppercase' }}>
               {isDesperationMode ? 'Modo Desespero' : isBoss ? 'Confronto Final' : 'Combat Arena'}
             </span>
-            <span style={{ fontSize: 13, color: isDesperationMode ? '#ff4444' : isBoss ? '#cc44ff' : '#00d4ff', fontFamily: "'Courier New', monospace", fontWeight: 700 }}>
+            <span style={{ fontSize: 18, color: isDesperationMode ? '#ff4444' : isBoss ? '#cc44ff' : '#00d4ff', fontFamily: "'Courier New', monospace", fontWeight: 700 }}>
               {isDesperationMode ? '💀 ATAQUE DESESPERADO' : isBoss ? '👹 BOSS FINAL' : '⚔️  COMBATE'}
             </span>
-            <span style={{ fontSize: 11, color: isDesperationMode ? '#ff4444aa' : '#475569', fontFamily: "'Courier New', monospace", letterSpacing: 2, textTransform: 'uppercase' }}>
+            <span style={{ fontSize: 14, color: isDesperationMode ? '#ff4444aa' : '#475569', fontFamily: "'Courier New', monospace", letterSpacing: 2, textTransform: 'uppercase' }}>
               Nível {monsterLevel}
             </span>
           </div>
@@ -401,18 +401,18 @@ export function CombatArena({
           {/* ── Desperation banner ── */}
           {isDesperationMode && (
             <div style={{
-              padding:      '9px 20px',
+              padding:      '12px 24px',
               textAlign:    'center',
               animation:    'desperation-banner 0.7s ease infinite',
               borderBottom: '1px solid #ff222244',
               display:      'flex',
               alignItems:   'center',
               justifyContent: 'center',
-              gap:          10,
+              gap:          12,
             }}>
-              <span style={{ fontSize: 14 }}>⚠️</span>
+              <span style={{ fontSize: 20 }}>⚠️</span>
               <span style={{
-                fontSize:    10,
+                fontSize:    15,
                 color:       '#ff6666',
                 fontFamily:  "'Courier New', monospace",
                 fontWeight:  700,
@@ -422,19 +422,19 @@ export function CombatArena({
               }}>
                 Você está sobrepoderado — Erro = DERROTA IMEDIATA
               </span>
-              <span style={{ fontSize: 14 }}>⚠️</span>
+              <span style={{ fontSize: 20 }}>⚠️</span>
             </div>
           )}
 
-          <div style={{ padding: '20px 24px 24px', display: 'flex', flexDirection: 'column', gap: 18 }}>
+          <div style={{ padding: '28px 32px 32px', display: 'flex', flexDirection: 'column', gap: 24 }}>
 
             {/* ── VS Row ── */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
               <CombatantCard emoji="👾" name="Jogador" statLabel="Poder" statValue={playerPower} color="#00ff00" />
 
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
                 <span style={{
-                  fontSize:   22,
+                  fontSize:   36,
                   color:      isDesperationMode ? '#ff2222' : isBoss ? '#cc44ff' : '#ff6b35',
                   fontWeight: 900,
                   fontFamily: "'Courier New', monospace",
@@ -442,7 +442,7 @@ export function CombatArena({
                 }}>VS</span>
                 {picked !== null && (
                   <div style={{
-                    fontSize:    12,
+                    fontSize:    22,
                     color:       wasCorrect ? '#00ff00' : '#ff4444',
                     fontFamily:  "'Courier New', monospace",
                     textAlign:   'center',
@@ -457,7 +457,7 @@ export function CombatArena({
                         ? `+${resultDelta}`
                         : `${resultDelta}`}
                     <br />
-                    <span style={{ fontSize: 9, fontWeight: 400, color: wasCorrect ? '#00cc00' : '#cc3333' }}>
+                    <span style={{ fontSize: 13, fontWeight: 400, color: wasCorrect ? '#00cc00' : '#cc3333' }}>
                       {resultDelta === 'death' ? 'DERROTA' : 'poder'}
                     </span>
                   </div>
@@ -477,13 +477,13 @@ export function CombatArena({
             <div style={{
               background:   'rgba(0,212,255,0.04)',
               border:       '1px solid #1e3a4a',
-              borderRadius: 10,
-              padding:      '14px 18px',
+              borderRadius: 12,
+              padding:      '20px 24px',
               textAlign:    'center',
             }}>
               <p style={{
-                margin:      '0 0 10px',
-                fontSize:    10,
+                margin:      '0 0 12px',
+                fontSize:    20,
                 color:       '#64748b',
                 fontFamily:  "'Courier New', monospace",
                 textTransform: 'uppercase',
@@ -504,8 +504,8 @@ export function CombatArena({
                 {question.expression}
               </p>
               <p style={{
-                margin:      '8px 0 0',
-                fontSize:    11,
+                margin:      '12px 0 0',
+                fontSize:    18,
                 color:       '#475569',
                 fontFamily:  "'Courier New', monospace",
               }}>
@@ -514,11 +514,11 @@ export function CombatArena({
               {/* Stakes display — shown before answering */}
               {picked === null && (
                 <div style={{
-                  marginTop:  10,
+                  marginTop:  14,
                   display:    'flex',
                   justifyContent: 'center',
-                  gap:        18,
-                  fontSize:   10,
+                  gap:        22,
+                  fontSize:   16,
                   fontFamily: "'Courier New', monospace",
                 }}>
                   {isDesperationMode ? (
@@ -569,14 +569,12 @@ export function CombatArena({
               <div style={{
                 background:   wasCorrect ? 'rgba(0,40,0,0.4)' : 'rgba(40,0,0,0.4)',
                 border:       `1px solid ${wasCorrect ? '#00ff00' : '#ff4444'}44`,
-                borderRadius: 8,
-                padding:      '10px 14px',
-                fontSize:     11,
+                borderRadius: 10,
+                padding:      '14px 18px',
                 fontFamily:   "'Courier New', monospace",
-                color:        '#94a3b8',
-                lineHeight:   1.6,
+                lineHeight:   1.75,
               }}>
-                <span style={{ color: wasCorrect ? '#00ff00' : '#ff4444', fontWeight: 700 }}>
+                <div style={{ color: wasCorrect ? '#00ff00' : '#ff4444', fontWeight: 700, fontSize: 16, marginBottom: 8 }}>
                   {isDesperationMode
                     ? wasCorrect
                       ? `🔥 Milagre! +${gainIfCorrect} poder (50%). Sobreviveu contra as probabilidades!`
@@ -584,9 +582,10 @@ export function CombatArena({
                     : wasCorrect
                       ? `✅ Correto! +${gainIfCorrect} poder absorvido.`
                       : `❌ Errado! −${lossIfWrong} poder (dano). Resposta: ${correctAnswer}`}
-                </span>
-                {'  '}
-                {question.explanation}
+                </div>
+                <div style={{ color: '#94a3b8', fontSize: 14 }}>
+                  {question.explanation}
+                </div>
               </div>
             )}
           </div>
