@@ -65,12 +65,16 @@ function mkFracLabels(fracs: Frac[]): Record<number, string> {
   return rec;
 }
 
-// ── Tier 1 — Basic integer PEMDAS (stages 1–2) ────────────────────────────────
-function genTier1(): Question {
+// ── Tier 1 — Basic integer PEMDAS ─────────────────────────────────────────────
+function genTier1(cycle: number): Question {
   const t = r(0, 5);
+  // rA: addend range — grows aggressively each cycle (e.g. cycle 1 → double-digit addends)
+  // rM: multiplier range — grows moderately to keep products tractable
+  const rA = (lo: number, hi: number) => r(lo + cycle * 2, hi + cycle * 5);
+  const rM = (lo: number, hi: number) => r(lo + cycle,     hi + cycle * 3);
 
   if (t === 0) {  // A + B × C
-    const A = r(2, 9), B = r(2, 5), C = r(2, 5);
+    const A = rA(2, 9), B = rM(2, 5), C = rM(2, 5);
     const ans = A + B * C, trap = (A + B) * C;
     return {
       expression: `${A} + ${B} × ${C}`,
@@ -84,7 +88,7 @@ function genTier1(): Question {
     };
   }
   if (t === 1) {  // A − B × C  (A > B×C)
-    const B = r(2, 4), C = r(2, 4), A = B * C + r(1, 8);
+    const B = rM(2, 4), C = rM(2, 4), A = B * C + r(1, 8 + cycle * 4);
     const ans = A - B * C, trap = (A - B) * C;
     return {
       expression: `${A} − ${B} × ${C}`,
@@ -98,7 +102,7 @@ function genTier1(): Question {
     };
   }
   if (t === 2) {  // A × B + C
-    const A = r(2, 6), B = r(2, 5), C = r(2, 9);
+    const A = rM(2, 6), B = rM(2, 5), C = rA(2, 9);
     const ans = A * B + C, trap = A * (B + C);
     return {
       expression: `${A} × ${B} + ${C}`,
@@ -112,7 +116,7 @@ function genTier1(): Question {
     };
   }
   if (t === 3) {  // A × B − C  (A*B > C)
-    const A = r(2, 6), B = r(2, 5), prod = A * B, C = r(1, prod - 1);
+    const A = rM(2, 6), B = rM(2, 5), prod = A * B, C = r(1, prod - 1);
     const ans = prod - C, trap = A * (B - C);
     return {
       expression: `${A} × ${B} − ${C}`,
@@ -126,7 +130,7 @@ function genTier1(): Question {
     };
   }
   if (t === 4) {  // (B×M) ÷ B + C
-    const B = r(2, 5), M = r(2, 6), C = r(2, 8), A = B * M;
+    const B = rM(2, 5), M = rM(2, 6), C = rA(2, 8), A = B * M;
     const ans = M + C;
     return {
       expression: `${A} ÷ ${B} + ${C}`,
@@ -140,7 +144,7 @@ function genTier1(): Question {
     };
   }
   // t === 5: A × B + C × D
-  const [A5, B5, C5, D5] = [r(2, 5), r(2, 5), r(2, 5), r(2, 5)];
+  const A5 = rM(2, 5), B5 = rM(2, 5), C5 = rM(2, 5), D5 = rM(2, 5);
   const ans5 = A5 * B5 + C5 * D5, trap5 = (A5 * B5 + C5) * D5;
   return {
     expression: `${A5} × ${B5} + ${C5} × ${D5}`,
@@ -154,12 +158,14 @@ function genTier1(): Question {
   };
 }
 
-// ── Tier 2 — Negative numbers & sign rules (stages 3–4) ───────────────────────
-function genTier2(): Question {
+// ── Tier 2 — Negative numbers & sign rules ────────────────────────────────────
+function genTier2(cycle: number): Question {
   const t = r(0, 3);
+  const rA = (lo: number, hi: number) => r(lo + cycle * 2, hi + cycle * 5);
+  const rM = (lo: number, hi: number) => r(lo + cycle,     hi + cycle * 3);
 
   if (t === 0) {  // −A + B × C
-    const A = r(2, 8), B = r(2, 5), C = r(2, 5);
+    const A = rA(2, 8), B = rM(2, 5), C = rM(2, 5);
     const ans = -A + B * C, trap = (-A + B) * C;
     return {
       expression: `−${A} + ${B} × ${C}`,
@@ -173,7 +179,7 @@ function genTier2(): Question {
     };
   }
   if (t === 1) {  // A − (−B × C)  → double negative = +
-    const A = r(3, 9), B = r(2, 4), C = r(2, 4), prod = B * C;
+    const A = rA(3, 9), B = rM(2, 4), C = rM(2, 4), prod = B * C;
     const ans = A + prod, trap = A - prod;
     return {
       expression: `${A} − (−${B} × ${C})`,
@@ -187,7 +193,7 @@ function genTier2(): Question {
     };
   }
   if (t === 2) {  // A × (−B) + C   (C > A×B so result is positive)
-    const A = r(2, 5), B = r(2, 5), C = A * B + r(1, 12);
+    const A = rM(2, 5), B = rM(2, 5), C = A * B + r(1, 12 + cycle * 5);
     const ans = -A * B + C, trap = A * B + C;
     return {
       expression: `${A} × (−${B}) + ${C}`,
@@ -201,7 +207,7 @@ function genTier2(): Question {
     };
   }
   // t === 3: −A × B + C × D
-  const [A3, B3, C3, D3] = [r(2, 4), r(2, 4), r(3, 8), r(2, 5)];
+  const A3 = rM(2, 4), B3 = rM(2, 4), C3 = rA(3, 8), D3 = rM(2, 5);
   const ans3 = -A3 * B3 + C3 * D3, trap3 = (-A3 * B3 + C3) * D3;
   return {
     expression: `−${A3} × ${B3} + ${C3} × ${D3}`,
@@ -215,12 +221,39 @@ function genTier2(): Question {
   };
 }
 
-// ── Tier 3 — Fraction addition & subtraction (stages 5–6) ─────────────────────
-function genTier3(): Question {
+// ── Tier 3 — Fraction addition & subtraction ──────────────────────────────────
+function genTier3(cycle: number): Question {
   const t = r(0, 5);
 
+  // Cycle 0: classic binary denominators. Cycle 1+: add thirds, sixths, ninths, twelfths.
+  // Subtraction pool requires Q ≥ 3 so R < Q − 1 is always satisfiable.
+  const addPool = cycle === 0 ? [2, 4, 8]    : [2, 3, 4, 6, 8, 9, 12];
+  const subPool = cycle === 0 ? [4, 8]       : [3, 4, 6, 8, 9, 12];
+
+  // Cross-denom pairs for (1/D1) + (A/D2): D1 divides D2, factor = D2/D1
+  type DenomPair = { D1: number; D2: number; factor: number };
+  const crossPairs: DenomPair[] = cycle === 0
+    ? [{ D1: 2, D2: 4, factor: 2 }]
+    : [
+        { D1: 2, D2: 4,  factor: 2 },
+        { D1: 3, D2: 9,  factor: 3 },
+        { D1: 4, D2: 8,  factor: 2 },
+        { D1: 3, D2: 6,  factor: 2 },
+        { D1: 6, D2: 12, factor: 2 },
+      ];
+
+  // LCD pairs for (A/D1) + (B/D2): D1 divides D2, general numerators
+  const lcdPairs: DenomPair[] = cycle === 0
+    ? [{ D1: 4, D2: 8, factor: 2 }]
+    : [
+        { D1: 4, D2: 8,  factor: 2 },
+        { D1: 3, D2: 9,  factor: 3 },
+        { D1: 6, D2: 12, factor: 2 },
+        { D1: 4, D2: 12, factor: 3 },
+      ];
+
   if (t === 0) {  // (P/Q) + (R/Q)  same denominator
-    const Q = [2, 4, 8][r(0, 2)];
+    const Q = addPool[r(0, addPool.length - 1)];
     const P = r(1, Q - 1), R = r(1, Q - P);
     const ans  = fSim({ n: P + R,     d: Q });
     const trap = fSim({ n: P + R,     d: Q + Q }); // sums denominators — common error
@@ -238,8 +271,9 @@ function genTier3(): Question {
         `[≠ Armadilha: ${fLbl(trap)} — somou os denominadores (${Q}+${Q}=${Q + Q})]`,
     };
   }
-  if (t === 1) {  // (P/Q) − (R/Q)  same denominator (P > R, Q ≥ 4)
-    const Q = [4, 8][r(0, 1)];
+
+  if (t === 1) {  // (P/Q) − (R/Q)  same denominator (P > R, Q ≥ 3)
+    const Q = subPool[r(0, subPool.length - 1)];
     const R = r(1, Q - 2), P = r(R + 1, Q - 1);
     const ans  = fSim({ n: P - R,     d: Q });
     const trap = fSim({ n: P + R,     d: Q }); // added instead of subtracted
@@ -257,89 +291,100 @@ function genTier3(): Question {
         `[≠ Armadilha: ${fLbl(trap)} — somou em vez de subtrair]`,
     };
   }
-  if (t === 2) {  // (1/2) + (A/4)
-    const A = r(1, 3);
-    const ans  = fAdd({ n: 1, d: 2 }, { n: A, d: 4 }); // = (2+A)/4
-    const trap = fSim({ n: 1 + A, d: 6 });              // (1+A)/(2+4)
-    const d1   = fSim({ n: A,     d: 4 });
-    const d2   = fAdd(ans, { n: 1, d: 4 });
+
+  if (t === 2) {  // (1/D1) + (A/D2)  — convert the unit fraction to the LCD
+    const { D1, D2, factor } = crossPairs[r(0, crossPairs.length - 1)];
+    const A    = r(1, factor + 1);
+    const ans  = fAdd({ n: 1, d: D1 }, { n: A, d: D2 });
+    const trap = fSim({ n: 1 + A,  d: D1 + D2 }); // summed numerators AND denominators
+    const d1   = fSim({ n: A,      d: D2 });       // forgot to add the converted numerator
+    const d2   = fAdd(ans, { n: 1, d: D2 });
     return {
-      expression: `(1/2) + (${A}/4)`,
-      hint: 'Denominador comum: converta 1/2 → 2/4',
+      expression: `(1/${D1}) + (${A}/${D2})`,
+      hint: `Denominador comum: converta 1/${D1} → ${factor}/${D2}`,
       correctAnswer: fVal(ans),
       wrongAnswers: wrongs(fVal(ans), [fVal(trap), fVal(d1), fVal(d2)]),
       answerLabels: mkFracLabels([ans, trap, d1, d2]),
       explanation:
-        `Passo 1: 1/2 = 2/4  (denominador comum = 4)\n` +
-        `Passo 2: 2/4 + ${A}/4 = ${2 + A}/4 = ${fLbl(ans)}\n` +
+        `Passo 1: 1/${D1} = ${factor}/${D2}  (denominador comum = ${D2})\n` +
+        `Passo 2: ${factor}/${D2} + ${A}/${D2} = ${factor + A}/${D2} = ${fLbl(ans)}\n` +
         `[≠ Armadilha: ${fLbl(trap)} — somou numeradores E denominadores separadamente]`,
     };
   }
-  if (t === 3) {  // (A/4) + (1/2)
-    const A = r(1, 3);
-    const ans  = fAdd({ n: A, d: 4 }, { n: 1, d: 2 }); // = (A+2)/4
-    const trap = fSim({ n: A + 1, d: 6 });
-    const d1   = fSim({ n: A,     d: 4 });
-    const d2   = fSub(ans, { n: 1, d: 4 });
+
+  if (t === 3) {  // (A/D2) + (1/D1)  — same concept, flipped order
+    const { D1, D2, factor } = crossPairs[r(0, crossPairs.length - 1)];
+    const A    = r(1, factor + 1);
+    const ans  = fAdd({ n: A, d: D2 }, { n: 1, d: D1 });
+    const trap = fSim({ n: A + 1, d: D1 + D2 });
+    const d1   = fSim({ n: A,     d: D2 });
+    const d2   = fSub(ans, { n: 1, d: D2 });
     return {
-      expression: `(${A}/4) + (1/2)`,
-      hint: 'Denominador comum: converta 1/2 → 2/4',
+      expression: `(${A}/${D2}) + (1/${D1})`,
+      hint: `Denominador comum: converta 1/${D1} → ${factor}/${D2}`,
       correctAnswer: fVal(ans),
       wrongAnswers: wrongs(fVal(ans), [fVal(trap), fVal(d1), fVal(d2)]),
       answerLabels: mkFracLabels([ans, trap, d1, d2]),
       explanation:
-        `Passo 1: 1/2 = 2/4  (denominador comum = 4)\n` +
-        `Passo 2: ${A}/4 + 2/4 = ${A + 2}/4 = ${fLbl(ans)}\n` +
+        `Passo 1: 1/${D1} = ${factor}/${D2}  (denominador comum = ${D2})\n` +
+        `Passo 2: ${A}/${D2} + ${factor}/${D2} = ${A + factor}/${D2} = ${fLbl(ans)}\n` +
         `[≠ Armadilha: ${fLbl(trap)} — somou numeradores E denominadores separadamente]`,
     };
   }
-  if (t === 4) {  // (A/4) + (B/8)  LCD = 8
-    const A = r(1, 3), B = r(1, 5);
-    const ans  = fAdd({ n: A, d: 4 }, { n: B, d: 8 }); // = (2A+B)/8
-    const trap = fSim({ n: A + B, d: 12 });             // (A+B)/(4+8)
-    const d1   = fSim({ n: 2 * A, d: 8 });              // forgot to add B
-    const d2   = fAdd(ans, { n: 1, d: 8 });
+
+  if (t === 4) {  // (A/D1) + (B/D2)  LCD = D2 — general numerators
+    const { D1, D2, factor } = lcdPairs[r(0, lcdPairs.length - 1)];
+    const A    = r(1, D1 - 1);
+    const B    = r(1, D2 - 1);
+    const ans  = fAdd({ n: A, d: D1 }, { n: B, d: D2 });
+    const trap = fSim({ n: A + B,      d: D1 + D2 });   // summed both parts naively
+    const d1   = fSim({ n: factor * A, d: D2 });         // converted correctly, forgot B
+    const d2   = fAdd(ans, { n: 1, d: D2 });
     return {
-      expression: `(${A}/4) + (${B}/8)`,
-      hint: `Denominador comum: converta ${A}/4 → ${2 * A}/8`,
+      expression: `(${A}/${D1}) + (${B}/${D2})`,
+      hint: `Denominador comum: converta ${A}/${D1} → ${factor * A}/${D2}`,
       correctAnswer: fVal(ans),
       wrongAnswers: wrongs(fVal(ans), [fVal(trap), fVal(d1), fVal(d2)]),
       answerLabels: mkFracLabels([ans, trap, d1, d2]),
       explanation:
-        `Passo 1: ${A}/4 = ${2 * A}/8  (denominador comum = 8)\n` +
-        `Passo 2: ${2 * A}/8 + ${B}/8 = ${2 * A + B}/8 = ${fLbl(ans)}\n` +
+        `Passo 1: ${A}/${D1} = ${factor * A}/${D2}  (denominador comum = ${D2})\n` +
+        `Passo 2: ${factor * A}/${D2} + ${B}/${D2} = ${factor * A + B}/${D2} = ${fLbl(ans)}\n` +
         `[≠ Armadilha: ${fLbl(trap)} — somou numeradores E denominadores]`,
     };
   }
-  // t === 5: (A/8) − (B/8)
-  const B8 = r(1, 5), A8 = r(B8 + 1, 7);
-  const ans8  = fSim({ n: A8 - B8,     d: 8 });
-  const trap8 = fSim({ n: A8 + B8,     d: 8 }); // added instead of subtracted
-  const d1_8  = fSim({ n: A8 - B8 - 1, d: 8 });
-  const d2_8  = fSim({ n: A8,          d: 8 });
+
+  // t === 5: (A/Q) − (B/Q)  same denominator subtraction
+  const Q5  = subPool[r(0, subPool.length - 1)];
+  const B5  = r(1, Q5 - 2), A5 = r(B5 + 1, Q5 - 1);
+  const ans5  = fSim({ n: A5 - B5,     d: Q5 });
+  const trap5 = fSim({ n: A5 + B5,     d: Q5 }); // added instead of subtracted
+  const d1_5  = fSim({ n: A5 - B5 - 1, d: Q5 });
+  const d2_5  = fSim({ n: A5,          d: Q5 });
   return {
-    expression: `(${A8}/8) − (${B8}/8)`,
+    expression: `(${A5}/${Q5}) − (${B5}/${Q5})`,
     hint: 'Mesmo denominador: subtraia apenas os numeradores',
-    correctAnswer: fVal(ans8),
-    wrongAnswers: wrongs(fVal(ans8), [fVal(trap8), fVal(d1_8), fVal(d2_8)]),
-    answerLabels: mkFracLabels([ans8, trap8, d1_8, d2_8]),
+    correctAnswer: fVal(ans5),
+    wrongAnswers: wrongs(fVal(ans5), [fVal(trap5), fVal(d1_5), fVal(d2_5)]),
+    answerLabels: mkFracLabels([ans5, trap5, d1_5, d2_5]),
     explanation:
-      `Passo 1: Denominadores iguais (8) → subtraia: ${A8}−${B8} = ${A8 - B8}\n` +
-      `Passo 2: ${A8 - B8}/8 = ${fLbl(ans8)}\n` +
-      `[≠ Armadilha: ${fLbl(trap8)} — somou em vez de subtrair]`,
+      `Passo 1: Denominadores iguais (${Q5}) → subtraia: ${A5}−${B5} = ${A5 - B5}\n` +
+      `Passo 2: ${A5 - B5}/${Q5} = ${fLbl(ans5)}\n` +
+      `[≠ Armadilha: ${fLbl(trap5)} — somou em vez de subtrair]`,
   };
 }
 
-// ── Tier 4 — Fraction multiplication & division (stages 7+) ───────────────────
-function genTier4(): Question {
+// ── Tier 4 — Fraction multiplication & division ───────────────────────────────
+function genTier4(cycle: number): Question {
   const t = r(0, 4);
 
   if (t <= 1) {  // (A/D) × N → integer result
-    const D = r(0, 1) === 0 ? 2 : 4;
-    const k = r(1, 3), N = D * k, A = r(1, D - 1);
-    const ans:  Frac = { n: A * k,               d: 1 };
-    const trap: Frac = { n: A * N,               d: 1 }; // forgot denominator
-    const d1:   Frac = { n: A * k + 1,           d: 1 };
+    // Cycle 0: D ∈ {2,4}. Cycle 1+: expand to {2,4,6,8} for larger integer products.
+    const dPool: number[] = cycle === 0 ? [2, 4] : [2, 4, 6, 8];
+    const D = dPool[r(0, dPool.length - 1)];
+    const k = r(1, 3 + cycle * 2), N = D * k, A = r(1, D - 1);
+    const ans:  Frac = { n: A * k,                  d: 1 };
+    const trap: Frac = { n: A * N,                  d: 1 }; // forgot to divide by D
+    const d1:   Frac = { n: A * k + 1,              d: 1 };
     const d2:   Frac = { n: Math.max(0, A * k - 1), d: 1 };
     return {
       expression: `(${A}/${D}) × ${N}`,
@@ -354,22 +399,32 @@ function genTier4(): Question {
     };
   }
 
-  // t = 2,3,4: (A/D1) ÷ (A/D2) where D2 > D1 → result = D2/D1 (integer)
-  // Trap (reversed division) = D1/D2 — always a clean binary fraction
-  const divPairs: Array<[number, number, number]> = [
-    [2, 4, 2],  // (A/2)÷(A/4) = 2,  trap = 1/2 = 0.5
-    [4, 8, 2],  // (A/4)÷(A/8) = 2,  trap = 1/2 = 0.5
-    [2, 8, 4],  // (A/2)÷(A/8) = 4,  trap = 1/4 = 0.25
+  // t = 2,3,4: (A/D1) ÷ (A/D2) → integer result = D2/D1
+  // Trap (reversed division) = D1/D2 — always a clean fraction.
+  // Cycle 0: classic binary pairs. Cycle 1+: add thirds, sixths and wider ratios.
+  type DivPair = [number, number, number]; // [D1, D2, correctInt]
+  const basePairs: DivPair[] = [
+    [2, 4, 2],   // (A/2)÷(A/4)  = 2,  trap = 1/2
+    [4, 8, 2],   // (A/4)÷(A/8)  = 2,  trap = 1/2
+    [2, 8, 4],   // (A/2)÷(A/8)  = 4,  trap = 1/4
   ];
-  const [D1, D2, correctInt] = divPairs[t - 2];
+  const extPairs: DivPair[] = [
+    ...basePairs,
+    [3, 9,  3],  // (A/3)÷(A/9)  = 3,  trap = 1/3
+    [3, 12, 4],  // (A/3)÷(A/12) = 4,  trap = 1/4
+    [4, 16, 4],  // (A/4)÷(A/16) = 4,  trap = 1/4
+    [6, 12, 2],  // (A/6)÷(A/12) = 2,  trap = 1/2
+  ];
+  const divPairs = cycle >= 1 ? extPairs : basePairs;
+  const [D1, D2, correctInt] = divPairs[r(0, divPairs.length - 1)];
   const A      = r(1, Math.max(1, Math.min(D1, D2) - 1));
   const lhs:     Frac = { n: A,          d: D1 };
   const rhs:     Frac = { n: A,          d: D2 };
   const ansF:    Frac = { n: correctInt, d: 1  };
-  const trapF:   Frac = fDiv(rhs, lhs);           // reversed = D1/D2
+  const trapF:   Frac = fDiv(rhs, lhs);            // reversed = D1/D2
   const d1F:     Frac = { n: correctInt + 1, d: 1 };
   const d2F:     Frac = { n: correctInt + 2, d: 1 };
-  const invRhs:  Frac = { n: D2, d: A };          // inverted rhs for explanation
+  const invRhs:  Frac = { n: D2, d: A };           // inverted rhs for step-by-step
   return {
     expression:    `${fExpr(lhs)} ÷ ${fExpr(rhs)}`,
     hint:          'Divisão de frações: Keep × Change × Flip (inverta a 2ª e multiplique)',
@@ -386,18 +441,24 @@ function genTier4(): Question {
 // ── Public API — Dynamic Question Generator ────────────────────────────────────
 /**
  * Generates a fully unique, stage-scaled math question on the fly.
- *   Tier 1 (stages 1–2): Basic integer PEMDAS.
- *   Tier 2 (stages 3–4): Negative numbers and sign rules.
- *   Tier 3 (stages 5–6): Fraction addition & subtraction (LCD method).
- *   Tier 4 (stages 7+):  Fraction multiplication & division (KCF rule).
+ *
+ * The tier mapping repeats every 8 stages (2 stages per tier) in an endless loop:
+ *   Tier 1 (stages 1–2, 9–10, 17–18 …): Basic integer PEMDAS.
+ *   Tier 2 (stages 3–4, 11–12, 19–20 …): Negative numbers and sign rules.
+ *   Tier 3 (stages 5–6, 13–14, 21–22 …): Fraction addition & subtraction (LCD).
+ *   Tier 4 (stages 7–8, 15–16, 23–24 …): Fraction multiplication & division (KCF).
+ *
+ * Each full 8-stage rotation increments the `cycle` counter, which scales number
+ * ranges and expands denominator pools so difficulty grows with every New Game+ loop.
  */
 export function generateDynamicQuestion(stage: number): Question {
-  const tier = stage <= 2 ? 1 : stage <= 4 ? 2 : stage <= 6 ? 3 : 4;
+  const cycle = Math.floor((stage - 1) / 8);
+  const tier  = Math.floor(((stage - 1) % 8) / 2) + 1;
   switch (tier) {
-    case 1:  return genTier1();
-    case 2:  return genTier2();
-    case 3:  return genTier3();
-    default: return genTier4();
+    case 1:  return genTier1(cycle);
+    case 2:  return genTier2(cycle);
+    case 3:  return genTier3(cycle);
+    default: return genTier4(cycle);
   }
 }
 
