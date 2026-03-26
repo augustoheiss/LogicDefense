@@ -16,7 +16,7 @@ interface Message {
   content: string
 }
 
-const API_URL = 'http://localhost:8000/api/generate-cvs'
+const API_URL = 'https://heiss-cv-engine.onrender.com/api/generate-cvs'
 
 interface ChatInterfaceProps {
   onCVGenerated: (versions: CVVersions) => void
