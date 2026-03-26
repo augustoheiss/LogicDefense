@@ -3,7 +3,7 @@
    Themes applied via .cv-wrapper.theme-<name> on the parent div
    ================================================================= */
 
-@import url('https://fonts.googleapis.com/css2?family=Merriweather:ital,wght@0,300;0,400;0,700;0,900;1,300&family=Inter:wght@300;400;500;600;700&family=Poppins:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&family=Merriweather:ital,wght@0,300;0,400;0,700;0,900;1,300&family=Fira+Code:wght@400;500;700&family=Space+Mono:wght@400;700&display=swap');
 
 /* ── Base document ─────────────────────────────────────────────── */
 .cv-document {
@@ -299,306 +299,368 @@
 
 
 /* =================================================================
-   THEME: executive
-   Merriweather · Black/charcoal · Traditional corporate
+   THEME: executive  ·  "The Collective Impact"
+   Inter 900 · Pure white · Corporate navy — ruthless efficiency
    ================================================================= */
 .cv-wrapper.theme-executive .cv-document {
-  font-family: 'Merriweather', Georgia, serif;
+  font-family: 'Inter', system-ui, sans-serif;
   font-size: 13.5px;
-  line-height: 1.8;
-  color: #111111;
+  line-height: 1.65;
+  color: #111827;
   background: #ffffff;
-  padding: 44px 52px;
-  border: 1px solid #ccc;
-  box-shadow: 2px 2px 12px rgba(0,0,0,0.1);
+  padding: 48px 56px;
+  box-shadow: 0 1px 8px rgba(0,0,0,0.08);
 }
 
 .cv-wrapper.theme-executive .cv-header {
-  border-bottom-color: #111111;
-  border-bottom-width: 2px;
+  border-bottom: 2px solid #111827;
+  margin-bottom: 32px;
+  padding-bottom: 24px;
 }
 
 .cv-wrapper.theme-executive .cv-header__name {
-  font-family: 'Merriweather', Georgia, serif;
-  font-size: 1.9rem;
+  font-family: 'Inter', sans-serif;
+  font-size: 2.1rem;
   font-weight: 900;
   letter-spacing: -0.04em;
-  color: #050505;
+  color: #111827;
 }
 
 .cv-wrapper.theme-executive .cv-header__label {
-  font-family: 'Merriweather', Georgia, serif;
+  font-family: 'Inter', sans-serif;
   font-size: 0.82rem;
-  font-style: italic;
-  color: #555;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #1e3a8a;
+  opacity: 1;
+}
+
+.cv-wrapper.theme-executive .cv-header__contact-item { color: #374151; }
+.cv-wrapper.theme-executive .cv-header__contact-item:hover { color: #1e3a8a; }
+
+.cv-wrapper.theme-executive .cv-header__summary {
+  font-style: normal;
+  color: #374151;
+  opacity: 1;
 }
 
 .cv-wrapper.theme-executive .cv-section__title {
-  font-family: 'Merriweather', Georgia, serif;
-  font-size: 0.65rem;
+  font-family: 'Inter', sans-serif;
+  font-size: 0.62rem;
+  font-weight: 700;
   letter-spacing: 0.22em;
-  border-bottom-color: #333;
-  color: #222;
+  color: #1e3a8a;
+  border-bottom-color: #1e3a8a;
   opacity: 1;
 }
 
 .cv-wrapper.theme-executive .cv-item__title {
-  font-family: 'Merriweather', Georgia, serif;
-  font-size: 0.88rem;
-  color: #111;
+  font-family: 'Inter', sans-serif;
+  font-size: 0.9rem;
+  font-weight: 900;
+  color: #111827;
 }
+
+.cv-wrapper.theme-executive .cv-item__org   { color: #1e3a8a; font-weight: 600; opacity: 1; }
+.cv-wrapper.theme-executive .cv-item__date  { color: #6b7280; font-weight: 700; opacity: 1; }
+.cv-wrapper.theme-executive .cv-item__summary   { color: #374151; opacity: 1; }
+.cv-wrapper.theme-executive .cv-item__highlights { color: #374151; opacity: 1; }
 
 .cv-wrapper.theme-executive .cv-skills__tag {
   background: transparent;
-  border: 1px solid #bbb;
-  border-radius: 0;
-  font-family: 'JetBrains Mono', 'Courier New', monospace;
-  font-size: 10.5px;
-}
-
-
-/* =================================================================
-   THEME: dark
-   Inter · Neon accent on dark — matches portal design system
-   ================================================================= */
-.cv-wrapper.theme-dark .cv-document {
-  font-family: 'Inter', system-ui, sans-serif;
-  background: #0f1020;
-  color: #e2e4f0;
-  box-shadow: 0 0 40px rgba(0,212,255,0.12);
-  padding: 40px 48px;
-}
-
-.cv-wrapper.theme-dark .cv-header {
-  border-bottom-color: rgba(0,212,255,0.4);
-}
-
-.cv-wrapper.theme-dark .cv-header__name {
-  color: #ffffff;
-  text-shadow: 0 0 24px rgba(0,212,255,0.4);
-}
-
-.cv-wrapper.theme-dark .cv-header__label {
-  color: #00d4ff;
-  opacity: 1;
-  font-size: 0.82rem;
+  border: 1px solid #d1d5db;
+  border-radius: 2px;
+  color: #374151;
   font-weight: 600;
-  letter-spacing: 0.04em;
-}
-
-.cv-wrapper.theme-dark .cv-header__contact-item {
-  color: #8890aa;
-}
-
-.cv-wrapper.theme-dark .cv-header__contact-item:hover { color: #00d4ff; }
-
-.cv-wrapper.theme-dark .cv-header__summary {
-  color: #aab0c8;
-  border-left: 2px solid rgba(0,212,255,0.35);
-  padding-left: 14px;
-  font-style: normal;
-}
-
-.cv-wrapper.theme-dark .cv-section__title {
-  color: #00d4ff;
-  border-bottom-color: rgba(0,212,255,0.25);
-  opacity: 1;
-  text-shadow: 0 0 12px rgba(0,212,255,0.3);
-}
-
-.cv-wrapper.theme-dark .cv-item__title { color: #ffffff; }
-.cv-wrapper.theme-dark .cv-item__org { color: #7c3aed; opacity: 1; }
-.cv-wrapper.theme-dark .cv-item__date { color: #5c6380; opacity: 1; }
-.cv-wrapper.theme-dark .cv-item__summary { color: #aab0c8; opacity: 1; }
-.cv-wrapper.theme-dark .cv-item__highlights { color: #8890aa; opacity: 1; }
-
-.cv-wrapper.theme-dark .cv-skills__tag {
-  background: rgba(0,212,255,0.08);
-  border-color: rgba(0,212,255,0.2);
-  color: #00d4ff;
-}
-
-.cv-wrapper.theme-dark .cv-languages__name { color: #ffffff; }
-.cv-wrapper.theme-dark .cv-languages__fluency { color: #5c6380; opacity: 1; }
-.cv-wrapper.theme-dark .cv-certs__name { color: #e2e4f0; }
-
-
-/* =================================================================
-   THEME: creative
-   Poppins · Bold accent bar · Modern agency style
-   ================================================================= */
-.cv-wrapper.theme-creative .cv-document {
-  font-family: 'Poppins', system-ui, sans-serif;
-  background: #ffffff;
-  color: #1a1a2e;
-  padding: 0;
-  box-shadow: 0 8px 40px rgba(0,0,0,0.15);
-  overflow: hidden;
-}
-
-.cv-wrapper.theme-creative .cv-header {
-  background: linear-gradient(135deg, #6d28d9 0%, #2563eb 60%, #0891b2 100%);
-  color: #ffffff;
-  padding: 40px 48px 32px;
-  border-bottom: none;
-  margin-bottom: 0;
-}
-
-.cv-wrapper.theme-creative .cv-header__name {
-  font-family: 'Poppins', sans-serif;
-  font-size: 2.2rem;
-  font-weight: 800;
-  color: #ffffff;
-  letter-spacing: -0.04em;
-  margin-bottom: 6px;
-}
-
-.cv-wrapper.theme-creative .cv-header__label {
-  font-size: 0.9rem;
-  font-weight: 500;
-  color: rgba(255,255,255,0.85);
-  letter-spacing: 0.02em;
-}
-
-.cv-wrapper.theme-creative .cv-header__contact-item {
-  color: rgba(255,255,255,0.8);
-  font-size: 12px;
-}
-
-.cv-wrapper.theme-creative .cv-header__contact-item:hover { color: #ffffff; }
-
-.cv-wrapper.theme-creative .cv-header__summary {
-  color: rgba(255,255,255,0.9);
-  font-style: normal;
-  border-left: 3px solid rgba(255,255,255,0.4);
-  padding-left: 14px;
-  margin-top: 16px;
-}
-
-.cv-wrapper.theme-creative .cv-document > :not(.cv-header) {
-  padding: 0 48px;
-}
-
-.cv-wrapper.theme-creative .cv-section {
-  margin-top: 24px;
-}
-
-.cv-wrapper.theme-creative .cv-section:last-child {
-  padding-bottom: 40px;
-}
-
-.cv-wrapper.theme-creative .cv-section__title {
-  font-family: 'Poppins', sans-serif;
-  font-size: 0.65rem;
-  font-weight: 700;
-  letter-spacing: 0.2em;
-  color: #6d28d9;
-  border-bottom-color: #6d28d9;
-  opacity: 1;
-}
-
-.cv-wrapper.theme-creative .cv-item__title {
-  font-weight: 700;
-  color: #1a1a2e;
-  font-size: 0.92rem;
-}
-
-.cv-wrapper.theme-creative .cv-item__org { color: #2563eb; opacity: 1; font-weight: 600; }
-
-.cv-wrapper.theme-creative .cv-skills__tag {
-  background: rgba(109,40,217,0.08);
-  border-color: rgba(109,40,217,0.2);
-  color: #6d28d9;
-  border-radius: 20px;
-  font-weight: 600;
-}
-
-.cv-wrapper.theme-creative .cv-languages__name { font-weight: 700; color: #1a1a2e; }
-
-
-/* =================================================================
-   THEME: minimalist
-   Inter · Extreme whitespace · No colour — only type and space
-   ================================================================= */
-.cv-wrapper.theme-minimalist .cv-document {
-  font-family: 'Inter', system-ui, sans-serif;
-  font-size: 13px;
-  line-height: 1.85;
-  color: #222222;
-  background: #fafafa;
-  padding: 56px 64px;
-  box-shadow: none;
-  border: 1px solid #e8e8e8;
-}
-
-.cv-wrapper.theme-minimalist .cv-header {
-  border-bottom-color: #222;
-  border-bottom-width: 1px;
-  margin-bottom: 36px;
-  padding-bottom: 28px;
-}
-
-.cv-wrapper.theme-minimalist .cv-header__name {
-  font-size: 1.75rem;
-  font-weight: 300;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: #111;
-}
-
-.cv-wrapper.theme-minimalist .cv-header__label {
-  font-size: 0.78rem;
-  font-weight: 400;
-  color: #888;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.cv-wrapper.theme-minimalist .cv-header__contact-item {
-  font-size: 11.5px;
-  color: #666;
-}
-
-.cv-wrapper.theme-minimalist .cv-header__summary {
-  font-style: normal;
-  font-size: 12.5px;
-  color: #555;
-  max-width: 72ch;
-}
-
-.cv-wrapper.theme-minimalist .cv-section__title {
-  font-size: 0.6rem;
-  letter-spacing: 0.28em;
-  font-weight: 400;
-  color: #999;
-  border-bottom-color: #ddd;
-  text-transform: uppercase;
-  opacity: 1;
-  margin-bottom: 16px;
-}
-
-.cv-wrapper.theme-minimalist .cv-section {
-  margin-bottom: 32px;
-}
-
-.cv-wrapper.theme-minimalist .cv-item__title {
-  font-weight: 600;
-  font-size: 0.85rem;
-  color: #111;
-}
-
-.cv-wrapper.theme-minimalist .cv-item__org { color: #777; font-weight: 400; opacity: 1; }
-.cv-wrapper.theme-minimalist .cv-item__date { color: #bbb; opacity: 1; }
-.cv-wrapper.theme-minimalist .cv-item__summary { color: #555; opacity: 1; font-size: 12.5px; }
-.cv-wrapper.theme-minimalist .cv-item__highlights { color: #666; opacity: 1; }
-
-.cv-wrapper.theme-minimalist .cv-skills__tag {
-  background: transparent;
-  border-color: #ddd;
-  border-radius: 0;
-  color: #555;
   font-size: 11px;
 }
 
-.cv-wrapper.theme-minimalist .cv-languages__name { color: #222; }
-.cv-wrapper.theme-minimalist .cv-languages__fluency { color: #aaa; opacity: 1; }
+.cv-wrapper.theme-executive .cv-languages__name   { color: #111827; font-weight: 700; }
+.cv-wrapper.theme-executive .cv-languages__fluency { color: #6b7280; opacity: 1; }
+.cv-wrapper.theme-executive .cv-certs__name { color: #111827; }
+
+
+/* =================================================================
+   THEME: historian  ·  "The Process Historian"
+   Merriweather serif · Warm cream · Muted burgundy · Timeline left-border
+   ================================================================= */
+.cv-wrapper.theme-historian .cv-document {
+  font-family: 'Merriweather', Georgia, serif;
+  font-size: 13px;
+  line-height: 1.9;
+  color: #333333;
+  background: #fdfbf7;
+  padding: 44px 52px;
+  box-shadow: 2px 2px 16px rgba(0,0,0,0.1);
+}
+
+.cv-wrapper.theme-historian .cv-header {
+  border-bottom: 1px solid #c9a96e;
+  margin-bottom: 28px;
+  padding-bottom: 20px;
+}
+
+.cv-wrapper.theme-historian .cv-header__name {
+  font-family: 'Merriweather', Georgia, serif;
+  font-size: 1.9rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: #1a1a1a;
+}
+
+.cv-wrapper.theme-historian .cv-header__label {
+  font-family: 'Merriweather', Georgia, serif;
+  font-size: 0.82rem;
+  font-style: italic;
+  color: #7f1d1d;
+  opacity: 1;
+}
+
+.cv-wrapper.theme-historian .cv-header__contact-item { color: #5c4a3a; }
+.cv-wrapper.theme-historian .cv-header__contact-item:hover { color: #7f1d1d; }
+
+.cv-wrapper.theme-historian .cv-header__summary {
+  font-style: italic;
+  color: #4a3728;
+  opacity: 1;
+  border-left: 2px solid #c9a96e;
+  padding-left: 14px;
+}
+
+.cv-wrapper.theme-historian .cv-section__title {
+  font-family: 'Merriweather', Georgia, serif;
+  font-size: 0.62rem;
+  letter-spacing: 0.22em;
+  color: #7f1d1d;
+  border-bottom-color: #c9a96e;
+  opacity: 1;
+}
+
+/* Timeline left-border on every work entry */
+.cv-wrapper.theme-historian .cv-item--work {
+  border-left: 2px solid #c9a96e;
+  padding-left: 1rem;
+}
+
+.cv-wrapper.theme-historian .cv-item__title {
+  font-family: 'Merriweather', Georgia, serif;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #1a1a1a;
+}
+
+.cv-wrapper.theme-historian .cv-item__org    { color: #7f1d1d; font-style: italic; opacity: 1; }
+.cv-wrapper.theme-historian .cv-item__date   { color: #9a7b5a; opacity: 1; }
+.cv-wrapper.theme-historian .cv-item__summary    { color: #4a3728; opacity: 1; font-style: italic; }
+.cv-wrapper.theme-historian .cv-item__highlights { color: #5c4a3a; opacity: 1; }
+
+.cv-wrapper.theme-historian .cv-skills__tag {
+  background: rgba(127,29,29,0.05);
+  border-color: #c9a96e;
+  border-radius: 0;
+  color: #4a3728;
+}
+
+.cv-wrapper.theme-historian .cv-languages__name   { color: #1a1a1a; font-weight: 700; }
+.cv-wrapper.theme-historian .cv-languages__fluency { color: #9a7b5a; opacity: 1; }
+.cv-wrapper.theme-historian .cv-certs__name { color: #1a1a1a; }
+
+
+/* =================================================================
+   THEME: didactic  ·  "The Didactic Adaptor"
+   Fira Code headers · Inter body · Slate on light grey · Tagged skills
+   ================================================================= */
+.cv-wrapper.theme-didactic .cv-document {
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 13.5px;
+  line-height: 1.7;
+  color: #1f2937;
+  background: #f3f4f6;
+  padding: 40px 48px;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+}
+
+.cv-wrapper.theme-didactic .cv-header {
+  border-bottom: 3px solid #2563eb;
+  margin-bottom: 24px;
+  padding-bottom: 20px;
+}
+
+.cv-wrapper.theme-didactic .cv-header__name {
+  font-family: 'Fira Code', 'Courier New', monospace;
+  font-size: 1.8rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: #1f2937;
+}
+
+.cv-wrapper.theme-didactic .cv-header__label {
+  font-family: 'Fira Code', monospace;
+  font-size: 0.78rem;
+  color: #2563eb;
+  opacity: 1;
+  font-weight: 400;
+}
+
+.cv-wrapper.theme-didactic .cv-header__label::before {
+  content: '// ';
+  opacity: 0.45;
+}
+
+.cv-wrapper.theme-didactic .cv-header__contact-item { color: #4b5563; }
+.cv-wrapper.theme-didactic .cv-header__contact-item:hover { color: #2563eb; }
+
+.cv-wrapper.theme-didactic .cv-header__summary {
+  font-style: normal;
+  color: #4b5563;
+  opacity: 1;
+  border-left: 3px solid #2563eb;
+  padding-left: 14px;
+}
+
+/* Bordered "card" sections — the documentation-page feel */
+.cv-wrapper.theme-didactic .cv-section {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-left: 4px solid #2563eb;
+  border-radius: 0 6px 6px 0;
+  padding: 16px 20px;
+  margin-bottom: 16px;
+}
+
+.cv-wrapper.theme-didactic .cv-section__title {
+  font-family: 'Fira Code', monospace;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: #2563eb;
+  border-bottom-color: #e5e7eb;
+  opacity: 1;
+}
+
+.cv-wrapper.theme-didactic .cv-item__title {
+  font-family: 'Fira Code', monospace;
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: #1f2937;
+}
+
+.cv-wrapper.theme-didactic .cv-item__org    { color: #2563eb; font-weight: 600; opacity: 1; }
+.cv-wrapper.theme-didactic .cv-item__date   { color: #6b7280; font-weight: 600; opacity: 1; }
+.cv-wrapper.theme-didactic .cv-item__summary    { color: #374151; opacity: 1; }
+.cv-wrapper.theme-didactic .cv-item__highlights { color: #4b5563; opacity: 1; }
+
+/* Coloured inline tag pills */
+.cv-wrapper.theme-didactic .cv-skills__group-name {
+  font-family: 'Fira Code', monospace;
+  font-size: 11px;
+  color: #2563eb;
+  opacity: 1;
+}
+
+.cv-wrapper.theme-didactic .cv-skills__tag {
+  display: inline-block;
+  background: #dbeafe;
+  border: 1px solid #93c5fd;
+  border-radius: 20px;
+  color: #1e40af;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 10px;
+}
+
+.cv-wrapper.theme-didactic .cv-languages__name   { color: #1f2937; font-weight: 700; }
+.cv-wrapper.theme-didactic .cv-languages__fluency { color: #6b7280; opacity: 1; }
+.cv-wrapper.theme-didactic .cv-certs__name { color: #1f2937; }
+
+
+/* =================================================================
+   THEME: alien  ·  "The Observation Report"
+   Space Mono · Pitch black · Neon green · CRT glow text-shadow
+   ================================================================= */
+.cv-wrapper.theme-alien .cv-document {
+  font-family: 'Space Mono', 'Courier New', monospace;
+  font-size: 12.5px;
+  line-height: 1.8;
+  color: #00ff00;
+  background: #000000;
+  padding: 40px 48px;
+  box-shadow: 0 0 40px rgba(0,255,0,0.12), inset 0 0 100px rgba(0,255,0,0.02);
+  text-shadow: 0 0 5px #00ff00;
+}
+
+.cv-wrapper.theme-alien .cv-header {
+  border-bottom: 1px solid rgba(0,255,0,0.35);
+  margin-bottom: 28px;
+  padding-bottom: 20px;
+}
+
+.cv-wrapper.theme-alien .cv-header__name {
+  font-family: 'Space Mono', monospace;
+  font-size: 1.6rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #00ffff;
+  text-shadow: 0 0 10px #00ffff, 0 0 20px rgba(0,255,255,0.4);
+}
+
+.cv-wrapper.theme-alien .cv-header__label {
+  font-family: 'Space Mono', monospace;
+  font-size: 0.72rem;
+  color: #00ff00;
+  opacity: 1;
+  text-shadow: 0 0 5px #00ff00;
+}
+
+.cv-wrapper.theme-alien .cv-header__contact-item {
+  color: #00cc00;
+  text-shadow: 0 0 4px rgba(0,255,0,0.6);
+}
+
+.cv-wrapper.theme-alien .cv-header__contact-item:hover { color: #00ffff; }
+
+.cv-wrapper.theme-alien .cv-header__summary {
+  color: #00ff00;
+  opacity: 1;
+  font-style: normal;
+  border-left: 1px solid rgba(0,255,0,0.4);
+  padding-left: 14px;
+  text-shadow: 0 0 5px #00ff00;
+}
+
+.cv-wrapper.theme-alien .cv-section__title {
+  font-family: 'Space Mono', monospace;
+  font-size: 0.62rem;
+  letter-spacing: 0.22em;
+  color: #00ffff;
+  border-bottom-color: rgba(0,255,255,0.25);
+  opacity: 1;
+  text-shadow: 0 0 8px #00ffff;
+}
+
+.cv-wrapper.theme-alien .cv-item__title {
+  font-family: 'Space Mono', monospace;
+  font-weight: 700;
+  font-size: 0.88rem;
+  color: #00ffff;
+  text-shadow: 0 0 6px #00ffff;
+}
+
+.cv-wrapper.theme-alien .cv-item__org    { color: #00ff00; opacity: 0.85; text-shadow: 0 0 4px #00ff00; }
+.cv-wrapper.theme-alien .cv-item__date   { color: #009900; opacity: 1;    text-shadow: none; }
+.cv-wrapper.theme-alien .cv-item__summary    { color: #00dd00; opacity: 1; text-shadow: 0 0 4px rgba(0,255,0,0.5); }
+.cv-wrapper.theme-alien .cv-item__highlights { color: #00bb00; opacity: 1; }
+
+.cv-wrapper.theme-alien .cv-skills__tag {
+  background: rgba(0,255,0,0.07);
+  border: 1px solid rgba(0,255,0,0.35);
+  border-radius: 0;
+  color: #00ff00;
+  font-size: 11px;
+  text-shadow: 0 0 4px #00ff00;
+}
+
+.cv-wrapper.theme-alien .cv-languages__name    { color: #00ffff; text-shadow: 0 0 6px #00ffff; }
+.cv-wrapper.theme-alien .cv-languages__fluency { color: #009900; opacity: 1; text-shadow: none; }
+.cv-wrapper.theme-alien .cv-certs__name        { color: #00ffff; text-shadow: 0 0 6px #00ffff; }

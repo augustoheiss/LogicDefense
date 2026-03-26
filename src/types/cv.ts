@@ -131,7 +131,7 @@ export interface CVData {
 }
 
 export type TextVariant = 'professional' | 'historian' | 'didactic' | 'alien';
-export type ThemeVariant = 'executive' | 'dark' | 'creative' | 'minimalist';
+export type ThemeVariant = 'executive' | 'historian' | 'didactic' | 'alien';
 
 export interface SectionLabels {
   work: string;

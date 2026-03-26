@@ -111,10 +111,10 @@ const TEXT_VARIANTS: { id: TextVariant; label: string; icon: string }[] = [
 ]
 
 const THEME_VARIANTS: { id: ThemeVariant; label: string; icon: string }[] = [
-  { id: 'executive',  label: 'Executive',  icon: '🏢' },
-  { id: 'dark',       label: 'Dark',       icon: '🌑' },
-  { id: 'creative',   label: 'Creative',   icon: '🎨' },
-  { id: 'minimalist', label: 'Minimalist', icon: '◻' },
+  { id: 'executive', label: 'Executive', icon: '💼' },
+  { id: 'historian', label: 'Historian', icon: '📜' },
+  { id: 'didactic',  label: 'Didactic',  icon: '🎓' },
+  { id: 'alien',     label: 'Alien',     icon: '🤖' },
 ]
 
 /* ── Page component ───────────────────────────────────────────── */

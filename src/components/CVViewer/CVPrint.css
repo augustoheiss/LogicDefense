@@ -1,40 +1,54 @@
 /* =================================================================
    CVPrint.css — @media print rules for PDF generation
-   Called via window.print(); the entire Left panel is hidden.
+   Called via window.print(); the entire UI is hidden.
+
+   Print strategy: white background, theme text colours preserved
+     • Standard 0.5 in page margins — browser handles safe zones & breaks.
+     • Backgrounds forced to white (ink-safe) for all themes.
+     • Text colours from each theme are kept — Executive navy, Historian
+       burgundy, Didactic blue all print legibly on white paper.
+     • Alien neon greens/cyans are individually darkened to WCAG-legible
+       equivalents (those colours are invisible on white paper).
+     • text-shadow removed everywhere (no neon CRT glow on paper).
+     • All UI chrome (panels, toolbar, FAB) removed from layout.
    ================================================================= */
 
 @media print {
+
+  /* ── Page setup — standard safe margins ─────────────────────── */
+  @page {
+    size: A4 portrait;
+    margin: 0.5in;
+  }
 
   /* ── Hide everything except the CV document ─────────────────── */
   body * {
     visibility: hidden;
   }
 
-  /* Show only the CV document and its children */
   #cv-print-root,
   #cv-print-root * {
     visibility: visible;
   }
 
-  /* ── Layout reset for print ──────────────────────────────────── */
+  /* ── Body shell ──────────────────────────────────────────────── */
   body {
     background: #ffffff !important;
     margin: 0;
     padding: 0;
   }
 
-  /* Hide the navbar */
+  /* ── Hide ALL UI chrome (display:none removes layout space) ──── */
   .navbar,
-  .footer {
+  .footer,
+  .cv-maker__left,
+  .cv-maker__track,
+  .cv-maker__toolbar,
+  .cv-maker__fab {
     display: none !important;
   }
 
-  /* Hide the entire left panel (controls + textarea) */
-  .cv-maker__controls {
-    display: none !important;
-  }
-
-  /* Reset the right panel to fill the page */
+  /* ── Reset wrapper chain so showcase fills the page ─────────── */
   .cv-maker,
   .cv-maker__showcase {
     display: block !important;
@@ -50,98 +64,130 @@
   .cv-wrapper {
     max-width: 100% !important;
     width: 100% !important;
+    padding: 0 !important;
   }
 
-  /* ── Position the CV at the top-left corner ──────────────────── */
+  /* ── CV document — reset position & shadow ───────────────────── */
   #cv-print-root {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
+    position: static !important;
+    width: 100% !important;
     box-shadow: none !important;
     border: none !important;
   }
 
-  /* ── Page setup ──────────────────────────────────────────────── */
-  @page {
-    
-    size: A4 portrait;
-    margin: 15mm 18mm;
+  /* ══════════════════════════════════════════════════════════════
+     UNIVERSAL BACKGROUND NORMALISATION
+     Forces every theme to white paper — text colours are preserved
+     so each theme retains its personality on the printed page.
+     ══════════════════════════════════════════════════════════════ */
+  #cv-print-root,
+  #cv-print-root * {
+    background:       #ffffff !important;
+    background-color: #ffffff !important;
+    text-shadow:      none !important; /* removes Alien neon CRT glow */
+    box-shadow:       none !important;
   }
 
-  /* ── Prevent awkward page breaks ────────────────────────────── */
-  .cv-section {
-    page-break-inside: avoid;
-    break-inside: avoid;
+  /* Structural list wrappers — keep transparent so there's no double-white */
+  #cv-print-root .cv-skills__tags,
+  #cv-print-root .cv-languages__list,
+  #cv-print-root .cv-interests__grid,
+  #cv-print-root .cv-certs__list {
+    background:       transparent !important;
+    background-color: transparent !important;
   }
 
-  .cv-item {
-    page-break-inside: avoid;
-    break-inside: avoid;
+  /* Links — remove underlines and URL annotations; keep theme colour */
+  #cv-print-root a {
+    text-decoration: none !important;
   }
 
-  .cv-header {
-    page-break-after: avoid;
-    break-after: avoid;
-  }
-
-  .cv-section__title {
-    page-break-after: avoid;
-    break-after: avoid;
-  }
-
-  /* ── Force readable colours for inkjet/laser printers ────────── */
-
-  /* dark theme → force white background + dark text on print */
-  .cv-wrapper.theme-dark .cv-document {
-    background: #ffffff !important;
-    color: #111111 !important;
-    box-shadow: none !important;
-  }
-
-  .cv-wrapper.theme-dark .cv-header__name,
-  .cv-wrapper.theme-dark .cv-item__title {
-    color: #050505 !important;
-    text-shadow: none !important;
-  }
-
-  .cv-wrapper.theme-dark .cv-header {
-    border-bottom-color: #333 !important;
-  }
-
-  .cv-wrapper.theme-dark .cv-section__title {
-    color: #333 !important;
-    text-shadow: none !important;
-    border-bottom-color: #999 !important;
-  }
-
-  .cv-wrapper.theme-dark .cv-item__org,
-  .cv-wrapper.theme-dark .cv-item__summary,
-  .cv-wrapper.theme-dark .cv-item__highlights,
-  .cv-wrapper.theme-dark .cv-header__contact-item {
-    color: #444 !important;
-  }
-
-  .cv-wrapper.theme-dark .cv-skills__tag {
-    background: transparent !important;
-    border-color: #999 !important;
-    color: #333 !important;
-  }
-
-  .cv-wrapper.theme-dark .cv-header__summary {
-    border-left-color: #333 !important;
-    color: #444 !important;
-  }
-
-  /* creative theme header gradient — replace with flat colour on print */
-  .cv-wrapper.theme-creative .cv-header {
-    background: #1a1a2e !important;
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
-  }
-
-  /* Ensure links look clean when printed */
   a[href]::after {
     content: none !important;
+  }
+
+  /* ══════════════════════════════════════════════════════════════
+     ALIEN THEME — LEGIBILITY OVERRIDES
+     Neon #00ff00 and #00ffff are near-invisible on white paper
+     (~1.07:1 contrast). Each element is individually darkened to
+     a WCAG AA-compliant equivalent while keeping the green/teal
+     hacker aesthetic.
+
+     NOTE: the Alien theme uses hardcoded hex values, not CSS
+     variables, so CSS variable overrides cannot reach them.
+     ══════════════════════════════════════════════════════════════ */
+
+  /* Base document text — neon green → dark forest green */
+  .cv-wrapper.theme-alien #cv-print-root {
+    color: #15803d !important;
+  }
+
+  /* Cyan headline elements → dark ocean blue */
+  .cv-wrapper.theme-alien .cv-header__name,
+  .cv-wrapper.theme-alien .cv-section__title,
+  .cv-wrapper.theme-alien .cv-item__title,
+  .cv-wrapper.theme-alien .cv-languages__name,
+  .cv-wrapper.theme-alien .cv-certs__name {
+    color: #0369a1 !important;
+  }
+
+  /* Green body elements → dark hunter green */
+  .cv-wrapper.theme-alien .cv-header__label,
+  .cv-wrapper.theme-alien .cv-header__contact-item,
+  .cv-wrapper.theme-alien .cv-header__summary,
+  .cv-wrapper.theme-alien .cv-item__org,
+  .cv-wrapper.theme-alien .cv-item__summary,
+  .cv-wrapper.theme-alien .cv-item__highlights,
+  .cv-wrapper.theme-alien .cv-skills__tag {
+    color: #166534 !important;
+  }
+
+  /* Muted date / fluency values → slightly lighter dark green */
+  .cv-wrapper.theme-alien .cv-item__date,
+  .cv-wrapper.theme-alien .cv-languages__fluency {
+    color: #4d7c0f !important;
+  }
+
+  /* Borders — neon semi-transparent rgba borders become visible dark lines */
+  .cv-wrapper.theme-alien .cv-header {
+    border-bottom-color: #0369a1 !important;
+  }
+
+  .cv-wrapper.theme-alien .cv-section__title {
+    border-bottom-color: #15803d !important;
+  }
+
+  .cv-wrapper.theme-alien .cv-header__summary {
+    border-left-color: #15803d !important;
+  }
+
+  .cv-wrapper.theme-alien .cv-skills__tag {
+    border-color: #166534 !important;
+  }
+
+  /* ── Smart page breaks (mapped to actual component classes) ──── */
+
+  /* Each work / education / project / certificate block stays intact */
+  .cv-item {
+    page-break-inside: avoid;
+    break-inside:      avoid;
+  }
+
+  /* Section containers should not split across pages mid-way */
+  .cv-section {
+    page-break-inside: avoid;
+    break-inside:      avoid;
+  }
+
+  /* Section heading always stays with its first item */
+  .cv-section__title {
+    page-break-after: avoid;
+    break-after:      avoid;
+  }
+
+  /* Header block stays together */
+  .cv-header {
+    page-break-after: avoid;
+    break-after:      avoid;
   }
 }
