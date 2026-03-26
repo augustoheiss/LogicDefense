@@ -242,6 +242,10 @@ export function ChatInterface({
             }
           </button>
         </div>
+
+        <p className="chat__disclaimer">
+          Privacy Note: Your data is not stored. All information is cleared when you refresh the page.
+        </p>
       </div>
     </div>
   )

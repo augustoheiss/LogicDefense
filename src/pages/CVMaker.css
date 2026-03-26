@@ -220,7 +220,14 @@
 
 /* ── Chat panel ─────────────────────────────────────────────────── */
 .cv-maker__chat {
-  /* second slot — revealed when track shifts -50% */
+  /*
+   * Override the shared .cv-maker__panel overflow-y:auto.
+   * The chat component manages its own scroll via .chat__messages.
+   * Without this override the panel would render its own OS scrollbar
+   * (~15 px wide on Windows), shrinking the available width and clipping
+   * the right border of every chat element.
+   */
+  overflow: hidden;
 }
 
 /* ── Right panel — showcase ─────────────────────────────────────── */

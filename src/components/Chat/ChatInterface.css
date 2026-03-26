@@ -80,6 +80,13 @@
   flex-direction: column;
   gap: 24px;
   scroll-behavior: smooth;
+  /*
+   * scrollbar-gutter:stable is intentionally omitted.
+   * It reserves the *OS classic* scrollbar width (~15px) regardless of our
+   * custom 4px thin scrollbar, creating a large uneven gutter on the right.
+   * Layout stability is handled instead by the parent panel having
+   * overflow:hidden (see .cv-maker__chat in CVMaker.css).
+   */
 }
 
 .chat__messages::-webkit-scrollbar { width: 4px; }
@@ -186,7 +193,7 @@
 
 /* ── Warning banner ─────────────────────────────────────────────── */
 .chat__warning {
-  margin: 0 16px 12px;
+  margin: 0 20px 12px; /* matches 20px horizontal padding used throughout */
   padding: 11px 15px;
   background: rgba(239,68,68,0.08);
   border: 1px solid rgba(239,68,68,0.28);
@@ -200,13 +207,17 @@
 /* ── Composer ───────────────────────────────────────────────────── */
 .chat__composer {
   border-top: 1px solid var(--border, rgba(255,255,255,0.07));
-  padding: 16px;
+  /* Horizontal padding matches .chat__messages (20 px) for visual alignment */
+  padding: 16px 20px 14px;
   flex-shrink: 0;
   background: var(--surface, #0f1020);
+  box-sizing: border-box;
+  width: 100%;
 }
 
 .chat__input {
   width: 100%;
+  margin: 0;                  /* prevents any stray inline margin */
   background: var(--card-bg, #12132a);
   border: 1px solid rgba(255,255,255,0.1);
   border-radius: 14px;
@@ -248,6 +259,18 @@
   font-size: 11px;
   color: var(--text-dim, #4c5270);
   flex-shrink: 0;
+}
+
+/* ── Privacy disclaimer ─────────────────────────────────────────── */
+.chat__disclaimer {
+  width: 100%;
+  margin-top: 10px;
+  padding: 0;
+  font-size: 10px;
+  line-height: 1.2;
+  color: var(--text-muted, #6b7280);
+  opacity: 0.7;
+  text-align: center;
 }
 
 /* ── Send button ────────────────────────────────────────────────── */

@@ -351,21 +351,19 @@ export function CVMaker() {
       </main>
 
       {/* ════════════════════════════════════════════════
-          FAB — toggles chat open/closed
+          FAB — only shown when the YAML editor is active.
+          Hidden while chatting to clear visual space.
           ════════════════════════════════════════════════ */}
-      <button
-        className={`cv-maker__fab${isChatOpen ? ' cv-maker__fab--active' : ''}`}
-        onClick={() => setIsChatOpen(v => !v)}
-        aria-label={isChatOpen ? 'Switch to Manual Editor' : 'Open AI Assistant'}
-        aria-pressed={isChatOpen}
-      >
-        <span className="cv-maker__fab-icon" aria-hidden="true">
-          {isChatOpen ? '✏️' : '✨'}
-        </span>
-        <span className="cv-maker__fab-label">
-          {isChatOpen ? 'Manual Editor' : 'AI Assistant'}
-        </span>
-      </button>
+      {!isChatOpen && (
+        <button
+          className="cv-maker__fab"
+          onClick={() => setIsChatOpen(true)}
+          aria-label="Open AI Assistant"
+        >
+          <span className="cv-maker__fab-icon" aria-hidden="true">✨</span>
+          <span className="cv-maker__fab-label">AI Assistant</span>
+        </button>
+      )}
     </div>
   )
 }
