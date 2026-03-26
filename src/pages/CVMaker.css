@@ -1,0 +1,498 @@
+/* =================================================================
+   CVMaker.css — Split-screen layout with chat / YAML editor toggle
+   ================================================================= */
+
+/* ── Page shell ─────────────────────────────────────────────────── */
+.cv-maker {
+  display: flex;
+  min-height: calc(100vh - var(--nav-height, 64px));
+  background: var(--bg, #07070f);
+  color: var(--text, #e2e4f0);
+  position: relative;
+}
+
+/* ── Left area — viewport window that clips the sliding track ─────── */
+.cv-maker__left {
+  width: 390px;
+  flex-shrink: 0;
+  align-self: flex-start;           /* required for position:sticky in a flex row */
+  border-right: 1px solid var(--border, rgba(255,255,255,0.07));
+  background: var(--surface, #0f1020);
+  position: sticky;
+  top: var(--nav-height, 64px);
+  height: calc(100vh - var(--nav-height, 64px));
+  overflow: hidden;                 /* clips panels that are off-screen */
+}
+
+/* ── Sliding track — holds both panels side-by-side ─────────────── */
+.cv-maker__track {
+  display: flex;
+  width: 200%;                      /* two panels wide */
+  height: 100%;
+  transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  will-change: transform;
+}
+
+/* Shift left to reveal the chat panel (second slot) */
+.cv-maker__track--chat {
+  transform: translateX(-50%);
+}
+
+/* ── Shared panel base — each panel is one "window" wide ─────────── */
+.cv-maker__panel {
+  width: 50%;                       /* half of 200% track = exactly 390px */
+  flex-shrink: 0;
+  height: 100%;
+  overflow-y: auto;
+}
+
+/* ── Controls (YAML editor) panel ───────────────────────────────── */
+.cv-maker__controls {
+  /* first slot — visible at track position 0 */
+}
+
+.cv-maker__controls-inner {
+  padding: 24px 20px 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-height: 100%;
+  box-sizing: border-box;
+}
+
+/* ── Header ─────────────────────────────────────────────────────── */
+.cv-maker__badge {
+  display: inline-block;
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--accent, #00d4ff);
+  background: rgba(0,212,255,0.12);
+  border: 1px solid rgba(0,212,255,0.3);
+  padding: 3px 10px;
+  border-radius: 20px;
+  margin-bottom: 8px;
+}
+
+.cv-maker__title {
+  font-size: 1.4rem;
+  font-weight: 800;
+  margin: 0 0 6px;
+  color: var(--text, #e2e4f0);
+  letter-spacing: -0.02em;
+}
+
+.cv-maker__subtitle {
+  font-size: 13px;
+  color: var(--text-muted, #8890aa);
+  margin: 0;
+  line-height: 1.6;
+}
+
+/* ── Field wrapper ──────────────────────────────────────────────── */
+.cv-maker__field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cv-maker__label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-muted, #8890aa);
+}
+
+/* ── Status badges ──────────────────────────────────────────────── */
+.cv-maker__status {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 10px;
+  letter-spacing: 0.05em;
+}
+
+.cv-maker__status--ok {
+  background: rgba(34,197,94,0.12);
+  color: #22c55e;
+  border: 1px solid rgba(34,197,94,0.28);
+}
+
+.cv-maker__status--error {
+  background: rgba(239,68,68,0.12);
+  color: #ef4444;
+  border: 1px solid rgba(239,68,68,0.28);
+}
+
+/* ── Textarea ───────────────────────────────────────────────────── */
+.cv-maker__textarea {
+  width: 100%;
+  height: 340px;
+  background: var(--card-bg, #12132a);
+  border: 1px solid var(--border, rgba(255,255,255,0.07));
+  border-radius: var(--radius-sm, 8px);
+  color: var(--text, #e2e4f0);
+  font-family: var(--font-mono, 'Courier New', monospace);
+  font-size: 12px;
+  line-height: 1.6;
+  padding: 12px;
+  resize: vertical;
+  outline: none;
+  transition: border-color 0.2s;
+  box-sizing: border-box;
+}
+
+.cv-maker__textarea:focus {
+  border-color: var(--accent, #00d4ff);
+  box-shadow: 0 0 0 2px rgba(0,212,255,0.12);
+}
+
+.cv-maker__textarea--error {
+  border-color: rgba(239,68,68,0.6);
+}
+
+.cv-maker__error-msg {
+  font-size: 11px;
+  color: #ef4444;
+  margin: 0;
+  font-family: var(--font-mono, monospace);
+  background: rgba(239,68,68,0.08);
+  border: 1px solid rgba(239,68,68,0.2);
+  border-radius: 6px;
+  padding: 8px 10px;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+/* ── Action buttons (controls panel) ───────────────────────────── */
+.cv-maker__actions {
+  display: flex;
+  gap: 8px;
+}
+
+.cv-maker__action-btn {
+  flex: 1;
+  padding: 11px 12px;
+  font-size: 13px;
+  font-weight: 700;
+  border-radius: var(--radius-sm, 8px);
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.cv-maker__action-btn--secondary {
+  background: var(--card-bg, #12132a);
+  color: var(--text-muted, #8890aa);
+  border-color: var(--border, rgba(255,255,255,0.07));
+}
+
+.cv-maker__action-btn--secondary:hover {
+  background: var(--card-hover, #191b35);
+  color: var(--text, #e2e4f0);
+  border-color: rgba(255,255,255,0.2);
+}
+
+.cv-maker__action-btn--primary {
+  background: var(--accent, #00d4ff);
+  color: #07070f;
+  box-shadow: 0 0 20px rgba(0,212,255,0.18);
+}
+
+.cv-maker__action-btn--primary:hover {
+  opacity: 0.9;
+  box-shadow: 0 0 28px rgba(0,212,255,0.32);
+}
+
+.cv-maker__privacy {
+  font-size: 11px;
+  color: var(--text-dim, #5c6380);
+  text-align: center;
+  margin: 0;
+}
+
+/* ── Chat panel ─────────────────────────────────────────────────── */
+.cv-maker__chat {
+  /* second slot — revealed when track shifts -50% */
+}
+
+/* ── Right panel — showcase ─────────────────────────────────────── */
+.cv-maker__showcase {
+  flex: 1;
+  overflow-y: auto;
+  background: #d0d0d0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-height: calc(100vh - var(--nav-height, 64px));
+}
+
+/* ── Sticky toolbar ─────────────────────────────────────────────── */
+.cv-maker__toolbar {
+  width: 100%;
+  background: var(--bg, #07070f);
+  border-bottom: 1px solid var(--border, rgba(255,255,255,0.07));
+  padding: 10px 24px;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.cv-maker__toolbar-section {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.cv-maker__toolbar-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-dim, #5c6380);
+  white-space: nowrap;
+}
+
+.cv-maker__toolbar-actions {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.cv-maker__toolbar-actions .cv-maker__action-btn {
+  flex: none;
+  padding: 8px 14px;
+  font-size: 12px;
+}
+
+/* ── Button groups ──────────────────────────────────────────────── */
+.cv-maker__btn-group {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.cv-maker__btn {
+  padding: 6px 11px;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 6px;
+  border: 1px solid var(--border, rgba(255,255,255,0.07));
+  background: var(--card-bg, #12132a);
+  color: var(--text-muted, #8890aa);
+  cursor: pointer;
+  transition: all 0.15s;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+
+.cv-maker__btn:hover {
+  background: var(--card-hover, #191b35);
+  color: var(--text, #e2e4f0);
+  border-color: rgba(255,255,255,0.15);
+}
+
+.cv-maker__btn--active {
+  background: rgba(0,212,255,0.12);
+  color: var(--accent, #00d4ff);
+  border-color: rgba(0,212,255,0.35);
+}
+
+/* ── CV wrapper ─────────────────────────────────────────────────── */
+.cv-wrapper {
+  width: 100%;
+  max-width: 860px;
+  padding: 32px 24px 48px;
+  box-sizing: border-box;
+}
+
+/* ── Empty state ────────────────────────────────────────────────── */
+.cv-maker__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 80px 40px;
+  color: #777;
+  text-align: center;
+}
+
+.cv-maker__empty-icon {
+  font-size: 52px;
+  opacity: 0.6;
+}
+
+.cv-maker__empty p {
+  font-size: 15px;
+  line-height: 1.6;
+  max-width: 360px;
+  color: #666;
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   FAB — floating action button
+   ══════════════════════════════════════════════════════════════════ */
+.cv-maker__fab {
+  position: fixed;
+  bottom: 28px;
+  left: calc(390px + 24px);   /* aligned to the right edge of the left panel */
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 20px;
+  border: none;
+  border-radius: 50px;
+  background: var(--accent, #00d4ff);
+  color: #07070f;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 4px 24px rgba(0,212,255,0.35), 0 2px 8px rgba(0,0,0,0.4);
+  transition: background 0.2s, box-shadow 0.2s, transform 0.15s;
+  letter-spacing: 0.01em;
+}
+
+.cv-maker__fab:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 32px rgba(0,212,255,0.45), 0 2px 10px rgba(0,0,0,0.5);
+}
+
+.cv-maker__fab:active {
+  transform: translateY(0);
+}
+
+.cv-maker__fab--active {
+  background: #6c47ff;             /* purple when showing "go back to editor" */
+  box-shadow: 0 4px 24px rgba(108,71,255,0.35), 0 2px 8px rgba(0,0,0,0.4);
+}
+
+.cv-maker__fab--active:hover {
+  box-shadow: 0 6px 32px rgba(108,71,255,0.5), 0 2px 10px rgba(0,0,0,0.5);
+}
+
+.cv-maker__fab-icon {
+  font-size: 16px;
+  line-height: 1;
+}
+
+.cv-maker__fab-label {
+  white-space: nowrap;
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   Responsive — tablet / mobile
+   ══════════════════════════════════════════════════════════════════ */
+
+/* Tablet (≤ 1024px): left panel becomes narrower */
+@media (max-width: 1024px) {
+  .cv-maker__left {
+    width: 340px;
+  }
+
+  .cv-maker__fab {
+    left: calc(340px + 16px);
+  }
+}
+
+/* Mobile (≤ 768px): stacked layout */
+@media (max-width: 768px) {
+  .cv-maker {
+    flex-direction: column;
+  }
+
+  .cv-maker__left {
+    width: 100%;
+    height: auto;
+    position: static;
+    align-self: auto;
+    border-right: none;
+    border-bottom: 1px solid var(--border, rgba(255,255,255,0.07));
+    overflow: hidden;
+  }
+
+  /* On mobile the track still slides — panels are auto-height */
+  .cv-maker__track {
+    height: auto;
+    align-items: flex-start;
+  }
+
+  .cv-maker__panel {
+    height: auto;
+    overflow-y: visible;
+  }
+
+  .cv-maker__controls-inner {
+    padding: 20px 16px 28px;
+  }
+
+  .cv-maker__textarea {
+    height: 220px;
+  }
+
+  .cv-maker__showcase {
+    min-height: 60vh;
+  }
+
+  .cv-wrapper {
+    padding: 20px 12px 40px;
+  }
+
+  /* Toolbar wraps nicely on mobile */
+  .cv-maker__toolbar {
+    padding: 10px 14px;
+    gap: 10px;
+  }
+
+  .cv-maker__toolbar-actions {
+    margin-left: 0;
+  }
+
+  /* FAB: bottom-centre on mobile */
+  .cv-maker__fab {
+    left: 50%;
+    transform: translateX(-50%);
+    bottom: 20px;
+  }
+
+  .cv-maker__fab:hover {
+    transform: translateX(-50%) translateY(-2px);
+  }
+
+  .cv-maker__fab:active {
+    transform: translateX(-50%);
+  }
+}
+
+/* Very small screens */
+@media (max-width: 400px) {
+  .cv-maker__btn {
+    font-size: 11px;
+    padding: 5px 8px;
+  }
+
+  .cv-maker__fab-label {
+    display: none;
+  }
+
+  .cv-maker__fab {
+    padding: 13px 16px;
+    border-radius: 50%;
+  }
+}

@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom'
 import { youtubeVideos } from '../data/content'
 
 export function LabPage() {
@@ -29,6 +30,21 @@ export function LabPage() {
             <span className="stat-bar__value">IA</span>
             <span className="stat-bar__label">Co-criado</span>
           </div>
+        </div>
+
+        {/* ── CV YAML tool card ── */}
+        <div className="cv-lab-card">
+          <div className="cv-lab-card__icon">📄</div>
+          <div className="cv-lab-card__body">
+            <span className="cv-lab-card__tag">SaaS Tool · MVP</span>
+            <h2 className="cv-lab-card__title">CV YAML — Crush the Bureaucracy</h2>
+            <p className="cv-lab-card__desc">
+              Paste your AI-generated YAML resume, choose a persona and a visual theme, then export a pixel-perfect PDF — all processed locally, zero data leaves your browser.
+            </p>
+          </div>
+          <Link to="/laboratorio/cv-maker" className="cv-lab-card__cta">
+            Open CV Maker ↗
+          </Link>
         </div>
 
         {/* ── Video grid ── */}

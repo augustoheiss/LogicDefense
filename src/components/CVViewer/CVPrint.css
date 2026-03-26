@@ -1,0 +1,147 @@
+/* =================================================================
+   CVPrint.css — @media print rules for PDF generation
+   Called via window.print(); the entire Left panel is hidden.
+   ================================================================= */
+
+@media print {
+
+  /* ── Hide everything except the CV document ─────────────────── */
+  body * {
+    visibility: hidden;
+  }
+
+  /* Show only the CV document and its children */
+  #cv-print-root,
+  #cv-print-root * {
+    visibility: visible;
+  }
+
+  /* ── Layout reset for print ──────────────────────────────────── */
+  body {
+    background: #ffffff !important;
+    margin: 0;
+    padding: 0;
+  }
+
+  /* Hide the navbar */
+  .navbar,
+  .footer {
+    display: none !important;
+  }
+
+  /* Hide the entire left panel (controls + textarea) */
+  .cv-maker__controls {
+    display: none !important;
+  }
+
+  /* Reset the right panel to fill the page */
+  .cv-maker,
+  .cv-maker__showcase {
+    display: block !important;
+    width: 100% !important;
+    height: auto !important;
+    overflow: visible !important;
+    background: #ffffff !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    min-height: unset !important;
+  }
+
+  .cv-wrapper {
+    max-width: 100% !important;
+    width: 100% !important;
+  }
+
+  /* ── Position the CV at the top-left corner ──────────────────── */
+  #cv-print-root {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    box-shadow: none !important;
+    border: none !important;
+  }
+
+  /* ── Page setup ──────────────────────────────────────────────── */
+  @page {
+    
+    size: A4 portrait;
+    margin: 15mm 18mm;
+  }
+
+  /* ── Prevent awkward page breaks ────────────────────────────── */
+  .cv-section {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  .cv-item {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  .cv-header {
+    page-break-after: avoid;
+    break-after: avoid;
+  }
+
+  .cv-section__title {
+    page-break-after: avoid;
+    break-after: avoid;
+  }
+
+  /* ── Force readable colours for inkjet/laser printers ────────── */
+
+  /* dark theme → force white background + dark text on print */
+  .cv-wrapper.theme-dark .cv-document {
+    background: #ffffff !important;
+    color: #111111 !important;
+    box-shadow: none !important;
+  }
+
+  .cv-wrapper.theme-dark .cv-header__name,
+  .cv-wrapper.theme-dark .cv-item__title {
+    color: #050505 !important;
+    text-shadow: none !important;
+  }
+
+  .cv-wrapper.theme-dark .cv-header {
+    border-bottom-color: #333 !important;
+  }
+
+  .cv-wrapper.theme-dark .cv-section__title {
+    color: #333 !important;
+    text-shadow: none !important;
+    border-bottom-color: #999 !important;
+  }
+
+  .cv-wrapper.theme-dark .cv-item__org,
+  .cv-wrapper.theme-dark .cv-item__summary,
+  .cv-wrapper.theme-dark .cv-item__highlights,
+  .cv-wrapper.theme-dark .cv-header__contact-item {
+    color: #444 !important;
+  }
+
+  .cv-wrapper.theme-dark .cv-skills__tag {
+    background: transparent !important;
+    border-color: #999 !important;
+    color: #333 !important;
+  }
+
+  .cv-wrapper.theme-dark .cv-header__summary {
+    border-left-color: #333 !important;
+    color: #444 !important;
+  }
+
+  /* creative theme header gradient — replace with flat colour on print */
+  .cv-wrapper.theme-creative .cv-header {
+    background: #1a1a2e !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* Ensure links look clean when printed */
+  a[href]::after {
+    content: none !important;
+  }
+}

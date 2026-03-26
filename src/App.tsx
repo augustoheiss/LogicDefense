@@ -8,6 +8,7 @@ import { LabPage } from './pages/LabPage'
 import { MaterialsPage } from './pages/MaterialsPage'
 import { LessonPage } from './pages/LessonPage'
 import { SobrePage } from './pages/SobrePage'
+import { CVMaker } from './pages/CVMaker'
 import './styles/game.css'
 
 export default function App() {
@@ -21,6 +22,7 @@ export default function App() {
           <Route path="/jogos/logic-defense"       element={<LogicDefensePage />} />
           <Route path="/jogos/logic-ascension"    element={<LogicAscensionPage />} />
           <Route path="/laboratorio"               element={<LabPage />} />
+          <Route path="/laboratorio/cv-maker"      element={<CVMaker />} />
           <Route path="/repositorio"               element={<MaterialsPage />} />
           {/* Dynamic lesson reading page — /repositorio/vieses-dos-numeros etc. */}
           <Route path="/repositorio/:slug"         element={<LessonPage />} />

@@ -1873,6 +1873,81 @@
   gap: 10px;
 }
 
+/* ── CV Lab Card ────────────────────────────────────────────────── */
+.cv-lab-card {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  background: linear-gradient(135deg, var(--surface-2) 0%, rgba(124,58,237,0.12) 100%);
+  border: 1px solid rgba(124,58,237,0.3);
+  border-radius: var(--radius-lg);
+  padding: 24px 28px;
+  margin-bottom: 32px;
+  box-shadow: 0 0 32px rgba(124,58,237,0.08);
+  flex-wrap: wrap;
+}
+
+.cv-lab-card__icon {
+  font-size: 40px;
+  flex-shrink: 0;
+}
+
+.cv-lab-card__body {
+  flex: 1;
+  min-width: 200px;
+}
+
+.cv-lab-card__tag {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--purple);
+  background: var(--purple-dim);
+  border: 1px solid rgba(124,58,237,0.3);
+  padding: 2px 9px;
+  border-radius: 20px;
+  display: inline-block;
+  margin-bottom: 6px;
+}
+
+.cv-lab-card__title {
+  font-size: 1.15rem;
+  font-weight: 800;
+  margin: 0 0 6px;
+  color: var(--text);
+  letter-spacing: -0.02em;
+}
+
+.cv-lab-card__desc {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin: 0;
+  line-height: 1.6;
+}
+
+.cv-lab-card__cta {
+  display: inline-flex;
+  align-items: center;
+  padding: 10px 20px;
+  background: var(--purple);
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 700;
+  border-radius: var(--radius-sm);
+  text-decoration: none;
+  white-space: nowrap;
+  transition: opacity 0.2s, box-shadow 0.2s;
+  box-shadow: 0 0 20px rgba(124,58,237,0.3);
+  flex-shrink: 0;
+}
+
+.cv-lab-card__cta:hover {
+  opacity: 0.88;
+  box-shadow: 0 0 32px rgba(124,58,237,0.5);
+}
+
 /* ── Responsive ──────────────────────────────────────────────── */
 @media (max-width: 900px) {
   .repo-workspace {
