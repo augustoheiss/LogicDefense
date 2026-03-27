@@ -352,56 +352,6 @@
   color: #666;
 }
 
-/* ══════════════════════════════════════════════════════════════════
-   FAB — floating action button
-   ══════════════════════════════════════════════════════════════════ */
-.cv-maker__fab {
-  position: fixed;
-  bottom: 28px;
-  left: calc(390px + 24px);   /* aligned to the right edge of the left panel */
-  z-index: 50;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 20px;
-  border: none;
-  border-radius: 50px;
-  background: var(--accent, #00d4ff);
-  color: #07070f;
-  font-size: 14px;
-  font-weight: 700;
-  cursor: pointer;
-  box-shadow: 0 4px 24px rgba(0,212,255,0.35), 0 2px 8px rgba(0,0,0,0.4);
-  transition: background 0.2s, box-shadow 0.2s, transform 0.15s;
-  letter-spacing: 0.01em;
-}
-
-.cv-maker__fab:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 32px rgba(0,212,255,0.45), 0 2px 10px rgba(0,0,0,0.5);
-}
-
-.cv-maker__fab:active {
-  transform: translateY(0);
-}
-
-.cv-maker__fab--active {
-  background: #6c47ff;             /* purple when showing "go back to editor" */
-  box-shadow: 0 4px 24px rgba(108,71,255,0.35), 0 2px 8px rgba(0,0,0,0.4);
-}
-
-.cv-maker__fab--active:hover {
-  box-shadow: 0 6px 32px rgba(108,71,255,0.5), 0 2px 10px rgba(0,0,0,0.5);
-}
-
-.cv-maker__fab-icon {
-  font-size: 16px;
-  line-height: 1;
-}
-
-.cv-maker__fab-label {
-  white-space: nowrap;
-}
 
 /* ══════════════════════════════════════════════════════════════════
    Responsive — tablet / mobile
@@ -411,10 +361,6 @@
 @media (max-width: 1024px) {
   .cv-maker__left {
     width: 340px;
-  }
-
-  .cv-maker__fab {
-    left: calc(340px + 16px);
   }
 }
 
@@ -470,21 +416,6 @@
   .cv-maker__toolbar-actions {
     margin-left: 0;
   }
-
-  /* FAB: bottom-centre on mobile */
-  .cv-maker__fab {
-    left: 50%;
-    transform: translateX(-50%);
-    bottom: 20px;
-  }
-
-  .cv-maker__fab:hover {
-    transform: translateX(-50%) translateY(-2px);
-  }
-
-  .cv-maker__fab:active {
-    transform: translateX(-50%);
-  }
 }
 
 /* Very small screens */
@@ -492,14 +423,5 @@
   .cv-maker__btn {
     font-size: 11px;
     padding: 5px 8px;
-  }
-
-  .cv-maker__fab-label {
-    display: none;
-  }
-
-  .cv-maker__fab {
-    padding: 13px 16px;
-    border-radius: 50%;
   }
 }

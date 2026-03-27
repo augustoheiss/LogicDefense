@@ -119,7 +119,6 @@ const THEME_VARIANTS: { id: ThemeVariant; label: string; icon: string }[] = [
 
 /* ── Page component ───────────────────────────────────────────── */
 export function CVMaker() {
-  const [isChatOpen, setIsChatOpen]     = useState(false)
   const [cvVersions, setCvVersions]     = useState<CVVersions | null>(null)
   const [yamlInput, setYamlInput]       = useState<string>(JOHN_DOE_YAML)
   const [cvData, setCvData]             = useState<CVData | null>(null)
@@ -164,7 +163,6 @@ export function CVMaker() {
 
   const handleCVGenerated = (versions: CVVersions) => {
     setCvVersions(versions)
-    setIsChatOpen(false) // slide back to preview after generation
   }
 
   const handleReset = () => {
@@ -195,17 +193,17 @@ export function CVMaker() {
           ════════════════════════════════════════════════ */}
       <div className="cv-maker__left" aria-label="Left panel">
         {/*
-          The track is 200% wide and holds both panels side-by-side.
-          translateX(-50%) on the track reveals the chat (second slot).
-          translateX(0)    reveals the editor (first slot).
+          The track is 200% wide. The --chat modifier locks it at -50%
+          so the Chat panel (slot 2) is always the visible left column.
+          The YAML editor (slot 1) remains off-screen at all times.
         */}
-        <div className={`cv-maker__track${isChatOpen ? ' cv-maker__track--chat' : ''}`}>
+        <div className="cv-maker__track cv-maker__track--chat">
 
-          {/* ── Slot 1: YAML editor ── */}
+          {/* ── Slot 1: YAML editor (off-screen, aria-hidden) ── */}
           <aside
             className="cv-maker__panel cv-maker__controls"
             aria-label="YAML editor"
-            aria-hidden={isChatOpen}
+            aria-hidden={true}
           >
             <div className="cv-maker__controls-inner">
 
@@ -213,7 +211,7 @@ export function CVMaker() {
                 <span className="cv-maker__badge">⚡ CV YAML</span>
                 <h1 className="cv-maker__title">Crush the Bureaucracy</h1>
                 <p className="cv-maker__subtitle">
-                  Edit your YAML directly — the preview updates in real-time. Or use the AI Assistant to generate it.
+                  Edit your YAML directly — the preview updates in real-time.
                 </p>
               </header>
 
@@ -232,7 +230,7 @@ export function CVMaker() {
                   onChange={e => handleYamlChange(e.target.value)}
                   spellCheck={false}
                   aria-describedby={parseError ? 'yaml-error' : undefined}
-                  tabIndex={isChatOpen ? -1 : undefined}
+                  tabIndex={-1}
                 />
                 {parseError && (
                   <p id="yaml-error" className="cv-maker__error-msg" role="alert">
@@ -245,14 +243,14 @@ export function CVMaker() {
                 <button
                   className="cv-maker__action-btn cv-maker__action-btn--secondary"
                   onClick={handleDownload}
-                  tabIndex={isChatOpen ? -1 : undefined}
+                  tabIndex={-1}
                 >
                   ⬇ Download .yaml
                 </button>
                 <button
                   className="cv-maker__action-btn cv-maker__action-btn--primary"
                   onClick={handlePrint}
-                  tabIndex={isChatOpen ? -1 : undefined}
+                  tabIndex={-1}
                 >
                   🖨 Generate PDF
                 </button>
@@ -262,11 +260,10 @@ export function CVMaker() {
             </div>
           </aside>
 
-          {/* ── Slot 2: Chat ── */}
+          {/* ── Slot 2: Chat (always visible) ── */}
           <div
             className="cv-maker__panel cv-maker__chat"
             aria-label="AI Chat"
-            aria-hidden={!isChatOpen}
           >
             <ChatInterface
               onCVGenerated={handleCVGenerated}
@@ -343,27 +340,13 @@ export function CVMaker() {
             : (
               <div className="cv-maker__empty">
                 <span className="cv-maker__empty-icon">📄</span>
-                <p>Paste valid YAML on the left, or click <strong>Open AI Assistant</strong> to generate your CV automatically.</p>
+                <p>Paste your resume in the AI Assistant on the left to generate your CV.</p>
               </div>
             )
           }
         </div>
       </main>
 
-      {/* ════════════════════════════════════════════════
-          FAB — only shown when the YAML editor is active.
-          Hidden while chatting to clear visual space.
-          ════════════════════════════════════════════════ */}
-      {!isChatOpen && (
-        <button
-          className="cv-maker__fab"
-          onClick={() => setIsChatOpen(true)}
-          aria-label="Open AI Assistant"
-        >
-          <span className="cv-maker__fab-icon" aria-hidden="true">✨</span>
-          <span className="cv-maker__fab-label">AI Assistant</span>
-        </button>
-      )}
     </div>
   )
 }
