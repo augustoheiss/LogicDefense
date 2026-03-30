@@ -4,12 +4,24 @@ import type { TableRow } from '../types';
 interface SpreadsheetGridProps {
   rows: TableRow[];
   dailyGoal: number;
+  /** "YYYY-MM" — only rows in this month are rendered. */
+  selectedMonth: string;
   onUpdateRow: (rowId: string, patch: Partial<Omit<TableRow, 'id'>>) => void;
   onDeleteRow: (rowId: string) => void;
 }
 
-export function SpreadsheetGrid({ rows, dailyGoal, onUpdateRow, onDeleteRow }: SpreadsheetGridProps) {
+export function SpreadsheetGrid({
+  rows,
+  dailyGoal,
+  selectedMonth,
+  onUpdateRow,
+  onDeleteRow,
+}: SpreadsheetGridProps) {
   const [editingCell, setEditingCell] = useState<{ rowId: string; field: string } | null>(null);
+
+  // Show only rows belonging to the selected month
+  const visibleRows = rows.filter((r) => r.date.startsWith(selectedMonth + '-'));
+  const hiddenCount = rows.length - visibleRows.length;
 
   function formatCurrency(v: number): string {
     return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -20,10 +32,15 @@ export function SpreadsheetGrid({ rows, dailyGoal, onUpdateRow, onDeleteRow }: S
     return `${d}/${m}/${y}`;
   }
 
-  if (rows.length === 0) {
+  if (visibleRows.length === 0) {
     return (
-      <div className="text-center py-12 text-white/30 text-sm">
-        Nenhuma entrada ainda. Adicione a primeira linha abaixo.
+      <div className="text-center py-12 text-white/30 text-sm space-y-1">
+        <p>Nenhuma entrada neste mês.</p>
+        {hiddenCount > 0 && (
+          <p className="text-xs text-white/20">
+            {hiddenCount} {hiddenCount === 1 ? 'entrada' : 'entradas'} em outros meses.
+          </p>
+        )}
       </div>
     );
   }
@@ -47,7 +64,7 @@ export function SpreadsheetGrid({ rows, dailyGoal, onUpdateRow, onDeleteRow }: S
           </tr>
         </thead>
         <tbody>
-          {rows.map((row, idx) => (
+          {visibleRows.map((row, idx) => (
             <tr
               key={row.id}
               className={`border-b border-white/5 hover:bg-white/5 transition-colors ${

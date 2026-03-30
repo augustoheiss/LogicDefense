@@ -12,6 +12,8 @@ import { WhatsAppExporter } from './WhatsAppExporter';
 import { ConfirmDialog } from './ConfirmDialog';
 import { downloadCSV } from '../utils/csvIO';
 
+// ── Types ─────────────────────────────────────────────────────────────────────
+
 type TabId = 'spreadsheet' | 'metrics' | 'chart';
 
 interface TableEditorProps {
@@ -21,6 +23,94 @@ interface TableEditorProps {
   onAddRow: (row: Omit<TableRow, 'id'>) => void;
   onEditTable: () => void;
 }
+
+// ── Month helpers (used by selector + children) ───────────────────────────────
+
+function pad2(n: number): string {
+  return String(n).padStart(2, '0');
+}
+
+function todayYM(): string {
+  const t = new Date();
+  return `${t.getFullYear()}-${pad2(t.getMonth() + 1)}`;
+}
+
+/** All distinct "YYYY-MM" values in rows + current month, newest first. */
+function buildAvailableMonths(rows: TableRow[]): string[] {
+  const months = new Set<string>([todayYM()]);
+  for (const row of rows) {
+    months.add(row.date.slice(0, 7));
+  }
+  return Array.from(months).sort().reverse();
+}
+
+/** Most recent month that has any revenue row, falling back to current month. */
+function defaultMonth(rows: TableRow[]): string {
+  const last = rows
+    .filter((r) => r.entryType !== 'deposit')
+    .map((r) => r.date.slice(0, 7))
+    .sort()
+    .reverse()[0];
+  return last ?? todayYM();
+}
+
+function formatMonthLabel(ym: string): string {
+  const [y, m] = ym.split('-');
+  const label = new Date(parseInt(y), parseInt(m) - 1, 1).toLocaleDateString('pt-BR', {
+    month: 'long',
+    year: 'numeric',
+  });
+  return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
+// ── Month selector ────────────────────────────────────────────────────────────
+
+interface MonthSelectorProps {
+  value: string;
+  options: string[];
+  onChange: (ym: string) => void;
+}
+
+function MonthSelector({ value, options, onChange }: MonthSelectorProps) {
+  const idx     = options.indexOf(value);
+  const hasPrev = idx < options.length - 1; // older = higher index (desc sort)
+  const hasNext = idx > 0;                  // newer = lower index
+
+  return (
+    <div className="flex items-center gap-1">
+      <button
+        onClick={() => hasPrev && onChange(options[idx + 1])}
+        disabled={!hasPrev}
+        className="px-2 py-1 rounded text-white/40 hover:text-white hover:bg-white/10 disabled:opacity-20 disabled:cursor-not-allowed transition-colors text-base leading-none"
+        aria-label="Mês anterior"
+      >
+        ‹
+      </button>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="text-xs font-medium text-white rounded-lg px-3 py-1.5 outline-none focus:ring-1 focus:ring-[#a855f7] cursor-pointer border border-white/15 appearance-none"
+        style={{ backgroundColor: 'rgba(255,255,255,0.06)' }}
+      >
+        {options.map((ym) => (
+          <option key={ym} value={ym} style={{ background: '#1a1a2e', color: '#fff' }}>
+            {formatMonthLabel(ym)}
+          </option>
+        ))}
+      </select>
+      <button
+        onClick={() => hasNext && onChange(options[idx - 1])}
+        disabled={!hasNext}
+        className="px-2 py-1 rounded text-white/40 hover:text-white hover:bg-white/10 disabled:opacity-20 disabled:cursor-not-allowed transition-colors text-base leading-none"
+        aria-label="Próximo mês"
+      >
+        ›
+      </button>
+    </div>
+  );
+}
+
+// ── Main component ────────────────────────────────────────────────────────────
 
 export function TableEditor({
   table,
@@ -34,12 +124,28 @@ export function TableEditor({
   const [deleteRowId,  setDeleteRowId]  = useState<string | null>(null);
   const [chartView,    setChartView]    = useState<'history' | 'projection'>('history');
 
-  // Only revenue rows feed the metrics engine — deposits must never skew averages
+  // ── Derived rows ────────────────────────────────────────────────────────────
   const revenueRows = useMemo(
     () => table.rows.filter((r) => r.entryType !== 'deposit'),
     [table.rows],
   );
   const metrics = useMemo(() => computeMetrics(revenueRows), [revenueRows]);
+
+  // ── Global month selector ───────────────────────────────────────────────────
+  const availableMonths = useMemo(() => buildAvailableMonths(table.rows), [table.rows]);
+  const [selectedMonth, setSelectedMonth] = useState<string>(
+    () => defaultMonth(table.rows),
+  );
+  // Guard: if the selected month is no longer in the list, snap to the first
+  const effectiveMonth = availableMonths.includes(selectedMonth)
+    ? selectedMonth
+    : (availableMonths[0] ?? todayYM());
+
+  // Rows visible in the current month view
+  const monthRows = useMemo(
+    () => table.rows.filter((r) => r.date.startsWith(effectiveMonth + '-')),
+    [table.rows, effectiveMonth],
+  );
 
   function fmt(v: number) {
     return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -47,8 +153,8 @@ export function TableEditor({
 
   const tabs: { id: TabId; label: string }[] = [
     { id: 'spreadsheet', label: 'Planilha' },
-    { id: 'metrics', label: 'Métricas' },
-    { id: 'chart', label: 'Gráfico' },
+    { id: 'metrics',     label: 'Métricas' },
+    { id: 'chart',       label: 'Gráfico'  },
   ];
 
   return (
@@ -91,7 +197,7 @@ export function TableEditor({
         </div>
       </div>
 
-      {/* ── Quick stats bar ── */}
+      {/* ── Global quick stats (all-time) ── */}
       {metrics.grossTotal > 0 && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
           {[
@@ -103,8 +209,8 @@ export function TableEditor({
                 ? 'text-emerald-400'
                 : 'text-amber-400',
             },
-            { label: 'Semanal', value: fmt(metrics.globalWeeklyAvg), color: 'text-white' },
-            { label: 'Mensal',  value: fmt(metrics.globalMonthlyAvg),color: 'text-white' },
+            { label: 'Semanal', value: fmt(metrics.globalWeeklyAvg),  color: 'text-white' },
+            { label: 'Mensal',  value: fmt(metrics.globalMonthlyAvg), color: 'text-white' },
           ].map((s) => (
             <div
               key={s.label}
@@ -116,6 +222,22 @@ export function TableEditor({
           ))}
         </div>
       )}
+
+      {/* ── Global month filter — controls Planilha, Gráfico, and WhatsApp ── */}
+      <div className="flex items-center justify-between gap-3 py-1 border-y border-white/8">
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-white/30 hidden sm:block">Visualizando:</span>
+          <MonthSelector
+            value={effectiveMonth}
+            options={availableMonths}
+            onChange={setSelectedMonth}
+          />
+        </div>
+        <span className="text-xs text-white/25">
+          {monthRows.length} {monthRows.length === 1 ? 'entrada' : 'entradas'} em{' '}
+          {formatMonthLabel(effectiveMonth).toLowerCase()}
+        </span>
+      </div>
 
       {/* ── Tabs ── */}
       <div className="flex gap-1 border-b border-white/10">
@@ -134,7 +256,7 @@ export function TableEditor({
         ))}
         <div className="flex-1" />
         <span className="text-xs text-white/20 self-end pb-2 pr-1">
-          {table.rows.length} {table.rows.length === 1 ? 'entrada' : 'entradas'}
+          {table.rows.length} total
         </span>
       </div>
 
@@ -145,6 +267,7 @@ export function TableEditor({
             <SpreadsheetGrid
               rows={table.rows}
               dailyGoal={table.goals.dailyGoal}
+              selectedMonth={effectiveMonth}
               onUpdateRow={(rowId, patch) => onUpdateRow(rowId, patch)}
               onDeleteRow={(rowId) => setDeleteRowId(rowId)}
             />
@@ -187,13 +310,16 @@ export function TableEditor({
 
             {chartView === 'history' && (
               <div className="bg-white/5 border border-white/10 rounded-xl p-5">
-                <RevenueChart rows={revenueRows} dailyGoal={table.goals.dailyGoal} />
+                <RevenueChart
+                  rows={revenueRows}
+                  dailyGoal={table.goals.dailyGoal}
+                  selectedMonth={effectiveMonth}
+                />
               </div>
             )}
 
             {chartView === 'projection' && (
               <div className="space-y-6">
-                {/* ── Section 1: Real deposit history ── */}
                 <div className="space-y-3">
                   <div className="flex items-center gap-3">
                     <div className="flex-1 h-px bg-white/8" />
@@ -207,7 +333,6 @@ export function TableEditor({
                   </div>
                 </div>
 
-                {/* ── Divider ── */}
                 <div className="flex items-center gap-3">
                   <div className="flex-1 h-px bg-white/8" />
                   <span className="text-xs text-white/20 uppercase tracking-wider px-1">
@@ -216,7 +341,6 @@ export function TableEditor({
                   <div className="flex-1 h-px bg-white/8" />
                 </div>
 
-                {/* ── Section 2: Future projection simulator ── */}
                 <div className="bg-white/5 border border-white/10 rounded-xl p-5">
                   <FutureProjectionChart rows={table.rows} />
                 </div>
@@ -231,6 +355,7 @@ export function TableEditor({
         <WhatsAppExporter
           table={table}
           metrics={metrics}
+          selectedMonth={effectiveMonth}
           onClose={() => setShowWhatsApp(false)}
         />
       )}

@@ -4,76 +4,121 @@ import type { CoinTable, TableMetrics } from '../types';
 interface WhatsAppExporterProps {
   table: CoinTable;
   metrics: TableMetrics;
+  /** "YYYY-MM" — the month currently in view; drives the month-specific report. */
+  selectedMonth: string;
   onClose: () => void;
 }
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
 function fmt(v: number): string {
   return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 }
 
-function buildMessage(table: CoinTable, metrics: TableMetrics): string {
-  const sortedMonths = Object.keys(metrics.byMonth).sort().reverse();
-  const latestYM = sortedMonths[0];
-  const latestMonth = latestYM ? metrics.byMonth[latestYM] : null;
+function formatMonthFull(ym: string): string {
+  const [y, m] = ym.split('-');
+  const label = new Date(parseInt(y), parseInt(m) - 1, 1).toLocaleDateString('pt-BR', {
+    month: 'long',
+    year: 'numeric',
+  });
+  return label.charAt(0).toUpperCase() + label.slice(1);
+}
 
-  function formatMonth(ym: string): string {
-    const [y, m] = ym.split('-');
-    const date = new Date(parseInt(y), parseInt(m) - 1, 1);
-    return date.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
-  }
+/** "YYYY-MM-DD" → "DD/MM" */
+function fmtDay(dateStr: string): string {
+  const [, m, d] = dateStr.split('-');
+  return `${d}/${m}`;
+}
+
+// ── Message builder ───────────────────────────────────────────────────────────
+
+function buildMessage(
+  table: CoinTable,
+  metrics: TableMetrics,
+  selectedMonth: string,
+): string {
+  const monthLabel   = formatMonthFull(selectedMonth);
+  const monthMetrics = metrics.byMonth[selectedMonth];
+
+  // Revenue rows for this month only, sorted chronologically, non-zero
+  const revenueRows = table.rows
+    .filter(
+      (r) =>
+        r.entryType !== 'deposit' &&
+        r.value > 0 &&
+        r.date.startsWith(selectedMonth + '-'),
+    )
+    .sort((a, b) => a.date.localeCompare(b.date));
 
   const lines: string[] = [
-    `📊 *Relatório Financeiro — ${table.name}*`,
-    table.description ? `_${table.description}_` : '',
-    '',
-    `📅 *Totais Globais*`,
-    `• Total Bruto: *${fmt(metrics.grossTotal)}*`,
-    `• Média Diária: ${fmt(metrics.globalDailyAvg)}`,
-    `• Média Semanal: ${fmt(metrics.globalWeeklyAvg)}`,
-    `• Média Mensal: ${fmt(metrics.globalMonthlyAvg)}`,
-    `• Média Anual: ${fmt(metrics.globalAnnualAvg)}`,
+    `📆 *Relatório: ${table.name}*`,
+    `_${monthLabel}_`,
+    ...(table.description ? [`_${table.description}_`] : []),
     '',
   ];
 
-  if (latestMonth && latestYM) {
+  // ── Month summary ──────────────────────────────────────────────────────────
+  if (monthMetrics) {
+    const goalPct = table.goals.dailyGoal > 0
+      ? ((monthMetrics.dailyAvg / table.goals.dailyGoal) * 100).toFixed(1)
+      : '0.0';
+
     lines.push(
-      `📆 *${formatMonth(latestYM)}*`,
-      `• Bruto: *${fmt(latestMonth.grossMonthly)}*`,
-      `• Média Diária: ${fmt(latestMonth.dailyAvg)}`,
-      `• Média Semanal: ${fmt(latestMonth.weeklyAvg)}`,
-      `• Última Semana: ${fmt(latestMonth.lastWeekGross)}`,
+      `📊 *Resumo do Mês*`,
+      `• Total do Mês: *${fmt(monthMetrics.grossMonthly)}*`,
+      `• Média Diária: ${fmt(monthMetrics.dailyAvg)}`,
+      `• Média Semanal: ${fmt(monthMetrics.weeklyAvg)}`,
+      `• Meta Diária (${fmt(table.goals.dailyGoal)}): ${goalPct}% atingida`,
       '',
     );
+  } else {
+    lines.push(`📊 *Sem receitas registradas neste mês.*`, '');
   }
 
-  const goalDailyPct =
-    metrics.globalDailyAvg > 0
-      ? ((metrics.globalDailyAvg / table.goals.dailyGoal) * 100).toFixed(1)
-      : '0.0';
-  const annualPct =
-    metrics.grossTotal > 0
-      ? ((metrics.grossTotal / table.goals.annualCost) * 100).toFixed(1)
-      : '0.0';
+  // ── Daily breakdown ────────────────────────────────────────────────────────
+  if (revenueRows.length > 0) {
+    lines.push(`📋 *Entradas Diárias*`);
+    for (const row of revenueRows) {
+      const desc = row.description ? ` — ${row.description}` : '';
+      lines.push(`• ${fmtDay(row.date)}: *${fmt(row.value)}*${desc}`);
+    }
+    lines.push(`— (${revenueRows.length} ${revenueRows.length === 1 ? 'entrada' : 'entradas'})`);
+    lines.push('');
+  }
+
+  // ── Global big picture + goals ───────────────────────────────────────────
+  const annualPct = metrics.grossTotal > 0 && table.goals.annualCost > 0
+    ? ((metrics.grossTotal / table.goals.annualCost) * 100).toFixed(1)
+    : '0.0';
 
   lines.push(
-    `🎯 *Metas*`,
-    `• Meta Diária (${fmt(table.goals.dailyGoal)}): ${goalDailyPct}% atingida`,
-    `• Custo Anual (${fmt(table.goals.annualCost)}): ${annualPct}% coberto`,
+    `🌎 *Visão Global & Metas*`,
+    `• Faturamento Total Histórico: *${fmt(metrics.grossTotal)}*`,
+    `• Média Diária Global: ${fmt(metrics.globalDailyAvg)}`,
+    `• Meta Semanal: ${fmt(table.goals.weeklyGoal)}`,
+    `• Custo Anual do Veículo: ${fmt(table.goals.annualCost)} _(${annualPct}% coberto)_`,
     '',
-    `_Gerado pelo Assistente Moeda · LogicDefense_`,
+    `_Gerado pelo Assistente Moeda · Heiss-Lab_`,
   );
 
-  return lines.filter((l) => l !== undefined).join('\n');
+  return lines.join('\n');
 }
 
-export function WhatsAppExporter({ table, metrics, onClose }: WhatsAppExporterProps) {
+// ── Component ─────────────────────────────────────────────────────────────────
+
+export function WhatsAppExporter({
+  table,
+  metrics,
+  selectedMonth,
+  onClose,
+}: WhatsAppExporterProps) {
   const [phone, setPhone] = useState('');
-  const message = buildMessage(table, metrics);
+  const message = buildMessage(table, metrics, selectedMonth);
 
   function handleSend() {
     const cleaned = phone.replace(/\D/g, '');
-    const full = cleaned.startsWith('55') ? cleaned : `55${cleaned}`;
-    const url = `https://wa.me/${full}?text=${encodeURIComponent(message)}`;
+    const full    = cleaned.startsWith('55') ? cleaned : `55${cleaned}`;
+    const url     = `https://wa.me/${full}?text=${encodeURIComponent(message)}`;
     window.open(url, '_blank', 'noopener,noreferrer');
   }
 
@@ -82,7 +127,12 @@ export function WhatsAppExporter({ table, metrics, onClose }: WhatsAppExporterPr
       <div className="bg-[#1a1a2e] border border-white/10 rounded-xl shadow-2xl w-full max-w-lg p-6 space-y-5">
         <div className="flex items-center gap-3">
           <span className="text-2xl">💬</span>
-          <h2 className="text-lg font-semibold text-white">Exportar para WhatsApp</h2>
+          <div>
+            <h2 className="text-lg font-semibold text-white">Exportar para WhatsApp</h2>
+            <p className="text-xs text-white/35 mt-0.5">
+              Relatório de {formatMonthFull(selectedMonth)}
+            </p>
+          </div>
         </div>
 
         {/* Preview */}
@@ -90,7 +140,7 @@ export function WhatsAppExporter({ table, metrics, onClose }: WhatsAppExporterPr
           <label className="text-xs text-white/40 uppercase tracking-wider">
             Pré-visualização da mensagem
           </label>
-          <pre className="bg-[#0d1117] border border-white/10 rounded-lg px-4 py-3 text-xs text-white/70 whitespace-pre-wrap font-sans leading-relaxed max-h-56 overflow-y-auto">
+          <pre className="bg-[#0d1117] border border-white/10 rounded-lg px-4 py-3 text-xs text-white/70 whitespace-pre-wrap font-sans leading-relaxed max-h-64 overflow-y-auto">
             {message}
           </pre>
         </div>
@@ -113,7 +163,7 @@ export function WhatsAppExporter({ table, metrics, onClose }: WhatsAppExporterPr
             />
           </div>
           <p className="text-xs text-white/30">
-            Deixe em branco para abrir sem destinatário definido (você escolhe no WhatsApp).
+            Deixe em branco para abrir sem destinatário definido.
           </p>
         </div>
 
