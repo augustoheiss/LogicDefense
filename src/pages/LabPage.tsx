@@ -32,6 +32,21 @@ export function LabPage() {
           </div>
         </div>
 
+        {/* ── Assistente Moeda tool card ── */}
+        <div className="cv-lab-card">
+          <div className="cv-lab-card__icon">💰</div>
+          <div className="cv-lab-card__body">
+            <span className="cv-lab-card__tag">SaaS Tool · Finanças</span>
+            <h2 className="cv-lab-card__title">Assistente Moeda — Gestão Financeira</h2>
+            <p className="cv-lab-card__desc">
+              Crie tabelas de receitas, registre entradas diárias e acompanhe médias automáticas (diária, semanal, mensal). Exporte relatórios para o WhatsApp. 100% local, sem backend.
+            </p>
+          </div>
+          <Link to="/laboratorio/assistente-moeda" className="cv-lab-card__cta">
+            Abrir Assistente ↗
+          </Link>
+        </div>
+
         {/* ── CV YAML tool card ── */}
         <div className="cv-lab-card">
           <div className="cv-lab-card__icon">📄</div>
