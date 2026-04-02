@@ -11,6 +11,7 @@ import { FutureProjectionChart } from './FutureProjectionChart';
 import { WhatsAppExporter } from './WhatsAppExporter';
 import { ConfirmDialog } from './ConfirmDialog';
 import { downloadCSV } from '../utils/csvIO';
+import { groupRowsByWeek, findCurrentWeek, fmtDate } from '../utils/dateUtils';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -147,6 +148,23 @@ export function TableEditor({
     [table.rows, effectiveMonth],
   );
 
+  // Current-week data derived from the selected month's revenue rows
+  const currentWeekData = useMemo(() => {
+    const revenueMonthRows = monthRows.filter(
+      (r) => r.entryType !== 'deposit' && r.value > 0,
+    );
+    const groups = groupRowsByWeek(revenueMonthRows, table.goals.weeklyGoal);
+    if (groups.length === 0) return null;
+
+    const today = new Date();
+    const [y, m] = effectiveMonth.split('-').map(Number);
+    const isCurrentMonth = today.getFullYear() === y && today.getMonth() + 1 === m;
+    // For past months use the last day of that month so findCurrentWeek falls back
+    // to the final week group rather than returning null.
+    const refDate = isCurrentMonth ? today : new Date(y, m, 0);
+    return findCurrentWeek(groups, refDate);
+  }, [monthRows, table.goals.weeklyGoal, effectiveMonth]);
+
   function fmt(v: number) {
     return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
   }
@@ -220,6 +238,35 @@ export function TableEditor({
               <div className={`text-sm font-mono font-semibold mt-0.5 ${s.color}`}>{s.value}</div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* ── Semana Atual ── */}
+      {currentWeekData && (
+        <div className="flex flex-wrap items-center justify-between gap-3 bg-white/5 border border-[#a855f7]/30 rounded-lg px-4 py-3">
+          <div>
+            <div className="text-xs text-white/30 uppercase tracking-wider mb-0.5">
+              Semana Atual&ensp;
+              <span className="normal-case font-normal text-white/20">
+                {fmtDate(currentWeekData.weekStartDate)}–{fmtDate(currentWeekData.weekEndDate)}
+              </span>
+            </div>
+            <div className="text-sm font-mono font-semibold text-white">
+              {fmt(currentWeekData.weeklyTotal)}
+            </div>
+          </div>
+          <div
+            className={`text-sm font-medium ${
+              currentWeekData.differenceFromGoal >= 0 ? 'text-emerald-400' : 'text-amber-400'
+            }`}
+          >
+            {currentWeekData.differenceFromGoal >= 0
+              ? `✅ Passou ${fmt(currentWeekData.differenceFromGoal)} da meta`
+              : `⚡ Faltam ${fmt(Math.abs(currentWeekData.differenceFromGoal))} para a meta`}
+          </div>
+          <div className="text-xs text-white/25">
+            Meta semanal: {fmt(table.goals.weeklyGoal)}
+          </div>
         </div>
       )}
 

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { CoinTable, TableMetrics } from '../types';
+import { groupRowsByWeek, fmtDate } from '../utils/dateUtils';
 
 interface WhatsAppExporterProps {
   table: CoinTable;
@@ -40,7 +41,7 @@ function buildMessage(
   const monthLabel   = formatMonthFull(selectedMonth);
   const monthMetrics = metrics.byMonth[selectedMonth];
 
-  // Revenue rows for this month only, sorted chronologically, non-zero
+  // Revenue rows for this month only — sorted chronologically, positive values only
   const revenueRows = table.rows
     .filter(
       (r) =>
@@ -49,6 +50,9 @@ function buildMessage(
         r.date.startsWith(selectedMonth + '-'),
     )
     .sort((a, b) => a.date.localeCompare(b.date));
+
+  // Group into Mon–Sun weeks
+  const weekGroups = groupRowsByWeek(revenueRows, table.goals.weeklyGoal);
 
   const lines: string[] = [
     `📆 *Relatório: ${table.name}*`,
@@ -75,21 +79,41 @@ function buildMessage(
     lines.push(`📊 *Sem receitas registradas neste mês.*`, '');
   }
 
-  // ── Daily breakdown ────────────────────────────────────────────────────────
-  if (revenueRows.length > 0) {
-    lines.push(`📋 *Entradas Diárias*`);
-    for (const row of revenueRows) {
-      const desc = row.description ? ` — ${row.description}` : '';
-      lines.push(`• ${fmtDay(row.date)}: *${fmt(row.value)}*${desc}`);
+  // ── Weekly breakdown ───────────────────────────────────────────────────────
+  if (weekGroups.length > 0) {
+    lines.push(`📋 *Entradas por Semana*`);
+
+    for (const week of weekGroups) {
+      lines.push('');
+      lines.push(
+        `🗓️ *Semana ${fmtDate(week.weekStartDate)} a ${fmtDate(week.weekEndDate)}*`,
+      );
+
+      for (const row of week.dailyEntries) {
+        const desc = row.description ? ` — ${row.description}` : '';
+        lines.push(`• ${fmtDay(row.date)}: *${fmt(row.value)}*${desc}`);
+      }
+
+      const diff = week.differenceFromGoal;
+      if (diff >= 0) {
+        lines.push(
+          `📈 Fechamento: *${fmt(week.weeklyTotal)}* _(Passou ${fmt(diff)} da meta!)_`,
+        );
+      } else {
+        lines.push(
+          `📉 Fechamento: *${fmt(week.weeklyTotal)}* _(Faltam ${fmt(Math.abs(diff))} para a meta)_`,
+        );
+      }
     }
-    lines.push(`— (${revenueRows.length} ${revenueRows.length === 1 ? 'entrada' : 'entradas'})`);
+
     lines.push('');
   }
 
-  // ── Global big picture + goals ───────────────────────────────────────────
-  const annualPct = metrics.grossTotal > 0 && table.goals.annualCost > 0
-    ? ((metrics.grossTotal / table.goals.annualCost) * 100).toFixed(1)
-    : '0.0';
+  // ── Global big picture + goals ─────────────────────────────────────────────
+  const annualPct =
+    metrics.grossTotal > 0 && table.goals.annualCost > 0
+      ? ((metrics.grossTotal / table.goals.annualCost) * 100).toFixed(1)
+      : '0.0';
 
   lines.push(
     `🌎 *Visão Global & Metas*`,
