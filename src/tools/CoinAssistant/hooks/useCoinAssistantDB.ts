@@ -204,7 +204,7 @@ export function useCoinAssistantDB() {
     (tableId: string): TableMetrics => {
       const table = db.tables.find((t) => t.id === tableId);
       if (!table) return emptyMetrics();
-      return computeMetrics(table.rows);
+      return computeMetrics(table.rows, table.goals.weeklyGoal);
     },
     [db],
   );
@@ -241,6 +241,7 @@ function emptyMetrics(): TableMetrics {
     globalWeeklyAvg: 0,
     globalMonthlyAvg: 0,
     globalAnnualAvg: 0,
+    globalGoalBalance: 0,
     byYear: {},
     byMonth: {},
     byWeek: {},
