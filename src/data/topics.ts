@@ -1,9 +1,5 @@
 // ──────────────────────────────────────────────────────────────────────────────
 // topics.ts — Master-Detail data model for the Repositório page.
-//
-// TOPICS is built from lessonCategories + a temporary mock demo topic.
-// To promote a topic from "demo" to real, remove `isMock` and move its
-// slugs into lessonCategories in content.ts.
 // ──────────────────────────────────────────────────────────────────────────────
 import { lessonPlans, lessonCategories, youtubeVideos } from './content'
 import type { LessonPlan } from './content'
@@ -16,12 +12,9 @@ export interface TopicItem {
   id: string
   type: TopicItemType
   title: string
-  /** Short label shown below the title — grade range or YouTube context */
   meta: string
   description: string
-  /** Present when type === 'lesson' */
   lessonData?: LessonPlan
-  /** Present when type === 'video' — the YouTube video ID */
   youtubeId?: string
 }
 
@@ -30,18 +23,18 @@ export interface Topic {
   title: string
   description: string
   icon: string
-  color: 'cyan' | 'purple' | 'gold' | 'green'
+  color: 'cyan' | 'purple' | 'gold' | 'green' | 'blue' | 'rose'
   items: TopicItem[]
-  /** Flags a temporary demo/mock topic — renders a "Demo" badge on the card */
-  isMock?: boolean
 }
 
 // ── Color mapping for real categories ─────────────────────────────────────────
 
 const COLOR_MAP: Record<string, Topic['color']> = {
-  'cat-equacao':       'cyan',
-  'cat-porcentagem':   'gold',
-  'cat-divisores':     'purple',
+  'cat-equacao': 'cyan',
+  'cat-porcentagem': 'gold',
+  'cat-divisores': 'purple',
+  'cat-fracoes': 'rose',
+  'cat-regra-de-tres': 'blue',
   'cat-simplificacao': 'green',
 }
 
@@ -66,88 +59,34 @@ function buildTopics(): Topic[] {
       })),
   }))
 
-  // ── Inject Algebra videos into cat-equacao ───────────────────────────────
-  const equacaoTopic = realTopics.find((t) => t.id === 'cat-equacao')
-  if (equacaoTopic) {
-    const vid13 = youtubeVideos.find((v) => v.id === 'vid-13')
-    const vid14 = youtubeVideos.find((v) => v.id === 'vid-14')
-
-    if (vid13) {
-      equacaoTopic.items.push({
-        id: vid13.id,
-        type: 'video',
-        title: vid13.title,
-        meta: 'YouTube · Episódio 1',
-        description: vid13.description,
-        youtubeId: vid13.youtubeId,
-      })
-    }
-    if (vid14) {
-      equacaoTopic.items.push({
-        id: vid14.id,
-        type: 'video',
-        title: vid14.title,
-        meta: 'YouTube · Episódio 2',
-        description: vid14.description,
-        youtubeId: vid14.youtubeId,
+  // Função utilitária para injetar vídeos em tópicos
+  const injectVideos = (topicId: string, videoIds: string[]) => {
+    const topic = realTopics.find((t) => t.id === topicId)
+    if (topic) {
+      videoIds.forEach((vidId, index) => {
+        const video = youtubeVideos.find((v) => v.id === vidId)
+        if (video) {
+          topic.items.push({
+            id: video.id,
+            type: 'video',
+            title: video.title,
+            meta: `YouTube · Episódio ${index + 1}`,
+            description: video.description,
+            youtubeId: video.youtubeId,
+          })
+        }
       })
     }
   }
 
-  // ── Mock demo topic: Frações (lesson + two video episodes) ────────────────
-  const fracaoLesson = lessonPlans.find((p) => p.slug === 'fracoes-operacoes')
-  const vid11 = youtubeVideos.find((v) => v.id === 'vid-11')
-  const vid12 = youtubeVideos.find((v) => v.id === 'vid-12')
+  // ── Injetando Vídeos nas Trilhas ───────────────────────────────
+  // Já amarramos os vídeos corretos do seu content.ts nestas trilhas:
+  injectVideos('cat-equacao', ['vid-13', 'vid-14'])
+  injectVideos('cat-fracoes', ['vid-11', 'vid-12'])
+  injectVideos('cat-regra-de-tres', ['vid-9', 'vid-10', 'vid-17', 'vid-18'])
 
-  const mockFracoes: Topic = {
-    id: 'cat-fracoes-demo',
-    title: 'Frações: Das Pirâmides ao Presente',
-    description:
-      'Uma jornada completa pelas frações — da história milenar à aula prática com exercícios e vídeos.',
-    icon: '🍕',
-    color: 'purple',
-    isMock: true,
-    items: [
-      ...(fracaoLesson
-        ? [
-            {
-              id: `${fracaoLesson.id}-ref`,
-              type: 'lesson' as TopicItemType,
-              title: fracaoLesson.title,
-              meta: fracaoLesson.grade,
-              description: fracaoLesson.description,
-              lessonData: fracaoLesson,
-            },
-          ]
-        : []),
-      ...(vid11
-        ? [
-            {
-              id: vid11.id,
-              type: 'video' as TopicItemType,
-              title: vid11.title,
-              meta: 'YouTube · Episódio 1',
-              description: vid11.description,
-              youtubeId: vid11.youtubeId,
-            },
-          ]
-        : []),
-      ...(vid12
-        ? [
-            {
-              id: vid12.id,
-              type: 'video' as TopicItemType,
-              title: vid12.title,
-              meta: 'YouTube · Episódio 2',
-              description: vid12.description,
-              youtubeId: vid12.youtubeId,
-            },
-          ]
-        : []),
-    ],
-  }
 
-  return [...realTopics, mockFracoes]
+  return realTopics
 }
 
 export const TOPICS: Topic[] = buildTopics()

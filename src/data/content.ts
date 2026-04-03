@@ -117,7 +117,7 @@ No episódio de hoje, nós vamos hackear a "Arquitetura dos Números Quebrados".
     tag: 'Matemática · História',
   },
 
-  
+
   {
     id: 'vid-13',
     title: 'A Álgebra que Cura Ossos e o Verdadeiro Significado do Sinal de Igual (=)',
@@ -126,7 +126,7 @@ No episódio de hoje, nós vamos hackear a "Arquitetura dos Números Quebrados".
     tag: 'Matemática · História',
   },
 
-  
+
   {
     id: 'vid-14',
     title: 'A Álgebra que Cura Ossos e o Verdadeiro Significado do Sinal de Igual (=)',
@@ -147,6 +147,20 @@ No episódio de hoje, nós vamos hackear a "Arquitetura dos Números Quebrados".
     description: `Descubra como a Inteligência Artificial está sendo usada para solucionar um dos maiores mistérios da educação moderna: o desaparecimento do tempo dos professores!`,
     youtubeId: 'sLhxml3Lfok',
     tag: 'IA · Educação',
+  },
+  {
+    id: 'vid-17',
+    title: 'A Regra de Ouro: O Código Oculto da Matemática e a Tragédia do "Multiplica Cruzado"',
+    description: 'Esqueça a decoreba. O que te ensinaram na escola foi apenas um atalho mecânico que roubou a essência de uma das ferramentas cognitivas mais poderosas da humanidade. Mergulhamos nas areias da antiga Rota da Seda.',
+    youtubeId: 'rCAid3r_Oqc',
+    tag: 'Matemática · Regra de Três',
+  },
+  {
+    id: 'vid-18',
+    title: 'Muito Além do X: A Filosofia da Regra de Três (Podcast Heiss-Lab)',
+    description: 'Em formato de podcast, mergulhamos em uma conversa profunda sobre como os mercadores antigos operavam como supercomputadores biológicos e como a proporção inversa nos ensina sobre colaboração e empatia.',
+    youtubeId: 'cMHIW0I65_4',
+    tag: 'Matemática · Podcast',
   }
 ];
 
@@ -229,19 +243,19 @@ Agora não há mais rodinhas de treinamento. Leia o problema, traduza o texto pa
 * **XIX.** Se eu pegar o meu salário mensal, dividir por 4 e usar essa quantia para pagar a prestação do meu carro, eu pagarei exatamente 600 reais. Qual é o valor do meu salário?
 * **XX. O Desafio Final:** O sêxtuplo (6 vezes) de um número, somado a 15, equilibra perfeitamente na balança com o número 75. Qual é o valor desse número para que a balança não despenque?
 `
-},
+  },
 
-{
-  id: 'plan-2',
-  slug: 'equacoes-maquina-do-tempo',
-  title: 'A Balança da Vida: A Máquina do Tempo das Equações',
-  subject: 'Matemática',
-  grade: '7°ano ao 9°ano',
-  description: 'Aprenda a resolver equações mais complexas usando o conceito de viagem no tempo. Desfaça as ações matemáticas passo a passo para isolar o X.',
-  pdfPath: '/pdfs/Equacao_01.pdf',
-  pages: 2,
-  available: true,
-  richContent: String.raw`
+  {
+    id: 'plan-2',
+    slug: 'equacoes-maquina-do-tempo',
+    title: 'A Balança da Vida: A Máquina do Tempo das Equações',
+    subject: 'Matemática',
+    grade: '7°ano ao 9°ano',
+    description: 'Aprenda a resolver equações mais complexas usando o conceito de viagem no tempo. Desfaça as ações matemáticas passo a passo para isolar o X.',
+    pdfPath: '/pdfs/Equacao_01.pdf',
+    pages: 2,
+    available: true,
+    richContent: String.raw`
 ## A Balança da Vida: Toda Ação Tem Uma Reação
 
 Vamos continuar na amplificação da nossa balança para o bem do nosso aprendizado. Essa é uma regra que devemos sempre levar para a vida: toda ação tem uma reação[cite: 72]. Muitas vezes, quando algo dá errado, é fácil apontar o dedo[cite: 73]. Mas a verdade é que nós devemos carregar a nossa parte dessa responsabilidade. A culpa não é só dos outros. Precisamos começar a processar os nossos erros segundo a segundo[cite: 74, 75].
@@ -286,19 +300,19 @@ A rodinha da bicicleta saiu! [cite: 114] Leia o problema em português, monte a 
 * **19.** Sete vezes um número mágico, somado a 3, deixa a balança equilibrada no número 73. Encontre o número mágico[cite: 130].
 * **20. DESAFIO FINAL:** A metade das páginas de um livro, somada com 15 páginas que eu já tinha lido ontem, resulta em 65 páginas[cite: 131]. Quantas páginas tem o livro inteiro? [cite: 132]
 `
-},
+  },
 
-{
-  id: 'plan-3',
-  slug: 'fracoes-operacoes',
-  title: 'Operações Aritméticas com Frações: A Construção da Balança',
-  subject: 'Matemática',
-  grade: '7°ano ao Ensino Médio',
-  description: 'Entenda a essência dos raciocínios matemáticos impressos nas funções e nas partes das coisas. Fazer contas com razões e proporções nunca foi tão fascinante.',
-  pdfPath: '/pdfs/00-fracoes.pdf',
-  pages: 2,
-  available: true,
-  richContent: String.raw`
+  {
+    id: 'plan-3',
+    slug: 'fracoes-operacoes',
+    title: 'Operações Aritméticas com Frações: A Construção da Balança',
+    subject: 'Matemática',
+    grade: '7°ano ao Ensino Médio',
+    description: 'Entenda a essência dos raciocínios matemáticos impressos nas funções e nas partes das coisas. Fazer contas com razões e proporções nunca foi tão fascinante.',
+    pdfPath: '/pdfs/00-fracoes.pdf',
+    pages: 2,
+    available: true,
+    richContent: String.raw`
 ## Operações Aritméticas com Frações! A Minha Paixão!
 
 A essência dos raciocínios impressos nas funções e papéis das coisas. Sem resolver esse tipo de operação, a gente não entende nada; somos vítimas de nossos próprios sentimentos, sem entender a eternidade das coisas, ou a eternidade do sistema em que estamos, enquanto ainda estamos nele.
@@ -347,7 +361,7 @@ Frações! Razões e Proporções! A soma e a subtração das partes de diferent
 
 20 - **A BALANÇA PERFEITA:** Em uma gangorra (balança), o peso no lado esquerdo é equivalente a $\frac{3}{4}$ do peso total suportado. Para equilibrar a balança adicionando um peso de 15 kg no lado direito, qual deve ser a capacidade total de peso dessa balança?
 `
-},
+  },
 
   {
     id: 'plan-4',
@@ -478,19 +492,19 @@ Agora eu te dou a fração mágica pronta e equilibrada. O seu trabalho é solta
 * $\frac{42}{99} =$ _______________
 
 O Grande Salto: $\frac{1}{3} =$ _______________ (Dica final: Multiplique o topo e a base da fração por 3 para fazer o 9 aparecer no denominador, e só então solte o infinito!)`,
-},
+  },
 
-{
-  id: 'plan-8',
-  slug: 'magica-porcentagem',
-  title: 'O Universo em 100 Partes: A Mágica da Porcentagem',
-  subject: 'Matemática',
-  grade: '7°ano ao Ensino Médio',
-  description: 'Aprenda a comparar as grandezas do universo dividindo-as em 100 partes iguais. Domine os três caminhos mentais para calcular porcentagens rapidamente.',
-  pdfPath: '/pdfs/Porcentagem_01.pdf',
-  pages: 2,
-  available: true,
-  richContent: String.raw`
+  {
+    id: 'plan-8',
+    slug: 'magica-porcentagem',
+    title: 'O Universo em 100 Partes: A Mágica da Porcentagem',
+    subject: 'Matemática',
+    grade: '7°ano ao Ensino Médio',
+    description: 'Aprenda a comparar as grandezas do universo dividindo-as em 100 partes iguais. Domine os três caminhos mentais para calcular porcentagens rapidamente.',
+    pdfPath: '/pdfs/Porcentagem_01.pdf',
+    pages: 2,
+    available: true,
+    richContent: String.raw`
 ## O Universo em 100 Partes: A Mágica da Porcentagem
 
 Vamos dar mais um passo na nossa jornada de decifrar o mundo. Hoje, vamos falar de representações e grandezas. Como nós podemos comparar o tamanho de um planeta com o tamanho de uma formiga? Como sabemos o quanto evoluímos em um projeto? A resposta é uma só: dividindo o universo em 100 partes iguais!
@@ -619,19 +633,19 @@ B) 6 é quantos % de 24? ___
 C) 9 é quantos % de 36? ___
 D) O que as respostas A, B e C têm em comum? ___
 `
-},
+  },
 
-{
-  id: 'plan-6',
-  slug: 'segredo-divisores',
-  title: 'O Segredo dos Números: Por Que o Mundo é Dividido Assim?',
-  subject: 'Matemática',
-  grade: '6°ano ao 9°ano',
-  description: 'Descubra por que medimos o tempo em 60 minutos, o círculo em 360 graus e usamos a base 10 para quase tudo. Uma investigação sobre o superpoder matemático dos divisores.',
-  pdfPath: '/pdfs/Divisores-emocionante-00.pdf',
-  pages: 2,
-  available: true,
-  richContent: String.raw`
+  {
+    id: 'plan-6',
+    slug: 'segredo-divisores',
+    title: 'O Segredo dos Números: Por Que o Mundo é Dividido Assim?',
+    subject: 'Matemática',
+    grade: '6°ano ao 9°ano',
+    description: 'Descubra por que medimos o tempo em 60 minutos, o círculo em 360 graus e usamos a base 10 para quase tudo. Uma investigação sobre o superpoder matemático dos divisores.',
+    pdfPath: '/pdfs/Divisores-emocionante-00.pdf',
+    pages: 2,
+    available: true,
+    richContent: String.raw`
 ## O Segredo dos Números: Por Que o Mundo é Dividido Assim?
 
 Você já parou para pensar que muitos números que usamos no nosso dia a dia não foram escolhidos por acaso? A forma como medimos o tempo, o espaço e até as formas geométricas tem tudo a ver com um superpoder matemático: os divisores! 
@@ -682,19 +696,19 @@ Nem todo número quer ser dividido. Alguns são solitários, outros são perfeit
 19. Um número é chamado de "perfeito" quando a soma de seus divisores (excluindo ele mesmo) é igual a ele próprio. Por exemplo, os divisores de 6 são 1, 2, 3 e 6. Se somarmos $1+2+3=6$! O número 28 também é perfeito. Encontre os divisores de 28 e prove que essa mágica é real! 
 20. Desafio Criativo: Se você pudesse inventar um novo sistema de tempo para um planeta alienígena, qual número você escolheria para ser a quantidade de horas no dia? Escolha um número, explique por que ele tem bons divisores e mostre como seria dividido o dia lá! 
 `
-},
+  },
 
-{
-  id: 'plan-7',
-  slug: 'matematica-elegante-recuperacao',
-  title: 'Recuperação: Matemática Elegante e Cálculo Mental',
-  subject: 'Matemática',
-  grade: '8°ano ao Ensino Médio',
-  description: 'Não faça contas enormes! Use a fatoração, a simplificação e a lógica para resolver esses 20 desafios rápidos de cálculo mental.',
-  pdfPath: '/pdfs/01_TOP.pdf',
-  pages: 2,
-  available: true,
-  richContent: String.raw`
+  {
+    id: 'plan-7',
+    slug: 'matematica-elegante-recuperacao',
+    title: 'Recuperação: Matemática Elegante e Cálculo Mental',
+    subject: 'Matemática',
+    grade: '8°ano ao Ensino Médio',
+    description: 'Não faça contas enormes! Use a fatoração, a simplificação e a lógica para resolver esses 20 desafios rápidos de cálculo mental.',
+    pdfPath: '/pdfs/01_TOP.pdf',
+    pages: 2,
+    available: true,
+    richContent: String.raw`
 ## Recuperação: Matemática Elegante e Cálculo Mental
 
 **Objetivo:** Não faça contas enormes! Use a fatoração, a simplificação e a lógica para resolver. [cite: 336]
@@ -764,19 +778,19 @@ Nem todo número quer ser dividido. Alguns são solitários, outros são perfeit
 * **19.** Aprox. 16,6 (ou 50/3) [cite: 377]
 * **20.** 35 [cite: 378]
 `
-},
+  },
 
-{
-  id: 'plan-8',
-  slug: 'aritmetica-elegante-01',
-  title: 'Super Lista 1: Dobrar, Meiar e Propriedade Distributiva',
-  subject: 'Matemática',
-  grade: '8°ano ao Ensino Médio',
-  description: 'Primeira bateria de exercícios práticos de cálculo mental. Domine as técnicas de dobrar e meiar, além da fatoração básica.',
-  pdfPath: '/pdfs/02_TOP.pdf',
-  pages: 2,
-  available: true,
-  richContent: String.raw`
+  {
+    id: 'plan-8',
+    slug: 'aritmetica-elegante-01',
+    title: 'Super Lista 1: Dobrar, Meiar e Propriedade Distributiva',
+    subject: 'Matemática',
+    grade: '8°ano ao Ensino Médio',
+    description: 'Primeira bateria de exercícios práticos de cálculo mental. Domine as técnicas de dobrar e meiar, além da fatoração básica.',
+    pdfPath: '/pdfs/02_TOP.pdf',
+    pages: 2,
+    available: true,
+    richContent: String.raw`
 ## Super Lista: Aritmética Elegante e Truques Matemáticos (Parte 1)
 
 **Regra de Ouro:** Tente não armar a conta. Use as dicas para fatorar, simplificar e resolver com raciocínio lógico.
@@ -807,19 +821,19 @@ Nem todo número quer ser dividido. Alguns são solitários, outros são perfeit
 * 19. Calcule $8 \times 999$ (Dica: Faça $8 \times 1000$ e subtraia 8).
 * 20. Calcule $5 \times 49$ (Dica: Faça $5 \times 50$ e subtraia 5).
 `
-},
+  },
 
-{
-  id: 'plan-9',
-  slug: 'aritmetica-elegante-02',
-  title: 'Super Lista 2: Diferença de Quadrados e Divisão Simplificada',
-  subject: 'Matemática',
-  grade: '8°ano ao Ensino Médio',
-  description: 'Segunda bateria de exercícios práticos. Explore o poder das potências, a clássica diferença de quadrados e simplifique divisões complexas.',
-  pdfPath: '/pdfs/03_TOP.pdf',
-  pages: 2,
-  available: true,
-  richContent: String.raw`
+  {
+    id: 'plan-9',
+    slug: 'aritmetica-elegante-02',
+    title: 'Super Lista 2: Diferença de Quadrados e Divisão Simplificada',
+    subject: 'Matemática',
+    grade: '8°ano ao Ensino Médio',
+    description: 'Segunda bateria de exercícios práticos. Explore o poder das potências, a clássica diferença de quadrados e simplifique divisões complexas.',
+    pdfPath: '/pdfs/03_TOP.pdf',
+    pages: 2,
+    available: true,
+    richContent: String.raw`
 ## Super Lista: Aritmética Elegante e Truques Matemáticos (Parte 2)
 
 **Regra de Ouro:** Tente não armar a conta. Use as dicas para fatorar, simplificar e resolver com raciocínio lógico.
@@ -850,19 +864,19 @@ Nem todo número quer ser dividido. Alguns são solitários, outros são perfeit
 * 39. Regra de Três Direta: Se 2 balas custam R$ 5,00, quanto custam 12? (Ache o fator de aumento de 2 para 12).
 * 40. Desafio final: Simplifique $(55 \times 22) / 11$ sem sofrer. (Dica: Divida o 22 ou o 55 por 11 primeiro).
 `
-},
+  },
 
-{
-  id: 'plan-10',
-  slug: 'diferenca-quadrados-fator-comum',
-  title: 'Avançado 1: O Poder da Diferença de Quadrados e Fator Comum',
-  subject: 'Matemática',
-  grade: '9°ano ao Ensino Médio',
-  description: 'Eleve o nível do cálculo mental com expressões envolvendo fatoração avançada e produtos notáveis aplicados na prática.',
-  pdfPath: '/pdfs/04_TOP.pdf',
-  pages: 1,
-  available: true,
-  richContent: String.raw`
+  {
+    id: 'plan-10',
+    slug: 'diferenca-quadrados-fator-comum',
+    title: 'Avançado 1: O Poder da Diferença de Quadrados e Fator Comum',
+    subject: 'Matemática',
+    grade: '9°ano ao Ensino Médio',
+    description: 'Eleve o nível do cálculo mental com expressões envolvendo fatoração avançada e produtos notáveis aplicados na prática.',
+    pdfPath: '/pdfs/04_TOP.pdf',
+    pages: 1,
+    available: true,
+    richContent: String.raw`
 ## Parte 1: O Poder da Diferença de Quadrados e Fator Comum 
 **Objetivo:** Não faça contas enormes! Use a fatoração, a simplificação e a lógica para resolver.
 
@@ -887,19 +901,19 @@ Nem todo número quer ser dividido. Alguns são solitários, outros são perfeit
 * 19. Resolva: $60^2 - 40^2$.
 * 20. Desafio rápido: $(2025^2 - 1^2) / 2024$.
 `
-},
+  },
 
-{
-  id: 'plan-11',
-  slug: 'quadrados-perfeitos-ajustes',
-  title: 'Avançado 2: Quadrados Perfeitos e Ajustes Finos',
-  subject: 'Matemática',
-  grade: '9°ano ao Ensino Médio',
-  description: 'Desafios finais de simplificação algébrica e aritmética usando trinômio quadrado perfeito, fatoração por agrupamento e ajustes decimais.',
-  pdfPath: '/pdfs/05_TOP.pdf',
-  pages: 1,
-  available: true,
-  richContent: String.raw`
+  {
+    id: 'plan-11',
+    slug: 'quadrados-perfeitos-ajustes',
+    title: 'Avançado 2: Quadrados Perfeitos e Ajustes Finos',
+    subject: 'Matemática',
+    grade: '9°ano ao Ensino Médio',
+    description: 'Desafios finais de simplificação algébrica e aritmética usando trinômio quadrado perfeito, fatoração por agrupamento e ajustes decimais.',
+    pdfPath: '/pdfs/05_TOP.pdf',
+    pages: 1,
+    available: true,
+    richContent: String.raw`
 ## Parte 2: Quadrados Perfeitos e Ajustes Finos 
 
 **Objetivo:** Não faça contas enormes! Use a fatoração, a simplificação e a lógica para resolver.
@@ -925,7 +939,99 @@ Nem todo número quer ser dividido. Alguns são solitários, outros são perfeit
 * 39. Calcule: $1002^2$.
 * 40. Desafio final: $1234 \times 0 + 55^2 - 45^2$.
 `
-}
+  },
+  {
+    id: 'plan-12',
+    slug: 'regra-de-ouro-1',
+    title: 'A Regra de Ouro: Proporção Direta e o Equilíbrio',
+    subject: 'Matemática',
+    grade: '7°ano ao Ensino Médio',
+    description: 'A regra de três não é sobre achar o X, é sobre o Equilíbrio do Universo. Explore frações equivalentes e proporções diretas.',
+    pdfPath: '/pdfs/regra-de-ouro-1.pdf',
+    pages: 2,
+    available: true,
+    richContent: String.raw`
+## A regra de ouro
+
+A regra de três não é sobre achar o valor de "X". Não é sobre chegar ao resultado mais rápido, nem sobre entender a matéria com pressa. Afinal, quem foi que nos disse que não devemos errar? É através do erro que alcançamos novas explicações. Se não temos espaço para processar a falha, estão negando a nós mesmos a própria vida e a capacidade de raciocínio que juraram nos dar.
+
+Não se engane: a regra de três é, em sua essência, sobre o Equilíbrio do Universo. Ninguém pode esconder isso de você, a não ser você mesmo. E se você procurar a fundo, vai encontrar.
+
+Vamos explorar esse tema partindo das frações equivalentes. Pense no seguinte: se 4 reais compram 1 doce, e 20 reais compram 5 doces, temos proporções perfeitas ($1/4$ e $5/20$). A razão, neste primeiro caso, é descobrir quanto vale "1 real de doce", e esse valor proporcional sempre será mantido. Mas a perspectiva pode mudar: se usarmos $4/1$ e $20/5$, a razão agora passa a representar o preço de um doce inteiro. Podemos ir ainda mais longe e afirmar que, se "1 real de doce" equivale a 25% da unidade ($1/4$), então o doce inteiro será 400% maior do que esse fragmento de 1 real.
+
+Durante esse processo de aprendizado, é fundamental escrevermos nosso raciocínio no nosso idioma materno. A essência da Matemática — e de todas as outras áreas de estudo criadas pelo homem — tem como alicerce a nossa linguagem. Não há como escapar disso. Se você acha que é possível evoluir sem aprimorar a comunicação, lembre-se do que cravou o filósofo Ludwig Wittgenstein: "Os limites da minha linguagem são os limites do meu mundo".
+
+Acreditar que o progresso ignora a comunicação seria o mesmo que defender que a Inteligência Artificial evoluiria melhor e mais rápido se não houvesse a Ética ou a Lei. Mas, no estudo verdadeiro e profundo, isso não faz sentido. O nosso avanço real depende de usarmos bem a linguagem que nos foi dada e de compreendermos a ética assimétrica que precede todo e qualquer cálculo, como nos ensina Emmanuel Lévinas.
+
+Introduzir e debater diferentes ferramentas matemáticas ainda na escola serve justamente para sedimentar essa base. Devemos nos preocupar incessantemente em fortalecer a nossa fundação intelectual — lógica e linguística —, pois não existe absolutamente nada mais importante para a construção do pensamento humano do que a solidez dessa base.
+
+* **A Proporção do Doce:** Se com 4 reais é possível comprar exatamente 1 doce, qual é o valor necessário para adquirir 15 doces mantendo a mesma proporção de preço?
+* **Ritmo de Caminhada:** Uma pessoa descobre que precisa dar 3.000 passos para percorrer 2,4 km. Quantos quilômetros ela terá percorrido se atingir rigorosamente a sua meta de 9.000 passos no dia?
+* **Trabalho Voluntário:** Para preparar uma massa de argamassa perfeita em uma obra, utilizam-se 4 baldes de areia para cada saco de cimento. Quantos baldes de areia serão necessários para acompanhar 7 sacos de cimento?
+* **Eficiência Híbrida:** Um carro híbrido consome 2 litros de combustível para percorrer 50 km no modo de combustão. Mantendo esse exato rendimento, quantos litros ele consumirá em uma viagem de 150 km?
+* **A Receita Exata:** Uma receita de bolo que rende 8 porções exige 200 gramas de farinha de trigo. Quantas gramas de farinha são necessárias para adaptar a receita para 20 porções?
+* **Leitura Focada:** Um estudante lê 12 páginas de um livro de filosofia em 20 minutos. Se ele mantiver a mesma velocidade de leitura e o mesmo foco, quantas páginas ele lerá em 50 minutos?
+* **Escala Cartográfica:** Em um mapa de uma trilha, 3 cm no papel representam 15 km na vida real. Qual é a distância real representada por uma linha de 8 cm neste mesmo mapa?
+* **Impressão de Documentos:** Uma impressora de escritório consegue imprimir 45 páginas em 3 minutos. Quanto tempo ela levará para imprimir uma apostila completa de 180 páginas?
+* **Produção de Software:** Um programador consegue escrever e revisar 150 linhas de código limpo em 2 horas. Mantendo esse ritmo de produtividade, quantas linhas ele terá finalizado após 5 horas de trabalho?
+* **A Força da Água:** Uma torneira aberta com vazão constante enche um balde de 15 litros em 5 minutos. Quantos litros de água terão saído dessa torneira após 12 minutos?
+* **Costura e Medidas:** Para confeccionar 3 camisas de uniforme do mesmo tamanho, uma costureira utiliza 4,5 metros de tecido. Quantos metros de tecido ela precisará comprar para fazer 10 camisas?
+* **Taxa de Download:** A conexão de internet de um laboratório baixa um arquivo de 300 megabytes em 12 segundos. Mantendo a estabilidade da rede, quantos megabytes serão baixados em 40 segundos?
+* **Rendimento Profissional:** Um professor substituto recebe 360 reais por 3 dias de aulas ministradas. Qual será a remuneração proporcional se ele lecionar por 14 dias no mês?
+* **Pintura de Paredes:** Dois galões de tinta são suficientes para pintar perfeitamente uma área de 25 metros quadrados. Quantos galões serão necessários para pintar um salão de 100 metros quadrados?
+* **Sombra e Geometria:** Em um determinado momento da tarde, um poste de 4 metros de altura projeta uma sombra de 1,5 metros. No mesmo instante, qual é a altura de um prédio que projeta uma sombra de 12 metros?
+* **Colheita Agrícola:** Uma máquina colheitadeira consegue processar 3 hectares de plantação em 2 horas. Quanto tempo será necessário para que ela processe uma fazenda de 15 hectares?
+* **Mensalidade Proporcional:** O plano de assinatura de um servidor em nuvem custa 180 reais por 3 meses de uso. Se o usuário quiser garantir o serviço por 8 meses, quanto ele deverá pagar?
+* **O Peso da Lógica:** Em uma balança universal, 5 blocos de metal maciço pesam 12 kg. Qual seria o peso exato de 18 desses mesmos blocos?
+* **Tradução de Idiomas:** Um tradutor profissional consegue verter 4 pages de um texto do inglês para o português em 1 hora e meia. Quantas horas ele precisará para traduzir um artigo de 20 páginas?
+* **Geração de Energia:** Um painel solar específico gera 150 kWh de energia em 5 dias de sol intenso. Quantos kWh esse mesmo painel gerará ao longo de 30 dias com as mesmas condições climáticas?
+`
+  },
+  {
+    id: 'plan-13',
+    slug: 'regra-de-ouro-2',
+    title: 'A Regra de Ouro – Aula 2: A Engrenagem do Tempo',
+    subject: 'Matemática',
+    grade: '7°ano ao Ensino Médio',
+    description: 'A regra de três inversa é a matemática do trabalho em equipe: quando dividimos o peso de um problema, multiplicamos nosso tempo livre.',
+    pdfPath: '/pdfs/regra-de-ouro-2.pdf',
+    pages: 2,
+    available: true,
+    richContent: String.raw`
+## A regra de ouro – Aula 2
+
+Como vimos, as frações equivalentes nos mostram com perfeição o princípio da balança na regra de três. Mas será que o universo se equilibra apenas de uma única forma? Não! Existe uma outra engrenagem, mais sutil e profundamente conectada com o nosso bem mais precioso: o tempo.
+
+Pense em uma viagem de carro entre duas cidades. A distância da estrada é fixa, não muda. No entanto, o tempo que passamos dentro do carro é uma variável. Se o veículo for mais rápido, a viagem durará menos tempo; se for mais lento, exigirá mais do nosso tempo. O ganho de um lado exige a redução do outro. Esse é o coração das grandezas inversamente proporcionais.
+
+Nós podemos visualizar isso na própria geometria. Imagine que você tem uma área fixa no chão que precisa ser coberta. Se você dobrar o comprimento dessa área, obrigatoriamente terá que cortar a altura pela metade para que o espaço total continue exatamente o mesmo. A figura muda de forma — deixa de ser um quadrado e se estica em um retângulo —, mas a sua essência, o seu espaço interno, permanece inalterado. Nós apenas adaptamos a forma para preservar o limite.
+
+Mas a beleza real desse cálculo está na colaboração. Se uma torneira enche um tanque em 2 horas, adicionar uma segunda torneira trabalhando junto fará com que o tanque encha muito mais rápido. O volume de água necessário não mudou, mas porque as forças se uniram, o esforço individual e o tempo de espera diminuíram. A regra de três inversa é, no fundo, a matemática do trabalho em equipe: quando dividimos o peso de um problema, multiplicamos o nosso tempo livre.
+
+Ao aprendermos a manipular as frações e a observar os números de ângulos diferentes, dominaremos não apenas uma ferramenta matemática, mas uma nova forma de enxergar o mundo. É um processo contínuo de descobertas. Nós sempre encontraremos caminhos novos para resolver o mesmo problema — e lembre-se: cada erro que cometemos no papel é um passo vital e necessário nessa busca pela resposta certa.
+
+* **Download do Jogo:** Uma atualização pesada de um jogo de videogame demora 40 minutos para ser baixada a uma velocidade de conexão de 15 Mbps. Se o estudante usar o cabo de rede e a internet subir para 60 Mbps, em quantos minutos a atualização estará pronta para jogar?
+* **Maratona de Série:** Um grupo de amigos decidiu maratonar um anime. Assistindo 3 episódios por dia, eles terminarão a temporada em 12 dias. Se a ansiedade bater e eles passarem a assistir 4 episódios por dia, em quantos dias terminarão a temporada?
+* **Programação de IA:** Um desenvolvedor Python está escrevendo o código para um novo assistente virtual e, trabalhando sozinho, estima que levará 60 horas para terminar. Se ele convidar mais 2 amigos programadores para codar junto com ele (trabalhando no mesmo ritmo), em quantas horas o projeto ficará pronto?
+* **O Passeio:** Um motorista dirigindo um carro viaja a 80 km/h e completa um trajeto até a praia em 3 horas. Se ele aumentar a velocidade constante para 100 km/h, quanto tempo levará para completar exatamente a mesma viagem?
+* **Caminhada e Frequência:** Em uma rotina de exercícios no parque, uma pessoa caminhando a 4 km/h demora 90 minutos para atingir sua meta de passos diários. Se ela apertar o passo e caminhar a 6 km/h, em quantos minutos ela baterá a mesma meta?
+* **Acampamento com a Galera:** Um grupo de 8 amigos alugou uma chácara e levou comida suficiente para 5 dias. No último minuto, mais 2 amigos confirmaram que vão junto. Mantendo as mesmas porções, para quantos dias a comida vai durar com o grupo de 10 pessoas?
+* **Bateria do Celular:** Se o brilho da tela do celular estiver configurado para 80%, a bateria aguenta jogar online por 5 horas seguidas. Se o estudante reduzir o brilho para 40%, quantas horas a bateria vai durar jogando?
+* **Renderização de Vídeo:** Um computador moderno com 1 placa de vídeo dedicada leva 45 minutos para renderizar um vídeo em 4K para o YouTube. Se um estúdio conectar 3 placas de vídeo idênticas trabalhando juntas, em quantos minutos o vídeo estará pronto?
+* **Mutirão de Limpeza:** Em um projeto de ciências, 12 alunos conseguem limpar todo o lixo plástico de uma praça em 4 horas. Se a turma se animar e 16 alunos aparecerem para ajudar, em quantas horas a praça estará limpa?
+* **A Engrenagem da Bicicleta:** Uma engrenagem de bicicleta com 24 dentes dá 150 voltas por minuto. Se a corrente for trocada para uma engrenagem menor, de 18 dentes, quantas voltas por minuto essa nova engrenagem dará, mantendo a mesma velocidade da roda?
+* **Pintura do Palco:** Faltam poucos dias para o festival de música da escola. 3 estudantes pintando o cenário levariam 8 horas para terminar tudo. Para liberar o palco mais rápido, o grêmio chamou mais pessoas e agora são 6 pintores. Em quanto tempo o cenário ficará pronto?
+* **A Força da Água:** Uma piscina gigante de um clube é esvaziada em 12 horas utilizando 2 bombas de sucção. O clube decidiu comprar mais 1 bomba igualzinha para acelerar a limpeza. Com as 3 bombas ligadas ao mesmo tempo, em quantas horas a piscina ficará vazia?
+* **Festa da Pizza:** Em uma sexta-feira à noite, 4 amigos pediram pizzas e calcularam que cada um pode comer 6 fatias. Antes da pizza chegar, mais 4 amigos aparecem de surpresa. Se eles dividirem igualmente, quantas fatias cada um comerá agora?
+* **Leitura nas Férias:** Uma estudante está lendo um livro de fantasia de 600 páginas. Lendo 20 páginas por dia, o livro durará o mês inteiro (30 dias). Se ela se empolgar com a história e ler 30 páginas por dia, em quantos dias ela terminará a leitura?
+* **Construção de Servidor:** Uma equipe de 5 jogadores de Minecraft demora 14 dias para construir uma réplica perfeita de um castelo histórico no servidor. Se a equipe fosse formada por 7 jogadores com a mesma habilidade, em quantos dias o castelo estaria erguido?
+* **Câmeras de Segurança:** Um disco rígido (HD) consegue armazenar as gravações de 4 câmeras de segurança por 15 dias. Se a escola instalar mais 2 câmeras no pátio (totalizando 6), para quantos dias o mesmo disco rígido conseguirá armazenar as imagens?
+* **Distribuição de Brindes:** Durante uma feira de tecnologia, a organização tem adesivos suficientes para dar 10 adesivos para 120 visitantes. Como a feira lotou e chegaram 150 visitantes interessados, quantos adesivos cada pessoa receberá para que ninguém fique sem?
+* **Corrida de Kart:** Em uma pista de Kart, um piloto completa uma volta em 45 segundos correndo a uma velocidade média de 60 km/h. Qual deveria ser a sua velocidade média para conseguir quebrar o recorde e fazer a volta em apenas 36 segundos?
+* **Trabalho Voluntário:** Em um abrigo de animais, a ração estocada é suficiente para alimentar 30 cães durante 20 dias. A prefeitura acabou de resgatar mais 10 cães abandonados que foram levados para o abrigo. Quanto tempo esse estoque de ração vai durar agora, alimentando os 40 cães?
+* **Revisão de Prova:** Uma professora gasta 10 minutos por prova para corrigir os testes de 24 alunos. Se ela otimizar seu processo e reduzir o tempo para 8 minutos por prova, de quantos alunos ela conseguirá corrigir as provas dentro do mesmo intervalo de tempo total?
+`
+  }
 
 ]
 
@@ -970,12 +1076,25 @@ export const lessonCategories: LessonCategory[] = [
     slugs: ['segredo-divisores'],
   },
   {
+    id: 'cat-fracoes',
+    title: 'Frações: Das Pirâmides ao Presente',
+    description: 'Uma jornada completa pelas frações — da história milenar à aula prática com exercícios.',
+    icon: '🍕',
+    slugs: ['fracoes-operacoes'],
+  },
+  {
+    id: 'cat-regra-de-tres',
+    title: 'Princípios por trás da Regra de Três',
+    description: 'O equilíbrio do universo através das grandezas direta e inversamente proporcionais.',
+    icon: '📐',
+    slugs: ['regra-de-ouro-1', 'regra-de-ouro-2'],
+  },
+  {
     id: 'cat-simplificacao',
     title: 'Princípios de simplificação em cálculos aritméticos',
-    description: 'Frações, dízimas, fatoração e truques mentais — a elegância de fazer mais com menos.',
+    description: 'Dízimas, fatoração e truques mentais — a elegância de fazer mais com menos.',
     icon: '✨',
     slugs: [
-      'fracoes-operacoes',
       'dizima',
       'aritmetica-elegante-truques',
       'aritmetica-elegante-01',
