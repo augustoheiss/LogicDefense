@@ -115,11 +115,21 @@ function buildMessage(
       ? ((metrics.grossTotal / table.goals.annualCost) * 100).toFixed(1)
       : '0.0';
 
+  const balance       = metrics.globalGoalBalance;
+  const balanceAbs    = Math.abs(balance).toLocaleString('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+  });
+  const balanceLine   = balance >= 0
+    ? `• Saldo Acumulado de Metas: *+${balanceAbs}* _(Banco de Valores / Excedente)_`
+    : `• Saldo Acumulado de Metas: *-${balanceAbs}* _(Dívida Pendente)_`;
+
   lines.push(
     `🌎 *Visão Global & Metas*`,
     `• Faturamento Total Histórico: *${fmt(metrics.grossTotal)}*`,
     `• Média Diária Global: ${fmt(metrics.globalDailyAvg)}`,
     `• Meta Semanal: ${fmt(table.goals.weeklyGoal)}`,
+    balanceLine,
     `• Custo Anual do Veículo: ${fmt(table.goals.annualCost)} _(${annualPct}% coberto)_`,
     '',
     `_Gerado pelo Assistente Moeda · Heiss-Lab_`,

@@ -1,4 +1,5 @@
 import type { TableRow, TableMetrics, MonthMetrics, YearMetrics } from '../types';
+import { calculateStrictGlobalBalance } from '../utils/dateUtils';
 
 /**
  * Pure math engine — calendar-elapsed-time averaging.
@@ -17,7 +18,7 @@ import type { TableRow, TableMetrics, MonthMetrics, YearMetrics } from '../types
  *  globalAnnualAvg  = globalDailyAvg × 365.25
  *  monthMetrics.weeklyAvg = monthMetrics.dailyAvg × 7
  */
-export function computeMetrics(rows: TableRow[]): TableMetrics {
+export function computeMetrics(rows: TableRow[], weeklyGoal: number): TableMetrics {
   if (rows.length === 0) return emptyMetrics();
 
   // Deposits are investment entries, not operational revenue.
@@ -134,12 +135,17 @@ export function computeMetrics(rows: TableRow[]): TableMetrics {
     byWeek[wk] = round2(v);
   }
 
+  // Strict cumulative balance: every Mon–Sun window from the first entry to
+  // today is scored against weeklyGoal, including completely empty weeks.
+  const globalGoalBalance = calculateStrictGlobalBalance(revenueRows, weeklyGoal);
+
   return {
     grossTotal: round2(grossTotal),
     globalDailyAvg,
     globalWeeklyAvg,
     globalMonthlyAvg,
     globalAnnualAvg,
+    globalGoalBalance,
     byYear,
     byMonth,
     byWeek,
@@ -208,6 +214,7 @@ function emptyMetrics(): TableMetrics {
     globalWeeklyAvg: 0,
     globalMonthlyAvg: 0,
     globalAnnualAvg: 0,
+    globalGoalBalance: 0,
     byYear: {},
     byMonth: {},
     byWeek: {},

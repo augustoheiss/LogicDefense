@@ -57,6 +57,12 @@ function ProgressBar({
   );
 }
 
+/** Formats balance as "+R$ X,XX" or "-R$ X,XX" (sign always explicit). */
+function fmtBalance(v: number): string {
+  const abs = Math.abs(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  return v >= 0 ? `+${abs}` : `-${abs}`;
+}
+
 export function GoalsPanel({ goals, metrics }: GoalsPanelProps) {
   // Latest month data for comparison
   const sortedMonths = Object.keys(metrics.byMonth).sort().reverse();
@@ -69,11 +75,47 @@ export function GoalsPanel({ goals, metrics }: GoalsPanelProps) {
   // Annual progress: use gross total vs annual cost
   const annualProgress = metrics.grossTotal;
 
+  const balance = metrics.globalGoalBalance;
+  const balancePositive = balance >= 0;
+
   return (
     <div className="bg-white/5 border border-white/10 rounded-xl p-4 space-y-5">
       <h3 className="text-sm font-semibold text-white/70 flex items-center gap-2">
         <span className="text-base">🎯</span> Metas
       </h3>
+
+      {/* ── Strict Global Balance ── */}
+      {metrics.grossTotal > 0 && (
+        <div
+          className={`rounded-xl border p-4 space-y-1 ${
+            balancePositive
+              ? 'bg-emerald-500/10 border-emerald-500/30'
+              : 'bg-red-500/10 border-red-500/25'
+          }`}
+        >
+          <div className="text-xs text-white/40 uppercase tracking-wider">
+            Saldo Acumulado de Metas
+          </div>
+          <div
+            className={`text-2xl font-bold font-mono ${
+              balancePositive ? 'text-emerald-400' : 'text-red-400'
+            }`}
+          >
+            {fmtBalance(balance)}
+          </div>
+          <div
+            className={`text-xs font-medium ${
+              balancePositive ? 'text-emerald-500/70' : 'text-red-400/70'
+            }`}
+          >
+            {balancePositive ? 'Banco de Valores / Excedente' : 'Dívida Pendente'}
+          </div>
+          <div className="text-xs text-white/20 pt-0.5">
+            Toda semana desde a 1ª entrada é contabilizada, incluindo semanas
+            sem registros.
+          </div>
+        </div>
+      )}
 
       <ProgressBar
         label="Meta Diária"

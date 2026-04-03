@@ -112,3 +112,75 @@ export function findCurrentWeek(
     groups[groups.length - 1]
   );
 }
+
+/**
+ * Strict global goal balance across the ENTIRE timeline from the very first
+ * recorded entry up to (and including) the current calendar week.
+ *
+ * Every Mon–Sun window in that range is scored, even completely empty ones
+ * (vacations, illness, etc.). An empty week contributes −weeklyGoal to the
+ * running total, making this metric deliberately unforgiving.
+ *
+ * @param rows       Revenue rows already stripped of deposits
+ *                   (`entryType !== 'deposit'`). Rest-day rows (value = 0)
+ *                   are ignored inside the function.
+ * @param weeklyGoal The target revenue per week (e.g. R$ 600).
+ * @returns          Running cumulative balance: positive = excedente,
+ *                   negative = dívida pendente.
+ */
+export function calculateStrictGlobalBalance(
+  rows: TableRow[],
+  weeklyGoal: number,
+): number {
+  const activeRows = rows.filter((r) => r.value > 0);
+  if (activeRows.length === 0) return 0;
+
+  // Step A — earliest date among all active revenue rows
+  const minDate = activeRows.map((r) => r.date).sort()[0];
+  const [minY, minMo, minD] = minDate.split('-').map(Number);
+
+  // Step B — Monday of the week that contains minDate (start of timeline)
+  const startOfTimeline = getMondayOf(new Date(minY, minMo - 1, minD));
+
+  // Step C — Monday of the CURRENT calendar week (end of timeline, inclusive)
+  const today = new Date();
+  const endOfTimeline = getMondayOf(
+    new Date(today.getFullYear(), today.getMonth(), today.getDate()),
+  );
+
+  // Build a fast O(1) lookup: "YYYY-MM-DD" → total revenue for that date
+  const dateValueMap = new Map<string, number>();
+  for (const row of activeRows) {
+    dateValueMap.set(row.date, (dateValueMap.get(row.date) ?? 0) + row.value);
+  }
+
+  // Steps D–G — walk each Mon–Sun window from startOfTimeline to endOfTimeline
+  let totalBalance = 0;
+  // Clone startOfTimeline to avoid mutating it
+  let cursor = new Date(
+    startOfTimeline.getFullYear(),
+    startOfTimeline.getMonth(),
+    startOfTimeline.getDate(),
+  );
+
+  while (cursor.getTime() <= endOfTimeline.getTime()) {
+    let weekSum = 0;
+    for (let i = 0; i < 7; i++) {
+      // new Date(y, m, d + i) handles month/year overflow correctly in JS
+      const dayKey = toLocalKey(
+        new Date(cursor.getFullYear(), cursor.getMonth(), cursor.getDate() + i),
+      );
+      weekSum += dateValueMap.get(dayKey) ?? 0;
+    }
+    totalBalance += weekSum - weeklyGoal;
+    // Advance exactly 7 days — JS Date constructor handles overflow across
+    // month and year boundaries without any manual wrapping needed.
+    cursor = new Date(
+      cursor.getFullYear(),
+      cursor.getMonth(),
+      cursor.getDate() + 7,
+    );
+  }
+
+  return Math.round(totalBalance * 100) / 100;
+}

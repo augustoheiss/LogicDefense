@@ -53,7 +53,13 @@ export interface TableMetrics {
   globalWeeklyAvg: number;
   globalMonthlyAvg: number;
   globalAnnualAvg: number;
-  byYear: Record<string, YearMetrics>;  // "YYYY" → YearMetrics
+  /**
+   * Strict cumulative goal balance from the first recorded entry to the
+   * current calendar week (inclusive), penalising every empty week at the
+   * full weeklyGoal rate. Positive = excedente; negative = dívida pendente.
+   */
+  globalGoalBalance: number;
+  byYear: Record<string, YearMetrics>;   // "YYYY" → YearMetrics
   byMonth: Record<string, MonthMetrics>; // "YYYY-MM" → MonthMetrics
   byWeek: Record<string, number>;        // "YYYY-Www" → gross total
 }

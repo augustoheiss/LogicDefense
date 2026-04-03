@@ -130,7 +130,10 @@ export function TableEditor({
     () => table.rows.filter((r) => r.entryType !== 'deposit'),
     [table.rows],
   );
-  const metrics = useMemo(() => computeMetrics(revenueRows), [revenueRows]);
+  const metrics = useMemo(
+    () => computeMetrics(revenueRows, table.goals.weeklyGoal),
+    [revenueRows, table.goals.weeklyGoal],
+  );
 
   // ── Global month selector ───────────────────────────────────────────────────
   const availableMonths = useMemo(() => buildAvailableMonths(table.rows), [table.rows]);
