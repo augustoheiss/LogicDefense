@@ -64,7 +64,7 @@ export function LabPage() {
 
         {/* ── Video grid ── */}
         <div className="video-grid">
-          {youtubeVideos.map((video) => (
+          {[...youtubeVideos].reverse().map((video) => (
             <article key={video.id} className="video-card">
               <div className="video-card__embed">
                 <iframe
