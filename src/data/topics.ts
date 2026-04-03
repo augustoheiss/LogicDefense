@@ -25,6 +25,7 @@ export interface Topic {
   icon: string
   color: 'cyan' | 'purple' | 'gold' | 'green' | 'blue' | 'rose'
   items: TopicItem[]
+  isMock?: boolean
 }
 
 // ── Color mapping for real categories ─────────────────────────────────────────
