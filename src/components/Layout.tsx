@@ -56,12 +56,16 @@ export function Layout() {
       {/* ── Footer ── */}
       <footer className="footer">
         <p className="footer__msg">
-        © 2026 Heiss-Lab | Feito com 💡 para a Educação |{' '}
-          <a href="mailto:augustoheiss@gmail.com">augustoheiss@gmail.com</a>
-          {' '}
-        </p>
-        <p className="footer__copy">
-          © {new Date().getFullYear()} Logic Defense · Produzido em co-criação com IA
+          © 2026 Heiss-Lab / Augusto Heiss. Todo o material deste portal está licenciado sob a{' '}
+          <a
+            href="https://creativecommons.org/licenses/by-nc-sa/4.0/deed.pt-br"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="footer__cc-link"
+          >
+            Licença Creative Commons CC BY-NC-SA 4.0
+          </a>
+          . Distribuição gratuita permitida; venda proibida.
         </p>
       </footer>
     </div>
