@@ -161,6 +161,48 @@ No episódio de hoje, nós vamos hackear a "Arquitetura dos Números Quebrados".
     description: 'Em formato de podcast, mergulhamos em uma conversa profunda sobre como os mercadores antigos operavam como supercomputadores biológicos e como a proporção inversa nos ensina sobre colaboração e empatia.',
     youtubeId: 'cMHIW0I65_4',
     tag: 'Matemática · Podcast',
+  },
+  {
+    id: 'vid-19',
+    title: 'The Architecture of Abstraction (Twin Lines)',
+    description: 'An alternative hip-hop anthem exploring the history of algebra, from the medical origins of Al-jabr to the invention of the equals sign and the bloody academic duels of the Renaissance.',
+    youtubeId: 'tWRGW75IQQ4',
+    tag: 'Música · Álgebra (EN)',
+  },
+  {
+    id: 'vid-20',
+    title: 'A Arquitetura da Abstração (O Som da Balança)',
+    description: 'Um boom-bap épico sobre a história da abstração matemática, a Casa da Sabedoria em Bagdá e como os atalhos modernos destruíram o verdadeiro significado do sinal de igual.',
+    youtubeId: '4NcRy6x9Qjc',
+    tag: 'Música · Álgebra (PT)',
+  },
+  {
+    id: 'vid-21',
+    title: 'O Número Quebrado (A Arquitetura da Fração)',
+    description: 'Uma jornada musical desde o Olho de Hórus no Egito até os códigos modernos de CSS e compressão de dados, desconstruindo a decoreba letal do "inverte e multiplica".',
+    youtubeId: 'soGhq-wpNMA',
+    tag: 'Música · Frações (PT)',
+  },
+  {
+    id: 'vid-22',
+    title: 'The Broken Number (Architecture of the Fraction)',
+    description: 'A driving boom-bap track explaining the cognitive hurdles and the real-world architecture of fractions. Stop memorizing the rule, understand the design!',
+    youtubeId: '5a4b__xZdz4',
+    tag: 'Música · Frações (EN)',
+  },
+  {
+    id: 'vid-23',
+    title: 'The Fiction of the Frictionless (The Golden Rule)',
+    description: 'A conscious hip-hop track criticizing the rote memorization of the Rule of Three and advocating for true intellectual friction to build cognitive resilience.',
+    youtubeId: 'wDc7e6P0XSE',
+    tag: 'Música · Proporção (EN)',
+  },
+  {
+    id: 'vid-24',
+    title: 'A Fricção do Pensamento (A Regula Aurea)',
+    description: 'Um manifesto musical sobre o Supercomputador Biológico da Rota da Seda e a tragédia do atalho na educação. Descubra o valor de UM e fuja do lugar comum!',
+    youtubeId: 'hjtSPLkwaeQ',
+    tag: 'Música · Proporção (PT)',
   }
 ];
 

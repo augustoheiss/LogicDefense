@@ -83,9 +83,15 @@ function buildTopics(): Topic[] {
 
   // ── Injetando Vídeos nas Trilhas ───────────────────────────────
   // Já amarramos os vídeos corretos do seu content.ts nestas trilhas:
-  injectVideos('cat-equacao', ['vid-13', 'vid-14'])
-  injectVideos('cat-fracoes', ['vid-11', 'vid-12'])
-  injectVideos('cat-regra-de-tres', ['vid-9', 'vid-10', 'vid-17', 'vid-18'])
+  // ── Injetando Vídeos nas Trilhas ───────────────────────────────
+  // Aulas de Equação + Músicas de Álgebra
+  injectVideos('cat-equacao', ['vid-13', 'vid-14', 'vid-19', 'vid-20'])
+
+  // Aulas de Frações + Músicas de Frações
+  injectVideos('cat-fracoes', ['vid-11', 'vid-12', 'vid-21', 'vid-22'])
+
+  // Aulas de Regra de Três + Podcasts + Músicas de Proporção
+  injectVideos('cat-regra-de-tres', ['vid-9', 'vid-10', 'vid-17', 'vid-18', 'vid-23', 'vid-24'])
 
   // ── Detectar vídeos órfãos e criar trilha "Laboratório de Vídeos" ──
   // Coleta todos os IDs que já foram injetados em alguma trilha
