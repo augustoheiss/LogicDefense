@@ -80,14 +80,12 @@ export function LabPage() {
                 <span className="video-card__tag">{video.tag}</span>
                 <h3 className="video-card__title">{video.title}</h3>
                 <p className="video-card__desc">{video.description}</p>
-                <a
-                  href={`https://www.youtube.com/watch?v=${video.youtubeId}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                <Link
+                  to={`/repositorio?v=${video.id}`}
                   className="video-card__link"
                 >
-                  Abrir no YouTube ↗
-                </a>
+                  Abrir no Repositório ↗
+                </Link>
               </div>
             </article>
           ))}

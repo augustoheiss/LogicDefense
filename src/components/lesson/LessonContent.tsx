@@ -3,21 +3,84 @@ import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
 import 'katex/dist/katex.min.css'
 import { cleanRichContent } from '../../data/content'
-import type { LessonPlan } from '../../data/content'
+import type { TopicItem } from '../../data/topics'
 
 interface LessonContentProps {
-  lesson: LessonPlan | null
+  item: TopicItem | null
 }
 
-export function LessonContent({ lesson }: LessonContentProps) {
-  if (!lesson) {
+export function LessonContent({ item }: LessonContentProps) {
+  // ── Empty state ────────────────────────────────────────────────────────────
+  if (!item) {
     return (
       <div className="lesson-content lesson-content--empty">
         <div className="lesson-content__placeholder">
           <span className="lesson-content__placeholder-icon" aria-hidden="true">📖</span>
-          <h2 className="lesson-content__placeholder-title">Selecione uma aula</h2>
+          <h2 className="lesson-content__placeholder-title">Selecione um material</h2>
           <p className="lesson-content__placeholder-desc">
-            Escolha uma trilha e uma aula no menu ao lado para começar a leitura.
+            Escolha uma trilha e um material no menu ao lado para começar.
+          </p>
+        </div>
+      </div>
+    )
+  }
+
+  // ── Video player ────────────────────────────────────────────────────────────
+  if (item.type === 'video') {
+    return (
+      <div className="lesson-content lesson-content--video">
+        <header className="lesson-content__header">
+          <div className="lesson-content__subject">
+            <span aria-hidden="true">▶</span>
+            Vídeo · YouTube
+          </div>
+          <h1 className="lesson-content__title">{item.title}</h1>
+          <p className="lesson-content__desc">{item.description}</p>
+          <div className="lesson-content__meta">
+            <span className="lesson-content__meta-item">🎬 {item.meta}</span>
+          </div>
+        </header>
+
+        <div className="lesson-video-embed">
+          <iframe
+            src={`https://www.youtube.com/embed/${item.youtubeId}?rel=0&modestbranding=1&autoplay=1`}
+            title={item.title}
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            allowFullScreen
+          />
+        </div>
+
+        <div className="lesson-cta lesson-cta--inline">
+          <span className="lesson-cta__eyebrow">🔗 Link Externo</span>
+          <h2 className="lesson-cta__title">Assistir no YouTube</h2>
+          <p className="lesson-cta__desc">
+            Abra diretamente no YouTube para comentar, curtir ou salvar na sua playlist.
+          </p>
+          <div className="lesson-cta__actions">
+            <a
+              href={`https://www.youtube.com/watch?v=${item.youtubeId}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn-primary"
+            >
+              ↗ Abrir no YouTube
+            </a>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // ── Lesson plan ────────────────────────────────────────────────────────────
+  const lesson = item.lessonData
+  if (!lesson) {
+    return (
+      <div className="lesson-content lesson-content--empty">
+        <div className="lesson-content__placeholder">
+          <span className="lesson-content__placeholder-icon" aria-hidden="true">⚠️</span>
+          <h2 className="lesson-content__placeholder-title">Conteúdo indisponível</h2>
+          <p className="lesson-content__placeholder-desc">
+            Os dados desta aula não foram encontrados.
           </p>
         </div>
       </div>

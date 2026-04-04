@@ -1,26 +1,48 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { LessonSidebar } from '../components/lesson/LessonSidebar'
 import { LessonContent } from '../components/lesson/LessonContent'
 import { lessonPlans } from '../data/content'
 import { TOPICS } from '../data/topics'
-import type { Topic } from '../data/topics'
-import type { LessonPlan } from '../data/content'
+import type { Topic, TopicItem } from '../data/topics'
 
 export function MaterialsPage() {
-  const [selectedTopic, setSelectedTopic] = useState<Topic | null>(null)
-  const [selectedLesson, setSelectedLesson] = useState<LessonPlan | null>(null)
+  const [searchParams, setSearchParams] = useSearchParams()
 
-  const totalPages = lessonPlans.reduce((acc, p) => acc + p.pages, 0)
-  const availableCount = lessonPlans.filter((p) => p.available).length
+  const [selectedTopic, setSelectedTopic] = useState<Topic | null>(null)
+  const [selectedItem, setSelectedItem]   = useState<TopicItem | null>(null)
+
+  // ── Auto-select from URL query param ?v=vid-XX on first load ────────────
+  useEffect(() => {
+    const videoId = searchParams.get('v')
+    if (!videoId) return
+
+    // Search all topics for the item with this id
+    for (const topic of TOPICS) {
+      const item = topic.items.find((i) => i.id === videoId)
+      if (item) {
+        setSelectedTopic(topic)
+        setSelectedItem(item)
+        break
+      }
+    }
+
+    // Clear the query param so the URL stays clean after auto-selection
+    setSearchParams({}, { replace: true })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const totalPages      = lessonPlans.reduce((acc, p) => acc + p.pages, 0)
+  const availableCount  = lessonPlans.filter((p) => p.available).length
 
   function handleTopicSelect(topic: Topic) {
     setSelectedTopic(topic)
-    setSelectedLesson(null)
+    setSelectedItem(null)
   }
 
   function handleBack() {
     setSelectedTopic(null)
-    setSelectedLesson(null)
+    setSelectedItem(null)
   }
 
   return (
@@ -97,12 +119,12 @@ export function MaterialsPage() {
         <div className="repo-workspace">
           <LessonSidebar
             topic={selectedTopic}
-            selectedLessonId={selectedLesson?.id ?? null}
-            onSelectLesson={setSelectedLesson}
+            selectedItemId={selectedItem?.id ?? null}
+            onSelectItem={setSelectedItem}
             onBack={handleBack}
           />
           <main className="repo-main" id="main-content">
-            <LessonContent lesson={selectedLesson} />
+            <LessonContent item={selectedItem} />
           </main>
         </div>
       )}

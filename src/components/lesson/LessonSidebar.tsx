@@ -1,17 +1,16 @@
-import type { LessonPlan } from '../../data/content'
-import type { Topic } from '../../data/topics'
+import type { TopicItem, Topic } from '../../data/topics'
 
 interface LessonSidebarProps {
   topic: Topic
-  selectedLessonId: string | null
-  onSelectLesson: (lesson: LessonPlan) => void
+  selectedItemId: string | null
+  onSelectItem: (item: TopicItem) => void
   onBack: () => void
 }
 
 export function LessonSidebar({
   topic,
-  selectedLessonId,
-  onSelectLesson,
+  selectedItemId,
+  onSelectItem,
   onBack,
 }: LessonSidebarProps) {
   const lessonCount = topic.items.filter((i) => i.type === 'lesson').length
@@ -42,32 +41,33 @@ export function LessonSidebar({
       <nav className="lesson-sidebar__nav" aria-label="Materiais da trilha">
         <ul className="lesson-cat__list" role="list">
           {topic.items.map((item) => {
+            const isActive = item.id === selectedItemId
+
             if (item.type === 'video') {
               return (
                 <li key={item.id}>
-                  <a
-                    href={`https://www.youtube.com/watch?v=${item.youtubeId}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="lesson-cat__item lesson-cat__item--video"
+                  <button
+                    className={`lesson-cat__item lesson-cat__item--video${isActive ? ' lesson-cat__item--active' : ''}`}
+                    onClick={() => onSelectItem(item)}
                     title={item.description}
+                    aria-current={isActive ? 'true' : undefined}
                   >
                     <span className="lesson-cat__item-title">{item.title}</span>
                     <span className="lesson-cat__item-meta lesson-cat__item-meta--video">
-                      ▶ {item.meta} ↗
+                      ▶ {item.meta}
                     </span>
-                  </a>
+                  </button>
                 </li>
               )
             }
 
-            const isActive = item.lessonData?.id === selectedLessonId
             return (
               <li key={item.id}>
                 <button
                   className={`lesson-cat__item${isActive ? ' lesson-cat__item--active' : ''}`}
-                  onClick={() => item.lessonData && onSelectLesson(item.lessonData)}
+                  onClick={() => onSelectItem(item)}
                   title={item.description}
+                  aria-current={isActive ? 'true' : undefined}
                 >
                   <span className="lesson-cat__item-title">{item.title}</span>
                   <span className="lesson-cat__item-meta">{item.meta}</span>

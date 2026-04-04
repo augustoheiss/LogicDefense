@@ -3,6 +3,7 @@
 // ──────────────────────────────────────────────────────────────────────────────
 import { lessonPlans, lessonCategories, youtubeVideos } from './content'
 import type { LessonPlan } from './content'
+export type { LessonPlan }
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -23,7 +24,7 @@ export interface Topic {
   title: string
   description: string
   icon: string
-  color: 'cyan' | 'purple' | 'gold' | 'green' | 'blue' | 'rose'
+  color: 'cyan' | 'purple' | 'gold' | 'green' | 'blue' | 'rose' | 'orange'
   items: TopicItem[]
   isMock?: boolean
 }
@@ -86,6 +87,35 @@ function buildTopics(): Topic[] {
   injectVideos('cat-fracoes', ['vid-11', 'vid-12'])
   injectVideos('cat-regra-de-tres', ['vid-9', 'vid-10', 'vid-17', 'vid-18'])
 
+  // ── Detectar vídeos órfãos e criar trilha "Laboratório de Vídeos" ──
+  // Coleta todos os IDs que já foram injetados em alguma trilha
+  const assignedVideoIds = new Set<string>()
+  realTopics.forEach((t) =>
+    t.items.filter((i) => i.type === 'video').forEach((i) => assignedVideoIds.add(i.id))
+  )
+
+  // Filtra os vídeos que NÃO estão em nenhuma trilha
+  const orphanVideos = youtubeVideos.filter((v) => !assignedVideoIds.has(v.id))
+
+  if (orphanVideos.length > 0) {
+    const laboratorioTopic: Topic = {
+      id: 'cat-laboratorio',
+      title: 'Laboratório de Vídeos',
+      description:
+        'Todos os vídeos e pesquisas sobre Inteligência Artificial, Filosofia e Matemática aplicada à Educação.',
+      icon: '🎥',
+      color: 'cyan',
+      items: orphanVideos.map((video, index): TopicItem => ({
+        id: video.id,
+        type: 'video',
+        title: video.title,
+        meta: `YouTube · Episódio ${index + 1}`,
+        description: video.description,
+        youtubeId: video.youtubeId,
+      })),
+    }
+    realTopics.push(laboratorioTopic)
+  }
 
   return realTopics
 }
