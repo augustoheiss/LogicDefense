@@ -151,22 +151,34 @@ export function TableEditor({
     [table.rows, effectiveMonth],
   );
 
-  // Current-week data derived from the selected month's revenue rows
+  // Current-week data — uses ALL revenue rows (not just the current month) so
+  // that cross-month weeks (e.g. Jan 26–Feb 01) are never artificially split.
+  // Rule mirrors WhatsApp: a week "belongs" to the month whose calendar
+  // contains its SUNDAY.  For the live current month we always show today's
+  // actual week regardless of where its Sunday lands.
   const currentWeekData = useMemo(() => {
-    const revenueMonthRows = monthRows.filter(
+    const allRevenueRows = table.rows.filter(
       (r) => r.entryType !== 'deposit' && r.value > 0,
     );
-    const groups = groupRowsByWeek(revenueMonthRows, table.goals.weeklyGoal);
-    if (groups.length === 0) return null;
+    const allGroups = groupRowsByWeek(allRevenueRows, table.goals.weeklyGoal);
+    if (allGroups.length === 0) return null;
 
     const today = new Date();
     const [y, m] = effectiveMonth.split('-').map(Number);
     const isCurrentMonth = today.getFullYear() === y && today.getMonth() + 1 === m;
-    // For past months use the last day of that month so findCurrentWeek falls back
-    // to the final week group rather than returning null.
-    const refDate = isCurrentMonth ? today : new Date(y, m, 0);
-    return findCurrentWeek(groups, refDate);
-  }, [monthRows, table.goals.weeklyGoal, effectiveMonth]);
+
+    if (isCurrentMonth) {
+      // Live view: show today's real week even if it straddles next month
+      return findCurrentWeek(allGroups, today);
+    }
+
+    // Past-month view: show the last week whose SUNDAY falls in this month
+    const monthGroups = allGroups.filter((g) => {
+      const sun = g.weekEndDate;
+      return sun.getFullYear() === y && sun.getMonth() + 1 === m;
+    });
+    return monthGroups[monthGroups.length - 1] ?? null;
+  }, [table.rows, table.goals.weeklyGoal, effectiveMonth]);
 
   function fmt(v: number) {
     return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });

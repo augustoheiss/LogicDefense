@@ -90,13 +90,18 @@ function parseLine(line: string): string[] {
 export function exportTableToCSV(table: CoinTable): string {
   const sortedRows = [...table.rows].sort((a, b) => a.date.localeCompare(b.date));
 
+  // Emit one goal_annual_YEAR line per configured year (sorted ascending)
+  const annualLines = Object.entries(table.goals.annualCosts)
+    .sort(([a], [b]) => parseInt(a) - parseInt(b))
+    .map(([year, cost]) => `goal_annual_${year},${cost}`);
+
   const lines = [
     MAGIC,
     `name,${escapeField(table.name)}`,
     `description,${escapeField(table.description ?? '')}`,
     `goal_daily,${table.goals.dailyGoal}`,
     `goal_weekly,${table.goals.weeklyGoal}`,
-    `goal_annual,${table.goals.annualCost}`,
+    ...annualLines,
     ROWS_MARKER,
     'date,value,description,entryType',
     ...sortedRows.map(
@@ -181,10 +186,21 @@ export function importTableFromCSV(csv: string): ImportedTable {
     throw new Error('Seção de dados (## ROWS ##) não encontrada no arquivo.');
   }
 
+  // Collect goal_annual_YEAR entries (new per-year format)
+  const annualCosts: Record<number, number> = {};
+  for (const [key, value] of Object.entries(meta)) {
+    const m = key.match(/^goal_annual_(\d{4})$/);
+    if (m) annualCosts[parseInt(m[1])] = parseFinite(value, 0);
+  }
+  // Backward compat: old CSVs used a single `goal_annual` key → assign to current year
+  if (Object.keys(annualCosts).length === 0 && meta['goal_annual'] !== undefined) {
+    annualCosts[new Date().getFullYear()] = parseFinite(meta['goal_annual'], 15000);
+  }
+
   const goals: TableGoals = {
-    dailyGoal:  parseFinite(meta['goal_daily'],  50),
-    weeklyGoal: parseFinite(meta['goal_weekly'], 400),
-    annualCost: parseFinite(meta['goal_annual'], 15000),
+    dailyGoal:   parseFinite(meta['goal_daily'],  50),
+    weeklyGoal:  parseFinite(meta['goal_weekly'], 400),
+    annualCosts,
   };
 
   // ── Parse data rows ──────────────────────────────────────────────────────────

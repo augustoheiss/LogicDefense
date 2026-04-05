@@ -41,18 +41,19 @@ function buildMessage(
   const monthLabel   = formatMonthFull(selectedMonth);
   const monthMetrics = metrics.byMonth[selectedMonth];
 
-  // Revenue rows for this month only — sorted chronologically, positive values only
-  const revenueRows = table.rows
-    .filter(
-      (r) =>
-        r.entryType !== 'deposit' &&
-        r.value > 0 &&
-        r.date.startsWith(selectedMonth + '-'),
-    )
+  // Task 2 fix: group ALL revenue rows into Mon–Sun weeks first, then filter
+  // weeks by their SUNDAY date.  A week whose Sunday falls in selectedMonth
+  // is entirely attributed to that month — entries from the preceding month
+  // that share the same Mon–Sun window are included, preventing fragmentation.
+  const [selY, selM] = selectedMonth.split('-').map(Number);
+
+  const allRevenueRows = table.rows
+    .filter((r) => r.entryType !== 'deposit' && r.value > 0)
     .sort((a, b) => a.date.localeCompare(b.date));
 
-  // Group into Mon–Sun weeks
-  const weekGroups = groupRowsByWeek(revenueRows, table.goals.weeklyGoal);
+  const weekGroups = groupRowsByWeek(allRevenueRows, table.goals.weeklyGoal).filter(
+    (g) => g.weekEndDate.getFullYear() === selY && g.weekEndDate.getMonth() + 1 === selM,
+  );
 
   const lines: string[] = [
     `📆 *Relatório: ${table.name}*`,
@@ -110,17 +111,20 @@ function buildMessage(
   }
 
   // ── Global big picture + goals ─────────────────────────────────────────────
-  const annualPct =
-    metrics.grossTotal > 0 && table.goals.annualCost > 0
-      ? ((metrics.grossTotal / table.goals.annualCost) * 100).toFixed(1)
-      : '0.0';
+  // Task 3: use the selected year's specific cost and that year's gross revenue
+  const reportYear   = selY;
+  const yearCost     = table.goals.annualCosts[reportYear] ?? 0;
+  const yearRevenue  = metrics.byYear[String(reportYear)]?.grossAnnual ?? 0;
+  const annualPct    = yearCost > 0
+    ? ((yearRevenue / yearCost) * 100).toFixed(1)
+    : '0.0';
 
-  const balance       = metrics.globalGoalBalance;
-  const balanceAbs    = Math.abs(balance).toLocaleString('pt-BR', {
+  const balance    = metrics.globalGoalBalance;
+  const balanceAbs = Math.abs(balance).toLocaleString('pt-BR', {
     style: 'currency',
     currency: 'BRL',
   });
-  const balanceLine   = balance >= 0
+  const balanceLine = balance >= 0
     ? `• Saldo Acumulado de Metas: *+${balanceAbs}* _(Banco de Valores / Excedente)_`
     : `• Saldo Acumulado de Metas: *-${balanceAbs}* _(Dívida Pendente)_`;
 
@@ -130,7 +134,7 @@ function buildMessage(
     `• Média Diária Global: ${fmt(metrics.globalDailyAvg)}`,
     `• Meta Semanal: ${fmt(table.goals.weeklyGoal)}`,
     balanceLine,
-    `• Custo Anual do Veículo: ${fmt(table.goals.annualCost)} _(${annualPct}% coberto)_`,
+    `• Custo Anual ${reportYear}: ${fmt(yearCost)} _(${annualPct}% coberto em ${reportYear})_`,
     '',
     `_Gerado pelo Assistente Moeda · Heiss-Lab_`,
   );

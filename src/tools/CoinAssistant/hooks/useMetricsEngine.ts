@@ -112,8 +112,20 @@ export function computeMetrics(rows: TableRow[], weeklyGoal: number): TableMetri
       ? Math.max(1, todayDayOfMonth)
       : Math.max(1, daysInMonth(ymYear, ymMonth));
 
-    const dailyAvg  = round2(acc.gross / denominator);
-    const weeklyAvg = round2(dailyAvg * 7);
+    const dailyAvg = round2(acc.gross / denominator);
+
+    /*
+     * Weekly average — two strategies to prevent early-month distortion:
+     *
+     *   Current month: divide gross by the number of 7-day blocks elapsed
+     *     so far (ceil(daysElapsed / 7) ≥ 1).  This avoids the "R$ 600 in
+     *     5 days → R$ 840/week" extrapolation, giving R$ 600 instead.
+     *
+     *   Past month: use dailyAvg × 7 (the full-month pace is stable).
+     */
+    const weeklyAvg = ym === todayYM
+      ? round2(acc.gross / Math.max(1, Math.ceil(todayDayOfMonth / 7)))
+      : round2(dailyAvg * 7);
 
     // Last ISO week that touched this month
     const sortedWeeks = Array.from(acc.weeks).sort();

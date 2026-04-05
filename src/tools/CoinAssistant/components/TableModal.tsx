@@ -11,7 +11,7 @@ interface TableModalProps {
 const DEFAULT_GOALS: TableGoals = {
   dailyGoal: 50,
   weeklyGoal: 400,
-  annualCost: 15000,
+  annualCosts: { [new Date().getFullYear()]: 15000 },
 };
 
 export function TableModal({ mode, table, onSave, onClose }: TableModalProps) {
@@ -27,9 +27,34 @@ export function TableModal({ mode, table, onSave, onClose }: TableModalProps) {
     }
   }, [table]);
 
-  function handleGoal(key: keyof TableGoals, raw: string) {
+  function handleGoal(key: 'dailyGoal' | 'weeklyGoal', raw: string) {
     const v = parseFloat(raw);
     setGoals((prev) => ({ ...prev, [key]: isNaN(v) ? 0 : v }));
+  }
+
+  function setAnnualCost(year: number, raw: string) {
+    const v = parseFloat(raw);
+    setGoals((prev) => ({
+      ...prev,
+      annualCosts: { ...prev.annualCosts, [year]: isNaN(v) ? 0 : v },
+    }));
+  }
+
+  function addAnnualCostYear() {
+    const existing = Object.keys(goals.annualCosts).map(Number);
+    const next = existing.length > 0 ? Math.max(...existing) + 1 : new Date().getFullYear();
+    setGoals((prev) => ({
+      ...prev,
+      annualCosts: { ...prev.annualCosts, [next]: 0 },
+    }));
+  }
+
+  function removeAnnualCostYear(year: number) {
+    setGoals((prev) => {
+      const updated = { ...prev.annualCosts };
+      delete updated[year];
+      return { ...prev, annualCosts: updated };
+    });
   }
 
   function handleSubmit(e: React.FormEvent) {
@@ -74,10 +99,10 @@ export function TableModal({ mode, table, onSave, onClose }: TableModalProps) {
             />
           </div>
 
-          {/* Goals */}
+          {/* Daily + Weekly goals */}
           <div className="space-y-2">
             <label className="text-xs text-white/50 uppercase tracking-wider">Metas (R$)</label>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 gap-2">
               <div className="space-y-1">
                 <label className="text-xs text-white/30">Meta Diária</label>
                 <input
@@ -100,18 +125,55 @@ export function TableModal({ mode, table, onSave, onClose }: TableModalProps) {
                   className="w-full bg-white/10 text-white text-sm rounded-lg px-2 py-2 outline-none focus:ring-1 focus:ring-[#a855f7] border border-white/10"
                 />
               </div>
-              <div className="space-y-1">
-                <label className="text-xs text-white/30">Custo Anual</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={goals.annualCost}
-                  onChange={(e) => handleGoal('annualCost', e.target.value)}
-                  className="w-full bg-white/10 text-white text-sm rounded-lg px-2 py-2 outline-none focus:ring-1 focus:ring-[#a855f7] border border-white/10"
-                />
-              </div>
             </div>
+          </div>
+
+          {/* Per-year annual costs */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <label className="text-xs text-white/50 uppercase tracking-wider">
+                Custo Anual por Ano (R$)
+              </label>
+              <button
+                type="button"
+                onClick={addAnnualCostYear}
+                className="text-xs text-[#a855f7] hover:text-[#c084fc] transition-colors font-medium"
+              >
+                + Adicionar Ano
+              </button>
+            </div>
+
+            {Object.keys(goals.annualCosts).length === 0 && (
+              <p className="text-xs text-white/25 italic">
+                Nenhum custo anual configurado.
+              </p>
+            )}
+
+            {Object.entries(goals.annualCosts)
+              .sort(([a], [b]) => parseInt(a) - parseInt(b))
+              .map(([year, cost]) => (
+                <div key={year} className="flex items-center gap-2">
+                  <span className="text-sm text-white/50 w-12 shrink-0 text-right">
+                    {year}
+                  </span>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={cost}
+                    onChange={(e) => setAnnualCost(parseInt(year), e.target.value)}
+                    className="flex-1 bg-white/10 text-white text-sm rounded-lg px-2 py-1.5 outline-none focus:ring-1 focus:ring-[#a855f7] border border-white/10"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removeAnnualCostYear(parseInt(year))}
+                    className="text-white/25 hover:text-red-400 transition-colors text-xl leading-none px-1"
+                    aria-label={`Remover custo de ${year}`}
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
           </div>
 
           {/* Actions */}

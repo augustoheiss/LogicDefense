@@ -72,8 +72,10 @@ export function GoalsPanel({ goals, metrics }: GoalsPanelProps) {
   const sortedWeeks = Object.keys(metrics.byWeek).sort().reverse();
   const latestWeekGross = sortedWeeks[0] ? metrics.byWeek[sortedWeeks[0]] : 0;
 
-  // Annual progress: use gross total vs annual cost
-  const annualProgress = metrics.grossTotal;
+  // Current-year cost and revenue for the annual progress bar
+  const currentYear     = new Date().getFullYear();
+  const currentYearCost = goals.annualCosts[currentYear] ?? 0;
+  const currentYearGross = metrics.byYear[String(currentYear)]?.grossAnnual ?? 0;
 
   const balance = metrics.globalGoalBalance;
   const balancePositive = balance >= 0;
@@ -141,9 +143,9 @@ export function GoalsPanel({ goals, metrics }: GoalsPanelProps) {
       )}
 
       <ProgressBar
-        label="Custo Anual do Veículo"
-        current={annualProgress}
-        target={goals.annualCost}
+        label={`Custo Anual ${currentYear}`}
+        current={currentYearGross}
+        target={currentYearCost}
         unit="anual"
       />
 
@@ -156,9 +158,9 @@ export function GoalsPanel({ goals, metrics }: GoalsPanelProps) {
           </div>
         </div>
         <div>
-          <div className="text-xs text-white/30 mb-1">Custo anual</div>
+          <div className="text-xs text-white/30 mb-1">Custo anual {currentYear}</div>
           <div className="text-sm font-mono font-semibold text-[#a855f7]">
-            {fmt(goals.annualCost)}
+            {fmt(currentYearCost)}
           </div>
         </div>
       </div>

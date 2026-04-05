@@ -8,15 +8,46 @@ const STORAGE_KEY = 'coin_assistant_db';
 const DEFAULT_GOALS: TableGoals = {
   dailyGoal: 50,
   weeklyGoal: 400,
-  annualCost: 15000,
+  annualCosts: { [new Date().getFullYear()]: 15000 },
 };
 
 // ── Persistence helpers ───────────────────────────────────────────────────────
 
+/**
+ * One-time forward migration: tables stored with the old `annualCost: number`
+ * field are promoted to `annualCosts: { [currentYear]: oldValue }`.
+ * This runs on every load but is a no-op for already-migrated data.
+ */
+function migrateDB(db: DB): DB {
+  const currentYear = new Date().getFullYear();
+  return {
+    tables: db.tables.map((table) => {
+      // Cast to loosen the type so we can inspect the legacy field
+      const rawGoals = table.goals as Record<string, unknown>;
+      if (typeof rawGoals['annualCost'] === 'number' && !rawGoals['annualCosts']) {
+        const legacyCost = rawGoals['annualCost'] as number;
+        const migratedGoals: TableGoals = {
+          dailyGoal:   (rawGoals['dailyGoal']  as number) ?? DEFAULT_GOALS.dailyGoal,
+          weeklyGoal:  (rawGoals['weeklyGoal'] as number) ?? DEFAULT_GOALS.weeklyGoal,
+          annualCosts: { [currentYear]: legacyCost },
+        };
+        return { ...table, goals: migratedGoals };
+      }
+      if (!rawGoals['annualCosts']) {
+        return {
+          ...table,
+          goals: { ...table.goals, annualCosts: {} } as TableGoals,
+        };
+      }
+      return table;
+    }),
+  };
+}
+
 function loadDB(): DB {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return JSON.parse(raw) as DB;
+    if (raw) return migrateDB(JSON.parse(raw) as DB);
   } catch {
     // ignore corrupt data
   }
