@@ -48,6 +48,28 @@ export function fmtDate(date: Date): string {
 }
 
 /**
+ * Resolves the goal amount for a specific `year` from a per-year Record.
+ *
+ * Fallback priority (to avoid returning NaN or 0 when the user hasn't yet
+ * configured a goal for a historical year):
+ *   1. Exact year match.
+ *   2. Closest year BEFORE `year` (most recent prior configuration).
+ *   3. Closest year AFTER `year` (earliest future configuration).
+ *   4. 0 — only if the record is completely empty.
+ */
+export function resolveGoalForYear(
+  goals: Record<number, number>,
+  year: number,
+): number {
+  if (goals[year] !== undefined) return goals[year];
+  const years = Object.keys(goals).map(Number).sort((a, b) => a - b);
+  if (years.length === 0) return 0;
+  const earlier = years.filter((y) => y < year);
+  if (earlier.length > 0) return goals[earlier[earlier.length - 1]];
+  return goals[years[0]]; // earliest later year
+}
+
+/**
  * Groups revenue rows chronologically into Mon–Sun calendar weeks.
  *
  * Expectations for `rows`:
@@ -58,7 +80,10 @@ export function fmtDate(date: Date): string {
  * Each resulting `WeekGroup` has the real Mon–Sun window (which can extend
  * outside the filtered month) but `dailyEntries` only contains the rows supplied.
  */
-export function groupRowsByWeek(rows: TableRow[], weeklyGoal: number): WeekGroup[] {
+export function groupRowsByWeek(
+  rows: TableRow[],
+  weeklyGoals: Record<number, number>,
+): WeekGroup[] {
   if (rows.length === 0) return [];
 
   const sorted = [...rows].sort((a, b) => a.date.localeCompare(b.date));
@@ -82,12 +107,14 @@ export function groupRowsByWeek(rows: TableRow[], weeklyGoal: number): WeekGroup
       const monday      = new Date(y, mo - 1, d);
       const sunday      = getSundayOf(monday);
       const weeklyTotal = entries.reduce((sum, r) => sum + r.value, 0);
+      // The goal for this week is determined by the year its SUNDAY falls in
+      const weekGoal    = resolveGoalForYear(weeklyGoals, sunday.getFullYear());
       return {
         weekStartDate:      monday,
         weekEndDate:        sunday,
         dailyEntries:       [...entries].sort((a, b) => a.date.localeCompare(b.date)),
         weeklyTotal,
-        differenceFromGoal: weeklyTotal - weeklyGoal,
+        differenceFromGoal: weeklyTotal - weekGoal,
       };
     });
 }
@@ -130,7 +157,7 @@ export function findCurrentWeek(
  */
 export function calculateStrictGlobalBalance(
   rows: TableRow[],
-  weeklyGoal: number,
+  weeklyGoals: Record<number, number>,
 ): number {
   const activeRows = rows.filter((r) => r.value > 0);
   if (activeRows.length === 0) return 0;
@@ -156,7 +183,6 @@ export function calculateStrictGlobalBalance(
 
   // Steps D–G — walk each Mon–Sun window from startOfTimeline to endOfTimeline
   let totalBalance = 0;
-  // Clone startOfTimeline to avoid mutating it
   let cursor = new Date(
     startOfTimeline.getFullYear(),
     startOfTimeline.getMonth(),
@@ -172,7 +198,11 @@ export function calculateStrictGlobalBalance(
       );
       weekSum += dateValueMap.get(dayKey) ?? 0;
     }
-    totalBalance += weekSum - weeklyGoal;
+    // Score this week against the goal for the year its SUNDAY falls in.
+    // cursor + 6 days = the Sunday of this Mon–Sun window.
+    const sunday   = new Date(cursor.getFullYear(), cursor.getMonth(), cursor.getDate() + 6);
+    const weekGoal = resolveGoalForYear(weeklyGoals, sunday.getFullYear());
+    totalBalance  += weekSum - weekGoal;
     // Advance exactly 7 days — JS Date constructor handles overflow across
     // month and year boundaries without any manual wrapping needed.
     cursor = new Date(

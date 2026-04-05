@@ -6,8 +6,8 @@ import { computeMetrics } from './useMetricsEngine';
 const STORAGE_KEY = 'coin_assistant_db';
 
 const DEFAULT_GOALS: TableGoals = {
-  dailyGoal: 50,
-  weeklyGoal: 400,
+  dailyGoals:  { [new Date().getFullYear()]: 50 },
+  weeklyGoals: { [new Date().getFullYear()]: 400 },
   annualCosts: { [new Date().getFullYear()]: 15000 },
 };
 
@@ -22,26 +22,34 @@ function migrateDB(db: DB): DB {
   const currentYear = new Date().getFullYear();
   return {
     tables: db.tables.map((table) => {
-      // Double-cast through unknown to inspect the legacy `annualCost` field
-      // that existed before the per-year annualCosts refactor.
+      // Double-cast through unknown so we can inspect all legacy flat fields
+      // (annualCost, dailyGoal, weeklyGoal) without TS2352 errors.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const rawGoals = table.goals as unknown as Record<string, any>;
-      if (typeof rawGoals['annualCost'] === 'number' && !rawGoals['annualCosts']) {
-        const legacyCost = rawGoals['annualCost'] as number;
-        const migratedGoals: TableGoals = {
-          dailyGoal:   (rawGoals['dailyGoal']  as number) ?? DEFAULT_GOALS.dailyGoal,
-          weeklyGoal:  (rawGoals['weeklyGoal'] as number) ?? DEFAULT_GOALS.weeklyGoal,
-          annualCosts: { [currentYear]: legacyCost },
-        };
-        return { ...table, goals: migratedGoals };
-      }
-      if (!rawGoals['annualCosts']) {
-        return {
-          ...table,
-          goals: { ...table.goals, annualCosts: {} } as TableGoals,
-        };
-      }
-      return table;
+      const old = table.goals as unknown as Record<string, any>;
+
+      // annualCosts — migrate old scalar annualCost if present
+      const annualCosts: Record<number, number> =
+        old['annualCosts'] ??
+        (typeof old['annualCost'] === 'number'
+          ? { [currentYear]: old['annualCost'] as number }
+          : {});
+
+      // dailyGoals — migrate old scalar dailyGoal if present
+      const dailyGoals: Record<number, number> =
+        old['dailyGoals'] ??
+        (typeof old['dailyGoal'] === 'number'
+          ? { [currentYear]: old['dailyGoal'] as number }
+          : {});
+
+      // weeklyGoals — migrate old scalar weeklyGoal if present
+      const weeklyGoals: Record<number, number> =
+        old['weeklyGoals'] ??
+        (typeof old['weeklyGoal'] === 'number'
+          ? { [currentYear]: old['weeklyGoal'] as number }
+          : {});
+
+      const migratedGoals: TableGoals = { dailyGoals, weeklyGoals, annualCosts };
+      return { ...table, goals: migratedGoals };
     }),
   };
 }
@@ -237,7 +245,7 @@ export function useCoinAssistantDB() {
     (tableId: string): TableMetrics => {
       const table = db.tables.find((t) => t.id === tableId);
       if (!table) return emptyMetrics();
-      return computeMetrics(table.rows, table.goals.weeklyGoal);
+      return computeMetrics(table.rows, table.goals.weeklyGoals);
     },
     [db],
   );

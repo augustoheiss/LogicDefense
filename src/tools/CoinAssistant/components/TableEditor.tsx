@@ -11,7 +11,7 @@ import { FutureProjectionChart } from './FutureProjectionChart';
 import { WhatsAppExporter } from './WhatsAppExporter';
 import { ConfirmDialog } from './ConfirmDialog';
 import { downloadCSV } from '../utils/csvIO';
-import { groupRowsByWeek, findCurrentWeek, fmtDate } from '../utils/dateUtils';
+import { groupRowsByWeek, findCurrentWeek, fmtDate, resolveGoalForYear } from '../utils/dateUtils';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -131,8 +131,8 @@ export function TableEditor({
     [table.rows],
   );
   const metrics = useMemo(
-    () => computeMetrics(revenueRows, table.goals.weeklyGoal),
-    [revenueRows, table.goals.weeklyGoal],
+    () => computeMetrics(revenueRows, table.goals.weeklyGoals),
+    [revenueRows, table.goals.weeklyGoals],
   );
 
   // ── Global month selector ───────────────────────────────────────────────────
@@ -160,7 +160,7 @@ export function TableEditor({
     const allRevenueRows = table.rows.filter(
       (r) => r.entryType !== 'deposit' && r.value > 0,
     );
-    const allGroups = groupRowsByWeek(allRevenueRows, table.goals.weeklyGoal);
+    const allGroups = groupRowsByWeek(allRevenueRows, table.goals.weeklyGoals);
     if (allGroups.length === 0) return null;
 
     const today = new Date();
@@ -178,7 +178,7 @@ export function TableEditor({
       return sun.getFullYear() === y && sun.getMonth() + 1 === m;
     });
     return monthGroups[monthGroups.length - 1] ?? null;
-  }, [table.rows, table.goals.weeklyGoal, effectiveMonth]);
+  }, [table.rows, table.goals.weeklyGoals, effectiveMonth]);
 
   function fmt(v: number) {
     return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -238,7 +238,7 @@ export function TableEditor({
             {
               label: 'Diária',
               value: fmt(metrics.globalDailyAvg),
-              color: metrics.globalDailyAvg >= table.goals.dailyGoal
+              color: metrics.globalDailyAvg >= resolveGoalForYear(table.goals.dailyGoals, new Date().getFullYear())
                 ? 'text-emerald-400'
                 : 'text-amber-400',
             },
@@ -280,7 +280,7 @@ export function TableEditor({
               : `⚡ Faltam ${fmt(Math.abs(currentWeekData.differenceFromGoal))} para a meta`}
           </div>
           <div className="text-xs text-white/25">
-            Meta semanal: {fmt(table.goals.weeklyGoal)}
+            Meta semanal: {fmt(resolveGoalForYear(table.goals.weeklyGoals, new Date().getFullYear()))}
           </div>
         </div>
       )}
@@ -328,7 +328,7 @@ export function TableEditor({
           <div className="flex flex-col gap-4">
             <SpreadsheetGrid
               rows={table.rows}
-              dailyGoal={table.goals.dailyGoal}
+              dailyGoal={resolveGoalForYear(table.goals.dailyGoals, parseInt(effectiveMonth.slice(0, 4)))}
               selectedMonth={effectiveMonth}
               onUpdateRow={(rowId, patch) => onUpdateRow(rowId, patch)}
               onDeleteRow={(rowId) => setDeleteRowId(rowId)}
@@ -340,7 +340,7 @@ export function TableEditor({
         {activeTab === 'metrics' && (
           <div className="flex flex-col lg:flex-row gap-4">
             <div className="flex-1">
-              <MetricsPanel metrics={metrics} dailyGoal={table.goals.dailyGoal} />
+              <MetricsPanel metrics={metrics} dailyGoal={resolveGoalForYear(table.goals.dailyGoals, new Date().getFullYear())} />
             </div>
             <div className="lg:w-72 shrink-0">
               <GoalsPanel goals={table.goals} metrics={metrics} />
@@ -374,7 +374,7 @@ export function TableEditor({
               <div className="bg-white/5 border border-white/10 rounded-xl p-5">
                 <RevenueChart
                   rows={revenueRows}
-                  dailyGoal={table.goals.dailyGoal}
+                  dailyGoal={resolveGoalForYear(table.goals.dailyGoals, parseInt(effectiveMonth.slice(0, 4)))}
                   selectedMonth={effectiveMonth}
                 />
               </div>

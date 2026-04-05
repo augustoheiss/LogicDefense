@@ -18,7 +18,7 @@ import { calculateStrictGlobalBalance } from '../utils/dateUtils';
  *  globalAnnualAvg  = globalDailyAvg × 365.25
  *  monthMetrics.weeklyAvg = monthMetrics.dailyAvg × 7
  */
-export function computeMetrics(rows: TableRow[], weeklyGoal: number): TableMetrics {
+export function computeMetrics(rows: TableRow[], weeklyGoals: Record<number, number>): TableMetrics {
   if (rows.length === 0) return emptyMetrics();
 
   // Deposits are investment entries, not operational revenue.
@@ -148,8 +148,8 @@ export function computeMetrics(rows: TableRow[], weeklyGoal: number): TableMetri
   }
 
   // Strict cumulative balance: every Mon–Sun window from the first entry to
-  // today is scored against weeklyGoal, including completely empty weeks.
-  const globalGoalBalance = calculateStrictGlobalBalance(revenueRows, weeklyGoal);
+  // today is scored against the year-specific weeklyGoals, including empty weeks.
+  const globalGoalBalance = calculateStrictGlobalBalance(revenueRows, weeklyGoals);
 
   return {
     grossTotal: round2(grossTotal),

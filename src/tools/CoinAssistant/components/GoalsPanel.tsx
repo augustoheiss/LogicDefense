@@ -1,4 +1,5 @@
 import type { TableGoals, TableMetrics } from '../types';
+import { resolveGoalForYear } from '../utils/dateUtils';
 
 interface GoalsPanelProps {
   goals: TableGoals;
@@ -72,10 +73,12 @@ export function GoalsPanel({ goals, metrics }: GoalsPanelProps) {
   const sortedWeeks = Object.keys(metrics.byWeek).sort().reverse();
   const latestWeekGross = sortedWeeks[0] ? metrics.byWeek[sortedWeeks[0]] : 0;
 
-  // Current-year cost and revenue for the annual progress bar
-  const currentYear     = new Date().getFullYear();
-  const currentYearCost = goals.annualCosts[currentYear] ?? 0;
-  const currentYearGross = metrics.byYear[String(currentYear)]?.grossAnnual ?? 0;
+  const currentYear       = new Date().getFullYear();
+  // Resolve each goal using the closest configured year (handles gaps gracefully)
+  const currentDailyGoal  = resolveGoalForYear(goals.dailyGoals,  currentYear);
+  const currentWeeklyGoal = resolveGoalForYear(goals.weeklyGoals, currentYear);
+  const currentYearCost   = resolveGoalForYear(goals.annualCosts, currentYear);
+  const currentYearGross  = metrics.byYear[String(currentYear)]?.grossAnnual ?? 0;
 
   const balance = metrics.globalGoalBalance;
   const balancePositive = balance >= 0;
@@ -120,16 +123,16 @@ export function GoalsPanel({ goals, metrics }: GoalsPanelProps) {
       )}
 
       <ProgressBar
-        label="Meta Diária"
+        label={`Meta Diária ${currentYear}`}
         current={metrics.globalDailyAvg}
-        target={goals.dailyGoal}
+        target={currentDailyGoal}
         unit="/ dia"
       />
 
       <ProgressBar
-        label="Meta Semanal (última semana)"
+        label={`Meta Semanal ${currentYear} (última semana)`}
         current={latestWeekGross}
-        target={goals.weeklyGoal}
+        target={currentWeeklyGoal}
         unit="/ semana"
       />
 
@@ -137,7 +140,7 @@ export function GoalsPanel({ goals, metrics }: GoalsPanelProps) {
         <ProgressBar
           label="Bruto Mensal (último mês)"
           current={latestMonthMetrics.grossMonthly}
-          target={goals.weeklyGoal * 4}
+          target={currentWeeklyGoal * 4}
           unit="/ mês"
         />
       )}
@@ -152,9 +155,9 @@ export function GoalsPanel({ goals, metrics }: GoalsPanelProps) {
       {/* ── Quick stats ── */}
       <div className="pt-1 border-t border-white/10 grid grid-cols-2 gap-3 text-center">
         <div>
-          <div className="text-xs text-white/30 mb-1">Meta diária</div>
+          <div className="text-xs text-white/30 mb-1">Meta diária {currentYear}</div>
           <div className="text-sm font-mono font-semibold text-[#a855f7]">
-            {fmt(goals.dailyGoal)}
+            {fmt(currentDailyGoal)}
           </div>
         </div>
         <div>

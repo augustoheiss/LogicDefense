@@ -90,18 +90,20 @@ function parseLine(line: string): string[] {
 export function exportTableToCSV(table: CoinTable): string {
   const sortedRows = [...table.rows].sort((a, b) => a.date.localeCompare(b.date));
 
-  // Emit one goal_annual_YEAR line per configured year (sorted ascending)
-  const annualLines = Object.entries(table.goals.annualCosts)
-    .sort(([a], [b]) => parseInt(a) - parseInt(b))
-    .map(([year, cost]) => `goal_annual_${year},${cost}`);
+  // Helper: emit one key_YEAR line per entry in a Record<number, number>
+  function perYearLines(prefix: string, rec: Record<number, number>): string[] {
+    return Object.entries(rec)
+      .sort(([a], [b]) => parseInt(a) - parseInt(b))
+      .map(([year, val]) => `${prefix}_${year},${val}`);
+  }
 
   const lines = [
     MAGIC,
     `name,${escapeField(table.name)}`,
     `description,${escapeField(table.description ?? '')}`,
-    `goal_daily,${table.goals.dailyGoal}`,
-    `goal_weekly,${table.goals.weeklyGoal}`,
-    ...annualLines,
+    ...perYearLines('goal_daily',  table.goals.dailyGoals),
+    ...perYearLines('goal_weekly', table.goals.weeklyGoals),
+    ...perYearLines('goal_annual', table.goals.annualCosts),
     ROWS_MARKER,
     'date,value,description,entryType',
     ...sortedRows.map(
@@ -186,21 +188,29 @@ export function importTableFromCSV(csv: string): ImportedTable {
     throw new Error('Seção de dados (## ROWS ##) não encontrada no arquivo.');
   }
 
-  // Collect goal_annual_YEAR entries (new per-year format)
-  const annualCosts: Record<number, number> = {};
-  for (const [key, value] of Object.entries(meta)) {
-    const m = key.match(/^goal_annual_(\d{4})$/);
-    if (m) annualCosts[parseInt(m[1])] = parseFinite(value, 0);
-  }
-  // Backward compat: old CSVs used a single `goal_annual` key → assign to current year
-  if (Object.keys(annualCosts).length === 0 && meta['goal_annual'] !== undefined) {
-    annualCosts[new Date().getFullYear()] = parseFinite(meta['goal_annual'], 15000);
+  // Helper: collect all goal_PREFIX_YEAR entries from the parsed metadata
+  function collectPerYearRecord(
+    prefix: string,
+    fallbackKey: string,
+    fallbackDefault: number,
+  ): Record<number, number> {
+    const rec: Record<number, number> = {};
+    const pattern = new RegExp(`^${prefix}_(\\d{4})$`);
+    for (const [key, value] of Object.entries(meta)) {
+      const m = key.match(pattern);
+      if (m) rec[parseInt(m[1])] = parseFinite(value, 0);
+    }
+    // Backward compat: old CSVs wrote a single flat key (e.g. goal_daily,86.00)
+    if (Object.keys(rec).length === 0 && meta[fallbackKey] !== undefined) {
+      rec[new Date().getFullYear()] = parseFinite(meta[fallbackKey], fallbackDefault);
+    }
+    return rec;
   }
 
   const goals: TableGoals = {
-    dailyGoal:   parseFinite(meta['goal_daily'],  50),
-    weeklyGoal:  parseFinite(meta['goal_weekly'], 400),
-    annualCosts,
+    dailyGoals:  collectPerYearRecord('goal_daily',  'goal_daily',  50),
+    weeklyGoals: collectPerYearRecord('goal_weekly', 'goal_weekly', 400),
+    annualCosts: collectPerYearRecord('goal_annual', 'goal_annual', 15000),
   };
 
   // ── Parse data rows ──────────────────────────────────────────────────────────

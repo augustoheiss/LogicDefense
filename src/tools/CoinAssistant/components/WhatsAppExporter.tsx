@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { CoinTable, TableMetrics } from '../types';
-import { groupRowsByWeek, fmtDate } from '../utils/dateUtils';
+import { groupRowsByWeek, fmtDate, resolveGoalForYear } from '../utils/dateUtils';
 
 interface WhatsAppExporterProps {
   table: CoinTable;
@@ -51,7 +51,7 @@ function buildMessage(
     .filter((r) => r.entryType !== 'deposit' && r.value > 0)
     .sort((a, b) => a.date.localeCompare(b.date));
 
-  const weekGroups = groupRowsByWeek(allRevenueRows, table.goals.weeklyGoal).filter(
+  const weekGroups = groupRowsByWeek(allRevenueRows, table.goals.weeklyGoals).filter(
     (g) => g.weekEndDate.getFullYear() === selY && g.weekEndDate.getMonth() + 1 === selM,
   );
 
@@ -63,9 +63,13 @@ function buildMessage(
   ];
 
   // ── Month summary ──────────────────────────────────────────────────────────
+  const reportYear        = selY;
+  const reportDailyGoal   = resolveGoalForYear(table.goals.dailyGoals,  reportYear);
+  const reportWeeklyGoal  = resolveGoalForYear(table.goals.weeklyGoals, reportYear);
+
   if (monthMetrics) {
-    const goalPct = table.goals.dailyGoal > 0
-      ? ((monthMetrics.dailyAvg / table.goals.dailyGoal) * 100).toFixed(1)
+    const goalPct = reportDailyGoal > 0
+      ? ((monthMetrics.dailyAvg / reportDailyGoal) * 100).toFixed(1)
       : '0.0';
 
     lines.push(
@@ -73,7 +77,7 @@ function buildMessage(
       `• Total do Mês: *${fmt(monthMetrics.grossMonthly)}*`,
       `• Média Diária: ${fmt(monthMetrics.dailyAvg)}`,
       `• Média Semanal: ${fmt(monthMetrics.weeklyAvg)}`,
-      `• Meta Diária (${fmt(table.goals.dailyGoal)}): ${goalPct}% atingida`,
+      `• Meta Diária ${reportYear} (${fmt(reportDailyGoal)}): ${goalPct}% atingida`,
       '',
     );
   } else {
@@ -111,11 +115,9 @@ function buildMessage(
   }
 
   // ── Global big picture + goals ─────────────────────────────────────────────
-  // Task 3: use the selected year's specific cost and that year's gross revenue
-  const reportYear   = selY;
-  const yearCost     = table.goals.annualCosts[reportYear] ?? 0;
-  const yearRevenue  = metrics.byYear[String(reportYear)]?.grossAnnual ?? 0;
-  const annualPct    = yearCost > 0
+  const yearCost    = resolveGoalForYear(table.goals.annualCosts, reportYear);
+  const yearRevenue = metrics.byYear[String(reportYear)]?.grossAnnual ?? 0;
+  const annualPct   = yearCost > 0
     ? ((yearRevenue / yearCost) * 100).toFixed(1)
     : '0.0';
 
@@ -132,7 +134,7 @@ function buildMessage(
     `🌎 *Visão Global & Metas*`,
     `• Faturamento Total Histórico: *${fmt(metrics.grossTotal)}*`,
     `• Média Diária Global: ${fmt(metrics.globalDailyAvg)}`,
-    `• Meta Semanal: ${fmt(table.goals.weeklyGoal)}`,
+    `• Meta Semanal ${reportYear}: ${fmt(reportWeeklyGoal)}`,
     balanceLine,
     `• Custo Anual ${reportYear}: ${fmt(yearCost)} _(${annualPct}% coberto em ${reportYear})_`,
     '',

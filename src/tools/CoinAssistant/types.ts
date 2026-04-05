@@ -13,12 +13,20 @@ export interface TableRow {
 }
 
 export interface TableGoals {
-  dailyGoal: number;   // e.g. R$ 86.00  — daily revenue target
-  weeklyGoal: number;  // e.g. R$ 600.00 — weekly revenue target
+  /**
+   * Per-calendar-year daily revenue target (e.g. { 2026: 86.00 }).
+   * Year-keyed so changing the 2027 target never overwrites 2026 history.
+   */
+  dailyGoals: Record<number, number>;
+  /**
+   * Per-calendar-year weekly revenue target (e.g. { 2026: 600.00 }).
+   * Used by calculateStrictGlobalBalance to score each historical week
+   * against the goal that was in effect for THAT specific year.
+   */
+  weeklyGoals: Record<number, number>;
   /**
    * Per-calendar-year vehicle/operating cost target.
    * Key = full year number (e.g. 2026), value = cost in BRL.
-   * Stored as Record so adding 2027 in January never erases the 2026 context.
    */
   annualCosts: Record<number, number>;
 }
