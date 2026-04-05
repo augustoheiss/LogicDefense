@@ -22,8 +22,10 @@ function migrateDB(db: DB): DB {
   const currentYear = new Date().getFullYear();
   return {
     tables: db.tables.map((table) => {
-      // Cast to loosen the type so we can inspect the legacy field
-      const rawGoals = table.goals as Record<string, unknown>;
+      // Double-cast through unknown to inspect the legacy `annualCost` field
+      // that existed before the per-year annualCosts refactor.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const rawGoals = table.goals as unknown as Record<string, any>;
       if (typeof rawGoals['annualCost'] === 'number' && !rawGoals['annualCosts']) {
         const legacyCost = rawGoals['annualCost'] as number;
         const migratedGoals: TableGoals = {
