@@ -1,4 +1,4 @@
-import type { TableRow } from '../types';
+import type { TableRow, TableGoals, GoalProfile } from '../types';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -67,6 +67,45 @@ export function resolveGoalForYear(
   const earlier = years.filter((y) => y < year);
   if (earlier.length > 0) return goals[earlier[earlier.length - 1]];
   return goals[years[0]]; // earliest later year
+}
+
+/**
+ * Resolves the effective GoalProfile for a given scope using the hierarchy:
+ *   monthly ("YYYY-MM") → yearly (number) → global → legacy flat records.
+ *
+ * @param scope  Either a year/month combo or 'global' for the ultimate fallback.
+ * @param goals  The full TableGoals object.
+ * @returns      A GoalProfile guaranteed to have numeric values (may be 0).
+ */
+export function getEffectiveGoals(
+  scope: { year: number; month?: number } | 'global',
+  goals: TableGoals,
+): GoalProfile {
+  // ── Monthly override ──────────────────────────────────────────────────────
+  if (scope !== 'global' && scope.month !== undefined) {
+    const monthKey = `${scope.year}-${String(scope.month).padStart(2, '0')}`;
+    const monthly = goals.monthlyGoals?.[monthKey];
+    if (monthly) return monthly;
+  }
+
+  // ── Yearly override ───────────────────────────────────────────────────────
+  if (scope !== 'global') {
+    const yearly = goals.yearlyGoals?.[scope.year];
+    if (yearly) return yearly;
+  }
+
+  // ── Global override ───────────────────────────────────────────────────────
+  if (goals.globalGoals) return goals.globalGoals;
+
+  // ── Legacy flat-record fallback ───────────────────────────────────────────
+  // Reconstruct a GoalProfile from the old per-year records so this function
+  // always returns something sensible even for pre-migration data.
+  const year = scope === 'global' ? new Date().getFullYear() : scope.year;
+  return {
+    dailyGoal:  resolveGoalForYear(goals.dailyGoals,  year),
+    weeklyGoal: resolveGoalForYear(goals.weeklyGoals, year),
+    annualCost: resolveGoalForYear(goals.annualCosts, year),
+  };
 }
 
 /**
@@ -148,12 +187,7 @@ export function findCurrentWeek(
  * (vacations, illness, etc.). An empty week contributes −weeklyGoal to the
  * running total, making this metric deliberately unforgiving.
  *
- * @param rows       Revenue rows already stripped of deposits
- *                   (`entryType !== 'deposit'`). Rest-day rows (value = 0)
- *                   are ignored inside the function.
- * @param weeklyGoal The target revenue per week (e.g. R$ 600).
- * @returns          Running cumulative balance: positive = excedente,
- *                   negative = dívida pendente.
+ * Result is in BRL. Positive = excedente, negative = dívida pendente.
  */
 export function calculateStrictGlobalBalance(
   rows: TableRow[],
@@ -213,4 +247,49 @@ export function calculateStrictGlobalBalance(
   }
 
   return Math.round(totalBalance * 100) / 100;
+}
+
+/**
+ * Calculates the Time Bank balance in WEEKS.
+ *
+ *   elapsedWeeks    = floor((today − minDate) / 7 days)  [real calendar time]
+ *   paidWeeks       = grossTotal / effectiveWeeklyGoal    [how many weeks revenue "buys"]
+ *   timeBankBalance = paidWeeks − elapsedWeeks
+ *
+ * Positive → credit weeks (you are ahead of schedule).
+ * Negative → weeks of work still owed.
+ *
+ * @param rows              Revenue rows already stripped of deposits.
+ * @param grossTotal        Total historical revenue (sum of active revenue rows).
+ * @param effectiveWeeklyGoal  The weekly goal used as the "price of a week."
+ */
+export function calculateTimeBankBalance(
+  rows: TableRow[],
+  grossTotal: number,
+  effectiveWeeklyGoal: number,
+): number {
+  if (effectiveWeeklyGoal <= 0 || grossTotal <= 0) return 0;
+
+  const activeRows = rows.filter((r) => r.value > 0);
+  if (activeRows.length === 0) return 0;
+
+  // minDate — the absolute first entry date
+  const minDateStr = activeRows.map((r) => r.date).sort()[0];
+  const [minY, minMo, minD] = minDateStr.split('-').map(Number);
+  const minDate = new Date(minY, minMo - 1, minD);
+
+  // today (midnight, local)
+  const today = new Date();
+  const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+
+  // elapsed full calendar weeks (floor)
+  const msPerWeek = 7 * 24 * 60 * 60 * 1000;
+  const elapsedMs = todayMidnight.getTime() - minDate.getTime();
+  const elapsedWeeks = Math.floor(Math.max(0, elapsedMs) / msPerWeek);
+
+  // paid weeks = how much revenue "buys" at the weekly rate
+  const paidWeeks = grossTotal / effectiveWeeklyGoal;
+
+  const balance = paidWeeks - elapsedWeeks;
+  return Math.round(balance * 100) / 100;
 }

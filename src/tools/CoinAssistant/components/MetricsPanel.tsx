@@ -91,6 +91,25 @@ export function MetricsPanel({ metrics, dailyGoal }: MetricsPanelProps) {
             sub="meses ativos"
           />
         </div>
+
+        {/* ── Time Bank ── */}
+        {metrics.grossTotal > 0 && (() => {
+          const tb = metrics.timeBankBalance;
+          const positive = tb >= 0;
+          const absW = Math.abs(tb).toFixed(1);
+          return (
+            <MetricCard
+              label="Banco de Horas"
+              value={`${positive ? '+' : ''}${tb.toFixed(1)} sem.`}
+              status={positive ? 'success' : 'warning'}
+              sub={
+                positive
+                  ? `✅ ${absW} semana${parseFloat(absW) !== 1 ? 's' : ''} adiantadas`
+                  : `🚨 ${absW} semana${parseFloat(absW) !== 1 ? 's' : ''} pendentes`
+              }
+            />
+          );
+        })()}
       </div>
 
       {/* ── Latest month breakdown ── */}

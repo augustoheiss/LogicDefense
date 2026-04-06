@@ -1,5 +1,9 @@
 import type { TableRow, TableMetrics, MonthMetrics, YearMetrics } from '../types';
-import { calculateStrictGlobalBalance } from '../utils/dateUtils';
+import {
+  calculateStrictGlobalBalance,
+  calculateTimeBankBalance,
+  resolveGoalForYear,
+} from '../utils/dateUtils';
 
 /**
  * Pure math engine — calendar-elapsed-time averaging.
@@ -17,6 +21,12 @@ import { calculateStrictGlobalBalance } from '../utils/dateUtils';
  *  globalMonthlyAvg = globalDailyAvg × 30.44   (avg calendar days per month)
  *  globalAnnualAvg  = globalDailyAvg × 365.25
  *  monthMetrics.weeklyAvg = monthMetrics.dailyAvg × 7
+ *
+ * New in this version:
+ *  - timeBankBalance (weeks): paidWeeks − elapsedWeeks
+ *    paidWeeks    = grossTotal / effectiveWeeklyGoal
+ *    elapsedWeeks = floor((today − minDate) / 7 days)
+ *    effectiveWeeklyGoal = resolveGoalForYear(weeklyGoals, currentYear)
  */
 export function computeMetrics(rows: TableRow[], weeklyGoals: Record<number, number>): TableMetrics {
   if (rows.length === 0) return emptyMetrics();
@@ -147,9 +157,16 @@ export function computeMetrics(rows: TableRow[], weeklyGoals: Record<number, num
     byWeek[wk] = round2(v);
   }
 
-  // Strict cumulative balance: every Mon–Sun window from the first entry to
-  // today is scored against the year-specific weeklyGoals, including empty weeks.
+  // ── Strict cumulative BRL balance ─────────────────────────────────────────────
+  // Every Mon–Sun window from the first entry to today is scored against the
+  // year-specific weeklyGoals, including empty weeks.
   const globalGoalBalance = calculateStrictGlobalBalance(revenueRows, weeklyGoals);
+
+  // ── Time Bank balance (weeks) ─────────────────────────────────────────────────
+  // effectiveWeeklyGoal = the goal for the current year (most recently configured)
+  const currentYear = new Date().getFullYear();
+  const effectiveWeeklyGoal = resolveGoalForYear(weeklyGoals, currentYear);
+  const timeBankBalance = calculateTimeBankBalance(activeRows, grossTotal, effectiveWeeklyGoal);
 
   return {
     grossTotal: round2(grossTotal),
@@ -158,6 +175,7 @@ export function computeMetrics(rows: TableRow[], weeklyGoals: Record<number, num
     globalMonthlyAvg,
     globalAnnualAvg,
     globalGoalBalance,
+    timeBankBalance,
     byYear,
     byMonth,
     byWeek,
@@ -227,6 +245,7 @@ function emptyMetrics(): TableMetrics {
     globalMonthlyAvg: 0,
     globalAnnualAvg: 0,
     globalGoalBalance: 0,
+    timeBankBalance: 0,
     byYear: {},
     byMonth: {},
     byWeek: {},

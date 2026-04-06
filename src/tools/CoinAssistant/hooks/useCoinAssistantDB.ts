@@ -1,22 +1,41 @@
 import { useState, useCallback, useMemo } from 'react';
-import type { CoinTable, TableRow, TableGoals, TableMetrics, DB } from '../types';
+import type { CoinTable, TableRow, TableGoals, TableMetrics, DB, GoalProfile } from '../types';
 import type { ImportedTable } from '../utils/csvIO';
 import { computeMetrics } from './useMetricsEngine';
+import { resolveGoalForYear } from '../utils/dateUtils';
 
 const STORAGE_KEY = 'coin_assistant_db';
 
+const DEFAULT_GOAL_PROFILE: GoalProfile = {
+  dailyGoal:  50,
+  weeklyGoal: 400,
+  annualCost: 15000,
+};
+
 const DEFAULT_GOALS: TableGoals = {
-  dailyGoals:  { [new Date().getFullYear()]: 50 },
-  weeklyGoals: { [new Date().getFullYear()]: 400 },
-  annualCosts: { [new Date().getFullYear()]: 15000 },
+  // Legacy flat records — kept for calculateStrictGlobalBalance compatibility
+  dailyGoals:  { [new Date().getFullYear()]: DEFAULT_GOAL_PROFILE.dailyGoal  },
+  weeklyGoals: { [new Date().getFullYear()]: DEFAULT_GOAL_PROFILE.weeklyGoal },
+  annualCosts: { [new Date().getFullYear()]: DEFAULT_GOAL_PROFILE.annualCost },
+  // New hierarchical fields
+  globalGoals: { ...DEFAULT_GOAL_PROFILE },
+  yearlyGoals:  {},
+  monthlyGoals: {},
 };
 
 // ── Persistence helpers ───────────────────────────────────────────────────────
 
 /**
- * One-time forward migration: tables stored with the old `annualCost: number`
- * field are promoted to `annualCosts: { [currentYear]: oldValue }`.
- * This runs on every load but is a no-op for already-migrated data.
+ * Forward migration applied on every DB load (idempotent):
+ *
+ *  v1 → v2  Scalar legacy fields (annualCost, dailyGoal, weeklyGoal) promoted
+ *            to Record<year, number> flat records.
+ *
+ *  v2 → v3  Flat year Records synthesized into the new GoalProfile hierarchy:
+ *            - yearlyGoals[year] is built from each year present in any of the
+ *              three flat records, using resolveGoalForYear as fallback.
+ *            - globalGoals is set from the most recent year's data (if not
+ *              already present), giving a sensible ultimate fallback.
  */
 function migrateDB(db: DB): DB {
   const currentYear = new Date().getFullYear();
@@ -27,28 +46,74 @@ function migrateDB(db: DB): DB {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const old = table.goals as unknown as Record<string, any>;
 
-      // annualCosts — migrate old scalar annualCost if present
+      // ── v1 → v2: scalar → Record ─────────────────────────────────────────
+
       const annualCosts: Record<number, number> =
         old['annualCosts'] ??
         (typeof old['annualCost'] === 'number'
           ? { [currentYear]: old['annualCost'] as number }
           : {});
 
-      // dailyGoals — migrate old scalar dailyGoal if present
       const dailyGoals: Record<number, number> =
         old['dailyGoals'] ??
         (typeof old['dailyGoal'] === 'number'
           ? { [currentYear]: old['dailyGoal'] as number }
           : {});
 
-      // weeklyGoals — migrate old scalar weeklyGoal if present
       const weeklyGoals: Record<number, number> =
         old['weeklyGoals'] ??
         (typeof old['weeklyGoal'] === 'number'
           ? { [currentYear]: old['weeklyGoal'] as number }
           : {});
 
-      const migratedGoals: TableGoals = { dailyGoals, weeklyGoals, annualCosts };
+      // ── v2 → v3: flat Records → GoalProfile hierarchy ────────────────────
+
+      // Collect every year that appears in any of the three flat records
+      const allYears = Array.from(
+        new Set([
+          ...Object.keys(dailyGoals).map(Number),
+          ...Object.keys(weeklyGoals).map(Number),
+          ...Object.keys(annualCosts).map(Number),
+        ]),
+      ).sort((a, b) => a - b);
+
+      // yearlyGoals: preserve existing or build from flat records per year
+      const yearlyGoals: Record<number, GoalProfile> =
+        (old['yearlyGoals'] as Record<number, GoalProfile> | undefined) ?? {};
+
+      if (Object.keys(yearlyGoals).length === 0 && allYears.length > 0) {
+        for (const year of allYears) {
+          yearlyGoals[year] = {
+            dailyGoal:  resolveGoalForYear(dailyGoals,  year),
+            weeklyGoal: resolveGoalForYear(weeklyGoals, year),
+            annualCost: resolveGoalForYear(annualCosts, year),
+          };
+        }
+      }
+
+      // globalGoals: preserve existing or derive from the most recent year
+      const globalGoals: GoalProfile =
+        (old['globalGoals'] as GoalProfile | undefined) ??
+        (allYears.length > 0
+          ? {
+              dailyGoal:  resolveGoalForYear(dailyGoals,  allYears[allYears.length - 1]),
+              weeklyGoal: resolveGoalForYear(weeklyGoals, allYears[allYears.length - 1]),
+              annualCost: resolveGoalForYear(annualCosts, allYears[allYears.length - 1]),
+            }
+          : { ...DEFAULT_GOAL_PROFILE });
+
+      // monthlyGoals: preserve existing (no legacy equivalent)
+      const monthlyGoals: Record<string, GoalProfile> =
+        (old['monthlyGoals'] as Record<string, GoalProfile> | undefined) ?? {};
+
+      const migratedGoals: TableGoals = {
+        dailyGoals,
+        weeklyGoals,
+        annualCosts,
+        globalGoals,
+        yearlyGoals,
+        monthlyGoals,
+      };
       return { ...table, goals: migratedGoals };
     }),
   };
@@ -283,6 +348,7 @@ function emptyMetrics(): TableMetrics {
     globalMonthlyAvg: 0,
     globalAnnualAvg: 0,
     globalGoalBalance: 0,
+    timeBankBalance: 0,
     byYear: {},
     byMonth: {},
     byWeek: {},

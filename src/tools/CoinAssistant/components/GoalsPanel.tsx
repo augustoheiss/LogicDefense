@@ -64,6 +64,39 @@ function fmtBalance(v: number): string {
   return v >= 0 ? `+${abs}` : `-${abs}`;
 }
 
+/**
+ * Time Bank balance card — shows signed weeks with contextual copy.
+ * Positive = credit weeks; negative = debt weeks.
+ */
+function TimeBankCard({ balance }: { balance: number }) {
+  const positive = balance >= 0;
+  const absWeeks = Math.abs(balance).toFixed(1);
+
+  return (
+    <div
+      className={`rounded-xl border p-4 space-y-1.5 ${
+        positive
+          ? 'bg-emerald-500/10 border-emerald-500/30'
+          : 'bg-red-500/10 border-red-500/25'
+      }`}
+    >
+      <div className="text-xs text-white/40 uppercase tracking-wider">Banco de Horas</div>
+      <div className={`text-2xl font-bold font-mono ${positive ? 'text-emerald-400' : 'text-red-400'}`}>
+        {positive ? `+${absWeeks}` : `-${absWeeks}`}{' '}
+        <span className="text-base font-semibold">semanas</span>
+      </div>
+      <div className={`text-xs font-medium leading-snug ${positive ? 'text-emerald-500/80' : 'text-red-400/80'}`}>
+        {positive
+          ? `✅ Você tem ${absWeeks} semana${parseFloat(absWeeks) !== 1 ? 's' : ''} de folga/adiantadas!`
+          : `🚨 Você tem ${absWeeks} semana${parseFloat(absWeeks) !== 1 ? 's' : ''} de serviço pendentes para recuperar a meta`}
+      </div>
+      <div className="text-xs text-white/20 pt-0.5">
+        paidWeeks = receita ÷ meta semanal · elapsedWeeks = semanas desde 1ª entrada
+      </div>
+    </div>
+  );
+}
+
 export function GoalsPanel({ goals, metrics }: GoalsPanelProps) {
   // Latest month data for comparison
   const sortedMonths = Object.keys(metrics.byMonth).sort().reverse();
@@ -89,7 +122,7 @@ export function GoalsPanel({ goals, metrics }: GoalsPanelProps) {
         <span className="text-base">🎯</span> Metas
       </h3>
 
-      {/* ── Strict Global Balance ── */}
+      {/* ── Strict Global BRL Balance ── */}
       {metrics.grossTotal > 0 && (
         <div
           className={`rounded-xl border p-4 space-y-1 ${
@@ -120,6 +153,11 @@ export function GoalsPanel({ goals, metrics }: GoalsPanelProps) {
             sem registros.
           </div>
         </div>
+      )}
+
+      {/* ── Time Bank (Banco de Horas) ── */}
+      {metrics.grossTotal > 0 && (
+        <TimeBankCard balance={metrics.timeBankBalance} />
       )}
 
       <ProgressBar

@@ -130,12 +130,19 @@ function buildMessage(
     ? `• Saldo Acumulado de Metas: *+${balanceAbs}* _(Banco de Valores / Excedente)_`
     : `• Saldo Acumulado de Metas: *-${balanceAbs}* _(Dívida Pendente)_`;
 
+  const tb = metrics.timeBankBalance;
+  const absWeeks = Math.abs(tb).toFixed(1);
+  const tbLine = tb >= 0
+    ? `• ✅ Banco de Horas: *+${absWeeks} semanas* _(Você tem ${absWeeks} semana${parseFloat(absWeeks) !== 1 ? 's' : ''} de folga/adiantadas!)_`
+    : `• 🚨 Banco de Horas: *-${absWeeks} semanas* _(Você tem ${absWeeks} semana${parseFloat(absWeeks) !== 1 ? 's' : ''} de serviço pendentes para recuperar a meta)_`;
+
   lines.push(
     `🌎 *Visão Global & Metas*`,
     `• Faturamento Total Histórico: *${fmt(metrics.grossTotal)}*`,
     `• Média Diária Global: ${fmt(metrics.globalDailyAvg)}`,
     `• Meta Semanal ${reportYear}: ${fmt(reportWeeklyGoal)}`,
     balanceLine,
+    tbLine,
     `• Custo Anual ${reportYear}: ${fmt(yearCost)} _(${annualPct}% coberto em ${reportYear})_`,
     '',
     `_Gerado pelo Assistente Moeda · Heiss-Lab_`,

@@ -1,3 +1,14 @@
+// ─── Goal Hierarchy ───────────────────────────────────────────────────────────
+
+/**
+ * A complete set of financial targets for a single scope (global, year, or month).
+ */
+export interface GoalProfile {
+  dailyGoal: number;
+  weeklyGoal: number;
+  annualCost: number;
+}
+
 // ─── Persisted Data ──────────────────────────────────────────────────────────
 
 export interface TableRow {
@@ -13,6 +24,7 @@ export interface TableRow {
 }
 
 export interface TableGoals {
+  // ── Legacy flat records (kept for backward compat with calculateStrictGlobalBalance) ──
   /**
    * Per-calendar-year daily revenue target (e.g. { 2026: 86.00 }).
    * Year-keyed so changing the 2027 target never overwrites 2026 history.
@@ -29,6 +41,22 @@ export interface TableGoals {
    * Key = full year number (e.g. 2026), value = cost in BRL.
    */
   annualCosts: Record<number, number>;
+
+  // ── New hierarchical goal system (additive — never replaces legacy records) ──
+  /**
+   * The ultimate fallback. Applied whenever no yearly or monthly override exists.
+   */
+  globalGoals?: GoalProfile;
+  /**
+   * Per-year overrides. Key = year number (can be any year, past or future).
+   * Overrides globalGoals for that specific year.
+   */
+  yearlyGoals?: Record<number, GoalProfile>;
+  /**
+   * Per-month overrides. Key = "YYYY-MM".
+   * Overrides both yearlyGoals and globalGoals for that specific month.
+   */
+  monthlyGoals?: Record<string, GoalProfile>;
 }
 
 export interface CoinTable {
@@ -69,9 +97,19 @@ export interface TableMetrics {
   /**
    * Strict cumulative goal balance from the first recorded entry to the
    * current calendar week (inclusive), penalising every empty week at the
-   * full weeklyGoal rate. Positive = excedente; negative = dívida pendente.
+   * full weeklyGoal rate. Expressed in BRL.
+   * Positive = excedente; negative = dívida pendente.
    */
   globalGoalBalance: number;
+  /**
+   * Time Bank balance expressed in *weeks*.
+   *   paidWeeks    = totalHistoricalRevenue / effectiveWeeklyGoal
+   *   elapsedWeeks = floor((today − minDate) / 7 days)
+   *   timeBankBalance = paidWeeks − elapsedWeeks
+   * Positive = weeks of credit (ahead of schedule).
+   * Negative = weeks of work still owed.
+   */
+  timeBankBalance: number;
   byYear: Record<string, YearMetrics>;   // "YYYY" → YearMetrics
   byMonth: Record<string, MonthMetrics>; // "YYYY-MM" → MonthMetrics
   byWeek: Record<string, number>;        // "YYYY-Www" → gross total
