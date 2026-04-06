@@ -191,7 +191,7 @@ export function GoalsPanel({ goals, metrics }: GoalsPanelProps) {
       />
 
       {/* ── Quick stats ── */}
-      <div className="pt-1 border-t border-white/10 grid grid-cols-2 gap-3 text-center">
+      <div className="pt-1 border-t border-white/10 grid grid-cols-3 gap-3 text-center">
         <div>
           <div className="text-xs text-white/30 mb-1">Meta diária {currentYear}</div>
           <div className="text-sm font-mono font-semibold text-[#a855f7]">
@@ -202,6 +202,12 @@ export function GoalsPanel({ goals, metrics }: GoalsPanelProps) {
           <div className="text-xs text-white/30 mb-1">Custo anual {currentYear}</div>
           <div className="text-sm font-mono font-semibold text-[#a855f7]">
             {fmt(currentYearCost)}
+          </div>
+        </div>
+        <div>
+          <div className="text-xs text-white/30 mb-1">Semanas de parceria</div>
+          <div className="text-sm font-mono font-semibold text-white/60">
+            {metrics.totalElapsedWeeks} sem.
           </div>
         </div>
       </div>

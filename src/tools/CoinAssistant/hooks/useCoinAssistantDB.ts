@@ -348,6 +348,7 @@ function emptyMetrics(): TableMetrics {
     globalMonthlyAvg: 0,
     globalAnnualAvg: 0,
     globalGoalBalance: 0,
+    totalElapsedWeeks: 0,
     timeBankBalance: 0,
     byYear: {},
     byMonth: {},

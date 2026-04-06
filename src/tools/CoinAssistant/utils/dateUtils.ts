@@ -192,9 +192,9 @@ export function findCurrentWeek(
 export function calculateStrictGlobalBalance(
   rows: TableRow[],
   weeklyGoals: Record<number, number>,
-): number {
+): { balance: number; elapsedWeeks: number } {
   const activeRows = rows.filter((r) => r.value > 0);
-  if (activeRows.length === 0) return 0;
+  if (activeRows.length === 0) return { balance: 0, elapsedWeeks: 0 };
 
   // Step A — earliest date among all active revenue rows
   const minDate = activeRows.map((r) => r.date).sort()[0];
@@ -217,6 +217,7 @@ export function calculateStrictGlobalBalance(
 
   // Steps D–G — walk each Mon–Sun window from startOfTimeline to endOfTimeline
   let totalBalance = 0;
+  let elapsedWeeksCount = 0; // incremented once per scored week
   let cursor = new Date(
     startOfTimeline.getFullYear(),
     startOfTimeline.getMonth(),
@@ -226,19 +227,16 @@ export function calculateStrictGlobalBalance(
   while (cursor.getTime() <= endOfTimeline.getTime()) {
     let weekSum = 0;
     for (let i = 0; i < 7; i++) {
-      // new Date(y, m, d + i) handles month/year overflow correctly in JS
       const dayKey = toLocalKey(
         new Date(cursor.getFullYear(), cursor.getMonth(), cursor.getDate() + i),
       );
       weekSum += dateValueMap.get(dayKey) ?? 0;
     }
     // Score this week against the goal for the year its SUNDAY falls in.
-    // cursor + 6 days = the Sunday of this Mon–Sun window.
     const sunday   = new Date(cursor.getFullYear(), cursor.getMonth(), cursor.getDate() + 6);
     const weekGoal = resolveGoalForYear(weeklyGoals, sunday.getFullYear());
     totalBalance  += weekSum - weekGoal;
-    // Advance exactly 7 days — JS Date constructor handles overflow across
-    // month and year boundaries without any manual wrapping needed.
+    elapsedWeeksCount++; // one real calendar week counted
     cursor = new Date(
       cursor.getFullYear(),
       cursor.getMonth(),
@@ -246,7 +244,10 @@ export function calculateStrictGlobalBalance(
     );
   }
 
-  return Math.round(totalBalance * 100) / 100;
+  return {
+    balance:      Math.round(totalBalance * 100) / 100,
+    elapsedWeeks: elapsedWeeksCount,
+  };
 }
 
 /**

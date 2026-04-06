@@ -102,6 +102,12 @@ export interface TableMetrics {
    */
   globalGoalBalance: number;
   /**
+   * The exact number of real Mon–Sun calendar weeks that have elapsed since
+   * the first recorded entry up to (and including) the current week.
+   * Counted by the same strict loop as globalGoalBalance — always consistent.
+   */
+  totalElapsedWeeks: number;
+  /**
    * Time Bank balance expressed in *weeks*.
    *   paidWeeks    = totalHistoricalRevenue / effectiveWeeklyGoal
    *   elapsedWeeks = floor((today − minDate) / 7 days)

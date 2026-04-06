@@ -136,12 +136,15 @@ function buildMessage(
     ? `• ✅ Banco de Horas: *+${absWeeks} semanas* _(Você tem ${absWeeks} semana${parseFloat(absWeeks) !== 1 ? 's' : ''} de folga/adiantadas!)_`
     : `• 🚨 Banco de Horas: *-${absWeeks} semanas* _(Você tem ${absWeeks} semana${parseFloat(absWeeks) !== 1 ? 's' : ''} de serviço pendentes para recuperar a meta)_`;
 
+  const partnershipLine = `• ⏳ Tempo de Parceria: *${metrics.totalElapsedWeeks} semanas reais*`;
+
   lines.push(
     `🌎 *Visão Global & Metas*`,
     `• Faturamento Total Histórico: *${fmt(metrics.grossTotal)}*`,
     `• Média Diária Global: ${fmt(metrics.globalDailyAvg)}`,
     `• Meta Semanal ${reportYear}: ${fmt(reportWeeklyGoal)}`,
     balanceLine,
+    partnershipLine,
     tbLine,
     `• Custo Anual ${reportYear}: ${fmt(yearCost)} _(${annualPct}% coberto em ${reportYear})_`,
     '',
