@@ -1173,20 +1173,20 @@ Calcule a distância percorrida. A conta é sempre: **Final - Inicial**
 ### Nível 2: O Peso dos Boletos (Somas e Subtrações)
 A vida cobra caro. Mostre que sabe fazer as contas do seu bolso.
 
-6. O banco mostra um saldo de $-\text{R\$} 210$. Você trabalha no fim de semana e ganha $\text{R\$} 350$. Qual é o seu saldo final agora? Deu pra respirar?
-7. Você tinha $\text{R\$} 80$ na conta. Consertar a moto custou $-\text{R\$} 250$ e o banco ainda cobrou uma taxa de $-\text{R\$} 45$. Como ficou o seu saldo depois dessa maré de azar?
-8. Uma empresa tem uma dívida trabalhista de $-\text{R\$} 8.000$. O dono vende o carro por $\text{R\$} 6.500$ e coloca o dinheiro na conta da empresa. A dívida acabou? Qual o saldo atual?
-9. Um aluno já deve $\text{R\$} 130$ para o irmão ($-130$). Ele pega mais $\text{R\$} 90$ emprestados com um amigo ($-90$). Qual é o tamanho do buraco em que ele se meteu?
-10. Você recebe um adiantamento de $\text{R\$} 400$. Mas logo caem dois débitos na conta: o aluguel atrasado de $-\text{R\$} 550$ e a conta de água de $-\text{R\$} 120$. Faça a conta inteira. Como ficou o seu saldo?
+6. O banco mostra um saldo de $- 210$ reais. Você trabalha no fim de semana e ganha $ 350$ reais. Qual é o seu saldo final agora? Deu pra respirar?
+7. Você tinha $ 80$ reais na conta. Consertar a moto custou $- 250$ reais e o banco ainda cobrou uma taxa de $- 45$ reais. Como ficou o seu saldo depois dessa maré de azar?
+8. Uma empresa tem uma dívida trabalhista de $- 8.000$ reais. O dono vende o carro por $ 6.500$ reais e coloca o dinheiro na conta da empresa. A dívida acabou? Qual o saldo atual?
+9. Um aluno já deve $ 130$ reais para o irmão ($-130$). Ele pega mais $ 90$ reais emprestados com um amigo ($-90$). Qual é o tamanho do buraco em que ele se meteu?
+10. Você recebe um adiantamento de $ 400$ reais. Mas logo caem dois débitos na conta: o aluguel atrasado de $- 550$ reais e a conta de água de $- 120$ reais. Faça a conta inteira. Como ficou o seu saldo?
 
 ### Nível 3: O Milagre do "Menos com Menos"
 Quando o cancelamento de uma dívida salva o seu dia.
 
-11. Seu saldo é de $-\text{R\$} 600$ por causa de uma cobrança errada de $-\text{R\$} 450$. O banco reconhece o erro e cancela (subtrai) essa dívida da sua conta. Faça a conta: $-600 - (-450)$. Qual saldo sobrou?
+11. Seu saldo é de $- 600$ reais por causa de uma cobrança errada de $- 450$ reais. O banco reconhece o erro e cancela (subtrai) essa dívida da sua conta. Faça a conta: $-600 - (-450)$. Qual saldo sobrou?
 12. No videogame, seu personagem tomou uma maldição de $-60$ pontos de vida. O curandeiro do time usa uma magia que subtrai (tira) essa maldição: $- (-60)$. O que acontece com os seus pontos de vida?
-13. O dono da padaria está com o caixa em $-\text{R\$} 380$. Um fornecedor fica com pena e perdoa (subtrai) uma dívida antiga de $\text{R\$} 150$ que a padaria tinha com ele. Monte a equação do alívio: $-380 - (-150)$. Qual é a nova situação do caixa?
+13. O dono da padaria está com o caixa em $- 380$ reais. Um fornecedor fica com pena e perdoa (subtrai) uma dívida antiga de $ 150$ reais que a padaria tinha com ele. Monte a equação do alívio: $-380 - (-150)$. Qual é a nova situação do caixa?
 14. Num jogo de tabuleiro, você está com saldo de $-30$ moedas. O líder do jogo te rouba mais $10$ moedas ($-10$). Na rodada seguinte, você usa uma carta que permite retirar a última ação de prejuízo: $- (-10)$. Você começou em $-30$, sofreu o roubo de $-10$, e depois o roubo foi cancelado. Com qual saldo você fica no final?
-15. Uma cliente tinha $-\text{R\$} 1.200$ de saldo. O juiz obriga a operadora a subtrair (excluir) uma multa injusta de $-\text{R\$} 800$ e ainda manda a empresa pagar uma indenização de $\text{R\$} 500$ para ela. Calcule passo a passo: $-1200 - (-800) + 500$. Ela terminou com dinheiro positivo na conta?
+15. Uma cliente tinha $- 1.200$ reais de saldo. O juiz obriga a operadora a subtrair (excluir) uma multa injusta de $- 800$ reais e ainda manda a empresa pagar uma indenização de $ 500$ reais para ela. Calcule passo a passo: $-1200 - (-800) + 500$. Ela terminou com dinheiro positivo na conta?
 
 ### Nível 4: O Teste de Fogo (Operações Mistas)
 Junte tudo e resolva os combos de uma vez só.
@@ -1196,11 +1196,11 @@ Junte tudo e resolva os combos de uma vez só.
 18. Um investidor começa o dia perdendo $-2$ milhões. Tenta recuperar e perde mais $-5$ milhões. A corretora bloqueia a operação e cancela (subtrai) a última perda: $- (-5)$. À tarde, ele acerta a mão e ganha $+8$ milhões. Ele fechou o dia no lucro ou no prejuízo?
 19. No RPG, você cai num buraco até o andar $-8$. Uma magia te empurra mais $-12$ andares para baixo. Um aliado te puxa $+30$ andares para cima. O mestre do jogo então decide cancelar (subtrair) aquela sua primeira queda do início: $- (-8)$. Em qual andar você parou?
 20. **O Desafio Final:** Calcule o saldo desse dia conturbado:
-    * Acordou devendo $-\text{R\$} 450$.
-    * Fez um trabalho extra e ganhou $+\text{R\$} 600$.
-    * A geladeira quebrou: prejuízo de $-\text{R\$} 300$.
-    * A companhia de água pediu desculpas por um erro e retirou (subtraiu) uma cobrança de $-\text{R\$} 250$ da sua conta.
-    * O cachorro foi no veterinário: $-\text{R\$} 150$.
+    * Acordou devendo $- 450$ reais.
+    * Fez um trabalho extra e ganhou $+ 600$ reais.
+    * A geladeira quebrou: prejuízo de $- 300$ reais.
+    * A companhia de água pediu desculpas por um erro e retirou (subtraiu) uma cobrança de $- 250$ reais da sua conta.
+    * O cachorro foi no veterinário: $- 150$ reais.
 
     **Monte a conta:** $-450 + 600 - 300 - (-250) - 150$. Qual é o seu saldo no fim do dia?
 `
