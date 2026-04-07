@@ -1133,7 +1133,7 @@ Ao aprendermos a manipular as frações e a observar os números de ângulos dif
     description: 'As operações com números inteiros não são só regrinhas decoradas; elas descrevem a vida real: nossos ganhos, dívidas, quedas e superações.',
     pdfPath: '/pdfs/01-numerosinteiros-revisado.pdf',
     pages: 3,
-    available: false,
+    available: true,
     richContent: String.raw`
 ## A Matemática dos Sinais: O Peso e o Alívio
 
@@ -1214,7 +1214,7 @@ Junte tudo e resolva os combos de uma vez só.
     description: 'Transforme a confusão dos sinais em clareza lógica usando as analogias do elevador, do dinheiro e a prova irrefutável do perdão de dívidas.',
     pdfPath: '/pdfs/02-numerosinteiros-revisado.pdf',
     pages: 2,
-    available: false,
+    available: true,
     richContent: String.raw`
 ## As 3 Regras de Ouro dos Números Negativos
 
@@ -1278,7 +1278,7 @@ $$ [(-6 \cdot -4) - (-12)] \div (-4) - (8 - 15) \cdot (-2) $$
     description: 'A ordem das operações não é para complicar, é a sintaxe da comunicação. Combata a atrofia cognitiva e religue as sinapses do seu córtex pré-frontal.',
     pdfPath: '/pdfs/01-expressaonumerica-revisado.pdf',
     pages: 2,
-    available: false,
+    available: true,
     richContent: String.raw`
 ## Expressões Numéricas: A Trincheira de Defesa do Cérebro
 
