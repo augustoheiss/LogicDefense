@@ -1229,10 +1229,10 @@ Fica muito mais fácil se você imaginar que matemática é dinheiro.
 
 * **Números positivos ($+$):** É o dinheiro que você tem no bolso (lucro).
 * **Números negativos ($-$):** É o dinheiro que você deve (dívida).
-* Se você tem $\text{R\$ } 5$ e gasta $\text{R\$ } 18$ ($5 - 18$), você fica com uma dívida de $-13$.
+* Se você tem $ 5$ reais e gasta $ 18$ reais ($5 - 18$), você fica com uma dívida de $-13$ reais.
 
 ### 3. O Truque da Dupla Negação ("Menos com menos dá mais")
-Por que isso acontece? Imagine que você tem uma conta de luz atrasada de $\text{R\$ } 150$ (uma dívida de $-150$). Se a empresa de energia cometer um erro e decidir **retirar (subtrair)** essa dívida de você, o que acontece? Subtrair uma dívida tira um peso das suas costas. Então, $- (-150)$ vira um crédito de $+150$ na sua conta. Retirar uma dívida é o mesmo que ganhar dinheiro!
+Por que isso acontece? Imagine que você tem uma conta de luz atrasada de $ 150$ reais (uma dívida de $-150$ reais). Se a empresa de energia cometer um erro e decidir **retirar (subtrair)** essa dívida de você, o que acontece? Subtrair uma dívida tira um peso das suas costas. Então, $- (-150)$ vira um crédito de $+150$ na sua conta. Retirar uma dívida é o mesmo que ganhar dinheiro!
 
 ---
 
