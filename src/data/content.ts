@@ -420,7 +420,7 @@ Frações! Razões e Proporções! A soma e a subtração das partes de diferent
 
 4 - **O TANQUE DE COMBUSTÍVEL:** O marcador de combustível de um veículo indica que o tanque está com $\frac{3}{8}$ da sua capacidade. Após abastecer com 20 litros, o tanque passa a registrar $\frac{5}{8}$. Qual é a capacidade total, em litros, desse tanque?
 
-5 - **DIVISÃO DE HERANÇA:** Uma herança foi dividida entre três irmãos. O primeiro recebeu $\frac{1}{2}$ do total, o segundo recebeu $\frac{1}{3}$ do total, e o terceiro recebeu os R$ 15.000,00 restantes. Qual era o valor total da herança?
+5 - **DIVISÃO DE HERANÇA:** Uma herança foi dividida entre três irmãos. O primeiro recebeu $\frac{1}{2}$ do total, o segundo recebeu $\frac{1}{3}$ do total, e o terceiro recebeu os 15.000,00 reais restantes. Qual era o valor total da herança?
 
 6 - **A TURMA DO VESTIBULINHO:** Em uma sala de aula, $\frac{3}{5}$ dos alunos são meninas. Se há 16 meninos na sala, qual é o total de alunos nessa turma?
 
@@ -428,7 +428,7 @@ Frações! Razões e Proporções! A soma e a subtração das partes de diferent
 
 8 - **A BIBLIOTECA:** De todos os livros de uma biblioteca, $\frac{1}{4}$ são de matemática, $\frac{2}{5}$ são de literatura e os 350 restantes são de ciências. Quantos livros de matemática existem nessa biblioteca?
 
-9 - **DESCONTO NO SALÁRIO:** Um trabalhador tem $\frac{1}{10}$ do seu salário descontado para a previdência e $\frac{1}{5}$ descontado para o plano de saúde. Sabendo que após os descontos ele recebe R$ 2.100,00, qual é o seu salário bruto?
+9 - **DESCONTO NO SALÁRIO:** Um trabalhador tem $\frac{1}{10}$ do seu salário descontado para a previdência e $\frac{1}{5}$ descontado para o plano de saúde. Sabendo que após os descontos ele recebe 2.100,00 reais, qual é o seu salário bruto?
 
 10 - **A ENGRENAGEM:** Em um sistema mecânico, uma engrenagem gira $\frac{3}{4}$ de volta a cada segundo. Quantas voltas completas ela dará após 12 segundos contínuos de funcionamento?
 
@@ -440,7 +440,7 @@ Frações! Razões e Proporções! A soma e a subtração das partes de diferent
 
 14 - **COLHEITA:** Dois agricultores estão colhendo laranjas. O primeiro colhe $\frac{1}{3}$ da plantação em 4 dias. O segundo colhe $\frac{1}{4}$ da plantação em 2 dias. Se trabalharem juntos, que fração da plantação eles colherão em 1 dia?
 
-15 - **ORÇAMENTO MENSAL:** Uma família gasta $\frac{2}{5}$ do seu orçamento com alimentação e $\frac{1}{4}$ com aluguel. Se eles conseguem guardar R$ 700,00, que correspondem ao restante do orçamento, qual é a renda total dessa família?
+15 - **ORÇAMENTO MENSAL:** Uma família gasta $\frac{2}{5}$ do seu orçamento com alimentação e $\frac{1}{4}$ com aluguel. Se eles conseguem guardar 700,00 reais, que correspondem ao restante do orçamento, qual é a renda total dessa família?
 
 16 - **RENDIMENTO DE MATERIAL:** Uma peça de tecido tem 12 metros. Um alfaiate usa $\frac{2}{3}$ desse tecido para fazer calças e $\frac{1}{4}$ do que sobrou para fazer bermudas. Quantos metros de tecido não foram utilizados?
 
@@ -857,7 +857,7 @@ Nem todo número quer ser dividido. Alguns são solitários, outros são perfeit
 * **7.** 420 km [cite: 365]
 * **8.** 6 [cite: 366]
 * **9.** 12 [cite: 367]
-* **10.** R$ 240 [cite: 368]
+* **10.** 240 reais[cite: 368]
 * **11.** 176 [cite: 369]
 * **12.** 399 [cite: 370]
 * **13.** 2496 [cite: 371]
@@ -952,7 +952,7 @@ Nem todo número quer ser dividido. Alguns são solitários, outros são perfeit
 * 36. Calcule: $1200 \div 50$. (Dica: Corte os zeros. Fica $120 \div 5$. Use a regra anterior).
 * 37. Quanto é 150% de 40? (Dica: Inverta. É o mesmo que 40% de 150. Ou $1,5 \times 40$).
 * 38. Regra de Três Inversa: Se 4 pedreiros levam 10 dias (Total = 40 dias-trabalho), quantos dias levam 8 pedreiros?.
-* 39. Regra de Três Direta: Se 2 balas custam R$ 5,00, quanto custam 12? (Ache o fator de aumento de 2 para 12).
+* 39. Regra de Três Direta: Se 2 balas custam 5,00 reais, quanto custam 12? (Ache o fator de aumento de 2 para 12).
 * 40. Desafio final: Simplifique $(55 \times 22) / 11$ sem sofrer. (Dica: Divida o 22 ou o 55 por 11 primeiro).
 `
   },
@@ -1131,7 +1131,7 @@ Ao aprendermos a manipular as frações e a observar os números de ângulos dif
     subject: 'Matemática',
     grade: '7°ano ao Ensino Médio',
     description: 'As operações com números inteiros não são só regrinhas decoradas; elas descrevem a vida real: nossos ganhos, dívidas, quedas e superações.',
-    pdfPath: '/pdfs/matematica-sinais-peso-alivio.pdf',
+    pdfPath: '/pdfs/01-numerosinteiros-revisado.pdf',
     pages: 3,
     available: false,
     richContent: String.raw`
@@ -1155,7 +1155,7 @@ Na matemática financeira do dia a dia:
 
 A maior dúvida da galera: **o que acontece quando temos dois sinais de menos juntos?** Pense nisso como o "perdão de uma dívida".
 
-Imagine que você tem uma conta de luz atrasada de R$ 150 (um peso de $-150$). De repente, a companhia avisa que errou e decide cancelar essa cobrança. Subtrair uma dívida — ou seja, fazer $- (-150)$ — é literalmente tirar um peso das costas! Ao invés de dever, o erro foi perdoado. Subtrair uma dor é somar um alívio ($+150$).
+Imagine que você tem uma conta de luz atrasada de 150 reais(um peso de $-150$). De repente, a companhia avisa que errou e decide cancelar essa cobrança. Subtrair uma dívida — ou seja, fazer $- (-150)$ — é literalmente tirar um peso das costas! Ao invés de dever, o erro foi perdoado. Subtrair uma dor é somar um alívio ($+150$).
 
 As 20 missões a seguir são situações reais. Resolva cada uma e mostre que você domina as regras!
 
@@ -1212,7 +1212,7 @@ Junte tudo e resolva os combos de uma vez só.
     subject: 'Matemática',
     grade: '7°ano ao Ensino Médio',
     description: 'Transforme a confusão dos sinais em clareza lógica usando as analogias do elevador, do dinheiro e a prova irrefutável do perdão de dívidas.',
-    pdfPath: '/pdfs/3-regras-ouro.pdf',
+    pdfPath: '/pdfs/02-numerosinteiros-revisado.pdf',
     pages: 2,
     available: false,
     richContent: String.raw`
@@ -1276,7 +1276,7 @@ $$ [(-6 \cdot -4) - (-12)] \div (-4) - (8 - 15) \cdot (-2) $$
     subject: 'Matemática',
     grade: '7°ano ao Ensino Médio',
     description: 'A ordem das operações não é para complicar, é a sintaxe da comunicação. Combata a atrofia cognitiva e religue as sinapses do seu córtex pré-frontal.',
-    pdfPath: '/pdfs/expressoes-numericas.pdf',
+    pdfPath: '/pdfs/01-expressaonumerica-revisado.pdf',
     pages: 2,
     available: false,
     richContent: String.raw`
@@ -1287,7 +1287,7 @@ Expressões Numéricas não é uma 'decoreba de regras chatas'. É uma trincheir
 * **A Ordem das Operações é a Sintaxe da Comunicação:** Por que resolvemos a multiplicação antes da soma? Não é para complicar sua vida. É porque a multiplicação é uma 'soma repetida', ela tem mais peso estrutural. Sem essa regra universal, uma mesma conta teria vários resultados e a comunicação lógica seria um caos.
 * **A Lógica do Livro-Caixa (Regra de Sinais):** Vamos jogar fora o decoreba cego de 'menos com menos dá mais'. Pensem como os antigos mercadores e como o gênio indiano Brahmagupta no século VII: O número positivo é um Crédito (seu dinheiro). O número negativo é uma Dívida.
   * Se você soma dois números negativos ($-5 + (-8)$), você está apenas acumulando dívidas. O resultado é $-13$.
-  * E a subtração de um negativo? Pense: se o banco subtrai (retira, perdoa) uma dívida (negativo) do seu nome, o que acontece com a sua vida financeira? Você fica mais rico! Retirar uma dívida tem o exato mesmo impacto de adicionar dinheiro. Por isso $- (-5)$ vira $+5$. É pura lógica!
+  * E a subtração de um negativo? Pense: se o banco subtrai (retira, perdoa) uma dívida (negativo) do seu nome, o que acontece com a sua vida financeira? Você fica mais rico! Retirar uma dívida tem o exato mesmo impacto de adicionar dinheiro. Por isso $-(-5)$ vira $+5$. É pura lógica!
 * **Deslocamento Espacial:** Imagine uma linha no chão. Positivo olha para frente, negativo olha para trás. Subtrair é a ordem para 'andar de costas'. Se você olha para trás (negativo) e anda de costas (subtração), você fisicamente se desloca para a frente (positivo)!
 * **Divisão é Multiplicação Inversa:** Não trate a divisão como uma regra nova. Ela é apenas a pergunta: 'Qual número eu multiplico para chegar a esse valor?'.
 
@@ -1298,56 +1298,100 @@ Nós vamos agora resolver aqueles 40 exercícios. **É terminantemente proibido 
 ### Nível 1: Lógica de Dívidas, Créditos e Deslocamentos (Soma e Subtração)
 *(Treine a visualização mental antes de calcular.)*
 
+1) $-5 + 8$
+
+2) $-12 - 7$
+
+3) $15 - 20$
+
+4) $-4 + (-9)$
+
+5) $10 - (-6)$
+
+6) $-8 + (-3) - (-5)$
+
+7) $-15 + 20 - 10$
+
+8) $-2 - (-2)$
+
+9) $0 - (-14)$
+
+10) $-7 + 7 - 5$
+
+---
+
 ### Nível 2: O Deslocamento de Valores (Multiplicação, Divisão e Regra de Sinais)
 *(A operação muda de tamanho e de direção.)*
+
+11) $(-4) \cdot (-5)$
+
+12) $6 \cdot (-7)$
+
+13) $(-36) \div 9$
+
+14) $(-48) \div (-8)$
+
+15) $(-3) \cdot 4 \cdot (-2)$
+
+16) $(-100) \div (-5)$
+
+17) $(-2) \cdot (-2) \cdot (-2)$
+
+18) $(-15) \div 3 \cdot (-2)$
+
+19) $8 \cdot (-5) \div (-10)$
+
+20) $(-20) \div (-4) \cdot (-3)$
+
+---
 
 ### Nível 3: A Convenção na Prática (Ordem das Operações sem Prioridade de Parênteses)
 *(Lembrete mental: a multiplicação e a divisão definem o valor antes de efetuarmos a soma/subtração)*
 
-21) $ -5 + 4 \cdot (-2) $
+21) $-5 + 4 \cdot (-2)$
 
-22) $ 10 - (-6) \div (-3) $
+22) $10 - (-6) \div (-3)$
 
-23) $ (-8) \cdot 2 - (-15) $
+23) $(-8) \cdot 2 - (-15)$
 
-24) $ 12 \div (-4) + 5 \cdot (-2) $
+24) $12 \div (-4) + 5 \cdot (-2)$
 
-25) $ -3 - (-4) \cdot (-5) $
+25) $-3 - (-4) \cdot (-5)$
 
-26) $ 20 + (-18) \div 6 $
+26) $20 + (-18) \div 6$
 
-27) $ -7 \cdot (-2) + 14 \div (-7) $
+27) $-7 \cdot (-2) + 14 \div (-7)$
 
-28) $ (-5) \cdot 3 - (-20) \div 4 $
+28) $(-5) \cdot 3 - (-20) \div 4$
 
-29) $ 15 - 2 \cdot (-4) + (-8) \div (-2) $
+29) $15 - 2 \cdot (-4) + (-8) \div (-2)$
 
-30) $ -10 \div 5 - 4 \cdot (-3) $
+30) $-10 \div 5 - 4 \cdot (-3)$
 
 ---
 
 ### Nível 4: Combate à Atrofia Cognitiva (Ginástica Mental com Parênteses, Colchetes e Chaves)
 *(Todos os exercícios foram elaborados para resultar em números inteiros exatos)*
 
-31) $ -2 \cdot ( -5 + 8 ) $
+31) $-2 \cdot (-5 + 8)$
 
-32) $ 10 - ( -4 - 6 ) \div (-2) $
+32) $10 - (-4 - 6) \div (-2)$
 
-33) $ ( -12 + 4 ) \cdot ( -3 - (-1) ) $
+33) $(-12 + 4) \cdot (-3 - (-1))$
 
-34) $ -5 + [ -3 \cdot ( 4 - 6 ) ] $
+34) $-5 + [-3 \cdot (4 - 6)]$
 
-35) $ 15 - [ -2 + ( -8 \div 4 ) ] \cdot (-3) $
+35) $15 - [-2 + (-8 \div 4)] \cdot (-3)$
 
-36) $ [ (-10) \cdot (-2) - 5 ] \div (-5) $
+36) $[(-10) \cdot (-2) - 5] \div (-5)$
 
-37) $ - \left\{ 4 - [ -3 \cdot ( -2 + 5 ) ] \right\} $
+37) $-\left\{ 4 - [-3 \cdot (-2 + 5)] \right\}$
 
-38) $ 20 \div \left\{ -2 \cdot [ -4 - (-6 + 1) ] \right\} + 3 $
+38) $20 \div \left\{ -2 \cdot [-4 - (-6 + 1)] \right\} + 3$
 
-39) $ -3 \cdot \left\{ -5 + [ 12 \div (-3) - (-2) \cdot (-4) ] \right\} $
+39) $-3 \cdot \left\{ -5 + [12 \div (-3) - (-2) \cdot (-4)] \right\}$
 
-40) $ \left\{ [ -15 \div ( -2 - 3 ) ] \cdot (-4) \right\} - [ - ( -8 + 2 ) ] $
+40) $\left\{ [-15 \div (-2 - 3)] \cdot (-4) \right\} - [-(-8 + 2)]$
 `
   }
 
