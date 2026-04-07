@@ -203,6 +203,55 @@ No episódio de hoje, nós vamos hackear a "Arquitetura dos Números Quebrados".
     description: 'Um manifesto musical sobre o Supercomputador Biológico da Rota da Seda e a tragédia do atalho na educação. Descubra o valor de UM e fuja do lugar comum!',
     youtubeId: 'hjtSPLkwaeQ',
     tag: 'Música · Proporção (PT)',
+  },
+  {
+    id: 'vid-25',
+    title: 'The Ballad of the Absurd Root',
+    description: 'No digital crutch, no external drive, just a five-fingered memory keeping logic alive. A musical journey exploring the history of negative numbers and the cognitive act of subtraction.',
+    youtubeId: 'yExTHV0_7XU',
+    tag: 'Música · Matemática (EN)',
+  },
+  {
+    id: 'vid-26',
+    title: 'A Lógica Oculta dos Números Negativos e o Perigo da Atrofia Mental',
+    description: 'Mergulhamos na história da matemática para entender como mentes brilhantes da Europa sofreram para aceitar os números negativos, enquanto civilizações antigas resolveram isso muito antes.',
+    youtubeId: 'EjH6ERFmNDk',
+    tag: 'Matemática · História',
+  },
+  {
+    id: 'vid-27',
+    title: 'A Lógica Oculta dos Números Negativos | Podcast',
+    description: 'Podcast: O Bloqueio Europeu, a Armadilha Geométrica, a Solução Oriental das varetas, e a lógica financeira de que cancelar uma dívida resulta em um alívio.',
+    youtubeId: 'UjZtVDo-VeE',
+    tag: 'Podcast · Matemática',
+  },
+  {
+    id: 'vid-28',
+    title: 'O Peso do Conceito (A Descoberta do Negativo)',
+    description: 'A nossa biologia é a mesma, não houve evolução. Um rap investigativo que desvenda o "absurdo" dos números negativos e alerta para o perigo da atrofia mental.',
+    youtubeId: 'XnFRvCtkqKg',
+    tag: 'Música · Matemática (PT)',
+  },
+  {
+    id: 'vid-29',
+    title: 'Mente, Matemática e Máquina: A Tecnologia Está Atrofiando Nosso Raciocínio? | Podcast',
+    description: 'O custo invisível da conveniência digital. Discutimos a epidemia de atrofia cognitiva causada pela IA e a necessidade do esforço neural pelo mecanismo de Grokking.',
+    youtubeId: 'JaiVcCQg4VI',
+    tag: 'Podcast · Educação',
+  },
+  {
+    id: 'vid-30',
+    title: 'Mente, Matemática e Máquina: A Tecnologia Está Atrofiando Nosso Raciocínio?',
+    description: 'A tecnologia que deveria nos impulsionar está enferrujando nossa rede neural. Descubra como transformar decoreba em lógica usando a analogia financeira.',
+    youtubeId: 'AkJHlGzm5ao',
+    tag: 'Educação · IA',
+  },
+  {
+    id: 'vid-31',
+    title: 'The Cognitive Cathedral',
+    description: 'Embrace the productive struggle, let the neurons ignite. A powerful track defending the waking brain against algorithmic sleep and epistemic atrophy. Use it or lose it!',
+    youtubeId: 'Ur-eqYRa8tA',
+    tag: 'Música · Filosofia (EN)',
   }
 ];
 
@@ -1073,6 +1122,233 @@ Ao aprendermos a manipular as frações e a observar os números de ângulos dif
 * **Trabalho Voluntário:** Em um abrigo de animais, a ração estocada é suficiente para alimentar 30 cães durante 20 dias. A prefeitura acabou de resgatar mais 10 cães abandonados que foram levados para o abrigo. Quanto tempo esse estoque de ração vai durar agora, alimentando os 40 cães?
 * **Revisão de Prova:** Uma professora gasta 10 minutos por prova para corrigir os testes de 24 alunos. Se ela otimizar seu processo e reduzir o tempo para 8 minutos por prova, de quantos alunos ela conseguirá corrigir as provas dentro do mesmo intervalo de tempo total?
 `
+  },
+
+  {
+    id: 'plan-14',
+    slug: 'matematica-sinais-peso-alivio',
+    title: 'A Matemática dos Sinais: O Peso e o Alívio',
+    subject: 'Matemática',
+    grade: '7°ano ao Ensino Médio',
+    description: 'As operações com números inteiros não são só regrinhas decoradas; elas descrevem a vida real: nossos ganhos, dívidas, quedas e superações.',
+    pdfPath: '/pdfs/matematica-sinais-peso-alivio.pdf',
+    pages: 3,
+    available: false,
+    richContent: String.raw`
+## A Matemática dos Sinais: O Peso e o Alívio
+
+Aprender matemática não precisa ser um processo chato. Ficar confuso ao ver sinais de mais e menos misturados é super normal. É o seu cérebro suando e criando novas conexões. Quebrar a cabeça com um problema e sentir aquele alívio quando finalmente entende é o que constrói a sua inteligência de verdade. As operações com números inteiros não são só regrinhas decoradas; elas descrevem a vida real: nossos ganhos, dívidas, quedas e superações.
+
+Para dominar os sinais, você precisa entender as regras do jogo:
+
+### 1. A Regra do Deslocamento: O Tamanho do Salto
+Para calcular o deslocamento — seja de um objeto ou na vida —, a gente sempre faz a diferença entre onde você chegou (Final) e de onde você saiu (Inicial). A regra de ouro é: **Deslocamento = Final - Inicial.**
+
+* **A Subida:** Se você entra no elevador no 2º subsolo ($-2$) e sobe até o 6º andar ($6$), qual foi o seu esforço? A conta é: $6 - (-2)$. O choque de sinais vira uma soma: $6 + 2 = 8$. Você se deslocou $8$ andares para cima!
+* **A Queda:** Se você está no 8º andar ($8$) e desce até o 3º subsolo ($-3$), a conta mostra a realidade: $-3 - 8 = -11$. O sinal negativo mostra que você desceu $11$ andares.
+
+### 2. A Batalha Financeira: Dinheiro, Dívidas e o "Menos com Menos"
+Na matemática financeira do dia a dia:
+
+* **Soma ($+$):** É o seu salário, o seu ganho, o dinheiro no bolso.
+* **Subtração ($-$):** É a dívida, o boleto para pagar, o gasto inesperado.
+
+A maior dúvida da galera: **o que acontece quando temos dois sinais de menos juntos?** Pense nisso como o "perdão de uma dívida".
+
+Imagine que você tem uma conta de luz atrasada de R$ 150 (um peso de $-150$). De repente, a companhia avisa que errou e decide cancelar essa cobrança. Subtrair uma dívida — ou seja, fazer $- (-150)$ — é literalmente tirar um peso das costas! Ao invés de dever, o erro foi perdoado. Subtrair uma dor é somar um alívio ($+150$).
+
+As 20 missões a seguir são situações reais. Resolva cada uma e mostre que você domina as regras!
+
+---
+
+### Nível 1: O Desafio do Deslocamento (Final - Inicial)
+Calcule a distância percorrida. A conta é sempre: **Final - Inicial**
+
+1. Um mergulhador está a $-45$ metros. Ele usa um balão de emergência e sobe até um helicóptero que o resgata a $+15$ metros de altura. Qual foi o deslocamento total dele?
+2. Você está no 12º andar e deixa o celular cair até o 5º subsolo ($-5$). Escreva a conta e calcule o deslocamento exato dessa queda.
+3. Um leopardo está a $22$ metros de altura e pula para um vale que fica a $-14$ metros. Qual foi o deslocamento desse salto?
+4. Um submarino está a $-120$ metros. Para fugir de um perigo, ele afunda até $-580$ metros. Qual foi o deslocamento vertical dele?
+5. Uma lâmina de metal sai de um tanque congelado a $-196^\circ\text{C}$ direto para uma fornalha a $850^\circ\text{C}$. Qual foi a variação (deslocamento) de temperatura?
+
+### Nível 2: O Peso dos Boletos (Somas e Subtrações)
+A vida cobra caro. Mostre que sabe fazer as contas do seu bolso.
+
+6. O banco mostra um saldo de $-\text{R\$} 210$. Você trabalha no fim de semana e ganha $\text{R\$} 350$. Qual é o seu saldo final agora? Deu pra respirar?
+7. Você tinha $\text{R\$} 80$ na conta. Consertar a moto custou $-\text{R\$} 250$ e o banco ainda cobrou uma taxa de $-\text{R\$} 45$. Como ficou o seu saldo depois dessa maré de azar?
+8. Uma empresa tem uma dívida trabalhista de $-\text{R\$} 8.000$. O dono vende o carro por $\text{R\$} 6.500$ e coloca o dinheiro na conta da empresa. A dívida acabou? Qual o saldo atual?
+9. Um aluno já deve $\text{R\$} 130$ para o irmão ($-130$). Ele pega mais $\text{R\$} 90$ emprestados com um amigo ($-90$). Qual é o tamanho do buraco em que ele se meteu?
+10. Você recebe um adiantamento de $\text{R\$} 400$. Mas logo caem dois débitos na conta: o aluguel atrasado de $-\text{R\$} 550$ e a conta de água de $-\text{R\$} 120$. Faça a conta inteira. Como ficou o seu saldo?
+
+### Nível 3: O Milagre do "Menos com Menos"
+Quando o cancelamento de uma dívida salva o seu dia.
+
+11. Seu saldo é de $-\text{R\$} 600$ por causa de uma cobrança errada de $-\text{R\$} 450$. O banco reconhece o erro e cancela (subtrai) essa dívida da sua conta. Faça a conta: $-600 - (-450)$. Qual saldo sobrou?
+12. No videogame, seu personagem tomou uma maldição de $-60$ pontos de vida. O curandeiro do time usa uma magia que subtrai (tira) essa maldição: $- (-60)$. O que acontece com os seus pontos de vida?
+13. O dono da padaria está com o caixa em $-\text{R\$} 380$. Um fornecedor fica com pena e perdoa (subtrai) uma dívida antiga de $\text{R\$} 150$ que a padaria tinha com ele. Monte a equação do alívio: $-380 - (-150)$. Qual é a nova situação do caixa?
+14. Num jogo de tabuleiro, você está com saldo de $-30$ moedas. O líder do jogo te rouba mais $10$ moedas ($-10$). Na rodada seguinte, você usa uma carta que permite retirar a última ação de prejuízo: $- (-10)$. Você começou em $-30$, sofreu o roubo de $-10$, e depois o roubo foi cancelado. Com qual saldo você fica no final?
+15. Uma cliente tinha $-\text{R\$} 1.200$ de saldo. O juiz obriga a operadora a subtrair (excluir) uma multa injusta de $-\text{R\$} 800$ e ainda manda a empresa pagar uma indenização de $\text{R\$} 500$ para ela. Calcule passo a passo: $-1200 - (-800) + 500$. Ela terminou com dinheiro positivo na conta?
+
+### Nível 4: O Teste de Fogo (Operações Mistas)
+Junte tudo e resolva os combos de uma vez só.
+
+16. Você acorda com a energia em $-15$. Um café te dá $+20$. O trânsito tira $-30$. O chefe cancela uma reunião chata, tirando um peso enorme das suas costas: $- (-40)$. Qual é o saldo exato da sua paciência?
+17. Um freezer estava a $-5^\circ\text{C}$. Dá um defeito e a temperatura sobe $+18^\circ\text{C}$. O técnico tenta consertar e a temperatura cai $-40^\circ\text{C}$ de uma vez. Para não congelar e estragar tudo, o sistema desfaz (subtrai) essa última queda exagerada: $- (-40)$. Qual foi a temperatura final?
+18. Um investidor começa o dia perdendo $-2$ milhões. Tenta recuperar e perde mais $-5$ milhões. A corretora bloqueia a operação e cancela (subtrai) a última perda: $- (-5)$. À tarde, ele acerta a mão e ganha $+8$ milhões. Ele fechou o dia no lucro ou no prejuízo?
+19. No RPG, você cai num buraco até o andar $-8$. Uma magia te empurra mais $-12$ andares para baixo. Um aliado te puxa $+30$ andares para cima. O mestre do jogo então decide cancelar (subtrair) aquela sua primeira queda do início: $- (-8)$. Em qual andar você parou?
+20. **O Desafio Final:** Calcule o saldo desse dia conturbado:
+    * Acordou devendo $-\text{R\$} 450$.
+    * Fez um trabalho extra e ganhou $+\text{R\$} 600$.
+    * A geladeira quebrou: prejuízo de $-\text{R\$} 300$.
+    * A companhia de água pediu desculpas por um erro e retirou (subtraiu) uma cobrança de $-\text{R\$} 250$ da sua conta.
+    * O cachorro foi no veterinário: $-\text{R\$} 150$.
+
+    **Monte a conta:** $-450 + 600 - 300 - (-250) - 150$. Qual é o seu saldo no fim do dia?
+`
+  },
+  {
+    id: 'plan-15',
+    slug: 'regras-de-ouro-negativos',
+    title: 'As 3 Regras de Ouro dos Números Negativos',
+    subject: 'Matemática',
+    grade: '7°ano ao Ensino Médio',
+    description: 'Transforme a confusão dos sinais em clareza lógica usando as analogias do elevador, do dinheiro e a prova irrefutável do perdão de dívidas.',
+    pdfPath: '/pdfs/3-regras-ouro.pdf',
+    pages: 2,
+    available: false,
+    richContent: String.raw`
+## As 3 Regras de Ouro dos Números Negativos
+
+### 1. A Regra do Elevador (Para calcular distâncias)
+Pense nos números como andares de um prédio. Os números positivos são os andares para cima, e os negativos são os subsolos. Para saber quantos andares você percorreu, basta pegar o **Andar Final** e subtrair o **Andar Inicial**.
+
+* Se você sai do 2º subsolo ($-2$) para o 6º andar ($6$), a conta é: $6 - (-2) = 6 + 2 = 8$ andares para cima.
+* Se você cai do 8º andar ($8$) para o 3º subsolo ($-3$), a conta é: $-3 - 8 = -11$ (uma queda de 11 andares).
+
+### 2. A Regra do Dinheiro (Lucros e Dívidas)
+Fica muito mais fácil se você imaginar que matemática é dinheiro.
+
+* **Números positivos ($+$):** É o dinheiro que você tem no bolso (lucro).
+* **Números negativos ($-$):** É o dinheiro que você deve (dívida).
+* Se você tem $\text{R\$ } 5$ e gasta $\text{R\$ } 18$ ($5 - 18$), você fica com uma dívida de $-13$.
+
+### 3. O Truque da Dupla Negação ("Menos com menos dá mais")
+Por que isso acontece? Imagine que você tem uma conta de luz atrasada de $\text{R\$ } 150$ (uma dívida de $-150$). Se a empresa de energia cometer um erro e decidir **retirar (subtrair)** essa dívida de você, o que acontece? Subtrair uma dívida tira um peso das suas costas. Então, $- (-150)$ vira um crédito de $+150$ na sua conta. Retirar uma dívida é o mesmo que ganhar dinheiro!
+
+---
+
+## Hora de Praticar: Os 20 Desafios Simplificados
+Resolva os problemas abaixo usando as regrinhas do elevador, do dinheiro e da conta de luz.
+
+### Nível 1: Entendendo a Lógica
+1. **Lucros e Dívidas:** Você tem $34$ dívidas ($-34$) e ganha $50$ moedas ($+50$). Qual é o seu saldo final?
+2. **Falta de Oxigênio:** Você tem $5$ minutos de oxigênio, mas precisa de $18$ para cruzar um túnel. A conta é $5 - 18$. Qual é o resultado?
+3. **O Elevador:** Você está no andar $-4$ e o elevador desce mais $9$ andares ($-9$). Onde você vai parar?
+4. **Distância 1:** Um pássaro vai do ponto $45$ metros até o ponto $-15$ metros. Calcule a distância (Final menos Inicial): $-15 - 45$.
+5. **Distância 2:** Um drone sobe do ponto $-40$ metros até $25$ metros. Calcule a distância: $25 - (-40)$.
+
+### Nível 2: Descomplicando os Sinais
+6. **Extrato Bancário:** Seu saldo é $-80$. O banco cobra uma taxa de $25$ (subtrai $25$) e retira uma dívida velha de $40$ (subtrai $-40$). A conta é: $-80 - 25 - (-40)$. Qual o saldo final?
+7. **Tirando o Peso:** Você está no fundo de um poço na posição $-14$. Alguém retira um peso de $8\text{ kg}$ de você. Calcule: $-14 - (-8)$.
+8. **Cancelando Dívida:** Você tem saldo $0$. Alguém retira uma cobrança falsa de $500$. Calcule: $0 - (-500)$.
+9. **Múltiplos Sinais:** O sinal de menos inverte a direção. O que acontece com três sinais juntos? Calcule: $-(-(-20))$.
+10. **Curando a Maldição:** Você tem $8$ pontos de vida. Remove uma penalidade de $-12$. Calcule: $8 - (-12)$.
+
+### Nível 3: Multiplicação e Memória
+11. **Viagem no Tempo:** Um barco afunda $5$ toneladas por minuto ($-5$). Como ele estava $6$ minutos atrás no passado ($-6$)? Multiplique: $(-5) \cdot (-6)$.
+12. **Refletindo o Feitiço:** O inimigo lança um poder de $-4$, e você usa um escudo que multiplica o efeito por $-3$. Calcule: $(-4) \cdot (-3)$.
+13. **Dividindo Dívidas:** Uma empresa faliu com uma dívida de $-18.000$, que será dividida entre $3$ pessoas. Quanto cada um deve pagar?
+14. **Não confunda:** Você deve $8$ e faz outra dívida de $12$. Cuidado, aqui não há multiplicação! Calcule: $-8 - 12$.
+15. **A Batalha:** O herói tem $15$ pontos de vida. Leva $20$ de dano ($-20$), mas remove uma penalidade de $-10$ (subtrai $-10$). Qual o saldo de vida dele?
+
+### Nível 4: Desafios com Várias Operações (Faça primeiro a multiplicação/divisão)
+16. **Pegadinha da Potência:** Calcule as duas partes e diminua: $(-3)^2 - -(3^2)$
+17. **Foco:** Lembre-se de multiplicar antes de somar/subtrair: $-15 - (-4) \cdot 5 + (-6)$
+18. **A Mistura:** Resolva a divisão e a multiplicação primeiro, depois o meio: $(-24 \div 6) - (-3 \cdot -5)$
+19. **O Poder do Zero:** Multiplicar por zero zera tudo: $-10 - (-10) + 14 \cdot 0$
+20. **O Desafio Final:** Resolva por partes (primeiro colchetes e parênteses, depois divisão/multiplicação): 
+$$ [(-6 \cdot -4) - (-12)] \div (-4) - (8 - 15) \cdot (-2) $$
+`
+  },
+  {
+    id: 'plan-16',
+    slug: 'expressoes-numericas-trincheira',
+    title: 'Expressões Numéricas: A Trincheira de Defesa do Cérebro',
+    subject: 'Matemática',
+    grade: '7°ano ao Ensino Médio',
+    description: 'A ordem das operações não é para complicar, é a sintaxe da comunicação. Combata a atrofia cognitiva e religue as sinapses do seu córtex pré-frontal.',
+    pdfPath: '/pdfs/expressoes-numericas.pdf',
+    pages: 2,
+    available: false,
+    richContent: String.raw`
+## Expressões Numéricas: A Trincheira de Defesa do Cérebro
+
+Expressões Numéricas não é uma 'decoreba de regras chatas'. É uma trincheira de defesa do seu cérebro. A matemática é a gramática da lógica humana:
+
+* **A Ordem das Operações é a Sintaxe da Comunicação:** Por que resolvemos a multiplicação antes da soma? Não é para complicar sua vida. É porque a multiplicação é uma 'soma repetida', ela tem mais peso estrutural. Sem essa regra universal, uma mesma conta teria vários resultados e a comunicação lógica seria um caos.
+* **A Lógica do Livro-Caixa (Regra de Sinais):** Vamos jogar fora o decoreba cego de 'menos com menos dá mais'. Pensem como os antigos mercadores e como o gênio indiano Brahmagupta no século VII: O número positivo é um Crédito (seu dinheiro). O número negativo é uma Dívida.
+  * Se você soma dois números negativos ($-5 + (-8)$), você está apenas acumulando dívidas. O resultado é $-13$.
+  * E a subtração de um negativo? Pense: se o banco subtrai (retira, perdoa) uma dívida (negativo) do seu nome, o que acontece com a sua vida financeira? Você fica mais rico! Retirar uma dívida tem o exato mesmo impacto de adicionar dinheiro. Por isso $- (-5)$ vira $+5$. É pura lógica!
+* **Deslocamento Espacial:** Imagine uma linha no chão. Positivo olha para frente, negativo olha para trás. Subtrair é a ordem para 'andar de costas'. Se você olha para trás (negativo) e anda de costas (subtração), você fisicamente se desloca para a frente (positivo)!
+* **Divisão é Multiplicação Inversa:** Não trate a divisão como uma regra nova. Ela é apenas a pergunta: 'Qual número eu multiplico para chegar a esse valor?'.
+
+Nós vamos agora resolver aqueles 40 exercícios. **É terminantemente proibido o uso de calculadoras.** Vocês vão sentir a carga cognitiva, vão sentir o cérebro esquentar. Ao organizar os colchetes e administrar essas 'dívidas', vocês estarão religando as sinapses do córtex pré-frontal e recuperando a nossa herança intelectual. Peguem seus lápis. Vamos ao treino!
+
+---
+
+### Nível 1: Lógica de Dívidas, Créditos e Deslocamentos (Soma e Subtração)
+*(Treine a visualização mental antes de calcular.)*
+
+### Nível 2: O Deslocamento de Valores (Multiplicação, Divisão e Regra de Sinais)
+*(A operação muda de tamanho e de direção.)*
+
+### Nível 3: A Convenção na Prática (Ordem das Operações sem Prioridade de Parênteses)
+*(Lembrete mental: a multiplicação e a divisão definem o valor antes de efetuarmos a soma/subtração)*
+
+21) $ -5 + 4 \cdot (-2) $
+
+22) $ 10 - (-6) \div (-3) $
+
+23) $ (-8) \cdot 2 - (-15) $
+
+24) $ 12 \div (-4) + 5 \cdot (-2) $
+
+25) $ -3 - (-4) \cdot (-5) $
+
+26) $ 20 + (-18) \div 6 $
+
+27) $ -7 \cdot (-2) + 14 \div (-7) $
+
+28) $ (-5) \cdot 3 - (-20) \div 4 $
+
+29) $ 15 - 2 \cdot (-4) + (-8) \div (-2) $
+
+30) $ -10 \div 5 - 4 \cdot (-3) $
+
+---
+
+### Nível 4: Combate à Atrofia Cognitiva (Ginástica Mental com Parênteses, Colchetes e Chaves)
+*(Todos os exercícios foram elaborados para resultar em números inteiros exatos)*
+
+31) $ -2 \cdot ( -5 + 8 ) $
+
+32) $ 10 - ( -4 - 6 ) \div (-2) $
+
+33) $ ( -12 + 4 ) \cdot ( -3 - (-1) ) $
+
+34) $ -5 + [ -3 \cdot ( 4 - 6 ) ] $
+
+35) $ 15 - [ -2 + ( -8 \div 4 ) ] \cdot (-3) $
+
+36) $ [ (-10) \cdot (-2) - 5 ] \div (-5) $
+
+37) $ - \left\{ 4 - [ -3 \cdot ( -2 + 5 ) ] \right\} $
+
+38) $ 20 \div \left\{ -2 \cdot [ -4 - (-6 + 1) ] \right\} + 3 $
+
+39) $ -3 \cdot \left\{ -5 + [ 12 \div (-3) - (-2) \cdot (-4) ] \right\} $
+
+40) $ \left\{ [ -15 \div ( -2 - 3 ) ] \cdot (-4) \right\} - [ - ( -8 + 2 ) ] $
+`
   }
 
 ]
@@ -1144,5 +1420,12 @@ export const lessonCategories: LessonCategory[] = [
       'diferenca-quadrados-fator-comum',
       'quadrados-perfeitos-ajustes',
     ],
+  },
+  {
+    id: 'cat-inteiros',
+    title: 'A Lógica dos Números Inteiros',
+    description: 'O peso e o alívio. A lógica oculta do "menos com menos" e a trincheira de defesa do seu cérebro.',
+    icon: '➖',
+    slugs: ['matematica-sinais-peso-alivio', 'regras-de-ouro-negativos', 'expressoes-numericas-trincheira'],
   },
 ]

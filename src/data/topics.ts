@@ -38,6 +38,7 @@ const COLOR_MAP: Record<string, Topic['color']> = {
   'cat-fracoes': 'rose',
   'cat-regra-de-tres': 'blue',
   'cat-simplificacao': 'green',
+  'cat-inteiros': 'orange',
 }
 
 // ── Builder ───────────────────────────────────────────────────────────────────
@@ -92,6 +93,9 @@ function buildTopics(): Topic[] {
 
   // Aulas de Regra de Três + Podcasts + Músicas de Proporção
   injectVideos('cat-regra-de-tres', ['vid-9', 'vid-10', 'vid-17', 'vid-18', 'vid-23', 'vid-24'])
+
+  // Aulas de Números Inteiros + Músicas + Podcasts
+  injectVideos('cat-inteiros', ['vid-26', 'vid-27', 'vid-28', 'vid-25', 'vid-29', 'vid-30', 'vid-31'])
 
   // ── Detectar vídeos órfãos e criar trilha "Laboratório de Vídeos" ──
   // Coleta todos os IDs que já foram injetados em alguma trilha
