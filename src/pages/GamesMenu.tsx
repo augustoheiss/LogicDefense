@@ -62,6 +62,29 @@ export function GamesMenu() {
           </div>
         </div>
 
+        {/* ── Logic Invaders card ── */}
+        <div className="game-card" style={{ marginTop: 24 }}>
+          <div className="game-card__thumb" style={{ background: 'linear-gradient(135deg, #070714 0%, #12082a 100%)' }}>
+            <span style={{ position: 'relative', zIndex: 1 }}>👾</span>
+          </div>
+          <div className="game-card__body">
+            <span className="game-card__tag" style={{ background: 'rgba(0,212,255,0.12)', color: '#00d4ff', border: '1px solid rgba(0,212,255,0.3)' }}>Arcade Shooter</span>
+            <h2 className="game-card__title">Logic Invaders</h2>
+            <p className="game-card__desc">
+              Retro-arcade meets EdTech. Alien ships descend carrying Math equations — your ammunition
+              is NUMBERS. Shoot the correct answer to destroy them. Shoot wrong? They absorb it and
+              get FASTER. No Game Overs — only Elastic Feedback.
+            </p>
+            <div className="game-card__footer">
+              <span className="game-card__badge">🚀 Cálculo mental reflexivo</span>
+              <span className="game-card__badge">🔄 Elastic Feedback</span>
+              <Link to="/jogos/logic-invaders" className="btn-primary">
+                ▶ Jogar agora
+              </Link>
+            </div>
+          </div>
+        </div>
+
         {/* ── Coming Soon ── */}
         <div
           style={{

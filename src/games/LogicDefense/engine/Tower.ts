@@ -37,8 +37,12 @@ export class Tower {
     this.totalCost += this.upgradeCost
     this.upgradeCost = this.type.cost * Math.pow(2, this.level - 1)
     this.range = this.type.range * (1 + 0.2 * (this.level - 1))
-    if (this.type.symbol === '÷') this.currentRate = Math.max(1, Math.floor(this.currentRate / 2))
-    if (this.type.symbol === '+') this.currentRate = Math.max(1, Math.floor(this.currentRate / 1.5))
+    // ALL towers get attack speed upgrade (+50%), ÷ gets double (+100%)
+    if (this.type.symbol === '÷') {
+      this.currentRate = Math.max(1, Math.floor(this.currentRate / 2))
+    } else {
+      this.currentRate = Math.max(1, Math.floor(this.currentRate / 1.5))
+    }
     if (onUpgrade) {
       const pts: Particle[] = []
       for (let i = 0; i < 15; i++) pts.push(new Particle(this.x, this.y, '#fff'))
@@ -47,7 +51,7 @@ export class Tower {
   }
 
   getDamage(): number {
-    if (this.type.symbol === '÷') return this.type.damage
+    // ALL towers (including ÷) gain +20% damage per level
     return this.type.damage * (1 + 0.2 * (this.level - 1))
   }
 

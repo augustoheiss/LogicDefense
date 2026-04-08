@@ -1,9 +1,11 @@
 import { useRef, useState, useCallback, useEffect } from 'react'
-import type { GameState, BuffType, MathProblem, GameStats } from '../types/game'
+import type { GameState, BuffType, MathProblem, GameStats, DifficultyMode } from '../types/game'
 import { Enemy } from '../engine/Enemy'
 import { Tower } from '../engine/Tower'
 import { Bullet } from '../engine/Bullet'
 import { Particle } from '../engine/Particle'
+import { Hero } from '../engine/Hero'
+import { Coin } from '../engine/Coin'
 import { TOWER_TYPES, BUFF_PHRASES, TOTAL_TIME, CANVAS_WIDTH, CANVAS_HEIGHT } from '../engine/constants'
 import {
   generateMapPaths,
@@ -44,6 +46,10 @@ export interface GameEngineState {
   phraseMessage: string
   // Modal
   showSaveModal: boolean
+  // ── NEW: Hero / Difficulty system ──────────────────────────
+  difficultyMode: DifficultyMode
+  heroCount: number
+  selectedHero: Hero | null
 }
 
 const initialStats: GameStats = {
@@ -54,52 +60,69 @@ const initialStats: GameStats = {
   errors: { '+': 0, '-': 0, 'x': 0, '÷': 0 },
 }
 
+function getHeroStartPositions(count: number): Array<{ x: number; y: number }> {
+  const cx = CANVAS_WIDTH / 2
+  const cy = CANVAS_HEIGHT / 2
+  if (count === 1) return [{ x: cx, y: cy }]
+  if (count === 2) return [{ x: cx - 65, y: cy }, { x: cx + 65, y: cy }]
+  return [{ x: cx, y: cy - 65 }, { x: cx - 75, y: cy + 45 }, { x: cx + 75, y: cy + 45 }]
+}
+
 export function useGameEngine(
   canvasRef: React.RefObject<HTMLCanvasElement | null>,
   playSound: (type: string) => void,
   initAudio: () => void,
 ) {
   // ── Mutable game object refs (no re-renders) ──────────────────────────
-  const towersRef = useRef<Tower[]>([])
-  const enemiesRef = useRef<Enemy[]>([])
-  const bulletsRef = useRef<Bullet[]>([])
+  const towersRef    = useRef<Tower[]>([])
+  const enemiesRef   = useRef<Enemy[]>([])
+  const bulletsRef   = useRef<Bullet[]>([])
   const particlesRef = useRef<Particle[]>([])
+  const heroesRef    = useRef<Hero[]>([])
+  const coinsRef     = useRef<Coin[]>([])
   const cinematicParticlesRef = useRef<Array<{ x: number; y: number; angle: number; dist: number; speed: number; char: string }>>([])
 
   // Mouse/touch
-  const mouseXRef = useRef(0)
-  const mouseYRef = useRef(0)
+  const mouseXRef    = useRef(0)
+  const mouseYRef    = useRef(0)
   const physicalXRef = useRef(0)
   const physicalYRef = useRef(0)
 
   // Game flow control refs
-  const isPausedRef = useRef(false)
-  const isGameOverRef = useRef(false)
-  const lastRotatedWaveRef = useRef(0)
-  const waitingForMathRef = useRef(false)
-  const isWaveTransitioningRef = useRef(false)
-  const spinConsumedRef = useRef(false)  // prevents double-fire from StrictMode/re-mounts
-  const lastAnswerCorrectRef = useRef(true)
+  const isPausedRef              = useRef(false)
+  const isGameOverRef            = useRef(false)
+  const lastRotatedWaveRef       = useRef(0)
+  const waitingForMathRef        = useRef(false)
+  const isWaveTransitioningRef   = useRef(false)
+  const spinConsumedRef          = useRef(false)
+  const lastAnswerCorrectRef     = useRef(true)
 
   // Math timer
   const mathTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  const timeLeftRef = useRef(TOTAL_TIME)
+  const timeLeftRef  = useRef(TOTAL_TIME)
 
   // AI mode refs
-  const aiModeRef = useRef(false)
+  const aiModeRef    = useRef(false)
   const stressModeRef = useRef(false)
 
   // Drag state
   const isDraggingGhostRef = useRef(false)
-  const movingTowerRef = useRef<Tower | null>(null)
+  const movingTowerRef     = useRef<Tower | null>(null)
 
   // Enemy spawn
   const totalEnemiesToSpawnRef = useRef(0)
-  const enemiesSpawnedRef = useRef(0)
-  const spawnFrameCounterRef = useRef(0)
+  const enemiesSpawnedRef      = useRef(0)
+  const spawnFrameCounterRef   = useRef(0)
 
   // Phrase queue
   const phraseQueueRef = useRef<string[]>([])
+
+  // ── Hero / Difficulty refs ────────────────────────────────────────────
+  const selectedHeroRef      = useRef<Hero | null>(null)
+  const difficultyModeRef    = useRef<DifficultyMode>('normal')
+  const spawnMultiplierRef   = useRef<number>(1)
+  const waveOffsetRef        = useRef<number>(0)
+  const heroCountRef         = useRef<number>(0)
 
   // ── React UI State ─────────────────────────────────────────────────────
   const [uiState, setUiState] = useState<GameEngineState>({
@@ -126,22 +149,25 @@ export function useGameEngine(
     timeLeft: TOTAL_TIME,
     phraseMessage: '',
     showSaveModal: false,
+    difficultyMode: 'normal',
+    heroCount: 0,
+    selectedHero: null,
   })
 
   // Refs that mirror state for use inside closures/RAF
-  const gameStateRef = useRef<GameState>('START')
-  const goldRef = useRef(150)
-  const livesRef = useRef(20)
-  const waveRef = useRef(0)
-  const goldMultiplierRef = useRef(1.0)
-  const totalCorrectRef = useRef(0)
-  const totalWrongRef = useRef(0)
-  const statsRef = useRef<GameStats>({ ...initialStats })
-  const selectedTowerIdxRef = useRef(-1)
+  const gameStateRef           = useRef<GameState>('START')
+  const goldRef                = useRef(150)
+  const livesRef               = useRef(20)
+  const waveRef                = useRef(0)
+  const goldMultiplierRef      = useRef(1.0)
+  const totalCorrectRef        = useRef(0)
+  const totalWrongRef          = useRef(0)
+  const statsRef               = useRef<GameStats>({ ...initialStats })
+  const selectedTowerIdxRef    = useRef(-1)
   const selectedExistingTowerRef = useRef<Tower | null>(null)
-  const gameSpeedRef = useRef(1)
-  const currentProblemRef = useRef<MathProblem | null>(null)
-  const currentBuffRef = useRef<BuffType>('cadeira')
+  const gameSpeedRef           = useRef(1)
+  const currentProblemRef      = useRef<MathProblem | null>(null)
+  const currentBuffRef         = useRef<BuffType>('cadeira')
 
   // Feedback message setter (passed from component via ref)
   const feedbackRef = useRef<((msg: string, color: string) => void) | null>(null)
@@ -173,30 +199,41 @@ export function useGameEngine(
 
   // ── Game Initialization ────────────────────────────────────────────────
   const initGame = useCallback(() => {
-    // ── Kill all active timers before touching any ref ────────────────────
     if (mathTimerRef.current) { clearInterval(mathTimerRef.current); mathTimerRef.current = null }
 
     generateMapPaths()
-    towersRef.current = []
-    enemiesRef.current = []
-    bulletsRef.current = []
-    particlesRef.current = []
+    towersRef.current            = []
+    enemiesRef.current           = []
+    bulletsRef.current           = []
+    particlesRef.current         = []
+    heroesRef.current            = []
+    coinsRef.current             = []
     cinematicParticlesRef.current = []
-    goldRef.current = 150
-    livesRef.current = 20
-    waveRef.current = 0
+
+    // Reset difficulty
+    heroesRef.current.forEach(h => h.selected = false)
+    selectedHeroRef.current    = null
+    difficultyModeRef.current  = 'normal'
+    spawnMultiplierRef.current = 1
+    waveOffsetRef.current      = 0
+    heroCountRef.current       = 0
+
+    goldRef.current          = 150
+    livesRef.current         = 20
+    waveRef.current          = 0
     goldMultiplierRef.current = 1.0
-    totalCorrectRef.current = 0
-    totalWrongRef.current = 0
-    statsRef.current = { ...initialStats }
-    gameStateRef.current = 'START'
-    isGameOverRef.current = false
-    isPausedRef.current = false
-    waitingForMathRef.current = false
-    isWaveTransitioningRef.current = false
-    spinConsumedRef.current = false
-    lastRotatedWaveRef.current = 0
+    totalCorrectRef.current  = 0
+    totalWrongRef.current    = 0
+    statsRef.current         = { ...initialStats }
+    gameStateRef.current     = 'START'
+    isGameOverRef.current    = false
+    isPausedRef.current      = false
+    waitingForMathRef.current         = false
+    isWaveTransitioningRef.current    = false
+    spinConsumedRef.current           = false
+    lastRotatedWaveRef.current        = 0
     resetMap()
+
     syncUiState({
       gameState: 'START',
       gold: 150,
@@ -209,8 +246,40 @@ export function useGameEngine(
       selectedTowerIdx: -1,
       selectedExistingTower: null,
       showSaveModal: false,
+      difficultyMode: 'normal',
+      heroCount: 0,
+      selectedHero: null,
     })
   }, [])
+
+  // ── Difficulty / Hero selection ────────────────────────────────────────
+  /**
+   * Called from HeroSelectionOverlay.
+   * Configures spawn multiplier + wave offset, spawns heroes, then starts SPIN.
+   */
+  const applyDifficulty = useCallback((count: 1 | 2 | 3) => {
+    let mode: DifficultyMode = 'normal'
+    let offset = 0
+    let multiplier = 1
+
+    if (count === 2) { mode = 'hardcore';  offset = 300;  multiplier = 3 }
+    if (count === 3) { mode = 'godmode';   offset = 1000; multiplier = 9 }
+
+    difficultyModeRef.current  = mode
+    waveOffsetRef.current      = offset
+    spawnMultiplierRef.current = multiplier
+    heroCountRef.current       = count
+
+    // Spawn heroes at symmetrical starting positions
+    heroesRef.current = getHeroStartPositions(count).map(p => new Hero(p.x, p.y))
+
+    syncUiState({ difficultyMode: mode, heroCount: count, selectedHero: null })
+
+    try { initAudio() } catch { /* audio failure is non-fatal */ }
+    gameStateRef.current = 'SPIN'
+    syncUiState({ gameState: 'SPIN' })
+    spinConsumedRef.current = false  // arm for the upcoming spin
+  }, [initAudio])
 
   // ── Buff / Phrase system ───────────────────────────────────────────────
   function applyBuff(buff: BuffType) {
@@ -237,14 +306,12 @@ export function useGameEngine(
 
   // ── SPIN trigger ───────────────────────────────────────────────────────
   const triggerSpin = useCallback(() => {
-    spinConsumedRef.current = false  // arm the guard for the upcoming spin
+    spinConsumedRef.current = false
     gameStateRef.current = 'SPIN'
     syncUiState({ gameState: 'SPIN' })
   }, [])
 
   const onSpinComplete = useCallback((buff: BuffType) => {
-    // Defense-in-depth: StrictMode mounts SpinEsfera twice in dev,
-    // firing onComplete twice. Only process the first call per spin.
     if (spinConsumedRef.current) return
     spinConsumedRef.current = true
     initAudio()
@@ -252,25 +319,19 @@ export function useGameEngine(
     startMathPhase()
   }, [])
 
-  // ── Wave Advance (single controlled entry point) ───────────────────────
+  // ── Wave Advance ───────────────────────────────────────────────────────
   function advanceWave() {
-    // Hard gate: only one wave transition at a time
     if (isWaveTransitioningRef.current) return
     isWaveTransitioningRef.current = true
     waitingForMathRef.current = false
 
     if (waveRef.current % 10 === 0) {
-      // Boss wave completed → mark rotation, then transition
       lastRotatedWaveRef.current = waveRef.current
       if (stressModeRef.current) {
-        // In stress mode: bypass CINEMATIC + SPIN components entirely.
-        // This avoids the React StrictMode double-useEffect race condition
-        // that was causing one math count to be lost per boss wave.
         triggerInstantBossTransition()
       } else {
         triggerCinematicRotation()
       }
-      // isWaveTransitioningRef released inside startMathPhase() after waveRef++
     } else {
       startMathPhase()
     }
@@ -278,7 +339,6 @@ export function useGameEngine(
 
   // ── Math Phase ─────────────────────────────────────────────────────────
   function startMathPhase() {
-    // wave % 10 cinematic rotation (not spin — spin already ran before this)
     if (waveRef.current > 0 && waveRef.current % 10 === 0 && lastRotatedWaveRef.current !== waveRef.current) {
       lastRotatedWaveRef.current = waveRef.current
       triggerCinematicRotation()
@@ -287,10 +347,11 @@ export function useGameEngine(
 
     gameStateRef.current = 'MATH'
     waveRef.current++
-    isWaveTransitioningRef.current = false  // release the transition lock
+    isWaveTransitioningRef.current = false
     syncUiState({ gameState: 'MATH', wave: waveRef.current })
 
-    const problem = generateMathProblem(waveRef.current)
+    // ← pass waveOffset for difficulty scaling
+    const problem = generateMathProblem(waveRef.current, waveOffsetRef.current)
     currentProblemRef.current = problem
     const questionText = buildQuestionText(problem)
     const options = generateOptions(problem.answer)
@@ -361,6 +422,7 @@ export function useGameEngine(
     }
 
     goldMultiplierRef.current = newMultiplier
+    // Math bonus gold goes directly to bank (not a coin — it's a phase reward, not loot)
     goldRef.current += earned
     statsRef.current.totalGold += earned
     lastAnswerCorrectRef.current = isCorrect && !isTimeout
@@ -407,13 +469,13 @@ export function useGameEngine(
 
   function spawnEnemies() {
     const wave = waveRef.current
+    // base count — spawn RATE is multiplied via spawnMultiplierRef (enemies per frame)
     if (wave % 10 === 0) {
-      const lastWaveCount = 10 + (wave - 1)
-      totalEnemiesToSpawnRef.current = lastWaveCount * 5
+      totalEnemiesToSpawnRef.current = (10 + (wave - 1)) * 5
     } else {
       totalEnemiesToSpawnRef.current = 10 + wave
     }
-    enemiesSpawnedRef.current = 0
+    enemiesSpawnedRef.current    = 0
     spawnFrameCounterRef.current = 0
   }
 
@@ -437,7 +499,6 @@ export function useGameEngine(
     cinematicParticlesRef.current = cParticles
 
     setTimeout(() => {
-      // Guard: if game was reset while cinematic was running, abort silently
       if (gameStateRef.current !== 'CINEMATIC') return
 
       const angle = Math.PI / 4
@@ -450,24 +511,15 @@ export function useGameEngine(
       towersRef.current.forEach(t => {
         const nx = cx + (t.x - cx) * cosA - (t.y - cy) * sinA
         const ny = cy + (t.x - cx) * sinA + (t.y - cy) * cosA
-        // Clamp to canvas bounds so towers on edges don't vanish after rotation
         t.x = Math.max(MARGIN, Math.min(CANVAS_WIDTH - MARGIN, nx))
         t.y = Math.max(MARGIN, Math.min(CANVAS_HEIGHT - MARGIN, ny))
       })
 
       cinematicParticlesRef.current = []
-
-      // After cinematic → trigger SPIN instead of manual buff selection
       triggerSpin()
     }, 1500)
   }
 
-  /**
-   * Stress-mode-only bypass: applies the map rotation and a random buff
-   * entirely inside the engine, skipping the CINEMATIC + SPIN React components.
-   * This eliminates the StrictMode double-useEffect race condition that was
-   * causing one math count to be lost per boss wave in stress mode.
-   */
   function triggerInstantBossTransition() {
     const angle = Math.PI / 4
     const cx = CANVAS_WIDTH / 2, cy = CANVAS_HEIGHT / 2
@@ -495,12 +547,12 @@ export function useGameEngine(
     const state = gameStateRef.current
     if (state === 'MATH' || state === 'START' || state === 'SPIN' || isGameOverRef.current || state === 'CINEMATIC') return
 
-    const wave = waveRef.current
-    const gold = goldRef.current
+    const wave  = waveRef.current
+    const gold  = goldRef.current
     const towers = towersRef.current
 
-    const baseTarget = 12 + Math.floor(wave / 10) * 5
-    const panicBonus = statsRef.current.livesLost * 20
+    const baseTarget  = 12 + Math.floor(wave / 10) * 5
+    const panicBonus  = statsRef.current.livesLost * 20
     const targetTowers = Math.min(baseTarget + panicBonus, 500)
 
     let builtSomething = false
@@ -527,8 +579,7 @@ export function useGameEngine(
       }
 
       if (spot) {
-        // Sniper proportion rule: last 5 slots of every 30-tower block → force Div (÷)
-        const posInBlock = towers.length % 30
+        const posInBlock  = towers.length % 30
         const mustBeSniper = posInBlock >= 25
 
         let typeToBuild = 0
@@ -569,7 +620,6 @@ export function useGameEngine(
       }
     }
 
-    // Relocate towers that ended up too far from any path segment after a map rotation
     const INEFFECTIVE_DIST = 350
     const rotatedPaths = getRotatedPaths()
     for (const tower of towers) {
@@ -612,7 +662,10 @@ export function useGameEngine(
     isDraggingGhostRef.current = false
     selectedExistingTowerRef.current = null
     movingTowerRef.current = null
-    syncUiState({ selectedTowerIdx: -1, selectedExistingTower: null })
+    // Also clear any hero selection
+    heroesRef.current.forEach(h => h.selected = false)
+    selectedHeroRef.current = null
+    syncUiState({ selectedTowerIdx: -1, selectedExistingTower: null, selectedHero: null })
   }, [])
 
   const upgradeSelectedTower = useCallback(() => {
@@ -647,6 +700,29 @@ export function useGameEngine(
     syncUiState({ gold: goldRef.current })
   }, [playSound, cancelSelection])
 
+  // ── Hero interactions ──────────────────────────────────────────────────
+  /** Upgrade the currently selected hero. */
+  const upgradeSelectedHero = useCallback(() => {
+    const hero = selectedHeroRef.current
+    if (!hero) return
+    if (goldRef.current < hero.upgradeCost) {
+      showFeedback('FALTA OURO!', 'red'); return
+    }
+    goldRef.current -= hero.upgradeCost
+    hero.upgrade(pts => { particlesRef.current.push(...pts) })
+    playSound('upgrade')
+    showFeedback('HERÓI EVOLUÍDO!', '#00d4ff')
+    // Force an object reference update so the panel re-renders
+    syncUiState({ gold: goldRef.current, selectedHero: hero })
+  }, [playSound])
+
+  /** Deselect any currently selected hero. */
+  const cancelHeroSelection = useCallback(() => {
+    heroesRef.current.forEach(h => h.selected = false)
+    selectedHeroRef.current = null
+    syncUiState({ selectedHero: null })
+  }, [])
+
   // ── System toggles ─────────────────────────────────────────────────────
   const toggleSpeed = useCallback(() => {
     const cur = gameSpeedRef.current
@@ -667,13 +743,16 @@ export function useGameEngine(
       gameSpeedRef.current = 6
       if (gameStateRef.current === 'MATH') resolveMath(true, false)
       if (gameStateRef.current === 'BUILD') startWaveCombat()
-      if (gameStateRef.current === 'START') triggerSpin()
+      if (gameStateRef.current === 'START') {
+        // Auto-apply normal difficulty and start
+        applyDifficulty(1)
+      }
       syncUiState({ stressMode: true, aiMode: true, gameSpeed: 6 })
     } else {
       gameSpeedRef.current = 1
       syncUiState({ stressMode: false, gameSpeed: 1 })
     }
-  }, [resolveMath, startWaveCombat])
+  }, [resolveMath, startWaveCombat, applyDifficulty])
 
   const toggleUiHidden = useCallback((hidden: boolean) => {
     syncUiState({ uiHidden: hidden })
@@ -697,12 +776,12 @@ export function useGameEngine(
     initGame()
   }, [initGame])
 
-  /** @deprecated — kept for backward compat, now delegates to triggerSaveModal */
+  /** @deprecated — kept for backward compat */
   const restartGame = useCallback(() => {
     triggerSaveModal()
   }, [triggerSaveModal])
 
-  // ── Canvas input handlers ──────────────────────────────────────────────
+  // ── Canvas Input Handlers ──────────────────────────────────────────────
   const updateMousePos = useCallback((e: MouseEvent | TouchEvent) => {
     const canvas = canvasRef.current
     if (!canvas) return
@@ -718,33 +797,83 @@ export function useGameEngine(
 
     const scaleW = window.innerWidth / 820
     const scaleH = window.innerHeight / 620
-    const scale = Math.min(scaleW, scaleH, 1)
+    const scale  = Math.min(scaleW, scaleH, 1)
 
     mouseXRef.current = (clientX - rect.left) / scale
     const touchOffset = (e as TouchEvent).touches ? 40 : 0
     mouseYRef.current = (clientY - rect.top) / scale - touchOffset
   }, [canvasRef])
 
+  /**
+   * handlePress — fires on mousedown / touchstart.
+   *
+   * Priority order:
+   *  1. Ghost drag (tower placement in progress)
+   *  2. Hero click → select hero
+   *  3. Tower click → show upgrade panel
+   *  4. Empty space + hero selected → RTS MOVE command (mobile tap-to-move)
+   *  5. Empty space → cancel all selections
+   */
   const handlePress = useCallback(() => {
     const state = gameStateRef.current
     if (state !== 'BUILD' && state !== 'COMBAT') return
 
+    // ── 1. Ghost tower drag ──────────────────────────────────────────────
     if (selectedTowerIdxRef.current > -1) { isDraggingGhostRef.current = true; return }
     if (movingTowerRef.current) return
 
     const mx = mouseXRef.current, my = mouseYRef.current
-    let clickedTower: Tower | null = null
-    for (const t of towersRef.current) {
-      if (Math.sqrt((t.x - mx) ** 2 + (t.y - my) ** 2) < 30) { clickedTower = t; break }
+
+    // ── 2. Hero click (radius 22px) ──────────────────────────────────────
+    let clickedHero: Hero | null = null
+    for (const hero of heroesRef.current) {
+      if (Math.hypot(hero.x - mx, hero.y - my) < 22) { clickedHero = hero; break }
+    }
+    if (clickedHero) {
+      heroesRef.current.forEach(h => h.selected = false)
+      clickedHero.selected = true
+      selectedHeroRef.current = clickedHero
+      // Deselect any tower
+      selectedExistingTowerRef.current = null
+      syncUiState({ selectedHero: clickedHero, selectedExistingTower: null })
+      return
     }
 
-    if (clickedTower) {
-      selectedExistingTowerRef.current = clickedTower
-      syncUiState({ selectedExistingTower: clickedTower })
-    } else {
-      cancelSelection()
+    // ── 3. Tower click (radius 30px) ──────────────────────────────────────
+    let clickedTower: Tower | null = null
+    for (const t of towersRef.current) {
+      if (Math.hypot(t.x - mx, t.y - my) < 30) { clickedTower = t; break }
     }
+    if (clickedTower) {
+      // Deselect heroes, select tower
+      heroesRef.current.forEach(h => h.selected = false)
+      selectedHeroRef.current = null
+      selectedExistingTowerRef.current = clickedTower
+      syncUiState({ selectedExistingTower: clickedTower, selectedHero: null })
+      return
+    }
+
+    // ── 4. Empty ground + hero selected → MOVE COMMAND ───────────────────
+    if (selectedHeroRef.current) {
+      selectedHeroRef.current.moveTo(mx, my)
+      // Hero stays selected (issue multiple commands without re-clicking)
+      return
+    }
+
+    // ── 5. Cancel all ────────────────────────────────────────────────────
+    cancelSelection()
   }, [cancelSelection])
+
+  /** Desktop right-click → issue move command to selected (or first) hero. */
+  const handleRightClick = useCallback((e: MouseEvent) => {
+    e.preventDefault()
+    const state = gameStateRef.current
+    if (state !== 'BUILD' && state !== 'COMBAT') return
+    updateMousePos(e)
+    const mx = mouseXRef.current, my = mouseYRef.current
+    const hero = selectedHeroRef.current ?? heroesRef.current[0] ?? null
+    if (hero) hero.moveTo(mx, my)
+  }, [updateMousePos])
 
   const handleRelease = useCallback(() => {
     const state = gameStateRef.current
@@ -796,16 +925,15 @@ export function useGameEngine(
     }
 
     if (state === 'COMBAT') {
+      // ── Spawn enemies (multiplied rate: N per frame) ──────────────────
       if (enemiesSpawnedRef.current < totalEnemiesToSpawnRef.current) {
-        spawnFrameCounterRef.current++
-        if (spawnFrameCounterRef.current >= 1) {
-          const baseHp = 30
+        const mult = spawnMultiplierRef.current
+        const toSpawn = Math.min(mult, totalEnemiesToSpawnRef.current - enemiesSpawnedRef.current)
+        for (let s = 0; s < toSpawn; s++) {
+          const baseHp  = 30
           const hpBonus = waveRef.current * (baseHp * 0.1)
-          const wave = waveRef.current
-          const isGolden = lastAnswerCorrectRef.current
-          enemiesRef.current.push(new Enemy(baseHp + hpBonus, isGolden, wave))
+          enemiesRef.current.push(new Enemy(baseHp + hpBonus, lastAnswerCorrectRef.current, waveRef.current))
           enemiesSpawnedRef.current++
-          spawnFrameCounterRef.current = 0
         }
       }
 
@@ -834,6 +962,7 @@ export function useGameEngine(
       }
     }
 
+    // ── Enemies ──────────────────────────────────────────────────────────
     enemiesRef.current.forEach(e => {
       e.update(() => {
         livesRef.current--
@@ -849,6 +978,7 @@ export function useGameEngine(
     })
     enemiesRef.current = enemiesRef.current.filter(e => e.active)
 
+    // ── Towers ───────────────────────────────────────────────────────────
     towersRef.current.forEach(t => {
       t.update(
         enemiesRef.current,
@@ -858,14 +988,24 @@ export function useGameEngine(
       )
     })
 
+    // ── Heroes ───────────────────────────────────────────────────────────
+    heroesRef.current.forEach(hero => {
+      hero.update(
+        enemiesRef.current,
+        bullet => { bulletsRef.current.push(bullet) },
+        playSound,
+        waveRef.current,
+      )
+    })
+
+    // ── Bullets → spawn Coins instead of direct gold ──────────────────
     const newParticles: Particle[] = []
     bulletsRef.current.forEach(b => {
       b.update(
         enemiesRef.current,
-        (_enemy, earned) => {
-          goldRef.current += earned
-          statsRef.current.totalGold += earned
-          syncUiState({ gold: goldRef.current })
+        (enemy, earned) => {
+          // Physical coin spawns at enemy death position — must be looted by hero
+          coinsRef.current.push(new Coin(enemy.x, enemy.y, earned))
         },
         goldMultiplierRef.current,
         newParticles,
@@ -874,6 +1014,19 @@ export function useGameEngine(
     })
     particlesRef.current.push(...newParticles)
     bulletsRef.current = bulletsRef.current.filter(b => b.active)
+
+    // ── Coins (magnetic loot + lifespan) ─────────────────────────────────
+    let goldChanged = false
+    coinsRef.current.forEach(coin => {
+      coin.update(heroesRef.current, value => {
+        goldRef.current          += value
+        statsRef.current.totalGold += value
+        goldChanged = true
+      })
+    })
+    coinsRef.current = coinsRef.current.filter(c => c.active)
+    if (goldChanged) syncUiState({ gold: goldRef.current })
+
     particlesRef.current.forEach(p => p.update())
     particlesRef.current = particlesRef.current.filter(p => p.life > 0)
   }
@@ -892,20 +1045,18 @@ export function useGameEngine(
     }
 
     const mx = mouseXRef.current, my = mouseYRef.current
-    const movingTower = movingTowerRef.current
+    const movingTower  = movingTowerRef.current
     const selectedTower = selectedExistingTowerRef.current
 
+    // Draw order: towers → enemies → heroes → bullets → particles → coins
     towersRef.current.forEach(t => {
-      t.draw(
-        ctx, mx, my,
-        t === selectedTower,
-        t === movingTower,
-        checkCollision,
-      )
+      t.draw(ctx, mx, my, t === selectedTower, t === movingTower, checkCollision)
     })
     enemiesRef.current.forEach(e => e.draw(ctx))
+    heroesRef.current.forEach(h => h.draw(ctx))
     bulletsRef.current.forEach(b => b.draw(ctx))
     particlesRef.current.forEach(p => p.draw(ctx))
+    coinsRef.current.forEach(c => c.draw(ctx))
 
     if (selectedTowerIdxRef.current > -1 && isDraggingGhostRef.current) {
       const type = TOWER_TYPES[selectedTowerIdxRef.current]
@@ -1012,7 +1163,7 @@ export function useGameEngine(
       if (!container) return
       const scaleW = window.innerWidth / 820
       const scaleH = window.innerHeight / 620
-      const scale = Math.min(scaleW, scaleH, 1)
+      const scale  = Math.min(scaleW, scaleH, 1)
       container.style.transform = `translate(-50%, -50%) scale(${scale})`
     }
     resizeCanvas()
@@ -1029,12 +1180,12 @@ export function useGameEngine(
   // ── Network handlers ───────────────────────────────────────────────────
   useEffect(() => {
     const onOffline = () => { isPausedRef.current = true }
-    const onOnline = () => { isPausedRef.current = false }
+    const onOnline  = () => { isPausedRef.current = false }
     window.addEventListener('offline', onOffline)
-    window.addEventListener('online', onOnline)
+    window.addEventListener('online',  onOnline)
     return () => {
       window.removeEventListener('offline', onOffline)
-      window.removeEventListener('online', onOnline)
+      window.removeEventListener('online',  onOnline)
     }
   }, [])
 
@@ -1061,6 +1212,11 @@ export function useGameEngine(
     upgradeSelectedTower,
     moveSelectedTower,
     sellSelectedTower,
+    // Hero management (NEW)
+    applyDifficulty,
+    upgradeSelectedHero,
+    cancelHeroSelection,
+    handleRightClick,
     // System
     toggleSpeed,
     toggleAIMode,

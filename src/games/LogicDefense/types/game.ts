@@ -1,4 +1,5 @@
 export type BuffType = 'amor' | 'odio' | 'cadeira'
+export type DifficultyMode = 'normal' | 'hardcore' | 'godmode'
 
 export type GameState = 'START' | 'SPIN' | 'MATH' | 'BUILD' | 'COMBAT' | 'CINEMATIC'
 

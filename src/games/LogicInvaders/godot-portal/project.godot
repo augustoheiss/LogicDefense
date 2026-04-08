@@ -1,0 +1,78 @@
+; Logic Invaders — Godot 4 Project Configuration
+; ==========================================================================
+; CRITICAL RENDERER SETTING: gl_compatibility (OpenGL 3.0 / WebGL 2.0)
+; Forward+ or Mobile renderer will produce a BLACK SCREEN on web exports.
+; ==========================================================================
+; Target Platforms: Web Browser (embedded in React/Vite portal) + Android (Play Store)
+; Network Layer   : WebSocketMultiplayerPeer  (raw UDP/ENet blocked in browsers)
+; Stretch Mode    : canvas_items + expand  (responsive across all screen sizes)
+; ==========================================================================
+
+config_version=5
+
+[application]
+
+config/name="Logic Invaders"
+config/description="A real-time multiplayer math shooter. Destroy invaders by firing the correct answer."
+run/main_scene="res://scenes/menu/MainMenu.tscn"
+config/features=PackedStringArray("4.3", "gl_compatibility")
+config/icon="res://icon.svg"
+
+[autoload]
+
+; Register NetworkManager as a singleton Autoload.
+; The asterisk (*) prefix means Godot instantiates it as a Node (not a GDScript resource).
+NetworkManager="*res://autoloads/network_manager.gd"
+
+[display]
+
+; CRITICAL: canvas_items stretch mode preserves pixel density on all screen sizes.
+; "expand" aspect allows the viewport to grow beyond the base resolution responsively.
+window/stretch/mode="canvas_items"
+window/stretch/aspect="expand"
+
+; Base resolution — matches typical mobile portrait and web embed minimum.
+window/size/viewport_width=480
+window/size/viewport_height=854
+
+; Allow resizing (required for web embed responsiveness).
+window/size/resizable=true
+
+[rendering]
+
+; CRITICAL: Must be "gl_compatibility" for WebGL 2.0 / Android support.
+; Do NOT change to "forward_plus" or "mobile" — web export will render black.
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
+
+; Disable MSAA (compatibility renderer limitation — use post-process AA if needed).
+anti_aliasing/quality/msaa_2d=0
+anti_aliasing/quality/msaa_3d=0
+
+[network]
+
+; Enable MultiplayerAPI for scene-based multiplayer.
+; WebSocketMultiplayerPeer is assigned at runtime via NetworkManager.
+limits/debugger/max_errors_per_second=100
+
+[gdscript]
+
+; Enable all GDScript warnings to enforce strict typing discipline.
+; Required by the GodotGameplayScripter coding standard.
+warnings/enable_all_warnings=true
+warnings/return_value_discarded=false
+
+[physics]
+
+; 2D physics settings for Logic Invaders (top-down shooter geometry).
+common/physics_ticks_per_second=60
+2d/default_gravity=0
+
+[layer_names]
+
+; Named physics collision layers for Logic Invaders.
+2d_physics/layer_1="player_ship"
+2d_physics/layer_2="player_projectile"
+2d_physics/layer_3="invader"
+2d_physics/layer_4="invader_projectile"
+2d_physics/layer_5="shield_wall"

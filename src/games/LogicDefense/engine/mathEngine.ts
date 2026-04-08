@@ -1,11 +1,12 @@
 import type { MathProblem } from '../types/game'
 
-export function generateMathProblem(wave: number): MathProblem {
+export function generateMathProblem(wave: number, waveOffset: number = 0): MathProblem {
+  const effectiveWave = wave + waveOffset
   let operations: Array<'+' | '-' | 'x' | '÷'> = ['+', '-', 'x']
-  if (wave % 10 === 0) operations = ['÷']
+  if (effectiveWave % 10 === 0) operations = ['÷']
 
   const op = operations[Math.floor(Math.random() * operations.length)]
-  const difficulty = Math.ceil(wave / 2)
+  const difficulty = Math.ceil(effectiveWave / 2)
   let n1: number, n2: number, answer: number
 
   if (op === '÷') {
