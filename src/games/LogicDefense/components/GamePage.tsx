@@ -292,7 +292,7 @@ function HeroPanel({ hero, gold, onUpgrade, onClose }: HeroPanelProps) {
 // GamePage
 // ─────────────────────────────────────────────────────────────────────────────
 export function GamePage({ onReset }: GamePageProps = {}) {
-  const canvasRef      = useRef<HTMLCanvasElement | null>(null)
+  const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const feedbackMsgRef = useRef<FeedbackHandle | null>(null)
 
   const { initAudio, playSound, toggleMute, setAudioMode, pauseMusic, resumeMusic } = useAudio()
@@ -302,7 +302,6 @@ export function GamePage({ onReset }: GamePageProps = {}) {
   const {
     uiState,
     feedbackRef,
-    triggerSpin,
     onSpinComplete,
     startWaveCombat,
     resolveMath,
@@ -359,12 +358,12 @@ export function GamePage({ onReset }: GamePageProps = {}) {
   // Pause/resume BGM on network drop
   useEffect(() => {
     const onOffline = () => pauseMusic()
-    const onOnline  = () => resumeMusic()
+    const onOnline = () => resumeMusic()
     window.addEventListener('offline', onOffline)
-    window.addEventListener('online',  onOnline)
+    window.addEventListener('online', onOnline)
     return () => {
       window.removeEventListener('offline', onOffline)
-      window.removeEventListener('online',  onOnline)
+      window.removeEventListener('online', onOnline)
     }
   }, [pauseMusic, resumeMusic])
 
@@ -465,7 +464,7 @@ export function GamePage({ onReset }: GamePageProps = {}) {
             onToggleSpeed={toggleSpeed}
             onToggleAI={toggleAIMode}
             onToggleGhost={() => toggleUiHidden(!uiHidden)}
-            onToggleMute={() => {}}
+            onToggleMute={() => { }}
             onToggleStress={toggleStressMode}
             onFullscreen={handleFullscreen}
             onSaveRound={triggerSaveModal}
