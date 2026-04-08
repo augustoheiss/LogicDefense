@@ -40,8 +40,8 @@ const WAVE_MILESTONE_FLASH_FRAMES  = 30;  // frames for the teal milestone flash
 const WRONG_BUBBLE_MULTIPLIER = 1.35;
 const LASER_MODE_MS = 5000;
 const LASER_DAMAGE_PER_FRAME = 100;
-const BUBBLE_ORBIT_R = 52;
-const BUBBLE_HIT_R = 20;
+const BUBBLE_ORBIT_R = 80;   // distance from invader centre → bubbles orbit further apart
+const BUBBLE_HIT_R   = 40;   // visual + collision radius (2× original 20px)
 const SHAKE_FRAMES = 22;
 const ENEMY_PROJECTILE_SPEED = 3.5;
 const ENEMY_SHOOT_COOLDOWN_MS = 4000;      // each invader shoots every ~4s
@@ -900,25 +900,25 @@ function renderFrame(ctx: CanvasRenderingContext2D, state: GameState, ts: number
       const { bx, by } = bubblePos(inv, bubble);
 
       ctx.save();
-      ctx.shadowColor = BNC; ctx.shadowBlur = 18;
+      ctx.shadowColor = BNC; ctx.shadowBlur = 26;
       // Holographic gradient fill
-      const hlGrad = ctx.createRadialGradient(bx, by-4, 2, bx, by, BUBBLE_HIT_R);
+      const hlGrad = ctx.createRadialGradient(bx, by-6, 4, bx, by, BUBBLE_HIT_R);
       hlGrad.addColorStop(0, 'rgba(0,212,255,0.28)');
       hlGrad.addColorStop(1, 'rgba(0,80,140,0.15)');
       ctx.fillStyle = hlGrad;
       ctx.beginPath(); ctx.arc(bx, by, BUBBLE_HIT_R, 0, Math.PI*2); ctx.fill();
       // Outer ring
-      ctx.strokeStyle = BNC; ctx.lineWidth = 1.5;
+      ctx.strokeStyle = BNC; ctx.lineWidth = 2.5;
       ctx.beginPath(); ctx.arc(bx, by, BUBBLE_HIT_R, 0, Math.PI*2); ctx.stroke();
       // Inner scan-line ring
       ctx.globalAlpha = 0.4;
-      ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 0.8;
-      ctx.beginPath(); ctx.arc(bx, by, BUBBLE_HIT_R - 4, 0, Math.PI*2); ctx.stroke();
+      ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1.2;
+      ctx.beginPath(); ctx.arc(bx, by, BUBBLE_HIT_R - 8, 0, Math.PI*2); ctx.stroke();
       ctx.globalAlpha = 1;
-      // Answer number
-      ctx.shadowBlur = 8; ctx.shadowColor = BNC;
+      // Answer number — 2× font size for easy reading and tapping
+      ctx.shadowBlur = 12; ctx.shadowColor = BNC;
       ctx.fillStyle = '#e0f8ff';
-      ctx.font = `bold 13px 'Courier New', monospace`;
+      ctx.font = `bold 26px 'Courier New', monospace`;
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       ctx.fillText(String(bubble.value), bx, by);
       // Dashed connector to invader centre
