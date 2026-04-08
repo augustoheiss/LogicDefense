@@ -110,4 +110,6 @@ export interface GameState {
   lastBulletTime: number;
   lastInvaderSpawn: number;
   spawnIntervalMs: number;    // dynamic — decreases on Difficulty Surge
+  killCount: number;          // total kills this session (for natural wave advancement)
+  lastWaveAdvanceTs: number;  // performance.now() timestamp of last natural wave advance
 }

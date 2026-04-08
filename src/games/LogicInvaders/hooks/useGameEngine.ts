@@ -31,6 +31,12 @@ const RECOVERY_PER_KILL     = 0.12;        // difficulty drop per Math Kill
 const RECOVERY_SPAWN_RESTORE = 120;        // ms restored to spawn interval per kill
 const RECOVERY_FLASH_FRAMES = 22;          // frames for cyan recovery flash
 const SPEED_LERP_RATE        = 0.04;       // per-frame lerp toward target speed (smooth)
+// ── Natural Wave Progression ────────────────────────────────────
+const WAVE_ADVANCE_KILLS = 12;             // destroy this many invaders → natural wave up
+const WAVE_ADVANCE_MS    = 28_000;        // OR survive this many ms → natural wave up
+const NATURAL_WAVE_DIFFICULTY_STEP = 0.15; // lighter than surge (+0.25)
+const NATURAL_WAVE_SPAWN_RESTORE   = 80;  // partial spawn interval restore on natural advance
+const WAVE_MILESTONE_FLASH_FRAMES  = 30;  // frames for the teal milestone flash
 const WRONG_BUBBLE_MULTIPLIER = 1.35;
 const LASER_MODE_MS = 5000;
 const LASER_DAMAGE_PER_FRAME = 100;
@@ -90,6 +96,8 @@ function makeInitialState(): GameState {
     lastBulletTime: 0,
     lastInvaderSpawn: 0,
     spawnIntervalMs: INITIAL_SPAWN_INTERVAL_MS,
+    killCount: 0,
+    lastWaveAdvanceTs: 0,   // will be set when game starts
   };
 }
 
@@ -148,6 +156,47 @@ function spawnModifierHitEffect(state: GameState, x: number, y: number, mod: Sco
     id: state.nextId++, x, y: y - 28,
     vx: 0, vy: -2, life: 1,
     color, size: 20, text: mod.label,
+  });
+}
+
+// ─── Natural Wave Progression ────────────────────────────────
+function triggerNaturalWave(state: GameState, now: number): void {
+  // Advance wave (uncapped)
+  state.wave += 1;
+
+  // Lighter difficulty step than a Surge — skill still matters, but time does too
+  state.difficultyMultiplier = parseFloat(
+    (state.difficultyMultiplier + NATURAL_WAVE_DIFFICULTY_STEP).toFixed(2)
+  );
+
+  // Tighten spawn interval (less aggressive than a Surge)
+  state.spawnIntervalMs = Math.max(
+    MIN_SPAWN_INTERVAL_MS,
+    state.spawnIntervalMs - NATURAL_WAVE_SPAWN_RESTORE
+  );
+
+  // Reset progression counters
+  state.killCount = 0;
+  state.lastWaveAdvanceTs = now;
+
+  // ── Milestone visual: teal flash + "ONDA X INICIADA" particle banner ──
+  state.player.recoveryFlashTimer = WAVE_MILESTONE_FLASH_FRAMES;
+
+  // Big centred wave title
+  state.particles.push({
+    id: state.nextId++,
+    x: CANVAS_W / 2, y: CANVAS_H / 2 - 20,
+    vx: 0, vy: -1.0, life: 1,
+    color: '#00ffcc', size: 22,
+    text: `▶ ONDA ${state.wave} INICIADA`,
+  });
+  // Sub-label with new difficulty
+  state.particles.push({
+    id: state.nextId++,
+    x: CANVAS_W / 2, y: CANVAS_H / 2 + 14,
+    vx: 0, vy: -0.7, life: 1,
+    color: '#aaffee', size: 13,
+    text: `DIFICULDADE x${state.difficultyMultiplier.toFixed(2)}`,
   });
 }
 
@@ -291,6 +340,7 @@ function destroyInvader(
   spawnExplosion(state, cx, cy, inv.color, count, `+${bonus}`);
   state.score += bonus + Math.floor(state.wave * 10);
   state.invaders.splice(ii, 1);
+  state.killCount++;  // ── natural progression counter
 
   if (isMathKill) {
     state.player.laserModeTimer = LASER_MODE_MS;
@@ -1137,6 +1187,27 @@ export function useGameEngine(
       // ── Tick recovery flash timer ──────────────────────────────
       if (state.player.recoveryFlashTimer > 0) state.player.recoveryFlashTimer--;
 
+      // ───────────────────────────────────────────────────────
+      // ── NATURAL WAVE PROGRESSION (time + kills) ───────────────
+      // Triggers even if the player is hitting every equation perfectly.
+      // Stacks ON TOP of Penalty Surges when enemies escape.
+      // ───────────────────────────────────────────────────────
+      const nowMs = performance.now();
+      const enoughKills = state.killCount >= WAVE_ADVANCE_KILLS;
+      // Guard: don't advance on the very first frame (lastWaveAdvanceTs === 0)
+      const enoughTime  = state.lastWaveAdvanceTs > 0
+        && (nowMs - state.lastWaveAdvanceTs) >= WAVE_ADVANCE_MS;
+
+      if (enoughKills || enoughTime) {
+        triggerNaturalWave(state, nowMs);
+        // Report updated wave to React
+        if (state.wave !== lastReportedWave.current) {
+          lastReportedWave.current = state.wave;
+          options.onWaveChange(state.wave);
+        }
+      }
+
+
       // Move invaders + enemy shooting + ENDLESS: bottom crossing = Difficulty Surge
       const now = performance.now();
       for (let ii = state.invaders.length - 1; ii >= 0; ii--) {
@@ -1251,7 +1322,9 @@ export function useGameEngine(
     starfield = [];
     const fresh = makeInitialState();
     fresh.status = 'playing';
-    fresh.lastInvaderSpawn = performance.now() - INITIAL_SPAWN_INTERVAL_MS + 900;
+    const now = performance.now();
+    fresh.lastInvaderSpawn = now - INITIAL_SPAWN_INTERVAL_MS + 900;
+    fresh.lastWaveAdvanceTs = now;   // seed the natural wave timer
     stateRef.current = fresh;
     lastReportedScore.current = -1;
     lastReportedWave.current = 1;
