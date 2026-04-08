@@ -219,7 +219,12 @@ export function LogicInvadersGame() {
           height={CANVAS_H}
           tabIndex={0}
           aria-label="Logic Invaders — canvas do jogo"
-          style={{ cursor: isPlaying ? 'crosshair' : 'default' }}
+          style={{
+            cursor: isPlaying ? 'crosshair' : 'default',
+            touchAction: 'none',      // ← CRITICAL: stops browser swipe-scroll intercepting pointer events
+            userSelect: 'none',       // ← prevents text-selection drag on mobile
+            WebkitUserSelect: 'none', // ← Safari
+          }}
         />
 
         {/* IDLE overlay */}

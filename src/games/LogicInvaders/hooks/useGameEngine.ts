@@ -953,7 +953,12 @@ export function useGameEngine(
   const lastReportedScore = useRef(-1);
   const lastReportedWave = useRef(1);
   const lastLaserActive = useRef(false);
-  const pointerHeldRef = useRef<() => boolean>(() => false);
+  // ── Mobile/touch input state ─────────────────────────────────
+  // targetX: canvas-space X the player ship should smoothly track
+  // isFiring: true while any pointer is held (finger or mouse)
+  const touchInputRef = useRef({ targetX: -1, isFiring: false });
+  // Legacy compat — kept so existing pHeld check in game loop still compiles
+  const pointerHeldRef = useRef<() => boolean>(() => touchInputRef.current.isFiring);
 
   // ── Keyboard input ────────────────────────────────────────
   useEffect(() => {
@@ -1016,30 +1021,36 @@ export function useGameEngine(
       if (state.status !== 'playing') return;
       canvas!.setPointerCapture(e.pointerId);
       const { cx, cy } = toCanvasPoint(e.clientX, e.clientY);
-      if (!tryBubbleHit(cx, cy)) {
-        pointerHeld = true;
-        fireBullet(state);
-      }
+      // Try bubble hit first — if it hits, do NOT start firing/moving
+      if (tryBubbleHit(cx, cy)) return;
+      // Set the tracking target (do NOT teleport — lerp handles movement)
+      touchInputRef.current.targetX = cx - PLAYER_W / 2;
+      touchInputRef.current.isFiring = true;
+      pointerHeld = true;   // keep legacy flag in sync
     }
     function onPointerMove(e: PointerEvent) {
       const state = stateRef.current;
       if (!pointerHeld || state.status !== 'playing') return;
       const { cx } = toCanvasPoint(e.clientX, e.clientY);
-      state.player.x = Math.max(0, Math.min(CANVAS_W - PLAYER_W, cx - PLAYER_W / 2));
+      // Only update the TARGET — the game loop lerps the player toward it
+      touchInputRef.current.targetX = cx - PLAYER_W / 2;
     }
-    function onPointerUp(_e: PointerEvent) { pointerHeld = false; }
+    function onPointerUp(_e: PointerEvent) {
+      pointerHeld = false;
+      touchInputRef.current.isFiring = false;
+    }
 
-    pointerHeldRef.current = () => pointerHeld;
+    pointerHeldRef.current = () => touchInputRef.current.isFiring;
 
     canvas.addEventListener('pointerdown', onPointerDown);
     canvas.addEventListener('pointermove', onPointerMove);
-    canvas.addEventListener('pointerup', onPointerUp);
+    canvas.addEventListener('pointerup',     onPointerUp);
     canvas.addEventListener('pointercancel', onPointerUp);
     canvas.addEventListener('contextmenu', (e) => e.preventDefault());
     return () => {
       canvas.removeEventListener('pointerdown', onPointerDown);
       canvas.removeEventListener('pointermove', onPointerMove);
-      canvas.removeEventListener('pointerup', onPointerUp);
+      canvas.removeEventListener('pointerup',     onPointerUp);
       canvas.removeEventListener('pointercancel', onPointerUp);
     };
   }, [canvasRef]);
@@ -1069,13 +1080,21 @@ export function useGameEngine(
     if (state.status === 'playing') {
       const dtMs = 16.67;
 
-      // Player movement
+      // ── Player movement ──────────────────────────────────────
+      // Keyboard: instant directional movement
       if (state.keys.has('ArrowLeft') || state.keys.has('KeyA'))
         state.player.x = Math.max(0, state.player.x - PLAYER_SPEED);
       if (state.keys.has('ArrowRight') || state.keys.has('KeyD'))
         state.player.x = Math.min(CANVAS_W - PLAYER_W, state.player.x + PLAYER_SPEED);
 
-      // Laser auto-damage (Task 4 carry-over)
+      // Touch/pointer: smooth lerp toward finger position (18% per frame ≈ ~6 frames to close gap)
+      const touchIn = touchInputRef.current;
+      if (touchIn.isFiring && touchIn.targetX >= 0) {
+        const clampedTarget = Math.max(0, Math.min(CANVAS_W - PLAYER_W, touchIn.targetX));
+        state.player.x += (clampedTarget - state.player.x) * 0.18;
+      }
+
+      // ── Laser auto-damage ────────────────────────────────────
       if (state.player.laserModeTimer > 0) {
         const beamX = state.player.x + PLAYER_W / 2;
         for (let ii = state.invaders.length - 1; ii >= 0; ii--) {
@@ -1087,10 +1106,10 @@ export function useGameEngine(
           }
         }
       } else {
-        // Normal continuous fire
+        // Continuous fire: space, OR touch held — fires regardless of whether ship is still moving
         const spaceHeld = state.keys.has('Space');
-        const pHeld = pointerHeldRef.current?.() ?? false;
-        if (spaceHeld || pHeld) fireBullet(state);
+        const touchFiring = touchIn.isFiring;
+        if (spaceHeld || touchFiring) fireBullet(state);
       }
 
       // Timers
