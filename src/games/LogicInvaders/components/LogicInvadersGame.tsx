@@ -4,6 +4,7 @@
 // ============================================================
 import { useRef, useState, useCallback, useMemo, useEffect } from 'react';
 import { useGameEngine, CANVAS_W, CANVAS_H } from '../hooks/useGameEngine';
+import { formatScore } from '../utils/formatScore';
 import type { LeaderboardEntry } from '../types';
 
 const LEADERBOARD_KEY = 'logic_invaders_leaderboard';
@@ -56,29 +57,29 @@ function LeaderboardTable({ entries }: { entries: LeaderboardEntry[] }) {
     );
   }
   return (
-    <div className="li-lb-table">
-      <div className="li-lb-header">
-        <span>#</span>
-        <span>Nome</span>
-        <span>Pontos</span>
-        <span>Onda</span>
-        <span>Data</span>
-      </div>
-      {entries.map((e, i) => (
-        <div
-          key={i}
-          className={`li-lb-row ${i === 0 ? 'li-lb-row--gold' : i === 1 ? 'li-lb-row--silver' : i === 2 ? 'li-lb-row--bronze' : ''}`}
-        >
-          <span className="li-lb-rank">
-            {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `#${i + 1}`}
-          </span>
-          <span className="li-lb-name">{e.name}</span>
-          <span className="li-lb-score">{e.score.toLocaleString('pt-BR')}</span>
-          <span className="li-lb-wave">Onda {e.wave}</span>
-          <span className="li-lb-date">{new Date(e.date).toLocaleDateString('pt-BR')}</span>
+      <div className="li-lb-table">
+        <div className="li-lb-header">
+          <span>#</span>
+          <span>Nome</span>
+          <span>Pontos</span>
+          <span>Onda</span>
+          <span>Data</span>
         </div>
-      ))}
-    </div>
+        {entries.map((e, i) => (
+          <div
+            key={i}
+            className={`li-lb-row ${i === 0 ? 'li-lb-row--gold' : i === 1 ? 'li-lb-row--silver' : i === 2 ? 'li-lb-row--bronze' : ''}`}
+          >
+            <span className="li-lb-rank">
+              {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `#${i + 1}`}
+            </span>
+            <span className="li-lb-name">{e.name}</span>
+            <span className="li-lb-score">{formatScore(e.score)}</span>
+            <span className="li-lb-wave">Onda {e.wave}</span>
+            <span className="li-lb-date">{new Date(e.date).toLocaleDateString('pt-BR')}</span>
+          </div>
+        ))}
+      </div>
   );
 }
 
@@ -186,7 +187,7 @@ export function LogicInvadersGame() {
         <div className="li-hud">
           <div className="li-hud-stat">
             <span className="li-hud-label">PONTOS</span>
-            <span className="li-hud-value li-hud-value--cyan">{score.toLocaleString('pt-BR')}</span>
+            <span className="li-hud-value li-hud-value--cyan">{formatScore(score)}</span>
           </div>
           <div className="li-hud-stat">
             <span className="li-hud-label">ONDA</span>
@@ -296,7 +297,7 @@ export function LogicInvadersGame() {
             <div className="li-save-score-display">
               <div className="li-save-stat">
                 <span className="li-save-stat-label">PONTOS</span>
-                <span className="li-save-stat-value li-glow-cyan">{score.toLocaleString('pt-BR')}</span>
+                <span className="li-save-stat-value li-glow-cyan">{formatScore(score)}</span>
               </div>
               <div className="li-save-stat">
                 <span className="li-save-stat-label">ONDA</span>
@@ -344,7 +345,7 @@ export function LogicInvadersGame() {
 
             {savedEntry && (
               <div className="li-lb-saved-banner">
-                ✅ Pontuação salva! <strong>{savedEntry.name}</strong> — {savedEntry.score.toLocaleString('pt-BR')} pts
+                ✅ Pontuação salva! <strong>{savedEntry.name}</strong> — {formatScore(savedEntry.score)} pts
               </div>
             )}
 

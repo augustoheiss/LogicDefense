@@ -8,6 +8,7 @@
 import { useRef, useEffect, useCallback } from 'react';
 import type { GameState, Invader, AnswerBubble, ScoreModifier } from '../types';
 import { generateEquation, generateAnswerBubbles } from '../utils/mathEngine';
+import { formatScore } from '../utils/formatScore';
 
 // ─── Constants ───────────────────────────────────────────────
 const CANVAS_W = 700;
@@ -1211,18 +1212,19 @@ export function useGameEngine(
           if (mod.type === 'buff') {
             state.score = state.score * mod.factor;
           } else {
-            state.score = Math.floor(state.score / mod.factor);
+            // Allow floating-point division — score can shrink to fractions (idle-game style)
+            state.score = state.score / mod.factor;
           }
           const delta = state.score - before;
           spawnModifierHitEffect(state, pcx, pcy, mod);
-          // Score label
+          // Floating delta label — use formatScore so it never overflows the canvas
           state.particles.push({
             id: state.nextId++,
             x: pcx, y: pcy - 50,
             vx: 0, vy: -1.8, life: 1,
             color: mod.type === 'buff' ? '#00ff88' : '#ff4444',
             size: 15,
-            text: `${delta >= 0 ? '+' : ''}${delta.toLocaleString('pt-BR')}`,
+            text: `${delta >= 0 ? '+' : ''}${formatScore(delta)}`,
           });
           state.player.hitFlash = PLAYER_HIT_FLASH_FRAMES;
           state.enemyProjectiles.splice(i, 1);
