@@ -48,7 +48,7 @@ function buildAvailableMonths(rows: TableRow[]): string[] {
 /** Most recent month that has any revenue row, falling back to current month. */
 function defaultMonth(rows: TableRow[]): string {
   const last = rows
-    .filter((r) => r.entryType !== 'deposit')
+    .filter((r) => r.entryType !== 'deposit' && r.entryType !== 'waiver')
     .map((r) => r.date.slice(0, 7))
     .sort()
     .reverse()[0];
@@ -126,13 +126,15 @@ export function TableEditor({
   const [chartView,    setChartView]    = useState<'history' | 'projection'>('history');
 
   // ── Derived rows ────────────────────────────────────────────────────────────
+  // Revenue rows exclude both deposits and waiver ledger entries.
+  // computeMetrics receives ALL rows so it can locate waiver rows internally.
   const revenueRows = useMemo(
-    () => table.rows.filter((r) => r.entryType !== 'deposit'),
+    () => table.rows.filter((r) => r.entryType !== 'deposit' && r.entryType !== 'waiver'),
     [table.rows],
   );
   const metrics = useMemo(
-    () => computeMetrics(revenueRows, table.goals.weeklyGoals),
-    [revenueRows, table.goals.weeklyGoals],
+    () => computeMetrics(table.rows, table.goals.weeklyGoals),
+    [table.rows, table.goals.weeklyGoals],
   );
 
   // ── Global month selector ───────────────────────────────────────────────────

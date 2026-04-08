@@ -14,13 +14,23 @@ export interface GoalProfile {
 export interface TableRow {
   id: string;
   date: string;        // "YYYY-MM-DD"
-  value: number;       // R$ amount; 0 = rest day (skipped in averages)
+  /**
+   * Meaning depends on entryType:
+   *   'revenue'  → R$ earned (0 = rest day, skipped in averages)
+   *   'deposit'  → R$ invested
+   *   'waiver'   → number of consecutive days justified/excused (e.g. 7 = one week)
+   */
+  value: number;
   description?: string;
   /**
-   * Distinguishes revenue entries (default) from investment deposits.
+   * Distinguishes the kind of ledger entry:
+   *   'revenue'  — operational income (default for legacy rows)
+   *   'deposit'  — investment / aporte
+   *   'waiver'   — excused downtime period; value = days justified
+   *                date = start of the period; description = reason
    * Omitted on legacy rows — treated as 'revenue' for full backward compatibility.
    */
-  entryType?: 'revenue' | 'deposit';
+  entryType?: 'revenue' | 'deposit' | 'waiver';
 }
 
 export interface TableGoals {
@@ -96,24 +106,35 @@ export interface TableMetrics {
   globalAnnualAvg: number;
   /**
    * Strict cumulative goal balance from the first recorded entry to the
-   * current calendar week (inclusive), penalising every empty week at the
-   * full weeklyGoal rate. Expressed in BRL.
+   * current calendar week (inclusive), with waiver credits applied.
    * Positive = excedente; negative = dívida pendente.
    */
   globalGoalBalance: number;
   /**
    * The exact number of real Mon–Sun calendar weeks that have elapsed since
    * the first recorded entry up to (and including) the current week.
-   * Counted by the same strict loop as globalGoalBalance — always consistent.
    */
   totalElapsedWeeks: number;
   /**
-   * Time Bank balance expressed in *weeks*.
-   *   paidWeeks    = totalHistoricalRevenue / effectiveWeeklyGoal
-   *   elapsedWeeks = floor((today − minDate) / 7 days)
-   *   timeBankBalance = paidWeeks − elapsedWeeks
-   * Positive = weeks of credit (ahead of schedule).
-   * Negative = weeks of work still owed.
+   * Total excused weeks derived from all 'waiver' rows:
+   *   waivedWeeks = sum(waiver.value) / 7
+   * This does NOT reduce totalElapsedWeeks — it only offsets the debt.
+   */
+  waivedWeeks: number;
+  /**
+   * The weeks the driver is actually accountable for:
+   *   billableWeeks = totalElapsedWeeks - waivedWeeks
+   */
+  billableWeeks: number;
+  /**
+   * The total BRL amount credited back to globalGoalBalance from all waivers.
+   * Each waiver row's credit = (row.value / 7) × weeklyGoalForThatYear.
+   */
+  totalWaiverCredit: number;
+  /**
+   * Time Bank balance expressed in *weeks*:
+   *   timeBankBalance = finalGlobalGoalBalance / currentEffectiveWeeklyGoal
+   * Positive = weeks of credit; Negative = weeks of work still owed.
    */
   timeBankBalance: number;
   byYear: Record<string, YearMetrics>;   // "YYYY" → YearMetrics

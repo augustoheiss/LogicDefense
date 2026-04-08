@@ -27,12 +27,17 @@ import {
  *    elapsedWeeks = floor((today − minDate) / 7 days)
  *    effectiveWeeklyGoal = resolveGoalForYear(weeklyGoals, currentYear)
  */
-export function computeMetrics(rows: TableRow[], weeklyGoals: Record<number, number>): TableMetrics {
+export function computeMetrics(
+  rows: TableRow[],
+  weeklyGoals: Record<number, number>,
+): TableMetrics {
   if (rows.length === 0) return emptyMetrics();
 
-  // Deposits are investment entries, not operational revenue.
-  // Strip them so they never inflate gross totals or skew averages.
-  const revenueRows = rows.filter((r) => r.entryType !== 'deposit');
+  // Waiver rows are ledger entries, not revenue — strip them alongside deposits
+  // so they never inflate gross totals or skew averages.
+  const revenueRows = rows.filter(
+    (r) => r.entryType !== 'deposit' && r.entryType !== 'waiver',
+  );
 
   if (revenueRows.length === 0) return emptyMetrics();
 
@@ -159,14 +164,33 @@ export function computeMetrics(rows: TableRow[], weeklyGoals: Record<number, num
   // ── Strict cumulative BRL balance + real elapsed weeks ───────────────────────
   // Both values come from the same strict Mon–Sun calendar loop — guaranteed
   // to be perfectly consistent with each other.
-  const { balance: globalGoalBalance, elapsedWeeks: totalElapsedWeeks } =
+  const { balance: rawStrictBalance, elapsedWeeks: totalElapsedWeeks } =
     calculateStrictGlobalBalance(revenueRows, weeklyGoals);
 
+  // ── Waiver credits — derived directly from 'waiver' ledger rows ─────────
+  // For each waiver row:
+  //   - row.date  = start of the excused period (determines the year's goal rate)
+  //   - row.value = number of days justified
+  // Per-year goal integrity: a waiver in 2026 uses 2026's weeklyGoal, so a
+  // 2027 goal change can never retroactively corrupt 2026's balance.
+  let totalWaiverCredits = 0;
+  let totalWaivedDays = 0;
+  const waiverRows = rows.filter((r) => r.entryType === 'waiver' && r.value > 0);
+
+  for (const row of waiverRows) {
+    const waiverYear = parseInt(row.date.slice(0, 4), 10);
+    const goalForYear = resolveGoalForYear(weeklyGoals, waiverYear);
+    totalWaiverCredits += (row.value / 7) * goalForYear;
+    totalWaivedDays    += row.value;
+  }
+
+  const globalGoalBalance = Math.round((rawStrictBalance + totalWaiverCredits) * 100) / 100;
+  const waivedWeeks = Math.round((totalWaivedDays / 7) * 100) / 100;
+  const billableWeeks = Math.round((totalElapsedWeeks - waivedWeeks) * 100) / 100;
+
   // ── Time Bank balance (weeks) ─────────────────────────────────────────────
-  // Derived directly from globalGoalBalance so the two metrics are always
-  // mathematically consistent — both use the same strict Mon–Sun calendar loop.
-  // timeBankBalance = globalGoalBalance / weeklyGoal  (how many weeks the BRL
-  // surplus/deficit represents).  Guard against div-by-zero when no goal is set.
+  // timeBankBalance = finalGlobalGoalBalance / currentEffectiveWeeklyGoal
+  // Guard against div-by-zero when no goal is set.
   const currentYear = new Date().getFullYear();
   const effectiveWeeklyGoal = resolveGoalForYear(weeklyGoals, currentYear);
   const timeBankBalance = effectiveWeeklyGoal > 0
@@ -181,6 +205,9 @@ export function computeMetrics(rows: TableRow[], weeklyGoals: Record<number, num
     globalAnnualAvg,
     globalGoalBalance,
     totalElapsedWeeks,
+    waivedWeeks,
+    billableWeeks,
+    totalWaiverCredit: Math.round(totalWaiverCredits * 100) / 100,
     timeBankBalance,
     byYear,
     byMonth,
@@ -252,6 +279,9 @@ function emptyMetrics(): TableMetrics {
     globalAnnualAvg: 0,
     globalGoalBalance: 0,
     totalElapsedWeeks: 0,
+    waivedWeeks: 0,
+    billableWeeks: 0,
+    totalWaiverCredit: 0,
     timeBankBalance: 0,
     byYear: {},
     byMonth: {},

@@ -57,6 +57,7 @@ export function SpreadsheetGrid({
                 <span className="text-emerald-400/60">● </span>≥ meta
                 <span className="text-amber-400/60 ml-1.5">● </span>&lt; meta
                 <span className="text-sky-400/60 ml-1.5">● </span>aporte
+                <span className="text-orange-400/60 ml-1.5">● </span>justificado
               </span>
             </th>
             <th className="text-left px-4 py-3 text-white/50 font-medium">Descrição</th>
@@ -101,7 +102,7 @@ export function SpreadsheetGrid({
                 {editingCell?.rowId === row.id && editingCell.field === 'value' ? (
                   <input
                     type="number"
-                    step="0.01"
+                    step={row.entryType === 'waiver' ? '1' : '0.01'}
                     min="0"
                     defaultValue={row.value}
                     autoFocus
@@ -115,26 +116,34 @@ export function SpreadsheetGrid({
                 ) : (
                   <span
                     className={`cursor-pointer font-mono font-medium transition-colors ${
-                      row.entryType === 'deposit'
-                        ? 'text-sky-400 hover:text-sky-300'
-                        : row.value === 0
-                          ? 'text-white/30'
-                          : row.value >= dailyGoal
-                            ? 'text-emerald-400 hover:text-emerald-300'
-                            : 'text-amber-400 hover:text-amber-300'
+                      row.entryType === 'waiver'
+                        ? 'text-orange-400 hover:text-orange-300'
+                        : row.entryType === 'deposit'
+                          ? 'text-sky-400 hover:text-sky-300'
+                          : row.value === 0
+                            ? 'text-white/30'
+                            : row.value >= dailyGoal
+                              ? 'text-emerald-400 hover:text-emerald-300'
+                              : 'text-amber-400 hover:text-amber-300'
                     }`}
                     onClick={() => setEditingCell({ rowId: row.id, field: 'value' })}
                     title={
-                      row.entryType === 'deposit'
-                        ? 'Aporte / Investimento'
-                        : row.value === 0
-                          ? 'Dia de descanso'
-                          : row.value >= dailyGoal
-                            ? `✓ Meta atingida (R$ ${dailyGoal})`
-                            : `Abaixo da meta (R$ ${dailyGoal})`
+                      row.entryType === 'waiver'
+                        ? `🛡️ ${row.value} dia${row.value !== 1 ? 's' : ''} justificado${row.value !== 1 ? 's' : ''}`
+                        : row.entryType === 'deposit'
+                          ? 'Aporte / Investimento'
+                          : row.value === 0
+                            ? 'Dia de descanso'
+                            : row.value >= dailyGoal
+                              ? `✓ Meta atingida (R$ ${dailyGoal})`
+                              : `Abaixo da meta (R$ ${dailyGoal})`
                     }
                   >
-                    {row.value === 0 ? '—' : formatCurrency(row.value)}
+                    {row.entryType === 'waiver'
+                      ? `${row.value}d justif.`
+                      : row.value === 0
+                        ? '—'
+                        : formatCurrency(row.value)}
                   </span>
                 )}
               </td>
@@ -160,6 +169,11 @@ export function SpreadsheetGrid({
                     onClick={() => setEditingCell({ rowId: row.id, field: 'desc' })}
                     title="Clique para editar"
                   >
+                    {row.entryType === 'waiver' && (
+                      <span className="not-italic text-xs bg-orange-500/15 text-orange-400 border border-orange-500/25 px-1.5 py-0.5 rounded font-semibold">
+                        🛡️ Justificado
+                      </span>
+                    )}
                     {row.entryType === 'deposit' && (
                       <span className="not-italic text-xs bg-sky-500/15 text-sky-400 border border-sky-500/25 px-1.5 py-0.5 rounded font-semibold">
                         Aporte

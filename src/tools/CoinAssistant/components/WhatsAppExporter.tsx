@@ -136,7 +136,12 @@ function buildMessage(
     ? `• ✅ Banco de Horas: *+${absWeeks} semanas* _(Você tem ${absWeeks} semana${parseFloat(absWeeks) !== 1 ? 's' : ''} de folga/adiantadas!)_`
     : `• 🚨 Banco de Horas: *-${absWeeks} semanas* _(Você tem ${absWeeks} semana${parseFloat(absWeeks) !== 1 ? 's' : ''} de serviço pendentes para recuperar a meta)_`;
 
+  const waiversCount = table.rows.filter((r) => r.entryType === 'waiver' && r.value > 0).length;
+  const waivedWeeks  = metrics.waivedWeeks;
   const partnershipLine = `• ⏳ Tempo de Parceria: *${metrics.totalElapsedWeeks} semanas reais*`;
+  const waiverLine = waivedWeeks > 0
+    ? `• 🛡️ Período Justificado: *${waivedWeeks.toFixed(1)} semanas* (${waiversCount} ocorrência${waiversCount !== 1 ? 's' : ''})`
+    : null;
 
   lines.push(
     `🌎 *Visão Global & Metas*`,
@@ -145,6 +150,7 @@ function buildMessage(
     `• Meta Semanal ${reportYear}: ${fmt(reportWeeklyGoal)}`,
     balanceLine,
     partnershipLine,
+    ...(waiverLine ? [waiverLine] : []),
     tbLine,
     `• Custo Anual ${reportYear}: ${fmt(yearCost)} _(${annualPct}% coberto em ${reportYear})_`,
     '',
