@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, CSSProperties } from 'react';
+import { useState, useEffect, useCallback, useRef, CSSProperties, memo } from 'react';
 import { Tile, TileType, Direction, PlayerPos, PathId } from './types';
 import {
   generateRandomMap,
@@ -100,6 +100,14 @@ const VIEWPORT_TILES = 9;
 const VIEWPORT_W = VIEWPORT_TILES * CELL + (VIEWPORT_TILES - 1) * GAP; // 736 px
 const VIEWPORT_H = VIEWPORT_W;
 
+// ── Pure camera helper — module-level so it is hoisted before any useEffect runs ──
+// Depends only on module constants; never needs to be inside the component.
+function getCamTransform(row: number, col: number): string {
+  const tx = Math.round(VIEWPORT_W / 2 - col * (CELL + GAP) - CELL / 2);
+  const ty = Math.round(VIEWPORT_H / 2 - row * (CELL + GAP) - CELL / 2);
+  return `translate3d(${tx}px, ${ty}px, 0)`;
+}
+
 // ── Biome background helper ────────────────────────────────────────────────────
 function getBackgroundImage(stage: number): string {
   const index = ((stage - 1) % 9) + 1;
@@ -121,8 +129,8 @@ const COLOR: Record<TileType | 'PLAYER', { bg: string; border: string; shadow?: 
   PLAYER:       { bg: 'rgba(0,26,0,0.80)',  border: '#00ff00', shadow: 'inset 0 0 16px rgba(0,255,0,0.45), 0 0 14px rgba(0,255,0,0.6)' },
 };
 
-function cellStyle(tile: Tile, isPlayer: boolean): CSSProperties {
-  const key       = isPlayer ? 'PLAYER' : tile.type;
+function cellStyle(tile: Tile): CSSProperties {
+  const key       = tile.type;
   const c         = COLOR[key];
   const activated = tile.type === 'MAJOR_CHOICE' && tile.activated;
   return {
@@ -143,8 +151,8 @@ function cellStyle(tile: Tile, isPlayer: boolean): CSSProperties {
   };
 }
 
-// ── Tile content ───────────────────────────────────────────────────────────────
-function CellContent({ tile, isPlayer }: { tile: Tile; isPlayer: boolean }) {
+// ── Tile content (memoised — only re-renders when tile data changes, not on player move) ──
+const CellContent = memo(function CellContent({ tile }: { tile: Tile }) {
   const icon: CSSProperties = {
     fontSize: 28, lineHeight: 1,
     filter: 'drop-shadow(0 2px 5px rgba(0,0,0,0.95))',
@@ -161,9 +169,7 @@ function CellContent({ tile, isPlayer }: { tile: Tile; isPlayer: boolean }) {
     padding: '1px 5px',
   };
 
-  if (isPlayer) return (
-    <span style={{ fontSize: 36, filter: 'drop-shadow(0 2px 6px rgba(0,0,0,0.95))' }}>👾</span>
-  );
+
 
   switch (tile.type) {
     case 'MONSTER':
@@ -232,7 +238,7 @@ function CellContent({ tile, isPlayer }: { tile: Tile; isPlayer: boolean }) {
     default:
       return null;
   }
-}
+});
 
 // ── Sub-components ─────────────────────────────────────────────────────────────
 function LogItemRow({
@@ -762,7 +768,9 @@ export function LogicAscension({ onGoToMenu }: { onGoToMenu?: () => void } = {})
   }, [addEntries]);
 
   // ── Combat result handler ─────────────────────────────────────────────────────
-  const handleCombatResult = useCallback((correct: boolean) => {
+  // `survivedPower` is the authoritative player power AFTER any Second Wind
+  // penalty was applied inside the CombatArena. We use it as our base.
+  const handleCombatResult = useCallback((correct: boolean, survivedPower: number) => {
     const c = combatRef.current;
     if (!c) return;
     setCombat(null);
@@ -796,6 +804,18 @@ export function LogicAscension({ onGoToMenu }: { onGoToMenu?: () => void } = {})
       ]);
     };
 
+    // ── Critical-hit Second Wind narration ────────────────────────────────────
+    const tookCriticalHit = survivedPower < c.powerSnapshot;
+    if (tookCriticalHit) {
+      addEntries([
+        mkLog(
+          `⚡ Você sobreviveu a um golpe crítico de -50% de poder! ` +
+          `(${formatPower(c.powerSnapshot)} → ${formatPower(survivedPower)})`,
+          'info',
+        ),
+      ]);
+    }
+
     if (c.isImpossibleMode) {
       setGamePhase('gameover');
       setGameOverReason(
@@ -815,7 +835,7 @@ export function LogicAscension({ onGoToMenu }: { onGoToMenu?: () => void } = {})
     if (c.isDesperationMode) {
       if (correct) {
         const absorbed = Math.round(c.monsterLevel * 0.5);
-        const newPower = c.powerSnapshot + absorbed;
+        const newPower = survivedPower + absorbed;
         if (c.isBoss) spawnPortal(newPower, '🔥 Milagre Desesperado!');
         else resolveKill(newPower, `🔥 Milagre! +${formatPower(absorbed)} poder (50% desespero). Total: ${formatPower(newPower)}`);
       } else {
@@ -830,7 +850,7 @@ export function LogicAscension({ onGoToMenu }: { onGoToMenu?: () => void } = {})
     }
 
     if (c.isBoss) {
-      if (correct) spawnPortal(c.powerSnapshot + c.monsterLevel, '🏆');
+      if (correct) spawnPortal(survivedPower + c.monsterLevel, '🏆');
       else {
         setGamePhase('gameover');
         setGameOverReason(
@@ -841,7 +861,7 @@ export function LogicAscension({ onGoToMenu }: { onGoToMenu?: () => void } = {})
     }
 
     const delta    = correct ? c.monsterLevel : -Math.round(c.monsterLevel * 0.5);
-    const newPower = c.powerSnapshot + delta;
+    const newPower = survivedPower + delta;
     if (newPower <= 0) {
       setGamePhase('gameover');
       setGameOverReason(
@@ -867,19 +887,55 @@ export function LogicAscension({ onGoToMenu }: { onGoToMenu?: () => void } = {})
     setActivePanel('knowledge');
   }, []);
 
-  // ── Keyboard listener ─────────────────────────────────────────────────────────
+  // ── Keyboard listener — zero-latency, zero throttle ──
+  // Optimistic DOM write: camera layer is translated BEFORE React setState
+  // so the visual snaps within the same frame (16ms). React state updates
+  // (setPlayerPos, setGrid, etc. inside move()) follow asynchronously for
+  // logic/Oracle correctness, but the player already sees the result.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      let dir: Direction | null = null;
       switch (e.key) {
-        case 'ArrowUp':    case 'w': case 'W': e.preventDefault(); move('UP');    break;
-        case 'ArrowDown':  case 's': case 'S': e.preventDefault(); move('DOWN');  break;
-        case 'ArrowLeft':  case 'a': case 'A': e.preventDefault(); move('LEFT');  break;
-        case 'ArrowRight': case 'd': case 'D': e.preventDefault(); move('RIGHT'); break;
+        case 'ArrowUp':    case 'w': case 'W': dir = 'UP';    break;
+        case 'ArrowDown':  case 's': case 'S': dir = 'DOWN';  break;
+        case 'ArrowLeft':  case 'a': case 'A': dir = 'LEFT';  break;
+        case 'ArrowRight': case 'd': case 'D': dir = 'RIGHT'; break;
       }
+      if (!dir) return;
+      e.preventDefault();
+
+      // ── Optimistic DOM write (frame-0 visual, no React render needed) ────
+      try {
+        if (
+          camLayerRef.current &&
+          posRef.current &&
+          gridRef.current &&
+          !combatRef.current &&
+          gamePhaseRef.current === 'playing'
+        ) {
+          const { row, col } = posRef.current;
+          const [dr, dc] = DIR_DELTA[dir];
+          const nr = row + dr;
+          const nc = col + dc;
+          const inBounds = nr >= 0 && nr < GRID_ROWS && nc >= 0 && nc < GRID_COLS;
+          if (inBounds) {
+            const t = gridRef.current?.[nr]?.[nc];
+            const walkable = t && t.type !== 'WALL' && t.type !== 'FOG';
+            if (walkable) {
+              camLayerRef.current.style.transform = getCamTransform(nr, nc);
+            }
+          }
+        }
+      } catch (err) {
+        console.error('[optimistic-cam] DOM write failed:', err);
+      }
+
+      // ── Logical state update (React reconciles after frame paint) ────────
+      move(dir);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [move]);
+  }, [move]);   // getCamTransform is module-level — stable reference, not a dep
 
   // ── Reset to Stage 1 (full hard restart) ─────────────────────────────────────
   const resetGame = useCallback(() => {
@@ -955,12 +1011,20 @@ export function LogicAscension({ onGoToMenu }: { onGoToMenu?: () => void } = {})
   const bossTile = grid[BOSS_SPAWN.row]?.[BOSS_SPAWN.col];
   const bossLevel = bossTile?.type === 'BOSS' ? bossTile.level : undefined;
 
-  // ── Render ────────────────────────────────────────────────────────────────────
-  // Camera: translate the full grid so the player tile is centred in the viewport.
-  // playerPos.col * (CELL + GAP) is the left-edge of the player tile; add CELL/2
-  // to get its centre, then subtract half the viewport width to align them.
-  const camTx = Math.round(VIEWPORT_W / 2 - playerPos.col * (CELL + GAP) - CELL / 2);
-  const camTy = Math.round(VIEWPORT_H / 2 - playerPos.row * (CELL + GAP) - CELL / 2);
+  // Player sprite overlay: always centered in viewport (camTx + col*(CELL+GAP) = VIEWPORT_W/2 - CELL/2)
+  // It never moves — only the camera grid beneath it slides.
+  const playerSpriteRef = useRef<HTMLDivElement>(null);
+  // Camera grid layer ref — mutated directly in keydown for zero-latency visual feedback
+  const camLayerRef = useRef<HTMLDivElement>(null);
+
+  // Camera offsets — used for initial/React-driven render pass.
+  // After keydown, camLayerRef.current.style.transform is written directly (bypasses React).
+  const camTx = playerPos ? Math.round(VIEWPORT_W / 2 - playerPos.col * (CELL + GAP) - CELL / 2) : 0;
+  const camTy = playerPos ? Math.round(VIEWPORT_H / 2 - playerPos.row * (CELL + GAP) - CELL / 2) : 0;
+
+  // Player overlay is always centered: camTx + col*(CELL+GAP) = VIEWPORT_W/2 - CELL/2
+  const playerScreenX = Math.round(VIEWPORT_W / 2 - CELL / 2);
+  const playerScreenY = Math.round(VIEWPORT_H / 2 - CELL / 2);
 
   return (
     <div style={{
@@ -1017,29 +1081,59 @@ export function LogicAscension({ onGoToMenu }: { onGoToMenu?: () => void } = {})
             boxShadow:          '0 0 40px rgba(0,0,0,0.8)',
           }}>
 
-            {/* Camera layer — translate3d tracks the player */}
-            <div style={{
-              position:   'absolute',
-              top:        0,
-              left:       0,
-              zIndex:     0,
-              transform:  `translate3d(${camTx}px, ${camTy}px, 0)`,
-              transition: 'transform 0.18s ease-out',
-              willChange: 'transform',
-              display:             'grid',
-              gridTemplateColumns: `repeat(${GRID_COLS}, ${CELL}px)`,
-              gap:                 GAP,
-            }}>
+            {/* Camera layer — translate3d; NO transition = instant snap on keydown DOM write */}
+            <div
+              ref={camLayerRef}
+              style={{
+                position:   'absolute',
+                top:        0,
+                left:       0,
+                zIndex:     0,
+                transform:  `translate3d(${camTx}px, ${camTy}px, 0)`,
+                willChange: 'transform',
+                display:             'grid',
+                gridTemplateColumns: `repeat(${GRID_COLS}, ${CELL}px)`,
+                gap:                 GAP,
+              }}>
               {grid.map((row, ri) =>
-                row.map((tile, ci) => {
-                  const isPlayer = ri === playerPos.row && ci === playerPos.col;
-                  return (
-                    <div key={`${ri}-${ci}`} style={cellStyle(tile, isPlayer)}>
-                      <CellContent tile={tile} isPlayer={isPlayer} />
-                    </div>
-                  );
-                })
+                row.map((tile, ci) => (
+                  // Key is stable per tile position — React.memo(CellContent) skips
+                  // re-renders unless tile data changed. Player position does NOT
+                  // affect any tile prop here → zero cell re-renders on player move.
+                  <div
+                    key={`${ri}-${ci}`}
+                    style={cellStyle(tile)}
+                  >
+                    <CellContent tile={tile} />
+                  </div>
+                ))
               )}
+            </div>
+
+            {/* Player sprite overlay — ALWAYS centered in viewport (math: camTx + col*(CELL+GAP) = VIEWPORT_W/2 - CELL/2) */}
+            {/* Its transform never changes; the camera grid below it moves. No transition needed. */}
+            <div
+              ref={playerSpriteRef}
+              style={{
+                position:   'absolute',
+                top:        0,
+                left:       0,
+                zIndex:     2,
+                width:      CELL,
+                height:     CELL,
+                transform:  `translate(${playerScreenX}px, ${playerScreenY}px)`,
+                willChange: 'transform',
+                display:        'flex',
+                alignItems:     'center',
+                justifyContent: 'center',
+                pointerEvents:  'none',
+                borderRadius:   6,
+                border:         '2px solid #00ff00',
+                background:     'rgba(0,26,0,0.80)',
+                boxShadow:      'inset 0 0 16px rgba(0,255,0,0.45), 0 0 14px rgba(0,255,0,0.6)',
+              }}
+            >
+              <span style={{ fontSize: 36, filter: 'drop-shadow(0 2px 6px rgba(0,0,0,0.95))' }}>👾</span>
             </div>
 
             {/* Vignette overlay — darkens edges so entities/text stay legible on bright biome art */}
