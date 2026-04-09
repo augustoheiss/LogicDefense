@@ -108,6 +108,9 @@ function getCamTransform(row: number, col: number): string {
   return `translate3d(${tx}px, ${ty}px, 0)`;
 }
 
+/** Virtual joystick repeat rate — milliseconds between steps while the finger is held. */
+const JOYSTICK_REPEAT_MS = 180;
+
 // ── Biome background helper ────────────────────────────────────────────────────
 function getBackgroundImage(stage: number): string {
   const index = ((stage - 1) % 9) + 1;
@@ -484,6 +487,13 @@ export function LogicAscension({ onGoToMenu }: { onGoToMenu?: () => void } = {})
   activeRoomIdxRef.current  = activeRoomIdx;
   oracleChainRef.current    = oracleChain;
 
+  // ── Virtual joystick refs ───────────────────────────────────────────────
+  // These hold the active continuous-movement interval and current direction.
+  // Using refs (not state) so they never cause React re-renders.
+  const moveIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const currentDirRef   = useRef<Direction | null>(null);
+
+
   const addEntries = useCallback((entries: LogItem[]) => {
     setLog(prev => [...entries, ...prev].slice(0, 40));
   }, []);
@@ -718,6 +728,27 @@ export function LogicAscension({ onGoToMenu }: { onGoToMenu?: () => void } = {})
     if (entries.length) addEntries(entries);
   }, [addEntries]);
 
+  // ── Virtual Joystick Handlers ────────────────────────────────────────────────
+  // Stop any in-flight movement interval.
+  const stopContinuousMove = useCallback(() => {
+    if (moveIntervalRef.current !== null) {
+      clearInterval(moveIntervalRef.current);
+      moveIntervalRef.current = null;
+    }
+    currentDirRef.current = null;
+  }, []);
+
+  // Start (or restart after direction change) the continuous move loop.
+  // Fires immediately for frame-0 feedback, then every JOYSTICK_REPEAT_MS.
+  const startContinuousMove = useCallback((dir: Direction) => {
+    stopContinuousMove();
+    currentDirRef.current = dir;
+    move(dir);                           // instant first step
+    moveIntervalRef.current = setInterval(() => {
+      if (currentDirRef.current) move(currentDirRef.current);
+    }, JOYSTICK_REPEAT_MS);
+  }, [move, stopContinuousMove]);
+
   // ── Combat result handler ─────────────────────────────────────────────────────
   // `survivedPower` is the authoritative player power AFTER any Second Wind
   // penalty was applied inside the CombatArena. We use it as our base.
@@ -888,6 +919,9 @@ export function LogicAscension({ onGoToMenu }: { onGoToMenu?: () => void } = {})
     return () => window.removeEventListener('keydown', onKey);
   }, [move]);   // getCamTransform is module-level — stable reference, not a dep
 
+  // ── Unmount cleanup — clear virtual joystick interval if component unmounts mid-hold ──
+  useEffect(() => () => stopContinuousMove(), [stopContinuousMove]);
+
   // ── Reset to Stage 1 (full hard restart) ─────────────────────────────────────
   const resetGame = useCallback(() => {
     const newMap = generateRandomMap();
@@ -1022,21 +1056,39 @@ export function LogicAscension({ onGoToMenu }: { onGoToMenu?: () => void } = {})
         <div style={{ flexShrink: 0 }}>
 
           {/* Fixed clipping window — overflow:hidden hides everything outside */}
-          {/* onPointerDown: tap-to-move for mobile — uses element-relative center so it
-              works even when the viewport box is not full-screen (e.g. desktop with sidebar) */}
+          {/* Pointer events implement an invisible virtual joystick:
+              • PointerDown  → instant first step + start repeat interval
+              • PointerMove  → update direction mid-hold (drag-to-steer)
+              • PointerUp / Cancel / Leave → stop interval */}
           <div
             onPointerDown={(e) => {
-              // Ignore taps that land on interactive children (buttons, canvas)
               if ((e.target as HTMLElement).closest('button,canvas')) return;
-              if (combat || gamePhase !== 'playing') return;
+              if (combatRef.current || gamePhaseRef.current !== 'playing') return;
               const rect = e.currentTarget.getBoundingClientRect();
               const dx = e.clientX - (rect.left + rect.width  / 2);
               const dy = e.clientY - (rect.top  + rect.height / 2);
               const dir: Direction = Math.abs(dx) > Math.abs(dy)
                 ? (dx > 0 ? 'RIGHT' : 'LEFT')
                 : (dy > 0 ? 'DOWN'  : 'UP');
-              move(dir);
+              startContinuousMove(dir);
             }}
+            onPointerMove={(e) => {
+              // Only steer if the user is actively holding (interval is running)
+              if (moveIntervalRef.current === null) return;
+              if (combatRef.current || gamePhaseRef.current !== 'playing') return;
+              const rect = e.currentTarget.getBoundingClientRect();
+              const dx = e.clientX - (rect.left + rect.width  / 2);
+              const dy = e.clientY - (rect.top  + rect.height / 2);
+              const newDir: Direction = Math.abs(dx) > Math.abs(dy)
+                ? (dx > 0 ? 'RIGHT' : 'LEFT')
+                : (dy > 0 ? 'DOWN'  : 'UP');
+              // Only update ref — interval picks up new dir on its next tick.
+              // No interval restart = no stutter on direction change.
+              currentDirRef.current = newDir;
+            }}
+            onPointerUp={stopContinuousMove}
+            onPointerCancel={stopContinuousMove}
+            onPointerLeave={stopContinuousMove}
             style={{
             position:           'relative',
             width:              VIEWPORT_W,
