@@ -423,55 +423,6 @@ function AccordionHeader({
   );
 }
 
-// ── Fixed mobile D-pad ─────────────────────────────────────────────────────────
-function FixedDpad({ onMove }: { onMove: (dir: Direction) => void }) {
-  const btn: CSSProperties = {
-    width:                     72,
-    height:                    72,
-    background:                'rgba(0,212,255,0.10)',
-    border:                    '2px solid rgba(0,212,255,0.28)',
-    borderRadius:              14,
-    color:                     '#00d4ff',
-    fontSize:                  30,
-    cursor:                    'pointer',
-    display:                   'flex',
-    alignItems:                'center',
-    justifyContent:            'center',
-    touchAction:               'manipulation',
-    userSelect:                'none',
-    WebkitTapHighlightColor:   'transparent',
-    transition:                'background 0.1s ease',
-    fontFamily:                'system-ui, sans-serif',
-  };
-  const press  = (e: React.MouseEvent<HTMLButtonElement> | React.TouchEvent<HTMLButtonElement>) =>
-    ((e.currentTarget as HTMLButtonElement).style.background = 'rgba(0,212,255,0.30)');
-  const release = (e: React.MouseEvent<HTMLButtonElement> | React.TouchEvent<HTMLButtonElement>) =>
-    ((e.currentTarget as HTMLButtonElement).style.background = 'rgba(0,212,255,0.10)');
-
-  return (
-    <div style={{
-      position:   'fixed',
-      bottom:     24,
-      left:       24,
-      zIndex:     500,
-      display:    'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      gap:        4,
-    }}>
-      <button style={btn} aria-label="Cima"     onClick={() => onMove('UP')}
-        onMouseDown={press} onMouseUp={release} onTouchStart={press} onTouchEnd={release}>↑</button>
-      <div style={{ display: 'flex', gap: 4 }}>
-        <button style={btn} aria-label="Esquerda" onClick={() => onMove('LEFT')}
-          onMouseDown={press} onMouseUp={release} onTouchStart={press} onTouchEnd={release}>←</button>
-        <button style={btn} aria-label="Baixo"    onClick={() => onMove('DOWN')}
-          onMouseDown={press} onMouseUp={release} onTouchStart={press} onTouchEnd={release}>↓</button>
-        <button style={btn} aria-label="Direita"  onClick={() => onMove('RIGHT')}
-          onMouseDown={press} onMouseUp={release} onTouchStart={press} onTouchEnd={release}>→</button>
-      </div>
-    </div>
-  );
-}
 
 // ── Main component ─────────────────────────────────────────────────────────────
 export function LogicAscension({ onGoToMenu }: { onGoToMenu?: () => void } = {}) {
@@ -1037,6 +988,9 @@ export function LogicAscension({ onGoToMenu }: { onGoToMenu?: () => void } = {})
       background:    '#07070f',
       fontFamily:    "'Courier New', monospace",
       color:         '#e2e8f0',
+      // ── Mobile lag killers — prevent browser scroll/zoom interference ──
+      touchAction:   'none',
+      userSelect:    'none',
     }}>
 
       <style>{GAME_STYLES}</style>
@@ -1068,7 +1022,22 @@ export function LogicAscension({ onGoToMenu }: { onGoToMenu?: () => void } = {})
         <div style={{ flexShrink: 0 }}>
 
           {/* Fixed clipping window — overflow:hidden hides everything outside */}
-          <div style={{
+          {/* onPointerDown: tap-to-move for mobile — uses element-relative center so it
+              works even when the viewport box is not full-screen (e.g. desktop with sidebar) */}
+          <div
+            onPointerDown={(e) => {
+              // Ignore taps that land on interactive children (buttons, canvas)
+              if ((e.target as HTMLElement).closest('button,canvas')) return;
+              if (combat || gamePhase !== 'playing') return;
+              const rect = e.currentTarget.getBoundingClientRect();
+              const dx = e.clientX - (rect.left + rect.width  / 2);
+              const dy = e.clientY - (rect.top  + rect.height / 2);
+              const dir: Direction = Math.abs(dx) > Math.abs(dy)
+                ? (dx > 0 ? 'RIGHT' : 'LEFT')
+                : (dy > 0 ? 'DOWN'  : 'UP');
+              move(dir);
+            }}
+            style={{
             position:           'relative',
             width:              VIEWPORT_W,
             height:             VIEWPORT_H,
@@ -1337,12 +1306,10 @@ export function LogicAscension({ onGoToMenu }: { onGoToMenu?: () => void } = {})
         </div>
       </div>
 
+      {/* Mobile tap-to-move hint — replaces D-pad instruction */}
       <p style={{ margin: 0, fontSize: 10, color: '#334155', letterSpacing: 1 }}>
-        ⌨  WASD ou Setas · Limpe as {NUM_ROOMS} Salas de cada caminho · Derrote o Boss · Entre no Portal
+        ⌨  WASD / Setas · 📱 Toque no mapa para mover · Limpe as {NUM_ROOMS} Salas · Derrote o Boss · Portal
       </p>
-
-      {/* ── Fixed mobile D-pad ── */}
-      {gamePhase === 'playing' && !combat && <FixedDpad onMove={move} />}
 
       {/* ── Combat overlay ── */}
       {combat && (
