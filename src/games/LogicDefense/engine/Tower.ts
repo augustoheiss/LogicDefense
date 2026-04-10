@@ -18,6 +18,7 @@ export class Tower {
   upgradeCost: number
   totalCost: number
   range: number
+  lootRange: number
   currentRate: number
 
   constructor(x: number, y: number, type: TowerType) {
@@ -28,7 +29,9 @@ export class Tower {
     this.level = 1
     this.upgradeCost = type.cost
     this.totalCost = type.cost
-    this.range = type.range
+    this.range     = type.range
+    // Enforce: lootRange is ALWAYS > attackRange (5% buffer, rounded UP to avoid sub-range)
+    this.lootRange = Math.ceil(type.range * 1.05)
     this.currentRate = type.rate
   }
 
@@ -36,8 +39,11 @@ export class Tower {
     this.level++
     this.totalCost += this.upgradeCost
     this.upgradeCost = this.type.cost * Math.pow(2, this.level - 1)
-    this.range = this.type.range * (1 + 0.2 * (this.level - 1))
-    // ALL towers get attack speed upgrade (+50%), ÷ gets double (+100%)
+    // Compound ×1.2 range growth (Vampire Survivors feel)
+    this.range = Math.floor(this.range * 1.2)
+    // MANDATORY: loot zone must always be > attackRange (Math.ceil prevents sub-range)
+    this.lootRange = Math.max(this.lootRange, Math.ceil(this.range * 1.05))
+    // VIP speed boost: ÷ gets ×2 attack speed; all others get ×1.5
     if (this.type.symbol === '÷') {
       this.currentRate = Math.max(1, Math.floor(this.currentRate / 2))
     } else {
@@ -88,6 +94,15 @@ export class Tower {
     if (isMoving) {
       this.x = mouseX; this.y = mouseY
       ctx.globalAlpha = 0.5
+      // Loot zone (gold, dashed) — slightly larger than attack range
+      ctx.beginPath()
+      ctx.arc(this.x, this.y, this.lootRange, 0, Math.PI * 2)
+      ctx.setLineDash([5, 5])
+      ctx.strokeStyle = 'rgba(255, 200, 0, 0.35)'
+      ctx.lineWidth = 1
+      ctx.stroke()
+      ctx.setLineDash([])
+      // Attack zone (red/green tinted fill)
       ctx.beginPath()
       ctx.arc(this.x, this.y, this.range, 0, Math.PI * 2)
       ctx.fillStyle = canPlaceAt(this.x, this.y, this)
@@ -95,11 +110,20 @@ export class Tower {
         : 'rgba(255, 0, 0, 0.2)'
       ctx.fill()
     } else if (isSelected) {
+      // Draw attack ring FIRST (solid white — inner)
       ctx.beginPath()
       ctx.arc(this.x, this.y, this.range, 0, Math.PI * 2)
       ctx.strokeStyle = '#fff'
       ctx.lineWidth = 1
       ctx.stroke()
+      // Draw loot ring ON TOP (gold dashed — always outside attack ring)
+      ctx.beginPath()
+      ctx.arc(this.x, this.y, this.lootRange, 0, Math.PI * 2)
+      ctx.setLineDash([5, 5])
+      ctx.strokeStyle = 'rgba(255, 200, 0, 0.6)'
+      ctx.lineWidth = 1.5
+      ctx.stroke()
+      ctx.setLineDash([])
     }
 
     if (this.level > 1 && !isMoving) {

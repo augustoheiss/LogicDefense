@@ -1015,14 +1015,42 @@ export function useGameEngine(
     particlesRef.current.push(...newParticles)
     bulletsRef.current = bulletsRef.current.filter(b => b.active)
 
-    // ── Coins (magnetic loot + lifespan) ─────────────────────────────────
+    // ── Coins: 3-pass loot system ─────────────────────────────────────────
+
+    // PASS 1 — Universal Tower Loot Scan (every frame, decoupled from attacks)
+    // Towers use their centre (x, y) which is the same coordinate used for
+    // drawing and distance checks inside update().  No width/height offset needed.
+    for (const coin of coinsRef.current) {
+      if (!coin.active || !coin.isCollectable) continue
+      for (const tower of towersRef.current) {
+        const dist = Math.hypot(tower.x - coin.x, tower.y - coin.y)
+        if (dist <= tower.lootRange) {
+          coin.lockOn(tower.x, tower.y)
+          break   // coin is claimed — stop checking other towers
+        }
+      }
+    }
+
+    // PASS 2 — Hero Magnet Scan (for coins not yet claimed by a tower)
+    for (const coin of coinsRef.current) {
+      if (!coin.active || !coin.isCollectable) continue
+      for (const hero of heroesRef.current) {
+        const dist = Math.hypot(hero.x - coin.x, hero.y - coin.y)
+        if (dist <= hero.magnetRadius) {
+          coin.lockOn(hero.x, hero.y)
+          break
+        }
+      }
+    }
+
+    // PASS 3 — Physics + flight + grounded countdown
     let goldChanged = false
     coinsRef.current.forEach(coin => {
-      coin.update(heroesRef.current, value => {
-        goldRef.current          += value
+      coin.update(value => {
+        goldRef.current           += value
         statsRef.current.totalGold += value
         goldChanged = true
-      })
+      }, 16.67)
     })
     coinsRef.current = coinsRef.current.filter(c => c.active)
     if (goldChanged) syncUiState({ gold: goldRef.current })
