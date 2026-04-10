@@ -54,14 +54,11 @@ function getWaveConfig(wave: number, difficultyMultiplier: number): WaveConfig {
     baseMaxA = 30; baseMaxB = 25;
   }
 
-  // Scale by difficultyMultiplier — each surge adds 0.25, so:
-  //   mult=1.0 → ×1.0 (no change)
-  //   mult=1.5 → ×1.5 (50% bigger numbers)
-  //   mult=2.0 → ×2.0 (100% bigger, proper two-digit arithmetic)
-  //   mult=3.0 → ×3.0 (hard three-digit territory)
-  const scaleFactor = Math.min(difficultyMultiplier, 4.0); // cap at 4×
-  const maxA = Math.round(baseMaxA * scaleFactor);
-  const maxB = Math.round(baseMaxB * scaleFactor);
+  // Scale by difficultyMultiplier — each surge/natural advance adds to this.
+  // No hard cap here: wave+difficulty drive unbounded number complexity.
+  // Multiplication/division each clamp their own factors inside the switch below.
+  const maxA = Math.round(baseMaxA * difficultyMultiplier);
+  const maxB = Math.round(baseMaxB * difficultyMultiplier);
 
   return { ops, maxA, maxB };
 }

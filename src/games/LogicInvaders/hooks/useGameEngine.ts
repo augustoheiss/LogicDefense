@@ -295,8 +295,9 @@ function spawnInvader(state: GameState): void {
   // Pass difficultyMultiplier so math gets harder with each surge
   const { display, answer } = generateEquation(state.wave, state.difficultyMultiplier);
   const color = INVADER_COLORS[Math.floor(Math.random() * INVADER_COLORS.length)];
-  // Speed scales with BOTH wave AND continuous difficultyMultiplier
-  const speedBonus = (state.wave - 1) * 0.08 + (state.difficultyMultiplier - 1) * 0.22;
+  // Speed scales with wave & difficulty but is hard-capped so late-game stays humanly playable.
+  // Math difficulty (generateEquation) grows uncapped — only physical speed is limited here.
+  const speedBonus = Math.min(1.2, (state.wave - 1) * 0.02 + (state.difficultyMultiplier - 1) * 0.06);
   const baseSpeed = BASE_INVADER_SPEED + speedBonus;
   const answers = generateAnswerBubbles(answer);
 
@@ -1214,10 +1215,14 @@ export function useGameEngine(
         const inv = state.invaders[ii];
 
         // ── Smooth speed lerp toward live difficulty target ──────
-        // Recalculate what this invader's speed SHOULD be at current difficulty
-        const targetSpeed = inv.baseSpeed
-          * inv.speedMultiplier                              // wrong-answer penalty multiplier
-          * (1 + (state.difficultyMultiplier - 1) * 0.55);  // difficulty bonus (softer than spawn)
+        // difficultyMultiplier bonus nerfed (0.55 → 0.15) and absolute speed capped at 3.2 px/frame
+        // so the game stays physically playable even at very high wave numbers.
+        const targetSpeed = Math.min(
+          3.2,
+          inv.baseSpeed
+            * inv.speedMultiplier                             // wrong-answer penalty multiplier
+            * (1 + (state.difficultyMultiplier - 1) * 0.15)  // lighter live-bonus (nerfed)
+        );
         // Lerp current speed toward target for buttery-smooth deceleration/acceleration
         inv.speed += (targetSpeed - inv.speed) * SPEED_LERP_RATE;
 
