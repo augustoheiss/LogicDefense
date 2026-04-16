@@ -365,6 +365,81 @@ async def health() -> dict:
     return {"status": "ok", "model": MODEL, "mode": "parallel-4x"}
 
 
+# ── CoinAssistant: Bulk Input API ────────────────────────────────────────────
+
+class BulkInputRequest(BaseModel):
+    """Comma-separated expense values + optional date."""
+    values: str = Field(
+        ...,
+        min_length=1,
+        description="Comma-separated numeric values, e.g. '45.50, 120, 33.90, 88'",
+    )
+    date: str = Field(
+        default_factory=lambda: __import__("datetime").date.today().isoformat(),
+        description="ISO date for all entries (default: today). Format: YYYY-MM-DD",
+    )
+
+
+class BulkTransaction(BaseModel):
+    date: str
+    value: float
+    description: str
+    entryType: str
+
+
+class BulkInputResponse(BaseModel):
+    transactions: list[BulkTransaction]
+    skipped: int = Field(default=0, description="Count of non-numeric or negative values skipped")
+
+
+@app.post("/api/coin/bulk-input", response_model=BulkInputResponse)
+async def coin_bulk_input(request: BulkInputRequest) -> BulkInputResponse:
+    """
+    Parse a comma-separated string of expense values and return structured
+    transaction objects ready for the frontend to commit.
+
+    Validation rules:
+      - Non-numeric tokens are skipped (counted in `skipped`)
+      - Negative or zero values are skipped
+      - Values are rounded to 2 decimal places
+    """
+    parts = [s.strip() for s in request.values.split(",") if s.strip()]
+    transactions: list[BulkTransaction] = []
+    skipped = 0
+
+    for part in parts:
+        try:
+            value = float(part)
+        except ValueError:
+            skipped += 1
+            continue
+
+        if value <= 0 or not __import__("math").isfinite(value):
+            skipped += 1
+            continue
+
+        transactions.append(
+            BulkTransaction(
+                date=request.date,
+                value=round(value, 2),
+                description="Sem descrição",
+                entryType="expense",
+            )
+        )
+
+    if not transactions:
+        raise HTTPException(
+            status_code=422,
+            detail="Nenhum valor numérico positivo encontrado na string fornecida.",
+        )
+
+    log.info(
+        "Bulk input: %d transactions parsed, %d skipped",
+        len(transactions), skipped,
+    )
+    return BulkInputResponse(transactions=transactions, skipped=skipped)
+
+
 # ── Dev entrypoint ───────────────────────────────────────────────────────────
 
 if __name__ == "__main__":

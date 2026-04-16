@@ -1,14 +1,14 @@
 import type { TableGoals, TableMetrics } from '../types';
 import { resolveGoalForYear } from '../utils/dateUtils';
+import { formatCurrencyShort, formatCurrencyFull } from '../utils/formatCurrency';
 
 interface GoalsPanelProps {
   goals: TableGoals;
   metrics: TableMetrics;
 }
 
-function fmt(v: number): string {
-  return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-}
+/** Shorthand for compact card values */
+const fmt = formatCurrencyShort;
 
 function ProgressBar({
   label,
@@ -60,8 +60,8 @@ function ProgressBar({
 
 /** Formats balance as "+R$ X,XX" or "-R$ X,XX" (sign always explicit). */
 function fmtBalance(v: number): string {
-  const abs = Math.abs(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-  return v >= 0 ? `+${abs}` : `-${abs}`;
+  const abs = Math.abs(v);
+  return v >= 0 ? `+${formatCurrencyFull(abs)}` : `-${formatCurrencyFull(abs)}`;
 }
 
 /**

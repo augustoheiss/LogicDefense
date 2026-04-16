@@ -356,5 +356,7 @@ function emptyMetrics(): TableMetrics {
     byYear: {},
     byMonth: {},
     byWeek: {},
+    totalExpenses: 0,
+    annualExpenses: 0,
   };
 }

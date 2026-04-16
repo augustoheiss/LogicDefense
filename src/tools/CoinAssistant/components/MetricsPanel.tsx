@@ -1,13 +1,13 @@
 import type { TableMetrics } from '../types';
+import { formatCurrencyShort, formatCurrencyFull } from '../utils/formatCurrency';
 
 interface MetricsPanelProps {
   metrics: TableMetrics;
   dailyGoal: number;
 }
 
-function fmt(v: number): string {
-  return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-}
+/** Shorthand used across all metric cards. Full value shown in tooltip via title attr. */
+const fmt = formatCurrencyShort;
 
 type CardStatus = 'accent' | 'success' | 'warning' | 'default';
 
@@ -16,11 +16,14 @@ function MetricCard({
   value,
   status = 'default',
   sub,
+  fullValue,
 }: {
   label: string;
   value: string;
   status?: CardStatus;
   sub?: string;
+  /** Tooltip: full-precision value shown on hover */
+  fullValue?: string;
 }) {
   const styles: Record<CardStatus, { wrap: string; text: string }> = {
     accent:  { wrap: 'bg-[#a855f7]/10 border-[#a855f7]/30', text: 'text-[#a855f7]' },
@@ -30,7 +33,7 @@ function MetricCard({
   };
   const s = styles[status];
   return (
-    <div className={`rounded-xl border p-4 flex flex-col gap-1 ${s.wrap}`}>
+    <div className={`rounded-xl border p-4 flex flex-col gap-1 ${s.wrap}`} title={fullValue}>
       <span className="text-xs text-white/40 uppercase tracking-wider">{label}</span>
       <span className={`text-xl font-bold font-mono ${s.text}`}>{value}</span>
       {sub && <span className="text-xs text-white/30">{sub}</span>}
@@ -62,11 +65,13 @@ export function MetricsPanel({ metrics, dailyGoal }: MetricsPanelProps) {
           <MetricCard
             label="Total Bruto"
             value={fmt(metrics.grossTotal)}
+            fullValue={formatCurrencyFull(metrics.grossTotal)}
             status="accent"
           />
           <MetricCard
             label="Média Diária"
             value={fmt(metrics.globalDailyAvg)}
+            fullValue={formatCurrencyFull(metrics.globalDailyAvg)}
             status={
               metrics.globalDailyAvg === 0
                 ? 'default'
@@ -83,11 +88,13 @@ export function MetricsPanel({ metrics, dailyGoal }: MetricsPanelProps) {
           <MetricCard
             label="Média Semanal"
             value={fmt(metrics.globalWeeklyAvg)}
+            fullValue={formatCurrencyFull(metrics.globalWeeklyAvg)}
             sub="semanas ISO"
           />
           <MetricCard
             label="Média Mensal"
             value={fmt(metrics.globalMonthlyAvg)}
+            fullValue={formatCurrencyFull(metrics.globalMonthlyAvg)}
             sub="meses ativos"
           />
         </div>
@@ -169,6 +176,33 @@ export function MetricsPanel({ metrics, dailyGoal }: MetricsPanelProps) {
                 </div>
               );
             })}
+          </div>
+        </div>
+      )}
+
+      {/* ── Expense totals ── */}
+      {metrics.totalExpenses > 0 && (
+        <div>
+          <h3 className="text-xs text-white/40 uppercase tracking-wider mb-3 flex items-center gap-2">
+            <span className="w-4 h-px bg-rose-400/30 inline-block" />
+            Custos Dinâmicos
+            <span className="flex-1 h-px bg-white/10 inline-block" />
+          </h3>
+          <div className="grid grid-cols-2 gap-3">
+            <MetricCard
+              label="Total de Custos"
+              value={fmt(metrics.totalExpenses)}
+              fullValue={formatCurrencyFull(metrics.totalExpenses)}
+              status="warning"
+              sub="soma de todos os custos"
+            />
+            <MetricCard
+              label="Custo Anual"
+              value={fmt(metrics.annualExpenses)}
+              fullValue={formatCurrencyFull(metrics.annualExpenses)}
+              status="warning"
+              sub="mensal × meses"
+            />
           </div>
         </div>
       )}

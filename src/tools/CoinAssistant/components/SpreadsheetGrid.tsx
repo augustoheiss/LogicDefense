@@ -58,6 +58,7 @@ export function SpreadsheetGrid({
                 <span className="text-amber-400/60 ml-1.5">● </span>&lt; meta
                 <span className="text-sky-400/60 ml-1.5">● </span>aporte
                 <span className="text-orange-400/60 ml-1.5">● </span>justificado
+                <span className="text-rose-400/60 ml-1.5">● </span>custo
               </span>
             </th>
             <th className="text-left px-4 py-3 text-white/50 font-medium">Descrição</th>
@@ -120,11 +121,13 @@ export function SpreadsheetGrid({
                         ? 'text-orange-400 hover:text-orange-300'
                         : row.entryType === 'deposit'
                           ? 'text-sky-400 hover:text-sky-300'
-                          : row.value === 0
-                            ? 'text-white/30'
-                            : row.value >= dailyGoal
-                              ? 'text-emerald-400 hover:text-emerald-300'
-                              : 'text-amber-400 hover:text-amber-300'
+                          : row.entryType === 'expense'
+                            ? 'text-rose-400 hover:text-rose-300'
+                            : row.value === 0
+                              ? 'text-white/30'
+                              : row.value >= dailyGoal
+                                ? 'text-emerald-400 hover:text-emerald-300'
+                                : 'text-amber-400 hover:text-amber-300'
                     }`}
                     onClick={() => setEditingCell({ rowId: row.id, field: 'value' })}
                     title={
@@ -132,18 +135,22 @@ export function SpreadsheetGrid({
                         ? `🛡️ ${row.value} dia${row.value !== 1 ? 's' : ''} justificado${row.value !== 1 ? 's' : ''}`
                         : row.entryType === 'deposit'
                           ? 'Aporte / Investimento'
-                          : row.value === 0
-                            ? 'Dia de descanso'
-                            : row.value >= dailyGoal
-                              ? `✓ Meta atingida (R$ ${dailyGoal})`
-                              : `Abaixo da meta (R$ ${dailyGoal})`
+                          : row.entryType === 'expense'
+                            ? `🏷️ Custo: ${formatCurrency(row.value)}`
+                            : row.value === 0
+                              ? 'Dia de descanso'
+                              : row.value >= dailyGoal
+                                ? `✓ Meta atingida (R$ ${dailyGoal})`
+                                : `Abaixo da meta (R$ ${dailyGoal})`
                     }
                   >
                     {row.entryType === 'waiver'
                       ? `${row.value}d justif.`
-                      : row.value === 0
-                        ? '—'
-                        : formatCurrency(row.value)}
+                      : row.entryType === 'expense'
+                        ? `-${formatCurrency(row.value)}`
+                        : row.value === 0
+                          ? '—'
+                          : formatCurrency(row.value)}
                   </span>
                 )}
               </td>
@@ -179,7 +186,17 @@ export function SpreadsheetGrid({
                         Aporte
                       </span>
                     )}
+                    {row.entryType === 'expense' && (
+                      <span className="not-italic text-xs bg-rose-500/15 text-rose-400 border border-rose-500/25 px-1.5 py-0.5 rounded font-semibold">
+                        🏷️ Custo
+                      </span>
+                    )}
                     {row.description || <span className="not-italic text-white/20">—</span>}
+                    {row.entryType === 'expense' && row.monthlyValue != null && row.monthCount != null && (
+                      <span className="not-italic text-xs text-rose-400/50 ml-1">
+                        ({row.monthlyValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} × {row.monthCount}m)
+                      </span>
+                    )}
                   </span>
                 )}
               </td>

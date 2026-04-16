@@ -19,6 +19,7 @@ export interface TableRow {
    *   'revenue'  → R$ earned (0 = rest day, skipped in averages)
    *   'deposit'  → R$ invested
    *   'waiver'   → number of consecutive days justified/excused (e.g. 7 = one week)
+   *   'expense'  → dynamic cost entry; value = monthlyValue × monthCount
    */
   value: number;
   description?: string;
@@ -28,9 +29,21 @@ export interface TableRow {
    *   'deposit'  — investment / aporte
    *   'waiver'   — excused downtime period; value = days justified
    *                date = start of the period; description = reason
+   *   'expense'  — dynamic cost (e.g. insurance, IPVA, financing);
+   *                value = monthlyValue × monthCount (auto-computed on creation)
    * Omitted on legacy rows — treated as 'revenue' for full backward compatibility.
    */
-  entryType?: 'revenue' | 'deposit' | 'waiver';
+  entryType?: 'revenue' | 'deposit' | 'waiver' | 'expense';
+  /**
+   * For 'expense' entries only — the monthly cost amount (R$).
+   * Used to reconstruct the total: value = monthlyValue × monthCount.
+   */
+  monthlyValue?: number;
+  /**
+   * For 'expense' entries only — how many months this cost spans.
+   * Used to reconstruct the total: value = monthlyValue × monthCount.
+   */
+  monthCount?: number;
 }
 
 export interface TableGoals {
@@ -140,6 +153,16 @@ export interface TableMetrics {
   byYear: Record<string, YearMetrics>;   // "YYYY" → YearMetrics
   byMonth: Record<string, MonthMetrics>; // "YYYY-MM" → MonthMetrics
   byWeek: Record<string, number>;        // "YYYY-Www" → gross total
+  /**
+   * Sum of all 'expense' row values (dynamic costs like insurance, IPVA, etc.).
+   * Never included in revenue averages or gross totals.
+   */
+  totalExpenses: number;
+  /**
+   * Annualised expense total — derived from expense rows'
+   * monthlyValue × monthCount. Falls back to totalExpenses if fields are missing.
+   */
+  annualExpenses: number;
 }
 
 // ─── Projection Engine ────────────────────────────────────────────────────────

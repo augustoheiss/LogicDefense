@@ -36,10 +36,26 @@ export function computeMetrics(
   // Waiver rows are ledger entries, not revenue — strip them alongside deposits
   // so they never inflate gross totals or skew averages.
   const revenueRows = rows.filter(
-    (r) => r.entryType !== 'deposit' && r.entryType !== 'waiver',
+    (r) => r.entryType !== 'deposit' && r.entryType !== 'waiver' && r.entryType !== 'expense',
   );
 
-  if (revenueRows.length === 0) return emptyMetrics();
+  // ── Expense metrics — computed before the early-return guard ───────────────
+  const expenseRows = rows.filter((r) => r.entryType === 'expense');
+  let totalExpenses  = 0;
+  let annualExpenses = 0;
+  for (const row of expenseRows) {
+    totalExpenses += row.value;
+    // Prefer explicit monthlyValue × monthCount; fall back to raw value
+    annualExpenses += (row.monthlyValue != null && row.monthCount != null)
+      ? row.monthlyValue * row.monthCount
+      : row.value;
+  }
+  totalExpenses  = Math.round(totalExpenses  * 100) / 100;
+  annualExpenses = Math.round(annualExpenses * 100) / 100;
+
+  if (revenueRows.length === 0) {
+    return { ...emptyMetrics(), totalExpenses, annualExpenses };
+  }
 
   const activeRows = revenueRows.filter((r) => r.value > 0);
   if (activeRows.length === 0) return emptyMetrics();
@@ -212,6 +228,8 @@ export function computeMetrics(
     byYear,
     byMonth,
     byWeek,
+    totalExpenses,
+    annualExpenses,
   };
 }
 
@@ -286,5 +304,7 @@ function emptyMetrics(): TableMetrics {
     byYear: {},
     byMonth: {},
     byWeek: {},
+    totalExpenses: 0,
+    annualExpenses: 0,
   };
 }

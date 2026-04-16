@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import type { CoinTable, TableRow } from '../types';
 import { computeMetrics } from '../hooks/useMetricsEngine';
 import { SpreadsheetGrid } from './SpreadsheetGrid';
@@ -10,12 +10,15 @@ import { RealInvestmentsChart } from './RealInvestmentsChart';
 import { FutureProjectionChart } from './FutureProjectionChart';
 import { WhatsAppExporter } from './WhatsAppExporter';
 import { ConfirmDialog } from './ConfirmDialog';
+import { ExpensesBulkInput } from './ExpensesBulkInput';
+import { ExpensesSummary } from './ExpensesSummary';
 import { downloadCSV } from '../utils/csvIO';
+import { formatCurrencyShort, formatCurrencyFull } from '../utils/formatCurrency';
 import { groupRowsByWeek, findCurrentWeek, fmtDate, resolveGoalForYear } from '../utils/dateUtils';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type TabId = 'spreadsheet' | 'metrics' | 'chart';
+type TabId = 'spreadsheet' | 'metrics' | 'chart' | 'expenses';
 
 interface TableEditorProps {
   table: CoinTable;
@@ -129,7 +132,7 @@ export function TableEditor({
   // Revenue rows exclude both deposits and waiver ledger entries.
   // computeMetrics receives ALL rows so it can locate waiver rows internally.
   const revenueRows = useMemo(
-    () => table.rows.filter((r) => r.entryType !== 'deposit' && r.entryType !== 'waiver'),
+    () => table.rows.filter((r) => r.entryType !== 'deposit' && r.entryType !== 'waiver' && r.entryType !== 'expense'),
     [table.rows],
   );
   const metrics = useMemo(
@@ -187,10 +190,21 @@ export function TableEditor({
   }
 
   const tabs: { id: TabId; label: string }[] = [
-    { id: 'spreadsheet', label: 'Planilha' },
-    { id: 'metrics',     label: 'Métricas' },
-    { id: 'chart',       label: 'Gráfico'  },
+    { id: 'spreadsheet', label: '📋 Planilha' },
+    { id: 'metrics',     label: '📊 Métricas' },
+    { id: 'chart',       label: '📈 Gráfico'  },
+    { id: 'expenses',    label: '💸 Gastos'   },
   ];
+
+  /** Batch-add multiple rows at once (used by ExpensesBulkInput) */
+  const handleBulkAdd = useCallback(
+    (rows: Omit<TableRow, 'id'>[]) => {
+      for (const row of rows) {
+        onAddRow(row);
+      }
+    },
+    [onAddRow],
+  );
 
   return (
     <div className="flex flex-col h-full gap-4">
@@ -236,20 +250,22 @@ export function TableEditor({
       {metrics.grossTotal > 0 && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
           {[
-            { label: 'Total',   value: fmt(metrics.grossTotal),      color: 'text-white' },
+            { label: 'Total',   value: formatCurrencyShort(metrics.grossTotal),      full: formatCurrencyFull(metrics.grossTotal),      color: 'text-white' },
             {
               label: 'Diária',
-              value: fmt(metrics.globalDailyAvg),
+              value: formatCurrencyShort(metrics.globalDailyAvg),
+              full: formatCurrencyFull(metrics.globalDailyAvg),
               color: metrics.globalDailyAvg >= resolveGoalForYear(table.goals.dailyGoals, new Date().getFullYear())
                 ? 'text-emerald-400'
                 : 'text-amber-400',
             },
-            { label: 'Semanal', value: fmt(metrics.globalWeeklyAvg),  color: 'text-white' },
-            { label: 'Mensal',  value: fmt(metrics.globalMonthlyAvg), color: 'text-white' },
+            { label: 'Semanal', value: formatCurrencyShort(metrics.globalWeeklyAvg),  full: formatCurrencyFull(metrics.globalWeeklyAvg),  color: 'text-white' },
+            { label: 'Mensal',  value: formatCurrencyShort(metrics.globalMonthlyAvg), full: formatCurrencyFull(metrics.globalMonthlyAvg), color: 'text-white' },
           ].map((s) => (
             <div
               key={s.label}
               className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-center"
+              title={s.full}
             >
               <div className="text-xs text-white/30 uppercase tracking-wider">{s.label}</div>
               <div className={`text-sm font-mono font-semibold mt-0.5 ${s.color}`}>{s.value}</div>
@@ -410,6 +426,12 @@ export function TableEditor({
                 </div>
               </div>
             )}
+          </div>
+        )}
+        {activeTab === 'expenses' && (
+          <div className="space-y-6">
+            <ExpensesBulkInput onAddRows={handleBulkAdd} />
+            <ExpensesSummary rows={table.rows} />
           </div>
         )}
       </div>

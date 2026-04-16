@@ -105,10 +105,10 @@ export function exportTableToCSV(table: CoinTable): string {
     ...perYearLines('goal_weekly', table.goals.weeklyGoals),
     ...perYearLines('goal_annual', table.goals.annualCosts),
     ROWS_MARKER,
-    'date,value,description,entryType',
+    'date,value,description,entryType,monthlyValue,monthCount',
     ...sortedRows.map(
       (r) =>
-        `${r.date},${r.value},${escapeField(r.description ?? '')},${r.entryType ?? 'revenue'}`,
+        `${r.date},${r.value},${escapeField(r.description ?? 'Sem descrição')},${r.entryType ?? 'revenue'},${r.monthlyValue ?? ''},${r.monthCount ?? ''}`,
     ),
   ];
 
@@ -214,9 +214,10 @@ export function importTableFromCSV(csv: string): ImportedTable {
   };
 
   // ── Parse data rows ──────────────────────────────────────────────────────────
-  // Header line is at rowsSectionLine + 1; detect whether entryType column exists
+  // Header line is at rowsSectionLine + 1; detect available columns
   const headerLine  = lines[rowsSectionLine + 1]?.toLowerCase() ?? '';
   const hasTypeCol  = headerLine.includes('entrytype');
+  const hasMonthlyVal = headerLine.includes('monthlyvalue');
   const dataStart   = rowsSectionLine + 2; // first actual data row
 
   const rows: Array<Omit<TableRow, 'id'>> = [];
@@ -228,16 +229,23 @@ export function importTableFromCSV(csv: string): ImportedTable {
     const fields    = parseLine(line);
     const date      = fields[0]?.trim() ?? '';
     const rawVal    = fields[1]?.trim() ?? '';
-    const desc      = fields[2]?.trim() || undefined;
+    const desc      = fields[2]?.trim() || 'Sem descrição';
     const rawType   = hasTypeCol ? (fields[3]?.trim() ?? '') : '';
-    const entryType = rawType === 'deposit' ? 'deposit' : 'revenue';
+    const entryType = rawType === 'deposit'  ? 'deposit'
+                    : rawType === 'waiver'   ? 'waiver'
+                    : rawType === 'expense'  ? 'expense'
+                    : 'revenue';
 
     // Skip rows with invalid date or non-numeric value
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) continue;
     const value = parseFloat(rawVal);
     if (isNaN(value) || value < 0) continue;
 
-    rows.push({ date, value, description: desc, entryType });
+    // Parse optional expense fields
+    const monthlyValue = hasMonthlyVal ? parseOptionalFloat(fields[4]) : undefined;
+    const monthCount   = hasMonthlyVal ? parseOptionalInt(fields[5])   : undefined;
+
+    rows.push({ date, value, description: desc, entryType, monthlyValue, monthCount });
   }
 
   return {
@@ -272,4 +280,16 @@ export function readCSVFile(file: File): Promise<ImportedTable> {
 function parseFinite(raw: string | undefined, fallback: number): number {
   const n = parseFloat(raw ?? '');
   return isFinite(n) && n >= 0 ? n : fallback;
+}
+
+function parseOptionalFloat(raw: string | undefined): number | undefined {
+  if (!raw?.trim()) return undefined;
+  const n = parseFloat(raw);
+  return isFinite(n) ? n : undefined;
+}
+
+function parseOptionalInt(raw: string | undefined): number | undefined {
+  if (!raw?.trim()) return undefined;
+  const n = parseInt(raw, 10);
+  return isFinite(n) && n > 0 ? n : undefined;
 }

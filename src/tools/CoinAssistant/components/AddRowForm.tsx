@@ -5,7 +5,7 @@ interface AddRowFormProps {
   onAdd: (row: Omit<TableRow, 'id'>) => void;
 }
 
-type EntryType = 'revenue' | 'deposit' | 'waiver';
+type EntryType = 'revenue' | 'deposit' | 'waiver' | 'expense';
 
 function todayISO(): string {
   return new Date().toISOString().slice(0, 10);
@@ -54,6 +54,16 @@ const TYPE_CONFIG: Record<
     activeText:       'text-white',
     icon:             '🛡️',
   },
+  expense: {
+    label:            'Custo',
+    valueLabel:       'Valor Mensal (R$)',
+    valuePlaceholder: '450.00',
+    descPlaceholder:  'Seguro, IPVA, Financiamento...',
+    ring:             'focus:ring-rose-400',
+    activeBg:         'bg-rose-500',
+    activeText:       'text-white',
+    icon:             '🏷️',
+  },
 };
 
 export function AddRowForm({ onAdd }: AddRowFormProps) {
@@ -61,26 +71,47 @@ export function AddRowForm({ onAdd }: AddRowFormProps) {
   const [date,        setDate]        = useState(todayISO());
   const [value,       setValue]       = useState('');
   const [description, setDescription] = useState('');
+  const [monthCount,  setMonthCount]  = useState('12');
 
   const cfg = TYPE_CONFIG[entryType];
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    const numValue = parseFloat(value);
-    if (!date || isNaN(numValue) || numValue < 0) return;
-    // Waivers must have at least 1 day and a reason
-    if (entryType === 'waiver' && (numValue < 1 || !description.trim())) return;
 
-    onAdd({
-      date,
-      value: numValue,
-      description: description.trim() || undefined,
-      entryType,
-    });
+    if (entryType === 'expense') {
+      // Expense: monthlyValue × monthCount
+      const monthlyValue = parseFloat(value);
+      const months       = parseInt(monthCount, 10);
+      if (!date || isNaN(monthlyValue) || monthlyValue <= 0) return;
+      if (isNaN(months) || months < 1) return;
+      if (!description.trim()) return;
+
+      onAdd({
+        date,
+        value: Math.round(monthlyValue * months * 100) / 100,
+        description: description.trim(),
+        entryType: 'expense',
+        monthlyValue,
+        monthCount: months,
+      });
+    } else {
+      const numValue = parseFloat(value);
+      if (!date || isNaN(numValue) || numValue < 0) return;
+      // Waivers must have at least 1 day and a reason
+      if (entryType === 'waiver' && (numValue < 1 || !description.trim())) return;
+
+      onAdd({
+        date,
+        value: numValue,
+        description: description.trim() || undefined,
+        entryType,
+      });
+    }
 
     setValue('');
     setDescription('');
     setDate(todayISO());
+    setMonthCount('12');
   }
 
   return (
@@ -90,7 +121,7 @@ export function AddRowForm({ onAdd }: AddRowFormProps) {
     >
       {/* ── Entry type toggle ── */}
       <div className="flex items-center gap-1 self-start flex-wrap">
-        {(['revenue', 'deposit', 'waiver'] as EntryType[]).map((type) => {
+        {(['revenue', 'deposit', 'waiver', 'expense'] as EntryType[]).map((type) => {
           const active = type === entryType;
           const c = TYPE_CONFIG[type];
           return (
@@ -147,19 +178,46 @@ export function AddRowForm({ onAdd }: AddRowFormProps) {
           />
         </div>
 
+        {/* ── Expense: month count field ── */}
+        {entryType === 'expense' && (
+          <div className="flex flex-col gap-1">
+            <label className="text-xs text-white/40 uppercase tracking-wider">Meses</label>
+            <input
+              type="number"
+              step="1"
+              min="1"
+              placeholder="12"
+              value={monthCount}
+              onChange={(e) => setMonthCount(e.target.value)}
+              required
+              className={`bg-white/10 text-white text-sm rounded px-3 py-2 w-20 outline-none border border-white/10 ${cfg.ring}`}
+            />
+          </div>
+        )}
+
         <div className="flex flex-col gap-1 flex-1 min-w-36">
           <label className="text-xs text-white/40 uppercase tracking-wider">
-            {entryType === 'waiver' ? 'Motivo *' : 'Descrição'}
+            {entryType === 'waiver' ? 'Motivo *' : entryType === 'expense' ? 'Descrição *' : 'Descrição'}
           </label>
           <input
             type="text"
             placeholder={cfg.descPlaceholder}
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            required={entryType === 'waiver'}
+            required={entryType === 'waiver' || entryType === 'expense'}
             className={`bg-white/10 text-white text-sm rounded px-3 py-2 outline-none border border-white/10 w-full ${cfg.ring}`}
           />
         </div>
+
+        {/* ── Expense preview ── */}
+        {entryType === 'expense' && value && monthCount && (
+          <div className="flex flex-col gap-1 text-right">
+            <span className="text-xs text-white/40 uppercase tracking-wider">Total</span>
+            <span className="text-sm font-mono font-semibold text-rose-400 py-2">
+              R$ {(parseFloat(value || '0') * parseInt(monthCount || '1', 10)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+            </span>
+          </div>
+        )}
 
         <button
           type="submit"
