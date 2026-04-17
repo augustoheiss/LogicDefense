@@ -3,20 +3,21 @@
  *
  * File format:
  * ┌──────────────────────────────────────────────────────────────┐
- * │ ## COIN ASSISTANT BACKUP v1 ##                             │  ← magic header
+ * │ ## COIN ASSISTANT BACKUP v2 ##                             │  ← magic header
  * │ name,Motorista Executivo                                   │  ← metadata
  * │ description,Controle financeiro mensal                     │
  * │ goal_daily,86.00                                           │
  * │ goal_weekly,600.00                                         │
  * │ goal_annual,34736.50                                       │
  * │ ## ROWS ##                                                 │  ← section separator
- * │ date,value,description,entryType                          │  ← column header
- * │ 2026-01-26,300.00,Corrida para aeroporto,revenue          │  ← data rows
- * │ 2026-02-01,2000.00,Aporte mensal Tesouro,deposit          │
+ * │ date,value,description,entryType,monthlyValue,...          │  ← column header
+ * │ 2026-01-26,300.00,Corrida aeroporto,revenue,,,             │  ← data rows
+ * │ 2026-03-01,3000.00,Contrato Mar,revenue,,,2026-03-01,...   │  ← period row
  * └──────────────────────────────────────────────────────────────┘
  *
- * Backward compatibility: old CSVs without the entryType column are accepted;
- * missing entryType defaults to 'revenue'.
+ * v1 → v2: added columns period_start and period_end (optional, blank = single-day).
+ * Backward compatibility: v1 CSVs without those columns are fully accepted.
+ * Old CSVs without entryType default to 'revenue'.
  *
  * - Fields containing commas, double-quotes, or newlines are RFC 4180-quoted.
  * - File is UTF-8 with a BOM (U+FEFF) for Excel compatibility.
@@ -25,7 +26,8 @@
 
 import type { CoinTable, TableGoals, TableRow } from '../types';
 
-const MAGIC       = '## COIN ASSISTANT BACKUP v1 ##';
+const MAGIC       = '## COIN ASSISTANT BACKUP v2 ##';
+const MAGIC_V1    = '## COIN ASSISTANT BACKUP v1 ##'; // accepted for backward compat
 const ROWS_MARKER = '## ROWS ##';
 const CRLF        = '\r\n';
 
@@ -105,10 +107,19 @@ export function exportTableToCSV(table: CoinTable): string {
     ...perYearLines('goal_weekly', table.goals.weeklyGoals),
     ...perYearLines('goal_annual', table.goals.annualCosts),
     ROWS_MARKER,
-    'date,value,description,entryType,monthlyValue,monthCount',
+    'date,value,description,entryType,monthlyValue,monthCount,period_start,period_end',
     ...sortedRows.map(
       (r) =>
-        `${r.date},${r.value},${escapeField(r.description ?? 'Sem descrição')},${r.entryType ?? 'revenue'},${r.monthlyValue ?? ''},${r.monthCount ?? ''}`,
+        [
+          r.date,
+          r.value,
+          escapeField(r.description ?? 'Sem descrição'),
+          r.entryType ?? 'revenue',
+          r.monthlyValue ?? '',
+          r.monthCount   ?? '',
+          r.periodStart  ?? '',
+          r.periodEnd    ?? '',
+        ].join(','),
     ),
   ];
 
@@ -156,8 +167,9 @@ export function importTableFromCSV(csv: string): ImportedTable {
   const cleaned = csv.startsWith('\uFEFF') ? csv.slice(1) : csv;
   const lines   = cleaned.split(/\r?\n/);
 
-  // Validate magic header
-  if (lines[0]?.trim() !== MAGIC) {
+  // Validate magic header (accept both v1 and v2)
+  const firstLine = lines[0]?.trim();
+  if (firstLine !== MAGIC && firstLine !== MAGIC_V1) {
     throw new Error(
       'Arquivo inválido. Use apenas backups exportados pelo Assistente Moeda (.csv).',
     );
@@ -215,10 +227,11 @@ export function importTableFromCSV(csv: string): ImportedTable {
 
   // ── Parse data rows ──────────────────────────────────────────────────────────
   // Header line is at rowsSectionLine + 1; detect available columns
-  const headerLine  = lines[rowsSectionLine + 1]?.toLowerCase() ?? '';
-  const hasTypeCol  = headerLine.includes('entrytype');
+  const headerLine    = lines[rowsSectionLine + 1]?.toLowerCase() ?? '';
+  const hasTypeCol    = headerLine.includes('entrytype');
   const hasMonthlyVal = headerLine.includes('monthlyvalue');
-  const dataStart   = rowsSectionLine + 2; // first actual data row
+  const hasPeriodCol  = headerLine.includes('period_start');  // v2 columns
+  const dataStart     = rowsSectionLine + 2; // first actual data row
 
   const rows: Array<Omit<TableRow, 'id'>> = [];
 
@@ -245,7 +258,13 @@ export function importTableFromCSV(csv: string): ImportedTable {
     const monthlyValue = hasMonthlyVal ? parseOptionalFloat(fields[4]) : undefined;
     const monthCount   = hasMonthlyVal ? parseOptionalInt(fields[5])   : undefined;
 
-    rows.push({ date, value, description: desc, entryType, monthlyValue, monthCount });
+    // Parse optional period fields (v2 — blank cells in v1 files are safe)
+    const rawPeriodStart = hasPeriodCol ? fields[6]?.trim() : '';
+    const rawPeriodEnd   = hasPeriodCol ? fields[7]?.trim() : '';
+    const periodStart    = /^\d{4}-\d{2}-\d{2}$/.test(rawPeriodStart ?? '') ? rawPeriodStart : undefined;
+    const periodEnd      = /^\d{4}-\d{2}-\d{2}$/.test(rawPeriodEnd   ?? '') ? rawPeriodEnd   : undefined;
+
+    rows.push({ date, value, description: desc, entryType, monthlyValue, monthCount, periodStart, periodEnd });
   }
 
   return {
