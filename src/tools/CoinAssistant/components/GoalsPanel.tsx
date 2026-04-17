@@ -191,7 +191,7 @@ export function GoalsPanel({ goals, metrics }: GoalsPanelProps) {
       />
 
       {/* ── Quick stats ── */}
-      <div className="pt-1 border-t border-white/10 grid grid-cols-3 gap-3 text-center">
+      <div className={`pt-1 border-t border-white/10 grid gap-3 text-center ${metrics.totalExpenses > 0 ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-3'}`}>
         <div>
           <div className="text-xs text-white/30 mb-1">Meta diária {currentYear}</div>
           <div className="text-sm font-mono font-semibold text-[#a855f7]">
@@ -210,6 +210,14 @@ export function GoalsPanel({ goals, metrics }: GoalsPanelProps) {
             {metrics.totalElapsedWeeks} sem.
           </div>
         </div>
+        {metrics.totalExpenses > 0 && (
+          <div>
+            <div className="text-xs text-white/30 mb-1">Saldo Líquido</div>
+            <div className={`text-sm font-mono font-semibold ${metrics.netBalance >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+              {metrics.netBalance >= 0 ? '+' : ''}{fmt(metrics.netBalance)}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

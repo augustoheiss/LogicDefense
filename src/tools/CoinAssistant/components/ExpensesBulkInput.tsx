@@ -1,6 +1,19 @@
 import { useState } from 'react';
 import type { TableRow } from '../types';
 
+/** Returns the first day of the current month as YYYY-MM-DD. */
+function firstOfMonth(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
+}
+
+/** Returns the last day of the current month as YYYY-MM-DD. */
+function lastOfMonth(): string {
+  const d = new Date();
+  const last = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+  return last.toISOString().slice(0, 10);
+}
+
 interface ExpensesBulkInputProps {
   onAddRows: (rows: Omit<TableRow, 'id'>[]) => void;
 }
@@ -11,10 +24,6 @@ interface StagedRow {
 }
 
 const API_BASE = 'http://localhost:8000';
-
-function todayISO(): string {
-  return new Date().toISOString().slice(0, 10);
-}
 
 /**
  * Bulk expense input component.
@@ -28,7 +37,8 @@ function todayISO(): string {
  */
 export function ExpensesBulkInput({ onAddRows }: ExpensesBulkInputProps) {
   const [rawInput,    setRawInput]    = useState('');
-  const [date,        setDate]        = useState(todayISO());
+  const [periodStart, setPeriodStart] = useState(firstOfMonth());
+  const [periodEnd,   setPeriodEnd]   = useState(lastOfMonth());
   const [staged,      setStaged]      = useState<StagedRow[]>([]);
   const [loading,     setLoading]     = useState(false);
   const [error,       setError]       = useState<string | null>(null);
@@ -42,7 +52,7 @@ export function ExpensesBulkInput({ onAddRows }: ExpensesBulkInputProps) {
       const res = await fetch(`${API_BASE}/api/coin/bulk-input`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ values: rawInput.trim(), date }),
+        body: JSON.stringify({ values: rawInput.trim(), date: periodStart }),
       });
 
       if (!res.ok) {
@@ -99,14 +109,15 @@ export function ExpensesBulkInput({ onAddRows }: ExpensesBulkInputProps) {
 
   function handleCommitAll() {
     if (staged.length === 0) return;
-
+    const [effStart, effEnd] = [periodStart, periodEnd].sort(); // guard reversed dates
     const rows: Omit<TableRow, 'id'>[] = staged.map((r) => ({
-      date,
-      value: r.value,
+      date:        effStart,
+      periodStart: effStart,
+      periodEnd:   effEnd,
+      value:       r.value,
       description: r.description || 'Sem descrição',
-      entryType: 'expense' as const,
+      entryType:   'expense' as const,
     }));
-
     onAddRows(rows);
     setStaged([]);
     setRawInput('');
@@ -127,13 +138,22 @@ export function ExpensesBulkInput({ onAddRows }: ExpensesBulkInputProps) {
           com "Sem descrição" — você poderá editar cada descrição antes de salvar.
         </p>
 
-        <div className="flex gap-2 items-end">
+        <div className="flex gap-2 items-end flex-wrap">
           <div className="flex flex-col gap-1">
-            <label className="text-xs text-white/40 uppercase tracking-wider">Data</label>
+            <label className="text-xs text-white/40 uppercase tracking-wider">Período Início</label>
             <input
               type="date"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
+              value={periodStart}
+              onChange={(e) => setPeriodStart(e.target.value)}
+              className="bg-white/10 text-white text-sm rounded px-3 py-2 outline-none border border-white/10 focus:ring-1 focus:ring-rose-400 [color-scheme:dark]"
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs text-white/40 uppercase tracking-wider">Período Fim</label>
+            <input
+              type="date"
+              value={periodEnd}
+              onChange={(e) => setPeriodEnd(e.target.value)}
               className="bg-white/10 text-white text-sm rounded px-3 py-2 outline-none border border-white/10 focus:ring-1 focus:ring-rose-400 [color-scheme:dark]"
             />
           </div>

@@ -99,6 +99,21 @@ export function MetricsPanel({ metrics, dailyGoal }: MetricsPanelProps) {
           />
         </div>
 
+        {/* ── Saldo Líquido (receitas − despesas) — só exibe quando há despesas ── */}
+        {metrics.totalExpenses > 0 && (
+          <MetricCard
+            label="Saldo Líquido Global"
+            value={fmt(metrics.netBalance)}
+            fullValue={formatCurrencyFull(metrics.netBalance)}
+            status={metrics.netBalance >= 0 ? 'success' : 'warning'}
+            sub={
+              metrics.netBalance >= 0
+                ? `✓ Receitas excedem despesas em ${fmt(metrics.netBalance)}`
+                : `⚠ Despesas superam receitas em ${fmt(Math.abs(metrics.netBalance))}`
+            }
+          />
+        )}
+
         {/* ── Time Bank ── */}
         {metrics.grossTotal > 0 && (() => {
           const tb = metrics.timeBankBalance;

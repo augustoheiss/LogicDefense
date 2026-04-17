@@ -358,5 +358,6 @@ function emptyMetrics(): TableMetrics {
     byWeek: {},
     totalExpenses: 0,
     annualExpenses: 0,
+    netBalance: 0,
   };
 }

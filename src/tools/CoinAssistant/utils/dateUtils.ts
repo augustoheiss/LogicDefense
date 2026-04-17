@@ -196,8 +196,8 @@ export function calculateStrictGlobalBalance(
   const activeRows = rows.filter((r) => r.value > 0);
   if (activeRows.length === 0) return { balance: 0, elapsedWeeks: 0 };
 
-  // Step A — earliest date among all active revenue rows
-  const minDate = activeRows.map((r) => r.date).sort()[0];
+  // Step A — earliest date among all active rows (use periodStart if available)
+  const minDate = activeRows.map((r) => r.periodStart ?? r.date).sort()[0];
   const [minY, minMo, minD] = minDate.split('-').map(Number);
 
   // Step B — Monday of the week that contains minDate (start of timeline)
@@ -209,10 +209,24 @@ export function calculateStrictGlobalBalance(
     new Date(today.getFullYear(), today.getMonth(), today.getDate()),
   );
 
-  // Build a fast O(1) lookup: "YYYY-MM-DD" → total revenue for that date
+  // Build a fast O(1) lookup: "YYYY-MM-DD" → total revenue for that date.
+  // Period rows are spread as daily contributions (value / periodDays per day)
+  // so the strict weekly balance correctly amortises lump-sum payments.
+  const msPerDay = 86_400_000;
   const dateValueMap = new Map<string, number>();
   for (const row of activeRows) {
-    dateValueMap.set(row.date, (dateValueMap.get(row.date) ?? 0) + row.value);
+    if (row.periodStart && row.periodEnd) {
+      const startMs  = new Date(row.periodStart + 'T12:00:00').getTime();
+      const endMs    = new Date(row.periodEnd   + 'T12:00:00').getTime();
+      const periodDays = Math.max(1, Math.round((endMs - startMs) / msPerDay) + 1);
+      const dailyValue = row.value / periodDays;
+      for (let ms = startMs; ms <= endMs; ms += msPerDay) {
+        const dayKey = toLocalKey(new Date(ms));
+        dateValueMap.set(dayKey, (dateValueMap.get(dayKey) ?? 0) + dailyValue);
+      }
+    } else {
+      dateValueMap.set(row.date, (dateValueMap.get(row.date) ?? 0) + row.value);
+    }
   }
 
   // Steps D–G — walk each Mon–Sun window from startOfTimeline to endOfTimeline

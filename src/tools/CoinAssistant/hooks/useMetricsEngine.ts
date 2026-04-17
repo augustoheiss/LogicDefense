@@ -58,11 +58,21 @@ export function computeMetrics(
   }
 
   const activeRows = revenueRows.filter((r) => r.value > 0);
-  if (activeRows.length === 0) return emptyMetrics();
+  if (activeRows.length === 0) return { ...emptyMetrics(), totalExpenses, annualExpenses };
 
-  // ── Global date span uses revenue rows only (rest-day entries included) ──────
-  const allDates = revenueRows.map((r) => r.date).sort();
-  const globalSpanDays = Math.max(1, calendarDaySpan(allDates[0], allDates[allDates.length - 1]));
+  // ── Global date span — uses periodStart/periodEnd when present ────────────────
+  // Including the full period boundaries prevents a single end-of-month payment
+  // from collapsing the span to 1 day and exploding the daily average.
+  const allEffectiveDates = revenueRows.flatMap((r) => {
+    const dates = [r.date];
+    if (r.periodStart) dates.push(r.periodStart);
+    if (r.periodEnd)   dates.push(r.periodEnd);
+    return dates;
+  }).sort();
+  const globalSpanDays = Math.max(
+    1,
+    calendarDaySpan(allEffectiveDates[0], allEffectiveDates[allEffectiveDates.length - 1]),
+  );
 
   // ── Today — used for the current-month partial-month denominator ─────────────
   const today = new Date();
@@ -83,26 +93,40 @@ export function computeMetrics(
   const byWeekAcc: Record<string, number> = {};
 
   // ── Single-pass over active rows ──────────────────────────────────────────────
+  // grossTotal and byYear always accumulate the full row.value (total earned).
+  // byMonth and byWeek use rowContributions() so that period entries are spread
+  // proportionally instead of landing as a lump sum on a single date.
   for (const row of activeRows) {
     const { date, value } = row;
-    const [yearStr, monthStr] = date.split('-');
-    const yearMonth = `${yearStr}-${monthStr}`;
-    const isoWeek = getISOWeekKey(date);
-
     grossTotal += value;
 
+    // byYear: attribute to the year of periodStart (or payment date as fallback)
+    const effectiveStart = row.periodStart ?? date;
+    const [yearStr] = effectiveStart.split('-');
     if (!byYearAcc[yearStr]) byYearAcc[yearStr] = { gross: 0, dates: [] };
     byYearAcc[yearStr].gross += value;
-    byYearAcc[yearStr].dates.push(date);
-
-    if (!byMonthAcc[yearMonth]) {
-      byMonthAcc[yearMonth] = { gross: 0, payments: {}, weeks: new Set() };
+    byYearAcc[yearStr].dates.push(effectiveStart);
+    if (row.periodEnd) {
+      const [endYearStr] = row.periodEnd.split('-');
+      if (endYearStr === yearStr) byYearAcc[yearStr].dates.push(row.periodEnd);
     }
-    byMonthAcc[yearMonth].gross += value;
-    byMonthAcc[yearMonth].payments[date] = value;
-    byMonthAcc[yearMonth].weeks.add(isoWeek);
 
-    byWeekAcc[isoWeek] = (byWeekAcc[isoWeek] ?? 0) + value;
+    // byMonth + byWeek: distribute value across daily contributions
+    for (const contrib of rowContributions(row)) {
+      const [cYearStr, cMonthStr] = contrib.date.split('-');
+      const yearMonth = `${cYearStr}-${cMonthStr}`;
+      const isoWeek = getISOWeekKey(contrib.date);
+
+      if (!byMonthAcc[yearMonth]) {
+        byMonthAcc[yearMonth] = { gross: 0, payments: {}, weeks: new Set() };
+      }
+      byMonthAcc[yearMonth].gross += contrib.value;
+      byMonthAcc[yearMonth].payments[contrib.date] =
+        (byMonthAcc[yearMonth].payments[contrib.date] ?? 0) + contrib.value;
+      byMonthAcc[yearMonth].weeks.add(isoWeek);
+
+      byWeekAcc[isoWeek] = (byWeekAcc[isoWeek] ?? 0) + contrib.value;
+    }
   }
 
   // ── Global averages ───────────────────────────────────────────────────────────
@@ -213,6 +237,9 @@ export function computeMetrics(
     ? Math.round((globalGoalBalance / effectiveWeeklyGoal) * 100) / 100
     : 0;
 
+  // ── Net balance (cash position after expenses) ────────────────────────────────
+  const netBalance = round2(grossTotal - totalExpenses);
+
   return {
     grossTotal: round2(grossTotal),
     globalDailyAvg,
@@ -230,6 +257,7 @@ export function computeMetrics(
     byWeek,
     totalExpenses,
     annualExpenses,
+    netBalance,
   };
 }
 
@@ -306,5 +334,39 @@ function emptyMetrics(): TableMetrics {
     byWeek: {},
     totalExpenses: 0,
     annualExpenses: 0,
+    netBalance: 0,
   };
+}
+
+// ── Period distribution helper ──────────────────────────────────────────────────────────
+
+/**
+ * Returns a list of daily contribution objects for a revenue row.
+ *
+ * Period rows (periodStart + periodEnd present and distinct):
+ *   Distributes row.value / periodDays to each calendar day in
+ *   [periodStart, periodEnd]. This prevents a lump-sum payment
+ *   from inflating daily/weekly/monthly averages.
+ *
+ * Single-day rows (no period fields or periodStart === periodEnd):
+ *   Returns a single entry with the full row.value at row.date.
+ */
+export function rowContributions(row: TableRow): Array<{ date: string; value: number }> {
+  if (row.periodStart && row.periodEnd && row.periodStart !== row.periodEnd) {
+    const msPerDay = 86_400_000;
+    const startMs  = new Date(row.periodStart + 'T12:00:00').getTime();
+    const endMs    = new Date(row.periodEnd   + 'T12:00:00').getTime();
+    if (endMs < startMs) return [{ date: row.date, value: row.value }]; // guard
+
+    const periodDays = Math.max(1, Math.round((endMs - startMs) / msPerDay) + 1);
+    const dailyValue = row.value / periodDays;
+    const contributions: Array<{ date: string; value: number }> = [];
+
+    for (let ms = startMs; ms <= endMs; ms += msPerDay) {
+      // Use ISO date string sliced to YYYY-MM-DD (noon UTC avoids DST shifts)
+      contributions.push({ date: new Date(ms).toISOString().slice(0, 10), value: dailyValue });
+    }
+    return contributions;
+  }
+  return [{ date: row.date, value: row.value }];
 }

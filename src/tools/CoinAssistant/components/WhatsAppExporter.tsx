@@ -47,8 +47,15 @@ function buildMessage(
   // that share the same Mon–Sun window are included, preventing fragmentation.
   const [selY, selM] = selectedMonth.split('-').map(Number);
 
+  // Fix: exclude expenses AND waivers so they never appear inside weekly revenue blocks
   const allRevenueRows = table.rows
-    .filter((r) => r.entryType !== 'deposit' && r.value > 0)
+    .filter(
+      (r) =>
+        r.entryType !== 'deposit' &&
+        r.entryType !== 'waiver' &&
+        r.entryType !== 'expense' &&
+        r.value > 0,
+    )
     .sort((a, b) => a.date.localeCompare(b.date));
 
   const weekGroups = groupRowsByWeek(allRevenueRows, table.goals.weeklyGoals).filter(
@@ -72,9 +79,19 @@ function buildMessage(
       ? ((monthMetrics.dailyAvg / reportDailyGoal) * 100).toFixed(1)
       : '0.0';
 
+    // Expenses lançadas neste mês (filtrado pela date do lançamento)
+    const monthExpenseRows = table.rows.filter(
+      (r) => r.entryType === 'expense' && r.date.startsWith(selectedMonth),
+    );
+    const totalExpM = monthExpenseRows.reduce((s, r) => s + r.value, 0);
+    const netMonthly = monthMetrics.grossMonthly - totalExpM;
+    const netSign   = netMonthly >= 0 ? '✅' : '⚠️';
+
     lines.push(
       `📊 *Resumo do Mês*`,
-      `• Total do Mês: *${fmt(monthMetrics.grossMonthly)}*`,
+      `• Receitas do Mês: *${fmt(monthMetrics.grossMonthly)}*`,
+      ...(totalExpM > 0 ? [`• Despesas do Mês: *-${fmt(totalExpM)}*`] : []),
+      ...(totalExpM > 0 ? [`• ${netSign} Saldo Líquido do Mês: *${fmt(netMonthly)}*`] : []),
       `• Média Diária: ${fmt(monthMetrics.dailyAvg)}`,
       `• Média Semanal: ${fmt(monthMetrics.weeklyAvg)}`,
       `• Meta Diária ${reportYear} (${fmt(reportDailyGoal)}): ${goalPct}% atingida`,
@@ -114,7 +131,24 @@ function buildMessage(
     lines.push('');
   }
 
-  // ── Global big picture + goals ─────────────────────────────────────────────
+  // ── Expenses breakdown (filtro: expenses cuja date está no mês selecionado) ──────────
+  const allMonthExpenses = table.rows.filter(
+    (r) => r.entryType === 'expense' && r.date.startsWith(selectedMonth),
+  );
+  if (allMonthExpenses.length > 0) {
+    lines.push(`💸 *Despesas do Período*`);
+    lines.push('');
+    for (const exp of allMonthExpenses) {
+      const desc = exp.description ?? 'Sem descrição';
+      const suffix =
+        exp.monthlyValue != null && exp.monthCount != null
+          ? ` _(${fmt(exp.monthlyValue)}/mês × ${exp.monthCount}m)_`
+          : '';
+      lines.push(`• ${desc}: *-${fmt(exp.value)}*${suffix}`);
+    }
+    lines.push('');
+  }
+
   const yearCost    = resolveGoalForYear(table.goals.annualCosts, reportYear);
   const yearRevenue = metrics.byYear[String(reportYear)]?.grossAnnual ?? 0;
   const annualPct   = yearCost > 0
@@ -146,6 +180,12 @@ function buildMessage(
   lines.push(
     `🌎 *Visão Global & Metas*`,
     `• Faturamento Total Histórico: *${fmt(metrics.grossTotal)}*`,
+    ...(metrics.totalExpenses > 0
+      ? [
+          `• Total de Despesas: *-${fmt(metrics.totalExpenses)}*`,
+          `• 💰 Saldo Líquido Global: *${fmt(metrics.netBalance)}*`,
+        ]
+      : []),
     `• Média Diária Global: ${fmt(metrics.globalDailyAvg)}`,
     `• Meta Semanal ${reportYear}: ${fmt(reportWeeklyGoal)}`,
     balanceLine,

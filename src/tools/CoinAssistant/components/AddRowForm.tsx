@@ -7,6 +7,16 @@ interface AddRowFormProps {
 
 type EntryType = 'revenue' | 'deposit' | 'waiver' | 'expense';
 
+/** Calculates calendar days in the range [a, b] inclusive. */
+function daySpan(a: string, b: string): number {
+  if (!a || !b) return 1;
+  const msPerDay = 86_400_000;
+  const diff = Math.round(
+    Math.abs(new Date(b + 'T12:00:00').getTime() - new Date(a + 'T12:00:00').getTime()) / msPerDay,
+  );
+  return Math.max(1, diff + 1);
+}
+
 function todayISO(): string {
   return new Date().toISOString().slice(0, 10);
 }
@@ -72,8 +82,17 @@ export function AddRowForm({ onAdd }: AddRowFormProps) {
   const [value,       setValue]       = useState('');
   const [description, setDescription] = useState('');
   const [monthCount,  setMonthCount]  = useState('12');
+  // Period mode — revenue only
+  const [isPeriod,    setIsPeriod]    = useState(false);
+  const [periodStart, setPeriodStart] = useState(todayISO());
+  const [periodEnd,   setPeriodEnd]   = useState(todayISO());
 
   const cfg = TYPE_CONFIG[entryType];
+  // Helpers for period preview
+  const periodDays   = isPeriod && entryType === 'revenue' ? daySpan(periodStart, periodEnd) : 1;
+  const dailyPreview = isPeriod && entryType === 'revenue' && value
+    ? Math.round((parseFloat(value) / periodDays) * 100) / 100
+    : null;
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -96,22 +115,34 @@ export function AddRowForm({ onAdd }: AddRowFormProps) {
       });
     } else {
       const numValue = parseFloat(value);
-      if (!date || isNaN(numValue) || numValue < 0) return;
+      if (isNaN(numValue) || numValue < 0) return;
       // Waivers must have at least 1 day and a reason
       if (entryType === 'waiver' && (numValue < 1 || !description.trim())) return;
 
+      const isPeriodMode = isPeriod && entryType === 'revenue' && periodStart && periodEnd;
+      // Swap if user picked end before start
+      const [effStart, effEnd] = isPeriodMode
+        ? [periodStart, periodEnd].sort()
+        : [date, date];
+
+      if (!effStart) return;
+
       onAdd({
-        date,
-        value: numValue,
+        date:        isPeriodMode ? effStart : date,
+        value:       numValue,
         description: description.trim() || undefined,
         entryType,
+        ...(isPeriodMode ? { periodStart: effStart, periodEnd: effEnd } : {}),
       });
     }
 
     setValue('');
     setDescription('');
     setDate(todayISO());
+    setPeriodStart(todayISO());
+    setPeriodEnd(todayISO());
     setMonthCount('12');
+    setIsPeriod(false);
   }
 
   return (
@@ -121,14 +152,19 @@ export function AddRowForm({ onAdd }: AddRowFormProps) {
     >
       {/* ── Entry type toggle ── */}
       <div className="flex items-center gap-1 self-start flex-wrap">
-        {(['revenue', 'deposit', 'waiver', 'expense'] as EntryType[]).map((type) => {
+        {([
+            'revenue', 'deposit', 'waiver', 'expense',
+          ] as EntryType[]).map((type) => {
           const active = type === entryType;
           const c = TYPE_CONFIG[type];
           return (
             <button
               key={type}
               type="button"
-              onClick={() => setEntryType(type)}
+              onClick={() => {
+                setEntryType(type);
+                if (type !== 'revenue') setIsPeriod(false);
+              }}
               className={`px-3 py-1 text-xs font-semibold rounded-md transition-all ${
                 active
                   ? `${c.activeBg} ${c.activeText} shadow`
@@ -141,6 +177,35 @@ export function AddRowForm({ onAdd }: AddRowFormProps) {
         })}
       </div>
 
+      {/* ── Period toggle (revenue only) ── */}
+      {entryType === 'revenue' && (
+        <div className="flex items-center gap-1 self-start text-xs">
+          <button
+            type="button"
+            onClick={() => setIsPeriod(false)}
+            className={`px-2 py-1 rounded transition-all ${
+              !isPeriod
+                ? 'bg-[#a855f7]/20 text-[#a855f7] font-semibold'
+                : 'text-white/30 hover:text-white/60'
+            }`}
+          >
+            📅 Único
+          </button>
+          <span className="text-white/20">|</span>
+          <button
+            type="button"
+            onClick={() => setIsPeriod(true)}
+            className={`px-2 py-1 rounded transition-all ${
+              isPeriod
+                ? 'bg-[#a855f7]/20 text-[#a855f7] font-semibold'
+                : 'text-white/30 hover:text-white/60'
+            }`}
+          >
+            📆 Cobre um Período
+          </button>
+        </div>
+      )}
+
       {/* ── Waiver hint ── */}
       {entryType === 'waiver' && (
         <p className="text-xs text-amber-400/60 leading-relaxed -mt-1">
@@ -151,18 +216,54 @@ export function AddRowForm({ onAdd }: AddRowFormProps) {
 
       {/* ── Fields row ── */}
       <div className="flex flex-wrap gap-2 items-end">
-        <div className="flex flex-col gap-1">
-          <label className="text-xs text-white/40 uppercase tracking-wider">
-            {entryType === 'waiver' ? 'Data da Ocorrência' : 'Data'}
-          </label>
-          <input
-            type="date"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-            required
-            className={`bg-white/10 text-white text-sm rounded px-3 py-2 outline-none border border-white/10 [color-scheme:dark] ${cfg.ring}`}
-          />
-        </div>
+        {/* Date or Period fields */}
+        {isPeriod && entryType === 'revenue' ? (
+          <>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs text-white/40 uppercase tracking-wider">Início</label>
+              <input
+                type="date"
+                value={periodStart}
+                onChange={(e) => setPeriodStart(e.target.value)}
+                required
+                className={`bg-white/10 text-white text-sm rounded px-3 py-2 outline-none border border-white/10 [color-scheme:dark] ${cfg.ring}`}
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs text-white/40 uppercase tracking-wider">Fim do Período</label>
+              <input
+                type="date"
+                value={periodEnd}
+                onChange={(e) => setPeriodEnd(e.target.value)}
+                required
+                className={`bg-white/10 text-white text-sm rounded px-3 py-2 outline-none border border-white/10 [color-scheme:dark] ${cfg.ring}`}
+              />
+            </div>
+            {dailyPreview !== null && (
+              <div className="flex flex-col gap-1 self-center">
+                <span className="text-xs text-white/40 uppercase tracking-wider">Rateio</span>
+                <span className="text-xs font-mono text-[#a855f7]/90 py-2">
+                  ≈ R$ {dailyPreview.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/dia
+                  &nbsp;·&nbsp;
+                  R$ {Math.round(dailyPreview * 7 * 100 / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/sem.
+                </span>
+              </div>
+            )}
+          </>
+        ) : (
+          <div className="flex flex-col gap-1">
+            <label className="text-xs text-white/40 uppercase tracking-wider">
+              {entryType === 'waiver' ? 'Data da Ocorrência' : 'Data'}
+            </label>
+            <input
+              type="date"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              required
+              className={`bg-white/10 text-white text-sm rounded px-3 py-2 outline-none border border-white/10 [color-scheme:dark] ${cfg.ring}`}
+            />
+          </div>
+        )}
 
         <div className="flex flex-col gap-1">
           <label className="text-xs text-white/40 uppercase tracking-wider">{cfg.valueLabel}</label>

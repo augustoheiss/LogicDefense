@@ -163,7 +163,11 @@ export function TableEditor({
   // actual week regardless of where its Sunday lands.
   const currentWeekData = useMemo(() => {
     const allRevenueRows = table.rows.filter(
-      (r) => r.entryType !== 'deposit' && r.value > 0,
+      (r) =>
+        r.entryType !== 'deposit' &&
+        r.entryType !== 'expense' &&
+        r.entryType !== 'waiver' &&
+        r.value > 0,
     );
     const allGroups = groupRowsByWeek(allRevenueRows, table.goals.weeklyGoals);
     if (allGroups.length === 0) return null;

@@ -44,6 +44,19 @@ export interface TableRow {
    * Used to reconstruct the total: value = monthlyValue × monthCount.
    */
   monthCount?: number;
+  /**
+   * Optional period start date for 'revenue' (and 'expense') entries.
+   * When set alongside periodEnd, the metrics engine distributes row.value
+   * across every calendar day in [periodStart, periodEnd] so that lump-sum
+   * payments don't inflate daily/weekly/monthly averages.
+   * For single-day entries leave undefined.
+   */
+  periodStart?: string; // "YYYY-MM-DD"
+  /**
+   * Optional period end date — must be set together with periodStart.
+   * row.date is set to periodStart on creation for backward‑compat.
+   */
+  periodEnd?: string;   // "YYYY-MM-DD"
 }
 
 export interface TableGoals {
@@ -163,6 +176,12 @@ export interface TableMetrics {
    * monthlyValue × monthCount. Falls back to totalExpenses if fields are missing.
    */
   annualExpenses: number;
+  /**
+   * Net balance = grossTotal − totalExpenses.
+   * Represents the real cash position after deducting all registered costs.
+   * Positive = receipts exceed costs; negative = costs exceed receipts.
+   */
+  netBalance: number;
 }
 
 // ─── Projection Engine ────────────────────────────────────────────────────────
