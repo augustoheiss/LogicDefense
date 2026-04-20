@@ -1,5 +1,5 @@
 // ============================================================
-// LOGIC INVADERS — CORE TYPES  (v3 — Endless Roguelike)
+// LOGIC INVADERS — CORE TYPES  (v4 — Boss Mode + Overdrive)
 // ============================================================
 
 export interface Vector2 {
@@ -77,6 +77,43 @@ export interface Particle {
 
 export type GameStatus = 'idle' | 'playing' | 'paused' | 'saving';
 
+// ─── Voxel Boss ──────────────────────────────────────────────
+
+/** 15 columns × 8 rows grid; true = voxel alive */
+export type VoxelGrid = boolean[][];
+
+/**
+ * Three logical columns (0 = left, 1 = center, 2 = right).
+ * Each spans 5 voxel columns of the 15-column grid.
+ */
+export interface VoxelBossState {
+  /** 8-row × 15-col alive/dead voxel matrix  [row][col] */
+  voxels: VoxelGrid;
+  /** Live voxel count per logical column (used for per-column HP display) */
+  colVoxelCount: [number, number, number];
+  /** Which logical column (0/1/2) is the correct answer column */
+  correctColIdx: 0 | 1 | 2;
+  /** Equation string shown at top, e.g. "8 × 7" */
+  equation: string;
+  /** Answer value shown above each logical column (index = logical column) */
+  columnAnswers: [number, number, number];
+  /** Visual phase based on remaining HP:  1 = full, 2 = ≤66%, 3 = ≤33% */
+  phase: 1 | 2 | 3;
+  /** Canvas position — centred horizontally, enters from top */
+  x: number;
+  y: number;
+  /** Total canvas width of the boss sprite */
+  width: number;
+  /** Total canvas height of the boss sprite */
+  height: number;
+  /** 0..1 entry animation progress (1 = fully on screen) */
+  entryProgress: number;
+  /** ms until next equation reshuffle */
+  reshuffleTimer: number;
+  /** Unique ID for the current boss fight */
+  id: number;
+}
+
 /** One entry stored in localStorage leaderboard */
 export interface LeaderboardEntry {
   name: string;
@@ -104,7 +141,13 @@ export interface GameState {
     hitFlash: number;         // frames of player hit flash
     surgeFlashTimer: number;  // frames for full-screen red surge flash
     recoveryFlashTimer: number; // frames for full-screen cyan recovery flash
+    // ── Overdrive ────────────────────────────────────────────
+    isOverdrive: boolean;     // true while Overdrive is active
+    overdriveTtl: number;     // ms remaining in Overdrive window
+    lastOverdriveShot: number; // performance.now() of last auto-fire
   };
+  /** Active boss fight, or undefined when not in a boss wave */
+  boss?: VoxelBossState;
   nextId: number;
   keys: Set<string>;
   lastBulletTime: number;

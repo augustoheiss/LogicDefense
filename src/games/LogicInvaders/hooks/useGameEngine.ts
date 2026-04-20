@@ -1,14 +1,20 @@
 // ============================================================
-// LOGIC INVADERS — GAME ENGINE HOOK  (v3 — Endless Roguelike)
+// LOGIC INVADERS — GAME ENGINE HOOK  (v4 — Boss Mode + Overdrive)
 // ─ No Game Over from invaders reaching bottom → Difficulty Surge
 // ─ Enemy projectiles with score multiplier modifiers (×2…÷8)
 // ─ Laser auto-fires, all bubbles neutral cyan
 // ─ Screen-shake, starfield, HP bars
+// ─ Boss Mode: VoxelBoss + column-gated collision + Overdrive
 // ============================================================
 import { useRef, useEffect, useCallback } from 'react';
-import type { GameState, Invader, AnswerBubble, ScoreModifier } from '../types';
+import type { GameState, Invader, AnswerBubble, ScoreModifier, VoxelBossState } from '../types';
 import { generateEquation, generateAnswerBubbles } from '../utils/mathEngine';
 import { formatScore } from '../utils/formatScore';
+import {
+  createBoss, hitBossVoxel, isBossDefeated, reshuffleBossEquation,
+  getBossColumnBounds, BOSS_ROWS, BOSS_COLS,
+  VOXEL_W, VOXEL_H, BOSS_RESHUFFLE_MS, LOGICAL_COLS, VOXELS_PER_COL,
+} from '../utils/VoxelBoss';
 
 // ─── Constants ───────────────────────────────────────────────
 const CANVAS_W = 700;
@@ -48,6 +54,20 @@ const ENEMY_SHOOT_COOLDOWN_MS = 4000;      // each invader shoots every ~4s
 const PLAYER_HIT_FLASH_FRAMES = 20;
 const PLAYER_HITBOX_R = 16;               // radius for projectile collision
 const SURGE_FLASH_FRAMES = 28;            // frames for red surge flash overlay
+
+// ── Boss Mode constants ──────────────────────────────────────────
+const BOSS_SPAWN_EVERY_N_WAVES = 5;        // boss on wave 5, 10, 15...
+const BOSS_ENTRY_SPEED = 1.2;             // px/frame during slide-in
+const BOSS_ENTRY_Y_TARGET = 30;           // final top-of-boss canvas Y
+const BOSS_VOXEL_SCORE = 25;              // score per voxel destroyed in Overdrive
+const BOSS_DEFEAT_BONUS = 2000;           // lump-sum when boss dies
+const BOSS_COLUMN_LABEL_OFFSET = 48;      // px above boss top for answer labels
+// ── Overdrive constants ─────────────────────────────────────────
+const OVERDRIVE_DURATION_MS      = 5_000;
+const OVERDRIVE_SHOOT_INTERVAL_MS = 80;   // ~12.5 shots/sec  
+const OVERDRIVE_SPEED_MULT        = 1.6;
+// 5-way spread in degrees (converts to radians inside fireBulletOverdrive)
+const OVERDRIVE_SPREAD_ANGLES = [-25, -12, 0, 12, 25] as const;
 
 // Score modifier pool: 7 buffs + 7 debuffs + 2 debuffs = 16 total
 const MODIFIER_POOL: ScoreModifier[] = [
@@ -90,7 +110,11 @@ function makeInitialState(): GameState {
       hitFlash: 0,
       surgeFlashTimer: 0,
       recoveryFlashTimer: 0,
+      isOverdrive: false,
+      overdriveTtl: 0,
+      lastOverdriveShot: 0,
     },
+    boss: undefined,
     nextId: 1,
     keys: new Set(),
     lastBulletTime: 0,
@@ -372,6 +396,94 @@ function bubblePos(inv: Invader, bubble: AnswerBubble): { bx: number; by: number
   };
 }
 
+// ─── Boss helper functions ────────────────────────────────────
+
+/** Small voxel-sized explosion when a single boss voxel is destroyed */
+function spawnBossVoxelExplosion(state: GameState, vx: number, vy: number, color: string): void {
+  for (let i = 0; i < 6; i++) {
+    const angle = (Math.PI * 2 * i) / 6 + Math.random() * 0.4;
+    const speed = 1.5 + Math.random() * 3;
+    state.particles.push({
+      id: state.nextId++, x: vx, y: vy,
+      vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed,
+      life: 1, color, size: 3 + Math.random() * 4,
+    });
+  }
+}
+
+/** Dramatic multi-burst explosion when the whole boss is defeated */
+function spawnBossDestroyedExplosion(state: GameState, cx: number, cy: number): void {
+  const colors = ['#ff4400', '#ffaa00', '#ffdd00', '#ff00ff', '#00ffff', '#ffffff'];
+  for (let ring = 0; ring < 5; ring++) {
+    const r = colors[ring % colors.length];
+    for (let i = 0; i < 28; i++) {
+      const angle = (Math.PI * 2 * i) / 28;
+      const speed = 2 + ring * 1.2 + Math.random() * 2;
+      state.particles.push({
+        id: state.nextId++,
+        x: cx + (Math.random() - 0.5) * 60,
+        y: cy + (Math.random() - 0.5) * 40,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        life: 1, color: r, size: 4 + Math.random() * 8,
+      });
+    }
+  }
+  // Giant score text
+  state.particles.push({
+    id: state.nextId++, x: cx, y: cy - 30,
+    vx: 0, vy: -2.5, life: 1,
+    color: '#ffdd00', size: 30, text: `+${BOSS_DEFEAT_BONUS}`,
+  });
+  state.particles.push({
+    id: state.nextId++, x: cx, y: cy + 10,
+    vx: 0, vy: -1.5, life: 1,
+    color: '#ffffff', size: 18, text: '👾 BOSS DERROTADO!',
+  });
+}
+
+/** Activate Overdrive on the player ship */
+function triggerOverdrive(state: GameState): void {
+  state.player.isOverdrive = true;
+  state.player.overdriveTtl = OVERDRIVE_DURATION_MS;
+  state.player.lastOverdriveShot = 0;
+  state.player.shakeTimer = SHAKE_FRAMES;
+  // Flash + notification particle
+  state.player.recoveryFlashTimer = 25;
+  state.particles.push({
+    id: state.nextId++,
+    x: CANVAS_W / 2, y: CANVAS_H / 2,
+    vx: 0, vy: -1.8, life: 1,
+    color: '#ffdd00', size: 24, text: '⚡ OVERDRIVE!',
+  });
+  // Starburst around player
+  const px = state.player.x + PLAYER_W / 2;
+  const py = state.player.y;
+  for (let i = 0; i < 20; i++) {
+    const angle = (Math.PI * 2 * i) / 20;
+    state.particles.push({
+      id: state.nextId++, x: px, y: py,
+      vx: Math.cos(angle) * 5, vy: Math.sin(angle) * 5,
+      life: 1, color: '#ffdd00', size: 7,
+    });
+  }
+}
+
+/** Entry spark effect when boss first appears (called each frame during slide-in) */
+function spawnBossEntryParticles(state: GameState, bossX: number, bossY: number, bossW: number): void {
+  if (Math.random() > 0.4) return; // only some frames
+  const x = bossX + Math.random() * bossW;
+  const y = bossY + Math.random() * 20;
+  const colors = ['#ff4400', '#ff8800', '#ffdd00', '#ff00ff'];
+  state.particles.push({
+    id: state.nextId++, x, y,
+    vx: (Math.random() - 0.5) * 3,
+    vy: -1 - Math.random() * 3,
+    life: 0.8, color: colors[Math.floor(Math.random() * colors.length)],
+    size: 3 + Math.random() * 5,
+  });
+}
+
 // ─── Canvas Renderer ─────────────────────────────────────────────────────────
 // Three-layer parallax starfield
 interface StarPoint { x: number; y: number; r: number; speed: number; opacity: number; layer: 0|1|2; twinkle: number; twinkleDir: number }
@@ -572,6 +684,244 @@ function drawExhaust(ctx: CanvasRenderingContext2D): void {
     e.x += e.vx; e.y += e.vy; e.life -= 0.055;
     if (e.life <= 0) exhaustPool.splice(i, 1);
   }
+}
+
+// ─── Boss renderer ────────────────────────────────────────────
+
+/** Spark burst on wrong-column deflection */
+function spawnBossColumnSpark(state: GameState, bx: number, by: number): void {
+  const colors = ['#ff8800', '#ffaa00', '#ff4400'];
+  for (let i = 0; i < 12; i++) {
+    const angle = (Math.PI * 2 * i) / 12 + Math.random() * 0.3;
+    const speed = 2 + Math.random() * 3;
+    state.particles.push({
+      id: state.nextId++, x: bx, y: by,
+      vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed,
+      life: 0.9, color: colors[Math.floor(Math.random() * colors.length)],
+      size: 4 + Math.random() * 4,
+    });
+  }
+  // Ricochet text
+  state.particles.push({
+    id: state.nextId++, x: bx, y: by - 16,
+    vx: (Math.random() - 0.5) * 2, vy: -2, life: 1,
+    color: '#ff8800', size: 14, text: '✗',
+  });
+}
+
+/** Full VoxelBoss renderer */
+function drawVoxelBoss(
+  ctx: CanvasRenderingContext2D,
+  boss: VoxelBossState,
+  animFrame: number,
+  tick: number,
+): void {
+  const { x: bx, y: by, voxels } = boss;
+
+  // Phase-based palette
+  const PHASE_COLORS = [
+    ['#ff4400', '#ff8800', '#ffaa00'],  // Phase 1 — fire/orange
+    ['#ff00aa', '#ff4488', '#ff88cc'],  // Phase 2 — magenta
+    ['#ff0000', '#ff3300', '#ff6600'],  // Phase 3 — danger red
+  ];
+  const palette = PHASE_COLORS[boss.phase - 1];
+
+  // Strobe speed: phase 3 = very fast strobe
+  const strobeSpeed = boss.phase === 3 ? 3 : boss.phase === 2 ? 8 : 16;
+  const strobing = Math.floor(tick / strobeSpeed) % 2 === 0;
+
+  // Subtle shimmer on correct column (oscillates at low alpha)
+  const shimmerAlpha = boss.phase === 3
+    ? 0                                    // phase 3 = no hint (max tension)
+    : 0.04 + 0.03 * Math.sin(tick * 0.08); // nearly invisible golden pulse
+
+  // ── Draw voxels ──────────────────────────────────────────────
+  for (let r = 0; r < BOSS_ROWS; r++) {
+    for (let vc = 0; vc < BOSS_COLS; vc++) {
+      if (!voxels[r][vc]) continue;
+
+      const logicalCol = Math.floor(vc / VOXELS_PER_COL) as 0|1|2;
+      const vxPx = bx + vc * VOXEL_W;
+      const vyPx = by + r * VOXEL_H;
+
+      // Pick color per logical column, modulated by phase/strobe
+      const colColor = palette[logicalCol % 3];
+      const isCorrectCol = logicalCol === boss.correctColIdx;
+
+      // Strobe flicker in phase 2+
+      const flickerAlpha = (boss.phase >= 2 && !strobing && r % 2 === 0) ? 0.5 : 1.0;
+
+      ctx.save();
+      ctx.globalAlpha = flickerAlpha;
+      ctx.shadowColor = colColor;
+      ctx.shadowBlur = boss.phase === 3 ? 18 : 10;
+      ctx.fillStyle = colColor;
+      ctx.fillRect(vxPx + 1, vyPx + 1, VOXEL_W - 2, VOXEL_H - 2);
+
+      // Highlight edge (pseudo-3D voxel)
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = 'rgba(255,255,255,0.3)';
+      ctx.fillRect(vxPx + 1, vyPx + 1, VOXEL_W - 2, 2);
+      ctx.fillRect(vxPx + 1, vyPx + 1, 2, VOXEL_H - 2);
+
+      // Subtle golden shimmer on correct column (accessibility support)
+      if (isCorrectCol && shimmerAlpha > 0) {
+        ctx.globalAlpha = shimmerAlpha;
+        ctx.fillStyle = '#ffdd00';
+        ctx.fillRect(vxPx, vyPx, VOXEL_W, VOXEL_H);
+      }
+
+      ctx.restore();
+    }
+  }
+
+  // ── Outer boss glow frame ─────────────────────────────────────
+  ctx.save();
+  ctx.shadowColor = palette[2]; ctx.shadowBlur = 28;
+  ctx.strokeStyle = palette[0];
+  ctx.lineWidth = 2;
+  ctx.strokeRect(bx - 2, by - 2, boss.width + 4, boss.height + 4);
+  ctx.restore();
+
+  // ── Column dividers (faint) ───────────────────────────────────
+  ctx.save();
+  ctx.setLineDash([4, 6]);
+  ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+  ctx.lineWidth = 1;
+  for (let lc = 1; lc < LOGICAL_COLS; lc++) {
+    const divX = bx + lc * (boss.width / LOGICAL_COLS);
+    ctx.beginPath();
+    ctx.moveTo(divX, by);
+    ctx.lineTo(divX, by + boss.height);
+    ctx.stroke();
+  }
+  ctx.setLineDash([]);
+  ctx.restore();
+
+  // ── Answer labels above each logical column ───────────────────
+  for (let lc = 0; lc < LOGICAL_COLS; lc++) {
+    const { x: colX, w: colW } = getBossColumnBounds(boss, lc as 0|1|2);
+    const labelX = colX + colW / 2;
+    const labelY = by - BOSS_COLUMN_LABEL_OFFSET;
+
+    const answer = boss.columnAnswers[lc];
+    const isCorrect = lc === boss.correctColIdx;
+
+    // Pill background (dark translucent, correct col slightly warmer)
+    const pillW = 70, pillH = 34, pillR = 8;
+    ctx.save();
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = isCorrect ? 'rgba(60,30,0,0.85)' : 'rgba(0,0,0,0.82)';
+    ctx.beginPath();
+    ctx.roundRect(labelX - pillW/2, labelY - pillH/2, pillW, pillH, pillR);
+    ctx.fill();
+    // Border
+    ctx.strokeStyle = palette[lc % 3];
+    ctx.lineWidth = isCorrect ? 2.0 : 1.2;
+    ctx.globalAlpha = 0.75;
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+    // Answer number
+    ctx.shadowColor = palette[lc % 3]; ctx.shadowBlur = 10;
+    ctx.fillStyle = '#ffffff';
+    ctx.font = `bold 20px 'Courier New', monospace`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(String(answer), labelX, labelY);
+    // Column letter (A/B/C) small label below answer
+    ctx.shadowBlur = 0; ctx.fillStyle = palette[lc % 3];
+    ctx.font = `bold 10px 'Courier New', monospace`;
+    ctx.fillText(['▼ COL A', '▼ COL B', '▼ COL C'][lc], labelX, labelY + 14);
+    ctx.restore();
+
+    // Connector arrow from pill to column top
+    ctx.save();
+    ctx.strokeStyle = `${palette[lc % 3]}55`;
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([3, 4]);
+    ctx.beginPath();
+    ctx.moveTo(labelX, labelY + pillH/2 + 2);
+    ctx.lineTo(labelX, by - 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.restore();
+  }
+
+  // ── Equation HUD pill at top of canvas ───────────────────────
+  {
+    const EQ_FONT_SIZE = 38;
+    const eqFont = `bold ${EQ_FONT_SIZE}px 'Courier New', monospace`;
+    const eqX = CANVAS_W / 2;
+    const eqY = 22;
+
+    ctx.save();
+    ctx.font = eqFont;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const metrics = ctx.measureText(boss.equation);
+    const tw = metrics.width;
+    const th = EQ_FONT_SIZE * 1.1;
+    const padX = 20, padY = 10;
+    const pillX = eqX - tw/2 - padX;
+    const pillY = eqY - th/2 - padY;
+    const pillW = tw + padX * 2;
+    const pillH = th + padY * 2;
+
+    // Badge glow
+    ctx.shadowColor = '#ff8800'; ctx.shadowBlur = 22;
+    ctx.fillStyle = 'rgba(0,0,0,0.92)';
+    ctx.beginPath(); ctx.roundRect(pillX, pillY, pillW, pillH, 12); ctx.fill();
+    ctx.strokeStyle = '#ff8800'; ctx.lineWidth = 2; ctx.globalAlpha = 0.8;
+    ctx.stroke(); ctx.globalAlpha = 1;
+
+    // "BOSS" eyebrow
+    ctx.shadowBlur = 0; ctx.fillStyle = '#ff4400';
+    ctx.font = `bold 10px 'Courier New', monospace`;
+    ctx.fillText('👾  BOSS  ', pillX + pillW / 2, pillY + 10);
+
+    // Equation text
+    ctx.lineWidth = 6; ctx.strokeStyle = 'rgba(0,0,0,0.95)';
+    ctx.lineJoin = 'round';
+    ctx.font = eqFont;
+    ctx.strokeText(boss.equation, eqX, eqY + 10);
+    ctx.shadowColor = '#ffaa00'; ctx.shadowBlur = 14;
+    ctx.fillStyle = '#ffffff';
+    ctx.fillText(boss.equation, eqX, eqY + 10);
+
+    // Reshuffle countdown ring
+    const pct = boss.reshuffleTimer / BOSS_RESHUFFLE_MS;
+    const ringR = 10;
+    const ringX = pillX + pillW - 14;
+    const ringY = pillY + pillH / 2;
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = '#333'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(ringX, ringY, ringR, 0, Math.PI * 2); ctx.stroke();
+    ctx.strokeStyle = pct > 0.4 ? '#00ff88' : '#ffaa00';
+    ctx.beginPath();
+    ctx.arc(ringX, ringY, ringR, -Math.PI/2, -Math.PI/2 + Math.PI * 2 * pct);
+    ctx.stroke();
+
+    ctx.restore();
+  }
+
+  // ── Per-column HP mini-bars ───────────────────────────────────
+  const totalVoxelsPerCol = BOSS_ROWS * VOXELS_PER_COL;
+  for (let lc = 0; lc < LOGICAL_COLS; lc++) {
+    const { x: colX, w: colW } = getBossColumnBounds(boss, lc as 0|1|2);
+    const hpR = boss.colVoxelCount[lc] / totalVoxelsPerCol;
+    const barW = colW - 10;
+    const barH = 5;
+    const barX = colX + 5;
+    const barY = by + boss.height + 4;
+    ctx.save();
+    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    ctx.fillRect(barX, barY, barW, barH);
+    const hpCol = hpR > 0.6 ? '#00ff88' : hpR > 0.3 ? '#ffaa00' : '#ff2244';
+    ctx.fillStyle = hpCol; ctx.shadowColor = hpCol; ctx.shadowBlur = 5;
+    ctx.fillRect(barX, barY, barW * hpR, barH);
+    ctx.restore();
+  }
+
+  void animFrame; // kept for future leg-animation equivalents
 }
 
 // Shared animation frame counter (updated each render call)
@@ -935,6 +1285,45 @@ function renderFrame(ctx: CanvasRenderingContext2D, state: GameState, ts: number
     if (inv.flashGreen > 0) inv.flashGreen--;
   }
 
+  // ── Voxel Boss ────────────────────────────────────────────
+  if (state.boss) {
+    drawVoxelBoss(ctx, state.boss, _animFrame, _animTick);
+  }
+
+  // ── Overdrive bullet render (gold spread trails) ──────────
+  if (state.player.isOverdrive) {
+    for (const b of state.bullets) {
+      ctx.save();
+      ctx.shadowColor = '#ffdd00'; ctx.shadowBlur = 28;
+      // Longer trail for spread feel
+      ctx.fillStyle = 'rgba(255,180,0,0.22)';
+      ctx.fillRect(b.x - 2, b.y + 8, 4, 30);
+      // Core orb
+      ctx.fillStyle = '#ffdd00';
+      ctx.beginPath(); ctx.arc(b.x, b.y, 5, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath(); ctx.arc(b.x, b.y, 2, 0, Math.PI*2); ctx.fill();
+      ctx.restore();
+    }
+  }
+
+  // ── Overdrive status bar (in-canvas, below boss) ──────────
+  if (state.player.isOverdrive && state.player.overdriveTtl > 0) {
+    const odr = state.player.overdriveTtl / OVERDRIVE_DURATION_MS;
+    const barY = CANVAS_H - 28;
+    ctx.save();
+    ctx.fillStyle = 'rgba(0,0,0,0.7)';
+    ctx.beginPath(); ctx.roundRect(8, barY, CANVAS_W - 16, 14, 7); ctx.fill();
+    const odGrad = ctx.createLinearGradient(8, 0, 8 + (CANVAS_W - 16) * odr, 0);
+    odGrad.addColorStop(0, '#ffdd00'); odGrad.addColorStop(0.6, '#ff8800'); odGrad.addColorStop(1, '#ff4400');
+    ctx.fillStyle = odGrad; ctx.shadowColor = '#ffdd00'; ctx.shadowBlur = 16;
+    ctx.beginPath(); ctx.roundRect(8, barY, (CANVAS_W - 16) * odr, 14, 7); ctx.fill();
+    ctx.shadowBlur = 0; ctx.fillStyle = '#ffffff';
+    ctx.font = `bold 8px 'Courier New', monospace`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('⚡  OVERDRIVE ATIVO  ⚡', CANVAS_W/2, barY + 7);
+    ctx.restore();
+  }
 
   // ── Particles ────────────────────────────────────────────
   for (let i = state.particles.length - 1; i >= 0; i--) {
@@ -1121,6 +1510,29 @@ export function useGameEngine(
     });
   }
 
+  // ── Fire Overdrive spread burst ──────────────────────────
+  function fireBulletOverdrive(state: GameState): void {
+    const now = performance.now();
+    if (now - state.player.lastOverdriveShot < OVERDRIVE_SHOOT_INTERVAL_MS) return;
+    state.player.lastOverdriveShot = now;
+    const px = state.player.x + state.player.width / 2;
+    const py = state.player.y;
+    for (const deg of OVERDRIVE_SPREAD_ANGLES) {
+      const rad = (deg * Math.PI) / 180 - Math.PI / 2; // -90° = straight up
+      state.bullets.push({
+        id: state.nextId++,
+        x: px,
+        y: py,
+        speed: BULLET_SPEED * OVERDRIVE_SPEED_MULT,
+        isLaser: false,
+        // Store velocity direction in overloaded fields via a cast trick
+        // We extend the Bullet with optional vx/vy in the game loop update
+        _vx: Math.cos(rad) * BULLET_SPEED * OVERDRIVE_SPEED_MULT,
+        _vy: Math.sin(rad) * BULLET_SPEED * OVERDRIVE_SPEED_MULT,
+      } as any);
+    }
+  }
+
   // ── Game loop ─────────────────────────────────────────────
   const loop = useCallback((ts: number) => {
     const state = stateRef.current;
@@ -1146,8 +1558,11 @@ export function useGameEngine(
         state.player.x += (clampedTarget - state.player.x) * 0.18;
       }
 
+      // ── Overdrive auto-fire (takes priority over laser and normal fire) ──────
+      if (state.player.isOverdrive) {
+        fireBulletOverdrive(state);
       // ── Laser auto-damage ────────────────────────────────────
-      if (state.player.laserModeTimer > 0) {
+      } else if (state.player.laserModeTimer > 0) {
         const beamX = state.player.x + PLAYER_W / 2;
         for (let ii = state.invaders.length - 1; ii >= 0; ii--) {
           const inv = state.invaders[ii];
@@ -1158,7 +1573,7 @@ export function useGameEngine(
           }
         }
       } else {
-        // Continuous fire: space, OR touch held — fires regardless of whether ship is still moving
+        // Continuous fire: space, OR touch held
         const spaceHeld = state.keys.has('Space');
         const touchFiring = touchIn.isFiring;
         if (spaceHeld || touchFiring) fireBullet(state);
@@ -1169,6 +1584,19 @@ export function useGameEngine(
         state.player.laserModeTimer = Math.max(0, state.player.laserModeTimer - dtMs);
       if (state.player.shakeTimer > 0) state.player.shakeTimer--;
       if (state.player.hitFlash > 0) state.player.hitFlash--;
+      // ── Overdrive timer ──────────────────────────────────────────────────────
+      if (state.player.isOverdrive) {
+        state.player.overdriveTtl = Math.max(0, state.player.overdriveTtl - dtMs);
+        if (state.player.overdriveTtl <= 0) {
+          state.player.isOverdrive = false;
+          state.particles.push({
+            id: state.nextId++,
+            x: CANVAS_W / 2, y: CANVAS_H / 2 + 20,
+            vx: 0, vy: -1.2, life: 1,
+            color: '#ff8800', size: 16, text: '⚡ OVERDRIVE ESGOTADO',
+          });
+        }
+      }
 
       // Laser change notification
       const laserNowActive = state.player.laserModeTimer > 0;
@@ -1179,13 +1607,59 @@ export function useGameEngine(
         options.onLaserChange(true, state.player.laserModeTimer / LASER_MODE_MS);
       }
 
-      // Spawn invaders
-      if (ts - state.lastInvaderSpawn > state.spawnIntervalMs) {
-        spawnInvader(state);
-        state.lastInvaderSpawn = ts;
+      // ── Boss spawn (wave 5, 10, 15... only at start of wave cycle) ───────────
+      if (!state.boss && state.wave > 1 && state.wave % BOSS_SPAWN_EVERY_N_WAVES === 0
+          && state.killCount === 0) {
+        state.invaders = [];
+        state.enemyProjectiles = [];
+        state.boss = createBoss(state.wave, state.difficultyMultiplier, CANVAS_W, state.nextId++);
+        state.particles.push({
+          id: state.nextId++,
+          x: CANVAS_W / 2, y: CANVAS_H / 2 - 40,
+          vx: 0, vy: -1.4, life: 1,
+          color: '#ff4400', size: 26, text: '⚠️  BOSS CHEGANDO!',
+        });
+        state.lastInvaderSpawn = ts + 999_999;
       }
 
-      // ── Tick recovery flash timer ──────────────────────────────
+      // ── Boss update (entry slide-in + reshuffle + defeat/escape) ─────────────
+      if (state.boss) {
+        const boss = state.boss;
+        if (boss.y < BOSS_ENTRY_Y_TARGET) {
+          boss.y = Math.min(BOSS_ENTRY_Y_TARGET, boss.y + BOSS_ENTRY_SPEED);
+          boss.entryProgress = Math.min(1, (boss.y + boss.height) / (BOSS_ENTRY_Y_TARGET + boss.height));
+          spawnBossEntryParticles(state, boss.x, boss.y, boss.width);
+        }
+        boss.reshuffleTimer = Math.max(0, boss.reshuffleTimer - dtMs);
+        if (boss.reshuffleTimer <= 0) {
+          reshuffleBossEquation(boss, state.wave, state.difficultyMultiplier);
+          state.particles.push({
+            id: state.nextId++,
+            x: CANVAS_W / 2, y: boss.y + boss.height / 2,
+            vx: 0, vy: -1.6, life: 1,
+            color: '#ff8800', size: 14, text: '🔄 EQUAÇÃO MUDOU!',
+          });
+        }
+        if (isBossDefeated(boss)) {
+          spawnBossDestroyedExplosion(state, boss.x + boss.width / 2, boss.y + boss.height / 2);
+          state.score += BOSS_DEFEAT_BONUS + Math.floor(state.wave * 50);
+          state.player.shakeTimer = 40;
+          state.boss = undefined;
+          state.lastInvaderSpawn = ts;
+        } else if (boss.y + boss.height >= CANVAS_H - 10) {
+          spawnBossDestroyedExplosion(state, boss.x + boss.width / 2, boss.y + boss.height / 2);
+          state.boss = undefined;
+          triggerDifficultySurge(state);
+          state.lastInvaderSpawn = ts;
+        }
+      } else {
+        if (ts - state.lastInvaderSpawn > state.spawnIntervalMs) {
+          spawnInvader(state);
+          state.lastInvaderSpawn = ts;
+        }
+      }
+
+      // ── Tick recovery flash timer ────────────────────────────────────────────
       if (state.player.recoveryFlashTimer > 0) state.player.recoveryFlashTimer--;
 
       // ───────────────────────────────────────────────────────
@@ -1245,24 +1719,53 @@ export function useGameEngine(
         }
       }
 
-      // Move bullets + normal bullet collision
+      // Move bullets + column-gated boss collision / normal invader collision
       for (let i = state.bullets.length - 1; i >= 0; i--) {
-        const b = state.bullets[i];
-        b.y -= b.speed;
-        if (b.y < -20) { state.bullets.splice(i, 1); continue; }
+        const b = state.bullets[i] as any;
+        // Support diagonal overdrive bullets (_vx/_vy overrides vertical-only speed)
+        if (b._vx !== undefined) {
+          b.x += b._vx;
+          b.y += b._vy;
+        } else {
+          b.y -= b.speed;
+        }
+        if (b.y < -20 || b.x < -20 || b.x > CANVAS_W + 20) {
+          state.bullets.splice(i, 1); continue;
+        }
 
         let consumed = false;
-        for (let ii = state.invaders.length - 1; ii >= 0; ii--) {
-          const inv = state.invaders[ii];
-          const hit = b.x > inv.x && b.x < inv.x + inv.width && b.y > inv.y && b.y < inv.y + inv.height;
-          if (!hit) continue;
-          state.bullets.splice(i, 1);
-          consumed = true;
-          inv.hp -= 1;
-          inv.flashGreen = 5;
-          if (inv.hp <= 0) destroyInvader(state, ii, false, false);
-          else spawnExplosion(state, b.x, b.y, inv.color, 4);
-          break;
+
+        // ── Boss collision (column-gated) ─────────────────────────────────────
+        if (state.boss && !consumed) {
+          const result = hitBossVoxel(state.boss, b.x, b.y, state.player.isOverdrive);
+          if (result === 'correct') {
+            state.score += BOSS_VOXEL_SCORE;
+            spawnBossVoxelExplosion(state, b.x, b.y, '#ffdd00');
+            if (!state.player.isOverdrive) triggerOverdrive(state);
+            state.bullets.splice(i, 1);
+            consumed = true;
+          } else if (result === 'wrong') {
+            spawnBossColumnSpark(state, b.x, b.y);
+            state.bullets.splice(i, 1);
+            consumed = true;
+          }
+          // 'miss' = bullet continues (not yet touching boss)
+        }
+
+        // ── Normal invader collision (only when no boss) ──────────────────────
+        if (!consumed && !state.boss) {
+          for (let ii = state.invaders.length - 1; ii >= 0; ii--) {
+            const inv = state.invaders[ii];
+            const hit = b.x > inv.x && b.x < inv.x + inv.width && b.y > inv.y && b.y < inv.y + inv.height;
+            if (!hit) continue;
+            state.bullets.splice(i, 1);
+            consumed = true;
+            inv.hp -= 1;
+            inv.flashGreen = 5;
+            if (inv.hp <= 0) destroyInvader(state, ii, false, false);
+            else spawnExplosion(state, b.x, b.y, inv.color, 4);
+            break;
+          }
         }
         void consumed;
       }
