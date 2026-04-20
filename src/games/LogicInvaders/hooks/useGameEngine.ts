@@ -11,9 +11,9 @@ import type { GameState, Invader, AnswerBubble, ScoreModifier, VoxelBossState } 
 import { generateEquation, generateAnswerBubbles } from '../utils/mathEngine';
 import { formatScore } from '../utils/formatScore';
 import {
-  createBoss, hitBossVoxel, isBossDefeated, reshuffleBossEquation,
+  createBoss, hitBossVoxel, isBossDefeated,
   getBossColumnBounds, BOSS_ROWS, BOSS_COLS,
-  VOXEL_W, VOXEL_H, BOSS_RESHUFFLE_MS, LOGICAL_COLS, VOXELS_PER_COL,
+  VOXEL_W, VOXEL_H, LOGICAL_COLS, VOXELS_PER_COL,
 } from '../utils/VoxelBoss';
 
 // ─── Constants ───────────────────────────────────────────────
@@ -121,7 +121,8 @@ function makeInitialState(): GameState {
     lastInvaderSpawn: 0,
     spawnIntervalMs: INITIAL_SPAWN_INTERVAL_MS,
     killCount: 0,
-    lastWaveAdvanceTs: 0,   // will be set when game starts
+    lastWaveAdvanceTs: 0,       // will be set when game starts
+    bossSpawnCooldownTs: 0,    // 0 = no cooldown active
   };
 }
 
@@ -709,13 +710,14 @@ function spawnBossColumnSpark(state: GameState, bx: number, by: number): void {
   });
 }
 
-/** Full VoxelBoss renderer */
+/** Full VoxelBoss renderer — Two-pass: geometry first, text last (correct z-order) */
 function drawVoxelBoss(
   ctx: CanvasRenderingContext2D,
   boss: VoxelBossState,
   animFrame: number,
   tick: number,
 ): void {
+  void animFrame;
   const { x: bx, y: by, voxels } = boss;
 
   // Phase-based palette
@@ -731,11 +733,16 @@ function drawVoxelBoss(
   const strobing = Math.floor(tick / strobeSpeed) % 2 === 0;
 
   // Subtle shimmer on correct column (oscillates at low alpha)
+  // Phase 3 = zero hint (maximum pressure to actually solve the math)
   const shimmerAlpha = boss.phase === 3
-    ? 0                                    // phase 3 = no hint (max tension)
-    : 0.04 + 0.03 * Math.sin(tick * 0.08); // nearly invisible golden pulse
+    ? 0
+    : 0.04 + 0.03 * Math.sin(tick * 0.08);
 
-  // ── Draw voxels ──────────────────────────────────────────────
+  // ════════════════════════════════════════════════════════
+  // PASS 1 — Geometry: voxels, frame, dividers, HP bars
+  // ════════════════════════════════════════════════════════
+
+  // Draw each alive voxel
   for (let r = 0; r < BOSS_ROWS; r++) {
     for (let vc = 0; vc < BOSS_COLS; vc++) {
       if (!voxels[r][vc]) continue;
@@ -743,12 +750,10 @@ function drawVoxelBoss(
       const logicalCol = Math.floor(vc / VOXELS_PER_COL) as 0|1|2;
       const vxPx = bx + vc * VOXEL_W;
       const vyPx = by + r * VOXEL_H;
-
-      // Pick color per logical column, modulated by phase/strobe
       const colColor = palette[logicalCol % 3];
       const isCorrectCol = logicalCol === boss.correctColIdx;
 
-      // Strobe flicker in phase 2+
+      // Alternating-row flicker in phase 2+
       const flickerAlpha = (boss.phase >= 2 && !strobing && r % 2 === 0) ? 0.5 : 1.0;
 
       ctx.save();
@@ -758,35 +763,33 @@ function drawVoxelBoss(
       ctx.fillStyle = colColor;
       ctx.fillRect(vxPx + 1, vyPx + 1, VOXEL_W - 2, VOXEL_H - 2);
 
-      // Highlight edge (pseudo-3D voxel)
+      // Pseudo-3D highlight edge
       ctx.shadowBlur = 0;
       ctx.fillStyle = 'rgba(255,255,255,0.3)';
       ctx.fillRect(vxPx + 1, vyPx + 1, VOXEL_W - 2, 2);
       ctx.fillRect(vxPx + 1, vyPx + 1, 2, VOXEL_H - 2);
 
-      // Subtle golden shimmer on correct column (accessibility support)
+      // Nearly-invisible gold shimmer on correct column (accessibility hint)
       if (isCorrectCol && shimmerAlpha > 0) {
         ctx.globalAlpha = shimmerAlpha;
         ctx.fillStyle = '#ffdd00';
         ctx.fillRect(vxPx, vyPx, VOXEL_W, VOXEL_H);
       }
-
       ctx.restore();
     }
   }
 
-  // ── Outer boss glow frame ─────────────────────────────────────
+  // Outer boss glow border
   ctx.save();
   ctx.shadowColor = palette[2]; ctx.shadowBlur = 28;
-  ctx.strokeStyle = palette[0];
-  ctx.lineWidth = 2;
+  ctx.strokeStyle = palette[0]; ctx.lineWidth = 2;
   ctx.strokeRect(bx - 2, by - 2, boss.width + 4, boss.height + 4);
   ctx.restore();
 
-  // ── Column dividers (faint) ───────────────────────────────────
+  // Faint column-divider lines
   ctx.save();
   ctx.setLineDash([4, 6]);
-  ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+  ctx.strokeStyle = 'rgba(255,255,255,0.14)';
   ctx.lineWidth = 1;
   for (let lc = 1; lc < LOGICAL_COLS; lc++) {
     const divX = bx + lc * (boss.width / LOGICAL_COLS);
@@ -798,130 +801,118 @@ function drawVoxelBoss(
   ctx.setLineDash([]);
   ctx.restore();
 
-  // ── Answer labels above each logical column ───────────────────
+  // Per-column HP mini-bars (below body)
+  const totalVoxelsPerCol = BOSS_ROWS * VOXELS_PER_COL;
   for (let lc = 0; lc < LOGICAL_COLS; lc++) {
     const { x: colX, w: colW } = getBossColumnBounds(boss, lc as 0|1|2);
-    const labelX = colX + colW / 2;
-    const labelY = by - BOSS_COLUMN_LABEL_OFFSET;
-
-    const answer = boss.columnAnswers[lc];
-    const isCorrect = lc === boss.correctColIdx;
-
-    // Pill background (dark translucent, correct col slightly warmer)
-    const pillW = 70, pillH = 34, pillR = 8;
+    const hpR = boss.colVoxelCount[lc] / totalVoxelsPerCol;
+    const barX = colX + 5;
+    const barY = by + boss.height + 4;
+    const barW = colW - 10;
     ctx.save();
-    ctx.shadowBlur = 0;
-    ctx.fillStyle = isCorrect ? 'rgba(60,30,0,0.85)' : 'rgba(0,0,0,0.82)';
-    ctx.beginPath();
-    ctx.roundRect(labelX - pillW/2, labelY - pillH/2, pillW, pillH, pillR);
-    ctx.fill();
-    // Border
-    ctx.strokeStyle = palette[lc % 3];
-    ctx.lineWidth = isCorrect ? 2.0 : 1.2;
-    ctx.globalAlpha = 0.75;
-    ctx.stroke();
-    ctx.globalAlpha = 1;
-    // Answer number
-    ctx.shadowColor = palette[lc % 3]; ctx.shadowBlur = 10;
-    ctx.fillStyle = '#ffffff';
-    ctx.font = `bold 20px 'Courier New', monospace`;
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText(String(answer), labelX, labelY);
-    // Column letter (A/B/C) small label below answer
-    ctx.shadowBlur = 0; ctx.fillStyle = palette[lc % 3];
-    ctx.font = `bold 10px 'Courier New', monospace`;
-    ctx.fillText(['▼ COL A', '▼ COL B', '▼ COL C'][lc], labelX, labelY + 14);
-    ctx.restore();
-
-    // Connector arrow from pill to column top
-    ctx.save();
-    ctx.strokeStyle = `${palette[lc % 3]}55`;
-    ctx.lineWidth = 1.5;
-    ctx.setLineDash([3, 4]);
-    ctx.beginPath();
-    ctx.moveTo(labelX, labelY + pillH/2 + 2);
-    ctx.lineTo(labelX, by - 2);
-    ctx.stroke();
-    ctx.setLineDash([]);
+    ctx.fillStyle = 'rgba(0,0,0,0.65)';
+    ctx.fillRect(barX, barY, barW, 5);
+    const hpCol = hpR > 0.6 ? '#00ff88' : hpR > 0.3 ? '#ffaa00' : '#ff2244';
+    ctx.fillStyle = hpCol; ctx.shadowColor = hpCol; ctx.shadowBlur = 5;
+    ctx.fillRect(barX, barY, barW * hpR, 5);
     ctx.restore();
   }
 
-  // ── Equation HUD pill at top of canvas ───────────────────────
+  // ════════════════════════════════════════════════════════
+  // PASS 2 — Text: answer labels + equation pill (always on top)
+  // ════════════════════════════════════════════════════════
+
+  // ── Answer pills — centred inside each logical column, 1/3 down from boss top ──
+  // Positioning: labelY sits at boss.y + boss.height * 0.38
+  // so the pill floats clearly inside the voxel grid with room above and below.
+  const answerLabelY = by + boss.height * 0.38;
+
+  for (let lc = 0; lc < LOGICAL_COLS; lc++) {
+    const { x: colX, w: colW } = getBossColumnBounds(boss, lc as 0|1|2);
+    const labelX = colX + colW / 2;
+    const answer = boss.columnAnswers[lc];
+    const isCorrect = lc === boss.correctColIdx;
+
+    const pillW = colW - 16;  // nearly full column width
+    const pillH = 50;
+    const pillR = 10;
+    const pillX = labelX - pillW / 2;
+    const pillY = answerLabelY - pillH / 2;
+
+    ctx.save();
+    // Dark opaque pill background — fully covers voxels beneath text
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = isCorrect ? 'rgba(40, 18, 0, 0.92)' : 'rgba(5, 5, 20, 0.88)';
+    ctx.beginPath();
+    ctx.roundRect(pillX, pillY, pillW, pillH, pillR);
+    ctx.fill();
+
+    // Coloured border (correct col = thicker, same colour as that column)
+    ctx.strokeStyle = palette[lc % 3];
+    ctx.lineWidth = isCorrect ? 2.5 : 1.5;
+    ctx.globalAlpha = 0.9;
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+
+    // Answer number — large and readable
+    ctx.shadowColor = palette[lc % 3]; ctx.shadowBlur = 14;
+    ctx.fillStyle = '#ffffff';
+    ctx.font = `bold 26px 'Courier New', monospace`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(String(answer), labelX, answerLabelY - 5);
+
+    // Small column indicator (A / B / C) below the number
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = palette[lc % 3];
+    ctx.font = `bold 11px 'Courier New', monospace`;
+    ctx.fillText(['A', 'B', 'C'][lc], labelX, answerLabelY + 16);
+
+    ctx.restore();
+  }
+
+  // ── Equation pill — pinned at top of canvas, always visible ──
   {
-    const EQ_FONT_SIZE = 38;
+    const EQ_FONT_SIZE = 36;
     const eqFont = `bold ${EQ_FONT_SIZE}px 'Courier New', monospace`;
     const eqX = CANVAS_W / 2;
-    const eqY = 22;
+    // Pill top = 4px from canvas edge; centre of text sits below
+    const eqTextY = 36;
 
     ctx.save();
     ctx.font = eqFont;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    const metrics = ctx.measureText(boss.equation);
-    const tw = metrics.width;
-    const th = EQ_FONT_SIZE * 1.1;
-    const padX = 20, padY = 10;
-    const pillX = eqX - tw/2 - padX;
-    const pillY = eqY - th/2 - padY;
-    const pillW = tw + padX * 2;
-    const pillH = th + padY * 2;
+    const tw = ctx.measureText(boss.equation).width;
+    const padX = 22, padY = 10;
+    const pillW = tw + padX * 2; // no ring offset needed — equation is fixed
+    const pillH = EQ_FONT_SIZE + padY * 2;
+    const pillX = eqX - pillW / 2;
+    const pillY = 4;
 
-    // Badge glow
+    // Background
     ctx.shadowColor = '#ff8800'; ctx.shadowBlur = 22;
-    ctx.fillStyle = 'rgba(0,0,0,0.92)';
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.94)';
     ctx.beginPath(); ctx.roundRect(pillX, pillY, pillW, pillH, 12); ctx.fill();
-    ctx.strokeStyle = '#ff8800'; ctx.lineWidth = 2; ctx.globalAlpha = 0.8;
+
+    // Border
+    ctx.strokeStyle = '#ff6600'; ctx.lineWidth = 2; ctx.globalAlpha = 0.85;
     ctx.stroke(); ctx.globalAlpha = 1;
 
-    // "BOSS" eyebrow
+    // "👾 BOSS" eyebrow label
     ctx.shadowBlur = 0; ctx.fillStyle = '#ff4400';
-    ctx.font = `bold 10px 'Courier New', monospace`;
-    ctx.fillText('👾  BOSS  ', pillX + pillW / 2, pillY + 10);
+    ctx.font = `bold 9px 'Courier New', monospace`;
+    ctx.fillText('👾  BOSS', pillX + pillW / 2, pillY + 7);
 
-    // Equation text
-    ctx.lineWidth = 6; ctx.strokeStyle = 'rgba(0,0,0,0.95)';
-    ctx.lineJoin = 'round';
+    // Equation text — thick stroke then coloured fill (cuts through any bg glow)
     ctx.font = eqFont;
-    ctx.strokeText(boss.equation, eqX, eqY + 10);
-    ctx.shadowColor = '#ffaa00'; ctx.shadowBlur = 14;
+    ctx.lineWidth = 6; ctx.strokeStyle = 'rgba(0,0,0,0.95)'; ctx.lineJoin = 'round';
+    ctx.strokeText(boss.equation, eqX - 10, eqTextY);
+    ctx.shadowColor = '#ffaa00'; ctx.shadowBlur = 12;
     ctx.fillStyle = '#ffffff';
-    ctx.fillText(boss.equation, eqX, eqY + 10);
-
-    // Reshuffle countdown ring
-    const pct = boss.reshuffleTimer / BOSS_RESHUFFLE_MS;
-    const ringR = 10;
-    const ringX = pillX + pillW - 14;
-    const ringY = pillY + pillH / 2;
-    ctx.shadowBlur = 0;
-    ctx.strokeStyle = '#333'; ctx.lineWidth = 3;
-    ctx.beginPath(); ctx.arc(ringX, ringY, ringR, 0, Math.PI * 2); ctx.stroke();
-    ctx.strokeStyle = pct > 0.4 ? '#00ff88' : '#ffaa00';
-    ctx.beginPath();
-    ctx.arc(ringX, ringY, ringR, -Math.PI/2, -Math.PI/2 + Math.PI * 2 * pct);
-    ctx.stroke();
+    ctx.fillText(boss.equation, eqX - 10, eqTextY);
 
     ctx.restore();
   }
-
-  // ── Per-column HP mini-bars ───────────────────────────────────
-  const totalVoxelsPerCol = BOSS_ROWS * VOXELS_PER_COL;
-  for (let lc = 0; lc < LOGICAL_COLS; lc++) {
-    const { x: colX, w: colW } = getBossColumnBounds(boss, lc as 0|1|2);
-    const hpR = boss.colVoxelCount[lc] / totalVoxelsPerCol;
-    const barW = colW - 10;
-    const barH = 5;
-    const barX = colX + 5;
-    const barY = by + boss.height + 4;
-    ctx.save();
-    ctx.fillStyle = 'rgba(0,0,0,0.6)';
-    ctx.fillRect(barX, barY, barW, barH);
-    const hpCol = hpR > 0.6 ? '#00ff88' : hpR > 0.3 ? '#ffaa00' : '#ff2244';
-    ctx.fillStyle = hpCol; ctx.shadowColor = hpCol; ctx.shadowBlur = 5;
-    ctx.fillRect(barX, barY, barW * hpR, barH);
-    ctx.restore();
-  }
-
-  void animFrame; // kept for future leg-animation equivalents
 }
 
 // Shared animation frame counter (updated each render call)
@@ -1608,11 +1599,17 @@ export function useGameEngine(
       }
 
       // ── Boss spawn (wave 5, 10, 15... only at start of wave cycle) ───────────
+      // bossSpawnCooldownTs: mandatory 500ms gap after any boss exit (defeat/escape).
+      // Prevents same-frame or next-frame re-spawn that would inherit stale Overdrive.
       if (!state.boss && state.wave > 1 && state.wave % BOSS_SPAWN_EVERY_N_WAVES === 0
-          && state.killCount === 0) {
+          && state.killCount === 0 && ts >= state.bossSpawnCooldownTs) {
         state.invaders = [];
         state.enemyProjectiles = [];
         state.boss = createBoss(state.wave, state.difficultyMultiplier, CANVAS_W, state.nextId++);
+        // ── Explicitly reset Overdrive — must EARN it by hitting the correct column ──
+        state.player.isOverdrive = false;
+        state.player.overdriveTtl = 0;
+        state.player.lastOverdriveShot = 0;
         state.particles.push({
           id: state.nextId++,
           x: CANVAS_W / 2, y: CANVAS_H / 2 - 40,
@@ -1630,28 +1627,30 @@ export function useGameEngine(
           boss.entryProgress = Math.min(1, (boss.y + boss.height) / (BOSS_ENTRY_Y_TARGET + boss.height));
           spawnBossEntryParticles(state, boss.x, boss.y, boss.width);
         }
-        boss.reshuffleTimer = Math.max(0, boss.reshuffleTimer - dtMs);
-        if (boss.reshuffleTimer <= 0) {
-          reshuffleBossEquation(boss, state.wave, state.difficultyMultiplier);
-          state.particles.push({
-            id: state.nextId++,
-            x: CANVAS_W / 2, y: boss.y + boss.height / 2,
-            vx: 0, vy: -1.6, life: 1,
-            color: '#ff8800', size: 14, text: '🔄 EQUAÇÃO MUDOU!',
-          });
-        }
         if (isBossDefeated(boss)) {
           spawnBossDestroyedExplosion(state, boss.x + boss.width / 2, boss.y + boss.height / 2);
           state.score += BOSS_DEFEAT_BONUS + Math.floor(state.wave * 50);
           state.player.shakeTimer = 40;
+          // ── Overdrive reset + 500ms cooldown lock ────────────────────────────
+          // Ensures next boss cannot spawn on the same frame and inherits no Overdrive.
+          state.player.isOverdrive       = false;
+          state.player.overdriveTtl      = 0;
+          state.player.lastOverdriveShot = 0;
+          state.bossSpawnCooldownTs      = ts + 500;  // ← 500ms gate
           state.boss = undefined;
           state.lastInvaderSpawn = ts;
         } else if (boss.y + boss.height >= CANVAS_H - 10) {
           spawnBossDestroyedExplosion(state, boss.x + boss.width / 2, boss.y + boss.height / 2);
+          // ── Overdrive reset + 500ms cooldown lock ────────────────────────────
+          state.player.isOverdrive       = false;
+          state.player.overdriveTtl      = 0;
+          state.player.lastOverdriveShot = 0;
+          state.bossSpawnCooldownTs      = ts + 500;  // ← 500ms gate
           state.boss = undefined;
           triggerDifficultySurge(state);
           state.lastInvaderSpawn = ts;
         }
+
       } else {
         if (ts - state.lastInvaderSpawn > state.spawnIntervalMs) {
           spawnInvader(state);
@@ -1735,21 +1734,52 @@ export function useGameEngine(
 
         let consumed = false;
 
-        // ── Boss collision (column-gated) ─────────────────────────────────────
+        // ── Boss collision ────────────────────────────────────────────────────
+        // BRUTE FORCE: both 'hit_correct' and 'hit_wrong' destroy the voxel.
+        // Only 'hit_correct' (correct column, or Overdrive) earns Overdrive.
         if (state.boss && !consumed) {
-          const result = hitBossVoxel(state.boss, b.x, b.y, state.player.isOverdrive);
-          if (result === 'correct') {
-            state.score += BOSS_VOXEL_SCORE;
-            spawnBossVoxelExplosion(state, b.x, b.y, '#ffdd00');
-            if (!state.player.isOverdrive) triggerOverdrive(state);
-            state.bullets.splice(i, 1);
-            consumed = true;
-          } else if (result === 'wrong') {
-            spawnBossColumnSpark(state, b.x, b.y);
-            state.bullets.splice(i, 1);
-            consumed = true;
+
+          // ── ENTRY INVULNERABILITY GUARD ───────────────────────────────────
+          // While the boss is still sliding in (entryProgress < 1) the player
+          // has not yet seen the equation or column answers — no damage, no Overdrive.
+          // Bullets that physically touch the boss sprite are silently consumed
+          // (they don't pass through infinitely, just vanish with a faint spark).
+          if (state.boss.entryProgress < 1) {
+            // Only deflect bullets that have actually reached the boss Y range
+            const bossInRange = b.y >= state.boss.y - 4 && b.y <= state.boss.y + state.boss.height
+                             && b.x >= state.boss.x && b.x <= state.boss.x + state.boss.width;
+            if (bossInRange) {
+              // Small white deflection spark — no damage, no score, no Overdrive
+              state.particles.push({
+                id: state.nextId++, x: b.x, y: b.y,
+                vx: (Math.random() - 0.5) * 2, vy: -1.5, life: 0.4,
+                color: '#aaaaaa', size: 6,
+              });
+              state.bullets.splice(i, 1);
+              consumed = true;
+            }
+            // If not in range yet, bullet keeps flying — skip rest of collision
+          } else {
+            // ── Full collision (boss fully on screen, equation visible) ──────
+            const result = hitBossVoxel(state.boss, b.x, b.y, state.player.isOverdrive);
+
+            if (result === 'hit_correct') {
+              // ── Correct column (or Overdrive) → gold voxel explosion + Overdrive ──
+              state.score += BOSS_VOXEL_SCORE;
+              spawnBossVoxelExplosion(state, b.x, b.y, '#ffdd00');
+              if (!state.player.isOverdrive) triggerOverdrive(state);
+              state.bullets.splice(i, 1);
+              consumed = true;
+
+            } else if (result === 'hit_wrong') {
+              // ── Wrong column → voxel still destroyed, small orange spark, no Overdrive ──
+              state.score += Math.floor(BOSS_VOXEL_SCORE / 2);
+              spawnBossVoxelExplosion(state, b.x, b.y, '#ff8800');
+              state.bullets.splice(i, 1);
+              consumed = true;
+            }
+            // 'miss' → bullet hasn't reached the boss yet; keep moving
           }
-          // 'miss' = bullet continues (not yet touching boss)
         }
 
         // ── Normal invader collision (only when no boss) ──────────────────────

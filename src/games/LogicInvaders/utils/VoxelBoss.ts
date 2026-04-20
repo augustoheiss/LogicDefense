@@ -18,9 +18,6 @@ export const BOSS_H = 168;  // 8 rows × 21px each
 export const VOXEL_W = BOSS_W / BOSS_COLS; // 28px
 export const VOXEL_H = BOSS_H / BOSS_ROWS; // 21px
 
-// ─── Reshuffle config ─────────────────────────────────────────
-export const BOSS_RESHUFFLE_MS = 12_000; // re-roll equation every 12 s
-
 // ─── Grid factory ────────────────────────────────────────────
 /**
  * Create a fully-alive 8-row × 15-col voxel grid.
@@ -126,7 +123,6 @@ export function createBoss(
     width: BOSS_W,
     height: BOSS_H,
     entryProgress: 0,
-    reshuffleTimer: BOSS_RESHUFFLE_MS,
   };
 }
 
@@ -153,47 +149,61 @@ export function getBossColumnBounds(
 
 /**
  * Hit a specific canvas position on the boss.
- * Destroys the topmost alive voxel at that x in the column.
- * Returns: 'correct', 'wrong', or 'miss' (outside bounds).
+ *
+ * BRUTE FORCE RULE: ANY hit on ANY voxel ALWAYS destroys it.
+ * The return value tells the caller whether the column was correct
+ * so it can decide whether to trigger Overdrive:
+ *
+ *   'hit_correct' → voxel destroyed; column === correctColIdx  → trigger Overdrive
+ *   'hit_wrong'   → voxel destroyed; wrong column              → no Overdrive
+ *   'miss'        → bullet outside boss bounds or column empty  → bullet continues
+ *
+ * isOverdrive: when true, overdrive spread-bullets also apply the same rules
+ * (overdrive bullets always use 'hit_correct' semantics regardless of column).
  */
 export function hitBossVoxel(
   boss: VoxelBossState,
   bulletX: number,
-  bulletY: number,  // unused now but kept for future z-targeted hits
+  bulletY: number,
   isOverdrive: boolean,
-): 'correct' | 'wrong' | 'miss' {
-  void bulletY;
+): 'hit_correct' | 'hit_wrong' | 'miss' {
 
+  // ── Entry invulnerability (defensive layer) ───────────────────
+  // The outer collision block already guards this, but this ensures
+  // the function is safe even if called directly during entry.
+  if (boss.entryProgress < 1) return 'miss';
+
+  // ── Bounds check (x) ─────────────────────────────────────────
   const logicalCol = getBossLogicalCol(boss, bulletX);
   if (logicalCol === -1) return 'miss';
 
-  // Check bullet Y is within boss vertically
-  if (bulletY < boss.y || bulletY > boss.y + boss.height) return 'miss';
+  // ── Bounds check (y) ─────────────────────────────────────────
+  // Allow a 4px top margin so bullets that just reach the crown register
+  if (bulletY < boss.y - 4 || bulletY > boss.y + boss.height) return 'miss';
 
-  // Find the topmost-alive voxel in the hit voxel column
-  // Map canvas-x → voxel column index
+  // ── Map canvas-x → exact voxel column ────────────────────────
   const relX = bulletX - boss.x;
   const voxelCol = Math.floor(relX / VOXEL_W);
   const clampedVC = Math.max(0, Math.min(BOSS_COLS - 1, voxelCol));
 
-  // Find first alive voxel from top (row 0 → row 7)
+  // ── Find topmost alive voxel in this pixel column ─────────────
   let hitRow = -1;
   for (let r = 0; r < BOSS_ROWS; r++) {
     if (boss.voxels[r][clampedVC]) { hitRow = r; break; }
   }
-  if (hitRow === -1) return 'miss'; // whole column dead
+  if (hitRow === -1) return 'miss';  // entire voxel column already dead
 
-  // If overdrive OR correct logical column → destroy voxel
-  if (isOverdrive || logicalCol === boss.correctColIdx) {
-    boss.voxels[hitRow][clampedVC] = false;
-    boss.colVoxelCount = countColVoxels(boss.voxels);
-    updatePhase(boss);
-    return 'correct';
-  }
+  // ── Always destroy the voxel (Brute Force is valid) ──────────
+  boss.voxels[hitRow][clampedVC] = false;
+  boss.colVoxelCount = countColVoxels(boss.voxels);
+  updatePhase(boss);
 
-  // Wrong column: bullet is destroyed but voxel survives
-  return 'wrong';
+  // ── Was it the correct logical column? ───────────────────────
+  // Overdrive bullets count as correct regardless of column (already earned).
+  const isCorrectCol = logicalCol === boss.correctColIdx;
+  return (isOverdrive || isCorrectCol) ? 'hit_correct' : 'hit_wrong';
 }
+
 
 /** Sync phase based on remaining voxel count ratio */
 function updatePhase(boss: VoxelBossState): void {
@@ -206,20 +216,4 @@ function updatePhase(boss: VoxelBossState): void {
 /** True when every voxel has been destroyed. */
 export function isBossDefeated(boss: VoxelBossState): boolean {
   return boss.colVoxelCount[0] + boss.colVoxelCount[1] + boss.colVoxelCount[2] === 0;
-}
-
-/**
- * Reshuffle the boss equation + correct column.
- * Called every BOSS_RESHUFFLE_MS to keep pressure on reading.
- */
-export function reshuffleBossEquation(
-  boss: VoxelBossState,
-  wave: number,
-  difficulty: number,
-): void {
-  const { equation, correctColIdx, columnAnswers } = generateBossEquation(wave, difficulty);
-  boss.equation = equation;
-  boss.correctColIdx = correctColIdx;
-  boss.columnAnswers = columnAnswers;
-  boss.reshuffleTimer = BOSS_RESHUFFLE_MS;
 }

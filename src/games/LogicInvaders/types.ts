@@ -108,8 +108,6 @@ export interface VoxelBossState {
   height: number;
   /** 0..1 entry animation progress (1 = fully on screen) */
   entryProgress: number;
-  /** ms until next equation reshuffle */
-  reshuffleTimer: number;
   /** Unique ID for the current boss fight */
   id: number;
 }
@@ -155,4 +153,7 @@ export interface GameState {
   spawnIntervalMs: number;    // dynamic — decreases on Difficulty Surge
   killCount: number;          // total kills this session (for natural wave advancement)
   lastWaveAdvanceTs: number;  // performance.now() timestamp of last natural wave advance
+  /** performance.now() timestamp after which the next boss is allowed to spawn.
+   *  Set to now+500ms on boss defeat/escape to create a mandatory cooldown gap. */
+  bossSpawnCooldownTs: number;
 }
