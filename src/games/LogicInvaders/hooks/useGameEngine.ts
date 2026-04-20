@@ -61,7 +61,6 @@ const BOSS_ENTRY_SPEED = 1.2;             // px/frame during slide-in
 const BOSS_ENTRY_Y_TARGET = 30;           // final top-of-boss canvas Y
 const BOSS_VOXEL_SCORE = 25;              // score per voxel destroyed in Overdrive
 const BOSS_DEFEAT_BONUS = 2000;           // lump-sum when boss dies
-const BOSS_COLUMN_LABEL_OFFSET = 48;      // px above boss top for answer labels
 // ── Overdrive constants ─────────────────────────────────────────
 const OVERDRIVE_DURATION_MS      = 5_000;
 const OVERDRIVE_SHOOT_INTERVAL_MS = 80;   // ~12.5 shots/sec  
@@ -689,26 +688,6 @@ function drawExhaust(ctx: CanvasRenderingContext2D): void {
 
 // ─── Boss renderer ────────────────────────────────────────────
 
-/** Spark burst on wrong-column deflection */
-function spawnBossColumnSpark(state: GameState, bx: number, by: number): void {
-  const colors = ['#ff8800', '#ffaa00', '#ff4400'];
-  for (let i = 0; i < 12; i++) {
-    const angle = (Math.PI * 2 * i) / 12 + Math.random() * 0.3;
-    const speed = 2 + Math.random() * 3;
-    state.particles.push({
-      id: state.nextId++, x: bx, y: by,
-      vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed,
-      life: 0.9, color: colors[Math.floor(Math.random() * colors.length)],
-      size: 4 + Math.random() * 4,
-    });
-  }
-  // Ricochet text
-  state.particles.push({
-    id: state.nextId++, x: bx, y: by - 16,
-    vx: (Math.random() - 0.5) * 2, vy: -2, life: 1,
-    color: '#ff8800', size: 14, text: '✗',
-  });
-}
 
 /** Full VoxelBoss renderer — Two-pass: geometry first, text last (correct z-order) */
 function drawVoxelBoss(
