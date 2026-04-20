@@ -156,4 +156,8 @@ export interface GameState {
   /** performance.now() timestamp after which the next boss is allowed to spawn.
    *  Set to now+500ms on boss defeat/escape to create a mandatory cooldown gap. */
   bossSpawnCooldownTs: number;
+  /** How many bosses are still queued in the current boss-wave gauntlet.
+   *  Set to BOSS_GAUNTLET_COUNT (4) on wave trigger, decremented on each boss exit.
+   *  0 = no active gauntlet → normal invader waves. */
+  bossesRemainingInWave: number;
 }

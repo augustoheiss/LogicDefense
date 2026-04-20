@@ -56,7 +56,8 @@ const PLAYER_HITBOX_R = 16;               // radius for projectile collision
 const SURGE_FLASH_FRAMES = 28;            // frames for red surge flash overlay
 
 // ── Boss Mode constants ──────────────────────────────────────────
-const BOSS_SPAWN_EVERY_N_WAVES = 5;        // boss on wave 5, 10, 15...
+const BOSS_SPAWN_EVERY_N_WAVES = 5;        // boss gauntlet on wave 5, 10, 15…
+const BOSS_GAUNTLET_COUNT      = 4;        // sequential bosses per gauntlet wave
 const BOSS_ENTRY_SPEED = 1.2;             // px/frame during slide-in
 const BOSS_ENTRY_Y_TARGET = 30;           // final top-of-boss canvas Y
 const BOSS_VOXEL_SCORE = 25;              // score per voxel destroyed in Overdrive
@@ -122,6 +123,7 @@ function makeInitialState(): GameState {
     killCount: 0,
     lastWaveAdvanceTs: 0,       // will be set when game starts
     bossSpawnCooldownTs: 0,    // 0 = no cooldown active
+    bossesRemainingInWave: 0,  // 0 = no active gauntlet
   };
 }
 
@@ -1577,25 +1579,49 @@ export function useGameEngine(
         options.onLaserChange(true, state.player.laserModeTimer / LASER_MODE_MS);
       }
 
-      // ── Boss spawn (wave 5, 10, 15... only at start of wave cycle) ───────────
-      // bossSpawnCooldownTs: mandatory 500ms gap after any boss exit (defeat/escape).
-      // Prevents same-frame or next-frame re-spawn that would inherit stale Overdrive.
-      if (!state.boss && state.wave > 1 && state.wave % BOSS_SPAWN_EVERY_N_WAVES === 0
-          && state.killCount === 0 && ts >= state.bossSpawnCooldownTs) {
+      // ════════════════════════════════════════════════════════════
+      // BOSS GAUNTLET SPAWN LOGIC
+      // ════════════════════════════════════════════════════════════
+      // Helper: spawn one boss and reset Overdrive
+      function spawnNextBoss(): void {
         state.invaders = [];
         state.enemyProjectiles = [];
         state.boss = createBoss(state.wave, state.difficultyMultiplier, CANVAS_W, state.nextId++);
-        // ── Explicitly reset Overdrive — must EARN it by hitting the correct column ──
-        state.player.isOverdrive = false;
-        state.player.overdriveTtl = 0;
+        // Overdrive is NOT carried between individual bosses
+        state.player.isOverdrive       = false;
+        state.player.overdriveTtl      = 0;
         state.player.lastOverdriveShot = 0;
+        state.lastInvaderSpawn         = ts + 999_999;
+      }
+
+      // ── Initial gauntlet trigger (wave 5 / 10 / 15…) ─────────────────────
+      // Fires only once — when the wave number hits a boss milestone AND the
+      // gauntlet isn't already running and no boss is alive.
+      if (!state.boss && state.bossesRemainingInWave === 0
+          && state.wave > 1 && state.wave % BOSS_SPAWN_EVERY_N_WAVES === 0
+          && state.killCount === 0 && ts >= state.bossSpawnCooldownTs) {
+        state.bossesRemainingInWave = BOSS_GAUNTLET_COUNT;
+        state.particles.push({
+          id: state.nextId++,
+          x: CANVAS_W / 2, y: CANVAS_H / 2 - 50,
+          vx: 0, vy: -1.2, life: 1.2,
+          color: '#ff4400', size: 30, text: `⚠️  GAUNTLET! ${BOSS_GAUNTLET_COUNT} BOSSES!`,
+        });
+        spawnNextBoss();
+      }
+
+      // ── Sequential re-spawn (cooldown elapsed, gauntlet still running) ────
+      // Fires after each boss defeat/escape when more bosses remain in the queue.
+      if (!state.boss && state.bossesRemainingInWave > 0 && ts >= state.bossSpawnCooldownTs) {
+        const remaining = state.bossesRemainingInWave;
         state.particles.push({
           id: state.nextId++,
           x: CANVAS_W / 2, y: CANVAS_H / 2 - 40,
           vx: 0, vy: -1.4, life: 1,
-          color: '#ff4400', size: 26, text: '⚠️  BOSS CHEGANDO!',
+          color: '#ff6600', size: 24,
+          text: `👾  BOSS ${BOSS_GAUNTLET_COUNT - remaining + 1}/${BOSS_GAUNTLET_COUNT}`,
         });
-        state.lastInvaderSpawn = ts + 999_999;
+        spawnNextBoss();
       }
 
       // ── Boss update (entry slide-in + reshuffle + defeat/escape) ─────────────
@@ -1610,24 +1636,41 @@ export function useGameEngine(
           spawnBossDestroyedExplosion(state, boss.x + boss.width / 2, boss.y + boss.height / 2);
           state.score += BOSS_DEFEAT_BONUS + Math.floor(state.wave * 50);
           state.player.shakeTimer = 40;
-          // ── Overdrive reset + 500ms cooldown lock ────────────────────────────
-          // Ensures next boss cannot spawn on the same frame and inherits no Overdrive.
+          // ── Overdrive reset + 500ms cooldown ──────────────────────────────────────────
           state.player.isOverdrive       = false;
           state.player.overdriveTtl      = 0;
           state.player.lastOverdriveShot = 0;
-          state.bossSpawnCooldownTs      = ts + 500;  // ← 500ms gate
+          state.bossSpawnCooldownTs      = ts + 500;
           state.boss = undefined;
-          state.lastInvaderSpawn = ts;
+          // ── Gauntlet counter ──────────────────────────────────────────────────
+          state.bossesRemainingInWave = Math.max(0, state.bossesRemainingInWave - 1);
+          if (state.bossesRemainingInWave === 0) {
+            // Gauntlet complete — return to normal waves
+            state.particles.push({
+              id: state.nextId++,
+              x: CANVAS_W / 2, y: CANVAS_H / 2,
+              vx: 0, vy: -1.2, life: 1.4,
+              color: '#00ff88', size: 28, text: '★  GAUNTLET COMPLETO!',
+            });
+            state.lastInvaderSpawn = ts;
+          }
+          // else: sequential re-spawn handled by the spawn block above (after cooldown)
+
         } else if (boss.y + boss.height >= CANVAS_H - 10) {
           spawnBossDestroyedExplosion(state, boss.x + boss.width / 2, boss.y + boss.height / 2);
-          // ── Overdrive reset + 500ms cooldown lock ────────────────────────────
+          // ── Overdrive reset + 500ms cooldown ──────────────────────────────────────────
           state.player.isOverdrive       = false;
           state.player.overdriveTtl      = 0;
           state.player.lastOverdriveShot = 0;
-          state.bossSpawnCooldownTs      = ts + 500;  // ← 500ms gate
+          state.bossSpawnCooldownTs      = ts + 500;
           state.boss = undefined;
-          triggerDifficultySurge(state);
-          state.lastInvaderSpawn = ts;
+          // ── Gauntlet counter (escape still counts) ──────────────────────────────
+          state.bossesRemainingInWave = Math.max(0, state.bossesRemainingInWave - 1);
+          triggerDifficultySurge(state); // escaped boss = difficulty penalty
+          if (state.bossesRemainingInWave === 0) {
+            state.lastInvaderSpawn = ts;
+          }
+          // else: sequential re-spawn handled by spawn block after cooldown
         }
 
       } else {
