@@ -159,40 +159,6 @@ export function TableEditor({
     [table.rows, table.goals.weeklyGoals],
   );
 
-  // ── Cost-based target derivation (Dynamic Break-Even) ────────────────────────
-  // The survival goal absorbs ALL variable costs logged in the system, not just
-  // the static annualCost input.  This makes break-even targets adjust to real
-  // spending:
-  //   dynamicAnnualCost = baseAnnualCost + expenseRows + negativeValueCosts
-  //
-  // Everything reads from filteredRows so the Time Machine cutoff is respected.
-  const currentYear = cutoffDate ? parseInt(cutoffDate.slice(0, 4), 10) : new Date().getFullYear();
-  const baseAnnualCost = resolveGoalForYear(table.goals.annualCosts, currentYear);
-
-  const variableCosts = useMemo(() => {
-    // 1. Expense-type rows (Gastos tab entries — always positive values)
-    const expenseTotal = filteredRows
-      .filter((r) => r.entryType === 'expense' && r.value > 0)
-      .reduce((sum, r) => sum + r.value, 0);
-
-    // 2. Negative-value rows in the main spreadsheet (inline costs)
-    const negativeCosts = filteredRows
-      .filter((r) => r.entryType !== 'expense' && r.entryType !== 'deposit' && r.entryType !== 'waiver' && r.value < 0)
-      .reduce((sum, r) => sum + Math.abs(r.value), 0);
-
-    return Math.round((expenseTotal + negativeCosts) * 100) / 100;
-  }, [filteredRows]);
-
-  const dynamicAnnualCost = baseAnnualCost + variableCosts;
-
-  const costBasedTarget: CostBasedTarget | undefined = costGoalActive && dynamicAnnualCost > 0
-    ? {
-        weeklySurvival: Math.round((dynamicAnnualCost / 52) * 100) / 100,
-        dailySurvival: Math.round((dynamicAnnualCost / 365) * 100) / 100,
-        annualCost: dynamicAnnualCost,
-      }
-    : undefined;
-
   // ── Global month selector ───────────────────────────────────────────────────
   const availableMonths = useMemo(() => buildAvailableMonths(filteredRows), [filteredRows]);
   const [selectedMonth, setSelectedMonth] = useState<string>(
@@ -202,6 +168,50 @@ export function TableEditor({
   const effectiveMonth = availableMonths.includes(selectedMonth)
     ? selectedMonth
     : (availableMonths[0] ?? todayYM());
+
+  // ── Cost-based target derivation (Auto-Extrapolating Break-Even) ────────────
+  // Survival goals are derived ONLY from logged expenses in the currently viewed
+  // month, extrapolated to an annual projection.  Manual goals (dailyGoal,
+  // weeklyGoal) have ZERO effect on this calculation — fully decoupled.
+  //
+  //   currentMonthTotalExpenses = |expense rows| + |negative cost rows|  (for effectiveMonth)
+  //   projectedAnnualCost      = currentMonthTotalExpenses × 12
+  //
+  const currentYear = cutoffDate ? parseInt(cutoffDate.slice(0, 4), 10) : new Date().getFullYear();
+
+  const currentMonthTotalExpenses = useMemo(() => {
+    const monthPrefix = effectiveMonth + '-';
+
+    // 1. Expense-type rows for this month (Gastos tab — always positive values)
+    const expenseTotal = filteredRows
+      .filter((r) => r.entryType === 'expense' && r.value > 0 && r.date.startsWith(monthPrefix))
+      .reduce((sum, r) => sum + r.value, 0);
+
+    // 2. Negative-value rows in the main spreadsheet for this month (inline costs)
+    const negativeCosts = filteredRows
+      .filter(
+        (r) =>
+          r.entryType !== 'expense' &&
+          r.entryType !== 'deposit' &&
+          r.entryType !== 'waiver' &&
+          r.value < 0 &&
+          r.date.startsWith(monthPrefix),
+      )
+      .reduce((sum, r) => sum + Math.abs(r.value), 0);
+
+    return Math.round((expenseTotal + negativeCosts) * 100) / 100;
+  }, [filteredRows, effectiveMonth]);
+
+  const projectedAnnualCost = currentMonthTotalExpenses * 12;
+
+  const costBasedTarget: CostBasedTarget | undefined = costGoalActive && projectedAnnualCost > 0
+    ? {
+        monthlySurvival: currentMonthTotalExpenses,
+        weeklySurvival: Math.round((projectedAnnualCost / 52) * 100) / 100,
+        dailySurvival: Math.round((projectedAnnualCost / 365) * 100) / 100,
+        annualCost: Math.round(projectedAnnualCost * 100) / 100,
+      }
+    : undefined;
 
   // Rows visible in the current month view
   const monthRows = useMemo(

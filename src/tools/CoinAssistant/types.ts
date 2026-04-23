@@ -10,15 +10,18 @@ export interface GoalProfile {
 }
 
 /**
- * Cost-based survival targets derived from GoalProfile.annualCost.
- * These are never persisted — always computed on the fly.
+ * Cost-based survival targets auto-extrapolated from logged expenses.
+ * These are never persisted — always computed on the fly from the
+ * currently viewed month's expenses × 12.
  */
 export interface CostBasedTarget {
-  /** annualCost / 52 — minimum weekly revenue to cover operating costs. */
+  /** projectedAnnualCost / 52 — minimum weekly revenue to cover operating costs. */
   weeklySurvival: number;
-  /** annualCost / 365 — minimum daily revenue to cover operating costs. */
+  /** projectedAnnualCost / 365 — minimum daily revenue to cover operating costs. */
   dailySurvival: number;
-  /** The source annual cost used for the computation. */
+  /** projectedAnnualCost / 12 — equals currentMonthTotalExpenses. */
+  monthlySurvival: number;
+  /** The projected annual cost (currentMonthExpenses × 12). */
   annualCost: number;
 }
 

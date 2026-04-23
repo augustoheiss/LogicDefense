@@ -145,7 +145,7 @@ function makeTooltip(dailyGoal: number) {
     const dayBalance = get('dayBalance');
 
     const hasActivity  = revenue > 0 || expense > 0;
-    const performance  = revenue > 0 ? Math.round((revenue - dailyGoal) * 100) / 100 : null;
+    const performance  = revenue > 0 && dailyGoal > 0 ? Math.round((revenue - dailyGoal) * 100) / 100 : null;
     const perfPositive = performance !== null && performance >= 0;
 
     return (

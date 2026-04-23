@@ -161,21 +161,26 @@ export function GoalsPanel({ goals, metrics, costBasedTarget }: GoalsPanelProps)
         <TimeBankCard balance={metrics.timeBankBalance} />
       )}
 
-      <ProgressBar
-        label={`Meta Diária ${currentYear}`}
-        current={metrics.globalDailyAvg}
-        target={currentDailyGoal}
-        unit="/ dia"
-      />
+      {/* ── Manual goal progress bars (only when targets > 0) ── */}
+      {currentDailyGoal > 0 && (
+        <ProgressBar
+          label={`Meta Diária ${currentYear}`}
+          current={metrics.globalDailyAvg}
+          target={currentDailyGoal}
+          unit="/ dia"
+        />
+      )}
 
-      <ProgressBar
-        label={`Meta Semanal ${currentYear} (última semana)`}
-        current={latestWeekGross}
-        target={currentWeeklyGoal}
-        unit="/ semana"
-      />
+      {currentWeeklyGoal > 0 && (
+        <ProgressBar
+          label={`Meta Semanal ${currentYear} (última semana)`}
+          current={latestWeekGross}
+          target={currentWeeklyGoal}
+          unit="/ semana"
+        />
+      )}
 
-      {latestMonthMetrics && (
+      {currentWeeklyGoal > 0 && latestMonthMetrics && (
         <ProgressBar
           label="Bruto Mensal (último mês)"
           current={latestMonthMetrics.grossMonthly}
@@ -184,18 +189,21 @@ export function GoalsPanel({ goals, metrics, costBasedTarget }: GoalsPanelProps)
         />
       )}
 
-      <ProgressBar
-        label={`Custo Anual ${currentYear}`}
-        current={currentYearGross}
-        target={currentYearCost}
-        unit="anual"
-      />
+      {currentYearCost > 0 && (
+        <ProgressBar
+          label={`Custo Anual ${currentYear}`}
+          current={currentYearGross}
+          target={currentYearCost}
+          unit="anual"
+        />
+      )}
 
       {/* ── Cost-based survival progress bars (dual-target) ── */}
       {costBasedTarget && (
         <div className="space-y-3 pt-2 border-t border-cyan-500/20">
           <div className="text-xs text-cyan-400/60 uppercase tracking-wider flex items-center gap-1.5">
             <span>🛡️</span> Metas de Sobrevivência
+            <span className="text-white/20 normal-case">(projeção baseada nos gastos do mês)</span>
           </div>
           <ProgressBar
             label="Sobrevivência Diária"
@@ -209,23 +217,35 @@ export function GoalsPanel({ goals, metrics, costBasedTarget }: GoalsPanelProps)
             target={costBasedTarget.weeklySurvival}
             unit="/ semana"
           />
+          {latestMonthMetrics && (
+            <ProgressBar
+              label="Sobrevivência Mensal"
+              current={latestMonthMetrics.grossMonthly}
+              target={costBasedTarget.monthlySurvival}
+              unit="/ mês"
+            />
+          )}
         </div>
       )}
 
       {/* ── Quick stats ── */}
-      <div className={`pt-1 border-t border-white/10 grid gap-3 text-center ${metrics.totalExpenses > 0 ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-3'}`}>
-        <div>
-          <div className="text-xs text-white/30 mb-1">Meta diária {currentYear}</div>
-          <div className="text-sm font-mono font-semibold text-[#a855f7]">
-            {fmt(currentDailyGoal)}
+      <div className="pt-1 border-t border-white/10 grid gap-3 text-center grid-cols-2 sm:grid-cols-4">
+        {currentDailyGoal > 0 && (
+          <div>
+            <div className="text-xs text-white/30 mb-1">Meta diária {currentYear}</div>
+            <div className="text-sm font-mono font-semibold text-[#a855f7]">
+              {fmt(currentDailyGoal)}
+            </div>
           </div>
-        </div>
-        <div>
-          <div className="text-xs text-white/30 mb-1">Custo anual {currentYear}</div>
-          <div className="text-sm font-mono font-semibold text-[#a855f7]">
-            {fmt(currentYearCost)}
+        )}
+        {currentYearCost > 0 && (
+          <div>
+            <div className="text-xs text-white/30 mb-1">Custo anual {currentYear}</div>
+            <div className="text-sm font-mono font-semibold text-[#a855f7]">
+              {fmt(currentYearCost)}
+            </div>
           </div>
-        </div>
+        )}
         <div>
           <div className="text-xs text-white/30 mb-1">Semanas de parceria</div>
           <div className="text-sm font-mono font-semibold text-white/60">

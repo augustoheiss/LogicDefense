@@ -108,7 +108,7 @@ function buildMessage(
       `• Meta Diária ${reportYear} (${fmt(reportDailyGoal)}): ${goalPct}% atingida`,
       ...(costBasedTarget && costBasedTarget.annualCost > 0
         ? [
-            `• 🛡️ Meta de Sobrevivência Mensal: ${fmt(Math.round((costBasedTarget.annualCost / 12) * 100) / 100)}`,
+            `• 🛡️ Meta de Sobrevivência Mensal: ${fmt(costBasedTarget.monthlySurvival)}`,
             `• 🛡️ Meta de Sobrevivência Diária: ${fmt(costBasedTarget.dailySurvival)}`,
           ]
         : []),
@@ -166,7 +166,10 @@ function buildMessage(
     lines.push('');
   }
 
-  const yearCost    = resolveGoalForYear(table.goals.annualCosts, reportYear);
+  const staticYearCost = resolveGoalForYear(table.goals.annualCosts, reportYear);
+  const yearCost    = costBasedTarget && costBasedTarget.annualCost > 0
+    ? costBasedTarget.annualCost
+    : staticYearCost;
   const yearRevenue = metrics.byYear[String(reportYear)]?.grossAnnual ?? 0;
   const annualPct   = yearCost > 0
     ? ((yearRevenue / yearCost) * 100).toFixed(1)
