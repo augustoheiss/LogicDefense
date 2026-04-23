@@ -159,14 +159,37 @@ export function TableEditor({
     [table.rows, table.goals.weeklyGoals],
   );
 
-  // ── Cost-based target derivation ────────────────────────────────────────────
+  // ── Cost-based target derivation (Dynamic Break-Even) ────────────────────────
+  // The survival goal absorbs ALL variable costs logged in the system, not just
+  // the static annualCost input.  This makes break-even targets adjust to real
+  // spending:
+  //   dynamicAnnualCost = baseAnnualCost + expenseRows + negativeValueCosts
+  //
+  // Everything reads from filteredRows so the Time Machine cutoff is respected.
   const currentYear = cutoffDate ? parseInt(cutoffDate.slice(0, 4), 10) : new Date().getFullYear();
-  const currentAnnualCost = resolveGoalForYear(table.goals.annualCosts, currentYear);
-  const costBasedTarget: CostBasedTarget | undefined = costGoalActive && currentAnnualCost > 0
+  const baseAnnualCost = resolveGoalForYear(table.goals.annualCosts, currentYear);
+
+  const variableCosts = useMemo(() => {
+    // 1. Expense-type rows (Gastos tab entries — always positive values)
+    const expenseTotal = filteredRows
+      .filter((r) => r.entryType === 'expense' && r.value > 0)
+      .reduce((sum, r) => sum + r.value, 0);
+
+    // 2. Negative-value rows in the main spreadsheet (inline costs)
+    const negativeCosts = filteredRows
+      .filter((r) => r.entryType !== 'expense' && r.entryType !== 'deposit' && r.entryType !== 'waiver' && r.value < 0)
+      .reduce((sum, r) => sum + Math.abs(r.value), 0);
+
+    return Math.round((expenseTotal + negativeCosts) * 100) / 100;
+  }, [filteredRows]);
+
+  const dynamicAnnualCost = baseAnnualCost + variableCosts;
+
+  const costBasedTarget: CostBasedTarget | undefined = costGoalActive && dynamicAnnualCost > 0
     ? {
-        weeklySurvival: Math.round((currentAnnualCost / 52) * 100) / 100,
-        dailySurvival: Math.round((currentAnnualCost / 365) * 100) / 100,
-        annualCost: currentAnnualCost,
+        weeklySurvival: Math.round((dynamicAnnualCost / 52) * 100) / 100,
+        dailySurvival: Math.round((dynamicAnnualCost / 365) * 100) / 100,
+        annualCost: dynamicAnnualCost,
       }
     : undefined;
 
