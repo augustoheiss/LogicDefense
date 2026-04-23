@@ -1,9 +1,10 @@
-import type { TableMetrics } from '../types';
+import type { TableMetrics, CostBasedTarget } from '../types';
 import { formatCurrencyShort, formatCurrencyFull } from '../utils/formatCurrency';
 
 interface MetricsPanelProps {
   metrics: TableMetrics;
   dailyGoal: number;
+  costBasedTarget?: CostBasedTarget;
 }
 
 /** Shorthand used across all metric cards. Full value shown in tooltip via title attr. */
@@ -41,7 +42,7 @@ function MetricCard({
   );
 }
 
-export function MetricsPanel({ metrics, dailyGoal }: MetricsPanelProps) {
+export function MetricsPanel({ metrics, dailyGoal, costBasedTarget }: MetricsPanelProps) {
   const sortedMonths = Object.keys(metrics.byMonth).sort().reverse().slice(0, 3);
   const latestMonth = sortedMonths[0];
   const latestMonthMetrics = latestMonth ? metrics.byMonth[latestMonth] : null;
@@ -128,6 +129,28 @@ export function MetricsPanel({ metrics, dailyGoal }: MetricsPanelProps) {
                 positive
                   ? `✅ ${absW} semana${parseFloat(absW) !== 1 ? 's' : ''} adiantadas`
                   : `🚨 ${absW} semana${parseFloat(absW) !== 1 ? 's' : ''} pendentes`
+              }
+            />
+          );
+        })()}
+
+        {/* ── Cost coverage card ── */}
+        {costBasedTarget && (() => {
+          const currentYear = new Date().getFullYear();
+          const yearGross = metrics.byYear[String(currentYear)]?.grossAnnual ?? 0;
+          const coveragePct = costBasedTarget.annualCost > 0
+            ? Math.round((yearGross / costBasedTarget.annualCost) * 1000) / 10
+            : 0;
+          const covered = coveragePct >= 100;
+          return (
+            <MetricCard
+              label="Cobertura de Custos"
+              value={`${coveragePct.toFixed(1)}%`}
+              status={covered ? 'success' : 'warning'}
+              sub={
+                covered
+                  ? `✅ Custos operacionais cobertos! Saldo é lucro líquido`
+                  : `⚡ ${formatCurrencyShort(yearGross)} de ${formatCurrencyShort(costBasedTarget.annualCost)} anuais`
               }
             />
           );

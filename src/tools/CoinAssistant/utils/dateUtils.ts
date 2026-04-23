@@ -192,6 +192,8 @@ export function findCurrentWeek(
 export function calculateStrictGlobalBalance(
   rows: TableRow[],
   weeklyGoals: Record<number, number>,
+  /** When set, the timeline is capped at this date instead of today. */
+  asOfDate?: Date,
 ): { balance: number; elapsedWeeks: number } {
   const activeRows = rows.filter((r) => r.value > 0);
   if (activeRows.length === 0) return { balance: 0, elapsedWeeks: 0 };
@@ -204,9 +206,10 @@ export function calculateStrictGlobalBalance(
   const startOfTimeline = getMondayOf(new Date(minY, minMo - 1, minD));
 
   // Step C — Monday of the CURRENT calendar week (end of timeline, inclusive)
-  const today = new Date();
+  // Time Machine: when asOfDate is provided, use it instead of today.
+  const refDate = asOfDate ?? new Date();
   const endOfTimeline = getMondayOf(
-    new Date(today.getFullYear(), today.getMonth(), today.getDate()),
+    new Date(refDate.getFullYear(), refDate.getMonth(), refDate.getDate()),
   );
 
   // Build a fast O(1) lookup: "YYYY-MM-DD" → total revenue for that date.

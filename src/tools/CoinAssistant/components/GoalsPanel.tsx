@@ -1,10 +1,11 @@
-import type { TableGoals, TableMetrics } from '../types';
+import type { TableGoals, TableMetrics, CostBasedTarget } from '../types';
 import { resolveGoalForYear } from '../utils/dateUtils';
 import { formatCurrencyShort, formatCurrencyFull } from '../utils/formatCurrency';
 
 interface GoalsPanelProps {
   goals: TableGoals;
   metrics: TableMetrics;
+  costBasedTarget?: CostBasedTarget;
 }
 
 /** Shorthand for compact card values */
@@ -97,7 +98,7 @@ function TimeBankCard({ balance }: { balance: number }) {
   );
 }
 
-export function GoalsPanel({ goals, metrics }: GoalsPanelProps) {
+export function GoalsPanel({ goals, metrics, costBasedTarget }: GoalsPanelProps) {
   // Latest month data for comparison
   const sortedMonths = Object.keys(metrics.byMonth).sort().reverse();
   const latestMonthMetrics = sortedMonths[0] ? metrics.byMonth[sortedMonths[0]] : null;
@@ -189,6 +190,27 @@ export function GoalsPanel({ goals, metrics }: GoalsPanelProps) {
         target={currentYearCost}
         unit="anual"
       />
+
+      {/* ── Cost-based survival progress bars (dual-target) ── */}
+      {costBasedTarget && (
+        <div className="space-y-3 pt-2 border-t border-cyan-500/20">
+          <div className="text-xs text-cyan-400/60 uppercase tracking-wider flex items-center gap-1.5">
+            <span>🛡️</span> Metas de Sobrevivência
+          </div>
+          <ProgressBar
+            label="Sobrevivência Diária"
+            current={metrics.globalDailyAvg}
+            target={costBasedTarget.dailySurvival}
+            unit="/ dia"
+          />
+          <ProgressBar
+            label="Sobrevivência Semanal"
+            current={latestWeekGross}
+            target={costBasedTarget.weeklySurvival}
+            unit="/ semana"
+          />
+        </div>
+      )}
 
       {/* ── Quick stats ── */}
       <div className={`pt-1 border-t border-white/10 grid gap-3 text-center ${metrics.totalExpenses > 0 ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-3'}`}>

@@ -9,6 +9,19 @@ export interface GoalProfile {
   annualCost: number;
 }
 
+/**
+ * Cost-based survival targets derived from GoalProfile.annualCost.
+ * These are never persisted — always computed on the fly.
+ */
+export interface CostBasedTarget {
+  /** annualCost / 52 — minimum weekly revenue to cover operating costs. */
+  weeklySurvival: number;
+  /** annualCost / 365 — minimum daily revenue to cover operating costs. */
+  dailySurvival: number;
+  /** The source annual cost used for the computation. */
+  annualCost: number;
+}
+
 // ─── Persisted Data ──────────────────────────────────────────────────────────
 
 export interface TableRow {

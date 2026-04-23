@@ -30,6 +30,8 @@ import {
 export function computeMetrics(
   rows: TableRow[],
   weeklyGoals: Record<number, number>,
+  /** When set, the engine treats this date as "today" for all calculations. */
+  asOfDate?: string,
 ): TableMetrics {
   if (rows.length === 0) return emptyMetrics();
 
@@ -75,7 +77,10 @@ export function computeMetrics(
   );
 
   // ── Today — used for the current-month partial-month denominator ─────────────
-  const today = new Date();
+  // Time Machine: when asOfDate is provided, treat it as "today".
+  const today = asOfDate
+    ? new Date(asOfDate + 'T12:00:00')
+    : new Date();
   const todayYM = isoYearMonth(today);
   const todayDayOfMonth = today.getDate();
 
@@ -205,7 +210,7 @@ export function computeMetrics(
   // Both values come from the same strict Mon–Sun calendar loop — guaranteed
   // to be perfectly consistent with each other.
   const { balance: rawStrictBalance, elapsedWeeks: totalElapsedWeeks } =
-    calculateStrictGlobalBalance(revenueRows, weeklyGoals);
+    calculateStrictGlobalBalance(revenueRows, weeklyGoals, asOfDate ? today : undefined);
 
   // ── Waiver credits — derived directly from 'waiver' ledger rows ─────────
   // For each waiver row:
@@ -231,7 +236,7 @@ export function computeMetrics(
   // ── Time Bank balance (weeks) ─────────────────────────────────────────────
   // timeBankBalance = finalGlobalGoalBalance / currentEffectiveWeeklyGoal
   // Guard against div-by-zero when no goal is set.
-  const currentYear = new Date().getFullYear();
+  const currentYear = today.getFullYear();
   const effectiveWeeklyGoal = resolveGoalForYear(weeklyGoals, currentYear);
   const timeBankBalance = effectiveWeeklyGoal > 0
     ? Math.round((globalGoalBalance / effectiveWeeklyGoal) * 100) / 100

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { CoinTable, TableMetrics } from '../types';
+import type { CoinTable, TableMetrics, CostBasedTarget } from '../types';
 import { groupRowsByWeek, fmtDate, resolveGoalForYear } from '../utils/dateUtils';
 
 interface WhatsAppExporterProps {
@@ -8,6 +8,10 @@ interface WhatsAppExporterProps {
   /** "YYYY-MM" — the month currently in view; drives the month-specific report. */
   selectedMonth: string;
   onClose: () => void;
+  /** When set, the report reflects data up to this date. */
+  cutoffDate?: string;
+  /** When active, adds cost-coverage messaging to the report. */
+  costBasedTarget?: CostBasedTarget;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -37,9 +41,14 @@ function buildMessage(
   table: CoinTable,
   metrics: TableMetrics,
   selectedMonth: string,
+  cutoffDate?: string,
+  costBasedTarget?: CostBasedTarget,
 ): string {
   const monthLabel   = formatMonthFull(selectedMonth);
   const monthMetrics = metrics.byMonth[selectedMonth];
+  const cutoffLabel  = cutoffDate
+    ? cutoffDate.split('-').reverse().join('/')
+    : null;
 
   // Task 2 fix: group ALL revenue rows into Mon–Sun weeks first, then filter
   // weeks by their SUNDAY date.  A week whose Sunday falls in selectedMonth
@@ -64,7 +73,9 @@ function buildMessage(
 
   const lines: string[] = [
     `📆 *Relatório: ${table.name}*`,
-    `_${monthLabel}_`,
+    cutoffLabel
+      ? `_Performance até ${cutoffLabel} — ${monthLabel}_`
+      : `_${monthLabel}_`,
     ...(table.description ? [`_${table.description}_`] : []),
     '',
   ];
@@ -95,6 +106,12 @@ function buildMessage(
       `• Média Diária: ${fmt(monthMetrics.dailyAvg)}`,
       `• Média Semanal: ${fmt(monthMetrics.weeklyAvg)}`,
       `• Meta Diária ${reportYear} (${fmt(reportDailyGoal)}): ${goalPct}% atingida`,
+      ...(costBasedTarget && costBasedTarget.annualCost > 0
+        ? [
+            `• 🛡️ Meta de Sobrevivência Mensal: ${fmt(Math.round((costBasedTarget.annualCost / 12) * 100) / 100)}`,
+            `• 🛡️ Meta de Sobrevivência Diária: ${fmt(costBasedTarget.dailySurvival)}`,
+          ]
+        : []),
       '',
     );
   } else {
@@ -188,12 +205,27 @@ function buildMessage(
       : []),
     `• Média Diária Global: ${fmt(metrics.globalDailyAvg)}`,
     `• Meta Semanal ${reportYear}: ${fmt(reportWeeklyGoal)}`,
+    ...(costBasedTarget && costBasedTarget.annualCost > 0
+      ? [`• 🛡️ Meta de Sobrevivência Semanal: ${fmt(costBasedTarget.weeklySurvival)}`]
+      : []),
     balanceLine,
     partnershipLine,
     ...(waiverLine ? [waiverLine] : []),
     tbLine,
     `• Custo Anual ${reportYear}: ${fmt(yearCost)} _(${annualPct}% coberto em ${reportYear})_`,
     '',
+  );
+
+  // ── Cost-based goal coverage message ───────────────────────────────────────
+  if (costBasedTarget && costBasedTarget.annualCost > 0 && yearRevenue >= costBasedTarget.annualCost) {
+    const netProfit = yearRevenue - costBasedTarget.annualCost;
+    lines.push(
+      `✅ *Custos operacionais cobertos!* O saldo atual de *${fmt(netProfit)}* em ${reportYear} é lucro líquido puro.`,
+      '',
+    );
+  }
+
+  lines.push(
     `_Gerado pelo Assistente Moeda · Heiss-Lab_`,
   );
 
@@ -207,9 +239,11 @@ export function WhatsAppExporter({
   metrics,
   selectedMonth,
   onClose,
+  cutoffDate,
+  costBasedTarget,
 }: WhatsAppExporterProps) {
   const [phone, setPhone] = useState('');
-  const message = buildMessage(table, metrics, selectedMonth);
+  const message = buildMessage(table, metrics, selectedMonth, cutoffDate, costBasedTarget);
 
   function handleSend() {
     const cleaned = phone.replace(/\D/g, '');

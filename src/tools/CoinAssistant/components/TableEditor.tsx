@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback } from 'react';
-import type { CoinTable, TableRow } from '../types';
+import type { CoinTable, TableRow, CostBasedTarget } from '../types';
 import { computeMetrics } from '../hooks/useMetricsEngine';
 import { SpreadsheetGrid } from './SpreadsheetGrid';
 import { AddRowForm } from './AddRowForm';
@@ -128,20 +128,50 @@ export function TableEditor({
   const [deleteRowId,  setDeleteRowId]  = useState<string | null>(null);
   const [chartView,    setChartView]    = useState<'history' | 'projection'>('history');
 
+  // ── Time Machine (cutoff date) ──────────────────────────────────────────────
+  const [cutoffDate, setCutoffDate] = useState<string>(''); // '' = today (no filter)
+
+  // ── Dual-Target: cost-based goal toggle ─────────────────────────────────────
+  const [costGoalActive, setCostGoalActive] = useState(false);
+
+  // ── Filtered rows (Time Machine) ────────────────────────────────────────────
+  // When a cutoff date is set, only rows on or before that date are considered.
+  const filteredRows = useMemo(() => {
+    if (!cutoffDate) return table.rows;
+    return table.rows.filter((r) => r.date <= cutoffDate);
+  }, [table.rows, cutoffDate]);
+
   // ── Derived rows ────────────────────────────────────────────────────────────
   // Revenue rows exclude both deposits and waiver ledger entries.
-  // computeMetrics receives ALL rows so it can locate waiver rows internally.
+  // computeMetrics receives ALL filtered rows so it can locate waiver rows internally.
   const revenueRows = useMemo(
-    () => table.rows.filter((r) => r.entryType !== 'deposit' && r.entryType !== 'waiver' && r.entryType !== 'expense'),
-    [table.rows],
+    () => filteredRows.filter((r) => r.entryType !== 'deposit' && r.entryType !== 'waiver' && r.entryType !== 'expense'),
+    [filteredRows],
   );
   const metrics = useMemo(
+    () => computeMetrics(filteredRows, table.goals.weeklyGoals, cutoffDate || undefined),
+    [filteredRows, table.goals.weeklyGoals, cutoffDate],
+  );
+
+  // All-time metrics — always unfiltered, used by the global overview section.
+  const allTimeMetrics = useMemo(
     () => computeMetrics(table.rows, table.goals.weeklyGoals),
     [table.rows, table.goals.weeklyGoals],
   );
 
+  // ── Cost-based target derivation ────────────────────────────────────────────
+  const currentYear = cutoffDate ? parseInt(cutoffDate.slice(0, 4), 10) : new Date().getFullYear();
+  const currentAnnualCost = resolveGoalForYear(table.goals.annualCosts, currentYear);
+  const costBasedTarget: CostBasedTarget | undefined = costGoalActive && currentAnnualCost > 0
+    ? {
+        weeklySurvival: Math.round((currentAnnualCost / 52) * 100) / 100,
+        dailySurvival: Math.round((currentAnnualCost / 365) * 100) / 100,
+        annualCost: currentAnnualCost,
+      }
+    : undefined;
+
   // ── Global month selector ───────────────────────────────────────────────────
-  const availableMonths = useMemo(() => buildAvailableMonths(table.rows), [table.rows]);
+  const availableMonths = useMemo(() => buildAvailableMonths(filteredRows), [filteredRows]);
   const [selectedMonth, setSelectedMonth] = useState<string>(
     () => defaultMonth(table.rows),
   );
@@ -152,17 +182,13 @@ export function TableEditor({
 
   // Rows visible in the current month view
   const monthRows = useMemo(
-    () => table.rows.filter((r) => r.date.startsWith(effectiveMonth + '-')),
-    [table.rows, effectiveMonth],
+    () => filteredRows.filter((r) => r.date.startsWith(effectiveMonth + '-')),
+    [filteredRows, effectiveMonth],
   );
 
-  // Current-week data — uses ALL revenue rows (not just the current month) so
-  // that cross-month weeks (e.g. Jan 26–Feb 01) are never artificially split.
-  // Rule mirrors WhatsApp: a week "belongs" to the month whose calendar
-  // contains its SUNDAY.  For the live current month we always show today's
-  // actual week regardless of where its Sunday lands.
+  // Current-week data — uses filtered revenue rows so Time Machine is respected.
   const currentWeekData = useMemo(() => {
-    const allRevenueRows = table.rows.filter(
+    const allRevenueRows = filteredRows.filter(
       (r) =>
         r.entryType !== 'deposit' &&
         r.entryType !== 'expense' &&
@@ -172,13 +198,12 @@ export function TableEditor({
     const allGroups = groupRowsByWeek(allRevenueRows, table.goals.weeklyGoals);
     if (allGroups.length === 0) return null;
 
-    const today = new Date();
+    const refDate = cutoffDate ? new Date(cutoffDate + 'T12:00:00') : new Date();
     const [y, m] = effectiveMonth.split('-').map(Number);
-    const isCurrentMonth = today.getFullYear() === y && today.getMonth() + 1 === m;
+    const isCurrentMonth = refDate.getFullYear() === y && refDate.getMonth() + 1 === m;
 
     if (isCurrentMonth) {
-      // Live view: show today's real week even if it straddles next month
-      return findCurrentWeek(allGroups, today);
+      return findCurrentWeek(allGroups, refDate);
     }
 
     // Past-month view: show the last week whose SUNDAY falls in this month
@@ -187,7 +212,7 @@ export function TableEditor({
       return sun.getFullYear() === y && sun.getMonth() + 1 === m;
     });
     return monthGroups[monthGroups.length - 1] ?? null;
-  }, [table.rows, table.goals.weeklyGoals, effectiveMonth]);
+  }, [filteredRows, table.goals.weeklyGoals, effectiveMonth, cutoffDate]);
 
   function fmt(v: number) {
     return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -250,7 +275,99 @@ export function TableEditor({
         </div>
       </div>
 
-      {/* ── Global quick stats (all-time) ── */}
+      {/* ── Time Machine + Cost Toggle bar ── */}
+      <div className="flex flex-wrap items-center gap-4 bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3">
+        {/* Date picker */}
+        <div className="flex items-center gap-2">
+          <span className="text-base">🕰️</span>
+          <div className="space-y-0.5">
+            <label className="text-xs text-white/40 uppercase tracking-wider block">Máquina do Tempo</label>
+            <div className="flex items-center gap-1.5">
+              <input
+                type="date"
+                value={cutoffDate}
+                onChange={(e) => setCutoffDate(e.target.value)}
+                className="bg-white/10 text-white text-xs rounded-lg px-2.5 py-1.5 outline-none focus:ring-1 focus:ring-cyan-400 border border-white/10 [color-scheme:dark]"
+              />
+              {cutoffDate && (
+                <button
+                  onClick={() => setCutoffDate('')}
+                  className="text-xs text-cyan-400/70 hover:text-cyan-400 transition-colors"
+                  title="Voltar para hoje"
+                >
+                  ✕ Reset
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="w-px h-8 bg-white/10 hidden sm:block" />
+
+        {/* Cost-based goal toggle */}
+        <div className="flex items-center gap-2.5">
+          <span className="text-base">🎯</span>
+          <div className="space-y-0.5">
+            <label className="text-xs text-white/40 uppercase tracking-wider block">Meta por Custo</label>
+            <button
+              onClick={() => setCostGoalActive((v) => !v)}
+              className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+                costGoalActive ? 'bg-cyan-500' : 'bg-white/15'
+              }`}
+              role="switch"
+              aria-checked={costGoalActive}
+            >
+              <span
+                className={`inline-block h-3.5 w-3.5 rounded-full bg-white transition-transform ${
+                  costGoalActive ? 'translate-x-4.5' : 'translate-x-0.5'
+                }`}
+              />
+            </button>
+          </div>
+          {costGoalActive && costBasedTarget && (
+            <div className="flex gap-3 text-xs">
+              <div>
+                <div className="text-white/30">Sobrev. Diária</div>
+                <div className="font-mono font-semibold text-cyan-400">{formatCurrencyShort(costBasedTarget.dailySurvival)}</div>
+              </div>
+              <div>
+                <div className="text-white/30">Sobrev. Semanal</div>
+                <div className="font-mono font-semibold text-cyan-400">{formatCurrencyShort(costBasedTarget.weeklySurvival)}</div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {cutoffDate && (
+          <span className="text-xs text-cyan-400/60 ml-auto">
+            ⚠ Exibindo dados até {cutoffDate.split('-').reverse().join('/')}
+          </span>
+        )}
+      </div>
+
+      {/* ── All-Time Metrics (always unfiltered, visible when cutoff is active) ── */}
+      {cutoffDate && allTimeMetrics.grossTotal > 0 && (
+        <div className="bg-gradient-to-r from-cyan-500/5 to-transparent border border-cyan-500/20 rounded-xl px-4 py-3">
+          <div className="text-xs text-cyan-400/70 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+            <span>📌</span> Métricas Globais (Todo o Período)
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            {[
+              { label: 'Total Histórico', value: formatCurrencyShort(allTimeMetrics.grossTotal), color: 'text-white' },
+              { label: 'Média Diária', value: formatCurrencyShort(allTimeMetrics.globalDailyAvg), color: 'text-white/70' },
+              { label: 'Média Semanal', value: formatCurrencyShort(allTimeMetrics.globalWeeklyAvg), color: 'text-white/70' },
+              { label: 'Saldo Líquido', value: formatCurrencyShort(allTimeMetrics.netBalance), color: allTimeMetrics.netBalance >= 0 ? 'text-emerald-400' : 'text-red-400' },
+            ].map((s) => (
+              <div key={s.label} className="text-center">
+                <div className="text-xs text-white/25">{s.label}</div>
+                <div className={`text-sm font-mono font-semibold ${s.color}`}>{s.value}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── Quick stats (filtered by cutoff) ── */}
       {metrics.grossTotal > 0 && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
           {[
@@ -259,7 +376,7 @@ export function TableEditor({
               label: 'Diária',
               value: formatCurrencyShort(metrics.globalDailyAvg),
               full: formatCurrencyFull(metrics.globalDailyAvg),
-              color: metrics.globalDailyAvg >= resolveGoalForYear(table.goals.dailyGoals, new Date().getFullYear())
+              color: metrics.globalDailyAvg >= resolveGoalForYear(table.goals.dailyGoals, currentYear)
                 ? 'text-emerald-400'
                 : 'text-amber-400',
             },
@@ -302,7 +419,7 @@ export function TableEditor({
               : `⚡ Faltam ${fmt(Math.abs(currentWeekData.differenceFromGoal))} para a meta`}
           </div>
           <div className="text-xs text-white/25">
-            Meta semanal: {fmt(resolveGoalForYear(table.goals.weeklyGoals, new Date().getFullYear()))}
+            Meta semanal: {fmt(resolveGoalForYear(table.goals.weeklyGoals, currentYear))}
           </div>
         </div>
       )}
@@ -362,10 +479,10 @@ export function TableEditor({
         {activeTab === 'metrics' && (
           <div className="flex flex-col lg:flex-row gap-4">
             <div className="flex-1">
-              <MetricsPanel metrics={metrics} dailyGoal={resolveGoalForYear(table.goals.dailyGoals, new Date().getFullYear())} />
+              <MetricsPanel metrics={metrics} dailyGoal={resolveGoalForYear(table.goals.dailyGoals, currentYear)} costBasedTarget={costBasedTarget} />
             </div>
             <div className="lg:w-72 shrink-0">
-              <GoalsPanel goals={table.goals} metrics={metrics} />
+              <GoalsPanel goals={table.goals} metrics={metrics} costBasedTarget={costBasedTarget} />
             </div>
           </div>
         )}
@@ -398,6 +515,7 @@ export function TableEditor({
                   rows={revenueRows}
                   dailyGoal={resolveGoalForYear(table.goals.dailyGoals, parseInt(effectiveMonth.slice(0, 4)))}
                   selectedMonth={effectiveMonth}
+                  dailySurvivalGoal={costBasedTarget?.dailySurvival}
                 />
               </div>
             )}
@@ -447,6 +565,8 @@ export function TableEditor({
           metrics={metrics}
           selectedMonth={effectiveMonth}
           onClose={() => setShowWhatsApp(false)}
+          cutoffDate={cutoffDate || undefined}
+          costBasedTarget={costBasedTarget}
         />
       )}
 

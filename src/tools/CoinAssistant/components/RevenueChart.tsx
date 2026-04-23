@@ -18,6 +18,8 @@ interface RevenueChartProps {
   dailyGoal: number;
   /** Controlled from TableEditor — the global month filter. */
   selectedMonth: string;
+  /** When cost-based goal is active, shows a second survival reference line. */
+  dailySurvivalGoal?: number;
 }
 
 /**
@@ -202,7 +204,7 @@ function yFmt(v: number): string {
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-export function RevenueChart({ rows, dailyGoal, selectedMonth }: RevenueChartProps) {
+export function RevenueChart({ rows, dailyGoal, selectedMonth, dailySurvivalGoal }: RevenueChartProps) {
   const data = useMemo(
     () => buildCashFlowData(rows, selectedMonth),
     [rows, selectedMonth],
@@ -276,10 +278,18 @@ export function RevenueChart({ rows, dailyGoal, selectedMonth }: RevenueChartPro
                 <span className="inline-block w-3 h-3 rounded-sm bg-rose-500/70" /> Custo rateado
               </span>
             )}
-            <span className="flex items-center gap-1.5">
-              <span className="inline-block w-5 h-0.5 border-t-2 border-dashed border-white/30" />
-              Meta diária
-            </span>
+            {dailyGoal > 0 && (
+              <span className="flex items-center gap-1.5">
+                <span className="inline-block w-5 h-0.5 border-t-2 border-dashed border-white/30" />
+                Meta diária
+              </span>
+            )}
+            {dailySurvivalGoal && dailySurvivalGoal > 0 && (
+              <span className="flex items-center gap-1.5">
+                <span className="inline-block w-5 h-0.5 border-t-2 border-dashed border-cyan-400/50" />
+                Sobrevivência
+              </span>
+            )}
           </div>
 
           {/* ── Chart ── */}
@@ -289,17 +299,34 @@ export function RevenueChart({ rows, dailyGoal, selectedMonth }: RevenueChartPro
               <ReferenceLine y={0} stroke="rgba(255,255,255,0.15)" strokeWidth={1} />
 
               {/* Daily goal reference */}
-              <ReferenceLine
-                y={dailyGoal}
-                stroke="rgba(255,255,255,0.22)"
-                strokeDasharray="4 3"
-                label={{
-                  value: `Meta ${fmtBRL(dailyGoal)}`,
-                  position: 'insideTopRight',
-                  fill: 'rgba(255,255,255,0.28)',
-                  fontSize: 10,
-                }}
-              />
+              {dailyGoal > 0 && (
+                <ReferenceLine
+                  y={dailyGoal}
+                  stroke="rgba(255,255,255,0.22)"
+                  strokeDasharray="4 3"
+                  label={{
+                    value: `Meta ${fmtBRL(dailyGoal)}`,
+                    position: 'insideTopRight',
+                    fill: 'rgba(255,255,255,0.28)',
+                    fontSize: 10,
+                  }}
+                />
+              )}
+
+              {/* Survival goal reference (dual-target) */}
+              {dailySurvivalGoal && dailySurvivalGoal > 0 && (
+                <ReferenceLine
+                  y={dailySurvivalGoal}
+                  stroke="rgba(34,211,238,0.40)"
+                  strokeDasharray="6 3"
+                  label={{
+                    value: `Sobrev. ${fmtBRL(dailySurvivalGoal)}`,
+                    position: 'insideBottomRight',
+                    fill: 'rgba(34,211,238,0.50)',
+                    fontSize: 10,
+                  }}
+                />
+              )}
 
               <XAxis
                 dataKey="dateLabel"
