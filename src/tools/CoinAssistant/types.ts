@@ -11,17 +11,18 @@ export interface GoalProfile {
 
 /**
  * Cost-based survival targets auto-extrapolated from logged expenses.
- * These are never persisted — always computed on the fly from the
- * currently viewed month's expenses × 12.
+ * These are never persisted — always computed on the fly using the
+ * YTD Average Run Rate: sum all expenses in the selected year,
+ * divide by elapsed months, and project over 12 months.
  */
 export interface CostBasedTarget {
   /** projectedAnnualCost / 52 — minimum weekly revenue to cover operating costs. */
   weeklySurvival: number;
   /** projectedAnnualCost / 365 — minimum daily revenue to cover operating costs. */
   dailySurvival: number;
-  /** projectedAnnualCost / 12 — equals currentMonthTotalExpenses. */
+  /** projectedAnnualCost / 12 — equals averageMonthlyExpense (YTD smoothed). */
   monthlySurvival: number;
-  /** The projected annual cost (currentMonthExpenses × 12). */
+  /** The projected annual cost (averageMonthlyExpense × 12). */
   annualCost: number;
 }
 

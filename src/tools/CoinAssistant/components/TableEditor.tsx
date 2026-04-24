@@ -169,25 +169,42 @@ export function TableEditor({
     ? selectedMonth
     : (availableMonths[0] ?? todayYM());
 
-  // ── Cost-based target derivation (Auto-Extrapolating Break-Even) ────────────
-  // Survival goals are derived ONLY from logged expenses in the currently viewed
-  // month, extrapolated to an annual projection.  Manual goals (dailyGoal,
-  // weeklyGoal) have ZERO effect on this calculation — fully decoupled.
+  // ── Cost-based target derivation (YTD Run Rate Break-Even) ──────────────────
+  // Survival goals are derived from the AVERAGE monthly expense across all
+  // elapsed months in the selected year (up to the cutoff date), then
+  // projected to an annual total.  This smooths out single-month outliers
+  // (e.g. buying 4 tires in one month) and produces stable survival targets.
   //
-  //   currentMonthTotalExpenses = |expense rows| + |negative cost rows|  (for effectiveMonth)
-  //   projectedAnnualCost      = currentMonthTotalExpenses × 12
+  //   ytdTotalExpenses    = Σ |expense rows| + Σ |negative cost rows|  (entire selected year)
+  //   elapsedMonths       = month number of cutoff/today (min 1)
+  //   averageMonthlyExp   = ytdTotalExpenses / elapsedMonths
+  //   projectedAnnualCost = averageMonthlyExp × 12
   //
   const currentYear = cutoffDate ? parseInt(cutoffDate.slice(0, 4), 10) : new Date().getFullYear();
 
-  const currentMonthTotalExpenses = useMemo(() => {
-    const monthPrefix = effectiveMonth + '-';
+  // How many months have elapsed in the selected year (based on cutoff or today).
+  const elapsedMonths = useMemo(() => {
+    if (cutoffDate && cutoffDate.startsWith(String(currentYear))) {
+      return Math.max(1, parseInt(cutoffDate.slice(5, 7), 10));
+    }
+    const today = new Date();
+    if (today.getFullYear() === currentYear) {
+      return Math.max(1, today.getMonth() + 1);
+    }
+    // Viewing a past/future year entirely: assume all 12 months.
+    return 12;
+  }, [cutoffDate, currentYear]);
 
-    // 1. Expense-type rows for this month (Gastos tab — always positive values)
+  // YTD total expenses for the entire selected year (up to cutoff).
+  const ytdTotalExpenses = useMemo(() => {
+    const yearPrefix = String(currentYear) + '-';
+
+    // 1. Expense-type rows for this year (Gastos tab — always positive values)
     const expenseTotal = filteredRows
-      .filter((r) => r.entryType === 'expense' && r.value > 0 && r.date.startsWith(monthPrefix))
+      .filter((r) => r.entryType === 'expense' && r.value > 0 && r.date.startsWith(yearPrefix))
       .reduce((sum, r) => sum + r.value, 0);
 
-    // 2. Negative-value rows in the main spreadsheet for this month (inline costs)
+    // 2. Negative-value rows in the main spreadsheet for this year (inline costs)
     const negativeCosts = filteredRows
       .filter(
         (r) =>
@@ -195,18 +212,19 @@ export function TableEditor({
           r.entryType !== 'deposit' &&
           r.entryType !== 'waiver' &&
           r.value < 0 &&
-          r.date.startsWith(monthPrefix),
+          r.date.startsWith(yearPrefix),
       )
       .reduce((sum, r) => sum + Math.abs(r.value), 0);
 
     return Math.round((expenseTotal + negativeCosts) * 100) / 100;
-  }, [filteredRows, effectiveMonth]);
+  }, [filteredRows, currentYear]);
 
-  const projectedAnnualCost = currentMonthTotalExpenses * 12;
+  const averageMonthlyExpense = Math.round((ytdTotalExpenses / elapsedMonths) * 100) / 100;
+  const projectedAnnualCost = averageMonthlyExpense * 12;
 
   const costBasedTarget: CostBasedTarget | undefined = costGoalActive && projectedAnnualCost > 0
     ? {
-        monthlySurvival: currentMonthTotalExpenses,
+        monthlySurvival: averageMonthlyExpense,
         weeklySurvival: Math.round((projectedAnnualCost / 52) * 100) / 100,
         dailySurvival: Math.round((projectedAnnualCost / 365) * 100) / 100,
         annualCost: Math.round(projectedAnnualCost * 100) / 100,
