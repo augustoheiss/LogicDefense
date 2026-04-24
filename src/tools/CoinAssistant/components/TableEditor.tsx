@@ -171,29 +171,35 @@ export function TableEditor({
 
   // ── Cost-based target derivation (YTD Run Rate Break-Even) ──────────────────
   // Survival goals are derived from the AVERAGE monthly expense across all
-  // elapsed months in the selected year (up to the cutoff date), then
+  // ACTIVE months (months with actual data) in the selected year, then
   // projected to an annual total.  This smooths out single-month outliers
   // (e.g. buying 4 tires in one month) and produces stable survival targets.
   //
   //   ytdTotalExpenses    = Σ |expense rows| + Σ |negative cost rows|  (entire selected year)
-  //   elapsedMonths       = month number of cutoff/today (min 1)
-  //   averageMonthlyExp   = ytdTotalExpenses / elapsedMonths
+  //   activeMonthsCount   = distinct YYYY-MM values with any activity (min 1)
+  //   averageMonthlyExp   = ytdTotalExpenses / activeMonthsCount
   //   projectedAnnualCost = averageMonthlyExp × 12
   //
   const currentYear = cutoffDate ? parseInt(cutoffDate.slice(0, 4), 10) : new Date().getFullYear();
 
-  // How many months have elapsed in the selected year (based on cutoff or today).
-  const elapsedMonths = useMemo(() => {
-    if (cutoffDate && cutoffDate.startsWith(String(currentYear))) {
-      return Math.max(1, parseInt(cutoffDate.slice(5, 7), 10));
+  // Count only months that actually have data (revenue, expense, or cost rows).
+  // This avoids dividing by empty calendar months that would artificially
+  // deflate the average (e.g. April=4 but user only has March data → /1, not /4).
+  const activeMonthsCount = useMemo(() => {
+    const yearPrefix = String(currentYear) + '-';
+    const months = new Set<string>();
+
+    for (const r of filteredRows) {
+      if (!r.date.startsWith(yearPrefix)) continue;
+      // Include: revenue (positive), expense entries, and negative inline costs
+      if (r.entryType === 'deposit' || r.entryType === 'waiver') continue;
+      if (r.entryType === 'expense' || r.value !== 0) {
+        months.add(r.date.slice(0, 7));
+      }
     }
-    const today = new Date();
-    if (today.getFullYear() === currentYear) {
-      return Math.max(1, today.getMonth() + 1);
-    }
-    // Viewing a past/future year entirely: assume all 12 months.
-    return 12;
-  }, [cutoffDate, currentYear]);
+
+    return Math.max(1, months.size);
+  }, [filteredRows, currentYear]);
 
   // YTD total expenses for the entire selected year (up to cutoff).
   const ytdTotalExpenses = useMemo(() => {
@@ -219,7 +225,7 @@ export function TableEditor({
     return Math.round((expenseTotal + negativeCosts) * 100) / 100;
   }, [filteredRows, currentYear]);
 
-  const averageMonthlyExpense = Math.round((ytdTotalExpenses / elapsedMonths) * 100) / 100;
+  const averageMonthlyExpense = Math.round((ytdTotalExpenses / activeMonthsCount) * 100) / 100;
   const projectedAnnualCost = averageMonthlyExpense * 12;
 
   const costBasedTarget: CostBasedTarget | undefined = costGoalActive && projectedAnnualCost > 0
