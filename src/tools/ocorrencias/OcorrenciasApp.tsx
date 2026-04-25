@@ -71,7 +71,7 @@ export function OcorrenciasApp() {
   const handleMapComplete = useCallback((map: any, ids: string[]) => {
     setDynamicMap(map);
     setMappedFields(ids);
-    
+
     // Initialize dynamic data state for any field not hardcoded
     const initialData: Record<string, string> = {};
     ids.forEach(id => {
@@ -104,12 +104,12 @@ export function OcorrenciasApp() {
     const formData = new FormData();
     formData.append('template_pdf', file);
     formData.append('template_map_json', JSON.stringify(dynamicMap));
-    
+
     // Append all dynamic fields
     Object.entries(dynamicData).forEach(([key, val]) => {
       formData.append(key, val.trim());
     });
-    
+
     // Append hardcoded AI fields
     formData.append('descricao_ocorrencia', descricao.trim());
 
@@ -160,8 +160,8 @@ export function OcorrenciasApp() {
         <p className="hero__eyebrow">Laboratório · Ferramentas</p>
         <h1 className="hero__title">Gerador de Ocorrências</h1>
         <p className="hero__sub">
-          Faça upload do template PDF da escola, descreva a ocorrência de forma informal e deixe a IA
-          formalizar o texto em linguagem pedagógica técnica. O PDF carimbado é gerado instantaneamente.
+          Faça upload do template PDF da escola, descreva a ocorrência
+          em linguagem pedagógica técnica. O PDF carimbado é gerado instantaneamente.
         </p>
       </div>
 
@@ -206,13 +206,13 @@ export function OcorrenciasApp() {
         {/* ── Main Content Area ── */}
         {file && (
           <div className="flex flex-col gap-8 mt-8">
-            
+
             {/* TOP: Template Mapper (always full width) */}
             {!dynamicMap && (
               <div className="w-full">
-                <TemplateMapper 
-                  file={file} 
-                  onMapComplete={handleMapComplete} 
+                <TemplateMapper
+                  file={file}
+                  onMapComplete={handleMapComplete}
                   onMapProgress={handleMapProgress}
                   onCancel={removeFile}
                 />
@@ -222,11 +222,11 @@ export function OcorrenciasApp() {
             {/* BOTTOM: Form with Progressive Disclosure */}
             <div className="w-full max-w-[800px] mx-auto">
               <form className="oc-form" onSubmit={(e) => { e.preventDefault(); handleSubmit(); }}>
-                
+
                 <div className="oc-form-header">
                   <h3>Preenchimento da Ocorrência</h3>
                   {!dynamicMap && <p className="oc-form-hint">Mapeie os campos no PDF ao lado para liberar o preenchimento.</p>}
-                  {dynamicMap && <p className="oc-form-hint" style={{color: 'var(--success)'}}>✓ Mapeamento concluído. Preencha os dados finais.</p>}
+                  {dynamicMap && <p className="oc-form-hint" style={{ color: 'var(--success)' }}>✓ Mapeamento concluído. Preencha os dados finais.</p>}
                 </div>
 
                 <div className="flex flex-col gap-4">
@@ -264,7 +264,7 @@ export function OcorrenciasApp() {
                         required
                       />
                     </div>
-                    
+
 
 
                     <div className="oc-divider fade-in" />
