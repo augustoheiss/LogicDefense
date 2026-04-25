@@ -46,7 +46,13 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s  %(message)s")
 log = logging.getLogger(__name__)
 
 # ── Gemini client ────────────────────────────────────────────────────────────
-client = genai.Client(api_key=GEMINI_API_KEY)
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+
+client = None
+if GEMINI_API_KEY:
+    client = genai.Client(api_key=GEMINI_API_KEY)
+else:
+    print("⚠️ AVISO: GEMINI_API_KEY não encontrada. Iniciando servidor sem suporte à IA.")
 
 # ── FastAPI app ──────────────────────────────────────────────────────────────
 app = FastAPI(
