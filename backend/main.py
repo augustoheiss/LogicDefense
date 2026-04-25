@@ -37,7 +37,7 @@ from pydantic import BaseModel, Field
 load_dotenv()
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-if not GEMINI_API_KEY:
+if not os.getenv("GEMINI_API_KEY"):
     raise RuntimeError("GEMINI_API_KEY is not set. Add it to backend/.env")
 
 MODEL         = "gemini-2.5-flash"
