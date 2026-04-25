@@ -36,10 +36,6 @@ from pydantic import BaseModel, Field
 # ── Environment ──────────────────────────────────────────────────────────────
 load_dotenv()
 
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-if not os.getenv("GEMINI_API_KEY"):
-    raise RuntimeError("GEMINI_API_KEY is not set. Add it to backend/.env")
-
 MODEL         = "gemini-2.5-flash"
 MAX_TOKENS    = 8192     # one CV per call; 8 k gives headroom for rich resumes
 MAX_RETRIES   = 3        # attempts per archetype before giving up
