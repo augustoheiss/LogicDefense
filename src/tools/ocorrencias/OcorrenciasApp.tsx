@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback } from 'react';
 import './ocorrencias.css';
 
-const API_BASE = 'http://192.168.15.6:8000';
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 /** Returns today's date as DD/MM/YYYY. */
 function todayBR(): string {
