@@ -405,7 +405,7 @@ export function TemplateMapper({ file, onMapComplete, onMapProgress, onCancel }:
       </div>
 
       {/* ── PDF Canvas ── */}
-      <div className="w-full max-h-[800px] overflow-auto border border-gray-700 rounded-md flex justify-start bg-gray-800 p-4 relative">
+      <div className="pdf-canvas-container">
         <div 
           className="pdf-draw-wrapper" 
           ref={wrapperRef}

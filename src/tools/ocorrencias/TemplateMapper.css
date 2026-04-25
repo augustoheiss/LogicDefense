@@ -1,5 +1,27 @@
 /* Styles for interactive drawing elements and specific PDF overrides */
 
+/* Outer scroll container for the PDF canvas */
+.pdf-canvas-container {
+  width: 100%;
+  max-height: 800px;
+  overflow: auto;
+  border: 1px solid var(--border, #374151);
+  border-radius: 0.375rem;
+  display: flex;
+  justify-content: flex-start;
+  background: #1f2937;
+  padding: 1rem;
+  position: relative;
+}
+
+/* Mobile scroll safe zone — lateral gutters so users can swipe past the PDF */
+@media (max-width: 768px) {
+  .pdf-canvas-container {
+    padding: 0.5rem 1.5rem; /* Wider horizontal gutters for thumb scrolling */
+    max-height: none;       /* Let mobile users see the full page */
+  }
+}
+
 /* The wrapper that sizes exactly to the rendered PDF page */
 .pdf-draw-wrapper {
   position: relative;
