@@ -410,14 +410,6 @@ export function TemplateMapper({ file, onMapComplete, onMapProgress, onCancel }:
           className="pdf-draw-wrapper" 
           ref={wrapperRef}
           data-can-draw={!!activeFieldId}
-          onMouseDown={handlePointerDown}
-          onMouseMove={handlePointerMove}
-          onMouseUp={handlePointerUp}
-          onMouseLeave={handlePointerUp}
-          onTouchStart={handlePointerDown}
-          onTouchMove={handlePointerMove}
-          onTouchEnd={handlePointerUp}
-          onTouchCancel={handlePointerUp}
         >
           <Document 
             file={file}
@@ -433,7 +425,17 @@ export function TemplateMapper({ file, onMapComplete, onMapProgress, onCancel }:
             />
           </Document>
 
-          <div className="drawing-overlay">
+          <div 
+            className="drawing-overlay"
+            onMouseDown={handlePointerDown}
+            onMouseMove={handlePointerMove}
+            onMouseUp={handlePointerUp}
+            onMouseLeave={handlePointerUp}
+            onTouchStart={handlePointerDown}
+            onTouchMove={handlePointerMove}
+            onTouchEnd={handlePointerUp}
+            onTouchCancel={handlePointerUp}
+          >
             {/* Draw existing boxes */}
             {Object.values(mappedFields)
               .filter(box => (box.page || 0) === pageNumber - 1)

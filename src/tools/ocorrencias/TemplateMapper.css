@@ -12,32 +12,33 @@
   background: #1f2937;
   padding: 1rem;
   position: relative;
+  touch-action: auto; /* ALWAYS allow native scrolling on the container */
 }
 
 /* Mobile scroll safe zone — lateral gutters so users can swipe past the PDF */
 @media (max-width: 768px) {
   .pdf-canvas-container {
-    padding: 0.5rem 1.5rem; /* Wider horizontal gutters for thumb scrolling */
-    max-height: none;       /* Let mobile users see the full page */
+    padding: 0.75rem 1.75rem; /* Wider horizontal gutters for thumb scrolling */
+    max-height: none;          /* Let mobile users see the full page */
+    background: #111827;       /* Darker gutter so user can see the scroll-safe edges */
   }
 }
 
 /* The wrapper that sizes exactly to the rendered PDF page */
 .pdf-draw-wrapper {
   position: relative;
-  margin: 0 auto; /* Centers the PDF natively while allowing left-scroll when zoomed */
+  margin: 0 auto;
   width: max-content;
   box-shadow: 0 4px 12px rgba(0,0,0,0.1);
 }
 
 .pdf-draw-wrapper[data-can-draw="true"] {
   cursor: crosshair;
-  touch-action: none; /* Prevent scroll/zoom while drawing on mobile */
 }
 
 /* The actual PDF rendered by react-pdf */
 .react-pdf__Page {
-  pointer-events: none; /* Let drawing wrapper handle events */
+  pointer-events: none; /* Let drawing overlay handle events */
 }
 
 .react-pdf__Page__canvas {
@@ -53,7 +54,13 @@
   right: 0;
   bottom: 0;
   z-index: 10;
-  touch-action: none; /* Prevent scroll/zoom while drawing on mobile */
+  touch-action: auto; /* Default: allow scrolling */
+}
+
+/* Only block native touch when a field is selected for drawing */
+.pdf-draw-wrapper[data-can-draw="true"] .drawing-overlay {
+  touch-action: none;
+  cursor: crosshair;
 }
 
 /* Individual mapped boxes */
