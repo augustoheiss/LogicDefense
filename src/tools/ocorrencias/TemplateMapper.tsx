@@ -16,6 +16,7 @@ export interface MappedField {
   y: number;
   width: number;
   height: number;
+  page: number;
 }
 
 interface TemplateMapperProps {
@@ -43,11 +44,13 @@ interface PyMuPDFCoords {
   font_size: number;
   type: string;
   label: string;
+  page: number;
 }
 
 export function TemplateMapper({ file, onMapComplete, onMapProgress, onCancel }: TemplateMapperProps) {
   const [availableFields, setAvailableFields] = useState(DEFAULT_FIELDS);
-
+  const [numPages, setNumPages] = useState<number | null>(null);
+  const [pageNumber, setPageNumber] = useState<number>(1);
   const [activeFieldId, setActiveFieldId] = useState<string>(DEFAULT_FIELDS[0].id);
   const [mappedFields, setMappedFields] = useState<Record<string, MappedField>>({});
   const [scale, setScale] = useState<number>(1.5);
@@ -61,6 +64,10 @@ export function TemplateMapper({ file, onMapComplete, onMapProgress, onCancel }:
   const [isDrawing, setIsDrawing] = useState(false);
   const [startPos, setStartPos] = useState({ x: 0, y: 0 });
   const [currentPos, setCurrentPos] = useState({ x: 0, y: 0 });
+
+  function onDocumentLoadSuccess({ numPages }: { numPages: number }) {
+    setNumPages(numPages);
+  }
 
   function onPageLoadSuccess(page: any) {
     // page.originalWidth / originalHeight are in PDF points (1/72 inch)
@@ -107,7 +114,7 @@ export function TemplateMapper({ file, onMapComplete, onMapProgress, onCancel }:
       setMappedFields(prev => {
         const next = {
           ...prev,
-          [activeFieldId]: { id: activeFieldId, x, y, width, height }
+          [activeFieldId]: { id: activeFieldId, x, y, width, height, page: pageNumber - 1 }
         };
         onMapProgress(Object.keys(next));
         return next;
@@ -189,7 +196,8 @@ export function TemplateMapper({ file, onMapComplete, onMapProgress, onCancel }:
         height: Math.round(pdfHeight),
         font_size: fieldDef.type === 'textarea' ? 11 : 12, // default sizes matching config
         type: fieldDef.type,
-        label: fieldDef.label
+        label: fieldDef.label,
+        page: box.page || 0
       };
 
       if (fieldDef.type === 'textarea') {
@@ -349,6 +357,22 @@ export function TemplateMapper({ file, onMapComplete, onMapProgress, onCancel }:
             <button className="px-3 py-1 hover:bg-gray-700 text-gray-200 rounded transition-colors" onClick={() => setScale(s => Math.min(3.0, s + 0.25))}>+</button>
           </div>
 
+          <div className="flex items-center gap-2 bg-gray-800 p-1 rounded-md border border-gray-700">
+            <button 
+              className="px-3 py-1 hover:bg-gray-700 text-gray-200 rounded transition-colors disabled:opacity-50" 
+              onClick={() => setPageNumber(p => Math.max(1, p - 1))} 
+              disabled={pageNumber <= 1}
+            >&lt;</button>
+            <span className="text-sm font-medium text-gray-200 text-center w-20">
+              Pág. {pageNumber} / {numPages || '?'}
+            </span>
+            <button 
+              className="px-3 py-1 hover:bg-gray-700 text-gray-200 rounded transition-colors disabled:opacity-50" 
+              onClick={() => setPageNumber(p => Math.min(numPages || p, p + 1))} 
+              disabled={pageNumber >= (numPages || 1)}
+            >&gt;</button>
+          </div>
+
           <label className="px-4 py-2 text-sm font-medium border border-gray-600 hover:bg-gray-800 text-gray-200 rounded-md transition-colors cursor-pointer">
             Importar JSON
             <input type="file" accept=".json" style={{ display: 'none' }} onChange={handleImportMap} />
@@ -389,10 +413,11 @@ export function TemplateMapper({ file, onMapComplete, onMapProgress, onCancel }:
         >
           <Document 
             file={file}
+            onLoadSuccess={onDocumentLoadSuccess}
             loading={<div style={{ padding: '2rem' }}>Carregando PDF...</div>}
           >
             <Page 
-              pageNumber={1} 
+              pageNumber={pageNumber} 
               scale={scale}
               renderTextLayer={false} 
               renderAnnotationLayer={false}
@@ -402,7 +427,9 @@ export function TemplateMapper({ file, onMapComplete, onMapProgress, onCancel }:
 
           <div className="drawing-overlay">
             {/* Draw existing boxes */}
-            {Object.values(mappedFields).map(box => {
+            {Object.values(mappedFields)
+              .filter(box => (box.page || 0) === pageNumber - 1)
+              .map(box => {
               const label = availableFields.find(f => f.id === box.id)?.label || box.id;
               return (
                 <div 

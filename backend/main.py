@@ -526,7 +526,10 @@ async def gerar_ocorrencia(request: Request):
             fields[key] = value
 
     # Override AI and checkbox fields with their parsed/formalized values
-    fields["descricao_ocorrencia"] = descricao_formal
+    if descricao_formal and descricao_formal.strip():
+        fields["descricao_ocorrencia"] = descricao_formal
+    else:
+        fields["descricao_ocorrencia"] = form_data.get("descricao_ocorrencia", "")
     
     # Only overwrite with AI commitments if the AI actually generated something.
     # Otherwise, preserve whatever the user manually typed in request.form()

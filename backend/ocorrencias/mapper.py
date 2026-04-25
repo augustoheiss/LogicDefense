@@ -62,61 +62,66 @@ def generate_pdf_buffer(
     default_size = font_config.get("size_normal", 12)
     field_defs = template_map.get("fields", {})
 
-    # 2. Escreve diretamente em cada página usando a matemática exata do bounding box
-    for page_num in range(len(template_doc)):
-        template_page = template_doc[page_num]
+    # 2. Escreve diretamente usando a matemática exata do bounding box na página correta
+    for field_name, value in fields.items():
+        if field_name not in field_defs:
+            continue
 
-        for field_name, value in fields.items():
-            if field_name not in field_defs:
-                continue
+        field_def = field_defs[field_name]
+        target_page_index = field_def.get("page", 0)
+        
+        # Failsafe se a página mapeada exceder o documento atual
+        if target_page_index >= len(template_doc):
+            target_page_index = len(template_doc) - 1
+            
+        template_page = template_doc[target_page_index]
 
-            # Failsafe for empty values
-            str_value = str(value).strip()
-            if not str_value:
-                import logging
-                logger = logging.getLogger("uvicorn.error")
-                logger.warning(f"Missing text payload for mapped key: {field_name}")
+        # Failsafe for empty values
+        str_value = str(value).strip()
+        if not str_value:
+            import logging
+            logger = logging.getLogger("uvicorn.error")
+            logger.warning(f"Missing text payload for mapped key: {field_name}")
 
-            field_def = field_defs[field_name]
-            x = field_def.get("x", 0)
-            y = field_def.get("y", 0)
-            width = field_def.get("max_width", 200)
-            height = field_def.get("height", 30) # Default if older map
-            font_size = field_def.get("font_size", default_size)
-            field_type = field_def.get("type", "text")
+        x = field_def.get("x", 0)
+        y = field_def.get("y", 0)
+        width = field_def.get("max_width", 200)
+        height = field_def.get("height", 30) # Default if older map
+        font_size = field_def.get("font_size", default_size)
+        field_type = field_def.get("type", "text")
 
-            # Smart Multi-line Detection
-            str_value = str(value)
-            is_multiline = len(str_value) > 60 or '\n' in str_value
-            is_known_paragraph = any(k in field_name.lower() for k in ['descri', 'compromisso'])
-            is_textarea = field_type == "textarea"
+        # Smart Multi-line Detection
+        str_value = str(value)
+        is_multiline = len(str_value) > 60 or '\n' in str_value
+        is_known_paragraph = any(k in field_name.lower() for k in ['descri', 'compromisso', 'informac', 'relato', 'observac'])
+        is_textarea = field_type == "textarea"
 
-            # Failsafe: Ensure height is large enough to not clip text
-            if is_multiline or is_known_paragraph or is_textarea:
-                if height < font_size * 2:
-                    height = max(height, font_size * 2)
-            else:
-                if height < font_size * 1.5:
-                    height = font_size * 1.5
+        # Failsafe: Ensure height is large enough to not clip text
+        if is_multiline or is_known_paragraph or is_textarea:
+            if height < font_size * 2:
+                height = max(height, font_size * 2)
+        else:
+            if height < font_size * 1.5:
+                height = font_size * 1.5
 
-            # Create the exact bounding box drawn on the frontend
-            rect = fitz.Rect(x, y, x + width, y + height)
+        # Create the exact bounding box drawn on the frontend
+        rect = fitz.Rect(x, y, x + width, y + height)
 
-            # Debug: Draw a red bounding box to visually verify coordinate math
-            template_page.draw_rect(rect, color=(1, 0, 0), width=1)
+        # Debug: Draw a red bounding box to visually verify coordinate math
+        template_page.draw_rect(rect, color=(1, 0, 0), width=1)
 
-            if field_type == "checkbox":
-                if value:
-                    # Draw a checkmark or X within the box
-                    template_page.insert_textbox(rect, "X", fontsize=font_size, color=color, align=fitz.TEXT_ALIGN_CENTER)
-            elif is_multiline or is_known_paragraph or is_textarea:
-                # Multi-line fields use insert_textbox which handles auto-wrapping
-                template_page.insert_textbox(rect, str_value, fontsize=font_size, color=color, align=fitz.TEXT_ALIGN_LEFT)
-            else:
-                # Single-line fields use insert_text to bypass strict height constraints.
-                # The point (x, y) for insert_text is the bottom-left baseline.
-                point = fitz.Point(x, y + font_size)
-                template_page.insert_text(point, str_value, fontsize=font_size, color=color)
+        if field_type == "checkbox":
+            if value:
+                # Draw a checkmark or X within the box
+                template_page.insert_textbox(rect, "X", fontsize=font_size, color=color, align=fitz.TEXT_ALIGN_CENTER)
+        elif is_multiline or is_known_paragraph or is_textarea:
+            # Multi-line fields use insert_textbox which handles auto-wrapping
+            template_page.insert_textbox(rect, str_value, fontsize=font_size, color=color, align=fitz.TEXT_ALIGN_LEFT)
+        else:
+            # Single-line fields use insert_text to bypass strict height constraints.
+            # The point (x, y) for insert_text is the bottom-left baseline.
+            point = fitz.Point(x, y + font_size)
+            template_page.insert_text(point, str_value, fontsize=font_size, color=color)
 
     # 3. Serializa o resultado para bytes (ZERO disk writes)
     output_buffer = io.BytesIO()

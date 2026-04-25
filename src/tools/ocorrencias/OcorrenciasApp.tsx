@@ -252,7 +252,7 @@ export function OcorrenciasApp() {
                     <div className="oc-divider fade-in" />
                     <div className="oc-field fade-in">
                       <label className="oc-field__label oc-field__label--required">
-                        Descrição da Ocorrência (relato informal)
+                        Descrição da Ocorrência
                       </label>
                       <textarea
                         id="oc-descricao"
@@ -322,7 +322,7 @@ export function OcorrenciasApp() {
                       {status === 'loading' ? (
                         <>
                           <span className="oc-spinner" />
-                          Formalizando com IA...
+                          Formalizando...
                         </>
                       ) : (
                         <>
@@ -333,7 +333,7 @@ export function OcorrenciasApp() {
 
                     {status === 'loading' && (
                       <span className="oc-submit__status">
-                        Processando PDF e consultando IA...
+                        Processando PDF...
                       </span>
                     )}
                   </div>

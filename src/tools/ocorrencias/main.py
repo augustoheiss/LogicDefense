@@ -58,7 +58,7 @@ def collect_input_interactive() -> dict:
     data["telefone"] = input("[+] Telefone de contato: ").strip()
 
     # --- Descricao da ocorrencia (multi-linha) ---
-    print("\n[+] Descricao da ocorrencia (relato informal):")
+    print("\n[+] Descricao da ocorrencia:")
     print("    (Digite o texto. Pressione ENTER duas vezes para finalizar)\n")
     descricao_lines = []
     empty_count = 0
