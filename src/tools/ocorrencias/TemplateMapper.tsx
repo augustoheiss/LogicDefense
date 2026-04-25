@@ -77,29 +77,32 @@ export function TemplateMapper({ file, onMapComplete, onMapProgress, onCancel }:
   }
 
   // ── Drawing Handlers ──
-  const getMousePos = (e: React.MouseEvent) => {
+  // Unified coordinate extractor for mouse and touch events
+  const getPointerPos = (e: React.MouseEvent | React.TouchEvent) => {
     if (!wrapperRef.current) return { x: 0, y: 0 };
     const rect = wrapperRef.current.getBoundingClientRect();
+    const clientX = 'touches' in e ? e.touches[0]?.clientX ?? (e as React.TouchEvent).changedTouches[0]?.clientX ?? 0 : e.clientX;
+    const clientY = 'touches' in e ? e.touches[0]?.clientY ?? (e as React.TouchEvent).changedTouches[0]?.clientY ?? 0 : e.clientY;
     return {
-      x: e.clientX - rect.left,
-      y: e.clientY - rect.top
+      x: clientX - rect.left,
+      y: clientY - rect.top
     };
   };
 
-  const handleMouseDown = (e: React.MouseEvent) => {
+  const handlePointerDown = (e: React.MouseEvent | React.TouchEvent) => {
     if (!activeFieldId) return;
-    const pos = getMousePos(e);
+    const pos = getPointerPos(e);
     setStartPos(pos);
     setCurrentPos(pos);
     setIsDrawing(true);
   };
 
-  const handleMouseMove = (e: React.MouseEvent) => {
+  const handlePointerMove = (e: React.MouseEvent | React.TouchEvent) => {
     if (!isDrawing) return;
-    setCurrentPos(getMousePos(e));
+    setCurrentPos(getPointerPos(e));
   };
 
-  const handleMouseUp = () => {
+  const handlePointerUp = () => {
     if (!isDrawing || !activeFieldId) return;
     setIsDrawing(false);
     
@@ -407,10 +410,14 @@ export function TemplateMapper({ file, onMapComplete, onMapProgress, onCancel }:
           className="pdf-draw-wrapper" 
           ref={wrapperRef}
           data-can-draw={!!activeFieldId}
-          onMouseDown={handleMouseDown}
-          onMouseMove={handleMouseMove}
-          onMouseUp={handleMouseUp}
-          onMouseLeave={handleMouseUp}
+          onMouseDown={handlePointerDown}
+          onMouseMove={handlePointerMove}
+          onMouseUp={handlePointerUp}
+          onMouseLeave={handlePointerUp}
+          onTouchStart={handlePointerDown}
+          onTouchMove={handlePointerMove}
+          onTouchEnd={handlePointerUp}
+          onTouchCancel={handlePointerUp}
         >
           <Document 
             file={file}

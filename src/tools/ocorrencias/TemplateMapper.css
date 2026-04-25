@@ -10,6 +10,7 @@
 
 .pdf-draw-wrapper[data-can-draw="true"] {
   cursor: crosshair;
+  touch-action: none; /* Prevent scroll/zoom while drawing on mobile */
 }
 
 /* The actual PDF rendered by react-pdf */
@@ -30,6 +31,7 @@
   right: 0;
   bottom: 0;
   z-index: 10;
+  touch-action: none; /* Prevent scroll/zoom while drawing on mobile */
 }
 
 /* Individual mapped boxes */
