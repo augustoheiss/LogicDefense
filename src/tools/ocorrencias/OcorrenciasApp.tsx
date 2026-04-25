@@ -3,9 +3,6 @@ import './ocorrencias.css';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
-// Silent pre-flight ping to wake backend on cold starts (Render free tier)
-const _warmup = fetch(`${API_BASE}/api/health`).catch(() => {});
-
 /** Returns today's date as DD/MM/YYYY. */
 function todayBR(): string {
   const d = new Date();
@@ -17,6 +14,18 @@ type Status = 'idle' | 'loading' | 'success' | 'error';
 import { TemplateMapper } from './TemplateMapper';
 
 export function OcorrenciasApp() {
+  // ── Pre-flight ping (cold-start mitigation) ──
+  useEffect(() => {
+    const warmupServer = async () => {
+      try {
+        await fetch(`${API_BASE}/api/health`);
+      } catch {
+        // Silently ignore so UI is not blocked
+      }
+    };
+    warmupServer();
+  }, []);
+
   // ── File & Mapping state ──
   const [file, setFile] = useState<File | null>(null);
   const [dragActive, setDragActive] = useState(false);
