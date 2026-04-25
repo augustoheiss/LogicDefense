@@ -110,7 +110,7 @@ export function OcorrenciasApp() {
       formData.append(key, val.trim());
     });
 
-    // Append hardcoded AI fields
+    // Append core text fields
     formData.append('descricao_ocorrencia', descricao.trim());
 
     formData.append('checkbox_orientacao', String(checkOrientacao));
@@ -322,7 +322,7 @@ export function OcorrenciasApp() {
                       {status === 'loading' ? (
                         <>
                           <span className="oc-spinner" />
-                          Formalizando...
+                          Gerando...
                         </>
                       ) : (
                         <>
@@ -333,7 +333,7 @@ export function OcorrenciasApp() {
 
                     {status === 'loading' && (
                       <span className="oc-submit__status">
-                        Processando PDF...
+                        Escrevendo no PDF...
                       </span>
                     )}
                   </div>

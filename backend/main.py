@@ -444,7 +444,6 @@ async def coin_bulk_input(request: BulkInputRequest) -> BulkInputResponse:
 
 # ── Ocorrências: Incident Report Generator ───────────────────────────────────
 
-from ocorrencias import formalizer as oc_formalizer
 from ocorrencias import mapper as oc_mapper
 
 
@@ -456,9 +455,8 @@ async def gerar_ocorrencia(request: Request):
     Flow:
     1. Extracts dynamic form payload containing arbitrary user-mapped fields
     2. Reads the uploaded template PDF into memory
-    3. Formalizes core text fields via Gemini AI (async)
-    4. Creates overlay + merges onto template — all in BytesIO
-    5. Streams the result back as application/pdf
+    3. Stamps text onto the correct pages using the dynamic JSON map
+    4. Streams the result back as application/pdf
     """
     form_data = await request.form()
     
@@ -466,11 +464,6 @@ async def gerar_ocorrencia(request: Request):
     if template_pdf is None or not hasattr(template_pdf, "read"):
         raise HTTPException(status_code=422, detail="PDF template não enviado ou inválido.")
 
-    # Core AI fields
-    descricao = str(form_data.get("descricao_ocorrencia", ""))
-    compromissos = str(form_data.get("compromissos", ""))
-    skip_ai = str(form_data.get("skip_ai", "false")).lower() == "true"
-    
     # Checkboxes
     checkbox_orientacao = str(form_data.get("checkbox_orientacao", "false")).lower() == "true"
     checkbox_convocar = str(form_data.get("checkbox_convocar", "false")).lower() == "true"
@@ -478,7 +471,7 @@ async def gerar_ocorrencia(request: Request):
     # Template Map
     template_map_json = str(form_data.get("template_map_json", ""))
 
-    log.info("Received dynamic ocorrencia request, skip_ai=%s", skip_ai)
+    log.info("Received ocorrencia request")
 
     # 1. Read template bytes into memory (NEVER saved to disk)
     template_bytes = await template_pdf.read()
@@ -496,55 +489,19 @@ async def gerar_ocorrencia(request: Request):
     else:
         template_map = oc_mapper.load_template_map()
 
-    # 3. Formalize text fields via AI
-    if skip_ai:
-        log.info("Skipping AI formalization (test mode)")
-        descricao_formal = descricao
-        compromissos_formal = compromissos
-    else:
-        log.info("Starting AI formalization...")
-        async def _maybe_formalize_commitments() -> str:
-            if compromissos.strip():
-                return await oc_formalizer.formalize_commitments(compromissos, oc_config)
-            return compromissos
-
-        descricao_formal, compromissos_formal = await asyncio.gather(
-            oc_formalizer.formalize_description(descricao, oc_config),
-            _maybe_formalize_commitments(),
-        )
-        log.info("AI formalization complete.")
-
-    # 4. Build the dynamic fields dict
+    # 3. Build the dynamic fields dict — direct passthrough, no AI
     fields = {}
     
-    # Inject all arbitrary string fields from the form payload
+    # Inject all string fields from the form payload
     for key, value in form_data.items():
-        if isinstance(value, str) and key not in [
-            "template_map_json", "skip_ai", "checkbox_orientacao", "checkbox_convocar", 
-            "descricao_ocorrencia", "compromissos"
-        ]:
+        if isinstance(value, str) and key not in ["template_map_json"]:
             fields[key] = value
 
-    # Override AI and checkbox fields with their parsed/formalized values
-    if descricao_formal and descricao_formal.strip():
-        fields["descricao_ocorrencia"] = descricao_formal
-    else:
-        fields["descricao_ocorrencia"] = form_data.get("descricao_ocorrencia", "")
-    
-    # Only overwrite with AI commitments if the AI actually generated something.
-    # Otherwise, preserve whatever the user manually typed in request.form()
-    if compromissos_formal and compromissos_formal.strip():
-        fields["compromissos"] = compromissos_formal
-        fields["compromissos_firmados"] = compromissos_formal
-    else:
-        # Ensure we don't accidentally wipe it if it was manually provided
-        pass
+    # Normalize checkbox fields to booleans
     fields["checkbox_orientacao_aluno"] = checkbox_orientacao
     fields["checkbox_convocar_responsavel"] = checkbox_convocar
 
-    import logging
-    logger = logging.getLogger("uvicorn.error")
-    logger.info(f"Form Keys: {list(fields.keys())} | Map Keys: {list(template_map.get('fields', {}).keys())}")
+    log.info(f"Form Keys: {list(fields.keys())} | Map Keys: {list(template_map.get('fields', {}).keys())}")
 
     # 5. Generate stamped PDF in memory
     try:

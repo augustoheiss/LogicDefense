@@ -242,7 +242,8 @@ export function TemplateMapper({ file, onMapComplete, onMapProgress, onCancel }:
         height: Math.round(box.height * scaleY),
         font_size: fieldDef.type === 'textarea' ? 11 : 12,
         type: fieldDef.type,
-        label: fieldDef.label
+        label: fieldDef.label,
+        page: box.page || 0
       };
       if (fieldDef.type === 'textarea') {
         mappedField.max_lines = Math.max(1, Math.floor((box.height * scaleY) / 18));
