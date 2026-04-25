@@ -24,7 +24,7 @@ export function OcorrenciasApp() {
   // ── Form state ──
   const [dynamicData, setDynamicData] = useState<Record<string, string>>({});
   const [descricao, setDescricao] = useState('');
-  const [compromissos, setCompromissos] = useState('');
+
   const [checkOrientacao, setCheckOrientacao] = useState(true);
   const [checkConvocar, setCheckConvocar] = useState(false);
 
@@ -112,7 +112,7 @@ export function OcorrenciasApp() {
     
     // Append hardcoded AI fields
     formData.append('descricao_ocorrencia', descricao.trim());
-    formData.append('compromissos', compromissos.trim());
+
     formData.append('checkbox_orientacao', String(checkOrientacao));
     formData.append('checkbox_convocar', String(checkConvocar));
 
