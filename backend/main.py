@@ -67,6 +67,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# ── Health Check (cold-start mitigation) ─────────────────────────────────────
+
+@app.get("/api/health")
+async def health_check():
+    return {"status": "awake"}
+
 # ── Pydantic models ──────────────────────────────────────────────────────────
 
 class GenerateRequest(BaseModel):

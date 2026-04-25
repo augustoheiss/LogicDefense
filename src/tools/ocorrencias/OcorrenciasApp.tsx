@@ -1,7 +1,10 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import './ocorrencias.css';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+
+// Silent pre-flight ping to wake backend on cold starts (Render free tier)
+const _warmup = fetch(`${API_BASE}/api/health`).catch(() => {});
 
 /** Returns today's date as DD/MM/YYYY. */
 function todayBR(): string {
