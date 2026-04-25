@@ -52,7 +52,7 @@ export function LabPage() {
           <div className="cv-lab-card__icon">📋</div>
           <div className="cv-lab-card__body">
             <span className="cv-lab-card__tag">SaaS Tool · Pedagógico</span>
-            <h2 className="cv-lab-card__title">Gerador de Ocorrências — Formalização com IA</h2>
+            <h2 className="cv-lab-card__title">Gerador de Ocorrências</h2>
             <p className="cv-lab-card__desc">
               Faça upload do formulário escolar em PDF, descreva a ocorrência e preencha o PDF oficial da escola. Zero dados armazenados.
             </p>
