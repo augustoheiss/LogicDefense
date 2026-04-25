@@ -1,0 +1,373 @@
+/* ================================================================
+   GERADOR DE OCORRÊNCIAS — Scoped Styles
+   Uses the portal.css design system tokens
+   ================================================================ */
+
+/* ── Page layout ─────────────────────────────────────────────── */
+.oc-page {
+  max-width: 820px;
+  margin: 0 auto;
+  padding: clamp(24px, 4vw, 48px) clamp(16px, 4vw, 40px);
+}
+
+.oc-page__title {
+  font-size: clamp(22px, 4vw, 32px);
+  font-weight: 800;
+  margin: 0 0 6px;
+  background: linear-gradient(135deg, #fff 40%, var(--accent) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.oc-page__subtitle {
+  font-size: 14px;
+  color: var(--text-muted);
+  margin: 0 0 32px;
+  line-height: 1.6;
+}
+
+/* ── Drop zone ───────────────────────────────────────────────── */
+.oc-dropzone {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 40px 24px;
+  border: 2px dashed rgba(255, 255, 255, 0.12);
+  border-radius: var(--radius-lg);
+  background: rgba(255, 255, 255, 0.02);
+  cursor: pointer;
+  transition: border-color 0.3s, background 0.3s, box-shadow 0.3s;
+  text-align: center;
+  min-height: 160px;
+}
+
+.oc-dropzone:hover {
+  border-color: rgba(0, 212, 255, 0.4);
+  background: rgba(0, 212, 255, 0.04);
+}
+
+.oc-dropzone--active {
+  border-color: var(--accent) !important;
+  background: rgba(0, 212, 255, 0.08) !important;
+  box-shadow: 0 0 24px rgba(0, 212, 255, 0.15),
+              inset 0 0 48px rgba(0, 212, 255, 0.05);
+}
+
+.oc-dropzone--has-file {
+  border-color: rgba(34, 197, 94, 0.4);
+  background: rgba(34, 197, 94, 0.04);
+}
+
+.oc-dropzone__icon {
+  font-size: 36px;
+  line-height: 1;
+  transition: transform 0.3s;
+}
+
+.oc-dropzone--active .oc-dropzone__icon {
+  transform: scale(1.15);
+  animation: oc-bounce 0.6s ease-in-out infinite alternate;
+}
+
+@keyframes oc-bounce {
+  from { transform: scale(1.1) translateY(0); }
+  to   { transform: scale(1.2) translateY(-4px); }
+}
+
+.oc-dropzone__label {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.oc-dropzone__label strong {
+  color: var(--accent);
+}
+
+.oc-dropzone__hint {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.oc-dropzone__file-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  border-radius: var(--radius-sm);
+  background: rgba(34, 197, 94, 0.1);
+  border: 1px solid rgba(34, 197, 94, 0.25);
+}
+
+.oc-dropzone__file-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--green);
+  font-family: var(--font-mono);
+}
+
+.oc-dropzone__file-remove {
+  font-size: 16px;
+  color: var(--text-dim);
+  cursor: pointer;
+  background: none;
+  border: none;
+  padding: 0 4px;
+  transition: color 0.2s;
+  line-height: 1;
+}
+
+.oc-dropzone__file-remove:hover {
+  color: #ef4444;
+}
+
+.oc-dropzone input[type="file"] {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+/* ── Form ────────────────────────────────────────────────────── */
+.oc-form {
+  margin-top: 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.oc-form__row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+@media (max-width: 560px) {
+  .oc-form__row {
+    grid-template-columns: 1fr;
+  }
+}
+
+.oc-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.oc-field__label {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.oc-field__label--required::after {
+  content: " *";
+  color: #ef4444;
+}
+
+.oc-field__input {
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 14px;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.oc-field__input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-dim);
+}
+
+.oc-field__input::placeholder {
+  color: var(--text-dim);
+}
+
+textarea.oc-field__input {
+  resize: vertical;
+  min-height: 100px;
+  line-height: 1.6;
+}
+
+/* ── Checkboxes ──────────────────────────────────────────────── */
+.oc-checkboxes {
+  display: flex;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+
+.oc-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.oc-checkbox__box {
+  width: 20px;
+  height: 20px;
+  border-radius: 5px;
+  border: 2px solid var(--border);
+  background: var(--surface);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: border-color 0.2s, background 0.2s;
+}
+
+.oc-checkbox--checked .oc-checkbox__box {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+
+.oc-checkbox__check {
+  font-size: 12px;
+  color: var(--bg);
+  font-weight: 900;
+}
+
+.oc-checkbox__label {
+  font-size: 14px;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+/* ── Submit area ─────────────────────────────────────────────── */
+.oc-submit {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+
+.oc-submit__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 32px;
+  border-radius: var(--radius-sm);
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--bg);
+  background: linear-gradient(135deg, var(--accent), #00b4d8);
+  border: none;
+  cursor: pointer;
+  transition: opacity 0.2s, transform 0.15s, box-shadow 0.2s;
+  box-shadow: 0 4px 20px rgba(0, 212, 255, 0.25);
+  letter-spacing: 0.3px;
+}
+
+.oc-submit__btn:hover:not(:disabled) {
+  opacity: 0.92;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 28px rgba(0, 212, 255, 0.35);
+}
+
+.oc-submit__btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.oc-submit__status {
+  font-size: 13px;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ── Loading spinner ─────────────────────────────────────────── */
+.oc-spinner {
+  width: 18px;
+  height: 18px;
+  border: 2.5px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: oc-spin 0.7s linear infinite;
+}
+
+@keyframes oc-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ── Error / Success messages ────────────────────────────────── */
+.oc-message {
+  padding: 12px 18px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.oc-message--error {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #f87171;
+}
+
+.oc-message--success {
+  background: rgba(34, 197, 94, 0.1);
+  border: 1px solid rgba(34, 197, 94, 0.3);
+  color: var(--green);
+}
+
+/* ── Privacy badge ───────────────────────────────────────────── */
+.oc-privacy {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 24px;
+  padding: 12px 16px;
+  border-radius: var(--radius-sm);
+  background: rgba(124, 58, 237, 0.08);
+  border: 1px solid rgba(124, 58, 237, 0.2);
+}
+
+.oc-privacy__icon {
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.oc-privacy__text {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.oc-privacy__text strong {
+  color: #a78bfa;
+}
+
+/* ── Section divider ─────────────────────────────────────────── */
+.oc-divider {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--border), transparent);
+  margin: 4px 0;
+}
+.oc-split-layout { display: flex; gap: 2rem; width: 100%; align-items: flex-start; }
+.oc-split-left { flex: 1; min-width: 0; }
+.oc-split-right { flex: 1; min-width: 0; transition: all 0.3s ease; }
+.oc-split-full { flex: 100%; max-width: 800px; margin: 0 auto; }
+.fade-in { animation: fadeIn 0.4s ease forwards; }
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.oc-form-header { margin-bottom: 1rem; }
+.oc-form-hint { color: var(--text-secondary); font-size: 0.9rem; margin-top: 0.25rem; }

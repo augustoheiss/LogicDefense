@@ -1,0 +1,1 @@
+export { OcorrenciasApp } from './OcorrenciasApp';

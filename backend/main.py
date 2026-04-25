@@ -18,6 +18,7 @@ Architecture (parallel concurrent generation):
 """
 
 import asyncio
+import io
 import json
 import logging
 import os
@@ -25,8 +26,9 @@ from typing import Any
 
 import yaml
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException
+from fastapi import APIRouter, FastAPI, UploadFile, File, Form, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from google import genai
 from google.genai import types
 from pydantic import BaseModel, Field
@@ -438,6 +440,136 @@ async def coin_bulk_input(request: BulkInputRequest) -> BulkInputResponse:
         len(transactions), skipped,
     )
     return BulkInputResponse(transactions=transactions, skipped=skipped)
+
+
+# ── Ocorrências: Incident Report Generator ───────────────────────────────────
+
+from ocorrencias import formalizer as oc_formalizer
+from ocorrencias import mapper as oc_mapper
+
+
+@app.post("/api/ocorrencias/gerar")
+async def gerar_ocorrencia(request: Request):
+    """
+    Generates a stamped incident report PDF — ZERO disk writes.
+
+    Flow:
+    1. Extracts dynamic form payload containing arbitrary user-mapped fields
+    2. Reads the uploaded template PDF into memory
+    3. Formalizes core text fields via Gemini AI (async)
+    4. Creates overlay + merges onto template — all in BytesIO
+    5. Streams the result back as application/pdf
+    """
+    form_data = await request.form()
+    
+    template_pdf = form_data.get("template_pdf")
+    if template_pdf is None or not hasattr(template_pdf, "read"):
+        raise HTTPException(status_code=422, detail="PDF template não enviado ou inválido.")
+
+    # Core AI fields
+    descricao = str(form_data.get("descricao_ocorrencia", ""))
+    compromissos = str(form_data.get("compromissos", ""))
+    skip_ai = str(form_data.get("skip_ai", "false")).lower() == "true"
+    
+    # Checkboxes
+    checkbox_orientacao = str(form_data.get("checkbox_orientacao", "false")).lower() == "true"
+    checkbox_convocar = str(form_data.get("checkbox_convocar", "false")).lower() == "true"
+    
+    # Template Map
+    template_map_json = str(form_data.get("template_map_json", ""))
+
+    log.info("Received dynamic ocorrencia request, skip_ai=%s", skip_ai)
+
+    # 1. Read template bytes into memory (NEVER saved to disk)
+    template_bytes = await template_pdf.read()
+    if not template_bytes:
+        raise HTTPException(status_code=422, detail="Arquivo PDF vazio ou inválido.")
+
+    # Basic PDF validation
+    if not template_bytes[:5] == b"%PDF-":
+        raise HTTPException(status_code=422, detail="O arquivo enviado não é um PDF válido.")
+
+    # 2. Load config and template map
+    oc_config = oc_mapper.load_config()
+    if template_map_json:
+        template_map = json.loads(template_map_json)
+    else:
+        template_map = oc_mapper.load_template_map()
+
+    # 3. Formalize text fields via AI
+    if skip_ai:
+        log.info("Skipping AI formalization (test mode)")
+        descricao_formal = descricao
+        compromissos_formal = compromissos
+    else:
+        log.info("Starting AI formalization...")
+        async def _maybe_formalize_commitments() -> str:
+            if compromissos.strip():
+                return await oc_formalizer.formalize_commitments(compromissos, oc_config)
+            return compromissos
+
+        descricao_formal, compromissos_formal = await asyncio.gather(
+            oc_formalizer.formalize_description(descricao, oc_config),
+            _maybe_formalize_commitments(),
+        )
+        log.info("AI formalization complete.")
+
+    # 4. Build the dynamic fields dict
+    fields = {}
+    
+    # Inject all arbitrary string fields from the form payload
+    for key, value in form_data.items():
+        if isinstance(value, str) and key not in [
+            "template_map_json", "skip_ai", "checkbox_orientacao", "checkbox_convocar", 
+            "descricao_ocorrencia", "compromissos"
+        ]:
+            fields[key] = value
+
+    # Override AI and checkbox fields with their parsed/formalized values
+    fields["descricao_ocorrencia"] = descricao_formal
+    
+    # Only overwrite with AI commitments if the AI actually generated something.
+    # Otherwise, preserve whatever the user manually typed in request.form()
+    if compromissos_formal and compromissos_formal.strip():
+        fields["compromissos"] = compromissos_formal
+        fields["compromissos_firmados"] = compromissos_formal
+    else:
+        # Ensure we don't accidentally wipe it if it was manually provided
+        pass
+    fields["checkbox_orientacao_aluno"] = checkbox_orientacao
+    fields["checkbox_convocar_responsavel"] = checkbox_convocar
+
+    import logging
+    logger = logging.getLogger("uvicorn.error")
+    logger.info(f"Form Keys: {list(fields.keys())} | Map Keys: {list(template_map.get('fields', {}).keys())}")
+
+    # 5. Generate stamped PDF in memory
+    try:
+        pdf_bytes = oc_mapper.generate_pdf_buffer(
+            template_bytes=template_bytes,
+            fields=fields,
+            template_map=template_map,
+            config=oc_config,
+        )
+    except Exception as exc:
+        log.exception("PDF generation failed: %s", exc)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Erro ao gerar PDF: {exc}"
+        ) from exc
+
+    log.info(
+        "Ocorrência generated successfully: %d bytes, aluno='%s'",
+        len(pdf_bytes), form_data.get('nome_aluno', 'Não informado'),
+    )
+
+    # 6. Stream the PDF back — nothing touches disk
+    headers = {"Content-Disposition": 'attachment; filename="ocorrencia_gerada.pdf"'}
+    return StreamingResponse(
+        io.BytesIO(pdf_bytes),
+        media_type="application/pdf",
+        headers=headers,
+    )
 
 
 # ── Dev entrypoint ───────────────────────────────────────────────────────────

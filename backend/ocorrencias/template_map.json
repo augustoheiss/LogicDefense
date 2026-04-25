@@ -1,0 +1,80 @@
+{
+  "_comment": "Coordenadas no sistema PyMuPDF (Y=0 no topo da pagina). Gerado pelo auto_mapper.py. Valores calibrados para o template de teste.",
+  "page_width": 595.28,
+  "page_height": 841.89,
+  "coordinate_system": "pymupdf_top_left",
+  "fields": {
+    "nome_aluno": {
+      "x": 195,
+      "y": 142,
+      "max_width": 210,
+      "font_size": 10,
+      "type": "text",
+      "label": "Nome do(a) aluno(a)"
+    },
+    "turma": {
+      "x": 105,
+      "y": 167,
+      "max_width": 100,
+      "font_size": 10,
+      "type": "text",
+      "label": "Turma"
+    },
+    "data": {
+      "x": 450,
+      "y": 142,
+      "max_width": 80,
+      "font_size": 10,
+      "type": "text",
+      "label": "Data"
+    },
+    "telefone": {
+      "x": 475,
+      "y": 167,
+      "max_width": 65,
+      "font_size": 10,
+      "type": "text",
+      "label": "Telefone de contato"
+    },
+    "descricao_ocorrencia": {
+      "x": 62,
+      "y": 260,
+      "max_width": 470,
+      "max_lines": 17,
+      "font_size": 11,
+      "type": "textarea",
+      "label": "Descricao da Ocorrencia"
+    },
+    "checkbox_orientacao_aluno": {
+      "x": 73,
+      "y": 488,
+      "font_size": 10,
+      "type": "checkbox",
+      "label": "Orientacao ao aluno"
+    },
+    "checkbox_convocar_responsavel": {
+      "x": 73,
+      "y": 508,
+      "font_size": 10,
+      "type": "checkbox",
+      "label": "Convocar responsavel"
+    },
+    "compromissos_firmados": {
+      "x": 62,
+      "y": 640,
+      "max_width": 470,
+      "max_lines": 10,
+      "font_size": 11,
+      "type": "textarea",
+      "label": "Compromissos Firmados"
+    },
+    "responsavel_registro": {
+      "x": 300,
+      "y": 240,
+      "max_width": 280,
+      "font_size": 10,
+      "type": "text",
+      "label": "Responsavel pelo Registro"
+    }
+  }
+}

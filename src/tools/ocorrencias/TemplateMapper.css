@@ -1,0 +1,70 @@
+/* Styles for interactive drawing elements and specific PDF overrides */
+
+/* The wrapper that sizes exactly to the rendered PDF page */
+.pdf-draw-wrapper {
+  position: relative;
+  margin: 0 auto; /* Centers the PDF natively while allowing left-scroll when zoomed */
+  width: max-content;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+.pdf-draw-wrapper[data-can-draw="true"] {
+  cursor: crosshair;
+}
+
+/* The actual PDF rendered by react-pdf */
+.react-pdf__Page {
+  pointer-events: none; /* Let drawing wrapper handle events */
+}
+
+.react-pdf__Page__canvas {
+  max-width: 100%;
+  height: auto !important;
+}
+
+/* The interactive overlay where boxes are drawn */
+.drawing-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 10;
+}
+
+/* Individual mapped boxes */
+.mapped-box {
+  position: absolute;
+  border: 2px solid var(--primary);
+  background: rgba(var(--primary-rgb), 0.15);
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-start;
+  padding: 4px;
+  pointer-events: none; /* So we can draw over them if needed, or we might want to let users click to delete */
+}
+
+.mapped-box__label {
+  background: var(--primary);
+  color: white;
+  font-size: 0.75rem;
+  font-weight: bold;
+  padding: 2px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+/* The active box being drawn */
+.drawing-box {
+  position: absolute;
+  border: 2px dashed var(--accent);
+  background: rgba(var(--accent-rgb), 0.2);
+  pointer-events: none;
+}
+
+/* Map Import/Export Area */
+.map-io {
+  display: flex;
+  gap: 1rem;
+}

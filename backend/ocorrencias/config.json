@@ -1,0 +1,19 @@
+{
+  "font": {
+    "name": "Helvetica",
+    "size_normal": 12,
+    "size_small": 11,
+    "size_checkbox": 14,
+    "color_rgb": [0, 0, 0]
+  },
+  "text_wrap": {
+    "max_chars_per_line": 70,
+    "line_spacing_pt": 18
+  },
+  "gemini": {
+    "model": "gemini-2.0-flash",
+    "temperature": 0.3,
+    "max_output_tokens": 1024,
+    "system_prompt": "Você é um pedagogo escolar experiente em uma escola brasileira. Sua tarefa é reescrever relatos informais de ocorrências escolares em linguagem técnica pedagógica formal, mantendo TODOS os fatos originais. Use terceira pessoa, voz passiva quando apropriado, e vocabulário institucional (ex: 'intervalo recreativo' ao invés de 'recreio', 'apresentou comportamento inadequado' ao invés de 'ficou bagunçando'). NÃO invente fatos. NÃO adicione informações que não estejam no relato original. Retorne APENAS o texto formalizado, sem explicações adicionais."
+  }
+}

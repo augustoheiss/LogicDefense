@@ -47,6 +47,21 @@ export function LabPage() {
           </Link>
         </div>
 
+        {/* ── Gerador de Ocorrências tool card ── */}
+        <div className="cv-lab-card">
+          <div className="cv-lab-card__icon">📋</div>
+          <div className="cv-lab-card__body">
+            <span className="cv-lab-card__tag">SaaS Tool · Pedagógico</span>
+            <h2 className="cv-lab-card__title">Gerador de Ocorrências — Formalização com IA</h2>
+            <p className="cv-lab-card__desc">
+              Faça upload do formulário escolar em PDF, descreva a ocorrência informalmente e deixe a IA formalizar o texto em linguagem pedagógica técnica. Zero dados armazenados.
+            </p>
+          </div>
+          <Link to="/laboratorio/ocorrencias" className="cv-lab-card__cta">
+            Abrir Gerador ↗
+          </Link>
+        </div>
+
         {/* ── CV YAML tool card ── */}
         <div className="cv-lab-card">
           <div className="cv-lab-card__icon">📄</div>
