@@ -74,22 +74,23 @@
 .navbar__logo {
   display: flex;
   align-items: center;
-  gap: 10px;
   text-decoration: none;
   flex-shrink: 0;
 }
-.navbar__logo-icon {
-  font-size: 22px;
-  line-height: 1;
+.navbar__logo-img {
+  height: 44px;
+  width: auto;
+  object-fit: contain;
+  transition: filter 0.25s ease, transform 0.25s ease;
 }
-.navbar__logo-text {
-  font-family: var(--font-mono);
-  font-size: 15px;
-  font-weight: bold;
-  color: var(--accent);
-  letter-spacing: 1px;
-  text-shadow: 0 0 12px var(--accent-glow);
-  white-space: nowrap;
+.navbar__logo:hover .navbar__logo-img {
+  filter: drop-shadow(0 0 10px var(--accent-glow));
+  transform: scale(1.03);
+}
+@media (max-width: 640px) {
+  .navbar__logo-img {
+    height: 36px;
+  }
 }
 
 .navbar__links {

@@ -15,8 +15,11 @@ export function Layout() {
       {/* ── Navbar ── */}
       <nav className="navbar">
         <NavLink to="/" className="navbar__logo" end>
-          <span className="navbar__logo-icon">∑</span>
-          <span className="navbar__logo-text">LOGIC DEFENSE</span>
+          <img
+            src="/logo-heisslab.png"
+            alt="Heiss-Lab Logo"
+            className="navbar__logo-img"
+          />
         </NavLink>
 
         <ul className="navbar__links">
