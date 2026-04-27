@@ -219,11 +219,15 @@ const GAP  = 2;
 
 
 // ── Pure camera helper — module-level so it is hoisted before any useEffect runs ──
-// Depends only on module constants; never needs to be inside the component.
-function getCamTransform(row: number, col: number): string {
+// viewportW / viewportH are the MEASURED pixel dimensions of .la-viewport.
+// Using pixel values (not %) ensures the camera centers on the viewport,
+// not on the camera layer itself (which is the full map grid, much larger).
+function getCamTransform(row: number, col: number, viewportW: number, viewportH: number): string {
   const playerPixelX = col * (CELL + GAP);
   const playerPixelY = row * (CELL + GAP);
-  return `translate(calc(50% - ${playerPixelX + CELL / 2}px), calc(50% - ${playerPixelY + CELL / 2}px))`;
+  const tx = viewportW / 2 - playerPixelX - CELL / 2;
+  const ty = viewportH / 2 - playerPixelY - CELL / 2;
+  return `translate(${tx}px, ${ty}px)`;
 }
 
 /** Virtual joystick repeat rate — milliseconds between steps while the finger is held. */
@@ -1024,7 +1028,8 @@ export function LogicAscension({ onGoToMenu }: { onGoToMenu?: () => void } = {})
             const t = gridRef.current?.[nr]?.[nc];
             const walkable = t && t.type !== 'WALL' && t.type !== 'FOG';
             if (walkable) {
-              camLayerRef.current.style.transform = getCamTransform(nr, nc);
+              const { w, h } = viewportSizeRef.current;
+              camLayerRef.current.style.transform = getCamTransform(nr, nc, w, h);
             }
           }
         }
@@ -1123,12 +1128,39 @@ export function LogicAscension({ onGoToMenu }: { onGoToMenu?: () => void } = {})
   const camLayerRef     = useRef<HTMLDivElement>(null);
   // Outermost game wrapper — target for requestFullscreen()
   const wrapperRef      = useRef<HTMLDivElement>(null);
+  // Viewport element ref — used by ResizeObserver to get actual pixel dimensions.
+  const viewportRef     = useRef<HTMLDivElement>(null);
+
+  // Measured viewport pixel dimensions — updated by ResizeObserver on mount & resize.
+  // Default to a reasonable fallback so initial render is close before first measure.
+  const [viewportSize, setViewportSize] = useState<{ w: number; h: number }>({ w: 400, h: 400 });
+  const viewportSizeRef = useRef(viewportSize);
+  viewportSizeRef.current = viewportSize;
+
+  // ResizeObserver — keeps viewportSize in sync with the actual CSS-rendered .la-viewport box.
+  useEffect(() => {
+    const el = viewportRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(entries => {
+      const entry = entries[0];
+      if (!entry) return;
+      const { width, height } = entry.contentRect;
+      setViewportSize(prev =>
+        prev.w === width && prev.h === height ? prev : { w: width, h: height }
+      );
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   // Camera offsets — computed from player pixel position so the player tile is always centered.
-  // Formula: shift grid so playerPixel + CELL/2 lands at 50% of the viewport.
-  const playerPixelX = playerPos ? playerPos.col * (CELL + GAP) : 0;
-  const playerPixelY = playerPos ? playerPos.row * (CELL + GAP) : 0;
-  const camTransform = `translate(calc(50% - ${playerPixelX + CELL / 2}px), calc(50% - ${playerPixelY + CELL / 2}px))`;
+  // Uses measured viewport pixel dims so the reference frame matches the player sprite's 50% anchor.
+  const camTransform = getCamTransform(
+    playerPos?.row ?? 0,
+    playerPos?.col ?? 0,
+    viewportSize.w,
+    viewportSize.h,
+  );
 
 
 
@@ -1197,7 +1229,7 @@ export function LogicAscension({ onGoToMenu }: { onGoToMenu?: () => void } = {})
             </h1>
           </div>
 
-        <div className="la-viewport">
+        <div className="la-viewport" ref={viewportRef}>
 
           {/* Fixed clipping window — overflow:hidden hides everything outside */}
           {/* Pointer events implement an invisible virtual joystick:
