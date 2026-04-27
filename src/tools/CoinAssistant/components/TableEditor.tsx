@@ -169,71 +169,76 @@ export function TableEditor({
     ? selectedMonth
     : (availableMonths[0] ?? todayYM());
 
-  // ── Cost-based target derivation (YTD Run Rate Break-Even) ──────────────────
-  // Survival goals are derived from the AVERAGE monthly expense across all
-  // ACTIVE months (months with actual data) in the selected year, then
-  // projected to an annual total.  This smooths out single-month outliers
-  // (e.g. buying 4 tires in one month) and produces stable survival targets.
+  // ── Cost-based target derivation (Dynamic Day-Span Break-Even) ───────────────
+  // All survival targets are derived from the EXACT day span of the expense
+  // data in the selected year.  No hardcoded monthly/yearly divisors.
   //
-  //   ytdTotalExpenses    = Σ |expense rows| + Σ |negative cost rows|  (entire selected year)
-  //   activeMonthsCount   = distinct YYYY-MM values with any activity (min 1)
-  //   averageMonthlyExp   = ytdTotalExpenses / activeMonthsCount
-  //   projectedAnnualCost = averageMonthlyExp × 12
+  //   totalExpenses  = Σ |expense rows| + Σ |negative cost rows|  (selected year)
+  //   daySpan        = (latestExpenseDate − earliestExpenseDate) + 1  (min 1)
+  //   dailyCost      = totalExpenses / daySpan
+  //   weeklySurvival = dailyCost × 7
+  //   monthlySurvival= dailyCost × 30
+  //   annualCost     = dailyCost × 365
+  //
+  // This is universally correct for both a 30-day personal expenses table
+  // and a full 365-day operational vehicle table.
   //
   const currentYear = cutoffDate ? parseInt(cutoffDate.slice(0, 4), 10) : new Date().getFullYear();
 
-  // Count only months that actually have data (revenue, expense, or cost rows).
-  // This avoids dividing by empty calendar months that would artificially
-  // deflate the average (e.g. April=4 but user only has March data → /1, not /4).
-  const activeMonthsCount = useMemo(() => {
+  // Collect all expense-bearing rows for the selected year and compute totals + date range.
+  const { totalExpenses: ytdTotalExpenses, daySpan } = useMemo(() => {
     const yearPrefix = String(currentYear) + '-';
-    const months = new Set<string>();
+    let earliest = '';
+    let latest = '';
+    let expenseTotal = 0;
+    let negativeCosts = 0;
 
     for (const r of filteredRows) {
       if (!r.date.startsWith(yearPrefix)) continue;
-      // Include: revenue (positive), expense entries, and negative inline costs
-      if (r.entryType === 'deposit' || r.entryType === 'waiver') continue;
-      if (r.entryType === 'expense' || r.value !== 0) {
-        months.add(r.date.slice(0, 7));
+
+      // 1. Expense-type rows (Gastos tab — always positive values)
+      if (r.entryType === 'expense' && r.value > 0) {
+        expenseTotal += r.value;
+        if (!earliest || r.date < earliest) earliest = r.date;
+        if (!latest || r.date > latest) latest = r.date;
+        continue;
+      }
+
+      // 2. Negative-value rows in the main spreadsheet (inline costs)
+      if (
+        r.entryType !== 'expense' &&
+        r.entryType !== 'deposit' &&
+        r.entryType !== 'waiver' &&
+        r.value < 0
+      ) {
+        negativeCosts += Math.abs(r.value);
+        if (!earliest || r.date < earliest) earliest = r.date;
+        if (!latest || r.date > latest) latest = r.date;
       }
     }
 
-    return Math.max(1, months.size);
+    const total = Math.round((expenseTotal + negativeCosts) * 100) / 100;
+
+    // Day span: difference in days between earliest and latest expense + 1 (inclusive).
+    let span = 1;
+    if (earliest && latest) {
+      const d0 = new Date(earliest + 'T12:00:00');
+      const d1 = new Date(latest + 'T12:00:00');
+      span = Math.max(1, Math.round((d1.getTime() - d0.getTime()) / 86_400_000) + 1);
+    }
+
+    return { totalExpenses: total, daySpan: span };
   }, [filteredRows, currentYear]);
 
-  // YTD total expenses for the entire selected year (up to cutoff).
-  const ytdTotalExpenses = useMemo(() => {
-    const yearPrefix = String(currentYear) + '-';
+  // Pure daily cost — the single source of truth for all survival targets.
+  const dailyCost = Math.round((ytdTotalExpenses / daySpan) * 100) / 100;
 
-    // 1. Expense-type rows for this year (Gastos tab — always positive values)
-    const expenseTotal = filteredRows
-      .filter((r) => r.entryType === 'expense' && r.value > 0 && r.date.startsWith(yearPrefix))
-      .reduce((sum, r) => sum + r.value, 0);
-
-    // 2. Negative-value rows in the main spreadsheet for this year (inline costs)
-    const negativeCosts = filteredRows
-      .filter(
-        (r) =>
-          r.entryType !== 'expense' &&
-          r.entryType !== 'deposit' &&
-          r.entryType !== 'waiver' &&
-          r.value < 0 &&
-          r.date.startsWith(yearPrefix),
-      )
-      .reduce((sum, r) => sum + Math.abs(r.value), 0);
-
-    return Math.round((expenseTotal + negativeCosts) * 100) / 100;
-  }, [filteredRows, currentYear]);
-
-  const averageMonthlyExpense = Math.round((ytdTotalExpenses / activeMonthsCount) * 100) / 100;
-  const projectedAnnualCost = averageMonthlyExpense * 12;
-
-  const costBasedTarget: CostBasedTarget | undefined = costGoalActive && projectedAnnualCost > 0
+  const costBasedTarget: CostBasedTarget | undefined = costGoalActive && dailyCost > 0
     ? {
-        monthlySurvival: averageMonthlyExpense,
-        weeklySurvival: Math.round((projectedAnnualCost / 52) * 100) / 100,
-        dailySurvival: Math.round((projectedAnnualCost / 365) * 100) / 100,
-        annualCost: Math.round(projectedAnnualCost * 100) / 100,
+        dailySurvival: dailyCost,
+        weeklySurvival: Math.round(dailyCost * 7 * 100) / 100,
+        monthlySurvival: Math.round(dailyCost * 30 * 100) / 100,
+        annualCost: Math.round(dailyCost * 365 * 100) / 100,
       }
     : undefined;
 
