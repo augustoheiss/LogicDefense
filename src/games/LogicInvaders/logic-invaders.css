@@ -535,6 +535,11 @@
   padding: 16px;
   background: #070714;
   user-select: none;
+  /* ── Mobile: never overflow the viewport ── */
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow-x: hidden;
 }
 
 /* ── HUD bar ── */
@@ -579,7 +584,12 @@
   font-size: 10px;
   color: rgba(255,255,255,0.3);
   letter-spacing: 0.05em;
-  white-space: nowrap;
+  /* ── Mobile: allow wrapping instead of forcing overflow ── */
+  white-space: normal;
+  overflow-wrap: break-word;
+  word-break: break-word;
+  max-width: 180px;
+  text-align: right;
 }
 
 /* ── Canvas container ── */

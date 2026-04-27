@@ -100,6 +100,12 @@ const VIEWPORT_TILES = 9;
 const VIEWPORT_W = VIEWPORT_TILES * CELL + (VIEWPORT_TILES - 1) * GAP; // 736 px
 const VIEWPORT_H = VIEWPORT_W;
 
+/**
+ * Natural width of the entire game UI (viewport + gap + sidebar + padding).
+ * Used by the responsive scale calculation.
+ */
+const NATURAL_UI_W = VIEWPORT_W + 20 + 270 + 32; // ~1058 px
+
 // ── Pure camera helper — module-level so it is hoisted before any useEffect runs ──
 // Depends only on module constants; never needs to be inside the component.
 function getCamTransform(row: number, col: number): string {
@@ -450,6 +456,26 @@ export function LogicAscension({ onGoToMenu }: { onGoToMenu?: () => void } = {})
   /** Sprint 12: player names for leaderboard save on Victory / Game Over. */
   const [victoryName,  setVictoryName]  = useState('');
   const [gameOverName, setGameOverName] = useState('');
+
+  // ── Responsive scale (CSS transform) ────────────────────────────────────────
+  // The game uses fixed pixel coords (VIEWPORT_W = 736) for the camera.
+  // On small screens we scale the whole UI down with transform:scale() so
+  // the coordinate math stays pixel-perfect.
+  const [gameScale,   setGameScale]   = useState(1);
+  const scaleWrapRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const el = scaleWrapRef.current;
+    if (!el) return;
+    const obs = new ResizeObserver((entries) => {
+      const w = entries[0]?.contentRect.width ?? el.clientWidth;
+      setGameScale(Math.min(1, w / NATURAL_UI_W));
+    });
+    obs.observe(el);
+    // Initial calculation
+    setGameScale(Math.min(1, el.clientWidth / NATURAL_UI_W));
+    return () => obs.disconnect();
+  }, []);
 
   // ── ProcGen room tracking ────────────────────────────────────────────────────
   // activeRoomIdx[pathId] = current room being played (undefined = not started)
@@ -1012,19 +1038,36 @@ export function LogicAscension({ onGoToMenu }: { onGoToMenu?: () => void } = {})
   const playerScreenY = Math.round(VIEWPORT_H / 2 - CELL / 2);
 
   return (
+    /* ── Scale wrapper: measures available width, clips overflow ── */
+    <div
+      ref={scaleWrapRef}
+      style={{
+        width:     '100%',
+        maxWidth:  '100%',
+        overflowX: 'hidden',
+      }}
+    >
     <div style={{
-      display:       'flex',
-      flexDirection: 'column',
-      alignItems:    'center',
-      gap:           20,
-      padding:       '24px 16px 32px',
-      minHeight:     '100vh',
-      background:    '#07070f',
-      fontFamily:    "'Courier New', monospace",
-      color:         '#e2e8f0',
-      // ── Mobile lag killers — prevent browser scroll/zoom interference ──
-      touchAction:   'none',
-      userSelect:    'none',
+      display:          'flex',
+      flexDirection:    'column',
+      alignItems:       'center',
+      gap:              20,
+      padding:          '24px 16px 32px',
+      minHeight:        '100vh',
+      background:       '#07070f',
+      fontFamily:       "'Courier New', monospace",
+      color:            '#e2e8f0',
+      // ── Mobile lag killers ──
+      touchAction:      'none',
+      userSelect:       'none',
+      // ── Responsive CSS scale ──
+      // Viewport + sidebar is pixel-fixed; scale the whole block so it fits
+      // any screen without breaking coordinate logic.
+      transform:        `scale(${gameScale})`,
+      transformOrigin:  'top center',
+      width:            NATURAL_UI_W,
+      // Compensate collapsed height when scaled < 1
+      marginBottom:     gameScale < 1 ? `calc((${gameScale} - 1) * 100vh)` : 0,
     }}>
 
       <style>{GAME_STYLES}</style>
@@ -1586,6 +1629,7 @@ export function LogicAscension({ onGoToMenu }: { onGoToMenu?: () => void } = {})
           </div>
         </div>
       )}
+    </div>
     </div>
   );
 }
