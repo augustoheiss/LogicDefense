@@ -79,7 +79,6 @@ const GAME_STYLES = `
 }
 
 /* 1. Main Wrapper */
-/* 1. Main Wrapper */
 .la-main-layout {
   display: flex;
   flex-wrap: wrap;
@@ -107,6 +106,7 @@ const GAME_STYLES = `
 .la-viewport {
   width: 100%;
   max-width: 85vh;
+  max-height: 70vh;
   aspect-ratio: 1 / 1;
   position: relative;
   overflow: hidden;
@@ -184,6 +184,13 @@ const GAME_STYLES = `
 .la-main-layout:-webkit-full-screen .la-sidebar {
   max-height: 100%;
   overflow-y: auto;
+}
+
+/* Viewport expands in fullscreen */
+.la-main-layout:fullscreen .la-viewport,
+.la-main-layout:-webkit-full-screen .la-viewport {
+  max-height: 90vh;
+  max-width: 90vh;
 }
 `;
 
