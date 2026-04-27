@@ -1289,7 +1289,7 @@ export function LogicAscension({ onGoToMenu }: { onGoToMenu?: () => void } = {})
           </div>
 
           {/* ── Controls ── */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 10, width: VIEWPORT_W }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 10, width: '100%' }}>
             <button
               onClick={() => { if (wrapperRef.current) requestFullScreen(wrapperRef.current); }}
               style={{
