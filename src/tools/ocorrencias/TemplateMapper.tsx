@@ -76,34 +76,35 @@ export function TemplateMapper({ file, onMapComplete, onMapProgress, onCancel }:
     }
   }
 
-  // ── Drawing Handlers ──
-  // Unified coordinate extractor for mouse and touch events
-  const getPointerPos = (e: React.MouseEvent | React.TouchEvent) => {
+  // ── Drawing Handlers (Pointer Events API with capture) ──
+  const getPointerPos = (e: React.PointerEvent) => {
     if (!wrapperRef.current) return { x: 0, y: 0 };
     const rect = wrapperRef.current.getBoundingClientRect();
-    const clientX = 'touches' in e ? e.touches[0]?.clientX ?? (e as React.TouchEvent).changedTouches[0]?.clientX ?? 0 : e.clientX;
-    const clientY = 'touches' in e ? e.touches[0]?.clientY ?? (e as React.TouchEvent).changedTouches[0]?.clientY ?? 0 : e.clientY;
     return {
-      x: clientX - rect.left,
-      y: clientY - rect.top
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top
     };
   };
 
-  const handlePointerDown = (e: React.MouseEvent | React.TouchEvent) => {
+  const handlePointerDown = (e: React.PointerEvent) => {
     if (!activeFieldId) return;
+    e.preventDefault();
+    // Lock all pointer events to this element until release
+    e.currentTarget.setPointerCapture(e.pointerId);
     const pos = getPointerPos(e);
     setStartPos(pos);
     setCurrentPos(pos);
     setIsDrawing(true);
   };
 
-  const handlePointerMove = (e: React.MouseEvent | React.TouchEvent) => {
+  const handlePointerMove = (e: React.PointerEvent) => {
     if (!isDrawing) return;
     setCurrentPos(getPointerPos(e));
   };
 
-  const handlePointerUp = () => {
+  const handlePointerUp = (e: React.PointerEvent) => {
     if (!isDrawing || !activeFieldId) return;
+    e.currentTarget.releasePointerCapture(e.pointerId);
     setIsDrawing(false);
     
     // Calculate final box
@@ -427,14 +428,10 @@ export function TemplateMapper({ file, onMapComplete, onMapProgress, onCancel }:
 
           <div 
             className="drawing-overlay"
-            onMouseDown={handlePointerDown}
-            onMouseMove={handlePointerMove}
-            onMouseUp={handlePointerUp}
-            onMouseLeave={handlePointerUp}
-            onTouchStart={handlePointerDown}
-            onTouchMove={handlePointerMove}
-            onTouchEnd={handlePointerUp}
-            onTouchCancel={handlePointerUp}
+            onPointerDown={handlePointerDown}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerUp}
+            onPointerCancel={handlePointerUp}
           >
             {/* Draw existing boxes */}
             {Object.values(mappedFields)
