@@ -606,7 +606,8 @@
   display: block;
   width: 100%;
   height: auto;
-  max-height: 540px;
+  /* height: auto ensures correct aspect ratio — do NOT add max-height
+     here as it would squish the canvas without adjusting width. */
   cursor: crosshair;
 }
 #li-canvas:focus { outline: none; }

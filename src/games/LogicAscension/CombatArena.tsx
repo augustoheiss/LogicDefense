@@ -1,4 +1,4 @@
-﻿import {
+import {
   useState, useEffect, useRef, useCallback, CSSProperties,
 } from 'react';
 import { Question } from './mathEngine';
@@ -193,12 +193,17 @@ function PocketArena({
     isRunning.current = false;
     cancelAnimationFrame(rafRef.current);
 
-    // HiDPI init
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    // ── HiDPI init ───────────────────────────────────────────────────────────
+    // Cap DPR to 1 on mobile to eliminate the 4× GPU workload that causes lag.
+    // DPR > 1 only provides sharper rendering at the cost of performance; on a
+    // 192×288 canvas the difference is imperceptible, but the lag is very real.
+    const isMobile = window.matchMedia('(max-width: 768px)').matches;
+    const dpr = isMobile ? 1 : Math.min(window.devicePixelRatio || 1, 2);
     canvas.width = CANVAS_W * dpr;
     canvas.height = CANVAS_H * dpr;
-    canvas.style.width = `${CANVAS_W}px`;
-    canvas.style.height = `${CANVAS_H}px`;
+    // Let CSS (100% width, auto height) control visual size — do NOT hardcode px.
+    canvas.style.width = '100%';
+    canvas.style.height = 'auto';
     const ctx = canvas.getContext('2d')!;
     ctx.scale(dpr, dpr);
 

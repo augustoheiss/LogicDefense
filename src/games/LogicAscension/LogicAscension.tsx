@@ -68,6 +68,43 @@ const GAME_STYLES = `
   50%  { transform: scale(1.5);  color: #00ff88; }
   100% { transform: scale(1);    color: #ffd700; }
 }
+
+/* ── Responsive layout ── */
+.la-main-layout {
+  display: flex;
+  gap: 20px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  justify-content: center;
+  width: 100%;
+}
+
+/* ── Viewport container: clips the fixed-px game grid ── */
+.la-viewport {
+  flex-shrink: 0;
+  /* transform-origin top-left so it scales within the flow */
+  transform-origin: top left;
+}
+
+/* ── Mobile: scale the viewport down to fit the screen ──
+   736px is VIEWPORT_W. At 390px screen with 32px padding the
+   available width is 358px → scale = 358/736 ≈ 0.487.
+   We use vw-based calc() so it adapts to any device width.   */
+@media (max-width: 800px) {
+  .la-main-layout {
+    flex-direction: column;
+    align-items: center;
+  }
+  .la-viewport {
+    /* scale = (100vw - 32px) / 736px */
+    --la-vp-scale: calc((100vw - 32px) / 736);
+    transform: scale(var(--la-vp-scale));
+    /* After scale the div still occupies its natural 736×736 space in the DOM.
+       Use negative margin to collapse that dead space so the sidebar follows tightly. */
+    margin-bottom: calc((var(--la-vp-scale) - 1) * 736px);
+    margin-right:  calc((var(--la-vp-scale) - 1) * 736px);
+  }
+}
 `;
 
 // ── Log item type ──────────────────────────────────────────────────────────────
@@ -100,11 +137,6 @@ const VIEWPORT_TILES = 9;
 const VIEWPORT_W = VIEWPORT_TILES * CELL + (VIEWPORT_TILES - 1) * GAP; // 736 px
 const VIEWPORT_H = VIEWPORT_W;
 
-/**
- * Natural width of the entire game UI (viewport + gap + sidebar + padding).
- * Used by the responsive scale calculation.
- */
-const NATURAL_UI_W = VIEWPORT_W + 20 + 270 + 32; // ~1058 px
 
 // ── Pure camera helper — module-level so it is hoisted before any useEffect runs ──
 // Depends only on module constants; never needs to be inside the component.
@@ -457,25 +489,6 @@ export function LogicAscension({ onGoToMenu }: { onGoToMenu?: () => void } = {})
   const [victoryName,  setVictoryName]  = useState('');
   const [gameOverName, setGameOverName] = useState('');
 
-  // ── Responsive scale (CSS transform) ────────────────────────────────────────
-  // The game uses fixed pixel coords (VIEWPORT_W = 736) for the camera.
-  // On small screens we scale the whole UI down with transform:scale() so
-  // the coordinate math stays pixel-perfect.
-  const [gameScale,   setGameScale]   = useState(1);
-  const scaleWrapRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    const el = scaleWrapRef.current;
-    if (!el) return;
-    const obs = new ResizeObserver((entries) => {
-      const w = entries[0]?.contentRect.width ?? el.clientWidth;
-      setGameScale(Math.min(1, w / NATURAL_UI_W));
-    });
-    obs.observe(el);
-    // Initial calculation
-    setGameScale(Math.min(1, el.clientWidth / NATURAL_UI_W));
-    return () => obs.disconnect();
-  }, []);
 
   // ── ProcGen room tracking ────────────────────────────────────────────────────
   // activeRoomIdx[pathId] = current room being played (undefined = not started)
@@ -1038,36 +1051,24 @@ export function LogicAscension({ onGoToMenu }: { onGoToMenu?: () => void } = {})
   const playerScreenY = Math.round(VIEWPORT_H / 2 - CELL / 2);
 
   return (
-    /* ── Scale wrapper: measures available width, clips overflow ── */
-    <div
-      ref={scaleWrapRef}
-      style={{
-        width:     '100%',
-        maxWidth:  '100%',
-        overflowX: 'hidden',
-      }}
-    >
     <div style={{
-      display:          'flex',
-      flexDirection:    'column',
-      alignItems:       'center',
-      gap:              20,
-      padding:          '24px 16px 32px',
-      minHeight:        '100vh',
-      background:       '#07070f',
-      fontFamily:       "'Courier New', monospace",
-      color:            '#e2e8f0',
+      display:       'flex',
+      flexDirection: 'column',
+      alignItems:    'center',
+      gap:           20,
+      padding:       '24px 16px 32px',
+      minHeight:     '100vh',
+      background:    '#07070f',
+      fontFamily:    "'Courier New', monospace",
+      color:         '#e2e8f0',
       // ── Mobile lag killers ──
-      touchAction:      'none',
-      userSelect:       'none',
-      // ── Responsive CSS scale ──
-      // Viewport + sidebar is pixel-fixed; scale the whole block so it fits
-      // any screen without breaking coordinate logic.
-      transform:        `scale(${gameScale})`,
-      transformOrigin:  'top center',
-      width:            NATURAL_UI_W,
-      // Compensate collapsed height when scaled < 1
-      marginBottom:     gameScale < 1 ? `calc((${gameScale} - 1) * 100vh)` : 0,
+      touchAction:   'none',
+      userSelect:    'none',
+      // Prevent any child from blowing out the viewport width
+      width:         '100%',
+      maxWidth:      '100%',
+      boxSizing:     'border-box',
+      overflowX:     'hidden',
     }}>
 
       <style>{GAME_STYLES}</style>
@@ -1092,11 +1093,11 @@ export function LogicAscension({ onGoToMenu }: { onGoToMenu?: () => void } = {})
         </h1>
       </div>
 
-      {/* ── Main layout ── */}
-      <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start', flexWrap: 'wrap', justifyContent: 'center', width: '100%' }}>
+      {/* ── Main layout — CSS class drives responsive flex-direction ── */}
+      <div className="la-main-layout">
 
-        {/* ── Grid viewport ── */}
-        <div style={{ flexShrink: 0 }}>
+        {/* ── Grid viewport — .la-viewport handles CSS scale on mobile ── */}
+        <div className="la-viewport">
 
           {/* Fixed clipping window — overflow:hidden hides everything outside */}
           {/* Pointer events implement an invisible virtual joystick:
@@ -1629,7 +1630,6 @@ export function LogicAscension({ onGoToMenu }: { onGoToMenu?: () => void } = {})
           </div>
         </div>
       )}
-    </div>
     </div>
   );
 }
