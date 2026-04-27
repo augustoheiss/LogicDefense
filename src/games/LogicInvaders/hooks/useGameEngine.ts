@@ -1386,6 +1386,27 @@ export function useGameEngine(
   // Legacy compat — kept so existing pHeld check in game loop still compiles
   const pointerHeldRef = useRef<() => boolean>(() => touchInputRef.current.isFiring);
 
+  // ── Canvas Initialization (HiDPI & Mobile Cap) ─────────────
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    
+    // Detect mobile and cap internal resolution instead of DPR scaling to avoid GPU lag
+    const isMobile = window.matchMedia('(max-width: 768px)').matches || /Mobi|Android/i.test(navigator.userAgent);
+    const dpr = isMobile ? 1 : Math.min(window.devicePixelRatio || 1, 2);
+    
+    // Set actual internal buffer size
+    canvas.width = CANVAS_W * dpr;
+    canvas.height = CANVAS_H * dpr;
+    
+    // Scale context so game logic runs in logical CANVAS_W / CANVAS_H coordinates
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      ctx.scale(dpr, dpr);
+      ctx.imageSmoothingEnabled = false; // ensure crisp lines
+    }
+  }, [canvasRef]);
+
   // ── Keyboard input ────────────────────────────────────────
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
