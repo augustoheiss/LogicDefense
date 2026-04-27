@@ -1376,6 +1376,7 @@ export function useGameEngine(
 ) {
   const stateRef = useRef<GameState>(makeInitialState());
   const rafRef = useRef<number>(0);
+  const lastTsRef = useRef<number>(performance.now());
   const lastReportedScore = useRef(-1);
   const lastReportedWave = useRef(1);
   const lastLaserActive = useRef(false);
@@ -1549,21 +1550,24 @@ export function useGameEngine(
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    if (state.status === 'playing') {
-      const dtMs = 16.67;
+    const now = ts || performance.now();
+    const dtMs = now - lastTsRef.current;
+    lastTsRef.current = now;
+    const dt = Math.min(dtMs, 100) / 16.666;
 
+    if (state.status === 'playing') {
       // ── Player movement ──────────────────────────────────────
       // Keyboard: instant directional movement
       if (state.keys.has('ArrowLeft') || state.keys.has('KeyA'))
-        state.player.x = Math.max(0, state.player.x - PLAYER_SPEED);
+        state.player.x = Math.max(0, state.player.x - PLAYER_SPEED * dt);
       if (state.keys.has('ArrowRight') || state.keys.has('KeyD'))
-        state.player.x = Math.min(CANVAS_W - PLAYER_W, state.player.x + PLAYER_SPEED);
+        state.player.x = Math.min(CANVAS_W - PLAYER_W, state.player.x + PLAYER_SPEED * dt);
 
-      // Touch/pointer: smooth lerp toward finger position (18% per frame ≈ ~6 frames to close gap)
+      // Touch/pointer: smooth lerp toward finger position
       const touchIn = touchInputRef.current;
       if (touchIn.isFiring && touchIn.targetX >= 0) {
         const clampedTarget = Math.max(0, Math.min(CANVAS_W - PLAYER_W, touchIn.targetX));
-        state.player.x += (clampedTarget - state.player.x) * 0.18;
+        state.player.x += (clampedTarget - state.player.x) * Math.min(1, 0.18 * dt);
       }
 
       // ── Overdrive auto-fire (takes priority over laser and normal fire) ──────
@@ -1667,7 +1671,7 @@ export function useGameEngine(
       if (state.boss) {
         const boss = state.boss;
         if (boss.y < BOSS_ENTRY_Y_TARGET) {
-          boss.y = Math.min(BOSS_ENTRY_Y_TARGET, boss.y + BOSS_ENTRY_SPEED);
+          boss.y = Math.min(BOSS_ENTRY_Y_TARGET, boss.y + BOSS_ENTRY_SPEED * dt);
           boss.entryProgress = Math.min(1, (boss.y + boss.height) / (BOSS_ENTRY_Y_TARGET + boss.height));
           spawnBossEntryParticles(state, boss.x, boss.y, boss.width);
         }
@@ -1760,9 +1764,9 @@ export function useGameEngine(
             * (1 + (state.difficultyMultiplier - 1) * 0.15)  // lighter live-bonus (nerfed)
         );
         // Lerp current speed toward target for buttery-smooth deceleration/acceleration
-        inv.speed += (targetSpeed - inv.speed) * SPEED_LERP_RATE;
+        inv.speed += (targetSpeed - inv.speed) * Math.min(1, SPEED_LERP_RATE * dt);
 
-        inv.y += inv.speed;
+        inv.y += inv.speed * dt;
 
         // Enemy shooting
         if (now - inv.lastShotTime > ENEMY_SHOOT_COOLDOWN_MS) {
@@ -1786,10 +1790,10 @@ export function useGameEngine(
         const b = state.bullets[i] as any;
         // Support diagonal overdrive bullets (_vx/_vy overrides vertical-only speed)
         if (b._vx !== undefined) {
-          b.x += b._vx;
-          b.y += b._vy;
+          b.x += b._vx * dt;
+          b.y += b._vy * dt;
         } else {
-          b.y -= b.speed;
+          b.y -= b.speed * dt;
         }
         if (b.y < -20 || b.x < -20 || b.x > CANVAS_W + 20) {
           state.bullets.splice(i, 1); continue;
@@ -1893,8 +1897,8 @@ export function useGameEngine(
       const pcy = state.player.y + PLAYER_H / 2;
       for (let i = state.enemyProjectiles.length - 1; i >= 0; i--) {
         const ep = state.enemyProjectiles[i];
-        ep.x += ep.vx;
-        ep.y += ep.vy;
+        ep.x += ep.vx * dt;
+        ep.y += ep.vy * dt;
 
         // Out of bounds
         if (ep.y > CANVAS_H + 20 || ep.x < -20 || ep.x > CANVAS_W + 20) {

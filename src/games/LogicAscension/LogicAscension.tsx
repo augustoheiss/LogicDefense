@@ -200,13 +200,6 @@ function mkLog(
 const CELL = 80;   // large tiles — viewport camera handles clipping
 const GAP  = 2;
 
-// ── Viewport / camera constants ────────────────────────────────────────────────
-/** How many tiles are visible in each axis of the camera window. */
-const VIEWPORT_TILES = 9;
-/** Pixel size of the fixed viewport container (square). */
-const VIEWPORT_W = VIEWPORT_TILES * CELL + (VIEWPORT_TILES - 1) * GAP; // 736 px
-const VIEWPORT_H = VIEWPORT_W;
-
 
 // ── Pure camera helper — module-level so it is hoisted before any useEffect runs ──
 // Depends only on module constants; never needs to be inside the component.
