@@ -174,18 +174,20 @@ export function TableEditor({
   // data in the selected year.  No hardcoded monthly/yearly divisors.
   //
   //   totalExpenses  = Σ |expense rows| + Σ |negative cost rows|  (selected year)
-  //   daySpan        = (latestExpenseDate − earliestExpenseDate) + 1  (min 1)
+  //   daySpan        = (latestBoundary − earliestBoundary) + 1  (min 1)
   //   dailyCost      = totalExpenses / daySpan
   //   weeklySurvival = dailyCost × 7
   //   monthlySurvival= dailyCost × 30
   //   annualCost     = dailyCost × 365
   //
-  // This is universally correct for both a 30-day personal expenses table
-  // and a full 365-day operational vehicle table.
+  // Date boundary fallback pattern (per row):
+  //   Primary:  periodStart / periodEnd  (explicit coverage window, e.g. 365-day contract)
+  //   Fallback: r.date                   (transaction date, used as both start and end)
   //
   const currentYear = cutoffDate ? parseInt(cutoffDate.slice(0, 4), 10) : new Date().getFullYear();
 
   // Collect all expense-bearing rows for the selected year and compute totals + date range.
+  // Date boundary priority: periodStart/periodEnd → r.date (fallback).
   const { totalExpenses: ytdTotalExpenses, daySpan } = useMemo(() => {
     const yearPrefix = String(currentYear) + '-';
     let earliest = '';
@@ -193,14 +195,28 @@ export function TableEditor({
     let expenseTotal = 0;
     let negativeCosts = 0;
 
+    /** Resolve the effective coverage boundaries for a row.
+     *  Primary: periodStart/periodEnd (explicit coverage window).
+     *  Fallback: r.date (transaction date, used as both start and end). */
+    const bounds = (r: typeof filteredRows[number]): [string, string] => {
+      const start = r.periodStart || r.date;
+      const end   = r.periodEnd   || r.date;
+      return [start, end];
+    };
+
+    /** Widen the global earliest/latest to include a [start, end] pair. */
+    const widen = (start: string, end: string) => {
+      if (!earliest || start < earliest) earliest = start;
+      if (!latest   || end   > latest)   latest   = end;
+    };
+
     for (const r of filteredRows) {
       if (!r.date.startsWith(yearPrefix)) continue;
 
       // 1. Expense-type rows (Gastos tab — always positive values)
       if (r.entryType === 'expense' && r.value > 0) {
         expenseTotal += r.value;
-        if (!earliest || r.date < earliest) earliest = r.date;
-        if (!latest || r.date > latest) latest = r.date;
+        widen(...bounds(r));
         continue;
       }
 
@@ -212,14 +228,13 @@ export function TableEditor({
         r.value < 0
       ) {
         negativeCosts += Math.abs(r.value);
-        if (!earliest || r.date < earliest) earliest = r.date;
-        if (!latest || r.date > latest) latest = r.date;
+        widen(...bounds(r));
       }
     }
 
     const total = Math.round((expenseTotal + negativeCosts) * 100) / 100;
 
-    // Day span: difference in days between earliest and latest expense + 1 (inclusive).
+    // Day span: difference in days between earliest and latest boundary + 1 (inclusive).
     let span = 1;
     if (earliest && latest) {
       const d0 = new Date(earliest + 'T12:00:00');
