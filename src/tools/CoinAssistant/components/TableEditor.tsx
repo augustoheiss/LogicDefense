@@ -491,9 +491,11 @@ export function TableEditor({
               currentWeekData.differenceFromGoal >= 0 ? 'text-emerald-400' : 'text-amber-400'
             }`}
           >
-            {currentWeekData.differenceFromGoal >= 0
-              ? `✅ Passou ${fmt(currentWeekData.differenceFromGoal)} da meta`
-              : `⚡ Faltam ${fmt(Math.abs(currentWeekData.differenceFromGoal))} para a meta`}
+            {currentWeekData.differenceFromGoal === 0
+              ? '🎯 Meta cravada!'
+              : currentWeekData.differenceFromGoal > 0
+                ? `✅ Passou ${fmt(currentWeekData.differenceFromGoal)} da meta`
+                : `⚡ Faltam ${fmt(Math.abs(currentWeekData.differenceFromGoal))} para a meta`}
           </div>
           <div className="text-xs text-white/25">
             Meta semanal: {fmt(resolveGoalForYear(table.goals.weeklyGoals, currentYear))}

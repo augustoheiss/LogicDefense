@@ -134,7 +134,11 @@ function buildMessage(
       }
 
       const diff = week.differenceFromGoal;
-      if (diff >= 0) {
+      if (diff === 0) {
+        lines.push(
+          `🎯 Fechamento: *${fmt(week.weeklyTotal)}* _(Meta cravada!)_`,
+        );
+      } else if (diff > 0) {
         lines.push(
           `📈 Fechamento: *${fmt(week.weeklyTotal)}* _(Passou ${fmt(diff)} da meta!)_`,
         );
