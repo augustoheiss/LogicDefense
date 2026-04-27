@@ -562,6 +562,7 @@ export function LogicAscension({ onGoToMenu }: { onGoToMenu?: () => void } = {})
   const [combat,         setCombat]         = useState<CombatState | null>(null);
   const [completedRooms, setCompletedRooms] = useState<Set<PathId>>(new Set());
   const [gamePhase,      setGamePhase]      = useState<GamePhase>('playing');
+  const [gameState,      setGameState]      = useState<'MENU' | 'PLAYING'>('MENU');
   const [bossSpawned,    setBossSpawned]    = useState(false);
   const [gameOverReason, setGameOverReason] = useState('');
   /** Sprint 9: stage persists across maps — increments on "Avançar", resets on "Reiniciar". */
@@ -1143,13 +1144,14 @@ export function LogicAscension({ onGoToMenu }: { onGoToMenu?: () => void } = {})
       flexDirection: 'column',
       alignItems:    'center',
       gap:           20,
-      padding:       '24px 16px 32px',
+      padding:       gameState === 'MENU' ? '20px' : '24px 16px 32px',
       minHeight:     '100vh',
       background:    '#07070f',
       fontFamily:    "'Courier New', monospace",
       color:         '#e2e8f0',
+      justifyContent: gameState === 'MENU' ? 'center' : 'flex-start',
       // ── Mobile lag killers ──
-      touchAction:   'none',
+      touchAction:   gameState === 'PLAYING' ? 'none' : 'auto',
       userSelect:    'none',
       // Prevent any child from blowing out the viewport width
       width:         '100%',
@@ -1159,6 +1161,47 @@ export function LogicAscension({ onGoToMenu }: { onGoToMenu?: () => void } = {})
     }}>
 
       <style>{GAME_STYLES}</style>
+
+      {gameState === 'MENU' ? (
+        <div style={{ textAlign: 'center', pointerEvents: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', width: '100%', flex: 1 }}>
+          <div style={{ fontSize: 48, fontWeight: 'bold', color: '#00d4ff', marginBottom: 10, textShadow: '0 0 10px #00d4ff' }}>Logic Ascension</div>
+          <div style={{ fontSize: 16, color: '#94a3b8', marginBottom: 40 }}>Roguelike Math Engine</div>
+          <button
+            onClick={() => {
+              if (wrapperRef.current) requestFullScreen(wrapperRef.current);
+              setGameState('PLAYING');
+            }}
+            style={{
+              background: 'rgba(0,212,255,0.15)', border: '2px solid #00d4ff', color: '#00d4ff',
+              padding: '16px 40px', borderRadius: 8, cursor: 'pointer',
+              fontFamily: "'Courier New', monospace", fontSize: 24, fontWeight: 'bold', transition: 'all 0.2s',
+              boxShadow: '0 0 15px rgba(0,212,255,0.3)', textTransform: 'uppercase', pointerEvents: 'auto'
+            }}
+            onMouseEnter={e => { e.currentTarget.style.background = 'rgba(0,212,255,0.3)'; e.currentTarget.style.transform = 'scale(1.05)'; }}
+            onMouseLeave={e => { e.currentTarget.style.background = 'rgba(0,212,255,0.15)'; e.currentTarget.style.transform = 'scale(1)'; }}
+          >
+            START GAME / JOGAR
+          </button>
+        </div>
+      ) : (
+        <>
+          {/* Sair / Quit Button */}
+          <div style={{ width: '100%', display: 'flex', justifyContent: 'flex-end', paddingRight: '20px', position: 'absolute', top: 10, right: 10, zIndex: 100 }}>
+             <button
+                onClick={() => {
+                   if (document.exitFullscreen) document.exitFullscreen().catch(()=>{});
+                   // @ts-ignore
+                   else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+                   setGameState('MENU');
+                   resetGame();
+                }}
+                style={{
+                  background: 'rgba(255,68,68,0.15)', border: '1px solid #ff4444', color: '#ff4444',
+                  padding: '8px 16px', borderRadius: 6, cursor: 'pointer',
+                  fontFamily: "'Courier New', monospace", fontSize: 12, fontWeight: 'bold', pointerEvents: 'auto'
+                }}
+             >Sair / Quit</button>
+          </div>
 
       {/* ── Header ── */}
       <div style={{ textAlign: 'center' }}>
@@ -1731,6 +1774,8 @@ export function LogicAscension({ onGoToMenu }: { onGoToMenu?: () => void } = {})
             </button>
           </div>
         </div>
+      )}
+      </>
       )}
     </div>
   );
