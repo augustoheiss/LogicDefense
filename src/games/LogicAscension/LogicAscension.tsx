@@ -79,36 +79,34 @@ const GAME_STYLES = `
 }
 
 /* 1. Main Wrapper */
+/* 1. Main Wrapper */
 .la-main-layout {
   display: flex;
-  flex-direction: row;
+  flex-wrap: wrap;
   gap: 2rem;
   width: 100%;
-  height: 100vh;
+  justify-content: center;
+  align-items: flex-start;
+  background: #07070f;
   box-sizing: border-box;
   padding: 2rem;
-  align-items: stretch;
-  justify-content: center;
-  background: #07070f;
   position: relative;
 }
 
 /* 2. Game Area Wrapper */
 .la-game-wrapper {
-  flex: 1;
+  flex: 1 1 400px;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   justify-content: center;
   align-items: center;
-  min-width: 0;
-  min-height: 0;
-  position: relative;
 }
 
 /* 3. Game Grid */
 .la-viewport {
   width: 100%;
-  max-height: 100%;
+  max-width: 85vh;
   aspect-ratio: 1 / 1;
   position: relative;
   overflow: hidden;
@@ -119,60 +117,60 @@ const GAME_STYLES = `
 
 /* 4. Sidebar */
 .la-sidebar {
-  width: 300px;
-  flex-shrink: 0;
+  flex: 0 0 320px;
+  max-height: 85vh;
+  overflow-y: auto;
+  background: rgba(0, 0, 0, 0.4);
+  border-radius: 8px;
   display: flex;
   flex-direction: column;
   gap: 6px;
-  max-height: 100%;
-  overflow-y: auto;
 }
 
 /* 5. Quit button */
 .la-quit-btn {
   position: absolute;
-  top: 1rem;
-  right: 1rem;
+  top: 1.5rem;
+  right: 1.5rem;
   z-index: 100;
 }
 
 /* Mobile */
 @media (max-width: 800px) {
   .la-main-layout {
-    flex-direction: column;
-    height: auto;
-    min-height: 100vh;
     padding: 1rem;
-    align-items: center;
+    gap: 1rem;
   }
   .la-game-wrapper {
-    width: 100%;
+    flex: 1 1 100%;
   }
   .la-sidebar {
-    width: 100%;
+    flex: 0 0 100%;
     max-height: none;
-    overflow-y: visible;
   }
 }
 
 /* Fullscreen */
 .la-main-layout:fullscreen {
-  padding: 1rem !important;
-  gap: 1.5rem !important;
-  width: 100vw;
+  flex-wrap: nowrap;
+  align-items: center;
   height: 100vh;
-  overflow: hidden;
-  flex-direction: row;
+  width: 100vw;
+  padding: 2rem;
+  gap: 2rem;
+  background-color: #070810;
 }
 .la-main-layout:-webkit-full-screen {
-  padding: 1rem !important;
-  gap: 1.5rem !important;
-  width: 100vw;
+  flex-wrap: nowrap;
+  align-items: center;
   height: 100vh;
-  overflow: hidden;
-  flex-direction: row;
+  width: 100vw;
+  padding: 2rem;
+  gap: 2rem;
+  background-color: #070810;
 }
 
+/* Mobile fullscreen: stack */
 @media (max-width: 800px) {
   .la-main-layout:fullscreen,
   .la-main-layout:-webkit-full-screen {
@@ -181,6 +179,7 @@ const GAME_STYLES = `
   }
 }
 
+/* Sidebar in fullscreen */
 .la-main-layout:fullscreen .la-sidebar,
 .la-main-layout:-webkit-full-screen .la-sidebar {
   max-height: 100%;
@@ -215,9 +214,9 @@ const GAP  = 2;
 // ── Pure camera helper — module-level so it is hoisted before any useEffect runs ──
 // Depends only on module constants; never needs to be inside the component.
 function getCamTransform(row: number, col: number): string {
-  const tx = -(col * (CELL + GAP));
-  const ty = -(row * (CELL + GAP));
-  return `translate(calc(-50% + ${tx}px), calc(-50% + ${ty}px))`;
+  const playerPixelX = col * (CELL + GAP);
+  const playerPixelY = row * (CELL + GAP);
+  return `translate(calc(50% - ${playerPixelX + CELL / 2}px), calc(50% - ${playerPixelY + CELL / 2}px))`;
 }
 
 /** Virtual joystick repeat rate — milliseconds between steps while the finger is held. */
@@ -1118,10 +1117,12 @@ export function LogicAscension({ onGoToMenu }: { onGoToMenu?: () => void } = {})
   // Outermost game wrapper — target for requestFullscreen()
   const wrapperRef      = useRef<HTMLDivElement>(null);
 
-  // Camera offsets — used for initial/React-driven render pass.
-  // After keydown, camLayerRef.current.style.transform is written directly (bypasses React).
-  const camTx = playerPos ? -(playerPos.col * (CELL + GAP)) : 0;
-  const camTy = playerPos ? -(playerPos.row * (CELL + GAP)) : 0;
+  // Camera offsets — computed from player pixel position so the player tile is always centered.
+  // Formula: shift grid so playerPixel + CELL/2 lands at 50% of the viewport.
+  const playerPixelX = playerPos ? playerPos.col * (CELL + GAP) : 0;
+  const playerPixelY = playerPos ? playerPos.row * (CELL + GAP) : 0;
+  const camTransform = `translate(calc(50% - ${playerPixelX + CELL / 2}px), calc(50% - ${playerPixelY + CELL / 2}px))`;
+
 
 
   return (
@@ -1238,11 +1239,10 @@ export function LogicAscension({ onGoToMenu }: { onGoToMenu?: () => void } = {})
               ref={camLayerRef}
               style={{
                 position:   'absolute',
-                top:        '50%',
-                left:       '50%',
+                top:        0,
+                left:       0,
                 zIndex:     0,
-                // Shift grid by camera position, and offset by half a cell to center the player's tile
-                transform:  `translate(calc(-50% + ${camTx}px), calc(-50% + ${camTy}px))`,
+                transform:  camTransform,
                 willChange: 'transform',
                 display:             'grid',
                 gridTemplateColumns: `repeat(${GRID_COLS}, ${CELL}px)`,
