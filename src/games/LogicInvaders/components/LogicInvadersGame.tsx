@@ -83,9 +83,22 @@ function LeaderboardTable({ entries }: { entries: LeaderboardEntry[] }) {
   );
 }
 
+// ── Fullscreen helper ─────────────────────────────────────────
+// Must live outside the component so it's never recreated (stable reference).
+// Called synchronously inside a user-gesture handler — browsers require
+// requestFullscreen() to be invoked directly from a click/touch event.
+function requestFullScreen(el: HTMLElement): void {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const e = el as any;
+  if (e.requestFullscreen)            { e.requestFullscreen().catch(() => {}); }
+  else if (e.webkitRequestFullscreen) { e.webkitRequestFullscreen(); } // Safari / iOS
+  else if (e.msRequestFullscreen)     { e.msRequestFullscreen();     } // IE11
+}
+
 // ── Main component ────────────────────────────────────────────
 export function LogicInvadersGame() {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const canvasRef  = useRef<HTMLCanvasElement>(null);
+  const wrapperRef = useRef<HTMLDivElement>(null);
 
   const [score, setScore] = useState(0);
   const [status, setStatus] = useState<string>('idle');
@@ -180,7 +193,7 @@ export function LogicInvadersGame() {
   }, []);
 
   return (
-    <div className="li-wrapper">
+    <div className="li-wrapper" ref={wrapperRef}>
 
       {/* ── HUD bar ── */}
       {!isIdle && !showSaveOverlay && !showLeaderboard && (
@@ -269,10 +282,13 @@ export function LogicInvadersGame() {
               <button
                 id="li-start-btn"
                 className="li-start-btn"
-                onClick={startGame}
+                onClick={() => {
+                if (wrapperRef.current) requestFullScreen(wrapperRef.current);
+                startGame();
+              }}
                 style={{ touchAction: 'auto', pointerEvents: 'auto' }}
               >
-                ▶ INICIAR JOGO
+                ⛶ INICIAR (TELA CHEIA)
               </button>
               <button
                 className="li-lb-open-btn"

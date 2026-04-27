@@ -57,6 +57,15 @@ interface CombatState {
 }
 
 // ── Buff-modification animations (injected once) ──────────────────────────────
+// ── Fullscreen helper ──────────────────────────────────────────────────────────
+function requestFullScreen(el: HTMLElement): void {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const e = el as any;
+  if (e.requestFullscreen)            { e.requestFullscreen().catch(() => {}); }
+  else if (e.webkitRequestFullscreen) { e.webkitRequestFullscreen(); } // Safari / iOS
+  else if (e.msRequestFullscreen)     { e.msRequestFullscreen();     } // IE11
+}
+
 const GAME_STYLES = `
 @keyframes buff-punish {
   0%   { transform: scale(1.35); color: #ffd700; }
@@ -118,6 +127,69 @@ const GAME_STYLES = `
     align-items: center;
   }
 }
+
+/* ── Fullscreen mode ─────────────────────────────────────────────────────────
+   .la-root:fullscreen / :-webkit-full-screen selectors must be SEPARATE rules.
+   The outer clip uses min(100vw,100vh) so the square game fits both portrait
+   (100vw < 100vh) and landscape (100vh < 100vw) orientations. */
+
+.la-root:fullscreen {
+  padding: 0 !important;
+  gap: 0 !important;
+  justify-content: center;
+  align-items: center;
+  background: #000 !important;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+}
+.la-root:-webkit-full-screen {
+  padding: 0 !important;
+  gap: 0 !important;
+  justify-content: center;
+  align-items: center;
+  background: #000 !important;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.la-root:fullscreen .la-main-layout {
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  width: 100vw;
+  height: 100vh;
+  justify-content: center;
+}
+.la-root:-webkit-full-screen .la-main-layout {
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  width: 100vw;
+  height: 100vh;
+  justify-content: center;
+}
+
+.la-root:fullscreen .la-viewport-outer {
+  width:  min(736px, min(100vw, 100vh));
+  height: min(736px, min(100vw, 100vh));
+}
+.la-root:-webkit-full-screen .la-viewport-outer {
+  width:  min(736px, min(100vw, 100vh));
+  height: min(736px, min(100vw, 100vh));
+}
+
+.la-root:fullscreen .la-viewport {
+  transform: scale(min(1, calc(min(100vw, 100vh) / 736)));
+}
+.la-root:-webkit-full-screen .la-viewport {
+  transform: scale(min(1, calc(min(100vw, 100vh) / 736)));
+}
+
+/* Sidebar hidden in fullscreen to maximise game area */
+.la-root:fullscreen .la-sidebar  { display: none !important; }
+.la-root:-webkit-full-screen .la-sidebar { display: none !important; }
 `;
 
 // ── Log item type ──────────────────────────────────────────────────────────────
@@ -1052,7 +1124,9 @@ export function LogicAscension({ onGoToMenu }: { onGoToMenu?: () => void } = {})
   // It never moves — only the camera grid beneath it slides.
   const playerSpriteRef = useRef<HTMLDivElement>(null);
   // Camera grid layer ref — mutated directly in keydown for zero-latency visual feedback
-  const camLayerRef = useRef<HTMLDivElement>(null);
+  const camLayerRef     = useRef<HTMLDivElement>(null);
+  // Outermost game wrapper — target for requestFullscreen()
+  const wrapperRef      = useRef<HTMLDivElement>(null);
 
   // Camera offsets — used for initial/React-driven render pass.
   // After keydown, camLayerRef.current.style.transform is written directly (bypasses React).
@@ -1064,7 +1138,7 @@ export function LogicAscension({ onGoToMenu }: { onGoToMenu?: () => void } = {})
   const playerScreenY = Math.round(VIEWPORT_H / 2 - CELL / 2);
 
   return (
-    <div style={{
+    <div className="la-root" ref={wrapperRef} style={{
       display:       'flex',
       flexDirection: 'column',
       alignItems:    'center',
@@ -1227,7 +1301,20 @@ export function LogicAscension({ onGoToMenu }: { onGoToMenu?: () => void } = {})
           </div>
 
           {/* ── Controls ── */}
-          <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', marginTop: 10, width: VIEWPORT_W }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 10, width: VIEWPORT_W }}>
+            <button
+              onClick={() => { if (wrapperRef.current) requestFullScreen(wrapperRef.current); }}
+              style={{
+                background: 'transparent', border: '1px solid #00d4ff', color: '#00d4ff',
+                padding: '8px 14px', borderRadius: 6, cursor: 'pointer',
+                fontFamily: "'Courier New', monospace", fontSize: 11, transition: 'background 0.2s',
+                touchAction: 'auto', pointerEvents: 'auto',
+              }}
+              onMouseEnter={e => (e.currentTarget.style.background = 'rgba(0,212,255,0.15)')}
+              onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+            >
+              ⛶ Tela Cheia
+            </button>
             <button onClick={resetGame}
               style={{ background: 'transparent', border: '1px solid #ff4444', color: '#ff4444', padding: '8px 14px', borderRadius: 6, cursor: 'pointer', fontFamily: "'Courier New', monospace", fontSize: 11, transition: 'background 0.2s' }}
               onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,68,68,0.15)')}
@@ -1239,8 +1326,8 @@ export function LogicAscension({ onGoToMenu }: { onGoToMenu?: () => void } = {})
         </div>{/* /.la-viewport */}
         </div>{/* /.la-viewport-outer */}
 
-        {/* ── Sidebar (accordion) ── */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, width: 270, minWidth: 220, flexShrink: 0 }}>
+        {/* ── Sidebar (accordion) — .la-sidebar class hides it in fullscreen ── */}
+        <div className="la-sidebar" style={{ display: 'flex', flexDirection: 'column', gap: 6, width: 270, minWidth: 220, flexShrink: 0 }}>
 
           {/* Status — always visible ───────────────────────────────────────────── */}
           <div style={{
