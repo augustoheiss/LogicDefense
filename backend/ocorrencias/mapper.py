@@ -108,7 +108,7 @@ def generate_pdf_buffer(
         rect = fitz.Rect(x, y, x + width, y + height)
 
         # Semi-transparent white background for readability on scanned PDFs
-        template_page.draw_rect(rect, color=None, fill=(1, 1, 1), fill_opacity=0.5)
+        template_page.draw_rect(rect, color=None, fill=(1, 1, 1), fill_opacity=0.8)
 
         if field_type == "checkbox":
             if value:
