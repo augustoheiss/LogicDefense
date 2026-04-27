@@ -1122,6 +1122,8 @@ kbd {
 /* Root wrapper fills the screen */
 .li-wrapper:fullscreen {
   padding: 0;
+  display: flex;
+  flex-direction: column;
   height: 100vh;
   width: 100vw;
   justify-content: flex-start;
@@ -1132,6 +1134,8 @@ kbd {
 }
 .li-wrapper:-webkit-full-screen {
   padding: 0;
+  display: flex;
+  flex-direction: column;
   height: 100vh;
   width: 100vw;
   justify-content: flex-start;
@@ -1184,14 +1188,18 @@ kbd {
 /* Canvas fills container, letterboxes with object-fit: contain */
 .li-wrapper:fullscreen #li-canvas {
   width: 100% !important;
-  height: 100% !important;
+  flex: 1;
+  min-height: 0;
+  max-height: 100%;
   object-fit: contain !important;
   background-color: black !important;
   cursor: crosshair;
 }
 .li-wrapper:-webkit-full-screen #li-canvas {
   width: 100% !important;
-  height: 100% !important;
+  flex: 1;
+  min-height: 0;
+  max-height: 100%;
   object-fit: contain !important;
   background-color: black !important;
   cursor: crosshair;

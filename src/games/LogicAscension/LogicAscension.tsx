@@ -79,46 +79,40 @@ const GAME_STYLES = `
 }
 
 /* ── Responsive main layout ──────────────────────────────────────────────────
-   On wide screens: viewport + sidebar side-by-side.
-   On narrow screens (<= 800px): stack vertically. */
+   Using native CSS Flexbox without transform scale hacks.
+*/
 .la-main-layout {
   display: flex;
   gap: 20px;
   align-items: flex-start;
-  flex-wrap: wrap;
   justify-content: center;
   width: 100%;
+  padding: 24px 16px 32px;
+  min-height: 100vh;
+  background: #07070f;
+  box-sizing: border-box;
 }
 
-/* ── Two-wrapper responsive viewport system ──────────────────────────────────
-   VIEWPORT_W = 736px (square game grid, fixed pixel coordinates).
-   We cannot change the inner pixel dimensions — coordinate math depends on them.
-   Solution: outer wrapper clips at the visible (scaled) size; inner div
-   scales proportionally using CSS min() — no JavaScript needed.
-
-   How it works:
-   1. .la-viewport-outer  — the clip window.
-      width = height = min(736px, 100vw - 32px)
-      overflow: hidden clips any unscaled overflow.
-   2. .la-viewport        — always 736×736, scaled down on small screens.
-      transform: scale(min(1, (100vw - 32px) / 736))
-      transform-origin: top left aligns scale with the clip window. */
-
+/* ── Grid viewport ───────────────────────────────────────────────────────────
+   Native aspect-ratio clipping instead of JS math.
+*/
 .la-viewport-outer {
-  flex-shrink: 0;
-  overflow: hidden;
-  /* Visual size = scaled size */
-  width:  min(736px, calc(100vw - 32px));
-  height: min(736px, calc(100vw - 32px));
+  flex: 1;
+  max-width: 736px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
 .la-viewport {
-  /* Always natural size — clip window handles overflow */
-  width:  736px;
-  height: 736px;
-  transform-origin: top left;
-  /* scale = min(100%, available-px / 736). Pure CSS. */
-  transform: scale(min(1, calc((100vw - 32px) / 736)));
+  position: relative;
+  width: 100%;
+  max-width: 736px;
+  aspect-ratio: 1 / 1;
+  overflow: hidden;
+  border: 2px solid #1e293b;
+  border-radius: 8px;
+  box-shadow: 0 0 40px rgba(0,0,0,0.8);
 }
 
 @media (max-width: 800px) {
@@ -126,70 +120,61 @@ const GAME_STYLES = `
     flex-direction: column;
     align-items: center;
   }
+  .la-viewport-outer {
+    width: 100%;
+  }
 }
 
-/* ── Fullscreen mode ─────────────────────────────────────────────────────────
-   .la-root:fullscreen / :-webkit-full-screen selectors must be SEPARATE rules.
-   The outer clip uses min(100vw,100vh) so the square game fits both portrait
-   (100vw < 100vh) and landscape (100vh < 100vw) orientations. */
+/* ── Fullscreen mode ───────────────────────────────────────────────────────── */
 
-.la-root:fullscreen {
-  padding: 0 !important;
-  gap: 0 !important;
-  justify-content: center;
-  align-items: center;
-  background: #000 !important;
+.la-main-layout:fullscreen {
+  padding: 10px !important;
+  gap: 16px !important;
   width: 100vw;
   height: 100vh;
   overflow: hidden;
+  flex-direction: row; /* Desktop defaults to row */
 }
-.la-root:-webkit-full-screen {
-  padding: 0 !important;
-  gap: 0 !important;
-  justify-content: center;
-  align-items: center;
-  background: #000 !important;
+.la-main-layout:-webkit-full-screen {
+  padding: 10px !important;
+  gap: 16px !important;
   width: 100vw;
   height: 100vh;
   overflow: hidden;
+  flex-direction: row;
 }
 
-.la-root:fullscreen .la-main-layout {
-  flex-direction: column;
-  align-items: center;
-  gap: 0;
-  width: 100vw;
-  height: 100vh;
+/* Mobile fullscreen overrides */
+@media (max-width: 800px) {
+  .la-main-layout:fullscreen {
+    flex-direction: column;
+  }
+  .la-main-layout:-webkit-full-screen {
+    flex-direction: column;
+  }
+}
+
+/* Ensure the game area fills remaining height/width correctly in fullscreen */
+.la-main-layout:fullscreen .la-viewport-outer {
+  flex-grow: 1;
+  display: flex;
   justify-content: center;
 }
-.la-root:-webkit-full-screen .la-main-layout {
-  flex-direction: column;
-  align-items: center;
-  gap: 0;
-  width: 100vw;
-  height: 100vh;
+.la-main-layout:-webkit-full-screen .la-viewport-outer {
+  flex-grow: 1;
+  display: flex;
   justify-content: center;
 }
 
-.la-root:fullscreen .la-viewport-outer {
-  width:  min(736px, min(100vw, 100vh));
-  height: min(736px, min(100vw, 100vh));
+/* Sidebar behavior in fullscreen - scrollable instead of hidden */
+.la-main-layout:fullscreen .la-sidebar {
+  max-height: 100%;
+  overflow-y: auto;
 }
-.la-root:-webkit-full-screen .la-viewport-outer {
-  width:  min(736px, min(100vw, 100vh));
-  height: min(736px, min(100vw, 100vh));
+.la-main-layout:-webkit-full-screen .la-sidebar {
+  max-height: 100%;
+  overflow-y: auto;
 }
-
-.la-root:fullscreen .la-viewport {
-  transform: scale(min(1, calc(min(100vw, 100vh) / 736)));
-}
-.la-root:-webkit-full-screen .la-viewport {
-  transform: scale(min(1, calc(min(100vw, 100vh) / 736)));
-}
-
-/* Sidebar hidden in fullscreen to maximise game area */
-.la-root:fullscreen .la-sidebar  { display: none !important; }
-.la-root:-webkit-full-screen .la-sidebar { display: none !important; }
 `;
 
 // ── Log item type ──────────────────────────────────────────────────────────────
@@ -226,9 +211,9 @@ const VIEWPORT_H = VIEWPORT_W;
 // ── Pure camera helper — module-level so it is hoisted before any useEffect runs ──
 // Depends only on module constants; never needs to be inside the component.
 function getCamTransform(row: number, col: number): string {
-  const tx = Math.round(VIEWPORT_W / 2 - col * (CELL + GAP) - CELL / 2);
-  const ty = Math.round(VIEWPORT_H / 2 - row * (CELL + GAP) - CELL / 2);
-  return `translate3d(${tx}px, ${ty}px, 0)`;
+  const tx = -(col * (CELL + GAP));
+  const ty = -(row * (CELL + GAP));
+  return `translate(calc(-50% + ${tx}px), calc(-50% + ${ty}px))`;
 }
 
 /** Virtual joystick repeat rate — milliseconds between steps while the finger is held. */
@@ -1131,33 +1116,17 @@ export function LogicAscension({ onGoToMenu }: { onGoToMenu?: () => void } = {})
 
   // Camera offsets — used for initial/React-driven render pass.
   // After keydown, camLayerRef.current.style.transform is written directly (bypasses React).
-  const camTx = playerPos ? Math.round(VIEWPORT_W / 2 - playerPos.col * (CELL + GAP) - CELL / 2) : 0;
-  const camTy = playerPos ? Math.round(VIEWPORT_H / 2 - playerPos.row * (CELL + GAP) - CELL / 2) : 0;
+  const camTx = playerPos ? -(playerPos.col * (CELL + GAP)) : 0;
+  const camTy = playerPos ? -(playerPos.row * (CELL + GAP)) : 0;
 
-  // Player overlay is always centered: camTx + col*(CELL+GAP) = VIEWPORT_W/2 - CELL/2
-  const playerScreenX = Math.round(VIEWPORT_W / 2 - CELL / 2);
-  const playerScreenY = Math.round(VIEWPORT_H / 2 - CELL / 2);
 
   return (
-    <div className="la-root" ref={wrapperRef} style={{
-      display:       'flex',
-      flexDirection: 'column',
-      alignItems:    'center',
-      gap:           20,
-      padding:       gameState === 'MENU' ? '20px' : '24px 16px 32px',
-      minHeight:     '100vh',
-      background:    '#07070f',
+    <div className="la-main-layout" ref={wrapperRef} style={{
       fontFamily:    "'Courier New', monospace",
       color:         '#e2e8f0',
-      justifyContent: gameState === 'MENU' ? 'center' : 'flex-start',
       // ── Mobile lag killers ──
       touchAction:   gameState === 'PLAYING' ? 'none' : 'auto',
       userSelect:    'none',
-      // Prevent any child from blowing out the viewport width
-      width:         '100%',
-      maxWidth:      '100%',
-      boxSizing:     'border-box',
-      overflowX:     'hidden',
     }}>
 
       <style>{GAME_STYLES}</style>
@@ -1202,32 +1171,21 @@ export function LogicAscension({ onGoToMenu }: { onGoToMenu?: () => void } = {})
                 }}
              >Sair / Quit</button>
           </div>
-
-      {/* ── Header ── */}
-      <div style={{ textAlign: 'center' }}>
-        <p style={{ margin: 0, fontSize: 11, color: '#00d4ff', letterSpacing: 3, textTransform: 'uppercase' }}>
-          Logic Ascension · Sprint 9 · Progressão Infinita
-        </p>
-        <h1 style={{ margin: '4px 0 0', fontSize: 'clamp(18px, 3.5vw, 28px)', fontWeight: 700, color: '#f1f5f9', letterSpacing: 1 }}>
-          A Ascensão Lógica
-          <span style={{
-            marginLeft: 14,
-            fontSize: 'clamp(14px, 2vw, 20px)',
-            color: '#ffd700',
-            fontWeight: 900,
-            letterSpacing: 2,
-            textShadow: '0 0 12px rgba(255,215,0,0.5)',
-          }}>
-            — Nível {currentStage}
-          </span>
-        </h1>
-      </div>
-
-      {/* ── Main layout — CSS class drives responsive flex-direction ── */}
-      <div className="la-main-layout">
-
-        {/* ── Grid viewport — .la-viewport-outer clips, .la-viewport scales ── */}
+        {/* ── Grid viewport ── */}
         <div className="la-viewport-outer">
+          {/* ── Header inside the game area ── */}
+          <div style={{ textAlign: 'center', marginBottom: 12 }}>
+            <p style={{ margin: 0, fontSize: 11, color: '#00d4ff', letterSpacing: 3, textTransform: 'uppercase' }}>
+              Logic Ascension · Sprint 9
+            </p>
+            <h1 style={{ margin: '4px 0 0', fontSize: 'clamp(18px, 3.5vw, 28px)', fontWeight: 700, color: '#f1f5f9', letterSpacing: 1 }}>
+              A Ascensão Lógica
+              <span style={{ marginLeft: 14, fontSize: 'clamp(14px, 2vw, 20px)', color: '#ffd700', fontWeight: 900, letterSpacing: 2, textShadow: '0 0 12px rgba(255,215,0,0.5)' }}>
+                — Nível {currentStage}
+              </span>
+            </h1>
+          </div>
+
         <div className="la-viewport">
 
           {/* Fixed clipping window — overflow:hidden hides everything outside */}
@@ -1265,27 +1223,23 @@ export function LogicAscension({ onGoToMenu }: { onGoToMenu?: () => void } = {})
             onPointerCancel={stopContinuousMove}
             onPointerLeave={stopContinuousMove}
             style={{
-            position:           'relative',
-            width:              VIEWPORT_W,
-            height:             VIEWPORT_H,
-            overflow:           'hidden',
+            position:           'absolute',
+            inset:              0,
             backgroundImage:    `linear-gradient(rgba(10,10,20,0.85), rgba(10,10,20,0.85)), url('${getBackgroundImage(currentStage)}')`,
             backgroundSize:     'cover',
             backgroundPosition: 'center',
-            border:             '2px solid #1e293b',
-            borderRadius:       8,
-            boxShadow:          '0 0 40px rgba(0,0,0,0.8)',
           }}>
 
-            {/* Camera layer — translate3d; NO transition = instant snap on keydown DOM write */}
+            {/* Camera layer — NO transition = instant snap on keydown DOM write */}
             <div
               ref={camLayerRef}
               style={{
                 position:   'absolute',
-                top:        0,
-                left:       0,
+                top:        '50%',
+                left:       '50%',
                 zIndex:     0,
-                transform:  `translate3d(${camTx}px, ${camTy}px, 0)`,
+                // Shift grid by camera position, and offset by half a cell to center the player's tile
+                transform:  `translate(calc(-50% + ${camTx}px), calc(-50% + ${camTy}px))`,
                 willChange: 'transform',
                 display:             'grid',
                 gridTemplateColumns: `repeat(${GRID_COLS}, ${CELL}px)`,
@@ -1306,19 +1260,17 @@ export function LogicAscension({ onGoToMenu }: { onGoToMenu?: () => void } = {})
               )}
             </div>
 
-            {/* Player sprite overlay — ALWAYS centered in viewport (math: camTx + col*(CELL+GAP) = VIEWPORT_W/2 - CELL/2) */}
-            {/* Its transform never changes; the camera grid below it moves. No transition needed. */}
+            {/* Player sprite overlay — ALWAYS centered in viewport via CSS 50% */}
             <div
               ref={playerSpriteRef}
               style={{
                 position:   'absolute',
-                top:        0,
-                left:       0,
+                top:        '50%',
+                left:       '50%',
                 zIndex:     2,
                 width:      CELL,
                 height:     CELL,
-                transform:  `translate(${playerScreenX}px, ${playerScreenY}px)`,
-                willChange: 'transform',
+                transform:  'translate(-50%, -50%)',
                 display:        'flex',
                 alignItems:     'center',
                 justifyContent: 'center',
@@ -1545,8 +1497,6 @@ export function LogicAscension({ onGoToMenu }: { onGoToMenu?: () => void } = {})
           </div>
 
         </div>
-      </div>
-
       {/* Mobile tap-to-move hint — replaces D-pad instruction */}
       <p style={{ margin: 0, fontSize: 10, color: '#334155', letterSpacing: 1 }}>
         ⌨  WASD / Setas · 📱 Toque no mapa para mover · Limpe as {NUM_ROOMS} Salas · Derrote o Boss · Portal
