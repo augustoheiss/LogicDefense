@@ -78,99 +78,110 @@ const GAME_STYLES = `
   100% { transform: scale(1);    color: #ffd700; }
 }
 
-/* ── Responsive main layout ──────────────────────────────────────────────────
-   Using native CSS Flexbox without transform scale hacks.
-*/
+/* 1. Main Wrapper */
 .la-main-layout {
   display: flex;
-  gap: 20px;
-  align-items: flex-start;
-  justify-content: center;
+  flex-direction: row;
+  gap: 2rem;
   width: 100%;
-  padding: 24px 16px 32px;
-  min-height: 100vh;
-  background: #07070f;
+  height: 100vh;
   box-sizing: border-box;
+  padding: 2rem;
+  align-items: stretch;
+  justify-content: center;
+  background: #07070f;
+  position: relative;
 }
 
-/* ── Grid viewport ───────────────────────────────────────────────────────────
-   Native aspect-ratio clipping instead of JS math.
-*/
-.la-viewport-outer {
+/* 2. Game Area Wrapper */
+.la-game-wrapper {
   flex: 1;
-  max-width: 736px;
   display: flex;
   flex-direction: column;
+  justify-content: center;
   align-items: center;
+  min-width: 0;
+  min-height: 0;
+  position: relative;
 }
 
+/* 3. Game Grid */
 .la-viewport {
-  position: relative;
   width: 100%;
-  max-width: 736px;
+  max-height: 100%;
   aspect-ratio: 1 / 1;
+  position: relative;
   overflow: hidden;
   border: 2px solid #1e293b;
   border-radius: 8px;
   box-shadow: 0 0 40px rgba(0,0,0,0.8);
 }
 
+/* 4. Sidebar */
+.la-sidebar {
+  width: 300px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 100%;
+  overflow-y: auto;
+}
+
+/* 5. Quit button */
+.la-quit-btn {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  z-index: 100;
+}
+
+/* Mobile */
 @media (max-width: 800px) {
   .la-main-layout {
     flex-direction: column;
+    height: auto;
+    min-height: 100vh;
+    padding: 1rem;
     align-items: center;
   }
-  .la-viewport-outer {
+  .la-game-wrapper {
     width: 100%;
+  }
+  .la-sidebar {
+    width: 100%;
+    max-height: none;
+    overflow-y: visible;
   }
 }
 
-/* ── Fullscreen mode ───────────────────────────────────────────────────────── */
-
+/* Fullscreen */
 .la-main-layout:fullscreen {
-  padding: 10px !important;
-  gap: 16px !important;
+  padding: 1rem !important;
+  gap: 1.5rem !important;
   width: 100vw;
   height: 100vh;
   overflow: hidden;
-  flex-direction: row; /* Desktop defaults to row */
+  flex-direction: row;
 }
 .la-main-layout:-webkit-full-screen {
-  padding: 10px !important;
-  gap: 16px !important;
+  padding: 1rem !important;
+  gap: 1.5rem !important;
   width: 100vw;
   height: 100vh;
   overflow: hidden;
   flex-direction: row;
 }
 
-/* Mobile fullscreen overrides */
 @media (max-width: 800px) {
-  .la-main-layout:fullscreen {
-    flex-direction: column;
-  }
+  .la-main-layout:fullscreen,
   .la-main-layout:-webkit-full-screen {
     flex-direction: column;
+    align-items: center;
   }
 }
 
-/* Ensure the game area fills remaining height/width correctly in fullscreen */
-.la-main-layout:fullscreen .la-viewport-outer {
-  flex-grow: 1;
-  display: flex;
-  justify-content: center;
-}
-.la-main-layout:-webkit-full-screen .la-viewport-outer {
-  flex-grow: 1;
-  display: flex;
-  justify-content: center;
-}
-
-/* Sidebar behavior in fullscreen - scrollable instead of hidden */
-.la-main-layout:fullscreen .la-sidebar {
-  max-height: 100%;
-  overflow-y: auto;
-}
+.la-main-layout:fullscreen .la-sidebar,
 .la-main-layout:-webkit-full-screen .la-sidebar {
   max-height: 100%;
   overflow-y: auto;
@@ -1148,24 +1159,23 @@ export function LogicAscension({ onGoToMenu }: { onGoToMenu?: () => void } = {})
       ) : (
         <>
           {/* Sair / Quit Button */}
-          <div style={{ width: '100%', display: 'flex', justifyContent: 'flex-end', paddingRight: '20px', position: 'absolute', top: 10, right: 10, zIndex: 100 }}>
-             <button
-                onClick={() => {
-                   if (document.exitFullscreen) document.exitFullscreen().catch(()=>{});
-                   // @ts-ignore
-                   else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
-                   setGameState('MENU');
-                   resetGame();
-                }}
-                style={{
-                  background: 'rgba(255,68,68,0.15)', border: '1px solid #ff4444', color: '#ff4444',
-                  padding: '8px 16px', borderRadius: 6, cursor: 'pointer',
-                  fontFamily: "'Courier New', monospace", fontSize: 12, fontWeight: 'bold', pointerEvents: 'auto'
-                }}
-             >Sair / Quit</button>
-          </div>
+          <button
+            className="la-quit-btn"
+            onClick={() => {
+              if (document.exitFullscreen) document.exitFullscreen().catch(() => {});
+              // @ts-ignore
+              else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+              setGameState('MENU');
+              resetGame();
+            }}
+            style={{
+              background: 'rgba(255,68,68,0.15)', border: '1px solid #ff4444', color: '#ff4444',
+              padding: '8px 16px', borderRadius: 6, cursor: 'pointer',
+              fontFamily: "'Courier New', monospace", fontSize: 12, fontWeight: 'bold', pointerEvents: 'auto'
+            }}
+          >Sair / Quit</button>
         {/* ── Grid viewport ── */}
-        <div className="la-viewport-outer">
+        <div className="la-game-wrapper">
           {/* ── Header inside the game area ── */}
           <div style={{ textAlign: 'center', marginBottom: 12 }}>
             <p style={{ margin: 0, fontSize: 11, color: '#00d4ff', letterSpacing: 3, textTransform: 'uppercase' }}>
@@ -1312,10 +1322,10 @@ export function LogicAscension({ onGoToMenu }: { onGoToMenu?: () => void } = {})
             </button>
           </div>
         </div>{/* /.la-viewport */}
-        </div>{/* /.la-viewport-outer */}
+        </div>{/* /.la-game-wrapper */}
 
-        {/* ── Sidebar (accordion) — .la-sidebar class hides it in fullscreen ── */}
-        <div className="la-sidebar" style={{ display: 'flex', flexDirection: 'column', gap: 6, width: 270, minWidth: 220, flexShrink: 0 }}>
+        {/* ── Sidebar (accordion) ── */}
+        <div className="la-sidebar">
 
           {/* Status — always visible ───────────────────────────────────────────── */}
           <div style={{
