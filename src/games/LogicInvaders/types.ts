@@ -79,15 +79,15 @@ export type GameStatus = 'idle' | 'playing' | 'paused' | 'saving';
 
 // ─── Voxel Boss ──────────────────────────────────────────────
 
-/** 15 columns × 8 rows grid; true = voxel alive */
+/** Variable-size grid; true = voxel alive */
 export type VoxelGrid = boolean[][];
 
 /**
  * Three logical columns (0 = left, 1 = center, 2 = right).
- * Each spans 5 voxel columns of the 15-column grid.
+ * Each spans `voxelsPerLogicalCol` voxel columns.
  */
 export interface VoxelBossState {
-  /** 8-row × 15-col alive/dead voxel matrix  [row][col] */
+  /** Variable-size alive/dead voxel matrix [row][col] */
   voxels: VoxelGrid;
   /** Live voxel count per logical column (used for per-column HP display) */
   colVoxelCount: [number, number, number];
@@ -102,14 +102,42 @@ export interface VoxelBossState {
   /** Canvas position — centred horizontally, enters from top */
   x: number;
   y: number;
-  /** Total canvas width of the boss sprite */
+  /** Total canvas width of the boss sprite (fixed 420px) */
   width: number;
-  /** Total canvas height of the boss sprite */
+  /** Total canvas height of the boss sprite (fixed 168px) */
   height: number;
   /** 0..1 entry animation progress (1 = fully on screen) */
   entryProgress: number;
   /** Unique ID for the current boss fight */
   id: number;
+  // ── Per-boss design fields (v2) ──────────────────────────
+  /** Which of the 4 boss designs (0–3) this instance uses */
+  bossIndex: number;
+  /** Display name, e.g. "DREADNOUGHT" */
+  bossName: string;
+  /** Three column colors [col0, col1, col2] */
+  palette: [string, string, string];
+  /** Pixel width of one voxel cell (BOSS_W / cols) */
+  voxelW: number;
+  /** Pixel height of one voxel cell (BOSS_H / rows) */
+  voxelH: number;
+  /** Number of voxel rows in this boss's grid */
+  rows: number;
+  /** Number of voxel cols in this boss's grid (divisible by 3) */
+  cols: number;
+  /** Voxel columns per logical column (cols / 3) */
+  voxelsPerLogicalCol: number;
+  /**
+   * Core block grid coordinate [row, col].
+   * Empowered bullets hitting this cell trigger instant defeat.
+   * Standard bullets are deflected.
+   */
+  coreBlock: { row: number; col: number };
+  /**
+   * Total alive voxels at spawn — used to compute the 85% defeat threshold.
+   * Defeat triggers when alive count falls to ≤ 15% of this value.
+   */
+  startingVoxelCount: number;
 }
 
 /** One entry stored in localStorage leaderboard */
