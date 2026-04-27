@@ -107,8 +107,8 @@ def generate_pdf_buffer(
         # Create the exact bounding box drawn on the frontend
         rect = fitz.Rect(x, y, x + width, y + height)
 
-        # Debug: Draw a red bounding box to visually verify coordinate math
-        template_page.draw_rect(rect, color=(1, 0, 0), width=1)
+        # Semi-transparent white background for readability on scanned PDFs
+        template_page.draw_rect(rect, color=None, fill=(1, 1, 1), fill_opacity=0.5)
 
         if field_type == "checkbox":
             if value:
