@@ -222,56 +222,69 @@ export function LogicInvadersGame() {
           aria-label="Logic Invaders — canvas do jogo"
           style={{
             cursor: isPlaying ? 'crosshair' : 'default',
-            touchAction: 'none',      // ← CRITICAL: stops browser swipe-scroll intercepting pointer events
+            touchAction: 'none',      // ← stops browser swipe-scroll intercepting pointer events
             userSelect: 'none',       // ← prevents text-selection drag on mobile
             WebkitUserSelect: 'none', // ← Safari
           }}
         />
+      </div>{/* /.li-canvas-container — overlays are siblings below, NOT inside */}
 
-        {/* IDLE overlay */}
-        {isIdle && !showLeaderboard && (
-          <div className="li-overlay">
-            <div className="li-overlay-box">
-              <div className="li-overlay-eyebrow">HEISS-LAB PROTOTYPE</div>
-              <h2 className="li-overlay-title">
-                <span className="li-glow-cyan">Logic</span>{' '}
-                <span className="li-glow-magenta">Invaders</span>
-              </h2>
-              <p className="li-overlay-sub">
-                Aliens descem com equações matemáticas. Você tem <strong>2 armas</strong>:
-              </p>
-              <div className="li-overlay-mechanic-list">
-                <div className="li-overlay-mechanic">
-                  <span className="li-m-icon">🔫</span>
-                  <span><strong>Bala normal</strong> (Espaço/Segure) — causa 1 de dano. 10 tiros para destruir.</span>
-                </div>
-                <div className="li-overlay-mechanic">
-                  <span className="li-m-icon">🧮</span>
-                  <span><strong>Matar-Math</strong> (Clique na bolha certa) — mata instantâneo + LASER por 5s!</span>
-                </div>
-                <div className="li-overlay-mechanic">
-                  <span className="li-m-icon">🎲</span>
-                  <span><strong>Projéteis inimigos</strong> — aliens atiram modificadores (×2…÷8) que alteram sua pontuação!</span>
-                </div>
+      {/* ══ IDLE OVERLAY ══
+          Anchored to .li-wrapper (position:relative) so overflow:hidden on
+          the canvas container cannot clip this content. z-index:100 floats
+          above HUD, canvas, and LaserBar. touch-action:auto on buttons lets
+          iOS Safari route taps correctly. */}
+      {isIdle && !showLeaderboard && (
+        <div className="li-overlay">
+          <div className="li-overlay-box">
+            <div className="li-overlay-eyebrow">HEISS-LAB PROTOTYPE</div>
+            <h2 className="li-overlay-title">
+              <span className="li-glow-cyan">Logic</span>{' '}
+              <span className="li-glow-magenta">Invaders</span>
+            </h2>
+            <p className="li-overlay-sub">
+              Aliens descem com equações matemáticas. Você tem <strong>2 armas</strong>:
+            </p>
+            <div className="li-overlay-mechanic-list">
+              <div className="li-overlay-mechanic">
+                <span className="li-m-icon">🔫</span>
+                <span><strong>Bala normal</strong> (Espaço/Segure) — causa 1 de dano. 10 tiros para destruir.</span>
               </div>
-              <div className="li-overlay-keys">
-                <span><kbd>A</kbd><kbd>D</kbd> Mover</span>
-                <span><kbd>Espaço</kbd> Atirar (segure)</span>
-                <span>📱 Segure e deslize</span>
-                <span>🖱️ Clique nas bolhas</span>
+              <div className="li-overlay-mechanic">
+                <span className="li-m-icon">🧮</span>
+                <span><strong>Matar-Math</strong> (Clique na bolha certa) — mata instantâneo + LASER por 5s!</span>
               </div>
-              <div className="li-overlay-action-row">
-                <button id="li-start-btn" className="li-start-btn" onClick={startGame}>
-                  ▶ INICIAR JOGO
-                </button>
-                <button className="li-lb-open-btn" onClick={handleViewLeaderboard}>
-                  🏆 Ver Placar
-                </button>
+              <div className="li-overlay-mechanic">
+                <span className="li-m-icon">🎲</span>
+                <span><strong>Projéteis inimigos</strong> — aliens atiram modificadores (×2…÷8) que alteram sua pontuação!</span>
               </div>
             </div>
+            <div className="li-overlay-keys">
+              <span><kbd>A</kbd><kbd>D</kbd> Mover</span>
+              <span><kbd>Espaço</kbd> Atirar (segure)</span>
+              <span>📱 Segure e deslize</span>
+              <span>🖱️ Clique nas bolhas</span>
+            </div>
+            <div className="li-overlay-action-row">
+              <button
+                id="li-start-btn"
+                className="li-start-btn"
+                onClick={startGame}
+                style={{ touchAction: 'auto', pointerEvents: 'auto' }}
+              >
+                ▶ INICIAR JOGO
+              </button>
+              <button
+                className="li-lb-open-btn"
+                onClick={handleViewLeaderboard}
+                style={{ touchAction: 'auto', pointerEvents: 'auto' }}
+              >
+                🏆 Ver Placar
+              </button>
+            </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* ── Laser bar ── */}
       <LaserBar ratio={laserRatio} />
@@ -321,10 +334,19 @@ export function LogicInvadersGame() {
             />
 
             <div className="li-save-actions">
-              <button className="li-start-btn" onClick={handleSaveScore} id="li-save-score-btn">
+              <button
+                className="li-start-btn"
+                onClick={handleSaveScore}
+                id="li-save-score-btn"
+                style={{ touchAction: 'auto', pointerEvents: 'auto' }}
+              >
                 💾 Salvar no Placar
               </button>
-              <button className="li-ghost-btn" onClick={handleCancelSave}>
+              <button
+                className="li-ghost-btn"
+                onClick={handleCancelSave}
+                style={{ touchAction: 'auto', pointerEvents: 'auto' }}
+              >
                 ← Continuar Jogando
               </button>
             </div>
@@ -352,10 +374,19 @@ export function LogicInvadersGame() {
             <LeaderboardTable entries={leaderboard} />
 
             <div className="li-save-actions" style={{ marginTop: '1.5rem' }}>
-              <button className="li-start-btn" onClick={handleNewGame} id="li-new-game-btn">
+              <button
+                className="li-start-btn"
+                onClick={handleNewGame}
+                id="li-new-game-btn"
+                style={{ touchAction: 'auto', pointerEvents: 'auto' }}
+              >
                 🔄 Novo Jogo
               </button>
-              <button className="li-ghost-btn" onClick={handleCloseLeaderboard}>
+              <button
+                className="li-ghost-btn"
+                onClick={handleCloseLeaderboard}
+                style={{ touchAction: 'auto', pointerEvents: 'auto' }}
+              >
                 ✕ Fechar
               </button>
             </div>

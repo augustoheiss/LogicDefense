@@ -540,6 +540,8 @@
   max-width: 100%;
   box-sizing: border-box;
   overflow-x: hidden;
+  /* ── Overlays anchor here (not to .li-canvas-container) ── */
+  position: relative;
 }
 
 /* ── HUD bar ── */
@@ -593,35 +595,46 @@
 }
 
 /* ── Canvas container ── */
+/* aspect-ratio maintains correct proportions when width shrinks on mobile.
+   No overflow:hidden here — overlays are now siblings at the .li-wrapper level. */
 .li-canvas-container {
   position: relative;
   width: 100%;
   max-width: 700px;
+  aspect-ratio: 700 / 540;
   line-height: 0;
   border-radius: 0 0 12px 12px;
-  overflow: hidden;
 }
 
+/* object-fit: contain scales the canvas graphics like an image.
+   The internal 700×540 coordinate system is untouched;
+   CSS handles the visual scaling. touch-action is set inline in JSX. */
 #li-canvas {
   display: block;
   width: 100%;
-  height: auto;
-  /* height: auto ensures correct aspect ratio — do NOT add max-height
-     here as it would squish the canvas without adjusting width. */
+  height: 100%;
+  object-fit: contain;
   cursor: crosshair;
 }
 #li-canvas:focus { outline: none; }
 
 /* ── Overlays ── */
+/* Overlays cover the ENTIRE .li-wrapper (position:relative), not just the canvas
+   container. This prevents overflow:hidden on any inner div from clipping them.
+   z-index:100 ensures they sit above HUD, canvas, and all other children.
+   pointer-events:auto is the default but stated explicitly for clarity.
+   backdrop-filter is removed — it creates a compositing layer that can
+   cause touch event routing bugs on iOS Safari. */
 .li-overlay {
   position: absolute;
   inset: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(7,7,20,0.88);
-  backdrop-filter: blur(4px);
-  z-index: 10;
+  background: rgba(7, 7, 20, 0.93);
+  z-index: 100;
+  pointer-events: auto;
+  touch-action: auto;
 }
 
 .li-overlay-box {

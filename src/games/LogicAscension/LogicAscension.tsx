@@ -69,7 +69,9 @@ const GAME_STYLES = `
   100% { transform: scale(1);    color: #ffd700; }
 }
 
-/* ── Responsive layout ── */
+/* ── Responsive main layout ──────────────────────────────────────────────────
+   On wide screens: viewport + sidebar side-by-side.
+   On narrow screens (<= 800px): stack vertically. */
 .la-main-layout {
   display: flex;
   gap: 20px;
@@ -79,30 +81,41 @@ const GAME_STYLES = `
   width: 100%;
 }
 
-/* ── Viewport container: clips the fixed-px game grid ── */
-.la-viewport {
+/* ── Two-wrapper responsive viewport system ──────────────────────────────────
+   VIEWPORT_W = 736px (square game grid, fixed pixel coordinates).
+   We cannot change the inner pixel dimensions — coordinate math depends on them.
+   Solution: outer wrapper clips at the visible (scaled) size; inner div
+   scales proportionally using CSS min() — no JavaScript needed.
+
+   How it works:
+   1. .la-viewport-outer  — the clip window.
+      width = height = min(736px, 100vw - 32px)
+      overflow: hidden clips any unscaled overflow.
+   2. .la-viewport        — always 736×736, scaled down on small screens.
+      transform: scale(min(1, (100vw - 32px) / 736))
+      transform-origin: top left aligns scale with the clip window. */
+
+.la-viewport-outer {
   flex-shrink: 0;
-  /* transform-origin top-left so it scales within the flow */
-  transform-origin: top left;
+  overflow: hidden;
+  /* Visual size = scaled size */
+  width:  min(736px, calc(100vw - 32px));
+  height: min(736px, calc(100vw - 32px));
 }
 
-/* ── Mobile: scale the viewport down to fit the screen ──
-   736px is VIEWPORT_W. At 390px screen with 32px padding the
-   available width is 358px → scale = 358/736 ≈ 0.487.
-   We use vw-based calc() so it adapts to any device width.   */
+.la-viewport {
+  /* Always natural size — clip window handles overflow */
+  width:  736px;
+  height: 736px;
+  transform-origin: top left;
+  /* scale = min(100%, available-px / 736). Pure CSS. */
+  transform: scale(min(1, calc((100vw - 32px) / 736)));
+}
+
 @media (max-width: 800px) {
   .la-main-layout {
     flex-direction: column;
     align-items: center;
-  }
-  .la-viewport {
-    /* scale = (100vw - 32px) / 736px */
-    --la-vp-scale: calc((100vw - 32px) / 736);
-    transform: scale(var(--la-vp-scale));
-    /* After scale the div still occupies its natural 736×736 space in the DOM.
-       Use negative margin to collapse that dead space so the sidebar follows tightly. */
-    margin-bottom: calc((var(--la-vp-scale) - 1) * 736px);
-    margin-right:  calc((var(--la-vp-scale) - 1) * 736px);
   }
 }
 `;
@@ -1096,7 +1109,8 @@ export function LogicAscension({ onGoToMenu }: { onGoToMenu?: () => void } = {})
       {/* ── Main layout — CSS class drives responsive flex-direction ── */}
       <div className="la-main-layout">
 
-        {/* ── Grid viewport — .la-viewport handles CSS scale on mobile ── */}
+        {/* ── Grid viewport — .la-viewport-outer clips, .la-viewport scales ── */}
+        <div className="la-viewport-outer">
         <div className="la-viewport">
 
           {/* Fixed clipping window — overflow:hidden hides everything outside */}
@@ -1222,7 +1236,8 @@ export function LogicAscension({ onGoToMenu }: { onGoToMenu?: () => void } = {})
               ↺ Novo Mapa
             </button>
           </div>
-        </div>
+        </div>{/* /.la-viewport */}
+        </div>{/* /.la-viewport-outer */}
 
         {/* ── Sidebar (accordion) ── */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6, width: 270, minWidth: 220, flexShrink: 0 }}>
