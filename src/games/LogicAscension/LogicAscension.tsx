@@ -1215,7 +1215,7 @@ export function LogicAscension({ onGoToMenu }: { onGoToMenu?: () => void } = {})
             </h1>
           </div>
 
-        <div className="la-viewport" ref={viewportRef}>
+        <div className="la-viewport">
 
           {/* Fixed clipping window — overflow:hidden hides everything outside */}
           {/* Pointer events implement an invisible virtual joystick:
