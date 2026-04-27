@@ -115,6 +115,28 @@ const GAME_STYLES = `
   box-shadow: 0 0 40px rgba(0,0,0,0.8);
 }
 
+/* 3a. Camera anchor — sits exactly at the viewport's center point via CSS.
+   width/height are 0 so it has no layout footprint; overflow:visible lets
+   the grid container spill out in all directions. */
+.la-camera-anchor {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  overflow: visible;
+}
+
+/* 3b. Grid container — absolutely positioned children share one coordinate
+   system. The camera transform shifts this div so the player tile lands
+   exactly on the anchor origin (= the viewport's visual center). */
+.la-grid-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  will-change: transform;
+}
+
 /* 4. Sidebar */
 .la-sidebar {
   flex: 0 0 320px;
@@ -218,15 +240,13 @@ const CELL = 80;   // large tiles — viewport camera handles clipping
 const GAP  = 2;
 
 
-// ── Pure camera helper — module-level so it is hoisted before any useEffect runs ──
-// viewportW / viewportH are the MEASURED pixel dimensions of .la-viewport.
-// Using pixel values (not %) ensures the camera centers on the viewport,
-// not on the camera layer itself (which is the full map grid, much larger).
-function getCamTransform(row: number, col: number, viewportW: number, viewportH: number): string {
-  const playerPixelX = col * (CELL + GAP);
-  const playerPixelY = row * (CELL + GAP);
-  const tx = viewportW / 2 - playerPixelX - CELL / 2;
-  const ty = viewportH / 2 - playerPixelY - CELL / 2;
+// ── Pure camera helper — module-level, no viewport measurement needed ──
+// .la-camera-anchor is already CSS-centered at 50%/50% of the viewport.
+// This function only needs to pull the grid back so the player tile sits
+// exactly under the anchor's origin point.
+function getCamTransform(row: number, col: number): string {
+  const tx = -(col * (CELL + GAP) + CELL / 2);
+  const ty = -(row * (CELL + GAP) + CELL / 2);
   return `translate(${tx}px, ${ty}px)`;
 }
 
@@ -1028,8 +1048,7 @@ export function LogicAscension({ onGoToMenu }: { onGoToMenu?: () => void } = {})
             const t = gridRef.current?.[nr]?.[nc];
             const walkable = t && t.type !== 'WALL' && t.type !== 'FOG';
             if (walkable) {
-              const { w, h } = viewportSizeRef.current;
-              camLayerRef.current.style.transform = getCamTransform(nr, nc, w, h);
+              camLayerRef.current.style.transform = getCamTransform(nr, nc);
             }
           }
         }
@@ -1121,46 +1140,13 @@ export function LogicAscension({ onGoToMenu }: { onGoToMenu?: () => void } = {})
   const bossTile = grid[BOSS_SPAWN.row]?.[BOSS_SPAWN.col];
   const bossLevel = bossTile?.type === 'BOSS' ? bossTile.level : undefined;
 
-  // Player sprite overlay: always centered in viewport (camTx + col*(CELL+GAP) = VIEWPORT_W/2 - CELL/2)
-  // It never moves — only the camera grid beneath it slides.
-  const playerSpriteRef = useRef<HTMLDivElement>(null);
   // Camera grid layer ref — mutated directly in keydown for zero-latency visual feedback
-  const camLayerRef     = useRef<HTMLDivElement>(null);
+  const camLayerRef = useRef<HTMLDivElement>(null);
   // Outermost game wrapper — target for requestFullscreen()
-  const wrapperRef      = useRef<HTMLDivElement>(null);
-  // Viewport element ref — used by ResizeObserver to get actual pixel dimensions.
-  const viewportRef     = useRef<HTMLDivElement>(null);
+  const wrapperRef  = useRef<HTMLDivElement>(null);
 
-  // Measured viewport pixel dimensions — updated by ResizeObserver on mount & resize.
-  // Default to a reasonable fallback so initial render is close before first measure.
-  const [viewportSize, setViewportSize] = useState<{ w: number; h: number }>({ w: 400, h: 400 });
-  const viewportSizeRef = useRef(viewportSize);
-  viewportSizeRef.current = viewportSize;
-
-  // ResizeObserver — keeps viewportSize in sync with the actual CSS-rendered .la-viewport box.
-  useEffect(() => {
-    const el = viewportRef.current;
-    if (!el) return;
-    const ro = new ResizeObserver(entries => {
-      const entry = entries[0];
-      if (!entry) return;
-      const { width, height } = entry.contentRect;
-      setViewportSize(prev =>
-        prev.w === width && prev.h === height ? prev : { w: width, h: height }
-      );
-    });
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
-
-  // Camera offsets — computed from player pixel position so the player tile is always centered.
-  // Uses measured viewport pixel dims so the reference frame matches the player sprite's 50% anchor.
-  const camTransform = getCamTransform(
-    playerPos?.row ?? 0,
-    playerPos?.col ?? 0,
-    viewportSize.w,
-    viewportSize.h,
-  );
+  // Camera transform — local coords only; .la-camera-anchor provides the 50%/50% viewport center.
+  const camTransform = getCamTransform(playerPos?.row ?? 0, playerPos?.col ?? 0);
 
 
 
@@ -1273,57 +1259,57 @@ export function LogicAscension({ onGoToMenu }: { onGoToMenu?: () => void } = {})
             backgroundPosition: 'center',
           }}>
 
-            {/* Camera layer — NO transition = instant snap on keydown DOM write */}
-            <div
-              ref={camLayerRef}
-              style={{
-                position:   'absolute',
-                top:        0,
-                left:       0,
-                zIndex:     0,
-                transform:  camTransform,
-                willChange: 'transform',
-                display:             'grid',
-                gridTemplateColumns: `repeat(${GRID_COLS}, ${CELL}px)`,
-                gap:                 GAP,
-              }}>
-              {grid.map((row, ri) =>
-                row.map((tile, ci) => (
-                  // Key is stable per tile position — React.memo(CellContent) skips
-                  // re-renders unless tile data changed. Player position does NOT
-                  // affect any tile prop here → zero cell re-renders on player move.
-                  <div
-                    key={`${ri}-${ci}`}
-                    style={cellStyle(tile)}
-                  >
-                    <CellContent tile={tile} />
-                  </div>
-                ))
-              )}
-            </div>
+            {/* CSS anchor — natively centered at viewport 50%/50%. No JS measurement needed. */}
+            <div className="la-camera-anchor">
 
-            {/* Player sprite overlay — ALWAYS centered in viewport via CSS 50% */}
-            <div
-              ref={playerSpriteRef}
-              style={{
-                position:   'absolute',
-                top:        '50%',
-                left:       '50%',
-                zIndex:     2,
-                width:      CELL,
-                height:     CELL,
-                transform:  'translate(-50%, -50%)',
-                display:        'flex',
-                alignItems:     'center',
-                justifyContent: 'center',
-                pointerEvents:  'none',
-                borderRadius:   6,
-                border:         '2px solid #00ff00',
-                background:     'rgba(0,26,0,0.80)',
-                boxShadow:      'inset 0 0 16px rgba(0,255,0,0.45), 0 0 14px rgba(0,255,0,0.6)',
-              }}
-            >
-              <span style={{ fontSize: 36, filter: 'drop-shadow(0 2px 6px rgba(0,0,0,0.95))' }}>👾</span>
+              {/* Grid container — camera transform shifts it so the player tile
+                  lands exactly on the anchor origin. Player rendered inside as
+                  a regular absolute-positioned child, sharing local coords. */}
+              <div
+                ref={camLayerRef}
+                className="la-grid-container"
+                style={{ transform: camTransform }}
+              >
+                {/* Map tiles */}
+                {grid.map((row, ri) =>
+                  row.map((tile, ci) => (
+                    <div
+                      key={`${ri}-${ci}`}
+                      style={{
+                        ...cellStyle(tile),
+                        position: 'absolute',
+                        left:     ci * (CELL + GAP),
+                        top:      ri * (CELL + GAP),
+                      }}
+                    >
+                      <CellContent tile={tile} />
+                    </div>
+                  ))
+                )}
+
+                {/* Player — same coordinate system as tiles, pixel-perfect alignment */}
+                <div
+                  style={{
+                    position:       'absolute',
+                    left:           (playerPos?.col ?? 0) * (CELL + GAP),
+                    top:            (playerPos?.row ?? 0) * (CELL + GAP),
+                    width:          CELL,
+                    height:         CELL,
+                    zIndex:         2,
+                    display:        'flex',
+                    alignItems:     'center',
+                    justifyContent: 'center',
+                    pointerEvents:  'none',
+                    borderRadius:   6,
+                    border:         '2px solid #00ff00',
+                    background:     'rgba(0,26,0,0.80)',
+                    boxShadow:      'inset 0 0 16px rgba(0,255,0,0.45), 0 0 14px rgba(0,255,0,0.6)',
+                  }}
+                >
+                  <span style={{ fontSize: 36, filter: 'drop-shadow(0 2px 6px rgba(0,0,0,0.95))' }}>👾</span>
+                </div>
+
+              </div>
             </div>
 
             {/* Vignette overlay — darkens edges so entities/text stay legible on bright biome art */}
