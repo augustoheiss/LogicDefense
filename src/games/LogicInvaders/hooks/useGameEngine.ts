@@ -1434,9 +1434,19 @@ export function useGameEngine(
 
     function toCanvasPoint(clientX: number, clientY: number): { cx: number; cy: number } {
       const rect = canvas!.getBoundingClientRect();
+      // The internal canvas buffer may be scaled by DPR (set at init time, capped at 2).
+      // canvas.width / dpr gives the logical resolution the game loop draws in.
+      // rect.width/height is the actual CSS display size (after CSS letterboxing).
+      // Dividing (clientXY - rect.origin) by rect.size and multiplying by logical
+      // resolution maps any screen coordinate — including letterboxed fullscreen — to
+      // the exact same coordinate system the game uses.
+      const isMobile = window.matchMedia('(max-width: 768px)').matches || /Mobi|Android/i.test(navigator.userAgent);
+      const dpr = isMobile ? 1 : Math.min(window.devicePixelRatio || 1, 2);
+      const logicalW = canvas!.width  / dpr;
+      const logicalH = canvas!.height / dpr;
       return {
-        cx: (clientX - rect.left) * (CANVAS_W / rect.width),
-        cy: (clientY - rect.top) * (CANVAS_H / rect.height),
+        cx: (clientX - rect.left)  * (logicalW / rect.width),
+        cy: (clientY - rect.top)   * (logicalH / rect.height),
       };
     }
 
