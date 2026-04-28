@@ -140,6 +140,7 @@ const GAME_STYLES = `
 /* 4. Sidebar */
 .la-sidebar {
   flex: 0 0 320px;
+  max-width: 100%;
   max-height: 85vh;
   overflow-y: auto;
   background: rgba(0, 0, 0, 0.4);
@@ -172,47 +173,52 @@ const GAME_STYLES = `
   }
 }
 
-/* Fullscreen */
+/* Fullscreen — allow wrapping so tablet/mobile can stack sidebar below the map */
 .la-main-layout:fullscreen {
-  flex-wrap: nowrap;
-  align-items: center;
+  flex-wrap: wrap;
+  align-items: flex-start;
   height: 100vh;
   width: 100vw;
-  padding: 2rem;
-  gap: 2rem;
+  padding: 1.5rem;
+  gap: 1.5rem;
+  overflow-y: auto;
+  overflow-x: hidden;
   background-color: #070810;
 }
 .la-main-layout:-webkit-full-screen {
-  flex-wrap: nowrap;
-  align-items: center;
+  flex-wrap: wrap;
+  align-items: flex-start;
   height: 100vh;
   width: 100vw;
-  padding: 2rem;
-  gap: 2rem;
+  padding: 1.5rem;
+  gap: 1.5rem;
+  overflow-y: auto;
+  overflow-x: hidden;
   background-color: #070810;
 }
 
-/* Mobile fullscreen: stack */
+/* Mobile fullscreen: tighter padding */
 @media (max-width: 800px) {
   .la-main-layout:fullscreen,
   .la-main-layout:-webkit-full-screen {
-    flex-direction: column;
+    padding: 1rem;
+    gap: 1rem;
     align-items: center;
   }
 }
 
-/* Sidebar in fullscreen */
+/* Sidebar in fullscreen — uncap height, fill available width on narrow screens */
 .la-main-layout:fullscreen .la-sidebar,
 .la-main-layout:-webkit-full-screen .la-sidebar {
-  max-height: 100%;
+  max-height: none;
   overflow-y: auto;
 }
 
-/* Viewport expands in fullscreen */
+/* Viewport in fullscreen — square but constrained to breathing-room dims */
 .la-main-layout:fullscreen .la-viewport,
 .la-main-layout:-webkit-full-screen .la-viewport {
-  max-height: 90vh;
-  max-width: 90vh;
+  max-width: 100%;
+  max-height: 85vh;
 }
 `;
 
