@@ -835,6 +835,44 @@ kbd {
   margin: 0;
 }
 
+/* ── External Play Button ──
+   Sits below the canvas in the normal document flow — always reachable
+   on small phones regardless of overlay clipping.
+   min-height 56px meets WCAG touch-target guidelines for thumb use.
+   Hidden once the game is active (conditional rendering in JSX). */
+.li-external-play-btn {
+  display: block;
+  width: 100%;
+  max-width: 700px;          /* matches the canvas max-width */
+  min-height: 56px;          /* WCAG-friendly thumb target */
+  margin: 12px auto 0;
+  padding: 16px 32px;
+  font-family: var(--li-mono);
+  font-size: clamp(15px, 4vw, 18px);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: #000;
+  background: linear-gradient(135deg, var(--li-cyan) 0%, #0088cc 100%);
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  box-shadow: 0 0 28px rgba(0,212,255,0.5), 0 4px 16px rgba(0,0,0,0.4);
+  transition: transform 0.15s, box-shadow 0.15s;
+  animation: li-play-pulse 2.4s ease-in-out infinite;
+}
+.li-external-play-btn:hover {
+  transform: translateY(-2px) scale(1.02);
+  box-shadow: 0 0 44px rgba(0,212,255,0.75), 0 6px 20px rgba(0,0,0,0.5);
+}
+.li-external-play-btn:active {
+  transform: scale(0.97);
+}
+
+@keyframes li-play-pulse {
+  0%, 100% { box-shadow: 0 0 28px rgba(0,212,255,0.5), 0 4px 16px rgba(0,0,0,0.4); }
+  50%       { box-shadow: 0 0 52px rgba(0,212,255,0.85), 0 4px 20px rgba(0,0,0,0.4); }
+}
+
 /* ── Idle overlay mechanic list ── */
 .li-overlay-mechanic-list {
   display: flex;

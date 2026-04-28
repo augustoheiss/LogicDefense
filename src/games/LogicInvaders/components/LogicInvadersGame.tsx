@@ -305,6 +305,25 @@ export function LogicInvadersGame() {
       {/* ── Laser bar ── */}
       <LaserBar ratio={laserRatio} />
 
+      {/* ── External Play Button (mobile-first CTA, lives OUTSIDE the canvas) ──
+          The in-canvas idle overlay can be hard to tap on small phones because
+          it is position:absolute and may be partially clipped by the wrapper.
+          This button is a plain HTML sibling — always in the normal document
+          flow, easy to tap, disappears the instant the game starts.          */}
+      {isIdle && !showLeaderboard && !showSaveOverlay && (
+        <button
+          id="li-external-play-btn"
+          className="li-external-play-btn"
+          onClick={() => {
+            if (wrapperRef.current) requestFullScreen(wrapperRef.current);
+            startGame();
+          }}
+          style={{ touchAction: 'auto', pointerEvents: 'auto' }}
+        >
+          ▶ Jogar em Tela Cheia
+        </button>
+      )}
+
       {/* ── Mobile hint ── */}
       {isPlaying && (
         <p className="li-mobile-hint" style={{ textAlign: 'center', marginTop: 8 }}>
