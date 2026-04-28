@@ -540,6 +540,8 @@
   max-width: 100%;
   box-sizing: border-box;
   overflow-x: hidden;
+  /* ── Touch: prevent browser scroll/gesture hijacking ── */
+  touch-action: none;
   /* ── Overlays anchor here (not to .li-canvas-container) ── */
   position: relative;
 }
@@ -1124,11 +1126,13 @@ kbd {
   padding: 0;
   display: flex;
   flex-direction: column;
+  align-items: center;
   height: 100vh;
   width: 100vw;
   justify-content: flex-start;
   background-color: black !important;
   overflow: hidden;
+  touch-action: none;            /* keep pointer events away from browser gestures */
   position: fixed;
   inset: 0;
 }
@@ -1136,11 +1140,13 @@ kbd {
   padding: 0;
   display: flex;
   flex-direction: column;
+  align-items: center;
   height: 100vh;
   width: 100vw;
   justify-content: flex-start;
   background-color: black !important;
   overflow: hidden;
+  touch-action: none;
   position: fixed;
   inset: 0;
 }
@@ -1152,6 +1158,7 @@ kbd {
   border-radius: 0;
   background: rgba(0, 0, 0, 0.80);
   border-bottom: 1px solid rgba(0,212,255,0.2);
+  flex-shrink: 0;
 }
 .li-wrapper:-webkit-full-screen .li-hud {
   max-width: none;
@@ -1159,57 +1166,75 @@ kbd {
   border-radius: 0;
   background: rgba(0, 0, 0, 0.80);
   border-bottom: 1px solid rgba(0,212,255,0.2);
+  flex-shrink: 0;
 }
 
-/* Canvas container fills all remaining height */
+/* Canvas container — height-first layout for letterboxing.
+   Fills all remaining height after the HUD; width is capped by the
+   game's native aspect ratio (700:540 ≈ 1.296) so the canvas never
+   overflows horizontally OR vertically, regardless of orientation. */
 .li-wrapper:fullscreen .li-canvas-container {
   flex: 1;
-  width: 100vw;
-  max-width: none;
+  min-height: 0;              /* allow shrinking inside the flex column */
+  width: 100%;
+  max-width: calc((100vh - 50px) * (700 / 540)); /* cap width by height × aspect */
+  height: 100%;               /* fill remaining flex space */
   aspect-ratio: auto;
   border-radius: 0;
   display: flex;
   align-items: center;
   justify-content: center;
   background-color: black !important;
+  overflow: hidden;
 }
 .li-wrapper:-webkit-full-screen .li-canvas-container {
   flex: 1;
-  width: 100vw;
-  max-width: none;
+  min-height: 0;
+  width: 100%;
+  max-width: calc((100vh - 50px) * (700 / 540));
+  height: 100%;
   aspect-ratio: auto;
   border-radius: 0;
   display: flex;
   align-items: center;
   justify-content: center;
   background-color: black !important;
+  overflow: hidden;
 }
 
-/* Canvas fills container, letterboxes with object-fit: contain */
+/* Canvas inside fullscreen container.
+   height:100% + width:auto + object-fit:contain = letterbox on all orientations:
+   - Landscape: canvas fills container height; black bars appear left/right.
+   - Portrait : canvas fills container width;  black bars appear top/bottom. */
 .li-wrapper:fullscreen #li-canvas {
-  width: 100% !important;
-  flex: 1;
-  min-height: 0;
-  max-height: 100%;
+  display: block;
+  height: 100% !important;
+  width: auto !important;
+  max-width: 100%;
   object-fit: contain !important;
   background-color: black !important;
   cursor: crosshair;
+  touch-action: none;
 }
 .li-wrapper:-webkit-full-screen #li-canvas {
-  width: 100% !important;
-  flex: 1;
-  min-height: 0;
-  max-height: 100%;
+  display: block;
+  height: 100% !important;
+  width: auto !important;
+  max-width: 100%;
   object-fit: contain !important;
   background-color: black !important;
   cursor: crosshair;
+  touch-action: none;
 }
 
 /* Overlays use fixed positioning in fullscreen so they anchor to
-   the screen itself, not the wrapper's flex layout */
+   the screen itself, not the wrapper's flex layout.
+   touch-action:auto lets button taps through on mobile. */
 .li-wrapper:fullscreen .li-overlay {
   position: fixed;
+  touch-action: auto;
 }
 .li-wrapper:-webkit-full-screen .li-overlay {
   position: fixed;
+  touch-action: auto;
 }
