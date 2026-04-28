@@ -836,41 +836,46 @@ kbd {
 }
 
 /* ── External Play Button ──
-   Sits below the canvas in the normal document flow — always reachable
-   on small phones regardless of overlay clipping.
-   min-height 56px meets WCAG touch-target guidelines for thumb use.
-   Hidden once the game is active (conditional rendering in JSX). */
+   position:absolute anchors it to .li-wrapper (position:relative).
+   This takes it OUT of normal document flow, so it is never clipped by
+   any ancestor's overflow:hidden (e.g., .li-game-wrapper).
+   z-index:200 floats it above the idle overlay (z-index:100).
+   Docked to the bottom of the canvas area so it doesn't cover the game
+   title / mechanics list in the overlay's upper half.
+   Hidden automatically when isIdle becomes false (JSX condition). */
 .li-external-play-btn {
-  display: block;
-  width: 100%;
-  max-width: 700px;          /* matches the canvas max-width */
-  min-height: 56px;          /* WCAG-friendly thumb target */
-  margin: 12px auto 0;
-  padding: 16px 32px;
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 200;
+  white-space: nowrap;
+  min-height: 56px;          /* WCAG 2.5.8 touch target */
+  padding: 16px 36px;
   font-family: var(--li-mono);
   font-size: clamp(15px, 4vw, 18px);
   font-weight: 700;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.08em;
   color: #000;
   background: linear-gradient(135deg, var(--li-cyan) 0%, #0088cc 100%);
   border: none;
   border-radius: 10px;
   cursor: pointer;
-  box-shadow: 0 0 28px rgba(0,212,255,0.5), 0 4px 16px rgba(0,0,0,0.4);
+  box-shadow: 0 0 28px rgba(0,212,255,0.6), 0 4px 16px rgba(0,0,0,0.5);
   transition: transform 0.15s, box-shadow 0.15s;
   animation: li-play-pulse 2.4s ease-in-out infinite;
 }
 .li-external-play-btn:hover {
-  transform: translateY(-2px) scale(1.02);
-  box-shadow: 0 0 44px rgba(0,212,255,0.75), 0 6px 20px rgba(0,0,0,0.5);
+  transform: translateX(-50%) translateY(-2px) scale(1.03);
+  box-shadow: 0 0 48px rgba(0,212,255,0.85), 0 6px 20px rgba(0,0,0,0.5);
 }
 .li-external-play-btn:active {
-  transform: scale(0.97);
+  transform: translateX(-50%) scale(0.97);
 }
 
 @keyframes li-play-pulse {
-  0%, 100% { box-shadow: 0 0 28px rgba(0,212,255,0.5), 0 4px 16px rgba(0,0,0,0.4); }
-  50%       { box-shadow: 0 0 52px rgba(0,212,255,0.85), 0 4px 20px rgba(0,0,0,0.4); }
+  0%, 100% { box-shadow: 0 0 28px rgba(0,212,255,0.6), 0 4px 16px rgba(0,0,0,0.5); }
+  50%       { box-shadow: 0 0 56px rgba(0,212,255,0.9), 0 4px 20px rgba(0,0,0,0.5); }
 }
 
 /* ── Idle overlay mechanic list ── */
