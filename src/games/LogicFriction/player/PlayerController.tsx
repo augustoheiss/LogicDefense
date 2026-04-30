@@ -30,6 +30,7 @@ import {
   CAMERA_LERP,
   BUFF_DAMAGE_MULT,
   BUFF_COOLDOWN_MULT,
+  ARENA_RADIUS,
 } from '../config/constants'
 
 // ── Player Component ────────────────────────────────────────────────────────────
@@ -90,6 +91,22 @@ export function PlayerController() {
     } else {
       const currentVel = rb.linvel()
       rb.setLinvel({ x: 0, y: currentVel.y, z: 0 }, true)
+    }
+
+    // ── Arena Leash (radial clamp — no physics walls needed) ──
+    const LEASH = ARENA_RADIUS - PLAYER_RADIUS - 0.5  // small margin
+    const dist = Math.sqrt(pos.x * pos.x + pos.z * pos.z)
+    if (dist > LEASH) {
+      const scale = LEASH / dist
+      rb.setTranslation({ x: pos.x * scale, y: pos.y, z: pos.z * scale }, true)
+      // Zero out the outward velocity component to prevent jitter
+      const vel = rb.linvel()
+      const nx = pos.x / dist  // radial unit normal
+      const nz = pos.z / dist
+      const radialSpeed = vel.x * nx + vel.z * nz  // dot product
+      if (radialSpeed > 0) {
+        rb.setLinvel({ x: vel.x - radialSpeed * nx, y: vel.y, z: vel.z - radialSpeed * nz }, true)
+      }
     }
 
     // ── Attack (Spacebar) — with buff multipliers ──
