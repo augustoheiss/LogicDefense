@@ -40,7 +40,7 @@ export default function LogicFriction() {
 
   const onCreated = useCallback((state: { gl: THREE.WebGLRenderer }) => {
     state.gl.shadowMap.enabled = true
-    state.gl.shadowMap.type = THREE.PCFSoftShadowMap
+    state.gl.shadowMap.type = THREE.BasicShadowMap  // Cheapest — prevents fullscreen lag
     state.gl.toneMapping = THREE.ACESFilmicToneMapping
     state.gl.toneMappingExposure = 1.0
   }, [])
@@ -96,14 +96,8 @@ export default function LogicFriction() {
         <color attach="background" args={['#04040e']} />
         <fog attach="fog" args={['#04040e', 60, 120]} />
 
-        {/* 360° Camera — mouse drag (PC) / finger drag (mobile) */}
-        <OrbitControls
-          makeDefault
-          enablePan={false}
-          maxPolarAngle={Math.PI / 2.2}
-          minDistance={10}
-          maxDistance={40}
-        />
+        {/* 360° Camera — rotation gated by Settings toggle */}
+        <CameraRig />
 
         <Physics gravity={[0, -30, 0]} timeStep="vary">
           <Lighting />
@@ -146,6 +140,21 @@ export default function LogicFriction() {
         }
       `}</style>
     </div>
+  )
+}
+
+// ── Camera Rig (OrbitControls with Settings toggle) ──────────────────────────
+function CameraRig() {
+  const isCameraFree = useGameStore(s => s.isCameraFree)
+  return (
+    <OrbitControls
+      makeDefault
+      enablePan={false}
+      enableRotate={isCameraFree}
+      maxPolarAngle={Math.PI / 2.2}
+      minDistance={10}
+      maxDistance={40}
+    />
   )
 }
 

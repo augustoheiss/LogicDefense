@@ -12,7 +12,7 @@
 // ============================================================
 import { useRef, useEffect, useState, useMemo } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
-import { Text } from '@react-three/drei'
+import { Text, Billboard } from '@react-three/drei'
 import * as THREE from 'three'
 import { useGameStore } from '../state/useGameStore'
 import {
@@ -168,45 +168,47 @@ export function ConstructionSite({ id, position, type }: ConstructionSiteProps) 
       {/* ── Floating 3D Text: Cost + Timer (vertical bob via ref) ──
           SAFE: No <RigidBody> exists in this component. */}
       <group ref={textGroupRef} position={[0, SITE_SIZE * 2.5, 0]}>
-        {/* Cost */}
-        <Text
-          position={[0, 0, 0]}
-          fontSize={1}
-          color={bpColor}
-          anchorX="center"
-          anchorY="middle"
-          outlineWidth={0.05}
-          outlineColor="#000000"
-        >
-          {`$${bpCost}`}
-          <meshBasicMaterial
-            attach="material"
+        <Billboard>
+          {/* Cost */}
+          <Text
+            position={[0, 0, 0]}
+            fontSize={1}
             color={bpColor}
-            depthTest={false}
-            transparent
-            toneMapped={false}
-          />
-        </Text>
+            anchorX="center"
+            anchorY="middle"
+            outlineWidth={0.05}
+            outlineColor="#000000"
+          >
+            {`$${bpCost}`}
+            <meshBasicMaterial
+              attach="material"
+              color={bpColor}
+              depthTest={false}
+              transparent
+              toneMapped={false}
+            />
+          </Text>
 
-        {/* Timer */}
-        <Text
-          position={[0, -1.2, 0]}
-          fontSize={0.6}
-          color={secondsLeft <= 5 ? '#ff4444' : '#94a3b8'}
-          anchorX="center"
-          anchorY="middle"
-          outlineWidth={0.03}
-          outlineColor="#000000"
-        >
-          {`⏱ ${secondsLeft}s`}
-          <meshBasicMaterial
-            attach="material"
+          {/* Timer */}
+          <Text
+            position={[0, -1.2, 0]}
+            fontSize={0.6}
             color={secondsLeft <= 5 ? '#ff4444' : '#94a3b8'}
-            depthTest={false}
-            transparent
-            toneMapped={false}
-          />
-        </Text>
+            anchorX="center"
+            anchorY="middle"
+            outlineWidth={0.03}
+            outlineColor="#000000"
+          >
+            {`⏱ ${secondsLeft}s`}
+            <meshBasicMaterial
+              attach="material"
+              color={secondsLeft <= 5 ? '#ff4444' : '#94a3b8'}
+              depthTest={false}
+              transparent
+              toneMapped={false}
+            />
+          </Text>
+        </Billboard>
       </group>
     </group>
   )

@@ -247,6 +247,9 @@ export function GameHUD({ onStart, onRestart }: GameHUDProps) {
 
   return (
     <>
+      {/* ── Settings Menu (top-right) ── */}
+      <SettingsMenu />
+
       {/* Top HUD row */}
       <div style={{
         position: 'absolute',
@@ -383,6 +386,104 @@ export function GameHUD({ onStart, onRestart }: GameHUDProps) {
         </div>
       )}
     </>
+  )
+}
+
+// ── Settings Menu ───────────────────────────────────────────────────────────────
+function SettingsMenu() {
+  const isMenuOpen = useGameStore(s => s.isMenuOpen)
+  const isCameraFree = useGameStore(s => s.isCameraFree)
+  const toggleMenu = useGameStore(s => s.toggleMenu)
+  const toggleCameraFree = useGameStore(s => s.toggleCameraFree)
+
+  return (
+    <div style={{
+      position: 'absolute',
+      top: 12,
+      right: 12,
+      zIndex: 200,
+      pointerEvents: 'auto',
+      fontFamily: "'Courier New', monospace",
+    }}>
+      {/* Gear button */}
+      <button
+        onClick={toggleMenu}
+        style={{
+          background: isMenuOpen
+            ? 'rgba(0,212,255,0.25)'
+            : 'rgba(0,0,0,0.8)',
+          border: `1px solid ${isMenuOpen ? '#00d4ff60' : 'rgba(255,255,255,0.15)'}`,
+          borderRadius: 10,
+          padding: '8px 14px',
+          color: isMenuOpen ? '#00d4ff' : '#94a3b8',
+          fontSize: 16,
+          fontWeight: 800,
+          cursor: 'pointer',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 6,
+          transition: 'all 0.2s ease',
+        }}
+      >
+        ⚙️ <span style={{ fontSize: 12, letterSpacing: '0.08em' }}>MENU</span>
+      </button>
+
+      {/* Dropdown panel */}
+      {isMenuOpen && (
+        <div style={{
+          marginTop: 6,
+          background: 'rgba(4,4,14,0.95)',
+          border: '1px solid rgba(255,255,255,0.12)',
+          borderRadius: 10,
+          padding: 12,
+          minWidth: 200,
+          backdropFilter: 'blur(12px)',
+          boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
+        }}>
+          <div style={{
+            fontSize: 10,
+            color: '#475569',
+            textTransform: 'uppercase',
+            letterSpacing: '0.15em',
+            fontWeight: 700,
+            marginBottom: 8,
+          }}>
+            Configurações
+          </div>
+
+          {/* Camera Free toggle */}
+          <button
+            onClick={toggleCameraFree}
+            style={{
+              width: '100%',
+              background: isCameraFree
+                ? 'rgba(0,255,136,0.12)'
+                : 'rgba(255,255,255,0.05)',
+              border: `1px solid ${isCameraFree ? '#00ff8840' : 'rgba(255,255,255,0.08)'}`,
+              borderRadius: 8,
+              padding: '10px 12px',
+              color: isCameraFree ? '#00ff88' : '#94a3b8',
+              fontSize: 13,
+              fontWeight: 700,
+              cursor: 'pointer',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              transition: 'all 0.2s ease',
+              fontFamily: "'Courier New', monospace",
+            }}
+          >
+            <span>🎥 Câmera Livre</span>
+            <span style={{
+              fontSize: 14,
+              fontWeight: 900,
+            }}>
+              {isCameraFree ? 'ON 🔓' : 'OFF 🔒'}
+            </span>
+          </button>
+        </div>
+      )}
+    </div>
   )
 }
 

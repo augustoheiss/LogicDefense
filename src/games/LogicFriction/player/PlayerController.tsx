@@ -13,6 +13,11 @@ import { useFrame, useThree } from '@react-three/fiber'
 import { RigidBody, BallCollider } from '@react-three/rapier'
 import type { RapierRigidBody } from '@react-three/rapier'
 import * as THREE from 'three'
+
+// Reusable vectors — allocated once, never GC'd
+const _forward = new THREE.Vector3()
+const _right = new THREE.Vector3()
+const _moveDir = new THREE.Vector3()
 import { useKeyboard, keys } from '../hooks/useInput'
 import { useGameStore } from '../state/useGameStore'
 import { playerPositionRef, fireAttack } from './playerEvents'
@@ -33,7 +38,7 @@ export function PlayerController() {
   const rigidBodyRef = useRef<RapierRigidBody>(null)
   const meshRef = useRef<THREE.Mesh>(null)
   const attackRingRef = useRef<THREE.Mesh>(null)
-  const { camera } = useThree()
+  const { camera, controls } = useThree()
 
   const attackCooldownRef = useRef(0)
   const attackVisualRef = useRef(0)
@@ -53,24 +58,36 @@ export function PlayerController() {
     const state = useGameStore.getState()
     const buffed = state.isBuffActive
 
-    // ── Movement ──
+    // ── Camera-Relative Movement ──
     if (state.phase === 'PLAYING' || state.phase === 'WAVE_CLEAR') {
-      let moveX = 0
-      let moveZ = 0
+      // Get camera forward on the XZ plane
+      camera.getWorldDirection(_forward)
+      _forward.y = 0
+      _forward.normalize()
 
-      if (keys['KeyW'] || keys['ArrowUp'])    moveZ -= 1
-      if (keys['KeyS'] || keys['ArrowDown'])  moveZ += 1
-      if (keys['KeyA'] || keys['ArrowLeft'])   moveX -= 1
-      if (keys['KeyD'] || keys['ArrowRight']) moveX += 1
+      // Right vector = cross(up, forward)
+      _right.crossVectors(_forward, camera.up).normalize()
 
-      const len = Math.sqrt(moveX * moveX + moveZ * moveZ)
-      if (len > 0) {
-        moveX = (moveX / len) * PLAYER_SPEED
-        moveZ = (moveZ / len) * PLAYER_SPEED
+      // Raw WASD input
+      let inputZ = 0  // forward/back
+      let inputX = 0  // left/right
+
+      if (keys['KeyW'] || keys['ArrowUp'])    inputZ += 1  // into screen
+      if (keys['KeyS'] || keys['ArrowDown'])  inputZ -= 1  // toward camera
+      if (keys['KeyA'] || keys['ArrowLeft'])   inputX -= 1
+      if (keys['KeyD'] || keys['ArrowRight']) inputX += 1
+
+      // Combine into a world-space direction
+      _moveDir.set(0, 0, 0)
+      _moveDir.addScaledVector(_forward, inputZ)
+      _moveDir.addScaledVector(_right, inputX)
+
+      if (_moveDir.lengthSq() > 0) {
+        _moveDir.normalize().multiplyScalar(PLAYER_SPEED)
       }
 
       const currentVel = rb.linvel()
-      rb.setLinvel({ x: moveX, y: currentVel.y, z: moveZ }, true)
+      rb.setLinvel({ x: _moveDir.x, y: currentVel.y, z: _moveDir.z }, true)
     } else {
       const currentVel = rb.linvel()
       rb.setLinvel({ x: 0, y: currentVel.y, z: 0 }, true)
@@ -122,14 +139,15 @@ export function PlayerController() {
       mat.opacity = inZone ? 0.3 : 1.0
     }
 
-    // ── Camera Follow ──
-    const targetCamPos = new THREE.Vector3(
-      pos.x + CAMERA_OFFSET.x,
-      CAMERA_OFFSET.y,
-      pos.z + CAMERA_OFFSET.z,
-    )
-    camera.position.lerp(targetCamPos, CAMERA_LERP)
-    camera.lookAt(pos.x, 0, pos.z)
+    // ── Camera Follow (OrbitControls-aware) ──
+    // ONLY update the OrbitControls target to track the player.
+    // Do NOT touch camera.position — OrbitControls owns that.
+    // This decouples camera rotation from player movement.
+    const orbitTarget = (controls as any)?.target as THREE.Vector3 | undefined
+    if (orbitTarget) {
+      const playerPos = new THREE.Vector3(pos.x, 0, pos.z)
+      orbitTarget.lerp(playerPos, CAMERA_LERP)
+    }
   })
 
   return (

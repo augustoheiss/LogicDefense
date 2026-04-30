@@ -85,6 +85,10 @@ export interface GameStore {
   // ── Transparency Sensor ──
   insideMathZone: boolean
 
+  // ── Settings ──
+  isMenuOpen: boolean
+  isCameraFree: boolean
+
   // ── Actions ──
   startGame: () => void
   nextWave: () => void
@@ -112,6 +116,10 @@ export interface GameStore {
   // Math
   submitAnswer: (isCorrect: boolean) => void
   setInsideMathZone: (inside: boolean) => void
+
+  // Settings
+  toggleMenu: () => void
+  toggleCameraFree: () => void
 
   // Reset
   reset: () => void
@@ -157,6 +165,8 @@ const initialState = {
   mathAnswered: false,
   mathZonePosition: 'N' as MathZoneDir,
   insideMathZone: false,
+  isMenuOpen: false,
+  isCameraFree: false,
 }
 
 // ── Store ───────────────────────────────────────────────────────────────────────
@@ -365,6 +375,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
   // ── Transparency Sensor ──
   setInsideMathZone: (inside) => set({ insideMathZone: inside }),
+
+  // ── Settings ──
+  toggleMenu: () => set(s => ({ isMenuOpen: !s.isMenuOpen })),
+  toggleCameraFree: () => set(s => ({ isCameraFree: !s.isCameraFree })),
 
   // ── Full reset ──
   reset: () => {

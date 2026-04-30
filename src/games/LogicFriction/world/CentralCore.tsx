@@ -10,7 +10,7 @@
 import { useRef } from 'react'
 import { useFrame, type ThreeEvent } from '@react-three/fiber'
 import { RigidBody, BallCollider } from '@react-three/rapier'
-import { Text } from '@react-three/drei'
+import { Text, Billboard } from '@react-three/drei'
 import * as THREE from 'three'
 import { CORE_SIZE, CORE_COLLIDER_SIZE, CORE_UPGRADE_BASE_COST } from '../config/constants'
 import { useGameStore } from '../state/useGameStore'
@@ -130,7 +130,7 @@ export function CentralCore() {
           depthTest={false} for always-on-top readability.
           ═══════════════════════════════════════════ */}
       {isUpgradeMode && (
-        <>
+        <Billboard>
           <Text
             position={[0, CORE_SIZE * 2.5 * levelScale, 0]}
             fontSize={0.8}
@@ -167,7 +167,7 @@ export function CentralCore() {
               toneMapped={false}
             />
           </Text>
-        </>
+        </Billboard>
       )}
     </group>
   )

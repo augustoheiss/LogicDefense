@@ -18,7 +18,7 @@
 import { useRef, useState, useMemo } from 'react'
 import { useFrame, useThree, type ThreeEvent } from '@react-three/fiber'
 import { RigidBody, CuboidCollider } from '@react-three/rapier'
-import { Text } from '@react-three/drei'
+import { Text, Billboard } from '@react-three/drei'
 import * as THREE from 'three'
 import { enemyRegistry } from '../enemies/EnemyRegistry'
 import {
@@ -296,46 +296,50 @@ export function Tower({ id, position, type = 'RAPID', level = 1 }: TowerProps) {
 
       {/* Level badge */}
       {safeLevel > 1 && (
-        <Text
-          position={[TOWER_SIZE * 1.8, TOWER_HEIGHT + 0.5, 0]}
-          fontSize={0.5}
-          color={bp.color}
-          anchorX="center"
-          anchorY="middle"
-          outlineWidth={0.03}
-          outlineColor="#000000"
-        >
-          {`LV${safeLevel}`}
-          <meshBasicMaterial
-            attach="material"
+        <Billboard>
+          <Text
+            position={[TOWER_SIZE * 1.8, TOWER_HEIGHT + 0.5, 0]}
+            fontSize={0.5}
             color={bp.color}
-            depthTest={false}
-            transparent
-            toneMapped={false}
-          />
-        </Text>
+            anchorX="center"
+            anchorY="middle"
+            outlineWidth={0.03}
+            outlineColor="#000000"
+          >
+            {`LV${safeLevel}`}
+            <meshBasicMaterial
+              attach="material"
+              color={bp.color}
+              depthTest={false}
+              transparent
+              toneMapped={false}
+            />
+          </Text>
+        </Billboard>
       )}
 
       {/* Upgrade info (only in upgrade mode) */}
       {isUpgradeMode && (
-        <Text
-          position={[0, TOWER_HEIGHT + 2, 0]}
-          fontSize={0.6}
-          color={upgradeColor}
-          anchorX="center"
-          anchorY="middle"
-          outlineWidth={0.04}
-          outlineColor="#000000"
-        >
-          {upgradeLabel}
-          <meshBasicMaterial
-            attach="material"
+        <Billboard>
+          <Text
+            position={[0, TOWER_HEIGHT + 2, 0]}
+            fontSize={0.6}
             color={upgradeColor}
-            depthTest={false}
-            transparent
-            toneMapped={false}
-          />
-        </Text>
+            anchorX="center"
+            anchorY="middle"
+            outlineWidth={0.04}
+            outlineColor="#000000"
+          >
+            {upgradeLabel}
+            <meshBasicMaterial
+              attach="material"
+              color={upgradeColor}
+              depthTest={false}
+              transparent
+              toneMapped={false}
+            />
+          </Text>
+        </Billboard>
       )}
 
       {/* Level indicator rings (one per level) */}

@@ -10,7 +10,7 @@
 import { useRef, useMemo, useCallback } from 'react'
 import { useFrame } from '@react-three/fiber'
 import { RigidBody, CylinderCollider } from '@react-three/rapier'
-import { Text } from '@react-three/drei'
+import { Text, Billboard } from '@react-three/drei'
 import * as THREE from 'three'
 import { useGameStore } from '../state/useGameStore'
 import {
@@ -60,46 +60,50 @@ export function MathChallenge() {
       </mesh>
 
       {/* ── Floating equation text (3D — NO physics here, safe) ── */}
-      <Text
-        position={[0, MATH_ZONE_Y, 0]}
-        fontSize={2.5}
-        color="#00d4ff"
-        anchorX="center"
-        anchorY="middle"
-        outlineWidth={0.08}
-        outlineColor="#000000"
-        maxWidth={30}
-      >
-        {currentProblem.expression}
-        <meshBasicMaterial
-          attach="material"
-          color="#00d4ff"
-          depthTest={false}
-          transparent
-          toneMapped={false}
-        />
-      </Text>
-
-      {/* ── "Walk to answer!" hint ── */}
-      {!mathAnswered && (
+      <Billboard>
         <Text
-          position={[0, MATH_ZONE_Y - 2.5, 0]}
-          fontSize={0.8}
-          color="#ffd700"
+          position={[0, MATH_ZONE_Y, 0]}
+          fontSize={2.5}
+          color="#00d4ff"
           anchorX="center"
           anchorY="middle"
-          outlineWidth={0.05}
+          outlineWidth={0.08}
           outlineColor="#000000"
+          maxWidth={30}
         >
-          ▼ PISE NA RESPOSTA CORRETA ▼
+          {currentProblem.expression}
           <meshBasicMaterial
             attach="material"
-            color="#ffd700"
+            color="#00d4ff"
             depthTest={false}
             transparent
             toneMapped={false}
           />
         </Text>
+      </Billboard>
+
+      {/* ── "Walk to answer!" hint ── */}
+      {!mathAnswered && (
+        <Billboard>
+          <Text
+            position={[0, MATH_ZONE_Y - 2.5, 0]}
+            fontSize={0.8}
+            color="#ffd700"
+            anchorX="center"
+            anchorY="middle"
+            outlineWidth={0.05}
+            outlineColor="#000000"
+          >
+            ▼ PISE NA RESPOSTA CORRETA ▼
+            <meshBasicMaterial
+              attach="material"
+              color="#ffd700"
+              depthTest={false}
+              transparent
+              toneMapped={false}
+            />
+          </Text>
+        </Billboard>
       )}
 
       {/* ── Answer Pads ── */}
@@ -124,24 +128,26 @@ export function MathChallenge() {
 
       {/* ── Result indicator ── */}
       {mathAnswered && (
-        <Text
-          position={[0, MATH_ZONE_Y + 2, 0]}
-          fontSize={2}
-          color={isBuffActive ? '#00ff88' : '#ff4444'}
-          anchorX="center"
-          anchorY="middle"
-          outlineWidth={0.1}
-          outlineColor="#000000"
-        >
-          {isBuffActive ? '✓ BUFF DIVINO ATIVADO!' : '✗ RESPOSTA ERRADA'}
-          <meshBasicMaterial
-            attach="material"
+        <Billboard>
+          <Text
+            position={[0, MATH_ZONE_Y + 2, 0]}
+            fontSize={2}
             color={isBuffActive ? '#00ff88' : '#ff4444'}
-            depthTest={false}
-            transparent
-            toneMapped={false}
-          />
-        </Text>
+            anchorX="center"
+            anchorY="middle"
+            outlineWidth={0.1}
+            outlineColor="#000000"
+          >
+            {isBuffActive ? '✓ BUFF DIVINO ATIVADO!' : '✗ RESPOSTA ERRADA'}
+            <meshBasicMaterial
+              attach="material"
+              color={isBuffActive ? '#00ff88' : '#ff4444'}
+              depthTest={false}
+              transparent
+              toneMapped={false}
+            />
+          </Text>
+        </Billboard>
       )}
 
       {/* NOTE: Explanation text has been moved to the 2D GameHUD
@@ -284,26 +290,28 @@ function AnswerPad({ label, isCorrect, position, disabled, showResult }: AnswerP
       {/* ═══════════════════════════════════════════
           TEXT — SIBLING to RigidBody, not a child.
           ═══════════════════════════════════════════ */}
-      <Text
-        position={[0, ANSWER_PAD_HEIGHT + 1.2, 0]}
-        fontSize={1.4}
-        color={labelColor}
-        anchorX="center"
-        anchorY="middle"
-        outlineWidth={0.06}
-        outlineColor="#000000"
-        maxWidth={6}
-      >
-        {label}
-        <meshBasicMaterial
-          attach="material"
+      <Billboard>
+        <Text
+          position={[0, ANSWER_PAD_HEIGHT + 1.2, 0]}
+          fontSize={1.4}
           color={labelColor}
-          depthTest={false}
-          transparent
-          opacity={showResult && !isCorrect ? 0.3 : 1}
-          toneMapped={false}
-        />
-      </Text>
+          anchorX="center"
+          anchorY="middle"
+          outlineWidth={0.06}
+          outlineColor="#000000"
+          maxWidth={6}
+        >
+          {label}
+          <meshBasicMaterial
+            attach="material"
+            color={labelColor}
+            depthTest={false}
+            transparent
+            opacity={showResult && !isCorrect ? 0.3 : 1}
+            toneMapped={false}
+          />
+        </Text>
+      </Billboard>
     </group>
   )
 }
