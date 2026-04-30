@@ -234,7 +234,6 @@ export function GameHUD({ onStart, onRestart }: GameHUDProps) {
   const isBuffActive = useGameStore(s => s.isBuffActive)
   const showExplanation = useGameStore(s => s.showExplanation)
   const currentProblem = useGameStore(s => s.currentProblem)
-  const mathZonePosition = useGameStore(s => s.mathZonePosition)
   const coreLevel = useGameStore(s => s.coreLevel)
   const nextWave = useGameStore(s => s.nextWave)
 
