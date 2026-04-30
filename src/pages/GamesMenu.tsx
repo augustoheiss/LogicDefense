@@ -85,6 +85,29 @@ export function GamesMenu() {
           </div>
         </div>
 
+        {/* ── Logic Friction card ── */}
+        <div className="game-card" style={{ marginTop: 24 }}>
+          <div className="game-card__thumb" style={{ background: 'linear-gradient(135deg, #020a06 0%, #041a0d 50%, #0a1a2e 100%)' }}>
+            <span style={{ position: 'relative', zIndex: 1 }}>🏟️</span>
+          </div>
+          <div className="game-card__body">
+            <span className="game-card__tag" style={{ background: 'rgba(0,255,136,0.10)', color: '#00ff88', border: '1px solid rgba(0,255,136,0.3)' }}>3D ARPG · Tower Defense</span>
+            <h2 className="game-card__title">Logic Friction</h2>
+            <p className="game-card__desc">
+              Arena 3D com física real. Movimentação livre WASD, combate corpo-a-corpo, construção
+              física de torres e equações renderizadas no mundo 3D. Acerte a resposta e receba
+              um buff divino. Aritmética e PEMDAS em espiral infinita.
+            </p>
+            <div className="game-card__footer">
+              <span className="game-card__badge">🎮 3D WebGL</span>
+              <span className="game-card__badge">🧮 PEMDAS + Aritmética</span>
+              <Link to="/jogos/logic-friction" className="btn-primary">
+                ▶ Jogar agora
+              </Link>
+            </div>
+          </div>
+        </div>
+
         {/* ── Coming Soon ── */}
         <div
           style={{
@@ -94,7 +117,7 @@ export function GamesMenu() {
             gap: 16,
           }}
         >
-          {['Quiz de Frações', 'Geometria Espacial', 'Álgebra RPG'].map((name) => (
+          {['Quiz de Frações', 'Geometria Espacial'].map((name) => (
             <div key={name} className="coming-soon-card">
               <span className="coming-soon-card__icon">🔒</span>
               <p style={{ margin: 0, fontWeight: 600, color: 'var(--text-muted)' }}>

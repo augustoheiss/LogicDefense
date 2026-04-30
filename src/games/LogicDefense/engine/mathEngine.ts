@@ -66,7 +66,7 @@ export function generateTip(problem: MathProblem): string {
     const c1 = Math.floor(n1 / 100), c2 = Math.floor(n2 / 100)
 
     if (u1 + u2 < 10 && d1 + d2 < 10 && c1 + c2 < 10) {
-      text = `Ataque Direto:<br>Bicho, a linha de frente ta pronta nesse aqui, só ir DIRETO que o negócio já ta tudo pronto é só encaixar e dar um play. Pensa nos passos da reta numérica, não vamos dar passos grandes!<br><span class="tip-highlight">${n1} + ${n2} = ${answer}</span>.`
+      text = `Ataque Direto:<br>Bicho, a linha de frente ta pronta nesse aqui, só ir DIRETO, encaixar e dar um play. Pensa nos passos da reta numérica, não vamos dar passos grandes!<br><span class="tip-highlight">${n1} + ${n2} = ${answer}</span>.`
     } else {
       let temp1 = n1, temp2 = n2
       let shiftText = ''

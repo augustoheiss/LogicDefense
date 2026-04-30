@@ -10,6 +10,9 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@react-three/drei": "^10.7.7",
+    "@react-three/fiber": "^9.6.1",
+    "@react-three/rapier": "^2.2.0",
     "howler": "^2.2.4",
     "js-yaml": "^4.1.1",
     "katex": "^0.16.38",
@@ -20,7 +23,9 @@
     "react-router-dom": "^7.4.0",
     "recharts": "^3.8.1",
     "rehype-katex": "^7.0.1",
-    "remark-math": "^6.0.0"
+    "remark-math": "^6.0.0",
+    "three": "^0.184.0",
+    "zustand": "^5.0.12"
   },
   "devDependencies": {
     "@eslint/js": "^9.21.0",
@@ -29,6 +34,7 @@
     "@types/js-yaml": "^4.0.9",
     "@types/react": "^19.1.0",
     "@types/react-dom": "^19.1.0",
+    "@types/three": "^0.184.0",
     "@vitejs/plugin-react": "^4.4.1",
     "eslint": "^9.21.0",
     "eslint-plugin-react-hooks": "^5.1.0",

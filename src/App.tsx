@@ -5,6 +5,7 @@ import { GamesMenu } from './pages/GamesMenu'
 import { LogicDefensePage } from './pages/LogicDefensePage'
 import { LogicAscensionPage } from './pages/LogicAscensionPage'
 import { LogicInvadersLanding } from './pages/LogicInvadersLanding'
+import { LogicFrictionPage } from './pages/LogicFrictionPage'
 import { LabPage } from './pages/LabPage'
 import { MaterialsPage } from './pages/MaterialsPage'
 import { LessonPage } from './pages/LessonPage'
@@ -25,6 +26,7 @@ export default function App() {
           <Route path="/jogos/logic-defense"       element={<LogicDefensePage />} />
           <Route path="/jogos/logic-ascension"    element={<LogicAscensionPage />} />
           <Route path="/jogos/logic-invaders"     element={<LogicInvadersLanding />} />
+          <Route path="/jogos/logic-friction"    element={<LogicFrictionPage />} />
           <Route path="/laboratorio"               element={<LabPage />} />
           <Route path="/laboratorio/cv-maker"      element={<CVMaker />} />
           <Route path="/laboratorio/assistente-moeda" element={<CoinAssistantPage />} />
