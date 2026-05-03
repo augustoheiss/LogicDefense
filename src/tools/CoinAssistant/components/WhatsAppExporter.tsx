@@ -143,9 +143,6 @@ function buildMessage(
       ? ` ${goalIcon} ${goalPct}% atingida!`
       : ` ${goalPct}% atingida`;
 
-    const netMonthly = monthMetrics.grossMonthly - totalExpM;
-    const netSign = netMonthly >= 0 ? '✅' : '⚠️';
-
     lines.push(
       `📊 *Resumo de Resultados do Mês*`,
       `• Receitas do Mês: *${fmt(monthMetrics.grossMonthly)}*`,
@@ -153,7 +150,6 @@ function buildMessage(
       `• Média Semanal: ${fmt(monthMetrics.weeklyAvg)}`,
       `• Meta Diária ${reportYear} (${fmt(reportDailyGoal)}):${goalNote}`,
       ...(totalExpM > 0 ? [`• Despesas Ativas no Mês: *-${fmt(totalExpM)}*`] : []),
-      ...(totalExpM > 0 ? [`• ${netSign} Saldo Líquido do Mês: *${fmt(netMonthly)}*`] : []),
       ...(costBasedTarget && costBasedTarget.annualCost > 0
         ? [
           `• 🛡️ Meta de Sobrevivência Mensal: ${fmt(costBasedTarget.monthlySurvival)}`,
