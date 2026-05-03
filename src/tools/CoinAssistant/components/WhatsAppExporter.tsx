@@ -107,7 +107,6 @@ function buildMessage(
 
   // ── Expenses active in this month (crossover logic) ─────────────────────
   const activeExpenses = table.rows.filter((r) => isExpenseActiveInMonth(r, selectedMonth));
-  const totalExpM = activeExpenses.reduce((s, r) => s + r.value, 0);
 
   // ── Year-level cost data ────────────────────────────────────────────────
   const staticYearCost = resolveGoalForYear(table.goals.annualCosts, reportYear);
@@ -149,7 +148,6 @@ function buildMessage(
       `• Média Diária: ${fmt(monthMetrics.dailyAvg)}`,
       `• Média Semanal: ${fmt(monthMetrics.weeklyAvg)}`,
       `• Meta Diária ${reportYear} (${fmt(reportDailyGoal)}):${goalNote}`,
-      ...(totalExpM > 0 ? [`• Despesas Ativas no Mês: *-${fmt(totalExpM)}*`] : []),
       ...(costBasedTarget && costBasedTarget.annualCost > 0
         ? [
           `• 🛡️ Meta de Sobrevivência Mensal: ${fmt(costBasedTarget.monthlySurvival)}`,
