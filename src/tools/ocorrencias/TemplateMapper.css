@@ -42,8 +42,7 @@
 }
 
 .react-pdf__Page__canvas {
-  max-width: 100%;
-  height: auto !important;
+  display: block; /* Remove inline spacing artifacts */
 }
 
 /* The interactive overlay where boxes are drawn */
