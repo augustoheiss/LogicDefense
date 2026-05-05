@@ -45,13 +45,13 @@
   display: block; /* Remove inline spacing artifacts */
 }
 
-/* The interactive overlay where boxes are drawn */
+/* The interactive overlay where boxes are drawn.
+   Width/height are set inline by React (measured from the actual canvas)
+   so the overlay is always 1:1 with the rendered PDF, at any scale/DPR. */
 .drawing-overlay {
   position: absolute;
   top: 0;
   left: 0;
-  right: 0;
-  bottom: 0;
   z-index: 10;
   touch-action: auto; /* Default: allow scrolling */
 }

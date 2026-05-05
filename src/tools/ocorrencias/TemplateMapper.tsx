@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import { Document, Page, pdfjs } from 'react-pdf';
 import 'react-pdf/dist/Page/AnnotationLayer.css';
 import 'react-pdf/dist/Page/TextLayer.css';
@@ -59,6 +59,9 @@ export function TemplateMapper({ file, onMapComplete, onMapProgress, onCancel }:
   // PDF metadata
   const [pdfIntrinsicSize, setPdfIntrinsicSize] = useState({ width: 595.28, height: 841.89 }); // default A4
   
+  // Actual rendered canvas dimensions (updated after every render)
+  const [canvasDims, setCanvasDims] = useState({ width: 0, height: 0 });
+  
   // Drawing state
   const wrapperRef = useRef<HTMLDivElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
@@ -76,10 +79,25 @@ export function TemplateMapper({ file, onMapComplete, onMapProgress, onCancel }:
     }
   }
 
+  // Measure the actual canvas CSS dimensions after react-pdf finishes rendering.
+  // This is the single source of truth — immune to DPR, scale, or CSS interference.
+  const onPageRenderSuccess = useCallback(() => {
+    if (!wrapperRef.current) return;
+    const canvas = wrapperRef.current.querySelector('canvas');
+    if (canvas) {
+      setCanvasDims({ width: canvas.clientWidth, height: canvas.clientHeight });
+    }
+  }, []);
+
   // ── Drawing Handlers (Pointer Events API with capture) ──
+  // Coordinates are measured relative to the canvas bounding rect so they
+  // stay correct regardless of scroll position, scale, or DPR.
   const getPointerPos = (e: React.PointerEvent) => {
     if (!wrapperRef.current) return { x: 0, y: 0 };
-    const rect = wrapperRef.current.getBoundingClientRect();
+    const canvas = wrapperRef.current.querySelector('canvas');
+    const rect = canvas
+      ? canvas.getBoundingClientRect()
+      : wrapperRef.current.getBoundingClientRect();
     return {
       x: e.clientX - rect.left,
       y: e.clientY - rect.top
@@ -423,11 +441,13 @@ export function TemplateMapper({ file, onMapComplete, onMapProgress, onCancel }:
               renderTextLayer={false} 
               renderAnnotationLayer={false}
               onLoadSuccess={onPageLoadSuccess}
+              onRenderSuccess={onPageRenderSuccess}
             />
           </Document>
 
           <div 
             className="drawing-overlay"
+            style={canvasDims.width > 0 ? { width: canvasDims.width, height: canvasDims.height } : undefined}
             onPointerDown={handlePointerDown}
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}
