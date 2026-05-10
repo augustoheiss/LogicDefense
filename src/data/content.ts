@@ -263,12 +263,7 @@ No episódio de hoje, nós vamos hackear a "Arquitetura dos Números Quebrados".
   {
     id: 'vid-33',
     title: 'Dificuldades Desejáveis: Por que o Esforço Mental é a Nossa Única Salvação',
-    description: `A Rebelião Contra o Atrito Zero: Como Salvar a Nossa Capacidade de Pensar
-
-Vivemos na era do "atrito zero", onde algoritmos e ferramentas de inteligência artificial prometem soluções imediatas para tudo. Mas qual é o custo real de entregar nosso esforço mental de bandeja para as máquinas?
-
-Neste vídeo, exploramos um dos maiores desafios existenciais da nossa geração: a atrofia cognitiva. Resgatando um alerta feito por Sócrates há mais de 2.400 anos, discutimos como a terceirização do nosso conhecimento está criando mentes acostumadas a receber respostas prontas, sem a capacidade de raciocinar por conta própria.
-`,
+    description: `A Rebelião Contra o Atrito Zero: Como Salvar a Nossa Capacidade de Pensar`,
     youtubeId: '6D_U4sQbHp0',
     tag: 'Educação · Matemática (PT-BR)',
   },
@@ -284,10 +279,6 @@ Neste vídeo, exploramos um dos maiores desafios existenciais da nossa geração
     id: 'vid-35',
     title: `O Poder Perdido da Mente: Como a Matemática Antiga Pode Salvar Nosso Cérebro`,
     description: `O Poder Perdido da Mente: Redescobrindo a Força do Nosso Cérebro
-
-Há mais de 2.000 anos, Sócrates alertou que a invenção da escrita poderia "implantar o esquecimento" nas nossas almas, deixando-nos mentalmente preguiçosos. Hoje, com a tecnologia na palma da mão, essa profecia bate à nossa porta de forma agressiva. Se o nosso "hardware" neurológico é exatamente o mesmo de um escriba babilônico que ajudou a construir pirâmides, por que o nosso cérebro parece estar perdendo potência?
-
-Neste vídeo, fazemos uma escavação arqueológica na mente humana para entender a crise da Demência Digital — o declínio cognitivo causado por terceirizarmos memórias e cálculos básicos para o GPS e a calculadora. Vamos descobrir como as civilizações antigas usavam a matemática não como decoreba, mas como verdadeiros "ginásios mentais" para forjar o intelecto.
 `,
     youtubeId: 'qIxgHpObNIs',
     tag: 'Educação · Matemática (PT-BR)',
@@ -304,12 +295,7 @@ Estilo: MPB / Samba-Rock
   {
     id: 'vid-37',
     title: `Demência Digital: Como a Tecnologia Está Encolhendo o Nosso Cérebro (e Como Evitar)`,
-    description: `Demência Digital e o Resgate da Cognição Corporificada
-
-Se colocarmos o cérebro de um humano de 300.000 anos atrás ao lado do nosso, biologicamente, não haveria diferença nenhuma. Então, o que mudou? Neste episódio, mergulhamos no conceito alarmante, porém real, da Demência Digital: o atrofiamento das nossas redes neurais causado pela terceirização da inteligência espacial e matemática para os nossos celulares.
-
-Avaliamos como os caçadores Inuit perderam sua incrível capacidade de mapeamento mental no Ártico após a chegada do GPS. Em contrapartida, exploramos os "ginásios de elite para o cérebro" do mundo antigo. Você sabia que um estudante na Mesopotâmia (ano 2.000 a.C.) fazia malabarismos mentais usando um sistema de base 60 sem precisar decorar planilhas imensas?
-`,
+    description: `Demência Digital e o Resgate da Cognição Corporificada`,
     youtubeId: 'XcSuFCXNEUg',
     tag: 'Educação · Matemática (PT-BR)',
   },
@@ -324,26 +310,14 @@ Avaliamos como os caçadores Inuit perderam sua incrível capacidade de mapeamen
   {
     id: 'vid-39',
     title: `O Verdadeiro Motivo para Estudar Matemática`,
-    description: `Você já se perguntou por que aprender matemática parece exigir tanto esforço? A resposta não está na sua capacidade, mas na "gravidade intelectual".
-
-Neste vídeo, fazemos um mergulho profundo na história do pensamento humano. Vamos voltar aos antigos bazares de Bagdá e à Espanha medieval para descobrir por que a arte de consertar ossos fraturados e a arte de resolver equações eram consideradas a mesma profissão (os famosos "Algebristas").
-
-Descubra como a matemática deixou de ser uma disciplina escrita em prosa (álgebra retórica), sobreviveu a duelos de sangue nas praças da Itália renascentista com Niccolò Tartaglia, e como a simples invenção do sinal de igual (=) por Robert Recorde serviu como o primeiro "HD externo" da humanidade.
-
-Hoje, vivemos em um mundo de "gravidade zero" mental, onde algoritmos e IAs resolvem tudo sem atrito. Mas será que terceirizar o nosso raciocínio é seguro? Entenda por que a matemática é, na verdade, o seu escudo mental e a sua garantia de Soberania Intelectual contra manipulações, fake news e promessas vazias.
-`,
+    description: `Você já se perguntou por que aprender matemática parece exigir tanto esforço? A resposta não está na sua capacidade, mas na "gravidade intelectual".`,
     youtubeId: 'FbcyGqGcPhc',
     tag: 'Educação · Matemática (PT-BR)',
   },
   {
     id: 'vid-40',
     title: `Diário de um Sobrevivente: A Verdade sobre o Caos Escolar`,
-    description: `O desabafo de quem sobrevive à linha de frente da educação. Este não é apenas um vídeo sobre indisciplina; é a radiografia de um colapso sistêmico. Quando a escola troca o aprendizado e a disciplina pela aprovação automática, o resultado é o caos absoluto. E no meio desse fogo cruzado estão os professores, os funcionários da gestão e os próprios alunos — que são jogados em um ambiente para o qual não têm prontidão emocional ou cognitiva, sendo abandonados à própria sorte por um sistema que finge incluir, mas apenas negligencia.
-
-Neste documentário investigativo, dissecamos o relatório "Abordagens Globais para a Prontidão do Aluno" para entender como quatro superpotências educacionais (Alemanha, Finlândia, Singapura e Japão) lidam com a falta de habilidades básicas e a desregulação comportamental crônica.
-
-Vamos além do sintoma e buscamos a raiz mecânica do problema:
-`,
+    description: `O desabafo de quem sobrevive à linha de frente da educação. Este não é apenas um vídeo sobre indisciplina;`,
     youtubeId: 'SAA3B_Y1Cs8',
     tag: 'Educação · Matemática (PT-BR)',
   }
