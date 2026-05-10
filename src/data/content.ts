@@ -256,7 +256,7 @@ No episódio de hoje, nós vamos hackear a "Arquitetura dos Números Quebrados".
   {
     id: 'vid-32',
     title: 'A Dança do Atrito (O Despertar do Logos)',
-    description: 'Neste vídeo, mergulhamos fundo em um dos conceitos mais profundos e revolucionários que estuda: A Dança do Atrito. Este conceito une a sabedoria milenar da filosofia à precisão da matemática para nos mostrar como o conflito e o desequilíbrio são, na verdade, os motores fundamentais para o crescimento, a evolução e o surgimento de novas compreensões.',
+    description: 'Música do canal LogicDefense',
     youtubeId: '2e06SjDKtlo',
     tag: 'Música · Filosofia (PT-BR)',
   },
