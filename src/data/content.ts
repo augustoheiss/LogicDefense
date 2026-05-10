@@ -252,6 +252,100 @@ No episódio de hoje, nós vamos hackear a "Arquitetura dos Números Quebrados".
     description: 'Embrace the productive struggle, let the neurons ignite. A powerful track defending the waking brain against algorithmic sleep and epistemic atrophy. Use it or lose it!',
     youtubeId: 'Ur-eqYRa8tA',
     tag: 'Música · Filosofia (EN)',
+  },
+  {
+    id: 'vid-32',
+    title: 'A Dança do Atrito (O Despertar do Logos)',
+    description: 'Neste vídeo, mergulhamos fundo em um dos conceitos mais profundos e revolucionários que estuda: A Dança do Atrito. Este conceito une a sabedoria milenar da filosofia à precisão da matemática para nos mostrar como o conflito e o desequilíbrio são, na verdade, os motores fundamentais para o crescimento, a evolução e o surgimento de novas compreensões.',
+    youtubeId: '2e06SjDKtlo',
+    tag: 'Música · Filosofia (PT-BR)',
+  },
+  {
+    id: 'vid-33',
+    title: 'Dificuldades Desejáveis: Por que o Esforço Mental é a Nossa Única Salvação',
+    description: `A Rebelião Contra o Atrito Zero: Como Salvar a Nossa Capacidade de Pensar
+
+Vivemos na era do "atrito zero", onde algoritmos e ferramentas de inteligência artificial prometem soluções imediatas para tudo. Mas qual é o custo real de entregar nosso esforço mental de bandeja para as máquinas?
+
+Neste vídeo, exploramos um dos maiores desafios existenciais da nossa geração: a atrofia cognitiva. Resgatando um alerta feito por Sócrates há mais de 2.400 anos, discutimos como a terceirização do nosso conhecimento está criando mentes acostumadas a receber respostas prontas, sem a capacidade de raciocinar por conta própria.
+`,
+    youtubeId: '6D_U4sQbHp0',
+    tag: 'Educação · Matemática (PT-BR)',
+  },
+  {
+    id: 'vid-34',
+    title: 'The Democracy Of Proof',
+    description: `The logic of the equation is what matters, not who solves it. A dive into the beauty of mathematics and the importance of clear, verifiable steps.
+`,
+    youtubeId: 'I8FClE7kaPY',
+    tag: 'Música · Matemática (US)',
+  },
+  {
+    id: 'vid-35',
+    title: `O Poder Perdido da Mente: Como a Matemática Antiga Pode Salvar Nosso Cérebro`,
+    description: `O Poder Perdido da Mente: Redescobrindo a Força do Nosso Cérebro
+
+Há mais de 2.000 anos, Sócrates alertou que a invenção da escrita poderia "implantar o esquecimento" nas nossas almas, deixando-nos mentalmente preguiçosos. Hoje, com a tecnologia na palma da mão, essa profecia bate à nossa porta de forma agressiva. Se o nosso "hardware" neurológico é exatamente o mesmo de um escriba babilônico que ajudou a construir pirâmides, por que o nosso cérebro parece estar perdendo potência?
+
+Neste vídeo, fazemos uma escavação arqueológica na mente humana para entender a crise da Demência Digital — o declínio cognitivo causado por terceirizarmos memórias e cálculos básicos para o GPS e a calculadora. Vamos descobrir como as civilizações antigas usavam a matemática não como decoreba, mas como verdadeiros "ginásios mentais" para forjar o intelecto.
+`,
+    youtubeId: 'qIxgHpObNIs',
+    tag: 'Educação · Matemática (PT-BR)',
+  },
+  {
+    id: 'vid-36',
+    title: `O Compasso da Mente`,
+    description: `Título: O Compasso da Mente 
+Estilo: MPB / Samba-Rock
+`,
+    youtubeId: 'MUDTUFEvaPs',
+    tag: 'Música · Matemática (PT-BR)',
+  },
+  {
+    id: 'vid-37',
+    title: `Demência Digital: Como a Tecnologia Está Encolhendo o Nosso Cérebro (e Como Evitar)`,
+    description: `Demência Digital e o Resgate da Cognição Corporificada
+
+Se colocarmos o cérebro de um humano de 300.000 anos atrás ao lado do nosso, biologicamente, não haveria diferença nenhuma. Então, o que mudou? Neste episódio, mergulhamos no conceito alarmante, porém real, da Demência Digital: o atrofiamento das nossas redes neurais causado pela terceirização da inteligência espacial e matemática para os nossos celulares.
+
+Avaliamos como os caçadores Inuit perderam sua incrível capacidade de mapeamento mental no Ártico após a chegada do GPS. Em contrapartida, exploramos os "ginásios de elite para o cérebro" do mundo antigo. Você sabia que um estudante na Mesopotâmia (ano 2.000 a.C.) fazia malabarismos mentais usando um sistema de base 60 sem precisar decorar planilhas imensas?
+`,
+    youtubeId: 'XcSuFCXNEUg',
+    tag: 'Educação · Matemática (PT-BR)',
+  },
+  {
+    id: 'vid-38',
+    title: `The Hippocampal Heart`,
+    description: `The Hippocampal Heart Music
+`,
+    youtubeId: 'f4dNUio2WWg',
+    tag: 'Música · Matemática (US)',
+  },
+  {
+    id: 'vid-39',
+    title: `O Verdadeiro Motivo para Estudar Matemática`,
+    description: `Você já se perguntou por que aprender matemática parece exigir tanto esforço? A resposta não está na sua capacidade, mas na "gravidade intelectual".
+
+Neste vídeo, fazemos um mergulho profundo na história do pensamento humano. Vamos voltar aos antigos bazares de Bagdá e à Espanha medieval para descobrir por que a arte de consertar ossos fraturados e a arte de resolver equações eram consideradas a mesma profissão (os famosos "Algebristas").
+
+Descubra como a matemática deixou de ser uma disciplina escrita em prosa (álgebra retórica), sobreviveu a duelos de sangue nas praças da Itália renascentista com Niccolò Tartaglia, e como a simples invenção do sinal de igual (=) por Robert Recorde serviu como o primeiro "HD externo" da humanidade.
+
+Hoje, vivemos em um mundo de "gravidade zero" mental, onde algoritmos e IAs resolvem tudo sem atrito. Mas será que terceirizar o nosso raciocínio é seguro? Entenda por que a matemática é, na verdade, o seu escudo mental e a sua garantia de Soberania Intelectual contra manipulações, fake news e promessas vazias.
+`,
+    youtubeId: 'FbcyGqGcPhc',
+    tag: 'Educação · Matemática (PT-BR)',
+  },
+  {
+    id: 'vid-40',
+    title: `Diário de um Sobrevivente: A Verdade sobre o Caos Escolar`,
+    description: `O desabafo de quem sobrevive à linha de frente da educação. Este não é apenas um vídeo sobre indisciplina; é a radiografia de um colapso sistêmico. Quando a escola troca o aprendizado e a disciplina pela aprovação automática, o resultado é o caos absoluto. E no meio desse fogo cruzado estão os professores, os funcionários da gestão e os próprios alunos — que são jogados em um ambiente para o qual não têm prontidão emocional ou cognitiva, sendo abandonados à própria sorte por um sistema que finge incluir, mas apenas negligencia.
+
+Neste documentário investigativo, dissecamos o relatório "Abordagens Globais para a Prontidão do Aluno" para entender como quatro superpotências educacionais (Alemanha, Finlândia, Singapura e Japão) lidam com a falta de habilidades básicas e a desregulação comportamental crônica.
+
+Vamos além do sintoma e buscamos a raiz mecânica do problema:
+`,
+    youtubeId: 'SAA3B_Y1Cs8',
+    tag: 'Educação · Matemática (PT-BR)',
   }
 ];
 
@@ -1393,6 +1487,147 @@ Nós vamos agora resolver aqueles 40 exercícios. **É terminantemente proibido 
 
 40) $\left\{ [-15 \div (-2 - 3)] \cdot (-4) \right\} - [-(-8 + 2)]$
 `
+  },
+
+  {
+    id: 'plan-17',
+    slug: 'magia-calculo-mental-multiplicacao',
+    title: 'A Magia do Cálculo Mental: 40 Desafios de Multiplicação',
+    subject: 'Matemática',
+    grade: '6°ano ao 9°ano',
+    description: 'Abandone as contas armadas! Aprenda 8 estratégias poderosas para multiplicar de cabeça usando o dobro, a metade e a aproximação.',
+    pdfPath: '/pdfs/01-multiplicacao-revisado.pdf',
+    pages: 3,
+    available: true,
+    richContent: String.raw`
+## A Magia do Cálculo Mental: 40 Desafios de Multiplicação
+
+### Estratégia 1: Multiplicar por 4 (O "Dobro do Dobro")
+**A Linguagem:** Em vez de armar uma conta vezes 4, simplesmente dobre o valor duas vezes seguidas. O cérebro humano é ótimo em calcular dobros! (Ex: 15 x 4 -> o dobro de 15 é 30; o dobro de 30 é 60).
+
+1. A entrada para o parque custa R$ 15,00. Um grupo de 4 amigos vai junto. Quanto eles vão pagar no total?
+2. Uma volta na pista de corrida tem 25 metros. Se o piloto der 4 voltas completas, quantos metros ele correu?
+3. Para fazer uma receita, o padeiro usa 120 gramas de açúcar. Ele precisa fazer 4 receitas iguais. Quanto açúcar ele vai usar ao todo?
+4. Um episódio de série dura 45 minutos. Se você maratonar 4 episódios seguidos, quantos minutos passará na frente da TV?
+5. Cada aluno precisa trazer 35 tampinhas para um trabalho de artes. O grupo da Ana tem 4 alunos. Quantas tampinhas eles juntaram?
+
+### Estratégia 2: Multiplicar por 5 (Vezes 10 e Corta ao Meio)
+**A Linguagem:** Multiplicar por 10 é muito fácil (é só colocar um zero no final). Como o 5 é a metade de 10, basta multiplicar por 10 e dividir o resultado pela metade. (Ex: 18 x 5 -> 18 x 10 = 180; a metade de 180 é 90).
+
+6. Um pacote de figurinhas especiais tem 18 cards. O Léo comprou 5 pacotes. Quantas figurinhas ele conseguiu?
+7. Uma corrida de aplicativo custou R$ 42,00. Se o motorista fizer 5 corridas com esse mesmo valor, quanto ele ganhará?
+8. O carro da família faz 14 km com um litro de gasolina. Se eles colocarem 5 litros, quantos quilômetros o carro vai conseguir rodar?
+9. Um pedreiro assenta 36 tijolos por hora. Em 5 horas de trabalho, quantos tijolos ele terá colocado na parede?
+10. Uma lanchonete vende combos a R$ 64,00. Hoje à noite, eles venderam 5 combos. Qual foi o valor arrecadado?
+
+### Estratégia 3: Multiplicar por 6 (Dobra e depois Triplica)
+**A Linguagem:** Multiplicar por 6 é a mesma coisa que dobrar o valor e, em seguida, pegar esse resultado e multiplicar por 3. (Ou multiplicar por 3 e depois dobrar!). (Ex: 15 x 6 -> o dobro de 15 é 30. O triplo de 30 é 90).
+
+11. Um pacote de balas custa R$ 15,00. O mercadinho comprou 6 pacotes. Quanto eles pagaram?
+12. Uma impressora rápida imprime 12 páginas por minuto. Em 6 minutos, quantas páginas estarão prontas?
+13. O ingresso do cinema custa R$ 25,00. Uma família de 6 pessoas foi assistir a um filme. Qual o valor total dos ingressos?
+14. A professora corrige 35 provas por hora. Em 6 horas de trabalho ininterrupto, quantas provas ela terá corrigido?
+15. A mensalidade da escolinha de futebol é R$ 45,00. O Marcos pagou 6 meses adiantados. Quanto ele pagou?
+
+### Estratégia 4: O Truque do 15 (Vezes 10 + A sua Metade)
+**A Linguagem:** O 15 é a união do 10 com o 5. Para multiplicar rápido por 15, você multiplica o número por 10 e depois soma a metade desse valor. (Ex: 24 x 15 -> 24 x 10 = 240. A metade de 240 é 120. Logo, 240 + 120 = 360).
+
+16. A mensalidade do clube de leitura é R$ 24,00. O Pedro resolveu pagar 15 meses de uma vez. Quanto ele pagou?
+17. O estacionamento tem 18 vagas em cada fileira. O pátio tem 15 fileiras. Quantos carros cabem lá dentro?
+18. A dona da confeitaria comprou 15 caixas de chocolate. Cada caixa custa R$ 42,00. Quanto ela gastou no total?
+19. Um trabalhador ganha R$ 16,00 por hora extra. Se ele fizer 15 horas extras no mês, qual será o seu pagamento adicional?
+20. Uma partida de xadrez em um torneio durou exatos 22 minutos. Se rolaram 15 partidas com essa mesma duração, qual é o tempo total jogado?
+
+### Estratégia 5: Aproximar e Tirar o Excesso (Final 9)
+**A Linguagem:** Quando um número está perto de uma dezena redonda (como 9, 19, 39, 49), é mais fácil arredondar para cima, multiplicar de cabeça e depois tirar o excesso. (Ex: 49 x 15 -> finja que é 50 x 15 = 750. Como você colocou "um a mais" 15 vezes, retire 15 no final: 750 - 15 = 735).
+
+21. Uma jaqueta custa R$ 49,00. O time de vôlei comprou 15 jaquetas iguais para o campeonato. Quanto o time gastou?
+22. O ingresso da roda-gigante custa R$ 19,00. Um grupo de 6 amigos foi brincar. Quanto pagaram no total? (Dica: Faça 20 x 6 e retire 6).
+23. Um pacote de canetas tem 39 unidades. A escola comprou 5 pacotes. Quantas canetas chegaram? (Dica: Faça 40 x 5 e retire 5).
+24. O fazendeiro colheu 29 caixas de laranjas. Cada caixa pesa 8 quilos. Qual o peso total da colheita?
+25. Um livro de fantasia tem exatas 99 páginas por capítulo. A Maria leu 4 capítulos no fim de semana. Quantas páginas ela leu ao todo? (Dica: Faça 100 x 4 e retire 4).
+
+### Estratégia 6: Aproximar e Adicionar a Falta (Final 1)
+**A Linguagem:** O contrário da estratégia anterior! Se o número passou um pouquinho de uma dezena redonda (11, 21, 51), arredonde para baixo, multiplique e adicione a "sobra" no final. (Ex: 21 x 15 -> faça 20 x 15 = 300, e depois adicione mais uma vez o 15: 300 + 15 = 315).
+
+26. Um pacote de biscoitos custa R$ 11,00. A turma comprou 25 pacotes para a festa. Quanto custou tudo? (Dica: Faça 10 x 25 = 250, e depois some mais um pacote de 25).
+27. Uma van escolar consegue levar 21 pessoas. A prefeitura alugou 15 vans iguais. Quantas pessoas podem viajar ao mesmo tempo?
+28. Cada caixa de piso vem com 51 azulejos. O pedreiro usou 8 caixas completas. Quantos azulejos foram usados? (Dica: Faça 50 x 8 e some 8).
+29. Um relógio de parede custa R$ 31,00 no atacado. Um lojista comprou 12 relógios. Qual foi o total da compra?
+30. Um livro gigante tem 101 desafios. O professor comprou 6 livros iguais para a turma. Quantos desafios há no total?
+
+### Estratégia 7: O Truque do 8 (Dobrar Três Vezes)
+**A Linguagem:** Se para multiplicar por 4 nós dobramos duas vezes, para multiplicar por 8 nós dobramos três vezes seguidas! (O dobro do dobro do dobro). (Ex: 15 x 8 -> 30 -> 60 -> 120).
+
+31. Um passeio de barco custa R$ 15,00. Um grupo de 8 pessoas comprou ingressos. Quanto gastaram?
+32. A Júlia guarda R$ 25,00 da sua mesada todo mês. Quanto ela terá guardado após 8 meses?
+33. Um pacote de pães de queijo vem com 12 unidades. A padaria assou 8 pacotes na primeira fornada. Quantos pães de queijo foram assados?
+34. Uma professora leva 45 minutos para corrigir a prova de uma turma. Como ela tem 8 turmas, quantos minutos passará corrigindo no total?
+35. Uma pista infantil de atletismo tem 35 metros. A criança teve muita energia e deu 8 voltas. Quantos metros ela correu no total?
+
+### Estratégia 8: A Arte de Desmontar (Propriedade Distributiva)
+**A Linguagem:** Quando o número parecer feio, desmonte-o em dezenas e unidades, multiplique separado e some no final. (Ex: 14 x 12 -> Desmonte o 12 em 10 + 2. Faça 14 x 10 = 140. Depois faça 14 x 2 = 28. Junte tudo: 140 + 28 = 168).
+
+36. Um fazendeiro plantou 14 fileiras de macieiras. Em cada fileira, ele colocou 12 árvores. Quantas árvores foram plantadas no total?
+37. Um tênis esportivo é vendido parcelado em 13 vezes de R$ 25,00. Qual o valor total do tênis? (Dica: Faça 25 x 10 e some com 25 x 3).
+38. O carteiro entregou 15 correspondências em cada prédio. Ele passou por 14 prédios. Quantas cartas ele entregou no total? (Dica: Faça 15 x 10 e some com 15 x 4).
+39. Um ônibus viaja a uma velocidade de 82 km por hora. Em 12 horas de viagem na estrada, qual a distância percorrida? (Dica: Faça 82 x 10 e some com 82 x 2).
+40. Uma lanchonete encomendou 22 embalagens que contêm 15 pães cada. Quantos pães chegaram no total? (Dica: Desmonte o 22 em 20 + 2. Faça 20 x 15 e some com 2 x 15).
+`
+  },
+  {
+    id: 'plan-18',
+    slug: 'desafios-multiplicacao-exercicios',
+    title: 'Lista de Exercícios: Os Desafios da Multiplicação',
+    subject: 'Matemática',
+    grade: '6°ano ao 9°ano',
+    description: 'Cinco missões práticas organizadas por grupos, linhas e combinações para você treinar a lógica invisível da multiplicação.',
+    pdfPath: '/pdfs/02-multiplicacao-revisado.pdf',
+    pages: 2,
+    available: true,
+    richContent: String.raw`
+## 📝 Lista de Exercícios: Os Desafios da Multiplicação
+
+### 📦 Missão 1: Grupos Iguais (A "Soma Rápida")
+**Dica:** Lembre-se de que aqui estamos lidando com coisas que se repetem sempre na mesma quantidade, como o nosso sistema de dinheiro ou compras.
+
+1. O Marcos ganha R$ 15,00 de mesada por semana. Ele decidiu não gastar nada para comprar um jogo novo. Quantos reais ele terá guardado no total após 4 semanas?
+2. A Sofia foi à banca e comprou 5 pacotinhos de figurinhas para o seu álbum de animais. Ela sabe que dentro de cada pacotinho vêm exatamente 8 figurinhas. Quantas figurinhas ela comprou ao todo?
+3. A professora de Artes comprou 6 caixas de lápis de cor para a turma usar durante o ano. Sabendo que cada caixa tem 12 lápis, qual é o total de lápis que a professora tem agora?
+4. Uma escola alugou 3 vans para levar as crianças ao zoológico. Se em cada van entraram exatamente 14 crianças, quantos alunos foram a esse passeio?
+
+### 🏢 Missão 2: Organização Visual (Linhas e Colunas)
+**Dica:** Imagine um mapa, uma grade, um piso de azulejos ou um jogo da velha gigante.
+
+5. No cinema do shopping, as poltronas estão organizadas em 8 fileiras (linhas horizontais). Em cada fileira, cabem 10 poltronas. Quantas pessoas conseguem assistir ao filme sentadas nessa sala?
+6. A mãe do Lucas fez uma assadeira de brigadeiros para uma festa. Ela organizou os docinhos perfeitamente em 5 linhas e 6 colunas. Sem precisar apontar o dedo e contar um por um, quantos brigadeiros cabem nessa assadeira?
+7. O Seu João plantou alfaces na sua horta. Ele fez 7 linhas na terra e colocou 9 mudas de alface em cada linha. Quantos pés de alface ele plantou no total?
+8. O prédio onde a Carol mora foi construído com 12 andares. Os arquitetos desenharam 4 apartamentos por andar. Quantos apartamentos existem no prédio inteiro?
+
+### 👕 Missão 3: Combinações (A Matemática das Escolhas)
+**Dica:** Para saber o total de opções possíveis sem precisar desenhar todas, multiplicamos as opções de um grupo pelas opções do outro.
+
+9. O Thiago vai a uma festa e está em dúvida do que vestir. Ele separou em cima da cama 4 camisetas diferentes e 3 bermudas. De quantas maneiras diferentes ele pode montar um visual (escolhendo uma camiseta e uma bermuda)?
+10. Na lanchonete da escola, a promoção do dia deixa você escolher 1 lanche e 1 suco. Eles têm 5 tipos de lanches (quente, natural, hambúrguer, etc.) e 4 sabores de suco. Quantas combinações diferentes de "Lanche + Suco" você pode inventar?
+11. Na sorveteria "Gelato Frio", você escolhe o tamanho do copo e o sabor. Existem 3 tamanhos de copo (pequeno, médio e grande) e 6 sabores de sorvete. Quantas opções diferentes de pedido você pode fazer?
+12. Em um jogo de videogame, antes da corrida começar, a Ana precisa escolher o seu piloto e o seu carro. O jogo tem 4 pilotos e 5 carros disponíveis. De quantas formas diferentes a Ana pode começar essa corrida?
+
+### 🕵️ Missão 4: Comparação (Os Códigos Secretos da Matemática)
+**Dica:** Traduza palavras mágicas da escola como dobro, triplo e quádruplo para o número multiplicador correto.
+
+13. O cãozinho Max é pequeno e pesa 6 quilos. O cãozinho Thor, que é de uma raça maior, pesa o dobro do peso do Max. Quantos quilos o Thor pesa?
+14. A Mariana leu 20 páginas do seu livro favorito no sábado. O seu irmão mais velho ficou lendo até mais tarde e conseguiu ler o triplo de páginas da Mariana. Quantas páginas o irmão dela leu?
+15. O pai do Lucas disse uma charada: "Eu tenho o quádruplo da sua idade!". Sabendo que o Lucas tem 9 anos hoje, qual é a idade do pai dele?
+16. Um jogo de tabuleiro simples custa R$ 45,00 na loja de brinquedos. O videogame novo que o Pedro quer comprar custa o dobro desse valor. Qual é o preço do videogame?
+
+### ⚖️ Missão 5: Proporção e Escalas (Crescimento Justo)
+**Dica:** Se uma coisa cresce, a outra parte ligada a ela tem que crescer na mesma velocidade (muito usado em receitas, tempo e distância).
+
+17. Para fazer 1 bolo de chocolate delicioso, a vovó usa 3 ovos. No domingo, ela quer fazer 5 bolos iguais para doar para uma creche. Quantos ovos ela vai precisar separar na cozinha?
+18. O Gabriel adora séries. Cada episódio do desenho dele dura exatamente 20 minutos. Se ele maratonar e assistir a 4 episódios seguidos, quantos minutos ele vai passar na frente da TV?
+19. Para encher um balde até a boca, são necessários 5 litros de água. O pai da Júlia usou 15 baldes cheios para encher a piscininha de plástico dela. Quantos litros de água cabem na piscina?
+20. Uma volta completa de bicicleta correndo ao redor da praça tem 400 metros de distância. O Caio estava com muita energia e deu 6 voltas completas. Quantos metros ele pedalou no total?
+`
   }
 
 ]
@@ -1472,4 +1707,12 @@ export const lessonCategories: LessonCategory[] = [
     icon: '➖',
     slugs: ['matematica-sinais-peso-alivio', 'regras-de-ouro-negativos', 'expressoes-numericas-trincheira'],
   },
+  {
+    id: 'cat-multiplicacao',
+    title: 'Princípios por trás da Multiplicação',
+    description: 'Grupos, linhas, combinações e os segredos do cálculo mental rápido.',
+    icon: '✖️',
+    slugs: ['magia-calculo-mental-multiplicacao', 'desafios-multiplicacao-exercicios'],
+  },
+
 ]

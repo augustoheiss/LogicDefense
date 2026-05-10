@@ -39,6 +39,7 @@ const COLOR_MAP: Record<string, Topic['color']> = {
   'cat-regra-de-tres': 'blue',
   'cat-simplificacao': 'green',
   'cat-inteiros': 'orange',
+  'cat-multiplicacao': 'cyan',
 }
 
 // ── Builder ───────────────────────────────────────────────────────────────────
@@ -83,10 +84,8 @@ function buildTopics(): Topic[] {
   }
 
   // ── Injetando Vídeos nas Trilhas ───────────────────────────────
-  // Já amarramos os vídeos corretos do seu content.ts nestas trilhas:
-  // ── Injetando Vídeos nas Trilhas ───────────────────────────────
-  // Aulas de Equação + Músicas de Álgebra
-  injectVideos('cat-equacao', ['vid-13', 'vid-14', 'vid-19', 'vid-20'])
+  // Aulas de Equação + Filosofia da Matemática
+  injectVideos('cat-equacao', ['vid-13', 'vid-14', 'vid-19', 'vid-20', 'vid-32', 'vid-34', 'vid-39'])
 
   // Aulas de Frações + Músicas de Frações
   injectVideos('cat-fracoes', ['vid-11', 'vid-12', 'vid-21', 'vid-22'])
@@ -94,11 +93,14 @@ function buildTopics(): Topic[] {
   // Aulas de Regra de Três + Podcasts + Músicas de Proporção
   injectVideos('cat-regra-de-tres', ['vid-9', 'vid-10', 'vid-17', 'vid-18', 'vid-23', 'vid-24'])
 
-  // Aulas de Números Inteiros + Músicas + Podcasts
-  injectVideos('cat-inteiros', ['vid-26', 'vid-27', 'vid-28', 'vid-25', 'vid-29', 'vid-30', 'vid-31'])
+  // Aulas de Números Inteiros + Combate à Atrofia Cognitiva + Demência Digital
+  injectVideos('cat-inteiros', ['vid-25', 'vid-26', 'vid-27', 'vid-28', 'vid-29', 'vid-30', 'vid-31', 'vid-33', 'vid-37', 'vid-38'])
+
+  // Nova trilha de Multiplicação (Podcast Musical)
+  injectVideos('cat-multiplicacao', ['vid-36'])
 
   // ── Detectar vídeos órfãos e criar trilha "Laboratório de Vídeos" ──
-  // Coleta todos os IDs que já foram injetados em alguma trilha
+  // (Isso vai pegar o vid-40 do Caos Escolar e os vid-15/vid-16 do Assistente Escola Modelo automaticamente!)
   const assignedVideoIds = new Set<string>()
   realTopics.forEach((t) =>
     t.items.filter((i) => i.type === 'video').forEach((i) => assignedVideoIds.add(i.id))
