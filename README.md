@@ -2,7 +2,7 @@
 
 Bem-vindo ao **Heiss-Lab**, um portal educacional focado no ensino de Matemática e no desenvolvimento do pensamento lógico. Nascido da evolução do projeto *LogicDefense*, o Heiss-Lab é um ecossistema completo de aprendizado que une materiais tradicionais à tecnologia de ponta.
 
-🔗 **Acesse o portal:** [heiss-lab.vercel.app](https://heiss-lab.vercel.app)
+🔗 **Acesse o portal:** [heisslab.com.br](https://heisslab.com.br)
 
 ## 🎯 O Propósito
 Este projeto foi elaborado 100% em cocriação com a Inteligência Artificial. No entanto, sua filosofia central é a de que **a IA deve ser uma alavanca para o esforço humano, e não um substituto para o ato de pensar.** Vivemos uma era onde a produção de conteúdo foi banalizada pelos algoritmos. O Heiss-Lab defende o "processo" — a jornada de aprendizado, a pesquisa, o erro e o trabalho árduo. Os jogos e materiais aqui presentes não entregam respostas fáceis; eles exigem cálculo, estratégia e lógica pura.
