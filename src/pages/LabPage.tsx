@@ -62,6 +62,21 @@ export function LabPage() {
           </Link>
         </div>
 
+        {/* ── Porta USB Universal — API Port tool card ── */}
+        <div className="cv-lab-card">
+          <div className="cv-lab-card__icon">🔌</div>
+          <div className="cv-lab-card__body">
+            <span className="cv-lab-card__tag">SaaS Tool · Integração</span>
+            <h2 className="cv-lab-card__title">Porta USB Universal — API</h2>
+            <p className="cv-lab-card__desc">
+              Leitor dinâmico de APIs para integração de sistemas legados sem interface gráfica. Carregue um contrato OpenAPI e o sistema desenha formulários e botões automaticamente, sem hardcode de regras.
+            </p>
+          </div>
+          <Link to="/laboratorio/api-port" className="cv-lab-card__cta">
+            Abrir API Port ↗
+          </Link>
+        </div>
+
         {/* ── CV YAML tool card ── */}
         <div className="cv-lab-card">
           <div className="cv-lab-card__icon">📄</div>
