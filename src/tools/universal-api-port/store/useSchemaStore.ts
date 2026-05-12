@@ -7,6 +7,7 @@
 import { create } from 'zustand';
 import type { OpenApiDocument, ParsedEndpoint } from '../types/openapi';
 import { parseOpenApiDocument, extractTags } from '../core/schemaParser';
+import { validateSchema, type ValidationResult } from '../core/schemaValidator';
 import type { ExecutionResult } from '../core/apiExecutor';
 
 interface SchemaState {
@@ -16,6 +17,7 @@ interface SchemaState {
   tags: string[];
   activeTag: string | null;
   selectedEndpoint: ParsedEndpoint | null;
+  validationResult: ValidationResult | null;
 
   /* ── Connection config ───────────────────────── */
   baseUrl: string;
@@ -45,6 +47,7 @@ export const useSchemaStore = create<SchemaState>((set) => ({
   tags: [],
   activeTag: null,
   selectedEndpoint: null,
+  validationResult: null,
   baseUrl: '',
   apiKey: '',
   authHeaderName: 'Authorization',
@@ -55,6 +58,7 @@ export const useSchemaStore = create<SchemaState>((set) => ({
     const endpoints = parseOpenApiDocument(doc);
     const tags = extractTags(doc);
     const baseUrl = doc.servers?.[0]?.url ?? '';
+    const validationResult = validateSchema(doc);
     set({
       rawDocument: doc,
       endpoints,
@@ -62,6 +66,7 @@ export const useSchemaStore = create<SchemaState>((set) => ({
       activeTag: tags[0] ?? null,
       selectedEndpoint: null,
       baseUrl,
+      validationResult,
       executionHistory: [],
     });
   },
@@ -74,6 +79,7 @@ export const useSchemaStore = create<SchemaState>((set) => ({
       activeTag: null,
       selectedEndpoint: null,
       baseUrl: '',
+      validationResult: null,
       executionHistory: [],
     }),
 

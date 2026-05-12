@@ -1,9 +1,13 @@
 /**
  * ResponseViewer — Full transparency panel showing raw request + response traces.
- * Renders execution history with collapsible JSON viewers and timing badges.
+ * Renders execution history with collapsible JSON viewers, timing badges,
+ * and auto-tabulated table views for array responses.
  */
 
+import { useState } from 'react';
 import { useSchemaStore } from '../store/useSchemaStore';
+import { ResponseTable } from './ResponseTable';
+import { downloadHar } from '../core/harExporter';
 import type { ExecutionResult } from '../core/apiExecutor';
 
 function StatusBadge({ status }: { status: number }) {
@@ -18,9 +22,12 @@ function StatusBadge({ status }: { status: number }) {
   );
 }
 
+type ViewMode = 'auto' | 'json';
+
 function TraceCard({ result, index }: { result: ExecutionResult; index: number }) {
   const { request, response, error } = result;
   const time = new Date(request.timestamp).toLocaleTimeString('pt-BR');
+  const [viewMode, setViewMode] = useState<ViewMode>('auto');
 
   return (
     <div className={`uap-trace ${error ? 'uap-trace--error' : ''}`}>
@@ -48,10 +55,47 @@ function TraceCard({ result, index }: { result: ExecutionResult; index: number }
 
       {response && (
         <details className="uap-trace__details" open>
-          <summary>📥 Resposta ({response.status} {response.statusText})</summary>
-          <pre className="uap-trace__json">
-            {JSON.stringify(response.body, null, 2)}
-          </pre>
+          <summary className="uap-trace__response-summary">
+            <span>📥 Resposta ({response.status} {response.statusText})</span>
+            {/* View mode toggle — only show if table rendering is possible */}
+            <span className="uap-view-toggle" onClick={(e) => e.stopPropagation()}>
+              <button
+                className={`uap-view-toggle__btn ${viewMode === 'auto' ? 'uap-view-toggle__btn--active' : ''}`}
+                onClick={() => setViewMode('auto')}
+                title="Tabela automática (quando disponível)"
+              >
+                📊
+              </button>
+              <button
+                className={`uap-view-toggle__btn ${viewMode === 'json' ? 'uap-view-toggle__btn--active' : ''}`}
+                onClick={() => setViewMode('json')}
+                title="JSON bruto"
+              >
+                {'{ }'}
+              </button>
+            </span>
+          </summary>
+
+          {/* Auto mode: try table first, fall back to JSON */}
+          {viewMode === 'auto' && (
+            <>
+              <ResponseTable body={response.body} />
+              {/* Always show raw JSON in a collapsed details below the table */}
+              <details className="uap-trace__raw-fallback">
+                <summary>Visualizar JSON bruto</summary>
+                <pre className="uap-trace__json">
+                  {JSON.stringify(response.body, null, 2)}
+                </pre>
+              </details>
+            </>
+          )}
+
+          {/* JSON mode: raw only */}
+          {viewMode === 'json' && (
+            <pre className="uap-trace__json">
+              {JSON.stringify(response.body, null, 2)}
+            </pre>
+          )}
         </details>
       )}
     </div>
@@ -78,9 +122,18 @@ export function ResponseViewer() {
     <div className="uap-response">
       <div className="uap-response__toolbar">
         <h3>Histórico de Requisições ({executionHistory.length})</h3>
-        <button onClick={clearHistory} className="uap-btn uap-btn--ghost">
-          🗑️ Limpar
-        </button>
+        <div className="uap-response__actions">
+          <button
+            onClick={() => downloadHar(executionHistory)}
+            className="uap-btn uap-btn--ghost"
+            title="Exportar como arquivo HAR (HTTP Archive)"
+          >
+            📦 Exportar .har
+          </button>
+          <button onClick={clearHistory} className="uap-btn uap-btn--ghost">
+            🗑️ Limpar
+          </button>
+        </div>
       </div>
       <div className="uap-response__list">
         {executionHistory.map((result, i) => (

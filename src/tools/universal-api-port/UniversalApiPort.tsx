@@ -6,6 +6,7 @@
 import { useSchemaStore } from './store/useSchemaStore';
 import { SchemaLoader } from './components/SchemaLoader';
 import { ConnectionBar } from './components/ConnectionBar';
+import { ValidationPanel } from './components/ValidationPanel';
 import { EndpointCard } from './components/EndpointCard';
 import { DynamicForm } from './components/DynamicForm';
 import { ResponseViewer } from './components/ResponseViewer';
@@ -47,6 +48,7 @@ export function UniversalApiPort() {
       </header>
 
       <ConnectionBar />
+      <ValidationPanel />
 
       {/* Main workbench: sidebar + form + response */}
       <div className="uap-workbench">

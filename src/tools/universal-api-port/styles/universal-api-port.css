@@ -505,6 +505,12 @@
   color: var(--uap-text-secondary);
 }
 
+.uap-response__actions {
+  display: flex;
+  gap: 0.25rem;
+  align-items: center;
+}
+
 .uap-response__list {
   display: flex;
   flex-direction: column;
@@ -706,6 +712,324 @@
   background: rgba(239, 68, 68, 0.1);
   border-radius: var(--uap-radius);
   width: 100%;
+}
+
+/* ── Validation Panel ────────────────────────────────────────── */
+
+.uap-validation {
+  border: 1px solid var(--uap-border);
+  border-radius: var(--uap-radius);
+  margin-bottom: 1rem;
+  overflow: hidden;
+  animation: uap-slide-in 250ms ease;
+}
+
+.uap-validation--issues {
+  border-color: rgba(245, 158, 11, 0.35);
+}
+
+.uap-validation--clean {
+  border-color: rgba(34, 197, 94, 0.25);
+}
+
+.uap-validation__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  padding: 0.55rem 0.85rem;
+  background: var(--uap-bg-secondary);
+  border: none;
+  cursor: pointer;
+  transition: background var(--uap-transition);
+  color: var(--uap-text-primary);
+  font-family: var(--uap-font);
+}
+
+.uap-validation__header:hover {
+  background: var(--uap-bg-tertiary);
+}
+
+.uap-validation__badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.uap-validation__badge {
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+}
+
+.uap-validation__badge--error {
+  background: rgba(239, 68, 68, 0.15);
+  color: var(--uap-red);
+}
+
+.uap-validation__badge--warning {
+  background: rgba(245, 158, 11, 0.15);
+  color: var(--uap-amber);
+}
+
+.uap-validation__badge--info {
+  background: rgba(59, 130, 246, 0.1);
+  color: var(--uap-text-accent);
+}
+
+.uap-validation__badge--ok {
+  background: rgba(34, 197, 94, 0.12);
+  color: var(--uap-green);
+}
+
+.uap-validation__toggle {
+  font-size: 0.72rem;
+  color: var(--uap-text-muted);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.uap-validation__list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  background: var(--uap-border);
+}
+
+/* ── Diagnostic Row ──────────────────────────────────────────── */
+
+.uap-diag {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.5rem 0.85rem;
+  background: var(--uap-bg-primary);
+  align-items: flex-start;
+}
+
+.uap-diag--error {
+  border-left: 3px solid var(--uap-red);
+}
+
+.uap-diag--warning {
+  border-left: 3px solid var(--uap-amber);
+}
+
+.uap-diag--info {
+  border-left: 3px solid var(--uap-blue);
+}
+
+.uap-diag__icon {
+  flex-shrink: 0;
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
+.uap-diag__body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.uap-diag__message {
+  font-size: 0.8rem;
+  color: var(--uap-text-primary);
+  line-height: 1.4;
+}
+
+.uap-diag__hint {
+  font-size: 0.72rem;
+  color: var(--uap-text-secondary);
+  line-height: 1.4;
+}
+
+.uap-diag__path {
+  font-family: var(--uap-font-mono);
+  font-size: 0.65rem;
+  color: var(--uap-text-muted);
+}
+
+/* ── View Toggle (Table / JSON) ──────────────────────────────── */
+
+.uap-trace__response-summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.uap-view-toggle {
+  display: inline-flex;
+  gap: 2px;
+  background: var(--uap-bg-tertiary);
+  border-radius: 6px;
+  padding: 2px;
+  flex-shrink: 0;
+}
+
+.uap-view-toggle__btn {
+  padding: 0.2rem 0.45rem;
+  font-size: 0.7rem;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--uap-text-muted);
+  cursor: pointer;
+  transition: all var(--uap-transition);
+  font-family: var(--uap-font-mono);
+}
+
+.uap-view-toggle__btn:hover {
+  color: var(--uap-text-primary);
+}
+
+.uap-view-toggle__btn--active {
+  background: var(--uap-bg-hover);
+  color: var(--uap-text-primary);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+.uap-trace__raw-fallback {
+  margin-top: 0.4rem;
+}
+
+.uap-trace__raw-fallback summary {
+  font-size: 0.7rem;
+  color: var(--uap-text-muted);
+  cursor: pointer;
+}
+
+/* ── Response Table ──────────────────────────────────────────── */
+
+.uap-table-wrap {
+  margin-top: 0.4rem;
+  animation: uap-slide-in 200ms ease;
+}
+
+.uap-table__source {
+  font-size: 0.72rem;
+  color: var(--uap-text-muted);
+  margin-bottom: 0.35rem;
+}
+
+.uap-table__source code {
+  background: var(--uap-bg-tertiary);
+  padding: 0.1rem 0.35rem;
+  border-radius: 4px;
+  font-size: 0.68rem;
+  color: var(--uap-text-accent);
+}
+
+.uap-table__scroll {
+  overflow-x: auto;
+  border: 1px solid var(--uap-border);
+  border-radius: 6px;
+}
+
+.uap-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.75rem;
+  font-family: var(--uap-font-mono);
+}
+
+.uap-table__th {
+  text-align: left;
+  padding: 0.4rem 0.55rem;
+  background: var(--uap-bg-tertiary);
+  color: var(--uap-text-secondary);
+  font-weight: 700;
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+  border-bottom: 2px solid var(--uap-border);
+  transition: color var(--uap-transition);
+}
+
+.uap-table__th:hover {
+  color: var(--uap-text-primary);
+}
+
+.uap-table__th--sorted {
+  color: var(--uap-text-accent);
+}
+
+.uap-table__th--index {
+  width: 2.5rem;
+  text-align: center;
+  cursor: default;
+}
+
+.uap-table__sort-arrow {
+  font-size: 0.65rem;
+}
+
+.uap-table__tr {
+  transition: background var(--uap-transition);
+}
+
+.uap-table__tr:hover {
+  background: var(--uap-bg-hover);
+}
+
+.uap-table__tr:nth-child(even) {
+  background: rgba(255, 255, 255, 0.015);
+}
+
+.uap-table__tr:nth-child(even):hover {
+  background: var(--uap-bg-hover);
+}
+
+.uap-table__td {
+  padding: 0.35rem 0.55rem;
+  border-bottom: 1px solid var(--uap-border-subtle);
+  color: var(--uap-text-primary);
+  max-width: 250px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.uap-table__td--index {
+  text-align: center;
+  color: var(--uap-text-muted);
+  font-size: 0.65rem;
+}
+
+/* ── Table cell type variants ────────────────────────────────── */
+
+.uap-table__null {
+  color: var(--uap-text-muted);
+  font-style: italic;
+}
+
+.uap-table__bool {
+  font-weight: 700;
+}
+
+.uap-table__bool--true {
+  color: var(--uap-green);
+}
+
+.uap-table__bool--false {
+  color: var(--uap-red);
+}
+
+.uap-table__number {
+  color: var(--uap-amber);
+}
+
+.uap-table__object {
+  font-size: 0.65rem;
+  color: var(--uap-text-muted);
+  background: var(--uap-bg-input);
+  padding: 0.1rem 0.3rem;
+  border-radius: 3px;
 }
 
 /* ── Animations ──────────────────────────────────────────────── */

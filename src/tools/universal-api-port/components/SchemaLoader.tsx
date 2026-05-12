@@ -1,9 +1,10 @@
 /**
- * SchemaLoader — Drop zone + paste area for loading an OpenAPI JSON.
- * Supports: file upload (drag & drop), JSON paste, and demo schema.
+ * SchemaLoader — Drop zone + paste area for loading an OpenAPI spec.
+ * Supports: JSON and YAML formats, file upload (drag & drop), paste, and demo schema.
  */
 
 import { useState, useCallback, useRef } from 'react';
+import yaml from 'js-yaml';
 import { useSchemaStore } from '../store/useSchemaStore';
 import { sampleSchema } from '../data/sampleSchema';
 import type { OpenApiDocument } from '../types/openapi';
@@ -16,17 +17,29 @@ export function SchemaLoader() {
 
   const tryParse = useCallback(
     (raw: string) => {
+      let doc: OpenApiDocument | null = null;
+
+      // 1️⃣ Try JSON first (faster, stricter)
       try {
-        const doc = JSON.parse(raw) as OpenApiDocument;
-        if (!doc.openapi || !doc.paths) {
-          setError('JSON inválido: campos "openapi" e "paths" são obrigatórios.');
+        doc = JSON.parse(raw) as OpenApiDocument;
+      } catch {
+        // 2️⃣ Fallback: try YAML
+        try {
+          doc = yaml.load(raw) as OpenApiDocument;
+        } catch (yamlErr) {
+          const msg = yamlErr instanceof Error ? yamlErr.message : '';
+          setError(`Erro ao interpretar o arquivo. Não é JSON nem YAML válido.${msg ? ` (${msg})` : ''}`);
           return;
         }
-        setError(null);
-        loadSchema(doc);
-      } catch {
-        setError('Erro ao interpretar JSON. Verifique a formatação.');
       }
+
+      if (!doc || typeof doc !== 'object' || !doc.openapi || !doc.paths) {
+        setError('Schema inválido: campos "openapi" e "paths" são obrigatórios.');
+        return;
+      }
+
+      setError(null);
+      loadSchema(doc);
     },
     [loadSchema]
   );
@@ -59,7 +72,7 @@ export function SchemaLoader() {
       <div className="uap-loader__hero">
         <div className="uap-loader__icon">🔌</div>
         <h2>Porta USB Universal</h2>
-        <p>Conecte qualquer API carregando seu contrato OpenAPI (JSON)</p>
+        <p>Conecte qualquer API carregando seu contrato OpenAPI (JSON ou YAML)</p>
       </div>
 
       {/* Drop zone */}
@@ -70,19 +83,19 @@ export function SchemaLoader() {
         onDrop={handleDrop}
       >
         <span className="uap-loader__dropzone-icon">📂</span>
-        <span>Arraste um arquivo .json aqui</span>
+        <span>Arraste um arquivo .json ou .yaml aqui</span>
       </div>
 
       {/* Or paste */}
       <div className="uap-loader__paste">
         <textarea
           ref={textareaRef}
-          placeholder='Cole o JSON do OpenAPI aqui...'
+          placeholder='Cole o JSON ou YAML do OpenAPI aqui...'
           rows={6}
           className="uap-loader__textarea"
         />
         <button onClick={handlePaste} className="uap-btn uap-btn--secondary">
-          Carregar JSON
+          Carregar Schema
         </button>
       </div>
 
