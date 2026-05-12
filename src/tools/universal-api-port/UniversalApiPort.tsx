@@ -4,7 +4,7 @@
  */
 
 import { useSchemaStore } from './store/useSchemaStore';
-import { SchemaLoader } from './components/SchemaLoader';
+import { ManifestoWelcome } from './components/ManifestoWelcome';
 import { ConnectionBar } from './components/ConnectionBar';
 import { ValidationPanel } from './components/ValidationPanel';
 import { EndpointCard } from './components/EndpointCard';
@@ -15,11 +15,11 @@ import './styles/universal-api-port.css';
 export function UniversalApiPort() {
   const { rawDocument, endpoints, tags, activeTag, setActiveTag, clearSchema } = useSchemaStore();
 
-  // Phase 1: No schema loaded → show loader
+  // Phase 1: No schema loaded → show manifesto + loader
   if (!rawDocument) {
     return (
       <div className="uap-page">
-        <SchemaLoader />
+        <ManifestoWelcome />
       </div>
     );
   }

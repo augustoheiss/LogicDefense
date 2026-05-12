@@ -1050,6 +1050,439 @@
   border-radius: 3px;
 }
 
+/* ═══════════════════════════════════════════════════════════════
+ *  Manifesto Landing Page
+ * ═══════════════════════════════════════════════════════════════ */
+
+.uap-manifesto {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 1rem 0 3rem;
+}
+
+/* ── Hero ────────────────────────────────────────────────────── */
+
+.uap-manifesto__hero {
+  position: relative;
+  text-align: center;
+  padding: 4rem 1.5rem 3rem;
+  overflow: hidden;
+}
+
+.uap-manifesto__hero-glow {
+  position: absolute;
+  top: -120px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 600px;
+  height: 600px;
+  background: radial-gradient(
+    circle,
+    rgba(59, 130, 246, 0.12) 0%,
+    rgba(168, 85, 247, 0.06) 40%,
+    transparent 70%
+  );
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.uap-manifesto__kicker {
+  position: relative;
+  z-index: 1;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  color: var(--uap-text-muted);
+  margin-bottom: 1.25rem;
+}
+
+.uap-manifesto__headline {
+  position: relative;
+  z-index: 1;
+  font-size: clamp(2rem, 5vw, 3.2rem);
+  font-weight: 900;
+  line-height: 1.1;
+  margin-bottom: 1.5rem;
+  background: linear-gradient(135deg, var(--uap-blue), var(--uap-cyan), var(--uap-purple));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: uap-manifesto-fade-up 600ms ease both;
+}
+
+.uap-manifesto__subheadline {
+  position: relative;
+  z-index: 1;
+  font-size: clamp(0.95rem, 2vw, 1.1rem);
+  line-height: 1.7;
+  color: var(--uap-text-secondary);
+  max-width: 680px;
+  margin: 0 auto 2.5rem;
+  animation: uap-manifesto-fade-up 600ms 100ms ease both;
+}
+
+.uap-manifesto__subheadline strong {
+  color: var(--uap-text-primary);
+}
+
+/* ── Pillars ─────────────────────────────────────────────────── */
+
+.uap-manifesto__pillars {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+  margin-bottom: 2.5rem;
+  animation: uap-manifesto-fade-up 600ms 200ms ease both;
+}
+
+@media (max-width: 700px) {
+  .uap-manifesto__pillars {
+    grid-template-columns: 1fr;
+    max-width: 380px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+}
+
+.uap-manifesto__pillar {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+  padding: 0.85rem 1rem;
+  background: var(--uap-bg-secondary);
+  border: 1px solid var(--uap-border);
+  border-radius: var(--uap-radius);
+  text-align: left;
+  transition: border-color var(--uap-transition), transform var(--uap-transition);
+}
+
+.uap-manifesto__pillar:hover {
+  border-color: var(--uap-border-focus);
+  transform: translateY(-2px);
+}
+
+.uap-manifesto__pillar-icon {
+  font-size: 1.5rem;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.uap-manifesto__pillar strong {
+  display: block;
+  font-size: 0.82rem;
+  color: var(--uap-text-primary);
+  margin-bottom: 0.15rem;
+}
+
+.uap-manifesto__pillar span {
+  font-size: 0.72rem;
+  color: var(--uap-text-muted);
+}
+
+/* ── Hero CTA ────────────────────────────────────────────────── */
+
+.uap-manifesto__cta {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.85rem 2rem;
+  font-size: 1.05rem;
+  font-weight: 700;
+  font-family: var(--uap-font);
+  color: #fff;
+  background: linear-gradient(135deg, var(--uap-blue), var(--uap-cyan));
+  border: none;
+  border-radius: var(--uap-radius-lg);
+  cursor: pointer;
+  box-shadow: 0 4px 20px rgba(59, 130, 246, 0.35);
+  transition: all 250ms ease;
+  animation: uap-manifesto-fade-up 600ms 300ms ease both;
+}
+
+.uap-manifesto__cta:hover {
+  transform: translateY(-2px) scale(1.02);
+  box-shadow: 0 8px 32px rgba(59, 130, 246, 0.5);
+}
+
+/* ── Section Layout ──────────────────────────────────────────── */
+
+.uap-manifesto__section {
+  padding: 3.5rem 1.5rem;
+  border-top: 1px solid var(--uap-border);
+}
+
+.uap-manifesto__section-label {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  color: var(--uap-text-muted);
+  margin-bottom: 0.75rem;
+}
+
+.uap-manifesto__section--before .uap-manifesto__section-label {
+  color: var(--uap-red);
+}
+
+.uap-manifesto__section--after .uap-manifesto__section-label {
+  color: var(--uap-green);
+}
+
+.uap-manifesto__section--bridge .uap-manifesto__section-label {
+  color: var(--uap-cyan);
+}
+
+.uap-manifesto__section-title {
+  font-size: clamp(1.4rem, 3.5vw, 2rem);
+  font-weight: 800;
+  line-height: 1.2;
+  margin-bottom: 2rem;
+  color: var(--uap-text-primary);
+}
+
+/* ── Cards Grid ──────────────────────────────────────────────── */
+
+.uap-manifesto__cards {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1.25rem;
+  margin-bottom: 2rem;
+}
+
+@media (max-width: 650px) {
+  .uap-manifesto__cards {
+    grid-template-columns: 1fr;
+  }
+}
+
+.uap-manifesto__card {
+  padding: 1.5rem;
+  border-radius: var(--uap-radius-lg);
+  border: 1px solid var(--uap-border);
+  background: var(--uap-bg-secondary);
+  transition: border-color var(--uap-transition), transform var(--uap-transition);
+}
+
+.uap-manifesto__card:hover {
+  transform: translateY(-2px);
+}
+
+.uap-manifesto__card--pain {
+  border-left: 3px solid var(--uap-red);
+}
+
+.uap-manifesto__card--pain:hover {
+  border-color: var(--uap-red);
+}
+
+.uap-manifesto__card--outcome {
+  border-left: 3px solid var(--uap-green);
+}
+
+.uap-manifesto__card--outcome:hover {
+  border-color: var(--uap-green);
+}
+
+.uap-manifesto__card-icon {
+  font-size: 1.8rem;
+  margin-bottom: 0.65rem;
+}
+
+.uap-manifesto__card h3 {
+  font-size: 1rem;
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+  color: var(--uap-text-primary);
+}
+
+.uap-manifesto__card p {
+  font-size: 0.88rem;
+  line-height: 1.65;
+  color: var(--uap-text-secondary);
+}
+
+.uap-manifesto__card p strong {
+  color: var(--uap-text-primary);
+}
+
+/* ── Belief Blockquote ───────────────────────────────────────── */
+
+.uap-manifesto__belief {
+  display: flex;
+  gap: 0.85rem;
+  align-items: flex-start;
+  padding: 1.25rem 1.5rem;
+  background: rgba(245, 158, 11, 0.06);
+  border: 1px solid rgba(245, 158, 11, 0.2);
+  border-radius: var(--uap-radius-lg);
+  margin: 0;
+}
+
+.uap-manifesto__belief-icon {
+  font-size: 1.5rem;
+  flex-shrink: 0;
+  line-height: 1.4;
+}
+
+.uap-manifesto__belief-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--uap-amber);
+  margin-bottom: 0.35rem;
+}
+
+.uap-manifesto__belief p {
+  font-size: 0.88rem;
+  line-height: 1.65;
+  color: var(--uap-text-secondary);
+  margin: 0;
+}
+
+.uap-manifesto__belief p + p {
+  margin-top: 0.35rem;
+}
+
+.uap-manifesto__belief p strong {
+  color: var(--uap-text-primary);
+}
+
+/* ── Paradigm Blockquote ─────────────────────────────────────── */
+
+.uap-manifesto__paradigm {
+  padding: 1.5rem 2rem;
+  background: rgba(34, 197, 94, 0.05);
+  border: 1px solid rgba(34, 197, 94, 0.18);
+  border-left: 3px solid var(--uap-green);
+  border-radius: var(--uap-radius-lg);
+  margin: 0;
+  text-align: center;
+}
+
+.uap-manifesto__paradigm p {
+  font-size: 0.92rem;
+  line-height: 1.7;
+  color: var(--uap-text-secondary);
+  margin: 0;
+}
+
+.uap-manifesto__paradigm p + p {
+  margin-top: 0.5rem;
+}
+
+.uap-manifesto__paradigm em {
+  font-size: 1.1rem;
+  color: var(--uap-text-primary);
+  font-style: italic;
+}
+
+.uap-manifesto__paradigm strong {
+  color: var(--uap-green);
+}
+
+/* ── Badge ───────────────────────────────────────────────────── */
+
+.uap-manifesto__badge {
+  display: inline-block;
+  font-size: 0.6rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 0.2rem 0.55rem;
+  background: rgba(6, 182, 212, 0.12);
+  color: var(--uap-cyan);
+  border-radius: 999px;
+  vertical-align: middle;
+  margin-left: 0.5rem;
+}
+
+/* ── Pipeline (Architecture Steps) ───────────────────────────── */
+
+.uap-manifesto__pipeline {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+}
+
+.uap-manifesto__step {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  width: 100%;
+  max-width: 520px;
+  padding: 1.25rem 1.5rem;
+  background: var(--uap-bg-secondary);
+  border: 1px solid var(--uap-border);
+  border-radius: var(--uap-radius-lg);
+  transition: border-color var(--uap-transition), transform var(--uap-transition);
+}
+
+.uap-manifesto__step:hover {
+  border-color: var(--uap-cyan);
+  transform: translateX(4px);
+}
+
+.uap-manifesto__step-num {
+  width: 2.2rem;
+  height: 2.2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.95rem;
+  font-weight: 800;
+  font-family: var(--uap-font-mono);
+  color: #fff;
+  background: linear-gradient(135deg, var(--uap-blue), var(--uap-cyan));
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+
+.uap-manifesto__step-body h4 {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--uap-text-primary);
+  margin-bottom: 0.2rem;
+}
+
+.uap-manifesto__step-body p {
+  font-size: 0.82rem;
+  color: var(--uap-text-secondary);
+  margin-bottom: 0.35rem;
+}
+
+.uap-manifesto__step-body code {
+  font-family: var(--uap-font-mono);
+  font-size: 0.68rem;
+  color: var(--uap-text-muted);
+  background: var(--uap-bg-input);
+  padding: 0.15rem 0.4rem;
+  border-radius: 4px;
+}
+
+.uap-manifesto__step-arrow {
+  font-size: 1rem;
+  color: var(--uap-text-muted);
+  text-align: center;
+  line-height: 1;
+  padding: 0.3rem 0;
+  opacity: 0.4;
+}
+
+/* ── Loader Section (CTA Target) ─────────────────────────────── */
+
+.uap-manifesto__loader-section {
+  padding-top: 3rem;
+  border-top: 1px solid var(--uap-border);
+}
+
 /* ── Animations ──────────────────────────────────────────────── */
 
 @keyframes uap-pulse {
@@ -1060,4 +1493,15 @@
 @keyframes uap-slide-in {
   from { opacity: 0; transform: translateY(-8px); }
   to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes uap-manifesto-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
