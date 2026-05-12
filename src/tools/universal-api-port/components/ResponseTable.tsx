@@ -1,13 +1,14 @@
 /**
- * ResponseTable — Auto-tabulates array-of-objects API responses.
+ * ResponseTable — Auto-tabulates API responses.
  *
  * Detection logic:
- *  1. If body is an array of objects → render as table directly
- *  2. If body is an object with a single array-of-objects field
+ *  1. If body is an array of objects → render as horizontal table
+ *  2. If body is an object wrapping a single array-of-objects field
  *     (common pattern: { "data": [...], "total": 42 }) → render that field
- *  3. Otherwise → returns null (fallback to raw JSON)
+ *  3. If body is a single object → render as vertical key-value table
+ *  4. Otherwise → returns null (fallback to raw JSON)
  *
- * Design: no hardcoded field names, fully dynamic column discovery.
+ * Design: no hardcoded field names, fully dynamic column/key discovery.
  */
 
 import { useState, useMemo } from 'react';
@@ -27,14 +28,16 @@ function isRowArray(val: unknown): val is Row[] {
 /* ── Extract tabular data from any response shape ────────────── */
 
 interface TableData {
+  mode: 'array' | 'keyvalue';
   rows: Row[];
   wrapperKey?: string; // e.g. "data" if extracted from { data: [...] }
+  kvEntries?: [string, unknown][]; // for single-object key-value rendering
 }
 
 function extractTableData(body: unknown): TableData | null {
   // Case 1: body is directly an array of objects
   if (isRowArray(body)) {
-    return { rows: body };
+    return { mode: 'array', rows: body };
   }
 
   // Case 2: body is an object wrapping a single array field
@@ -43,8 +46,17 @@ function extractTableData(body: unknown): TableData | null {
     const arrayEntries = entries.filter(([, v]) => isRowArray(v));
     if (arrayEntries.length === 1) {
       const [key, arr] = arrayEntries[0];
-      return { rows: arr as Row[], wrapperKey: key };
+      return { mode: 'array', rows: arr as Row[], wrapperKey: key };
     }
+  }
+
+  // Case 3: body is a single object → key-value table
+  if (isRow(body) && Object.keys(body).length > 0) {
+    return {
+      mode: 'keyvalue',
+      rows: [],
+      kvEntries: Object.entries(body),
+    };
   }
 
   return null;
@@ -68,17 +80,48 @@ function CellValue({ value }: { value: unknown }) {
   return <>{String(value)}</>;
 }
 
-/* ── Main component ──────────────────────────────────────────── */
+/* ── Key-Value table (single object) ─────────────────────────── */
 
-export function ResponseTable({ body }: { body: unknown }) {
+function KeyValueTable({ entries }: { entries: [string, unknown][] }) {
+  return (
+    <div className="uap-table-wrap">
+      <div className="uap-table__source">
+        Objeto com {entries.length} {entries.length === 1 ? 'propriedade' : 'propriedades'}
+      </div>
+      <div className="uap-table__scroll">
+        <table className="uap-table">
+          <thead>
+            <tr>
+              <th className="uap-table__th uap-table__th--prop">Propriedade</th>
+              <th className="uap-table__th">Valor</th>
+            </tr>
+          </thead>
+          <tbody>
+            {entries.map(([key, value]) => (
+              <tr key={key} className="uap-table__tr">
+                <td className="uap-table__td uap-table__td--key">
+                  <code>{key}</code>
+                </td>
+                <td className="uap-table__td">
+                  <CellValue value={value} />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+/* ── Array table (list of records) ───────────────────────────── */
+
+function ArrayTable({ tableData }: { tableData: TableData }) {
   const [sortCol, setSortCol] = useState<string | null>(null);
   const [sortAsc, setSortAsc] = useState(true);
 
-  const tableData = useMemo(() => extractTableData(body), [body]);
-
   // Discover all unique columns across all rows
   const columns = useMemo(() => {
-    if (!tableData) return [];
     const colSet = new Set<string>();
     for (const row of tableData.rows) {
       Object.keys(row).forEach((k) => colSet.add(k));
@@ -88,7 +131,6 @@ export function ResponseTable({ body }: { body: unknown }) {
 
   // Sorted rows
   const sortedRows = useMemo(() => {
-    if (!tableData) return [];
     if (!sortCol) return tableData.rows;
 
     return [...tableData.rows].sort((a, b) => {
@@ -105,8 +147,6 @@ export function ResponseTable({ body }: { body: unknown }) {
       return sortAsc ? cmp : -cmp;
     });
   }, [tableData, sortCol, sortAsc]);
-
-  if (!tableData) return null;
 
   const handleSort = (col: string) => {
     if (sortCol === col) {
@@ -164,4 +204,18 @@ export function ResponseTable({ body }: { body: unknown }) {
       </div>
     </div>
   );
+}
+
+/* ── Main component ──────────────────────────────────────────── */
+
+export function ResponseTable({ body }: { body: unknown }) {
+  const tableData = useMemo(() => extractTableData(body), [body]);
+
+  if (!tableData) return null;
+
+  if (tableData.mode === 'keyvalue' && tableData.kvEntries) {
+    return <KeyValueTable entries={tableData.kvEntries} />;
+  }
+
+  return <ArrayTable tableData={tableData} />;
 }

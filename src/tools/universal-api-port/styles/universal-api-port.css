@@ -1001,6 +1001,24 @@
   font-size: 0.65rem;
 }
 
+.uap-table__th--prop {
+  width: 180px;
+  cursor: default;
+}
+
+.uap-table__td--key {
+  width: 180px;
+  font-family: var(--uap-font-mono);
+  font-size: 0.75rem;
+  color: var(--uap-text-accent);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.uap-table__td--key code {
+  background: transparent;
+}
+
 /* ── Table cell type variants ────────────────────────────────── */
 
 .uap-table__null {
