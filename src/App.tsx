@@ -13,6 +13,7 @@ import { SobrePage } from './pages/SobrePage'
 import { CVMaker } from './pages/CVMaker'
 import { CoinAssistantPage } from './pages/CoinAssistantPage'
 import { OcorrenciasPage } from './pages/OcorrenciasPage'
+import { ApiPortPage } from './pages/ApiPortPage'
 import './styles/game.css'
 
 export default function App() {
@@ -31,6 +32,7 @@ export default function App() {
           <Route path="/laboratorio/cv-maker"      element={<CVMaker />} />
           <Route path="/laboratorio/assistente-moeda" element={<CoinAssistantPage />} />
           <Route path="/laboratorio/ocorrencias" element={<OcorrenciasPage />} />
+          <Route path="/laboratorio/api-port" element={<ApiPortPage />} />
           <Route path="/repositorio"               element={<MaterialsPage />} />
           {/* Dynamic lesson reading page — /repositorio/vieses-dos-numeros etc. */}
           <Route path="/repositorio/:slug"         element={<LessonPage />} />
