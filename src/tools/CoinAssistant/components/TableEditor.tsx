@@ -503,6 +503,7 @@ export function TableEditor({
         };
 
         const cmpManual   = compare(dailyManual);
+        const cmpMonth    = dailyMonth > 0 && Math.abs(dailyMonth - dailyManual) > 1 ? compare(dailyMonth) : null;
         const cmpSurvival = dailySurvival > 0 ? compare(dailySurvival) : null;
 
         return (
@@ -528,6 +529,12 @@ export function TableEditor({
                 <div className="flex items-center gap-1.5">
                   <span className="text-white/30">Meta Diária ({fmt(dailyManual)}):</span>
                   <span className={`font-semibold ${cmpManual.color}`}>{cmpManual.text}</span>
+                </div>
+              )}
+              {cmpMonth && (
+                <div className="flex items-center gap-1.5">
+                  <span className="text-white/30">Média do Mês ({fmt(dailyMonth)}):</span>
+                  <span className={`font-semibold ${cmpMonth.color}`}>{cmpMonth.text}</span>
                 </div>
               )}
               {cmpSurvival && (
