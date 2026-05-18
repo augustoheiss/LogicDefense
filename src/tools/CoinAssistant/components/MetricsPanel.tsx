@@ -85,6 +85,47 @@ function prorateExpensesForMonth(
   return results;
 }
 
+/**
+ * Computes dynamic Survival Goals from the global expense daily average.
+ *
+ * 1. globalTotalExpenses = sum of ALL expense row values (no month filter)
+ * 2. globalActiveDays    = earliest expense date → latest expense end date (inclusive)
+ * 3. survivalDailyGoal   = globalTotalExpenses / globalActiveDays
+ * 4. Project to selectedMonth: weekly = daily×7, monthly = daily×daysInMonth
+ */
+function computeGlobalSurvivalGoals(
+  rows: TableRow[],
+  selectedMonth: string,
+): { dailySurvival: number; weeklySurvival: number; monthlySurvival: number } | null {
+  let earliest = '';
+  let latest = '';
+  let total = 0;
+
+  for (const r of rows) {
+    if (r.entryType !== 'expense' || r.value <= 0) continue;
+    total += r.value;
+    const start = r.periodStart || r.date;
+    const end   = r.periodEnd   || r.date;
+    if (!earliest || start < earliest) earliest = start;
+    if (!latest   || end   > latest)   latest   = end;
+  }
+
+  if (total <= 0 || !earliest) return null;
+
+  const globalDays = daysBetween(earliest, latest);
+  const dailySurvival = globalDays > 0 ? total / globalDays : 0;
+  if (dailySurvival <= 0) return null;
+
+  const [y, m] = selectedMonth.split('-').map(Number);
+  const mDays = daysInMonth(y, m);
+
+  return {
+    dailySurvival,
+    weeklySurvival: dailySurvival * 7,
+    monthlySurvival: dailySurvival * mDays,
+  };
+}
+
 /** Shorthand used across all metric cards. Full value shown in tooltip via title attr. */
 const fmt = formatCurrencyShort;
 
@@ -131,6 +172,11 @@ export function MetricsPanel({ metrics, dailyGoal, costBasedTarget, table, selec
   const expenseDailyAvg  = monthDays > 0 ? monthlyExpenseTotal / monthDays : 0;
   const expenseWeeklyAvg = expenseDailyAvg * 7;
   const selectedMonthMetrics = metrics.byMonth[selectedMonth] ?? null;
+
+  // ── Dynamic Survival Goals (global expense daily average) ──────────────
+  const survivalGoals = costBasedTarget
+    ? computeGlobalSurvivalGoals(table.rows, selectedMonth)
+    : null;
 
   function formatMonth(ym: string): string {
     const [y, m] = ym.split('-');
@@ -240,6 +286,33 @@ export function MetricsPanel({ metrics, dailyGoal, costBasedTarget, table, selec
             />
           );
         })()}
+
+        {/* ── Dynamic Survival Goals (Meta de Sobrevivência) ── */}
+        {survivalGoals && (
+          <>
+            <MetricCard
+              label="🛡️ Meta Mensal de Sobrevivência"
+              value={fmt(survivalGoals.monthlySurvival)}
+              fullValue={formatCurrencyFull(survivalGoals.monthlySurvival)}
+              status="default"
+              sub={`${monthDays} dias × ${fmt(survivalGoals.dailySurvival)}/dia`}
+            />
+            <MetricCard
+              label="🛡️ Meta Semanal de Sobrevivência"
+              value={fmt(survivalGoals.weeklySurvival)}
+              fullValue={formatCurrencyFull(survivalGoals.weeklySurvival)}
+              status="default"
+              sub="diária × 7"
+            />
+            <MetricCard
+              label="🛡️ Meta Diária de Sobrevivência"
+              value={fmt(survivalGoals.dailySurvival)}
+              fullValue={formatCurrencyFull(survivalGoals.dailySurvival)}
+              status="default"
+              sub="total global ÷ dias de parceria"
+            />
+          </>
+        )}
       </div>
 
       {/* ── Selected month — Income breakdown ── */}

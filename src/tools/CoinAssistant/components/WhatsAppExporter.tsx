@@ -104,6 +104,43 @@ function prorateExpensesForMonth(
   return results;
 }
 
+/**
+ * Dynamic Survival Goals from global expense daily average.
+ * Identical logic to MetricsPanel.
+ */
+function computeGlobalSurvivalGoals(
+  rows: TableRow[],
+  selectedMonth: string,
+): { dailySurvival: number; weeklySurvival: number; monthlySurvival: number } | null {
+  let earliest = '';
+  let latest = '';
+  let total = 0;
+
+  for (const r of rows) {
+    if (r.entryType !== 'expense' || r.value <= 0) continue;
+    total += r.value;
+    const start = r.periodStart || r.date;
+    const end   = r.periodEnd   || r.date;
+    if (!earliest || start < earliest) earliest = start;
+    if (!latest   || end   > latest)   latest   = end;
+  }
+
+  if (total <= 0 || !earliest) return null;
+
+  const globalDays = daysBetween(earliest, latest);
+  const dailySurvival = globalDays > 0 ? total / globalDays : 0;
+  if (dailySurvival <= 0) return null;
+
+  const [y, m] = selectedMonth.split('-').map(Number);
+  const mDays = daysInMonth(y, m);
+
+  return {
+    dailySurvival,
+    weeklySurvival: dailySurvival * 7,
+    monthlySurvival: dailySurvival * mDays,
+  };
+}
+
 // ── Message builder ───────────────────────────────────────────────────────────
 
 function buildMessage(
@@ -138,6 +175,11 @@ function buildMessage(
 
   // ── Expenses prorated for this month (Regime de Competência) ─────────────
   const proratedExpenses = prorateExpensesForMonth(table.rows, selectedMonth);
+
+  // ── Dynamic Survival Goals (global expense daily average) ──────────────
+  const survivalGoals = costBasedTarget
+    ? computeGlobalSurvivalGoals(table.rows, selectedMonth)
+    : null;
 
   // ── Year-level cost data ────────────────────────────────────────────────
   const staticYearCost = resolveGoalForYear(table.goals.annualCosts, reportYear);
@@ -179,10 +221,11 @@ function buildMessage(
       `• Média Diária: ${fmt(monthMetrics.dailyAvg)}`,
       `• Média Semanal: ${fmt(monthMetrics.weeklyAvg)}`,
       `• Meta Diária ${reportYear} (${fmt(reportDailyGoal)}):${goalNote}`,
-      ...(costBasedTarget && costBasedTarget.annualCost > 0
+      ...(survivalGoals
         ? [
-          `• 🛡️ Meta de Sobrevivência Mensal: ${fmt(costBasedTarget.monthlySurvival)}`,
-          `• 🛡️ Meta de Sobrevivência Diária: ${fmt(costBasedTarget.dailySurvival)}`,
+          `• 🛡️ Meta de Sobrevivência Mensal: ${fmt(survivalGoals.monthlySurvival)}`,
+          `• 🛡️ Meta de Sobrevivência Semanal: ${fmt(survivalGoals.weeklySurvival)}`,
+          `• 🛡️ Meta de Sobrevivência Diária: ${fmt(survivalGoals.dailySurvival)}`,
         ]
         : []),
       '',
@@ -279,8 +322,12 @@ function buildMessage(
       : []),
     `• Média Diária Global: ${fmt(metrics.globalDailyAvg)}`,
     `• Meta Semanal ${reportYear}: ${fmt(reportWeeklyGoal)}`,
-    ...(costBasedTarget && costBasedTarget.annualCost > 0
-      ? [`• 🛡️ Meta de Sobrevivência Semanal: ${fmt(costBasedTarget.weeklySurvival)}`]
+    ...(survivalGoals
+      ? [
+        `• 🛡️ Meta de Sobrevivência Mensal: ${fmt(survivalGoals.monthlySurvival)}`,
+        `• 🛡️ Meta de Sobrevivência Semanal: ${fmt(survivalGoals.weeklySurvival)}`,
+        `• 🛡️ Meta de Sobrevivência Diária: ${fmt(survivalGoals.dailySurvival)}`,
+      ]
       : []),
     balanceLine,
     '',
