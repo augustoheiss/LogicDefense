@@ -16,6 +16,7 @@ import { forwardRef } from 'react';
 import {
   ComposedChart,
   Bar,
+  LabelList,
   XAxis,
   YAxis,
   ReferenceLine,
@@ -28,6 +29,58 @@ import { rowContributions } from '../hooks/useMetricsEngine';
 function fmtBRL(v: number): string {
   return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 }
+
+/** Compact label for bar tops — avoids overlap on narrow columns */
+function fmtLabel(v: number): string {
+  if (v === 0) return '';
+  const abs = Math.abs(v);
+  if (abs >= 1000) return `R$${(abs / 1000).toFixed(1)}k`;
+  return `R$${Math.round(abs)}`;
+}
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
+/** Staggered revenue label — 3-step staircase pushing UP from bar top */
+function renderRevenueLabel(props: any) {
+  const { x, y, width, value, index } = props;
+  if (!value || value === 0) return null;
+  const step = (index ?? 0) % 3;
+  const yOff = step * 12;
+  return (
+    <text
+      x={x + width / 2}
+      y={y - yOff - 4}
+      textAnchor="middle"
+      fill="#000000"
+      fontSize={9}
+      fontWeight={600}
+      fontFamily="monospace"
+    >
+      {fmtLabel(value)}
+    </text>
+  );
+}
+
+/** Staggered expense label — 3-step staircase pushing DOWN from bar bottom */
+function renderExpenseLabel(props: any) {
+  const { x, y, width, height, value, index } = props;
+  if (!value || value === 0) return null;
+  const step = (index ?? 0) % 3;
+  const yOff = step * 12;
+  return (
+    <text
+      x={x + width / 2}
+      y={y + (height ?? 0) + yOff + 12}
+      textAnchor="middle"
+      fill="#000000"
+      fontSize={9}
+      fontWeight={600}
+      fontFamily="monospace"
+    >
+      {fmtLabel(value)}
+    </text>
+  );
+}
+/* eslint-enable @typescript-eslint/no-explicit-any */
 
 function round2(n: number): number {
   return Math.round(n * 100) / 100;
@@ -286,7 +339,7 @@ export const PrintableReport = forwardRef<HTMLDivElement, PrintableReportProps>(
             <h2 style={{ fontSize: '11px', fontWeight: 700, color: '#7c3aed', letterSpacing: '1.5px', textTransform: 'uppercase' as const, marginBottom: '12px' }}>
               Fluxo de Caixa Diário
             </h2>
-            <ComposedChart width={714} height={220} data={chartData} margin={{ top: 8, right: 12, left: 0, bottom: 4 }}>
+            <ComposedChart width={714} height={300} data={chartData} margin={{ top: 44, right: 12, left: 0, bottom: 40 }}>
               <ReferenceLine y={0} stroke="#d1d5db" strokeWidth={1} />
               {dailyGoal > 0 && (
                 <ReferenceLine y={dailyGoal} stroke="#9ca3af" strokeDasharray="4 3" label={{ value: `Meta ${fmtBRL(dailyGoal)}`, position: 'insideTopRight', fill: '#6b7280', fontSize: 9 }} />
@@ -296,8 +349,14 @@ export const PrintableReport = forwardRef<HTMLDivElement, PrintableReportProps>(
               )}
               <XAxis dataKey="dateLabel" tick={{ fill: '#6b7280', fontSize: 9 }} axisLine={{ stroke: '#e5e7eb' }} tickLine={false} interval={chartData.length > 20 ? Math.ceil(chartData.length / 15) - 1 : 0} />
               <YAxis tickFormatter={(v: number) => v >= 1000 || v <= -1000 ? `R$${(v / 1000).toFixed(1)}k` : `R$${v}`} tick={{ fill: '#6b7280', fontSize: 9 }} axisLine={false} tickLine={false} width={52} />
-              <Bar dataKey="revenue" fill="#059669" radius={[3, 3, 0, 0]} maxBarSize={16} />
-              {hasExpenses && <Bar dataKey="expenseNeg" fill="#e11d48" radius={[0, 0, 3, 3]} maxBarSize={16} />}
+              <Bar dataKey="revenue" fill="#059669" radius={[3, 3, 0, 0]} maxBarSize={16}>
+                <LabelList dataKey="revenue" content={renderRevenueLabel} />
+              </Bar>
+              {hasExpenses && (
+                <Bar dataKey="expenseNeg" fill="#e11d48" radius={[0, 0, 3, 3]} maxBarSize={16}>
+                  <LabelList dataKey="expenseNeg" content={renderExpenseLabel} />
+                </Bar>
+              )}
             </ComposedChart>
             <div style={{ fontSize: '9px', color: '#9ca3af', textAlign: 'right' as const, marginTop: '4px' }}>
               ✦ Valores distribuídos proporcionalmente pelo período de cada lançamento
