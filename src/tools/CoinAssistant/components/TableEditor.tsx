@@ -558,7 +558,7 @@ export function TableEditor({
         {activeTab === 'metrics' && (
           <div className="flex flex-col lg:flex-row gap-4">
             <div className="flex-1">
-              <MetricsPanel metrics={metrics} dailyGoal={resolveGoalForYear(table.goals.dailyGoals, currentYear)} costBasedTarget={costBasedTarget} />
+              <MetricsPanel metrics={metrics} dailyGoal={resolveGoalForYear(table.goals.dailyGoals, currentYear)} costBasedTarget={costBasedTarget} table={table} selectedMonth={effectiveMonth} />
             </div>
             <div className="lg:w-72 shrink-0">
               <GoalsPanel goals={table.goals} metrics={metrics} costBasedTarget={costBasedTarget} />

@@ -1,10 +1,38 @@
-import type { TableMetrics, CostBasedTarget } from '../types';
+import type { TableMetrics, CostBasedTarget, CoinTable, TableRow } from '../types';
 import { formatCurrencyShort, formatCurrencyFull } from '../utils/formatCurrency';
 
 interface MetricsPanelProps {
   metrics: TableMetrics;
   dailyGoal: number;
   costBasedTarget?: CostBasedTarget;
+  /** The full table — needed to compute month-scoped expense totals. */
+  table: CoinTable;
+  /** Currently selected month ("YYYY-MM") from the global month filter. */
+  selectedMonth: string;
+}
+
+// ── Expense crossover helper (mirrors WhatsAppExporter logic) ─────────────────
+
+/**
+ * Determines whether an expense row is active during a target month.
+ * Uses periodStart/periodEnd crossover when available; falls back to row.date.
+ */
+function isExpenseActiveInMonth(row: TableRow, month: string): boolean {
+  if (row.entryType !== 'expense') return false;
+
+  const [selY, selM] = month.split('-').map(Number);
+  const monthStart = new Date(selY, selM - 1, 1);
+  const monthEnd = new Date(selY, selM, 0); // last day of month
+
+  if (row.periodStart && row.periodEnd) {
+    const [psY, psM, psD] = row.periodStart.split('-').map(Number);
+    const [peY, peM, peD] = row.periodEnd.split('-').map(Number);
+    const periodStart = new Date(psY, psM - 1, psD);
+    const periodEnd = new Date(peY, peM - 1, peD);
+    return periodStart <= monthEnd && periodEnd >= monthStart;
+  }
+
+  return row.date.startsWith(month);
 }
 
 /** Shorthand used across all metric cards. Full value shown in tooltip via title attr. */
@@ -42,10 +70,14 @@ function MetricCard({
   );
 }
 
-export function MetricsPanel({ metrics, dailyGoal, costBasedTarget }: MetricsPanelProps) {
+export function MetricsPanel({ metrics, dailyGoal, costBasedTarget, table, selectedMonth }: MetricsPanelProps) {
   const sortedMonths = Object.keys(metrics.byMonth).sort().reverse().slice(0, 3);
-  const latestMonth = sortedMonths[0];
-  const latestMonthMetrics = latestMonth ? metrics.byMonth[latestMonth] : null;
+
+  // ── Monthly expenses for the selected month (crossover-aware) ───────────────
+  const monthlyExpenses = table.rows
+    .filter((r) => isExpenseActiveInMonth(r, selectedMonth))
+    .reduce((sum, r) => sum + (r.monthlyValue ?? r.value), 0);
+  const selectedMonthMetrics = metrics.byMonth[selectedMonth] ?? null;
 
   function formatMonth(ym: string): string {
     const [y, m] = ym.split('-');
@@ -157,21 +189,30 @@ export function MetricsPanel({ metrics, dailyGoal, costBasedTarget }: MetricsPan
         })()}
       </div>
 
-      {/* ── Latest month breakdown ── */}
-      {latestMonthMetrics && (
+      {/* ── Selected month breakdown ── */}
+      {selectedMonthMetrics && (
         <div>
           <h3 className="text-xs text-white/40 uppercase tracking-wider mb-3 flex items-center gap-2">
             <span className="w-4 h-px bg-white/20 inline-block" />
-            {formatMonth(latestMonth)}
+            {formatMonth(selectedMonth)}
             <span className="flex-1 h-px bg-white/10 inline-block" />
           </h3>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <MetricCard label="Bruto do Mês" value={fmt(latestMonthMetrics.grossMonthly)} />
-            <MetricCard label="Média Diária" value={fmt(latestMonthMetrics.dailyAvg)} />
-            <MetricCard label="Média Semanal" value={fmt(latestMonthMetrics.weeklyAvg)} />
+            <MetricCard label="Bruto do Mês" value={fmt(selectedMonthMetrics.grossMonthly)} />
+            {monthlyExpenses > 0 && (
+              <MetricCard
+                label="Gastos do Mês"
+                value={`-${fmt(monthlyExpenses)}`}
+                fullValue={`-${formatCurrencyFull(monthlyExpenses)}`}
+                status="warning"
+                sub="custos ativos no período"
+              />
+            )}
+            <MetricCard label="Média Diária" value={fmt(selectedMonthMetrics.dailyAvg)} />
+            <MetricCard label="Média Semanal" value={fmt(selectedMonthMetrics.weeklyAvg)} />
             <MetricCard
               label="Última Semana"
-              value={fmt(latestMonthMetrics.lastWeekGross)}
+              value={fmt(selectedMonthMetrics.lastWeekGross)}
               sub="semana ISO"
             />
           </div>

@@ -210,6 +210,12 @@ function buildMessage(
           : '';
       lines.push(`• ${desc}: *-${fmt(exp.value)}*${suffix}`);
     }
+    // Monthly expense total — sum of monthlyValue (or raw value as fallback) for active expenses
+    const monthExpenseTotal = activeExpenses.reduce(
+      (sum, exp) => sum + (exp.monthlyValue ?? exp.value),
+      0,
+    );
+    lines.push(`• *Total de Gastos do Mês:* _-${fmt(monthExpenseTotal)}_`);
     lines.push(`• *Total de Despesas Anuais: ${fmt(yearCost)}* _(${annualPct}% coberto em ${reportYear})_`);
     lines.push('');
   }
