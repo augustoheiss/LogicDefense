@@ -9,6 +9,7 @@ import { RevenueChart } from './RevenueChart';
 import { RealInvestmentsChart } from './RealInvestmentsChart';
 import { FutureProjectionChart } from './FutureProjectionChart';
 import { WhatsAppExporter } from './WhatsAppExporter';
+import { MoedaLandingGuide } from './MoedaLandingGuide';
 import { ConfirmDialog } from './ConfirmDialog';
 import { ExpensesBulkInput } from './ExpensesBulkInput';
 import { ExpensesSummary } from './ExpensesSummary';
@@ -313,7 +314,7 @@ export function TableEditor({
   );
 
   return (
-    <div className="flex flex-col h-full gap-4">
+    <div className="flex flex-col min-h-full gap-4">
       {/* ── Table header ── */}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
@@ -636,6 +637,9 @@ export function TableEditor({
           </div>
         )}
       </div>
+
+      {/* ── Landing Page & Practical Guide ── */}
+      <MoedaLandingGuide />
 
       {/* ── Modals ── */}
       {showWhatsApp && (
