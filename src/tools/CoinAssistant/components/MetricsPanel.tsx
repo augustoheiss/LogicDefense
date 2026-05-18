@@ -11,28 +11,21 @@ interface MetricsPanelProps {
   selectedMonth: string;
 }
 
-// ── Expense crossover helper (mirrors WhatsAppExporter logic) ─────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+/** Exact calendar days in a given month (1-indexed). */
+function daysInMonth(year: number, month: number): number {
+  return new Date(year, month, 0).getDate();
+}
 
 /**
- * Determines whether an expense row is active during a target month.
- * Uses periodStart/periodEnd crossover when available; falls back to row.date.
+ * Collects expense rows whose `date` falls strictly within `selectedMonth`.
+ * This ensures the total changes per month and matches the items the user sees.
  */
-function isExpenseActiveInMonth(row: TableRow, month: string): boolean {
-  if (row.entryType !== 'expense') return false;
-
-  const [selY, selM] = month.split('-').map(Number);
-  const monthStart = new Date(selY, selM - 1, 1);
-  const monthEnd = new Date(selY, selM, 0); // last day of month
-
-  if (row.periodStart && row.periodEnd) {
-    const [psY, psM, psD] = row.periodStart.split('-').map(Number);
-    const [peY, peM, peD] = row.periodEnd.split('-').map(Number);
-    const periodStart = new Date(psY, psM - 1, psD);
-    const periodEnd = new Date(peY, peM - 1, peD);
-    return periodStart <= monthEnd && periodEnd >= monthStart;
-  }
-
-  return row.date.startsWith(month);
+function getExpensesForMonth(rows: TableRow[], selectedMonth: string): TableRow[] {
+  return rows.filter(
+    (r) => r.entryType === 'expense' && r.date.startsWith(selectedMonth + '-'),
+  );
 }
 
 /** Shorthand used across all metric cards. Full value shown in tooltip via title attr. */
@@ -73,10 +66,13 @@ function MetricCard({
 export function MetricsPanel({ metrics, dailyGoal, costBasedTarget, table, selectedMonth }: MetricsPanelProps) {
   const sortedMonths = Object.keys(metrics.byMonth).sort().reverse().slice(0, 3);
 
-  // ── Monthly expenses for the selected month (crossover-aware) ───────────────
-  const monthlyExpenses = table.rows
-    .filter((r) => isExpenseActiveInMonth(r, selectedMonth))
-    .reduce((sum, r) => sum + (r.monthlyValue ?? r.value), 0);
+  // ── Monthly expenses — strict date filter (only expenses dated in selectedMonth) ──
+  const [selYear, selMon] = selectedMonth.split('-').map(Number);
+  const monthExpenseRows = getExpensesForMonth(table.rows, selectedMonth);
+  const monthlyExpenseTotal = monthExpenseRows.reduce((s, r) => s + (r.monthlyValue ?? r.value), 0);
+  const monthDays = daysInMonth(selYear, selMon);
+  const expenseDailyAvg  = monthDays > 0 ? monthlyExpenseTotal / monthDays : 0;
+  const expenseWeeklyAvg = expenseDailyAvg * 7;
   const selectedMonthMetrics = metrics.byMonth[selectedMonth] ?? null;
 
   function formatMonth(ym: string): string {
@@ -189,7 +185,7 @@ export function MetricsPanel({ metrics, dailyGoal, costBasedTarget, table, selec
         })()}
       </div>
 
-      {/* ── Selected month breakdown ── */}
+      {/* ── Selected month — Income breakdown ── */}
       {selectedMonthMetrics && (
         <div>
           <h3 className="text-xs text-white/40 uppercase tracking-wider mb-3 flex items-center gap-2">
@@ -199,21 +195,46 @@ export function MetricsPanel({ metrics, dailyGoal, costBasedTarget, table, selec
           </h3>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <MetricCard label="Bruto do Mês" value={fmt(selectedMonthMetrics.grossMonthly)} />
-            {monthlyExpenses > 0 && (
-              <MetricCard
-                label="Gastos do Mês"
-                value={`-${fmt(monthlyExpenses)}`}
-                fullValue={`-${formatCurrencyFull(monthlyExpenses)}`}
-                status="warning"
-                sub="custos ativos no período"
-              />
-            )}
             <MetricCard label="Média Diária" value={fmt(selectedMonthMetrics.dailyAvg)} />
             <MetricCard label="Média Semanal" value={fmt(selectedMonthMetrics.weeklyAvg)} />
             <MetricCard
               label="Última Semana"
               value={fmt(selectedMonthMetrics.lastWeekGross)}
               sub="semana ISO"
+            />
+          </div>
+        </div>
+      )}
+
+      {/* ── Selected month — Expense breakdown (mirrors income cards) ── */}
+      {monthlyExpenseTotal > 0 && (
+        <div>
+          <h3 className="text-xs text-white/40 uppercase tracking-wider mb-3 flex items-center gap-2">
+            <span className="w-4 h-px bg-amber-400/30 inline-block" />
+            Gastos de {formatMonth(selectedMonth)}
+            <span className="flex-1 h-px bg-white/10 inline-block" />
+          </h3>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            <MetricCard
+              label="Total Gasto Mensal"
+              value={`-${fmt(monthlyExpenseTotal)}`}
+              fullValue={`-${formatCurrencyFull(monthlyExpenseTotal)}`}
+              status="warning"
+              sub={`${monthExpenseRows.length} despesa${monthExpenseRows.length !== 1 ? 's' : ''}`}
+            />
+            <MetricCard
+              label="Média de Gasto Diário"
+              value={`-${fmt(expenseDailyAvg)}`}
+              fullValue={`-${formatCurrencyFull(expenseDailyAvg)}`}
+              status="warning"
+              sub={`÷ ${monthDays} dias`}
+            />
+            <MetricCard
+              label="Média de Gasto Semanal"
+              value={`-${fmt(expenseWeeklyAvg)}`}
+              fullValue={`-${formatCurrencyFull(expenseWeeklyAvg)}`}
+              status="warning"
+              sub="diária × 7"
             />
           </div>
         </div>

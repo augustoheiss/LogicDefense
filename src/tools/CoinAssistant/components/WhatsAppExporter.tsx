@@ -42,35 +42,19 @@ function fmtDay(dateStr: string): string {
   return `${d}/${m}`;
 }
 
+/** Exact calendar days in a given month (1-indexed). */
+function daysInMonth(year: number, month: number): number {
+  return new Date(year, month, 0).getDate();
+}
+
 /**
- * Determines whether an expense row is active during the report's target month.
- *
- * Uses the start_period / end_period crossover logic:
- *   If the expense has periodStart + periodEnd, the row is included when
- *   any day of the report month falls within [periodStart, periodEnd].
- *   Otherwise, falls back to matching the row's registration date.
+ * Collects expense rows whose `date` falls strictly within `selectedMonth`.
+ * Ensures the listed items (and their sum) change per month.
  */
-function isExpenseActiveInMonth(row: TableRow, selectedMonth: string): boolean {
-  if (row.entryType !== 'expense') return false;
-
-  const [selY, selM] = selectedMonth.split('-').map(Number);
-  // First and last day of the report month
-  const monthStart = new Date(selY, selM - 1, 1);
-  const monthEnd = new Date(selY, selM, 0); // last day of month
-
-  if (row.periodStart && row.periodEnd) {
-    // Parse period boundaries
-    const [psY, psM, psD] = row.periodStart.split('-').map(Number);
-    const [peY, peM, peD] = row.periodEnd.split('-').map(Number);
-    const periodStart = new Date(psY, psM - 1, psD);
-    const periodEnd = new Date(peY, peM - 1, peD);
-
-    // Overlap check: the report month intersects [periodStart, periodEnd]
-    return periodStart <= monthEnd && periodEnd >= monthStart;
-  }
-
-  // Fallback: match by registration date month
-  return row.date.startsWith(selectedMonth);
+function getExpensesForMonth(rows: TableRow[], selectedMonth: string): TableRow[] {
+  return rows.filter(
+    (r) => r.entryType === 'expense' && r.date.startsWith(selectedMonth + '-'),
+  );
 }
 
 // ── Message builder ───────────────────────────────────────────────────────────
@@ -105,8 +89,8 @@ function buildMessage(
     (g) => g.weekEndDate.getFullYear() === selY && g.weekEndDate.getMonth() + 1 === selM,
   );
 
-  // ── Expenses active in this month (crossover logic) ─────────────────────
-  const activeExpenses = table.rows.filter((r) => isExpenseActiveInMonth(r, selectedMonth));
+  // ── Expenses strictly in this month (date-based) ───────────────────────
+  const activeExpenses = getExpensesForMonth(table.rows, selectedMonth);
 
   // ── Year-level cost data ────────────────────────────────────────────────
   const staticYearCost = resolveGoalForYear(table.goals.annualCosts, reportYear);
@@ -210,12 +194,17 @@ function buildMessage(
           : '';
       lines.push(`• ${desc}: *-${fmt(exp.value)}*${suffix}`);
     }
-    // Monthly expense total — sum of monthlyValue (or raw value as fallback) for active expenses
+    // Monthly expense metrics — daily-anchored math
     const monthExpenseTotal = activeExpenses.reduce(
       (sum, exp) => sum + (exp.monthlyValue ?? exp.value),
       0,
     );
+    const mDays = daysInMonth(selY, selM);
+    const expDailyAvg  = mDays > 0 ? monthExpenseTotal / mDays : 0;
+    const expWeeklyAvg = expDailyAvg * 7;
     lines.push(`• *Total de Gastos do Mês:* _-${fmt(monthExpenseTotal)}_`);
+    lines.push(`• *Média de Gasto Semanal:* _-${fmt(expWeeklyAvg)}_`);
+    lines.push(`• *Média de Gasto Diário:* _-${fmt(expDailyAvg)}_`);
     lines.push(`• *Total de Despesas Anuais: ${fmt(yearCost)}* _(${annualPct}% coberto em ${reportYear})_`);
     lines.push('');
   }
