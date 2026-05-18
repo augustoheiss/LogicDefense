@@ -11,21 +11,78 @@ interface MetricsPanelProps {
   selectedMonth: string;
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+// ── Prorated Accrual Helpers (Regime de Competência) ──────────────────────────
 
 /** Exact calendar days in a given month (1-indexed). */
 function daysInMonth(year: number, month: number): number {
   return new Date(year, month, 0).getDate();
 }
 
+/** Inclusive day count between two YYYY-MM-DD strings. */
+function daysBetween(a: string, b: string): number {
+  const msA = new Date(a + 'T12:00:00').getTime();
+  const msB = new Date(b + 'T12:00:00').getTime();
+  return Math.max(1, Math.round(Math.abs(msB - msA) / 86_400_000) + 1);
+}
+
+/** YYYY-MM-DD for the first day of a month. */
+function monthFirstDay(year: number, month: number): string {
+  return `${year}-${String(month).padStart(2, '0')}-01`;
+}
+/** YYYY-MM-DD for the last day of a month. */
+function monthLastDay(year: number, month: number): string {
+  return `${year}-${String(month).padStart(2, '0')}-${String(daysInMonth(year, month)).padStart(2, '0')}`;
+}
+
+interface ProratedExpense {
+  row: TableRow;
+  /** This expense’s prorated contribution to the selected month. */
+  monthlyContribution: number;
+}
+
 /**
- * Collects expense rows whose `date` falls strictly within `selectedMonth`.
- * This ensures the total changes per month and matches the items the user sees.
+ * Prorated accrual engine.
+ *
+ * For each expense row:
+ *   1. Resolve lifespan: [periodStart, periodEnd] or single-day at row.date.
+ *   2. Check overlap with the target month.
+ *   3. dailyRate = row.value / totalLifespanDays
+ *   4. activeDays = overlap between expense lifespan and month window
+ *   5. monthlyContribution = dailyRate × activeDays
  */
-function getExpensesForMonth(rows: TableRow[], selectedMonth: string): TableRow[] {
-  return rows.filter(
-    (r) => r.entryType === 'expense' && r.date.startsWith(selectedMonth + '-'),
-  );
+function prorateExpensesForMonth(
+  rows: TableRow[],
+  selectedMonth: string,
+): ProratedExpense[] {
+  const [selY, selM] = selectedMonth.split('-').map(Number);
+  const mStart = monthFirstDay(selY, selM);
+  const mEnd   = monthLastDay(selY, selM);
+
+  const results: ProratedExpense[] = [];
+
+  for (const r of rows) {
+    if (r.entryType !== 'expense') continue;
+
+    // Resolve expense lifespan boundaries
+    const expStart = r.periodStart || r.date;
+    const expEnd   = r.periodEnd   || r.date;
+
+    // Overlap check: expense must touch the month window
+    if (expStart > mEnd || expEnd < mStart) continue;
+
+    // Clamp to month boundaries
+    const overlapStart = expStart < mStart ? mStart : expStart;
+    const overlapEnd   = expEnd   > mEnd   ? mEnd   : expEnd;
+
+    const totalLifespanDays = daysBetween(expStart, expEnd);
+    const activeDaysInMonth = daysBetween(overlapStart, overlapEnd);
+    const dailyRate = r.value / totalLifespanDays;
+    const monthlyContribution = dailyRate * activeDaysInMonth;
+
+    results.push({ row: r, monthlyContribution });
+  }
+
+  return results;
 }
 
 /** Shorthand used across all metric cards. Full value shown in tooltip via title attr. */
@@ -66,10 +123,10 @@ function MetricCard({
 export function MetricsPanel({ metrics, dailyGoal, costBasedTarget, table, selectedMonth }: MetricsPanelProps) {
   const sortedMonths = Object.keys(metrics.byMonth).sort().reverse().slice(0, 3);
 
-  // ── Monthly expenses — strict date filter (only expenses dated in selectedMonth) ──
+  // ── Prorated monthly expenses (Regime de Competência) ─────────────────────
   const [selYear, selMon] = selectedMonth.split('-').map(Number);
-  const monthExpenseRows = getExpensesForMonth(table.rows, selectedMonth);
-  const monthlyExpenseTotal = monthExpenseRows.reduce((s, r) => s + (r.monthlyValue ?? r.value), 0);
+  const proratedExpenses = prorateExpensesForMonth(table.rows, selectedMonth);
+  const monthlyExpenseTotal = proratedExpenses.reduce((s, e) => s + e.monthlyContribution, 0);
   const monthDays = daysInMonth(selYear, selMon);
   const expenseDailyAvg  = monthDays > 0 ? monthlyExpenseTotal / monthDays : 0;
   const expenseWeeklyAvg = expenseDailyAvg * 7;
@@ -220,7 +277,7 @@ export function MetricsPanel({ metrics, dailyGoal, costBasedTarget, table, selec
               value={`-${fmt(monthlyExpenseTotal)}`}
               fullValue={`-${formatCurrencyFull(monthlyExpenseTotal)}`}
               status="warning"
-              sub={`${monthExpenseRows.length} despesa${monthExpenseRows.length !== 1 ? 's' : ''}`}
+              sub={`${proratedExpenses.length} despesa${proratedExpenses.length !== 1 ? 's' : ''} rateada${proratedExpenses.length !== 1 ? 's' : ''}`}
             />
             <MetricCard
               label="Média de Gasto Diário"

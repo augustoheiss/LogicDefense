@@ -42,19 +42,66 @@ function fmtDay(dateStr: string): string {
   return `${d}/${m}`;
 }
 
+// ── Prorated Accrual Helpers (Regime de Competência) ──────────────────────────
+
 /** Exact calendar days in a given month (1-indexed). */
 function daysInMonth(year: number, month: number): number {
   return new Date(year, month, 0).getDate();
 }
 
+/** Inclusive day count between two YYYY-MM-DD strings. */
+function daysBetween(a: string, b: string): number {
+  const msA = new Date(a + 'T12:00:00').getTime();
+  const msB = new Date(b + 'T12:00:00').getTime();
+  return Math.max(1, Math.round(Math.abs(msB - msA) / 86_400_000) + 1);
+}
+
+function monthFirstDay(year: number, month: number): string {
+  return `${year}-${String(month).padStart(2, '0')}-01`;
+}
+function monthLastDay(year: number, month: number): string {
+  return `${year}-${String(month).padStart(2, '0')}-${String(daysInMonth(year, month)).padStart(2, '0')}`;
+}
+
+interface ProratedExpense {
+  row: TableRow;
+  monthlyContribution: number;
+}
+
 /**
- * Collects expense rows whose `date` falls strictly within `selectedMonth`.
- * Ensures the listed items (and their sum) change per month.
+ * Prorated accrual engine — identical logic to MetricsPanel.
+ * dailyRate = row.value / totalLifespanDays
+ * monthlyContribution = dailyRate × activeDaysInMonth
  */
-function getExpensesForMonth(rows: TableRow[], selectedMonth: string): TableRow[] {
-  return rows.filter(
-    (r) => r.entryType === 'expense' && r.date.startsWith(selectedMonth + '-'),
-  );
+function prorateExpensesForMonth(
+  rows: TableRow[],
+  selectedMonth: string,
+): ProratedExpense[] {
+  const [selY, selM] = selectedMonth.split('-').map(Number);
+  const mStart = monthFirstDay(selY, selM);
+  const mEnd   = monthLastDay(selY, selM);
+
+  const results: ProratedExpense[] = [];
+
+  for (const r of rows) {
+    if (r.entryType !== 'expense') continue;
+
+    const expStart = r.periodStart || r.date;
+    const expEnd   = r.periodEnd   || r.date;
+
+    if (expStart > mEnd || expEnd < mStart) continue;
+
+    const overlapStart = expStart < mStart ? mStart : expStart;
+    const overlapEnd   = expEnd   > mEnd   ? mEnd   : expEnd;
+
+    const totalLifespanDays = daysBetween(expStart, expEnd);
+    const activeDaysInMonth = daysBetween(overlapStart, overlapEnd);
+    const dailyRate = r.value / totalLifespanDays;
+
+    results.push({ row: r, monthlyContribution: dailyRate * activeDaysInMonth });
+  }
+
+  return results;
 }
 
 // ── Message builder ───────────────────────────────────────────────────────────
@@ -89,8 +136,8 @@ function buildMessage(
     (g) => g.weekEndDate.getFullYear() === selY && g.weekEndDate.getMonth() + 1 === selM,
   );
 
-  // ── Expenses strictly in this month (date-based) ───────────────────────
-  const activeExpenses = getExpensesForMonth(table.rows, selectedMonth);
+  // ── Expenses prorated for this month (Regime de Competência) ─────────────
+  const proratedExpenses = prorateExpensesForMonth(table.rows, selectedMonth);
 
   // ── Year-level cost data ────────────────────────────────────────────────
   const staticYearCost = resolveGoalForYear(table.goals.annualCosts, reportYear);
@@ -183,20 +230,20 @@ function buildMessage(
   // ═══════════════════════════════════════════════════════════════════════════
   // SECTION 4 — The Reality: Custo Operacional do Veículo
   // ═══════════════════════════════════════════════════════════════════════════
-  if (activeExpenses.length > 0) {
+  if (proratedExpenses.length > 0) {
     lines.push(`💸 *Custo Operacional do Veículo*`);
     lines.push('');
-    for (const exp of activeExpenses) {
-      const desc = exp.description ?? 'Sem descrição';
+    for (const pe of proratedExpenses) {
+      const desc = pe.row.description ?? 'Sem descrição';
       const suffix =
-        exp.monthlyValue != null && exp.monthCount != null
-          ? ` _(${fmt(exp.monthlyValue)}/mês × ${exp.monthCount}m)_`
+        pe.row.periodStart && pe.row.periodEnd && pe.row.periodStart !== pe.row.periodEnd
+          ? ` _(rateado: ${fmt(pe.monthlyContribution)} este mês)_`
           : '';
-      lines.push(`• ${desc}: *-${fmt(exp.value)}*${suffix}`);
+      lines.push(`• ${desc}: *-${fmt(pe.row.value)}*${suffix}`);
     }
-    // Monthly expense metrics — daily-anchored math
-    const monthExpenseTotal = activeExpenses.reduce(
-      (sum, exp) => sum + (exp.monthlyValue ?? exp.value),
+    // Prorated monthly expense metrics — daily-anchored math
+    const monthExpenseTotal = proratedExpenses.reduce(
+      (sum, pe) => sum + pe.monthlyContribution,
       0,
     );
     const mDays = daysInMonth(selY, selM);
