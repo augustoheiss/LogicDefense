@@ -10,6 +10,7 @@ import { RealInvestmentsChart } from './RealInvestmentsChart';
 import { FutureProjectionChart } from './FutureProjectionChart';
 import { WhatsAppExporter } from './WhatsAppExporter';
 import { MoedaLandingGuide } from './MoedaLandingGuide';
+import { PdfExporter } from './PdfExporter';
 import { ConfirmDialog } from './ConfirmDialog';
 import { ExpensesBulkInput } from './ExpensesBulkInput';
 import { ExpensesSummary } from './ExpensesSummary';
@@ -347,6 +348,12 @@ export function TableEditor({
             </svg>
             CSV
           </button>
+          <PdfExporter
+            table={table}
+            metrics={metrics}
+            selectedMonth={effectiveMonth}
+            costBasedTarget={costBasedTarget}
+          />
           <button
             onClick={() => setShowWhatsApp(true)}
             className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg bg-[#25D366]/20 hover:bg-[#25D366]/30 text-[#25D366] border border-[#25D366]/30 transition-colors font-medium"
