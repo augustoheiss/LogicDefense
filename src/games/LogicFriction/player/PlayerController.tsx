@@ -45,7 +45,6 @@ interface PathCache {
 
 const WAYPOINT_REACH_DIST = 1.5    // How close to waypoint before advancing
 const ENTITY_RECALC_DIST = 2.0     // Recalc path if entity moved > this
-const AUTO_ATTACK_RANGE_MULT = 1.0 // Auto-attack at normal attack range
 
 // ── Player Component ────────────────────────────────────────────────────────────
 export function PlayerController() {
