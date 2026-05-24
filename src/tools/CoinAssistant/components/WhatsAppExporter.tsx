@@ -221,13 +221,6 @@ function buildMessage(
       `• Média Diária: ${fmt(monthMetrics.dailyAvg)}`,
       `• Média Semanal: ${fmt(monthMetrics.weeklyAvg)}`,
       `• Meta Diária ${reportYear} (${fmt(reportDailyGoal)}):${goalNote}`,
-      ...(survivalGoals
-        ? [
-          `• 🛡️ Meta de Sobrevivência Mensal: ${fmt(survivalGoals.monthlySurvival)}`,
-          `• 🛡️ Meta de Sobrevivência Semanal: ${fmt(survivalGoals.weeklySurvival)}`,
-          `• 🛡️ Meta de Sobrevivência Diária: ${fmt(survivalGoals.dailySurvival)}`,
-        ]
-        : []),
       '',
     );
   } else {
