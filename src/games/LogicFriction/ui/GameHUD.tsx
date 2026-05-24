@@ -112,11 +112,6 @@ function TowerSelector() {
 
   return (
     <div style={{
-      position: 'absolute',
-      top: 70,
-      left: '50%',
-      transform: 'translateX(-50%)',
-      zIndex: 100,
       display: 'flex',
       gap: 8,
       pointerEvents: 'auto',
@@ -299,8 +294,21 @@ export function GameHUD({ onStart, onRestart }: GameHUDProps) {
       </div>
 
       {/* Action Mode Toggle + Tower Selection Bar */}
-      <ActionModeToggle />
-      {actionMode === 'BUILD' && <TowerSelector />}
+      <div style={{
+        position: 'absolute',
+        top: 70,
+        left: '50%',
+        transform: 'translateX(-50%)',
+        zIndex: 100,
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        gap: 6,
+        pointerEvents: 'none',
+      }}>
+        <ActionModeToggle />
+        {actionMode === 'BUILD' && <TowerSelector />}
+      </div>
 
       {/* Wave Clear overlay */}
       {phase === 'WAVE_CLEAR' && (
@@ -403,11 +411,6 @@ function ActionModeToggle() {
 
   return (
     <div style={{
-      position: 'absolute',
-      top: 130,
-      left: '50%',
-      transform: 'translateX(-50%)',
-      zIndex: 100,
       display: 'flex',
       gap: 4,
       pointerEvents: 'auto',
