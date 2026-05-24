@@ -19,7 +19,7 @@ import { useGameStore } from '../state/useGameStore'
 
 // ── Arena Floor ─────────────────────────────────────────────────────────────────
 export function Arena() {
-  // ── Click handler: place construction site ──
+  // ── Click handler: mode-aware (BUILD places towers, MOVE sets pathfinding target) ──
   const handlePointerDown = useCallback((e: ThreeEvent<PointerEvent>) => {
     // Only left-click
     if (e.button !== 0) return
@@ -30,13 +30,22 @@ export function Arena() {
     if (state.phase !== 'PLAYING' && state.phase !== 'WAVE_CLEAR') return
 
     const point = e.point
-    // Guard: don't place too close to the core
     const distFromCenter = Math.sqrt(point.x * point.x + point.z * point.z)
-    if (distFromCenter < CORE_COLLIDER_SIZE + 3) return
-    // Guard: don't place outside the arena
-    if (distFromCenter > ARENA_RADIUS - 3) return
 
-    state.placeConstructionSite(point.x, point.z)
+    // ── BUILD MODE: Place construction site ──
+    if (state.actionMode === 'BUILD') {
+      // Guard: don't place too close to the core
+      if (distFromCenter < CORE_COLLIDER_SIZE + 3) return
+      // Guard: don't place outside the arena
+      if (distFromCenter > ARENA_RADIUS - 3) return
+      state.placeConstructionSite(point.x, point.z)
+      return
+    }
+
+    // ── MOVE MODE: Set pathfinding target ──
+    // Guard: don't move outside the arena
+    if (distFromCenter > ARENA_RADIUS - 1) return
+    state.setMoveTarget({ type: 'point', x: point.x, z: point.z })
   }, [])
 
   return (

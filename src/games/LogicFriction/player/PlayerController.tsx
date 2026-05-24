@@ -1,12 +1,11 @@
 // ============================================================
 // Logic Friction — Player Controller
-// Sprint 4.1: WASD movement + Spacebar melee attack + Divine Buff
-// + Math Zone transparency effect
+// MOBA Edition: WASD + Tap-to-Move (A*) + Click-to-Follow +
+//               Auto-Attack + Manual Attack (Spacebar override)
 //
 // HMR-FIX: Non-component exports (playerPositionRef, onPlayerAttack,
 // fireAttack) moved to playerEvents.ts so this file only exports
-// the PlayerController component. This prevents Vite from doing
-// full page reloads that crash the Physics tree.
+// the PlayerController component.
 // ============================================================
 import { useRef } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
@@ -21,6 +20,8 @@ const _moveDir = new THREE.Vector3()
 import { useKeyboard, keys } from '../hooks/useInput'
 import { useGameStore } from '../state/useGameStore'
 import { playerPositionRef, fireAttack } from './playerEvents'
+import { enemyRegistry } from '../enemies/EnemyRegistry'
+import { findPath } from './pathfinding'
 import {
   PLAYER_RADIUS,
   PLAYER_SPEED,
@@ -33,6 +34,19 @@ import {
   ARENA_RADIUS,
 } from '../config/constants'
 
+// ── Pathfinding cache ──
+// Only recalculate A* when the target or obstacle count changes
+interface PathCache {
+  targetKey: string
+  obstacleCount: number
+  waypoints: Array<{ x: number; z: number }>
+  waypointIndex: number
+}
+
+const WAYPOINT_REACH_DIST = 1.5    // How close to waypoint before advancing
+const ENTITY_RECALC_DIST = 2.0     // Recalc path if entity moved > this
+const AUTO_ATTACK_RANGE_MULT = 1.0 // Auto-attack at normal attack range
+
 // ── Player Component ────────────────────────────────────────────────────────────
 export function PlayerController() {
   const rigidBodyRef = useRef<RapierRigidBody>(null)
@@ -42,6 +56,8 @@ export function PlayerController() {
 
   const attackCooldownRef = useRef(0)
   const attackVisualRef = useRef(0)
+  const pathCacheRef = useRef<PathCache | null>(null)
+  const lastEntityPosRef = useRef<{ x: number; z: number } | null>(null)
 
   useKeyboard()
 
@@ -58,64 +74,136 @@ export function PlayerController() {
     const state = useGameStore.getState()
     const buffed = state.isBuffActive
 
-    // ── Camera-Relative Movement ──
+    // ── Buff-scaled combat stats ──
+    const effectiveCooldown = buffed ? PLAYER_ATTACK_COOLDOWN * BUFF_COOLDOWN_MULT : PLAYER_ATTACK_COOLDOWN
+    const effectiveDamage = buffed ? PLAYER_ATTACK_DAMAGE * BUFF_DAMAGE_MULT : PLAYER_ATTACK_DAMAGE
+    const effectiveRange = buffed ? PLAYER_ATTACK_RANGE * 1.5 : PLAYER_ATTACK_RANGE
+
+    // ── Detect WASD input ──
+    const hasWASD = !!(
+      keys['KeyW'] || keys['ArrowUp'] ||
+      keys['KeyS'] || keys['ArrowDown'] ||
+      keys['KeyA'] || keys['ArrowLeft'] ||
+      keys['KeyD'] || keys['ArrowRight']
+    )
+
+    // ── WASD cancels auto-move ──
+    if (hasWASD && state.moveTarget !== null) {
+      useGameStore.getState().setMoveTarget(null)
+      pathCacheRef.current = null
+      lastEntityPosRef.current = null
+    }
+
+    // ── Movement Logic ──
     if (state.phase === 'PLAYING' || state.phase === 'WAVE_CLEAR') {
-      // Get camera forward on the XZ plane
+      // Camera vectors for relative movement
       camera.getWorldDirection(_forward)
       _forward.y = 0
       _forward.normalize()
-
-      // Right vector = cross(up, forward)
       _right.crossVectors(_forward, camera.up).normalize()
 
-      // Raw WASD input
-      let inputZ = 0  // forward/back
-      let inputX = 0  // left/right
+      if (hasWASD) {
+        // ── Manual WASD movement ──
+        let inputZ = 0
+        let inputX = 0
 
-      if (keys['KeyW'] || keys['ArrowUp'])    inputZ += 1  // into screen
-      if (keys['KeyS'] || keys['ArrowDown'])  inputZ -= 1  // toward camera
-      if (keys['KeyA'] || keys['ArrowLeft'])   inputX -= 1
-      if (keys['KeyD'] || keys['ArrowRight']) inputX += 1
+        if (keys['KeyW'] || keys['ArrowUp'])    inputZ += 1
+        if (keys['KeyS'] || keys['ArrowDown'])  inputZ -= 1
+        if (keys['KeyA'] || keys['ArrowLeft'])   inputX -= 1
+        if (keys['KeyD'] || keys['ArrowRight']) inputX += 1
 
-      // Combine into a world-space direction
-      _moveDir.set(0, 0, 0)
-      _moveDir.addScaledVector(_forward, inputZ)
-      _moveDir.addScaledVector(_right, inputX)
+        _moveDir.set(0, 0, 0)
+        _moveDir.addScaledVector(_forward, inputZ)
+        _moveDir.addScaledVector(_right, inputX)
 
-      if (_moveDir.lengthSq() > 0) {
-        _moveDir.normalize().multiplyScalar(PLAYER_SPEED)
+        if (_moveDir.lengthSq() > 0) {
+          _moveDir.normalize().multiplyScalar(PLAYER_SPEED)
+        }
+
+        const currentVel = rb.linvel()
+        rb.setLinvel({ x: _moveDir.x, y: currentVel.y, z: _moveDir.z }, true)
+
+      } else if (state.moveTarget !== null) {
+        // ── Auto-Move (pathfinding) ──
+        const moveResult = processAutoMove(pos, state, effectiveRange)
+
+        if (moveResult) {
+          const currentVel = rb.linvel()
+          rb.setLinvel({ x: moveResult.vx, y: currentVel.y, z: moveResult.vz }, true)
+        } else {
+          // Arrived or path failed — stop
+          const currentVel = rb.linvel()
+          rb.setLinvel({ x: 0, y: currentVel.y, z: 0 }, true)
+        }
+
+      } else {
+        // No input and no target — stop
+        const currentVel = rb.linvel()
+        rb.setLinvel({ x: 0, y: currentVel.y, z: 0 }, true)
       }
-
-      const currentVel = rb.linvel()
-      rb.setLinvel({ x: _moveDir.x, y: currentVel.y, z: _moveDir.z }, true)
     } else {
       const currentVel = rb.linvel()
       rb.setLinvel({ x: 0, y: currentVel.y, z: 0 }, true)
     }
 
     // ── Arena Leash (radial clamp — no physics walls needed) ──
-    const LEASH = ARENA_RADIUS - PLAYER_RADIUS - 0.5  // small margin
+    const LEASH = ARENA_RADIUS - PLAYER_RADIUS - 0.5
     const dist = Math.sqrt(pos.x * pos.x + pos.z * pos.z)
     if (dist > LEASH) {
       const scale = LEASH / dist
       rb.setTranslation({ x: pos.x * scale, y: pos.y, z: pos.z * scale }, true)
-      // Zero out the outward velocity component to prevent jitter
       const vel = rb.linvel()
-      const nx = pos.x / dist  // radial unit normal
+      const nx = pos.x / dist
       const nz = pos.z / dist
-      const radialSpeed = vel.x * nx + vel.z * nz  // dot product
+      const radialSpeed = vel.x * nx + vel.z * nz
       if (radialSpeed > 0) {
         rb.setLinvel({ x: vel.x - radialSpeed * nx, y: vel.y, z: vel.z - radialSpeed * nz }, true)
       }
     }
 
-    // ── Attack (Spacebar) — with buff multipliers ──
-    const effectiveCooldown = buffed ? PLAYER_ATTACK_COOLDOWN * BUFF_COOLDOWN_MULT : PLAYER_ATTACK_COOLDOWN
-    const effectiveDamage = buffed ? PLAYER_ATTACK_DAMAGE * BUFF_DAMAGE_MULT : PLAYER_ATTACK_DAMAGE
-    const effectiveRange = buffed ? PLAYER_ATTACK_RANGE * 1.5 : PLAYER_ATTACK_RANGE
-
+    // ── Auto-Attack: fire at nearest enemy in range ──
     attackCooldownRef.current = Math.max(0, attackCooldownRef.current - delta)
 
+    if (state.phase === 'PLAYING' && attackCooldownRef.current <= 0) {
+      // Find the priority target (tracked entity) or nearest enemy
+      let attackTarget: { x: number; z: number } | null = null
+      let attackDist = Infinity
+
+      // Priority: tracked entity
+      if (state.moveTarget?.type === 'entity') {
+        const entry = enemyRegistry.get(state.moveTarget.id)
+        if (entry) {
+          const dx = entry.x - pos.x
+          const dz = entry.z - pos.z
+          const d = Math.sqrt(dx * dx + dz * dz)
+          if (d <= effectiveRange) {
+            attackTarget = entry
+            attackDist = d
+          }
+        }
+      }
+
+      // Fallback: nearest enemy in range
+      if (!attackTarget) {
+        for (const [, entry] of enemyRegistry) {
+          const dx = entry.x - pos.x
+          const dz = entry.z - pos.z
+          const d = Math.sqrt(dx * dx + dz * dz)
+          if (d <= effectiveRange && d < attackDist) {
+            attackTarget = entry
+            attackDist = d
+          }
+        }
+      }
+
+      if (attackTarget) {
+        attackCooldownRef.current = effectiveCooldown
+        attackVisualRef.current = 0.2
+        fireAttack(pos.x, pos.z, effectiveDamage, effectiveRange)
+      }
+    }
+
+    // ── Manual Attack Override (Spacebar) ──
     if (keys['Space'] && attackCooldownRef.current <= 0 && state.phase === 'PLAYING') {
       attackCooldownRef.current = effectiveCooldown
       attackVisualRef.current = 0.2
@@ -130,7 +218,6 @@ export function PlayerController() {
       const scale = 1 + (0.2 - attackVisualRef.current) * 5
       attackRingRef.current.scale.setScalar(Math.max(1, scale))
 
-      // Buff visual: golden attack ring
       if (buffed) {
         mat.color.set('#ffd700')
       } else {
@@ -156,15 +243,138 @@ export function PlayerController() {
     }
 
     // ── Camera Follow (OrbitControls-aware) ──
-    // ONLY update the OrbitControls target to track the player.
-    // Do NOT touch camera.position — OrbitControls owns that.
-    // This decouples camera rotation from player movement.
     const orbitTarget = (controls as any)?.target as THREE.Vector3 | undefined
     if (orbitTarget) {
       const playerPos = new THREE.Vector3(pos.x, 0, pos.z)
       orbitTarget.lerp(playerPos, CAMERA_LERP)
     }
   })
+
+  // ── Auto-Move processor ──
+  // Returns { vx, vz } if the player should keep moving, or null to stop
+  function processAutoMove(
+    pos: { x: number; y: number; z: number },
+    state: ReturnType<typeof useGameStore.getState>,
+    attackRange: number,
+  ): { vx: number; vz: number } | null {
+    const target = state.moveTarget
+    if (!target) return null
+
+    // ── Resolve target position ──
+    let targetX: number
+    let targetZ: number
+
+    if (target.type === 'point') {
+      targetX = target.x
+      targetZ = target.z
+    } else {
+      // Entity target — get live position from registry
+      const entry = enemyRegistry.get(target.id)
+      if (!entry) {
+        // Entity died or despawned — cancel chase
+        useGameStore.getState().setMoveTarget(null)
+        pathCacheRef.current = null
+        lastEntityPosRef.current = null
+        return null
+      }
+      targetX = entry.x
+      targetZ = entry.z
+
+      // MOBA Chase: if within attack range, STOP and let auto-attack handle it
+      const chaseDx = targetX - pos.x
+      const chaseDz = targetZ - pos.z
+      const chaseDist = Math.sqrt(chaseDx * chaseDx + chaseDz * chaseDz)
+      if (chaseDist <= attackRange) {
+        return null // Stop moving, auto-attack will fire
+      }
+
+      // Check if entity moved enough to warrant path recalculation
+      if (lastEntityPosRef.current) {
+        const movedDx = targetX - lastEntityPosRef.current.x
+        const movedDz = targetZ - lastEntityPosRef.current.z
+        const movedDist = Math.sqrt(movedDx * movedDx + movedDz * movedDz)
+        if (movedDist > ENTITY_RECALC_DIST) {
+          pathCacheRef.current = null // Force recalc
+        }
+      }
+      lastEntityPosRef.current = { x: targetX, z: targetZ }
+    }
+
+    // ── Check arrival (for point targets) ──
+    if (target.type === 'point') {
+      const arrivalDx = targetX - pos.x
+      const arrivalDz = targetZ - pos.z
+      const arrivalDist = Math.sqrt(arrivalDx * arrivalDx + arrivalDz * arrivalDz)
+      if (arrivalDist < WAYPOINT_REACH_DIST) {
+        useGameStore.getState().setMoveTarget(null)
+        pathCacheRef.current = null
+        return null
+      }
+    }
+
+    // ── Calculate or use cached path ──
+    const obstacles = [...state.towers, ...state.constructionSites]
+    const targetKey = `${Math.round(targetX)},${Math.round(targetZ)}`
+
+    if (
+      !pathCacheRef.current ||
+      pathCacheRef.current.targetKey !== targetKey ||
+      pathCacheRef.current.obstacleCount !== obstacles.length
+    ) {
+      // Recalculate path
+      const waypoints = findPath(pos.x, pos.z, targetX, targetZ, obstacles)
+      if (!waypoints || waypoints.length === 0) {
+        // No path — try direct movement as fallback
+        const dx = targetX - pos.x
+        const dz = targetZ - pos.z
+        const d = Math.sqrt(dx * dx + dz * dz)
+        if (d < 0.5) {
+          useGameStore.getState().setMoveTarget(null)
+          pathCacheRef.current = null
+          return null
+        }
+        return { vx: (dx / d) * PLAYER_SPEED, vz: (dz / d) * PLAYER_SPEED }
+      }
+      pathCacheRef.current = {
+        targetKey,
+        obstacleCount: obstacles.length,
+        waypoints,
+        waypointIndex: 0,
+      }
+    }
+
+    const cache = pathCacheRef.current
+
+    // ── Follow waypoints ──
+    if (cache.waypointIndex >= cache.waypoints.length) {
+      // All waypoints consumed — move directly to final target
+      const dx = targetX - pos.x
+      const dz = targetZ - pos.z
+      const d = Math.sqrt(dx * dx + dz * dz)
+      if (d < WAYPOINT_REACH_DIST) {
+        if (target.type === 'point') {
+          useGameStore.getState().setMoveTarget(null)
+          pathCacheRef.current = null
+        }
+        return null
+      }
+      return { vx: (dx / d) * PLAYER_SPEED, vz: (dz / d) * PLAYER_SPEED }
+    }
+
+    const wp = cache.waypoints[cache.waypointIndex]
+    const wpDx = wp.x - pos.x
+    const wpDz = wp.z - pos.z
+    const wpDist = Math.sqrt(wpDx * wpDx + wpDz * wpDz)
+
+    // Reached this waypoint — advance to next
+    if (wpDist < WAYPOINT_REACH_DIST) {
+      cache.waypointIndex++
+      return processAutoMove(pos, state, attackRange) // Recurse for next wp
+    }
+
+    // Move toward current waypoint
+    return { vx: (wpDx / wpDist) * PLAYER_SPEED, vz: (wpDz / wpDist) * PLAYER_SPEED }
+  }
 
   return (
     <RigidBody

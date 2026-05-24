@@ -22,6 +22,12 @@ import { generateFrictionProblem, type FrictionProblem } from '../math/mathBridg
 
 // ── Types ───────────────────────────────────────────────────────────────────────
 export type GamePhase = 'MENU' | 'PLAYING' | 'WAVE_CLEAR' | 'GAME_OVER'
+export type ActionMode = 'MOVE' | 'BUILD'
+
+/** MOBA-style move target: static point or dynamic entity chase */
+export type MoveTarget =
+  | { type: 'point'; x: number; z: number }
+  | { type: 'entity'; id: string }
 
 export interface SiteData {
   id: string
@@ -85,6 +91,10 @@ export interface GameStore {
   // ── Transparency Sensor ──
   insideMathZone: boolean
 
+  // ── MOBA Movement ──
+  actionMode: ActionMode
+  moveTarget: MoveTarget | null
+
   // ── Settings ──
   isMenuOpen: boolean
   isCameraFree: boolean
@@ -116,6 +126,10 @@ export interface GameStore {
   // Math
   submitAnswer: (isCorrect: boolean) => void
   setInsideMathZone: (inside: boolean) => void
+
+  // MOBA Movement
+  setActionMode: (mode: ActionMode) => void
+  setMoveTarget: (target: MoveTarget | null) => void
 
   // Settings
   toggleMenu: () => void
@@ -165,6 +179,8 @@ const initialState = {
   mathAnswered: false,
   mathZonePosition: 'N' as MathZoneDir,
   insideMathZone: false,
+  actionMode: 'MOVE' as ActionMode,
+  moveTarget: null as MoveTarget | null,
   isMenuOpen: false,
   isCameraFree: false,
 }
@@ -375,6 +391,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
   // ── Transparency Sensor ──
   setInsideMathZone: (inside) => set({ insideMathZone: inside }),
+
+  // ── MOBA Movement ──
+  setActionMode: (mode) => set({ actionMode: mode }),
+  setMoveTarget: (target) => set({ moveTarget: target }),
 
   // ── Settings ──
   toggleMenu: () => set(s => ({ isMenuOpen: !s.isMenuOpen })),

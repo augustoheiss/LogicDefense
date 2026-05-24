@@ -17,6 +17,7 @@ import { EnemyManager } from './enemies/EnemyManager'
 import { TowerManager } from './towers/TowerManager'
 import { MathChallenge } from './math/MathChallenge'
 import { GameHUD } from './ui/GameHUD'
+import { ClickPing } from './ui/ClickPing'
 import { useGameStore } from './state/useGameStore'
 import { CAMERA_OFFSET } from './config/constants'
 
@@ -98,6 +99,7 @@ export default function LogicFriction() {
 
         {/* 360° Camera — rotation gated by Settings toggle */}
         <CameraRig />
+        <ClickPing />
 
         <Physics gravity={[0, -30, 0]} timeStep="vary">
           <Lighting />

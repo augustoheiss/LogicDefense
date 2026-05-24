@@ -4,6 +4,7 @@
 // ============================================================
 import { useEffect, useState } from 'react'
 import { useGameStore } from '../state/useGameStore'
+import type { ActionMode } from '../state/useGameStore'
 import { TOWER_BLUEPRINTS, TOWER_BLUEPRINT_KEYS } from '../config/constants'
 
 // ── Props ───────────────────────────────────────────────────────────────────────
@@ -236,6 +237,7 @@ export function GameHUD({ onStart, onRestart }: GameHUDProps) {
   const currentProblem = useGameStore(s => s.currentProblem)
   const coreLevel = useGameStore(s => s.coreLevel)
   const nextWave = useGameStore(s => s.nextWave)
+  const actionMode = useGameStore(s => s.actionMode)
 
   if (phase === 'MENU') {
     return <StartScreen onStart={onStart} />
@@ -296,8 +298,9 @@ export function GameHUD({ onStart, onRestart }: GameHUDProps) {
         )}
       </div>
 
-      {/* Tower Selection Bar */}
-      <TowerSelector />
+      {/* Action Mode Toggle + Tower Selection Bar */}
+      <ActionModeToggle />
+      {actionMode === 'BUILD' && <TowerSelector />}
 
       {/* Wave Clear overlay */}
       {phase === 'WAVE_CLEAR' && (
@@ -386,6 +389,67 @@ export function GameHUD({ onStart, onRestart }: GameHUDProps) {
         </div>
       )}
     </>
+  )
+}
+// ── Action Mode Toggle (MOVE / BUILD) ───────────────────────────────────────────
+function ActionModeToggle() {
+  const actionMode = useGameStore(s => s.actionMode)
+  const setActionMode = useGameStore(s => s.setActionMode)
+
+  const modes: Array<{ key: ActionMode; icon: string; label: string; color: string }> = [
+    { key: 'MOVE',  icon: '🚶', label: 'MOVER',     color: '#00ff88' },
+    { key: 'BUILD', icon: '🏗️', label: 'CONSTRUIR', color: '#ff8800' },
+  ]
+
+  return (
+    <div style={{
+      position: 'absolute',
+      top: 130,
+      left: '50%',
+      transform: 'translateX(-50%)',
+      zIndex: 100,
+      display: 'flex',
+      gap: 4,
+      pointerEvents: 'auto',
+      background: 'rgba(4,4,14,0.95)',
+      borderRadius: 10,
+      padding: 4,
+      border: '1px solid rgba(255,255,255,0.08)',
+      backdropFilter: 'blur(8px)',
+    }}>
+      {modes.map(m => {
+        const isActive = actionMode === m.key
+        return (
+          <button
+            key={m.key}
+            onClick={() => setActionMode(m.key)}
+            style={{
+              background: isActive
+                ? `${m.color}20`
+                : 'transparent',
+              border: `2px solid ${isActive ? m.color : 'transparent'}`,
+              borderRadius: 8,
+              padding: '8px 18px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              transition: 'all 0.15s ease',
+            }}
+          >
+            <span style={{ fontSize: 20 }}>{m.icon}</span>
+            <span style={{
+              fontSize: 14,
+              color: isActive ? m.color : '#64748b',
+              fontWeight: 800,
+              fontFamily: "'Courier New', monospace",
+              textTransform: 'uppercase',
+              letterSpacing: '0.05em',
+            }}>{m.label}</span>
+          </button>
+        )
+      })}
+    </div>
   )
 }
 

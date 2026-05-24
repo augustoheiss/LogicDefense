@@ -117,7 +117,17 @@ export function Enemy({ id, position, hp, speed, onDeath }: EnemyProps) {
       userData={{ type: 'enemy', id }}
     >
       <BallCollider args={[ENEMY_RADIUS]} />
-      <mesh ref={meshRef} castShadow>
+      <mesh
+        ref={meshRef}
+        castShadow
+        onPointerDown={(e) => {
+          // Click-to-follow: set this enemy as the tracked MOBA target
+          e.stopPropagation()
+          const state = useGameStore.getState()
+          if (state.actionMode !== 'MOVE') return
+          state.setMoveTarget({ type: 'entity', id })
+        }}
+      >
         <capsuleGeometry args={[ENEMY_RADIUS, ENEMY_RADIUS * 0.8, 6, 12]} />
         <meshStandardMaterial
           color="#ff4444"
