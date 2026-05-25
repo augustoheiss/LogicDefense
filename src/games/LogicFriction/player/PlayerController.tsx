@@ -219,13 +219,6 @@ export function PlayerController() {
       }
     }
 
-    // ── Manual Attack Override (Spacebar) ──
-    if (keys['Space'] && attackCooldownRef.current <= 0 && state.phase === 'PLAYING') {
-      attackCooldownRef.current = effectiveCooldown
-      attackVisualRef.current = 0.2
-      fireAttack(pos.x, pos.z, effectiveDamage, effectiveRange)
-    }
-
     // ── Attack visual fade ──
     attackVisualRef.current = Math.max(0, attackVisualRef.current - delta)
     if (attackRingRef.current) {
@@ -233,6 +226,9 @@ export function PlayerController() {
       mat.opacity = attackVisualRef.current * 2
       const scale = 1 + (0.2 - attackVisualRef.current) * 5
       attackRingRef.current.scale.setScalar(Math.max(1, scale))
+
+      // Update visibility dynamically to prevent any shadow rendering when inactive
+      attackRingRef.current.visible = attackVisualRef.current > 0.01
 
       if (buffed) {
         mat.color.set('#ffd700')
@@ -423,18 +419,13 @@ export function PlayerController() {
           <meshBasicMaterial color={isBuffActive ? '#ffd700' : '#00ffcc'} />
         </mesh>
 
-        {/* Idle glow ring */}
-        <mesh position={[0, -0.4, 0]} rotation={[-Math.PI / 2, 0, 0]} frustumCulled={false}>
-          <ringGeometry args={[0.5, 0.8, 32]} />
-          <meshBasicMaterial color={isBuffActive ? '#ffd700' : '#00ffcc'} transparent opacity={0.25} side={THREE.DoubleSide} />
-        </mesh>
-
         {/* Attack range ring (visible on attack) */}
         <mesh
           ref={attackRingRef}
           position={[0, -0.35, 0]}
           rotation={[-Math.PI / 2, 0, 0]}
           frustumCulled={false}
+          visible={false}
         >
           <ringGeometry args={[PLAYER_ATTACK_RANGE * 0.8, PLAYER_ATTACK_RANGE, 32]} />
           <meshBasicMaterial color="#ffffff" transparent opacity={0} side={THREE.DoubleSide} />
