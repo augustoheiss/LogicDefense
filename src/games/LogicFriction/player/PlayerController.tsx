@@ -7,7 +7,7 @@
 // fireAttack) moved to playerEvents.ts so this file only exports
 // the PlayerController component.
 // ============================================================
-import { useRef } from 'react'
+import { useRef, useEffect } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import { RigidBody, BallCollider } from '@react-three/rapier'
 import type { RapierRigidBody } from '@react-three/rapier'
@@ -63,12 +63,48 @@ export function PlayerController() {
   const attackVisualRef = useRef(0)
   const pathCacheRef = useRef<PathCache | null>(null)
   const lastEntityPosRef = useRef<{ x: number; z: number } | null>(null)
+  const frameCountRef = useRef(0)
 
   useKeyboard()
+
+  // ── Mount Diagnostic — helps debug tablet invisibility ──
+  useEffect(() => {
+    console.log('[PlayerController] Mounted. RigidBody ref:', rigidBodyRef.current ? 'READY' : 'NULL')
+    // Check again after a short delay (Rapier may not be ready on first render)
+    const timer = setTimeout(() => {
+      const rb = rigidBodyRef.current
+      if (rb) {
+        const t = rb.translation()
+        console.log(`[PlayerController] Post-init position: x=${t.x.toFixed(2)} y=${t.y.toFixed(2)} z=${t.z.toFixed(2)}`)
+      } else {
+        console.warn('[PlayerController] RigidBody still NULL after 500ms — physics may not be initialized')
+      }
+    }, 500)
+    return () => clearTimeout(timer)
+  }, [])
 
   useFrame((_, delta) => {
     const rb = rigidBodyRef.current
     if (!rb) return
+
+    // ── Startup Physics Lockdown ──
+    // Rapier needs a few frames to build the BVH (collision tree).
+    // Lock the player at spawn for the first 10 frames to prevent
+    // gravity from dropping it through the floor before collisions load.
+    frameCountRef.current++
+    if (frameCountRef.current <= 10) {
+      rb.setTranslation({ x: 0, y: 2, z: 0 }, true)
+      rb.setLinvel({ x: 0, y: 0, z: 0 }, true)
+      rb.setAngvel({ x: 0, y: 0, z: 0 }, true)
+      if (frameCountRef.current === 1) {
+        console.log('[PlayerController] Frame 1 — physics lockdown active')
+      }
+      if (frameCountRef.current === 10) {
+        const t = rb.translation()
+        console.log(`[PlayerController] Frame 10 — lockdown released. Y=${t.y.toFixed(2)}`)
+      }
+      return
+    }
 
     // ── Pause guard ──
     if (useGameStore.getState().isPaused) return
@@ -76,9 +112,21 @@ export function PlayerController() {
     // ── Update shared position ──
     const pos = rb.translation()
 
-    // ⚠️ NaN SAFETY: If physics returns NaN, skip entire frame to prevent
-    // position poisoning that makes the mesh vanish on mobile.
-    if (isNaN(pos.x) || isNaN(pos.y) || isNaN(pos.z)) return
+    // ── Diagnostic: log Y position for first 20 frames after lockdown ──
+    if (frameCountRef.current <= 30) {
+      console.log(`[PlayerController] Frame ${frameCountRef.current} — Y=${pos.y.toFixed(2)}`)
+    }
+
+    // ⚠️ NaN RESCUE: If physics returns NaN, force-teleport the player
+    // back to a safe spawn instead of silently skipping (which causes
+    // the mesh to stay at infinity on mobile tablets).
+    if (isNaN(pos.x) || isNaN(pos.y) || isNaN(pos.z)) {
+      console.warn('[PlayerController] ⚠️ Physics NaN detected! Rescuing player to [0, 2, 0]')
+      rb.setTranslation({ x: 0, y: 2, z: 0 }, true)
+      rb.setLinvel({ x: 0, y: 0, z: 0 }, true)
+      rb.setAngvel({ x: 0, y: 0, z: 0 }, true)
+      return
+    }
 
     playerPositionRef.x = pos.x
     playerPositionRef.y = pos.y
