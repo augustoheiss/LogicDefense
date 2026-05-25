@@ -1,19 +1,21 @@
 // ============================================================
-// Logic Friction — Active Tower (Auto-Targeting Turret)
+// Logic Friction — Active Tower (Low-Poly Obelisk Turret)
 // Sprint 5: Type-aware (RAPID/HEAVY), level-scaled stats,
 // click-to-upgrade, upgrade mode floating text, Divine Buff,
 // Math Zone transparency.
 //
+// VISUAL: Procedural Low-Poly Obelisk built from R3F primitives:
+//   • Stone base (box)
+//   • Tapered pillar (4-segment cylinder = pyramidal)
+//   • Floating crystal (octahedron, rotating + hovering)
+// ALL materials are meshLambertMaterial or meshBasicMaterial.
+// ZERO dynamic lights — glow is faked via meshBasicMaterial.
+//
 // GHOST MODE: Tower starts as a transparent phantom (no physics).
 // It solidifies ONLY when the player walks away (dist > 2.5).
-// This prevents the player from being physically trapped inside
-// the tower after funding a construction site.
 //
 // TEXT SAFETY: <Text> is rendered as a SIBLING to <RigidBody>,
 // never as a child. This prevents WebGL Context Lost.
-//
-// NO visual scaling on level-up. Feedback via emissive intensity
-// + ring indicators + floating <Text>.
 // ============================================================
 import { useRef, useState, useMemo } from 'react'
 import { useFrame, useThree, type ThreeEvent } from '@react-three/fiber'
@@ -43,8 +45,19 @@ interface TowerProps {
 // Distance the player must be from the tower before it solidifies
 const SOLIDIFY_DISTANCE = 2.5
 
+// ── Obelisk geometry constants ──────────────────────────────────────────────────
+const BASE_W = 1.2
+const BASE_H = 0.4
+const PILLAR_BOT_R = 0.7
+const PILLAR_TOP_R = 0.3
+const PILLAR_H = 2.5
+const CRYSTAL_R = 0.5
+const CRYSTAL_HOVER_AMP = 0.15
+const CRYSTAL_HOVER_SPEED = 2.0
+const CRYSTAL_Y_BASE = BASE_H + PILLAR_H + 0.6 // Float above the pillar tip
+
 export function Tower({ id, position, type = 'RAPID', level = 1 }: TowerProps) {
-  const turretRef = useRef<THREE.Mesh>(null)
+  const crystalRef = useRef<THREE.Mesh>(null)
   const beamRef = useRef<THREE.Mesh>(null)
   const baseRef = useRef<THREE.Mesh>(null)
   const pillarRef = useRef<THREE.Mesh>(null)
@@ -81,8 +94,8 @@ export function Tower({ id, position, type = 'RAPID', level = 1 }: TowerProps) {
   )
   const playerPosVec = useMemo(() => new THREE.Vector3(), [])
 
-  useFrame((_, delta) => {
-    const state = useGameStore.getState()
+  useFrame((state, delta) => {
+    const store = useGameStore.getState()
 
     // ── Ghost solidification check ──
     if (!isSolid) {
@@ -99,10 +112,17 @@ export function Tower({ id, position, type = 'RAPID', level = 1 }: TowerProps) {
       }
     }
 
-    if (state.phase !== 'PLAYING') return
-    if (state.isPaused) return
+    // ── Crystal animation (always runs — it's just rotation + sin) ──
+    if (crystalRef.current) {
+      crystalRef.current.rotation.y += delta * 1.2
+      crystalRef.current.position.y =
+        CRYSTAL_Y_BASE + Math.sin(state.clock.elapsedTime * CRYSTAL_HOVER_SPEED) * CRYSTAL_HOVER_AMP
+    }
 
-    const buffed = state.isBuffActive
+    if (store.phase !== 'PLAYING') return
+    if (store.isPaused) return
+
+    const buffed = store.isBuffActive
     const effectiveCooldown = buffed ? baseCooldown * BUFF_COOLDOWN_MULT : baseCooldown
     const effectiveDamage = buffed ? baseDamage * BUFF_DAMAGE_MULT : baseDamage
 
@@ -146,9 +166,10 @@ export function Tower({ id, position, type = 'RAPID', level = 1 }: TowerProps) {
             })
           }
 
-          if (turretRef.current) {
+          // Point crystal toward target
+          if (crystalRef.current) {
             const angle = Math.atan2(target.x - tx, target.z - tz)
-            turretRef.current.rotation.y = angle
+            crystalRef.current.rotation.y = angle
           }
 
           if (beamRef.current) {
@@ -170,23 +191,20 @@ export function Tower({ id, position, type = 'RAPID', level = 1 }: TowerProps) {
       mat.opacity = beamVisualRef.current * 6
     }
 
-    // ── Turret emissive: buff + upgrade mode pulse ──
-    if (turretRef.current) {
-      const mat = turretRef.current.material as THREE.MeshStandardMaterial
+    // ── Crystal color: buff = gold, upgrade = green, normal = type color ──
+    if (crystalRef.current) {
+      const mat = crystalRef.current.material as THREE.MeshBasicMaterial
       if (buffed) {
-        mat.emissive.set('#ffd700')
-        mat.emissiveIntensity = 0.6 + Math.sin(Date.now() * 0.005) * 0.3
-      } else if (state.isUpgradeMode) {
-        mat.emissive.set('#00ff88')
-        mat.emissiveIntensity = 0.5 + Math.sin(Date.now() * 0.004) * 0.3
+        mat.color.set('#ffd700')
+      } else if (store.isUpgradeMode) {
+        mat.color.set('#00ff88')
       } else {
-        mat.emissive.set(bp.emissive)
-        mat.emissiveIntensity = 0.6
+        mat.color.set(bp.color)
       }
     }
 
     // ── Math Zone transparency ──
-    const zoneDir = state.mathZonePosition
+    const zoneDir = store.mathZonePosition
     const zoneCenter = MATH_ZONE_POSITIONS[zoneDir]
     const dxz = safePos[0] - zoneCenter[0]
     const dzz = safePos[2] - zoneCenter[2]
@@ -200,16 +218,16 @@ export function Tower({ id, position, type = 'RAPID', level = 1 }: TowerProps) {
 
     const applyOpacity = (mesh: THREE.Mesh | null) => {
       if (!mesh) return
-      const mat = mesh.material as THREE.MeshStandardMaterial
+      const mat = mesh.material as THREE.MeshLambertMaterial
       mat.transparent = true
       mat.opacity = finalOpacity
     }
     applyOpacity(baseRef.current)
     applyOpacity(pillarRef.current)
-    if (turretRef.current) {
-      const tMat = turretRef.current.material as THREE.MeshStandardMaterial
-      tMat.transparent = true
-      tMat.opacity = finalOpacity
+    if (crystalRef.current) {
+      const cMat = crystalRef.current.material as THREE.MeshBasicMaterial
+      cMat.transparent = true
+      cMat.opacity = finalOpacity
     }
   })
 
@@ -243,48 +261,41 @@ export function Tower({ id, position, type = 'RAPID', level = 1 }: TowerProps) {
     : '#ff4444'
 
   // ═══════════════════════════════════════════════════════════════
-  // VISUAL CONTENT — shared between ghost and solid modes.
-  // Transparency controlled by useFrame (ghost=0.4, solid=1.0).
+  // LOW-POLY OBELISK — procedural tower visual.
+  // All materials: meshLambertMaterial (body) / meshBasicMaterial (crystal).
+  // ZERO dynamic lights.
   // ═══════════════════════════════════════════════════════════════
   const visualContent = (
     <group onPointerDown={handlePointerDown}>
-      {/* Base platform */}
-      <mesh ref={baseRef} position={[0, 0.15, 0]} receiveShadow>
-        <cylinderGeometry args={[TOWER_SIZE * 1.3, TOWER_SIZE * 1.5, 0.3, 8]} />
-        <meshStandardMaterial
-          color="#1a1a3a"
+      {/* ── Stone Base Foundation ── */}
+      <mesh ref={baseRef} position={[0, BASE_H / 2, 0]} receiveShadow castShadow>
+        <boxGeometry args={[BASE_W, BASE_H, BASE_W]} />
+        <meshLambertMaterial
+          color="#3a3a4a"
           emissive={bp.emissive}
-          emissiveIntensity={levelEmissive}
-          metalness={0.8}
-          roughness={0.2}
+          emissiveIntensity={levelEmissive * 0.3}
           transparent
           opacity={isSolid ? 1 : 0.4}
         />
       </mesh>
 
-      {/* Main pillar */}
-      <mesh ref={pillarRef} position={[0, TOWER_HEIGHT / 2, 0]} castShadow>
-        <boxGeometry args={[TOWER_SIZE * 1.4, TOWER_HEIGHT, TOWER_SIZE * 1.4]} />
-        <meshStandardMaterial
-          color="#0f0f2a"
+      {/* ── Tapered Pillar (4 radial segments = pyramidal/obelisk) ── */}
+      <mesh ref={pillarRef} position={[0, BASE_H + PILLAR_H / 2, 0]} castShadow>
+        <cylinderGeometry args={[PILLAR_TOP_R, PILLAR_BOT_R, PILLAR_H, 4]} />
+        <meshLambertMaterial
+          color="#5a5a6a"
           emissive={bp.emissive}
-          emissiveIntensity={levelEmissive * 0.75}
-          metalness={0.6}
-          roughness={0.3}
+          emissiveIntensity={levelEmissive * 0.5}
           transparent
           opacity={isSolid ? 1 : 0.4}
         />
       </mesh>
 
-      {/* Turret head */}
-      <mesh ref={turretRef} position={[0, TOWER_HEIGHT, 0]} castShadow>
-        <octahedronGeometry args={[TOWER_SIZE * 0.8, 0]} />
-        <meshStandardMaterial
+      {/* ── Floating Energy Crystal (octahedron) ── */}
+      <mesh ref={crystalRef} position={[0, CRYSTAL_Y_BASE, 0]}>
+        <octahedronGeometry args={[CRYSTAL_R]} />
+        <meshBasicMaterial
           color={bp.color}
-          emissive={bp.emissive}
-          emissiveIntensity={0.6}
-          metalness={0.5}
-          roughness={0.2}
           transparent
           opacity={isSolid ? 1 : 0.4}
         />
@@ -364,7 +375,7 @@ export function Tower({ id, position, type = 'RAPID', level = 1 }: TowerProps) {
         </mesh>
       ))}
 
-      {/* Range ring */}
+      {/* Range ring — only when selected */}
       {selectedEntity?.id === id && (
         <mesh position={[0, 0.05, 0]} rotation={[-Math.PI / 2, 0, 0]}>
           <ringGeometry args={[baseRange - 0.3, baseRange, 48]} />

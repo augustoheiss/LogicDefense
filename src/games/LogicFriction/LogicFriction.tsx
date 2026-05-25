@@ -10,7 +10,7 @@ import { Physics } from '@react-three/rapier'
 import * as THREE from 'three'
 
 // ── Game Systems ────────────────────────────────────────────────────────────────
-import { Arena, ArenaBoundary, Lighting } from './world/Arena'
+import { Arena, ArenaBoundary, ArenaPillars, Lighting } from './world/Arena'
 import { CentralCore } from './world/CentralCore'
 import { PlayerController } from './player/PlayerController'
 import { EnemyManager } from './enemies/EnemyManager'
@@ -69,7 +69,7 @@ export default function LogicFriction() {
         minHeight: '500px',
         maxHeight: '100vh',
         position: 'relative',
-        background: '#04040e',
+        background: '#050510',
         borderRadius: 12,
         overflow: 'hidden',
         touchAction: 'none',  // Prevent mobile browser from hijacking touch for scroll/pan
@@ -97,8 +97,8 @@ export default function LogicFriction() {
         resize={{ scroll: true, debounce: { scroll: 50, resize: 0 } }}
         style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', margin: 0, padding: 0, touchAction: 'none' }}
       >
-        <color attach="background" args={['#04040e']} />
-        <fog attach="fog" args={['#04040e', 60, 120]} />
+        <color attach="background" args={['#050510']} />
+        <fog attach="fog" args={['#050510', 50, 110]} />
 
         {/* 360° Camera — rotation gated by Settings toggle */}
         <CameraRig />
@@ -108,6 +108,7 @@ export default function LogicFriction() {
           <Lighting />
           <Arena />
           <ArenaBoundary />
+          <ArenaPillars />
           <CentralCore />
           {/* Player is removed from physics world while dead */}
           {!isPlayerDead && <PlayerController />}
