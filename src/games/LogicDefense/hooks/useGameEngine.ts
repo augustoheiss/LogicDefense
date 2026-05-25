@@ -105,6 +105,12 @@ export function useGameEngine(
   const aiModeRef    = useRef(false)
   const stressModeRef = useRef(false)
 
+  // AoE Nuke buff (activated on correct math answer)
+  const aoeBuffActiveRef = useRef(false)
+  const aoeBuffTimerRef  = useRef<ReturnType<typeof setTimeout> | null>(null)
+  /** Duration of the AoE nuke buff in milliseconds */
+  const AOE_BUFF_DURATION_MS = 15_000
+
   // Drag state
   const isDraggingGhostRef = useRef(false)
   const movingTowerRef     = useRef<Tower | null>(null)
@@ -233,6 +239,10 @@ export function useGameEngine(
     spinConsumedRef.current           = false
     lastRotatedWaveRef.current        = 0
     resetMap()
+
+    // Reset AoE buff
+    aoeBuffActiveRef.current = false
+    if (aoeBuffTimerRef.current) { clearTimeout(aoeBuffTimerRef.current); aoeBuffTimerRef.current = null }
 
     syncUiState({
       gameState: 'START',
@@ -426,6 +436,16 @@ export function useGameEngine(
     goldRef.current += earned
     statsRef.current.totalGold += earned
     lastAnswerCorrectRef.current = isCorrect && !isTimeout
+
+    // ── Activate AoE Nuke buff on correct answer ─────────────────────────
+    if (isCorrect && !isTimeout) {
+      aoeBuffActiveRef.current = true
+      if (aoeBuffTimerRef.current) clearTimeout(aoeBuffTimerRef.current)
+      aoeBuffTimerRef.current = setTimeout(() => {
+        aoeBuffActiveRef.current = false
+        aoeBuffTimerRef.current = null
+      }, AOE_BUFF_DURATION_MS)
+    }
 
     const tipHtml = problem ? generateTip(problem) : ''
 
@@ -1000,6 +1020,7 @@ export function useGameEngine(
 
     // ── Bullets → spawn Coins instead of direct gold ──────────────────
     const newParticles: Particle[] = []
+    const isAoeActive = aoeBuffActiveRef.current
     bulletsRef.current.forEach(b => {
       b.update(
         enemiesRef.current,
@@ -1010,6 +1031,7 @@ export function useGameEngine(
         goldMultiplierRef.current,
         newParticles,
         playSound,
+        isAoeActive,
       )
     })
     particlesRef.current.push(...newParticles)
@@ -1082,9 +1104,28 @@ export function useGameEngine(
     })
     enemiesRef.current.forEach(e => e.draw(ctx))
     heroesRef.current.forEach(h => h.draw(ctx))
-    bulletsRef.current.forEach(b => b.draw(ctx))
+    const isAoeDraw = aoeBuffActiveRef.current
+    bulletsRef.current.forEach(b => b.draw(ctx, isAoeDraw))
     particlesRef.current.forEach(p => p.draw(ctx))
     coinsRef.current.forEach(c => c.draw(ctx))
+
+    // ── AoE Nuke buff screen-edge indicator ─────────────────────────────
+    if (isAoeDraw) {
+      ctx.save()
+      const pulse = 0.15 + 0.1 * Math.sin(Date.now() / 200)
+      ctx.strokeStyle = `rgba(255, 68, 0, ${pulse})`
+      ctx.lineWidth = 6
+      ctx.shadowBlur = 30
+      ctx.shadowColor = '#ff4400'
+      ctx.strokeRect(3, 3, CANVAS_WIDTH - 6, CANVAS_HEIGHT - 6)
+      // Top-center buff label
+      ctx.fillStyle = '#ff6600'
+      ctx.font = 'bold 14px Courier New'
+      ctx.textAlign = 'center'
+      ctx.textBaseline = 'top'
+      ctx.fillText('☢ AoE NUKE ATIVO ☢', CANVAS_WIDTH / 2, 8)
+      ctx.restore()
+    }
 
     if (selectedTowerIdxRef.current > -1 && isDraggingGhostRef.current) {
       const type = TOWER_TYPES[selectedTowerIdxRef.current]
