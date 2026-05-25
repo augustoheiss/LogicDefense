@@ -53,16 +53,6 @@ export function MathChallenge() {
       {/* ── Transparency Sensor ── */}
       <TransparencySensor />
 
-      {/* ── Ground glow ring — marks the math zone ── */}
-      <mesh position={[0, 0.08, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-        <ringGeometry args={[MATH_ZONE_SENSOR_RADIUS - 1, MATH_ZONE_SENSOR_RADIUS, 48]} />
-        <meshBasicMaterial
-          color="#00d4ff"
-          transparent
-          opacity={mathAnswered ? 0.03 : 0.08}
-          side={THREE.DoubleSide}
-        />
-      </mesh>
 
       {/* ── Floating equation text (3D — NO physics here, safe) ── */}
       <Billboard>

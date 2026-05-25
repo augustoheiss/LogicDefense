@@ -27,6 +27,7 @@ export function Arena() {
     e.stopPropagation()
 
     const state = useGameStore.getState()
+    state.setSelectedEntity(null)
     if (state.phase !== 'PLAYING' && state.phase !== 'WAVE_CLEAR') return
 
     const point = e.point

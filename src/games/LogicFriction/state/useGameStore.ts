@@ -54,6 +54,11 @@ export interface TowerData {
   level: number  // Starts at 1, increments on upgrade
 }
 
+export interface SelectedEntity {
+  id: string
+  type: 'player' | 'tower'
+}
+
 // ── Math zone helpers ───────────────────────────────────────────────────────────
 const DIRECTIONS: MathZoneDir[] = ['N', 'S', 'E', 'W']
 
@@ -103,6 +108,9 @@ export interface GameStore {
   // ── Transparency Sensor ──
   insideMathZone: boolean
 
+  // ── Contextual Selection ──
+  selectedEntity: SelectedEntity | null
+
   // ── MOBA Movement ──
   actionMode: ActionMode
   moveTarget: MoveTarget | null
@@ -143,6 +151,9 @@ export interface GameStore {
   // MOBA Movement
   setActionMode: (mode: ActionMode) => void
   setMoveTarget: (target: MoveTarget | null) => void
+
+  // ── Contextual Selection ──
+  setSelectedEntity: (entity: SelectedEntity | null) => void
 
   // Settings
   toggleMenu: () => void
@@ -206,6 +217,7 @@ const initialState = {
   explanationLog: [] as ExplanationEntry[],
   mathZonePosition: 'N' as MathZoneDir,
   insideMathZone: false,
+  selectedEntity: null as SelectedEntity | null,
   actionMode: 'MOVE' as ActionMode,
   moveTarget: null as MoveTarget | null,
   isMenuOpen: false,
@@ -259,6 +271,7 @@ export const useGameStore = create<GameStore>()(
       mathZonePosition: newDir,
       insideMathZone: false,
       isUpgradeMode: false,
+      selectedEntity: null,
     })
   },
 
@@ -449,6 +462,7 @@ export const useGameStore = create<GameStore>()(
   // ── MOBA Movement ──
   setActionMode: (mode) => set({ actionMode: mode }),
   setMoveTarget: (target) => set({ moveTarget: target }),
+  setSelectedEntity: (entity) => set({ selectedEntity: entity }),
 
   // ── Settings ──
   toggleMenu: () => set(s => ({ isMenuOpen: !s.isMenuOpen })),

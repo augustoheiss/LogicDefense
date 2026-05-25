@@ -213,15 +213,19 @@ export function Tower({ id, position, type = 'RAPID', level = 1 }: TowerProps) {
     }
   })
 
-  // ── Click to upgrade (only in upgrade mode) ──
+  // ── Click to select and upgrade ──
   const handlePointerDown = (e: ThreeEvent<PointerEvent>) => {
     e.stopPropagation()
+    setSelectedEntity({ id, type: 'tower' })
+
     const state = useGameStore.getState()
     if (!state.isUpgradeMode) return
     state.upgradeTower(id)
   }
 
   // ── Store subscriptions for floating UI ──
+  const selectedEntity = useGameStore(s => s.selectedEntity)
+  const setSelectedEntity = useGameStore(s => s.setSelectedEntity)
   const isUpgradeMode = useGameStore(s => s.isUpgradeMode)
   const coreLevel = useGameStore(s => s.coreLevel)
   const gold = useGameStore(s => s.gold)
@@ -361,15 +365,17 @@ export function Tower({ id, position, type = 'RAPID', level = 1 }: TowerProps) {
       ))}
 
       {/* Range ring */}
-      <mesh position={[0, 0.05, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-        <ringGeometry args={[baseRange - 0.3, baseRange, 48]} />
-        <meshBasicMaterial
-          color={bp.color}
-          transparent
-          opacity={0.03}
-          side={THREE.DoubleSide}
-        />
-      </mesh>
+      {selectedEntity?.id === id && (
+        <mesh position={[0, 0.05, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+          <ringGeometry args={[baseRange - 0.3, baseRange, 48]} />
+          <meshBasicMaterial
+            color={bp.color}
+            transparent
+            opacity={0.12}
+            side={THREE.DoubleSide}
+          />
+        </mesh>
+      )}
 
       {/* Laser beam */}
       <mesh ref={beamRef} position={[0, TOWER_HEIGHT - 0.5, 0]}>

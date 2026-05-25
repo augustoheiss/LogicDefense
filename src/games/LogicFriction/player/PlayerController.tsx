@@ -53,6 +53,13 @@ export function PlayerController() {
   const attackRingRef = useRef<THREE.Mesh>(null)
   const { camera, controls } = useThree()
 
+  // Selected range subscriptions
+  const selectedEntity = useGameStore(s => s.selectedEntity)
+  const setSelectedEntity = useGameStore(s => s.setSelectedEntity)
+  const isBuffActive = useGameStore(s => s.isBuffActive)
+
+  const effectiveRange = isBuffActive ? PLAYER_ATTACK_RANGE * 1.5 : PLAYER_ATTACK_RANGE
+
   const attackCooldownRef = useRef(0)
   const attackVisualRef = useRef(0)
   const pathCacheRef = useRef<PathCache | null>(null)
@@ -402,15 +409,24 @@ export function PlayerController() {
       {/* Player orb group — Y=0.6 so the sphere (r=0.6) hovers just above the floor */}
       <group name="player" frustumCulled={false} position={[0, 0.6, 0]}>
         {/* Sphere avatar — meshBasicMaterial for mobile GPU safety (no lighting) */}
-        <mesh ref={meshRef} castShadow={false} frustumCulled={false} renderOrder={1}>
+        <mesh
+          ref={meshRef}
+          castShadow={false}
+          frustumCulled={false}
+          renderOrder={1}
+          onPointerDown={(e) => {
+            e.stopPropagation()
+            setSelectedEntity({ id: 'player', type: 'player' })
+          }}
+        >
           <sphereGeometry args={[0.6, 16, 16]} />
-          <meshBasicMaterial color="#00ffcc" />
+          <meshBasicMaterial color={isBuffActive ? '#ffd700' : '#00ffcc'} />
         </mesh>
 
         {/* Idle glow ring */}
         <mesh position={[0, -0.4, 0]} rotation={[-Math.PI / 2, 0, 0]} frustumCulled={false}>
           <ringGeometry args={[0.5, 0.8, 32]} />
-          <meshBasicMaterial color="#00ffcc" transparent opacity={0.25} side={THREE.DoubleSide} />
+          <meshBasicMaterial color={isBuffActive ? '#ffd700' : '#00ffcc'} transparent opacity={0.25} side={THREE.DoubleSide} />
         </mesh>
 
         {/* Attack range ring (visible on attack) */}
@@ -423,6 +439,23 @@ export function PlayerController() {
           <ringGeometry args={[PLAYER_ATTACK_RANGE * 0.8, PLAYER_ATTACK_RANGE, 32]} />
           <meshBasicMaterial color="#ffffff" transparent opacity={0} side={THREE.DoubleSide} />
         </mesh>
+
+        {/* Selected range ring (visible when player is selected) */}
+        {selectedEntity?.type === 'player' && (
+          <mesh
+            position={[0, -0.38, 0]}
+            rotation={[-Math.PI / 2, 0, 0]}
+            frustumCulled={false}
+          >
+            <ringGeometry args={[effectiveRange - 0.25, effectiveRange, 64]} />
+            <meshBasicMaterial
+              color={isBuffActive ? '#ffd700' : '#00ffcc'}
+              transparent
+              opacity={0.12}
+              side={THREE.DoubleSide}
+            />
+          </mesh>
+        )}
       </group>
     </RigidBody>
   )
