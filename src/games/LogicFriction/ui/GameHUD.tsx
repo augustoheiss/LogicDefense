@@ -586,7 +586,7 @@ function SettingsMenu() {
           {explanationLog.length > 0 && (
             <>
               <div style={{
-                fontSize: 10,
+                fontSize: 13,
                 color: '#475569',
                 textTransform: 'uppercase',
                 letterSpacing: '0.15em',
@@ -597,11 +597,11 @@ function SettingsMenu() {
                 📝 Log de Respostas
               </div>
               <div style={{
-                maxHeight: 220,
+                maxHeight: 320,
                 overflowY: 'auto',
                 display: 'flex',
                 flexDirection: 'column',
-                gap: 6,
+                gap: 8,
               }}>
                 {[...explanationLog].reverse().map((entry, i) => (
                   <div
@@ -612,7 +612,7 @@ function SettingsMenu() {
                         : 'rgba(255,68,68,0.08)',
                       border: `1px solid ${entry.wasCorrect ? '#00ff8830' : '#ff444430'}`,
                       borderRadius: 8,
-                      padding: '8px 10px',
+                      padding: '12px 14px',
                     }}
                   >
                     <div style={{
@@ -622,14 +622,14 @@ function SettingsMenu() {
                       marginBottom: 4,
                     }}>
                       <span style={{
-                        fontSize: 11,
+                        fontSize: 14,
                         color: '#94a3b8',
                         fontWeight: 700,
                       }}>
                         Onda {entry.wave}
                       </span>
                       <span style={{
-                        fontSize: 11,
+                        fontSize: 14,
                         color: entry.wasCorrect ? '#00ff88' : '#ff4444',
                         fontWeight: 800,
                       }}>
@@ -637,17 +637,17 @@ function SettingsMenu() {
                       </span>
                     </div>
                     <div style={{
-                      fontSize: 12,
+                      fontSize: 16,
                       color: '#c8d6e5',
                       fontWeight: 700,
-                      marginBottom: 4,
+                      marginBottom: 6,
                     }}>
                       {entry.question}
                     </div>
                     <div style={{
-                      fontSize: 11,
+                      fontSize: 14,
                       color: '#64748b',
-                      lineHeight: 1.5,
+                      lineHeight: 1.7,
                       whiteSpace: 'pre-wrap',
                       wordBreak: 'break-word',
                     }}>
