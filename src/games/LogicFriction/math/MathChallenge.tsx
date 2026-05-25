@@ -272,14 +272,14 @@ function AnswerPad({ label, isCorrect, position, zoneWorldPos, disabled, showRes
         />
       </RigidBody>
 
-      {/* ⚠️ "FAT FINGER" HITBOX — Raycaster-visible but visually transparent.
-          visible={false} makes Three.js Raycaster IGNORE the mesh entirely!
-          Instead we render it with a fully transparent material + depthWrite=false. */}
+      {/* ⚠️ ABSURDLY LARGE HITBOX — r=5, h=2, elevated at Y=1.0.
+          Catches even wildly DPI-misaligned mobile raycasts.
+          Reduce after confirming taps register on tablet. */}
       <mesh
-        position={[0, 0.5, 0]}
+        position={[0, 1.0, 0]}
         onPointerDown={handlePadTap}
       >
-        <cylinderGeometry args={[2.5, 2.5, 1, 16]} />
+        <cylinderGeometry args={[5, 5, 2, 16]} />
         <meshBasicMaterial transparent opacity={0} depthWrite={false} />
       </mesh>
 

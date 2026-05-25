@@ -73,11 +73,13 @@ export default function LogicFriction() {
         borderRadius: 12,
         overflow: 'hidden',
         touchAction: 'none',  // Prevent mobile browser from hijacking touch for scroll/pan
+        margin: 0,
+        padding: 0,
       }}
     >
       <Canvas
         shadows
-        dpr={[1, 1.5]}
+        dpr={[1, 2]}  // ⚠️ MOBILE FIX: Match retina/tablet DPI so Raycaster aligns with touch coords
         gl={{
           powerPreference: 'high-performance',
           antialias: false,
@@ -93,7 +95,7 @@ export default function LogicFriction() {
         }}
         onCreated={onCreated}
         resize={{ scroll: true, debounce: { scroll: 50, resize: 0 } }}
-        style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}
+        style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', margin: 0, padding: 0, touchAction: 'none' }}
       >
         <color attach="background" args={['#04040e']} />
         <fog attach="fog" args={['#04040e', 60, 120]} />

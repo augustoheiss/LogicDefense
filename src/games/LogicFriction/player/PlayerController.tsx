@@ -399,11 +399,11 @@ export function PlayerController() {
       {/* Y=1.0 lifts visuals well above the arena floor for mobile depth buffers */}
       {/* ⚠️ NUCLEAR DEBUG: scale={[2,2,2]} tests if tablet was rendering it microscopically */}
       <group name="player" frustumCulled={false} position={[0, 1.0, 0]} scale={[2, 2, 2]}>
-        {/* ⚠️ NUCLEAR DEBUG: meshBasicMaterial (red) bypasses ALL lighting/shader
-            compilation. If this is visible on mobile, the root cause is confirmed
-            as shader compilation failure with meshStandardMaterial. */}
+        {/* ⚠️ MINECRAFT FALLBACK: boxGeometry is the cheapest, most universally
+            supported WebGL primitive. If the tablet GPU failed on CapsuleGeometry
+            vertices, this cube WILL render. */}
         <mesh ref={meshRef} castShadow={false} frustumCulled={false} renderOrder={1}>
-          <capsuleGeometry args={[PLAYER_RADIUS, PLAYER_RADIUS * 1.2, 8, 16]} />
+          <boxGeometry args={[2, 2, 2]} />
           <meshBasicMaterial color="red" />
         </mesh>
 
