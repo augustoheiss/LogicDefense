@@ -50,6 +50,86 @@ function StatBadge({ label, value, color, icon }: {
   )
 }
 
+// ── Buff Badge ───────────────────────────────────────────────────────────────────
+function BuffBadge() {
+  const isBuffActive = useGameStore(s => s.isBuffActive)
+  const isPaused = useGameStore(s => s.isPaused)
+  const [timeLeft, setTimeLeft] = useState(25)
+
+  // Reset the timer when the buff is activated
+  useEffect(() => {
+    if (isBuffActive) {
+      setTimeLeft(25)
+    }
+  }, [isBuffActive])
+
+  // Countdown timer logic
+  useEffect(() => {
+    if (!isBuffActive || isPaused) return
+
+    const interval = setInterval(() => {
+      setTimeLeft(prev => {
+        if (prev <= 1) {
+          clearInterval(interval)
+          // Defer the state change to avoid React rendering timing issues
+          setTimeout(() => {
+            useGameStore.setState({ isBuffActive: false })
+          }, 0)
+          return 0
+        }
+        return prev - 1
+      })
+    }, 1000)
+
+    return () => clearInterval(interval)
+  }, [isBuffActive, isPaused])
+
+  if (!isBuffActive) return null
+
+  return (
+    <div style={{
+      background: 'rgba(255,215,0,0.15)',
+      border: '1px solid rgba(255,215,0,0.5)',
+      borderRadius: 8,
+      padding: '6px 14px',
+      display: 'flex',
+      alignItems: 'center',
+      gap: 10,
+      minWidth: 120,
+      animation: 'lf-buff-pulse 1.8s ease-in-out infinite',
+      boxShadow: '0 0 15px rgba(255,215,0,0.2)',
+      pointerEvents: 'none',
+    }}>
+      <style>{`
+        @keyframes lf-buff-pulse {
+          0%, 100% { opacity: 1; transform: scale(1); box-shadow: 0 0 15px rgba(255,215,0,0.2); }
+          50% { opacity: 0.85; transform: scale(1.03); box-shadow: 0 0 25px rgba(255,215,0,0.45); }
+        }
+      `}</style>
+      <span style={{ fontSize: 18, filter: 'drop-shadow(0 0 4px #ffd700)' }}>🪽</span>
+      <div>
+        <div style={{
+          fontSize: 8,
+          color: '#ffd700',
+          textTransform: 'uppercase',
+          letterSpacing: '0.12em',
+          fontWeight: 800,
+          fontFamily: "'Courier New', monospace",
+        }}>BUFF DIVINO</div>
+        <div style={{
+          fontSize: 14,
+          color: '#ffffff',
+          fontWeight: 900,
+          fontFamily: "'Courier New', monospace",
+          letterSpacing: '0.05em',
+        }}>
+          {timeLeft}s
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── HP Bar ───────────────────────────────────────────────────────────────────────
 function HPBar({ current, max, color, label }: {
   current: number; max: number; color: string; label: string
@@ -229,7 +309,6 @@ export function GameHUD({ onStart, onRestart }: GameHUDProps) {
   const gold = useGameStore(s => s.gold)
   const enemiesAlive = useGameStore(s => s.enemiesAlive)
   const isPlayerDead = useGameStore(s => s.isPlayerDead)
-  const isBuffActive = useGameStore(s => s.isBuffActive)
   const coreLevel = useGameStore(s => s.coreLevel)
   const actionMode = useGameStore(s => s.actionMode)
   const isPaused = useGameStore(s => s.isPaused)
@@ -310,28 +389,7 @@ export function GameHUD({ onStart, onRestart }: GameHUDProps) {
         <StatBadge label="Wave" value={waveNumber} color="#a855f7" icon="🌊" />
         <StatBadge label="Gold" value={gold} color="#ffd700" icon="💰" />
         <StatBadge label="Enemies" value={enemiesAlive} color="#ff4444" icon="👾" />
-        {isBuffActive && (
-          <div style={{
-            background: 'rgba(255,215,0,0.15)',
-            border: '1px solid rgba(255,215,0,0.5)',
-            borderRadius: 8,
-            padding: '6px 14px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 6,
-            animation: 'lf-cta-glow 1.5s ease infinite',
-          }}>
-            <span style={{ fontSize: 16 }}>⚡</span>
-            <span style={{
-              fontSize: 11,
-              color: '#ffd700',
-              fontWeight: 800,
-              fontFamily: "'Courier New', monospace",
-              textTransform: 'uppercase',
-              letterSpacing: '0.1em',
-            }}>BUFF DIVINO</span>
-          </div>
-        )}
+        <BuffBadge />
       </div>
 
       {/* Action Mode Toggle + Tower Selection Bar */}

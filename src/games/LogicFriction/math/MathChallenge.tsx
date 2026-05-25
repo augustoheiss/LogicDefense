@@ -133,21 +133,21 @@ export function MathChallenge() {
       })}
 
       {/* ── Result indicator ── */}
-      {mathAnswered && (
+      {mathAnswered && !isBuffActive && (
         <Billboard>
           <Text
             position={[0, MATH_ZONE_Y + 2, 0]}
             fontSize={2}
-            color={isBuffActive ? '#00ff88' : '#ff4444'}
+            color="#ff4444"
             anchorX="center"
             anchorY="middle"
             outlineWidth={0.1}
             outlineColor="#000000"
           >
-            {isBuffActive ? '✓ BUFF DIVINO ATIVADO!' : '✗ RESPOSTA ERRADA'}
+            ✗ RESPOSTA ERRADA
             <meshBasicMaterial
               attach="material"
-              color={isBuffActive ? '#00ff88' : '#ff4444'}
+              color="#ff4444"
               depthTest={false}
               transparent
               toneMapped={false}
