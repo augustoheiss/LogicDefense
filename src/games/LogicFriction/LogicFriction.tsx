@@ -72,6 +72,7 @@ export default function LogicFriction() {
         background: '#04040e',
         borderRadius: 12,
         overflow: 'hidden',
+        touchAction: 'none',  // Prevent mobile browser from hijacking touch for scroll/pan
       }}
     >
       <Canvas

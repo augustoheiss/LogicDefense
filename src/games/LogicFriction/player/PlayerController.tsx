@@ -389,9 +389,11 @@ export function PlayerController() {
       <BallCollider args={[PLAYER_RADIUS]} />
 
       {/* Named group so scene.getObjectByName('player') can find us */}
-      <group name="player" frustumCulled={false}>
-        {/* Player capsule — frustumCulled={false} prevents mobile GPU culling */}
-        <mesh ref={meshRef} castShadow frustumCulled={false} renderOrder={1}>
+      {/* Y offset lifts visuals above 16-bit depth-buffer Z-fighting zone on mobile */}
+      <group name="player" frustumCulled={false} position={[0, 0.5, 0]}>
+        {/* Player capsule — castShadow disabled: mobile WebGL shadow-map compile
+            failures silently hide the entire mesh */}
+        <mesh ref={meshRef} castShadow={false} frustumCulled={false} renderOrder={1}>
           <capsuleGeometry args={[PLAYER_RADIUS, PLAYER_RADIUS * 1.2, 8, 16]} />
           <meshStandardMaterial
             color="#00ff88"

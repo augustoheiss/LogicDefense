@@ -7,8 +7,9 @@
 // never nested inside it. The main equation/hint/result text
 // lives in MathChallenge (no physics) and is inherently safe.
 //
-// MOBILE FIX: Answer pad meshes use onPointerDown + stopPropagation
-// to prevent touch events from bleeding through to Arena.tsx.
+// MOBILE FIX: Answer pad meshes use onPointerDown that stops
+// propagation AND explicitly triggers setMoveTarget toward the
+// pad's world position, so the player walks onto it on tap.
 // ============================================================
 import { useRef, useMemo, useCallback } from 'react'
 import { useFrame } from '@react-three/fiber'
@@ -124,6 +125,7 @@ export function MathChallenge() {
             label={answer.label}
             isCorrect={answer.isCorrect}
             position={padPos}
+            zoneWorldPos={zonePos}
             disabled={mathAnswered}
             showResult={mathAnswered}
           />
@@ -194,11 +196,12 @@ interface AnswerPadProps {
   label: string
   isCorrect: boolean
   position: [number, number, number]
+  zoneWorldPos: [number, number, number]
   disabled: boolean
   showResult: boolean
 }
 
-function AnswerPad({ label, isCorrect, position, disabled, showResult }: AnswerPadProps) {
+function AnswerPad({ label, isCorrect, position, zoneWorldPos, disabled, showResult }: AnswerPadProps) {
   const meshRef = useRef<THREE.Mesh>(null)
   const submittedRef = useRef(false)
 
@@ -240,12 +243,17 @@ function AnswerPad({ label, isCorrect, position, disabled, showResult }: AnswerP
     }, 0)
   }, [disabled, isCorrect])
 
-  // ── MOBILE FIX: Stop touch events from bleeding through to Arena ──
-  // Without this, tapping an answer pad on mobile triggers a pathfinding
-  // move command instead of (or in addition to) the physics answer sensor.
-  const stopPointerBleed = useCallback((e: ThreeEvent<PointerEvent>) => {
+  // ── MOBILE FIX: Tap-to-walk onto answer pad ──
+  // Stops propagation (so Arena doesn't fire a competing move) AND
+  // explicitly commands the player to walk toward this pad's world position.
+  const handlePadTap = useCallback((e: ThreeEvent<PointerEvent>) => {
     e.stopPropagation()
-  }, [])
+    if (disabled) return
+    // Compute world position: parent group offset (zoneWorldPos) + local pad offset
+    const worldX = zoneWorldPos[0] + position[0]
+    const worldZ = zoneWorldPos[2] + position[2]
+    useGameStore.getState().setMoveTarget({ type: 'point', x: worldX, z: worldZ })
+  }, [disabled, zoneWorldPos, position])
 
   // Label colors
   const labelColor = showResult ? (isCorrect ? '#00ff88' : '#ff4444') : '#ffffff'
@@ -264,13 +272,13 @@ function AnswerPad({ label, isCorrect, position, disabled, showResult }: AnswerP
         />
       </RigidBody>
 
-      {/* Visual cylinder — onPointerDown stops touch from reaching Arena */}
+      {/* Visual cylinder — onPointerDown: stop propagation + walk toward pad */}
       <mesh
         ref={meshRef}
         position={[0, ANSWER_PAD_HEIGHT / 2, 0]}
         receiveShadow
         visible={!showResult || isCorrect}
-        onPointerDown={stopPointerBleed}
+        onPointerDown={handlePadTap}
       >
         <cylinderGeometry args={[ANSWER_PAD_RADIUS, ANSWER_PAD_RADIUS, ANSWER_PAD_HEIGHT, 16]} />
         <meshStandardMaterial
@@ -284,12 +292,12 @@ function AnswerPad({ label, isCorrect, position, disabled, showResult }: AnswerP
         />
       </mesh>
 
-      {/* Ring border — also captures touch to prevent bleed */}
+      {/* Ring border — also captures touch + triggers walk */}
       <mesh
         position={[0, ANSWER_PAD_HEIGHT + 0.02, 0]}
         rotation={[-Math.PI / 2, 0, 0]}
         visible={!showResult || isCorrect}
-        onPointerDown={stopPointerBleed}
+        onPointerDown={handlePadTap}
       >
         <ringGeometry args={[ANSWER_PAD_RADIUS - 0.1, ANSWER_PAD_RADIUS + 0.1, 16]} />
         <meshBasicMaterial
