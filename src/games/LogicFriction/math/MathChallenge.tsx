@@ -6,9 +6,13 @@
 // TEXT SAFETY: In AnswerPad, <Text> is a SIBLING to <RigidBody>,
 // never nested inside it. The main equation/hint/result text
 // lives in MathChallenge (no physics) and is inherently safe.
+//
+// MOBILE FIX: Answer pad meshes use onPointerDown + stopPropagation
+// to prevent touch events from bleeding through to Arena.tsx.
 // ============================================================
 import { useRef, useMemo, useCallback } from 'react'
 import { useFrame } from '@react-three/fiber'
+import type { ThreeEvent } from '@react-three/fiber'
 import { RigidBody, CylinderCollider } from '@react-three/rapier'
 import { Text, Billboard } from '@react-three/drei'
 import * as THREE from 'three'
@@ -236,6 +240,13 @@ function AnswerPad({ label, isCorrect, position, disabled, showResult }: AnswerP
     }, 0)
   }, [disabled, isCorrect])
 
+  // ── MOBILE FIX: Stop touch events from bleeding through to Arena ──
+  // Without this, tapping an answer pad on mobile triggers a pathfinding
+  // move command instead of (or in addition to) the physics answer sensor.
+  const stopPointerBleed = useCallback((e: ThreeEvent<PointerEvent>) => {
+    e.stopPropagation()
+  }, [])
+
   // Label colors
   const labelColor = showResult ? (isCorrect ? '#00ff88' : '#ff4444') : '#ffffff'
 
@@ -253,12 +264,13 @@ function AnswerPad({ label, isCorrect, position, disabled, showResult }: AnswerP
         />
       </RigidBody>
 
-      {/* Visual cylinder */}
+      {/* Visual cylinder — onPointerDown stops touch from reaching Arena */}
       <mesh
         ref={meshRef}
         position={[0, ANSWER_PAD_HEIGHT / 2, 0]}
         receiveShadow
         visible={!showResult || isCorrect}
+        onPointerDown={stopPointerBleed}
       >
         <cylinderGeometry args={[ANSWER_PAD_RADIUS, ANSWER_PAD_RADIUS, ANSWER_PAD_HEIGHT, 16]} />
         <meshStandardMaterial
@@ -272,11 +284,12 @@ function AnswerPad({ label, isCorrect, position, disabled, showResult }: AnswerP
         />
       </mesh>
 
-      {/* Ring border */}
+      {/* Ring border — also captures touch to prevent bleed */}
       <mesh
         position={[0, ANSWER_PAD_HEIGHT + 0.02, 0]}
         rotation={[-Math.PI / 2, 0, 0]}
         visible={!showResult || isCorrect}
+        onPointerDown={stopPointerBleed}
       >
         <ringGeometry args={[ANSWER_PAD_RADIUS - 0.1, ANSWER_PAD_RADIUS + 0.1, 16]} />
         <meshBasicMaterial

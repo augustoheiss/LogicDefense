@@ -389,9 +389,9 @@ export function PlayerController() {
       <BallCollider args={[PLAYER_RADIUS]} />
 
       {/* Named group so scene.getObjectByName('player') can find us */}
-      <group name="player">
-        {/* Player capsule */}
-        <mesh ref={meshRef} castShadow>
+      <group name="player" frustumCulled={false}>
+        {/* Player capsule — frustumCulled={false} prevents mobile GPU culling */}
+        <mesh ref={meshRef} castShadow frustumCulled={false} renderOrder={1}>
           <capsuleGeometry args={[PLAYER_RADIUS, PLAYER_RADIUS * 1.2, 8, 16]} />
           <meshStandardMaterial
             color="#00ff88"
@@ -405,7 +405,7 @@ export function PlayerController() {
         </mesh>
 
         {/* Idle glow ring */}
-        <mesh position={[0, -PLAYER_RADIUS * 0.8, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <mesh position={[0, -PLAYER_RADIUS * 0.8, 0]} rotation={[-Math.PI / 2, 0, 0]} frustumCulled={false}>
           <ringGeometry args={[PLAYER_RADIUS * 0.9, PLAYER_RADIUS * 1.3, 32]} />
           <meshBasicMaterial color="#00ff88" transparent opacity={0.25} side={THREE.DoubleSide} />
         </mesh>
@@ -415,6 +415,7 @@ export function PlayerController() {
           ref={attackRingRef}
           position={[0, -PLAYER_RADIUS * 0.7, 0]}
           rotation={[-Math.PI / 2, 0, 0]}
+          frustumCulled={false}
         >
           <ringGeometry args={[PLAYER_ATTACK_RANGE * 0.8, PLAYER_ATTACK_RANGE, 32]} />
           <meshBasicMaterial color="#ffffff" transparent opacity={0} side={THREE.DoubleSide} />
