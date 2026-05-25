@@ -5,6 +5,7 @@
 // ============================================================
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
+import type { GameStateSnapshot } from './leaderboard'
 import {
   CORE_MAX_HP,
   CORE_UPGRADE_BASE_COST,
@@ -150,6 +151,7 @@ export interface GameStore {
   setPaused: (v: boolean) => void
 
   // Reset
+  loadGameState: (snapshot: GameStateSnapshot) => void
   reset: () => void
 }
 
@@ -453,6 +455,31 @@ export const useGameStore = create<GameStore>()(
   toggleCameraFree: () => set(s => ({ isCameraFree: !s.isCameraFree })),
   togglePause: () => set(s => ({ isPaused: !s.isPaused })),
   setPaused: (v) => set({ isPaused: v }),
+
+  // ── Load from save slot ──
+  loadGameState: (snapshot) => {
+    clearRespawnTimer()
+    clearAutoWaveTimer()
+    const dir = randomDirection()
+    const problem = generateFrictionProblem(snapshot.waveNumber)
+    set({
+      ...initialState,
+      phase: 'PLAYING',
+      waveNumber: snapshot.waveNumber,
+      gold: snapshot.gold,
+      coreHp: snapshot.coreHp,
+      maxCoreHp: snapshot.maxCoreHp,
+      coreLevel: snapshot.coreLevel,
+      towers: snapshot.towers,
+      constructionSites: snapshot.constructionSites,
+      enemiesToSpawn: WAVE_BASE_COUNT + (snapshot.waveNumber - 1) * WAVE_COUNT_SCALE,
+      totalWaveEnemies: WAVE_BASE_COUNT + (snapshot.waveNumber - 1) * WAVE_COUNT_SCALE,
+      currentProblem: problem,
+      mathZonePosition: dir,
+      isPaused: false,
+      explanationLog: [],
+    })
+  },
 
   // ── Full reset ──
   reset: () => {

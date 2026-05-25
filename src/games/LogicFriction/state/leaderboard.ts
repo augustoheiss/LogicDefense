@@ -1,10 +1,24 @@
 // ============================================================
-// Logic Friction — Local Leaderboard (Top 10)
+// Logic Friction — Local Leaderboard (Top 10) + Save Slots
 // Persists to localStorage under 'logicFriction_leaderboard'.
+// Each entry doubles as a save slot with a gameStateSnapshot.
 // Sorted by wave (desc), then gold (desc).
 // ============================================================
 
+import type { TowerData, SiteData } from './useGameStore'
+
 const STORAGE_KEY = 'logicFriction_leaderboard'
+
+/** Snapshot of persistent game data for loading a save slot. */
+export interface GameStateSnapshot {
+  waveNumber: number
+  gold: number
+  coreHp: number
+  maxCoreHp: number
+  coreLevel: number
+  towers: TowerData[]
+  constructionSites: SiteData[]
+}
 
 export interface LeaderboardEntry {
   id: string
@@ -12,6 +26,7 @@ export interface LeaderboardEntry {
   wave: number
   gold: number
   date: string
+  snapshot: GameStateSnapshot | null
 }
 
 /** Read the leaderboard from localStorage (sorted). */
@@ -26,8 +41,13 @@ export function getLeaderboard(): LeaderboardEntry[] {
   }
 }
 
-/** Add a score, sort, trim to Top 10, and persist. */
-export function saveToLeaderboard(name: string, wave: number, gold: number): void {
+/** Add a score + game state snapshot, sort, trim to Top 10, and persist. */
+export function saveToLeaderboard(
+  name: string,
+  wave: number,
+  gold: number,
+  snapshot: GameStateSnapshot | null = null,
+): void {
   const entries = getLeaderboard()
 
   const entry: LeaderboardEntry = {
@@ -36,6 +56,7 @@ export function saveToLeaderboard(name: string, wave: number, gold: number): voi
     wave,
     gold,
     date: new Date().toLocaleDateString('pt-BR'),
+    snapshot,
   }
 
   entries.push(entry)

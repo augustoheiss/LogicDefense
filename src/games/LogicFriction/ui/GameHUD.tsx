@@ -7,7 +7,7 @@ import { useGameStore } from '../state/useGameStore'
 import type { ActionMode } from '../state/useGameStore'
 import { TOWER_BLUEPRINTS, TOWER_BLUEPRINT_KEYS } from '../config/constants'
 import { getLeaderboard, saveToLeaderboard } from '../state/leaderboard'
-import type { LeaderboardEntry } from '../state/leaderboard'
+import type { LeaderboardEntry, GameStateSnapshot } from '../state/leaderboard'
 
 // ── Props ───────────────────────────────────────────────────────────────────────
 interface GameHUDProps {
@@ -729,7 +729,17 @@ function GameOverScreen({ wave, gold, onRestart }: { wave: number; gold: number;
 
   const handleSave = () => {
     if (saved) return
-    saveToLeaderboard(playerName, wave, gold)
+    const state = useGameStore.getState()
+    const snapshot: GameStateSnapshot = {
+      waveNumber: state.waveNumber,
+      gold: state.gold,
+      coreHp: state.coreHp,
+      maxCoreHp: state.maxCoreHp,
+      coreLevel: state.coreLevel,
+      towers: state.towers,
+      constructionSites: state.constructionSites,
+    }
+    saveToLeaderboard(playerName, wave, gold, snapshot)
     setLeaderboard(getLeaderboard())
     setSaved(true)
   }
@@ -838,7 +848,10 @@ function GameOverScreen({ wave, gold, onRestart }: { wave: number; gold: number;
       )}
 
       {/* Leaderboard */}
-      <LeaderboardTable entries={leaderboard} />
+      <LeaderboardTable
+        entries={leaderboard}
+        onLoad={(snapshot) => useGameStore.getState().loadGameState(snapshot)}
+      />
 
       <button
         onClick={onRestart}
@@ -910,9 +923,20 @@ function PauseMenu({ wave, gold, onResume, onRestart }: {
   const [saved, setSaved] = useState(false)
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>(getLeaderboard())
   const reset = useGameStore(s => s.reset)
+  const loadGameState = useGameStore(s => s.loadGameState)
 
   const handleSaveAndExit = () => {
-    saveToLeaderboard(playerName, wave, gold)
+    const state = useGameStore.getState()
+    const snapshot: GameStateSnapshot = {
+      waveNumber: state.waveNumber,
+      gold: state.gold,
+      coreHp: state.coreHp,
+      maxCoreHp: state.maxCoreHp,
+      coreLevel: state.coreLevel,
+      towers: state.towers,
+      constructionSites: state.constructionSites,
+    }
+    saveToLeaderboard(playerName, wave, gold, snapshot)
     setLeaderboard(getLeaderboard())
     setSaved(true)
     setTimeout(() => {
@@ -1081,7 +1105,10 @@ function PauseMenu({ wave, gold, onResume, onRestart }: {
       {/* Leaderboard */}
       {showTop10 && (
         <div style={{ marginTop: 16, width: 340, maxWidth: '95vw' }}>
-          <LeaderboardTable entries={leaderboard} />
+          <LeaderboardTable
+            entries={leaderboard}
+            onLoad={(snapshot) => loadGameState(snapshot)}
+          />
         </div>
       )}
     </div>
@@ -1089,7 +1116,10 @@ function PauseMenu({ wave, gold, onResume, onRestart }: {
 }
 
 // ── Leaderboard Table (Retro Arcade) ────────────────────────────────────────────
-function LeaderboardTable({ entries }: { entries: LeaderboardEntry[] }) {
+function LeaderboardTable({ entries, onLoad }: { 
+  entries: LeaderboardEntry[]
+  onLoad?: (snapshot: GameStateSnapshot) => void 
+}) {
   if (entries.length === 0) {
     return (
       <div style={{
@@ -1130,14 +1160,14 @@ function LeaderboardTable({ entries }: { entries: LeaderboardEntry[] }) {
       {/* Header */}
       <div style={{
         display: 'grid',
-        gridTemplateColumns: '30px 1fr 60px 70px',
+        gridTemplateColumns: onLoad ? '28px 1fr 50px 60px 44px' : '30px 1fr 60px 70px',
         gap: 6,
         padding: '4px 0',
         borderBottom: '1px solid #00d4ff20',
         marginBottom: 6,
       }}>
-        {['#', 'NOME', 'ONDA', 'OURO'].map(h => (
-          <div key={h} style={{
+        {['#', 'NOME', 'ONDA', 'OURO', ...(onLoad ? [''] : [])].map((h, idx) => (
+          <div key={`h-${idx}`} style={{
             fontSize: 9,
             color: '#475569',
             fontFamily: "'Courier New', monospace",
@@ -1161,7 +1191,7 @@ function LeaderboardTable({ entries }: { entries: LeaderboardEntry[] }) {
             key={entry.id}
             style={{
               display: 'grid',
-              gridTemplateColumns: '30px 1fr 60px 70px',
+              gridTemplateColumns: onLoad ? '28px 1fr 50px 60px 44px' : '30px 1fr 60px 70px',
               gap: 6,
               padding: '6px 0',
               borderBottom: '1px solid #ffffff08',
@@ -1203,6 +1233,28 @@ function LeaderboardTable({ entries }: { entries: LeaderboardEntry[] }) {
             }}>
               ${entry.gold}
             </div>
+            {onLoad && (
+              <button
+                onClick={() => entry.snapshot && onLoad(entry.snapshot)}
+                disabled={!entry.snapshot}
+                style={{
+                  background: entry.snapshot
+                    ? 'rgba(0,255,136,0.15)'
+                    : 'rgba(255,255,255,0.03)',
+                  border: `1px solid ${entry.snapshot ? '#00ff8840' : '#ffffff10'}`,
+                  borderRadius: 6,
+                  padding: '4px 6px',
+                  color: entry.snapshot ? '#00ff88' : '#333',
+                  fontSize: 12,
+                  fontWeight: 900,
+                  fontFamily: "'Courier New', monospace",
+                  cursor: entry.snapshot ? 'pointer' : 'default',
+                  transition: 'all 0.15s ease',
+                }}
+              >
+                ▶
+              </button>
+            )}
           </div>
         )
       })}
