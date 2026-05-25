@@ -34,8 +34,8 @@ export function Arena() {
 
     // ── BUILD MODE: Place construction site ──
     if (state.actionMode === 'BUILD') {
-      // Guard: don't place too close to the core
-      if (distFromCenter < CORE_COLLIDER_SIZE + 3) return
+      // Guard: don't place inside the core's physics collider (tiny clearance)
+      if (distFromCenter < CORE_COLLIDER_SIZE + 0.5) return
       // Guard: don't place outside the arena
       if (distFromCenter > ARENA_RADIUS - 3) return
       state.placeConstructionSite(point.x, point.z)

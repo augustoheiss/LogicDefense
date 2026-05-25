@@ -55,14 +55,18 @@ export function CentralCore() {
 
   // ── Click to upgrade core (only in upgrade mode) ──
   const handlePointerDown = (e: ThreeEvent<PointerEvent>) => {
-    e.stopPropagation()
     const state = useGameStore.getState()
-    if (!state.isUpgradeMode) return
+    if (!state.isUpgradeMode) return  // Let rays pass through to Arena
+    e.stopPropagation()
     state.upgradeCore()
   }
 
   // Core visual scale grows slightly per level
   const levelScale = 1 + (coreLevel - 1) * 0.1
+
+  // Null raycast function — makes R3F Raycaster skip this group entirely,
+  // allowing clicks to reach the Arena floor behind the core.
+  const noRaycast = () => null
 
   return (
     <group position={[0, CORE_SIZE + 0.5, 0]}>
@@ -78,8 +82,10 @@ export function CentralCore() {
         <BallCollider args={[CORE_COLLIDER_SIZE * levelScale]} sensor />
       </RigidBody>
 
-      {/* Clickable visual group */}
-      <group scale={[levelScale, levelScale, levelScale]} onPointerDown={handlePointerDown}>
+      {/* Visual group — raycast={noRaycast} makes raycaster skip the Core
+          so clicks pass through to the Arena floor behind it.
+          onPointerDown still fires for upgrade mode (Three.js event bubbling). */}
+      <group scale={[levelScale, levelScale, levelScale]} onPointerDown={handlePointerDown} raycast={noRaycast}>
         {/* Visual: Octahedron core */}
         <mesh ref={meshRef} castShadow>
           <octahedronGeometry args={[CORE_SIZE, 0]} />

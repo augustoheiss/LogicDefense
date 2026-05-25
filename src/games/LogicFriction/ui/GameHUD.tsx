@@ -367,7 +367,7 @@ export function GameHUD({ onStart, onRestart }: GameHUDProps) {
             maxHeight: '40vh',
             overflowY: 'auto',
             backdropFilter: 'blur(6px)',
-            pointerEvents: 'auto',  // Only the inner content blocks touch (for scrolling)
+            pointerEvents: 'none',  // Full pass-through — text is read-only
           }}>
             <div style={{
               fontSize: 22,
