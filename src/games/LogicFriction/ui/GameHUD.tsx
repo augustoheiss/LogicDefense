@@ -8,6 +8,7 @@ import type { ActionMode } from '../state/useGameStore'
 import { TOWER_BLUEPRINTS, TOWER_BLUEPRINT_KEYS } from '../config/constants'
 import { getLeaderboard, saveToLeaderboard } from '../state/leaderboard'
 import type { LeaderboardEntry, GameStateSnapshot } from '../state/leaderboard'
+import { LandingPage } from './LandingPage'
 
 // ── Props ───────────────────────────────────────────────────────────────────────
 interface GameHUDProps {
@@ -287,7 +288,7 @@ export function GameHUD({ onStart, onRestart }: GameHUDProps) {
   const setPaused = useGameStore(s => s.setPaused)
 
   if (phase === 'MENU') {
-    return <StartScreen onStart={onStart} />
+    return <LandingPage onStart={onStart} />
   }
 
   if (phase === 'GAME_OVER') {

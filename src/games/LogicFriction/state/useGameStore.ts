@@ -69,6 +69,9 @@ function randomDirection(exclude?: MathZoneDir): MathZoneDir {
 }
 
 export interface GameStore {
+  // ── Landing Page ──
+  isAtLandingPage: boolean
+
   // ── Game Phase ──
   phase: GamePhase
 
@@ -196,6 +199,7 @@ function genId(prefix: string) {
 
 // ── Initial State ───────────────────────────────────────────────────────────────
 const initialState = {
+  isAtLandingPage: true,
   phase: 'MENU' as GamePhase,
   coreHp: CORE_MAX_HP,
   maxCoreHp: CORE_MAX_HP,
@@ -240,6 +244,7 @@ export const useGameStore = create<GameStore>()(
     const problem = generateFrictionProblem(1)
     set({
       ...initialState,
+      isAtLandingPage: false,
       phase: 'PLAYING',
       waveNumber: 1,
       gold: STARTING_GOLD,
