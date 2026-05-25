@@ -67,6 +67,7 @@ export function Enemy({ id, position, hp, speed, onDeath }: EnemyProps) {
   useFrame(() => {
     const rb = rbRef.current
     if (!rb || !aliveRef.current) return
+    if (useGameStore.getState().isPaused) return
 
     const pos = rb.translation()
 

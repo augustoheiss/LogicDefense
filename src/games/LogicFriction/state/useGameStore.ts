@@ -4,6 +4,7 @@
 //           Construction Site expiry, Math + Divine Buff
 // ============================================================
 import { create } from 'zustand'
+import { persist } from 'zustand/middleware'
 import {
   CORE_MAX_HP,
   CORE_UPGRADE_BASE_COST,
@@ -108,6 +109,7 @@ export interface GameStore {
   // ── Settings ──
   isMenuOpen: boolean
   isCameraFree: boolean
+  isPaused: boolean
 
   // ── Actions ──
   startGame: () => void
@@ -144,6 +146,8 @@ export interface GameStore {
   // Settings
   toggleMenu: () => void
   toggleCameraFree: () => void
+  togglePause: () => void
+  setPaused: (v: boolean) => void
 
   // Reset
   reset: () => void
@@ -204,10 +208,13 @@ const initialState = {
   moveTarget: null as MoveTarget | null,
   isMenuOpen: false,
   isCameraFree: false,
+  isPaused: false,
 }
 
-// ── Store ───────────────────────────────────────────────────────────────────────
-export const useGameStore = create<GameStore>((set, get) => ({
+// ── Store (persisted) ───────────────────────────────────────────────────────────
+export const useGameStore = create<GameStore>()(
+  persist(
+    (set, get) => ({
   ...initialState,
 
   // ── Phase transitions ──
@@ -444,6 +451,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
   // ── Settings ──
   toggleMenu: () => set(s => ({ isMenuOpen: !s.isMenuOpen })),
   toggleCameraFree: () => set(s => ({ isCameraFree: !s.isCameraFree })),
+  togglePause: () => set(s => ({ isPaused: !s.isPaused })),
+  setPaused: (v) => set({ isPaused: v }),
 
   // ── Full reset ──
   reset: () => {
@@ -451,4 +460,20 @@ export const useGameStore = create<GameStore>((set, get) => ({
     clearAutoWaveTimer()
     set(initialState)
   },
-}))
+}),
+    {
+      name: 'logicFriction_saveData',
+      partialize: (state) => ({
+        waveNumber: state.waveNumber,
+        gold: state.gold,
+        coreHp: state.coreHp,
+        maxCoreHp: state.maxCoreHp,
+        coreLevel: state.coreLevel,
+        towers: state.towers,
+        constructionSites: state.constructionSites,
+        actionMode: state.actionMode,
+        selectedBlueprint: state.selectedBlueprint,
+      }),
+    }
+  )
+)

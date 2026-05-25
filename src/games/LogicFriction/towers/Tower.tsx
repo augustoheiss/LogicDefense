@@ -100,6 +100,7 @@ export function Tower({ id, position, type = 'RAPID', level = 1 }: TowerProps) {
     }
 
     if (state.phase !== 'PLAYING') return
+    if (state.isPaused) return
 
     const buffed = state.isBuffActive
     const effectiveCooldown = buffed ? baseCooldown * BUFF_COOLDOWN_MULT : baseCooldown

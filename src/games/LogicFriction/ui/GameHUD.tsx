@@ -6,6 +6,8 @@ import { useEffect, useState } from 'react'
 import { useGameStore } from '../state/useGameStore'
 import type { ActionMode } from '../state/useGameStore'
 import { TOWER_BLUEPRINTS, TOWER_BLUEPRINT_KEYS } from '../config/constants'
+import { getLeaderboard, saveToLeaderboard } from '../state/leaderboard'
+import type { LeaderboardEntry } from '../state/leaderboard'
 
 // ── Props ───────────────────────────────────────────────────────────────────────
 interface GameHUDProps {
@@ -230,6 +232,8 @@ export function GameHUD({ onStart, onRestart }: GameHUDProps) {
   const isBuffActive = useGameStore(s => s.isBuffActive)
   const coreLevel = useGameStore(s => s.coreLevel)
   const actionMode = useGameStore(s => s.actionMode)
+  const isPaused = useGameStore(s => s.isPaused)
+  const setPaused = useGameStore(s => s.setPaused)
 
   if (phase === 'MENU') {
     return <StartScreen onStart={onStart} />
@@ -239,17 +243,57 @@ export function GameHUD({ onStart, onRestart }: GameHUDProps) {
     return <GameOverScreen wave={waveNumber} gold={gold} onRestart={onRestart} />
   }
 
+  // Show pause menu overlay
+  if (isPaused) {
+    return <PauseMenu
+      wave={waveNumber}
+      gold={gold}
+      onResume={() => setPaused(false)}
+      onRestart={onRestart}
+    />
+  }
+
   return (
     <>
       {/* ── Settings Menu (top-right) ── */}
       <SettingsMenu />
+
+      {/* Pause button (top-right, below settings) */}
+      <div style={{
+        position: 'absolute',
+        top: 56,
+        right: 12,
+        zIndex: 200,
+        pointerEvents: 'auto',
+      }}>
+        <button
+          onClick={() => setPaused(true)}
+          style={{
+            background: 'rgba(0,0,0,0.8)',
+            border: '1px solid rgba(255,255,255,0.15)',
+            borderRadius: 10,
+            padding: '8px 14px',
+            color: '#94a3b8',
+            fontSize: 16,
+            fontWeight: 800,
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+            transition: 'all 0.2s ease',
+            fontFamily: "'Courier New', monospace",
+          }}
+        >
+          ⏸ <span style={{ fontSize: 12, letterSpacing: '0.08em' }}>PAUSAR</span>
+        </button>
+      </div>
 
       {/* Top HUD row */}
       <div style={{
         position: 'absolute',
         top: 12,
         left: 12,
-        right: 12,
+        right: 80,
         display: 'flex',
         gap: 10,
         flexWrap: 'wrap',
@@ -677,8 +721,19 @@ function StartScreen({ onStart }: { onStart: () => void }) {
   )
 }
 
-// ── Game Over Screen ────────────────────────────────────────────────────────────
+// ── Game Over Screen ──────────────────────────────────────────────────────────────
 function GameOverScreen({ wave, gold, onRestart }: { wave: number; gold: number; onRestart: () => void }) {
+  const [playerName, setPlayerName] = useState('')
+  const [saved, setSaved] = useState(false)
+  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>(getLeaderboard())
+
+  const handleSave = () => {
+    if (saved) return
+    saveToLeaderboard(playerName, wave, gold)
+    setLeaderboard(getLeaderboard())
+    setSaved(true)
+  }
+
   return (
     <div style={{
       position: 'absolute',
@@ -690,6 +745,8 @@ function GameOverScreen({ wave, gold, onRestart }: { wave: number; gold: number;
       background: 'rgba(10,2,2,0.9)',
       zIndex: 30,
       pointerEvents: 'auto',
+      overflowY: 'auto',
+      padding: '24px 16px',
     }}>
       <h1 style={{
         fontFamily: "'Orbitron', 'Courier New', monospace",
@@ -703,14 +760,90 @@ function GameOverScreen({ wave, gold, onRestart }: { wave: number; gold: number;
       <div style={{
         display: 'flex',
         gap: 24,
-        margin: '0 0 32px',
+        margin: '0 0 24px',
       }}>
         <StatBadge label="Ondas" value={wave} color="#a855f7" icon="🌊" />
         <StatBadge label="Ouro" value={gold} color="#ffd700" icon="💰" />
       </div>
+
+      {/* Name input + save */}
+      {!saved ? (
+        <div style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          gap: 12,
+          marginBottom: 24,
+        }}>
+          <div style={{
+            fontSize: 12,
+            color: '#64748b',
+            fontFamily: "'Courier New', monospace",
+            textTransform: 'uppercase',
+            letterSpacing: '0.15em',
+          }}>
+            Digite seu nome para o ranking
+          </div>
+          <input
+            type="text"
+            value={playerName}
+            onChange={e => setPlayerName(e.target.value)}
+            placeholder="Seu nome..."
+            maxLength={40}
+            style={{
+              background: 'rgba(0,0,0,0.8)',
+              border: '2px solid #00d4ff40',
+              borderRadius: 10,
+              padding: '12px 20px',
+              color: '#00d4ff',
+              fontSize: 18,
+              fontFamily: "'Courier New', monospace",
+              fontWeight: 700,
+              width: 300,
+              textAlign: 'center',
+              outline: 'none',
+            }}
+            onFocus={e => e.target.style.borderColor = '#00d4ff'}
+            onBlur={e => e.target.style.borderColor = '#00d4ff40'}
+          />
+          <button
+            onClick={handleSave}
+            style={{
+              background: 'linear-gradient(135deg, #ffd700, #ff8800)',
+              border: 'none',
+              borderRadius: 10,
+              padding: '10px 30px',
+              color: '#000',
+              fontFamily: "'Courier New', monospace",
+              fontSize: 14,
+              fontWeight: 800,
+              cursor: 'pointer',
+              textTransform: 'uppercase',
+              letterSpacing: '0.1em',
+            }}
+          >
+            💾 Salvar Pontuação
+          </button>
+        </div>
+      ) : (
+        <div style={{
+          fontSize: 14,
+          color: '#00ff88',
+          fontFamily: "'Courier New', monospace",
+          fontWeight: 700,
+          marginBottom: 24,
+        }}>
+          ✓ Pontuação salva!
+        </div>
+      )}
+
+      {/* Leaderboard */}
+      <LeaderboardTable entries={leaderboard} />
+
       <button
         onClick={onRestart}
         style={{
+          marginTop: 20,
           background: 'linear-gradient(135deg, #ff4444, #ff8800)',
           border: 'none',
           borderRadius: 12,
@@ -760,6 +893,319 @@ function ControlsHint() {
     }}>
       <strong style={{ color: '#00ff88' }}>WASD</strong> mover ·{' '}
       <strong style={{ color: '#ffffff' }}>ESPAÇO</strong> atacar
+    </div>
+  )
+}
+
+// ── Pause Menu ──────────────────────────────────────────────────────────────────
+function PauseMenu({ wave, gold, onResume, onRestart }: {
+  wave: number
+  gold: number
+  onResume: () => void
+  onRestart: () => void
+}) {
+  const [showSave, setShowSave] = useState(false)
+  const [showTop10, setShowTop10] = useState(false)
+  const [playerName, setPlayerName] = useState('')
+  const [saved, setSaved] = useState(false)
+  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>(getLeaderboard())
+  const reset = useGameStore(s => s.reset)
+
+  const handleSaveAndExit = () => {
+    saveToLeaderboard(playerName, wave, gold)
+    setLeaderboard(getLeaderboard())
+    setSaved(true)
+    setTimeout(() => {
+      reset()
+    }, 1200)
+  }
+
+  const btnStyle = (bg: string, color: string, border: string): React.CSSProperties => ({
+    width: '100%',
+    background: bg,
+    border: `2px solid ${border}`,
+    borderRadius: 10,
+    padding: '14px 20px',
+    color,
+    fontFamily: "'Courier New', monospace",
+    fontSize: 15,
+    fontWeight: 800,
+    cursor: 'pointer',
+    textTransform: 'uppercase',
+    letterSpacing: '0.08em',
+    transition: 'all 0.15s ease',
+    textAlign: 'left',
+  })
+
+  return (
+    <div style={{
+      position: 'absolute',
+      inset: 0,
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      justifyContent: 'center',
+      background: 'rgba(4,4,14,0.92)',
+      zIndex: 30,
+      pointerEvents: 'auto',
+      overflowY: 'auto',
+      padding: '24px 16px',
+    }}>
+      <h1 style={{
+        fontFamily: "'Orbitron', 'Courier New', monospace",
+        fontSize: 'clamp(24px, 4vw, 36px)',
+        color: '#00d4ff',
+        textShadow: '0 0 30px rgba(0,212,255,0.4)',
+        margin: '0 0 8px',
+      }}>
+        ⏸ JOGO PAUSADO
+      </h1>
+      <div style={{
+        display: 'flex',
+        gap: 16,
+        margin: '0 0 24px',
+      }}>
+        <StatBadge label="Onda" value={wave} color="#a855f7" icon="🌊" />
+        <StatBadge label="Ouro" value={gold} color="#ffd700" icon="💰" />
+      </div>
+
+      {/* Button stack */}
+      <div style={{
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 10,
+        width: 300,
+        maxWidth: '90vw',
+      }}>
+        {/* Resume */}
+        <button onClick={onResume} style={btnStyle('rgba(0,255,136,0.12)', '#00ff88', '#00ff8850')}>
+          ▶ Continuar Jogo
+        </button>
+
+        {/* Save & Exit */}
+        {!showSave ? (
+          <button onClick={() => setShowSave(true)} style={btnStyle('rgba(255,215,0,0.1)', '#ffd700', '#ffd70040')}>
+            💾 Salvar e Sair
+          </button>
+        ) : !saved ? (
+          <div style={{
+            background: 'rgba(0,0,0,0.6)',
+            border: '2px solid #ffd70040',
+            borderRadius: 10,
+            padding: 14,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 10,
+          }}>
+            <div style={{
+              fontSize: 11,
+              color: '#64748b',
+              fontFamily: "'Courier New', monospace",
+              textTransform: 'uppercase',
+              letterSpacing: '0.12em',
+            }}>
+              Digite seu nome
+            </div>
+            <input
+              type="text"
+              value={playerName}
+              onChange={e => setPlayerName(e.target.value)}
+              placeholder="Seu nome..."
+              maxLength={40}
+              style={{
+                background: 'rgba(0,0,0,0.8)',
+                border: '2px solid #00d4ff40',
+                borderRadius: 8,
+                padding: '10px 14px',
+                color: '#00d4ff',
+                fontSize: 16,
+                fontFamily: "'Courier New', monospace",
+                fontWeight: 700,
+                width: '100%',
+                boxSizing: 'border-box',
+                textAlign: 'center',
+                outline: 'none',
+              }}
+              onFocus={e => e.target.style.borderColor = '#00d4ff'}
+              onBlur={e => e.target.style.borderColor = '#00d4ff40'}
+            />
+            <button
+              onClick={handleSaveAndExit}
+              style={{
+                background: 'linear-gradient(135deg, #ffd700, #ff8800)',
+                border: 'none',
+                borderRadius: 8,
+                padding: '10px',
+                color: '#000',
+                fontFamily: "'Courier New', monospace",
+                fontSize: 13,
+                fontWeight: 800,
+                cursor: 'pointer',
+                textTransform: 'uppercase',
+              }}
+            >
+              ✓ Confirmar e Sair
+            </button>
+          </div>
+        ) : (
+          <div style={{
+            textAlign: 'center',
+            color: '#00ff88',
+            fontSize: 14,
+            fontFamily: "'Courier New', monospace",
+            fontWeight: 700,
+            padding: 12,
+          }}>
+            ✓ Salvo! Voltando ao menu...
+          </div>
+        )}
+
+        {/* New Game */}
+        <button onClick={onRestart} style={btnStyle('rgba(255,68,68,0.1)', '#ff4444', '#ff444440')}>
+          🔄 Novo Jogo
+        </button>
+
+        {/* Top 10 toggle */}
+        <button
+          onClick={() => setShowTop10(!showTop10)}
+          style={btnStyle(
+            showTop10 ? 'rgba(0,212,255,0.15)' : 'rgba(0,212,255,0.05)',
+            '#00d4ff',
+            showTop10 ? '#00d4ff60' : '#00d4ff30'
+          )}
+        >
+          🏆 TOP 10 {showTop10 ? '▲' : '▼'}
+        </button>
+      </div>
+
+      {/* Leaderboard */}
+      {showTop10 && (
+        <div style={{ marginTop: 16, width: 340, maxWidth: '95vw' }}>
+          <LeaderboardTable entries={leaderboard} />
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Leaderboard Table (Retro Arcade) ────────────────────────────────────────────
+function LeaderboardTable({ entries }: { entries: LeaderboardEntry[] }) {
+  if (entries.length === 0) {
+    return (
+      <div style={{
+        color: '#475569',
+        fontSize: 13,
+        fontFamily: "'Courier New', monospace",
+        textAlign: 'center',
+        padding: 16,
+      }}>
+        Nenhum recorde ainda. Jogue para entrar no ranking!
+      </div>
+    )
+  }
+
+  return (
+    <div style={{
+      background: 'rgba(0,0,0,0.7)',
+      border: '2px solid #00d4ff25',
+      borderRadius: 12,
+      padding: 14,
+      width: '100%',
+      boxSizing: 'border-box',
+    }}>
+      <div style={{
+        fontSize: 11,
+        color: '#00d4ff',
+        fontFamily: "'Courier New', monospace",
+        fontWeight: 800,
+        textTransform: 'uppercase',
+        letterSpacing: '0.2em',
+        textAlign: 'center',
+        marginBottom: 10,
+        textShadow: '0 0 12px rgba(0,212,255,0.3)',
+      }}>
+        🏆 TOP 10 — RANKING LOCAL
+      </div>
+
+      {/* Header */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: '30px 1fr 60px 70px',
+        gap: 6,
+        padding: '4px 0',
+        borderBottom: '1px solid #00d4ff20',
+        marginBottom: 6,
+      }}>
+        {['#', 'NOME', 'ONDA', 'OURO'].map(h => (
+          <div key={h} style={{
+            fontSize: 9,
+            color: '#475569',
+            fontFamily: "'Courier New', monospace",
+            fontWeight: 700,
+            textTransform: 'uppercase',
+            letterSpacing: '0.1em',
+          }}>{h}</div>
+        ))}
+      </div>
+
+      {/* Rows */}
+      {entries.map((entry, i) => {
+        const isGold = i === 0
+        const isSilver = i === 1
+        const isBronze = i === 2
+        const rankColor = isGold ? '#ffd700' : isSilver ? '#c0c0c0' : isBronze ? '#cd7f32' : '#64748b'
+        const nameColor = isGold ? '#ffd700' : '#c8d6e5'
+
+        return (
+          <div
+            key={entry.id}
+            style={{
+              display: 'grid',
+              gridTemplateColumns: '30px 1fr 60px 70px',
+              gap: 6,
+              padding: '6px 0',
+              borderBottom: '1px solid #ffffff08',
+              alignItems: 'center',
+            }}
+          >
+            <div style={{
+              fontSize: 14,
+              color: rankColor,
+              fontWeight: 900,
+              fontFamily: "'Courier New', monospace",
+            }}>
+              {i + 1}
+            </div>
+            <div style={{
+              fontSize: 13,
+              color: nameColor,
+              fontWeight: 700,
+              fontFamily: "'Courier New', monospace",
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}>
+              {entry.name}
+            </div>
+            <div style={{
+              fontSize: 13,
+              color: '#a855f7',
+              fontWeight: 800,
+              fontFamily: "'Courier New', monospace",
+            }}>
+              {entry.wave}
+            </div>
+            <div style={{
+              fontSize: 13,
+              color: '#ffd700',
+              fontWeight: 800,
+              fontFamily: "'Courier New', monospace",
+            }}>
+              ${entry.gold}
+            </div>
+          </div>
+        )
+      })}
     </div>
   )
 }

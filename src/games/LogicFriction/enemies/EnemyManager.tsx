@@ -70,6 +70,7 @@ export function EnemyManager() {
   // synchronously in R3F.
   useFrame((_, delta) => {
     const state = useGameStore.getState()
+    if (state.isPaused) return
     if (state.phase !== 'PLAYING' || state.enemiesToSpawn <= 0) return
 
     spawnTimerRef.current += delta

@@ -64,6 +64,9 @@ export function PlayerController() {
     const rb = rigidBodyRef.current
     if (!rb) return
 
+    // ── Pause guard ──
+    if (useGameStore.getState().isPaused) return
+
     // ── Update shared position ──
     const pos = rb.translation()
 
