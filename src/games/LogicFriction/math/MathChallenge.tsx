@@ -272,13 +272,23 @@ function AnswerPad({ label, isCorrect, position, zoneWorldPos, disabled, showRes
         />
       </RigidBody>
 
-      {/* Visual cylinder — onPointerDown: stop propagation + walk toward pad */}
+      {/* ⚠️ "FAT FINGER" INVISIBLE HITBOX — the ONLY mesh catching pointer events.
+          Wide cylinder (r=2.5) elevated at Y=0.5 to avoid raycaster Z-fighting
+          with the arena floor. Stops propagation + triggers walk-to-pad. */}
+      <mesh
+        visible={false}
+        position={[0, 0.5, 0]}
+        onPointerDown={handlePadTap}
+      >
+        <cylinderGeometry args={[2.5, 2.5, 1, 16]} />
+      </mesh>
+
+      {/* Visual cylinder — NO pointer events (hitbox handles them) */}
       <mesh
         ref={meshRef}
-        position={[0, ANSWER_PAD_HEIGHT / 2, 0]}
+        position={[0, ANSWER_PAD_HEIGHT / 2 + 0.2, 0]}
         receiveShadow
         visible={!showResult || isCorrect}
-        onPointerDown={handlePadTap}
       >
         <cylinderGeometry args={[ANSWER_PAD_RADIUS, ANSWER_PAD_RADIUS, ANSWER_PAD_HEIGHT, 16]} />
         <meshStandardMaterial
@@ -292,12 +302,11 @@ function AnswerPad({ label, isCorrect, position, zoneWorldPos, disabled, showRes
         />
       </mesh>
 
-      {/* Ring border — also captures touch + triggers walk */}
+      {/* Ring border — NO pointer events (hitbox handles them) */}
       <mesh
-        position={[0, ANSWER_PAD_HEIGHT + 0.02, 0]}
+        position={[0, ANSWER_PAD_HEIGHT + 0.22, 0]}
         rotation={[-Math.PI / 2, 0, 0]}
         visible={!showResult || isCorrect}
-        onPointerDown={handlePadTap}
       >
         <ringGeometry args={[ANSWER_PAD_RADIUS - 0.1, ANSWER_PAD_RADIUS + 0.1, 16]} />
         <meshBasicMaterial

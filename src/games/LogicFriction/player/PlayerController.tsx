@@ -225,21 +225,21 @@ export function PlayerController() {
     }
 
     // ── Buff visual: player glow ──
-    if (meshRef.current) {
-      const mat = meshRef.current.material as THREE.MeshStandardMaterial
-      if (buffed) {
-        mat.emissive.set('#ffd700')
-        mat.emissiveIntensity = 0.6 + Math.sin(Date.now() * 0.005) * 0.2
-      } else {
-        mat.emissive.set('#00ff88')
-        mat.emissiveIntensity = 0.4
-      }
-
-      // ── Math Zone transparency ──
-      const inZone = state.insideMathZone
-      mat.transparent = inZone
-      mat.opacity = inZone ? 0.3 : 1.0
-    }
+    // ⚠️ NUCLEAR DEBUG: Disabled — meshBasicMaterial has no emissive/transparency.
+    // Restore this block when switching back to meshStandardMaterial.
+    // if (meshRef.current) {
+    //   const mat = meshRef.current.material as THREE.MeshStandardMaterial
+    //   if (buffed) {
+    //     mat.emissive.set('#ffd700')
+    //     mat.emissiveIntensity = 0.6 + Math.sin(Date.now() * 0.005) * 0.2
+    //   } else {
+    //     mat.emissive.set('#00ff88')
+    //     mat.emissiveIntensity = 0.4
+    //   }
+    //   const inZone = state.insideMathZone
+    //   mat.transparent = inZone
+    //   mat.opacity = inZone ? 0.3 : 1.0
+    // }
 
     // ── Camera Follow (OrbitControls-aware) ──
     const orbitTarget = (controls as any)?.target as THREE.Vector3 | undefined
@@ -389,30 +389,27 @@ export function PlayerController() {
       <BallCollider args={[PLAYER_RADIUS]} />
 
       {/* Named group so scene.getObjectByName('player') can find us */}
-      {/* Y offset lifts visuals above 16-bit depth-buffer Z-fighting zone on mobile */}
-      <group name="player" frustumCulled={false} position={[0, 0.5, 0]}>
-        {/* Player capsule — castShadow disabled: mobile WebGL shadow-map compile
-            failures silently hide the entire mesh */}
+      {/* Y=1.0 lifts visuals well above the arena floor for mobile depth buffers */}
+      <group name="player" frustumCulled={false} position={[0, 1.0, 0]}>
+        {/* ⚠️ NUCLEAR DEBUG: meshBasicMaterial (red) bypasses ALL lighting/shader
+            compilation. If this is visible on mobile, the root cause is confirmed
+            as shader compilation failure with meshStandardMaterial. */}
         <mesh ref={meshRef} castShadow={false} frustumCulled={false} renderOrder={1}>
           <capsuleGeometry args={[PLAYER_RADIUS, PLAYER_RADIUS * 1.2, 8, 16]} />
-          <meshStandardMaterial
-            color="#00ff88"
-            emissive="#00ff88"
-            emissiveIntensity={0.4}
-            metalness={0.3}
-            roughness={0.4}
-            transparent
-            opacity={1}
-          />
+          <meshBasicMaterial color="red" />
         </mesh>
 
-        {/* Idle glow ring */}
+        {/* ⚠️ NUCLEAR DEBUG: Transparent rings HIDDEN — mobile depth buffers
+            break when sorting multiple transparent objects near the floor.
+            Uncomment when meshBasicMaterial confirms the avatar renders. */}
+        {/* Idle glow ring
         <mesh position={[0, -PLAYER_RADIUS * 0.8, 0]} rotation={[-Math.PI / 2, 0, 0]} frustumCulled={false}>
           <ringGeometry args={[PLAYER_RADIUS * 0.9, PLAYER_RADIUS * 1.3, 32]} />
           <meshBasicMaterial color="#00ff88" transparent opacity={0.25} side={THREE.DoubleSide} />
         </mesh>
+        */}
 
-        {/* Attack range ring (visible on attack) */}
+        {/* Attack range ring — also hidden for nuclear test
         <mesh
           ref={attackRingRef}
           position={[0, -PLAYER_RADIUS * 0.7, 0]}
@@ -422,6 +419,7 @@ export function PlayerController() {
           <ringGeometry args={[PLAYER_ATTACK_RANGE * 0.8, PLAYER_ATTACK_RANGE, 32]} />
           <meshBasicMaterial color="#ffffff" transparent opacity={0} side={THREE.DoubleSide} />
         </mesh>
+        */}
       </group>
     </RigidBody>
   )
