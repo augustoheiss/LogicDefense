@@ -21,6 +21,7 @@ import {
 } from '../config/constants'
 import type { MathZoneDir } from '../config/constants'
 import { generateFrictionProblem, type FrictionProblem } from '../math/mathBridge'
+import { enemyRegistry } from '../enemies/EnemyRegistry'
 
 // ── Types ───────────────────────────────────────────────────────────────────────
 export type GamePhase = 'MENU' | 'PLAYING' | 'WAVE_CLEAR' | 'GAME_OVER'
@@ -336,17 +337,41 @@ export const useGameStore = create<GameStore>()(
     const newGold = get().gold + ENEMY_KILL_GOLD
     set({ enemiesAlive: newAlive, gold: newGold })
 
+    // Double-check: the enemyRegistry is the ground truth for physically
+    // alive enemies. The Zustand counter can desync from React component
+    // lifecycle due to batching. Only transition to WAVE_CLEAR when BOTH
+    // the counter AND the registry agree that everything is dead.
     if (newAlive <= 0 && get().enemiesToSpawn <= 0) {
-      set({ phase: 'WAVE_CLEAR' })
-      // Auto-advance to next wave after 4 seconds
-      clearAutoWaveTimer()
-      autoWaveTimerId = setTimeout(() => {
-        const phase = get().phase
-        if (phase === 'WAVE_CLEAR') {
-          get().nextWave()
+      // Defer slightly to let the dying enemy unregister from the registry
+      setTimeout(() => {
+        const state = get()
+        if (state.phase !== 'PLAYING') return // already transitioned
+        if (state.enemiesToSpawn > 0) return  // more spawns queued
+
+        // Registry check: if enemies are still physically on the board, retry later
+        if (enemyRegistry.size > 0) {
+          // Re-check in 500ms — the remaining enemies should die or failsafe
+          setTimeout(() => {
+            const s2 = get()
+            if (s2.phase === 'PLAYING' && s2.enemiesAlive <= 0 && s2.enemiesToSpawn <= 0) {
+              set({ phase: 'WAVE_CLEAR', isBuffActive: false, mathAnswered: false })
+              clearAutoWaveTimer()
+              autoWaveTimerId = setTimeout(() => {
+                if (get().phase === 'WAVE_CLEAR') get().nextWave()
+                autoWaveTimerId = null
+              }, AUTO_WAVE_DELAY)
+            }
+          }, 500)
+          return
         }
-        autoWaveTimerId = null
-      }, AUTO_WAVE_DELAY)
+
+        set({ phase: 'WAVE_CLEAR', isBuffActive: false, mathAnswered: false })
+        clearAutoWaveTimer()
+        autoWaveTimerId = setTimeout(() => {
+          if (get().phase === 'WAVE_CLEAR') get().nextWave()
+          autoWaveTimerId = null
+        }, AUTO_WAVE_DELAY)
+      }, 50) // Small defer lets the dying Enemy's cleanup useEffect run
     }
   },
 

@@ -51,38 +51,10 @@ function StatBadge({ label, value, color, icon }: {
 }
 
 // ── Buff Badge ───────────────────────────────────────────────────────────────────
+// The Divine Buff now persists until WAVE_CLEAR (all enemies dead).
+// No independent timer — deactivation is handled by the store.
 function BuffBadge() {
   const isBuffActive = useGameStore(s => s.isBuffActive)
-  const isPaused = useGameStore(s => s.isPaused)
-  const [timeLeft, setTimeLeft] = useState(25)
-
-  // Reset the timer when the buff is activated
-  useEffect(() => {
-    if (isBuffActive) {
-      setTimeLeft(25)
-    }
-  }, [isBuffActive])
-
-  // Countdown timer logic
-  useEffect(() => {
-    if (!isBuffActive || isPaused) return
-
-    const interval = setInterval(() => {
-      setTimeLeft(prev => {
-        if (prev <= 1) {
-          clearInterval(interval)
-          // Defer the state change to avoid React rendering timing issues
-          setTimeout(() => {
-            useGameStore.setState({ isBuffActive: false })
-          }, 0)
-          return 0
-        }
-        return prev - 1
-      })
-    }, 1000)
-
-    return () => clearInterval(interval)
-  }, [isBuffActive, isPaused])
 
   if (!isBuffActive) return null
 
@@ -123,7 +95,7 @@ function BuffBadge() {
           fontFamily: "'Courier New', monospace",
           letterSpacing: '0.05em',
         }}>
-          {timeLeft}s
+          ATIVO
         </div>
       </div>
     </div>

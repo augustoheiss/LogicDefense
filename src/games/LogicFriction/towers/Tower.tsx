@@ -27,9 +27,7 @@ import {
   TOWER_BLUEPRINTS,
   TOWER_SIZE,
   TOWER_HEIGHT,
-  BUFF_DAMAGE_MULT,
   BUFF_COOLDOWN_MULT,
-  BUFF_AOE_RANGE,
   MATH_ZONE_POSITIONS,
   MATH_ZONE_SENSOR_RADIUS,
 } from '../config/constants'
@@ -119,12 +117,14 @@ export function Tower({ id, position, type = 'RAPID', level = 1 }: TowerProps) {
         CRYSTAL_Y_BASE + Math.sin(state.clock.elapsedTime * CRYSTAL_HOVER_SPEED) * CRYSTAL_HOVER_AMP
     }
 
-    if (store.phase !== 'PLAYING') return
+    // Free Fire Directive: towers shoot during PLAYING *and* WAVE_CLEAR
+    // to eliminate any "ghost" enemies still walking after the wave counter hits 0.
+    if (store.phase !== 'PLAYING' && store.phase !== 'WAVE_CLEAR') return
     if (store.isPaused) return
 
     const buffed = store.isBuffActive
     const effectiveCooldown = buffed ? baseCooldown * BUFF_COOLDOWN_MULT : baseCooldown
-    const effectiveDamage = buffed ? baseDamage * BUFF_DAMAGE_MULT : baseDamage
+    const effectiveDamage = baseDamage
 
     cooldownRef.current = Math.max(0, cooldownRef.current - delta)
 
@@ -152,19 +152,6 @@ export function Tower({ id, position, type = 'RAPID', level = 1 }: TowerProps) {
           target.takeDamage(effectiveDamage)
           cooldownRef.current = effectiveCooldown
           beamVisualRef.current = 0.15
-
-          // AoE splash when buffed
-          if (buffed) {
-            const aoeSq = BUFF_AOE_RANGE * BUFF_AOE_RANGE
-            enemyRegistry.forEach((entry, enemyId) => {
-              if (enemyId === closestId) return
-              const dx = entry.x - target.x
-              const dz = entry.z - target.z
-              if (dx * dx + dz * dz < aoeSq) {
-                entry.takeDamage(effectiveDamage * 0.5)
-              }
-            })
-          }
 
           // Point crystal toward target
           if (crystalRef.current) {

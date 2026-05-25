@@ -1,7 +1,12 @@
 // ============================================================
-// Logic Friction — Single Enemy Component
+// Logic Friction — Single Enemy Component ("Glitch Geometric Virus")
 // Sprint 2: Moves toward center (0,0,0), damages core on contact
 // Registers real-time position for player attack range checks
+//
+// VISUAL: Procedural low-poly icosahedron with wireframe overlay.
+// Chaotic rotation + heartbeat pulse. ALL meshBasicMaterial —
+// ZERO dynamic lights. Harsh magenta/crimson contrasts the
+// cyan Cyber-Grid arena.
 // ============================================================
 import { useRef, useEffect } from 'react'
 import { useFrame } from '@react-three/fiber'
@@ -24,9 +29,14 @@ interface EnemyProps {
   onDeath: (id: string) => void
 }
 
+// ── Virus geometry constants ────────────────────────────────────────────────────
+const VIRUS_RADIUS = 0.35
+const WIRE_RADIUS = 0.42 // Slightly larger wireframe shell
+
 export function Enemy({ id, position, hp, speed, onDeath }: EnemyProps) {
   const rbRef = useRef<RapierRigidBody>(null)
-  const meshRef = useRef<THREE.Mesh>(null)
+  const virusRef = useRef<THREE.Group>(null) // Visual group (rotation/scale target)
+  const solidRef = useRef<THREE.Mesh>(null)  // Solid core mesh (color changes on damage)
   const hpRef = useRef(hp)
   const aliveRef = useRef(true)
   const takeCoreDamage = useGameStore(s => s.takeCoreDamage)
@@ -64,7 +74,7 @@ export function Enemy({ id, position, hp, speed, onDeath }: EnemyProps) {
     return () => clearTimeout(failsafeTimer)
   }, [id, onDeath])
 
-  useFrame(() => {
+  useFrame((state, delta) => {
     const rb = rbRef.current
     if (!rb || !aliveRef.current) return
     if (useGameStore.getState().isPaused) return
@@ -96,11 +106,26 @@ export function Enemy({ id, position, hp, speed, onDeath }: EnemyProps) {
       onDeath(id)
     }
 
-    // ── Visual: pulse red as HP drops ──
-    if (meshRef.current) {
+    // ── Visual: Chaotic rotation on the visual group (NOT the RigidBody) ──
+    if (virusRef.current) {
+      virusRef.current.rotation.x += delta * 3.5
+      virusRef.current.rotation.y -= delta * 2.1
+      virusRef.current.rotation.z += delta * 4.0
+
+      // Heartbeat pulse
+      const pulse = 1 + Math.sin(state.clock.elapsedTime * 8) * 0.15
+      virusRef.current.scale.set(pulse, pulse, pulse)
+    }
+
+    // ── Visual: color shifts toward white as HP drops (damage feedback) ──
+    if (solidRef.current) {
       const ratio = Math.max(0, hpRef.current / hp)
-      const mat = meshRef.current.material as THREE.MeshStandardMaterial
-      mat.emissiveIntensity = 0.3 + (1 - ratio) * 0.7
+      const mat = solidRef.current.material as THREE.MeshBasicMaterial
+      // Lerp from harsh magenta (#ff0055) toward hot white (#ffaacc) as HP drops
+      const r = 1.0
+      const g = 0.0 + (1 - ratio) * 0.65
+      const b = 0.33 + (1 - ratio) * 0.47
+      mat.color.setRGB(r, g, b)
     }
   })
 
@@ -118,30 +143,42 @@ export function Enemy({ id, position, hp, speed, onDeath }: EnemyProps) {
       userData={{ type: 'enemy', id }}
     >
       <BallCollider args={[ENEMY_RADIUS]} />
-      <mesh
-        ref={meshRef}
-        castShadow
+
+      {/* Click-to-follow: set this enemy as the tracked MOBA target */}
+      <group
         onPointerDown={(e) => {
-          // Click-to-follow: set this enemy as the tracked MOBA target
           e.stopPropagation()
-          const state = useGameStore.getState()
-          if (state.actionMode !== 'MOVE') return
-          state.setMoveTarget({ type: 'entity', id })
+          const store = useGameStore.getState()
+          if (store.actionMode !== 'MOVE') return
+          store.setMoveTarget({ type: 'entity', id })
         }}
       >
-        <capsuleGeometry args={[ENEMY_RADIUS, ENEMY_RADIUS * 0.8, 6, 12]} />
-        <meshStandardMaterial
-          color="#ff4444"
-          emissive="#ff2200"
-          emissiveIntensity={0.3}
-          metalness={0.4}
-          roughness={0.5}
-        />
-      </mesh>
-      {/* Enemy glow ring */}
+        {/* Virus visual group — chaotic rotation + pulse applied here,
+            NOT on the physics body (lockRotations stays intact) */}
+        <group ref={virusRef}>
+          {/* Solid core — harsh magenta icosahedron */}
+          <mesh ref={solidRef} castShadow>
+            <icosahedronGeometry args={[VIRUS_RADIUS, 0]} />
+            <meshBasicMaterial color="#ff0055" />
+          </mesh>
+
+          {/* Wireframe shell — glitchy hologram overlay */}
+          <mesh>
+            <icosahedronGeometry args={[WIRE_RADIUS, 0]} />
+            <meshBasicMaterial
+              color="#ff3377"
+              wireframe
+              transparent
+              opacity={0.4}
+            />
+          </mesh>
+        </group>
+      </group>
+
+      {/* Ground shadow ring — subtle positional indicator */}
       <mesh position={[0, -ENEMY_RADIUS * 0.6, 0]} rotation={[-Math.PI / 2, 0, 0]}>
         <ringGeometry args={[ENEMY_RADIUS * 0.6, ENEMY_RADIUS * 1.0, 16]} />
-        <meshBasicMaterial color="#ff4444" transparent opacity={0.2} side={THREE.DoubleSide} />
+        <meshBasicMaterial color="#ff0055" transparent opacity={0.15} side={THREE.DoubleSide} />
       </mesh>
     </RigidBody>
   )

@@ -34,7 +34,10 @@ export function MathChallenge() {
   const mathAnswered = useGameStore(s => s.mathAnswered)
   const isBuffActive = useGameStore(s => s.isBuffActive)
   const mathZonePosition = useGameStore(s => s.mathZonePosition)
+  const phase = useGameStore(s => s.phase)
 
+  // Hide the entire math challenge outside of active combat
+  if (phase !== 'PLAYING') return null
   if (!currentProblem) return null
 
   // Resolve world position from cardinal direction
@@ -127,17 +130,17 @@ export function MathChallenge() {
         <Billboard>
           <Text
             position={[0, MATH_ZONE_Y + 2, 0]}
-            fontSize={2}
-            color="#ff4444"
+            fontSize={3}
+            color="#00ccff"
             anchorX="center"
             anchorY="middle"
-            outlineWidth={0.1}
+            outlineWidth={0.12}
             outlineColor="#000000"
           >
-            ✗ RESPOSTA ERRADA
+            ✗
             <meshBasicMaterial
               attach="material"
-              color="#ff4444"
+              color="#00ccff"
               depthTest={false}
               transparent
               toneMapped={false}

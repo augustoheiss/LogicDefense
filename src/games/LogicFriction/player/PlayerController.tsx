@@ -29,7 +29,6 @@ import {
   PLAYER_ATTACK_DAMAGE,
   PLAYER_ATTACK_COOLDOWN,
   CAMERA_LERP,
-  BUFF_DAMAGE_MULT,
   BUFF_COOLDOWN_MULT,
   ARENA_RADIUS,
 } from '../config/constants'
@@ -90,7 +89,7 @@ export function PlayerController() {
 
     // ── Buff-scaled combat stats ──
     const effectiveCooldown = buffed ? PLAYER_ATTACK_COOLDOWN * BUFF_COOLDOWN_MULT : PLAYER_ATTACK_COOLDOWN
-    const effectiveDamage = buffed ? PLAYER_ATTACK_DAMAGE * BUFF_DAMAGE_MULT : PLAYER_ATTACK_DAMAGE
+    const effectiveDamage = PLAYER_ATTACK_DAMAGE
     const effectiveRange = buffed ? PLAYER_ATTACK_RANGE * 1.5 : PLAYER_ATTACK_RANGE
 
     // ── Detect WASD input ──
