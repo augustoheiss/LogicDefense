@@ -66,6 +66,11 @@ export function PlayerController() {
 
     // ── Update shared position ──
     const pos = rb.translation()
+
+    // ⚠️ NaN SAFETY: If physics returns NaN, skip entire frame to prevent
+    // position poisoning that makes the mesh vanish on mobile.
+    if (isNaN(pos.x) || isNaN(pos.y) || isNaN(pos.z)) return
+
     playerPositionRef.x = pos.x
     playerPositionRef.y = pos.y
     playerPositionRef.z = pos.z
@@ -148,15 +153,17 @@ export function PlayerController() {
     // ── Arena Leash (radial clamp — no physics walls needed) ──
     const LEASH = ARENA_RADIUS - PLAYER_RADIUS - 0.5
     const dist = Math.sqrt(pos.x * pos.x + pos.z * pos.z)
-    if (dist > LEASH) {
+    if (dist > LEASH && dist > 0.001) {  // ⚠️ Guard: dist=0 causes NaN from 0/0
       const scale = LEASH / dist
       rb.setTranslation({ x: pos.x * scale, y: pos.y, z: pos.z * scale }, true)
       const vel = rb.linvel()
       const nx = pos.x / dist
       const nz = pos.z / dist
-      const radialSpeed = vel.x * nx + vel.z * nz
-      if (radialSpeed > 0) {
-        rb.setLinvel({ x: vel.x - radialSpeed * nx, y: vel.y, z: vel.z - radialSpeed * nz }, true)
+      if (!isNaN(nx) && !isNaN(nz)) {  // ⚠️ Extra NaN guard
+        const radialSpeed = vel.x * nx + vel.z * nz
+        if (radialSpeed > 0) {
+          rb.setLinvel({ x: vel.x - radialSpeed * nx, y: vel.y, z: vel.z - radialSpeed * nz }, true)
+        }
       }
     }
 
@@ -390,7 +397,8 @@ export function PlayerController() {
 
       {/* Named group so scene.getObjectByName('player') can find us */}
       {/* Y=1.0 lifts visuals well above the arena floor for mobile depth buffers */}
-      <group name="player" frustumCulled={false} position={[0, 1.0, 0]}>
+      {/* ⚠️ NUCLEAR DEBUG: scale={[2,2,2]} tests if tablet was rendering it microscopically */}
+      <group name="player" frustumCulled={false} position={[0, 1.0, 0]} scale={[2, 2, 2]}>
         {/* ⚠️ NUCLEAR DEBUG: meshBasicMaterial (red) bypasses ALL lighting/shader
             compilation. If this is visible on mobile, the root cause is confirmed
             as shader compilation failure with meshStandardMaterial. */}

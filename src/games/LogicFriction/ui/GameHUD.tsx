@@ -354,7 +354,7 @@ export function GameHUD({ onStart, onRestart }: GameHUDProps) {
           bottom: 24,
           left: 24,
           zIndex: 15,
-          pointerEvents: 'auto',
+          pointerEvents: 'none',  // ⚠️ MOBILE FIX: Let touches pass through to 3D canvas
           maxWidth: 560,
           width: '45%',
           minWidth: 300,
@@ -367,6 +367,7 @@ export function GameHUD({ onStart, onRestart }: GameHUDProps) {
             maxHeight: '40vh',
             overflowY: 'auto',
             backdropFilter: 'blur(6px)',
+            pointerEvents: 'auto',  // Only the inner content blocks touch (for scrolling)
           }}>
             <div style={{
               fontSize: 22,

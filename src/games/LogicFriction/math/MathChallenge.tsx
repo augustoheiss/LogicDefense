@@ -272,15 +272,15 @@ function AnswerPad({ label, isCorrect, position, zoneWorldPos, disabled, showRes
         />
       </RigidBody>
 
-      {/* ⚠️ "FAT FINGER" INVISIBLE HITBOX — the ONLY mesh catching pointer events.
-          Wide cylinder (r=2.5) elevated at Y=0.5 to avoid raycaster Z-fighting
-          with the arena floor. Stops propagation + triggers walk-to-pad. */}
+      {/* ⚠️ "FAT FINGER" HITBOX — Raycaster-visible but visually transparent.
+          visible={false} makes Three.js Raycaster IGNORE the mesh entirely!
+          Instead we render it with a fully transparent material + depthWrite=false. */}
       <mesh
-        visible={false}
         position={[0, 0.5, 0]}
         onPointerDown={handlePadTap}
       >
         <cylinderGeometry args={[2.5, 2.5, 1, 16]} />
+        <meshBasicMaterial transparent opacity={0} depthWrite={false} />
       </mesh>
 
       {/* Visual cylinder — NO pointer events (hitbox handles them) */}
