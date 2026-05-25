@@ -101,12 +101,13 @@ export function isWalkable(
     return false;
   }
 
-  // 3. Obstacle collision — snap each obstacle to grid and compare
+  // 3. Obstacle collision — snap each obstacle to grid and check 3×3 area
+  //    (1-cell radius buffer prevents player RigidBody from snagging on corners)
   for (let i = 0; i < obstacles.length; i++) {
     const obs = obstacles[i];
     const ogx = Math.round(obs.x / CELL_SIZE);
     const ogz = Math.round(obs.z / CELL_SIZE);
-    if (ogx === gx && ogz === gz) {
+    if (Math.abs(ogx - gx) <= 1 && Math.abs(ogz - gz) <= 1) {
       return false;
     }
   }

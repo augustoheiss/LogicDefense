@@ -29,6 +29,14 @@ export type MoveTarget =
   | { type: 'point'; x: number; z: number }
   | { type: 'entity'; id: string }
 
+/** Stored answer explanation for the Answer Log */
+export interface ExplanationEntry {
+  wave: number
+  question: string
+  explanation: string
+  wasCorrect: boolean
+}
+
 export interface SiteData {
   id: string
   x: number
@@ -84,8 +92,10 @@ export interface GameStore {
   // ── Math & Buff ──
   currentProblem: FrictionProblem | null
   isBuffActive: boolean
-  showExplanation: boolean
   mathAnswered: boolean
+
+  // ── Answer Log ──
+  explanationLog: ExplanationEntry[]
   mathZonePosition: MathZoneDir
 
   // ── Transparency Sensor ──
@@ -149,6 +159,17 @@ function clearRespawnTimer() {
   }
 }
 
+// ── Auto-Wave Timer (4s delay between waves) ────────────────────────────────────
+let autoWaveTimerId: ReturnType<typeof setTimeout> | null = null
+const AUTO_WAVE_DELAY = 4000
+
+function clearAutoWaveTimer() {
+  if (autoWaveTimerId !== null) {
+    clearTimeout(autoWaveTimerId)
+    autoWaveTimerId = null
+  }
+}
+
 // ── ID Generator ────────────────────────────────────────────────────────────────
 let nextId = 0
 function genId(prefix: string) {
@@ -175,8 +196,8 @@ const initialState = {
   towers: [] as TowerData[],
   currentProblem: null as FrictionProblem | null,
   isBuffActive: false,
-  showExplanation: false,
   mathAnswered: false,
+  explanationLog: [] as ExplanationEntry[],
   mathZonePosition: 'N' as MathZoneDir,
   insideMathZone: false,
   actionMode: 'MOVE' as ActionMode,
@@ -192,6 +213,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   // ── Phase transitions ──
   startGame: () => {
     clearRespawnTimer()
+    clearAutoWaveTimer()
     const dir = randomDirection()
     const problem = generateFrictionProblem(1)
     set({
@@ -203,14 +225,15 @@ export const useGameStore = create<GameStore>((set, get) => ({
       totalWaveEnemies: WAVE_BASE_COUNT,
       currentProblem: problem,
       isBuffActive: false,
-      showExplanation: false,
       mathAnswered: false,
       mathZonePosition: dir,
       insideMathZone: false,
+      explanationLog: [],
     })
   },
 
   nextWave: () => {
+    clearAutoWaveTimer()
     const wave = get().waveNumber + 1
     const count = WAVE_BASE_COUNT + (wave - 1) * WAVE_COUNT_SCALE
     const problem = generateFrictionProblem(wave)
@@ -223,7 +246,6 @@ export const useGameStore = create<GameStore>((set, get) => ({
       phase: 'PLAYING',
       currentProblem: problem,
       isBuffActive: false,
-      showExplanation: false,
       mathAnswered: false,
       mathZonePosition: newDir,
       insideMathZone: false,
@@ -233,6 +255,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
   gameOver: () => {
     clearRespawnTimer()
+    clearAutoWaveTimer()
     set({ phase: 'GAME_OVER' })
   },
 
@@ -293,6 +316,15 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
     if (newAlive <= 0 && get().enemiesToSpawn <= 0) {
       set({ phase: 'WAVE_CLEAR' })
+      // Auto-advance to next wave after 4 seconds
+      clearAutoWaveTimer()
+      autoWaveTimerId = setTimeout(() => {
+        const phase = get().phase
+        if (phase === 'WAVE_CLEAR') {
+          get().nextWave()
+        }
+        autoWaveTimerId = null
+      }, AUTO_WAVE_DELAY)
     }
   },
 
@@ -377,7 +409,20 @@ export const useGameStore = create<GameStore>((set, get) => ({
   // ── Math — Submit Answer ──
   submitAnswer: (isCorrect) => {
     if (get().mathAnswered) return
-    set({ mathAnswered: true, showExplanation: true })
+    set({ mathAnswered: true })
+
+    // Push to answer log
+    const state = get()
+    if (state.currentProblem) {
+      const entry: ExplanationEntry = {
+        wave: state.waveNumber,
+        question: state.currentProblem.expression,
+        explanation: state.currentProblem.explanation,
+        wasCorrect: isCorrect,
+      }
+      set({ explanationLog: [...state.explanationLog, entry] })
+    }
+
     if (isCorrect) {
       set(s => ({
         coreHp: s.maxCoreHp,
@@ -403,6 +448,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   // ── Full reset ──
   reset: () => {
     clearRespawnTimer()
+    clearAutoWaveTimer()
     set(initialState)
   },
 }))

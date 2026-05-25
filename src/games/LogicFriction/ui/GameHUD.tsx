@@ -228,10 +228,7 @@ export function GameHUD({ onStart, onRestart }: GameHUDProps) {
   const enemiesAlive = useGameStore(s => s.enemiesAlive)
   const isPlayerDead = useGameStore(s => s.isPlayerDead)
   const isBuffActive = useGameStore(s => s.isBuffActive)
-  const showExplanation = useGameStore(s => s.showExplanation)
-  const currentProblem = useGameStore(s => s.currentProblem)
   const coreLevel = useGameStore(s => s.coreLevel)
-  const nextWave = useGameStore(s => s.nextWave)
   const actionMode = useGameStore(s => s.actionMode)
 
   if (phase === 'MENU') {
@@ -310,93 +307,11 @@ export function GameHUD({ onStart, onRestart }: GameHUDProps) {
         {actionMode === 'BUILD' && <TowerSelector />}
       </div>
 
-      {/* Wave Clear overlay */}
-      {phase === 'WAVE_CLEAR' && (
-        <div style={{
-          position: 'absolute',
-          bottom: 40,
-          left: '50%',
-          transform: 'translateX(-50%)',
-          zIndex: 20,
-          pointerEvents: 'auto',
-        }}>
-          <button
-            onClick={nextWave}
-            style={{
-              background: 'linear-gradient(135deg, #00ff88, #00d4ff)',
-              border: 'none',
-              borderRadius: 12,
-              padding: '14px 36px',
-              color: '#000',
-              fontFamily: "'Courier New', monospace",
-              fontSize: 16,
-              fontWeight: 800,
-              cursor: 'pointer',
-              textTransform: 'uppercase',
-              letterSpacing: '0.1em',
-              boxShadow: '0 0 30px rgba(0,255,136,0.4)',
-              animation: 'lf-cta-glow 1.5s ease infinite',
-            }}
-          >
-            ▶ Próxima Onda (Wave {waveNumber + 1})
-          </button>
-        </div>
-      )}
+      {/* Wave Clear — auto-advance countdown banner */}
+      {phase === 'WAVE_CLEAR' && <WaveCountdownBanner waveNumber={waveNumber} />}
 
       {/* Controls hint at bottom */}
       <ControlsHint />
-
-
-      {/* Explanation panel — bottom-left, large font for readability */}
-      {showExplanation && currentProblem && (
-        <div style={{
-          position: 'absolute',
-          bottom: 24,
-          left: 24,
-          zIndex: 15,
-          pointerEvents: 'none',  // ⚠️ MOBILE FIX: Let touches pass through to 3D canvas
-          maxWidth: 560,
-          width: '45%',
-          minWidth: 300,
-        }}>
-          <div style={{
-            background: isBuffActive ? 'rgba(0,255,136,0.12)' : 'rgba(255,68,68,0.12)',
-            border: `2px solid ${isBuffActive ? 'rgba(0,255,136,0.4)' : 'rgba(255,68,68,0.4)'}`,
-            borderRadius: 14,
-            padding: '18px 24px',
-            maxHeight: '40vh',
-            overflowY: 'auto',
-            backdropFilter: 'blur(6px)',
-            pointerEvents: 'none',  // Full pass-through — text is read-only
-          }}>
-            <div style={{
-              fontSize: 22,
-              color: isBuffActive ? '#00ff88' : '#ff4444',
-              fontWeight: 800,
-              fontFamily: "'Courier New', monospace",
-              textTransform: 'uppercase',
-              letterSpacing: '0.1em',
-              marginBottom: 10,
-              textShadow: '0 2px 6px rgba(0,0,0,0.8)',
-            }}>
-              {isBuffActive ? '✓ Correto! Buff Divino Ativado' : '✗ Resposta Errada'}
-            </div>
-            <div style={{
-              fontSize: 20,
-              color: '#c8d6e5',
-              fontFamily: "'Courier New', monospace",
-              fontWeight: 600,
-              lineHeight: 1.7,
-              whiteSpace: 'pre-wrap',
-              wordBreak: 'break-word',
-              overflowWrap: 'break-word',
-              textShadow: '0 1px 4px rgba(0,0,0,0.7)',
-            }}>
-              {currentProblem.explanation}
-            </div>
-          </div>
-        </div>
-      )}
     </>
   )
 }
@@ -457,12 +372,85 @@ function ActionModeToggle() {
   )
 }
 
+// ── Wave Countdown Banner ───────────────────────────────────────────────────────
+function WaveCountdownBanner({ waveNumber }: { waveNumber: number }) {
+  const [countdown, setCountdown] = useState(4)
+
+  useEffect(() => {
+    setCountdown(4)
+    const interval = setInterval(() => {
+      setCountdown(prev => {
+        if (prev <= 1) {
+          clearInterval(interval)
+          return 0
+        }
+        return prev - 1
+      })
+    }, 1000)
+    return () => clearInterval(interval)
+  }, [waveNumber])
+
+  return (
+    <div style={{
+      position: 'absolute',
+      bottom: 40,
+      left: '50%',
+      transform: 'translateX(-50%)',
+      zIndex: 20,
+      pointerEvents: 'none',
+      textAlign: 'center',
+    }}>
+      <div style={{
+        background: 'rgba(0,0,0,0.75)',
+        border: '2px solid rgba(0,255,136,0.35)',
+        borderRadius: 14,
+        padding: '14px 36px',
+        fontFamily: "'Courier New', monospace",
+        backdropFilter: 'blur(8px)',
+        boxShadow: '0 0 30px rgba(0,255,136,0.2)',
+        animation: 'lf-countdown-pulse 1s ease infinite',
+      }}>
+        <div style={{
+          fontSize: 13,
+          color: '#00ff88',
+          fontWeight: 800,
+          textTransform: 'uppercase',
+          letterSpacing: '0.15em',
+          marginBottom: 4,
+        }}>
+          ✓ Onda {waveNumber} Completa
+        </div>
+        <div style={{
+          fontSize: 20,
+          color: '#ffffff',
+          fontWeight: 900,
+          letterSpacing: '0.1em',
+        }}>
+          {countdown > 0
+            ? `Próxima Onda em ${countdown}...`
+            : `▶ Onda ${waveNumber + 1}!`
+          }
+        </div>
+      </div>
+
+      {/* Inline keyframes for the pulse animation */}
+      <style>{`
+        @keyframes lf-countdown-pulse {
+          0%, 100% { opacity: 1; transform: scale(1); }
+          50% { opacity: 0.85; transform: scale(1.02); }
+        }
+      `}</style>
+    </div>
+  )
+}
+
 // ── Settings Menu ───────────────────────────────────────────────────────────────
 function SettingsMenu() {
   const isMenuOpen = useGameStore(s => s.isMenuOpen)
   const isCameraFree = useGameStore(s => s.isCameraFree)
   const toggleMenu = useGameStore(s => s.toggleMenu)
   const toggleCameraFree = useGameStore(s => s.toggleCameraFree)
+  const explanationLog = useGameStore(s => s.explanationLog)
 
   return (
     <div style={{
@@ -504,7 +492,7 @@ function SettingsMenu() {
           border: '1px solid rgba(255,255,255,0.12)',
           borderRadius: 10,
           padding: 12,
-          minWidth: 200,
+          minWidth: 260,
           backdropFilter: 'blur(12px)',
           boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
         }}>
@@ -549,6 +537,83 @@ function SettingsMenu() {
               {isCameraFree ? 'ON 🔓' : 'OFF 🔒'}
             </span>
           </button>
+
+          {/* ── Answer Log (Log de Respostas) ── */}
+          {explanationLog.length > 0 && (
+            <>
+              <div style={{
+                fontSize: 10,
+                color: '#475569',
+                textTransform: 'uppercase',
+                letterSpacing: '0.15em',
+                fontWeight: 700,
+                marginTop: 12,
+                marginBottom: 6,
+              }}>
+                📝 Log de Respostas
+              </div>
+              <div style={{
+                maxHeight: 220,
+                overflowY: 'auto',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 6,
+              }}>
+                {[...explanationLog].reverse().map((entry, i) => (
+                  <div
+                    key={`log-${entry.wave}-${i}`}
+                    style={{
+                      background: entry.wasCorrect
+                        ? 'rgba(0,255,136,0.08)'
+                        : 'rgba(255,68,68,0.08)',
+                      border: `1px solid ${entry.wasCorrect ? '#00ff8830' : '#ff444430'}`,
+                      borderRadius: 8,
+                      padding: '8px 10px',
+                    }}
+                  >
+                    <div style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      marginBottom: 4,
+                    }}>
+                      <span style={{
+                        fontSize: 11,
+                        color: '#94a3b8',
+                        fontWeight: 700,
+                      }}>
+                        Onda {entry.wave}
+                      </span>
+                      <span style={{
+                        fontSize: 11,
+                        color: entry.wasCorrect ? '#00ff88' : '#ff4444',
+                        fontWeight: 800,
+                      }}>
+                        {entry.wasCorrect ? '✓ Correto' : '✗ Errado'}
+                      </span>
+                    </div>
+                    <div style={{
+                      fontSize: 12,
+                      color: '#c8d6e5',
+                      fontWeight: 700,
+                      marginBottom: 4,
+                    }}>
+                      {entry.question}
+                    </div>
+                    <div style={{
+                      fontSize: 11,
+                      color: '#64748b',
+                      lineHeight: 1.5,
+                      whiteSpace: 'pre-wrap',
+                      wordBreak: 'break-word',
+                    }}>
+                      {entry.explanation}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
         </div>
       )}
     </div>
