@@ -695,63 +695,6 @@ function SettingsMenu() {
   )
 }
 
-// ── Start Screen ────────────────────────────────────────────────────────────────
-function StartScreen({ onStart }: { onStart: () => void }) {
-  return (
-    <div style={{
-      position: 'absolute',
-      inset: 0,
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      justifyContent: 'center',
-      background: 'rgba(4,4,14,0.85)',
-      zIndex: 30,
-      pointerEvents: 'auto',
-    }}>
-      <h1 style={{
-        fontFamily: "'Orbitron', 'Courier New', monospace",
-        fontSize: 'clamp(24px, 4vw, 42px)',
-        color: '#00ff88',
-        textShadow: '0 0 40px rgba(0,255,136,0.5)',
-        margin: '0 0 12px',
-        textAlign: 'center',
-      }}>
-        LOGIC FRICTION
-      </h1>
-      <p style={{
-        color: '#64748b',
-        fontSize: 14,
-        margin: '0 0 32px',
-        textAlign: 'center',
-        maxWidth: 400,
-      }}>
-        Defenda o Core central contra ondas infinitas de inimigos.
-        Pressione ESPAÇO para atacar.
-      </p>
-      <button
-        onClick={onStart}
-        style={{
-          background: 'linear-gradient(135deg, #00ff88, #00d4ff)',
-          border: 'none',
-          borderRadius: 12,
-          padding: '16px 48px',
-          color: '#000',
-          fontFamily: "'Courier New', monospace",
-          fontSize: 18,
-          fontWeight: 800,
-          cursor: 'pointer',
-          textTransform: 'uppercase',
-          letterSpacing: '0.12em',
-          boxShadow: '0 0 40px rgba(0,255,136,0.4)',
-        }}
-      >
-        ⛶ INICIAR (TELA CHEIA)
-      </button>
-    </div>
-  )
-}
-
 // ── Game Over Screen ──────────────────────────────────────────────────────────────
 function GameOverScreen({ wave, gold, onRestart }: { wave: number; gold: number; onRestart: () => void }) {
   const [playerName, setPlayerName] = useState('')
