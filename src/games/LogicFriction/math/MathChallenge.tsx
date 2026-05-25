@@ -272,14 +272,13 @@ function AnswerPad({ label, isCorrect, position, zoneWorldPos, disabled, showRes
         />
       </RigidBody>
 
-      {/* ⚠️ ABSURDLY LARGE HITBOX — r=5, h=2, elevated at Y=1.0.
-          Catches even wildly DPI-misaligned mobile raycasts.
-          Reduce after confirming taps register on tablet. */}
+      {/* Tap hitbox — r=1.5 covers the visual pad without overlapping neighbors
+          (pad spacing = 5 units, so r=1.5 leaves 2 units of gap). */}
       <mesh
         position={[0, 1.0, 0]}
         onPointerDown={handlePadTap}
       >
-        <cylinderGeometry args={[5, 5, 2, 16]} />
+        <cylinderGeometry args={[1.5, 1.5, 1, 16]} />
         <meshBasicMaterial transparent opacity={0} depthWrite={false} />
       </mesh>
 

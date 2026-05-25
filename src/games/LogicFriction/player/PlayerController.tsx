@@ -232,21 +232,22 @@ export function PlayerController() {
     }
 
     // ── Buff visual: player glow ──
-    if (meshRef.current) {
-      const mat = meshRef.current.material as THREE.MeshStandardMaterial
-      if (buffed) {
-        mat.emissive.set('#ffd700')
-        mat.emissiveIntensity = 0.6 + Math.sin(Date.now() * 0.005) * 0.2
-      } else {
-        mat.emissive.set('#00ffcc')
-        mat.emissiveIntensity = 0.2
-      }
-
-      // ── Math Zone transparency ──
-      const inZone = state.insideMathZone
-      mat.transparent = inZone
-      mat.opacity = inZone ? 0.3 : 1.0
-    }
+    // Disabled: meshBasicMaterial required for mobile GPU compatibility.
+    // meshBasicMaterial has no emissive/transparency properties.
+    // TODO: Restore when mobile shader compilation issue is resolved.
+    // if (meshRef.current) {
+    //   const mat = meshRef.current.material as THREE.MeshStandardMaterial
+    //   if (buffed) {
+    //     mat.emissive.set('#ffd700')
+    //     mat.emissiveIntensity = 0.6 + Math.sin(Date.now() * 0.005) * 0.2
+    //   } else {
+    //     mat.emissive.set('#00ffcc')
+    //     mat.emissiveIntensity = 0.2
+    //   }
+    //   const inZone = state.insideMathZone
+    //   mat.transparent = inZone
+    //   mat.opacity = inZone ? 0.3 : 1.0
+    // }
 
     // ── Camera Follow (OrbitControls-aware) ──
     const orbitTarget = (controls as any)?.target as THREE.Vector3 | undefined
@@ -397,16 +398,10 @@ export function PlayerController() {
 
       {/* Player orb group — Y=0.6 so the sphere (r=0.6) hovers just above the floor */}
       <group name="player" frustumCulled={false} position={[0, 0.6, 0]}>
-        {/* Sleek sphere avatar — mobile-safe meshStandardMaterial */}
+        {/* Sphere avatar — meshBasicMaterial for mobile GPU safety (no lighting) */}
         <mesh ref={meshRef} castShadow={false} frustumCulled={false} renderOrder={1}>
-          <sphereGeometry args={[0.6, 32, 32]} />
-          <meshStandardMaterial
-            color="#00ffcc"
-            emissive="#00ffcc"
-            emissiveIntensity={0.2}
-            roughness={0.2}
-            metalness={0.4}
-          />
+          <sphereGeometry args={[0.6, 16, 16]} />
+          <meshBasicMaterial color="#00ffcc" />
         </mesh>
 
         {/* Idle glow ring */}
