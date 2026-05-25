@@ -30,6 +30,7 @@ import {
   BUFF_DAMAGE_MULT,
   BUFF_COOLDOWN_MULT,
   BUFF_AOE_RANGE,
+  BUFF_AOE_SPLASH_MULT,
   MATH_ZONE_POSITIONS,
   MATH_ZONE_SENSOR_RADIUS,
 } from '../config/constants'
@@ -123,6 +124,7 @@ export function Tower({ id, position, type = 'RAPID', level = 1 }: TowerProps) {
     if (store.isPaused) return
 
     const buffed = store.isBuffActive
+    const nukeAoe = store.aoeBuffActive
     const effectiveCooldown = buffed ? baseCooldown * BUFF_COOLDOWN_MULT : baseCooldown
     const effectiveDamage = buffed ? baseDamage * BUFF_DAMAGE_MULT : baseDamage
 
@@ -153,15 +155,15 @@ export function Tower({ id, position, type = 'RAPID', level = 1 }: TowerProps) {
           cooldownRef.current = effectiveCooldown
           beamVisualRef.current = 0.15
 
-          // AoE splash when buffed
-          if (buffed) {
+          // AoE nuke splash when aoeBuffActive
+          if (nukeAoe) {
             const aoeSq = BUFF_AOE_RANGE * BUFF_AOE_RANGE
             enemyRegistry.forEach((entry, enemyId) => {
               if (enemyId === closestId) return
               const dx = entry.x - target.x
               const dz = entry.z - target.z
               if (dx * dx + dz * dz < aoeSq) {
-                entry.takeDamage(effectiveDamage * 0.5)
+                entry.takeDamage(effectiveDamage * BUFF_AOE_SPLASH_MULT)
               }
             })
           }
@@ -191,10 +193,12 @@ export function Tower({ id, position, type = 'RAPID', level = 1 }: TowerProps) {
       mat.opacity = beamVisualRef.current * 6
     }
 
-    // ── Crystal color: buff = gold, upgrade = green, normal = type color ──
+    // ── Crystal color: nuke = orange, buff = gold, upgrade = green, normal = type color ──
     if (crystalRef.current) {
       const mat = crystalRef.current.material as THREE.MeshBasicMaterial
-      if (buffed) {
+      if (nukeAoe) {
+        mat.color.set('#ff6600')
+      } else if (buffed) {
         mat.color.set('#ffd700')
       } else if (store.isUpgradeMode) {
         mat.color.set('#00ff88')

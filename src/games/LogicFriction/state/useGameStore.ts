@@ -18,6 +18,7 @@ import {
   TOWER_BLUEPRINT_KEYS,
   STARTING_GOLD,
   MAX_TOWERS,
+  BUFF_AOE_DURATION,
 } from '../config/constants'
 import type { MathZoneDir } from '../config/constants'
 import { generateFrictionProblem, type FrictionProblem } from '../math/mathBridge'
@@ -99,6 +100,7 @@ export interface GameStore {
   // ── Math & Buff ──
   currentProblem: FrictionProblem | null
   isBuffActive: boolean
+  aoeBuffActive: boolean
   mathAnswered: boolean
 
   // ── Answer Log ──
@@ -180,6 +182,16 @@ function clearRespawnTimer() {
 let autoWaveTimerId: ReturnType<typeof setTimeout> | null = null
 const AUTO_WAVE_DELAY = 4000
 
+// ── AoE Buff Timer ──────────────────────────────────────────────────────────────
+let aoeBuffTimerId: ReturnType<typeof setTimeout> | null = null
+
+function clearAoeBuffTimer() {
+  if (aoeBuffTimerId !== null) {
+    clearTimeout(aoeBuffTimerId)
+    aoeBuffTimerId = null
+  }
+}
+
 function clearAutoWaveTimer() {
   if (autoWaveTimerId !== null) {
     clearTimeout(autoWaveTimerId)
@@ -213,6 +225,7 @@ const initialState = {
   towers: [] as TowerData[],
   currentProblem: null as FrictionProblem | null,
   isBuffActive: false,
+  aoeBuffActive: false,
   mathAnswered: false,
   explanationLog: [] as ExplanationEntry[],
   mathZonePosition: 'N' as MathZoneDir,
@@ -235,6 +248,7 @@ export const useGameStore = create<GameStore>()(
   startGame: () => {
     clearRespawnTimer()
     clearAutoWaveTimer()
+    clearAoeBuffTimer()
     const dir = randomDirection()
     const problem = generateFrictionProblem(1)
     set({
@@ -246,6 +260,7 @@ export const useGameStore = create<GameStore>()(
       totalWaveEnemies: WAVE_BASE_COUNT,
       currentProblem: problem,
       isBuffActive: false,
+      aoeBuffActive: false,
       mathAnswered: false,
       mathZonePosition: dir,
       insideMathZone: false,
@@ -255,6 +270,7 @@ export const useGameStore = create<GameStore>()(
 
   nextWave: () => {
     clearAutoWaveTimer()
+    clearAoeBuffTimer()
     const wave = get().waveNumber + 1
     const count = WAVE_BASE_COUNT + (wave - 1) * WAVE_COUNT_SCALE
     const problem = generateFrictionProblem(wave)
@@ -267,6 +283,7 @@ export const useGameStore = create<GameStore>()(
       phase: 'PLAYING',
       currentProblem: problem,
       isBuffActive: false,
+      aoeBuffActive: false,
       mathAnswered: false,
       mathZonePosition: newDir,
       insideMathZone: false,
@@ -278,6 +295,7 @@ export const useGameStore = create<GameStore>()(
   gameOver: () => {
     clearRespawnTimer()
     clearAutoWaveTimer()
+    clearAoeBuffTimer()
     set({ phase: 'GAME_OVER' })
   },
 
@@ -451,8 +469,19 @@ export const useGameStore = create<GameStore>()(
         playerHp: s.maxPlayerHp,
         isPlayerDead: false,
         isBuffActive: true,
+        aoeBuffActive: true,
       }))
       clearRespawnTimer()
+
+      // ── AoE Nuke buff timer: expires after BUFF_AOE_DURATION seconds ──
+      clearAoeBuffTimer()
+      aoeBuffTimerId = setTimeout(() => {
+        const phase = get().phase
+        if (phase === 'PLAYING' || phase === 'WAVE_CLEAR') {
+          set({ aoeBuffActive: false })
+        }
+        aoeBuffTimerId = null
+      }, BUFF_AOE_DURATION * 1000)
     }
   },
 
@@ -474,6 +503,7 @@ export const useGameStore = create<GameStore>()(
   loadGameState: (snapshot) => {
     clearRespawnTimer()
     clearAutoWaveTimer()
+    clearAoeBuffTimer()
     const dir = randomDirection()
     const problem = generateFrictionProblem(snapshot.waveNumber)
     set({
@@ -499,6 +529,7 @@ export const useGameStore = create<GameStore>()(
   reset: () => {
     clearRespawnTimer()
     clearAutoWaveTimer()
+    clearAoeBuffTimer()
     set(initialState)
   },
 }),

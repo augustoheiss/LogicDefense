@@ -118,7 +118,9 @@ export const MATH_ZONE_POSITIONS: Record<MathZoneDir, [number, number, number]> 
 // ── Divine Buff ─────────────────────────────────────────────────────────────────
 export const BUFF_DAMAGE_MULT    = 2.0       // [PLACEHOLDER] — damage multiplier when buff active
 export const BUFF_COOLDOWN_MULT  = 0.5       // [PLACEHOLDER] — cooldown multiplier (halved)
-export const BUFF_AOE_RANGE      = 8         // [PLACEHOLDER] — AoE splash radius for buffed towers
+export const BUFF_AOE_RANGE      = 4         // [PLACEHOLDER] — AoE nuke splash radius (grid units)
+export const BUFF_AOE_DURATION   = 15        // [PLACEHOLDER] — seconds the AoE nuke buff lasts
+export const BUFF_AOE_SPLASH_MULT = 1.0      // [PLACEHOLDER] — 100% of damage applied to ALL enemies in radius
 
 // ── Collision Groups (bitmasks for Rapier) ──────────────────────────────────────
 // Not used for filtering yet, but defined for Sprint 3+ tower projectiles

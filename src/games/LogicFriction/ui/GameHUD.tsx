@@ -5,7 +5,7 @@
 import { useEffect, useState } from 'react'
 import { useGameStore } from '../state/useGameStore'
 import type { ActionMode } from '../state/useGameStore'
-import { TOWER_BLUEPRINTS, TOWER_BLUEPRINT_KEYS } from '../config/constants'
+import { TOWER_BLUEPRINTS, TOWER_BLUEPRINT_KEYS, BUFF_AOE_DURATION } from '../config/constants'
 import { getLeaderboard, saveToLeaderboard } from '../state/leaderboard'
 import type { LeaderboardEntry, GameStateSnapshot } from '../state/leaderboard'
 
@@ -53,22 +53,31 @@ function StatBadge({ label, value, color, icon }: {
 // ── Buff Badge ───────────────────────────────────────────────────────────────────
 function BuffBadge() {
   const isBuffActive = useGameStore(s => s.isBuffActive)
+  const aoeBuffActive = useGameStore(s => s.aoeBuffActive)
   const isPaused = useGameStore(s => s.isPaused)
-  const [timeLeft, setTimeLeft] = useState(25)
+  const [buffTimeLeft, setBuffTimeLeft] = useState(25)
+  const [aoeTimeLeft, setAoeTimeLeft] = useState(BUFF_AOE_DURATION)
 
-  // Reset the timer when the buff is activated
+  // Reset the buff timer when the buff is activated
   useEffect(() => {
     if (isBuffActive) {
-      setTimeLeft(25)
+      setBuffTimeLeft(25)
     }
   }, [isBuffActive])
 
-  // Countdown timer logic
+  // Reset the AoE timer when the AoE buff is activated
+  useEffect(() => {
+    if (aoeBuffActive) {
+      setAoeTimeLeft(BUFF_AOE_DURATION)
+    }
+  }, [aoeBuffActive])
+
+  // Buff countdown timer logic
   useEffect(() => {
     if (!isBuffActive || isPaused) return
 
     const interval = setInterval(() => {
-      setTimeLeft(prev => {
+      setBuffTimeLeft(prev => {
         if (prev <= 1) {
           clearInterval(interval)
           // Defer the state change to avoid React rendering timing issues
@@ -84,20 +93,47 @@ function BuffBadge() {
     return () => clearInterval(interval)
   }, [isBuffActive, isPaused])
 
+  // AoE countdown timer (display only — actual expiry is in store)
+  useEffect(() => {
+    if (!aoeBuffActive || isPaused) return
+
+    const interval = setInterval(() => {
+      setAoeTimeLeft(prev => {
+        if (prev <= 1) {
+          clearInterval(interval)
+          return 0
+        }
+        return prev - 1
+      })
+    }, 1000)
+
+    return () => clearInterval(interval)
+  }, [aoeBuffActive, isPaused])
+
   if (!isBuffActive) return null
+
+  // AoE Nuke active → orange/red pulsing badge
+  const isNuke = aoeBuffActive
+  const badgeBg = isNuke ? 'rgba(255,102,0,0.2)' : 'rgba(255,215,0,0.15)'
+  const badgeBorder = isNuke ? 'rgba(255,102,0,0.6)' : 'rgba(255,215,0,0.5)'
+  const badgeGlow = isNuke ? 'rgba(255,102,0,0.3)' : 'rgba(255,215,0,0.2)'
+  const labelColor = isNuke ? '#ff6600' : '#ffd700'
+  const labelText = isNuke ? '☢ NUKE AoE' : '🪽 BUFF DIVINO'
+  const displayTime = isNuke ? aoeTimeLeft : buffTimeLeft
+  const animName = isNuke ? 'lf-nuke-pulse' : 'lf-buff-pulse'
 
   return (
     <div style={{
-      background: 'rgba(255,215,0,0.15)',
-      border: '1px solid rgba(255,215,0,0.5)',
+      background: badgeBg,
+      border: `1px solid ${badgeBorder}`,
       borderRadius: 8,
       padding: '6px 14px',
       display: 'flex',
       alignItems: 'center',
       gap: 10,
       minWidth: 120,
-      animation: 'lf-buff-pulse 1.8s ease-in-out infinite',
-      boxShadow: '0 0 15px rgba(255,215,0,0.2)',
+      animation: `${animName} 1.8s ease-in-out infinite`,
+      boxShadow: `0 0 15px ${badgeGlow}`,
       pointerEvents: 'none',
     }}>
       <style>{`
@@ -105,17 +141,20 @@ function BuffBadge() {
           0%, 100% { opacity: 1; transform: scale(1); box-shadow: 0 0 15px rgba(255,215,0,0.2); }
           50% { opacity: 0.85; transform: scale(1.03); box-shadow: 0 0 25px rgba(255,215,0,0.45); }
         }
+        @keyframes lf-nuke-pulse {
+          0%, 100% { opacity: 1; transform: scale(1); box-shadow: 0 0 15px rgba(255,102,0,0.3); }
+          50% { opacity: 0.9; transform: scale(1.06); box-shadow: 0 0 30px rgba(255,102,0,0.6); }
+        }
       `}</style>
-      <span style={{ fontSize: 18, filter: 'drop-shadow(0 0 4px #ffd700)' }}>🪽</span>
       <div>
         <div style={{
           fontSize: 8,
-          color: '#ffd700',
+          color: labelColor,
           textTransform: 'uppercase',
           letterSpacing: '0.12em',
           fontWeight: 800,
           fontFamily: "'Courier New', monospace",
-        }}>BUFF DIVINO</div>
+        }}>{labelText}</div>
         <div style={{
           fontSize: 14,
           color: '#ffffff',
@@ -123,7 +162,7 @@ function BuffBadge() {
           fontFamily: "'Courier New', monospace",
           letterSpacing: '0.05em',
         }}>
-          {timeLeft}s
+          {displayTime}s
         </div>
       </div>
     </div>
