@@ -65,6 +65,12 @@ export function PlayerController() {
   const lastEntityPosRef = useRef<{ x: number; z: number } | null>(null)
   const frameCountRef = useRef(0)
 
+  // ── Wiggle sidestep state for auto-move ──
+  const playerStuckTimerRef = useRef(0)
+  const playerStuckPrevPosRef = useRef({ x: 0, z: 0 })
+  const sidestepDirRef = useRef(1)        // +1 or -1: alternating L/R wiggle
+  const slideRecalcTimerRef = useRef(0)   // Path recalc during wiggling
+
   useKeyboard()
 
   // ── Mount Diagnostic — helps debug tablet invisibility ──
@@ -191,10 +197,62 @@ export function PlayerController() {
         if (moveResult) {
           const currentVel = rb.linvel()
           rb.setLinvel({ x: moveResult.vx, y: currentVel.y, z: moveResult.vz }, true)
+
+          // ── Pure Alternating Wiggle Sidestep ──
+          // If barely moving, alternate L/R perpendicular to intended direction.
+          // NEVER pushes backward — only sideways + slight forward (W+A / W+D).
+          const prevSP = playerStuckPrevPosRef.current
+          const moveDelta = Math.sqrt(
+            (pos.x - prevSP.x) * (pos.x - prevSP.x) +
+            (pos.z - prevSP.z) * (pos.z - prevSP.z)
+          )
+          if (moveDelta < 0.15) {
+            playerStuckTimerRef.current += delta
+
+            if (playerStuckTimerRef.current >= 0.25) {
+              const dirLen = Math.sqrt(moveResult.vx * moveResult.vx + moveResult.vz * moveResult.vz)
+              if (dirLen > 0.01) {
+                const dirX = moveResult.vx / dirLen
+                const dirZ = moveResult.vz / dirLen
+                // Perpendicular sidestep vector
+                const sideX = -dirZ * sidestepDirRef.current
+                const sideZ = dirX * sidestepDirRef.current
+                // Blend: 70% sideways + 30% forward
+                const wiggleSpeed = PLAYER_SPEED * 0.95
+                rb.setLinvel(
+                  {
+                    x: (sideX * 0.7 + dirX * 0.3) * wiggleSpeed,
+                    y: rb.linvel().y,
+                    z: (sideZ * 0.7 + dirZ * 0.3) * wiggleSpeed,
+                  },
+                  true
+                )
+              }
+
+              // Flip direction every 0.5s for rapid L-R-L-R wiggle
+              if (playerStuckTimerRef.current >= 0.75) {
+                sidestepDirRef.current *= -1
+                playerStuckTimerRef.current = 0.25 // Stay in wiggle mode
+              }
+
+              // Continuous path recalc every 0.3s
+              slideRecalcTimerRef.current += delta
+              if (slideRecalcTimerRef.current >= 0.3) {
+                pathCacheRef.current = null
+                slideRecalcTimerRef.current = 0
+              }
+            }
+          } else {
+            // Successfully moving — reset wiggle state
+            playerStuckTimerRef.current = 0
+            slideRecalcTimerRef.current = 0
+          }
+          playerStuckPrevPosRef.current = { x: pos.x, z: pos.z }
         } else {
-          // Arrived or path failed — stop
+          // Arrived or path failed — stop + reset
           const currentVel = rb.linvel()
           rb.setLinvel({ x: 0, y: currentVel.y, z: 0 }, true)
+          playerStuckTimerRef.current = 0
         }
 
       } else {
@@ -447,7 +505,7 @@ export function PlayerController() {
       mass={1}
       userData={{ type: 'player' }}
     >
-      <BallCollider args={[PLAYER_RADIUS]} />
+      <BallCollider args={[PLAYER_RADIUS]} friction={0} restitution={0} />
 
       {/* Player orb group — Y=0.6 so the sphere (r=0.6) hovers just above the floor */}
       <group name="player" frustumCulled={false} position={[0, 0.6, 0]}>

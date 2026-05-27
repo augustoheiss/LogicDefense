@@ -92,7 +92,7 @@ export function MathChallenge() {
             outlineWidth={0.05}
             outlineColor="#000000"
           >
-            ▼ PISE NA RESPOSTA CORRETA ▼
+            ▼ CLIQUE OU PISE NA RESPOSTA ▼
             <meshBasicMaterial
               attach="material"
               color="#ffd700"
@@ -194,7 +194,7 @@ interface AnswerPadProps {
   showResult: boolean
 }
 
-function AnswerPad({ label, isCorrect, position, zoneWorldPos, disabled, showResult }: AnswerPadProps) {
+function AnswerPad({ label, isCorrect, position, disabled, showResult }: AnswerPadProps) {
   const meshRef = useRef<THREE.Mesh>(null)
   const submittedRef = useRef(false)
 
@@ -236,17 +236,28 @@ function AnswerPad({ label, isCorrect, position, zoneWorldPos, disabled, showRes
     }, 0)
   }, [disabled, isCorrect])
 
-  // ── MOBILE FIX: Tap-to-walk onto answer pad ──
-  // Stops propagation (so Arena doesn't fire a competing move) AND
-  // explicitly commands the player to walk toward this pad's world position.
+  // ── CLICK/TAP: Instant answer submission ──
+  // Clicking the pad directly submits the answer (bypasses walking).
+  // Triple safety: submittedRef + disabled + store's mathAnswered guard.
   const handlePadTap = useCallback((e: ThreeEvent<PointerEvent>) => {
     e.stopPropagation()
-    if (disabled) return
-    // Compute world position: parent group offset (zoneWorldPos) + local pad offset
-    const worldX = zoneWorldPos[0] + position[0]
-    const worldZ = zoneWorldPos[2] + position[2]
-    useGameStore.getState().setMoveTarget({ type: 'point', x: worldX, z: worldZ })
-  }, [disabled, zoneWorldPos, position])
+    if (disabled || submittedRef.current) return
+    submittedRef.current = true
+    document.body.style.cursor = 'auto'
+    setTimeout(() => {
+      useGameStore.getState().submitAnswer(isCorrect)
+    }, 0)
+  }, [disabled, isCorrect])
+
+  // ── Cursor feedback (desktop) ──
+  const handlePointerOver = useCallback((e: ThreeEvent<PointerEvent>) => {
+    e.stopPropagation()
+    if (!disabled) document.body.style.cursor = 'pointer'
+  }, [disabled])
+
+  const handlePointerOut = useCallback(() => {
+    document.body.style.cursor = 'auto'
+  }, [])
 
   // Label colors
   const labelColor = showResult ? (isCorrect ? '#00ff88' : '#ff4444') : '#ffffff'
@@ -265,11 +276,13 @@ function AnswerPad({ label, isCorrect, position, zoneWorldPos, disabled, showRes
         />
       </RigidBody>
 
-      {/* Tap hitbox — r=1.5 covers the visual pad without overlapping neighbors
+      {/* Tap/click hitbox — r=1.5 covers the visual pad without overlapping neighbors
           (pad spacing = 5 units, so r=1.5 leaves 2 units of gap). */}
       <mesh
         position={[0, 1.0, 0]}
         onPointerDown={handlePadTap}
+        onPointerOver={handlePointerOver}
+        onPointerOut={handlePointerOut}
       >
         <cylinderGeometry args={[1.5, 1.5, 1, 16]} />
         <meshBasicMaterial transparent opacity={0} depthWrite={false} />

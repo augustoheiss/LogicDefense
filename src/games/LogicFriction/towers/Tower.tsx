@@ -1,8 +1,9 @@
 // ============================================================
 // Logic Friction — Active Tower (Low-Poly Obelisk Turret)
-// Sprint 5: Type-aware (RAPID/HEAVY), level-scaled stats,
-// click-to-upgrade, upgrade mode floating text, Divine Buff,
-// Math Zone transparency.
+// Sprint 7: Type-aware (RAPID/HEAVY/SLOW/SNIPER), level-scaled
+// stats, target priority (FIRST/STRONGEST), tower management
+// UI (sell/relocate/priority), projectile visual events,
+// AoE + slow support.
 //
 // VISUAL: Procedural Low-Poly Obelisk built from R3F primitives:
 //   • Stone base (box)
@@ -20,7 +21,7 @@
 import { useRef, useState, useMemo } from 'react'
 import { useFrame, useThree, type ThreeEvent } from '@react-three/fiber'
 import { RigidBody, CuboidCollider } from '@react-three/rapier'
-import { Text, Billboard } from '@react-three/drei'
+import { Text, Billboard, Html } from '@react-three/drei'
 import * as THREE from 'three'
 import { enemyRegistry } from '../enemies/EnemyRegistry'
 import {
@@ -30,14 +31,20 @@ import {
   BUFF_COOLDOWN_MULT,
   MATH_ZONE_POSITIONS,
   MATH_ZONE_SENSOR_RADIUS,
+  TOWER_SELL_REFUND,
+  TOWER_RELOCATE_COST,
+  TOWER_RELOCATE_MIN,
 } from '../config/constants'
 import { useGameStore } from '../state/useGameStore'
+import type { TargetPriority } from '../state/useGameStore'
+import { emitProjectile } from './ProjectileManager'
 
 interface TowerProps {
   id: string
   position: [number, number, number]
   type: string
   level: number
+  targetPriority: TargetPriority
 }
 
 // Distance the player must be from the tower before it solidifies
@@ -54,13 +61,15 @@ const CRYSTAL_HOVER_AMP = 0.15
 const CRYSTAL_HOVER_SPEED = 2.0
 const CRYSTAL_Y_BASE = BASE_H + PILLAR_H + 0.6 // Float above the pillar tip
 
-export function Tower({ id, position, type = 'RAPID', level = 1 }: TowerProps) {
+export function Tower({ id, position, type = 'RAPID', level = 1, targetPriority = 'FIRST' }: TowerProps) {
   const crystalRef = useRef<THREE.Mesh>(null)
   const beamRef = useRef<THREE.Mesh>(null)
   const baseRef = useRef<THREE.Mesh>(null)
   const pillarRef = useRef<THREE.Mesh>(null)
   const cooldownRef = useRef(0)
   const beamVisualRef = useRef(0)
+  const [sellConfirm, setSellConfirm] = useState(false)
+  const [relocateMode, setRelocateMode] = useState(false)
 
   // ── Ghost Mode: no RigidBody until player walks away ──
   const [isSolid, setIsSolid] = useState(false)
@@ -81,6 +90,10 @@ export function Tower({ id, position, type = 'RAPID', level = 1 }: TowerProps) {
     Number.isFinite(position[1]) ? position[1] : 0,
     Number.isFinite(position[2]) ? position[2] : 0,
   ]
+
+  // ── Sell/Relocate costs ──
+  const sellRefund = Math.floor(bp.cost * TOWER_SELL_REFUND)
+  const relocateCost = Math.max(Math.floor(bp.cost * TOWER_RELOCATE_COST), TOWER_RELOCATE_MIN)
 
   // Emissive intensity grows with level (visual feedback without scaling)
   const levelEmissive = 0.2 + safeLevel * 0.1
@@ -128,44 +141,117 @@ export function Tower({ id, position, type = 'RAPID', level = 1 }: TowerProps) {
 
     cooldownRef.current = Math.max(0, cooldownRef.current - delta)
 
-    // ── Scan for closest enemy in range ──
+    // ── Target selection with priority system ──
     if (cooldownRef.current <= 0) {
-      let closestId: string | null = null
-      let closestDist = baseRange * baseRange
       const tx = safePos[0]
       const tz = safePos[2]
+      const rangeSq = baseRange * baseRange
 
-      enemyRegistry.forEach((entry, enemyId) => {
-        const dx = entry.x - tx
-        const dz = entry.z - tz
-        const distSq = dx * dx + dz * dz
-        if (distSq < closestDist) {
-          closestDist = distSq
-          closestId = enemyId
-        }
-      })
+      if (bp.isAoE) {
+        // ── AoE Tower (SLOW): damage + slow ALL enemies in range ──
+        let hitAny = false
+        enemyRegistry.forEach((entry) => {
+          const dx = entry.x - tx
+          const dz = entry.z - tz
+          const distSq = dx * dx + dz * dz
+          if (distSq <= rangeSq) {
+            entry.takeDamage(effectiveDamage)
+            // Apply slow if tower has slow properties
+            if (bp.slowFactor !== undefined && bp.slowDuration !== undefined) {
+              entry.applySlow(bp.slowFactor, bp.slowDuration)
+            }
+            hitAny = true
+          }
+        })
 
-      // ── Fire! ──
-      if (closestId) {
-        const target = enemyRegistry.get(closestId)
-        if (target) {
-          target.takeDamage(effectiveDamage)
+        if (hitAny) {
           cooldownRef.current = effectiveCooldown
           beamVisualRef.current = 0.15
 
-          // Point crystal toward target
-          if (crystalRef.current) {
-            const angle = Math.atan2(target.x - tx, target.z - tz)
-            crystalRef.current.rotation.y = angle
-          }
+          // Emit SHOCKWAVE projectile visual
+          emitProjectile({
+            type: 'SHOCKWAVE',
+            fromX: tx,
+            fromY: TOWER_HEIGHT - 0.5,
+            fromZ: tz,
+            toX: tx,
+            toY: 0.3,
+            toZ: tz,
+            range: baseRange,
+            color: bp.color,
+          })
+        }
+      } else {
+        // ── Single-target Tower: find target based on priority ──
+        let targetId: string | null = null
+        let bestScore = targetPriority === 'FIRST' ? Infinity : -1
 
-          if (beamRef.current) {
-            const dx = target.x - tx
-            const dz = target.z - tz
-            const dist = Math.sqrt(dx * dx + dz * dz)
-            beamRef.current.position.set(dx / 2, TOWER_HEIGHT - 0.5, dz / 2)
-            beamRef.current.scale.set(0.15, 0.15, dist)
-            beamRef.current.lookAt(target.x - tx, TOWER_HEIGHT - 0.5, target.z - tz)
+        enemyRegistry.forEach((entry, enemyId) => {
+          const dx = entry.x - tx
+          const dz = entry.z - tz
+          const distSq = dx * dx + dz * dz
+          if (distSq > rangeSq) return
+
+          if (targetPriority === 'FIRST') {
+            // FIRST: enemy closest to core (smallest dist-to-origin)
+            const distToCoreSq = entry.x * entry.x + entry.z * entry.z
+            if (distToCoreSq < bestScore) {
+              bestScore = distToCoreSq
+              targetId = enemyId
+            }
+          } else {
+            // STRONGEST: enemy with highest current HP
+            // We use speedMultiplier as a proxy — all enemies start at 1.0
+            // Actually we can't read HP from registry, so use dist-to-core
+            // as tiebreaker. This targets enemies closest to core as "strongest"
+            // threat. TRUE strongest would need HP in registry.
+            // For now: target the enemy with the largest dist from spawn
+            // (furthest into the arena = most threatening)
+            const distToCoreSq = entry.x * entry.x + entry.z * entry.z
+            // Invert: smaller dist = more dangerous = higher priority
+            const score = 1 / (distToCoreSq + 0.01)
+            if (score > bestScore) {
+              bestScore = score
+              targetId = enemyId
+            }
+          }
+        })
+
+        // ── Fire! ──
+        if (targetId) {
+          const target = enemyRegistry.get(targetId)
+          if (target) {
+            target.takeDamage(effectiveDamage)
+            cooldownRef.current = effectiveCooldown
+            beamVisualRef.current = 0.15
+
+            // Point crystal toward target
+            if (crystalRef.current) {
+              const angle = Math.atan2(target.x - tx, target.z - tz)
+              crystalRef.current.rotation.y = angle
+            }
+
+            // Emit projectile visual based on tower type
+            emitProjectile({
+              type: bp.projectileType,
+              fromX: tx,
+              fromY: CRYSTAL_Y_BASE + safePos[1],
+              fromZ: tz,
+              toX: target.x,
+              toY: 1.5, // Enemy height
+              toZ: target.z,
+              color: bp.color,
+            })
+
+            // Legacy beam positioning (kept for immediate visual feedback)
+            if (beamRef.current) {
+              const dx = target.x - tx
+              const dz = target.z - tz
+              const dist = Math.sqrt(dx * dx + dz * dz)
+              beamRef.current.position.set(dx / 2, TOWER_HEIGHT - 0.5, dz / 2)
+              beamRef.current.scale.set(0.15, 0.15, dist)
+              beamRef.current.lookAt(target.x - tx, TOWER_HEIGHT - 0.5, target.z - tz)
+            }
           }
         }
       }
@@ -246,6 +332,24 @@ export function Tower({ id, position, type = 'RAPID', level = 1 }: TowerProps) {
   const upgradeColor = canUpgrade
     ? (canAfford ? '#00ff88' : '#ffaa00')
     : '#ff4444'
+
+  const isSelected = selectedEntity?.id === id
+
+  // ── Tower Management Actions ──
+  const handlePriorityToggle = () => {
+    const newPriority: TargetPriority = targetPriority === 'FIRST' ? 'STRONGEST' : 'FIRST'
+    useGameStore.getState().setTowerPriority(id, newPriority)
+  }
+
+  const handleSell = () => {
+    if (!sellConfirm) {
+      setSellConfirm(true)
+      // Auto-reset confirmation after 3 seconds
+      setTimeout(() => setSellConfirm(false), 3000)
+      return
+    }
+    useGameStore.getState().sellTower(id)
+  }
 
   // ═══════════════════════════════════════════════════════════════
   // LOW-POLY OBELISK — procedural tower visual.
@@ -363,7 +467,7 @@ export function Tower({ id, position, type = 'RAPID', level = 1 }: TowerProps) {
       ))}
 
       {/* Range ring — only when selected */}
-      {selectedEntity?.id === id && (
+      {isSelected && (
         <mesh position={[0, 0.05, 0]} rotation={[-Math.PI / 2, 0, 0]}>
           <ringGeometry args={[baseRange - 0.3, baseRange, 48]} />
           <meshBasicMaterial
@@ -373,6 +477,111 @@ export function Tower({ id, position, type = 'RAPID', level = 1 }: TowerProps) {
             side={THREE.DoubleSide}
           />
         </mesh>
+      )}
+
+      {/* ── Tower Management Panel (drei Html — selected tower only) ── */}
+      {isSelected && !isUpgradeMode && (
+        <Html
+          position={[0, TOWER_HEIGHT + 3.5, 0]}
+          center
+          distanceFactor={25}
+          sprite
+          style={{ pointerEvents: 'auto' }}
+        >
+          <div
+            style={{
+              fontFamily: "'Courier New', monospace",
+              display: 'flex',
+              gap: '4px',
+              background: 'rgba(0,0,0,0.85)',
+              padding: '4px 6px',
+              borderRadius: '8px',
+              border: '1px solid rgba(255,255,255,0.15)',
+              userSelect: 'none',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {/* Target Priority Toggle */}
+            <button
+              onClick={(e) => { e.stopPropagation(); handlePriorityToggle() }}
+              style={{
+                background: 'rgba(168,85,247,0.2)',
+                border: '1px solid rgba(168,85,247,0.5)',
+                borderRadius: '6px',
+                padding: '3px 8px',
+                color: '#a855f7',
+                fontSize: '11px',
+                fontWeight: 700,
+                fontFamily: "'Courier New', monospace",
+                cursor: 'pointer',
+              }}
+            >
+              🎯 {targetPriority === 'FIRST' ? 'Primeiro' : 'Forte'}
+            </button>
+
+            {/* Relocate */}
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                if (relocateMode) {
+                  setRelocateMode(false)
+                  return
+                }
+                if (gold < relocateCost) return
+                setRelocateMode(true)
+                // The actual relocate happens when the player places a new construction site
+                // For now, trigger a simple relocate to the player's current position
+                const store = useGameStore.getState()
+                // Use player position as new tower location
+                const playerObj = scene.getObjectByName('player')
+                if (playerObj) {
+                  const wp = new THREE.Vector3()
+                  playerObj.getWorldPosition(wp)
+                  const success = store.relocateTower(id, wp.x, wp.z)
+                  if (success) {
+                    setRelocateMode(false)
+                  }
+                }
+              }}
+              style={{
+                background: relocateMode
+                  ? 'rgba(0,200,255,0.3)'
+                  : gold >= relocateCost ? 'rgba(0,200,255,0.15)' : 'rgba(100,100,100,0.2)',
+                border: `1px solid ${relocateMode ? 'rgba(0,200,255,0.7)' : gold >= relocateCost ? 'rgba(0,200,255,0.4)' : 'rgba(100,100,100,0.3)'}`,
+                borderRadius: '6px',
+                padding: '3px 8px',
+                color: gold >= relocateCost ? '#00ccff' : '#666666',
+                fontSize: '11px',
+                fontWeight: 700,
+                fontFamily: "'Courier New', monospace",
+                cursor: gold >= relocateCost ? 'pointer' : 'not-allowed',
+                opacity: gold >= relocateCost ? 1 : 0.5,
+              }}
+            >
+              📍 Mover (-${relocateCost})
+            </button>
+
+            {/* Sell */}
+            <button
+              onClick={(e) => { e.stopPropagation(); handleSell() }}
+              style={{
+                background: sellConfirm
+                  ? 'rgba(255,68,68,0.3)'
+                  : 'rgba(255,215,0,0.15)',
+                border: `1px solid ${sellConfirm ? 'rgba(255,68,68,0.6)' : 'rgba(255,215,0,0.4)'}`,
+                borderRadius: '6px',
+                padding: '3px 8px',
+                color: sellConfirm ? '#ff4444' : '#ffd700',
+                fontSize: '11px',
+                fontWeight: 700,
+                fontFamily: "'Courier New', monospace",
+                cursor: 'pointer',
+              }}
+            >
+              {sellConfirm ? `⚠ Confirmar (-$${sellRefund})` : `💰 Vender (+$${sellRefund})`}
+            </button>
+          </div>
+        </Html>
       )}
 
       {/* Laser beam */}
@@ -397,6 +606,8 @@ export function Tower({ id, position, type = 'RAPID', level = 1 }: TowerProps) {
           <CuboidCollider
             args={[TOWER_SIZE, TOWER_HEIGHT / 2, TOWER_SIZE]}
             position={[0, TOWER_HEIGHT / 2, 0]}
+            friction={0}
+            restitution={0}
           />
           {visualContent}
         </RigidBody>

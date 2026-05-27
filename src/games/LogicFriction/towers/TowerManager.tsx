@@ -1,11 +1,13 @@
 // ============================================================
 // Logic Friction — Tower Manager
-// Sprint 5: Maps constructionSites (with type) and towers
-// (with type + level) to their respective 3D components.
+// Sprint 7: Maps constructionSites (with type) and towers
+// (with type + level + targetPriority) to their respective 3D
+// components. Includes shared ProjectileManager.
 // ============================================================
 import { useGameStore } from '../state/useGameStore'
 import { ConstructionSite } from './ConstructionSite'
 import { Tower } from './Tower'
+import { ProjectileManager } from './ProjectileManager'
 
 export function TowerManager() {
   const constructionSites = useGameStore(s => s.constructionSites)
@@ -28,8 +30,10 @@ export function TowerManager() {
           position={[tower.x, 0, tower.z]}
           type={tower.type}
           level={tower.level}
+          targetPriority={tower.targetPriority}
         />
       ))}
+      <ProjectileManager />
     </>
   )
 }

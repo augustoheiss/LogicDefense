@@ -96,23 +96,64 @@ export function isWalkable(
     return false;
   }
 
-  // 2. Core exclusion zone
-  if (distFromOriginSq < CORE_EXCLUSION_RADIUS * CORE_EXCLUSION_RADIUS) {
-    return false;
-  }
+  // 2. Core exclusion zone — DISABLED.
+  // The Core's physics collider is a sensor (phantom), so the player
+  // can physically walk through it. Blocking A* here causes jitter
+  // when clicking near (0,0).
+  // if (distFromOriginSq < CORE_EXCLUSION_RADIUS * CORE_EXCLUSION_RADIUS) {
+  //   return false;
+  // }
 
-  // 3. Obstacle collision — snap each obstacle to grid and check 3×3 area
-  //    (1-cell radius buffer prevents player RigidBody from snagging on corners)
+  // 3. Obstacle collision — exact 1×1 grid cell match.
+  //    The player's physics BallCollider handles wall sliding naturally;
+  //    grid-level padding just blocks valid corridors.
   for (let i = 0; i < obstacles.length; i++) {
     const obs = obstacles[i];
     const ogx = Math.round(obs.x / CELL_SIZE);
     const ogz = Math.round(obs.z / CELL_SIZE);
-    if (Math.abs(ogx - gx) <= 1 && Math.abs(ogz - gz) <= 1) {
+    if (ogx === gx && ogz === gz) {
       return false;
     }
   }
 
   return true;
+}
+
+/**
+ * Find the nearest walkable grid cell to (gx, gz) via spiral search.
+ * Returns the snapped grid coords, or null if nothing found within radius.
+ */
+export function snapToWalkable(
+  gx: number,
+  gz: number,
+  obstacles: Array<{ x: number; z: number }>,
+  maxRadius = 5,
+): [number, number] | null {
+  // Check the cell itself first
+  if (isWalkable(gx, gz, obstacles)) return [gx, gz];
+
+  // Spiral outward
+  for (let r = 1; r <= maxRadius; r++) {
+    // Scan the ring at distance r — prefer cells closest to original
+    let bestCell: [number, number] | null = null;
+    let bestDistSq = Infinity;
+    for (let dx = -r; dx <= r; dx++) {
+      for (let dz = -r; dz <= r; dz++) {
+        if (Math.abs(dx) !== r && Math.abs(dz) !== r) continue; // Only ring
+        const cx = gx + dx;
+        const cz = gz + dz;
+        if (isWalkable(cx, cz, obstacles)) {
+          const distSq = dx * dx + dz * dz;
+          if (distSq < bestDistSq) {
+            bestDistSq = distSq;
+            bestCell = [cx, cz];
+          }
+        }
+      }
+    }
+    if (bestCell) return bestCell;
+  }
+  return null;
 }
 
 // ---------------------------------------------------------------------------
@@ -236,10 +277,20 @@ export function findPath(
     return [];
   }
 
-  // If the goal cell itself is not walkable, bail out early
+  // If the goal cell itself is not walkable, snap to nearest walkable neighbor
+  let finalGx = egx;
+  let finalGz = egz;
   if (!isWalkable(egx, egz, obstacles)) {
-    return null;
+    const snapped = snapToWalkable(egx, egz, obstacles);
+    if (!snapped) return null; // Truly unreachable
+    finalGx = snapped[0];
+    finalGz = snapped[1];
+    // If snapped goal equals start, we're already there
+    if (sgx === finalGx && sgz === finalGz) return [];
   }
+
+  // Update endKey to use snapped goal
+  const endKey = key(finalGx, finalGz);
 
   // ----- Data structures -----
 
@@ -251,12 +302,11 @@ export function findPath(
   const closedSet = new Set<string>();
 
   const startKey = key(sgx, sgz);
-  const endKey = key(egx, egz);
 
   gScore.set(startKey, 0);
 
   const openHeap = new MinHeap();
-  openHeap.push({ gx: sgx, gz: sgz, f: heuristic(sgx, sgz, egx, egz) });
+  openHeap.push({ gx: sgx, gz: sgz, f: heuristic(sgx, sgz, finalGx, finalGz) });
 
   let iterations = 0;
 
@@ -308,7 +358,7 @@ export function findPath(
       gScore.set(nk, tentativeG);
       cameFrom.set(nk, ck);
 
-      const f = tentativeG + heuristic(nx, nz, egx, egz);
+      const f = tentativeG + heuristic(nx, nz, finalGx, finalGz);
       openHeap.push({ gx: nx, gz: nz, f });
     }
   }

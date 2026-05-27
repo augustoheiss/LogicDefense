@@ -385,6 +385,63 @@ export function GameHUD({ onStart, onRestart }: GameHUDProps) {
       {/* Wave Clear — auto-advance countdown banner */}
       {phase === 'WAVE_CLEAR' && <WaveCountdownBanner waveNumber={waveNumber} />}
 
+      {/* ── Overdrive: Call Next Wave Early ── */}
+      {(phase === 'PLAYING' || phase === 'WAVE_CLEAR') && (
+        <div style={{
+          position: 'absolute',
+          bottom: 16,
+          right: 16,
+          zIndex: 100,
+          pointerEvents: 'auto',
+        }}>
+          <style>{`
+            @keyframes lf-overdrive-pulse {
+              0%, 100% { box-shadow: 0 0 8px rgba(255,100,0,0.3), inset 0 0 8px rgba(255,100,0,0.05); }
+              50% { box-shadow: 0 0 20px rgba(255,100,0,0.6), inset 0 0 12px rgba(255,100,0,0.1); }
+            }
+          `}</style>
+          <button
+            id="overdrive-call-wave"
+            onClick={() => useGameStore.getState().forceNextWave()}
+            style={{
+              background: 'linear-gradient(135deg, rgba(255,100,0,0.25), rgba(255,30,30,0.25))',
+              border: '2px solid rgba(255,100,0,0.6)',
+              borderRadius: 12,
+              padding: '10px 20px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 10,
+              fontFamily: "'Courier New', monospace",
+              animation: 'lf-overdrive-pulse 2s ease-in-out infinite',
+              transition: 'all 0.2s ease',
+            }}
+          >
+            <span style={{
+              fontSize: 22,
+              filter: 'drop-shadow(0 0 4px rgba(255,100,0,0.6))',
+            }}>💀⏩</span>
+            <div style={{ textAlign: 'left' }}>
+              <div style={{
+                fontSize: 9,
+                color: '#ff6600',
+                textTransform: 'uppercase',
+                letterSpacing: '0.12em',
+                fontWeight: 800,
+              }}>OVERDRIVE</div>
+              <div style={{
+                fontSize: 13,
+                color: '#ff4444',
+                fontWeight: 900,
+                letterSpacing: '0.05em',
+              }}>
+                {`>> Onda ${waveNumber + 1} (Perigo!)`}
+              </div>
+            </div>
+          </button>
+        </div>
+      )}
+
       {/* Controls hint at bottom */}
       <ControlsHint />
     </>

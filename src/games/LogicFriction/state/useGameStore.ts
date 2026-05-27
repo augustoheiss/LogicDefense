@@ -1,7 +1,9 @@
 // ============================================================
 // Logic Friction — Zustand Game Store
-// Sprint 5: Tower Types + Levels, Core Level, Upgrade Mode,
-//           Construction Site expiry, Math + Divine Buff
+// Sprint 6: Tower Types + Levels, Core Level, Upgrade Mode,
+//           Construction Site expiry, Math + Divine Buff,
+//           Tower Management (sell/relocate/priority),
+//           Pathfinding Grid integration
 // ============================================================
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
@@ -14,18 +16,26 @@ import {
   WAVE_BASE_COUNT,
   WAVE_COUNT_SCALE,
   ENEMY_KILL_GOLD,
+  BOSS_KILL_GOLD,
+  BOSS_BASE_COUNT,
+  BOSS_COUNT_INCREMENT,
   TOWER_BLUEPRINTS,
   TOWER_BLUEPRINT_KEYS,
   STARTING_GOLD,
   MAX_TOWERS,
+  TOWER_SELL_REFUND,
+  TOWER_RELOCATE_COST,
+  TOWER_RELOCATE_MIN,
 } from '../config/constants'
 import type { MathZoneDir } from '../config/constants'
 import { generateFrictionProblem, type FrictionProblem } from '../math/mathBridge'
 import { enemyRegistry } from '../enemies/EnemyRegistry'
+import { rebuildObstacles, resetGrid } from '../enemies/pathfindingGrid'
 
 // ── Types ───────────────────────────────────────────────────────────────────────
 export type GamePhase = 'MENU' | 'PLAYING' | 'WAVE_CLEAR' | 'GAME_OVER'
 export type ActionMode = 'MOVE' | 'BUILD'
+export type TargetPriority = 'FIRST' | 'STRONGEST'
 
 /** MOBA-style move target: static point or dynamic entity chase */
 export type MoveTarget =
@@ -53,6 +63,7 @@ export interface TowerData {
   z: number
   type: string   // Blueprint key
   level: number  // Starts at 1, increments on upgrade
+  targetPriority: TargetPriority  // 'FIRST' = closest to core, 'STRONGEST' = highest HP
 }
 
 export interface SelectedEntity {
@@ -93,6 +104,9 @@ export interface GameStore {
   enemiesAlive: number
   enemiesToSpawn: number
   totalWaveEnemies: number
+  isBossWave: boolean
+  bossesToSpawn: number
+  trojanSpawns: Array<{ x: number; z: number; count: number }>
 
   // ── Towers & Construction ──
   selectedBlueprint: string  // Key in TOWER_BLUEPRINTS
@@ -127,6 +141,7 @@ export interface GameStore {
   // ── Actions ──
   startGame: () => void
   nextWave: () => void
+  forceNextWave: () => void
   gameOver: () => void
 
   // Core
@@ -138,7 +153,10 @@ export interface GameStore {
 
   // Enemies
   enemySpawned: () => void
-  enemyKilled: () => void
+  enemyKilled: (isBoss?: boolean) => void
+  bossSpawned: () => void
+  queueTrojanSpawn: (x: number, z: number) => void
+  consumeTrojanSpawn: () => { x: number; z: number; count: number } | null
 
   // Towers
   setSelectedBlueprint: (type: string) => void
@@ -147,6 +165,9 @@ export interface GameStore {
   removeConstructionSite: (id: string) => void
   fundTower: (siteId: string) => void
   upgradeTower: (id: string) => void
+  setTowerPriority: (id: string, priority: TargetPriority) => void
+  relocateTower: (id: string, newX: number, newZ: number) => boolean
+  sellTower: (id: string) => void
 
   // Math
   submitAnswer: (isCorrect: boolean) => void
@@ -212,6 +233,9 @@ const initialState = {
   enemiesAlive: 0,
   enemiesToSpawn: 0,
   totalWaveEnemies: 0,
+  isBossWave: false,
+  bossesToSpawn: 0,
+  trojanSpawns: [] as Array<{ x: number; z: number; count: number }>,
   selectedBlueprint: TOWER_BLUEPRINT_KEYS[0],
   isUpgradeMode: false,
   constructionSites: [] as SiteData[],
@@ -250,6 +274,9 @@ export const useGameStore = create<GameStore>()(
       gold: STARTING_GOLD,
       enemiesToSpawn: WAVE_BASE_COUNT,
       totalWaveEnemies: WAVE_BASE_COUNT,
+      isBossWave: false,
+      bossesToSpawn: 0,
+      trojanSpawns: [],
       currentProblem: problem,
       isBuffActive: false,
       mathAnswered: false,
@@ -262,23 +289,97 @@ export const useGameStore = create<GameStore>()(
   nextWave: () => {
     clearAutoWaveTimer()
     const wave = get().waveNumber + 1
-    const count = WAVE_BASE_COUNT + (wave - 1) * WAVE_COUNT_SCALE
+    const isBoss = wave % 10 === 0
     const problem = generateFrictionProblem(wave)
     const newDir = randomDirection(get().mathZonePosition)
-    set({
-      waveNumber: wave,
-      enemiesToSpawn: count,
-      totalWaveEnemies: count,
-      enemiesAlive: 0,
-      phase: 'PLAYING',
-      currentProblem: problem,
-      isBuffActive: false,
-      mathAnswered: false,
-      mathZonePosition: newDir,
-      insideMathZone: false,
-      isUpgradeMode: false,
-      selectedEntity: null,
-    })
+
+    if (isBoss) {
+      // Boss wave: spawn ONLY bosses, no normal enemies
+      const bossCount = BOSS_BASE_COUNT + ((wave / 10) - 1) * BOSS_COUNT_INCREMENT
+      set({
+        waveNumber: wave,
+        enemiesToSpawn: 0,           // No normal enemies on boss waves
+        totalWaveEnemies: bossCount,
+        bossesToSpawn: bossCount,
+        isBossWave: true,
+        trojanSpawns: [],
+        enemiesAlive: 0,
+        phase: 'PLAYING',
+        currentProblem: problem,
+        isBuffActive: false,
+        mathAnswered: false,
+        mathZonePosition: newDir,
+        insideMathZone: false,
+        isUpgradeMode: false,
+        selectedEntity: null,
+      })
+    } else {
+      // Normal wave: standard scaling
+      const count = WAVE_BASE_COUNT + (wave - 1) * WAVE_COUNT_SCALE
+      set({
+        waveNumber: wave,
+        enemiesToSpawn: count,
+        totalWaveEnemies: count,
+        bossesToSpawn: 0,
+        isBossWave: false,
+        trojanSpawns: [],
+        enemiesAlive: 0,
+        phase: 'PLAYING',
+        currentProblem: problem,
+        isBuffActive: false,
+        mathAnswered: false,
+        mathZonePosition: newDir,
+        insideMathZone: false,
+        isUpgradeMode: false,
+        selectedEntity: null,
+      })
+    }
+  },
+
+  forceNextWave: () => {
+    const state = get()
+    // Only callable during PLAYING or WAVE_CLEAR
+    if (state.phase !== 'PLAYING' && state.phase !== 'WAVE_CLEAR') return
+
+    // Cancel any pending auto-wave timer to avoid double-trigger
+    clearAutoWaveTimer()
+
+    const wave = state.waveNumber + 1
+    const isBoss = wave % 10 === 0
+    const problem = generateFrictionProblem(wave)
+    const newDir = randomDirection(state.mathZonePosition)
+
+    if (isBoss) {
+      // Boss wave: ADD bosses to existing queue
+      const bossCount = BOSS_BASE_COUNT + ((wave / 10) - 1) * BOSS_COUNT_INCREMENT
+      set({
+        waveNumber: wave,
+        bossesToSpawn: state.bossesToSpawn + bossCount,
+        totalWaveEnemies: state.totalWaveEnemies + bossCount,
+        isBossWave: true,
+        phase: 'PLAYING',
+        currentProblem: problem,
+        mathZonePosition: newDir,
+        isBuffActive: false,
+        mathAnswered: false,
+        insideMathZone: false,
+      })
+    } else {
+      // Normal wave: ADD enemies to existing queue
+      const count = WAVE_BASE_COUNT + (wave - 1) * WAVE_COUNT_SCALE
+      set({
+        waveNumber: wave,
+        enemiesToSpawn: state.enemiesToSpawn + count,
+        totalWaveEnemies: state.totalWaveEnemies + count,
+        isBossWave: false,
+        phase: 'PLAYING',
+        currentProblem: problem,
+        mathZonePosition: newDir,
+        isBuffActive: false,
+        mathAnswered: false,
+        insideMathZone: false,
+      })
+    }
   },
 
   gameOver: () => {
@@ -337,21 +438,41 @@ export const useGameStore = create<GameStore>()(
     enemiesToSpawn: Math.max(0, s.enemiesToSpawn - 1),
   })),
 
-  enemyKilled: () => {
+  bossSpawned: () => set(s => ({
+    enemiesAlive: s.enemiesAlive + 1,
+    bossesToSpawn: Math.max(0, s.bossesToSpawn - 1),
+  })),
+
+  queueTrojanSpawn: (x, z) => {
+    set(s => ({
+      trojanSpawns: [...s.trojanSpawns, { x, z, count: 10 }],
+    }))
+  },
+
+  consumeTrojanSpawn: () => {
+    const spawns = get().trojanSpawns
+    if (spawns.length === 0) return null
+    const [first, ...rest] = spawns
+    set({ trojanSpawns: rest })
+    return first
+  },
+
+  enemyKilled: (isBoss = false) => {
+    const goldReward = isBoss ? BOSS_KILL_GOLD : ENEMY_KILL_GOLD
     const newAlive = Math.max(0, get().enemiesAlive - 1)
-    const newGold = get().gold + ENEMY_KILL_GOLD
+    const newGold = get().gold + goldReward
     set({ enemiesAlive: newAlive, gold: newGold })
 
     // Double-check: the enemyRegistry is the ground truth for physically
     // alive enemies. The Zustand counter can desync from React component
     // lifecycle due to batching. Only transition to WAVE_CLEAR when BOTH
     // the counter AND the registry agree that everything is dead.
-    if (newAlive <= 0 && get().enemiesToSpawn <= 0) {
+    if (newAlive <= 0 && get().enemiesToSpawn <= 0 && get().bossesToSpawn <= 0 && get().trojanSpawns.length <= 0) {
       // Defer slightly to let the dying enemy unregister from the registry
       setTimeout(() => {
         const state = get()
         if (state.phase !== 'PLAYING') return // already transitioned
-        if (state.enemiesToSpawn > 0) return  // more spawns queued
+        if (state.enemiesToSpawn > 0 || state.bossesToSpawn > 0 || state.trojanSpawns.length > 0) return  // more spawns queued
 
         // Registry check: if enemies are still physically on the board, retry later
         if (enemyRegistry.size > 0) {
@@ -426,12 +547,16 @@ export const useGameStore = create<GameStore>()(
       z: safeZ,
       type: safeType,
       level: 1, // STRICT: always integer 1
+      targetPriority: 'FIRST',
     }
+    const updatedTowers = [...state.towers, tower]
     set({
       gold: state.gold - bp.cost,
       constructionSites: state.constructionSites.filter(s => s.id !== siteId),
-      towers: [...state.towers, tower],
+      towers: updatedTowers,
     })
+    // Rebuild pathfinding grid after tower placement
+    rebuildObstacles(updatedTowers)
   },
 
   // ── Tower Upgrade ──
@@ -456,6 +581,59 @@ export const useGameStore = create<GameStore>()(
         t.id === id ? { ...t, level: t.level + 1 } : t
       ),
     })
+  },
+
+  // ── Tower Target Priority ──
+  setTowerPriority: (id, priority) => {
+    set(s => ({
+      towers: s.towers.map(t =>
+        t.id === id ? { ...t, targetPriority: priority } : t
+      ),
+    }))
+  },
+
+  // ── Tower Relocate ──
+  // Cost: max(floor(blueprint.cost * 0.25), 15)
+  relocateTower: (id, newX, newZ) => {
+    const state = get()
+    const tower = state.towers.find(t => t.id === id)
+    if (!tower) return false
+
+    const bp = TOWER_BLUEPRINTS[tower.type]
+    if (!bp) return false
+
+    const cost = Math.max(Math.floor(bp.cost * TOWER_RELOCATE_COST), TOWER_RELOCATE_MIN)
+    if (state.gold < cost) return false
+
+    const updatedTowers = state.towers.map(t =>
+      t.id === id ? { ...t, x: newX, z: newZ } : t
+    )
+    set({
+      gold: state.gold - cost,
+      towers: updatedTowers,
+    })
+    rebuildObstacles(updatedTowers)
+    return true
+  },
+
+  // ── Tower Sell ──
+  // Refund: floor(blueprint.cost * 0.6)
+  sellTower: (id) => {
+    const state = get()
+    const tower = state.towers.find(t => t.id === id)
+    if (!tower) return
+
+    const bp = TOWER_BLUEPRINTS[tower.type]
+    if (!bp) return
+
+    const refund = Math.floor(bp.cost * TOWER_SELL_REFUND)
+    const updatedTowers = state.towers.filter(t => t.id !== id)
+    set({
+      gold: state.gold + refund,
+      towers: updatedTowers,
+      selectedEntity: null,  // Deselect after selling
+    })
+    rebuildObstacles(updatedTowers)
   },
 
   // ── Math — Submit Answer ──
@@ -518,6 +696,9 @@ export const useGameStore = create<GameStore>()(
       constructionSites: snapshot.constructionSites,
       enemiesToSpawn: WAVE_BASE_COUNT + (snapshot.waveNumber - 1) * WAVE_COUNT_SCALE,
       totalWaveEnemies: WAVE_BASE_COUNT + (snapshot.waveNumber - 1) * WAVE_COUNT_SCALE,
+      isBossWave: false,
+      bossesToSpawn: 0,
+      trojanSpawns: [],
       currentProblem: problem,
       mathZonePosition: dir,
       isPaused: false,
@@ -529,6 +710,7 @@ export const useGameStore = create<GameStore>()(
   reset: () => {
     clearRespawnTimer()
     clearAutoWaveTimer()
+    resetGrid()
     set(initialState)
   },
 }),
