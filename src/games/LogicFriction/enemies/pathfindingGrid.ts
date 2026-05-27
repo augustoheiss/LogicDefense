@@ -13,7 +13,7 @@
  * zone, then Enemy.tsx beelines the final segment.
  */
 
-import { CELL_SIZE, worldToGrid, gridToWorld } from '../player/pathfinding'
+import { CELL_SIZE, worldToGrid } from '../player/pathfinding'
 export { CELL_SIZE }
 
 // ---------------------------------------------------------------------------

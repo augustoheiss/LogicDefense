@@ -15,7 +15,6 @@
 export const CELL_SIZE = 2;
 
 const ARENA_RADIUS = 50;
-const CORE_EXCLUSION_RADIUS = 3.5;
 const MAX_ITERATIONS = 5000;
 const GRID_MIN = -25;
 const GRID_MAX = 25;
@@ -96,13 +95,7 @@ export function isWalkable(
     return false;
   }
 
-  // 2. Core exclusion zone — DISABLED.
-  // The Core's physics collider is a sensor (phantom), so the player
-  // can physically walk through it. Blocking A* here causes jitter
-  // when clicking near (0,0).
-  // if (distFromOriginSq < CORE_EXCLUSION_RADIUS * CORE_EXCLUSION_RADIUS) {
-  //   return false;
-  // }
+  // 2. Core is a sensor (phantom) — no exclusion zone for the player.
 
   // 3. Obstacle collision — exact 1×1 grid cell match.
   //    The player's physics BallCollider handles wall sliding naturally;
