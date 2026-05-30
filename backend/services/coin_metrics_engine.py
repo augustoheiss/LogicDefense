@@ -44,6 +44,43 @@ def _round2(n: float) -> float:
     """Round to 2 decimal places (matches TS Math.round(n * 100) / 100)."""
     return round(n * 100) / 100
 
+# ── Year-scoped expense allocation ──────────────────────────────────────────
+
+
+def _compute_year_expenses(expense_rows: list, year: int) -> float:
+    """
+    Year-scoped expense allocation with proper overlap logic.
+
+    - Point-in-time expenses (start == end): full value if date falls in year.
+    - Multi-period expenses: dailyRate × overlapDays with this year.
+    """
+    year_start = f"{year}-01-01"
+    year_end = f"{year}-12-31"
+    total = 0.0
+
+    for row in expense_rows:
+        if row.value <= 0:
+            continue
+        start = row.period_start or row.date
+        end = row.period_end or row.date
+
+        # No overlap with this year
+        if start > year_end or end < year_start:
+            continue
+
+        if start == end:
+            # Point-in-time expense — full value
+            total += row.value
+        else:
+            # Multi-period: prorate by overlap days
+            total_days = max(1, _calendar_day_span(start, end))
+            overlap_start = max(start, year_start)
+            overlap_end = min(end, year_end)
+            overlap_days = max(1, _calendar_day_span(overlap_start, overlap_end))
+            total += (row.value / total_days) * overlap_days
+
+    return _round2(total)
+
 
 # ── Period Distribution ──────────────────────────────────────────────────────
 
@@ -113,7 +150,6 @@ def compute_metrics(
     # ── Expense metrics — computed before the early-return guard ──────────
     expense_rows = [r for r in rows if r.entry_type == EntryType.EXPENSE]
     total_expenses = 0.0
-    annual_expenses = 0.0
 
     # Survival goal accumulators: track the global expense date span
     exp_earliest = ""
@@ -122,13 +158,9 @@ def compute_metrics(
     for row in expense_rows:
         total_expenses += row.value
 
-        # Annualize via daily rate × 365 (fixes multi-year expense inflation)
+        # Widen global expense span for survival goals
         exp_start = row.period_start or row.date
         exp_end = row.period_end or row.date
-        lifespan_days = max(1, _calendar_day_span(exp_start, exp_end))
-        annual_expenses += (row.value / lifespan_days) * 365
-
-        # Widen global expense span for survival goals
         if row.value > 0:
             if not exp_earliest or exp_start < exp_earliest:
                 exp_earliest = exp_start
@@ -136,7 +168,9 @@ def compute_metrics(
                 exp_latest = exp_end
 
     total_expenses = _round2(total_expenses)
-    annual_expenses = _round2(annual_expenses)
+    # annualExpenses = totalExpenses at global level;
+    # per-year breakdown lives in by_year[yr].year_expenses
+    annual_expenses = total_expenses
 
     # ── Survival / Break-Even Goals (always computed) ─────────────────────
     global_expense_day_span = (
@@ -191,33 +225,32 @@ def compute_metrics(
     # ── Accumulators ─────────────────────────────────────────────────────
     gross_total = 0.0
 
-    by_year_acc: dict[str, dict] = {}   # year_str → {gross, dates}
+    # byYear: {gross, dates[], months set, weeks set}
+    by_year_acc: dict[str, dict] = {}
     by_month_acc: dict[str, dict] = {}  # YYYY-MM → {gross, payments, weeks}
     by_week_acc: dict[str, float] = {}  # YYYY-Www → total
 
-    # ── Single-pass over active rows ─────────────────────────────────────
+    # ── Single-pass over active rows ───────────────────────────────────
     for row in active_rows:
         gross_total += row.value
 
-        # byYear: attribute to year of periodStart or payment date
-        effective_start = row.period_start or row.date
-        year_str = effective_start[:4]
-        if year_str not in by_year_acc:
-            by_year_acc[year_str] = {"gross": 0.0, "dates": []}
-        by_year_acc[year_str]["gross"] += row.value
-        by_year_acc[year_str]["dates"].append(effective_start)
-        if row.period_end:
-            end_year_str = row.period_end[:4]
-            if end_year_str == year_str:
-                by_year_acc[year_str]["dates"].append(row.period_end)
-
-        # byMonth + byWeek: distribute value across daily contributions
+        # Distribute value across daily contributions into year, month, week
         for contrib in row_contributions(row):
             c_year_str = contrib["date"][:4]
-            c_month_str = contrib["date"][5:7]
-            year_month = f"{c_year_str}-{c_month_str}"
+            year_month = contrib["date"][:7]
             iso_week = get_iso_week_key(contrib["date"])
 
+            # byYear
+            if c_year_str not in by_year_acc:
+                by_year_acc[c_year_str] = {
+                    "gross": 0.0, "dates": [], "months": set(), "weeks": set(),
+                }
+            by_year_acc[c_year_str]["gross"] += contrib["value"]
+            by_year_acc[c_year_str]["dates"].append(contrib["date"])
+            by_year_acc[c_year_str]["months"].add(year_month)
+            by_year_acc[c_year_str]["weeks"].add(iso_week)
+
+            # byMonth
             if year_month not in by_month_acc:
                 by_month_acc[year_month] = {
                     "gross": 0.0,
@@ -231,6 +264,7 @@ def compute_metrics(
             )
             by_month_acc[year_month]["weeks"].add(iso_week)
 
+            # byWeek
             by_week_acc[iso_week] = by_week_acc.get(iso_week, 0.0) + contrib["value"]
 
     # ── Global averages ──────────────────────────────────────────────────
@@ -242,14 +276,16 @@ def compute_metrics(
     # ── Per-year metrics ─────────────────────────────────────────────────
     by_year: dict[str, YearMetrics] = {}
     for yr, acc in by_year_acc.items():
-        sorted_dates = sorted(acc["dates"])
+        sorted_dates = sorted(set(acc["dates"]))
         span = max(1, _calendar_day_span(sorted_dates[0], sorted_dates[-1]))
         daily_avg = _round2(acc["gross"] / span)
+        year_num = int(yr)
         by_year[yr] = YearMetrics(
             grossAnnual=_round2(acc["gross"]),
+            yearExpenses=_compute_year_expenses(expense_rows, year_num),
             dailyAvg=daily_avg,
-            weeklyAvg=_round2(daily_avg * 7),
-            monthlyAvg=_round2(daily_avg * 30.44),
+            weeklyAvg=_round2(acc["gross"] / max(1, len(acc["weeks"]))),
+            monthlyAvg=_round2(acc["gross"] / max(1, len(acc["months"]))),
         )
 
     # ── Per-month metrics ────────────────────────────────────────────────

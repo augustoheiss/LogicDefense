@@ -136,8 +136,13 @@ export interface MonthMetrics {
 
 export interface YearMetrics {
   grossAnnual: number;
+  /** Year-scoped expenses: sum of expense values prorated to this year.
+   *  Point-in-time: full value. Multi-year: dailyRate × overlapDays. */
+  yearExpenses: number;
   dailyAvg: number;
+  /** grossAnnual / number of active weeks in this year */
   weeklyAvg: number;
+  /** grossAnnual / number of active months in this year */
   monthlyAvg: number;
 }
 
@@ -189,9 +194,8 @@ export interface TableMetrics {
    */
   totalExpenses: number;
   /**
-   * Annualised expense projection — each expense's value is divided by its
-   * lifespan in days, then multiplied by 365. Correctly handles multi-year
-   * expenses (e.g. 60-month financing) without inflating the annual figure.
+   * Global expense total — always equals totalExpenses.
+   * Per-year breakdowns live in byYear[year].yearExpenses.
    */
   annualExpenses: number;
   /**

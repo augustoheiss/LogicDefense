@@ -189,22 +189,48 @@ export function MetricsPanel({ metrics, dailyGoal, table, selectedMonth }: Metri
           />
         </div>
 
-        {/* ── Annual metrics for selected year ── */}
+        {/* ── Year-scoped metrics for selected year ── */}
         {yearMetrics && (
-          <div className="grid grid-cols-2 gap-3 mt-3">
-            <MetricCard
-              label={`Total Bruto Anual ${selectedYearStr}`}
-              value={fmt(yearMetrics.grossAnnual)}
-              fullValue={formatCurrencyFull(yearMetrics.grossAnnual)}
-              status="accent"
-              sub={`receitas de ${selectedYearStr}`}
-            />
-            <MetricCard
-              label="Média Anual"
-              value={fmt(metrics.globalAnnualAvg)}
-              fullValue={formatCurrencyFull(metrics.globalAnnualAvg)}
-              sub="diária × 365.25"
-            />
+          <div className="mt-3 space-y-2">
+            <h3 className="text-xs text-white/40 uppercase tracking-wider flex items-center gap-2">
+              <span className="w-4 h-px bg-white/20 inline-block" />
+              Métricas de {selectedYearStr}
+              <span className="flex-1 h-px bg-white/10 inline-block" />
+            </h3>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              <MetricCard
+                label={`Total Bruto ${selectedYearStr}`}
+                value={fmt(yearMetrics.grossAnnual)}
+                fullValue={formatCurrencyFull(yearMetrics.grossAnnual)}
+                status="accent"
+                sub={`receitas de ${selectedYearStr}`}
+              />
+              <MetricCard
+                label={`Custo Anual ${selectedYearStr}`}
+                value={fmt(yearMetrics.yearExpenses)}
+                fullValue={formatCurrencyFull(yearMetrics.yearExpenses)}
+                status={yearMetrics.yearExpenses > 0 ? 'warning' : 'default'}
+                sub="despesas alocadas ao ano"
+              />
+              <MetricCard
+                label="Média Diária"
+                value={fmt(yearMetrics.dailyAvg)}
+                fullValue={formatCurrencyFull(yearMetrics.dailyAvg)}
+                sub={`span do ano ${selectedYearStr}`}
+              />
+              <MetricCard
+                label="Média Semanal"
+                value={fmt(yearMetrics.weeklyAvg)}
+                fullValue={formatCurrencyFull(yearMetrics.weeklyAvg)}
+                sub="bruto ÷ semanas ativas"
+              />
+              <MetricCard
+                label="Média Mensal"
+                value={fmt(yearMetrics.monthlyAvg)}
+                fullValue={formatCurrencyFull(yearMetrics.monthlyAvg)}
+                sub="bruto ÷ meses ativos"
+              />
+            </div>
           </div>
         )}
 

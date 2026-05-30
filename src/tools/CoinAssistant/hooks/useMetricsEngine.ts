@@ -43,8 +43,7 @@ export function computeMetrics(
 
   // ── Expense metrics — computed before the early-return guard ───────────────
   const expenseRows = rows.filter((r) => r.entryType === 'expense');
-  let totalExpenses  = 0;
-  let annualExpenses = 0;
+  let totalExpenses = 0;
 
   // Survival goal accumulators: track the global expense date span
   let expEarliest = '';
@@ -53,20 +52,18 @@ export function computeMetrics(
   for (const row of expenseRows) {
     totalExpenses += row.value;
 
-    // Annualize via daily rate × 365 (fixes multi-year expense inflation)
+    // Widen global expense span for survival goals
     const expStart = row.periodStart || row.date;
     const expEnd   = row.periodEnd   || row.date;
-    const lifespanDays = Math.max(1, calendarDaySpan(expStart, expEnd));
-    annualExpenses += (row.value / lifespanDays) * 365;
-
-    // Widen global expense span for survival goals
     if (row.value > 0) {
       if (!expEarliest || expStart < expEarliest) expEarliest = expStart;
       if (!expLatest   || expEnd   > expLatest)   expLatest   = expEnd;
     }
   }
-  totalExpenses  = round2(totalExpenses);
-  annualExpenses = round2(annualExpenses);
+  totalExpenses = round2(totalExpenses);
+  // annualExpenses = totalExpenses at the global level;
+  // per-year breakdown lives in byYear[yr].yearExpenses
+  const annualExpenses = totalExpenses;
 
   // ── Survival / Break-Even Goals (always computed) ──────────────────────────
   const globalExpenseDaySpan = (expEarliest && expLatest)
@@ -111,7 +108,12 @@ export function computeMetrics(
   // ── Accumulators ─────────────────────────────────────────────────────────────
   let grossTotal = 0;
 
-  const byYearAcc: Record<string, { gross: number; dates: string[] }> = {};
+  const byYearAcc: Record<string, {
+    gross: number;
+    dates: string[];
+    months: Set<string>;
+    weeks: Set<string>;
+  }> = {};
 
   const byMonthAcc: Record<string, {
     gross: number;
@@ -122,30 +124,28 @@ export function computeMetrics(
   const byWeekAcc: Record<string, number> = {};
 
   // ── Single-pass over active rows ──────────────────────────────────────────────
-  // grossTotal and byYear always accumulate the full row.value (total earned).
-  // byMonth and byWeek use rowContributions() so that period entries are spread
-  // proportionally instead of landing as a lump sum on a single date.
+  // grossTotal accumulates full row.value (total earned).
+  // byYear, byMonth, byWeek all use rowContributions() so period entries are
+  // spread proportionally across their date span.
   for (const row of activeRows) {
-    const { date, value } = row;
-    grossTotal += value;
+    grossTotal += row.value;
 
-    // byYear: attribute to the year of periodStart (or payment date as fallback)
-    const effectiveStart = row.periodStart ?? date;
-    const [yearStr] = effectiveStart.split('-');
-    if (!byYearAcc[yearStr]) byYearAcc[yearStr] = { gross: 0, dates: [] };
-    byYearAcc[yearStr].gross += value;
-    byYearAcc[yearStr].dates.push(effectiveStart);
-    if (row.periodEnd) {
-      const [endYearStr] = row.periodEnd.split('-');
-      if (endYearStr === yearStr) byYearAcc[yearStr].dates.push(row.periodEnd);
-    }
-
-    // byMonth + byWeek: distribute value across daily contributions
+    // Distribute value across daily contributions into year, month, and week
     for (const contrib of rowContributions(row)) {
-      const [cYearStr, cMonthStr] = contrib.date.split('-');
-      const yearMonth = `${cYearStr}-${cMonthStr}`;
-      const isoWeek = getISOWeekKey(contrib.date);
+      const cYearStr  = contrib.date.slice(0, 4);
+      const yearMonth = contrib.date.slice(0, 7);
+      const isoWeek   = getISOWeekKey(contrib.date);
 
+      // byYear
+      if (!byYearAcc[cYearStr]) {
+        byYearAcc[cYearStr] = { gross: 0, dates: [], months: new Set(), weeks: new Set() };
+      }
+      byYearAcc[cYearStr].gross += contrib.value;
+      byYearAcc[cYearStr].dates.push(contrib.date);
+      byYearAcc[cYearStr].months.add(yearMonth);
+      byYearAcc[cYearStr].weeks.add(isoWeek);
+
+      // byMonth
       if (!byMonthAcc[yearMonth]) {
         byMonthAcc[yearMonth] = { gross: 0, payments: {}, weeks: new Set() };
       }
@@ -154,6 +154,7 @@ export function computeMetrics(
         (byMonthAcc[yearMonth].payments[contrib.date] ?? 0) + contrib.value;
       byMonthAcc[yearMonth].weeks.add(isoWeek);
 
+      // byWeek
       byWeekAcc[isoWeek] = (byWeekAcc[isoWeek] ?? 0) + contrib.value;
     }
   }
@@ -167,14 +168,16 @@ export function computeMetrics(
   // ── Per-year metrics ──────────────────────────────────────────────────────────
   const byYear: Record<string, YearMetrics> = {};
   for (const [yr, acc] of Object.entries(byYearAcc)) {
-    const sorted = [...acc.dates].sort();
-    const span = Math.max(1, calendarDaySpan(sorted[0], sorted[sorted.length - 1]));
+    const sortedDates = [...new Set(acc.dates)].sort();
+    const span = Math.max(1, calendarDaySpan(sortedDates[0], sortedDates[sortedDates.length - 1]));
     const dailyAvg = round2(acc.gross / span);
+    const yearNum  = parseInt(yr, 10);
     byYear[yr] = {
-      grossAnnual: round2(acc.gross),
+      grossAnnual:  round2(acc.gross),
+      yearExpenses: computeYearExpenses(expenseRows, yearNum),
       dailyAvg,
-      weeklyAvg:  round2(dailyAvg * 7),
-      monthlyAvg: round2(dailyAvg * 30.44),
+      weeklyAvg:  round2(acc.gross / Math.max(1, acc.weeks.size)),
+      monthlyAvg: round2(acc.gross / Math.max(1, acc.months.size)),
     };
   }
 
@@ -344,6 +347,40 @@ function getISOWeekKey(dateStr: string): string {
   const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
   const weekNum = Math.ceil(((d.getTime() - yearStart.getTime()) / 86_400_000 + 1) / 7);
   return `${d.getUTCFullYear()}-W${String(weekNum).padStart(2, '0')}`;
+}
+
+/**
+ * Year-scoped expense allocation with proper overlap logic.
+ *
+ * - Point-in-time expenses (start === end): full value if date falls in year.
+ * - Multi-period expenses: dailyRate × overlapDays with this year.
+ */
+function computeYearExpenses(expenseRows: TableRow[], year: number): number {
+  const yearStart = `${year}-01-01`;
+  const yearEnd   = `${year}-12-31`;
+  let total = 0;
+
+  for (const row of expenseRows) {
+    if (row.value <= 0) continue;
+    const start = row.periodStart || row.date;
+    const end   = row.periodEnd   || row.date;
+
+    // No overlap with this year at all
+    if (start > yearEnd || end < yearStart) continue;
+
+    if (start === end) {
+      // Point-in-time expense — full value
+      total += row.value;
+    } else {
+      // Multi-period: prorate by overlap days
+      const totalDays   = Math.max(1, calendarDaySpan(start, end));
+      const overlapStart = start < yearStart ? yearStart : start;
+      const overlapEnd   = end   > yearEnd   ? yearEnd   : end;
+      const overlapDays  = Math.max(1, calendarDaySpan(overlapStart, overlapEnd));
+      total += (row.value / totalDays) * overlapDays;
+    }
+  }
+  return round2(total);
 }
 
 function emptyMetrics(): TableMetrics {

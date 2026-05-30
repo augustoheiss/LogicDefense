@@ -211,9 +211,22 @@ class YearMetrics(BaseModel):
     """Metrics for a single calendar year."""
 
     gross_annual: float = Field(..., alias="grossAnnual")
+    year_expenses: float = Field(
+        default=0,
+        alias="yearExpenses",
+        description="Year-scoped expenses: point-in-time full value, multi-year prorated by overlap days",
+    )
     daily_avg: float = Field(..., alias="dailyAvg")
-    weekly_avg: float = Field(..., alias="weeklyAvg")
-    monthly_avg: float = Field(..., alias="monthlyAvg")
+    weekly_avg: float = Field(
+        ...,
+        alias="weeklyAvg",
+        description="grossAnnual / active weeks in this year",
+    )
+    monthly_avg: float = Field(
+        ...,
+        alias="monthlyAvg",
+        description="grossAnnual / active months in this year",
+    )
 
     model_config = {"populate_by_name": True}
 
