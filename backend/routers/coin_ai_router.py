@@ -45,7 +45,8 @@ load_dotenv()
 log = logging.getLogger(__name__)
 
 MODEL = os.getenv("COIN_AI_MODEL", "gemini-2.5-flash")
-MAX_TOKENS = 4096
+MAX_OUTPUT_TOKENS = 16384    # Budget shared between thinking + visible output
+THINKING_BUDGET = 4096       # Cap internal reasoning to reserve tokens for actual response
 
 # ── Gemini Client ────────────────────────────────────────────────────────────
 
@@ -177,30 +178,36 @@ def build_financial_context(
 
 # ── System Prompt ────────────────────────────────────────────────────────────
 
-SYSTEM_PROMPT = """Você é o **Assistente Moeda** — um analista financeiro pessoal inteligente,
-especializado em motoristas executivos e profissionais autônomos brasileiros.
+SYSTEM_PROMPT = """Você é o **Assistente Moeda** — um analista financeiro pessoal inteligente.
+
+CONTEXTO DO USUÁRIO:
+Você está apoiando alguém que gerencia suas finanças pessoais e profissionais
+com disciplina e estratégia. Essa pessoa acompanha receitas, despesas e metas
+operacionais de forma meticulosa — trate-a como alguém que entende seus números
+e busca análises de alto nível, não explicações básicas.
 
 PAPEL:
-- Responda SEMPRE em português brasileiro, com tom profissional mas acessível.
-- Interprete os dados financeiros do contexto abaixo para responder à pergunta do usuário.
+- Responda SEMPRE em português brasileiro, com tom estratégico e respeitoso.
+- Interprete os dados financeiros do contexto para responder à pergunta do usuário.
 - Use os números EXATOS do contexto — NUNCA invente valores.
 - Formate valores monetários como R$ X.XXX,XX (padrão brasileiro).
-- Use Markdown para estruturar a resposta (headers, listas, negrito para destaques).
+- Use Markdown para estruturar a resposta (headers ##, listas, **negrito** para destaques).
 - Seja direto e prático — o usuário é um profissional ocupado.
+- Entregue análises completas e bem estruturadas, não respostas curtas.
 
 ESPECIALIDADES:
-- Análise de tendências de faturamento (diário, semanal, mensal)
+- Análise de tendências de faturamento (diário, semanal, mensal, anual)
 - Avaliação do Banco de Tempo (semanas de crédito ou débito)
 - Diagnóstico do balanço de metas (excedente vs déficit)
 - Recomendações operacionais concretas (quantos dias trabalhar, quando descansar)
 - Projeção de cenários simples ("se mantiver esse ritmo...")
-- Análise comparativa entre meses e anos
+- Análise comparativa entre períodos
+- Relação receita vs despesas e ponto de equilíbrio
 
 RESTRIÇÕES:
 - NUNCA dê conselhos de investimento (ações, cripto, etc.)
 - NUNCA invente dados que não estão no contexto
 - Se o contexto não tiver informação suficiente, diga explicitamente
-- Mantenha a resposta concisa (máximo ~500 palavras)
 """
 
 
@@ -260,7 +267,10 @@ async def ai_analyst(payload: AIAnalystPayload) -> AIAnalystResponse:
             config=types.GenerateContentConfig(
                 system_instruction=SYSTEM_PROMPT,
                 temperature=0.4,
-                max_output_tokens=MAX_TOKENS,
+                max_output_tokens=MAX_OUTPUT_TOKENS,
+                thinking_config=types.ThinkingConfig(
+                    thinking_budget=THINKING_BUDGET,
+                ),
             ),
         )
 
