@@ -56,9 +56,9 @@ else:
 
 # ── FastAPI app ──────────────────────────────────────────────────────────────
 app = FastAPI(
-    title="LogicDefense CV Engine",
-    description="Generates 4 CV archetype YAMLs using Gemini (parallel calls).",
-    version="2.0.0",
+    title="Heiss-Lab Backend",
+    description="Backend services: CV Generator, CoinAssistant AI Analyst, Ocorrências.",
+    version="3.0.0",
 )
 
 app.add_middleware(
@@ -68,6 +68,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ── CoinAssistant AI Router ──────────────────────────────────────────────────
+from routers.coin_ai_router import router as coin_ai_router
+app.include_router(coin_ai_router)
 
 # ── Health Check (cold-start mitigation) ─────────────────────────────────────
 

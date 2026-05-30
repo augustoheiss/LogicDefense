@@ -1,0 +1,359 @@
+"""
+CoinAssistant — Pydantic Data Contract
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Mirrors the TypeScript interfaces from:
+  src/tools/CoinAssistant/types.ts
+
+Every model here is a 1:1 translation of the frontend type system.
+The frontend sends its localStorage data to the API as a JSON payload;
+these models validate and parse that payload with zero ambiguity.
+
+Key design decisions:
+  - entry_type uses a Python StrEnum (not Literal) for extensibility.
+  - All monetary values are float (R$ with centavos), never int.
+  - Date strings remain "YYYY-MM-DD" — parsed/validated by regex,
+    not converted to datetime, so the engine logic matches TS exactly.
+  - Optional fields use `None` default, matching TS `undefined`.
+"""
+
+from __future__ import annotations
+
+from enum import StrEnum
+from typing import Optional
+
+from pydantic import BaseModel, Field, field_validator
+
+
+# ── Enums ────────────────────────────────────────────────────────────────────
+
+
+class EntryType(StrEnum):
+    """Matches frontend: 'revenue' | 'deposit' | 'waiver' | 'expense'."""
+
+    REVENUE = "revenue"
+    DEPOSIT = "deposit"
+    WAIVER = "waiver"
+    EXPENSE = "expense"
+
+
+# ── Goal Hierarchy ───────────────────────────────────────────────────────────
+
+
+class GoalProfile(BaseModel):
+    """
+    A complete set of financial targets for a single scope (global, year, or month).
+    Mirrors: interface GoalProfile in types.ts.
+    """
+
+    daily_goal: float = Field(..., alias="dailyGoal", description="Daily revenue target (R$)")
+    weekly_goal: float = Field(..., alias="weeklyGoal", description="Weekly revenue target (R$)")
+    annual_cost: float = Field(..., alias="annualCost", description="Annual vehicle/operating cost (R$)")
+
+    model_config = {"populate_by_name": True}
+
+
+class CostBasedTarget(BaseModel):
+    """
+    Cost-based survival targets derived from expense data.
+    Never persisted — always computed on the fly.
+    Mirrors: interface CostBasedTarget in types.ts.
+    """
+
+    weekly_survival: float = Field(..., alias="weeklySurvival")
+    daily_survival: float = Field(..., alias="dailySurvival")
+    monthly_survival: float = Field(..., alias="monthlySurvival")
+    annual_cost: float = Field(..., alias="annualCost")
+
+    model_config = {"populate_by_name": True}
+
+
+# ── Persisted Data ───────────────────────────────────────────────────────────
+
+
+class TableRow(BaseModel):
+    """
+    A single ledger entry.
+    Mirrors: interface TableRow in types.ts.
+
+    The `id` field is present in persisted data but NOT required in API input
+    (the backend never stores rows — stateless architecture).
+    """
+
+    id: Optional[str] = Field(default=None, description="UUID — optional in API payloads")
+    date: str = Field(
+        ...,
+        pattern=r"^\d{4}-\d{2}-\d{2}$",
+        description="Entry date in YYYY-MM-DD format",
+    )
+    value: float = Field(..., ge=0, description="Monetary value (R$) — meaning depends on entryType")
+    description: Optional[str] = Field(default=None)
+    entry_type: EntryType = Field(
+        default=EntryType.REVENUE,
+        alias="entryType",
+        description="revenue | deposit | waiver | expense",
+    )
+    monthly_value: Optional[float] = Field(
+        default=None,
+        alias="monthlyValue",
+        description="For 'expense' entries — the monthly cost amount (R$)",
+    )
+    month_count: Optional[int] = Field(
+        default=None,
+        alias="monthCount",
+        ge=1,
+        description="For 'expense' entries — how many months this cost spans",
+    )
+    period_start: Optional[str] = Field(
+        default=None,
+        alias="periodStart",
+        pattern=r"^\d{4}-\d{2}-\d{2}$",
+        description="Period start date (YYYY-MM-DD) — for distributed revenue",
+    )
+    period_end: Optional[str] = Field(
+        default=None,
+        alias="periodEnd",
+        pattern=r"^\d{4}-\d{2}-\d{2}$",
+        description="Period end date (YYYY-MM-DD) — must pair with periodStart",
+    )
+
+    model_config = {"populate_by_name": True}
+
+
+class TableGoals(BaseModel):
+    """
+    Financial goal configuration.
+    Mirrors: interface TableGoals in types.ts.
+
+    The flat per-year Records (dailyGoals, weeklyGoals, annualCosts) are the
+    legacy format kept for backward compatibility with calculateStrictGlobalBalance.
+    The new hierarchical system (globalGoals → yearlyGoals → monthlyGoals) adds
+    finer granularity without replacing the legacy fields.
+    """
+
+    # Legacy flat records — per-year keyed
+    daily_goals: dict[int, float] = Field(
+        default_factory=dict,
+        alias="dailyGoals",
+        description="Per-year daily revenue target: { 2026: 86.00 }",
+    )
+    weekly_goals: dict[int, float] = Field(
+        default_factory=dict,
+        alias="weeklyGoals",
+        description="Per-year weekly revenue target: { 2026: 600.00 }",
+    )
+    annual_costs: dict[int, float] = Field(
+        default_factory=dict,
+        alias="annualCosts",
+        description="Per-year vehicle/operating cost: { 2026: 34736.50 }",
+    )
+
+    # New hierarchical goal system
+    global_goals: Optional[GoalProfile] = Field(
+        default=None,
+        alias="globalGoals",
+        description="Ultimate fallback — applied when no year/month override exists",
+    )
+    yearly_goals: Optional[dict[int, GoalProfile]] = Field(
+        default=None,
+        alias="yearlyGoals",
+        description="Per-year overrides: { 2026: GoalProfile }",
+    )
+    monthly_goals: Optional[dict[str, GoalProfile]] = Field(
+        default=None,
+        alias="monthlyGoals",
+        description='Per-month overrides: { "2026-05": GoalProfile }',
+    )
+
+    model_config = {"populate_by_name": True}
+
+    @field_validator("daily_goals", "weekly_goals", "annual_costs", mode="before")
+    @classmethod
+    def coerce_string_keys_to_int(cls, v: dict) -> dict[int, float]:
+        """
+        JSON keys are always strings. The frontend sends { "2026": 600 },
+        but our model expects { 2026: 600.0 }. This coerces automatically.
+        """
+        if isinstance(v, dict):
+            return {int(k): float(val) for k, val in v.items()}
+        return v
+
+    @field_validator("yearly_goals", mode="before")
+    @classmethod
+    def coerce_yearly_goals_keys(cls, v: dict | None) -> dict[int, GoalProfile] | None:
+        """Same string-to-int key coercion for yearly_goals."""
+        if v is None:
+            return None
+        if isinstance(v, dict):
+            return {int(k): (val if isinstance(val, GoalProfile) else GoalProfile(**val)) for k, val in v.items()}
+        return v
+
+
+# ── Computed Metrics (never persisted, always derived) ───────────────────────
+
+
+class MonthMetrics(BaseModel):
+    """Metrics for a single calendar month."""
+
+    gross_monthly: float = Field(..., alias="grossMonthly")
+    daily_avg: float = Field(..., alias="dailyAvg")
+    weekly_avg: float = Field(..., alias="weeklyAvg")
+    last_week_gross: float = Field(..., alias="lastWeekGross")
+    daily_payments: dict[str, float] = Field(
+        default_factory=dict,
+        alias="dailyPayments",
+        description='"YYYY-MM-DD" → value',
+    )
+
+    model_config = {"populate_by_name": True}
+
+
+class YearMetrics(BaseModel):
+    """Metrics for a single calendar year."""
+
+    gross_annual: float = Field(..., alias="grossAnnual")
+    daily_avg: float = Field(..., alias="dailyAvg")
+    weekly_avg: float = Field(..., alias="weeklyAvg")
+    monthly_avg: float = Field(..., alias="monthlyAvg")
+
+    model_config = {"populate_by_name": True}
+
+
+class TableMetrics(BaseModel):
+    """
+    Full computed metrics for a table.
+    Mirrors: interface TableMetrics in types.ts.
+
+    This is the OUTPUT of the Python metrics engine — the "prepared food"
+    that gets injected into the AI context prompt.
+    """
+
+    gross_total: float = Field(..., alias="grossTotal")
+    global_daily_avg: float = Field(..., alias="globalDailyAvg")
+    global_weekly_avg: float = Field(..., alias="globalWeeklyAvg")
+    global_monthly_avg: float = Field(..., alias="globalMonthlyAvg")
+    global_annual_avg: float = Field(..., alias="globalAnnualAvg")
+    global_goal_balance: float = Field(
+        ...,
+        alias="globalGoalBalance",
+        description="Cumulative BRL balance vs goals. Positive = surplus, negative = debt",
+    )
+    total_elapsed_weeks: int = Field(..., alias="totalElapsedWeeks")
+    waived_weeks: float = Field(..., alias="waivedWeeks")
+    billable_weeks: float = Field(..., alias="billableWeeks")
+    total_waiver_credit: float = Field(..., alias="totalWaiverCredit")
+    time_bank_balance: float = Field(
+        ...,
+        alias="timeBankBalance",
+        description="Weeks of credit (+) or debt (−)",
+    )
+    by_year: dict[str, YearMetrics] = Field(default_factory=dict, alias="byYear")
+    by_month: dict[str, MonthMetrics] = Field(default_factory=dict, alias="byMonth")
+    by_week: dict[str, float] = Field(default_factory=dict, alias="byWeek")
+    total_expenses: float = Field(..., alias="totalExpenses")
+    annual_expenses: float = Field(..., alias="annualExpenses")
+    net_balance: float = Field(
+        ...,
+        alias="netBalance",
+        description="grossTotal − totalExpenses",
+    )
+
+    model_config = {"populate_by_name": True}
+
+
+# ── Projection Engine ────────────────────────────────────────────────────────
+
+
+class ProjectionPoint(BaseModel):
+    """A single month in the compound interest projection."""
+
+    month: int = Field(..., ge=1, le=360)
+    total_deposited: float = Field(..., alias="totalDeposited")
+    accumulated_interest: float = Field(..., alias="accumulatedInterest")
+    total_balance: float = Field(..., alias="totalBalance")
+    monthly_yield: float = Field(
+        ...,
+        alias="monthlyYield",
+        description="Interest earned by accumulated capital this month alone",
+    )
+
+    model_config = {"populate_by_name": True}
+
+
+class ProjectionSummary(BaseModel):
+    """End-of-projection summary."""
+
+    final_balance: float = Field(..., alias="finalBalance")
+    total_deposited: float = Field(..., alias="totalDeposited")
+    total_interest: float = Field(..., alias="totalInterest")
+    final_monthly_yield: float = Field(..., alias="finalMonthlyYield")
+    multiplier: float
+
+    model_config = {"populate_by_name": True}
+
+
+# ── API Payload & Response ───────────────────────────────────────────────────
+
+
+class AIAnalystPayload(BaseModel):
+    """
+    The complete stateless payload sent by the frontend.
+
+    Contains everything the backend needs to:
+      1. Compute metrics (rows + goals)
+      2. Build rich AI context (metrics + prompt)
+      3. Query the LLM and return a response
+
+    Zero data is stored. The backend is a pure function:
+      payload → metrics → context → LLM → response.
+    """
+
+    rows: list[TableRow] = Field(
+        ...,
+        min_length=1,
+        description="All TableRows from the active table (localStorage)",
+    )
+    goals: TableGoals = Field(
+        ...,
+        description="The active table's goals configuration",
+    )
+    user_prompt: str = Field(
+        ...,
+        alias="userPrompt",
+        min_length=1,
+        max_length=2000,
+        description="The user's natural language question about their finances",
+    )
+    as_of_date: Optional[str] = Field(
+        default=None,
+        alias="asOfDate",
+        pattern=r"^\d{4}-\d{2}-\d{2}$",
+        description="Time Machine: treat this date as 'today' for all calculations",
+    )
+    table_name: Optional[str] = Field(
+        default=None,
+        alias="tableName",
+        description="Name of the active table (for context in the AI response)",
+    )
+
+    model_config = {"populate_by_name": True}
+
+
+class AIAnalystResponse(BaseModel):
+    """Response from the AI Analyst endpoint."""
+
+    analysis: str = Field(
+        ...,
+        description="The AI-generated financial analysis in Markdown format",
+    )
+    metrics_snapshot: TableMetrics = Field(
+        ...,
+        alias="metricsSnapshot",
+        description="The computed metrics used as context for the AI response",
+    )
+    model_used: str = Field(
+        ...,
+        alias="modelUsed",
+        description="Which LLM model generated this analysis",
+    )
+
+    model_config = {"populate_by_name": True}

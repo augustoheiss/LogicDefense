@@ -17,6 +17,7 @@ import { ExpensesSummary } from './ExpensesSummary';
 import { downloadCSV } from '../utils/csvIO';
 import { formatCurrencyShort, formatCurrencyFull } from '../utils/formatCurrency';
 import { resolveGoalForYear } from '../utils/dateUtils';
+import { AIAnalystChat } from './AIAnalystChat';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -688,6 +689,9 @@ export function TableEditor({
           </div>
         )}
       </div>
+
+      {/* ── AI Analyst Chat ── */}
+      <AIAnalystChat table={table} cutoffDate={cutoffDate || undefined} />
 
       {/* ── Landing Page & Practical Guide ── */}
       <MoedaLandingGuide />
