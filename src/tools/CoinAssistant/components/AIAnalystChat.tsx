@@ -203,7 +203,7 @@ export function AIAnalystChat({ table, cutoffDate }: AIAnalystChatProps) {
       {isExpanded && (
         <div className="border-t border-white/10">
           {/* Messages area */}
-          <div className="max-h-96 overflow-y-auto px-4 py-3 space-y-3" style={{ minHeight: messages.length > 0 ? '200px' : '0' }}>
+          <div className="px-4 py-3 space-y-3">
             {/* Empty state with suggestions */}
             {messages.length === 0 && !isLoading && (
               <div className="py-4 space-y-3">
