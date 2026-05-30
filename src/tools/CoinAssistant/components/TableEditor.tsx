@@ -299,7 +299,6 @@ export function TableEditor({
             table={table}
             metrics={metrics}
             selectedMonth={effectiveMonth}
-            costBasedTarget={costBasedTarget}
           />
           <button
             onClick={() => setShowWhatsApp(true)}

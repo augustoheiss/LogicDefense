@@ -1,4 +1,4 @@
-import type { TableMetrics, CoinTable } from '../types';
+import type { TableMetrics, CoinTable, TableRow } from '../types';
 import { formatCurrencyShort, formatCurrencyFull } from '../utils/formatCurrency';
 
 interface MetricsPanelProps {

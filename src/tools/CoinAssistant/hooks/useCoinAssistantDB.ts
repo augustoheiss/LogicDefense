@@ -359,5 +359,9 @@ function emptyMetrics(): TableMetrics {
     totalExpenses: 0,
     annualExpenses: 0,
     netBalance: 0,
+    survivalDaily: 0,
+    survivalWeekly: 0,
+    survivalMonthly: 0,
+    survivalAnnualCost: 0,
   };
 }
