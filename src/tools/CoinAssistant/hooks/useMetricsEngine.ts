@@ -76,12 +76,40 @@ export function computeMetrics(
 
   const survivalFields = { survivalDaily, survivalWeekly, survivalMonthly, survivalAnnualCost };
 
+  // ── Investment / Deposit compound interest (0.8%/month CDI reference) ──────
+  const MONTHLY_RATE = 0.008;
+  const depositRows = rows.filter((r) => r.entryType === 'deposit' && r.value > 0);
+  const depositCount = depositRows.length;
+
+  // Group deposits by YYYY-MM
+  const depositByMonth: Record<string, number> = {};
+  for (const row of depositRows) {
+    const ym = row.date.slice(0, 7);
+    depositByMonth[ym] = (depositByMonth[ym] ?? 0) + row.value;
+  }
+  const sortedDepositMonths = Object.entries(depositByMonth).sort(([a], [b]) => a.localeCompare(b));
+
+  let investRunning = 0;
+  let totalInvested = 0;
+  let totalInterestEarned = 0;
+  for (const [, rawDeposit] of sortedDepositMonths) {
+    const monthYield = round2(investRunning * MONTHLY_RATE);
+    totalInterestEarned += monthYield;
+    totalInvested += rawDeposit;
+    investRunning = round2(investRunning + monthYield + rawDeposit);
+  }
+  totalInvested = round2(totalInvested);
+  totalInterestEarned = round2(totalInterestEarned);
+  const investmentBalance = round2(investRunning);
+
+  const investFields = { depositCount, totalInvested, totalInterestEarned, investmentBalance };
+
   if (revenueRows.length === 0) {
-    return { ...emptyMetrics(), totalExpenses, annualExpenses, ...survivalFields };
+    return { ...emptyMetrics(), totalExpenses, annualExpenses, ...survivalFields, ...investFields };
   }
 
   const activeRows = revenueRows.filter((r) => r.value > 0);
-  if (activeRows.length === 0) return { ...emptyMetrics(), totalExpenses, annualExpenses, ...survivalFields };
+  if (activeRows.length === 0) return { ...emptyMetrics(), totalExpenses, annualExpenses, ...survivalFields, ...investFields };
 
   // ── Global date span — uses periodStart/periodEnd when present ────────────────
   // Including the full period boundaries prevents a single end-of-month payment
@@ -291,6 +319,7 @@ export function computeMetrics(
     annualExpenses,
     netBalance,
     ...survivalFields,
+    ...investFields,
   };
 }
 
@@ -406,6 +435,10 @@ function emptyMetrics(): TableMetrics {
     survivalWeekly: 0,
     survivalMonthly: 0,
     survivalAnnualCost: 0,
+    depositCount: 0,
+    totalInvested: 0,
+    totalInterestEarned: 0,
+    investmentBalance: 0,
   };
 }
 

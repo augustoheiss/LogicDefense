@@ -292,6 +292,28 @@ class TableMetrics(BaseModel):
         description="survivalDaily × 365.25 — projected annual cost burden",
     )
 
+    # ── Investment / Deposit Metrics (compound interest at 0.8%/month) ────────
+    deposit_count: int = Field(
+        default=0,
+        alias="depositCount",
+        description="Number of 'deposit' entries",
+    )
+    total_invested: float = Field(
+        default=0,
+        alias="totalInvested",
+        description="Sum of all deposit row values (user's physical effort)",
+    )
+    total_interest_earned: float = Field(
+        default=0,
+        alias="totalInterestEarned",
+        description="Total compound interest earned across all months with deposits",
+    )
+    investment_balance: float = Field(
+        default=0,
+        alias="investmentBalance",
+        description="Current balance: totalInvested + totalInterestEarned",
+    )
+
     model_config = {"populate_by_name": True}
 
 

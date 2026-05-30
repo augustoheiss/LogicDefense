@@ -363,5 +363,9 @@ function emptyMetrics(): TableMetrics {
     survivalWeekly: 0,
     survivalMonthly: 0,
     survivalAnnualCost: 0,
+    depositCount: 0,
+    totalInvested: 0,
+    totalInterestEarned: 0,
+    investmentBalance: 0,
   };
 }

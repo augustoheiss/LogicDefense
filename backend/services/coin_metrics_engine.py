@@ -190,17 +190,48 @@ def compute_metrics(
         "survivalAnnualCost": survival_annual_cost,
     }
 
+    # ── Investment / Deposit compound interest (0.8%/month CDI reference) ────
+    MONTHLY_RATE = 0.008
+    deposit_rows_inv = [r for r in rows if r.entry_type == EntryType.DEPOSIT and r.value > 0]
+    deposit_count = len(deposit_rows_inv)
+
+    # Group deposits by YYYY-MM
+    deposit_by_month: dict[str, float] = {}
+    for row in deposit_rows_inv:
+        ym = row.date[:7]
+        deposit_by_month[ym] = deposit_by_month.get(ym, 0.0) + row.value
+    sorted_dep_months = sorted(deposit_by_month.items(), key=lambda x: x[0])
+
+    invest_running = 0.0
+    total_invested = 0.0
+    total_interest_earned = 0.0
+    for _, raw_deposit in sorted_dep_months:
+        month_yield = _round2(invest_running * MONTHLY_RATE)
+        total_interest_earned += month_yield
+        total_invested += raw_deposit
+        invest_running = _round2(invest_running + month_yield + raw_deposit)
+    total_invested = _round2(total_invested)
+    total_interest_earned = _round2(total_interest_earned)
+    investment_balance = _round2(invest_running)
+
+    invest_fields = {
+        "depositCount": deposit_count,
+        "totalInvested": total_invested,
+        "totalInterestEarned": total_interest_earned,
+        "investmentBalance": investment_balance,
+    }
+
     if not revenue_rows:
         m = _empty_metrics()
         return TableMetrics(
-            **{**m.model_dump(by_alias=True), "totalExpenses": total_expenses, "annualExpenses": annual_expenses, **survival_fields}
+            **{**m.model_dump(by_alias=True), "totalExpenses": total_expenses, "annualExpenses": annual_expenses, **survival_fields, **invest_fields}
         )
 
     active_rows = [r for r in revenue_rows if r.value > 0]
     if not active_rows:
         m = _empty_metrics()
         return TableMetrics(
-            **{**m.model_dump(by_alias=True), "totalExpenses": total_expenses, "annualExpenses": annual_expenses, **survival_fields}
+            **{**m.model_dump(by_alias=True), "totalExpenses": total_expenses, "annualExpenses": annual_expenses, **survival_fields, **invest_fields}
         )
 
     # ── Global date span — uses periodStart/periodEnd when present ───────
@@ -379,6 +410,7 @@ def compute_metrics(
         annualExpenses=annual_expenses,
         netBalance=net_balance,
         **survival_fields,
+        **invest_fields,
     )
 
 
@@ -408,4 +440,8 @@ def _empty_metrics() -> TableMetrics:
         survivalWeekly=0,
         survivalMonthly=0,
         survivalAnnualCost=0,
+        depositCount=0,
+        totalInvested=0,
+        totalInterestEarned=0,
+        investmentBalance=0,
     )

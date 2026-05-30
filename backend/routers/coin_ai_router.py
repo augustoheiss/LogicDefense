@@ -134,7 +134,7 @@ def build_financial_context(
     else:
         time_bank_status = f"{abs(metrics.time_bank_balance):.1f} semanas de DÉBITO (precisa recuperar)"
 
-    return f"""═══════════════════════════════════════════════════════════
+    context = f"""═══════════════════════════════════════════════════════════
   CONTEXTO FINANCEIRO — {table_name}
   Data de referência: {today}
 ═══════════════════════════════════════════════════════════
@@ -172,8 +172,20 @@ def build_financial_context(
 
 ── Últimas Semanas ──
 {weeks_block}
+"""
 
-═══════════════════════════════════════════════════════════"""
+    # Investment block — only if deposits exist
+    invest_block = ""
+    if metrics.deposit_count > 0:
+        invest_block = f"""
+── Portfólio de Investimentos (juros compostos, 0.8%/mês CDI) ──
+  Total aportes:           {metrics.deposit_count} depósitos
+  Total investido:         R$ {metrics.total_invested:,.2f}
+  Rendimentos acumulados:  R$ {metrics.total_interest_earned:,.2f}
+  Saldo atual (c/ juros):  R$ {metrics.investment_balance:,.2f}
+"""
+
+    return context + invest_block + "\n═══════════════════════════════════════════════════════════"
 
 
 # ── System Prompt ────────────────────────────────────────────────────────────
@@ -203,6 +215,7 @@ ESPECIALIDADES:
 - Projeção de cenários simples ("se mantiver esse ritmo...")
 - Análise comparativa entre períodos
 - Relação receita vs despesas e ponto de equilíbrio
+- Análise de portfólio de investimentos (aportes, rendimentos compostos, saldo acumulado)
 
 RESTRIÇÕES:
 - NUNCA dê conselhos de investimento (ações, cripto, etc.)

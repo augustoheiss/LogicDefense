@@ -219,6 +219,16 @@ export interface TableMetrics {
   survivalMonthly: number;
   /** survivalDaily × 365.25 — projected annual cost burden. */
   survivalAnnualCost: number;
+
+  // ─── Investment / Deposit Metrics (compound interest at 0.8%/month) ────────
+  /** Number of 'deposit' entries. */
+  depositCount: number;
+  /** Sum of all 'deposit' row values (the user's physical effort). */
+  totalInvested: number;
+  /** Total compound interest earned across all months with deposits. */
+  totalInterestEarned: number;
+  /** Current balance: totalInvested + totalInterestEarned. */
+  investmentBalance: number;
 }
 
 // ─── Projection Engine ────────────────────────────────────────────────────────
