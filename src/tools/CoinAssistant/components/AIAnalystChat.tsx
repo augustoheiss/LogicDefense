@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import type { CoinTable } from '../types';
 import ReactMarkdown from 'react-markdown';
 
@@ -71,15 +71,7 @@ export function AIAnalystChat({ table, cutoffDate }: AIAnalystChatProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isExpanded, setIsExpanded] = useState(false);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
-
-  // Auto-scroll to bottom when new messages arrive
-  useEffect(() => {
-    if (messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
-    }
-  }, [messages]);
 
   // Auto-resize textarea
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -283,7 +275,7 @@ export function AIAnalystChat({ table, cutoffDate }: AIAnalystChatProps) {
               </div>
             )}
 
-            <div ref={messagesEndRef} />
+
           </div>
 
           {/* ── Input area ── */}
