@@ -158,6 +158,15 @@ export function MetricsPanel({ metrics, dailyGoal, table, selectedMonth }: Metri
             fullValue={formatCurrencyFull(metrics.grossTotal)}
             status="accent"
           />
+          {metrics.totalExpenses > 0 && (
+            <MetricCard
+              label="Total de Custos"
+              value={fmt(metrics.totalExpenses)}
+              fullValue={formatCurrencyFull(metrics.totalExpenses)}
+              status="warning"
+              sub="soma de todos os custos"
+            />
+          )}
           <MetricCard
             label="Média Diária"
             value={fmt(metrics.globalDailyAvg)}
@@ -412,32 +421,6 @@ export function MetricsPanel({ metrics, dailyGoal, table, selectedMonth }: Metri
         </div>
       )}
 
-      {/* ── Expense totals ── */}
-      {metrics.totalExpenses > 0 && (
-        <div>
-          <h3 className="text-xs text-white/40 uppercase tracking-wider mb-3 flex items-center gap-2">
-            <span className="w-4 h-px bg-rose-400/30 inline-block" />
-            Custos Dinâmicos
-            <span className="flex-1 h-px bg-white/10 inline-block" />
-          </h3>
-          <div className="grid grid-cols-2 gap-3">
-            <MetricCard
-              label="Total de Custos"
-              value={fmt(metrics.totalExpenses)}
-              fullValue={formatCurrencyFull(metrics.totalExpenses)}
-              status="warning"
-              sub="soma de todos os custos"
-            />
-            <MetricCard
-              label="Custo Anual"
-              value={fmt(metrics.annualExpenses)}
-              fullValue={formatCurrencyFull(metrics.annualExpenses)}
-              status="warning"
-              sub="mensal × meses"
-            />
-          </div>
-        </div>
-      )}
     </div>
   );
 }
