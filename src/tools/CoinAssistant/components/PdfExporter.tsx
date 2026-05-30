@@ -126,6 +126,7 @@ export function PdfExporter({ table, metrics, selectedMonth, costBasedTarget }: 
           metrics={metrics}
           selectedMonth={selectedMonth}
           dailyGoal={dailyGoal}
+          goals={table.goals}
           costBasedTarget={costBasedTarget}
         />
       </div>

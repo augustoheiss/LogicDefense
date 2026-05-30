@@ -21,7 +21,7 @@ import {
   YAxis,
   ReferenceLine,
 } from 'recharts';
-import type { TableRow, TableMetrics, CostBasedTarget, MonthMetrics } from '../types';
+import type { TableRow, TableMetrics, CostBasedTarget, MonthMetrics, TableGoals } from '../types';
 import { rowContributions } from '../hooks/useMetricsEngine';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -194,13 +194,14 @@ interface PrintableReportProps {
   metrics: TableMetrics;
   selectedMonth: string;
   dailyGoal: number;
+  goals: TableGoals;
   costBasedTarget?: CostBasedTarget;
 }
 
 // ── Component ────────────────────────────────────────────────────────────────
 
 export const PrintableReport = forwardRef<HTMLDivElement, PrintableReportProps>(
-  function PrintableReport({ tableName, rows, metrics, selectedMonth, dailyGoal, costBasedTarget }, ref) {
+  function PrintableReport({ tableName, rows, metrics, selectedMonth, dailyGoal, goals, costBasedTarget }, ref) {
     const [selY, selM] = selectedMonth.split('-').map(Number);
     const monthName = new Date(selY, selM - 1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
     const monthMetrics: MonthMetrics | null = metrics.byMonth[selectedMonth] ?? null;
@@ -363,6 +364,116 @@ export const PrintableReport = forwardRef<HTMLDivElement, PrintableReportProps>(
             </div>
           </div>
         )}
+
+        {/* ═══════════════════════════════════════════════════════════════════
+            COMPACT SUMMARY — Must fit on same page as chart above.
+            Uses tight 8-9pt fonts and 3-col grids to stay compact.
+            ═══════════════════════════════════════════════════════════════════ */}
+        {(() => {
+          const yr = String(selY);
+          const ym = metrics.byYear[yr];
+          const weeklyGoal = (goals.weeklyGoals && goals.weeklyGoals[selY]) || 0;
+          const dailyG = dailyGoal;
+          const monthlyGoal = round2(weeklyGoal * 4.345);
+
+          // Partnership span
+          const allDates = rows.filter(r => r.value > 0).map(r => r.periodStart || r.date).sort();
+          const firstDate = allDates[0] || selectedMonth + '-01';
+          const spanDays = Math.max(1, Math.round(Math.abs(new Date().getTime() - new Date(firstDate + 'T12:00:00').getTime()) / 86_400_000));
+          const spanMonths = Math.round(spanDays / 30.44);
+
+          // Compact label style
+          const lbl: React.CSSProperties = { fontSize: '8px', color: '#9ca3af', fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.3px' };
+          const val: React.CSSProperties = { fontSize: '10px', fontWeight: 700, fontFamily: 'monospace', marginTop: '1px' };
+          const cell: React.CSSProperties = { padding: '5px 6px' };
+
+          return (
+            <div style={{ marginTop: '12px', breakInside: 'avoid' as const }}>
+              {/* ── Section Title ── */}
+              <div style={{ fontSize: '9px', fontWeight: 700, color: '#7c3aed', letterSpacing: '1.5px', textTransform: 'uppercase' as const, marginBottom: '6px', borderBottom: '1px solid #e5e7eb', paddingBottom: '3px' }}>
+                📋 Painel Consolidado
+              </div>
+
+              {/* ── Row 1: Global + Annual Metrics (6-col) ── */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', border: '1px solid #e5e7eb', borderRadius: '6px', marginBottom: '6px', backgroundColor: '#fafafa' }}>
+                {/* Global */}
+                <div style={cell}>
+                  <div style={lbl}>Total Bruto</div>
+                  <div style={{ ...val, color: '#059669' }}>{fmtBRL(metrics.grossTotal)}</div>
+                </div>
+                <div style={cell}>
+                  <div style={lbl}>Total Custos</div>
+                  <div style={{ ...val, color: '#dc2626' }}>{fmtBRL(metrics.totalExpenses)}</div>
+                </div>
+                <div style={cell}>
+                  <div style={lbl}>Saldo Líquido</div>
+                  <div style={{ ...val, color: metrics.netBalance >= 0 ? '#059669' : '#dc2626' }}>{fmtBRL(metrics.netBalance)}</div>
+                </div>
+                {/* Year-scoped */}
+                <div style={cell}>
+                  <div style={lbl}>Bruto {yr}</div>
+                  <div style={{ ...val, color: '#1a1a2e' }}>{fmtBRL(ym?.grossAnnual ?? 0)}</div>
+                </div>
+                <div style={cell}>
+                  <div style={lbl}>Média Diária {yr}</div>
+                  <div style={{ ...val, color: '#1a1a2e' }}>{fmtBRL(ym?.dailyAvg ?? 0)}</div>
+                </div>
+                <div style={cell}>
+                  <div style={lbl}>Média Mensal {yr}</div>
+                  <div style={{ ...val, color: '#1a1a2e' }}>{fmtBRL(ym?.monthlyAvg ?? 0)}</div>
+                </div>
+              </div>
+
+              {/* ── Row 2: Survival Goals (3-col) ── */}
+              {metrics.survivalDaily > 0 && (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', border: '1px solid #e0e7ff', borderRadius: '6px', marginBottom: '6px', backgroundColor: '#f5f3ff' }}>
+                  <div style={cell}>
+                    <div style={lbl}>🛡️ Sobrevivência Diária</div>
+                    <div style={{ ...val, color: '#4c1d95' }}>{fmtBRL(metrics.survivalDaily)}</div>
+                  </div>
+                  <div style={cell}>
+                    <div style={lbl}>🛡️ Sobrevivência Semanal</div>
+                    <div style={{ ...val, color: '#4c1d95' }}>{fmtBRL(metrics.survivalWeekly)}</div>
+                  </div>
+                  <div style={cell}>
+                    <div style={lbl}>🛡️ Sobrevivência Mensal</div>
+                    <div style={{ ...val, color: '#4c1d95' }}>{fmtBRL(metrics.survivalMonthly)}</div>
+                  </div>
+                </div>
+              )}
+
+              {/* ── Row 3: Operational & Partnership (6-col) ── */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', border: '1px solid #e5e7eb', borderRadius: '6px', backgroundColor: '#fafafa' }}>
+                <div style={cell}>
+                  <div style={lbl}>Meta Diária</div>
+                  <div style={{ ...val, color: '#7c3aed' }}>{dailyG > 0 ? fmtBRL(dailyG) : '—'}</div>
+                </div>
+                <div style={cell}>
+                  <div style={lbl}>Meta Semanal</div>
+                  <div style={{ ...val, color: '#7c3aed' }}>{weeklyGoal > 0 ? fmtBRL(weeklyGoal) : '—'}</div>
+                </div>
+                <div style={cell}>
+                  <div style={lbl}>Meta Mensal</div>
+                  <div style={{ ...val, color: '#7c3aed' }}>{monthlyGoal > 0 ? fmtBRL(monthlyGoal) : '—'}</div>
+                </div>
+                <div style={cell}>
+                  <div style={lbl}>Parceria</div>
+                  <div style={{ ...val, color: '#1a1a2e' }}>{spanMonths} meses ({spanDays}d)</div>
+                </div>
+                <div style={cell}>
+                  <div style={lbl}>Banco de Tempo</div>
+                  <div style={{ ...val, color: metrics.timeBankBalance >= 0 ? '#059669' : '#dc2626' }}>
+                    {metrics.timeBankBalance >= 0 ? '+' : ''}{metrics.timeBankBalance.toFixed(1)} sem.
+                  </div>
+                </div>
+                <div style={cell}>
+                  <div style={lbl}>Saldo Metas</div>
+                  <div style={{ ...val, color: metrics.globalGoalBalance >= 0 ? '#059669' : '#dc2626' }}>{fmtBRL(metrics.globalGoalBalance)}</div>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
 
         {/* ═══════════════════════════════════════════════════════════════════
             PAGE BREAK + PRACTICAL GUIDE
