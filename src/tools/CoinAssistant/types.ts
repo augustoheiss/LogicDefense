@@ -189,8 +189,9 @@ export interface TableMetrics {
    */
   totalExpenses: number;
   /**
-   * Annualised expense total — derived from expense rows'
-   * monthlyValue × monthCount. Falls back to totalExpenses if fields are missing.
+   * Annualised expense projection — each expense's value is divided by its
+   * lifespan in days, then multiplied by 365. Correctly handles multi-year
+   * expenses (e.g. 60-month financing) without inflating the annual figure.
    */
   annualExpenses: number;
   /**
@@ -199,6 +200,21 @@ export interface TableMetrics {
    * Positive = receipts exceed costs; negative = costs exceed receipts.
    */
   netBalance: number;
+
+  // ─── Survival / Break-Even Goals (always computed, never toggled) ──────────
+  /**
+   * Break-even daily revenue needed to cover operating costs.
+   * Computed from prorated daily expense rate across ALL expense rows.
+   *   survivalDaily = totalExpenses / globalExpenseDaySpan
+   * Returns 0 when no expenses exist.
+   */
+  survivalDaily: number;
+  /** survivalDaily × 7 */
+  survivalWeekly: number;
+  /** survivalDaily × 30.44 */
+  survivalMonthly: number;
+  /** survivalDaily × 365.25 — projected annual cost burden. */
+  survivalAnnualCost: number;
 }
 
 // ─── Projection Engine ────────────────────────────────────────────────────────

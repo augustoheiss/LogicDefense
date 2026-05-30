@@ -114,26 +114,59 @@ def compute_metrics(
     expense_rows = [r for r in rows if r.entry_type == EntryType.EXPENSE]
     total_expenses = 0.0
     annual_expenses = 0.0
+
+    # Survival goal accumulators: track the global expense date span
+    exp_earliest = ""
+    exp_latest = ""
+
     for row in expense_rows:
         total_expenses += row.value
-        if row.monthly_value is not None and row.month_count is not None:
-            annual_expenses += row.monthly_value * row.month_count
-        else:
-            annual_expenses += row.value
+
+        # Annualize via daily rate × 365 (fixes multi-year expense inflation)
+        exp_start = row.period_start or row.date
+        exp_end = row.period_end or row.date
+        lifespan_days = max(1, _calendar_day_span(exp_start, exp_end))
+        annual_expenses += (row.value / lifespan_days) * 365
+
+        # Widen global expense span for survival goals
+        if row.value > 0:
+            if not exp_earliest or exp_start < exp_earliest:
+                exp_earliest = exp_start
+            if not exp_latest or exp_end > exp_latest:
+                exp_latest = exp_end
+
     total_expenses = _round2(total_expenses)
     annual_expenses = _round2(annual_expenses)
+
+    # ── Survival / Break-Even Goals (always computed) ─────────────────────
+    global_expense_day_span = (
+        max(1, _calendar_day_span(exp_earliest, exp_latest))
+        if exp_earliest and exp_latest
+        else 0
+    )
+    survival_daily = _round2(total_expenses / global_expense_day_span) if global_expense_day_span > 0 else 0.0
+    survival_weekly = _round2(survival_daily * 7)
+    survival_monthly = _round2(survival_daily * 30.44)
+    survival_annual_cost = _round2(survival_daily * 365.25)
+
+    survival_fields = {
+        "survivalDaily": survival_daily,
+        "survivalWeekly": survival_weekly,
+        "survivalMonthly": survival_monthly,
+        "survivalAnnualCost": survival_annual_cost,
+    }
 
     if not revenue_rows:
         m = _empty_metrics()
         return TableMetrics(
-            **{**m.model_dump(by_alias=True), "totalExpenses": total_expenses, "annualExpenses": annual_expenses}
+            **{**m.model_dump(by_alias=True), "totalExpenses": total_expenses, "annualExpenses": annual_expenses, **survival_fields}
         )
 
     active_rows = [r for r in revenue_rows if r.value > 0]
     if not active_rows:
         m = _empty_metrics()
         return TableMetrics(
-            **{**m.model_dump(by_alias=True), "totalExpenses": total_expenses, "annualExpenses": annual_expenses}
+            **{**m.model_dump(by_alias=True), "totalExpenses": total_expenses, "annualExpenses": annual_expenses, **survival_fields}
         )
 
     # ── Global date span — uses periodStart/periodEnd when present ───────
@@ -309,6 +342,7 @@ def compute_metrics(
         totalExpenses=total_expenses,
         annualExpenses=annual_expenses,
         netBalance=net_balance,
+        **survival_fields,
     )
 
 
@@ -334,4 +368,8 @@ def _empty_metrics() -> TableMetrics:
         totalExpenses=0,
         annualExpenses=0,
         netBalance=0,
+        survivalDaily=0,
+        survivalWeekly=0,
+        survivalMonthly=0,
+        survivalAnnualCost=0,
     )

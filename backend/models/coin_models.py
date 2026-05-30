@@ -257,6 +257,28 @@ class TableMetrics(BaseModel):
         description="grossTotal − totalExpenses",
     )
 
+    # ── Survival / Break-Even Goals (always computed) ────────────────────────
+    survival_daily: float = Field(
+        default=0,
+        alias="survivalDaily",
+        description="Break-even daily revenue = totalExpenses / globalExpenseDaySpan",
+    )
+    survival_weekly: float = Field(
+        default=0,
+        alias="survivalWeekly",
+        description="survivalDaily × 7",
+    )
+    survival_monthly: float = Field(
+        default=0,
+        alias="survivalMonthly",
+        description="survivalDaily × 30.44",
+    )
+    survival_annual_cost: float = Field(
+        default=0,
+        alias="survivalAnnualCost",
+        description="survivalDaily × 365.25 — projected annual cost burden",
+    )
+
     model_config = {"populate_by_name": True}
 
 

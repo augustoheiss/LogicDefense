@@ -1,11 +1,10 @@
-import type { TableGoals, TableMetrics, CostBasedTarget } from '../types';
+import type { TableGoals, TableMetrics } from '../types';
 import { resolveGoalForYear } from '../utils/dateUtils';
 import { formatCurrencyShort, formatCurrencyFull } from '../utils/formatCurrency';
 
 interface GoalsPanelProps {
   goals: TableGoals;
   metrics: TableMetrics;
-  costBasedTarget?: CostBasedTarget;
 }
 
 /** Shorthand for compact card values */
@@ -98,7 +97,7 @@ function TimeBankCard({ balance }: { balance: number }) {
   );
 }
 
-export function GoalsPanel({ goals, metrics, costBasedTarget }: GoalsPanelProps) {
+export function GoalsPanel({ goals, metrics }: GoalsPanelProps) {
   // Latest month data for comparison
   const sortedMonths = Object.keys(metrics.byMonth).sort().reverse();
   const latestMonthMetrics = sortedMonths[0] ? metrics.byMonth[sortedMonths[0]] : null;
@@ -198,30 +197,30 @@ export function GoalsPanel({ goals, metrics, costBasedTarget }: GoalsPanelProps)
         />
       )}
 
-      {/* ── Cost-based survival progress bars (dual-target) ── */}
-      {costBasedTarget && (
+      {/* ── Survival goals (always-on, from core engine) ── */}
+      {metrics.survivalDaily > 0 && (
         <div className="space-y-3 pt-2 border-t border-cyan-500/20">
           <div className="text-xs text-cyan-400/60 uppercase tracking-wider flex items-center gap-1.5">
             <span>🛡️</span> Metas de Sobrevivência
-            <span className="text-white/20 normal-case">(projeção baseada nos gastos do mês)</span>
+            <span className="text-white/20 normal-case">(break-even diário global)</span>
           </div>
           <ProgressBar
             label="Sobrevivência Diária"
             current={metrics.globalDailyAvg}
-            target={costBasedTarget.dailySurvival}
+            target={metrics.survivalDaily}
             unit="/ dia"
           />
           <ProgressBar
             label="Sobrevivência Semanal"
             current={latestWeekGross}
-            target={costBasedTarget.weeklySurvival}
+            target={metrics.survivalWeekly}
             unit="/ semana"
           />
           {latestMonthMetrics && (
             <ProgressBar
               label="Sobrevivência Mensal"
               current={latestMonthMetrics.grossMonthly}
-              target={costBasedTarget.monthlySurvival}
+              target={metrics.survivalMonthly}
               unit="/ mês"
             />
           )}

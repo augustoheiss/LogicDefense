@@ -268,9 +268,9 @@ async def ai_analyst(payload: AIAnalystPayload) -> AIAnalystResponse:
                 system_instruction=SYSTEM_PROMPT,
                 temperature=0.4,
                 max_output_tokens=MAX_OUTPUT_TOKENS,
-                thinking_config=types.ThinkingConfig(
+                **{"thinking_config": types.ThinkingConfig(  # type: ignore[arg-type]
                     thinking_budget=THINKING_BUDGET,
-                ),
+                )},
             ),
         )
 

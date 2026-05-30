@@ -1,10 +1,9 @@
-import type { TableMetrics, CostBasedTarget, CoinTable, TableRow } from '../types';
+import type { TableMetrics, CoinTable } from '../types';
 import { formatCurrencyShort, formatCurrencyFull } from '../utils/formatCurrency';
 
 interface MetricsPanelProps {
   metrics: TableMetrics;
   dailyGoal: number;
-  costBasedTarget?: CostBasedTarget;
   /** The full table — needed to compute month-scoped expense totals. */
   table: CoinTable;
   /** Currently selected month ("YYYY-MM") from the global month filter. */
@@ -85,46 +84,6 @@ function prorateExpensesForMonth(
   return results;
 }
 
-/**
- * Computes dynamic Survival Goals from the global expense daily average.
- *
- * 1. globalTotalExpenses = sum of ALL expense row values (no month filter)
- * 2. globalActiveDays    = earliest expense date → latest expense end date (inclusive)
- * 3. survivalDailyGoal   = globalTotalExpenses / globalActiveDays
- * 4. Project to selectedMonth: weekly = daily×7, monthly = daily×daysInMonth
- */
-function computeGlobalSurvivalGoals(
-  rows: TableRow[],
-  selectedMonth: string,
-): { dailySurvival: number; weeklySurvival: number; monthlySurvival: number } | null {
-  let earliest = '';
-  let latest = '';
-  let total = 0;
-
-  for (const r of rows) {
-    if (r.entryType !== 'expense' || r.value <= 0) continue;
-    total += r.value;
-    const start = r.periodStart || r.date;
-    const end   = r.periodEnd   || r.date;
-    if (!earliest || start < earliest) earliest = start;
-    if (!latest   || end   > latest)   latest   = end;
-  }
-
-  if (total <= 0 || !earliest) return null;
-
-  const globalDays = daysBetween(earliest, latest);
-  const dailySurvival = globalDays > 0 ? total / globalDays : 0;
-  if (dailySurvival <= 0) return null;
-
-  const [y, m] = selectedMonth.split('-').map(Number);
-  const mDays = daysInMonth(y, m);
-
-  return {
-    dailySurvival,
-    weeklySurvival: dailySurvival * 7,
-    monthlySurvival: dailySurvival * mDays,
-  };
-}
 
 /** Shorthand used across all metric cards. Full value shown in tooltip via title attr. */
 const fmt = formatCurrencyShort;
@@ -161,7 +120,7 @@ function MetricCard({
   );
 }
 
-export function MetricsPanel({ metrics, dailyGoal, costBasedTarget, table, selectedMonth }: MetricsPanelProps) {
+export function MetricsPanel({ metrics, dailyGoal, table, selectedMonth }: MetricsPanelProps) {
   const sortedMonths = Object.keys(metrics.byMonth).sort().reverse().slice(0, 3);
 
   // ── Prorated monthly expenses (Regime de Competência) ─────────────────────
@@ -173,10 +132,9 @@ export function MetricsPanel({ metrics, dailyGoal, costBasedTarget, table, selec
   const expenseWeeklyAvg = expenseDailyAvg * 7;
   const selectedMonthMetrics = metrics.byMonth[selectedMonth] ?? null;
 
-  // ── Dynamic Survival Goals (global expense daily average) ──────────────
-  const survivalGoals = costBasedTarget
-    ? computeGlobalSurvivalGoals(table.rows, selectedMonth)
-    : null;
+  // ── Annual data for selected year ───────────────────────────────────────
+  const selectedYearStr = String(selYear);
+  const yearMetrics = metrics.byYear[selectedYearStr] ?? null;
 
   function formatMonth(ym: string): string {
     const [y, m] = ym.split('-');
@@ -231,6 +189,25 @@ export function MetricsPanel({ metrics, dailyGoal, costBasedTarget, table, selec
           />
         </div>
 
+        {/* ── Annual metrics for selected year ── */}
+        {yearMetrics && (
+          <div className="grid grid-cols-2 gap-3 mt-3">
+            <MetricCard
+              label={`Total Bruto Anual ${selectedYearStr}`}
+              value={fmt(yearMetrics.grossAnnual)}
+              fullValue={formatCurrencyFull(yearMetrics.grossAnnual)}
+              status="accent"
+              sub={`receitas de ${selectedYearStr}`}
+            />
+            <MetricCard
+              label="Média Anual"
+              value={fmt(metrics.globalAnnualAvg)}
+              fullValue={formatCurrencyFull(metrics.globalAnnualAvg)}
+              sub="diária × 365.25"
+            />
+          </div>
+        )}
+
         {/* ── Saldo Líquido (receitas − despesas) — só exibe quando há despesas ── */}
         {metrics.totalExpenses > 0 && (
           <MetricCard
@@ -266,11 +243,10 @@ export function MetricsPanel({ metrics, dailyGoal, costBasedTarget, table, selec
         })()}
 
         {/* ── Cost coverage card ── */}
-        {costBasedTarget && (() => {
-          const currentYear = new Date().getFullYear();
-          const yearGross = metrics.byYear[String(currentYear)]?.grossAnnual ?? 0;
-          const coveragePct = costBasedTarget.annualCost > 0
-            ? Math.round((yearGross / costBasedTarget.annualCost) * 1000) / 10
+        {metrics.survivalAnnualCost > 0 && (() => {
+          const yearGross = metrics.byYear[selectedYearStr]?.grossAnnual ?? 0;
+          const coveragePct = metrics.survivalAnnualCost > 0
+            ? Math.round((yearGross / metrics.survivalAnnualCost) * 1000) / 10
             : 0;
           const covered = coveragePct >= 100;
           return (
@@ -281,35 +257,35 @@ export function MetricsPanel({ metrics, dailyGoal, costBasedTarget, table, selec
               sub={
                 covered
                   ? `✅ Custos operacionais cobertos! Saldo é lucro líquido`
-                  : `⚡ ${formatCurrencyShort(yearGross)} de ${formatCurrencyShort(costBasedTarget.annualCost)} anuais`
+                  : `⚡ ${formatCurrencyShort(yearGross)} de ${formatCurrencyShort(metrics.survivalAnnualCost)} anuais`
               }
             />
           );
         })()}
 
-        {/* ── Dynamic Survival Goals (Meta de Sobrevivência) ── */}
-        {survivalGoals && (
+        {/* ── Survival Goals (always-on, from core engine) ── */}
+        {metrics.survivalDaily > 0 && (
           <>
             <MetricCard
               label="🛡️ Meta Mensal de Sobrevivência"
-              value={fmt(survivalGoals.monthlySurvival)}
-              fullValue={formatCurrencyFull(survivalGoals.monthlySurvival)}
+              value={fmt(metrics.survivalMonthly)}
+              fullValue={formatCurrencyFull(metrics.survivalMonthly)}
               status="default"
-              sub={`${monthDays} dias × ${fmt(survivalGoals.dailySurvival)}/dia`}
+              sub={`30.44 dias × ${fmt(metrics.survivalDaily)}/dia`}
             />
             <MetricCard
               label="🛡️ Meta Semanal de Sobrevivência"
-              value={fmt(survivalGoals.weeklySurvival)}
-              fullValue={formatCurrencyFull(survivalGoals.weeklySurvival)}
+              value={fmt(metrics.survivalWeekly)}
+              fullValue={formatCurrencyFull(metrics.survivalWeekly)}
               status="default"
               sub="diária × 7"
             />
             <MetricCard
               label="🛡️ Meta Diária de Sobrevivência"
-              value={fmt(survivalGoals.dailySurvival)}
-              fullValue={formatCurrencyFull(survivalGoals.dailySurvival)}
+              value={fmt(metrics.survivalDaily)}
+              fullValue={formatCurrencyFull(metrics.survivalDaily)}
               status="default"
-              sub="total global ÷ dias de parceria"
+              sub="total global ÷ dias de cobertura"
             />
           </>
         )}

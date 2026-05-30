@@ -45,22 +45,46 @@ export function computeMetrics(
   const expenseRows = rows.filter((r) => r.entryType === 'expense');
   let totalExpenses  = 0;
   let annualExpenses = 0;
+
+  // Survival goal accumulators: track the global expense date span
+  let expEarliest = '';
+  let expLatest   = '';
+
   for (const row of expenseRows) {
     totalExpenses += row.value;
-    // Prefer explicit monthlyValue × monthCount; fall back to raw value
-    annualExpenses += (row.monthlyValue != null && row.monthCount != null)
-      ? row.monthlyValue * row.monthCount
-      : row.value;
+
+    // Annualize via daily rate × 365 (fixes multi-year expense inflation)
+    const expStart = row.periodStart || row.date;
+    const expEnd   = row.periodEnd   || row.date;
+    const lifespanDays = Math.max(1, calendarDaySpan(expStart, expEnd));
+    annualExpenses += (row.value / lifespanDays) * 365;
+
+    // Widen global expense span for survival goals
+    if (row.value > 0) {
+      if (!expEarliest || expStart < expEarliest) expEarliest = expStart;
+      if (!expLatest   || expEnd   > expLatest)   expLatest   = expEnd;
+    }
   }
-  totalExpenses  = Math.round(totalExpenses  * 100) / 100;
-  annualExpenses = Math.round(annualExpenses * 100) / 100;
+  totalExpenses  = round2(totalExpenses);
+  annualExpenses = round2(annualExpenses);
+
+  // ── Survival / Break-Even Goals (always computed) ──────────────────────────
+  const globalExpenseDaySpan = (expEarliest && expLatest)
+    ? Math.max(1, calendarDaySpan(expEarliest, expLatest))
+    : 0;
+  const survivalDaily = globalExpenseDaySpan > 0 ? round2(totalExpenses / globalExpenseDaySpan) : 0;
+  const survivalWeekly      = round2(survivalDaily * 7);
+  const survivalMonthly     = round2(survivalDaily * 30.44);
+  const survivalAnnualCost  = round2(survivalDaily * 365.25);
+
+  const survivalFields = { survivalDaily, survivalWeekly, survivalMonthly, survivalAnnualCost };
 
   if (revenueRows.length === 0) {
-    return { ...emptyMetrics(), totalExpenses, annualExpenses };
+    return { ...emptyMetrics(), totalExpenses, annualExpenses, ...survivalFields };
   }
 
   const activeRows = revenueRows.filter((r) => r.value > 0);
-  if (activeRows.length === 0) return { ...emptyMetrics(), totalExpenses, annualExpenses };
+  if (activeRows.length === 0) return { ...emptyMetrics(), totalExpenses, annualExpenses, ...survivalFields };
 
   // ── Global date span — uses periodStart/periodEnd when present ────────────────
   // Including the full period boundaries prevents a single end-of-month payment
@@ -263,6 +287,7 @@ export function computeMetrics(
     totalExpenses,
     annualExpenses,
     netBalance,
+    ...survivalFields,
   };
 }
 
@@ -340,6 +365,10 @@ function emptyMetrics(): TableMetrics {
     totalExpenses: 0,
     annualExpenses: 0,
     netBalance: 0,
+    survivalDaily: 0,
+    survivalWeekly: 0,
+    survivalMonthly: 0,
+    survivalAnnualCost: 0,
   };
 }
 

@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback } from 'react';
-import type { CoinTable, TableRow, CostBasedTarget } from '../types';
+import type { CoinTable, TableRow } from '../types';
 import { computeMetrics } from '../hooks/useMetricsEngine';
 import { SpreadsheetGrid } from './SpreadsheetGrid';
 import { AddRowForm } from './AddRowForm';
@@ -79,14 +79,49 @@ interface MonthSelectorProps {
 }
 
 function MonthSelector({ value, options, onChange }: MonthSelectorProps) {
-  const idx     = options.indexOf(value);
-  const hasPrev = idx < options.length - 1; // older = higher index (desc sort)
-  const hasNext = idx > 0;                  // newer = lower index
+  // Group options by year (options are desc-sorted: newest first)
+  const yearMap = new Map<string, string[]>();
+  for (const ym of options) {
+    const yr = ym.slice(0, 4);
+    if (!yearMap.has(yr)) yearMap.set(yr, []);
+    yearMap.get(yr)!.push(ym);
+  }
+  const years = Array.from(yearMap.keys()).sort().reverse(); // Show newest years first
+  const selectedYear = value.slice(0, 4);
+  const monthsInYear = yearMap.get(selectedYear) ?? [];
+  const idx     = monthsInYear.indexOf(value);
+  const hasPrev = idx < monthsInYear.length - 1;
+  const hasNext = idx > 0;
+
+  const handleYearChange = (yr: string) => {
+    const months = yearMap.get(yr) ?? [];
+    onChange(months[0] ?? value); // newest month in that year
+  };
 
   return (
-    <div className="flex items-center gap-1">
+    <div className="flex items-center gap-2">
+      {/* Year pills */}
+      <div className="flex items-center gap-1">
+        {years.map((yr) => (
+          <button
+            key={yr}
+            onClick={() => handleYearChange(yr)}
+            className={`px-2.5 py-1 text-xs font-semibold rounded-md transition-all ${
+              yr === selectedYear
+                ? 'bg-[#a855f7] text-white shadow'
+                : 'text-white/30 hover:text-white/60 hover:bg-white/8'
+            }`}
+          >
+            {yr}
+          </button>
+        ))}
+      </div>
+
+      <span className="w-px h-5 bg-white/15" />
+
+      {/* Month carousel within selected year */}
       <button
-        onClick={() => hasPrev && onChange(options[idx + 1])}
+        onClick={() => hasPrev && onChange(monthsInYear[idx + 1])}
         disabled={!hasPrev}
         className="px-2 py-1 rounded text-white/40 hover:text-white hover:bg-white/10 disabled:opacity-20 disabled:cursor-not-allowed transition-colors text-base leading-none"
         aria-label="Mês anterior"
@@ -99,14 +134,14 @@ function MonthSelector({ value, options, onChange }: MonthSelectorProps) {
         className="text-xs font-medium text-white rounded-lg px-3 py-1.5 outline-none focus:ring-1 focus:ring-[#a855f7] cursor-pointer border border-white/15 appearance-none"
         style={{ backgroundColor: 'rgba(255,255,255,0.06)' }}
       >
-        {options.map((ym) => (
+        {monthsInYear.map((ym) => (
           <option key={ym} value={ym} style={{ background: '#1a1a2e', color: '#fff' }}>
             {formatMonthLabel(ym)}
           </option>
         ))}
       </select>
       <button
-        onClick={() => hasNext && onChange(options[idx - 1])}
+        onClick={() => hasNext && onChange(monthsInYear[idx - 1])}
         disabled={!hasNext}
         className="px-2 py-1 rounded text-white/40 hover:text-white hover:bg-white/10 disabled:opacity-20 disabled:cursor-not-allowed transition-colors text-base leading-none"
         aria-label="Próximo mês"
@@ -133,9 +168,6 @@ export function TableEditor({
 
   // ── Time Machine (cutoff date) ──────────────────────────────────────────────
   const [cutoffDate, setCutoffDate] = useState<string>(''); // '' = today (no filter)
-
-  // ── Dual-Target: cost-based goal toggle ─────────────────────────────────────
-  const [costGoalActive, setCostGoalActive] = useState(false);
 
   // ── Filtered rows (Time Machine) ────────────────────────────────────────────
   // When a cutoff date is set, only rows on or before that date are considered.
@@ -172,93 +204,7 @@ export function TableEditor({
     ? selectedMonth
     : (availableMonths[0] ?? todayYM());
 
-  // ── Cost-based target derivation (Dynamic Day-Span Break-Even) ───────────────
-  // All survival targets are derived from the EXACT day span of the expense
-  // data in the selected year.  No hardcoded monthly/yearly divisors.
-  //
-  //   totalExpenses  = Σ |expense rows| + Σ |negative cost rows|  (selected year)
-  //   daySpan        = (latestBoundary − earliestBoundary) + 1  (min 1)
-  //   dailyCost      = totalExpenses / daySpan
-  //   weeklySurvival = dailyCost × 7
-  //   monthlySurvival= dailyCost × 30
-  //   annualCost     = dailyCost × 365
-  //
-  // Date boundary fallback pattern (per row):
-  //   Primary:  periodStart / periodEnd  (explicit coverage window, e.g. 365-day contract)
-  //   Fallback: r.date                   (transaction date, used as both start and end)
-  //
   const currentYear = cutoffDate ? parseInt(cutoffDate.slice(0, 4), 10) : new Date().getFullYear();
-
-  // Collect all expense-bearing rows for the selected year and compute totals + date range.
-  // Date boundary priority: periodStart/periodEnd → r.date (fallback).
-  const { totalExpenses: ytdTotalExpenses, daySpan } = useMemo(() => {
-    const yearPrefix = String(currentYear) + '-';
-    let earliest = '';
-    let latest = '';
-    let expenseTotal = 0;
-    let negativeCosts = 0;
-
-    /** Resolve the effective coverage boundaries for a row.
-     *  Primary: periodStart/periodEnd (explicit coverage window).
-     *  Fallback: r.date (transaction date, used as both start and end). */
-    const bounds = (r: typeof filteredRows[number]): [string, string] => {
-      const start = r.periodStart || r.date;
-      const end   = r.periodEnd   || r.date;
-      return [start, end];
-    };
-
-    /** Widen the global earliest/latest to include a [start, end] pair. */
-    const widen = (start: string, end: string) => {
-      if (!earliest || start < earliest) earliest = start;
-      if (!latest   || end   > latest)   latest   = end;
-    };
-
-    for (const r of filteredRows) {
-      if (!r.date.startsWith(yearPrefix)) continue;
-
-      // 1. Expense-type rows (Gastos tab — always positive values)
-      if (r.entryType === 'expense' && r.value > 0) {
-        expenseTotal += r.value;
-        widen(...bounds(r));
-        continue;
-      }
-
-      // 2. Negative-value rows in the main spreadsheet (inline costs)
-      if (
-        r.entryType !== 'expense' &&
-        r.entryType !== 'deposit' &&
-        r.entryType !== 'waiver' &&
-        r.value < 0
-      ) {
-        negativeCosts += Math.abs(r.value);
-        widen(...bounds(r));
-      }
-    }
-
-    const total = Math.round((expenseTotal + negativeCosts) * 100) / 100;
-
-    // Day span: difference in days between earliest and latest boundary + 1 (inclusive).
-    let span = 1;
-    if (earliest && latest) {
-      const d0 = new Date(earliest + 'T12:00:00');
-      const d1 = new Date(latest + 'T12:00:00');
-      span = Math.max(1, Math.round((d1.getTime() - d0.getTime()) / 86_400_000) + 1);
-    }
-
-    return { totalExpenses: total, daySpan: span };
-  }, [filteredRows, currentYear]);
-
-  // Pure daily cost — the single source of truth for all survival targets.
-  const dailyCost = Math.round((ytdTotalExpenses / daySpan) * 100) / 100;
-
-  const costBasedTarget: CostBasedTarget | undefined = costGoalActive && dailyCost > 0
-    ? {
-        dailySurvival: dailyCost,
-        weeklySurvival: Math.round(dailyCost * 7 * 100) / 100,
-        monthlySurvival: Math.round(dailyCost * 30 * 100) / 100,
-        annualCost: Math.round(dailyCost * 365 * 100) / 100,
-      }
-    : undefined;
 
   // Rows visible in the current month view
   const monthRows = useMemo(
@@ -394,42 +340,6 @@ export function TableEditor({
           </div>
         </div>
 
-        <div className="w-px h-8 bg-white/10 hidden sm:block" />
-
-        {/* Cost-based goal toggle */}
-        <div className="flex items-center gap-2.5">
-          <span className="text-base">🎯</span>
-          <div className="space-y-0.5">
-            <label className="text-xs text-white/40 uppercase tracking-wider block">Meta por Custo</label>
-            <button
-              onClick={() => setCostGoalActive((v) => !v)}
-              className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
-                costGoalActive ? 'bg-cyan-500' : 'bg-white/15'
-              }`}
-              role="switch"
-              aria-checked={costGoalActive}
-            >
-              <span
-                className={`inline-block h-3.5 w-3.5 rounded-full bg-white transition-transform ${
-                  costGoalActive ? 'translate-x-4.5' : 'translate-x-0.5'
-                }`}
-              />
-            </button>
-          </div>
-          {costGoalActive && costBasedTarget && (
-            <div className="flex gap-3 text-xs">
-              <div>
-                <div className="text-white/30">Sobrev. Diária</div>
-                <div className="font-mono font-semibold text-cyan-400">{formatCurrencyShort(costBasedTarget.dailySurvival)}</div>
-              </div>
-              <div>
-                <div className="text-white/30">Sobrev. Semanal</div>
-                <div className="font-mono font-semibold text-cyan-400">{formatCurrencyShort(costBasedTarget.weeklySurvival)}</div>
-              </div>
-            </div>
-          )}
-        </div>
-
         {cutoffDate && (
           <span className="text-xs text-cyan-400/60 ml-auto">
             ⚠ Exibindo dados até {cutoffDate.split('-').reverse().join('/')}
@@ -494,7 +404,7 @@ export function TableEditor({
         const mDays = new Date(selY, selM, 0).getDate();
         const selectedMonthM = metrics.byMonth[effectiveMonth];
         const dailyMonth = selectedMonthM ? selectedMonthM.dailyAvg : 0;
-        const dailySurvival = costBasedTarget?.dailySurvival ?? 0;
+        const dailySurvival = metrics.survivalDaily;
 
         // Goal comparison helper
         const compare = (goal: number) => {
@@ -611,10 +521,10 @@ export function TableEditor({
         {activeTab === 'metrics' && (
           <div className="flex flex-col lg:flex-row gap-4">
             <div className="flex-1">
-              <MetricsPanel metrics={metrics} dailyGoal={resolveGoalForYear(table.goals.dailyGoals, currentYear)} costBasedTarget={costBasedTarget} table={table} selectedMonth={effectiveMonth} />
+              <MetricsPanel metrics={metrics} dailyGoal={resolveGoalForYear(table.goals.dailyGoals, currentYear)} table={table} selectedMonth={effectiveMonth} />
             </div>
             <div className="lg:w-72 shrink-0">
-              <GoalsPanel goals={table.goals} metrics={metrics} costBasedTarget={costBasedTarget} />
+              <GoalsPanel goals={table.goals} metrics={metrics} />
             </div>
           </div>
         )}
@@ -647,7 +557,7 @@ export function TableEditor({
                   rows={revenueRows}
                   dailyGoal={resolveGoalForYear(table.goals.dailyGoals, parseInt(effectiveMonth.slice(0, 4)))}
                   selectedMonth={effectiveMonth}
-                  dailySurvivalGoal={costBasedTarget?.dailySurvival}
+                  dailySurvivalGoal={metrics.survivalDaily > 0 ? metrics.survivalDaily : undefined}
                 />
               </div>
             )}
@@ -704,7 +614,12 @@ export function TableEditor({
           selectedMonth={effectiveMonth}
           onClose={() => setShowWhatsApp(false)}
           cutoffDate={cutoffDate || undefined}
-          costBasedTarget={costBasedTarget}
+          costBasedTarget={metrics.survivalDaily > 0 ? {
+            dailySurvival: metrics.survivalDaily,
+            weeklySurvival: metrics.survivalWeekly,
+            monthlySurvival: metrics.survivalMonthly,
+            annualCost: metrics.survivalAnnualCost,
+          } : undefined}
         />
       )}
 
