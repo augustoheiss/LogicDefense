@@ -61,6 +61,173 @@ router = APIRouter(prefix="/api/coin", tags=["CoinAssistant AI"])
 # ── Context Builder ──────────────────────────────────────────────────────────
 
 
+# Entry type labels for the ledger
+_ENTRY_LABELS = {
+    EntryType.REVENUE: "RECEITA",
+    EntryType.EXPENSE: "DESPESA",
+    EntryType.DEPOSIT: "APORTE",
+    EntryType.WAIVER:  "DISPENSA",
+}
+
+
+def build_stats_block(metrics: TableMetrics) -> str:
+    """Formats the pre-computed advanced statistics into a context block."""
+    if metrics.max_transaction == 0 and metrics.min_transaction == 0:
+        return ""
+    mode_line = (
+        f"  Moda (valor mais frequente): R$ {metrics.mode_transaction:,.2f}"
+        if metrics.mode_transaction > 0
+        else "  Moda: nenhum valor repetido"
+    )
+    return f"""
+── Estatísticas Avançadas (receitas) ──
+  Maior transação:         R$ {metrics.max_transaction:,.2f}
+  Menor transação:         R$ {metrics.min_transaction:,.2f}
+  Mediana:                 R$ {metrics.median_transaction:,.2f}
+{mode_line}
+  Desvio padrão:           R$ {metrics.std_deviation:,.2f}
+"""
+
+
+def build_transaction_ledger(
+    rows: list,
+    current_ym: str,
+) -> str:
+    """
+    Builds a tiered transaction ledger for the AI context.
+
+    4-Tier Cascade:
+      Tier 1 (≤ 200 rows):   Full ledger — every row with description.
+      Tier 2 (201–1000):     Current month full + monthly summaries + Top 10.
+      Tier 3 (1001–5000):    Current month (capped at 100) + quarterly + Top 10.
+      Tier 4 (5000+):        Minimal + yearly summaries + Top 10 + hint.
+    """
+    total = len(rows)
+    if total == 0:
+        return ""
+
+    def _fmt_row(r) -> str:
+        entry_type = r.entry_type or EntryType.REVENUE
+        label = _ENTRY_LABELS.get(entry_type, "RECEITA")
+        desc = f" | {r.description}" if r.description else ""
+        return f"  {r.date} | {label:8s} | R$ {r.value:>10,.2f}{desc}"
+
+    def _top_n(n: int = 10) -> str:
+        by_value = sorted(rows, key=lambda r: r.value, reverse=True)[:n]
+        lines = [_fmt_row(r) for r in by_value]
+        return f"\n── Top {n} Maiores Transações ──\n" + "\n".join(lines) if lines else ""
+
+    def _monthly_summaries(exclude_ym: str = "") -> str:
+        """Group rows by YYYY-MM and produce count + total per type."""
+        from collections import defaultdict
+        buckets: dict[str, list] = defaultdict(list)
+        for r in rows:
+            ym = r.date[:7]
+            if ym != exclude_ym:
+                buckets[ym].append(r)
+        if not buckets:
+            return ""
+        lines = []
+        for ym in sorted(buckets.keys()):
+            group = buckets[ym]
+            rev = [r for r in group if (r.entry_type or EntryType.REVENUE) == EntryType.REVENUE]
+            exp = [r for r in group if r.entry_type == EntryType.EXPENSE]
+            dep = [r for r in group if r.entry_type == EntryType.DEPOSIT]
+            rev_total = sum(r.value for r in rev)
+            exp_total = sum(r.value for r in exp)
+            dep_total = sum(r.value for r in dep)
+            parts = []
+            if rev:
+                parts.append(f"{len(rev)} receitas (R$ {rev_total:,.2f})")
+            if exp:
+                parts.append(f"{len(exp)} despesas (R$ {exp_total:,.2f})")
+            if dep:
+                parts.append(f"{len(dep)} aportes (R$ {dep_total:,.2f})")
+            lines.append(f"  {ym}: {', '.join(parts)}")
+        return "\n── Resumo por Mês ──\n" + "\n".join(lines)
+
+    def _quarterly_summaries() -> str:
+        """Group rows by YYYY-Qn and produce count + total."""
+        from collections import defaultdict
+        buckets: dict[str, list] = defaultdict(list)
+        for r in rows:
+            y = r.date[:4]
+            m = int(r.date[5:7])
+            q = (m - 1) // 3 + 1
+            key = f"{y}-Q{q}"
+            buckets[key].append(r)
+        lines = []
+        for qk in sorted(buckets.keys()):
+            group = buckets[qk]
+            total = sum(r.value for r in group)
+            lines.append(f"  {qk}: {len(group)} transações, total R$ {total:,.2f}")
+        return "\n── Resumo por Trimestre ──\n" + "\n".join(lines) if lines else ""
+
+    def _yearly_summaries() -> str:
+        from collections import defaultdict
+        buckets: dict[str, list] = defaultdict(list)
+        for r in rows:
+            buckets[r.date[:4]].append(r)
+        lines = []
+        for yk in sorted(buckets.keys()):
+            group = buckets[yk]
+            total = sum(r.value for r in group)
+            lines.append(f"  {yk}: {len(group)} transações, total R$ {total:,.2f}")
+        return "\n── Resumo por Ano ──\n" + "\n".join(lines) if lines else ""
+
+    def _current_month_ledger(cap: int = 0) -> str:
+        cm_rows = sorted(
+            [r for r in rows if r.date[:7] == current_ym],
+            key=lambda r: r.date,
+        )
+        if not cm_rows:
+            return ""
+        if cap > 0 and len(cm_rows) > cap:
+            shown = cm_rows[:cap]
+            lines = [_fmt_row(r) for r in shown]
+            lines.append(f"  ... e mais {len(cm_rows) - cap} transações neste mês")
+        else:
+            lines = [_fmt_row(r) for r in cm_rows]
+        return f"\n── Transações do Mês Atual ({current_ym}) ──\n" + "\n".join(lines)
+
+    # ── Tier 1: ≤ 200 rows — full ledger ─────────────────────────────────────
+    if total <= 200:
+        sorted_rows = sorted(rows, key=lambda r: r.date)
+        lines = [_fmt_row(r) for r in sorted_rows]
+        return f"\n── Registro Completo de Transações ({total} entradas) ──\n" + "\n".join(lines)
+
+    # ── Tier 2: 201–1000 — current month full + monthly summaries + Top 10 ──
+    if total <= 1000:
+        parts = [
+            _current_month_ledger(),
+            _monthly_summaries(exclude_ym=current_ym),
+            _top_n(10),
+        ]
+        return "\n".join(p for p in parts if p)
+
+    # ── Tier 3: 1001–5000 — current month (cap 100) + quarterly + Top 10 ────
+    if total <= 5000:
+        parts = [
+            _current_month_ledger(cap=100),
+            _quarterly_summaries(),
+            _top_n(10),
+        ]
+        return "\n".join(p for p in parts if p)
+
+    # ── Tier 4: 5000+ — minimal + yearly + Top 10 + hint ────────────────────
+    hint = (
+        "\n⚠️ O usuário possui milhares de transações. Para análise de descrições "
+        "específicas, peça ao usuário para informar o mês ou período desejado."
+    )
+    parts = [
+        _current_month_ledger(cap=50),
+        _yearly_summaries(),
+        _top_n(10),
+        hint,
+    ]
+    return "\n".join(p for p in parts if p)
+
+
 def build_financial_context(
     payload: AIAnalystPayload,
     metrics: TableMetrics,
@@ -185,7 +352,19 @@ def build_financial_context(
   Saldo atual (c/ juros):  R$ {metrics.investment_balance:,.2f}
 """
 
-    return context + invest_block + "\n═══════════════════════════════════════════════════════════"
+    # Advanced statistics block
+    stats_block = build_stats_block(metrics)
+
+    # Transaction ledger (4-tier cascade)
+    ledger_block = build_transaction_ledger(payload.rows, current_ym)
+
+    return (
+        context
+        + invest_block
+        + stats_block
+        + ledger_block
+        + "\n═══════════════════════════════════════════════════════════"
+    )
 
 
 # ── System Prompt ────────────────────────────────────────────────────────────
@@ -216,6 +395,14 @@ ESPECIALIDADES:
 - Análise comparativa entre períodos
 - Relação receita vs despesas e ponto de equilíbrio
 - Análise de portfólio de investimentos (aportes, rendimentos compostos, saldo acumulado)
+- Estatísticas avançadas: mediana, moda, desvio padrão, min/max (já calculados — use os valores do contexto)
+- Análise de transações individuais: descrições, padrões de receita, categorias de despesa
+
+DICAS SOBRE O CONTEXTO:
+- O contexto inclui um REGISTRO DE TRANSAÇÕES com datas, valores, tipos e descrições.
+- Para datasets grandes (>200 entradas), o registro mostra o mês atual detalhado e resumos dos demais.
+- As estatísticas avançadas (mediana, moda, desvio padrão) JÁ FORAM calculadas — use-as diretamente, NÃO recalcule.
+- Se o usuário perguntar sobre uma transação específica, procure-a no registro.
 
 RESTRIÇÕES:
 - NUNCA dê conselhos de investimento (ações, cripto, etc.)

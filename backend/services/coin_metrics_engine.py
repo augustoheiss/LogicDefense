@@ -15,6 +15,8 @@ Key invariants (identical to the TypeScript version):
 
 from __future__ import annotations
 
+from collections import Counter
+
 from datetime import date, timedelta
 from typing import Optional
 
@@ -221,17 +223,65 @@ def compute_metrics(
         "investmentBalance": investment_balance,
     }
 
+    # ── Advanced Statistics (revenue rows only, value > 0) ─────────────────
+    positive_rev_values = [r.value for r in rows
+                           if r.entry_type not in (EntryType.DEPOSIT, EntryType.WAIVER, EntryType.EXPENSE)
+                           and r.value > 0]
+
+    if not positive_rev_values:
+        stats_fields = {
+            "maxTransaction": 0.0,
+            "minTransaction": 0.0,
+            "medianTransaction": 0.0,
+            "modeTransaction": 0.0,
+            "stdDeviation": 0.0,
+        }
+    else:
+        sorted_vals = sorted(positive_rev_values)
+        n = len(sorted_vals)
+        max_tx = _round2(sorted_vals[-1])
+        min_tx = _round2(sorted_vals[0])
+
+        # Median
+        if n % 2 == 1:
+            median_tx = _round2(sorted_vals[n // 2])
+        else:
+            median_tx = _round2((sorted_vals[n // 2 - 1] + sorted_vals[n // 2]) / 2)
+
+        # Mode (most frequent, need at least 2 occurrences)
+        freq = Counter(positive_rev_values)
+        mode_tx = 0.0
+        max_freq = 1  # threshold: needs > 1 to count as mode
+        for val, cnt in freq.items():
+            if cnt > max_freq:
+                max_freq = cnt
+                mode_tx = val
+        mode_tx = _round2(mode_tx)
+
+        # Population standard deviation
+        mean = sum(positive_rev_values) / n
+        variance = sum((v - mean) ** 2 for v in positive_rev_values) / n
+        std_dev = _round2(variance ** 0.5)
+
+        stats_fields = {
+            "maxTransaction": max_tx,
+            "minTransaction": min_tx,
+            "medianTransaction": median_tx,
+            "modeTransaction": mode_tx,
+            "stdDeviation": std_dev,
+        }
+
     if not revenue_rows:
         m = _empty_metrics()
         return TableMetrics(
-            **{**m.model_dump(by_alias=True), "totalExpenses": total_expenses, "annualExpenses": annual_expenses, **survival_fields, **invest_fields}
+            **{**m.model_dump(by_alias=True), "totalExpenses": total_expenses, "annualExpenses": annual_expenses, **survival_fields, **invest_fields, **stats_fields}
         )
 
     active_rows = [r for r in revenue_rows if r.value > 0]
     if not active_rows:
         m = _empty_metrics()
         return TableMetrics(
-            **{**m.model_dump(by_alias=True), "totalExpenses": total_expenses, "annualExpenses": annual_expenses, **survival_fields, **invest_fields}
+            **{**m.model_dump(by_alias=True), "totalExpenses": total_expenses, "annualExpenses": annual_expenses, **survival_fields, **invest_fields, **stats_fields}
         )
 
     # ── Global date span — uses periodStart/periodEnd when present ───────
@@ -411,6 +461,7 @@ def compute_metrics(
         netBalance=net_balance,
         **survival_fields,
         **invest_fields,
+        **stats_fields,
     )
 
 
@@ -444,4 +495,9 @@ def _empty_metrics() -> TableMetrics:
         totalInvested=0,
         totalInterestEarned=0,
         investmentBalance=0,
+        maxTransaction=0,
+        minTransaction=0,
+        medianTransaction=0,
+        modeTransaction=0,
+        stdDeviation=0,
     )

@@ -367,5 +367,10 @@ function emptyMetrics(): TableMetrics {
     totalInvested: 0,
     totalInterestEarned: 0,
     investmentBalance: 0,
+    maxTransaction: 0,
+    minTransaction: 0,
+    medianTransaction: 0,
+    modeTransaction: 0,
+    stdDeviation: 0,
   };
 }

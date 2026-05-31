@@ -229,6 +229,18 @@ export interface TableMetrics {
   totalInterestEarned: number;
   /** Current balance: totalInvested + totalInterestEarned. */
   investmentBalance: number;
+
+  // ─── Advanced Statistics (deterministic, never let the LLM compute these) ──
+  /** Largest single revenue transaction value. */
+  maxTransaction: number;
+  /** Smallest single revenue transaction value (among value > 0). */
+  minTransaction: number;
+  /** Median revenue transaction value (50th percentile). */
+  medianTransaction: number;
+  /** Most frequent revenue transaction value. 0 if no repeats. */
+  modeTransaction: number;
+  /** Population standard deviation of revenue transaction values. */
+  stdDeviation: number;
 }
 
 // ─── Projection Engine ────────────────────────────────────────────────────────

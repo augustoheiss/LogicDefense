@@ -314,6 +314,33 @@ class TableMetrics(BaseModel):
         description="Current balance: totalInvested + totalInterestEarned",
     )
 
+    # ── Advanced Statistics (deterministic, never let the LLM compute) ────────
+    max_transaction: float = Field(
+        default=0,
+        alias="maxTransaction",
+        description="Largest single revenue transaction value",
+    )
+    min_transaction: float = Field(
+        default=0,
+        alias="minTransaction",
+        description="Smallest single revenue transaction value (value > 0)",
+    )
+    median_transaction: float = Field(
+        default=0,
+        alias="medianTransaction",
+        description="Median revenue transaction value (50th percentile)",
+    )
+    mode_transaction: float = Field(
+        default=0,
+        alias="modeTransaction",
+        description="Most frequent revenue transaction value. 0 if no repeats",
+    )
+    std_deviation: float = Field(
+        default=0,
+        alias="stdDeviation",
+        description="Population standard deviation of revenue transaction values",
+    )
+
     model_config = {"populate_by_name": True}
 
 

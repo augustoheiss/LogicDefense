@@ -104,12 +104,55 @@ export function computeMetrics(
 
   const investFields = { depositCount, totalInvested, totalInterestEarned, investmentBalance };
 
+  // ── Advanced Statistics (revenue rows only, value > 0) ───────────────────
+  const positiveRevenueValues = rows
+    .filter((r) => r.entryType !== 'deposit' && r.entryType !== 'waiver' && r.entryType !== 'expense' && r.value > 0)
+    .map((r) => r.value);
+
+  let statsFields: { maxTransaction: number; minTransaction: number; medianTransaction: number; modeTransaction: number; stdDeviation: number };
+
+  if (positiveRevenueValues.length === 0) {
+    statsFields = { maxTransaction: 0, minTransaction: 0, medianTransaction: 0, modeTransaction: 0, stdDeviation: 0 };
+  } else {
+    const sorted = [...positiveRevenueValues].sort((a, b) => a - b);
+    const n = sorted.length;
+    const maxTransaction = round2(sorted[n - 1]);
+    const minTransaction = round2(sorted[0]);
+
+    // Median
+    const medianTransaction = n % 2 === 1
+      ? round2(sorted[Math.floor(n / 2)])
+      : round2((sorted[n / 2 - 1] + sorted[n / 2]) / 2);
+
+    // Mode (most frequent value)
+    const freqMap = new Map<number, number>();
+    for (const v of positiveRevenueValues) {
+      freqMap.set(v, (freqMap.get(v) ?? 0) + 1);
+    }
+    let modeTransaction = 0;
+    let maxFreq = 1; // need at least 2 occurrences to have a mode
+    for (const [val, freq] of freqMap) {
+      if (freq > maxFreq) {
+        maxFreq = freq;
+        modeTransaction = val;
+      }
+    }
+    modeTransaction = round2(modeTransaction);
+
+    // Population standard deviation
+    const mean = positiveRevenueValues.reduce((s, v) => s + v, 0) / n;
+    const variance = positiveRevenueValues.reduce((s, v) => s + (v - mean) ** 2, 0) / n;
+    const stdDeviation = round2(Math.sqrt(variance));
+
+    statsFields = { maxTransaction, minTransaction, medianTransaction, modeTransaction, stdDeviation };
+  }
+
   if (revenueRows.length === 0) {
-    return { ...emptyMetrics(), totalExpenses, annualExpenses, ...survivalFields, ...investFields };
+    return { ...emptyMetrics(), totalExpenses, annualExpenses, ...survivalFields, ...investFields, ...statsFields };
   }
 
   const activeRows = revenueRows.filter((r) => r.value > 0);
-  if (activeRows.length === 0) return { ...emptyMetrics(), totalExpenses, annualExpenses, ...survivalFields, ...investFields };
+  if (activeRows.length === 0) return { ...emptyMetrics(), totalExpenses, annualExpenses, ...survivalFields, ...investFields, ...statsFields };
 
   // ── Global date span — uses periodStart/periodEnd when present ────────────────
   // Including the full period boundaries prevents a single end-of-month payment
@@ -320,6 +363,7 @@ export function computeMetrics(
     netBalance,
     ...survivalFields,
     ...investFields,
+    ...statsFields,
   };
 }
 
@@ -439,6 +483,11 @@ function emptyMetrics(): TableMetrics {
     totalInvested: 0,
     totalInterestEarned: 0,
     investmentBalance: 0,
+    maxTransaction: 0,
+    minTransaction: 0,
+    medianTransaction: 0,
+    modeTransaction: 0,
+    stdDeviation: 0,
   };
 }
 
