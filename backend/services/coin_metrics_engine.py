@@ -146,7 +146,7 @@ def compute_metrics(
     # Filter out deposits, waivers, expenses for revenue calculations
     revenue_rows = [
         r for r in rows
-        if r.entry_type not in (EntryType.DEPOSIT, EntryType.WAIVER, EntryType.EXPENSE)
+        if r.entry_type not in (EntryType.DEPOSIT, EntryType.WAIVER, EntryType.EXPENSE, EntryType.PARTNER_OUT)
     ]
 
     # ── Expense metrics — computed before the early-return guard ──────────
@@ -169,10 +169,9 @@ def compute_metrics(
             if not exp_latest or exp_end > exp_latest:
                 exp_latest = exp_end
 
-    total_expenses = _round2(total_expenses)
+    # Note: total_expenses rounding deferred until after partner_out accumulation
     # annualExpenses = totalExpenses at global level;
     # per-year breakdown lives in by_year[yr].year_expenses
-    annual_expenses = total_expenses
 
     # ── Survival / Break-Even Goals (always computed) ─────────────────────
     global_expense_day_span = (
@@ -191,6 +190,25 @@ def compute_metrics(
         "survivalMonthly": survival_monthly,
         "survivalAnnualCost": survival_annual_cost,
     }
+
+    # ── Partnership ledger — separate tracking for Time Bank + breakdown ─────
+    partner_in_rows = [r for r in rows if r.entry_type == EntryType.PARTNER_IN]
+    partner_out_rows = [r for r in rows if r.entry_type == EntryType.PARTNER_OUT]
+    total_partner_in = _round2(sum(r.value for r in partner_in_rows))
+    total_partner_out = _round2(sum(r.value for r in partner_out_rows))
+
+    # partner_out adds to total_expenses (cash flow tracking)
+    for row in partner_out_rows:
+        total_expenses += row.value
+        s = row.period_start or row.date
+        e = row.period_end or row.date
+        if not exp_earliest or s < exp_earliest:
+            exp_earliest = s
+        if not exp_latest or e > exp_latest:
+            exp_latest = e
+
+    total_expenses = _round2(total_expenses)
+    annual_expenses = total_expenses
 
     # ── Investment / Deposit compound interest (0.8%/month CDI reference) ────
     MONTHLY_RATE = 0.008
@@ -225,7 +243,7 @@ def compute_metrics(
 
     # ── Advanced Statistics (revenue rows only, value > 0) ─────────────────
     positive_rev_values = [r.value for r in rows
-                           if r.entry_type not in (EntryType.DEPOSIT, EntryType.WAIVER, EntryType.EXPENSE)
+                           if r.entry_type not in (EntryType.DEPOSIT, EntryType.WAIVER, EntryType.EXPENSE, EntryType.PARTNER_OUT)
                            and r.value > 0]
 
     if not positive_rev_values:
@@ -425,7 +443,8 @@ def compute_metrics(
         total_waiver_credits += (row.value / 7) * goal_for_year
         total_waived_days += row.value
 
-    global_goal_balance = round((raw_strict_balance + total_waiver_credits) * 100) / 100
+    # Partner_out subtracts from goal balance (operational debt to the Time Bank)
+    global_goal_balance = round((raw_strict_balance + total_waiver_credits - total_partner_out) * 100) / 100
     waived_weeks = round((total_waived_days / 7) * 100) / 100
     billable_weeks = round((total_elapsed_weeks - waived_weeks) * 100) / 100
 
@@ -462,6 +481,8 @@ def compute_metrics(
         **survival_fields,
         **invest_fields,
         **stats_fields,
+        totalPartnerIn=total_partner_in,
+        totalPartnerOut=total_partner_out,
     )
 
 
@@ -500,4 +521,6 @@ def _empty_metrics() -> TableMetrics:
         medianTransaction=0,
         modeTransaction=0,
         stdDeviation=0,
+        totalPartnerIn=0,
+        totalPartnerOut=0,
     )

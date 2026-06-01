@@ -22,7 +22,10 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import math
 import os
+from collections import defaultdict
+from statistics import median as stat_median
 from datetime import date
 
 from dotenv import load_dotenv
@@ -66,7 +69,9 @@ _ENTRY_LABELS = {
     EntryType.REVENUE: "RECEITA",
     EntryType.EXPENSE: "DESPESA",
     EntryType.DEPOSIT: "APORTE",
-    EntryType.WAIVER:  "DISPENSA",
+    EntryType.WAIVER:      "DISPENSA",
+    EntryType.PARTNER_IN:  "CRÉDITO PARCERIA",
+    EntryType.PARTNER_OUT: "DÉBITO PARCERIA",
 }
 
 
@@ -143,6 +148,12 @@ def build_transaction_ledger(
                 parts.append(f"{len(exp)} despesas (R$ {exp_total:,.2f})")
             if dep:
                 parts.append(f"{len(dep)} aportes (R$ {dep_total:,.2f})")
+            neu = [r for r in group if r.entry_type == EntryType.PARTNER_IN]
+            if neu:
+                parts.append(f"{len(neu)} créd.parceria (R$ {sum(r.value for r in neu):,.2f})")
+            deb = [r for r in group if r.entry_type == EntryType.PARTNER_OUT]
+            if deb:
+                parts.append(f"{len(deb)} déb.parceria (R$ {sum(r.value for r in deb):,.2f})")
             lines.append(f"  {ym}: {', '.join(parts)}")
         return "\n── Resumo por Mês ──\n" + "\n".join(lines)
 
@@ -228,6 +239,94 @@ def build_transaction_ledger(
     return "\n".join(p for p in parts if p)
 
 
+def _global_day_span(rows: list) -> int:
+    """Inclusive day count between earliest and latest row dates."""
+    dates = sorted(r.date for r in rows if r.date)
+    if len(dates) < 2:
+        return 1
+    from datetime import datetime
+    d0 = datetime.strptime(dates[0], "%Y-%m-%d")
+    d1 = datetime.strptime(dates[-1], "%Y-%m-%d")
+    return max(1, (d1 - d0).days + 1)
+
+
+_TYPE_SECTION_LABELS = {
+    EntryType.REVENUE:     "Receitas",
+    EntryType.EXPENSE:     "Despesas",
+    EntryType.DEPOSIT:     "Aportes",
+    EntryType.WAIVER:      "Dispensas",
+    EntryType.PARTNER_IN:  "Créditos de Parceria",
+    EntryType.PARTNER_OUT: "Débitos de Parceria",
+}
+
+
+def build_category_summaries(rows: list, globalDaySpan: int = 1) -> str:
+    """
+    Groups all rows by (entry_type, description) and computes advanced
+    category-level statistics for the AI context.
+
+    For each category: count, total, mean, max, min, median, stddev,
+    daily_avg (global span), weekly_avg, and percentage of type total.
+    """
+    if not rows:
+        return ""
+
+    # Group by entry type first, then by description
+    type_buckets: dict[str, dict[str, list]] = defaultdict(lambda: defaultdict(list))
+    for r in rows:
+        entry_type = r.entry_type or EntryType.REVENUE
+        desc = (r.description or "Sem descrição").strip()
+        type_buckets[entry_type][desc].append(r)
+
+    sections: list[str] = []
+
+    for entry_type in [EntryType.REVENUE, EntryType.EXPENSE, EntryType.DEPOSIT,
+                       EntryType.PARTNER_IN, EntryType.PARTNER_OUT, EntryType.WAIVER]:
+        cats = type_buckets.get(entry_type, {})
+        if not cats:
+            continue
+
+        section_label = _TYPE_SECTION_LABELS.get(entry_type, str(entry_type))
+        all_values = [r.value for desc_rows in cats.values() for r in desc_rows]
+        type_total = sum(all_values)
+        n_categories = len(cats)
+
+        lines: list[str] = [f"\n── {section_label} por Categoria ({n_categories} categorias, total R$ {type_total:,.2f}) ──"]
+
+        # Sort by total descending
+        sorted_cats = sorted(cats.items(), key=lambda kv: sum(r.value for r in kv[1]), reverse=True)
+
+        for desc, cat_rows in sorted_cats:
+            values = [r.value for r in cat_rows]
+            count = len(values)
+            total = sum(values)
+            mean = total / count if count > 0 else 0
+            cat_max = max(values) if values else 0
+            cat_min = min(values) if values else 0
+            cat_median = stat_median(values) if values else 0
+            variance = sum((v - mean) ** 2 for v in values) / count if count > 0 else 0
+            cat_stddev = math.sqrt(variance)
+            daily_avg = total / globalDaySpan if globalDaySpan > 0 else 0
+            weekly_avg = daily_avg * 7
+            pct = (total / type_total * 100) if type_total > 0 else 0
+
+            lines.append(
+                f"  {desc} ({count}x): "
+                f"Total R$ {total:,.2f} | "
+                f"Média R$ {mean:,.2f} | "
+                f"Max R$ {cat_max:,.2f} | "
+                f"Min R$ {cat_min:,.2f} | "
+                f"Mediana R$ {cat_median:,.2f} | "
+                f"DP R$ {cat_stddev:,.2f} | "
+                f"Diária R$ {daily_avg:,.2f} | "
+                f"Semanal R$ {weekly_avg:,.2f} | "
+                f"{pct:.1f}%"
+            )
+
+        sections.append("\n".join(lines))
+
+    return "\n".join(sections) if sections else ""
+
 def build_financial_context(
     payload: AIAnalystPayload,
     metrics: TableMetrics,
@@ -247,6 +346,8 @@ def build_financial_context(
     expense_count = sum(1 for r in payload.rows if r.entry_type == EntryType.EXPENSE)
     deposit_count = sum(1 for r in payload.rows if r.entry_type == EntryType.DEPOSIT)
     waiver_count = sum(1 for r in payload.rows if r.entry_type == EntryType.WAIVER)
+    partner_in_count = sum(1 for r in payload.rows if r.entry_type == EntryType.PARTNER_IN)
+    partner_out_count = sum(1 for r in payload.rows if r.entry_type == EntryType.PARTNER_OUT)
 
     # Date range
     dates = sorted(r.date for r in payload.rows)
@@ -308,7 +409,7 @@ def build_financial_context(
 
 ── Visão Geral ──
   Período de dados:       {date_range}
-  Total de registros:     {len(payload.rows)} ({revenue_count} receitas, {expense_count} despesas, {deposit_count} aportes, {waiver_count} dispensas)
+  Total de registros:     {len(payload.rows)} ({revenue_count} receitas, {expense_count} despesas, {deposit_count} aportes, {waiver_count} dispensas, {partner_in_count} créditos parceria, {partner_out_count} débitos parceria)
   Semanas transcorridas:  {metrics.total_elapsed_weeks}
   Semanas faturáveis:     {metrics.billable_weeks} (excluindo {metrics.waived_weeks} dispensadas)
 
@@ -355,14 +456,14 @@ def build_financial_context(
     # Advanced statistics block
     stats_block = build_stats_block(metrics)
 
-    # Transaction ledger (4-tier cascade)
-    ledger_block = build_transaction_ledger(payload.rows, current_ym)
+    # Category-based summaries (replaces raw transaction ledger)
+    category_block = build_category_summaries(payload.rows, globalDaySpan=_global_day_span(payload.rows))
 
     return (
         context
         + invest_block
         + stats_block
-        + ledger_block
+        + category_block
         + "\n═══════════════════════════════════════════════════════════"
     )
 
@@ -396,13 +497,14 @@ ESPECIALIDADES:
 - Relação receita vs despesas e ponto de equilíbrio
 - Análise de portfólio de investimentos (aportes, rendimentos compostos, saldo acumulado)
 - Estatísticas avançadas: mediana, moda, desvio padrão, min/max (já calculados — use os valores do contexto)
-- Análise de transações individuais: descrições, padrões de receita, categorias de despesa
+- Análise de CATEGORIAS financeiras: identificar padrões de gasto/receita, concentração, diversificação
 
 DICAS SOBRE O CONTEXTO:
-- O contexto inclui um REGISTRO DE TRANSAÇÕES com datas, valores, tipos e descrições.
-- Para datasets grandes (>200 entradas), o registro mostra o mês atual detalhado e resumos dos demais.
+- O contexto inclui RESUMOS POR CATEGORIA com métricas avançadas (max, min, mediana, DP, média diária/semanal).
+- Use esses resumos para identificar tendências, riscos de concentração e oportunidades de otimização.
+- As médias diária/semanal por categoria usam o período GLOBAL (primeira→última entrada) para refletir o impacto estrutural real.
 - As estatísticas avançadas (mediana, moda, desvio padrão) JÁ FORAM calculadas — use-as diretamente, NÃO recalcule.
-- Se o usuário perguntar sobre uma transação específica, procure-a no registro.
+- Se o usuário pedir detalhes de transações individuais, sugira que informe o mês ou período desejado.
 
 RESTRIÇÕES:
 - NUNCA dê conselhos de investimento (ações, cripto, etc.)

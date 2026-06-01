@@ -35,7 +35,7 @@ function monthLastDay(year: number, month: number): string {
 
 interface ProratedExpense {
   row: TableRow;
-  /** This expense’s prorated contribution to the selected month. */
+  /** This expense's prorated contribution to the selected month. */
   monthlyContribution: number;
 }
 
@@ -112,10 +112,10 @@ function MetricCard({
   };
   const s = styles[status];
   return (
-    <div className={`rounded-xl border p-4 flex flex-col gap-1 ${s.wrap}`} title={fullValue}>
-      <span className="text-xs text-white/40 uppercase tracking-wider">{label}</span>
-      <span className={`text-xl font-bold font-mono ${s.text}`}>{value}</span>
-      {sub && <span className="text-xs text-white/30">{sub}</span>}
+    <div className={`rounded-xl border p-4 flex flex-col gap-1 min-w-0 ${s.wrap}`} title={fullValue}>
+      <span className="text-xs text-white/50 uppercase tracking-wider leading-tight">{label}</span>
+      <span className={`text-xl font-bold font-mono ${s.text} truncate`}>{value}</span>
+      {sub && <span className="text-xs text-white/40 leading-tight">{sub}</span>}
     </div>
   );
 }
@@ -144,14 +144,14 @@ export function MetricsPanel({ metrics, dailyGoal, table, selectedMonth }: Metri
 
   return (
     <div className="space-y-4">
-      {/* ── Global averages ── */}
+      {/* ── Totais Globais (top-level KPIs — no duplicated averages) ── */}
       <div>
-        <h3 className="text-xs text-white/40 uppercase tracking-wider mb-3 flex items-center gap-2">
+        <h3 className="text-xs text-white/50 uppercase tracking-wider mb-3 font-semibold flex items-center gap-2">
           <span className="w-4 h-px bg-white/20 inline-block" />
-          Médias Globais
+          Totais Globais
           <span className="flex-1 h-px bg-white/10 inline-block" />
         </h3>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
           <MetricCard
             label="Total Bruto"
             value={fmt(metrics.grossTotal)}
@@ -167,6 +167,26 @@ export function MetricsPanel({ metrics, dailyGoal, table, selectedMonth }: Metri
               sub="soma de todos os custos"
             />
           )}
+          {metrics.totalExpenses > 0 && (
+            <MetricCard
+              label="Saldo Líquido"
+              value={fmt(metrics.netBalance)}
+              fullValue={formatCurrencyFull(metrics.netBalance)}
+              status={metrics.netBalance >= 0 ? 'success' : 'warning'}
+              sub={metrics.netBalance >= 0 ? '✓ receitas > despesas' : '⚠ despesas > receitas'}
+            />
+          )}
+        </div>
+      </div>
+
+      {/* ── Médias Globais (consolidated — single place for averages) ── */}
+      <div>
+        <h3 className="text-xs text-white/50 uppercase tracking-wider mb-3 font-semibold flex items-center gap-2">
+          <span className="w-4 h-px bg-white/20 inline-block" />
+          Médias Globais
+          <span className="flex-1 h-px bg-white/10 inline-block" />
+        </h3>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <MetricCard
             label="Média Diária"
             value={fmt(metrics.globalDailyAvg)}
@@ -181,7 +201,7 @@ export function MetricsPanel({ metrics, dailyGoal, table, selectedMonth }: Metri
             sub={
               metrics.globalDailyAvg >= dailyGoal && metrics.globalDailyAvg > 0
                 ? '✓ meta atingida'
-                : 'dias úteis'
+                : 'base calendário'
             }
           />
           <MetricCard
@@ -196,140 +216,127 @@ export function MetricsPanel({ metrics, dailyGoal, table, selectedMonth }: Metri
             fullValue={formatCurrencyFull(metrics.globalMonthlyAvg)}
             sub="meses ativos"
           />
+          {/* Time Bank — placed here to avoid isolated card */}
+          {metrics.grossTotal > 0 && (() => {
+            const tb = metrics.timeBankBalance;
+            const positive = tb >= 0;
+            const absW = Math.abs(tb).toFixed(1);
+            return (
+              <MetricCard
+                label="Banco de Horas"
+                value={`${positive ? '+' : ''}${tb.toFixed(1)} semanas`}
+                status={positive ? 'success' : 'warning'}
+                sub={
+                  positive
+                    ? `✅ ${absW} semana${parseFloat(absW) !== 1 ? 's' : ''} adiantadas`
+                    : `🚨 ${absW} semana${parseFloat(absW) !== 1 ? 's' : ''} pendentes`
+                }
+              />
+            );
+          })()}
         </div>
+      </div>
 
-        {/* ── Year-scoped metrics for selected year ── */}
-        {yearMetrics && (
-          <div className="mt-3 space-y-2">
-            <h3 className="text-xs text-white/40 uppercase tracking-wider flex items-center gap-2">
-              <span className="w-4 h-px bg-white/20 inline-block" />
-              Métricas de {selectedYearStr}
-              <span className="flex-1 h-px bg-white/10 inline-block" />
-            </h3>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-              <MetricCard
-                label={`Total Bruto ${selectedYearStr}`}
-                value={fmt(yearMetrics.grossAnnual)}
-                fullValue={formatCurrencyFull(yearMetrics.grossAnnual)}
-                status="accent"
-                sub={`receitas de ${selectedYearStr}`}
-              />
-              <MetricCard
-                label={`Custo Anual ${selectedYearStr}`}
-                value={fmt(yearMetrics.yearExpenses)}
-                fullValue={formatCurrencyFull(yearMetrics.yearExpenses)}
-                status={yearMetrics.yearExpenses > 0 ? 'warning' : 'default'}
-                sub="despesas alocadas ao ano"
-              />
-              <MetricCard
-                label="Média Diária"
-                value={fmt(yearMetrics.dailyAvg)}
-                fullValue={formatCurrencyFull(yearMetrics.dailyAvg)}
-                sub={`span do ano ${selectedYearStr}`}
-              />
-              <MetricCard
-                label="Média Semanal"
-                value={fmt(yearMetrics.weeklyAvg)}
-                fullValue={formatCurrencyFull(yearMetrics.weeklyAvg)}
-                sub="bruto ÷ semanas ativas"
-              />
-              <MetricCard
-                label="Média Mensal"
-                value={fmt(yearMetrics.monthlyAvg)}
-                fullValue={formatCurrencyFull(yearMetrics.monthlyAvg)}
-                sub="bruto ÷ meses ativos"
-              />
-            </div>
+      {/* ── Year-scoped metrics ── */}
+      {yearMetrics && (
+        <div>
+          <h3 className="text-xs text-white/50 uppercase tracking-wider mb-3 font-semibold flex items-center gap-2">
+            <span className="w-4 h-px bg-white/20 inline-block" />
+            Métricas de {selectedYearStr}
+            <span className="flex-1 h-px bg-white/10 inline-block" />
+          </h3>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            <MetricCard
+              label={`Total Bruto ${selectedYearStr}`}
+              value={fmt(yearMetrics.grossAnnual)}
+              fullValue={formatCurrencyFull(yearMetrics.grossAnnual)}
+              status="accent"
+              sub={`receitas de ${selectedYearStr}`}
+            />
+            <MetricCard
+              label={`Custo Anual ${selectedYearStr}`}
+              value={fmt(yearMetrics.yearExpenses)}
+              fullValue={formatCurrencyFull(yearMetrics.yearExpenses)}
+              status={yearMetrics.yearExpenses > 0 ? 'warning' : 'default'}
+              sub="despesas alocadas ao ano"
+            />
+            <MetricCard
+              label="Diária do Ano"
+              value={fmt(yearMetrics.dailyAvg)}
+              fullValue={formatCurrencyFull(yearMetrics.dailyAvg)}
+              sub={`span do ano ${selectedYearStr}`}
+            />
+            <MetricCard
+              label="Semanal do Ano"
+              value={fmt(yearMetrics.weeklyAvg)}
+              fullValue={formatCurrencyFull(yearMetrics.weeklyAvg)}
+              sub="bruto ÷ semanas ativas"
+            />
+            <MetricCard
+              label="Mensal do Ano"
+              value={fmt(yearMetrics.monthlyAvg)}
+              fullValue={formatCurrencyFull(yearMetrics.monthlyAvg)}
+              sub="bruto ÷ meses ativos"
+            />
+            {/* Cost coverage — placed inside year grid */}
+            {metrics.survivalAnnualCost > 0 && (() => {
+              const yearGross = yearMetrics.grossAnnual;
+              const coveragePct = metrics.survivalAnnualCost > 0
+                ? Math.round((yearGross / metrics.survivalAnnualCost) * 1000) / 10
+                : 0;
+              const covered = coveragePct >= 100;
+              return (
+                <MetricCard
+                  label="Cobertura de Custos"
+                  value={`${coveragePct.toFixed(1)}%`}
+                  status={covered ? 'success' : 'warning'}
+                  sub={
+                    covered
+                      ? `✅ Custos cobertos! Saldo é lucro`
+                      : `⚡ ${formatCurrencyShort(yearGross)} de ${formatCurrencyShort(metrics.survivalAnnualCost)}`
+                  }
+                />
+              );
+            })()}
           </div>
-        )}
+        </div>
+      )}
 
-        {/* ── Saldo Líquido (receitas − despesas) — só exibe quando há despesas ── */}
-        {metrics.totalExpenses > 0 && (
-          <MetricCard
-            label="Saldo Líquido Global"
-            value={fmt(metrics.netBalance)}
-            fullValue={formatCurrencyFull(metrics.netBalance)}
-            status={metrics.netBalance >= 0 ? 'success' : 'warning'}
-            sub={
-              metrics.netBalance >= 0
-                ? `✓ Receitas excedem despesas em ${fmt(metrics.netBalance)}`
-                : `⚠ Despesas superam receitas em ${fmt(Math.abs(metrics.netBalance))}`
-            }
-          />
-        )}
-
-        {/* ── Time Bank ── */}
-        {metrics.grossTotal > 0 && (() => {
-          const tb = metrics.timeBankBalance;
-          const positive = tb >= 0;
-          const absW = Math.abs(tb).toFixed(1);
-          return (
+      {/* ── Survival Goals (compact row, better contrast) ── */}
+      {metrics.survivalDaily > 0 && (
+        <div>
+          <h3 className="text-xs text-white/50 uppercase tracking-wider mb-3 font-semibold flex items-center gap-2">
+            <span className="w-4 h-px bg-white/20 inline-block" />
+            🛡️ Metas de Sobrevivência
+            <span className="flex-1 h-px bg-white/10 inline-block" />
+          </h3>
+          <div className="grid grid-cols-3 gap-3">
             <MetricCard
-              label="Banco de Horas"
-              value={`${positive ? '+' : ''}${tb.toFixed(1)} sem.`}
-              status={positive ? 'success' : 'warning'}
-              sub={
-                positive
-                  ? `✅ ${absW} semana${parseFloat(absW) !== 1 ? 's' : ''} adiantadas`
-                  : `🚨 ${absW} semana${parseFloat(absW) !== 1 ? 's' : ''} pendentes`
-              }
-            />
-          );
-        })()}
-
-        {/* ── Cost coverage card ── */}
-        {metrics.survivalAnnualCost > 0 && (() => {
-          const yearGross = metrics.byYear[selectedYearStr]?.grossAnnual ?? 0;
-          const coveragePct = metrics.survivalAnnualCost > 0
-            ? Math.round((yearGross / metrics.survivalAnnualCost) * 1000) / 10
-            : 0;
-          const covered = coveragePct >= 100;
-          return (
-            <MetricCard
-              label="Cobertura de Custos"
-              value={`${coveragePct.toFixed(1)}%`}
-              status={covered ? 'success' : 'warning'}
-              sub={
-                covered
-                  ? `✅ Custos operacionais cobertos! Saldo é lucro líquido`
-                  : `⚡ ${formatCurrencyShort(yearGross)} de ${formatCurrencyShort(metrics.survivalAnnualCost)} anuais`
-              }
-            />
-          );
-        })()}
-
-        {/* ── Survival Goals (always-on, from core engine) ── */}
-        {metrics.survivalDaily > 0 && (
-          <>
-            <MetricCard
-              label="🛡️ Meta Mensal de Sobrevivência"
-              value={fmt(metrics.survivalMonthly)}
-              fullValue={formatCurrencyFull(metrics.survivalMonthly)}
-              status="default"
-              sub={`30.44 dias × ${fmt(metrics.survivalDaily)}/dia`}
+              label="🛡️ Diária"
+              value={fmt(metrics.survivalDaily)}
+              fullValue={formatCurrencyFull(metrics.survivalDaily)}
+              sub="custos globais ÷ dias"
             />
             <MetricCard
-              label="🛡️ Meta Semanal de Sobrevivência"
+              label="🛡️ Semanal"
               value={fmt(metrics.survivalWeekly)}
               fullValue={formatCurrencyFull(metrics.survivalWeekly)}
-              status="default"
               sub="diária × 7"
             />
             <MetricCard
-              label="🛡️ Meta Diária de Sobrevivência"
-              value={fmt(metrics.survivalDaily)}
-              fullValue={formatCurrencyFull(metrics.survivalDaily)}
-              status="default"
-              sub="total global ÷ dias de cobertura"
+              label="🛡️ Mensal"
+              value={fmt(metrics.survivalMonthly)}
+              fullValue={formatCurrencyFull(metrics.survivalMonthly)}
+              sub={`30.44 dias × ${fmt(metrics.survivalDaily)}/dia`}
             />
-          </>
-        )}
-      </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Selected month — Income breakdown ── */}
       {selectedMonthMetrics && (
         <div>
-          <h3 className="text-xs text-white/40 uppercase tracking-wider mb-3 flex items-center gap-2">
+          <h3 className="text-xs text-white/50 uppercase tracking-wider mb-3 font-semibold flex items-center gap-2">
             <span className="w-4 h-px bg-white/20 inline-block" />
             {formatMonth(selectedMonth)}
             <span className="flex-1 h-px bg-white/10 inline-block" />
@@ -347,15 +354,15 @@ export function MetricsPanel({ metrics, dailyGoal, table, selectedMonth }: Metri
         </div>
       )}
 
-      {/* ── Selected month — Expense breakdown (mirrors income cards) ── */}
+      {/* ── Selected month — Expense breakdown ── */}
       {monthlyExpenseTotal > 0 && (
         <div>
-          <h3 className="text-xs text-white/40 uppercase tracking-wider mb-3 flex items-center gap-2">
+          <h3 className="text-xs text-white/50 uppercase tracking-wider mb-3 font-semibold flex items-center gap-2">
             <span className="w-4 h-px bg-amber-400/30 inline-block" />
             Gastos de {formatMonth(selectedMonth)}
             <span className="flex-1 h-px bg-white/10 inline-block" />
           </h3>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          <div className="grid grid-cols-3 gap-3">
             <MetricCard
               label="Total Gasto Mensal"
               value={`-${fmt(monthlyExpenseTotal)}`}
@@ -364,14 +371,14 @@ export function MetricsPanel({ metrics, dailyGoal, table, selectedMonth }: Metri
               sub={`${proratedExpenses.length} despesa${proratedExpenses.length !== 1 ? 's' : ''} rateada${proratedExpenses.length !== 1 ? 's' : ''}`}
             />
             <MetricCard
-              label="Média de Gasto Diário"
+              label="Gasto Diário"
               value={`-${fmt(expenseDailyAvg)}`}
               fullValue={`-${formatCurrencyFull(expenseDailyAvg)}`}
               status="warning"
               sub={`÷ ${monthDays} dias`}
             />
             <MetricCard
-              label="Média de Gasto Semanal"
+              label="Gasto Semanal"
               value={`-${fmt(expenseWeeklyAvg)}`}
               fullValue={`-${formatCurrencyFull(expenseWeeklyAvg)}`}
               status="warning"
@@ -384,7 +391,7 @@ export function MetricsPanel({ metrics, dailyGoal, table, selectedMonth }: Metri
       {/* ── Recent months mini-list ── */}
       {sortedMonths.length > 1 && (
         <div>
-          <h3 className="text-xs text-white/40 uppercase tracking-wider mb-3 flex items-center gap-2">
+          <h3 className="text-xs text-white/50 uppercase tracking-wider mb-3 font-semibold flex items-center gap-2">
             <span className="w-4 h-px bg-white/20 inline-block" />
             Histórico Recente
             <span className="flex-1 h-px bg-white/10 inline-block" />
@@ -400,11 +407,11 @@ export function MetricsPanel({ metrics, dailyGoal, table, selectedMonth }: Metri
                   <span className="text-sm text-white/60 capitalize">{formatMonth(ym)}</span>
                   <div className="flex gap-6 text-right">
                     <div>
-                      <div className="text-xs text-white/30">Bruto</div>
+                      <div className="text-xs text-white/40">Bruto</div>
                       <div className="text-sm font-mono text-white/80">{fmt(m.grossMonthly)}</div>
                     </div>
                     <div>
-                      <div className="text-xs text-white/30">Diária</div>
+                      <div className="text-xs text-white/40">Diária</div>
                       <div
                         className={`text-sm font-mono font-medium ${
                           m.dailyAvg >= dailyGoal ? 'text-emerald-400' : 'text-amber-400'

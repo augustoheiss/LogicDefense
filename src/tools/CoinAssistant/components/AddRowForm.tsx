@@ -5,7 +5,7 @@ interface AddRowFormProps {
   onAdd: (row: Omit<TableRow, 'id'>) => void;
 }
 
-type EntryType = 'revenue' | 'deposit' | 'waiver' | 'expense';
+type EntryType = 'revenue' | 'deposit' | 'waiver' | 'expense' | 'partner_in' | 'partner_out';
 
 /** Calculates calendar days in the range [a, b] inclusive. */
 function daySpan(a: string, b: string): number {
@@ -73,6 +73,26 @@ const TYPE_CONFIG: Record<
     activeBg:         'bg-rose-500',
     activeText:       'text-white',
     icon:             '🏷️',
+  },
+  partner_in: {
+    label:            'Crédito Parceria',
+    valueLabel:       'Valor (R$)',
+    valuePlaceholder: '0,00',
+    descPlaceholder:  'Reembolso, crédito de parceiro...',
+    ring:             'focus:ring-indigo-400',
+    activeBg:         'bg-indigo-500',
+    activeText:       'text-white',
+    icon:             '🤝',
+  },
+  partner_out: {
+    label:            'Débito Parceria',
+    valueLabel:       'Valor (R$)',
+    valuePlaceholder: '0,00',
+    descPlaceholder:  'Encargo, dívida de parceiro...',
+    ring:             'focus:ring-amber-400',
+    activeBg:         'bg-amber-500',
+    activeText:       'text-white',
+    icon:             '📤',
   },
 };
 
@@ -150,31 +170,34 @@ export function AddRowForm({ onAdd }: AddRowFormProps) {
       onSubmit={handleSubmit}
       className="flex flex-col gap-3 bg-white/5 border border-white/10 rounded-lg p-3"
     >
-      {/* ── Entry type toggle ── */}
-      <div className="flex items-center gap-1 self-start flex-wrap">
-        {([
-            'revenue', 'deposit', 'waiver', 'expense',
-          ] as EntryType[]).map((type) => {
-          const active = type === entryType;
-          const c = TYPE_CONFIG[type];
-          return (
-            <button
-              key={type}
-              type="button"
-              onClick={() => {
-                setEntryType(type);
-                if (type !== 'revenue') setIsPeriod(false);
-              }}
-              className={`px-3 py-1 text-xs font-semibold rounded-md transition-all ${
-                active
-                  ? `${c.activeBg} ${c.activeText} shadow`
-                  : 'bg-white/5 text-white/40 hover:text-white hover:bg-white/10 border border-white/10'
-              }`}
-            >
-              {c.icon} {c.label}
-            </button>
-          );
-        })}
+      {/* ── Entry type selector ── */}
+      <div className="flex items-center gap-2 self-start">
+        <select
+          value={entryType}
+          onChange={(e) => {
+            const t = e.target.value as EntryType;
+            setEntryType(t);
+            if (t !== 'revenue') setIsPeriod(false);
+          }}
+          className={`text-sm font-semibold rounded-lg px-3 py-1.5 outline-none cursor-pointer border appearance-none pr-8 transition-all ${TYPE_CONFIG[entryType].ring} ring-1 ring-transparent focus:ring-1`}
+          style={{
+            backgroundColor: 'rgba(255,255,255,0.06)',
+            color: '#fff',
+            borderColor: 'rgba(255,255,255,0.15)',
+            backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23ffffff40' d='M3 5l3 3 3-3'/%3E%3C/svg%3E")`,
+            backgroundRepeat: 'no-repeat',
+            backgroundPosition: 'right 8px center',
+          }}
+        >
+          {(['revenue', 'deposit', 'waiver', 'expense', 'partner_in', 'partner_out'] as EntryType[]).map((type) => {
+            const c = TYPE_CONFIG[type];
+            return (
+              <option key={type} value={type} style={{ background: '#1a1a2e', color: '#fff' }}>
+                {c.icon} {c.label}
+              </option>
+            );
+          })}
+        </select>
       </div>
 
       {/* ── Period toggle (revenue only) ── */}

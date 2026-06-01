@@ -13,15 +13,15 @@ import { MoedaLandingGuide } from './MoedaLandingGuide';
 import { PdfExporter } from './PdfExporter';
 import { ConfirmDialog } from './ConfirmDialog';
 import { ExpensesBulkInput } from './ExpensesBulkInput';
-import { ExpensesSummary } from './ExpensesSummary';
+import { CategorySummary } from './CategorySummary';
 import { downloadCSV } from '../utils/csvIO';
-import { formatCurrencyShort, formatCurrencyFull } from '../utils/formatCurrency';
+import { formatCurrencyShort } from '../utils/formatCurrency';
 import { resolveGoalForYear } from '../utils/dateUtils';
 import { AIAnalystChat } from './AIAnalystChat';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type TabId = 'spreadsheet' | 'metrics' | 'chart' | 'expenses';
+type TabId = 'spreadsheet' | 'metrics' | 'chart';
 
 interface TableEditorProps {
   table: CoinTable;
@@ -180,7 +180,7 @@ export function TableEditor({
   // Revenue rows exclude both deposits and waiver ledger entries.
   // computeMetrics receives ALL filtered rows so it can locate waiver rows internally.
   const revenueRows = useMemo(
-    () => filteredRows.filter((r) => r.entryType !== 'deposit' && r.entryType !== 'waiver' && r.entryType !== 'expense'),
+    () => filteredRows.filter((r) => r.entryType !== 'deposit' && r.entryType !== 'waiver' && r.entryType !== 'expense' && r.entryType !== 'partner_out'),
     [filteredRows],
   );
   const metrics = useMemo(
@@ -223,7 +223,7 @@ export function TableEditor({
     let monthTotal = 0;
     for (const r of filteredRows) {
       // Revenue rows only (not deposits, waivers, or expenses)
-      if (r.entryType === 'deposit' || r.entryType === 'waiver' || r.entryType === 'expense') continue;
+      if (r.entryType === 'deposit' || r.entryType === 'waiver' || r.entryType === 'expense' || r.entryType === 'partner_out') continue;
       if (r.value <= 0) continue;
 
       const expStart = r.periodStart || r.date;
@@ -254,7 +254,6 @@ export function TableEditor({
     { id: 'spreadsheet', label: '📋 Planilha' },
     { id: 'metrics',     label: '📊 Métricas' },
     { id: 'chart',       label: '📈 Gráfico'  },
-    { id: 'expenses',    label: '💸 Gastos'   },
   ];
 
   /** Batch-add multiple rows at once (used by ExpensesBulkInput) */
@@ -368,41 +367,12 @@ export function TableEditor({
         </div>
       )}
 
-      {/* ── Quick stats (filtered by cutoff) ── */}
-      {metrics.grossTotal > 0 && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-          {[
-            { label: 'Total',   value: formatCurrencyShort(metrics.grossTotal),      full: formatCurrencyFull(metrics.grossTotal),      color: 'text-white' },
-            {
-              label: 'Diária',
-              value: formatCurrencyShort(metrics.globalDailyAvg),
-              full: formatCurrencyFull(metrics.globalDailyAvg),
-              color: metrics.globalDailyAvg >= resolveGoalForYear(table.goals.dailyGoals, currentYear)
-                ? 'text-emerald-400'
-                : 'text-amber-400',
-            },
-            { label: 'Semanal', value: formatCurrencyShort(metrics.globalWeeklyAvg),  full: formatCurrencyFull(metrics.globalWeeklyAvg),  color: 'text-white' },
-            { label: 'Mensal',  value: formatCurrencyShort(metrics.globalMonthlyAvg), full: formatCurrencyFull(metrics.globalMonthlyAvg), color: 'text-white' },
-          ].map((s) => (
-            <div
-              key={s.label}
-              className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-center"
-              title={s.full}
-            >
-              <div className="text-xs text-white/30 uppercase tracking-wider">{s.label}</div>
-              <div className={`text-sm font-mono font-semibold mt-0.5 ${s.color}`}>{s.value}</div>
-            </div>
-          ))}
-        </div>
-      )}
 
       {/* ── Desempenho Diário Rateado ── */}
       {proratedDailyIncome > 0 && (() => {
         const dailyManual = resolveGoalForYear(table.goals.dailyGoals, currentYear);
         const [selY, selM] = effectiveMonth.split('-').map(Number);
         const mDays = new Date(selY, selM, 0).getDate();
-        const selectedMonthM = metrics.byMonth[effectiveMonth];
-        const dailyMonth = selectedMonthM ? selectedMonthM.dailyAvg : 0;
         const dailySurvival = metrics.survivalDaily;
 
         // Goal comparison helper
@@ -420,7 +390,6 @@ export function TableEditor({
         };
 
         const cmpManual   = compare(dailyManual);
-        const cmpMonth    = dailyMonth > 0 && Math.abs(dailyMonth - dailyManual) > 1 ? compare(dailyMonth) : null;
         const cmpSurvival = dailySurvival > 0 ? compare(dailySurvival) : null;
 
         return (
@@ -448,12 +417,7 @@ export function TableEditor({
                   <span className={`font-semibold ${cmpManual.color}`}>{cmpManual.text}</span>
                 </div>
               )}
-              {cmpMonth && (
-                <div className="flex items-center gap-1.5">
-                  <span className="text-white/30">Média do Mês ({fmt(dailyMonth)}):</span>
-                  <span className={`font-semibold ${cmpMonth.color}`}>{cmpMonth.text}</span>
-                </div>
-              )}
+
               {cmpSurvival && (
                 <div className="flex items-center gap-1.5">
                   <span className="text-white/30">🛡️ Sobrevivência ({fmt(dailySurvival)}):</span>
@@ -514,6 +478,13 @@ export function TableEditor({
               onDeleteRow={(rowId) => setDeleteRowId(rowId)}
             />
             <AddRowForm onAdd={onAddRow} />
+            <ExpensesBulkInput onAddRows={handleBulkAdd} />
+            <CategorySummary
+              rows={table.rows}
+              dailyGoal={resolveGoalForYear(table.goals.dailyGoals, parseInt(effectiveMonth.slice(0, 4)))}
+              onUpdateRow={(rowId, patch) => onUpdateRow(rowId, patch)}
+              onDeleteRow={(rowId) => setDeleteRowId(rowId)}
+            />
           </div>
         )}
 
@@ -522,7 +493,7 @@ export function TableEditor({
             <div className="flex-1">
               <MetricsPanel metrics={metrics} dailyGoal={resolveGoalForYear(table.goals.dailyGoals, currentYear)} table={table} selectedMonth={effectiveMonth} />
             </div>
-            <div className="lg:w-72 shrink-0">
+            <div className="lg:w-80 shrink-0 min-w-0">
               <GoalsPanel goals={table.goals} metrics={metrics} />
             </div>
           </div>
@@ -591,12 +562,7 @@ export function TableEditor({
             )}
           </div>
         )}
-        {activeTab === 'expenses' && (
-          <div className="space-y-6">
-            <ExpensesBulkInput onAddRows={handleBulkAdd} />
-            <ExpensesSummary rows={table.rows} />
-          </div>
-        )}
+
       </div>
 
       {/* ── AI Analyst Chat ── */}

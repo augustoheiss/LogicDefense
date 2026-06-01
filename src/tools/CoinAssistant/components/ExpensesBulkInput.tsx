@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import type { TableRow } from '../types';
 
+type EntryType = 'revenue' | 'deposit' | 'waiver' | 'expense' | 'partner_in' | 'partner_out';
+
 /** Returns the first day of the current month as YYYY-MM-DD. */
 function firstOfMonth(): string {
   const d = new Date();
@@ -25,23 +27,44 @@ interface StagedRow {
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
+const TYPE_OPTIONS: { value: EntryType; label: string; icon: string; color: string; border: string }[] = [
+  { value: 'revenue',     label: 'Recebimento',      icon: '📥', color: 'text-purple-400', border: 'border-purple-500/30' },
+  { value: 'deposit',     label: 'Aporte',            icon: '💰', color: 'text-sky-400',    border: 'border-sky-500/30'    },
+  { value: 'expense',     label: 'Custo',             icon: '🏷️', color: 'text-rose-400',   border: 'border-rose-500/30'   },
+  { value: 'partner_in',  label: 'Crédito Parceria',  icon: '🤝', color: 'text-indigo-400', border: 'border-indigo-500/30' },
+  { value: 'partner_out', label: 'Débito Parceria',   icon: '📤', color: 'text-amber-400',  border: 'border-amber-500/30'  },
+];
+
+const TYPE_BTN_STYLES: Record<EntryType, { bg: string; hover: string }> = {
+  revenue:     { bg: 'bg-[#a855f7]', hover: 'hover:bg-[#9333ea]' },
+  deposit:     { bg: 'bg-sky-500',   hover: 'hover:bg-sky-600'   },
+  waiver:      { bg: 'bg-amber-500', hover: 'hover:bg-amber-600' },
+  expense:     { bg: 'bg-rose-500',  hover: 'hover:bg-rose-600'  },
+  partner_in:  { bg: 'bg-indigo-500',hover: 'hover:bg-indigo-600'},
+  partner_out: { bg: 'bg-amber-500', hover: 'hover:bg-amber-600' },
+};
+
 /**
- * Bulk expense input component.
+ * Universal Bulk input component — supports all entry types.
  *
  * Flow:
- *   1. User types comma-separated values in a textarea
- *   2. Clicks "Processar" → sends to POST /api/coin/bulk-input
- *   3. API returns parsed transaction objects
- *   4. User edits descriptions inline in the preview grid
- *   5. Clicks "Salvar Todos" → commits all rows via onAddRows
+ *   1. User selects entry type and types comma-separated values
+ *   2. Clicks "Processar" → sends to POST /api/coin/bulk-input (or fallback local parse)
+ *   3. User edits descriptions inline in the preview grid
+ *   4. Clicks "Salvar Todos" → commits all rows via onAddRows
  */
 export function ExpensesBulkInput({ onAddRows }: ExpensesBulkInputProps) {
+  const [bulkType,    setBulkType]    = useState<EntryType>('expense');
   const [rawInput,    setRawInput]    = useState('');
   const [periodStart, setPeriodStart] = useState(firstOfMonth());
   const [periodEnd,   setPeriodEnd]   = useState(lastOfMonth());
   const [staged,      setStaged]      = useState<StagedRow[]>([]);
   const [loading,     setLoading]     = useState(false);
   const [error,       setError]       = useState<string | null>(null);
+  const [collapsed,   setCollapsed]   = useState(true);
+
+  const currentOpt = TYPE_OPTIONS.find((o) => o.value === bulkType) ?? TYPE_OPTIONS[0];
+  const btnStyle   = TYPE_BTN_STYLES[bulkType];
 
   async function handleProcess() {
     if (!rawInput.trim()) return;
@@ -110,13 +133,13 @@ export function ExpensesBulkInput({ onAddRows }: ExpensesBulkInputProps) {
   function handleCommitAll() {
     if (staged.length === 0) return;
     const [effStart, effEnd] = [periodStart, periodEnd].sort(); // guard reversed dates
+    const needsPeriod = bulkType === 'expense' || bulkType === 'revenue';
     const rows: Omit<TableRow, 'id'>[] = staged.map((r) => ({
       date:        effStart,
-      periodStart: effStart,
-      periodEnd:   effEnd,
+      ...(needsPeriod ? { periodStart: effStart, periodEnd: effEnd } : {}),
       value:       r.value,
       description: r.description || 'Sem descrição',
-      entryType:   'expense' as const,
+      entryType:   bulkType,
     }));
     onAddRows(rows);
     setStaged([]);
@@ -126,72 +149,102 @@ export function ExpensesBulkInput({ onAddRows }: ExpensesBulkInputProps) {
   const total = staged.reduce((sum, r) => sum + r.value, 0);
 
   return (
-    <div className="space-y-4">
-      {/* ── Input area ── */}
-      <div className="bg-white/5 border border-white/10 rounded-xl p-4 space-y-3">
-        <div className="flex items-center gap-2 mb-1">
-          <span className="text-base">⚡</span>
-          <h4 className="text-sm font-semibold text-white/70">Entrada em Lote</h4>
-        </div>
-        <p className="text-xs text-white/30 leading-relaxed">
-          Insira valores separados por vírgula. O sistema processará e criará entradas de gasto
-          com "Sem descrição" — você poderá editar cada descrição antes de salvar.
-        </p>
+    <div className="space-y-3">
+      {/* ── Collapsible header ── */}
+      <button
+        type="button"
+        onClick={() => setCollapsed(!collapsed)}
+        className="flex items-center gap-2 text-xs text-white/30 hover:text-white/50 transition-colors select-none w-full"
+      >
+        <span className={`transition-transform inline-block ${collapsed ? '' : 'rotate-90'}`}>▶</span>
+        <span className="text-base">⚡</span>
+        <span className="font-semibold">Entrada em Lote</span>
+        <span className="flex-1 h-px bg-white/8" />
+      </button>
 
-        <div className="flex gap-2 items-end flex-wrap">
-          <div className="flex flex-col gap-1">
-            <label className="text-xs text-white/40 uppercase tracking-wider">Período Início</label>
-            <input
-              type="date"
-              value={periodStart}
-              onChange={(e) => setPeriodStart(e.target.value)}
-              className="bg-white/10 text-white text-sm rounded px-3 py-2 outline-none border border-white/10 focus:ring-1 focus:ring-rose-400 [color-scheme:dark]"
-            />
+      {!collapsed && (
+        <div className={`bg-white/5 border ${currentOpt.border} rounded-xl p-4 space-y-3 transition-all`}>
+          {/* ── Type selector + date range ── */}
+          <div className="flex gap-2 items-end flex-wrap">
+            <div className="flex flex-col gap-1">
+              <label className="text-xs text-white/40 uppercase tracking-wider">Tipo</label>
+              <select
+                value={bulkType}
+                onChange={(e) => setBulkType(e.target.value as EntryType)}
+                className="bg-white/10 text-white text-sm rounded-lg px-3 py-2 outline-none border border-white/10 focus:ring-1 focus:ring-[#a855f7] cursor-pointer appearance-none pr-8"
+                style={{
+                  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23ffffff40' d='M3 5l3 3 3-3'/%3E%3C/svg%3E")`,
+                  backgroundRepeat: 'no-repeat',
+                  backgroundPosition: 'right 8px center',
+                  backgroundColor: 'rgba(255,255,255,0.06)',
+                }}
+              >
+                {TYPE_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value} style={{ background: '#1a1a2e', color: '#fff' }}>
+                    {opt.icon} {opt.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs text-white/40 uppercase tracking-wider">Período Início</label>
+              <input
+                type="date"
+                value={periodStart}
+                onChange={(e) => setPeriodStart(e.target.value)}
+                className="bg-white/10 text-white text-sm rounded px-3 py-2 outline-none border border-white/10 focus:ring-1 focus:ring-[#a855f7] [color-scheme:dark]"
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs text-white/40 uppercase tracking-wider">Período Fim</label>
+              <input
+                type="date"
+                value={periodEnd}
+                onChange={(e) => setPeriodEnd(e.target.value)}
+                className="bg-white/10 text-white text-sm rounded px-3 py-2 outline-none border border-white/10 focus:ring-1 focus:ring-[#a855f7] [color-scheme:dark]"
+              />
+            </div>
+            <div className="flex-1 flex flex-col gap-1">
+              <label className="text-xs text-white/40 uppercase tracking-wider">
+                Valores (separados por vírgula)
+              </label>
+              <textarea
+                value={rawInput}
+                onChange={(e) => setRawInput(e.target.value)}
+                placeholder="45.50, 120, 33.90, 88, 15.00"
+                rows={2}
+                className="bg-white/10 text-white text-sm rounded-lg px-3 py-2 outline-none border border-white/10 focus:ring-1 focus:ring-[#a855f7] resize-none w-full font-mono"
+              />
+            </div>
+            <button
+              onClick={handleProcess}
+              disabled={loading || !rawInput.trim()}
+              className={`px-5 py-2 rounded-lg ${btnStyle.bg} ${btnStyle.hover} text-white text-sm font-semibold transition-colors disabled:opacity-30 disabled:cursor-not-allowed shrink-0 self-end`}
+            >
+              {loading ? '...' : '⚡ Processar'}
+            </button>
           </div>
-          <div className="flex flex-col gap-1">
-            <label className="text-xs text-white/40 uppercase tracking-wider">Período Fim</label>
-            <input
-              type="date"
-              value={periodEnd}
-              onChange={(e) => setPeriodEnd(e.target.value)}
-              className="bg-white/10 text-white text-sm rounded px-3 py-2 outline-none border border-white/10 focus:ring-1 focus:ring-rose-400 [color-scheme:dark]"
-            />
-          </div>
-          <div className="flex-1 flex flex-col gap-1">
-            <label className="text-xs text-white/40 uppercase tracking-wider">
-              Valores (separados por vírgula)
-            </label>
-            <textarea
-              value={rawInput}
-              onChange={(e) => setRawInput(e.target.value)}
-              placeholder="45.50, 120, 33.90, 88, 15.00"
-              rows={2}
-              className="bg-white/10 text-white text-sm rounded-lg px-3 py-2 outline-none border border-white/10 focus:ring-1 focus:ring-rose-400 resize-none w-full font-mono"
-            />
-          </div>
-          <button
-            onClick={handleProcess}
-            disabled={loading || !rawInput.trim()}
-            className="px-5 py-2 rounded-lg bg-rose-500 hover:bg-rose-600 text-white text-sm font-semibold transition-colors disabled:opacity-30 disabled:cursor-not-allowed shrink-0 self-end"
-          >
-            {loading ? '...' : '⚡ Processar'}
-          </button>
-        </div>
 
-        {error && (
-          <p className="text-xs text-amber-400/80">{error}</p>
-        )}
-      </div>
+          <p className="text-xs text-white/25 leading-relaxed">
+            Insira valores separados por vírgula. O tipo selecionado será aplicado a todas as entradas.
+          </p>
+
+          {error && (
+            <p className="text-xs text-amber-400/80">{error}</p>
+          )}
+        </div>
+      )}
 
       {/* ── Staged rows preview ── */}
       {staged.length > 0 && (
-        <div className="bg-white/5 border border-rose-500/20 rounded-xl p-4 space-y-3">
+        <div className={`bg-white/5 border ${currentOpt.border} rounded-xl p-4 space-y-3`}>
           <div className="flex items-center justify-between">
-            <h4 className="text-sm font-semibold text-rose-400 flex items-center gap-2">
+            <h4 className={`text-sm font-semibold ${currentOpt.color} flex items-center gap-2`}>
               <span>📝</span>
-              {staged.length} {staged.length === 1 ? 'gasto' : 'gastos'} para salvar
+              {staged.length} {staged.length === 1 ? 'entrada' : 'entradas'} para salvar
+              <span className="text-xs text-white/30 font-normal">({currentOpt.icon} {currentOpt.label})</span>
             </h4>
-            <span className="text-sm font-mono font-semibold text-rose-400">
+            <span className={`text-sm font-mono font-semibold ${currentOpt.color}`}>
               Total: R$ {total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
             </span>
           </div>
@@ -215,7 +268,7 @@ export function ExpensesBulkInput({ onAddRows }: ExpensesBulkInputProps) {
                     }`}
                   >
                     <td className="text-center px-3 py-2 text-white/20 text-xs">{idx + 1}</td>
-                    <td className="text-right px-3 py-2 font-mono font-medium text-rose-400">
+                    <td className={`text-right px-3 py-2 font-mono font-medium ${currentOpt.color}`}>
                       R$ {row.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                     </td>
                     <td className="px-3 py-2">
@@ -223,8 +276,8 @@ export function ExpensesBulkInput({ onAddRows }: ExpensesBulkInputProps) {
                         type="text"
                         value={row.description}
                         onChange={(e) => updateStagedDesc(idx, e.target.value)}
-                        placeholder="Descreva este gasto..."
-                        className="bg-white/10 text-white text-sm rounded px-2 py-1 w-full outline-none border border-white/10 focus:ring-1 focus:ring-rose-400"
+                        placeholder="Descreva esta entrada..."
+                        className="bg-white/10 text-white text-sm rounded px-2 py-1 w-full outline-none border border-white/10 focus:ring-1 focus:ring-[#a855f7]"
                       />
                     </td>
                     <td className="px-2 py-2 text-center">
@@ -245,7 +298,7 @@ export function ExpensesBulkInput({ onAddRows }: ExpensesBulkInputProps) {
           <div className="flex justify-end">
             <button
               onClick={handleCommitAll}
-              className="px-6 py-2.5 rounded-lg bg-rose-500 hover:bg-rose-600 text-white font-semibold text-sm transition-colors shadow"
+              className={`px-6 py-2.5 rounded-lg ${btnStyle.bg} ${btnStyle.hover} text-white font-semibold text-sm transition-colors shadow`}
             >
               ✓ Salvar Todos ({staged.length})
             </button>

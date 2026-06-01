@@ -155,6 +155,58 @@ export function GoalsPanel({ goals, metrics }: GoalsPanelProps) {
         </div>
       )}
 
+      {/* ── Time Bank Breakdown (always visible) ── */}
+      {metrics.grossTotal > 0 && (() => {
+        // Decompose the goal balance:
+        //   goalBalance = grossTotal - goalTarget - partnerOut
+        //   grossTotal  = regularIncome + partnerIn
+        //   goalTarget  = billableWeeks × weeklyGoal
+        const regularIncome = metrics.grossTotal - metrics.totalPartnerIn;
+        const goalTarget = metrics.billableWeeks > 0 && currentWeeklyGoal > 0
+          ? Math.round(metrics.billableWeeks * currentWeeklyGoal * 100) / 100
+          : 0;
+
+        /** Convert a monetary value to weeks based on the weekly goal. */
+        const toWeeks = (v: number) =>
+          currentWeeklyGoal > 0 ? (v / currentWeeklyGoal).toFixed(1) : '—';
+
+        const rows = [
+          { sign: '+', label: 'Receitas Operacionais', value: regularIncome, color: 'text-emerald-400' },
+          { sign: '+', label: 'Créditos de Parceria', value: metrics.totalPartnerIn, color: 'text-indigo-400' },
+          { sign: '−', label: 'Metas Acumuladas', value: goalTarget, color: 'text-white/50' },
+          { sign: '−', label: 'Débitos de Parceria', value: metrics.totalPartnerOut, color: 'text-amber-400' },
+        ];
+
+        return (
+          <details className="group" open>
+            <summary className="text-xs text-white/30 cursor-pointer hover:text-white/50 transition-colors select-none flex items-center gap-1">
+              <span className="text-white/20 group-open:rotate-90 transition-transform inline-block">▶</span>
+              Detalhamento do Banco de Valores
+            </summary>
+            <div className="mt-2 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 space-y-1 text-xs font-mono overflow-hidden">
+              {rows.map((r, i) => (
+                <div key={i} className="flex flex-wrap justify-between items-center gap-x-2 gap-y-0.5 min-w-0">
+                  <span className={`${r.color} min-w-0`}>
+                    <span className="text-white/25 w-4 inline-block">{r.sign}</span> {r.label}
+                  </span>
+                  <span className={`${r.color} text-right`}>
+                    {fmt(r.value)} <span className="text-white/20">({toWeeks(r.value)} sem)</span>
+                  </span>
+                </div>
+              ))}
+              <div className="border-t border-white/10 pt-1 flex flex-wrap justify-between items-center font-semibold gap-x-2 gap-y-0.5 min-w-0">
+                <span className={balancePositive ? 'text-emerald-400' : 'text-red-400'}>
+                  <span className="text-white/25 w-4 inline-block">=</span> Saldo Final
+                </span>
+                <span className={`text-right ${balancePositive ? 'text-emerald-400' : 'text-red-400'}`}>
+                  {fmt(balance)} <span className="text-white/20">({toWeeks(balance)} sem)</span>
+                </span>
+              </div>
+            </div>
+          </details>
+        );
+      })()}
+
       {/* ── Time Bank (Banco de Horas) ── */}
       {metrics.grossTotal > 0 && (
         <TimeBankCard balance={metrics.timeBankBalance} />

@@ -38,7 +38,7 @@ export function computeMetrics(
   // Waiver rows are ledger entries, not revenue — strip them alongside deposits
   // so they never inflate gross totals or skew averages.
   const revenueRows = rows.filter(
-    (r) => r.entryType !== 'deposit' && r.entryType !== 'waiver' && r.entryType !== 'expense',
+    (r) => r.entryType !== 'deposit' && r.entryType !== 'waiver' && r.entryType !== 'expense' && r.entryType !== 'partner_out',
   );
 
   // ── Expense metrics — computed before the early-return guard ───────────────
@@ -60,6 +60,23 @@ export function computeMetrics(
       if (!expLatest   || expEnd   > expLatest)   expLatest   = expEnd;
     }
   }
+  // ── Partnership ledger — separate tracking for Time Bank + breakdown ────────
+  const partnerInRows = rows.filter((r) => r.entryType === 'partner_in');
+  const partnerOutRows = rows.filter((r) => r.entryType === 'partner_out');
+  const totalPartnerIn = round2(partnerInRows.reduce((s, r) => s + r.value, 0));
+  const totalPartnerOut = round2(partnerOutRows.reduce((s, r) => s + r.value, 0));
+
+  // partner_out adds to totalExpenses (cash flow tracking)
+  for (const row of partnerOutRows) {
+    totalExpenses += row.value;
+
+    // Widen global expense span for survival goals
+    const s = row.periodStart || row.date;
+    const e = row.periodEnd   || row.date;
+    if (!expEarliest || s < expEarliest) expEarliest = s;
+    if (!expLatest   || e > expLatest)   expLatest   = e;
+  }
+
   totalExpenses = round2(totalExpenses);
   // annualExpenses = totalExpenses at the global level;
   // per-year breakdown lives in byYear[yr].yearExpenses
@@ -106,7 +123,7 @@ export function computeMetrics(
 
   // ── Advanced Statistics (revenue rows only, value > 0) ───────────────────
   const positiveRevenueValues = rows
-    .filter((r) => r.entryType !== 'deposit' && r.entryType !== 'waiver' && r.entryType !== 'expense' && r.value > 0)
+    .filter((r) => r.entryType !== 'deposit' && r.entryType !== 'waiver' && r.entryType !== 'expense' && r.entryType !== 'partner_out' && r.value > 0)
     .map((r) => r.value);
 
   let statsFields: { maxTransaction: number; minTransaction: number; medianTransaction: number; modeTransaction: number; stdDeviation: number };
@@ -327,7 +344,8 @@ export function computeMetrics(
     totalWaivedDays    += row.value;
   }
 
-  const globalGoalBalance = Math.round((rawStrictBalance + totalWaiverCredits) * 100) / 100;
+  // Partner_out subtracts from goal balance (operational debt to the Time Bank)
+  const globalGoalBalance = Math.round((rawStrictBalance + totalWaiverCredits - totalPartnerOut) * 100) / 100;
   const waivedWeeks = Math.round((totalWaivedDays / 7) * 100) / 100;
   const billableWeeks = Math.round((totalElapsedWeeks - waivedWeeks) * 100) / 100;
 
@@ -364,6 +382,8 @@ export function computeMetrics(
     ...survivalFields,
     ...investFields,
     ...statsFields,
+    totalPartnerIn,
+    totalPartnerOut,
   };
 }
 
@@ -488,6 +508,8 @@ function emptyMetrics(): TableMetrics {
     medianTransaction: 0,
     modeTransaction: 0,
     stdDeviation: 0,
+    totalPartnerIn: 0,
+    totalPartnerOut: 0,
   };
 }
 

@@ -28,12 +28,14 @@ from pydantic import BaseModel, Field, field_validator
 
 
 class EntryType(StrEnum):
-    """Matches frontend: 'revenue' | 'deposit' | 'waiver' | 'expense'."""
+    """Matches frontend: 'revenue' | 'deposit' | 'waiver' | 'expense' | 'partner_in' | 'partner_out'."""
 
     REVENUE = "revenue"
     DEPOSIT = "deposit"
     WAIVER = "waiver"
     EXPENSE = "expense"
+    PARTNER_IN = "partner_in"
+    PARTNER_OUT = "partner_out"
 
 
 # ── Goal Hierarchy ───────────────────────────────────────────────────────────
@@ -339,6 +341,18 @@ class TableMetrics(BaseModel):
         default=0,
         alias="stdDeviation",
         description="Population standard deviation of revenue transaction values",
+    )
+
+    # ── Partnership Ledger ────────────────────────────────────────────────
+    total_partner_in: float = Field(
+        default=0,
+        alias="totalPartnerIn",
+        description="Sum of all partner_in (credit/reimbursement) row values",
+    )
+    total_partner_out: float = Field(
+        default=0,
+        alias="totalPartnerOut",
+        description="Sum of all partner_out (debit/charge) row values",
     )
 
     model_config = {"populate_by_name": True}

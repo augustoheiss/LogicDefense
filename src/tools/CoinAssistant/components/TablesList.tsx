@@ -80,7 +80,7 @@ export function TablesList({
               }`}
               onClick={() => onSelect(table.id)}
             >
-              <div className="px-3 py-2.5 pr-16">
+              <div className="px-3 py-2.5 pr-28">
                 <p
                   className={`text-sm font-medium truncate ${
                     isActive ? 'text-white' : 'text-white/70'
@@ -94,40 +94,54 @@ export function TablesList({
                 <p className="text-xs text-white/20 mt-1">{formatDate(table.updatedAt)}</p>
               </div>
 
-              {/* ── Action buttons (edit / export / delete) ── */}
-              <div className="absolute right-1 top-1/2 -translate-y-1/2 flex gap-0 opacity-0 group-hover:opacity-100 transition-opacity">
+              {/* ── Action buttons (edit / export / delete) — always visible ── */}
+              <div className="absolute right-1 top-1/2 -translate-y-1/2 flex gap-0.5">
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
                     onEdit(table);
                   }}
-                  className="p-1.5 rounded text-white/30 hover:text-white hover:bg-white/10 transition-colors text-xs"
+                  className="p-2 rounded-md text-white/40 hover:text-white hover:bg-white/10 transition-colors"
                   title="Editar tabela"
                   aria-label="Editar tabela"
                 >
-                  ✎
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                  </svg>
                 </button>
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
                     onExport(table);
                   }}
-                  className="p-1.5 rounded text-white/30 hover:text-sky-400 hover:bg-sky-400/10 transition-colors text-xs"
+                  className="p-2 rounded-md text-white/40 hover:text-sky-400 hover:bg-sky-400/10 transition-colors"
                   title="Exportar como CSV"
                   aria-label="Exportar tabela"
                 >
-                  ↓
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                    <polyline points="7 10 12 15 17 10" />
+                    <line x1="12" y1="15" x2="12" y2="3" />
+                  </svg>
                 </button>
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    onDelete(table.id);
+                    if (window.confirm('Tem certeza que deseja remover esta tabela inteira? Esta ação não pode ser desfeita.')) {
+                      onDelete(table.id);
+                    }
                   }}
-                  className="p-1.5 rounded text-white/30 hover:text-red-400 hover:bg-red-400/10 transition-colors text-xs"
+                  className="p-2 rounded-md text-red-400/50 hover:text-red-400 hover:bg-red-500/15 transition-colors"
                   title="Excluir tabela"
                   aria-label="Excluir tabela"
                 >
-                  ×
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="3 6 5 6 21 6" />
+                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                    <line x1="10" y1="11" x2="10" y2="17" />
+                    <line x1="14" y1="11" x2="14" y2="17" />
+                  </svg>
                 </button>
               </div>
             </div>

@@ -372,5 +372,7 @@ function emptyMetrics(): TableMetrics {
     medianTransaction: 0,
     modeTransaction: 0,
     stdDeviation: 0,
+    totalPartnerIn: 0,
+    totalPartnerOut: 0,
   };
 }

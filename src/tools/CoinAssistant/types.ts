@@ -41,16 +41,19 @@ export interface TableRow {
   value: number;
   description?: string;
   /**
-   * Distinguishes the kind of ledger entry:
    *   'revenue'  — operational income (default for legacy rows)
    *   'deposit'  — investment / aporte
    *   'waiver'   — excused downtime period; value = days justified
    *                date = start of the period; description = reason
    *   'expense'  — dynamic cost (e.g. insurance, IPVA, financing);
    *                value = monthlyValue × monthCount (auto-computed on creation)
+   *   'partner_in'  — partnership credit / reimbursement. Adds to grossTotal
+   *                    AND globalGoalBalance (treated like revenue in the Time Bank).
+   *   'partner_out' — partnership debit / charge. Adds to totalExpenses
+   *                    AND subtracts from globalGoalBalance (operational debt).
    * Omitted on legacy rows — treated as 'revenue' for full backward compatibility.
    */
-  entryType?: 'revenue' | 'deposit' | 'waiver' | 'expense';
+  entryType?: 'revenue' | 'deposit' | 'waiver' | 'expense' | 'partner_in' | 'partner_out';
   /**
    * For 'expense' entries only — the monthly cost amount (R$).
    * Used to reconstruct the total: value = monthlyValue × monthCount.
@@ -241,6 +244,12 @@ export interface TableMetrics {
   modeTransaction: number;
   /** Population standard deviation of revenue transaction values. */
   stdDeviation: number;
+
+  // ─── Partnership Ledger (isolated third-party transactions) ─────────────────
+  /** Sum of all 'partner_in' row values (credits received). */
+  totalPartnerIn: number;
+  /** Sum of all 'partner_out' row values (debits paid). */
+  totalPartnerOut: number;
 }
 
 // ─── Projection Engine ────────────────────────────────────────────────────────

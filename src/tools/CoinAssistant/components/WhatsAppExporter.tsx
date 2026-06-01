@@ -197,7 +197,7 @@ function buildMessage(
   // SECTION 1 — Header
   // ═══════════════════════════════════════════════════════════════════════════
   lines.push(
-    `📆 *Relatório de Parceria: Motorista-Executivo*`,
+    `📆 *Relatório Financeiro*`,
     `_Ref: ${monthName} de ${reportYear}_`,
     '',
   );
@@ -267,14 +267,14 @@ function buildMessage(
   // SECTION 4 — The Reality: Custo Operacional do Veículo
   // ═══════════════════════════════════════════════════════════════════════════
   if (proratedExpenses.length > 0) {
-    lines.push(`💸 *Custo Operacional do Veículo*`);
+    lines.push(`💸 *Custos do Período*`);
     lines.push('');
     for (const pe of proratedExpenses) {
       const desc = pe.row.description ?? 'Sem descrição';
-      const suffix =
-        pe.row.periodStart && pe.row.periodEnd && pe.row.periodStart !== pe.row.periodEnd
-          ? ` _(rateado: ${fmt(pe.monthlyContribution)} este mês)_`
-          : '';
+      const isMultiMonth = pe.row.periodStart && pe.row.periodEnd && pe.row.periodStart !== pe.row.periodEnd;
+      const suffix = isMultiMonth
+        ? ` _(rateado: ${fmt(pe.monthlyContribution)} este mês)_`
+        : '';
       lines.push(`• ${desc}: *-${fmt(pe.row.value)}*${suffix}`);
     }
     // Prorated monthly expense metrics — daily-anchored math
@@ -326,6 +326,43 @@ function buildMessage(
     '',
   );
 
+  // ═══════════════════════════════════════════════════════════════════════════
+  // SECTION 5b + 6 — Unified: Detalhamento & Indicadores
+  // ═══════════════════════════════════════════════════════════════════════════
+  const regularIncome = metrics.grossTotal - (metrics.totalPartnerIn ?? 0);
+  const goalTarget = metrics.billableWeeks > 0 && reportWeeklyGoal > 0
+    ? Math.round(metrics.billableWeeks * reportWeeklyGoal * 100) / 100
+    : 0;
+  const toW = (v: number) => reportWeeklyGoal > 0 ? `${(v / reportWeeklyGoal).toFixed(1)} sem` : '—';
+
+  const waiversCount = table.rows.filter((r) => r.entryType === 'waiver' && r.value > 0).length;
+  const waivedWeeks = metrics.waivedWeeks;
+  const tb = metrics.timeBankBalance;
+  const absWeeks = Math.abs(tb).toFixed(1);
+  const tbLine = tb >= 0
+    ? `• ✅ Saldo de Reposição: *+${absWeeks} semanas* _(${absWeeks} semana${parseFloat(absWeeks) !== 1 ? 's' : ''} adiantada${parseFloat(absWeeks) !== 1 ? 's' : ''})_`
+    : `• 🚨 Saldo de Reposição: *-${absWeeks} semanas* _(Volume de serviço pendente para recuperar o teto da meta)_`;
+
+  lines.push(
+    `📊 *Balanço Operacional & Indicadores*`,
+    `(+) Receitas Operacionais: ${fmt(regularIncome)} _(${toW(regularIncome)})_`,
+    ...(metrics.totalPartnerIn > 0
+      ? [`(+) Créditos de Parceria: ${fmt(metrics.totalPartnerIn)} _(${toW(metrics.totalPartnerIn)})_`]
+      : []),
+    `(−) Metas Acumuladas: ${fmt(goalTarget)} _(${toW(goalTarget)})_`,
+    ...(metrics.totalPartnerOut > 0
+      ? [`(−) Débitos de Parceria: ${fmt(metrics.totalPartnerOut)} _(${toW(metrics.totalPartnerOut)})_`]
+      : []),
+    `(=) *Saldo Final: ${fmt(balance)} (${toW(balance)})*`,
+    '',
+    `• ⏳ Tempo de Parceria: *${metrics.totalElapsedWeeks} semanas*`,
+    ...(waivedWeeks > 0
+      ? [`• 🛡️ Período Justificado: *${waivedWeeks.toFixed(1)} semanas* (${waiversCount} ocorrência${waiversCount !== 1 ? 's' : ''})`]
+      : []),
+    tbLine,
+    '',
+  );
+
   // ── Cost-based goal coverage message ───────────────────────────────────────
   if (costBasedTarget && costBasedTarget.annualCost > 0 && yearRevenue >= costBasedTarget.annualCost) {
     const netProfit = yearRevenue - costBasedTarget.annualCost;
@@ -334,31 +371,6 @@ function buildMessage(
       '',
     );
   }
-
-  // ═══════════════════════════════════════════════════════════════════════════
-  // SECTION 6 — Partnership Indicators: Indicadores de Parceria
-  // ═══════════════════════════════════════════════════════════════════════════
-  const waiversCount = table.rows.filter((r) => r.entryType === 'waiver' && r.value > 0).length;
-  const waivedWeeks = metrics.waivedWeeks;
-
-  const tb = metrics.timeBankBalance;
-  const absWeeks = Math.abs(tb).toFixed(1);
-  const tbLine = tb >= 0
-    ? `• ✅ Saldo de Reposição: *+${absWeeks} semanas* _(${absWeeks} semana${parseFloat(absWeeks) !== 1 ? 's' : ''} adiantada${parseFloat(absWeeks) !== 1 ? 's' : ''})_`
-    : `• 🚨 Saldo de Reposição: *-${absWeeks} semanas* _(Volume de serviço pendente para recuperar o teto da meta)_`;
-
-  const partnershipTimeLine = `• ⏳ Tempo de Parceria: *${metrics.totalElapsedWeeks} semanas*`;
-  const waiverLine = waivedWeeks > 0
-    ? `• 🛡️ Período Justificado: *${waivedWeeks.toFixed(1)} semanas* (${waiversCount} ocorrência${waiversCount !== 1 ? 's' : ''})`
-    : null;
-
-  lines.push(
-    `⏳ *Indicadores de Parceria*`,
-    partnershipTimeLine,
-    ...(waiverLine ? [waiverLine] : []),
-    tbLine,
-    '',
-  );
 
   lines.push(
     `_Gerado pelo Assistente Moeda · Heiss-Lab_`,

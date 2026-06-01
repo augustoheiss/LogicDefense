@@ -36,6 +36,8 @@ const TYPE_COLOR: Record<string, string> = {
   expense: 'text-rose-400 bg-rose-500/15 border-rose-500/30',
   waiver:  'text-orange-400 bg-orange-500/15 border-orange-500/30',
   deposit: 'text-sky-400 bg-sky-500/15 border-sky-500/30',
+  partner_in:  'text-indigo-400 bg-indigo-500/15 border-indigo-500/30',
+  partner_out: 'text-amber-400 bg-amber-500/15 border-amber-500/30',
 };
 
 const TYPE_LABEL: Record<string, string> = {
@@ -43,6 +45,8 @@ const TYPE_LABEL: Record<string, string> = {
   expense: '🏷️ Custo',
   waiver:  '🛡️ Justificado',
   deposit: '📥 Aporte',
+  partner_in:  '🤝 Crédito Parceria',
+  partner_out: '📤 Débito Parceria',
 };
 
 // ── Props ─────────────────────────────────────────────────────────────────────
@@ -182,8 +186,10 @@ export function EditRowModal({ row, dailyGoal, onSave, onClose }: EditRowModalPr
 
   // ── Render ────────────────────────────────────────────────────────────────
   const ringColor = row.entryType === 'expense' ? 'focus:ring-rose-500/60'
-    : row.entryType === 'waiver'  ? 'focus:ring-orange-500/60'
-    : row.entryType === 'deposit' ? 'focus:ring-sky-500/60'
+    : row.entryType === 'waiver'      ? 'focus:ring-orange-500/60'
+    : row.entryType === 'deposit'     ? 'focus:ring-sky-500/60'
+    : row.entryType === 'partner_in'  ? 'focus:ring-indigo-500/60'
+    : row.entryType === 'partner_out' ? 'focus:ring-amber-500/60'
     : 'focus:ring-[#a855f7]/60';
 
   const inputCls = `
@@ -404,7 +410,11 @@ export function EditRowModal({ row, dailyGoal, onSave, onClose }: EditRowModalPr
                   ? 'bg-orange-600 hover:bg-orange-500 text-white'
                   : row.entryType === 'deposit'
                     ? 'bg-sky-600 hover:bg-sky-500 text-white'
-                    : 'bg-[#a855f7] hover:bg-[#9333ea] text-white'
+                    : row.entryType === 'partner_in'
+                      ? 'bg-indigo-600 hover:bg-indigo-500 text-white'
+                      : row.entryType === 'partner_out'
+                        ? 'bg-amber-600 hover:bg-amber-500 text-white'
+                        : 'bg-[#a855f7] hover:bg-[#9333ea] text-white'
             }`}
           >
             Salvar
