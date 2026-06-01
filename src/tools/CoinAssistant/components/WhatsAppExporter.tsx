@@ -271,8 +271,9 @@ function buildMessage(
     lines.push('');
     for (const pe of proratedExpenses) {
       const desc = pe.row.description ?? 'Sem descrição';
-      const isMultiMonth = pe.row.periodStart && pe.row.periodEnd && pe.row.periodStart !== pe.row.periodEnd;
-      const suffix = isMultiMonth
+      // Only show "rateado" when the month's portion is strictly less than the full value
+      const isProrated = Math.round(pe.monthlyContribution * 100) < Math.round(pe.row.value * 100);
+      const suffix = isProrated
         ? ` _(rateado: ${fmt(pe.monthlyContribution)} este mês)_`
         : '';
       lines.push(`• ${desc}: *-${fmt(pe.row.value)}*${suffix}`);
