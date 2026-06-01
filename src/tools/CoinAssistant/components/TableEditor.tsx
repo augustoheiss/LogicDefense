@@ -29,6 +29,7 @@ interface TableEditorProps {
   onDeleteRow: (rowId: string) => void;
   onAddRow: (row: Omit<TableRow, 'id'>) => void;
   onEditTable: () => void;
+  onDeleteTable?: () => void;
 }
 
 // ── Month helpers (used by selector + children) ───────────────────────────────
@@ -160,6 +161,7 @@ export function TableEditor({
   onDeleteRow,
   onAddRow,
   onEditTable,
+  onDeleteTable,
 }: TableEditorProps) {
   const [activeTab,    setActiveTab]    = useState<TabId>('spreadsheet');
   const [showWhatsApp, setShowWhatsApp] = useState(false);
@@ -308,6 +310,25 @@ export function TableEditor({
             </svg>
             WhatsApp
           </button>
+          {onDeleteTable && (
+            <button
+              onClick={() => {
+                if (window.confirm('Tem certeza que deseja remover esta tabela inteira? Esta ação não pode ser desfeita.')) {
+                  onDeleteTable();
+                }
+              }}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400/70 hover:text-red-400 border border-red-500/20 transition-colors font-medium"
+              title="Remover tabela"
+            >
+              <svg className="w-3.5 h-3.5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="3 6 5 6 21 6" />
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                <line x1="10" y1="11" x2="10" y2="17" />
+                <line x1="14" y1="11" x2="14" y2="17" />
+              </svg>
+              Remover
+            </button>
+          )}
         </div>
       </div>
 

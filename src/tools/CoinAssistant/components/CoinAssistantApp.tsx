@@ -139,6 +139,9 @@ export function CoinAssistantApp() {
               onEditTable={() =>
                 db.activeTable && setModal({ mode: 'edit', table: db.activeTable })
               }
+              onDeleteTable={() =>
+                db.activeTableId && setConfirmDeleteId(db.activeTableId)
+              }
             />
           ) : (
             <EmptyState onNew={() => setModal({ mode: 'create' })} />
