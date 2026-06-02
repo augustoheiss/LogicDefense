@@ -55,12 +55,6 @@ export interface TableRow {
    */
   entryType?: 'revenue' | 'deposit' | 'waiver' | 'expense' | 'partner_in' | 'partner_out';
   /**
-   * For 'waiver' entries only — how to interpret the value field:
-   *   'days'  — value = number of justified days (default, backward-compatible)
-   *   'value' — value = direct R$ monetary credit
-   */
-  waiverMode?: 'days' | 'value';
-  /**
    * For 'expense' entries only — the monthly cost amount (R$).
    * Used to reconstruct the total: value = monthlyValue × monthCount.
    */

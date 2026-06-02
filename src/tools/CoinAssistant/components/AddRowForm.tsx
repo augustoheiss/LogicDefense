@@ -56,8 +56,8 @@ const TYPE_CONFIG: Record<
   },
   waiver: {
     label:            'Justificativas',
-    valueLabel:       'Qtd. de Dias',
-    valuePlaceholder: '7',
+    valueLabel:       'Valor (R$)',
+    valuePlaceholder: '0,00',
     descPlaceholder:  'Motivo: placa perdida, manutenção...',
     ring:             'focus:ring-amber-400',
     activeBg:         'bg-amber-500',
@@ -106,8 +106,7 @@ export function AddRowForm({ onAdd }: AddRowFormProps) {
   const [isPeriod,    setIsPeriod]    = useState(false);
   const [periodStart, setPeriodStart] = useState(todayISO());
   const [periodEnd,   setPeriodEnd]   = useState(todayISO());
-  // Waiver mode: 'days' (default) or 'value' (direct R$ credit)
-  const [waiverMode,  setWaiverMode]  = useState<'days' | 'value'>('days');
+
 
   const cfg = TYPE_CONFIG[entryType];
   // Helpers for period preview
@@ -139,7 +138,7 @@ export function AddRowForm({ onAdd }: AddRowFormProps) {
       const numValue = parseFloat(value);
       if (isNaN(numValue) || numValue < 0) return;
       // Waivers must have a positive value and a reason
-      if (entryType === 'waiver' && (numValue < (waiverMode === 'days' ? 1 : 0.01) || !description.trim())) return;
+      if (entryType === 'waiver' && (numValue < 0.01 || !description.trim())) return;
 
       const isPeriodMode = isPeriod && entryType === 'revenue' && periodStart && periodEnd;
       // Swap if user picked end before start
@@ -155,7 +154,6 @@ export function AddRowForm({ onAdd }: AddRowFormProps) {
         description: description.trim() || undefined,
         entryType,
         ...(isPeriodMode ? { periodStart: effStart, periodEnd: effEnd } : {}),
-        ...(entryType === 'waiver' ? { waiverMode } : {}),
       });
     }
 
@@ -166,7 +164,6 @@ export function AddRowForm({ onAdd }: AddRowFormProps) {
     setPeriodEnd(todayISO());
     setMonthCount('12');
     setIsPeriod(false);
-    setWaiverMode('days');
   }
 
   return (
@@ -233,38 +230,11 @@ export function AddRowForm({ onAdd }: AddRowFormProps) {
         </div>
       )}
 
-      {/* ── Waiver mode toggle + hint ── */}
+      {/* ── Waiver info hint ── */}
       {entryType === 'waiver' && (
         <div className="space-y-1 -mt-1">
-          <div className="flex items-center gap-2 text-xs">
-            <button
-              type="button"
-              onClick={() => setWaiverMode('days')}
-              className={`px-2 py-1 rounded transition-all ${
-                waiverMode === 'days'
-                  ? 'bg-amber-500/20 text-amber-400 font-semibold'
-                  : 'text-white/30 hover:text-white/60'
-              }`}
-            >
-              📅 Dias
-            </button>
-            <span className="text-white/20">|</span>
-            <button
-              type="button"
-              onClick={() => setWaiverMode('value')}
-              className={`px-2 py-1 rounded transition-all ${
-                waiverMode === 'value'
-                  ? 'bg-amber-500/20 text-amber-400 font-semibold'
-                  : 'text-white/30 hover:text-white/60'
-              }`}
-            >
-              💲 Valor (R$)
-            </button>
-          </div>
           <p className="text-xs text-amber-400/60 leading-relaxed">
-            {waiverMode === 'days'
-              ? 'Registre dias de inatividade justificada. O crédito financeiro será calculado automaticamente usando a meta semanal do ano correspondente.'
-              : 'Registre um crédito direto em R$. O valor será adicionado integralmente ao Banco de Valores.'}
+            Registre o valor financeiro da justificativa. Esse valor será convertido em créditos diretos no seu Banco de Tempo.
           </p>
         </div>
       )}
@@ -322,15 +292,13 @@ export function AddRowForm({ onAdd }: AddRowFormProps) {
 
         <div className="flex flex-col gap-1">
           <label className="text-xs text-white/40 uppercase tracking-wider">
-            {entryType === 'waiver'
-              ? (waiverMode === 'value' ? 'Valor (R$)' : 'Qtd. de Dias')
-              : cfg.valueLabel}
+            {cfg.valueLabel}
           </label>
           <input
             type="number"
-            step={entryType === 'waiver' && waiverMode === 'days' ? '1' : '0.01'}
-            min={entryType === 'waiver' && waiverMode === 'days' ? '1' : '0'}
-            placeholder={entryType === 'waiver' && waiverMode === 'value' ? '0,00' : cfg.valuePlaceholder}
+            step="0.01"
+            min="0"
+            placeholder={cfg.valuePlaceholder}
             value={value}
             onChange={(e) => setValue(e.target.value)}
             required

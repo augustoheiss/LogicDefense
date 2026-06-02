@@ -320,24 +320,13 @@ export function computeMetrics(
     calculateStrictGlobalBalance(revenueRows, weeklyGoals, asOfDate ? today : undefined);
 
   // ── Waiver credits — derived directly from 'waiver' ledger rows ─────────
-  // Dual-mode waivers:
-  //   waiverMode='days' (default)  → credit = (row.value / 7) × weeklyGoalForYear
-  //   waiverMode='value'           → credit = row.value (direct R$ amount)
+  // Strictly monetary values.
   let totalWaiverCredits = 0;
   let totalWaivedDays = 0;
   const waiverRows = rows.filter((r) => r.entryType === 'waiver' && r.value > 0);
 
   for (const row of waiverRows) {
-    if (row.waiverMode === 'value') {
-      // Direct monetary credit — bypass day-to-goal conversion
-      totalWaiverCredits += row.value;
-    } else {
-      // Default: day-based — convert to monetary credit using year's weekly goal
-      const waiverYear = parseInt(row.date.slice(0, 4), 10);
-      const goalForYear = resolveGoalForYear(weeklyGoals, waiverYear);
-      totalWaiverCredits += (row.value / 7) * goalForYear;
-      totalWaivedDays    += row.value;
-    }
+    totalWaiverCredits += row.value;
   }
 
   // FIREWALL Goal Balance: add partner_in credit since it no longer flows through rawStrictBalance

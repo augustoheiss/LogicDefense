@@ -117,19 +117,6 @@ class TableRow(BaseModel):
         pattern=r"^\d{4}-\d{2}-\d{2}$",
         description="Period end date (YYYY-MM-DD) — must pair with periodStart",
     )
-    waiver_mode: str = Field(
-        default="days",
-        alias="waiverMode",
-        description="For 'waiver' entries: 'days' (default) or 'value' (direct R$ credit)",
-    )
-
-    @field_validator("waiver_mode", mode="before")
-    @classmethod
-    def validate_waiver_mode(cls, v: Optional[str]) -> str:
-        if not v:
-            return "days"
-        return v
-
     model_config = {"populate_by_name": True}
 
 

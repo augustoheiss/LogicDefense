@@ -428,10 +428,7 @@ def compute_metrics(
     )
 
     # ── Waiver days (for billable weeks calculation) ──────────────────────────
-    total_waived_days = sum(
-        r.value for r in rows
-        if r.entry_type == EntryType.WAIVER and r.value > 0 and r.waiver_mode == "days"
-    )
+    total_waived_days = 0.0
 
     # FIREWALL Goal Balance: add partner_in credit since it no longer flows through rawStrictBalance
     global_goal_balance = round((raw_strict_balance + total_waiver_credits + total_partner_in - total_partner_out) * 100) / 100

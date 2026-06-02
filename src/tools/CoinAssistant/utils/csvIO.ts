@@ -107,7 +107,7 @@ export function exportTableToCSV(table: CoinTable): string {
     ...perYearLines('goal_weekly', table.goals.weeklyGoals),
     ...perYearLines('goal_annual', table.goals.annualCosts),
     ROWS_MARKER,
-    'date,value,description,entryType,monthlyValue,monthCount,period_start,period_end,waiverMode',
+    'date,value,description,entryType,monthlyValue,monthCount,period_start,period_end',
     ...sortedRows.map(
       (r) =>
         [
@@ -119,7 +119,6 @@ export function exportTableToCSV(table: CoinTable): string {
           r.monthCount   ?? '',
           r.periodStart  ?? '',
           r.periodEnd    ?? '',
-          r.waiverMode   ?? '',
         ].join(','),
     ),
   ];
@@ -267,18 +266,7 @@ export function importTableFromCSV(csv: string): ImportedTable {
     const periodStart    = /^\d{4}-\d{2}-\d{2}$/.test(rawPeriodStart ?? '') ? rawPeriodStart : undefined;
     const periodEnd      = /^\d{4}-\d{2}-\d{2}$/.test(rawPeriodEnd   ?? '') ? rawPeriodEnd   : undefined;
 
-    // Parse optional waiverMode field (with fallback logic for older CSVs)
-    let waiverMode: 'value' | 'days' | undefined = undefined;
-    if (entryType === 'waiver') {
-      const rawWaiverMode = fields[8]?.trim();
-      if (rawWaiverMode === 'value' || rawWaiverMode === 'days') {
-        waiverMode = rawWaiverMode;
-      } else {
-        waiverMode = value > 100 ? 'value' : 'days';
-      }
-    }
-
-    rows.push({ date, value, description: desc, entryType, monthlyValue, monthCount, periodStart, periodEnd, waiverMode });
+    rows.push({ date, value, description: desc, entryType, monthlyValue, monthCount, periodStart, periodEnd });
   }
 
   return {
