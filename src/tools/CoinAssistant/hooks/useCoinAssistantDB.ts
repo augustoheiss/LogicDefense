@@ -374,5 +374,8 @@ function emptyMetrics(): TableMetrics {
     stdDeviation: 0,
     totalPartnerIn: 0,
     totalPartnerOut: 0,
+    grossWithPartner: 0,
+    expensesWithPartner: 0,
+    netWithPartner: 0,
   };
 }

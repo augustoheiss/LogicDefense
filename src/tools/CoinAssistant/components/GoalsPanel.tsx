@@ -158,10 +158,9 @@ export function GoalsPanel({ goals, metrics }: GoalsPanelProps) {
       {/* ── Time Bank Breakdown (always visible) ── */}
       {metrics.grossTotal > 0 && (() => {
         // Decompose the goal balance:
-        //   goalBalance = grossTotal - goalTarget - partnerOut
-        //   grossTotal  = regularIncome + partnerIn
-        //   goalTarget  = billableWeeks × weeklyGoal
-        const regularIncome = metrics.grossTotal - metrics.totalPartnerIn;
+        //   goalBalance = regularIncome + waiverCredits + partnerIn - goalTarget - partnerOut
+        //   FIREWALL: grossTotal is now pure operational (no partner_in)
+        const regularIncome = metrics.grossTotal;
         const goalTarget = metrics.billableWeeks > 0 && currentWeeklyGoal > 0
           ? Math.round(metrics.billableWeeks * currentWeeklyGoal * 100) / 100
           : 0;
@@ -172,9 +171,16 @@ export function GoalsPanel({ goals, metrics }: GoalsPanelProps) {
 
         const rows = [
           { sign: '+', label: 'Receitas Operacionais', value: regularIncome, color: 'text-emerald-400' },
-          { sign: '+', label: 'Créditos de Parceria', value: metrics.totalPartnerIn, color: 'text-indigo-400' },
+          ...(metrics.totalWaiverCredit > 0
+            ? [{ sign: '+', label: 'Justificativas', value: metrics.totalWaiverCredit, color: 'text-orange-400' }]
+            : []),
+          ...(metrics.totalPartnerIn > 0
+            ? [{ sign: '+', label: 'Créditos de Parceria', value: metrics.totalPartnerIn, color: 'text-indigo-400' }]
+            : []),
           { sign: '−', label: 'Metas Acumuladas', value: goalTarget, color: 'text-white/50' },
-          { sign: '−', label: 'Débitos de Parceria', value: metrics.totalPartnerOut, color: 'text-amber-400' },
+          ...(metrics.totalPartnerOut > 0
+            ? [{ sign: '−', label: 'Débitos de Parceria', value: metrics.totalPartnerOut, color: 'text-amber-400' }]
+            : []),
         ];
 
         return (

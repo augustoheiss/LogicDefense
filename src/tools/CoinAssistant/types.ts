@@ -35,7 +35,7 @@ export interface TableRow {
    * Meaning depends on entryType:
    *   'revenue'  → R$ earned (0 = rest day, skipped in averages)
    *   'deposit'  → R$ invested
-   *   'waiver'   → number of consecutive days justified/excused (e.g. 7 = one week)
+   *   'waiver'   → days justified (waiverMode='days') or direct R$ credit (waiverMode='value')
    *   'expense'  → dynamic cost entry; value = monthlyValue × monthCount
    */
   value: number;
@@ -43,17 +43,23 @@ export interface TableRow {
   /**
    *   'revenue'  — operational income (default for legacy rows)
    *   'deposit'  — investment / aporte
-   *   'waiver'   — excused downtime period; value = days justified
+   *   'waiver'   — excused downtime period or direct monetary justification.
    *                date = start of the period; description = reason
    *   'expense'  — dynamic cost (e.g. insurance, IPVA, financing);
    *                value = monthlyValue × monthCount (auto-computed on creation)
-   *   'partner_in'  — partnership credit / reimbursement. Adds to grossTotal
-   *                    AND globalGoalBalance (treated like revenue in the Time Bank).
-   *   'partner_out' — partnership debit / charge. Adds to totalExpenses
-   *                    AND subtracts from globalGoalBalance (operational debt).
+   *   'partner_in'  — partnership credit / reimbursement. Isolated from grossTotal;
+   *                    adds to totalPartnerIn and globalGoalBalance.
+   *   'partner_out' — partnership debit / charge. Isolated from totalExpenses;
+   *                    adds to totalPartnerOut and subtracts from globalGoalBalance.
    * Omitted on legacy rows — treated as 'revenue' for full backward compatibility.
    */
   entryType?: 'revenue' | 'deposit' | 'waiver' | 'expense' | 'partner_in' | 'partner_out';
+  /**
+   * For 'waiver' entries only — how to interpret the value field:
+   *   'days'  — value = number of justified days (default, backward-compatible)
+   *   'value' — value = direct R$ monetary credit
+   */
+  waiverMode?: 'days' | 'value';
   /**
    * For 'expense' entries only — the monthly cost amount (R$).
    * Used to reconstruct the total: value = monthlyValue × monthCount.
@@ -192,8 +198,8 @@ export interface TableMetrics {
   byMonth: Record<string, MonthMetrics>; // "YYYY-MM" → MonthMetrics
   byWeek: Record<string, number>;        // "YYYY-Www" → gross total
   /**
-   * Sum of all 'expense' row values (dynamic costs like insurance, IPVA, etc.).
-   * Never included in revenue averages or gross totals.
+   * Sum of all 'expense' row values ONLY (dynamic costs like insurance, IPVA).
+   * Partner_out is NOT included — use expensesWithPartner for full outflows.
    */
   totalExpenses: number;
   /**
@@ -202,9 +208,8 @@ export interface TableMetrics {
    */
   annualExpenses: number;
   /**
-   * Net balance = grossTotal − totalExpenses.
-   * Represents the real cash position after deducting all registered costs.
-   * Positive = receipts exceed costs; negative = costs exceed receipts.
+   * Net balance = grossTotal − totalExpenses (pure operational).
+   * Represents the real cash position after deducting registered operational costs.
    */
   netBalance: number;
 
@@ -250,6 +255,14 @@ export interface TableMetrics {
   totalPartnerIn: number;
   /** Sum of all 'partner_out' row values (debits paid). */
   totalPartnerOut: number;
+
+  // ─── Combined Metrics (operational + partnership) ──────────────────────────
+  /** grossTotal + totalPartnerIn — full cash inflow picture. */
+  grossWithPartner: number;
+  /** totalExpenses + totalPartnerOut — full cash outflow picture. */
+  expensesWithPartner: number;
+  /** grossWithPartner − expensesWithPartner — net position including partnership. */
+  netWithPartner: number;
 }
 
 // ─── Projection Engine ────────────────────────────────────────────────────────

@@ -5,7 +5,7 @@ import { EditRowModal } from './EditRowModal';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type FilterableType = 'revenue' | 'expense' | 'deposit' | 'partner_in' | 'partner_out';
+type FilterableType = 'revenue' | 'expense' | 'deposit' | 'partner_in' | 'partner_out' | 'waiver';
 
 interface CategoryGroup {
   description: string;
@@ -30,6 +30,7 @@ const FILTER_OPTIONS: { value: FilterableType; label: string; icon: string; colo
   { value: 'revenue',     label: 'Recebimentos',     icon: '📥', color: 'bg-purple-500',  textColor: 'text-purple-400' },
   { value: 'expense',     label: 'Custos',            icon: '🏷️', color: 'bg-rose-500',    textColor: 'text-rose-400'   },
   { value: 'deposit',     label: 'Aportes',           icon: '💰', color: 'bg-sky-500',     textColor: 'text-sky-400'    },
+  { value: 'waiver',      label: 'Justificativas',    icon: '🛡️', color: 'bg-amber-500',   textColor: 'text-amber-400'  },
   { value: 'partner_in',  label: 'Créd. Parceria',    icon: '🤝', color: 'bg-indigo-500',  textColor: 'text-indigo-400' },
   { value: 'partner_out', label: 'Déb. Parceria',     icon: '📤', color: 'bg-amber-500',   textColor: 'text-amber-400'  },
 ];

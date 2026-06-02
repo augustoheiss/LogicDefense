@@ -179,12 +179,6 @@ export function TableEditor({
   }, [table.rows, cutoffDate]);
 
   // ── Derived rows ────────────────────────────────────────────────────────────
-  // Revenue rows exclude both deposits and waiver ledger entries.
-  // computeMetrics receives ALL filtered rows so it can locate waiver rows internally.
-  const revenueRows = useMemo(
-    () => filteredRows.filter((r) => r.entryType !== 'deposit' && r.entryType !== 'waiver' && r.entryType !== 'expense' && r.entryType !== 'partner_out'),
-    [filteredRows],
-  );
   const metrics = useMemo(
     () => computeMetrics(filteredRows, table.goals.weeklyGoals, cutoffDate || undefined),
     [filteredRows, table.goals.weeklyGoals, cutoffDate],
@@ -500,12 +494,20 @@ export function TableEditor({
             />
             <AddRowForm onAdd={onAddRow} />
             <ExpensesBulkInput onAddRows={handleBulkAdd} />
-            <CategorySummary
-              rows={table.rows}
-              dailyGoal={resolveGoalForYear(table.goals.dailyGoals, parseInt(effectiveMonth.slice(0, 4)))}
-              onUpdateRow={(rowId, patch) => onUpdateRow(rowId, patch)}
-              onDeleteRow={(rowId) => setDeleteRowId(rowId)}
-            />
+            <details className="group">
+              <summary className="cursor-pointer select-none flex items-center gap-2 text-sm text-white/40 hover:text-white/60 transition-colors py-2">
+                <span className="text-white/20 group-open:rotate-90 transition-transform inline-block">▶</span>
+                <span className="text-base">📊</span> Resumo por Categorias
+              </summary>
+              <div className="mt-2">
+                <CategorySummary
+                  rows={table.rows}
+                  dailyGoal={resolveGoalForYear(table.goals.dailyGoals, parseInt(effectiveMonth.slice(0, 4)))}
+                  onUpdateRow={(rowId, patch) => onUpdateRow(rowId, patch)}
+                  onDeleteRow={(rowId) => setDeleteRowId(rowId)}
+                />
+              </div>
+            </details>
           </div>
         )}
 
@@ -545,7 +547,8 @@ export function TableEditor({
             {chartView === 'history' && (
               <div className="bg-white/5 border border-white/10 rounded-xl p-5">
                 <RevenueChart
-                  rows={revenueRows}
+                  rows={filteredRows}
+                  metrics={metrics}
                   dailyGoal={resolveGoalForYear(table.goals.dailyGoals, parseInt(effectiveMonth.slice(0, 4)))}
                   selectedMonth={effectiveMonth}
                   dailySurvivalGoal={metrics.survivalDaily > 0 ? metrics.survivalDaily : undefined}

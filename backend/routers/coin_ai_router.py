@@ -69,7 +69,7 @@ _ENTRY_LABELS = {
     EntryType.REVENUE: "RECEITA",
     EntryType.EXPENSE: "DESPESA",
     EntryType.DEPOSIT: "APORTE",
-    EntryType.WAIVER:      "DISPENSA",
+    EntryType.WAIVER:      "JUSTIFICATIVA",
     EntryType.PARTNER_IN:  "CRÉDITO PARCERIA",
     EntryType.PARTNER_OUT: "DÉBITO PARCERIA",
 }
@@ -254,7 +254,7 @@ _TYPE_SECTION_LABELS = {
     EntryType.REVENUE:     "Receitas",
     EntryType.EXPENSE:     "Despesas",
     EntryType.DEPOSIT:     "Aportes",
-    EntryType.WAIVER:      "Dispensas",
+    EntryType.WAIVER:      "Justificativas",
     EntryType.PARTNER_IN:  "Créditos de Parceria",
     EntryType.PARTNER_OUT: "Débitos de Parceria",
 }
@@ -418,11 +418,18 @@ def build_financial_context(
   Meta semanal:   R$ {weekly_goal:,.2f}
   Custo anual:    R$ {annual_cost:,.2f}
 
-── Totais Globais ──
-  Faturamento bruto total: R$ {metrics.gross_total:,.2f}
-  Total de despesas:       R$ {metrics.total_expenses:,.2f}
-  Despesas anualizadas:    R$ {metrics.annual_expenses:,.2f}
-  Saldo líquido:           R$ {metrics.net_balance:,.2f}
+── Totais Globais (Operacionais — receita pura, sem parceria) ──
+  Receita operacional bruta:  R$ {metrics.gross_total:,.2f}
+  Despesas operacionais:      R$ {metrics.total_expenses:,.2f}
+  Despesas anualizadas:       R$ {metrics.annual_expenses:,.2f}
+  Saldo líquido operacional:  R$ {metrics.net_balance:,.2f}
+
+── Totais com Parceria (passthrough — créditos/débitos de terceiros) ──
+  Receita + Créditos parceria: R$ {metrics.gross_with_partner:,.2f}
+  Despesas + Débitos parceria: R$ {metrics.expenses_with_partner:,.2f}
+  Saldo líquido c/ parceria:   R$ {metrics.net_with_partner:,.2f}
+  Créditos de parceria (in):   R$ {metrics.total_partner_in:,.2f}
+  Débitos de parceria (out):   R$ {metrics.total_partner_out:,.2f}
 
 ── Médias Globais (baseadas em tempo-calendário, não dias trabalhados) ──
   Média diária:   R$ {metrics.global_daily_avg:,.2f}
@@ -510,6 +517,7 @@ RESTRIÇÕES:
 - NUNCA dê conselhos de investimento (ações, cripto, etc.)
 - NUNCA invente dados que não estão no contexto
 - Se o contexto não tiver informação suficiente, diga explicitamente
+- Entradas de parceria (partner_in / partner_out) são estritamente PASSTHROUGH — NÃO representam a capacidade operacional do usuário. Sempre use as métricas OPERACIONAIS puras para análise de desempenho e produtividade.
 """
 
 

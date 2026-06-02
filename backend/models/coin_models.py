@@ -117,6 +117,11 @@ class TableRow(BaseModel):
         pattern=r"^\d{4}-\d{2}-\d{2}$",
         description="Period end date (YYYY-MM-DD) — must pair with periodStart",
     )
+    waiver_mode: Optional[str] = Field(
+        default=None,
+        alias="waiverMode",
+        description="For 'waiver' entries: 'days' (default) or 'value' (direct R$ credit)",
+    )
 
     model_config = {"populate_by_name": True}
 
@@ -353,6 +358,23 @@ class TableMetrics(BaseModel):
         default=0,
         alias="totalPartnerOut",
         description="Sum of all partner_out (debit/charge) row values",
+    )
+
+    # ── Combined Metrics (operational + partnership) ──────────────────────────
+    gross_with_partner: float = Field(
+        default=0,
+        alias="grossWithPartner",
+        description="grossTotal + totalPartnerIn — full cash inflow picture",
+    )
+    expenses_with_partner: float = Field(
+        default=0,
+        alias="expensesWithPartner",
+        description="totalExpenses + totalPartnerOut — full cash outflow picture",
+    )
+    net_with_partner: float = Field(
+        default=0,
+        alias="netWithPartner",
+        description="grossWithPartner − expensesWithPartner — net including partnership",
     )
 
     model_config = {"populate_by_name": True}

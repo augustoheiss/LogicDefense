@@ -169,7 +169,9 @@ export function SpreadsheetGrid({
                         }`}
                         title={
                           row.entryType === 'waiver'
-                            ? `🛡️ ${row.value} dia${row.value !== 1 ? 's' : ''} justificado${row.value !== 1 ? 's' : ''}`
+                            ? (row.waiverMode === 'value'
+                              ? `🛡️ Justificativa: ${formatCurrency(row.value)}`
+                              : `🛡️ ${row.value} dia${row.value !== 1 ? 's' : ''} justificado${row.value !== 1 ? 's' : ''}`)
                             : row.entryType === 'deposit'
                               ? 'Aporte / Investimento'
                               : row.entryType === 'expense'
@@ -186,7 +188,9 @@ export function SpreadsheetGrid({
                         }
                       >
                         {row.entryType === 'waiver'
-                          ? `${row.value}d justif.`
+                          ? (row.waiverMode === 'value'
+                            ? `🛡️ ${formatCurrency(row.value)}`
+                            : `${row.value}d justif.`)
                           : row.entryType === 'expense'
                             ? `-${formatCurrency(row.value)}`
                             : row.entryType === 'partner_in'

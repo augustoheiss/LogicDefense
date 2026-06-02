@@ -158,13 +158,15 @@ function buildMessage(
   const reportDailyGoal = resolveGoalForYear(table.goals.dailyGoals, reportYear);
   const reportWeeklyGoal = resolveGoalForYear(table.goals.weeklyGoals, reportYear);
 
-  // ── Revenue rows (exclude deposits, waivers, expenses) ──────────────────
+  // ── Revenue rows (exclude deposits, waivers, expenses, partner entries) ────
   const allRevenueRows = table.rows
     .filter(
       (r) =>
         r.entryType !== 'deposit' &&
         r.entryType !== 'waiver' &&
         r.entryType !== 'expense' &&
+        r.entryType !== 'partner_in' &&
+        r.entryType !== 'partner_out' &&
         r.value > 0,
     )
     .sort((a, b) => a.date.localeCompare(b.date));
@@ -330,7 +332,8 @@ function buildMessage(
   // ═══════════════════════════════════════════════════════════════════════════
   // SECTION 5b + 6 — Unified: Detalhamento & Indicadores
   // ═══════════════════════════════════════════════════════════════════════════
-  const regularIncome = metrics.grossTotal - (metrics.totalPartnerIn ?? 0);
+  // FIREWALL: grossTotal is now pure operational (no partner_in)
+  const regularIncome = metrics.grossTotal;
   const goalTarget = metrics.billableWeeks > 0 && reportWeeklyGoal > 0
     ? Math.round(metrics.billableWeeks * reportWeeklyGoal * 100) / 100
     : 0;
@@ -347,6 +350,9 @@ function buildMessage(
   lines.push(
     `📊 *Balanço Operacional & Indicadores*`,
     `(+) Receitas Operacionais: ${fmt(regularIncome)} _(${toW(regularIncome)})_`,
+    ...(metrics.totalWaiverCredit > 0
+      ? [`(+) Justificativas: ${fmt(metrics.totalWaiverCredit)} _(${toW(metrics.totalWaiverCredit)})_`]
+      : []),
     ...(metrics.totalPartnerIn > 0
       ? [`(+) Créditos de Parceria: ${fmt(metrics.totalPartnerIn)} _(${toW(metrics.totalPartnerIn)})_`]
       : []),

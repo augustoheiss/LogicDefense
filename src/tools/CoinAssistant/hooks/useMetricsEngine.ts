@@ -35,10 +35,10 @@ export function computeMetrics(
 ): TableMetrics {
   if (rows.length === 0) return emptyMetrics();
 
-  // Waiver rows are ledger entries, not revenue — strip them alongside deposits
-  // so they never inflate gross totals or skew averages.
+  // Waiver rows are ledger entries, not revenue — strip them alongside deposits.
+  // FIREWALL: partner_in and partner_out are isolated from operational revenue.
   const revenueRows = rows.filter(
-    (r) => r.entryType !== 'deposit' && r.entryType !== 'waiver' && r.entryType !== 'expense' && r.entryType !== 'partner_out',
+    (r) => r.entryType !== 'deposit' && r.entryType !== 'waiver' && r.entryType !== 'expense' && r.entryType !== 'partner_out' && r.entryType !== 'partner_in',
   );
 
   // ── Expense metrics — computed before the early-return guard ───────────────
@@ -66,16 +66,8 @@ export function computeMetrics(
   const totalPartnerIn = round2(partnerInRows.reduce((s, r) => s + r.value, 0));
   const totalPartnerOut = round2(partnerOutRows.reduce((s, r) => s + r.value, 0));
 
-  // partner_out adds to totalExpenses (cash flow tracking)
-  for (const row of partnerOutRows) {
-    totalExpenses += row.value;
-
-    // Widen global expense span for survival goals
-    const s = row.periodStart || row.date;
-    const e = row.periodEnd   || row.date;
-    if (!expEarliest || s < expEarliest) expEarliest = s;
-    if (!expLatest   || e > expLatest)   expLatest   = e;
-  }
+  // FIREWALL: partner_out does NOT add to totalExpenses.
+  // Survival goals are based purely on operational expenses.
 
   totalExpenses = round2(totalExpenses);
   // annualExpenses = totalExpenses at the global level;
@@ -121,9 +113,9 @@ export function computeMetrics(
 
   const investFields = { depositCount, totalInvested, totalInterestEarned, investmentBalance };
 
-  // ── Advanced Statistics (revenue rows only, value > 0) ───────────────────
+  // ── Advanced Statistics (revenue rows only, excludes partner_in/out, value > 0) ─
   const positiveRevenueValues = rows
-    .filter((r) => r.entryType !== 'deposit' && r.entryType !== 'waiver' && r.entryType !== 'expense' && r.entryType !== 'partner_out' && r.value > 0)
+    .filter((r) => r.entryType !== 'deposit' && r.entryType !== 'waiver' && r.entryType !== 'expense' && r.entryType !== 'partner_out' && r.entryType !== 'partner_in' && r.value > 0)
     .map((r) => r.value);
 
   let statsFields: { maxTransaction: number; minTransaction: number; medianTransaction: number; modeTransaction: number; stdDeviation: number };
@@ -328,24 +320,28 @@ export function computeMetrics(
     calculateStrictGlobalBalance(revenueRows, weeklyGoals, asOfDate ? today : undefined);
 
   // ── Waiver credits — derived directly from 'waiver' ledger rows ─────────
-  // For each waiver row:
-  //   - row.date  = start of the excused period (determines the year's goal rate)
-  //   - row.value = number of days justified
-  // Per-year goal integrity: a waiver in 2026 uses 2026's weeklyGoal, so a
-  // 2027 goal change can never retroactively corrupt 2026's balance.
+  // Dual-mode waivers:
+  //   waiverMode='days' (default)  → credit = (row.value / 7) × weeklyGoalForYear
+  //   waiverMode='value'           → credit = row.value (direct R$ amount)
   let totalWaiverCredits = 0;
   let totalWaivedDays = 0;
   const waiverRows = rows.filter((r) => r.entryType === 'waiver' && r.value > 0);
 
   for (const row of waiverRows) {
-    const waiverYear = parseInt(row.date.slice(0, 4), 10);
-    const goalForYear = resolveGoalForYear(weeklyGoals, waiverYear);
-    totalWaiverCredits += (row.value / 7) * goalForYear;
-    totalWaivedDays    += row.value;
+    if (row.waiverMode === 'value') {
+      // Direct monetary credit — bypass day-to-goal conversion
+      totalWaiverCredits += row.value;
+    } else {
+      // Default: day-based — convert to monetary credit using year's weekly goal
+      const waiverYear = parseInt(row.date.slice(0, 4), 10);
+      const goalForYear = resolveGoalForYear(weeklyGoals, waiverYear);
+      totalWaiverCredits += (row.value / 7) * goalForYear;
+      totalWaivedDays    += row.value;
+    }
   }
 
-  // Partner_out subtracts from goal balance (operational debt to the Time Bank)
-  const globalGoalBalance = Math.round((rawStrictBalance + totalWaiverCredits - totalPartnerOut) * 100) / 100;
+  // FIREWALL Goal Balance: add partner_in credit since it no longer flows through rawStrictBalance
+  const globalGoalBalance = Math.round((rawStrictBalance + totalWaiverCredits + totalPartnerIn - totalPartnerOut) * 100) / 100;
   const waivedWeeks = Math.round((totalWaivedDays / 7) * 100) / 100;
   const billableWeeks = Math.round((totalElapsedWeeks - waivedWeeks) * 100) / 100;
 
@@ -358,8 +354,13 @@ export function computeMetrics(
     ? Math.round((globalGoalBalance / effectiveWeeklyGoal) * 100) / 100
     : 0;
 
-  // ── Net balance (cash position after expenses) ────────────────────────────────
+  // ── Net balance (cash position after expenses — pure operational) ──────────
   const netBalance = round2(grossTotal - totalExpenses);
+
+  // ── Combined metrics (operational + partnership) ──────────────────────────
+  const grossWithPartner = round2(grossTotal + totalPartnerIn);
+  const expensesWithPartner = round2(totalExpenses + totalPartnerOut);
+  const netWithPartner = round2(grossWithPartner - expensesWithPartner);
 
   return {
     grossTotal: round2(grossTotal),
@@ -384,6 +385,9 @@ export function computeMetrics(
     ...statsFields,
     totalPartnerIn,
     totalPartnerOut,
+    grossWithPartner,
+    expensesWithPartner,
+    netWithPartner,
   };
 }
 
@@ -510,6 +514,9 @@ function emptyMetrics(): TableMetrics {
     stdDeviation: 0,
     totalPartnerIn: 0,
     totalPartnerOut: 0,
+    grossWithPartner: 0,
+    expensesWithPartner: 0,
+    netWithPartner: 0,
   };
 }
 

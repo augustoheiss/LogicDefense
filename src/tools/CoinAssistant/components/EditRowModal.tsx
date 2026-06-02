@@ -43,7 +43,7 @@ const TYPE_COLOR: Record<string, string> = {
 const TYPE_LABEL: Record<string, string> = {
   revenue: '💰 Receita',
   expense: '🏷️ Custo',
-  waiver:  '🛡️ Justificado',
+  waiver:  '🛡️ Justificativa',
   deposit: '📥 Aporte',
   partner_in:  '🤝 Crédito Parceria',
   partner_out: '📤 Débito Parceria',
@@ -249,12 +249,14 @@ export function EditRowModal({ row, dailyGoal, onSave, onClose }: EditRowModalPr
         {/* ── Value ── */}
         <div className="space-y-1">
           <label className="text-xs text-white/40 uppercase tracking-wider">
-            {row.entryType === 'waiver' ? 'Dias justificados' : 'Valor (R$)'}
+            {row.entryType === 'waiver'
+              ? (row.waiverMode === 'value' ? 'Valor (R$)' : 'Dias justificados')
+              : 'Valor (R$)'}
           </label>
           <input
             type="number"
             value={value}
-            step={row.entryType === 'waiver' ? '1' : '0.01'}
+            step={row.entryType === 'waiver' && row.waiverMode !== 'value' ? '1' : '0.01'}
             min="0"
             onChange={(e) => setValue(e.target.value)}
             className={`${inputCls} font-mono`}

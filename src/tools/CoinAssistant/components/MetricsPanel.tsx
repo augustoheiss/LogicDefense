@@ -144,40 +144,76 @@ export function MetricsPanel({ metrics, dailyGoal, table, selectedMonth }: Metri
 
   return (
     <div className="space-y-4">
-      {/* ── Totais Globais (top-level KPIs — no duplicated averages) ── */}
+      {/* ── Totais Globais — Operacionais (pure revenue/expense) ── */}
       <div>
         <h3 className="text-xs text-white/50 uppercase tracking-wider mb-3 font-semibold flex items-center gap-2">
           <span className="w-4 h-px bg-white/20 inline-block" />
-          Totais Globais
+          Totais Operacionais
           <span className="flex-1 h-px bg-white/10 inline-block" />
         </h3>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
           <MetricCard
-            label="Total Bruto"
+            label="Receita Operacional"
             value={fmt(metrics.grossTotal)}
             fullValue={formatCurrencyFull(metrics.grossTotal)}
             status="accent"
           />
           {metrics.totalExpenses > 0 && (
             <MetricCard
-              label="Total de Custos"
+              label="Custos Operacionais"
               value={fmt(metrics.totalExpenses)}
               fullValue={formatCurrencyFull(metrics.totalExpenses)}
               status="warning"
-              sub="soma de todos os custos"
+              sub="custos próprios"
             />
           )}
           {metrics.totalExpenses > 0 && (
             <MetricCard
-              label="Saldo Líquido"
+              label="Saldo Operacional"
               value={fmt(metrics.netBalance)}
               fullValue={formatCurrencyFull(metrics.netBalance)}
               status={metrics.netBalance >= 0 ? 'success' : 'warning'}
-              sub={metrics.netBalance >= 0 ? '✓ receitas > despesas' : '⚠ despesas > receitas'}
+              sub={metrics.netBalance >= 0 ? '✓ receitas > custos' : '⚠ custos > receitas'}
             />
           )}
         </div>
       </div>
+
+      {/* ── Totais com Parceria (only when partnership entries exist) ── */}
+      {(metrics.totalPartnerIn > 0 || metrics.totalPartnerOut > 0) && (
+        <div>
+          <h3 className="text-xs text-white/50 uppercase tracking-wider mb-3 font-semibold flex items-center gap-2">
+            <span className="w-4 h-px bg-white/20 inline-block" />
+            Totais com Parceria
+            <span className="flex-1 h-px bg-white/10 inline-block" />
+          </h3>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            <MetricCard
+              label="Receita + Créditos"
+              value={fmt(metrics.grossWithPartner)}
+              fullValue={formatCurrencyFull(metrics.grossWithPartner)}
+              status="accent"
+              sub={`créditos: ${fmt(metrics.totalPartnerIn)}`}
+            />
+            {metrics.expensesWithPartner > 0 && (
+              <MetricCard
+                label="Custos + Débitos"
+                value={fmt(metrics.expensesWithPartner)}
+                fullValue={formatCurrencyFull(metrics.expensesWithPartner)}
+                status="warning"
+                sub={`débitos: ${fmt(metrics.totalPartnerOut)}`}
+              />
+            )}
+            <MetricCard
+              label="Saldo c/ Parceria"
+              value={fmt(metrics.netWithPartner)}
+              fullValue={formatCurrencyFull(metrics.netWithPartner)}
+              status={metrics.netWithPartner >= 0 ? 'success' : 'warning'}
+              sub="inclui parceria"
+            />
+          </div>
+        </div>
+      )}
 
       {/* ── Médias Globais (consolidated — single place for averages) ── */}
       <div>

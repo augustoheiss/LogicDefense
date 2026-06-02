@@ -143,10 +143,11 @@ def compute_metrics(
     if not rows:
         return _empty_metrics()
 
-    # Filter out deposits, waivers, expenses for revenue calculations
+    # Filter out deposits, waivers, expenses, AND partner entries for revenue calculations
+    # FIREWALL: partner_in and partner_out are isolated from operational revenue.
     revenue_rows = [
         r for r in rows
-        if r.entry_type not in (EntryType.DEPOSIT, EntryType.WAIVER, EntryType.EXPENSE, EntryType.PARTNER_OUT)
+        if r.entry_type not in (EntryType.DEPOSIT, EntryType.WAIVER, EntryType.EXPENSE, EntryType.PARTNER_OUT, EntryType.PARTNER_IN)
     ]
 
     # ── Expense metrics — computed before the early-return guard ──────────
@@ -197,15 +198,8 @@ def compute_metrics(
     total_partner_in = _round2(sum(r.value for r in partner_in_rows))
     total_partner_out = _round2(sum(r.value for r in partner_out_rows))
 
-    # partner_out adds to total_expenses (cash flow tracking)
-    for row in partner_out_rows:
-        total_expenses += row.value
-        s = row.period_start or row.date
-        e = row.period_end or row.date
-        if not exp_earliest or s < exp_earliest:
-            exp_earliest = s
-        if not exp_latest or e > exp_latest:
-            exp_latest = e
+    # FIREWALL: partner_out does NOT add to total_expenses.
+    # Survival goals are based purely on operational expenses.
 
     total_expenses = _round2(total_expenses)
     annual_expenses = total_expenses
@@ -243,7 +237,7 @@ def compute_metrics(
 
     # ── Advanced Statistics (revenue rows only, value > 0) ─────────────────
     positive_rev_values = [r.value for r in rows
-                           if r.entry_type not in (EntryType.DEPOSIT, EntryType.WAIVER, EntryType.EXPENSE, EntryType.PARTNER_OUT)
+                           if r.entry_type not in (EntryType.DEPOSIT, EntryType.WAIVER, EntryType.EXPENSE, EntryType.PARTNER_OUT, EntryType.PARTNER_IN)
                            and r.value > 0]
 
     if not positive_rev_values:
@@ -432,19 +426,24 @@ def compute_metrics(
         _parse_date(as_of_date) if as_of_date else None,
     )
 
-    # ── Waiver credits ───────────────────────────────────────────────────
+    # ── Waiver credits ───────────────────────────────────────────────────────
     total_waiver_credits = 0.0
     total_waived_days = 0.0
     waiver_rows = [r for r in rows if r.entry_type == EntryType.WAIVER and r.value > 0]
 
     for row in waiver_rows:
-        waiver_year = int(row.date[:4])
-        goal_for_year = resolve_goal_for_year(weekly_goals, waiver_year)
-        total_waiver_credits += (row.value / 7) * goal_for_year
-        total_waived_days += row.value
+        if getattr(row, 'waiver_mode', None) == 'value':
+            # Direct monetary credit — bypass day-to-goal conversion
+            total_waiver_credits += row.value
+        else:
+            # Default: day-based — convert to monetary credit using year's weekly goal
+            waiver_year = int(row.date[:4])
+            goal_for_year = resolve_goal_for_year(weekly_goals, waiver_year)
+            total_waiver_credits += (row.value / 7) * goal_for_year
+            total_waived_days += row.value
 
-    # Partner_out subtracts from goal balance (operational debt to the Time Bank)
-    global_goal_balance = round((raw_strict_balance + total_waiver_credits - total_partner_out) * 100) / 100
+    # FIREWALL Goal Balance: add partner_in credit since it no longer flows through rawStrictBalance
+    global_goal_balance = round((raw_strict_balance + total_waiver_credits + total_partner_in - total_partner_out) * 100) / 100
     waived_weeks = round((total_waived_days / 7) * 100) / 100
     billable_weeks = round((total_elapsed_weeks - waived_weeks) * 100) / 100
 
@@ -457,8 +456,13 @@ def compute_metrics(
         else 0.0
     )
 
-    # ── Net balance ──────────────────────────────────────────────────────
+    # ── Net balance ──────────────────────────────────────────────────────────────
     net_balance = _round2(gross_total - total_expenses)
+
+    # ── Combined metrics (operational + partnership) ──────────────────────────
+    gross_with_partner = _round2(gross_total + total_partner_in)
+    expenses_with_partner = _round2(total_expenses + total_partner_out)
+    net_with_partner = _round2(gross_with_partner - expenses_with_partner)
 
     return TableMetrics(
         grossTotal=_round2(gross_total),
@@ -483,6 +487,9 @@ def compute_metrics(
         **stats_fields,
         totalPartnerIn=total_partner_in,
         totalPartnerOut=total_partner_out,
+        grossWithPartner=gross_with_partner,
+        expensesWithPartner=expenses_with_partner,
+        netWithPartner=net_with_partner,
     )
 
 
@@ -523,4 +530,7 @@ def _empty_metrics() -> TableMetrics:
         stdDeviation=0,
         totalPartnerIn=0,
         totalPartnerOut=0,
+        grossWithPartner=0,
+        expensesWithPartner=0,
+        netWithPartner=0,
     )

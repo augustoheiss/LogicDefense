@@ -39,47 +39,63 @@ function fmtLabel(v: number): string {
 }
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
-/** Staggered revenue label — 3-step staircase pushing UP from bar top */
-function renderRevenueLabel(props: any) {
-  const { x, y, width, value, index } = props;
-  if (!value || value === 0) return null;
-  const step = (index ?? 0) % 3;
-  const yOff = step * 12;
-  return (
-    <text
-      x={x + width / 2}
-      y={y - yOff - 4}
-      textAnchor="middle"
-      fill="#000000"
-      fontSize={9}
-      fontWeight={600}
-      fontFamily="monospace"
-    >
-      {fmtLabel(value)}
-    </text>
-  );
+/** Staggered positive label — 3-step staircase pushing UP from bar top */
+function makePositiveLabel(color: string) {
+  return function PositiveLabel(props: any) {
+    const { x, y, width, value, index } = props;
+    if (!value || value === 0) return null;
+    const step = (index ?? 0) % 3;
+    const yOff = step * 14;
+    return (
+      <text
+        x={x + width / 2}
+        y={y - yOff - 4}
+        textAnchor="middle"
+        dominantBaseline="auto"
+        fill={color}
+        fontSize={9}
+        fontWeight={600}
+        fontFamily="monospace"
+      >
+        {fmtLabel(value)}
+      </text>
+    );
+  };
 }
 
-/** Staggered expense label — 3-step staircase pushing DOWN from bar bottom */
-function renderExpenseLabel(props: any) {
-  const { x, y, width, height, value, index } = props;
-  if (!value || value === 0) return null;
-  const step = (index ?? 0) % 3;
-  const yOff = step * 12;
-  return (
-    <text
-      x={x + width / 2}
-      y={y + (height ?? 0) + yOff + 12}
-      textAnchor="middle"
-      fill="#000000"
-      fontSize={9}
-      fontWeight={600}
-      fontFamily="monospace"
-    >
-      {fmtLabel(value)}
-    </text>
-  );
+/** Staggered negative label — 3-step staircase pushing DOWN from bar bottom */
+function makeNegativeLabel(color: string) {
+  return function NegativeLabel(props: any) {
+    const { x, y, width, height, value, index } = props;
+    if (!value || value === 0) return null;
+    const step = (index ?? 0) % 3;
+    const yOff = step * 14;
+    // Recharts may pass negative height for downward bars.
+    // Math.abs ensures we always move from y to the bar's BOTTOM edge.
+    const barBottom = y + Math.abs(height ?? 0);
+    return (
+      <text
+        x={x + width / 2}
+        y={barBottom + yOff + 4}
+        textAnchor="middle"
+        dominantBaseline="hanging"
+        fill={color}
+        fontSize={9}
+        fontWeight={600}
+        fontFamily="monospace"
+      >
+        {fmtLabel(value)}
+      </text>
+    );
+  };
 }
+
+const renderRevenueLabel    = makePositiveLabel('#059669');
+const renderDepositLabel    = makePositiveLabel('#0284c7');
+const renderPartnerInLabel  = makePositiveLabel('#6366f1');
+const renderWaiverLabel     = makePositiveLabel('#64748b');
+const renderExpenseLabel    = makeNegativeLabel('#e11d48');
+const renderPartnerOutLabel = makeNegativeLabel('#d97706');
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
 function round2(n: number): number {
@@ -106,30 +122,51 @@ function buildChartData(rows: TableRow[], ym: string) {
 
   const revMap: Record<string, number> = {};
   const expMap: Record<string, number> = {};
+  const pinMap: Record<string, number> = {};
+  const poutMap: Record<string, number> = {};
+  const depMap: Record<string, number> = {};
+  const waiMap: Record<string, number> = {};
 
   for (const row of rows) {
-    const isRevenue = row.entryType !== 'deposit' && row.entryType !== 'expense' && row.entryType !== 'waiver' && row.value > 0;
-    const isExpense = row.entryType === 'expense' && row.value > 0;
-    if (!isRevenue && !isExpense) continue;
+    const et = row.entryType || 'revenue';
+    const isRevenue    = et !== 'deposit' && et !== 'expense' && et !== 'waiver' && et !== 'partner_in' && et !== 'partner_out' && row.value > 0;
+    const isExpense    = et === 'expense' && row.value > 0;
+    const isPartnerIn  = et === 'partner_in' && row.value > 0;
+    const isPartnerOut = et === 'partner_out' && row.value > 0;
+    const isDeposit    = et === 'deposit' && row.value > 0;
+    const isWaiver     = et === 'waiver' && row.value > 0;
+    if (!isRevenue && !isExpense && !isPartnerIn && !isPartnerOut && !isDeposit && !isWaiver) continue;
 
     const contributions = rowContributions(row);
     for (const c of contributions) {
       if (!c.date.startsWith(ym + '-')) continue;
-      if (isRevenue) revMap[c.date] = round2((revMap[c.date] ?? 0) + c.value);
-      if (isExpense) expMap[c.date] = round2((expMap[c.date] ?? 0) + c.value);
+      if (isRevenue)    revMap[c.date]  = round2((revMap[c.date]  ?? 0) + c.value);
+      if (isExpense)    expMap[c.date]  = round2((expMap[c.date]  ?? 0) + c.value);
+      if (isPartnerIn)  pinMap[c.date]  = round2((pinMap[c.date]  ?? 0) + c.value);
+      if (isPartnerOut) poutMap[c.date] = round2((poutMap[c.date] ?? 0) + c.value);
+      if (isDeposit)    depMap[c.date]  = round2((depMap[c.date]  ?? 0) + c.value);
+      if (isWaiver)     waiMap[c.date]  = round2((waiMap[c.date]  ?? 0) + c.value);
     }
   }
 
-  const points: { dateLabel: string; revenue: number; expenseNeg: number }[] = [];
+  const points: { dateLabel: string; revenue: number; expenseNeg: number; partnerIn: number; partnerOutNeg: number; deposit: number; waiver: number }[] = [];
   for (let d = 1; d <= totalDays; d++) {
     const dateISO = `${yearStr}-${monthStr}-${pad2(d)}`;
     if (isThisMonth && dateISO > todayISO) break;
-    const revenue = round2(revMap[dateISO] ?? 0);
-    const expense = round2(expMap[dateISO] ?? 0);
+    const revenue    = round2(revMap[dateISO]  ?? 0);
+    const expense    = round2(expMap[dateISO]  ?? 0);
+    const partnerIn  = round2(pinMap[dateISO]  ?? 0);
+    const partnerOut = round2(poutMap[dateISO] ?? 0);
+    const deposit    = round2(depMap[dateISO]  ?? 0);
+    const waiver     = round2(waiMap[dateISO]  ?? 0);
     points.push({
       dateLabel: `${pad2(d)}/${monthStr}`,
       revenue,
-      expenseNeg: expense > 0 ? -expense : 0,
+      expenseNeg:    expense !== 0 ? -Math.abs(expense) : 0,
+      partnerIn,
+      partnerOutNeg: partnerOut !== 0 ? -Math.abs(partnerOut) : 0,
+      deposit,
+      waiver,
     });
   }
   return points;
@@ -209,7 +246,11 @@ export const PrintableReport = forwardRef<HTMLDivElement, PrintableReportProps>(
 
     // Chart data
     const chartData = buildChartData(rows, selectedMonth);
-    const hasExpenses = chartData.some(p => p.expenseNeg < 0);
+    const hasExpenses  = chartData.some(p => p.expenseNeg < 0);
+    const hasPartnerIn  = chartData.some(p => p.partnerIn > 0);
+    const hasPartnerOut = chartData.some(p => p.partnerOutNeg < 0);
+    const hasDeposits  = chartData.some(p => p.deposit > 0);
+    const hasWaivers   = chartData.some(p => p.waiver > 0);
 
     // Survival goals
     const survival = costBasedTarget ? computeSurvivalForPdf(rows, selectedMonth) : null;
@@ -280,59 +321,6 @@ export const PrintableReport = forwardRef<HTMLDivElement, PrintableReportProps>(
         )}
 
         {/* ═══════════════════════════════════════════════════════════════════
-            PRORATED EXPENSE METRICS
-            ═══════════════════════════════════════════════════════════════════ */}
-        {expenseTotal > 0 && (
-          <div style={{ marginBottom: '24px', breakInside: 'avoid' as const }}>
-            <h2 style={{ fontSize: '11px', fontWeight: 700, color: '#dc2626', letterSpacing: '1.5px', textTransform: 'uppercase' as const, marginBottom: '12px' }}>
-              💸 Custos Rateados do Mês
-            </h2>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
-              {[
-                { label: 'Total de Gastos', value: fmtBRL(expenseTotal), color: '#dc2626' },
-                { label: 'Média Semanal', value: fmtBRL(expenseWeekly), color: '#b91c1c' },
-                { label: 'Média Diária', value: fmtBRL(expenseDaily), color: '#b91c1c' },
-              ].map((card) => (
-                <div key={card.label} style={{
-                  border: '1px solid #fecaca',
-                  borderRadius: '8px',
-                  padding: '12px',
-                  textAlign: 'center' as const,
-                  backgroundColor: '#fff5f5',
-                }}>
-                  <div style={{ fontSize: '10px', color: '#9ca3af', fontWeight: 600, textTransform: 'uppercase' as const }}>{card.label}</div>
-                  <div style={{ fontSize: '16px', fontWeight: 700, color: card.color, marginTop: '4px', fontFamily: 'monospace' }}>{card.value}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* ═══════════════════════════════════════════════════════════════════
-            SURVIVAL GOALS (only when cost toggle is active)
-            ═══════════════════════════════════════════════════════════════════ */}
-        {survival && (
-          <div style={{ marginBottom: '24px', border: '1px solid #e0e7ff', borderRadius: '8px', padding: '16px', backgroundColor: '#f5f3ff', breakInside: 'avoid' as const }}>
-            <h2 style={{ fontSize: '11px', fontWeight: 700, color: '#7c3aed', letterSpacing: '1.5px', textTransform: 'uppercase' as const, marginBottom: '10px' }}>
-              🛡️ Metas de Sobrevivência (Regime de Competência)
-            </h2>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
-              {[
-                { label: 'Meta Mensal', value: fmtBRL(survival.monthly), sub: `${mDays} dias × ${fmtBRL(survival.daily)}/dia` },
-                { label: 'Meta Semanal', value: fmtBRL(survival.weekly), sub: 'diária × 7' },
-                { label: 'Meta Diária', value: fmtBRL(survival.daily), sub: 'custo global ÷ dias de parceria' },
-              ].map((card) => (
-                <div key={card.label} style={{ textAlign: 'center' as const }}>
-                  <div style={{ fontSize: '10px', color: '#6b7280', fontWeight: 600, textTransform: 'uppercase' as const }}>{card.label}</div>
-                  <div style={{ fontSize: '15px', fontWeight: 700, color: '#4c1d95', marginTop: '4px', fontFamily: 'monospace' }}>{card.value}</div>
-                  <div style={{ fontSize: '9px', color: '#9ca3af' }}>{card.sub}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* ═══════════════════════════════════════════════════════════════════
             CHART — Recharts with fixed width (no ResponsiveContainer)
             ═══════════════════════════════════════════════════════════════════ */}
         {chartData.length > 0 && (
@@ -340,7 +328,7 @@ export const PrintableReport = forwardRef<HTMLDivElement, PrintableReportProps>(
             <h2 style={{ fontSize: '11px', fontWeight: 700, color: '#7c3aed', letterSpacing: '1.5px', textTransform: 'uppercase' as const, marginBottom: '12px' }}>
               Fluxo de Caixa Diário
             </h2>
-            <ComposedChart width={714} height={300} data={chartData} margin={{ top: 44, right: 12, left: 0, bottom: 40 }}>
+            <ComposedChart width={714} height={340} data={chartData} margin={{ top: 44, right: 12, left: 0, bottom: 70 }}>
               <ReferenceLine y={0} stroke="#d1d5db" strokeWidth={1} />
               {dailyGoal > 0 && (
                 <ReferenceLine y={dailyGoal} stroke="#9ca3af" strokeDasharray="4 3" label={{ value: `Meta ${fmtBRL(dailyGoal)}`, position: 'insideTopRight', fill: '#6b7280', fontSize: 9 }} />
@@ -348,14 +336,34 @@ export const PrintableReport = forwardRef<HTMLDivElement, PrintableReportProps>(
               {survival && survival.daily > 0 && (
                 <ReferenceLine y={survival.daily} stroke="#7c3aed" strokeDasharray="6 3" label={{ value: `Sobrev. ${fmtBRL(survival.daily)}`, position: 'insideBottomRight', fill: '#7c3aed', fontSize: 9 }} />
               )}
-              <XAxis dataKey="dateLabel" tick={{ fill: '#6b7280', fontSize: 9 }} axisLine={{ stroke: '#e5e7eb' }} tickLine={false} interval={chartData.length > 20 ? Math.ceil(chartData.length / 15) - 1 : 0} />
+              <XAxis dataKey="dateLabel" tick={{ fill: '#6b7280', fontSize: 9 }} axisLine={{ stroke: '#e5e7eb' }} tickLine={false} tickMargin={30} interval={chartData.length > 20 ? Math.ceil(chartData.length / 15) - 1 : 0} />
               <YAxis tickFormatter={(v: number) => v >= 1000 || v <= -1000 ? `R$${(v / 1000).toFixed(1)}k` : `R$${v}`} tick={{ fill: '#6b7280', fontSize: 9 }} axisLine={false} tickLine={false} width={52} />
-              <Bar dataKey="revenue" fill="#059669" radius={[3, 3, 0, 0]} maxBarSize={16}>
+              <Bar dataKey="revenue" fill="#059669" radius={[3, 3, 0, 0]} maxBarSize={16} stackId="positive">
                 <LabelList dataKey="revenue" content={renderRevenueLabel} />
               </Bar>
+              {hasDeposits && (
+                <Bar dataKey="deposit" fill="#0284c7" radius={[3, 3, 0, 0]} maxBarSize={16} stackId="positive">
+                  <LabelList dataKey="deposit" content={renderDepositLabel} />
+                </Bar>
+              )}
+              {hasPartnerIn && (
+                <Bar dataKey="partnerIn" fill="#6366f1" radius={[3, 3, 0, 0]} maxBarSize={16} stackId="positive">
+                  <LabelList dataKey="partnerIn" content={renderPartnerInLabel} />
+                </Bar>
+              )}
+              {hasWaivers && (
+                <Bar dataKey="waiver" fill="#64748b" radius={[3, 3, 0, 0]} maxBarSize={16} stackId="positive">
+                  <LabelList dataKey="waiver" content={renderWaiverLabel} />
+                </Bar>
+              )}
               {hasExpenses && (
-                <Bar dataKey="expenseNeg" fill="#e11d48" radius={[0, 0, 3, 3]} maxBarSize={16}>
+                <Bar dataKey="expenseNeg" fill="#e11d48" radius={[0, 0, 3, 3]} maxBarSize={16} stackId="negative">
                   <LabelList dataKey="expenseNeg" content={renderExpenseLabel} />
+                </Bar>
+              )}
+              {hasPartnerOut && (
+                <Bar dataKey="partnerOutNeg" fill="#d97706" radius={[0, 0, 3, 3]} maxBarSize={16} stackId="negative">
+                  <LabelList dataKey="partnerOutNeg" content={renderPartnerOutLabel} />
                 </Bar>
               )}
             </ComposedChart>
@@ -366,8 +374,8 @@ export const PrintableReport = forwardRef<HTMLDivElement, PrintableReportProps>(
         )}
 
         {/* ═══════════════════════════════════════════════════════════════════
-            COMPACT SUMMARY — Must fit on same page as chart above.
-            Uses tight 8-9pt fonts and 3-col grids to stay compact.
+            COMPACT SUMMARY — Painel Consolidado
+            Uses tight 8-9pt fonts and grid rows to stay compact.
             ═══════════════════════════════════════════════════════════════════ */}
         {(() => {
           const yr = String(selY);
@@ -424,6 +432,24 @@ export const PrintableReport = forwardRef<HTMLDivElement, PrintableReportProps>(
                 </div>
               </div>
 
+              {/* ── Row 1b: Custos Rateados do Mês (3-col) ── */}
+              {expenseTotal > 0 && (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', border: '1px solid #fecaca', borderRadius: '6px', marginBottom: '6px', backgroundColor: '#fff5f5' }}>
+                  <div style={cell}>
+                    <div style={lbl}>💸 Custos Rateados</div>
+                    <div style={{ ...val, color: '#dc2626' }}>{fmtBRL(expenseTotal)}</div>
+                  </div>
+                  <div style={cell}>
+                    <div style={lbl}>💸 Média Semanal</div>
+                    <div style={{ ...val, color: '#b91c1c' }}>{fmtBRL(expenseWeekly)}</div>
+                  </div>
+                  <div style={cell}>
+                    <div style={lbl}>💸 Média Diária</div>
+                    <div style={{ ...val, color: '#b91c1c' }}>{fmtBRL(expenseDaily)}</div>
+                  </div>
+                </div>
+              )}
+
               {/* ── Row 2: Survival Goals (3-col) ── */}
               {metrics.survivalDaily > 0 && (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', border: '1px solid #e0e7ff', borderRadius: '6px', marginBottom: '6px', backgroundColor: '#f5f3ff' }}>
@@ -442,8 +468,8 @@ export const PrintableReport = forwardRef<HTMLDivElement, PrintableReportProps>(
                 </div>
               )}
 
-              {/* ── Row 3: Operational & Partnership (6-col) ── */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', border: '1px solid #e5e7eb', borderRadius: '6px', backgroundColor: '#fafafa' }}>
+              {/* ── Row 3: Operational & Partnership + Justificativas (7-col) ── */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', border: '1px solid #e5e7eb', borderRadius: '6px', backgroundColor: '#fafafa' }}>
                 <div style={cell}>
                   <div style={lbl}>Meta Diária</div>
                   <div style={{ ...val, color: '#7c3aed' }}>{dailyG > 0 ? fmtBRL(dailyG) : '—'}</div>
@@ -459,6 +485,10 @@ export const PrintableReport = forwardRef<HTMLDivElement, PrintableReportProps>(
                 <div style={cell}>
                   <div style={lbl}>Parceria</div>
                   <div style={{ ...val, color: '#1a1a2e' }}>{spanMonths} meses ({spanDays}d)</div>
+                </div>
+                <div style={cell}>
+                  <div style={lbl}>🛡️ Justificativas</div>
+                  <div style={{ ...val, color: metrics.totalWaiverCredit > 0 ? '#d97706' : '#9ca3af' }}>{fmtBRL(metrics.totalWaiverCredit)}</div>
                 </div>
                 <div style={cell}>
                   <div style={lbl}>Banco de Tempo</div>
