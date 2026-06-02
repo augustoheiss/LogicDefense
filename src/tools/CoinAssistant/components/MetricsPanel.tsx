@@ -1,3 +1,4 @@
+import { ReactNode } from 'react';
 import type { TableMetrics, CoinTable, TableRow } from '../types';
 import { formatCurrencyShort, formatCurrencyFull } from '../utils/formatCurrency';
 
@@ -100,7 +101,7 @@ function MetricCard({
   label: string;
   value: string;
   status?: CardStatus;
-  sub?: string;
+  sub?: ReactNode;
   /** Tooltip: full-precision value shown on hover */
   fullValue?: string;
 }) {
@@ -369,60 +370,133 @@ export function MetricsPanel({ metrics, dailyGoal, table, selectedMonth }: Metri
         </div>
       )}
 
-      {/* ── Selected month — Income breakdown ── */}
-      {selectedMonthMetrics && (
-        <div>
-          <h3 className="text-xs text-white/50 uppercase tracking-wider mb-3 font-semibold flex items-center gap-2">
-            <span className="w-4 h-px bg-white/20 inline-block" />
-            {formatMonth(selectedMonth)}
-            <span className="flex-1 h-px bg-white/10 inline-block" />
-          </h3>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <MetricCard label="Bruto do Mês" value={fmt(selectedMonthMetrics.grossMonthly)} />
-            <MetricCard label="Média Diária" value={fmt(selectedMonthMetrics.dailyAvg)} />
-            <MetricCard label="Média Semanal" value={fmt(selectedMonthMetrics.weeklyAvg)} />
-            <MetricCard
-              label="Última Semana"
-              value={fmt(selectedMonthMetrics.lastWeekGross)}
-              sub="semana ISO"
-            />
-          </div>
-        </div>
-      )}
+      {/* ── Selected month — Income & Expense side-by-side paired layout ── */}
+      {selectedMonthMetrics && (() => {
+        // Comparison to Meta Diária
+        let compareMetaText: ReactNode = null;
+        let metaStatus: CardStatus = 'default';
+        if (dailyGoal > 0) {
+          const diff = selectedMonthMetrics.dailyAvg - dailyGoal;
+          if (diff >= 0) {
+            compareMetaText = (
+              <span className="text-emerald-400 font-medium">
+                ✅ Meta ({fmt(dailyGoal)}) atingida!
+              </span>
+            );
+            metaStatus = 'success';
+          } else {
+            compareMetaText = (
+              <span className="text-amber-400 font-medium">
+                ⚡ Faltam {fmt(Math.abs(diff))}
+              </span>
+            );
+            metaStatus = 'warning';
+          }
+        }
 
-      {/* ── Selected month — Expense breakdown ── */}
-      {monthlyExpenseTotal > 0 && (
-        <div>
-          <h3 className="text-xs text-white/50 uppercase tracking-wider mb-3 font-semibold flex items-center gap-2">
-            <span className="w-4 h-px bg-amber-400/30 inline-block" />
-            Gastos de {formatMonth(selectedMonth)}
-            <span className="flex-1 h-px bg-white/10 inline-block" />
-          </h3>
-          <div className="grid grid-cols-3 gap-3">
-            <MetricCard
-              label="Total Gasto Mensal"
-              value={`-${fmt(monthlyExpenseTotal)}`}
-              fullValue={`-${formatCurrencyFull(monthlyExpenseTotal)}`}
-              status="warning"
-              sub={`${proratedExpenses.length} despesa${proratedExpenses.length !== 1 ? 's' : ''} rateada${proratedExpenses.length !== 1 ? 's' : ''}`}
-            />
-            <MetricCard
-              label="Gasto Diário"
-              value={`-${fmt(expenseDailyAvg)}`}
-              fullValue={`-${formatCurrencyFull(expenseDailyAvg)}`}
-              status="warning"
-              sub={`÷ ${monthDays} dias`}
-            />
-            <MetricCard
-              label="Gasto Semanal"
-              value={`-${fmt(expenseWeeklyAvg)}`}
-              fullValue={`-${formatCurrencyFull(expenseWeeklyAvg)}`}
-              status="warning"
-              sub="diária × 7"
-            />
+        // Comparison to Sobrevivência Diária
+        let compareSurvivalText: ReactNode = null;
+        let survivalStatus: CardStatus = 'default';
+        if (metrics.survivalDaily > 0) {
+          const diff = selectedMonthMetrics.dailyAvg - metrics.survivalDaily;
+          if (diff >= 0) {
+            compareSurvivalText = (
+              <span className="text-emerald-400 font-medium">
+                🛡️ Sobrevivência ({fmt(metrics.survivalDaily)}) atingida!
+              </span>
+            );
+            survivalStatus = 'success';
+          } else {
+            compareSurvivalText = (
+              <span className="text-amber-400 font-medium">
+                ⚡ Faltam {fmt(Math.abs(diff))}
+              </span>
+            );
+            survivalStatus = 'warning';
+          }
+        }
+
+        return (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {/* Receitas Card Group */}
+            <div className="space-y-3">
+              <h3 className="text-xs text-white/50 uppercase tracking-wider font-semibold flex items-center gap-2">
+                <span className="w-4 h-px bg-emerald-500/30 inline-block" />
+                Receitas de {formatMonth(selectedMonth)}
+                <span className="flex-1 h-px bg-white/10 inline-block" />
+              </h3>
+              <div className="grid grid-cols-3 gap-3">
+                <MetricCard
+                  label="Total Recebido Mensal"
+                  value={fmt(selectedMonthMetrics.grossMonthly)}
+                  fullValue={formatCurrencyFull(selectedMonthMetrics.grossMonthly)}
+                  status="success"
+                  sub="receita operacional"
+                />
+                <MetricCard
+                  label="Receita Diária Média"
+                  value={`${fmt(selectedMonthMetrics.dailyAvg)}/dia`}
+                  fullValue={`${formatCurrencyFull(selectedMonthMetrics.dailyAvg)}/dia`}
+                  status={metaStatus}
+                  sub={compareMetaText}
+                />
+                <MetricCard
+                  label="Receita Semanal Média"
+                  value={`${fmt(selectedMonthMetrics.weeklyAvg)}/sem`}
+                  fullValue={`${formatCurrencyFull(selectedMonthMetrics.weeklyAvg)}/semana`}
+                  status={survivalStatus}
+                  sub={compareSurvivalText}
+                />
+              </div>
+            </div>
+
+            {/* Gastos Card Group */}
+            {monthlyExpenseTotal > 0 ? (
+              <div className="space-y-3">
+                <h3 className="text-xs text-white/50 uppercase tracking-wider font-semibold flex items-center gap-2">
+                  <span className="w-4 h-px bg-amber-400/30 inline-block" />
+                  Gastos de {formatMonth(selectedMonth)}
+                  <span className="flex-1 h-px bg-white/10 inline-block" />
+                </h3>
+                <div className="grid grid-cols-3 gap-3">
+                  <MetricCard
+                    label="Total Gasto Mensal"
+                    value={`-${fmt(monthlyExpenseTotal)}`}
+                    fullValue={`-${formatCurrencyFull(monthlyExpenseTotal)}`}
+                    status="warning"
+                    sub={`${proratedExpenses.length} despesa${proratedExpenses.length !== 1 ? 's' : ''} rateada${proratedExpenses.length !== 1 ? 's' : ''}`}
+                  />
+                  <MetricCard
+                    label="Gasto Diário"
+                    value={`-${fmt(expenseDailyAvg)}`}
+                    fullValue={`-${formatCurrencyFull(expenseDailyAvg)}`}
+                    status="warning"
+                    sub={`÷ ${monthDays} dias`}
+                  />
+                  <MetricCard
+                    label="Gasto Semanal"
+                    value={`-${fmt(expenseWeeklyAvg)}`}
+                    fullValue={`-${formatCurrencyFull(expenseWeeklyAvg)}`}
+                    status="warning"
+                    sub="diária × 7"
+                  />
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <h3 className="text-xs text-white/50 uppercase tracking-wider font-semibold flex items-center gap-2">
+                  <span className="w-4 h-px bg-white/20 inline-block" />
+                  Gastos de {formatMonth(selectedMonth)}
+                  <span className="flex-1 h-px bg-white/10 inline-block" />
+                </h3>
+                <div className="rounded-xl border border-dashed border-white/10 bg-white/[0.02] p-4 h-24 flex items-center justify-center text-xs text-white/30">
+                  Nenhuma despesa rateada para este mês.
+                </div>
+              </div>
+            )}
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* ── Recent months mini-list ── */}
       {sortedMonths.length > 1 && (

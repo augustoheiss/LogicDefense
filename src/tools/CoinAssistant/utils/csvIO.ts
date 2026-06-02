@@ -107,7 +107,7 @@ export function exportTableToCSV(table: CoinTable): string {
     ...perYearLines('goal_weekly', table.goals.weeklyGoals),
     ...perYearLines('goal_annual', table.goals.annualCosts),
     ROWS_MARKER,
-    'date,value,description,entryType,monthlyValue,monthCount,period_start,period_end',
+    'date,value,description,entryType,monthlyValue,monthCount,period_start,period_end,waiverMode',
     ...sortedRows.map(
       (r) =>
         [
@@ -119,6 +119,7 @@ export function exportTableToCSV(table: CoinTable): string {
           r.monthCount   ?? '',
           r.periodStart  ?? '',
           r.periodEnd    ?? '',
+          r.waiverMode   ?? '',
         ].join(','),
     ),
   ];
@@ -244,9 +245,11 @@ export function importTableFromCSV(csv: string): ImportedTable {
     const rawVal    = fields[1]?.trim() ?? '';
     const desc      = fields[2]?.trim() || 'Sem descrição';
     const rawType   = hasTypeCol ? (fields[3]?.trim() ?? '') : '';
-    const entryType = rawType === 'deposit'  ? 'deposit'
-                    : rawType === 'waiver'   ? 'waiver'
-                    : rawType === 'expense'  ? 'expense'
+    const entryType = rawType === 'deposit'     ? 'deposit'
+                    : rawType === 'waiver'      ? 'waiver'
+                    : rawType === 'expense'     ? 'expense'
+                    : rawType === 'partner_in'  ? 'partner_in'
+                    : rawType === 'partner_out' ? 'partner_out'
                     : 'revenue';
 
     // Skip rows with invalid date or non-numeric value
@@ -264,7 +267,18 @@ export function importTableFromCSV(csv: string): ImportedTable {
     const periodStart    = /^\d{4}-\d{2}-\d{2}$/.test(rawPeriodStart ?? '') ? rawPeriodStart : undefined;
     const periodEnd      = /^\d{4}-\d{2}-\d{2}$/.test(rawPeriodEnd   ?? '') ? rawPeriodEnd   : undefined;
 
-    rows.push({ date, value, description: desc, entryType, monthlyValue, monthCount, periodStart, periodEnd });
+    // Parse optional waiverMode field (with fallback logic for older CSVs)
+    let waiverMode: 'value' | 'days' | undefined = undefined;
+    if (entryType === 'waiver') {
+      const rawWaiverMode = fields[8]?.trim();
+      if (rawWaiverMode === 'value' || rawWaiverMode === 'days') {
+        waiverMode = rawWaiverMode;
+      } else {
+        waiverMode = value > 100 ? 'value' : 'days';
+      }
+    }
+
+    rows.push({ date, value, description: desc, entryType, monthlyValue, monthCount, periodStart, periodEnd, waiverMode });
   }
 
   return {

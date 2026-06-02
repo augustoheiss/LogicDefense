@@ -209,42 +209,7 @@ export function TableEditor({
   );
 
 
-  // ── Prorated daily income for the selected month ────────────────────────
-  const proratedDailyIncome = useMemo(() => {
-    const [selY, selM] = effectiveMonth.split('-').map(Number);
-    const mDays = new Date(selY, selM, 0).getDate();
-    const mStart = `${effectiveMonth}-01`;
-    const mEnd   = `${effectiveMonth}-${String(mDays).padStart(2, '0')}`;
 
-    let monthTotal = 0;
-    for (const r of filteredRows) {
-      // Revenue rows only (not deposits, waivers, or expenses)
-      if (r.entryType === 'deposit' || r.entryType === 'waiver' || r.entryType === 'expense' || r.entryType === 'partner_out') continue;
-      if (r.value <= 0) continue;
-
-      const expStart = r.periodStart || r.date;
-      const expEnd   = r.periodEnd   || r.date;
-
-      // Overlap check
-      if (expStart > mEnd || expEnd < mStart) continue;
-
-      // Clamp to month boundaries
-      const overlapStart = expStart < mStart ? mStart : expStart;
-      const overlapEnd   = expEnd   > mEnd   ? mEnd   : expEnd;
-
-      // Inclusive day counts
-      const totalDays  = Math.max(1, Math.round(Math.abs(new Date(expEnd + 'T12:00:00').getTime() - new Date(expStart + 'T12:00:00').getTime()) / 86_400_000) + 1);
-      const activeDays = Math.max(1, Math.round(Math.abs(new Date(overlapEnd + 'T12:00:00').getTime() - new Date(overlapStart + 'T12:00:00').getTime()) / 86_400_000) + 1);
-
-      monthTotal += (r.value / totalDays) * activeDays;
-    }
-
-    return mDays > 0 ? monthTotal / mDays : 0;
-  }, [filteredRows, effectiveMonth]);
-
-  function fmt(v: number) {
-    return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-  }
 
   const tabs: { id: TabId; label: string }[] = [
     { id: 'spreadsheet', label: '📋 Planilha' },
@@ -383,66 +348,6 @@ export function TableEditor({
       )}
 
 
-      {/* ── Desempenho Diário Rateado ── */}
-      {proratedDailyIncome > 0 && (() => {
-        const dailyManual = resolveGoalForYear(table.goals.dailyGoals, currentYear);
-        const [selY, selM] = effectiveMonth.split('-').map(Number);
-        const mDays = new Date(selY, selM, 0).getDate();
-        const dailySurvival = metrics.survivalDaily;
-
-        // Goal comparison helper
-        const compare = (goal: number) => {
-          if (goal <= 0) return null;
-          const diff = proratedDailyIncome - goal;
-          const absDiff = Math.abs(diff);
-          if (Math.round(absDiff * 100) === 0) {
-            return { text: '🎯 Meta Cravada!', color: 'text-emerald-400' };
-          }
-          if (diff > 0) {
-            return { text: `✅ Passou ${fmt(diff)}`, color: 'text-emerald-400' };
-          }
-          return { text: `⚡ Faltam ${fmt(absDiff)}`, color: 'text-amber-400' };
-        };
-
-        const cmpManual   = compare(dailyManual);
-        const cmpSurvival = dailySurvival > 0 ? compare(dailySurvival) : null;
-
-        return (
-          <div className="bg-white/5 border border-[#a855f7]/30 rounded-lg px-4 py-3 space-y-2">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <div className="text-xs text-white/30 uppercase tracking-wider mb-0.5">
-                  Receita Diária Rateada&ensp;
-                  <span className="normal-case font-normal text-white/20">
-                    {new Date(selY, selM - 1).toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' })} • {mDays} dias
-                  </span>
-                </div>
-                <div className="text-lg font-mono font-bold text-white">
-                  {fmt(proratedDailyIncome)}
-                  <span className="text-xs text-white/25 font-normal ml-1">/dia</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Goal comparisons */}
-            <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs">
-              {cmpManual && (
-                <div className="flex items-center gap-1.5">
-                  <span className="text-white/30">Meta Diária ({fmt(dailyManual)}):</span>
-                  <span className={`font-semibold ${cmpManual.color}`}>{cmpManual.text}</span>
-                </div>
-              )}
-
-              {cmpSurvival && (
-                <div className="flex items-center gap-1.5">
-                  <span className="text-white/30">🛡️ Sobrevivência ({fmt(dailySurvival)}):</span>
-                  <span className={`font-semibold ${cmpSurvival.color}`}>{cmpSurvival.text}</span>
-                </div>
-              )}
-            </div>
-          </div>
-        );
-      })()}
 
       {/* ── Global month filter — controls Planilha, Gráfico, and WhatsApp ── */}
       <div className="flex items-center justify-between gap-3 py-1 border-y border-white/8">
