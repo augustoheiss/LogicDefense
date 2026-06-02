@@ -432,7 +432,7 @@ def compute_metrics(
     waiver_rows = [r for r in rows if r.entry_type == EntryType.WAIVER and r.value > 0]
 
     for row in waiver_rows:
-        if getattr(row, 'waiver_mode', None) == 'value':
+        if row.waiver_mode == 'value':
             # Direct monetary credit — bypass day-to-goal conversion
             total_waiver_credits += row.value
         else:
