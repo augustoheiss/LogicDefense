@@ -495,7 +495,7 @@ export function TableEditor({
       </div>
 
       {/* ── AI Analyst Chat ── */}
-      <AIAnalystChat table={table} cutoffDate={cutoffDate || undefined} />
+      <AIAnalystChat table={table} cutoffDate={cutoffDate || undefined} totalWaiverCredits={metrics.totalWaiverCredit} />
 
       {/* ── Landing Page & Practical Guide ── */}
       <MoedaLandingGuide />

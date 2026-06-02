@@ -439,7 +439,7 @@ def build_financial_context(
 
 ── Balanço de Metas (Estrito — conta semanas vazias como débito) ──
   Status: {balance_status}
-  Crédito de dispensas:    R$ {metrics.total_waiver_credit:,.2f}
+  Crédito de dispensas:    R$ {payload.total_waiver_credits:,.2f}
   Banco de Tempo:          {time_bank_status}
 {current_month_block}
 ── Por Ano ──
@@ -551,6 +551,7 @@ async def ai_analyst(payload: AIAnalystPayload) -> AIAnalystResponse:
             rows=payload.rows,
             weekly_goals=payload.goals.weekly_goals,
             as_of_date=payload.as_of_date,
+            total_waiver_credits=payload.total_waiver_credits,
         )
     except Exception as exc:
         log.exception("Metrics computation failed: %s", exc)

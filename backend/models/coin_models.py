@@ -461,6 +461,11 @@ class AIAnalystPayload(BaseModel):
         alias="tableName",
         description="Name of the active table (for context in the AI response)",
     )
+    total_waiver_credits: float = Field(
+        default=0.0,
+        alias="totalWaiverCredits",
+        description="The calculated total waiver credits sent directly from the frontend",
+    )
 
     model_config = {"populate_by_name": True}
 

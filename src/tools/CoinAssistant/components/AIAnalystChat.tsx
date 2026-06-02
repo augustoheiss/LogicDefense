@@ -7,6 +7,7 @@ import ReactMarkdown from 'react-markdown';
 interface AIAnalystChatProps {
   table: CoinTable;
   cutoffDate?: string;
+  totalWaiverCredits: number;
 }
 
 interface ChatMessage {
@@ -36,6 +37,7 @@ const SUGGESTED_PROMPTS = [
 function buildPayload(
   table: CoinTable,
   userPrompt: string,
+  totalWaiverCredits: number,
   cutoffDate?: string,
 ): Record<string, unknown> {
   return {
@@ -60,12 +62,13 @@ function buildPayload(
     userPrompt: userPrompt,
     asOfDate: cutoffDate || null,
     tableName: table.name,
+    totalWaiverCredits: totalWaiverCredits,
   };
 }
 
 // ── Component ────────────────────────────────────────────────────────────────
 
-export function AIAnalystChat({ table, cutoffDate }: AIAnalystChatProps) {
+export function AIAnalystChat({ table, cutoffDate, totalWaiverCredits }: AIAnalystChatProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -102,7 +105,7 @@ export function AIAnalystChat({ table, cutoffDate }: AIAnalystChatProps) {
     }
 
     try {
-      const payload = buildPayload(table, prompt.trim(), cutoffDate);
+      const payload = buildPayload(table, prompt.trim(), totalWaiverCredits, cutoffDate);
       const response = await fetch(`${API_BASE}/api/coin/ai-analyst`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

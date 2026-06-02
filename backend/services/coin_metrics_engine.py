@@ -127,6 +127,7 @@ def compute_metrics(
     rows: list[TableRow],
     weekly_goals: dict[int, float],
     as_of_date: Optional[str] = None,
+    total_waiver_credits: float = 0.0,
 ) -> TableMetrics:
     """
     Pure math engine — calendar-elapsed-time averaging.
@@ -426,21 +427,11 @@ def compute_metrics(
         _parse_date(as_of_date) if as_of_date else None,
     )
 
-    # ── Waiver credits ───────────────────────────────────────────────────────
-    total_waiver_credits = 0.0
-    total_waived_days = 0.0
-    waiver_rows = [r for r in rows if r.entry_type == EntryType.WAIVER and r.value > 0]
-
-    for row in waiver_rows:
-        if row.waiver_mode == 'value':
-            # Direct monetary credit — bypass day-to-goal conversion
-            total_waiver_credits += row.value
-        else:
-            # Default: day-based — convert to monetary credit using year's weekly goal
-            waiver_year = int(row.date[:4])
-            goal_for_year = resolve_goal_for_year(weekly_goals, waiver_year)
-            total_waiver_credits += (row.value / 7) * goal_for_year
-            total_waived_days += row.value
+    # ── Waiver days (for billable weeks calculation) ──────────────────────────
+    total_waived_days = sum(
+        r.value for r in rows
+        if r.entry_type == EntryType.WAIVER and r.value > 0 and r.waiver_mode == "days"
+    )
 
     # FIREWALL Goal Balance: add partner_in credit since it no longer flows through rawStrictBalance
     global_goal_balance = round((raw_strict_balance + total_waiver_credits + total_partner_in - total_partner_out) * 100) / 100
