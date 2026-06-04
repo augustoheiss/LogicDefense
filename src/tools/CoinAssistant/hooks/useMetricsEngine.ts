@@ -2,6 +2,7 @@ import type { TableRow, TableGoals, TableMetrics, MonthMetrics, YearMetrics } fr
 import {
   calculateStrictGlobalBalance,
   getEffectiveGoals,
+  getWeeklyGoalForDate,
 } from '../utils/dateUtils';
 
 /**
@@ -187,6 +188,7 @@ export function computeMetrics(
 
   // ── Accumulators ─────────────────────────────────────────────────────────────
   let grossTotal = 0;
+  let grossTotalWeeks = 0; // historically-accumulated week equivalent
 
   const byYearAcc: Record<string, {
     gross: number;
@@ -209,6 +211,12 @@ export function computeMetrics(
   // spread proportionally across their date span.
   for (const row of activeRows) {
     grossTotal += row.value;
+
+    // Accumulate historically-correct week equivalent
+    const activeWeeklyGoal = getWeeklyGoalForDate(row.date, goals);
+    if (activeWeeklyGoal > 0) {
+      grossTotalWeeks += row.value / activeWeeklyGoal;
+    }
 
     // Distribute value across daily contributions into year, month, and week
     for (const contrib of rowContributions(row)) {
@@ -323,10 +331,16 @@ export function computeMetrics(
   // Strictly monetary values.
   let totalWaiverCredits = 0;
   let totalWaivedDays = 0;
+  let waiverTotalWeeks = 0; // historically-accumulated week equivalent for waivers
   const waiverRows = rows.filter((r) => r.entryType === 'waiver' && r.value > 0);
 
   for (const row of waiverRows) {
     totalWaiverCredits += row.value;
+    // Accumulate historically-correct week equivalent for waivers
+    const activeWeeklyGoal = getWeeklyGoalForDate(row.date, goals);
+    if (activeWeeklyGoal > 0) {
+      waiverTotalWeeks += row.value / activeWeeklyGoal;
+    }
   }
 
   // FIREWALL Goal Balance: add partner_in credit since it no longer flows through rawStrictBalance
@@ -349,6 +363,12 @@ export function computeMetrics(
 
   // ── Net balance (cash position after expenses — pure operational) ──────────
   const netBalance = round2(grossTotal - totalExpenses);
+
+  // ── Historically-Accumulated Week Equivalents ──────────────────────────────
+  grossTotalWeeks  = round2(grossTotalWeeks);
+  waiverTotalWeeks = round2(waiverTotalWeeks);
+  const goalTotalWeeks   = totalElapsedWeeks; // 1 calendar week = 1 goal-week
+  const netBalanceWeeks  = round2(grossTotalWeeks + waiverTotalWeeks - goalTotalWeeks);
 
   // ── Combined metrics (operational + partnership) ──────────────────────────
   const grossWithPartner = round2(grossTotal + totalPartnerIn);
@@ -381,6 +401,10 @@ export function computeMetrics(
     grossWithPartner,
     expensesWithPartner,
     netWithPartner,
+    grossTotalWeeks,
+    waiverTotalWeeks,
+    goalTotalWeeks,
+    netBalanceWeeks,
   };
 }
 
@@ -510,6 +534,10 @@ function emptyMetrics(): TableMetrics {
     grossWithPartner: 0,
     expensesWithPartner: 0,
     netWithPartner: 0,
+    grossTotalWeeks: 0,
+    waiverTotalWeeks: 0,
+    goalTotalWeeks: 0,
+    netBalanceWeeks: 0,
   };
 }
 

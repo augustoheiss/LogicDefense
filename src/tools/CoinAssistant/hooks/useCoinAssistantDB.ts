@@ -377,5 +377,9 @@ function emptyMetrics(): TableMetrics {
     grossWithPartner: 0,
     expensesWithPartner: 0,
     netWithPartner: 0,
+    grossTotalWeeks: 0,
+    waiverTotalWeeks: 0,
+    goalTotalWeeks: 0,
+    netBalanceWeeks: 0,
   };
 }

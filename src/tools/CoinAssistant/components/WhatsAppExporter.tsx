@@ -337,7 +337,8 @@ function buildMessage(
   const goalTarget = metrics.billableWeeks > 0 && reportWeeklyGoal > 0
     ? Math.round(metrics.billableWeeks * reportWeeklyGoal * 100) / 100
     : 0;
-  const toW = (v: number) => reportWeeklyGoal > 0 ? `${(v / reportWeeklyGoal).toFixed(1)} sem` : '—';
+  // Historically-accumulated week formatter (avoids naive flat division)
+  const fmtW = (weeks: number) => `${weeks.toFixed(1)} sem`;
 
   const waiversCount = table.rows.filter((r) => r.entryType === 'waiver' && r.value > 0).length;
   const waivedWeeks = metrics.waivedWeeks;
@@ -349,18 +350,18 @@ function buildMessage(
 
   lines.push(
     `📊 *Balanço Operacional & Indicadores*`,
-    `(+) Receitas Operacionais: ${fmt(regularIncome)} _(${toW(regularIncome)})_`,
+    `(+) Receitas Operacionais: ${fmt(regularIncome)} _(${fmtW(metrics.grossTotalWeeks)})_`,
     ...(metrics.totalWaiverCredit > 0
-      ? [`(+) Justificativas: ${fmt(metrics.totalWaiverCredit)} _(${toW(metrics.totalWaiverCredit)})_`]
+      ? [`(+) Justificativas: ${fmt(metrics.totalWaiverCredit)} _(${fmtW(metrics.waiverTotalWeeks)})_`]
       : []),
     ...(metrics.totalPartnerIn > 0
-      ? [`(+) Créditos de Parceria: ${fmt(metrics.totalPartnerIn)} _(${toW(metrics.totalPartnerIn)})_`]
+      ? [`(+) Créditos de Parceria: ${fmt(metrics.totalPartnerIn)}`]
       : []),
-    `(−) Metas Acumuladas: ${fmt(goalTarget)} _(${toW(goalTarget)})_`,
+    `(−) Metas Acumuladas: ${fmt(goalTarget)} _(${fmtW(metrics.goalTotalWeeks)})_`,
     ...(metrics.totalPartnerOut > 0
-      ? [`(−) Débitos de Parceria: ${fmt(metrics.totalPartnerOut)} _(${toW(metrics.totalPartnerOut)})_`]
+      ? [`(−) Débitos de Parceria: ${fmt(metrics.totalPartnerOut)}`]
       : []),
-    `(=) *Saldo Final: ${fmt(balance)} (${toW(balance)})*`,
+    `(=) *Saldo Final: ${fmt(balance)} (${fmtW(metrics.netBalanceWeeks)})*`,
     '',
     `• ⏳ Tempo de Parceria: *${metrics.totalElapsedWeeks} semanas*`,
     ...(waivedWeeks > 0

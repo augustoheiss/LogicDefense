@@ -37,6 +37,7 @@ from services.coin_date_utils import (
     iso_year_month,
     calculate_strict_global_balance,
     get_effective_goals,
+    get_weekly_goal_for_date,
 )
 
 
@@ -320,6 +321,7 @@ def compute_metrics(
 
     # ── Accumulators ─────────────────────────────────────────────────────
     gross_total = 0.0
+    gross_total_weeks = 0.0  # historically-accumulated week equivalent
 
     # byYear: {gross, dates[], months set, weeks set}
     by_year_acc: dict[str, dict] = {}
@@ -329,6 +331,11 @@ def compute_metrics(
     # ── Single-pass over active rows ───────────────────────────────────
     for row in active_rows:
         gross_total += row.value
+
+        # Accumulate historically-correct week equivalent
+        active_weekly_goal = get_weekly_goal_for_date(row.date, goals)
+        if active_weekly_goal > 0:
+            gross_total_weeks += row.value / active_weekly_goal
 
         # Distribute value across daily contributions into year, month, week
         for contrib in row_contributions(row):
@@ -431,6 +438,13 @@ def compute_metrics(
 
     # ── Waiver days (for billable weeks calculation) ──────────────────────────
     total_waived_days = 0.0
+    # ── Waiver credits ───────────────────────────────────────────────
+    waiver_total_weeks = 0.0  # historically-accumulated week equivalent for waivers
+    waiver_rows = [r for r in rows if r.entry_type == EntryType.WAIVER and r.value > 0]
+    for row in waiver_rows:
+        active_weekly_goal = get_weekly_goal_for_date(row.date, goals)
+        if active_weekly_goal > 0:
+            waiver_total_weeks += row.value / active_weekly_goal
 
     # FIREWALL Goal Balance: add partner_in credit since it no longer flows through rawStrictBalance
     global_goal_balance = round((raw_strict_balance + total_waiver_credits + total_partner_in - total_partner_out) * 100) / 100
@@ -452,6 +466,12 @@ def compute_metrics(
 
     # ── Net balance ──────────────────────────────────────────────────────────────
     net_balance = _round2(gross_total - total_expenses)
+
+    # ── Historically-Accumulated Week Equivalents ───────────────────────────
+    gross_total_weeks  = _round2(gross_total_weeks)
+    waiver_total_weeks = _round2(waiver_total_weeks)
+    goal_total_weeks   = float(total_elapsed_weeks)  # 1 calendar week = 1 goal-week
+    net_balance_weeks  = _round2(gross_total_weeks + waiver_total_weeks - goal_total_weeks)
 
     # ── Combined metrics (operational + partnership) ──────────────────────────
     gross_with_partner = _round2(gross_total + total_partner_in)
@@ -484,6 +504,10 @@ def compute_metrics(
         grossWithPartner=gross_with_partner,
         expensesWithPartner=expenses_with_partner,
         netWithPartner=net_with_partner,
+        grossTotalWeeks=gross_total_weeks,
+        waiverTotalWeeks=waiver_total_weeks,
+        goalTotalWeeks=goal_total_weeks,
+        netBalanceWeeks=net_balance_weeks,
     )
 
 
@@ -527,4 +551,8 @@ def _empty_metrics() -> TableMetrics:
         grossWithPartner=0,
         expensesWithPartner=0,
         netWithPartner=0,
+        grossTotalWeeks=0,
+        waiverTotalWeeks=0,
+        goalTotalWeeks=0,
+        netBalanceWeeks=0,
     )

@@ -257,6 +257,19 @@ export interface TableMetrics {
   expensesWithPartner: number;
   /** grossWithPartner − expensesWithPartner — net position including partnership. */
   netWithPartner: number;
+
+  // ─── Historically-Accumulated Week Equivalents (Time-Aware) ─────────────────
+  /**
+   * Sum of each revenue row's value divided by its active weekly goal at that date.
+   * Avoids the naive "grossTotal / currentWeeklyGoal" dilution across eras.
+   */
+  grossTotalWeeks: number;
+  /** Same incremental accumulation for waiver credit rows. */
+  waiverTotalWeeks: number;
+  /** Total elapsed calendar weeks scored against goals (= totalElapsedWeeks). */
+  goalTotalWeeks: number;
+  /** grossTotalWeeks + waiverTotalWeeks − goalTotalWeeks */
+  netBalanceWeeks: number;
 }
 
 // ─── Projection Engine ────────────────────────────────────────────────────────

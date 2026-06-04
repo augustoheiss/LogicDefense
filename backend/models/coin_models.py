@@ -371,6 +371,28 @@ class TableMetrics(BaseModel):
         description="grossWithPartner − expensesWithPartner — net including partnership",
     )
 
+    # ── Historically-Accumulated Week Equivalents (Time-Aware) ────────────────
+    gross_total_weeks: float = Field(
+        default=0.0,
+        alias="grossTotalWeeks",
+        description="Sum of each revenue row's value / activeWeeklyGoal at that date",
+    )
+    waiver_total_weeks: float = Field(
+        default=0.0,
+        alias="waiverTotalWeeks",
+        description="Same incremental accumulation for waiver credit rows",
+    )
+    goal_total_weeks: float = Field(
+        default=0.0,
+        alias="goalTotalWeeks",
+        description="Total elapsed calendar weeks scored against goals (= totalElapsedWeeks)",
+    )
+    net_balance_weeks: float = Field(
+        default=0.0,
+        alias="netBalanceWeeks",
+        description="grossTotalWeeks + waiverTotalWeeks − goalTotalWeeks",
+    )
+
     model_config = {"populate_by_name": True}
 
 
