@@ -22,6 +22,7 @@ from typing import Optional
 
 from models.coin_models import (
     TableRow,
+    TableGoals,
     TableMetrics,
     MonthMetrics,
     YearMetrics,
@@ -35,7 +36,7 @@ from services.coin_date_utils import (
     get_iso_week_key,
     iso_year_month,
     calculate_strict_global_balance,
-    resolve_goal_for_year,
+    get_effective_goals,
 )
 
 
@@ -125,7 +126,7 @@ def row_contributions(row: TableRow) -> list[dict]:
 
 def compute_metrics(
     rows: list[TableRow],
-    weekly_goals: dict[int, float],
+    goals: TableGoals,
     as_of_date: Optional[str] = None,
     total_waiver_credits: float = 0.0,
 ) -> TableMetrics:
@@ -135,11 +136,12 @@ def compute_metrics(
 
     Args:
         rows:         All table rows (revenue, deposit, waiver, expense).
-        weekly_goals: Per-year weekly goal record { 2026: 600.0 }.
+        goals:        The full TableGoals hierarchy (Monthly > Annual > Global).
         as_of_date:   Optional "YYYY-MM-DD" — treats this as "today".
+        total_waiver_credits: Pre-calculated waiver credits from the frontend.
 
     Returns:
-        TableMetrics with all 23 computed fields.
+        TableMetrics with all computed fields.
     """
     if not rows:
         return _empty_metrics()
@@ -423,7 +425,7 @@ def compute_metrics(
     # ── Strict cumulative BRL balance + real elapsed weeks ───────────────
     raw_strict_balance, total_elapsed_weeks = calculate_strict_global_balance(
         revenue_rows,
-        weekly_goals,
+        goals,
         _parse_date(as_of_date) if as_of_date else None,
     )
 
@@ -437,7 +439,11 @@ def compute_metrics(
 
     # ── Time Bank balance (weeks) ────────────────────────────────────────
     current_year = today.year
-    effective_weekly_goal = resolve_goal_for_year(weekly_goals, current_year)
+    current_month = today.month
+    effective_weekly_goal = get_effective_goals(
+        {"year": current_year, "month": current_month},
+        goals,
+    ).weekly_goal
     time_bank_balance = (
         round((global_goal_balance / effective_weekly_goal) * 100) / 100
         if effective_weekly_goal > 0

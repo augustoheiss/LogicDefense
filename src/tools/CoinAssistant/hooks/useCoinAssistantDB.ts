@@ -310,7 +310,7 @@ export function useCoinAssistantDB() {
     (tableId: string): TableMetrics => {
       const table = db.tables.find((t) => t.id === tableId);
       if (!table) return emptyMetrics();
-      return computeMetrics(table.rows, table.goals.weeklyGoals);
+      return computeMetrics(table.rows, table.goals);
     },
     [db],
   );

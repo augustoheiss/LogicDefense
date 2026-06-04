@@ -40,7 +40,7 @@ from models.coin_models import (
     EntryType,
 )
 from services.coin_metrics_engine import compute_metrics
-from services.coin_date_utils import resolve_goal_for_year, iso_year_month
+from services.coin_date_utils import resolve_goal_for_year, iso_year_month, get_effective_goals
 
 # ── Environment & Logging ────────────────────────────────────────────────────
 
@@ -353,11 +353,16 @@ def build_financial_context(
     dates = sorted(r.date for r in payload.rows)
     date_range = f"{dates[0]} até {dates[-1]}" if dates else "N/A"
 
-    # Current goals
+    # Current goals — resolved from the full hierarchy for current month
     current_year = int(today[:4])
-    weekly_goal = resolve_goal_for_year(payload.goals.weekly_goals, current_year)
-    daily_goal = resolve_goal_for_year(payload.goals.daily_goals, current_year)
-    annual_cost = resolve_goal_for_year(payload.goals.annual_costs, current_year)
+    current_month_num = int(today[5:7])
+    current_goals = get_effective_goals(
+        {"year": current_year, "month": current_month_num},
+        payload.goals,
+    )
+    weekly_goal = current_goals.weekly_goal
+    daily_goal = current_goals.daily_goal
+    annual_cost = current_goals.annual_cost
 
     # Current month metrics
     current_ym = today[:7]  # "YYYY-MM"
@@ -549,7 +554,7 @@ async def ai_analyst(payload: AIAnalystPayload) -> AIAnalystResponse:
     try:
         metrics = compute_metrics(
             rows=payload.rows,
-            weekly_goals=payload.goals.weekly_goals,
+            goals=payload.goals,
             as_of_date=payload.as_of_date,
             total_waiver_credits=payload.total_waiver_credits,
         )

@@ -137,6 +137,30 @@ def get_effective_goals(
     )
 
 
+def get_daily_goal_for_date(date_str: str, goals: TableGoals) -> float:
+    """
+    Resolves the effective daily goal for a specific date using the hierarchy:
+      Monthly ("YYYY-MM") → Yearly (number) → Global → Legacy flat records.
+
+    Mirrors: getDailyGoalForDate() in dateUtils.ts
+    """
+    year = int(date_str[:4])
+    month = int(date_str[5:7])
+    return get_effective_goals({"year": year, "month": month}, goals).daily_goal
+
+
+def get_weekly_goal_for_date(date_str: str, goals: TableGoals) -> float:
+    """
+    Resolves the effective weekly goal for a specific date using the hierarchy:
+      Monthly ("YYYY-MM") → Yearly (number) → Global → Legacy flat records.
+
+    Mirrors: getWeeklyGoalForDate() in dateUtils.ts
+    """
+    year = int(date_str[:4])
+    month = int(date_str[5:7])
+    return get_effective_goals({"year": year, "month": month}, goals).weekly_goal
+
+
 def get_iso_week_key(date_str: str) -> str:
     """
     ISO 8601 week key 'YYYY-Www'.
@@ -184,7 +208,7 @@ class WeekGroup:
 
 def group_rows_by_week(
     rows: list[TableRow],
-    weekly_goals: dict[int, float],
+    goals: TableGoals,
 ) -> list[WeekGroup]:
     """
     Groups revenue rows chronologically into Mon–Sun calendar weeks.
@@ -211,8 +235,10 @@ def group_rows_by_week(
         monday = _parse_date(monday_str)
         sunday = _get_sunday_of(monday)
         weekly_total = sum(r.value for r in entries)
-        # Goal determined by the year of SUNDAY (matches TS logic)
-        week_goal = resolve_goal_for_year(weekly_goals, sunday.year)
+        # Goal resolved from the full hierarchy, anchored to Sunday's date
+        # (Monthly > Annual > Global).
+        sunday_key = _to_local_key(sunday)
+        week_goal = get_weekly_goal_for_date(sunday_key, goals)
         result.append(
             WeekGroup(
                 week_start_date=monday,
@@ -231,7 +257,7 @@ def group_rows_by_week(
 
 def calculate_strict_global_balance(
     rows: list[TableRow],
-    weekly_goals: dict[int, float],
+    goals: TableGoals,
     as_of_date: Optional[date] = None,
 ) -> tuple[float, int]:
     """
@@ -284,9 +310,11 @@ def calculate_strict_global_balance(
             day_key = _to_local_key(cursor + timedelta(days=i))
             week_sum += date_value_map.get(day_key, 0.0)
 
-        # Score against the goal for the year of this week's SUNDAY
+        # Score against the goal resolved from the FULL hierarchy,
+        # anchored to the Sunday's date (Monthly > Annual > Global).
         sunday = cursor + timedelta(days=6)
-        week_goal = resolve_goal_for_year(weekly_goals, sunday.year)
+        sunday_key = _to_local_key(sunday)
+        week_goal = get_weekly_goal_for_date(sunday_key, goals)
         total_balance += week_sum - week_goal
         elapsed_weeks += 1
         cursor += timedelta(days=7)

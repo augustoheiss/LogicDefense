@@ -171,7 +171,7 @@ function buildMessage(
     )
     .sort((a, b) => a.date.localeCompare(b.date));
 
-  const weekGroups = groupRowsByWeek(allRevenueRows, table.goals.weeklyGoals).filter(
+  const weekGroups = groupRowsByWeek(allRevenueRows, table.goals).filter(
     (g) => g.weekEndDate.getFullYear() === selY && g.weekEndDate.getMonth() + 1 === selM,
   );
 

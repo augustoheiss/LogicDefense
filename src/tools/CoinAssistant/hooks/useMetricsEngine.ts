@@ -1,7 +1,7 @@
-import type { TableRow, TableMetrics, MonthMetrics, YearMetrics } from '../types';
+import type { TableRow, TableGoals, TableMetrics, MonthMetrics, YearMetrics } from '../types';
 import {
   calculateStrictGlobalBalance,
-  resolveGoalForYear,
+  getEffectiveGoals,
 } from '../utils/dateUtils';
 
 /**
@@ -29,7 +29,7 @@ import {
  */
 export function computeMetrics(
   rows: TableRow[],
-  weeklyGoals: Record<number, number>,
+  goals: TableGoals,
   /** When set, the engine treats this date as "today" for all calculations. */
   asOfDate?: string,
 ): TableMetrics {
@@ -317,7 +317,7 @@ export function computeMetrics(
   // Both values come from the same strict Mon–Sun calendar loop — guaranteed
   // to be perfectly consistent with each other.
   const { balance: rawStrictBalance, elapsedWeeks: totalElapsedWeeks } =
-    calculateStrictGlobalBalance(revenueRows, weeklyGoals, asOfDate ? today : undefined);
+    calculateStrictGlobalBalance(revenueRows, goals, asOfDate ? today : undefined);
 
   // ── Waiver credits — derived directly from 'waiver' ledger rows ─────────
   // Strictly monetary values.
@@ -337,8 +337,12 @@ export function computeMetrics(
   // ── Time Bank balance (weeks) ─────────────────────────────────────────────
   // timeBankBalance = finalGlobalGoalBalance / currentEffectiveWeeklyGoal
   // Guard against div-by-zero when no goal is set.
-  const currentYear = today.getFullYear();
-  const effectiveWeeklyGoal = resolveGoalForYear(weeklyGoals, currentYear);
+  const currentYear  = today.getFullYear();
+  const currentMonth = today.getMonth() + 1;
+  const effectiveWeeklyGoal = getEffectiveGoals(
+    { year: currentYear, month: currentMonth },
+    goals,
+  ).weeklyGoal;
   const timeBankBalance = effectiveWeeklyGoal > 0
     ? Math.round((globalGoalBalance / effectiveWeeklyGoal) * 100) / 100
     : 0;

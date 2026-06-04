@@ -109,6 +109,34 @@ export function getEffectiveGoals(
 }
 
 /**
+ * Resolves the effective daily goal for a specific date using the hierarchy:
+ *   Monthly ("YYYY-MM") → Yearly (number) → Global → Legacy flat records.
+ *
+ * @param dateStr  A "YYYY-MM-DD" date string.
+ * @param goals    The full TableGoals object.
+ * @returns        The daily goal in effect for that date.
+ */
+export function getDailyGoalForDate(dateStr: string, goals: TableGoals): number {
+  const year  = parseInt(dateStr.slice(0, 4), 10);
+  const month = parseInt(dateStr.slice(5, 7), 10);
+  return getEffectiveGoals({ year, month }, goals).dailyGoal;
+}
+
+/**
+ * Resolves the effective weekly goal for a specific date using the hierarchy:
+ *   Monthly ("YYYY-MM") → Yearly (number) → Global → Legacy flat records.
+ *
+ * @param dateStr  A "YYYY-MM-DD" date string.
+ * @param goals    The full TableGoals object.
+ * @returns        The weekly goal in effect for that date.
+ */
+export function getWeeklyGoalForDate(dateStr: string, goals: TableGoals): number {
+  const year  = parseInt(dateStr.slice(0, 4), 10);
+  const month = parseInt(dateStr.slice(5, 7), 10);
+  return getEffectiveGoals({ year, month }, goals).weeklyGoal;
+}
+
+/**
  * Groups revenue rows chronologically into Mon–Sun calendar weeks.
  *
  * Expectations for `rows`:
@@ -121,7 +149,7 @@ export function getEffectiveGoals(
  */
 export function groupRowsByWeek(
   rows: TableRow[],
-  weeklyGoals: Record<number, number>,
+  goals: TableGoals,
 ): WeekGroup[] {
   if (rows.length === 0) return [];
 
@@ -146,8 +174,10 @@ export function groupRowsByWeek(
       const monday      = new Date(y, mo - 1, d);
       const sunday      = getSundayOf(monday);
       const weeklyTotal = entries.reduce((sum, r) => sum + r.value, 0);
-      // The goal for this week is determined by the year its SUNDAY falls in
-      const weekGoal    = resolveGoalForYear(weeklyGoals, sunday.getFullYear());
+      // The goal for this week is resolved from the full hierarchy,
+      // anchored to the Sunday's date (Monthly > Annual > Global).
+      const sundayKey   = toLocalKey(sunday);
+      const weekGoal    = getWeeklyGoalForDate(sundayKey, goals);
       return {
         weekStartDate:      monday,
         weekEndDate:        sunday,
@@ -191,7 +221,7 @@ export function findCurrentWeek(
  */
 export function calculateStrictGlobalBalance(
   rows: TableRow[],
-  weeklyGoals: Record<number, number>,
+  goals: TableGoals,
   /** When set, the timeline is capped at this date instead of today. */
   asOfDate?: Date,
 ): { balance: number; elapsedWeeks: number } {
@@ -249,10 +279,12 @@ export function calculateStrictGlobalBalance(
       );
       weekSum += dateValueMap.get(dayKey) ?? 0;
     }
-    // Score this week against the goal for the year its SUNDAY falls in.
-    const sunday   = new Date(cursor.getFullYear(), cursor.getMonth(), cursor.getDate() + 6);
-    const weekGoal = resolveGoalForYear(weeklyGoals, sunday.getFullYear());
-    totalBalance  += weekSum - weekGoal;
+    // Score this week against the goal resolved from the FULL hierarchy,
+    // anchored to the Sunday's date (Monthly > Annual > Global).
+    const sunday    = new Date(cursor.getFullYear(), cursor.getMonth(), cursor.getDate() + 6);
+    const sundayKey = toLocalKey(sunday);
+    const weekGoal  = getWeeklyGoalForDate(sundayKey, goals);
+    totalBalance   += weekSum - weekGoal;
     elapsedWeeksCount++; // one real calendar week counted
     cursor = new Date(
       cursor.getFullYear(),

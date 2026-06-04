@@ -180,14 +180,14 @@ export function TableEditor({
 
   // ── Derived rows ────────────────────────────────────────────────────────────
   const metrics = useMemo(
-    () => computeMetrics(filteredRows, table.goals.weeklyGoals, cutoffDate || undefined),
-    [filteredRows, table.goals.weeklyGoals, cutoffDate],
+    () => computeMetrics(filteredRows, table.goals, cutoffDate || undefined),
+    [filteredRows, table.goals, cutoffDate],
   );
 
   // All-time metrics — always unfiltered, used by the global overview section.
   const allTimeMetrics = useMemo(
-    () => computeMetrics(table.rows, table.goals.weeklyGoals),
-    [table.rows, table.goals.weeklyGoals],
+    () => computeMetrics(table.rows, table.goals),
+    [table.rows, table.goals],
   );
 
   // ── Global month selector ───────────────────────────────────────────────────
