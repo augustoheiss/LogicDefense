@@ -165,21 +165,21 @@ export function GoalsPanel({ goals, metrics }: GoalsPanelProps) {
           ? Math.round(metrics.billableWeeks * currentWeeklyGoal * 100) / 100
           : 0;
 
-        /** Convert a monetary value to weeks based on the weekly goal. */
-        const toWeeks = (v: number) =>
-          currentWeeklyGoal > 0 ? (v / currentWeeklyGoal).toFixed(1) : '—';
+        // Pre-computed historically-accumulated week equivalents from the engine.
+        // These replace the naive (value / currentWeeklyGoal) flat division.
+        const fmtW = (weeks: number) => weeks.toFixed(1);
 
         const rows = [
-          { sign: '+', label: 'Receitas Operacionais', value: regularIncome, color: 'text-emerald-400' },
+          { sign: '+', label: 'Receitas Operacionais', value: regularIncome, weeks: metrics.grossTotalWeeks, color: 'text-emerald-400' },
           ...(metrics.totalWaiverCredit > 0
-            ? [{ sign: '+', label: 'Justificativas', value: metrics.totalWaiverCredit, color: 'text-orange-400' }]
+            ? [{ sign: '+', label: 'Justificativas', value: metrics.totalWaiverCredit, weeks: metrics.waiverTotalWeeks, color: 'text-orange-400' }]
             : []),
           ...(metrics.totalPartnerIn > 0
-            ? [{ sign: '+', label: 'Créditos de Parceria', value: metrics.totalPartnerIn, color: 'text-indigo-400' }]
+            ? [{ sign: '+', label: 'Créditos de Parceria', value: metrics.totalPartnerIn, weeks: 0, color: 'text-indigo-400' }]
             : []),
-          { sign: '−', label: 'Metas Acumuladas', value: goalTarget, color: 'text-white/50' },
+          { sign: '−', label: 'Metas Acumuladas', value: goalTarget, weeks: metrics.goalTotalWeeks, color: 'text-white/50' },
           ...(metrics.totalPartnerOut > 0
-            ? [{ sign: '−', label: 'Débitos de Parceria', value: metrics.totalPartnerOut, color: 'text-amber-400' }]
+            ? [{ sign: '−', label: 'Débitos de Parceria', value: metrics.totalPartnerOut, weeks: 0, color: 'text-amber-400' }]
             : []),
         ];
 
@@ -196,7 +196,7 @@ export function GoalsPanel({ goals, metrics }: GoalsPanelProps) {
                     <span className="text-white/25 w-4 inline-block">{r.sign}</span> {r.label}
                   </span>
                   <span className={`${r.color} text-right`}>
-                    {fmt(r.value)} <span className="text-white/20">({toWeeks(r.value)} sem)</span>
+                    {fmt(r.value)} {r.weeks > 0 && <span className="text-white/20">({fmtW(r.weeks)} sem)</span>}
                   </span>
                 </div>
               ))}
@@ -205,7 +205,7 @@ export function GoalsPanel({ goals, metrics }: GoalsPanelProps) {
                   <span className="text-white/25 w-4 inline-block">=</span> Saldo Final
                 </span>
                 <span className={`text-right ${balancePositive ? 'text-emerald-400' : 'text-red-400'}`}>
-                  {fmt(balance)} <span className="text-white/20">({toWeeks(balance)} sem)</span>
+                  {fmt(balance)} <span className="text-white/20">({fmtW(metrics.netBalanceWeeks)} sem)</span>
                 </span>
               </div>
             </div>
