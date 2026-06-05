@@ -36,7 +36,6 @@ from services.coin_date_utils import (
     get_iso_week_key,
     iso_year_month,
     calculate_strict_global_balance,
-    get_effective_goals,
     get_weekly_goal_for_date,
 )
 
@@ -452,17 +451,9 @@ def compute_metrics(
     billable_weeks = round((total_elapsed_weeks - waived_weeks) * 100) / 100
 
     # ── Time Bank balance (weeks) ────────────────────────────────────────
-    current_year = today.year
-    current_month = today.month
-    effective_weekly_goal = get_effective_goals(
-        {"year": current_year, "month": current_month},
-        goals,
-    ).weekly_goal
-    time_bank_balance = (
-        round((global_goal_balance / effective_weekly_goal) * 100) / 100
-        if effective_weekly_goal > 0
-        else 0.0
-    )
+    # Uses the historically-accumulated net_balance_weeks instead of a naive
+    # flat division (global_goal_balance / effective_weekly_goal).
+    # Assigned below after the week equivalents are finalized.
 
     # ── Net balance ──────────────────────────────────────────────────────────────
     net_balance = _round2(gross_total - total_expenses)
@@ -472,6 +463,9 @@ def compute_metrics(
     waiver_total_weeks = _round2(waiver_total_weeks)
     goal_total_weeks   = float(total_elapsed_weeks)  # 1 calendar week = 1 goal-week
     net_balance_weeks  = _round2(gross_total_weeks + waiver_total_weeks - goal_total_weeks)
+
+    # time_bank_balance now equals the historically-accumulated net_balance_weeks.
+    time_bank_balance = net_balance_weeks
 
     # ── Combined metrics (operational + partnership) ──────────────────────────
     gross_with_partner = _round2(gross_total + total_partner_in)

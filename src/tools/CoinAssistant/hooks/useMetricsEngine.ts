@@ -1,7 +1,6 @@
 import type { TableRow, TableGoals, TableMetrics, MonthMetrics, YearMetrics } from '../types';
 import {
   calculateStrictGlobalBalance,
-  getEffectiveGoals,
   getWeeklyGoalForDate,
 } from '../utils/dateUtils';
 
@@ -349,17 +348,10 @@ export function computeMetrics(
   const billableWeeks = Math.round((totalElapsedWeeks - waivedWeeks) * 100) / 100;
 
   // ── Time Bank balance (weeks) ─────────────────────────────────────────────
-  // timeBankBalance = finalGlobalGoalBalance / currentEffectiveWeeklyGoal
-  // Guard against div-by-zero when no goal is set.
-  const currentYear  = today.getFullYear();
-  const currentMonth = today.getMonth() + 1;
-  const effectiveWeeklyGoal = getEffectiveGoals(
-    { year: currentYear, month: currentMonth },
-    goals,
-  ).weeklyGoal;
-  const timeBankBalance = effectiveWeeklyGoal > 0
-    ? Math.round((globalGoalBalance / effectiveWeeklyGoal) * 100) / 100
-    : 0;
+  // Uses the historically-accumulated netBalanceWeeks instead of a naive
+  // flat division (globalGoalBalance / currentWeeklyGoal).
+  // netBalanceWeeks = grossTotalWeeks + waiverTotalWeeks − goalTotalWeeks
+  // and is computed below after the week equivalents are finalized.
 
   // ── Net balance (cash position after expenses — pure operational) ──────────
   const netBalance = round2(grossTotal - totalExpenses);
@@ -369,6 +361,9 @@ export function computeMetrics(
   waiverTotalWeeks = round2(waiverTotalWeeks);
   const goalTotalWeeks   = totalElapsedWeeks; // 1 calendar week = 1 goal-week
   const netBalanceWeeks  = round2(grossTotalWeeks + waiverTotalWeeks - goalTotalWeeks);
+
+  // timeBankBalance now equals the historically-accumulated netBalanceWeeks.
+  const timeBankBalance = netBalanceWeeks;
 
   // ── Combined metrics (operational + partnership) ──────────────────────────
   const grossWithPartner = round2(grossTotal + totalPartnerIn);
