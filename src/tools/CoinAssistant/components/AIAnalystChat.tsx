@@ -8,6 +8,7 @@ interface AIAnalystChatProps {
   table: CoinTable;
   cutoffDate?: string;
   totalWaiverCredits: number;
+  onAnalysisGenerated?: (analysis: string) => void;
 }
 
 interface ChatMessage {
@@ -70,7 +71,7 @@ function buildPayload(
 
 // ── Component ────────────────────────────────────────────────────────────────
 
-export function AIAnalystChat({ table, cutoffDate, totalWaiverCredits }: AIAnalystChatProps) {
+export function AIAnalystChat({ table, cutoffDate, totalWaiverCredits, onAnalysisGenerated }: AIAnalystChatProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -131,6 +132,9 @@ export function AIAnalystChat({ table, cutoffDate, totalWaiverCredits }: AIAnaly
       };
 
       setMessages((prev) => [...prev, assistantMessage]);
+      if (onAnalysisGenerated) {
+        onAnalysisGenerated(data.analysis);
+      }
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Erro desconhecido';
       setError(errorMsg);

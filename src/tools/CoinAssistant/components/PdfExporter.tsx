@@ -45,9 +45,10 @@ interface PdfExporterProps {
   metrics: TableMetrics;
   selectedMonth: string;
   costBasedTarget?: CostBasedTarget;
+  aiAnalysis?: string;
 }
 
-export function PdfExporter({ table, metrics, selectedMonth, costBasedTarget }: PdfExporterProps) {
+export function PdfExporter({ table, metrics, selectedMonth, costBasedTarget, aiAnalysis }: PdfExporterProps) {
   const reportRef = useRef<HTMLDivElement>(null);
 
   const [selY] = selectedMonth.split('-').map(Number);
@@ -128,6 +129,7 @@ export function PdfExporter({ table, metrics, selectedMonth, costBasedTarget }: 
           dailyGoal={dailyGoal}
           goals={table.goals}
           costBasedTarget={costBasedTarget}
+          aiAnalysis={aiAnalysis}
         />
       </div>
     </>

@@ -180,6 +180,7 @@ export function TableEditor({
   const [deleteRowId,  setDeleteRowId]  = useState<string | null>(null);
   const [chartView,    setChartView]    = useState<'history' | 'projection'>('history');
   const [showCSVManager, setShowCSVManager] = useState(false);
+  const [latestAIAnalysis, setLatestAIAnalysis] = useState<string | undefined>(undefined);
 
   // ── Time Machine (cutoff date) ──────────────────────────────────────────────
   const [cutoffDate, setCutoffDate] = useState<string>(''); // '' = today (no filter)
@@ -272,6 +273,7 @@ export function TableEditor({
             table={table}
             metrics={metrics}
             selectedMonth={effectiveMonth}
+            aiAnalysis={latestAIAnalysis}
           />
           <button
             onClick={() => setShowWhatsApp(true)}
@@ -539,7 +541,12 @@ export function TableEditor({
       </div>
 
       {/* ── AI Analyst Chat ── */}
-      <AIAnalystChat table={table} cutoffDate={cutoffDate || undefined} totalWaiverCredits={metrics.totalWaiverCredit} />
+      <AIAnalystChat
+        table={table}
+        cutoffDate={cutoffDate || undefined}
+        totalWaiverCredits={metrics.totalWaiverCredit}
+        onAnalysisGenerated={setLatestAIAnalysis}
+      />
 
       {/* ── Landing Page & Practical Guide ── */}
       <MoedaLandingGuide />

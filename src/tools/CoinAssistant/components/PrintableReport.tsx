@@ -225,6 +225,63 @@ function computeProratedExpenses(rows: TableRow[], selectedMonth: string): numbe
 
 // ── Props ────────────────────────────────────────────────────────────────────
 
+/** Text Filtering Logic: parses the AI response and returns max 4-5 strategic bullet points. */
+function extractStrategicRecommendations(text: string | undefined): string[] {
+  if (!text) return [];
+
+  const normalizedText = text.replace(/\r\n/g, '\n');
+  const lines = normalizedText.split('\n');
+  let startIdx = -1;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].toLowerCase();
+    if (line.includes('recomendaç') || line.includes('estratég')) {
+      if (line.startsWith('#') || line.startsWith('**') || line.includes(':')) {
+        startIdx = i;
+        break;
+      }
+    }
+  }
+
+  const bulletPoints: string[] = [];
+
+  if (startIdx !== -1) {
+    for (let i = startIdx + 1; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (line.startsWith('#')) break;
+      if (line.startsWith('- ') || line.startsWith('* ') || line.startsWith('• ') || /^\d+\.\s/.test(line)) {
+        const cleanLine = line
+          .replace(/^[-*•]\s+/, '')
+          .replace(/^\d+\.\s+/, '')
+          .replace(/\*\*/g, '')
+          .trim();
+        if (cleanLine) {
+          bulletPoints.push(cleanLine);
+        }
+      }
+    }
+  }
+
+  if (bulletPoints.length < 2) {
+    bulletPoints.length = 0;
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (trimmed.startsWith('- ') || trimmed.startsWith('* ') || trimmed.startsWith('• ') || /^\d+\.\s/.test(trimmed)) {
+        const cleanLine = trimmed
+          .replace(/^[-*•]\s+/, '')
+          .replace(/^\d+\.\s+/, '')
+          .replace(/\*\*/g, '')
+          .trim();
+        if (cleanLine && cleanLine.length > 15) {
+          bulletPoints.push(cleanLine);
+        }
+      }
+    }
+  }
+
+  return bulletPoints.slice(0, 4);
+}
+
 interface PrintableReportProps {
   tableName: string;
   rows: TableRow[];
@@ -233,12 +290,13 @@ interface PrintableReportProps {
   dailyGoal: number;
   goals: TableGoals;
   costBasedTarget?: CostBasedTarget;
+  aiAnalysis?: string;
 }
 
 // ── Component ────────────────────────────────────────────────────────────────
 
 export const PrintableReport = forwardRef<HTMLDivElement, PrintableReportProps>(
-  function PrintableReport({ tableName, rows, metrics, selectedMonth, dailyGoal, goals, costBasedTarget }, ref) {
+  function PrintableReport({ tableName, rows, metrics, selectedMonth, dailyGoal, goals, costBasedTarget, aiAnalysis }, ref) {
     const [selY, selM] = selectedMonth.split('-').map(Number);
     const monthName = new Date(selY, selM - 1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
     const monthMetrics: MonthMetrics | null = metrics.byMonth[selectedMonth] ?? null;
@@ -501,6 +559,59 @@ export const PrintableReport = forwardRef<HTMLDivElement, PrintableReportProps>(
                   <div style={{ ...val, color: metrics.globalGoalBalance >= 0 ? '#059669' : '#dc2626' }}>{fmtBRL(metrics.globalGoalBalance)}</div>
                 </div>
               </div>
+
+              {/* ── Row 4: Portfólio de Investimentos (3-col) ── */}
+              {(metrics.depositCount > 0 || metrics.globalTotalDeposited > 0) && (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', border: '1px solid #bfdbfe', borderRadius: '6px', marginTop: '6px', backgroundColor: '#eff6ff' }}>
+                  <div style={cell}>
+                    <div style={lbl}>📈 Total Aportado</div>
+                    <div style={{ ...val, color: '#1e3a8a' }}>{fmtBRL(metrics.globalTotalDeposited)}</div>
+                  </div>
+                  <div style={cell}>
+                    <div style={lbl}>📈 Rendimentos Acumulados</div>
+                    <div style={{ ...val, color: '#059669' }}>{fmtBRL(metrics.globalTotalYield)}</div>
+                  </div>
+                  <div style={cell}>
+                    <div style={lbl}>📈 Saldo Total do Portfólio</div>
+                    <div style={{ ...val, color: '#1e3a8a' }}>{fmtBRL(metrics.globalBalance)}</div>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })()}
+
+        {/* ═══════════════════════════════════════════════════════════════════
+            AI STRATEGIC RECOMMENDATIONS BOX
+            ═══════════════════════════════════════════════════════════════════ */}
+        {(() => {
+          const recs = extractStrategicRecommendations(aiAnalysis);
+          return (
+            <div style={{
+              marginTop: '12px',
+              border: '1px solid #c084fc',
+              borderRadius: '8px',
+              padding: '10px 12px',
+              backgroundColor: '#faf5ff',
+              breakInside: 'avoid' as const
+            }}>
+              <div style={{ fontSize: '9px', fontWeight: 700, color: '#7c3aed', letterSpacing: '1px', textTransform: 'uppercase' as const, marginBottom: '5px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <span>✦</span> RECOMENDAÇÕES ESTRATÉGICAS (ANÁLISE DE IA)
+              </div>
+              {recs.length > 0 ? (
+                <div style={{ display: 'flex', flexDirection: 'column' as const, gap: '4px' }}>
+                  {recs.map((rec, idx) => (
+                    <div key={idx} style={{ display: 'flex', gap: '6px', alignItems: 'flex-start', fontSize: '11px', color: '#581c87', lineHeight: '1.4' }}>
+                      <span style={{ color: '#a855f7', fontWeight: 900 }}>•</span>
+                      <span>{rec}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div style={{ fontSize: '10.5px', color: '#6b7280', fontStyle: 'italic', lineHeight: '1.4' }}>
+                  Nenhuma análise de IA foi realizada nesta sessão. Para incluir recomendações estratégicas personalizadas, utilize o Assistente Moeda IA na planilha antes de exportar o PDF.
+                </div>
+              )}
             </div>
           );
         })()}
