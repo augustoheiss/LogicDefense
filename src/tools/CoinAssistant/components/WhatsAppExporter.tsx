@@ -1,6 +1,12 @@
 import { useState } from 'react';
 import type { CoinTable, TableRow, TableMetrics, CostBasedTarget } from '../types';
-import { groupRowsByWeek, fmtDate, resolveGoalForYear } from '../utils/dateUtils';
+import {
+  fmtDate,
+  resolveGoalForYear,
+  getMondayOf,
+  toLocalKey,
+  getWeeklyGoalForDate,
+} from '../utils/dateUtils';
 
 interface WhatsAppExporterProps {
   table: CoinTable;
@@ -171,9 +177,41 @@ function buildMessage(
     )
     .sort((a, b) => a.date.localeCompare(b.date));
 
-  const weekGroups = groupRowsByWeek(allRevenueRows, table.goals).filter(
-    (g) => g.weekEndDate.getFullYear() === selY && g.weekEndDate.getMonth() + 1 === selM,
-  );
+  // Generate a continuous chronological sequence of all weeks in the target month
+  const totalDays = daysInMonth(selY, selM);
+  const sundays: Date[] = [];
+  for (let d = 1; d <= totalDays; d++) {
+    const date = new Date(selY, selM - 1, d);
+    if (date.getDay() === 0) { // Sunday
+      sundays.push(date);
+    }
+  }
+
+  const weekGroups = sundays.map((sunday) => {
+    const monday = getMondayOf(sunday);
+    const mondayKey = toLocalKey(monday);
+
+    // Find entries for this week from allRevenueRows
+    const entries = allRevenueRows.filter((r) => {
+      const [ry, rmo, rd] = r.date.split('-').map(Number);
+      const rDate = new Date(ry, rmo - 1, rd);
+      const rMonday = getMondayOf(rDate);
+      return toLocalKey(rMonday) === mondayKey;
+    }).sort((a, b) => a.date.localeCompare(b.date));
+
+    const weeklyTotal = entries.reduce((sum, r) => sum + r.value, 0);
+    const sundayKey = toLocalKey(sunday);
+    const weekGoal = getWeeklyGoalForDate(sundayKey, table.goals);
+
+    return {
+      weekStartDate: monday,
+      weekEndDate: sunday,
+      dailyEntries: entries,
+      weeklyTotal,
+      differenceFromGoal: weeklyTotal - weekGoal,
+      weeklyGoal: weekGoal,
+    };
+  });
 
   // ── Expenses prorated for this month (Regime de Competência) ─────────────
   const proratedExpenses = prorateExpensesForMonth(table.rows, selectedMonth);
@@ -241,24 +279,30 @@ function buildMessage(
         `🗓️ *Semana ${fmtDate(week.weekStartDate)} a ${fmtDate(week.weekEndDate)}*`,
       );
 
-      for (const row of week.dailyEntries) {
-        const desc = row.description ? ` — ${row.description}` : '';
-        lines.push(`• ${fmtDay(row.date)}: *${fmt(row.value)}*${desc}`);
-      }
-
-      const diff = week.differenceFromGoal;
-      if (diff === 0) {
+      if (week.dailyEntries.length === 0) {
         lines.push(
-          `🎯 Fechamento: *${fmt(week.weeklyTotal)}* _(Meta cravada!)_`,
-        );
-      } else if (diff > 0) {
-        lines.push(
-          `🎯 Fechamento: *${fmt(week.weeklyTotal)}* _(Superou ${fmt(diff)} da meta!)_`,
+          `📉 Fechamento: *R$ 0,00* _(Faltam ${fmt(week.weeklyGoal)} para a meta)_`,
         );
       } else {
-        lines.push(
-          `📉 Fechamento: *${fmt(week.weeklyTotal)}* _(Faltam ${fmt(Math.abs(diff))} para a meta)_`,
-        );
+        for (const row of week.dailyEntries) {
+          const desc = row.description ? ` — ${row.description}` : '';
+          lines.push(`• ${fmtDay(row.date)}: *${fmt(row.value)}*${desc}`);
+        }
+
+        const diff = week.differenceFromGoal;
+        if (diff === 0) {
+          lines.push(
+            `🎯 Fechamento: *${fmt(week.weeklyTotal)}* _(Meta cravada!)_`,
+          );
+        } else if (diff > 0) {
+          lines.push(
+            `🎯 Fechamento: *${fmt(week.weeklyTotal)}* _(Superou ${fmt(diff)} da meta!)_`,
+          );
+        } else {
+          lines.push(
+            `📉 Fechamento: *${fmt(week.weeklyTotal)}* _(Faltam ${fmt(Math.abs(diff))} para a meta)_`,
+          );
+        }
       }
     }
 

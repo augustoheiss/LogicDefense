@@ -14,7 +14,7 @@ export interface WeekGroup {
 // ─── Internal helpers ─────────────────────────────────────────────────────────
 
 /** Returns the Monday (at midnight, local time) of the week containing `date`. */
-function getMondayOf(date: Date): Date {
+export function getMondayOf(date: Date): Date {
   const d = new Date(date.getFullYear(), date.getMonth(), date.getDate());
   const day = d.getDay(); // 0 = Sun, 1 = Mon … 6 = Sat
   // Distance back to Monday: Sunday → 6 days back, else (day − 1) days back
@@ -24,12 +24,12 @@ function getMondayOf(date: Date): Date {
 }
 
 /** Returns the Sunday of the week starting on `monday`. */
-function getSundayOf(monday: Date): Date {
+export function getSundayOf(monday: Date): Date {
   return new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + 6);
 }
 
 /** Stable "YYYY-MM-DD" key from a local-time Date (avoids UTC offset issues). */
-function toLocalKey(date: Date): string {
+export function toLocalKey(date: Date): string {
   return [
     date.getFullYear(),
     String(date.getMonth() + 1).padStart(2, '0'),
