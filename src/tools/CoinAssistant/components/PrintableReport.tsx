@@ -319,11 +319,14 @@ export const PrintableReport = forwardRef<HTMLDivElement, PrintableReportProps>(
       <div
         ref={ref}
         style={{
-          width: '794px', // A4 width at 96 DPI
+          width: '100%',
+          maxWidth: '700px',
+          margin: '0 auto',
+          boxSizing: 'border-box',
           fontFamily: "'Inter', 'Segoe UI', system-ui, sans-serif",
           backgroundColor: '#ffffff',
           color: '#1a1a2e',
-          padding: '40px',
+          padding: '24px',
           fontSize: '13px',
           lineHeight: '1.5',
         }}
@@ -331,12 +334,12 @@ export const PrintableReport = forwardRef<HTMLDivElement, PrintableReportProps>(
         {/* ═══════════════════════════════════════════════════════════════════
             HEADER
             ═══════════════════════════════════════════════════════════════════ */}
-        <div style={{ borderBottom: '2px solid #7c3aed', paddingBottom: '16px', marginBottom: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+        <div style={{ borderBottom: '2px solid #7c3aed', paddingBottom: '10px', marginBottom: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
           <div>
             <div style={{ fontSize: '10px', color: '#7c3aed', fontWeight: 700, letterSpacing: '2px', textTransform: 'uppercase' as const }}>
               💰 Assistente Moeda — Relatório Financeiro
             </div>
-            <h1 style={{ fontSize: '22px', fontWeight: 800, color: '#1a1a2e', margin: '4px 0 0' }}>
+            <h1 style={{ fontSize: '22px', fontWeight: 800, color: '#1a1a2e', margin: '2px 0 0' }}>
               {tableName}
             </h1>
           </div>
@@ -350,11 +353,11 @@ export const PrintableReport = forwardRef<HTMLDivElement, PrintableReportProps>(
             MONTHLY METRICS
             ═══════════════════════════════════════════════════════════════════ */}
         {monthMetrics && (
-          <div style={{ marginBottom: '24px', breakInside: 'avoid' as const }}>
-            <h2 style={{ fontSize: '11px', fontWeight: 700, color: '#7c3aed', letterSpacing: '1.5px', textTransform: 'uppercase' as const, marginBottom: '12px' }}>
+          <div style={{ marginBottom: '14px', breakInside: 'avoid' as const }}>
+            <h2 style={{ fontSize: '11px', fontWeight: 700, color: '#7c3aed', letterSpacing: '1.5px', textTransform: 'uppercase' as const, marginBottom: '6px' }}>
               Receitas do Mês
             </h2>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px' }}>
               {[
                 { label: 'Receita Bruta', value: fmtBRL(monthMetrics.grossMonthly), color: '#059669' },
                 { label: 'Média Diária', value: fmtBRL(monthMetrics.dailyAvg), color: monthMetrics.dailyAvg >= dailyGoal ? '#059669' : '#d97706' },
@@ -364,11 +367,11 @@ export const PrintableReport = forwardRef<HTMLDivElement, PrintableReportProps>(
                 <div key={card.label} style={{
                   border: '1px solid #e5e7eb',
                   borderRadius: '8px',
-                  padding: '12px',
+                  padding: '8px',
                   textAlign: 'center' as const,
                 }}>
                   <div style={{ fontSize: '10px', color: '#9ca3af', fontWeight: 600, textTransform: 'uppercase' as const }}>{card.label}</div>
-                  <div style={{ fontSize: '16px', fontWeight: 700, color: card.color, marginTop: '4px', fontFamily: 'monospace' }}>{card.value}</div>
+                  <div style={{ fontSize: '16px', fontWeight: 700, color: card.color, marginTop: '2px', fontFamily: 'monospace' }}>{card.value}</div>
                 </div>
               ))}
             </div>
@@ -379,50 +382,52 @@ export const PrintableReport = forwardRef<HTMLDivElement, PrintableReportProps>(
             CHART — Recharts with fixed width (no ResponsiveContainer)
             ═══════════════════════════════════════════════════════════════════ */}
         {chartData.length > 0 && (
-          <div style={{ marginBottom: '28px', breakInside: 'avoid' as const }}>
-            <h2 style={{ fontSize: '11px', fontWeight: 700, color: '#7c3aed', letterSpacing: '1.5px', textTransform: 'uppercase' as const, marginBottom: '12px' }}>
+          <div style={{ marginBottom: '16px', breakInside: 'avoid' as const }}>
+            <h2 style={{ fontSize: '11px', fontWeight: 700, color: '#7c3aed', letterSpacing: '1.5px', textTransform: 'uppercase' as const, marginBottom: '6px' }}>
               Fluxo de Caixa Diário
             </h2>
-            <ComposedChart width={714} height={340} data={chartData} margin={{ top: 44, right: 12, left: 0, bottom: 70 }}>
-              <ReferenceLine y={0} stroke="#d1d5db" strokeWidth={1} />
-              {dailyGoal > 0 && (
-                <ReferenceLine y={dailyGoal} stroke="#9ca3af" strokeDasharray="4 3" label={{ value: `Meta ${fmtBRL(dailyGoal)}`, position: 'insideTopRight', fill: '#6b7280', fontSize: 9 }} />
-              )}
-              {survival && survival.daily > 0 && (
-                <ReferenceLine y={survival.daily} stroke="#7c3aed" strokeDasharray="6 3" label={{ value: `Sobrev. ${fmtBRL(survival.daily)}`, position: 'insideBottomRight', fill: '#7c3aed', fontSize: 9 }} />
-              )}
-              <XAxis dataKey="dateLabel" tick={{ fill: '#6b7280', fontSize: 9 }} axisLine={{ stroke: '#e5e7eb' }} tickLine={false} tickMargin={30} interval={chartData.length > 20 ? Math.ceil(chartData.length / 15) - 1 : 0} />
-              <YAxis tickFormatter={(v: number) => v >= 1000 || v <= -1000 ? `R$${(v / 1000).toFixed(1)}k` : `R$${v}`} tick={{ fill: '#6b7280', fontSize: 9 }} axisLine={false} tickLine={false} width={52} />
-              <Bar dataKey="revenue" fill="#059669" radius={[3, 3, 0, 0]} maxBarSize={16} stackId="positive">
-                <LabelList dataKey="revenue" content={renderRevenueLabel} />
-              </Bar>
-              {hasDeposits && (
-                <Bar dataKey="deposit" fill="#0284c7" radius={[3, 3, 0, 0]} maxBarSize={16} stackId="positive">
-                  <LabelList dataKey="deposit" content={renderDepositLabel} />
+            <div className="w-full flex justify-center items-center overflow-hidden mx-auto" style={{ width: '100%', maxWidth: '680px', margin: '0 auto', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+              <ComposedChart width={680} height={260} data={chartData} margin={{ top: 10, right: 10, bottom: 5, left: 10 }}>
+                <ReferenceLine y={0} stroke="#d1d5db" strokeWidth={1} />
+                {dailyGoal > 0 && (
+                  <ReferenceLine y={dailyGoal} stroke="#9ca3af" strokeDasharray="4 3" label={{ value: `Meta ${fmtBRL(dailyGoal)}`, position: 'insideTopRight', fill: '#6b7280', fontSize: 9 }} />
+                )}
+                {survival && survival.daily > 0 && (
+                  <ReferenceLine y={survival.daily} stroke="#7c3aed" strokeDasharray="6 3" label={{ value: `Sobrev. ${fmtBRL(survival.daily)}`, position: 'insideBottomRight', fill: '#7c3aed', fontSize: 9 }} />
+                )}
+                <XAxis dataKey="dateLabel" tick={{ fill: '#6b7280', fontSize: 9 }} axisLine={{ stroke: '#e5e7eb' }} tickLine={false} tickMargin={8} interval={chartData.length > 20 ? Math.ceil(chartData.length / 15) - 1 : 0} />
+                <YAxis tickFormatter={(v: number) => v >= 1000 || v <= -1000 ? `R$${(v / 1000).toFixed(1)}k` : `R$${v}`} tick={{ fill: '#6b7280', fontSize: 9 }} axisLine={false} tickLine={false} width={52} />
+                <Bar dataKey="revenue" fill="#059669" radius={[3, 3, 0, 0]} maxBarSize={16} stackId="positive">
+                  <LabelList dataKey="revenue" content={renderRevenueLabel} />
                 </Bar>
-              )}
-              {hasPartnerIn && (
-                <Bar dataKey="partnerIn" fill="#6366f1" radius={[3, 3, 0, 0]} maxBarSize={16} stackId="positive">
-                  <LabelList dataKey="partnerIn" content={renderPartnerInLabel} />
-                </Bar>
-              )}
-              {hasWaivers && (
-                <Bar dataKey="waiver" fill="#64748b" radius={[3, 3, 0, 0]} maxBarSize={16} stackId="positive">
-                  <LabelList dataKey="waiver" content={renderWaiverLabel} />
-                </Bar>
-              )}
-              {hasExpenses && (
-                <Bar dataKey="expenseNeg" fill="#e11d48" radius={[0, 0, 3, 3]} maxBarSize={16} stackId="negative">
-                  <LabelList dataKey="expenseNeg" content={renderExpenseLabel} />
-                </Bar>
-              )}
-              {hasPartnerOut && (
-                <Bar dataKey="partnerOutNeg" fill="#d97706" radius={[0, 0, 3, 3]} maxBarSize={16} stackId="negative">
-                  <LabelList dataKey="partnerOutNeg" content={renderPartnerOutLabel} />
-                </Bar>
-              )}
-            </ComposedChart>
-            <div style={{ fontSize: '9px', color: '#9ca3af', textAlign: 'right' as const, marginTop: '4px' }}>
+                {hasDeposits && (
+                  <Bar dataKey="deposit" fill="#0284c7" radius={[3, 3, 0, 0]} maxBarSize={16} stackId="positive">
+                    <LabelList dataKey="deposit" content={renderDepositLabel} />
+                  </Bar>
+                )}
+                {hasPartnerIn && (
+                  <Bar dataKey="partnerIn" fill="#6366f1" radius={[3, 3, 0, 0]} maxBarSize={16} stackId="positive">
+                    <LabelList dataKey="partnerIn" content={renderPartnerInLabel} />
+                  </Bar>
+                )}
+                {hasWaivers && (
+                  <Bar dataKey="waiver" fill="#64748b" radius={[3, 3, 0, 0]} maxBarSize={16} stackId="positive">
+                    <LabelList dataKey="waiver" content={renderWaiverLabel} />
+                  </Bar>
+                )}
+                {hasExpenses && (
+                  <Bar dataKey="expenseNeg" fill="#e11d48" radius={[0, 0, 3, 3]} maxBarSize={16} stackId="negative">
+                    <LabelList dataKey="expenseNeg" content={renderExpenseLabel} />
+                  </Bar>
+                )}
+                {hasPartnerOut && (
+                  <Bar dataKey="partnerOutNeg" fill="#d97706" radius={[0, 0, 3, 3]} maxBarSize={16} stackId="negative">
+                    <LabelList dataKey="partnerOutNeg" content={renderPartnerOutLabel} />
+                  </Bar>
+                )}
+              </ComposedChart>
+            </div>
+            <div style={{ fontSize: '9px', color: '#9ca3af', textAlign: 'right' as const, marginTop: '2px' }}>
               ✦ Valores distribuídos proporcionalmente pelo período de cada lançamento
             </div>
           </div>
@@ -448,17 +453,17 @@ export const PrintableReport = forwardRef<HTMLDivElement, PrintableReportProps>(
           // Compact label style
           const lbl: React.CSSProperties = { fontSize: '8px', color: '#9ca3af', fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.3px' };
           const val: React.CSSProperties = { fontSize: '10px', fontWeight: 700, fontFamily: 'monospace', marginTop: '1px' };
-          const cell: React.CSSProperties = { padding: '5px 6px' };
+          const cell: React.CSSProperties = { padding: '4px 6px' };
 
           return (
-            <div style={{ marginTop: '12px', breakInside: 'avoid' as const }}>
+            <div style={{ marginTop: '8px', breakInside: 'avoid' as const }}>
               {/* ── Section Title ── */}
-              <div style={{ fontSize: '9px', fontWeight: 700, color: '#7c3aed', letterSpacing: '1.5px', textTransform: 'uppercase' as const, marginBottom: '6px', borderBottom: '1px solid #e5e7eb', paddingBottom: '3px' }}>
+              <div style={{ fontSize: '9px', fontWeight: 700, color: '#7c3aed', letterSpacing: '1.5px', textTransform: 'uppercase' as const, marginBottom: '4px', borderBottom: '1px solid #e5e7eb', paddingBottom: '2px' }}>
                 📋 Painel Consolidado
               </div>
 
               {/* ── Row 1: Global + Annual Metrics (6-col) ── */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', border: '1px solid #e5e7eb', borderRadius: '6px', marginBottom: '6px', backgroundColor: '#fafafa' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', border: '1px solid #e5e7eb', borderRadius: '6px', marginBottom: '4px', backgroundColor: '#fafafa' }}>
                 {/* Global */}
                 <div style={cell}>
                   <div style={lbl}>Total Bruto</div>
@@ -489,7 +494,7 @@ export const PrintableReport = forwardRef<HTMLDivElement, PrintableReportProps>(
 
               {/* ── Row 1b: Custos Rateados do Mês (3-col) ── */}
               {expenseTotal > 0 && (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', border: '1px solid #fecaca', borderRadius: '6px', marginBottom: '6px', backgroundColor: '#fff5f5' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', border: '1px solid #fecaca', borderRadius: '6px', marginBottom: '4px', backgroundColor: '#fff5f5' }}>
                   <div style={cell}>
                     <div style={lbl}>💸 Custos Rateados</div>
                     <div style={{ ...val, color: '#dc2626' }}>{fmtBRL(expenseTotal)}</div>
@@ -507,7 +512,7 @@ export const PrintableReport = forwardRef<HTMLDivElement, PrintableReportProps>(
 
               {/* ── Row 2: Survival Goals (3-col) ── */}
               {metrics.survivalDaily > 0 && (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', border: '1px solid #e0e7ff', borderRadius: '6px', marginBottom: '6px', backgroundColor: '#f5f3ff' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', border: '1px solid #e0e7ff', borderRadius: '6px', marginBottom: '4px', backgroundColor: '#f5f3ff' }}>
                   <div style={cell}>
                     <div style={lbl}>🛡️ Sobrevivência Diária</div>
                     <div style={{ ...val, color: '#4c1d95' }}>{fmtBRL(metrics.survivalDaily)}</div>
@@ -559,7 +564,7 @@ export const PrintableReport = forwardRef<HTMLDivElement, PrintableReportProps>(
 
               {/* ── Row 4: Portfólio de Investimentos (3-col) ── */}
               {(metrics.depositCount > 0 || metrics.globalTotalDeposited > 0) && (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', border: '1px solid #bfdbfe', borderRadius: '6px', marginTop: '6px', backgroundColor: '#eff6ff' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', border: '1px solid #bfdbfe', borderRadius: '6px', marginTop: '4px', backgroundColor: '#eff6ff' }}>
                   <div style={cell}>
                     <div style={lbl}>📈 Total Aportado</div>
                     <div style={{ ...val, color: '#1e3a8a' }}>{fmtBRL(metrics.globalTotalDeposited)}</div>
@@ -585,27 +590,27 @@ export const PrintableReport = forwardRef<HTMLDivElement, PrintableReportProps>(
           const recs = extractStrategicRecommendations(aiAnalysis);
           return (
             <div style={{
-              marginTop: '12px',
+              marginTop: '8px',
               border: '1px solid #c084fc',
               borderRadius: '8px',
-              padding: '10px 12px',
+              padding: '6px 10px',
               backgroundColor: '#faf5ff',
               breakInside: 'avoid' as const
             }}>
-              <div style={{ fontSize: '9px', fontWeight: 700, color: '#7c3aed', letterSpacing: '1px', textTransform: 'uppercase' as const, marginBottom: '5px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <div style={{ fontSize: '9px', fontWeight: 700, color: '#7c3aed', letterSpacing: '1px', textTransform: 'uppercase' as const, marginBottom: '3px', display: 'flex', alignItems: 'center', gap: '4px' }}>
                 <span>✦</span> RECOMENDAÇÕES ESTRATÉGICAS (ANÁLISE DE IA)
               </div>
               {recs.length > 0 ? (
-                <div style={{ display: 'flex', flexDirection: 'column' as const, gap: '4px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column' as const, gap: '3px' }}>
                   {recs.map((rec, idx) => (
-                    <div key={idx} style={{ display: 'flex', gap: '6px', alignItems: 'flex-start', fontSize: '11px', color: '#581c87', lineHeight: '1.4' }}>
+                    <div key={idx} style={{ display: 'flex', gap: '6px', alignItems: 'flex-start', fontSize: '10.5px', color: '#581c87', lineHeight: '1.3' }}>
                       <span style={{ color: '#a855f7', fontWeight: 900 }}>•</span>
                       <span>{rec}</span>
                     </div>
                   ))}
                 </div>
               ) : (
-                <div style={{ fontSize: '10.5px', color: '#6b7280', fontStyle: 'italic', lineHeight: '1.4' }}>
+                <div style={{ fontSize: '10px', color: '#6b7280', fontStyle: 'italic', lineHeight: '1.3' }}>
                   Nenhuma análise de IA foi realizada nesta sessão. Para incluir recomendações estratégicas personalizadas, utilize o Assistente Moeda IA na planilha antes de exportar o PDF.
                 </div>
               )}
@@ -616,38 +621,38 @@ export const PrintableReport = forwardRef<HTMLDivElement, PrintableReportProps>(
         {/* ═══════════════════════════════════════════════════════════════════
             PAGE BREAK + PRACTICAL GUIDE
             ═══════════════════════════════════════════════════════════════════ */}
-        <div style={{ display: 'block', breakBefore: 'page' as const, pageBreakBefore: 'always' as const, paddingTop: '32px' }}>
+        <div style={{ display: 'block', pageBreakBefore: 'always' as const, breakBefore: 'page' as const }}>
           {/* Hero */}
-          <div style={{ textAlign: 'center' as const, marginBottom: '28px' }}>
-            <div style={{ display: 'inline-block', padding: '4px 14px', borderRadius: '999px', backgroundColor: '#f3e8ff', color: '#7c3aed', fontSize: '10px', fontWeight: 700, letterSpacing: '1px', marginBottom: '12px' }}>
+          <div style={{ textAlign: 'center' as const, marginBottom: '16px', paddingTop: '8px' }}>
+            <div style={{ display: 'inline-block', padding: '3px 10px', borderRadius: '999px', backgroundColor: '#f3e8ff', color: '#7c3aed', fontSize: '9px', fontWeight: 700, letterSpacing: '1px', marginBottom: '6px' }}>
               💰 Assistente Moeda — Guia Prático
             </div>
-            <h2 style={{ fontSize: '24px', fontWeight: 800, color: '#1a1a2e', margin: '0 0 8px' }}>
+            <h2 style={{ fontSize: '20px', fontWeight: 800, color: '#1a1a2e', margin: '0 0 4px' }}>
               Assuma o Volante do seu Fluxo de Caixa
             </h2>
-            <p style={{ fontSize: '12px', color: '#6b7280', maxWidth: '520px', margin: '0 auto' }}>
+            <p style={{ fontSize: '11px', color: '#6b7280', maxWidth: '520px', margin: '0 auto', lineHeight: '1.4' }}>
               O Assistente Moeda não é apenas uma planilha — é um motor de inteligência financeira. Descubra a sua Meta Diária de Sobrevivência real e pare de ser surpreendido por contas anuais invisíveis.
             </p>
-            <div style={{ display: 'flex', justifyContent: 'center', gap: '12px', marginTop: '14px', flexWrap: 'wrap' as const }}>
+            <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', marginTop: '8px', flexWrap: 'wrap' as const }}>
               {[
                 '⚙️ Rateio Automático de Custos Fixos (Regime de Competência)',
                 '📊 Separação inteligente de despesas do dia a dia',
                 '🎯 Metas Dinâmicas que se ajustam ao tamanho do mês',
               ].map((t) => (
-                <span key={t} style={{ fontSize: '10px', color: '#6b7280', border: '1px solid #e5e7eb', borderRadius: '6px', padding: '4px 10px', backgroundColor: '#f9fafb' }}>{t}</span>
+                <span key={t} style={{ fontSize: '9px', color: '#6b7280', border: '1px solid #e5e7eb', borderRadius: '6px', padding: '3px 8px', backgroundColor: '#f9fafb' }}>{t}</span>
               ))}
             </div>
           </div>
 
           {/* Section: O Antes */}
-          <div style={{ marginBottom: '24px', breakInside: 'avoid' as const }}>
+          <div style={{ marginBottom: '14px', breakInside: 'avoid' as const }}>
             <div style={{ fontSize: '10px', fontWeight: 700, color: '#dc2626', letterSpacing: '1.5px', textTransform: 'uppercase' as const, marginBottom: '4px' }}>
               ✦ O ANTES: A Ilusão do Lucro e o Pesadelo das Contas Anuais
             </div>
-            <h3 style={{ fontSize: '16px', fontWeight: 800, color: '#1a1a2e', margin: '0 0 10px' }}>
+            <h3 style={{ fontSize: '14px', fontWeight: 800, color: '#1a1a2e', margin: '0 0 6px' }}>
               Como os Custos Invisíveis Sabotam seu Negócio
             </h3>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '10px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '6px' }}>
               <PdfCard icon="💸" title="A Falsa Sensação de Riqueza" borderColor="#fecaca" bgColor="#fff5f5">
                 Você faz um faturamento excelente na semana, mas esquece que o IPVA, o seguro, a depreciação e a manutenção estão correndo em silêncio debaixo dos seus pés. No fim das contas, o lucro real desaparece.
               </PdfCard>
@@ -661,14 +666,14 @@ export const PrintableReport = forwardRef<HTMLDivElement, PrintableReportProps>(
           </div>
 
           {/* Section: O Depois */}
-          <div style={{ marginBottom: '24px', breakInside: 'avoid' as const }}>
+          <div style={{ marginBottom: '14px', breakInside: 'avoid' as const }}>
             <div style={{ fontSize: '10px', fontWeight: 700, color: '#059669', letterSpacing: '1.5px', textTransform: 'uppercase' as const, marginBottom: '4px' }}>
               ✦ O DEPOIS: A Clareza de Marchar Sabendo Onde Pisar
             </div>
-            <h3 style={{ fontSize: '16px', fontWeight: 800, color: '#1a1a2e', margin: '0 0 10px' }}>
+            <h3 style={{ fontSize: '14px', fontWeight: 800, color: '#1a1a2e', margin: '0 0 6px' }}>
               Previsibilidade Operacional e Lucro Líquido Real
             </h3>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
               <PdfCard icon="🧮" title="Os Primeiros R$ 108,00 Quitados" borderColor="#a7f3d0" bgColor="#f0fdf4">
                 Imagine ligar o carro ou abrir o negócio sabendo que o custo fixo rateado diário já está guardado. Tudo o que ultrapassar essa linha é lucro líquido real no seu bolso.
               </PdfCard>
@@ -679,17 +684,17 @@ export const PrintableReport = forwardRef<HTMLDivElement, PrintableReportProps>(
           </div>
 
           {/* Section: Guia Prático */}
-          <div style={{ marginBottom: '24px', breakInside: 'avoid' as const }}>
+          <div style={{ marginBottom: '16px', breakInside: 'avoid' as const }}>
             <div style={{ fontSize: '10px', fontWeight: 700, color: '#7c3aed', letterSpacing: '1.5px', textTransform: 'uppercase' as const, marginBottom: '4px' }}>
               ✦ COMO OPERAR O ASSISTENTE-MOEDA
             </div>
-            <h3 style={{ fontSize: '16px', fontWeight: 800, color: '#1a1a2e', margin: '0 0 4px' }}>
+            <h3 style={{ fontSize: '14px', fontWeight: 800, color: '#1a1a2e', margin: '0 0 2px' }}>
               3 Passos Simples para a Clareza Financeira
             </h3>
-            <p style={{ fontSize: '11px', color: '#9ca3af', margin: '0 0 12px' }}>
+            <p style={{ fontSize: '10.5px', color: '#9ca3af', margin: '0 0 6px' }}>
               Siga os passos operacionais abaixo para extrair a inteligência máxima dos seus lançamentos.
             </p>
-            <div style={{ display: 'flex', flexDirection: 'column' as const, gap: '10px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column' as const, gap: '6px' }}>
               <StepItem step={1} icon="🛒" title="Lançando o Dia a Dia (Custos Variáveis)">
                 Adicione despesas operacionais diárias (ex: combustível ou pedágio sob a categoria 'EH BB' ou 'ALIMENTAÇÃO') com a mesma data de início e de fim para isolar o impacto no mês.
               </StepItem>
@@ -703,9 +708,9 @@ export const PrintableReport = forwardRef<HTMLDivElement, PrintableReportProps>(
           </div>
 
           {/* Footer */}
-          <div style={{ textAlign: 'center' as const, fontSize: '10px', color: '#9ca3af', borderTop: '1px solid #e5e7eb', paddingTop: '12px', breakInside: 'avoid' as const }}>
+          <div style={{ textAlign: 'center' as const, fontSize: '10px', color: '#9ca3af', borderTop: '1px solid #e5e7eb', paddingTop: '8px', breakInside: 'avoid' as const }}>
             <div>Todos os dados são salvos localmente no seu navegador. Nada sai do seu dispositivo.</div>
-            <div style={{ marginTop: '8px', fontSize: '11px', fontWeight: 600 }}>
+            <div style={{ marginTop: '4px', fontSize: '11px', fontWeight: 600 }}>
               Acesse e crie o seu:{' '}
               <a
                 href="https://www.heisslab.com.br/laboratorio/assistente-moeda"
@@ -725,13 +730,13 @@ export const PrintableReport = forwardRef<HTMLDivElement, PrintableReportProps>(
 
 // ── Sub-components ───────────────────────────────────────────────────────────
 
-function PdfCard({ icon, title, children, borderColor, bgColor }: {
-  icon: string; title: string; children: React.ReactNode; borderColor: string; bgColor: string;
+function PdfCard({ icon, title, children, borderColor = '#e5e7eb', bgColor = '#fafafa' }: {
+  icon: string; title: string; children: React.ReactNode; borderColor?: string; bgColor?: string;
 }) {
   return (
-    <div style={{ border: `1px solid ${borderColor}`, borderRadius: '8px', padding: '12px', backgroundColor: bgColor }}>
-      <div style={{ fontSize: '11px', fontWeight: 700, color: '#1a1a2e', marginBottom: '4px' }}>{icon} {title}</div>
-      <div style={{ fontSize: '11px', color: '#4b5563', lineHeight: '1.5' }}>{children}</div>
+    <div style={{ border: `1px solid ${borderColor}`, borderRadius: '8px', padding: '8px 10px', backgroundColor: bgColor }}>
+      <div style={{ fontSize: '11px', fontWeight: 700, color: '#1a1a2e', marginBottom: '2px' }}>{icon} {title}</div>
+      <div style={{ fontSize: '10.5px', color: '#4b5563', lineHeight: '1.35' }}>{children}</div>
     </div>
   );
 }
@@ -740,17 +745,17 @@ function StepItem({ step, icon, title, children }: {
   step: number; icon: string; title: string; children: React.ReactNode;
 }) {
   return (
-    <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '12px', backgroundColor: '#fafafa' }}>
+    <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-start', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '8px 10px', backgroundColor: '#fafafa' }}>
       <div style={{
-        width: '28px', height: '28px', borderRadius: '8px',
+        width: '24px', height: '24px', borderRadius: '8px',
         backgroundColor: '#f3e8ff', color: '#7c3aed',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        fontSize: '13px', fontWeight: 700, fontFamily: 'monospace', flexShrink: 0,
+        fontSize: '11px', fontWeight: 700, fontFamily: 'monospace', flexShrink: 0,
         border: '1px solid #e9d5ff',
       }}>{step}</div>
       <div>
         <div style={{ fontSize: '12px', fontWeight: 700, color: '#1a1a2e', marginBottom: '2px' }}>{icon} {title}</div>
-        <div style={{ fontSize: '11px', color: '#6b7280', lineHeight: '1.5' }}>{children}</div>
+        <div style={{ fontSize: '10.5px', color: '#6b7280', lineHeight: '1.35' }}>{children}</div>
       </div>
     </div>
   );

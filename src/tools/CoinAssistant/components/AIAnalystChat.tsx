@@ -284,7 +284,20 @@ export function AIAnalystChat({ table, cutoffDate, totalWaiverCredits, onAnalysi
               </div>
             )}
 
-
+            {/* Support micro-card */}
+            {messages.some((msg) => msg.role === 'assistant') && (
+              <div className="mt-3 p-3 rounded-lg border border-white/10 bg-white/5 backdrop-blur-sm hover:bg-white/10 hover:border-white/20 transition-all duration-300">
+                <div className="flex gap-2.5">
+                  <span className="text-base shrink-0 select-none">☕</span>
+                  <div className="space-y-1">
+                    <h4 className="text-xs font-bold text-white">Alimente o cérebro da nossa IA!</h4>
+                    <p className="text-[11px] text-white/50 leading-relaxed">
+                      Curtiu o Assistente IA? Cada análise detalhada consome processamento em nuvem. Faça uma contribuição (ou pague um café) para o autor manter o motor de inteligência ativo e livre de anúncios. Dados de contato na página Sobre.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* ── Input area ── */}

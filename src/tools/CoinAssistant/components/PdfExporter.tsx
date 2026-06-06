@@ -17,7 +17,7 @@ import { resolveGoalForYear } from '../utils/dateUtils';
 const PRINT_CSS = `
   @page {
     size: A4;
-    margin: 10mm 0;
+    margin: 8mm 12mm 8mm 12mm;
   }
   *, *::before, *::after {
     -webkit-print-color-adjust: exact !important;
@@ -118,6 +118,7 @@ export function PdfExporter({ table, metrics, selectedMonth, costBasedTarget, ai
           top: '0',
           zIndex: -1,
           pointerEvents: 'none',
+          width: '700px',
         }}
       >
         <PrintableReport
