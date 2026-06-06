@@ -47,4 +47,4 @@ O objetivo é substituir a copy atual por uma linguagem visceral, baseada nas do
 ### B. Consistência Visual e Responsividade
 * Uso de wrappers responsivos flex/grid (`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6`) para garantir que os cards se adaptem a smartphones e tablets.
 * Manutenção do tema dark e do design glassmorphic premium (bordas brancas translúcidas, fundos escuros, efeitos de brilho em gradiente).
-* **Normalização Universal**: Todas as categorias exibidas como exemplo ou mock no guia visual devem estar estritamente em **MAIÚSCULO** (ex: `'AH ITAU'`, `'EH BB'`).
+* **Normalização Universal**: Todas as categorias exibidas como exemplo ou mock no guia visual devem estar estritamente em **MAIÚSCULO** (ex: `'AH Bradesco'`, `'EH Santander'`).

@@ -90,11 +90,11 @@ function makeNegativeLabel(color: string) {
   };
 }
 
-const renderRevenueLabel    = makePositiveLabel('#059669');
-const renderDepositLabel    = makePositiveLabel('#0284c7');
-const renderPartnerInLabel  = makePositiveLabel('#6366f1');
-const renderWaiverLabel     = makePositiveLabel('#64748b');
-const renderExpenseLabel    = makeNegativeLabel('#e11d48');
+const renderRevenueLabel = makePositiveLabel('#059669');
+const renderDepositLabel = makePositiveLabel('#0284c7');
+const renderPartnerInLabel = makePositiveLabel('#6366f1');
+const renderWaiverLabel = makePositiveLabel('#64748b');
+const renderExpenseLabel = makeNegativeLabel('#e11d48');
 const renderPartnerOutLabel = makeNegativeLabel('#d97706');
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
@@ -113,12 +113,12 @@ function daysInMonth(year: number, month: number): number {
 /** Build daily chart data (same logic as RevenueChart but inlined) */
 function buildChartData(rows: TableRow[], ym: string) {
   const [yearStr, monthStr] = ym.split('-');
-  const year      = parseInt(yearStr, 10);
-  const month     = parseInt(monthStr, 10);
+  const year = parseInt(yearStr, 10);
+  const month = parseInt(monthStr, 10);
   const totalDays = daysInMonth(year, month);
-  const today     = new Date();
-  const todayISO  = `${today.getFullYear()}-${pad2(today.getMonth()+1)}-${pad2(today.getDate())}`;
-  const isThisMonth = ym === `${today.getFullYear()}-${pad2(today.getMonth()+1)}`;
+  const today = new Date();
+  const todayISO = `${today.getFullYear()}-${pad2(today.getMonth() + 1)}-${pad2(today.getDate())}`;
+  const isThisMonth = ym === `${today.getFullYear()}-${pad2(today.getMonth() + 1)}`;
 
   const revMap: Record<string, number> = {};
   const expMap: Record<string, number> = {};
@@ -129,23 +129,23 @@ function buildChartData(rows: TableRow[], ym: string) {
 
   for (const row of rows) {
     const et = row.entryType || 'revenue';
-    const isRevenue    = et !== 'deposit' && et !== 'expense' && et !== 'waiver' && et !== 'partner_in' && et !== 'partner_out' && row.value > 0;
-    const isExpense    = et === 'expense' && row.value > 0;
-    const isPartnerIn  = et === 'partner_in' && row.value > 0;
+    const isRevenue = et !== 'deposit' && et !== 'expense' && et !== 'waiver' && et !== 'partner_in' && et !== 'partner_out' && row.value > 0;
+    const isExpense = et === 'expense' && row.value > 0;
+    const isPartnerIn = et === 'partner_in' && row.value > 0;
     const isPartnerOut = et === 'partner_out' && row.value > 0;
-    const isDeposit    = et === 'deposit' && row.value > 0;
-    const isWaiver     = et === 'waiver' && row.value > 0;
+    const isDeposit = et === 'deposit' && row.value > 0;
+    const isWaiver = et === 'waiver' && row.value > 0;
     if (!isRevenue && !isExpense && !isPartnerIn && !isPartnerOut && !isDeposit && !isWaiver) continue;
 
     const contributions = rowContributions(row);
     for (const c of contributions) {
       if (!c.date.startsWith(ym + '-')) continue;
-      if (isRevenue)    revMap[c.date]  = round2((revMap[c.date]  ?? 0) + c.value);
-      if (isExpense)    expMap[c.date]  = round2((expMap[c.date]  ?? 0) + c.value);
-      if (isPartnerIn)  pinMap[c.date]  = round2((pinMap[c.date]  ?? 0) + c.value);
+      if (isRevenue) revMap[c.date] = round2((revMap[c.date] ?? 0) + c.value);
+      if (isExpense) expMap[c.date] = round2((expMap[c.date] ?? 0) + c.value);
+      if (isPartnerIn) pinMap[c.date] = round2((pinMap[c.date] ?? 0) + c.value);
       if (isPartnerOut) poutMap[c.date] = round2((poutMap[c.date] ?? 0) + c.value);
-      if (isDeposit)    depMap[c.date]  = round2((depMap[c.date]  ?? 0) + c.value);
-      if (isWaiver)     waiMap[c.date]  = round2((waiMap[c.date]  ?? 0) + c.value);
+      if (isDeposit) depMap[c.date] = round2((depMap[c.date] ?? 0) + c.value);
+      if (isWaiver) waiMap[c.date] = round2((waiMap[c.date] ?? 0) + c.value);
     }
   }
 
@@ -153,16 +153,16 @@ function buildChartData(rows: TableRow[], ym: string) {
   for (let d = 1; d <= totalDays; d++) {
     const dateISO = `${yearStr}-${monthStr}-${pad2(d)}`;
     if (isThisMonth && dateISO > todayISO) break;
-    const revenue    = round2(revMap[dateISO]  ?? 0);
-    const expense    = round2(expMap[dateISO]  ?? 0);
-    const partnerIn  = round2(pinMap[dateISO]  ?? 0);
+    const revenue = round2(revMap[dateISO] ?? 0);
+    const expense = round2(expMap[dateISO] ?? 0);
+    const partnerIn = round2(pinMap[dateISO] ?? 0);
     const partnerOut = round2(poutMap[dateISO] ?? 0);
-    const deposit    = round2(depMap[dateISO]  ?? 0);
-    const waiver     = round2(waiMap[dateISO]  ?? 0);
+    const deposit = round2(depMap[dateISO] ?? 0);
+    const waiver = round2(waiMap[dateISO] ?? 0);
     points.push({
       dateLabel: `${pad2(d)}/${monthStr}`,
       revenue,
-      expenseNeg:    expense !== 0 ? -Math.abs(expense) : 0,
+      expenseNeg: expense !== 0 ? -Math.abs(expense) : 0,
       partnerIn,
       partnerOutNeg: partnerOut !== 0 ? -Math.abs(partnerOut) : 0,
       deposit,
@@ -185,14 +185,14 @@ function computeSurvivalForPdf(
     if (r.entryType !== 'expense' || r.value <= 0) continue;
     total += r.value;
     const start = r.periodStart || r.date;
-    const end   = r.periodEnd   || r.date;
+    const end = r.periodEnd || r.date;
     if (!earliest || start < earliest) earliest = start;
-    if (!latest   || end   > latest)   latest   = end;
+    if (!latest || end > latest) latest = end;
   }
 
   if (total <= 0 || !earliest) return null;
   const msA = new Date(earliest + 'T12:00:00').getTime();
-  const msB = new Date(latest   + 'T12:00:00').getTime();
+  const msB = new Date(latest + 'T12:00:00').getTime();
   const globalDays = Math.max(1, Math.round(Math.abs(msB - msA) / 86_400_000) + 1);
   const daily = globalDays > 0 ? total / globalDays : 0;
   if (daily <= 0) return null;
@@ -206,17 +206,17 @@ function computeSurvivalForPdf(
 function computeProratedExpenses(rows: TableRow[], selectedMonth: string): number {
   const [selY, selM] = selectedMonth.split('-').map(Number);
   const mStart = `${selectedMonth}-01`;
-  const mEnd   = `${selectedMonth}-${pad2(daysInMonth(selY, selM))}`;
+  const mEnd = `${selectedMonth}-${pad2(daysInMonth(selY, selM))}`;
   let total = 0;
 
   for (const r of rows) {
     if (r.entryType !== 'expense' || r.value <= 0) continue;
     const expStart = r.periodStart || r.date;
-    const expEnd   = r.periodEnd   || r.date;
+    const expEnd = r.periodEnd || r.date;
     if (expStart > mEnd || expEnd < mStart) continue;
     const overlapStart = expStart < mStart ? mStart : expStart;
-    const overlapEnd   = expEnd   > mEnd   ? mEnd   : expEnd;
-    const totalDays  = Math.max(1, Math.round(Math.abs(new Date(expEnd + 'T12:00:00').getTime() - new Date(expStart + 'T12:00:00').getTime()) / 86_400_000) + 1);
+    const overlapEnd = expEnd > mEnd ? mEnd : expEnd;
+    const totalDays = Math.max(1, Math.round(Math.abs(new Date(expEnd + 'T12:00:00').getTime() - new Date(expStart + 'T12:00:00').getTime()) / 86_400_000) + 1);
     const activeDays = Math.max(1, Math.round(Math.abs(new Date(overlapEnd + 'T12:00:00').getTime() - new Date(overlapStart + 'T12:00:00').getTime()) / 86_400_000) + 1);
     total += (r.value / totalDays) * activeDays;
   }
@@ -301,18 +301,18 @@ export const PrintableReport = forwardRef<HTMLDivElement, PrintableReportProps>(
 
     // Chart data
     const chartData = buildChartData(rows, selectedMonth);
-    const hasExpenses  = chartData.some(p => p.expenseNeg < 0);
-    const hasPartnerIn  = chartData.some(p => p.partnerIn > 0);
+    const hasExpenses = chartData.some(p => p.expenseNeg < 0);
+    const hasPartnerIn = chartData.some(p => p.partnerIn > 0);
     const hasPartnerOut = chartData.some(p => p.partnerOutNeg < 0);
-    const hasDeposits  = chartData.some(p => p.deposit > 0);
-    const hasWaivers   = chartData.some(p => p.waiver > 0);
+    const hasDeposits = chartData.some(p => p.deposit > 0);
+    const hasWaivers = chartData.some(p => p.waiver > 0);
 
     // Survival goals
     const survival = costBasedTarget ? computeSurvivalForPdf(rows, selectedMonth) : null;
 
     // Prorated expense metrics
     const expenseTotal = computeProratedExpenses(rows, selectedMonth);
-    const expenseDaily  = mDays > 0 ? round2(expenseTotal / mDays) : 0;
+    const expenseDaily = mDays > 0 ? round2(expenseTotal / mDays) : 0;
     const expenseWeekly = round2(expenseDaily * 7);
 
     return (
@@ -696,10 +696,10 @@ export const PrintableReport = forwardRef<HTMLDivElement, PrintableReportProps>(
             </p>
             <div style={{ display: 'flex', flexDirection: 'column' as const, gap: '6px' }}>
               <StepItem step={1} icon="🛒" title="Lançando o Dia a Dia (Custos Variáveis)">
-                Adicione despesas operacionais diárias (ex: combustível ou pedágio sob a categoria 'EH BB' ou 'ALIMENTAÇÃO') com a mesma data de início e de fim para isolar o impacto no mês.
+                Adicione despesas operacionais diárias (ex: combustível ou pedágio sob a categoria 'AH Bradesco' ou 'ALIMENTAÇÃO') com a mesma data de início e de fim para isolar o impacto no mês.
               </StepItem>
               <StepItem step={2} icon="✨" title="A Mágica do Rateio Completo (Custos Fixos)">
-                Insira custos fixos anuais/longo prazo (ex: IPVA ou seguro sob a categoria 'AH ITAU') definindo a data inicial e final no calendário para ativar o rateio diário proporcional.
+                Insira custos fixos anuais/longo prazo (ex: IPVA ou seguro sob a categoria 'AH Bradesco') definindo a data inicial e final no calendário para ativar o rateio diário proporcional.
               </StepItem>
               <StepItem step={3} icon="📊" title="Extraia a Inteligência Máxima">
                 Monitore gráficos de fluxo diário cronológico, audite os números com o feedback local do Analista de IA e exporte este relatório executivo em PDF oficial com um único clique.

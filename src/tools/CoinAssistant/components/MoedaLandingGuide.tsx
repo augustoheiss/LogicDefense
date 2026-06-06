@@ -281,7 +281,7 @@ export function MoedaLandingGuide() {
               step={1}
               icon="🛒"
               title="Passo 1 — Lançando o Dia a Dia (Custos Variáveis)"
-              description="Adicione combustível, pedágio ou almoço com a mesma data de início e fim (ex: sob a categoria 'EH BB' ou 'ALIMENTAÇÃO'). O sistema entende que foi um gasto pontual e isola o impacto no mês corrente."
+              description="Adicione combustível, pedágio ou almoço com a mesma data de início e fim (ex: sob a categoria 'EH Bradesco' ou 'ALIMENTAÇÃO'). O sistema entende que foi um gasto pontual e isola o impacto no mês corrente."
             />
             <StepCard
               step={2}
