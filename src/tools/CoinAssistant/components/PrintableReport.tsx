@@ -229,57 +229,54 @@ function computeProratedExpenses(rows: TableRow[], selectedMonth: string): numbe
 function extractStrategicRecommendations(text: string | undefined): string[] {
   if (!text) return [];
 
-  const normalizedText = text.replace(/\r\n/g, '\n');
-  const lines = normalizedText.split('\n');
-  let startIdx = -1;
+  // 1. Clean up markdown bold tags to avoid regex fragmentation
+  const cleanText = text.replace(/\*\*/g, '');
 
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i].toLowerCase();
-    if (line.includes('recomendaç') || line.includes('estratég')) {
-      if (line.startsWith('#') || line.startsWith('**') || line.includes(':')) {
-        startIdx = i;
-        break;
-      }
+  // 2. High-probability semantic anchors for the final recommendation block
+  const structuralAnchors = [
+    "Recomendações Estratégicas",
+    "Recomendações",
+    "Recomendaçoes",
+    "Sugestões",
+    "Sugestoes",
+    "Ações Sugeridas",
+    "Ações Recomendadas",
+    "Direcionamento",
+    "Próximos Passos"
+  ];
+
+  let markerIndex = -1;
+  let matchedLength = 0;
+
+  // Find the first anchor that appears in the text
+  for (const anchor of structuralAnchors) {
+    const index = cleanText.search(new RegExp(anchor, "i"));
+    if (index !== -1) {
+      markerIndex = index;
+      matchedLength = anchor.length;
+      break; // Lock onto the first matched section header
     }
   }
 
-  const bulletPoints: string[] = [];
+  let relevantContent = "";
 
-  if (startIdx !== -1) {
-    for (let i = startIdx + 1; i < lines.length; i++) {
-      const line = lines[i].trim();
-      if (line.startsWith('#')) break;
-      if (line.startsWith('- ') || line.startsWith('* ') || line.startsWith('• ') || /^\d+\.\s/.test(line)) {
-        const cleanLine = line
-          .replace(/^[-*•]\s+/, '')
-          .replace(/^\d+\.\s+/, '')
-          .replace(/\*\*/g, '')
-          .trim();
-        if (cleanLine) {
-          bulletPoints.push(cleanLine);
-        }
-      }
-    }
+  if (markerIndex !== -1) {
+    // Strategy A: Cut the text from the found header forward
+    relevantContent = cleanText.substring(markerIndex + matchedLength);
+  } else {
+    // Strategy B (Fallback): If no headers match, take the last 40% of the entire text 
+    // since recommendations naturally live at the bottom of the analyst report.
+    relevantContent = cleanText.substring(Math.floor(cleanText.length * 0.6));
   }
 
-  if (bulletPoints.length < 2) {
-    bulletPoints.length = 0;
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (trimmed.startsWith('- ') || trimmed.startsWith('* ') || trimmed.startsWith('• ') || /^\d+\.\s/.test(trimmed)) {
-        const cleanLine = trimmed
-          .replace(/^[-*•]\s+/, '')
-          .replace(/^\d+\.\s+/, '')
-          .replace(/\*\*/g, '')
-          .trim();
-        if (cleanLine && cleanLine.length > 15) {
-          bulletPoints.push(cleanLine);
-        }
-      }
-    }
-  }
+  // 3. Split into lines, clean up bullet/numbering prefixes, and filter core action blocks
+  const lines = relevantContent
+    .split('\n')
+    .map(line => line.replace(/^[•\-\*\s\d\.]+\s*/, '').trim()) // Clear bullet trash
+    .filter(line => line.length > 45 && (line.includes(':') || line.endsWith('.'))); // Keep structural bullet-like items
 
-  return bulletPoints.slice(0, 4);
+  // 4. Cap at 4 items max to fit seamlessly into the A4 PDF bounding box
+  return lines.slice(0, 4);
 }
 
 interface PrintableReportProps {
