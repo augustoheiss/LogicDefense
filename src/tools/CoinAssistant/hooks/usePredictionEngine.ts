@@ -246,6 +246,8 @@ interface CategoryStats {
   avgPeriodSpanMonths: number;
   /** Average monthlyValue from source rows (for prorated categories). */
   avgMonthlyValue: number;
+  /** Average totalValue from source rows (for prorated categories). */
+  avgTotalValue?: number;
 }
 
 /**
@@ -325,12 +327,15 @@ export function generateStatisticalData(
     // 2 occurrences in 3 months → 0.67/month → round to 1
     const trueMonthlyFrequency = Math.max(1, Math.round(g.count / globalSourceMonthCount));
 
-    // DILUTED prorated monthlyValue: total monthlyValue sum / GLOBAL month count
-    // Insurance with monthlyValue=R$500 appearing once in a 3-month source
-    // → trueAvgMonthlyValue = R$500/3 ≈ R$166.67 (not R$500!)
+    // For prorated categories (fixed/recurring items), do NOT divide by globalSourceMonthCount.
+    // Calculate average monthlyValue and totalValue across the prorated rows directly.
     const trueAvgMonthlyValue = isProrated
-      ? Math.round((g.totalMonthlyValue / globalSourceMonthCount) * 100) / 100
+      ? Math.round((g.totalMonthlyValue / g.proratedCount) * 100) / 100
       : 0;
+
+    const avgTotalValue = isProrated
+      ? Math.round((g.totalValue / g.proratedCount) * 100) / 100
+      : undefined;
 
     return {
       description: g.desc,
@@ -342,6 +347,7 @@ export function generateStatisticalData(
         ? Math.max(1, Math.round(g.totalPeriodSpanMonths / g.proratedCount))
         : 1,
       avgMonthlyValue: trueAvgMonthlyValue,
+      avgTotalValue,
     };
   });
 
@@ -381,7 +387,8 @@ export function generateStatisticalData(
         const periodEndMaxDay = daysInMonth(periodEndYM);
         const monthCount = cat.avgPeriodSpanMonths;
         const monthlyValue = cat.avgMonthlyValue;
-        const totalValue = Math.round(monthlyValue * monthCount * 100) / 100;
+        // Map totalValue directly from cat.avgTotalValue to preserve integrity for fixed/recurring items
+        const totalValue = cat.avgTotalValue ?? 0;
 
         if (totalValue <= 0) continue;
 
