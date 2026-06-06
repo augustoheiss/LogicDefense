@@ -6,6 +6,8 @@
  * uses the same dark-theme design language as the rest of the app.
  */
 
+import React from 'react';
+
 // ── Section wrapper ──────────────────────────────────────────────────────────
 
 function Section({
@@ -110,43 +112,53 @@ export function MoedaLandingGuide() {
   return (
     <div className="mt-16 border-t border-white/5">
       {/* ────────────────────────────────────────────────────────────────────
-           SECTION 1 — HERO
+           SECTION 1 — HERO (Above the Fold)
            ──────────────────────────────────────────────────────────────────── */}
       <Section>
         <div className="text-center space-y-6">
           {/* Decorative badge */}
           <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#a855f7]/10 border border-[#a855f7]/20 text-[#a855f7] text-xs font-semibold tracking-wide">
-            💰 Assistente Moeda — Guia Prático
+            💰 Assistente-Moeda — Inteligência Local & IA
           </span>
 
           <h2 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold text-white leading-tight tracking-tight">
             Assuma o Volante do seu{' '}
             <span className="bg-gradient-to-r from-[#a855f7] to-cyan-400 bg-clip-text text-transparent">
-              Fluxo de Caixa
-            </span>
-            .
+              Fluxo de Caixa Real
+            </span>{' '}
+            e Pare de Dirigir de Olhos Vendados.
           </h2>
 
-          <p className="text-base sm:text-lg text-white/40 max-w-2xl mx-auto leading-relaxed">
-            O Assistente Moeda não é apenas uma planilha — é um{' '}
-            <span className="text-white/70 font-medium">motor de inteligência financeira</span>.
-            Descubra a sua Meta Diária de Sobrevivência real e pare de ser surpreendido
-            por contas anuais invisíveis.
+          <p className="text-base sm:text-lg text-white/45 max-w-2xl mx-auto leading-relaxed">
+            O Assistente-Moeda não é uma planilha comum. É um{' '}
+            <span className="text-white font-medium">motor de inteligência financeira local com IA</span> que
+            fatia seus custos invisíveis por dia e calcula seu lucro líquido real, integrando juros compostos
+            automatizados e relatórios de auditoria.
           </p>
 
-          {/* Feature pills */}
-          <div className="flex flex-wrap justify-center gap-3 pt-2">
+          {/* Quick benefits (3 points) */}
+          <div className="grid sm:grid-cols-3 gap-3 pt-4 max-w-2xl mx-auto">
             {[
-              { icon: '⚙️', text: 'Rateio Automático de Custos Fixos (Regime de Competência)' },
-              { icon: '📊', text: 'Separação inteligente de despesas do dia a dia' },
-              { icon: '🎯', text: 'Metas Dinâmicas que se ajustam ao tamanho do mês' },
-            ].map((pill) => (
-              <span
-                key={pill.text}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-white/5 border border-white/8 text-xs text-white/50"
+              {
+                title: '✦ Meta Diária de Sobrevivência Dinâmica',
+                desc: 'Saiba os primeiros Reais do dia que já estão comprometidos antes de ligar o motor.',
+              },
+              {
+                title: '✦ Rendimento de Portfólio Integrado',
+                desc: 'Loop cronológico de juros compostos a 0.8%/mês CDI direto nos aportes salvos.',
+              },
+              {
+                title: '✦ Soberania Absoluta dos Dados',
+                desc: 'Processamento local criptografado. Nada sai do seu dispositivo.',
+              },
+            ].map((b) => (
+              <div
+                key={b.title}
+                className="rounded-xl border border-white/5 bg-white/[0.02] p-4 text-left space-y-1"
               >
-                <span>{pill.icon}</span> {pill.text}
-              </span>
+                <div className="text-xs font-bold text-white">{b.title}</div>
+                <div className="text-[11px] text-white/40 leading-relaxed">{b.desc}</div>
+              </div>
             ))}
           </div>
 
@@ -156,23 +168,23 @@ export function MoedaLandingGuide() {
               onClick={scrollToTop}
               className="px-8 py-3 rounded-xl bg-gradient-to-r from-[#a855f7] to-[#7c3aed] hover:from-[#9333ea] hover:to-[#6d28d9] text-white font-bold text-sm shadow-lg shadow-[#a855f7]/20 hover:shadow-[#a855f7]/30 transition-all duration-300 active:scale-[0.97]"
             >
-              ↑ Começar a Lançar Gastos
+              ↑ Começar a Usar
             </button>
           </div>
         </div>
       </Section>
 
       {/* ────────────────────────────────────────────────────────────────────
-           SECTION 2 — THE "BEFORE" (Pain)
+           SECTION 2 — THE "BEFORE" (Pain / O Antes)
            ──────────────────────────────────────────────────────────────────── */}
       <Section className="border-t border-white/5">
         <div className="space-y-8">
           <div className="text-center space-y-3">
             <span className="text-xs font-semibold text-red-400/60 uppercase tracking-widest">
-              O Problema
+              O Antes
             </span>
             <h3 className="text-2xl sm:text-3xl font-extrabold text-white">
-              A Ilusão do Lucro e o Pesadelo das Contas Anuais
+              A Ilusão do Lucro e o Pesadelo das Contas Anuais Invisíveis
             </h3>
           </div>
 
@@ -180,12 +192,12 @@ export function MoedaLandingGuide() {
             <PainCard
               icon="💸"
               title="A Falsa Sensação de Riqueza"
-              description="Você faz um bom dinheiro na semana, mas esquece que o IPVA e o Seguro estão correndo em silêncio. Quando a conta chega, o lucro desaparece."
+              description="Você faz um faturamento bruto excelente na semana, mas esquece que o IPVA, o seguro, a depreciação e a manutenção estão correndo em silêncio debaixo dos seus pés. Quando a conta chega no final do ano, o seu lucro simplesmente desaparece."
             />
             <PainCard
               icon="📉"
-              title="Planilhas Que Mentem"
-              description="Lançar um gasto de R$ 3.000 em Janeiro faz aquele mês parecer um desastre, e os outros meses parecerem lucrativos demais."
+              title="Planilhas Tradicionais que Mentem"
+              description="Lançar um gasto de R$ 3.000 em Janeiro faz aquele mês parecer um desastre completo, e os meses seguintes parecerem falsamente lucrativos. Sem diluir os custos fixos no tempo por regime de competência, você está operando no escuro."
             />
           </div>
 
@@ -195,13 +207,12 @@ export function MoedaLandingGuide() {
               <span className="text-2xl shrink-0">🪞</span>
               <div className="space-y-2">
                 <h4 className="text-sm font-bold text-amber-400">
-                  A Verdade Inconveniente
+                  Desconstrução de Crença
                 </h4>
                 <p className="text-sm text-white/45 leading-relaxed">
-                  Muitos motoristas e autônomos acreditam que basta anotar o que entra e o que
-                  sai no dia. A verdade é que{' '}
+                  Muitos motoristas e profissionais independentes acreditam que basta anotar o que entra e sai no dia para ter controle. A verdade inconveniente é que{' '}
                   <span className="text-white/70 font-medium">
-                    sem diluir os custos de longo prazo, você está dirigindo de olhos vendados
+                    sem ratear os custos de longo prazo proporcionalmente pelo calendário, você está gastando capital de giro achando que é lucro
                   </span>
                   .
                 </p>
@@ -212,49 +223,56 @@ export function MoedaLandingGuide() {
       </Section>
 
       {/* ────────────────────────────────────────────────────────────────────
-           SECTION 3 — THE "AFTER" (Desired Outcome)
+           SECTION 3 — THE "AFTER" (Desired Outcome / O Depois)
            ──────────────────────────────────────────────────────────────────── */}
       <Section className="border-t border-white/5">
         <div className="space-y-8">
           <div className="text-center space-y-3">
             <span className="text-xs font-semibold text-emerald-400/60 uppercase tracking-widest">
-              O Resultado
+              O Depois
             </span>
             <h3 className="text-2xl sm:text-3xl font-extrabold text-white">
-              A Clareza da{' '}
-              <span className="text-emerald-400">&ldquo;Meta de Sobrevivência&rdquo;</span>
+              Imagine marchar sabendo exatamente onde pisar
             </h3>
           </div>
 
+          {/* Dobra de Resultado */}
+          <div className="rounded-xl border border-emerald-500/10 bg-emerald-500/[0.02] p-6 text-center space-y-2 max-w-2xl mx-auto">
+            <p className="text-base text-white/80 leading-relaxed font-semibold">
+              "Ligue o seu carro ou abra o seu negócio sabendo que os primeiros R$ 108,00 do dia já estão automaticamente quitados e guardados para as suas contas anuais rateadas. O que passar dessa linha, é lucro real e líquido no seu bolso."
+            </p>
+          </div>
+
+          {/* Visual de Sucesso */}
           <div className="grid sm:grid-cols-2 gap-4">
             <OutcomeCard
               icon="🧮"
-              title="Saber Exatamente o Seu Custo Diário"
-              description="Imagine ligar o carro sabendo que os primeiros R$ 108,00 do dia já estão comprometidos com o custo rateado do seu ano. O que passar disso, é lucro real."
+              title="Meta de Sobrevivência Coberta"
+              description="Controle operacional limpo. Visualize de antemão qual é o faturamento exato diário para garantir o pagamento de IPVA, Manutenção e Seguro sem sobressaltos."
             />
             <OutcomeCard
               icon="📅"
-              title="Previsibilidade Absoluta"
-              description="Mês de 28 dias ou 31 dias? O painel ajusta a sua meta de sobrevivência automaticamente para a realidade do calendário."
+              title="Previsibilidade Absoluta Calendário"
+              description="Previsibilidade absoluta ajustada dinamicamente para meses de 28 ou 31 dias, garantindo que o seu custo real seja diluído sem distorções temporais."
             />
           </div>
         </div>
       </Section>
 
       {/* ────────────────────────────────────────────────────────────────────
-           SECTION 4 — THE BRIDGE / HOW IT WORKS
+           SECTION 4 — THE BRIDGE / HOW IT WORKS (A Ponte)
            ──────────────────────────────────────────────────────────────────── */}
       <Section className="border-t border-white/5">
         <div className="space-y-8">
           <div className="text-center space-y-3">
             <span className="text-xs font-semibold text-[#a855f7]/60 uppercase tracking-widest">
-              Guia Prático
+              A Ponte
             </span>
             <h3 className="text-2xl sm:text-3xl font-extrabold text-white">
-              Como Operar o Assistente Moeda
+              Como Operar o Assistente-Moeda: 3 Passos Simples
             </h3>
             <p className="text-sm text-white/35 max-w-xl mx-auto">
-              3 passos simples para transformar caos financeiro em clareza absoluta.
+              Siga este guia prático para alcançar previsibilidade absoluta sobre seus números.
             </p>
           </div>
 
@@ -262,20 +280,20 @@ export function MoedaLandingGuide() {
             <StepCard
               step={1}
               icon="🛒"
-              title="Lançando Custos Variáveis (O Dia a Dia)"
-              description="Adicione combustível, almoço ou pedágio. Coloque a mesma data no Início e no Fim. O sistema entende que foi um gasto pontual que sangrou o caixa naquele mês."
+              title="Passo 1 — Lançando o Dia a Dia (Custos Variáveis)"
+              description="Adicione combustível, pedágio ou almoço com a mesma data de início e fim (ex: sob a categoria 'EH BB' ou 'ALIMENTAÇÃO'). O sistema entende que foi um gasto pontual e isola o impacto no mês corrente."
             />
             <StepCard
               step={2}
               icon="✨"
-              title="Lançando Custos Fixos (A Mágica do Rateio)"
-              description="Adicionou o IPVA ou o Seguro? Defina a Data Inicial (ex: 01/Jan) e a Data Final (ex: 31/Dez). O motor do Assistente vai fatiar esse valor gigante e cobrar apenas a parcela justa de cada dia trabalhado."
+              title="Passo 2 — A Mágica do Rateio Completo (Custos Fixos)"
+              description="Lançou o IPVA ou o Seguro Anual (ex: sob a categoria 'AH ITAU')? Defina a Data Inicial e Final (ex: 01/Jan a 31/Dez). O motor fatiará o montante e cobrará apenas a fração justa para cada dia do calendário."
             />
             <StepCard
               step={3}
               icon="📊"
-              title="Acompanhe as Métricas"
-              description="Deixe o sistema calcular a sua 'Meta Diária Global'. Exporte para o WhatsApp e tenha o relatório perfeito na palma da mão."
+              title="Passo 3 — Extraia a Inteligência Máxima"
+              description="Acompanhe os gráficos de fluxo diário cronológico, acione o Analista de IA para receber auditorias e exporte o Relatório Executivo em PDF oficial com um clique."
             />
           </div>
 
@@ -285,10 +303,10 @@ export function MoedaLandingGuide() {
               onClick={scrollToTop}
               className="px-8 py-3 rounded-xl bg-gradient-to-r from-[#a855f7] to-[#7c3aed] hover:from-[#9333ea] hover:to-[#6d28d9] text-white font-bold text-sm shadow-lg shadow-[#a855f7]/20 hover:shadow-[#a855f7]/30 transition-all duration-300 active:scale-[0.97]"
             >
-              ↑ Voltar ao Painel e Começar
+              ↑ Ir para o Painel Operacional
             </button>
             <p className="text-xs text-white/20 mt-3">
-              Todos os dados são salvos localmente no seu navegador. Nada sai do seu dispositivo.
+              Todos os dados são salvos localmente no seu navegador. Processamento local criptografado.
             </p>
           </div>
         </div>

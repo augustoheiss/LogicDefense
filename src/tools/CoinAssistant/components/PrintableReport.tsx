@@ -639,51 +639,65 @@ export const PrintableReport = forwardRef<HTMLDivElement, PrintableReportProps>(
             </div>
           </div>
 
-          {/* Section: O Problema */}
+          {/* Section: O Antes */}
           <div style={{ marginBottom: '24px', breakInside: 'avoid' as const }}>
-            <div style={{ fontSize: '10px', fontWeight: 700, color: '#dc2626', letterSpacing: '1.5px', textTransform: 'uppercase' as const, marginBottom: '4px' }}>O Problema</div>
-            <h3 style={{ fontSize: '16px', fontWeight: 800, color: '#1a1a2e', margin: '0 0 10px' }}>A Ilusão do Lucro e o Pesadelo das Contas Anuais</h3>
+            <div style={{ fontSize: '10px', fontWeight: 700, color: '#dc2626', letterSpacing: '1.5px', textTransform: 'uppercase' as const, marginBottom: '4px' }}>
+              ✦ O ANTES: A Ilusão do Lucro e o Pesadelo das Contas Anuais
+            </div>
+            <h3 style={{ fontSize: '16px', fontWeight: 800, color: '#1a1a2e', margin: '0 0 10px' }}>
+              Como os Custos Invisíveis Sabotam seu Negócio
+            </h3>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '10px' }}>
               <PdfCard icon="💸" title="A Falsa Sensação de Riqueza" borderColor="#fecaca" bgColor="#fff5f5">
-                Você faz um bom dinheiro na semana, mas esquece que o IPVA e o Seguro estão correndo em silêncio. Quando a conta chega, o lucro desaparece.
+                Você faz um faturamento excelente na semana, mas esquece que o IPVA, o seguro, a depreciação e a manutenção estão correndo em silêncio debaixo dos seus pés. No fim das contas, o lucro real desaparece.
               </PdfCard>
-              <PdfCard icon="📉" title="Planilhas Que Mentem" borderColor="#fecaca" bgColor="#fff5f5">
-                Lançar um gasto de R$ 3.000 em Janeiro faz aquele mês parecer um desastre, e os outros meses parecerem lucrativos demais.
+              <PdfCard icon="📉" title="Planilhas Tradicionais que Mentem" borderColor="#fecaca" bgColor="#fff5f5">
+                Lançar um gasto de R$ 3.000 em Janeiro faz aquele mês parecer um desastre completo, e os meses seguintes falsamente lucrativos. Sem diluir custos fixos no tempo, você opera no escuro.
               </PdfCard>
             </div>
-            <PdfCard icon="🪞" title="A Verdade Inconveniente" borderColor="#fde68a" bgColor="#fffbeb">
-              Muitos motoristas e autônomos acreditam que basta anotar o que entra e o que sai no dia. A verdade é que sem diluir os custos de longo prazo, você está dirigindo de olhos vendados.
+            <PdfCard icon="🪞" title="A Necessidade Absoluta do Rateio Diário" borderColor="#fde68a" bgColor="#fffbeb">
+              Anotar o fluxo de caixa diário sem ratear custos de longo prazo proporcionalmente pelo calendário cria uma ilusão de lucro. É essencial diluir despesas fixas por regime de competência para proteger seu capital de giro.
             </PdfCard>
           </div>
 
-          {/* Section: O Resultado */}
+          {/* Section: O Depois */}
           <div style={{ marginBottom: '24px', breakInside: 'avoid' as const }}>
-            <div style={{ fontSize: '10px', fontWeight: 700, color: '#059669', letterSpacing: '1.5px', textTransform: 'uppercase' as const, marginBottom: '4px' }}>O Resultado</div>
-            <h3 style={{ fontSize: '16px', fontWeight: 800, color: '#1a1a2e', margin: '0 0 10px' }}>A Clareza da "Meta de Sobrevivência"</h3>
+            <div style={{ fontSize: '10px', fontWeight: 700, color: '#059669', letterSpacing: '1.5px', textTransform: 'uppercase' as const, marginBottom: '4px' }}>
+              ✦ O DEPOIS: A Clareza de Marchar Sabendo Onde Pisar
+            </div>
+            <h3 style={{ fontSize: '16px', fontWeight: 800, color: '#1a1a2e', margin: '0 0 10px' }}>
+              Previsibilidade Operacional e Lucro Líquido Real
+            </h3>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-              <PdfCard icon="🧮" title="Saber Exatamente o Seu Custo Diário" borderColor="#a7f3d0" bgColor="#f0fdf4">
-                Imagine ligar o carro sabendo que os primeiros R$ 108,00 do dia já estão comprometidos com o custo rateado do seu ano. O que passar disso, é lucro real.
+              <PdfCard icon="🧮" title="Os Primeiros R$ 108,00 Quitados" borderColor="#a7f3d0" bgColor="#f0fdf4">
+                Imagine ligar o carro ou abrir o negócio sabendo que o custo fixo rateado diário já está guardado. Tudo o que ultrapassar essa linha é lucro líquido real no seu bolso.
               </PdfCard>
-              <PdfCard icon="📅" title="Previsibilidade Absoluta" borderColor="#a7f3d0" bgColor="#f0fdf4">
-                Mês de 28 dias ou 31 dias? O painel ajusta a sua meta de sobrevivência automaticamente para a realidade do calendário.
+              <PdfCard icon="📅" title="Previsibilidade no Calendário" borderColor="#a7f3d0" bgColor="#f0fdf4">
+                O motor do Assistente ajusta a meta de sobrevivência automaticamente para meses de 28 ou 31 dias, garantindo clareza total sob qualquer cenário ou mês trabalhado.
               </PdfCard>
             </div>
           </div>
 
           {/* Section: Guia Prático */}
           <div style={{ marginBottom: '24px', breakInside: 'avoid' as const }}>
-            <div style={{ fontSize: '10px', fontWeight: 700, color: '#7c3aed', letterSpacing: '1.5px', textTransform: 'uppercase' as const, marginBottom: '4px' }}>Guia Prático</div>
-            <h3 style={{ fontSize: '16px', fontWeight: 800, color: '#1a1a2e', margin: '0 0 4px' }}>Como Operar o Assistente Moeda</h3>
-            <p style={{ fontSize: '11px', color: '#9ca3af', margin: '0 0 12px' }}>3 passos simples para transformar caos financeiro em clareza absoluta.</p>
+            <div style={{ fontSize: '10px', fontWeight: 700, color: '#7c3aed', letterSpacing: '1.5px', textTransform: 'uppercase' as const, marginBottom: '4px' }}>
+              ✦ COMO OPERAR O ASSISTENTE-MOEDA
+            </div>
+            <h3 style={{ fontSize: '16px', fontWeight: 800, color: '#1a1a2e', margin: '0 0 4px' }}>
+              3 Passos Simples para a Clareza Financeira
+            </h3>
+            <p style={{ fontSize: '11px', color: '#9ca3af', margin: '0 0 12px' }}>
+              Siga os passos operacionais abaixo para extrair a inteligência máxima dos seus lançamentos.
+            </p>
             <div style={{ display: 'flex', flexDirection: 'column' as const, gap: '10px' }}>
-              <StepItem step={1} icon="🛒" title="Lançando Custos Variáveis (O Dia a Dia)">
-                Adicione combustível, almoço ou pedágio. Coloque a mesma data no Início e no Fim. O sistema entende que foi um gasto pontual que sangrou o caixa naquele mês.
+              <StepItem step={1} icon="🛒" title="Lançando o Dia a Dia (Custos Variáveis)">
+                Adicione despesas operacionais diárias (ex: combustível ou pedágio sob a categoria 'EH BB' ou 'ALIMENTAÇÃO') com a mesma data de início e de fim para isolar o impacto no mês.
               </StepItem>
-              <StepItem step={2} icon="✨" title="Lançando Custos Fixos (A Mágica do Rateio)">
-                Adicionou o IPVA ou o Seguro? Defina a Data Inicial (ex: 01/Jan) e a Data Final (ex: 31/Dez). O motor do Assistente vai fatiar esse valor gigante e cobrar apenas a parcela justa de cada dia trabalhado.
+              <StepItem step={2} icon="✨" title="A Mágica do Rateio Completo (Custos Fixos)">
+                Insira custos fixos anuais/longo prazo (ex: IPVA ou seguro sob a categoria 'AH ITAU') definindo a data inicial e final no calendário para ativar o rateio diário proporcional.
               </StepItem>
-              <StepItem step={3} icon="📊" title="Acompanhe as Métricas">
-                Deixe o sistema calcular a sua 'Meta Diária Global'. Exporte para o WhatsApp e tenha o relatório perfeito na palma da mão.
+              <StepItem step={3} icon="📊" title="Extraia a Inteligência Máxima">
+                Monitore gráficos de fluxo diário cronológico, audite os números com o feedback local do Analista de IA e exporte este relatório executivo em PDF oficial com um único clique.
               </StepItem>
             </div>
           </div>
