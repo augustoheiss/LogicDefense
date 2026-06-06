@@ -79,6 +79,8 @@ export function AIAnalystChat({ table, cutoffDate, totalWaiverCredits, onAnalysi
   const [isExpanded, setIsExpanded] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
+  const shouldShowCoffeeCard = messages.some((msg) => msg.role === 'assistant') || !!error;
+
   // Auto-resize textarea
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setInput(e.target.value);
@@ -138,6 +140,13 @@ export function AIAnalystChat({ table, cutoffDate, totalWaiverCredits, onAnalysi
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Erro desconhecido';
       setError(errorMsg);
+      const failedMessage: ChatMessage = {
+        id: crypto.randomUUID(),
+        role: 'assistant',
+        content: `⚠️ **Erro de Processamento / Cota Excedida**\n\nOpa, mermão! Parece que o nosso motor de IA esgotou os créditos de processamento em nuvem para esta sessão. As análises detalhadas têm um custo de infraestrutura ativo e contínuo. Apoie o projeto para manter o motor ativo!`,
+        timestamp: new Date(),
+      };
+      setMessages((prev) => [...prev, failedMessage]);
     } finally {
       setIsLoading(false);
     }
@@ -285,7 +294,7 @@ export function AIAnalystChat({ table, cutoffDate, totalWaiverCredits, onAnalysi
             )}
 
             {/* Support micro-card */}
-            {messages.some((msg) => msg.role === 'assistant') && (
+            {shouldShowCoffeeCard && (
               <div className="mt-3 p-3 rounded-lg border border-white/10 bg-white/5 backdrop-blur-sm hover:bg-white/10 hover:border-white/20 transition-all duration-300">
                 <div className="flex gap-2.5">
                   <span className="text-base shrink-0 select-none">☕</span>
