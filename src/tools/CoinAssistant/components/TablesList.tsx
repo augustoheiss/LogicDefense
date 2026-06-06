@@ -9,6 +9,7 @@ interface TablesListProps {
   onExport: (table: CoinTable) => void;
   onEdit: (table: CoinTable) => void;
   onDelete: (id: string) => void;
+  onMoveTable: (id: string, direction: 'up' | 'down') => void;
 }
 
 function formatDate(iso: string): string {
@@ -28,6 +29,7 @@ export function TablesList({
   onExport,
   onEdit,
   onDelete,
+  onMoveTable,
 }: TablesListProps) {
   return (
     <aside className="flex flex-col gap-2 h-full">
@@ -68,7 +70,7 @@ export function TablesList({
 
       {/* ── List ── */}
       <div className="flex flex-col gap-1 overflow-y-auto flex-1">
-        {tables.map((table) => {
+        {tables.map((table, index) => {
           const isActive = table.id === activeTableId;
           return (
             <div
@@ -94,14 +96,58 @@ export function TablesList({
                 )}
                 <p className="text-xs text-white/20 mt-1">{formatDate(table.updatedAt)}</p>
 
-                {/* ── Action buttons (bottom-right aligned) ── */}
-                <div className="flex justify-end gap-1.5 mt-2 pt-1.5 border-t border-white/5">
+                {/* ── Action buttons ── */}
+                <div className="flex items-center gap-1.5 mt-2 pt-1.5 border-t border-white/5">
+                  {/* Reorder Up */}
+                  <button
+                    disabled={index === 0}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onMoveTable(table.id, 'up');
+                    }}
+                    className={`p-1.5 rounded-md transition-colors ${
+                      index === 0
+                        ? 'text-white/10 cursor-not-allowed opacity-20'
+                        : 'text-white/30 hover:text-purple-400 hover:bg-purple-500/15 cursor-pointer'
+                    }`}
+                    title={index === 0 ? undefined : "Mover para cima"}
+                    aria-label="Mover para cima"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="m18 15-6-6-6 6"/>
+                    </svg>
+                  </button>
+
+                  {/* Reorder Down */}
+                  <button
+                    disabled={index === tables.length - 1}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onMoveTable(table.id, 'down');
+                    }}
+                    className={`p-1.5 rounded-md transition-colors ${
+                      index === tables.length - 1
+                        ? 'text-white/10 cursor-not-allowed opacity-20'
+                        : 'text-white/30 hover:text-purple-400 hover:bg-purple-500/15 cursor-pointer'
+                    }`}
+                    title={index === tables.length - 1 ? undefined : "Mover para baixo"}
+                    aria-label="Mover para baixo"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="m6 9 6 6 6-6"/>
+                    </svg>
+                  </button>
+
+                  {/* Separator spacer to separate reordering from operations */}
+                  <span className="flex-1" />
+
+                  {/* Edit */}
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
                       onEdit(table);
                     }}
-                    className="p-1.5 rounded-md text-white/30 hover:text-white hover:bg-white/10 transition-colors"
+                    className="p-1.5 rounded-md text-white/30 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
                     title="Editar tabela"
                     aria-label="Editar tabela"
                   >
@@ -110,12 +156,13 @@ export function TablesList({
                       <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
                     </svg>
                   </button>
+                  {/* Export */}
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
                       onExport(table);
                     }}
-                    className="p-1.5 rounded-md text-white/30 hover:text-sky-400 hover:bg-sky-400/10 transition-colors"
+                    className="p-1.5 rounded-md text-white/30 hover:text-sky-400 hover:bg-sky-400/10 transition-colors cursor-pointer"
                     title="Exportar como CSV"
                     aria-label="Exportar tabela"
                   >
@@ -125,6 +172,7 @@ export function TablesList({
                       <line x1="12" y1="15" x2="12" y2="3" />
                     </svg>
                   </button>
+                  {/* Delete */}
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
@@ -132,7 +180,7 @@ export function TablesList({
                         onDelete(table.id);
                       }
                     }}
-                    className="p-1.5 rounded-md text-red-400/40 hover:text-red-400 hover:bg-red-500/15 transition-colors"
+                    className="p-1.5 rounded-md text-red-400/40 hover:text-red-400 hover:bg-red-500/15 transition-colors cursor-pointer"
                     title="Excluir tabela"
                     aria-label="Excluir tabela"
                   >

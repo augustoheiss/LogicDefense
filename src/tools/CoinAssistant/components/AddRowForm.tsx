@@ -1,8 +1,11 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import type { TableRow } from '../types';
+import { useAutocomplete } from '../hooks/useAutocomplete';
 
 interface AddRowFormProps {
   onAdd: (row: Omit<TableRow, 'id'>) => void;
+  /** All rows in the current table — used to build the autocomplete index. */
+  rows: TableRow[];
 }
 
 type EntryType = 'revenue' | 'deposit' | 'waiver' | 'expense' | 'partner_in' | 'partner_out';
@@ -96,7 +99,7 @@ const TYPE_CONFIG: Record<
   },
 };
 
-export function AddRowForm({ onAdd }: AddRowFormProps) {
+export function AddRowForm({ onAdd, rows }: AddRowFormProps) {
   const [entryType,   setEntryType]   = useState<EntryType>('revenue');
   const [date,        setDate]        = useState(todayISO());
   const [value,       setValue]       = useState('');
@@ -107,6 +110,70 @@ export function AddRowForm({ onAdd }: AddRowFormProps) {
   const [periodStart, setPeriodStart] = useState(todayISO());
   const [periodEnd,   setPeriodEnd]   = useState(todayISO());
 
+  // ── Autocomplete ────────────────────────────────────────────────────────────
+  const { getSuggestions } = useAutocomplete(rows);
+  const [suggestions,     setSuggestions]     = useState<ReturnType<typeof getSuggestions>>([]);
+  const [showSuggestions,  setShowSuggestions] = useState(false);
+  const [highlightedIndex, setHighlightedIndex] = useState(-1);
+  const suggestionsRef = useRef<HTMLDivElement>(null);
+  const descInputRef   = useRef<HTMLInputElement>(null);
+
+  // Close suggestions on click outside
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (
+        suggestionsRef.current &&
+        !suggestionsRef.current.contains(e.target as Node) &&
+        descInputRef.current &&
+        !descInputRef.current.contains(e.target as Node)
+      ) {
+        setShowSuggestions(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  function handleDescriptionChange(val: string) {
+    setDescription(val);
+    if (val.trim().length >= 1) {
+      const results = getSuggestions(val);
+      setSuggestions(results);
+      setShowSuggestions(results.length > 0);
+      setHighlightedIndex(-1);
+    } else {
+      setSuggestions([]);
+      setShowSuggestions(false);
+    }
+  }
+
+  function handleSuggestionSelect(suggestion: (typeof suggestions)[0]) {
+    setDescription(suggestion.description);
+    // Auto-switch entry type (ruling #4: auto-switch but allow manual override)
+    setEntryType(suggestion.entryType);
+    setShowSuggestions(false);
+    setSuggestions([]);
+    setHighlightedIndex(-1);
+    // Re-focus the value input for fast data entry
+    // (description is filled, next step is entering the value)
+  }
+
+  function handleDescriptionKeyDown(e: React.KeyboardEvent) {
+    if (!showSuggestions || suggestions.length === 0) return;
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setHighlightedIndex((prev) => Math.min(prev + 1, suggestions.length - 1));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setHighlightedIndex((prev) => Math.max(prev - 1, 0));
+    } else if (e.key === 'Enter' && highlightedIndex >= 0) {
+      e.preventDefault();
+      handleSuggestionSelect(suggestions[highlightedIndex]);
+    } else if (e.key === 'Escape') {
+      setShowSuggestions(false);
+    }
+  }
 
   const cfg = TYPE_CONFIG[entryType];
   // Helpers for period preview
@@ -323,18 +390,68 @@ export function AddRowForm({ onAdd }: AddRowFormProps) {
           </div>
         )}
 
-        <div className="flex flex-col gap-1 flex-1 min-w-36">
+        <div className="flex flex-col gap-1 flex-1 min-w-36 relative">
           <label className="text-xs text-white/40 uppercase tracking-wider">
             {entryType === 'waiver' ? 'Motivo *' : entryType === 'expense' ? 'Descrição *' : 'Descrição'}
           </label>
           <input
+            ref={descInputRef}
             type="text"
             placeholder={cfg.descPlaceholder}
             value={description}
-            onChange={(e) => setDescription(e.target.value)}
+            onChange={(e) => handleDescriptionChange(e.target.value)}
+            onFocus={() => {
+              if (description.trim().length >= 1) {
+                const results = getSuggestions(description);
+                setSuggestions(results);
+                setShowSuggestions(results.length > 0);
+              }
+            }}
+            onKeyDown={handleDescriptionKeyDown}
             required={entryType === 'waiver' || entryType === 'expense'}
             className={`bg-white/10 text-white text-sm rounded px-3 py-2 outline-none border border-white/10 w-full ${cfg.ring}`}
+            autoComplete="off"
           />
+
+          {/* ── Autocomplete dropdown ── */}
+          {showSuggestions && suggestions.length > 0 && (
+            <div
+              ref={suggestionsRef}
+              className="absolute top-full left-0 right-0 mt-1 z-50 bg-[#0d1117] border border-white/15 rounded-lg shadow-2xl overflow-hidden backdrop-blur-xl"
+            >
+              {suggestions.map((s, i) => {
+                const isHighlighted = i === highlightedIndex;
+                const typeIcon = TYPE_CONFIG[s.entryType]?.icon ?? '📥';
+                return (
+                  <button
+                    key={s.description}
+                    type="button"
+                    onClick={() => handleSuggestionSelect(s)}
+                    onMouseEnter={() => setHighlightedIndex(i)}
+                    className={`w-full flex items-center gap-2.5 px-3 py-2 text-left text-sm transition-colors ${
+                      isHighlighted
+                        ? 'bg-[#a855f7]/20 text-white'
+                        : 'text-white/60 hover:bg-white/5 hover:text-white/80'
+                    }`}
+                  >
+                    <span className="text-base shrink-0">{typeIcon}</span>
+                    <span className="flex-1 truncate">{s.description}</span>
+                    <span className="text-xs text-white/25 shrink-0 tabular-nums">
+                      {s.count}×
+                    </span>
+                  </button>
+                );
+              })}
+              <div className="px-3 py-1.5 text-[10px] text-white/20 border-t border-white/5 flex items-center gap-1">
+                <kbd className="px-1 py-0.5 rounded bg-white/10 text-white/30 text-[9px]">↑↓</kbd>
+                navegar
+                <kbd className="px-1 py-0.5 rounded bg-white/10 text-white/30 text-[9px] ml-1">Enter</kbd>
+                selecionar
+                <kbd className="px-1 py-0.5 rounded bg-white/10 text-white/30 text-[9px] ml-1">Esc</kbd>
+                fechar
+              </div>
+            </div>
+          )}
         </div>
 
         {/* ── Expense preview ── */}

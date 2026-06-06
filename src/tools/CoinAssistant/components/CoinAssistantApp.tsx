@@ -123,6 +123,7 @@ export function CoinAssistantApp() {
               onExport={(table) => downloadCSV(table)}
               onEdit={(table) => setModal({ mode: 'edit', table })}
               onDelete={(id) => setConfirmDeleteId(id)}
+              onMoveTable={db.moveTable}
             />
           </aside>
         )}
@@ -136,12 +137,17 @@ export function CoinAssistantApp() {
               onUpdateRow={(rowId, patch) => db.updateRow(db.activeTableId!, rowId, patch)}
               onDeleteRow={(rowId) => db.deleteRow(db.activeTableId!, rowId)}
               onAddRow={(row) => db.addRow(db.activeTableId!, row)}
+              onBulkAddRows={(newRows) => db.bulkAddRows(db.activeTableId!, newRows)}
+              onDeleteGeneratedData={(prefix) => db.deleteGeneratedData(db.activeTableId!, prefix)}
+              onEffectuateGeneratedData={(prefix) => db.effectuateGeneratedData(db.activeTableId!, prefix)}
+              onDeleteRealDataByPeriod={(prefix) => db.deleteRealDataByPeriod(db.activeTableId!, prefix)}
               onEditTable={() =>
                 db.activeTable && setModal({ mode: 'edit', table: db.activeTable })
               }
               onDeleteTable={() =>
                 db.activeTableId && setConfirmDeleteId(db.activeTableId)
               }
+              onImportTable={db.importTable}
             />
           ) : (
             <EmptyState onNew={() => setModal({ mode: 'create' })} />

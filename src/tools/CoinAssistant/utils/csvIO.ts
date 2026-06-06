@@ -242,7 +242,7 @@ export function importTableFromCSV(csv: string): ImportedTable {
     const fields    = parseLine(line);
     const date      = fields[0]?.trim() ?? '';
     const rawVal    = fields[1]?.trim() ?? '';
-    const desc      = fields[2]?.trim() || 'Sem descrição';
+    const desc      = (fields[2] || 'SEM DESCRIÇÃO').toUpperCase().trim();
     const rawType   = hasTypeCol ? (fields[3]?.trim() ?? '') : '';
     const entryType = rawType === 'deposit'     ? 'deposit'
                     : rawType === 'waiver'      ? 'waiver'

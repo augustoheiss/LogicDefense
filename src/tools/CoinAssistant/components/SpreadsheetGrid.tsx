@@ -118,9 +118,13 @@ export function SpreadsheetGrid({
                   key={row.id}
                   className={`border-b border-white/5 hover:bg-white/[0.06] transition-colors cursor-pointer group ${
                     idx % 2 === 0 ? '' : 'bg-white/[0.02]'
+                  }${
+                    row.generatedBy
+                      ? ' opacity-60 border-l-2 border-l-purple-500/40 border-dashed'
+                      : ''
                   }`}
                   onClick={() => setEditingRow(row)}
-                  title="Clique para editar"
+                  title={row.generatedBy ? `🔮 Dado ${row.generatedBy === 'cloned' ? 'clonado' : 'previsto'}${row.clonedFrom ? ` de ${row.clonedFrom}` : ''}` : 'Clique para editar'}
                 >
                   {/* ── Date cell ── */}
                   <td className="px-4 py-2">
@@ -235,6 +239,11 @@ export function SpreadsheetGrid({
                         </span>
                       )}
                       {row.description || <span className="not-italic text-white/20">—</span>}
+                      {row.generatedBy && (
+                        <span className="not-italic text-xs bg-purple-500/15 text-purple-400 border border-purple-500/25 px-1.5 py-0.5 rounded font-semibold">
+                          🔮 {row.generatedBy === 'cloned' ? 'Clonado' : 'Previsto'}
+                        </span>
+                      )}
                       {row.entryType === 'expense' && row.monthlyValue != null && row.monthCount != null && (
                         <span className="not-italic text-xs text-rose-400/50 ml-1">
                           ({row.monthlyValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} × {row.monthCount}m)

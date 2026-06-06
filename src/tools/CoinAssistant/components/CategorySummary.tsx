@@ -56,6 +56,27 @@ function daysBetween(a: string, b: string): number {
   return Math.max(1, Math.round(Math.abs(msB - msA) / 86_400_000) + 1);
 }
 
+// ── Date helpers ──────────────────────────────────────────────────────────────
+
+function todayISO(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function formatDateShort(dateStr: string): string {
+  const [y, m, d] = dateStr.split('-');
+  return `${d}/${m}/${y}`;
+}
+
+/**
+ * Calendar months between two YYYY-MM-DD strings, inclusive.
+ * E.g. "2026-01-01" → "2026-12-31" = 12 months.
+ */
+function monthSpan(a: string, b: string): number {
+  const [ay, am] = a.split('-').map(Number);
+  const [by, bm] = b.split('-').map(Number);
+  return Math.max(1, (by - ay) * 12 + (bm - am) + 1);
+}
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 interface CategorySummaryProps {
@@ -63,13 +84,30 @@ interface CategorySummaryProps {
   dailyGoal?: number;
   onUpdateRow?: (rowId: string, patch: Partial<TableRow>) => void;
   onDeleteRow?: (rowId: string) => void;
+  /** Callback to add a brand-new row (from the inline category form). */
+  onAddRow?: (row: Omit<TableRow, 'id'>) => void;
 }
 
-export function CategorySummary({ rows, dailyGoal = 0, onUpdateRow, onDeleteRow }: CategorySummaryProps) {
+export function CategorySummary({ rows, dailyGoal = 0, onUpdateRow, onDeleteRow, onAddRow }: CategorySummaryProps) {
   const [filterType, setFilterType] = useState<FilterableType>('expense');
   const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
   const [page, setPage] = useState(0);
   const [editingRow, setEditingRow] = useState<TableRow | null>(null);
+
+  // ── Inline add form state ─────────────────────────────────────────────────
+  const [addingForCategory, setAddingForCategory] = useState<string | null>(null);
+  const [inlineDate,        setInlineDate]        = useState(todayISO());
+  const [inlineValue,       setInlineValue]       = useState('');
+  const [inlinePeriodStart, setInlinePeriodStart] = useState('');
+  const [inlinePeriodEnd,   setInlinePeriodEnd]   = useState('');
+
+  function resetInlineForm() {
+    setAddingForCategory(null);
+    setInlineDate(todayISO());
+    setInlineValue('');
+    setInlinePeriodStart('');
+    setInlinePeriodEnd('');
+  }
 
   const filterOpt = FILTER_OPTIONS.find((o) => o.value === filterType)!;
 
@@ -98,7 +136,7 @@ export function CategorySummary({ rows, dailyGoal = 0, onUpdateRow, onDeleteRow 
 
     const map = new Map<string, TableRow[]>();
     for (const row of typeRows) {
-      const key = (row.description ?? 'Sem descrição').trim().toLowerCase();
+      const key = (row.description || 'SEM DESCRIÇÃO').toUpperCase().trim();
       if (!map.has(key)) map.set(key, []);
       map.get(key)!.push(row);
     }
@@ -119,7 +157,7 @@ export function CategorySummary({ rows, dailyGoal = 0, onUpdateRow, onDeleteRow 
         const pct = grandTotal > 0 ? (total / grandTotal) * 100 : 0;
 
         return {
-          description: key.charAt(0).toUpperCase() + key.slice(1),
+          description: key,
           count: catRows.length,
           total: Math.round(total * 100) / 100,
           mean: Math.round(mean * 100) / 100,
@@ -312,7 +350,9 @@ export function CategorySummary({ rows, dailyGoal = 0, onUpdateRow, onDeleteRow 
                                 </tr>
                               </thead>
                               <tbody>
-                                {pagedRows.map((row, idx) => (
+                                {pagedRows.map((row, idx) => {
+                                  const hasPeriod = !!(row.periodStart && row.periodEnd && row.periodStart !== row.periodEnd);
+                                  return (
                                   <tr
                                     key={row.id ?? idx}
                                     className={`border-b border-white/[0.03] cursor-pointer hover:bg-white/[0.04] transition-colors ${idx % 2 === 0 ? '' : 'bg-white/[0.015]'}`}
@@ -320,10 +360,30 @@ export function CategorySummary({ rows, dailyGoal = 0, onUpdateRow, onDeleteRow 
                                     title="Clique para editar"
                                   >
                                     <td className="px-4 py-2 text-white/50">
-                                      {row.date.split('-').reverse().join('/')}
+                                      {hasPeriod ? (
+                                        <div className="flex items-center gap-1.5 flex-wrap">
+                                          <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold px-1 py-0.5 rounded border text-purple-400 bg-purple-500/15 border-purple-500/30 shrink-0">
+                                            📆
+                                          </span>
+                                          <span className="font-mono text-white/50">
+                                            {formatDateShort(row.periodStart!)}
+                                            <span className="text-white/25 mx-0.5">→</span>
+                                            {formatDateShort(row.periodEnd!)}
+                                          </span>
+                                        </div>
+                                      ) : (
+                                        row.date.split('-').reverse().join('/')
+                                      )}
                                     </td>
                                     <td className={`text-right px-3 py-2 font-mono ${filterOpt.textColor}`}>
-                                      {formatCurrencyFull(row.value)}
+                                      <div className="flex flex-col items-end">
+                                        <span>{formatCurrencyFull(row.value)}</span>
+                                        {row.entryType === 'expense' && row.monthlyValue != null && row.monthCount != null && (
+                                          <span className="text-[10px] text-white/25">
+                                            {row.monthlyValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} × {row.monthCount}m
+                                          </span>
+                                        )}
+                                      </div>
                                     </td>
                                     <td className="px-3 py-2 text-white/40">
                                       {row.description || '—'}
@@ -359,9 +419,187 @@ export function CategorySummary({ rows, dailyGoal = 0, onUpdateRow, onDeleteRow 
                                       </div>
                                     </td>
                                   </tr>
-                                ))}
+                                  );
+                                })}
                               </tbody>
                             </table>
+
+                            {/* ── Inline Add Form ── */}
+                            {onAddRow && (() => {
+                              const inferredType = (g.rows[0]?.entryType ?? 'revenue') as TableRow['entryType'];
+                              const isExpenseCategory = inferredType === 'expense';
+                              // Check if existing rows in this category use periods
+                              const categoryHasPeriods = g.rows.some(
+                                (r) => r.periodStart && r.periodEnd && r.periodStart !== r.periodEnd,
+                              );
+                              const showPeriodFields = isExpenseCategory || categoryHasPeriods;
+
+                              if (addingForCategory === g.description) {
+                                // ── Active inline form ──
+                                const parsedValue = parseFloat(inlineValue);
+                                const hasPeriodDates = !!(inlinePeriodStart && inlinePeriodEnd);
+                                const months = hasPeriodDates ? monthSpan(inlinePeriodStart, inlinePeriodEnd) : 1;
+                                const totalCost = isExpenseCategory && hasPeriodDates
+                                  ? Math.round(parsedValue * months * 100) / 100
+                                  : parsedValue;
+
+                                function handleInlineSave() {
+                                  if (!inlineDate || isNaN(parsedValue) || parsedValue <= 0) return;
+
+                                  if (isExpenseCategory) {
+                                    // Expense with optional period
+                                    const mc = hasPeriodDates ? months : 1;
+                                    const mv = parsedValue;
+                                    const row: Omit<TableRow, 'id'> = {
+                                      date: hasPeriodDates ? inlinePeriodStart : inlineDate,
+                                      value: Math.round(mv * mc * 100) / 100,
+                                      description: g.description,
+                                      entryType: 'expense',
+                                      monthlyValue: mv,
+                                      monthCount: mc,
+                                      ...(hasPeriodDates ? {
+                                        periodStart: [inlinePeriodStart, inlinePeriodEnd].sort()[0],
+                                        periodEnd:   [inlinePeriodStart, inlinePeriodEnd].sort()[1],
+                                      } : {}),
+                                    };
+                                    onAddRow?.(row);
+                                  } else {
+                                    // Revenue, deposit, waiver, partner_in, partner_out
+                                    const row: Omit<TableRow, 'id'> = {
+                                      date: hasPeriodDates ? inlinePeriodStart : inlineDate,
+                                      value: parsedValue,
+                                      description: g.description,
+                                      entryType: inferredType,
+                                      ...(hasPeriodDates ? {
+                                        periodStart: [inlinePeriodStart, inlinePeriodEnd].sort()[0],
+                                        periodEnd:   [inlinePeriodStart, inlinePeriodEnd].sort()[1],
+                                      } : {}),
+                                    };
+                                    onAddRow?.(row);
+                                  }
+                                  resetInlineForm();
+                                }
+
+                                return (
+                                  <div className="border-t border-white/10 bg-white/[0.04] px-4 py-3 space-y-2">
+                                    {/* Row 1: Date + Value + actions */}
+                                    <div className="flex flex-wrap items-end gap-2">
+                                      <div className="flex flex-col gap-1">
+                                        <label className="text-[10px] text-white/30 uppercase tracking-wider">Data</label>
+                                        <input
+                                          type="date"
+                                          value={inlineDate}
+                                          onChange={(e) => setInlineDate(e.target.value)}
+                                          className="bg-white/10 text-white text-xs rounded px-2.5 py-1.5 outline-none border border-white/10 [color-scheme:dark] focus:ring-1 focus:ring-[#a855f7]"
+                                        />
+                                      </div>
+                                      <div className="flex flex-col gap-1">
+                                        <label className="text-[10px] text-white/30 uppercase tracking-wider">
+                                          {isExpenseCategory ? 'Valor Mensal (R$)' : 'Valor (R$)'}
+                                        </label>
+                                        <input
+                                          type="number"
+                                          step="0.01"
+                                          min="0"
+                                          placeholder="0,00"
+                                          value={inlineValue}
+                                          onChange={(e) => setInlineValue(e.target.value)}
+                                          className="bg-white/10 text-white text-xs rounded px-2.5 py-1.5 w-28 outline-none border border-white/10 focus:ring-1 focus:ring-[#a855f7]"
+                                          autoFocus
+                                        />
+                                      </div>
+
+                                      {/* Total preview for expenses with period */}
+                                      {isExpenseCategory && hasPeriodDates && !isNaN(parsedValue) && parsedValue > 0 && (
+                                        <div className="flex flex-col gap-1">
+                                          <span className="text-[10px] text-white/30 uppercase tracking-wider">Total ({months}m)</span>
+                                          <span className="text-xs font-mono font-semibold text-rose-400 py-1.5">
+                                            R$ {totalCost.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                          </span>
+                                        </div>
+                                      )}
+
+                                      <div className="flex items-end gap-1.5 ml-auto">
+                                        <button
+                                          type="button"
+                                          onClick={handleInlineSave}
+                                          disabled={!inlineDate || isNaN(parsedValue) || parsedValue <= 0}
+                                          className="px-3 py-1.5 text-xs font-semibold rounded-md bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/30 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                                        >
+                                          ✓ Salvar
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={resetInlineForm}
+                                          className="px-3 py-1.5 text-xs rounded-md bg-white/5 text-white/40 border border-white/10 hover:text-white/70 hover:bg-white/10 transition-colors"
+                                        >
+                                          Cancelar
+                                        </button>
+                                      </div>
+                                    </div>
+
+                                    {/* Row 2: Period fields (expenses or categories that use periods) */}
+                                    {showPeriodFields && (
+                                      <div className="flex flex-wrap items-end gap-2 pl-0">
+                                        <div className="flex flex-col gap-1">
+                                          <label className="text-[10px] text-white/30 uppercase tracking-wider">Início do Rateio</label>
+                                          <input
+                                            type="date"
+                                            value={inlinePeriodStart}
+                                            onChange={(e) => setInlinePeriodStart(e.target.value)}
+                                            className="bg-white/10 text-white text-xs rounded px-2.5 py-1.5 outline-none border border-white/10 [color-scheme:dark] focus:ring-1 focus:ring-purple-400"
+                                          />
+                                        </div>
+                                        <div className="flex flex-col gap-1">
+                                          <label className="text-[10px] text-white/30 uppercase tracking-wider">Fim do Rateio</label>
+                                          <input
+                                            type="date"
+                                            value={inlinePeriodEnd}
+                                            onChange={(e) => setInlinePeriodEnd(e.target.value)}
+                                            className="bg-white/10 text-white text-xs rounded px-2.5 py-1.5 outline-none border border-white/10 [color-scheme:dark] focus:ring-1 focus:ring-purple-400"
+                                          />
+                                        </div>
+                                        {!inlinePeriodStart && !inlinePeriodEnd && (
+                                          <span className="text-[10px] text-white/20 py-1.5">
+                                            Opcional — deixe vazio para entrada pontual
+                                          </span>
+                                        )}
+                                      </div>
+                                    )}
+
+                                    <div className="text-[10px] text-white/20">
+                                      Categoria: <span className="text-white/40 font-medium">{g.description}</span>
+                                      {' · '}
+                                      Tipo: <span className="text-white/40 font-medium">{filterOpt.label}</span>
+                                    </div>
+                                  </div>
+                                );
+                              }
+
+                              // ── Collapsed: show "+ Nova Entrada" button ──
+                              return (
+                                <div className="border-t border-white/5 px-4 py-2">
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setAddingForCategory(g.description);
+                                      setInlineDate(todayISO());
+                                      setInlineValue('');
+                                      setInlinePeriodStart('');
+                                      setInlinePeriodEnd('');
+                                    }}
+                                    className="flex items-center gap-1.5 text-xs text-[#a855f7]/70 hover:text-[#a855f7] transition-colors font-medium"
+                                  >
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                      <line x1="12" y1="5" x2="12" y2="19" />
+                                      <line x1="5" y1="12" x2="19" y2="12" />
+                                    </svg>
+                                    Nova Entrada para "{g.description}"
+                                  </button>
+                                </div>
+                              );
+                            })()}
                           </div>
                         </td>
                       </tr>

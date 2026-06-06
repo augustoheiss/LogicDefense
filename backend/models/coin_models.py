@@ -117,6 +117,16 @@ class TableRow(BaseModel):
         pattern=r"^\d{4}-\d{2}-\d{2}$",
         description="Period end date (YYYY-MM-DD) — must pair with periodStart",
     )
+    generated_by: Optional[str] = Field(
+        default=None,
+        alias="generatedBy",
+        description="'predicted' | 'cloned' — marks synthetic rows from the prediction engine",
+    )
+    cloned_from: Optional[str] = Field(
+        default=None,
+        alias="clonedFrom",
+        description="Audit trail: source YYYY-MM from which this cloned row was copied",
+    )
     model_config = {"populate_by_name": True}
 
 
@@ -204,6 +214,8 @@ class MonthMetrics(BaseModel):
         alias="dailyPayments",
         description='"YYYY-MM-DD" → value',
     )
+    investment: Optional[float] = Field(default=None)
+    expense: Optional[float] = Field(default=None)
 
     model_config = {"populate_by_name": True}
 
@@ -228,6 +240,19 @@ class YearMetrics(BaseModel):
         alias="monthlyAvg",
         description="grossAnnual / active months in this year",
     )
+
+    model_config = {"populate_by_name": True}
+
+
+class PortfolioTimelinePoint(BaseModel):
+    """A single month in the chronological portfolio yield calculation."""
+
+    month: str = Field(..., description="YYYY-MM month key")
+    monthly_deposit: float = Field(..., alias="monthlyDeposit")
+    current_month_yield: float = Field(..., alias="currentMonthYield")
+    accumulated_principal: float = Field(..., alias="accumulatedPrincipal")
+    accumulated_yield: float = Field(..., alias="accumulatedYield")
+    total_balance: float = Field(..., alias="totalBalance")
 
     model_config = {"populate_by_name": True}
 
@@ -313,6 +338,26 @@ class TableMetrics(BaseModel):
         default=0,
         alias="investmentBalance",
         description="Current balance: totalInvested + totalInterestEarned",
+    )
+    global_total_deposited: float = Field(
+        default=0.0,
+        alias="globalTotalDeposited",
+        description="Total deposited by the user",
+    )
+    global_total_yield: float = Field(
+        default=0.0,
+        alias="globalTotalYield",
+        description="Total accumulated yield",
+    )
+    global_balance: float = Field(
+        default=0.0,
+        alias="globalBalance",
+        description="Current total balance with interest",
+    )
+    portfolio_timeline: list[PortfolioTimelinePoint] = Field(
+        default_factory=list,
+        alias="portfolioTimeline",
+        description="Chronological portfolio timeline metrics",
     )
 
     # ── Advanced Statistics (deterministic, never let the LLM compute) ────────

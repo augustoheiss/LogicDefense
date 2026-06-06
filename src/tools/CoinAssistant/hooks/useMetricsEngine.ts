@@ -35,6 +35,49 @@ export function computeMetrics(
 ): TableMetrics {
   if (rows.length === 0) return emptyMetrics();
 
+  // Find all YYYY-MM months in the entire rows dataset (including ranges) to populate byMonthAcc
+  const allMonths = new Set<string>();
+  for (const r of rows) {
+    const start = r.periodStart || r.date;
+    const end = r.periodEnd || r.date;
+    const startYM = start.slice(0, 7);
+    const endYM = end.slice(0, 7);
+    
+    const [startY, startM] = startYM.split('-').map(Number);
+    const [endY, endM] = endYM.split('-').map(Number);
+    
+    let currY = startY;
+    let currM = startM;
+    while (currY < endY || (currY === endY && currM <= endM)) {
+      allMonths.add(`${currY}-${String(currM).padStart(2, '0')}`);
+      currM++;
+      if (currM > 12) {
+        currM = 1;
+        currY++;
+      }
+    }
+  }
+
+  // ── Prorated monthly calculations for deposits and expenses ─────────────────
+  const depositRows = rows.filter((r) => r.entryType === 'deposit' && r.value > 0);
+  const expenseRows = rows.filter((r) => r.entryType === 'expense');
+
+  const depositByMonth: Record<string, number> = {};
+  for (const row of depositRows) {
+    for (const contrib of rowContributions(row)) {
+      const ym = contrib.date.slice(0, 7);
+      depositByMonth[ym] = (depositByMonth[ym] ?? 0) + contrib.value;
+    }
+  }
+
+  const monthlyExpenses: Record<string, number> = {};
+  for (const row of expenseRows) {
+    for (const contrib of rowContributions(row)) {
+      const ym = contrib.date.slice(0, 7);
+      monthlyExpenses[ym] = (monthlyExpenses[ym] ?? 0) + contrib.value;
+    }
+  }
+
   // Waiver rows are ledger entries, not revenue — strip them alongside deposits.
   // FIREWALL: partner_in and partner_out are isolated from operational revenue.
   const revenueRows = rows.filter(
@@ -42,7 +85,6 @@ export function computeMetrics(
   );
 
   // ── Expense metrics — computed before the early-return guard ───────────────
-  const expenseRows = rows.filter((r) => r.entryType === 'expense');
   let totalExpenses = 0;
 
   // Survival goal accumulators: track the global expense date span
@@ -87,31 +129,72 @@ export function computeMetrics(
 
   // ── Investment / Deposit compound interest (0.8%/month CDI reference) ──────
   const MONTHLY_RATE = 0.008;
-  const depositRows = rows.filter((r) => r.entryType === 'deposit' && r.value > 0);
+  const allYMs = Array.from(allMonths).sort();
+  let earliestInvestMonth = '';
+  for (const ym of allYMs) {
+    if ((depositByMonth[ym] ?? 0) > 0) {
+      earliestInvestMonth = ym;
+      break;
+    }
+  }
+
+  let portfolioTimeline: Array<{
+    month: string;
+    monthlyDeposit: number;
+    currentMonthYield: number;
+    accumulatedPrincipal: number;
+    accumulatedYield: number;
+    totalBalance: number;
+  }> = [];
+
+  let globalTotalDeposited = 0;
+  let globalTotalYield = 0;
+  let globalBalance = 0;
+
+  if (earliestInvestMonth) {
+    const latestMonth = allYMs[allYMs.length - 1] || earliestInvestMonth;
+    const consecutiveMonths = getConsecutiveMonths(earliestInvestMonth, latestMonth);
+
+    let accumulatedPrincipal = 0;
+    let accumulatedYield = 0;
+
+    for (const ym of consecutiveMonths) {
+      const monthlyDeposit = depositByMonth[ym] ?? 0;
+      const currentMonthYield = round2((accumulatedPrincipal + accumulatedYield) * MONTHLY_RATE);
+      accumulatedYield = round2(accumulatedYield + currentMonthYield);
+      accumulatedPrincipal = round2(accumulatedPrincipal + monthlyDeposit);
+      const totalBalance = round2(accumulatedPrincipal + accumulatedYield);
+
+      portfolioTimeline.push({
+        month: ym,
+        monthlyDeposit: round2(monthlyDeposit),
+        currentMonthYield,
+        accumulatedPrincipal,
+        accumulatedYield,
+        totalBalance,
+      });
+    }
+
+    globalTotalDeposited = accumulatedPrincipal;
+    globalTotalYield = accumulatedYield;
+    globalBalance = accumulatedPrincipal + accumulatedYield;
+  }
+
   const depositCount = depositRows.length;
+  const totalInvested = globalTotalDeposited;
+  const totalInterestEarned = globalTotalYield;
+  const investmentBalance = globalBalance;
 
-  // Group deposits by YYYY-MM
-  const depositByMonth: Record<string, number> = {};
-  for (const row of depositRows) {
-    const ym = row.date.slice(0, 7);
-    depositByMonth[ym] = (depositByMonth[ym] ?? 0) + row.value;
-  }
-  const sortedDepositMonths = Object.entries(depositByMonth).sort(([a], [b]) => a.localeCompare(b));
-
-  let investRunning = 0;
-  let totalInvested = 0;
-  let totalInterestEarned = 0;
-  for (const [, rawDeposit] of sortedDepositMonths) {
-    const monthYield = round2(investRunning * MONTHLY_RATE);
-    totalInterestEarned += monthYield;
-    totalInvested += rawDeposit;
-    investRunning = round2(investRunning + monthYield + rawDeposit);
-  }
-  totalInvested = round2(totalInvested);
-  totalInterestEarned = round2(totalInterestEarned);
-  const investmentBalance = round2(investRunning);
-
-  const investFields = { depositCount, totalInvested, totalInterestEarned, investmentBalance };
+  const investFields = {
+    depositCount,
+    totalInvested,
+    totalInterestEarned,
+    investmentBalance,
+    globalTotalDeposited,
+    globalTotalYield,
+    globalBalance,
+    portfolioTimeline,
+  };
 
   // ── Advanced Statistics (revenue rows only, excludes partner_in/out, value > 0) ─
   const positiveRevenueValues = rows
@@ -201,6 +284,10 @@ export function computeMetrics(
     payments: Record<string, number>;
     weeks: Set<string>;
   }> = {};
+
+  for (const ym of allMonths) {
+    byMonthAcc[ym] = { gross: 0, payments: {}, weeks: new Set() };
+  }
 
   const byWeekAcc: Record<string, number> = {};
 
@@ -311,6 +398,8 @@ export function computeMetrics(
       weeklyAvg,
       lastWeekGross,
       dailyPayments: acc.payments,
+      investment: round2(depositByMonth[ym] ?? 0),
+      expense: round2(monthlyExpenses[ym] ?? 0),
     };
   }
 
@@ -492,7 +581,7 @@ function computeYearExpenses(expenseRows: TableRow[], year: number): number {
   return round2(total);
 }
 
-function emptyMetrics(): TableMetrics {
+export function emptyMetrics(): TableMetrics {
   return {
     grossTotal: 0,
     globalDailyAvg: 0,
@@ -519,6 +608,10 @@ function emptyMetrics(): TableMetrics {
     totalInvested: 0,
     totalInterestEarned: 0,
     investmentBalance: 0,
+    globalTotalDeposited: 0,
+    globalTotalYield: 0,
+    globalBalance: 0,
+    portfolioTimeline: [],
     maxTransaction: 0,
     minTransaction: 0,
     medianTransaction: 0,
@@ -534,6 +627,24 @@ function emptyMetrics(): TableMetrics {
     goalTotalWeeks: 0,
     netBalanceWeeks: 0,
   };
+}
+
+function getConsecutiveMonths(startYM: string, endYM: string): string[] {
+  const [startY, startM] = startYM.split('-').map(Number);
+  const [endY, endM] = endYM.split('-').map(Number);
+  const result: string[] = [];
+  let currY = startY;
+  let currM = startM;
+
+  while (currY < endY || (currY === endY && currM <= endM)) {
+    result.push(`${currY}-${String(currM).padStart(2, '0')}`);
+    currM++;
+    if (currM > 12) {
+      currM = 1;
+      currY++;
+    }
+  }
+  return result;
 }
 
 // ── Period distribution helper ──────────────────────────────────────────────────────────

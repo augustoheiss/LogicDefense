@@ -1,7 +1,7 @@
 import { useState, useCallback, useMemo } from 'react';
 import type { CoinTable, TableRow, TableGoals, TableMetrics, DB, GoalProfile } from '../types';
 import type { ImportedTable } from '../utils/csvIO';
-import { computeMetrics } from './useMetricsEngine';
+import { computeMetrics, emptyMetrics } from './useMetricsEngine';
 import { resolveGoalForYear } from '../utils/dateUtils';
 
 const STORAGE_KEY = 'coin_assistant_db';
@@ -41,6 +41,12 @@ function migrateDB(db: DB): DB {
   const currentYear = new Date().getFullYear();
   return {
     tables: db.tables.map((table) => {
+      // Universal Category Normalization: enforce uppercase and trim
+      const normalizedRows = table.rows.map((row) => ({
+        ...row,
+        description: (row.description || 'SEM DESCRIÇÃO').toUpperCase().trim(),
+      }));
+
       // Double-cast through unknown so we can inspect all legacy flat fields
       // (annualCost, dailyGoal, weeklyGoal) without TS2352 errors.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -114,7 +120,7 @@ function migrateDB(db: DB): DB {
         yearlyGoals,
         monthlyGoals,
       };
-      return { ...table, goals: migratedGoals };
+      return { ...table, rows: normalizedRows, goals: migratedGoals };
     }),
   };
 }
@@ -224,6 +230,26 @@ export function useCoinAssistantDB() {
     [mutate],
   );
 
+  const moveTable = useCallback(
+    (id: string, direction: 'up' | 'down') => {
+      mutate((prev) => {
+        const index = prev.tables.findIndex((t) => t.id === id);
+        if (index === -1) return prev;
+        if (direction === 'up' && index === 0) return prev;
+        if (direction === 'down' && index === prev.tables.length - 1) return prev;
+
+        const nextTables = [...prev.tables];
+        const swapIndex = direction === 'up' ? index - 1 : index + 1;
+        const temp = nextTables[index];
+        nextTables[index] = nextTables[swapIndex];
+        nextTables[swapIndex] = temp;
+
+        return { ...prev, tables: nextTables };
+      });
+    },
+    [mutate],
+  );
+
   /**
    * Hydrates a fully-parsed ImportedTable into the DB in a single mutation.
    * New UUIDs are assigned to the table and every row so there are never collisions.
@@ -251,7 +277,11 @@ export function useCoinAssistantDB() {
 
   const addRow = useCallback(
     (tableId: string, row: Omit<TableRow, 'id'>): TableRow => {
-      const newRow: TableRow = { ...row, id: uuid() };
+      const sanitizedRow = {
+        ...row,
+        description: (row.description || 'SEM DESCRIÇÃO').toUpperCase().trim(),
+      };
+      const newRow: TableRow = { ...sanitizedRow, id: uuid() };
       mutate((prev) => ({
         tables: prev.tables.map((t) =>
           t.id === tableId
@@ -270,13 +300,19 @@ export function useCoinAssistantDB() {
 
   const updateRow = useCallback(
     (tableId: string, rowId: string, patch: Partial<Omit<TableRow, 'id'>>) => {
+      const sanitizedPatch = {
+        ...patch,
+        description: patch.description !== undefined
+          ? (patch.description || 'SEM DESCRIÇÃO').toUpperCase().trim()
+          : undefined,
+      };
       mutate((prev) => ({
         tables: prev.tables.map((t) =>
           t.id === tableId
             ? {
                 ...t,
                 rows: t.rows
-                  .map((r) => (r.id === rowId ? { ...r, ...patch } : r))
+                  .map((r) => (r.id === rowId ? { ...r, ...sanitizedPatch } : r))
                   .sort((a, b) => a.date.localeCompare(b.date)),
                 updatedAt: new Date().toISOString(),
               }
@@ -300,6 +336,115 @@ export function useCoinAssistantDB() {
             : t,
         ),
       }));
+    },
+    [mutate],
+  );
+
+  /**
+   * Insert multiple rows in a single mutation (used by prediction/cloning engine).
+   * Each row receives a fresh UUID. Rows are sorted by date after insertion.
+   */
+  const bulkAddRows = useCallback(
+    (tableId: string, newRows: Omit<TableRow, 'id'>[]): void => {
+      if (newRows.length === 0) return;
+      const sanitizedNewRows = newRows.map((r) => ({
+        ...r,
+        description: (r.description || 'SEM DESCRIÇÃO').toUpperCase().trim(),
+        id: uuid(),
+      }));
+      mutate((prev) => ({
+        tables: prev.tables.map((t) =>
+          t.id === tableId
+            ? {
+                ...t,
+                rows: [...t.rows, ...sanitizedNewRows]
+                  .sort((a, b) => a.date.localeCompare(b.date)),
+                updatedAt: new Date().toISOString(),
+              }
+            : t,
+        ),
+      }));
+    },
+    [mutate],
+  );
+
+  /**
+   * Delete all generated/predicted/cloned rows from a table.
+   * @param prefix — optional date prefix filter:
+   *   "2028"    → delete only generated rows in year 2028
+   *   "2028-06" → delete only generated rows in June 2028
+   *   undefined → delete ALL generated rows regardless of date
+   */
+  const deleteGeneratedData = useCallback(
+    (tableId: string, prefix?: string): number => {
+      let deletedCount = 0;
+      mutate((prev) => ({
+        tables: prev.tables.map((t) => {
+          if (t.id !== tableId) return t;
+          const remaining = t.rows.filter((r) => {
+            if (!r.generatedBy) return true; // keep real rows
+            if (prefix && !r.date.startsWith(prefix)) return true; // keep rows outside prefix
+            deletedCount++;
+            return false;
+          });
+          return { ...t, rows: remaining, updatedAt: new Date().toISOString() };
+        }),
+      }));
+      return deletedCount;
+    },
+    [mutate],
+  );
+
+  /**
+   * Effectuate ("Make Real") generated rows — strips the generatedBy and clonedFrom
+   * flags, turning synthetic data into permanent historical records.
+   * @param prefix — optional date prefix filter ("2026-06", "2026", or undefined for all).
+   * @returns number of rows effectuated.
+   */
+  const effectuateGeneratedData = useCallback(
+    (tableId: string, prefix?: string): number => {
+      let count = 0;
+      mutate((prev) => ({
+        tables: prev.tables.map((t) => {
+          if (t.id !== tableId) return t;
+          const updatedRows = t.rows.map((r) => {
+            if (!r.generatedBy) return r;
+            if (prefix && !r.date.startsWith(prefix)) return r;
+            count++;
+            // Strip the synthetic flags — row becomes real
+            const { generatedBy, clonedFrom, ...realRow } = r;
+            return realRow as TableRow;
+          });
+          return { ...t, rows: updatedRows, updatedAt: new Date().toISOString() };
+        }),
+      }));
+      return count;
+    },
+    [mutate],
+  );
+
+  /**
+   * Bulk-delete REAL (non-generated) rows matching a date prefix.
+   * @param prefix — date prefix ("2026" or "2026-05").
+   * @returns number of rows deleted.
+   */
+  const deleteRealDataByPeriod = useCallback(
+    (tableId: string, prefix: string): number => {
+      let deletedCount = 0;
+      mutate((prev) => ({
+        tables: prev.tables.map((t) => {
+          if (t.id !== tableId) return t;
+          const remaining = t.rows.filter((r) => {
+            // Only target real rows (no generatedBy flag)
+            if (r.generatedBy) return true;
+            if (!r.date.startsWith(prefix)) return true;
+            deletedCount++;
+            return false;
+          });
+          return { ...t, rows: remaining, updatedAt: new Date().toISOString() };
+        }),
+      }));
+      return deletedCount;
     },
     [mutate],
   );
@@ -331,55 +476,14 @@ export function useCoinAssistantDB() {
     updateGoals,
     updateTableDescription,
     deleteTable,
+    moveTable,
     addRow,
     updateRow,
     deleteRow,
+    bulkAddRows,
+    deleteGeneratedData,
+    effectuateGeneratedData,
+    deleteRealDataByPeriod,
     getMetrics,
-  };
-}
-
-// ── Empty metrics fallback ────────────────────────────────────────────────────
-
-function emptyMetrics(): TableMetrics {
-  return {
-    grossTotal: 0,
-    globalDailyAvg: 0,
-    globalWeeklyAvg: 0,
-    globalMonthlyAvg: 0,
-    globalAnnualAvg: 0,
-    globalGoalBalance: 0,
-    totalElapsedWeeks: 0,
-    waivedWeeks: 0,
-    billableWeeks: 0,
-    totalWaiverCredit: 0,
-    timeBankBalance: 0,
-    byYear: {},
-    byMonth: {},
-    byWeek: {},
-    totalExpenses: 0,
-    annualExpenses: 0,
-    netBalance: 0,
-    survivalDaily: 0,
-    survivalWeekly: 0,
-    survivalMonthly: 0,
-    survivalAnnualCost: 0,
-    depositCount: 0,
-    totalInvested: 0,
-    totalInterestEarned: 0,
-    investmentBalance: 0,
-    maxTransaction: 0,
-    minTransaction: 0,
-    medianTransaction: 0,
-    modeTransaction: 0,
-    stdDeviation: 0,
-    totalPartnerIn: 0,
-    totalPartnerOut: 0,
-    grossWithPartner: 0,
-    expensesWithPartner: 0,
-    netWithPartner: 0,
-    grossTotalWeeks: 0,
-    waiverTotalWeeks: 0,
-    goalTotalWeeks: 0,
-    netBalanceWeeks: 0,
   };
 }

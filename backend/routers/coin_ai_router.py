@@ -327,6 +327,105 @@ def build_category_summaries(rows: list, globalDaySpan: int = 1) -> str:
 
     return "\n".join(sections) if sections else ""
 
+
+def format_month_year_pt(ym: str) -> str:
+    parts = ym.split("-")
+    if len(parts) != 2:
+        return ym
+    y, m = parts
+    month_names = [
+        "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+        "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"
+    ]
+    try:
+        month_idx = int(m) - 1
+        if 0 <= month_idx < 12:
+            return f"{month_names[month_idx]}/{y}"
+    except ValueError:
+        pass
+    return ym
+
+
+def format_short_month_year_pt(ym: str) -> str:
+    parts = ym.split("-")
+    if len(parts) != 2:
+        return ym
+    y, m = parts
+    short_months = [
+        "Jan", "Fev", "Mar", "Abr", "Mai", "Jun",
+        "Jul", "Ago", "Set", "Out", "Nov", "Dez"
+    ]
+    try:
+        month_idx = int(m) - 1
+        if 0 <= month_idx < 12:
+            return f"{short_months[month_idx]}/{y}"
+    except ValueError:
+        pass
+    return ym
+
+
+def build_ai_scenario_context(rows: list[TableRow]) -> str:
+    synthetic_rows = [r for r in rows if r.generated_by is not None]
+    if not synthetic_rows:
+        return ""
+
+    # Group by YYYY-MM
+    groups = defaultdict(list)
+    for r in synthetic_rows:
+        ym = r.date[:7]
+        groups[ym].append(r)
+
+    sorted_months = sorted(groups.keys())
+    lines = ["🔮 CENÁRIOS PROJETADOS:"]
+
+    for ym in sorted_months:
+        group_rows = groups[ym]
+
+        # Determine generation type
+        has_predicted = any(r.generated_by == "predicted" for r in group_rows)
+        has_cloned = any(r.generated_by == "cloned" for r in group_rows)
+
+        if has_predicted and has_cloned:
+            type_label = "Misto"
+        elif has_predicted:
+            type_label = "Previsão Estatística"
+        elif has_cloned:
+            first_cloned = next((r for r in group_rows if r.generated_by == "cloned"), None)
+            cloned_from = first_cloned.cloned_from if first_cloned else None
+            if cloned_from:
+                type_label = f"Clonagem de {format_short_month_year_pt(cloned_from)}"
+            else:
+                type_label = "Clonagem"
+        else:
+            type_label = "Projeção"
+
+        # Compute metrics
+        revenue = sum(
+            r.value for r in group_rows
+            if r.entry_type not in (EntryType.EXPENSE, EntryType.DEPOSIT, EntryType.WAIVER, EntryType.PARTNER_IN, EntryType.PARTNER_OUT)
+        )
+
+        expenses = sum(
+            r.value for r in group_rows
+            if r.entry_type == EntryType.EXPENSE
+        )
+
+        net = revenue - expenses
+
+        def fmt(v: float) -> str:
+            if v.is_integer():
+                formatted = f"{int(v):,}".replace(",", ".")
+                return f"R$ {formatted}"
+            return f"R$ {v:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+        month_label = format_month_year_pt(ym)
+        lines.append(
+            f"- {month_label} ({type_label}): Receita {fmt(revenue)} | Custos: {fmt(expenses)} | Saldo: {fmt(net)}"
+        )
+
+    return "\n" + "\n".join(lines)
+
+
 def build_financial_context(
     payload: AIAnalystPayload,
     metrics: TableMetrics,
@@ -459,10 +558,10 @@ def build_financial_context(
     if metrics.deposit_count > 0:
         invest_block = f"""
 ── Portfólio de Investimentos (juros compostos, 0.8%/mês CDI) ──
-  Total aportes:           {metrics.deposit_count} depósitos
-  Total investido:         R$ {metrics.total_invested:,.2f}
-  Rendimentos acumulados:  R$ {metrics.total_interest_earned:,.2f}
-  Saldo atual (c/ juros):  R$ {metrics.investment_balance:,.2f}
+  Total aportes:                    {metrics.deposit_count} depósitos
+  Total Depositado pelo Usuário:    R$ {metrics.global_total_deposited:,.2f}
+  Rendimentos Reais de Juros Compostos (0.8%/mês): R$ {metrics.global_total_yield:,.2f}
+  Saldo Atualizado do Portfólio:    R$ {metrics.global_balance:,.2f}
 """
 
     # Advanced statistics block
@@ -471,11 +570,15 @@ def build_financial_context(
     # Category-based summaries (replaces raw transaction ledger)
     category_block = build_category_summaries(payload.rows, globalDaySpan=_global_day_span(payload.rows))
 
+    # Scenario context block
+    scenario_context = build_ai_scenario_context(payload.rows)
+
     return (
         context
         + invest_block
         + stats_block
         + category_block
+        + scenario_context
         + "\n═══════════════════════════════════════════════════════════"
     )
 
@@ -517,6 +620,7 @@ DICAS SOBRE O CONTEXTO:
 - As médias diária/semanal por categoria usam o período GLOBAL (primeira→última entrada) para refletir o impacto estrutural real.
 - As estatísticas avançadas (mediana, moda, desvio padrão) JÁ FORAM calculadas — use-as diretamente, NÃO recalcule.
 - Se o usuário pedir detalhes de transações individuais, sugira que informe o mês ou período desejado.
+- You now have access to 'CENÁRIOS PROJETADOS' (Projected Scenarios). These are synthetic future months generated by the user using statistical averages or cloned history. When analyzing, compare their real past performance with these future projections. Advise them if their projected future is financially healthy or if they need to adjust their strategy.
 
 RESTRIÇÕES:
 - NUNCA dê conselhos de investimento (ações, cripto, etc.)

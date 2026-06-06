@@ -27,6 +27,7 @@ from models.coin_models import (
     MonthMetrics,
     YearMetrics,
     EntryType,
+    PortfolioTimelinePoint,
 )
 from services.coin_date_utils import (
     _parse_date,
@@ -121,6 +122,25 @@ def row_contributions(row: TableRow) -> list[dict]:
     return [{"date": row.date, "value": row.value}]
 
 
+def _get_consecutive_months(start_ym: str, end_ym: str) -> list[str]:
+    """
+    Returns all YYYY-MM consecutive month strings between start_ym and end_ym, inclusive.
+    Mirrors: getConsecutiveMonths() in useMetricsEngine.ts
+    """
+    start_y, start_m = map(int, start_ym.split("-"))
+    end_y, end_m = map(int, end_ym.split("-"))
+    result = []
+    curr_y = start_y
+    curr_m = start_m
+    while curr_y < end_y or (curr_y == end_y and curr_m <= end_m):
+        result.append(f"{curr_y}-{curr_m:02d}")
+        curr_m += 1
+        if curr_m > 12:
+            curr_m = 1
+            curr_y += 1
+    return result
+
+
 # ── Main Engine ──────────────────────────────────────────────────────────────
 
 
@@ -146,6 +166,41 @@ def compute_metrics(
     if not rows:
         return _empty_metrics()
 
+    # Find all YYYY-MM months in the entire rows dataset (including ranges) to populate byMonthAcc
+    all_months = set()
+    for r in rows:
+        start = r.period_start or r.date
+        end = r.period_end or r.date
+        start_ym = start[:7]
+        end_ym = end[:7]
+        start_y, start_m = map(int, start_ym.split("-"))
+        end_y, end_m = map(int, end_ym.split("-"))
+        
+        curr_y = start_y
+        curr_m = start_m
+        while curr_y < end_y or (curr_y == end_y and curr_m <= end_m):
+            all_months.add(f"{curr_y}-{curr_m:02d}")
+            curr_m += 1
+            if curr_m > 12:
+                curr_m = 1
+                curr_y += 1
+
+    # ── Prorated monthly calculations for deposits and expenses ─────────────────
+    deposit_rows = [r for r in rows if r.entry_type == EntryType.DEPOSIT and r.value > 0]
+    expense_rows = [r for r in rows if r.entry_type == EntryType.EXPENSE]
+
+    deposit_by_month: dict[str, float] = {}
+    for row in deposit_rows:
+        for contrib in row_contributions(row):
+            ym = contrib["date"][:7]
+            deposit_by_month[ym] = deposit_by_month.get(ym, 0.0) + contrib["value"]
+
+    monthly_expenses: dict[str, float] = {}
+    for row in expense_rows:
+        for contrib in row_contributions(row):
+            ym = contrib["date"][:7]
+            monthly_expenses[ym] = monthly_expenses.get(ym, 0.0) + contrib["value"]
+
     # Filter out deposits, waivers, expenses, AND partner entries for revenue calculations
     # FIREWALL: partner_in and partner_out are isolated from operational revenue.
     revenue_rows = [
@@ -153,8 +208,6 @@ def compute_metrics(
         if r.entry_type not in (EntryType.DEPOSIT, EntryType.WAIVER, EntryType.EXPENSE, EntryType.PARTNER_OUT, EntryType.PARTNER_IN)
     ]
 
-    # ── Expense metrics — computed before the early-return guard ──────────
-    expense_rows = [r for r in rows if r.entry_type == EntryType.EXPENSE]
     total_expenses = 0.0
 
     # Survival goal accumulators: track the global expense date span
@@ -209,33 +262,63 @@ def compute_metrics(
 
     # ── Investment / Deposit compound interest (0.8%/month CDI reference) ────
     MONTHLY_RATE = 0.008
-    deposit_rows_inv = [r for r in rows if r.entry_type == EntryType.DEPOSIT and r.value > 0]
-    deposit_count = len(deposit_rows_inv)
+    all_yms = sorted(list(all_months))
+    earliest_invest_month = ""
+    for ym in all_yms:
+        if deposit_by_month.get(ym, 0.0) > 0:
+            earliest_invest_month = ym
+            break
 
-    # Group deposits by YYYY-MM
-    deposit_by_month: dict[str, float] = {}
-    for row in deposit_rows_inv:
-        ym = row.date[:7]
-        deposit_by_month[ym] = deposit_by_month.get(ym, 0.0) + row.value
-    sorted_dep_months = sorted(deposit_by_month.items(), key=lambda x: x[0])
+    portfolio_timeline = []
+    global_total_deposited = 0.0
+    global_total_yield = 0.0
+    global_balance = 0.0
 
-    invest_running = 0.0
-    total_invested = 0.0
-    total_interest_earned = 0.0
-    for _, raw_deposit in sorted_dep_months:
-        month_yield = _round2(invest_running * MONTHLY_RATE)
-        total_interest_earned += month_yield
-        total_invested += raw_deposit
-        invest_running = _round2(invest_running + month_yield + raw_deposit)
-    total_invested = _round2(total_invested)
-    total_interest_earned = _round2(total_interest_earned)
-    investment_balance = _round2(invest_running)
+    if earliest_invest_month:
+        latest_month = all_yms[-1] if all_yms else earliest_invest_month
+        consecutive_months = _get_consecutive_months(earliest_invest_month, latest_month)
+
+        accumulated_principal = 0.0
+        accumulated_yield = 0.0
+
+        for ym in consecutive_months:
+            monthly_deposit = deposit_by_month.get(ym, 0.0)
+            current_month_yield = _round2((accumulated_principal + accumulated_yield) * MONTHLY_RATE)
+            accumulated_yield = _round2(accumulated_yield + current_month_yield)
+            accumulated_principal = _round2(accumulated_principal + monthly_deposit)
+            total_balance = _round2(accumulated_principal + accumulated_yield)
+
+            portfolio_timeline.append(
+                PortfolioTimelinePoint(
+                    month=ym,
+                    monthlyDeposit=_round2(monthly_deposit),
+                    currentMonthYield=current_month_yield,
+                    accumulatedPrincipal=accumulated_principal,
+                    accumulatedYield=accumulated_yield,
+                    totalBalance=total_balance,
+                )
+            )
+
+        global_total_deposited = accumulated_principal
+        global_total_yield = accumulated_yield
+        global_balance = accumulated_principal + accumulated_yield
+
+    print(f"DEBUG PORTFOLIO: Deposited={global_total_deposited}, Yield={global_total_yield}, Balance={global_balance}")
+
+    deposit_count = len(deposit_rows)
+    total_invested = global_total_deposited
+    total_interest_earned = global_total_yield
+    investment_balance = global_balance
 
     invest_fields = {
         "depositCount": deposit_count,
         "totalInvested": total_invested,
         "totalInterestEarned": total_interest_earned,
         "investmentBalance": investment_balance,
+        "globalTotalDeposited": global_total_deposited,
+        "globalTotalYield": global_total_yield,
+        "globalBalance": global_balance,
+        "portfolioTimeline": portfolio_timeline,
     }
 
     # ── Advanced Statistics (revenue rows only, value > 0) ─────────────────
@@ -324,7 +407,10 @@ def compute_metrics(
 
     # byYear: {gross, dates[], months set, weeks set}
     by_year_acc: dict[str, dict] = {}
-    by_month_acc: dict[str, dict] = {}  # YYYY-MM → {gross, payments, weeks}
+    by_month_acc: dict[str, dict] = {
+        ym: {"gross": 0.0, "payments": {}, "weeks": set()}
+        for ym in all_months
+    }
     by_week_acc: dict[str, float] = {}  # YYYY-Www → total
 
     # ── Single-pass over active rows ───────────────────────────────────
@@ -423,6 +509,8 @@ def compute_metrics(
             weeklyAvg=weekly_avg,
             lastWeekGross=last_week_gross,
             dailyPayments=acc["payments"],
+            investment=_round2(deposit_by_month.get(ym, 0.0)),
+            expense=_round2(monthly_expenses.get(ym, 0.0)),
         )
 
     # ── Week totals ──────────────────────────────────────────────────────
@@ -535,6 +623,10 @@ def _empty_metrics() -> TableMetrics:
         totalInvested=0,
         totalInterestEarned=0,
         investmentBalance=0,
+        globalTotalDeposited=0,
+        globalTotalYield=0,
+        globalBalance=0,
+        portfolioTimeline=[],
         maxTransaction=0,
         minTransaction=0,
         medianTransaction=0,

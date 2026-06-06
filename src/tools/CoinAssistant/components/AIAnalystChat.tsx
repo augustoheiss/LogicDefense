@@ -50,6 +50,8 @@ function buildPayload(
       monthCount: r.monthCount,
       periodStart: r.periodStart,
       periodEnd: r.periodEnd,
+      generatedBy: r.generatedBy,
+      clonedFrom: r.clonedFrom,
     })),
     goals: {
       dailyGoals: table.goals.dailyGoals,
