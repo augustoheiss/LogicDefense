@@ -392,28 +392,111 @@ function buildMessage(
     ? `• ✅ Saldo de Reposição: *+${absWeeks} semanas* _(${absWeeks} semana${parseFloat(absWeeks) !== 1 ? 's' : ''} adiantada${parseFloat(absWeeks) !== 1 ? 's' : ''})_`
     : `• 🚨 Saldo de Reposição: *-${absWeeks} semanas* _(Volume de serviço pendente para recuperar o teto da meta)_`;
 
+  const recentWaivers = table.rows
+    .filter((r) => r.entryType === 'waiver' && r.value > 0)
+    .sort((a, b) => b.date.localeCompare(a.date))
+    .slice(0, 10);
+
+  // Group raw partnership arrays for wash detection (matching credited/debited pairs)
+  const partnerInRows = table.rows.filter((r) => r.entryType === 'partner_in' && r.value > 0);
+  const partnerOutRows = table.rows.filter((r) => r.entryType === 'partner_out' && r.value > 0);
+
+  const matchedInIds = new Set<string>();
+  const matchedOutIds = new Set<string>();
+  const canceledPartnerships: TableRow[] = [];
+
+  // Identify pairs that have the exact same value
+  for (const inRow of partnerInRows) {
+    const match = partnerOutRows.find(
+      (outRow) =>
+        !matchedOutIds.has(outRow.id) &&
+        Math.round(outRow.value * 100) === Math.round(inRow.value * 100)
+    );
+
+    if (match) {
+      matchedInIds.add(inRow.id);
+      matchedOutIds.add(match.id);
+      canceledPartnerships.push(match);
+    }
+  }
+
+  // Keep unmatched outstanding rows to accurately represent true outstanding surpluses or liabilities
+  const unmatchedPartnerOut = partnerOutRows.filter((r) => !matchedOutIds.has(r.id));
+
+  const recentPartnerOut = unmatchedPartnerOut
+    .sort((a, b) => b.date.localeCompare(a.date))
+    .slice(0, 10);
+
+  // Partnership Netting Calculations
+  const totalCreditosParceria = metrics.totalPartnerIn;
+  const totalDebitosParceria = metrics.totalPartnerOut;
+  const netPartnershipDelta = totalCreditosParceria - totalDebitosParceria;
+  const partnershipDeficit = netPartnershipDelta < 0 ? Math.abs(netPartnershipDelta) : 0;
+
+  // Absorb Net Deficit into Metas Acumuladas
+  const adjustedMetasAcumuladas = goalTarget + partnershipDeficit;
+  const partnershipDeficitWeeks = reportWeeklyGoal > 0 ? partnershipDeficit / reportWeeklyGoal : 0;
+  const adjustedGoalTotalWeeks = metrics.goalTotalWeeks + partnershipDeficitWeeks;
+
+  // Realign Final Balance Weeks
+  const netPartnershipWeeks = reportWeeklyGoal > 0 ? netPartnershipDelta / reportWeeklyGoal : 0;
+  const finalWeeks = metrics.netBalanceWeeks + netPartnershipWeeks;
+
   lines.push(
     `📊 *Balanço Operacional & Indicadores*`,
-    `(+) Receitas Operacionais: ${fmt(regularIncome)} _(${fmtW(metrics.grossTotalWeeks)})_`,
-    ...(metrics.totalWaiverCredit > 0
-      ? [`(+) Justificativas: ${fmt(metrics.totalWaiverCredit)} _(${fmtW(metrics.waiverTotalWeeks)})_`]
-      : []),
-    ...(metrics.totalPartnerIn > 0
-      ? [`(+) Créditos de Parceria: ${fmt(metrics.totalPartnerIn)}`]
-      : []),
-    `(−) Metas Acumuladas: ${fmt(goalTarget)} _(${fmtW(metrics.goalTotalWeeks)})_`,
-    ...(metrics.totalPartnerOut > 0
-      ? [`(−) Débitos de Parceria: ${fmt(metrics.totalPartnerOut)}`]
-      : []),
-    `(=) *Saldo Final: ${fmt(balance)} (${fmtW(metrics.netBalanceWeeks)})*`,
-    '',
-    `• ⏳ Tempo de Parceria: *${metrics.totalElapsedWeeks} semanas*`,
-    ...(waivedWeeks > 0
-      ? [`• 🛡️ Período Justificado: *${waivedWeeks.toFixed(1)} semanas* (${waiversCount} ocorrência${waiversCount !== 1 ? 's' : ''})`]
-      : []),
-    tbLine,
-    '',
+    `(+) Receitas Operacionais: ${fmt(regularIncome)} _(${fmtW(metrics.grossTotalWeeks)})_`
   );
+
+  if (metrics.totalWaiverCredit > 0) {
+    lines.push(`(+) Justificativas: ${fmt(metrics.totalWaiverCredit)} _(${fmtW(metrics.waiverTotalWeeks)})_`);
+    if (recentWaivers.length > 0) {
+      lines.push(`🔎 *Últimas Justificativas:*`);
+      for (const row of recentWaivers) {
+        const desc = row.description ? ` — ${row.description}` : '';
+        lines.push(`  • ${fmtDay(row.date)}: *${fmt(row.value)}*${desc}`);
+      }
+    }
+  }
+
+  // Render Metas row and unmatched deficit details
+  if (netPartnershipDelta < 0) {
+    lines.push(`(−) Metas Acumuladas + Déficit Parceria: ${fmt(adjustedMetasAcumuladas)} _(${fmtW(adjustedGoalTotalWeeks)})_`);
+    if (recentPartnerOut.length > 0) {
+      lines.push(`🔎 *Déficit Real de Parceria (A pagar):*`);
+      for (const row of recentPartnerOut) {
+        const desc = row.description ? ` — ${row.description}` : '';
+        lines.push(`  • ${fmtDay(row.date)}: *${fmt(row.value)}*${desc}`);
+      }
+    }
+  } else {
+    lines.push(`(−) Metas Acumuladas: ${fmt(goalTarget)} _(${fmtW(metrics.goalTotalWeeks)})_`);
+  }
+
+  lines.push(
+    `(=) *Saldo Final: ${fmt(balance)} (${fmtW(finalWeeks)})*`,
+    '',
+    `• ⏳ Tempo de Parceria: *${metrics.totalElapsedWeeks} semanas*`
+  );
+
+  if (waivedWeeks > 0) {
+    lines.push(`• 🛡️ Período Justificado: *${waivedWeeks.toFixed(1)} semanas* (${waiversCount} ocorrência${waiversCount !== 1 ? 's' : ''})`);
+  }
+
+  lines.push(
+    tbLine,
+    ''
+  );
+
+  // Neutralized Section (Wash Transactions)
+  const sortedCanceled = canceledPartnerships.sort((a, b) => b.date.localeCompare(a.date)).slice(0, 10);
+  if (sortedCanceled.length > 0) {
+    lines.push(`🤝 *Parcerias Compensadas (Impacto Zero no Caixa):*`);
+    for (const row of sortedCanceled) {
+      const desc = row.description ? ` — ${row.description}` : '';
+      lines.push(`  • ${fmtDay(row.date)}: *${fmt(row.value)}*${desc} _(Anulado/Compensado)_`);
+    }
+    lines.push('');
+  }
 
   // ── Cost-based goal coverage message ───────────────────────────────────────
   if (costBasedTarget && costBasedTarget.annualCost > 0 && yearRevenue >= costBasedTarget.annualCost) {
