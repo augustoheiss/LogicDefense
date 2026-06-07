@@ -7,7 +7,7 @@ import { TablesList } from './TablesList';
 import { TableEditor } from './TableEditor';
 import { TableModal } from './TableModal';
 import { ConfirmDialog } from './ConfirmDialog';
-import { MoedaLandingGuide } from './MoedaLandingGuide';
+import { SaaSMasterclassLandingPage } from './SaaSMasterclassLandingPage';
 
 type ModalState =
   | { mode: 'create' }
@@ -153,7 +153,7 @@ export function CoinAssistantApp() {
           ) : (
             <div className="flex flex-col gap-6">
               <EmptyState onNew={() => setModal({ mode: 'create' })} />
-              <MoedaLandingGuide />
+              <SaaSMasterclassLandingPage />
             </div>
           )}
         </main>

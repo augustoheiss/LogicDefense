@@ -9,7 +9,7 @@ import { RevenueChart } from './RevenueChart';
 import { RealInvestmentsChart } from './RealInvestmentsChart';
 import { FutureProjectionChart } from './FutureProjectionChart';
 import { WhatsAppExporter } from './WhatsAppExporter';
-import { MoedaLandingGuide } from './MoedaLandingGuide';
+import { SaaSMasterclassLandingPage } from './SaaSMasterclassLandingPage';
 import { PdfExporter } from './PdfExporter';
 import { ConfirmDialog } from './ConfirmDialog';
 import { ExpensesBulkInput } from './ExpensesBulkInput';
@@ -549,7 +549,7 @@ export function TableEditor({
       />
 
       {/* ── Landing Page & Practical Guide ── */}
-      <MoedaLandingGuide />
+      <SaaSMasterclassLandingPage />
 
       {/* ── Modals ── */}
       {showWhatsApp && (
