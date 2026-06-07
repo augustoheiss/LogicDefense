@@ -23,7 +23,7 @@ Este documento serve como a especificação de interface e cópia de conversão 
 `🚀 PORTAL OPEN-SOURCE DE ENGENHARIA DE SOFTWARE E SISTEMAS DE IA`
 
 ### [Headline Principal]
-# Pare de escrever CRUDs medíocres de "arrastar card". Aprenda de graça a engenharia por trás de motores contábeis com proração de tempo real e arquitetura de RAG financeiro que corta 85% dos custos de nuvem.
+# Aprenda de graça a engenharia por trás de motores contábeis com proração de tempo real e arquitetura de RAG financeiro que corta 85% dos custos de nuvem.
 
 ### [Subheadline]
 Acesse o manual completo e estude os módulos de código-fonte real do ecossistema do **Assistente-Moeda** de forma 100% gratuita. Aprenda revisando, auditando e reconstruindo uma infraestrutura financeira de alta complexidade diretamente no seu navegador.

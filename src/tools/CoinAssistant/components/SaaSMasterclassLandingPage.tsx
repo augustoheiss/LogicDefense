@@ -142,7 +142,7 @@ export function SaaSMasterclassLandingPage() {
   return (
     <div className="mt-16 sm:mt-24 border-t border-indigo-500/15 bg-slate-950 rounded-3xl overflow-hidden text-white font-sans">
       <div className="relative">
-        
+
         {/* ── SECTION 1: HERO (Above the Fold) ── */}
         <Section className="relative border-b border-white/5 pt-16 sm:pt-20">
           <div className="text-center space-y-6">
@@ -151,7 +151,7 @@ export function SaaSMasterclassLandingPage() {
             </span>
 
             <h2 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-white leading-tight tracking-tight max-w-3xl mx-auto">
-              Pare de escrever CRUDs medíocres de "arrastar card". Aprenda de graça a engenharia por trás de motores contábeis com proração de tempo real e arquitetura de RAG financeiro que corta 85% dos custos de nuvem.
+              Aprenda de graça a engenharia por trás de motores contábeis com proração de tempo real e arquitetura de RAG financeiro que corta 85% dos custos de nuvem.
             </h2>
 
             <p className="text-sm sm:text-base text-slate-300 max-w-2xl mx-auto leading-relaxed">
@@ -426,7 +426,7 @@ export function SaaSMasterclassLandingPage() {
             <h2 className="text-3xl font-bold tracking-tight text-white mb-8 flex items-center gap-2 font-outfit">
               <span className="text-emerald-400">💬</span> Perguntas Frequentes
             </h2>
-            
+
             <div className="space-y-6">
               {/* Pergunta 1 */}
               <div className="p-5 rounded-xl bg-slate-900/50 border border-indigo-500/10 backdrop-blur-sm transition-all hover:border-indigo-500/20">
@@ -471,7 +471,7 @@ export function SaaSMasterclassLandingPage() {
 
             {/* Link de retorno higienizado */}
             <div className="mt-12 text-center">
-              <button 
+              <button
                 onClick={scrollToTop}
                 className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-400 hover:text-emerald-400 transition-colors bg-transparent border-0 cursor-pointer"
               >
