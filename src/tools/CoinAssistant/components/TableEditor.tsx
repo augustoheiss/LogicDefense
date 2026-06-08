@@ -20,6 +20,8 @@ import { formatCurrencyShort } from '../utils/formatCurrency';
 import { resolveGoalForYear } from '../utils/dateUtils';
 import { AIAnalystChat } from './AIAnalystChat';
 import { PredictionPanel } from './PredictionPanel';
+import { YearlyHeatmap } from './YearlyHeatmap';
+import { WeeklyAuditDrawer } from './WeeklyAuditDrawer';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -50,9 +52,12 @@ function todayYM(): string {
   return `${t.getFullYear()}-${pad2(t.getMonth() + 1)}`;
 }
 
-/** All distinct "YYYY-MM" values in rows + current month, newest first. */
-function buildAvailableMonths(rows: TableRow[]): string[] {
+/** All distinct "YYYY-MM" values in rows + current month + extra selected month, newest first. */
+function buildAvailableMonths(rows: TableRow[], extraMonth?: string): string[] {
   const months = new Set<string>([todayYM()]);
+  if (extraMonth) {
+    months.add(extraMonth);
+  }
   for (const row of rows) {
     months.add(row.date.slice(0, 7));
   }
@@ -181,6 +186,7 @@ export function TableEditor({
   const [chartView,    setChartView]    = useState<'history' | 'projection'>('history');
   const [showCSVManager, setShowCSVManager] = useState(false);
   const [latestAIAnalysis, setLatestAIAnalysis] = useState<string | undefined>(undefined);
+  const [selectedWeeks, setSelectedWeeks] = useState<string[]>([]);
 
   // ── Time Machine (cutoff date) ──────────────────────────────────────────────
   const [cutoffDate, setCutoffDate] = useState<string>(''); // '' = today (no filter)
@@ -205,10 +211,10 @@ export function TableEditor({
   );
 
   // ── Global month selector ───────────────────────────────────────────────────
-  const availableMonths = useMemo(() => buildAvailableMonths(filteredRows), [filteredRows]);
   const [selectedMonth, setSelectedMonth] = useState<string>(
     () => defaultMonth(table.rows),
   );
+  const availableMonths = useMemo(() => buildAvailableMonths(filteredRows, selectedMonth), [filteredRows, selectedMonth]);
   // Guard: if the selected month is no longer in the list, snap to the first
   const effectiveMonth = availableMonths.includes(selectedMonth)
     ? selectedMonth
@@ -539,6 +545,36 @@ export function TableEditor({
         )}
 
       </div>
+
+      {/* ── Yearly Operational Heatmap ── */}
+      <YearlyHeatmap
+        year={parseInt(effectiveMonth.slice(0, 4), 10)}
+        table={table}
+        rows={filteredRows}
+        selectedWeeks={selectedWeeks}
+        onToggleWeek={(mondayKey) => {
+          setSelectedWeeks((prev) => {
+            const isSelecting = !prev.includes(mondayKey);
+            if (isSelecting) {
+              const targetMonth = mondayKey.slice(0, 7);
+              setSelectedMonth(targetMonth);
+            }
+            return prev.includes(mondayKey)
+              ? prev.filter((k) => k !== mondayKey)
+              : [...prev, mondayKey];
+          });
+        }}
+        onClearSelection={() => setSelectedWeeks([])}
+      />
+
+      {/* ── Weekly Audit Drawer ── */}
+      <WeeklyAuditDrawer
+        selectedWeeks={selectedWeeks}
+        table={table}
+        rows={filteredRows}
+        onClearSelection={() => setSelectedWeeks([])}
+        globalSystemBalance={metrics.globalGoalBalance}
+      />
 
       {/* ── AI Analyst Chat ── */}
       <AIAnalystChat

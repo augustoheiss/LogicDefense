@@ -26,7 +26,7 @@ import math
 import os
 from collections import defaultdict
 from statistics import median as stat_median
-from datetime import date
+from datetime import date, timedelta
 
 from dotenv import load_dotenv
 from fastapi import APIRouter, HTTPException
@@ -39,8 +39,17 @@ from models.coin_models import (
     TableMetrics,
     EntryType,
 )
-from services.coin_metrics_engine import compute_metrics
-from services.coin_date_utils import resolve_goal_for_year, iso_year_month, get_effective_goals
+from services.coin_metrics_engine import compute_metrics, row_contributions
+from services.coin_date_utils import (
+    resolve_goal_for_year,
+    iso_year_month,
+    get_effective_goals,
+    _parse_date,
+    _to_local_key,
+    _get_monday_of,
+    get_weekly_goal_for_date,
+    fmt_date,
+)
 
 # ── Environment & Logging ────────────────────────────────────────────────────
 
@@ -426,6 +435,121 @@ def build_ai_scenario_context(rows: list[TableRow]) -> str:
     return "\n" + "\n".join(lines)
 
 
+def build_weekly_performance_context(
+    payload: AIAnalystPayload,
+    metrics: TableMetrics,
+) -> str:
+    """
+    Builds the weekly performance context block with dynamic tiered token compression
+    and temporal isolation boundary clamping.
+    """
+    # 1. Temporal boundary identification
+    active_rows = [r for r in payload.rows if r.value > 0]
+    if not active_rows:
+        return ""
+
+    # Earliest date in active rows (operational start)
+    partnership_start_date_str = min(r.period_start or r.date for r in active_rows)
+    try:
+        partnership_start_date = _parse_date(partnership_start_date_str)
+    except Exception:
+        return ""
+
+    # Current date (Time Machine or physical today)
+    as_of = payload.as_of_date
+    current_date = _parse_date(as_of) if as_of else date.today()
+
+    # 2. Generate active weeks chronologically
+    start_of_timeline = _get_monday_of(partnership_start_date)
+    end_of_timeline = _get_monday_of(current_date)
+
+    # Filter operational revenue rows only
+    # Same filter as YearlyHeatmap and metrics engine:
+    # Exclude deposit, waiver, expense, partner_in, partner_out
+    revenue_rows = [
+        r for r in payload.rows
+        if r.entry_type not in (EntryType.DEPOSIT, EntryType.WAIVER, EntryType.EXPENSE, EntryType.PARTNER_OUT, EntryType.PARTNER_IN)
+    ]
+
+    weeks_list = []
+    cursor = start_of_timeline
+    while cursor <= end_of_timeline:
+        monday = cursor
+        sunday = cursor + timedelta(days=6)
+
+        # Check boundary rules:
+        # Sunday >= partnership start date, and Monday <= current date
+        if sunday >= partnership_start_date and monday <= current_date:
+            # Calculate weekly revenue from daily contributions
+            weekly_revenue = 0.0
+            for row in revenue_rows:
+                for contrib in row_contributions(row):
+                    contrib_date = _parse_date(contrib["date"])
+                    if monday <= contrib_date <= sunday:
+                        weekly_revenue += contrib["value"]
+
+            # Get weekly goal anchored to Sunday key
+            weekly_goal = get_weekly_goal_for_date(_to_local_key(sunday), payload.goals)
+            daily_average = weekly_revenue / 7.0
+
+            weeks_list.append({
+                "monday": monday,
+                "sunday": sunday,
+                "goal": weekly_goal,
+                "revenue": weekly_revenue,
+                "daily_average": daily_average
+            })
+
+        cursor += timedelta(days=7)
+
+    W = len(weeks_list)
+    if W == 0:
+        return ""
+
+    def _fmt_brl(val: float) -> str:
+        # Formats float to R$ X.XXX,XX
+        formatted = f"{val:,.2f}"
+        return formatted.replace(",", "X").replace(".", ",").replace("X", ".")
+
+    lines = ["\n── HISTÓRICO DE PERFORMANCE SEMANAL ──"]
+
+    # 3. Tiered Token Compression Cascade
+    if W <= 20:
+        # Tier 1: Render all weeks line-by-line
+        for wk in weeks_list:
+            mon_str = fmt_date(wk["monday"])
+            sun_str = fmt_date(wk["sunday"])
+            goal_str = _fmt_brl(wk["goal"])
+            rev_str = _fmt_brl(wk["revenue"])
+            avg_str = _fmt_brl(wk["daily_average"])
+            lines.append(f"  Semana {mon_str} a {sun_str} | Meta: R$ {goal_str} | Real: R$ {rev_str} | Média: R$ {avg_str}")
+    else:
+        # Tier 2/3/4: Compress older weeks, print most recent 12 weeks
+        older_weeks = weeks_list[:-12]
+        recent_weeks = weeks_list[-12:]
+
+        # Aggregate older weeks
+        num_older = len(older_weeks)
+        if num_older > 0:
+            avg_goal = sum(wk["goal"] for wk in older_weeks) / num_older
+            avg_revenue = sum(wk["revenue"] for wk in older_weeks) / num_older
+            avg_goal_str = _fmt_brl(avg_goal)
+            avg_rev_str = _fmt_brl(avg_revenue)
+            lines.append(f"  ── HISTÓRICO ANTIGO COMPRIMIDO ({num_older} semanas) ──")
+            lines.append(f"  Média de Meta Histórica: R$ {avg_goal_str} / semana | Faturamento Real Médio: R$ {avg_rev_str} / semana")
+
+        # Print recent weeks
+        for wk in recent_weeks:
+            mon_str = fmt_date(wk["monday"])
+            sun_str = fmt_date(wk["sunday"])
+            goal_str = _fmt_brl(wk["goal"])
+            rev_str = _fmt_brl(wk["revenue"])
+            avg_str = _fmt_brl(wk["daily_average"])
+            lines.append(f"  Semana {mon_str} a {sun_str} | Meta: R$ {goal_str} | Real: R$ {rev_str} | Média: R$ {avg_str}")
+
+    return "\n".join(lines) + "\n"
+
+
 def build_financial_context(
     payload: AIAnalystPayload,
     metrics: TableMetrics,
@@ -573,12 +697,16 @@ def build_financial_context(
     # Scenario context block
     scenario_context = build_ai_scenario_context(payload.rows)
 
+    # Weekly performance context block
+    weekly_perf_context = build_weekly_performance_context(payload, metrics)
+
     return (
         context
         + invest_block
         + stats_block
         + category_block
         + scenario_context
+        + weekly_perf_context
         + "\n═══════════════════════════════════════════════════════════"
     )
 
