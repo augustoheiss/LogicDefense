@@ -22,10 +22,12 @@ import { AIAnalystChat } from './AIAnalystChat';
 import { PredictionPanel } from './PredictionPanel';
 import { YearlyHeatmap } from './YearlyHeatmap';
 import { WeeklyAuditDrawer } from './WeeklyAuditDrawer';
+import { DebtTrackingTable } from './DebtTrackingTable';
+import { TabelaExporter } from './TabelaExporter';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type TabId = 'spreadsheet' | 'metrics' | 'chart';
+type TabId = 'spreadsheet' | 'metrics' | 'chart' | 'tabela';
 
 interface TableEditorProps {
   table: CoinTable;
@@ -235,6 +237,7 @@ export function TableEditor({
     { id: 'spreadsheet', label: '📋 Planilha' },
     { id: 'metrics',     label: '📊 Métricas' },
     { id: 'chart',       label: '📈 Gráfico'  },
+    { id: 'tabela',      label: '📄 Tabela'   },
   ];
 
   /** Batch-add multiple rows at once (used by ExpensesBulkInput) */
@@ -541,6 +544,52 @@ export function TableEditor({
                 </div>
               </div>
             )}
+          </div>
+        )}
+
+        {activeTab === 'tabela' && (
+          <div className="space-y-6">
+            {/* ── Export buttons ── */}
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                <span className="text-base">📄</span>
+                Tabela Financeira
+              </h3>
+              <TabelaExporter
+                tableName={table.name}
+                rows={filteredRows}
+                goals={table.goals}
+                cutoffDate={cutoffDate || undefined}
+              />
+            </div>
+
+            {/* ── Main Debt Tracking Table ── */}
+            <DebtTrackingTable
+              rows={filteredRows}
+              goals={table.goals}
+              cutoffDate={cutoffDate || undefined}
+              globalGoalBalance={metrics.globalGoalBalance}
+            />
+
+            {/* ── Entrada em Lote (duplicated from Planilha) ── */}
+            <ExpensesBulkInput onAddRows={handleBulkAdd} />
+
+            {/* ── Resumo por Categorias (duplicated from Planilha) ── */}
+            <details className="group">
+              <summary className="cursor-pointer select-none flex items-center gap-2 text-sm text-white/40 hover:text-white/60 transition-colors py-2">
+                <span className="text-white/20 group-open:rotate-90 transition-transform inline-block">▶</span>
+                <span className="text-base">📊</span> Resumo por Categorias
+              </summary>
+              <div className="mt-2">
+                <CategorySummary
+                  rows={table.rows}
+                  dailyGoal={resolveGoalForYear(table.goals.dailyGoals, parseInt(effectiveMonth.slice(0, 4)))}
+                  onUpdateRow={(rowId, patch) => onUpdateRow(rowId, patch)}
+                  onDeleteRow={(rowId) => setDeleteRowId(rowId)}
+                  onAddRow={onAddRow}
+                />
+              </div>
+            </details>
           </div>
         )}
 
