@@ -552,9 +552,14 @@ export const PrintableReport = forwardRef<HTMLDivElement, PrintableReportProps>(
                 </div>
                 <div style={cell}>
                   <div style={lbl}>Banco de Tempo</div>
-                  <div style={{ ...val, color: metrics.timeBankBalance >= 0 ? '#059669' : '#dc2626' }}>
-                    {metrics.timeBankBalance >= 0 ? '+' : ''}{metrics.timeBankBalance.toFixed(1)} sem.
-                  </div>
+                  {(() => {
+                    const effectiveWeeks = weeklyGoal > 0 ? metrics.globalGoalBalance / weeklyGoal : 0;
+                    return (
+                      <div style={{ ...val, color: effectiveWeeks >= 0 ? '#059669' : '#dc2626' }}>
+                        {effectiveWeeks >= 0 ? '+' : ''}{effectiveWeeks.toFixed(1)} sem.
+                      </div>
+                    );
+                  })()}
                 </div>
                 <div style={cell}>
                   <div style={lbl}>Saldo Metas</div>

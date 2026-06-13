@@ -624,11 +624,16 @@ def build_financial_context(
     else:
         balance_status = f"DÉFICIT de R$ {abs(metrics.global_goal_balance):,.2f} (está atrás das metas)"
 
-    # Time bank interpretation
-    if metrics.time_bank_balance >= 0:
-        time_bank_status = f"{metrics.time_bank_balance:.1f} semanas de CRÉDITO (pode descansar)"
+    # Time bank: liquid formula (global_goal_balance / weekly_goal)
+    # Mirrors the corrected UI in GoalsPanel.tsx and MetricsPanel.tsx.
+    if weekly_goal > 0:
+        reposition_weeks = round(metrics.global_goal_balance / weekly_goal, 1)
     else:
-        time_bank_status = f"{abs(metrics.time_bank_balance):.1f} semanas de DÉBITO (precisa recuperar)"
+        reposition_weeks = 0.0
+    if reposition_weeks >= 0:
+        time_bank_status = f"+{reposition_weeks:.1f} semanas de CRÉDITO (pode descansar)"
+    else:
+        time_bank_status = f"{reposition_weeks:.1f} semanas de DÉBITO (precisa recuperar)"
 
     context = f"""═══════════════════════════════════════════════════════════
   CONTEXTO FINANCEIRO — {table_name}
@@ -652,12 +657,13 @@ def build_financial_context(
   Despesas anualizadas:       R$ {metrics.annual_expenses:,.2f}
   Saldo líquido operacional:  R$ {metrics.net_balance:,.2f}
 
-── Totais com Parceria (passthrough — créditos/débitos de terceiros) ──
-  Receita + Créditos parceria: R$ {metrics.gross_with_partner:,.2f}
-  Despesas + Débitos parceria: R$ {metrics.expenses_with_partner:,.2f}
-  Saldo líquido c/ parceria:   R$ {metrics.net_with_partner:,.2f}
-  Créditos de parceria (in):   R$ {metrics.total_partner_in:,.2f}
-  Débitos de parceria (out):   R$ {metrics.total_partner_out:,.2f}
+── Totais com Parceria (Líquido — após cancelamento mútuo) ──
+  Créditos de parceria (bruto):   R$ {metrics.total_partner_in:,.2f}
+  Débitos de parceria (bruto):    R$ {metrics.total_partner_out:,.2f}
+  Cancelado mutuamente:           R$ {min(metrics.total_partner_in, metrics.total_partner_out):,.2f}
+  Créditos líquidos (in):         R$ {max(0, metrics.total_partner_in - min(metrics.total_partner_in, metrics.total_partner_out)):,.2f}
+  Débitos líquidos (out):         R$ {max(0, metrics.total_partner_out - min(metrics.total_partner_in, metrics.total_partner_out)):,.2f}
+  Saldo líquido c/ parceria:      R$ {metrics.net_with_partner:,.2f}
 
 ── Médias Globais (baseadas em tempo-calendário, não dias trabalhados) ──
   Média diária:   R$ {metrics.global_daily_avg:,.2f}
@@ -667,8 +673,8 @@ def build_financial_context(
 
 ── Balanço de Metas (Estrito — conta semanas vazias como débito) ──
   Status: {balance_status}
-  Crédito de dispensas:    R$ {payload.total_waiver_credits:,.2f}
-  Banco de Tempo:          {time_bank_status}
+  Crédito de dispensas:               R$ {payload.total_waiver_credits:,.2f}
+  Saldo de Reposição (Semanas):       {time_bank_status}
 {current_month_block}
 ── Por Ano ──
 {year_block}

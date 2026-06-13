@@ -552,8 +552,12 @@ def compute_metrics(
     goal_total_weeks   = float(total_elapsed_weeks)  # 1 calendar week = 1 goal-week
     net_balance_weeks  = _round2(gross_total_weeks + waiver_total_weeks - goal_total_weeks)
 
-    # time_bank_balance now equals the historically-accumulated net_balance_weeks.
-    time_bank_balance = net_balance_weeks
+    # time_bank_balance: uses the liquid formula (globalGoalBalance / currentWeeklyGoal)
+    # to match the corrected UI in GoalsPanel.tsx and MetricsPanel.tsx.
+    # This accounts for partner netting, unlike the legacy netBalanceWeeks.
+    current_year = today.year
+    effective_weekly_goal = resolve_goal_for_year(goals.weekly_goals, current_year)
+    time_bank_balance = round(global_goal_balance / effective_weekly_goal, 2) if effective_weekly_goal > 0 else 0.0
 
     # ── Combined metrics (operational + partnership) ──────────────────────────
     gross_with_partner = _round2(gross_total + total_partner_in)

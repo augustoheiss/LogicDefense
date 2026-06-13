@@ -386,9 +386,13 @@ function buildMessage(
 
   const waiversCount = table.rows.filter((r) => r.entryType === 'waiver' && r.value > 0).length;
   const waivedWeeks = metrics.waivedWeeks;
-  const tb = metrics.timeBankBalance;
-  const absWeeks = Math.abs(tb).toFixed(1);
-  const tbLine = tb >= 0
+  // ── Saldo de Reposição: liquid formula (globalGoalBalance / currentWeeklyGoal)
+  // Mirrors the corrected UI in GoalsPanel.tsx and MetricsPanel.tsx.
+  const effectiveWeeksBalance = reportWeeklyGoal > 0
+    ? metrics.globalGoalBalance / reportWeeklyGoal
+    : 0;
+  const absWeeks = Math.abs(effectiveWeeksBalance).toFixed(1);
+  const tbLine = effectiveWeeksBalance >= 0
     ? `• ✅ Saldo de Reposição: *+${absWeeks} semanas* _(${absWeeks} semana${parseFloat(absWeeks) !== 1 ? 's' : ''} adiantada${parseFloat(absWeeks) !== 1 ? 's' : ''})_`
     : `• 🚨 Saldo de Reposição: *-${absWeeks} semanas* _(Volume de serviço pendente para recuperar o teto da meta)_`;
 
@@ -427,20 +431,16 @@ function buildMessage(
     .sort((a, b) => b.date.localeCompare(a.date))
     .slice(0, 10);
 
-  // Partnership Netting Calculations
-  const totalCreditosParceria = metrics.totalPartnerIn;
-  const totalDebitosParceria = metrics.totalPartnerOut;
-  const netPartnershipDelta = totalCreditosParceria - totalDebitosParceria;
-  const partnershipDeficit = netPartnershipDelta < 0 ? Math.abs(netPartnershipDelta) : 0;
+  // ── Partner Netting (Enxugamento de Parceria) ──────────────────────
+  const canceledAmount = Math.min(metrics.totalPartnerIn, metrics.totalPartnerOut);
+  const liquidPartnerIn  = metrics.totalPartnerIn  - canceledAmount;
+  const liquidPartnerOut = metrics.totalPartnerOut - canceledAmount;
+  const totalDevido = goalTarget + liquidPartnerOut;
 
-  // Absorb Net Deficit into Metas Acumuladas
-  const adjustedMetasAcumuladas = goalTarget + partnershipDeficit;
-  const partnershipDeficitWeeks = reportWeeklyGoal > 0 ? partnershipDeficit / reportWeeklyGoal : 0;
-  const adjustedGoalTotalWeeks = metrics.goalTotalWeeks + partnershipDeficitWeeks;
-
-  // Realign Final Balance Weeks
-  const netPartnershipWeeks = reportWeeklyGoal > 0 ? netPartnershipDelta / reportWeeklyGoal : 0;
-  const finalWeeks = metrics.netBalanceWeeks + netPartnershipWeeks;
+  // Effective weeks balance — same liquid formula used across all UI
+  const effectiveFinalWeeks = reportWeeklyGoal > 0
+    ? balance / reportWeeklyGoal
+    : 0;
 
   lines.push(
     `📊 *Balanço Operacional & Indicadores*`,
@@ -458,9 +458,10 @@ function buildMessage(
     }
   }
 
-  // Render Metas row and unmatched deficit details
-  if (netPartnershipDelta < 0) {
-    lines.push(`(−) Metas Acumuladas + Déficit Parceria: ${fmt(adjustedMetasAcumuladas)} _(${fmtW(adjustedGoalTotalWeeks)})_`);
+  // Render Metas row with liquid partner netting
+  if (liquidPartnerOut > 0) {
+    lines.push(`(−) Total Devido (Metas + Parceria Líq.): ${fmt(totalDevido)} _(${fmtW(metrics.goalTotalWeeks)})_`);
+    lines.push(`    Metas: ${fmt(goalTarget)} + Parceria Líq.: ${fmt(liquidPartnerOut)}`);
     if (recentPartnerOut.length > 0) {
       lines.push(`🔎 *Déficit Real de Parceria (A pagar):*`);
       for (const row of recentPartnerOut) {
@@ -472,8 +473,16 @@ function buildMessage(
     lines.push(`(−) Metas Acumuladas: ${fmt(goalTarget)} _(${fmtW(metrics.goalTotalWeeks)})_`);
   }
 
+  if (liquidPartnerIn > 0) {
+    lines.push(`(+) Créditos de Parceria (Líquido): ${fmt(liquidPartnerIn)}`);
+  }
+
+  if (canceledAmount > 0) {
+    lines.push(`🤝 Parceria cancelada mutuamente: ${fmt(canceledAmount)}`);
+  }
+
   lines.push(
-    `(=) *Saldo Final: ${fmt(balance)} (${fmtW(finalWeeks)})*`,
+    `(=) *Saldo Final: ${fmt(balance)} (${effectiveFinalWeeks >= 0 ? '+' : ''}${effectiveFinalWeeks.toFixed(1)} sem)*`,
     '',
     `• ⏳ Tempo de Parceria: *${metrics.totalElapsedWeeks} semanas*`
   );
