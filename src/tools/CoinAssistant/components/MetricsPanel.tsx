@@ -181,40 +181,47 @@ export function MetricsPanel({ metrics, dailyGoal, table, selectedMonth }: Metri
       </div>
 
       {/* ── Totais com Parceria (only when partnership entries exist) ── */}
-      {(metrics.totalPartnerIn > 0 || metrics.totalPartnerOut > 0) && (
-        <div>
-          <h3 className="text-xs text-white/50 uppercase tracking-wider mb-3 font-semibold flex items-center gap-2">
-            <span className="w-4 h-px bg-white/20 inline-block" />
-            Totais com Parceria
-            <span className="flex-1 h-px bg-white/10 inline-block" />
-          </h3>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            <MetricCard
-              label="Receita + Créditos"
-              value={fmt(metrics.grossWithPartner)}
-              fullValue={formatCurrencyFull(metrics.grossWithPartner)}
-              status="accent"
-              sub={`créditos: ${fmt(metrics.totalPartnerIn)}`}
-            />
-            {metrics.expensesWithPartner > 0 && (
+      {(metrics.totalPartnerIn > 0 || metrics.totalPartnerOut > 0) && (() => {
+        // ── Partner Netting (Enxugamento de Parceria) ──────────────────────
+        const canceledAmount = Math.min(metrics.totalPartnerIn, metrics.totalPartnerOut);
+        const liquidPartnerIn  = metrics.totalPartnerIn  - canceledAmount;
+        const liquidPartnerOut = metrics.totalPartnerOut - canceledAmount;
+
+        return (
+          <div>
+            <h3 className="text-xs text-white/50 uppercase tracking-wider mb-3 font-semibold flex items-center gap-2">
+              <span className="w-4 h-px bg-white/20 inline-block" />
+              Totais com Parceria (Líquido)
+              <span className="flex-1 h-px bg-white/10 inline-block" />
+            </h3>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
               <MetricCard
-                label="Custos + Débitos"
-                value={fmt(metrics.expensesWithPartner)}
-                fullValue={formatCurrencyFull(metrics.expensesWithPartner)}
-                status="warning"
-                sub={`débitos: ${fmt(metrics.totalPartnerOut)}`}
+                label="Receita + Créditos Líq."
+                value={fmt(metrics.grossTotal + liquidPartnerIn)}
+                fullValue={formatCurrencyFull(metrics.grossTotal + liquidPartnerIn)}
+                status="accent"
+                sub={liquidPartnerIn > 0 ? `créditos líq.: ${fmt(liquidPartnerIn)}` : 'sem créditos líquidos'}
               />
-            )}
-            <MetricCard
-              label="Saldo c/ Parceria"
-              value={fmt(metrics.netWithPartner)}
-              fullValue={formatCurrencyFull(metrics.netWithPartner)}
-              status={metrics.netWithPartner >= 0 ? 'success' : 'warning'}
-              sub="inclui parceria"
-            />
+              {(metrics.totalExpenses > 0 || liquidPartnerOut > 0) && (
+                <MetricCard
+                  label="Custos + Débitos Líq."
+                  value={fmt(metrics.totalExpenses + liquidPartnerOut)}
+                  fullValue={formatCurrencyFull(metrics.totalExpenses + liquidPartnerOut)}
+                  status="warning"
+                  sub={liquidPartnerOut > 0 ? `débitos líq.: ${fmt(liquidPartnerOut)}` : 'sem débitos líquidos'}
+                />
+              )}
+              <MetricCard
+                label="Saldo c/ Parceria"
+                value={fmt(metrics.netWithPartner)}
+                fullValue={formatCurrencyFull(metrics.netWithPartner)}
+                status={metrics.netWithPartner >= 0 ? 'success' : 'warning'}
+                sub={canceledAmount > 0 ? `${fmt(canceledAmount)} cancelados mutuamente` : 'inclui parceria'}
+              />
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* ── Médias Globais (consolidated — single place for averages) ── */}
       <div>
@@ -255,13 +262,16 @@ export function MetricsPanel({ metrics, dailyGoal, table, selectedMonth }: Metri
           />
           {/* Time Bank — placed here to avoid isolated card */}
           {metrics.grossTotal > 0 && (() => {
-            const tb = metrics.timeBankBalance;
-            const positive = tb >= 0;
-            const absW = Math.abs(tb).toFixed(1);
+            const effectiveWeeksBalance = dailyGoal > 0
+              ? metrics.globalGoalBalance / (dailyGoal * 7)
+              : 0;
+            const positive = effectiveWeeksBalance >= 0;
+            const absW = Math.abs(effectiveWeeksBalance).toFixed(3);
             return (
               <MetricCard
                 label="Banco de Horas"
-                value={`${positive ? '+' : ''}${tb.toFixed(1)} semanas`}
+                value={`${positive ? '+' : '-'}${absW} semanas`}
+                fullValue={`Saldo Final Líquido (${formatCurrencyFull(metrics.globalGoalBalance)}) ÷ Meta Semanal (${formatCurrencyFull(dailyGoal * 7)})`}
                 status={positive ? 'success' : 'warning'}
                 sub={
                   positive

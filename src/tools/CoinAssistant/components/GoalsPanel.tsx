@@ -91,7 +91,7 @@ function TimeBankCard({ balance }: { balance: number }) {
           : `🚨 Você tem ${absWeeks} semana${parseFloat(absWeeks) !== 1 ? 's' : ''} de serviço pendentes para recuperar a meta`}
       </div>
       <div className="text-xs text-white/20 pt-0.5">
-        paidWeeks = receita ÷ meta semanal · elapsedWeeks = semanas desde 1ª entrada
+        Semanas de Saldo = Saldo Final Líquido ÷ Meta Semanal
       </div>
     </div>
   );
@@ -165,22 +165,31 @@ export function GoalsPanel({ goals, metrics }: GoalsPanelProps) {
           ? Math.round(metrics.billableWeeks * currentWeeklyGoal * 100) / 100
           : 0;
 
+        // ── Partner Netting (Enxugamento de Parceria) ──────────────────────
+        // Cancel the overlapping amount so the breakdown shows only liquid values.
+        const canceledAmount = Math.min(metrics.totalPartnerIn, metrics.totalPartnerOut);
+        const liquidPartnerIn  = metrics.totalPartnerIn  - canceledAmount;
+        const liquidPartnerOut = metrics.totalPartnerOut - canceledAmount;
+        const totalDevido = goalTarget + liquidPartnerOut;
+
         // Pre-computed historically-accumulated week equivalents from the engine.
         // These replace the naive (value / currentWeeklyGoal) flat division.
         const fmtW = (weeks: number) => weeks.toFixed(1);
+
+        // Effective time bank: globalGoalBalance / currentWeeklyGoal
+        const effectiveWeeksBalance = currentWeeklyGoal > 0
+          ? balance / currentWeeklyGoal
+          : 0;
 
         const rows = [
           { sign: '+', label: 'Receitas Operacionais', value: regularIncome, weeks: metrics.grossTotalWeeks, color: 'text-emerald-400' },
           ...(metrics.totalWaiverCredit > 0
             ? [{ sign: '+', label: 'Justificativas', value: metrics.totalWaiverCredit, weeks: metrics.waiverTotalWeeks, color: 'text-orange-400' }]
             : []),
-          ...(metrics.totalPartnerIn > 0
-            ? [{ sign: '+', label: 'Créditos de Parceria', value: metrics.totalPartnerIn, weeks: 0, color: 'text-indigo-400' }]
+          ...(liquidPartnerIn > 0
+            ? [{ sign: '+', label: 'Créditos de Parceria (Líquido)', value: liquidPartnerIn, weeks: 0, color: 'text-indigo-400' }]
             : []),
-          { sign: '−', label: 'Metas Acumuladas', value: goalTarget, weeks: metrics.goalTotalWeeks, color: 'text-white/50' },
-          ...(metrics.totalPartnerOut > 0
-            ? [{ sign: '−', label: 'Débitos de Parceria', value: metrics.totalPartnerOut, weeks: 0, color: 'text-amber-400' }]
-            : []),
+          { sign: '−', label: liquidPartnerOut > 0 ? 'Total Devido (Metas + Parceria Líq.)' : 'Metas Acumuladas', value: liquidPartnerOut > 0 ? totalDevido : goalTarget, weeks: metrics.goalTotalWeeks, color: 'text-white/50' },
         ];
 
         return (
@@ -200,12 +209,19 @@ export function GoalsPanel({ goals, metrics }: GoalsPanelProps) {
                   </span>
                 </div>
               ))}
+              {liquidPartnerOut > 0 && (
+                <div className="flex flex-wrap justify-between items-center gap-x-2 gap-y-0.5 min-w-0 text-white/20">
+                  <span className="min-w-0 pl-4 text-[10px]">
+                    Metas: {fmt(goalTarget)} + Parceria Líq.: {fmt(liquidPartnerOut)}
+                  </span>
+                </div>
+              )}
               <div className="border-t border-white/10 pt-1 flex flex-wrap justify-between items-center font-semibold gap-x-2 gap-y-0.5 min-w-0">
                 <span className={balancePositive ? 'text-emerald-400' : 'text-red-400'}>
                   <span className="text-white/25 w-4 inline-block">=</span> Saldo Final
                 </span>
                 <span className={`text-right ${balancePositive ? 'text-emerald-400' : 'text-red-400'}`}>
-                  {fmt(balance)} <span className="text-white/20">({fmtW(metrics.netBalanceWeeks)} sem)</span>
+                  {fmt(balance)} <span className="text-white/20">({effectiveWeeksBalance >= 0 ? '+' : ''}{effectiveWeeksBalance.toFixed(3)} sem)</span>
                 </span>
               </div>
             </div>
@@ -214,9 +230,12 @@ export function GoalsPanel({ goals, metrics }: GoalsPanelProps) {
       })()}
 
       {/* ── Time Bank (Banco de Horas) ── */}
-      {metrics.grossTotal > 0 && (
-        <TimeBankCard balance={metrics.timeBankBalance} />
-      )}
+      {metrics.grossTotal > 0 && (() => {
+        const effectiveWeeks = currentWeeklyGoal > 0
+          ? metrics.globalGoalBalance / currentWeeklyGoal
+          : 0;
+        return <TimeBankCard balance={effectiveWeeks} />;
+      })()}
 
       {/* ── Manual goal progress bars (only when targets > 0) ── */}
       {currentDailyGoal > 0 && (
