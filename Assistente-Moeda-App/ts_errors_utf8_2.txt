@@ -1,0 +1,151 @@
+﻿node_modules/react-native-gifted-charts/src/BarChart/index.tsx(78,33): error TS7006: Parameter 'item' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/BarChart/index.tsx(548,29): error TS7006: Parameter 'initialPointerIndex' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/BarChart/index.tsx(548,50): error TS7006: Parameter 'item' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/BarChart/index.tsx(548,56): error TS7006: Parameter 'x' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/BarChart/index.tsx(548,59): error TS7006: Parameter 'y' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/BarChart/index.tsx(658,28): error TS2345: Argument of type 'itemType' is not assignable to parameter of type 'SetStateAction<{ pointerShiftX: number; pointerShiftY: number; }>'.
+node_modules/react-native-gifted-charts/src/BarChart/index.tsx(696,28): error TS2345: Argument of type 'itemType' is not assignable to parameter of type 'SetStateAction<{ pointerShiftX: number; pointerShiftY: number; }>'.
+node_modules/react-native-gifted-charts/src/BarChart/index.tsx(739,43): error TS7006: Parameter 'item' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/BarChart/index.tsx(739,49): error TS7006: Parameter 'index' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/BarChart/index.tsx(837,19): error TS7006: Parameter 'evt' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/BarChart/RenderBars.tsx(408,36): error TS7006: Parameter 'noGradient' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/Components/BarAndLineChartsWrapper/index.tsx(346,9): error TS2769: No overload matches this call.
+  Overload 1 of 2, '(props: ViewProps): View', gave the following error.
+    Type '{ width: string; height: any; marginBottom: number; }' is not assignable to type 'ViewStyle | Falsy | RecursiveArray<ViewStyle | Falsy> | readonly (ViewStyle | Falsy)[]'.
+      Type '{ width: string; height: any; marginBottom: number; }' is not assignable to type 'ViewStyle'.
+        Types of property 'width' are incompatible.
+          Type 'string' is not assignable to type 'DimensionValue | undefined'.
+  Overload 2 of 2, '(props: ViewProps, context: any): View', gave the following error.
+    Type '{ width: string; height: any; marginBottom: number; }' is not assignable to type 'ViewStyle | Falsy | RecursiveArray<ViewStyle | Falsy> | readonly (ViewStyle | Falsy)[]'.
+      Type '{ width: string; height: any; marginBottom: number; }' is not assignable to type 'ViewStyle'.
+        Types of property 'width' are incompatible.
+          Type 'string' is not assignable to type 'DimensionValue | undefined'.
+node_modules/react-native-gifted-charts/src/Components/BarAndLineChartsWrapper/renderHorizSections.tsx(352,26): error TS7006: Parameter 'val' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/Components/BarAndLineChartsWrapper/renderHorizSections.tsx(352,31): error TS7006: Parameter 'index' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/Components/BarAndLineChartsWrapper/renderHorizSections.tsx(366,43): error TS7006: Parameter 'val' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/Components/BarAndLineChartsWrapper/renderHorizSections.tsx(366,48): error TS7006: Parameter 'index' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/Components/BarAndLineChartsWrapper/renderLineInBarChart.tsx(7,30): error TS7006: Parameter 'props' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/Components/BarAndLineChartsWrapper/renderLineInBarChart.tsx(70,29): error TS7006: Parameter 'total' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/Components/BarAndLineChartsWrapper/renderLineInBarChart.tsx(70,36): error TS7006: Parameter 'item' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/Components/BarAndLineChartsWrapper/renderLineInBarChart.tsx(203,36): error TS7006: Parameter 'dataForRender' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/Components/BarAndLineChartsWrapper/renderVerticalLines.tsx(6,29): error TS7006: Parameter 'props' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/Components/BarAndLineChartsWrapper/renderVerticalLines.tsx(32,35): error TS7006: Parameter 'index' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/Components/BarSpecificComponents/barBackgroundPattern.tsx(4,30): error TS7006: Parameter 'props' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/Components/BarSpecificComponents/cap.tsx(5,13): error TS7006: Parameter 'props' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/Components/common/Pointer.tsx(4,24): error TS7006: Parameter 'props' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/Components/common/StripAndLabel.tsx(5,30): error TS7006: Parameter 'props' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/LineChart/index.tsx(137,36): error TS7006: Parameter 'item' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/LineChart/index.tsx(149,37): error TS7006: Parameter 'item' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/LineChart/index.tsx(161,37): error TS7006: Parameter 'item' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/LineChart/index.tsx(173,37): error TS7006: Parameter 'item' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/LineChart/index.tsx(185,37): error TS7006: Parameter 'item' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/LineChart/index.tsx(468,16): error TS7006: Parameter 'index' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/LineChart/index.tsx(469,16): error TS7006: Parameter 'value' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/LineChart/index.tsx(479,25): error TS7006: Parameter 'value' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/LineChart/index.tsx(485,24): error TS7006: Parameter 'val' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/LineChart/index.tsx(622,11): error TS7053: Element implicitly has an 'any' type because expression of type 'number' can't be used to index type '() => void'.
+  No index signature with a parameter of type 'number' was found on type '() => void'.
+node_modules/react-native-gifted-charts/src/LineChart/index.tsx(836,5): error TS7006: Parameter 'initialPath' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/LineChart/index.tsx(837,5): error TS7006: Parameter 'value' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/LineChart/index.tsx(838,5): error TS7006: Parameter 'dataLength' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/LineChart/index.tsx(866,25): error TS7006: Parameter 'data' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/LineChart/index.tsx(866,31): error TS7006: Parameter 'index' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/LineChart/index.tsx(866,38): error TS7006: Parameter 'around' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/LineChart/index.tsx(876,24): error TS7006: Parameter 'data' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/LineChart/index.tsx(876,30): error TS7006: Parameter 'i' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/LineChart/index.tsx(887,28): error TS7006: Parameter 'currentPointRegion' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/LineChart/index.tsx(887,48): error TS7006: Parameter 'nextPointRegion' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/LineChart/index.tsx(892,27): error TS7006: Parameter 'data' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/LineChart/index.tsx(892,33): error TS7006: Parameter 'i' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/LineChart/index.tsx(892,36): error TS7006: Parameter 'lineSegment' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/LineChart/index.tsx(892,49): error TS7006: Parameter 'startIndex' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/LineChart/index.tsx(892,61): error TS7006: Parameter 'endIndex' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/LineChart/index.tsx(1833,29): error TS7006: Parameter 'initialPointerIndex' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/LineChart/index.tsx(1833,50): error TS7006: Parameter 'item' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/LineChart/index.tsx(1833,56): error TS7006: Parameter 'x' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/LineChart/index.tsx(1833,59): error TS7006: Parameter 'y' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/LineChart/index.tsx(1938,25): error TS7006: Parameter 'item' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/LineChart/index.tsx(1938,31): error TS7006: Parameter 'index' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/LineChart/index.tsx(1946,5): error TS7006: Parameter 'hideDataPoints' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/LineChart/index.tsx(1947,5): error TS7006: Parameter 'dataForRender' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/LineChart/index.tsx(1948,5): error TS7006: Parameter 'originalDataFromProps' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/LineChart/index.tsx(1949,5): error TS7006: Parameter 'dataPtsShape' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/LineChart/index.tsx(1950,5): error TS7006: Parameter 'dataPtsWidth' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/LineChart/index.tsx(1951,5): error TS7006: Parameter 'dataPtsHeight' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/LineChart/index.tsx(1952,5): error TS7006: Parameter 'dataPtsColor' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/LineChart/index.tsx(1953,5): error TS7006: Parameter 'dataPtsRadius' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/LineChart/index.tsx(1954,5): error TS7006: Parameter 'textColor' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/LineChart/index.tsx(1955,5): error TS7006: Parameter 'textFontSize' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/LineChart/index.tsx(1956,5): error TS7006: Parameter 'startIndex' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/LineChart/index.tsx(1957,5): error TS7006: Parameter 'endIndex' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/LineChart/index.tsx(1958,5): error TS7006: Parameter 'isSecondary' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/LineChart/index.tsx(1959,5): error TS7006: Parameter 'showValuesAsDataPointsText' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/LineChart/index.tsx(2405,5): error TS7006: Parameter 'arrowPoints' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/LineChart/index.tsx(2406,5): error TS7006: Parameter 'arrowStrokeWidth' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/LineChart/index.tsx(2407,5): error TS7006: Parameter 'arrowStrokeColor' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/LineChart/index.tsx(2408,5): error TS7006: Parameter 'arrowFillColor' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/LineChart/index.tsx(2661,5): error TS7006: Parameter 'showArrow' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/LineChart/index.tsx(2662,5): error TS7006: Parameter 'arrowPoints' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/LineChart/index.tsx(2663,5): error TS7006: Parameter 'arrowStrokeWidth' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/LineChart/index.tsx(2664,5): error TS7006: Parameter 'arrowStrokeColor' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/LineChart/index.tsx(2665,5): error TS7006: Parameter 'arrowFillColor' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/LineChart/index.tsx(2929,5): error TS7006: Parameter 'showArrow' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/LineChart/index.tsx(2930,5): error TS7006: Parameter 'arrowPoints' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/LineChart/index.tsx(2931,5): error TS7006: Parameter 'arrowStrokeWidth' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/LineChart/index.tsx(2932,5): error TS7006: Parameter 'arrowStrokeColor' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/LineChart/index.tsx(2933,5): error TS7006: Parameter 'arrowFillColor' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/LineChart/LineChartBicolor.tsx(257,21): error TS2554: Expected 1 arguments, but got 0.
+node_modules/react-native-gifted-charts/src/LineChart/LineChartBicolor.tsx(404,16): error TS7006: Parameter 'index' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/LineChart/LineChartBicolor.tsx(405,16): error TS7006: Parameter 'index' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/LineChart/LineChartBicolor.tsx(488,7): error TS7034: Variable 'startX' implicitly has type 'any' in some locations where its type cannot be determined.
+node_modules/react-native-gifted-charts/src/LineChart/LineChartBicolor.tsx(539,17): error TS7006: Parameter 'spItem' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/LineChart/LineChartBicolor.tsx(565,11): error TS7005: Variable 'startX' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/LineChart/LineChartBicolor.tsx(780,25): error TS7006: Parameter 'item' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/LineChart/LineChartBicolor.tsx(780,31): error TS7006: Parameter 'index' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/LineChart/LineChartBicolor.tsx(788,5): error TS7006: Parameter 'dataForRender' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/LineChart/LineChartBicolor.tsx(789,5): error TS7006: Parameter 'dataPtsShape' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/LineChart/LineChartBicolor.tsx(790,5): error TS7006: Parameter 'dataPtsWidth' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/LineChart/LineChartBicolor.tsx(791,5): error TS7006: Parameter 'dataPtsHeight' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/LineChart/LineChartBicolor.tsx(792,5): error TS7006: Parameter 'dataPtsColor' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/LineChart/LineChartBicolor.tsx(793,5): error TS7006: Parameter 'dataPtsRadius' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/LineChart/LineChartBicolor.tsx(794,5): error TS7006: Parameter 'textColor' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/LineChart/LineChartBicolor.tsx(795,5): error TS7006: Parameter 'textFontSize' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/LineChart/LineChartBicolor.tsx(796,5): error TS7006: Parameter 'startIndex' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/LineChart/LineChartBicolor.tsx(797,5): error TS7006: Parameter 'endIndex' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/LineChart/LineChartBicolor.tsx(1085,30): error TS7006: Parameter 'points' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/LineChart/LineChartBicolor.tsx(1085,38): error TS7006: Parameter 'index' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/LineChart/LineChartBicolor.tsx(1095,30): error TS7006: Parameter 'points' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/LineChart/LineChartBicolor.tsx(1095,38): error TS7006: Parameter 'index' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/utils/index.tsx(70,38): error TS7006: Parameter 'points' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/utils/index.tsx(169,34): error TS7006: Parameter 'lineSegment' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/utils/index.tsx(169,47): error TS7006: Parameter 'index' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/utils/index.tsx(170,37): error TS7006: Parameter 'segment' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/utils/index.tsx(171,20): error TS2304: Cannot find name 'startDelimeter'.
+node_modules/react-native-gifted-charts/src/utils/index.tsx(171,63): error TS2304: Cannot find name 'endDelimeter'.
+node_modules/react-native-gifted-charts/src/utils/index.tsx(186,18): error TS2304: Cannot find name 'startDelimeter'.
+node_modules/react-native-gifted-charts/src/utils/index.tsx(186,61): error TS2304: Cannot find name 'endDelimeter'.
+node_modules/react-native-gifted-charts/src/utils/index.tsx(191,46): error TS7006: Parameter 'isCurved' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/utils/index.tsx(191,56): error TS7006: Parameter 'previousSegment' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/utils/index.tsx(215,3): error TS7006: Parameter 'points' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/utils/index.tsx(216,3): error TS7006: Parameter 'color' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/utils/index.tsx(217,3): error TS7006: Parameter 'currentLineThickness' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/utils/index.tsx(218,3): error TS7006: Parameter 'thickness' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/utils/index.tsx(219,3): error TS7006: Parameter 'strokeDashArray' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/utils/index.tsx(220,3): error TS7006: Parameter 'isCurved' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/utils/index.tsx(221,3): error TS7006: Parameter 'startDelimeter' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/utils/index.tsx(222,3): error TS7006: Parameter 'endDelimeter' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/utils/index.tsx(467,31): error TS7006: Parameter 'item' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/utils/index.tsx(484,5): error TS7053: Element implicitly has an 'any' type because expression of type 'string' can't be used to index type 'arrowConfigType'.
+  No index signature with a parameter of type 'string' was found on type 'arrowConfigType'.
+node_modules/react-native-gifted-charts/src/utils/index.tsx(628,5): error TS7006: Parameter 'item' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/utils/index.tsx(631,5): error TS7006: Parameter 'item' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/utils/index.tsx(634,5): error TS7006: Parameter 'item' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/utils/index.tsx(637,5): error TS7006: Parameter 'item' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/utils/index.tsx(640,5): error TS7006: Parameter 'item' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/utils/index.tsx(643,5): error TS7006: Parameter 'item' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/utils/index.tsx(798,34): error TS7006: Parameter 'value' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/utils/index.tsx(798,41): error TS7006: Parameter 'shiftY' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/utils/index.tsx(798,49): error TS7006: Parameter 'containerHeight' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/utils/index.tsx(798,66): error TS7006: Parameter 'maxValue' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/utils/index.tsx(801,22): error TS7006: Parameter 'obj' implicitly has an 'any' type.
+node_modules/react-native-gifted-charts/src/utils/index.tsx(819,41): error TS7006: Parameter 'lineConfig' implicitly has an 'any' type.
