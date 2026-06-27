@@ -11,7 +11,6 @@ import { MaterialsPage } from './pages/MaterialsPage'
 import { LessonPage } from './pages/LessonPage'
 import { SobrePage } from './pages/SobrePage'
 import { CVMaker } from './pages/CVMaker'
-import { CoinAssistantPage } from './pages/CoinAssistantPage'
 import { OcorrenciasPage } from './pages/OcorrenciasPage'
 import { ApiPortPage } from './pages/ApiPortPage'
 import './styles/game.css'
@@ -30,7 +29,6 @@ export default function App() {
           <Route path="/jogos/logic-friction"    element={<LogicFrictionPage />} />
           <Route path="/laboratorio"               element={<LabPage />} />
           <Route path="/laboratorio/cv-maker"      element={<CVMaker />} />
-          <Route path="/laboratorio/assistente-moeda" element={<CoinAssistantPage />} />
           <Route path="/laboratorio/ocorrencias" element={<OcorrenciasPage />} />
           <Route path="/laboratorio/api-port" element={<ApiPortPage />} />
           <Route path="/repositorio"               element={<MaterialsPage />} />

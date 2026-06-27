@@ -42,9 +42,9 @@ export function LabPage() {
               Crie tabelas de receitas, registre entradas diárias e acompanhe médias automáticas (diária, semanal, mensal). Exporte relatórios para o WhatsApp. 100% local, sem backend.
             </p>
           </div>
-          <Link to="/laboratorio/assistente-moeda" className="cv-lab-card__cta">
+          <a href="/laboratorio/assistente-moeda" className="cv-lab-card__cta">
             Abrir Assistente ↗
-          </Link>
+          </a>
         </div>
 
         {/* ── Gerador de Ocorrências tool card ── */}

@@ -1,3 +1,7 @@
 {
-  "rewrites": [{ "source": "/(.*)", "destination": "/" }]
+  "rewrites": [
+    { "source": "/laboratorio/assistente-moeda", "destination": "/laboratorio/assistente-moeda/index.html" },
+    { "source": "/laboratorio/assistente-moeda/:path*", "destination": "/laboratorio/assistente-moeda/:path*" },
+    { "source": "/((?!laboratorio/assistente-moeda).*)", "destination": "/" }
+  ]
 }
