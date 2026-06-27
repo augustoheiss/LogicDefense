@@ -130,8 +130,11 @@ export function useAuth(): AuthState {
   }, []);
 
   const logout = useCallback(async () => {
+    setUser(null);
+    setProfile(null);
+    setSession(null);
+    setMode('guest');
     await signOut();
-    // Auth state listener will handle cleanup
   }, []);
 
   const isAdmin = !!(

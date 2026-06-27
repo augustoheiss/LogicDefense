@@ -34,7 +34,24 @@ export async function pushToCloud(userId: string): Promise<{ success: boolean; e
     });
     if (settingsError) throw settingsError;
 
-    // 2. Upsert tables
+    // 2. Delete remote tables that are not in the local list
+    const localTableIds = (db.tables || []).map((t) => t.id);
+    if (localTableIds.length > 0) {
+      const { error: deleteTablesError } = await supabase
+        .from('coin_tables')
+        .delete()
+        .eq('user_id', userId)
+        .not('id', 'in', `(${localTableIds.join(',')})`);
+      if (deleteTablesError) throw deleteTablesError;
+    } else {
+      const { error: deleteTablesError } = await supabase
+        .from('coin_tables')
+        .delete()
+        .eq('user_id', userId);
+      if (deleteTablesError) throw deleteTablesError;
+    }
+
+    // 3. Upsert tables and manage their transactions
     if (db.tables && db.tables.length > 0) {
       for (const table of db.tables) {
         // Upsert table metadata
@@ -50,6 +67,23 @@ export async function pushToCloud(userId: string): Promise<{ success: boolean; e
         });
 
         if (tableError) throw tableError;
+
+        // Delete remote transactions that are not in the local table rows
+        const localRowIds = table.rows.map((r) => r.id);
+        if (localRowIds.length > 0) {
+          const { error: deleteRowsError } = await supabase
+            .from('transactions')
+            .delete()
+            .eq('table_id', table.id)
+            .not('id', 'in', `(${localRowIds.join(',')})`);
+          if (deleteRowsError) throw deleteRowsError;
+        } else {
+          const { error: deleteRowsError } = await supabase
+            .from('transactions')
+            .delete()
+            .eq('table_id', table.id);
+          if (deleteRowsError) throw deleteRowsError;
+        }
 
         // Upsert all rows to the 'transactions' table
         if (table.rows.length > 0) {

@@ -15,7 +15,7 @@ import { loadDB, saveDB } from '../storage/asyncStorageAdapter';
 import { computeMetrics, emptyMetrics } from '../core/metricsEngine';
 import type { DB, CoinTable, TableRow, TableGoals, TableMetrics } from '../core/types';
 import { useAuthContext } from './useAuth';
-import { fullSync, pushToCloud } from '../storage/supabaseSync';
+import { fullSync, pushToCloud, pullFromCloud } from '../storage/supabaseSync';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -68,6 +68,8 @@ export interface CoinDBState {
   aiCostCurrentMonth: number;
   aiCostLastReset: string;
   addAICost: (costInBRL: number) => void;
+  /** Manually trigger cloud synchronization */
+  syncCloud: () => Promise<{ success: boolean; error?: string }>;
 }
 
 // ── React Context ────────────────────────────────────────────────────────────
@@ -116,25 +118,50 @@ function useCoinDBInternal(): CoinDBState {
     init();
   }, []);
 
+  // ── Hydrate from Cloud on Login (Pull remote data) ───
+  const hydrateFromCloud = useCallback(async (userId: string) => {
+    setIsLoading(true);
+    const res = await pullFromCloud(userId);
+    if (res.success) {
+      const db = await loadDB();
+      if (db) {
+        setTables(db.tables);
+        setAiCostCurrentMonth(db.aiCostCurrentMonth ?? 0);
+        setAiCostLastReset(db.aiCostLastReset ?? '');
+      }
+    }
+    setIsLoading(false);
+    return res;
+  }, []);
+
+  // ── Manual Sync trigger (Bidirectional push + pull) ────
+  const syncCloud = useCallback(async (): Promise<{ success: boolean; error?: string }> => {
+    if (auth.mode !== 'authenticated' || !auth.user) {
+      return { success: false, error: 'User is not authenticated' };
+    }
+    setIsLoading(true);
+    const res = await fullSync(auth.user.id);
+    if (res.success) {
+      const db = await loadDB();
+      if (db) {
+        setTables(db.tables);
+        setAiCostCurrentMonth(db.aiCostCurrentMonth ?? 0);
+        setAiCostLastReset(db.aiCostLastReset ?? '');
+      }
+    }
+    setIsLoading(false);
+    return res;
+  }, [auth.mode, auth.user]);
+
   // ── Sync from Cloud when Authenticated ─────────────────
   useEffect(() => {
     async function sync() {
       if (auth.mode === 'authenticated' && auth.user) {
-        setIsLoading(true);
-        const res = await fullSync(auth.user.id);
-        if (res.success) {
-          const db = await loadDB();
-          if (db) {
-            setTables(db.tables);
-            setAiCostCurrentMonth(db.aiCostCurrentMonth ?? 0);
-            setAiCostLastReset(db.aiCostLastReset ?? '');
-          }
-        }
-        setIsLoading(false);
+        await hydrateFromCloud(auth.user.id);
       }
     }
     sync();
-  }, [auth.mode, auth.user]);
+  }, [auth.mode, auth.user, hydrateFromCloud]);
 
   // ── Reset local state on Logout ────────────────────────
   useEffect(() => {
@@ -412,6 +439,7 @@ function useCoinDBInternal(): CoinDBState {
     aiCostCurrentMonth,
     aiCostLastReset,
     addAICost,
+    syncCloud,
   };
 }
 

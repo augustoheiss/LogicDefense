@@ -17,6 +17,7 @@ import {
   StyleSheet,
   ScrollView,
   Alert,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -33,6 +34,24 @@ export default function SettingsScreen() {
   const router = useRouter();
   const auth = useAuthContext();
   const db = useCoinDB();
+  const [isSyncing, setIsSyncing] = useState(false);
+
+  const handleManualSync = async () => {
+    if (auth.mode !== 'authenticated' || !auth.user) return;
+    setIsSyncing(true);
+    try {
+      const res = await db.syncCloud();
+      if (res.success) {
+        Alert.alert('Sucesso', 'Sincronização concluída com sucesso!');
+      } else {
+        Alert.alert('Erro', `Falha na sincronização: ${res.error}`);
+      }
+    } catch (err: any) {
+      Alert.alert('Erro', err.message || 'Erro inesperado ao sincronizar.');
+    } finally {
+      setIsSyncing(false);
+    }
+  };
 
   const handleLogout = () => {
     Alert.alert(
@@ -44,9 +63,21 @@ export default function SettingsScreen() {
           text: 'Sair',
           style: 'destructive',
           onPress: async () => {
-            await auth.logout();
-            await clearDB();
-            router.replace('/(auth)/login');
+            try {
+              await auth.logout();
+            } catch (err) {
+              console.warn('Sign out failed:', err);
+            }
+            try {
+              await clearDB();
+            } catch (err) {
+              console.warn('clearDB failed:', err);
+            }
+            if (Platform.OS === 'web') {
+              window.location.href = '/laboratorio/assistente-moeda/login';
+            } else {
+              router.replace('/(auth)/login');
+            }
           },
         },
       ],
@@ -81,6 +112,20 @@ export default function SettingsScreen() {
                   </Text>
                 </View>
               </View>
+
+              <Pressable
+                style={({ pressed }) => [
+                  styles.syncButton,
+                  isSyncing && styles.syncButtonDisabled,
+                  pressed && styles.pressed,
+                ]}
+                onPress={handleManualSync}
+                disabled={isSyncing}
+              >
+                <Text style={styles.syncButtonText}>
+                  {isSyncing ? '🔄 Sincronizando...' : '🔄 Sincronizar Nuvem'}
+                </Text>
+              </Pressable>
             </Card>
           ) : (
             <Card>
@@ -667,6 +712,23 @@ const styles = StyleSheet.create({
   actionButtonText: {
     color: '#fff',
     fontSize: 14,
+    fontWeight: '600',
+  },
+  syncButton: {
+    backgroundColor: colors.background.tertiary,
+    borderWidth: 1,
+    borderColor: colors.border.strong,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.sm,
+    alignItems: 'center',
+    marginTop: spacing.md,
+  },
+  syncButtonDisabled: {
+    opacity: 0.5,
+  },
+  syncButtonText: {
+    color: colors.text.primary,
+    fontSize: 13,
     fontWeight: '600',
   },
   emptyText: {
