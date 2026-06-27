@@ -39,14 +39,20 @@ export default function SettingsScreen() {
 
   const handleLocalMigration = async () => {
     if (auth.mode !== 'authenticated' || !auth.user) {
-      Alert.alert(
-        'Acesso Restrito',
-        'Por favor, faça login ou crie uma conta para migrar suas planilhas para a nuvem.',
-        [
-          { text: 'Cancelar', style: 'cancel' },
-          { text: 'Entrar / Criar Conta', onPress: () => router.push('/(auth)/login') }
-        ]
-      );
+      if (Platform.OS === 'web') {
+        window.alert("Por favor, faça login ou crie uma conta para migrar suas planilhas para a nuvem.");
+      } else {
+        Alert.alert("Atenção", "Por favor, faça login ou crie uma conta para migrar suas planilhas para a nuvem.");
+      }
+      return;
+    }
+
+    if (db.tables.length === 0) {
+      if (Platform.OS === 'web') {
+        window.alert("Nenhuma planilha local encontrada para migrar.");
+      } else {
+        Alert.alert("Aviso", "Nenhuma planilha local encontrada para migrar.");
+      }
       return;
     }
     
@@ -54,12 +60,25 @@ export default function SettingsScreen() {
     try {
       const res = await db.migrateLocalToCloud();
       if (res.success) {
-        Alert.alert('Sucesso', 'Suas planilhas locais foram migradas para a nuvem com sucesso!');
+        if (Platform.OS === 'web') {
+          window.alert('Suas planilhas locais foram migradas para a nuvem com sucesso!');
+        } else {
+          Alert.alert('Sucesso', 'Suas planilhas locais foram migradas para a nuvem com sucesso!');
+        }
       } else {
-        Alert.alert('Erro', `Falha na migração: ${res.error}`);
+        if (Platform.OS === 'web') {
+          window.alert(`Falha na migração: ${res.error}`);
+        } else {
+          Alert.alert('Erro', `Falha na migração: ${res.error}`);
+        }
       }
     } catch (err: any) {
-      Alert.alert('Erro', err.message || 'Erro inesperado durante a migração.');
+      const errMsg = err.message || 'Erro inesperado durante a migração.';
+      if (Platform.OS === 'web') {
+        window.alert(errMsg);
+      } else {
+        Alert.alert('Erro', errMsg);
+      }
     } finally {
       setIsMigrating(false);
     }
@@ -163,27 +182,29 @@ export default function SettingsScreen() {
         </Section>
 
         {/* ── Migration Section ───────────────────────────── */}
-        <Section title="Migração de Dados">
-          <Card>
-            <Text style={styles.migrationTitle}>📤 Migrar Planilhas Locais</Text>
-            <Text style={styles.migrationText}>
-              Você tem {db.tables.length} planilhas salvas na memória local. Você pode migrá-las e enviá-las para sua conta em nuvem agora.
-            </Text>
-            <Pressable
-              style={({ pressed }) => [
-                styles.migrationButton,
-                isMigrating && styles.syncButtonDisabled,
-                pressed && styles.pressed,
-              ]}
-              onPress={handleLocalMigration}
-              disabled={isMigrating}
-            >
-              <Text style={styles.migrationButtonText}>
-                {isMigrating ? '⏳ Migrando...' : '📤 Subir Planilhas Locais para a Nuvem'}
+        {auth.mode === 'authenticated' && auth.user && (
+          <Section title="Migração de Dados">
+            <Card>
+              <Text style={styles.migrationTitle}>📤 Migrar Planilhas Locais</Text>
+              <Text style={styles.migrationText}>
+                Você tem {db.tables.length} planilhas salvas na memória local. Você pode migrá-las e enviá-las para sua conta em nuvem agora.
               </Text>
-            </Pressable>
-          </Card>
-        </Section>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.migrationButton,
+                  isMigrating && styles.syncButtonDisabled,
+                  pressed && styles.pressed,
+                ]}
+                onPress={handleLocalMigration}
+                disabled={isMigrating}
+              >
+                <Text style={styles.migrationButtonText}>
+                  {isMigrating ? '⏳ Migrando...' : '📤 Subir Planilhas Locais para a Nuvem'}
+                </Text>
+              </Pressable>
+            </Card>
+          </Section>
+        )}
 
         {/* ── Goals Accordion ─────────────────────────────── */}
         {db.activeTable && (
@@ -238,7 +259,7 @@ export default function SettingsScreen() {
         </Section>
 
         {/* ── Logout ─────────────────────────────────────── */}
-        {auth.mode === 'authenticated' && (
+        {auth.mode === 'authenticated' && auth.user && (
           <Pressable
             style={({ pressed }) => [styles.logoutButton, pressed && styles.pressed]}
             onPress={handleLogout}

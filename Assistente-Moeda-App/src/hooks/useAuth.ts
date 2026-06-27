@@ -71,16 +71,15 @@ export function useAuth(): AuthState {
         const existingSession = await getSession();
         if (existingSession) {
           setSession(existingSession);
-          const currentUser = await getCurrentUser();
-          setUser(currentUser);
-          if (currentUser) {
-            const userProfile = await getUserProfile(currentUser.id);
-            setProfile(userProfile);
-          }
+          setUser(existingSession.user);
+          const userProfile = await getUserProfile(existingSession.user.id);
+          setProfile(userProfile);
           setMode('authenticated');
+        } else {
+          setMode('guest');
         }
       } catch {
-        // No session found — stay in loading state until user chooses
+        setMode('guest');
       } finally {
         setIsLoading(false);
       }
@@ -96,14 +95,19 @@ export function useAuth(): AuthState {
         setProfile(null);
         setSession(null);
         setMode('guest');
+      } else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+        if (newSession) {
+          setSession(newSession);
+          setUser(newSession.user);
+          const userProfile = await getUserProfile(newSession.user.id);
+          setProfile(userProfile);
+          setMode('authenticated');
+        }
       } else if (newSession) {
         setSession(newSession);
-        const currentUser = await getCurrentUser();
-        setUser(currentUser);
-        if (currentUser) {
-          const userProfile = await getUserProfile(currentUser.id);
-          setProfile(userProfile);
-        }
+        setUser(newSession.user);
+        const userProfile = await getUserProfile(newSession.user.id);
+        setProfile(userProfile);
         setMode('authenticated');
       }
     });
@@ -121,7 +125,16 @@ export function useAuth(): AuthState {
   const login = useCallback(async (email: string, password: string) => {
     const result = await signIn(email, password);
     if (result.error) return { error: result.error };
-    // Auth state listener will handle the rest
+    
+    // Explicitly update React state variables right here for instant reactivity
+    if (result.session) {
+      setSession(result.session);
+      setUser(result.session.user);
+      const userProfile = await getUserProfile(result.session.user.id);
+      setProfile(userProfile);
+      setMode('authenticated');
+    }
+    
     return { error: null };
   }, []);
 
