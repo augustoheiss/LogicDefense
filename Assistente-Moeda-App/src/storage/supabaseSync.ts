@@ -114,9 +114,10 @@ export async function pushToCloud(userId: string): Promise<{ success: boolean; e
     }
 
     return { success: true };
-  } catch (err) {
-    const message = err instanceof Error ? err.message : 'Unknown push error';
-    return { success: false, error: message };
+  } catch (err: any) {
+    console.error("Supabase Push Error:", err);
+    const errorMessage = err?.message || err?.details || JSON.stringify(err) || 'Unknown push error';
+    return { success: false, error: errorMessage };
   }
 }
 

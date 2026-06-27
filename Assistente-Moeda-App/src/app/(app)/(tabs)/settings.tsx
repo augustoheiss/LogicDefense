@@ -36,6 +36,7 @@ export default function SettingsScreen() {
   const db = useCoinDB();
   const [isSyncing, setIsSyncing] = useState(false);
   const [isMigrating, setIsMigrating] = useState(false);
+  const isVisitor = !auth.user || auth.mode === 'guest';
 
   const handleLocalMigration = async () => {
     if (auth.mode !== 'authenticated' || !auth.user) {
@@ -132,19 +133,19 @@ export default function SettingsScreen() {
       <ScrollView style={styles.content} contentContainerStyle={styles.contentInner}>
         {/* ── Account Section ──────────────────────────────── */}
         <Section title="Conta">
-          {auth.mode === 'authenticated' && auth.profile ? (
+          {!isVisitor ? (
             <Card>
               <View style={styles.profileRow}>
                 <View style={styles.avatar}>
                   <Text style={styles.avatarText}>
-                    {(auth.profile.displayName || auth.profile.email || '?')[0].toUpperCase()}
+                    {(auth.profile?.displayName || auth.profile?.email || auth.user?.email || '?')[0].toUpperCase()}
                   </Text>
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.profileName}>
-                    {auth.profile.displayName || 'Usuário'}
+                    {auth.profile?.displayName || auth.user?.email?.split('@')[0] || 'Usuário'}
                   </Text>
-                  <Text style={styles.profileEmail}>{auth.profile.email}</Text>
+                  <Text style={styles.profileEmail}>{auth.profile?.email || auth.user?.email}</Text>
                   <Text style={styles.tierText}>
                     {auth.isPremium ? '⭐ Premium' : '🆓 Gratuito'}
                   </Text>
@@ -182,7 +183,7 @@ export default function SettingsScreen() {
         </Section>
 
         {/* ── Migration Section ───────────────────────────── */}
-        {auth.mode === 'authenticated' && auth.user && (
+        {!isVisitor && (
           <Section title="Migração de Dados">
             <Card>
               <Text style={styles.migrationTitle}>📤 Migrar Planilhas Locais</Text>
@@ -258,8 +259,21 @@ export default function SettingsScreen() {
           </Card>
         </Section>
 
+        {/* ── Auth Status Debugger (Temporary UI) ────────── */}
+        <View style={{ padding: spacing.md, marginTop: spacing.md, backgroundColor: '#1f2937', borderRadius: radius.md, borderWidth: 1, borderColor: '#374151', marginHorizontal: spacing.md }}>
+          <Text style={{ color: '#9ca3af', fontSize: 12, fontFamily: 'monospace' }}>
+            DEBUG - User ID: {auth.user?.id || 'null'}
+          </Text>
+          <Text style={{ color: '#9ca3af', fontSize: 12, fontFamily: 'monospace' }}>
+            Mode: {auth.mode}
+          </Text>
+          <Text style={{ color: '#9ca3af', fontSize: 12, fontFamily: 'monospace' }}>
+            Session: {auth.session ? 'Active' : 'None'}
+          </Text>
+        </View>
+
         {/* ── Logout ─────────────────────────────────────── */}
-        {auth.mode === 'authenticated' && auth.user && (
+        {!isVisitor && (
           <Pressable
             style={({ pressed }) => [styles.logoutButton, pressed && styles.pressed]}
             onPress={handleLogout}
