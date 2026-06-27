@@ -109,22 +109,25 @@ export function buildFinancialContext(
 
 export async function sendChatMessage(
   message: string,
-  context: string,
-  history: ChatMessage[],
+  rows: TableRow[],
+  goals: TableGoals,
+  tableName: string,
+  totalWaiverCredits: number,
+  asOfDate?: string,
 ): Promise<ChatResponse> {
   try {
-    const response = await fetch(`${API_URL}/api/coinassistant/chat`, {
+    const response = await fetch(`${API_URL}/api/coin/ai-analyst`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        message,
-        context,
-        history: history.slice(-10).map((m) => ({
-          role: m.role,
-          content: m.content,
-        })),
+        rows,
+        goals,
+        userPrompt: message,
+        asOfDate: asOfDate || null,
+        tableName,
+        totalWaiverCredits,
       }),
     });
 
@@ -134,11 +137,11 @@ export async function sendChatMessage(
     }
 
     const data = await response.json();
-    const promptTokens = data.usage?.prompt_tokens ?? data.usage?.promptTokens ?? Math.ceil((message.length + context.length + history.reduce((sum, msg) => sum + msg.content.length, 0)) / 4);
-    const completionTokens = data.usage?.completion_tokens ?? data.usage?.completionTokens ?? Math.ceil((data.response || data.message || '').length / 4);
+    const promptTokens = Math.ceil((message.length + JSON.stringify(rows).length + JSON.stringify(goals).length) / 4);
+    const completionTokens = Math.ceil((data.analysis || '').length / 4);
 
     return { 
-      response: data.response || data.message || 'Sem resposta',
+      response: data.analysis || 'Sem resposta',
       promptTokens,
       completionTokens
     };

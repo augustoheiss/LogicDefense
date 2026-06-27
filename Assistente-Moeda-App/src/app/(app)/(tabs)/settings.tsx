@@ -38,7 +38,18 @@ export default function SettingsScreen() {
   const [isMigrating, setIsMigrating] = useState(false);
 
   const handleLocalMigration = async () => {
-    if (auth.mode !== 'authenticated' || !auth.user) return;
+    if (auth.mode !== 'authenticated' || !auth.user) {
+      Alert.alert(
+        'Acesso Restrito',
+        'Por favor, faça login ou crie uma conta para migrar suas planilhas para a nuvem.',
+        [
+          { text: 'Cancelar', style: 'cancel' },
+          { text: 'Entrar / Criar Conta', onPress: () => router.push('/(auth)/login') }
+        ]
+      );
+      return;
+    }
+    
     setIsMigrating(true);
     try {
       const res = await db.migrateLocalToCloud();
@@ -92,9 +103,9 @@ export default function SettingsScreen() {
               console.warn('clearDB failed:', err);
             }
             if (Platform.OS === 'web') {
-              window.location.href = '/laboratorio/assistente-moeda/login';
+              window.location.href = '/laboratorio/assistente-moeda/';
             } else {
-              router.replace('/(auth)/login');
+              router.replace('/(app)/(tabs)');
             }
           },
         },
@@ -162,29 +173,27 @@ export default function SettingsScreen() {
         </Section>
 
         {/* ── Migration Section ───────────────────────────── */}
-        {auth.mode === 'authenticated' && (
-          <Section title="Migração de Dados">
-            <Card>
-              <Text style={styles.migrationTitle}>📤 Migrar Planilhas Locais</Text>
-              <Text style={styles.migrationText}>
-                Você tem {db.tables.length} planilhas salvas na memória local. Você pode migrá-las e enviá-las para sua conta em nuvem agora.
+        <Section title="Migração de Dados">
+          <Card>
+            <Text style={styles.migrationTitle}>📤 Migrar Planilhas Locais</Text>
+            <Text style={styles.migrationText}>
+              Você tem {db.tables.length} planilhas salvas na memória local. Você pode migrá-las e enviá-las para sua conta em nuvem agora.
+            </Text>
+            <Pressable
+              style={({ pressed }) => [
+                styles.migrationButton,
+                isMigrating && styles.syncButtonDisabled,
+                pressed && styles.pressed,
+              ]}
+              onPress={handleLocalMigration}
+              disabled={isMigrating}
+            >
+              <Text style={styles.migrationButtonText}>
+                {isMigrating ? '⏳ Migrando...' : '📤 Subir Planilhas Locais para a Nuvem'}
               </Text>
-              <Pressable
-                style={({ pressed }) => [
-                  styles.migrationButton,
-                  isMigrating && styles.syncButtonDisabled,
-                  pressed && styles.pressed,
-                ]}
-                onPress={handleLocalMigration}
-                disabled={isMigrating}
-              >
-                <Text style={styles.migrationButtonText}>
-                  {isMigrating ? '⏳ Migrando...' : '📤 Subir Planilhas Locais para a Nuvem'}
-                </Text>
-              </Pressable>
-            </Card>
-          </Section>
-        )}
+            </Pressable>
+          </Card>
+        </Section>
 
         {/* ── Goals Accordion ─────────────────────────────── */}
         {db.activeTable && (

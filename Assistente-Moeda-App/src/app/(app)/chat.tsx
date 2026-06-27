@@ -34,7 +34,6 @@ import { useCoinDB } from '@/hooks/useCoinDB';
 import { useSubscription } from '@/hooks/useSubscription';
 import {
   sendChatMessage,
-  buildFinancialContext,
   createMessage,
   type ChatMessage,
 } from '@/services/aiChatService';
@@ -80,17 +79,6 @@ export default function AIChatScreen() {
     }
   }, [messages.length]);
 
-  // Build financial context on every send
-  const getContext = useCallback(() => {
-    if (!db.activeTable) return 'Nenhuma tabela ativa.';
-    return buildFinancialContext(
-      db.activeTable.rows,
-      db.activeTable.goals,
-      db.metrics,
-      db.activeTable.name,
-    );
-  }, [db.activeTable, db.metrics]);
-
   const handleSend = useCallback(async (text?: string) => {
     const msg = (text || input).trim();
     if (!msg || isLoading) return;
@@ -117,8 +105,14 @@ export default function AIChatScreen() {
     setIsLoading(true);
 
     try {
-      const context = getContext();
-      const result = await sendChatMessage(msg, context, newMessages);
+      const result = await sendChatMessage(
+        msg,
+        db.activeTable?.rows || [],
+        (db.activeTable?.goals || { dailyGoals: {}, weeklyGoals: {}, annualCosts: {} }) as any,
+        db.activeTable?.name || 'Tabela Principal',
+        db.metrics.totalWaiverCredit || 0,
+        db.cutoffDate || undefined
+      );
 
       if (result.error) {
         setMessages([...newMessages, createMessage('assistant', `⚠️ ${result.error}`)]);
@@ -138,7 +132,7 @@ export default function AIChatScreen() {
     } finally {
       setIsLoading(false);
     }
-  }, [input, messages, isLoading, getContext, db, subscriptionType]);
+  }, [input, messages, isLoading, db, subscriptionType]);
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>

@@ -192,6 +192,18 @@ export default function RegisterScreen() {
             <Text style={styles.footerLink}>Entrar</Text>
           </Pressable>
         </View>
+
+        <Pressable
+          style={{ marginTop: spacing.md, alignItems: 'center' }}
+          onPress={() => {
+            auth.enterGuestMode();
+            router.replace('/(app)/(tabs)');
+          }}
+        >
+          <Text style={{ color: colors.text.tertiary, fontSize: 13, textDecorationLine: 'underline' }}>
+            Voltar para o painel principal (Modo Visitante)
+          </Text>
+        </Pressable>
       </ScrollView>
     </KeyboardAvoidingView>
   );

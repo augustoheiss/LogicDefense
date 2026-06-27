@@ -134,7 +134,24 @@ export function useAuth(): AuthState {
     setProfile(null);
     setSession(null);
     setMode('guest');
-    await signOut();
+
+    try {
+      // Safely wipe Supabase tokens from AsyncStorage manually
+      const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+      const keys = await AsyncStorage.getAllKeys();
+      const authKeys = keys.filter((k: string) => k.startsWith('sb-'));
+      for (const key of authKeys) {
+        await AsyncStorage.removeItem(key);
+      }
+    } catch (e) {
+      console.warn('Wiping storage keys failed:', e);
+    }
+
+    try {
+      await signOut();
+    } catch (e) {
+      console.warn('Supabase signOut failed:', e);
+    }
   }, []);
 
   const isAdmin = !!(

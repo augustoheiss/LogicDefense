@@ -9,11 +9,5 @@ import { Redirect } from 'expo-router';
 import { useAuthContext } from '@/hooks/useAuth';
 
 export default function RootIndex() {
-  const auth = useAuthContext();
-
-  if (auth.user) {
-    return <Redirect href="/(app)/(tabs)" />;
-  }
-
-  return <Redirect href="/(auth)/login" />;
+  return <Redirect href="/(app)/(tabs)" />;
 }

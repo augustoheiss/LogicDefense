@@ -33,6 +33,7 @@ import { colors } from '@/theme/colors';
 import { spacing, radius } from '@/theme/spacing';
 import { useCoinDB } from '@/hooks/useCoinDB';
 import { useSubscription } from '@/hooks/useSubscription';
+import { useAuthContext } from '@/hooks/useAuth';
 import { SwipeableRowCard } from '@/components/ui/SwipeableRowCard';
 import { MonthPicker } from '@/components/ui/MonthPicker';
 import { AddRowModal } from '@/components/ui/AddRowModal';
@@ -45,6 +46,7 @@ import type { TableRow } from '@/core/types';
 export default function SpreadsheetScreen() {
   const router = useRouter();
   const db = useCoinDB();
+  const auth = useAuthContext();
   const { isPro, showPaywall, setShowPaywall } = useSubscription();
   const [showAddModal, setShowAddModal] = useState(false);
   const [showTableSwitcher, setShowTableSwitcher] = useState(false);
@@ -402,6 +404,17 @@ export default function SpreadsheetScreen() {
               style={[styles.fabMenuItem, { backgroundColor: colors.background.elevated, borderColor: colors.accent.purpleBorder }]}
               onPress={() => {
                 setShowFab(false);
+                if (auth.mode === 'guest') {
+                  Alert.alert(
+                    'Recurso Premium',
+                    'Para conversar com o Assistente IA, você precisa criar uma conta ou fazer login.',
+                    [
+                      { text: 'Cancelar', style: 'cancel' },
+                      { text: 'Entrar / Criar Conta', onPress: () => router.push('/(auth)/login') }
+                    ]
+                  );
+                  return;
+                }
                 if (!isPro) {
                   setShowPaywall(true);
                 } else {
