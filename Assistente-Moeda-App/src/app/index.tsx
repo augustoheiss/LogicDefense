@@ -11,9 +11,9 @@ import { useAuthContext } from '@/hooks/useAuth';
 export default function RootIndex() {
   const auth = useAuthContext();
 
-  if (auth.mode === 'authenticated') {
+  if (auth.user) {
     return <Redirect href="/(app)/(tabs)" />;
   }
 
-  return <Redirect href="/(auth)/welcome" />;
+  return <Redirect href="/(auth)/login" />;
 }

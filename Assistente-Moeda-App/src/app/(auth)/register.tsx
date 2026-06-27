@@ -97,7 +97,7 @@ export default function RegisterScreen() {
       >
         {/* Header */}
         <View style={styles.header}>
-          <Pressable onPress={() => router.back()} style={styles.backButton}>
+          <Pressable onPress={() => router.replace('/(auth)/login')} style={styles.backButton}>
             <Text style={styles.backText}>← Voltar</Text>
           </Pressable>
           <Text style={styles.title}>Criar Conta</Text>

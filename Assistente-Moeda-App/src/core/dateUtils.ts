@@ -45,15 +45,27 @@ export function fmtDate(date: Date): string {
 }
 
 export function resolveGoalForYear(
-  goals: Record<number, number>,
+  goals: Record<number | string, number>,
   year: number,
 ): number {
   if (goals[year] !== undefined) return goals[year];
-  const years = Object.keys(goals).map(Number).sort((a, b) => a - b);
+  const years = Object.keys(goals)
+    .map(Number)
+    .filter((k) => !isNaN(k))
+    .sort((a, b) => a - b);
   if (years.length === 0) return 0;
   const earlier = years.filter((y) => y < year);
   if (earlier.length > 0) return goals[earlier[earlier.length - 1]];
   return goals[years[0]];
+}
+
+export function getISOWeekKey(dateStr: string): string {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const date = new Date(Date.UTC(y, m - 1, d));
+  date.setUTCDate(date.getUTCDate() + 4 - (date.getUTCDay() || 7));
+  const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
+  const weekNum = Math.ceil(((date.getTime() - yearStart.getTime()) / 86_400_000 + 1) / 7);
+  return `${date.getUTCFullYear()}-W${String(weekNum).padStart(2, '0')}`;
 }
 
 export function getEffectiveGoals(
@@ -78,16 +90,24 @@ export function getEffectiveGoals(
   };
 }
 
-export function getDailyGoalForDate(dateStr: string, goals: TableGoals): number {
-  const year  = parseInt(dateStr.slice(0, 4), 10);
-  const month = parseInt(dateStr.slice(5, 7), 10);
-  return getEffectiveGoals({ year, month }, goals).dailyGoal;
-}
-
 export function getWeeklyGoalForDate(dateStr: string, goals: TableGoals): number {
+  const weekKey = getISOWeekKey(dateStr);
+  if (goals.weeklyGoals && goals.weeklyGoals[weekKey] !== undefined) {
+    return goals.weeklyGoals[weekKey];
+  }
   const year  = parseInt(dateStr.slice(0, 4), 10);
   const month = parseInt(dateStr.slice(5, 7), 10);
   return getEffectiveGoals({ year, month }, goals).weeklyGoal;
+}
+
+export function getDailyGoalForDate(dateStr: string, goals: TableGoals): number {
+  const weekKey = getISOWeekKey(dateStr);
+  if (goals.weeklyGoals && goals.weeklyGoals[weekKey] !== undefined) {
+    return goals.weeklyGoals[weekKey] / 7;
+  }
+  const year  = parseInt(dateStr.slice(0, 4), 10);
+  const month = parseInt(dateStr.slice(5, 7), 10);
+  return getEffectiveGoals({ year, month }, goals).dailyGoal;
 }
 
 export function groupRowsByWeek(

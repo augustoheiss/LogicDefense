@@ -966,6 +966,15 @@ export function buildCSV(
       });
     }
 
+    // 4. Weekly overrides (manual sprints)
+    if (goals.weeklyGoals) {
+      Object.entries(goals.weeklyGoals).forEach(([key, val]) => {
+        if (typeof key === 'string' && key.includes('-W')) {
+          meta.push(`goal_weekly_${key},${val}`);
+        }
+      });
+    }
+
     meta.push('## ROWS ##');
     const header = 'date,value,description,entryType,monthlyValue,monthCount,period_start,period_end';
     const lines = rows.map((r) => {

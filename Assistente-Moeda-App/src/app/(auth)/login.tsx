@@ -60,9 +60,6 @@ export default function LoginScreen() {
       >
         {/* Header */}
         <View style={styles.header}>
-          <Pressable onPress={() => router.back()} style={styles.backButton}>
-            <Text style={styles.backText}>← Voltar</Text>
-          </Pressable>
           <Text style={styles.title}>Entrar</Text>
           <Text style={styles.subtitle}>
             Acesse sua conta para sincronizar dados
@@ -149,13 +146,6 @@ const styles = StyleSheet.create({
 
   header: {
     marginBottom: spacing.xxxl,
-  },
-  backButton: {
-    marginBottom: spacing.xl,
-  },
-  backText: {
-    color: colors.text.tertiary,
-    fontSize: 14,
   },
   title: {
     fontSize: 28,

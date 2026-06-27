@@ -30,13 +30,15 @@ import { DebtTrackingList } from '@/components/charts/DebtTrackingList';
 
 import { RevenueChart } from '@/components/charts/RevenueChart';
 import { FutureProjectionChart } from '@/components/charts/FutureProjectionChart';
+import { RealInvestmentsChart } from '@/components/charts/RealInvestmentsChart';
 
 const isWeb = Platform.OS === 'web';
 
-type ChartView = 'revenue' | 'projection' | 'audit';
+type ChartView = 'revenue' | 'evolution' | 'projection' | 'audit';
 
 const tabs: { key: ChartView; label: string; icon: string }[] = [
   { key: 'revenue',    label: 'Receita',    icon: '📊' },
+  { key: 'evolution',  label: 'Evolução',   icon: '🏦' },
   { key: 'projection', label: 'Projeção',   icon: '📈' },
   { key: 'audit',      label: 'Auditoria',  icon: '📋' },
 ];
@@ -65,7 +67,7 @@ export default function ChartsScreen() {
   // Default to 'revenue' on all platforms since we have Recharts on web
   const [activeView, setActiveView] = useState<ChartView>('revenue');
 
-  const hasData = activeTable && metrics.grossTotal > 0;
+  const hasData = activeTable && activeTable.rows.length > 0;
 
   return (
     <SafeAreaView style={styles.container} edges={[]}>
@@ -121,6 +123,12 @@ export default function ChartsScreen() {
               metrics={metrics}
               goals={activeTable.goals}
               rows={activeTable.rows}
+            />
+          )}
+
+          {activeView === 'evolution' && (
+            <RealInvestmentsChart
+              metrics={metrics}
             />
           )}
 

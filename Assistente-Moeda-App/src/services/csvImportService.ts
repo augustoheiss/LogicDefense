@@ -190,7 +190,7 @@ function parseBackupV2(raw: string): CSVImportResult {
 
   // Parse Metadata
   const dailyGoals: Record<number, number> = {};
-  const weeklyGoals: Record<number, number> = {};
+  const weeklyGoals: Record<string | number, number> = {};
   const annualCosts: Record<number, number> = {};
   const years = new Set<number>();
   let name = 'Importado (Backup)';
@@ -230,7 +230,7 @@ function parseBackupV2(raw: string): CSVImportResult {
       globalAnnual = parseFloat(val);
     } else {
       const dailyMatch = key.match(/^goal_daily_(\d+)$/i);
-      const weeklyMatch = key.match(/^goal_weekly_(\d+)$/i);
+      const weeklyMatch = key.match(/^goal_weekly_(\d{4}-W\d{2}|\d+)$/i);
       const annualMatch = key.match(/^goal_annual_(\d+)$/i);
 
       const monthlyDailyMatch = key.match(/^goal_monthly_daily_(\d{4}-\d{2})$/i);
@@ -245,11 +245,18 @@ function parseBackupV2(raw: string): CSVImportResult {
           years.add(year);
         }
       } else if (weeklyMatch) {
-        const year = parseInt(weeklyMatch[1], 10);
+        const weekOrYear = weeklyMatch[1];
         const parsedVal = parseFloat(val);
-        if (!isNaN(year) && !isNaN(parsedVal)) {
-          weeklyGoals[year] = parsedVal;
-          years.add(year);
+        if (weekOrYear && !isNaN(parsedVal)) {
+          if (weekOrYear.includes('-W')) {
+            weeklyGoals[weekOrYear] = parsedVal;
+          } else {
+            const year = parseInt(weekOrYear, 10);
+            if (!isNaN(year)) {
+              weeklyGoals[year] = parsedVal;
+              years.add(year);
+            }
+          }
         }
       } else if (annualMatch) {
         const year = parseInt(annualMatch[1], 10);

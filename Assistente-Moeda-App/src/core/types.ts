@@ -103,7 +103,7 @@ export interface TableGoals {
    * Used by calculateStrictGlobalBalance to score each historical week
    * against the goal that was in effect for THAT specific year.
    */
-  weeklyGoals: Record<number, number>;
+  weeklyGoals: Record<string | number, number>;
   /**
    * Per-calendar-year vehicle/operating cost target.
    * Key = full year number (e.g. 2026), value = cost in BRL.

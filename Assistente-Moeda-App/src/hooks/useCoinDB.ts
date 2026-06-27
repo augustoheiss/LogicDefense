@@ -14,6 +14,8 @@ import React, { useState, useEffect, useCallback, useMemo, createContext, useCon
 import { loadDB, saveDB } from '../storage/asyncStorageAdapter';
 import { computeMetrics, emptyMetrics } from '../core/metricsEngine';
 import type { DB, CoinTable, TableRow, TableGoals, TableMetrics } from '../core/types';
+import { useAuthContext } from './useAuth';
+import { fullSync, pushToCloud } from '../storage/supabaseSync';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -96,6 +98,8 @@ function useCoinDBInternal(): CoinDBState {
   const [aiCostCurrentMonth, setAiCostCurrentMonth] = useState<number>(0);
   const [aiCostLastReset, setAiCostLastReset] = useState<string>('');
 
+  const auth = useAuthContext();
+
   // ── Load from AsyncStorage on mount ────────────────────
   useEffect(() => {
     async function init() {
@@ -112,7 +116,27 @@ function useCoinDBInternal(): CoinDBState {
     init();
   }, []);
 
-  // ── Persist to AsyncStorage on every change ────────────
+  // ── Sync from Cloud when Authenticated ─────────────────
+  useEffect(() => {
+    async function sync() {
+      if (auth.mode === 'authenticated' && auth.user) {
+        setIsLoading(true);
+        const res = await fullSync(auth.user.id);
+        if (res.success) {
+          const db = await loadDB();
+          if (db) {
+            setTables(db.tables);
+            setAiCostCurrentMonth(db.aiCostCurrentMonth ?? 0);
+            setAiCostLastReset(db.aiCostLastReset ?? '');
+          }
+        }
+        setIsLoading(false);
+      }
+    }
+    sync();
+  }, [auth.mode, auth.user]);
+
+  // ── Persist to AsyncStorage and Push to Cloud ──────────
   const persist = useCallback(async (newTables: CoinTable[]) => {
     setTables(newTables);
     const currentDB = await loadDB();
@@ -121,7 +145,10 @@ function useCoinDBInternal(): CoinDBState {
       aiCostCurrentMonth: currentDB?.aiCostCurrentMonth ?? 0,
       aiCostLastReset: currentDB?.aiCostLastReset ?? '',
     });
-  }, []);
+    if (auth.mode === 'authenticated' && auth.user) {
+      pushToCloud(auth.user.id).catch((err) => console.error('Cloud push failed:', err));
+    }
+  }, [auth.mode, auth.user]);
 
   const updateAICost = useCallback(async (newCost: number, newResetMonth: string) => {
     setAiCostCurrentMonth(newCost);
@@ -132,7 +159,10 @@ function useCoinDBInternal(): CoinDBState {
       aiCostCurrentMonth: newCost,
       aiCostLastReset: newResetMonth,
     });
-  }, [tables]);
+    if (auth.mode === 'authenticated' && auth.user) {
+      pushToCloud(auth.user.id).catch((err) => console.error('Cloud push failed:', err));
+    }
+  }, [auth.mode, auth.user, tables]);
 
   const addAICost = useCallback((costInBRL: number) => {
     const currentMonthStr = new Date().toISOString().slice(0, 7); // YYYY-MM

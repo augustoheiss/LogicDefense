@@ -14,7 +14,7 @@
 
 import { useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
-import { Stack } from 'expo-router';
+import { Stack, useRouter, useSegments } from 'expo-router';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import * as SplashScreen from 'expo-splash-screen';
 import { useAuth, AuthProvider } from '@/hooks/useAuth';
@@ -27,12 +27,28 @@ SplashScreen.preventAutoHideAsync();
 
 function RootNavigator() {
   const auth = useAuth();
+  const segments = useSegments();
+  const router = useRouter();
 
   useEffect(() => {
     if (!auth.isLoading) {
       SplashScreen.hideAsync();
     }
   }, [auth.isLoading]);
+
+  useEffect(() => {
+    if (auth.isLoading) return;
+
+    const inAuthGroup = segments[0] === '(auth)';
+
+    if (!auth.user && !inAuthGroup) {
+      // strictly redirect to login screen
+      router.replace('/(auth)/login');
+    } else if (auth.user && inAuthGroup) {
+      // strictly redirect to main app tabs
+      router.replace('/(app)/(tabs)');
+    }
+  }, [auth.user, auth.isLoading, segments]);
 
   if (auth.isLoading) {
     return (

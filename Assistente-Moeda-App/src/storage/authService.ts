@@ -12,7 +12,7 @@
  *   - 'premium' → Cloud sync + AI Analyst access
  */
 
-import { supabase } from './supabaseClient';
+import { supabase } from '@/lib/supabase';
 import type { Session, User } from '@supabase/supabase-js';
 
 // ── Types ────────────────────────────────────────────────────────────────────

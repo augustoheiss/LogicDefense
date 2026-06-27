@@ -10,59 +10,71 @@
  * This is practical and sufficient for a single-user financial tool.
  */
 
-import { supabase } from './supabaseClient';
+import { supabase } from '@/lib/supabase';
 import { loadDB, saveDB } from './asyncStorageAdapter';
-import type { CoinTable, TableRow, DB } from '../core/types';
+import type { CoinTable, TableRow } from '../core/types';
 
 // ── Push Local → Cloud ───────────────────────────────────────────────────────
 
 /**
- * Uploads the entire local DB to Supabase.
+ * Uploads the entire local DB to Supabase (including user settings).
  * Uses upsert (ON CONFLICT DO UPDATE) so it's idempotent.
  */
 export async function pushToCloud(userId: string): Promise<{ success: boolean; error?: string }> {
   const db = await loadDB();
-  if (!db || db.tables.length === 0) return { success: true };
+  if (!db) return { success: true };
 
   try {
-    for (const table of db.tables) {
-      // Upsert table metadata
-      const { error: tableError } = await supabase.from('coin_tables').upsert({
-        id: table.id,
-        user_id: userId,
-        name: table.name,
-        description: table.description ?? null,
-        goals: table.goals,
-        position: db.tables.indexOf(table),
-        created_at: table.createdAt,
-        updated_at: table.updatedAt,
-      });
+    // 1. Upsert user settings
+    const { error: settingsError } = await supabase.from('user_settings').upsert({
+      id: userId,
+      ai_cost_current_month: db.aiCostCurrentMonth ?? 0.00,
+      ai_cost_last_reset: db.aiCostLastReset ?? '',
+      updated_at: new Date().toISOString(),
+    });
+    if (settingsError) throw settingsError;
 
-      if (tableError) throw tableError;
+    // 2. Upsert tables
+    if (db.tables && db.tables.length > 0) {
+      for (const table of db.tables) {
+        // Upsert table metadata
+        const { error: tableError } = await supabase.from('coin_tables').upsert({
+          id: table.id,
+          user_id: userId,
+          name: table.name,
+          description: table.description ?? null,
+          goals: table.goals,
+          position: db.tables.indexOf(table),
+          created_at: table.createdAt,
+          updated_at: table.updatedAt,
+        });
 
-      // Upsert all rows for this table
-      if (table.rows.length > 0) {
-        const rowPayloads = table.rows.map((row) => ({
-          id: row.id,
-          table_id: table.id,
-          date: row.date,
-          value: row.value,
-          description: row.description ?? null,
-          entry_type: row.entryType ?? 'revenue',
-          monthly_value: row.monthlyValue ?? null,
-          month_count: row.monthCount ?? null,
-          period_start: row.periodStart ?? null,
-          period_end: row.periodEnd ?? null,
-          generated_by: row.generatedBy ?? null,
-          cloned_from: row.clonedFrom ?? null,
-          updated_at: new Date().toISOString(),
-        }));
+        if (tableError) throw tableError;
 
-        // Batch upsert in chunks of 500 to avoid payload limits
-        for (let i = 0; i < rowPayloads.length; i += 500) {
-          const chunk = rowPayloads.slice(i, i + 500);
-          const { error: rowError } = await supabase.from('coin_rows').upsert(chunk);
-          if (rowError) throw rowError;
+        // Upsert all rows to the 'transactions' table
+        if (table.rows.length > 0) {
+          const rowPayloads = table.rows.map((row) => ({
+            id: row.id,
+            table_id: table.id,
+            date: row.date,
+            value: row.value,
+            description: row.description ?? null,
+            entry_type: row.entryType ?? 'revenue',
+            monthly_value: row.monthlyValue ?? null,
+            month_count: row.monthCount ?? null,
+            period_start: row.periodStart ?? null,
+            period_end: row.periodEnd ?? null,
+            generated_by: row.generatedBy ?? null,
+            cloned_from: row.clonedFrom ?? null,
+            updated_at: new Date().toISOString(),
+          }));
+
+          // Batch upsert in chunks of 500 to avoid payload limits
+          for (let i = 0; i < rowPayloads.length; i += 500) {
+            const chunk = rowPayloads.slice(i, i + 500);
+            const { error: rowError } = await supabase.from('transactions').upsert(chunk);
+            if (rowError) throw rowError;
+          }
         }
       }
     }
@@ -77,12 +89,24 @@ export async function pushToCloud(userId: string): Promise<{ success: boolean; e
 // ── Pull Cloud → Local ───────────────────────────────────────────────────────
 
 /**
- * Downloads all data from Supabase for this user and saves to local storage.
+ * Downloads all data from Supabase for this user (including settings) and saves to local storage.
  * Completely replaces local DB with remote state (server is source of truth).
  */
 export async function pullFromCloud(userId: string): Promise<{ success: boolean; error?: string }> {
   try {
-    // Fetch all tables for this user
+    // 1. Fetch settings from user_settings
+    const { data: settings, error: settingsError } = await supabase
+      .from('user_settings')
+      .select('*')
+      .eq('id', userId)
+      .maybeSingle();
+
+    if (settingsError) throw settingsError;
+
+    const aiCostCurrentMonth = settings?.ai_cost_current_month ? Number(settings.ai_cost_current_month) : 0.00;
+    const aiCostLastReset = settings?.ai_cost_last_reset ?? '';
+
+    // 2. Fetch all tables for this user
     const { data: tables, error: tablesError } = await supabase
       .from('coin_tables')
       .select('*')
@@ -91,14 +115,18 @@ export async function pullFromCloud(userId: string): Promise<{ success: boolean;
 
     if (tablesError) throw tablesError;
     if (!tables || tables.length === 0) {
-      await saveDB({ tables: [] });
+      await saveDB({
+        tables: [],
+        aiCostCurrentMonth,
+        aiCostLastReset,
+      });
       return { success: true };
     }
 
-    // Fetch all rows for all tables in one query
+    // 3. Fetch all rows for all tables in one query
     const tableIds = tables.map((t) => t.id);
     const { data: allRows, error: rowsError } = await supabase
-      .from('coin_rows')
+      .from('transactions')
       .select('*')
       .in('table_id', tableIds)
       .order('date', { ascending: true });
@@ -135,7 +163,11 @@ export async function pullFromCloud(userId: string): Promise<{ success: boolean;
       goals: t.goals ?? { dailyGoals: {}, weeklyGoals: {}, annualCosts: {} },
     }));
 
-    await saveDB({ tables: coinTables });
+    await saveDB({
+      tables: coinTables,
+      aiCostCurrentMonth,
+      aiCostLastReset,
+    });
     return { success: true };
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown pull error';
@@ -162,4 +194,5 @@ export async function fullSync(userId: string): Promise<{ success: boolean; erro
 export async function deleteAllCloudData(userId: string): Promise<void> {
   // Rows are CASCADE-deleted when tables are deleted
   await supabase.from('coin_tables').delete().eq('user_id', userId);
+  await supabase.from('user_settings').delete().eq('id', userId);
 }

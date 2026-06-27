@@ -8,7 +8,7 @@
  *   - Annual costs by year
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -200,6 +200,16 @@ function GoalsAccordion({
   });
   const [newMonthWeekly, setNewMonthWeekly] = useState('');
 
+  // Weekly States (for YYYY-Www overrides)
+  const [newWeek, setNewWeek] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 4 - (d.getDay() || 7));
+    const yearStart = new Date(d.getFullYear(), 0, 1);
+    const weekNum = Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+    return `${d.getFullYear()}-W${String(weekNum).padStart(2, '0')}`;
+  });
+  const [newWeekWeekly, setNewWeekWeekly] = useState('');
+
   // ── Global Goals Handlers ──────────────────────────────────────────────────
   const handleSaveGlobal = () => {
     const val = parseFloat(globalWeekly.replace(',', '.'));
@@ -324,6 +334,53 @@ function GoalsAccordion({
     });
   };
 
+  // ── Weekly Overrides Handlers ──────────────────────────────────────────────
+  const weeklyOverrides = useMemo(() => {
+    const list: { key: string; value: number }[] = [];
+    if (!goals.weeklyGoals) return list;
+    for (const key of Object.keys(goals.weeklyGoals)) {
+      if (typeof key === 'string' && key.includes('-W')) {
+        list.push({ key, value: goals.weeklyGoals[key] });
+      }
+    }
+    return list.sort((a, b) => b.key.localeCompare(a.key));
+  }, [goals.weeklyGoals]);
+
+  const handleAddWeekly = () => {
+    if (!newWeek.match(/^\d{4}-W\d{2}$/)) {
+      Alert.alert('Erro', 'Insira a semana no formato AAAA-WSS (Ex: 2026-W26).');
+      return;
+    }
+    const val = parseFloat(newWeekWeekly.replace(',', '.'));
+    if (isNaN(val) || val <= 0) {
+      Alert.alert('Erro', 'Insira um valor de meta válido.');
+      return;
+    }
+
+    const updatedWeeklyGoals = {
+      ...(goals.weeklyGoals ?? {}),
+      [newWeek]: val,
+    };
+
+    onUpdate({
+      ...goals,
+      weeklyGoals: updatedWeeklyGoals,
+    });
+
+    setNewWeekWeekly('');
+    Alert.alert('Sucesso', `Meta para a semana ${newWeek} adicionada!`);
+  };
+
+  const handleDeleteWeekly = (weekKey: string) => {
+    const nextWeeklyGoals = { ...(goals.weeklyGoals ?? {}) };
+    delete nextWeeklyGoals[weekKey];
+
+    onUpdate({
+      ...goals,
+      weeklyGoals: nextWeeklyGoals,
+    });
+  };
+
   return (
     <Card>
       <Pressable
@@ -334,14 +391,63 @@ function GoalsAccordion({
           {expanded ? '▼' : '▶'} Níveis de Metas
         </Text>
         <Text style={styles.accordionCount}>
-          {Object.keys(yearlyGoals).length} Anual / {Object.keys(monthlyGoals).length} Mensal
+          {weeklyOverrides.length} Sem. / {Object.keys(monthlyGoals).length} Mens. / {Object.keys(yearlyGoals).length} Anual
         </Text>
       </Pressable>
 
       {expanded && (
         <View style={styles.accordionBody}>
           
-          {/* 1. GLOBAL GOAL */}
+          {/* 1. WEEKLY GOALS OVERRIDES (Priority 1) */}
+          <View style={styles.goalSection}>
+            <Text style={styles.subSectionTitle}>🚀 Sobrescrita por Semana</Text>
+            <Text style={styles.sectionDesc}>Prioridade máxima. Substitui todas as metas para a semana específica (AAAA-WSS).</Text>
+            
+            {weeklyOverrides.map((item: { key: string; value: number }) => (
+              <View key={item.key} style={styles.goalRow}>
+                <Text style={[styles.goalYear, { width: 90 }]}>{item.key}</Text>
+                <Text style={styles.goalValue}>
+                  {formatCurrencySmart(item.value)} /sem
+                </Text>
+                <Pressable
+                  onPress={() => handleDeleteWeekly(item.key)}
+                  style={styles.goalDelete}
+                >
+                  <Text style={styles.goalDeleteText}>✕</Text>
+                </Pressable>
+              </View>
+            ))}
+
+            {/* Add new weekly override */}
+            <View style={styles.addGoalRow}>
+              <TextInput
+                style={[styles.goalInput, { flex: 0.4 }]}
+                value={newWeek}
+                onChangeText={setNewWeek}
+                placeholder="AAAA-WSS"
+                placeholderTextColor={colors.text.disabled}
+                keyboardType="numbers-and-punctuation"
+              />
+              <TextInput
+                style={[styles.goalInput, { flex: 0.6 }]}
+                value={newWeekWeekly}
+                onChangeText={setNewWeekWeekly}
+                placeholder="Meta semanal (R$)"
+                placeholderTextColor={colors.text.disabled}
+                keyboardType="decimal-pad"
+              />
+              <Pressable
+                style={({ pressed }) => [styles.goalAddBtn, pressed && styles.pressed]}
+                onPress={handleAddWeekly}
+              >
+                <Text style={styles.goalAddBtnText}>+</Text>
+              </Pressable>
+            </View>
+          </View>
+
+          <View style={styles.subSectionDivider} />
+
+          {/* 2. GLOBAL GOAL */}
           <View style={styles.goalSection}>
             <Text style={styles.subSectionTitle}>🌍 Meta Global (Padrão)</Text>
             <Text style={styles.sectionDesc}>Usada como fallback geral na ausência de metas anuais ou mensais.</Text>
@@ -365,7 +471,7 @@ function GoalsAccordion({
 
           <View style={styles.subSectionDivider} />
 
-          {/* 2. YEARLY GOALS */}
+          {/* 3. YEARLY GOALS */}
           <View style={styles.goalSection}>
             <Text style={styles.subSectionTitle}>📅 Sobrescrita por Ano</Text>
             <Text style={styles.sectionDesc}>Substitui a meta global para todo o ano selecionado.</Text>
@@ -414,7 +520,7 @@ function GoalsAccordion({
 
           <View style={styles.subSectionDivider} />
 
-          {/* 3. MONTHLY GOALS */}
+          {/* 4. MONTHLY GOALS */}
           <View style={styles.goalSection}>
             <Text style={styles.subSectionTitle}>🗓️ Sobrescrita por Mês</Text>
             <Text style={styles.sectionDesc}>Substitui a meta anual e global para o mês específico (AAAA-MM).</Text>
