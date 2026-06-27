@@ -95,17 +95,7 @@ export default function SettingsScreen() {
             try {
               await auth.logout();
             } catch (err) {
-              console.warn('Sign out failed:', err);
-            }
-            try {
-              await clearDB();
-            } catch (err) {
-              console.warn('clearDB failed:', err);
-            }
-            if (Platform.OS === 'web') {
-              window.location.href = '/laboratorio/assistente-moeda/';
-            } else {
-              router.replace('/(app)/(tabs)');
+              console.warn('Logout failed:', err);
             }
           },
         },

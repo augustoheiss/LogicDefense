@@ -11,6 +11,8 @@
  */
 
 import { useState, useEffect, useCallback, createContext, useContext, useMemo } from 'react';
+import { Platform } from 'react-native';
+import { router } from 'expo-router';
 import type { Session, User } from '@supabase/supabase-js';
 import {
   signIn,
@@ -130,27 +132,45 @@ export function useAuth(): AuthState {
   }, []);
 
   const logout = useCallback(async () => {
+    try {
+      await signOut();
+    } catch (e) {
+      console.warn('Supabase signOut failed:', e);
+    }
+
+    try {
+      const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+      await AsyncStorage.clear();
+    } catch (e) {
+      console.warn('Wiping storage failed:', e);
+    }
+
+    if (Platform.OS === 'web') {
+      try {
+        Object.keys(localStorage).forEach(key => {
+          if (key.startsWith('sb-') || key.includes('supabase')) {
+            localStorage.removeItem(key);
+          }
+        });
+        Object.keys(sessionStorage).forEach(key => {
+          if (key.startsWith('sb-') || key.includes('supabase')) {
+            sessionStorage.removeItem(key);
+          }
+        });
+      } catch (e) {
+        console.warn('Web local/session storage clear failed:', e);
+      }
+    }
+
     setUser(null);
     setProfile(null);
     setSession(null);
     setMode('guest');
 
-    try {
-      // Safely wipe Supabase tokens from AsyncStorage manually
-      const AsyncStorage = require('@react-native-async-storage/async-storage').default;
-      const keys = await AsyncStorage.getAllKeys();
-      const authKeys = keys.filter((k: string) => k.startsWith('sb-'));
-      for (const key of authKeys) {
-        await AsyncStorage.removeItem(key);
-      }
-    } catch (e) {
-      console.warn('Wiping storage keys failed:', e);
-    }
-
-    try {
-      await signOut();
-    } catch (e) {
-      console.warn('Supabase signOut failed:', e);
+    if (Platform.OS === 'web') {
+      window.location.href = '/laboratorio/assistente-moeda';
+    } else {
+      router.replace('/');
     }
   }, []);
 
