@@ -1,7 +1,13 @@
 {
+  "cleanUrls": true,
   "rewrites": [
-    { "source": "/laboratorio/assistente-moeda", "destination": "/laboratorio/assistente-moeda/index.html" },
-    { "source": "/laboratorio/assistente-moeda/:path*", "destination": "/laboratorio/assistente-moeda/:path*" },
-    { "source": "/((?!laboratorio/assistente-moeda).*)", "destination": "/" }
+    {
+      "source": "/laboratorio/assistente-moeda/((?!_expo|assets|static|.*\\..*$).*)",
+      "destination": "/laboratorio/assistente-moeda/index.html"
+    },
+    {
+      "source": "/((?!laboratorio/assistente-moeda).*)",
+      "destination": "/"
+    }
   ]
 }

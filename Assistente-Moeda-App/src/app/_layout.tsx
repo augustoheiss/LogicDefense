@@ -40,11 +40,13 @@ function RootNavigator() {
     if (auth.isLoading) return;
 
     const inAuthGroup = segments[0] === '(auth)';
+    const currentPath = segments.join('/');
+    const isExplicitAuthPage = currentPath.includes('login') || currentPath.includes('register');
 
     if (!auth.user && !inAuthGroup) {
       // strictly redirect to login screen
       router.replace('/(auth)/login');
-    } else if (auth.user && inAuthGroup) {
+    } else if (auth.user && inAuthGroup && !isExplicitAuthPage) {
       // strictly redirect to main app tabs
       router.replace('/(app)/(tabs)');
     }

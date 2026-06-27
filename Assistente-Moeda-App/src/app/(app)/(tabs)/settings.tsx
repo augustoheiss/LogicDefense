@@ -35,6 +35,24 @@ export default function SettingsScreen() {
   const auth = useAuthContext();
   const db = useCoinDB();
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isMigrating, setIsMigrating] = useState(false);
+
+  const handleLocalMigration = async () => {
+    if (auth.mode !== 'authenticated' || !auth.user) return;
+    setIsMigrating(true);
+    try {
+      const res = await db.migrateLocalToCloud();
+      if (res.success) {
+        Alert.alert('Sucesso', 'Suas planilhas locais foram migradas para a nuvem com sucesso!');
+      } else {
+        Alert.alert('Erro', `Falha na migração: ${res.error}`);
+      }
+    } catch (err: any) {
+      Alert.alert('Erro', err.message || 'Erro inesperado durante a migração.');
+    } finally {
+      setIsMigrating(false);
+    }
+  };
 
   const handleManualSync = async () => {
     if (auth.mode !== 'authenticated' || !auth.user) return;
@@ -142,6 +160,31 @@ export default function SettingsScreen() {
             </Card>
           )}
         </Section>
+
+        {/* ── Migration Section ───────────────────────────── */}
+        {auth.mode === 'authenticated' && (
+          <Section title="Migração de Dados">
+            <Card>
+              <Text style={styles.migrationTitle}>📤 Migrar Planilhas Locais</Text>
+              <Text style={styles.migrationText}>
+                Você tem {db.tables.length} planilhas salvas na memória local. Você pode migrá-las e enviá-las para sua conta em nuvem agora.
+              </Text>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.migrationButton,
+                  isMigrating && styles.syncButtonDisabled,
+                  pressed && styles.pressed,
+                ]}
+                onPress={handleLocalMigration}
+                disabled={isMigrating}
+              >
+                <Text style={styles.migrationButtonText}>
+                  {isMigrating ? '⏳ Migrando...' : '📤 Subir Planilhas Locais para a Nuvem'}
+                </Text>
+              </Pressable>
+            </Card>
+          </Section>
+        )}
 
         {/* ── Goals Accordion ─────────────────────────────── */}
         {db.activeTable && (
@@ -728,6 +771,28 @@ const styles = StyleSheet.create({
   },
   syncButtonText: {
     color: colors.text.primary,
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  migrationTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.text.primary,
+  },
+  migrationText: {
+    fontSize: 13,
+    color: colors.text.secondary,
+    marginTop: spacing.xs,
+  },
+  migrationButton: {
+    backgroundColor: colors.accent.purple,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.sm,
+    alignItems: 'center',
+    marginTop: spacing.md,
+  },
+  migrationButtonText: {
+    color: '#fff',
     fontSize: 13,
     fontWeight: '600',
   },

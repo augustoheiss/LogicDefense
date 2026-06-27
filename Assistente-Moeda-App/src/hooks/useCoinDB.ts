@@ -70,6 +70,8 @@ export interface CoinDBState {
   addAICost: (costInBRL: number) => void;
   /** Manually trigger cloud synchronization */
   syncCloud: () => Promise<{ success: boolean; error?: string }>;
+  /** Manually migrate local spreadsheets to cloud */
+  migrateLocalToCloud: () => Promise<{ success: boolean; error?: string }>;
 }
 
 // ── React Context ────────────────────────────────────────────────────────────
@@ -149,6 +151,17 @@ function useCoinDBInternal(): CoinDBState {
         setAiCostLastReset(db.aiCostLastReset ?? '');
       }
     }
+    setIsLoading(false);
+    return res;
+  }, [auth.mode, auth.user]);
+
+  // ── Manual Local-to-Cloud Migration ────────────────────
+  const migrateLocalToCloud = useCallback(async (): Promise<{ success: boolean; error?: string }> => {
+    if (auth.mode !== 'authenticated' || !auth.user) {
+      return { success: false, error: 'User is not authenticated' };
+    }
+    setIsLoading(true);
+    const res = await pushToCloud(auth.user.id);
     setIsLoading(false);
     return res;
   }, [auth.mode, auth.user]);
@@ -440,6 +453,7 @@ function useCoinDBInternal(): CoinDBState {
     aiCostLastReset,
     addAICost,
     syncCloud,
+    migrateLocalToCloud,
   };
 }
 
