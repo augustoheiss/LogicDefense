@@ -399,7 +399,7 @@ export default function SpreadsheetScreen() {
         {showFab && (
           <View style={styles.fabMenu}>
             <Pressable
-              style={[styles.fabMenuItem, { backgroundColor: colors.accent.purpleLight }]}
+              style={[styles.fabMenuItem, { backgroundColor: colors.background.elevated, borderColor: colors.accent.purpleBorder }]}
               onPress={() => {
                 setShowFab(false);
                 if (!isPro) {
@@ -413,35 +413,35 @@ export default function SpreadsheetScreen() {
               <Text style={styles.fabMenuLabel}>Chat IA</Text>
             </Pressable>
             <Pressable
-              style={[styles.fabMenuItem, { backgroundColor: colors.success.light }]}
+              style={[styles.fabMenuItem, { backgroundColor: colors.background.elevated, borderColor: colors.success.border }]}
               onPress={handleExportWhatsApp}
             >
               <Text style={styles.fabMenuIcon}>📱</Text>
               <Text style={styles.fabMenuLabel}>WhatsApp</Text>
             </Pressable>
             <Pressable
-              style={[styles.fabMenuItem, { backgroundColor: colors.danger.light }]}
+              style={[styles.fabMenuItem, { backgroundColor: colors.background.elevated, borderColor: colors.danger.border }]}
               onPress={handleExportPDF}
             >
               <Text style={styles.fabMenuIcon}>📕</Text>
               <Text style={styles.fabMenuLabel}>Exportar PDF</Text>
             </Pressable>
             <Pressable
-              style={[styles.fabMenuItem, { backgroundColor: colors.info.light }]}
+              style={[styles.fabMenuItem, { backgroundColor: colors.background.elevated, borderColor: colors.info.border }]}
               onPress={handleExportCSV}
             >
               <Text style={styles.fabMenuIcon}>📄</Text>
               <Text style={styles.fabMenuLabel}>Exportar CSV</Text>
             </Pressable>
             <Pressable
-              style={[styles.fabMenuItem, { backgroundColor: colors.warning.light }]}
+              style={[styles.fabMenuItem, { backgroundColor: colors.background.elevated, borderColor: colors.warning.border }]}
               onPress={handleImportCSV}
             >
               <Text style={styles.fabMenuIcon}>📥</Text>
               <Text style={styles.fabMenuLabel}>Importar CSV</Text>
             </Pressable>
             <Pressable
-              style={[styles.fabMenuItem, { backgroundColor: colors.danger.light }]}
+              style={[styles.fabMenuItem, { backgroundColor: colors.background.elevated, borderColor: colors.danger.border }]}
               onPress={() => {
                 setShowFab(false);
                 setShowBulkDelete(true);
@@ -679,6 +679,7 @@ const styles = StyleSheet.create({
     bottom: spacing.lg + 10,
     alignItems: 'flex-end',
     gap: spacing.sm,
+    zIndex: 9999,
   },
   fabMenu: {
     gap: spacing.xs,

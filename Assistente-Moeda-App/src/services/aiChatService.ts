@@ -31,7 +31,7 @@ export interface ChatResponse {
 
 // ── API Config ───────────────────────────────────────────────────────────────
 
-const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8000';
+const API_URL = process.env.EXPO_PUBLIC_AI_BACKEND_URL || process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8000';
 
 // ── Context Builder ──────────────────────────────────────────────────────────
 

@@ -22,6 +22,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useAuthContext } from '@/hooks/useAuth';
 import { useCoinDB } from '@/hooks/useCoinDB';
+import { clearDB } from '@/storage/asyncStorageAdapter';
 import { colors } from '@/theme/colors';
 import { spacing, radius } from '@/theme/spacing';
 import { Card } from '@/components/ui/Card';
@@ -36,7 +37,7 @@ export default function SettingsScreen() {
   const handleLogout = () => {
     Alert.alert(
       'Sair da Conta',
-      'Seus dados locais serão mantidos. Deseja sair?',
+      'Seus dados locais serão apagados. Deseja sair?',
       [
         { text: 'Cancelar', style: 'cancel' },
         {
@@ -44,7 +45,8 @@ export default function SettingsScreen() {
           style: 'destructive',
           onPress: async () => {
             await auth.logout();
-            router.replace('/(auth)/welcome');
+            await clearDB();
+            router.replace('/(auth)/login');
           },
         },
       ],

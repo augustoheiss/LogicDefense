@@ -10,7 +10,7 @@
  * app can consume via React context.
  */
 
-import { useState, useEffect, useCallback, createContext, useContext } from 'react';
+import { useState, useEffect, useCallback, createContext, useContext, useMemo } from 'react';
 import type { Session, User } from '@supabase/supabase-js';
 import {
   signIn,
@@ -134,13 +134,30 @@ export function useAuth(): AuthState {
     // Auth state listener will handle cleanup
   }, []);
 
-  const isPremium = profile?.premiumTier === 'premium';
+  const isAdmin = !!(
+    user?.email && (
+      user.email.toLowerCase() === 'augustoheiss@gmail.com' ||
+      user.email.toLowerCase() === 'augusto@heisslab.com.br' ||
+      user.email.toLowerCase() === 'ceo@heisslab.com.br' ||
+      (process.env.EXPO_PUBLIC_ADMIN_EMAIL && user.email.toLowerCase() === process.env.EXPO_PUBLIC_ADMIN_EMAIL.toLowerCase())
+    )
+  );
+
+  const effectiveProfile = useMemo(() => {
+    if (!profile) return null;
+    if (isAdmin) {
+      return { ...profile, premiumTier: 'premium' as const };
+    }
+    return profile;
+  }, [profile, isAdmin]);
+
+  const isPremium = isAdmin || profile?.premiumTier === 'premium';
 
   return {
     mode,
     isLoading,
     user,
-    profile,
+    profile: effectiveProfile,
     session,
     isPremium,
     enterGuestMode,

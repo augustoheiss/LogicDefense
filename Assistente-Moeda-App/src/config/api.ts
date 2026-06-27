@@ -5,7 +5,7 @@
  * Uses the same FastAPI backend as the web version — no changes needed.
  */
 
-export const API_BASE = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8000';
+export const API_BASE = process.env.EXPO_PUBLIC_AI_BACKEND_URL || process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8000';
 
 /**
  * AI Analyst endpoint — POST /api/coin/ai-analyst

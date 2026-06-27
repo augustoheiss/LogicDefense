@@ -136,6 +136,16 @@ function useCoinDBInternal(): CoinDBState {
     sync();
   }, [auth.mode, auth.user]);
 
+  // ── Reset local state on Logout ────────────────────────
+  useEffect(() => {
+    if (auth.mode === 'guest' && !auth.user) {
+      setTables([]);
+      setAiCostCurrentMonth(0);
+      setAiCostLastReset('');
+      setActiveTableIndex(0);
+    }
+  }, [auth.mode, auth.user]);
+
   // ── Persist to AsyncStorage and Push to Cloud ──────────
   const persist = useCallback(async (newTables: CoinTable[]) => {
     setTables(newTables);

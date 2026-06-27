@@ -5,7 +5,8 @@
  * which causes static bundling errors in Metro.
  */
 
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
+import { useAuthContext } from './useAuth';
 
 export interface SubscriptionPackage {
   identifier: string;
@@ -60,6 +61,22 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
   const [subscriptionType, setSubscriptionType] = useState<'monthly' | 'yearly' | null>(null);
   const [showPaywall, setShowPaywall] = useState(false);
 
+  const auth = useAuthContext();
+
+  const isAdmin = useMemo(() => {
+    return !!(
+      auth.user?.email && (
+        auth.user.email.toLowerCase() === 'augustoheiss@gmail.com' ||
+        auth.user.email.toLowerCase() === 'augusto@heisslab.com.br' ||
+        auth.user.email.toLowerCase() === 'ceo@heisslab.com.br' ||
+        (process.env.EXPO_PUBLIC_ADMIN_EMAIL && auth.user.email.toLowerCase() === process.env.EXPO_PUBLIC_ADMIN_EMAIL.toLowerCase())
+      )
+    );
+  }, [auth.user]);
+
+  const effectiveIsPro = isAdmin ? true : isPro;
+  const effectiveSubscriptionType = isAdmin ? 'yearly' : subscriptionType;
+
   const purchasePackage = useCallback(async (pkg: any): Promise<boolean> => {
     setIsPro(true);
     setSubscriptionType(pkg.packageType === 'YEARLY' ? 'yearly' : 'monthly');
@@ -83,8 +100,8 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
   }, []);
 
   const value: SubscriptionContextState = {
-    isPro,
-    subscriptionType,
+    isPro: effectiveIsPro,
+    subscriptionType: effectiveSubscriptionType,
     packages: MOCK_PACKAGES,
     isLoading: false,
     purchasePackage,

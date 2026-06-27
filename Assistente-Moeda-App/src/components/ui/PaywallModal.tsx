@@ -229,17 +229,19 @@ export function PaywallModal({ visible, onClose }: PaywallModalProps) {
             </View>
 
             {/* Dev Mock Tool */}
-            <View style={styles.devMockContainer}>
-              <Text style={styles.devMockTitle}>[Dev Mode] Status da Assinatura:</Text>
-              <View style={styles.devMockRow}>
-                <Text style={styles.devMockStatus}>
-                  Pro Ativo: {isPro ? '✅ SIM' : '❌ NÃO'}
-                </Text>
-                <Pressable style={styles.devMockToggleBtn} onPress={toggleProMock}>
-                  <Text style={styles.devMockToggleBtnText}>Alternar Mock Pro</Text>
-                </Pressable>
+            {__DEV__ && (
+              <View style={styles.devMockContainer}>
+                <Text style={styles.devMockTitle}>[Dev Mode] Status da Assinatura:</Text>
+                <View style={styles.devMockRow}>
+                  <Text style={styles.devMockStatus}>
+                    Pro Ativo: {isPro ? '✅ SIM' : '❌ NÃO'}
+                  </Text>
+                  <Pressable style={styles.devMockToggleBtn} onPress={toggleProMock}>
+                    <Text style={styles.devMockToggleBtnText}>Alternar Mock Pro</Text>
+                  </Pressable>
+                </View>
               </View>
-            </View>
+            )}
           </ScrollView>
         </View>
       </View>
