@@ -8,7 +8,11 @@ const targetPublicDir = path.join(rootDir, 'public', 'laboratorio', 'assistente-
 
 console.log('🚀 Starting full production build process...');
 
-// 1. Build the Expo Web app
+// 1. Install sub-dependencies inside Expo folder
+console.log('📦 Installing Expo sub-dependencies...');
+execSync('npm install', { cwd: expoAppDir, stdio: 'inherit' });
+
+// 2. Build the Expo Web app
 console.log('📦 Building Expo Web app...');
 execSync('npm run build:web', { cwd: expoAppDir, stdio: 'inherit' });
 
