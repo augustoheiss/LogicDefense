@@ -319,7 +319,11 @@ function useCoinDBInternal(): CoinDBState {
     const actualIndex = targetIndex !== -1 ? targetIndex : activeTableIndex;
     if (actualIndex < 0 || actualIndex >= tables.length) return;
 
-    const newRow: TableRow = { ...row, id: generateId() };
+    const normalizedDescription = row.description 
+      ? row.description.toUpperCase().trim() 
+      : undefined;
+
+    const newRow: TableRow = { ...row, description: normalizedDescription, id: generateId() };
     const newTables = tables.map((t, i) => {
       if (i !== actualIndex) return t;
       return {
@@ -340,7 +344,11 @@ function useCoinDBInternal(): CoinDBState {
     const actualIndex = targetIndex !== -1 ? targetIndex : activeTableIndex;
     if (actualIndex < 0 || actualIndex >= tables.length) return;
 
-    const newRows: TableRow[] = rows.map((r) => ({ ...r, id: generateId() }));
+    const newRows: TableRow[] = rows.map((r) => ({
+      ...r,
+      description: r.description ? r.description.toUpperCase().trim() : undefined,
+      id: generateId()
+    }));
     const newTables = tables.map((t, i) => {
       if (i !== actualIndex) return t;
       return {
@@ -353,11 +361,15 @@ function useCoinDBInternal(): CoinDBState {
   }, [tables, activeTableIndex, persist]);
 
   const updateRow = useCallback((rowId: string, updates: Partial<TableRow>) => {
+    const normalizedUpdates = { ...updates };
+    if (normalizedUpdates.description) {
+      normalizedUpdates.description = normalizedUpdates.description.toUpperCase().trim();
+    }
     const newTables = tables.map((t, i) => {
       if (i !== activeTableIndex) return t;
       return {
         ...t,
-        rows: t.rows.map((r) => (r.id === rowId ? { ...r, ...updates } : r)),
+        rows: t.rows.map((r) => (r.id === rowId ? { ...r, ...normalizedUpdates } : r)),
         updatedAt: new Date().toISOString(),
       };
     });

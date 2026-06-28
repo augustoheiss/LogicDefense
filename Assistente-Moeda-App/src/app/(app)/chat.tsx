@@ -171,9 +171,10 @@ export default function AIChatScreen() {
               const { table_name, description, value, date, period_start, period_end } = payload.parameters;
               const numericValue = Number(value);
               
+              const normalizedDesc = (description || 'Sem descrição').toUpperCase().trim();
               await db.addRow(
                 {
-                  description: description || 'Sem descrição',
+                  description: normalizedDesc,
                   value: Math.abs(numericValue),
                   date: date || new Date().toISOString().slice(0, 10),
                   entryType: (numericValue < 0 ? 'expense' : 'revenue') as any,
@@ -184,7 +185,7 @@ export default function AIChatScreen() {
               );
 
               const periodInfo = period_start && period_end ? ` (Vigência: **${period_start}** a **${period_end}**)` : '';
-              responseText = `✅ **Ação Executada:**\nAdicionei **${description}** no valor de **R$ ${Math.abs(numericValue).toFixed(2)}** (${numericValue < 0 ? 'Despesa' : 'Receita'}) na planilha **${table_name}** em **${date}**${periodInfo}.`;
+              responseText = `✅ **Ação Executada:**\nAdicionei **${normalizedDesc}** no valor de **R$ ${Math.abs(numericValue).toFixed(2)}** (${numericValue < 0 ? 'Despesa' : 'Receita'}) na planilha **${table_name}** em **${date}**${periodInfo}.`;
             }
             else if (payload.action === 'bulk_add_transactions' && payload.parameters) {
               const { table_name, transactions } = payload.parameters;
@@ -193,7 +194,7 @@ export default function AIChatScreen() {
                 const rowsToAdd = transactions.map((t: any) => {
                   const numVal = Number(t.value);
                   return {
-                    description: t.description || 'Sem descrição',
+                    description: (t.description || 'Sem descrição').toUpperCase().trim(),
                     value: Math.abs(numVal),
                     date: t.date || new Date().toISOString().slice(0, 10),
                     entryType: (numVal < 0 ? 'expense' : 'revenue') as any,

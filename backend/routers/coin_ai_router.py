@@ -292,7 +292,7 @@ def build_category_summaries(rows: list, globalDaySpan: int = 1) -> str:
     type_buckets: dict[str, dict[str, list]] = defaultdict(lambda: defaultdict(list))
     for r in rows:
         entry_type = r.entry_type or EntryType.REVENUE
-        desc = (r.description or "Sem descrição").strip()
+        desc = (r.description or "SEM DESCRIÇÃO").upper().strip()
         type_buckets[entry_type][desc].append(r)
 
     sections: list[str] = []

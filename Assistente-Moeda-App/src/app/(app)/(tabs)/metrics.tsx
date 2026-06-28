@@ -199,7 +199,7 @@ export default function MetricsScreen() {
   const microGroups = useMemo(() => {
     const groups: Record<string, number> = {};
     for (const r of macroFilteredRows) {
-      const desc = (r.description || 'Sem Descrição').trim() || 'Sem Descrição';
+      const desc = (r.description || 'SEM DESCRIÇÃO').toUpperCase().trim() || 'SEM DESCRIÇÃO';
       groups[desc] = (groups[desc] || 0) + r.value;
     }
     return groups;
@@ -231,7 +231,7 @@ export default function MetricsScreen() {
   // Level 3: Category X-Ray calculations
   const categoryRows = useMemo(() => {
     if (!selectedCategory) return [];
-    return macroFilteredRows.filter(r => ((r.description || 'Sem Descrição').trim() || 'Sem Descrição') === selectedCategory);
+    return macroFilteredRows.filter(r => ((r.description || 'SEM DESCRIÇÃO').toUpperCase().trim() || 'SEM DESCRIÇÃO') === selectedCategory.toUpperCase().trim());
   }, [macroFilteredRows, selectedCategory]);
 
   const fallbackDays = useMemo(() => {
