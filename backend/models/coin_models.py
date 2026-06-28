@@ -19,9 +19,9 @@ Key design decisions:
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import Optional
+from typing import Optional, Any
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 # ── Enums ────────────────────────────────────────────────────────────────────
@@ -488,40 +488,58 @@ class AIAnalystPayload(BaseModel):
       payload → metrics → context → LLM → response.
     """
 
-    rows: list[TableRow] = Field(
-        ...,
-        min_length=1,
-        description="All TableRows from the active table (localStorage)",
-    )
-    goals: TableGoals = Field(
-        ...,
-        description="The active table's goals configuration",
-    )
-    user_prompt: str = Field(
+    message: str = Field(
         ...,
         alias="userPrompt",
-        min_length=1,
-        max_length=2000,
         description="The user's natural language question about their finances",
     )
-    as_of_date: Optional[str] = Field(
-        default=None,
-        alias="asOfDate",
-        pattern=r"^\d{4}-\d{2}-\d{2}$",
-        description="Time Machine: treat this date as 'today' for all calculations",
+    tables: list[dict] = Field(
+        default_factory=list,
+        description="List of all tables / spreadsheets"
     )
-    table_name: Optional[str] = Field(
-        default=None,
-        alias="tableName",
-        description="Name of the active table (for context in the AI response)",
+    transactions: list[dict] = Field(
+        default_factory=list,
+        description="List of all transactions"
     )
-    total_waiver_credits: float = Field(
-        default=0.0,
-        alias="totalWaiverCredits",
-        description="The calculated total waiver credits sent directly from the frontend",
+    user_settings: Optional[dict] = Field(
+        default=None,
+        alias="userSettings",
+        description="Additional configuration like active table index and/or time machine date"
     )
 
+    # Optional fields for backward compatibility or when parsed
+    rows: Optional[list[TableRow]] = Field(default=None)
+    goals: Optional[TableGoals] = Field(default=None)
+    as_of_date: Optional[str] = Field(
+        default=None, 
+        alias="asOfDate",
+        pattern=r"^\d{4}-\d{2}-\d{2}$"
+    )
+    table_name: Optional[str] = Field(default=None, alias="tableName")
+    total_waiver_credits: Optional[float] = Field(default=0.0, alias="totalWaiverCredits")
+
     model_config = {"populate_by_name": True}
+
+    @model_validator(mode="before")
+    @classmethod
+    def map_aliases(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            # Map userPrompt/user_prompt to message if message is not present
+            if "message" not in data:
+                if "userPrompt" in data:
+                    data["message"] = data["userPrompt"]
+                elif "user_prompt" in data:
+                    data["message"] = data["user_prompt"]
+            # Map userSettings to user_settings if not present
+            if "user_settings" not in data and "userSettings" in data:
+                data["user_settings"] = data["userSettings"]
+            # Map asOfDate to as_of_date if not present
+            if "as_of_date" not in data:
+                if "asOfDate" in data:
+                    data["as_of_date"] = data["asOfDate"]
+                elif data.get("user_settings") and isinstance(data["user_settings"], dict):
+                    data["as_of_date"] = data["user_settings"].get("asOfDate") or data["user_settings"].get("as_of_date")
+        return data
 
 
 class AIAnalystResponse(BaseModel):

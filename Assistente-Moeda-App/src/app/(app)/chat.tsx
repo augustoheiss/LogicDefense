@@ -32,6 +32,7 @@ import { colors } from '@/theme/colors';
 import { spacing, radius } from '@/theme/spacing';
 import { useCoinDB } from '@/hooks/useCoinDB';
 import { useSubscription } from '@/hooks/useSubscription';
+import Markdown from 'react-native-markdown-display';
 import {
   sendChatMessage,
   createMessage,
@@ -104,6 +105,41 @@ export default function AIChatScreen() {
     setInput('');
     setIsLoading(true);
 
+    // Convert tables and transactions to Supabase/stateless-friendly schema representation
+    const tablesPayload = (db.tables || []).map((t, idx) => ({
+      id: t.id,
+      name: t.name,
+      description: t.description || null,
+      goals: t.goals,
+      position: idx,
+      createdAt: t.createdAt,
+      updatedAt: t.updatedAt,
+    }));
+
+    const transactionsPayload = (db.tables || []).flatMap(t => 
+      (t.rows || []).map(r => ({
+        id: r.id,
+        table_id: t.id,
+        date: r.date,
+        value: r.value,
+        description: r.description || null,
+        entry_type: r.entryType || 'revenue',
+        monthly_value: r.monthlyValue || null,
+        month_count: r.monthCount || null,
+        period_start: r.periodStart || null,
+        period_end: r.periodEnd || null,
+        generated_by: r.generatedBy || null,
+        cloned_from: r.clonedFrom || null,
+      }))
+    );
+
+    const userSettingsPayload = {
+      activeTableIndex: db.activeTableIndex,
+      aiCostCurrentMonth: db.aiCostCurrentMonth,
+      aiCostLastReset: db.aiCostLastReset,
+      asOfDate: db.cutoffDate || null,
+    };
+
     try {
       const result = await sendChatMessage(
         msg,
@@ -111,7 +147,10 @@ export default function AIChatScreen() {
         (db.activeTable?.goals || { dailyGoals: {}, weeklyGoals: {}, annualCosts: {} }) as any,
         db.activeTable?.name || 'Tabela Principal',
         db.metrics.totalWaiverCredit || 0,
-        db.cutoffDate || undefined
+        db.cutoffDate || undefined,
+        tablesPayload,
+        transactionsPayload,
+        userSettingsPayload
       );
 
       if (result.error) {
@@ -226,6 +265,82 @@ export default function AIChatScreen() {
 
 // ── Message Bubble ───────────────────────────────────────────────────────────
 
+const markdownStyles = {
+  body: {
+    color: colors.text.primary,
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  heading1: {
+    color: colors.text.primary,
+    fontSize: 18,
+    fontWeight: 'bold' as const,
+    marginTop: spacing.xs,
+    marginBottom: spacing.xs,
+  },
+  heading2: {
+    color: colors.text.primary,
+    fontSize: 16,
+    fontWeight: 'bold' as const,
+    marginTop: spacing.xs,
+    marginBottom: spacing.xs,
+  },
+  heading3: {
+    color: colors.text.primary,
+    fontSize: 15,
+    fontWeight: 'bold' as const,
+    marginTop: spacing.xs,
+    marginBottom: spacing.xs,
+  },
+  strong: {
+    color: colors.text.primary,
+    fontWeight: 'bold' as const,
+  },
+  bullet_list: {
+    marginTop: spacing.xs,
+    marginBottom: spacing.xs,
+  },
+  ordered_list: {
+    marginTop: spacing.xs,
+    marginBottom: spacing.xs,
+  },
+  list_item: {
+    marginTop: 2,
+    marginBottom: 2,
+  },
+  hr: {
+    backgroundColor: colors.border.default,
+    height: 1,
+    marginVertical: spacing.sm,
+  },
+  table: {
+    borderWidth: 1,
+    borderColor: colors.border.default,
+    borderRadius: radius.sm,
+    marginVertical: spacing.sm,
+  },
+  thead: {
+    backgroundColor: colors.background.tertiary,
+  },
+  th: {
+    color: colors.text.primary,
+    fontWeight: 'bold' as const,
+    padding: spacing.xs,
+    borderRightWidth: 1,
+    borderRightColor: colors.border.default,
+  },
+  tr: {
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border.default,
+  },
+  td: {
+    color: colors.text.secondary,
+    padding: spacing.xs,
+    borderRightWidth: 1,
+    borderRightColor: colors.border.default,
+  },
+};
+
 function MessageBubble({ message }: { message: ChatMessage }) {
   const isUser = message.role === 'user';
 
@@ -238,15 +353,21 @@ function MessageBubble({ message }: { message: ChatMessage }) {
           isUser ? styles.bubbleUser : styles.bubbleAssistant,
         ]}
       >
-        <Text
-          style={[
-            styles.bubbleText,
-            isUser && styles.bubbleTextUser,
-          ]}
-          selectable
-        >
-          {message.content}
-        </Text>
+        {isUser ? (
+          <Text
+            style={[
+              styles.bubbleText,
+              styles.bubbleTextUser,
+            ]}
+            selectable
+          >
+            {message.content}
+          </Text>
+        ) : (
+          <Markdown style={markdownStyles}>
+            {message.content}
+          </Markdown>
+        )}
       </View>
     </View>
   );

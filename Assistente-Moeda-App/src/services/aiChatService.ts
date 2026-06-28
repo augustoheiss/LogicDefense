@@ -114,6 +114,9 @@ export async function sendChatMessage(
   tableName: string,
   totalWaiverCredits: number,
   asOfDate?: string,
+  tables?: any[],
+  transactions?: any[],
+  userSettings?: any,
 ): Promise<ChatResponse> {
   try {
     const response = await fetch(`${API_URL}/api/coin/ai-analyst`, {
@@ -128,6 +131,9 @@ export async function sendChatMessage(
         asOfDate: asOfDate || null,
         tableName,
         totalWaiverCredits,
+        tables: tables || [],
+        transactions: transactions || [],
+        userSettings: userSettings || null,
       }),
     });
 

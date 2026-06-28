@@ -38,6 +38,8 @@ from models.coin_models import (
     AIAnalystResponse,
     TableMetrics,
     EntryType,
+    TableRow,
+    TableGoals,
 )
 from services.coin_metrics_engine import compute_metrics, row_contributions
 from services.coin_date_utils import (
@@ -767,13 +769,94 @@ RESTRIÇÕES:
 # ── Endpoint ─────────────────────────────────────────────────────────────────
 
 
+def parse_payload_data(payload: AIAnalystPayload) -> tuple[list[TableRow], TableGoals, str, float]:
+    """
+    Parses the stateless tables, transactions, and user_settings list from the payload
+    and extracts/maps the active table's TableRows and TableGoals.
+    """
+    # 1. Determine active table index
+    active_table_index = 0
+    if payload.user_settings:
+        active_table_index = payload.user_settings.get("activeTableIndex", 0)
+        if "active_table_index" in payload.user_settings:
+            active_table_index = payload.user_settings["active_table_index"]
+    
+    if not payload.tables:
+        # Fallback to legacy fields if present
+        if payload.rows and payload.goals:
+            table_name = payload.table_name or "Tabela Principal"
+            return payload.rows, payload.goals, table_name, payload.total_waiver_credits or 0.0
+        return [], TableGoals(), "Nenhuma Tabela", 0.0
+
+    # 2. Select active table
+    if active_table_index < 0 or active_table_index >= len(payload.tables):
+        active_table_index = 0
+    
+    active_table = payload.tables[active_table_index]
+    table_id = active_table.get("id") or active_table.get("id_table")
+    table_name = active_table.get("name", f"Planilha {active_table_index + 1}")
+    
+    # Parse table goals
+    raw_goals = active_table.get("goals") or {}
+    goals_model = TableGoals()
+    if isinstance(raw_goals, dict):
+        try:
+            goals_model = TableGoals(**raw_goals)
+        except Exception as err:
+            log.warning("Failed to parse goals dict to TableGoals model: %s", err)
+    
+    # 3. Filter and parse transactions for this active table
+    active_rows = []
+    # If the table itself contains the nested rows (local frontend structure):
+    if "rows" in active_table and isinstance(active_table["rows"], list):
+        for raw_row in active_table["rows"]:
+            try:
+                active_rows.append(TableRow(**raw_row))
+            except Exception as err:
+                log.warning("Failed to parse nested TableRow: %s", err)
+    
+    # If transactions are passed in the flat list (Supabase structure):
+    if payload.transactions:
+        for t in payload.transactions:
+            if t.get("table_id") == table_id or t.get("tableId") == table_id:
+                try:
+                    mapped_tx = {
+                        "id": t.get("id"),
+                        "date": t.get("date"),
+                        "value": float(t.get("value", 0.0)),
+                        "description": t.get("description"),
+                        "entryType": t.get("entry_type") or t.get("entryType") or "revenue",
+                        "monthlyValue": t.get("monthly_value") or t.get("monthlyValue"),
+                        "monthCount": t.get("month_count") or t.get("monthCount"),
+                        "periodStart": t.get("period_start") or t.get("periodStart"),
+                        "periodEnd": t.get("period_end") or t.get("periodEnd"),
+                        "generatedBy": t.get("generated_by") or t.get("generatedBy"),
+                        "clonedFrom": t.get("cloned_from") or t.get("clonedBy") or t.get("clonedFrom"),
+                    }
+                    active_rows.append(TableRow(**mapped_tx))
+                except Exception as err:
+                    log.warning("Failed to parse transaction into TableRow: %s", err)
+                    
+    # Deduplicate rows by ID
+    seen_ids = set()
+    unique_rows = []
+    for r in active_rows:
+        if r.id not in seen_ids:
+            seen_ids.add(r.id)
+            unique_rows.append(r)
+    
+    total_waiver_credits = payload.total_waiver_credits or 0.0
+    
+    return unique_rows, goals_model, table_name, total_waiver_credits
+
+
 @router.post("/ai-analyst", response_model=AIAnalystResponse)
 async def ai_analyst(payload: AIAnalystPayload) -> AIAnalystResponse:
     """
     Stateless AI financial analyst.
 
-    Receives the full table data from localStorage, computes metrics
-    server-side, builds rich context, and queries Gemini for analysis.
+    Receives the full tables and transactions data from the client, parses
+    active context dynamically, computes metrics, and queries Gemini.
     """
     if not client:
         raise HTTPException(
@@ -782,35 +865,50 @@ async def ai_analyst(payload: AIAnalystPayload) -> AIAnalystResponse:
         )
 
     log.info(
-        "AI Analyst request: %d rows, prompt='%s' (%d chars)",
-        len(payload.rows),
-        payload.user_prompt[:80],
-        len(payload.user_prompt),
+        "AI Analyst request: %d tables, %d transactions, prompt='%s' (%d chars)",
+        len(payload.tables),
+        len(payload.transactions),
+        payload.message[:80],
+        len(payload.message),
     )
 
+    # ── Parse and populate fallback fields dynamically ───────────────────
+    unique_rows, goals_model, table_name, total_waiver_credits = parse_payload_data(payload)
+    payload.rows = unique_rows
+    payload.goals = goals_model
+    payload.table_name = table_name
+    payload.total_waiver_credits = total_waiver_credits
+
     # ── Step 1: Compute metrics ──────────────────────────────────────────
-    try:
-        metrics = compute_metrics(
-            rows=payload.rows,
-            goals=payload.goals,
-            as_of_date=payload.as_of_date,
-            total_waiver_credits=payload.total_waiver_credits,
-        )
-    except Exception as exc:
-        log.exception("Metrics computation failed: %s", exc)
-        raise HTTPException(
-            status_code=422,
-            detail=f"Erro ao computar métricas: {exc}",
-        ) from exc
+    metrics = None
+    if payload.tables or (unique_rows and goals_model):
+        try:
+            metrics = compute_metrics(
+                rows=unique_rows,
+                goals=goals_model,
+                as_of_date=payload.as_of_date,
+                total_waiver_credits=total_waiver_credits,
+            )
+        except Exception as exc:
+            log.exception("Metrics computation failed: %s", exc)
+            raise HTTPException(
+                status_code=422,
+                detail=f"Erro ao computar métricas: {exc}",
+            ) from exc
 
     # ── Step 2: Build rich context ───────────────────────────────────────
-    financial_context = build_financial_context(payload, metrics)
+    if metrics:
+        financial_context = build_financial_context(payload, metrics)
+    else:
+        financial_context = "O usuário atualmente não possui nenhuma planilha ou dados financeiros cadastrados (The user currently has no spreadsheet data)."
+        from services.coin_metrics_engine import _empty_metrics
+        metrics = _empty_metrics()
 
     # ── Step 3: Query Gemini ─────────────────────────────────────────────
     user_message = (
         f"{financial_context}\n\n"
         f"── PERGUNTA DO USUÁRIO ──\n"
-        f"{payload.user_prompt}"
+        f"{payload.message}"
     )
 
     try:
