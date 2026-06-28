@@ -27,10 +27,17 @@ import { CategorySummary, AddRowModal } from '@/components/ui';
 import type { TableRow } from '@/core/types';
 import { PieChart } from 'react-native-gifted-charts';
 
-function calculateStats(values: number[], dateRangeSpan: number) {
-  if (values.length === 0) {
+function daysBetween(a: string, b: string): number {
+  const msA = new Date(a + 'T12:00:00').getTime();
+  const msB = new Date(b + 'T12:00:00').getTime();
+  return Math.max(1, Math.round(Math.abs(msB - msA) / 86_400_000) + 1);
+}
+
+function calculateStats(rows: TableRow[], fallbackDays: number) {
+  if (rows.length === 0) {
     return { sum: 0, count: 0, mean: 0, median: 0, mode: 0, stdDev: 0, max: 0, min: 0, dailyAvg: 0, weeklyAvg: 0 };
   }
+  const values = rows.map(r => r.value);
   const sum = values.reduce((a, b) => a + b, 0);
   const count = values.length;
   const mean = sum / count;
@@ -59,8 +66,19 @@ function calculateStats(values: number[], dateRangeSpan: number) {
   const max = Math.max(...values);
   const min = Math.min(...values);
 
-  const dailyAvg = dateRangeSpan > 0 ? sum / dateRangeSpan : sum;
-  const weeklyAvg = dailyAvg * 7;
+  // Category average daily rate calculations
+  let totalDailyRate = 0;
+  for (const row of rows) {
+    const hasPeriod = !!(row.periodStart && row.periodEnd);
+    if (hasPeriod) {
+      const txDays = daysBetween(row.periodStart!, row.periodEnd!);
+      totalDailyRate += (row.value / txDays);
+    } else {
+      totalDailyRate += (row.value / fallbackDays);
+    }
+  }
+  const dailyAvg = totalDailyRate;
+  const weeklyAvg = totalDailyRate * 7;
 
   return { sum, count, mean, median, mode, stdDev, max, min, dailyAvg, weeklyAvg };
 }
@@ -216,21 +234,25 @@ export default function MetricsScreen() {
     return macroFilteredRows.filter(r => ((r.description || 'Sem Descrição').trim() || 'Sem Descrição') === selectedCategory);
   }, [macroFilteredRows, selectedCategory]);
 
+  const fallbackDays = useMemo(() => {
+    if (selectedMonth === 'all') {
+      if (!activeTable || activeTable.rows.length === 0) return 1;
+      const dates = activeTable.rows.map(r => r.date).filter(Boolean).sort();
+      const oldest = dates[0] || new Date().toISOString().slice(0, 10);
+      const start = new Date(oldest);
+      const end = new Date();
+      const diff = Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+      return Math.max(1, diff);
+    } else {
+      const [y, m] = selectedMonth.split('-').map(Number);
+      return new Date(y, m, 0).getDate();
+    }
+  }, [selectedMonth, activeTable]);
+
   const categoryStats = useMemo(() => {
     if (categoryRows.length === 0) return null;
-    const values = categoryRows.map(r => r.value);
-    
-    // Calculate date span
-    let dateRangeSpan = 0;
-    const dates = categoryRows.map(r => r.date).filter(Boolean).sort();
-    if (dates.length > 0) {
-      const start = new Date(dates[0]);
-      const end = new Date(dates[dates.length - 1]);
-      dateRangeSpan = Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
-    }
-
-    return calculateStats(values, dateRangeSpan);
-  }, [categoryRows]);
+    return calculateStats(categoryRows, fallbackDays);
+  }, [categoryRows, fallbackDays]);
 
   // Resolve month-scoped metrics if filtered
   const selectedMonthMetrics = selectedMonth !== 'all' ? metrics.byMonth[selectedMonth] || null : null;

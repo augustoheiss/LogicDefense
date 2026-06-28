@@ -11,7 +11,7 @@
  *   - Prorated values in accordion list, averages, and statistics
  */
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, Alert, Platform } from 'react-native';
 import { colors } from '@/theme/colors';
 import { spacing, radius } from '@/theme/spacing';
@@ -214,6 +214,14 @@ export function CategorySummary({ allRows, selectedMonth, cutoffDate, onEditRow,
   const [categoryScope, setCategoryScope] = useState<CategoryScope>('month');
   const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
 
+  useEffect(() => {
+    if (selectedMonth === 'all') {
+      setCategoryScope('global');
+    } else {
+      setCategoryScope('month');
+    }
+  }, [selectedMonth]);
+
   const filterOpt = useMemo(() => FILTER_OPTIONS.find((o) => o.value === filterType)!, [filterType]);
 
   const typeLabel = useMemo(() => {
@@ -273,6 +281,25 @@ export function CategorySummary({ allRows, selectedMonth, cutoffDate, onEditRow,
     return new Date(y, m, 0).getDate();
   }, [categoryScope, globalDaySpan, activeMonth, activeYear]);
 
+  const fallbackDays = useMemo(() => {
+    if (categoryScope === 'global') {
+      if (!allRows || allRows.length === 0) return 1;
+      const dates = allRows.map((r) => r.date).filter(Boolean).sort();
+      const oldest = dates[0] || new Date().toISOString().slice(0, 10);
+      const start = new Date(oldest);
+      const end = new Date();
+      const diff = Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+      return Math.max(1, diff);
+    } else if (categoryScope === 'year') {
+      const y = parseInt(activeYear, 10) || new Date().getFullYear();
+      const isLeap = (y % 4 === 0 && y % 100 !== 0) || (y % 400 === 0);
+      return isLeap ? 366 : 365;
+    } else { // 'month'
+      const [y, m] = activeMonth.split('-').map(Number);
+      return new Date(y, m, 0).getDate();
+    }
+  }, [categoryScope, allRows, activeMonth, activeYear]);
+
   // Count how many entries exist per type under the active scope (for chips badge counts)
   const typeCounts = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -315,9 +342,19 @@ export function CategorySummary({ allRows, selectedMonth, cutoffDate, onEditRow,
         const mode = computeMode(values);
         const stdDev = computeStdDev(values, mean);
         
-        const activeSpan = getCategoryActiveSpan(items.map(item => item.row), categoryScope, activeMonth, activeYear);
-        const dailyAvg = activeSpan > 0 ? total / activeSpan : 0;
-        const weeklyAvg = dailyAvg * 7;
+        let totalDailyRate = 0;
+        for (const item of items) {
+          const row = item.row;
+          const hasPeriod = !!(row.periodStart && row.periodEnd);
+          if (hasPeriod) {
+            const txDays = daysBetween(row.periodStart!, row.periodEnd!);
+            totalDailyRate += (row.value / txDays);
+          } else {
+            totalDailyRate += (row.value / fallbackDays);
+          }
+        }
+        const dailyAvg = totalDailyRate;
+        const weeklyAvg = totalDailyRate * 7;
         const pct = grandTotal > 0 ? (total / grandTotal) * 100 : 0;
 
         // Map the rows to include display prorated value and keep reference to original row
@@ -347,7 +384,7 @@ export function CategorySummary({ allRows, selectedMonth, cutoffDate, onEditRow,
       .sort((a, b) => b.total - a.total);
   }, [baseRows, filterType, categoryScope, activeMonth, activeYear, daysInScope]);
 
-  const hasAnyData = useMemo(() => FILTER_OPTIONS.some((o) => typeCounts[o.value] > 0), [typeCounts]);
+  const hasAnyData = baseRows.length > 0;
   if (!hasAnyData) return null;
 
   return (
