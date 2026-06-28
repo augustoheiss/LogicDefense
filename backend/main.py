@@ -77,6 +77,10 @@ app.include_router(coin_ai_router)
 from routers.webhook_router import router as webhook_router
 app.include_router(webhook_router)
 
+# ── Stripe Webhook Router ────────────────────────────────────────────────────
+from routers.stripe_webhook_router import router as stripe_webhook_router
+app.include_router(stripe_webhook_router)
+
 # ── Health Check (cold-start mitigation) ─────────────────────────────────────
 
 @app.get("/api/health")

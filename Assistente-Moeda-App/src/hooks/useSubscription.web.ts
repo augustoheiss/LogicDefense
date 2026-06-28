@@ -7,6 +7,7 @@
 
 import React, { createContext, useContext, useState, useMemo, useCallback } from 'react';
 import { useAuthContext } from './useAuth';
+import { purchasePackage as webPurchase } from '../services/revenueCatService.web';
 
 export interface SubscriptionPackage {
   identifier: string;
@@ -92,15 +93,10 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
   const effectiveSubscriptionType = isAdmin ? 'yearly' : subscriptionType;
 
   const purchasePackage = useCallback(async (pkg: any): Promise<boolean> => {
-    if (pkg.packageType === 'CUSTOM') {
-      window.alert(`Sucesso: Compra do pacote avulso "${pkg.product.title}" simulada com sucesso!`);
-      return true;
-    }
-    setIsPro(true);
-    setSubscriptionType(pkg.packageType === 'YEARLY' ? 'yearly' : 'monthly');
-    window.alert(`Sucesso: Assinatura "${pkg.product.title}" ativada no simulador web!`);
-    return true;
-  }, []);
+    const userId = auth.user?.id;
+    const success = await webPurchase(pkg, userId);
+    return success;
+  }, [auth.user]);
 
   const restorePurchases = useCallback(async (): Promise<boolean> => {
     setIsPro(true);
