@@ -158,19 +158,20 @@ export default function AIChatScreen() {
       } else {
         let responseText = result.response;
         try {
-          const cleanJsonString = result.response
-            .replace(/```json/g, '')
-            .replace(/```/g, '')
-            .trim();
-          
-          if (cleanJsonString.startsWith('{') && cleanJsonString.endsWith('}')) {
+          let cleanJsonString = result.response;
+          const jsonMatch = result.response.match(/\{[\s\S]*\}/);
+          if (jsonMatch) {
+            cleanJsonString = jsonMatch[0];
+          }
+
+          if (cleanJsonString.trim().startsWith('{') && cleanJsonString.trim().endsWith('}')) {
             const payload = JSON.parse(cleanJsonString);
 
             if (payload.action === 'add_transaction' && payload.parameters) {
               const { table_name, description, value, date, period_start, period_end } = payload.parameters;
               const numericValue = Number(value);
               
-              db.addRow(
+              await db.addRow(
                 {
                   description: description || 'Sem descrição',
                   value: Math.abs(numericValue),
@@ -201,13 +202,16 @@ export default function AIChatScreen() {
                   };
                 });
 
-                db.addRows(rowsToAdd, table_name);
+                await db.addRows(rowsToAdd, table_name);
                 responseText = `✅ **Lote Processado:**\nAdicionei com sucesso **${transactions.length}** transações na planilha **${table_name}**!`;
               }
             }
           }
         } catch (e) {
-          // Not JSON or parse error, keep responseText as is
+          console.error("AI Action Interceptor Error:", e);
+          if (result.response.includes('"action"') || result.response.includes('add_transaction')) {
+            responseText = `❌ **Erro ao executar ação no banco local:**\nOcorreu uma falha no processamento do comando automático da IA. Detalhes: ${String(e)}`;
+          }
         }
 
         setMessages([...newMessages, createMessage('assistant', responseText)]);

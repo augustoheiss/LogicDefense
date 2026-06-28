@@ -40,8 +40,8 @@ export interface CoinDBState {
   deleteTable: (tableId: string) => void;
 
   // ── Row Operations ────────────────────────────────────
-  addRow: (row: Omit<TableRow, 'id'>, tableName?: string) => void;
-  addRows: (rows: Omit<TableRow, 'id'>[], tableName?: string) => void;
+  addRow: (row: Omit<TableRow, 'id'>, tableName?: string) => Promise<void> | void;
+  addRows: (rows: Omit<TableRow, 'id'>[], tableName?: string) => Promise<void> | void;
   updateRow: (rowId: string, updates: Partial<TableRow>) => void;
   deleteRow: (rowId: string) => void;
   deleteRowsByPrefix: (prefix: string) => number;
@@ -308,7 +308,7 @@ function useCoinDBInternal(): CoinDBState {
   }, [tables, activeTableIndex, persist]);
 
   // ── Row Operations ────────────────────────────────────
-  const addRow = useCallback((row: Omit<TableRow, 'id'>, tableName?: string) => {
+  const addRow = useCallback(async (row: Omit<TableRow, 'id'>, tableName?: string) => {
     const targetIndex = tableName 
       ? tables.findIndex(t => t.name.toLowerCase().trim() === tableName.toLowerCase().trim())
       : activeTableIndex;
@@ -325,10 +325,10 @@ function useCoinDBInternal(): CoinDBState {
         updatedAt: new Date().toISOString(),
       };
     });
-    persist(newTables);
+    await persist(newTables);
   }, [tables, activeTableIndex, persist]);
 
-  const addRows = useCallback((rows: Omit<TableRow, 'id'>[], tableName?: string) => {
+  const addRows = useCallback(async (rows: Omit<TableRow, 'id'>[], tableName?: string) => {
     if (rows.length === 0) return;
     const targetIndex = tableName 
       ? tables.findIndex(t => t.name.toLowerCase().trim() === tableName.toLowerCase().trim())
@@ -346,7 +346,7 @@ function useCoinDBInternal(): CoinDBState {
         updatedAt: new Date().toISOString(),
       };
     });
-    persist(newTables);
+    await persist(newTables);
   }, [tables, activeTableIndex, persist]);
 
   const updateRow = useCallback((rowId: string, updates: Partial<TableRow>) => {
