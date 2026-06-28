@@ -12,7 +12,7 @@
  */
 
 import { useState, useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors } from '@/theme/colors';
 import { spacing, radius } from '@/theme/spacing';
@@ -25,6 +25,45 @@ import { computeMetrics, emptyMetrics } from '@/core/metricsEngine';
 import { getDailyGoalForDate } from '@/core/dateUtils';
 import { CategorySummary, AddRowModal } from '@/components/ui';
 import type { TableRow } from '@/core/types';
+import { PieChart } from 'react-native-gifted-charts';
+
+function calculateStats(values: number[], dateRangeSpan: number) {
+  if (values.length === 0) {
+    return { sum: 0, count: 0, mean: 0, median: 0, mode: 0, stdDev: 0, max: 0, min: 0, dailyAvg: 0, weeklyAvg: 0 };
+  }
+  const sum = values.reduce((a, b) => a + b, 0);
+  const count = values.length;
+  const mean = sum / count;
+
+  // Median
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(count / 2);
+  const median = count % 2 !== 0 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+
+  // Mode
+  const counts: Record<number, number> = {};
+  let maxCount = 0;
+  let mode = sorted[0];
+  for (const v of sorted) {
+    counts[v] = (counts[v] || 0) + 1;
+    if (counts[v] > maxCount) {
+      maxCount = counts[v];
+      mode = v;
+    }
+  }
+
+  // Std Dev
+  const variance = values.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / count;
+  const stdDev = Math.sqrt(variance);
+
+  const max = Math.max(...values);
+  const min = Math.min(...values);
+
+  const dailyAvg = dateRangeSpan > 0 ? sum / dateRangeSpan : sum;
+  const weeklyAvg = dailyAvg * 7;
+
+  return { sum, count, mean, median, mode, stdDev, max, min, dailyAvg, weeklyAvg };
+}
 
 export default function MetricsScreen() {
   const db = useCoinDB();
@@ -32,10 +71,166 @@ export default function MetricsScreen() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingRow, setEditingRow] = useState<TableRow | null>(null);
 
+  const [selectedMacro, setSelectedMacro] = useState<string | null>(null);
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+
+  // Reset category selectors when month is changed
+  useMemo(() => {
+    setSelectedMacro(null);
+    setSelectedCategory(null);
+  }, [selectedMonth]);
+
   const handleEditRow = (row: TableRow) => {
     setEditingRow(row);
     setShowAddModal(true);
   };
+
+  // Level 1: Macro categories (Receitas, Custos, Aportes, Parceria, Abonos)
+  const macroSums = useMemo(() => {
+    let receitas = 0;
+    let custos = 0;
+    let aportes = 0;
+    let parceria = 0;
+    let abonos = 0;
+
+    for (const r of db.filteredRows || []) {
+      const type = r.entryType || 'revenue';
+      if (type === 'revenue') {
+        receitas += r.value;
+      } else if (type === 'expense') {
+        custos += r.value;
+      } else if (type === 'deposit') {
+        aportes += r.value;
+      } else if (type === 'partner_in' || type === 'partner_out') {
+        parceria += r.value;
+      } else if (type === 'waiver') {
+        abonos += r.value;
+      }
+    }
+    return { receitas, custos, aportes, parceria, abonos };
+  }, [db.filteredRows]);
+
+  const macroPieData = useMemo(() => {
+    const data: any[] = [];
+    const { receitas, custos, aportes, parceria, abonos } = macroSums;
+    const total = receitas + custos + aportes + parceria + abonos;
+    if (total === 0) return [];
+
+    if (receitas > 0) {
+      data.push({
+        value: receitas,
+        color: '#10b981',
+        label: 'Receitas',
+        text: `${Math.round((receitas / total) * 100)}%`,
+        focused: selectedMacro === 'Receitas',
+      });
+    }
+    if (custos > 0) {
+      data.push({
+        value: custos,
+        color: '#ef4444',
+        label: 'Custos',
+        text: `${Math.round((custos / total) * 100)}%`,
+        focused: selectedMacro === 'Custos',
+      });
+    }
+    if (aportes > 0) {
+      data.push({
+        value: aportes,
+        color: '#3b82f6',
+        label: 'Aportes',
+        text: `${Math.round((aportes / total) * 100)}%`,
+        focused: selectedMacro === 'Aportes',
+      });
+    }
+    if (parceria > 0) {
+      data.push({
+        value: parceria,
+        color: '#8b5cf6',
+        label: 'Parceria',
+        text: `${Math.round((parceria / total) * 100)}%`,
+        focused: selectedMacro === 'Parceria',
+      });
+    }
+    if (abonos > 0) {
+      data.push({
+        value: abonos,
+        color: '#f59e0b',
+        label: 'Abonos',
+        text: `${Math.round((abonos / total) * 100)}%`,
+        focused: selectedMacro === 'Abonos',
+      });
+    }
+    return data;
+  }, [macroSums, selectedMacro]);
+
+  // Level 2: Micro categories (filtered by selectedMacro and grouped by description)
+  const macroFilteredRows = useMemo(() => {
+    if (!selectedMacro) return [];
+    return (db.filteredRows || []).filter(r => {
+      const type = r.entryType || 'revenue';
+      if (selectedMacro === 'Receitas') return type === 'revenue';
+      if (selectedMacro === 'Custos') return type === 'expense';
+      if (selectedMacro === 'Aportes') return type === 'deposit';
+      if (selectedMacro === 'Parceria') return type === 'partner_in' || type === 'partner_out';
+      if (selectedMacro === 'Abonos') return type === 'waiver';
+      return false;
+    });
+  }, [db.filteredRows, selectedMacro]);
+
+  const microGroups = useMemo(() => {
+    const groups: Record<string, number> = {};
+    for (const r of macroFilteredRows) {
+      const desc = (r.description || 'Sem Descrição').trim() || 'Sem Descrição';
+      groups[desc] = (groups[desc] || 0) + r.value;
+    }
+    return groups;
+  }, [macroFilteredRows]);
+
+  const microPieData = useMemo(() => {
+    const data: any[] = [];
+    const entries = Object.entries(microGroups).sort((a, b) => b[1] - a[1]);
+    const total = entries.reduce((acc, curr) => acc + curr[1], 0);
+    if (total === 0) return [];
+
+    const colorsPalette = ['#ef4444', '#f97316', '#facc15', '#10b981', '#3b82f6', '#8b5cf6', '#ec4899', '#6366f1', '#14b8a6', '#84cc16'];
+
+    entries.forEach(([label, value], idx) => {
+      if (value > 0) {
+        const color = colorsPalette[idx % colorsPalette.length];
+        data.push({
+          value,
+          color,
+          label,
+          text: `${Math.round((value / total) * 100)}%`,
+          focused: selectedCategory === label,
+        });
+      }
+    });
+    return data;
+  }, [microGroups, selectedCategory]);
+
+  // Level 3: Category X-Ray calculations
+  const categoryRows = useMemo(() => {
+    if (!selectedCategory) return [];
+    return macroFilteredRows.filter(r => ((r.description || 'Sem Descrição').trim() || 'Sem Descrição') === selectedCategory);
+  }, [macroFilteredRows, selectedCategory]);
+
+  const categoryStats = useMemo(() => {
+    if (categoryRows.length === 0) return null;
+    const values = categoryRows.map(r => r.value);
+    
+    // Calculate date span
+    let dateRangeSpan = 0;
+    const dates = categoryRows.map(r => r.date).filter(Boolean).sort();
+    if (dates.length > 0) {
+      const start = new Date(dates[0]);
+      const end = new Date(dates[dates.length - 1]);
+      dateRangeSpan = Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+    }
+
+    return calculateStats(values, dateRangeSpan);
+  }, [categoryRows]);
 
   // Resolve month-scoped metrics if filtered
   const selectedMonthMetrics = selectedMonth !== 'all' ? metrics.byMonth[selectedMonth] || null : null;
@@ -93,6 +288,204 @@ export default function MetricsScreen() {
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
       >
+        {/* ── Dashboard BI Interativo (Progressive Drill-Down) ── */}
+        <SectionTitle title="📊 Dashboard BI Interativo" />
+        <Card style={styles.biCard}>
+          {selectedCategory ? (
+            /* Level 3: Category X-Ray View */
+            <View style={styles.xrayContainer}>
+              <View style={styles.xrayHeader}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.xrayTitle}>🔍 Raio-X: {selectedCategory}</Text>
+                  <Text style={styles.xraySubtitle}>Detalhamento em {selectedMacro}</Text>
+                </View>
+                <Pressable
+                  style={styles.xrayBackBtn}
+                  onPress={() => setSelectedCategory(null)}
+                >
+                  <Text style={styles.xrayBackText}>Voltar</Text>
+                </Pressable>
+              </View>
+
+              {categoryStats && (
+                <View style={styles.statsGrid}>
+                  <View style={styles.statCell}>
+                    <Text style={styles.statLabel}>Soma Total</Text>
+                    <Text style={[styles.statValue, { color: selectedMacro === 'Receitas' ? colors.success.main : colors.danger.main }]}>
+                      {formatCurrencySmart(categoryStats.sum)}
+                    </Text>
+                    <Text style={styles.statCellSub}>
+                      {(() => {
+                        const macroTotal = selectedMacro === 'Receitas' ? macroSums.receitas :
+                                           selectedMacro === 'Custos' ? macroSums.custos :
+                                           selectedMacro === 'Aportes' ? macroSums.aportes :
+                                           selectedMacro === 'Parceria' ? macroSums.parceria :
+                                           macroSums.abonos;
+                        const pct = macroTotal > 0 ? (categoryStats.sum / macroTotal) * 100 : 0;
+                        return `${pct.toFixed(1)}% do macro`;
+                      })()}
+                    </Text>
+                  </View>
+
+                  <View style={styles.statCell}>
+                    <Text style={styles.statLabel}>Média por Entrada</Text>
+                    <Text style={styles.statValue}>{formatCurrencySmart(categoryStats.mean)}</Text>
+                    <Text style={styles.statCellSub}>{categoryStats.count} registros</Text>
+                  </View>
+
+                  <View style={styles.statCell}>
+                    <Text style={styles.statLabel}>Mediana</Text>
+                    <Text style={styles.statValue}>{formatCurrencySmart(categoryStats.median)}</Text>
+                  </View>
+
+                  <View style={styles.statCell}>
+                    <Text style={styles.statLabel}>Moda</Text>
+                    <Text style={styles.statValue}>{formatCurrencySmart(categoryStats.mode)}</Text>
+                  </View>
+
+                  <View style={styles.statCell}>
+                    <Text style={styles.statLabel}>Desvio Padrão</Text>
+                    <Text style={styles.statValue}>{formatCurrencySmart(categoryStats.stdDev)}</Text>
+                  </View>
+
+                  <View style={styles.statCell}>
+                    <Text style={styles.statLabel}>Média Diária</Text>
+                    <Text style={styles.statValue}>{formatCurrencySmart(categoryStats.dailyAvg)}</Text>
+                  </View>
+
+                  <View style={styles.statCell}>
+                    <Text style={styles.statLabel}>Média Semanal</Text>
+                    <Text style={styles.statValue}>{formatCurrencySmart(categoryStats.weeklyAvg)}</Text>
+                  </View>
+
+                  <View style={styles.statCell}>
+                    <Text style={styles.statLabel}>Mín / Máx</Text>
+                    <Text style={styles.statValue}>
+                      {formatCurrencySmart(categoryStats.min)} / {formatCurrencySmart(categoryStats.max)}
+                    </Text>
+                  </View>
+                </View>
+              )}
+
+              {/* Transactions List */}
+              <Text style={styles.xrayListTitle}>Transações desta Categoria</Text>
+              <View style={styles.xrayList}>
+                {categoryRows.map((row) => (
+                  <View key={row.id} style={styles.xrayRow}>
+                    <View style={styles.xrayRowLeft}>
+                      <Text style={styles.xrayRowDate}>{row.date.split('-').reverse().slice(0, 2).join('/')}</Text>
+                      <Text style={styles.xrayRowDesc} numberOfLines={1}>{row.description || 'Sem descrição'}</Text>
+                    </View>
+                    <View style={styles.xrayRowRight}>
+                      <Text style={[styles.xrayRowValue, { color: selectedMacro === 'Receitas' ? colors.success.main : colors.danger.main }]}>
+                        {selectedMacro === 'Custos' ? '-' : ''}{formatCurrencySmart(row.value)}
+                      </Text>
+                      <View style={styles.xrayRowActions}>
+                        <Pressable style={styles.xrayRowActionBtn} onPress={() => handleEditRow(row)}>
+                          <Text style={{ fontSize: 13 }}>✏️</Text>
+                        </Pressable>
+                        <Pressable style={styles.xrayRowActionBtn} onPress={() => db.deleteRow(row.id)}>
+                          <Text style={{ fontSize: 13 }}>🗑️</Text>
+                        </Pressable>
+                      </View>
+                    </View>
+                  </View>
+                ))}
+              </View>
+            </View>
+          ) : selectedMacro ? (
+            /* Level 2: Micro / Category view */
+            <View style={styles.chartContainer}>
+              <View style={styles.xrayHeader}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.chartTitle}>🔍 Categorias: {selectedMacro}</Text>
+                  <Text style={styles.chartSubtitle}>Clique em uma fatia para abrir o Raio-X</Text>
+                </View>
+                <Pressable
+                  style={styles.xrayBackBtn}
+                  onPress={() => setSelectedMacro(null)}
+                >
+                  <Text style={styles.xrayBackText}>Voltar</Text>
+                </Pressable>
+              </View>
+
+              {microPieData.length > 0 ? (
+                <View style={styles.chartRow}>
+                  <View style={styles.pieWrapper}>
+                    <PieChart
+                      data={microPieData}
+                      donut
+                      showText
+                      textColor="#111"
+                      textSize={9}
+                      radius={65}
+                      innerRadius={40}
+                      onPress={(item: any) => setSelectedCategory(item.label)}
+                    />
+                  </View>
+                  <View style={styles.legendList}>
+                    {microPieData.map((item, idx) => (
+                      <Pressable
+                        key={idx}
+                        style={styles.legendItem}
+                        onPress={() => setSelectedCategory(item.label)}
+                      >
+                        <View style={[styles.legendIndicator, { backgroundColor: item.color }]} />
+                        <Text style={styles.legendLabel} numberOfLines={1}>
+                          {item.label} ({item.text})
+                        </Text>
+                        <Text style={styles.legendValue}>{formatCurrencySmart(item.value)}</Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                </View>
+              ) : (
+                <Text style={styles.noDataText}>Nenhum dado para exibir nesta categoria.</Text>
+              )}
+            </View>
+          ) : (
+            /* Level 1: Macro overview */
+            <View style={styles.chartContainer}>
+              <Text style={styles.chartTitle}>📊 Visão Geral das Finanças</Text>
+              <Text style={styles.chartSubtitle}>Selecione um macro-grupo para detalhar</Text>
+
+              {macroPieData.length > 0 ? (
+                <View style={styles.chartRow}>
+                  <View style={styles.pieWrapper}>
+                    <PieChart
+                      data={macroPieData}
+                      donut
+                      showText
+                      textColor="#111"
+                      textSize={9}
+                      radius={65}
+                      innerRadius={40}
+                      onPress={(item: any) => setSelectedMacro(item.label)}
+                    />
+                  </View>
+                  <View style={styles.legendList}>
+                    {macroPieData.map((item, idx) => (
+                      <Pressable
+                        key={idx}
+                        style={styles.legendItem}
+                        onPress={() => setSelectedMacro(item.label)}
+                      >
+                        <View style={[styles.legendIndicator, { backgroundColor: item.color }]} />
+                        <Text style={styles.legendLabel}>
+                          {item.label} ({item.text})
+                        </Text>
+                        <Text style={styles.legendValue}>{formatCurrencySmart(item.value)}</Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                </View>
+              ) : (
+                <Text style={styles.noDataText}>Sem dados financeiros no mês selecionado.</Text>
+              )}
+            </View>
+          )}
+        </Card>
+
         {/* ── Month/Year Scoped Metrics (if filtered) ── */}
         {selectedMonth !== 'all' && yearMetrics && (
           <>
@@ -513,6 +906,201 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: colors.text.secondary,
     marginTop: spacing.sm,
+  },
+
+  /* BI Dashboard */
+  biCard: {
+    backgroundColor: '#1f2937',
+    borderRadius: radius.md,
+    padding: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.border.default,
+  },
+  chartContainer: {
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  chartTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: colors.text.primary,
+    textAlign: 'center',
+  },
+  chartSubtitle: {
+    fontSize: 11,
+    color: colors.text.tertiary,
+    textAlign: 'center',
+    marginBottom: spacing.xs,
+  },
+  chartRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-around',
+    width: '100%',
+    flexWrap: 'wrap',
+    gap: spacing.md,
+    marginTop: spacing.xs,
+  },
+  pieWrapper: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 140,
+    minHeight: 140,
+  },
+  legendList: {
+    flex: 1,
+    minWidth: 180,
+    gap: spacing.xs,
+  },
+  legendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 4,
+    paddingHorizontal: spacing.xs,
+    borderRadius: radius.sm,
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+  },
+  legendIndicator: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginRight: 6,
+  },
+  legendLabel: {
+    fontSize: 12,
+    color: colors.text.secondary,
+    flex: 1,
+  },
+  legendValue: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.text.primary,
+  },
+  noDataText: {
+    fontSize: 13,
+    color: colors.text.disabled,
+    textAlign: 'center',
+    marginVertical: spacing.md,
+  },
+
+  /* Level 3: X-Ray View */
+  xrayContainer: {
+    width: '100%',
+  },
+  xrayHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border.default,
+    paddingBottom: spacing.sm,
+    marginBottom: spacing.md,
+    gap: spacing.sm,
+  },
+  xrayTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: colors.text.primary,
+  },
+  xraySubtitle: {
+    fontSize: 11,
+    color: colors.text.tertiary,
+    marginTop: 2,
+  },
+  xrayBackBtn: {
+    backgroundColor: colors.background.tertiary || '#374151',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: radius.sm,
+    borderWidth: 1,
+    borderColor: colors.border.default,
+  },
+  xrayBackText: {
+    color: colors.text.secondary,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  statsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  statCell: {
+    flex: 1,
+    minWidth: '45%',
+    backgroundColor: 'rgba(255, 255, 255, 0.02)',
+    padding: spacing.sm,
+    borderRadius: radius.sm,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.05)',
+  },
+  statLabel: {
+    fontSize: 11,
+    color: colors.text.tertiary,
+    marginBottom: 2,
+  },
+  statValue: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.text.primary,
+  },
+  statCellSub: {
+    fontSize: 10,
+    color: colors.text.disabled,
+    marginTop: 2,
+  },
+  xrayListTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.text.secondary,
+    marginBottom: spacing.xs,
+  },
+  xrayList: {
+    gap: spacing.xs,
+  },
+  xrayRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: 'rgba(255, 255, 255, 0.01)',
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radius.sm,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.03)',
+  },
+  xrayRowLeft: {
+    flex: 1,
+    marginRight: spacing.sm,
+  },
+  xrayRowDate: {
+    fontSize: 10,
+    color: colors.text.disabled,
+  },
+  xrayRowDesc: {
+    fontSize: 13,
+    color: colors.text.primary,
+    marginTop: 2,
+  },
+  xrayRowRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  xrayRowValue: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  xrayRowActions: {
+    flexDirection: 'row',
+    gap: spacing.xs,
+  },
+  xrayRowActionBtn: {
+    padding: 4,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: radius.sm,
   },
 
   emptyState: {
