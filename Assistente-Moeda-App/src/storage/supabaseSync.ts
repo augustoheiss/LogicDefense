@@ -14,6 +14,40 @@ import { supabase } from '@/lib/supabase';
 import { loadDB, saveDB } from './asyncStorageAdapter';
 import type { CoinTable, TableRow } from '../core/types';
 
+function sanitizeGoals(goals: any): any {
+  if (!goals) return { dailyGoals: {}, weeklyGoals: {}, annualCosts: {} };
+  const clean: any = {};
+
+  if (goals.dailyGoals) {
+    clean.dailyGoals = {};
+    for (const [k, v] of Object.entries(goals.dailyGoals)) {
+      if (v !== undefined) clean.dailyGoals[k] = v;
+    }
+  } else {
+    clean.dailyGoals = {};
+  }
+
+  if (goals.weeklyGoals) {
+    clean.weeklyGoals = {};
+    for (const [k, v] of Object.entries(goals.weeklyGoals)) {
+      if (v !== undefined) clean.weeklyGoals[k] = v;
+    }
+  } else {
+    clean.weeklyGoals = {};
+  }
+
+  if (goals.annualCosts) {
+    clean.annualCosts = {};
+    for (const [k, v] of Object.entries(goals.annualCosts)) {
+      if (v !== undefined) clean.annualCosts[k] = v;
+    }
+  } else {
+    clean.annualCosts = {};
+  }
+
+  return clean;
+}
+
 // ── Push Local → Cloud ───────────────────────────────────────────────────────
 
 /**
@@ -26,12 +60,13 @@ export async function pushToCloud(userId: string): Promise<{ success: boolean; e
 
   try {
     // 1. Upsert user settings
-    const { error: settingsError } = await supabase.from('user_settings').upsert({
-      id: userId,
-      ai_cost_current_month: db.aiCostCurrentMonth ?? 0.00,
-      ai_cost_last_reset: db.aiCostLastReset ?? '',
+    const settingsPayload = {
+      id: String(userId),
+      ai_cost_current_month: typeof db.aiCostCurrentMonth === 'number' ? db.aiCostCurrentMonth : 0.00,
+      ai_cost_last_reset: db.aiCostLastReset ? String(db.aiCostLastReset) : '',
       updated_at: new Date().toISOString(),
-    });
+    };
+    const { error: settingsError } = await supabase.from('user_settings').upsert(settingsPayload);
     if (settingsError) throw settingsError;
 
     // 2. Delete remote tables that are not in the local list
@@ -54,52 +89,62 @@ export async function pushToCloud(userId: string): Promise<{ success: boolean; e
     // 3. Upsert tables and manage their transactions
     if (db.tables && db.tables.length > 0) {
       for (const table of db.tables) {
-        // Upsert table metadata
-        const { error: tableError } = await supabase.from('coin_tables').upsert({
-          id: table.id,
-          user_id: userId,
-          name: table.name,
-          description: table.description ?? null,
-          goals: table.goals,
+        // Sanitize Table Payload
+        const tablePayload = {
+          id: String(table.id),
+          user_id: String(userId),
+          name: String(table.name),
+          description: table.description ? String(table.description) : null,
+          goals: sanitizeGoals(table.goals),
           position: db.tables.indexOf(table),
-          created_at: table.createdAt,
-          updated_at: table.updatedAt,
-        });
-
+          created_at: String(table.createdAt),
+          updated_at: String(table.updatedAt),
+        };
+        const { error: tableError } = await supabase.from('coin_tables').upsert(tablePayload);
         if (tableError) throw tableError;
 
         // Delete remote transactions that are not in the local table rows
         const localRowIds = table.rows.map((r) => r.id);
-        if (localRowIds.length > 0) {
-          const { error: deleteRowsError } = await supabase
-            .from('transactions')
-            .delete()
-            .eq('table_id', table.id)
-            .not('id', 'in', `(${localRowIds.join(',')})`);
-          if (deleteRowsError) throw deleteRowsError;
-        } else {
-          const { error: deleteRowsError } = await supabase
-            .from('transactions')
-            .delete()
-            .eq('table_id', table.id);
-          if (deleteRowsError) throw deleteRowsError;
+
+        // Step A: Fetch existing cloud IDs for the table
+        const { data: cloudData, error: fetchError } = await supabase
+          .from('transactions')
+          .select('id')
+          .eq('table_id', table.id);
+        if (fetchError) throw fetchError;
+
+        // Step B: Diff in memory to find orphans
+        const cloudIds = cloudData?.map((d) => d.id) || [];
+        const idsToDelete = cloudIds.filter((id) => !localRowIds.includes(id));
+
+        // Step C: Chunk and Delete safely
+        if (idsToDelete.length > 0) {
+          for (let i = 0; i < idsToDelete.length; i += 100) {
+            const chunk = idsToDelete.slice(i, i + 100);
+            const { error: deleteRowsError } = await supabase
+              .from('transactions')
+              .delete()
+              .in('id', chunk);
+            if (deleteRowsError) throw deleteRowsError;
+          }
         }
+
 
         // Upsert all rows to the 'transactions' table
         if (table.rows.length > 0) {
           const rowPayloads = table.rows.map((row) => ({
-            id: row.id,
-            table_id: table.id,
-            date: row.date,
-            value: row.value,
-            description: row.description ?? null,
-            entry_type: row.entryType ?? 'revenue',
-            monthly_value: row.monthlyValue ?? null,
-            month_count: row.monthCount ?? null,
-            period_start: row.periodStart ?? null,
-            period_end: row.periodEnd ?? null,
-            generated_by: row.generatedBy ?? null,
-            cloned_from: row.clonedFrom ?? null,
+            id: String(row.id),
+            table_id: String(table.id),
+            date: String(row.date),
+            value: Number(row.value),
+            description: row.description ? String(row.description) : null,
+            entry_type: row.entryType ? String(row.entryType) : 'revenue',
+            monthly_value: row.monthlyValue !== undefined && row.monthlyValue !== null ? Number(row.monthlyValue) : null,
+            month_count: row.monthCount !== undefined && row.monthCount !== null ? Number(row.monthCount) : null,
+            period_start: row.periodStart ? String(row.periodStart) : null,
+            period_end: row.periodEnd ? String(row.periodEnd) : null,
+            generated_by: row.generatedBy ? String(row.generatedBy) : null,
+            cloned_from: row.clonedFrom ? String(row.clonedFrom) : null,
             updated_at: new Date().toISOString(),
           }));
 
@@ -116,6 +161,7 @@ export async function pushToCloud(userId: string): Promise<{ success: boolean; e
     return { success: true };
   } catch (err: any) {
     console.error("Supabase Push Error:", err);
+    console.error("Deep Supabase Error:", JSON.stringify(err, null, 2));
     const errorMessage = err?.message || err?.details || JSON.stringify(err) || 'Unknown push error';
     return { success: false, error: errorMessage };
   }
