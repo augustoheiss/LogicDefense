@@ -1010,6 +1010,10 @@ async def ai_analyst(payload: AIAnalystPayload) -> AIAnalystResponse:
         if not analysis_text:
             raise ValueError("Gemini retornou resposta vazia")
 
+        total_tokens = 0
+        if response.usage_metadata:
+            total_tokens = response.usage_metadata.total_token_count or 0
+
     except Exception as exc:
         log.exception("Gemini API call failed: %s", exc)
         raise HTTPException(
@@ -1017,11 +1021,12 @@ async def ai_analyst(payload: AIAnalystPayload) -> AIAnalystResponse:
             detail=f"Erro ao consultar a IA: {exc}",
         ) from exc
 
-    log.info("AI Analyst response generated: %d chars", len(analysis_text))
+    log.info("AI Analyst response generated: %d chars (tokens: %d)", len(analysis_text), total_tokens)
 
     # ── Step 4: Return response ──────────────────────────────────────────
     return AIAnalystResponse(
-        analysis=analysis_text,
+        content=analysis_text,
+        tokensUsed=total_tokens,
         metricsSnapshot=metrics,
         modelUsed=MODEL,
     )

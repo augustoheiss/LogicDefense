@@ -8,7 +8,8 @@
  *   - Annual costs by year
  */
 
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
+import { supabase } from '@/lib/supabase';
 import {
   View,
   Text,
@@ -37,6 +38,36 @@ export default function SettingsScreen() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [isMigrating, setIsMigrating] = useState(false);
   const isVisitor = !auth.user || auth.mode === 'guest';
+
+  const [tokenBalance, setTokenBalance] = useState<number>(100000);
+  const MAX_TOKENS = 100000;
+
+  const fetchTokenBalance = useCallback(async () => {
+    if (auth.mode === 'authenticated' && auth.user) {
+      try {
+        const { data, error } = await supabase
+          .from('user_settings')
+          .select('token_balance')
+          .eq('id', auth.user.id)
+          .maybeSingle();
+
+        if (error) throw error;
+        if (data && data.token_balance !== null && data.token_balance !== undefined) {
+          setTokenBalance(Number(data.token_balance));
+        } else {
+          setTokenBalance(MAX_TOKENS);
+        }
+      } catch (err) {
+        console.error('Failed to fetch token balance:', err);
+      }
+    } else {
+      setTokenBalance(MAX_TOKENS);
+    }
+  }, [auth.mode, auth.user]);
+
+  useEffect(() => {
+    fetchTokenBalance();
+  }, [fetchTokenBalance]);
 
   const handleLocalMigration = async () => {
     if (auth.mode !== 'authenticated' || !auth.user) {
@@ -241,6 +272,40 @@ export default function SettingsScreen() {
               </View>
             </Card>
           )}
+        </Section>
+
+        {/* ── AI Engine Section (Fuel Gauge) ───────────────── */}
+        <Section title="⚡ Motor de Inteligência Artificial">
+          <Card>
+            <Text style={styles.gaugeTitle}>Consumo de Tokens da IA</Text>
+            <Text style={styles.gaugeSubtitle}>
+              Saldo: <Text style={{ fontWeight: 'bold', color: colors.text.primary }}>{tokenBalance.toLocaleString('pt-BR')}</Text> / {MAX_TOKENS.toLocaleString('pt-BR')} tokens
+            </Text>
+            
+            <View style={styles.progressBarContainer}>
+              <View style={[styles.progressBarFill, { width: `${Math.max(0, Math.min(100, (tokenBalance / MAX_TOKENS) * 100))}%`, backgroundColor: tokenBalance / MAX_TOKENS <= 0.2 ? '#F44336' : (tokenBalance / MAX_TOKENS <= 0.5 ? '#FF9800' : '#4CAF50') }]} />
+            </View>
+            
+            <Text style={styles.gaugeHelperText}>
+              Os tokens são consumidos conforme você envia mensagens e solicita análises da IA.
+            </Text>
+
+            <Pressable
+              style={({ pressed }) => [
+                styles.storefrontButton,
+                pressed && styles.pressed,
+              ]}
+              onPress={() => {
+                if (Platform.OS === 'web') {
+                  window.alert("O sistema de recargas avulsas via PIX será ativado em breve!");
+                } else {
+                  Alert.alert("Em Breve", "O sistema de recargas avulsas via PIX será ativado em breve!");
+                }
+              }}
+            >
+              <Text style={styles.storefrontButtonText}>🪙 Recarregar Créditos (Loja)</Text>
+            </Pressable>
+          </Card>
         </Section>
 
         {/* ── Migration Section ───────────────────────────── */}
@@ -1079,5 +1144,47 @@ const styles = StyleSheet.create({
   },
   pressed: {
     opacity: 0.75,
+  },
+  // Tokenomics Gauge
+  gaugeTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.text.primary,
+  },
+  gaugeSubtitle: {
+    fontSize: 13,
+    color: colors.text.secondary,
+    marginTop: spacing.xs,
+  },
+  progressBarContainer: {
+    height: 12,
+    backgroundColor: '#1F1F1F',
+    borderRadius: radius.full,
+    overflow: 'hidden',
+    marginTop: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.border.default,
+  },
+  progressBarFill: {
+    height: '100%',
+    borderRadius: radius.full,
+  },
+  gaugeHelperText: {
+    fontSize: 11,
+    color: colors.text.tertiary,
+    marginTop: spacing.sm,
+    lineHeight: 16,
+  },
+  storefrontButton: {
+    backgroundColor: colors.accent.purple,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.sm,
+    alignItems: 'center',
+    marginTop: spacing.md,
+  },
+  storefrontButtonText: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '600',
   },
 });

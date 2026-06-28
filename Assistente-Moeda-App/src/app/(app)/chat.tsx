@@ -215,6 +215,14 @@ export default function AIChatScreen() {
         }
 
         setMessages([...newMessages, createMessage('assistant', responseText)]);
+
+        // Asynchronously deduct tokens from Supabase balance
+        if (result.tokensUsed && result.tokensUsed > 0) {
+          db.deductTokens(result.tokensUsed).catch((err) => {
+            console.error("Token deduction failed:", err);
+          });
+        }
+
         const promptTokens = result.promptTokens ?? 0;
         const completionTokens = result.completionTokens ?? 0;
         const costUSD = (promptTokens * 0.15 + completionTokens * 0.60) / 1000000;

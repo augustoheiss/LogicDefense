@@ -16,6 +16,7 @@ import { computeMetrics, emptyMetrics } from '../core/metricsEngine';
 import type { DB, CoinTable, TableRow, TableGoals, TableMetrics } from '../core/types';
 import { useAuthContext } from './useAuth';
 import { fullSync, pushToCloud, pullFromCloud } from '../storage/supabaseSync';
+import { supabase } from '@/lib/supabase';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -74,6 +75,8 @@ export interface CoinDBState {
   migrateLocalToCloud: () => Promise<{ success: boolean; error?: string }>;
   /** Manually clear local AsyncStorage database cache */
   clearLocalState: () => Promise<void>;
+  /** Deduct user tokens from Supabase user_settings */
+  deductTokens: (amount: number) => Promise<void>;
 }
 
 // ── React Context ────────────────────────────────────────────────────────────
@@ -449,6 +452,32 @@ function useCoinDBInternal(): CoinDBState {
     persist(newTables);
   }, [tables, activeTableIndex, persist]);
 
+  const deductTokens = useCallback(async (amount: number) => {
+    if (auth.mode === 'authenticated' && auth.user) {
+      try {
+        const { data, error } = await supabase
+          .from('user_settings')
+          .select('token_balance')
+          .eq('id', auth.user.id)
+          .maybeSingle();
+
+        if (error) throw error;
+
+        const currentBalance = data?.token_balance ? Number(data.token_balance) : 0;
+        const newBalance = Math.max(0, currentBalance - amount);
+
+        const { error: updateError } = await supabase
+          .from('user_settings')
+          .update({ token_balance: newBalance })
+          .eq('id', auth.user.id);
+
+        if (updateError) throw updateError;
+      } catch (err) {
+        console.error('Failed to deduct tokens:', err);
+      }
+    }
+  }, [auth.mode, auth.user]);
+
   return {
     isLoading,
     tables,
@@ -479,6 +508,7 @@ function useCoinDBInternal(): CoinDBState {
     syncCloud,
     migrateLocalToCloud,
     clearLocalState,
+    deductTokens,
   };
 }
 

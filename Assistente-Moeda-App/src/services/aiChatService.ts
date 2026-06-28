@@ -27,6 +27,7 @@ export interface ChatResponse {
   error?: string;
   promptTokens?: number;
   completionTokens?: number;
+  tokensUsed?: number;
 }
 
 // ── API Config ───────────────────────────────────────────────────────────────
@@ -143,13 +144,17 @@ export async function sendChatMessage(
     }
 
     const data = await response.json();
+    const content = data.content || data.analysis || 'Sem resposta';
+    const tokensUsed = data.tokens_used !== undefined ? Number(data.tokens_used) : (data.tokensUsed !== undefined ? Number(data.tokensUsed) : 0);
+
     const promptTokens = Math.ceil((message.length + JSON.stringify(rows).length + JSON.stringify(goals).length) / 4);
-    const completionTokens = Math.ceil((data.analysis || '').length / 4);
+    const completionTokens = Math.ceil(content.length / 4);
 
     return { 
-      response: data.analysis || 'Sem resposta',
+      response: content,
       promptTokens,
-      completionTokens
+      completionTokens,
+      tokensUsed
     };
   } catch (error: any) {
     if (error.name === 'TypeError' && error.message.includes('fetch')) {

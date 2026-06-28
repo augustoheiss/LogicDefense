@@ -555,9 +555,14 @@ class AIAnalystPayload(BaseModel):
 class AIAnalystResponse(BaseModel):
     """Response from the AI Analyst endpoint."""
 
-    analysis: str = Field(
+    content: str = Field(
         ...,
         description="The AI-generated financial analysis in Markdown format",
+    )
+    tokens_used: int = Field(
+        ...,
+        alias="tokensUsed",
+        description="The total tokens used by the LLM generation",
     )
     metrics_snapshot: TableMetrics = Field(
         ...,
