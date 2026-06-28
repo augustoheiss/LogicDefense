@@ -38,6 +38,7 @@ from services.coin_date_utils import (
     iso_year_month,
     calculate_strict_global_balance,
     get_weekly_goal_for_date,
+    resolve_goal_for_year,
 )
 
 
