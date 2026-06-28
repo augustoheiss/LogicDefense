@@ -108,13 +108,11 @@ class TableRow(BaseModel):
     period_start: Optional[str] = Field(
         default=None,
         alias="periodStart",
-        pattern=r"^\d{4}-\d{2}-\d{2}$",
         description="Period start date (YYYY-MM-DD) — for distributed revenue",
     )
     period_end: Optional[str] = Field(
         default=None,
         alias="periodEnd",
-        pattern=r"^\d{4}-\d{2}-\d{2}$",
         description="Period end date (YYYY-MM-DD) — must pair with periodStart",
     )
     generated_by: Optional[str] = Field(
@@ -128,6 +126,18 @@ class TableRow(BaseModel):
         description="Audit trail: source YYYY-MM from which this cloned row was copied",
     )
     model_config = {"populate_by_name": True}
+
+    @model_validator(mode="before")
+    @classmethod
+    def clean_empty_periods(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            for k in ["period_start", "periodStart"]:
+                if k in data and (data[k] == "" or data[k] is None):
+                    data[k] = None
+            for k in ["period_end", "periodEnd"]:
+                if k in data and (data[k] == "" or data[k] is None):
+                    data[k] = None
+        return data
 
 
 class TableGoals(BaseModel):

@@ -298,7 +298,16 @@ export function computeMetrics(
   }
 
   // ── Global averages ───────────────────────────────────────────────────────
-  const globalDailyAvg   = round2(grossTotal / globalSpanDays);
+  let totalDailyRate = 0;
+  for (const row of activeRows) {
+    if (row.periodStart && row.periodEnd) {
+      const txDays = Math.max(1, calendarDaySpan(row.periodStart, row.periodEnd));
+      totalDailyRate += (row.value / txDays);
+    } else {
+      totalDailyRate += (row.value / globalSpanDays);
+    }
+  }
+  const globalDailyAvg   = round2(totalDailyRate);
   const globalWeeklyAvg  = round2(globalDailyAvg * 7);
   const globalMonthlyAvg = round2(globalDailyAvg * 30.44);
   const globalAnnualAvg  = round2(globalDailyAvg * 365.25);

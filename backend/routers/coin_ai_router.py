@@ -51,6 +51,7 @@ from services.coin_date_utils import (
     _get_monday_of,
     get_weekly_goal_for_date,
     fmt_date,
+    _calendar_day_span,
 )
 
 # ── Environment & Logging ────────────────────────────────────────────────────
@@ -317,8 +318,19 @@ def build_category_summaries(rows: list, globalDaySpan: int = 1) -> str:
             cat_median = stat_median(values) if values else 0
             variance = sum((v - mean) ** 2 for v in values) / count if count > 0 else 0
             cat_stddev = math.sqrt(variance)
-            daily_avg = total / globalDaySpan if globalDaySpan > 0 else 0
-            weekly_avg = daily_avg * 7
+            total_daily_rate = 0.0
+            for r in cat_rows:
+                period_start = getattr(r, "period_start", None) or getattr(r, "periodStart", None)
+                period_end = getattr(r, "period_end", None) or getattr(r, "periodEnd", None)
+                val = getattr(r, "value", 0.0)
+                if period_start and period_end:
+                    tx_days = max(1, _calendar_day_span(period_start, period_end))
+                    total_daily_rate += (val / tx_days)
+                else:
+                    total_daily_rate += (val / globalDaySpan) if globalDaySpan > 0 else 0
+
+            daily_avg = total_daily_rate
+            weekly_avg = total_daily_rate * 7
             pct = (total / type_total * 100) if type_total > 0 else 0
 
             lines.append(

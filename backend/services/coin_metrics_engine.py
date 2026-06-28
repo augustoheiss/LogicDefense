@@ -457,7 +457,14 @@ def compute_metrics(
             by_week_acc[iso_week] = by_week_acc.get(iso_week, 0.0) + contrib["value"]
 
     # ── Global averages ──────────────────────────────────────────────────
-    global_daily_avg = _round2(gross_total / global_span_days)
+    total_daily_rate = 0.0
+    for r in active_rows:
+        if r.period_start and r.period_end:
+            tx_days = max(1, _calendar_day_span(r.period_start, r.period_end))
+            total_daily_rate += (r.value / tx_days)
+        else:
+            total_daily_rate += (r.value / global_span_days) if global_span_days > 0 else 0.0
+    global_daily_avg = _round2(total_daily_rate)
     global_weekly_avg = _round2(global_daily_avg * 7)
     global_monthly_avg = _round2(global_daily_avg * 30.44)
     global_annual_avg = _round2(global_daily_avg * 365.25)
