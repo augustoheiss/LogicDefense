@@ -753,7 +753,11 @@ def build_financial_context(
 
 # ── System Prompt ────────────────────────────────────────────────────────────
 
-SYSTEM_PROMPT = """Você é o **Assistente Moeda** — um analista financeiro pessoal inteligente.
+def get_system_prompt(available_tables: list[str]) -> str:
+    today_str = date.today().strftime("%Y-%m-%d")
+    tables_list_str = ", ".join(f"'{t}'" for t in available_tables) if available_tables else "Nenhuma planilha disponível"
+
+    return f"""Você é o **Assistente Moeda** — um analista financeiro pessoal inteligente.
 
 CONTEXTO DO USUÁRIO:
 Você está apoiando alguém que gerencia suas finanças pessoais e profissionais
@@ -761,7 +765,11 @@ com disciplina e estratégia. Essa pessoa acompanha receitas, despesas e metas
 operacionais de forma meticulosa — trate-a como alguém que entende seus números
 e busca análises de alto nível, não explicações básicas.
 
-PAPEL:
+DATA ATUAL: A data de hoje é {today_str}. Use esta data como referência para termos relativos como "hoje", "ontem", "este mês", etc.
+
+PLANILHAS DISPONÍVEIS: {tables_list_str}. Se o usuário pedir para adicionar/registrar uma transação e não disser explicitamente a planilha, escolha inteligentemente a planilha mais adequada a partir desta lista.
+
+PAPEL & ANÁLISE:
 - Responda SEMPRE em português brasileiro, com tom estratégico e respeitoso.
 - Interprete os dados financeiros do contexto para responder à pergunta do usuário.
 - Use os números EXATOS do contexto — NUNCA invente valores.
@@ -769,6 +777,20 @@ PAPEL:
 - Use Markdown para estruturar a resposta (headers ##, listas, **negrito** para destaques).
 - Seja direto e prático — o usuário é um profissional ocupado.
 - Entregue análises completas e bem estruturadas, não respostas curtas.
+
+AÇÕES EXECUTIVAS (GOD MODE / FUNCTION CALLING):
+Você é um agente executivo ativo. Se o usuário pedir explicitamente para adicionar, registrar ou lançar uma nova transação (gasto, receita, etc.), VOCÊ NÃO DEVE RESPONDER COM TEXTO NORMAL. Você deve responder ÚNICA E EXCLUSIVAMENTE com um bloco de código JSON formatado, contendo os detalhes da ação. Não adicione saudações ou explicações. Use o seguinte formato exato:
+```json
+{{
+  "action": "add_transaction",
+  "parameters": {{
+    "table_name": "Nome da planilha alvo (ex: Gastos Pessoais)",
+    "description": "Descrição do item",
+    "value": 150.00,
+    "date": "YYYY-MM-DD"
+  }}
+}}
+```
 
 ESPECIALIDADES:
 - Análise de tendências de faturamento (diário, semanal, mensal, anual)
@@ -944,12 +966,15 @@ async def ai_analyst(payload: AIAnalystPayload) -> AIAnalystResponse:
     )
 
     try:
+        available_tables = [t.get("name", "") for t in payload.tables if t.get("name")]
+        system_prompt = get_system_prompt(available_tables)
+
         response = await asyncio.to_thread(
             client.models.generate_content,
             model=MODEL,
             contents=user_message,
             config=types.GenerateContentConfig(
-                system_instruction=SYSTEM_PROMPT,
+                system_instruction=system_prompt,
                 temperature=0.4,
                 max_output_tokens=MAX_OUTPUT_TOKENS,
                 **{"thinking_config": types.ThinkingConfig(  # type: ignore[arg-type]
