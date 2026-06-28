@@ -156,7 +156,61 @@ export default function AIChatScreen() {
       if (result.error) {
         setMessages([...newMessages, createMessage('assistant', `⚠️ ${result.error}`)]);
       } else {
-        setMessages([...newMessages, createMessage('assistant', result.response)]);
+        let responseText = result.response;
+        try {
+          const cleanJsonString = result.response
+            .replace(/```json/g, '')
+            .replace(/```/g, '')
+            .trim();
+          
+          if (cleanJsonString.startsWith('{') && cleanJsonString.endsWith('}')) {
+            const payload = JSON.parse(cleanJsonString);
+
+            if (payload.action === 'add_transaction' && payload.parameters) {
+              const { table_name, description, value, date, period_start, period_end } = payload.parameters;
+              const numericValue = Number(value);
+              
+              db.addRow(
+                {
+                  description: description || 'Sem descrição',
+                  value: Math.abs(numericValue),
+                  date: date || new Date().toISOString().slice(0, 10),
+                  entryType: (numericValue < 0 ? 'expense' : 'revenue') as any,
+                  periodStart: period_start || undefined,
+                  periodEnd: period_end || undefined,
+                },
+                table_name
+              );
+
+              const periodInfo = period_start && period_end ? ` (Vigência: **${period_start}** a **${period_end}**)` : '';
+              responseText = `✅ **Ação Executada:**\nAdicionei **${description}** no valor de **R$ ${Math.abs(numericValue).toFixed(2)}** (${numericValue < 0 ? 'Despesa' : 'Receita'}) na planilha **${table_name}** em **${date}**${periodInfo}.`;
+            }
+            else if (payload.action === 'bulk_add_transactions' && payload.parameters) {
+              const { table_name, transactions } = payload.parameters;
+              
+              if (Array.isArray(transactions) && transactions.length > 0) {
+                const rowsToAdd = transactions.map((t: any) => {
+                  const numVal = Number(t.value);
+                  return {
+                    description: t.description || 'Sem descrição',
+                    value: Math.abs(numVal),
+                    date: t.date || new Date().toISOString().slice(0, 10),
+                    entryType: (numVal < 0 ? 'expense' : 'revenue') as any,
+                    periodStart: t.period_start || undefined,
+                    periodEnd: t.period_end || undefined,
+                  };
+                });
+
+                db.addRows(rowsToAdd, table_name);
+                responseText = `✅ **Lote Processado:**\nAdicionei com sucesso **${transactions.length}** transações na planilha **${table_name}**!`;
+              }
+            }
+          }
+        } catch (e) {
+          // Not JSON or parse error, keep responseText as is
+        }
+
+        setMessages([...newMessages, createMessage('assistant', responseText)]);
         const promptTokens = result.promptTokens ?? 0;
         const completionTokens = result.completionTokens ?? 0;
         const costUSD = (promptTokens * 0.15 + completionTokens * 0.60) / 1000000;
@@ -338,6 +392,22 @@ const markdownStyles = {
     padding: spacing.xs,
     borderRightWidth: 1,
     borderRightColor: colors.border.default,
+  },
+  code_block: {
+    backgroundColor: '#2A2A2A',
+    color: '#E0E0E0',
+    padding: spacing.sm,
+    borderRadius: radius.sm,
+    marginVertical: spacing.xs,
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+  },
+  fence: {
+    backgroundColor: '#2A2A2A',
+    color: '#E0E0E0',
+    padding: spacing.sm,
+    borderRadius: radius.sm,
+    marginVertical: spacing.xs,
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
   },
 };
 

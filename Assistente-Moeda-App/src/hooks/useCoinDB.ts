@@ -40,8 +40,8 @@ export interface CoinDBState {
   deleteTable: (tableId: string) => void;
 
   // ── Row Operations ────────────────────────────────────
-  addRow: (row: Omit<TableRow, 'id'>) => void;
-  addRows: (rows: Omit<TableRow, 'id'>[]) => void;
+  addRow: (row: Omit<TableRow, 'id'>, tableName?: string) => void;
+  addRows: (rows: Omit<TableRow, 'id'>[], tableName?: string) => void;
   updateRow: (rowId: string, updates: Partial<TableRow>) => void;
   deleteRow: (rowId: string) => void;
   deleteRowsByPrefix: (prefix: string) => number;
@@ -308,11 +308,17 @@ function useCoinDBInternal(): CoinDBState {
   }, [tables, activeTableIndex, persist]);
 
   // ── Row Operations ────────────────────────────────────
-  const addRow = useCallback((row: Omit<TableRow, 'id'>) => {
-    if (!activeTable) return;
+  const addRow = useCallback((row: Omit<TableRow, 'id'>, tableName?: string) => {
+    const targetIndex = tableName 
+      ? tables.findIndex(t => t.name.toLowerCase().trim() === tableName.toLowerCase().trim())
+      : activeTableIndex;
+
+    const actualIndex = targetIndex !== -1 ? targetIndex : activeTableIndex;
+    if (actualIndex < 0 || actualIndex >= tables.length) return;
+
     const newRow: TableRow = { ...row, id: generateId() };
     const newTables = tables.map((t, i) => {
-      if (i !== activeTableIndex) return t;
+      if (i !== actualIndex) return t;
       return {
         ...t,
         rows: [...t.rows, newRow].sort((a, b) => a.date.localeCompare(b.date)),
@@ -320,13 +326,20 @@ function useCoinDBInternal(): CoinDBState {
       };
     });
     persist(newTables);
-  }, [tables, activeTableIndex, activeTable, persist]);
+  }, [tables, activeTableIndex, persist]);
 
-  const addRows = useCallback((rows: Omit<TableRow, 'id'>[]) => {
-    if (!activeTable || rows.length === 0) return;
+  const addRows = useCallback((rows: Omit<TableRow, 'id'>[], tableName?: string) => {
+    if (rows.length === 0) return;
+    const targetIndex = tableName 
+      ? tables.findIndex(t => t.name.toLowerCase().trim() === tableName.toLowerCase().trim())
+      : activeTableIndex;
+
+    const actualIndex = targetIndex !== -1 ? targetIndex : activeTableIndex;
+    if (actualIndex < 0 || actualIndex >= tables.length) return;
+
     const newRows: TableRow[] = rows.map((r) => ({ ...r, id: generateId() }));
     const newTables = tables.map((t, i) => {
-      if (i !== activeTableIndex) return t;
+      if (i !== actualIndex) return t;
       return {
         ...t,
         rows: [...t.rows, ...newRows].sort((a, b) => a.date.localeCompare(b.date)),
@@ -334,7 +347,7 @@ function useCoinDBInternal(): CoinDBState {
       };
     });
     persist(newTables);
-  }, [tables, activeTableIndex, activeTable, persist]);
+  }, [tables, activeTableIndex, persist]);
 
   const updateRow = useCallback((rowId: string, updates: Partial<TableRow>) => {
     const newTables = tables.map((t, i) => {
