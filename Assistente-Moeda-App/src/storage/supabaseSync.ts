@@ -48,6 +48,31 @@ function sanitizeGoals(goals: any): any {
   return clean;
 }
 
+async function fetchAll(queryBuilder: any) {
+  let allData: any[] = [];
+  let hasMore = true;
+  let page = 0;
+  const pageSize = 1000;
+
+  while (hasMore) {
+    const from = page * pageSize;
+    const to = from + pageSize - 1;
+    const { data, error } = await queryBuilder.range(from, to);
+
+    if (error) throw error;
+    if (data) {
+      allData = allData.concat(data);
+      if (data.length < pageSize) {
+        hasMore = false;
+      }
+    } else {
+      hasMore = false;
+    }
+    page++;
+  }
+  return allData;
+}
+
 // ── Push Local → Cloud ───────────────────────────────────────────────────────
 
 /**
@@ -107,11 +132,11 @@ export async function pushToCloud(userId: string): Promise<{ success: boolean; e
         const localRowIds = table.rows.map((r) => r.id);
 
         // Step A: Fetch existing cloud IDs for the table
-        const { data: cloudData, error: fetchError } = await supabase
+        const cloudDataQuery = supabase
           .from('transactions')
           .select('id')
           .eq('table_id', table.id);
-        if (fetchError) throw fetchError;
+        const cloudData = await fetchAll(cloudDataQuery);
 
         // Step B: Diff in memory to find orphans
         const cloudIds = cloudData?.map((d) => d.id) || [];
@@ -188,13 +213,13 @@ export async function pullFromCloud(userId: string): Promise<{ success: boolean;
     const aiCostLastReset = settings?.ai_cost_last_reset ?? '';
 
     // 2. Fetch all tables for this user
-    const { data: tables, error: tablesError } = await supabase
+    const tablesQuery = supabase
       .from('coin_tables')
       .select('*')
       .eq('user_id', userId)
       .order('position', { ascending: true });
+    const tables = await fetchAll(tablesQuery);
 
-    if (tablesError) throw tablesError;
     if (!tables || tables.length === 0) {
       await saveDB({
         tables: [],
@@ -206,13 +231,12 @@ export async function pullFromCloud(userId: string): Promise<{ success: boolean;
 
     // 3. Fetch all rows for all tables in one query
     const tableIds = tables.map((t) => t.id);
-    const { data: allRows, error: rowsError } = await supabase
+    const rowsQuery = supabase
       .from('transactions')
       .select('*')
       .in('table_id', tableIds)
       .order('date', { ascending: true });
-
-    if (rowsError) throw rowsError;
+    const allRows = await fetchAll(rowsQuery);
 
     // Build the DB object
     const rowsByTable = new Map<string, TableRow[]>();
