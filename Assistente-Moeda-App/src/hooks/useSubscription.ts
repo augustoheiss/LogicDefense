@@ -11,7 +11,7 @@ import { useAuthContext } from './useAuth';
 
 export interface SubscriptionPackage {
   identifier: string;
-  packageType: 'MONTHLY' | 'YEARLY';
+  packageType: string;
   product: {
     priceString: string;
     price: number;
@@ -25,6 +25,7 @@ export interface SubscriptionContextState {
   isPro: boolean;
   subscriptionType: 'monthly' | 'yearly' | null;
   packages: SubscriptionPackage[];
+  consumables: SubscriptionPackage[];
   isLoading: boolean;
   purchasePackage: (pkg: any) => Promise<boolean>;
   restorePurchases: () => Promise<boolean>;
@@ -41,6 +42,7 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
   const [isPro, setIsPro] = useState(false);
   const [subscriptionType, setSubscriptionType] = useState<'monthly' | 'yearly' | null>(null);
   const [rcPackages, setRcPackages] = useState<SubscriptionPackage[]>([]);
+  const [rcConsumables, setRcConsumables] = useState<SubscriptionPackage[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showPaywall, setShowPaywall] = useState(false);
 
@@ -63,7 +65,7 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
   const updateProStatus = useCallback((customerInfo: any) => {
     if (customerInfo && customerInfo.entitlements && customerInfo.entitlements.active) {
       const activeEntitlements = customerInfo.entitlements.active;
-      const proEntitlement = activeEntitlements['Assistente Moeda Pro'];
+      const proEntitlement = activeEntitlements['pro'];
       if (proEntitlement) {
         setIsPro(true);
         const prodId = (proEntitlement.productIdentifier || '').toLowerCase();
@@ -83,12 +85,11 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
     try {
       const offerings = await Purchases.getOfferings();
       if (offerings.current !== null && offerings.current.availablePackages.length > 0) {
-        // Filter out Lifetime options, only keep Monthly and Yearly
         const filtered = offerings.current.availablePackages
           .filter((pkg: any) => pkg.packageType === 'MONTHLY' || pkg.packageType === 'YEARLY')
           .map((pkg: any) => ({
             identifier: pkg.identifier,
-            packageType: pkg.packageType as 'MONTHLY' | 'YEARLY',
+            packageType: pkg.packageType,
             product: {
               priceString: pkg.product.priceString,
               price: pkg.product.price,
@@ -98,6 +99,40 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
             _rcOriginalPackage: pkg,
           }));
         setRcPackages(filtered);
+      }
+
+      // Consumables offerings
+      const tokenOffering = offerings.all['Tokens'] || offerings.all['tokens'];
+      if (tokenOffering && tokenOffering.availablePackages.length > 0) {
+        const mappedConsumables = tokenOffering.availablePackages.map((pkg: any) => ({
+          identifier: pkg.identifier,
+          packageType: pkg.packageType,
+          product: {
+            priceString: pkg.product.priceString,
+            price: pkg.product.price,
+            title: pkg.product.title,
+            description: pkg.product.description,
+          },
+          _rcOriginalPackage: pkg,
+        }));
+        setRcConsumables(mappedConsumables);
+      } else {
+        if (offerings.current !== null) {
+          const customPkgs = offerings.current.availablePackages
+            .filter((pkg: any) => pkg.packageType !== 'MONTHLY' && pkg.packageType !== 'YEARLY')
+            .map((pkg: any) => ({
+              identifier: pkg.identifier,
+              packageType: pkg.packageType,
+              product: {
+                priceString: pkg.product.priceString,
+                price: pkg.product.price,
+                title: pkg.product.title,
+                description: pkg.product.description,
+              },
+              _rcOriginalPackage: pkg,
+            }));
+          setRcConsumables(customPkgs);
+        }
       }
     } catch (e) {
       console.warn('Failed to fetch RevenueCat offerings:', e);
@@ -111,6 +146,8 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
       try {
         Purchases.setLogLevel(Purchases.LOG_LEVEL.DEBUG);
         if (Platform.OS === 'android') {
+          Purchases.configure({ apiKey: GOOGLE_API_KEY });
+        } else if (Platform.OS === 'ios') {
           Purchases.configure({ apiKey: GOOGLE_API_KEY });
         } else {
           Purchases.configure({ apiKey: GOOGLE_API_KEY });
@@ -137,7 +174,7 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
     try {
       const packageToBuy = pkg._rcOriginalPackage || pkg;
       const { customerInfo } = await Purchases.purchasePackage(packageToBuy);
-      const active = !!customerInfo.entitlements.active['Assistente Moeda Pro'];
+      const active = !!customerInfo.entitlements.active['pro'];
       setIsPro(active);
       if (active) {
         const prodId = (packageToBuy.product?.identifier || '').toLowerCase();
@@ -161,10 +198,10 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
   const restorePurchases = useCallback(async (): Promise<boolean> => {
     try {
       const customerInfo = await Purchases.restorePurchases();
-      const active = !!customerInfo.entitlements.active['Assistente Moeda Pro'];
+      const active = !!customerInfo.entitlements.active['pro'];
       setIsPro(active);
       if (active) {
-        const proEntitlement = customerInfo.entitlements.active['Assistente Moeda Pro'];
+        const proEntitlement = customerInfo.entitlements.active['pro'];
         const prodId = (proEntitlement.productIdentifier || '').toLowerCase();
         if (prodId.includes('year') || prodId.includes('anual')) {
           setSubscriptionType('yearly');
@@ -197,6 +234,7 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
     isPro: effectiveIsPro,
     subscriptionType: effectiveSubscriptionType,
     packages: rcPackages,
+    consumables: rcConsumables,
     isLoading,
     purchasePackage,
     restorePurchases,

@@ -19,11 +19,13 @@ import {
   ScrollView,
   Alert,
   Platform,
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useAuthContext } from '@/hooks/useAuth';
 import { useCoinDB } from '@/hooks/useCoinDB';
+import { useSubscription } from '@/hooks/useSubscription';
 import { clearDB } from '@/storage/asyncStorageAdapter';
 import { colors } from '@/theme/colors';
 import { spacing, radius } from '@/theme/spacing';
@@ -41,6 +43,9 @@ export default function SettingsScreen() {
 
   const [tokenBalance, setTokenBalance] = useState<number>(100000);
   const MAX_TOKENS = 100000;
+
+  const { isPro, packages, consumables, purchasePackage, restorePurchases } = useSubscription();
+  const [showStoreModal, setShowStoreModal] = useState(false);
 
   const fetchTokenBalance = useCallback(async () => {
     if (auth.mode === 'authenticated' && auth.user) {
@@ -64,6 +69,75 @@ export default function SettingsScreen() {
       setTokenBalance(MAX_TOKENS);
     }
   }, [auth.mode, auth.user]);
+
+  const creditTokens = useCallback(async (amount: number) => {
+    if (auth.mode === 'authenticated' && auth.user) {
+      try {
+        const { data, error: fetchErr } = await supabase
+          .from('user_settings')
+          .select('token_balance')
+          .eq('id', auth.user.id)
+          .maybeSingle();
+
+        if (fetchErr) throw fetchErr;
+
+        const currentBalance = data?.token_balance ? Number(data.token_balance) : 0;
+        const newBalance = currentBalance + amount;
+
+        const { error: updateErr } = await supabase
+          .from('user_settings')
+          .update({ token_balance: newBalance })
+          .eq('id', auth.user.id);
+
+        if (updateErr) throw updateErr;
+        setTokenBalance(newBalance);
+      } catch (err) {
+        console.error('Failed to credit tokens:', err);
+      }
+    } else {
+      setTokenBalance((prev) => prev + amount);
+    }
+  }, [auth.mode, auth.user]);
+
+  const handlePurchase = async (pkg: any) => {
+    try {
+      const isConsumable = pkg.packageType === 'CUSTOM' || pkg.identifier.includes('token') || pkg.identifier.includes('consumable');
+      
+      if (isConsumable) {
+        const success = await purchasePackage(pkg);
+        if (success) {
+          let amount = 100000;
+          if (pkg.identifier.includes('50k')) amount = 50000;
+          else if (pkg.identifier.includes('200k')) amount = 200000;
+          else if (pkg.identifier.includes('500k')) amount = 500000;
+          
+          await creditTokens(amount);
+          if (Platform.OS === 'web') {
+            window.alert(`Recarga bem-sucedida! Adicionado ${amount.toLocaleString('pt-BR')} tokens ao seu saldo.`);
+          } else {
+            Alert.alert("Recarga Concluída", `Adicionado ${amount.toLocaleString('pt-BR')} tokens ao seu saldo.`);
+          }
+        }
+      } else {
+        const success = await purchasePackage(pkg);
+        if (success) {
+          if (Platform.OS === 'web') {
+            window.alert('Assinatura Pro ativada com sucesso!');
+          } else {
+            Alert.alert("Assinatura Ativa", "Você agora tem acesso completo ao Assistente Moeda Pro!");
+          }
+        }
+      }
+    } catch (err: any) {
+      console.error("Purchase Failed:", err);
+      const msg = err.message || String(err);
+      if (Platform.OS === 'web') {
+        window.alert("Erro na compra: " + msg);
+      } else {
+        Alert.alert("Erro na compra", msg);
+      }
+    }
+  };
 
   useEffect(() => {
     fetchTokenBalance();
@@ -295,13 +369,7 @@ export default function SettingsScreen() {
                 styles.storefrontButton,
                 pressed && styles.pressed,
               ]}
-              onPress={() => {
-                if (Platform.OS === 'web') {
-                  window.alert("O sistema de recargas avulsas via PIX será ativado em breve!");
-                } else {
-                  Alert.alert("Em Breve", "O sistema de recargas avulsas via PIX será ativado em breve!");
-                }
-              }}
+              onPress={() => setShowStoreModal(true)}
             >
               <Text style={styles.storefrontButtonText}>🪙 Recarregar Créditos (Loja)</Text>
             </Pressable>
@@ -435,6 +503,94 @@ export default function SettingsScreen() {
 
         <View style={{ height: spacing.huge }} />
       </ScrollView>
+
+      {/* ── Storefront Modal ────────────────────────────── */}
+      <Modal
+        visible={showStoreModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowStoreModal(false)}
+      >
+        <View style={styles.modalBackground}>
+          <View style={styles.modalContainer}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>🪙 Loja de Créditos & Pro</Text>
+              <Pressable onPress={() => setShowStoreModal(false)} style={styles.modalCloseButton}>
+                <Text style={styles.modalCloseText}>✖</Text>
+              </Pressable>
+            </View>
+
+            <ScrollView style={styles.modalContent} contentContainerStyle={styles.modalContentInner}>
+              {/* Entitlement Status */}
+              <View style={[styles.statusCard, isPro && styles.statusCardActive]}>
+                <Text style={styles.statusTitle}>
+                  {isPro ? '⭐ Plano PRO Ativo' : '🆓 Plano Gratuito Limitado'}
+                </Text>
+                <Text style={styles.statusDescription}>
+                  {isPro 
+                    ? 'Você tem acesso ilimitado ao Motor Estatístico, Projeções e maior cota de IA!' 
+                    : 'Assine o Pro para liberar análises ilimitadas, mediana, desvios padrões e inteligência avançada.'}
+                </Text>
+              </View>
+
+              {/* Subscriptions Section */}
+              <Text style={styles.storeSectionTitle}>Planos de Assinatura (Pro)</Text>
+              {packages.length === 0 ? (
+                <Text style={styles.emptyStoreText}>Carregando assinaturas...</Text>
+              ) : (
+                packages.map((pkg) => (
+                  <Card key={pkg.identifier} style={styles.storeCard}>
+                    <View style={styles.storeCardHeader}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.storeCardTitle}>{pkg.product.title}</Text>
+                        <Text style={styles.storeCardDesc}>{pkg.product.description}</Text>
+                      </View>
+                      <Text style={styles.storeCardPrice}>{pkg.product.priceString}</Text>
+                    </View>
+                    <Pressable
+                      style={({ pressed }) => [
+                        styles.buyButton,
+                        pressed && styles.pressed,
+                      ]}
+                      onPress={() => handlePurchase(pkg)}
+                    >
+                      <Text style={styles.buyButtonText}>Assinar Agora</Text>
+                    </Pressable>
+                  </Card>
+                ))
+              )}
+
+              {/* Consumables Section */}
+              <Text style={styles.storeSectionTitle}>Créditos Avulsos (Combustível)</Text>
+              {consumables.length === 0 ? (
+                <Text style={styles.emptyStoreText}>Carregando pacotes de recarga...</Text>
+              ) : (
+                consumables.map((pkg) => (
+                  <Card key={pkg.identifier} style={styles.storeCard}>
+                    <View style={styles.storeCardHeader}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.storeCardTitle}>{pkg.product.title}</Text>
+                        <Text style={styles.storeCardDesc}>{pkg.product.description}</Text>
+                      </View>
+                      <Text style={styles.storeCardPrice}>{pkg.product.priceString}</Text>
+                    </View>
+                    <Pressable
+                      style={({ pressed }) => [
+                        styles.buyButton,
+                        styles.buyButtonConsumable,
+                        pressed && styles.pressed,
+                      ]}
+                      onPress={() => handlePurchase(pkg)}
+                    >
+                      <Text style={styles.buyButtonText}>Comprar Recarga</Text>
+                    </Pressable>
+                  </Card>
+                ))
+              )}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -1183,6 +1339,125 @@ const styles = StyleSheet.create({
     marginTop: spacing.md,
   },
   storefrontButtonText: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  // Modal Storefront
+  modalBackground: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.85)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: spacing.md,
+  },
+  modalContainer: {
+    backgroundColor: colors.background.secondary,
+    width: '100%',
+    maxWidth: 500,
+    maxHeight: '90%',
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border.default,
+    overflow: 'hidden',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border.default,
+    backgroundColor: colors.background.tertiary,
+  },
+  modalTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: colors.text.primary,
+  },
+  modalCloseButton: {
+    padding: spacing.xs,
+  },
+  modalCloseText: {
+    color: colors.text.secondary,
+    fontSize: 16,
+  },
+  modalContent: {
+    padding: spacing.md,
+  },
+  modalContentInner: {
+    gap: spacing.md,
+    paddingBottom: spacing.huge,
+  },
+  statusCard: {
+    backgroundColor: colors.background.tertiary,
+    borderRadius: radius.sm,
+    padding: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.border.default,
+  },
+  statusCardActive: {
+    borderColor: colors.accent.purple,
+    backgroundColor: colors.accent.purpleLight,
+  },
+  statusTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: colors.text.primary,
+  },
+  statusDescription: {
+    fontSize: 12,
+    color: colors.text.secondary,
+    marginTop: spacing.xs,
+    lineHeight: 16,
+  },
+  storeSectionTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.text.primary,
+    marginTop: spacing.sm,
+  },
+  emptyStoreText: {
+    fontSize: 12,
+    color: colors.text.tertiary,
+    fontStyle: 'italic',
+  },
+  storeCard: {
+    padding: spacing.md,
+  },
+  storeCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+  },
+  storeCardTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: colors.text.primary,
+  },
+  storeCardDesc: {
+    fontSize: 12,
+    color: colors.text.secondary,
+    marginTop: spacing.xxs,
+    maxWidth: 250,
+  },
+  storeCardPrice: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: colors.accent.purple,
+  },
+  buyButton: {
+    backgroundColor: colors.accent.purple,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.sm,
+    alignItems: 'center',
+    marginTop: spacing.md,
+  },
+  buyButtonConsumable: {
+    backgroundColor: '#009688',
+  },
+  buyButtonText: {
     color: '#fff',
     fontSize: 13,
     fontWeight: '600',

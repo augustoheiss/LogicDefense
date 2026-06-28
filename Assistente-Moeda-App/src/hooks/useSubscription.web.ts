@@ -5,12 +5,12 @@
  * which causes static bundling errors in Metro.
  */
 
-import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
+import React, { createContext, useContext, useState, useMemo, useCallback } from 'react';
 import { useAuthContext } from './useAuth';
 
 export interface SubscriptionPackage {
   identifier: string;
-  packageType: 'MONTHLY' | 'YEARLY';
+  packageType: string;
   product: {
     priceString: string;
     price: number;
@@ -23,6 +23,7 @@ export interface SubscriptionContextState {
   isPro: boolean;
   subscriptionType: 'monthly' | 'yearly' | null;
   packages: SubscriptionPackage[];
+  consumables: SubscriptionPackage[];
   isLoading: boolean;
   purchasePackage: (pkg: any) => Promise<boolean>;
   restorePurchases: () => Promise<boolean>;
@@ -56,6 +57,19 @@ const MOCK_PACKAGES: SubscriptionPackage[] = [
   },
 ];
 
+const MOCK_CONSUMABLES: SubscriptionPackage[] = [
+  {
+    identifier: 'mock_tokens_100k',
+    packageType: 'CUSTOM',
+    product: {
+      priceString: 'R$ 29,90',
+      price: 29.90,
+      title: 'Recarga 100k Tokens',
+      description: 'Adiciona 100.000 tokens de saldo no Motor de IA',
+    },
+  },
+];
+
 export function SubscriptionProvider({ children }: { children: React.ReactNode }) {
   const [isPro, setIsPro] = useState(false);
   const [subscriptionType, setSubscriptionType] = useState<'monthly' | 'yearly' | null>(null);
@@ -78,6 +92,10 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
   const effectiveSubscriptionType = isAdmin ? 'yearly' : subscriptionType;
 
   const purchasePackage = useCallback(async (pkg: any): Promise<boolean> => {
+    if (pkg.packageType === 'CUSTOM') {
+      window.alert(`Sucesso: Compra do pacote avulso "${pkg.product.title}" simulada com sucesso!`);
+      return true;
+    }
     setIsPro(true);
     setSubscriptionType(pkg.packageType === 'YEARLY' ? 'yearly' : 'monthly');
     window.alert(`Sucesso: Assinatura "${pkg.product.title}" ativada no simulador web!`);
@@ -103,6 +121,7 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
     isPro: effectiveIsPro,
     subscriptionType: effectiveSubscriptionType,
     packages: MOCK_PACKAGES,
+    consumables: MOCK_CONSUMABLES,
     isLoading: false,
     purchasePackage,
     restorePurchases,

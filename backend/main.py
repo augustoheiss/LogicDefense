@@ -73,6 +73,10 @@ app.add_middleware(
 from routers.coin_ai_router import router as coin_ai_router
 app.include_router(coin_ai_router)
 
+# ── RevenueCat Webhook Router ────────────────────────────────────────────────
+from routers.webhook_router import router as webhook_router
+app.include_router(webhook_router)
+
 # ── Health Check (cold-start mitigation) ─────────────────────────────────────
 
 @app.get("/api/health")
