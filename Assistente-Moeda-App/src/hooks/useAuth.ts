@@ -145,10 +145,12 @@ export function useAuth(): AuthState {
   }, []);
 
   const logout = useCallback(async () => {
+    let signOutError: any = null;
     try {
       await signOut();
     } catch (e) {
-      console.warn('Supabase signOut failed:', e);
+      console.error('Supabase signOut failed:', e);
+      signOutError = e;
     }
 
     try {
@@ -180,10 +182,8 @@ export function useAuth(): AuthState {
     setSession(null);
     setMode('guest');
 
-    if (Platform.OS === 'web') {
-      window.location.href = '/laboratorio/assistente-moeda';
-    } else {
-      router.replace('/');
+    if (signOutError) {
+      throw signOutError;
     }
   }, []);
 

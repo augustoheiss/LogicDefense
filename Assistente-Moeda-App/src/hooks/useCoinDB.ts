@@ -11,7 +11,7 @@
  */
 
 import React, { useState, useEffect, useCallback, useMemo, createContext, useContext } from 'react';
-import { loadDB, saveDB } from '../storage/asyncStorageAdapter';
+import { loadDB, saveDB, clearDB } from '../storage/asyncStorageAdapter';
 import { computeMetrics, emptyMetrics } from '../core/metricsEngine';
 import type { DB, CoinTable, TableRow, TableGoals, TableMetrics } from '../core/types';
 import { useAuthContext } from './useAuth';
@@ -72,6 +72,8 @@ export interface CoinDBState {
   syncCloud: () => Promise<{ success: boolean; error?: string }>;
   /** Manually migrate local spreadsheets to cloud */
   migrateLocalToCloud: () => Promise<{ success: boolean; error?: string }>;
+  /** Manually clear local AsyncStorage database cache */
+  clearLocalState: () => Promise<void>;
 }
 
 // ── React Context ────────────────────────────────────────────────────────────
@@ -165,6 +167,15 @@ function useCoinDBInternal(): CoinDBState {
     setIsLoading(false);
     return res;
   }, [auth.mode, auth.user]);
+
+  // ── Clear local database cache ─────────────────────────
+  const clearLocalState = useCallback(async () => {
+    await clearDB();
+    setTables([]);
+    setActiveTableIndex(0);
+    setAiCostCurrentMonth(0);
+    setAiCostLastReset('');
+  }, []);
 
   // ── Sync from Cloud when Authenticated ─────────────────
   useEffect(() => {
@@ -454,6 +465,7 @@ function useCoinDBInternal(): CoinDBState {
     addAICost,
     syncCloud,
     migrateLocalToCloud,
+    clearLocalState,
   };
 }
 

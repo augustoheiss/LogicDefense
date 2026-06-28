@@ -103,24 +103,77 @@ export default function SettingsScreen() {
   };
 
   const handleLogout = () => {
-    Alert.alert(
-      'Sair da Conta',
-      'Seus dados locais serão apagados. Deseja sair?',
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Sair',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await auth.logout();
-            } catch (err) {
-              console.warn('Logout failed:', err);
-            }
-          },
-        },
-      ],
-    );
+    const performLogout = async () => {
+      try {
+        await auth.logout();
+        if (Platform.OS !== 'web') {
+          Alert.alert("Sucesso", "Você saiu da conta.");
+          router.replace('/');
+        } else {
+          window.alert("Você saiu da conta.");
+          window.location.href = '/laboratorio/assistente-moeda';
+        }
+      } catch (error: any) {
+        console.error("Logout Error:", error);
+        const msg = error?.message || String(error);
+        if (Platform.OS === 'web') {
+          window.alert("Erro ao sair: " + msg);
+        } else {
+          Alert.alert("Erro ao sair", msg);
+        }
+      }
+    };
+
+    if (Platform.OS === 'web') {
+      if (window.confirm("Seus dados locais serão apagados. Deseja sair?")) {
+        performLogout();
+      }
+    } else {
+      Alert.alert(
+        'Sair da Conta',
+        'Seus dados locais serão apagados. Deseja sair?',
+        [
+          { text: 'Cancelar', style: 'cancel' },
+          { text: 'Sair', style: 'destructive', onPress: performLogout },
+        ]
+      );
+    }
+  };
+
+  const handleClearLocalCache = () => {
+    const performClear = async () => {
+      try {
+        await db.clearLocalState();
+        if (Platform.OS === 'web') {
+          window.alert("Sucesso: Os dados locais foram apagados.");
+        } else {
+          Alert.alert("Sucesso", "Os dados locais foram apagados.");
+        }
+      } catch (error: any) {
+        console.error("Clear Cache Error:", error);
+        const msg = error?.message || String(error);
+        if (Platform.OS === 'web') {
+          window.alert("Erro ao limpar dados: " + msg);
+        } else {
+          Alert.alert("Erro ao limpar dados", msg);
+        }
+      }
+    };
+
+    if (Platform.OS === 'web') {
+      if (window.confirm("Tem certeza? Isso apagará os dados não salvos neste dispositivo.")) {
+        performClear();
+      }
+    } else {
+      Alert.alert(
+        'Atenção',
+        'Tem certeza? Isso apagará os dados não salvos neste dispositivo.',
+        [
+          { text: 'Cancelar', style: 'cancel' },
+          { text: 'Apagar', style: 'destructive', onPress: performClear },
+        ]
+      );
+    }
   };
 
   return (
@@ -172,12 +225,20 @@ export default function SettingsScreen() {
               <Text style={styles.guestText}>
                 Dados salvos apenas neste dispositivo.
               </Text>
-              <Pressable
-                style={({ pressed }) => [styles.actionButton, pressed && styles.pressed]}
-                onPress={() => router.push('/(auth)/register')}
-              >
-                <Text style={styles.actionButtonText}>Criar Conta</Text>
-              </Pressable>
+              <View style={{ flexDirection: 'row', gap: spacing.sm, marginTop: spacing.md }}>
+                <Pressable
+                  style={({ pressed }) => [styles.actionButton, { flex: 1, marginTop: 0 }, pressed && styles.pressed]}
+                  onPress={() => router.push('/(auth)/register')}
+                >
+                  <Text style={styles.actionButtonText}>Criar Conta</Text>
+                </Pressable>
+                <Pressable
+                  style={({ pressed }) => [styles.actionButton, { flex: 1, marginTop: 0, backgroundColor: colors.background.tertiary, borderWidth: 1, borderColor: colors.border.strong }, pressed && styles.pressed]}
+                  onPress={() => router.push('/(auth)/login')}
+                >
+                  <Text style={styles.actionButtonText}>Entrar</Text>
+                </Pressable>
+              </View>
             </Card>
           )}
         </Section>
@@ -246,6 +307,31 @@ export default function SettingsScreen() {
                 </View>
               ))
             )}
+          </Card>
+        </Section>
+
+        {/* ── Danger Zone ────────────────────────────────── */}
+        <Section title="Zona de Perigo">
+          <Card style={{ borderColor: colors.danger.main, borderWidth: 1 }}>
+            <Text style={{ fontSize: 13, color: colors.text.secondary, marginBottom: spacing.md }}>
+              Ações irreversíveis relacionadas aos dados armazenados no navegador.
+            </Text>
+            <Pressable
+              style={({ pressed }) => [
+                {
+                  backgroundColor: colors.danger.main,
+                  paddingVertical: spacing.sm,
+                  borderRadius: radius.sm,
+                  alignItems: 'center',
+                },
+                pressed && styles.pressed,
+              ]}
+              onPress={handleClearLocalCache}
+            >
+              <Text style={{ color: '#fff', fontSize: 13, fontWeight: '600' }}>
+                🗑️ Limpar Planilhas do Navegador
+              </Text>
+            </Pressable>
           </Card>
         </Section>
 
