@@ -127,7 +127,12 @@ def build_transaction_ledger(
         entry_type = r.entry_type or EntryType.REVENUE
         label = _ENTRY_LABELS.get(entry_type, "RECEITA")
         desc = f" | {r.description}" if r.description else ""
-        return f"  {r.date} | {label:8s} | R$ {r.value:>10,.2f}{desc}"
+        period_info = ""
+        period_start = getattr(r, "period_start", None) or getattr(r, "periodStart", None)
+        period_end = getattr(r, "period_end", None) or getattr(r, "periodEnd", None)
+        if period_start and period_end:
+            period_info = f" (Vigência: {period_start} a {period_end})"
+        return f"  {r.date} | {label:8s} | R$ {r.value:>10,.2f}{desc}{period_info}"
 
     def _top_n(n: int = 10) -> str:
         by_value = sorted(rows, key=lambda r: r.value, reverse=True)[:n]
@@ -333,6 +338,14 @@ def build_category_summaries(rows: list, globalDaySpan: int = 1) -> str:
             weekly_avg = total_daily_rate * 7
             pct = (total / type_total * 100) if type_total > 0 else 0
 
+            # Check if any transaction in this category has period boundaries
+            has_any_period = any(
+                (getattr(r, "period_start", None) or getattr(r, "periodStart", None)) and
+                (getattr(r, "period_end", None) or getattr(r, "periodEnd", None))
+                for r in cat_rows
+            )
+            period_note = " [Calculado pelo Regime de Competência estrito com base nos períodos de vigência individuais]" if has_any_period else ""
+
             lines.append(
                 f"  {desc} ({count}x): "
                 f"Total R$ {total:,.2f} | "
@@ -343,12 +356,19 @@ def build_category_summaries(rows: list, globalDaySpan: int = 1) -> str:
                 f"DP R$ {cat_stddev:,.2f} | "
                 f"Diária R$ {daily_avg:,.2f} | "
                 f"Semanal R$ {weekly_avg:,.2f} | "
-                f"{pct:.1f}%"
+                f"{pct:.1f}%{period_note}"
             )
 
         sections.append("\n".join(lines))
 
-    return "\n".join(sections) if sections else ""
+    header = (
+        "\n── RESUMOS POR CATEGORIA (Regime de Competência / Accrual Basis) ──\n"
+        "NOTA: Os cálculos de média diária e semanal por categoria são calculados no Regime de Competência.\n"
+        "Se uma transação de despesa ou receita possui período de vigência explícito (period_start / period_end),\n"
+        "a média diária correspondente a ela é (valor_da_transacao / dias_de_vigencia_da_transacao).\n"
+        "Caso contrário, a transação é rateada uniformemente por todo o período global (fallback).\n"
+    )
+    return header + "\n".join(sections) if sections else ""
 
 
 def format_month_year_pt(ym: str) -> str:
