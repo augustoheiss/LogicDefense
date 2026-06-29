@@ -63,8 +63,8 @@ const MOCK_CONSUMABLES: SubscriptionPackage[] = [
     identifier: 'mock_tokens_100k',
     packageType: 'CUSTOM',
     product: {
-      priceString: 'R$ 29,90',
-      price: 29.90,
+      priceString: 'R$ 9,90',
+      price: 9.90,
       title: 'Recarga 100k Tokens',
       description: 'Adiciona 100.000 tokens de saldo no Motor de IA',
     },
