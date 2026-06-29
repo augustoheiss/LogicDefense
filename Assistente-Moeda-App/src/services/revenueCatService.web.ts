@@ -24,7 +24,7 @@ export async function purchasePackage(rcPackage: any, userId?: string): Promise<
 
   const url = `${paymentLink}?client_reference_id=${userId || ''}`;
   if (typeof window !== 'undefined') {
-    window.open(url, '_blank');
+    window.location.href = url;
   }
-  return true;
+  return false;
 }
