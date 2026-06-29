@@ -6,6 +6,7 @@
  */
 
 import React, { createContext, useContext, useState, useMemo, useCallback } from 'react';
+import { useRouter } from 'expo-router';
 import { useAuthContext } from './useAuth';
 import { purchasePackage as webPurchase } from '../services/revenueCatService.web';
 
@@ -77,6 +78,7 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
   const [showPaywall, setShowPaywall] = useState(false);
 
   const auth = useAuthContext();
+  const router = useRouter();
 
   const isAdmin = useMemo(() => {
     return !!(
@@ -94,6 +96,13 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
 
   const purchasePackage = useCallback(async (pkg: any): Promise<boolean> => {
     const userId = auth.user?.id;
+    if (!userId) {
+      if (typeof window !== 'undefined') {
+        window.alert("Você precisa estar conectado para realizar uma recarga ou assinatura.");
+        window.location.href = '/login';
+      }
+      return false;
+    }
     const success = await webPurchase(pkg, userId);
     return success;
   }, [auth.user]);
