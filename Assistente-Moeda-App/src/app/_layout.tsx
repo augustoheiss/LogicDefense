@@ -40,14 +40,18 @@ function RootNavigator() {
     if (auth.isLoading) return;
 
     const inAuthGroup = segments[0] === '(auth)';
+    const inAppGroup = segments[0] === '(app)';
     const currentPath = segments.join('/');
     const isExplicitAuthPage = currentPath.includes('login') || currentPath.includes('register');
 
     if (auth.user && inAuthGroup && !isExplicitAuthPage) {
-      // strictly redirect to main app tabs
+      // Authenticated user lingering in auth flow → send to main app
       router.replace('/(app)/(tabs)');
+    } else if (!auth.user && inAppGroup && auth.mode !== 'guest') {
+      // Unauthenticated non-guest in the app group (e.g. deep link) → gate via welcome
+      router.replace('/(auth)/welcome');
     }
-  }, [auth.user, auth.isLoading, segments]);
+  }, [auth.user, auth.mode, auth.isLoading, segments]);
 
   if (auth.isLoading) {
     return (
