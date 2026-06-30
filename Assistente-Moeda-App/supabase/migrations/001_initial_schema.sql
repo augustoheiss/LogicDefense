@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS profiles (
   display_name TEXT,
   sync_enabled BOOLEAN DEFAULT TRUE,
   premium_tier TEXT DEFAULT 'free' CHECK (premium_tier IN ('free', 'premium')),
+  subscription_expires_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );

@@ -32,6 +32,7 @@ export interface SubscriptionContextState {
   showPaywall: boolean;
   setShowPaywall: (show: boolean) => void;
   toggleProMock: () => void;
+  expirationDate: string | null;
 }
 
 const SubscriptionContext = createContext<SubscriptionContextState | null>(null);
@@ -75,6 +76,7 @@ const MOCK_CONSUMABLES: SubscriptionPackage[] = [
 export function SubscriptionProvider({ children }: { children: React.ReactNode }) {
   const [isPro, setIsPro] = useState(false);
   const [subscriptionType, setSubscriptionType] = useState<'monthly' | 'yearly' | null>(null);
+  const [expirationDate, setExpirationDate] = useState<string | null>(null);
   const [showPaywall, setShowPaywall] = useState(false);
 
   const auth = useAuthContext();
@@ -91,8 +93,10 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
     );
   }, [auth.user]);
 
-  const effectiveIsPro = isAdmin ? true : isPro;
-  const effectiveSubscriptionType = isAdmin ? 'yearly' : subscriptionType;
+  const isPremiumUser = auth.profile?.premiumTier === 'premium';
+  const effectiveIsPro = isAdmin ? true : (isPro || isPremiumUser);
+  const effectiveSubscriptionType = isAdmin ? 'yearly' : (subscriptionType || (isPremiumUser ? 'monthly' : null));
+  const effectiveExpirationDate = isAdmin ? null : (expirationDate || auth.profile?.subscriptionExpiresAt || null);
 
   const purchasePackage = useCallback(async (pkg: any): Promise<boolean> => {
     const userId = auth.user?.id;
@@ -110,6 +114,7 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
   const restorePurchases = useCallback(async (): Promise<boolean> => {
     setIsPro(true);
     setSubscriptionType('yearly');
+    setExpirationDate(new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString());
     window.alert('Sucesso: Assinatura Pro restaurada no simulador web!');
     return true;
   }, []);
@@ -118,6 +123,7 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
     setIsPro((prev) => {
       const next = !prev;
       setSubscriptionType(next ? 'yearly' : null);
+      setExpirationDate(next ? new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString() : null);
       return next;
     });
   }, []);
@@ -133,6 +139,7 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
     showPaywall,
     setShowPaywall,
     toggleProMock,
+    expirationDate: effectiveExpirationDate,
   };
 
   return React.createElement(SubscriptionContext.Provider, { value }, children);

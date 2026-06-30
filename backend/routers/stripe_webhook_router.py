@@ -9,6 +9,7 @@ import hmac
 import hashlib
 import time
 import logging
+from datetime import datetime, timedelta
 from fastapi import APIRouter, Request, Header, HTTPException, status
 from fastapi.responses import JSONResponse
 from routers.webhook_router import credit_user_tokens, update_user_premium_status
@@ -126,12 +127,12 @@ async def stripe_webhook(
     logger.info(f"Fulfilling Stripe checkout for user {app_user_id}, product: {product_id}")
     
     # 3. Process Product Types
+    amount_total = session.get("amount_total", 0)
     is_subscription = "pro" in product_id or "monthly" in product_id or "yearly" in product_id
     is_consumable = "token" in product_id or "consumable" in product_id
     
     # If not defined in metadata, guess based on amount_total or default to tokens
     if not is_subscription and not is_consumable:
-        amount_total = session.get("amount_total", 0)
         if amount_total >= 10000: # R$ 100+ -> Yearly subscription
             is_subscription = True
         elif amount_total >= 1900: # R$ 19+ -> Monthly subscription
@@ -140,13 +141,37 @@ async def stripe_webhook(
             is_consumable = True
             
     if is_subscription:
-        profile_success = await update_user_premium_status(app_user_id, "premium", "active")
-        token_success = await credit_user_tokens(app_user_id, 100000)
+        # Extract current_period_end from payload
+        current_period_end_raw = session.get("current_period_end") or session.get("subscription", {}).get("current_period_end") if isinstance(session.get("subscription"), dict) else None
+        
+        expiration_date_iso = None
+        if current_period_end_raw:
+            try:
+                expiration_date_iso = datetime.utcfromtimestamp(int(current_period_end_raw)).strftime("%Y-%m-%dT%H:%M:%S+00:00")
+            except Exception as e:
+                logger.error(f"Error parsing current_period_end timestamp {current_period_end_raw}: {e}")
+                
+        if not expiration_date_iso:
+            # Fallback based on annual vs monthly
+            now = datetime.utcnow()
+            if "year" in product_id or "yearly" in product_id or "anual" in product_id or amount_total >= 10000:
+                expiration_date_iso = (now + timedelta(days=365)).strftime("%Y-%m-%dT%H:%M:%S+00:00")
+            else:
+                expiration_date_iso = (now + timedelta(days=30)).strftime("%Y-%m-%dT%H:%M:%S+00:00")
+                
+        profile_success = await update_user_premium_status(app_user_id, "premium", "active", expiration_date=expiration_date_iso)
+        
+        # Set token balance to 1,000,000 (1M) tokens directly
+        token_success = await credit_user_tokens(app_user_id, 1000000, set_balance=True)
         
         if profile_success and token_success:
             return JSONResponse(
                 status_code=status.HTTP_200_OK,
-                content={"status": "fulfilled", "action": "activated_subscription_and_granted_tokens"}
+                content={
+                    "status": "fulfilled", 
+                    "action": "activated_subscription_and_granted_tokens", 
+                    "expires_at": expiration_date_iso
+                }
             )
         else:
             return JSONResponse(
@@ -163,7 +188,7 @@ async def stripe_webhook(
         elif "500k" in product_id:
             amount = 500000
             
-        success = await credit_user_tokens(app_user_id, amount)
+        success = await credit_user_tokens(app_user_id, amount, set_balance=False)
         if success:
             return JSONResponse(
                 status_code=status.HTTP_200_OK,

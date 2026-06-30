@@ -7,15 +7,15 @@ Processes secure webhook events from RevenueCat to fulfill purchases.
 import os
 import httpx
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from fastapi import APIRouter, Request, Header, HTTPException, status
 from fastapi.responses import JSONResponse
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-async def credit_user_tokens(user_id: str, amount: int) -> bool:
-    """Increment user settings token balance in Supabase bypassing RLS using service role key."""
+async def credit_user_tokens(user_id: str, amount: int, set_balance: bool = False) -> bool:
+    """Increment or set user settings token balance in Supabase bypassing RLS using service role key."""
     supabase_url = os.getenv("SUPABASE_URL")
     supabase_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
     if not supabase_url or not supabase_key:
@@ -38,7 +38,8 @@ async def credit_user_tokens(user_id: str, amount: int) -> bool:
                 if data:
                     current_balance = data[0].get("token_balance")
                     current_balance = int(current_balance) if current_balance is not None else 0
-                    new_balance = current_balance + amount
+                    
+                    new_balance = amount if set_balance else (current_balance + amount)
                     
                     update_res = await client.patch(
                         url,
@@ -73,8 +74,8 @@ async def credit_user_tokens(user_id: str, amount: int) -> bool:
             logger.error(f"Exception during credit_user_tokens: {e}")
             return False
 
-async def update_user_premium_status(user_id: str, premium_tier: str, subscription_type: str) -> bool:
-    """Update profile premium tier and user settings subscription status in Supabase."""
+async def update_user_premium_status(user_id: str, premium_tier: str, subscription_type: str, expiration_date: str = None) -> bool:
+    """Update profile premium tier, subscription expiration and user settings subscription status in Supabase."""
     supabase_url = os.getenv("SUPABASE_URL")
     supabase_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
     if not supabase_url or not supabase_key:
@@ -91,13 +92,17 @@ async def update_user_premium_status(user_id: str, premium_tier: str, subscripti
         try:
             # 1. Update profiles table
             profile_url = f"{supabase_url}/rest/v1/profiles?id=eq.{user_id}"
+            profile_payload = {
+                "premium_tier": premium_tier,
+                "updated_at": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S+00:00")
+            }
+            if expiration_date:
+                profile_payload["subscription_expires_at"] = expiration_date
+                
             profile_res = await client.patch(
                 profile_url,
                 headers=headers,
-                json={
-                    "premium_tier": premium_tier,
-                    "updated_at": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S+00:00")
-                }
+                json=profile_payload
             )
             profile_ok = profile_res.status_code in (200, 201, 204)
             if not profile_ok:
@@ -123,7 +128,7 @@ async def update_user_premium_status(user_id: str, premium_tier: str, subscripti
                     headers=headers,
                     json={
                         "id": user_id,
-                        "token_balance": 100000, # Grant monthly tokens by default on creation
+                        "token_balance": 1000000 if premium_tier == "premium" else 100000,
                         "ai_cost_current_month": 0.0,
                         "ai_cost_last_reset": "",
                         "subscription_type": subscription_type,
@@ -201,7 +206,7 @@ async def revenuecat_webhook(request: Request, authorization: str = Header(None)
             elif "500k" in prod_id_lower:
                 amount = 500000
                 
-            success = await credit_user_tokens(app_user_id, amount)
+            success = await credit_user_tokens(app_user_id, amount, set_balance=False)
             if success:
                 return JSONResponse(
                     status_code=status.HTTP_200_OK,
@@ -215,13 +220,38 @@ async def revenuecat_webhook(request: Request, authorization: str = Header(None)
                 
     # Process PRO tier subscriptions (Monthly/Annual)
     elif event_type in ("INITIAL_PURCHASE", "RENEWAL"):
-        profile_success = await update_user_premium_status(app_user_id, "premium", "active")
-        token_success = await credit_user_tokens(app_user_id, 100000)
+        # 1. Parse or calculate subscription expiration date
+        expires_date_ms = event.get("expires_date_ms")
+        expiration_date_iso = None
+        if expires_date_ms:
+            try:
+                expiration_date_iso = datetime.utcfromtimestamp(int(expires_date_ms) / 1000.0).strftime("%Y-%m-%dT%H:%M:%S+00:00")
+            except Exception as e:
+                logger.error(f"Error parsing expires_date_ms {expires_date_ms}: {e}")
+                
+        if not expiration_date_iso:
+            # Fallback to calculated duration
+            now = datetime.utcnow()
+            prod_id_lower = str(product_id).lower()
+            if "year" in prod_id_lower or "anual" in prod_id_lower or "yearly" in prod_id_lower:
+                expiration_date_iso = (now + timedelta(days=365)).strftime("%Y-%m-%dT%H:%M:%S+00:00")
+            else:
+                expiration_date_iso = (now + timedelta(days=30)).strftime("%Y-%m-%dT%H:%M:%S+00:00")
+                
+        # 2. Update premium tier status and save expiration date
+        profile_success = await update_user_premium_status(app_user_id, "premium", "active", expiration_date=expiration_date_iso)
+        
+        # 3. Set token balance to 1,000,000 (1M) tokens directly
+        token_success = await credit_user_tokens(app_user_id, 1000000, set_balance=True)
         
         if profile_success and token_success:
             return JSONResponse(
                 status_code=status.HTTP_200_OK,
-                content={"status": "fulfilled", "action": "activated_subscription_and_granted_tokens"}
+                content={
+                    "status": "fulfilled", 
+                    "action": "activated_subscription_and_granted_tokens", 
+                    "expires_at": expiration_date_iso
+                }
             )
         else:
             return JSONResponse(

@@ -41,10 +41,10 @@ export default function SettingsScreen() {
   const [isMigrating, setIsMigrating] = useState(false);
   const isVisitor = !auth.user || auth.mode === 'guest';
 
-  const [tokenBalance, setTokenBalance] = useState<number>(100000);
-  const MAX_TOKENS = 100000;
+  const { isPro, packages, consumables, purchasePackage, restorePurchases, expirationDate } = useSubscription();
+  const maxTokens = isPro ? 1000000 : 100000;
+  const [tokenBalance, setTokenBalance] = useState<number>(maxTokens);
 
-  const { isPro, packages, consumables, purchasePackage, restorePurchases } = useSubscription();
   const [showStoreModal, setShowStoreModal] = useState(false);
 
   const fetchTokenBalance = useCallback(async () => {
@@ -60,15 +60,15 @@ export default function SettingsScreen() {
         if (data && data.token_balance !== null && data.token_balance !== undefined) {
           setTokenBalance(Number(data.token_balance));
         } else {
-          setTokenBalance(MAX_TOKENS);
+          setTokenBalance(maxTokens);
         }
       } catch (err) {
         console.error('Failed to fetch token balance:', err);
       }
     } else {
-      setTokenBalance(MAX_TOKENS);
+      setTokenBalance(maxTokens);
     }
-  }, [auth.mode, auth.user]);
+  }, [auth.mode, auth.user, maxTokens]);
 
   const creditTokens = useCallback(async (amount: number) => {
     if (auth.mode === 'authenticated' && auth.user) {
@@ -353,16 +353,28 @@ export default function SettingsScreen() {
           <Card>
             <Text style={styles.gaugeTitle}>Consumo de Tokens da IA</Text>
             <Text style={styles.gaugeSubtitle}>
-              Saldo: <Text style={{ fontWeight: 'bold', color: colors.text.primary }}>{tokenBalance.toLocaleString('pt-BR')}</Text> / {MAX_TOKENS.toLocaleString('pt-BR')} tokens
+              Saldo: <Text style={{ fontWeight: 'bold', color: colors.text.primary }}>{tokenBalance.toLocaleString('pt-BR')}</Text> / {maxTokens.toLocaleString('pt-BR')} tokens
             </Text>
             
             <View style={styles.progressBarContainer}>
-              <View style={[styles.progressBarFill, { width: `${Math.max(0, Math.min(100, (tokenBalance / MAX_TOKENS) * 100))}%`, backgroundColor: tokenBalance / MAX_TOKENS <= 0.2 ? '#F44336' : (tokenBalance / MAX_TOKENS <= 0.5 ? '#FF9800' : '#4CAF50') }]} />
+              <View style={[styles.progressBarFill, { width: `${Math.max(0, Math.min(100, (tokenBalance / maxTokens) * 100))}%`, backgroundColor: tokenBalance / maxTokens <= 0.2 ? '#F44336' : (tokenBalance / maxTokens <= 0.5 ? '#FF9800' : '#4CAF50') }]} />
             </View>
             
             <Text style={styles.gaugeHelperText}>
               Os tokens são consumidos conforme você envia mensagens e solicita análises da IA.
             </Text>
+
+            {isPro && expirationDate && (
+              <Text style={[styles.gaugeHelperText, { marginTop: spacing.xs, color: colors.success.main, fontWeight: '600' }]}>
+                ⭐ Assinatura Pro ativa até {(() => {
+                  try {
+                    return new Date(expirationDate).toLocaleDateString('pt-BR');
+                  } catch (e) {
+                    return expirationDate;
+                  }
+                })()}
+              </Text>
+            )}
 
             <Pressable
               style={({ pressed }) => [

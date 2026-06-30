@@ -25,6 +25,7 @@ export interface UserProfile {
   email: string | null;
   syncEnabled: boolean;
   premiumTier: PremiumTier;
+  subscriptionExpiresAt: string | null;
 }
 
 // ── Auth Functions ───────────────────────────────────────────────────────────
@@ -106,7 +107,7 @@ export async function getCurrentUser(): Promise<User | null> {
 export async function getUserProfile(userId: string): Promise<UserProfile | null> {
   const { data, error } = await supabase
     .from('profiles')
-    .select('id, display_name, sync_enabled, premium_tier')
+    .select('id, display_name, sync_enabled, premium_tier, subscription_expires_at')
     .eq('id', userId)
     .single();
 
@@ -120,6 +121,7 @@ export async function getUserProfile(userId: string): Promise<UserProfile | null
     email: user?.email ?? null,
     syncEnabled: data.sync_enabled ?? true,
     premiumTier: (data.premium_tier as PremiumTier) ?? 'free',
+    subscriptionExpiresAt: data.subscription_expires_at ?? null,
   };
 }
 

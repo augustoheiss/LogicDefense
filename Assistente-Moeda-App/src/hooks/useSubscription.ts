@@ -32,6 +32,7 @@ export interface SubscriptionContextState {
   showPaywall: boolean;
   setShowPaywall: (show: boolean) => void;
   toggleProMock: () => void;
+  expirationDate: string | null;
 }
 
 const SubscriptionContext = createContext<SubscriptionContextState | null>(null);
@@ -41,6 +42,7 @@ const GOOGLE_API_KEY = process.env.EXPO_PUBLIC_REVENUECAT_GOOGLE_KEY || '';
 export function SubscriptionProvider({ children }: { children: React.ReactNode }) {
   const [isPro, setIsPro] = useState(false);
   const [subscriptionType, setSubscriptionType] = useState<'monthly' | 'yearly' | null>(null);
+  const [expirationDate, setExpirationDate] = useState<string | null>(null);
   const [rcPackages, setRcPackages] = useState<SubscriptionPackage[]>([]);
   const [rcConsumables, setRcConsumables] = useState<SubscriptionPackage[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -61,6 +63,7 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
 
   const effectiveIsPro = isAdmin ? true : isPro;
   const effectiveSubscriptionType = isAdmin ? 'yearly' : subscriptionType;
+  const effectiveExpirationDate = isAdmin ? null : (expirationDate || auth.profile?.subscriptionExpiresAt || null);
 
   const updateProStatus = useCallback((customerInfo: any) => {
     if (customerInfo && customerInfo.entitlements && customerInfo.entitlements.active) {
@@ -68,6 +71,7 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
       const proEntitlement = activeEntitlements['pro'];
       if (proEntitlement) {
         setIsPro(true);
+        setExpirationDate(proEntitlement.expirationDate || null);
         const prodId = (proEntitlement.productIdentifier || '').toLowerCase();
         if (prodId.includes('year') || prodId.includes('anual')) {
           setSubscriptionType('yearly');
@@ -79,6 +83,7 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
     }
     setIsPro(false);
     setSubscriptionType(null);
+    setExpirationDate(null);
   }, []);
 
   const fetchOfferings = useCallback(async () => {
@@ -202,6 +207,7 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
       setIsPro(active);
       if (active) {
         const proEntitlement = customerInfo.entitlements.active['pro'];
+        setExpirationDate(proEntitlement.expirationDate || null);
         const prodId = (proEntitlement.productIdentifier || '').toLowerCase();
         if (prodId.includes('year') || prodId.includes('anual')) {
           setSubscriptionType('yearly');
@@ -210,6 +216,7 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
         }
       } else {
         setSubscriptionType(null);
+        setExpirationDate(null);
       }
       Alert.alert(
         'Restauração de Compra',
@@ -226,6 +233,7 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
     setIsPro((prev) => {
       const next = !prev;
       setSubscriptionType(next ? 'yearly' : null);
+      setExpirationDate(next ? new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString() : null);
       return next;
     });
   }, []);
@@ -241,6 +249,7 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
     showPaywall,
     setShowPaywall,
     toggleProMock,
+    expirationDate: effectiveExpirationDate,
   };
 
   return React.createElement(SubscriptionContext.Provider, { value }, children);

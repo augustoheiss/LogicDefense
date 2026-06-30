@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   display_name TEXT,
   sync_enabled BOOLEAN DEFAULT true,
   premium_tier TEXT DEFAULT 'free',
+  subscription_expires_at TIMESTAMP WITH TIME ZONE,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
 );
