@@ -2,9 +2,11 @@
  * Auth Group Layout — Assistente Moeda
  *
  * Stack navigator for the authentication flow:
- *   - welcome  → Choose Guest or Sign In
+ *   - welcome  → Onboarding carousel (first launch) + choose Guest or Sign In
  *   - login    → Email/password login
  *   - register → Create account
+ *
+ * Uses `fade_from_bottom` transitions for a premium cinematic feel.
  */
 
 import { Stack } from 'expo-router';
@@ -16,7 +18,7 @@ export default function AuthLayout() {
       screenOptions={{
         headerShown: false,
         contentStyle: { backgroundColor: colors.background.primary },
-        animation: 'slide_from_right',
+        animation: 'fade_from_bottom',
       }}
     >
       <Stack.Screen name="welcome" />

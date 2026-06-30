@@ -47,9 +47,11 @@
       "baseUrl": "/laboratorio/assistente-moeda"
     },
     "extra": {
+      "router": {},
       "eas": {
-        "projectId": "assistente-moeda"
+        "projectId": "444742d2-f4df-4a57-a412-98ede4bd6e1d"
       }
-    }
+    },
+    "owner": "augustoheiss"
   }
 }
