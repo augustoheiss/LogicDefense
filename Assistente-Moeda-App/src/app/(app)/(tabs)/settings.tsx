@@ -8,7 +8,7 @@
  *   - Annual costs by year
  */
 
-import { useState, useCallback, useMemo, useEffect } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import {
   View,
@@ -21,22 +21,38 @@ import {
   Platform,
   Modal,
 } from 'react-native';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+} from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useAuthContext } from '@/hooks/useAuth';
 import { useCoinDB } from '@/hooks/useCoinDB';
 import { useSubscription } from '@/hooks/useSubscription';
+import { useHaptics, ImpactFeedbackStyle } from '@/hooks/useHaptics';
 import { clearDB } from '@/storage/asyncStorageAdapter';
 import { colors } from '@/theme/colors';
 import { spacing, radius } from '@/theme/spacing';
+import { typography, fontFamily } from '@/theme/typography';
+import { shadows } from '@/theme/shadows';
 import { Card } from '@/components/ui/Card';
+import { TokenProgressBar } from '@/components/ui/TokenProgressBar';
 import { formatCurrencySmart } from '@/core/formatCurrency';
 import type { TableGoals } from '@/core/types';
+
+// ── Animated Pressable for spring-scale micro-interactions ───────────────────
+
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
+
+const SPRING_CONFIG = { damping: 15, stiffness: 300, mass: 0.8 };
 
 export default function SettingsScreen() {
   const router = useRouter();
   const auth = useAuthContext();
   const db = useCoinDB();
+  const { impact } = useHaptics();
   const [isSyncing, setIsSyncing] = useState(false);
   const [isMigrating, setIsMigrating] = useState(false);
   const isVisitor = !auth.user || auth.mode === 'guest';
@@ -100,6 +116,9 @@ export default function SettingsScreen() {
   }, [auth.mode, auth.user]);
 
   const handlePurchase = async (pkg: any) => {
+    // Haptic feedback for purchase intent
+    impact(ImpactFeedbackStyle.Medium);
+
     try {
       const isConsumable = pkg.packageType === 'CUSTOM' || pkg.identifier.includes('token') || pkg.identifier.includes('consumable');
       
@@ -282,7 +301,7 @@ export default function SettingsScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={[]}>
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <View style={styles.header}>
         <Text style={styles.title}>⚙️ Ajustes</Text>
         <Text style={styles.subtitle}>Conta, metas e preferências</Text>
@@ -350,14 +369,14 @@ export default function SettingsScreen() {
 
         {/* ── AI Engine Section (Fuel Gauge) ───────────────── */}
         <Section title="⚡ Motor de Inteligência Artificial">
-          <Card>
+          <Card glow>
             <Text style={styles.gaugeTitle}>Consumo de Tokens da IA</Text>
             <Text style={styles.gaugeSubtitle}>
-              Saldo: <Text style={{ fontWeight: 'bold', color: colors.text.primary }}>{tokenBalance.toLocaleString('pt-BR')}</Text> / {maxTokens.toLocaleString('pt-BR')} tokens
+              Saldo: <Text style={styles.gaugeBalanceHighlight}>{tokenBalance.toLocaleString('pt-BR')}</Text> / {maxTokens.toLocaleString('pt-BR')} tokens
             </Text>
             
-            <View style={styles.progressBarContainer}>
-              <View style={[styles.progressBarFill, { width: `${Math.max(0, Math.min(100, (tokenBalance / maxTokens) * 100))}%`, backgroundColor: tokenBalance / maxTokens <= 0.2 ? '#F44336' : (tokenBalance / maxTokens <= 0.5 ? '#FF9800' : '#4CAF50') }]} />
+            <View style={styles.progressBarWrapper}>
+              <TokenProgressBar current={tokenBalance} max={maxTokens} />
             </View>
             
             <Text style={styles.gaugeHelperText}>
@@ -365,7 +384,7 @@ export default function SettingsScreen() {
             </Text>
 
             {isPro && expirationDate && (
-              <Text style={[styles.gaugeHelperText, { marginTop: spacing.xs, color: colors.success.main, fontWeight: '600' }]}>
+              <Text style={styles.gaugeProStatus}>
                 ⭐ Assinatura Pro ativa até {(() => {
                   try {
                     return new Date(expirationDate).toLocaleDateString('pt-BR');
@@ -376,15 +395,15 @@ export default function SettingsScreen() {
               </Text>
             )}
 
-            <Pressable
-              style={({ pressed }) => [
-                styles.storefrontButton,
-                pressed && styles.pressed,
-              ]}
-              onPress={() => setShowStoreModal(true)}
+            <HapticButton
+              style={styles.storefrontButton}
+              onPress={() => {
+                impact(ImpactFeedbackStyle.Light);
+                setShowStoreModal(true);
+              }}
             >
               <Text style={styles.storefrontButtonText}>🪙 Recarregar Créditos (Loja)</Text>
-            </Pressable>
+            </HapticButton>
           </Card>
         </Section>
 
@@ -551,7 +570,7 @@ export default function SettingsScreen() {
                 <Text style={styles.emptyStoreText}>Carregando assinaturas...</Text>
               ) : (
                 packages.map((pkg) => (
-                  <Card key={pkg.identifier} style={styles.storeCard}>
+                  <Card key={pkg.identifier} glow variant="accent" style={styles.storeCard}>
                     <View style={styles.storeCardHeader}>
                       <View style={{ flex: 1 }}>
                         <Text style={styles.storeCardTitle}>{pkg.product.title}</Text>
@@ -559,15 +578,12 @@ export default function SettingsScreen() {
                       </View>
                       <Text style={styles.storeCardPrice}>{pkg.product.priceString}</Text>
                     </View>
-                    <Pressable
-                      style={({ pressed }) => [
-                        styles.buyButton,
-                        pressed && styles.pressed,
-                      ]}
+                    <HapticButton
+                      style={styles.buyButton}
                       onPress={() => handlePurchase(pkg)}
                     >
                       <Text style={styles.buyButtonText}>Assinar Agora</Text>
-                    </Pressable>
+                    </HapticButton>
                   </Card>
                 ))
               )}
@@ -586,16 +602,12 @@ export default function SettingsScreen() {
                       </View>
                       <Text style={styles.storeCardPrice}>{pkg.product.priceString}</Text>
                     </View>
-                    <Pressable
-                      style={({ pressed }) => [
-                        styles.buyButton,
-                        styles.buyButtonConsumable,
-                        pressed && styles.pressed,
-                      ]}
+                    <HapticButton
+                      style={[styles.buyButton, styles.buyButtonConsumable]}
                       onPress={() => handlePurchase(pkg)}
                     >
                       <Text style={styles.buyButtonText}>Comprar Recarga</Text>
-                    </Pressable>
+                    </HapticButton>
                   </Card>
                 ))
               )}
@@ -609,18 +621,58 @@ export default function SettingsScreen() {
 
 // ── Section Component ────────────────────────────────────────────────────────
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+const Section = React.memo(function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <View style={styles.section}>
       <Text style={styles.sectionTitle}>{title}</Text>
       {children}
     </View>
   );
+});
+
+// ── HapticButton — Pressable with spring-scale micro-animation ──────────────
+
+function HapticButton({
+  onPress,
+  style,
+  children,
+  disabled,
+}: {
+  onPress: () => void;
+  style: any;
+  children: React.ReactNode;
+  disabled?: boolean;
+}) {
+  const scale = useSharedValue(1);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
+
+  const handlePressIn = () => {
+    scale.value = withSpring(0.95, SPRING_CONFIG);
+  };
+
+  const handlePressOut = () => {
+    scale.value = withSpring(1, SPRING_CONFIG);
+  };
+
+  return (
+    <AnimatedPressable
+      style={[style, animatedStyle]}
+      onPress={onPress}
+      onPressIn={handlePressIn}
+      onPressOut={handlePressOut}
+      disabled={disabled}
+    >
+      {children}
+    </AnimatedPressable>
+  );
 }
 
 // ── Goals Accordion ──────────────────────────────────────────────────────────
 
-function GoalsAccordion({
+const GoalsAccordion = React.memo(function GoalsAccordion({
   goals,
   onUpdate,
 }: {
@@ -1014,7 +1066,7 @@ function GoalsAccordion({
       )}
     </Card>
   );
-}
+});
 
 // ── Styles ───────────────────────────────────────────────────────────────────
 
@@ -1030,15 +1082,14 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.border.default,
   },
   title: {
-    fontSize: 20,
-    fontWeight: '700',
+    ...typography.h2,
     color: colors.text.primary,
-  },
+  } as any,
   subtitle: {
-    fontSize: 12,
+    ...typography.bodySmall,
     color: colors.text.tertiary,
-    marginTop: 2,
-  },
+    marginTop: spacing.xxs,
+  } as any,
 
   content: { flex: 1 },
   contentInner: {
@@ -1048,12 +1099,11 @@ const styles = StyleSheet.create({
 
   section: { gap: spacing.sm },
   sectionTitle: {
-    fontSize: 13,
-    fontWeight: '600',
+    ...typography.labelSmall,
     color: colors.text.tertiary,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
-  },
+  } as any,
 
   // Profile
   profileRow: {
@@ -1070,34 +1120,33 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   avatarText: {
-    fontSize: 20,
-    fontWeight: '700',
+    ...typography.metric,
     color: colors.accent.purple,
-  },
+  } as any,
   profileName: {
-    fontSize: 16,
+    ...typography.bodyLarge,
     fontWeight: '600',
     color: colors.text.primary,
-  },
+  } as any,
   profileEmail: {
-    fontSize: 13,
+    ...typography.label,
     color: colors.text.secondary,
-  },
+  } as any,
   tierText: {
-    fontSize: 11,
+    ...typography.labelSmall,
     color: colors.text.tertiary,
-    marginTop: 2,
-  },
+    marginTop: spacing.xxs,
+  } as any,
   guestTitle: {
-    fontSize: 16,
+    ...typography.bodyLarge,
     fontWeight: '600',
     color: colors.text.primary,
-  },
+  } as any,
   guestText: {
-    fontSize: 13,
+    ...typography.label,
     color: colors.text.secondary,
     marginTop: spacing.xs,
-  },
+  } as any,
   actionButton: {
     backgroundColor: colors.accent.purple,
     paddingVertical: spacing.sm,
@@ -1106,10 +1155,10 @@ const styles = StyleSheet.create({
     marginTop: spacing.md,
   },
   actionButtonText: {
+    ...typography.body,
     color: '#fff',
-    fontSize: 14,
     fontWeight: '600',
-  },
+  } as any,
   syncButton: {
     backgroundColor: colors.background.tertiary,
     borderWidth: 1,
@@ -1123,20 +1172,20 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   },
   syncButtonText: {
+    ...typography.label,
     color: colors.text.primary,
-    fontSize: 13,
     fontWeight: '600',
-  },
+  } as any,
   migrationTitle: {
-    fontSize: 16,
+    ...typography.bodyLarge,
     fontWeight: '600',
     color: colors.text.primary,
-  },
+  } as any,
   migrationText: {
-    fontSize: 13,
+    ...typography.label,
     color: colors.text.secondary,
     marginTop: spacing.xs,
-  },
+  } as any,
   migrationButton: {
     backgroundColor: colors.accent.purple,
     paddingVertical: spacing.sm,
@@ -1145,14 +1194,14 @@ const styles = StyleSheet.create({
     marginTop: spacing.md,
   },
   migrationButtonText: {
+    ...typography.label,
     color: '#fff',
-    fontSize: 13,
     fontWeight: '600',
-  },
+  } as any,
   emptyText: {
-    fontSize: 13,
+    ...typography.label,
     color: colors.text.tertiary,
-  },
+  } as any,
 
   // Tables
   tableRow: {
@@ -1315,46 +1364,45 @@ const styles = StyleSheet.create({
   },
   // Tokenomics Gauge
   gaugeTitle: {
-    fontSize: 16,
-    fontWeight: '600',
+    ...typography.h3,
     color: colors.text.primary,
-  },
+  } as any,
   gaugeSubtitle: {
-    fontSize: 13,
+    ...typography.label,
     color: colors.text.secondary,
     marginTop: spacing.xs,
+  } as any,
+  gaugeBalanceHighlight: {
+    fontWeight: '700',
+    color: colors.text.primary,
   },
-  progressBarContainer: {
-    height: 12,
-    backgroundColor: '#1F1F1F',
-    borderRadius: radius.full,
-    overflow: 'hidden',
+  progressBarWrapper: {
     marginTop: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.border.default,
-  },
-  progressBarFill: {
-    height: '100%',
-    borderRadius: radius.full,
   },
   gaugeHelperText: {
-    fontSize: 11,
+    ...typography.labelSmall,
     color: colors.text.tertiary,
     marginTop: spacing.sm,
     lineHeight: 16,
-  },
+  } as any,
+  gaugeProStatus: {
+    ...typography.labelSmall,
+    color: colors.success.main,
+    fontWeight: '600',
+    marginTop: spacing.xs,
+  } as any,
   storefrontButton: {
     backgroundColor: colors.accent.purple,
     paddingVertical: spacing.sm,
-    borderRadius: radius.sm,
+    borderRadius: radius.md,
     alignItems: 'center',
     marginTop: spacing.md,
   },
   storefrontButtonText: {
+    ...typography.label,
     color: '#fff',
-    fontSize: 13,
     fontWeight: '600',
-  },
+  } as any,
   // Modal Storefront
   modalBackground: {
     flex: 1,
@@ -1424,16 +1472,16 @@ const styles = StyleSheet.create({
     lineHeight: 16,
   },
   storeSectionTitle: {
-    fontSize: 14,
+    ...typography.body,
     fontWeight: '700',
     color: colors.text.primary,
     marginTop: spacing.sm,
-  },
+  } as any,
   emptyStoreText: {
-    fontSize: 12,
+    ...typography.bodySmall,
     color: colors.text.tertiary,
     fontStyle: 'italic',
-  },
+  } as any,
   storeCard: {
     padding: spacing.md,
   },
@@ -1444,34 +1492,34 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   storeCardTitle: {
-    fontSize: 15,
+    ...typography.bodyLarge,
     fontWeight: '700',
     color: colors.text.primary,
-  },
+  } as any,
   storeCardDesc: {
-    fontSize: 12,
+    ...typography.bodySmall,
     color: colors.text.secondary,
     marginTop: spacing.xxs,
     maxWidth: 250,
-  },
+  } as any,
   storeCardPrice: {
-    fontSize: 16,
+    ...typography.metricSmall,
     fontWeight: '700',
     color: colors.accent.purple,
-  },
+  } as any,
   buyButton: {
     backgroundColor: colors.accent.purple,
     paddingVertical: spacing.sm,
-    borderRadius: radius.sm,
+    borderRadius: radius.md,
     alignItems: 'center',
     marginTop: spacing.md,
   },
   buyButtonConsumable: {
-    backgroundColor: '#009688',
+    backgroundColor: colors.success.main,
   },
   buyButtonText: {
+    ...typography.label,
     color: '#fff',
-    fontSize: 13,
     fontWeight: '600',
-  },
+  } as any,
 });

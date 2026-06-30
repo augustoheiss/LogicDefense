@@ -28,5 +28,6 @@ export { TimeMachineBar } from './TimeMachineBar';
 export { CategorySummary } from './CategorySummary';
 export { BulkDeleteModal } from './BulkDeleteModal';
 export { PaywallModal } from './PaywallModal';
+export { TokenProgressBar } from './TokenProgressBar';
 
 
