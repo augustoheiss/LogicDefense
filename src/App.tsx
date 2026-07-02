@@ -13,6 +13,8 @@ import { SobrePage } from './pages/SobrePage'
 import { CVMaker } from './pages/CVMaker'
 import { OcorrenciasPage } from './pages/OcorrenciasPage'
 import { ApiPortPage } from './pages/ApiPortPage'
+import PrivacyPolicy from './pages/PrivacyPolicy'
+import TermsOfUse from './pages/TermsOfUse'
 import './styles/game.css'
 
 export default function App() {
@@ -35,6 +37,8 @@ export default function App() {
           {/* Dynamic lesson reading page — /repositorio/vieses-dos-numeros etc. */}
           <Route path="/repositorio/:slug"         element={<LessonPage />} />
           <Route path="/sobre"                     element={<SobrePage />} />
+          <Route path="/privacidade"               element={<PrivacyPolicy />} />
+          <Route path="/termos"                    element={<TermsOfUse />} />
           <Route path="*"                          element={<Navigate to="/" replace />} />
         </Route>
       </Routes>
