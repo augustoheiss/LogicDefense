@@ -210,25 +210,88 @@ function buildDailyData(rows: TableRow[], ym: string): ChartPoint[] {
   return points;
 }
 
+function getMonthsSpan(startStr: string, endStr: string): string[] {
+  const startYM = startStr.slice(0, 7);
+  const endYM = endStr.slice(0, 7);
+  if (startYM === endYM) return [startYM];
+
+  const [startY, startM] = startYM.split('-').map(Number);
+  const [endY, endM] = endYM.split('-').map(Number);
+  const result: string[] = [];
+  let currY = startY;
+  let currM = startM;
+
+  while (currY < endY || (currY === endY && currM <= endM)) {
+    result.push(`${currY}-${String(currM).padStart(2, '0')}`);
+    currM++;
+    if (currM > 12) {
+      currM = 1;
+      currY++;
+    }
+  }
+  return result;
+}
+
 function buildMonthlyData(rows: TableRow[], yearStr: string): ChartPoint[] {
   const points: ChartPoint[] = [];
 
+  const revMap: Record<string, number> = {};
+  const expMap: Record<string, number> = {};
+  const pinMap: Record<string, number> = {};
+  const poutMap: Record<string, number> = {};
+  const depMap: Record<string, number> = {};
+  const waiMap: Record<string, number> = {};
+
+  for (const row of rows) {
+    const et = row.entryType || 'revenue';
+    let resolvedType: string | null = null;
+    if (et !== 'deposit' && et !== 'expense' && et !== 'waiver' && et !== 'partner_in' && et !== 'partner_out' && row.value > 0) {
+      resolvedType = 'revenue';
+    } else if (et === 'expense' && row.value > 0) {
+      resolvedType = 'expense';
+    } else if (et === 'partner_in' && row.value > 0) {
+      resolvedType = 'partner_in';
+    } else if (et === 'partner_out' && row.value > 0) {
+      resolvedType = 'partner_out';
+    } else if (et === 'deposit' && row.value > 0) {
+      resolvedType = 'deposit';
+    } else if (et === 'waiver' && row.value > 0) {
+      resolvedType = 'waiver';
+    }
+    if (!resolvedType) continue;
+
+    if (row.periodStart && row.periodEnd && row.periodStart !== row.periodEnd) {
+      const months = getMonthsSpan(row.periodStart, row.periodEnd);
+      const monthlyValue = row.value / months.length;
+      for (const ym of months) {
+        if (!ym.startsWith(yearStr + '-')) continue;
+        if (resolvedType === 'revenue')     revMap[ym]  = (revMap[ym]  ?? 0) + monthlyValue;
+        if (resolvedType === 'expense')     expMap[ym]  = (expMap[ym]  ?? 0) + monthlyValue;
+        if (resolvedType === 'partner_in')  pinMap[ym]  = (pinMap[ym]  ?? 0) + monthlyValue;
+        if (resolvedType === 'partner_out') poutMap[ym] = (poutMap[ym] ?? 0) + monthlyValue;
+        if (resolvedType === 'deposit')     depMap[ym]  = (depMap[ym]  ?? 0) + monthlyValue;
+        if (resolvedType === 'waiver')      waiMap[ym]  = (waiMap[ym]  ?? 0) + monthlyValue;
+      }
+    } else {
+      const ym = row.date.slice(0, 7);
+      if (!ym.startsWith(yearStr + '-')) continue;
+      if (resolvedType === 'revenue')     revMap[ym]  = (revMap[ym]  ?? 0) + row.value;
+      if (resolvedType === 'expense')     expMap[ym]  = (expMap[ym]  ?? 0) + row.value;
+      if (resolvedType === 'partner_in')  pinMap[ym]  = (pinMap[ym]  ?? 0) + row.value;
+      if (resolvedType === 'partner_out') poutMap[ym] = (poutMap[ym] ?? 0) + row.value;
+      if (resolvedType === 'deposit')     depMap[ym]  = (depMap[ym]  ?? 0) + row.value;
+      if (resolvedType === 'waiver')      waiMap[ym]  = (waiMap[ym]  ?? 0) + row.value;
+    }
+  }
+
   for (let m = 1; m <= 12; m++) {
     const ym = `${yearStr}-${pad2(m)}`;
-    let revenue = 0, expense = 0, partner_in = 0, partner_out = 0, deposit = 0, waiver = 0;
-
-    for (const row of rows) {
-      if (!row.date.startsWith(ym + '-')) continue;
-      const et = row.entryType || 'revenue';
-      switch (et) {
-        case 'revenue':     revenue += row.value; break;
-        case 'expense':     expense += row.value; break;
-        case 'partner_in':  partner_in += row.value; break;
-        case 'partner_out': partner_out += row.value; break;
-        case 'deposit':     deposit += row.value; break;
-        case 'waiver':      waiver += row.value; break;
-      }
-    }
+    const revenue     = round2(revMap[ym] ?? 0);
+    const expense     = round2(expMap[ym] ?? 0);
+    const partner_in  = round2(pinMap[ym] ?? 0);
+    const partner_out = round2(poutMap[ym] ?? 0);
+    const deposit     = round2(depMap[ym] ?? 0);
+    const waiver      = round2(waiMap[ym] ?? 0);
 
     const hasData = revenue > 0 || expense > 0 || partner_in > 0 || partner_out > 0 || deposit > 0 || waiver > 0;
     if (!hasData) continue;
@@ -238,12 +301,12 @@ function buildMonthlyData(rows: TableRow[], yearStr: string): ChartPoint[] {
     points.push({
       dateLabel: MONTH_NAMES_SHORT[m - 1],
       dateISO: ym,
-      revenue: round2(revenue),
-      expense: expense !== 0 ? -round2(expense) : 0,
-      partner_in: round2(partner_in),
-      partner_out: partner_out !== 0 ? -round2(partner_out) : 0,
-      deposit: round2(deposit),
-      waiver: round2(waiver),
+      revenue,
+      expense: expense !== 0 ? -expense : 0,
+      partner_in,
+      partner_out: partner_out !== 0 ? -partner_out : 0,
+      deposit,
+      waiver,
       dayBalance,
     });
   }
@@ -254,16 +317,45 @@ function buildYearlyData(rows: TableRow[]): ChartPoint[] {
   const yearSums: Record<string, { revenue: number; expense: number; partner_in: number; partner_out: number; deposit: number; waiver: number }> = {};
 
   for (const row of rows) {
-    const yr = row.date.slice(0, 4);
-    if (!yearSums[yr]) yearSums[yr] = { revenue: 0, expense: 0, partner_in: 0, partner_out: 0, deposit: 0, waiver: 0 };
     const et = row.entryType || 'revenue';
-    switch (et) {
-      case 'revenue':     yearSums[yr].revenue += row.value; break;
-      case 'expense':     yearSums[yr].expense += row.value; break;
-      case 'partner_in':  yearSums[yr].partner_in += row.value; break;
-      case 'partner_out': yearSums[yr].partner_out += row.value; break;
-      case 'deposit':     yearSums[yr].deposit += row.value; break;
-      case 'waiver':      yearSums[yr].waiver += row.value; break;
+    let resolvedType: string | null = null;
+    if (et !== 'deposit' && et !== 'expense' && et !== 'waiver' && et !== 'partner_in' && et !== 'partner_out' && row.value > 0) {
+      resolvedType = 'revenue';
+    } else if (et === 'expense' && row.value > 0) {
+      resolvedType = 'expense';
+    } else if (et === 'partner_in' && row.value > 0) {
+      resolvedType = 'partner_in';
+    } else if (et === 'partner_out' && row.value > 0) {
+      resolvedType = 'partner_out';
+    } else if (et === 'deposit' && row.value > 0) {
+      resolvedType = 'deposit';
+    } else if (et === 'waiver' && row.value > 0) {
+      resolvedType = 'waiver';
+    }
+    if (!resolvedType) continue;
+
+    if (row.periodStart && row.periodEnd && row.periodStart !== row.periodEnd) {
+      const months = getMonthsSpan(row.periodStart, row.periodEnd);
+      const monthlyValue = row.value / months.length;
+      for (const ym of months) {
+        const yr = ym.slice(0, 4);
+        if (!yearSums[yr]) yearSums[yr] = { revenue: 0, expense: 0, partner_in: 0, partner_out: 0, deposit: 0, waiver: 0 };
+        if (resolvedType === 'revenue')     yearSums[yr].revenue += monthlyValue;
+        if (resolvedType === 'expense')     yearSums[yr].expense += monthlyValue;
+        if (resolvedType === 'partner_in')  yearSums[yr].partner_in += monthlyValue;
+        if (resolvedType === 'partner_out') yearSums[yr].partner_out += monthlyValue;
+        if (resolvedType === 'deposit')     yearSums[yr].deposit += monthlyValue;
+        if (resolvedType === 'waiver')      yearSums[yr].waiver += monthlyValue;
+      }
+    } else {
+      const yr = row.date.slice(0, 4);
+      if (!yearSums[yr]) yearSums[yr] = { revenue: 0, expense: 0, partner_in: 0, partner_out: 0, deposit: 0, waiver: 0 };
+      if (resolvedType === 'revenue')     yearSums[yr].revenue += row.value;
+      if (resolvedType === 'expense')     yearSums[yr].expense += row.value;
+      if (resolvedType === 'partner_in')  yearSums[yr].partner_in += row.value;
+      if (resolvedType === 'partner_out') yearSums[yr].partner_out += row.value;
+      if (resolvedType === 'deposit')     yearSums[yr].deposit += row.value;
+      if (resolvedType === 'waiver')      yearSums[yr].waiver += row.value;
     }
   }
 
