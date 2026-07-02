@@ -12,7 +12,7 @@ import logging
 from datetime import datetime, timedelta
 from fastapi import APIRouter, Request, Header, HTTPException, status
 from fastapi.responses import JSONResponse
-from routers.webhook_router import credit_user_tokens, update_user_premium_status
+from routers.webhook_router import credit_user_tokens, update_user_premium_status, resolve_token_tank
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -159,17 +159,22 @@ async def stripe_webhook(
             else:
                 expiration_date_iso = (now + timedelta(days=30)).strftime("%Y-%m-%dT%H:%M:%S+00:00")
                 
-        profile_success = await update_user_premium_status(app_user_id, "premium", "active", expiration_date=expiration_date_iso)
+        # Resolve token tank based on product metadata and price (monthly=1M, yearly=12M)
+        token_tank = resolve_token_tank(product_id, amount_total)
+        logger.info(f"Resolved token tank for Stripe product '{product_id}' (amount={amount_total}): {token_tank:,} tokens")
         
-        # Set token balance to 1,000,000 (1M) tokens directly
-        token_success = await credit_user_tokens(app_user_id, 1000000, set_balance=True)
+        profile_success = await update_user_premium_status(app_user_id, "premium", "active", expiration_date=expiration_date_iso, token_tank=token_tank)
+        
+        # Set token balance to the resolved tank amount
+        token_success = await credit_user_tokens(app_user_id, token_tank, set_balance=True)
         
         if profile_success and token_success:
             return JSONResponse(
                 status_code=status.HTTP_200_OK,
                 content={
                     "status": "fulfilled", 
-                    "action": "activated_subscription_and_granted_tokens", 
+                    "action": "activated_subscription_and_granted_tokens",
+                    "token_tank": token_tank,
                     "expires_at": expiration_date_iso
                 }
             )

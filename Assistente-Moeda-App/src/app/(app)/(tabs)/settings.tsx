@@ -57,8 +57,11 @@ export default function SettingsScreen() {
   const [isMigrating, setIsMigrating] = useState(false);
   const isVisitor = !auth.user || auth.mode === 'guest';
 
-  const { isPro, packages, consumables, purchasePackage, restorePurchases, expirationDate } = useSubscription();
-  const maxTokens = isPro ? 1000000 : 100000;
+  const { isPro, subscriptionType, packages, consumables, purchasePackage, restorePurchases, expirationDate } = useSubscription();
+  // Token tank: yearly=12M, monthly=1M, free=100K
+  const maxTokens = isPro
+    ? (subscriptionType === 'yearly' ? 12_000_000 : 1_000_000)
+    : 100_000;
   const [tokenBalance, setTokenBalance] = useState<number>(maxTokens);
 
   const [showStoreModal, setShowStoreModal] = useState(false);

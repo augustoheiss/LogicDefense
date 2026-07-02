@@ -14,6 +14,29 @@ from fastapi.responses import JSONResponse
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
+# ── Token Tank Constants ────────────────────────────────────────────────────
+# "Tank" approach: monthly gets 1M tokens, yearly gets 12M upfront.
+# The same value is used as both the injection amount AND the ceiling cap.
+MONTHLY_TOKEN_TANK = 1_000_000    # 1M tokens
+YEARLY_TOKEN_TANK  = 12_000_000   # 12M tokens (12 × monthly)
+FREE_TOKEN_TANK    = 100_000      # 100K tokens for free tier
+
+def resolve_token_tank(product_identifier: str, amount_total: int = 0) -> int:
+    """Determine the correct token tank size based on product/price identifier.
+    
+    Checks for yearly keywords first (more specific), then falls back to monthly.
+    Also considers amount_total (in cents) as a heuristic when metadata is ambiguous.
+    """
+    pid = str(product_identifier).lower()
+    if "year" in pid or "yearly" in pid or "anual" in pid or "annual" in pid:
+        return YEARLY_TOKEN_TANK
+    if "month" in pid or "monthly" in pid or "pro" in pid:
+        return MONTHLY_TOKEN_TANK
+    # Heuristic fallback based on price (Stripe amount_total in cents)
+    if amount_total >= 10000:  # R$ 100+ → likely yearly
+        return YEARLY_TOKEN_TANK
+    return MONTHLY_TOKEN_TANK
+
 async def credit_user_tokens(user_id: str, amount: int, set_balance: bool = False) -> bool:
     """Increment or set user settings token balance in Supabase bypassing RLS using service role key."""
     supabase_url = os.getenv("SUPABASE_URL")
@@ -74,7 +97,7 @@ async def credit_user_tokens(user_id: str, amount: int, set_balance: bool = Fals
             logger.error(f"Exception during credit_user_tokens: {e}")
             return False
 
-async def update_user_premium_status(user_id: str, premium_tier: str, subscription_type: str, expiration_date: str = None) -> bool:
+async def update_user_premium_status(user_id: str, premium_tier: str, subscription_type: str, expiration_date: str = None, token_tank: int = MONTHLY_TOKEN_TANK) -> bool:
     """Update profile premium tier, subscription expiration and user settings subscription status in Supabase."""
     supabase_url = os.getenv("SUPABASE_URL")
     supabase_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
@@ -128,7 +151,7 @@ async def update_user_premium_status(user_id: str, premium_tier: str, subscripti
                     headers=headers,
                     json={
                         "id": user_id,
-                        "token_balance": 1000000 if premium_tier == "premium" else 100000,
+                        "token_balance": token_tank if premium_tier == "premium" else FREE_TOKEN_TANK,
                         "ai_cost_current_month": 0.0,
                         "ai_cost_last_reset": "",
                         "subscription_type": subscription_type,
@@ -238,11 +261,15 @@ async def revenuecat_webhook(request: Request, authorization: str = Header(None)
             else:
                 expiration_date_iso = (now + timedelta(days=30)).strftime("%Y-%m-%dT%H:%M:%S+00:00")
                 
-        # 2. Update premium tier status and save expiration date
-        profile_success = await update_user_premium_status(app_user_id, "premium", "active", expiration_date=expiration_date_iso)
+        # 2. Resolve token tank based on product identifier (monthly=1M, yearly=12M)
+        token_tank = resolve_token_tank(str(product_id))
+        logger.info(f"Resolved token tank for product '{product_id}': {token_tank:,} tokens")
         
-        # 3. Set token balance to 1,000,000 (1M) tokens directly
-        token_success = await credit_user_tokens(app_user_id, 1000000, set_balance=True)
+        # 3. Update premium tier status and save expiration date
+        profile_success = await update_user_premium_status(app_user_id, "premium", "active", expiration_date=expiration_date_iso, token_tank=token_tank)
+        
+        # 4. Set token balance to the resolved tank amount
+        token_success = await credit_user_tokens(app_user_id, token_tank, set_balance=True)
         
         if profile_success and token_success:
             return JSONResponse(
