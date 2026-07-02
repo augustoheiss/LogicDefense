@@ -55,6 +55,7 @@ export default function SettingsScreen() {
   const { impact } = useHaptics();
   const [isSyncing, setIsSyncing] = useState(false);
   const [isMigrating, setIsMigrating] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const isVisitor = !auth.user || auth.mode === 'guest';
 
   const { isPro, subscriptionType, packages, consumables, purchasePackage, restorePurchases, expirationDate } = useSubscription();
@@ -303,6 +304,60 @@ export default function SettingsScreen() {
     }
   };
 
+  const handleDeleteAccount = () => {
+    if (isVisitor) {
+      Alert.alert("Aviso", "Esta funcionalidade só está disponível para usuários com contas cadastradas.");
+      return;
+    }
+
+    const performDelete = async () => {
+      setIsDeleting(true);
+      try {
+        const { error } = await supabase.rpc('delete_user_account');
+        if (error) throw error;
+
+        // Clear local state/DB
+        await db.clearLocalState();
+
+        // Sign out
+        await auth.logout();
+
+        if (Platform.OS === 'web') {
+          window.alert("Sua conta e todos os dados associados foram excluídos com sucesso.");
+          window.location.href = '/laboratorio/assistente-moeda';
+        } else {
+          Alert.alert("Conta Excluída", "Sua conta e todos os dados associados foram excluídos com sucesso.");
+          router.replace('/');
+        }
+      } catch (err: any) {
+        console.error("Delete Account Error:", err);
+        const msg = err?.message || String(err);
+        if (Platform.OS === 'web') {
+          window.alert("Erro ao excluir conta: " + msg);
+        } else {
+          Alert.alert("Erro ao excluir conta", msg);
+        }
+      } finally {
+        setIsDeleting(false);
+      }
+    };
+
+    if (Platform.OS === 'web') {
+      if (window.confirm("Esta ação é irreversível e apagará todos os seus dados.\n\nATENÇÃO: A exclusão da conta NÃO cancela assinaturas ativas. Você deve cancelar sua assinatura diretamente na sua loja de aplicativos (Google Play / App Store).\n\nDeseja prosseguir com a exclusão definitiva?")) {
+        performDelete();
+      }
+    } else {
+      Alert.alert(
+        'Excluir Conta?',
+        'Esta ação é irreversível e apagará todos os seus dados. ATENÇÃO: A exclusão da conta NÃO cancela assinaturas ativas. Você deve cancelar sua assinatura diretamente na sua loja de aplicativos (Google Play / App Store).',
+        [
+          { text: 'Cancelar', style: 'cancel' },
+          { text: 'Excluir', style: 'destructive', onPress: performDelete },
+        ]
+      );
+    }
+  };
+
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <View style={styles.header}>
@@ -481,24 +536,49 @@ export default function SettingsScreen() {
         <Section title="Zona de Perigo">
           <Card style={{ borderColor: colors.danger.main, borderWidth: 1 }}>
             <Text style={{ fontSize: 13, color: colors.text.secondary, marginBottom: spacing.md }}>
-              Ações irreversíveis relacionadas aos dados armazenados no navegador.
+              Ações irreversíveis. Tenha cuidado ao prosseguir.
             </Text>
-            <Pressable
-              style={({ pressed }) => [
-                {
-                  backgroundColor: colors.danger.main,
-                  paddingVertical: spacing.sm,
-                  borderRadius: radius.sm,
-                  alignItems: 'center',
-                },
-                pressed && styles.pressed,
-              ]}
-              onPress={handleClearLocalCache}
-            >
-              <Text style={{ color: '#fff', fontSize: 13, fontWeight: '600' }}>
-                🗑️ Limpar Planilhas do Navegador
-              </Text>
-            </Pressable>
+            <View style={{ gap: spacing.md }}>
+              <Pressable
+                style={({ pressed }) => [
+                  {
+                    backgroundColor: 'transparent',
+                    borderWidth: 1,
+                    borderColor: colors.danger.main,
+                    paddingVertical: spacing.sm,
+                    borderRadius: radius.sm,
+                    alignItems: 'center',
+                  },
+                  pressed && styles.pressed,
+                ]}
+                onPress={handleClearLocalCache}
+              >
+                <Text style={{ color: colors.danger.main, fontSize: 13, fontWeight: '600' }}>
+                  🗑️ Limpar Planilhas do Navegador
+                </Text>
+              </Pressable>
+
+              {!isVisitor && (
+                <Pressable
+                  style={({ pressed }) => [
+                    {
+                      backgroundColor: colors.danger.main,
+                      paddingVertical: spacing.sm,
+                      borderRadius: radius.sm,
+                      alignItems: 'center',
+                    },
+                    isDeleting && { opacity: 0.5 },
+                    pressed && styles.pressed,
+                  ]}
+                  onPress={handleDeleteAccount}
+                  disabled={isDeleting}
+                >
+                  <Text style={{ color: '#fff', fontSize: 13, fontWeight: '600' }}>
+                    {isDeleting ? '⏳ Excluindo Conta...' : '⚠️ Excluir Conta Permanentemente'}
+                  </Text>
+                </Pressable>
+              )}
+            </View>
           </Card>
         </Section>
 
