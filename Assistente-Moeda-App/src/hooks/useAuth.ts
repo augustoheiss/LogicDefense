@@ -12,6 +12,7 @@
 
 import { useState, useEffect, useCallback, createContext, useContext, useMemo } from 'react';
 import { Platform } from 'react-native';
+import { supabase } from '../lib/supabase';
 import { router } from 'expo-router';
 import type { Session, User } from '@supabase/supabase-js';
 import {
@@ -114,6 +115,38 @@ export function useAuth(): AuthState {
 
     return unsubscribe;
   }, []);
+
+  // ── Supabase Realtime Listener for profiles table updates ──
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const channelName = `profile-db-updates-${user.id}`;
+    const channel = supabase
+      .channel(channelName)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'profiles',
+          filter: `id=eq.${user.id}`,
+        },
+        async (payload) => {
+          console.log('Realtime profile update detected:', payload);
+          if (payload.new && 'premium_tier' in payload.new) {
+            const updatedProfile = await getUserProfile(user.id);
+            if (updatedProfile) {
+              setProfile(updatedProfile);
+            }
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user?.id]);
 
   // ── Actions ────────────────────────────────────────────────
 
