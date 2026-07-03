@@ -187,24 +187,19 @@ export function useAuth(): AuthState {
     }
   }, []);
 
-  const isAdmin = !!(
-    user?.email && (
-      user.email.toLowerCase() === 'augustoheiss@gmail.com' ||
-      user.email.toLowerCase() === 'augusto@heisslab.com.br' ||
-      user.email.toLowerCase() === 'ceo@heisslab.com.br' ||
-      (process.env.EXPO_PUBLIC_ADMIN_EMAIL && user.email.toLowerCase() === process.env.EXPO_PUBLIC_ADMIN_EMAIL.toLowerCase())
-    )
+  const isReviewer = !!(
+    user?.email && user.email.toLowerCase() === 'augustotester@gmail.com'
   );
 
   const effectiveProfile = useMemo(() => {
     if (!profile) return null;
-    if (isAdmin) {
+    if (isReviewer) {
       return { ...profile, premiumTier: 'premium' as const };
     }
     return profile;
-  }, [profile, isAdmin]);
+  }, [profile, isReviewer]);
 
-  const isPremium = isAdmin || profile?.premiumTier === 'premium';
+  const isPremium = isReviewer || profile?.premiumTier === 'premium';
 
   return {
     mode,

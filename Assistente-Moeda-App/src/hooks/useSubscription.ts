@@ -50,20 +50,16 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
 
   const auth = useAuthContext();
 
-  const isAdmin = useMemo(() => {
+  const isReviewer = useMemo(() => {
     return !!(
-      auth.user?.email && (
-        auth.user.email.toLowerCase() === 'augustoheiss@gmail.com' ||
-        auth.user.email.toLowerCase() === 'augusto@heisslab.com.br' ||
-        auth.user.email.toLowerCase() === 'ceo@heisslab.com.br' ||
-        (process.env.EXPO_PUBLIC_ADMIN_EMAIL && auth.user.email.toLowerCase() === process.env.EXPO_PUBLIC_ADMIN_EMAIL.toLowerCase())
-      )
+      auth.user?.email && auth.user.email.toLowerCase() === 'augustotester@gmail.com'
     );
   }, [auth.user]);
 
-  const effectiveIsPro = isAdmin ? true : isPro;
-  const effectiveSubscriptionType = isAdmin ? 'yearly' : subscriptionType;
-  const effectiveExpirationDate = isAdmin ? null : (expirationDate || auth.profile?.subscriptionExpiresAt || null);
+  const isPremiumUser = auth.profile?.premiumTier === 'premium';
+  const effectiveIsPro = isReviewer ? true : (isPro || isPremiumUser);
+  const effectiveSubscriptionType = isReviewer ? 'yearly' : (subscriptionType || (isPremiumUser ? 'monthly' : null));
+  const effectiveExpirationDate = isReviewer ? null : (expirationDate || auth.profile?.subscriptionExpiresAt || null);
 
   const updateProStatus = useCallback((customerInfo: any) => {
     if (customerInfo && customerInfo.entitlements && customerInfo.entitlements.active) {

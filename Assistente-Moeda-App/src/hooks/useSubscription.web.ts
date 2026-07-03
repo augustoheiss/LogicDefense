@@ -82,21 +82,16 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
   const auth = useAuthContext();
   const router = useRouter();
 
-  const isAdmin = useMemo(() => {
+  const isReviewer = useMemo(() => {
     return !!(
-      auth.user?.email && (
-        auth.user.email.toLowerCase() === 'augustoheiss@gmail.com' ||
-        auth.user.email.toLowerCase() === 'augusto@heisslab.com.br' ||
-        auth.user.email.toLowerCase() === 'ceo@heisslab.com.br' ||
-        (process.env.EXPO_PUBLIC_ADMIN_EMAIL && auth.user.email.toLowerCase() === process.env.EXPO_PUBLIC_ADMIN_EMAIL.toLowerCase())
-      )
+      auth.user?.email && auth.user.email.toLowerCase() === 'augustotester@gmail.com'
     );
   }, [auth.user]);
 
   const isPremiumUser = auth.profile?.premiumTier === 'premium';
-  const effectiveIsPro = isAdmin ? true : (isPro || isPremiumUser);
-  const effectiveSubscriptionType = isAdmin ? 'yearly' : (subscriptionType || (isPremiumUser ? 'monthly' : null));
-  const effectiveExpirationDate = isAdmin ? null : (expirationDate || auth.profile?.subscriptionExpiresAt || null);
+  const effectiveIsPro = isReviewer ? true : (isPro || isPremiumUser);
+  const effectiveSubscriptionType = isReviewer ? 'yearly' : (subscriptionType || (isPremiumUser ? 'monthly' : null));
+  const effectiveExpirationDate = isReviewer ? null : (expirationDate || auth.profile?.subscriptionExpiresAt || null);
 
   const purchasePackage = useCallback(async (pkg: any): Promise<boolean> => {
     const userId = auth.user?.id;
