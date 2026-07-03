@@ -66,6 +66,7 @@ export default function SettingsScreen() {
   const [tokenBalance, setTokenBalance] = useState<number>(maxTokens);
 
   const [showStoreModal, setShowStoreModal] = useState(false);
+  const [showDebugger, setShowDebugger] = useState(false);
 
   const fetchTokenBalance = useCallback(async () => {
     if (auth.mode === 'authenticated' && auth.user) {
@@ -403,19 +404,6 @@ export default function SettingsScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-      {/* 🔍 X-RAY SUBSCRIPTION DEBUGGER */}
-      <View style={{ backgroundColor: '#ef4444', padding: 12, margin: 16, borderRadius: 8, borderWidth: 1, borderColor: '#b91c1c' }}>
-        <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 13, marginBottom: 4 }}>🔍 X-RAY SUBSCRIPTION DEBUGGER</Text>
-        <Text style={{ color: '#fff', fontSize: 11, fontFamily: 'monospace' }}>profile is null: {JSON.stringify(!auth.profile)}</Text>
-        <Text style={{ color: '#fff', fontSize: 11, fontFamily: 'monospace' }}>Fetch Error: {JSON.stringify(auth.profileFetchError || 'No error captured')}</Text>
-        <Text style={{ color: '#fff', fontSize: 11, fontFamily: 'monospace' }}>premiumTier: {JSON.stringify(auth.profile?.premiumTier)}</Text>
-        <Text style={{ color: '#fff', fontSize: 11, fontFamily: 'monospace' }}>premium_tier (raw): {JSON.stringify((auth.profile as any)?.premium_tier)}</Text>
-        <Text style={{ color: '#fff', fontSize: 11, fontFamily: 'monospace' }}>subscriptionType: {JSON.stringify(auth.profile?.subscriptionType)}</Text>
-        <Text style={{ color: '#fff', fontSize: 11, fontFamily: 'monospace' }}>subscriptionType hook: {JSON.stringify(subscriptionType)}</Text>
-        <Text style={{ color: '#fff', fontSize: 11, fontFamily: 'monospace' }}>isPro hook: {JSON.stringify(isPro)}</Text>
-        <Text style={{ color: '#fff', fontSize: 11, fontFamily: 'monospace' }}>auth.isPremium: {JSON.stringify(auth.isPremium)}</Text>
-        <Text style={{ color: '#fff', fontSize: 11, fontFamily: 'monospace' }}>auth.user: {JSON.stringify(auth.user?.email)}</Text>
-      </View>
 
       <View style={styles.header}>
         <Text style={styles.title}>⚙️ Ajustes</Text>
@@ -649,18 +637,42 @@ export default function SettingsScreen() {
           </Card>
         </Section>
 
-        {/* ── Auth Status Debugger (Temporary UI) ────────── */}
-        <View style={{ padding: spacing.md, marginTop: spacing.md, backgroundColor: '#1f2937', borderRadius: radius.md, borderWidth: 1, borderColor: '#374151', marginHorizontal: spacing.md }}>
-          <Text style={{ color: '#9ca3af', fontSize: 12, fontFamily: 'monospace' }}>
-            DEBUG - User ID: {auth.user?.id || 'null'}
+        {/* ── Collapsible Dev Mode Debugger ───────────────── */}
+        {showDebugger && (
+          <View style={{
+            marginHorizontal: spacing.md,
+            marginTop: spacing.md,
+            backgroundColor: '#1f2937',
+            borderRadius: radius.md,
+            borderWidth: 1,
+            borderColor: '#374151',
+            padding: spacing.md,
+            gap: spacing.xs
+          }}>
+            <Text style={{ color: '#ef4444', fontWeight: 'bold', fontSize: 13, marginBottom: 4 }}>🔍 X-RAY SUBSCRIPTION DEBUGGER</Text>
+            <Text style={{ color: '#9ca3af', fontSize: 11, fontFamily: 'monospace' }}>User ID: {auth.user?.id || 'null'}</Text>
+            <Text style={{ color: '#9ca3af', fontSize: 11, fontFamily: 'monospace' }}>Mode: {auth.mode}</Text>
+            <Text style={{ color: '#9ca3af', fontSize: 11, fontFamily: 'monospace' }}>Session: {auth.session ? 'Active' : 'None'}</Text>
+            <Text style={{ color: '#ef4444', fontSize: 11, fontFamily: 'monospace' }}>Fetch Error: {JSON.stringify(auth.profileFetchError || 'No error captured')}</Text>
+            <Text style={{ color: '#22d3ee', fontSize: 11, fontFamily: 'monospace' }}>profile is null: {JSON.stringify(!auth.profile)}</Text>
+            <Text style={{ color: '#facc15', fontSize: 11, fontFamily: 'monospace' }}>premiumTier: {JSON.stringify(auth.profile?.premiumTier)}</Text>
+            <Text style={{ color: '#facc15', fontSize: 11, fontFamily: 'monospace' }}>premium_tier (raw): {JSON.stringify((auth.profile as any)?.premium_tier)}</Text>
+            <Text style={{ color: '#c084fc', fontSize: 11, fontFamily: 'monospace' }}>subscriptionType: {JSON.stringify(auth.profile?.subscriptionType)}</Text>
+            <Text style={{ color: '#c084fc', fontSize: 11, fontFamily: 'monospace' }}>subscriptionType hook: {JSON.stringify(subscriptionType)}</Text>
+            <Text style={{ color: '#4ade80', fontSize: 11, fontFamily: 'monospace' }}>isPro hook: {JSON.stringify(isPro)}</Text>
+            <Text style={{ color: '#4ade80', fontSize: 11, fontFamily: 'monospace' }}>auth.isPremium: {JSON.stringify(auth.isPremium)}</Text>
+            <Text style={{ color: '#9ca3af', fontSize: 11, fontFamily: 'monospace' }}>auth.user: {JSON.stringify(auth.user?.email)}</Text>
+          </View>
+        )}
+
+        <Pressable
+          onPress={() => setShowDebugger(prev => !prev)}
+          style={{ alignSelf: 'center', marginVertical: spacing.md, opacity: 0.3 }}
+        >
+          <Text style={{ color: colors.text.tertiary, fontSize: 11, fontFamily: 'monospace' }}>
+            {showDebugger ? 'Hide Developer Tools 🐛' : '🐛 Modo Dev'}
           </Text>
-          <Text style={{ color: '#9ca3af', fontSize: 12, fontFamily: 'monospace' }}>
-            Mode: {auth.mode}
-          </Text>
-          <Text style={{ color: '#9ca3af', fontSize: 12, fontFamily: 'monospace' }}>
-            Session: {auth.session ? 'Active' : 'None'}
-          </Text>
-        </View>
+        </Pressable>
 
         {/* ── Logout ─────────────────────────────────────── */}
         {!isVisitor && (
