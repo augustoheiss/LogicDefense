@@ -425,7 +425,7 @@ export default function SettingsScreen() {
                   </Text>
                   <Text style={styles.profileEmail}>{auth.profile?.email || auth.user?.email}</Text>
                   <Text style={styles.tierText}>
-                    {auth.isPremium ? '⭐ Premium' : '🆓 Gratuito'}
+                    {isPro ? '⭐ Premium' : '🆓 Gratuito'}
                   </Text>
                 </View>
               </View>
