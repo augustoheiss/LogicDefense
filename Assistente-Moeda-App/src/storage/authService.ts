@@ -112,16 +112,23 @@ export async function getUserProfile(userId: string): Promise<UserProfile | null
     .eq('id', userId)
     .single();
 
-  if (error || !data) return null;
+  if (error) {
+    throw error;
+  }
+  if (!data) return null;
 
   const user = await getCurrentUser();
 
   // Also query user_settings table to fetch the subscription_type for synchronization
-  const { data: settingsData } = await supabase
+  const { data: settingsData, error: settingsError } = await supabase
     .from('user_settings')
     .select('subscription_type')
     .eq('id', userId)
     .maybeSingle();
+
+  if (settingsError) {
+    throw settingsError;
+  }
 
   return {
     id: data.id,

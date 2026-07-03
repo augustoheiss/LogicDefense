@@ -44,6 +44,8 @@ export interface AuthState {
   session: Session | null;
   /** Whether the user has premium tier (cloud sync + AI) */
   isPremium: boolean;
+  /** Raw fetch error message if profile retrieval fails */
+  profileFetchError: string | null;
 
   // ── Actions ───────────────────────────────────────────────
   /** Enter guest mode (skip auth) */
@@ -66,22 +68,31 @@ export function useAuth(): AuthState {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [session, setSession] = useState<Session | null>(null);
+  const [profileFetchError, setProfileFetchError] = useState<string | null>(null);
 
   // ── Initialize: check for existing session ─────────────────
   useEffect(() => {
     async function init() {
       try {
         const existingSession = await getSession();
-        if (existingSession) {
+        if (existingSession && existingSession.access_token) {
           setSession(existingSession);
           setUser(existingSession.user);
-          const userProfile = await getUserProfile(existingSession.user.id);
-          setProfile(userProfile);
+          setProfileFetchError(null);
+          try {
+            const userProfile = await getUserProfile(existingSession.user.id);
+            setProfile(userProfile);
+          } catch (err: any) {
+            console.error('Initial profile fetch failed:', err);
+            setProfileFetchError(err?.message || String(err));
+          }
           setMode('authenticated');
         } else {
           setMode('guest');
         }
-      } catch {
+      } catch (err: any) {
+        console.error('Session init failed:', err);
+        setProfileFetchError(err?.message || String(err));
         setMode('guest');
       } finally {
         setIsLoading(false);
@@ -97,20 +108,33 @@ export function useAuth(): AuthState {
         setUser(null);
         setProfile(null);
         setSession(null);
+        setProfileFetchError(null);
         setMode('guest');
       } else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-        if (newSession) {
+        if (newSession && newSession.access_token) {
           setSession(newSession);
           setUser(newSession.user);
-          const userProfile = await getUserProfile(newSession.user.id);
-          setProfile(userProfile);
+          setProfileFetchError(null);
+          try {
+            const userProfile = await getUserProfile(newSession.user.id);
+            setProfile(userProfile);
+          } catch (err: any) {
+            console.error('State change profile fetch failed:', err);
+            setProfileFetchError(err?.message || String(err));
+          }
           setMode('authenticated');
         }
-      } else if (newSession) {
+      } else if (newSession && newSession.access_token) {
         setSession(newSession);
         setUser(newSession.user);
-        const userProfile = await getUserProfile(newSession.user.id);
-        setProfile(userProfile);
+        setProfileFetchError(null);
+        try {
+          const userProfile = await getUserProfile(newSession.user.id);
+          setProfile(userProfile);
+        } catch (err: any) {
+          console.error('Fallback profile fetch failed:', err);
+          setProfileFetchError(err?.message || String(err));
+        }
         setMode('authenticated');
       }
     });
@@ -120,11 +144,13 @@ export function useAuth(): AuthState {
 
   const refreshProfile = useCallback(async () => {
     if (!user?.id) return;
+    setProfileFetchError(null);
     try {
       const userProfile = await getUserProfile(user.id);
       setProfile(userProfile);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to refresh profile:', err);
+      setProfileFetchError(err?.message || String(err));
     }
   }, [user?.id]);
 
@@ -264,6 +290,7 @@ export function useAuth(): AuthState {
     profile: effectiveProfile,
     session,
     isPremium,
+    profileFetchError,
     enterGuestMode,
     login,
     register,

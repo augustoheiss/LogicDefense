@@ -407,6 +407,7 @@ export default function SettingsScreen() {
       <View style={{ backgroundColor: '#ef4444', padding: 12, margin: 16, borderRadius: 8, borderWidth: 1, borderColor: '#b91c1c' }}>
         <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 13, marginBottom: 4 }}>🔍 X-RAY SUBSCRIPTION DEBUGGER</Text>
         <Text style={{ color: '#fff', fontSize: 11, fontFamily: 'monospace' }}>profile is null: {JSON.stringify(!auth.profile)}</Text>
+        <Text style={{ color: '#fff', fontSize: 11, fontFamily: 'monospace' }}>Fetch Error: {JSON.stringify(auth.profileFetchError || 'No error captured')}</Text>
         <Text style={{ color: '#fff', fontSize: 11, fontFamily: 'monospace' }}>premiumTier: {JSON.stringify(auth.profile?.premiumTier)}</Text>
         <Text style={{ color: '#fff', fontSize: 11, fontFamily: 'monospace' }}>premium_tier (raw): {JSON.stringify((auth.profile as any)?.premium_tier)}</Text>
         <Text style={{ color: '#fff', fontSize: 11, fontFamily: 'monospace' }}>subscriptionType: {JSON.stringify(auth.profile?.subscriptionType)}</Text>
