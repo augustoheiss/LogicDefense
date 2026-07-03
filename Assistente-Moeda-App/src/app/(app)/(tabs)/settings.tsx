@@ -403,6 +403,19 @@ export default function SettingsScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+      {/* 🔍 X-RAY SUBSCRIPTION DEBUGGER */}
+      <View style={{ backgroundColor: '#ef4444', padding: 12, margin: 16, borderRadius: 8, borderWidth: 1, borderColor: '#b91c1c' }}>
+        <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 13, marginBottom: 4 }}>🔍 X-RAY SUBSCRIPTION DEBUGGER</Text>
+        <Text style={{ color: '#fff', fontSize: 11, fontFamily: 'monospace' }}>profile is null: {JSON.stringify(!auth.profile)}</Text>
+        <Text style={{ color: '#fff', fontSize: 11, fontFamily: 'monospace' }}>premiumTier: {JSON.stringify(auth.profile?.premiumTier)}</Text>
+        <Text style={{ color: '#fff', fontSize: 11, fontFamily: 'monospace' }}>premium_tier (raw): {JSON.stringify((auth.profile as any)?.premium_tier)}</Text>
+        <Text style={{ color: '#fff', fontSize: 11, fontFamily: 'monospace' }}>subscriptionType: {JSON.stringify(auth.profile?.subscriptionType)}</Text>
+        <Text style={{ color: '#fff', fontSize: 11, fontFamily: 'monospace' }}>subscriptionType hook: {JSON.stringify(subscriptionType)}</Text>
+        <Text style={{ color: '#fff', fontSize: 11, fontFamily: 'monospace' }}>isPro hook: {JSON.stringify(isPro)}</Text>
+        <Text style={{ color: '#fff', fontSize: 11, fontFamily: 'monospace' }}>auth.isPremium: {JSON.stringify(auth.isPremium)}</Text>
+        <Text style={{ color: '#fff', fontSize: 11, fontFamily: 'monospace' }}>auth.user: {JSON.stringify(auth.user?.email)}</Text>
+      </View>
+
       <View style={styles.header}>
         <Text style={styles.title}>⚙️ Ajustes</Text>
         <Text style={styles.subtitle}>Conta, metas e preferências</Text>
