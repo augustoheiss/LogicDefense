@@ -4,10 +4,11 @@
  * RevenueCat SDK integration for managing subscription state and checkout flows on iOS and Android.
  */
 
-import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Platform, Alert } from 'react-native';
 import Purchases from 'react-native-purchases';
 import { useAuthContext } from './useAuth';
+import { supabase } from '../lib/supabase';
 
 export interface SubscriptionPackage {
   identifier: string;
@@ -60,6 +61,103 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
   const effectiveIsPro = isReviewer ? true : (isPro || isPremiumUser);
   const effectiveSubscriptionType = isReviewer ? 'yearly' : (subscriptionType || (auth.profile?.subscriptionType as 'monthly' | 'yearly') || (isPremiumUser ? 'monthly' : null));
   const effectiveExpirationDate = isReviewer ? null : (expirationDate || auth.profile?.subscriptionExpiresAt || null);
+
+  const isReconciling = useRef(false);
+
+  const syncStates = useCallback(async (active: boolean, plan: 'monthly' | 'yearly' | null) => {
+    if (auth.mode !== 'authenticated' || !auth.user || isReconciling.current) return;
+
+    const isDbPremium = auth.profile?.premiumTier === 'premium';
+    const dbExpiresAt = auth.profile?.subscriptionExpiresAt;
+    
+    // Check if Stripe is active (expires in the future or no expiration date set yet)
+    let isStripeActive = false;
+    if (dbExpiresAt) {
+      try {
+        isStripeActive = new Date(dbExpiresAt).getTime() > Date.now();
+      } catch (e) {
+        console.warn('Error parsing expiration date:', e);
+      }
+    } else if (isDbPremium) {
+      isStripeActive = true; // Lifetime/admin bypass
+    }
+
+    if (active) {
+      // Case 1: RevenueCat is active but DB is free. Upgrade DB.
+      if (!isDbPremium) {
+        console.log('Reconciler: RevenueCat active but DB free. Upgrading DB...');
+        isReconciling.current = true;
+        try {
+          const { error: profileErr } = await supabase
+            .from('profiles')
+            .update({
+              premium_tier: 'premium',
+              subscription_expires_at: expirationDate || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', auth.user.id);
+
+          if (profileErr) throw profileErr;
+
+          const { error: settingsErr } = await supabase
+            .from('user_settings')
+            .update({
+              subscription_type: plan || 'monthly',
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', auth.user.id);
+
+          if (settingsErr) throw settingsErr;
+
+          await auth.refreshProfile();
+        } catch (e) {
+          console.error('Reconciler: Failed to upgrade DB:', e);
+        } finally {
+          isReconciling.current = false;
+        }
+      }
+    } else {
+      // Case 2: RevenueCat is inactive, DB says premium, and Stripe is NOT active. Downgrade DB.
+      if (isDbPremium && !isStripeActive) {
+        console.log('Reconciler: RevenueCat inactive and no Stripe fallback. Downgrading DB...');
+        isReconciling.current = true;
+        try {
+          const { error: profileErr } = await supabase
+            .from('profiles')
+            .update({
+              premium_tier: 'free',
+              subscription_expires_at: null,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', auth.user.id);
+
+          if (profileErr) throw profileErr;
+
+          const { error: settingsErr } = await supabase
+            .from('user_settings')
+            .update({
+              subscription_type: 'free',
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', auth.user.id);
+
+          if (settingsErr) throw settingsErr;
+
+          await auth.refreshProfile();
+        } catch (e) {
+          console.error('Reconciler: Failed to downgrade DB:', e);
+        } finally {
+          isReconciling.current = false;
+        }
+      }
+    }
+  }, [auth.mode, auth.user?.id, auth.profile, expirationDate, auth.refreshProfile]);
+
+  useEffect(() => {
+    if (auth.mode === 'authenticated' && auth.user) {
+      syncStates(isPro, subscriptionType);
+    }
+  }, [auth.mode, auth.user?.id, isPro, subscriptionType, syncStates]);
 
   const updateProStatus = useCallback((customerInfo: any) => {
     if (customerInfo && customerInfo.entitlements && customerInfo.entitlements.active) {
