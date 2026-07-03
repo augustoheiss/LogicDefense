@@ -26,6 +26,7 @@ export interface UserProfile {
   syncEnabled: boolean;
   premiumTier: PremiumTier;
   subscriptionExpiresAt: string | null;
+  subscriptionType?: string | null;
 }
 
 // ── Auth Functions ───────────────────────────────────────────────────────────
@@ -115,6 +116,13 @@ export async function getUserProfile(userId: string): Promise<UserProfile | null
 
   const user = await getCurrentUser();
 
+  // Also query user_settings table to fetch the subscription_type for synchronization
+  const { data: settingsData } = await supabase
+    .from('user_settings')
+    .select('subscription_type')
+    .eq('id', userId)
+    .maybeSingle();
+
   return {
     id: data.id,
     displayName: data.display_name,
@@ -122,6 +130,7 @@ export async function getUserProfile(userId: string): Promise<UserProfile | null
     syncEnabled: data.sync_enabled ?? true,
     premiumTier: (data.premium_tier as PremiumTier) ?? 'free',
     subscriptionExpiresAt: data.subscription_expires_at ?? null,
+    subscriptionType: settingsData?.subscription_type ?? null,
   };
 }
 

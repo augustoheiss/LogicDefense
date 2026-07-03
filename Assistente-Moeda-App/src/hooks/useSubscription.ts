@@ -58,7 +58,7 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
 
   const isPremiumUser = auth.profile?.premiumTier === 'premium';
   const effectiveIsPro = isReviewer ? true : (isPro || isPremiumUser);
-  const effectiveSubscriptionType = isReviewer ? 'yearly' : (subscriptionType || (isPremiumUser ? 'monthly' : null));
+  const effectiveSubscriptionType = isReviewer ? 'yearly' : (subscriptionType || (auth.profile?.subscriptionType as 'monthly' | 'yearly') || (isPremiumUser ? 'monthly' : null));
   const effectiveExpirationDate = isReviewer ? null : (expirationDate || auth.profile?.subscriptionExpiresAt || null);
 
   const updateProStatus = useCallback((customerInfo: any) => {
@@ -187,6 +187,10 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
       } else {
         setSubscriptionType(null);
       }
+
+      // Active purchase trigger fallback: refresh Supabase state
+      await auth.refreshProfile();
+
       return active;
     } catch (e: any) {
       if (!e.userCancelled) {
@@ -194,7 +198,7 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
       }
       return false;
     }
-  }, []);
+  }, [auth.refreshProfile]);
 
   const restorePurchases = useCallback(async (): Promise<boolean> => {
     try {
@@ -214,6 +218,10 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
         setSubscriptionType(null);
         setExpirationDate(null);
       }
+
+      // Active purchase trigger fallback: refresh Supabase state
+      await auth.refreshProfile();
+
       Alert.alert(
         'Restauração de Compra',
         active ? 'Sua assinatura Pro foi restaurada com sucesso!' : 'Nenhuma assinatura Pro activa foi localizada.'
@@ -223,7 +231,7 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
       Alert.alert('Erro', e.message || 'Falha ao restaurar compras.');
       return false;
     }
-  }, []);
+  }, [auth.refreshProfile]);
 
   const toggleProMock = useCallback(() => {
     setIsPro((prev) => {

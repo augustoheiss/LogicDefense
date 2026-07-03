@@ -170,6 +170,45 @@ export default function SettingsScreen() {
     fetchTokenBalance();
   }, [fetchTokenBalance]);
 
+  // ── Supabase Realtime Listener to reactively update Token Balance state ────
+  useEffect(() => {
+    if (auth.mode !== 'authenticated' || !auth.user) return;
+
+    const channelName = `settings-token-sync-${auth.user.id}`;
+    const channel = supabase
+      .channel(channelName)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'user_settings',
+          filter: `id=eq.${auth.user.id}`,
+        },
+        (payload) => {
+          console.log('Realtime settings update in UI:', payload);
+          if (payload.new && 'token_balance' in payload.new) {
+            setTokenBalance(Number(payload.new.token_balance));
+          }
+        }
+      )
+      .subscribe();
+
+    const handleSettingsUpdated = () => {
+      fetchTokenBalance();
+    };
+    if (Platform.OS === 'web') {
+      window.addEventListener('supabase_settings_updated', handleSettingsUpdated);
+    }
+
+    return () => {
+      supabase.removeChannel(channel);
+      if (Platform.OS === 'web') {
+        window.removeEventListener('supabase_settings_updated', handleSettingsUpdated);
+      }
+    };
+  }, [auth.mode, auth.user?.id, fetchTokenBalance]);
+
   const handleLocalMigration = async () => {
     if (auth.mode !== 'authenticated' || !auth.user) {
       if (Platform.OS === 'web') {

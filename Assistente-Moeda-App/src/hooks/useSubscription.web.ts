@@ -90,7 +90,7 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
 
   const isPremiumUser = auth.profile?.premiumTier === 'premium';
   const effectiveIsPro = isReviewer ? true : (isPro || isPremiumUser);
-  const effectiveSubscriptionType = isReviewer ? 'yearly' : (subscriptionType || (isPremiumUser ? 'monthly' : null));
+  const effectiveSubscriptionType = isReviewer ? 'yearly' : (subscriptionType || (auth.profile?.subscriptionType as 'monthly' | 'yearly') || (isPremiumUser ? 'monthly' : null));
   const effectiveExpirationDate = isReviewer ? null : (expirationDate || auth.profile?.subscriptionExpiresAt || null);
 
   const purchasePackage = useCallback(async (pkg: any): Promise<boolean> => {
@@ -103,16 +103,24 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
       return false;
     }
     const success = await webPurchase(pkg, userId);
+    if (success) {
+      // Forcefully refresh Supabase profile
+      await auth.refreshProfile();
+    }
     return success;
-  }, [auth.user]);
+  }, [auth.user, auth.refreshProfile]);
 
   const restorePurchases = useCallback(async (): Promise<boolean> => {
     setIsPro(true);
     setSubscriptionType('yearly');
     setExpirationDate(new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString());
+    
+    // Forcefully refresh Supabase profile
+    await auth.refreshProfile();
+    
     window.alert('Sucesso: Assinatura Pro restaurada no simulador web!');
     return true;
-  }, []);
+  }, [auth.refreshProfile]);
 
   const toggleProMock = useCallback(() => {
     setIsPro((prev) => {

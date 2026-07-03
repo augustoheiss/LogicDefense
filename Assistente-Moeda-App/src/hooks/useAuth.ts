@@ -54,6 +54,8 @@ export interface AuthState {
   register: (email: string, password: string, displayName?: string) => Promise<{ error: string | null }>;
   /** Logout and return to welcome screen */
   logout: () => Promise<void>;
+  /** Refresh user profile and settings manually */
+  refreshProfile: () => Promise<void>;
 }
 
 // ── Hook ─────────────────────────────────────────────────────────────────────
@@ -116,11 +118,21 @@ export function useAuth(): AuthState {
     return unsubscribe;
   }, []);
 
-  // ── Supabase Realtime Listener for profiles table updates ──
+  const refreshProfile = useCallback(async () => {
+    if (!user?.id) return;
+    try {
+      const userProfile = await getUserProfile(user.id);
+      setProfile(userProfile);
+    } catch (err) {
+      console.error('Failed to refresh profile:', err);
+    }
+  }, [user?.id]);
+
+  // ── Supabase Realtime Listener for profiles & settings updates ──
   useEffect(() => {
     if (!user?.id) return;
 
-    const channelName = `profile-db-updates-${user.id}`;
+    const channelName = `db-sync-${user.id}`;
     const channel = supabase
       .channel(channelName)
       .on(
@@ -132,12 +144,23 @@ export function useAuth(): AuthState {
           filter: `id=eq.${user.id}`,
         },
         async (payload) => {
-          console.log('Realtime profile update detected:', payload);
-          if (payload.new && 'premium_tier' in payload.new) {
-            const updatedProfile = await getUserProfile(user.id);
-            if (updatedProfile) {
-              setProfile(updatedProfile);
-            }
+          console.log('Realtime profiles update detected:', payload);
+          await refreshProfile();
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'user_settings',
+          filter: `id=eq.${user.id}`,
+        },
+        async (payload) => {
+          console.log('Realtime user_settings update detected:', payload);
+          await refreshProfile();
+          if (Platform.OS === 'web') {
+            window.dispatchEvent(new Event('supabase_settings_updated'));
           }
         }
       )
@@ -146,7 +169,7 @@ export function useAuth(): AuthState {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [user?.id]);
+  }, [user?.id, refreshProfile]);
 
   // ── Actions ────────────────────────────────────────────────
 
@@ -245,6 +268,7 @@ export function useAuth(): AuthState {
     login,
     register,
     logout,
+    refreshProfile,
   };
 }
 
