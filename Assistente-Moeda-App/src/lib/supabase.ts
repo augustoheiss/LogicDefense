@@ -25,15 +25,17 @@ function getStorage() {
   if (Platform.OS === 'web' && typeof window === 'undefined') {
     return {
       getItem: async (_key: string) => null,
-      setItem: async (_key: string, _value: string) => {},
-      removeItem: async (_key: string) => {},
+      setItem: async (_key: string, _value: string) => { },
+      removeItem: async (_key: string) => { },
     };
   }
 
-  // Safe to import AsyncStorage — we're in a browser or RN runtime
+  // Importação lazy segura para o build de produção do Metro (iOS/Android)
   // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const AsyncStorage = require('@react-native-async-storage/async-storage').default;
-  return AsyncStorage;
+  const AsyncStorageModule = require('@react-native-async-storage/async-storage');
+
+  // Se o módulo tiver .default (Babel), usa ele. Se não (Metro Prod), usa o módulo direto.
+  return AsyncStorageModule.default || AsyncStorageModule;
 }
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
