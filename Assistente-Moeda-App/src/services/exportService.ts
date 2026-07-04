@@ -174,6 +174,11 @@ export function buildWhatsAppReport(
     const sundayKey = toLocalKey(sunday);
     const weekGoal = getWeeklyGoalForDate(sundayKey, goals);
 
+    const msPerDay = 86_400_000;
+    const yearStart = new Date(monday.getFullYear(), 0, 1);
+    const yearStartMonday = getMondayOf(yearStart);
+    const weekNumber = Math.floor((monday.getTime() - yearStartMonday.getTime()) / (7 * msPerDay)) + 1;
+
     return {
       weekStartDate: monday,
       weekEndDate: sunday,
@@ -181,6 +186,7 @@ export function buildWhatsAppReport(
       weeklyTotal,
       differenceFromGoal: weeklyTotal - weekGoal,
       weeklyGoal: weekGoal,
+      weekNumber,
     };
   });
 
@@ -232,7 +238,7 @@ export function buildWhatsAppReport(
     for (const week of weekGroups) {
       lines.push('');
       lines.push(
-        `🗓️ *Semana ${fmtDate(week.weekStartDate)} a ${fmtDate(week.weekEndDate)}*`,
+        `🗓️ *Semana ${week.weekNumber} de ${week.weekStartDate.getFullYear()} (${fmtDate(week.weekStartDate)} a ${fmtDate(week.weekEndDate)})*`,
       );
 
       if (week.dailyEntries.length === 0) {
@@ -1123,7 +1129,7 @@ export function buildWhatsAppDossie(
 
     const deltaSign = week.weekDelta >= 0 ? '+' : '';
     
-    lines.push(`🗓️ *Semana: ${startFmt} a ${endFmt}*`);
+    lines.push(`🗓️ *Semana ${week.weekNumber} de ${monday.getFullYear()} (${startFmt} a ${endFmt})*`);
     lines.push(`• Meta Estabelecida: R$ ${fmtVal(week.weeklyGoal)}`);
     lines.push(`• Faturamento Real: R$ ${fmtVal(week.weeklyRevenue)}`);
     lines.push(`• Média Diária: R$ ${fmtVal(dailyAvg)} (Inconstância: Min R$ ${fmtVal(minVal)} / Max R$ ${fmtVal(maxVal)})`);
@@ -1229,10 +1235,11 @@ export function buildTabularAuditHTML(
       ? `<br><small style="color: #ea580c; font-size: 10px;">(Abono: ${fmtBRL(w.weeklyWaivers)})</small>`
       : '';
 
+    const weekYear = new Date(w.mondayKey + 'T12:00:00').getFullYear();
     return `
       <tr>
         <td>
-          <div style="font-weight: 600; color: #0f172a;">Semana ${w.weekNumber}</div>
+          <div style="font-weight: 600; color: #0f172a;">Semana ${w.weekNumber} de ${weekYear}</div>
           <div style="font-size: 10px; color: #64748b;">${w.weekLabel}</div>
         </td>
         <td class="align-right monospace">${fmtBRL(w.weeklyGoal)}</td>

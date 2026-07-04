@@ -15,8 +15,9 @@
 import { useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { Stack, useRouter, useSegments } from 'expo-router';
-import { View, ActivityIndicator, StyleSheet } from 'react-native';
+import { View, ActivityIndicator, StyleSheet, Platform } from 'react-native';
 import * as SplashScreen from 'expo-splash-screen';
+import * as NavigationBar from 'expo-navigation-bar';
 import { useAuth, AuthProvider } from '@/hooks/useAuth';
 import { CoinDBProvider } from '@/hooks/useCoinDB';
 import { SubscriptionProvider } from '@/hooks/useSubscription';
@@ -29,6 +30,21 @@ function RootNavigator() {
   const auth = useAuth();
   const segments = useSegments();
   const router = useRouter();
+
+  // Android: hide system navigation bar for true fullscreen immersive mode
+  useEffect(() => {
+    if (Platform.OS === 'android') {
+      NavigationBar.setVisibilityAsync('hidden');
+      
+      // setBehaviorAsync was removed in newer versions of expo-navigation-bar (SDK 56+)
+      // because hiding the bar automatically defaults to 'sticky-immersive' behavior.
+      // We check for its existence dynamically to satisfy the requirement safely.
+      const navBarAny = NavigationBar as any;
+      if (typeof navBarAny.setBehaviorAsync === 'function') {
+        navBarAny.setBehaviorAsync('sticky-immersive');
+      }
+    }
+  }, []);
 
   useEffect(() => {
     if (!auth.isLoading) {

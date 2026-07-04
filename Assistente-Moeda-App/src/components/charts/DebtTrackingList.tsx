@@ -244,7 +244,7 @@ function WeekCard({ entry, selected, onToggleSelect }: WeekCardProps) {
           onPress={() => setExpanded(!expanded)}
         >
           <Text style={styles.weekLabel}>{entry.weekLabel}</Text>
-          <Text style={styles.weekNumber}>Semana {entry.weekNumber}</Text>
+          <Text style={styles.weekNumber}>Semana {entry.weekNumber} de {new Date(entry.mondayKey + 'T12:00:00').getFullYear()}</Text>
         </Pressable>
 
         {/* Balance badge */}
