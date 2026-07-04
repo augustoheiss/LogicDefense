@@ -38,6 +38,8 @@ import {
   createMessage,
   type ChatMessage,
 } from '@/services/aiChatService';
+import * as Clipboard from 'expo-clipboard';
+import { Feather } from '@expo/vector-icons';
 
 const QUICK_PROMPTS = [
   '📊 Como estou financeiramente?',
@@ -426,6 +428,19 @@ const markdownStyles = {
 
 function MessageBubble({ message }: { message: ChatMessage }) {
   const isUser = message.role === 'user';
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async () => {
+    try {
+      await Clipboard.setStringAsync(message.content);
+      setCopied(true);
+      setTimeout(() => {
+        setCopied(false);
+      }, 2000);
+    } catch (err) {
+      console.error('Failed to copy text: ', err);
+    }
+  };
 
   return (
     <View style={[styles.bubbleRow, isUser && styles.bubbleRowUser]}>
@@ -434,6 +449,7 @@ function MessageBubble({ message }: { message: ChatMessage }) {
         style={[
           styles.bubble,
           isUser ? styles.bubbleUser : styles.bubbleAssistant,
+          !isUser && styles.bubbleAssistantWithCopy,
         ]}
       >
         {isUser ? (
@@ -447,9 +463,25 @@ function MessageBubble({ message }: { message: ChatMessage }) {
             {message.content}
           </Text>
         ) : (
-          <Markdown style={markdownStyles}>
-            {message.content}
-          </Markdown>
+          <>
+            <Markdown style={markdownStyles}>
+              {message.content}
+            </Markdown>
+            <Pressable
+              onPress={handleCopy}
+              style={({ pressed }) => [
+                styles.copyButton,
+                pressed && styles.copyButtonPressed,
+              ]}
+              hitSlop={8}
+            >
+              <Feather
+                name={copied ? 'check' : 'copy'}
+                size={14}
+                color={copied ? colors.success.main : colors.text.tertiary}
+              />
+            </Pressable>
+          </>
         )}
       </View>
     </View>
@@ -527,6 +559,23 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border.default,
     borderBottomLeftRadius: 4,
+    position: 'relative',
+  },
+  bubbleAssistantWithCopy: {
+    paddingBottom: 24,
+  },
+  copyButton: {
+    position: 'absolute',
+    bottom: 6,
+    right: 8,
+    width: 24,
+    height: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: radius.xs,
+  },
+  copyButtonPressed: {
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
   },
   bubbleText: {
     fontSize: 14,
