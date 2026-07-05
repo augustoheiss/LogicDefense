@@ -18,31 +18,73 @@ function sanitizeGoals(goals: any): any {
   if (!goals) return { dailyGoals: {}, weeklyGoals: {}, annualCosts: {} };
   const clean: any = {};
 
+  // 1. dailyGoals
+  clean.dailyGoals = {};
   if (goals.dailyGoals) {
-    clean.dailyGoals = {};
     for (const [k, v] of Object.entries(goals.dailyGoals)) {
-      if (v !== undefined) clean.dailyGoals[k] = v;
+      if (v !== undefined && v !== null) {
+        clean.dailyGoals[Number(k)] = Number(v);
+      }
     }
-  } else {
-    clean.dailyGoals = {};
   }
 
+  // 2. weeklyGoals
+  clean.weeklyGoals = {};
   if (goals.weeklyGoals) {
-    clean.weeklyGoals = {};
     for (const [k, v] of Object.entries(goals.weeklyGoals)) {
-      if (v !== undefined) clean.weeklyGoals[k] = v;
+      if (v !== undefined && v !== null) {
+        clean.weeklyGoals[k] = typeof v === 'number' ? Number(v) : v;
+      }
     }
-  } else {
-    clean.weeklyGoals = {};
   }
 
+  // 3. annualCosts
+  clean.annualCosts = {};
   if (goals.annualCosts) {
-    clean.annualCosts = {};
     for (const [k, v] of Object.entries(goals.annualCosts)) {
-      if (v !== undefined) clean.annualCosts[k] = v;
+      if (v !== undefined && v !== null) {
+        clean.annualCosts[Number(k)] = Number(v);
+      }
     }
-  } else {
-    clean.annualCosts = {};
+  }
+
+  // 4. globalGoals
+  if (goals.globalGoals) {
+    clean.globalGoals = {
+      dailyGoal: Number(goals.globalGoals.dailyGoal),
+      weeklyGoal: Number(goals.globalGoals.weeklyGoal),
+      annualCost: Number(goals.globalGoals.annualCost),
+    };
+  }
+
+  // 5. yearlyGoals
+  if (goals.yearlyGoals) {
+    clean.yearlyGoals = {};
+    for (const [k, v] of Object.entries(goals.yearlyGoals)) {
+      const val = v as any;
+      if (val) {
+        clean.yearlyGoals[Number(k)] = {
+          dailyGoal: Number(val.dailyGoal),
+          weeklyGoal: Number(val.weeklyGoal),
+          annualCost: Number(val.annualCost),
+        };
+      }
+    }
+  }
+
+  // 6. monthlyGoals
+  if (goals.monthlyGoals) {
+    clean.monthlyGoals = {};
+    for (const [k, v] of Object.entries(goals.monthlyGoals)) {
+      const val = v as any;
+      if (val) {
+        clean.monthlyGoals[k] = {
+          dailyGoal: Number(val.dailyGoal),
+          weeklyGoal: Number(val.weeklyGoal),
+          annualCost: Number(val.annualCost),
+        };
+      }
+    }
   }
 
   return clean;
@@ -212,6 +254,10 @@ export async function pullFromCloud(userId: string): Promise<{ success: boolean;
     const aiCostCurrentMonth = settings?.ai_cost_current_month ? Number(settings.ai_cost_current_month) : 0.00;
     const aiCostLastReset = settings?.ai_cost_last_reset ?? '';
 
+    // Load local DB state first for conflict resolution merge
+    const localDB = await loadDB();
+    const localTables = localDB?.tables || [];
+
     // 2. Fetch all tables for this user
     const tablesQuery = supabase
       .from('coin_tables')
@@ -221,10 +267,11 @@ export async function pullFromCloud(userId: string): Promise<{ success: boolean;
     const tables = await fetchAll(tablesQuery);
 
     if (!tables || tables.length === 0) {
+      // If cloud has no tables, keep local tables rather than wiping them
       await saveDB({
-        tables: [],
-        aiCostCurrentMonth,
-        aiCostLastReset,
+        tables: localTables,
+        aiCostCurrentMonth: Math.max(localDB?.aiCostCurrentMonth ?? 0, aiCostCurrentMonth),
+        aiCostLastReset: aiCostLastReset || localDB?.aiCostLastReset || '',
       });
       return { success: true };
     }
@@ -258,7 +305,7 @@ export async function pullFromCloud(userId: string): Promise<{ success: boolean;
       });
     }
 
-    const coinTables: CoinTable[] = tables.map((t) => ({
+    const remoteTables: CoinTable[] = tables.map((t) => ({
       id: t.id,
       name: t.name,
       description: t.description ?? undefined,
@@ -268,10 +315,37 @@ export async function pullFromCloud(userId: string): Promise<{ success: boolean;
       goals: t.goals ?? { dailyGoals: {}, weeklyGoals: {}, annualCosts: {} },
     }));
 
+    const mergedTablesMap = new Map<string, CoinTable>();
+
+    // 1. Add all local tables
+    for (const lt of localTables) {
+      mergedTablesMap.set(lt.id, lt);
+    }
+
+    // 2. Merge remote tables based on updatedAt timestamps
+    for (const rt of remoteTables) {
+      const lt = mergedTablesMap.get(rt.id);
+      if (!lt) {
+        // Table only exists on cloud, add it
+        mergedTablesMap.set(rt.id, rt);
+      } else {
+        const localTime = new Date(lt.updatedAt).getTime();
+        const remoteTime = new Date(rt.updatedAt).getTime();
+        if (remoteTime > localTime) {
+          // Cloud version is newer, overwrite local version
+          mergedTablesMap.set(rt.id, rt);
+        } else {
+          // Local version is newer or equal, keep local version
+        }
+      }
+    }
+
+    const finalTables = Array.from(mergedTablesMap.values());
+
     await saveDB({
-      tables: coinTables,
-      aiCostCurrentMonth,
-      aiCostLastReset,
+      tables: finalTables,
+      aiCostCurrentMonth: Math.max(localDB?.aiCostCurrentMonth ?? 0, aiCostCurrentMonth),
+      aiCostLastReset: aiCostLastReset || localDB?.aiCostLastReset || '',
     });
     return { success: true };
   } catch (err) {
@@ -283,14 +357,16 @@ export async function pullFromCloud(userId: string): Promise<{ success: boolean;
 // ── Full Sync ────────────────────────────────────────────────────────────────
 
 /**
- * Full bidirectional sync: push local changes, then pull remote state.
- * The pull always wins (server = source of truth after push).
+ * Full bidirectional sync: pull remote changes and merge, then push final state.
+ * Prevents local stale state from overwriting newer cloud updates.
  */
 export async function fullSync(userId: string): Promise<{ success: boolean; error?: string }> {
-  const pushResult = await pushToCloud(userId);
-  if (!pushResult.success) return pushResult;
+  // Step 1: Pull and merge from cloud (conflict resolution LWW)
+  const pullResult = await pullFromCloud(userId);
+  if (!pullResult.success) return pullResult;
 
-  return pullFromCloud(userId);
+  // Step 2: Push merged state back to Supabase
+  return pushToCloud(userId);
 }
 
 /**

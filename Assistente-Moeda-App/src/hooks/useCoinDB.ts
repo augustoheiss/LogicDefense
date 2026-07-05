@@ -142,6 +142,10 @@ function useCoinDBInternal(): CoinDBState {
           setTables(db.tables);
           setAiCostCurrentMonth(db.aiCostCurrentMonth ?? 0);
           setAiCostLastReset(db.aiCostLastReset ?? '');
+          // Keep active table index within valid bounds of the newly loaded tables
+          if (activeTableIndex >= db.tables.length) {
+            setActiveTableIndex(Math.max(0, db.tables.length - 1));
+          }
         }
       } else {
         console.warn('pullFromCloud failed during hydration:', res.error);
@@ -164,7 +168,7 @@ function useCoinDBInternal(): CoinDBState {
       if (timeoutId) clearTimeout(timeoutId);
       if (!isSilent) setIsLoading(false);
     }
-  }, []);
+  }, [activeTableIndex]);
 
   // ── Manual Sync trigger (Bidirectional push + pull) ────
   const syncCloud = useCallback(async (): Promise<{ success: boolean; error?: string }> => {
@@ -179,11 +183,15 @@ function useCoinDBInternal(): CoinDBState {
         setTables(db.tables);
         setAiCostCurrentMonth(db.aiCostCurrentMonth ?? 0);
         setAiCostLastReset(db.aiCostLastReset ?? '');
+        // Keep active table index within valid bounds of the newly loaded tables
+        if (activeTableIndex >= db.tables.length) {
+          setActiveTableIndex(Math.max(0, db.tables.length - 1));
+        }
       }
     }
     setIsLoading(false);
     return res;
-  }, [auth.mode, auth.user]);
+  }, [auth.mode, auth.user, activeTableIndex]);
 
   // ── Manual Local-to-Cloud Migration ────────────────────
   const migrateLocalToCloud = useCallback(async (): Promise<{ success: boolean; error?: string }> => {
