@@ -567,7 +567,7 @@ function useCoinDBInternal(): CoinDBState {
 
   return {
     isLoading,
-    tables,
+    tables: activeTables,
     activeTableIndex,
     activeTable,
     metrics,
