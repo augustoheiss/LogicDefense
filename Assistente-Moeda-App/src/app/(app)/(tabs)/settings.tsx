@@ -539,6 +539,7 @@ export default function SettingsScreen() {
         {db.activeTable && (
           <Section title="🎯 Metas Semanais">
             <GoalsAccordion
+              key={db.activeTable.id}
               goals={db.activeTable.goals}
               onUpdate={db.updateGoals}
             />

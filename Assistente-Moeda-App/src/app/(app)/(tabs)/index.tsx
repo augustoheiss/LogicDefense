@@ -41,6 +41,7 @@ import { TableSwitcherModal, PreviewModal, PredictionPanel, BulkDeleteModal, Pay
 import { formatCurrencySmart } from '@/core/formatCurrency';
 import { shareWhatsAppReport, shareCSV, sharePDFReport, buildWhatsAppReport, shareCSVText, buildCSV } from '@/services/exportService';
 import { importCSVFlow, pickCSVFile, parseCSV } from '@/services/csvImportService';
+import { computeBaselineGoals } from '@/core/metricsEngine';
 import type { TableRow } from '@/core/types';
 
 export default function SpreadsheetScreen() {
@@ -243,7 +244,22 @@ export default function SpreadsheetScreen() {
             result.rows
           );
         } else {
-          db.addRows(result.rows);
+          await db.addRows(result.rows);
+
+          // Auto-calculate baseline goals from imported transaction history
+          // if the active table currently has no goals configured
+          const currentGoals = db.activeTable?.goals;
+          const hasExistingGoals = currentGoals && (
+            Object.keys(currentGoals.dailyGoals || {}).length > 0 ||
+            Object.keys(currentGoals.weeklyGoals || {}).length > 0 ||
+            currentGoals.globalGoals !== undefined
+          );
+          if (!hasExistingGoals && result.rows.length > 0) {
+            const baselineGoals = computeBaselineGoals(result.rows);
+            if (baselineGoals.globalGoals) {
+              db.updateGoals(baselineGoals);
+            }
+          }
         }
 
         const summary = [

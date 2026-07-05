@@ -550,6 +550,75 @@ export function emptyMetrics(): TableMetrics {
   };
 }
 
+/**
+ * Compute baseline goals from historical transaction data.
+ *
+ * Used when importing CSV data that has no explicit goal metadata.
+ * Calculates global daily average from revenue rows, then derives
+ * weekly and annual targets. Populates both legacy flat records
+ * (keyed by year) and the new hierarchical globalGoals.
+ *
+ * Returns a complete TableGoals object ready to persist.
+ */
+export function computeBaselineGoals(rows: Omit<TableRow, 'id'>[]): TableGoals {
+  // Filter for revenue-only rows (entryType undefined or 'revenue') with positive value
+  const revenueRows = rows.filter(
+    (r) => (!r.entryType || r.entryType === 'revenue') && r.value > 0,
+  );
+
+  if (revenueRows.length === 0) {
+    return { dailyGoals: {}, weeklyGoals: {}, annualCosts: {} };
+  }
+
+  // Find the calendar day span from earliest to latest revenue date
+  const dates = revenueRows.map((r) => r.periodStart || r.date).concat(
+    revenueRows.map((r) => r.periodEnd || r.date),
+  ).sort();
+  const earliest = dates[0];
+  const latest = dates[dates.length - 1];
+  const daySpan = Math.max(1, calendarDaySpan(earliest, latest));
+
+  // Calculate gross revenue total
+  const grossRevenue = revenueRows.reduce((sum, r) => sum + r.value, 0);
+  const dailyAvg = round2(grossRevenue / daySpan);
+  const weeklyGoal = round2(dailyAvg * 7);
+  const annualCost = round2(dailyAvg * 365.25);
+
+  // Determine which years the data spans
+  const yearSet = new Set<number>();
+  for (const r of revenueRows) {
+    yearSet.add(parseInt((r.periodStart || r.date).slice(0, 4), 10));
+    if (r.periodEnd) {
+      yearSet.add(parseInt(r.periodEnd.slice(0, 4), 10));
+    }
+  }
+  const years = Array.from(yearSet).sort();
+
+  // Build legacy flat records keyed by year
+  const dailyGoals: Record<number, number> = {};
+  const weeklyGoals: Record<number, number> = {};
+  const annualCosts: Record<number, number> = {};
+  for (const yr of years) {
+    dailyGoals[yr] = dailyAvg;
+    weeklyGoals[yr] = weeklyGoal;
+    annualCosts[yr] = annualCost;
+  }
+
+  // Build hierarchical globalGoals profile
+  const globalGoals = {
+    dailyGoal: dailyAvg,
+    weeklyGoal,
+    annualCost,
+  };
+
+  return {
+    dailyGoals,
+    weeklyGoals,
+    annualCosts,
+    globalGoals,
+  };
+}
+
 function getConsecutiveMonths(startYM: string, endYM: string): string[] {
   const [startY, startM] = startYM.split('-').map(Number);
   const [endY, endM] = endYM.split('-').map(Number);

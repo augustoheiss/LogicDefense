@@ -70,36 +70,101 @@ export function useAuth(): AuthState {
   const [session, setSession] = useState<Session | null>(null);
   const [profileFetchError, setProfileFetchError] = useState<string | null>(null);
 
+  // ── Helper Callbacks for Cache & Retry ──────────────────────
+  const loadProfileFromCache = useCallback(async () => {
+    try {
+      const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+      const cached = await AsyncStorage.getItem('coin_assistant_cached_profile');
+      if (cached) {
+        setProfile(JSON.parse(cached));
+      }
+    } catch (cacheErr) {
+      console.error('Failed to load cached profile:', cacheErr);
+    }
+  }, []);
+
+  const triggerBackgroundAuthRetry = useCallback((userId: string) => {
+    setTimeout(() => {
+      console.log('Retrying profile refresh silently in the background...');
+      getUserProfile(userId).then(async (userProfile) => {
+        if (userProfile) {
+          setProfile(userProfile);
+          setProfileFetchError(null);
+          const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+          await AsyncStorage.setItem('coin_assistant_cached_profile', JSON.stringify(userProfile));
+          console.log('Background profile refresh succeeded!');
+        }
+      }).catch((err) => {
+        console.warn('Background profile refresh failed:', err);
+      });
+    }, 10000);
+  }, []);
+
   // ── Initialize: check for existing session ─────────────────
   useEffect(() => {
     async function init() {
+      let timeoutId: any = null;
       try {
-        const existingSession = await getSession();
-        if (existingSession && existingSession.access_token) {
-          setSession(existingSession);
-          setUser(existingSession.user);
-          setProfileFetchError(null);
-          try {
-            const userProfile = await getUserProfile(existingSession.user.id);
-            setProfile(userProfile);
-          } catch (err: any) {
-            console.error('Initial profile fetch failed:', err);
-            setProfileFetchError(err?.message || String(err));
+        const initPromise = (async () => {
+          const existingSession = await getSession();
+          if (existingSession && existingSession.access_token) {
+            setSession(existingSession);
+            setUser(existingSession.user);
+            setProfileFetchError(null);
+            try {
+              const userProfile = await getUserProfile(existingSession.user.id);
+              setProfile(userProfile);
+              const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+              await AsyncStorage.setItem('coin_assistant_cached_profile', JSON.stringify(userProfile));
+            } catch (err: any) {
+              console.error('Initial profile fetch failed:', err);
+              setProfileFetchError(err?.message || String(err));
+              await loadProfileFromCache();
+            }
+            setMode('authenticated');
+          } else {
+            setMode('guest');
           }
-          setMode('authenticated');
-        } else {
-          setMode('guest');
-        }
+        })();
+
+        const timeoutPromise = new Promise((_, reject) => {
+          timeoutId = setTimeout(() => reject(new Error('Timeout')), 4000);
+        });
+
+        await Promise.race([initPromise, timeoutPromise]);
       } catch (err: any) {
-        console.error('Session init failed:', err);
-        setProfileFetchError(err?.message || String(err));
+        console.warn('Auth initialization timed out or failed, falling back to offline mode:', err);
+        
+        // Attempt to load from cache
+        try {
+          const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+          const keys = await AsyncStorage.getAllKeys();
+          const sbKey = keys.find((k: string) => k.startsWith('sb-') && k.endsWith('-auth-token'));
+          if (sbKey) {
+            const rawSession = await AsyncStorage.getItem(sbKey);
+            if (rawSession) {
+              const parsed = JSON.parse(rawSession);
+              if (parsed && parsed.user) {
+                setUser(parsed.user);
+                setSession(parsed);
+                setMode('authenticated');
+                await loadProfileFromCache();
+                triggerBackgroundAuthRetry(parsed.user.id);
+                return;
+              }
+            }
+          }
+        } catch (fallbackErr) {
+          console.error('Session recovery fallback failed:', fallbackErr);
+        }
         setMode('guest');
       } finally {
+        if (timeoutId) clearTimeout(timeoutId);
         setIsLoading(false);
       }
     }
     init();
-  }, []);
+  }, [loadProfileFromCache, triggerBackgroundAuthRetry]);
 
   // ── Listen for auth state changes ──────────────────────────
   useEffect(() => {

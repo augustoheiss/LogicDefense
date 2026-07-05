@@ -18,7 +18,7 @@ export type {
   ModalMode,
 } from './types';
 
-export { computeMetrics, emptyMetrics, rowContributions } from './metricsEngine';
+export { computeMetrics, emptyMetrics, rowContributions, computeBaselineGoals } from './metricsEngine';
 
 export {
   generateClonedData,

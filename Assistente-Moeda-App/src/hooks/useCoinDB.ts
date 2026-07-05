@@ -12,7 +12,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo, createContext, useContext } from 'react';
 import { loadDB, saveDB, clearDB } from '../storage/asyncStorageAdapter';
-import { computeMetrics, emptyMetrics } from '../core/metricsEngine';
+import { computeMetrics, emptyMetrics, computeBaselineGoals } from '../core/metricsEngine';
 import type { DB, CoinTable, TableRow, TableGoals, TableMetrics } from '../core/types';
 import { useAuthContext } from './useAuth';
 import { fullSync, pushToCloud, pullFromCloud } from '../storage/supabaseSync';
@@ -126,19 +126,44 @@ function useCoinDBInternal(): CoinDBState {
   }, []);
 
   // ── Hydrate from Cloud on Login (Pull remote data) ───
-  const hydrateFromCloud = useCallback(async (userId: string) => {
-    setIsLoading(true);
-    const res = await pullFromCloud(userId);
-    if (res.success) {
-      const db = await loadDB();
-      if (db) {
-        setTables(db.tables);
-        setAiCostCurrentMonth(db.aiCostCurrentMonth ?? 0);
-        setAiCostLastReset(db.aiCostLastReset ?? '');
+  const hydrateFromCloud = useCallback(async (userId: string, isSilent = false) => {
+    if (!isSilent) setIsLoading(true);
+    let timeoutId: any = null;
+    try {
+      const pullPromise = pullFromCloud(userId);
+      const timeoutPromise = new Promise<{ success: boolean; error?: string }>((_, reject) => {
+        timeoutId = setTimeout(() => reject(new Error('Timeout')), 4000);
+      });
+
+      const res = await Promise.race([pullPromise, timeoutPromise]) as { success: boolean; error?: string };
+      if (res.success) {
+        const db = await loadDB();
+        if (db) {
+          setTables(db.tables);
+          setAiCostCurrentMonth(db.aiCostCurrentMonth ?? 0);
+          setAiCostLastReset(db.aiCostLastReset ?? '');
+        }
+      } else {
+        console.warn('pullFromCloud failed during hydration:', res.error);
+        if (!isSilent) {
+          setTimeout(() => {
+            console.log('Retrying background sync silently...');
+            hydrateFromCloud(userId, true).catch((e) => console.error('Background sync failed:', e));
+          }, 15000);
+        }
       }
+    } catch (err: any) {
+      console.warn('hydrateFromCloud timed out or encountered an error:', err);
+      if (!isSilent) {
+        setTimeout(() => {
+          console.log('Retrying background sync silently after timeout...');
+          hydrateFromCloud(userId, true).catch((e) => console.error('Background sync failed:', e));
+        }, 15000);
+      }
+    } finally {
+      if (timeoutId) clearTimeout(timeoutId);
+      if (!isSilent) setIsLoading(false);
     }
-    setIsLoading(false);
-    return res;
   }, []);
 
   // ── Manual Sync trigger (Bidirectional push + pull) ────
@@ -281,6 +306,21 @@ function useCoinDBInternal(): CoinDBState {
     goals?: TableGoals,
     rows?: Omit<TableRow, 'id'>[]
   ) => {
+    // Auto-seed baseline goals from imported rows when no explicit goals are provided
+    let effectiveGoals = goals ?? { dailyGoals: {}, weeklyGoals: {}, annualCosts: {} };
+    const goalsAreEmpty = (
+      Object.keys(effectiveGoals.dailyGoals || {}).length === 0 &&
+      Object.keys(effectiveGoals.weeklyGoals || {}).length === 0 &&
+      Object.keys(effectiveGoals.annualCosts || {}).length === 0 &&
+      !effectiveGoals.globalGoals
+    );
+    if (goalsAreEmpty && rows && rows.length > 0) {
+      const baseline = computeBaselineGoals(rows);
+      if (baseline.globalGoals) {
+        effectiveGoals = baseline;
+      }
+    }
+
     const newTable: CoinTable = {
       id: generateId(),
       name,
@@ -288,7 +328,7 @@ function useCoinDBInternal(): CoinDBState {
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       rows: rows ? rows.map((r) => ({ ...r, id: generateId() })) : [],
-      goals: goals ?? { dailyGoals: {}, weeklyGoals: {}, annualCosts: {} },
+      goals: effectiveGoals,
     };
     const newTables = [...tables, newTable];
     persist(newTables);
