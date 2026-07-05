@@ -20,6 +20,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   useWindowDimensions,
+  Alert,
 } from 'react-native';
 import { colors } from '@/theme/colors';
 import { spacing, radius } from '@/theme/spacing';
@@ -30,6 +31,8 @@ interface AddRowModalProps {
   onClose: () => void;
   onAdd: (rowOrRows: Omit<TableRow, 'id'> | Omit<TableRow, 'id'>[]) => void;
   editingRow?: TableRow | null;
+  onDelete?: (rowId: string) => void;
+  onClone?: (row: TableRow) => void;
 }
 
 type EntryType = 'revenue' | 'deposit' | 'waiver' | 'expense' | 'partner_in' | 'partner_out';
@@ -51,7 +54,7 @@ function getTodayISO(): string {
   return `${y}-${m}-${day}`;
 }
 
-export function AddRowModal({ visible, onClose, onAdd, editingRow }: AddRowModalProps) {
+export function AddRowModal({ visible, onClose, onAdd, editingRow, onDelete, onClone }: AddRowModalProps) {
   const { width } = useWindowDimensions();
   const isWide = width >= 600;
 
@@ -149,6 +152,47 @@ export function AddRowModal({ visible, onClose, onAdd, editingRow }: AddRowModal
   };
 
   const isEditMode = !!editingRow;
+
+  const handleDelete = () => {
+    if (!editingRow || !onDelete) return;
+
+    if (Platform.OS === 'web') {
+      const confirm = window.confirm('Deseja mesmo excluir esta entrada?');
+      if (confirm) {
+        onDelete(editingRow.id);
+        onClose();
+      }
+    } else {
+      Alert.alert(
+        'Confirmação',
+        'Deseja mesmo excluir esta entrada?',
+        [
+          { text: 'Cancelar', style: 'cancel' },
+          {
+            text: 'Excluir',
+            style: 'destructive',
+            onPress: () => {
+              onDelete(editingRow.id);
+              onClose();
+            },
+          },
+        ]
+      );
+    }
+  };
+
+  const handleClone = () => {
+    if (!editingRow || !onClone) return;
+
+    onClone(editingRow);
+    onClose();
+
+    if (Platform.OS === 'web') {
+      window.alert('Entrada clonada com sucesso!');
+    } else {
+      Alert.alert('Sucesso', 'Entrada clonada com sucesso!');
+    }
+  };
 
   const handleSubmit = () => {
     setError(null);
@@ -519,26 +563,71 @@ export function AddRowModal({ visible, onClose, onAdd, editingRow }: AddRowModal
             )}
 
             {/* Actions */}
-            <View style={styles.actions}>
-              <Pressable
-                style={({ pressed }) => [
-                  styles.cancelButton,
-                  pressed && styles.pressed,
-                ]}
-                onPress={onClose}
-              >
-                <Text style={styles.cancelText}>Cancelar</Text>
-              </Pressable>
-              <Pressable
-                style={({ pressed }) => [
-                  styles.submitButton,
-                  pressed && styles.pressed,
-                ]}
-                onPress={handleSubmit}
-              >
-                <Text style={styles.submitText}>{isEditMode ? 'Salvar' : 'Adicionar'}</Text>
-              </Pressable>
-            </View>
+            {isEditMode ? (
+              <View style={styles.editActionsContainer}>
+                <View style={styles.actionsRow}>
+                  <Pressable
+                    style={({ pressed }) => [
+                      styles.cancelButton,
+                      pressed && styles.pressed,
+                    ]}
+                    onPress={onClose}
+                  >
+                    <Text style={styles.cancelText}>Cancelar</Text>
+                  </Pressable>
+                  <Pressable
+                    style={({ pressed }) => [
+                      styles.submitButton,
+                      pressed && styles.pressed,
+                    ]}
+                    onPress={handleSubmit}
+                  >
+                    <Text style={styles.submitText}>Salvar</Text>
+                  </Pressable>
+                </View>
+                <View style={styles.actionsRow}>
+                  <Pressable
+                    style={({ pressed }) => [
+                      styles.cloneButton,
+                      pressed && styles.pressed,
+                    ]}
+                    onPress={handleClone}
+                  >
+                    <Text style={styles.cloneText}>👥 Clonar</Text>
+                  </Pressable>
+                  <Pressable
+                    style={({ pressed }) => [
+                      styles.deleteButton,
+                      pressed && styles.pressed,
+                    ]}
+                    onPress={handleDelete}
+                  >
+                    <Text style={styles.deleteText}>🗑️ Excluir</Text>
+                  </Pressable>
+                </View>
+              </View>
+            ) : (
+              <View style={styles.actions}>
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.cancelButton,
+                    pressed && styles.pressed,
+                  ]}
+                  onPress={onClose}
+                >
+                  <Text style={styles.cancelText}>Cancelar</Text>
+                </Pressable>
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.submitButton,
+                    pressed && styles.pressed,
+                  ]}
+                  onPress={handleSubmit}
+                >
+                  <Text style={styles.submitText}>Adicionar</Text>
+                </Pressable>
+              </View>
+            )}
           </ScrollView>
         </View>
       </KeyboardAvoidingView>
@@ -759,5 +848,41 @@ const styles = StyleSheet.create({
   },
   pressed: {
     opacity: 0.75,
+  },
+  editActionsContainer: {
+    gap: spacing.md,
+    marginTop: spacing.sm,
+  },
+  actionsRow: {
+    flexDirection: 'row',
+    gap: spacing.md,
+  },
+  cloneButton: {
+    flex: 1,
+    paddingVertical: spacing.md,
+    borderRadius: radius.md,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.accent.purpleBorder,
+    backgroundColor: colors.accent.purpleLight,
+  },
+  cloneText: {
+    color: colors.accent.purple,
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  deleteButton: {
+    flex: 1,
+    paddingVertical: spacing.md,
+    borderRadius: radius.md,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.danger.border,
+    backgroundColor: colors.danger.light,
+  },
+  deleteText: {
+    color: colors.danger.main,
+    fontSize: 15,
+    fontWeight: '600',
   },
 });

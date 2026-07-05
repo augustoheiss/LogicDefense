@@ -513,6 +513,24 @@ export default function SpreadsheetScreen() {
           setEditingRow(null);
         }}
         editingRow={editingRow}
+        onDelete={(rowId) => {
+          db.deleteRow(rowId);
+        }}
+        onClone={(row) => {
+          const cloned: Omit<TableRow, 'id'> = {
+            date: row.date,
+            value: row.value,
+            description: row.description ? `${row.description} (CÓPIA)` : undefined,
+            entryType: row.entryType,
+            monthlyValue: row.monthlyValue,
+            monthCount: row.monthCount,
+            periodStart: row.periodStart,
+            periodEnd: row.periodEnd,
+            generatedBy: row.generatedBy,
+            clonedFrom: row.clonedFrom,
+          };
+          db.addRows([cloned]);
+        }}
       />
 
       {/* Table Switcher Modal */}
