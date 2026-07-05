@@ -166,6 +166,7 @@ export async function pushToCloud(userId: string): Promise<{ success: boolean; e
           position: db.tables.indexOf(table),
           created_at: String(table.createdAt),
           updated_at: String(table.updatedAt),
+          is_deleted: !!table.isDeleted,
         };
         const { error: tableError } = await supabase.from('coin_tables').upsert(tablePayload);
         if (tableError) throw tableError;
@@ -313,6 +314,7 @@ export async function pullFromCloud(userId: string): Promise<{ success: boolean;
       updatedAt: t.updated_at,
       rows: rowsByTable.get(t.id) ?? [],
       goals: t.goals ?? { dailyGoals: {}, weeklyGoals: {}, annualCosts: {} },
+      isDeleted: t.is_deleted ?? undefined,
     }));
 
     const mergedTablesMap = new Map<string, CoinTable>();

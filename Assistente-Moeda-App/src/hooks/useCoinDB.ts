@@ -288,8 +288,11 @@ function useCoinDBInternal(): CoinDBState {
     updateAICost(updatedCost, currentMonthStr);
   }, [aiCostCurrentMonth, aiCostLastReset, updateAICost]);
 
+  // Filter out tombstoned tables for the UI
+  const activeTables = useMemo(() => tables.filter((t) => !t.isDeleted), [tables]);
+
   // ── Active table ───────────────────────────────────────
-  const activeTable = tables[activeTableIndex] ?? null;
+  const activeTable = activeTables[activeTableIndex] ?? null;
 
   // ── Metrics (computed from active table) ───────────────
   const metrics = useMemo(() => {
@@ -368,29 +371,32 @@ function useCoinDBInternal(): CoinDBState {
   }, [tables, persist]);
 
   const deleteTable = useCallback((tableId: string) => {
-    const newTables = tables.filter((t) => t.id !== tableId);
+    const newTables = tables.map((t) =>
+      t.id === tableId ? { ...t, isDeleted: true, updatedAt: new Date().toISOString() } : t
+    );
     persist(newTables);
-    if (activeTableIndex >= newTables.length) {
-      setActiveTableIndex(Math.max(0, newTables.length - 1));
+    
+    const newActiveTables = newTables.filter((t) => !t.isDeleted);
+    if (activeTableIndex >= newActiveTables.length) {
+      setActiveTableIndex(Math.max(0, newActiveTables.length - 1));
     }
   }, [tables, activeTableIndex, persist]);
 
   // ── Row Operations ────────────────────────────────────
   const addRow = useCallback(async (row: Omit<TableRow, 'id'>, tableName?: string) => {
-    const targetIndex = tableName 
-      ? tables.findIndex(t => t.name.toLowerCase().trim() === tableName.toLowerCase().trim())
-      : activeTableIndex;
+    const targetTable = tableName 
+      ? tables.find(t => !t.isDeleted && t.name.toLowerCase().trim() === tableName.toLowerCase().trim())
+      : activeTable;
 
-    const actualIndex = targetIndex !== -1 ? targetIndex : activeTableIndex;
-    if (actualIndex < 0 || actualIndex >= tables.length) return;
+    if (!targetTable) return;
 
     const normalizedDescription = row.description 
       ? row.description.toUpperCase().trim() 
       : undefined;
 
     const newRow: TableRow = { ...row, description: normalizedDescription, id: generateId() };
-    const newTables = tables.map((t, i) => {
-      if (i !== actualIndex) return t;
+    const newTables = tables.map((t) => {
+      if (t.id !== targetTable.id) return t;
       return {
         ...t,
         rows: [...t.rows, newRow].sort((a, b) => a.date.localeCompare(b.date)),
@@ -398,24 +404,23 @@ function useCoinDBInternal(): CoinDBState {
       };
     });
     await persist(newTables);
-  }, [tables, activeTableIndex, persist]);
+  }, [tables, activeTable, persist]);
 
   const addRows = useCallback(async (rows: Omit<TableRow, 'id'>[], tableName?: string) => {
     if (rows.length === 0) return;
-    const targetIndex = tableName 
-      ? tables.findIndex(t => t.name.toLowerCase().trim() === tableName.toLowerCase().trim())
-      : activeTableIndex;
+    const targetTable = tableName 
+      ? tables.find(t => !t.isDeleted && t.name.toLowerCase().trim() === tableName.toLowerCase().trim())
+      : activeTable;
 
-    const actualIndex = targetIndex !== -1 ? targetIndex : activeTableIndex;
-    if (actualIndex < 0 || actualIndex >= tables.length) return;
+    if (!targetTable) return;
 
     const newRows: TableRow[] = rows.map((r) => ({
       ...r,
       description: r.description ? r.description.toUpperCase().trim() : undefined,
       id: generateId()
     }));
-    const newTables = tables.map((t, i) => {
-      if (i !== actualIndex) return t;
+    const newTables = tables.map((t) => {
+      if (t.id !== targetTable.id) return t;
       return {
         ...t,
         rows: [...t.rows, ...newRows].sort((a, b) => a.date.localeCompare(b.date)),
@@ -423,15 +428,16 @@ function useCoinDBInternal(): CoinDBState {
       };
     });
     await persist(newTables);
-  }, [tables, activeTableIndex, persist]);
+  }, [tables, activeTable, persist]);
 
   const updateRow = useCallback((rowId: string, updates: Partial<TableRow>) => {
+    if (!activeTable) return;
     const normalizedUpdates = { ...updates };
     if (normalizedUpdates.description) {
       normalizedUpdates.description = normalizedUpdates.description.toUpperCase().trim();
     }
-    const newTables = tables.map((t, i) => {
-      if (i !== activeTableIndex) return t;
+    const newTables = tables.map((t) => {
+      if (t.id !== activeTable.id) return t;
       return {
         ...t,
         rows: t.rows.map((r) => (r.id === rowId ? { ...r, ...normalizedUpdates } : r)),
@@ -439,11 +445,12 @@ function useCoinDBInternal(): CoinDBState {
       };
     });
     persist(newTables);
-  }, [tables, activeTableIndex, persist]);
+  }, [tables, activeTable, persist]);
 
   const deleteRow = useCallback((rowId: string) => {
-    const newTables = tables.map((t, i) => {
-      if (i !== activeTableIndex) return t;
+    if (!activeTable) return;
+    const newTables = tables.map((t) => {
+      if (t.id !== activeTable.id) return t;
       return {
         ...t,
         rows: t.rows.filter((r) => r.id !== rowId),
@@ -451,13 +458,13 @@ function useCoinDBInternal(): CoinDBState {
       };
     });
     persist(newTables);
-  }, [tables, activeTableIndex, persist]);
+  }, [tables, activeTable, persist]);
 
   const deleteRowsByPrefix = useCallback((prefix: string): number => {
     if (!activeTable) return 0;
     let deletedCount = 0;
-    const newTables = tables.map((t, i) => {
-      if (i !== activeTableIndex) return t;
+    const newTables = tables.map((t) => {
+      if (t.id !== activeTable.id) return t;
       const originalLength = t.rows.length;
       const keptRows = t.rows.filter((r) => {
         if (r.date.startsWith(prefix)) return false;
@@ -472,12 +479,13 @@ function useCoinDBInternal(): CoinDBState {
     });
     persist(newTables);
     return deletedCount;
-  }, [tables, activeTableIndex, activeTable, persist]);
+  }, [tables, activeTable, persist]);
 
   const deleteGeneratedRows = useCallback((prefix?: string): number => {
+    if (!activeTable) return 0;
     let deletedCount = 0;
-    const newTables = tables.map((t, i) => {
-      if (i !== activeTableIndex) return t;
+    const newTables = tables.map((t) => {
+      if (t.id !== activeTable.id) return t;
       const originalLength = t.rows.length;
       const keptRows = t.rows.filter((r) => {
         if (!r.generatedBy) return true;
@@ -493,12 +501,13 @@ function useCoinDBInternal(): CoinDBState {
     });
     persist(newTables);
     return deletedCount;
-  }, [tables, activeTableIndex, persist]);
+  }, [tables, activeTable, persist]);
 
   const effectuateGeneratedRows = useCallback((prefix?: string): number => {
+    if (!activeTable) return 0;
     let effectuatedCount = 0;
-    const newTables = tables.map((t, i) => {
-      if (i !== activeTableIndex) return t;
+    const newTables = tables.map((t) => {
+      if (t.id !== activeTable.id) return t;
       const updatedRows = t.rows.map((r) => {
         if (!r.generatedBy) return r;
         if (prefix && !r.date.startsWith(prefix)) return r;
@@ -514,12 +523,13 @@ function useCoinDBInternal(): CoinDBState {
     });
     persist(newTables);
     return effectuatedCount;
-  }, [tables, activeTableIndex, persist]);
+  }, [tables, activeTable, persist]);
 
   // ── Goals ─────────────────────────────────────────────
   const updateGoals = useCallback((goalUpdates: Partial<TableGoals>) => {
-    const newTables = tables.map((t, i) => {
-      if (i !== activeTableIndex) return t;
+    if (!activeTable) return;
+    const newTables = tables.map((t) => {
+      if (t.id !== activeTable.id) return t;
       return {
         ...t,
         goals: { ...t.goals, ...goalUpdates },
@@ -527,7 +537,7 @@ function useCoinDBInternal(): CoinDBState {
       };
     });
     persist(newTables);
-  }, [tables, activeTableIndex, persist]);
+  }, [tables, activeTable, persist]);
 
   const deductTokens = useCallback(async (amount: number) => {
     if (auth.mode === 'authenticated' && auth.user) {

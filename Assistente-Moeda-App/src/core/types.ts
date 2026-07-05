@@ -135,6 +135,7 @@ export interface CoinTable {
   updatedAt: string;   // ISO timestamp
   rows: TableRow[];
   goals: TableGoals;
+  isDeleted?: boolean;
 }
 
 export type DB = {
