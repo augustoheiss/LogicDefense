@@ -156,6 +156,7 @@ export async function pushToCloud(userId: string): Promise<{ success: boolean; e
     // 3. Upsert tables and manage their transactions
     if (db.tables && db.tables.length > 0) {
       for (const table of db.tables) {
+        if (!table) continue;
         // Sanitize Table Payload
         const tablePayload = {
           id: String(table.id),
@@ -166,7 +167,7 @@ export async function pushToCloud(userId: string): Promise<{ success: boolean; e
           position: db.tables.indexOf(table),
           created_at: String(table.createdAt),
           updated_at: String(table.updatedAt),
-          is_deleted: !!table.isDeleted,
+          is_deleted: table.isDeleted != null ? !!table.isDeleted : false,
         };
         const { error: tableError } = await supabase.from('coin_tables').upsert(tablePayload);
         if (tableError) throw tableError;
@@ -306,16 +307,18 @@ export async function pullFromCloud(userId: string): Promise<{ success: boolean;
       });
     }
 
-    const remoteTables: CoinTable[] = tables.map((t) => ({
-      id: t.id,
-      name: t.name,
-      description: t.description ?? undefined,
-      createdAt: t.created_at,
-      updatedAt: t.updated_at,
-      rows: rowsByTable.get(t.id) ?? [],
-      goals: t.goals ?? { dailyGoals: {}, weeklyGoals: {}, annualCosts: {} },
-      isDeleted: t.is_deleted ?? undefined,
-    }));
+    const remoteTables: CoinTable[] = (tables || [])
+      .filter((t) => t && t.id)
+      .map((t) => ({
+        id: t.id,
+        name: t.name,
+        description: t.description ?? undefined,
+        createdAt: t.created_at,
+        updatedAt: t.updated_at,
+        rows: rowsByTable.get(t.id) ?? [],
+        goals: t.goals ?? { dailyGoals: {}, weeklyGoals: {}, annualCosts: {} },
+        isDeleted: t.is_deleted != null ? !!t.is_deleted : undefined,
+      }));
 
     const mergedTablesMap = new Map<string, CoinTable>();
 
@@ -363,12 +366,17 @@ export async function pullFromCloud(userId: string): Promise<{ success: boolean;
  * Prevents local stale state from overwriting newer cloud updates.
  */
 export async function fullSync(userId: string): Promise<{ success: boolean; error?: string }> {
-  // Step 1: Pull and merge from cloud (conflict resolution LWW)
-  const pullResult = await pullFromCloud(userId);
-  if (!pullResult.success) return pullResult;
+  try {
+    // Step 1: Pull and merge from cloud (conflict resolution LWW)
+    const pullResult = await pullFromCloud(userId);
+    if (!pullResult.success) return pullResult;
 
-  // Step 2: Push merged state back to Supabase
-  return pushToCloud(userId);
+    // Step 2: Push merged state back to Supabase
+    return await pushToCloud(userId);
+  } catch (err: any) {
+    console.error("fullSync exception:", err);
+    return { success: false, error: err?.message || String(err) };
+  }
 }
 
 /**

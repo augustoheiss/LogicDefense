@@ -176,21 +176,27 @@ function useCoinDBInternal(): CoinDBState {
       return { success: false, error: 'User is not authenticated' };
     }
     setIsLoading(true);
-    const res = await fullSync(auth.user.id);
-    if (res.success) {
-      const db = await loadDB();
-      if (db) {
-        setTables(db.tables);
-        setAiCostCurrentMonth(db.aiCostCurrentMonth ?? 0);
-        setAiCostLastReset(db.aiCostLastReset ?? '');
-        // Keep active table index within valid bounds of the newly loaded tables
-        if (activeTableIndex >= db.tables.length) {
-          setActiveTableIndex(Math.max(0, db.tables.length - 1));
+    try {
+      const res = await fullSync(auth.user.id);
+      if (res.success) {
+        const db = await loadDB();
+        if (db) {
+          setTables(db.tables);
+          setAiCostCurrentMonth(db.aiCostCurrentMonth ?? 0);
+          setAiCostLastReset(db.aiCostLastReset ?? '');
+          // Keep active table index within valid bounds of the newly loaded tables
+          if (activeTableIndex >= db.tables.length) {
+            setActiveTableIndex(Math.max(0, db.tables.length - 1));
+          }
         }
       }
+      return res;
+    } catch (err: any) {
+      console.error('Manual sync failed:', err);
+      return { success: false, error: err?.message || 'Sync failed' };
+    } finally {
+      setIsLoading(false);
     }
-    setIsLoading(false);
-    return res;
   }, [auth.mode, auth.user, activeTableIndex]);
 
   // ── Manual Local-to-Cloud Migration ────────────────────
@@ -199,9 +205,15 @@ function useCoinDBInternal(): CoinDBState {
       return { success: false, error: 'User is not authenticated' };
     }
     setIsLoading(true);
-    const res = await pushToCloud(auth.user.id);
-    setIsLoading(false);
-    return res;
+    try {
+      const res = await pushToCloud(auth.user.id);
+      return res;
+    } catch (err: any) {
+      console.error('Cloud migration failed:', err);
+      return { success: false, error: err?.message || 'Migration failed' };
+    } finally {
+      setIsLoading(false);
+    }
   }, [auth.mode, auth.user]);
 
   // ── Clear local database cache ─────────────────────────
