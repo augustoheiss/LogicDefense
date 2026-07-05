@@ -243,9 +243,24 @@ function useCoinDBInternal(): CoinDBState {
       aiCostLastReset: currentDB?.aiCostLastReset ?? '',
     });
     if (auth.mode === 'authenticated' && auth.user) {
-      pushToCloud(auth.user.id).catch((err) => console.error('Cloud push failed:', err));
+      // Non-blocking bidirectional background fullSync to pull/merge remote data and push merged state
+      fullSync(auth.user.id).then(async (res) => {
+        if (res.success) {
+          const db = await loadDB();
+          if (db) {
+            setTables(db.tables);
+            setAiCostCurrentMonth(db.aiCostCurrentMonth ?? 0);
+            setAiCostLastReset(db.aiCostLastReset ?? '');
+            if (activeTableIndex >= db.tables.length) {
+              setActiveTableIndex(Math.max(0, db.tables.length - 1));
+            }
+          }
+        }
+      }).catch((err) => {
+        console.error('Cloud background sync failed:', err);
+      });
     }
-  }, [auth.mode, auth.user]);
+  }, [auth.mode, auth.user, activeTableIndex]);
 
   const updateAICost = useCallback(async (newCost: number, newResetMonth: string) => {
     setAiCostCurrentMonth(newCost);
@@ -257,7 +272,9 @@ function useCoinDBInternal(): CoinDBState {
       aiCostLastReset: newResetMonth,
     });
     if (auth.mode === 'authenticated' && auth.user) {
-      pushToCloud(auth.user.id).catch((err) => console.error('Cloud push failed:', err));
+      fullSync(auth.user.id).catch((err) => {
+        console.error('Cloud background sync failed:', err);
+      });
     }
   }, [auth.mode, auth.user, tables]);
 
