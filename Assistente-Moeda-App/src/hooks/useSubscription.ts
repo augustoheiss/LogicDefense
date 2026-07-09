@@ -279,7 +279,7 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
       setIsPro(active);
       if (active) {
         // Extract expiresDate or expirationDate directly from the RevenueCat entitlement object
-        const rcExpirationDate = proEntitlement.expiresDate || proEntitlement.expirationDate || null;
+        const rcExpirationDate = (proEntitlement as any).expiresDate || proEntitlement.expirationDate || null;
         setExpirationDate(rcExpirationDate);
         
         const prodId = (packageToBuy.product?.identifier || '').toLowerCase();
@@ -314,7 +314,7 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
       setIsPro(active);
       if (active) {
         // Extract expiresDate or expirationDate directly from the RevenueCat entitlement object
-        const rcExpirationDate = proEntitlement.expiresDate || proEntitlement.expirationDate || null;
+        const rcExpirationDate = (proEntitlement as any).expiresDate || proEntitlement.expirationDate || null;
         setExpirationDate(rcExpirationDate);
         const prodId = (proEntitlement.productIdentifier || '').toLowerCase();
         if (prodId.includes('year') || prodId.includes('anual')) {
