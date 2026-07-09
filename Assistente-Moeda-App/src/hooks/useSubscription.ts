@@ -94,7 +94,7 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
             .from('profiles')
             .update({
               premium_tier: 'premium',
-              subscription_expires_at: expirationDate || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+              subscription_expires_at: expirationDate, // Send direct timestamp from RevenueCat
               updated_at: new Date().toISOString()
             })
             .eq('id', auth.user.id);
@@ -105,6 +105,7 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
             .from('user_settings')
             .update({
               subscription_type: plan || 'monthly',
+              expires_at: expirationDate, // Send direct timestamp directly to user_settings
               updated_at: new Date().toISOString()
             })
             .eq('id', auth.user.id);
@@ -139,6 +140,7 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
             .from('user_settings')
             .update({
               subscription_type: 'free',
+              expires_at: null,
               updated_at: new Date().toISOString()
             })
             .eq('id', auth.user.id);
@@ -167,7 +169,9 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
       const proEntitlement = activeEntitlements['pro'];
       if (proEntitlement) {
         setIsPro(true);
-        setExpirationDate(proEntitlement.expirationDate || null);
+        // Extract expiresDate or expirationDate directly from the RevenueCat entitlement object
+        const rcExpirationDate = proEntitlement.expiresDate || proEntitlement.expirationDate || null;
+        setExpirationDate(rcExpirationDate);
         const prodId = (proEntitlement.productIdentifier || '').toLowerCase();
         // Explicit matching: 'moeda-pro-anual' → yearly, 'moeda-pro-mensal' → monthly
         if (prodId.includes('anual') || prodId.includes('year')) {
@@ -269,9 +273,15 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
     try {
       const packageToBuy = pkg._rcOriginalPackage || pkg;
       const { customerInfo } = await Purchases.purchasePackage(packageToBuy);
-      const active = !!customerInfo.entitlements.active['pro'];
+      const activeEntitlements = customerInfo.entitlements.active;
+      const proEntitlement = activeEntitlements['pro'];
+      const active = !!proEntitlement;
       setIsPro(active);
       if (active) {
+        // Extract expiresDate or expirationDate directly from the RevenueCat entitlement object
+        const rcExpirationDate = proEntitlement.expiresDate || proEntitlement.expirationDate || null;
+        setExpirationDate(rcExpirationDate);
+        
         const prodId = (packageToBuy.product?.identifier || '').toLowerCase();
         if (prodId.includes('year') || prodId.includes('anual') || packageToBuy.packageType === 'YEARLY') {
           setSubscriptionType('yearly');
@@ -280,6 +290,7 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
         }
       } else {
         setSubscriptionType(null);
+        setExpirationDate(null);
       }
 
       // Active purchase trigger fallback: refresh Supabase state
@@ -297,11 +308,14 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
   const restorePurchases = useCallback(async (): Promise<boolean> => {
     try {
       const customerInfo = await Purchases.restorePurchases();
-      const active = !!customerInfo.entitlements.active['pro'];
+      const activeEntitlements = customerInfo.entitlements.active;
+      const proEntitlement = activeEntitlements['pro'];
+      const active = !!proEntitlement;
       setIsPro(active);
       if (active) {
-        const proEntitlement = customerInfo.entitlements.active['pro'];
-        setExpirationDate(proEntitlement.expirationDate || null);
+        // Extract expiresDate or expirationDate directly from the RevenueCat entitlement object
+        const rcExpirationDate = proEntitlement.expiresDate || proEntitlement.expirationDate || null;
+        setExpirationDate(rcExpirationDate);
         const prodId = (proEntitlement.productIdentifier || '').toLowerCase();
         if (prodId.includes('year') || prodId.includes('anual')) {
           setSubscriptionType('yearly');
