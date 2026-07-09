@@ -52,6 +52,10 @@ def verify_stripe_signature(payload_bytes: bytes, sig_header: str, secret: str) 
             if hmac.compare_digest(sig, expected_sig):
                 return True
         return False
+    except Exception as e:
+        logger.error(f"Error validating Stripe signature: {e}")
+        return False
+
 async def credit_user_tokens_atomic(user_id: str, amount: int) -> bool:
     """Atomically increment user token balance using Postgres RPC to prevent race conditions."""
     supabase_url = os.getenv("SUPABASE_URL")
