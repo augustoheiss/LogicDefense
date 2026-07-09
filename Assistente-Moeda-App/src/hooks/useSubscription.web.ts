@@ -33,6 +33,8 @@ export interface SubscriptionContextState {
   setShowPaywall: (show: boolean) => void;
   toggleProMock: () => void;
   expirationDate: string | null;
+  /** Find a specific package by its RevenueCat identifier (e.g. '100k_tokens') */
+  getPackageByIdentifier: (identifier: string) => SubscriptionPackage | undefined;
 }
 
 const SubscriptionContext = createContext<SubscriptionContextState | null>(null);
@@ -131,6 +133,13 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
     });
   }, []);
 
+  const getPackageByIdentifier = useCallback((identifier: string): SubscriptionPackage | undefined => {
+    return (
+      MOCK_PACKAGES.find((p) => p.identifier === identifier) ||
+      MOCK_CONSUMABLES.find((p) => p.identifier === identifier)
+    );
+  }, []);
+
   const value: SubscriptionContextState = {
     isPro: effectiveIsPro,
     subscriptionType: effectiveSubscriptionType,
@@ -143,6 +152,7 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
     setShowPaywall,
     toggleProMock,
     expirationDate: effectiveExpirationDate,
+    getPackageByIdentifier,
   };
 
   return React.createElement(SubscriptionContext.Provider, { value }, children);

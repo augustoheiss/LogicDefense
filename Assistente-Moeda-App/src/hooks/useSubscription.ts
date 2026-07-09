@@ -34,6 +34,8 @@ export interface SubscriptionContextState {
   setShowPaywall: (show: boolean) => void;
   toggleProMock: () => void;
   expirationDate: string | null;
+  /** Find a specific package by its RevenueCat identifier (e.g. '100k_tokens') */
+  getPackageByIdentifier: (identifier: string) => SubscriptionPackage | undefined;
 }
 
 const SubscriptionContext = createContext<SubscriptionContextState | null>(null);
@@ -167,9 +169,13 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
         setIsPro(true);
         setExpirationDate(proEntitlement.expirationDate || null);
         const prodId = (proEntitlement.productIdentifier || '').toLowerCase();
-        if (prodId.includes('year') || prodId.includes('anual')) {
+        // Explicit matching: 'moeda-pro-anual' → yearly, 'moeda-pro-mensal' → monthly
+        if (prodId.includes('anual') || prodId.includes('year')) {
           setSubscriptionType('yearly');
+        } else if (prodId.includes('mensal') || prodId.includes('month')) {
+          setSubscriptionType('monthly');
         } else {
+          // Fallback: default to monthly for any other subscription product
           setSubscriptionType('monthly');
         }
         return;
@@ -183,8 +189,14 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
   const fetchOfferings = useCallback(async () => {
     try {
       const offerings = await Purchases.getOfferings();
-      if (offerings.current !== null && offerings.current.availablePackages.length > 0) {
-        const filtered = offerings.current.availablePackages
+      const currentOffering = offerings.current;
+
+      if (currentOffering !== null && currentOffering.availablePackages.length > 0) {
+        const allPackages = currentOffering.availablePackages;
+
+        // ── Clean bucket split from the 'default' offering ──────────────
+        // Bucket 1: Subscriptions (MONTHLY / YEARLY)
+        const subscriptions = allPackages
           .filter((pkg: any) => pkg.packageType === 'MONTHLY' || pkg.packageType === 'YEARLY')
           .map((pkg: any) => ({
             identifier: pkg.identifier,
@@ -197,41 +209,25 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
             },
             _rcOriginalPackage: pkg,
           }));
-        setRcPackages(filtered);
-      }
 
-      // Consumables offerings
-      const tokenOffering = offerings.all['Tokens'] || offerings.all['tokens'];
-      if (tokenOffering && tokenOffering.availablePackages.length > 0) {
-        const mappedConsumables = tokenOffering.availablePackages.map((pkg: any) => ({
-          identifier: pkg.identifier,
-          packageType: pkg.packageType,
-          product: {
-            priceString: pkg.product.priceString,
-            price: pkg.product.price,
-            title: pkg.product.title,
-            description: pkg.product.description,
-          },
-          _rcOriginalPackage: pkg,
-        }));
-        setRcConsumables(mappedConsumables);
-      } else {
-        if (offerings.current !== null) {
-          const customPkgs = offerings.current.availablePackages
-            .filter((pkg: any) => pkg.packageType !== 'MONTHLY' && pkg.packageType !== 'YEARLY')
-            .map((pkg: any) => ({
-              identifier: pkg.identifier,
-              packageType: pkg.packageType,
-              product: {
-                priceString: pkg.product.priceString,
-                price: pkg.product.price,
-                title: pkg.product.title,
-                description: pkg.product.description,
-              },
-              _rcOriginalPackage: pkg,
-            }));
-          setRcConsumables(customPkgs);
-        }
+        // Bucket 2: Consumables (CUSTOM packages like '100k_tokens')
+        const consumables = allPackages
+          .filter((pkg: any) => pkg.packageType !== 'MONTHLY' && pkg.packageType !== 'YEARLY')
+          .map((pkg: any) => ({
+            identifier: pkg.identifier,
+            packageType: pkg.packageType,
+            product: {
+              priceString: pkg.product.priceString,
+              price: pkg.product.price,
+              title: pkg.product.title,
+              description: pkg.product.description,
+            },
+            _rcOriginalPackage: pkg,
+          }));
+
+        console.log(`[RevenueCat] Fetched ${subscriptions.length} subscription(s) and ${consumables.length} consumable(s) from 'default' offering`);
+        setRcPackages(subscriptions);
+        setRcConsumables(consumables);
       }
     } catch (e) {
       console.warn('Failed to fetch RevenueCat offerings:', e);
@@ -340,6 +336,14 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
     });
   }, []);
 
+  /** Find a specific package by its RevenueCat identifier across both buckets */
+  const getPackageByIdentifier = useCallback((identifier: string): SubscriptionPackage | undefined => {
+    return (
+      rcPackages.find((p) => p.identifier === identifier) ||
+      rcConsumables.find((p) => p.identifier === identifier)
+    );
+  }, [rcPackages, rcConsumables]);
+
   const value: SubscriptionContextState = {
     isPro: effectiveIsPro,
     subscriptionType: effectiveSubscriptionType,
@@ -352,6 +356,7 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
     setShowPaywall,
     toggleProMock,
     expirationDate: effectiveExpirationDate,
+    getPackageByIdentifier,
   };
 
   return React.createElement(SubscriptionContext.Provider, { value }, children);

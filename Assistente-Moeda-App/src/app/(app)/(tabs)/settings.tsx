@@ -129,15 +129,22 @@ export default function SettingsScreen() {
     impact(ImpactFeedbackStyle.Medium);
 
     try {
-      const isConsumable = pkg.packageType === 'CUSTOM' || pkg.identifier.includes('token') || pkg.identifier.includes('consumable');
+      const isConsumable = pkg.packageType === 'CUSTOM' || pkg.identifier === '100k_tokens' || pkg.identifier.includes('token') || pkg.identifier.includes('consumable');
       
       if (isConsumable) {
         const success = await purchasePackage(pkg);
         if (success) {
-          let amount = 100000;
-          if (pkg.identifier.includes('50k')) amount = 50000;
-          else if (pkg.identifier.includes('200k')) amount = 200000;
-          else if (pkg.identifier.includes('500k')) amount = 500000;
+          // Explicit token amount mapping by identifier
+          let amount = 100_000; // default for '100k_tokens'
+          if (pkg.identifier === '100k_tokens') {
+            amount = 100_000;
+          } else if (pkg.identifier.includes('50k')) {
+            amount = 50_000;
+          } else if (pkg.identifier.includes('200k')) {
+            amount = 200_000;
+          } else if (pkg.identifier.includes('500k')) {
+            amount = 500_000;
+          }
           
           await creditTokens(amount);
           if (Platform.OS === 'web') {
@@ -147,6 +154,7 @@ export default function SettingsScreen() {
           }
         }
       } else {
+        // Subscription purchase
         const success = await purchasePackage(pkg);
         if (success) {
           if (Platform.OS === 'web') {
@@ -157,12 +165,15 @@ export default function SettingsScreen() {
         }
       }
     } catch (err: any) {
-      console.error("Purchase Failed:", err);
-      const msg = err.message || String(err);
-      if (Platform.OS === 'web') {
-        window.alert("Erro na compra: " + msg);
-      } else {
-        Alert.alert("Erro na compra", msg);
+      // Error is already handled in purchasePackage (user cancellation is silenced)
+      if (err && !err.userCancelled) {
+        console.error("Purchase Failed:", err);
+        const msg = err.message || String(err);
+        if (Platform.OS === 'web') {
+          window.alert("Erro na compra: " + msg);
+        } else {
+          Alert.alert("Erro na compra", msg);
+        }
       }
     }
   };
@@ -705,65 +716,149 @@ export default function SettingsScreen() {
             </View>
 
             <ScrollView style={styles.modalContent} contentContainerStyle={styles.modalContentInner}>
-              {/* Entitlement Status */}
+              {/* ── Entitlement Status Banner ──────────────────── */}
               <View style={[styles.statusCard, isPro && styles.statusCardActive]}>
                 <Text style={styles.statusTitle}>
                   {isPro ? '⭐ Plano PRO Ativo' : '🆓 Plano Gratuito Limitado'}
                 </Text>
                 <Text style={styles.statusDescription}>
                   {isPro 
-                    ? 'Você tem acesso ilimitado ao Motor Estatístico, Projeções e maior cota de IA!' 
+                    ? `Você tem acesso ilimitado ao Motor Estatístico, Projeções e maior cota de IA!${
+                        subscriptionType ? `\nPlano: ${subscriptionType === 'yearly' ? 'Anual' : 'Mensal'}` : ''
+                      }${
+                        expirationDate ? `\nExpira em: ${(() => {
+                          try { return new Date(expirationDate).toLocaleDateString('pt-BR'); }
+                          catch { return expirationDate; }
+                        })()}` : ''
+                      }`
                     : 'Assine o Pro para liberar análises ilimitadas, mediana, desvios padrões e inteligência avançada.'}
                 </Text>
               </View>
 
-              {/* Subscriptions Section */}
-              <Text style={styles.storeSectionTitle}>Planos de Assinatura (Pro)</Text>
-              {packages.length === 0 ? (
-                <Text style={styles.emptyStoreText}>Carregando assinaturas...</Text>
-              ) : (
-                packages.map((pkg) => (
-                  <Card key={pkg.identifier} glow variant="accent" style={styles.storeCard}>
-                    <View style={styles.storeCardHeader}>
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.storeCardTitle}>{pkg.product.title}</Text>
-                        <Text style={styles.storeCardDesc}>{pkg.product.description}</Text>
-                      </View>
-                      <Text style={styles.storeCardPrice}>{pkg.product.priceString}</Text>
-                    </View>
-                    <HapticButton
-                      style={styles.buyButton}
-                      onPress={() => handlePurchase(pkg)}
-                    >
-                      <Text style={styles.buyButtonText}>Assinar Agora</Text>
-                    </HapticButton>
-                  </Card>
-                ))
+              {/* ── Subscription Section (hidden when PRO active) ─ */}
+              {!isPro && (
+                <>
+                  <Text style={styles.storeSectionTitle}>Planos de Assinatura (Pro)</Text>
+                  {packages.length === 0 ? (
+                    <Text style={styles.emptyStoreText}>Carregando assinaturas...</Text>
+                  ) : (
+                    <>
+                      {/* Mensal Button */}
+                      {(() => {
+                        const monthlyPkg = packages.find(p => p.packageType === 'MONTHLY');
+                        if (!monthlyPkg) return null;
+                        return (
+                          <Card key={monthlyPkg.identifier} glow variant="accent" style={styles.storeCard}>
+                            <View style={styles.storeCardHeader}>
+                              <View style={{ flex: 1 }}>
+                                <Text style={styles.storeCardTitle}>Mensal</Text>
+                                <Text style={styles.storeCardDesc}>{monthlyPkg.product.description}</Text>
+                              </View>
+                              <Text style={styles.storeCardPrice}>{monthlyPkg.product.priceString}</Text>
+                            </View>
+                            <HapticButton
+                              style={styles.buyButton}
+                              onPress={() => handlePurchase(monthlyPkg)}
+                            >
+                              <Text style={styles.buyButtonText}>Assinar Mensal</Text>
+                            </HapticButton>
+                          </Card>
+                        );
+                      })()}
+
+                      {/* Anual Button */}
+                      {(() => {
+                        const yearlyPkg = packages.find(p => p.packageType === 'YEARLY');
+                        if (!yearlyPkg) return null;
+                        return (
+                          <Card key={yearlyPkg.identifier} glow variant="accent" style={styles.storeCard}>
+                            <View style={styles.storeCardHeader}>
+                              <View style={{ flex: 1 }}>
+                                <Text style={styles.storeCardTitle}>Anual</Text>
+                                <Text style={styles.storeCardDesc}>{yearlyPkg.product.description}</Text>
+                              </View>
+                              <Text style={styles.storeCardPrice}>{yearlyPkg.product.priceString}</Text>
+                            </View>
+                            <View style={styles.bestValueBadge}>
+                              <Text style={styles.bestValueBadgeText}>MELHOR VALOR</Text>
+                            </View>
+                            <HapticButton
+                              style={styles.buyButton}
+                              onPress={() => handlePurchase(yearlyPkg)}
+                            >
+                              <Text style={styles.buyButtonText}>Assinar Anual</Text>
+                            </HapticButton>
+                          </Card>
+                        );
+                      })()}
+                    </>
+                  )}
+                </>
               )}
 
-              {/* Consumables Section */}
+              {/* ── Consumables Section (always visible) ─────── */}
               <Text style={styles.storeSectionTitle}>Créditos Avulsos (Combustível)</Text>
               {consumables.length === 0 ? (
                 <Text style={styles.emptyStoreText}>Carregando pacotes de recarga...</Text>
               ) : (
-                consumables.map((pkg) => (
-                  <Card key={pkg.identifier} style={styles.storeCard}>
-                    <View style={styles.storeCardHeader}>
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.storeCardTitle}>{pkg.product.title}</Text>
-                        <Text style={styles.storeCardDesc}>{pkg.product.description}</Text>
-                      </View>
-                      <Text style={styles.storeCardPrice}>{pkg.product.priceString}</Text>
-                    </View>
-                    <HapticButton
-                      style={[styles.buyButton, styles.buyButtonConsumable]}
-                      onPress={() => handlePurchase(pkg)}
-                    >
-                      <Text style={styles.buyButtonText}>Comprar Recarga</Text>
-                    </HapticButton>
-                  </Card>
-                ))
+                <>
+                  {/* 100k Tokens Button — explicit identifier match */}
+                  {(() => {
+                    const tokenPkg = consumables.find(p => p.identifier === '100k_tokens');
+                    if (!tokenPkg) {
+                      // Fallback: render all consumables if '100k_tokens' not found by identifier
+                      return consumables.map((pkg) => (
+                        <Card key={pkg.identifier} style={styles.storeCard}>
+                          <View style={styles.storeCardHeader}>
+                            <View style={{ flex: 1 }}>
+                              <Text style={styles.storeCardTitle}>{pkg.product.title}</Text>
+                              <Text style={styles.storeCardDesc}>{pkg.product.description}</Text>
+                            </View>
+                            <Text style={styles.storeCardPrice}>{pkg.product.priceString}</Text>
+                          </View>
+                          <HapticButton
+                            style={[styles.buyButton, styles.buyButtonConsumable]}
+                            onPress={() => handlePurchase(pkg)}
+                          >
+                            <Text style={styles.buyButtonText}>Comprar Recarga</Text>
+                          </HapticButton>
+                        </Card>
+                      ));
+                    }
+                    return (
+                      <Card key={tokenPkg.identifier} style={styles.storeCard}>
+                        <View style={styles.storeCardHeader}>
+                          <View style={{ flex: 1 }}>
+                            <Text style={styles.storeCardTitle}>100k Tokens</Text>
+                            <Text style={styles.storeCardDesc}>Adiciona 100.000 tokens de saldo ao Motor de IA</Text>
+                          </View>
+                          <Text style={styles.storeCardPrice}>{tokenPkg.product.priceString}</Text>
+                        </View>
+                        <HapticButton
+                          style={[styles.buyButton, styles.buyButtonConsumable]}
+                          onPress={() => handlePurchase(tokenPkg)}
+                        >
+                          <Text style={styles.buyButtonText}>Comprar 100k Tokens</Text>
+                        </HapticButton>
+                      </Card>
+                    );
+                  })()}
+                </>
               )}
+
+              {/* ── Restore Purchases ───────────────────────── */}
+              <Pressable
+                style={({ pressed }) => [styles.restorePurchasesBtn, pressed && styles.pressed]}
+                onPress={async () => {
+                  try {
+                    await restorePurchases();
+                  } catch (err: any) {
+                    console.error('Restore failed:', err);
+                  }
+                }}
+              >
+                <Text style={styles.restorePurchasesText}>🔄 Restaurar Compras</Text>
+              </Pressable>
             </ScrollView>
           </View>
         </View>
@@ -1675,4 +1770,28 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: '600',
   } as any,
+  bestValueBadge: {
+    backgroundColor: colors.accent.purple,
+    alignSelf: 'flex-start',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    borderRadius: radius.xs,
+    marginTop: spacing.xs,
+  },
+  bestValueBadgeText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#fff',
+    letterSpacing: 0.5,
+  },
+  restorePurchasesBtn: {
+    paddingVertical: spacing.sm,
+    alignItems: 'center',
+    marginTop: spacing.xs,
+  },
+  restorePurchasesText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: colors.text.secondary,
+  },
 });

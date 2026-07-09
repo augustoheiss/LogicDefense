@@ -1,4 +1,4 @@
-import Purchases, { PurchasesOffering, PurchasesPackage, CustomerInfo } from 'react-native-purchases';
+import Purchases, { PurchasesOffering, PurchasesPackage, CustomerInfo, ENTITLEMENT_VERIFICATION_MODE } from 'react-native-purchases';
 import { Platform } from 'react-native';
 
 const REVENUECAT_API_KEY = process.env.EXPO_PUBLIC_REVENUECAT_GOOGLE_KEY || '';
@@ -36,5 +36,20 @@ export async function purchasePackage(rcPackage: PurchasesPackage): Promise<Cust
       throw e;
     }
     return null;
+  }
+}
+
+/**
+ * Convenience helper: Returns the active entitlements map from RevenueCat.
+ * Useful for quick entitlement checks outside the main subscription hook.
+ */
+export async function getCustomerEntitlements(): Promise<Record<string, any>> {
+  if (Platform.OS === 'web') return {};
+  try {
+    const customerInfo = await Purchases.getCustomerInfo();
+    return customerInfo.entitlements.active || {};
+  } catch (e) {
+    console.error('Failed to get customer entitlements:', e);
+    return {};
   }
 }

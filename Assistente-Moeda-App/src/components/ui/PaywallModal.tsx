@@ -48,6 +48,16 @@ export function PaywallModal({ visible, onClose }: PaywallModalProps) {
     }
   }, [packages, selectedPackage]);
 
+  // Auto-dismiss when user is already PRO
+  React.useEffect(() => {
+    if (visible && isPro) {
+      const timer = setTimeout(() => {
+        onClose();
+      }, 2500);
+      return () => clearTimeout(timer);
+    }
+  }, [visible, isPro, onClose]);
+
   const handleSubscribe = async () => {
     if (!selectedPackage) return;
     setIsPurchasing(true);
@@ -92,155 +102,179 @@ export function PaywallModal({ visible, onClose }: PaywallModalProps) {
 
           {/* Scrollable Content */}
           <ScrollView contentContainerStyle={styles.scrollContent} style={styles.scroll}>
-            {/* Crown Icon */}
-            <View style={styles.iconContainer}>
-              <Text style={styles.premiumIcon}>👑</Text>
-            </View>
-
-            {/* Title & Tagline */}
-            <Text style={styles.title}>Assistente Moeda Pro</Text>
-            <Text style={styles.subtitle}>
-              Suba de nível e tome decisões inteligentes com nossa inteligência artificial avançada.
-            </Text>
-
-            {/* Benefits */}
-            <View style={styles.benefitsList}>
-              <View style={styles.benefitItem}>
-                <Text style={styles.benefitIcon}>🔮</Text>
-                <View style={styles.benefitTextContainer}>
-                  <Text style={styles.benefitTitle}>Previsões em 1 Clique</Text>
-                  <Text style={styles.benefitDesc}>
-                    Simule cenários futuros e crie dados sintéticos baseados em seu histórico.
-                  </Text>
+            {/* ── PRO Active State ───────────────────────────── */}
+            {isPro ? (
+              <View style={styles.proActiveContainer}>
+                <View style={styles.iconContainer}>
+                  <Text style={styles.premiumIcon}>🎉</Text>
                 </View>
+                <Text style={styles.title}>Plano PRO Ativo!</Text>
+                <Text style={styles.subtitle}>
+                  Você já tem acesso completo ao Motor Estatístico, Projeções e inteligência avançada.
+                </Text>
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.subscribeBtn,
+                    pressed && styles.subscribeBtnPressed,
+                  ]}
+                  onPress={onClose}
+                >
+                  <Text style={styles.subscribeBtnText}>Fechar</Text>
+                </Pressable>
               </View>
-
-              <View style={styles.benefitItem}>
-                <Text style={styles.benefitIcon}>🤖</Text>
-                <View style={styles.benefitTextContainer}>
-                  <Text style={styles.benefitTitle}>Análise Financeira Avançada</Text>
-                  <Text style={styles.benefitDesc}>
-                    Pergunte qualquer coisa para a IA e obtenha insights instantâneos baseados nos seus dados.
-                  </Text>
-                </View>
-              </View>
-
-              <View style={styles.benefitItem}>
-                <Text style={styles.benefitIcon}>📈</Text>
-                <View style={styles.benefitTextContainer}>
-                  <Text style={styles.benefitTitle}>Estatísticas Inteligentes</Text>
-                  <Text style={styles.benefitDesc}>
-                     breakdowns completos com média, mediana, desvio padrão e tendências por categorias.
-                  </Text>
-                </View>
-              </View>
-            </View>
-
-            {/* Loading Indicator */}
-            {isLoading ? (
-              <ActivityIndicator size="large" color={colors.accent.purple} style={styles.loader} />
             ) : (
-              <View style={styles.packagesContainer}>
-                {packages.map((pkg) => {
-                  const isSelected = selectedPackage?.identifier === pkg.identifier;
-                  const isYearly = pkg.packageType === 'YEARLY';
+              <>
+                {/* Crown Icon */}
+                <View style={styles.iconContainer}>
+                  <Text style={styles.premiumIcon}>👑</Text>
+                </View>
 
-                  return (
-                    <Pressable
-                      key={pkg.identifier}
-                      onPress={() => setSelectedPackage(pkg)}
-                      style={[
-                        styles.packageCard,
-                        isSelected && styles.packageCardSelected,
-                        isYearly && styles.packageCardYearly,
-                      ]}
-                    >
-                      {isYearly && (
-                        <View style={styles.badge}>
-                          <Text style={styles.badgeText}>MAIS POPULAR - SALVE 50%</Text>
-                        </View>
-                      )}
+                {/* Title & Tagline */}
+                <Text style={styles.title}>Assistente Moeda Pro</Text>
+                <Text style={styles.subtitle}>
+                  Suba de nível e tome decisões inteligentes com nossa inteligência artificial avançada.
+                </Text>
 
-                      <View style={styles.packageHeader}>
-                        <Text style={styles.packageName}>
-                          {isYearly ? 'Plano Anual' : 'Plano Mensal'}
-                        </Text>
-                        <View
+                {/* Benefits */}
+                <View style={styles.benefitsList}>
+                  <View style={styles.benefitItem}>
+                    <Text style={styles.benefitIcon}>🔮</Text>
+                    <View style={styles.benefitTextContainer}>
+                      <Text style={styles.benefitTitle}>Previsões em 1 Clique</Text>
+                      <Text style={styles.benefitDesc}>
+                        Simule cenários futuros e crie dados sintéticos baseados em seu histórico.
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.benefitItem}>
+                    <Text style={styles.benefitIcon}>🤖</Text>
+                    <View style={styles.benefitTextContainer}>
+                      <Text style={styles.benefitTitle}>Análise Financeira Avançada</Text>
+                      <Text style={styles.benefitDesc}>
+                        Pergunte qualquer coisa para a IA e obtenha insights instantâneos baseados nos seus dados.
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.benefitItem}>
+                    <Text style={styles.benefitIcon}>📈</Text>
+                    <View style={styles.benefitTextContainer}>
+                      <Text style={styles.benefitTitle}>Estatísticas Inteligentes</Text>
+                      <Text style={styles.benefitDesc}>
+                         breakdowns completos com média, mediana, desvio padrão e tendências por categorias.
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+
+                {/* Loading Indicator */}
+                {isLoading ? (
+                  <ActivityIndicator size="large" color={colors.accent.purple} style={styles.loader} />
+                ) : (
+                  <View style={styles.packagesContainer}>
+                    {packages.map((pkg) => {
+                      const isSelected = selectedPackage?.identifier === pkg.identifier;
+                      const isYearly = pkg.packageType === 'YEARLY';
+
+                      return (
+                        <Pressable
+                          key={pkg.identifier}
+                          onPress={() => setSelectedPackage(pkg)}
                           style={[
-                            styles.radioCircle,
-                            isSelected && styles.radioCircleSelected,
+                            styles.packageCard,
+                            isSelected && styles.packageCardSelected,
+                            isYearly && styles.packageCardYearly,
                           ]}
-                        />
-                      </View>
+                        >
+                          {isYearly && (
+                            <View style={styles.badge}>
+                              <Text style={styles.badgeText}>MAIS POPULAR - SALVE 50%</Text>
+                            </View>
+                          )}
 
-                      <Text style={styles.packagePrice}>
-                        {pkg.product.priceString}
-                        <Text style={styles.packagePeriod}>
-                          {isYearly ? ' / ano' : ' / mês'}
-                        </Text>
-                      </Text>
+                          <View style={styles.packageHeader}>
+                            <Text style={styles.packageName}>
+                              {isYearly ? 'Plano Anual' : 'Plano Mensal'}
+                            </Text>
+                            <View
+                              style={[
+                                styles.radioCircle,
+                                isSelected && styles.radioCircleSelected,
+                              ]}
+                            />
+                          </View>
 
-                      <Text style={styles.packageDetails}>
-                        {isYearly
-                          ? 'Equivale a R$ 10,00 por mês. Faturamento anual.'
-                          : 'Cancele a qualquer momento. Faturamento mensal.'}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-            )}
+                          <Text style={styles.packagePrice}>
+                            {pkg.product.priceString}
+                            <Text style={styles.packagePeriod}>
+                              {isYearly ? ' / ano' : ' / mês'}
+                            </Text>
+                          </Text>
 
-            {/* Actions */}
-            <View style={styles.actions}>
-              <Pressable
-                style={({ pressed }) => [
-                  styles.subscribeBtn,
-                  (!selectedPackage || isPurchasing) && styles.disabledBtn,
-                  pressed && styles.subscribeBtnPressed,
-                ]}
-                onPress={handleSubscribe}
-                disabled={!selectedPackage || isPurchasing}
-              >
-                {isPurchasing ? (
-                  <ActivityIndicator size="small" color="#fff" />
-                ) : (
-                  <Text style={styles.subscribeBtnText}>
-                    Começar Teste Pro Agora
-                  </Text>
+                          <Text style={styles.packageDetails}>
+                            {isYearly
+                              ? 'Equivale a R$ 10,00 por mês. Faturamento anual.'
+                              : 'Cancele a qualquer momento. Faturamento mensal.'}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
                 )}
-              </Pressable>
 
-              <Pressable
-                style={({ pressed }) => [
-                  styles.restoreBtn,
-                  isRestoring && styles.disabledBtn,
-                  pressed && styles.pressed,
-                ]}
-                onPress={handleRestore}
-                disabled={isRestoring}
-              >
-                {isRestoring ? (
-                  <ActivityIndicator size="small" color={colors.text.secondary} />
-                ) : (
-                  <Text style={styles.restoreBtnText}>Restaurar Compras Existentes</Text>
-                )}
-              </Pressable>
-            </View>
+                {/* Actions */}
+                <View style={styles.actions}>
+                  <Pressable
+                    style={({ pressed }) => [
+                      styles.subscribeBtn,
+                      (!selectedPackage || isPurchasing) && styles.disabledBtn,
+                      pressed && styles.subscribeBtnPressed,
+                    ]}
+                    onPress={handleSubscribe}
+                    disabled={!selectedPackage || isPurchasing}
+                  >
+                    {isPurchasing ? (
+                      <ActivityIndicator size="small" color="#fff" />
+                    ) : (
+                      <Text style={styles.subscribeBtnText}>
+                        Começar Teste Pro Agora
+                      </Text>
+                    )}
+                  </Pressable>
 
-            {/* Dev Mock Tool */}
-            {__DEV__ && (
-              <View style={styles.devMockContainer}>
-                <Text style={styles.devMockTitle}>[Dev Mode] Status da Assinatura:</Text>
-                <View style={styles.devMockRow}>
-                  <Text style={styles.devMockStatus}>
-                    Pro Ativo: {isPro ? '✅ SIM' : '❌ NÃO'}
-                  </Text>
-                  <Pressable style={styles.devMockToggleBtn} onPress={toggleProMock}>
-                    <Text style={styles.devMockToggleBtnText}>Alternar Mock Pro</Text>
+                  <Pressable
+                    style={({ pressed }) => [
+                      styles.restoreBtn,
+                      isRestoring && styles.disabledBtn,
+                      pressed && styles.pressed,
+                    ]}
+                    onPress={handleRestore}
+                    disabled={isRestoring}
+                  >
+                    {isRestoring ? (
+                      <ActivityIndicator size="small" color={colors.text.secondary} />
+                    ) : (
+                      <Text style={styles.restoreBtnText}>Restaurar Compras Existentes</Text>
+                    )}
                   </Pressable>
                 </View>
-              </View>
+
+                {/* Dev Mock Tool */}
+                {__DEV__ && (
+                  <View style={styles.devMockContainer}>
+                    <Text style={styles.devMockTitle}>[Dev Mode] Status da Assinatura:</Text>
+                    <View style={styles.devMockRow}>
+                      <Text style={styles.devMockStatus}>
+                        Pro Ativo: {isPro ? '✅ SIM' : '❌ NÃO'}
+                      </Text>
+                      <Pressable style={styles.devMockToggleBtn} onPress={toggleProMock}>
+                        <Text style={styles.devMockToggleBtnText}>Alternar Mock Pro</Text>
+                      </Pressable>
+                    </View>
+                  </View>
+                )}
+              </>
             )}
           </ScrollView>
         </View>
@@ -503,5 +537,10 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '700',
     color: colors.accent.purple,
+  },
+  proActiveContainer: {
+    alignItems: 'center',
+    gap: spacing.md,
+    paddingVertical: spacing.lg,
   },
 });
