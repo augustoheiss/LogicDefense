@@ -13,9 +13,9 @@ export async function purchasePackage(rcPackage: any, userId?: string): Promise<
   const identifier = rcPackage?.identifier || '';
   const packageType = rcPackage?.packageType || '';
 
-  if (packageType === 'MONTHLY' || identifier === 'mock_monthly') {
+  if (packageType === 'MONTHLY' || identifier === 'moeda_pro:moeda-pro-mensal') {
     paymentLink = process.env.EXPO_PUBLIC_WEB_PAYMENT_LINK_MONTHLY || 'https://buy.stripe.com/mock-monthly';
-  } else if (packageType === 'YEARLY' || identifier === 'mock_yearly') {
+  } else if (packageType === 'YEARLY' || identifier === 'moeda_pro:moeda-pro-anual') {
     paymentLink = process.env.EXPO_PUBLIC_WEB_PAYMENT_LINK_YEARLY || 'https://buy.stripe.com/mock-yearly';
   } else {
     // Consumable tokens top-up

@@ -95,12 +95,13 @@ export default function SettingsScreen() {
     }
   }, [auth.mode, auth.user, maxTokens]);
 
-  const creditTokens = useCallback(async (amount: number) => {
+  const incrementarTokensNoBancoLocal = useCallback(async (amount: number) => {
     if (auth.mode === 'authenticated' && auth.user) {
       try {
+        // Fetch existing columns dynamically to avoid querying non-existent columns (e.g. token_limit)
         const { data, error: fetchErr } = await supabase
           .from('user_settings')
-          .select('token_balance')
+          .select('*')
           .eq('id', auth.user.id)
           .maybeSingle();
 
@@ -109,34 +110,48 @@ export default function SettingsScreen() {
         const currentBalance = data?.token_balance ? Number(data.token_balance) : 0;
         const newBalance = currentBalance + amount;
 
+        const updatePayload: Record<string, any> = {
+          token_balance: newBalance,
+          updated_at: new Date().toISOString()
+        };
+
+        // If database schema includes token_limit, update it cumulatively as well
+        if (data && 'token_limit' in data && data.token_limit !== null) {
+          const currentLimit = Number(data.token_limit);
+          updatePayload.token_limit = currentLimit + amount;
+        }
+
         const { error: updateErr } = await supabase
           .from('user_settings')
-          .update({ token_balance: newBalance })
+          .update(updatePayload)
           .eq('id', auth.user.id);
 
         if (updateErr) throw updateErr;
+
+        // Immediately update state to trigger UI progress bar update in real-time
         setTokenBalance(newBalance);
+        await auth.refreshProfile();
       } catch (err) {
-        console.error('Failed to credit tokens:', err);
+        console.error('Failed to credit tokens cumulatively:', err);
       }
     } else {
       setTokenBalance((prev) => prev + amount);
     }
-  }, [auth.mode, auth.user]);
+  }, [auth.mode, auth.user, auth.refreshProfile]);
 
   const handlePurchase = async (pkg: any) => {
     // Haptic feedback for purchase intent
     impact(ImpactFeedbackStyle.Medium);
 
     try {
-      const isConsumable = pkg.packageType === 'CUSTOM' || pkg.identifier === '100k_tokens' || pkg.identifier.includes('token') || pkg.identifier.includes('consumable');
+      const isConsumable = pkg.packageType === 'CUSTOM' || pkg.identifier === 'moeda_tokens_100k' || pkg.identifier.includes('token') || pkg.identifier.includes('consumable');
       
       if (isConsumable) {
         const success = await purchasePackage(pkg);
         if (success) {
           // Explicit token amount mapping by identifier
-          let amount = 100_000; // default for '100k_tokens'
-          if (pkg.identifier === '100k_tokens') {
+          let amount = 100_000; // default for 'moeda_tokens_100k'
+          if (pkg.identifier === 'moeda_tokens_100k') {
             amount = 100_000;
           } else if (pkg.identifier.includes('50k')) {
             amount = 50_000;
@@ -146,7 +161,7 @@ export default function SettingsScreen() {
             amount = 500_000;
           }
           
-          await creditTokens(amount);
+          await incrementarTokensNoBancoLocal(amount);
           if (Platform.OS === 'web') {
             window.alert(`Recarga bem-sucedida! Adicionado ${amount.toLocaleString('pt-BR')} tokens ao seu saldo.`);
           } else {
@@ -804,9 +819,9 @@ export default function SettingsScreen() {
                 <>
                   {/* 100k Tokens Button — explicit identifier match */}
                   {(() => {
-                    const tokenPkg = consumables.find(p => p.identifier === '100k_tokens');
+                    const tokenPkg = consumables.find(p => p.identifier === 'moeda_tokens_100k');
                     if (!tokenPkg) {
-                      // Fallback: render all consumables if '100k_tokens' not found by identifier
+                      // Fallback: render all consumables if 'moeda_tokens_100k' not found by identifier
                       return consumables.map((pkg) => (
                         <Card key={pkg.identifier} style={styles.storeCard}>
                           <View style={styles.storeCardHeader}>

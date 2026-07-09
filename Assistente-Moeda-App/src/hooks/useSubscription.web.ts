@@ -33,7 +33,7 @@ export interface SubscriptionContextState {
   setShowPaywall: (show: boolean) => void;
   toggleProMock: () => void;
   expirationDate: string | null;
-  /** Find a specific package by its RevenueCat identifier (e.g. '100k_tokens') */
+  /** Find a specific package by its RevenueCat identifier (e.g. 'moeda_tokens_100k') */
   getPackageByIdentifier: (identifier: string) => SubscriptionPackage | undefined;
 }
 
@@ -41,7 +41,7 @@ const SubscriptionContext = createContext<SubscriptionContextState | null>(null)
 
 const MOCK_PACKAGES: SubscriptionPackage[] = [
   {
-    identifier: 'mock_monthly',
+    identifier: 'moeda_pro:moeda-pro-mensal',
     packageType: 'MONTHLY',
     product: {
       priceString: 'R$ 20,00',
@@ -51,7 +51,7 @@ const MOCK_PACKAGES: SubscriptionPackage[] = [
     },
   },
   {
-    identifier: 'mock_yearly',
+    identifier: 'moeda_pro:moeda-pro-anual',
     packageType: 'YEARLY',
     product: {
       priceString: 'R$ 120,00',
@@ -64,7 +64,7 @@ const MOCK_PACKAGES: SubscriptionPackage[] = [
 
 const MOCK_CONSUMABLES: SubscriptionPackage[] = [
   {
-    identifier: 'mock_tokens_100k',
+    identifier: 'moeda_tokens_100k',
     packageType: 'CUSTOM',
     product: {
       priceString: 'R$ 9,90',

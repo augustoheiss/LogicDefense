@@ -34,7 +34,7 @@ export interface SubscriptionContextState {
   setShowPaywall: (show: boolean) => void;
   toggleProMock: () => void;
   expirationDate: string | null;
-  /** Find a specific package by its RevenueCat identifier (e.g. '100k_tokens') */
+  /** Find a specific package by its RevenueCat identifier (e.g. 'moeda_tokens_100k') */
   getPackageByIdentifier: (identifier: string) => SubscriptionPackage | undefined;
 }
 
@@ -210,7 +210,7 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
             _rcOriginalPackage: pkg,
           }));
 
-        // Bucket 2: Consumables (CUSTOM packages like '100k_tokens')
+        // Bucket 2: Consumables (CUSTOM packages like 'moeda_tokens_100k')
         const consumables = allPackages
           .filter((pkg: any) => pkg.packageType !== 'MONTHLY' && pkg.packageType !== 'YEARLY')
           .map((pkg: any) => ({
