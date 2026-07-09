@@ -133,31 +133,39 @@ async def update_user_premium_status(user_id: str, premium_tier: str, subscripti
                 
             # 2. Update user_settings table
             settings_url = f"{supabase_url}/rest/v1/user_settings?id=eq.{user_id}"
+            settings_payload = {
+                "subscription_type": subscription_type,
+                "updated_at": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S+00:00")
+            }
+            if expiration_date:
+                settings_payload["expires_at"] = expiration_date
+
             settings_res = await client.patch(
                 settings_url,
                 headers=headers,
-                json={
-                    "subscription_type": subscription_type,
-                    "updated_at": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S+00:00")
-                }
+                json=settings_payload
             )
             settings_ok = settings_res.status_code in (200, 201, 204)
             
             # If user_settings doesn't exist, insert it
             if not settings_ok:
                 insert_url = f"{supabase_url}/rest/v1/user_settings"
+                insert_payload = {
+                    "id": user_id,
+                    "token_balance": token_tank if premium_tier == "premium" else FREE_TOKEN_TANK,
+                    "ai_cost_current_month": 0.0,
+                    "ai_cost_last_reset": "",
+                    "subscription_type": subscription_type,
+                    "goals": {},
+                    "updated_at": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S+00:00")
+                }
+                if expiration_date:
+                    insert_payload["expires_at"] = expiration_date
+
                 insert_res = await client.post(
                     insert_url,
                     headers=headers,
-                    json={
-                        "id": user_id,
-                        "token_balance": token_tank if premium_tier == "premium" else FREE_TOKEN_TANK,
-                        "ai_cost_current_month": 0.0,
-                        "ai_cost_last_reset": "",
-                        "subscription_type": subscription_type,
-                        "goals": {},
-                        "updated_at": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S+00:00")
-                    }
+                    json=insert_payload
                 )
                 settings_ok = insert_res.status_code in (200, 201, 204)
                 

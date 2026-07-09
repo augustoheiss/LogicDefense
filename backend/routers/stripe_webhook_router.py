@@ -77,25 +77,40 @@ async def fulfill_stripe_checkout(session: dict):
             is_consumable = True
 
     if is_subscription:
-        current_period_end_raw = session.get("current_period_end") or (
-            session.get("subscription", {}).get("current_period_end") 
-            if isinstance(session.get("subscription"), dict) else None
-        )
-        
-        expiration_date_iso = None
-        if current_period_end_raw:
-            try:
-                expiration_date_iso = datetime.utcfromtimestamp(int(current_period_end_raw)).strftime("%Y-%m-%dT%H:%M:%S+00:00")
-            except Exception as e:
-                logger.error(f"Error parsing current_period_end timestamp {current_period_end_raw}: {e}")
-                
-        if not expiration_date_iso:
-            # Fallback subscription expiration offset
-            now = datetime.utcnow()
-            if "year" in product_id or "yearly" in product_id or "anual" in product_id or amount_total >= 10000:
-                expiration_date_iso = (now + timedelta(days=365)).strftime("%Y-%m-%dT%H:%M:%S+00:00")
-            else:
-                expiration_date_iso = (now + timedelta(days=30)).strftime("%Y-%m-%dT%H:%M:%S+00:00")
+        # Fetch current expiration date from database to support cumulative stacking
+        current_expiration_date = None
+        supabase_url = os.getenv("SUPABASE_URL")
+        supabase_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+        if supabase_url and supabase_key:
+            headers = {
+                "apikey": supabase_key,
+                "Authorization": f"Bearer {supabase_key}"
+            }
+            profile_get_url = f"{supabase_url}/rest/v1/profiles?id=eq.{app_user_id}"
+            async with httpx.AsyncClient() as client:
+                try:
+                    profile_res = await client.get(profile_get_url, headers=headers)
+                    if profile_res.status_code == 200:
+                        profile_data = profile_res.json()
+                        if profile_data:
+                            expires_str = profile_data[0].get("subscription_expires_at")
+                            if expires_str:
+                                # Clean timezone offsets for isoformat parsing
+                                clean_expires_str = expires_str.replace("Z", "").split("+")[0]
+                                current_expiration_date = datetime.fromisoformat(clean_expires_str)
+                except Exception as e:
+                    logger.error(f"Error fetching user profile for expiration stacking: {e}")
+
+        now = datetime.utcnow()
+        baseline = now
+        if current_expiration_date and current_expiration_date > now:
+            baseline = current_expiration_date
+
+        # Stack the purchased duration onto the baseline
+        if "year" in product_id or "yearly" in product_id or "anual" in product_id or amount_total >= 10000:
+            expiration_date_iso = (baseline + timedelta(days=365)).strftime("%Y-%m-%dT%H:%M:%S+00:00")
+        else:
+            expiration_date_iso = (baseline + timedelta(days=30)).strftime("%Y-%m-%dT%H:%M:%S+00:00")
 
         # Resolve token tank size (e.g. 1M for monthly, 12M for yearly)
         token_tank = resolve_token_tank(product_id, amount_total)
