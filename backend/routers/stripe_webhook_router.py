@@ -9,6 +9,7 @@ import hmac
 import hashlib
 import time
 import logging
+import httpx
 from datetime import datetime, timedelta
 from fastapi import APIRouter, Request, Header, HTTPException, status
 from fastapi.responses import JSONResponse
@@ -51,9 +52,39 @@ def verify_stripe_signature(payload_bytes: bytes, sig_header: str, secret: str) 
             if hmac.compare_digest(sig, expected_sig):
                 return True
         return False
-    except Exception as e:
-        logger.error(f"Error validating Stripe signature: {e}")
+async def credit_user_tokens_atomic(user_id: str, amount: int) -> bool:
+    """Atomically increment user token balance using Postgres RPC to prevent race conditions."""
+    supabase_url = os.getenv("SUPABASE_URL")
+    supabase_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY") # Bypasses RLS safely
+    if not supabase_url or not supabase_key:
+        logger.error("Supabase credentials missing.")
         return False
+        
+    headers = {
+        "apikey": supabase_key,
+        "Authorization": f"Bearer {supabase_key}",
+        "Content-Type": "application/json"
+    }
+    
+    # Call the stored function via PostgREST RPC
+    rpc_url = f"{supabase_url}/rest/v1/rpc/increment_user_tokens"
+    payload = {
+        "target_user_id": user_id,
+        "token_increment_amount": amount
+    }
+    
+    async with httpx.AsyncClient() as client:
+        try:
+            response = await client.post(rpc_url, headers=headers, json=payload)
+            if response.status_code in (200, 204):
+                logger.info(f"Successfully credited {amount:,} tokens to user {user_id}")
+                return True
+            else:
+                logger.error(f"Failed to call RPC: {response.status_code} - {response.text}")
+                return False
+        except Exception as e:
+            logger.error(f"Exception during atomic token crediting: {e}")
+            return False
 
 @router.post("/webhooks/stripe")
 async def stripe_webhook(
@@ -192,8 +223,7 @@ async def stripe_webhook(
             amount = 200000
         elif "500k" in product_id:
             amount = 500000
-            
-        success = await credit_user_tokens(app_user_id, amount, set_balance=False)
+        success = await credit_user_tokens_atomic(app_user_id, amount)
         if success:
             return JSONResponse(
                 status_code=status.HTTP_200_OK,
