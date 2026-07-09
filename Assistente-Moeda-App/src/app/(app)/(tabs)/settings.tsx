@@ -58,7 +58,7 @@ export default function SettingsScreen() {
   const [isDeleting, setIsDeleting] = useState(false);
   const isVisitor = !auth.user || auth.mode === 'guest';
 
-  const { isPro, subscriptionType, packages, consumables, purchasePackage, restorePurchases, expirationDate } = useSubscription();
+  const { isPro, subscriptionType, packages, consumables, purchasePackage, restorePurchases, expirationDate, isProcessing } = useSubscription();
   // Token tank: yearly=12M, monthly=1M, free=100K
   const maxTokens = isPro
     ? (subscriptionType === 'yearly' ? 12_000_000 : 1_000_000)
@@ -67,6 +67,68 @@ export default function SettingsScreen() {
 
   const [showStoreModal, setShowStoreModal] = useState(false);
   const [showDebugger, setShowDebugger] = useState(false);
+
+  const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+  const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
+
+  const handleUpdatePassword = async () => {
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      setPasswordError("Preencha todos os campos.");
+      return;
+    }
+    if (newPassword.length < 6) {
+      setPasswordError("A nova senha deve ter no mínimo 6 caracteres.");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordError("As senhas não coincidem.");
+      return;
+    }
+
+    setIsUpdatingPassword(true);
+    setPasswordError('');
+    try {
+      const email = auth.user?.email;
+      if (!email) throw new Error("Email do usuário não encontrado.");
+
+      const { error: reauthError } = await supabase.auth.signInWithPassword({
+        email,
+        password: currentPassword,
+      });
+
+      if (reauthError) {
+        setPasswordError("Senha atual incorreta");
+        return;
+      }
+
+      const { error: updateError } = await supabase.auth.updateUser({
+        password: newPassword,
+      });
+
+      if (updateError) {
+        setPasswordError(updateError.message);
+        return;
+      }
+
+      setIsPasswordModalOpen(false);
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      if (Platform.OS === 'web') {
+        window.alert("Senha alterada com sucesso!");
+      } else {
+        Alert.alert("Sucesso", "Senha alterada com sucesso!");
+      }
+    } catch (err: any) {
+      setPasswordError(err.message || String(err));
+    } finally {
+      setIsUpdatingPassword(false);
+    }
+  };
 
   const fetchTokenBalance = useCallback(async () => {
     if (auth.mode === 'authenticated' && auth.user) {
@@ -140,6 +202,7 @@ export default function SettingsScreen() {
   }, [auth.mode, auth.user, auth.refreshProfile]);
 
   const handlePurchase = async (pkg: any) => {
+    if (isProcessing) return;
     // Haptic feedback for purchase intent
     impact(ImpactFeedbackStyle.Medium);
 
@@ -471,6 +534,24 @@ export default function SettingsScreen() {
                   {isSyncing ? '🔄 Sincronizando...' : '🔄 Sincronizar Nuvem'}
                 </Text>
               </Pressable>
+
+              <Pressable
+                style={({ pressed }) => [
+                  styles.syncButton,
+                  (isProcessing || isUpdatingPassword) && styles.syncButtonDisabled,
+                  pressed && styles.pressed,
+                ]}
+                onPress={() => {
+                  setCurrentPassword('');
+                  setNewPassword('');
+                  setConfirmPassword('');
+                  setPasswordError('');
+                  setIsPasswordModalOpen(true);
+                }}
+                disabled={isProcessing || isUpdatingPassword}
+              >
+                <Text style={styles.syncButtonText}>🔒 Alterar Senha</Text>
+              </Pressable>
             </Card>
           ) : (
             <Card>
@@ -714,6 +795,91 @@ export default function SettingsScreen() {
         <View style={{ height: spacing.huge }} />
       </ScrollView>
 
+      {/* ── Change Password Modal ───────────────────────── */}
+      <Modal
+        visible={isPasswordModalOpen}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => {
+          if (!isUpdatingPassword) {
+            setIsPasswordModalOpen(false);
+          }
+        }}
+      >
+        <View style={styles.modalBackground}>
+          <View style={styles.modalContainer}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>🔒 Alterar Senha</Text>
+              <Pressable
+                onPress={() => {
+                  if (!isUpdatingPassword) {
+                    setIsPasswordModalOpen(false);
+                  }
+                }}
+                disabled={isUpdatingPassword}
+                style={styles.modalCloseButton}
+              >
+                <Text style={styles.modalCloseText}>✖</Text>
+              </Pressable>
+            </View>
+
+            <View style={styles.modalContent}>
+              <Text style={styles.passwordLabel}>Senha Atual</Text>
+              <TextInput
+                style={styles.passwordInput}
+                value={currentPassword}
+                onChangeText={setCurrentPassword}
+                secureTextEntry={true}
+                placeholder="Digite sua senha atual"
+                placeholderTextColor={colors.text.disabled}
+                editable={!isUpdatingPassword}
+              />
+
+              <Text style={styles.passwordLabel}>Nova Senha</Text>
+              <TextInput
+                style={styles.passwordInput}
+                value={newPassword}
+                onChangeText={setNewPassword}
+                secureTextEntry={true}
+                placeholder="No mínimo 6 caracteres"
+                placeholderTextColor={colors.text.disabled}
+                editable={!isUpdatingPassword}
+              />
+
+              <Text style={styles.passwordLabel}>Confirmar Nova Senha</Text>
+              <TextInput
+                style={styles.passwordInput}
+                value={confirmPassword}
+                onChangeText={setConfirmPassword}
+                secureTextEntry={true}
+                placeholder="Repita a nova senha"
+                placeholderTextColor={colors.text.disabled}
+                editable={!isUpdatingPassword}
+              />
+
+              {passwordError ? (
+                <Text style={styles.passwordErrorText}>{passwordError}</Text>
+              ) : null}
+
+              <Pressable
+                style={({ pressed }) => [
+                  styles.buyButton,
+                  isUpdatingPassword && styles.syncButtonDisabled,
+                  pressed && styles.pressed,
+                  { marginTop: spacing.lg }
+                ]}
+                onPress={handleUpdatePassword}
+                disabled={isUpdatingPassword}
+              >
+                <Text style={styles.buyButtonText}>
+                  {isUpdatingPassword ? '⏳ Atualizando...' : 'Confirmar Alteração'}
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
       {/* ── Storefront Modal ────────────────────────────── */}
       <Modal
         visible={showStoreModal}
@@ -772,8 +938,9 @@ export default function SettingsScreen() {
                               <Text style={styles.storeCardPrice}>{monthlyPkg.product.priceString}</Text>
                             </View>
                             <HapticButton
-                              style={styles.buyButton}
+                              style={[styles.buyButton, isProcessing && { opacity: 0.5 }]}
                               onPress={() => handlePurchase(monthlyPkg)}
+                              disabled={isProcessing}
                             >
                               <Text style={styles.buyButtonText}>Assinar Mensal</Text>
                             </HapticButton>
@@ -798,8 +965,9 @@ export default function SettingsScreen() {
                               <Text style={styles.bestValueBadgeText}>MELHOR VALOR</Text>
                             </View>
                             <HapticButton
-                              style={styles.buyButton}
+                              style={[styles.buyButton, isProcessing && { opacity: 0.5 }]}
                               onPress={() => handlePurchase(yearlyPkg)}
+                              disabled={isProcessing}
                             >
                               <Text style={styles.buyButtonText}>Assinar Anual</Text>
                             </HapticButton>
@@ -832,8 +1000,9 @@ export default function SettingsScreen() {
                             <Text style={styles.storeCardPrice}>{pkg.product.priceString}</Text>
                           </View>
                           <HapticButton
-                            style={[styles.buyButton, styles.buyButtonConsumable]}
+                            style={[styles.buyButton, styles.buyButtonConsumable, isProcessing && { opacity: 0.5 }]}
                             onPress={() => handlePurchase(pkg)}
+                            disabled={isProcessing}
                           >
                             <Text style={styles.buyButtonText}>Comprar Recarga</Text>
                           </HapticButton>
@@ -850,8 +1019,9 @@ export default function SettingsScreen() {
                           <Text style={styles.storeCardPrice}>{tokenPkg.product.priceString}</Text>
                         </View>
                         <HapticButton
-                          style={[styles.buyButton, styles.buyButtonConsumable]}
+                          style={[styles.buyButton, styles.buyButtonConsumable, isProcessing && { opacity: 0.5 }]}
                           onPress={() => handlePurchase(tokenPkg)}
+                          disabled={isProcessing}
                         >
                           <Text style={styles.buyButtonText}>Comprar 100k Tokens</Text>
                         </HapticButton>
@@ -863,8 +1033,10 @@ export default function SettingsScreen() {
 
               {/* ── Restore Purchases ───────────────────────── */}
               <Pressable
-                style={({ pressed }) => [styles.restorePurchasesBtn, pressed && styles.pressed]}
+                style={({ pressed }) => [styles.restorePurchasesBtn, (pressed || isProcessing) && styles.pressed, isProcessing && { opacity: 0.5 }]}
+                disabled={isProcessing}
                 onPress={async () => {
+                  if (isProcessing) return;
                   try {
                     await restorePurchases();
                   } catch (err: any) {
@@ -1808,5 +1980,29 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '500',
     color: colors.text.secondary,
+  },
+  passwordLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.text.secondary,
+    marginTop: spacing.md,
+  },
+  passwordInput: {
+    backgroundColor: colors.background.tertiary,
+    borderWidth: 1,
+    borderColor: colors.border.default,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    color: colors.text.primary,
+    fontSize: 14,
+    marginTop: spacing.xs,
+    width: '100%',
+  },
+  passwordErrorText: {
+    color: colors.danger.main,
+    fontSize: 12,
+    marginTop: spacing.sm,
+    fontWeight: '600',
   },
 });

@@ -18,6 +18,7 @@ export interface SubscriptionPackage {
     price: number;
     title: string;
     description: string;
+    expirationDate?: string | null;
   };
   _rcOriginalPackage?: any;
 }

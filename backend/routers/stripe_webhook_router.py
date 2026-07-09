@@ -110,8 +110,8 @@ async def fulfill_stripe_checkout(session: dict):
             token_tank=token_tank
         )
         
-        # Reset subscription token balance to the premium tank limit
-        token_success = await credit_user_tokens(app_user_id, token_tank, set_balance=True)
+        # Increment subscription token balance cumulatively to prevent resetting user tokens
+        token_success = await credit_user_tokens(app_user_id, token_tank, set_balance=False)
 
         if profile_success and token_success:
             logger.info(f"Subscription successfully fulfilled in database for user {app_user_id}")

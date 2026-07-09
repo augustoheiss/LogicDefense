@@ -6,6 +6,7 @@
  */
 
 import React, { createContext, useContext, useState, useMemo, useCallback } from 'react';
+import { Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuthContext } from './useAuth';
 import { purchasePackage as webPurchase } from '../services/revenueCatService.web';
@@ -18,6 +19,7 @@ export interface SubscriptionPackage {
     price: number;
     title: string;
     description: string;
+    expirationDate?: string | null;
   };
 }
 
@@ -27,6 +29,7 @@ export interface SubscriptionContextState {
   packages: SubscriptionPackage[];
   consumables: SubscriptionPackage[];
   isLoading: boolean;
+  isProcessing: boolean;
   purchasePackage: (pkg: any) => Promise<boolean>;
   restorePurchases: () => Promise<boolean>;
   showPaywall: boolean;
@@ -39,7 +42,7 @@ export interface SubscriptionContextState {
 
 const SubscriptionContext = createContext<SubscriptionContextState | null>(null);
 
-const MOCK_PACKAGES: SubscriptionPackage[] = [
+const MOCK_PACKAGES: SubscriptionPackage[] = Platform.OS === 'web' ? [
   {
     identifier: 'moeda_pro:moeda-pro-mensal',
     packageType: 'MONTHLY',
@@ -48,6 +51,7 @@ const MOCK_PACKAGES: SubscriptionPackage[] = [
       price: 20.00,
       title: 'Mensal',
       description: 'Acesso mensal completo ao Assistente Moeda Pro',
+      expirationDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
     },
   },
   {
@@ -58,11 +62,12 @@ const MOCK_PACKAGES: SubscriptionPackage[] = [
       price: 120.00,
       title: 'Anual',
       description: 'Acesso anual completo ao Assistente Moeda Pro',
+      expirationDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
     },
   },
-];
+] : [];
 
-const MOCK_CONSUMABLES: SubscriptionPackage[] = [
+const MOCK_CONSUMABLES: SubscriptionPackage[] = Platform.OS === 'web' ? [
   {
     identifier: 'moeda_tokens_100k',
     packageType: 'CUSTOM',
@@ -71,15 +76,17 @@ const MOCK_CONSUMABLES: SubscriptionPackage[] = [
       price: 9.90,
       title: 'Recarga 100k Tokens',
       description: 'Adiciona 100.000 tokens de saldo no Motor de IA',
+      expirationDate: null,
     },
   },
-];
+] : [];
 
 export function SubscriptionProvider({ children }: { children: React.ReactNode }) {
   const [isPro, setIsPro] = useState(false);
   const [subscriptionType, setSubscriptionType] = useState<'monthly' | 'yearly' | null>(null);
   const [expirationDate, setExpirationDate] = useState<string | null>(null);
   const [showPaywall, setShowPaywall] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
 
   const auth = useAuthContext();
   const router = useRouter();
@@ -104,24 +111,36 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
       }
       return false;
     }
-    const success = await webPurchase(pkg, userId);
-    if (success) {
-      // Forcefully refresh Supabase profile
-      await auth.refreshProfile();
+    setIsProcessing(true);
+    try {
+      // 1-second latency simulation for redirection to allow UI to render processing state
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+      const success = await webPurchase(pkg, userId);
+      if (success) {
+        // Forcefully refresh Supabase profile
+        await auth.refreshProfile();
+      }
+      return success;
+    } finally {
+      setIsProcessing(false);
     }
-    return success;
   }, [auth.user, auth.refreshProfile]);
 
   const restorePurchases = useCallback(async (): Promise<boolean> => {
-    setIsPro(true);
-    setSubscriptionType('yearly');
-    setExpirationDate(new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString());
-    
-    // Forcefully refresh Supabase profile
-    await auth.refreshProfile();
-    
-    window.alert('Sucesso: Assinatura Pro restaurada no simulador web!');
-    return true;
+    setIsProcessing(true);
+    try {
+      setIsPro(true);
+      setSubscriptionType('yearly');
+      setExpirationDate(new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString());
+      
+      // Forcefully refresh Supabase profile
+      await auth.refreshProfile();
+      
+      window.alert('Sucesso: Assinatura Pro restaurada no simulador web!');
+      return true;
+    } finally {
+      setIsProcessing(false);
+    }
   }, [auth.refreshProfile]);
 
   const toggleProMock = useCallback(() => {
@@ -146,6 +165,7 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
     packages: MOCK_PACKAGES,
     consumables: MOCK_CONSUMABLES,
     isLoading: false,
+    isProcessing,
     purchasePackage,
     restorePurchases,
     showPaywall,

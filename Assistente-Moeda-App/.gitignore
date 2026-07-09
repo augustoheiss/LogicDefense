@@ -48,3 +48,6 @@ example
 # generated native folders
 /ios
 /android
+# Testes locais de QA (Contêm credenciais e tokens)
+backend/test_stripe_webhook.py
+test_web_subscription.js

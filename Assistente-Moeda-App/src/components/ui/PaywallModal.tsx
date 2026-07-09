@@ -30,6 +30,7 @@ export function PaywallModal({ visible, onClose }: PaywallModalProps) {
     isPro,
     packages,
     isLoading,
+    isProcessing,
     purchasePackage,
     restorePurchases,
     toggleProMock,
@@ -59,7 +60,7 @@ export function PaywallModal({ visible, onClose }: PaywallModalProps) {
   }, [visible, isPro, onClose]);
 
   const handleSubscribe = async () => {
-    if (!selectedPackage) return;
+    if (!selectedPackage || isPurchasing || isProcessing) return;
     setIsPurchasing(true);
     try {
       const success = await purchasePackage(selectedPackage);
@@ -72,6 +73,7 @@ export function PaywallModal({ visible, onClose }: PaywallModalProps) {
   };
 
   const handleRestore = async () => {
+    if (isRestoring || isProcessing) return;
     setIsRestoring(true);
     try {
       const success = await restorePurchases();
@@ -228,13 +230,13 @@ export function PaywallModal({ visible, onClose }: PaywallModalProps) {
                   <Pressable
                     style={({ pressed }) => [
                       styles.subscribeBtn,
-                      (!selectedPackage || isPurchasing) && styles.disabledBtn,
+                      (!selectedPackage || isPurchasing || isProcessing) && styles.disabledBtn,
                       pressed && styles.subscribeBtnPressed,
                     ]}
                     onPress={handleSubscribe}
-                    disabled={!selectedPackage || isPurchasing}
+                    disabled={!selectedPackage || isPurchasing || isProcessing}
                   >
-                    {isPurchasing ? (
+                    {(isPurchasing || isProcessing) ? (
                       <ActivityIndicator size="small" color="#fff" />
                     ) : (
                       <Text style={styles.subscribeBtnText}>
@@ -246,13 +248,13 @@ export function PaywallModal({ visible, onClose }: PaywallModalProps) {
                   <Pressable
                     style={({ pressed }) => [
                       styles.restoreBtn,
-                      isRestoring && styles.disabledBtn,
+                      (isRestoring || isProcessing) && styles.disabledBtn,
                       pressed && styles.pressed,
                     ]}
                     onPress={handleRestore}
-                    disabled={isRestoring}
+                    disabled={isRestoring || isProcessing}
                   >
-                    {isRestoring ? (
+                    {(isRestoring || isProcessing) ? (
                       <ActivityIndicator size="small" color={colors.text.secondary} />
                     ) : (
                       <Text style={styles.restoreBtnText}>Restaurar Compras Existentes</Text>

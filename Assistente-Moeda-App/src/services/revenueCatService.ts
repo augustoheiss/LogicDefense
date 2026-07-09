@@ -1,4 +1,4 @@
-import Purchases, { PurchasesOffering, PurchasesPackage, CustomerInfo, ENTITLEMENT_VERIFICATION_MODE } from 'react-native-purchases';
+import Purchases, { PurchasesOffering, PurchasesPackage, CustomerInfo } from 'react-native-purchases';
 import { Platform } from 'react-native';
 
 const REVENUECAT_API_KEY = process.env.EXPO_PUBLIC_REVENUECAT_GOOGLE_KEY || '';

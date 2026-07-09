@@ -24,7 +24,14 @@ export async function purchasePackage(rcPackage: any, userId?: string): Promise<
 
   const url = `${paymentLink}?client_reference_id=${userId || ''}`;
   if (typeof window !== 'undefined') {
-    window.location.href = url;
+    console.log("purchasePackage web: __interceptRedirect flag is:", (window as any).__interceptRedirect);
+    if ((window as any).__interceptRedirect) {
+      console.log("purchasePackage web: Intercepting redirect URL:", url);
+      (window as any).__interceptedRedirectUrl = url;
+    } else {
+      console.log("purchasePackage web: Navigating to Stripe URL:", url);
+      window.location.href = url;
+    }
   }
   return false;
 }
