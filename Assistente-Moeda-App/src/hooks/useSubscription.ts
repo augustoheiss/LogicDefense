@@ -28,6 +28,7 @@ export interface SubscriptionContextState {
   packages: SubscriptionPackage[];
   consumables: SubscriptionPackage[];
   isLoading: boolean;
+  isProcessing: boolean;
   purchasePackage: (pkg: any) => Promise<boolean>;
   restorePurchases: () => Promise<boolean>;
   showPaywall: boolean;
@@ -49,6 +50,7 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
   const [rcPackages, setRcPackages] = useState<SubscriptionPackage[]>([]);
   const [rcConsumables, setRcConsumables] = useState<SubscriptionPackage[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isProcessing, setIsProcessing] = useState(false);
   const [showPaywall, setShowPaywall] = useState(false);
 
   const auth = useAuthContext();
@@ -169,14 +171,14 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
       const proEntitlement = activeEntitlements['pro'];
       if (proEntitlement) {
         setIsPro(true);
-        // Extract expiresDate or expirationDate directly from the RevenueCat entitlement object
-        const rcExpirationDate = proEntitlement.expiresDate || proEntitlement.expirationDate || null;
+        // Extract expirationDate directly from the RevenueCat entitlement object
+        const rcExpirationDate = proEntitlement.expirationDate || null;
         setExpirationDate(rcExpirationDate);
         const prodId = (proEntitlement.productIdentifier || '').toLowerCase();
-        // Explicit matching: 'moeda-pro-anual' → yearly, 'moeda-pro-mensal' → monthly
-        if (prodId.includes('anual') || prodId.includes('year')) {
+        // Explicit matching: compound production identifiers support
+        if (prodId.includes('anual') || prodId.includes('year') || prodId.includes('moeda-pro-anual')) {
           setSubscriptionType('yearly');
-        } else if (prodId.includes('mensal') || prodId.includes('month')) {
+        } else if (prodId.includes('mensal') || prodId.includes('month') || prodId.includes('moeda-pro-mensal')) {
           setSubscriptionType('monthly');
         } else {
           // Fallback: default to monthly for any other subscription product
@@ -270,6 +272,7 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
   }, [updateProStatus, fetchOfferings]);
 
   const purchasePackage = useCallback(async (pkg: any): Promise<boolean> => {
+    setIsProcessing(true);
     try {
       const packageToBuy = pkg._rcOriginalPackage || pkg;
       const { customerInfo } = await Purchases.purchasePackage(packageToBuy);
@@ -278,12 +281,12 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
       const active = !!proEntitlement;
       setIsPro(active);
       if (active) {
-        // Extract expiresDate or expirationDate directly from the RevenueCat entitlement object
-        const rcExpirationDate = (proEntitlement as any).expiresDate || proEntitlement.expirationDate || null;
+        // Extract expirationDate directly from the RevenueCat entitlement object (no any cast)
+        const rcExpirationDate = proEntitlement.expirationDate || null;
         setExpirationDate(rcExpirationDate);
         
         const prodId = (packageToBuy.product?.identifier || '').toLowerCase();
-        if (prodId.includes('year') || prodId.includes('anual') || packageToBuy.packageType === 'YEARLY') {
+        if (prodId.includes('anual') || prodId.includes('year') || prodId.includes('moeda-pro-anual')) {
           setSubscriptionType('yearly');
         } else {
           setSubscriptionType('monthly');
@@ -292,9 +295,6 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
         setSubscriptionType(null);
         setExpirationDate(null);
       }
-
-      // Active purchase trigger fallback: refresh Supabase state
-      await auth.refreshProfile();
 
       return active;
     } catch (e: any) {
@@ -302,10 +302,13 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
         Alert.alert('Erro', e.message || 'Erro ao processar compra.');
       }
       return false;
+    } finally {
+      setIsProcessing(false);
     }
-  }, [auth.refreshProfile]);
+  }, []);
 
   const restorePurchases = useCallback(async (): Promise<boolean> => {
+    setIsProcessing(true);
     try {
       const customerInfo = await Purchases.restorePurchases();
       const activeEntitlements = customerInfo.entitlements.active;
@@ -313,11 +316,11 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
       const active = !!proEntitlement;
       setIsPro(active);
       if (active) {
-        // Extract expiresDate or expirationDate directly from the RevenueCat entitlement object
-        const rcExpirationDate = (proEntitlement as any).expiresDate || proEntitlement.expirationDate || null;
+        // Extract expirationDate directly from the RevenueCat entitlement object (no any cast)
+        const rcExpirationDate = proEntitlement.expirationDate || null;
         setExpirationDate(rcExpirationDate);
         const prodId = (proEntitlement.productIdentifier || '').toLowerCase();
-        if (prodId.includes('year') || prodId.includes('anual')) {
+        if (prodId.includes('anual') || prodId.includes('year') || prodId.includes('moeda-pro-anual')) {
           setSubscriptionType('yearly');
         } else {
           setSubscriptionType('monthly');
@@ -326,9 +329,6 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
         setSubscriptionType(null);
         setExpirationDate(null);
       }
-
-      // Active purchase trigger fallback: refresh Supabase state
-      await auth.refreshProfile();
 
       Alert.alert(
         'Restauração de Compra',
@@ -338,8 +338,10 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
     } catch (e: any) {
       Alert.alert('Erro', e.message || 'Falha ao restaurar compras.');
       return false;
+    } finally {
+      setIsProcessing(false);
     }
-  }, [auth.refreshProfile]);
+  }, []);
 
   const toggleProMock = useCallback(() => {
     setIsPro((prev) => {
@@ -364,6 +366,7 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
     packages: rcPackages,
     consumables: rcConsumables,
     isLoading,
+    isProcessing,
     purchasePackage,
     restorePurchases,
     showPaywall,
