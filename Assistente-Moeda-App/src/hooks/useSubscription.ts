@@ -202,12 +202,12 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
         const allPackages = currentOffering.availablePackages;
 
         // ── Clean bucket split from the 'default' offering ──────────────
-        // Bucket 1: Subscriptions (MONTHLY / YEARLY)
+        // Bucket 1: Subscriptions (MONTHLY / YEARLY / ANNUAL)
         const subscriptions = allPackages
-          .filter((pkg: any) => pkg.packageType === 'MONTHLY' || pkg.packageType === 'YEARLY')
+          .filter((pkg: any) => pkg.packageType === 'MONTHLY' || pkg.packageType === 'YEARLY' || pkg.packageType === 'ANNUAL')
           .map((pkg: any) => ({
             identifier: pkg.identifier,
-            packageType: pkg.packageType,
+            packageType: pkg.packageType === 'ANNUAL' ? 'YEARLY' : pkg.packageType,
             product: {
               priceString: pkg.product.priceString,
               price: pkg.product.price,
@@ -219,7 +219,7 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
 
         // Bucket 2: Consumables (CUSTOM packages like 'moeda_tokens_100k')
         const consumables = allPackages
-          .filter((pkg: any) => pkg.packageType !== 'MONTHLY' && pkg.packageType !== 'YEARLY')
+          .filter((pkg: any) => pkg.packageType !== 'MONTHLY' && pkg.packageType !== 'YEARLY' && pkg.packageType !== 'ANNUAL')
           .map((pkg: any) => ({
             identifier: pkg.identifier,
             packageType: pkg.packageType,

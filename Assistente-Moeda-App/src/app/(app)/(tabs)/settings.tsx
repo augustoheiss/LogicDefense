@@ -939,7 +939,7 @@ export default function SettingsScreen() {
 
                       {/* Anual Button */}
                       {(() => {
-                        const yearlyPkg = packages.find(p => p.packageType === 'YEARLY');
+                        const yearlyPkg = packages.find(p => p.packageType === 'YEARLY' || p.packageType === 'ANNUAL');
                         if (!yearlyPkg) return null;
                         return (
                           <Card key={yearlyPkg.identifier} glow variant="accent" style={styles.storeCard}>

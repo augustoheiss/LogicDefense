@@ -44,7 +44,7 @@ export function PaywallModal({ visible, onClose }: PaywallModalProps) {
   React.useEffect(() => {
     if (packages.length > 0 && !selectedPackage) {
       // Prefer Yearly package by default if available
-      const yearly = packages.find((p) => p.packageType === 'YEARLY');
+      const yearly = packages.find((p) => p.packageType === 'YEARLY' || p.packageType === 'ANNUAL');
       setSelectedPackage(yearly || packages[0]);
     }
   }, [packages, selectedPackage]);
@@ -177,7 +177,7 @@ export function PaywallModal({ visible, onClose }: PaywallModalProps) {
                   <View style={styles.packagesContainer}>
                     {packages.map((pkg) => {
                       const isSelected = selectedPackage?.identifier === pkg.identifier;
-                      const isYearly = pkg.packageType === 'YEARLY';
+                      const isYearly = pkg.packageType === 'YEARLY' || pkg.packageType === 'ANNUAL';
 
                       return (
                         <Pressable
