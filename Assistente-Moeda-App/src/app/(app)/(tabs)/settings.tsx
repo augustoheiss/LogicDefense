@@ -157,44 +157,33 @@ export default function SettingsScreen() {
     }
   }, [auth.mode, auth.user, maxTokens]);
 
-  const incrementarTokensNoBancoLocal = useCallback(async (amount: number) => {
+  const incrementarTokensNoBancoLocal = useCallback(async (amount: number, transactionId?: string) => {
     if (auth.mode === 'authenticated' && auth.user) {
       try {
-        // Fetch existing columns dynamically to avoid querying non-existent columns (e.g. token_limit)
+        // Execute atomic increment in the database via RPC
+        const { error: rpcErr } = await supabase.rpc('increment_user_tokens', {
+          target_user_id: auth.user.id,
+          token_increment_amount: amount,
+          transaction_id: transactionId || null,
+        });
+
+        if (rpcErr) throw rpcErr;
+
+        // Fetch the newly updated balance to synchronize UI accurately
         const { data, error: fetchErr } = await supabase
           .from('user_settings')
-          .select('*')
+          .select('token_balance')
           .eq('id', auth.user.id)
           .maybeSingle();
 
         if (fetchErr) throw fetchErr;
 
-        const currentBalance = data?.token_balance ? Number(data.token_balance) : 0;
-        const newBalance = currentBalance + amount;
-
-        const updatePayload: Record<string, any> = {
-          token_balance: newBalance,
-          updated_at: new Date().toISOString()
-        };
-
-        // If database schema includes token_limit, update it cumulatively as well
-        if (data && 'token_limit' in data && data.token_limit !== null) {
-          const currentLimit = Number(data.token_limit);
-          updatePayload.token_limit = currentLimit + amount;
+        if (data && data.token_balance !== null && data.token_balance !== undefined) {
+          setTokenBalance(Number(data.token_balance));
         }
-
-        const { error: updateErr } = await supabase
-          .from('user_settings')
-          .update(updatePayload)
-          .eq('id', auth.user.id);
-
-        if (updateErr) throw updateErr;
-
-        // Immediately update state to trigger UI progress bar update in real-time
-        setTokenBalance(newBalance);
         await auth.refreshProfile();
       } catch (err) {
-        console.error('Failed to credit tokens cumulatively:', err);
+        console.error('Failed to credit tokens cumulatively via RPC:', err);
       }
     } else {
       setTokenBalance((prev) => prev + amount);
@@ -210,8 +199,8 @@ export default function SettingsScreen() {
       const isConsumable = pkg.packageType === 'CUSTOM' || pkg.identifier === 'moeda_tokens_100k' || pkg.identifier.includes('token') || pkg.identifier.includes('consumable');
       
       if (isConsumable) {
-        const success = await purchasePackage(pkg);
-        if (success) {
+        const transactionId = await purchasePackage(pkg);
+        if (transactionId) {
           // Explicit token amount mapping by identifier
           let amount = 100_000; // default for 'moeda_tokens_100k'
           if (pkg.identifier === 'moeda_tokens_100k') {
@@ -224,7 +213,7 @@ export default function SettingsScreen() {
             amount = 500_000;
           }
           
-          await incrementarTokensNoBancoLocal(amount);
+          await incrementarTokensNoBancoLocal(amount, transactionId);
           if (Platform.OS === 'web') {
             window.alert(`Recarga bem-sucedida! Adicionado ${amount.toLocaleString('pt-BR')} tokens ao seu saldo.`);
           } else {

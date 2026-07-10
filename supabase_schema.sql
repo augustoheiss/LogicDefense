@@ -132,3 +132,47 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 CREATE OR REPLACE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+
+-- ── 5. PROCESSED TRANSACTIONS TABLE ──
+-- Idempotency log for unique transaction ids (Stripe session IDs, App Store / Google Play transaction IDs)
+CREATE TABLE IF NOT EXISTS public.processed_transactions (
+  id TEXT PRIMARY KEY,
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
+);
+
+ALTER TABLE public.processed_transactions ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users can view their own processed transactions"
+  ON public.processed_transactions FOR SELECT
+  USING (auth.uid() = user_id);
+
+-- ── 6. ATOMIC USER TOKEN INCREMENT RPC ──
+-- Secure RPC function to atomically increment tokens without race conditions or duplication bugs
+CREATE OR REPLACE FUNCTION public.increment_user_tokens(
+  target_user_id UUID,
+  token_increment_amount INT,
+  transaction_id TEXT DEFAULT NULL
+)
+RETURNS VOID AS $$
+BEGIN
+  -- If a transaction ID is provided, check for uniqueness to enforce idempotency
+  IF transaction_id IS NOT NULL THEN
+    BEGIN
+      INSERT INTO public.processed_transactions (id, user_id)
+      VALUES (transaction_id, target_user_id);
+    EXCEPTION WHEN unique_violation THEN
+      -- Duplicate transaction! Exit immediately to prevent double-crediting
+      RETURN;
+    END;
+  END IF;
+
+  -- Upsert user settings token balance
+  INSERT INTO public.user_settings (id, token_balance, updated_at)
+  VALUES (target_user_id, token_increment_amount, timezone('utc'::text, now()))
+  ON CONFLICT (id)
+  DO UPDATE SET
+    token_balance = COALESCE(public.user_settings.token_balance, 0) + token_increment_amount,
+    updated_at = timezone('utc'::text, now());
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;

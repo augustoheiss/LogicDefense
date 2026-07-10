@@ -97,6 +97,39 @@ async def credit_user_tokens(user_id: str, amount: int, set_balance: bool = Fals
             logger.error(f"Exception during credit_user_tokens: {e}")
             return False
 
+async def credit_user_tokens_atomic(user_id: str, amount: int) -> bool:
+    """Atomically increment user token balance using Postgres RPC to prevent race conditions."""
+    supabase_url = os.getenv("SUPABASE_URL")
+    supabase_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+    if not supabase_url or not supabase_key:
+        logger.error("Supabase credentials missing.")
+        return False
+        
+    headers = {
+        "apikey": supabase_key,
+        "Authorization": f"Bearer {supabase_key}",
+        "Content-Type": "application/json"
+    }
+    
+    rpc_url = f"{supabase_url}/rest/v1/rpc/increment_user_tokens"
+    payload = {
+        "target_user_id": user_id,
+        "token_increment_amount": amount
+    }
+    
+    async with httpx.AsyncClient() as client:
+        try:
+            response = await client.post(rpc_url, headers=headers, json=payload)
+            if response.status_code in (200, 204):
+                logger.info(f"Successfully credited {amount:,} tokens to user {user_id}")
+                return True
+            else:
+                logger.error(f"Failed to call RPC: {response.status_code} - {response.text}")
+                return False
+        except Exception as e:
+            logger.error(f"Exception during atomic token crediting: {e}")
+            return False
+
 async def update_user_premium_status(user_id: str, premium_tier: str, subscription_type: str, expiration_date: str = None, token_tank: int = MONTHLY_TOKEN_TANK) -> bool:
     """Update profile premium tier, subscription expiration and user settings subscription status in Supabase."""
     supabase_url = os.getenv("SUPABASE_URL")
@@ -226,6 +259,8 @@ async def revenuecat_webhook(request: Request, authorization: str = Header(None)
         )
         
     # Process consumable token package top-ups
+    transaction_id = event.get("id") or event.get("transaction_id") or "unknown_tx"
+    
     if event_type == "NON_RENEWING_PURCHASE":
         prod_id_lower = str(product_id).lower()
         if "token" in prod_id_lower or "consumable" in prod_id_lower:
@@ -237,16 +272,17 @@ async def revenuecat_webhook(request: Request, authorization: str = Header(None)
             elif "500k" in prod_id_lower:
                 amount = 500000
                 
-            success = await credit_user_tokens(app_user_id, amount, set_balance=False)
+            logger.info(f"Fulfilling RevenueCat token purchase: amount={amount}, user={app_user_id}, tx={transaction_id}")
+            success = await credit_user_tokens_atomic(app_user_id, amount)
             if success:
                 return JSONResponse(
                     status_code=status.HTTP_200_OK,
-                    content={"status": "fulfilled", "action": "credited_tokens", "amount": amount}
+                    content={"status": "fulfilled", "action": "credited_tokens", "amount": amount, "transaction_id": transaction_id}
                 )
             else:
                 return JSONResponse(
                     status_code=status.HTTP_200_OK,
-                    content={"status": "failed", "reason": "database update error"}
+                    content={"status": "failed", "reason": "database update error", "transaction_id": transaction_id}
                 )
                 
     # Process PRO tier subscriptions (Monthly/Annual)
@@ -271,13 +307,13 @@ async def revenuecat_webhook(request: Request, authorization: str = Header(None)
                 
         # 2. Resolve token tank based on product identifier (monthly=1M, yearly=12M)
         token_tank = resolve_token_tank(str(product_id))
-        logger.info(f"Resolved token tank for product '{product_id}': {token_tank:,} tokens")
+        logger.info(f"Resolved token tank for product '{product_id}': {token_tank:,} tokens (tx={transaction_id})")
         
         # 3. Update premium tier status and save expiration date
         profile_success = await update_user_premium_status(app_user_id, "premium", "active", expiration_date=expiration_date_iso, token_tank=token_tank)
         
-        # 4. Set token balance to the resolved tank amount
-        token_success = await credit_user_tokens(app_user_id, token_tank, set_balance=True)
+        # 4. Increment token balance atomically
+        token_success = await credit_user_tokens_atomic(app_user_id, token_tank)
         
         if profile_success and token_success:
             return JSONResponse(
@@ -285,13 +321,14 @@ async def revenuecat_webhook(request: Request, authorization: str = Header(None)
                 content={
                     "status": "fulfilled", 
                     "action": "activated_subscription_and_granted_tokens", 
-                    "expires_at": expiration_date_iso
+                    "expires_at": expiration_date_iso,
+                    "transaction_id": transaction_id
                 }
             )
         else:
             return JSONResponse(
                 status_code=status.HTTP_200_OK,
-                content={"status": "failed", "reason": "database update error"}
+                content={"status": "failed", "reason": "database update error", "transaction_id": transaction_id}
             )
             
     # Default fallback for other events

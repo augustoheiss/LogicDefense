@@ -16,7 +16,7 @@ from routers.webhook_router import credit_user_tokens, update_user_premium_statu
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-async def credit_user_tokens_atomic(user_id: str, amount: int) -> bool:
+async def credit_user_tokens_atomic(user_id: str, amount: int, transaction_id: str = None) -> bool:
     """Atomically increment user token balance using Postgres RPC to prevent race conditions."""
     supabase_url = os.getenv("SUPABASE_URL")
     supabase_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")  # Bypasses RLS safely
@@ -36,6 +36,8 @@ async def credit_user_tokens_atomic(user_id: str, amount: int) -> bool:
         "target_user_id": user_id,
         "token_increment_amount": amount
     }
+    if transaction_id:
+        payload["transaction_id"] = transaction_id
     
     async with httpx.AsyncClient() as client:
         try:
@@ -126,7 +128,7 @@ async def fulfill_stripe_checkout(session: dict):
         )
         
         # Increment subscription token balance cumulatively to prevent resetting user tokens
-        token_success = await credit_user_tokens(app_user_id, token_tank, set_balance=False)
+        token_success = await credit_user_tokens_atomic(app_user_id, token_tank, transaction_id=session.get("id"))
 
         if profile_success and token_success:
             logger.info(f"Subscription successfully fulfilled in database for user {app_user_id}")
@@ -143,8 +145,8 @@ async def fulfill_stripe_checkout(session: dict):
         elif "500k" in product_id:
             amount = 500000
 
-        logger.info(f"Fulfilling consumable top-up: adding {amount:,} tokens to user {app_user_id}")
-        success = await credit_user_tokens_atomic(app_user_id, amount)
+        logger.info(f"Fulfilling consumable top-up: adding {amount:,} tokens to user {app_user_id} (session={session.get('id')})")
+        success = await credit_user_tokens_atomic(app_user_id, amount, transaction_id=session.get("id"))
         if success:
             logger.info(f"Consumable top-up successfully credited to user {app_user_id}")
         else:

@@ -30,7 +30,7 @@ export interface SubscriptionContextState {
   consumables: SubscriptionPackage[];
   isLoading: boolean;
   isProcessing: boolean;
-  purchasePackage: (pkg: any) => Promise<boolean>;
+  purchasePackage: (pkg: any) => Promise<string | null>;
   restorePurchases: () => Promise<boolean>;
   showPaywall: boolean;
   setShowPaywall: (show: boolean) => void;
@@ -102,14 +102,14 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
   const effectiveSubscriptionType = isReviewer ? 'yearly' : (subscriptionType || (auth.profile?.subscriptionType as 'monthly' | 'yearly') || (isPremiumUser ? 'monthly' : null));
   const effectiveExpirationDate = isReviewer ? null : (expirationDate || auth.profile?.subscriptionExpiresAt || null);
 
-  const purchasePackage = useCallback(async (pkg: any): Promise<boolean> => {
+  const purchasePackage = useCallback(async (pkg: any): Promise<string | null> => {
     const userId = auth.user?.id;
     if (!userId) {
       if (typeof window !== 'undefined') {
         window.alert("Você precisa estar conectado para realizar uma recarga ou assinatura.");
         window.location.href = '/login';
       }
-      return false;
+      return null;
     }
     setIsProcessing(true);
     try {
@@ -120,7 +120,8 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
         // Forcefully refresh Supabase profile
         await auth.refreshProfile();
       }
-      return success;
+      // Return mock transaction ID on web success
+      return success ? `web_tx_${Date.now()}` : null;
     } finally {
       setIsProcessing(false);
     }

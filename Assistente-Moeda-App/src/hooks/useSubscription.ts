@@ -30,7 +30,7 @@ export interface SubscriptionContextState {
   consumables: SubscriptionPackage[];
   isLoading: boolean;
   isProcessing: boolean;
-  purchasePackage: (pkg: any) => Promise<boolean>;
+  purchasePackage: (pkg: any) => Promise<string | null>;
   restorePurchases: () => Promise<boolean>;
   showPaywall: boolean;
   setShowPaywall: (show: boolean) => void;
@@ -272,11 +272,11 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
     init();
   }, [updateProStatus, fetchOfferings]);
 
-  const purchasePackage = useCallback(async (pkg: any): Promise<boolean> => {
+  const purchasePackage = useCallback(async (pkg: any): Promise<string | null> => {
     setIsProcessing(true);
     try {
       const packageToBuy = pkg._rcOriginalPackage || pkg;
-      const { customerInfo } = await Purchases.purchasePackage(packageToBuy);
+      const { customerInfo, transaction } = await Purchases.purchasePackage(packageToBuy);
       const activeEntitlements = customerInfo.entitlements.active;
       const proEntitlement = activeEntitlements['pro'];
       const active = !!proEntitlement;
@@ -297,12 +297,14 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
         setExpirationDate(null);
       }
 
-      return active;
+      // Return unique transaction identifier for idempotency checks
+      const txId = transaction?.transactionIdentifier || `rc_tx_${Date.now()}`;
+      return txId;
     } catch (e: any) {
       if (!e.userCancelled) {
         Alert.alert('Erro', e.message || 'Erro ao processar compra.');
       }
-      return false;
+      return null;
     } finally {
       setIsProcessing(false);
     }
