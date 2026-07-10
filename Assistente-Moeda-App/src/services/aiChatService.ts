@@ -12,6 +12,7 @@
 import { buildAIScenarioContext } from '../core/aiContextBuilder';
 import { formatCurrencyFull } from '../core/formatCurrency';
 import type { TableRow, TableGoals, TableMetrics } from '../core/types';
+import { supabase } from '../lib/supabase';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -120,11 +121,19 @@ export async function sendChatMessage(
   userSettings?: any,
 ): Promise<ChatResponse> {
   try {
+    const sessionRes = await supabase.auth.getSession();
+    const token = sessionRes.data.session?.access_token;
+    
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
     const response = await fetch(`${API_URL}/api/coin/ai-analyst`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers,
       body: JSON.stringify({
         rows,
         goals,
