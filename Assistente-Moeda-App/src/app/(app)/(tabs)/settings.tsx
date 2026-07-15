@@ -20,7 +20,9 @@ import {
   Alert,
   Platform,
   Modal,
+  ActivityIndicator,
 } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -642,6 +644,16 @@ export default function SettingsScreen() {
           </Section>
         )}
 
+        {/* ── API Integration ─────────────────────────────── */}
+        {db.activeTable && (
+          <Section title="🔌 Integração via API (IA)">
+            <SpreadsheetApiSection 
+              tableId={db.activeTable.id} 
+              onShowStore={() => setShowStoreModal(true)} 
+            />
+          </Section>
+        )}
+
         {/* ── Table Management ────────────────────────────── */}
         <Section title="📋 Tabelas">
           <Card>
@@ -1053,6 +1065,212 @@ const Section = React.memo(function Section({ title, children }: { title: string
     </View>
   );
 });
+
+// ── Spreadsheet API Keys Integration Section ───────────────────────────────────
+
+const API_URL = process.env.EXPO_PUBLIC_AI_BACKEND_URL || process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8000';
+
+const SpreadsheetApiSection = React.memo(function SpreadsheetApiSection({
+  tableId,
+  onShowStore,
+}: {
+  tableId: string;
+  onShowStore: () => void;
+}) {
+  const [apiKey, setApiKey] = useState<string | null>(null);
+  const [keyHint, setKeyHint] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [generating, setGenerating] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    fetchActiveKey();
+  }, [tableId]);
+
+  const fetchActiveKey = async () => {
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('spreadsheet_api_keys')
+        .select('key_hint')
+        .eq('table_id', tableId)
+        .maybeSingle();
+
+      if (data) {
+        setKeyHint(data.key_hint);
+      } else {
+        setKeyHint(null);
+      }
+      setApiKey(null);
+      setCopied(false);
+    } catch (e) {
+      console.warn('Erro ao carregar dica da chave API:', e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCopy = async () => {
+    if (apiKey) {
+      await Clipboard.setStringAsync(apiKey);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
+  const generateKey = async () => {
+    if (keyHint) {
+      const proceed = await new Promise<boolean>((resolve) => {
+        if (Platform.OS === 'web') {
+          const ok = window.confirm(
+            "Atenção: Ao gerar uma nova chave de API, qualquer integração ativa (no ChatGPT, Make ou scripts) que use a chave antiga vai parar de funcionar imediatamente. Deseja continuar?"
+          );
+          resolve(ok);
+        } else {
+          Alert.alert(
+            "Atenção",
+            "Ao gerar uma nova chave de API, qualquer integração ativa (no ChatGPT, Make ou scripts) que use a chave antiga vai parar de funcionar imediatamente. Deseja continuar?",
+            [
+              { text: "Cancelar", style: "cancel", onPress: () => resolve(false) },
+              { text: "Confirmar", style: "destructive", onPress: () => resolve(true) }
+            ]
+          );
+        }
+      });
+      if (!proceed) return;
+    }
+
+    setGenerating(true);
+    try {
+      const sessionRes = await supabase.auth.getSession();
+      const token = sessionRes.data.session?.access_token;
+
+      const headers: any = {
+        'Content-Type': 'application/json',
+      };
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
+      const response = await fetch(`${API_URL}/api/v1/api-keys/generate`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          table_id: tableId,
+          permissions: 'read:write',
+        }),
+      });
+
+      if (!response.ok) {
+        const errText = await response.text();
+        let errMsg = errText;
+        try {
+          const errJson = JSON.parse(errText);
+          errMsg = errJson.detail || errMsg;
+        } catch (e) {}
+
+        if (errMsg.includes("Upgrade to PRO") || response.status === 403 && errMsg.includes("PRO")) {
+          if (Platform.OS === 'web') {
+            window.alert("Faça upgrade para o plano PRO para gerenciar chaves de API em planilhas adicionais!");
+          } else {
+            Alert.alert(
+              "Limite Atingido",
+              "Faça upgrade para o plano PRO para gerenciar chaves de API em planilhas adicionais.",
+              [
+                { text: "Ver Planos", onPress: onShowStore },
+                { text: "Fechar", style: "cancel" }
+              ]
+            );
+          }
+        } else {
+          if (Platform.OS === 'web') {
+            window.alert(`Erro ao gerar chave: ${errMsg}`);
+          } else {
+            Alert.alert("Erro", `Erro ao gerar chave: ${errMsg}`);
+          }
+        }
+        return;
+      }
+
+      const resData = await response.json();
+      setApiKey(resData.api_key);
+      setKeyHint(resData.key_hint);
+      setCopied(false);
+    } catch (error: any) {
+      if (Platform.OS === 'web') {
+        window.alert(`Erro de rede: ${error.message}`);
+      } else {
+        Alert.alert("Erro de Rede", `Não foi possível conectar ao servidor: ${error.message}`);
+      }
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <Card style={styles.apiCard}>
+        <ActivityIndicator size="small" color={colors.accent.purple} />
+      </Card>
+    );
+  }
+
+  return (
+    <Card style={styles.apiCard}>
+      <Text style={styles.apiDescription}>
+        Conecte esta planilha a IAs externas (como ChatGPT ou Claude) e ferramentas de automação (Make, n8n) para ler ou adicionar transações.
+      </Text>
+
+      {keyHint ? (
+        <View style={styles.keyContainer}>
+          <Text style={styles.keyLabel}>
+            Dica da Chave Ativa: <Text style={styles.keyHintText}>{keyHint}</Text>
+          </Text>
+          
+          {apiKey ? (
+            <View style={styles.rawKeyBox}>
+              <Text style={styles.rawKeyLabel}>Sua Chave de API:</Text>
+              <TextInput
+                style={styles.rawKeyInput}
+                value={apiKey}
+                editable={false}
+                selectTextOnFocus
+              />
+              <HapticButton
+                onPress={handleCopy}
+                style={[styles.copyBtn, copied && styles.copyBtnSuccess]}
+              >
+                <Text style={styles.copyBtnText}>
+                  {copied ? 'Copiado! ✓' : 'Copiar Chave 📋'}
+                </Text>
+              </HapticButton>
+              <Text style={styles.rawKeyWarning}>
+                ⚠️ Guarde esta chave em local seguro. Por motivos de segurança, você não poderá visualizá-la novamente.
+              </Text>
+            </View>
+          ) : (
+            <HapticButton onPress={generateKey} disabled={generating} style={styles.regenerateBtn}>
+              {generating ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Text style={styles.regenerateBtnText}>🔄 Regerar Nova Chave de API</Text>
+              )}
+            </HapticButton>
+          )}
+        </View>
+      ) : (
+        <HapticButton onPress={generateKey} disabled={generating} style={styles.generateBtn}>
+          {generating ? (
+            <ActivityIndicator size="small" color="#fff" />
+          ) : (
+            <Text style={styles.generateBtnText}>🔑 Gerar Chave de API para esta Planilha</Text>
+          )}
+        </HapticButton>
+      )}
+    </Card>
+  );
+});
+
 
 // ── HapticButton — Pressable with spring-scale micro-animation ──────────────
 
@@ -1994,4 +2212,95 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
     fontWeight: '600',
   },
+  apiCard: {
+    padding: spacing.md,
+  },
+  apiDescription: {
+    ...typography.bodySmall,
+    color: colors.text.secondary,
+    lineHeight: 18,
+    marginBottom: spacing.md,
+  } as any,
+  keyContainer: {
+    gap: spacing.sm,
+  },
+  keyLabel: {
+    ...typography.bodyMedium,
+    fontWeight: '600',
+    color: colors.text.primary,
+  } as any,
+  keyHintText: {
+    color: colors.accent.purple,
+    fontWeight: '700',
+  },
+  rawKeyBox: {
+    marginTop: spacing.xs,
+    backgroundColor: colors.background.tertiary,
+    borderWidth: 1,
+    borderColor: colors.border.strong,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    gap: spacing.sm,
+  },
+  rawKeyLabel: {
+    ...typography.bodySmall,
+    fontWeight: '600',
+    color: colors.text.secondary,
+  } as any,
+  rawKeyInput: {
+    backgroundColor: colors.background.secondary,
+    borderWidth: 1,
+    borderColor: colors.border.default,
+    borderRadius: radius.sm,
+    padding: spacing.sm,
+    color: colors.text.primary,
+    fontFamily: fontFamily.mono || 'monospace',
+    fontSize: 12,
+  },
+  copyBtn: {
+    backgroundColor: colors.accent.purple,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.md,
+    alignItems: 'center',
+    marginTop: spacing.xs,
+  },
+  copyBtnSuccess: {
+    backgroundColor: colors.success.main,
+  },
+  copyBtnText: {
+    ...typography.label,
+    color: '#fff',
+    fontWeight: '600',
+  } as any,
+  rawKeyWarning: {
+    fontSize: 10,
+    color: colors.danger.main,
+    fontStyle: 'italic',
+    lineHeight: 14,
+    marginTop: spacing.xxs,
+  },
+  generateBtn: {
+    backgroundColor: colors.accent.purple,
+    paddingVertical: spacing.md,
+    borderRadius: radius.md,
+    alignItems: 'center',
+  },
+  generateBtnText: {
+    ...typography.label,
+    color: '#fff',
+    fontWeight: '600',
+  } as any,
+  regenerateBtn: {
+    backgroundColor: colors.background.tertiary,
+    borderWidth: 1,
+    borderColor: colors.border.strong,
+    paddingVertical: spacing.md,
+    borderRadius: radius.md,
+    alignItems: 'center',
+  },
+  regenerateBtnText: {
+    ...typography.label,
+    color: colors.text.secondary,
+    fontWeight: '600',
+  } as any,
 });

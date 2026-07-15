@@ -52,6 +52,12 @@
         "projectId": "444742d2-f4df-4a57-a412-98ede4bd6e1d"
       }
     },
-    "owner": "augustoheiss"
+    "owner": "augustoheiss",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/444742d2-f4df-4a57-a412-98ede4bd6e1d"
+    }
   }
 }

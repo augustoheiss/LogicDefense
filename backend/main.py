@@ -81,6 +81,15 @@ app.include_router(webhook_router)
 from routers.stripe_webhook_router import router as stripe_webhook_router
 app.include_router(stripe_webhook_router)
 
+# ── Spreadsheet API Keys Router ──────────────────────────────────────────────
+from routers.api_keys_router import router as api_keys_router
+app.include_router(api_keys_router)
+
+# ── Public API Integration Router ────────────────────────────────────────────
+from routers.public_api_router import router as public_api_router
+app.include_router(public_api_router)
+
+
 # ── Health Check (cold-start mitigation) ─────────────────────────────────────
 
 @app.get("/api/health")
