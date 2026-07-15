@@ -4,38 +4,38 @@
     "slug": "assistente-moeda",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/favicon.jpg",
+    "icon": "./assets/images/app-icon.png",
     "scheme": "assistentemoeda",
     "userInterfaceStyle": "dark",
     "ios": {
       "bundleIdentifier": "com.logicdefense.assistentemoeda",
       "supportsTablet": true,
-      "icon": "./assets/favicon.jpg"
+      "icon": "./assets/images/app-icon.png"
     },
     "android": {
       "package": "com.heisslab.assistentemoeda",
       "adaptiveIcon": {
-        "backgroundColor": "#0d1117",
-        "foregroundImage": "./assets/images/android-icon-foreground.png",
-        "backgroundImage": "./assets/images/android-icon-background.png",
-        "monochromeImage": "./assets/images/android-icon-monochrome.png"
+        "backgroundColor": "#12151C",
+        "foregroundImage": "./assets/images/app-icon.png"
       },
       "predictiveBackGestureEnabled": true
     },
     "web": {
       "bundler": "metro",
       "output": "static",
-      "favicon": "./assets/favicon.jpg"
+      "favicon": "./assets/images/app-icon.png"
     },
     "plugins": [
       "expo-router",
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#0d1117",
+          "backgroundColor": "#12151C",
+          "image": "./assets/images/app-icon.png",
+          "imageWidth": 120,
           "android": {
-            "image": "./assets/images/splash-icon.png",
-            "imageWidth": 76
+            "image": "./assets/images/app-icon.png",
+            "imageWidth": 120
           }
         }
       ],
