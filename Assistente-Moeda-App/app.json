@@ -4,13 +4,13 @@
     "slug": "assistente-moeda",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/favicon.jpg",
     "scheme": "assistentemoeda",
     "userInterfaceStyle": "dark",
     "ios": {
       "bundleIdentifier": "com.logicdefense.assistentemoeda",
       "supportsTablet": true,
-      "icon": "./assets/expo.icon"
+      "icon": "./assets/favicon.jpg"
     },
     "android": {
       "package": "com.heisslab.assistentemoeda",
@@ -25,7 +25,7 @@
     "web": {
       "bundler": "metro",
       "output": "static",
-      "favicon": "./assets/favicon.jpeg"
+      "favicon": "./assets/favicon.jpg"
     },
     "plugins": [
       "expo-router",
