@@ -13,7 +13,15 @@ from typing import List, Optional
 
 # Import backend metrics engine and models
 from services.coin_metrics_engine import compute_metrics
-from models.coin_models import TableRow, TableGoals, EntryType, ProjectionPoint, ProjectionSummary
+from services.context_builder import build_financial_context
+from models.coin_models import (
+    TableRow,
+    TableGoals,
+    EntryType,
+    ProjectionPoint,
+    ProjectionSummary,
+    AIAnalystPayload
+)
 
 # Setup logger
 logging.basicConfig(level=logging.INFO, format="%(levelname)s  %(message)s")
@@ -442,3 +450,86 @@ async def get_projection(
     )
     
     return PublicProjectionResponse(summary=summary, points=points)
+
+class PublicAnalysisContextResponse(BaseModel):
+    context: str = Field(..., description="Pre-computed operational financial intelligence formatted in Markdown, optimized with tiered token compression.")
+
+@router.get("/analysis-context", response_model=PublicAnalysisContextResponse)
+async def get_analysis_context(
+    table_id: str = Depends(get_table_id_for_read),
+    as_of_date: Optional[str] = Query(None, pattern=r"^\d{4}-\d{2}-\d{2}$", description="Reference date YYYY-MM-DD")
+):
+    """Retorna o contexto financeiro estruturado em Markdown para uso por IAs externas."""
+    supabase_url = os.getenv("SUPABASE_URL")
+    supabase_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+    
+    headers = {
+        "apikey": supabase_key,
+        "Authorization": f"Bearer {supabase_key}"
+    }
+    
+    ref_date = as_of_date or datetime.date.today().isoformat()
+    
+    async with httpx.AsyncClient() as client:
+        # 1. Obter metadados da planilha
+        tbl_url = f"{supabase_url}/rest/v1/coin_tables?id=eq.{table_id}&select=*"
+        tbl_res = await client.get(tbl_url, headers=headers)
+        if tbl_res.status_code != 200 or not tbl_res.json():
+            raise HTTPException(status_code=404, detail="Planilha não localizada.")
+        table_data = tbl_res.json()[0]
+        table_name = table_data.get("name", "Sem Nome")
+        total_waiver_credits = float(table_data.get("total_waiver_credits") or 0.0)
+        
+        # 2. Obter todas as transações (ordenadas por data ascendente para a performance semanal)
+        tx_url = f"{supabase_url}/rest/v1/transactions?table_id=eq.{table_id}&select=*&order=date.asc"
+        tx_res = await client.get(tx_url, headers=headers)
+        if tx_res.status_code != 200:
+            raise HTTPException(status_code=500, detail="Erro ao buscar transações da planilha.")
+            
+        # Parse para modelos pydantic
+        raw_rows = tx_res.json()
+        rows = []
+        for r in raw_rows:
+            try:
+                rows.append(TableRow(**r))
+            except Exception as e:
+                log.warning(f"Erro ao converter TableRow nas chaves de API: {e}")
+                
+        raw_goals = table_data.get("goals") or {}
+        goals = TableGoals()
+        if isinstance(raw_goals, dict):
+            try:
+                goals = TableGoals(**raw_goals)
+            except Exception:
+                pass
+                
+        # 3. Computar métricas no motor matemático
+        try:
+            metrics = compute_metrics(
+                rows=rows,
+                goals=goals,
+                as_of_date=ref_date,
+                total_waiver_credits=total_waiver_credits
+            )
+        except Exception as e:
+            log.exception(f"Erro ao computar métricas para o contexto: {e}")
+            raise HTTPException(status_code=500, detail=f"Erro ao compilar métricas: {e}")
+            
+        # 4. Construir o payload temporário do AIAnalyst
+        payload = AIAnalystPayload(
+            message="",
+            rows=rows,
+            goals=goals,
+            tableName=table_name,
+            totalWaiverCredits=total_waiver_credits,
+            asOfDate=ref_date
+        )
+        
+        # 5. Gerar o contexto em Markdown usando o serviço compartilhado
+        try:
+            context_markdown = build_financial_context(payload, metrics)
+        except Exception as e:
+            log.exception(f"Erro ao gerar o contexto em Markdown: {e}")
+            raise HTTPException(status_code=500, detail=f"Erro ao gerar o contexto em Markdown: {e}")
+            
+        return PublicAnalysisContextResponse(context=context_markdown)
