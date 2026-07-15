@@ -726,7 +726,7 @@ async def public_ai_analyst(
                 system_instruction=system_prompt,
                 temperature=0.4,
                 max_output_tokens=MAX_OUTPUT_TOKENS,
-                **{"thinking_config": types.ThinkingConfig(
+                **{"thinking_config": types.ThinkingConfig(  # type: ignore[arg-type]
                     thinking_budget=THINKING_BUDGET
                 )}
             )
