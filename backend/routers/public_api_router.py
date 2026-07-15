@@ -116,10 +116,17 @@ async def validate_api_key_and_get_table_id(
                 detail=f"Erro interno de validação: {e}"
             )
 
-def get_table_id_for_read(table_id: str = Depends(lambda k: validate_api_key_and_get_table_id("read", k))) -> str:
+class APIKeyValidator:
+    def __init__(self, request_type: str):
+        self.request_type = request_type
+
+    async def __call__(self, api_key: str = Security(API_KEY_HEADER)) -> str:
+        return await validate_api_key_and_get_table_id(self.request_type, api_key)
+
+def get_table_id_for_read(table_id: str = Depends(APIKeyValidator("read"))) -> str:
     return table_id
 
-def get_table_id_for_write(table_id: str = Depends(lambda k: validate_api_key_and_get_table_id("write", k))) -> str:
+def get_table_id_for_write(table_id: str = Depends(APIKeyValidator("write"))) -> str:
     return table_id
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────

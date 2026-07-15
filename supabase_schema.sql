@@ -213,6 +213,12 @@ CREATE POLICY "Users can manage their own spreadsheet API keys"
 -- Index on hash for O(1) validations
 CREATE INDEX IF NOT EXISTS idx_spreadsheet_api_keys_hash ON public.spreadsheet_api_keys(key_hash);
 
+-- Grant permissions to standard Supabase roles
+GRANT ALL ON public.spreadsheet_api_keys TO postgres;
+GRANT ALL ON public.spreadsheet_api_keys TO service_role;
+GRANT ALL ON public.spreadsheet_api_keys TO authenticated;
+GRANT ALL ON public.spreadsheet_api_keys TO anon;
+
 -- ── 8. IDEMPOTENCY KEY ON TRANSACTIONS ──
 -- Add column for idempotency
 ALTER TABLE public.transactions ADD COLUMN IF NOT EXISTS idempotency_key TEXT;
@@ -220,4 +226,16 @@ ALTER TABLE public.transactions ADD COLUMN IF NOT EXISTS idempotency_key TEXT;
 -- Compound unique constraint to ensure unique transactions within a table
 ALTER TABLE public.transactions DROP CONSTRAINT IF EXISTS unique_table_idempotency;
 ALTER TABLE public.transactions ADD CONSTRAINT unique_table_idempotency UNIQUE (table_id, idempotency_key);
+
+-- Grant permissions on transactions to standard Supabase roles
+GRANT ALL ON public.transactions TO postgres;
+GRANT ALL ON public.transactions TO service_role;
+GRANT ALL ON public.transactions TO authenticated;
+GRANT ALL ON public.transactions TO anon;
+
+-- Grant permissions on coin_tables to standard Supabase roles
+GRANT ALL ON public.coin_tables TO postgres;
+GRANT ALL ON public.coin_tables TO service_role;
+GRANT ALL ON public.coin_tables TO authenticated;
+GRANT ALL ON public.coin_tables TO anon;
 

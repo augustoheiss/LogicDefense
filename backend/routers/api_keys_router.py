@@ -23,8 +23,8 @@ class GenerateKeyResponse(BaseModel):
     table_id: str
     permissions: str
 
-async def get_authenticated_user_id(authorization: str = Header(None)) -> str:
-    """Valida o token JWT com o Supabase Auth e retorna a ID do usuário."""
+async def get_authenticated_user_and_token(authorization: str = Header(None)) -> tuple[str, str]:
+    """Valida o token JWT com o Supabase Auth e retorna a ID do usuário e o token limpo."""
     if not authorization:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -63,7 +63,7 @@ async def get_authenticated_user_id(authorization: str = Header(None)) -> str:
                     status_code=status.HTTP_401_UNAUTHORIZED,
                     detail="ID de usuário não encontrado no token de autenticação."
                 )
-            return user_id
+            return user_id, token
         except HTTPException:
             raise
         except Exception as e:
@@ -72,36 +72,45 @@ async def get_authenticated_user_id(authorization: str = Header(None)) -> str:
                 detail=f"Falha na verificação de autenticação: {e}"
             )
 
-async def verify_table_ownership_and_premium(user_id: str, table_id: str):
-    """Verifica se o usuário é dono da planilha e valida regras Freemium para chaves de API."""
+async def verify_table_ownership_and_premium(user_id: str, token: str, table_id: str):
+    """Verifica se o usuário é dono da planilha e valida regras Freemium usando o JWT do próprio usuário."""
     supabase_url = os.getenv("SUPABASE_URL")
-    supabase_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
-    if not supabase_url or not supabase_key:
+    supabase_anon_key = os.getenv("SUPABASE_ANON_KEY")
+    
+    if not supabase_url or not supabase_anon_key:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Credenciais do banco de dados ausentes."
         )
     
-    headers = {
-        "apikey": supabase_key,
-        "Authorization": f"Bearer {supabase_key}"
+    user_headers = {
+        "apikey": supabase_anon_key,
+        "Authorization": f"Bearer {token}"
     }
     
     async with httpx.AsyncClient() as client:
-        # 1. Verificar se a tabela existe e pertence ao usuário
+        # 1. Verificar se a tabela existe e pertence ao usuário (RLS filtra e retorna apenas se for dono)
         tbl_url = f"{supabase_url}/rest/v1/coin_tables?id=eq.{table_id}&select=user_id"
         try:
-            tbl_res = await client.get(tbl_url, headers=headers)
-            if tbl_res.status_code != 200 or not tbl_res.json():
+            tbl_res = await client.get(tbl_url, headers=user_headers)
+            if tbl_res.status_code != 200:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=f"Erro ao consultar planilha no banco: {tbl_res.text}"
+                )
+            
+            tbl_data = tbl_res.json()
+            if not tbl_data:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
-                    detail="Planilha não encontrada."
+                    detail="Planilha não encontrada ou você não tem permissão para acessá-la."
                 )
-            owner_id = tbl_res.json()[0].get("user_id")
+                
+            owner_id = tbl_data[0].get("user_id")
             if owner_id != user_id:
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Acesso negado: Você não tem permissão para esta planilha."
+                    detail="Acesso negado: Você não é o dono desta planilha."
                 )
         except HTTPException:
             raise
@@ -111,10 +120,10 @@ async def verify_table_ownership_and_premium(user_id: str, table_id: str):
                 detail=f"Erro de verificação da planilha: {e}"
             )
             
-        # 2. Obter plano de assinatura
+        # 2. Obter plano de assinatura usando o token do próprio usuário (satisfaz RLS da profiles)
         profile_url = f"{supabase_url}/rest/v1/profiles?id=eq.{user_id}&select=premium_tier"
         try:
-            profile_res = await client.get(profile_url, headers=headers)
+            profile_res = await client.get(profile_url, headers=user_headers)
             premium_tier = "free"
             if profile_res.status_code == 200 and profile_res.json():
                 premium_tier = profile_res.json()[0].get("premium_tier", "free")
@@ -124,18 +133,17 @@ async def verify_table_ownership_and_premium(user_id: str, table_id: str):
             
         # 3. Se for gratuito, verificar se já possui outra chave de API ativa
         if premium_tier != "premium":
-            # Obter todas as tabelas do usuário para cruzar dados
+            # Obter todas as tabelas do usuário (via JWT do usuário para segurança)
             all_tbl_url = f"{supabase_url}/rest/v1/coin_tables?user_id=eq.{user_id}&select=id"
-            all_tbl_res = await client.get(all_tbl_url, headers=headers)
+            all_tbl_res = await client.get(all_tbl_url, headers=user_headers)
             if all_tbl_res.status_code == 200:
                 user_table_ids = [t.get("id") for t in all_tbl_res.json() if t.get("id")]
                 if user_table_ids:
                     # Buscar chaves de API existentes pertencentes a essas planilhas
                     keys_url = f"{supabase_url}/rest/v1/spreadsheet_api_keys?select=table_id"
-                    keys_res = await client.get(keys_url, headers=headers)
+                    keys_res = await client.get(keys_url, headers=user_headers)
                     if keys_res.status_code == 200:
                         existing_keys = keys_res.json()
-                        # Outras tabelas do usuário que possuem chave API (excluindo a atual)
                         other_keys = [
                             k for k in existing_keys 
                             if k.get("table_id") in user_table_ids and k.get("table_id") != table_id
@@ -149,12 +157,13 @@ async def verify_table_ownership_and_premium(user_id: str, table_id: str):
 @router.post("/generate", response_model=GenerateKeyResponse)
 async def generate_api_key(
     payload: GenerateKeyRequest,
-    user_id: str = Depends(get_authenticated_user_id)
+    auth_data: tuple[str, str] = Depends(get_authenticated_user_and_token)
 ):
+    user_id, token = auth_data
     table_id = payload.table_id
     
-    # Valida ownership e limite Freemium
-    await verify_table_ownership_and_premium(user_id, table_id)
+    # Valida ownership e limite Freemium usando o token do usuário
+    await verify_table_ownership_and_premium(user_id, token, table_id)
     
     # Gerar token cru seguro
     raw_token = secrets.token_hex(32) # 64 hex chars
@@ -165,13 +174,13 @@ async def generate_api_key(
     key_hint = f"...{api_key[-4:]}"
     
     supabase_url = os.getenv("SUPABASE_URL")
-    supabase_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+    supabase_anon_key = os.getenv("SUPABASE_ANON_KEY")
     
+    # Usar cabeçalhos com o JWT do usuário para passar com as devidas permissões RLS
     headers = {
-        "apikey": supabase_key,
-        "Authorization": f"Bearer {supabase_key}",
-        "Content-Type": "application/json",
-        "Prefer": "resolution=merge-duplicates, return=representation"
+        "apikey": supabase_anon_key,
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json"
     }
     
     upsert_payload = {
@@ -182,14 +191,28 @@ async def generate_api_key(
         "created_at": datetime.datetime.utcnow().isoformat()
     }
     
-    # Executar upsert (on_conflict=table_id)
+    # Executar upsert via fluxo robusto de Verificação -> Inserção/Atualização
     async with httpx.AsyncClient() as client:
-        db_res = await client.post(
-            f"{supabase_url}/rest/v1/spreadsheet_api_keys?on_conflict=table_id",
-            json=upsert_payload,
-            headers=headers
-        )
-        if db_res.status_code not in (200, 201):
+        # 1. Verificar se a chave já existe para esta planilha (usando JWT do usuário)
+        check_url = f"{supabase_url}/rest/v1/spreadsheet_api_keys?table_id=eq.{table_id}"
+        check_res = await client.get(check_url, headers=headers)
+        
+        if check_res.status_code == 200 and check_res.json():
+            # 2. Se já existe, atualizar (PATCH)
+            db_res = await client.patch(
+                f"{supabase_url}/rest/v1/spreadsheet_api_keys?table_id=eq.{table_id}",
+                json=upsert_payload,
+                headers=headers
+            )
+        else:
+            # 3. Se não existe, criar (POST)
+            db_res = await client.post(
+                f"{supabase_url}/rest/v1/spreadsheet_api_keys",
+                json=upsert_payload,
+                headers=headers
+            )
+            
+        if db_res.status_code not in (200, 201, 204):
             log.error(f"Erro ao salvar chave de API: {db_res.text}")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
