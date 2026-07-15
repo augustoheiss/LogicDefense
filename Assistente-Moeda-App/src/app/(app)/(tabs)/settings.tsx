@@ -1082,6 +1082,15 @@ const SpreadsheetApiSection = React.memo(function SpreadsheetApiSection({
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [showGuide, setShowGuide] = useState(false);
+  const [copiedSchema, setCopiedSchema] = useState(false);
+
+  const handleCopySchema = async () => {
+    const schemaUrl = `${API_URL}/api/v1/public/openapi.json`;
+    await Clipboard.setStringAsync(schemaUrl);
+    setCopiedSchema(true);
+    setTimeout(() => setCopiedSchema(false), 2000);
+  };
 
   useEffect(() => {
     fetchActiveKey();
@@ -1266,6 +1275,49 @@ const SpreadsheetApiSection = React.memo(function SpreadsheetApiSection({
             <Text style={styles.generateBtnText}>🔑 Gerar Chave de API para esta Planilha</Text>
           )}
         </HapticButton>
+      )}
+
+      {/* ── Guia de Integração com IAs Externas ───────────────────────── */}
+      <HapticButton 
+        onPress={() => setShowGuide(!showGuide)} 
+        style={styles.guideHeader}
+      >
+        <Text style={styles.guideHeaderTitle}>
+          {showGuide ? '🔌 Ocultar Guia de Integração ▲' : '🔌 Como conectar a IAs Externas ▼'}
+        </Text>
+      </HapticButton>
+
+      {showGuide && (
+        <View style={styles.guideContent}>
+          <Text style={styles.guideStepTitle}>1. Obter o Schema da API:</Text>
+          <Text style={styles.guideText}>
+            As IAs externas precisam do Schema OpenAPI para saber quais endpoints chamar. Copie o link abaixo para importar:
+          </Text>
+          <HapticButton 
+            onPress={handleCopySchema} 
+            style={[styles.copySchemaBtn, copiedSchema && styles.copyBtnSuccess]}
+          >
+            <Text style={styles.copySchemaBtnText}>
+              {copiedSchema ? 'Link Copiado! ✓' : 'Copiar Link do Schema OpenAPI 📋'}
+            </Text>
+          </HapticButton>
+
+          <Text style={styles.guideStepTitle}>2. Configuração no ChatGPT (Custom GPTs):</Text>
+          <View style={styles.guideStepsBox}>
+            <Text style={styles.guideStepItem}>• Vá em Explore GPTs → Create → Configure.</Text>
+            <Text style={styles.guideStepItem}>• Role até o final e clique em Create new action.</Text>
+            <Text style={styles.guideStepItem}>• Clique em Import from URL, cole o link copiado e clique em Import.</Text>
+            <Text style={styles.guideStepItem}>• Em Authentication, mude para API Key.</Text>
+            <Text style={styles.guideStepItem}>• Escolha Auth Type: Custom e no nome do cabeçalho digite exatamente: X-Spreadsheet-Key.</Text>
+            <Text style={styles.guideStepItem}>• Cole a sua chave de API gerada no campo de valor e salve.</Text>
+          </View>
+
+          <Text style={styles.guideStepTitle}>3. Configuração no Claude (Projects) / n8n / Make:</Text>
+          <View style={styles.guideStepsBox}>
+            <Text style={styles.guideStepItem}>• Claude Projects: Envie o link do Schema OpenAPI nas instruções do projeto, e forneça sua chave para uso nas ações.</Text>
+            <Text style={styles.guideStepItem}>• Automações: Em qualquer requisição HTTP, envie o cabeçalho X-Spreadsheet-Key preenchido com a chave de API gerada.</Text>
+          </View>
+        </View>
       )}
     </Card>
   );
@@ -2254,7 +2306,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.sm,
     padding: spacing.sm,
     color: colors.text.primary,
-    fontFamily: fontFamily.mono || 'monospace',
+    fontFamily: 'monospace',
     fontSize: 12,
   },
   copyBtn: {
@@ -2303,4 +2355,67 @@ const styles = StyleSheet.create({
     color: colors.text.secondary,
     fontWeight: '600',
   } as any,
+  guideHeader: {
+    marginTop: spacing.md,
+    backgroundColor: colors.background.tertiary,
+    borderWidth: 1,
+    borderColor: colors.border.strong,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.md,
+    alignItems: 'center',
+  },
+  guideHeaderTitle: {
+    ...typography.bodyMedium,
+    fontWeight: '700',
+    color: colors.accent.purple,
+  } as any,
+  guideContent: {
+    marginTop: spacing.sm,
+    backgroundColor: colors.background.tertiary,
+    borderWidth: 1,
+    borderColor: colors.border.strong,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    gap: spacing.sm,
+  },
+  guideStepTitle: {
+    ...typography.bodySmall,
+    fontWeight: '700',
+    color: colors.text.primary,
+    marginTop: spacing.xs,
+  } as any,
+  guideText: {
+    ...typography.bodySmall,
+    color: colors.text.secondary,
+    lineHeight: 16,
+  } as any,
+  copySchemaBtn: {
+    backgroundColor: colors.accent.purple,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.sm,
+    alignItems: 'center',
+    marginTop: spacing.xxs,
+    marginBottom: spacing.xs,
+  },
+  copySchemaBtnText: {
+    ...typography.label,
+    color: '#fff',
+    fontWeight: '600',
+  } as any,
+  guideStepsBox: {
+    backgroundColor: colors.background.secondary,
+    borderRadius: radius.sm,
+    padding: spacing.sm,
+    gap: spacing.xxs,
+  },
+  guideStepItem: {
+    ...typography.bodySmall,
+    color: colors.text.secondary,
+    lineHeight: 16,
+  } as any,
+  boldText: {
+    fontWeight: '700',
+    color: colors.text.primary,
+  },
 });

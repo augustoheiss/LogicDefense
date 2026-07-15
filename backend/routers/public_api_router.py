@@ -4,7 +4,9 @@ import logging
 import hashlib
 import uuid
 import datetime
-from fastapi import APIRouter, Security, HTTPException, Header, status, Depends, Query
+from fastapi import APIRouter, Security, HTTPException, Header, status, Depends, Query, Request
+from fastapi.openapi.utils import get_openapi
+from fastapi.responses import JSONResponse
 from fastapi.security.api_key import APIKeyHeader
 from pydantic import BaseModel, Field
 from typing import List, Optional
@@ -18,6 +20,63 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s  %(message)s")
 log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/public", tags=["Public API Integration"])
+
+@router.get("/openapi.json", include_in_schema=False)
+async def get_public_openapi(request: Request):
+    app = request.app
+    # 1. Generate the master openapi schema
+    full_schema = get_openapi(
+        title="Assistente Moeda - Public API Integration",
+        version="1.0.0",
+        description="Public endpoints to integrate your spreadsheet with external IAs (ChatGPT, Claude) and automated tools.",
+        routes=app.routes,
+    )
+
+    # 2. Filter paths to only include those under /api/v1/public
+    public_paths = {}
+    for path, path_item in full_schema.get("paths", {}).items():
+        if path.startswith("/api/v1/public"):
+            if path == "/api/v1/public/openapi.json":
+                continue
+            public_paths[path] = path_item
+
+    # 3. Filter components/schemas to only keep models used in public routes (e.g. TableRow, etc.)
+    filtered_components = {"schemas": {}}
+    used_schemas = set()
+    
+    import json
+    public_paths_str = json.dumps(public_paths)
+    for schema_name in full_schema.get("components", {}).get("schemas", {}).keys():
+        if f"#/components/schemas/{schema_name}" in public_paths_str:
+            used_schemas.add(schema_name)
+            filtered_components["schemas"][schema_name] = full_schema["components"]["schemas"][schema_name]
+
+    # Resolve schema dependency references recursively
+    schema_definitions = full_schema.get("components", {}).get("schemas", {})
+    resolved_any = True
+    while resolved_any:
+        resolved_any = False
+        components_str = json.dumps(filtered_components)
+        for schema_name in schema_definitions.keys():
+            if schema_name not in used_schemas:
+                if f"#/components/schemas/{schema_name}" in components_str:
+                    used_schemas.add(schema_name)
+                    filtered_components["schemas"][schema_name] = schema_definitions[schema_name]
+                    resolved_any = True
+
+    # 4. Resolve the active host url dynamically (Localhost, Staging, or Production)
+    server_url = str(request.base_url).rstrip("/")
+
+    # 5. Build clean public specification
+    public_openapi_schema = {
+        "openapi": full_schema.get("openapi", "3.1.0"),
+        "info": full_schema.get("info"),
+        "servers": [{"url": server_url, "description": "Active API Server"}],
+        "paths": public_paths,
+        "components": filtered_components
+    }
+
+    return JSONResponse(content=public_openapi_schema)
 
 # Chave API header
 API_KEY_HEADER = APIKeyHeader(name="X-Spreadsheet-Key", auto_error=True)
