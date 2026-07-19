@@ -1,0 +1,22 @@
+# Sekundo Backend — Stateless Microservice
+#
+# Deployed independently on Render as: https://sekundo-api.onrender.com
+# ZERO dependency on Assistente-Moeda backend, middleware, or env vars.
+
+# FastAPI
+fastapi==0.115.*
+uvicorn[standard]==0.34.*
+
+# PDF processing (port of ocorrencias auto_mapper concept)
+PyMuPDF==1.25.*
+pdf2image==1.17.*
+
+# CORS & Security
+python-multipart==0.0.*
+
+# WebRTC signaling relay (lightweight, stateless)
+websockets==14.*
+
+# Testing
+pytest==8.*
+httpx==0.28.*

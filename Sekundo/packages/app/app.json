@@ -1,0 +1,54 @@
+{
+  "expo": {
+    "name": "Sekundo",
+    "slug": "sekundo",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/app-icon.png",
+    "scheme": "sekundo",
+    "userInterfaceStyle": "dark",
+    "ios": {
+      "bundleIdentifier": "com.logicdefense.sekundo",
+      "supportsTablet": true,
+      "icon": "./assets/images/app-icon.png"
+    },
+    "android": {
+      "package": "com.heisslab.sekundo",
+      "adaptiveIcon": {
+        "backgroundColor": "#12151C",
+        "foregroundImage": "./assets/images/app-icon.png"
+      },
+      "predictiveBackGestureEnabled": true
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "static",
+      "favicon": "./assets/images/app-icon.png"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#12151C",
+          "image": "./assets/images/app-icon.png",
+          "imageWidth": 120,
+          "android": {
+            "image": "./assets/images/app-icon.png",
+            "imageWidth": 120
+          }
+        }
+      ],
+      "expo-sharing"
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true,
+      "baseUrl": "/laboratorio/sekundo"
+    },
+    "extra": {
+      "router": {}
+    },
+    "owner": "augustoheiss"
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "name": "sekundo",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Agnostic skeleton engine for temporal event automation. Local-first, serverless, infinite.",
+  "workspaces": [
+    "packages/core",
+    "packages/app"
+  ],
+  "scripts": {
+    "test:core": "cd packages/core && npx vitest run",
+    "typecheck:core": "cd packages/core && npx tsc --noEmit",
+    "dev": "cd packages/app && npx expo start",
+    "dev:web": "cd packages/app && npx expo start --web",
+    "dev:backend": "cd packages/backend && python main.py",
+    "install:backend": "cd packages/backend && pip install -r requirements.txt"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

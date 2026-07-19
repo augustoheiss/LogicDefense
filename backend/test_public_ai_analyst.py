@@ -171,8 +171,12 @@ async def run_tests():
             
             # 6. Validar no banco de dados se a transação existe
             print("\n[TESTE 4] Validando se a transação foi salva no banco de dados...")
-            txs_url = f"{BACKEND_URL}/api/v1/public/transactions"
-            res_txs = await client.get(txs_url, headers={"X-Spreadsheet-Key": api_key})
+            txs_url = f"{SUPABASE_URL}/rest/v1/transactions?table_id=eq.{table_id}"
+            headers = {
+                "apikey": SUPABASE_ANON_KEY,
+                "Authorization": f"Bearer {token}"
+            }
+            res_txs = await client.get(txs_url, headers=headers)
             print(f"[DEBUG GET TXS] status={res_txs.status_code} body={res_txs.text}")
             assert res_txs.status_code == 200
             txs = res_txs.json()
@@ -187,6 +191,24 @@ async def run_tests():
             assert found_tx.get("date") == "2026-07-14", "Data da transação incorreta."
             assert (found_tx.get("generatedBy") or found_tx.get("generated_by")) == "public_api_ai", "Marcador de gerador inválido."
             print(f"[OK] Transação gravada com sucesso via God Mode no banco!")
+            
+            # 7. Testar GET /analysis-context com filtragem temporal (TESTE 5)
+            print("\n[TESTE 5] Testando filtragem temporal (start_date e end_date)...")
+            await insert_sample_transaction(table_id, token, "Faturamento Janeiro", 1000.0, "2026-01-15")
+            await insert_sample_transaction(table_id, token, "Hospedagem Fevereiro", -200.0, "2026-02-15")
+            await insert_sample_transaction(table_id, token, "Assinatura Março", -300.0, "2026-03-15")
+
+            filtered_ctx_url = f"{BACKEND_URL}/api/v1/public/analysis-context?as_of_date=2026-07-15&start_date=2026-02-01&end_date=2026-02-28"
+            res_fctx = await client.get(filtered_ctx_url, headers={"X-Spreadsheet-Key": api_key})
+            assert res_fctx.status_code == 200, f"Falha na filtragem temporal: {res_fctx.status_code} - {res_fctx.text}"
+            fctx_data = res_fctx.json()
+            fctx_text = fctx_data["context"]
+
+            # Verificações da filtragem temporal:
+            assert "Hospedagem Fevereiro" in fctx_text, "A transação de Fevereiro deveria estar presente no contexto filtrado."
+            assert "Faturamento Janeiro" not in fctx_text, "A transação de Janeiro foi incorretamente incluída no contexto temporal."
+            assert "Assinatura Março" not in fctx_text, "A transação de Março foi incorretamente incluída no contexto temporal."
+            print(f"[OK] Filtragem temporal validada com sucesso! Transações filtradas corretamente no ledger.")
             
     finally:
         # Cleanup

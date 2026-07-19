@@ -1,0 +1,17 @@
+{
+  "name": "@sekundo/core",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Platform-agnostic brain for Sekundo: skeleton engine, CSV processing, crypto, PDF mapping.",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "~5.7.0",
+    "vitest": "^3.2.0"
+  }
+}
