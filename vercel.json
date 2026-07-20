@@ -6,7 +6,11 @@
       "destination": "/laboratorio/assistente-moeda/index.html"
     },
     {
-      "source": "/((?!laboratorio/assistente-moeda).*)",
+      "source": "/laboratorio/sekundo/((?!_expo|assets|static|.*\\..*$).*)",
+      "destination": "/laboratorio/sekundo/index.html"
+    },
+    {
+      "source": "/((?!laboratorio/assistente-moeda|laboratorio/sekundo).*)",
       "destination": "/"
     }
   ]

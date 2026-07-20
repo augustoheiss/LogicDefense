@@ -77,6 +77,21 @@ export function LabPage() {
           </Link>
         </div>
 
+        {/* ── Sekundo tool card ── */}
+        <div className="cv-lab-card">
+          <div className="cv-lab-card__icon">📅</div>
+          <div className="cv-lab-card__body">
+            <span className="cv-lab-card__tag">SaaS Tool · Produtividade</span>
+            <h2 className="cv-lab-card__title">Sekundo — Planejador de Eventos</h2>
+            <p className="cv-lab-card__desc">
+              Agnostic & Local-First Event Scheduler with infinite-depth path keys, ephemeral WebRTC P2P sync, and hybrid smart PDF mapping. 100% serverless data privacy.
+            </p>
+          </div>
+          <a href="/laboratorio/sekundo" className="cv-lab-card__cta">
+            Abrir Sekundo ↗
+          </a>
+        </div>
+
         {/* ── CV YAML tool card ── */}
         <div className="cv-lab-card">
           <div className="cv-lab-card__icon">📄</div>
@@ -91,6 +106,7 @@ export function LabPage() {
             Open CV Maker ↗
           </Link>
         </div>
+
 
         {/* ── Video grid ── */}
         <div className="video-grid">
