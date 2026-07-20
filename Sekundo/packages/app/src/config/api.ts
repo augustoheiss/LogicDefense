@@ -78,6 +78,7 @@ export const API = {
     answer: (id: string) => `${SEKUNDO_API_URL}/signal/room/${id}/answer`,
     candidates: (id: string, role: 'offer' | 'answer') =>
       `${SEKUNDO_API_URL}/signal/room/${id}/candidates/${role}`,
+    state: (id: string) => `${SEKUNDO_API_URL}/signal/room/${id}/state`,
   },
 } as const;
 

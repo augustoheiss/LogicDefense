@@ -129,7 +129,7 @@ async function deriveKey(
   return subtle.deriveKey(
     {
       name: 'PBKDF2',
-      salt,
+      salt: salt as any,
       iterations: PBKDF2_ITERATIONS,
       hash: 'SHA-256',
     },
@@ -174,7 +174,7 @@ export async function encrypt(
 
   // Encrypt
   const cipherBuffer = await subtle.encrypt(
-    { name: 'AES-GCM', iv },
+    { name: 'AES-GCM', iv: iv as any },
     key,
     encoder.encode(plaintext)
   );
@@ -227,9 +227,9 @@ export async function decrypt(
   try {
     // Decrypt
     const plainBuffer = await subtle.decrypt(
-      { name: 'AES-GCM', iv },
+      { name: 'AES-GCM', iv: iv as any },
       key,
-      ciphertext
+      ciphertext as any
     );
 
     return decoder.decode(plainBuffer);
@@ -315,7 +315,7 @@ export async function decompress(compressed: Uint8Array): Promise<string> {
     const writer = ds.writable.getWriter();
     const reader = ds.readable.getReader();
 
-    writer.write(compressed);
+    writer.write(compressed as any);
     writer.close();
 
     const chunks: Uint8Array[] = [];

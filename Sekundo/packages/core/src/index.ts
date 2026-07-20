@@ -18,6 +18,8 @@ export type {
 } from './skeleton/types';
 
 // Events
+export * as eventContainer from './events/eventContainer';
+export * as rollover from './events/rollover';
 export type {
   Frequency,
   EventConfig,

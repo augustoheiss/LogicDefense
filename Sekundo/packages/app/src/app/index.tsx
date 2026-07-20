@@ -1,31 +1,39 @@
 /**
  * Landing Dashboard — Sekundo
  *
- * Provides a stunning, premium dark-mode interface for managing local events,
- * configuring skeletons, importing CSV files, and sharing links.
+ * Immersive, premium dark-mode console for temporal event templates.
+ * Loads events dynamically from useLocalEvent.
  */
 
-import React, { useState } from 'react';
+import React from 'react';
 import {
   StyleSheet,
   Text,
   View,
   ScrollView,
   Pressable,
+  ActivityIndicator,
   Platform,
   useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
+import { useLocalEvent } from '../hooks/useLocalEvent';
 
 export default function Dashboard() {
+  const router = useRouter();
   const { width } = useWindowDimensions();
   const isLargeScreen = width >= 768;
 
-  // Placeholder state for events list
-  const [events] = useState([
-    { id: '1', name: 'Weekly Congregation Meeting', frequency: 'weekly', lastRollover: '2026-07-14' },
-    { id: '2', name: 'Territory Quadra Distribution', frequency: 'monthly', lastRollover: '2026-07-01' },
-  ]);
+  const { events, loading, deleteEventState } = useLocalEvent();
+
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#FFB800" />
+      </View>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container}>
@@ -52,39 +60,60 @@ export default function Dashboard() {
           {/* Quick Actions Column */}
           <View style={[styles.column, isLargeScreen && styles.leftColumn]}>
             <Text style={styles.sectionTitle}>Quick Actions</Text>
-            
-            <Pressable style={({ pressed }) => [styles.actionButton, pressed && styles.buttonPressed]}>
+
+            <Pressable
+              onPress={() => router.push('/create-event')}
+              style={({ pressed }) => [styles.actionButton, pressed && styles.buttonPressed]}
+            >
               <Text style={styles.actionButtonText}>Create New Event</Text>
               <Text style={styles.actionButtonSub}>Setup a custom skeleton hierarchy</Text>
             </Pressable>
 
-            <Pressable style={({ pressed }) => [styles.actionButton, pressed && styles.buttonPressed]}>
+            <Pressable
+              onPress={() => router.push('/csv-import')}
+              style={({ pressed }) => [styles.actionButton, pressed && styles.buttonPressed]}
+            >
               <Text style={styles.actionButtonText}>Import CSV Template</Text>
               <Text style={styles.actionButtonSub}>Excel or Google Sheets source format</Text>
-            </Pressable>
-
-            <Pressable style={({ pressed }) => [styles.actionButton, pressed && styles.buttonPressed]}>
-              <Text style={styles.actionButtonText}>Fill PDF Form</Text>
-              <Text style={styles.actionButtonSub}>Inject data into coordinate mapping templates</Text>
             </Pressable>
           </View>
 
           {/* Active Events Column */}
           <View style={[styles.column, isLargeScreen && styles.rightColumn]}>
             <Text style={styles.sectionTitle}>Your Active Skeletons</Text>
-            {events.map((event) => (
-              <View key={event.id} style={styles.eventCard}>
-                <View style={styles.eventInfo}>
-                  <Text style={styles.eventName}>{event.name}</Text>
-                  <Text style={styles.eventFrequency}>
-                    Recurrence: {event.frequency.toUpperCase()} • Last Rollover: {event.lastRollover}
-                  </Text>
-                </View>
-                <Pressable style={styles.viewButton}>
-                  <Text style={styles.viewButtonText}>Open</Text>
-                </Pressable>
+            
+            {events.length === 0 ? (
+              <View style={styles.emptyCard}>
+                <Text style={styles.emptyText}>No events configured yet.</Text>
+                <Text style={styles.emptySub}>Click "Create New Event" to get started.</Text>
               </View>
-            ))}
+            ) : (
+              events.map((event) => (
+                <View key={event.config.id} style={styles.eventCard}>
+                  <View style={styles.eventInfo}>
+                    <Text style={styles.eventName}>{event.config.name}</Text>
+                    <Text style={styles.eventFrequency}>
+                      Recurrence: {event.config.frequency.toUpperCase()} • Roots:{' '}
+                      {event.config.skeletonRoots.join(', ') || 'None'}
+                    </Text>
+                  </View>
+                  <View style={styles.cardActions}>
+                    <Pressable
+                      onPress={() => router.push(`/skeleton-editor?id=${event.config.id}`)}
+                      style={styles.openButton}
+                    >
+                      <Text style={styles.openButtonText}>Edit</Text>
+                    </Pressable>
+                    <Pressable
+                      onPress={() => deleteEventState(event.config.id)}
+                      style={styles.deleteButton}
+                    >
+                      <Text style={styles.deleteButtonText}>✕</Text>
+                    </Pressable>
+                  </View>
+                </View>
+              ))
+            )}
           </View>
         </View>
       </ScrollView>
@@ -96,6 +125,12 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#12151C', // Immersive dark background
+  },
+  loadingContainer: {
+    flex: 1,
+    backgroundColor: '#12151C',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   scrollContent: {
     padding: 24,
@@ -120,7 +155,7 @@ const styles = StyleSheet.create({
     fontWeight: '400',
   },
   manifestoCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    backgroundColor: 'rgba(255, 255, 255, 0.02)',
     borderRadius: 16,
     padding: 20,
     borderWidth: 1,
@@ -163,7 +198,7 @@ const styles = StyleSheet.create({
     letterSpacing: -0.5,
   },
   actionButton: {
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
     borderRadius: 12,
     padding: 18,
     marginBottom: 16,
@@ -171,7 +206,7 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255, 255, 255, 0.08)',
   },
   buttonPressed: {
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    backgroundColor: 'rgba(255, 255, 255, 0.07)',
     transform: [{ scale: 0.99 }],
   },
   actionButtonText: {
@@ -184,8 +219,26 @@ const styles = StyleSheet.create({
     color: '#6F7E94',
     marginTop: 4,
   },
+  emptyCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.02)',
+    borderRadius: 12,
+    padding: 24,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.05)',
+  },
+  emptyText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  emptySub: {
+    color: '#6F7E94',
+    fontSize: 13,
+    marginTop: 6,
+  },
   eventCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
     borderRadius: 12,
     padding: 16,
     flexDirection: 'row',
@@ -193,7 +246,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderColor: 'rgba(255, 255, 255, 0.05)',
   },
   eventInfo: {
     flex: 1,
@@ -209,15 +262,34 @@ const styles = StyleSheet.create({
     color: '#8A94A6',
     marginTop: 4,
   },
-  viewButton: {
+  cardActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  openButton: {
     backgroundColor: '#FFFFFF',
     borderRadius: 8,
     paddingVertical: 8,
     paddingHorizontal: 16,
+    marginRight: 8,
   },
-  viewButtonText: {
+  openButtonText: {
     color: '#12151C',
     fontWeight: '600',
     fontSize: 14,
+  },
+  deleteButton: {
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+    borderRadius: 8,
+    padding: 8,
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  deleteButtonText: {
+    color: '#EF4444',
+    fontSize: 14,
+    fontWeight: '600',
   },
 });
