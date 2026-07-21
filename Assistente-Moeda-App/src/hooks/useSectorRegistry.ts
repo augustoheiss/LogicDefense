@@ -10,6 +10,24 @@ export interface Sector {
 
 export const ALL_SECTORS: Sector[] = [
   {
+    id: 'core_cashflow',
+    label: 'Fluxo de Caixa',
+    description: 'Saldo acumulado linha a linha e previsão de liquidez.',
+    icon: '📊',
+  },
+  {
+    id: 'core_revenue',
+    label: 'Receitas & Faturamento',
+    description: 'Categorização de faturamento, origens de renda e recorrência.',
+    icon: '📈',
+  },
+  {
+    id: 'core_costs',
+    label: 'Custos & Despesas',
+    description: 'Classificação de custos fixos/variáveis, centros de custo e drenos.',
+    icon: '📉',
+  },
+  {
     id: 'personal_finance',
     label: 'Finanças Pessoais',
     description: 'Controle de receitas, despesas pessoais, investimentos e projeções de longo prazo.',
@@ -42,7 +60,7 @@ export const ALL_SECTORS: Sector[] = [
 ];
 
 export function useSectorRegistry() {
-  const { activeTable, updateGoals } = useCoinDB();
+  const { activeTable } = useCoinDB();
 
   const activeSectors = useMemo<string[]>(() => {
     if (!activeTable) return ['personal_finance'];
@@ -59,17 +77,9 @@ export function useSectorRegistry() {
   const setSectors = useCallback(
     (sectors: string[]) => {
       if (!activeTable) return;
-      // Guarantee at least personal_finance if empty
-      const updatedSectors = sectors.length === 0 ? ['personal_finance'] : sectors;
-      
-      // We can update the goals or properties of the table. Wait, does useCoinDB support updating activeSectors?
-      // We will add support for it in useCoinDB!
-      // In useCoinDB, we will expose a method to update the active table or we can piggyback on updateGoals/updateTable
-      // Let's add updateActiveSectors to useCoinDB and type check it properly.
-      // For now, let's call the typecast version if we add it to the CoinDBState interface.
       const dbState = useCoinDB() as any;
       if (dbState.updateActiveSectors) {
-        dbState.updateActiveSectors(updatedSectors);
+        dbState.updateActiveSectors(sectors);
       }
     },
     [activeTable]
@@ -78,8 +88,6 @@ export function useSectorRegistry() {
   const toggleSector = useCallback(
     (sectorId: string) => {
       if (activeSectors.includes(sectorId)) {
-        // Don't allow disabling the only active sector
-        if (activeSectors.length <= 1) return;
         setSectors(activeSectors.filter((id) => id !== sectorId));
       } else {
         setSectors([...activeSectors, sectorId]);

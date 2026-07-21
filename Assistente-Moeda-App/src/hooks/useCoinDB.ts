@@ -634,6 +634,6 @@ function generateId(): string {
 function ensureActiveSectors(tables: CoinTable[]): CoinTable[] {
   return tables.map((t) => ({
     ...t,
-    activeSectors: t.activeSectors && t.activeSectors.length > 0 ? t.activeSectors : ['personal_finance'],
+    activeSectors: t.activeSectors !== undefined ? t.activeSectors : ['personal_finance'],
   }));
 }

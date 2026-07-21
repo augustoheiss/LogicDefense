@@ -297,44 +297,48 @@ export default function SpreadsheetScreen() {
           />
         )}
 
-        {/* Personal Finance: Resumo geral */}
-        <SectorGuard sector="personal_finance">
-          <View style={{ gap: spacing.md, marginTop: spacing.md }}>
-            {db.filteredRows.length > 0 && (
-              <View style={[styles.summaryCard, { marginTop: 0 }]}>
-                <Text style={styles.summaryLabel}>{monthSummary.label}</Text>
-                <View style={styles.summaryRow}>
-                  <View style={styles.summaryItem}>
-                    <Text style={styles.summaryItemLabel}>Receita</Text>
-                    <Text style={[styles.summaryItemValue, { color: colors.success.main }]}>
-                      {formatCurrencySmart(monthSummary.gross)}
-                    </Text>
-                  </View>
-                  <View style={styles.summaryDivider} />
-                  <View style={styles.summaryItem}>
-                    <Text style={styles.summaryItemLabel}>Despesas</Text>
-                    <Text style={[styles.summaryItemValue, { color: colors.danger.main }]}>
-                      {formatCurrencySmart(monthSummary.expenses)}
-                    </Text>
-                  </View>
-                  <View style={styles.summaryDivider} />
-                  <View style={styles.summaryItem}>
-                    <Text style={styles.summaryItemLabel}>Saldo</Text>
-                    <Text
-                      style={[
-                        styles.summaryItemValue,
-                        { color: monthSummary.net >= 0 ? colors.success.main : colors.danger.main },
-                      ]}
-                    >
-                      {formatCurrencySmart(monthSummary.net)}
-                    </Text>
-                  </View>
+        {/* Core & Personal Finance Widgets */}
+        {db.filteredRows.length > 0 && (
+          <View style={[styles.summaryCard, { marginHorizontal: spacing.lg, marginTop: spacing.md }]}>
+            <Text style={styles.summaryLabel}>{monthSummary.label}</Text>
+            <View style={styles.summaryRow}>
+              <SectorGuard sector="core_revenue">
+                <View style={styles.summaryItem}>
+                  <Text style={styles.summaryItemLabel}>Receita</Text>
+                  <Text style={[styles.summaryItemValue, { color: colors.success.main }]}>
+                    {formatCurrencySmart(monthSummary.gross)}
+                  </Text>
                 </View>
-              </View>
-            )}
-            <View style={{ marginHorizontal: spacing.lg }}>
-              <PersonalFinanceSectorWidget />
+              </SectorGuard>
+              <SectorGuard sector="core_costs">
+                <View style={styles.summaryItem}>
+                  <Text style={styles.summaryItemLabel}>Despesas</Text>
+                  <Text style={[styles.summaryItemValue, { color: colors.danger.main }]}>
+                    {formatCurrencySmart(monthSummary.expenses)}
+                  </Text>
+                </View>
+              </SectorGuard>
+              <SectorGuard sector="core_cashflow">
+                <View style={styles.summaryItem}>
+                  <Text style={styles.summaryItemLabel}>Saldo</Text>
+                  <Text
+                    style={[
+                      styles.summaryItemValue,
+                      { color: monthSummary.net >= 0 ? colors.success.main : colors.danger.main },
+                    ]}
+                  >
+                    {formatCurrencySmart(monthSummary.net)}
+                  </Text>
+                </View>
+              </SectorGuard>
             </View>
+          </View>
+        )}
+
+        {/* Personal Finance widgets */}
+        <SectorGuard sector="personal_finance">
+          <View style={{ marginHorizontal: spacing.lg, marginTop: spacing.md }}>
+            <PersonalFinanceSectorWidget />
           </View>
         </SectorGuard>
 

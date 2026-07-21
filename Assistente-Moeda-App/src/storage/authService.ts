@@ -106,39 +106,73 @@ export async function getCurrentUser(): Promise<User | null> {
  * Fetch the user's profile from the `profiles` table.
  */
 export async function getUserProfile(userId: string): Promise<UserProfile | null> {
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('id, display_name, sync_enabled, premium_tier, subscription_expires_at')
-    .eq('id', userId)
-    .single();
-
-  if (error) {
-    throw error;
-  }
-  if (!data) return null;
-
   const user = await getCurrentUser();
+  const email = user?.email ?? null;
 
-  // Also query user_settings table to fetch the subscription_type for synchronization
-  const { data: settingsData, error: settingsError } = await supabase
-    .from('user_settings')
-    .select('subscription_type')
-    .eq('id', userId)
-    .maybeSingle();
+  try {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('id, display_name, sync_enabled, premium_tier, subscription_expires_at')
+      .eq('id', userId)
+      .maybeSingle();
 
-  if (settingsError) {
-    throw settingsError;
+    if (error || !data) {
+      try {
+        await supabase.from('profiles').upsert({
+          id: userId,
+          email: email || 'user@moeda.app',
+          active_sectors: ['personal_finance'],
+          sync_enabled: true,
+          premium_tier: 'free',
+        });
+      } catch {
+        // ignore auto-creation error
+      }
+
+      return {
+        id: userId,
+        displayName: email ? email.split('@')[0] : 'Usuário',
+        email,
+        syncEnabled: true,
+        premiumTier: 'free',
+        subscriptionExpiresAt: null,
+        subscriptionType: null,
+      };
+    }
+
+    let subscriptionType: string | null = null;
+    try {
+      const { data: settingsData } = await supabase
+        .from('user_settings')
+        .select('subscription_type')
+        .eq('id', userId)
+        .maybeSingle();
+      subscriptionType = settingsData?.subscription_type ?? null;
+    } catch {
+      // Ignore user_settings errors
+    }
+
+    return {
+      id: data.id,
+      displayName: data.display_name ?? (email ? email.split('@')[0] : 'Usuário'),
+      email,
+      syncEnabled: data.sync_enabled ?? true,
+      premiumTier: (data.premium_tier as PremiumTier) ?? 'free',
+      subscriptionExpiresAt: data.subscription_expires_at ?? null,
+      subscriptionType,
+    };
+  } catch (err) {
+    console.warn('getUserProfile fallback triggered:', err);
+    return {
+      id: userId,
+      displayName: email ? email.split('@')[0] : 'Usuário',
+      email,
+      syncEnabled: true,
+      premiumTier: 'free',
+      subscriptionExpiresAt: null,
+      subscriptionType: null,
+    };
   }
-
-  return {
-    id: data.id,
-    displayName: data.display_name,
-    email: user?.email ?? null,
-    syncEnabled: data.sync_enabled ?? true,
-    premiumTier: (data.premium_tier as PremiumTier) ?? 'free',
-    subscriptionExpiresAt: data.subscription_expires_at ?? null,
-    subscriptionType: settingsData?.subscription_type ?? null,
-  };
 }
 
 /**
