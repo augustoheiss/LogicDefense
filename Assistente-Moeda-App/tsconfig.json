@@ -18,6 +18,9 @@
     "expo-env.d.ts"
   ],
   "exclude": [
-    "node_modules"
+    "node_modules",
+    "e2e",
+    "playwright.config.ts",
+    "scripts"
   ]
 }
