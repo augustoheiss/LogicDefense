@@ -49,10 +49,12 @@ import {
   RealEstateSectorWidget,
   VehiclesSectorWidget,
   LegalTaxesSectorWidget,
+  PersonalFinanceSectorWidget,
 } from '@/components/ui';
 import { formatCurrencySmart } from '@/core/formatCurrency';
 import { shareWhatsAppReport, shareCSV, sharePDFReport, buildWhatsAppReport, shareCSVText, buildCSV } from '@/services/exportService';
 import { importCSVFlow, pickCSVFile, parseCSV } from '@/services/csvImportService';
+import { parseCSVText } from '@/utils/csvEngine';
 import { computeBaselineGoals } from '@/core/metricsEngine';
 import type { TableRow } from '@/core/types';
 
@@ -235,9 +237,9 @@ export default function SpreadsheetScreen() {
       await shareCSVText(editedText, db.activeTable.name);
     } else if (previewMode === 'csv_import') {
       try {
-        const result = parseCSV(editedText);
+        const result = parseCSVText(editedText);
 
-        if (!result.success) {
+        if (result.rows.length === 0) {
           const errMsg = result.errors.length > 0
             ? result.errors.slice(0, 3).join('\n')
             : 'Nenhuma entrada válida encontrada no texto.';
@@ -245,36 +247,24 @@ export default function SpreadsheetScreen() {
           return;
         }
 
-        if (result.isBackupV2) {
-          db.addTable(
-            result.backupName || 'Importado',
-            result.backupDescription,
-            result.backupGoals,
-            result.rows
-          );
-        } else {
-          await db.addRows(result.rows);
+        // Always load directly into active table/store (in-place loading)
+        await db.addRows(result.rows);
 
-          // Auto-calculate baseline goals from imported transaction history
-          // if the active table currently has no goals configured
-          const currentGoals = db.activeTable?.goals;
-          const hasExistingGoals = currentGoals && (
-            Object.keys(currentGoals.dailyGoals || {}).length > 0 ||
-            Object.keys(currentGoals.weeklyGoals || {}).length > 0 ||
-            currentGoals.globalGoals !== undefined
-          );
-          if (!hasExistingGoals && result.rows.length > 0) {
-            const baselineGoals = computeBaselineGoals(result.rows);
-            if (baselineGoals.globalGoals) {
-              db.updateGoals(baselineGoals);
-            }
-          }
+        // Auto-activate detected sectors
+        const currentActiveSectors = db.activeTable?.activeSectors || ['personal_finance'];
+        const sectorsToActivate = result.detectedSectors.filter(
+          (sec) => !currentActiveSectors.includes(sec)
+        );
+
+        if (sectorsToActivate.length > 0) {
+          const nextSectors = Array.from(new Set([...currentActiveSectors, ...sectorsToActivate]));
+          await db.updateActiveSectors(nextSectors);
         }
 
         const summary = [
-          `✅ ${result.totalParsed} entradas importadas`,
-          result.isBackupV2 ? `📋 Nova tabela "${result.backupName || 'Importado'}" criada` : '',
-          result.skippedLines > 0 ? `⚠️ ${result.skippedLines} linhas ignoradas` : '',
+          `✅ ${result.rows.length} entradas importadas na planilha ativa`,
+          sectorsToActivate.length > 0 ? `🚀 Setores auto-ativados: ${sectorsToActivate.join(', ')}` : '',
+          result.skippedCount > 0 ? `⚠️ ${result.skippedCount} linhas ignoradas` : '',
           result.errors.length > 0 ? `❌ ${result.errors.length} erros` : '',
         ].filter(Boolean).join('\n');
 
@@ -309,38 +299,43 @@ export default function SpreadsheetScreen() {
 
         {/* Personal Finance: Resumo geral */}
         <SectorGuard sector="personal_finance">
-          {db.filteredRows.length > 0 && (
-            <View style={styles.summaryCard}>
-              <Text style={styles.summaryLabel}>{monthSummary.label}</Text>
-              <View style={styles.summaryRow}>
-                <View style={styles.summaryItem}>
-                  <Text style={styles.summaryItemLabel}>Receita</Text>
-                  <Text style={[styles.summaryItemValue, { color: colors.success.main }]}>
-                    {formatCurrencySmart(monthSummary.gross)}
-                  </Text>
-                </View>
-                <View style={styles.summaryDivider} />
-                <View style={styles.summaryItem}>
-                  <Text style={styles.summaryItemLabel}>Despesas</Text>
-                  <Text style={[styles.summaryItemValue, { color: colors.danger.main }]}>
-                    {formatCurrencySmart(monthSummary.expenses)}
-                  </Text>
-                </View>
-                <View style={styles.summaryDivider} />
-                <View style={styles.summaryItem}>
-                  <Text style={styles.summaryItemLabel}>Saldo</Text>
-                  <Text
-                    style={[
-                      styles.summaryItemValue,
-                      { color: monthSummary.net >= 0 ? colors.success.main : colors.danger.main },
-                    ]}
-                  >
-                    {formatCurrencySmart(monthSummary.net)}
-                  </Text>
+          <View style={{ gap: spacing.md, marginTop: spacing.md }}>
+            {db.filteredRows.length > 0 && (
+              <View style={[styles.summaryCard, { marginTop: 0 }]}>
+                <Text style={styles.summaryLabel}>{monthSummary.label}</Text>
+                <View style={styles.summaryRow}>
+                  <View style={styles.summaryItem}>
+                    <Text style={styles.summaryItemLabel}>Receita</Text>
+                    <Text style={[styles.summaryItemValue, { color: colors.success.main }]}>
+                      {formatCurrencySmart(monthSummary.gross)}
+                    </Text>
+                  </View>
+                  <View style={styles.summaryDivider} />
+                  <View style={styles.summaryItem}>
+                    <Text style={styles.summaryItemLabel}>Despesas</Text>
+                    <Text style={[styles.summaryItemValue, { color: colors.danger.main }]}>
+                      {formatCurrencySmart(monthSummary.expenses)}
+                    </Text>
+                  </View>
+                  <View style={styles.summaryDivider} />
+                  <View style={styles.summaryItem}>
+                    <Text style={styles.summaryItemLabel}>Saldo</Text>
+                    <Text
+                      style={[
+                        styles.summaryItemValue,
+                        { color: monthSummary.net >= 0 ? colors.success.main : colors.danger.main },
+                      ]}
+                    >
+                      {formatCurrencySmart(monthSummary.net)}
+                    </Text>
+                  </View>
                 </View>
               </View>
+            )}
+            <View style={{ marginHorizontal: spacing.lg }}>
+              <PersonalFinanceSectorWidget />
             </View>
-          )}
+          </View>
         </SectorGuard>
 
         {/* SMB / Accounting widgets */}

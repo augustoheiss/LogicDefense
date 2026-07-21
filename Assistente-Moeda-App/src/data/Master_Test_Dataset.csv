@@ -1,0 +1,9 @@
+date,value,description,entryType,category,tags,metadata_json
+2026-07-01,150000.00,"Faturamento Servicos de TI",revenue,"Receita de Vendas","ncg,welford,rolling_margin","{""massa_salarial_12"":90000.00,""receita_bruta_12"":350000.00}"
+2026-07-02,30000.00,"Folha de Pagamento CLT",expense,"Massa Salarial","fap_rat,payroll_tax","{}"
+2026-07-03,10000.00,"Litigio Trabalhista ADC 58",deposit,"Ações Judiciais","taxa_legal,adc_58,simples_nacional","{""data_ajuizamento"":""2024-05-20"",""data_vencimento"":""2023-01-15""}"
+2026-07-04,450000.00,"Aquisicao Predio Comercial",deposit,"Imóveis","sistema_sac,cap_rate,ross_heidecke","{""property_value"":450000.00,""monthly_rent"":2500.00}"
+2026-07-05,120.00,"Troca Pneus Frota CAR01",expense,"Manutenção Frota","cpk,weibull,ubi","{""idveiculo"":""CAR01"",""perfil_msrp"":120000}"
+2026-07-06,25.00,"Uber Corrida Profissional",revenue,"Ganhos de Aplicativo","deadhead,tipo_viagem","{""milhas_km"":15.5}"
+2026-07-07,6000.00,"Pro-Labore Socio Administrador",expense,"Retiradas","fator_r,irpf_2026,simples_nacional","{}"
+2026-07-08,5000.00,"Aporte Swissquote Offshore",deposit,"Investimentos Externos","fbar,fatca,sankey,monte_carlo","{""jurisdicao_pais"":""Suiça""}"

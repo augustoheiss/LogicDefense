@@ -982,7 +982,7 @@ export function buildCSV(
     }
 
     meta.push('## ROWS ##');
-    const header = 'date,value,description,entryType,monthlyValue,monthCount,period_start,period_end';
+    const header = 'date,value,description,entryType,monthlyValue,monthCount,period_start,period_end,category,tags,metadata_json';
     const lines = rows.map((r) => {
       const cols = [
         r.date,
@@ -993,6 +993,9 @@ export function buildCSV(
         r.monthCount !== undefined ? r.monthCount : '',
         r.periodStart || '',
         r.periodEnd || '',
+        r.category ? `"${r.category.replace(/"/g, '""')}"` : '',
+        r.tags ? `"${r.tags.replace(/"/g, '""')}"` : '',
+        r.metadataJson ? `"${r.metadataJson.replace(/"/g, '""')}"` : '',
       ];
       return cols.join(',');
     });
@@ -1001,7 +1004,7 @@ export function buildCSV(
   }
 
   // Fallback to standard semicolon-delimited CSV for plain rows export
-  const header = 'Data;Tipo;Valor;Descrição;Período Início;Período Fim;Valor Mensal;Meses;Gerado Por';
+  const header = 'Data;Tipo;Valor;Descrição;Período Início;Período Fim;Valor Mensal;Meses;Gerado Por;Categoria;Tags;Metadados';
   const lines = rows.map((r) => {
     const cols = [
       r.date,
@@ -1013,6 +1016,9 @@ export function buildCSV(
       r.monthlyValue?.toString().replace('.', ',') || '',
       r.monthCount?.toString() || '',
       r.generatedBy || '',
+      r.category ? `"${r.category.replace(/"/g, '""')}"` : '',
+      r.tags ? `"${r.tags.replace(/"/g, '""')}"` : '',
+      r.metadataJson ? `"${r.metadataJson.replace(/"/g, '""')}"` : '',
     ];
     return cols.join(';');
   });

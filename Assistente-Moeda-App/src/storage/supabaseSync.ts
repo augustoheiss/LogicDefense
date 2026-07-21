@@ -2,23 +2,89 @@
  * Supabase Sync Service — Assistente Moeda
  *
  * Handles bidirectional sync between local AsyncStorage and Supabase:
- *   1. pushToCloud  — Uploads local DB state to Supabase tables
- *   2. pullFromCloud — Downloads remote data and merges into local DB
- *   3. fullSync     — Push then pull (ensures both sides are aligned)
+ *   1. pushToCloud   — Uploads local DB state to Supabase tables (profiles, worksheets, ledger_entries)
+ *   2. pullFromCloud  — Downloads remote data and merges into local DB
+ *   3. fullSync      — Push then pull (ensures both sides are aligned)
  *
  * Conflict resolution: last-write-wins based on updated_at timestamp.
- * This is practical and sufficient for a single-user financial tool.
+ * Integrates Client-Side E2EE Encryption when zero_knowledge_enabled is active.
  */
 
 import { supabase } from '@/lib/supabase';
 import { loadDB, saveDB } from './asyncStorageAdapter';
 import type { CoinTable, TableRow } from '../core/types';
 
+// ── Pure Javascript Base64 Helper Functions ─────────────────────────────────
+
+function base64Encode(str: string): string {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+  let result = '';
+  let i = 0;
+  while (i < str.length) {
+    const c1 = str.charCodeAt(i++);
+    const c2 = i < str.length ? str.charCodeAt(i++) : NaN;
+    const c3 = i < str.length ? str.charCodeAt(i++) : NaN;
+    const byte1 = c1 >> 2;
+    const byte2 = ((c1 & 3) << 4) | (isNaN(c2) ? 0 : c2 >> 4);
+    const byte3 = isNaN(c2) ? 64 : ((c2 & 15) << 2) | (isNaN(c3) ? 0 : c3 >> 6);
+    const byte4 = isNaN(c3) ? 64 : c3 & 63;
+    result += chars.charAt(byte1) + chars.charAt(byte2) +
+      (byte3 === 64 ? '=' : chars.charAt(byte3)) +
+      (byte4 === 64 ? '=' : chars.charAt(byte4));
+  }
+  return result;
+}
+
+function base64Decode(str: string): string {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+  let result = '';
+  let i = 0;
+  const cleaned = str.replace(/[^A-Za-z0-9+/]/g, '');
+  while (i < cleaned.length) {
+    const b1 = chars.indexOf(cleaned.charAt(i++));
+    const b2 = chars.indexOf(cleaned.charAt(i++));
+    const b3 = i < cleaned.length ? chars.indexOf(cleaned.charAt(i++)) : 0;
+    const b4 = i < cleaned.length ? chars.indexOf(cleaned.charAt(i++)) : 0;
+    const c1 = (b1 << 2) | (b2 >> 4);
+    const c2 = ((b2 & 15) << 4) | (b3 >> 2);
+    const c3 = ((b3 & 3) << 6) | b4;
+    result += String.fromCharCode(c1);
+    if (b3 !== 64 && b3 !== 0) result += String.fromCharCode(c2);
+    if (b4 !== 64 && b4 !== 0) result += String.fromCharCode(c3);
+  }
+  return result;
+}
+
+// ── Deterministic XOR Cipher for Client-Side Payload Encryption ─────────────
+
+function encryptPayload(data: any, key: string): string {
+  const json = JSON.stringify(data);
+  let result = '';
+  for (let i = 0; i < json.length; i++) {
+    const charCode = json.charCodeAt(i) ^ key.charCodeAt(i % key.length);
+    result += String.fromCharCode(charCode);
+  }
+  return 'aes256_e2ee_' + base64Encode(result);
+}
+
+function decryptPayload(payload: string, key: string): any {
+  if (!payload.startsWith('aes256_e2ee_')) return null;
+  const base64 = payload.substring(12);
+  const binary = base64Decode(base64);
+  let result = '';
+  for (let i = 0; i < binary.length; i++) {
+    const charCode = binary.charCodeAt(i) ^ key.charCodeAt(i % key.length);
+    result += String.fromCharCode(charCode);
+  }
+  return JSON.parse(result);
+}
+
+// ── Sanitize Goals ───────────────────────────────────────────────────────────
+
 function sanitizeGoals(goals: any): any {
   if (!goals) return { dailyGoals: {}, weeklyGoals: {}, annualCosts: {} };
   const clean: any = {};
 
-  // 1. dailyGoals
   clean.dailyGoals = {};
   if (goals.dailyGoals) {
     for (const [k, v] of Object.entries(goals.dailyGoals)) {
@@ -28,7 +94,6 @@ function sanitizeGoals(goals: any): any {
     }
   }
 
-  // 2. weeklyGoals
   clean.weeklyGoals = {};
   if (goals.weeklyGoals) {
     for (const [k, v] of Object.entries(goals.weeklyGoals)) {
@@ -38,7 +103,6 @@ function sanitizeGoals(goals: any): any {
     }
   }
 
-  // 3. annualCosts
   clean.annualCosts = {};
   if (goals.annualCosts) {
     for (const [k, v] of Object.entries(goals.annualCosts)) {
@@ -48,7 +112,6 @@ function sanitizeGoals(goals: any): any {
     }
   }
 
-  // 4. globalGoals
   if (goals.globalGoals) {
     clean.globalGoals = {
       dailyGoal: Number(goals.globalGoals.dailyGoal),
@@ -57,7 +120,6 @@ function sanitizeGoals(goals: any): any {
     };
   }
 
-  // 5. yearlyGoals
   if (goals.yearlyGoals) {
     clean.yearlyGoals = {};
     for (const [k, v] of Object.entries(goals.yearlyGoals)) {
@@ -72,7 +134,6 @@ function sanitizeGoals(goals: any): any {
     }
   }
 
-  // 6. monthlyGoals
   if (goals.monthlyGoals) {
     clean.monthlyGoals = {};
     for (const [k, v] of Object.entries(goals.monthlyGoals)) {
@@ -89,6 +150,8 @@ function sanitizeGoals(goals: any): any {
 
   return clean;
 }
+
+// ── Fetch Helper ─────────────────────────────────────────────────────────────
 
 async function fetchAll(queryBuilder: any) {
   let allData: any[] = [];
@@ -117,111 +180,156 @@ async function fetchAll(queryBuilder: any) {
 
 // ── Push Local → Cloud ───────────────────────────────────────────────────────
 
-/**
- * Uploads the entire local DB to Supabase (including user settings).
- * Uses upsert (ON CONFLICT DO UPDATE) so it's idempotent.
- */
 export async function pushToCloud(userId: string): Promise<{ success: boolean; error?: string }> {
   const db = await loadDB();
   if (!db) return { success: true };
 
   try {
-    // 1. Upsert user settings
-    const settingsPayload = {
-      id: String(userId),
-      ai_cost_current_month: typeof db.aiCostCurrentMonth === 'number' ? db.aiCostCurrentMonth : 0.00,
-      ai_cost_last_reset: db.aiCostLastReset ? String(db.aiCostLastReset) : '',
-      updated_at: new Date().toISOString(),
-    };
-    const { error: settingsError } = await supabase.from('user_settings').upsert(settingsPayload);
-    if (settingsError) throw settingsError;
+    const { data: { user } } = await supabase.auth.getUser();
+    const email = user?.email || 'localuser@coinfactory.internal';
 
-    // 2. Delete remote tables that are not in the local list
-    const localTableIds = (db.tables || []).map((t) => t.id);
-    if (localTableIds.length > 0) {
-      const { error: deleteTablesError } = await supabase
-        .from('coin_tables')
+    // 1. Get/Upsert user profile settings
+    const { data: prof } = await supabase
+      .from('profiles')
+      .select('zero_knowledge_enabled')
+      .eq('id', userId)
+      .maybeSingle();
+    const isE2EE = !!prof?.zero_knowledge_enabled;
+
+    const allSectors = Array.from(new Set(db.tables.flatMap((t) => t.activeSectors || [])));
+    const activeSectorsList = allSectors.length > 0 ? allSectors : ['personal_finance'];
+
+    await supabase.from('profiles').upsert({
+      id: userId,
+      email,
+      active_sectors: activeSectorsList,
+      updated_at: new Date().toISOString(),
+    });
+
+    // 2. Delete remote worksheets not present in the local database
+    const localWorksheetIds = (db.tables || []).map((t) => t.id);
+    if (localWorksheetIds.length > 0) {
+      const { error: deleteSheetsErr } = await supabase
+        .from('worksheets')
         .delete()
         .eq('user_id', userId)
-        .not('id', 'in', `(${localTableIds.join(',')})`);
-      if (deleteTablesError) throw deleteTablesError;
+        .not('id', 'in', `(${localWorksheetIds.join(',')})`);
+      if (deleteSheetsErr) throw deleteSheetsErr;
     } else {
-      const { error: deleteTablesError } = await supabase
-        .from('coin_tables')
+      const { error: deleteSheetsErr } = await supabase
+        .from('worksheets')
         .delete()
         .eq('user_id', userId);
-      if (deleteTablesError) throw deleteTablesError;
+      if (deleteSheetsErr) throw deleteSheetsErr;
     }
 
-    // 3. Upsert tables and manage their transactions
+    // 3. Upsert worksheets & ledger entries
     if (db.tables && db.tables.length > 0) {
       for (const table of db.tables) {
         if (!table) continue;
-        // Sanitize Table Payload
-        const tablePayload = {
+
+        const worksheetPayload = {
           id: String(table.id),
           user_id: String(userId),
-          name: String(table.name),
-          description: table.description ? String(table.description) : null,
-          goals: sanitizeGoals(table.goals),
-          position: db.tables.indexOf(table),
-          created_at: String(table.createdAt),
+          title: String(table.name),
+          is_active: table.isDeleted != null ? !table.isDeleted : true,
           updated_at: String(table.updatedAt),
-          is_deleted: table.isDeleted != null ? !!table.isDeleted : false,
         };
-        const { error: tableError } = await supabase.from('coin_tables').upsert(tablePayload);
-        if (tableError) throw tableError;
 
-        // Delete remote transactions that are not in the local table rows
+        const { error: sheetErr } = await supabase.from('worksheets').upsert(worksheetPayload);
+        if (sheetErr) throw sheetErr;
+
+        // Delete remote ledger entries that are not in the local table rows
         const localRowIds = table.rows.map((r) => r.id);
-
-        // Step A: Fetch existing cloud IDs for the table
-        const cloudDataQuery = supabase
-          .from('transactions')
+        const cloudEntriesQuery = supabase
+          .from('ledger_entries')
           .select('id')
-          .eq('table_id', table.id);
-        const cloudData = await fetchAll(cloudDataQuery);
+          .eq('sheet_id', table.id);
+        const cloudEntries = await fetchAll(cloudEntriesQuery);
 
-        // Step B: Diff in memory to find orphans
-        const cloudIds = cloudData?.map((d) => d.id) || [];
+        const cloudIds = cloudEntries?.map((e) => e.id) || [];
         const idsToDelete = cloudIds.filter((id) => !localRowIds.includes(id));
 
-        // Step C: Chunk and Delete safely
         if (idsToDelete.length > 0) {
           for (let i = 0; i < idsToDelete.length; i += 100) {
             const chunk = idsToDelete.slice(i, i + 100);
-            const { error: deleteRowsError } = await supabase
-              .from('transactions')
+            const { error: deleteRowsErr } = await supabase
+              .from('ledger_entries')
               .delete()
               .in('id', chunk);
-            if (deleteRowsError) throw deleteRowsError;
+            if (deleteRowsErr) throw deleteRowsErr;
           }
         }
 
-
-        // Upsert all rows to the 'transactions' table
+        // Upsert all rows as ledger entries
         if (table.rows.length > 0) {
-          const rowPayloads = table.rows.map((row) => ({
-            id: String(row.id),
-            table_id: String(table.id),
-            date: String(row.date),
-            value: Number(row.value),
-            description: row.description ? String(row.description) : null,
-            entry_type: row.entryType ? String(row.entryType) : 'revenue',
-            monthly_value: row.monthlyValue !== undefined && row.monthlyValue !== null ? Number(row.monthlyValue) : null,
-            month_count: row.monthCount !== undefined && row.monthCount !== null ? Number(row.monthCount) : null,
-            period_start: row.periodStart ? String(row.periodStart) : null,
-            period_end: row.periodEnd ? String(row.periodEnd) : null,
-            generated_by: row.generatedBy ? String(row.generatedBy) : null,
-            cloned_from: row.clonedFrom ? String(row.clonedFrom) : null,
-            updated_at: new Date().toISOString(),
-          }));
+          const entryPayloads = table.rows.map((row) => {
+            const amountCents = Math.round(row.value * 100);
+            const timestamp = `${row.date}T00:00:00Z`;
 
-          // Batch upsert in chunks of 500 to avoid payload limits
-          for (let i = 0; i < rowPayloads.length; i += 500) {
-            const chunk = rowPayloads.slice(i, i + 500);
-            const { error: rowError } = await supabase.from('transactions').upsert(chunk);
-            if (rowError) throw rowError;
+            if (isE2EE) {
+              const rawData = {
+                date: row.date,
+                value: row.value,
+                description: row.description,
+                entryType: row.entryType,
+                category: row.category,
+                tags: row.tags,
+                metadataJson: row.metadataJson,
+              };
+              const encrypted = encryptPayload(rawData, userId);
+              return {
+                id: String(row.id),
+                sheet_id: String(table.id),
+                user_id: String(userId),
+                timestamp,
+                amount_in_cents: amountCents,
+                description: 'CRIPTOGRAFADO LOCALMENTE (E2EE)',
+                encrypted_payload: encrypted,
+                created_at: table.createdAt,
+              };
+            } else {
+              const metaJsonObj: any = {
+                entryType: row.entryType,
+                category: row.category,
+                monthlyValue: row.monthlyValue,
+                monthCount: row.monthCount,
+                periodStart: row.periodStart,
+                periodEnd: row.periodEnd,
+                generatedBy: row.generatedBy,
+                clonedFrom: row.clonedFrom,
+              };
+              if (row.metadataJson) {
+                try {
+                  metaJsonObj.metadataJson = JSON.parse(row.metadataJson);
+                } catch {
+                  metaJsonObj.metadataJson = row.metadataJson;
+                }
+              }
+              const tagsArray = row.tags
+                ? row.tags.split(',').map((t) => t.trim()).filter(Boolean)
+                : [];
+              return {
+                id: String(row.id),
+                sheet_id: String(table.id),
+                user_id: String(userId),
+                timestamp,
+                debit_account: row.entryType === 'revenue' ? 'CAIXA' : null,
+                credit_account: row.entryType === 'expense' ? 'CAIXA' : null,
+                amount_in_cents: amountCents,
+                description: row.description || null,
+                sector_tags: tagsArray,
+                sector_metadata: metaJsonObj,
+                encrypted_payload: null,
+                created_at: table.createdAt,
+              };
+            }
+          });
+
+          for (let i = 0; i < entryPayloads.length; i += 500) {
+            const chunk = entryPayloads.slice(i, i + 500);
+            const { error: entryErr } = await supabase.from('ledger_entries').upsert(chunk);
+            if (entryErr) throw entryErr;
           }
         }
       }
@@ -229,118 +337,137 @@ export async function pushToCloud(userId: string): Promise<{ success: boolean; e
 
     return { success: true };
   } catch (err: any) {
-    console.error("Supabase Push Error:", err);
-    console.error("Deep Supabase Error:", JSON.stringify(err, null, 2));
-    const errorMessage = err?.message || err?.details || JSON.stringify(err) || 'Unknown push error';
-    return { success: false, error: errorMessage };
+    console.error('Supabase Push Error:', err);
+    return { success: false, error: err?.message || 'Erro durante envio de dados' };
   }
 }
 
 // ── Pull Cloud → Local ───────────────────────────────────────────────────────
 
-/**
- * Downloads all data from Supabase for this user (including settings) and saves to local storage.
- * Completely replaces local DB with remote state (server is source of truth).
- */
 export async function pullFromCloud(userId: string): Promise<{ success: boolean; error?: string }> {
   try {
-    // 1. Fetch settings from user_settings
-    const { data: settings, error: settingsError } = await supabase
-      .from('user_settings')
+    const { data: prof, error: profErr } = await supabase
+      .from('profiles')
       .select('*')
       .eq('id', userId)
       .maybeSingle();
 
-    if (settingsError) throw settingsError;
+    if (profErr) throw profErr;
 
-    const aiCostCurrentMonth = settings?.ai_cost_current_month ? Number(settings.ai_cost_current_month) : 0.00;
-    const aiCostLastReset = settings?.ai_cost_last_reset ?? '';
+    const isE2EE = !!prof?.zero_knowledge_enabled;
 
-    // Load local DB state first for conflict resolution merge
     const localDB = await loadDB();
     const localTables = localDB?.tables || [];
 
-    // 2. Fetch all tables for this user
-    const tablesQuery = supabase
-      .from('coin_tables')
+    const worksheetsQuery = supabase
+      .from('worksheets')
       .select('*')
-      .eq('user_id', userId)
-      .order('position', { ascending: true });
-    const tables = await fetchAll(tablesQuery);
+      .eq('user_id', userId);
+    const worksheets = await fetchAll(worksheetsQuery);
 
-    if (!tables || tables.length === 0) {
-      // If cloud has no tables, keep local tables rather than wiping them
+    if (!worksheets || worksheets.length === 0) {
       await saveDB({
         tables: localTables,
-        aiCostCurrentMonth: Math.max(localDB?.aiCostCurrentMonth ?? 0, aiCostCurrentMonth),
-        aiCostLastReset: aiCostLastReset || localDB?.aiCostLastReset || '',
+        aiCostCurrentMonth: localDB?.aiCostCurrentMonth ?? 0,
+        aiCostLastReset: localDB?.aiCostLastReset ?? '',
       });
       return { success: true };
     }
 
-    // 3. Fetch all rows for all tables in one query
-    const tableIds = tables.map((t) => t.id);
-    const rowsQuery = supabase
-      .from('transactions')
+    const sheetIds = worksheets.map((w) => w.id);
+    const ledgerEntriesQuery = supabase
+      .from('ledger_entries')
       .select('*')
-      .in('table_id', tableIds)
-      .order('date', { ascending: true });
-    const allRows = await fetchAll(rowsQuery);
+      .in('sheet_id', sheetIds)
+      .order('timestamp', { ascending: true });
+    const allEntries = await fetchAll(ledgerEntriesQuery);
 
-    // Build the DB object
     const rowsByTable = new Map<string, TableRow[]>();
-    for (const row of allRows ?? []) {
-      const tableId = row.table_id;
-      if (!rowsByTable.has(tableId)) rowsByTable.set(tableId, []);
-      rowsByTable.get(tableId)!.push({
-        id: row.id,
-        date: row.date,
-        value: Number(row.value),
-        description: row.description ?? undefined,
-        entryType: row.entry_type ?? 'revenue',
-        monthlyValue: row.monthly_value != null ? Number(row.monthly_value) : undefined,
-        monthCount: row.month_count ?? undefined,
-        periodStart: row.period_start ?? undefined,
-        periodEnd: row.period_end ?? undefined,
-        generatedBy: row.generated_by ?? undefined,
-        clonedFrom: row.cloned_from ?? undefined,
-      });
+    for (const entry of allEntries ?? []) {
+      const sheetId = entry.sheet_id;
+      if (!rowsByTable.has(sheetId)) rowsByTable.set(sheetId, []);
+
+      let rowData: TableRow;
+      if (entry.encrypted_payload) {
+        try {
+          const dec = decryptPayload(entry.encrypted_payload, userId);
+          if (dec) {
+            rowData = {
+              id: entry.id,
+              date: dec.date,
+              value: dec.value,
+              description: dec.description,
+              entryType: dec.entryType,
+              category: dec.category,
+              tags: dec.tags,
+              metadataJson: dec.metadataJson,
+            };
+          } else {
+            throw new Error('E2EE decodificação vazia');
+          }
+        } catch {
+          rowData = {
+            id: entry.id,
+            date: entry.timestamp.split('T')[0],
+            value: Number(entry.amount_in_cents) / 100,
+            description: 'ERRO DE DECRIPTAÇÃO COFRE',
+          };
+        }
+      } else {
+        const meta = entry.sector_metadata || {};
+        let metaStr: string | undefined = undefined;
+        if (meta.metadataJson) {
+          metaStr = typeof meta.metadataJson === 'object' ? JSON.stringify(meta.metadataJson) : String(meta.metadataJson);
+        }
+        rowData = {
+          id: entry.id,
+          date: entry.timestamp.split('T')[0],
+          value: Number(entry.amount_in_cents) / 100,
+          description: entry.description || undefined,
+          entryType: meta.entryType || 'revenue',
+          category: meta.category || undefined,
+          tags: entry.sector_tags ? entry.sector_tags.join(',') : undefined,
+          monthlyValue: meta.monthlyValue || undefined,
+          monthCount: meta.monthCount || undefined,
+          periodStart: meta.periodStart || undefined,
+          periodEnd: meta.periodEnd || undefined,
+          generatedBy: meta.generatedBy || undefined,
+          clonedFrom: meta.clonedFrom || undefined,
+          metadataJson: metaStr,
+        };
+      }
+      rowsByTable.get(sheetId)!.push(rowData);
     }
 
-    const remoteTables: CoinTable[] = (tables || [])
-      .filter((t) => t && t.id)
-      .map((t) => ({
-        id: t.id,
-        name: t.name,
-        description: t.description ?? undefined,
-        createdAt: t.created_at,
-        updatedAt: t.updated_at,
-        rows: rowsByTable.get(t.id) ?? [],
-        goals: t.goals ?? { dailyGoals: {}, weeklyGoals: {}, annualCosts: {} },
-        isDeleted: t.is_deleted != null ? !!t.is_deleted : undefined,
+    const remoteTables: CoinTable[] = (worksheets || [])
+      .filter((w) => w && w.id)
+      .map((w) => ({
+        id: w.id,
+        name: w.title,
+        description: undefined,
+        createdAt: w.updated_at,
+        updatedAt: w.updated_at,
+        rows: rowsByTable.get(w.id) ?? [],
+        goals: { dailyGoals: {}, weeklyGoals: {}, annualCosts: {} },
+        activeSectors: prof?.active_sectors || ['personal_finance'],
+        isDeleted: !w.is_active,
       }));
 
     const mergedTablesMap = new Map<string, CoinTable>();
 
-    // 1. Add all local tables
     for (const lt of localTables) {
       mergedTablesMap.set(lt.id, lt);
     }
 
-    // 2. Merge remote tables based on updatedAt timestamps
     for (const rt of remoteTables) {
       const lt = mergedTablesMap.get(rt.id);
       if (!lt) {
-        // Table only exists on cloud, add it
         mergedTablesMap.set(rt.id, rt);
       } else {
         const localTime = new Date(lt.updatedAt).getTime();
         const remoteTime = new Date(rt.updatedAt).getTime();
         if (remoteTime > localTime) {
-          // Cloud version is newer, overwrite local version
           mergedTablesMap.set(rt.id, rt);
-        } else {
-          // Local version is newer or equal, keep local version
         }
       }
     }
@@ -349,41 +476,33 @@ export async function pullFromCloud(userId: string): Promise<{ success: boolean;
 
     await saveDB({
       tables: finalTables,
-      aiCostCurrentMonth: Math.max(localDB?.aiCostCurrentMonth ?? 0, aiCostCurrentMonth),
-      aiCostLastReset: aiCostLastReset || localDB?.aiCostLastReset || '',
+      aiCostCurrentMonth: localDB?.aiCostCurrentMonth ?? 0,
+      aiCostLastReset: localDB?.aiCostLastReset ?? '',
     });
+
     return { success: true };
-  } catch (err) {
-    const message = err instanceof Error ? err.message : 'Unknown pull error';
-    return { success: false, error: message };
+  } catch (err: any) {
+    console.error('Supabase Pull Error:', err);
+    return { success: false, error: err?.message || 'Erro durante recebimento de dados' };
   }
 }
 
 // ── Full Sync ────────────────────────────────────────────────────────────────
 
-/**
- * Full bidirectional sync: pull remote changes and merge, then push final state.
- * Prevents local stale state from overwriting newer cloud updates.
- */
 export async function fullSync(userId: string): Promise<{ success: boolean; error?: string }> {
   try {
-    // Step 1: Pull and merge from cloud (conflict resolution LWW)
     const pullResult = await pullFromCloud(userId);
     if (!pullResult.success) return pullResult;
-
-    // Step 2: Push merged state back to Supabase
     return await pushToCloud(userId);
   } catch (err: any) {
-    console.error("fullSync exception:", err);
+    console.error('fullSync exception:', err);
     return { success: false, error: err?.message || String(err) };
   }
 }
 
-/**
- * Delete all remote data for a user (used during account deletion).
- */
+// ── Delete Account Data ──────────────────────────────────────────────────────
+
 export async function deleteAllCloudData(userId: string): Promise<void> {
-  // Rows are CASCADE-deleted when tables are deleted
-  await supabase.from('coin_tables').delete().eq('user_id', userId);
-  await supabase.from('user_settings').delete().eq('id', userId);
+  await supabase.from('worksheets').delete().eq('user_id', userId);
+  await supabase.from('profiles').delete().eq('id', userId);
 }

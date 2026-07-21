@@ -32,6 +32,6 @@ export { TokenProgressBar } from './TokenProgressBar';
 export { CSVTextImporterModal } from './CSVTextImporterModal';
 export { SectorSettingsPanel } from './SectorSettingsPanel';
 export { SectorGuard } from '../SectorGuard';
-export { SMBSectorWidget, RealEstateSectorWidget, VehiclesSectorWidget, LegalTaxesSectorWidget } from './SectorWidgets';
+export { SMBSectorWidget, RealEstateSectorWidget, VehiclesSectorWidget, LegalTaxesSectorWidget, PersonalFinanceSectorWidget } from './SectorWidgets';
 
 
