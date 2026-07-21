@@ -37,7 +37,19 @@ import { useAuthContext } from '@/hooks/useAuth';
 import { SwipeableRowCard } from '@/components/ui/SwipeableRowCard';
 import { MonthPicker } from '@/components/ui/MonthPicker';
 import { AddRowModal } from '@/components/ui/AddRowModal';
-import { TableSwitcherModal, PreviewModal, PredictionPanel, BulkDeleteModal, PaywallModal } from '@/components/ui';
+import {
+  TableSwitcherModal,
+  PreviewModal,
+  PredictionPanel,
+  BulkDeleteModal,
+  PaywallModal,
+  CSVTextImporterModal,
+  SectorGuard,
+  SMBSectorWidget,
+  RealEstateSectorWidget,
+  VehiclesSectorWidget,
+  LegalTaxesSectorWidget,
+} from '@/components/ui';
 import { formatCurrencySmart } from '@/core/formatCurrency';
 import { shareWhatsAppReport, shareCSV, sharePDFReport, buildWhatsAppReport, shareCSVText, buildCSV } from '@/services/exportService';
 import { importCSVFlow, pickCSVFile, parseCSV } from '@/services/csvImportService';
@@ -54,6 +66,7 @@ export default function SpreadsheetScreen() {
   const [editingRow, setEditingRow] = useState<TableRow | null>(null);
   const [showFab, setShowFab] = useState(false);
   const [showBulkDelete, setShowBulkDelete] = useState(false);
+  const [showCSVStreamModal, setShowCSVStreamModal] = useState(false);
   const { width } = useWindowDimensions();
 
   // ── Preview Modal State ───────────────────────────────
@@ -177,14 +190,12 @@ export default function SpreadsheetScreen() {
 
     if (Platform.OS === 'web') {
       const choice = window.confirm(
-        "Deseja escolher um arquivo CSV (OK) ou colar o texto do backup manualmente (Cancelar)?"
+        "Deseja escolher um arquivo de backup CSV (OK) ou colar um Bloco CSV de IA / Texto manualmente (Cancelar)?"
       );
       if (choice) {
         triggerFileImport();
       } else {
-        setPreviewText('');
-        setPreviewMode('csv_import');
-        setPreviewVisible(true);
+        setShowCSVStreamModal(true);
       }
     } else {
       Alert.alert(
@@ -192,15 +203,13 @@ export default function SpreadsheetScreen() {
         'Como você deseja importar seus dados?',
         [
           {
-            text: '📁 Escolher Arquivo CSV',
+            text: '📁 Arquivo de Backup CSV',
             onPress: triggerFileImport,
           },
           {
-            text: '📋 Colar Texto CSV/Backup',
+            text: '📥 Importar Bloco CSV de IA',
             onPress: () => {
-              setPreviewText('');
-              setPreviewMode('csv_import');
-              setPreviewVisible(true);
+              setShowCSVStreamModal(true);
             },
           },
           { text: 'Cancelar', style: 'cancel' },
@@ -286,6 +295,101 @@ export default function SpreadsheetScreen() {
     }
   }, [db]);
 
+  const renderHeader = useCallback(() => {
+    return (
+      <View>
+        {db.activeTable && (
+          <PredictionPanel
+            rows={db.activeTable.rows}
+            onBulkAdd={db.addRows}
+            onDeleteGenerated={db.deleteGeneratedRows}
+            onEffectuateGenerated={db.effectuateGeneratedRows}
+          />
+        )}
+
+        {/* Personal Finance: Resumo geral */}
+        <SectorGuard sector="personal_finance">
+          {db.filteredRows.length > 0 && (
+            <View style={styles.summaryCard}>
+              <Text style={styles.summaryLabel}>{monthSummary.label}</Text>
+              <View style={styles.summaryRow}>
+                <View style={styles.summaryItem}>
+                  <Text style={styles.summaryItemLabel}>Receita</Text>
+                  <Text style={[styles.summaryItemValue, { color: colors.success.main }]}>
+                    {formatCurrencySmart(monthSummary.gross)}
+                  </Text>
+                </View>
+                <View style={styles.summaryDivider} />
+                <View style={styles.summaryItem}>
+                  <Text style={styles.summaryItemLabel}>Despesas</Text>
+                  <Text style={[styles.summaryItemValue, { color: colors.danger.main }]}>
+                    {formatCurrencySmart(monthSummary.expenses)}
+                  </Text>
+                </View>
+                <View style={styles.summaryDivider} />
+                <View style={styles.summaryItem}>
+                  <Text style={styles.summaryItemLabel}>Saldo</Text>
+                  <Text
+                    style={[
+                      styles.summaryItemValue,
+                      { color: monthSummary.net >= 0 ? colors.success.main : colors.danger.main },
+                    ]}
+                  >
+                    {formatCurrencySmart(monthSummary.net)}
+                  </Text>
+                </View>
+              </View>
+            </View>
+          )}
+        </SectorGuard>
+
+        {/* SMB / Accounting widgets */}
+        <SectorGuard sector="smb_accounting">
+          <View style={{ marginHorizontal: spacing.lg }}>
+            <SMBSectorWidget />
+          </View>
+        </SectorGuard>
+
+        {/* Real Estate widgets */}
+        <SectorGuard sector="real_estate">
+          <View style={{ marginHorizontal: spacing.lg }}>
+            <RealEstateSectorWidget />
+          </View>
+        </SectorGuard>
+
+        {/* Vehicles & Fleet widgets */}
+        <SectorGuard sector="vehicles">
+          <View style={{ marginHorizontal: spacing.lg }}>
+            <VehiclesSectorWidget />
+          </View>
+        </SectorGuard>
+
+        {/* Legal & Taxes widgets */}
+        <SectorGuard sector="legal_taxes">
+          <View style={{ marginHorizontal: spacing.lg }}>
+            <LegalTaxesSectorWidget />
+          </View>
+        </SectorGuard>
+
+        {/* Month Picker */}
+        {db.availableMonths.length > 0 && (
+          <MonthPicker
+            months={db.availableMonths}
+            selected={db.selectedMonth}
+            onSelect={db.setSelectedMonth}
+          />
+        )}
+      </View>
+    );
+  }, [
+    db.activeTable,
+    db.filteredRows,
+    db.availableMonths,
+    db.selectedMonth,
+    db.setSelectedMonth,
+    monthSummary,
+  ]);
+
   return (
     <SafeAreaView style={styles.container} edges={[]}>
       {/* Header */}
@@ -320,62 +424,11 @@ export default function SpreadsheetScreen() {
       </View>
 
 
-      {db.activeTable && (
-        <PredictionPanel
-          rows={db.activeTable.rows}
-          onBulkAdd={db.addRows}
-          onDeleteGenerated={db.deleteGeneratedRows}
-          onEffectuateGenerated={db.effectuateGeneratedRows}
-        />
-      )}
-
-      {/* Month Summary Card */}
-      {db.filteredRows.length > 0 && (
-        <View style={styles.summaryCard}>
-          <Text style={styles.summaryLabel}>{monthSummary.label}</Text>
-          <View style={styles.summaryRow}>
-            <View style={styles.summaryItem}>
-              <Text style={styles.summaryItemLabel}>Receita</Text>
-              <Text style={[styles.summaryItemValue, { color: colors.success.main }]}>
-                {formatCurrencySmart(monthSummary.gross)}
-              </Text>
-            </View>
-            <View style={styles.summaryDivider} />
-            <View style={styles.summaryItem}>
-              <Text style={styles.summaryItemLabel}>Despesas</Text>
-              <Text style={[styles.summaryItemValue, { color: colors.danger.main }]}>
-                {formatCurrencySmart(monthSummary.expenses)}
-              </Text>
-            </View>
-            <View style={styles.summaryDivider} />
-            <View style={styles.summaryItem}>
-              <Text style={styles.summaryItemLabel}>Saldo</Text>
-              <Text
-                style={[
-                  styles.summaryItemValue,
-                  { color: monthSummary.net >= 0 ? colors.success.main : colors.danger.main },
-                ]}
-              >
-                {formatCurrencySmart(monthSummary.net)}
-              </Text>
-            </View>
-          </View>
-        </View>
-      )}
-
-      {/* Month Picker */}
-      {db.availableMonths.length > 0 && (
-        <MonthPicker
-          months={db.availableMonths}
-          selected={db.selectedMonth}
-          onSelect={db.setSelectedMonth}
-        />
-      )}
-
       {/* Row List */}
       <FlatList
         data={db.filteredRows}
         keyExtractor={(item) => item.id}
+        ListHeaderComponent={renderHeader}
         renderItem={({ item }) => (
           <SwipeableRowCard
             row={item}
@@ -568,6 +621,20 @@ export default function SpreadsheetScreen() {
       <PaywallModal
         visible={showPaywall}
         onClose={() => setShowPaywall(false)}
+      />
+
+      {/* CSV Text Stream Importer Modal */}
+      <CSVTextImporterModal
+        visible={showCSVStreamModal}
+        onClose={() => setShowCSVStreamModal(false)}
+        onSuccess={(summary) => {
+          setShowCSVStreamModal(false);
+          if (Platform.OS === 'web') {
+            window.alert(summary);
+          } else {
+            Alert.alert('Importação Bem-Sucedida', summary);
+          }
+        }}
       />
     </SafeAreaView>
   );

@@ -41,6 +41,7 @@ import { typography, fontFamily } from '@/theme/typography';
 import { shadows } from '@/theme/shadows';
 import { Card } from '@/components/ui/Card';
 import { TokenProgressBar } from '@/components/ui/TokenProgressBar';
+import { SectorSettingsPanel } from '@/components/ui/SectorSettingsPanel';
 import { formatCurrencySmart } from '@/core/formatCurrency';
 import type { TableGoals } from '@/core/types';
 
@@ -641,6 +642,13 @@ export default function SettingsScreen() {
               goals={db.activeTable.goals}
               onUpdate={db.updateGoals}
             />
+          </Section>
+        )}
+
+        {/* ── Sector Configurations ───────────────────────── */}
+        {db.activeTable && (
+          <Section title="⚙️ Módulos / Setores">
+            <SectorSettingsPanel />
           </Section>
         )}
 

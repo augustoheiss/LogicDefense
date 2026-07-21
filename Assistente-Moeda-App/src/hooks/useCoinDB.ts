@@ -51,6 +51,7 @@ export interface CoinDBState {
 
   // ── Goals ─────────────────────────────────────────────
   updateGoals: (goals: Partial<TableGoals>) => void;
+  updateActiveSectors: (sectors: string[]) => void;
 
   // ── Month Filter ──────────────────────────────────────
   setSelectedMonth: (month: string) => void;
@@ -115,7 +116,7 @@ function useCoinDBInternal(): CoinDBState {
       const db = await loadDB();
       if (db) {
         if (db.tables.length > 0) {
-          setTables(db.tables);
+          setTables(ensureActiveSectors(db.tables));
         }
         setAiCostCurrentMonth(db.aiCostCurrentMonth ?? 0);
         setAiCostLastReset(db.aiCostLastReset ?? '');
@@ -139,7 +140,7 @@ function useCoinDBInternal(): CoinDBState {
       if (res.success) {
         const db = await loadDB();
         if (db) {
-          setTables(db.tables);
+          setTables(ensureActiveSectors(db.tables));
           setAiCostCurrentMonth(db.aiCostCurrentMonth ?? 0);
           setAiCostLastReset(db.aiCostLastReset ?? '');
           // Keep active table index within valid bounds of the newly loaded tables
@@ -181,7 +182,7 @@ function useCoinDBInternal(): CoinDBState {
       if (res.success) {
         const db = await loadDB();
         if (db) {
-          setTables(db.tables);
+          setTables(ensureActiveSectors(db.tables));
           setAiCostCurrentMonth(db.aiCostCurrentMonth ?? 0);
           setAiCostLastReset(db.aiCostLastReset ?? '');
           // Keep active table index within valid bounds of the newly loaded tables
@@ -247,10 +248,11 @@ function useCoinDBInternal(): CoinDBState {
 
   // ── Persist to AsyncStorage and Push to Cloud ──────────
   const persist = useCallback(async (newTables: CoinTable[]) => {
-    setTables(newTables);
+    const mainTables = ensureActiveSectors(newTables);
+    setTables(mainTables);
     const currentDB = await loadDB();
     await saveDB({
-      tables: newTables,
+      tables: mainTables,
       aiCostCurrentMonth: currentDB?.aiCostCurrentMonth ?? 0,
       aiCostLastReset: currentDB?.aiCostLastReset ?? '',
     });
@@ -260,7 +262,7 @@ function useCoinDBInternal(): CoinDBState {
         if (res.success) {
           const db = await loadDB();
           if (db) {
-            setTables(db.tables);
+            setTables(ensureActiveSectors(db.tables));
             setAiCostCurrentMonth(db.aiCostCurrentMonth ?? 0);
             setAiCostLastReset(db.aiCostLastReset ?? '');
             if (activeTableIndex >= db.tables.length) {
@@ -369,6 +371,7 @@ function useCoinDBInternal(): CoinDBState {
       updatedAt: new Date().toISOString(),
       rows: rows ? rows.map((r) => ({ ...r, id: generateId() })) : [],
       goals: effectiveGoals,
+      activeSectors: ['personal_finance'],
     };
     const newTables = [...tables, newTable];
     persist(newTables);
@@ -577,6 +580,16 @@ function useCoinDBInternal(): CoinDBState {
     }
   }, [auth.mode, auth.user]);
 
+  const updateActiveSectors = useCallback((sectors: string[]) => {
+    if (!activeTable) return;
+    const newTables = tables.map((t) =>
+      t.id === activeTable.id
+        ? { ...t, activeSectors: sectors, updatedAt: new Date().toISOString() }
+        : t,
+    );
+    persist(newTables);
+  }, [tables, activeTable, persist]);
+
   return {
     isLoading,
     tables: activeTables,
@@ -596,6 +609,7 @@ function useCoinDBInternal(): CoinDBState {
     deleteGeneratedRows,
     effectuateGeneratedRows,
     updateGoals,
+    updateActiveSectors,
     setSelectedMonth,
     cutoffDate,
     setCutoffDate,
@@ -615,4 +629,11 @@ function useCoinDBInternal(): CoinDBState {
 
 function generateId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+}
+
+function ensureActiveSectors(tables: CoinTable[]): CoinTable[] {
+  return tables.map((t) => ({
+    ...t,
+    activeSectors: t.activeSectors && t.activeSectors.length > 0 ? t.activeSectors : ['personal_finance'],
+  }));
 }

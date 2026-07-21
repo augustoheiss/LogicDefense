@@ -89,6 +89,9 @@ export interface TableRow {
    * this entry was copied. E.g. "2025-12".
    */
   clonedFrom?: string;
+  category?: string;
+  tags?: string;
+  metadataJson?: string;
 }
 
 export interface TableGoals {
@@ -136,6 +139,7 @@ export interface CoinTable {
   rows: TableRow[];
   goals: TableGoals;
   isDeleted?: boolean;
+  activeSectors?: string[];
 }
 
 export type DB = {
