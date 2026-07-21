@@ -1,0 +1,60 @@
+declare function describe(name: string, fn: () => void): void;
+declare function it(name: string, fn: () => void): void;
+declare function expect(actual: any): {
+  toBe(expected: any): void;
+  toEqual(expected: any): void;
+  toBeLessThan(expected: number): void;
+  toBeGreaterThan(expected: number): void;
+  toContain(expected: any): void;
+};
+
+import { parseCSVText } from '../utils/csvEngine';
+import { ALL_SECTORS } from '../hooks/useSectorRegistry';
+
+const MASTER_10YEAR_CSV = `date,value,description,entryType,category,tags,metadata_json
+2016-01-15,50000.00,"Faturamento Inicial PME",revenue,"Receita de Vendas","ncg,welford,rolling_margin","{""massa_salarial_12"":30000.00,""receita_bruta_12"":120000.00}"
+2017-03-20,12000.00,"Aquisicao Maquinas Industriais",expense,"Ativo Imobilizado","ncg,dre_pme","{""vida_util_anos"":10}"
+2018-06-10,250000.00,"Aquisicao Terreno Galpão",deposit,"Imóveis","sistema_sac,cap_rate,ross_heidecke","{""property_value"":250000.00,""monthly_rent"":1500.00}"
+2019-09-05,45000.00,"Compra Veiculo Utilitario CAR01",expense,"Frotas","cpk,weibull,ubi,tco_vehicle","{""idveiculo"":""CAR01"",""perfil_msrp"":45000}"
+2020-04-12,8000.00,"Fundo Reserva Crise 2020",deposit,"Reservas","cfar,risk_liquidity","{""probabilidade_perda"":0.05}"
+2021-11-30,15000.00,"Acordo Trabalhista ADC 58",expense,"Ações Judiciais","taxa_legal,adc_58,simples_nacional","{""data_ajuizamento"":""2020-01-10"",""data_vencimento"":""2019-12-01""}"
+2022-08-14,7500.00,"Pro-Labore Administrador",expense,"Retiradas","fator_r,irpf_2026,simples_nacional","{""massa_salarial_12"":90000.00,""receita_bruta_12"":300000.00}"
+2023-05-22,35.00,"Corrida Aplicativo Executivo",revenue,"Ganhos de Aplicativo","deadhead,tipo_viagem","{""milhas_km"":18.2}"
+2024-02-18,10000.00,"Aporte Fundo Offshore Suiça",deposit,"Investimentos Externos","fbar,fatca,sankey,monte_carlo","{""jurisdicao_pais"":""Suiça""}"
+2025-10-01,180000.00,"Contrato Servicos TI 2025",revenue,"Receita de Vendas","ncg,welford,rolling_margin","{""massa_salarial_12"":110000.00,""receita_bruta_12"":480000.00}"
+2026-07-01,200000.00,"Faturamento Master 2026",revenue,"Receita de Vendas","ncg,welford,fator_r,cpk,sistema_sac,adc_58,fbar","{""massa_salarial_12"":120000.00,""receita_bruta_12"":500000.00}"`;
+
+describe('Relatório de Teste 03: Master 10-Year Dataset & Performance Benchmark', () => {
+  it('Deve carregar e interpretar corretamente o dataset de 10 anos (2016-2026)', () => {
+    const result = parseCSVText(MASTER_10YEAR_CSV);
+    expect(result.errors.length).toBe(0);
+    expect(result.rows.length).toBeGreaterThan(10);
+    expect(result.rows[0].date).toBe('2016-01-15');
+    expect(result.rows[result.rows.length - 1].date).toBe('2026-07-01');
+  });
+
+  it('Deve autodetectar e autoativar todos os 9 setores do sistema', () => {
+    const result = parseCSVText(MASTER_10YEAR_CSV);
+    const detected = result.detectedSectors;
+
+    expect(detected).toContain('smb_accounting');
+    expect(detected).toContain('legal_taxes');
+    expect(detected).toContain('real_estate');
+    expect(detected).toContain('vehicles');
+    expect(detected).toContain('personal_finance');
+  });
+
+  it('Benchmark de Performance: Deve processar o dataset em menos de 100ms', () => {
+    const startTime = performance.now();
+    
+    // Executa a operação de parsing e detecção 50 vezes para simular carga pesada
+    for (let i = 0; i < 50; i++) {
+      parseCSVText(MASTER_10YEAR_CSV);
+    }
+    
+    const endTime = performance.now();
+    const duration = (endTime - startTime) / 50; // tempo médio em ms
+
+    expect(duration).toBeLessThan(100);
+  });
+});

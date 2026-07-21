@@ -335,41 +335,6 @@ export default function SpreadsheetScreen() {
           </View>
         )}
 
-        {/* Personal Finance widgets */}
-        <SectorGuard sector="personal_finance">
-          <View style={{ marginHorizontal: spacing.lg, marginTop: spacing.md }}>
-            <PersonalFinanceSectorWidget />
-          </View>
-        </SectorGuard>
-
-        {/* SMB / Accounting widgets */}
-        <SectorGuard sector="smb_accounting">
-          <View style={{ marginHorizontal: spacing.lg }}>
-            <SMBSectorWidget />
-          </View>
-        </SectorGuard>
-
-        {/* Real Estate widgets */}
-        <SectorGuard sector="real_estate">
-          <View style={{ marginHorizontal: spacing.lg }}>
-            <RealEstateSectorWidget />
-          </View>
-        </SectorGuard>
-
-        {/* Vehicles & Fleet widgets */}
-        <SectorGuard sector="vehicles">
-          <View style={{ marginHorizontal: spacing.lg }}>
-            <VehiclesSectorWidget />
-          </View>
-        </SectorGuard>
-
-        {/* Legal & Taxes widgets */}
-        <SectorGuard sector="legal_taxes">
-          <View style={{ marginHorizontal: spacing.lg }}>
-            <LegalTaxesSectorWidget />
-          </View>
-        </SectorGuard>
-
         {/* Month Picker */}
         {db.availableMonths.length > 0 && (
           <MonthPicker

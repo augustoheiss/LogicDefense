@@ -27,6 +27,7 @@ import { colors } from '@/theme/colors';
 import { spacing, radius } from '@/theme/spacing';
 import { useCoinDB } from '@/hooks/useCoinDB';
 import { DebtTrackingList } from '@/components/charts/DebtTrackingList';
+import { SectorGuard } from '@/components/SectorGuard';
 
 import { RevenueChart } from '@/components/charts/RevenueChart';
 import { FutureProjectionChart } from '@/components/charts/FutureProjectionChart';
@@ -119,32 +120,40 @@ export default function ChartsScreen() {
           showsVerticalScrollIndicator={false}
         >
           {activeView === 'revenue' && (
-            <RevenueChart
-              metrics={metrics}
-              goals={activeTable.goals}
-              rows={activeTable.rows}
-            />
+            <SectorGuard sector="core_revenue">
+              <RevenueChart
+                metrics={metrics}
+                goals={activeTable.goals}
+                rows={activeTable.rows}
+              />
+            </SectorGuard>
           )}
 
           {activeView === 'evolution' && (
-            <RealInvestmentsChart
-              metrics={metrics}
-            />
+            <SectorGuard sector="core_cashflow">
+              <RealInvestmentsChart
+                metrics={metrics}
+              />
+            </SectorGuard>
           )}
 
           {activeView === 'projection' && (
-            <FutureProjectionChart
-              metrics={metrics}
-              rows={activeTable.rows}
-            />
+            <SectorGuard sector="personal_finance">
+              <FutureProjectionChart
+                metrics={metrics}
+                rows={activeTable.rows}
+              />
+            </SectorGuard>
           )}
 
           {activeView === 'audit' && (
-            <DebtTrackingList
-              rows={activeTable.rows}
-              goals={activeTable.goals}
-              metrics={metrics}
-            />
+            <SectorGuard sector="core_costs">
+              <DebtTrackingList
+                rows={activeTable.rows}
+                goals={activeTable.goals}
+                metrics={metrics}
+              />
+            </SectorGuard>
           )}
 
           <View style={styles.bottomPad} />

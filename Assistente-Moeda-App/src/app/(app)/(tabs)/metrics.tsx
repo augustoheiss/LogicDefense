@@ -24,6 +24,14 @@ import { MonthPicker } from '@/components/ui/MonthPicker';
 import { computeMetrics, emptyMetrics } from '@/core/metricsEngine';
 import { getDailyGoalForDate } from '@/core/dateUtils';
 import { CategorySummary, AddRowModal } from '@/components/ui';
+import { SectorGuard } from '@/components/SectorGuard';
+import {
+  PersonalFinanceSectorWidget,
+  SMBSectorWidget,
+  RealEstateSectorWidget,
+  VehiclesSectorWidget,
+  LegalTaxesSectorWidget,
+} from '@/components/ui/SectorWidgets';
 import type { TableRow } from '@/core/types';
 import { PieChart } from 'react-native-gifted-charts';
 
@@ -850,6 +858,32 @@ export default function MetricsScreen() {
           onEditRow={handleEditRow}
           onDeleteRow={db.deleteRow}
         />
+
+        {/* ── Sector Actuarial & Simulation Widgets ── */}
+        <SectorGuard sector="personal_finance">
+          <SectionTitle title="👤 Simuladores de Finanças Pessoais (PFM)" />
+          <PersonalFinanceSectorWidget />
+        </SectorGuard>
+
+        <SectorGuard sector="smb_accounting">
+          <SectionTitle title="🏢 Simuladores de Contabilidade PME" />
+          <SMBSectorWidget />
+        </SectorGuard>
+
+        <SectorGuard sector="real_estate">
+          <SectionTitle title="🏠 Simuladores Imobiliários & PropTech" />
+          <RealEstateSectorWidget />
+        </SectorGuard>
+
+        <SectorGuard sector="vehicles">
+          <SectionTitle title="🚗 Simuladores de Frotas & TCO de Veículos" />
+          <VehiclesSectorWidget />
+        </SectorGuard>
+
+        <SectorGuard sector="legal_taxes">
+          <SectionTitle title="⚖️ Otimizadores Jurídicos & Tributários" />
+          <LegalTaxesSectorWidget />
+        </SectorGuard>
 
         <View style={styles.bottomPad} />
       </ScrollView>
