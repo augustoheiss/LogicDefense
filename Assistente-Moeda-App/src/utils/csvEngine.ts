@@ -162,71 +162,130 @@ export function parseCSVText(csvText: string): CSVParseOutput {
   const errors: string[] = [];
   let skippedCount = 0;
   const rows: Omit<TableRow, 'id'>[] = [];
-  let metadata: { name?: string; description?: string; goals?: Record<string, number | string>; tableGoals?: TableGoals } = {
-    name: 'Minha Planilha',
-    description: '',
-    goals: {},
-    tableGoals: { dailyGoals: {}, weeklyGoals: {}, annualCosts: {}, yearlyGoals: {} },
-  };
 
   const cleaned = csvText.startsWith('\uFEFF') ? csvText.slice(1) : csvText;
   
-  // Section Parsing for Backup v2 (## COIN ASSISTANT BACKUP v2 ## / ## ROWS ##)
-  let csvSourceText = cleaned;
-  const rowsMarkerRegex = /##\s*ROWS\s*##/i;
-  const rowsMarkerMatch = cleaned.match(rowsMarkerRegex);
+  // Split all lines safely
+  const allLines = cleaned
+    .replace(/\r\n/g, '\n')
+    .replace(/\r/g, '\n')
+    .split('\n')
+    .map((l) => l.trim())
+    .filter((l) => l.length > 0);
 
-  if (rowsMarkerMatch && rowsMarkerMatch.index !== undefined) {
-    const headerBlock = cleaned.slice(0, rowsMarkerMatch.index);
-    csvSourceText = cleaned.slice(rowsMarkerMatch.index + rowsMarkerMatch[0].length);
-
-    // Extract metadata name, description, and dynamic goal_* keys from headerBlock
-    const metaLines = headerBlock
-      .replace(/\r\n/g, '\n')
-      .replace(/\r/g, '\n')
-      .split('\n')
-      .map((l) => l.trim())
-      .filter((l) => l.length > 0 && !l.startsWith('##'));
-
-    const metaObj: {
-      name?: string;
-      description?: string;
-      goals: Record<string, number | string>;
-      tableGoals: TableGoals;
-    } = {
-      goals: {},
-      tableGoals: { dailyGoals: {}, weeklyGoals: {}, annualCosts: {}, yearlyGoals: {} },
+  if (allLines.length === 0) {
+    return {
+      rows,
+      errors: ['O CSV está vazio.'],
+      skippedCount: 0,
+      detectedSectors: ['personal_finance'],
+      metadata: {
+        name: 'Minha Planilha',
+        description: '',
+        goals: {},
+        tableGoals: { dailyGoals: {}, weeklyGoals: {}, annualCosts: {}, yearlyGoals: {} },
+      },
     };
+  }
 
-    metaLines.forEach((line) => {
-      const parts = line.split(',').map((p) => cleanCell(p));
-      if (parts.length >= 2) {
-        const rawKey = parts[0];
-        const keyLower = rawKey.toLowerCase();
-        const valStr = parts[1];
-        const numVal = parseFloat(valStr);
+  const dateAliases = ['date', 'data', 'data_movimento', 'created_at'];
+  const amountAliases = ['amount', 'valor', 'value', 'valor_cents', 'amount_in_cents', 'preco'];
 
-        if (keyLower === 'name') {
-          metaObj.name = valStr;
-        } else if (keyLower === 'description') {
-          metaObj.description = valStr;
-        } else {
-          // Capture raw key-value into metadata.goals
-          const finalVal = !isNaN(numVal) ? numVal : valStr;
-          metaObj.goals[rawKey] = finalVal;
+  // Check if ## ROWS ## marker exists
+  const rowsMarkerRegex = /##\s*ROWS\s*##/i;
+  let rowsMarkerLineIdx = -1;
+  for (let i = 0; i < allLines.length; i++) {
+    if (rowsMarkerRegex.test(allLines[i])) {
+      rowsMarkerLineIdx = i;
+      break;
+    }
+  }
 
-          // Parse structured goal if key matches goal_(daily|weekly|annual)_YYYY
-          const goalMatch = keyLower.match(/^goal_(daily|weekly|annual)_(\d{4})$/);
-          if (goalMatch && !isNaN(numVal)) {
-            const [, goalType, yearStr] = goalMatch;
+  let metadataLines: string[] = [];
+  let transactionLines: string[] = [];
+
+  if (rowsMarkerLineIdx !== -1) {
+    metadataLines = allLines.slice(0, rowsMarkerLineIdx);
+    transactionLines = allLines.slice(rowsMarkerLineIdx + 1);
+  } else {
+    // Dynamic Header Search: scan lines to find the actual transaction header row containing date and amount columns
+    let transactionHeaderIdx = -1;
+    for (let i = 0; i < allLines.length; i++) {
+      const lineDelim = detectDelimiter(allLines[i]);
+      const cols = splitCSVLine(allLines[i], lineDelim).map((h) => cleanCell(h).toLowerCase());
+      const hasDate = findHeaderIdx(cols, dateAliases) !== -1;
+      const hasAmount = findHeaderIdx(cols, amountAliases) !== -1;
+      if (hasDate && hasAmount) {
+        transactionHeaderIdx = i;
+        break;
+      }
+    }
+
+    if (transactionHeaderIdx !== -1) {
+      metadataLines = allLines.slice(0, transactionHeaderIdx);
+      transactionLines = allLines.slice(transactionHeaderIdx);
+    } else {
+      // Fallback: line 0 as header
+      transactionLines = allLines;
+    }
+  }
+
+  // Parse metadata from metadataLines (flexible delimiter per line)
+  const metaObj: {
+    name?: string;
+    description?: string;
+    goals: Record<string, number | string>;
+    tableGoals: TableGoals;
+  } = {
+    name: 'Minha Planilha',
+    description: '',
+    goals: {},
+    tableGoals: {
+      dailyGoals: {},
+      weeklyGoals: {},
+      annualCosts: {},
+      yearlyGoals: {},
+      globalGoals: { dailyGoal: 0, weeklyGoal: 0, annualCost: 0 },
+    },
+  };
+
+  const currentYear = new Date().getFullYear();
+
+  metadataLines.forEach((line) => {
+    if (line.startsWith('##')) return;
+    const lineDelim = detectDelimiter(line);
+    const parts = splitCSVLine(line, lineDelim).map((p) => cleanCell(p));
+    if (parts.length >= 2) {
+      const rawKey = parts[0];
+      const keyLower = rawKey.toLowerCase();
+      const valStr = parts[1];
+      const numVal = parseFloat(valStr);
+
+      if (keyLower === 'name' || keyLower === 'nome') {
+        metaObj.name = valStr;
+      } else if (keyLower === 'description' || keyLower === 'descricao') {
+        metaObj.description = valStr;
+      } else {
+        const finalVal = !isNaN(numVal) ? numVal : valStr;
+        metaObj.goals[rawKey] = finalVal;
+
+        if (!isNaN(numVal)) {
+          const dGoals = metaObj.tableGoals.dailyGoals as Record<number | string, number>;
+          const wGoals = metaObj.tableGoals.weeklyGoals as Record<number | string, number>;
+          const aCosts = metaObj.tableGoals.annualCosts as Record<number | string, number>;
+
+          // 1. Annual key match: goal_(daily|weekly|annual)_YYYY or meta_(diaria|semanal|anual)_YYYY
+          const annualMatch = keyLower.match(/^(?:goal_|meta_|custo_)(daily|weekly|annual|diaria|semanal|anual)_(\d{4})$/);
+          if (annualMatch) {
+            const [, typeStr, yearStr] = annualMatch;
             const year = parseInt(yearStr, 10);
-            if (goalType === 'daily') {
-              metaObj.tableGoals.dailyGoals[year] = numVal;
-            } else if (goalType === 'weekly') {
-              metaObj.tableGoals.weeklyGoals[year] = numVal;
-            } else if (goalType === 'annual') {
-              metaObj.tableGoals.annualCosts[year] = numVal;
-            }
+            let goalType = 'daily';
+            if (typeStr === 'weekly' || typeStr === 'semanal') goalType = 'weekly';
+            if (typeStr === 'annual' || typeStr === 'anual') goalType = 'annual';
+
+            if (goalType === 'daily') dGoals[year] = numVal;
+            if (goalType === 'weekly') wGoals[year] = numVal;
+            if (goalType === 'annual') aCosts[year] = numVal;
 
             const currentYg = metaObj.tableGoals.yearlyGoals![year] || {
               dailyGoal: 0,
@@ -238,30 +297,64 @@ export function parseCSVText(csvText: string): CSVParseOutput {
             if (goalType === 'annual') currentYg.annualCost = numVal;
             metaObj.tableGoals.yearlyGoals![year] = currentYg;
           }
+
+          // 2. Global key match (without year suffix): goal_daily, goal_weekly, goal_annual, meta_diaria, meta_semanal, custo_anual
+          const globalMatch = keyLower.match(/^(?:goal_|meta_|custo_)?(daily|weekly|annual|diaria|semanal|anual)$/);
+          if (globalMatch) {
+            const typeStr = globalMatch[1];
+            let goalType = 'daily';
+            if (typeStr === 'weekly' || typeStr === 'semanal') goalType = 'weekly';
+            if (typeStr === 'annual' || typeStr === 'anual') goalType = 'annual';
+
+            if (!metaObj.tableGoals.globalGoals) {
+              metaObj.tableGoals.globalGoals = { dailyGoal: 0, weeklyGoal: 0, annualCost: 0 };
+            }
+
+            if (goalType === 'daily') {
+              metaObj.tableGoals.globalGoals.dailyGoal = numVal;
+              dGoals['global'] = numVal;
+              dGoals[currentYear] = numVal;
+            } else if (goalType === 'weekly') {
+              metaObj.tableGoals.globalGoals.weeklyGoal = numVal;
+              wGoals['global'] = numVal;
+              wGoals[currentYear] = numVal;
+            } else if (goalType === 'annual') {
+              metaObj.tableGoals.globalGoals.annualCost = numVal;
+              aCosts['global'] = numVal;
+              aCosts[currentYear] = numVal;
+            }
+
+            const currentYg = metaObj.tableGoals.yearlyGoals![currentYear] || {
+              dailyGoal: 0,
+              weeklyGoal: 0,
+              annualCost: 0,
+            };
+            if (goalType === 'daily') currentYg.dailyGoal = numVal;
+            if (goalType === 'weekly') currentYg.weeklyGoal = numVal;
+            if (goalType === 'annual') currentYg.annualCost = numVal;
+            metaObj.tableGoals.yearlyGoals![currentYear] = currentYg;
+          }
         }
       }
-    });
+    }
+  });
 
-    metadata = metaObj;
+  const metadata = metaObj;
+
+  if (transactionLines.length === 0) {
+    return {
+      rows,
+      errors: ['Nenhuma linha de transação foi encontrada.'],
+      skippedCount: 0,
+      detectedSectors: ['personal_finance'],
+      metadata,
+    };
   }
 
-  const lines = csvSourceText
-    .replace(/\r\n/g, '\n')
-    .replace(/\r/g, '\n')
-    .split('\n')
-    .map((l) => l.trim())
-    .filter((l) => l.length > 0);
+  const delimiter = detectDelimiter(transactionLines[0]);
+  const headers = splitCSVLine(transactionLines[0], delimiter).map((h) => cleanCell(h).toLowerCase());
 
-  if (lines.length === 0) {
-    return { rows, errors: ['O CSV está vazio.'], skippedCount: 0, detectedSectors: [], metadata };
-  }
-
-  const delimiter = detectDelimiter(lines[0]);
-  const headers = splitCSVLine(lines[0], delimiter).map((h) => cleanCell(h).toLowerCase());
-
-  const dateAliases = ['date', 'data', 'data_movimento', 'created_at'];
   const descriptionAliases = ['description', 'descricao', 'historico', 'memo', 'title'];
-  const amountAliases = ['amount', 'valor', 'value', 'valor_cents', 'amount_in_cents'];
   const categoryAliases = ['category', 'categoria', 'type'];
   const tagsAliases = ['tags', 'sector_tags', 'etiquetas'];
   const metadataAliases = ['metadata_json', 'metadatajson', 'metadata', 'metadados'];
@@ -288,7 +381,7 @@ export function parseCSVText(csvText: string): CSVParseOutput {
       rows,
       errors: ['Cabeçalhos inválidos. O CSV precisa conter ao menos as colunas de data ("data", "date") e valor ("valor", "amount").'],
       skippedCount: 0,
-      detectedSectors: [],
+      detectedSectors: ['personal_finance'],
       metadata,
     };
   }
@@ -315,9 +408,9 @@ export function parseCSVText(csvText: string): CSVParseOutput {
 
   const todayStr = new Date().toISOString().slice(0, 10);
 
-  for (let i = 1; i < lines.length; i++) {
+  for (let i = 1; i < transactionLines.length; i++) {
     const lineNum = i + 1;
-    const cols = splitCSVLine(lines[i], delimiter);
+    const cols = splitCSVLine(transactionLines[i], delimiter);
     if (cols.length === 0 || (cols.length === 1 && cols[0] === '')) {
       skippedCount++;
       continue;
