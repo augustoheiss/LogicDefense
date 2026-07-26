@@ -20,10 +20,11 @@
  *   - Maps column headers to TableRow fields by name
  */
 
-import { Platform } from 'react-native';
+const isWebPlatform = typeof window !== 'undefined' && typeof window.document !== 'undefined';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import type { TableRow, TableGoals } from '../core/types';
+import { parseCSVText } from '../utils/csvEngine';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -97,7 +98,7 @@ export async function pickCSVFile(): Promise<string | null> {
 
     const asset = result.assets[0];
 
-    if (Platform.OS === 'web') {
+    if (isWebPlatform) {
       // On web, read the file via fetch (the URI is a blob URL)
       const response = await fetch(asset.uri);
       const text = await response.text();
@@ -118,62 +119,17 @@ export async function pickCSVFile(): Promise<string | null> {
 // ── Parser ───────────────────────────────────────────────────────────────────
 
 export function parseCSV(raw: string): CSVImportResult {
-  if (raw.includes('## COIN ASSISTANT BACKUP v2 ##')) {
-    return parseBackupV2(raw);
-  }
-
-  const errors: string[] = [];
-  let skippedLines = 0;
-
-  // Normalize line endings
-  const lines = raw
-    .replace(/\r\n/g, '\n')
-    .replace(/\r/g, '\n')
-    .split('\n')
-    .map((l) => l.trim())
-    .filter((l) => l.length > 0);
-
-  if (lines.length === 0) {
-    return { success: false, rows: [], totalParsed: 0, skippedLines: 0, errors: ['Arquivo vazio'] };
-  }
-
-  // Auto-detect delimiter
-  const delimiter = detectDelimiter(lines[0]);
-
-  // Check if first line is a header
-  const firstCols = splitCSVLine(lines[0], delimiter);
-  const headerMap = tryMapHeaders(firstCols);
-  const hasHeader = headerMap !== null;
-
-  const dataLines = hasHeader ? lines.slice(1) : lines;
-  const rows: Omit<TableRow, 'id'>[] = [];
-
-  for (let i = 0; i < dataLines.length; i++) {
-    const lineNum = hasHeader ? i + 2 : i + 1;
-    const cols = splitCSVLine(dataLines[i], delimiter);
-
-    try {
-      const row = headerMap
-        ? parseRowWithHeaders(cols, headerMap)
-        : parseRowPositional(cols);
-
-      if (row) {
-        rows.push(row);
-      } else {
-        skippedLines++;
-      }
-    } catch (err: any) {
-      errors.push(`Linha ${lineNum}: ${err.message}`);
-      skippedLines++;
-    }
-  }
-
+  const parsed = parseCSVText(raw);
   return {
-    success: rows.length > 0,
-    rows,
-    totalParsed: rows.length,
-    skippedLines,
-    errors,
+    success: parsed.rows.length > 0,
+    rows: parsed.rows as TableRow[],
+    totalParsed: parsed.rows.length,
+    skippedLines: parsed.skippedCount,
+    errors: parsed.errors,
+    isBackupV2: true,
+    backupName: parsed.metadata?.name,
+    backupDescription: parsed.metadata?.description,
+    backupGoals: parsed.metadata?.tableGoals,
   };
 }
 

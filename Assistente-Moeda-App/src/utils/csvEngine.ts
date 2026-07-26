@@ -274,65 +274,105 @@ export function parseCSVText(csvText: string): CSVParseOutput {
           const wGoals = metaObj.tableGoals.weeklyGoals as Record<number | string, number>;
           const aCosts = metaObj.tableGoals.annualCosts as Record<number | string, number>;
 
-          // 1. Annual key match: goal_(daily|weekly|annual)_YYYY or meta_(diaria|semanal|anual)_YYYY
-          const annualMatch = keyLower.match(/^(?:goal_|meta_|custo_)(daily|weekly|annual|diaria|semanal|anual)_(\d{4})$/);
-          if (annualMatch) {
-            const [, typeStr, yearStr] = annualMatch;
-            const year = parseInt(yearStr, 10);
-            let goalType = 'daily';
-            if (typeStr === 'weekly' || typeStr === 'semanal') goalType = 'weekly';
-            if (typeStr === 'annual' || typeStr === 'anual') goalType = 'annual';
-
-            if (goalType === 'daily') dGoals[year] = numVal;
-            if (goalType === 'weekly') wGoals[year] = numVal;
-            if (goalType === 'annual') aCosts[year] = numVal;
-
-            const currentYg = metaObj.tableGoals.yearlyGoals![year] || {
-              dailyGoal: 0,
-              weeklyGoal: 0,
-              annualCost: 0,
-            };
-            if (goalType === 'daily') currentYg.dailyGoal = numVal;
-            if (goalType === 'weekly') currentYg.weeklyGoal = numVal;
-            if (goalType === 'annual') currentYg.annualCost = numVal;
-            metaObj.tableGoals.yearlyGoals![year] = currentYg;
+          if (!metaObj.tableGoals.globalGoals) {
+            metaObj.tableGoals.globalGoals = { dailyGoal: 0, weeklyGoal: 0, annualCost: 0 };
+          }
+          if (!metaObj.tableGoals.monthlyGoals) {
+            metaObj.tableGoals.monthlyGoals = {};
           }
 
-          // 2. Global key match (without year suffix): goal_daily, goal_weekly, goal_annual, meta_diaria, meta_semanal, custo_anual
-          const globalMatch = keyLower.match(/^(?:goal_|meta_|custo_)?(daily|weekly|annual|diaria|semanal|anual)$/);
-          if (globalMatch) {
-            const typeStr = globalMatch[1];
-            let goalType = 'daily';
-            if (typeStr === 'weekly' || typeStr === 'semanal') goalType = 'weekly';
-            if (typeStr === 'annual' || typeStr === 'anual') goalType = 'annual';
-
-            if (!metaObj.tableGoals.globalGoals) {
-              metaObj.tableGoals.globalGoals = { dailyGoal: 0, weeklyGoal: 0, annualCost: 0 };
+          // 1. Explicit Global Keys: goal_global_daily, goal_global_weekly, goal_global_annual
+          if (keyLower === 'goal_global_daily' || keyLower === 'meta_global_diaria') {
+            metaObj.tableGoals.globalGoals.dailyGoal = numVal;
+            dGoals['global'] = numVal;
+            dGoals[currentYear] = numVal;
+          } else if (keyLower === 'goal_global_weekly' || keyLower === 'meta_global_semanal') {
+            metaObj.tableGoals.globalGoals.weeklyGoal = numVal;
+            wGoals['global'] = numVal;
+            wGoals[currentYear] = numVal;
+          } else if (keyLower === 'goal_global_annual' || keyLower === 'meta_global_anual') {
+            metaObj.tableGoals.globalGoals.annualCost = numVal;
+            aCosts['global'] = numVal;
+            aCosts[currentYear] = numVal;
+          }
+          // 2. Weekly ISO Override Keys: goal_weekly_2026-W30 or meta_semanal_2026-W30
+          else if (/^(?:goal_weekly_|meta_semanal_)(\d{4}-W\d{2})$/i.test(keyLower)) {
+            const match = keyLower.match(/^(?:goal_weekly_|meta_semanal_)(\d{4}-W\d{2})$/i);
+            if (match) {
+              wGoals[match[1].toUpperCase()] = numVal;
             }
-
-            if (goalType === 'daily') {
-              metaObj.tableGoals.globalGoals.dailyGoal = numVal;
-              dGoals['global'] = numVal;
-              dGoals[currentYear] = numVal;
-            } else if (goalType === 'weekly') {
-              metaObj.tableGoals.globalGoals.weeklyGoal = numVal;
-              wGoals['global'] = numVal;
-              wGoals[currentYear] = numVal;
-            } else if (goalType === 'annual') {
-              metaObj.tableGoals.globalGoals.annualCost = numVal;
-              aCosts['global'] = numVal;
-              aCosts[currentYear] = numVal;
+          }
+          // 3. Monthly Goals: goal_monthly_daily_2026-07, goal_monthly_weekly_2026-07, goal_monthly_annual_2026-07
+          else if (/^goal_monthly_(daily|weekly|annual)_(\d{4}-\d{2})$/i.test(keyLower)) {
+            const match = keyLower.match(/^goal_monthly_(daily|weekly|annual)_(\d{4}-\d{2})$/i);
+            if (match) {
+              const [, gType, mKey] = match;
+              if (!metaObj.tableGoals.monthlyGoals[mKey]) {
+                metaObj.tableGoals.monthlyGoals[mKey] = { dailyGoal: 0, weeklyGoal: 0, annualCost: 0 };
+              }
+              if (gType === 'daily') metaObj.tableGoals.monthlyGoals[mKey].dailyGoal = numVal;
+              if (gType === 'weekly') metaObj.tableGoals.monthlyGoals[mKey].weeklyGoal = numVal;
+              if (gType === 'annual') metaObj.tableGoals.monthlyGoals[mKey].annualCost = numVal;
             }
+          }
+          // 4. Annual Goals: goal_daily_2026, goal_weekly_2026, goal_annual_2026, meta_diaria_2026
+          else if (/^(?:goal_|meta_|custo_)(daily|weekly|annual|diaria|semanal|anual)_(\d{4})$/i.test(keyLower)) {
+            const annualMatch = keyLower.match(/^(?:goal_|meta_|custo_)(daily|weekly|annual|diaria|semanal|anual)_(\d{4})$/i);
+            if (annualMatch) {
+              const [, typeStr, yearStr] = annualMatch;
+              const year = parseInt(yearStr, 10);
+              let goalType = 'daily';
+              if (typeStr === 'weekly' || typeStr === 'semanal') goalType = 'weekly';
+              if (typeStr === 'annual' || typeStr === 'anual') goalType = 'annual';
 
-            const currentYg = metaObj.tableGoals.yearlyGoals![currentYear] || {
-              dailyGoal: 0,
-              weeklyGoal: 0,
-              annualCost: 0,
-            };
-            if (goalType === 'daily') currentYg.dailyGoal = numVal;
-            if (goalType === 'weekly') currentYg.weeklyGoal = numVal;
-            if (goalType === 'annual') currentYg.annualCost = numVal;
-            metaObj.tableGoals.yearlyGoals![currentYear] = currentYg;
+              if (goalType === 'daily') dGoals[year] = numVal;
+              if (goalType === 'weekly') wGoals[year] = numVal;
+              if (goalType === 'annual') aCosts[year] = numVal;
+
+              const currentYg = metaObj.tableGoals.yearlyGoals![year] || {
+                dailyGoal: 0,
+                weeklyGoal: 0,
+                annualCost: 0,
+              };
+              if (goalType === 'daily') currentYg.dailyGoal = numVal;
+              if (goalType === 'weekly') currentYg.weeklyGoal = numVal;
+              if (goalType === 'annual') currentYg.annualCost = numVal;
+              metaObj.tableGoals.yearlyGoals![year] = currentYg;
+            }
+          }
+          // 5. Global Fallback Keys (without year or suffix): goal_daily, goal_weekly, goal_annual, meta_diaria, meta_semanal, custo_anual
+          else if (/^(?:goal_|meta_|custo_)?(daily|weekly|annual|diaria|semanal|anual)$/i.test(keyLower)) {
+            const globalMatch = keyLower.match(/^(?:goal_|meta_|custo_)?(daily|weekly|annual|diaria|semanal|anual)$/i);
+            if (globalMatch) {
+              const typeStr = globalMatch[1];
+              let goalType = 'daily';
+              if (typeStr === 'weekly' || typeStr === 'semanal') goalType = 'weekly';
+              if (typeStr === 'annual' || typeStr === 'anual') goalType = 'annual';
+
+              if (goalType === 'daily') {
+                metaObj.tableGoals.globalGoals.dailyGoal = numVal;
+                dGoals['global'] = numVal;
+                dGoals[currentYear] = numVal;
+              } else if (goalType === 'weekly') {
+                metaObj.tableGoals.globalGoals.weeklyGoal = numVal;
+                wGoals['global'] = numVal;
+                wGoals[currentYear] = numVal;
+              } else if (goalType === 'annual') {
+                metaObj.tableGoals.globalGoals.annualCost = numVal;
+                aCosts['global'] = numVal;
+                aCosts[currentYear] = numVal;
+              }
+
+              const currentYg = metaObj.tableGoals.yearlyGoals![currentYear] || {
+                dailyGoal: 0,
+                weeklyGoal: 0,
+                annualCost: 0,
+              };
+              if (goalType === 'daily') currentYg.dailyGoal = numVal;
+              if (goalType === 'weekly') currentYg.weeklyGoal = numVal;
+              if (goalType === 'annual') currentYg.annualCost = numVal;
+              metaObj.tableGoals.yearlyGoals![currentYear] = currentYg;
+            }
           }
         }
       }

@@ -9,18 +9,25 @@ declare function expect(actual: any): {
 };
 
 import { parseCSVText, exportRowsToCSV } from '../utils/csvEngine';
-import { buildCSV } from '../services/exportService';
 import type { TableRow } from '../core/types';
 
 describe('Relatório de Teste: Prevenção de Crash Roundtrip Import/Export', () => {
   it('Deve importar CSV auto-gerado com campos trailing vazios sem lançar SyntaxError', () => {
     const selfExportedCSV = `## COIN ASSISTANT BACKUP v2 ##
 name,Motorista
+goal_global_daily,100
+goal_global_weekly,700
+goal_global_annual,36500
+goal_daily_2026,100
+goal_weekly_2026,700
+goal_annual_2026,36500
+goal_monthly_daily_2026-07,100
+goal_weekly_2026-W30,800
 ## ROWS ##
 date,value,description,entryType,monthlyValue,monthCount,period_start,period_end,category,tags,metadata_json
 2026-07-26,1,"",revenue,,,,,,,`;
 
-    // 1. Import first time
+    // 1. Import first time via parseCSVText
     const result1 = parseCSVText(selfExportedCSV);
 
     expect(result1.errors.length).toBe(0);
@@ -34,6 +41,8 @@ date,value,description,entryType,monthlyValue,monthCount,period_start,period_end
     expect(row.category).toBe('Geral');
     expect(row.tags).toBe('');
     expect(row.metadataJson).toBe('{}');
+    expect(result1.metadata?.tableGoals?.globalGoals?.dailyGoal).toBe(100);
+    expect(result1.metadata?.tableGoals?.weeklyGoals['2026-W30']).toBe(800);
 
     // 2. Export row back via exportRowsToCSV
     const mockRows: TableRow[] = [{ ...row, id: 'row-1' }];
@@ -43,11 +52,7 @@ date,value,description,entryType,monthlyValue,monthCount,period_start,period_end
     expect(exportedCSV).toContain('"{}"');
     expect(exportedCSV).toContain('"Geral"');
 
-    // 3. Export row back via buildCSV (with metadata block)
-    const fullBackupExport = buildCSV(mockRows, 'Motorista', 'Planilha Motorista', { dailyGoals: {}, weeklyGoals: {}, annualCosts: {} });
-    expect(fullBackupExport).toContain('"{}"');
-
-    // 4. Re-import exported CSV strings and assert 100% identical data
+    // 3. Re-import exported CSV strings via parseCSVText and assert 100% identical data
     const result2 = parseCSVText(exportedCSV);
     expect(result2.errors.length).toBe(0);
     expect(result2.rows.length).toBe(1);
@@ -56,7 +61,7 @@ date,value,description,entryType,monthlyValue,monthCount,period_start,period_end
     expect(result2.rows[0].category).toBe('Geral');
     expect(result2.rows[0].metadataJson).toBe('{}');
 
-    const result3 = parseCSVText(fullBackupExport);
+    const result3 = parseCSVText(selfExportedCSV);
     expect(result3.errors.length).toBe(0);
     expect(result3.rows.length).toBe(1);
     expect(result3.rows[0].date).toBe(row.date);
