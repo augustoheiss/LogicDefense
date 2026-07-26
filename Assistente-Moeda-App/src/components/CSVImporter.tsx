@@ -20,18 +20,13 @@ interface CSVImporterProps {
 }
 
 export function CSVImporter({ onSuccess, onCancel }: CSVImporterProps) {
-  const { activeTable, updateActiveTableRows, updateActiveTableName, updateActiveSectors, updateGoals, setSelectedMonth } = useCoinDB() as any;
+  const { importSpreadsheet, activeTable, updateActiveSectors } = useCoinDB() as any;
   const [csvText, setCsvText] = useState('');
   const [errorLogs, setErrorLogs] = useState<string[]>([]);
   const [statusMsg, setStatusMsg] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
 
   const handleImport = async () => {
-    if (!activeTable) {
-      setErrorLogs(['Nenhuma planilha ativa selecionada.']);
-      return;
-    }
-
     if (!csvText.trim()) {
       setErrorLogs(['Por favor, cole um conteúdo CSV válido.']);
       return;
@@ -48,37 +43,29 @@ export function CSVImporter({ onSuccess, onCancel }: CSVImporterProps) {
 
       if (parsed.errors.length > 0) {
         setErrorLogs(parsed.errors);
-      }
-
-      if (!parsed.rows || parsed.rows.length === 0) {
-        const msg = 'O arquivo foi lido, mas nenhuma linha de transação foi encontrada após a seção ## ROWS ##.';
-        setStatusMsg(`Falha: ${msg}`);
-        if (Platform.OS === 'web') {
-          window.alert(`Aviso de Importação: ${msg}`);
-        } else {
-          Alert.alert('Aviso de Importação', msg);
-        }
         setIsProcessing(false);
         return;
       }
 
-      // 1. Commit rows directly to active table
-      await updateActiveTableRows(parsed.rows);
-      if (setSelectedMonth) {
-        setSelectedMonth('all');
+      if (parsed.rows.length === 0) {
+        setErrorLogs(['Nenhuma linha de transação foi encontrada no CSV.']);
+        setIsProcessing(false);
+        return;
       }
 
-      // 2. Update active table name if present in metadata
-      if (parsed.metadata?.name) {
-        await updateActiveTableName(parsed.metadata.name);
-      }
+      // Commit rows, name, description, and goals in ONE ATOMIC OPERATION
+      await importSpreadsheet({
+        rows: parsed.rows,
+        name: parsed.metadata?.name,
+        description: parsed.metadata?.description,
+        goals: parsed.metadata?.tableGoals,
+      });
 
-      // 3. Safely apply goals in isolation
-      if (parsed.metadata?.tableGoals) {
+      if (parsed.detectedSectors && parsed.detectedSectors.length > 0) {
         try {
-          await updateGoals(parsed.metadata.tableGoals);
-        } catch (goalErr) {
-          console.warn('[Import Warning]: Skipped goals merge', goalErr);
+          await updateActiveSectors(parsed.detectedSectors);
+        } catch (secErr) {
+          console.warn('[Import Warning]: Skipped sectors update', secErr);
         }
       }
 

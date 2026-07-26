@@ -10,7 +10,7 @@
  * This is the single source of truth for all financial data in the app.
  */
 
-import React, { useState, useEffect, useCallback, useMemo, createContext, useContext } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef, createContext, useContext } from 'react';
 import { loadDB, saveDB, clearDB } from '../storage/asyncStorageAdapter';
 import { computeMetrics, emptyMetrics, computeBaselineGoals } from '../core/metricsEngine';
 import type { DB, CoinTable, TableRow, TableGoals, TableMetrics } from '../core/types';
@@ -38,6 +38,12 @@ export interface CoinDBState {
 
   // ── Table Operations ──────────────────────────────────
   setActiveTableIndex: (index: number) => void;
+  importSpreadsheet: (payload: {
+    rows: (TableRow | Omit<TableRow, 'id'>)[];
+    name?: string;
+    description?: string;
+    goals?: TableGoals;
+  }) => Promise<void>;
   addTable: (name: string, description?: string, goals?: TableGoals, rows?: Omit<TableRow, 'id'>[]) => void;
   renameTable: (tableId: string, name: string) => void;
   deleteTable: (tableId: string) => void;
@@ -251,9 +257,15 @@ function useCoinDBInternal(): CoinDBState {
     }
   }, [auth.mode, auth.user]);
 
+  const tablesRef = useRef<CoinTable[]>(tables);
+  useEffect(() => {
+    tablesRef.current = tables;
+  }, [tables]);
+
   // ── Persist to AsyncStorage and Push to Cloud ──────────
   const persist = useCallback(async (newTables: CoinTable[]) => {
     const mainTables = ensureActiveSectors(newTables);
+    tablesRef.current = mainTables;
     setTables(mainTables);
     const currentDB = await loadDB();
     await saveDB({
@@ -703,6 +715,66 @@ function useCoinDBInternal(): CoinDBState {
     setSelectedMonth('all');
   }, []);
 
+  const importSpreadsheet = useCallback(async (payload: {
+    rows: (TableRow | Omit<TableRow, 'id'>)[];
+    name?: string;
+    description?: string;
+    goals?: TableGoals;
+  }) => {
+    const currentTables = tablesRef.current.length > 0 ? tablesRef.current : tables;
+    const activeTablesList = currentTables.filter((t: CoinTable) => !t.isDeleted);
+    let targetTable = (activeTableIndex >= 0 && activeTableIndex < activeTablesList.length)
+      ? activeTablesList[activeTableIndex]
+      : activeTablesList[0];
+
+    let baseTables = currentTables;
+
+    if (!targetTable) {
+      const newTable: CoinTable = {
+        id: generateId(),
+        name: payload.name || 'Minha Planilha',
+        description: payload.description || 'Planilha principal',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        rows: [],
+        goals: payload.goals || { dailyGoals: {}, weeklyGoals: {}, annualCosts: {} },
+        activeSectors: ['personal_finance'],
+      };
+      baseTables = [...currentTables, newTable];
+      targetTable = newTable;
+    }
+
+    const formattedRows: TableRow[] = payload.rows.map((r) => ({
+      ...r,
+      id: 'id' in r && r.id ? r.id : generateId(),
+    }));
+
+    const updatedTables = baseTables.map((t: CoinTable) => {
+      if (t.id !== targetTable!.id) return t;
+      const currentGoals: TableGoals = t.goals || { dailyGoals: {}, weeklyGoals: {}, annualCosts: {} };
+      const goalUpdates: TableGoals = payload.goals || { dailyGoals: {}, weeklyGoals: {}, annualCosts: {} };
+      return {
+        ...t,
+        name: payload.name && payload.name.trim() ? payload.name : t.name,
+        description: payload.description !== undefined ? payload.description : t.description,
+        rows: [...formattedRows].sort((a, b) => a.date.localeCompare(b.date)),
+        goals: payload.goals ? {
+          ...currentGoals,
+          ...goalUpdates,
+          dailyGoals: { ...(currentGoals.dailyGoals || {}), ...(goalUpdates.dailyGoals || {}) },
+          weeklyGoals: { ...(currentGoals.weeklyGoals || {}), ...(goalUpdates.weeklyGoals || {}) },
+          annualCosts: { ...(currentGoals.annualCosts || {}), ...(goalUpdates.annualCosts || {}) },
+          yearlyGoals: { ...(currentGoals.yearlyGoals || {}), ...(goalUpdates.yearlyGoals || {}) },
+          globalGoals: goalUpdates.globalGoals || currentGoals.globalGoals,
+        } : t.goals,
+        updatedAt: new Date().toISOString(),
+      };
+    });
+
+    setSelectedMonth('all');
+    await persist(updatedTables);
+  }, [tables, activeTableIndex, persist]);
+
   return {
     isLoading,
     tables,
@@ -712,6 +784,7 @@ function useCoinDBInternal(): CoinDBState {
     activeTableIndex,
     selectedMonth,
     setActiveTableIndex: changeActiveTableIndex,
+    importSpreadsheet,
     addTable,
     renameTable,
     deleteTable,

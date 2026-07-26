@@ -273,22 +273,13 @@ export default function SpreadsheetScreen() {
           return;
         }
 
-        // 1. Commit rows directly to active table
-        await db.updateActiveTableRows(result.rows);
-
-        // 2. Update active table name if present in metadata
-        if (result.metadata?.name) {
-          await db.updateActiveTableName(result.metadata.name);
-        }
-
-        // 3. Safely apply goals in isolation
-        if (result.metadata?.tableGoals) {
-          try {
-            await db.updateGoals(result.metadata.tableGoals);
-          } catch (goalErr) {
-            console.warn('[Import Warning]: Skipped goals merge', goalErr);
-          }
-        }
+        // Commit rows, name, description, and goals in ONE ATOMIC OPERATION
+        await db.importSpreadsheet({
+          rows: result.rows,
+          name: result.metadata?.name,
+          description: result.metadata?.description,
+          goals: result.metadata?.tableGoals,
+        });
 
         // Auto-activate detected sectors
         const currentActiveSectors = db.activeTable?.activeSectors || ['personal_finance'];
