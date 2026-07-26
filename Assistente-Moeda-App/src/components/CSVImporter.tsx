@@ -19,7 +19,7 @@ interface CSVImporterProps {
 }
 
 export function CSVImporter({ onSuccess, onCancel }: CSVImporterProps) {
-  const { activeTable, addRows, updateActiveSectors } = useCoinDB() as any;
+  const { activeTable, addRows, updateActiveSectors, updateGoals } = useCoinDB() as any;
   const [csvText, setCsvText] = useState('');
   const [errorLogs, setErrorLogs] = useState<string[]>([]);
   const [statusMsg, setStatusMsg] = useState('');
@@ -55,6 +55,10 @@ export function CSVImporter({ onSuccess, onCancel }: CSVImporterProps) {
 
       // Add to store in-place
       await addRows(parsed.rows);
+
+      if (parsed.metadata?.tableGoals) {
+        await updateGoals(parsed.metadata.tableGoals);
+      }
 
       // Trigger dynamic activeSectors toggles
       const currentActiveSectors = activeTable.activeSectors || ['personal_finance'];

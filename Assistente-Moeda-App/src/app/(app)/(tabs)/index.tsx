@@ -276,6 +276,10 @@ export default function SpreadsheetScreen() {
         // Always load directly into active table/store (in-place loading)
         await db.addRows(result.rows);
 
+        if (result.metadata?.tableGoals) {
+          await db.updateGoals(result.metadata.tableGoals);
+        }
+
         // Auto-activate detected sectors
         const currentActiveSectors = db.activeTable?.activeSectors || ['personal_finance'];
         const sectorsToActivate = result.detectedSectors.filter(

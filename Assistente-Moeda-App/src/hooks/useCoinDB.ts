@@ -574,9 +574,17 @@ function useCoinDBInternal(): CoinDBState {
     if (!activeTable) return;
     const newTables = tables.map((t) => {
       if (t.id !== activeTable.id) return t;
+      const current = t.goals || { dailyGoals: {}, weeklyGoals: {}, annualCosts: {} };
       return {
         ...t,
-        goals: { ...t.goals, ...goalUpdates },
+        goals: {
+          ...current,
+          ...goalUpdates,
+          dailyGoals: { ...(current.dailyGoals || {}), ...(goalUpdates.dailyGoals || {}) },
+          weeklyGoals: { ...(current.weeklyGoals || {}), ...(goalUpdates.weeklyGoals || {}) },
+          annualCosts: { ...(current.annualCosts || {}), ...(goalUpdates.annualCosts || {}) },
+          yearlyGoals: { ...(current.yearlyGoals || {}), ...(goalUpdates.yearlyGoals || {}) },
+        },
         updatedAt: new Date().toISOString(),
       };
     });

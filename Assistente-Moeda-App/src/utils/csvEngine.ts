@@ -1,4 +1,4 @@
-import type { TableRow } from '../core/types';
+import type { TableRow, TableGoals } from '../core/types';
 import { detectSectorsFromRows } from './sectorTagDetector';
 
 // Delimiter detection helper
@@ -127,6 +127,8 @@ export interface CSVParseOutput {
   metadata?: {
     name?: string;
     description?: string;
+    goals?: Record<string, number | string>;
+    tableGoals?: TableGoals;
   };
 }
 
@@ -147,7 +149,7 @@ export function parseCSVText(csvText: string): CSVParseOutput {
   const errors: string[] = [];
   let skippedCount = 0;
   const rows: Omit<TableRow, 'id'>[] = [];
-  let metadata: { name?: string; description?: string } | undefined = undefined;
+  let metadata: { name?: string; description?: string; goals?: Record<string, number | string>; tableGoals?: TableGoals } | undefined = undefined;
 
   const cleaned = csvText.startsWith('\uFEFF') ? csvText.slice(1) : csvText;
   
@@ -160,7 +162,7 @@ export function parseCSVText(csvText: string): CSVParseOutput {
     const headerBlock = cleaned.slice(0, rowsMarkerMatch.index);
     csvSourceText = cleaned.slice(rowsMarkerMatch.index + rowsMarkerMatch[0].length);
 
-    // Extract metadata name and description from headerBlock
+    // Extract metadata name, description, and dynamic goal_* keys from headerBlock
     const metaLines = headerBlock
       .replace(/\r\n/g, '\n')
       .replace(/\r/g, '\n')
@@ -168,19 +170,61 @@ export function parseCSVText(csvText: string): CSVParseOutput {
       .map((l) => l.trim())
       .filter((l) => l.length > 0 && !l.startsWith('##'));
 
-    const metaObj: { name?: string; description?: string } = {};
+    const metaObj: {
+      name?: string;
+      description?: string;
+      goals: Record<string, number | string>;
+      tableGoals: TableGoals;
+    } = {
+      goals: {},
+      tableGoals: { dailyGoals: {}, weeklyGoals: {}, annualCosts: {}, yearlyGoals: {} },
+    };
+
     metaLines.forEach((line) => {
       const parts = line.split(',').map((p) => p.replace(/^"|"$/g, '').trim());
       if (parts.length >= 2) {
-        const key = parts[0].toLowerCase();
-        if (key === 'name') metaObj.name = parts[1];
-        if (key === 'description') metaObj.description = parts[1];
+        const rawKey = parts[0];
+        const keyLower = rawKey.toLowerCase();
+        const valStr = parts[1];
+        const numVal = parseFloat(valStr);
+
+        if (keyLower === 'name') {
+          metaObj.name = valStr;
+        } else if (keyLower === 'description') {
+          metaObj.description = valStr;
+        } else {
+          // Capture raw key-value into metadata.goals
+          const finalVal = !isNaN(numVal) ? numVal : valStr;
+          metaObj.goals[rawKey] = finalVal;
+
+          // Parse structured goal if key matches goal_(daily|weekly|annual)_YYYY
+          const goalMatch = keyLower.match(/^goal_(daily|weekly|annual)_(\d{4})$/);
+          if (goalMatch && !isNaN(numVal)) {
+            const [, goalType, yearStr] = goalMatch;
+            const year = parseInt(yearStr, 10);
+            if (goalType === 'daily') {
+              metaObj.tableGoals.dailyGoals[year] = numVal;
+            } else if (goalType === 'weekly') {
+              metaObj.tableGoals.weeklyGoals[year] = numVal;
+            } else if (goalType === 'annual') {
+              metaObj.tableGoals.annualCosts[year] = numVal;
+            }
+
+            const currentYg = metaObj.tableGoals.yearlyGoals![year] || {
+              dailyGoal: 0,
+              weeklyGoal: 0,
+              annualCost: 0,
+            };
+            if (goalType === 'daily') currentYg.dailyGoal = numVal;
+            if (goalType === 'weekly') currentYg.weeklyGoal = numVal;
+            if (goalType === 'annual') currentYg.annualCost = numVal;
+            metaObj.tableGoals.yearlyGoals![year] = currentYg;
+          }
+        }
       }
     });
 
-    if (metaObj.name || metaObj.description) {
-      metadata = metaObj;
-    }
+    metadata = metaObj;
   }
 
   const lines = csvSourceText
