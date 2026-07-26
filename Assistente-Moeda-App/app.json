@@ -39,7 +39,17 @@
           }
         }
       ],
-      "expo-sharing"
+      "expo-sharing",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "extraDependencies": [
+              "com.android.billingclient:billing:8.0.0"
+            ]
+          }
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

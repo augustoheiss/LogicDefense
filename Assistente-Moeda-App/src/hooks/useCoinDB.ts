@@ -43,8 +43,10 @@ export interface CoinDBState {
   // ── Row Operations ────────────────────────────────────
   addRow: (row: Omit<TableRow, 'id'>, tableName?: string) => Promise<void> | void;
   addRows: (rows: Omit<TableRow, 'id'>[], tableName?: string) => Promise<void> | void;
+  updateActiveTableRows: (rows: TableRow[]) => Promise<void> | void;
   updateRow: (rowId: string, updates: Partial<TableRow>) => void;
   deleteRow: (rowId: string) => void;
+  deleteLastRow: () => Promise<void> | void;
   deleteRowsByPrefix: (prefix: string) => number;
   deleteGeneratedRows: (prefix?: string) => number;
   effectuateGeneratedRows: (prefix?: string) => number;
@@ -475,6 +477,33 @@ function useCoinDBInternal(): CoinDBState {
     persist(newTables);
   }, [tables, activeTable, persist]);
 
+  const updateActiveTableRows = useCallback(async (newRows: TableRow[]) => {
+    if (!activeTable) return;
+    const newTables = tables.map((t) => {
+      if (t.id !== activeTable.id) return t;
+      return {
+        ...t,
+        rows: [...newRows].sort((a, b) => a.date.localeCompare(b.date)),
+        updatedAt: new Date().toISOString(),
+      };
+    });
+    await persist(newTables);
+  }, [tables, activeTable, persist]);
+
+  const deleteLastRow = useCallback(async () => {
+    if (!activeTable || activeTable.rows.length === 0) return;
+    const newRows = activeTable.rows.slice(0, -1);
+    const newTables = tables.map((t) => {
+      if (t.id !== activeTable.id) return t;
+      return {
+        ...t,
+        rows: newRows,
+        updatedAt: new Date().toISOString(),
+      };
+    });
+    await persist(newTables);
+  }, [tables, activeTable, persist]);
+
   const deleteRowsByPrefix = useCallback((prefix: string): number => {
     if (!activeTable) return 0;
     let deletedCount = 0;
@@ -603,8 +632,10 @@ function useCoinDBInternal(): CoinDBState {
     deleteTable,
     addRow,
     addRows,
+    updateActiveTableRows,
     updateRow,
     deleteRow,
+    deleteLastRow,
     deleteRowsByPrefix,
     deleteGeneratedRows,
     effectuateGeneratedRows,

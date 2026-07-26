@@ -111,6 +111,32 @@ export default function SpreadsheetScreen() {
     db.deleteRow(rowId);
   }, [db]);
 
+  const handleDeleteLastRow = useCallback(() => {
+    if (!db.activeTable || db.activeTable.rows.length === 0) return;
+
+    if (Platform.OS === 'web') {
+      const confirmDelete = window.confirm('Deseja realmente apagar a última transação adicionada?');
+      if (confirmDelete) {
+        db.deleteLastRow();
+      }
+    } else {
+      Alert.alert(
+        'Apagar Última Transação',
+        'Deseja realmente apagar a última transação adicionada?',
+        [
+          { text: 'Cancelar', style: 'cancel' },
+          {
+            text: 'Apagar',
+            style: 'destructive',
+            onPress: () => {
+              db.deleteLastRow();
+            },
+          },
+        ]
+      );
+    }
+  }, [db]);
+
   const handleEditRow = useCallback((row: TableRow) => {
     setEditingRow(row);
     setShowAddModal(true);
@@ -372,19 +398,32 @@ export default function SpreadsheetScreen() {
             {db.filteredRows.length} entradas
           </Text>
         </Pressable>
-        <Pressable
-          style={({ pressed }) => [
-            styles.addButton,
-            pressed && styles.pressed,
-          ]}
-          onPress={() => {
-            ensureTable();
-            setEditingRow(null);
-            setShowAddModal(true);
-          }}
-        >
-          <Text style={styles.addButtonText}>+ Novo</Text>
-        </Pressable>
+        <View style={styles.headerActions}>
+          <Pressable
+            style={({ pressed }) => [
+              styles.undoButton,
+              pressed && styles.pressed,
+              (!db.activeTable || db.activeTable.rows.length === 0) && styles.disabledButton,
+            ]}
+            onPress={handleDeleteLastRow}
+            disabled={!db.activeTable || db.activeTable.rows.length === 0}
+          >
+            <Text style={styles.undoButtonText}>↩ Desfazer</Text>
+          </Pressable>
+          <Pressable
+            style={({ pressed }) => [
+              styles.addButton,
+              pressed && styles.pressed,
+            ]}
+            onPress={() => {
+              ensureTable();
+              setEditingRow(null);
+              setShowAddModal(true);
+            }}
+          >
+            <Text style={styles.addButtonText}>+ Novo</Text>
+          </Pressable>
+        </View>
       </View>
 
 
@@ -655,6 +694,27 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 14,
     fontWeight: '600',
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  undoButton: {
+    backgroundColor: colors.background.tertiary,
+    borderWidth: 1,
+    borderColor: colors.border.default,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.sm,
+  },
+  undoButtonText: {
+    color: colors.text.secondary,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  disabledButton: {
+    opacity: 0.4,
   },
   pressed: {
     opacity: 0.75,

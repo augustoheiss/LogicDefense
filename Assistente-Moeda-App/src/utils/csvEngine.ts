@@ -40,47 +40,68 @@ export function splitCSVLine(line: string, delimiter: string): string[] {
 
 // Date parser & normalizer
 export function parseAndNormalizeDate(input: string): string | null {
-  let s = input.replace(/['"]/g, '').trim();
+  if (!input) return null;
+  let s = String(input).replace(/['"]/g, '').trim();
   if (!s) return null;
 
-  s = s.split(/\s+/)[0];
+  s = s.split(/[\sT]/)[0];
   if (!s) return null;
 
   // Already YYYY-MM-DD
   if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
 
-  // DD/MM/YYYY or DD-MM-YYYY
-  const brMatch = s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})$/);
-  if (brMatch) {
-    const [, d, m, y] = brMatch;
+  // YYYY/MM/DD or YYYY.MM.DD
+  const ymdMatch = s.match(/^(\d{4})[\/\-.](\d{1,2})[\/\-.](\d{1,2})$/);
+  if (ymdMatch) {
+    const [, y, m, d] = ymdMatch;
     return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
   }
 
-  // MM/DD/YYYY (US)
+  // DD/MM/YYYY or DD-MM-YYYY or DD.MM.YYYY
+  const dmyMatch = s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})$/);
+  if (dmyMatch) {
+    const [, d, m, y] = dmyMatch;
+    return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+  }
+
+  // MM/DD/YYYY (US format)
   const usMatch = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
   if (usMatch) {
     const [, m, d, y] = usMatch;
-    if (parseInt(m) > 12) {
-      return `${y}-${d.padStart(2, '0')}-${m.padStart(2, '0')}`;
-    }
+    return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+  }
+
+  const d = new Date(s);
+  if (!isNaN(d.getTime())) {
+    return d.toISOString().slice(0, 10);
   }
 
   return null;
 }
 
 // Value parser & normalizer
-export function parseValue(input: string): number | null {
-  let s = input.replace(/['"R$\s]/g, '').trim();
+export function parseValue(input: string, isCentsColumn: boolean = false): number | null {
+  if (input === null || input === undefined) return null;
+  let s = String(input).replace(/['"R$\s]/g, '').trim();
   if (!s) return null;
 
-  if (s.includes(',') && s.includes('.')) {
-    s = s.replace(/\./g, '').replace(',', '.');
+  if (s.includes('.') && s.includes(',')) {
+    if (s.lastIndexOf(',') > s.lastIndexOf('.')) {
+      s = s.replace(/\./g, '').replace(',', '.');
+    } else {
+      s = s.replace(/,/g, '');
+    }
   } else if (s.includes(',')) {
     s = s.replace(',', '.');
   }
 
   const num = parseFloat(s);
-  return isNaN(num) ? null : num;
+  if (isNaN(num)) return null;
+
+  if (isCentsColumn) {
+    return num / 100;
+  }
+  return num;
 }
 
 // Entry Type normalizer
@@ -89,7 +110,7 @@ const VALID_ENTRY_TYPES = new Set([
 ]);
 
 export function normalizeEntryType(input: string): TableRow['entryType'] {
-  const s = input.replace(/['"]/g, '').trim().toLowerCase();
+  const s = String(input).replace(/['"]/g, '').trim().toLowerCase();
   if (VALID_ENTRY_TYPES.has(s)) return s as TableRow['entryType'];
 
   if (s.includes('receita') || s.includes('revenue')) return 'revenue';
@@ -109,6 +130,19 @@ export interface CSVParseOutput {
   errors: string[];
   skippedCount: number;
   detectedSectors: string[];
+}
+
+function findHeaderIdx(headers: string[], aliases: string[]): number {
+  for (const alias of aliases) {
+    const idx = headers.indexOf(alias);
+    if (idx !== -1) return idx;
+  }
+  for (const alias of aliases) {
+    const normalizedAlias = alias.replace(/[^a-z0-9_]/gi, '').toLowerCase();
+    const idx = headers.findIndex((h) => h.replace(/[^a-z0-9_]/gi, '').toLowerCase() === normalizedAlias);
+    if (idx !== -1) return idx;
+  }
+  return -1;
 }
 
 export function parseCSVText(csvText: string): CSVParseOutput {
@@ -133,24 +167,35 @@ export function parseCSVText(csvText: string): CSVParseOutput {
     h.toLowerCase().replace(/['"]/g, '').trim()
   );
 
-  const dateIdx = headers.indexOf('date') !== -1 ? headers.indexOf('date') : headers.indexOf('data');
-  const typeIdx = headers.indexOf('type') !== -1 ? headers.indexOf('type') : headers.indexOf('tipo');
-  const categoryIdx = headers.indexOf('category') !== -1 ? headers.indexOf('category') : headers.indexOf('categoria');
-  const amountIdx = headers.indexOf('amount') !== -1 ? headers.indexOf('amount') : headers.indexOf('valor');
-  const descriptionIdx = headers.indexOf('description') !== -1 ? headers.indexOf('description') : headers.indexOf('descricao');
-  const tagsIdx = headers.indexOf('tags') !== -1 ? headers.indexOf('tags') : headers.indexOf('etiquetas');
-  const metadataIdx = headers.indexOf('metadata_json') !== -1 ? headers.indexOf('metadata_json') : headers.indexOf('metadados');
+  const dateAliases = ['date', 'data', 'data_movimento', 'created_at'];
+  const descriptionAliases = ['description', 'descricao', 'historico', 'memo', 'title'];
+  const amountAliases = ['amount', 'valor', 'value', 'valor_cents', 'amount_in_cents'];
+  const categoryAliases = ['category', 'categoria', 'type'];
+  const tagsAliases = ['tags', 'sector_tags', 'etiquetas'];
+  const metadataAliases = ['metadata_json', 'metadatajson', 'metadata', 'metadados'];
+  const typeAliases = ['entrytype', 'entry_type', 'tipo'];
+
+  const dateIdx = findHeaderIdx(headers, dateAliases);
+  const descriptionIdx = findHeaderIdx(headers, descriptionAliases);
+  const amountIdx = findHeaderIdx(headers, amountAliases);
+  const categoryIdx = findHeaderIdx(headers, categoryAliases);
+  const tagsIdx = findHeaderIdx(headers, tagsAliases);
+  const metadataIdx = findHeaderIdx(headers, metadataAliases);
+  const typeIdx = findHeaderIdx(headers, typeAliases);
 
   if (dateIdx === -1 || amountIdx === -1) {
     return {
       rows,
-      errors: ['Cabeçalhos inválidos. O CSV precisa conter ao menos as colunas "date" / "data" e "amount" / "valor".'],
+      errors: ['Cabeçalhos inválidos. O CSV precisa conter ao menos as colunas de data ("data", "date") e valor ("valor", "amount").'],
       skippedCount: 0,
       detectedSectors: [],
     };
   }
 
-  // Scan headers for sector keywords (e.g. if column header itself indicates a sector)
+  const matchedAmountHeader = headers[amountIdx] || '';
+  const isCentsColumn = matchedAmountHeader === 'valor_cents' || matchedAmountHeader === 'amount_in_cents';
+
+  // Scan headers for sector keywords
   const headerSectors = new Set<string>();
   const headerSectorsMap: Record<string, string[]> = {
     smb_accounting: ['ncg', 'fap_rat', 'lucro_real', 'cfar', 'massa_salarial_12', 'receita_bruta_12'],
@@ -167,6 +212,8 @@ export function parseCSVText(csvText: string): CSVParseOutput {
     }
   });
 
+  const todayStr = new Date().toISOString().slice(0, 10);
+
   for (let i = 1; i < lines.length; i++) {
     const lineNum = i + 1;
     const cols = splitCSVLine(lines[i], delimiter);
@@ -177,20 +224,20 @@ export function parseCSVText(csvText: string): CSVParseOutput {
 
     try {
       const rawDate = cols[dateIdx] || '';
-      const normalizedDate = parseAndNormalizeDate(rawDate);
-      if (!normalizedDate) {
-        throw new Error(`Data inválida ou em formato não reconhecido: "${rawDate}"`);
-      }
+      const normalizedDate = parseAndNormalizeDate(rawDate) || todayStr;
 
-      const rawAmount = cols[amountIdx] || '';
-      const parsedVal = parseValue(rawAmount);
+      const rawAmount = cols[amountIdx] || '0';
+      let parsedVal = parseValue(rawAmount, isCentsColumn);
       if (parsedVal === null || isNaN(parsedVal)) {
-        throw new Error(`Valor numérico inválido: "${rawAmount}"`);
+        parsedVal = 0;
       }
 
-      const entryType = typeIdx !== -1 && cols[typeIdx]
-        ? normalizeEntryType(cols[typeIdx])
-        : 'revenue';
+      let entryType: TableRow['entryType'] = 'revenue';
+      if (typeIdx !== -1 && cols[typeIdx]) {
+        entryType = normalizeEntryType(cols[typeIdx]);
+      } else if (categoryIdx !== -1 && cols[categoryIdx] && VALID_ENTRY_TYPES.has(cols[categoryIdx].toLowerCase().trim())) {
+        entryType = normalizeEntryType(cols[categoryIdx]);
+      }
 
       const description = descriptionIdx !== -1 && cols[descriptionIdx]
         ? cols[descriptionIdx].replace(/^"|"$/g, '').trim()
@@ -198,23 +245,32 @@ export function parseCSVText(csvText: string): CSVParseOutput {
 
       const category = categoryIdx !== -1 && cols[categoryIdx]
         ? cols[categoryIdx].replace(/^"|"$/g, '').trim()
-        : undefined;
+        : 'Geral';
 
       const tags = tagsIdx !== -1 && cols[tagsIdx]
         ? cols[tagsIdx].replace(/^"|"$/g, '').trim()
-        : undefined;
+        : '';
 
-      const metadataJson = metadataIdx !== -1 && cols[metadataIdx]
-        ? cols[metadataIdx].replace(/^"|"$/g, '').trim()
-        : undefined;
+      let metadataJson = '{}';
+      if (metadataIdx !== -1 && cols[metadataIdx]) {
+        const rawMeta = cols[metadataIdx].replace(/^"|"$/g, '').trim();
+        if (rawMeta) {
+          try {
+            JSON.parse(rawMeta);
+            metadataJson = rawMeta;
+          } catch {
+            metadataJson = '{}';
+          }
+        }
+      }
 
       rows.push({
         date: normalizedDate,
         value: parsedVal,
         description,
         entryType,
-        category,
-        tags,
+        category: category || 'Geral',
+        tags: tags || '',
         metadataJson,
       });
     } catch (err: any) {
