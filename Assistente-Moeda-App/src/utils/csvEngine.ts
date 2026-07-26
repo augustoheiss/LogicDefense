@@ -337,9 +337,9 @@ export function parseCSVText(csvText: string): CSVParseOutput {
         : '';
 
       let metadataJson = '{}';
-      if (metadataIdx !== -1 && cols[metadataIdx]) {
-        const rawMeta = cols[metadataIdx].replace(/^"|"$/g, '').trim();
-        if (rawMeta) {
+      if (metadataIdx !== -1 && cols[metadataIdx] !== undefined && cols[metadataIdx] !== null) {
+        const rawMeta = String(cols[metadataIdx]).replace(/^"|"$/g, '').trim();
+        if (rawMeta.length > 0) {
           try {
             JSON.parse(rawMeta);
             metadataJson = rawMeta;
@@ -416,9 +416,9 @@ export function exportRowsToCSV(rows: TableRow[]): string {
       row.value.toFixed(2),
       `"${(row.description || '').replace(/"/g, '""')}"`,
       row.entryType || 'revenue',
-      row.category ? `"${row.category.replace(/"/g, '""')}"` : '',
-      row.tags ? `"${row.tags.replace(/"/g, '""')}"` : '',
-      row.metadataJson ? `"${row.metadataJson.replace(/"/g, '""')}"` : '',
+      row.category && row.category.trim() ? `"${row.category.replace(/"/g, '""')}"` : '"Geral"',
+      row.tags ? `"${row.tags.replace(/"/g, '""')}"` : '""',
+      row.metadataJson && row.metadataJson.trim() ? `"${row.metadataJson.replace(/"/g, '""')}"` : '"{}"',
     ];
     lines.push(cols.join(','));
   });

@@ -7,6 +7,7 @@ import {
   Pressable,
   ScrollView,
   Platform,
+  Alert,
 } from 'react-native';
 import { colors } from '@/theme/colors';
 import { spacing, radius } from '@/theme/spacing';
@@ -81,7 +82,13 @@ export function CSVImporter({ onSuccess, onCancel }: CSVImporterProps) {
         setTimeout(onSuccess, 1500);
       }
     } catch (err: any) {
-      setErrorLogs([`Erro geral de importação: ${err.message}`]);
+      const errMsg = err.message || 'Falha ao processar o arquivo CSV';
+      setErrorLogs([`Erro geral de importação: ${errMsg}`]);
+      if (Platform.OS === 'web') {
+        window.alert(`Erro na Importação: ${errMsg}`);
+      } else {
+        Alert.alert('Erro na Importação', errMsg);
+      }
     } finally {
       setIsProcessing(false);
     }

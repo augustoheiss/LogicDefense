@@ -993,9 +993,9 @@ export function buildCSV(
         r.monthCount !== undefined ? r.monthCount : '',
         r.periodStart || '',
         r.periodEnd || '',
-        r.category ? `"${r.category.replace(/"/g, '""')}"` : '',
-        r.tags ? `"${r.tags.replace(/"/g, '""')}"` : '',
-        r.metadataJson ? `"${r.metadataJson.replace(/"/g, '""')}"` : '',
+        r.category && r.category.trim() ? `"${r.category.replace(/"/g, '""')}"` : '"Geral"',
+        r.tags ? `"${r.tags.replace(/"/g, '""')}"` : '""',
+        r.metadataJson && r.metadataJson.trim() ? `"${r.metadataJson.replace(/"/g, '""')}"` : '"{}"',
       ];
       return cols.join(',');
     });
