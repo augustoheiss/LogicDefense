@@ -104,25 +104,19 @@ export function parseValue(input: string, isCentsColumn: boolean = false): numbe
   return num;
 }
 
-// Entry Type normalizer
-const VALID_ENTRY_TYPES = new Set([
-  'revenue', 'deposit', 'waiver', 'expense', 'partner_in', 'partner_out',
-]);
-
+// Extensible Entry Type normalizer — preserves exact string values!
 export function normalizeEntryType(input: string): TableRow['entryType'] {
+  if (!input) return 'revenue';
   const s = String(input).replace(/['"]/g, '').trim().toLowerCase();
-  if (VALID_ENTRY_TYPES.has(s)) return s as TableRow['entryType'];
+  if (!s) return 'revenue';
 
-  if (s.includes('receita') || s.includes('revenue')) return 'revenue';
-  if (s.includes('despesa') || s.includes('expense') || s.includes('custo')) return 'expense';
-  if (s.includes('depósito') || s.includes('deposito') || s.includes('deposit') || s.includes('investimento') || s.includes('aporte')) return 'deposit';
-  if (s.includes('abono') || s.includes('waiver') || s.includes('justificativa')) return 'waiver';
-  if (s.includes('sócio') || s.includes('socio') || s.includes('partner')) {
-    if (s.includes('out') || s.includes('pag')) return 'partner_out';
-    return 'partner_in';
-  }
+  if (s === 'receita') return 'revenue';
+  if (s === 'despesa' || s === 'custo') return 'expense';
+  if (s === 'depósito' || s === 'deposito') return 'deposit';
+  if (s === 'abono' || s === 'justificativa') return 'waiver';
 
-  return 'revenue';
+  // Return s unchanged (partner_in, partner_out, waiver, expense, revenue, deposit, custom string)
+  return s as TableRow['entryType'];
 }
 
 export interface CSVParseOutput {
@@ -130,6 +124,10 @@ export interface CSVParseOutput {
   errors: string[];
   skippedCount: number;
   detectedSectors: string[];
+  metadata?: {
+    name?: string;
+    description?: string;
+  };
 }
 
 function findHeaderIdx(headers: string[], aliases: string[]): number {
@@ -149,9 +147,43 @@ export function parseCSVText(csvText: string): CSVParseOutput {
   const errors: string[] = [];
   let skippedCount = 0;
   const rows: Omit<TableRow, 'id'>[] = [];
+  let metadata: { name?: string; description?: string } | undefined = undefined;
 
   const cleaned = csvText.startsWith('\uFEFF') ? csvText.slice(1) : csvText;
-  const lines = cleaned
+  
+  // Section Parsing for Backup v2 (## COIN ASSISTANT BACKUP v2 ## / ## ROWS ##)
+  let csvSourceText = cleaned;
+  const rowsMarkerRegex = /##\s*ROWS\s*##/i;
+  const rowsMarkerMatch = cleaned.match(rowsMarkerRegex);
+
+  if (rowsMarkerMatch && rowsMarkerMatch.index !== undefined) {
+    const headerBlock = cleaned.slice(0, rowsMarkerMatch.index);
+    csvSourceText = cleaned.slice(rowsMarkerMatch.index + rowsMarkerMatch[0].length);
+
+    // Extract metadata name and description from headerBlock
+    const metaLines = headerBlock
+      .replace(/\r\n/g, '\n')
+      .replace(/\r/g, '\n')
+      .split('\n')
+      .map((l) => l.trim())
+      .filter((l) => l.length > 0 && !l.startsWith('##'));
+
+    const metaObj: { name?: string; description?: string } = {};
+    metaLines.forEach((line) => {
+      const parts = line.split(',').map((p) => p.replace(/^"|"$/g, '').trim());
+      if (parts.length >= 2) {
+        const key = parts[0].toLowerCase();
+        if (key === 'name') metaObj.name = parts[1];
+        if (key === 'description') metaObj.description = parts[1];
+      }
+    });
+
+    if (metaObj.name || metaObj.description) {
+      metadata = metaObj;
+    }
+  }
+
+  const lines = csvSourceText
     .replace(/\r\n/g, '\n')
     .replace(/\r/g, '\n')
     .split('\n')
@@ -159,7 +191,7 @@ export function parseCSVText(csvText: string): CSVParseOutput {
     .filter((l) => l.length > 0);
 
   if (lines.length === 0) {
-    return { rows, errors: ['O CSV está vazio.'], skippedCount: 0, detectedSectors: [] };
+    return { rows, errors: ['O CSV está vazio.'], skippedCount: 0, detectedSectors: [], metadata };
   }
 
   const delimiter = detectDelimiter(lines[0]);
@@ -174,6 +206,10 @@ export function parseCSVText(csvText: string): CSVParseOutput {
   const tagsAliases = ['tags', 'sector_tags', 'etiquetas'];
   const metadataAliases = ['metadata_json', 'metadatajson', 'metadata', 'metadados'];
   const typeAliases = ['entrytype', 'entry_type', 'tipo'];
+  const monthlyValueAliases = ['monthlyvalue', 'valor_mensal', 'monthly_value'];
+  const monthCountAliases = ['monthcount', 'qtd_meses', 'month_count', 'months'];
+  const periodStartAliases = ['period_start', 'periodstart', 'inicio_periodo', 'period_inicio'];
+  const periodEndAliases = ['period_end', 'periodend', 'fim_periodo', 'period_fim'];
 
   const dateIdx = findHeaderIdx(headers, dateAliases);
   const descriptionIdx = findHeaderIdx(headers, descriptionAliases);
@@ -182,6 +218,10 @@ export function parseCSVText(csvText: string): CSVParseOutput {
   const tagsIdx = findHeaderIdx(headers, tagsAliases);
   const metadataIdx = findHeaderIdx(headers, metadataAliases);
   const typeIdx = findHeaderIdx(headers, typeAliases);
+  const monthlyValueIdx = findHeaderIdx(headers, monthlyValueAliases);
+  const monthCountIdx = findHeaderIdx(headers, monthCountAliases);
+  const periodStartIdx = findHeaderIdx(headers, periodStartAliases);
+  const periodEndIdx = findHeaderIdx(headers, periodEndAliases);
 
   if (dateIdx === -1 || amountIdx === -1) {
     return {
@@ -189,6 +229,7 @@ export function parseCSVText(csvText: string): CSVParseOutput {
       errors: ['Cabeçalhos inválidos. O CSV precisa conter ao menos as colunas de data ("data", "date") e valor ("valor", "amount").'],
       skippedCount: 0,
       detectedSectors: [],
+      metadata,
     };
   }
 
@@ -235,7 +276,7 @@ export function parseCSVText(csvText: string): CSVParseOutput {
       let entryType: TableRow['entryType'] = 'revenue';
       if (typeIdx !== -1 && cols[typeIdx]) {
         entryType = normalizeEntryType(cols[typeIdx]);
-      } else if (categoryIdx !== -1 && cols[categoryIdx] && VALID_ENTRY_TYPES.has(cols[categoryIdx].toLowerCase().trim())) {
+      } else if (categoryIdx !== -1 && cols[categoryIdx] && cols[categoryIdx].trim()) {
         entryType = normalizeEntryType(cols[categoryIdx]);
       }
 
@@ -264,6 +305,31 @@ export function parseCSVText(csvText: string): CSVParseOutput {
         }
       }
 
+      // Recurrence and period fields
+      let monthlyValue: number | undefined = undefined;
+      if (monthlyValueIdx !== -1 && cols[monthlyValueIdx]) {
+        const parsedMv = parseValue(cols[monthlyValueIdx]);
+        if (parsedMv !== null && !isNaN(parsedMv)) monthlyValue = parsedMv;
+      }
+
+      let monthCount: number | undefined = undefined;
+      if (monthCountIdx !== -1 && cols[monthCountIdx]) {
+        const parsedMc = parseInt(cols[monthCountIdx].trim(), 10);
+        if (!isNaN(parsedMc)) monthCount = parsedMc;
+      }
+
+      let periodStart: string | undefined = undefined;
+      if (periodStartIdx !== -1 && cols[periodStartIdx]) {
+        const parsedPs = parseAndNormalizeDate(cols[periodStartIdx]);
+        if (parsedPs) periodStart = parsedPs;
+      }
+
+      let periodEnd: string | undefined = undefined;
+      if (periodEndIdx !== -1 && cols[periodEndIdx]) {
+        const parsedPe = parseAndNormalizeDate(cols[periodEndIdx]);
+        if (parsedPe) periodEnd = parsedPe;
+      }
+
       rows.push({
         date: normalizedDate,
         value: parsedVal,
@@ -272,6 +338,10 @@ export function parseCSVText(csvText: string): CSVParseOutput {
         category: category || 'Geral',
         tags: tags || '',
         metadataJson,
+        monthlyValue,
+        monthCount,
+        periodStart,
+        periodEnd,
       });
     } catch (err: any) {
       errors.push(`Linha ${lineNum}: ${err.message}`);
@@ -288,6 +358,7 @@ export function parseCSVText(csvText: string): CSVParseOutput {
     errors,
     skippedCount,
     detectedSectors,
+    metadata,
   };
 }
 

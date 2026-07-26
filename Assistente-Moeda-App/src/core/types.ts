@@ -53,7 +53,7 @@ export interface TableRow {
    *                    adds to totalPartnerOut and subtracts from globalGoalBalance.
    * Omitted on legacy rows — treated as 'revenue' for full backward compatibility.
    */
-  entryType?: 'revenue' | 'deposit' | 'waiver' | 'expense' | 'partner_in' | 'partner_out';
+  entryType?: 'revenue' | 'deposit' | 'waiver' | 'expense' | 'partner_in' | 'partner_out' | string;
   /**
    * For 'expense' entries only — the monthly cost amount (R$).
    * Used to reconstruct the total: value = monthlyValue × monthCount.
