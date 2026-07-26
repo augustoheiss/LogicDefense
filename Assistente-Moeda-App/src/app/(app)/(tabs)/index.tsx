@@ -610,10 +610,16 @@ export default function SpreadsheetScreen() {
       <TableSwitcherModal
         visible={showTableSwitcher}
         onClose={() => setShowTableSwitcher(false)}
-        tables={db.tables}
+        tables={db.activeTables}
         activeTableIndex={db.activeTableIndex}
-        onSelect={db.setActiveTableIndex}
-        onAdd={db.addTable}
+        onSelect={(idx) => {
+          db.setActiveTableIndex(idx);
+          db.setSelectedMonth('all');
+        }}
+        onAdd={(name) => {
+          db.addTable(name);
+          db.setSelectedMonth('all');
+        }}
         onRename={db.renameTable}
         onDelete={db.deleteTable}
       />

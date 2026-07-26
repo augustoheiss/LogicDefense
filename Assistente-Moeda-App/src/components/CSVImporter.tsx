@@ -20,7 +20,7 @@ interface CSVImporterProps {
 }
 
 export function CSVImporter({ onSuccess, onCancel }: CSVImporterProps) {
-  const { activeTable, updateActiveTableRows, updateActiveTableName, updateActiveSectors, updateGoals } = useCoinDB() as any;
+  const { activeTable, updateActiveTableRows, updateActiveTableName, updateActiveSectors, updateGoals, setSelectedMonth } = useCoinDB() as any;
   const [csvText, setCsvText] = useState('');
   const [errorLogs, setErrorLogs] = useState<string[]>([]);
   const [statusMsg, setStatusMsg] = useState('');
@@ -64,6 +64,9 @@ export function CSVImporter({ onSuccess, onCancel }: CSVImporterProps) {
 
       // 1. Commit rows directly to active table
       await updateActiveTableRows(parsed.rows);
+      if (setSelectedMonth) {
+        setSelectedMonth('all');
+      }
 
       // 2. Update active table name if present in metadata
       if (parsed.metadata?.name) {

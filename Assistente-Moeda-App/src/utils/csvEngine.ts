@@ -104,6 +104,8 @@ export function parseValue(input: string, isCentsColumn: boolean = false): numbe
     }
   } else if (s.includes(',')) {
     s = s.replace(',', '.');
+  } else if (/^-?\d{1,3}(\.\d{3})+$/.test(s)) {
+    s = s.replace(/\./g, '');
   }
 
   const num = parseFloat(s);
@@ -417,7 +419,7 @@ export function parseCSVText(csvText: string): CSVParseOutput {
 
   // Detect sectors from parsed rows
   const rowSectors = detectSectorsFromRows(rows);
-  const detectedSectors = Array.from(new Set([...headerSectors, ...rowSectors]));
+  const detectedSectors = Array.from(new Set(['personal_finance', ...headerSectors, ...rowSectors]));
 
   console.log('[CSV Parser]: Total rows extracted from section ## ROWS ##:', rows.length);
 

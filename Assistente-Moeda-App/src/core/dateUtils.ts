@@ -72,21 +72,36 @@ export function getEffectiveGoals(
   scope: { year: number; month?: number } | 'global',
   goals: TableGoals,
 ): GoalProfile {
+  if (!goals) {
+    return { dailyGoal: 0, weeklyGoal: 0, annualCost: 0 };
+  }
   if (scope !== 'global' && scope.month !== undefined) {
     const monthKey = `${scope.year}-${String(scope.month).padStart(2, '0')}`;
     const monthly = goals.monthlyGoals?.[monthKey];
-    if (monthly) return monthly;
+    if (monthly) return {
+      dailyGoal: monthly.dailyGoal ?? 0,
+      weeklyGoal: monthly.weeklyGoal ?? 0,
+      annualCost: monthly.annualCost ?? 0,
+    };
   }
   if (scope !== 'global') {
     const yearly = goals.yearlyGoals?.[scope.year];
-    if (yearly) return yearly;
+    if (yearly) return {
+      dailyGoal: yearly.dailyGoal ?? 0,
+      weeklyGoal: yearly.weeklyGoal ?? 0,
+      annualCost: yearly.annualCost ?? 0,
+    };
   }
-  if (goals.globalGoals) return goals.globalGoals;
+  if (goals.globalGoals) return {
+    dailyGoal: goals.globalGoals.dailyGoal ?? 0,
+    weeklyGoal: goals.globalGoals.weeklyGoal ?? 0,
+    annualCost: goals.globalGoals.annualCost ?? 0,
+  };
   const year = scope === 'global' ? new Date().getFullYear() : scope.year;
   return {
-    dailyGoal:  resolveGoalForYear(goals.dailyGoals,  year),
-    weeklyGoal: resolveGoalForYear(goals.weeklyGoals, year),
-    annualCost: resolveGoalForYear(goals.annualCosts, year),
+    dailyGoal:  resolveGoalForYear(goals.dailyGoals || {},  year) ?? 0,
+    weeklyGoal: resolveGoalForYear(goals.weeklyGoals || {}, year) ?? 0,
+    annualCost: resolveGoalForYear(goals.annualCosts || {}, year) ?? 0,
   };
 }
 

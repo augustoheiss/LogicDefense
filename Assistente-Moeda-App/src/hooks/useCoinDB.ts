@@ -25,6 +25,8 @@ export interface CoinDBState {
   isLoading: boolean;
   /** All coin tables */
   tables: CoinTable[];
+  /** Active coin tables (excluding deleted) */
+  activeTables: CoinTable[];
   /** Currently active table index */
   activeTableIndex: number;
   /** Currently active table (convenience accessor) */
@@ -264,8 +266,14 @@ function useCoinDBInternal(): CoinDBState {
       fullSync(auth.user.id).then(async (res) => {
         if (res.success) {
           const db = await loadDB();
-          if (db) {
-            setTables(ensureActiveSectors(db.tables));
+          if (db && db.tables && db.tables.length > 0) {
+            setTables((prevTables) => {
+              const remoteTables = ensureActiveSectors(db.tables);
+              if (remoteTables.length < prevTables.length) {
+                return prevTables;
+              }
+              return remoteTables;
+            });
             setAiCostCurrentMonth(db.aiCostCurrentMonth ?? 0);
             setAiCostLastReset(db.aiCostLastReset ?? '');
             if (activeTableIndex >= db.tables.length) {
@@ -690,14 +698,20 @@ function useCoinDBInternal(): CoinDBState {
     persist(newTables);
   }, [tables, activeTable, persist]);
 
+  const changeActiveTableIndex = useCallback((index: number) => {
+    setActiveTableIndex(index);
+    setSelectedMonth('all');
+  }, []);
+
   return {
     isLoading,
-    tables: activeTables,
-    activeTableIndex,
+    tables,
+    activeTables,
     activeTable,
     metrics,
+    activeTableIndex,
     selectedMonth,
-    setActiveTableIndex,
+    setActiveTableIndex: changeActiveTableIndex,
     addTable,
     renameTable,
     deleteTable,

@@ -41,8 +41,8 @@ describe('Testes de Retrocompatibilidade de Importação CSV Legacy', () => {
 
   it('Deve interpretar formatos de moeda brasileira (R$ 1.500,00) e centavos inteiros (valor_cents)', () => {
     const brlCSV = `data,descricao,valor
-01/08/2026,"Serviço TI",R$ 1.500,00
-02/08/2026,"Taxa",-150,50`;
+01/08/2026,"Serviço TI","R$ 1.500,00"
+02/08/2026,"Taxa","-150,50"`;
 
     const resultBrl = parseCSVText(brlCSV);
     expect(resultBrl.rows[0].value).toBe(1500.00);
