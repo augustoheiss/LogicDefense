@@ -90,22 +90,25 @@ export function CSVImporter({ onSuccess, onCancel }: CSVImporterProps) {
         await updateActiveSectors(nextSectors);
       }
 
-      const activeTableName = parsed.metadata?.name || activeTable?.name || 'Ativa';
-      const successTitle = 'Importação Concluída! 🎉';
-      const successMsg = `Sucesso! ${parsed.rows.length} transações foram carregadas na tabela "${activeTableName}".`;
-
-      setStatusMsg(successMsg);
-
-      if (Platform.OS === 'web') {
-        window.alert(`${successTitle}\n\n${successMsg}`);
-      } else {
-        Alert.alert(successTitle, successMsg);
-      }
-
       setCsvText('');
+
+      // 1. Close modal FIRST so React commits state and re-renders main screen
       if (onSuccess) {
-        setTimeout(onSuccess, 1500);
+        onSuccess();
       }
+
+      // 2. Trigger completion alert AFTER modal closes and render cycle flushes
+      setTimeout(() => {
+        const activeTableName = parsed.metadata?.name || activeTable?.name || 'Ativa';
+        const successTitle = 'Importação Concluída! 🎉';
+        const successMsg = `Sucesso! ${parsed.rows.length} transações foram carregadas na tabela "${activeTableName}".`;
+
+        if (Platform.OS === 'web') {
+          window.alert(`${successTitle}\n\n${successMsg}`);
+        } else {
+          Alert.alert(successTitle, successMsg);
+        }
+      }, 100);
     } catch (err: any) {
       const errMsg = err.message || 'Falha ao processar o arquivo CSV';
       setErrorLogs([`Erro geral de importação: ${errMsg}`]);

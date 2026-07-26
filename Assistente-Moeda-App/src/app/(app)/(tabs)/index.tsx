@@ -301,15 +301,17 @@ export default function SpreadsheetScreen() {
           await db.updateActiveSectors(nextSectors);
         }
 
-        const activeTableName = result.metadata?.name || db.activeTable?.name || 'Ativa';
-        const successTitle = 'Importação Concluída! 🎉';
-        const successMsg = `Sucesso! ${result.rows.length} transações foram carregadas na tabela "${activeTableName}".`;
+        setTimeout(() => {
+          const activeTableName = result.metadata?.name || db.activeTable?.name || 'Ativa';
+          const successTitle = 'Importação Concluída! 🎉';
+          const successMsg = `Sucesso! ${result.rows.length} transações foram carregadas na tabela "${activeTableName}".`;
 
-        if (Platform.OS === 'web') {
-          window.alert(`${successTitle}\n\n${successMsg}`);
-        } else {
-          Alert.alert(successTitle, successMsg);
-        }
+          if (Platform.OS === 'web') {
+            window.alert(`${successTitle}\n\n${successMsg}`);
+          } else {
+            Alert.alert(successTitle, successMsg);
+          }
+        }, 100);
       } catch (err: any) {
         Alert.alert('Erro na importação', err.message || 'Erro desconhecido');
       }
