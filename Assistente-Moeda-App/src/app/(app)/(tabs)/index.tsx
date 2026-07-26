@@ -273,11 +273,18 @@ export default function SpreadsheetScreen() {
           return;
         }
 
-        // Always load directly into active table/store (in-place loading)
-        await db.addRows(result.rows);
+        // PRIORITY 1: Always load rows directly into active table/store FIRST
+        if (result.rows && result.rows.length > 0) {
+          await db.addRows(result.rows);
+        }
 
+        // PRIORITY 2: Safely apply goals in isolation
         if (result.metadata?.tableGoals) {
-          await db.updateGoals(result.metadata.tableGoals);
+          try {
+            await db.updateGoals(result.metadata.tableGoals);
+          } catch (goalErr) {
+            console.warn('[Import Warning]: Skipped goals merge', goalErr);
+          }
         }
 
         // Auto-activate detected sectors

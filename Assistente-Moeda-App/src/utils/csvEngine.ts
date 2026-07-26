@@ -160,7 +160,12 @@ export function parseCSVText(csvText: string): CSVParseOutput {
   const errors: string[] = [];
   let skippedCount = 0;
   const rows: Omit<TableRow, 'id'>[] = [];
-  let metadata: { name?: string; description?: string; goals?: Record<string, number | string>; tableGoals?: TableGoals } | undefined = undefined;
+  let metadata: { name?: string; description?: string; goals?: Record<string, number | string>; tableGoals?: TableGoals } = {
+    name: 'Minha Planilha',
+    description: '',
+    goals: {},
+    tableGoals: { dailyGoals: {}, weeklyGoals: {}, annualCosts: {}, yearlyGoals: {} },
+  };
 
   const cleaned = csvText.startsWith('\uFEFF') ? csvText.slice(1) : csvText;
   

@@ -310,10 +310,14 @@ function useCoinDBInternal(): CoinDBState {
   // ── Active table ───────────────────────────────────────
   const activeTable = useMemo(() => {
     if (activeTables.length === 0) return null;
-    if (activeTableIndex >= 0 && activeTableIndex < activeTables.length) {
-      return activeTables[activeTableIndex];
-    }
-    return activeTables[0] ?? null;
+    const currentTable = (activeTableIndex >= 0 && activeTableIndex < activeTables.length)
+      ? activeTables[activeTableIndex]
+      : activeTables[0];
+    if (!currentTable) return null;
+    return {
+      ...currentTable,
+      rows: [...currentTable.rows],
+    };
   }, [activeTables, activeTableIndex]);
 
   // ── Metrics (computed from active table) ───────────────
@@ -431,19 +435,35 @@ function useCoinDBInternal(): CoinDBState {
 
   const addRows = useCallback(async (rows: Omit<TableRow, 'id'>[], tableName?: string) => {
     if (rows.length === 0) return;
-    const targetTable = tableName 
+    let targetTable = tableName 
       ? tables.find(t => !t.isDeleted && t.name.toLowerCase().trim() === tableName.toLowerCase().trim())
       : activeTable;
 
-    if (!targetTable) return;
+    let baseTables = tables;
+
+    if (!targetTable) {
+      const newTable: CoinTable = {
+        id: generateId(),
+        name: tableName || 'Minha Planilha',
+        description: 'Planilha principal',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        rows: [],
+        goals: { dailyGoals: {}, weeklyGoals: {}, annualCosts: {} },
+        activeSectors: ['personal_finance'],
+      };
+      baseTables = [...tables, newTable];
+      targetTable = newTable;
+      setActiveTableIndex(baseTables.length - 1);
+    }
 
     const newRows: TableRow[] = rows.map((r) => ({
       ...r,
       description: r.description ? r.description.toUpperCase().trim() : undefined,
       id: generateId()
     }));
-    const newTables = tables.map((t) => {
-      if (t.id !== targetTable.id) return t;
+    const newTables = baseTables.map((t) => {
+      if (t.id !== targetTable!.id) return t;
       return {
         ...t,
         rows: [...t.rows, ...newRows].sort((a, b) => a.date.localeCompare(b.date)),

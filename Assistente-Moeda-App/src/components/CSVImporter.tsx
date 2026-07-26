@@ -56,11 +56,18 @@ export function CSVImporter({ onSuccess, onCancel }: CSVImporterProps) {
         return;
       }
 
-      // Add to store in-place
-      await addRows(parsed.rows);
+      // PRIORITY 1: Always add/update table rows FIRST
+      if (parsed.rows && parsed.rows.length > 0) {
+        await addRows(parsed.rows);
+      }
 
+      // PRIORITY 2: Safely apply goals in isolation
       if (parsed.metadata?.tableGoals) {
-        await updateGoals(parsed.metadata.tableGoals);
+        try {
+          await updateGoals(parsed.metadata.tableGoals);
+        } catch (goalErr) {
+          console.warn('[Import Warning]: Skipped goals merge', goalErr);
+        }
       }
 
       // Trigger dynamic activeSectors toggles
