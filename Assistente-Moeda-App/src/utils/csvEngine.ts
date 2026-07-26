@@ -12,6 +12,16 @@ export function detectDelimiter(line: string): string {
   return ',';
 }
 
+// Cell cleaner — strips outer double quotes and unescapes inner quotes
+export function cleanCell(cell: string): string {
+  if (!cell) return '';
+  let s = String(cell).trim();
+  if (s.startsWith('"') && s.endsWith('"') && s.length >= 2) {
+    s = s.slice(1, -1);
+  }
+  return s.replace(/""/g, '"').trim();
+}
+
 // Quote-aware CSV line splitter
 export function splitCSVLine(line: string, delimiter: string): string[] {
   const result: string[] = [];
@@ -22,26 +32,27 @@ export function splitCSVLine(line: string, delimiter: string): string[] {
     const ch = line[i];
     if (ch === '"') {
       if (inQuotes && i + 1 < line.length && line[i + 1] === '"') {
-        current += '"';
-        i++; // skip escaped quote
+        current += '""';
+        i++; // skip escaped quote pair
       } else {
         inQuotes = !inQuotes;
+        current += '"';
       }
     } else if (ch === delimiter && !inQuotes) {
-      result.push(current.trim());
+      result.push(cleanCell(current));
       current = '';
     } else {
       current += ch;
     }
   }
-  result.push(current.trim());
+  result.push(cleanCell(current));
   return result;
 }
 
 // Date parser & normalizer
 export function parseAndNormalizeDate(input: string): string | null {
   if (!input) return null;
-  let s = String(input).replace(/['"]/g, '').trim();
+  let s = cleanCell(input);
   if (!s) return null;
 
   s = s.split(/[\sT]/)[0];
@@ -82,7 +93,7 @@ export function parseAndNormalizeDate(input: string): string | null {
 // Value parser & normalizer
 export function parseValue(input: string, isCentsColumn: boolean = false): number | null {
   if (input === null || input === undefined) return null;
-  let s = String(input).replace(/['"R$\s]/g, '').trim();
+  let s = cleanCell(input).replace(/['"R$\s]/g, '').trim();
   if (!s) return null;
 
   if (s.includes('.') && s.includes(',')) {
@@ -107,7 +118,7 @@ export function parseValue(input: string, isCentsColumn: boolean = false): numbe
 // Extensible Entry Type normalizer — preserves exact string values!
 export function normalizeEntryType(input: string): TableRow['entryType'] {
   if (!input) return 'revenue';
-  const s = String(input).replace(/['"]/g, '').trim().toLowerCase();
+  const s = cleanCell(input).toLowerCase();
   if (!s) return 'revenue';
 
   if (s === 'receita') return 'revenue';
@@ -181,7 +192,7 @@ export function parseCSVText(csvText: string): CSVParseOutput {
     };
 
     metaLines.forEach((line) => {
-      const parts = line.split(',').map((p) => p.replace(/^"|"$/g, '').trim());
+      const parts = line.split(',').map((p) => cleanCell(p));
       if (parts.length >= 2) {
         const rawKey = parts[0];
         const keyLower = rawKey.toLowerCase();
@@ -239,9 +250,7 @@ export function parseCSVText(csvText: string): CSVParseOutput {
   }
 
   const delimiter = detectDelimiter(lines[0]);
-  const headers = splitCSVLine(lines[0], delimiter).map((h) =>
-    h.toLowerCase().replace(/['"]/g, '').trim()
-  );
+  const headers = splitCSVLine(lines[0], delimiter).map((h) => cleanCell(h).toLowerCase());
 
   const dateAliases = ['date', 'data', 'data_movimento', 'created_at'];
   const descriptionAliases = ['description', 'descricao', 'historico', 'memo', 'title'];
@@ -325,24 +334,28 @@ export function parseCSVText(csvText: string): CSVParseOutput {
       }
 
       const description = descriptionIdx !== -1 && cols[descriptionIdx]
-        ? cols[descriptionIdx].replace(/^"|"$/g, '').trim()
+        ? cleanCell(cols[descriptionIdx])
         : 'IMPORTADO VIA PLANILHA';
 
       const category = categoryIdx !== -1 && cols[categoryIdx]
-        ? cols[categoryIdx].replace(/^"|"$/g, '').trim()
+        ? cleanCell(cols[categoryIdx])
         : 'Geral';
 
       const tags = tagsIdx !== -1 && cols[tagsIdx]
-        ? cols[tagsIdx].replace(/^"|"$/g, '').trim()
+        ? cleanCell(cols[tagsIdx])
         : '';
 
       let metadataJson = '{}';
       if (metadataIdx !== -1 && cols[metadataIdx] !== undefined && cols[metadataIdx] !== null) {
-        const rawMeta = String(cols[metadataIdx]).replace(/^"|"$/g, '').trim();
+        const rawMeta = cleanCell(cols[metadataIdx]);
         if (rawMeta.length > 0) {
           try {
-            JSON.parse(rawMeta);
-            metadataJson = rawMeta;
+            const parsedObj = JSON.parse(rawMeta);
+            if (typeof parsedObj === 'object' && parsedObj !== null) {
+              metadataJson = JSON.stringify(parsedObj);
+            } else {
+              metadataJson = '{}';
+            }
           } catch {
             metadataJson = '{}';
           }
@@ -358,7 +371,7 @@ export function parseCSVText(csvText: string): CSVParseOutput {
 
       let monthCount: number | undefined = undefined;
       if (monthCountIdx !== -1 && cols[monthCountIdx]) {
-        const parsedMc = parseInt(cols[monthCountIdx].trim(), 10);
+        const parsedMc = parseInt(cleanCell(cols[monthCountIdx]), 10);
         if (!isNaN(parsedMc)) monthCount = parsedMc;
       }
 

@@ -308,7 +308,13 @@ function useCoinDBInternal(): CoinDBState {
   const activeTables = useMemo(() => tables.filter((t) => !t.isDeleted), [tables]);
 
   // ── Active table ───────────────────────────────────────
-  const activeTable = activeTables[activeTableIndex] ?? null;
+  const activeTable = useMemo(() => {
+    if (activeTables.length === 0) return null;
+    if (activeTableIndex >= 0 && activeTableIndex < activeTables.length) {
+      return activeTables[activeTableIndex];
+    }
+    return activeTables[0] ?? null;
+  }, [activeTables, activeTableIndex]);
 
   // ── Metrics (computed from active table) ───────────────
   const metrics = useMemo(() => {
@@ -478,9 +484,27 @@ function useCoinDBInternal(): CoinDBState {
   }, [tables, activeTable, persist]);
 
   const updateActiveTableRows = useCallback(async (newRows: TableRow[]) => {
-    if (!activeTable) return;
-    const newTables = tables.map((t) => {
-      if (t.id !== activeTable.id) return t;
+    let targetTable = activeTable;
+    let baseTables = tables;
+
+    if (!targetTable) {
+      const newTable: CoinTable = {
+        id: generateId(),
+        name: 'Minha Planilha',
+        description: 'Planilha principal',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        rows: [],
+        goals: { dailyGoals: {}, weeklyGoals: {}, annualCosts: {} },
+        activeSectors: ['personal_finance'],
+      };
+      baseTables = [...tables, newTable];
+      targetTable = newTable;
+      setActiveTableIndex(baseTables.length - 1);
+    }
+
+    const newTables = baseTables.map((t) => {
+      if (t.id !== targetTable!.id) return t;
       return {
         ...t,
         rows: [...newRows].sort((a, b) => a.date.localeCompare(b.date)),

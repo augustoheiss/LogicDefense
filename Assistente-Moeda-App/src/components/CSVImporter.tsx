@@ -42,7 +42,9 @@ export function CSVImporter({ onSuccess, onCancel }: CSVImporterProps) {
     setStatusMsg('');
 
     try {
+      console.log('[CSV Import Step 1]: Raw text length', csvText.length);
       const parsed = parseCSVText(csvText);
+      console.log('[CSV Import Step 2]: Parsed output', parsed);
 
       if (parsed.errors.length > 0) {
         setErrorLogs(parsed.errors);
