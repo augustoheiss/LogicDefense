@@ -273,12 +273,15 @@ export default function SpreadsheetScreen() {
           return;
         }
 
-        // PRIORITY 1: Always load rows directly into active table/store FIRST
-        if (result.rows && result.rows.length > 0) {
-          await db.addRows(result.rows);
+        // 1. Commit rows directly to active table
+        await db.updateActiveTableRows(result.rows);
+
+        // 2. Update active table name if present in metadata
+        if (result.metadata?.name) {
+          await db.updateActiveTableName(result.metadata.name);
         }
 
-        // PRIORITY 2: Safely apply goals in isolation
+        // 3. Safely apply goals in isolation
         if (result.metadata?.tableGoals) {
           try {
             await db.updateGoals(result.metadata.tableGoals);
@@ -298,14 +301,15 @@ export default function SpreadsheetScreen() {
           await db.updateActiveSectors(nextSectors);
         }
 
-        const summary = [
-          `✅ ${result.rows.length} entradas importadas na planilha ativa`,
-          sectorsToActivate.length > 0 ? `🚀 Setores auto-ativados: ${sectorsToActivate.join(', ')}` : '',
-          result.skippedCount > 0 ? `⚠️ ${result.skippedCount} linhas ignoradas` : '',
-          result.errors.length > 0 ? `❌ ${result.errors.length} erros` : '',
-        ].filter(Boolean).join('\n');
+        const activeTableName = result.metadata?.name || db.activeTable?.name || 'Ativa';
+        const successTitle = 'Importação Concluída! 🎉';
+        const successMsg = `Sucesso! ${result.rows.length} transações foram carregadas na tabela "${activeTableName}".`;
 
-        Alert.alert('Importação concluída', summary);
+        if (Platform.OS === 'web') {
+          window.alert(`${successTitle}\n\n${successMsg}`);
+        } else {
+          Alert.alert(successTitle, successMsg);
+        }
       } catch (err: any) {
         Alert.alert('Erro na importação', err.message || 'Erro desconhecido');
       }

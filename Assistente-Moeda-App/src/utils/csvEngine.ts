@@ -338,9 +338,13 @@ export function parseCSVText(csvText: string): CSVParseOutput {
         entryType = normalizeEntryType(cols[categoryIdx]);
       }
 
-      const description = descriptionIdx !== -1 && cols[descriptionIdx]
-        ? cleanCell(cols[descriptionIdx])
-        : 'IMPORTADO VIA PLANILHA';
+      let description = '';
+      if (descriptionIdx !== -1 && cols[descriptionIdx] !== undefined && cols[descriptionIdx] !== null) {
+        description = cleanCell(cols[descriptionIdx]);
+      }
+      if (description === '' && descriptionIdx === -1) {
+        description = 'IMPORTADO VIA PLANILHA';
+      }
 
       const category = categoryIdx !== -1 && cols[categoryIdx]
         ? cleanCell(cols[categoryIdx])
@@ -414,6 +418,8 @@ export function parseCSVText(csvText: string): CSVParseOutput {
   // Detect sectors from parsed rows
   const rowSectors = detectSectorsFromRows(rows);
   const detectedSectors = Array.from(new Set([...headerSectors, ...rowSectors]));
+
+  console.log('[CSV Parser]: Total rows extracted from section ## ROWS ##:', rows.length);
 
   return {
     rows,

@@ -20,7 +20,7 @@ interface CSVImporterProps {
 }
 
 export function CSVImporter({ onSuccess, onCancel }: CSVImporterProps) {
-  const { activeTable, addRows, updateActiveSectors, updateGoals } = useCoinDB() as any;
+  const { activeTable, updateActiveTableRows, updateActiveTableName, updateActiveSectors, updateGoals } = useCoinDB() as any;
   const [csvText, setCsvText] = useState('');
   const [errorLogs, setErrorLogs] = useState<string[]>([]);
   const [statusMsg, setStatusMsg] = useState('');
@@ -50,18 +50,27 @@ export function CSVImporter({ onSuccess, onCancel }: CSVImporterProps) {
         setErrorLogs(parsed.errors);
       }
 
-      if (parsed.rows.length === 0) {
-        setStatusMsg('Falha: Nenhum registro válido pôde ser importado.');
+      if (!parsed.rows || parsed.rows.length === 0) {
+        const msg = 'O arquivo foi lido, mas nenhuma linha de transação foi encontrada após a seção ## ROWS ##.';
+        setStatusMsg(`Falha: ${msg}`);
+        if (Platform.OS === 'web') {
+          window.alert(`Aviso de Importação: ${msg}`);
+        } else {
+          Alert.alert('Aviso de Importação', msg);
+        }
         setIsProcessing(false);
         return;
       }
 
-      // PRIORITY 1: Always add/update table rows FIRST
-      if (parsed.rows && parsed.rows.length > 0) {
-        await addRows(parsed.rows);
+      // 1. Commit rows directly to active table
+      await updateActiveTableRows(parsed.rows);
+
+      // 2. Update active table name if present in metadata
+      if (parsed.metadata?.name) {
+        await updateActiveTableName(parsed.metadata.name);
       }
 
-      // PRIORITY 2: Safely apply goals in isolation
+      // 3. Safely apply goals in isolation
       if (parsed.metadata?.tableGoals) {
         try {
           await updateGoals(parsed.metadata.tableGoals);
@@ -71,7 +80,7 @@ export function CSVImporter({ onSuccess, onCancel }: CSVImporterProps) {
       }
 
       // Trigger dynamic activeSectors toggles
-      const currentActiveSectors = activeTable.activeSectors || ['personal_finance'];
+      const currentActiveSectors = activeTable?.activeSectors || ['personal_finance'];
       const sectorsToActivate = parsed.detectedSectors.filter(
         (sec) => !currentActiveSectors.includes(sec)
       );
@@ -79,11 +88,18 @@ export function CSVImporter({ onSuccess, onCancel }: CSVImporterProps) {
       if (sectorsToActivate.length > 0) {
         const nextSectors = Array.from(new Set([...currentActiveSectors, ...sectorsToActivate]));
         await updateActiveSectors(nextSectors);
-        setStatusMsg(
-          `Sucesso: ${parsed.rows.length} linhas importadas! Setores auto-ativados: ${sectorsToActivate.join(', ')}`
-        );
+      }
+
+      const activeTableName = parsed.metadata?.name || activeTable?.name || 'Ativa';
+      const successTitle = 'Importação Concluída! 🎉';
+      const successMsg = `Sucesso! ${parsed.rows.length} transações foram carregadas na tabela "${activeTableName}".`;
+
+      setStatusMsg(successMsg);
+
+      if (Platform.OS === 'web') {
+        window.alert(`${successTitle}\n\n${successMsg}`);
       } else {
-        setStatusMsg(`Sucesso: ${parsed.rows.length} linhas importadas na planilha ativa!`);
+        Alert.alert(successTitle, successMsg);
       }
 
       setCsvText('');

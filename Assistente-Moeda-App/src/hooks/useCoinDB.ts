@@ -43,7 +43,8 @@ export interface CoinDBState {
   // ── Row Operations ────────────────────────────────────
   addRow: (row: Omit<TableRow, 'id'>, tableName?: string) => Promise<void> | void;
   addRows: (rows: Omit<TableRow, 'id'>[], tableName?: string) => Promise<void> | void;
-  updateActiveTableRows: (rows: TableRow[]) => Promise<void> | void;
+  updateActiveTableRows: (rows: (TableRow | Omit<TableRow, 'id'>)[]) => Promise<void> | void;
+  updateActiveTableName: (newName: string) => Promise<void> | void;
   updateRow: (rowId: string, updates: Partial<TableRow>) => void;
   deleteRow: (rowId: string) => void;
   deleteLastRow: () => Promise<void> | void;
@@ -503,7 +504,7 @@ function useCoinDBInternal(): CoinDBState {
     persist(newTables);
   }, [tables, activeTable, persist]);
 
-  const updateActiveTableRows = useCallback(async (newRows: TableRow[]) => {
+  const updateActiveTableRows = useCallback(async (newRows: (TableRow | Omit<TableRow, 'id'>)[]) => {
     let targetTable = activeTable;
     let baseTables = tables;
 
@@ -523,11 +524,29 @@ function useCoinDBInternal(): CoinDBState {
       setActiveTableIndex(baseTables.length - 1);
     }
 
+    const formattedRows: TableRow[] = newRows.map((r) => ({
+      ...r,
+      id: 'id' in r && r.id ? r.id : generateId(),
+    }));
+
     const newTables = baseTables.map((t) => {
       if (t.id !== targetTable!.id) return t;
       return {
         ...t,
-        rows: [...newRows].sort((a, b) => a.date.localeCompare(b.date)),
+        rows: [...formattedRows].sort((a, b) => a.date.localeCompare(b.date)),
+        updatedAt: new Date().toISOString(),
+      };
+    });
+    await persist(newTables);
+  }, [tables, activeTable, persist]);
+
+  const updateActiveTableName = useCallback(async (newName: string) => {
+    if (!activeTable || !newName.trim()) return;
+    const newTables = tables.map((t) => {
+      if (t.id !== activeTable.id) return t;
+      return {
+        ...t,
+        name: newName.trim(),
         updatedAt: new Date().toISOString(),
       };
     });
@@ -685,6 +704,7 @@ function useCoinDBInternal(): CoinDBState {
     addRow,
     addRows,
     updateActiveTableRows,
+    updateActiveTableName,
     updateRow,
     deleteRow,
     deleteLastRow,
