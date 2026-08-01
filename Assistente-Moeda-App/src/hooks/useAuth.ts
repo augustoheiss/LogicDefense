@@ -32,19 +32,35 @@ export function useAuth(): AuthState {
   const [user, setUser] = useState<any | null>({ id: 'local_user', email: 'user@local' });
   const [profile, setProfile] = useState<UserProfile | null>({
     id: 'local_user',
-    displayName: 'Usuário',
+    displayName: 'Usuário Local',
     email: null,
     licenseKey: null,
-    premiumTier: 'premium',
-    tokenBalance: 1000000
+    premiumTier: 'free',
+    tokenBalance: 0
   });
 
   useEffect(() => {
     async function checkLicense() {
       try {
         const key = await getStoredLicenseKey();
-        if (key && profile) {
-          setProfile(prev => prev ? { ...prev, licenseKey: key } : null);
+        if (key) {
+          setProfile({
+            id: 'local_user',
+            displayName: 'Usuário Pro',
+            email: null,
+            licenseKey: key,
+            premiumTier: 'premium',
+            tokenBalance: 1000000
+          });
+        } else {
+          setProfile({
+            id: 'local_user',
+            displayName: 'Usuário Local',
+            email: null,
+            licenseKey: null,
+            premiumTier: 'free',
+            tokenBalance: 0
+          });
         }
       } catch (err) {
         console.warn('License check error:', err);
@@ -84,7 +100,7 @@ export function useAuth(): AuthState {
     user,
     profile,
     session: null,
-    isPremium: true,
+    isPremium: profile?.premiumTier === 'premium',
     profileFetchError: null,
     enterGuestMode,
     login,
@@ -107,7 +123,7 @@ export function useAuthContext(): AuthState {
       user: { id: 'local_user' },
       profile: null,
       session: null,
-      isPremium: true,
+      isPremium: false,
       profileFetchError: null,
       enterGuestMode: () => {},
       login: async () => ({ error: null }),

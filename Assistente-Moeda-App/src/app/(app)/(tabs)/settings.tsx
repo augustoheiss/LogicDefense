@@ -62,11 +62,8 @@ export default function SettingsScreen() {
   const isVisitor = !auth.user || auth.mode === 'guest';
 
   const { isPro, subscriptionType, packages, consumables, purchasePackage, restorePurchases, expirationDate, isProcessing } = useSubscription();
-  // Token tank: yearly=12M, monthly=1M, free=100K
-  const maxTokens = isPro
-    ? (subscriptionType === 'yearly' ? 12_000_000 : 1_000_000)
-    : 100_000;
-  const [tokenBalance, setTokenBalance] = useState<number>(maxTokens);
+  const maxTokens = 1_000_000;
+  const tokenBalance = auth.isPremium ? (auth.profile?.tokenBalance ?? 1_000_000) : 0;
 
   const [showStoreModal, setShowStoreModal] = useState(false);
   const [showDebugger, setShowDebugger] = useState(false);
@@ -492,81 +489,30 @@ export default function SettingsScreen() {
       </View>
 
       <ScrollView style={styles.content} contentContainerStyle={styles.contentInner}>
-        {/* ── Account Section ──────────────────────────────── */}
-        <Section title="Conta">
-          {!isVisitor ? (
-            <Card>
-              <View style={styles.profileRow}>
-                <View style={styles.avatar}>
-                  <Text style={styles.avatarText}>
-                    {(auth.profile?.displayName || auth.profile?.email || auth.user?.email || '?')[0].toUpperCase()}
-                  </Text>
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.profileName}>
-                    {auth.profile?.displayName || auth.user?.email?.split('@')[0] || 'Usuário'}
-                  </Text>
-                  <Text style={styles.profileEmail}>{auth.profile?.email || auth.user?.email}</Text>
-                  <Text style={styles.tierText}>
-                    {isPro ? '⭐ Premium' : '🆓 Gratuito'}
-                  </Text>
-                </View>
-              </View>
-
-              <Pressable
-                style={({ pressed }) => [
-                  styles.syncButton,
-                  isSyncing && styles.syncButtonDisabled,
-                  pressed && styles.pressed,
-                ]}
-                onPress={handleManualSync}
-                disabled={isSyncing}
-              >
-                <Text style={styles.syncButtonText}>
-                  {isSyncing ? '🔄 Sincronizando...' : '🔄 Sincronizar Nuvem'}
+        {/* ── Account & License Section ──────────────────────────────── */}
+        <Section title="🔑 Licença & Armazenamento">
+          <Card>
+            <View style={styles.profileRow}>
+              <View style={styles.avatar}>
+                <Text style={styles.avatarText}>
+                  {auth.isPremium ? '⭐' : '🔒'}
                 </Text>
-              </Pressable>
-
-              <Pressable
-                style={({ pressed }) => [
-                  styles.syncButton,
-                  (isProcessing || isUpdatingPassword) && styles.syncButtonDisabled,
-                  pressed && styles.pressed,
-                ]}
-                onPress={() => {
-                  setCurrentPassword('');
-                  setNewPassword('');
-                  setConfirmPassword('');
-                  setPasswordError('');
-                  setIsPasswordModalOpen(true);
-                }}
-                disabled={isProcessing || isUpdatingPassword}
-              >
-                <Text style={styles.syncButtonText}>🔒 Alterar Senha</Text>
-              </Pressable>
-            </Card>
-          ) : (
-            <Card>
-              <Text style={styles.guestTitle}>👤 Modo Visitante</Text>
-              <Text style={styles.guestText}>
-                Dados salvos apenas neste dispositivo.
-              </Text>
-              <View style={{ flexDirection: 'row', gap: spacing.sm, marginTop: spacing.md }}>
-                <Pressable
-                  style={({ pressed }) => [styles.actionButton, { flex: 1, marginTop: 0 }, pressed && styles.pressed]}
-                  onPress={() => router.push('/(auth)/register')}
-                >
-                  <Text style={styles.actionButtonText}>Criar Conta</Text>
-                </Pressable>
-                <Pressable
-                  style={({ pressed }) => [styles.actionButton, { flex: 1, marginTop: 0, backgroundColor: colors.background.tertiary, borderWidth: 1, borderColor: colors.border.strong }, pressed && styles.pressed]}
-                  onPress={() => router.push('/(auth)/login')}
-                >
-                  <Text style={styles.actionButtonText}>Entrar</Text>
-                </Pressable>
               </View>
-            </Card>
-          )}
+              <View style={{ flex: 1 }}>
+                <Text style={styles.profileName}>
+                  {auth.isPremium ? 'Licença Pro Ativa' : 'Plano Gratuito (Local)'}
+                </Text>
+                <Text style={styles.profileEmail}>
+                  {auth.profile?.licenseKey 
+                    ? `Chave: ${auth.profile.licenseKey.slice(0, 12)}...` 
+                    : 'Dados salvos 100% no dispositivo local'}
+                </Text>
+                <Text style={styles.tierText}>
+                  {auth.isPremium ? '⭐ Motor de IA e Consultor Liberados' : '🔒 Insira uma Chave Pro para ativar o Assistente de IA'}
+                </Text>
+              </View>
+            </View>
+          </Card>
         </Section>
 
         {/* ── AI Engine Section (Fuel Gauge) ───────────────── */}
