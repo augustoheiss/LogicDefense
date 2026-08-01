@@ -23,8 +23,10 @@ import { CoinDBProvider } from '@/hooks/useCoinDB';
 import { SubscriptionProvider } from '@/hooks/useSubscription';
 import { colors } from '@/theme/colors';
 
-// Prevent auto-hide so we control it
-SplashScreen.preventAutoHideAsync();
+// Prevent auto-hide so we control it (mobile only)
+if (Platform.OS !== 'web') {
+  SplashScreen.preventAutoHideAsync().catch(() => {});
+}
 
 function RootNavigator() {
   const auth = useAuth();
@@ -36,9 +38,6 @@ function RootNavigator() {
     if (Platform.OS === 'android') {
       NavigationBar.setVisibilityAsync('hidden');
       
-      // setBehaviorAsync was removed in newer versions of expo-navigation-bar (SDK 56+)
-      // because hiding the bar automatically defaults to 'sticky-immersive' behavior.
-      // We check for its existence dynamically to satisfy the requirement safely.
       const navBarAny = NavigationBar as any;
       if (typeof navBarAny.setBehaviorAsync === 'function') {
         navBarAny.setBehaviorAsync('sticky-immersive');
@@ -47,8 +46,8 @@ function RootNavigator() {
   }, []);
 
   useEffect(() => {
-    if (!auth.isLoading) {
-      SplashScreen.hideAsync();
+    if (!auth.isLoading && Platform.OS !== 'web') {
+      SplashScreen.hideAsync().catch(() => {});
     }
   }, [auth.isLoading]);
 
