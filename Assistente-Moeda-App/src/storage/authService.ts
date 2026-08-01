@@ -16,6 +16,8 @@ export interface UserProfile {
   licenseKey: string | null;
   premiumTier: PremiumTier;
   tokenBalance: number;
+  subscriptionType?: 'monthly' | 'yearly' | null;
+  subscriptionExpiresAt?: string | null;
 }
 
 export async function getStoredLicenseKey(): Promise<string | null> {
