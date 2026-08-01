@@ -89,6 +89,9 @@ app.include_router(api_keys_router)
 from routers.public_api_router import router as public_api_router
 app.include_router(public_api_router)
 
+# ── License Management Router ─────────────────────────────────────────────────
+from routers.license_router import router as license_router
+app.include_router(license_router)
 
 # ── Health Check (cold-start mitigation) ─────────────────────────────────────
 

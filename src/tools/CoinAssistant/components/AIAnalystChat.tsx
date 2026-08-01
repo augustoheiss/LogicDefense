@@ -110,10 +110,14 @@ export function AIAnalystChat({ table, cutoffDate, totalWaiverCredits, onAnalysi
     }
 
     try {
+      const savedLicenseKey = localStorage.getItem('coin_license_key') || '';
       const payload = buildPayload(table, prompt.trim(), totalWaiverCredits, cutoffDate);
       const response = await fetch(`${API_BASE}/api/coin/ai-analyst`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'X-License-Key': savedLicenseKey,
+        },
         body: JSON.stringify(payload),
       });
 

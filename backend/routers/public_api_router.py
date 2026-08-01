@@ -130,61 +130,29 @@ async def validate_api_key_and_get_table_id(
     # Calcular hash SHA-256
     key_hash = hashlib.sha256(api_key.encode("utf-8")).hexdigest()
     
-    supabase_url = os.getenv("SUPABASE_URL")
-    supabase_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
-    if not supabase_url or not supabase_key:
+    from db.license_db import get_spreadsheet_api_key
+    record = get_spreadsheet_api_key(key_hash)
+    if not record:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Configuração do Supabase ausente no servidor do backend."
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Chave de API inválida ou revogada."
         )
-    
-    headers = {
-        "apikey": supabase_key,
-        "Authorization": f"Bearer {supabase_key}"
-    }
-    
-    async with httpx.AsyncClient() as client:
-        url = f"{supabase_url}/rest/v1/spreadsheet_api_keys?key_hash=eq.{key_hash}&select=table_id,permissions"
-        try:
-            res = await client.get(url, headers=headers)
-            if res.status_code != 200 or not res.json():
-                raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail="Chave de API inválida ou revogada."
-                )
-            
-            data = res.json()[0]
-            table_id = data.get("table_id")
-            permissions = data.get("permissions", "read:write")
-            
-            # Validar permissões de escrita
-            if request_type == "write" and permissions == "read-only":
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Acesso negado: Chave de API possui apenas permissão de leitura ('read-only')."
-                )
-                
-            # Atualizar last_used_at de forma assíncrona/segura
-            # (Não bloqueia a execução da rota principal em caso de falha menor)
-            try:
-                update_url = f"{supabase_url}/rest/v1/spreadsheet_api_keys?key_hash=eq.{key_hash}"
-                await client.patch(
-                    update_url, 
-                    json={"last_used_at": datetime.datetime.utcnow().isoformat()}, 
-                    headers=headers
-                )
-            except Exception:
-                pass
-                
-            return table_id
-            
-        except HTTPException:
-            raise
-        except Exception as e:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Erro interno de validação: {e}"
-            )
+        
+    permissions = record.get("permissions", "read:write")
+    if request_type == "write" and permissions == "read-only":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Acesso negado: Chave de API possui apenas permissão de leitura ('read-only')."
+        )
+        
+    token_balance = record.get("token_balance", 0)
+    if token_balance <= 0:
+        raise HTTPException(
+            status_code=status.HTTP_402_PAYMENT_REQUIRED,
+            detail="Saldo de tokens da Licença PRO associada foi esgotado."
+        )
+        
+    return record["table_id"]
 
 class APIKeyValidator:
     def __init__(self, request_type: str):

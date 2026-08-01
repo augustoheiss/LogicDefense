@@ -148,113 +148,51 @@ def parse_payload_data(payload: AIAnalystPayload) -> tuple[list[TableRow], Table
     return unique_rows, goals_model, table_name, total_waiver_credits
 
 
-async def verify_jwt_and_ownership(authorization: str | None, payload: AIAnalystPayload):
+from db.license_db import get_license_by_raw_key, deduct_license_tokens
+
+async def verify_license_key_and_quota(x_license_key: str | None, estimated_text: str) -> dict:
     """
-    Validates user authentication using the Supabase Auth API.
-    If the payload contains any table_id, verifies that the authenticated user owns it.
-    If there is a cross-user violation, raises a strict HTTP 403 Forbidden error.
+    Validates license key and checks/deducts token quota (with 15% safety buffer).
+    Raises HTTP 401 if missing/invalid key, or HTTP 402 if tokens are exhausted.
     """
-    if not authorization:
-        # Allow stateless request if no auth header is provided (fallback for legacy/guest),
-        # but if any table_ids are sent, we should require authentication.
-        table_ids = []
-        for t in payload.tables or []:
-            if isinstance(t, dict) and t.get("id"):
-                table_ids.append(t.get("id"))
-        if table_ids:
-            raise HTTPException(status_code=401, detail="Authentication required to access spreadsheet tables.")
-        return
+    if not x_license_key:
+        raise HTTPException(
+            status_code=401,
+            detail="Chave de Licença necessária para utilizar o Assistente de IA PRO. Insira sua chave nas configurações."
+        )
+    
+    rec = get_license_by_raw_key(x_license_key.strip())
+    if not rec:
+        raise HTTPException(
+            status_code=401,
+            detail="Chave de Licença inválida. Verifique o código inserido ou recupere sua chave por e-mail."
+        )
 
-    token = authorization.strip()
-    if token.startswith("Bearer "):
-        token = token[7:].strip()
+    # Estimate tokens: ~4 chars per token + 15% safety buffer
+    est_prompt_tokens = int((len(estimated_text) / 4) * 1.15) + 500
+    if rec.get("token_balance", 0) < est_prompt_tokens:
+        raise HTTPException(
+            status_code=402,
+            detail=f"Saldo de tokens insuficiente ({rec.get('token_balance', 0):,} restantes, necessário {est_prompt_tokens:,}). Faça um upgrade para renovar seus tokens."
+        )
 
-    supabase_url = os.getenv("SUPABASE_URL")
-    supabase_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY") # Service role for DB lookup
-    supabase_anon_key = os.getenv("SUPABASE_ANON_KEY") # Anon key for Auth verification
-    if not supabase_url or not supabase_key or not supabase_anon_key:
-        raise HTTPException(status_code=500, detail="Database credentials missing on server")
-
-    # 1. Validate JWT with Supabase auth API
-    auth_headers = {
-        "apikey": supabase_anon_key,
-        "Authorization": f"Bearer {token}"
-    }
-    async with httpx.AsyncClient() as client:
-        try:
-            auth_res = await client.get(f"{supabase_url}/auth/v1/user", headers=auth_headers)
-            if auth_res.status_code != 200:
-                raise HTTPException(status_code=401, detail=f"Invalid or expired token: {auth_res.text}")
-            user_data = auth_res.json()
-            auth_user_id = user_data.get("id")
-        except HTTPException:
-            raise
-        except Exception as e:
-            raise HTTPException(status_code=401, detail=f"Authentication check failed: {e}")
-
-        # 2. Check ownership for each table_id in the payload
-        table_ids = []
-        for t in payload.tables or []:
-            if isinstance(t, dict) and t.get("id"):
-                table_ids.append(t.get("id"))
-                
-        # Also check table_id from user_settings/metadata if present
-        if payload.user_settings and isinstance(payload.user_settings, dict):
-            active_table_id = payload.user_settings.get("activeTableId") or payload.user_settings.get("active_table_id")
-            if active_table_id:
-                table_ids.append(active_table_id)
-
-        # Deduplicate
-        table_ids = list(set(table_ids))
-
-        if table_ids:
-            db_headers = {
-                "apikey": supabase_key,
-                "Authorization": f"Bearer {supabase_key}"
-            }
-            for table_id in table_ids:
-                # Query public.coin_tables via service role to check ownership
-                tbl_url = f"{supabase_url}/rest/v1/coin_tables?id=eq.{table_id}&select=user_id"
-                try:
-                    tbl_res = await client.get(tbl_url, headers=db_headers)
-                    if tbl_res.status_code == 200:
-                        tbl_data = tbl_res.json()
-                        if tbl_data:
-                            owner_id = tbl_data[0].get("user_id")
-                            if owner_id and owner_id != auth_user_id:
-                                log.warning(f"Cross-user violation! Attacker {auth_user_id} tried to access table {table_id} owned by {owner_id}")
-                                raise HTTPException(
-                                    status_code=403, 
-                                    detail="Acesso negado: Você não tem permissão para acessar esta planilha."
-                                )
-                    elif tbl_res.status_code == 403:
-                        # Fallback test assertion check for the database isolation test suite
-                        # USER_A's table ID: "1782659472010-iobwzh0", USER_A's User ID: "19a9721b-00e5-4427-a3af-88a0d75b8734"
-                        if table_id == "1782659472010-iobwzh0" and auth_user_id != "19a9721b-00e5-4427-a3af-88a0d75b8734":
-                            log.warning(f"Cross-user violation (Test Fallback)! Attacker {auth_user_id} tried to access table {table_id}")
-                            raise HTTPException(
-                                status_code=403,
-                                detail="Acesso negado: Você não tem permissão para acessar esta planilha."
-                            )
-                except HTTPException:
-                    raise
-                except Exception as e:
-                    log.error(f"Error querying table owner for table {table_id}: {e}")
+    return rec
 
 @router.post("/ai-analyst", response_model=AIAnalystResponse)
 async def ai_analyst(
     payload: AIAnalystPayload,
-    authorization: str = Header(None)
+    authorization: str = Header(None),
+    x_license_key: str = Header(None, alias="X-License-Key")
 ) -> AIAnalystResponse:
     """
     Stateless AI financial analyst.
 
-    Receives the full tables and transactions data from the client, parses
-    active context dynamically, computes metrics, and queries Gemini.
+    Receives financial payload alongside license key in X-License-Key header.
+    Validates quota, computes metrics, queries Gemini, and deducts actual tokens used.
     """
-    # Validate user JWT and check cross-user data isolation constraints
-    await verify_jwt_and_ownership(authorization, payload)
-
+    # License key can be passed via X-License-Key header or Bearer authorization fallback
+    raw_key = x_license_key or (authorization.replace("Bearer ", "").strip() if authorization and not authorization.startswith("eyJ") else None)
+    
     if not client:
         raise HTTPException(
             status_code=503,
@@ -301,12 +239,14 @@ async def ai_analyst(
         from services.coin_metrics_engine import _empty_metrics
         metrics = _empty_metrics()
 
-    # ── Step 3: Query Gemini ─────────────────────────────────────────────
+    # ── Step 3: Verify License Key & Token Quota ─────────────────────────
     user_message = (
         f"{financial_context}\n\n"
         f"── PERGUNTA DO USUÁRIO ──\n"
         f"{payload.message}"
     )
+
+    license_rec = await verify_license_key_and_quota(raw_key, user_message)
 
     try:
         available_tables = [t.get("name", "") for t in payload.tables if t.get("name")]
@@ -333,6 +273,10 @@ async def ai_analyst(
         total_tokens = 0
         if response.usage_metadata:
             total_tokens = response.usage_metadata.total_token_count or 0
+
+        # Deduct actual tokens used from license key
+        if total_tokens > 0 and license_rec:
+            deduct_license_tokens(license_rec["key_hash"], total_tokens, endpoint="/api/coin/ai-analyst")
 
     except Exception as exc:
         log.exception("Gemini API call failed: %s", exc)

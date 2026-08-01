@@ -9,6 +9,8 @@ import { TableModal } from './TableModal';
 import { ConfirmDialog } from './ConfirmDialog';
 import { SaaSMasterclassLandingPage } from './SaaSMasterclassLandingPage';
 
+import { LicenseKeyModal } from './LicenseKeyModal';
+
 type ModalState =
   | { mode: 'create' }
   | { mode: 'edit'; table: CoinTable }
@@ -17,6 +19,7 @@ type ModalState =
 export function CoinAssistantApp() {
   const db = useCoinAssistantDB();
   const [modal, setModal] = useState<ModalState>(null);
+  const [isLicenseModalOpen, setIsLicenseModalOpen] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [importError, setImportError] = useState<string | null>(null);
@@ -90,6 +93,12 @@ export function CoinAssistantApp() {
           — Gestão financeira local
         </span>
         <div className="flex-1" />
+        <button
+          onClick={() => setIsLicenseModalOpen(true)}
+          className="px-3 py-1.5 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/30 text-indigo-300 font-medium text-xs flex items-center gap-1.5 transition-all"
+        >
+          <span>🔑</span> Chave Licença / IA
+        </button>
         <span className="text-xs text-white/20 hidden sm:block">
           {db.tables.length} {db.tables.length === 1 ? 'tabela' : 'tabelas'}
         </span>
@@ -160,6 +169,11 @@ export function CoinAssistantApp() {
       </div>
 
       {/* ── Modals ── */}
+      <LicenseKeyModal
+        isOpen={isLicenseModalOpen}
+        onClose={() => setIsLicenseModalOpen(false)}
+      />
+
       {modal && (
         <TableModal
           mode={modal.mode}

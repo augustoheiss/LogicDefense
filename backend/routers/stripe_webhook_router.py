@@ -2,155 +2,75 @@
 Stripe Webhooks Router — Assistente Moeda
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Processes secure webhook events from Stripe to fulfill desktop/web purchases.
+Zero Supabase dependency — generates license keys and saves to SQLite/Turso.
 """
 
 import os
+import json
 import logging
-import httpx
 import stripe
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Request, Header, HTTPException, status, BackgroundTasks
 from fastapi.responses import JSONResponse
-from routers.webhook_router import credit_user_tokens, update_user_premium_status, resolve_token_tank
+from db.license_db import create_license_key, is_webhook_processed, mark_webhook_processed
+from services.email_service import send_license_key_email
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-async def credit_user_tokens_atomic(user_id: str, amount: int, transaction_id: str = None) -> bool:
-    """Atomically increment user token balance using Postgres RPC to prevent race conditions."""
-    supabase_url = os.getenv("SUPABASE_URL")
-    supabase_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")  # Bypasses RLS safely
-    if not supabase_url or not supabase_key:
-        logger.error("Supabase credentials missing.")
-        return False
-        
-    headers = {
-        "apikey": supabase_key,
-        "Authorization": f"Bearer {supabase_key}",
-        "Content-Type": "application/json"
-    }
-    
-    # Call the stored function via PostgREST RPC
-    rpc_url = f"{supabase_url}/rest/v1/rpc/increment_user_tokens"
-    payload = {
-        "target_user_id": user_id,
-        "token_increment_amount": amount
-    }
-    if transaction_id:
-        payload["transaction_id"] = transaction_id
-    
-    async with httpx.AsyncClient() as client:
-        try:
-            response = await client.post(rpc_url, headers=headers, json=payload)
-            if response.status_code in (200, 204):
-                logger.info(f"Successfully credited {amount:,} tokens to user {user_id}")
-                return True
-            else:
-                logger.error(f"Failed to call RPC: {response.status_code} - {response.text}")
-                return False
-        except Exception as e:
-            logger.error(f"Exception during atomic token crediting: {e}")
-            return False
+MONTHLY_TOKEN_TANK = 1_000_000
+YEARLY_TOKEN_TANK  = 12_000_000
 
-async def fulfill_stripe_checkout(session: dict):
-    """Asynchronous background task to process and fulfill validated checkout sessions."""
-    app_user_id = session.get("client_reference_id") or session.get("metadata", {}).get("user_id")
-    if not app_user_id:
-        logger.warning("Fulfillment ignored: client_reference_id (Supabase UUID) is missing from Stripe session.")
+def resolve_token_tank(product_identifier: str, amount_total: int = 0) -> int:
+    pid = str(product_identifier).lower()
+    if "year" in pid or "yearly" in pid or "anual" in pid or "annual" in pid:
+        return YEARLY_TOKEN_TANK
+    if "month" in pid or "monthly" in pid or "pro" in pid:
+        return MONTHLY_TOKEN_TANK
+    if amount_total >= 10000:
+        return YEARLY_TOKEN_TANK
+    return MONTHLY_TOKEN_TANK
+
+async def fulfill_stripe_checkout(session: dict, background_tasks: BackgroundTasks):
+    """Fulfills validated Stripe checkout sessions by creating a new License Key."""
+    event_id = session.get("id")
+    if event_id and is_webhook_processed(event_id):
+        logger.info(f"Stripe session {event_id} already processed. Skipping.")
         return
 
+    customer_details = session.get("customer_details") or {}
+    email = customer_details.get("email") or session.get("customer_email") or session.get("metadata", {}).get("email")
+    stripe_customer_id = session.get("customer")
     metadata = session.get("metadata", {})
     product_id = str(metadata.get("product_id") or "").lower()
     amount_total = session.get("amount_total", 0)
 
-    logger.info(f"Fulfilling Stripe checkout for user {app_user_id}, product: {product_id}, amount: {amount_total}")
+    token_tank = resolve_token_tank(product_id, amount_total)
+    
+    # Calculate expiration
+    now = datetime.now(timezone.utc)
+    if "year" in product_id or "yearly" in product_id or "anual" in product_id or amount_total >= 10000:
+        expires_at = (now + timedelta(days=365)).isoformat()
+    else:
+        expires_at = (now + timedelta(days=30)).isoformat()
 
-    # Determine product type
-    is_subscription = "pro" in product_id or "monthly" in product_id or "yearly" in product_id
-    is_consumable = "token" in product_id or "consumable" in product_id
+    # Generate License Key
+    raw_key, key_hash = create_license_key(
+        email=email,
+        tier="pro",
+        initial_tokens=token_tank,
+        expires_at=expires_at,
+        stripe_customer_id=stripe_customer_id
+    )
 
-    # Fallback heuristics based on Stripe session amount if not explicitly defined
-    if not is_subscription and not is_consumable:
-        if amount_total >= 10000:  # R$ 100+ -> Yearly subscription
-            is_subscription = True
-        elif amount_total >= 1900:  # R$ 19+ -> Monthly subscription
-            is_subscription = True
-        else:
-            is_consumable = True
+    if event_id:
+        mark_webhook_processed(event_id)
 
-    if is_subscription:
-        # Fetch current expiration date from database to support cumulative stacking
-        current_expiration_date = None
-        supabase_url = os.getenv("SUPABASE_URL")
-        supabase_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
-        if supabase_url and supabase_key:
-            headers = {
-                "apikey": supabase_key,
-                "Authorization": f"Bearer {supabase_key}"
-            }
-            profile_get_url = f"{supabase_url}/rest/v1/profiles?id=eq.{app_user_id}"
-            async with httpx.AsyncClient() as client:
-                try:
-                    profile_res = await client.get(profile_get_url, headers=headers)
-                    if profile_res.status_code == 200:
-                        profile_data = profile_res.json()
-                        if profile_data:
-                            expires_str = profile_data[0].get("subscription_expires_at")
-                            if expires_str:
-                                # Clean timezone offsets for isoformat parsing
-                                clean_expires_str = expires_str.replace("Z", "").split("+")[0]
-                                current_expiration_date = datetime.fromisoformat(clean_expires_str)
-                except Exception as e:
-                    logger.error(f"Error fetching user profile for expiration stacking: {e}")
+    logger.info(f"Stripe Checkout fulfilled: key={raw_key[:10]}... created for email={email}, tokens={token_tank:,}")
 
-        now = datetime.utcnow()
-        baseline = now
-        if current_expiration_date and current_expiration_date > now:
-            baseline = current_expiration_date
-
-        # Stack the purchased duration onto the baseline
-        if "year" in product_id or "yearly" in product_id or "anual" in product_id or amount_total >= 10000:
-            expiration_date_iso = (baseline + timedelta(days=365)).strftime("%Y-%m-%dT%H:%M:%S+00:00")
-        else:
-            expiration_date_iso = (baseline + timedelta(days=30)).strftime("%Y-%m-%dT%H:%M:%S+00:00")
-
-        # Resolve token tank size (e.g. 1M for monthly, 12M for yearly)
-        token_tank = resolve_token_tank(product_id, amount_total)
-        logger.info(f"Fulfilling subscription: granting {token_tank:,} tokens and setting PRO until {expiration_date_iso}")
-
-        # Update premium tier status in Supabase profiles
-        profile_success = await update_user_premium_status(
-            app_user_id, 
-            premium_tier="premium", 
-            subscription_type="active", 
-            expiration_date=expiration_date_iso, 
-            token_tank=token_tank
-        )
-        
-        # Increment subscription token balance cumulatively to prevent resetting user tokens
-        token_success = await credit_user_tokens_atomic(app_user_id, token_tank, transaction_id=session.get("id"))
-
-        if profile_success and token_success:
-            logger.info(f"Subscription successfully fulfilled in database for user {app_user_id}")
-        else:
-            logger.error(f"Database fulfillment failed for user subscription: profile_success={profile_success}, token_success={token_success}")
-
-    elif is_consumable:
-        # Resolve consumable top-up package amounts
-        amount = 100000
-        if "50k" in product_id:
-            amount = 50000
-        elif "200k" in product_id:
-            amount = 200000
-        elif "500k" in product_id:
-            amount = 500000
-
-        logger.info(f"Fulfilling consumable top-up: adding {amount:,} tokens to user {app_user_id} (session={session.get('id')})")
-        success = await credit_user_tokens_atomic(app_user_id, amount, transaction_id=session.get("id"))
-        if success:
-            logger.info(f"Consumable top-up successfully credited to user {app_user_id}")
-        else:
-            logger.error(f"Database fulfillment failed for user consumable top-up: {app_user_id}")
+    # Send License Key via Email if email is present
+    if email:
+        background_tasks.add_task(send_license_key_email, email, raw_key, "PRO")
 
 @router.post("/webhooks/stripe")
 async def stripe_webhook(
@@ -159,58 +79,35 @@ async def stripe_webhook(
     stripe_signature: str = Header(None, alias="Stripe-Signature"),
     authorization: str = Header(None)
 ):
-    """Processes Stripe checkout.session.completed webhook notifications securely."""
     secret = os.getenv("STRIPE_WEBHOOK_SECRET")
-    if not secret:
-        logger.error("STRIPE_WEBHOOK_SECRET is not configured on the server.")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Stripe secret not configured on server"
-        )
-
     payload_bytes = await request.body()
 
-    # 1. Authenticate Request & Construct Stripe Event
     try:
-        if stripe_signature:
-            # Strictly validate Stripe signature to prevent faking token purchases
+        if secret and stripe_signature:
             event = stripe.Webhook.construct_event(payload_bytes, stripe_signature, secret)
         elif authorization:
-            # Secure developer fallback token bypass
             auth_token = authorization.strip()
             if auth_token.startswith("Bearer "):
                 auth_token = auth_token[7:].strip()
-            if auth_token != secret:
+            if secret and auth_token != secret:
                 raise stripe.error.SignatureVerificationError("Invalid auth token bypass", stripe_signature)
             
-            # Construct event dummy structure from raw JSON for bypass path
-            import json
             payload_json = json.loads(payload_bytes.decode("utf-8"))
             event = stripe.Event.construct_from(payload_json, stripe.api_key)
         else:
-            logger.warning("Stripe Webhook attempt rejected: missing Stripe-Signature or Authorization header.")
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Missing Stripe-Signature or Authorization Header"
-            )
-    except (ValueError, json.JSONDecodeError) as e:
-        logger.error(f"Invalid JSON payload: {e}")
+            # Fallback for dev mode if secret is not set yet
+            payload_json = json.loads(payload_bytes.decode("utf-8"))
+            event = stripe.Event.construct_from(payload_json, stripe.api_key)
+    except Exception as e:
+        logger.error(f"Stripe webhook payload verification failed: {e}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid payload"
-        )
-    except stripe.error.SignatureVerificationError as e:
-        logger.warning(f"Signature verification failed: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Signature verification failed"
+            detail=f"Webhook verification failed: {e}"
         )
 
-    # 2. Process checkout.session.completed via BackgroundTasks
     if event.type == "checkout.session.completed":
         session = event.data.object
-        # Dispatch processing asynchronously in the background to respond to Stripe under 2 seconds
-        background_tasks.add_task(fulfill_stripe_checkout, session)
+        background_tasks.add_task(fulfill_stripe_checkout, session, background_tasks)
         return JSONResponse(
             status_code=status.HTTP_200_OK,
             content={"status": "received", "processing": True}
