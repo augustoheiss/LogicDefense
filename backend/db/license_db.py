@@ -14,8 +14,8 @@ from datetime import datetime, timezone
 
 logger = logging.getLogger(__name__)
 
-TURSO_DATABASE_URL = os.getenv("TURSO_DATABASE_URL")
-TURSO_AUTH_TOKEN = os.getenv("TURSO_AUTH_TOKEN")
+TURSO_DATABASE_URL = (os.getenv("TURSO_DATABASE_URL") or "").strip(' "\' \t\r\n')
+TURSO_AUTH_TOKEN = (os.getenv("TURSO_AUTH_TOKEN") or "").strip(' "\' \t\r\n')
 DB_FILE = os.getenv("LICENSE_DB_PATH", "license_storage.db")
 
 def is_turso_configured() -> bool:
@@ -82,7 +82,13 @@ class TursoHTTPCursor:
                 self._rowcount = 0
                 return self
 
-            exec_res = results[0].get("response", {}).get("result", {})
+            first_res = results[0]
+            if first_res.get("type") == "error":
+                err_msg = first_res.get("error", {}).get("message", "Unknown Turso error")
+                logger.error(f"Turso SQL error: {err_msg}")
+                raise RuntimeError(f"Turso SQL error: {err_msg}")
+
+            exec_res = first_res.get("response", {}).get("result", {})
             cols = [c.get("name") for c in exec_res.get("cols", [])]
             raw_rows = exec_res.get("rows", [])
             self._rowcount = exec_res.get("affected_row_count", 0)
@@ -147,63 +153,66 @@ def get_connection():
 
 def init_db():
     """Initializes the database schema if tables do not exist."""
-    with get_connection() as conn:
-        cursor = conn.cursor()
-        
-        # License Keys table
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS license_keys (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                license_key TEXT UNIQUE NOT NULL,
-                key_hash TEXT UNIQUE NOT NULL,
-                email TEXT,
-                tier TEXT NOT NULL DEFAULT 'pro',
-                token_balance INTEGER NOT NULL DEFAULT 0,
-                token_cap INTEGER NOT NULL DEFAULT 1000000,
-                expires_at TEXT,
-                stripe_customer_id TEXT,
-                created_at TEXT NOT NULL,
-                updated_at TEXT NOT NULL
-            );
-        """)
-        
-        # Token Usage Transactions
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS token_transactions (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                license_key_hash TEXT NOT NULL,
-                tokens_used INTEGER NOT NULL,
-                endpoint TEXT NOT NULL,
-                created_at TEXT NOT NULL,
-                FOREIGN KEY (license_key_hash) REFERENCES license_keys(key_hash)
-            );
-        """)
-        
-        # Processed Webhooks (Idempotency)
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS processed_webhooks (
-                event_id TEXT PRIMARY KEY,
-                processed_at TEXT NOT NULL
-            );
-        """)
+    try:
+        with get_connection() as conn:
+            cursor = conn.cursor()
+            
+            # License Keys table
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS license_keys (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    license_key TEXT UNIQUE NOT NULL,
+                    key_hash TEXT UNIQUE NOT NULL,
+                    email TEXT,
+                    tier TEXT NOT NULL DEFAULT 'pro',
+                    token_balance INTEGER NOT NULL DEFAULT 0,
+                    token_cap INTEGER NOT NULL DEFAULT 1000000,
+                    expires_at TEXT,
+                    stripe_customer_id TEXT,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
+            """)
+            
+            # Token Usage Transactions
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS token_transactions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    license_key_hash TEXT NOT NULL,
+                    tokens_used INTEGER NOT NULL,
+                    endpoint TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    FOREIGN KEY (license_key_hash) REFERENCES license_keys(key_hash)
+                );
+            """)
+            
+            # Processed Webhooks (Idempotency)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS processed_webhooks (
+                    event_id TEXT PRIMARY KEY,
+                    processed_at TEXT NOT NULL
+                );
+            """)
 
-        # Spreadsheet API Keys
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS spreadsheet_api_keys (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                table_id TEXT UNIQUE NOT NULL,
-                key_hash TEXT UNIQUE NOT NULL,
-                key_hint TEXT NOT NULL,
-                license_key_hash TEXT NOT NULL,
-                permissions TEXT DEFAULT 'read:write',
-                created_at TEXT NOT NULL,
-                last_used_at TEXT,
-                FOREIGN KEY (license_key_hash) REFERENCES license_keys(key_hash)
-            );
-        """)
-        
-        conn.commit()
-        logger.info("License Database initialized successfully.")
+            # Spreadsheet API Keys
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS spreadsheet_api_keys (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    table_id TEXT UNIQUE NOT NULL,
+                    key_hash TEXT UNIQUE NOT NULL,
+                    key_hint TEXT NOT NULL,
+                    license_key_hash TEXT NOT NULL,
+                    permissions TEXT DEFAULT 'read:write',
+                    created_at TEXT NOT NULL,
+                    last_used_at TEXT,
+                    FOREIGN KEY (license_key_hash) REFERENCES license_keys(key_hash)
+                );
+            """)
+            
+            conn.commit()
+            logger.info("License Database initialized successfully.")
+    except Exception as e:
+        logger.error(f"Failed to initialize License Database: {e}")
 
 # Initialize on module load
 init_db()
