@@ -134,13 +134,12 @@ export default function SettingsScreen() {
     await auth.refreshProfile();
   }, [auth.refreshProfile]);
 
-  const incrementarTokensNoBancoLocal = useCallback(async (_amount: number) => {
+  const incrementarTokensNoBancoLocal = useCallback(async (_amount: number, _transactionId?: string) => {
     await auth.refreshProfile();
   }, [auth.refreshProfile]);
 
   const handlePurchase = async (pkg: any) => {
     if (isProcessing) return;
-    // Haptic feedback for purchase intent
     impact(ImpactFeedbackStyle.Medium);
 
     try {
@@ -149,8 +148,7 @@ export default function SettingsScreen() {
       if (isConsumable) {
         const transactionId = await purchasePackage(pkg);
         if (transactionId) {
-          // Explicit token amount mapping by identifier
-          let amount = 100_000; // default for 'moeda_tokens_100k'
+          let amount = 100_000;
           if (pkg.identifier === 'moeda_tokens_100k') {
             amount = 100_000;
           } else if (pkg.identifier.includes('50k')) {
@@ -169,7 +167,6 @@ export default function SettingsScreen() {
           }
         }
       } else {
-        // Subscription purchase
         const success = await purchasePackage(pkg);
         if (success) {
           if (Platform.OS === 'web') {
@@ -180,7 +177,6 @@ export default function SettingsScreen() {
         }
       }
     } catch (err: any) {
-      // Error is already handled in purchasePackage (user cancellation is silenced)
       if (err && !err.userCancelled) {
         console.error("Purchase Failed:", err);
         const msg = err.message || String(err);
@@ -196,45 +192,6 @@ export default function SettingsScreen() {
   useEffect(() => {
     fetchTokenBalance();
   }, [fetchTokenBalance]);
-
-  // ── Supabase Realtime Listener to reactively update Token Balance state ────
-  useEffect(() => {
-    if (auth.mode !== 'authenticated' || !auth.user) return;
-
-    const channelName = `settings-token-sync-${auth.user.id}`;
-    const channel = supabase
-      .channel(channelName)
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'user_settings',
-          filter: `id=eq.${auth.user.id}`,
-        },
-        (payload) => {
-          console.log('Realtime settings update in UI:', payload);
-          if (payload.new && 'token_balance' in payload.new) {
-            setTokenBalance(Number(payload.new.token_balance));
-          }
-        }
-      )
-      .subscribe();
-
-    const handleSettingsUpdated = () => {
-      fetchTokenBalance();
-    };
-    if (Platform.OS === 'web') {
-      window.addEventListener('supabase_settings_updated', handleSettingsUpdated);
-    }
-
-    return () => {
-      supabase.removeChannel(channel);
-      if (Platform.OS === 'web') {
-        window.removeEventListener('supabase_settings_updated', handleSettingsUpdated);
-      }
-    };
-  }, [auth.mode, auth.user?.id, fetchTokenBalance]);
 
   const handleLocalMigration = async () => {
     if (auth.mode !== 'authenticated' || !auth.user) {
