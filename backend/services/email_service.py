@@ -10,7 +10,7 @@ import httpx
 logger = logging.getLogger(__name__)
 
 RESEND_API_KEY = os.getenv("RESEND_API_KEY")
-FROM_EMAIL = os.getenv("FROM_EMAIL", "Assistente Moeda <noreply@coinfactory.internal>")
+FROM_EMAIL = os.getenv("FROM_EMAIL", "Assistente Moeda <onboarding@resend.dev>")
 
 async def send_license_key_email(to_email: str, license_key: str, tier: str = "PRO") -> bool:
     """Sends license key to buyer email."""

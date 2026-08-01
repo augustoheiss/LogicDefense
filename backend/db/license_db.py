@@ -1,7 +1,7 @@
 """
 Database Access Layer for License Keys and Token Quotas — Assistente Moeda
-Uses SQLite (standard library) with support for persistent local file or Turso URL fallback.
-Zero Supabase dependency.
+Uses local SQLite file in dev mode, and pure HTTP (via httpx) for Turso in production.
+Zero C/Rust compilation requirements — 100% compatible with all Python versions and platforms.
 """
 
 import os
@@ -9,6 +9,7 @@ import sqlite3
 import hashlib
 import secrets
 import logging
+import httpx
 from datetime import datetime, timezone
 
 logger = logging.getLogger(__name__)
@@ -17,25 +18,128 @@ TURSO_DATABASE_URL = os.getenv("TURSO_DATABASE_URL")
 TURSO_AUTH_TOKEN = os.getenv("TURSO_AUTH_TOKEN")
 DB_FILE = os.getenv("LICENSE_DB_PATH", "license_storage.db")
 
-import importlib
+def is_turso_configured() -> bool:
+    return bool(TURSO_DATABASE_URL and TURSO_AUTH_TOKEN)
+
+def get_turso_http_url() -> str:
+    url = TURSO_DATABASE_URL.strip()
+    if url.startswith("libsql://"):
+        url = url.replace("libsql://", "https://")
+    elif not url.startswith("http"):
+        url = f"https://{url}"
+    return url.rstrip("/") + "/v2/pipeline"
+
+class TursoHTTPCursor:
+    """Wrapper that mimics sqlite3 cursor interface using Turso's v2 HTTP pipeline API."""
+    
+    def __init__(self, http_url: str, auth_token: str):
+        self.http_url = http_url
+        self.auth_token = auth_token
+        self._rows: list[dict] = []
+        self._rowcount: int = 0
+
+    def execute(self, sql: str, params: tuple | list = ()):
+        # Convert positional params to Turso HTTP JSON format
+        args = []
+        for p in params:
+            if p is None:
+                args.append({"type": "null"})
+            elif isinstance(p, int):
+                args.append({"type": "integer", "value": str(p)})
+            elif isinstance(p, float):
+                args.append({"type": "float", "value": p})
+            else:
+                args.append({"type": "text", "value": str(p)})
+
+        payload = {
+            "requests": [
+                {
+                    "type": "execute",
+                    "stmt": {
+                        "sql": sql,
+                        "args": args
+                    }
+                },
+                {"type": "close"}
+            ]
+        }
+
+        headers = {
+            "Authorization": f"Bearer {self.auth_token}",
+            "Content-Type": "application/json"
+        }
+
+        with httpx.Client(timeout=10.0) as client:
+            res = client.post(self.http_url, headers=headers, json=payload)
+            if res.status_code not in (200, 201):
+                logger.error(f"Turso HTTP query failed ({res.status_code}): {res.text}")
+                raise RuntimeError(f"Turso HTTP query failed: {res.text}")
+            
+            data = res.json()
+            results = data.get("results", [])
+            if not results:
+                self._rows = []
+                self._rowcount = 0
+                return self
+
+            exec_res = results[0].get("response", {}).get("result", {})
+            cols = [c.get("name") for c in exec_res.get("cols", [])]
+            raw_rows = exec_res.get("rows", [])
+            self._rowcount = exec_res.get("affected_row_count", 0)
+
+            # Map Turso HTTP cell values to python dicts
+            mapped_rows = []
+            for r in raw_rows:
+                row_dict = {}
+                for idx, col_name in enumerate(cols):
+                    cell = r[idx]
+                    val = cell.get("value")
+                    cell_type = cell.get("type")
+                    if cell_type == "null" or val is None:
+                        row_dict[col_name] = None
+                    elif cell_type == "integer":
+                        row_dict[col_name] = int(val)
+                    elif cell_type == "float":
+                        row_dict[col_name] = float(val)
+                    else:
+                        row_dict[col_name] = str(val)
+                mapped_rows.append(row_dict)
+
+            self._rows = mapped_rows
+            return self
+
+    def fetchone(self) -> dict | None:
+        return self._rows[0] if self._rows else None
+
+    def fetchall(self) -> list[dict]:
+        return self._rows
+
+    @property
+    def rowcount(self) -> int:
+        return self._rowcount
+
+class TursoHTTPConnection:
+    """Wrapper that mimics sqlite3 connection interface."""
+    def __init__(self, http_url: str, auth_token: str):
+        self.http_url = http_url
+        self.auth_token = auth_token
+
+    def cursor(self):
+        return TursoHTTPCursor(self.http_url, self.auth_token)
+
+    def commit(self):
+        pass # Turso HTTP executes statement immediately
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        pass
 
 def get_connection():
-    """
-    Returns a connection object.
-    If TURSO_DATABASE_URL and TURSO_AUTH_TOKEN are set, connects to Turso (libsql).
-    Otherwise, defaults to local SQLite file.
-    """
-    if TURSO_DATABASE_URL and TURSO_AUTH_TOKEN:
-        url = TURSO_DATABASE_URL.replace("libsql://", "https://")
-        try:
-            libsql = importlib.import_module("libsql_experimental")
-            return libsql.connect(database=url, auth_token=TURSO_AUTH_TOKEN)
-        except ImportError:
-            try:
-                libsql = importlib.import_module("libsql")
-                return libsql.connect(database=url, auth_token=TURSO_AUTH_TOKEN)
-            except ImportError:
-                logger.warning("TURSO_DATABASE_URL configured but 'libsql-experimental' package not installed. Falling back to local SQLite.")
+    """Returns sqlite3 connection or Turso HTTP connection wrapper."""
+    if is_turso_configured():
+        return TursoHTTPConnection(get_turso_http_url(), TURSO_AUTH_TOKEN)
     
     conn = sqlite3.connect(DB_FILE, check_same_thread=False)
     conn.row_factory = sqlite3.Row
@@ -109,9 +213,7 @@ def hash_key(key: str) -> str:
     return hashlib.sha256(key.strip().encode("utf-8")).hexdigest()
 
 def create_license_key(email: str | None, tier: str = "pro", initial_tokens: int = 1_000_000, expires_at: str | None = None, stripe_customer_id: str | None = None) -> tuple[str, str]:
-    """
-    Generates a new secure license key, saves it to DB, and returns (raw_key, key_hash).
-    """
+    """Generates a new secure license key, saves to DB, and returns (raw_key, key_hash)."""
     raw_random = secrets.token_hex(16)
     raw_key = f"am_{tier}_{raw_random}"
     key_h = hash_key(raw_key)
@@ -223,16 +325,22 @@ def create_spreadsheet_api_key(table_id: str, license_key_hash: str, permissions
     
     with get_connection() as conn:
         cursor = conn.cursor()
-        cursor.execute("""
-            INSERT INTO spreadsheet_api_keys (table_id, key_hash, key_hint, license_key_hash, permissions, created_at)
-            VALUES (?, ?, ?, ?, ?, ?)
-            ON CONFLICT(table_id) DO UPDATE SET
-                key_hash = excluded.key_hash,
-                key_hint = excluded.key_hint,
-                license_key_hash = excluded.license_key_hash,
-                permissions = excluded.permissions,
-                created_at = excluded.created_at
-        """, (table_id, key_h, hint, license_key_hash, permissions, now))
+        if is_turso_configured():
+            cursor.execute("""
+                INSERT INTO spreadsheet_api_keys (table_id, key_hash, key_hint, license_key_hash, permissions, created_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (table_id, key_h, hint, license_key_hash, permissions, now))
+        else:
+            cursor.execute("""
+                INSERT INTO spreadsheet_api_keys (table_id, key_hash, key_hint, license_key_hash, permissions, created_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT(table_id) DO UPDATE SET
+                    key_hash = excluded.key_hash,
+                    key_hint = excluded.key_hint,
+                    license_key_hash = excluded.license_key_hash,
+                    permissions = excluded.permissions,
+                    created_at = excluded.created_at
+            """, (table_id, key_h, hint, license_key_hash, permissions, now))
         conn.commit()
         
     return api_key, hint
