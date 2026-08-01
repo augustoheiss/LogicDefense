@@ -1,32 +1,15 @@
 {
-  "cleanUrls": true,
   "rewrites": [
     {
-      "source": "/laboratorio/assistente-moeda",
+      "source": "/laboratorio/assistente-moeda/:path*",
       "destination": "/laboratorio/assistente-moeda/index.html"
     },
     {
-      "source": "/laboratorio/assistente-moeda/",
-      "destination": "/laboratorio/assistente-moeda/index.html"
-    },
-    {
-      "source": "/laboratorio/assistente-moeda/:path((?!_expo|assets|static|.*\\..*$).*)",
-      "destination": "/laboratorio/assistente-moeda/index.html"
-    },
-    {
-      "source": "/laboratorio/sekundo",
+      "source": "/laboratorio/sekundo/:path*",
       "destination": "/laboratorio/sekundo/index.html"
     },
     {
-      "source": "/laboratorio/sekundo/",
-      "destination": "/laboratorio/sekundo/index.html"
-    },
-    {
-      "source": "/laboratorio/sekundo/:path((?!_expo|assets|static|.*\\..*$).*)",
-      "destination": "/laboratorio/sekundo/index.html"
-    },
-    {
-      "source": "/((?!laboratorio/assistente-moeda|laboratorio/sekundo).*)",
+      "source": "/:path*",
       "destination": "/index.html"
     }
   ]
