@@ -13,6 +13,7 @@ import { SobrePage } from './pages/SobrePage'
 import { CVMaker } from './pages/CVMaker'
 import { OcorrenciasPage } from './pages/OcorrenciasPage'
 import { ApiPortPage } from './pages/ApiPortPage'
+import { CoinAssistantPage } from './pages/CoinAssistantPage'
 import PrivacyPolicy from './pages/PrivacyPolicy'
 import TermsOfUse from './pages/TermsOfUse'
 import './styles/game.css'
@@ -30,6 +31,7 @@ export default function App() {
           <Route path="/jogos/logic-invaders"     element={<LogicInvadersLanding />} />
           <Route path="/jogos/logic-friction"    element={<LogicFrictionPage />} />
           <Route path="/laboratorio"               element={<LabPage />} />
+          <Route path="/laboratorio/assistente-moeda" element={<CoinAssistantPage />} />
           <Route path="/laboratorio/cv-maker"      element={<CVMaker />} />
           <Route path="/laboratorio/ocorrencias" element={<OcorrenciasPage />} />
           <Route path="/laboratorio/api-port" element={<ApiPortPage />} />
