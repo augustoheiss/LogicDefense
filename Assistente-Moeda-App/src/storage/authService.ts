@@ -16,6 +16,7 @@ export interface UserProfile {
   licenseKey: string | null;
   premiumTier: PremiumTier;
   tokenBalance: number;
+  tokenCap?: number;
   subscriptionType?: 'monthly' | 'yearly' | null;
   subscriptionExpiresAt?: string | null;
 }
@@ -36,7 +37,7 @@ export async function clearStoredLicenseKey(): Promise<void> {
   await AsyncStorage.removeItem(LICENSE_STORAGE_KEY);
 }
 
-export async function validateMobileLicenseKey(key: string, apiBaseUrl: string): Promise<{ valid: boolean; tier: string; balance: number; message: string }> {
+export async function validateMobileLicenseKey(key: string, apiBaseUrl: string): Promise<{ valid: boolean; tier: string; balance: number; cap: number; message: string }> {
   try {
     const response = await fetch(`${apiBaseUrl}/api/license/validate`, {
       method: 'POST',
@@ -50,6 +51,7 @@ export async function validateMobileLicenseKey(key: string, apiBaseUrl: string):
         valid: true,
         tier: data.tier,
         balance: data.token_balance,
+        cap: data.token_cap || 1000000,
         message: 'Chave de Licença válida.'
       };
     } else {
@@ -57,6 +59,7 @@ export async function validateMobileLicenseKey(key: string, apiBaseUrl: string):
         valid: false,
         tier: 'free',
         balance: 0,
+        cap: 1000000,
         message: data.message || 'Chave inválida.'
       };
     }

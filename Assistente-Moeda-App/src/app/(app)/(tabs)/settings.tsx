@@ -62,8 +62,8 @@ export default function SettingsScreen() {
   const isVisitor = !auth.user || auth.mode === 'guest';
 
   const { isPro, subscriptionType, packages, consumables, purchasePackage, restorePurchases, expirationDate, isProcessing } = useSubscription();
-  const maxTokens = 1_000_000;
-  const tokenBalance = auth.isPremium ? (auth.profile?.tokenBalance ?? 1_000_000) : 0;
+  const maxTokens = auth.profile?.tokenCap ?? (auth.isPremium ? 1_000_000 : 1_000_000);
+  const tokenBalance = auth.isPremium ? (auth.profile?.tokenBalance ?? 0) : 0;
 
   const [showStoreModal, setShowStoreModal] = useState(false);
   const [showDebugger, setShowDebugger] = useState(false);
