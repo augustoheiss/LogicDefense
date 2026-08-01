@@ -109,6 +109,8 @@ export function buildFinancialContext(
 
 // ── API Call ──────────────────────────────────────────────────────────────────
 
+import { getStoredLicenseKey } from '../storage/authService';
+
 export async function sendChatMessage(
   message: string,
   rows: TableRow[],
@@ -121,14 +123,13 @@ export async function sendChatMessage(
   userSettings?: any,
 ): Promise<ChatResponse> {
   try {
-    const sessionRes = await supabase.auth.getSession();
-    const token = sessionRes.data.session?.access_token;
+    const licenseKey = await getStoredLicenseKey();
     
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
     };
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
+    if (licenseKey) {
+      headers['X-License-Key'] = licenseKey;
     }
 
     const response = await fetch(`${API_URL}/api/coin/ai-analyst`, {
