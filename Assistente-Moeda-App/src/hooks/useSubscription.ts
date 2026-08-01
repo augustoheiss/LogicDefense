@@ -245,15 +245,13 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
 
   useEffect(() => {
     async function init() {
+      if (Platform.OS === 'web') {
+        setIsLoading(false);
+        return;
+      }
       try {
         Purchases.setLogLevel(Purchases.LOG_LEVEL.DEBUG);
-        if (Platform.OS === 'android') {
-          Purchases.configure({ apiKey: GOOGLE_API_KEY });
-        } else if (Platform.OS === 'ios') {
-          Purchases.configure({ apiKey: GOOGLE_API_KEY });
-        } else {
-          Purchases.configure({ apiKey: GOOGLE_API_KEY });
-        }
+        Purchases.configure({ apiKey: GOOGLE_API_KEY });
 
         // Register Listener
         const listener = (info: any) => {
