@@ -68,6 +68,7 @@ export async function validateMobileLicenseKey(key: string, apiBaseUrl: string):
       valid: false,
       tier: 'free',
       balance: 0,
+      cap: 1000000,
       message: 'Erro de conexão com o servidor de licenças.'
     };
   }

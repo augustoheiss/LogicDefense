@@ -131,64 +131,12 @@ export default function SettingsScreen() {
   };
 
   const fetchTokenBalance = useCallback(async () => {
-    if (auth.mode === 'authenticated' && auth.user) {
-      if (auth.user.email?.toLowerCase() === 'augustotester@gmail.com') {
-        setTokenBalance(12000000);
-        return;
-      }
-      try {
-        const { data, error } = await supabase
-          .from('user_settings')
-          .select('token_balance')
-          .eq('id', auth.user.id)
-          .maybeSingle();
+    await auth.refreshProfile();
+  }, [auth.refreshProfile]);
 
-        if (error) throw error;
-        if (data && data.token_balance !== null && data.token_balance !== undefined) {
-          setTokenBalance(Number(data.token_balance));
-        } else {
-          setTokenBalance(maxTokens);
-        }
-      } catch (err) {
-        console.error('Failed to fetch token balance:', err);
-      }
-    } else {
-      setTokenBalance(maxTokens);
-    }
-  }, [auth.mode, auth.user, maxTokens]);
-
-  const incrementarTokensNoBancoLocal = useCallback(async (amount: number, transactionId?: string) => {
-    if (auth.mode === 'authenticated' && auth.user) {
-      try {
-        // Execute atomic increment in the database via RPC
-        const { error: rpcErr } = await supabase.rpc('increment_user_tokens', {
-          target_user_id: auth.user.id,
-          token_increment_amount: amount,
-          transaction_id: transactionId || null,
-        });
-
-        if (rpcErr) throw rpcErr;
-
-        // Fetch the newly updated balance to synchronize UI accurately
-        const { data, error: fetchErr } = await supabase
-          .from('user_settings')
-          .select('token_balance')
-          .eq('id', auth.user.id)
-          .maybeSingle();
-
-        if (fetchErr) throw fetchErr;
-
-        if (data && data.token_balance !== null && data.token_balance !== undefined) {
-          setTokenBalance(Number(data.token_balance));
-        }
-        await auth.refreshProfile();
-      } catch (err) {
-        console.error('Failed to credit tokens cumulatively via RPC:', err);
-      }
-    } else {
-      setTokenBalance((prev) => prev + amount);
-    }
-  }, [auth.mode, auth.user, auth.refreshProfile]);
+  const incrementarTokensNoBancoLocal = useCallback(async (_amount: number) => {
+    await auth.refreshProfile();
+  }, [auth.refreshProfile]);
 
   const handlePurchase = async (pkg: any) => {
     if (isProcessing) return;
