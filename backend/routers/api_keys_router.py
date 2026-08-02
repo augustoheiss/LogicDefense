@@ -35,29 +35,18 @@ async def generate_api_key(
     x_license_key: str | None = Header(None, alias="X-License-Key")
 ):
     """
-    Generates a spreadsheet API key tied to a valid PRO license key.
+    Generates a spreadsheet API key for external automation (100% free open-source feature).
     """
     raw_license = payload.license_key or x_license_key
-    if not raw_license:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Por favor, ative uma Chave de Licença PRO para gerar chaves de integração via API para IAs externas."
-        )
-
-    license_rec = get_license_by_raw_key(raw_license.strip())
-    if not license_rec:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Chave de Licença PRO inválida ou não encontrada."
-        )
+    license_key_hash = None
+    if raw_license:
+        license_rec = get_license_by_raw_key(raw_license.strip())
+        if license_rec:
+            license_key_hash = license_rec.get("key_hash")
+            
+    if not license_key_hash:
+        license_key_hash = hash_key("free_community_license")
         
-    if license_rec.get("token_balance", 0) <= 0 and license_rec.get("tier") != "godmode_owner":
-        raise HTTPException(
-            status_code=status.HTTP_402_PAYMENT_REQUIRED,
-            detail="Saldo de tokens insuficiente na sua licença PRO."
-        )
-        
-    license_key_hash = license_rec["key_hash"]
     table_id = payload.table_id.strip()
     
     try:
@@ -65,7 +54,7 @@ async def generate_api_key(
             table_id=table_id,
             license_key_hash=license_key_hash,
             permissions=payload.permissions,
-            raw_license=raw_license
+            raw_license=raw_license or "free_community_license"
         )
     except Exception as e:
         log.error(f"Failed to generate API key for table {table_id}: {e}", exc_info=True)

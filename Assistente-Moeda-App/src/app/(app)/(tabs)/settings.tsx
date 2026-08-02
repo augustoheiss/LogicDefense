@@ -631,7 +631,7 @@ export default function SettingsScreen() {
             </View>
             
             <Text style={styles.gaugeHelperText}>
-              Os tokens são consumidos conforme você envia mensagens e solicita análises da IA.
+              O aplicativo e o Módulo Preditivo são 100% gratuitos e open-source. A Chave PRO recarrega créditos exclusivamente para interagir com o Consultor de IA Gemini no nosso servidor. Você também pode integrar agentes externos de graça usando Chaves de API de Planilhas.
             </Text>
 
             {isPro && expirationDate && (

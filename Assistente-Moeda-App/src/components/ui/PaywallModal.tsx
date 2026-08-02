@@ -132,19 +132,19 @@ export function PaywallModal({ visible, onClose }: PaywallModalProps) {
                 </View>
 
                 {/* Title & Tagline */}
-                <Text style={styles.title}>Assistente Moeda Pro</Text>
+                <Text style={styles.title}>Créditos do Motor de IA Gemini</Text>
                 <Text style={styles.subtitle}>
-                  Suba de nível e tome decisões inteligentes com nossa inteligência artificial avançada.
+                  O aplicativo é 100% Gratuito & Open-Source para gestão local, relatórios, módulo preditivo e chaves de API. A Licença serve exclusivamente para recarregar o Motor de IA interno no servidor.
                 </Text>
 
                 {/* Benefits */}
                 <View style={styles.benefitsList}>
                   <View style={styles.benefitItem}>
-                    <Text style={styles.benefitIcon}>🔮</Text>
+                    <Text style={styles.benefitIcon}>🔓</Text>
                     <View style={styles.benefitTextContainer}>
-                      <Text style={styles.benefitTitle}>Previsões em 1 Clique</Text>
+                      <Text style={styles.benefitTitle}>100% Grátis & Open-Source</Text>
                       <Text style={styles.benefitDesc}>
-                        Simule cenários futuros e crie dados sintéticos baseados em seu histórico.
+                        Gestão de tabelas, Módulo Preditivo, Projeções, Auditoria e Import/Export CSV são 100% gratuitos.
                       </Text>
                     </View>
                   </View>
@@ -152,19 +152,19 @@ export function PaywallModal({ visible, onClose }: PaywallModalProps) {
                   <View style={styles.benefitItem}>
                     <Text style={styles.benefitIcon}>🤖</Text>
                     <View style={styles.benefitTextContainer}>
-                      <Text style={styles.benefitTitle}>Análise Financeira Avançada</Text>
+                      <Text style={styles.benefitTitle}>Consultor de IA Gemini (Servidor)</Text>
                       <Text style={styles.benefitDesc}>
-                        Pergunte qualquer coisa para a IA e obtenha insights instantâneos baseados nos seus dados.
+                        A Chave de Licença recarrega tokens para usar o nosso modelo Gemini interno com análise financeira em tempo real.
                       </Text>
                     </View>
                   </View>
 
                   <View style={styles.benefitItem}>
-                    <Text style={styles.benefitIcon}>📈</Text>
+                    <Text style={styles.benefitIcon}>🔌</Text>
                     <View style={styles.benefitTextContainer}>
-                      <Text style={styles.benefitTitle}>Estatísticas Inteligentes</Text>
+                      <Text style={styles.benefitTitle}>Agentes Externos & n8n Grátis</Text>
                       <Text style={styles.benefitDesc}>
-                         breakdowns completos com média, mediana, desvio padrão e tendências por categorias.
+                        Gere Chaves de API de Planilhas gratuitamente para integrar com Python, n8n ou seus próprios agentes de IA.
                       </Text>
                     </View>
                   </View>
