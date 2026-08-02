@@ -79,7 +79,7 @@ export default function PrivacyPolicy() {
             fontWeight: '600',
             marginTop: '12px',
           }}>
-            Última atualização: 2 de Julho de 2026
+            Última atualização: 2 de Agosto de 2026
           </p>
         </header>
 

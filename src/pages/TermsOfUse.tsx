@@ -10,7 +10,7 @@ export default function TermsOfUse() {
     { id: 'politica-reembolso', label: '4. Reembolsos' },
     { id: 'motor-ia-disclaimer', label: '5. Isenção de Responsabilidade (IA)' },
     { id: 'propriedade', label: '6. Propriedade Intelectual' },
-    { id: 'rescisao', label: '7. Rescisão de Conta' },
+    { id: 'rescisao', label: '7. Descontinuidade do Uso' },
     { id: 'alteracoes', label: '8. Alterações dos Termos' },
   ];
 
@@ -79,7 +79,7 @@ export default function TermsOfUse() {
             fontWeight: '600',
             marginTop: '12px',
           }}>
-            Última atualização: 2 de Julho de 2026
+            Última atualização: 2 de Agosto de 2026
           </p>
         </header>
 
@@ -143,7 +143,7 @@ export default function TermsOfUse() {
                 1. Aceite dos Termos
               </h2>
               <p style={{ marginBottom: '16px' }}>
-                Bem-vindo ao <strong>Assistente Moeda</strong>. Ao criar uma conta, adquirir uma assinatura ou utilizar de qualquer forma as funcionalidades de nosso aplicativo móvel e serviços associados, você declara ter lido, compreendido e aceitado integralmente estes <strong>Termos de Uso</strong> e a nossa <strong>Política de Privacidade</strong>.
+                Bem-vindo ao <strong>Assistente Moeda</strong>. Ao utilizar o aplicativo, adquirir uma licença de uso PRO ou utilizar de qualquer forma nossas ferramentas financeiras, você declara ter lido, compreendido e aceitado integralmente estes <strong>Termos de Uso</strong> e a nossa <strong>Política de Privacidade</strong>.
               </p>
               <p>
                 Estes Termos constituem um contrato vinculante entre você e a <strong>Heiss-Lab</strong>. Caso não concorde com qualquer disposição aqui estabelecida, solicitamos que não utilize o aplicativo ou seus serviços correlatos.
@@ -246,16 +246,16 @@ export default function TermsOfUse() {
               </p>
             </section>
 
-            {/* Rescisão de Conta */}
+            {/* Rescisão e Descontinuidade */}
             <section id="rescisao" style={{ marginBottom: '48px' }}>
               <h2 style={{ fontSize: '22px', fontWeight: '700', color: '#fff', marginBottom: '16px' }}>
-                7. Rescisão de Conta
+                7. Descontinuidade do Uso e Limpeza de Dados
               </h2>
               <p style={{ marginBottom: '16px' }}>
-                Você tem o direito de descontinuar a utilização do aplicativo a qualquer momento e solicitar a exclusão integral do seu perfil.
+                Como os dados financeiros residem unicamente no seu próprio dispositivo (LocalStorage / AsyncStorage local), você possui controle total e pode interromper o uso do aplicativo a qualquer momento.
               </p>
               <p>
-                Para deletar permanentemente seus dados do banco de dados na nuvem, você pode acionar a opção "Excluir Conta" dentro das Configurações do aplicativo móvel ou formalizar uma requisição de deleção enviando um email ao DPO/Encarregado.
+                Para remover permanentemente todos os seus lançamentos e planilhas, basta acionar a opção de limpar dados nas Configurações do próprio aplicativo ou desinstalar o app do seu aparelho, o que apagará instantaneamente todos os registros locais do seu dispositivo.
               </p>
             </section>
 
