@@ -14,29 +14,33 @@ from datetime import datetime, timezone
 
 logger = logging.getLogger(__name__)
 
-TURSO_DATABASE_URL = (os.getenv("TURSO_DATABASE_URL") or "").strip(' "\' \t\r\n')
-TURSO_AUTH_TOKEN = (os.getenv("TURSO_AUTH_TOKEN") or "").strip(' "\' \t\r\n')
-GODMODE_SECRET_KEY = (os.getenv("GODMODE_SECRET_KEY") or "").strip(' "\' \t\r\n')
-DB_FILE = os.getenv("LICENSE_DB_PATH", "license_storage.db")
+def get_godmode_secret() -> str:
+    return (os.getenv("GODMODE_SECRET_KEY") or "").strip(' "\' \t\r\n')
 
 def is_godmode_key(raw_key: str) -> bool:
     clean_k = raw_key.strip()
     if not clean_k:
         return False
-    if GODMODE_SECRET_KEY and clean_k == GODMODE_SECRET_KEY:
+    godmode_secret = get_godmode_secret()
+    if godmode_secret and clean_k == godmode_secret:
         return True
     return False
 
 def is_turso_configured() -> bool:
-    return bool(TURSO_DATABASE_URL and TURSO_AUTH_TOKEN)
+    db_url = (os.getenv("TURSO_DATABASE_URL") or "").strip(' "\' \t\r\n')
+    token = (os.getenv("TURSO_AUTH_TOKEN") or "").strip(' "\' \t\r\n')
+    return bool(db_url and token)
+
+def get_turso_token() -> str:
+    return (os.getenv("TURSO_AUTH_TOKEN") or "").strip(' "\' \t\r\n')
 
 def get_turso_http_url() -> str:
-    url = TURSO_DATABASE_URL.strip()
-    if url.startswith("libsql://"):
-        url = url.replace("libsql://", "https://")
-    elif not url.startswith("http"):
-        url = f"https://{url}"
-    return url.rstrip("/") + "/v2/pipeline"
+    db_url = (os.getenv("TURSO_DATABASE_URL") or "").strip(' "\' \t\r\n[').rstrip("/")
+    if db_url.startswith("libsql://"):
+        db_url = db_url.replace("libsql://", "https://")
+    elif not db_url.startswith("http"):
+        db_url = f"https://{db_url}"
+    return db_url.rstrip("/") + "/v2/pipeline"
 
 class TursoHTTPCursor:
     """Wrapper that mimics sqlite3 cursor interface using Turso's v2 HTTP pipeline API."""
@@ -154,9 +158,10 @@ class TursoHTTPConnection:
 def get_connection():
     """Returns sqlite3 connection or Turso HTTP connection wrapper."""
     if is_turso_configured():
-        return TursoHTTPConnection(get_turso_http_url(), TURSO_AUTH_TOKEN)
+        return TursoHTTPConnection(get_turso_http_url(), get_turso_token())
     
-    conn = sqlite3.connect(DB_FILE, check_same_thread=False)
+    db_file = os.getenv("LICENSE_DB_PATH", "license_storage.db")
+    conn = sqlite3.connect(db_file, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     return conn
 
@@ -309,7 +314,8 @@ def credit_license_tokens(key_hash: str, token_amount: int, expires_at: str | No
 
 def deduct_license_tokens(key_hash: str, amount: int, endpoint: str = "/api/coin/ai-analyst") -> bool:
     """Atomically deducts token amount from a license balance if sufficient tokens exist."""
-    if GODMODE_SECRET_KEY and key_hash == hash_key(GODMODE_SECRET_KEY):
+    godmode_secret = get_godmode_secret()
+    if godmode_secret and key_hash == hash_key(godmode_secret):
         return True
 
     now = datetime.now(timezone.utc).isoformat()
