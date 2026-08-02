@@ -1,30 +1,38 @@
 #!/usr/bin/env python3
 """
-Create Tester License Key Script — Assistente Moeda
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Create Tester License Key Script — Assistente Moeda Mobile
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Generates a 12M Annual License Key (or custom token/duration key)
 directly into Turso/SQLite database for mobile beta testers.
 
 Usage:
-  python scripts/create_tester_key.py tester@email.com
-  python scripts/create_tester_key.py tester@email.com --tokens 12000000 --days 365
+  python Assistente-Moeda-App/scripts/create_tester_key.py tester@email.com
+  python Assistente-Moeda-App/scripts/create_tester_key.py tester@email.com --tokens 12000000 --days 365
 """
 
 import sys
 import os
 import argparse
+from pathlib import Path
 from datetime import datetime, timezone, timedelta
 
-# Add backend directory to sys.path
-root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-backend_dir = os.path.join(root_dir, "backend")
-if backend_dir not in sys.path:
-    sys.path.insert(0, backend_dir)
+# Dynamically locate root backend directory (../../backend)
+script_dir = Path(__file__).resolve().parent
+app_dir = script_dir.parent
+root_dir = app_dir.parent
+backend_dir = root_dir / "backend"
+
+if str(backend_dir) not in sys.path:
+    sys.path.insert(0, str(backend_dir))
 
 from dotenv import load_dotenv
-load_dotenv(os.path.join(backend_dir, ".env"))
+load_dotenv(backend_dir / ".env")
 
-from db.license_db import create_license_key, get_license_by_raw_key
+try:
+    from db.license_db import create_license_key
+except ImportError:
+    sys.path.append(str(backend_dir))
+    from db.license_db import create_license_key
 
 def main():
     parser = argparse.ArgumentParser(description="Generate a Tester License Key")
