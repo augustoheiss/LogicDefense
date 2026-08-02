@@ -1,4 +1,13 @@
-import { describe, it, expect } from '@jest/globals';
+declare function describe(name: string, fn: () => void): void;
+declare function it(name: string, fn: () => void): void;
+declare function expect(actual: any): {
+  toBe(expected: any): void;
+  toEqual(expected: any): void;
+  toBeDefined(): void;
+  toBeTruthy(): void;
+  toBeFalsy(): void;
+};
+
 import { mergeRows, isBankRowAlreadyPresent, generateUUIDv4 } from '../utils/csvEngine';
 import type { TableRow } from '../core/types';
 
