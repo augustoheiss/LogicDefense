@@ -16,5 +16,8 @@ backend/test_database_isolation.py
 backend/*.db
 backend/*.db-journal
 *.db
+*.sqlite
+*.sqlite3
+license_storage.db
 # Generated sub-app builds (Vercel builds these automatically on deploy)
 public/laboratorio/
