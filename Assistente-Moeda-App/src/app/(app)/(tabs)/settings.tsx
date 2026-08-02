@@ -46,7 +46,7 @@ import { formatCurrencySmart } from '@/core/formatCurrency';
 import { validateMobileLicenseKey, getStoredLicenseKey } from '@/storage/authService';
 import type { TableGoals, CoinTable } from '@/core/types';
 
-const API_URL = process.env.EXPO_PUBLIC_AI_BACKEND_URL || process.env.EXPO_PUBLIC_API_URL || 'https://logicdefense-api.onrender.com';
+const API_URL = process.env.EXPO_PUBLIC_AI_BACKEND_URL || process.env.EXPO_PUBLIC_API_URL || 'https://ocorrencias-pdf-writer.onrender.com';
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
