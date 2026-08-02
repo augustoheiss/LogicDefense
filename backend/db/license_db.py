@@ -428,7 +428,7 @@ def mark_webhook_processed(event_id: str):
 
 # ── Spreadsheet API Keys ─────────────────────────────────────────────────────
 
-def create_spreadsheet_api_key(table_id: str, license_key_hash: str, permissions: str = "read:write") -> tuple[str, str]:
+def create_spreadsheet_api_key(table_id: str, license_key_hash: str, permissions: str = "read:write", raw_license: str | None = None) -> tuple[str, str]:
     """Generates a spreadsheet API key linked to a valid license key."""
     raw_token = secrets.token_hex(32)
     api_key = f"am_sheet_live_{raw_token}"
@@ -438,6 +438,12 @@ def create_spreadsheet_api_key(table_id: str, license_key_hash: str, permissions
     
     with get_connection() as conn:
         cursor = conn.cursor()
+        if raw_license and is_godmode_key(raw_license.strip()):
+            cursor.execute("""
+                INSERT OR IGNORE INTO license_keys (license_key, key_hash, email, tier, token_balance, token_cap, expires_at, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (raw_license.strip(), license_key_hash, "augustoheiss@heisslab.com.br", "godmode_owner", 999999999, 999999999, "2099-12-31T23:59:59Z", now, now))
+
         cursor.execute("""
             INSERT INTO spreadsheet_api_keys (table_id, key_hash, key_hint, license_key_hash, permissions, created_at)
             VALUES (?, ?, ?, ?, ?, ?)

@@ -64,7 +64,8 @@ async def generate_api_key(
         api_key, hint = create_spreadsheet_api_key(
             table_id=table_id,
             license_key_hash=license_key_hash,
-            permissions=payload.permissions
+            permissions=payload.permissions,
+            raw_license=raw_license
         )
     except Exception as e:
         log.error(f"Failed to generate API key for table {table_id}: {e}", exc_info=True)
