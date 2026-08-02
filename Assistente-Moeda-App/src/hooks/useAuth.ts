@@ -89,10 +89,31 @@ export function useAuth(): AuthState {
 
   const refreshProfile = useCallback(async () => {
     const key = await getStoredLicenseKey();
-    if (key && profile) {
-      setProfile(prev => prev ? { ...prev, licenseKey: key } : null);
-    }
-  }, [profile]);
+    setProfile(prev => {
+      if (!key) {
+        if (!prev || (prev.licenseKey === null && prev.premiumTier === 'free')) return prev;
+        return {
+          id: 'local_user',
+          displayName: 'Usuário Local',
+          email: null,
+          licenseKey: null,
+          premiumTier: 'free',
+          tokenBalance: 0
+        };
+      }
+      if (prev && prev.licenseKey === key && prev.premiumTier === 'premium') {
+        return prev;
+      }
+      return {
+        id: 'local_user',
+        displayName: 'Usuário Pro',
+        email: null,
+        licenseKey: key,
+        premiumTier: 'premium',
+        tokenBalance: 1000000
+      };
+    });
+  }, []);
 
   return {
     mode,

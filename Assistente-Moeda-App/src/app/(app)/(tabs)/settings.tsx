@@ -319,7 +319,7 @@ export default function SettingsScreen() {
 
   useEffect(() => {
     fetchTokenBalance();
-  }, [fetchTokenBalance]);
+  }, []);
 
   const handleLocalMigration = async () => {
     if (auth.mode !== 'authenticated' || !auth.user) {
