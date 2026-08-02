@@ -33,10 +33,10 @@ export function useSync(): SyncState {
   const [lastSyncAt, setLastSyncAt] = useState<Date | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const sync = useCallback(async (userId: string) => {
+  const sync = useCallback(async (userId?: string) => {
     setStatus('syncing');
     setError(null);
-    const result = await fullSync(userId);
+    const result = await fullSync();
     if (result.success) {
       setStatus('success');
       setLastSyncAt(new Date());
@@ -48,10 +48,10 @@ export function useSync(): SyncState {
     }
   }, []);
 
-  const push = useCallback(async (userId: string) => {
+  const push = useCallback(async (userId?: string) => {
     setStatus('syncing');
     setError(null);
-    const result = await pushToCloud(userId);
+    const result = await pushToCloud();
     if (result.success) {
       setStatus('success');
       setLastSyncAt(new Date());
@@ -62,10 +62,10 @@ export function useSync(): SyncState {
     }
   }, []);
 
-  const pull = useCallback(async (userId: string) => {
+  const pull = useCallback(async (userId?: string) => {
     setStatus('syncing');
     setError(null);
-    const result = await pullFromCloud(userId);
+    const result = await pullFromCloud();
     if (result.success) {
       setStatus('success');
       setLastSyncAt(new Date());

@@ -133,7 +133,7 @@ export function normalizeEntryType(input: string): TableRow['entryType'] {
 }
 
 export interface CSVParseOutput {
-  rows: Omit<TableRow, 'id'>[];
+  rows: (TableRow | Omit<TableRow, 'id'>)[];
   errors: string[];
   skippedCount: number;
   detectedSectors: string[];
@@ -161,7 +161,7 @@ function findHeaderIdx(headers: string[], aliases: string[]): number {
 export function parseCSVText(csvText: string): CSVParseOutput {
   const errors: string[] = [];
   let skippedCount = 0;
-  const rows: Omit<TableRow, 'id'>[] = [];
+  const rows: (TableRow | Omit<TableRow, 'id'>)[] = [];
 
   const cleaned = csvText.startsWith('\uFEFF') ? csvText.slice(1) : csvText;
   
@@ -394,6 +394,7 @@ export function parseCSVText(csvText: string): CSVParseOutput {
   const delimiter = detectDelimiter(transactionLines[0]);
   const headers = splitCSVLine(transactionLines[0], delimiter).map((h) => cleanCell(h).toLowerCase());
 
+  const idAliases = ['id', 'uuid', 'transaction_id', 'id_transacao', 'external_id'];
   const descriptionAliases = ['description', 'descricao', 'historico', 'memo', 'title'];
   const categoryAliases = ['category', 'categoria', 'type'];
   const tagsAliases = ['tags', 'sector_tags', 'etiquetas'];
@@ -404,6 +405,7 @@ export function parseCSVText(csvText: string): CSVParseOutput {
   const periodStartAliases = ['period_start', 'periodstart', 'inicio_periodo', 'period_inicio'];
   const periodEndAliases = ['period_end', 'periodend', 'fim_periodo', 'period_fim'];
 
+  const idIdx = findHeaderIdx(headers, idAliases);
   const dateIdx = findHeaderIdx(headers, dateAliases);
   const descriptionIdx = findHeaderIdx(headers, descriptionAliases);
   const amountIdx = findHeaderIdx(headers, amountAliases);
@@ -457,6 +459,14 @@ export function parseCSVText(csvText: string): CSVParseOutput {
     }
 
     try {
+      let rowId: string | undefined = undefined;
+      if (idIdx !== -1 && cols[idIdx] !== undefined && cols[idIdx] !== null) {
+        const cleanedId = cleanCell(cols[idIdx]);
+        if (cleanedId.length > 0) {
+          rowId = cleanedId;
+        }
+      }
+
       const rawDate = cols[dateIdx] || '';
       const normalizedDate = parseAndNormalizeDate(rawDate) || todayStr;
 
@@ -532,6 +542,7 @@ export function parseCSVText(csvText: string): CSVParseOutput {
       }
 
       rows.push({
+        ...(rowId ? { id: rowId } : {}),
         date: normalizedDate,
         value: parsedVal,
         description,
@@ -566,11 +577,12 @@ export function parseCSVText(csvText: string): CSVParseOutput {
 }
 
 export function exportRowsToCSV(rows: TableRow[]): string {
-  const headers = ['date', 'value', 'description', 'entryType', 'category', 'tags', 'metadata_json'];
+  const headers = ['id', 'date', 'value', 'description', 'entryType', 'category', 'tags', 'metadata_json'];
   const lines = [headers.join(',')];
 
   rows.forEach((row) => {
     const cols = [
+      row.id || '',
       row.date || '',
       row.value.toFixed(2),
       `"${(row.description || '').replace(/"/g, '""')}"`,

@@ -982,9 +982,10 @@ export function buildCSV(
     }
 
     meta.push('## ROWS ##');
-    const header = 'date,value,description,entryType,monthlyValue,monthCount,period_start,period_end,category,tags,metadata_json';
+    const header = 'id,date,value,description,entryType,monthlyValue,monthCount,period_start,period_end,category,tags,metadata_json';
     const lines = rows.map((r) => {
       const cols = [
+        r.id || '',
         r.date,
         r.value,
         `"${(r.description || '').replace(/"/g, '""')}"`,
@@ -1004,9 +1005,10 @@ export function buildCSV(
   }
 
   // Fallback to standard semicolon-delimited CSV for plain rows export
-  const header = 'Data;Tipo;Valor;Descrição;Período Início;Período Fim;Valor Mensal;Meses;Gerado Por;Categoria;Tags;Metadados';
+  const header = 'ID;Data;Tipo;Valor;Descrição;Período Início;Período Fim;Valor Mensal;Meses;Gerado Por;Categoria;Tags;Metadados';
   const lines = rows.map((r) => {
     const cols = [
+      r.id || '',
       r.date,
       r.entryType || 'revenue',
       r.value.toString().replace('.', ','),

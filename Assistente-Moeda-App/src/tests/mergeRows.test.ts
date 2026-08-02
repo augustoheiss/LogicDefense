@@ -6,9 +6,11 @@ declare function expect(actual: any): {
   toBeDefined(): void;
   toBeTruthy(): void;
   toBeFalsy(): void;
+  toContain(expected: any): void;
+  toHaveProperty(prop: string, value?: any): void;
 };
 
-import { mergeRows, isBankRowAlreadyPresent, generateUUIDv4 } from '../utils/csvEngine';
+import { mergeRows, isBankRowAlreadyPresent, generateUUIDv4, exportRowsToCSV, parseCSVText } from '../utils/csvEngine';
 import type { TableRow } from '../core/types';
 
 describe('mergeRows Engine & Deduplication Tests', () => {
@@ -91,5 +93,33 @@ describe('mergeRows Engine & Deduplication Tests', () => {
 
     expect(isBankRowAlreadyPresent(existing, { date: '2026-08-01', value: 15.50, description: 'Almoço' })).toBe(true);
     expect(isBankRowAlreadyPresent(existing, { date: '2026-08-01', value: 20.00, description: 'Almoço' })).toBe(false);
+  });
+
+  it('Roundtrip Export/Import CSV com IDs: Preserva UUIDs e executa UPDATE no merge', () => {
+    const originalRows: TableRow[] = [
+      { id: 'uuid-101', date: '2026-08-01', value: 150.00, description: 'Serviço Prestado', entryType: 'revenue', category: 'Serviços' },
+      { id: 'uuid-102', date: '2026-08-02', value: 45.00, description: 'Material de Escritório', entryType: 'expense', category: 'Insumos' },
+    ];
+
+    // Exporta para CSV
+    const csvContent = exportRowsToCSV(originalRows);
+    expect(csvContent).toContain('id,date,value');
+    expect(csvContent).toContain('uuid-101');
+    expect(csvContent).toContain('uuid-102');
+
+    // Simula alteração do usuário no CSV exportado (UPDATE em uuid-101)
+    const modifiedCsv = csvContent.replace('150.00', '180.00');
+
+    // Importa o CSV modificado de volta
+    const parsed = parseCSVText(modifiedCsv);
+    expect(parsed.rows.length).toBe(2);
+    expect(parsed.rows[0]).toHaveProperty('id', 'uuid-101');
+
+    // Executa merge com o estado existente
+    const merged = mergeRows(originalRows, parsed.rows);
+    expect(merged.length).toBe(2);
+
+    const updatedRow = merged.find((r) => r.id === 'uuid-101');
+    expect(updatedRow?.value).toBe(180.00);
   });
 });
