@@ -26,7 +26,7 @@ export function CSVImporter({ onSuccess, onCancel }: CSVImporterProps) {
   const [statusMsg, setStatusMsg] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
 
-  const handleImport = async () => {
+  const handleImport = async (importMode: 'merge' | 'replace' = 'merge') => {
     if (!csvText.trim()) {
       setErrorLogs(['Por favor, cole um conteúdo CSV válido.']);
       return;
@@ -37,7 +37,7 @@ export function CSVImporter({ onSuccess, onCancel }: CSVImporterProps) {
     setStatusMsg('');
 
     try {
-      console.log('[CSV Import Step 1]: Raw text length', csvText.length);
+      console.log('[CSV Import Step 1]: Raw text length', csvText.length, 'mode:', importMode);
       const parsed = parseCSVText(csvText);
       console.log('[CSV Import Step 2]: Parsed output', parsed);
 
@@ -59,6 +59,7 @@ export function CSVImporter({ onSuccess, onCancel }: CSVImporterProps) {
         name: parsed.metadata?.name,
         description: parsed.metadata?.description,
         goals: parsed.metadata?.tableGoals,
+        mode: importMode,
       });
 
       if (parsed.detectedSectors && parsed.detectedSectors.length > 0) {
@@ -91,7 +92,8 @@ export function CSVImporter({ onSuccess, onCancel }: CSVImporterProps) {
       setTimeout(() => {
         const activeTableName = parsed.metadata?.name || activeTable?.name || 'Ativa';
         const successTitle = 'Importação Concluída! 🎉';
-        const successMsg = `Sucesso! ${parsed.rows.length} transações foram carregadas na tabela "${activeTableName}".`;
+        const modeLabel = importMode === 'merge' ? 'acumuladas' : 'carregadas (substituição)';
+        const successMsg = `Sucesso! ${parsed.rows.length} transações foram ${modeLabel} na planilha "${activeTableName}".`;
 
         if (Platform.OS === 'web') {
           window.alert(`${successTitle}\n\n${successMsg}`);
@@ -116,11 +118,12 @@ export function CSVImporter({ onSuccess, onCancel }: CSVImporterProps) {
     <View style={styles.container}>
       <Text style={styles.title}>📥 Importador de Planilha In-Place CSV</Text>
       <Text style={styles.description}>
-        Cole os registros CSV abaixo. Os dados serão consolidados diretamente na sua planilha ativa{' '}
+        Cole os registros CSV abaixo. Escolha se deseja{' '}
+        <Text style={{ fontWeight: '700', color: colors.accent.purple }}>Acumular (Mesclar)</Text> com as entradas existentes ou{' '}
+        <Text style={{ fontWeight: '700', color: colors.accent.blue }}>Substituir</Text> a planilha ativa{' '}
         <Text style={{ fontWeight: '700', color: colors.accent.purple }}>
-          "{activeTable?.name || 'Sem Tabela Active'}"
-        </Text>
-        . Padrões de setores serão auto-detectados para habilitar as ferramentas adequadas.
+          "{activeTable?.name || 'Sem Tabela Ativa'}"
+        </Text>.
       </Text>
 
       <TextInput
@@ -136,16 +139,25 @@ export function CSVImporter({ onSuccess, onCancel }: CSVImporterProps) {
       <View style={styles.actionRow}>
         <Pressable
           style={[styles.actionBtn, isProcessing && styles.disabledBtn]}
-          onPress={handleImport}
+          onPress={() => handleImport('merge')}
           disabled={isProcessing}
         >
           <Text style={styles.actionBtnText}>
-            {isProcessing ? 'Processando...' : '🚀 Consolidação In-Place'}
+            {isProcessing ? 'Processando...' : '➕ Acumular Entradas'}
+          </Text>
+        </Pressable>
+        <Pressable
+          style={[styles.actionBtn, { backgroundColor: colors.accent.blue }, isProcessing && styles.disabledBtn]}
+          onPress={() => handleImport('replace')}
+          disabled={isProcessing}
+        >
+          <Text style={styles.actionBtnText}>
+            {isProcessing ? 'Processando...' : '🔄 Substituir Planilha'}
           </Text>
         </Pressable>
         {onCancel && (
           <Pressable
-            style={[styles.actionBtn, { backgroundColor: colors.background.tertiary }]}
+            style={[styles.actionBtn, { backgroundColor: colors.background.tertiary, flex: 0.7 }]}
             onPress={onCancel}
             disabled={isProcessing}
           >

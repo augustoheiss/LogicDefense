@@ -584,3 +584,108 @@ export function exportRowsToCSV(rows: TableRow[]): string {
 
   return lines.join('\n');
 }
+
+// ── UUID v4 Generator ─────────────────────────────────────────────────────────
+export function generateUUIDv4(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
+
+// ── Merge & Frequency Fingerprint Engine ──────────────────────────────────────
+
+function getRowFingerprintKey(row: { date: string; value: number; description?: string }): string {
+  const d = row.date || '';
+  const v = Number(row.value || 0).toFixed(2);
+  const desc = (row.description || '').trim().toLowerCase();
+  return `${d}|${v}|${desc}`;
+}
+
+export function isBankRowAlreadyPresent(
+  existingRows: TableRow[],
+  incoming: TableRow | Omit<TableRow, 'id'>
+): boolean {
+  const key = getRowFingerprintKey(incoming);
+  return existingRows.some((r) => getRowFingerprintKey(r) === key);
+}
+
+/**
+ * Merges incoming spreadsheet rows into existing rows.
+ * Rules:
+ * CASE 1: Incoming row has ID and exists in current table -> UPDATE
+ * CASE 2: Incoming row has ID and does NOT exist in current table -> INSERT
+ * CASE 3: Incoming row has NO ID (e.g. bank CSV) -> Frequency-based fingerprinting.
+ */
+export function mergeRows(
+  existingRows: TableRow[],
+  incomingRows: (TableRow | Omit<TableRow, 'id'>)[]
+): TableRow[] {
+  const existingMap = new Map<string, TableRow>();
+  existingRows.forEach((row) => {
+    if (row.id) {
+      existingMap.set(row.id, row);
+    }
+  });
+
+  // Track frequency counts in existingRows for rows without ID
+  const existingFreqCounts = new Map<string, number>();
+  existingRows.forEach((row) => {
+    const key = getRowFingerprintKey(row);
+    existingFreqCounts.set(key, (existingFreqCounts.get(key) || 0) + 1);
+  });
+
+  // Track how many frequency matches we have consumed from existingRows
+  const matchedFreqCounts = new Map<string, number>();
+  const newRowsToAdd: TableRow[] = [];
+
+  incomingRows.forEach((rawIncoming) => {
+    const incomingId = 'id' in rawIncoming ? rawIncoming.id : undefined;
+
+    // CASO 1 & CASO 2: A linha possui ID
+    if (incomingId) {
+      if (existingMap.has(incomingId)) {
+        // CASO 1: UPDATE
+        const existing = existingMap.get(incomingId)!;
+        existingMap.set(incomingId, {
+          ...existing,
+          ...rawIncoming,
+          id: incomingId,
+        });
+      } else {
+        // CASO 2: INSERT com o ID fornecido
+        const newRow: TableRow = {
+          ...(rawIncoming as TableRow),
+          id: incomingId,
+        };
+        existingMap.set(incomingId, newRow);
+      }
+      return;
+    }
+
+    // CASO 3: A linha NÃO POSSUI ID (ex: CSV de Banco) -> Fingerprint por Frequência
+    const key = getRowFingerprintKey(rawIncoming);
+    const totalInExisting = existingFreqCounts.get(key) || 0;
+    const consumedSoFar = matchedFreqCounts.get(key) || 0;
+
+    if (consumedSoFar < totalInExisting) {
+      // Frequency match: this row is already present in existing rows -> skip as duplicate
+      matchedFreqCounts.set(key, consumedSoFar + 1);
+    } else {
+      // New distinct entry or exceeds existing frequency -> insert with new UUID v4
+      const newRow: TableRow = {
+        ...(rawIncoming as TableRow),
+        id: generateUUIDv4(),
+      };
+      newRowsToAdd.push(newRow);
+    }
+  });
+
+  const merged = [...Array.from(existingMap.values()), ...newRowsToAdd];
+  return merged.sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+}
+

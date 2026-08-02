@@ -273,36 +273,60 @@ export default function SpreadsheetScreen() {
           return;
         }
 
-        // Commit rows, name, description, and goals in ONE ATOMIC OPERATION
-        await db.importSpreadsheet({
-          rows: result.rows,
-          name: result.metadata?.name,
-          description: result.metadata?.description,
-          goals: result.metadata?.tableGoals,
-        });
+        const executeCommit = async (mode: 'merge' | 'replace') => {
+          try {
+            await db.importSpreadsheet({
+              rows: result.rows,
+              name: result.metadata?.name,
+              description: result.metadata?.description,
+              goals: result.metadata?.tableGoals,
+              mode,
+            });
 
-        // Auto-activate detected sectors
-        const currentActiveSectors = db.activeTable?.activeSectors || ['personal_finance'];
-        const sectorsToActivate = result.detectedSectors.filter(
-          (sec) => !currentActiveSectors.includes(sec)
-        );
+            // Auto-activate detected sectors
+            const currentActiveSectors = db.activeTable?.activeSectors || ['personal_finance'];
+            const sectorsToActivate = result.detectedSectors.filter(
+              (sec) => !currentActiveSectors.includes(sec)
+            );
 
-        if (sectorsToActivate.length > 0) {
-          const nextSectors = Array.from(new Set([...currentActiveSectors, ...sectorsToActivate]));
-          await db.updateActiveSectors(nextSectors);
-        }
+            if (sectorsToActivate.length > 0) {
+              const nextSectors = Array.from(new Set([...currentActiveSectors, ...sectorsToActivate]));
+              await db.updateActiveSectors(nextSectors);
+            }
 
-        setTimeout(() => {
-          const activeTableName = result.metadata?.name || db.activeTable?.name || 'Ativa';
-          const successTitle = 'Importação Concluída! 🎉';
-          const successMsg = `Sucesso! ${result.rows.length} transações foram carregadas na tabela "${activeTableName}".`;
+            setTimeout(() => {
+              const activeTableName = result.metadata?.name || db.activeTable?.name || 'Ativa';
+              const successTitle = 'Importação Concluída! 🎉';
+              const modeLabel = mode === 'merge' ? 'acumuladas' : 'carregadas (substituição)';
+              const successMsg = `Sucesso! ${result.rows.length} transações foram ${modeLabel} na planilha "${activeTableName}".`;
 
-          if (Platform.OS === 'web') {
-            window.alert(`${successTitle}\n\n${successMsg}`);
-          } else {
-            Alert.alert(successTitle, successMsg);
+              if (Platform.OS === 'web') {
+                window.alert(`${successTitle}\n\n${successMsg}`);
+              } else {
+                Alert.alert(successTitle, successMsg);
+              }
+            }, 100);
+          } catch (commitErr: any) {
+            Alert.alert('Erro na importação', commitErr.message || 'Erro desconhecido');
           }
-        }, 100);
+        };
+
+        if (Platform.OS === 'web') {
+          const isMerge = window.confirm(
+            `Deseja ACUMULAR (${result.rows.length} transações) na planilha atual "${db.activeTable?.name || 'Ativa'}"? (Clique OK para Acumular, ou Cancelar para Substituir completamente)`
+          );
+          await executeCommit(isMerge ? 'merge' : 'replace');
+        } else {
+          Alert.alert(
+            'Modo de Importação',
+            `Como você deseja importar as ${result.rows.length} transações na planilha "${db.activeTable?.name || 'Ativa'}"?`,
+            [
+              { text: '➕ Acumular Entradas', onPress: () => executeCommit('merge') },
+              { text: '🔄 Substituir Planilha', onPress: () => executeCommit('replace') },
+              { text: 'Cancelar', style: 'cancel' },
+            ]
+          );
+        }
       } catch (err: any) {
         Alert.alert('Erro na importação', err.message || 'Erro desconhecido');
       }

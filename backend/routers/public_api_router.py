@@ -259,6 +259,172 @@ async def get_analysis_context(
             
         return PublicAnalysisContextResponse(context=context_markdown)
 
+# ── Endpoint: Push/Append Transações (External API Integration) ─────────────
+
+class AppendTransactionItem(BaseModel):
+    date: str = Field(..., description="Data em formato YYYY-MM-DD")
+    value: float = Field(..., description="Valor monetário da transação")
+    description: str = Field(..., description="Descrição da transação")
+    entry_type: Optional[str] = Field("expense", description="Tipo: expense, revenue, partner_in, partner_out, waiver", alias="entryType")
+    category: Optional[str] = Field("Geral", description="Categoria")
+    tags: Optional[str] = Field("", description="Tags da transação")
+    external_id: Optional[str] = Field(None, description="ID externo para idempotência (ex: n8n_invoice_9841)", alias="externalId")
+    metadata_json: Optional[str] = Field("{}", description="String JSON de metadados", alias="metadataJson")
+
+    model_config = {"populate_by_name": True}
+
+class AppendSpreadsheetPayload(BaseModel):
+    mode: Optional[str] = Field("merge", description="Modo de importação: 'merge' (acumular entradas) ou 'replace' (substituir planilha). Padrão 'merge'.")
+    transactions: Optional[List[AppendTransactionItem]] = Field(None, description="Array de transações estruturadas")
+    csv_content: Optional[str] = Field(None, description="Bloco de texto CSV bruto", alias="csvContent")
+
+    model_config = {"populate_by_name": True}
+
+class AppendSpreadsheetResponse(BaseModel):
+    success: bool
+    mode: str
+    inserted_count: int = Field(..., alias="insertedCount")
+    updated_count: int = Field(..., alias="updatedCount")
+    total_count: int = Field(..., alias="totalCount")
+    message: str
+
+    model_config = {"populate_by_name": True}
+
+@router.post("/spreadsheet/append", response_model=AppendSpreadsheetResponse)
+async def append_to_spreadsheet(
+    payload: AppendSpreadsheetPayload,
+    table_id: str = Depends(get_table_id_for_write)
+):
+    """
+    Permite que agentes de IA (n8n, Make, Python) enviem transações de forma incremental ou em lote para a planilha.
+    Suporta idempotência via `external_id`.
+    """
+    supabase_url = os.getenv("SUPABASE_URL")
+    supabase_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+
+    headers = {
+        "apikey": supabase_key,
+        "Authorization": f"Bearer {supabase_key}",
+        "Content-Type": "application/json"
+    }
+
+    items_to_process: List[AppendTransactionItem] = []
+
+    # 1. Se foi enviado JSON estruturado
+    if payload.transactions:
+        items_to_process.extend(payload.transactions)
+
+    # 2. Se foi enviado texto CSV bruto
+    if payload.csv_content and payload.csv_content.trim() if hasattr(payload.csv_content, 'trim') else (payload.csv_content or "").strip():
+        raw_lines = payload.csv_content.strip().split("\n")
+        header_skipped = False
+        for line in raw_lines:
+            if line.startswith("##") or not line.strip():
+                continue
+            parts = [p.strip().strip('"') for p in line.split(",")]
+            if len(parts) >= 3:
+                # Tenta identificar se é cabeçalho
+                if not header_skipped and ("date" in parts[0].lower() or "data" in parts[0].lower()):
+                    header_skipped = True
+                    continue
+                try:
+                    dt = parts[0]
+                    val = float(parts[1])
+                    desc = parts[2]
+                    entry_type = parts[3] if len(parts) > 3 and parts[3] else ("expense" if val < 0 else "revenue")
+                    cat = parts[4] if len(parts) > 4 else "Geral"
+                    tag = parts[5] if len(parts) > 5 else ""
+                    ext_id = parts[6] if len(parts) > 6 else None
+
+                    items_to_process.append(AppendTransactionItem(
+                        date=dt,
+                        value=abs(val),
+                        description=desc,
+                        entryType=entry_type,
+                        category=cat,
+                        tags=tag,
+                        externalId=ext_id
+                    ))
+                except Exception as parse_err:
+                    log.warning(f"Ignorando linha CSV inválida no append: {line} ({parse_err})")
+
+    if not items_to_process:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Nenhuma transação válida foi fornecida (informe 'transactions' ou 'csv_content')."
+        )
+
+    mode = (payload.mode or "merge").lower()
+    inserted_count = 0
+    updated_count = 0
+
+    async with httpx.AsyncClient() as client_http:
+        # Se mode == 'replace', remove transações existentes da planilha
+        if mode == "replace":
+            del_url = f"{supabase_url}/rest/v1/transactions?table_id=eq.{table_id}"
+            await client_http.delete(del_url, headers=headers)
+
+        # Buscar transações existentes para idempotência com external_id
+        existing_url = f"{supabase_url}/rest/v1/transactions?table_id=eq.{table_id}&select=id,date,value,description,metadata_json"
+        ex_res = await client_http.get(existing_url, headers=headers)
+        existing_rows = ex_res.json() if ex_res.status_code == 200 else []
+
+        existing_by_id = {r["id"]: r for r in existing_rows}
+        existing_fingerprints = set(f"{r.get('date')}|{float(r.get('value', 0)):.2f}|{(r.get('description') or '').strip().lower()}" for r in existing_rows)
+
+        for item in items_to_process:
+            tx_id = item.external_id or f"tx_api_{uuid.uuid4().hex[:16]}"
+            
+            # Formatar payload da transação
+            entry_type = item.entry_type or ("expense" if item.value < 0 else "revenue")
+            tx_payload = {
+                "id": tx_id,
+                "table_id": table_id,
+                "date": item.date,
+                "value": abs(item.value),
+                "description": item.description or "Transação API",
+                "entry_type": entry_type,
+                "category": item.category or "Geral",
+                "tags": item.tags or "",
+                "metadata_json": item.metadata_json or "{}",
+                "generated_by": "public_api_append",
+                "updated_at": datetime.datetime.utcnow().isoformat()
+            }
+
+            # Checar idempotência
+            if tx_id in existing_by_id:
+                # UPDATE em registro existente com mesmo external_id
+                patch_url = f"{supabase_url}/rest/v1/transactions?id=eq.{tx_id}"
+                up_res = await client_http.patch(patch_url, json=tx_payload, headers=headers)
+                if up_res.status_code in (200, 204):
+                    updated_count += 1
+            else:
+                # Checar se não tem external_id mas o fingerprint já existe no modo merge
+                fp_key = f"{item.date}|{abs(item.value):.2f}|{(item.description or '').strip().lower()}"
+                if mode == "merge" and not item.external_id and fp_key in existing_fingerprints:
+                    # Impede duplicação de linha idêntica sem ID no append
+                    continue
+
+                # INSERT nova transação
+                post_url = f"{supabase_url}/rest/v1/transactions"
+                post_headers = {**headers, "Prefer": "return=minimal"}
+                ins_res = await client_http.post(post_url, json=tx_payload, headers=post_headers)
+                if ins_res.status_code in (200, 201):
+                    inserted_count += 1
+                    existing_fingerprints.add(fp_key)
+
+    total_processed = inserted_count + updated_count
+    msg = f"Sucesso! {inserted_count} transações inseridas, {updated_count} atualizadas (Modo: {mode})."
+
+    return AppendSpreadsheetResponse(
+        success=True,
+        mode=mode,
+        insertedCount=inserted_count,
+        updatedCount=updated_count,
+        totalCount=total_processed,
+        message=msg
+    )
+
 async def execute_add_transaction(
     table_id: str,
     description: str,

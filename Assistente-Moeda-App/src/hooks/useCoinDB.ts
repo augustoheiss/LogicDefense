@@ -17,6 +17,7 @@ import type { DB, CoinTable, TableRow, TableGoals, TableMetrics } from '../core/
 import { useAuthContext } from './useAuth';
 import { fullSync, pushToCloud, pullFromCloud } from '../storage/supabaseSync';
 import { supabase } from '@/lib/supabase';
+import { mergeRows } from '../utils/csvEngine';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -43,6 +44,7 @@ export interface CoinDBState {
     name?: string;
     description?: string;
     goals?: TableGoals;
+    mode?: 'replace' | 'merge';
   }) => Promise<void>;
   addTable: (name: string, description?: string, goals?: TableGoals, rows?: Omit<TableRow, 'id'>[]) => void;
   renameTable: (tableId: string, name: string) => void;
@@ -720,6 +722,7 @@ function useCoinDBInternal(): CoinDBState {
     name?: string;
     description?: string;
     goals?: TableGoals;
+    mode?: 'replace' | 'merge';
   }) => {
     const currentTables = tablesRef.current.length > 0 ? tablesRef.current : tables;
     const activeTablesList = currentTables.filter((t: CoinTable) => !t.isDeleted);
@@ -744,6 +747,7 @@ function useCoinDBInternal(): CoinDBState {
       targetTable = newTable;
     }
 
+    const mode = payload.mode || 'replace';
     const formattedRows: TableRow[] = payload.rows.map((r) => ({
       ...r,
       id: 'id' in r && r.id ? r.id : generateId(),
@@ -753,12 +757,17 @@ function useCoinDBInternal(): CoinDBState {
       if (t.id !== targetTable!.id) return t;
       const currentGoals: TableGoals = t.goals || { dailyGoals: {}, weeklyGoals: {}, annualCosts: {} };
       const goalUpdates: TableGoals = payload.goals || { dailyGoals: {}, weeklyGoals: {}, annualCosts: {} };
+
+      const finalRows = mode === 'merge'
+        ? mergeRows(t.rows || [], formattedRows)
+        : [...formattedRows].sort((a, b) => a.date.localeCompare(b.date));
+
       return {
         ...t,
-        name: payload.name && payload.name.trim() ? payload.name : t.name,
-        description: payload.description !== undefined ? payload.description : t.description,
-        rows: [...formattedRows].sort((a, b) => a.date.localeCompare(b.date)),
-        goals: payload.goals ? {
+        name: mode === 'merge' ? t.name : (payload.name && payload.name.trim() ? payload.name : t.name),
+        description: mode === 'merge' ? t.description : (payload.description !== undefined ? payload.description : t.description),
+        rows: finalRows,
+        goals: mode === 'merge' ? (t.goals || payload.goals) : (payload.goals ? {
           ...currentGoals,
           ...goalUpdates,
           dailyGoals: { ...(currentGoals.dailyGoals || {}), ...(goalUpdates.dailyGoals || {}) },
@@ -766,7 +775,7 @@ function useCoinDBInternal(): CoinDBState {
           annualCosts: { ...(currentGoals.annualCosts || {}), ...(goalUpdates.annualCosts || {}) },
           yearlyGoals: { ...(currentGoals.yearlyGoals || {}), ...(goalUpdates.yearlyGoals || {}) },
           globalGoals: goalUpdates.globalGoals || currentGoals.globalGoals,
-        } : t.goals,
+        } : t.goals),
         updatedAt: new Date().toISOString(),
       };
     });
