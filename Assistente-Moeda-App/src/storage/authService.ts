@@ -47,11 +47,15 @@ export async function validateMobileLicenseKey(key: string, apiBaseUrl: string):
     const data = await response.json();
     if (data.valid) {
       await setStoredLicenseKey(key);
+      const rawCap = data.token_cap !== undefined && data.token_cap !== null ? data.token_cap : data.tokenCap;
+      const rawBalance = data.token_balance !== undefined && data.token_balance !== null ? data.token_balance : data.tokenBalance;
+      const parsedCap = typeof rawCap === 'number' ? rawCap : (data.tier === 'godmode_owner' || data.tier === 'admin' ? -1 : 0);
+      const parsedBalance = typeof rawBalance === 'number' ? rawBalance : 0;
       return {
         valid: true,
-        tier: data.tier,
-        balance: data.token_balance,
-        cap: data.token_cap !== undefined && data.token_cap !== null ? data.token_cap : 1000000,
+        tier: data.tier || 'pro',
+        balance: parsedBalance,
+        cap: parsedCap,
         message: 'Chave de Licença válida.'
       };
     } else {
@@ -59,7 +63,7 @@ export async function validateMobileLicenseKey(key: string, apiBaseUrl: string):
         valid: false,
         tier: 'free',
         balance: 0,
-        cap: 1000000,
+        cap: 0,
         message: data.message || 'Chave inválida.'
       };
     }
@@ -68,7 +72,7 @@ export async function validateMobileLicenseKey(key: string, apiBaseUrl: string):
       valid: false,
       tier: 'free',
       balance: 0,
-      cap: 1000000,
+      cap: 0,
       message: 'Erro de conexão com o servidor de licenças.'
     };
   }

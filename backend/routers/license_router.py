@@ -22,6 +22,8 @@ class ValidateKeyResponse(BaseModel):
     tier: str
     token_balance: int
     token_cap: int
+    tokenBalance: int | None = None
+    tokenCap: int | None = None
     expires_at: str | None = None
     message: str
 
@@ -48,14 +50,20 @@ async def validate_license_key(payload: ValidateKeyRequest):
             tier="free",
             token_balance=0,
             token_cap=0,
+            tokenBalance=0,
+            tokenCap=0,
             message="Chave de licença inválida ou não encontrada."
         )
         
+    t_bal = rec.get("token_balance", 0)
+    t_cap = rec.get("token_cap", 0)
     return ValidateKeyResponse(
         valid=True,
         tier=rec.get("tier", "pro"),
-        token_balance=rec.get("token_balance", 0),
-        token_cap=rec.get("token_cap", 0),
+        token_balance=t_bal,
+        token_cap=t_cap,
+        tokenBalance=t_bal,
+        tokenCap=t_cap,
         expires_at=rec.get("expires_at"),
         message="Chave de licença válida."
     )

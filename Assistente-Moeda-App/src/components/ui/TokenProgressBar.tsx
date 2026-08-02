@@ -51,13 +51,17 @@ function TokenProgressBarInner({ current, max }: TokenProgressBarProps) {
 
   // ── Derived values ──────────────────────────────────────────────────────
   const percentage = useMemo(
-    () => (isGodMode ? 100 : Math.max(0, Math.min(100, (current / Math.max(max, 1)) * 100))),
+    () => {
+      if (max <= 0 && !isGodMode) return 0;
+      return isGodMode ? 100 : Math.max(0, Math.min(100, (current / max) * 100));
+    },
     [current, max, isGodMode],
   );
 
   const gradientColors = useMemo<[string, string]>(() => {
     if (isGodMode) return GRADIENT_HIGH;
-    const ratio = current / Math.max(max, 1);
+    if (max <= 0) return GRADIENT_LOW;
+    const ratio = current / max;
     if (ratio <= 0.2) return GRADIENT_LOW;
     if (ratio <= 0.5) return GRADIENT_MEDIUM;
     return GRADIENT_HIGH;

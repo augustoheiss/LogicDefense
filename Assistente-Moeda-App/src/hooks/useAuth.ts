@@ -7,7 +7,9 @@
  */
 
 import { useState, useEffect, useCallback, createContext, useContext, useMemo } from 'react';
-import { getStoredLicenseKey, type UserProfile } from '../storage/authService';
+import { getStoredLicenseKey, validateMobileLicenseKey, type UserProfile } from '../storage/authService';
+
+const API_URL = process.env.EXPO_PUBLIC_AI_BACKEND_URL || process.env.EXPO_PUBLIC_API_URL || 'https://ocorrencias-pdf-writer.onrender.com';
 
 export type AuthMode = 'guest' | 'authenticated';
 
@@ -28,7 +30,7 @@ export interface AuthState {
 
 export function useAuth(): AuthState {
   const [mode, setMode] = useState<AuthMode>('guest');
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [user, setUser] = useState<any | null>({ id: 'local_user', email: 'user@local' });
   const [profile, setProfile] = useState<UserProfile | null>({
     id: 'local_user',
@@ -36,22 +38,41 @@ export function useAuth(): AuthState {
     email: null,
     licenseKey: null,
     premiumTier: 'free',
-    tokenBalance: 0
+    tokenBalance: 0,
+    tokenCap: 0,
   });
+
+  const loadProfileFromLicense = useCallback(async (key: string): Promise<UserProfile> => {
+    const res = await validateMobileLicenseKey(key, API_URL);
+    if (res.valid) {
+      return {
+        id: 'local_user',
+        displayName: res.tier === 'godmode_owner' ? 'Usuário God Mode' : 'Usuário Pro',
+        email: null,
+        licenseKey: key,
+        premiumTier: res.tier,
+        tokenBalance: res.balance,
+        tokenCap: res.cap,
+      };
+    }
+    return {
+      id: 'local_user',
+      displayName: 'Usuário Local',
+      email: null,
+      licenseKey: null,
+      premiumTier: 'free',
+      tokenBalance: 0,
+      tokenCap: 0,
+    };
+  }, []);
 
   useEffect(() => {
     async function checkLicense() {
       try {
         const key = await getStoredLicenseKey();
         if (key) {
-          setProfile({
-            id: 'local_user',
-            displayName: 'Usuário Pro',
-            email: null,
-            licenseKey: key,
-            premiumTier: 'premium',
-            tokenBalance: 1000000
-          });
+          const prof = await loadProfileFromLicense(key);
+          setProfile(prof);
         } else {
           setProfile({
             id: 'local_user',
@@ -59,7 +80,8 @@ export function useAuth(): AuthState {
             email: null,
             licenseKey: null,
             premiumTier: 'free',
-            tokenBalance: 0
+            tokenBalance: 0,
+            tokenCap: 0,
           });
         }
       } catch (err) {
@@ -69,7 +91,7 @@ export function useAuth(): AuthState {
       }
     }
     checkLicense();
-  }, []);
+  }, [loadProfileFromLicense]);
 
   const enterGuestMode = useCallback(() => {
     setMode('guest');
@@ -89,31 +111,23 @@ export function useAuth(): AuthState {
 
   const refreshProfile = useCallback(async () => {
     const key = await getStoredLicenseKey();
-    setProfile(prev => {
-      if (!key) {
-        if (!prev || (prev.licenseKey === null && prev.premiumTier === 'free')) return prev;
-        return {
-          id: 'local_user',
-          displayName: 'Usuário Local',
-          email: null,
-          licenseKey: null,
-          premiumTier: 'free',
-          tokenBalance: 0
-        };
-      }
-      if (prev && prev.licenseKey === key && prev.premiumTier === 'premium') {
-        return prev;
-      }
-      return {
+    if (!key) {
+      setProfile({
         id: 'local_user',
-        displayName: 'Usuário Pro',
+        displayName: 'Usuário Local',
         email: null,
-        licenseKey: key,
-        premiumTier: 'premium',
-        tokenBalance: 1000000
-      };
-    });
-  }, []);
+        licenseKey: null,
+        premiumTier: 'free',
+        tokenBalance: 0,
+        tokenCap: 0,
+      });
+      return;
+    }
+    const prof = await loadProfileFromLicense(key);
+    setProfile(prof);
+  }, [loadProfileFromLicense]);
+
+  const isPremium = Boolean(profile?.licenseKey && profile?.premiumTier && profile?.premiumTier !== 'free');
 
   return {
     mode,
@@ -121,7 +135,7 @@ export function useAuth(): AuthState {
     user,
     profile,
     session: null,
-    isPremium: profile?.premiumTier === 'premium',
+    isPremium,
     profileFetchError: null,
     enterGuestMode,
     login,
