@@ -32,7 +32,7 @@ load_dotenv(backend_dir / ".env")
 try:
     from backend.db.license_db import create_license_key
 except ImportError:
-    from db.license_db import create_license_key
+    from db.license_db import create_license_key  # type: ignore
 
 def main():
     parser = argparse.ArgumentParser(description="Generate a Tester License Key")
