@@ -438,35 +438,47 @@ def create_spreadsheet_api_key(table_id: str, license_key_hash: str, permissions
     
     with get_connection() as conn:
         cursor = conn.cursor()
-        if is_turso_configured():
-            cursor.execute("""
-                INSERT INTO spreadsheet_api_keys (table_id, key_hash, key_hint, license_key_hash, permissions, created_at)
-                VALUES (?, ?, ?, ?, ?, ?)
-            """, (table_id, key_h, hint, license_key_hash, permissions, now))
-        else:
-            cursor.execute("""
-                INSERT INTO spreadsheet_api_keys (table_id, key_hash, key_hint, license_key_hash, permissions, created_at)
-                VALUES (?, ?, ?, ?, ?, ?)
-                ON CONFLICT(table_id) DO UPDATE SET
-                    key_hash = excluded.key_hash,
-                    key_hint = excluded.key_hint,
-                    license_key_hash = excluded.license_key_hash,
-                    permissions = excluded.permissions,
-                    created_at = excluded.created_at
-            """, (table_id, key_h, hint, license_key_hash, permissions, now))
+        cursor.execute("""
+            INSERT INTO spreadsheet_api_keys (table_id, key_hash, key_hint, license_key_hash, permissions, created_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(table_id) DO UPDATE SET
+                key_hash = excluded.key_hash,
+                key_hint = excluded.key_hint,
+                license_key_hash = excluded.license_key_hash,
+                permissions = excluded.permissions,
+                created_at = excluded.created_at
+        """, (table_id, key_h, hint, license_key_hash, permissions, now))
         conn.commit()
         
     return api_key, hint
 
 def get_spreadsheet_api_key(key_hash: str) -> dict | None:
-    """Retrieves spreadsheet API key info by its hash."""
+    """Retrieves spreadsheet API key info by its hash. Supports God Mode key."""
     with get_connection() as conn:
         cursor = conn.cursor()
-        cursor.execute("""
-            SELECT s.*, l.token_balance, l.expires_at
-            FROM spreadsheet_api_keys s
-            JOIN license_keys l ON s.license_key_hash = l.key_hash
-            WHERE s.key_hash = ?
-        """, (key_hash,))
+        cursor.execute("SELECT * FROM spreadsheet_api_keys WHERE key_hash = ?", (key_hash,))
         row = cursor.fetchone()
-        return dict(row) if row else None
+        if not row:
+            return None
+        
+        api_key_data = dict(row)
+        lic_hash = api_key_data.get("license_key_hash")
+        
+        # Support God Mode key
+        godmode_secret = get_godmode_secret()
+        if godmode_secret and lic_hash == hash_key(godmode_secret):
+            api_key_data["token_balance"] = 999_999_999
+            api_key_data["expires_at"] = "2099-12-31T23:59:59Z"
+            return api_key_data
+
+        # Standard license check
+        cursor.execute("SELECT token_balance, expires_at FROM license_keys WHERE key_hash = ?", (lic_hash,))
+        lic_row = cursor.fetchone()
+        if lic_row:
+            api_key_data["token_balance"] = lic_row["token_balance"]
+            api_key_data["expires_at"] = lic_row.get("expires_at")
+        else:
+            api_key_data["token_balance"] = 0
+            api_key_data["expires_at"] = None
+
+        return api_key_data

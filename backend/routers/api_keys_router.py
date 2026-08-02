@@ -60,11 +60,18 @@ async def generate_api_key(
     license_key_hash = license_rec["key_hash"]
     table_id = payload.table_id.strip()
     
-    api_key, hint = create_spreadsheet_api_key(
-        table_id=table_id,
-        license_key_hash=license_key_hash,
-        permissions=payload.permissions
-    )
+    try:
+        api_key, hint = create_spreadsheet_api_key(
+            table_id=table_id,
+            license_key_hash=license_key_hash,
+            permissions=payload.permissions
+        )
+    except Exception as e:
+        log.error(f"Failed to generate API key for table {table_id}: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erro interno ao criar a chave de API: {e}"
+        )
     
     return GenerateKeyResponse(
         api_key=api_key,
