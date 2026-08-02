@@ -43,7 +43,7 @@ import { Card } from '@/components/ui/Card';
 import { TokenProgressBar } from '@/components/ui/TokenProgressBar';
 import { SectorSettingsPanel } from '@/components/ui/SectorSettingsPanel';
 import { formatCurrencySmart } from '@/core/formatCurrency';
-import { validateMobileLicenseKey } from '@/storage/authService';
+import { validateMobileLicenseKey, getStoredLicenseKey } from '@/storage/authService';
 import type { TableGoals, CoinTable } from '@/core/types';
 
 // ── Animated Pressable for spring-scale micro-interactions ───────────────────
