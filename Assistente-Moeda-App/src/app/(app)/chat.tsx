@@ -54,15 +54,45 @@ export default function AIChatScreen() {
   const db = useCoinDB();
   const { isPro, subscriptionType, setShowPaywall } = useSubscription();
 
-  // Safeguard screen: if not pro, redirect back and trigger paywall modal
-  useEffect(() => {
-    if (!isPro) {
-      router.replace('/(app)/(tabs)');
-      setTimeout(() => {
-        setShowPaywall(true);
-      }, 100);
-    }
-  }, [isPro, router, setShowPaywall]);
+  if (!isPro) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.header}>
+          <Pressable onPress={() => router.back()} style={styles.backButton}>
+            <Feather name="arrow-left" size={20} color={colors.text.primary} />
+            <Text style={styles.backText}>Voltar</Text>
+          </Pressable>
+          <Text style={styles.title}>🤖 Assistente IA</Text>
+          <View style={{ width: 60 }} />
+        </View>
+
+        <View style={styles.proRequiredContainer}>
+          <Text style={styles.proEmoji}>🔒</Text>
+          <Text style={styles.proTitle}>Chave de Licença PRO Necessária</Text>
+          <Text style={styles.proSubtitle}>
+            O Assistente de IA utiliza Inteligência Artificial avançada para analisar suas métricas e projeções. Ative sua Chave de Licença ou assine um plano para liberar o chat.
+          </Text>
+
+          <Pressable
+            style={styles.proPrimaryBtn}
+            onPress={() => router.push('/(app)/(tabs)/settings')}
+          >
+            <Text style={styles.proPrimaryBtnText}>🔑 Ativar Chave de Licença em Ajustes</Text>
+          </Pressable>
+
+          <Pressable
+            style={styles.proSecondaryBtn}
+            onPress={() => {
+              router.back();
+              setTimeout(() => setShowPaywall(true), 150);
+            }}
+          >
+            <Text style={styles.proSecondaryBtnText}>🛍️ Ver Planos de Assinatura</Text>
+          </Pressable>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   const [messages, setMessages] = useState<ChatMessage[]>([
     createMessage('assistant', 
@@ -665,5 +695,60 @@ const styles = StyleSheet.create({
   sendBtnText: {
     color: '#fff',
     fontSize: 16,
+  },
+
+  // PRO Required Screen
+  proRequiredContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: spacing.xxl,
+    gap: spacing.md,
+  },
+  proEmoji: {
+    fontSize: 54,
+  },
+  proTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: colors.text.primary,
+    textAlign: 'center',
+  },
+  proSubtitle: {
+    fontSize: 14,
+    color: colors.text.secondary,
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: spacing.lg,
+  },
+  proPrimaryBtn: {
+    width: '100%',
+    maxWidth: 340,
+    backgroundColor: colors.accent.purple,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    borderRadius: radius.md,
+    alignItems: 'center',
+  },
+  proPrimaryBtnText: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  proSecondaryBtn: {
+    width: '100%',
+    maxWidth: 340,
+    backgroundColor: colors.background.tertiary,
+    borderWidth: 1,
+    borderColor: colors.border.default,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    borderRadius: radius.md,
+    alignItems: 'center',
+  },
+  proSecondaryBtnText: {
+    color: colors.text.primary,
+    fontSize: 14,
+    fontWeight: '500',
   },
 });

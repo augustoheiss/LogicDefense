@@ -484,19 +484,27 @@ export default function SpreadsheetScreen() {
               style={[styles.fabMenuItem, { backgroundColor: colors.background.elevated, borderColor: colors.accent.purpleBorder }]}
               onPress={() => {
                 setShowFab(false);
-                if (auth.mode === 'guest') {
-                  Alert.alert(
-                    'Recurso Premium',
-                    'Para conversar com o Assistente IA, você precisa criar uma conta ou fazer login.',
-                    [
-                      { text: 'Cancelar', style: 'cancel' },
-                      { text: 'Entrar / Criar Conta', onPress: () => router.push('/(auth)/login') }
-                    ]
-                  );
-                  return;
-                }
                 if (!isPro) {
-                  setShowPaywall(true);
+                  if (Platform.OS === 'web') {
+                    const goToSettings = window.confirm(
+                      '🔒 Licença PRO Necessária\n\n' +
+                      'O Assistente de IA financeiro exige uma Chave de Licença PRO ativa.\n\n' +
+                      'Deseja ir para as Configurações para ativar sua chave de licença ou ver os planos?'
+                    );
+                    if (goToSettings) {
+                      router.push('/(app)/(tabs)/settings');
+                    }
+                  } else {
+                    Alert.alert(
+                      '🔒 Licença PRO Necessária',
+                      'O Assistente de IA financeiro exige uma Chave de Licença PRO ativa. Ative sua chave nas Configurações.',
+                      [
+                        { text: 'Cancelar', style: 'cancel' },
+                        { text: 'Ativar Licença', onPress: () => router.push('/(app)/(tabs)/settings') },
+                        { text: 'Ver Planos', onPress: () => setShowPaywall(true) }
+                      ]
+                    );
+                  }
                 } else {
                   router.push('/(app)/chat');
                 }
