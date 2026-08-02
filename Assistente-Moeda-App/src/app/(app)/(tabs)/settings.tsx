@@ -63,8 +63,11 @@ export default function SettingsScreen() {
   const isVisitor = !auth.user || auth.mode === 'guest';
 
   const { isPro, subscriptionType, packages, consumables, purchasePackage, restorePurchases, expirationDate, isProcessing } = useSubscription();
-  const maxTokens = auth.profile?.tokenCap ?? (auth.isPremium ? 1_000_000 : 1_000_000);
-  const tokenBalance = auth.isPremium ? (auth.profile?.tokenBalance ?? 0) : 0;
+  const maxTokens = auth.profile?.tokenCap !== undefined && auth.profile?.tokenCap !== null
+    ? auth.profile.tokenCap
+    : 1_000_000;
+  const tokenBalance = auth.profile?.tokenBalance ?? 0;
+  const isGodMode = maxTokens === -1 || tokenBalance >= 999_000_000 || auth.profile?.premiumTier === 'godmode_owner';
 
   const [showStoreModal, setShowStoreModal] = useState(false);
   const [showDebugger, setShowDebugger] = useState(false);
@@ -613,7 +616,11 @@ export default function SettingsScreen() {
           <Card glow>
             <Text style={styles.gaugeTitle}>Consumo de Tokens da IA</Text>
             <Text style={styles.gaugeSubtitle}>
-              Saldo: <Text style={styles.gaugeBalanceHighlight}>{tokenBalance.toLocaleString('pt-BR')}</Text> / {maxTokens.toLocaleString('pt-BR')} tokens
+              Saldo: {isGodMode ? (
+                <Text style={styles.gaugeBalanceHighlight}>∞ (God Mode / Ilimitado)</Text>
+              ) : (
+                <><Text style={styles.gaugeBalanceHighlight}>{tokenBalance.toLocaleString('pt-BR')}</Text> / {maxTokens.toLocaleString('pt-BR')} tokens</>
+              )}
             </Text>
             
             <View style={styles.progressBarWrapper}>

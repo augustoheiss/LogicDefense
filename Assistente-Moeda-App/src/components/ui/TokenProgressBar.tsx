@@ -47,18 +47,21 @@ interface TokenProgressBarProps {
 const AnimatedLinearGradient = Animated.createAnimatedComponent(LinearGradient);
 
 function TokenProgressBarInner({ current, max }: TokenProgressBarProps) {
+  const isGodMode = max === -1 || current >= 999_000_000;
+
   // ── Derived values ──────────────────────────────────────────────────────
   const percentage = useMemo(
-    () => Math.max(0, Math.min(100, (current / Math.max(max, 1)) * 100)),
-    [current, max],
+    () => (isGodMode ? 100 : Math.max(0, Math.min(100, (current / Math.max(max, 1)) * 100))),
+    [current, max, isGodMode],
   );
 
   const gradientColors = useMemo<[string, string]>(() => {
+    if (isGodMode) return GRADIENT_HIGH;
     const ratio = current / Math.max(max, 1);
     if (ratio <= 0.2) return GRADIENT_LOW;
     if (ratio <= 0.5) return GRADIENT_MEDIUM;
     return GRADIENT_HIGH;
-  }, [current, max]);
+  }, [current, max, isGodMode]);
 
   // ── Animated fill width ────────────────────────────────────────────────
   const animatedWidth = useSharedValue(percentage);
@@ -76,11 +79,12 @@ function TokenProgressBarInner({ current, max }: TokenProgressBarProps) {
 
   // ── Accessibility ──────────────────────────────────────────────────────
   const a11yLabel = useMemo(() => {
+    if (isGodMode) return 'Saldo de tokens: Ilimitado (God Mode)';
     const formattedCurrent = current.toLocaleString('pt-BR');
     const formattedMax = max.toLocaleString('pt-BR');
     const pct = Math.round(percentage);
     return `Saldo de tokens: ${formattedCurrent} de ${formattedMax}, ${pct}% restante`;
-  }, [current, max, percentage]);
+  }, [current, max, percentage, isGodMode]);
 
   // ── Render ─────────────────────────────────────────────────────────────
   return (

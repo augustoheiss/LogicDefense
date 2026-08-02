@@ -242,12 +242,14 @@ def create_license_key(email: str | None, tier: str = "pro", initial_tokens: int
     key_h = hash_key(raw_key)
     now = datetime.now(timezone.utc).isoformat()
     
+    token_cap = -1 if tier in ("godmode_owner", "admin") else initial_tokens
+
     with get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("""
             INSERT INTO license_keys (license_key, key_hash, email, tier, token_balance, token_cap, expires_at, stripe_customer_id, created_at, updated_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (raw_key, key_h, email, tier, initial_tokens, initial_tokens, expires_at, stripe_customer_id, now, now))
+        """, (raw_key, key_h, email, tier, initial_tokens, token_cap, expires_at, stripe_customer_id, now, now))
         conn.commit()
         
     logger.info(f"Created new license key for {email or 'anonymous'}: {raw_key[:10]}...")
@@ -293,18 +295,19 @@ def fulfill_or_extend_license(
 
         new_expires_at = (base_date + timedelta(days=duration_days)).isoformat()
         new_balance = current_balance + token_tank
+        target_cap = -1 if tier in ("godmode_owner", "admin") else (rec.get("token_cap", 0) + token_tank if rec.get("token_cap", 0) != -1 else -1)
 
         with get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("""
                 UPDATE license_keys
                 SET token_balance = token_balance + ?,
-                    token_cap = MAX(token_cap, token_balance + ?),
+                    token_cap = ?,
                     expires_at = ?,
                     tier = ?,
                     updated_at = ?
                 WHERE key_hash = ?
-            """, (token_tank, token_tank, new_expires_at, tier, now.isoformat(), key_h))
+            """, (token_tank, target_cap, new_expires_at, tier, now.isoformat(), key_h))
             conn.commit()
 
         logger.info(f"Cumulative License Stacked for {clean_email}: +{token_tank:,} tokens, +{duration_days} days. New expires_at: {new_expires_at}")
@@ -332,7 +335,7 @@ def get_license_by_raw_key(raw_key: str) -> dict | None:
             "email": "augustoheiss@heisslab.com.br",
             "tier": "godmode_owner",
             "token_balance": 999_999_999,
-            "token_cap": 999_999_999,
+            "token_cap": -1,
             "expires_at": "2099-12-31T23:59:59Z",
             "stripe_customer_id": "cust_godmode",
             "created_at": "2026-01-01T00:00:00Z",

@@ -741,6 +741,7 @@ DIRETRIZES DE EXECUÇÃO:
 1. Valores de despesa/saída de caixa DEVEM ser representados como números negativos (ex: -1200.00 para despesa de seguro). Valores de receita/entrada de caixa devem ser números positivos.
 2. Se o usuário relatar uma despesa ou receita que abrange um período (ex: 'seguro do ano todo', 'assinatura anual', 'receitas do mês de junho', 'dívida parcelada em 30 dias'), VOCÊ NÃO DEVE criar várias transações individuais. Crie UMA ÚNICA transação e preencha os campos `period_start` e `period_end` (no formato YYYY-MM-DD). Se for um gasto pontual (ex: 'almoço hoje'), omita os campos `period_start` e `period_end`.
 3. Escolha a planilha correta a partir de PLANILHAS DISPONÍVEIS. Se não houver planilha explícita na mensagem, escolha inteligentemente baseando-se no tipo de transação (ex: despesa vai para planilhas como 'Custos' ou 'Despesas', receita vai para 'Receitas').
+4. NUNCA gere ou inclua o campo 'id' ou UUIDs no JSON nem nas respostas de texto. O ID será gerado localmente pelo parser/sistema cliente/servidor. Omitir IDs economiza tokens de saída e previne duplicidade.
 
 ESPECIALIDADES:
 - Análise de tendências de faturamento (diário, semanal, mensal, anual)

@@ -7,7 +7,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const LICENSE_STORAGE_KEY = 'coin_license_key';
 
-export type PremiumTier = 'free' | 'premium';
+export type PremiumTier = 'free' | 'premium' | 'godmode_owner' | 'pro' | 'pro_yearly' | string;
 
 export interface UserProfile {
   id: string;
@@ -51,7 +51,7 @@ export async function validateMobileLicenseKey(key: string, apiBaseUrl: string):
         valid: true,
         tier: data.tier,
         balance: data.token_balance,
-        cap: data.token_cap || 1000000,
+        cap: data.token_cap !== undefined && data.token_cap !== null ? data.token_cap : 1000000,
         message: 'Chave de Licença válida.'
       };
     } else {
