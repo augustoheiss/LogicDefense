@@ -12,7 +12,7 @@ import stripe
 from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Request, Header, HTTPException, status, BackgroundTasks
 from fastapi.responses import JSONResponse
-from db.license_db import create_license_key, is_webhook_processed, mark_webhook_processed
+from db.license_db import fulfill_or_extend_license, is_webhook_processed, mark_webhook_processed
 from services.email_service import send_license_key_email
 
 logger = logging.getLogger(__name__)
@@ -45,28 +45,23 @@ async def fulfill_stripe_checkout(session: dict, background_tasks: BackgroundTas
     product_id = str(metadata.get("product_id") or "").lower()
     amount_total = session.get("amount_total", 0)
 
-    token_tank = resolve_token_tank(product_id, amount_total)
-    
-    # Calculate expiration
-    now = datetime.now(timezone.utc)
-    if "year" in product_id or "yearly" in product_id or "anual" in product_id or amount_total >= 10000:
-        expires_at = (now + timedelta(days=365)).isoformat()
-    else:
-        expires_at = (now + timedelta(days=30)).isoformat()
+    is_yearly = ("year" in product_id or "yearly" in product_id or "anual" in product_id or amount_total >= 10000)
+    duration_days = 365 if is_yearly else 30
+    tier = "pro_yearly" if is_yearly else "pro"
 
-    # Generate License Key
-    raw_key, key_hash = create_license_key(
+    # Fulfill or Cumulatively Extend existing License Key
+    raw_key, key_hash, total_tokens, expires_at = fulfill_or_extend_license(
         email=email,
-        tier="pro",
-        initial_tokens=token_tank,
-        expires_at=expires_at,
+        tier=tier,
+        token_tank=token_tank,
+        duration_days=duration_days,
         stripe_customer_id=stripe_customer_id
     )
 
     if event_id:
         mark_webhook_processed(event_id)
 
-    logger.info(f"Stripe Checkout fulfilled: key={raw_key[:10]}... created for email={email}, tokens={token_tank:,}")
+    logger.info(f"Stripe Checkout fulfilled: key={raw_key[:10]}... email={email}, total_tokens={total_tokens:,}, expires_at={expires_at}")
 
     # Send License Key via Email if email is present
     if email:

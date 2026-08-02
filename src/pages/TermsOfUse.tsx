@@ -153,33 +153,40 @@ export default function TermsOfUse() {
             {/* Descrição do Serviço */}
             <section id="descricao" style={{ marginBottom: '48px' }}>
               <h2 style={{ fontSize: '22px', fontWeight: '700', color: '#fff', marginBottom: '16px' }}>
-                2. Descrição do Serviço
+                2. Descrição do Serviço e Armazenamento Local
               </h2>
               <p style={{ marginBottom: '16px' }}>
-                O Assistente Moeda é um assistente financeiro pessoal interativo focado no monitoramento e cálculo de fluxo de caixa, despesas, receitas, investimentos e planejamento de longo prazo.
+                O Assistente Moeda é um assistente financeiro pessoal focado no monitoramento e cálculo de fluxo de caixa, despesas, receitas, investimentos e planejamento de longo prazo.
               </p>
-              <p>
-                O aplicativo disponibiliza duas formas de uso: o <strong>"Modo Visitante" (Guest Mode)</strong>, onde seus registros financeiros ficam salvos exclusivamente no armazenamento interno do seu dispositivo móvel, e a <strong>Conta Autenticada</strong>, que permite a sincronização segura de dados através da infraestrutura na nuvem da Heiss-Lab (utilizando o Supabase).
-              </p>
+              <div style={{
+                backgroundColor: 'rgba(16, 185, 129, 0.08)',
+                borderLeft: '4px solid #10b981',
+                padding: '16px',
+                borderRadius: '0 8px 8px 0',
+                fontSize: '14px',
+                lineHeight: '1.6',
+              }}>
+                <strong>🛡️ Armazenamento 100% Local no Dispositivo:</strong> Para a máxima segurança e privacidade do proprietário e dos usuários, <strong>todas as suas informações financeiras e planilhas ficam salvas unicamente no armazenamento local do seu próprio dispositivo</strong>. Os dados financeiros não são salvos em nenhum banco de dados na nuvem da Heiss-Lab nem compartilhados com servidores remotos.
+              </div>
             </section>
 
             {/* Planos e Faturamento */}
             <section id="assinaturas" style={{ marginBottom: '48px' }}>
               <h2 style={{ fontSize: '22px', fontWeight: '700', color: '#fff', marginBottom: '16px' }}>
-                3. Planos e Faturamento
+                3. Planos, Faturamento e Acúmulo de Renovações
               </h2>
               <p style={{ marginBottom: '16px' }}>
-                Disponibilizamos planos pagos sob assinatura (Mensal e Anual) para desbloqueio de ferramentas avançadas, tais como sincronização de dados ilimitada e análises de inteligência artificial (God Mode):
+                Disponibilizamos planos pagos sob assinatura (Mensal e Anual) para liberação de consultas com a Inteligência Artificial (Chat IA):
               </p>
               <ul style={{ paddingLeft: '20px', marginBottom: '16px', listStyleType: 'disc' }}>
                 <li style={{ marginBottom: '8px' }}>
-                  <strong>Faturamento e Renovação:</strong> As assinaturas Pro são faturadas no momento da contratação e renovadas automaticamente ao final de cada período contratual (mensal ou anual), a menos que o cancelamento seja efetuado pelo usuário antes da data da renovação.
+                  <strong>Acúmulo de Expiração e Tokens:</strong> Caso o usuário adquira o plano mensal ou anual mais de uma vez ou renove antes da expiração de um plano vigente, o sistema <strong>não sobrescreve o período anterior</strong>. O novo tempo contratado (30 dias ou 365 dias) é <strong>adicionado cumulativamente à data de expiração restante</strong>, e a cota de tokens é somada ao saldo ativo.
                 </li>
                 <li style={{ marginBottom: '8px' }}>
-                  <strong>Processamento Móvel:</strong> Em dispositivos móveis, as assinaturas e compras in-app são gerenciadas de forma exclusiva pelo <strong>Google Play Billing</strong> e integradas operacionalmente via <strong>RevenueCat</strong>.
+                  <strong>Processamento Móvel:</strong> Em dispositivos móveis, o faturamento é processado com segurança via <strong>Google Play Billing</strong> e operacionalizado via <strong>RevenueCat</strong>.
                 </li>
                 <li style={{ marginBottom: '8px' }}>
-                  <strong>Processamento Web:</strong> Assinaturas adquiridas pela interface web do aplicativo são processadas pelo gateway seguro <strong>Stripe</strong>.
+                  <strong>Processamento Web:</strong> Assinaturas adquiridas na interface web são processadas pelo gateway internacional <strong>Stripe</strong>.
                 </li>
               </ul>
               <p>

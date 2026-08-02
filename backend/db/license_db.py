@@ -253,6 +253,74 @@ def create_license_key(email: str | None, tier: str = "pro", initial_tokens: int
     logger.info(f"Created new license key for {email or 'anonymous'}: {raw_key[:10]}...")
     return raw_key, key_h
 
+def fulfill_or_extend_license(
+    email: str | None,
+    tier: str = "pro",
+    token_tank: int = 1_000_000,
+    duration_days: int = 30,
+    stripe_customer_id: str | None = None
+) -> tuple[str, str, int, str]:
+    """
+    Smart License Fulfillment & Cumulative Stacker:
+    - If user already has an active license key:
+        1. Additively stacks token_tank onto token_balance and token_cap.
+        2. Cumulatively extends expires_at by +duration_days onto existing future expiration.
+        3. Returns (license_key, key_hash, new_total_tokens, new_expires_at).
+    - If no existing license key:
+        Creates a new license key with now + duration_days.
+    """
+    now = datetime.now(timezone.utc)
+    clean_email = email.strip().lower() if email else None
+
+    existing_recs = get_licenses_by_email(clean_email) if clean_email else []
+
+    if existing_recs:
+        rec = existing_recs[0]
+        raw_key = rec["license_key"]
+        key_h = rec["key_hash"]
+        current_balance = rec.get("token_balance", 0)
+        current_exp_str = rec.get("expires_at")
+
+        # Base date for cumulative extension
+        base_date = now
+        if current_exp_str:
+            try:
+                exp_dt = datetime.fromisoformat(current_exp_str.replace("Z", "+00:00"))
+                if exp_dt > now:
+                    base_date = exp_dt
+            except Exception as e:
+                logger.warning(f"Could not parse existing expires_at '{current_exp_str}': {e}")
+
+        new_expires_at = (base_date + timedelta(days=duration_days)).isoformat()
+        new_balance = current_balance + token_tank
+
+        with get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                UPDATE license_keys
+                SET token_balance = token_balance + ?,
+                    token_cap = MAX(token_cap, token_balance + ?),
+                    expires_at = ?,
+                    tier = ?,
+                    updated_at = ?
+                WHERE key_hash = ?
+            """, (token_tank, token_tank, new_expires_at, tier, now.isoformat(), key_h))
+            conn.commit()
+
+        logger.info(f"Cumulative License Stacked for {clean_email}: +{token_tank:,} tokens, +{duration_days} days. New expires_at: {new_expires_at}")
+        return raw_key, key_h, new_balance, new_expires_at
+
+    # New License Creation
+    new_expires_at = (now + timedelta(days=duration_days)).isoformat()
+    raw_key, key_h = create_license_key(
+        email=clean_email,
+        tier=tier,
+        initial_tokens=token_tank,
+        expires_at=new_expires_at,
+        stripe_customer_id=stripe_customer_id
+    )
+    return raw_key, key_h, token_tank, new_expires_at
+
 def get_license_by_raw_key(raw_key: str) -> dict | None:
     """Retrieves license record by raw license key string. Supports Master God Mode key for owner."""
     clean_k = raw_key.strip()

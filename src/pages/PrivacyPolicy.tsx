@@ -143,66 +143,61 @@ export default function PrivacyPolicy() {
                 1. Introdução
               </h2>
               <p style={{ marginBottom: '16px' }}>
-                Esta Política de Privacidade regulamenta a forma como a <strong>Heiss-Lab</strong> ("nós", "nosso"), na qualidade de Controladora de Dados, coleta, armazena, processa, utiliza e protege as informações pessoais dos usuários ("você", "usuário") do aplicativo móvel <strong>Assistente Moeda</strong> e seus serviços associados.
+                Esta Política de Privacidade regulamenta a forma como a <strong>Heiss-Lab</strong> ("nós", "nosso") garante a privacidade e a segurança integral dos dados dos usuários ("você", "usuário") do aplicativo <strong>Assistente Moeda</strong> e seus serviços associados.
               </p>
               <p style={{ marginBottom: '16px' }}>
-                Nosso compromisso fundamental é assegurar a transparência, segurança e a conformidade integral com a <strong>Lei Geral de Proteção de Dados (LGPD)</strong> (Lei nº 13.709/2018) e com as diretrizes da Autoridade Nacional de Proteção de Dados (ANPD).
+                Nosso compromisso fundamental é assegurar a máxima privacidade, transparência e conformidade integral com a <strong>Lei Geral de Proteção de Dados (LGPD)</strong> (Lei nº 13.709/2018).
               </p>
-              <p>
-                Ao utilizar o Assistente Moeda, você declara estar ciente dos termos desta Política. Caso opte por utilizar o aplicativo no "Modo Visitante" (Guest Mode), seus dados financeiros serão armazenados exclusivamente de forma local em seu dispositivo, sem qualquer sincronização com nossos servidores em nuvem.
-              </p>
+              <div style={{
+                backgroundColor: 'rgba(16, 185, 129, 0.08)',
+                borderLeft: '4px solid #10b981',
+                padding: '20px',
+                borderRadius: '0 8px 8px 0',
+                fontSize: '15px',
+                lineHeight: '1.6',
+              }}>
+                <strong>🛡️ Garantia de Privacidade Absoluta e Armazenamento Local:</strong> Para a máxima segurança do proprietário e de todos os usuários, <strong>todas as suas planilhas, transações, receitas, despesas e metas financeiras são armazenadas exclusivamente de forma local no seu próprio dispositivo</strong>. Nenhum dado financeiro ou planilha é salvo, armazenado ou mantido em nenhum banco de dados remoto ou servidor externo.
+              </div>
             </section>
 
             {/* Dados Coletados */}
             <section id="dados-coletados" style={{ marginBottom: '48px' }}>
               <h2 style={{ fontSize: '22px', fontWeight: '700', color: '#fff', marginBottom: '16px' }}>
-                2. Dados Coletados
+                2. Armazenamento Local de Dados
               </h2>
               <p style={{ marginBottom: '16px' }}>
-                Dependendo da sua forma de interação com o aplicativo, coletamos as seguintes categorias de dados:
+                O Assistente Moeda foi projetado sob a arquitetura <em>Local-First Security</em>:
               </p>
               <ul style={{ paddingLeft: '20px', marginBottom: '16px', listStyleType: 'disc' }}>
                 <li style={{ marginBottom: '8px' }}>
-                  <strong>Dados de Cadastro e Autenticação:</strong> Endereço de email e credenciais de acesso fornecidos espontaneamente no ato de criação de conta.
+                  <strong>Dados Financeiros e Planilhas:</strong> Registros informados por você (como lançamentos, fluxo de caixa, aportes e metas) residem unicamente no armazenamento interno do seu aparelho (LocalStorage / AsyncStorage local).
                 </li>
                 <li style={{ marginBottom: '8px' }}>
-                  <strong>Dados Financeiros de Fluxo de Caixa:</strong> Registros informados por você, incluindo receitas, despesas, aportes, investimentos e metas financeiras.
+                  <strong>Zero Banco de Dados Remoto:</strong> Nós não mantemos nem possuímos acesso a nenhum banco de dados de planilhas financeiras dos usuários em nossos servidores.
                 </li>
                 <li style={{ marginBottom: '8px' }}>
-                  <strong>Dados de Transações e Pagamentos:</strong> Histórico de planos contratados e status da assinatura. Não armazenamos informações brutas de cartão de crédito.
+                  <strong>Chaves de Licença (PRO):</strong> Nosso servidor armazena unicamente o registro hash criptográfico da sua Chave de Licença PRO para autenticação de saldo de tokens e validade do plano contratado.
                 </li>
                 <li style={{ marginBottom: '8px' }}>
-                  <strong>Metadados de Uso:</strong> Registro de interações, volumetria de requisições de inteligência artificial e diagnósticos técnicos para suporte do app.
+                  <strong>Dados de Pagamento:</strong> Processados diretamente por gateways seguros (Stripe para Web e Google Play / RevenueCat para dispositivos móveis). Não armazenamos informações brutas de cartão de crédito.
                 </li>
               </ul>
-              <div style={{
-                backgroundColor: 'rgba(168, 85, 247, 0.05)',
-                borderLeft: '4px solid #a855f7',
-                padding: '16px',
-                borderRadius: '0 8px 8px 0',
-                fontSize: '14px',
-              }}>
-                <strong>Nota Importante sobre Supabase:</strong> Os dados de autenticação e banco de dados são estruturados e transmitidos utilizando criptografia TLS em trânsito e criptografados em repouso nos servidores do <strong>Supabase</strong>, garantindo alto nível de resiliência e confidencialidade.
-              </div>
             </section>
 
             {/* Finalidades do Tratamento */}
             <section id="finalidades" style={{ marginBottom: '48px' }}>
               <h2 style={{ fontSize: '22px', fontWeight: '700', color: '#fff', marginBottom: '16px' }}>
-                3. Finalidades do Tratamento
+                3. Processamento e Autonomia do Usuário
               </h2>
               <p style={{ marginBottom: '16px' }}>
-                O tratamento de seus dados é balizado pelas seguintes bases legais da LGPD (Artigo 7º):
+                A arquitetura local garante autonomia completa sobre seus dados:
               </p>
               <ol style={{ paddingLeft: '20px', marginBottom: '16px', listStyleType: 'decimal' }}>
                 <li style={{ marginBottom: '8px' }}>
-                  <strong>Execução de Contrato:</strong> Para autenticar sua conta, sincronizar seu histórico financeiro entre múltiplos dispositivos e viabilizar a utilização das funcionalidades contratadas.
+                  <strong>Controle Total:</strong> Você pode exportar, limpar ou apagar todos os seus registros financeiros a qualquer momento diretamente na interface do app.
                 </li>
                 <li style={{ marginBottom: '8px' }}>
-                  <strong>Legítimo Interesse:</strong> Para melhorar o desempenho do software, prevenir fraudes e solucionar bugs de estabilidade operacional.
-                </li>
-                <li style={{ marginBottom: '8px' }}>
-                  <strong>Consentimento:</strong> Solicitado expressamente para o processamento de previsões avançadas pela nossa Inteligência Artificial ou envio de comunicações de suporte.
+                  <strong>Inexistência de Vazamento de Dados na Nuvem:</strong> Como suas planilhas não são salvas em bancos de dados remotos, seus registros financeiros estão imunes a vazamentos de servidores centrais.
                 </li>
               </ol>
             </section>
@@ -210,10 +205,10 @@ export default function PrivacyPolicy() {
             {/* Motor de IA (God Mode) */}
             <section id="motor-ia" style={{ marginBottom: '48px' }}>
               <h2 style={{ fontSize: '22px', fontWeight: '700', color: '#fff', marginBottom: '16px' }}>
-                4. Motor de IA (God Mode)
+                4. Motor de IA e Consultas Em Memória (Stateless)
               </h2>
               <p style={{ marginBottom: '16px' }}>
-                O recurso <strong>God Mode</strong> utiliza modelos de linguagem gerativos e algoritmos preditivos avançados para analisar suas receitas, despesas e comportamento de fluxo de caixa, gerando simulações de longo prazo e análises de break-even.
+                O Assistente de IA utiliza Inteligência Artificial avançada para gerar diagnósticos e insights sobre suas métricas:
               </p>
               <div style={{
                 backgroundColor: 'rgba(59, 130, 246, 0.05)',
@@ -223,29 +218,26 @@ export default function PrivacyPolicy() {
                 fontSize: '14px',
                 marginBottom: '16px',
               }}>
-                <strong>Declaração de Exclusividade da IA:</strong> Suas métricas financeiras são processadas através da API de IA de forma estritamente isolada e com finalidade exclusiva de gerar os seus insights pessoais dentro do aplicativo. O histórico de conversas e fluxos financeiros <strong>não são compartilhados publicamente nem utilizados para o treinamento de modelos globais de Inteligência Artificial</strong>.
+                <strong>Declaração de Processamento Stateless (Em Memória):</strong> Ao realizar perguntas no Chat de IA, os dados necessários para o cálculo da resposta são transmitidos de forma temporária e criptografada (HTTPS/TLS) e processados estritamente em memória em tempo de execução. <strong>Os dados são imediatamente descartados após a resposta e jamais são salvos em banco de dados ou utilizados para treinamento de modelos de IA de terceiros.</strong>
               </div>
             </section>
 
             {/* Pagamentos e Assinaturas */}
             <section id="pagamentos" style={{ marginBottom: '48px' }}>
               <h2 style={{ fontSize: '22px', fontWeight: '700', color: '#fff', marginBottom: '16px' }}>
-                5. Pagamentos e Assinaturas
+                5. Pagamentos e Acúmulo de Assinaturas
               </h2>
               <p style={{ marginBottom: '16px' }}>
-                Para viabilizar a contratação de planos Pro (mensais ou anuais), utilizamos prestadores de serviços de pagamento amplamente consolidados no mercado:
+                As compras de assinaturas Pro (mensais ou anuais) são integradas via Stripe (Web) e Google Play / RevenueCat (Mobile):
               </p>
               <ul style={{ paddingLeft: '20px', marginBottom: '16px', listStyleType: 'disc' }}>
                 <li style={{ marginBottom: '8px' }}>
-                  <strong>Stripe:</strong> Responsável pelo processamento seguro na interface web.
+                  <strong>Renovações Cumulativas:</strong> Caso o usuário adquira novos planos ou renovações com uma licença ativa, a nova validade é <strong>adicionada cumulativamente</strong> à data de expiração existente, e o saldo de tokens é somado sem perdas.
                 </li>
                 <li style={{ marginBottom: '8px' }}>
-                  <strong>RevenueCat e Google Play Billing:</strong> Responsáveis pelo faturamento, controle de recibos e renovação automática de assinaturas nos dispositivos móveis Android.
+                  <strong>Conformidade PCI-DSS:</strong> Todos os pagamentos cumprem os mais rigorosos padrões internacionais de segurança bancária.
                 </li>
               </ul>
-              <p>
-                Os provedores de pagamento operam sob conformidade estrita da norma de segurança PCI-DSS. A Heiss-Lab não armazena, visualiza ou retém dados de cartões de crédito em seus servidores de banco de dados.
-              </p>
             </section>
 
             {/* Seus Direitos (LGPD) */}
@@ -254,7 +246,7 @@ export default function PrivacyPolicy() {
                 6. Seus Direitos (LGPD)
               </h2>
               <p style={{ marginBottom: '16px' }}>
-                Em conformidade com o Artigo 18 da LGPD, você detém controle total sobre os seus dados, possuindo os seguintes direitos fundamentais:
+                Pela arquitetura local do aplicativo, você possui pleno domínio sobre seus dados:
               </p>
               <div style={{
                 display: 'grid',
@@ -263,21 +255,18 @@ export default function PrivacyPolicy() {
                 marginBottom: '24px',
               }}>
                 <div style={{ backgroundColor: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '8px', padding: '16px' }}>
-                  <h4 style={{ color: '#fff', fontWeight: '600', marginBottom: '8px', fontSize: '14px' }}>📥 Acesso e Exportação</h4>
-                  <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.6)' }}>Direito de obter confirmação do processamento e exportar todos os seus dados em formato legível.</p>
+                  <h4 style={{ color: '#fff', fontWeight: '600', marginBottom: '8px', fontSize: '14px' }}>📥 Armazenamento no Dispositivo</h4>
+                  <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.6)' }}>Seus registros pertencem 100% ao seu dispositivo, com controle total do usuário.</p>
                 </div>
                 <div style={{ backgroundColor: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '8px', padding: '16px' }}>
-                  <h4 style={{ color: '#fff', fontWeight: '600', marginBottom: '8px', fontSize: '14px' }}>✏️ Retificação</h4>
-                  <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.6)' }}>Direito de requerer a correção imediata de dados incompletos, inexatos ou desatualizados.</p>
+                  <h4 style={{ color: '#10b981', fontWeight: '600', marginBottom: '8px', fontSize: '14px' }}>🔒 Privacidade Absoluta</h4>
+                  <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.6)' }}>Nenhum histórico financeiro é armazenado em banco de dados remoto.</p>
                 </div>
                 <div style={{ backgroundColor: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '8px', padding: '16px' }}>
-                  <h4 style={{ color: '#ef4444', fontWeight: '600', marginBottom: '8px', fontSize: '14px' }}>❌ Exclusão Completa</h4>
-                  <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.6)' }}>Direito de solicitar a eliminação definitiva de todos os registros pessoais dos servidores da nuvem.</p>
+                  <h4 style={{ color: '#ef4444', fontWeight: '600', marginBottom: '8px', fontSize: '14px' }}>❌ Limpeza Instantânea</h4>
+                  <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.6)' }}>Você pode limpar o cachê e dados do app instantaneamente nas configurações.</p>
                 </div>
               </div>
-              <p>
-                A solicitação de exclusão de conta pode ser realizada diretamente dentro das Configurações do aplicativo de maneira instantânea ou mediante contato por email.
-              </p>
             </section>
 
             {/* Segurança dos Dados */}
@@ -286,12 +275,12 @@ export default function PrivacyPolicy() {
                 7. Segurança dos Dados
               </h2>
               <p style={{ marginBottom: '16px' }}>
-                Empregamos salvaguardas técnicas apropriadas para mitigar riscos de acessos não autorizados, perdas acidentais, destruição ou vazamentos:
+                Medidas técnicas adotadas no Assistente Moeda:
               </p>
               <ul style={{ paddingLeft: '20px', marginBottom: '16px', listStyleType: 'disc' }}>
-                <li style={{ marginBottom: '8px' }}>Criptografia AES-256 no armazenamento persistente do banco de dados.</li>
-                <li style={{ marginBottom: '8px' }}>Autenticação segura via JSON Web Tokens (JWT) e Row Level Security (RLS) no Supabase.</li>
-                <li style={{ marginBottom: '8px' }}>Tráfego integral de requisições sobre protocolo criptografado HTTPS/TLS.</li>
+                <li style={{ marginBottom: '8px' }}>Isolamento sandbox no dispositivo móvel/navegador do próprio usuário.</li>
+                <li style={{ marginBottom: '8px' }}>Comunicação de chamadas de IA via protocolo criptografado HTTPS/TLS.</li>
+                <li style={{ marginBottom: '8px' }}>Autenticação segura via Chave de Licença hash SHA-256 no backend.</li>
               </ul>
             </section>
 

@@ -10,7 +10,7 @@ import logging
 from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Request, Header, HTTPException, status
 from fastapi.responses import JSONResponse
-from db.license_db import create_license_key, is_webhook_processed, mark_webhook_processed
+from db.license_db import fulfill_or_extend_license, is_webhook_processed, mark_webhook_processed
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -54,18 +54,17 @@ async def revenuecat_webhook(request: Request, authorization: str = Header(None)
         
     if event_type in ("INITIAL_PURCHASE", "RENEWAL", "NON_RENEWING_PURCHASE"):
         token_tank = resolve_token_tank(str(product_id))
-        now = datetime.now(timezone.utc)
         prod_id_lower = str(product_id).lower()
-        if "year" in prod_id_lower or "anual" in prod_id_lower or "yearly" in prod_id_lower:
-            expiration_date_iso = (now + timedelta(days=365)).isoformat()
-        else:
-            expiration_date_iso = (now + timedelta(days=30)).isoformat()
+        is_yearly = ("year" in prod_id_lower or "anual" in prod_id_lower or "yearly" in prod_id_lower)
+        duration_days = 365 if is_yearly else 30
+        tier = "pro_yearly" if is_yearly else "pro"
+        user_email = f"{app_user_id}@mobile.app"
 
-        raw_key, key_hash = create_license_key(
-            email=f"{app_user_id}@mobile.app",
-            tier="pro",
-            initial_tokens=token_tank,
-            expires_at=expiration_date_iso,
+        raw_key, key_hash, total_tokens, expiration_date_iso = fulfill_or_extend_license(
+            email=user_email,
+            tier=tier,
+            token_tank=token_tank,
+            duration_days=duration_days,
             stripe_customer_id=app_user_id
         )
 
@@ -77,6 +76,7 @@ async def revenuecat_webhook(request: Request, authorization: str = Header(None)
             content={
                 "status": "fulfilled", 
                 "license_key": raw_key,
+                "token_balance": total_tokens,
                 "expires_at": expiration_date_iso
             }
         )
