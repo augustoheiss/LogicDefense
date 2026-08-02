@@ -46,7 +46,7 @@ import { formatCurrencySmart } from '@/core/formatCurrency';
 import { validateMobileLicenseKey, getStoredLicenseKey } from '@/storage/authService';
 import type { TableGoals, CoinTable } from '@/core/types';
 
-// ── Animated Pressable for spring-scale micro-interactions ───────────────────
+const API_URL = process.env.EXPO_PUBLIC_AI_BACKEND_URL || process.env.EXPO_PUBLIC_API_URL || 'https://logicdefense-api.onrender.com';
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
@@ -94,8 +94,7 @@ export default function SettingsScreen() {
     }
     setIsValidatingKey(true);
     try {
-      const apiBaseUrl = process.env.EXPO_PUBLIC_API_URL || 'https://logicdefense-api.onrender.com';
-      const res = await validateMobileLicenseKey(inputLicenseKey.trim(), apiBaseUrl);
+      const res = await validateMobileLicenseKey(inputLicenseKey.trim(), API_URL);
       if (res.valid) {
         await auth.refreshProfile();
         if (Platform.OS === 'web') {
@@ -1177,8 +1176,6 @@ const Section = React.memo(function Section({ title, children }: { title: string
 });
 
 // ── Spreadsheet API Keys Integration Section ───────────────────────────────────
-
-const API_URL = process.env.EXPO_PUBLIC_AI_BACKEND_URL || process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8000';
 
 const SpreadsheetApiSection = React.memo(function SpreadsheetApiSection({
   tableId,
