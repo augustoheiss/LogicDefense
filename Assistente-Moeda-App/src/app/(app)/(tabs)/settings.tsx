@@ -708,7 +708,7 @@ export default function SettingsScreen() {
             {db.activeTables.length === 0 ? (
               <Text style={styles.emptyText}>Nenhuma tabela criada</Text>
             ) : (
-              db.activeTables.map((t) => {
+              db.activeTables.map((t, index) => {
                 const isActive = t.id === db.activeTable?.id;
                 const isEditing = t.id === editingTableId;
 
@@ -739,10 +739,7 @@ export default function SettingsScreen() {
                       <View style={styles.tableCardContent}>
                         <Pressable
                           style={styles.tableSelectArea}
-                          onPress={() => {
-                            const idx = db.tables.findIndex(table => table.id === t.id);
-                            if (idx !== -1) db.setActiveTableIndex(idx);
-                          }}
+                          onPress={() => db.setActiveTableIndex(index)}
                         >
                           <Text style={[styles.tableName, isActive && styles.tableNameActive]}>
                             {isActive ? '● ' : '○ '}
