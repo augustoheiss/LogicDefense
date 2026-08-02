@@ -8,7 +8,7 @@ Zero Supabase dependency — generates license keys and saves to SQLite/Turso.
 import os
 import json
 import logging
-import stripe
+import stripe  # type: ignore
 from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Request, Header, HTTPException, status, BackgroundTasks
 from fastapi.responses import JSONResponse
@@ -45,6 +45,7 @@ async def fulfill_stripe_checkout(session: dict, background_tasks: BackgroundTas
     product_id = str(metadata.get("product_id") or "").lower()
     amount_total = session.get("amount_total", 0)
 
+    token_tank = resolve_token_tank(product_id, amount_total)
     is_yearly = ("year" in product_id or "yearly" in product_id or "anual" in product_id or amount_total >= 10000)
     duration_days = 365 if is_yearly else 30
     tier = "pro_yearly" if is_yearly else "pro"
