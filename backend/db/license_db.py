@@ -16,7 +16,16 @@ logger = logging.getLogger(__name__)
 
 TURSO_DATABASE_URL = (os.getenv("TURSO_DATABASE_URL") or "").strip(' "\' \t\r\n')
 TURSO_AUTH_TOKEN = (os.getenv("TURSO_AUTH_TOKEN") or "").strip(' "\' \t\r\n')
+GODMODE_SECRET_KEY = (os.getenv("GODMODE_SECRET_KEY") or "").strip(' "\' \t\r\n')
 DB_FILE = os.getenv("LICENSE_DB_PATH", "license_storage.db")
+
+def is_godmode_key(raw_key: str) -> bool:
+    clean_k = raw_key.strip()
+    if not clean_k:
+        return False
+    if GODMODE_SECRET_KEY and clean_k == GODMODE_SECRET_KEY:
+        return True
+    return False
 
 def is_turso_configured() -> bool:
     return bool(TURSO_DATABASE_URL and TURSO_AUTH_TOKEN)
@@ -242,7 +251,7 @@ def create_license_key(email: str | None, tier: str = "pro", initial_tokens: int
 def get_license_by_raw_key(raw_key: str) -> dict | None:
     """Retrieves license record by raw license key string. Supports Master God Mode key for owner."""
     clean_k = raw_key.strip()
-    if "godmode" in clean_k.lower() or clean_k.lower() == "am_godmode":
+    if is_godmode_key(clean_k):
         return {
             "id": 999999,
             "license_key": clean_k,
@@ -300,8 +309,7 @@ def credit_license_tokens(key_hash: str, token_amount: int, expires_at: str | No
 
 def deduct_license_tokens(key_hash: str, amount: int, endpoint: str = "/api/coin/ai-analyst") -> bool:
     """Atomically deducts token amount from a license balance if sufficient tokens exist."""
-    godmode_hash = hash_key("am_godmode")
-    if key_hash == godmode_hash:
+    if GODMODE_SECRET_KEY and key_hash == hash_key(GODMODE_SECRET_KEY):
         return True
 
     now = datetime.now(timezone.utc).isoformat()
@@ -309,10 +317,7 @@ def deduct_license_tokens(key_hash: str, amount: int, endpoint: str = "/api/coin
         cursor = conn.cursor()
         cursor.execute("SELECT token_balance, tier FROM license_keys WHERE key_hash = ?", (key_hash,))
         row = cursor.fetchone()
-        if not row:
-            # Check if godmode key hash
-            return True
-        if row.get("tier") == "godmode_owner":
+        if not row or row.get("tier") == "godmode_owner":
             return True
         if row["token_balance"] < amount:
             return False
