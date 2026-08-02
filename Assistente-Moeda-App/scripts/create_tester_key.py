@@ -22,16 +22,16 @@ app_dir = script_dir.parent
 root_dir = app_dir.parent
 backend_dir = root_dir / "backend"
 
-if str(backend_dir) not in sys.path:
-    sys.path.insert(0, str(backend_dir))
+for path in [str(root_dir), str(backend_dir)]:
+    if path not in sys.path:
+        sys.path.insert(0, path)
 
 from dotenv import load_dotenv
 load_dotenv(backend_dir / ".env")
 
 try:
-    from db.license_db import create_license_key
+    from backend.db.license_db import create_license_key
 except ImportError:
-    sys.path.append(str(backend_dir))
     from db.license_db import create_license_key
 
 def main():
