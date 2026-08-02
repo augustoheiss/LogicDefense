@@ -1261,14 +1261,12 @@ const SpreadsheetApiSection = React.memo(function SpreadsheetApiSection({
 
     setGenerating(true);
     try {
-      const sessionRes = await supabase.auth.getSession();
-      const token = sessionRes.data.session?.access_token;
-
+      const storedLicenseKey = await getStoredLicenseKey();
       const headers: any = {
         'Content-Type': 'application/json',
       };
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
+      if (storedLicenseKey) {
+        headers['X-License-Key'] = storedLicenseKey;
       }
 
       const response = await fetch(`${API_URL}/api/v1/api-keys/generate`, {
@@ -1276,6 +1274,7 @@ const SpreadsheetApiSection = React.memo(function SpreadsheetApiSection({
         headers,
         body: JSON.stringify({
           table_id: tableId,
+          license_key: storedLicenseKey || undefined,
           permissions: 'read:write',
         }),
       });
@@ -1285,16 +1284,20 @@ const SpreadsheetApiSection = React.memo(function SpreadsheetApiSection({
         let errMsg = errText;
         try {
           const errJson = JSON.parse(errText);
-          errMsg = errJson.detail || errMsg;
+          if (typeof errJson.detail === 'string') {
+            errMsg = errJson.detail;
+          } else if (Array.isArray(errJson.detail)) {
+            errMsg = errJson.detail[0]?.msg || errText;
+          }
         } catch (e) {}
 
-        if (errMsg.includes("Upgrade to PRO") || response.status === 403 && errMsg.includes("PRO")) {
+        if (response.status === 401 || response.status === 403 || errMsg.includes("PRO") || errMsg.includes("Licença")) {
           if (Platform.OS === 'web') {
-            window.alert("Faça upgrade para o plano PRO para gerenciar chaves de API em planilhas adicionais!");
+            window.alert(errMsg || "Uma Chave de Licença PRO ativa é necessária para gerar chaves de API externa!");
           } else {
             Alert.alert(
-              "Limite Atingido",
-              "Faça upgrade para o plano PRO para gerenciar chaves de API em planilhas adicionais.",
+              "Licença Necessária",
+              errMsg || "Uma Chave de Licença PRO ativa é necessária para gerar chaves de API externa.",
               [
                 { text: "Ver Planos", onPress: onShowStore },
                 { text: "Fechar", style: "cancel" }

@@ -150,7 +150,23 @@ export async function sendChatMessage(
 
     if (!response.ok) {
       const errorText = await response.text();
-      return { response: '', error: `Erro do servidor: ${response.status} — ${errorText}` };
+      let msg = errorText;
+      try {
+        const errJson = JSON.parse(errorText);
+        if (typeof errJson.detail === 'string') {
+          msg = errJson.detail;
+        } else if (Array.isArray(errJson.detail)) {
+          msg = errJson.detail[0]?.msg || errorText;
+        }
+      } catch (e) {}
+
+      if (response.status === 401) {
+        return { response: '', error: `🔒 Chave de Licença PRO necessária para utilizar a IA. Insira sua chave em Ajustes > Licença & Armazenamento.` };
+      }
+      if (response.status === 402) {
+        return { response: '', error: `⚠️ ${msg}` };
+      }
+      return { response: '', error: msg };
     }
 
     const data = await response.json();

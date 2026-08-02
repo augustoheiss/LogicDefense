@@ -20,7 +20,7 @@ router = APIRouter(prefix="/api/v1/api-keys", tags=["API Keys Management"])
 
 class GenerateKeyRequest(BaseModel):
     table_id: str = Field(..., description="ID da planilha para a qual a chave será gerada")
-    license_key: str = Field(..., description="Sua Chave de Licença PRO (am_pro_...)")
+    license_key: str | None = Field(default=None, description="Sua Chave de Licença PRO (am_pro_...)")
     permissions: str = Field(default="read:write", description="Permissões da chave: 'read-only' ou 'read:write'")
 
 class GenerateKeyResponse(BaseModel):
@@ -30,19 +30,28 @@ class GenerateKeyResponse(BaseModel):
     permissions: str
 
 @router.post("/generate", response_model=GenerateKeyResponse)
-async def generate_api_key(payload: GenerateKeyRequest):
+async def generate_api_key(
+    payload: GenerateKeyRequest,
+    x_license_key: str | None = Header(None, alias="X-License-Key")
+):
     """
     Generates a spreadsheet API key tied to a valid PRO license key.
     """
-    raw_license = payload.license_key.strip()
-    license_rec = get_license_by_raw_key(raw_license)
+    raw_license = payload.license_key or x_license_key
+    if not raw_license:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Por favor, ative uma Chave de Licença PRO para gerar chaves de integração via API para IAs externas."
+        )
+
+    license_rec = get_license_by_raw_key(raw_license.strip())
     if not license_rec:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Chave de Licença PRO inválida ou expirada."
+            detail="Chave de Licença PRO inválida ou não encontrada."
         )
         
-    if license_rec.get("token_balance", 0) <= 0:
+    if license_rec.get("token_balance", 0) <= 0 and license_rec.get("tier") != "godmode_owner":
         raise HTTPException(
             status_code=status.HTTP_402_PAYMENT_REQUIRED,
             detail="Saldo de tokens insuficiente na sua licença PRO."
