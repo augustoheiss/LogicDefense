@@ -43,7 +43,8 @@ import { Card } from '@/components/ui/Card';
 import { TokenProgressBar } from '@/components/ui/TokenProgressBar';
 import { SectorSettingsPanel } from '@/components/ui/SectorSettingsPanel';
 import { formatCurrencySmart } from '@/core/formatCurrency';
-import type { TableGoals } from '@/core/types';
+import { validateMobileLicenseKey } from '@/storage/authService';
+import type { TableGoals, CoinTable } from '@/core/types';
 
 // ── Animated Pressable for spring-scale micro-interactions ───────────────────
 
@@ -74,6 +75,133 @@ export default function SettingsScreen() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [passwordError, setPasswordError] = useState('');
   const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
+
+  // License Key activation & email recovery states
+  const [inputLicenseKey, setInputLicenseKey] = useState('');
+  const [isValidatingKey, setIsValidatingKey] = useState(false);
+  const [recoveryEmail, setRecoveryEmail] = useState('');
+  const [isRecoveringKey, setIsRecoveringKey] = useState(false);
+
+  // Table management states
+  const [newTableName, setNewTableName] = useState('');
+  const [editingTableId, setEditingTableId] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState('');
+
+  const handleValidateKey = async () => {
+    if (!inputLicenseKey.trim()) {
+      Alert.alert('Erro', 'Por favor, digite uma chave de licença.');
+      return;
+    }
+    setIsValidatingKey(true);
+    try {
+      const apiBaseUrl = process.env.EXPO_PUBLIC_API_URL || 'https://logicdefense-api.onrender.com';
+      const res = await validateMobileLicenseKey(inputLicenseKey.trim(), apiBaseUrl);
+      if (res.valid) {
+        await auth.refreshProfile();
+        if (Platform.OS === 'web') {
+          window.alert('Chave de Licença ativada com sucesso!');
+        } else {
+          Alert.alert('Sucesso', 'Chave de Licença ativada com sucesso!');
+        }
+        setInputLicenseKey('');
+      } else {
+        if (Platform.OS === 'web') {
+          window.alert(res.message || 'Chave inválida.');
+        } else {
+          Alert.alert('Erro', res.message || 'Chave inválida.');
+        }
+      }
+    } catch (err: any) {
+      console.error(err);
+      if (Platform.OS === 'web') {
+        window.alert('Falha ao validar a chave. Tente novamente.');
+      } else {
+        Alert.alert('Erro', 'Falha ao validar a chave. Tente novamente.');
+      }
+    } finally {
+      setIsValidatingKey(false);
+    }
+  };
+
+  const handleRecoverKey = async () => {
+    if (!recoveryEmail.trim() || !recoveryEmail.includes('@')) {
+      Alert.alert('Erro', 'Por favor, digite um e-mail válido.');
+      return;
+    }
+    setIsRecoveringKey(true);
+    try {
+      const apiBaseUrl = process.env.EXPO_PUBLIC_API_URL || 'https://logicdefense-api.onrender.com';
+      const response = await fetch(`${apiBaseUrl}/api/license/recover`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: recoveryEmail.trim() }),
+      });
+      const data = await response.json();
+      const msg = data.message || 'Se existir alguma chave associada a este e-mail, ela foi enviada para sua caixa de entrada.';
+      if (Platform.OS === 'web') {
+        window.alert(msg);
+      } else {
+        Alert.alert('Recuperação de Licença', msg);
+      }
+      setRecoveryEmail('');
+    } catch (err: any) {
+      const errMsg = 'Falha ao se conectar com o servidor. Tente novamente.';
+      if (Platform.OS === 'web') {
+        window.alert(errMsg);
+      } else {
+        Alert.alert('Erro', errMsg);
+      }
+    } finally {
+      setIsRecoveringKey(false);
+    }
+  };
+
+  const handleAddTable = () => {
+    if (!newTableName.trim()) {
+      Alert.alert('Erro', 'O nome da planilha não pode estar vazio.');
+      return;
+    }
+    db.addTable(newTableName.trim());
+    setNewTableName('');
+  };
+
+  const handleStartRenameTable = (t: CoinTable) => {
+    setEditingTableId(t.id);
+    setRenameValue(t.name);
+  };
+
+  const handleSaveRenameTable = (id: string) => {
+    if (!renameValue.trim()) {
+      Alert.alert('Erro', 'O nome da planilha não pode estar vazio.');
+      return;
+    }
+    db.renameTable(id, renameValue.trim());
+    setEditingTableId(null);
+  };
+
+  const handleDeleteTable = (t: CoinTable) => {
+    if (db.activeTables.length <= 1) {
+      Alert.alert('Aviso', 'Você precisa ter pelo menos uma planilha ativa.');
+      return;
+    }
+    const deleteAction = () => {
+      db.deleteTable(t.id);
+    };
+    if (Platform.OS === 'web') {
+      if (window.confirm(`Deseja excluir a planilha "${t.name}" e todas as suas entradas?`)) {
+        deleteAction();
+      }
+    } else {
+      Alert.alert(
+        'Excluir Planilha',
+        `Tem certeza que deseja excluir a planilha "${t.name}"? Isso apagará todos os dados dela permanentemente.`,
+        [
+          { text: 'Cancelar', style: 'cancel' },
+          { text: 'Excluir', style: 'destructive', onPress: deleteAction },
+        ]
+      );
+    }
+  };
 
   const handleUpdatePassword = async () => {
     if (!currentPassword || !newPassword || !confirmPassword) {
@@ -409,12 +537,73 @@ export default function SettingsScreen() {
                 </Text>
                 <Text style={styles.profileEmail}>
                   {auth.profile?.licenseKey 
-                    ? `Chave: ${auth.profile.licenseKey.slice(0, 12)}...` 
+                    ? `Chave: ${auth.profile.licenseKey}` 
                     : 'Dados salvos 100% no dispositivo local'}
                 </Text>
                 <Text style={styles.tierText}>
                   {auth.isPremium ? '⭐ Motor de IA e Consultor Liberados' : '🔒 Insira uma Chave Pro para ativar o Assistente de IA'}
                 </Text>
+              </View>
+            </View>
+
+            {/* License Key input / activation */}
+            <View style={styles.licenseInputContainer}>
+              <Text style={styles.licenseInputLabel}>Ativar Nova Chave de Licença</Text>
+              <View style={styles.licenseInputRow}>
+                <TextInput
+                  style={styles.licenseInput}
+                  value={inputLicenseKey}
+                  onChangeText={setInputLicenseKey}
+                  placeholder="am_pro_..."
+                  placeholderTextColor={colors.text.disabled}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.licenseBtn,
+                    isValidatingKey && { opacity: 0.6 },
+                    pressed && styles.pressed,
+                  ]}
+                  onPress={handleValidateKey}
+                  disabled={isValidatingKey}
+                >
+                  <Text style={styles.licenseBtnText}>
+                    {isValidatingKey ? '⏳' : 'Ativar'}
+                  </Text>
+                </Pressable>
+              </View>
+            </View>
+
+            {/* Email License Recovery Box */}
+            <View style={styles.recoveryBox}>
+              <Text style={styles.recoveryTitle}>📩 Perdeu sua Chave de Licença?</Text>
+              <Text style={styles.recoveryText}>
+                Digite o e-mail utilizado no Checkout do Stripe para receber todas as suas chaves cadastradas na sua caixa de entrada.
+              </Text>
+              <View style={styles.licenseInputRow}>
+                <TextInput
+                  style={styles.licenseInput}
+                  value={recoveryEmail}
+                  onChangeText={setRecoveryEmail}
+                  placeholder="seu-email@exemplo.com"
+                  placeholderTextColor={colors.text.disabled}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                />
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.recoveryBtn,
+                    isRecoveringKey && { opacity: 0.6 },
+                    pressed && styles.pressed,
+                  ]}
+                  onPress={handleRecoverKey}
+                  disabled={isRecoveringKey}
+                >
+                  <Text style={styles.licenseBtnText}>
+                    {isRecoveringKey ? '⏳ Enviando...' : 'Enviar Chave'}
+                  </Text>
+                </Pressable>
               </View>
             </View>
           </Card>
@@ -516,32 +705,97 @@ export default function SettingsScreen() {
         {/* ── Table Management ────────────────────────────── */}
         <Section title="📋 Tabelas">
           <Card>
-            {db.tables.length === 0 ? (
+            {db.activeTables.length === 0 ? (
               <Text style={styles.emptyText}>Nenhuma tabela criada</Text>
             ) : (
-              db.tables.map((t, i) => (
-                <View key={t.id} style={styles.tableRow}>
-                  <Pressable
-                    style={[
-                      styles.tableButton,
-                      i === db.activeTableIndex && styles.tableButtonActive,
-                    ]}
-                    onPress={() => db.setActiveTableIndex(i)}
-                  >
-                    <Text
-                      style={[
-                        styles.tableName,
-                        i === db.activeTableIndex && styles.tableNameActive,
-                      ]}
-                    >
-                      {i === db.activeTableIndex ? '● ' : '○ '}
-                      {t.name}
-                    </Text>
-                    <Text style={styles.tableRowCount}>{t.rows.length} entradas</Text>
-                  </Pressable>
-                </View>
-              ))
+              db.activeTables.map((t) => {
+                const isActive = t.id === db.activeTable?.id;
+                const isEditing = t.id === editingTableId;
+
+                return (
+                  <View key={t.id} style={[styles.tableRowContainer, isActive && styles.tableRowActive]}>
+                    {isEditing ? (
+                      <View style={styles.renameRow}>
+                        <TextInput
+                          style={styles.renameInput}
+                          value={renameValue}
+                          onChangeText={setRenameValue}
+                          autoFocus
+                        />
+                        <Pressable
+                          style={[styles.actionBtn, styles.saveBtn]}
+                          onPress={() => handleSaveRenameTable(t.id)}
+                        >
+                          <Text style={styles.actionBtnText}>✓</Text>
+                        </Pressable>
+                        <Pressable
+                          style={[styles.actionBtn, styles.cancelBtn]}
+                          onPress={() => setEditingTableId(null)}
+                        >
+                          <Text style={styles.actionBtnText}>✕</Text>
+                        </Pressable>
+                      </View>
+                    ) : (
+                      <View style={styles.tableCardContent}>
+                        <Pressable
+                          style={styles.tableSelectArea}
+                          onPress={() => {
+                            const idx = db.tables.findIndex(table => table.id === t.id);
+                            if (idx !== -1) db.setActiveTableIndex(idx);
+                          }}
+                        >
+                          <Text style={[styles.tableName, isActive && styles.tableNameActive]}>
+                            {isActive ? '● ' : '○ '}
+                            {t.name}
+                          </Text>
+                          <Text style={styles.tableRowCount}>{t.rows.length} entradas</Text>
+                        </Pressable>
+
+                        <View style={styles.cardActions}>
+                          <Pressable
+                            style={styles.iconBtn}
+                            onPress={() => handleStartRenameTable(t)}
+                            accessibilityLabel="Renomear"
+                          >
+                            <Text style={styles.iconText}>✏️</Text>
+                          </Pressable>
+                          <Pressable
+                            style={styles.iconBtn}
+                            onPress={() => handleDeleteTable(t)}
+                            accessibilityLabel="Excluir"
+                          >
+                            <Text style={[styles.iconText, styles.dangerText]}>🗑️</Text>
+                          </Pressable>
+                        </View>
+                      </View>
+                    )}
+                  </View>
+                );
+              })
             )}
+
+            {/* Criar Nova Planilha form directly in Settings */}
+            <View style={styles.addTableSection}>
+              <Text style={styles.addTableLabel}>Criar Nova Planilha</Text>
+              <View style={styles.addTableInputRow}>
+                <TextInput
+                  style={styles.addTableInput}
+                  value={newTableName}
+                  onChangeText={setNewTableName}
+                  placeholder="Nome da planilha..."
+                  placeholderTextColor={colors.text.disabled}
+                />
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.addTableBtn,
+                    pressed && styles.pressed,
+                  ]}
+                  onPress={handleAddTable}
+                >
+                  <Text style={styles.addTableBtnText}>+ Criar</Text>
+                </Pressable>
+              </View>
+            </View>
           </Card>
         </Section>
 
@@ -2093,6 +2347,189 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
     alignItems: 'center',
     marginTop: spacing.xs,
+  },
+
+  // License Activation & Recovery Box styles
+  licenseInputContainer: {
+    marginTop: spacing.md,
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.border.default,
+  },
+  licenseInputLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.text.tertiary,
+    marginBottom: spacing.xs,
+    textTransform: 'uppercase',
+  },
+  licenseInputRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  licenseInput: {
+    flex: 1,
+    backgroundColor: colors.background.tertiary,
+    borderWidth: 1,
+    borderColor: colors.border.default,
+    borderRadius: radius.md,
+    color: colors.text.primary,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    fontSize: 14,
+  },
+  licenseBtn: {
+    backgroundColor: colors.accent.purple,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: spacing.lg,
+    borderRadius: radius.md,
+  },
+  licenseBtnText: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  recoveryBox: {
+    marginTop: spacing.md,
+    padding: spacing.md,
+    backgroundColor: colors.background.tertiary,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border.default,
+    gap: spacing.xs,
+  },
+  recoveryTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.text.primary,
+  },
+  recoveryText: {
+    fontSize: 12,
+    color: colors.text.secondary,
+    lineHeight: 16,
+    marginBottom: spacing.xs,
+  },
+  recoveryBtn: {
+    backgroundColor: colors.accent.purple,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.md,
+  },
+
+  // Table Management styles
+  tableRowContainer: {
+    borderWidth: 1,
+    borderColor: colors.border.default,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    marginBottom: spacing.sm,
+    backgroundColor: colors.background.secondary,
+  },
+  tableRowActive: {
+    borderColor: colors.accent.purpleBorder,
+    backgroundColor: colors.accent.purpleLight,
+  },
+  tableCardContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  tableSelectArea: {
+    flex: 1,
+    gap: 4,
+  },
+  cardActions: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  iconBtn: {
+    padding: spacing.xs,
+    borderRadius: radius.xs,
+    backgroundColor: colors.background.tertiary,
+  },
+  iconText: {
+    fontSize: 14,
+  },
+  dangerText: {
+    color: colors.danger.main,
+  },
+  renameRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    alignItems: 'center',
+  },
+  renameInput: {
+    flex: 1,
+    backgroundColor: colors.background.tertiary,
+    borderWidth: 1,
+    borderColor: colors.border.strong,
+    borderRadius: radius.md,
+    color: colors.text.primary,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    fontSize: 14,
+  },
+  actionBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: radius.md,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  saveBtn: {
+    backgroundColor: colors.success.main,
+  },
+  cancelBtn: {
+    backgroundColor: colors.background.elevated,
+    borderWidth: 1,
+    borderColor: colors.border.default,
+  },
+  actionBtnText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  addTableSection: {
+    marginTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.border.default,
+    paddingTop: spacing.md,
+    gap: spacing.sm,
+  },
+  addTableLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.text.tertiary,
+    textTransform: 'uppercase',
+  },
+  addTableInputRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  addTableInput: {
+    flex: 1,
+    backgroundColor: colors.background.tertiary,
+    borderWidth: 1,
+    borderColor: colors.border.default,
+    borderRadius: radius.md,
+    color: colors.text.primary,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    fontSize: 14,
+  },
+  addTableBtn: {
+    backgroundColor: colors.accent.purple,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: spacing.lg,
+    borderRadius: radius.md,
+  },
+  addTableBtnText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
   },
   restorePurchasesText: {
     fontSize: 12,
