@@ -1,3 +1,4 @@
+import { describe, it, expect } from '@jest/globals';
 import { mergeRows, isBankRowAlreadyPresent, generateUUIDv4 } from '../utils/csvEngine';
 import type { TableRow } from '../core/types';
 

@@ -120,7 +120,7 @@ export function CSVImporter({ onSuccess, onCancel }: CSVImporterProps) {
       <Text style={styles.description}>
         Cole os registros CSV abaixo. Escolha se deseja{' '}
         <Text style={{ fontWeight: '700', color: colors.accent.purple }}>Acumular (Mesclar)</Text> com as entradas existentes ou{' '}
-        <Text style={{ fontWeight: '700', color: colors.accent.blue }}>Substituir</Text> a planilha ativa{' '}
+        <Text style={{ fontWeight: '700', color: colors.info.main }}>Substituir</Text> a planilha ativa{' '}
         <Text style={{ fontWeight: '700', color: colors.accent.purple }}>
           "{activeTable?.name || 'Sem Tabela Ativa'}"
         </Text>.
@@ -147,7 +147,7 @@ export function CSVImporter({ onSuccess, onCancel }: CSVImporterProps) {
           </Text>
         </Pressable>
         <Pressable
-          style={[styles.actionBtn, { backgroundColor: colors.accent.blue }, isProcessing && styles.disabledBtn]}
+          style={[styles.actionBtn, { backgroundColor: colors.info.main }, isProcessing && styles.disabledBtn]}
           onPress={() => handleImport('replace')}
           disabled={isProcessing}
         >

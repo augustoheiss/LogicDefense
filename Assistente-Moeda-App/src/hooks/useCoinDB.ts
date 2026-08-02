@@ -144,7 +144,7 @@ function useCoinDBInternal(): CoinDBState {
     if (!isSilent) setIsLoading(true);
     let timeoutId: any = null;
     try {
-      const pullPromise = pullFromCloud(userId);
+      const pullPromise = pullFromCloud();
       const timeoutPromise = new Promise<{ success: boolean; error?: string }>((_, reject) => {
         timeoutId = setTimeout(() => reject(new Error('Timeout')), 4000);
       });
@@ -191,7 +191,7 @@ function useCoinDBInternal(): CoinDBState {
     }
     setIsLoading(true);
     try {
-      const res = await fullSync(auth.user.id);
+      const res = await fullSync();
       if (res.success) {
         const db = await loadDB();
         if (db) {
@@ -220,7 +220,7 @@ function useCoinDBInternal(): CoinDBState {
     }
     setIsLoading(true);
     try {
-      const res = await pushToCloud(auth.user.id);
+      const res = await pushToCloud();
       return res;
     } catch (err: any) {
       console.error('Cloud migration failed:', err);
@@ -277,7 +277,7 @@ function useCoinDBInternal(): CoinDBState {
     });
     if (auth.mode === 'authenticated' && auth.user) {
       // Non-blocking bidirectional background fullSync to pull/merge remote data and push merged state
-      fullSync(auth.user.id).then(async (res) => {
+      fullSync().then(async (res) => {
         if (res.success) {
           const db = await loadDB();
           if (db && db.tables && db.tables.length > 0) {
@@ -311,7 +311,7 @@ function useCoinDBInternal(): CoinDBState {
       aiCostLastReset: newResetMonth,
     });
     if (auth.mode === 'authenticated' && auth.user) {
-      fullSync(auth.user.id).catch((err) => {
+      fullSync().catch((err) => {
         console.error('Cloud background sync failed:', err);
       });
     }
