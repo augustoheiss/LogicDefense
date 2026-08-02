@@ -11,7 +11,8 @@ from pydantic import BaseModel, Field
 from db.license_db import (
     get_license_by_raw_key,
     create_spreadsheet_api_key,
-    get_spreadsheet_api_key
+    get_spreadsheet_api_key,
+    hash_key
 )
 
 log = logging.getLogger(__name__)
