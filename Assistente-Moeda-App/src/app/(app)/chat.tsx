@@ -58,11 +58,12 @@ export default function AIChatScreen() {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.header}>
-          <Pressable onPress={() => router.back()} style={styles.backButton}>
-            <Feather name="arrow-left" size={20} color={colors.text.primary} />
-            <Text style={styles.backText}>Voltar</Text>
+          <Pressable onPress={() => router.back()} style={styles.backBtn}>
+            <Text style={styles.backText}>← Voltar</Text>
           </Pressable>
-          <Text style={styles.title}>🤖 Assistente IA</Text>
+          <View style={styles.headerCenter}>
+            <Text style={styles.headerTitle}>🤖 Assistente IA</Text>
+          </View>
           <View style={{ width: 60 }} />
         </View>
 
