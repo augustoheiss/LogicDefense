@@ -152,24 +152,6 @@ export function PredictionPanel({
   };
 
   const handleGenerate = () => {
-    if (!isPro) {
-      setShowPaywall(true);
-      return;
-    }
-
-    // Check limit
-    const currentMonthStr = new Date().toISOString().slice(0, 7);
-    const activeCost = db.aiCostLastReset === currentMonthStr ? db.aiCostCurrentMonth : 0;
-    const limit = subscriptionType === 'yearly' ? 10.0 : subscriptionType === 'monthly' ? 20.0 : 5.0;
-
-    if (activeCost >= limit) {
-      alertMsg(
-        'Cota Excedida',
-        '⚠️ Cota Mensal Excedida: O seu limite de uso da Inteligência Artificial para este mês foi atingido. Para continuar utilizando, aguarde a renovação do mês ou adquira um pacote extra.'
-      );
-      return;
-    }
-
     if (!targetStart) {
       alertMsg('Erro', 'Por favor, selecione um mês de destino.');
       return;

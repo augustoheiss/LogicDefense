@@ -145,13 +145,6 @@ async def validate_api_key_and_get_table_id(
             detail="Acesso negado: Chave de API possui apenas permissão de leitura ('read-only')."
         )
         
-    token_balance = record.get("token_balance", 0)
-    if token_balance <= 0:
-        raise HTTPException(
-            status_code=status.HTTP_402_PAYMENT_REQUIRED,
-            detail="Saldo de tokens da Licença PRO associada foi esgotado."
-        )
-        
     return record["table_id"]
 
 class APIKeyValidator:
@@ -258,6 +251,73 @@ async def get_analysis_context(
             raise HTTPException(status_code=500, detail=f"Erro ao gerar o contexto em Markdown: {e}")
             
         return PublicAnalysisContextResponse(context=context_markdown)
+
+@router.get("/spreadsheet/export")
+async def export_spreadsheet_csv(
+    table_id: str = Depends(get_table_id_for_read),
+    download: bool = Query(False, description="Se True, retorna como arquivo para download .csv")
+):
+    """
+    Exporta a planilha associada à Chave API em formato CSV v2 padrão.
+    """
+    supabase_url = os.getenv("SUPABASE_URL")
+    supabase_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+
+    headers = {
+        "apikey": supabase_key,
+        "Authorization": f"Bearer {supabase_key}"
+    }
+
+    async with httpx.AsyncClient() as client_http:
+        tbl_url = f"{supabase_url}/rest/v1/coin_tables?id=eq.{table_id}&select=*"
+        tbl_res = await client_http.get(tbl_url, headers=headers)
+        if tbl_res.status_code != 200 or not tbl_res.json():
+            raise HTTPException(status_code=404, detail="Planilha não localizada.")
+        table_data = tbl_res.json()[0]
+        table_name = table_data.get("name", "Sem Nome")
+
+        tx_url = f"{supabase_url}/rest/v1/transactions?table_id=eq.{table_id}&select=*&order=date.asc"
+        tx_res = await client_http.get(tx_url, headers=headers)
+        if tx_res.status_code != 200:
+            raise HTTPException(status_code=500, detail="Erro ao buscar transações para exportação.")
+        raw_rows = tx_res.json()
+
+    csv_lines = [
+        "## COIN_BACKUP_V2 ##",
+        f"table_name,{table_name}",
+        f"id,{table_id}",
+        "## ROWS ##",
+        "id,date,value,description,type,category,tags,external_id"
+    ]
+
+    for r in raw_rows:
+        rid = r.get("id") or ""
+        dt = r.get("date") or ""
+        val = r.get("value") or 0.0
+        desc = (r.get("description") or "").replace(",", " ")
+        tp = r.get("entry_type") or "expense"
+        cat = (r.get("category") or "Geral").replace(",", " ")
+        tags = (r.get("tags") or "").replace(",", " ")
+        ext_id = r.get("external_id") or ""
+        csv_lines.append(f"{rid},{dt},{val},{desc},{tp},{cat},{tags},{ext_id}")
+
+    csv_string = "\n".join(csv_lines)
+
+    if download:
+        from fastapi import Response
+        safe_filename = "".join(c for c in table_name if c.isalnum() or c in ("_", "-")).strip() or "planilha"
+        return Response(
+            content=csv_string,
+            media_type="text/csv",
+            headers={"Content-Disposition": f'attachment; filename="coin_backup_{safe_filename}.csv"'}
+        )
+
+    return {
+        "status": "success",
+        "table_name": table_name,
+        "total_rows": len(raw_rows),
+        "csv_content": csv_string
+    }
 
 # ── Endpoint: Push/Append Transações (External API Integration) ─────────────
 
