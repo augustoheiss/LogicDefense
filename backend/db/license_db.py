@@ -210,20 +210,48 @@ def init_db():
                 );
             """)
 
-            # Spreadsheet API Keys
+            # Spreadsheet API Keys with Rotation Support (is_active)
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS spreadsheet_api_keys (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    table_id TEXT UNIQUE NOT NULL,
+                    table_id TEXT NOT NULL,
                     key_hash TEXT UNIQUE NOT NULL,
                     key_hint TEXT NOT NULL,
                     license_key_hash TEXT NOT NULL,
                     permissions TEXT DEFAULT 'read:write',
+                    is_active INTEGER NOT NULL DEFAULT 1,
                     created_at TEXT NOT NULL,
                     last_used_at TEXT,
                     FOREIGN KEY (license_key_hash) REFERENCES license_keys(key_hash)
                 );
             """)
+
+            # Table Sequence Tracker for Atomic Versioning (seq_number)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS table_sequence_tracker (
+                    table_id TEXT PRIMARY KEY,
+                    last_seq INTEGER NOT NULL DEFAULT 0,
+                    updated_at TEXT NOT NULL
+                );
+            """)
+
+            # Offline Buffer Queue
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS pending_sync_queue (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    key_hash TEXT NOT NULL,
+                    table_id TEXT NOT NULL,
+                    seq_number INTEGER NOT NULL,
+                    payload_json TEXT NOT NULL,
+                    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+                );
+            """)
+
+            # Migration: Ensure is_active column exists if database was created prior
+            try:
+                cursor.execute("ALTER TABLE spreadsheet_api_keys ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1")
+            except Exception:
+                pass # Column already exists
             
             conn.commit()
             logger.info("License Database initialized successfully.")
@@ -488,7 +516,7 @@ def mark_webhook_processed(event_id: str):
 # ── Spreadsheet API Keys ─────────────────────────────────────────────────────
 
 def create_spreadsheet_api_key(table_id: str, license_key_hash: str, permissions: str = "read:write", raw_license: str | None = None) -> tuple[str, str]:
-    """Generates a spreadsheet API key linked to a valid license key."""
+    """Generates a spreadsheet API key linked to a valid license key with Key Rotation."""
     raw_token = secrets.token_hex(32)
     api_key = f"am_sheet_live_{raw_token}"
     key_h = hash_key(api_key)
@@ -511,22 +539,20 @@ def create_spreadsheet_api_key(table_id: str, license_key_hash: str, permissions
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (lic_key_str, license_key_hash, "user@heisslab.com.br", tier_name, tokens, cap, "2099-12-31T23:59:59Z", now, now))
 
+        # Key Rotation Rule: Deactivate all old keys for this table_id
+        cursor.execute("UPDATE spreadsheet_api_keys SET is_active = 0 WHERE table_id = ?", (table_id,))
+
+        # Insert new active API Key
         cursor.execute("""
-            INSERT INTO spreadsheet_api_keys (table_id, key_hash, key_hint, license_key_hash, permissions, created_at)
-            VALUES (?, ?, ?, ?, ?, ?)
-            ON CONFLICT(table_id) DO UPDATE SET
-                key_hash = excluded.key_hash,
-                key_hint = excluded.key_hint,
-                license_key_hash = excluded.license_key_hash,
-                permissions = excluded.permissions,
-                created_at = excluded.created_at
+            INSERT INTO spreadsheet_api_keys (table_id, key_hash, key_hint, license_key_hash, permissions, is_active, created_at)
+            VALUES (?, ?, ?, ?, ?, 1, ?)
         """, (table_id, key_h, hint, license_key_hash, permissions, now))
         conn.commit()
         
     return api_key, hint
 
 def get_spreadsheet_api_key(key_hash: str) -> dict | None:
-    """Retrieves spreadsheet API key info by its hash. Supports God Mode key."""
+    """Retrieves spreadsheet API key info by its hash if active (is_active == 1)."""
     with get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM spreadsheet_api_keys WHERE key_hash = ?", (key_hash,))
@@ -535,6 +561,10 @@ def get_spreadsheet_api_key(key_hash: str) -> dict | None:
             return None
         
         api_key_data = dict(row)
+        if not api_key_data.get("is_active", 1):
+            # Key was rotated or revoked
+            return None
+
         lic_hash = api_key_data.get("license_key_hash")
         
         # Support God Mode key
@@ -555,3 +585,54 @@ def get_spreadsheet_api_key(key_hash: str) -> dict | None:
             api_key_data["expires_at"] = None
 
         return api_key_data
+
+# ── Sequence Versioning & Offline Buffer Queue ───────────────────────────────
+
+def get_next_table_sequence(table_id: str) -> int:
+    """Atomically increments and returns the next seq_number version for a table_id."""
+    now = datetime.now(timezone.utc).isoformat()
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT last_seq FROM table_sequence_tracker WHERE table_id = ?", (table_id,))
+        row = cursor.fetchone()
+        next_seq = (row["last_seq"] + 1) if row else 1
+
+        cursor.execute("""
+            INSERT INTO table_sequence_tracker (table_id, last_seq, updated_at)
+            VALUES (?, ?, ?)
+            ON CONFLICT(table_id) DO UPDATE SET
+                last_seq = excluded.last_seq,
+                updated_at = excluded.updated_at
+        """, (table_id, next_seq, now))
+        conn.commit()
+        return next_seq
+
+def enqueue_pending_sync(key_hash: str, table_id: str, seq_number: int, payload_json: str):
+    """Enqueues a sync event in pending_sync_queue when offline."""
+    now = datetime.now(timezone.utc).isoformat()
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO pending_sync_queue (key_hash, table_id, seq_number, payload_json, created_at)
+            VALUES (?, ?, ?, ?, ?)
+        """, (key_hash, table_id, seq_number, payload_json, now))
+        conn.commit()
+
+def pop_pending_sync(key_hash: str, since_seq: int = 0) -> list[dict]:
+    """Retrieves and removes pending sync mutations with seq_number > since_seq for a key_hash."""
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT id, table_id, seq_number, payload_json, created_at
+            FROM pending_sync_queue
+            WHERE key_hash = ? AND seq_number > ?
+            ORDER BY seq_number ASC
+        """, (key_hash, since_seq))
+        rows = [dict(r) for r in cursor.fetchall()]
+        
+        if rows:
+            cursor.execute("DELETE FROM pending_sync_queue WHERE key_hash = ? AND seq_number <= ?", 
+                           (key_hash, max(r["seq_number"] for r in rows)))
+            conn.commit()
+            
+        return rows

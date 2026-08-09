@@ -191,7 +191,8 @@ class PublicAnalysisContextResponse(BaseModel):
 @router.post("/spreadsheet/append", response_model=AppendSpreadsheetResponse)
 async def append_to_spreadsheet(
     payload: AppendSpreadsheetPayload,
-    table_id: str = Depends(get_table_id_for_write)
+    table_id: str = Depends(get_table_id_for_write),
+    api_key: str = Security(API_KEY_HEADER)
 ):
     """
     Processa transações enviadas por ferramentas ou agentes de IA 100% em memória RAM.
@@ -272,7 +273,42 @@ async def append_to_spreadsheet(
         inserted_count += 1
 
     csv_output = "\n".join(csv_lines)
-    msg = f"Sucesso! {inserted_count} transações processadas 100% em memória RAM (Modo: {mode})."
+    
+    # ── Sequence Versioning & Real-Time SSE / Queue ─────────────────────────
+    from db.license_db import get_next_table_sequence, enqueue_pending_sync, hash_key
+    from services.sync_broadcaster import broadcaster
+
+    seq_number = get_next_table_sequence(table_id)
+    key_h = hash_key(api_key)
+
+    # Build payload object for sync
+    sync_event = {
+        "event": "MUTATION",
+        "tableId": table_id,
+        "seqNumber": seq_number,
+        "mode": mode,
+        "rows": [
+            {
+                "id": item.external_id or f"tx_api_{idx+1:04d}",
+                "date": item.date,
+                "value": abs(item.value),
+                "description": item.description or "Transação API",
+                "entryType": item.entry_type or ("expense" if item.value < 0 else "revenue"),
+                "category": item.category or "Geral",
+                "tags": item.tags or "",
+                "externalId": item.external_id
+            }
+            for idx, item in enumerate(items_to_process)
+        ]
+    }
+
+    # Check if browser is connected via SSE
+    if key_h and broadcaster.has_subscribers(key_h):
+        broadcaster.broadcast(key_h, sync_event)
+    elif key_h:
+        enqueue_pending_sync(key_h, table_id, seq_number, json.dumps(sync_event))
+
+    msg = f"Sucesso! {inserted_count} transações processadas em memória RAM (seq #{seq_number}, Modo: {mode})."
 
     return AppendSpreadsheetResponse(
         success=True,
@@ -283,6 +319,89 @@ async def append_to_spreadsheet(
         message=msg,
         csvContent=csv_output
     )
+
+# ── Sync Endpoints (SSE Stream & Pending Queue) ───────────────────────────────
+
+@router.get("/sync/stream")
+async def sync_stream_sse(
+    api_key: str = Query(..., description="Chave API da planilha am_sheet_live_..."),
+):
+    """
+    Endpoint de streaming SSE (Server-Sent Events) em tempo real.
+    Transmite atualizações instantâneas da API diretamente para o navegador.
+    """
+    if not api_key.startswith("am_sheet_live_"):
+        raise HTTPException(status_code=401, detail="Chave API inválida.")
+        
+    key_h = hashlib.sha256(api_key.encode("utf-8")).hexdigest()
+    from db.license_db import get_spreadsheet_api_key
+    record = get_spreadsheet_api_key(key_h)
+    if not record or not record.get("is_active", 1):
+        raise HTTPException(status_code=401, detail="Chave API revogada ou inválida.")
+
+    from services.sync_broadcaster import broadcaster
+
+    async def event_generator():
+        q = broadcaster.subscribe(key_h)
+        try:
+            # Yield initial connection confirmation
+            yield f"data: {json.dumps({'event': 'CONNECTED', 'tableId': record['table_id']})}\n\n"
+            while True:
+                try:
+                    # Wait for next event or heartbeat timeout (15s)
+                    msg_str = await asyncio.wait_for(q.get(), timeout=15.0)
+                    yield f"data: {msg_str}\n\n"
+                except asyncio.TimeoutError:
+                    yield f"data: {json.dumps({'event': 'ping'})}\n\n"
+        except asyncio.CancelledError:
+            pass
+        finally:
+            broadcaster.unsubscribe(key_h, q)
+
+    from fastapi.responses import StreamingResponse
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no"
+        }
+    )
+
+@router.get("/sync/pending")
+async def sync_pending_queue(
+    api_key: str = Query(..., description="Chave API da planilha am_sheet_live_..."),
+    since_seq: int = Query(0, description="Última versão da sequência (seq_number) já aplicada localmente")
+):
+    """
+    Drena mutações offline da fila pending_sync_queue com seq_number > since_seq.
+    """
+    if not api_key.startswith("am_sheet_live_"):
+        raise HTTPException(status_code=401, detail="Chave API inválida.")
+        
+    key_h = hashlib.sha256(api_key.encode("utf-8")).hexdigest()
+    from db.license_db import get_spreadsheet_api_key, pop_pending_sync
+    record = get_spreadsheet_api_key(key_h)
+    if not record or not record.get("is_active", 1):
+        raise HTTPException(status_code=401, detail="Chave API revogada ou inválida.")
+
+    pending_items = pop_pending_sync(key_h, since_seq=since_seq)
+    
+    parsed_events = []
+    for item in pending_items:
+        try:
+            p_data = json.loads(item["payload_json"])
+            p_data["seqNumber"] = item["seq_number"]
+            parsed_events.append(p_data)
+        except Exception:
+            pass
+
+    return {
+        "success": True,
+        "pendingCount": len(parsed_events),
+        "events": parsed_events
+    }
 
 @router.post("/analysis-context", response_model=PublicAnalysisContextResponse)
 async def generate_analysis_context_in_memory(

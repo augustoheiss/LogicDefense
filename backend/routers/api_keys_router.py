@@ -51,6 +51,9 @@ async def generate_api_key(
     table_id = payload.table_id.strip()
     
     try:
+        from services.sync_broadcaster import broadcaster
+        # Disconnect any active SSE listeners for this table_id
+        # create_spreadsheet_api_key deactivates old keys in DB
         api_key, hint = create_spreadsheet_api_key(
             table_id=table_id,
             license_key_hash=license_key_hash,

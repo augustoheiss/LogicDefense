@@ -42,6 +42,7 @@ import { shadows } from '@/theme/shadows';
 import { Card } from '@/components/ui/Card';
 import { TokenProgressBar } from '@/components/ui/TokenProgressBar';
 import { SectorSettingsPanel } from '@/components/ui/SectorSettingsPanel';
+import { SyncAuditPanel } from '@/components/ui/SyncAuditPanel';
 import { formatCurrencySmart } from '@/core/formatCurrency';
 import { validateMobileLicenseKey, getStoredLicenseKey } from '@/storage/authService';
 import type { TableGoals, CoinTable } from '@/core/types';
@@ -701,6 +702,11 @@ export default function SettingsScreen() {
           </Section>
         )}
 
+        {/* ── Real-Time Sync & Audit Panel ─────────────────── */}
+        <Section title="⚡ Auditoria & Sincronismo em Tempo Real">
+          <SyncAuditPanel />
+        </Section>
+
         {/* ── API Integration ─────────────────────────────── */}
         {db.activeTable && (
           <Section title="🔌 Integração via API (IA)">
@@ -1326,6 +1332,11 @@ const SpreadsheetApiSection = React.memo(function SpreadsheetApiSection({
       setApiKey(resData.api_key);
       setKeyHint(resData.key_hint);
       setCopied(false);
+
+      if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.setItem(`coin_api_key_${tableId}`, resData.api_key);
+        window.localStorage.setItem('coin_active_api_key', resData.api_key);
+      }
     } catch (error: any) {
       if (Platform.OS === 'web') {
         window.alert(`Erro de rede: ${error.message}`);
