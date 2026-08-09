@@ -23,8 +23,3 @@ backend/*.db-journal
 license_storage.db
 # Generated sub-app builds (Vercel builds these automatically on deploy)
 public/laboratorio/
-Assistente-Moeda-App/src/components/ui/APIManagementTester.tsx
-Assistente-Moeda-App/src/app/(app)/api-test.tsx
-.gitignore
-Assistente-Moeda-App/src/config/publicApiConfig.ts
-Assistente-Moeda-App/src/services/publicApiService.ts
