@@ -53,7 +53,7 @@
     ],
     "experiments": {
       "typedRoutes": true,
-      "reactCompiler": true,
+      "reactCompiler": false,
       "baseUrl": "/laboratorio/assistente-moeda"
     },
     "extra": {
