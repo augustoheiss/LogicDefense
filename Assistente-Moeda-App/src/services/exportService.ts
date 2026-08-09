@@ -939,23 +939,48 @@ export function buildCSV(
   tableName?: string,
   description?: string,
   goals?: TableGoals,
+  tableId?: string,
+  apiKey?: string | null,
+  lastEventSeq?: number,
 ): string {
-  if (tableName && goals) {
-    const meta: string[] = ['## COIN ASSISTANT BACKUP v2 ##'];
-    meta.push(`name,${tableName}`);
+  if (tableName || goals || tableId) {
+    const meta: string[] = ['## COIN ASSISTANT BACKUP v3 ##'];
+    if (tableId) {
+      meta.push(`table_id,${tableId}`);
+    }
+
+    let effectiveApiKey = apiKey;
+    if (!effectiveApiKey && Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage && tableId) {
+      effectiveApiKey = window.localStorage.getItem(`coin_api_key_${tableId}`) || window.localStorage.getItem('coin_active_api_key');
+    }
+    if (effectiveApiKey) {
+      meta.push(`api_key,${effectiveApiKey}`);
+    }
+
+    let effectiveSeq = lastEventSeq;
+    if (effectiveSeq === undefined && Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage && tableId) {
+      const rawSeq = window.localStorage.getItem(`coin_last_seq_${tableId}`);
+      if (rawSeq) effectiveSeq = parseInt(rawSeq, 10);
+    }
+    meta.push(`last_event_seq,${effectiveSeq ?? 0}`);
+    meta.push(`exported_at,${new Date().toISOString()}`);
+
+    if (tableName) {
+      meta.push(`name,${tableName}`);
+    }
     if (description) {
       meta.push(`description,${description}`);
     }
 
     // 1. Global goals
-    if (goals.globalGoals) {
+    if (goals?.globalGoals) {
       meta.push(`goal_global_daily,${goals.globalGoals.dailyGoal}`);
       meta.push(`goal_global_weekly,${goals.globalGoals.weeklyGoal}`);
       meta.push(`goal_global_annual,${goals.globalGoals.annualCost}`);
     }
 
     // 2. Yearly goals
-    if (goals.yearlyGoals) {
+    if (goals?.yearlyGoals) {
       Object.entries(goals.yearlyGoals).forEach(([year, g]) => {
         meta.push(`goal_daily_${year},${g.dailyGoal}`);
         meta.push(`goal_weekly_${year},${g.weeklyGoal}`);
@@ -964,7 +989,7 @@ export function buildCSV(
     }
 
     // 3. Monthly goals
-    if (goals.monthlyGoals) {
+    if (goals?.monthlyGoals) {
       Object.entries(goals.monthlyGoals).forEach(([month, g]) => {
         meta.push(`goal_monthly_daily_${month},${g.dailyGoal}`);
         meta.push(`goal_monthly_weekly_${month},${g.weeklyGoal}`);
@@ -973,7 +998,7 @@ export function buildCSV(
     }
 
     // 4. Weekly overrides (manual sprints)
-    if (goals.weeklyGoals) {
+    if (goals?.weeklyGoals) {
       Object.entries(goals.weeklyGoals).forEach(([key, val]) => {
         if (typeof key === 'string' && key.includes('-W')) {
           meta.push(`goal_weekly_${key},${val}`);

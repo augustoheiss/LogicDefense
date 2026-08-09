@@ -138,6 +138,30 @@ export function useLocalSync() {
     }
   }, [apiKey, getStoredApiKey, lastSeqNumber, db, pushAuditLog]);
 
+  // Listen for CSV import / key update sync requests
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof window === 'undefined') return;
+
+    const handleSyncRequest = (e: any) => {
+      const detail = e.detail || {};
+      const key = detail.apiKey || getStoredApiKey(detail.tableId);
+      if (key) {
+        setApiKeyState(key);
+        if (detail.lastEventSeq !== undefined) {
+          setLastSeqNumber(detail.lastEventSeq);
+        }
+        setTimeout(() => {
+          forceSyncPending();
+        }, 100);
+      }
+    };
+
+    window.addEventListener('coin_sync_requested', handleSyncRequest);
+    return () => {
+      window.removeEventListener('coin_sync_requested', handleSyncRequest);
+    };
+  }, [getStoredApiKey, forceSyncPending]);
+
   // 2. Open Real-Time SSE Connection
   useEffect(() => {
     const activeKey = apiKey || getStoredApiKey();

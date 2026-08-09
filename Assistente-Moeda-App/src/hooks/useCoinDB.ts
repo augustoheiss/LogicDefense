@@ -11,6 +11,7 @@
  */
 
 import React, { useState, useEffect, useCallback, useMemo, useRef, createContext, useContext } from 'react';
+import { Platform } from 'react-native';
 import { loadDB, saveDB, clearDB } from '../storage/asyncStorageAdapter';
 import { computeMetrics, emptyMetrics, computeBaselineGoals } from '../core/metricsEngine';
 import type { DB, CoinTable, TableRow, TableGoals, TableMetrics } from '../core/types';
@@ -41,6 +42,9 @@ export interface CoinDBState {
   setActiveTableIndex: (index: number) => void;
   importSpreadsheet: (payload: {
     rows: (TableRow | Omit<TableRow, 'id'>)[];
+    tableId?: string;
+    apiKey?: string;
+    lastEventSeq?: number;
     name?: string;
     description?: string;
     goals?: TableGoals;
@@ -719,6 +723,9 @@ function useCoinDBInternal(): CoinDBState {
 
   const importSpreadsheet = useCallback(async (payload: {
     rows: (TableRow | Omit<TableRow, 'id'>)[];
+    tableId?: string;
+    apiKey?: string;
+    lastEventSeq?: number;
     name?: string;
     description?: string;
     goals?: TableGoals;
@@ -726,15 +733,24 @@ function useCoinDBInternal(): CoinDBState {
   }) => {
     const currentTables = tablesRef.current.length > 0 ? tablesRef.current : tables;
     const activeTablesList = currentTables.filter((t: CoinTable) => !t.isDeleted);
-    let targetTable = (activeTableIndex >= 0 && activeTableIndex < activeTablesList.length)
-      ? activeTablesList[activeTableIndex]
-      : activeTablesList[0];
+
+    // 1. Preservar table_id: Se tableId for fornecido pelo CSV v3, procurar planilha existente com essa ID
+    let targetTable: CoinTable | undefined;
+    if (payload.tableId) {
+      targetTable = currentTables.find((t: CoinTable) => !t.isDeleted && t.id === payload.tableId);
+    }
+
+    if (!targetTable) {
+      targetTable = (activeTableIndex >= 0 && activeTableIndex < activeTablesList.length)
+        ? activeTablesList[activeTableIndex]
+        : activeTablesList[0];
+    }
 
     let baseTables = currentTables;
 
     if (!targetTable) {
       const newTable: CoinTable = {
-        id: generateId(),
+        id: payload.tableId || generateId(),
         name: payload.name || 'Minha Planilha',
         description: payload.description || 'Planilha principal',
         createdAt: new Date().toISOString(),
@@ -745,9 +761,33 @@ function useCoinDBInternal(): CoinDBState {
       };
       baseTables = [...currentTables, newTable];
       targetTable = newTable;
+    } else if (payload.tableId && targetTable.id !== payload.tableId && payload.mode === 'replace') {
+      // Preserva a ID v3 na planilha de destino em modo replace
+      targetTable = {
+        ...targetTable,
+        id: payload.tableId,
+      };
     }
 
     const mode = payload.mode || 'replace';
+    const effectiveTableId = targetTable.id;
+
+    // 2. Restaurar api_key e last_event_seq no localStorage
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+      if (payload.apiKey) {
+        window.localStorage.setItem(`coin_api_key_${effectiveTableId}`, payload.apiKey);
+        window.localStorage.setItem('coin_active_api_key', payload.apiKey);
+      }
+      if (payload.lastEventSeq !== undefined) {
+        window.localStorage.setItem(`coin_last_seq_${effectiveTableId}`, String(payload.lastEventSeq));
+      }
+
+      // 3. Disparar evento de Sincronia Local
+      window.dispatchEvent(new CustomEvent('coin_sync_requested', {
+        detail: { tableId: effectiveTableId, apiKey: payload.apiKey, lastEventSeq: payload.lastEventSeq }
+      }));
+    }
+
     const formattedRows: TableRow[] = payload.rows.map((r) => ({
       ...r,
       id: 'id' in r && r.id ? r.id : generateId(),
@@ -764,6 +804,7 @@ function useCoinDBInternal(): CoinDBState {
 
       return {
         ...t,
+        id: effectiveTableId,
         name: mode === 'merge' ? t.name : (payload.name && payload.name.trim() ? payload.name : t.name),
         description: mode === 'merge' ? t.description : (payload.description !== undefined ? payload.description : t.description),
         rows: finalRows,

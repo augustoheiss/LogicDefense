@@ -53,9 +53,12 @@ export function CSVImporter({ onSuccess, onCancel }: CSVImporterProps) {
         return;
       }
 
-      // Commit rows, name, description, and goals in ONE ATOMIC OPERATION
+      // Commit rows, name, description, goals, tableId, apiKey, and lastEventSeq in ONE ATOMIC OPERATION
       await importSpreadsheet({
         rows: parsed.rows,
+        tableId: parsed.metadata?.tableId,
+        apiKey: parsed.metadata?.apiKey,
+        lastEventSeq: parsed.metadata?.lastEventSeq,
         name: parsed.metadata?.name,
         description: parsed.metadata?.description,
         goals: parsed.metadata?.tableGoals,

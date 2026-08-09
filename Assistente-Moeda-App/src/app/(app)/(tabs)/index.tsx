@@ -177,7 +177,8 @@ export default function SpreadsheetScreen() {
       db.activeTable.rows,
       db.activeTable.name,
       db.activeTable.description,
-      db.activeTable.goals
+      db.activeTable.goals,
+      db.activeTable.id
     );
     setPreviewText(csv);
     setPreviewMode('csv_export');

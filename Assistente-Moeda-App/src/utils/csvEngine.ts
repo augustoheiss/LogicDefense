@@ -138,6 +138,9 @@ export interface CSVParseOutput {
   skippedCount: number;
   detectedSectors: string[];
   metadata?: {
+    tableId?: string;
+    apiKey?: string;
+    lastEventSeq?: number;
     name?: string;
     description?: string;
     goals?: Record<string, number | string>;
@@ -232,6 +235,9 @@ export function parseCSVText(csvText: string): CSVParseOutput {
 
   // Parse metadata from metadataLines (flexible delimiter per line)
   const metaObj: {
+    tableId?: string;
+    apiKey?: string;
+    lastEventSeq?: number;
     name?: string;
     description?: string;
     goals: Record<string, number | string>;
@@ -261,7 +267,16 @@ export function parseCSVText(csvText: string): CSVParseOutput {
       const valStr = parts[1];
       const numVal = parseFloat(valStr);
 
-      if (keyLower === 'name' || keyLower === 'nome') {
+      if (keyLower === 'table_id' || keyLower === 'tableid' || keyLower === 'id_planilha') {
+        metaObj.tableId = valStr;
+      } else if (keyLower === 'api_key' || keyLower === 'apikey' || keyLower === 'chave_api') {
+        metaObj.apiKey = valStr;
+      } else if (keyLower === 'last_event_seq' || keyLower === 'lasteventseq' || keyLower === 'seq') {
+        const parsedSeq = parseInt(valStr, 10);
+        if (!isNaN(parsedSeq)) {
+          metaObj.lastEventSeq = parsedSeq;
+        }
+      } else if (keyLower === 'name' || keyLower === 'nome') {
         metaObj.name = valStr;
       } else if (keyLower === 'description' || keyLower === 'descricao') {
         metaObj.description = valStr;
