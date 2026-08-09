@@ -859,7 +859,8 @@ export default function MetricsScreen() {
           onDeleteRow={db.deleteRow}
         />
 
-        {/* ── Sector Actuarial & Simulation Widgets ── */}
+        {/* ── Sector Actuarial & Simulation Widgets (Temporariamente Ocultados da UI) ── */}
+        {/*
         <SectorGuard sector="personal_finance">
           <SectionTitle title="👤 Simuladores de Finanças Pessoais (PFM)" />
           <PersonalFinanceSectorWidget />
@@ -884,6 +885,7 @@ export default function MetricsScreen() {
           <SectionTitle title="⚖️ Otimizadores Jurídicos & Tributários" />
           <LegalTaxesSectorWidget />
         </SectorGuard>
+        */}
 
         <View style={styles.bottomPad} />
       </ScrollView>
