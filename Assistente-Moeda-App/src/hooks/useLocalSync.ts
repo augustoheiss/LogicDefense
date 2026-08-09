@@ -77,6 +77,17 @@ export function useLocalSync() {
     setAuditLogs((prev) => [newLog, ...prev].slice(0, 50));
   }, []);
 
+  const saveLastSeqNumber = useCallback((seq: number, tid?: string) => {
+    setLastSeqNumber(seq);
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+      const targetId = tid || tableId;
+      if (targetId) {
+        window.localStorage.setItem(`coin_last_seq_${targetId}`, String(seq));
+      }
+      window.localStorage.setItem('coin_active_seq', String(seq));
+    }
+  }, [tableId]);
+
   // 1. Drain offline pending queue
   const forceSyncPending = useCallback(async () => {
     const activeKey = apiKey || getStoredApiKey();
@@ -128,7 +139,7 @@ export function useLocalSync() {
           }
         }
 
-        setLastSeqNumber(maxSeq);
+        saveLastSeqNumber(maxSeq);
       }
 
       setStatus('connected');
@@ -148,7 +159,7 @@ export function useLocalSync() {
       if (key) {
         setApiKeyState(key);
         if (detail.lastEventSeq !== undefined) {
-          setLastSeqNumber(detail.lastEventSeq);
+          saveLastSeqNumber(detail.lastEventSeq, detail.tableId);
         }
         setTimeout(() => {
           forceSyncPending();

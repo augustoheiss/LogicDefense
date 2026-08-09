@@ -950,17 +950,23 @@ export function buildCSV(
     }
 
     let effectiveApiKey = apiKey;
-    if (!effectiveApiKey && Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage && tableId) {
-      effectiveApiKey = window.localStorage.getItem(`coin_api_key_${tableId}`) || window.localStorage.getItem('coin_active_api_key');
+    if (!effectiveApiKey && typeof window !== 'undefined' && window.localStorage) {
+      effectiveApiKey = (tableId ? window.localStorage.getItem(`coin_api_key_${tableId}`) : null) ||
+                        window.localStorage.getItem('coin_active_api_key') ||
+                        '';
     }
     if (effectiveApiKey) {
       meta.push(`api_key,${effectiveApiKey}`);
     }
 
     let effectiveSeq = lastEventSeq;
-    if (effectiveSeq === undefined && Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage && tableId) {
-      const rawSeq = window.localStorage.getItem(`coin_last_seq_${tableId}`);
-      if (rawSeq) effectiveSeq = parseInt(rawSeq, 10);
+    if ((effectiveSeq === undefined || effectiveSeq === null || effectiveSeq === 0) && typeof window !== 'undefined' && window.localStorage) {
+      const rawSeq = (tableId ? window.localStorage.getItem(`coin_last_seq_${tableId}`) : null) ||
+                     window.localStorage.getItem('coin_active_seq');
+      if (rawSeq) {
+        const parsed = parseInt(rawSeq, 10);
+        if (!isNaN(parsed)) effectiveSeq = parsed;
+      }
     }
     meta.push(`last_event_seq,${effectiveSeq ?? 0}`);
     meta.push(`exported_at,${new Date().toISOString()}`);
