@@ -13,13 +13,15 @@ const sekundoRootDir = path.join(rootDir, 'Sekundo');
 const sekundoAppDir = path.join(sekundoRootDir, 'packages', 'app');
 const targetSekundoPublicDir = path.join(rootDir, 'public', 'laboratorio', 'sekundo');
 
+process.env.NODE_OPTIONS = (process.env.NODE_OPTIONS || '') + ' --max-old-space-size=4096';
+
 console.log('🚀 Starting full production build process...');
 
 // -----------------------------------------------------------------------------
 // 1. Build Assistente-Moeda
 // -----------------------------------------------------------------------------
 console.log('📦 Installing Assistente-Moeda sub-dependencies...');
-execSync('npm install', { cwd: expoAppDir, stdio: 'inherit' });
+execSync('npm install --no-audit --no-fund', { cwd: expoAppDir, stdio: 'inherit' });
 
 console.log('📦 Building Assistente-Moeda Expo Web app...');
 execSync('npm run build:web', { cwd: expoAppDir, stdio: 'inherit' });
@@ -37,7 +39,7 @@ copyRecursiveSync(path.join(expoAppDir, 'dist'), targetPublicDir);
 // 2. Build Sekundo
 // -----------------------------------------------------------------------------
 console.log('📦 Installing Sekundo monorepo dependencies...');
-execSync('npm install', { cwd: sekundoRootDir, stdio: 'inherit' });
+execSync('npm install --no-audit --no-fund', { cwd: sekundoRootDir, stdio: 'inherit' });
 
 console.log('📦 Building Sekundo Expo Web app...');
 execSync('npm run build:web', { cwd: sekundoAppDir, stdio: 'inherit' });
