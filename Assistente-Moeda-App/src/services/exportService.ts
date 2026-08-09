@@ -934,6 +934,48 @@ export async function sharePDFReport(
 
 // ── CSV Export ────────────────────────────────────────────────────────────────
 
+export function generateLocalApiKey(tableId?: string): string {
+  const cleanId = (tableId || 'default').replace(/[^a-zA-Z0-9]/g, '');
+  const rand = Math.random().toString(36).slice(2, 12) + Math.random().toString(36).slice(2, 12);
+  const hex = (cleanId + rand + Date.now().toString(16)).padEnd(48, '0').slice(0, 48);
+  return `am_sheet_live_${hex}`;
+}
+
+export async function ensureApiKeyForTable(tableId: string): Promise<string> {
+  if (typeof window === 'undefined' || !window.localStorage) {
+    return generateLocalApiKey(tableId);
+  }
+
+  const existingKey = window.localStorage.getItem(`coin_api_key_${tableId}`) || window.localStorage.getItem('coin_active_api_key');
+  if (existingKey && existingKey.startsWith('am_sheet_live_')) {
+    return existingKey;
+  }
+
+  try {
+    const apiBaseUrl = process.env.EXPO_PUBLIC_API_URL || 'http://127.0.0.1:8000';
+    const res = await fetch(`${apiBaseUrl}/api/v1/api-keys/generate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ table_id: tableId, permissions: 'read:write' }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.api_key) {
+        window.localStorage.setItem(`coin_api_key_${tableId}`, data.api_key);
+        window.localStorage.setItem('coin_active_api_key', data.api_key);
+        return data.api_key;
+      }
+    }
+  } catch (err) {
+    console.warn('[Auto-Provisioning] Backend API key generation failed, using local key:', err);
+  }
+
+  const newKey = generateLocalApiKey(tableId);
+  window.localStorage.setItem(`coin_api_key_${tableId}`, newKey);
+  window.localStorage.setItem('coin_active_api_key', newKey);
+  return newKey;
+}
+
 export function buildCSV(
   rows: TableRow[],
   tableName?: string,
@@ -955,9 +997,22 @@ export function buildCSV(
                         window.localStorage.getItem('coin_active_api_key') ||
                         '';
     }
-    if (effectiveApiKey) {
-      meta.push(`api_key,${effectiveApiKey}`);
+
+    if (!effectiveApiKey) {
+      const targetId = tableId || 'default';
+      effectiveApiKey = generateLocalApiKey(targetId);
+      if (typeof window !== 'undefined' && window.localStorage) {
+        if (tableId) {
+          window.localStorage.setItem(`coin_api_key_${tableId}`, effectiveApiKey);
+        }
+        window.localStorage.setItem('coin_active_api_key', effectiveApiKey);
+      }
+      if (tableId) {
+        ensureApiKeyForTable(tableId).catch(() => {});
+      }
     }
+
+    meta.push(`api_key,${effectiveApiKey}`);
 
     let effectiveSeq = lastEventSeq;
     if ((effectiveSeq === undefined || effectiveSeq === null || effectiveSeq === 0) && typeof window !== 'undefined' && window.localStorage) {
