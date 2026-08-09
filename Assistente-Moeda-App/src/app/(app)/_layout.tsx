@@ -26,6 +26,20 @@ export default function AppLayout() {
           animation: 'slide_from_bottom',
         }}
       />
+      <Stack.Screen
+        name="api-test"
+        options={{
+          presentation: 'modal',
+          animation: 'slide_from_bottom',
+        }}
+      />
+      <Stack.Screen
+        name="ai-chat"
+        options={{
+          presentation: 'modal',
+          animation: 'slide_from_bottom',
+        }}
+      />
     </Stack>
   );
 }

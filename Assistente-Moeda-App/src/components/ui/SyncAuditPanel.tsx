@@ -7,11 +7,13 @@
 
 import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
+import { useRouter } from 'expo-router';
 import { colors } from '@/theme/colors';
 import { spacing, radius } from '@/theme/spacing';
 import { useLocalSync, AuditLogItem, SyncStatus } from '@/hooks/useLocalSync';
 
 export function SyncAuditPanel() {
+  const router = useRouter();
   const { status, lastSeqNumber, auditLogs, forceSyncPending, undoAuditLog } = useLocalSync();
 
   const getStatusBadge = (st: SyncStatus) => {
@@ -85,6 +87,20 @@ export function SyncAuditPanel() {
           <Text style={styles.syncButtonText}>🔄 Sincronizar Agora</Text>
         </Pressable>
       </View>
+
+      {/* Button for Console de Testes API */}
+      <Pressable
+        style={({ pressed }) => [styles.apiConsoleButton, pressed && { opacity: 0.85 }]}
+        onPress={() => {
+          try {
+            router.push('/api-test' as any);
+          } catch (e) {
+            router.push('/(app)/api-test' as any);
+          }
+        }}
+      >
+        <Text style={styles.apiConsoleButtonText}>🚀 Abrir Console de Testes & Alterações em Massa via API</Text>
+      </Pressable>
 
       {/* Audit Log Feed */}
       <Text style={styles.sectionSubtitle}>Log de Eventos & Mutações ({auditLogs.length})</Text>
@@ -245,5 +261,18 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: colors.danger.main,
     fontWeight: '600',
+  },
+  apiConsoleButton: {
+    backgroundColor: colors.accent.purple,
+    paddingVertical: spacing.sm + 2,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.md,
+    alignItems: 'center',
+    marginBottom: spacing.md,
+  },
+  apiConsoleButtonText: {
+    color: '#ffffff',
+    fontWeight: '700',
+    fontSize: 13,
   },
 });
