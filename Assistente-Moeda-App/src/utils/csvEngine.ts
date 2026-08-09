@@ -396,10 +396,10 @@ export function parseCSVText(csvText: string): CSVParseOutput {
 
   const idAliases = ['id', 'uuid', 'transaction_id', 'id_transacao', 'external_id'];
   const descriptionAliases = ['description', 'descricao', 'historico', 'memo', 'title'];
-  const categoryAliases = ['category', 'categoria', 'type'];
+  const categoryAliases = ['category', 'categoria'];
   const tagsAliases = ['tags', 'sector_tags', 'etiquetas'];
   const metadataAliases = ['metadata_json', 'metadatajson', 'metadata', 'metadados'];
-  const typeAliases = ['entrytype', 'entry_type', 'tipo'];
+  const typeAliases = ['entrytype', 'entry_type', 'tipo', 'type'];
   const monthlyValueAliases = ['monthlyvalue', 'valor_mensal', 'monthly_value'];
   const monthCountAliases = ['monthcount', 'qtd_meses', 'month_count', 'months'];
   const periodStartAliases = ['period_start', 'periodstart', 'inicio_periodo', 'period_inicio'];

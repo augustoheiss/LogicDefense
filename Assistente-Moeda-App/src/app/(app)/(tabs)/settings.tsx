@@ -1194,6 +1194,7 @@ const SpreadsheetApiSection = React.memo(function SpreadsheetApiSection({
   tableId: string;
   onShowStore: () => void;
 }) {
+  const router = useRouter();
   const [apiKey, setApiKey] = useState<string | null>(null);
   const [keyHint, setKeyHint] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -1396,6 +1397,23 @@ const SpreadsheetApiSection = React.memo(function SpreadsheetApiSection({
           )}
         </HapticButton>
       )}
+
+      {/* ── Botão para Área de Testes e Alterações em Massa ───────────────── */}
+      <HapticButton
+        onPress={() => router.push('/api-test' as any)}
+        style={{
+          backgroundColor: colors.accent.purple,
+          paddingVertical: spacing.sm + 2,
+          paddingHorizontal: spacing.md,
+          borderRadius: radius.md,
+          alignItems: 'center',
+          marginTop: spacing.md,
+        }}
+      >
+        <Text style={{ color: '#ffffff', fontWeight: '700', fontSize: 13 }}>
+          🚀 Abrir Console de Testes & Alterações em Massa via API
+        </Text>
+      </HapticButton>
 
       {/* ── Guia de Integração com IAs Externas ───────────────────────── */}
       <HapticButton 

@@ -11,6 +11,8 @@ venv/
 # Testes locais de QA (Contêm credenciais e tokens)
 backend/test_stripe_webhook.py
 test_web_subscription.js
+scripts/test_public_api.js
+Assistente-Moeda-App/scripts/test_public_api.js
 backend/test_api_keys_isolation.py
 backend/test_database_isolation.py
 backend/*.db
@@ -21,3 +23,8 @@ backend/*.db-journal
 license_storage.db
 # Generated sub-app builds (Vercel builds these automatically on deploy)
 public/laboratorio/
+Assistente-Moeda-App/src/components/ui/APIManagementTester.tsx
+Assistente-Moeda-App/src/app/(app)/api-test.tsx
+.gitignore
+Assistente-Moeda-App/src/config/publicApiConfig.ts
+Assistente-Moeda-App/src/services/publicApiService.ts

@@ -549,7 +549,7 @@ def get_spreadsheet_api_key(key_hash: str) -> dict | None:
         lic_row = cursor.fetchone()
         if lic_row:
             api_key_data["token_balance"] = lic_row["token_balance"]
-            api_key_data["expires_at"] = lic_row.get("expires_at")
+            api_key_data["expires_at"] = lic_row["expires_at"]
         else:
             api_key_data["token_balance"] = 0
             api_key_data["expires_at"] = None
