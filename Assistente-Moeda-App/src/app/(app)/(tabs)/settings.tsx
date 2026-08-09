@@ -43,6 +43,7 @@ import { Card } from '@/components/ui/Card';
 import { TokenProgressBar } from '@/components/ui/TokenProgressBar';
 import { SectorSettingsPanel } from '@/components/ui/SectorSettingsPanel';
 import { SyncAuditPanel } from '@/components/ui/SyncAuditPanel';
+import { APIManagementTester } from '@/components/ui/APIManagementTester';
 import { formatCurrencySmart } from '@/core/formatCurrency';
 import { validateMobileLicenseKey, getStoredLicenseKey } from '@/storage/authService';
 import type { TableGoals, CoinTable } from '@/core/types';
@@ -1208,6 +1209,7 @@ const SpreadsheetApiSection = React.memo(function SpreadsheetApiSection({
   const [copied, setCopied] = useState(false);
   const [showGuide, setShowGuide] = useState(false);
   const [copiedSchema, setCopiedSchema] = useState(false);
+  const [showApiConsoleModal, setShowApiConsoleModal] = useState(false);
 
   const handleCopySchema = async () => {
     const schemaUrl = `${API_URL}/api/v1/public/openapi.json`;
@@ -1409,9 +1411,9 @@ const SpreadsheetApiSection = React.memo(function SpreadsheetApiSection({
         </HapticButton>
       )}
 
-      {/* ── Botão para Área de Testes e Alterações em Massa ───────────────── */}
+      {/* ── Botão para Área de Testes e Alterações em Massa (Modal Local) ───────────────── */}
       <HapticButton
-        onPress={() => router.push('/api-test' as any)}
+        onPress={() => setShowApiConsoleModal(true)}
         style={{
           backgroundColor: colors.accent.purple,
           paddingVertical: spacing.sm + 2,
@@ -1425,6 +1427,37 @@ const SpreadsheetApiSection = React.memo(function SpreadsheetApiSection({
           🚀 Abrir Console de Testes & Alterações em Massa via API
         </Text>
       </HapticButton>
+
+      {/* ── Modal do Console de Testes & Alterações em Massa ───────────────── */}
+      <Modal
+        visible={showApiConsoleModal}
+        animationType="slide"
+        onRequestClose={() => setShowApiConsoleModal(false)}
+      >
+        <SafeAreaView style={{ flex: 1, backgroundColor: colors.background.primary }} edges={['top', 'bottom']}>
+          <View style={{
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            paddingHorizontal: spacing.md,
+            paddingVertical: spacing.sm,
+            borderBottomWidth: 1,
+            borderBottomColor: colors.border.default,
+            backgroundColor: colors.background.secondary,
+          }}>
+            <Text style={{ fontSize: 16, fontWeight: '700', color: colors.text.primary }}>
+              Console de Integração & Testes API
+            </Text>
+            <Pressable
+              onPress={() => setShowApiConsoleModal(false)}
+              style={{ paddingVertical: 6, paddingHorizontal: 12, borderRadius: 6, backgroundColor: colors.background.tertiary }}
+            >
+              <Text style={{ color: colors.text.primary, fontWeight: '600', fontSize: 13 }}>✕ Fechar</Text>
+            </Pressable>
+          </View>
+          <APIManagementTester />
+        </SafeAreaView>
+      </Modal>
 
       {/* ── Guia de Integração com IAs Externas ───────────────────────── */}
       <HapticButton 

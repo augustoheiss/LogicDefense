@@ -88,20 +88,6 @@ export function SyncAuditPanel() {
         </Pressable>
       </View>
 
-      {/* Button for Console de Testes API */}
-      <Pressable
-        style={({ pressed }) => [styles.apiConsoleButton, pressed && { opacity: 0.85 }]}
-        onPress={() => {
-          try {
-            router.push('/api-test' as any);
-          } catch (e) {
-            router.push('/(app)/api-test' as any);
-          }
-        }}
-      >
-        <Text style={styles.apiConsoleButtonText}>🚀 Abrir Console de Testes & Alterações em Massa via API</Text>
-      </Pressable>
-
       {/* Audit Log Feed */}
       <Text style={styles.sectionSubtitle}>Log de Eventos & Mutações ({auditLogs.length})</Text>
 
