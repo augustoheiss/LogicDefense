@@ -382,15 +382,18 @@ async def public_ai_analyst(
     system_prompt = get_system_prompt(context_md)
 
     try:
+        gen_kwargs = {
+            "system_instruction": system_prompt,
+            "max_output_tokens": MAX_OUTPUT_TOKENS,
+        }
+        if "thinking" in MODEL.lower():
+            gen_kwargs["thinking_config"] = types.ThinkingConfig(thinking_budget=THINKING_BUDGET)
+
         response = await asyncio.to_thread(
             client.models.generate_content,
             model=MODEL,
             contents=payload.user_prompt,
-            config=types.GenerateContentConfig(
-                system_instruction=system_prompt,
-                max_output_tokens=MAX_OUTPUT_TOKENS,
-                thinking_config=types.ThinkingConfig(thinking_budget=THINKING_BUDGET) if "thinking" in MODEL.lower() else None
-            )
+            config=types.GenerateContentConfig(**gen_kwargs)
         )
         return PublicAIAnalystResponse(content=response.text, modelUsed=MODEL)
     except Exception as err:
