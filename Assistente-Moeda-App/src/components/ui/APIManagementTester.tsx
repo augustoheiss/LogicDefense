@@ -41,9 +41,26 @@ import {
 type ActiveTab = 'context' | 'export' | 'append' | 'ai' | 'spec';
 
 export function APIManagementTester() {
-  const [apiKey, setApiKey] = useState(DEFAULT_PUBLIC_API_KEY);
+  const [apiKey, setApiKey] = useState(() => {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      const activeKey = window.localStorage.getItem('coin_active_api_key');
+      if (activeKey && activeKey.startsWith('am_sheet_live_')) {
+        return activeKey;
+      }
+    }
+    return DEFAULT_PUBLIC_API_KEY;
+  });
   const [baseUrl, setBaseUrl] = useState(DEFAULT_PUBLIC_API_URL);
   const [activeTab, setActiveTab] = useState<ActiveTab>('append');
+
+  React.useEffect(() => {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      const activeKey = window.localStorage.getItem('coin_active_api_key');
+      if (activeKey && activeKey.startsWith('am_sheet_live_')) {
+        setApiKey(activeKey);
+      }
+    }
+  }, []);
 
   // Loading state
   const [loading, setLoading] = useState(false);

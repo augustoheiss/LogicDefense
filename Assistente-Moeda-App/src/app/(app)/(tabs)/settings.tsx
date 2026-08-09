@@ -1217,32 +1217,53 @@ const SpreadsheetApiSection = React.memo(function SpreadsheetApiSection({
     setTimeout(() => setCopiedSchema(false), 2000);
   };
 
-  useEffect(() => {
-    fetchActiveKey();
-  }, [tableId]);
-
-  const fetchActiveKey = async () => {
+  const fetchActiveKey = useCallback(async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('spreadsheet_api_keys')
-        .select('key_hint')
-        .eq('table_id', tableId)
-        .maybeSingle();
-
-      if (data) {
-        setKeyHint(data.key_hint);
-      } else {
-        setKeyHint(null);
+      let localKey: string | null = null;
+      if (typeof window !== 'undefined' && window.localStorage) {
+        localKey = window.localStorage.getItem(`coin_api_key_${tableId}`) || window.localStorage.getItem('coin_active_api_key');
       }
-      setApiKey(null);
+
+      if (localKey && localKey.startsWith('am_sheet_live_')) {
+        setApiKey(localKey);
+        setKeyHint(`...${localKey.slice(-4)}`);
+      } else {
+        const { data } = await supabase
+          .from('spreadsheet_api_keys')
+          .select('key_hint')
+          .eq('table_id', tableId)
+          .maybeSingle();
+
+        if (data) {
+          setKeyHint(data.key_hint);
+          setApiKey(null);
+        } else {
+          setKeyHint(null);
+          setApiKey(null);
+        }
+      }
       setCopied(false);
     } catch (e) {
       console.warn('Erro ao carregar dica da chave API:', e);
     } finally {
       setLoading(false);
     }
-  };
+  }, [tableId]);
+
+  useEffect(() => {
+    fetchActiveKey();
+
+    if (typeof window !== 'undefined') {
+      const handleSync = () => fetchActiveKey();
+      window.addEventListener('coin_sync_requested', handleSync);
+      window.addEventListener('storage', handleSync);
+      return () => {
+        window.removeEventListener('coin_sync_requested', handleSync);
+        window.removeEventListener('storage', handleSync);
+      };
+    }
+  }, [tableId, fetchActiveKey]);
 
   const handleCopy = async () => {
     if (apiKey) {
@@ -1253,7 +1274,7 @@ const SpreadsheetApiSection = React.memo(function SpreadsheetApiSection({
   };
 
   const generateKey = async () => {
-    if (keyHint) {
+    if (keyHint || apiKey) {
       const proceed = await new Promise<boolean>((resolve) => {
         if (Platform.OS === 'web') {
           const ok = window.confirm(
@@ -1331,10 +1352,10 @@ const SpreadsheetApiSection = React.memo(function SpreadsheetApiSection({
 
       const resData = await response.json();
       setApiKey(resData.api_key);
-      setKeyHint(resData.key_hint);
+      setKeyHint(resData.key_hint || `...${resData.api_key.slice(-4)}`);
       setCopied(false);
 
-      if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+      if (typeof window !== 'undefined' && window.localStorage) {
         window.localStorage.setItem(`coin_api_key_${tableId}`, resData.api_key);
         window.localStorage.setItem('coin_active_api_key', resData.api_key);
       }
@@ -1363,7 +1384,7 @@ const SpreadsheetApiSection = React.memo(function SpreadsheetApiSection({
         Conecte esta planilha a IAs externas (como ChatGPT ou Claude) e ferramentas de automação (Make, n8n) para ler ou adicionar transações.
       </Text>
 
-      {keyHint ? (
+      {keyHint || apiKey ? (
         <View style={styles.keyContainer}>
           <Text style={styles.keyLabel}>
             Dica da Chave Ativa: <Text style={styles.keyHintText}>{keyHint}</Text>
@@ -1371,7 +1392,7 @@ const SpreadsheetApiSection = React.memo(function SpreadsheetApiSection({
           
           {apiKey ? (
             <View style={styles.rawKeyBox}>
-              <Text style={styles.rawKeyLabel}>Sua Chave de API:</Text>
+              <Text style={styles.rawKeyLabel}>Sua Chave de API Ativa:</Text>
               <TextInput
                 style={styles.rawKeyInput}
                 value={apiKey}
@@ -1383,12 +1404,19 @@ const SpreadsheetApiSection = React.memo(function SpreadsheetApiSection({
                 style={[styles.copyBtn, copied && styles.copyBtnSuccess]}
               >
                 <Text style={styles.copyBtnText}>
-                  {copied ? 'Copiado! ✓' : 'Copiar Chave 📋'}
+                  {copied ? 'Copiado! ✓' : 'Copiar Chave API 📋'}
                 </Text>
               </HapticButton>
-              <Text style={styles.rawKeyWarning}>
-                ⚠️ Guarde esta chave em local seguro. Por motivos de segurança, você não poderá visualizá-la novamente.
+              <Text style={{ fontSize: 11, color: colors.success.main, marginTop: spacing.xxs }}>
+                ✓ Planilha com chave ativa vinculada (carregada do backup/localStorage).
               </Text>
+              <HapticButton onPress={generateKey} disabled={generating} style={[styles.regenerateBtn, { marginTop: spacing.sm }]}>
+                {generating ? (
+                  <ActivityIndicator size="small" color={colors.text.secondary} />
+                ) : (
+                  <Text style={styles.regenerateBtnText}>🔄 Rotacionar / Regerar Nova Chave de API</Text>
+                )}
+              </HapticButton>
             </View>
           ) : (
             <HapticButton onPress={generateKey} disabled={generating} style={styles.regenerateBtn}>
