@@ -991,11 +991,13 @@ export function buildCSV(
       meta.push(`table_id,${tableId}`);
     }
 
-    let effectiveApiKey = apiKey;
+    // Always fetch live key from localStorage at exact moment of export
+    let effectiveApiKey = (tableId && typeof window !== 'undefined' && window.localStorage)
+      ? window.localStorage.getItem(`coin_api_key_${tableId}`)
+      : null;
+
     if (!effectiveApiKey && typeof window !== 'undefined' && window.localStorage) {
-      effectiveApiKey = (tableId ? window.localStorage.getItem(`coin_api_key_${tableId}`) : null) ||
-                        window.localStorage.getItem('coin_active_api_key') ||
-                        '';
+      effectiveApiKey = window.localStorage.getItem('coin_active_api_key') || apiKey || null;
     }
 
     if (!effectiveApiKey) {

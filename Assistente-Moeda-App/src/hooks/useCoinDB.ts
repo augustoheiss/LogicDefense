@@ -19,6 +19,7 @@ import { useAuthContext } from './useAuth';
 import { fullSync, pushToCloud, pullFromCloud } from '../storage/supabaseSync';
 import { supabase } from '@/lib/supabase';
 import { mergeRows } from '../utils/csvEngine';
+import { ensureApiKeyForTable } from '../services/exportService';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -402,8 +403,9 @@ function useCoinDBInternal(): CoinDBState {
       }
     }
 
+    const tableId = generateId();
     const newTable: CoinTable = {
-      id: generateId(),
+      id: tableId,
       name,
       description,
       createdAt: new Date().toISOString(),
@@ -412,6 +414,7 @@ function useCoinDBInternal(): CoinDBState {
       goals: effectiveGoals,
       activeSectors: ['personal_finance'],
     };
+    ensureApiKeyForTable(tableId).catch(() => {});
     const newTables = [...tables, newTable];
     persist(newTables);
     setActiveTableIndex(newTables.length - 1);
