@@ -38,7 +38,7 @@ import {
   APIExecutionResult,
 } from '@/services/publicApiService';
 
-type ActiveTab = 'context' | 'export' | 'append' | 'ai' | 'spec';
+type ActiveTab = 'context' | 'export' | 'append' | 'spec';
 
 export function APIManagementTester() {
   const [apiKey, setApiKey] = useState(() => {
@@ -106,9 +106,6 @@ export function APIManagementTester() {
   const [csvInput, setCsvInput] = useState<string>(
     `Data;Valor;Descrição;Tipo;Categoria;Tags;ID_Externo\n${new Date().toISOString().split('T')[0]};299.90;Assinatura SaaS Lote;revenue;Software;lote,api;ext_csv_${Date.now()}`
   );
-
-  // POST /ai-analyst states
-  const [aiPrompt, setAiPrompt] = useState('Analise o saldo total da planilha e liste as últimas 3 transações.');
 
   // Quick preset generators
   const loadPresetSales = () => {
@@ -204,20 +201,7 @@ ${today};1500.00;Aporte Sócio Capital;partner_in;Socios;lote_csv;csv_3`;
     }
   };
 
-  const handleRunAiAnalyst = async () => {
-    if (!aiPrompt.trim()) {
-      Alert.alert('Aviso', 'Digite uma pergunta ou comando para a IA.');
-      return;
-    }
-    setLoading(true);
-    const res = await publicAiAnalyst(
-      { userPrompt: aiPrompt, asOfDate: asOfDate || undefined, startDate: startDate || undefined, endDate: endDate || undefined },
-      apiKey,
-      baseUrl
-    );
-    setLoading(false);
-    setLastResult(res);
-  };
+
 
   const copyResultToClipboard = async () => {
     if (!lastResult) return;
@@ -328,15 +312,6 @@ ${today};1500.00;Aporte Sócio Capital;partner_in;Socios;lote_csv;csv_3`;
         >
           <Text style={[styles.tabButtonText, activeTab === 'export' && styles.tabButtonTextActive]}>
             📥 Exportar CSV
-          </Text>
-        </Pressable>
-
-        <Pressable
-          style={[styles.tabButton, activeTab === 'ai' && styles.tabButtonActive]}
-          onPress={() => setActiveTab('ai')}
-        >
-          <Text style={[styles.tabButtonText, activeTab === 'ai' && styles.tabButtonTextActive]}>
-            🤖 IA Analyst (God)
           </Text>
         </Pressable>
 
@@ -545,47 +520,12 @@ ${today};1500.00;Aporte Sócio Capital;partner_in;Socios;lote_csv;csv_3`;
         </Card>
       )}
 
-      {/* TAB CONTENT 4: AI ANALYST */}
-      {activeTab === 'ai' && (
-        <Card style={styles.card}>
-          <Text style={styles.cardHeader}>🤖 IA Pública Analyst (God Mode)</Text>
-          <Text style={styles.description}>
-            Endpoint: <Text style={styles.codeText}>POST /api/v1/public/ai-analyst</Text>
-          </Text>
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Pergunta ou Comando em Linguagem Natural:</Text>
-            <TextInput
-              style={styles.textArea}
-              value={aiPrompt}
-              onChangeText={setAiPrompt}
-              multiline
-              numberOfLines={4}
-              placeholder="Digite o comando para a IA analisar ou alterar..."
-              placeholderTextColor={colors.text.disabled}
-            />
-          </View>
-
-          <Pressable
-            style={({ pressed }) => [styles.btnPrimary, pressed && styles.btnPressed]}
-            onPress={handleRunAiAnalyst}
-            disabled={loading}
-          >
-            {loading ? (
-              <ActivityIndicator color="#fff" size="small" />
-            ) : (
-              <Text style={styles.btnPrimaryText}>✨ Executar Análise via IA</Text>
-            )}
-          </Pressable>
-        </Card>
-      )}
-
-      {/* TAB CONTENT 5: OPENAPI SPEC */}
+      {/* TAB CONTENT 4: OPENAPI SPEC */}
       {activeTab === 'spec' && (
         <Card style={styles.card}>
-          <Text style={styles.cardHeader}>📜 Especificação OpenAPI 3.1.0 Oficial</Text>
+          <Text style={styles.cardHeader}>📜 Especificação OpenAPI 3.1.0 Oficial (Integração com IAs Externas)</Text>
           <Text style={styles.description}>
-            Cole esta especificação no ChatGPT, Claude, n8n ou Make para auto-gerar integrações.
+            Conecte IAs externas avançadas (ChatGPT, Claude 3.5, Custom GPTs, n8n) usando esta especificação técnica e sua Chave API. As IAs externas oferecem raciocínio muito superior, automação flexível e comandos avançados.
           </Text>
 
           <TextInput
