@@ -348,6 +348,28 @@ function useCoinDBInternal(): CoinDBState {
     };
   }, [activeTables, activeTableIndex]);
 
+  // ── Reactive API Key Isolation per Active Table ─────────
+  useEffect(() => {
+    const activeTableId = activeTable?.id;
+    if (!activeTableId || Platform.OS !== 'web' || typeof window === 'undefined' || !window.localStorage) return;
+
+    let tableKey = window.localStorage.getItem(`coin_api_key_${activeTableId}`);
+    if (tableKey && tableKey.startsWith('am_sheet_live_')) {
+      window.localStorage.setItem('coin_active_api_key', tableKey);
+      window.dispatchEvent(new CustomEvent('coin_sync_requested', {
+        detail: { tableId: activeTableId, apiKey: tableKey }
+      }));
+    } else {
+      ensureApiKeyForTable(activeTableId).then((newKey) => {
+        window.localStorage.setItem(`coin_api_key_${activeTableId}`, newKey);
+        window.localStorage.setItem('coin_active_api_key', newKey);
+        window.dispatchEvent(new CustomEvent('coin_sync_requested', {
+          detail: { tableId: activeTableId, apiKey: newKey }
+        }));
+      });
+    }
+  }, [activeTable?.id]);
+
   // ── Metrics (computed from active table) ───────────────
   const metrics = useMemo(() => {
     if (!activeTable) return emptyMetrics();

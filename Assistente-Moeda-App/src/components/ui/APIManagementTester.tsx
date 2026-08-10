@@ -54,11 +54,25 @@ export function APIManagementTester() {
   const [activeTab, setActiveTab] = useState<ActiveTab>('append');
 
   React.useEffect(() => {
-    if (typeof window !== 'undefined' && window.localStorage) {
-      const activeKey = window.localStorage.getItem('coin_active_api_key');
-      if (activeKey && activeKey.startsWith('am_sheet_live_')) {
-        setApiKey(activeKey);
+    const syncActiveApiKey = (e?: any) => {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        const detailKey = e?.detail?.apiKey;
+        const activeKey = detailKey || window.localStorage.getItem('coin_active_api_key');
+        if (activeKey && activeKey.startsWith('am_sheet_live_')) {
+          setApiKey(activeKey);
+        }
       }
+    };
+
+    syncActiveApiKey();
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('coin_sync_requested', syncActiveApiKey);
+      window.addEventListener('storage', syncActiveApiKey);
+      return () => {
+        window.removeEventListener('coin_sync_requested', syncActiveApiKey);
+        window.removeEventListener('storage', syncActiveApiKey);
+      };
     }
   }, []);
 

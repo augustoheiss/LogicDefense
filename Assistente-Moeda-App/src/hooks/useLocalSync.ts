@@ -175,7 +175,7 @@ export function useLocalSync() {
 
   // 2. Open Real-Time SSE Connection
   useEffect(() => {
-    const activeKey = apiKey || getStoredApiKey();
+    const activeKey = getStoredApiKey(tableId) || apiKey;
     if (Platform.OS !== 'web' || typeof window === 'undefined' || !activeKey || !window.EventSource) {
       return;
     }
@@ -208,7 +208,7 @@ export function useLocalSync() {
           });
 
           if (payload.seqNumber) {
-            setLastSeqNumber(payload.seqNumber);
+            saveLastSeqNumber(payload.seqNumber, tableId);
           }
 
           const totalValue = payload.rows.reduce((acc: number, r: TableRow) => acc + (Number(r.value) || 0), 0);
@@ -238,7 +238,7 @@ export function useLocalSync() {
     return () => {
       es.close();
     };
-  }, [apiKey, getStoredApiKey, forceSyncPending, db, pushAuditLog]);
+  }, [tableId, apiKey, getStoredApiKey, forceSyncPending, db, pushAuditLog, saveLastSeqNumber, lastSeqNumber]);
 
   // 3. Undo audit log event
   const undoAuditLog = useCallback(async (logId: string) => {
