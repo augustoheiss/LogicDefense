@@ -19,7 +19,7 @@ import { useAuthContext } from './useAuth';
 import { fullSync, pushToCloud, pullFromCloud } from '../storage/supabaseSync';
 import { supabase } from '@/lib/supabase';
 import { mergeRows } from '../utils/csvEngine';
-import { ensureApiKeyForTable } from '../services/exportService';
+import { ensureApiKeyForTable, generateLocalApiKey } from '../services/exportService';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -348,7 +348,24 @@ function useCoinDBInternal(): CoinDBState {
     };
   }, [activeTables, activeTableIndex]);
 
-  // ── Reactive API Key Isolation per Active Table ─────────
+  // ── Reactive API Key Isolation & Self-Healing per Table ─
+  useEffect(() => {
+    if (activeTables.length > 0 && Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+      const seenKeys = new Set<string>();
+      for (const t of activeTables) {
+        const tid = t.id;
+        let key = window.localStorage.getItem(`coin_api_key_${tid}`);
+        if (!key || !key.startsWith('am_sheet_live_') || seenKeys.has(key)) {
+          const newKey = generateLocalApiKey(tid);
+          window.localStorage.setItem(`coin_api_key_${tid}`, newKey);
+          ensureApiKeyForTable(tid).catch(() => {});
+          key = newKey;
+        }
+        seenKeys.add(key);
+      }
+    }
+  }, [activeTables]);
+
   useEffect(() => {
     const activeTableId = activeTable?.id;
     if (!activeTableId || Platform.OS !== 'web' || typeof window === 'undefined' || !window.localStorage) return;

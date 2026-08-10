@@ -45,6 +45,7 @@ import { SectorSettingsPanel } from '@/components/ui/SectorSettingsPanel';
 import { SyncAuditPanel, APIManagementTester } from '@/components/ui';
 import { formatCurrencySmart } from '@/core/formatCurrency';
 import { validateMobileLicenseKey, getStoredLicenseKey } from '@/storage/authService';
+import { ensureApiKeyForTable, generateLocalApiKey } from '@/services/exportService';
 import type { TableGoals, CoinTable } from '@/core/types';
 
 const API_URL = process.env.EXPO_PUBLIC_AI_BACKEND_URL || process.env.EXPO_PUBLIC_API_URL || 'https://ocorrencias-pdf-writer.onrender.com';
@@ -1222,7 +1223,14 @@ const SpreadsheetApiSection = React.memo(function SpreadsheetApiSection({
     try {
       let localKey: string | null = null;
       if (typeof window !== 'undefined' && window.localStorage) {
-        localKey = window.localStorage.getItem(`coin_api_key_${tableId}`) || window.localStorage.getItem('coin_active_api_key');
+        localKey = window.localStorage.getItem(`coin_api_key_${tableId}`);
+        if (!localKey && tableId) {
+          // Auto-generate isolated key specifically for THIS tableId!
+          localKey = generateLocalApiKey(tableId);
+          window.localStorage.setItem(`coin_api_key_${tableId}`, localKey);
+          window.localStorage.setItem('coin_active_api_key', localKey);
+          ensureApiKeyForTable(tableId).catch(() => {});
+        }
       }
 
       if (localKey && localKey.startsWith('am_sheet_live_')) {

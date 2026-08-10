@@ -991,26 +991,29 @@ export function buildCSV(
       meta.push(`table_id,${tableId}`);
     }
 
-    // Always fetch live key from localStorage at exact moment of export
+    // Strictly fetch live key for THIS tableId from localStorage
     let effectiveApiKey = (tableId && typeof window !== 'undefined' && window.localStorage)
       ? window.localStorage.getItem(`coin_api_key_${tableId}`)
       : null;
 
-    if (!effectiveApiKey && typeof window !== 'undefined' && window.localStorage) {
-      effectiveApiKey = window.localStorage.getItem('coin_active_api_key') || apiKey || null;
+    if (!effectiveApiKey && tableId) {
+      effectiveApiKey = generateLocalApiKey(tableId);
+      if (typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.setItem(`coin_api_key_${tableId}`, effectiveApiKey);
+        window.localStorage.setItem('coin_active_api_key', effectiveApiKey);
+      }
+      ensureApiKeyForTable(tableId).catch(() => {});
     }
 
     if (!effectiveApiKey) {
-      const targetId = tableId || 'default';
-      effectiveApiKey = generateLocalApiKey(targetId);
       if (typeof window !== 'undefined' && window.localStorage) {
-        if (tableId) {
-          window.localStorage.setItem(`coin_api_key_${tableId}`, effectiveApiKey);
-        }
-        window.localStorage.setItem('coin_active_api_key', effectiveApiKey);
+        effectiveApiKey = window.localStorage.getItem('coin_active_api_key') || apiKey || null;
       }
-      if (tableId) {
-        ensureApiKeyForTable(tableId).catch(() => {});
+      if (!effectiveApiKey) {
+        effectiveApiKey = generateLocalApiKey('default');
+        if (typeof window !== 'undefined' && window.localStorage) {
+          window.localStorage.setItem('coin_active_api_key', effectiveApiKey);
+        }
       }
     }
 
