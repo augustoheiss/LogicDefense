@@ -92,6 +92,10 @@ async def get_public_openapi(request: Request):
 # API Key header dependency
 API_KEY_HEADER = APIKeyHeader(name="X-Spreadsheet-Key", auto_error=True)
 
+# In-memory storage for active table transactions and exports
+TABLE_IN_MEMORY_STORAGE: Dict[str, Dict[str, Any]] = {}
+
+
 class PublicAIAnalystPayload(BaseModel):
     user_prompt: str = Field(..., description="The natural language question or command from the user.", alias="userPrompt")
     as_of_date: Optional[str] = Field(None, pattern=r"^\d{4}-\d{2}-\d{2}$", description="Optional reference date in YYYY-MM-DD format.", alias="asOfDate")
@@ -284,7 +288,14 @@ async def append_to_spreadsheet(
         inserted_count += 1
 
     csv_output = "\n".join(csv_lines)
-    
+
+    # ── Update In-Memory Storage for GET routes & Analysis ───────────────
+    TABLE_IN_MEMORY_STORAGE[table_id] = {
+        "items": items_to_process,
+        "csv_content": csv_output,
+        "updated_at": datetime.datetime.now().isoformat()
+    }
+
     # ── Sequence Versioning & Real-Time SSE / Queue ─────────────────────────
     from db.license_db import get_next_table_sequence, enqueue_pending_sync, hash_key
     from services.sync_broadcaster import broadcaster
@@ -414,56 +425,76 @@ async def sync_pending_queue(
         "events": parsed_events
     }
 
+@router.get("/analysis-context", response_model=PublicAnalysisContextResponse)
 @router.post("/analysis-context", response_model=PublicAnalysisContextResponse)
 async def generate_analysis_context_in_memory(
-    payload: AppendSpreadsheetPayload,
+    payload: Optional[AppendSpreadsheetPayload] = None,
     table_id: str = Depends(get_table_id_for_read),
-    as_of_date: Optional[str] = Query(None, pattern=r"^\d{4}-\d{2}-\d{2}$", description="Reference date YYYY-MM-DD")
+    as_of_date: Optional[str] = Query(None, pattern=r"^\d{4}-\d{2}-\d{2}$", description="Reference date YYYY-MM-DD"),
+    start_date: Optional[str] = Query(None, pattern=r"^\d{4}-\d{2}-\d{2}$", description="Optional start date filter YYYY-MM-DD"),
+    end_date: Optional[str] = Query(None, pattern=r"^\d{4}-\d{2}-\d{2}$", description="Optional end date filter YYYY-MM-DD")
 ):
     """Gera o contexto de inteligência financeira em Markdown 100% em memória RAM."""
     items_to_process: List[AppendTransactionItem] = []
-    if payload.transactions:
-        items_to_process.extend(payload.transactions)
+    
+    if payload:
+        if payload.transactions:
+            items_to_process.extend(payload.transactions)
 
-    if payload.csv_content and payload.csv_content.strip():
-        raw_lines = payload.csv_content.strip().split("\n")
-        for line in raw_lines:
-            if line.startswith("##") or not line.strip():
-                continue
-            parts = [p.strip().strip('"') for p in line.split(",")]
-            if len(parts) >= 3:
-                line_lower = line.lower()
-                if "date" in line_lower or "data" in line_lower or "description" in line_lower or "entrytype" in line_lower:
+        if payload.csv_content and payload.csv_content.strip():
+            raw_lines = payload.csv_content.strip().split("\n")
+            for line in raw_lines:
+                if line.startswith("##") or not line.strip():
                     continue
-                try:
-                    if len(parts) >= 4 and re.search(r"\d{4}-\d{2}-\d{2}", parts[1]):
-                        dt = parts[1]
-                        val = float(parts[2])
-                        desc = parts[3]
-                        entry_type = parts[4] if len(parts) > 4 and parts[4] else ("expense" if val < 0 else "revenue")
-                        cat = parts[9] if len(parts) > 9 and parts[9] else "Geral"
-                        tag = parts[10] if len(parts) > 10 else ""
-                        ext_id = parts[0]
-                    else:
-                        dt = parts[0]
-                        val = float(parts[1])
-                        desc = parts[2]
-                        entry_type = parts[3] if len(parts) > 3 and parts[3] else ("expense" if val < 0 else "revenue")
-                        cat = parts[4] if len(parts) > 4 else "Geral"
-                        tag = parts[5] if len(parts) > 5 else ""
-                        ext_id = parts[6] if len(parts) > 6 else None
+                parts = [p.strip().strip('"') for p in line.split(",")]
+                if len(parts) >= 3:
+                    line_lower = line.lower()
+                    if "date" in line_lower or "data" in line_lower or "description" in line_lower or "entrytype" in line_lower:
+                        continue
+                    try:
+                        if len(parts) >= 4 and re.search(r"\d{4}-\d{2}-\d{2}", parts[1]):
+                            dt = parts[1]
+                            val = float(parts[2])
+                            desc = parts[3]
+                            entry_type = parts[4] if len(parts) > 4 and parts[4] else ("expense" if val < 0 else "revenue")
+                            cat = parts[9] if len(parts) > 9 and parts[9] else "Geral"
+                            tag = parts[10] if len(parts) > 10 else ""
+                            ext_id = parts[0]
+                        else:
+                            dt = parts[0]
+                            val = float(parts[1])
+                            desc = parts[2]
+                            entry_type = parts[3] if len(parts) > 3 and parts[3] else ("expense" if val < 0 else "revenue")
+                            cat = parts[4] if len(parts) > 4 else "Geral"
+                            tag = parts[5] if len(parts) > 5 else ""
+                            ext_id = parts[6] if len(parts) > 6 else None
 
-                    items_to_process.append(AppendTransactionItem(
-                        date=dt,
-                        value=abs(val),
-                        description=desc,
-                        entryType=entry_type,
-                        category=cat,
-                        tags=tag,
-                        externalId=ext_id
-                    ))
-                except Exception:
-                    pass
+                        items_to_process.append(AppendTransactionItem(
+                            date=dt,
+                            value=abs(val),
+                            description=desc,
+                            entryType=entry_type,
+                            category=cat,
+                            tags=tag,
+                            externalId=ext_id
+                        ))
+                    except Exception:
+                        pass
+
+    # Fallback ao armazenamento em memória do table_id se não veio payload de itens
+    if not items_to_process and table_id in TABLE_IN_MEMORY_STORAGE:
+        items_to_process = TABLE_IN_MEMORY_STORAGE[table_id].get("items", [])
+
+    # Filtrar por intervalo de datas se fornecido
+    if start_date or end_date:
+        filtered = []
+        for it in items_to_process:
+            if start_date and it.date < start_date:
+                continue
+            if end_date and it.date > end_date:
+                continue
+            filtered.append(it)
+        items_to_process = filtered
 
     ref_date = as_of_date or datetime.date.today().isoformat()
 
@@ -502,27 +533,32 @@ async def export_spreadsheet_csv(
     download: bool = Query(False, description="Se True, retorna como arquivo para download .csv")
 ):
     """
-    Retorna a estrutura modelo oficial de exportação CSV v2 100% em memória.
+    Retorna o conteúdo CSV da planilha ativa mantido em memória RAM.
     """
-    csv_content = "\n".join([
-        "## COIN_BACKUP_V2 ##",
-        "table_name,Planilha Principal",
-        f"id,{table_id}",
-        "## ROWS ##",
-        "id,date,value,description,entryType,category,tags,external_id"
-    ])
+    stored = TABLE_IN_MEMORY_STORAGE.get(table_id, {})
+    csv_content = stored.get("csv_content")
+    items = stored.get("items", [])
+
+    if not csv_content:
+        csv_content = "\n".join([
+            "## COIN_BACKUP_V2 ##",
+            "table_name,Planilha Principal",
+            f"id,{table_id}",
+            "## ROWS ##",
+            "id,date,value,description,entryType,category,tags,external_id"
+        ])
 
     if download:
         return Response(
             content=csv_content,
             media_type="text/csv",
-            headers={"Content-Disposition": 'attachment; filename="coin_backup_planilha.csv"'}
+            headers={"Content-Disposition": f'attachment; filename="coin_backup_{table_id}.csv"'}
         )
 
     return {
         "status": "success",
         "table_name": "Planilha Principal",
-        "total_rows": 0,
+        "total_rows": len(items),
         "csv_content": csv_content
     }
 
