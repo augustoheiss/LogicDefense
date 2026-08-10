@@ -23,3 +23,9 @@ backend/*.db-journal
 license_storage.db
 # Generated sub-app builds (Vercel builds these automatically on deploy)
 public/laboratorio/
+backend/analyze_sherlock.py
+backend/sherlock_report.txt
+backend/analysis_output.txt
+backend/*.txt
+*.txt
+

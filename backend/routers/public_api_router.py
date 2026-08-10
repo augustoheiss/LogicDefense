@@ -113,6 +113,7 @@ async def validate_api_key_and_get_table_id(
     api_key: str = Security(API_KEY_HEADER)
 ) -> str:
     """Valida a chave de API estática (SHA-256) e retorna a table_id autorizada."""
+    api_key = (api_key or "").strip()
     if not api_key.startswith("am_sheet_live_"):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -124,6 +125,7 @@ async def validate_api_key_and_get_table_id(
     from db.license_db import get_spreadsheet_api_key
     record = get_spreadsheet_api_key(key_hash)
     if not record:
+        log.warning(f"[API Auth Debug] key_hash {key_hash} not found for raw key '{api_key[:15]}...' (len {len(api_key)})")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Chave de API inválida ou revogada."
@@ -207,23 +209,32 @@ async def append_to_spreadsheet(
     # 2. Texto CSV bruto
     if payload.csv_content and payload.csv_content.strip():
         raw_lines = payload.csv_content.strip().split("\n")
-        header_skipped = False
         for line in raw_lines:
             if line.startswith("##") or not line.strip():
                 continue
             parts = [p.strip().strip('"') for p in line.split(",")]
             if len(parts) >= 3:
-                if not header_skipped and ("date" in parts[0].lower() or "data" in parts[0].lower()):
-                    header_skipped = True
+                line_lower = line.lower()
+                if "date" in line_lower or "data" in line_lower or "description" in line_lower or "entrytype" in line_lower:
                     continue
                 try:
-                    dt = parts[0]
-                    val = float(parts[1])
-                    desc = parts[2]
-                    entry_type = parts[3] if len(parts) > 3 and parts[3] else ("expense" if val < 0 else "revenue")
-                    cat = parts[4] if len(parts) > 4 else "Geral"
-                    tag = parts[5] if len(parts) > 5 else ""
-                    ext_id = parts[6] if len(parts) > 6 else None
+                    # Detect if col 1 is date (standard Expo export v3)
+                    if len(parts) >= 4 and re.search(r"\d{4}-\d{2}-\d{2}", parts[1]):
+                        dt = parts[1]
+                        val = float(parts[2])
+                        desc = parts[3]
+                        entry_type = parts[4] if len(parts) > 4 and parts[4] else ("expense" if val < 0 else "revenue")
+                        cat = parts[9] if len(parts) > 9 and parts[9] else "Geral"
+                        tag = parts[10] if len(parts) > 10 else ""
+                        ext_id = parts[0]
+                    else:
+                        dt = parts[0]
+                        val = float(parts[1])
+                        desc = parts[2]
+                        entry_type = parts[3] if len(parts) > 3 and parts[3] else ("expense" if val < 0 else "revenue")
+                        cat = parts[4] if len(parts) > 4 else "Geral"
+                        tag = parts[5] if len(parts) > 5 else ""
+                        ext_id = parts[6] if len(parts) > 6 else None
 
                     items_to_process.append(AppendTransactionItem(
                         date=dt,
@@ -410,11 +421,54 @@ async def generate_analysis_context_in_memory(
     as_of_date: Optional[str] = Query(None, pattern=r"^\d{4}-\d{2}-\d{2}$", description="Reference date YYYY-MM-DD")
 ):
     """Gera o contexto de inteligência financeira em Markdown 100% em memória RAM."""
-    items = payload.transactions or []
+    items_to_process: List[AppendTransactionItem] = []
+    if payload.transactions:
+        items_to_process.extend(payload.transactions)
+
+    if payload.csv_content and payload.csv_content.strip():
+        raw_lines = payload.csv_content.strip().split("\n")
+        for line in raw_lines:
+            if line.startswith("##") or not line.strip():
+                continue
+            parts = [p.strip().strip('"') for p in line.split(",")]
+            if len(parts) >= 3:
+                line_lower = line.lower()
+                if "date" in line_lower or "data" in line_lower or "description" in line_lower or "entrytype" in line_lower:
+                    continue
+                try:
+                    if len(parts) >= 4 and re.search(r"\d{4}-\d{2}-\d{2}", parts[1]):
+                        dt = parts[1]
+                        val = float(parts[2])
+                        desc = parts[3]
+                        entry_type = parts[4] if len(parts) > 4 and parts[4] else ("expense" if val < 0 else "revenue")
+                        cat = parts[9] if len(parts) > 9 and parts[9] else "Geral"
+                        tag = parts[10] if len(parts) > 10 else ""
+                        ext_id = parts[0]
+                    else:
+                        dt = parts[0]
+                        val = float(parts[1])
+                        desc = parts[2]
+                        entry_type = parts[3] if len(parts) > 3 and parts[3] else ("expense" if val < 0 else "revenue")
+                        cat = parts[4] if len(parts) > 4 else "Geral"
+                        tag = parts[5] if len(parts) > 5 else ""
+                        ext_id = parts[6] if len(parts) > 6 else None
+
+                    items_to_process.append(AppendTransactionItem(
+                        date=dt,
+                        value=abs(val),
+                        description=desc,
+                        entryType=entry_type,
+                        category=cat,
+                        tags=tag,
+                        externalId=ext_id
+                    ))
+                except Exception:
+                    pass
+
     ref_date = as_of_date or datetime.date.today().isoformat()
 
     rows: List[TableRow] = []
-    for idx, it in enumerate(items):
+    for idx, it in enumerate(items_to_process):
         tx_id = it.external_id or f"tx_{idx+1}"
         entry_tp = EntryType(it.entry_type) if it.entry_type in [e.value for e in EntryType] else EntryType.EXPENSE
         rows.append(TableRow(
