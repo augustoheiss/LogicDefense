@@ -15,6 +15,7 @@ const API_BASE_URL = 'http://127.0.0.1:8000/api/v1/public';
 
 export interface AuditLogItem {
   id: string;
+  tableId: string;
   timestamp: string;
   origin: 'python' | 'whatsapp' | 'csv' | 'web_ui';
   seqNumber: number;
@@ -38,17 +39,17 @@ export function useLocalSync() {
 
   const eventSourceRef = useRef<any>(null);
 
-  // Helper: Read API key from localStorage for this tableId
+  // Helper: Read API key from localStorage for a specific tableId
   const getStoredApiKey = useCallback((tid?: string): string | null => {
     if (Platform.OS !== 'web' || typeof window === 'undefined' || !window.localStorage) {
       return null;
     }
     const targetId = tid || tableId;
     if (!targetId) return null;
-    return window.localStorage.getItem(`coin_api_key_${targetId}`) || window.localStorage.getItem('coin_active_api_key');
+    return window.localStorage.getItem(`coin_api_key_${targetId}`);
   }, [tableId]);
 
-  // Helper: Store new API key in localStorage
+  // Helper: Store API key in localStorage for a specific tableId
   const setApiKey = useCallback((key: string, tid?: string) => {
     if (Platform.OS !== 'web' || typeof window === 'undefined' || !window.localStorage) {
       return;
@@ -57,26 +58,21 @@ export function useLocalSync() {
     if (targetId) {
       window.localStorage.setItem(`coin_api_key_${targetId}`, key);
     }
-    window.localStorage.setItem('coin_active_api_key', key);
     setApiKeyState(key);
   }, [tableId]);
 
-  // Read stored key on mount / tableId change
-  useEffect(() => {
-    const key = getStoredApiKey();
-    setApiKeyState(key);
-  }, [getStoredApiKey]);
+  // Helper: Get sequence number scoped strictly by tableId
+  const getStoredSeqNumber = useCallback((tid?: string): number => {
+    if (Platform.OS !== 'web' || typeof window === 'undefined' || !window.localStorage) {
+      return 0;
+    }
+    const targetId = tid || tableId;
+    if (!targetId) return 0;
+    const val = window.localStorage.getItem(`coin_last_seq_${targetId}`);
+    return val ? parseInt(val, 10) || 0 : 0;
+  }, [tableId]);
 
-  // Add audit log helper
-  const pushAuditLog = useCallback((item: Omit<AuditLogItem, 'id' | 'timestamp'>) => {
-    const newLog: AuditLogItem = {
-      ...item,
-      id: `audit_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
-      timestamp: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-    };
-    setAuditLogs((prev) => [newLog, ...prev].slice(0, 50));
-  }, []);
-
+  // Helper: Save sequence number scoped strictly by tableId
   const saveLastSeqNumber = useCallback((seq: number, tid?: string) => {
     setLastSeqNumber(seq);
     if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
@@ -84,14 +80,78 @@ export function useLocalSync() {
       if (targetId) {
         window.localStorage.setItem(`coin_last_seq_${targetId}`, String(seq));
       }
-      window.localStorage.setItem('coin_active_seq', String(seq));
     }
   }, [tableId]);
 
+  // Helper: Load audit logs scoped strictly by tableId
+  const loadStoredAuditLogs = useCallback((tid?: string): AuditLogItem[] => {
+    if (Platform.OS !== 'web' || typeof window === 'undefined' || !window.localStorage) {
+      return [];
+    }
+    const targetId = tid || tableId;
+    if (!targetId) return [];
+    try {
+      const raw = window.localStorage.getItem(`coin_audit_events_${targetId}`);
+      return raw ? JSON.parse(raw) : [];
+    } catch (err) {
+      console.warn('Error reading stored audit logs:', err);
+      return [];
+    }
+  }, [tableId]);
+
+  // Helper: Save audit logs scoped strictly by tableId
+  const saveAuditLogs = useCallback((logs: AuditLogItem[], tid?: string) => {
+    setAuditLogs(logs);
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+      const targetId = tid || tableId;
+      if (targetId) {
+        window.localStorage.setItem(`coin_audit_events_${targetId}`, JSON.stringify(logs));
+      }
+    }
+  }, [tableId]);
+
+  // Add audit log helper (scoped by tableId)
+  const pushAuditLog = useCallback((item: Omit<AuditLogItem, 'id' | 'timestamp' | 'tableId'>, tid?: string) => {
+    const currentTableId = tid || tableId;
+    if (!currentTableId) return;
+    const newLog: AuditLogItem = {
+      ...item,
+      id: `audit_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      tableId: currentTableId,
+      timestamp: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+    };
+    setAuditLogs((prev) => {
+      const updated = [newLog, ...prev].slice(0, 50);
+      if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.setItem(`coin_audit_events_${currentTableId}`, JSON.stringify(updated));
+      }
+      return updated;
+    });
+  }, [tableId]);
+
+  // Reactive state reset & reload on tableId change
+  useEffect(() => {
+    if (!tableId) {
+      setAuditLogs([]);
+      setLastSeqNumber(0);
+      setApiKeyState(null);
+      return;
+    }
+
+    // 1. Reload isolated key, sequence number, and audit logs for THIS tableId
+    const key = getStoredApiKey(tableId);
+    const seq = getStoredSeqNumber(tableId);
+    const logs = loadStoredAuditLogs(tableId);
+
+    setApiKeyState(key);
+    setLastSeqNumber(seq);
+    setAuditLogs(logs);
+  }, [tableId, getStoredApiKey, getStoredSeqNumber, loadStoredAuditLogs]);
+
   // 1. Drain offline pending queue
   const forceSyncPending = useCallback(async () => {
-    const activeKey = apiKey || getStoredApiKey();
-    if (!activeKey) {
+    const activeKey = getStoredApiKey(tableId) || apiKey;
+    if (!activeKey || !tableId) {
       setStatus('disconnected');
       return;
     }
@@ -131,7 +191,7 @@ export function useLocalSync() {
               impactText: `${evt.rows.length} itens - Total ${formattedVal}`,
               rowsCount: evt.rows.length,
               rowIds: evt.rows.map((r: TableRow) => r.id),
-            });
+            }, tableId);
           }
 
           if (evt.seqNumber && evt.seqNumber > maxSeq) {
@@ -139,7 +199,7 @@ export function useLocalSync() {
           }
         }
 
-        saveLastSeqNumber(maxSeq);
+        saveLastSeqNumber(maxSeq, tableId);
       }
 
       setStatus('connected');
@@ -147,7 +207,7 @@ export function useLocalSync() {
       console.warn('Failed to drain pending sync queue:', err);
       setStatus('error');
     }
-  }, [apiKey, getStoredApiKey, lastSeqNumber, db, pushAuditLog]);
+  }, [apiKey, getStoredApiKey, lastSeqNumber, db, pushAuditLog, tableId, saveLastSeqNumber]);
 
   // Listen for CSV import / key update sync requests
   useEffect(() => {
@@ -155,11 +215,14 @@ export function useLocalSync() {
 
     const handleSyncRequest = (e: any) => {
       const detail = e.detail || {};
-      const key = detail.apiKey || getStoredApiKey(detail.tableId);
+      const targetTableId = detail.tableId || tableId;
+      if (targetTableId && targetTableId !== tableId) return;
+
+      const key = detail.apiKey || getStoredApiKey(targetTableId);
       if (key) {
         setApiKeyState(key);
         if (detail.lastEventSeq !== undefined) {
-          saveLastSeqNumber(detail.lastEventSeq, detail.tableId);
+          saveLastSeqNumber(detail.lastEventSeq, targetTableId);
         }
         setTimeout(() => {
           forceSyncPending();
@@ -171,12 +234,13 @@ export function useLocalSync() {
     return () => {
       window.removeEventListener('coin_sync_requested', handleSyncRequest);
     };
-  }, [getStoredApiKey, forceSyncPending]);
+  }, [tableId, getStoredApiKey, saveLastSeqNumber, forceSyncPending]);
 
-  // 2. Open Real-Time SSE Connection
+  // 2. Open Real-Time SSE Connection (Reconnected per tableId)
   useEffect(() => {
-    const activeKey = getStoredApiKey(tableId) || apiKey;
-    if (Platform.OS !== 'web' || typeof window === 'undefined' || !activeKey || !window.EventSource) {
+    const activeKey = getStoredApiKey(tableId);
+    if (Platform.OS !== 'web' || typeof window === 'undefined' || !activeKey || !tableId || !window.EventSource) {
+      setStatus('disconnected');
       return;
     }
 
@@ -221,7 +285,7 @@ export function useLocalSync() {
             impactText: `${payload.rows.length} itens - Total ${formattedVal}`,
             rowsCount: payload.rows.length,
             rowIds: payload.rows.map((r: TableRow) => r.id),
-          });
+          }, tableId);
         }
       } catch (err) {
         console.warn('Error parsing SSE event:', err);
@@ -238,12 +302,18 @@ export function useLocalSync() {
     return () => {
       es.close();
     };
-  }, [tableId, apiKey, getStoredApiKey, forceSyncPending, db, pushAuditLog, saveLastSeqNumber, lastSeqNumber]);
+  }, [tableId, getStoredApiKey, forceSyncPending, db, pushAuditLog, saveLastSeqNumber, lastSeqNumber]);
 
-  // 3. Undo audit log event
+  // 3. Safe undo audit log event with strict tableId validation
   const undoAuditLog = useCallback(async (logId: string) => {
     const targetLog = auditLogs.find((l) => l.id === logId);
     if (!targetLog) return;
+
+    // SECURITY CHECK: Validate event belongs strictly to activeTableId
+    if (targetLog.tableId && targetLog.tableId !== tableId) {
+      console.warn(`[Security Guard] Blocked undo action for event tableId (${targetLog.tableId}) which differs from activeTableId (${tableId})`);
+      return;
+    }
 
     for (const rid of targetLog.rowIds) {
       if (rid) {
@@ -251,8 +321,9 @@ export function useLocalSync() {
       }
     }
 
-    setAuditLogs((prev) => prev.filter((l) => l.id !== logId));
-  }, [auditLogs, db]);
+    const updated = auditLogs.filter((l) => l.id !== logId);
+    saveAuditLogs(updated, tableId);
+  }, [auditLogs, db, tableId, saveAuditLogs]);
 
   return {
     status,
@@ -264,3 +335,4 @@ export function useLocalSync() {
     undoAuditLog,
   };
 }
+
