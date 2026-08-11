@@ -134,6 +134,11 @@ async def validate_api_key_and_get_table_id(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Chave de API inválida ou revogada."
         )
+    if record.get("is_expired"):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="API Key Expired"
+        )
         
     permissions = record.get("permissions", "read:write")
     if request_type == "write" and permissions == "read-only":
@@ -360,6 +365,8 @@ async def sync_stream_sse(
     record = get_spreadsheet_api_key(key_h)
     if not record or not record.get("is_active", 1):
         raise HTTPException(status_code=401, detail="Chave API revogada ou inválida.")
+    if record.get("is_expired"):
+        raise HTTPException(status_code=401, detail="API Key Expired")
 
     from services.sync_broadcaster import broadcaster
 
@@ -407,6 +414,8 @@ async def sync_pending_queue(
     record = get_spreadsheet_api_key(key_h)
     if not record or not record.get("is_active", 1):
         raise HTTPException(status_code=401, detail="Chave API revogada ou inválida.")
+    if record.get("is_expired"):
+        raise HTTPException(status_code=401, detail="API Key Expired")
 
     pending_items = pop_pending_sync(key_h, since_seq=since_seq)
     

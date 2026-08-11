@@ -27,5 +27,5 @@ backend/analyze_sherlock.py
 backend/sherlock_report.txt
 backend/analysis_output.txt
 backend/*.txt
-*.txt
+backend/verify_key_ttl.py
 

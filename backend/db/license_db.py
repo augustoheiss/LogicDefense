@@ -247,9 +247,14 @@ def init_db():
                 );
             """)
 
-            # Migration: Ensure is_active column exists if database was created prior
+            # Migration: Ensure is_active and expires_at columns exist if database was created prior
             try:
                 cursor.execute("ALTER TABLE spreadsheet_api_keys ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1")
+            except Exception:
+                pass # Column already exists
+
+            try:
+                cursor.execute("ALTER TABLE spreadsheet_api_keys ADD COLUMN expires_at TEXT")
             except Exception:
                 pass # Column already exists
             
@@ -515,13 +520,15 @@ def mark_webhook_processed(event_id: str):
 
 # ── Spreadsheet API Keys ─────────────────────────────────────────────────────
 
-def create_spreadsheet_api_key(table_id: str, license_key_hash: str, permissions: str = "read:write", raw_license: str | None = None) -> tuple[str, str]:
-    """Generates a spreadsheet API key linked to a valid license key with Key Rotation."""
+def create_spreadsheet_api_key(table_id: str, license_key_hash: str, permissions: str = "read:write", raw_license: str | None = None, expires_in_days: int = 30) -> tuple[str, str]:
+    """Generates a spreadsheet API key linked to a valid license key with Key Rotation & Expiration TTL (default 30 days)."""
     raw_token = secrets.token_hex(32)
     api_key = f"am_sheet_live_{raw_token}"
     key_h = hash_key(api_key)
     hint = f"...{api_key[-4:]}"
-    now = datetime.now(timezone.utc).isoformat()
+    now_dt = datetime.now(timezone.utc)
+    now = now_dt.isoformat()
+    exp_dt = (now_dt + timedelta(days=expires_in_days)).isoformat()
     
     with get_connection() as conn:
         cursor = conn.cursor()
@@ -539,20 +546,20 @@ def create_spreadsheet_api_key(table_id: str, license_key_hash: str, permissions
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (lic_key_str, license_key_hash, "user@heisslab.com.br", tier_name, tokens, cap, "2099-12-31T23:59:59Z", now, now))
 
-        # Key Rotation Rule: Deactivate all old keys for this table_id
-        cursor.execute("UPDATE spreadsheet_api_keys SET is_active = 0 WHERE table_id = ?", (table_id,))
+        # Key Rotation Rule: Deactivate & replace old keys for this table_id
+        cursor.execute("DELETE FROM spreadsheet_api_keys WHERE table_id = ?", (table_id,))
 
-        # Insert new active API Key
+        # Insert new active API Key with TTL expires_at
         cursor.execute("""
-            INSERT INTO spreadsheet_api_keys (table_id, key_hash, key_hint, license_key_hash, permissions, is_active, created_at)
-            VALUES (?, ?, ?, ?, ?, 1, ?)
-        """, (table_id, key_h, hint, license_key_hash, permissions, now))
+            INSERT INTO spreadsheet_api_keys (table_id, key_hash, key_hint, license_key_hash, permissions, is_active, created_at, expires_at)
+            VALUES (?, ?, ?, ?, ?, 1, ?, ?)
+        """, (table_id, key_h, hint, license_key_hash, permissions, now, exp_dt))
         conn.commit()
         
     return api_key, hint
 
 def get_spreadsheet_api_key(key_hash: str) -> dict | None:
-    """Retrieves spreadsheet API key info by its hash if active (is_active == 1)."""
+    """Retrieves spreadsheet API key info by its hash if active (is_active == 1) and not expired."""
     env_key = (os.getenv("SPREADSHEET_API_KEY") or "").strip()
     if env_key and key_hash == hash_key(env_key):
         return {
@@ -576,10 +583,27 @@ def get_spreadsheet_api_key(key_hash: str) -> dict | None:
             return None
         
         api_key_data = dict(row)
+        logger.info(f"[DB Debug] get_spreadsheet_api_key record: {api_key_data}")
         is_act = api_key_data.get("is_active")
         if is_act is not None and not bool(int(is_act)):
             logger.warning(f"[DB Debug] Key is_active is 0/False for key_hash {key_hash}: {api_key_data}")
             return None
+
+        # Check API Key expiration TTL (expires_at)
+        key_exp_str = api_key_data.get("expires_at")
+        if key_exp_str:
+            try:
+                exp_dt = datetime.fromisoformat(key_exp_str.replace("Z", "+00:00"))
+                if exp_dt.tzinfo is None:
+                    exp_dt = exp_dt.replace(tzinfo=timezone.utc)
+                if exp_dt < datetime.now(timezone.utc):
+                    logger.warning(f"[DB Debug] API Key EXPIRED for key_hash {key_hash}: {key_exp_str}")
+                    api_key_data["is_active"] = 0
+                    api_key_data["is_expired"] = True
+                    api_key_data["error"] = "API Key Expired"
+                    return api_key_data
+            except Exception as exp_err:
+                logger.warning(f"[DB Debug] Could not parse key expires_at '{key_exp_str}': {exp_err}")
 
         lic_hash = api_key_data.get("license_key_hash")
         
@@ -595,10 +619,10 @@ def get_spreadsheet_api_key(key_hash: str) -> dict | None:
         lic_row = cursor.fetchone()
         if lic_row:
             api_key_data["token_balance"] = lic_row["token_balance"]
-            api_key_data["expires_at"] = lic_row["expires_at"]
+            if not api_key_data.get("expires_at"):
+                api_key_data["expires_at"] = lic_row["expires_at"]
         else:
             api_key_data["token_balance"] = 0
-            api_key_data["expires_at"] = None
 
         return api_key_data
 

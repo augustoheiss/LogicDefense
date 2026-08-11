@@ -20,6 +20,7 @@ import { fullSync, pushToCloud, pullFromCloud } from '../storage/supabaseSync';
 import { supabase } from '@/lib/supabase';
 import { mergeRows } from '../utils/csvEngine';
 import { ensureApiKeyForTable, generateLocalApiKey } from '../services/exportService';
+import { validateApiKey, generateNewApiKey } from '../services/apiKeyService';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -50,7 +51,13 @@ export interface CoinDBState {
     description?: string;
     goals?: TableGoals;
     mode?: 'replace' | 'merge';
-  }) => Promise<void>;
+  }) => Promise<{
+    success: boolean;
+    tableId: string;
+    keyWasAutoRenewed: boolean;
+    message: string;
+    apiKey: string;
+  }>;
   addTable: (name: string, description?: string, goals?: TableGoals, rows?: Omit<TableRow, 'id'>[]) => void;
   renameTable: (tableId: string, name: string) => void;
   deleteTable: (tableId: string) => void;
@@ -814,19 +821,56 @@ function useCoinDBInternal(): CoinDBState {
     const mode = payload.mode || 'replace';
     const effectiveTableId = targetTable.id;
 
-    // 2. Restaurar api_key e last_event_seq no localStorage
+    // 2. Tratar Chave API com Validação & Auto-Renovação no Import
+    let activeApiKey = payload.apiKey || '';
+    let keyWasAutoRenewed = false;
+
     if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
-      if (payload.apiKey) {
-        window.localStorage.setItem(`coin_api_key_${effectiveTableId}`, payload.apiKey);
-        window.localStorage.setItem('coin_active_api_key', payload.apiKey);
+      if (activeApiKey) {
+        // Valida a chave vinda do CSV contra o servidor backend
+        const valCheck = await validateApiKey(activeApiKey);
+        if (!valCheck.valid) {
+          console.warn(`[CSV Import] Chave API no CSV (${activeApiKey.slice(0, 15)}...) está ${valCheck.expired ? 'EXPIRADA' : 'INVÁLIDA'}. Gerando nova chave API para a planilha ${effectiveTableId}...`);
+          const genRes = await generateNewApiKey(effectiveTableId);
+          if (genRes && genRes.apiKey) {
+            activeApiKey = genRes.apiKey;
+            keyWasAutoRenewed = true;
+          }
+        }
+      } else {
+        // Caso o CSV não tenha api_key, verifica chave salva no localStorage ou gera nova se expirada/ausente
+        const existingKey = window.localStorage.getItem(`coin_api_key_${effectiveTableId}`);
+        if (existingKey) {
+          const valCheck = await validateApiKey(existingKey);
+          if (!valCheck.valid) {
+            const genRes = await generateNewApiKey(effectiveTableId);
+            if (genRes && genRes.apiKey) {
+              activeApiKey = genRes.apiKey;
+              keyWasAutoRenewed = true;
+            }
+          } else {
+            activeApiKey = existingKey;
+          }
+        } else {
+          const genRes = await generateNewApiKey(effectiveTableId);
+          if (genRes && genRes.apiKey) {
+            activeApiKey = genRes.apiKey;
+            keyWasAutoRenewed = true;
+          }
+        }
+      }
+
+      if (activeApiKey) {
+        window.localStorage.setItem(`coin_api_key_${effectiveTableId}`, activeApiKey);
+        window.localStorage.setItem('coin_active_api_key', activeApiKey);
       }
       if (payload.lastEventSeq !== undefined) {
         window.localStorage.setItem(`coin_last_seq_${effectiveTableId}`, String(payload.lastEventSeq));
       }
 
-      // 3. Disparar evento de Sincronia Local
+      // 3. Disparar evento de Sincronia Local com a chave ativa validada
       window.dispatchEvent(new CustomEvent('coin_sync_requested', {
-        detail: { tableId: effectiveTableId, apiKey: payload.apiKey, lastEventSeq: payload.lastEventSeq }
+        detail: { tableId: effectiveTableId, apiKey: activeApiKey, lastEventSeq: payload.lastEventSeq }
       }));
     }
 
@@ -865,6 +909,16 @@ function useCoinDBInternal(): CoinDBState {
 
     setSelectedMonth('all');
     await persist(updatedTables);
+
+    return {
+      success: true,
+      tableId: effectiveTableId,
+      keyWasAutoRenewed,
+      message: keyWasAutoRenewed
+        ? 'Planilha restaurada com sucesso! Uma nova Chave API ativa foi gerada para este ambiente.'
+        : 'Planilha restaurada com sucesso!',
+      apiKey: activeApiKey,
+    };
   }, [tables, activeTableIndex, persist]);
 
   return {

@@ -54,7 +54,7 @@ export function CSVImporter({ onSuccess, onCancel }: CSVImporterProps) {
       }
 
       // Commit rows, name, description, goals, tableId, apiKey, and lastEventSeq in ONE ATOMIC OPERATION
-      await importSpreadsheet({
+      const importRes = await importSpreadsheet({
         rows: parsed.rows,
         tableId: parsed.metadata?.tableId,
         apiKey: parsed.metadata?.apiKey,
@@ -96,7 +96,10 @@ export function CSVImporter({ onSuccess, onCancel }: CSVImporterProps) {
         const activeTableName = parsed.metadata?.name || activeTable?.name || 'Ativa';
         const successTitle = 'Importação Concluída! 🎉';
         const modeLabel = importMode === 'merge' ? 'acumuladas' : 'carregadas (substituição)';
-        const successMsg = `Sucesso! ${parsed.rows.length} transações foram ${modeLabel} na planilha "${activeTableName}".`;
+        let successMsg = `Sucesso! ${parsed.rows.length} transações foram ${modeLabel} na planilha "${activeTableName}".`;
+        if (importRes?.keyWasAutoRenewed) {
+          successMsg += '\n\n🔑 Planilha restaurada com sucesso! Uma nova Chave API ativa foi gerada para este ambiente.';
+        }
 
         if (Platform.OS === 'web') {
           window.alert(`${successTitle}\n\n${successMsg}`);

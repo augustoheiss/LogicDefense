@@ -73,3 +73,45 @@ async def generate_api_key(
         table_id=table_id,
         permissions=payload.permissions
     )
+
+class ValidateKeyRequest(BaseModel):
+    api_key: str = Field(..., alias="apiKey", description="Chave de API a ser validada")
+
+class ValidateKeyResponse(BaseModel):
+    valid: bool
+    table_id: str = Field(..., alias="tableId")
+    key_hint: str = Field(..., alias="keyHint")
+
+@router.post("/validate", response_model=ValidateKeyResponse)
+async def validate_api_key_endpoint(payload: ValidateKeyRequest):
+    """
+    Validates if an API key is active and not expired.
+    Returns HTTP 401 Unauthorized with {"detail": "API Key Expired"} if key is expired.
+    """
+    raw_key = payload.api_key.strip()
+    if not raw_key.startswith("am_sheet_live_"):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Formato de chave de API inválido."
+        )
+
+    k_hash = hash_key(raw_key)
+    record = get_spreadsheet_api_key(k_hash)
+    if not record:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Chave de API inválida ou revogada."
+        )
+
+    if record.get("is_expired"):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="API Key Expired"
+        )
+
+    return ValidateKeyResponse(
+        valid=True,
+        tableId=record.get("table_id", ""),
+        keyHint=record.get("key_hint", f"...{raw_key[-4:]}")
+    )
+
