@@ -520,8 +520,8 @@ def mark_webhook_processed(event_id: str):
 
 # ── Spreadsheet API Keys ─────────────────────────────────────────────────────
 
-def create_spreadsheet_api_key(table_id: str, license_key_hash: str, permissions: str = "read:write", raw_license: str | None = None, expires_in_days: int = 30) -> tuple[str, str]:
-    """Generates a spreadsheet API key linked to a valid license key with Key Rotation & Expiration TTL (default 30 days)."""
+def create_spreadsheet_api_key(table_id: str, license_key_hash: str, permissions: str = "read:write", raw_license: str | None = None, expires_in_days: int = 1) -> tuple[str, str, str]:
+    """Generates a spreadsheet API key linked to a valid license key with Key Rotation & Expiration TTL (default 1 day = 24h)."""
     raw_token = secrets.token_hex(32)
     api_key = f"am_sheet_live_{raw_token}"
     key_h = hash_key(api_key)
@@ -556,7 +556,7 @@ def create_spreadsheet_api_key(table_id: str, license_key_hash: str, permissions
         """, (table_id, key_h, hint, license_key_hash, permissions, now, exp_dt))
         conn.commit()
         
-    return api_key, hint
+    return api_key, hint, exp_dt
 
 def get_spreadsheet_api_key(key_hash: str) -> dict | None:
     """Retrieves spreadsheet API key info by its hash if active (is_active == 1) and not expired."""

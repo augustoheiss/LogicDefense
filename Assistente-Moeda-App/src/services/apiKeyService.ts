@@ -15,6 +15,7 @@ export interface KeyValidationResult {
   valid: boolean;
   expired?: boolean;
   tableId?: string;
+  expiresAt?: string;
   error?: string;
 }
 
@@ -22,11 +23,13 @@ export interface GeneratedKeyResult {
   apiKey: string;
   keyHint: string;
   tableId: string;
+  expiresAt?: string;
+  ttlDays?: number;
 }
 
 /**
  * Validates an API Key against backend.
- * Returns { valid: true } if active and unexpired,
+ * Returns { valid: true, expiresAt } if active and unexpired,
  * or { valid: false, expired: true } if TTL has expired.
  */
 export async function validateApiKey(apiKey: string): Promise<KeyValidationResult> {
@@ -44,7 +47,12 @@ export async function validateApiKey(apiKey: string): Promise<KeyValidationResul
 
     const data = await res.json().catch(() => ({}));
     if (res.status === 200 && data.valid) {
-      return { valid: true, expired: false, tableId: data.tableId };
+      return {
+        valid: true,
+        expired: false,
+        tableId: data.tableId,
+        expiresAt: data.expiresAt || data.expires_at,
+      };
     }
 
     const detailStr = (data.detail || data.error || '').toString();
@@ -55,17 +63,18 @@ export async function validateApiKey(apiKey: string): Promise<KeyValidationResul
     return { valid: false, expired: false, error: detailStr || 'Chave de API inválida ou revogada.' };
   } catch (err: any) {
     console.warn('[apiKeyService] Erro ao validar chave de API no servidor:', err);
-    // Em caso de falha de conexão offline, considera não-validada para forçar renovação se necessário
     return { valid: false, expired: false, error: 'Erro de conexão com o servidor.' };
   }
 }
 
 /**
  * Generates a new API Key for a given tableId via POST /api/v1/api-keys/generate
+ * Accepts custom ttlDays (1, 7, 30 — default: 1 day / 24h)
  */
 export async function generateNewApiKey(
   tableId: string,
-  licenseKey?: string
+  licenseKey?: string,
+  ttlDays: number = 1
 ): Promise<GeneratedKeyResult | null> {
   try {
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
@@ -80,6 +89,7 @@ export async function generateNewApiKey(
         table_id: tableId,
         license_key: licenseKey || undefined,
         permissions: 'read:write',
+        ttl_days: ttlDays,
       }),
     });
 
@@ -89,16 +99,77 @@ export async function generateNewApiKey(
     }
 
     const data = await res.json();
-    if (data.api_key) {
+    const rawKey = data.api_key || data.apiKey;
+    if (rawKey) {
       return {
-        apiKey: data.api_key,
-        keyHint: data.key_hint || `...${data.api_key.slice(-4)}`,
-        tableId: data.table_id || tableId,
+        apiKey: rawKey,
+        keyHint: data.key_hint || data.keyHint || `...${rawKey.slice(-4)}`,
+        tableId: data.table_id || data.tableId || tableId,
+        expiresAt: data.expires_at || data.expiresAt,
+        ttlDays: data.ttl_days || data.ttlDays || ttlDays,
       };
     }
     return null;
   } catch (err: any) {
     console.error('[apiKeyService] Falha ao comunicar com endpoint de geração de chave:', err);
     return null;
+  }
+}
+
+/**
+ * Helper to compute human-readable countdown to expiration.
+ */
+export function formatTimeRemaining(expiresAtStr?: string | null): {
+  formatted: string;
+  expired: boolean;
+  urgent: boolean;
+} {
+  if (!expiresAtStr) {
+    return { formatted: 'Sem data de expiração', expired: false, urgent: false };
+  }
+
+  try {
+    const expDate = new Date(expiresAtStr);
+    const now = new Date();
+    const diffMs = expDate.getTime() - now.getTime();
+
+    if (diffMs <= 0) {
+      return { formatted: 'Expirada (0h 00m)', expired: true, urgent: true };
+    }
+
+    const totalSeconds = Math.floor(diffMs / 1000);
+    const totalMinutes = Math.floor(totalSeconds / 60);
+    const totalHours = Math.floor(totalMinutes / 60);
+    const days = Math.floor(totalHours / 24);
+
+    const minutes = totalMinutes % 60;
+    const hours = totalHours % 24;
+
+    const isUrgent = diffMs < 3600_000; // Less than 1 hour
+
+    if (days > 0) {
+      return {
+        formatted: `Expira em ${days}d ${hours}h ${minutes}min`,
+        expired: false,
+        urgent: isUrgent,
+      };
+    }
+
+    if (totalHours > 0) {
+      return {
+        formatted: `Expira em ${hours}h ${minutes}min`,
+        expired: false,
+        urgent: isUrgent,
+      };
+    }
+
+    const seconds = totalSeconds % 60;
+    return {
+      formatted: `Expira em ${minutes}min ${seconds}s`,
+      expired: false,
+      urgent: true,
+    };
+  } catch {
+    return { formatted: 'Data inválida', expired: false, urgent: false };
   }
 }

@@ -23,12 +23,19 @@ class GenerateKeyRequest(BaseModel):
     table_id: str = Field(..., description="ID da planilha para a qual a chave será gerada")
     license_key: str | None = Field(default=None, description="Sua Chave de Licença PRO (am_pro_...)")
     permissions: str = Field(default="read:write", description="Permissões da chave: 'read-only' ou 'read:write'")
+    ttl_days: int = Field(default=1, alias="ttlDays", description="Validade da chave em dias: 1, 7 ou 30 (padrão 1)")
+
+    model_config = {"populate_by_name": True}
 
 class GenerateKeyResponse(BaseModel):
-    api_key: str = Field(..., description="Chave de API em texto puro (exibida apenas uma vez)")
-    key_hint: str = Field(..., description="Dica visual da chave (últimos 4 caracteres)")
-    table_id: str
+    api_key: str = Field(..., alias="apiKey", description="Chave de API em texto puro (exibida apenas uma vez)")
+    key_hint: str = Field(..., alias="keyHint", description="Dica visual da chave (últimos 4 caracteres)")
+    table_id: str = Field(..., alias="tableId")
     permissions: str
+    expires_at: str = Field(..., alias="expiresAt", description="Data/Hora ISO de expiração da chave")
+    ttl_days: int = Field(default=1, alias="ttlDays")
+
+    model_config = {"populate_by_name": True}
 
 @router.post("/generate", response_model=GenerateKeyResponse)
 async def generate_api_key(
@@ -49,16 +56,18 @@ async def generate_api_key(
         license_key_hash = hash_key("free_community_license")
         
     table_id = payload.table_id.strip()
+    ttl = payload.ttl_days if payload.ttl_days in (1, 7, 30) else 1
     
     try:
         from services.sync_broadcaster import broadcaster
         # Disconnect any active SSE listeners for this table_id
         # create_spreadsheet_api_key deactivates old keys in DB
-        api_key, hint = create_spreadsheet_api_key(
+        api_key, hint, expires_at = create_spreadsheet_api_key(
             table_id=table_id,
             license_key_hash=license_key_hash,
             permissions=payload.permissions,
-            raw_license=raw_license or "free_community_license"
+            raw_license=raw_license or "free_community_license",
+            expires_in_days=ttl
         )
     except Exception as e:
         log.error(f"Failed to generate API key for table {table_id}: {e}", exc_info=True)
@@ -68,19 +77,26 @@ async def generate_api_key(
         )
     
     return GenerateKeyResponse(
-        api_key=api_key,
-        key_hint=hint,
-        table_id=table_id,
-        permissions=payload.permissions
+        apiKey=api_key,
+        keyHint=hint,
+        tableId=table_id,
+        permissions=payload.permissions,
+        expiresAt=expires_at,
+        ttlDays=ttl
     )
 
 class ValidateKeyRequest(BaseModel):
     api_key: str = Field(..., alias="apiKey", description="Chave de API a ser validada")
 
+    model_config = {"populate_by_name": True}
+
 class ValidateKeyResponse(BaseModel):
     valid: bool
     table_id: str = Field(..., alias="tableId")
     key_hint: str = Field(..., alias="keyHint")
+    expires_at: str | None = Field(None, alias="expiresAt")
+
+    model_config = {"populate_by_name": True}
 
 @router.post("/validate", response_model=ValidateKeyResponse)
 async def validate_api_key_endpoint(payload: ValidateKeyRequest):
@@ -112,6 +128,7 @@ async def validate_api_key_endpoint(payload: ValidateKeyRequest):
     return ValidateKeyResponse(
         valid=True,
         tableId=record.get("table_id", ""),
-        keyHint=record.get("key_hint", f"...{raw_key[-4:]}")
+        keyHint=record.get("key_hint", f"...{raw_key[-4:]}"),
+        expiresAt=record.get("expires_at")
     )
 

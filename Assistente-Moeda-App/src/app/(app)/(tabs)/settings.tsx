@@ -46,6 +46,7 @@ import { SyncAuditPanel, APIManagementTester } from '@/components/ui';
 import { formatCurrencySmart } from '@/core/formatCurrency';
 import { validateMobileLicenseKey, getStoredLicenseKey } from '@/storage/authService';
 import { ensureApiKeyForTable, generateLocalApiKey } from '@/services/exportService';
+import { validateApiKey, generateNewApiKey, formatTimeRemaining } from '@/services/apiKeyService';
 import type { TableGoals, CoinTable } from '@/core/types';
 
 const API_URL = process.env.EXPO_PUBLIC_AI_BACKEND_URL || process.env.EXPO_PUBLIC_API_URL || 'https://ocorrencias-pdf-writer.onrender.com';
@@ -1204,6 +1205,9 @@ const SpreadsheetApiSection = React.memo(function SpreadsheetApiSection({
   const router = useRouter();
   const [apiKey, setApiKey] = useState<string | null>(null);
   const [keyHint, setKeyHint] = useState<string | null>(null);
+  const [expiresAt, setExpiresAt] = useState<string | null>(null);
+  const [selectedTtlDays, setSelectedTtlDays] = useState<number>(1);
+  const [timeRemaining, setTimeRemaining] = useState<{ formatted: string; expired: boolean; urgent: boolean } | null>(null);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -1222,8 +1226,10 @@ const SpreadsheetApiSection = React.memo(function SpreadsheetApiSection({
     setLoading(true);
     try {
       let localKey: string | null = null;
+      let localExp: string | null = null;
       if (typeof window !== 'undefined' && window.localStorage) {
         localKey = window.localStorage.getItem(`coin_api_key_${tableId}`);
+        localExp = window.localStorage.getItem(`coin_expires_at_${tableId}`);
         if (!localKey && tableId) {
           // Auto-generate isolated key specifically for THIS tableId!
           localKey = generateLocalApiKey(tableId);
@@ -1236,18 +1242,46 @@ const SpreadsheetApiSection = React.memo(function SpreadsheetApiSection({
       if (localKey && localKey.startsWith('am_sheet_live_')) {
         setApiKey(localKey);
         setKeyHint(`...${localKey.slice(-4)}`);
+        setExpiresAt(localExp);
+
+        // Validate TTL and auto-renew transparently if expired
+        validateApiKey(localKey).then(async (valRes) => {
+          if (valRes.valid && valRes.expiresAt) {
+            setExpiresAt(valRes.expiresAt);
+            if (typeof window !== 'undefined' && window.localStorage) {
+              window.localStorage.setItem(`coin_expires_at_${tableId}`, valRes.expiresAt);
+            }
+          } else if (valRes.expired) {
+            const storedLicenseKey = await getStoredLicenseKey();
+            const newRes = await generateNewApiKey(tableId, storedLicenseKey || undefined, 1);
+            if (newRes) {
+              setApiKey(newRes.apiKey);
+              setKeyHint(newRes.keyHint);
+              setExpiresAt(newRes.expiresAt || null);
+              if (typeof window !== 'undefined' && window.localStorage) {
+                window.localStorage.setItem(`coin_api_key_${tableId}`, newRes.apiKey);
+                window.localStorage.setItem('coin_active_api_key', newRes.apiKey);
+                if (newRes.expiresAt) {
+                  window.localStorage.setItem(`coin_expires_at_${tableId}`, newRes.expiresAt);
+                }
+              }
+            }
+          }
+        });
       } else {
         const { data } = await supabase
           .from('spreadsheet_api_keys')
-          .select('key_hint')
+          .select('key_hint, expires_at')
           .eq('table_id', tableId)
           .maybeSingle();
 
         if (data) {
           setKeyHint(data.key_hint);
+          setExpiresAt(data.expires_at || null);
           setApiKey(null);
         } else {
           setKeyHint(null);
+          setExpiresAt(null);
           setApiKey(null);
         }
       }
@@ -1272,6 +1306,42 @@ const SpreadsheetApiSection = React.memo(function SpreadsheetApiSection({
       };
     }
   }, [tableId, fetchActiveKey]);
+
+  // Live countdown ticker & background auto-renewal
+  useEffect(() => {
+    if (!expiresAt) {
+      setTimeRemaining(null);
+      return;
+    }
+
+    const updateTicker = () => {
+      const remaining = formatTimeRemaining(expiresAt);
+      setTimeRemaining(remaining);
+
+      if (remaining.expired && apiKey) {
+        getStoredLicenseKey().then((licKey) => {
+          generateNewApiKey(tableId, licKey || undefined, 1).then((res) => {
+            if (res) {
+              setApiKey(res.apiKey);
+              setKeyHint(res.keyHint);
+              setExpiresAt(res.expiresAt || null);
+              if (typeof window !== 'undefined' && window.localStorage) {
+                window.localStorage.setItem(`coin_api_key_${tableId}`, res.apiKey);
+                window.localStorage.setItem('coin_active_api_key', res.apiKey);
+                if (res.expiresAt) {
+                  window.localStorage.setItem(`coin_expires_at_${tableId}`, res.expiresAt);
+                }
+              }
+            }
+          });
+        });
+      }
+    };
+
+    updateTicker();
+    const timer = setInterval(updateTicker, 1000);
+    return () => clearInterval(timer);
+  }, [expiresAt, tableId, apiKey]);
 
   const handleCopy = async () => {
     if (apiKey) {
@@ -1320,6 +1390,7 @@ const SpreadsheetApiSection = React.memo(function SpreadsheetApiSection({
           table_id: tableId,
           license_key: storedLicenseKey || undefined,
           permissions: 'read:write',
+          ttl_days: selectedTtlDays,
         }),
       });
 
@@ -1359,13 +1430,19 @@ const SpreadsheetApiSection = React.memo(function SpreadsheetApiSection({
       }
 
       const resData = await response.json();
-      setApiKey(resData.api_key);
-      setKeyHint(resData.key_hint || `...${resData.api_key.slice(-4)}`);
+      const newKey = resData.api_key || resData.apiKey;
+      const newExp = resData.expires_at || resData.expiresAt;
+      setApiKey(newKey);
+      setKeyHint(resData.key_hint || resData.keyHint || `...${newKey.slice(-4)}`);
+      setExpiresAt(newExp || null);
       setCopied(false);
 
       if (typeof window !== 'undefined' && window.localStorage) {
-        window.localStorage.setItem(`coin_api_key_${tableId}`, resData.api_key);
-        window.localStorage.setItem('coin_active_api_key', resData.api_key);
+        window.localStorage.setItem(`coin_api_key_${tableId}`, newKey);
+        window.localStorage.setItem('coin_active_api_key', newKey);
+        if (newExp) {
+          window.localStorage.setItem(`coin_expires_at_${tableId}`, newExp);
+        }
       }
     } catch (error: any) {
       if (Platform.OS === 'web') {
@@ -1386,11 +1463,81 @@ const SpreadsheetApiSection = React.memo(function SpreadsheetApiSection({
     );
   }
 
+  const renderTtlPicker = () => (
+    <View style={{ marginTop: spacing.sm, marginBottom: spacing.xs }}>
+      <Text style={{ fontSize: 11, fontWeight: '600', color: colors.text.secondary, marginBottom: 4 }}>
+        Validade da Nova Chave:
+      </Text>
+      <View style={{ flexDirection: 'row', gap: 6 }}>
+        {[
+          { label: '1 Dia (Padrão)', value: 1 },
+          { label: '7 Dias', value: 7 },
+          { label: '30 Dias', value: 30 },
+        ].map((option) => {
+          const active = selectedTtlDays === option.value;
+          return (
+            <Pressable
+              key={option.value}
+              onPress={() => setSelectedTtlDays(option.value)}
+              style={{
+                flex: 1,
+                paddingVertical: 6,
+                paddingHorizontal: 4,
+                borderRadius: 6,
+                backgroundColor: active ? colors.accent.purple : colors.background.tertiary,
+                alignItems: 'center',
+                borderWidth: 1,
+                borderColor: active ? colors.accent.purple : colors.border.default,
+              }}
+            >
+              <Text
+                style={{
+                  fontSize: 10,
+                  fontWeight: active ? '700' : '500',
+                  color: active ? '#ffffff' : colors.text.primary,
+                }}
+              >
+                {option.label}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+    </View>
+  );
+
   return (
     <Card style={styles.apiCard}>
       <Text style={styles.apiDescription}>
         Conecte esta planilha a IAs externas (como ChatGPT ou Claude) e ferramentas de automação (Make, n8n) para ler ou adicionar transações.
       </Text>
+
+      {/* Indicador de Validade / Tempo Restante em Horas */}
+      {timeRemaining ? (
+        <View
+          style={{
+            marginBottom: spacing.xs,
+            paddingVertical: 6,
+            paddingHorizontal: 12,
+            borderRadius: radius.sm,
+            backgroundColor: timeRemaining.urgent ? '#fffbeb' : '#f0fdf4',
+            borderWidth: 1,
+            borderColor: timeRemaining.urgent ? '#f59e0b' : '#22c55e',
+            flexDirection: 'row',
+            alignItems: 'center',
+          }}
+        >
+          <Text
+            style={{
+              fontSize: 12,
+              fontWeight: '700',
+              color: timeRemaining.urgent ? '#b45309' : '#15803d',
+            }}
+          >
+            ⏳ Validade da Chave: {timeRemaining.formatted}
+          </Text>
+        </View>
+      ) : null}
 
       {keyHint || apiKey ? (
         <View style={styles.keyContainer}>
@@ -1418,7 +1565,10 @@ const SpreadsheetApiSection = React.memo(function SpreadsheetApiSection({
               <Text style={{ fontSize: 11, color: colors.success.main, marginTop: spacing.xxs }}>
                 ✓ Planilha com chave ativa vinculada (carregada do backup/localStorage).
               </Text>
-              <HapticButton onPress={generateKey} disabled={generating} style={[styles.regenerateBtn, { marginTop: spacing.sm }]}>
+
+              {renderTtlPicker()}
+
+              <HapticButton onPress={generateKey} disabled={generating} style={[styles.regenerateBtn, { marginTop: spacing.xs }]}>
                 {generating ? (
                   <ActivityIndicator size="small" color={colors.text.secondary} />
                 ) : (
