@@ -347,6 +347,78 @@ async def append_to_spreadsheet(
         csvContent=csv_output
     )
 
+@router.get("/summary")
+async def get_summary_endpoint(
+    table_id: str = Depends(get_table_id_for_read)
+):
+    """
+    Retorna os totais consolidados da planilha (Receitas, Despesas, Saldo Líquido, Contagem).
+    """
+    stored = TABLE_IN_MEMORY_STORAGE.get(table_id, {})
+    items: List[AppendTransactionItem] = stored.get("items", [])
+    
+    total_income = sum(abs(it.value) for it in items if (it.entry_type == "revenue" or it.value > 0))
+    total_expense = sum(abs(it.value) for it in items if (it.entry_type == "expense" or it.value < 0))
+    net_balance = total_income - total_expense
+    
+    return {
+        "status": "success",
+        "table_id": table_id,
+        "total_income": total_income,
+        "total_expense": total_expense,
+        "net_balance": net_balance,
+        "row_count": len(items),
+        "updated_at": stored.get("updated_at")
+    }
+
+@router.get("/transactions")
+async def get_transactions_endpoint(
+    table_id: str = Depends(get_table_id_for_read),
+    start_date: Optional[str] = Query(None, pattern=r"^\d{4}-\d{2}-\d{2}$"),
+    end_date: Optional[str] = Query(None, pattern=r"^\d{4}-\d{2}-\d{2}$")
+):
+    """
+    Retorna a lista de transações com suporte a filtros opcionais de data.
+    """
+    stored = TABLE_IN_MEMORY_STORAGE.get(table_id, {})
+    items: List[AppendTransactionItem] = stored.get("items", [])
+    
+    filtered = []
+    for it in items:
+        if start_date and it.date < start_date:
+            continue
+        if end_date and it.date > end_date:
+            continue
+        val = abs(it.value) if (it.entry_type == "revenue" or it.value > 0) else -abs(it.value)
+        filtered.append({
+            "id": it.external_id or "tx",
+            "date": it.date,
+            "value": val,
+            "description": it.description,
+            "category": it.category,
+            "tags": it.tags,
+            "entry_type": it.entry_type or ("expense" if val < 0 else "revenue")
+        })
+        
+    return {
+        "status": "success",
+        "table_id": table_id,
+        "count": len(filtered),
+        "transactions": filtered
+    }
+
+@router.post("/transactions", response_model=AppendSpreadsheetResponse)
+@router.post("/transactions/batch-sync", response_model=AppendSpreadsheetResponse)
+async def post_transactions_batch(
+    payload: AppendSpreadsheetPayload,
+    table_id: str = Depends(get_table_id_for_write),
+    api_key: str = Security(API_KEY_HEADER)
+):
+    """
+    Ingestão atômica ou em lote de transações financeiras para a planilha ativa.
+    """
+    return await append_to_spreadsheet(payload=payload, table_id=table_id, api_key=api_key)
+
 # ── Sync Endpoints (SSE Stream & Pending Queue) ───────────────────────────────
 
 @router.get("/sync/stream")
