@@ -15,6 +15,8 @@ import { formatCurrencyFull, formatCurrencySmart } from '../core/formatCurrency'
 import type { TableRow, TableMetrics, TableGoals } from '../core/types';
 import type { WeekDebtEntry } from '../core/computeWeeklyDebtTimeline';
 import { getMondayOf, toLocalKey, getWeeklyGoalForDate, resolveGoalForYear, fmtDate } from '../core/dateUtils';
+import { generateNewApiKey } from './apiKeyService';
+import { getStoredLicenseKey } from '../storage/authService';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -946,34 +948,39 @@ export async function ensureApiKeyForTable(tableId: string): Promise<string> {
     return generateLocalApiKey(tableId);
   }
 
-  const existingKey = window.localStorage.getItem(`coin_api_key_${tableId}`) || window.localStorage.getItem('coin_active_api_key');
-  if (existingKey && existingKey.startsWith('am_sheet_live_')) {
-    return existingKey;
+  const existingKey = window.localStorage.getItem(`coin_api_key_${tableId}`);
+  const existingExp = window.localStorage.getItem(`coin_expires_at_${tableId}`);
+
+  // Se a chave já existe e tem validade registrada no futuro, reutiliza
+  if (existingKey && existingKey.startsWith('am_sheet_live_') && existingExp) {
+    const expDt = new Date(existingExp).getTime();
+    if (expDt > Date.now()) {
+      return existingKey;
+    }
   }
 
+  // Caso contrário, gera uma chave nova com 1 dia (24h) de TTL no backend Turso
   try {
-    const apiBaseUrl = process.env.EXPO_PUBLIC_API_URL || 'http://127.0.0.1:8000';
-    const res = await fetch(`${apiBaseUrl}/api/v1/api-keys/generate`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ table_id: tableId, permissions: 'read:write' }),
-    });
-    if (res.ok) {
-      const data = await res.json();
-      if (data.api_key) {
-        window.localStorage.setItem(`coin_api_key_${tableId}`, data.api_key);
-        window.localStorage.setItem('coin_active_api_key', data.api_key);
-        return data.api_key;
+    const storedLicenseKey = await getStoredLicenseKey();
+    const newRes = await generateNewApiKey(tableId, storedLicenseKey || undefined, 1);
+    if (newRes && newRes.apiKey) {
+      window.localStorage.setItem(`coin_api_key_${tableId}`, newRes.apiKey);
+      window.localStorage.setItem('coin_active_api_key', newRes.apiKey);
+      if (newRes.expiresAt) {
+        window.localStorage.setItem(`coin_expires_at_${tableId}`, newRes.expiresAt);
       }
+      return newRes.apiKey;
     }
   } catch (err) {
-    console.warn('[Auto-Provisioning] Backend API key generation failed, using local key:', err);
+    console.warn('[Auto-Provisioning] Backend API key generation failed:', err);
   }
 
-  const newKey = generateLocalApiKey(tableId);
-  window.localStorage.setItem(`coin_api_key_${tableId}`, newKey);
-  window.localStorage.setItem('coin_active_api_key', newKey);
-  return newKey;
+  const fallbackKey = existingKey && existingKey.startsWith('am_sheet_live_') ? existingKey : generateLocalApiKey(tableId);
+  const fallbackExp = new Date(Date.now() + 86_400_000).toISOString();
+  window.localStorage.setItem(`coin_api_key_${tableId}`, fallbackKey);
+  window.localStorage.setItem('coin_active_api_key', fallbackKey);
+  window.localStorage.setItem(`coin_expires_at_${tableId}`, fallbackExp);
+  return fallbackKey;
 }
 
 export function buildCSV(

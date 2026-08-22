@@ -1338,12 +1338,13 @@ PROCEDIMENTO PADRÃO OBRIGATÓRIO:
       if (typeof window !== 'undefined' && window.localStorage) {
         localKey = window.localStorage.getItem(`coin_api_key_${tableId}`);
         localExp = window.localStorage.getItem(`coin_expires_at_${tableId}`);
-        if (!localKey && tableId) {
-          // Auto-generate isolated key specifically for THIS tableId!
-          localKey = generateLocalApiKey(tableId);
-          window.localStorage.setItem(`coin_api_key_${tableId}`, localKey);
-          window.localStorage.setItem('coin_active_api_key', localKey);
-          ensureApiKeyForTable(tableId).catch(() => {});
+      }
+
+      if (!localKey || !localKey.startsWith('am_sheet_live_')) {
+        const key = await ensureApiKeyForTable(tableId);
+        localKey = key;
+        if (typeof window !== 'undefined' && window.localStorage) {
+          localExp = window.localStorage.getItem(`coin_expires_at_${tableId}`);
         }
       }
 
@@ -1352,14 +1353,15 @@ PROCEDIMENTO PADRÃO OBRIGATÓRIO:
         setKeyHint(`...${localKey.slice(-4)}`);
         setExpiresAt(localExp);
 
-        // Validate TTL and auto-renew transparently if expired
+        // Valida no backend se a chave está ativa e se tem TTL
         validateApiKey(localKey).then(async (valRes) => {
           if (valRes.valid && valRes.expiresAt) {
             setExpiresAt(valRes.expiresAt);
             if (typeof window !== 'undefined' && window.localStorage) {
               window.localStorage.setItem(`coin_expires_at_${tableId}`, valRes.expiresAt);
             }
-          } else if (valRes.expired) {
+          } else {
+            // Chave expirada, revogada ou ainda não registrada no backend Turso -> Gera nova de 1 dia!
             const storedLicenseKey = await getStoredLicenseKey();
             const newRes = await generateNewApiKey(tableId, storedLicenseKey || undefined, 1);
             if (newRes) {
@@ -1377,21 +1379,9 @@ PROCEDIMENTO PADRÃO OBRIGATÓRIO:
           }
         });
       } else {
-        const { data } = await supabase
-          .from('spreadsheet_api_keys')
-          .select('key_hint, expires_at')
-          .eq('table_id', tableId)
-          .maybeSingle();
-
-        if (data) {
-          setKeyHint(data.key_hint);
-          setExpiresAt(data.expires_at || null);
-          setApiKey(null);
-        } else {
-          setKeyHint(null);
-          setExpiresAt(null);
-          setApiKey(null);
-        }
+        setKeyHint(null);
+        setExpiresAt(null);
+        setApiKey(null);
       }
       setCopied(false);
     } catch (e) {
@@ -1625,27 +1615,67 @@ PROCEDIMENTO PADRÃO OBRIGATÓRIO:
         <View
           style={{
             marginBottom: spacing.xs,
-            paddingVertical: 6,
+            paddingVertical: 7,
             paddingHorizontal: 12,
             borderRadius: radius.sm,
-            backgroundColor: timeRemaining.urgent ? '#fffbeb' : '#f0fdf4',
+            backgroundColor: timeRemaining.expired
+              ? 'rgba(239, 68, 68, 0.18)'
+              : timeRemaining.urgent
+                ? 'rgba(245, 158, 11, 0.18)'
+                : 'rgba(34, 197, 94, 0.18)',
             borderWidth: 1,
-            borderColor: timeRemaining.urgent ? '#f59e0b' : '#22c55e',
+            borderColor: timeRemaining.expired
+              ? '#ef4444'
+              : timeRemaining.urgent
+                ? '#f59e0b'
+                : '#22c55e',
             flexDirection: 'row',
             alignItems: 'center',
+            justifyContent: 'space-between',
           }}
         >
           <Text
             style={{
               fontSize: 12,
               fontWeight: '700',
-              color: timeRemaining.urgent ? '#b45309' : '#15803d',
+              color: timeRemaining.expired
+                ? '#f87171'
+                : timeRemaining.urgent
+                  ? '#fbbf24'
+                  : '#4ade80',
             }}
           >
             ⏳ Validade da Chave: {timeRemaining.formatted}
           </Text>
+          {timeRemaining.expired ? (
+            <Text style={{ fontSize: 10, color: '#f87171', fontWeight: '700' }}>
+              ⚠️ Expirada
+            </Text>
+          ) : (
+            <Text style={{ fontSize: 10, color: '#4ade80', fontWeight: '600' }}>
+              ✓ Ativa
+            </Text>
+          )}
         </View>
-      ) : null}
+      ) : (
+        <View
+          style={{
+            marginBottom: spacing.xs,
+            paddingVertical: 6,
+            paddingHorizontal: 12,
+            borderRadius: radius.sm,
+            backgroundColor: 'rgba(168, 85, 247, 0.15)',
+            borderWidth: 1,
+            borderColor: colors.accent.purple,
+            flexDirection: 'row',
+            alignItems: 'center',
+          }}
+        >
+          <Text style={{ fontSize: 11, color: colors.accent.purple, fontWeight: '600' }}>
+            ⏳ Sincronizando validade temporária (Padrão 24h)...
+          </Text>
+        </View>
+      )}
 
       {keyHint || apiKey ? (
         <View style={styles.keyContainer}>
@@ -1791,7 +1821,7 @@ PROCEDIMENTO PADRÃO OBRIGATÓRIO:
               Cabeçalho de Autenticação: <Text style={{ color: colors.text.primary, fontWeight: '700', fontFamily: 'monospace' }}>X-Spreadsheet-Key</Text>
             </Text>
             <Text style={{ fontSize: 11, color: colors.text.secondary, marginTop: 2 }}>
-              Chave Atual: <Text style={{ color: colors.accent.purple, fontWeight: '700', fontFamily: 'monospace' }}>{apiKey || 'Gere uma chave acima'}</Text>
+              Status da Chave: <Text style={{ color: colors.accent.purple, fontWeight: '700', fontFamily: 'monospace' }}>{keyHint ? `Ativa (${keyHint})` : 'Gere uma chave acima'}</Text>
             </Text>
           </View>
 
