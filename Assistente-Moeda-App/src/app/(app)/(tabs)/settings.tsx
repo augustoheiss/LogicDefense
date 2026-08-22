@@ -1215,12 +1215,120 @@ const SpreadsheetApiSection = React.memo(function SpreadsheetApiSection({
   const [copiedSchema, setCopiedSchema] = useState(false);
   const [showApiConsoleModal, setShowApiConsoleModal] = useState(false);
 
+  const [selectedPromptTab, setSelectedPromptTab] = useState<number>(0);
+  const [copiedPromptIndex, setCopiedPromptIndex] = useState<number | null>(null);
+
   const handleCopySchema = async () => {
     const schemaUrl = `${API_URL}/api/v1/public/openapi.json`;
     await Clipboard.setStringAsync(schemaUrl);
     setCopiedSchema(true);
     setTimeout(() => setCopiedSchema(false), 2000);
   };
+
+  const handleCopyPrompt = async (index: number, text: string) => {
+    await Clipboard.setStringAsync(text);
+    setCopiedPromptIndex(index);
+    setTimeout(() => setCopiedPromptIndex(null), 2500);
+  };
+
+  const SYSTEM_PROMPTS = useMemo(() => [
+    {
+      title: '🏛️ CFO Executivo',
+      subtitle: 'Auditoria Estratégica, DRE & Projeções C-Level',
+      tag: 'Estratégico',
+      badgeColor: '#3b82f6',
+      description: 'Ideal para ChatGPT Plus/Pro e Claude 3.7 Projects para análise profunda de fluxo de caixa, ponto de equilíbrio e corte de custos.',
+      content: `Você é o CFO Estratégico e Auditor Financeiro Principal do Assistente Moeda.
+Você tem acesso aos dados contábeis em tempo real através da API (cabeçalho X-Spreadsheet-Key).
+
+SUA MISSÃO:
+Entregar consultoria financeira de nível executivo (C-Level). Não economize em profundidade, clareza e rigor técnico. O foco é máxima eficiência, inteligência de capital e qualidade de decisão.
+
+DIRETRIZES ANALÍTICAS:
+1. RIGOR ESTATÍSTICO: Analise as métricas de mediana, moda, desvio padrão e limites operacionais presentes no contexto da API.
+2. DIAGNÓSTICO DE FLUXO & DRE:
+   - Receita Operacional Líquida vs. Custos Fixos e Variáveis.
+   - Ponto de Equilíbrio (Break-even operacional diário e mensal).
+   - Risco de Concentração por Categorias (destacando entradas/saídas atípicas e dependências).
+3. PROJEÇÃO DE 6 A 12 MESES:
+   - Simule cenários Realista, Otimista e Conservador cruzando dados históricos com metas vigentes.
+4. PLANO DE AÇÃO ACIONÁVEL:
+   - Conclua toda análise com 3 a 5 recomendações executivas concretas para maximizar a margem de lucro e blindar o fluxo de caixa.`,
+    },
+    {
+      title: '⚡ Agente Operacional',
+      subtitle: 'Ingestão em Lote, Extratos & Categorização (God Mode)',
+      tag: 'Automação',
+      badgeColor: '#eab308',
+      description: 'Ideal para IAs conectadas ao WhatsApp, Telegram, n8n ou faturas para lançar despesas e receitas automaticamente via API.',
+      content: `Você é o Agente Operacional Executivo do Assistente Moeda.
+Você processa entradas financeiras em linguagem natural, notas, faturas, extratos bancários e listas de despesas para envio via API.
+
+SUA MISSÃO:
+Transformar qualquer entrada desestruturada em operações perfeitamente categorizadas e estruturadas para ingestão imediata no sistema.
+
+REGRAS DE FORMATAÇÃO E EXECUÇÃO:
+1. SINALIZAÇÃO MONETÁRIA:
+   - Despesas / Saídas de caixa DEVEM ser números NEGATIVOS (ex: -150.00).
+   - Receitas / Entradas de caixa DEVEM ser números POSITIVOS (ex: 1200.00).
+2. DESPESAS/RECEITAS PERIÓDICAS:
+   - Se um lançamento abranger um período (ex: seguro anual, assinatura, projeto mensal), preencha period_start e period_end (YYYY-MM-DD) em vez de criar múltiplas linhas.
+3. INGESTÃO EM LOTE:
+   - Para múltiplos lançamentos, estruture o payload JSON pronto para o endpoint POST /api/v1/public/transactions/batch-sync.
+4. CATEGORIZAÇÃO PADRÃO:
+   - Normalize descrições genéricas em categorias consolidadas (ex: DIVERSOS, SERVIÇOS, INFRAESTRUTURA, PESSOAL, OPERACIONAL).`,
+    },
+    {
+      title: '🎯 Metas & Tempo',
+      subtitle: 'Banco de Tempo, Produtividade & Burnout Shield',
+      tag: 'Performance',
+      badgeColor: '#10b981',
+      description: 'Ideal para orientar a rotina de trabalho diária/semanal, calcular rentabilidade da hora e balancear esforço vs. descanso.',
+      content: `Você é o Estrategista de Produtividade, Metas e Banco de Tempo do Assistente Moeda.
+Você correlaciona o desempenho financeiro com o esforço e a sustentabilidade da rotina de trabalho.
+
+SUA MISSÃO:
+Garantir que as metas financeiras sejam atingidas com a máxima eficiência, otimizando o "Banco de Tempo" e prevenindo sobrecarga operacional.
+
+DIRETRIZES DE AVALIAÇÃO:
+1. BANCO DE TEMPO:
+   - Calcule o saldo acumulado de semanas (créditos vs. déficits em relação à meta semanal).
+2. EFICIÊNCIA POR HORA / DIA:
+   - Calcule o faturamento real gerado por esforço operacional e identifique quais projetos/clientes entregam maior retorno.
+3. RITMO E SUSTENTABILIDADE (BURNOUT SHIELD):
+   - Alerte com antecedência se a rotina estiver insustentável ou se há margem para descanso programado sem comprometer as metas anuais.
+4. RECOMENDAÇÕES DE CALENDÁRIO:
+   - Informe exatamente quantos dias de trabalho e com qual meta diária atuar nas próximas semanas para manter o plano em dia.`,
+    },
+    {
+      title: '🛠️ Agente Dev / Script',
+      subtitle: 'Passo a Passo Oficial para IAs Desenvolvedoras & Scripts',
+      tag: 'Dev / Cursor / Claude Code',
+      badgeColor: '#8b5cf6',
+      description: 'Instrução completa com endpoints, cabeçalhos e procedimentos padronizados para Claude Code, Cursor, Python CLI e scripts.',
+      content: `Você é o Agente Integrador e Desenvolvedor Oficial conectado à planilha via Assistente Moeda API.
+
+DADOS DE CONEXÃO:
+- Endpoint Base: ${API_URL}
+- OpenAPI Schema: ${API_URL}/api/v1/public/openapi.json
+- Autenticação: Envie em TODAS as requisições o cabeçalho HTTP:
+  X-Spreadsheet-Key: ${apiKey || '<SUA_CHAVE_API_AQUI>'}
+
+PROCEDIMENTO PADRÃO OBRIGATÓRIO:
+1. VALIDAÇÃO DE CONEXÃO & SNAPSHOT (Passo 1):
+   - Antes de qualquer ação, realize um GET em ${API_URL}/api/v1/public/analysis-context com o header X-Spreadsheet-Key.
+   - Isso retorna a DRE completa, metas ativas, estatísticas avançadas e transações recentes.
+2. LEITURA E CONSULTAS ESPECÍFICAS:
+   - Para resumo rápido de totais: GET ${API_URL}/api/v1/public/summary
+   - Para listar transações filtradas: GET ${API_URL}/api/v1/public/transactions?start_date=YYYY-MM-DD&end_date=YYYY-MM-DD
+3. LANÇAMENTO OU MODIFICAÇÃO DE DADOS:
+   - Para criar 1 transação: POST ${API_URL}/api/v1/public/transactions (body: {"description": "...", "value": -50.0, "date": "YYYY-MM-DD"})
+   - Para sincronismo em lote: POST ${API_URL}/api/v1/public/transactions/batch-sync (body: {"transactions": [...]})
+4. BOAS PRÁTICAS DE AMBIENTE:
+   - Não crie arquivos temporários soltos na raiz sem necessidade.
+   - Sempre confirme as alterações realizadas com um resumo claro dos valores e saldo atualizado.`,
+    },
+  ], [apiKey]);
 
   const fetchActiveKey = useCallback(async () => {
     setLoading(true);
@@ -1644,45 +1752,187 @@ const SpreadsheetApiSection = React.memo(function SpreadsheetApiSection({
         </SafeAreaView>
       </Modal>
 
-      {/* ── Guia de Integração com IAs Externas ───────────────────────── */}
+      {/* ── Hub de Conexão & System Prompts Turbocharged ───────────────────────── */}
       <HapticButton 
         onPress={() => setShowGuide(!showGuide)} 
         style={styles.guideHeader}
       >
         <Text style={styles.guideHeaderTitle}>
-          {showGuide ? '🔌 Ocultar Guia de Integração ▲' : '🔌 Como conectar a IAs Externas ▼'}
+          {showGuide ? '🔌 Ocultar Hub de Prompts & Integração ▲' : '🔌 Hub de Conexão & System Prompts Turbocharged ▼'}
         </Text>
       </HapticButton>
 
       {showGuide && (
         <View style={styles.guideContent}>
-          <Text style={styles.guideStepTitle}>1. Obter o Schema da API:</Text>
+          {/* 1. Schema OpenAPI & Chave de Autenticação */}
+          <Text style={styles.guideStepTitle}>1. Schema OpenAPI & Autenticação:</Text>
           <Text style={styles.guideText}>
-            As IAs externas precisam do Schema OpenAPI para saber quais endpoints chamar. Copie o link abaixo para importar:
+            Para IAs externas (como ChatGPT ou Claude) saberem quais rotas chamar, importe o link OpenAPI e configure o cabeçalho obrigatório:
           </Text>
+
           <HapticButton 
             onPress={handleCopySchema} 
             style={[styles.copySchemaBtn, copiedSchema && styles.copyBtnSuccess]}
           >
             <Text style={styles.copySchemaBtnText}>
-              {copiedSchema ? 'Link Copiado! ✓' : 'Copiar Link do Schema OpenAPI 📋'}
+              {copiedSchema ? 'Link OpenAPI Copiado! ✓' : 'Copiar Link do Schema OpenAPI 📋'}
             </Text>
           </HapticButton>
 
-          <Text style={styles.guideStepTitle}>2. Configuração no ChatGPT (Custom GPTs):</Text>
-          <View style={styles.guideStepsBox}>
-            <Text style={styles.guideStepItem}>• Vá em Explore GPTs → Create → Configure.</Text>
-            <Text style={styles.guideStepItem}>• Role até o final e clique em Create new action.</Text>
-            <Text style={styles.guideStepItem}>• Clique em Import from URL, cole o link copiado e clique em Import.</Text>
-            <Text style={styles.guideStepItem}>• Em Authentication, mude para API Key.</Text>
-            <Text style={styles.guideStepItem}>• Escolha Auth Type: Custom e no nome do cabeçalho digite exatamente: X-Spreadsheet-Key.</Text>
-            <Text style={styles.guideStepItem}>• Cole a sua chave de API gerada no campo de valor e salve.</Text>
+          <View style={{
+            backgroundColor: colors.background.secondary,
+            padding: spacing.sm,
+            borderRadius: radius.sm,
+            borderLeftWidth: 3,
+            borderLeftColor: colors.accent.purple,
+            marginBottom: spacing.xs,
+          }}>
+            <Text style={{ fontSize: 11, color: colors.text.secondary }}>
+              Cabeçalho de Autenticação: <Text style={{ color: colors.text.primary, fontWeight: '700', fontFamily: 'monospace' }}>X-Spreadsheet-Key</Text>
+            </Text>
+            <Text style={{ fontSize: 11, color: colors.text.secondary, marginTop: 2 }}>
+              Chave Atual: <Text style={{ color: colors.accent.purple, fontWeight: '700', fontFamily: 'monospace' }}>{apiKey || 'Gere uma chave acima'}</Text>
+            </Text>
           </View>
 
-          <Text style={styles.guideStepTitle}>3. Configuração no Claude (Projects) / n8n / Make:</Text>
+          {/* 2. Seletor de System Prompts Turbocharged */}
+          <Text style={[styles.guideStepTitle, { marginTop: spacing.sm }]}>
+            2. System Prompts Prontos para Uso (Turbocharged):
+          </Text>
+          <Text style={styles.guideText}>
+            Escolha o perfil desejado para copiar e colar diretamente nas instruções da sua IA externa (sem limite de tokens, foco em eficiência máxima):
+          </Text>
+
+          {/* Tabs de Seleção de Prompts */}
+          <View style={{ flexDirection: 'row', gap: 4, marginVertical: spacing.xs }}>
+            {SYSTEM_PROMPTS.map((p, idx) => {
+              const active = selectedPromptTab === idx;
+              return (
+                <Pressable
+                  key={idx}
+                  onPress={() => setSelectedPromptTab(idx)}
+                  style={{
+                    flex: 1,
+                    paddingVertical: 7,
+                    paddingHorizontal: 4,
+                    borderRadius: radius.xs || 6,
+                    backgroundColor: active ? colors.accent.purple : colors.background.secondary,
+                    alignItems: 'center',
+                    borderWidth: 1,
+                    borderColor: active ? colors.accent.purple : colors.border.default,
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontSize: 10,
+                      fontWeight: active ? '700' : '600',
+                      color: active ? '#ffffff' : colors.text.secondary,
+                      textAlign: 'center',
+                    }}
+                    numberOfLines={1}
+                  >
+                    {p.title}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+
+          {/* Card do Prompt Selecionado */}
+          {SYSTEM_PROMPTS[selectedPromptTab] && (
+            <View style={{
+              backgroundColor: colors.background.secondary,
+              borderWidth: 1,
+              borderColor: colors.border.strong,
+              borderRadius: radius.md,
+              padding: spacing.md,
+              gap: spacing.xs,
+              marginTop: spacing.xxs,
+            }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Text style={{ fontSize: 13, fontWeight: '700', color: colors.text.primary }}>
+                  {SYSTEM_PROMPTS[selectedPromptTab].title}
+                </Text>
+                <View style={{
+                  backgroundColor: SYSTEM_PROMPTS[selectedPromptTab].badgeColor + '22',
+                  paddingHorizontal: 8,
+                  paddingVertical: 2,
+                  borderRadius: 12,
+                  borderWidth: 1,
+                  borderColor: SYSTEM_PROMPTS[selectedPromptTab].badgeColor,
+                }}>
+                  <Text style={{ fontSize: 10, fontWeight: '700', color: SYSTEM_PROMPTS[selectedPromptTab].badgeColor }}>
+                    {SYSTEM_PROMPTS[selectedPromptTab].tag}
+                  </Text>
+                </View>
+              </View>
+
+              <Text style={{ fontSize: 11, color: colors.text.tertiary }}>
+                {SYSTEM_PROMPTS[selectedPromptTab].subtitle}
+              </Text>
+
+              <Text style={{ fontSize: 11, color: colors.text.secondary, marginVertical: 2, lineHeight: 15 }}>
+                💡 <Text style={{ fontStyle: 'italic' }}>{SYSTEM_PROMPTS[selectedPromptTab].description}</Text>
+              </Text>
+
+              <TextInput
+                style={{
+                  backgroundColor: colors.background.tertiary,
+                  borderRadius: radius.sm,
+                  padding: spacing.sm,
+                  fontSize: 11,
+                  color: colors.text.primary,
+                  fontFamily: 'monospace',
+                  maxHeight: 180,
+                  borderWidth: 1,
+                  borderColor: colors.border.default,
+                }}
+                value={SYSTEM_PROMPTS[selectedPromptTab].content}
+                multiline
+                editable={false}
+                selectTextOnFocus
+              />
+
+              <HapticButton
+                onPress={() => handleCopyPrompt(selectedPromptTab, SYSTEM_PROMPTS[selectedPromptTab].content)}
+                style={[
+                  styles.copyBtn,
+                  copiedPromptIndex === selectedPromptTab && styles.copyBtnSuccess,
+                  { marginTop: spacing.xxs }
+                ]}
+              >
+                <Text style={styles.copyBtnText}>
+                  {copiedPromptIndex === selectedPromptTab ? 'Prompt Copiado com Sucesso! ✓' : 'Copiar System Prompt 📋'}
+                </Text>
+              </HapticButton>
+            </View>
+          )}
+
+          {/* 3. Guia Rápido por Plataforma */}
+          <Text style={[styles.guideStepTitle, { marginTop: spacing.md }]}>
+            3. Como Configurar na sua Plataforma:
+          </Text>
+
           <View style={styles.guideStepsBox}>
-            <Text style={styles.guideStepItem}>• Claude Projects: Envie o link do Schema OpenAPI nas instruções do projeto, e forneça sua chave para uso nas ações.</Text>
-            <Text style={styles.guideStepItem}>• Automações: Em qualquer requisição HTTP, envie o cabeçalho X-Spreadsheet-Key preenchido com a chave de API gerada.</Text>
+            <Text style={[styles.guideStepItem, { fontWeight: '700', color: colors.text.primary }]}>
+              🤖 ChatGPT (Custom GPTs):
+            </Text>
+            <Text style={styles.guideStepItem}>• Explore GPTs → Create → Configure.</Text>
+            <Text style={styles.guideStepItem}>• Cole o System Prompt desejado no campo "Instructions".</Text>
+            <Text style={styles.guideStepItem}>• Role até o final e clique em "Create new action" → "Import from URL".</Text>
+            <Text style={styles.guideStepItem}>• Cole o Link do Schema OpenAPI copiado acima.</Text>
+            <Text style={styles.guideStepItem}>• Em Authentication: Auth Type = Custom, Header Name = X-Spreadsheet-Key e cole sua Chave API.</Text>
+
+            <Text style={[styles.guideStepItem, { fontWeight: '700', color: colors.text.primary, marginTop: spacing.xs }]}>
+              ⚡ Claude (Projects / Claude Code):
+            </Text>
+            <Text style={styles.guideStepItem}>• Crie um Project no Claude e cole o System Prompt nas instruções.</Text>
+            <Text style={styles.guideStepItem}>• Forneça o link do OpenAPI e sua chave X-Spreadsheet-Key para consultas via ferramentas.</Text>
+
+            <Text style={[styles.guideStepItem, { fontWeight: '700', color: colors.text.primary, marginTop: spacing.xs }]}>
+              🛠️ Cursor / Claude Code / Python / n8n:
+            </Text>
+            <Text style={styles.guideStepItem}>• Use o Prompt "🛠️ Agente Dev / Script" para que a IA siga o passo a passo oficial de validação e leitura sem poluir o ambiente.</Text>
           </View>
         </View>
       )}
