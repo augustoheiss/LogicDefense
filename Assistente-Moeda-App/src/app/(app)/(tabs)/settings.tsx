@@ -2143,7 +2143,19 @@ const GoalsAccordion = React.memo(function GoalsAccordion({
   const [expanded, setExpanded] = useState(true);
   
   // Global States
-  const [globalWeekly, setGlobalWeekly] = useState(goals.globalGoals ? String(goals.globalGoals.weeklyGoal) : '');
+  const [globalWeekly, setGlobalWeekly] = useState(
+    goals.globalGoals ? String(goals.globalGoals.weeklyGoal) : (goals.weeklyGoals?.['global'] ? String(goals.weeklyGoals['global']) : '')
+  );
+
+  useEffect(() => {
+    if (goals.globalGoals?.weeklyGoal) {
+      setGlobalWeekly(String(goals.globalGoals.weeklyGoal));
+    } else if (goals.weeklyGoals?.['global']) {
+      setGlobalWeekly(String(goals.weeklyGoals['global']));
+    } else {
+      setGlobalWeekly('');
+    }
+  }, [goals.globalGoals, goals.weeklyGoals]);
 
   // Yearly States
   const [newYear, setNewYear] = useState(String(new Date().getFullYear()));
@@ -2194,7 +2206,26 @@ const GoalsAccordion = React.memo(function GoalsAccordion({
   };
 
   // ── Yearly Overrides Handlers ──────────────────────────────────────────────
-  const yearlyGoals = goals.yearlyGoals ?? {};
+  const yearlyGoals = useMemo(() => {
+    const yg: Record<number, { weeklyGoal: number; dailyGoal: number; annualCost: number }> = {
+      ...(goals.yearlyGoals ?? {}),
+    };
+    if (goals.weeklyGoals) {
+      for (const [k, v] of Object.entries(goals.weeklyGoals)) {
+        if (!k.includes('-W') && k !== 'global' && !isNaN(Number(k))) {
+          const y = Number(k);
+          if (!yg[y]) {
+            yg[y] = {
+              weeklyGoal: Number(v),
+              dailyGoal: Math.round((Number(v) / 7) * 100) / 100,
+              annualCost: Number(v) * 52,
+            };
+          }
+        }
+      }
+    }
+    return yg;
+  }, [goals.yearlyGoals, goals.weeklyGoals]);
   const years = Object.keys(yearlyGoals).map(Number).sort((a, b) => b - a);
 
   const handleAddYearly = () => {

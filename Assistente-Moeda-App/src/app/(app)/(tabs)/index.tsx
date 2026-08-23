@@ -64,7 +64,6 @@ export default function SpreadsheetScreen() {
   const auth = useAuthContext();
   const { isPro, showPaywall, setShowPaywall } = useSubscription();
   const [showAddModal, setShowAddModal] = useState(false);
-  const [showTableSwitcher, setShowTableSwitcher] = useState(false);
   const [editingRow, setEditingRow] = useState<TableRow | null>(null);
   const [showFab, setShowFab] = useState(false);
   const [showBulkDelete, setShowBulkDelete] = useState(false);
@@ -417,20 +416,14 @@ export default function SpreadsheetScreen() {
     <SafeAreaView style={styles.container} edges={[]}>
       {/* Header */}
       <View style={styles.header}>
-        <Pressable
-          style={({ pressed }) => [
-            styles.headerTitleContainer,
-            pressed && styles.pressed,
-          ]}
-          onPress={() => setShowTableSwitcher(true)}
-        >
+        <View style={styles.headerTitleContainer}>
           <Text style={styles.headerTitle} numberOfLines={1}>
-            📋 {db.activeTable?.name || 'Planilha'} <Text style={styles.dropdownArrow}>▼</Text>
+            📋 {db.activeTable?.name || 'Planilha'}
           </Text>
           <Text style={styles.headerSubtitle}>
-            {db.filteredRows.length} entradas
+            {db.filteredRows.length} {db.filteredRows.length === 1 ? 'entrada' : 'entradas'}
           </Text>
-        </Pressable>
+        </View>
         <View style={styles.headerActions}>
           <Pressable
             style={({ pressed }) => [
@@ -628,25 +621,6 @@ export default function SpreadsheetScreen() {
           };
           db.addRows([cloned]);
         }}
-      />
-
-      {/* Table Switcher Modal */}
-      <TableSwitcherModal
-        visible={showTableSwitcher}
-        onClose={() => setShowTableSwitcher(false)}
-        tables={db.activeTables}
-        activeTableIndex={db.activeTableIndex}
-        onSelect={(idx) => {
-          db.setActiveTableIndex(idx);
-          db.setSelectedMonth('all');
-        }}
-        onAdd={(name) => {
-          db.addTable(name);
-          db.setSelectedMonth('all');
-        }}
-        onRename={db.renameTable}
-        onDelete={db.deleteTable}
-        onReorder={db.reorderTables}
       />
 
       {/* Preview Modal for WhatsApp and CSV */}

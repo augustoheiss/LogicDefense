@@ -295,10 +295,60 @@ async def append_to_spreadsheet(
 
     csv_output = "\n".join(csv_lines)
 
+    parsed_goals_dict = {}
+    if payload.csv_content and payload.csv_content.strip():
+        raw_lines = payload.csv_content.strip().split("\n")
+        for line in raw_lines:
+            line_str = line.strip()
+            if not line_str or line_str.startswith("##"):
+                continue
+            parts = [p.strip().strip('"') for p in line_str.split(",")]
+            if len(parts) >= 2 and parts[0].lower().startswith(("goal_", "meta_", "custo_")):
+                key = parts[0].lower()
+                try:
+                    val = float(parts[1])
+                    parsed_goals_dict[key] = val
+                except ValueError:
+                    pass
+
+    goals_obj = TableGoals()
+    for k, v in parsed_goals_dict.items():
+        if k in ("goal_global_daily", "meta_global_diaria"):
+            if not goals_obj.global_goals:
+                goals_obj.global_goals = {}
+            goals_obj.global_goals["dailyGoal"] = v
+            goals_obj.daily_goals["global"] = v
+        elif k in ("goal_global_weekly", "meta_global_semanal"):
+            if not goals_obj.global_goals:
+                goals_obj.global_goals = {}
+            goals_obj.global_goals["weeklyGoal"] = v
+            goals_obj.weekly_goals["global"] = v
+        elif k in ("goal_global_annual", "meta_global_anual"):
+            if not goals_obj.global_goals:
+                goals_obj.global_goals = {}
+            goals_obj.global_goals["annualCost"] = v
+            goals_obj.annual_costs["global"] = v
+        else:
+            m_year = re.match(r"^(?:goal_|meta_|custo_)(daily|weekly|annual|diaria|semanal|anual)_(\d{4})$", k)
+            if m_year:
+                g_type, y_str = m_year.groups()
+                y_num = int(y_str)
+                if g_type in ("daily", "diaria"):
+                    goals_obj.daily_goals[y_num] = v
+                elif g_type in ("weekly", "semanal"):
+                    goals_obj.weekly_goals[y_num] = v
+                elif g_type in ("annual", "anual"):
+                    goals_obj.annual_costs[y_num] = v
+            m_iso = re.match(r"^(?:goal_weekly_|meta_semanal_)(\d{4}-w\d{2})$", k)
+            if m_iso:
+                iso_key = m_iso.group(1).upper()
+                goals_obj.weekly_goals[iso_key] = v
+
     # ── Update In-Memory Storage for GET routes & Analysis ───────────────
     TABLE_IN_MEMORY_STORAGE[table_id] = {
         "items": items_to_process,
         "csv_content": csv_output,
+        "goals": goals_obj if parsed_goals_dict else TABLE_IN_MEMORY_STORAGE.get(table_id, {}).get("goals", TableGoals()),
         "updated_at": datetime.datetime.now().isoformat()
     }
 
@@ -607,7 +657,8 @@ async def generate_analysis_context_in_memory(
             tags=it.tags or ""
         ))
 
-    goals = TableGoals()
+    stored_data = TABLE_IN_MEMORY_STORAGE.get(table_id, {})
+    goals = stored_data.get("goals", TableGoals())
     metrics = compute_metrics(rows=rows, goals=goals, as_of_date=ref_date)
     
     ai_payload = AIAnalystPayload(
@@ -669,13 +720,30 @@ async def public_ai_analyst(
             detail="GEMINI_API_KEY não configurada. O serviço de IA está indisponível.",
         )
 
+    stored = TABLE_IN_MEMORY_STORAGE.get(table_id, {})
+    stored_items: List[AppendTransactionItem] = stored.get("items", [])
+    goals = stored.get("goals", TableGoals())
+
+    rows: List[TableRow] = []
+    for idx, it in enumerate(stored_items):
+        tx_id = it.external_id or f"tx_{idx+1}"
+        entry_tp = EntryType(it.entry_type) if it.entry_type in [e.value for e in EntryType] else EntryType.EXPENSE
+        rows.append(TableRow(
+            id=tx_id,
+            date=it.date,
+            value=abs(it.value),
+            description=it.description or "Transação API",
+            entry_type=entry_tp,
+            category=it.category or "Geral",
+            tags=it.tags or ""
+        ))
+
     ref_date = payload.as_of_date or datetime.date.today().isoformat()
-    goals = TableGoals()
-    metrics = compute_metrics(rows=[], goals=goals, as_of_date=ref_date)
+    metrics = compute_metrics(rows=rows, goals=goals, as_of_date=ref_date)
     
     ai_payload = AIAnalystPayload(
         message=payload.user_prompt,
-        rows=[],
+        rows=rows,
         goals=goals,
         tableName="Planilha Principal",
         totalWaiverCredits=0.0,

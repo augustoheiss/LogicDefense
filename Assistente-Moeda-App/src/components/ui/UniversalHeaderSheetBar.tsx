@@ -54,7 +54,7 @@ export function UniversalHeaderSheetBar() {
         {isDesktop && (
           <View style={styles.desktopInfo}>
             <Text style={styles.desktopInfoText}>
-              {db.tables.length} {db.tables.length === 1 ? 'planilha' : 'planilhas'} • Use setas ↑ ↓ no menu
+              {db.activeTables.length} {db.activeTables.length === 1 ? 'planilha' : 'planilhas'} • Use setas ↑ ↓ no menu
             </Text>
           </View>
         )}
@@ -64,7 +64,7 @@ export function UniversalHeaderSheetBar() {
       <TableSwitcherModal
         visible={modalVisible}
         onClose={() => setModalVisible(false)}
-        tables={db.tables}
+        tables={db.activeTables}
         activeTableIndex={db.activeTableIndex}
         onSelect={(index) => {
           db.setActiveTableIndex(index);

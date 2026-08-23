@@ -143,7 +143,9 @@ function useCoinDBInternal(): CoinDBState {
       const db = await loadDB();
       if (db) {
         if (db.tables.length > 0) {
-          setTables(ensureActiveSectors(db.tables));
+          // Auto-purge any historical tombstoned/zombie tables
+          const cleaned = db.tables.filter((t) => !t.isDeleted);
+          setTables(ensureActiveSectors(cleaned));
         }
         setAiCostCurrentMonth(db.aiCostCurrentMonth ?? 0);
         setAiCostLastReset(db.aiCostLastReset ?? '');
@@ -476,14 +478,17 @@ function useCoinDBInternal(): CoinDBState {
   }, [tables, persist]);
 
   const deleteTable = useCallback((tableId: string) => {
-    const newTables = tables.map((t) =>
-      t.id === tableId ? { ...t, isDeleted: true, updatedAt: new Date().toISOString() } : t
-    );
+    const newTables = tables.filter((t) => t.id !== tableId);
     persist(newTables);
     
-    const newActiveTables = newTables.filter((t) => !t.isDeleted);
-    if (activeTableIndex >= newActiveTables.length) {
-      setActiveTableIndex(Math.max(0, newActiveTables.length - 1));
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+      window.localStorage.removeItem(`coin_api_key_${tableId}`);
+      window.localStorage.removeItem(`coin_last_seq_${tableId}`);
+      window.localStorage.removeItem(`coin_expires_at_${tableId}`);
+    }
+
+    if (activeTableIndex >= newTables.length) {
+      setActiveTableIndex(Math.max(0, newTables.length - 1));
     }
   }, [tables, activeTableIndex, persist]);
 
@@ -948,13 +953,23 @@ function useCoinDBInternal(): CoinDBState {
         name: mode === 'merge' ? t.name : (payload.name && payload.name.trim() ? payload.name : t.name),
         description: mode === 'merge' ? t.description : (payload.description !== undefined ? payload.description : t.description),
         rows: finalRows,
-        goals: mode === 'merge' ? (t.goals || payload.goals) : (payload.goals ? {
+        goals: mode === 'merge' ? (payload.goals ? {
           ...currentGoals,
           ...goalUpdates,
           dailyGoals: { ...(currentGoals.dailyGoals || {}), ...(goalUpdates.dailyGoals || {}) },
           weeklyGoals: { ...(currentGoals.weeklyGoals || {}), ...(goalUpdates.weeklyGoals || {}) },
           annualCosts: { ...(currentGoals.annualCosts || {}), ...(goalUpdates.annualCosts || {}) },
           yearlyGoals: { ...(currentGoals.yearlyGoals || {}), ...(goalUpdates.yearlyGoals || {}) },
+          monthlyGoals: { ...(currentGoals.monthlyGoals || {}), ...(goalUpdates.monthlyGoals || {}) },
+          globalGoals: goalUpdates.globalGoals || currentGoals.globalGoals,
+        } : t.goals) : (payload.goals ? {
+          ...currentGoals,
+          ...goalUpdates,
+          dailyGoals: { ...(currentGoals.dailyGoals || {}), ...(goalUpdates.dailyGoals || {}) },
+          weeklyGoals: { ...(currentGoals.weeklyGoals || {}), ...(goalUpdates.weeklyGoals || {}) },
+          annualCosts: { ...(currentGoals.annualCosts || {}), ...(goalUpdates.annualCosts || {}) },
+          yearlyGoals: { ...(currentGoals.yearlyGoals || {}), ...(goalUpdates.yearlyGoals || {}) },
+          monthlyGoals: { ...(currentGoals.monthlyGoals || {}), ...(goalUpdates.monthlyGoals || {}) },
           globalGoals: goalUpdates.globalGoals || currentGoals.globalGoals,
         } : t.goals),
         updatedAt: new Date().toISOString(),
