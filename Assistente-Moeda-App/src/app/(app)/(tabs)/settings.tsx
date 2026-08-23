@@ -45,7 +45,7 @@ import { SectorSettingsPanel } from '@/components/ui/SectorSettingsPanel';
 import { SyncAuditPanel, APIManagementTester } from '@/components/ui';
 import { formatCurrencySmart } from '@/core/formatCurrency';
 import { validateMobileLicenseKey, getStoredLicenseKey } from '@/storage/authService';
-import { ensureApiKeyForTable, generateLocalApiKey } from '@/services/exportService';
+import { ensureApiKeyForTable, generateLocalApiKey, buildCSV, shareCSVText } from '@/services/exportService';
 import { validateApiKey, generateNewApiKey, formatTimeRemaining } from '@/services/apiKeyService';
 import type { TableGoals, CoinTable } from '@/core/types';
 
@@ -93,6 +93,25 @@ export default function SettingsScreen() {
   const [newTableName, setNewTableName] = useState('');
   const [editingTableId, setEditingTableId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
+
+  const handleDownloadBackup = async () => {
+    if (!db.activeTable) {
+      Alert.alert('Aviso', 'Nenhuma planilha ativa selecionada.');
+      return;
+    }
+    try {
+      const csv = buildCSV(
+        db.activeTable.rows,
+        db.activeTable.name,
+        db.activeTable.description,
+        db.activeTable.goals,
+        db.activeTable.id
+      );
+      await shareCSVText(csv, db.activeTable.name);
+    } catch (e: any) {
+      Alert.alert('Erro', e?.message || 'Falha ao gerar o arquivo de backup.');
+    }
+  };
 
   const handleValidateKey = async () => {
     if (!inputLicenseKey.trim()) {
@@ -615,6 +634,45 @@ export default function SettingsScreen() {
           </Card>
         </Section>
 
+        {/* ── Backup & Safety Advice (Golden Warning) ─────────────── */}
+        <Section title="🛡️ Segurança & Backups (.csv)">
+          <Card style={styles.backupAdviceCard}>
+            <View style={styles.backupHeaderRow}>
+              <Text style={styles.backupIcon}>💡</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.backupTitle}>Dica de Ouro: Exporte seus Backups em .CSV</Text>
+                <Text style={styles.backupSubtitle}>Sua máquina do tempo pessoal contra imprevistos</Text>
+              </View>
+            </View>
+
+            <Text style={styles.backupBodyText}>
+              Se você gostou da organização atual da sua planilha, <Text style={styles.boldWhite}>baixe um backup em .csv agora mesmo</Text>.
+            </Text>
+
+            <Text style={styles.backupBodyText}>
+              Uma faísca ou comando da IA pode alterar ou reestruturar pequenas planilhas em milésimos de segundos, criando novas fórmulas ou visões diferentes — e, às vezes, até alucinações. Se algum imprevisto acontecer, um backup <Text style={styles.backupCode}>.csv</Text> salvo no seu computador é a sua <Text style={styles.boldWhite}>garantia mais segura</Text> para retornar no tempo e restaurar exatamente o que estava funcionando perfeitamente.
+            </Text>
+
+            {db.activeTable && (
+              <Pressable
+                style={({ pressed }) => [
+                  styles.backupDownloadBtn,
+                  pressed && styles.pressed,
+                ]}
+                onPress={handleDownloadBackup}
+              >
+                <Text style={styles.backupDownloadBtnText}>
+                  📥 Baixar Backup de "{db.activeTable.name}" ({db.activeTable.rows.length} itens)
+                </Text>
+              </Pressable>
+            )}
+
+            <Text style={styles.backupFooterText}>
+              ℹ️ Você pode importar este arquivo .csv a qualquer momento na tela inicial para restaurar sua planilha intacta.
+            </Text>
+          </Card>
+        </Section>
+
         {/* ── AI Engine Section (Fuel Gauge) ───────────────── */}
         <Section title="⚡ Motor de Inteligência Artificial">
           <Card glow>
@@ -766,6 +824,26 @@ export default function SettingsScreen() {
                         </Pressable>
 
                         <View style={styles.cardActions}>
+                          {/* Reorder Up/Down */}
+                          <View style={styles.reorderGroup}>
+                            <Pressable
+                              style={[styles.iconBtn, index === 0 && styles.disabledBtn]}
+                              onPress={() => db.reorderTables(index, index - 1)}
+                              disabled={index === 0}
+                              accessibilityLabel="Mover para cima"
+                            >
+                              <Text style={[styles.iconText, index === 0 && styles.disabledText]}>▲</Text>
+                            </Pressable>
+                            <Pressable
+                              style={[styles.iconBtn, index === db.activeTables.length - 1 && styles.disabledBtn]}
+                              onPress={() => db.reorderTables(index, index + 1)}
+                              disabled={index === db.activeTables.length - 1}
+                              accessibilityLabel="Mover para baixo"
+                            >
+                              <Text style={[styles.iconText, index === db.activeTables.length - 1 && styles.disabledText]}>▼</Text>
+                            </Pressable>
+                          </View>
+
                           <Pressable
                             style={styles.iconBtn}
                             onPress={() => handleStartRenameTable(t)}
@@ -798,6 +876,8 @@ export default function SettingsScreen() {
                   onChangeText={setNewTableName}
                   placeholder="Nome da planilha..."
                   placeholderTextColor={colors.text.disabled}
+                  onSubmitEditing={handleAddTable}
+                  returnKeyType="done"
                 />
                 <Pressable
                   style={({ pressed }) => [
@@ -2476,6 +2556,9 @@ const styles = StyleSheet.create({
   contentInner: {
     padding: spacing.lg,
     gap: spacing.xl,
+    maxWidth: 960,
+    width: '100%',
+    alignSelf: 'center',
   },
 
   section: { gap: spacing.sm },
@@ -2992,6 +3075,75 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
   },
 
+  // Backup Advice Golden Warning Card styles
+  backupAdviceCard: {
+    backgroundColor: '#1c1917',
+    borderWidth: 1,
+    borderColor: 'rgba(245, 158, 11, 0.4)',
+    borderRadius: radius.lg,
+    padding: spacing.lg,
+    gap: spacing.sm,
+  },
+  backupHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginBottom: spacing.xs,
+  },
+  backupIcon: {
+    fontSize: 24,
+  },
+  backupTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#fbbf24',
+  },
+  backupSubtitle: {
+    fontSize: 12,
+    color: colors.text.tertiary,
+    marginTop: 1,
+  },
+  backupBodyText: {
+    fontSize: 13,
+    color: colors.text.secondary,
+    lineHeight: 19,
+  },
+  boldWhite: {
+    fontWeight: '700',
+    color: colors.text.primary,
+  },
+  backupCode: {
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+    fontWeight: '700',
+    color: '#fbbf24',
+    backgroundColor: 'rgba(245, 158, 11, 0.1)',
+    paddingHorizontal: 4,
+    borderRadius: 4,
+  },
+  backupDownloadBtn: {
+    backgroundColor: 'rgba(245, 158, 11, 0.15)',
+    borderWidth: 1,
+    borderColor: '#f59e0b',
+    borderRadius: radius.md,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: spacing.xs,
+    marginBottom: spacing.xxs,
+  },
+  backupDownloadBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#fbbf24',
+  },
+  backupFooterText: {
+    fontSize: 11,
+    color: colors.text.tertiary,
+    fontStyle: 'italic',
+    marginTop: spacing.xxs,
+  },
+
   // Table Management styles
   tableRowContainer: {
     borderWidth: 1,
@@ -3016,7 +3168,19 @@ const styles = StyleSheet.create({
   },
   cardActions: {
     flexDirection: 'row',
-    gap: spacing.sm,
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  reorderGroup: {
+    flexDirection: 'row',
+    gap: 2,
+    marginRight: 4,
+  },
+  disabledBtn: {
+    opacity: 0.25,
+  },
+  disabledText: {
+    color: colors.text.disabled,
   },
   iconBtn: {
     padding: spacing.xs,

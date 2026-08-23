@@ -61,6 +61,7 @@ export interface CoinDBState {
   addTable: (name: string, description?: string, goals?: TableGoals, rows?: Omit<TableRow, 'id'>[]) => void;
   renameTable: (tableId: string, name: string) => void;
   deleteTable: (tableId: string) => void;
+  reorderTables: (fromIndex: number, toIndex: number) => Promise<void> | void;
 
   // ── Row Operations ────────────────────────────────────
   addRow: (row: Omit<TableRow, 'id'>, tableName?: string) => Promise<void> | void;
@@ -68,6 +69,7 @@ export interface CoinDBState {
   updateActiveTableRows: (rows: (TableRow | Omit<TableRow, 'id'>)[]) => Promise<void> | void;
   updateActiveTableName: (newName: string) => Promise<void> | void;
   updateRow: (rowId: string, updates: Partial<TableRow>) => void;
+  renameCategoryInBulk: (oldCategoryName: string, newCategoryName: string, entryType?: string) => Promise<void> | void;
   deleteRow: (rowId: string) => void;
   deleteLastRow: () => Promise<void> | void;
   deleteRowsByPrefix: (prefix: string) => number;
@@ -628,6 +630,58 @@ function useCoinDBInternal(): CoinDBState {
     await persist(newTables);
   }, [tables, activeTable, persist]);
 
+  const renameCategoryInBulk = useCallback(async (oldCategoryName: string, newCategoryName: string, entryType?: string) => {
+    if (!activeTable || !oldCategoryName.trim() || !newCategoryName.trim()) return;
+    const cleanOld = oldCategoryName.trim().toUpperCase();
+    const cleanNew = newCategoryName.trim().toUpperCase();
+
+    const newTables = tables.map((t) => {
+      if (t.id !== activeTable.id) return t;
+      const updatedRows = t.rows.map((r) => {
+        const matchesType = !entryType || r.entryType === entryType;
+        const matchesCategory = 
+          (r.description && r.description.trim().toUpperCase() === cleanOld) ||
+          (r.category && r.category.trim().toUpperCase() === cleanOld);
+
+        if (matchesType && matchesCategory) {
+          return {
+            ...r,
+            description: cleanNew,
+            category: cleanNew,
+          };
+        }
+        return r;
+      });
+
+      return {
+        ...t,
+        rows: updatedRows,
+        updatedAt: new Date().toISOString(),
+      };
+    });
+
+    await persist(newTables);
+  }, [tables, activeTable, persist]);
+
+  const reorderTables = useCallback(async (fromIndex: number, toIndex: number) => {
+    if (fromIndex < 0 || fromIndex >= tables.length || toIndex < 0 || toIndex >= tables.length) return;
+    if (fromIndex === toIndex) return;
+
+    const activeTableId = activeTable?.id;
+    const newTables = [...tables];
+    const [moved] = newTables.splice(fromIndex, 1);
+    newTables.splice(toIndex, 0, moved);
+
+    if (activeTableId) {
+      const newActiveIdx = newTables.findIndex(t => t.id === activeTableId);
+      if (newActiveIdx !== -1) {
+        setActiveTableIndex(newActiveIdx);
+      }
+    }
+
+    await persist(newTables);
+  }, [tables, activeTable, persist]);
+
   const deleteLastRow = useCallback(async () => {
     if (!activeTable || activeTable.rows.length === 0) return;
     const newRows = activeTable.rows.slice(0, -1);
@@ -938,6 +992,8 @@ function useCoinDBInternal(): CoinDBState {
     addRows,
     updateActiveTableRows,
     updateActiveTableName,
+    renameCategoryInBulk,
+    reorderTables,
     updateRow,
     deleteRow,
     deleteLastRow,

@@ -857,6 +857,7 @@ export default function MetricsScreen() {
           cutoffDate={cutoffDate}
           onEditRow={handleEditRow}
           onDeleteRow={db.deleteRow}
+          onRenameCategory={db.renameCategoryInBulk}
         />
 
         {/* ── Sector Actuarial & Simulation Widgets (Temporariamente Ocultados da UI) ── */}
@@ -957,35 +958,39 @@ const styles = StyleSheet.create({
   scrollContent: {
     padding: spacing.lg,
     gap: spacing.lg,
+    maxWidth: 1080,
+    width: '100%',
+    alignSelf: 'center',
   },
 
   sectionTitle: {
-    fontSize: 15,
-    fontWeight: '600',
+    fontSize: 17,
+    fontWeight: '700',
     color: colors.text.secondary,
     marginTop: spacing.sm,
   },
 
   /* BI Dashboard */
   biCard: {
-    backgroundColor: '#1f2937',
-    borderRadius: radius.md,
-    padding: spacing.md,
+    backgroundColor: '#1a1f2c',
+    borderRadius: radius.lg,
+    padding: spacing.lg,
     borderWidth: 1,
-    borderColor: colors.border.default,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
   },
   chartContainer: {
     alignItems: 'center',
-    gap: spacing.sm,
+    gap: spacing.md,
+    width: '100%',
   },
   chartTitle: {
-    fontSize: 15,
-    fontWeight: '600',
+    fontSize: 17,
+    fontWeight: '700',
     color: colors.text.primary,
     textAlign: 'center',
   },
   chartSubtitle: {
-    fontSize: 11,
+    fontSize: 13,
     color: colors.text.tertiary,
     textAlign: 'center',
     marginBottom: spacing.xs,
@@ -993,50 +998,55 @@ const styles = StyleSheet.create({
   chartRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-around',
+    justifyContent: 'center',
     width: '100%',
     flexWrap: 'wrap',
-    gap: spacing.md,
-    marginTop: spacing.xs,
+    gap: spacing.xl,
+    marginTop: spacing.sm,
   },
   pieWrapper: {
     alignItems: 'center',
     justifyContent: 'center',
-    minWidth: 140,
-    minHeight: 140,
+    minWidth: 160,
+    minHeight: 160,
   },
   legendList: {
     flex: 1,
-    minWidth: 180,
-    gap: spacing.xs,
+    minWidth: 260,
+    maxWidth: 460,
+    gap: spacing.xs + 2,
   },
   legendItem: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 4,
-    paddingHorizontal: spacing.xs,
-    borderRadius: radius.sm,
-    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    paddingVertical: 8,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radius.md,
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.05)',
   },
   legendIndicator: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    marginRight: 6,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    marginRight: 8,
   },
   legendLabel: {
-    fontSize: 12,
+    fontSize: 14,
     color: colors.text.secondary,
+    fontWeight: '600',
     flex: 1,
   },
   legendValue: {
-    fontSize: 12,
-    fontWeight: '600',
+    fontSize: 15,
+    fontWeight: '800',
     color: colors.text.primary,
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
   },
   noDataText: {
-    fontSize: 13,
+    fontSize: 14,
     color: colors.text.disabled,
     textAlign: 'center',
     marginVertical: spacing.md,

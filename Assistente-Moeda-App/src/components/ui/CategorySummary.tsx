@@ -12,7 +12,7 @@
  */
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, Alert, Platform } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, Alert, Platform, Modal, TextInput } from 'react-native';
 import { colors } from '@/theme/colors';
 import { spacing, radius } from '@/theme/spacing';
 import { formatCurrencyFull, formatCurrencyShort, formatCurrencySmart } from '@/core/formatCurrency';
@@ -74,6 +74,7 @@ interface CategorySummaryProps {
   cutoffDate: string;
   onEditRow: (row: TableRow) => void;
   onDeleteRow: (rowId: string) => void;
+  onRenameCategory?: (oldName: string, newName: string, entryType?: string) => void;
 }
 
 const FILTER_OPTIONS: { value: FilterableType; label: string; icon: string; color: string }[] = [
@@ -209,10 +210,25 @@ function getRowProratedValue(row: TableRow, scope: CategoryScope, activeMonth: s
   }
 }
 
-export function CategorySummary({ allRows, selectedMonth, cutoffDate, onEditRow, onDeleteRow }: CategorySummaryProps) {
+export function CategorySummary({ allRows, selectedMonth, cutoffDate, onEditRow, onDeleteRow, onRenameCategory }: CategorySummaryProps) {
   const [filterType, setFilterType] = useState<FilterableType>('expense');
   const [categoryScope, setCategoryScope] = useState<CategoryScope>('month');
   const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
+  const [renamingGroup, setRenamingGroup] = useState<CategoryGroup | null>(null);
+  const [newCategoryName, setNewCategoryName] = useState('');
+
+  const handleOpenRename = (group: CategoryGroup) => {
+    setRenamingGroup(group);
+    setNewCategoryName(group.description);
+  };
+
+  const handleSaveRename = () => {
+    if (!renamingGroup || !newCategoryName.trim()) return;
+    if (onRenameCategory) {
+      onRenameCategory(renamingGroup.description, newCategoryName.trim(), filterType);
+    }
+    setRenamingGroup(null);
+  };
 
   useEffect(() => {
     if (selectedMonth === 'all') {
@@ -384,79 +400,53 @@ export function CategorySummary({ allRows, selectedMonth, cutoffDate, onEditRow,
       .sort((a, b) => b.total - a.total);
   }, [baseRows, filterType, categoryScope, activeMonth, activeYear, daysInScope]);
 
+  const totalSum = useMemo(() => groups.reduce((s, g) => s + g.total, 0), [groups]);
+
   const hasAnyData = baseRows.length > 0;
   if (!hasAnyData) return null;
 
   return (
-    <View style={styles.wrapper}>
+    <View style={styles.container}>
       <View style={styles.headerRow}>
-        <Text style={styles.sectionHeader}>📊 Categorias e Médias</Text>
-      </View>
+        <View>
+          <Text style={styles.title}>🏷️ Resumo por Categorias</Text>
+          <Text style={styles.subtitle}>
+            Total no período: <Text style={{ color: filterOpt.color, fontWeight: '700' }}>{formatCurrencyFull(totalSum)}</Text>
+          </Text>
+        </View>
 
-      {/* Scope Selector */}
-      <View style={styles.scopeContainer}>
-        <Text style={styles.scopeLabel}>Período de Análise:</Text>
-        <View style={styles.segmentedControl}>
-          <Pressable
-            onPress={() => {
-              setCategoryScope('month');
-              setExpandedCategory(null);
-            }}
-            style={[styles.segmentBtn, categoryScope === 'month' && styles.segmentBtnActive]}
-          >
-            <Text style={[styles.segmentBtnText, categoryScope === 'month' && styles.segmentBtnTextActive]}>
-              Mês ({formatMonthLabelShort(activeMonth)})
-            </Text>
-          </Pressable>
-          <Pressable
-            onPress={() => {
-              setCategoryScope('year');
-              setExpandedCategory(null);
-            }}
-            style={[styles.segmentBtn, categoryScope === 'year' && styles.segmentBtnActive]}
-          >
-            <Text style={[styles.segmentBtnText, categoryScope === 'year' && styles.segmentBtnTextActive]}>
-              Ano ({activeYear})
-            </Text>
-          </Pressable>
-          <Pressable
-            onPress={() => {
-              setCategoryScope('global');
-              setExpandedCategory(null);
-            }}
-            style={[styles.segmentBtn, categoryScope === 'global' && styles.segmentBtnActive]}
-          >
-            <Text style={[styles.segmentBtnText, categoryScope === 'global' && styles.segmentBtnTextActive]}>
-              Global (Tudo)
-            </Text>
-          </Pressable>
+        {/* Scope selector */}
+        <View style={styles.scopeSelector}>
+          {(['month', 'year', 'global'] as CategoryScope[]).map((s) => {
+            const active = categoryScope === s;
+            const label = s === 'month' ? 'Mês' : s === 'year' ? 'Ano' : 'Global';
+            return (
+              <Pressable
+                key={s}
+                style={[styles.scopeBtn, active && styles.scopeBtnActive]}
+                onPress={() => setCategoryScope(s)}
+              >
+                <Text style={[styles.scopeBtnText, active && styles.scopeBtnTextActive]}>
+                  {label}
+                </Text>
+              </Pressable>
+            );
+          })}
         </View>
       </View>
 
-      {/* Selector chips */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.chipsContainer}
-        style={styles.scrollView}
-      >
+      {/* Filter Tabs */}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterScroll}>
         {FILTER_OPTIONS.map((opt) => {
-          const count = typeCounts[opt.value];
           const active = filterType === opt.value;
+          const count = baseRows.filter((r) => (r.entryType || 'revenue') === opt.value).length;
           return (
             <Pressable
               key={opt.value}
-              onPress={() => {
-                setFilterType(opt.value);
-                setExpandedCategory(null);
-              }}
-              style={({ pressed }) => [
-                styles.chip,
-                active && { backgroundColor: opt.color, borderColor: opt.color },
-                pressed && styles.pressed,
-              ]}
+              style={[styles.filterChip, active && { borderColor: opt.color, backgroundColor: 'rgba(255,255,255,0.05)' }]}
+              onPress={() => setFilterType(opt.value)}
             >
-              <Text style={[styles.chipText, active && styles.chipTextActive]}>
+              <Text style={[styles.filterText, active && { color: opt.color, fontWeight: '700' }]}>
                 {opt.icon} {opt.label}
               </Text>
               {count > 0 && (
@@ -504,6 +494,16 @@ export function CategorySummary({ allRows, selectedMonth, cutoffDate, onEditRow,
 
                 {isExpanded && (
                   <View style={styles.expandedContent}>
+                    {/* Bulk Rename Button */}
+                    {onRenameCategory && (
+                      <Pressable
+                        style={({ pressed }) => [styles.bulkRenameBtn, pressed && styles.pressed]}
+                        onPress={() => handleOpenRename(g)}
+                      >
+                        <Text style={styles.bulkRenameBtnText}>✏️ Renomear toda a categoria ({g.count} itens)</Text>
+                      </Pressable>
+                    )}
+
                     {/* Stat grid */}
                     <View style={styles.statGrid}>
                       <View style={styles.statCol}>
@@ -600,107 +600,135 @@ export function CategorySummary({ allRows, selectedMonth, cutoffDate, onEditRow,
           })
         )}
       </View>
+
+      {/* Bulk Rename Modal */}
+      <Modal
+        visible={!!renamingGroup}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setRenamingGroup(null)}
+      >
+        <View style={styles.modalOverlay}>
+          <Pressable style={styles.modalBackdrop} onPress={() => setRenamingGroup(null)} />
+          <View style={styles.renameModalCard}>
+            <Text style={styles.renameModalTitle}>✏️ Renomear Categoria em Massa</Text>
+            <Text style={styles.renameModalSubtitle}>
+              Renomear todos os <Text style={styles.highlightCount}>{renamingGroup?.count} lançamentos</Text> da categoria "{renamingGroup?.description}" de uma só vez:
+            </Text>
+            <TextInput
+              style={styles.renameModalInput}
+              value={newCategoryName}
+              onChangeText={setNewCategoryName}
+              placeholder="Novo nome da categoria..."
+              placeholderTextColor={colors.text.disabled}
+              onSubmitEditing={handleSaveRename}
+              returnKeyType="done"
+              autoFocus
+            />
+            <View style={styles.renameModalActions}>
+              <Pressable
+                style={[styles.modalBtn, styles.modalCancelBtn]}
+                onPress={() => setRenamingGroup(null)}
+              >
+                <Text style={styles.modalCancelText}>Cancelar (Esc)</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.modalBtn, styles.modalSaveBtn]}
+                onPress={handleSaveRename}
+              >
+                <Text style={styles.modalSaveText}>Salvar Tudo (Enter)</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  wrapper: {
-    marginTop: spacing.md,
-    gap: spacing.md,
+  container: {
+    padding: spacing.lg,
+    backgroundColor: colors.background.secondary,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border.default,
   },
   headerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: spacing.xs,
+    marginBottom: spacing.md,
+    flexWrap: 'wrap',
+    gap: spacing.sm,
   },
-  sectionHeader: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: colors.text.secondary,
+  title: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: colors.text.primary,
   },
-  scopeContainer: {
-    paddingHorizontal: spacing.xs,
-    gap: spacing.xs,
-  },
-  scopeLabel: {
-    fontSize: 11,
-    fontWeight: '600',
+  subtitle: {
+    fontSize: 13,
     color: colors.text.tertiary,
-    textTransform: 'uppercase',
-    letterSpacing: 0.3,
+    marginTop: 2,
   },
-  segmentedControl: {
+  scopeSelector: {
     flexDirection: 'row',
-    backgroundColor: colors.background.secondary,
-    borderWidth: 1,
-    borderColor: colors.border.default,
+    backgroundColor: colors.background.tertiary,
     borderRadius: radius.md,
     padding: 2,
-    gap: 2,
+    borderWidth: 1,
+    borderColor: colors.border.default,
   },
-  segmentBtn: {
-    flex: 1,
-    paddingVertical: spacing.sm,
+  scopeBtn: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
     borderRadius: radius.sm,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
-  segmentBtnActive: {
+  scopeBtnActive: {
     backgroundColor: colors.accent.purple,
   },
-  segmentBtnText: {
-    fontSize: 11,
+  scopeBtnText: {
+    fontSize: 12,
+    color: colors.text.tertiary,
     fontWeight: '500',
-    color: colors.text.secondary,
   },
-  segmentBtnTextActive: {
+  scopeBtnTextActive: {
     color: '#ffffff',
-    fontWeight: '600',
+    fontWeight: '700',
   },
-  scrollView: {
-    flexGrow: 0,
+  filterScroll: {
+    marginBottom: spacing.md,
   },
-  chipsContainer: {
-    paddingHorizontal: spacing.xs,
-    gap: spacing.sm,
-    flexDirection: 'row',
-  },
-  chip: {
+  filterChip: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.xs,
     borderRadius: radius.full,
-    backgroundColor: colors.background.secondary,
     borderWidth: 1,
     borderColor: colors.border.default,
+    marginRight: spacing.xs,
     gap: spacing.xs,
   },
-  chipText: {
-    fontSize: 12,
-    fontWeight: '600',
+  filterText: {
+    fontSize: 14,
     color: colors.text.secondary,
-  },
-  chipTextActive: {
-    color: '#ffffff',
+    fontWeight: '500',
   },
   badge: {
-    paddingHorizontal: 5,
-    paddingVertical: 1,
-    borderRadius: radius.sm,
-    justifyContent: 'center',
-    alignItems: 'center',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: radius.full,
   },
   badgeActive: {
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: 'rgba(255,255,255,0.15)',
   },
   badgeInactive: {
     backgroundColor: 'rgba(255,255,255,0.05)',
   },
   badgeText: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: 'bold',
     color: '#ffffff',
   },
@@ -717,7 +745,7 @@ const styles = StyleSheet.create({
     borderColor: colors.border.default,
   },
   emptyText: {
-    fontSize: 13,
+    fontSize: 14,
     color: colors.text.disabled,
     textAlign: 'center',
   },
@@ -744,13 +772,13 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   arrowIcon: {
-    fontSize: 10,
+    fontSize: 12,
     color: colors.text.disabled,
-    width: 12,
+    width: 14,
   },
   categoryTitle: {
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 16,
+    fontWeight: '700',
     color: colors.text.primary,
     flex: 1,
   },
@@ -758,12 +786,13 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
   },
   categoryTotal: {
-    fontSize: 14,
-    fontWeight: '700',
+    fontSize: 17,
+    fontWeight: '800',
   },
   categoryMeta: {
-    fontSize: 10,
-    color: colors.text.tertiary,
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.accent.purple,
     marginTop: 2,
   },
   expandedContent: {
@@ -771,6 +800,23 @@ const styles = StyleSheet.create({
     borderTopColor: colors.border.default,
     padding: spacing.md,
     backgroundColor: 'rgba(255, 255, 255, 0.01)',
+  },
+  bulkRenameBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(167, 139, 250, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(167, 139, 250, 0.35)',
+    borderRadius: radius.md,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    marginBottom: spacing.md,
+  },
+  bulkRenameBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.accent.purple,
   },
   statGrid: {
     flexDirection: 'row',
@@ -787,21 +833,21 @@ const styles = StyleSheet.create({
     borderColor: colors.border.default,
   },
   statLabel: {
-    fontSize: 9,
+    fontSize: 11,
     color: colors.text.tertiary,
     textTransform: 'uppercase',
-    fontWeight: '600',
+    fontWeight: '700',
     marginBottom: 2,
   },
   statValue: {
-    fontSize: 12,
-    fontWeight: '700',
+    fontSize: 15,
+    fontWeight: '800',
     color: colors.text.primary,
     fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
   },
   entriesTitle: {
-    fontSize: 11,
-    fontWeight: '700',
+    fontSize: 13,
+    fontWeight: '800',
     color: colors.text.secondary,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
@@ -821,14 +867,15 @@ const styles = StyleSheet.create({
     paddingRight: spacing.sm,
   },
   rowDate: {
-    fontSize: 11,
+    fontSize: 13,
     color: colors.text.tertiary,
-    fontWeight: '500',
+    fontWeight: '600',
   },
   rowDesc: {
-    fontSize: 12,
+    fontSize: 14,
     color: colors.text.secondary,
     marginTop: 2,
+    fontWeight: '500',
   },
   rowRight: {
     flexDirection: 'row',
@@ -836,8 +883,8 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   rowValue: {
-    fontSize: 12,
-    fontWeight: '600',
+    fontSize: 15,
+    fontWeight: '700',
     fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
   },
   rowActions: {
@@ -845,8 +892,8 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   actionBtn: {
-    width: 28,
-    height: 28,
+    width: 32,
+    height: 32,
     borderRadius: radius.sm,
     backgroundColor: colors.background.tertiary,
     justifyContent: 'center',
@@ -855,9 +902,86 @@ const styles = StyleSheet.create({
     borderColor: colors.border.default,
   },
   actionBtnText: {
-    fontSize: 12,
+    fontSize: 14,
   },
   pressed: {
     opacity: 0.7,
+  },
+  modalOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalBackdrop: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+  },
+  renameModalCard: {
+    width: 440,
+    maxWidth: '92%',
+    backgroundColor: colors.background.secondary,
+    borderRadius: radius.lg,
+    padding: spacing.lg,
+    borderWidth: 1,
+    borderColor: colors.accent.purpleBorder,
+  },
+  renameModalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: colors.text.primary,
+    marginBottom: spacing.xs,
+  },
+  renameModalSubtitle: {
+    fontSize: 13,
+    color: colors.text.tertiary,
+    lineHeight: 18,
+    marginBottom: spacing.md,
+  },
+  highlightCount: {
+    fontWeight: 'bold',
+    color: colors.accent.purple,
+  },
+  renameModalInput: {
+    backgroundColor: colors.background.tertiary,
+    borderWidth: 1,
+    borderColor: colors.accent.purple,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    color: colors.text.primary,
+    fontSize: 15,
+    marginBottom: spacing.lg,
+  },
+  renameModalActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: spacing.sm,
+  },
+  modalBtn: {
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.md,
+  },
+  modalCancelBtn: {
+    backgroundColor: colors.background.tertiary,
+    borderWidth: 1,
+    borderColor: colors.border.default,
+  },
+  modalCancelText: {
+    color: colors.text.secondary,
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  modalSaveBtn: {
+    backgroundColor: colors.accent.purple,
+  },
+  modalSaveText: {
+    color: '#ffffff',
+    fontSize: 13,
+    fontWeight: '700',
   },
 });

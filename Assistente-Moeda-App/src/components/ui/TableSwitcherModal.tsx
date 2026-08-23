@@ -32,6 +32,7 @@ interface TableSwitcherModalProps {
   onAdd: (name: string) => void;
   onRename: (id: string, name: string) => void;
   onDelete: (id: string) => void;
+  onReorder?: (fromIndex: number, toIndex: number) => void;
 }
 
 export function TableSwitcherModal({
@@ -43,6 +44,7 @@ export function TableSwitcherModal({
   onAdd,
   onRename,
   onDelete,
+  onReorder,
 }: TableSwitcherModalProps) {
   const { width } = useWindowDimensions();
   const isWide = width >= 600;
@@ -50,6 +52,42 @@ export function TableSwitcherModal({
   const [newTableName, setNewTableName] = useState('');
   const [editingTableId, setEditingTableId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
+  const [focusedIndex, setFocusedIndex] = useState<number>(activeTableIndex);
+
+  React.useEffect(() => {
+    if (visible) {
+      setFocusedIndex(activeTableIndex);
+    }
+  }, [visible, activeTableIndex]);
+
+  // Keyboard navigation on Web (Up/Down + Enter to select, Esc to close)
+  React.useEffect(() => {
+    if (!visible || Platform.OS !== 'web') return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (editingTableId) return; // Allow normal typing while renaming
+
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setFocusedIndex((prev) => (prev + 1 < tables.length ? prev + 1 : 0));
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setFocusedIndex((prev) => (prev - 1 >= 0 ? prev - 1 : tables.length - 1));
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        if (focusedIndex >= 0 && focusedIndex < tables.length) {
+          onSelect(focusedIndex);
+          onClose();
+        }
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        onClose();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [visible, editingTableId, focusedIndex, tables.length, onSelect, onClose]);
 
   const handleAdd = () => {
     if (!newTableName.trim()) {
@@ -115,23 +153,33 @@ export function TableSwitcherModal({
           <View style={styles.header}>
             <Text style={styles.title}>📋 Suas Planilhas</Text>
             <Pressable onPress={onClose} style={styles.closeBtn}>
-              <Text style={styles.closeBtnText}>Fechar</Text>
+              <Text style={styles.closeBtnText}>Fechar (Esc)</Text>
             </Pressable>
           </View>
 
           <ScrollView style={styles.scrollList} contentContainerStyle={styles.scrollContent}>
             {tables.map((t, index) => {
               const isActive = index === activeTableIndex;
+              const isFocused = index === focusedIndex;
               const isEditing = t.id === editingTableId;
 
               return (
-                <Card key={t.id} style={StyleSheet.flatten([styles.tableCard, isActive && styles.activeCard])}>
+                <Card 
+                  key={t.id} 
+                  style={StyleSheet.flatten([
+                    styles.tableCard, 
+                    isActive && styles.activeCard,
+                    isFocused && !isActive && styles.focusedCard
+                  ])}
+                >
                   {isEditing ? (
                     <View style={styles.renameRow}>
                       <TextInput
                         style={styles.renameInput}
                         value={renameValue}
                         onChangeText={setRenameValue}
+                        onSubmitEditing={() => handleSaveRename(t.id)}
+                        returnKeyType="done"
                         autoFocus
                       />
                       <Pressable
@@ -157,13 +205,35 @@ export function TableSwitcherModal({
                         }}
                       >
                         <Text style={[styles.tableName, isActive && styles.activeTableName]}>
-                          {isActive ? '● ' : '○ '}
+                          {isActive ? '🟣 ' : '○ '}
                           {t.name}
                         </Text>
                         <Text style={styles.tableMeta}>{t.rows.length} entradas</Text>
                       </Pressable>
 
                       <View style={styles.cardActions}>
+                        {/* Reorder Up/Down */}
+                        {onReorder && (
+                          <View style={styles.reorderGroup}>
+                            <Pressable
+                              style={[styles.iconBtn, index === 0 && styles.disabledBtn]}
+                              onPress={() => onReorder(index, index - 1)}
+                              disabled={index === 0}
+                              accessibilityLabel="Mover para cima"
+                            >
+                              <Text style={[styles.iconText, index === 0 && styles.disabledText]}>▲</Text>
+                            </Pressable>
+                            <Pressable
+                              style={[styles.iconBtn, index === tables.length - 1 && styles.disabledBtn]}
+                              onPress={() => onReorder(index, index + 1)}
+                              disabled={index === tables.length - 1}
+                              accessibilityLabel="Mover para baixo"
+                            >
+                              <Text style={[styles.iconText, index === tables.length - 1 && styles.disabledText]}>▼</Text>
+                            </Pressable>
+                          </View>
+                        )}
+
                         <Pressable
                           style={styles.iconBtn}
                           onPress={() => handleStartRename(t)}
@@ -195,6 +265,8 @@ export function TableSwitcherModal({
                   onChangeText={setNewTableName}
                   placeholder="Nome da planilha..."
                   placeholderTextColor={colors.text.disabled}
+                  onSubmitEditing={handleAdd}
+                  returnKeyType="done"
                 />
                 <Pressable
                   style={({ pressed }) => [
@@ -288,6 +360,10 @@ const styles = StyleSheet.create({
     borderColor: colors.accent.purpleBorder,
     backgroundColor: colors.accent.purpleLight,
   },
+  focusedCard: {
+    borderColor: colors.accent.purple,
+    backgroundColor: 'rgba(167, 139, 250, 0.08)',
+  },
   tableCardContent: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -312,7 +388,19 @@ const styles = StyleSheet.create({
   },
   cardActions: {
     flexDirection: 'row',
-    gap: spacing.sm,
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  reorderGroup: {
+    flexDirection: 'row',
+    gap: 2,
+    marginRight: 4,
+  },
+  disabledBtn: {
+    opacity: 0.25,
+  },
+  disabledText: {
+    color: colors.text.disabled,
   },
   iconBtn: {
     padding: spacing.xs,

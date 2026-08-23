@@ -35,5 +35,6 @@ export { SectorGuard } from '../SectorGuard';
 export { SMBSectorWidget, RealEstateSectorWidget, VehiclesSectorWidget, LegalTaxesSectorWidget, PersonalFinanceSectorWidget } from './SectorWidgets';
 export { SyncAuditPanel } from './SyncAuditPanel';
 export { APIManagementTester } from './APIManagementTester';
+export { UniversalHeaderSheetBar } from './UniversalHeaderSheetBar';
 
 

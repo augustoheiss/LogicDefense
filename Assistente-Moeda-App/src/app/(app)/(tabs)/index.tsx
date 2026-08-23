@@ -646,6 +646,7 @@ export default function SpreadsheetScreen() {
         }}
         onRename={db.renameTable}
         onDelete={db.deleteTable}
+        onReorder={db.reorderTables}
       />
 
       {/* Preview Modal for WhatsApp and CSV */}
@@ -777,6 +778,9 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     padding: spacing.md,
     gap: spacing.sm,
+    maxWidth: 1080,
+    width: '100%',
+    alignSelf: 'center',
   },
   summaryLabel: {
     fontSize: 12,
@@ -813,6 +817,9 @@ const styles = StyleSheet.create({
   listContent: {
     padding: spacing.lg,
     paddingBottom: 100, // Extra space for FAB
+    maxWidth: 1080,
+    width: '100%',
+    alignSelf: 'center',
   },
   emptyList: {
     flexGrow: 1,

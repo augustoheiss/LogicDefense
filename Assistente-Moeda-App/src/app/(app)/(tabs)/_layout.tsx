@@ -15,6 +15,7 @@ import { Text, StyleSheet, Platform, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors } from '@/theme/colors';
 import { TimeMachineBar } from '@/components/ui/TimeMachineBar';
+import { UniversalHeaderSheetBar } from '@/components/ui/UniversalHeaderSheetBar';
 
 function TabIcon({ emoji, focused }: { emoji: string; focused: boolean }) {
   return (
@@ -28,6 +29,7 @@ export default function TabsLayout() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <TimeMachineBar />
+      <UniversalHeaderSheetBar />
       <View style={{ flex: 1 }}>
         <Tabs
           screenOptions={{
