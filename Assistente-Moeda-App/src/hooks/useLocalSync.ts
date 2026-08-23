@@ -209,6 +209,47 @@ export function useLocalSync() {
     }
   }, [apiKey, getStoredApiKey, lastSeqNumber, db, pushAuditLog, tableId, saveLastSeqNumber]);
 
+  // Helper: Synchronize active table rows to the local backend RAM
+  const pushActiveTableSnapshot = useCallback(async () => {
+    const activeKey = getStoredApiKey(tableId) || apiKey;
+    if (!activeKey || !tableId || !activeTable?.rows || activeTable.rows.length === 0) {
+      return;
+    }
+    try {
+      await fetch(`${API_BASE_URL}/transactions/batch-sync`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Spreadsheet-Key': activeKey,
+          'X-Origin-Browser': 'true',
+        },
+        body: JSON.stringify({
+          mode: 'replace',
+          transactions: activeTable.rows.map((r: TableRow) => ({
+            date: r.date,
+            value: r.entryType === 'expense' ? -Math.abs(r.value) : Math.abs(r.value),
+            description: r.description,
+            entry_type: r.entryType,
+            category: r.category,
+            tags: r.tags,
+            external_id: r.id,
+            period_start: r.periodStart,
+            period_end: r.periodEnd,
+          }))
+        })
+      });
+    } catch (err) {
+      console.warn('Failed to push table snapshot to backend:', err);
+    }
+  }, [getStoredApiKey, tableId, apiKey, activeTable?.rows]);
+
+  // Push snapshot whenever activeTable rows change or table is loaded
+  useEffect(() => {
+    if (activeTable?.rows && activeTable.rows.length > 0) {
+      pushActiveTableSnapshot();
+    }
+  }, [activeTable?.rows, pushActiveTableSnapshot]);
+
   // Listen for CSV import / key update sync requests
   useEffect(() => {
     if (Platform.OS !== 'web' || typeof window === 'undefined') return;
@@ -226,6 +267,7 @@ export function useLocalSync() {
         }
         setTimeout(() => {
           forceSyncPending();
+          pushActiveTableSnapshot();
         }, 100);
       }
     };
@@ -234,7 +276,7 @@ export function useLocalSync() {
     return () => {
       window.removeEventListener('coin_sync_requested', handleSyncRequest);
     };
-  }, [tableId, getStoredApiKey, saveLastSeqNumber, forceSyncPending]);
+  }, [tableId, getStoredApiKey, saveLastSeqNumber, forceSyncPending, pushActiveTableSnapshot]);
 
   // 2. Open Real-Time SSE Connection (Reconnected per tableId)
   useEffect(() => {

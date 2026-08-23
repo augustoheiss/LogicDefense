@@ -202,6 +202,7 @@ class PublicAnalysisContextResponse(BaseModel):
 @router.post("/spreadsheet/append", response_model=AppendSpreadsheetResponse)
 async def append_to_spreadsheet(
     payload: AppendSpreadsheetPayload,
+    request: Request = None,
     table_id: str = Depends(get_table_id_for_write),
     api_key: str = Security(API_KEY_HEADER)
 ):
@@ -323,17 +324,27 @@ async def append_to_spreadsheet(
                 "entryType": item.entry_type or ("expense" if item.value < 0 else "revenue"),
                 "category": item.category or "Geral",
                 "tags": item.tags or "",
-                "externalId": item.external_id
+                "externalId": item.external_id,
+                "periodStart": getattr(item, "period_start", None),
+                "periodEnd": getattr(item, "period_end", None),
+                "monthlyValue": getattr(item, "monthly_value", None),
+                "monthCount": getattr(item, "month_count", None)
             }
             for idx, item in enumerate(items_to_process)
         ]
     }
 
-    # Check if browser is connected via SSE
-    if key_h and broadcaster.has_subscribers(key_h):
-        broadcaster.broadcast(key_h, sync_event)
-    elif key_h:
-        enqueue_pending_sync(key_h, table_id, seq_number, json.dumps(sync_event))
+    # Check if this push came from the browser itself to avoid echo loop
+    is_from_browser = False
+    if request:
+        is_from_browser = request.headers.get("x-origin-browser", "").lower() == "true"
+
+    if not is_from_browser:
+        # Check if browser is connected via SSE
+        if key_h and broadcaster.has_subscribers(key_h):
+            broadcaster.broadcast(key_h, sync_event)
+        elif key_h:
+            enqueue_pending_sync(key_h, table_id, seq_number, json.dumps(sync_event))
 
     msg = f"Sucesso! {inserted_count} transações processadas em memória RAM (seq #{seq_number}, Modo: {mode})."
 
@@ -357,8 +368,9 @@ async def get_summary_endpoint(
     stored = TABLE_IN_MEMORY_STORAGE.get(table_id, {})
     items: List[AppendTransactionItem] = stored.get("items", [])
     
-    total_income = sum(abs(it.value) for it in items if (it.entry_type == "revenue" or it.value > 0))
-    total_expense = sum(abs(it.value) for it in items if (it.entry_type == "expense" or it.value < 0))
+    total_income = sum(abs(it.value) for it in items if it.entry_type == "revenue" or (not it.entry_type and it.value > 0))
+    total_expense = sum(abs(it.value) for it in items if it.entry_type == "expense" or (not it.entry_type and it.value < 0))
+    total_deposits = sum(abs(it.value) for it in items if it.entry_type == "deposit")
     net_balance = total_income - total_expense
     
     return {
@@ -366,6 +378,7 @@ async def get_summary_endpoint(
         "table_id": table_id,
         "total_income": total_income,
         "total_expense": total_expense,
+        "total_deposits": total_deposits,
         "net_balance": net_balance,
         "row_count": len(items),
         "updated_at": stored.get("updated_at")
@@ -411,13 +424,14 @@ async def get_transactions_endpoint(
 @router.post("/transactions/batch-sync", response_model=AppendSpreadsheetResponse)
 async def post_transactions_batch(
     payload: AppendSpreadsheetPayload,
+    request: Request,
     table_id: str = Depends(get_table_id_for_write),
     api_key: str = Security(API_KEY_HEADER)
 ):
     """
     Ingestão atômica ou em lote de transações financeiras para a planilha ativa.
     """
-    return await append_to_spreadsheet(payload=payload, table_id=table_id, api_key=api_key)
+    return await append_to_spreadsheet(payload=payload, request=request, table_id=table_id, api_key=api_key)
 
 # ── Sync Endpoints (SSE Stream & Pending Queue) ───────────────────────────────
 
