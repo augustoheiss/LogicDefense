@@ -570,8 +570,12 @@ async def sync_pending_queue(
         "events": parsed_events
     }
 
-@router.get("/analysis-context", response_model=PublicAnalysisContextResponse)
+@router.get("", response_model=PublicAnalysisContextResponse, summary="[ROTA PRINCIPAL #1] Snapshot Financeiro Completo")
+@router.get("/", response_model=PublicAnalysisContextResponse, summary="[ROTA PRINCIPAL #1] Snapshot Financeiro Completo")
+@router.get("/analysis-context", response_model=PublicAnalysisContextResponse, summary="[ROTA PRINCIPAL #1] Snapshot Financeiro Completo")
 @router.post("/analysis-context", response_model=PublicAnalysisContextResponse)
+@router.get("/spreadsheet", response_model=PublicAnalysisContextResponse)
+@router.get("/spreadsheet/analysis-context", response_model=PublicAnalysisContextResponse)
 async def generate_analysis_context_in_memory(
     payload: Optional[AppendSpreadsheetPayload] = None,
     table_id: str = Depends(get_table_id_for_read),
@@ -630,18 +634,20 @@ async def generate_analysis_context_in_memory(
     if not items_to_process and table_id in TABLE_IN_MEMORY_STORAGE:
         items_to_process = TABLE_IN_MEMORY_STORAGE[table_id].get("items", [])
 
+    start_date_str = start_date if isinstance(start_date, str) else None
+    end_date_str = end_date if isinstance(end_date, str) else None
+    ref_date = as_of_date if isinstance(as_of_date, str) else datetime.date.today().isoformat()
+
     # Filtrar por intervalo de datas se fornecido
-    if start_date or end_date:
+    if start_date_str or end_date_str:
         filtered = []
         for it in items_to_process:
-            if start_date and it.date < start_date:
+            if start_date_str and it.date < start_date_str:
                 continue
-            if end_date and it.date > end_date:
+            if end_date_str and it.date > end_date_str:
                 continue
             filtered.append(it)
         items_to_process = filtered
-
-    ref_date = as_of_date or datetime.date.today().isoformat()
 
     rows: List[TableRow] = []
     for idx, it in enumerate(items_to_process):

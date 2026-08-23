@@ -247,6 +247,17 @@ def init_db():
                 );
             """)
 
+            # Key Generation & Rotation Audit Log (Rate Limiting & Zero Collision)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS spreadsheet_api_key_history (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    table_id TEXT NOT NULL,
+                    key_hash TEXT NOT NULL,
+                    key_hint TEXT NOT NULL,
+                    created_at TEXT NOT NULL
+                );
+            """)
+
             # Migration: Ensure is_active and expires_at columns exist if database was created prior
             try:
                 cursor.execute("ALTER TABLE spreadsheet_api_keys ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1")
@@ -520,24 +531,61 @@ def mark_webhook_processed(event_id: str):
 
 # ── Spreadsheet API Keys ─────────────────────────────────────────────────────
 
-def create_spreadsheet_api_key(table_id: str, license_key_hash: str, permissions: str = "read:write", raw_license: str | None = None, expires_in_days: int = 1) -> tuple[str, str, str]:
-    """Generates a spreadsheet API key linked to a valid license key with Key Rotation & Expiration TTL (default 1 day = 24h)."""
-    raw_token = secrets.token_hex(32)
-    api_key = f"am_sheet_live_{raw_token}"
-    key_h = hash_key(api_key)
-    hint = f"...{api_key[-4:]}"
-    now_dt = datetime.now(timezone.utc)
-    now = now_dt.isoformat()
-    exp_dt = (now_dt + timedelta(days=expires_in_days)).isoformat()
-    
+def check_key_generation_rate_limit(table_id: str, max_per_day: int = 10) -> bool:
+    """Verifies that no more than max_per_day keys were generated for this table_id in the last 24 hours."""
+    since_dt = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
     with get_connection() as conn:
         cursor = conn.cursor()
+        cursor.execute("""
+            SELECT COUNT(*) as count FROM spreadsheet_api_key_history
+            WHERE table_id = ? AND created_at >= ?
+        """, (table_id, since_dt))
+        row = cursor.fetchone()
+        count = row.get("count", 0) if isinstance(row, dict) else (row[0] if row else 0)
+        return count < max_per_day
+
+def create_spreadsheet_api_key(
+    table_id: str, 
+    license_key_hash: str, 
+    permissions: str = "read:write", 
+    raw_license: str | None = None, 
+    expires_in_days: int = 1,
+    bypass_rate_limit: bool = False
+) -> tuple[str, str, str]:
+    """
+    Generates a spreadsheet API key linked to a valid license key with Key Rotation & Expiration TTL (default 1 day = 24h).
+    Enforces a strict rate limit of 10 key generations per 24 hours per spreadsheet for anti-abuse and stability.
+    """
+    is_god = bool(raw_license and is_godmode_key(raw_license.strip()))
+    if not is_god and not bypass_rate_limit and not check_key_generation_rate_limit(table_id, max_per_day=10):
+        raise RuntimeError("Limite diário de 10 gerações de chave atingido para esta planilha. Tente novamente mais tarde.")
+
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        
+        # 1. Zero Collision Loop: Guarantee this cryptographic key was NEVER assigned to any spreadsheet
+        while True:
+            raw_token = secrets.token_hex(32)
+            api_key = f"am_sheet_live_{raw_token}"
+            key_h = hash_key(api_key)
+            hint = f"...{api_key[-4:]}"
+            
+            cursor.execute("SELECT 1 FROM spreadsheet_api_keys WHERE key_hash = ?", (key_h,))
+            if cursor.fetchone():
+                continue
+            cursor.execute("SELECT 1 FROM spreadsheet_api_key_history WHERE key_hash = ?", (key_h,))
+            if cursor.fetchone():
+                continue
+            break
+
+        now_dt = datetime.now(timezone.utc)
+        now = now_dt.isoformat()
+        exp_dt = (now_dt + timedelta(days=expires_in_days)).isoformat()
         
         # Ensure license_key_hash exists in license_keys table to satisfy foreign key
         cursor.execute("SELECT 1 FROM license_keys WHERE key_hash = ?", (license_key_hash,))
         if not cursor.fetchone():
             lic_key_str = raw_license.strip() if raw_license else license_key_hash
-            is_god = bool(raw_license and is_godmode_key(raw_license.strip()))
             tier_name = "godmode_owner" if is_god else "pro"
             tokens = 999999999 if is_god else 1000000
             cap = -1 if is_god else 1000000
@@ -554,6 +602,13 @@ def create_spreadsheet_api_key(table_id: str, license_key_hash: str, permissions
             INSERT INTO spreadsheet_api_keys (table_id, key_hash, key_hint, license_key_hash, permissions, is_active, created_at, expires_at)
             VALUES (?, ?, ?, ?, ?, 1, ?, ?)
         """, (table_id, key_h, hint, license_key_hash, permissions, now, exp_dt))
+
+        # Record into Key Generation Audit Log
+        cursor.execute("""
+            INSERT INTO spreadsheet_api_key_history (table_id, key_hash, key_hint, created_at)
+            VALUES (?, ?, ?, ?)
+        """, (table_id, key_h, hint, now))
+
         conn.commit()
         
     return api_key, hint, exp_dt

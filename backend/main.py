@@ -99,6 +99,33 @@ app.include_router(license_router)
 async def health_check():
     return {"status": "awake"}
 
+@app.get("/")
+async def root_index(request: Request):
+    """
+    Root Endpoint — Auto-discovery & Universal Entrypoint.
+    If X-Spreadsheet-Key is provided, it serves the Analysis Context directly.
+    Otherwise, returns API documentation links and usage guide for external clients and LLMs.
+    """
+    key = request.headers.get("x-spreadsheet-key") or request.headers.get("X-Spreadsheet-Key")
+    if key and key.startswith("am_sheet_live_"):
+        from routers.public_api_router import generate_analysis_context_in_memory, validate_api_key_and_get_table_id
+        table_id = await validate_api_key_and_get_table_id("read", api_key=key)
+        return await generate_analysis_context_in_memory(table_id=table_id)
+
+    return {
+        "service": "Assistente Moeda API",
+        "status": "online",
+        "version": "3.0.0",
+        "primary_endpoint": "/api/v1/public/analysis-context",
+        "openapi_schema": "/api/v1/public/openapi.json",
+        "description": "API autônoma de inteligência financeira e sincronismo de planilhas locais.",
+        "usage": {
+            "step_1_mandatory": "Faça GET em /api/v1/public/analysis-context com header 'X-Spreadsheet-Key' para obter a DRE e snapshot completo.",
+            "step_2_optional": "Faça GET em /api/v1/public/summary para métricas rápidas ou /api/v1/public/transactions para listagem.",
+            "step_3_write": "Faça POST em /api/v1/public/transactions/batch-sync para sincronizar transações em lote."
+        }
+    }
+
 # ── Pydantic models ──────────────────────────────────────────────────────────
 
 class GenerateRequest(BaseModel):
