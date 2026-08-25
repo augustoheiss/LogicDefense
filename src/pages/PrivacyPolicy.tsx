@@ -8,7 +8,7 @@ export default function PrivacyPolicy() {
     { id: 'arquitetura-turso', label: '2. Arquitetura Turso & Local-First' },
     { id: 'dados-coletados', label: '3. Dados Coletados & Zero PII' },
     { id: 'controlador-operador', label: '4. Papéis: Usuário como Controlador' },
-    { id: 'motor-ia', label: '5. Motor de IA (Stateless)' },
+    { id: 'motor-ia', label: '5. Motor de IA & Vídeos Didáticos' },
     { id: 'pagamentos', label: '6. Pagamentos e Assinaturas' },
     { id: 'direitos-lgpd', label: '7. Seus Direitos e Exclusão' },
     { id: 'contato', label: '8. Encarregado de Dados (DPO)' },
@@ -143,7 +143,7 @@ export default function PrivacyPolicy() {
                 1. Introdução & Compromisso de Privacidade
               </h2>
               <p style={{ marginBottom: '16px' }}>
-                Esta Política de Privacidade estabelece os termos em que a <strong>Heiss-Lab</strong> ("nós", "plataforma") protege e trata as informações dos usuários ("você", "usuário") no portal <strong>Heiss-Lab / LogicDefense</strong>, no aplicativo móvel <strong>Assistente Moeda</strong> e nas APIs correlatas.
+                Esta Política de Privacidade estabelece os termos em que a <strong>Heiss-Lab</strong> ("nós", "plataforma") protege e trata as informações dos usuários ("você", "usuário") no portal <strong>Heiss-Lab / LogicDefense</strong>, em seus jogos educativos, no repositório de aulas matemáticas, no aplicativo móvel <strong>Assistente Moeda</strong> e nas APIs correlatas.
               </p>
               <p style={{ marginBottom: '16px' }}>
                 Nossa arquitetura foi desenhada segundo o princípio de <strong>Privacy by Design (Privacidade por Padrão)</strong>, em estrita conformidade com a <strong>Lei Geral de Proteção de Dados Pessoais (LGPD - Lei nº 13.709/2018)</strong> e os mais elevados padrões internacionais de segurança.
@@ -184,20 +184,23 @@ export default function PrivacyPolicy() {
             {/* Dados Coletados */}
             <section id="dados-coletados" style={{ marginBottom: '48px' }}>
               <h2 style={{ fontSize: '22px', fontWeight: '700', color: '#fff', marginBottom: '16px' }}>
-                3. Dados Tratados & Ausência de Coleta de Menores
+                3. Dados Tratados & Proteção Integral de Menores (LGPD Art. 14)
               </h2>
               <p style={{ marginBottom: '16px' }}>
                 Tratamos estritamente o mínimo indispensável para o funcionamento técnico do serviço:
               </p>
               <ol style={{ paddingLeft: '20px', marginBottom: '16px', listStyleType: 'decimal' }}>
                 <li style={{ marginBottom: '8px' }}>
-                  <strong>Chaves de Licença e Planilha:</strong> Tokens aleatórios (ex: hash SHA-256) utilizados para validar a cota de uso e a expiração do plano PRO.
+                  <strong>Chaves de Licença e Planilha:</strong> Tokens aleatórios (ex: hash SHA-256) utilizados para validar a cota de uso e a expiração do plano PRO do Assistente Moeda.
                 </li>
                 <li style={{ marginBottom: '8px' }}>
                   <strong>Lançamentos e Registros Financeiros:</strong> Valores numéricos, categorias e descrições inseridos por livre e espontânea vontade do usuário para seu próprio controle.
                 </li>
                 <li style={{ marginBottom: '8px' }}>
-                  <strong>Jogos e Leaderboards (Heiss-Lab):</strong> Os jogos educativos (Logic Defense, Logic Ascension) utilizam pontuações salvas localmente ou com *nicknames* anônimos. <strong>Nenhum dado pessoal de menores de idade é coletado, atendendo integralmente ao Art. 14 da LGPD.</strong>
+                  <strong>Jogos Educativos (Logic Defense, Ascension, Invaders, Friction):</strong> As pontuações e recordes são salvos localmente no navegador ou gravados com codinomes anônimos voluntários em leaderboards. <strong>Nenhum dado pessoal de menores de idade é coletado, em estrita conformidade com o Art. 14 da LGPD.</strong>
+                </li>
+                <li style={{ marginBottom: '8px' }}>
+                  <strong>Repositório de Aulas e Vídeos Didáticos:</strong> O acesso ao acervo pedagógico de lições matemáticas e visualização de vídeos educativos é 100% aberto e anônimo, não exigindo cadastro, formulários ou rastreamento de dados de estudantes.
                 </li>
               </ol>
             </section>
@@ -219,27 +222,30 @@ export default function PrivacyPolicy() {
                 lineHeight: '1.6',
                 marginBottom: '16px',
               }}>
-                <strong>⚖️ O Usuário é o Único e Exclusivo Controlador (Data Controller):</strong> Se você utiliza o Assistente Moeda ou suas APIs para cadastrar, gerenciar ou auditar transações, receitas, clientes ou terceiros vinculados à sua atividade comercial ou pessoal, <strong>você assume a condição integral de Controlador dos Dados perante a LGPD e a ANPD</strong>. Cabe a você assegurar a base legal (Art. 7º) e o consentimento dos titulares envolvidos.
+                <strong>⚖️ O Usuário é o Único e Exclusivo Controlador (Data Controller):</strong> Se você utiliza o Assistente Moeda, suas APIs ou as ferramentas de laboratório para cadastrar, gerenciar ou auditar transações, receitas, clientes ou terceiros vinculados à sua atividade comercial ou pessoal, <strong>você assume a condição integral de Controlador dos Dados perante a LGPD e a ANPD</strong>. Cabe a você assegurar a base legal (Art. 7º) e o consentimento dos titulares envolvidos.
               </div>
               <p>
                 A <strong>Heiss-Lab</strong> atua meramente como <strong>Operadora Tecnológica (Data Processor)</strong>, fornecendo a infraestrutura no estado em que se encontra (*AS IS*), sem qualquer ingerência sobre o mérito, veracidade ou legalidade dos dados inseridos.
               </p>
             </section>
 
-            {/* Motor de IA (Stateless) */}
+            {/* Motor de IA & Vídeos Didáticos */}
             <section id="motor-ia" style={{ marginBottom: '48px' }}>
               <h2 style={{ fontSize: '22px', fontWeight: '700', color: '#fff', marginBottom: '16px' }}>
-                5. Motor de IA e Consultas Estatísticas em Memória
+                5. Motor de IA (Stateless) & Produção de Vídeos Educativos
               </h2>
               <p style={{ marginBottom: '16px' }}>
-                O módulo de inteligência analítica opera com processamento transitório (*stateless*):
+                O uso de Inteligência Artificial no ecossistema Heiss-Lab pauta-se pelo rigor ético e privacidade:
               </p>
               <ul style={{ paddingLeft: '20px', marginBottom: '16px', listStyleType: 'disc' }}>
                 <li style={{ marginBottom: '8px' }}>
-                  Ao solicitar diagnósticos ou relatórios no Chat de IA, os parâmetros são trafegados via conexão criptografada (HTTPS/TLS) e computados temporariamente em memória.
+                  <strong>Processamento de Consultas em Memória (Stateless):</strong> Ao solicitar diagnósticos no Chat de IA do Assistente Moeda, os parâmetros trafegam via conexão criptografada (HTTPS/TLS) e são computados temporariamente em memória, sendo descartados imediatamente após a resposta.
                 </li>
                 <li style={{ marginBottom: '8px' }}>
-                  <strong>Zero Treinamento Público:</strong> Seus números e planilhas não são utilizados para treinar modelos de inteligência artificial públicos de terceiros.
+                  <strong>Zero Treinamento Público:</strong> Seus dados e planilhas privadas jamais são utilizados para treinar modelos de inteligência artificial de terceiros.
+                </li>
+                <li style={{ marginBottom: '8px' }}>
+                  <strong>Vídeos e Animações Pedagógicas com Apoio de IA:</strong> Os recursos visuais e vídeos disponibilizados no Repositório de Aulas são produzidos e renderizados com auxílio de ferramentas de IA generativa para enriquecimento visual do aprendizado. A visualização desses vídeos pelo estudante não realiza coleta de biometria, áudio ou dados comportamentais.
                 </li>
               </ul>
             </section>

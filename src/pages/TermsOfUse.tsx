@@ -5,15 +5,16 @@ export default function TermsOfUse() {
 
   const sections = [
     { id: 'aceite', label: '1. Aceite dos Termos' },
-    { id: 'descricao', label: '2. Descrição dos Serviços' },
+    { id: 'descricao', label: '2. Descrição dos Serviços & Ecossistema' },
     { id: 'responsabilidade-usuario', label: '3. Responsabilidade do Usuário (Controlador)' },
     { id: 'chaves-api', label: '4. Custódia de Chaves de API' },
     { id: 'disclaimer-financeiro', label: '5. Isenção Financeira & Não-CVM' },
-    { id: 'garantia-as-is', label: '6. Garantia AS IS & Limitação de Responsabilidade' },
-    { id: 'indenizacao', label: '7. Cláusula de Indenização (Hold Harmless)' },
-    { id: 'assinaturas', label: '8. Planos, Pagamentos e Reembolsos' },
-    { id: 'propriedade', label: '9. Propriedade Intelectual' },
-    { id: 'foro', label: '10. Foro e Disposições Gerais' },
+    { id: 'aulas-ia', label: '6. Repositório de Aulas, Vídeos com IA & Isenção Pedagógica' },
+    { id: 'garantia-as-is', label: '7. Garantia AS IS & Limitação de Responsabilidade' },
+    { id: 'indenizacao', label: '8. Cláusula de Indenização (Hold Harmless)' },
+    { id: 'assinaturas', label: '9. Planos, Pagamentos e Reembolsos' },
+    { id: 'propriedade', label: '10. Propriedade Intelectual & Licença CC' },
+    { id: 'foro', label: '11. Foro e Disposições Gerais' },
   ];
 
   const scrollToSection = (id: string) => {
@@ -73,7 +74,7 @@ export default function TermsOfUse() {
             margin: '0 auto',
             lineHeight: '1.5',
           }}>
-            Heiss-Lab · LogicDefense & Assistente Moeda · Contrato de Licença de Software e Governança Operacional
+            Heiss-Lab · LogicDefense & Assistente Moeda · Contrato de Licença de Software, Governança Pedagógica e Operacional
           </p>
           <p style={{
             fontSize: '13px',
@@ -139,38 +140,44 @@ export default function TermsOfUse() {
             fontSize: '15px',
             color: 'rgba(255, 255, 255, 0.8)',
           }}>
-            {/* Aceite dos Termos */}
+            {/* 1. Aceite dos Termos */}
             <section id="aceite" style={{ marginBottom: '48px' }}>
               <h2 style={{ fontSize: '22px', fontWeight: '700', color: '#fff', marginBottom: '16px' }}>
                 1. Aceite dos Termos & Natureza Contratual
               </h2>
               <p style={{ marginBottom: '16px' }}>
-                Ao acessar o portal <strong>Heiss-Lab / LogicDefense</strong>, utilizar o aplicativo <strong>Assistente Moeda</strong>, interagir com as APIs de planilha ou adquirir licenças de uso, você concorda expressamente com estes <strong>Termos de Uso</strong> e com a nossa <strong>Política de Privacidade</strong>.
+                Ao acessar o portal <strong>Heiss-Lab / LogicDefense</strong>, utilizar os jogos de lógica, consultar as aulas e vídeos do repositório, utilizar o aplicativo <strong>Assistente Moeda</strong>, interagir com as APIs de planilha ou adquirir licenças de uso, você concorda expressamente com estes <strong>Termos de Uso</strong> e com a nossa <strong>Política de Privacidade</strong>.
               </p>
               <p>
                 Este instrumento constitui um contrato legalmente vinculante entre você ("Usuário") e a <strong>Heiss-Lab / Augusto Heiss</strong> ("Desenvolvedor", "Nós"). Caso não concorde com qualquer cláusula, solicitamos a imediata descontinuidade do uso.
               </p>
             </section>
 
-            {/* Descrição do Serviço */}
+            {/* 2. Descrição do Serviço */}
             <section id="descricao" style={{ marginBottom: '48px' }}>
               <h2 style={{ fontSize: '22px', fontWeight: '700', color: '#fff', marginBottom: '16px' }}>
-                2. Descrição dos Serviços & Arquitetura
+                2. Descrição dos Serviços & Ecossistema Heiss-Lab
               </h2>
               <p style={{ marginBottom: '16px' }}>
-                A Heiss-Lab disponibiliza ferramentas de software compostas por:
+                A Heiss-Lab disponibiliza um ecossistema integrado composto por:
               </p>
               <ul style={{ paddingLeft: '20px', marginBottom: '16px', listStyleType: 'disc' }}>
                 <li style={{ marginBottom: '8px' }}>
-                  <strong>Heiss-Lab & Jogos de Lógica:</strong> Jogos educativos (Logic Defense, Logic Ascension) e materiais pedagógicos voltados ao raciocínio lógico e matemático.
+                  <strong>Jogos Educativos de Lógica:</strong> Jogos interativos (Logic Defense, Logic Ascension, Logic Invaders, Logic Friction) voltados ao raciocínio lógico, probabilístico e dedutivo, com leaderboards anônimos e sem coleta de PII de menores.
                 </li>
                 <li style={{ marginBottom: '8px' }}>
-                  <strong>Assistente Moeda (Web, Mobile e API):</strong> Software utilitário de controle de fluxo de caixa, gestão de planilhas financeiras e diagnósticos analíticos via IA.
+                  <strong>Repositório de Aulas & Conteúdo Pedagógico:</strong> Aulas estruturadas sobre temas matemáticos, vieses numéricos, probabilidade, lógica e suas conexões com diversas áreas do conhecimento, acompanhadas de vídeos e recursos visuais.
+                </li>
+                <li style={{ marginBottom: '8px' }}>
+                  <strong>Laboratório de Ferramentas:</strong> Utilitários técnicos como geradores de currículo (CV-Maker), formalizadores de relatórios (Ocorrências) e portas de conexão para desenvolvedores (API Port).
+                </li>
+                <li style={{ marginBottom: '8px' }}>
+                  <strong>Assistente Moeda (Web, Mobile e API):</strong> Software utilitário de controle de fluxo de caixa, gestão de planilhas financeiras isoladas no Turso e diagnósticos analíticos via IA.
                 </li>
               </ul>
             </section>
 
-            {/* Responsabilidade do Usuário (Controlador) */}
+            {/* 3. Responsabilidade do Usuário (Controlador) */}
             <section id="responsabilidade-usuario" style={{ marginBottom: '48px' }}>
               <h2 style={{ fontSize: '22px', fontWeight: '700', color: '#fff', marginBottom: '16px' }}>
                 3. Responsabilidade Exclusiva do Usuário (Controlador perante a LGPD)
@@ -184,7 +191,7 @@ export default function TermsOfUse() {
                 lineHeight: '1.6',
                 marginBottom: '16px',
               }}>
-                <strong>⚖️ DECLARAÇÃO DE RESPONSABILIDADE DO USUÁRIO:</strong> Caso você utilize a plataforma ou suas APIs para cadastrar, processar, calcular ou gerenciar valores, transações ou informações pertencentes a <strong>clientes seus, empresas ou terceiros</strong>, você declara e reconhece que:
+                <strong>⚖️ DECLARAÇÃO DE RESPONSABILIDADE DO USUÁRIO:</strong> Caso você utilize a plataforma, seus utilitários de laboratório ou suas APIs para cadastrar, processar, calcular ou gerenciar valores, transações ou informações pertencentes a <strong>clientes seus, empresas ou terceiros</strong>, você declara e reconhece que:
                 <ul style={{ paddingLeft: '20px', marginTop: '8px', listStyleType: 'circle' }}>
                   <li>Você atua como o único e exclusivo <strong>Controlador dos Dados (Data Controller)</strong> perante a LGPD (Lei 13.709/2018).</li>
                   <li>É de sua responsabilidade exclusiva obter consentimento, emitir notas fiscais, recolher tributos e assegurar a licitude da origem dos recursos cadastrados.</li>
@@ -193,7 +200,7 @@ export default function TermsOfUse() {
               </div>
             </section>
 
-            {/* Custódia de Chaves de API */}
+            {/* 4. Custódia de Chaves de API */}
             <section id="chaves-api" style={{ marginBottom: '48px' }}>
               <h2 style={{ fontSize: '22px', fontWeight: '700', color: '#fff', marginBottom: '16px' }}>
                 4. Custódia e Sigilo de Chaves de API (X-Spreadsheet-Key)
@@ -211,7 +218,7 @@ export default function TermsOfUse() {
               </ul>
             </section>
 
-            {/* Isenção Financeira & Não-CVM */}
+            {/* 5. Isenção Financeira & Não-CVM */}
             <section id="disclaimer-financeiro" style={{ marginBottom: '48px' }}>
               <h2 style={{ fontSize: '22px', fontWeight: '700', color: '#fff', marginBottom: '16px' }}>
                 5. Isenção de Responsabilidade Financeira, Tributária e Não-CVM
@@ -236,23 +243,55 @@ export default function TermsOfUse() {
               </div>
             </section>
 
-            {/* Garantia AS IS & Limitação */}
-            <section id="garantia-as-is" style={{ marginBottom: '48px' }}>
+            {/* 6. Repositório de Aulas, Vídeos com IA & Isenção Pedagógica */}
+            <section id="aulas-ia" style={{ marginBottom: '48px' }}>
               <h2 style={{ fontSize: '22px', fontWeight: '700', color: '#fff', marginBottom: '16px' }}>
-                6. Garantia "No Estado em que se Encontra" (AS IS) & Limitação de Danos
+                6. Repositório de Aulas, Vídeos Gerados com IA & Isenção Pedagógica
               </h2>
               <p style={{ marginBottom: '16px' }}>
-                O software é licenciado "no estado em que se encontra" (*AS IS*) e "conforme disponível" (*AS AVAILABLE*), sem garantias expressas ou implícitas de que funcionará de forma ininterrupta ou livre de erros provocados por instabilidades de rede, indisponibilidade temporária de provedores de nuvem (Turso, Vercel, Expo, gateways de pagamento) ou falhas no dispositivo do usuário.
+                O <strong>Repositório Heiss-Lab</strong> disponibiliza lições, análises conceituais e recursos audiovisuais sobre matemática aplicada e interdisciplinaridade:
+              </p>
+              <div style={{
+                backgroundColor: 'rgba(59, 130, 246, 0.08)',
+                borderLeft: '4px solid #3b82f6',
+                padding: '20px',
+                borderRadius: '0 8px 8px 0',
+                fontSize: '14px',
+                lineHeight: '1.6',
+                marginBottom: '16px',
+              }}>
+                <strong>🎓 Finalidade Estritamente Educativa & Vídeos com Apoio de IA:</strong>
+                <ul style={{ paddingLeft: '20px', marginTop: '8px', listStyleType: 'disc' }}>
+                  <li style={{ marginBottom: '6px' }}>
+                    <strong>A Matemática em Todas as Áreas:</strong> O portal explora como princípios matemáticos (estatística, probabilidade, lógica, teoria dos jogos) se manifestam em diversas disciplinas (ciências naturais, economia, computação, esportes e decisões cotidianas).
+                  </li>
+                  <li style={{ marginBottom: '6px' }}>
+                    <strong>Produção Audiovisual com Inteligência Artificial:</strong> As animações, vídeos explicativos, narrações sintetizadas e roteiros visuais disponibilizados nas aulas podem ser gerados ou acelerados com assistência de modelos de Inteligência Artificial generativa com o propósito de tornar conceitos abstratos mais didáticos e visuais.
+                  </li>
+                  <li style={{ marginBottom: '6px' }}>
+                    <strong>Isenção por Aplicação Prática Indevida:</strong> Os modelos matemáticos, demonstrações e exercícios têm fins pedagógicos e de desenvolvimento do pensamento crítico. A Heiss-Lab e seus autores não garantem ganhos patrimoniais, sucesso em apostas ou infalibilidade teórica quando aplicados no mundo real. O usuário é o único responsável pelo uso que fizer do conhecimento adquirido.
+                  </li>
+                </ul>
+              </div>
+            </section>
+
+            {/* 7. Garantia AS IS & Limitação */}
+            <section id="garantia-as-is" style={{ marginBottom: '48px' }}>
+              <h2 style={{ fontSize: '22px', fontWeight: '700', color: '#fff', marginBottom: '16px' }}>
+                7. Garantia "No Estado em que se Encontra" (AS IS) & Limitação de Danos
+              </h2>
+              <p style={{ marginBottom: '16px' }}>
+                O software e os portais são licenciados "no estado em que se encontram" (*AS IS*) e "conforme disponível" (*AS AVAILABLE*), sem garantias expressas ou implícitas de que funcionarão de forma ininterrupta ou livre de erros provocados por instabilidades de rede, indisponibilidade temporária de provedores de nuvem (Turso, Vercel, Expo, gateways de pagamento) ou falhas no dispositivo do usuário.
               </p>
               <p>
                 Em nenhuma circunstância o Desenvolvedor será responsável por danos indiretos, incidentais, especiais, punitivos ou consequenciais. Na extensão máxima permitida pela legislação aplicável, a responsabilidade total do Desenvolvedor perante qualquer reivindicação contratual limita-se ao valor efetivamente pago pelo usuário à plataforma nos últimos 30 (trinta) dias.
               </p>
             </section>
 
-            {/* Cláusula de Indenização */}
+            {/* 8. Cláusula de Indenização */}
             <section id="indenizacao" style={{ marginBottom: '48px' }}>
               <h2 style={{ fontSize: '22px', fontWeight: '700', color: '#fff', marginBottom: '16px' }}>
-                7. Cláusula de Indenização (Hold Harmless & Defesa Regressiva)
+                8. Cláusula de Indenização (Hold Harmless & Defesa Regressiva)
               </h2>
               <p style={{ marginBottom: '16px' }}>
                 O Usuário concorda em defender, indenizar e manter indene a <strong>Heiss-Lab</strong>, seus fundadores e desenvolvedores contra quaisquer reivindicações, processos administrativos (ex: ANPD, PROCON), ações judiciais, danos, multas, custas processuais e honorários advocatícios decorrentes de:
@@ -264,13 +303,13 @@ export default function TermsOfUse() {
               </ol>
             </section>
 
-            {/* Planos, Pagamentos e Reembolsos */}
+            {/* 9. Planos, Pagamentos e Reembolsos */}
             <section id="assinaturas" style={{ marginBottom: '48px' }}>
               <h2 style={{ fontSize: '22px', fontWeight: '700', color: '#fff', marginBottom: '16px' }}>
-                8. Planos, Faturamento e Reembolsos
+                9. Planos, Faturamento e Reembolsos
               </h2>
               <p style={{ marginBottom: '16px' }}>
-                As licenças PRO fornecem cotas de tokens e recursos analíticos avançados:
+                As licenças PRO fornecem cotas de tokens e recursos analíticos avançados para o Assistente Moeda:
               </p>
               <ul style={{ paddingLeft: '20px', marginBottom: '16px', listStyleType: 'disc' }}>
                 <li style={{ marginBottom: '8px' }}>
@@ -285,20 +324,30 @@ export default function TermsOfUse() {
               </ul>
             </section>
 
-            {/* Propriedade Intelectual */}
+            {/* 10. Propriedade Intelectual & Licença CC */}
             <section id="propriedade" style={{ marginBottom: '48px' }}>
               <h2 style={{ fontSize: '22px', fontWeight: '700', color: '#fff', marginBottom: '16px' }}>
-                9. Propriedade Intelectual
+                10. Propriedade Intelectual & Licenciamento Educacional
               </h2>
               <p style={{ marginBottom: '16px' }}>
-                Todos os direitos sobre o código-fonte, algoritmos, designs, jogos e marcas pertencem à Heiss-Lab. Os materiais didáticos do portal estão licenciados sob Creative Commons CC BY-NC-SA 4.0 (distribuição permitida; venda proibida).
+                Todos os direitos sobre os códigos-fonte, arquitetura de software, jogos (Logic Defense, Logic Ascension, Logic Invaders, Logic Friction), marcas e identidade visual pertencem à Heiss-Lab.
               </p>
+              <div style={{
+                backgroundColor: 'rgba(16, 185, 129, 0.08)',
+                borderLeft: '4px solid #10b981',
+                padding: '16px',
+                borderRadius: '0 8px 8px 0',
+                fontSize: '14px',
+                lineHeight: '1.6',
+              }}>
+                <strong>📚 Licença Creative Commons CC BY-NC-SA 4.0:</strong> O material textual e pedagógico do Repositório de Aulas está licenciado sob a licença <em>Atribuição-NãoComercial-CompartilhaIgual 4.0 Internacional</em>. É permitida a distribuição e o compartilhamento gratuito para fins não comerciais, desde que atribuída a autoria à Heiss-Lab / Augusto Heiss. <strong>A venda de materiais ou cobrança de terceiros por acesso ao conteúdo é estritamente proibida.</strong>
+              </div>
             </section>
 
-            {/* Foro */}
+            {/* 11. Foro */}
             <section id="foro" style={{ marginBottom: '48px' }}>
               <h2 style={{ fontSize: '22px', fontWeight: '700', color: '#fff', marginBottom: '16px' }}>
-                10. Legislação Aplicável e Foro de Eleição
+                11. Legislação Aplicável e Foro de Eleição
               </h2>
               <p style={{ marginBottom: '16px' }}>
                 Estes Termos são regidos pelas leis da República Federativa do Brasil. Fica eleito o Foro da Comarca de domicílio do Desenvolvedor para dirimir eventuais controvérsias oriundas deste instrumento, renunciando-se a qualquer outro por mais privilegiado que seja.
