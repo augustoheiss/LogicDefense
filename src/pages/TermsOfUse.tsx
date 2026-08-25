@@ -5,13 +5,15 @@ export default function TermsOfUse() {
 
   const sections = [
     { id: 'aceite', label: '1. Aceite dos Termos' },
-    { id: 'descricao', label: '2. Descrição do Serviço' },
-    { id: 'assinaturas', label: '3. Planos e Faturamento' },
-    { id: 'politica-reembolso', label: '4. Reembolsos' },
-    { id: 'motor-ia-disclaimer', label: '5. Isenção de Responsabilidade (IA)' },
-    { id: 'propriedade', label: '6. Propriedade Intelectual' },
-    { id: 'rescisao', label: '7. Descontinuidade do Uso' },
-    { id: 'alteracoes', label: '8. Alterações dos Termos' },
+    { id: 'descricao', label: '2. Descrição dos Serviços' },
+    { id: 'responsabilidade-usuario', label: '3. Responsabilidade do Usuário (Controlador)' },
+    { id: 'chaves-api', label: '4. Custódia de Chaves de API' },
+    { id: 'disclaimer-financeiro', label: '5. Isenção Financeira & Não-CVM' },
+    { id: 'garantia-as-is', label: '6. Garantia AS IS & Limitação de Responsabilidade' },
+    { id: 'indenizacao', label: '7. Cláusula de Indenização (Hold Harmless)' },
+    { id: 'assinaturas', label: '8. Planos, Pagamentos e Reembolsos' },
+    { id: 'propriedade', label: '9. Propriedade Intelectual' },
+    { id: 'foro', label: '10. Foro e Disposições Gerais' },
   ];
 
   const scrollToSection = (id: string) => {
@@ -62,16 +64,16 @@ export default function TermsOfUse() {
             letterSpacing: '-0.02em',
             marginBottom: '8px',
           }}>
-            Termos de Uso
+            Termos de Uso e Condições Gerais
           </h1>
           <p style={{
             fontSize: '16px',
             color: 'rgba(255, 255, 255, 0.6)',
-            maxWidth: '600px',
+            maxWidth: '700px',
             margin: '0 auto',
             lineHeight: '1.5',
           }}>
-            Assistente Moeda · Desenvolvido por Heiss-Lab
+            Heiss-Lab · LogicDefense & Assistente Moeda · Contrato de Licença de Software e Governança Operacional
           </p>
           <p style={{
             fontSize: '13px',
@@ -79,7 +81,7 @@ export default function TermsOfUse() {
             fontWeight: '600',
             marginTop: '12px',
           }}>
-            Última atualização: 2 de Agosto de 2026
+            Última atualização: 25 de Agosto de 2026
           </p>
         </header>
 
@@ -107,7 +109,7 @@ export default function TermsOfUse() {
               marginBottom: '12px',
               paddingLeft: '12px',
             }}>
-              Sumário
+              Índice dos Termos
             </h3>
             {sections.map((section) => (
               <button
@@ -140,142 +142,172 @@ export default function TermsOfUse() {
             {/* Aceite dos Termos */}
             <section id="aceite" style={{ marginBottom: '48px' }}>
               <h2 style={{ fontSize: '22px', fontWeight: '700', color: '#fff', marginBottom: '16px' }}>
-                1. Aceite dos Termos
+                1. Aceite dos Termos & Natureza Contratual
               </h2>
               <p style={{ marginBottom: '16px' }}>
-                Bem-vindo ao <strong>Assistente Moeda</strong>. Ao utilizar o aplicativo, adquirir uma licença de uso PRO ou utilizar de qualquer forma nossas ferramentas financeiras, você declara ter lido, compreendido e aceitado integralmente estes <strong>Termos de Uso</strong> e a nossa <strong>Política de Privacidade</strong>.
+                Ao acessar o portal <strong>Heiss-Lab / LogicDefense</strong>, utilizar o aplicativo <strong>Assistente Moeda</strong>, interagir com as APIs de planilha ou adquirir licenças de uso, você concorda expressamente com estes <strong>Termos de Uso</strong> e com a nossa <strong>Política de Privacidade</strong>.
               </p>
               <p>
-                Estes Termos constituem um contrato vinculante entre você e a <strong>Heiss-Lab</strong>. Caso não concorde com qualquer disposição aqui estabelecida, solicitamos que não utilize o aplicativo ou seus serviços correlatos.
+                Este instrumento constitui um contrato legalmente vinculante entre você ("Usuário") e a <strong>Heiss-Lab / Augusto Heiss</strong> ("Desenvolvedor", "Nós"). Caso não concorde com qualquer cláusula, solicitamos a imediata descontinuidade do uso.
               </p>
             </section>
 
             {/* Descrição do Serviço */}
             <section id="descricao" style={{ marginBottom: '48px' }}>
               <h2 style={{ fontSize: '22px', fontWeight: '700', color: '#fff', marginBottom: '16px' }}>
-                2. Descrição do Serviço e Armazenamento Local
+                2. Descrição dos Serviços & Arquitetura
               </h2>
               <p style={{ marginBottom: '16px' }}>
-                O Assistente Moeda é um assistente financeiro pessoal focado no monitoramento e cálculo de fluxo de caixa, despesas, receitas, investimentos e planejamento de longo prazo.
+                A Heiss-Lab disponibiliza ferramentas de software compostas por:
               </p>
+              <ul style={{ paddingLeft: '20px', marginBottom: '16px', listStyleType: 'disc' }}>
+                <li style={{ marginBottom: '8px' }}>
+                  <strong>Heiss-Lab & Jogos de Lógica:</strong> Jogos educativos (Logic Defense, Logic Ascension) e materiais pedagógicos voltados ao raciocínio lógico e matemático.
+                </li>
+                <li style={{ marginBottom: '8px' }}>
+                  <strong>Assistente Moeda (Web, Mobile e API):</strong> Software utilitário de controle de fluxo de caixa, gestão de planilhas financeiras e diagnósticos analíticos via IA.
+                </li>
+              </ul>
+            </section>
+
+            {/* Responsabilidade do Usuário (Controlador) */}
+            <section id="responsabilidade-usuario" style={{ marginBottom: '48px' }}>
+              <h2 style={{ fontSize: '22px', fontWeight: '700', color: '#fff', marginBottom: '16px' }}>
+                3. Responsabilidade Exclusiva do Usuário (Controlador perante a LGPD)
+              </h2>
               <div style={{
-                backgroundColor: 'rgba(16, 185, 129, 0.08)',
-                borderLeft: '4px solid #10b981',
+                backgroundColor: 'rgba(168, 85, 247, 0.08)',
+                borderLeft: '4px solid #a855f7',
                 padding: '16px',
                 borderRadius: '0 8px 8px 0',
                 fontSize: '14px',
                 lineHeight: '1.6',
+                marginBottom: '16px',
               }}>
-                <strong>🛡️ Armazenamento 100% Local no Dispositivo:</strong> Para a máxima segurança e privacidade do proprietário e dos usuários, <strong>todas as suas informações financeiras e planilhas ficam salvas unicamente no armazenamento local do seu próprio dispositivo</strong>. Os dados financeiros não são salvos em nenhum banco de dados na nuvem da Heiss-Lab nem compartilhados com servidores remotos.
+                <strong>⚖️ DECLARAÇÃO DE RESPONSABILIDADE DO USUÁRIO:</strong> Caso você utilize a plataforma ou suas APIs para cadastrar, processar, calcular ou gerenciar valores, transações ou informações pertencentes a <strong>clientes seus, empresas ou terceiros</strong>, você declara e reconhece que:
+                <ul style={{ paddingLeft: '20px', marginTop: '8px', listStyleType: 'circle' }}>
+                  <li>Você atua como o único e exclusivo <strong>Controlador dos Dados (Data Controller)</strong> perante a LGPD (Lei 13.709/2018).</li>
+                  <li>É de sua responsabilidade exclusiva obter consentimento, emitir notas fiscais, recolher tributos e assegurar a licitude da origem dos recursos cadastrados.</li>
+                  <li>O Desenvolvedor fornece apenas a ferramenta de software, não exercendo controle, verificação de veracidade ou custódia decisória sobre os lançamentos.</li>
+                </ul>
               </div>
             </section>
 
-            {/* Planos e Faturamento */}
+            {/* Custódia de Chaves de API */}
+            <section id="chaves-api" style={{ marginBottom: '48px' }}>
+              <h2 style={{ fontSize: '22px', fontWeight: '700', color: '#fff', marginBottom: '16px' }}>
+                4. Custódia e Sigilo de Chaves de API (X-Spreadsheet-Key)
+              </h2>
+              <p style={{ marginBottom: '16px' }}>
+                A segurança do ecossistema baseia-se na posse da sua Chave de API / Chave de Planilha:
+              </p>
+              <ul style={{ paddingLeft: '20px', marginBottom: '16px', listStyleType: 'disc' }}>
+                <li style={{ marginBottom: '8px' }}>
+                  <strong>Dever de Sigilo:</strong> A guarda, confidencialidade e não compartilhamento da sua chave de API com terceiros não autorizados é de sua inteira responsabilidade.
+                </li>
+                <li style={{ marginBottom: '8px' }}>
+                  <strong>Isenção por Exposição Pública:</strong> A Heiss-Lab não se responsabiliza por raspagem de dados, edições indevidas ou perdas causadas por usuários que publicarem suas chaves em repositórios públicos (ex: GitHub) ou automações abertas.
+                </li>
+              </ul>
+            </section>
+
+            {/* Isenção Financeira & Não-CVM */}
+            <section id="disclaimer-financeiro" style={{ marginBottom: '48px' }}>
+              <h2 style={{ fontSize: '22px', fontWeight: '700', color: '#fff', marginBottom: '16px' }}>
+                5. Isenção de Responsabilidade Financeira, Tributária e Não-CVM
+              </h2>
+              <div style={{
+                backgroundColor: 'rgba(245, 158, 11, 0.08)',
+                borderLeft: '4px solid #f59e0b',
+                padding: '20px',
+                borderRadius: '0 8px 8px 0',
+                fontSize: '14px',
+                lineHeight: '1.6',
+                marginBottom: '16px',
+              }}>
+                <strong>⚠️ AVISO DE NÃO-CONSULTORIA:</strong> O Assistente Moeda, suas fórmulas matemáticas, DREs, projeções simuladas e respostas geradas por Inteligência Artificial possuem caráter <strong>estritamente informativo, matemático e educacional</strong>.
+                <br /><br />
+                <strong>NENHUMA INFORMAÇÃO FORNECIDA PELA PLATAFORMA CONSTITUI:</strong>
+                <ol style={{ paddingLeft: '20px', marginTop: '8px', listStyleType: 'decimal' }}>
+                  <li>Consultoria de investimentos, assessoria de valores mobiliários ou recomendação de compra/venda regulada pela CVM ou BACEN.</li>
+                  <li>Parecer contábil, auditoria fiscal ou consultoria tributária oficial.</li>
+                </ol>
+                A tomada de decisão financeira, alocação de capital e gestão de risco é ato de exclusiva responsabilidade do usuário. O Desenvolvedor não se responsabiliza por prejuízos, lucros cessantes ou decisões de negócio baseadas nas ferramentas.
+              </div>
+            </section>
+
+            {/* Garantia AS IS & Limitação */}
+            <section id="garantia-as-is" style={{ marginBottom: '48px' }}>
+              <h2 style={{ fontSize: '22px', fontWeight: '700', color: '#fff', marginBottom: '16px' }}>
+                6. Garantia "No Estado em que se Encontra" (AS IS) & Limitação de Danos
+              </h2>
+              <p style={{ marginBottom: '16px' }}>
+                O software é licenciado "no estado em que se encontra" (*AS IS*) e "conforme disponível" (*AS AVAILABLE*), sem garantias expressas ou implícitas de que funcionará de forma ininterrupta ou livre de erros provocados por instabilidades de rede, indisponibilidade temporária de provedores de nuvem (Turso, Vercel, Expo, gateways de pagamento) ou falhas no dispositivo do usuário.
+              </p>
+              <p>
+                Em nenhuma circunstância o Desenvolvedor será responsável por danos indiretos, incidentais, especiais, punitivos ou consequenciais. Na extensão máxima permitida pela legislação aplicável, a responsabilidade total do Desenvolvedor perante qualquer reivindicação contratual limita-se ao valor efetivamente pago pelo usuário à plataforma nos últimos 30 (trinta) dias.
+              </p>
+            </section>
+
+            {/* Cláusula de Indenização */}
+            <section id="indenizacao" style={{ marginBottom: '48px' }}>
+              <h2 style={{ fontSize: '22px', fontWeight: '700', color: '#fff', marginBottom: '16px' }}>
+                7. Cláusula de Indenização (Hold Harmless & Defesa Regressiva)
+              </h2>
+              <p style={{ marginBottom: '16px' }}>
+                O Usuário concorda em defender, indenizar e manter indene a <strong>Heiss-Lab</strong>, seus fundadores e desenvolvedores contra quaisquer reivindicações, processos administrativos (ex: ANPD, PROCON), ações judiciais, danos, multas, custas processuais e honorários advocatícios decorrentes de:
+              </p>
+              <ol style={{ paddingLeft: '20px', marginBottom: '16px', listStyleType: 'decimal' }}>
+                <li style={{ marginBottom: '8px' }}>Violação destes Termos de Uso ou da legislação brasileira por parte do Usuário.</li>
+                <li style={{ marginBottom: '8px' }}>Coleta, armazenamento ou manipulação ilícita de dados de terceiros/clientes realizada pelo Usuário.</li>
+                <li style={{ marginBottom: '8px' }}>Uso indevido das APIs para fraudes, lavagem de dinheiro ou sonegação fiscal.</li>
+              </ol>
+            </section>
+
+            {/* Planos, Pagamentos e Reembolsos */}
             <section id="assinaturas" style={{ marginBottom: '48px' }}>
               <h2 style={{ fontSize: '22px', fontWeight: '700', color: '#fff', marginBottom: '16px' }}>
-                3. Planos, Faturamento e Acúmulo de Renovações
+                8. Planos, Faturamento e Reembolsos
               </h2>
               <p style={{ marginBottom: '16px' }}>
-                Disponibilizamos planos pagos sob assinatura (Mensal e Anual) para liberação de consultas com a Inteligência Artificial (Chat IA):
+                As licenças PRO fornecem cotas de tokens e recursos analíticos avançados:
               </p>
               <ul style={{ paddingLeft: '20px', marginBottom: '16px', listStyleType: 'disc' }}>
                 <li style={{ marginBottom: '8px' }}>
-                  <strong>Acúmulo de Expiração e Tokens:</strong> Caso o usuário adquira o plano mensal ou anual mais de uma vez ou renove antes da expiração de um plano vigente, o sistema <strong>não sobrescreve o período anterior</strong>. O novo tempo contratado (30 dias ou 365 dias) é <strong>adicionado cumulativamente à data de expiração restante</strong>, e a cota de tokens é somada ao saldo ativo.
+                  <strong>Acúmulo Cumulativo:</strong> Renovações antecipadas somam o prazo de validade e o saldo de tokens ao saldo existente sem perdas.
                 </li>
                 <li style={{ marginBottom: '8px' }}>
-                  <strong>Processamento Móvel:</strong> Em dispositivos móveis, o faturamento é processado com segurança via <strong>Google Play Billing</strong> e operacionalizado via <strong>RevenueCat</strong>.
+                  <strong>Reembolso no Google Play:</strong> Processado diretamente pelas regras e interfaces da Google Play Store.
                 </li>
                 <li style={{ marginBottom: '8px' }}>
-                  <strong>Processamento Web:</strong> Assinaturas adquiridas na interface web são processadas pelo gateway internacional <strong>Stripe</strong>.
+                  <strong>Reembolso na Web (Stripe):</strong> Garantido o direito de arrependimento no prazo legal de 7 (sete) dias (CDC Art. 49).
                 </li>
               </ul>
-              <p>
-                Você pode desativar a renovação automática da sua assinatura a qualquer momento acessando a seção de assinaturas da sua Conta Google Play (para compras em Android) ou a interface de faturamento da Stripe (para compras na web).
-              </p>
-            </section>
-
-            {/* Política de Reembolso */}
-            <section id="politica-reembolso" style={{ marginBottom: '48px' }}>
-              <h2 style={{ fontSize: '22px', fontWeight: '700', color: '#fff', marginBottom: '16px' }}>
-                4. Reembolsos
-              </h2>
-              <p style={{ marginBottom: '16px' }}>
-                Como o aplicativo utiliza serviços de terceiros para o gerenciamento de pagamentos, as regras de reembolso variam conforme a plataforma de aquisição:
-              </p>
-              <ul style={{ paddingLeft: '20px', marginBottom: '16px', listStyleType: 'disc' }}>
-                <li style={{ marginBottom: '8px' }}>
-                  <strong>Compras via Google Play:</strong> Reembolsos devem ser solicitados diretamente ao suporte da Google Play, seguindo as diretrizes e prazos de devolução da plataforma.
-                </li>
-                <li style={{ marginBottom: '8px' }}>
-                  <strong>Compras via Web (Stripe):</strong> Em conformidade com o Código de Defesa do Consumidor brasileiro, garantimos o direito de arrependimento e reembolso integral das assinaturas em até 7 (sete) dias contados a partir da data de compra inicial. Para solicitar o reembolso web, entre em contato pelo email de suporte.
-                </li>
-              </ul>
-            </section>
-
-            {/* Isenção de Responsabilidade IA */}
-            <section id="motor-ia-disclaimer" style={{ marginBottom: '48px' }}>
-              <h2 style={{ fontSize: '22px', fontWeight: '700', color: '#fff', marginBottom: '16px' }}>
-                5. Isenção de Responsabilidade (IA)
-              </h2>
-              <p style={{ marginBottom: '16px' }}>
-                O Assistente Moeda conta com um módulo de inteligência artificial de previsão financeira intitulado <strong>God Mode</strong>.
-              </p>
-              <div style={{
-                backgroundColor: 'rgba(245, 158, 11, 0.05)',
-                borderLeft: '4px solid #f59e0b',
-                padding: '16px',
-                borderRadius: '0 8px 8px 0',
-                fontSize: '14px',
-                marginBottom: '16px',
-                lineHeight: '1.6',
-              }}>
-                <strong>AVISO IMPORTANTE AOS USUÁRIOS:</strong> O God Mode fornece projeções e análises baseadas estritamente em modelos estatísticos e matemáticos com fins puramente informativos e educacionais. <strong>Nenhuma informação gerada pelo aplicativo constitui conselho profissional de investimentos, consultoria financeira oficial ou recomendação certified de compra/venda.</strong> A Heiss-Lab e seus desenvolvedores não se responsabilizam por decisões tomadas com base nas previsões do aplicativo, nem por eventuais prejuízos ou perdas financeiras decorrentes do uso da plataforma.
-              </div>
             </section>
 
             {/* Propriedade Intelectual */}
             <section id="propriedade" style={{ marginBottom: '48px' }}>
               <h2 style={{ fontSize: '22px', fontWeight: '700', color: '#fff', marginBottom: '16px' }}>
-                6. Propriedade Intelectual
+                9. Propriedade Intelectual
               </h2>
               <p style={{ marginBottom: '16px' }}>
-                O código-fonte, layout visual, design gráfico, marcas, logotipos e toda a tecnologia do aplicativo Assistente Moeda pertencem exclusivamente à <strong>Heiss-Lab</strong>.
-              </p>
-              <p>
-                Qualquer reprodução, modificação, engenharia reversa ou exploração comercial não autorizada do aplicativo é expressamente proibida e está sujeita às penalidades cabíveis pela lei de direitos autorais e propriedade industrial brasileira.
+                Todos os direitos sobre o código-fonte, algoritmos, designs, jogos e marcas pertencem à Heiss-Lab. Os materiais didáticos do portal estão licenciados sob Creative Commons CC BY-NC-SA 4.0 (distribuição permitida; venda proibida).
               </p>
             </section>
 
-            {/* Rescisão e Descontinuidade */}
-            <section id="rescisao" style={{ marginBottom: '48px' }}>
+            {/* Foro */}
+            <section id="foro" style={{ marginBottom: '48px' }}>
               <h2 style={{ fontSize: '22px', fontWeight: '700', color: '#fff', marginBottom: '16px' }}>
-                7. Descontinuidade do Uso e Limpeza de Dados
+                10. Legislação Aplicável e Foro de Eleição
               </h2>
               <p style={{ marginBottom: '16px' }}>
-                Como os dados financeiros residem unicamente no seu próprio dispositivo (LocalStorage / AsyncStorage local), você possui controle total e pode interromper o uso do aplicativo a qualquer momento.
-              </p>
-              <p>
-                Para remover permanentemente todos os seus lançamentos e planilhas, basta acionar a opção de limpar dados nas Configurações do próprio aplicativo ou desinstalar o app do seu aparelho, o que apagará instantaneamente todos os registros locais do seu dispositivo.
-              </p>
-            </section>
-
-            {/* Alterações dos Termos */}
-            <section id="alteracoes" style={{ marginBottom: '48px' }}>
-              <h2 style={{ fontSize: '22px', fontWeight: '700', color: '#fff', marginBottom: '16px' }}>
-                8. Alterações dos Termos
-              </h2>
-              <p style={{ marginBottom: '16px' }}>
-                Reservamo-nos o direito de alterar estes Termos de Uso periodicamente para refletir mudanças tecnológicas, operacionais ou regulamentares.
-              </p>
-              <p>
-                Notificaremos você sobre modificações substanciais publicando os termos revisados no aplicativo com antecedência razoável ou exibindo um aviso em destaque na tela de boas-vindas do app. A continuidade do uso do app após a entrada em vigor dos novos Termos implica em seu aceite automático.
+                Estes Termos são regidos pelas leis da República Federativa do Brasil. Fica eleito o Foro da Comarca de domicílio do Desenvolvedor para dirimir eventuais controvérsias oriundas deste instrumento, renunciando-se a qualquer outro por mais privilegiado que seja.
               </p>
             </section>
           </main>
         </div>
       </div>
 
-      {/* CSS overrides for responsive grid layout without heavy CSS file */}
       <style dangerouslySetInnerHTML={{__html: `
         @media (max-width: 768px) {
           .terms-layout {

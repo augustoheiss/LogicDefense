@@ -4,14 +4,14 @@ export default function PrivacyPolicy() {
   const [activeSection, setActiveSection] = useState('introducao');
 
   const sections = [
-    { id: 'introducao', label: '1. Introdução' },
-    { id: 'dados-coletados', label: '2. Dados Coletados' },
-    { id: 'finalidades', label: '3. Finalidades do Tratamento' },
-    { id: 'motor-ia', label: '4. Motor de IA (God Mode)' },
-    { id: 'pagamentos', label: '5. Pagamentos e Assinaturas' },
-    { id: 'direitos-lgpd', label: '6. Seus Direitos (LGPD)' },
-    { id: 'seguranca', label: '7. Segurança dos Dados' },
-    { id: 'contato', label: '8. Contato e Encarregado' },
+    { id: 'introducao', label: '1. Introdução & LGPD' },
+    { id: 'arquitetura-turso', label: '2. Arquitetura Turso & Local-First' },
+    { id: 'dados-coletados', label: '3. Dados Coletados & Zero PII' },
+    { id: 'controlador-operador', label: '4. Papéis: Usuário como Controlador' },
+    { id: 'motor-ia', label: '5. Motor de IA (Stateless)' },
+    { id: 'pagamentos', label: '6. Pagamentos e Assinaturas' },
+    { id: 'direitos-lgpd', label: '7. Seus Direitos e Exclusão' },
+    { id: 'contato', label: '8. Encarregado de Dados (DPO)' },
   ];
 
   const scrollToSection = (id: string) => {
@@ -53,7 +53,7 @@ export default function PrivacyPolicy() {
             fontSize: '32px',
             marginBottom: '16px',
           }}>
-            🪙
+            🛡️
           </div>
           <h1 style={{
             fontSize: '36px',
@@ -62,16 +62,16 @@ export default function PrivacyPolicy() {
             letterSpacing: '-0.02em',
             marginBottom: '8px',
           }}>
-            Política de Privacidade
+            Política de Privacidade & Governança de Dados
           </h1>
           <p style={{
             fontSize: '16px',
             color: 'rgba(255, 255, 255, 0.6)',
-            maxWidth: '600px',
+            maxWidth: '700px',
             margin: '0 auto',
             lineHeight: '1.5',
           }}>
-            Assistente Moeda · Desenvolvido por Heiss-Lab
+            Heiss-Lab · LogicDefense & Assistente Moeda · Conformidade com a Lei Geral de Proteção de Dados (LGPD - Lei 13.709/2018)
           </p>
           <p style={{
             fontSize: '13px',
@@ -79,7 +79,7 @@ export default function PrivacyPolicy() {
             fontWeight: '600',
             marginTop: '12px',
           }}>
-            Última atualização: 2 de Agosto de 2026
+            Última atualização: 25 de Agosto de 2026
           </p>
         </header>
 
@@ -107,7 +107,7 @@ export default function PrivacyPolicy() {
               marginBottom: '12px',
               paddingLeft: '12px',
             }}>
-              Sumário
+              Sumário de Privacidade
             </h3>
             {sections.map((section) => (
               <button
@@ -140,13 +140,13 @@ export default function PrivacyPolicy() {
             {/* Introdução */}
             <section id="introducao" style={{ marginBottom: '48px' }}>
               <h2 style={{ fontSize: '22px', fontWeight: '700', color: '#fff', marginBottom: '16px' }}>
-                1. Introdução
+                1. Introdução & Compromisso de Privacidade
               </h2>
               <p style={{ marginBottom: '16px' }}>
-                Esta Política de Privacidade regulamenta a forma como a <strong>Heiss-Lab</strong> ("nós", "nosso") garante a privacidade e a segurança integral dos dados dos usuários ("você", "usuário") do aplicativo <strong>Assistente Moeda</strong> e seus serviços associados.
+                Esta Política de Privacidade estabelece os termos em que a <strong>Heiss-Lab</strong> ("nós", "plataforma") protege e trata as informações dos usuários ("você", "usuário") no portal <strong>Heiss-Lab / LogicDefense</strong>, no aplicativo móvel <strong>Assistente Moeda</strong> e nas APIs correlatas.
               </p>
               <p style={{ marginBottom: '16px' }}>
-                Nosso compromisso fundamental é assegurar a máxima privacidade, transparência e conformidade integral com a <strong>Lei Geral de Proteção de Dados (LGPD)</strong> (Lei nº 13.709/2018).
+                Nossa arquitetura foi desenhada segundo o princípio de <strong>Privacy by Design (Privacidade por Padrão)</strong>, em estrita conformidade com a <strong>Lei Geral de Proteção de Dados Pessoais (LGPD - Lei nº 13.709/2018)</strong> e os mais elevados padrões internacionais de segurança.
               </p>
               <div style={{
                 backgroundColor: 'rgba(16, 185, 129, 0.08)',
@@ -156,97 +156,118 @@ export default function PrivacyPolicy() {
                 fontSize: '15px',
                 lineHeight: '1.6',
               }}>
-                <strong>🛡️ Garantia de Privacidade Absoluta e Armazenamento Local:</strong> Para a máxima segurança do proprietário e de todos os usuários, <strong>todas as suas planilhas, transações, receitas, despesas e metas financeiras são armazenadas exclusivamente de forma local no seu próprio dispositivo</strong>. Nenhum dado financeiro ou planilha é salvo, armazenado ou mantido em nenhum banco de dados remoto ou servidor externo.
+                <strong>🛡️ Arquitetura de Não-Custódia de Identidade (Zero PII):</strong> Não realizamos coleta nem armazenamento de dados de identificação pessoal civil (como e-mail de login centralizado, CPF ou senhas em texto plano). A plataforma opera por <strong>chaves criptográficas isoladas e armazenamento local</strong>.
               </div>
+            </section>
+
+            {/* Arquitetura Turso & Local-First */}
+            <section id="arquitetura-turso" style={{ marginBottom: '48px' }}>
+              <h2 style={{ fontSize: '22px', fontWeight: '700', color: '#fff', marginBottom: '16px' }}>
+                2. Arquitetura de Isolamento (Turso libSQL & Local-First)
+              </h2>
+              <p style={{ marginBottom: '16px' }}>
+                A infraestrutura de dados opera sob um modelo descentralizado e altamente segregado:
+              </p>
+              <ul style={{ paddingLeft: '20px', marginBottom: '16px', listStyleType: 'disc' }}>
+                <li style={{ marginBottom: '8px' }}>
+                  <strong>Armazenamento no Dispositivo (Local-First):</strong> No aplicativo móvel e portal web, suas preferências e planilhas primárias residem no armazenamento seguro do próprio aparelho do usuário (LocalStorage / SecureStore / AsyncStorage).
+                </li>
+                <li style={{ marginBottom: '8px' }}>
+                  <strong>Nuvem Isolada via Turso (libSQL):</strong> Quando a sincronização de planilhas ou chaves de licença é utilizada, os dados são gravados em banco de dados <strong>Turso</strong> vinculados exclusivamente a um hash criptográfico da chave de planilha (<code>X-Spreadsheet-Key</code>). <strong>Não existe tabela de usuários com nomes ou e-mails correlacionados aos lançamentos.</strong>
+                </li>
+                <li style={{ marginBottom: '8px' }}>
+                  <strong>Segregação Multilocatário Estrita:</strong> Cada chave opera em um escopo independente e inacessível por outros usuários ou chaves de API.
+                </li>
+              </ul>
             </section>
 
             {/* Dados Coletados */}
             <section id="dados-coletados" style={{ marginBottom: '48px' }}>
               <h2 style={{ fontSize: '22px', fontWeight: '700', color: '#fff', marginBottom: '16px' }}>
-                2. Armazenamento Local de Dados
+                3. Dados Tratados & Ausência de Coleta de Menores
               </h2>
               <p style={{ marginBottom: '16px' }}>
-                O Assistente Moeda foi projetado sob a arquitetura <em>Local-First Security</em>:
-              </p>
-              <ul style={{ paddingLeft: '20px', marginBottom: '16px', listStyleType: 'disc' }}>
-                <li style={{ marginBottom: '8px' }}>
-                  <strong>Dados Financeiros e Planilhas:</strong> Registros informados por você (como lançamentos, fluxo de caixa, aportes e metas) residem unicamente no armazenamento interno do seu aparelho (LocalStorage / AsyncStorage local).
-                </li>
-                <li style={{ marginBottom: '8px' }}>
-                  <strong>Zero Banco de Dados Remoto:</strong> Nós não mantemos nem possuímos acesso a nenhum banco de dados de planilhas financeiras dos usuários em nossos servidores.
-                </li>
-                <li style={{ marginBottom: '8px' }}>
-                  <strong>Chaves de Licença (PRO):</strong> Nosso servidor armazena unicamente o registro hash criptográfico da sua Chave de Licença PRO para autenticação de saldo de tokens e validade do plano contratado.
-                </li>
-                <li style={{ marginBottom: '8px' }}>
-                  <strong>Dados de Pagamento:</strong> Processados diretamente por gateways seguros (Stripe para Web e Google Play / RevenueCat para dispositivos móveis). Não armazenamos informações brutas de cartão de crédito.
-                </li>
-              </ul>
-            </section>
-
-            {/* Finalidades do Tratamento */}
-            <section id="finalidades" style={{ marginBottom: '48px' }}>
-              <h2 style={{ fontSize: '22px', fontWeight: '700', color: '#fff', marginBottom: '16px' }}>
-                3. Processamento e Autonomia do Usuário
-              </h2>
-              <p style={{ marginBottom: '16px' }}>
-                A arquitetura local garante autonomia completa sobre seus dados:
+                Tratamos estritamente o mínimo indispensável para o funcionamento técnico do serviço:
               </p>
               <ol style={{ paddingLeft: '20px', marginBottom: '16px', listStyleType: 'decimal' }}>
                 <li style={{ marginBottom: '8px' }}>
-                  <strong>Controle Total:</strong> Você pode exportar, limpar ou apagar todos os seus registros financeiros a qualquer momento diretamente na interface do app.
+                  <strong>Chaves de Licença e Planilha:</strong> Tokens aleatórios (ex: hash SHA-256) utilizados para validar a cota de uso e a expiração do plano PRO.
                 </li>
                 <li style={{ marginBottom: '8px' }}>
-                  <strong>Inexistência de Vazamento de Dados na Nuvem:</strong> Como suas planilhas não são salvas em bancos de dados remotos, seus registros financeiros estão imunes a vazamentos de servidores centrais.
+                  <strong>Lançamentos e Registros Financeiros:</strong> Valores numéricos, categorias e descrições inseridos por livre e espontânea vontade do usuário para seu próprio controle.
+                </li>
+                <li style={{ marginBottom: '8px' }}>
+                  <strong>Jogos e Leaderboards (Heiss-Lab):</strong> Os jogos educativos (Logic Defense, Logic Ascension) utilizam pontuações salvas localmente ou com *nicknames* anônimos. <strong>Nenhum dado pessoal de menores de idade é coletado, atendendo integralmente ao Art. 14 da LGPD.</strong>
                 </li>
               </ol>
             </section>
 
-            {/* Motor de IA (God Mode) */}
-            <section id="motor-ia" style={{ marginBottom: '48px' }}>
+            {/* Papéis: Usuário como Controlador */}
+            <section id="controlador-operador" style={{ marginBottom: '48px' }}>
               <h2 style={{ fontSize: '22px', fontWeight: '700', color: '#fff', marginBottom: '16px' }}>
-                4. Motor de IA e Consultas Em Memória (Stateless)
+                4. Separação de Papéis: O Usuário como Controlador de Dados
               </h2>
               <p style={{ marginBottom: '16px' }}>
-                O Assistente de IA utiliza Inteligência Artificial avançada para gerar diagnósticos e insights sobre suas métricas:
+                Em estrita observância aos <strong>Artigos 5º, 37 e 42 da LGPD</strong>:
               </p>
               <div style={{
-                backgroundColor: 'rgba(59, 130, 246, 0.05)',
-                borderLeft: '4px solid #3b82f6',
+                backgroundColor: 'rgba(168, 85, 247, 0.08)',
+                borderLeft: '4px solid #a855f7',
                 padding: '16px',
                 borderRadius: '0 8px 8px 0',
                 fontSize: '14px',
+                lineHeight: '1.6',
                 marginBottom: '16px',
               }}>
-                <strong>Declaração de Processamento Stateless (Em Memória):</strong> Ao realizar perguntas no Chat de IA, os dados necessários para o cálculo da resposta são transmitidos de forma temporária e criptografada (HTTPS/TLS) e processados estritamente em memória em tempo de execução. <strong>Os dados são imediatamente descartados após a resposta e jamais são salvos em banco de dados ou utilizados para treinamento de modelos de IA de terceiros.</strong>
+                <strong>⚖️ O Usuário é o Único e Exclusivo Controlador (Data Controller):</strong> Se você utiliza o Assistente Moeda ou suas APIs para cadastrar, gerenciar ou auditar transações, receitas, clientes ou terceiros vinculados à sua atividade comercial ou pessoal, <strong>você assume a condição integral de Controlador dos Dados perante a LGPD e a ANPD</strong>. Cabe a você assegurar a base legal (Art. 7º) e o consentimento dos titulares envolvidos.
               </div>
+              <p>
+                A <strong>Heiss-Lab</strong> atua meramente como <strong>Operadora Tecnológica (Data Processor)</strong>, fornecendo a infraestrutura no estado em que se encontra (*AS IS*), sem qualquer ingerência sobre o mérito, veracidade ou legalidade dos dados inseridos.
+              </p>
             </section>
 
-            {/* Pagamentos e Assinaturas */}
-            <section id="pagamentos" style={{ marginBottom: '48px' }}>
+            {/* Motor de IA (Stateless) */}
+            <section id="motor-ia" style={{ marginBottom: '48px' }}>
               <h2 style={{ fontSize: '22px', fontWeight: '700', color: '#fff', marginBottom: '16px' }}>
-                5. Pagamentos e Acúmulo de Assinaturas
+                5. Motor de IA e Consultas Estatísticas em Memória
               </h2>
               <p style={{ marginBottom: '16px' }}>
-                As compras de assinaturas Pro (mensais ou anuais) são integradas via Stripe (Web) e Google Play / RevenueCat (Mobile):
+                O módulo de inteligência analítica opera com processamento transitório (*stateless*):
               </p>
               <ul style={{ paddingLeft: '20px', marginBottom: '16px', listStyleType: 'disc' }}>
                 <li style={{ marginBottom: '8px' }}>
-                  <strong>Renovações Cumulativas:</strong> Caso o usuário adquira novos planos ou renovações com uma licença ativa, a nova validade é <strong>adicionada cumulativamente</strong> à data de expiração existente, e o saldo de tokens é somado sem perdas.
+                  Ao solicitar diagnósticos ou relatórios no Chat de IA, os parâmetros são trafegados via conexão criptografada (HTTPS/TLS) e computados temporariamente em memória.
                 </li>
                 <li style={{ marginBottom: '8px' }}>
-                  <strong>Conformidade PCI-DSS:</strong> Todos os pagamentos cumprem os mais rigorosos padrões internacionais de segurança bancária.
+                  <strong>Zero Treinamento Público:</strong> Seus números e planilhas não são utilizados para treinar modelos de inteligência artificial públicos de terceiros.
                 </li>
               </ul>
             </section>
 
-            {/* Seus Direitos (LGPD) */}
-            <section id="direitos-lgpd" style={{ marginBottom: '48px' }}>
+            {/* Pagamentos */}
+            <section id="pagamentos" style={{ marginBottom: '48px' }}>
               <h2 style={{ fontSize: '22px', fontWeight: '700', color: '#fff', marginBottom: '16px' }}>
-                6. Seus Direitos (LGPD)
+                6. Pagamentos e Gateways de Faturamento
               </h2>
               <p style={{ marginBottom: '16px' }}>
-                Pela arquitetura local do aplicativo, você possui pleno domínio sobre seus dados:
+                As transações comerciais são processadas por operadoras credenciadas e auditadas (PCI-DSS):
+              </p>
+              <ul style={{ paddingLeft: '20px', marginBottom: '16px', listStyleType: 'disc' }}>
+                <li style={{ marginBottom: '8px' }}><strong>Mobile:</strong> Google Play Billing / RevenueCat.</li>
+                <li style={{ marginBottom: '8px' }}><strong>Web:</strong> Stripe Payments.</li>
+              </ul>
+              <p>
+                A Heiss-Lab não tem acesso, não coleta e não custodia dados brutos de cartão de crédito ou contas bancárias.
+              </p>
+            </section>
+
+            {/* Seus Direitos e Exclusão */}
+            <section id="direitos-lgpd" style={{ marginBottom: '48px' }}>
+              <h2 style={{ fontSize: '22px', fontWeight: '700', color: '#fff', marginBottom: '16px' }}>
+                7. Seus Direitos (LGPD Art. 18) & Exclusão Imediata de Dados
+              </h2>
+              <p style={{ marginBottom: '16px' }}>
+                Em cumprimento ao Art. 18 da LGPD e às diretrizes da Google Play e Apple Store sobre exclusão de conta e dados:
               </p>
               <div style={{
                 display: 'grid',
@@ -255,42 +276,27 @@ export default function PrivacyPolicy() {
                 marginBottom: '24px',
               }}>
                 <div style={{ backgroundColor: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '8px', padding: '16px' }}>
-                  <h4 style={{ color: '#fff', fontWeight: '600', marginBottom: '8px', fontSize: '14px' }}>📥 Armazenamento no Dispositivo</h4>
-                  <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.6)' }}>Seus registros pertencem 100% ao seu dispositivo, com controle total do usuário.</p>
+                  <h4 style={{ color: '#fff', fontWeight: '600', marginBottom: '8px', fontSize: '14px' }}>📥 Acesso e Exportação</h4>
+                  <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.6)' }}>Exporte suas planilhas e métricas em CSV/JSON a qualquer momento na interface.</p>
                 </div>
                 <div style={{ backgroundColor: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '8px', padding: '16px' }}>
-                  <h4 style={{ color: '#10b981', fontWeight: '600', marginBottom: '8px', fontSize: '14px' }}>🔒 Privacidade Absoluta</h4>
-                  <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.6)' }}>Nenhum histórico financeiro é armazenado em banco de dados remoto.</p>
+                  <h4 style={{ color: '#10b981', fontWeight: '600', marginBottom: '8px', fontSize: '14px' }}>🔒 Isolamento Criptográfico</h4>
+                  <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.6)' }}>Seus registros ficam vinculados unicamente à sua chave, sem ligação com seu e-mail pessoal.</p>
                 </div>
                 <div style={{ backgroundColor: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '8px', padding: '16px' }}>
-                  <h4 style={{ color: '#ef4444', fontWeight: '600', marginBottom: '8px', fontSize: '14px' }}>❌ Limpeza Instantânea</h4>
-                  <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.6)' }}>Você pode limpar o cachê e dados do app instantaneamente nas configurações.</p>
+                  <h4 style={{ color: '#ef4444', fontWeight: '600', marginBottom: '8px', fontSize: '14px' }}>❌ Exclusão Total e Definitiva</h4>
+                  <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.6)' }}>Limpe os dados locais no app ou desative sua chave de API para apagar permanentemente os registros.</p>
                 </div>
               </div>
-            </section>
-
-            {/* Segurança dos Dados */}
-            <section id="seguranca" style={{ marginBottom: '48px' }}>
-              <h2 style={{ fontSize: '22px', fontWeight: '700', color: '#fff', marginBottom: '16px' }}>
-                7. Segurança dos Dados
-              </h2>
-              <p style={{ marginBottom: '16px' }}>
-                Medidas técnicas adotadas no Assistente Moeda:
-              </p>
-              <ul style={{ paddingLeft: '20px', marginBottom: '16px', listStyleType: 'disc' }}>
-                <li style={{ marginBottom: '8px' }}>Isolamento sandbox no dispositivo móvel/navegador do próprio usuário.</li>
-                <li style={{ marginBottom: '8px' }}>Comunicação de chamadas de IA via protocolo criptografado HTTPS/TLS.</li>
-                <li style={{ marginBottom: '8px' }}>Autenticação segura via Chave de Licença hash SHA-256 no backend.</li>
-              </ul>
             </section>
 
             {/* Contato e Encarregado */}
             <section id="contato" style={{ marginBottom: '48px' }}>
               <h2 style={{ fontSize: '22px', fontWeight: '700', color: '#fff', marginBottom: '16px' }}>
-                8. Contato e Encarregado
+                8. Contato e Encarregado pelo Tratamento de Dados (DPO)
               </h2>
               <p style={{ marginBottom: '16px' }}>
-                Se tiver qualquer dúvida sobre esta política ou se desejar exercer qualquer um de seus direitos como titular de dados, entre em contato diretamente com nosso Encarregado pelo Tratamento de Dados Pessoais (DPO):
+                Para exercer seus direitos como titular de dados ou esclarecer quaisquer dúvidas sobre governança e privacidade:
               </p>
               <div style={{
                 backgroundColor: 'rgba(255, 255, 255, 0.02)',
@@ -298,16 +304,15 @@ export default function PrivacyPolicy() {
                 borderRadius: '12px',
                 padding: '24px',
               }}>
-                <p style={{ margin: '0 0 8px 0', fontWeight: '600', color: '#fff' }}>Heiss-Lab</p>
-                <p style={{ margin: '0 0 8px 0', fontSize: '14px', color: 'rgba(255, 255, 255, 0.6)' }}>Website: <a href="http://www.heisslab.com.br" target="_blank" rel="noopener noreferrer" style={{ color: '#c084fc', textDecoration: 'none' }}>www.heisslab.com.br</a></p>
-                <p style={{ margin: '0 0 8px 0', fontSize: '14px', color: 'rgba(255, 255, 255, 0.6)' }}>Canal de Privacidade / DPO: <a href="mailto:augustoheiss@gmail.com" style={{ color: '#c084fc', textDecoration: 'none' }}>augustoheiss@gmail.com</a></p>
+                <p style={{ margin: '0 0 8px 0', fontWeight: '600', color: '#fff' }}>Heiss-Lab / LogicDefense</p>
+                <p style={{ margin: '0 0 8px 0', fontSize: '14px', color: 'rgba(255, 255, 255, 0.6)' }}>Portal Oficial: <a href="https://heisslab.com.br" target="_blank" rel="noopener noreferrer" style={{ color: '#c084fc', textDecoration: 'none' }}>heisslab.com.br</a></p>
+                <p style={{ margin: '0 0 8px 0', fontSize: '14px', color: 'rgba(255, 255, 255, 0.6)' }}>Encarregado pelo Tratamento de Dados (DPO): <a href="mailto:augustoheiss@gmail.com" style={{ color: '#c084fc', textDecoration: 'none' }}>augustoheiss@gmail.com</a></p>
               </div>
             </section>
           </main>
         </div>
       </div>
 
-      {/* CSS overrides for responsive grid layout without heavy CSS file */}
       <style dangerouslySetInnerHTML={{__html: `
         @media (max-width: 768px) {
           .privacy-layout {
