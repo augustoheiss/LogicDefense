@@ -101,6 +101,9 @@ export async function generateNewApiKey(
     const data = await res.json();
     const rawKey = data.api_key || data.apiKey;
     if (rawKey) {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.removeItem(`coin_api_revoked_${tableId}`);
+      }
       return {
         apiKey: rawKey,
         keyHint: data.key_hint || data.keyHint || `...${rawKey.slice(-4)}`,
@@ -113,6 +116,68 @@ export async function generateNewApiKey(
   } catch (err: any) {
     console.error('[apiKeyService] Falha ao comunicar com endpoint de geração de chave:', err);
     return null;
+  }
+}
+
+/**
+ * Revokes and deactivates the API Key for a tableId (Kill Switch).
+ * Calls backend POST /api/v1/api-keys/revoke and clears local caches in web & mobile storage.
+ */
+export async function revokeApiKey(
+  tableId: string,
+  apiKey?: string
+): Promise<{ success: boolean; message: string }> {
+  try {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (apiKey) {
+      headers['X-Spreadsheet-Key'] = apiKey;
+    }
+
+    const res = await fetch(`${API_URL}/api/v1/api-keys/revoke`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        table_id: tableId,
+        api_key: apiKey || undefined,
+      }),
+    });
+
+    // Clear from localStorage (Web) and mark as revoked
+    if (typeof window !== 'undefined' && window.localStorage) {
+      window.localStorage.setItem(`coin_api_revoked_${tableId}`, 'true');
+      window.localStorage.removeItem(`coin_api_key_${tableId}`);
+      window.localStorage.removeItem(`coin_expires_at_${tableId}`);
+      const activeKey = window.localStorage.getItem('coin_active_api_key');
+      if (activeKey === apiKey) {
+        window.localStorage.removeItem('coin_active_api_key');
+      }
+    }
+
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      return {
+        success: false,
+        message: errData.detail || 'Erro ao comunicar revogação com o servidor.',
+      };
+    }
+
+    const data = await res.json();
+    return {
+      success: true,
+      message: data.message || 'Chave desativada com sucesso.',
+    };
+  } catch (err: any) {
+    console.error('[apiKeyService] Erro ao revogar chave de API:', err);
+    // Still clear local storage even on network error to protect user locally
+    if (typeof window !== 'undefined' && window.localStorage) {
+      window.localStorage.setItem(`coin_api_revoked_${tableId}`, 'true');
+      window.localStorage.removeItem(`coin_api_key_${tableId}`);
+      window.localStorage.removeItem(`coin_expires_at_${tableId}`);
+    }
+    return {
+      success: true,
+      message: 'Chave desativada localmente.',
+    };
   }
 }
 

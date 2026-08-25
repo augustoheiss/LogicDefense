@@ -948,6 +948,12 @@ export async function ensureApiKeyForTable(tableId: string): Promise<string> {
     return generateLocalApiKey(tableId);
   }
 
+  // Se a chave foi revogada explicitamente pelo usuário, não auto-provisiona
+  const isRevoked = window.localStorage.getItem(`coin_api_revoked_${tableId}`) === 'true';
+  if (isRevoked) {
+    return '';
+  }
+
   const existingKey = window.localStorage.getItem(`coin_api_key_${tableId}`);
   const existingExp = window.localStorage.getItem(`coin_expires_at_${tableId}`);
 

@@ -46,7 +46,7 @@ import { SyncAuditPanel, APIManagementTester } from '@/components/ui';
 import { formatCurrencySmart } from '@/core/formatCurrency';
 import { validateMobileLicenseKey, getStoredLicenseKey } from '@/storage/authService';
 import { ensureApiKeyForTable, generateLocalApiKey, buildCSV, shareCSVText } from '@/services/exportService';
-import { validateApiKey, generateNewApiKey, formatTimeRemaining } from '@/services/apiKeyService';
+import { validateApiKey, generateNewApiKey, formatTimeRemaining, revokeApiKey } from '@/services/apiKeyService';
 import type { TableGoals, CoinTable } from '@/core/types';
 
 const API_URL = process.env.EXPO_PUBLIC_AI_BACKEND_URL || process.env.EXPO_PUBLIC_API_URL || 'https://ocorrencias-pdf-writer.onrender.com';
@@ -1290,6 +1290,7 @@ const SpreadsheetApiSection = React.memo(function SpreadsheetApiSection({
   const [timeRemaining, setTimeRemaining] = useState<{ formatted: string; expired: boolean; urgent: boolean } | null>(null);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
+  const [revoking, setRevoking] = useState(false);
   const [copied, setCopied] = useState(false);
   const [showGuide, setShowGuide] = useState(false);
   const [copiedSchema, setCopiedSchema] = useState(false);
@@ -1453,11 +1454,24 @@ PROCEDIMENTO PADRÃO OBRIGATÓRIO:
   const fetchActiveKey = useCallback(async () => {
     setLoading(true);
     try {
+      let isRevoked = false;
       let localKey: string | null = null;
       let localExp: string | null = null;
+
       if (typeof window !== 'undefined' && window.localStorage) {
+        isRevoked = window.localStorage.getItem(`coin_api_revoked_${tableId}`) === 'true';
         localKey = window.localStorage.getItem(`coin_api_key_${tableId}`);
         localExp = window.localStorage.getItem(`coin_expires_at_${tableId}`);
+      }
+
+      if (isRevoked) {
+        setApiKey(null);
+        setKeyHint(null);
+        setExpiresAt(null);
+        setTimeRemaining(null);
+        setCopied(false);
+        setLoading(false);
+        return;
       }
 
       if (!localKey || !localKey.startsWith('am_sheet_live_')) {
@@ -1481,6 +1495,10 @@ PROCEDIMENTO PADRÃO OBRIGATÓRIO:
               window.localStorage.setItem(`coin_expires_at_${tableId}`, valRes.expiresAt);
             }
           } else {
+            // Se foi revogada explicitamente, não auto-provisiona
+            const stillRevoked = typeof window !== 'undefined' && window.localStorage?.getItem(`coin_api_revoked_${tableId}`) === 'true';
+            if (stillRevoked) return;
+
             // Chave expirada, revogada ou ainda não registrada no backend Turso -> Gera nova de 1 dia!
             const storedLicenseKey = await getStoredLicenseKey();
             const newRes = await generateNewApiKey(tableId, storedLicenseKey || undefined, 1);
@@ -1537,6 +1555,9 @@ PROCEDIMENTO PADRÃO OBRIGATÓRIO:
       setTimeRemaining(remaining);
 
       if (remaining.expired && apiKey) {
+        const isRevoked = typeof window !== 'undefined' && window.localStorage?.getItem(`coin_api_revoked_${tableId}`) === 'true';
+        if (isRevoked) return;
+
         getStoredLicenseKey().then((licKey) => {
           generateNewApiKey(tableId, licKey || undefined, 1).then((res) => {
             if (res) {
@@ -1656,6 +1677,7 @@ PROCEDIMENTO PADRÃO OBRIGATÓRIO:
       setCopied(false);
 
       if (typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.removeItem(`coin_api_revoked_${tableId}`);
         window.localStorage.setItem(`coin_api_key_${tableId}`, newKey);
         window.localStorage.setItem('coin_active_api_key', newKey);
         if (newExp) {
@@ -1670,6 +1692,55 @@ PROCEDIMENTO PADRÃO OBRIGATÓRIO:
       }
     } finally {
       setGenerating(false);
+    }
+  };
+
+  const handleRevokeKey = async () => {
+    const proceed = await new Promise<boolean>((resolve) => {
+      if (Platform.OS === 'web') {
+        const ok = window.confirm(
+          "⚠️ ATENÇÃO: Desativar a chave de API irá revogá-la imediatamente em nossos servidores e desconectar qualquer integração externa (ChatGPT, n8n, scripts locais). Esta ação é instantânea e definitiva.\n\nDeseja desativar e revogar a chave agora?"
+        );
+        resolve(ok);
+      } else {
+        Alert.alert(
+          "⚠️ Desativar Chave de API",
+          "Desativar a chave de API irá revogá-la imediatamente em nossos servidores e desconectar qualquer integração externa (ChatGPT, n8n, scripts locais). Esta ação é instantânea e definitiva.\n\nDeseja desativar agora?",
+          [
+            { text: "Cancelar", style: "cancel", onPress: () => resolve(false) },
+            { text: "Desativar Agora", style: "destructive", onPress: () => resolve(true) }
+          ]
+        );
+      }
+    });
+
+    if (!proceed) return;
+
+    setRevoking(true);
+    try {
+      const res = await revokeApiKey(tableId, apiKey || undefined);
+      setApiKey(null);
+      setKeyHint(null);
+      setExpiresAt(null);
+      setTimeRemaining(null);
+      
+      if (typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.setItem(`coin_api_revoked_${tableId}`, 'true');
+      }
+
+      if (Platform.OS === 'web') {
+        window.alert(res.message || "Chave de API desativada e revogada com sucesso.");
+      } else {
+        Alert.alert("Chave Desativada", res.message || "Chave de API desativada e revogada com sucesso.");
+      }
+    } catch (err: any) {
+      if (Platform.OS === 'web') {
+        window.alert(`Erro ao desativar chave: ${err.message}`);
+      } else {
+        Alert.alert("Erro", `Erro ao desativar chave: ${err.message}`);
+      }
+    } finally {
+      setRevoking(false);
     }
   };
 
@@ -1731,7 +1802,7 @@ PROCEDIMENTO PADRÃO OBRIGATÓRIO:
       </Text>
 
       {/* Indicador de Validade / Tempo Restante em Horas */}
-      {timeRemaining ? (
+      {timeRemaining && (keyHint || apiKey) ? (
         <View
           style={{
             marginBottom: spacing.xs,
@@ -1776,6 +1847,28 @@ PROCEDIMENTO PADRÃO OBRIGATÓRIO:
               ✓ Ativa
             </Text>
           )}
+        </View>
+      ) : !apiKey && (typeof window !== 'undefined' && window.localStorage?.getItem(`coin_api_revoked_${tableId}`) === 'true') ? (
+        <View
+          style={{
+            marginBottom: spacing.xs,
+            paddingVertical: 6,
+            paddingHorizontal: 12,
+            borderRadius: radius.sm,
+            backgroundColor: 'rgba(100, 116, 139, 0.15)',
+            borderWidth: 1,
+            borderColor: 'rgba(100, 116, 139, 0.35)',
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+          }}
+        >
+          <Text style={{ fontSize: 11, color: colors.text.secondary, fontWeight: '600' }}>
+            🛡️ Chave de API: Desativada / Revogada
+          </Text>
+          <Text style={{ fontSize: 10, color: colors.text.tertiary, fontWeight: '500' }}>
+            Kill-Switch Ativo
+          </Text>
         </View>
       ) : (
         <View
@@ -1826,32 +1919,82 @@ PROCEDIMENTO PADRÃO OBRIGATÓRIO:
 
               {renderTtlPicker()}
 
-              <HapticButton onPress={generateKey} disabled={generating} style={[styles.regenerateBtn, { marginTop: spacing.xs }]}>
+              <HapticButton onPress={generateKey} disabled={generating || revoking} style={[styles.regenerateBtn, { marginTop: spacing.xs }]}>
                 {generating ? (
                   <ActivityIndicator size="small" color={colors.text.secondary} />
                 ) : (
                   <Text style={styles.regenerateBtnText}>🔄 Rotacionar / Regerar Nova Chave de API</Text>
                 )}
               </HapticButton>
+
+              {/* Botão Kill-Switch de Revogação Imediata */}
+              <HapticButton
+                onPress={handleRevokeKey}
+                disabled={revoking || generating}
+                style={[
+                  styles.regenerateBtn,
+                  {
+                    marginTop: spacing.xs,
+                    backgroundColor: 'rgba(239, 68, 68, 0.12)',
+                    borderColor: 'rgba(239, 68, 68, 0.4)',
+                    borderWidth: 1,
+                  }
+                ]}
+              >
+                {revoking ? (
+                  <ActivityIndicator size="small" color="#ef4444" />
+                ) : (
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: '#ef4444' }}>
+                    🚫 Desativar / Revogar Chave Agora (Kill-Switch)
+                  </Text>
+                )}
+              </HapticButton>
             </View>
           ) : (
-            <HapticButton onPress={generateKey} disabled={generating} style={styles.regenerateBtn}>
-              {generating ? (
-                <ActivityIndicator size="small" color="#fff" />
-              ) : (
-                <Text style={styles.regenerateBtnText}>🔄 Regerar Nova Chave de API</Text>
-              )}
-            </HapticButton>
+            <View>
+              {renderTtlPicker()}
+              <HapticButton onPress={generateKey} disabled={generating || revoking} style={styles.regenerateBtn}>
+                {generating ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={styles.regenerateBtnText}>🔄 Regerar Nova Chave de API</Text>
+                )}
+              </HapticButton>
+              <HapticButton
+                onPress={handleRevokeKey}
+                disabled={revoking || generating}
+                style={[
+                  styles.regenerateBtn,
+                  {
+                    marginTop: spacing.xs,
+                    backgroundColor: 'rgba(239, 68, 68, 0.12)',
+                    borderColor: 'rgba(239, 68, 68, 0.4)',
+                    borderWidth: 1,
+                  }
+                ]}
+              >
+                {revoking ? (
+                  <ActivityIndicator size="small" color="#ef4444" />
+                ) : (
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: '#ef4444' }}>
+                    🚫 Desativar / Revogar Chave Agora (Kill-Switch)
+                  </Text>
+                )}
+              </HapticButton>
+            </View>
           )}
         </View>
       ) : (
-        <HapticButton onPress={generateKey} disabled={generating} style={styles.generateBtn}>
-          {generating ? (
-            <ActivityIndicator size="small" color="#fff" />
-          ) : (
-            <Text style={styles.generateBtnText}>🔑 Gerar Chave de API para esta Planilha</Text>
-          )}
-        </HapticButton>
+        <View style={{ marginTop: spacing.xs }}>
+          {renderTtlPicker()}
+          <HapticButton onPress={generateKey} disabled={generating || revoking} style={styles.generateBtn}>
+            {generating ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <Text style={styles.generateBtnText}>🔑 Gerar Chave de API para esta Planilha</Text>
+            )}
+          </HapticButton>
+        </View>
       )}
 
       {/* ── Botão para Área de Testes e Alterações em Massa (Modal Local) ───────────────── */}

@@ -12,6 +12,7 @@ from db.license_db import (
     get_license_by_raw_key,
     create_spreadsheet_api_key,
     get_spreadsheet_api_key,
+    revoke_spreadsheet_api_key,
     hash_key
 )
 
@@ -131,4 +132,54 @@ async def validate_api_key_endpoint(payload: ValidateKeyRequest):
         keyHint=record.get("key_hint", f"...{raw_key[-4:]}"),
         expiresAt=record.get("expires_at")
     )
+
+class RevokeKeyRequest(BaseModel):
+    table_id: str = Field(..., alias="tableId", description="ID da planilha cuja chave será revogada")
+    api_key: str | None = Field(default=None, alias="apiKey", description="Chave de API opcional a ser revogada")
+
+    model_config = {"populate_by_name": True}
+
+class RevokeKeyResponse(BaseModel):
+    success: bool
+    already_inactive: bool = Field(default=False, alias="alreadyInactive")
+    message: str
+    table_id: str = Field(..., alias="tableId")
+
+    model_config = {"populate_by_name": True}
+
+@router.post("/revoke", response_model=RevokeKeyResponse)
+async def revoke_api_key_endpoint(
+    payload: RevokeKeyRequest,
+    x_spreadsheet_key: str | None = Header(None, alias="X-Spreadsheet-Key")
+):
+    """
+    Kill-Switch: Revoga e desativa imediatamente a chave de API da planilha.
+    Desconecta SSE em tempo real e purga caches de memória associados.
+    Idempotente: retorna 200 OK mesmo se a chave já estiver inativa.
+    """
+    table_id = payload.table_id.strip()
+    raw_key = payload.api_key or x_spreadsheet_key
+    
+    try:
+        success, was_active = revoke_spreadsheet_api_key(table_id=table_id, raw_key=raw_key)
+        
+        # Purge in-memory active tables
+        from routers.public_api_router import TABLE_IN_MEMORY_STORAGE
+        TABLE_IN_MEMORY_STORAGE.pop(table_id, None)
+
+        msg = "Chave de API revogada e desativada com sucesso." if was_active else "Nenhuma chave ativa encontrada (já revogada ou expirada)."
+
+        return RevokeKeyResponse(
+            success=True,
+            alreadyInactive=not was_active,
+            message=msg,
+            tableId=table_id
+        )
+    except Exception as e:
+        log.error(f"Erro ao revogar chave para table_id {table_id}: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erro interno ao revogar a chave de API: {e}"
+        )
+
 

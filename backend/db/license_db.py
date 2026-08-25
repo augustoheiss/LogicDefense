@@ -613,6 +613,51 @@ def create_spreadsheet_api_key(
         
     return api_key, hint, exp_dt
 
+def revoke_spreadsheet_api_key(table_id: str, raw_key: str | None = None, key_hash: str | None = None) -> tuple[bool, bool]:
+    """
+    Immediately revokes the active API key for a table_id or key_hash.
+    Idempotent: returns (success: bool, was_active: bool).
+    """
+    target_hash = key_hash or (hash_key(raw_key.strip()) if raw_key and raw_key.strip() else None)
+    now = datetime.now(timezone.utc).isoformat()
+    
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        
+        # Check if active key exists
+        if target_hash:
+            cursor.execute("SELECT * FROM spreadsheet_api_keys WHERE key_hash = ? OR table_id = ?", (target_hash, table_id))
+        else:
+            cursor.execute("SELECT * FROM spreadsheet_api_keys WHERE table_id = ?", (table_id,))
+            
+        rows = cursor.fetchall()
+        if not rows:
+            return True, False  # Idempotent: already revoked/inactive
+            
+        for r in rows:
+            row_dict = dict(r)
+            kh = row_dict.get("key_hash")
+            hint = row_dict.get("key_hint", "...")
+            tid = row_dict.get("table_id", table_id)
+            
+            # Record audit revocation in history
+            try:
+                cursor.execute("""
+                    INSERT INTO spreadsheet_api_key_history (table_id, key_hash, key_hint, created_at)
+                    VALUES (?, ?, ?, ?)
+                """, (tid, kh, f"{hint} [REVOKED]", now))
+            except Exception:
+                pass
+                
+        # Delete from active spreadsheet_api_keys table
+        if target_hash:
+            cursor.execute("DELETE FROM spreadsheet_api_keys WHERE key_hash = ? OR table_id = ?", (target_hash, table_id))
+        else:
+            cursor.execute("DELETE FROM spreadsheet_api_keys WHERE table_id = ?", (table_id,))
+            
+        conn.commit()
+        return True, True
+
 def get_spreadsheet_api_key(key_hash: str) -> dict | None:
     """Retrieves spreadsheet API key info by its hash if active (is_active == 1) and not expired."""
     env_key = (os.getenv("SPREADSHEET_API_KEY") or "").strip()
