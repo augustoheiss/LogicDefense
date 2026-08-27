@@ -37,3 +37,8 @@ api_workspace/
 # Master Plan
 master-plan/
 master-plan
+client_secret.json
+scripts/youtube_auto_uploader.py
+scripts/youtube_batch_uploader.py
+youtube_uploaded_log.json
+youtube_token.json
