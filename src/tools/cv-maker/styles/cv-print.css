@@ -1,6 +1,6 @@
 /* =============================================================
    cv-print.css — Regras de Impressão A4 de Alta Densidade e Fidelidade
-   Elimina bordas/margens escuras de layout e ajusta margens da folha
+   Harmonizado com a tipografia rica do HTML standalone da API
    ============================================================= */
 
 @media print {
@@ -23,13 +23,6 @@
   .cv-preview-area,
   .cv-viewer-container,
   .cv-card,
-  .theme-executive,
-  .theme-creative,
-  .theme-minimalist,
-  .theme-white,
-  .theme-terminal,
-  .theme-terminal .cv-card,
-  .theme-terminal .cv-project-card,
   .cv-wrapper,
   .cv-maker,
   .cv-maker__showcase {
@@ -45,10 +38,41 @@
     min-width: 100% !important;
     box-shadow: none !important;
     border: none !important;
-    font-size: 8.8pt !important;
-    line-height: 1.42 !important;
+    font-size: 9.8pt !important;
+    line-height: 1.55 !important;
     overflow: visible !important;
     display: block !important;
+  }
+
+  /* ── Preserva a Família Tipográfica do Tema Selecionado na Impressão ── */
+  .theme-executive,
+  .theme-executive .cv-card,
+  .theme-executive * {
+    font-family: 'Merriweather', Georgia, 'Times New Roman', serif !important;
+  }
+
+  .theme-creative,
+  .theme-creative .cv-card,
+  .theme-creative * {
+    font-family: 'Poppins', 'Segoe UI', system-ui, sans-serif !important;
+  }
+
+  .theme-minimalist,
+  .theme-minimalist .cv-card,
+  .theme-minimalist * {
+    font-family: 'Inter', system-ui, -apple-system, sans-serif !important;
+  }
+
+  .theme-white,
+  .theme-white .cv-card,
+  .theme-white * {
+    font-family: 'Inter', system-ui, sans-serif !important;
+  }
+
+  .theme-terminal,
+  .theme-terminal .cv-card,
+  .theme-terminal * {
+    font-family: 'Inter', monospace, system-ui, sans-serif !important;
   }
 
   @page {
@@ -56,7 +80,7 @@
     margin: 6mm 8mm 6mm 8mm !important;
   }
 
-  /* Ocultar rigorosamente apenas os elementos de navegacao do portal e app, mantendo o cabecalho do curriculo */
+  /* Ocultar rigorosamente apenas os elementos de navegação do portal e app */
   .cv-no-print,
   .navbar,
   .portal-navbar,
@@ -96,15 +120,15 @@
     max-height: none !important;
     position: static !important;
     top: auto !important;
-    margin-bottom: 0.6rem !important;
-    padding-bottom: 0.3rem !important;
-    border-bottom: 1.5px solid #1e293b !important;
+    margin-bottom: 0.8rem !important;
+    padding-bottom: 0.4rem !important;
+    border-bottom: 2px solid #111827 !important;
   }
 
   .cv-header__top {
     display: flex !important;
     visibility: visible !important;
-    gap: 0.75rem !important;
+    gap: 1rem !important;
     justify-content: space-between !important;
     align-items: flex-start !important;
   }
@@ -112,50 +136,61 @@
   .cv-header__profile {
     display: flex !important;
     visibility: visible !important;
-    gap: 0.75rem !important;
+    gap: 1rem !important;
     align-items: center !important;
   }
 
   .cv-avatar-container {
-    width: 58px !important;
-    height: 58px !important;
+    width: 68px !important;
+    height: 68px !important;
   }
 
   .cv-name {
-    font-size: 1.45rem !important;
-    margin-bottom: 0.15rem !important;
+    font-size: 1.75rem !important;
+    font-weight: 700 !important;
+    margin-bottom: 0.2rem !important;
     color: #0f172a !important;
+    line-height: 1.15 !important;
   }
 
   .cv-label {
-    font-size: 0.82rem !important;
+    font-size: 0.95rem !important;
+    font-weight: 600 !important;
+    color: #334155 !important;
   }
 
   .cv-contacts {
-    font-size: 7.6pt !important;
-    gap: 0.12rem !important;
+    font-size: 8.4pt !important;
+    gap: 0.2rem !important;
+    color: #64748b !important;
+    text-align: right !important;
   }
 
   .cv-summary-card,
   .cv-summary {
     display: block !important;
     visibility: visible !important;
-    margin-top: 0.4rem !important;
-    margin-bottom: 0.6rem !important;
-    font-size: 8.3pt !important;
-    line-height: 1.4 !important;
+    margin-top: 0.6rem !important;
+    margin-bottom: 0.85rem !important;
+    font-size: 9.4pt !important;
+    line-height: 1.55 !important;
     color: #334155 !important;
+    text-align: justify !important;
   }
 
-  /* ── Regras de Quebra de Página ── */
+  /* ── Regras de Quebra de Página e Títulos de Seção ── */
   .cv-section-title {
     break-after: avoid !important;
     page-break-after: avoid !important;
-    font-size: 8pt !important;
-    margin-top: 0.55rem !important;
-    margin-bottom: 0.25rem !important;
-    padding-bottom: 0.12rem !important;
-    letter-spacing: 0.12em !important;
+    font-size: 10.2pt !important;
+    font-weight: 700 !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.05em !important;
+    margin-top: 0.85rem !important;
+    margin-bottom: 0.45rem !important;
+    padding-bottom: 0.25rem !important;
+    border-bottom: 1.5px solid #334155 !important;
+    color: #0f172a !important;
   }
 
   .cv-header,
@@ -178,95 +213,129 @@
     page-break-inside: avoid !important;
   }
 
-  /* ── Itens de Experiência e Educação ── */
+  /* ── Itens de Experiência Profissional ── */
   .cv-section {
-    margin-bottom: 0.6rem !important;
+    margin-bottom: 0.85rem !important;
   }
 
   .cv-work-item {
-    margin-bottom: 0.5rem !important;
+    margin-bottom: 0.75rem !important;
   }
 
-  .cv-work-header {
-    margin-bottom: 0.12rem !important;
+  .cv-work-header,
+  .cv-item-header {
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: baseline !important;
+    margin-bottom: 0.18rem !important;
   }
 
-  .cv-work-position {
-    font-size: 8.8pt !important;
+  .cv-work-position,
+  .cv-item-title {
+    font-size: 9.8pt !important;
     font-weight: 700 !important;
+    color: #0f172a !important;
   }
 
-  .cv-work-company {
-    font-size: 8pt !important;
+  .cv-work-company,
+  .cv-item-company {
+    font-size: 9pt !important;
+    font-weight: 600 !important;
+    color: #0284c7 !important;
+    margin-bottom: 0.18rem !important;
   }
 
-  .cv-work-date {
-    font-size: 7.6pt !important;
+  .cv-work-date,
+  .cv-item-date {
+    font-size: 8.4pt !important;
+    font-weight: 600 !important;
+    color: #64748b !important;
   }
 
-  .cv-work-summary {
-    font-size: 8.1pt !important;
-    line-height: 1.36 !important;
+  .cv-work-summary,
+  .cv-item-summary {
+    font-size: 9.1pt !important;
+    line-height: 1.5 !important;
+    margin-bottom: 0.25rem !important;
+    color: #475569 !important;
+  }
+
+  .cv-work-highlights,
+  .cv-bullets {
+    margin-top: 0.2rem !important;
+    padding-left: 1.2rem !important;
+    gap: 0.15rem !important;
+    font-size: 9pt !important;
+    line-height: 1.48 !important;
+    color: #334155 !important;
+  }
+
+  .cv-bullets li,
+  .cv-bullet-item {
     margin-bottom: 0.2rem !important;
-  }
-
-  .cv-work-highlights {
-    margin-top: 0.15rem !important;
-    gap: 0.12rem !important;
-    font-size: 8pt !important;
-    line-height: 1.34 !important;
   }
 
   /* ── Projetos em Grid de 2 Colunas ── */
   .cv-projects-grid {
     display: grid !important;
     grid-template-columns: 1fr 1fr !important;
-    gap: 0.4rem !important;
+    gap: 0.65rem !important;
   }
 
   .cv-project-card {
-    padding: 0.4rem 0.55rem !important;
+    padding: 0.6rem 0.75rem !important;
     background: #f8fafc !important;
     border: 1px solid #e2e8f0 !important;
-    border-radius: 4px !important;
+    border-radius: 6px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: space-between !important;
   }
 
-  .cv-project-title {
-    font-size: 8.3pt !important;
+  .cv-project-title,
+  .cv-project-card h4 {
+    font-size: 9.6pt !important;
+    font-weight: 700 !important;
+    color: #0f172a !important;
+    margin-bottom: 0.25rem !important;
   }
 
-  .cv-project-desc {
-    font-size: 7.6pt !important;
-    line-height: 1.32 !important;
+  .cv-project-desc,
+  .cv-project-card p {
+    font-size: 8.8pt !important;
+    line-height: 1.45 !important;
+    color: #475569 !important;
+    margin-bottom: 0.4rem !important;
   }
 
   /* ── Formação Acadêmica em Grid de 3 Colunas ── */
   .cv-education-grid {
     display: grid !important;
     grid-template-columns: repeat(3, 1fr) !important;
-    gap: 0.4rem 0.55rem !important;
+    gap: 0.65rem !important;
   }
 
   .cv-education-card {
     background: #f8fafc !important;
-    border: 1px solid #cbd5e1 !important;
-    border-left: 2.5px solid #0f172a !important;
-    border-radius: 4px !important;
-    padding: 0.35rem 0.5rem !important;
+    border: 1px solid #e2e8f0 !important;
+    border-left: 3px solid #0f172a !important;
+    border-radius: 6px !important;
+    padding: 0.55rem 0.7rem !important;
     display: flex !important;
     flex-direction: column !important;
     justify-content: space-between !important;
   }
 
   .cv-education-card .cv-item-title {
-    font-size: 8.1pt !important;
+    font-size: 9.2pt !important;
     font-weight: 700 !important;
-    line-height: 1.25 !important;
-    margin: 0 0 0.15rem 0 !important;
+    line-height: 1.3 !important;
+    margin: 0 0 0.2rem 0 !important;
+    color: #0f172a !important;
   }
 
   .cv-item-inst {
-    font-size: 7.5pt !important;
+    font-size: 8.5pt !important;
     margin: 0 !important;
     color: #334155 !important;
   }
@@ -276,16 +345,16 @@
   .cv-awards-grid {
     display: grid !important;
     grid-template-columns: repeat(3, 1fr) !important;
-    gap: 0.4rem 0.55rem !important;
+    gap: 0.65rem !important;
   }
 
   .cv-cert-card,
   .cv-award-card {
     background: #f8fafc !important;
-    border: 1px solid #cbd5e1 !important;
-    border-left: 2.5px solid #0284c7 !important;
-    border-radius: 4px !important;
-    padding: 0.35rem 0.5rem !important;
+    border: 1px solid #e2e8f0 !important;
+    border-left: 3px solid #0284c7 !important;
+    border-radius: 6px !important;
+    padding: 0.55rem 0.7rem !important;
     display: flex !important;
     flex-direction: column !important;
     justify-content: space-between !important;
@@ -293,36 +362,38 @@
 
   .cv-cert-card .cv-item-title,
   .cv-award-card .cv-item-title {
-    font-size: 7.9pt !important;
+    font-size: 9.2pt !important;
     font-weight: 700 !important;
-    line-height: 1.25 !important;
-    margin: 0 0 0.2rem 0 !important;
+    line-height: 1.3 !important;
+    margin: 0 0 0.25rem 0 !important;
+    color: #0f172a !important;
   }
 
   .cv-issuer-pill {
-    font-size: 6.9pt !important;
+    font-size: 7.8pt !important;
     font-weight: 600 !important;
-    padding: 0.05rem 0.35rem !important;
-    border-radius: 3px !important;
-    background: #e2e8f0 !important;
-    color: #1e293b !important;
-    border: 1px solid #cbd5e1 !important;
+    padding: 0.1rem 0.45rem !important;
+    border-radius: 4px !important;
+    background: #f1f5f9 !important;
+    color: #334155 !important;
+    border: 1px solid #e2e8f0 !important;
     display: inline-block !important;
+    margin-top: 0.25rem !important;
   }
 
   /* ── Idiomas & Fluência em Grid de 3 Colunas ── */
   .cv-languages-grid {
     display: grid !important;
     grid-template-columns: repeat(3, 1fr) !important;
-    gap: 0.4rem 0.55rem !important;
+    gap: 0.65rem !important;
   }
 
   .cv-language-card {
     background: #f8fafc !important;
-    border: 1px solid #cbd5e1 !important;
-    border-left: 2.5px solid #10b981 !important;
-    border-radius: 4px !important;
-    padding: 0.32rem 0.5rem !important;
+    border: 1px solid #e2e8f0 !important;
+    border-left: 3px solid #10b981 !important;
+    border-radius: 6px !important;
+    padding: 0.5rem 0.7rem !important;
     display: flex !important;
     flex-direction: row !important;
     justify-content: space-between !important;
@@ -330,11 +401,13 @@
   }
 
   .cv-lang-name {
-    font-size: 7.8pt !important;
+    font-size: 8.8pt !important;
+    font-weight: 600 !important;
+    color: #0f172a !important;
   }
 
   .cv-lang-fluency {
-    font-size: 7.1pt !important;
+    font-size: 8.2pt !important;
     color: #475569 !important;
   }
 
@@ -342,50 +415,70 @@
   .cv-interests-grid {
     display: grid !important;
     grid-template-columns: repeat(3, 1fr) !important;
-    gap: 0.4rem 0.55rem !important;
+    gap: 0.65rem !important;
   }
 
   .cv-interest-card {
     background: #f8fafc !important;
-    border: 1px solid #cbd5e1 !important;
-    border-left: 2.5px solid #8b5cf6 !important;
-    border-radius: 4px !important;
-    padding: 0.35rem 0.5rem !important;
+    border: 1px solid #e2e8f0 !important;
+    border-left: 3px solid #8b5cf6 !important;
+    border-radius: 6px !important;
+    padding: 0.55rem 0.7rem !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: space-between !important;
   }
 
   .cv-interest-title {
-    font-size: 7.9pt !important;
+    font-size: 9.2pt !important;
     font-weight: 700 !important;
-    margin: 0 0 0.2rem 0 !important;
+    margin: 0 0 0.25rem 0 !important;
+    color: #0f172a !important;
   }
 
   /* ── Skills em Masonry / 3 Colunas ── */
   .cv-skills-masonry {
     display: grid !important;
     grid-template-columns: repeat(3, 1fr) !important;
-    gap: 0.35rem 0.6rem !important;
+    gap: 0.65rem !important;
     column-count: auto !important;
     break-inside: avoid !important;
     page-break-inside: avoid !important;
   }
 
   .cv-skills-group {
+    background: #f8fafc !important;
+    border: 1px solid #e2e8f0 !important;
+    border-left: 3px solid #0284c7 !important;
+    border-radius: 6px !important;
+    padding: 0.6rem !important;
     margin-bottom: 0 !important;
     break-inside: avoid !important;
     page-break-inside: avoid !important;
   }
 
-  .cv-skill-category {
-    font-size: 7.6pt !important;
-    margin-bottom: 0.18rem !important;
+  .cv-skill-category,
+  .cv-skills-group h4 {
+    font-size: 8.8pt !important;
+    font-weight: 700 !important;
+    color: #0f172a !important;
+    margin-bottom: 0.35rem !important;
+  }
+
+  .cv-skill-tags {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 0.3rem !important;
   }
 
   .cv-skill-tag {
-    font-size: 7pt !important;
-    padding: 0.08rem 0.3rem !important;
+    font-size: 8pt !important;
+    font-weight: 600 !important;
+    padding: 0.12rem 0.45rem !important;
     background: #f1f5f9 !important;
     color: #334155 !important;
-    border: 1px solid #cbd5e1 !important;
+    border: 1px solid #e2e8f0 !important;
+    border-radius: 4px !important;
   }
 
   /* Links clicáveis em azul profissional no PDF */
@@ -395,5 +488,3 @@
     font-weight: 500 !important;
   }
 }
-
-
