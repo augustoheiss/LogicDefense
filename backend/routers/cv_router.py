@@ -44,20 +44,6 @@ class CVRenderRequest(BaseModel):
     model_config = {"populate_by_name": True}
 
 
-@router.get("/prompts")
-async def get_cv_prompts_endpoint():
-    """
-    Retorna os prompts de sistema e arquétipos para agentes externos (Claude, ChatGPT, Cursor).
-    """
-    return {
-        "service": "CV Maker 2.0 Engine",
-        "description": "Prompts de Sistema Especializados para Geração e Alfaiataria (ATS Tailoring) de Currículos.",
-        "archetypes": PERSONA_INSTRUCTIONS,
-        "schema_guidance": "Gere a saída estritamente no padrão JSON Resume formatado em YAML válido.",
-        "available_themes": ["executive", "creative", "minimalist", "white", "terminal"]
-    }
-
-
 @router.post("/generate", response_model=CVGenerateResponse)
 async def generate_cv_endpoint(
     payload: CVGenerateRequest,
@@ -146,3 +132,48 @@ async def render_cv_endpoint(
     from services.cv_html_renderer import render_cv_to_standalone_html
     html_content = render_cv_to_standalone_html(yaml_text, theme=theme_name)
     return HTMLResponse(content=html_content)
+
+
+@router.get("/prompts")
+async def get_cv_prompts_endpoint():
+    """
+    Retorna os System Prompts e instruções de arquétipos para agentes de IA externos (Claude, Cursor, GPT).
+    """
+    from prompts.cv_prompts import BASE_INSTRUCTION, PERSONA_INSTRUCTIONS
+
+    prompts_list = [
+        {
+            "id": "ibm-executive",
+            "title": "🏛️ Executivo / IBM Senior Tech Lead",
+            "subtitle": "Fórmula X-Y-Z do Google/IBM, foco em impacto, liderança e métricas de ROI",
+            "persona": "professional",
+            "system_prompt": f"{BASE_INSTRUCTION}\n\n{PERSONA_INSTRUCTIONS['professional']}"
+        },
+        {
+            "id": "ai-solutions-architect",
+            "title": "⚡ AI & Cloud Solutions Architect",
+            "subtitle": "Pipelines de RAG, microsserviços, governança e engenharia de precisão",
+            "persona": "architect",
+            "system_prompt": f"{BASE_INSTRUCTION}\n\n{PERSONA_INSTRUCTIONS['architect']}"
+        },
+        {
+            "id": "career-transition-didactic",
+            "title": "🎓 Didático / Transição de Carreira & Velocidade de Aprendizado",
+            "subtitle": "Foco em raciocínio analítico, comunicação técnica e aprendizado acelerado",
+            "persona": "didactic",
+            "system_prompt": f"{BASE_INSTRUCTION}\n\n{PERSONA_INSTRUCTIONS['didactic']}"
+        },
+        {
+            "id": "ats-tailor-engine",
+            "title": "🎯 Alfaiataria ATS (Match 100% com a Vaga)",
+            "subtitle": "Otimização milimétrica de palavras-chave contra uma Job Description",
+            "persona": "tailor",
+            "system_prompt": f"{BASE_INSTRUCTION}\n\nTASK ADICIONAL: Adapte o currículo para dar match com os requisitos essenciais da vaga informada sem inventar dados."
+        }
+    ]
+
+    return {
+        "service": "CV Maker 2.0 Engine",
+        "description": "System Prompts corporativos para geração de currículos JSON Resume / YAML.",
+        "prompts": prompts_list
+    }

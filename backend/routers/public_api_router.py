@@ -43,15 +43,15 @@ router = APIRouter(prefix="/api/v1/public", tags=["Public API Integration"])
 async def get_public_openapi(request: Request):
     app = request.app
     full_schema = get_openapi(
-        title="Assistente Moeda - Public API Integration (Stateless / Local-First)",
-        version="1.0.0",
-        description="Public in-memory endpoints to process your financial data without remote database storage.",
+        title="HeissLab & LogicDefense — Unified Public API (Assistente Moeda & CV Maker 2.0)",
+        version="2.0.0",
+        description="Public in-memory and stateless endpoints for financial analysis, DRE computation, and CV generation/rendering.",
         routes=app.routes,
     )
 
     public_paths = {}
     for path, path_item in full_schema.get("paths", {}).items():
-        if path.startswith("/api/v1/public"):
+        if path.startswith("/api/v1/public") or path.startswith("/api/v1/cv"):
             if path == "/api/v1/public/openapi.json":
                 continue
             public_paths[path] = path_item
