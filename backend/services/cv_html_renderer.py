@@ -57,11 +57,42 @@ THEME_COLORS = {
     },
 }
 
-def render_cv_to_standalone_html(yaml_or_dict: Any, theme: str = "executive") -> str:
+I18N = {
+    "pt": {
+        "print_btn": "🖨️ Imprimir / Salvar PDF",
+        "work": "💼 Experiência Profissional",
+        "projects": "🚀 Projetos em Destaque",
+        "skills": "⚡ Competências & Habilidades Técnicas",
+        "education": "🎓 Formação Acadêmica",
+        "certificates": "📜 Licenças & Certificações",
+        "publications": "✍️ Artigos & Publicações",
+        "languages": "🌐 Idiomas",
+        "interests": "🎯 Interesses & Pesquisa",
+        "present": "Presente",
+        "in_progress": "Em andamento",
+    },
+    "en": {
+        "print_btn": "🖨️ Print / Save as PDF",
+        "work": "💼 Professional Experience",
+        "projects": "🚀 Featured Projects & Systems",
+        "skills": "⚡ Core Competencies & Technical Skills",
+        "education": "🎓 Education & Academic Background",
+        "certificates": "📜 Licenses & Certifications",
+        "publications": "✍️ Articles & Publications",
+        "languages": "🌐 Languages",
+        "interests": "🎯 Technical Research & Interests",
+        "present": "Present",
+        "in_progress": "In Progress",
+    },
+}
+
+def render_cv_to_standalone_html(yaml_or_dict: Any, theme: str = "executive", lang: str = "auto") -> str:
     """
-    Gera um HTML standalone de alta fidelidade visual para visualização e impressão A4.
+    Gera um HTML standalone de alta fidelidade visual para visualização e impressão A4 em PT ou EN.
     """
+    raw_str = ""
     if isinstance(yaml_or_dict, str):
+        raw_str = yaml_or_dict
         try:
             data = yaml.safe_load(yaml_or_dict) or {}
         except Exception:
@@ -78,6 +109,20 @@ def render_cv_to_standalone_html(yaml_or_dict: Any, theme: str = "executive") ->
     interests = data.get("interests", [])
     certificates = data.get("certificates", [])
 
+    # Auto-detect language
+    if lang == "auto":
+        txt_to_check = (raw_str or "") + " " + str(basics.get("label", "")) + " " + str(basics.get("summary", ""))
+        if any(w in txt_to_check.lower() for w in ["developer", "software engineer", "intern", "experience", "education"]):
+            if "desenvolvedor" in txt_to_check.lower() or "experiência" in txt_to_check.lower():
+                selected_lang = "pt"
+            else:
+                selected_lang = "en"
+        else:
+            selected_lang = "pt"
+    else:
+        selected_lang = lang if lang in I18N else "pt"
+
+    t = I18N[selected_lang]
     theme_cfg = THEME_COLORS.get(theme, THEME_COLORS["executive"])
 
     # Profiles list
@@ -94,7 +139,8 @@ def render_cv_to_standalone_html(yaml_or_dict: Any, theme: str = "executive") ->
         pos = html.escape(w.get("position", ""))
         company = html.escape(w.get("name", ""))
         start = html.escape(str(w.get("startDate", "")))
-        end = html.escape(str(w.get("endDate", "Presente") or "Presente"))
+        end_val = w.get("endDate", "")
+        end = html.escape(str(end_val)) if end_val else t["present"]
         summary = html.escape(w.get("summary", ""))
         highlights = w.get("highlights", [])
         
@@ -457,7 +503,7 @@ def render_cv_to_standalone_html(yaml_or_dict: Any, theme: str = "executive") ->
 <body>
 
   <div class="toolbar">
-    <button onclick="window.print()">🖨️ Imprimir / Salvar PDF</button>
+    <button onclick="window.print()">{t["print_btn"]}</button>
   </div>
 
   <div class="container">
@@ -476,21 +522,21 @@ def render_cv_to_standalone_html(yaml_or_dict: Any, theme: str = "executive") ->
 
     {f'<div class="summary">{html.escape(basics.get("summary", "")).replace(chr(10), "<br>")}</div>' if basics.get("summary") else ''}
 
-    {f'<section><h2 class="section-title">💼 Experiência Profissional</h2>{work_html}</section>' if work else ''}
+    {f'<section><h2 class="section-title">{t["work"]}</h2>{work_html}</section>' if work else ''}
 
-    {f'<section><h2 class="section-title">🚀 Projetos em Destaque</h2><div class="projects-grid">{projects_html}</div></section>' if projects else ''}
+    {f'<section><h2 class="section-title">{t["projects"]}</h2><div class="projects-grid">{projects_html}</div></section>' if projects else ''}
 
-    {f'<section class="avoid-break"><h2 class="section-title">⚡ Competências & Habilidades Técnicas</h2><div class="skills-grid">{skills_html}</div></section>' if skills else ''}
+    {f'<section class="avoid-break"><h2 class="section-title">{t["skills"]}</h2><div class="skills-grid">{skills_html}</div></section>' if skills else ''}
 
-    {f'<section><h2 class="section-title">🎓 Formação Acadêmica</h2>{education_html}</section>' if education else ''}
+    {f'<section><h2 class="section-title">{t["education"]}</h2>{education_html}</section>' if education else ''}
 
-    {f'<section class="avoid-break"><h2 class="section-title">📜 Licenças & Certificações</h2>{certificates_html}</section>' if certificates else ''}
+    {f'<section class="avoid-break"><h2 class="section-title">{t["certificates"]}</h2>{certificates_html}</section>' if certificates else ''}
 
-    {f'<section class="avoid-break"><h2 class="section-title">✍️ Artigos & Publicações</h2>{publications_html}</section>' if publications else ''}
+    {f'<section class="avoid-break"><h2 class="section-title">{t["publications"]}</h2>{publications_html}</section>' if publications else ''}
 
-    {f'<section class="avoid-break"><h2 class="section-title">🌐 Idiomas</h2><div class="tags">{lang_html}</div></section>' if languages else ''}
+    {f'<section class="avoid-break"><h2 class="section-title">{t["languages"]}</h2><div class="tags">{lang_html}</div></section>' if languages else ''}
 
-    {f'<section class="avoid-break"><h2 class="section-title">🎯 Interesses & Pesquisa</h2>{interest_html}</section>' if interests else ''}
+    {f'<section class="avoid-break"><h2 class="section-title">{t["interests"]}</h2>{interest_html}</section>' if interests else ''}
   </div>
 
 </body>
