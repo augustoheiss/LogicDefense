@@ -36,6 +36,14 @@ class CVTailorRequest(BaseModel):
     persona: Optional[str] = Field(default="professional", description="Persona desejada: professional, architect, historian, didactic")
 
 
+class CVRenderRequest(BaseModel):
+    yaml_content: Optional[str] = Field(default=None, alias="raw_text", description="Conteúdo do currículo em YAML ou texto")
+    theme: Optional[str] = Field(default="executive", description="Tema visual: executive, creative, minimalist, white, terminal")
+    format: Optional[str] = Field(default="html", description="Formato de saída: html ou yaml")
+
+    model_config = {"populate_by_name": True}
+
+
 @router.post("/generate", response_model=CVGenerateResponse)
 async def generate_cv_endpoint(
     payload: CVGenerateRequest,
@@ -109,15 +117,17 @@ async def tailor_cv_endpoint(
 
 @router.post("/render")
 async def render_cv_endpoint(
-    yaml_content: str,
-    theme: Optional[str] = Query("executive", description="Tema visual: executive, creative, minimalist, white, terminal"),
-    format: Optional[str] = Query("html", description="Formato de saída: html ou yaml"),
+    payload: CVRenderRequest = CVRenderRequest(),
+    x_api_key: Optional[str] = Header(None, alias="X-API-Key"),
 ):
     """
     Renderiza um payload HTML standalone ou devolve o YAML normalizado para agentes externos.
     """
-    if format == "yaml":
-        return Response(content=yaml_content, media_type="text/yaml")
+    yaml_text = payload.yaml_content or ""
+    theme_name = payload.theme or "executive"
+
+    if payload.format == "yaml":
+        return Response(content=yaml_text, media_type="text/yaml")
 
     html_template = f"""<!DOCTYPE html>
 <html lang="pt-BR">
@@ -129,9 +139,9 @@ async def render_cv_endpoint(
     pre {{ background: #f4f4f5; padding: 1rem; border-radius: 6px; overflow-x: auto; }}
   </style>
 </head>
-<body class="theme-{theme}">
-  <h2>Currículo Formatado (Tema: {theme})</h2>
-  <pre>{yaml_content}</pre>
+<body class="theme-{theme_name}">
+  <h2>Currículo Formatado (Tema: {theme_name})</h2>
+  <pre>{yaml_text}</pre>
 </body>
 </html>"""
 
