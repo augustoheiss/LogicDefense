@@ -1,6 +1,22 @@
 import type { CVVersions } from '../types/cv'
 
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || ''
+/**
+ * Returns candidate backend URLs in priority order.
+ * Ensures the app works on localhost, on Render, and when statically deployed without proxy.
+ */
+function getCandidateBackendUrls(): string[] {
+  const envUrl = import.meta.env.VITE_BACKEND_URL
+  const isLocal =
+    typeof window !== 'undefined' &&
+    (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+
+  const urls: string[] = []
+  if (envUrl) urls.push(envUrl.replace(/\/$/, ''))
+  if (isLocal) urls.push('http://localhost:8000')
+  urls.push('https://ocorrencias-pdf-writer.onrender.com')
+  urls.push('https://heiss-cv-engine.onrender.com')
+  return Array.from(new Set(urls))
+}
 
 export interface GenerateCVRequest {
   raw_text: string
@@ -10,6 +26,7 @@ export interface GenerateCVRequest {
 
 /**
  * Sends raw resume text (and optional job description) to the backend for parallel archetype generation.
+ * Iterates through candidate backends with automatic failover to eliminate 404/405/502 errors.
  */
 export async function generateCVFromText(req: GenerateCVRequest): Promise<CVVersions> {
   const headers: Record<string, string> = {
@@ -23,112 +40,157 @@ export async function generateCVFromText(req: GenerateCVRequest): Promise<CVVers
     headers['X-CV-Key'] = storedKey
   }
 
-  // Try the new v1 endpoint first, with automatic fallback to legacy /api/generate-cvs
-  let response: Response
-  try {
-    response = await fetch(`${BACKEND_URL}/api/v1/cv/generate`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        raw_text: req.raw_text,
-        job_description: req.job_description,
-      }),
-    })
+  const candidateUrls = getCandidateBackendUrls()
+  let lastError: Error = new Error('Nenhum servidor de IA disponível no momento.')
 
-    if (response.status === 404) {
-      // Fallback to legacy endpoint
-      response = await fetch(`${BACKEND_URL}/api/generate-cvs`, {
+  for (const baseUrl of candidateUrls) {
+    // 1. Try modern /api/v1/cv/generate
+    try {
+      const response = await fetch(`${baseUrl}/api/v1/cv/generate`, {
         method: 'POST',
         headers,
-        body: JSON.stringify({ raw_text: req.raw_text }),
+        body: JSON.stringify({
+          raw_text: req.raw_text,
+          job_description: req.job_description,
+        }),
       })
+
+      if (response.ok) {
+        const data = await response.json()
+        return {
+          professional: data.professional || '',
+          architect: data.architect || data.professional || '',
+          historian: data.historian || '',
+          didactic: data.didactic || '',
+          alien: data.alien || '',
+        }
+      }
+
+      // If 404/405, attempt legacy /api/generate-cvs on this same server
+      if (response.status === 404 || response.status === 405) {
+        const legacyRes = await fetch(`${baseUrl}/api/generate-cvs`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ raw_text: req.raw_text }),
+        })
+        if (legacyRes.ok) {
+          const data = await legacyRes.json()
+          return {
+            professional: data.professional || '',
+            architect: data.architect || data.professional || '',
+            historian: data.historian || '',
+            didactic: data.didactic || '',
+            alien: data.alien || '',
+          }
+        }
+      }
+
+      const errData = await response.json().catch(() => ({}))
+      lastError = new Error(errData.detail || `Erro no servidor (${response.status})`)
+    } catch (netErr) {
+      // Try legacy endpoint on network exception
+      try {
+        const legacyRes = await fetch(`${baseUrl}/api/generate-cvs`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ raw_text: req.raw_text }),
+        })
+        if (legacyRes.ok) {
+          const data = await legacyRes.json()
+          return {
+            professional: data.professional || '',
+            architect: data.architect || data.professional || '',
+            historian: data.historian || '',
+            didactic: data.didactic || '',
+            alien: data.alien || '',
+          }
+        }
+      } catch (legacyErr) {
+        lastError = (netErr as Error) || (legacyErr as Error)
+      }
     }
-  } catch (netErr) {
-    // If v1 fails by network, try fallback
-    response = await fetch(`${BACKEND_URL}/api/generate-cvs`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ raw_text: req.raw_text }),
-    })
   }
 
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}))
-    const detail = errorData.detail || `Erro no servidor (${response.status})`
-    throw new Error(detail)
-  }
-
-  const data = await response.json()
-  return {
-    professional: data.professional || '',
-    architect: data.architect || data.professional || '',
-    historian: data.historian || '',
-    didactic: data.didactic || '',
-    alien: data.alien || '',
-  }
+  throw lastError
 }
 
 /**
  * Validates an API key against the backend SQLite/Turso database.
  */
 export async function validateApiKey(apiKey: string): Promise<{ valid: boolean; tableId?: string; expiresAt?: string; error?: string }> {
-  try {
-    const res = await fetch(`${BACKEND_URL}/api/v1/api-keys/validate`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ apiKey }),
-    })
+  const candidateUrls = getCandidateBackendUrls()
+  for (const baseUrl of candidateUrls) {
+    try {
+      const res = await fetch(`${baseUrl}/api/v1/api-keys/validate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ apiKey }),
+      })
 
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}))
-      return { valid: false, error: err.detail || 'Chave inválida ou expirada.' }
+      if (res.ok) {
+        const data = await res.json()
+        return {
+          valid: Boolean(data.valid),
+          tableId: data.tableId,
+          expiresAt: data.expiresAt,
+        }
+      }
+    } catch {
+      // Continue to next candidate
     }
-
-    const data = await res.json()
-    return {
-      valid: Boolean(data.valid),
-      tableId: data.tableId,
-      expiresAt: data.expiresAt,
-    }
-  } catch (err) {
-    return { valid: false, error: (err as Error).message }
   }
+  return { valid: false, error: 'Não foi possível validar a chave no servidor.' }
 }
 
 /**
  * Generates a new temporary API key (1, 7, or 30 days) via the shared API Keys router.
  */
 export async function generateNewApiKey(ttlDays: number = 1): Promise<{ apiKey: string; keyHint: string; expiresAt: string; tableId: string }> {
-  const res = await fetch(`${BACKEND_URL}/api/v1/api-keys/generate`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      table_id: `cv-maker-${Date.now()}`,
-      ttlDays,
-      permissions: 'read:write',
-    }),
-  })
+  const candidateUrls = getCandidateBackendUrls()
+  let lastErr = new Error('Falha ao conectar com o servidor de chaves.')
 
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}))
-    throw new Error(err.detail || 'Falha ao gerar nova chave de API.')
+  for (const baseUrl of candidateUrls) {
+    try {
+      const res = await fetch(`${baseUrl}/api/v1/api-keys/generate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          table_id: `cv-maker-${Date.now()}`,
+          ttlDays,
+          permissions: 'read:write',
+        }),
+      })
+
+      if (res.ok) {
+        return await res.json()
+      }
+      const err = await res.json().catch(() => ({}))
+      lastErr = new Error(err.detail || 'Falha ao gerar nova chave de API.')
+    } catch (e) {
+      lastErr = e as Error
+    }
   }
 
-  return await res.json()
+  throw lastErr
 }
 
 /**
  * Instantly revokes an API key in the backend and clears client state.
  */
 export async function revokeApiKey(tableId: string, apiKey?: string): Promise<boolean> {
-  try {
-    const res = await fetch(`${BACKEND_URL}/api/v1/api-keys/revoke`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ tableId, apiKey }),
-    })
-    return res.ok
-  } catch {
-    return false
+  const candidateUrls = getCandidateBackendUrls()
+  for (const baseUrl of candidateUrls) {
+    try {
+      const res = await fetch(`${baseUrl}/api/v1/api-keys/revoke`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tableId, apiKey }),
+      })
+      if (res.ok) return true
+    } catch {
+      // Continue to next candidate
+    }
   }
+  return false
 }
+
