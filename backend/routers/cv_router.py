@@ -4,6 +4,10 @@ Suporta chamadas web do laboratório e integração com agentes externos via API
 """
 
 import logging
+import io
+import os
+import zipfile
+import yaml
 from typing import Optional
 from fastapi import APIRouter, HTTPException, Header, Query, status
 from fastapi.responses import HTMLResponse, Response
@@ -39,9 +43,27 @@ class CVTailorRequest(BaseModel):
 class CVRenderRequest(BaseModel):
     yaml_content: Optional[str] = Field(default=None, alias="raw_text", description="Conteúdo do currículo em YAML ou texto")
     theme: Optional[str] = Field(default="executive", description="Tema visual: executive, creative, minimalist, white, terminal")
-    format: Optional[str] = Field(default="html", description="Formato de saída: html ou yaml")
+    format: Optional[str] = Field(default="html", description="Formato de saída: html, yaml, zip, json")
+    filename: Optional[str] = Field(default="curriculo", description="Nome base para download do arquivo")
 
     model_config = {"populate_by_name": True}
+
+
+def get_default_yaml_content() -> str:
+    """Carrega o YAML de currículo padrão do repositório como fallback."""
+    possible_paths = [
+        os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "cv-yaml", "cv-ptbr.yaml")),
+        os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "cv-yaml", "cv-ptbr.yaml")),
+        os.path.abspath("cv-yaml/cv-ptbr.yaml"),
+    ]
+    for p in possible_paths:
+        if os.path.exists(p):
+            try:
+                with open(p, "r", encoding="utf-8") as f:
+                    return f.read()
+            except Exception:
+                pass
+    return ""
 
 
 from db.license_db import get_license_by_raw_key, deduct_license_tokens, is_godmode_key, get_spreadsheet_api_key, hash_key
@@ -173,22 +195,72 @@ async def tailor_cv_endpoint(
         )
 
 
+@router.get("/download")
+@router.get("/render")
 @router.post("/render")
 async def render_cv_endpoint(
-    payload: CVRenderRequest = CVRenderRequest(),
+    payload: Optional[CVRenderRequest] = None,
+    format: Optional[str] = Query(None, description="Formato de saída: html, yaml, zip, json"),
+    theme: Optional[str] = Query(None, description="Tema visual: executive, creative, minimalist, white, terminal"),
+    lang: Optional[str] = Query(None, description="Idioma forçado: pt, en ou auto"),
+    filename: Optional[str] = Query(None, description="Nome base para download do arquivo (sem extensão)"),
     x_api_key: Optional[str] = Header(None, alias="X-API-Key"),
 ):
     """
-    Renderiza um payload HTML standalone ou devolve o YAML normalizado para agentes externos.
+    Renderiza ou baixa o currículo em múltiplos formatos:
+    - format=zip  -> Retorna pacote .zip com curriculo.html e curriculo.yaml
+    - format=yaml -> Retorna o arquivo .yaml estruturado puro
+    - format=html -> Retorna o HTML standalone interativo de alta densidade
+    - format=json -> Retorna JSON {"html": ..., "yaml": ..., "theme": ...}
     """
-    yaml_text = payload.yaml_content or ""
-    theme_name = payload.theme or "executive"
+    q_format = format if isinstance(format, str) else None
+    q_theme = theme if isinstance(theme, str) else None
+    q_lang = lang if isinstance(lang, str) else None
+    q_filename = filename if isinstance(filename, str) else None
 
-    if payload.format == "yaml":
-        return Response(content=yaml_text, media_type="text/yaml")
+    yaml_text = (payload.yaml_content if payload and payload.yaml_content else None) or get_default_yaml_content()
+    theme_name = q_theme or (payload.theme if payload and payload.theme else None) or "executive"
+    target_format = (q_format or (payload.format if payload and payload.format else None) or "html").strip().lower()
+    base_filename = (q_filename or (payload.filename if payload and payload.filename else None) or "curriculo").strip()
+    target_lang = q_lang or "auto"
 
     from services.cv_html_renderer import render_cv_to_standalone_html
-    html_content = render_cv_to_standalone_html(yaml_text, theme=theme_name)
+
+    # 1. YAML Puro
+    if target_format in ("yaml", "yml"):
+        return Response(
+            content=yaml_text,
+            media_type="text/yaml; charset=utf-8",
+            headers={"Content-Disposition": f'attachment; filename="{base_filename}.yaml"'}
+        )
+
+    # Gera o HTML standalone
+    html_content = render_cv_to_standalone_html(yaml_text, theme=theme_name, lang=target_lang)
+
+    # 2. Pacote ZIP (HTML + YAML)
+    if target_format == "zip":
+        zip_buffer = io.BytesIO()
+        with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
+            zip_file.writestr(f"{base_filename}.html", html_content)
+            zip_file.writestr(f"{base_filename}.yaml", yaml_text)
+
+        return Response(
+            content=zip_buffer.getvalue(),
+            media_type="application/zip",
+            headers={"Content-Disposition": f'attachment; filename="{base_filename}_completo.zip"'}
+        )
+
+    # 3. JSON Estruturado para integrações
+    if target_format == "json":
+        return {
+            "html": html_content,
+            "yaml": yaml_text,
+            "theme": theme_name,
+            "filename": base_filename,
+            "lang": target_lang
+        }
+
+    # 4. HTML Standalone (Padrão)
     return HTMLResponse(content=html_content)
 
 

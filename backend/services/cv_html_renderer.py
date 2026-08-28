@@ -60,6 +60,9 @@ THEME_COLORS = {
 I18N = {
     "pt": {
         "print_btn": "🖨️ Imprimir / Salvar PDF",
+        "download_yaml": "📥 Baixar YAML",
+        "copy_yaml": "📋 Copiar YAML",
+        "yaml_copied": "Copiado!",
         "work": "💼 Experiência Profissional",
         "projects": "🚀 Projetos em Destaque",
         "skills": "⚡ Competências & Habilidades Técnicas",
@@ -73,6 +76,9 @@ I18N = {
     },
     "en": {
         "print_btn": "🖨️ Print / Save as PDF",
+        "download_yaml": "📥 Download YAML",
+        "copy_yaml": "📋 Copy YAML",
+        "yaml_copied": "Copied!",
         "work": "💼 Professional Experience",
         "projects": "🚀 Featured Projects & Systems",
         "skills": "⚡ Core Competencies & Technical Skills",
@@ -582,12 +588,21 @@ def render_cv_to_standalone_html(yaml_or_dict: Any, theme: str = "executive", la
         margin: 6mm 8mm 6mm 8mm !important;
       }}
     }}
+
+    .toolbar button.btn-sec {{
+      background: #334155;
+    }}
+    .toolbar button.btn-sec:hover {{
+      background: #475569;
+    }}
   </style>
 </head>
 <body>
 
   <div class="toolbar">
     <button onclick="window.print()">{t["print_btn"]}</button>
+    <button onclick="downloadYaml()" class="btn-sec">{t["download_yaml"]}</button>
+    <button id="copy-btn" onclick="copyYaml()" class="btn-sec">{t["copy_yaml"]}</button>
   </div>
 
   <div class="container">
@@ -624,6 +639,52 @@ def render_cv_to_standalone_html(yaml_or_dict: Any, theme: str = "executive", la
     {f'<section class="avoid-break"><h2 class="section-title">{t["interests"]}</h2><div class="interests-grid">{interest_html}</div></section>' if interests else ''}
   </div>
 
+  <script id="raw-yaml-data" type="text/yaml">
+{html.escape(raw_str)}
+  </script>
+
+  <script>
+    function downloadYaml() {{
+      const el = document.getElementById('raw-yaml-data');
+      if (!el) return;
+      const content = el.textContent.trim();
+      const blob = new Blob([content], {{ type: 'text/yaml;charset=utf-8' }});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'curriculo.yaml';
+      a.click();
+      URL.revokeObjectURL(url);
+    }}
+
+    function copyYaml() {{
+      const el = document.getElementById('raw-yaml-data');
+      if (!el) return;
+      const content = el.textContent.trim();
+      navigator.clipboard.writeText(content).then(() => {{
+        const btn = document.getElementById('copy-btn');
+        if (btn) {{
+          const original = btn.innerText;
+          btn.innerText = '✅ {t["yaml_copied"]}';
+          setTimeout(() => {{ btn.innerText = original; }}, 2000);
+        }}
+      }}).catch(() => {{
+        // Fallback se permissao do clipboard falhar
+        const textarea = document.createElement('textarea');
+        textarea.value = content;
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+        const btn = document.getElementById('copy-btn');
+        if (btn) {{
+          const original = btn.innerText;
+          btn.innerText = '✅ {t["yaml_copied"]}';
+          setTimeout(() => {{ btn.innerText = original; }}, 2000);
+        }}
+      }});
+    }}
+  </script>
 </body>
 </html>
 """
