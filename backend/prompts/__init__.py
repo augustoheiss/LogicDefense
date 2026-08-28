@@ -1,0 +1,1 @@
+from .cv_prompts import BASE_INSTRUCTION, PERSONA_INSTRUCTIONS

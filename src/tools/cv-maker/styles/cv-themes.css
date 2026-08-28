@@ -1,0 +1,334 @@
+/* =============================================================
+   cv-themes.css — 5 Temas Visuais de Alta Densidade (CV Maker 2.0)
+   Inspirado no ecossistema cv-yaml e adaptado para React / Modern CSS
+   ============================================================= */
+
+@import url('https://fonts.googleapis.com/css2?family=Merriweather:ital,wght@0,300;0,400;0,700;0,900;1,400&family=Courier+Prime:wght@400;700&family=Poppins:wght@300;400;500;600;700;800&family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   ■  1. TEMA EXECUTIVO (tema-executivo)
+      Merriweather · Preto / Cinza Chumbo / Branco
+      Layout denso, linhas finas, documento corporativo/jurídico
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+.theme-executive {
+  background-color: #fdfdfd;
+  font-family: 'Merriweather', Georgia, 'Times New Roman', serif;
+  font-size: 14px;
+  line-height: 1.7;
+  color: #1a1a1a;
+  letter-spacing: 0.01em;
+}
+
+.theme-executive .cv-card {
+  background-color: #ffffff;
+  border-radius: 0;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
+  border: 1px solid #d1d5db;
+}
+
+.theme-executive header.cv-header {
+  border-bottom: 2px solid #111827;
+  padding-bottom: 1.25rem;
+}
+
+.theme-executive h1.cv-name {
+  font-family: 'Merriweather', Georgia, serif;
+  font-size: 1.85rem;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  color: #050505;
+}
+
+.theme-executive .cv-label {
+  font-family: 'Merriweather', Georgia, serif;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #374151;
+}
+
+.theme-executive h2.cv-section-title {
+  font-family: 'Merriweather', Georgia, serif;
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  color: #111827;
+  border-bottom: 1px solid #4b5563;
+  padding-bottom: 0.25rem;
+  margin-bottom: 1rem;
+}
+
+.theme-executive h3.cv-item-title {
+  font-family: 'Merriweather', Georgia, serif;
+  font-weight: 700;
+  font-size: 0.92rem;
+  color: #111827;
+}
+
+.theme-executive .cv-meta-tag {
+  background-color: transparent;
+  color: #374151;
+  border: 1px solid #9ca3af;
+  border-radius: 0;
+  font-family: 'Courier Prime', monospace;
+  font-size: 0.75rem;
+}
+
+.theme-executive .cv-skill-tag {
+  background-color: transparent;
+  color: #374151;
+  border: 1px solid #9ca3af;
+  border-radius: 0;
+  font-size: 0.75rem;
+}
+
+.theme-executive .cv-link {
+  color: #1f2937;
+  text-decoration: underline;
+  text-decoration-color: #9ca3af;
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   ■  2. TEMA CRIATIVO (theme-creative)
+      Poppins · Azul Royal + Laranja · Design Moderno de Agência
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+.theme-creative {
+  background: linear-gradient(145deg, #eff6ff 0%, #eef2ff 100%);
+  font-family: 'Poppins', 'Segoe UI', system-ui, sans-serif;
+  font-size: 14.5px;
+  line-height: 1.65;
+  color: #1e293b;
+}
+
+.theme-creative .cv-card {
+  background-color: #ffffff;
+  border-radius: 1.25rem;
+  box-shadow: 0 20px 40px -10px rgba(37, 99, 235, 0.12);
+  border: 1px solid #dbeafe;
+}
+
+.theme-creative header.cv-header {
+  border-bottom: 3px solid #2563eb;
+  padding-bottom: 1.5rem;
+}
+
+.theme-creative h1.cv-name {
+  font-family: 'Poppins', sans-serif;
+  font-size: 2.1rem;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  color: #1e3a8a;
+}
+
+.theme-creative .cv-label {
+  font-family: 'Poppins', sans-serif;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #f97316;
+}
+
+.theme-creative h2.cv-section-title {
+  font-family: 'Poppins', sans-serif;
+  font-size: 0.88rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #1e3a8a;
+  border-bottom: 2px solid #bfdbfe;
+  padding-bottom: 0.35rem;
+  margin-bottom: 1.25rem;
+}
+
+.theme-creative h3.cv-item-title {
+  font-family: 'Poppins', sans-serif;
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: #1e293b;
+}
+
+.theme-creative .cv-project-card {
+  background-color: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 0.75rem;
+  padding: 1rem;
+}
+
+.theme-creative .cv-skill-tag {
+  background-color: #dbeafe;
+  color: #1e3a8a;
+  border: 1px solid #bfdbfe;
+  border-radius: 0.375rem;
+  font-weight: 500;
+}
+
+.theme-creative .cv-link {
+  color: #2563eb;
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   ■  3. TEMA MINIMALISTA (theme-minimalist)
+      Inter / System UI · Clean, Branco Puro, Hierarquia Tipográfica
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+.theme-minimalist {
+  background-color: #ffffff;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-size: 14.5px;
+  line-height: 1.75;
+  color: #0f172a;
+}
+
+.theme-minimalist .cv-card {
+  background-color: #ffffff;
+  border-radius: 0;
+  box-shadow: none;
+  border: none;
+}
+
+.theme-minimalist header.cv-header {
+  border-bottom: 1px solid #e2e8f0;
+  padding-bottom: 1.25rem;
+}
+
+.theme-minimalist h1.cv-name {
+  font-family: 'Inter', sans-serif;
+  font-size: 2.4rem;
+  font-weight: 800;
+  letter-spacing: -0.05em;
+  color: #0f172a;
+}
+
+.theme-minimalist .cv-label {
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: #64748b;
+}
+
+.theme-minimalist h2.cv-section-title {
+  font-family: 'Inter', sans-serif;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  color: #94a3b8;
+  border-bottom: none;
+  margin-bottom: 1rem;
+}
+
+.theme-minimalist h3.cv-item-title {
+  font-weight: 700;
+  font-size: 0.92rem;
+  color: #0f172a;
+}
+
+.theme-minimalist .cv-skill-tag {
+  background-color: transparent;
+  color: #475569;
+  border: 1px solid #e2e8f0;
+  border-radius: 2px;
+}
+
+.theme-minimalist .cv-link {
+  color: #475569;
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   ■  4. TEMA WHITE (theme-white)
+      Foco em Leitura Rápida e Impressão Limpa
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+.theme-white {
+  background-color: #ffffff;
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 14.5px;
+  line-height: 1.7;
+  color: #334155;
+}
+
+.theme-white .cv-card {
+  background-color: #ffffff;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.04);
+}
+
+.theme-white header.cv-header {
+  border-bottom: 2px solid #059669;
+}
+
+.theme-white h1.cv-name {
+  color: #0f172a;
+  font-weight: 800;
+}
+
+.theme-white .cv-label {
+  color: #059669;
+  font-weight: 600;
+}
+
+.theme-white h2.cv-section-title {
+  color: #059669;
+  border-bottom: 1px solid #cbd5e1;
+}
+
+.theme-white .cv-skill-tag {
+  background-color: #f1f5f9;
+  color: #475569;
+  border: 1px solid #cbd5e1;
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   ■  5. TEMA TERMINAL / DARK (theme-terminal)
+      O Clássico Dark Mode com Tons Esmeralda para Engenheiros
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+.theme-terminal {
+  background-color: #090d16;
+  font-family: 'Inter', monospace, system-ui, sans-serif;
+  font-size: 14.5px;
+  line-height: 1.65;
+  color: #cbd5e1;
+}
+
+.theme-terminal .cv-card {
+  background-color: #0f172a;
+  border: 1px solid #1e293b;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+}
+
+.theme-terminal header.cv-header {
+  border-bottom: 2px solid #10b981;
+}
+
+.theme-terminal h1.cv-name {
+  color: #ffffff;
+  font-weight: 800;
+}
+
+.theme-terminal .cv-label {
+  color: #34d399;
+  font-family: 'Courier Prime', monospace;
+}
+
+.theme-terminal h2.cv-section-title {
+  color: #34d399;
+  border-bottom: 1px solid #334155;
+}
+
+.theme-terminal .cv-project-card {
+  background-color: rgba(30, 41, 59, 0.6);
+  border: 1px solid #334155;
+  border-radius: 0.5rem;
+  padding: 1rem;
+}
+
+.theme-terminal .cv-skill-tag {
+  background-color: #1e293b;
+  color: #e2e8f0;
+  border: 1px solid #334155;
+}
+
+.theme-terminal .cv-link {
+  color: #34d399;
+}
