@@ -6,6 +6,7 @@ Zero Supabase dependency — links directly to License Keys in SQLite/Turso.
 """
 
 import logging
+import uuid
 from fastapi import APIRouter, HTTPException, Header, status
 from pydantic import BaseModel, Field
 from db.license_db import (
@@ -21,8 +22,12 @@ log = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/api-keys", tags=["API Keys Management"])
 
 class GenerateKeyRequest(BaseModel):
-    table_id: str = Field(..., description="ID da planilha para a qual a chave será gerada")
-    license_key: str | None = Field(default=None, description="Sua Chave de Licença PRO (am_pro_...)")
+    table_id: str | None = Field(
+        default=None,
+        alias="tableId",
+        description="ID da planilha ou sessão do agente. Se omitido, uma sessão autônoma efêmera é gerada automaticamente."
+    )
+    license_key: str | None = Field(default=None, alias="licenseKey", description="Sua Chave de Licença PRO (am_pro_...) ou omitida para Community")
     permissions: str = Field(default="read:write", description="Permissões da chave: 'read-only' ou 'read:write'")
     ttl_days: int = Field(default=1, alias="ttlDays", description="Validade da chave em dias: 1, 7 ou 30 (padrão 1)")
 
@@ -40,11 +45,12 @@ class GenerateKeyResponse(BaseModel):
 
 @router.post("/generate", response_model=GenerateKeyResponse)
 async def generate_api_key(
-    payload: GenerateKeyRequest,
+    payload: GenerateKeyRequest = GenerateKeyRequest(),
     x_license_key: str | None = Header(None, alias="X-License-Key")
 ):
     """
-    Generates a spreadsheet API key for external automation (100% free open-source feature).
+    Generates an API key for external AI agents, scripts, or spreadsheet automation.
+    If table_id is omitted, an ephemeral autonomous agent session is created automatically.
     """
     raw_license = payload.license_key or x_license_key
     license_key_hash = None
@@ -56,7 +62,7 @@ async def generate_api_key(
     if not license_key_hash:
         license_key_hash = hash_key("free_community_license")
         
-    table_id = payload.table_id.strip()
+    table_id = payload.table_id.strip() if payload.table_id and payload.table_id.strip() else f"agent-session-{uuid.uuid4().hex[:12]}"
     ttl = payload.ttl_days if payload.ttl_days in (1, 7, 30) else 1
     
     try:
