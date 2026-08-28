@@ -1,4 +1,4 @@
-﻿node_modules
+node_modules
 dist
 .env
 .env.local
@@ -29,6 +29,12 @@ backend/analysis_output.txt
 backend/*.txt
 Assistente-Moeda-App/api_workspace/
 api_workspace/
+api-workspace/
+**/api_workspace/
+**/api-workspace/
+src/tools/cv-maker/api_workspace/
+src/tools/cv-maker/api-workspace/
+backend/test_*.py
 
 .gemini/
 .agents/
