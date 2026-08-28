@@ -44,31 +44,83 @@ class CVRenderRequest(BaseModel):
     model_config = {"populate_by_name": True}
 
 
+from db.license_db import get_license_by_raw_key, deduct_license_tokens, is_godmode_key, get_spreadsheet_api_key, hash_key
+
+
+async def verify_cv_license_and_quota(raw_key: Optional[str], estimated_text: str, num_calls: int = 1) -> dict:
+    """
+    Valida a chave de licença ou API Key e verifica se há saldo de tokens suficiente com margem de segurança.
+    Suporta chaves Pro (am_pro_...), chaves de planilha (am_sheet_...) e God Mode (Mateus7:12@).
+    """
+    if not raw_key:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Chave de Licença Pro necessária para utilizar a IA do CV Maker. Ative sua chave ou assine um plano.",
+        )
+
+    clean_k = raw_key.strip()
+    if clean_k.startswith("Bearer "):
+        clean_k = clean_k.replace("Bearer ", "").strip()
+
+    if is_godmode_key(clean_k):
+        return {"tier": "godmode", "token_balance": 999999999, "key_hash": "godmode"}
+
+    # 1. Tenta buscar como Chave de Licença de Usuário (Pro / Anual / Recarga)
+    rec = get_license_by_raw_key(clean_k)
+    if rec:
+        # Estima tokens: (~4 chars por token) * chamadas + buffer de segurança de 15%
+        est_prompt_tokens = int((len(estimated_text) / 4) * 1.15 * num_calls) + (500 * num_calls)
+        if rec.get("token_balance", 0) < est_prompt_tokens:
+            raise HTTPException(
+                status_code=status.HTTP_402_PAYMENT_REQUIRED,
+                detail=f"Saldo de tokens insuficiente ({rec.get('token_balance', 0):,} restantes, estimado {est_prompt_tokens:,}). Adquira uma recarga ou faça upgrade do seu plano.",
+            )
+        return rec
+
+    # 2. Tenta buscar como Spreadsheet API Key
+    sheet_rec = get_spreadsheet_api_key(hash_key(clean_k))
+    if sheet_rec:
+        if sheet_rec.get("is_expired"):
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Chave de API expirada.")
+        return {"tier": "spreadsheet_api", "token_balance": 1000000, "key_hash": sheet_rec.get("key_hash", "sheet_api")}
+
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Chave de Licença inválida ou não encontrada. Verifique o código inserido nas configurações.",
+    )
+
+
 @router.post("/generate", response_model=CVGenerateResponse)
 async def generate_cv_endpoint(
     payload: CVGenerateRequest,
+    x_license_key: Optional[str] = Header(None, alias="X-License-Key"),
     x_api_key: Optional[str] = Header(None, alias="X-API-Key"),
     x_cv_key: Optional[str] = Header(None, alias="X-CV-Key"),
     x_spreadsheet_key: Optional[str] = Header(None, alias="X-Spreadsheet-Key"),
+    authorization: Optional[str] = Header(None),
 ):
     """
     Gera até 5 arquétipos em paralelo usando o Gemini 2.5 Flash.
-    Suporta autenticação transparente com as chaves temporárias do LogicDefense.
+    Verifica a licença Pro e debita os tokens consumidos via Turso SQLite.
     """
-    raw_key = x_api_key or x_cv_key or x_spreadsheet_key
-    if raw_key:
-        from db.license_db import get_spreadsheet_api_key, hash_key
-        record = get_spreadsheet_api_key(hash_key(raw_key.strip()))
-        if record and record.get("is_expired"):
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Chave de API expirada.")
+    raw_key = x_license_key or x_api_key or x_cv_key or x_spreadsheet_key or authorization
+    license_rec = await verify_cv_license_and_quota(raw_key, payload.raw_text, num_calls=5)
 
-    log.info("[CV Router] service='cv' action='generate' chars=%d", len(payload.raw_text))
+    log.info("[CV Router] service='cv' action='generate' tier='%s' chars=%d", license_rec.get("tier"), len(payload.raw_text))
 
     try:
-        results = await generate_all_archetypes(
+        results, total_tokens = await generate_all_archetypes(
             raw_text=payload.raw_text,
             job_description=payload.job_description,
         )
+
+        # Debita os tokens consumidos da chave do usuário no banco
+        if total_tokens > 0 and license_rec.get("key_hash") not in ("godmode", "sheet_api"):
+            try:
+                deduct_license_tokens(license_rec["key_hash"], total_tokens, endpoint="/api/v1/cv/generate")
+            except Exception as d_err:
+                log.warning("[CV Router] Falha ao debitar tokens: %s", d_err)
+
         return CVGenerateResponse(
             professional=results.get("professional", ""),
             architect=results.get("architect", results.get("professional", "")),
@@ -87,26 +139,39 @@ async def generate_cv_endpoint(
 @router.post("/tailor")
 async def tailor_cv_endpoint(
     payload: CVTailorRequest,
+    x_license_key: Optional[str] = Header(None, alias="X-License-Key"),
     x_api_key: Optional[str] = Header(None, alias="X-API-Key"),
+    authorization: Optional[str] = Header(None),
 ):
     """
-    Endpoint para agentes autônomos: Realiza a alfaiataria (tailoring) do currículo
-    contra uma Job Description específica, aplicando a fórmula X-Y-Z e keywords ATS.
+    Endpoint para alfaiataria (tailoring) do currículo contra uma Job Description específica.
+    Verifica a licença Pro e debita os tokens consumidos via Turso SQLite.
     """
+    raw_key = x_license_key or x_api_key or authorization
+    full_text = payload.base_yaml + "\n" + payload.job_description
+    license_rec = await verify_cv_license_and_quota(raw_key, full_text, num_calls=1)
+
     persona_key = payload.persona if payload.persona in PERSONA_INSTRUCTIONS else "professional"
     persona_inst = PERSONA_INSTRUCTIONS[persona_key]
 
-    log.info("[CV Router] service='cv' action='tailor' persona='%s'", persona_key)
+    log.info("[CV Router] service='cv' action='tailor' persona='%s' tier='%s'", persona_key, license_rec.get("tier"))
 
     try:
-        tailored_yaml = await generate_single_archetype(
+        tailored_yaml, total_tokens = await generate_single_archetype(
             archetype=persona_key,
             persona_instruction=persona_inst,
             raw_text=payload.base_yaml,
             job_description=payload.job_description,
             index=0,
         )
-        return {"persona": persona_key, "tailored_yaml": tailored_yaml}
+
+        if total_tokens > 0 and license_rec.get("key_hash") not in ("godmode", "sheet_api"):
+            try:
+                deduct_license_tokens(license_rec["key_hash"], total_tokens, endpoint="/api/v1/cv/tailor")
+            except Exception as d_err:
+                log.warning("[CV Router] Falha ao debitar tokens: %s", d_err)
+
+        return {"persona": persona_key, "tailored_yaml": tailored_yaml, "tokens_used": total_tokens}
     except Exception as e:
         log.error("[CV Router] service='cv' Tailoring error: %s", e)
         raise HTTPException(

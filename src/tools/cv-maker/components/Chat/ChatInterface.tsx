@@ -6,6 +6,7 @@ interface ChatInterfaceProps {
   onCVGenerated: (versions: CVVersions) => void
   hasGeneratedCVs: boolean
   onReset: () => void
+  onOpenStoreModal?: () => void
 }
 
 const QUICK_SUGGESTIONS = [
@@ -19,26 +20,31 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   onCVGenerated,
   hasGeneratedCVs,
   onReset,
+  onOpenStoreModal,
 }) => {
   const [inputText, setInputText] = useState<string>('')
   const [jobDescription, setJobDescription] = useState<string>('')
   const [showJobDescField, setShowJobDescField] = useState<boolean>(false)
   const [loading, setLoading] = useState<boolean>(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
+  const [isLicenseError, setIsLicenseError] = useState<boolean>(false)
 
   const handleGenerate = async () => {
     if (!inputText.trim()) {
       setErrorMsg('Cole o texto do seu currículo ou trajetória antes de gerar.')
+      setIsLicenseError(false)
       return
     }
 
     if (inputText.trim().length < 40) {
       setErrorMsg('O texto fornecido é muito curto. Forneça ao menos seu histórico profissional básico.')
+      setIsLicenseError(false)
       return
     }
 
     setLoading(true)
     setErrorMsg(null)
+    setIsLicenseError(false)
 
     try {
       const versions = await generateCVFromText({
@@ -47,7 +53,16 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
       })
       onCVGenerated(versions)
     } catch (err) {
-      setErrorMsg((err as Error).message || 'Falha ao processar currículo com a IA.')
+      const msg = (err as Error).message || 'Falha ao processar currículo com a IA.'
+      setErrorMsg(msg)
+      if (
+        msg.toLowerCase().includes('licença') ||
+        msg.toLowerCase().includes('tokens') ||
+        msg.includes('401') ||
+        msg.includes('402')
+      ) {
+        setIsLicenseError(true)
+      }
     } finally {
       setLoading(false)
     }
@@ -65,9 +80,9 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
         <div className="cv-chat-card__header">
           <span style={{ fontSize: '1.25rem' }}>✨</span>
           <div>
-            <h4 className="cv-chat-card__title">Assistente de Carreira & IA</h4>
+            <h4 className="cv-chat-card__title">Assistente de Carreira & IA Pro</h4>
             <p className="cv-chat-card__desc">
-              Cole seu currículo bruto, PDF do LinkedIn ou anotações para gerar 4 arquétipos estilizados.
+              Cole seu currículo bruto, PDF do LinkedIn ou anotações para gerar 5 arquétipos estilizados em paralelo.
             </p>
           </div>
         </div>
@@ -103,8 +118,8 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
           {showJobDescField && (
             <textarea
               className="cv-chat-textarea"
-              style={{ minHeight: '80px', borderColor: '#3b82f6' }}
-              placeholder="Cole aqui os requisitos da vaga (ex: Senior Software Architect na IBM) para alfaiataria de palavras-chave..."
+              style={{ minHeight: '80px', borderColor: '#38bdf8' }}
+              placeholder="Cole aqui a descrição completa da vaga desejada (requisitos, diferenciais e palavras-chave ATS)..."
               value={jobDescription}
               onChange={e => setJobDescription(e.target.value)}
               disabled={loading}
@@ -112,8 +127,27 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
           )}
 
           {errorMsg && (
-            <div className="cv-editor-error">
-              {errorMsg}
+            <div className="cv-error-banner" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+              <span>⚠️ {errorMsg}</span>
+              {(isLicenseError || !localStorage.getItem('ld_pro_license_key')) && onOpenStoreModal && (
+                <button
+                  type="button"
+                  onClick={onOpenStoreModal}
+                  style={{
+                    alignSelf: 'flex-start',
+                    background: 'linear-gradient(90deg, #38bdf8, #3b82f6)',
+                    color: '#0f172a',
+                    border: 'none',
+                    borderRadius: '6px',
+                    padding: '0.35rem 0.75rem',
+                    fontWeight: 700,
+                    fontSize: '0.78rem',
+                    cursor: 'pointer',
+                  }}
+                >
+                  💎 Abrir Planos e Ativar Chave Pro ↗
+                </button>
+              )}
             </div>
           )}
 
@@ -136,7 +170,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
               onClick={handleGenerate}
               disabled={loading}
             >
-              {loading ? 'Processando 4 Arquétipos...' : '✨ Gerar Currículos com IA'}
+              {loading ? 'Processando 5 Arquétipos...' : '✨ Gerar 5 Arquétipos com IA (Pro)'}
             </button>
           </div>
         </div>

@@ -7,6 +7,8 @@ import { ChatInterface } from './components/Chat/ChatInterface'
 import { CVToolbar } from './components/Toolbar/CVToolbar'
 import { PhotoUploader } from './components/Toolbar/PhotoUploader'
 import { ApiKeyModal } from './components/ApiKeyModal/ApiKeyModal'
+import { CVStoreModal } from './components/StoreModal/CVStoreModal'
+import { validateLicenseKey } from './services/cvService'
 
 import './styles/cv-themes.css'
 import './styles/cv-print.css'
@@ -35,12 +37,40 @@ export const CVMakerApp: React.FC = () => {
     return (localStorage.getItem(STORAGE_THEME_KEY) as ThemeVariant) || 'executive'
   })
 
-  // Modals
+  // Modals & Pro Licensing State
   const [isPhotoModalOpen, setIsPhotoModalOpen] = useState<boolean>(false)
   const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState<boolean>(false)
+  const [isStoreModalOpen, setIsStoreModalOpen] = useState<boolean>(false)
+  const [isPro, setIsPro] = useState<boolean>(false)
+  const [tokenBalance, setTokenBalance] = useState<number>(0)
   const [hasActiveKey, setHasActiveKey] = useState<boolean>(() => {
     return Boolean(localStorage.getItem('ld_universal_api_key'))
   })
+
+  // Fetch / Validate Pro license on mount
+  const checkLicense = useCallback(async () => {
+    const key = localStorage.getItem('ld_pro_license_key') || localStorage.getItem('am_license_key')
+    if (!key) {
+      setIsPro(false)
+      setTokenBalance(0)
+      return
+    }
+    try {
+      const res = await validateLicenseKey(key)
+      if (res.valid) {
+        setIsPro(true)
+        setTokenBalance(res.token_balance ?? res.tokenBalance ?? 0)
+      } else {
+        setIsPro(false)
+      }
+    } catch {
+      // Falha silenciosa de rede
+    }
+  }, [])
+
+  useEffect(() => {
+    checkLicense()
+  }, [checkLicense])
 
   // Debounced LocalStorage Saver (500ms)
   const debouncedSaveDraft = useMemo(
@@ -191,6 +221,7 @@ export const CVMakerApp: React.FC = () => {
                 onCVGenerated={handleCVGenerated}
                 hasGeneratedCVs={cvVersions !== null}
                 onReset={handleReset}
+                onOpenStoreModal={() => setIsStoreModalOpen(true)}
               />
             ) : (
               <div className="cv-raw-editor">
@@ -238,6 +269,9 @@ export const CVMakerApp: React.FC = () => {
             onOpenPhotoModal={() => setIsPhotoModalOpen(true)}
             onOpenApiKeyModal={() => setIsApiKeyModalOpen(true)}
             hasActiveKey={hasActiveKey}
+            isPro={isPro}
+            tokenBalance={tokenBalance}
+            onOpenStoreModal={() => setIsStoreModalOpen(true)}
           />
 
           <CVViewer data={cvData} theme={activeTheme} />
@@ -257,6 +291,18 @@ export const CVMakerApp: React.FC = () => {
         isOpen={isApiKeyModalOpen}
         onClose={() => setIsApiKeyModalOpen(false)}
         onKeyUpdated={key => setHasActiveKey(Boolean(key))}
+      />
+
+      <CVStoreModal
+        isOpen={isStoreModalOpen}
+        onClose={() => {
+          setIsStoreModalOpen(false)
+          checkLicense()
+        }}
+        onLicenseActivated={(_key, _tier, bal) => {
+          setIsPro(true)
+          setTokenBalance(bal)
+        }}
       />
     </div>
   )

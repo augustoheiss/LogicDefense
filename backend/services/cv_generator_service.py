@@ -50,9 +50,10 @@ async def generate_single_archetype(
     raw_text: str,
     job_description: str | None = None,
     index: int = 0,
-) -> str:
+) -> tuple[str, int]:
     """
     Generates ONE CV archetype as a clean YAML string with retry logic.
+    Returns (yaml_string, total_tokens_used).
     """
     if not client:
         raise RuntimeError("GEMINI_API_KEY não configurada no servidor.")
@@ -104,12 +105,16 @@ async def generate_single_archetype(
             if not raw_json:
                 raise ValueError(f"Resposta vazia da IA (finish_reason={_finish_reason(response)})")
 
+            tokens_used = 0
+            if response.usage_metadata:
+                tokens_used = response.usage_metadata.total_token_count or 0
+
             data: dict[str, Any] = json.loads(raw_json)
             log.info(
-                "[CV Engine] service='cv' archetype='%s' OK attempt=%d keys=%d finish_reason=%s",
-                archetype, attempt + 1, len(data), _finish_reason(response),
+                "[CV Engine] service='cv' archetype='%s' OK attempt=%d keys=%d tokens=%d finish_reason=%s",
+                archetype, attempt + 1, len(data), tokens_used, _finish_reason(response),
             )
-            return dict_to_yaml(data)
+            return dict_to_yaml(data), tokens_used
 
         except json.JSONDecodeError as exc:
             reason = _finish_reason(response) if response is not None else "N/A"
@@ -123,9 +128,10 @@ async def generate_single_archetype(
     raise last_exc
 
 
-async def generate_all_archetypes(raw_text: str, job_description: str | None = None) -> Dict[str, str]:
+async def generate_all_archetypes(raw_text: str, job_description: str | None = None) -> tuple[Dict[str, str], int]:
     """
     Launches concurrent calls for all personas in parallel via asyncio.gather().
+    Returns (dict_of_archetypes, total_tokens_used).
     """
     tasks = [
         generate_single_archetype(
@@ -139,4 +145,13 @@ async def generate_all_archetypes(raw_text: str, job_description: str | None = N
     ]
 
     results = await asyncio.gather(*tasks)
-    return {arch: results[i] for i, arch in enumerate(PERSONA_INSTRUCTIONS.keys())}
+    
+    archetypes_map: dict[str, str] = {}
+    total_tokens = 0
+    
+    for i, arch in enumerate(PERSONA_INSTRUCTIONS.keys()):
+        yaml_content, tokens = results[i]
+        archetypes_map[arch] = yaml_content
+        total_tokens += tokens
+
+    return archetypes_map, total_tokens

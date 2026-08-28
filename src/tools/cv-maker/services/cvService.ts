@@ -33,8 +33,10 @@ export async function generateCVFromText(req: GenerateCVRequest): Promise<CVVers
     'Content-Type': 'application/json',
   }
 
-  const storedKey = req.api_key || localStorage.getItem('ld_universal_api_key')
+  const storedKey = req.api_key || localStorage.getItem('ld_pro_license_key') || localStorage.getItem('am_license_key') || localStorage.getItem('ld_universal_api_key')
   if (storedKey) {
+    headers['X-License-Key'] = storedKey
+    headers['Authorization'] = `Bearer ${storedKey}`
     headers['X-API-Key'] = storedKey
     headers['X-Spreadsheet-Key'] = storedKey
     headers['X-CV-Key'] = storedKey
@@ -193,4 +195,60 @@ export async function revokeApiKey(tableId: string, apiKey?: string): Promise<bo
   }
   return false
 }
+
+/**
+ * Validates a Pro license key with Turso SQLite backend.
+ */
+export async function validateLicenseKey(licenseKey: string): Promise<{
+  valid: boolean
+  tier: string
+  token_balance?: number
+  token_cap?: number
+  tokenBalance?: number
+  tokenCap?: number
+  expires_at?: string | null
+  message?: string
+}> {
+  const candidateUrls = getCandidateBackendUrls()
+  for (const baseUrl of candidateUrls) {
+    try {
+      const res = await fetch(`${baseUrl}/api/license/validate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ license_key: licenseKey.trim() }),
+      })
+
+      if (res.ok) {
+        return await res.json()
+      }
+    } catch {
+      // Continue to next candidate
+    }
+  }
+  return { valid: false, tier: 'free', message: 'Servidor de validação indisponível.' }
+}
+
+/**
+ * Sends license recovery email to the user.
+ */
+export async function recoverLicenseKey(email: string): Promise<{ success: boolean; message: string }> {
+  const candidateUrls = getCandidateBackendUrls()
+  for (const baseUrl of candidateUrls) {
+    try {
+      const res = await fetch(`${baseUrl}/api/license/recover`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.trim() }),
+      })
+
+      if (res.ok) {
+        return await res.json()
+      }
+    } catch {
+      // Continue to next candidate
+    }
+  }
+  return { success: false, message: 'Falha ao conectar com o serviço de e-mail.' }
+}
+
 

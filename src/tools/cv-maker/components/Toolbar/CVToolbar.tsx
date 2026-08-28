@@ -11,6 +11,9 @@ interface CVToolbarProps {
   onOpenPhotoModal: () => void
   onOpenApiKeyModal: () => void
   hasActiveKey: boolean
+  isPro?: boolean
+  tokenBalance?: number
+  onOpenStoreModal?: () => void
 }
 
 const PERSONAS: { id: TextVariant; label: string; icon: string }[] = [
@@ -39,12 +42,21 @@ export const CVToolbar: React.FC<CVToolbarProps> = ({
   onOpenPhotoModal,
   onOpenApiKeyModal,
   hasActiveKey,
+  isPro = false,
+  tokenBalance = 0,
+  onOpenStoreModal,
 }) => {
+  const formattedBalance = tokenBalance >= 1000000
+    ? `${(tokenBalance / 1000000).toFixed(1)}M`
+    : tokenBalance >= 1000
+    ? `${(tokenBalance / 1000).toFixed(0)}k`
+    : tokenBalance.toString()
+
   return (
     <div className="cv-preview-toolbar cv-no-print">
       {/* Grupo de Personas de IA */}
       <div className="cv-toolbar-group">
-        <span className="cv-toolbar-label">Persona</span>
+        <span className="cv-toolbar-label">Persona IA</span>
         <div className="cv-btn-pill-group">
           {PERSONAS.map(p => (
             <button
@@ -59,16 +71,16 @@ export const CVToolbar: React.FC<CVToolbarProps> = ({
         </div>
       </div>
 
-      {/* Grupo de Temas Visuais */}
+      {/* Grupo de Temas Visuais / Modelos */}
       <div className="cv-toolbar-group">
-        <span className="cv-toolbar-label">Tema</span>
+        <span className="cv-toolbar-label">Modelo A4</span>
         <div className="cv-btn-pill-group">
           {THEMES.map(t => (
             <button
               key={t.id}
               className={`cv-btn-pill ${activeTheme === t.id ? 'cv-btn-pill--active' : ''}`}
               onClick={() => onThemeChange(t.id)}
-              title={`Aplicar tema visual ${t.label}`}
+              title={`Aplicar tema visual ${t.label} no PDF`}
             >
               <span>{t.icon}</span> {t.label}
             </button>
@@ -78,6 +90,21 @@ export const CVToolbar: React.FC<CVToolbarProps> = ({
 
       {/* Ações Rápidas */}
       <div className="cv-toolbar-group">
+        {onOpenStoreModal && (
+          <button
+            className="cv-btn-secondary"
+            onClick={onOpenStoreModal}
+            title={isPro ? `Licença Pro Ativa: ${tokenBalance.toLocaleString()} tokens` : 'Desbloquear IA Pro e Geração de Arquétipos'}
+            style={
+              isPro
+                ? { borderColor: '#38bdf8', color: '#38bdf8', background: 'rgba(56, 189, 248, 0.12)', fontWeight: 600 }
+                : { borderColor: '#818cf8', color: '#c7d2fe', background: 'rgba(99, 102, 241, 0.15)', fontWeight: 600 }
+            }
+          >
+            {isPro ? `💎 Pro (${formattedBalance})` : '💎 Ativar Pro'}
+          </button>
+        )}
+
         <button
           className="cv-btn-secondary"
           onClick={onOpenPhotoModal}
@@ -92,7 +119,7 @@ export const CVToolbar: React.FC<CVToolbarProps> = ({
           title="Gerenciar Chave de API para agentes externos"
           style={hasActiveKey ? { borderColor: '#10b981', color: '#34d399' } : {}}
         >
-          🔑 {hasActiveKey ? 'Chave Ativa' : 'API Key'}
+          🔑 {hasActiveKey ? 'Chave API' : 'API Key'}
         </button>
 
         <button
