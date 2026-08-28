@@ -11,11 +11,17 @@
       Layout denso, linhas finas, documento corporativo/jurídico
    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
 
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   ■  1. TEMA EXECUTIVO (tema-executivo)
+      Merriweather · Preto / Cinza Chumbo / Branco
+      Layout denso, linhas finas, documento corporativo/jurídico
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
 .theme-executive {
   background-color: #fdfdfd;
   font-family: 'Merriweather', Georgia, 'Times New Roman', serif;
-  font-size: 14px;
-  line-height: 1.7;
+  font-size: 15.5px;
+  line-height: 1.62;
   color: #1a1a1a;
   letter-spacing: 0.01em;
 }
@@ -34,7 +40,7 @@
 
 .theme-executive h1.cv-name {
   font-family: 'Merriweather', Georgia, serif;
-  font-size: 1.85rem;
+  font-size: 1.95rem;
   font-weight: 900;
   letter-spacing: -0.02em;
   color: #050505;
@@ -42,27 +48,27 @@
 
 .theme-executive .cv-label {
   font-family: 'Merriweather', Georgia, serif;
-  font-size: 0.95rem;
+  font-size: 1rem;
   font-weight: 700;
   color: #374151;
 }
 
 .theme-executive h2.cv-section-title {
   font-family: 'Merriweather', Georgia, serif;
-  font-size: 0.8rem;
+  font-size: 1.05rem;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.16em;
+  letter-spacing: 0.06em;
   color: #111827;
-  border-bottom: 1px solid #4b5563;
-  padding-bottom: 0.25rem;
+  border-bottom: 1.5px solid #374151;
+  padding-bottom: 0.3rem;
   margin-bottom: 1rem;
 }
 
 .theme-executive h3.cv-item-title {
   font-family: 'Merriweather', Georgia, serif;
   font-weight: 700;
-  font-size: 0.92rem;
+  font-size: 1.02rem;
   color: #111827;
 }
 
@@ -72,7 +78,7 @@
   border: 1px solid #9ca3af;
   border-radius: 0;
   font-family: 'Courier Prime', monospace;
-  font-size: 0.75rem;
+  font-size: 0.8rem;
 }
 
 .theme-executive .cv-skill-tag {
@@ -80,7 +86,8 @@
   color: #374151;
   border: 1px solid #9ca3af;
   border-radius: 0;
-  font-size: 0.75rem;
+  font-size: 0.82rem;
+  padding: 0.2rem 0.55rem;
 }
 
 .theme-executive .cv-link {
@@ -97,8 +104,8 @@
 .theme-creative {
   background: linear-gradient(145deg, #eff6ff 0%, #eef2ff 100%);
   font-family: 'Poppins', 'Segoe UI', system-ui, sans-serif;
-  font-size: 14.5px;
-  line-height: 1.65;
+  font-size: 15.5px;
+  line-height: 1.62;
   color: #1e293b;
 }
 
@@ -116,7 +123,7 @@
 
 .theme-creative h1.cv-name {
   font-family: 'Poppins', sans-serif;
-  font-size: 2.1rem;
+  font-size: 2.15rem;
   font-weight: 800;
   letter-spacing: -0.04em;
   color: #1e3a8a;
@@ -124,17 +131,17 @@
 
 .theme-creative .cv-label {
   font-family: 'Poppins', sans-serif;
-  font-size: 0.95rem;
+  font-size: 1rem;
   font-weight: 600;
   color: #f97316;
 }
 
 .theme-creative h2.cv-section-title {
   font-family: 'Poppins', sans-serif;
-  font-size: 0.88rem;
+  font-size: 1.05rem;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.06em;
   color: #1e3a8a;
   border-bottom: 2px solid #bfdbfe;
   padding-bottom: 0.35rem;
@@ -144,7 +151,7 @@
 .theme-creative h3.cv-item-title {
   font-family: 'Poppins', sans-serif;
   font-weight: 600;
-  font-size: 0.95rem;
+  font-size: 1.02rem;
   color: #1e293b;
 }
 
@@ -160,6 +167,7 @@
   color: #1e3a8a;
   border: 1px solid #bfdbfe;
   border-radius: 0.375rem;
+  font-size: 0.82rem;
   font-weight: 500;
 }
 
@@ -175,8 +183,8 @@
 .theme-minimalist {
   background-color: #ffffff;
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
-  font-size: 14.5px;
-  line-height: 1.75;
+  font-size: 15.5px;
+  line-height: 1.65;
   color: #0f172a;
 }
 
@@ -194,32 +202,33 @@
 
 .theme-minimalist h1.cv-name {
   font-family: 'Inter', sans-serif;
-  font-size: 2.4rem;
+  font-size: 2.3rem;
   font-weight: 800;
   letter-spacing: -0.05em;
   color: #0f172a;
 }
 
 .theme-minimalist .cv-label {
-  font-size: 0.95rem;
+  font-size: 1rem;
   font-weight: 500;
   color: #64748b;
 }
 
 .theme-minimalist h2.cv-section-title {
   font-family: 'Inter', sans-serif;
-  font-size: 0.7rem;
+  font-size: 0.95rem;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.2em;
-  color: #94a3b8;
-  border-bottom: none;
+  letter-spacing: 0.12em;
+  color: #475569;
+  border-bottom: 1px solid #e2e8f0;
+  padding-bottom: 0.25rem;
   margin-bottom: 1rem;
 }
 
 .theme-minimalist h3.cv-item-title {
   font-weight: 700;
-  font-size: 0.92rem;
+  font-size: 1.02rem;
   color: #0f172a;
 }
 
@@ -227,7 +236,8 @@
   background-color: transparent;
   color: #475569;
   border: 1px solid #e2e8f0;
-  border-radius: 2px;
+  border-radius: 4px;
+  font-size: 0.82rem;
 }
 
 .theme-minimalist .cv-link {
@@ -242,8 +252,8 @@
 .theme-white {
   background-color: #ffffff;
   font-family: 'Inter', system-ui, sans-serif;
-  font-size: 14.5px;
-  line-height: 1.7;
+  font-size: 15.5px;
+  line-height: 1.62;
   color: #334155;
 }
 
@@ -259,23 +269,33 @@
 
 .theme-white h1.cv-name {
   color: #0f172a;
+  font-size: 2.1rem;
   font-weight: 800;
 }
 
 .theme-white .cv-label {
   color: #059669;
+  font-size: 1rem;
   font-weight: 600;
 }
 
 .theme-white h2.cv-section-title {
   color: #059669;
+  font-size: 1.05rem;
+  font-weight: 700;
   border-bottom: 1px solid #cbd5e1;
+}
+
+.theme-white h3.cv-item-title {
+  font-size: 1.02rem;
+  font-weight: 700;
 }
 
 .theme-white .cv-skill-tag {
   background-color: #f1f5f9;
   color: #475569;
   border: 1px solid #cbd5e1;
+  font-size: 0.82rem;
 }
 
 /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -286,8 +306,8 @@
 .theme-terminal {
   background-color: #090d16;
   font-family: 'Inter', monospace, system-ui, sans-serif;
-  font-size: 14.5px;
-  line-height: 1.65;
+  font-size: 15.5px;
+  line-height: 1.62;
   color: #cbd5e1;
 }
 
@@ -303,17 +323,26 @@
 
 .theme-terminal h1.cv-name {
   color: #ffffff;
+  font-size: 2.1rem;
   font-weight: 800;
 }
 
 .theme-terminal .cv-label {
   color: #34d399;
+  font-size: 1rem;
   font-family: 'Courier Prime', monospace;
 }
 
 .theme-terminal h2.cv-section-title {
   color: #34d399;
+  font-size: 1.05rem;
+  font-weight: 700;
   border-bottom: 1px solid #334155;
+}
+
+.theme-terminal h3.cv-item-title {
+  font-size: 1.02rem;
+  font-weight: 700;
 }
 
 .theme-terminal .cv-project-card {
@@ -327,6 +356,7 @@
   background-color: #1e293b;
   color: #e2e8f0;
   border: 1px solid #334155;
+  font-size: 0.82rem;
 }
 
 .theme-terminal .cv-link {
