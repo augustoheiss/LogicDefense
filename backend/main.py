@@ -187,29 +187,6 @@ async def get_unified_v1_openapi(request: Request):
 # ── Legacy CV Route Proxy (100% Backward Compatibility) ──────────────────────
 from services.cv_generator_service import generate_all_archetypes
 
-class GenerateRequest(BaseModel):
-    raw_text: str = Field(..., min_length=40, description="Raw resume text pasted by the user.")
-
-class GenerateResponse(BaseModel):
-    professional: str = Field(..., description="Executive-style YAML.")
-    historian: str    = Field(..., description="Narrative/historian-style YAML.")
-    didactic: str     = Field(..., description="Didactic/learning-speed YAML.")
-    alien: str        = Field(..., description="Extraterrestrial observer YAML.")
-
-@app.post("/api/generate-cvs", response_model=GenerateResponse)
-async def legacy_generate_cvs(request: GenerateRequest) -> GenerateResponse:
-    """
-    Legacy proxy endpoint forwarding to cv_generator_service.
-    """
-    results = await generate_all_archetypes(raw_text=request.raw_text)
-    return GenerateResponse(
-        professional=results.get("professional", ""),
-        historian=results.get("historian", ""),
-        didactic=results.get("didactic", ""),
-        alien=results.get("alien", ""),
-    )
-
-
 # ── Health check ─────────────────────────────────────────────────────────────
 
 @app.get("/health")

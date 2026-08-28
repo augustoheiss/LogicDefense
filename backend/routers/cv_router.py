@@ -65,7 +65,7 @@ async def verify_cv_license_and_quota(raw_key: Optional[str], estimated_text: st
     if is_godmode_key(clean_k):
         return {"tier": "godmode", "token_balance": 999999999, "key_hash": "godmode"}
 
-    # 1. Tenta buscar como Chave de Licença de Usuário (Pro / Anual / Recarga)
+    # 1. Tenta buscar como Chave de Licença de Usuário Pro (Turso DB)
     rec = get_license_by_raw_key(clean_k)
     if rec:
         # Estima tokens: (~4 chars por token) * chamadas + buffer de segurança de 15%
@@ -77,16 +77,9 @@ async def verify_cv_license_and_quota(raw_key: Optional[str], estimated_text: st
             )
         return rec
 
-    # 2. Tenta buscar como Spreadsheet API Key
-    sheet_rec = get_spreadsheet_api_key(hash_key(clean_k))
-    if sheet_rec:
-        if sheet_rec.get("is_expired"):
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Chave de API expirada.")
-        return {"tier": "spreadsheet_api", "token_balance": 1000000, "key_hash": sheet_rec.get("key_hash", "sheet_api")}
-
     raise HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Chave de Licença inválida ou não encontrada. Verifique o código inserido nas configurações.",
+        detail="Chave de Licença inválida ou não encontrada. Verifique o código inserido ou ative sua chave Pro nas configurações.",
     )
 
 

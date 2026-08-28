@@ -33,20 +33,16 @@ export async function generateCVFromText(req: GenerateCVRequest): Promise<CVVers
     'Content-Type': 'application/json',
   }
 
-  const storedKey = req.api_key || localStorage.getItem('ld_pro_license_key') || localStorage.getItem('am_license_key') || localStorage.getItem('ld_universal_api_key')
+  const storedKey = req.api_key || localStorage.getItem('ld_pro_license_key') || localStorage.getItem('am_license_key')
   if (storedKey) {
     headers['X-License-Key'] = storedKey
     headers['Authorization'] = `Bearer ${storedKey}`
-    headers['X-API-Key'] = storedKey
-    headers['X-Spreadsheet-Key'] = storedKey
-    headers['X-CV-Key'] = storedKey
   }
 
   const candidateUrls = getCandidateBackendUrls()
   let lastError: Error = new Error('Nenhum servidor de IA disponível no momento.')
 
   for (const baseUrl of candidateUrls) {
-    // 1. Try modern /api/v1/cv/generate
     try {
       const response = await fetch(`${baseUrl}/api/v1/cv/generate`, {
         method: 'POST',
@@ -68,48 +64,19 @@ export async function generateCVFromText(req: GenerateCVRequest): Promise<CVVers
         }
       }
 
-      // If 404/405, attempt legacy /api/generate-cvs on this same server
-      if (response.status === 404 || response.status === 405) {
-        const legacyRes = await fetch(`${baseUrl}/api/generate-cvs`, {
-          method: 'POST',
-          headers,
-          body: JSON.stringify({ raw_text: req.raw_text }),
-        })
-        if (legacyRes.ok) {
-          const data = await legacyRes.json()
-          return {
-            professional: data.professional || '',
-            architect: data.architect || data.professional || '',
-            historian: data.historian || '',
-            didactic: data.didactic || '',
-            alien: data.alien || '',
-          }
-        }
-      }
-
       const errData = await response.json().catch(() => ({}))
-      lastError = new Error(errData.detail || `Erro no servidor (${response.status})`)
-    } catch (netErr) {
-      // Try legacy endpoint on network exception
-      try {
-        const legacyRes = await fetch(`${baseUrl}/api/generate-cvs`, {
-          method: 'POST',
-          headers,
-          body: JSON.stringify({ raw_text: req.raw_text }),
-        })
-        if (legacyRes.ok) {
-          const data = await legacyRes.json()
-          return {
-            professional: data.professional || '',
-            architect: data.architect || data.professional || '',
-            historian: data.historian || '',
-            didactic: data.didactic || '',
-            alien: data.alien || '',
-          }
-        }
-      } catch (legacyErr) {
-        lastError = (netErr as Error) || (legacyErr as Error)
+      const errorDetail = errData.detail || `Erro no servidor (${response.status})`
+      lastError = new Error(errorDetail)
+
+      // Se foi erro de autenticação ou pagamento (401 / 402), não adianta tentar outros backends com a mesma chave inválida
+      if (response.status === 401 || response.status === 402) {
+        throw lastError
       }
+    } catch (netErr) {
+      if ((netErr as Error).message && ((netErr as Error).message.includes('401') || (netErr as Error).message.includes('402') || (netErr as Error).message.toLowerCase().includes('licença'))) {
+        throw netErr
+      }
+      lastError = netErr as Error
     }
   }
 

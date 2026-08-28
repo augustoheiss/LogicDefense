@@ -42,6 +42,19 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
       return
     }
 
+    // Verificação proativa de Licença Pro no Client-Side
+    const hasLicenseKey = Boolean(
+      localStorage.getItem('ld_pro_license_key') || localStorage.getItem('am_license_key')
+    )
+    if (!hasLicenseKey) {
+      setErrorMsg('Recurso Pro: É necessária uma Chave de Licença Pro ativa para utilizar o Motor de IA.')
+      setIsLicenseError(true)
+      if (onOpenStoreModal) {
+        onOpenStoreModal()
+      }
+      return
+    }
+
     setLoading(true)
     setErrorMsg(null)
     setIsLicenseError(false)
