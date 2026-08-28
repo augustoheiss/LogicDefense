@@ -1,6 +1,6 @@
 /* =============================================================
    cv-print.css — Regras de Impressão A4 de Alta Densidade e Fidelidade
-   Hack da Tabela Fantasma + Prevenção Absoluta de Quebra de Cards
+   Elimina bordas/margens escuras de layout e ajusta margens da folha
    ============================================================= */
 
 @media print {
@@ -16,75 +16,115 @@
   html,
   body,
   #root,
-  .cv-maker,
-  .cv-maker__showcase,
-  .cv-wrapper,
+  .cv-maker-app,
+  .cv-split-layout,
+  .cv-preview-area,
   .cv-viewer-container,
-  .cv-card {
+  .cv-card,
+  .theme-executive,
+  .theme-creative,
+  .theme-minimalist,
+  .theme-white,
+  .theme-terminal,
+  .theme-terminal .cv-card,
+  .theme-terminal .cv-project-card,
+  .cv-wrapper,
+  .cv-maker,
+  .cv-maker__showcase {
     background: #ffffff !important;
     background-color: #ffffff !important;
-    color: #000000 !important;
+    color: #111827 !important;
     margin: 0 !important;
     padding: 0 !important;
     width: 100% !important;
     max-width: 100% !important;
+    min-width: 100% !important;
     box-shadow: none !important;
     border: none !important;
-    font-size: 9.5pt !important;
+    font-size: 9pt !important;
+    line-height: 1.45 !important;
+    overflow: visible !important;
+    display: block !important;
   }
 
   @page {
     size: A4 portrait;
-    margin: 8mm 12mm 8mm 12mm !important;
+    margin: 6mm 8mm 6mm 8mm !important;
   }
 
-  /* Ocultar elementos da interface interativa */
+  /* Ocultar rigorosamente todos os elementos da interface */
   .cv-no-print,
+  .cv-sidebar,
+  .cv-app-header,
+  .cv-preview-toolbar,
+  .cv-modal-overlay,
+  .cv-modal-content,
+  .cv-modal-backdrop,
   .cv-maker__left,
   .cv-maker__toolbar,
-  .cv-modal-backdrop,
   .cv-maker__empty,
+  .cv-toolbar,
+  .toolbar,
   nav,
   footer,
   header.portal-navbar {
     display: none !important;
-  }
-
-  /* ── Hack da Tabela Fantasma ── */
-  .cv-print-table {
-    width: 100% !important;
-    border-collapse: collapse !important;
-    border: none !important;
+    visibility: hidden !important;
+    height: 0 !important;
+    width: 0 !important;
     margin: 0 !important;
     padding: 0 !important;
+    position: absolute !important;
+    top: -9999px !important;
   }
 
-  .cv-print-header-spacer {
-    display: table-header-group !important;
-    height: 4mm !important;
+  /* ── Header do Currículo no Print ── */
+  .cv-header {
+    margin-bottom: 0.65rem !important;
+    padding-bottom: 0.35rem !important;
+    border-bottom: 1.5px solid #1e293b !important;
   }
 
-  .cv-print-footer-spacer {
-    display: table-footer-group !important;
-    height: 4mm !important;
+  .cv-header__top {
+    gap: 0.75rem !important;
   }
 
-  .cv-print-tbody {
-    display: table-row-group !important;
+  .cv-avatar-container {
+    width: 60px !important;
+    height: 60px !important;
   }
 
-  .cv-print-cell {
-    padding: 0 !important;
-    border: none !important;
-    vertical-align: top !important;
+  .cv-name {
+    font-size: 1.5rem !important;
+    margin-bottom: 0.15rem !important;
+    color: #0f172a !important;
   }
 
-  /* ── Regras de Quebra de Página (Evitar Orfãos e Fatiamentos) ── */
+  .cv-label {
+    font-size: 0.85rem !important;
+  }
+
+  .cv-contacts {
+    font-size: 7.8pt !important;
+    gap: 0.15rem !important;
+  }
+
+  .cv-summary-card {
+    margin-bottom: 0.65rem !important;
+    font-size: 8.5pt !important;
+    line-height: 1.42 !important;
+    color: #334155 !important;
+  }
+
+  /* ── Regras de Quebra de Página ── */
   .cv-section-title {
     break-after: avoid !important;
     page-break-after: avoid !important;
-    margin-bottom: 0.4rem !important;
-    padding-bottom: 0.2rem !important;
+    font-size: 8pt !important;
+    margin-top: 0.6rem !important;
+    margin-bottom: 0.3rem !important;
+    padding-bottom: 0.15rem !important;
+    letter-spacing: 0.12em !important;
   }
 
   .cv-header,
@@ -102,18 +142,73 @@
     page-break-inside: avoid !important;
   }
 
+  /* ── Itens de Experiência e Educação ── */
+  .cv-section {
+    margin-bottom: 0.65rem !important;
+  }
+
+  .cv-work-item {
+    margin-bottom: 0.55rem !important;
+  }
+
+  .cv-work-header {
+    margin-bottom: 0.15rem !important;
+  }
+
+  .cv-work-position {
+    font-size: 9pt !important;
+    font-weight: 700 !important;
+  }
+
+  .cv-work-company {
+    font-size: 8.2pt !important;
+  }
+
+  .cv-work-date {
+    font-size: 7.8pt !important;
+  }
+
+  .cv-work-summary {
+    font-size: 8.3pt !important;
+    line-height: 1.38 !important;
+    margin-bottom: 0.25rem !important;
+  }
+
+  .cv-work-highlights {
+    margin-top: 0.2rem !important;
+    gap: 0.15rem !important;
+    font-size: 8.2pt !important;
+    line-height: 1.35 !important;
+  }
+
   /* ── Grids Compactos no Print ── */
   .cv-projects-grid {
     display: grid !important;
     grid-template-columns: 1fr 1fr !important;
-    gap: 0.5rem !important;
+    gap: 0.45rem !important;
+  }
+
+  .cv-project-card {
+    padding: 0.45rem 0.6rem !important;
+    background: #f8fafc !important;
+    border: 1px solid #e2e8f0 !important;
+    border-radius: 4px !important;
+  }
+
+  .cv-project-title {
+    font-size: 8.5pt !important;
+  }
+
+  .cv-project-desc {
+    font-size: 7.8pt !important;
+    line-height: 1.35 !important;
   }
 
   /* Skills: Grid consistente sem quebra solta de coluna */
   .cv-skills-masonry {
     display: grid !important;
     grid-template-columns: repeat(3, 1fr) !important;
-    gap: 0.6rem 0.85rem !important;
+    gap: 0.4rem 0.65rem !important;
     column-count: auto !important;
     break-inside: avoid !important;
     page-break-inside: avoid !important;
@@ -125,22 +220,24 @@
     page-break-inside: avoid !important;
   }
 
-  .cv-section {
-    margin-bottom: 0.85rem !important;
+  .cv-skill-category {
+    font-size: 7.8pt !important;
+    margin-bottom: 0.2rem !important;
   }
 
-  .cv-work-item {
-    margin-bottom: 0.75rem !important;
+  .cv-skill-tag {
+    font-size: 7.2pt !important;
+    padding: 0.1rem 0.35rem !important;
+    background: #f1f5f9 !important;
+    color: #334155 !important;
+    border: 1px solid #cbd5e1 !important;
   }
 
-  .cv-work-highlights {
-    margin-top: 0.3rem !important;
-    gap: 0.2rem !important;
-  }
-
-  /* Links e badges limpos */
-  a {
+  /* Links clicáveis em azul profissional no PDF */
+  a, .cv-link {
     text-decoration: none !important;
-    color: inherit !important;
+    color: #0284c7 !important;
+    font-weight: 500 !important;
   }
 }
+

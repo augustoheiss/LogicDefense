@@ -522,7 +522,7 @@ def render_cv_to_standalone_html(yaml_or_dict: Any, theme: str = "executive", la
       }}
       @page {{
         size: A4 portrait;
-        margin: 8mm 12mm 8mm 12mm !important;
+        margin: 6mm 8mm 6mm 8mm !important;
       }}
     }}
   </style>
