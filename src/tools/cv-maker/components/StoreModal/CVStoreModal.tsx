@@ -139,21 +139,32 @@ export const CVStoreModal: React.FC<CVStoreModalProps> = ({
 
   if (!isOpen) return null
 
-  // URLs de pagamento (Stripe / MercadoPago unificados)
-  const MONTHLY_CHECKOUT_URL = 'https://buy.stripe.com/mock-monthly'
-  const YEARLY_CHECKOUT_URL = 'https://buy.stripe.com/mock-yearly'
-  const RECHARGE_CHECKOUT_URL = 'https://buy.stripe.com/mock-tokens'
+  // URLs de pagamento (configuráveis via variáveis de ambiente ou com fallback seguro)
+  const MONTHLY_CHECKOUT_URL = (import.meta as any).env?.VITE_STRIPE_MONTHLY_URL || ''
+  const YEARLY_CHECKOUT_URL = (import.meta as any).env?.VITE_STRIPE_YEARLY_URL || ''
+  const RECHARGE_CHECKOUT_URL = (import.meta as any).env?.VITE_STRIPE_TOKENS_URL || ''
+
+  const handleCheckoutClick = (planName: string, directUrl?: string) => {
+    if (directUrl && !directUrl.includes('mock-')) {
+      window.open(directUrl, '_blank', 'noopener,noreferrer')
+      return
+    }
+    // Redireciona diretamente para suporte/pagamento rápido via WhatsApp/Pix
+    const msg = encodeURIComponent(
+      `Olá Augusto! Gostaria de adquirir uma Chave de Licença Pro para o CV Maker / Assistente Moeda no Plano ${planName}. Poderia me enviar os detalhes de ativação via Pix/Cartão?`
+    )
+    window.open(`https://wa.me/5511981355495?text=${msg}`, '_blank', 'noopener,noreferrer')
+  }
 
   const tokenPercent = licenseData && licenseData.token_cap > 0
     ? Math.min(100, Math.max(0, (licenseData.token_balance / licenseData.token_cap) * 100))
     : 0
 
   return (
-    <div className="cv-modal-overlay" onClick={onClose} style={{ zIndex: 10000 }}>
+    <div className="cv-modal-overlay" onClick={onClose}>
       <div
         className="cv-modal-content"
         onClick={e => e.stopPropagation()}
-        style={{ maxWidth: '780px', width: '92%', maxHeight: '90vh', overflowY: 'auto', borderRadius: '16px', background: '#0f172a', border: '1px solid #334155', color: '#f8fafc', padding: '1.75rem' }}
       >
         {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '1px solid #1e293b', paddingBottom: '1rem', marginBottom: '1.25rem' }}>
@@ -167,7 +178,8 @@ export const CVStoreModal: React.FC<CVStoreModalProps> = ({
           </div>
           <button
             onClick={onClose}
-            style={{ background: 'transparent', border: 'none', color: '#94a3b8', fontSize: '1.25rem', cursor: 'pointer', padding: '0.25rem' }}
+            aria-label="Fechar Modal"
+            style={{ background: 'transparent', border: 'none', color: '#94a3b8', fontSize: '1.4rem', cursor: 'pointer', padding: '0.25rem', lineHeight: 1 }}
           >
             ✕
           </button>
@@ -188,14 +200,76 @@ export const CVStoreModal: React.FC<CVStoreModalProps> = ({
           </div>
         )}
 
-        {/* Active License Card */}
+        {/* ── 1. BLOCO DE ATIVAÇÃO / CÓDIGO PROMO NO TOPO ── */}
+        <div style={{ background: '#1e293b', borderRadius: '12px', padding: '1.25rem', border: '1px solid #334155', marginBottom: '1.25rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.35rem' }}>
+            <span style={{ fontSize: '1.1rem' }}>🔑</span>
+            <h4 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 700, color: '#f8fafc' }}>
+              Ativar Chave de Licença ou Código Promocional
+            </h4>
+          </div>
+          <p style={{ margin: '0 0 0.75rem', fontSize: '0.8rem', color: '#94a3b8' }}>
+            Se você já possui uma chave de compra, código de promoção ou sua chave do Assistente Moeda, cole abaixo para desbloquear a IA instantaneamente:
+          </p>
+
+          <form onSubmit={handleActivateKey} style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+            <input
+              type="text"
+              placeholder="Cole sua chave aqui (ex: am_pro_...)"
+              value={inputKey}
+              onChange={e => setInputKey(e.target.value)}
+              disabled={validating}
+              style={{ flex: '1 1 240px', background: '#0f172a', border: '1px solid #475569', borderRadius: '8px', padding: '0.6rem 0.85rem', color: '#f8fafc', fontSize: '0.85rem', fontFamily: 'monospace' }}
+            />
+            <button
+              type="submit"
+              disabled={validating || !inputKey.trim()}
+              style={{ background: '#38bdf8', color: '#0f172a', border: 'none', borderRadius: '8px', padding: '0.6rem 1.25rem', fontWeight: 700, fontSize: '0.85rem', cursor: validating || !inputKey.trim() ? 'not-allowed' : 'pointer', transition: 'all 0.2s ease' }}
+            >
+              {validating ? 'Validando...' : 'Ativar Chave'}
+            </button>
+          </form>
+
+          <div style={{ marginTop: '0.6rem', display: 'flex', justifyContent: 'flex-end' }}>
+            <button
+              type="button"
+              onClick={() => setShowRecovery(prev => !prev)}
+              style={{ background: 'transparent', border: 'none', color: '#38bdf8', fontSize: '0.78rem', textDecoration: 'underline', cursor: 'pointer', padding: 0 }}
+            >
+              {showRecovery ? 'Ocultar formulário de recuperação' : 'Perdeu sua chave? Recuperar por e-mail'}
+            </button>
+          </div>
+
+          {/* Recovery Form */}
+          {showRecovery && (
+            <form onSubmit={handleRecover} style={{ marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px dashed #334155', display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+              <input
+                type="email"
+                placeholder="Seu e-mail da compra..."
+                value={recoveryEmail}
+                onChange={e => setRecoveryEmail(e.target.value)}
+                disabled={recovering}
+                style={{ flex: '1 1 200px', background: '#0f172a', border: '1px solid #475569', borderRadius: '8px', padding: '0.5rem 0.75rem', color: '#f8fafc', fontSize: '0.8rem' }}
+              />
+              <button
+                type="submit"
+                disabled={recovering || !recoveryEmail}
+                style={{ background: '#475569', color: '#f8fafc', border: 'none', borderRadius: '8px', padding: '0.5rem 0.85rem', fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer' }}
+              >
+                {recovering ? 'Enviando...' : 'Enviar para meu E-mail'}
+              </button>
+            </form>
+          )}
+        </div>
+
+        {/* ── 2. CARD DE LICENÇA ATIVA (SE LOGADO) ── */}
         {licenseData && licenseData.valid && (
           <div style={{
             background: 'linear-gradient(135deg, rgba(14, 165, 233, 0.12), rgba(99, 102, 241, 0.12))',
             border: '1px solid rgba(56, 189, 248, 0.3)',
             borderRadius: '12px',
             padding: '1.2rem',
-            marginBottom: '1.5rem'
+            marginBottom: '1.25rem'
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -227,8 +301,14 @@ export const CVStoreModal: React.FC<CVStoreModalProps> = ({
           </div>
         )}
 
-        {/* Pricing Cards Grid */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
+        {/* ── 3. PLANOS DE AQUISIÇÃO / ASSINATURA ── */}
+        <div style={{ marginBottom: '0.5rem' }}>
+          <h4 style={{ margin: '0 0 0.75rem', fontSize: '0.85rem', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            Ou Escolha um Plano de IA para Começar:
+          </h4>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '1rem', marginBottom: '1.25rem' }}>
           {/* Card Mensal */}
           <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: '12px', padding: '1.1rem', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
             <div>
@@ -241,14 +321,12 @@ export const CVStoreModal: React.FC<CVStoreModalProps> = ({
                 <li>✓ Compartilhado com Assistente Moeda</li>
               </ul>
             </div>
-            <a
-              href={MONTHLY_CHECKOUT_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{ display: 'block', textAlign: 'center', background: '#3b82f6', color: '#ffffff', textDecoration: 'none', padding: '0.5rem', borderRadius: '8px', fontSize: '0.82rem', fontWeight: 600, marginTop: '0.75rem' }}
+            <button
+              onClick={() => handleCheckoutClick('Mensal (R$ 20/mês)', MONTHLY_CHECKOUT_URL)}
+              style={{ display: 'block', width: '100%', textAlign: 'center', background: '#3b82f6', color: '#ffffff', border: 'none', padding: '0.55rem', borderRadius: '8px', fontSize: '0.82rem', fontWeight: 600, marginTop: '0.75rem', cursor: 'pointer' }}
             >
               Assinar Mensal ↗
-            </a>
+            </button>
           </div>
 
           {/* Card Anual */}
@@ -267,14 +345,12 @@ export const CVStoreModal: React.FC<CVStoreModalProps> = ({
                 <li>✓ Licença Universal Pro</li>
               </ul>
             </div>
-            <a
-              href={YEARLY_CHECKOUT_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{ display: 'block', textAlign: 'center', background: 'linear-gradient(90deg, #38bdf8, #2563eb)', color: '#ffffff', textDecoration: 'none', padding: '0.5rem', borderRadius: '8px', fontSize: '0.82rem', fontWeight: 700, marginTop: '0.75rem' }}
+            <button
+              onClick={() => handleCheckoutClick('Anual Pro (R$ 120/ano)', YEARLY_CHECKOUT_URL)}
+              style={{ display: 'block', width: '100%', textAlign: 'center', background: 'linear-gradient(90deg, #38bdf8, #2563eb)', color: '#ffffff', border: 'none', padding: '0.55rem', borderRadius: '8px', fontSize: '0.82rem', fontWeight: 700, marginTop: '0.75rem', cursor: 'pointer' }}
             >
               Garantir Anual Pro ↗
-            </a>
+            </button>
           </div>
 
           {/* Card Recarga */}
@@ -289,74 +365,13 @@ export const CVStoreModal: React.FC<CVStoreModalProps> = ({
                 <li>✓ Sem mensalidade</li>
               </ul>
             </div>
-            <a
-              href={RECHARGE_CHECKOUT_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{ display: 'block', textAlign: 'center', background: '#7c3aed', color: '#ffffff', textDecoration: 'none', padding: '0.5rem', borderRadius: '8px', fontSize: '0.82rem', fontWeight: 600, marginTop: '0.75rem' }}
+            <button
+              onClick={() => handleCheckoutClick('Recarga 100k (R$ 9,90)', RECHARGE_CHECKOUT_URL)}
+              style={{ display: 'block', width: '100%', textAlign: 'center', background: '#7c3aed', color: '#ffffff', border: 'none', padding: '0.55rem', borderRadius: '8px', fontSize: '0.82rem', fontWeight: 600, marginTop: '0.75rem', cursor: 'pointer' }}
             >
               Comprar 100k ↗
-            </a>
-          </div>
-        </div>
-
-        {/* Activation Form */}
-        <div style={{ background: '#1e293b', borderRadius: '12px', padding: '1.25rem', border: '1px solid #334155', marginBottom: '1rem' }}>
-          <h4 style={{ margin: '0 0 0.5rem', fontSize: '0.9rem', color: '#f8fafc' }}>
-            🔑 Já possui uma Chave de Licença?
-          </h4>
-          <p style={{ margin: '0 0 0.75rem', fontSize: '0.78rem', color: '#94a3b8' }}>
-            Insira a chave recebida no e-mail após a compra ou sua chave do Assistente Moeda.
-          </p>
-
-          <form onSubmit={handleActivateKey} style={{ display: 'flex', gap: '0.5rem' }}>
-            <input
-              type="text"
-              placeholder="Ex: am_pro_... ou am_sheet_..."
-              value={inputKey}
-              onChange={e => setInputKey(e.target.value)}
-              disabled={validating}
-              style={{ flex: 1, background: '#0f172a', border: '1px solid #475569', borderRadius: '8px', padding: '0.5rem 0.75rem', color: '#f8fafc', fontSize: '0.82rem', fontFamily: 'monospace' }}
-            />
-            <button
-              type="submit"
-              disabled={validating || !inputKey.trim()}
-              style={{ background: '#38bdf8', color: '#0f172a', border: 'none', borderRadius: '8px', padding: '0.5rem 1rem', fontWeight: 700, fontSize: '0.82rem', cursor: validating ? 'not-allowed' : 'pointer' }}
-            >
-              {validating ? 'Validando...' : 'Ativar Chave'}
-            </button>
-          </form>
-
-          <div style={{ marginTop: '0.75rem', textAlign: 'right' }}>
-            <button
-              type="button"
-              onClick={() => setShowRecovery(prev => !prev)}
-              style={{ background: 'transparent', border: 'none', color: '#38bdf8', fontSize: '0.75rem', textDecoration: 'underline', cursor: 'pointer' }}
-            >
-              {showRecovery ? 'Ocultar recuperação' : 'Perdeu sua chave? Recuperar por e-mail'}
             </button>
           </div>
-
-          {/* Recovery Form */}
-          {showRecovery && (
-            <form onSubmit={handleRecover} style={{ marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px dashed #334155', display: 'flex', gap: '0.5rem' }}>
-              <input
-                type="email"
-                placeholder="Seu e-mail da compra..."
-                value={recoveryEmail}
-                onChange={e => setRecoveryEmail(e.target.value)}
-                disabled={recovering}
-                style={{ flex: 1, background: '#0f172a', border: '1px solid #475569', borderRadius: '8px', padding: '0.45rem 0.75rem', color: '#f8fafc', fontSize: '0.8rem' }}
-              />
-              <button
-                type="submit"
-                disabled={recovering || !recoveryEmail}
-                style={{ background: '#475569', color: '#f8fafc', border: 'none', borderRadius: '8px', padding: '0.45rem 0.75rem', fontSize: '0.8rem', cursor: 'pointer' }}
-              >
-                {recovering ? 'Enviando...' : 'Enviar para meu E-mail'}
-              </button>
-            </form>
-          )}
         </div>
 
         {/* Free Tier Reminder Banner */}
@@ -367,3 +382,4 @@ export const CVStoreModal: React.FC<CVStoreModalProps> = ({
     </div>
   )
 }
+
