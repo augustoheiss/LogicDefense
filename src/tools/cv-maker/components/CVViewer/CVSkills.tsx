@@ -1,4 +1,3 @@
-import React from 'react'
 import type { CVSkill } from '../../types/cv'
 
 interface CVSkillsProps {
@@ -9,7 +8,7 @@ export const CVSkills: React.FC<CVSkillsProps> = ({ skills }) => {
   if (!skills || skills.length === 0) return null
 
   return (
-    <section className="cv-section">
+    <section className="cv-section cv-section-skills cv-avoid-break">
       <h2 className="cv-section-title">
         <span>⚡</span> Competências & Habilidades Técnicas
       </h2>

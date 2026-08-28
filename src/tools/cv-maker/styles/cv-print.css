@@ -1,28 +1,49 @@
 /* =============================================================
-   cv-print.css — Regras de Impressão A4 de Alta Fidelidade
-   Hack da Tabela Fantasma + Prevenção de Quebra de Cards
+   cv-print.css — Regras de Impressão A4 de Alta Densidade e Fidelidade
+   Hack da Tabela Fantasma + Prevenção Absoluta de Quebra de Cards
    ============================================================= */
 
 @media print {
-  html, body {
+  *,
+  *::before,
+  *::after {
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+  }
+
+  html,
+  body,
+  #root,
+  .cv-maker,
+  .cv-maker__showcase,
+  .cv-wrapper,
+  .cv-viewer-container,
+  .cv-card {
+    background: #ffffff !important;
     background-color: #ffffff !important;
+    color: #000000 !important;
     margin: 0 !important;
     padding: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    box-shadow: none !important;
+    border: none !important;
     font-size: 9.5pt !important;
-    color: #000000 !important;
   }
 
   @page {
     size: A4 portrait;
-    margin: 0 !important;
+    margin: 8mm 12mm 8mm 12mm !important;
   }
 
-  /* Ocultar elementos interativos da tela */
+  /* Ocultar elementos da interface interativa */
   .cv-no-print,
   .cv-maker__left,
   .cv-maker__toolbar,
+  .cv-modal-backdrop,
+  .cv-maker__empty,
   nav,
   footer,
   header.portal-navbar {
@@ -40,12 +61,12 @@
 
   .cv-print-header-spacer {
     display: table-header-group !important;
-    height: 12mm !important;
+    height: 4mm !important;
   }
 
   .cv-print-footer-spacer {
     display: table-footer-group !important;
-    height: 12mm !important;
+    height: 4mm !important;
   }
 
   .cv-print-tbody {
@@ -53,30 +74,32 @@
   }
 
   .cv-print-cell {
-    padding: 0 10mm !important;
+    padding: 0 !important;
     border: none !important;
     vertical-align: top !important;
   }
 
-  /* ── Evitar quebras de página no meio de cards e blocos ── */
-  .cv-avoid-break,
+  /* ── Regras de Quebra de Página (Evitar Orfãos e Fatiamentos) ── */
+  .cv-section-title {
+    break-after: avoid !important;
+    page-break-after: avoid !important;
+    margin-bottom: 0.4rem !important;
+    padding-bottom: 0.2rem !important;
+  }
+
+  .cv-header,
+  .cv-summary-card,
   .cv-work-item,
   .cv-education-item,
   .cv-project-card,
   .cv-skills-group,
-  .cv-header {
+  .cv-section-skills,
+  .cv-optional-item,
+  .cv-languages-row,
+  .cv-interests-wrap,
+  .cv-avoid-break {
     break-inside: avoid !important;
     page-break-inside: avoid !important;
-  }
-
-  /* Reset de sombras e fundos desnecessários */
-  .cv-card {
-    box-shadow: none !important;
-    border: none !important;
-    background-color: #ffffff !important;
-    padding: 0 !important;
-    max-width: 100% !important;
-    margin: 0 !important;
   }
 
   /* ── Grids Compactos no Print ── */
@@ -86,49 +109,38 @@
     gap: 0.5rem !important;
   }
 
+  /* Skills: Grid consistente sem quebra solta de coluna */
   .cv-skills-masonry {
-    column-count: 3 !important;
-    column-gap: 0.75rem !important;
+    display: grid !important;
+    grid-template-columns: repeat(3, 1fr) !important;
+    gap: 0.6rem 0.85rem !important;
+    column-count: auto !important;
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
   }
 
   .cv-skills-group {
-    margin-bottom: 0.5rem !important;
+    margin-bottom: 0 !important;
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
   }
 
   .cv-section {
-    margin-bottom: 0.8rem !important;
+    margin-bottom: 0.85rem !important;
   }
 
-  .cv-section-title {
-    margin-bottom: 0.4rem !important;
-    padding-bottom: 0.2rem !important;
-    font-size: 0.95rem !important;
+  .cv-work-item {
+    margin-bottom: 0.75rem !important;
   }
 
-  .cv-item-title {
-    font-size: 0.9rem !important;
+  .cv-work-highlights {
+    margin-top: 0.3rem !important;
+    gap: 0.2rem !important;
   }
 
-  .cv-bullets {
-    margin-top: 0.25rem !important;
-    padding-left: 1rem !important;
-  }
-
-  .cv-bullet-item {
-    margin-bottom: 0.15rem !important;
-    line-height: 1.4 !important;
-  }
-
-  /* Forçar cores de texto contrastantes para impressão A4 */
-  .theme-terminal,
-  .theme-terminal .cv-card,
-  .theme-terminal h1,
-  .theme-terminal h2,
-  .theme-terminal h3,
-  .theme-terminal p,
-  .theme-terminal span {
-    background-color: #ffffff !important;
-    color: #111827 !important;
-    border-color: #e5e7eb !important;
+  /* Links e badges limpos */
+  a {
+    text-decoration: none !important;
+    color: inherit !important;
   }
 }
