@@ -144,29 +144,43 @@ async def get_cv_prompts_endpoint():
     prompts_list = [
         {
             "id": "ibm-executive",
-            "title": "🏛️ Executivo / IBM Senior Tech Lead",
-            "subtitle": "Fórmula X-Y-Z do Google/IBM, foco em impacto, liderança e métricas de ROI",
+            "title": "💼 Executivo IBM / Senior Tech Lead",
+            "subtitle": "Fórmula X-Y-Z do Google/IBM, foco em impacto, governança e métricas de ROI",
             "persona": "professional",
             "system_prompt": f"{BASE_INSTRUCTION}\n\n{PERSONA_INSTRUCTIONS['professional']}"
         },
         {
             "id": "ai-solutions-architect",
-            "title": "⚡ AI & Cloud Solutions Architect",
-            "subtitle": "Pipelines de RAG, microsserviços, governança e engenharia de precisão",
+            "title": "🧠 AI & Cloud Solutions Architect",
+            "subtitle": "Pipelines de RAG, microsserviços assíncronos, cloud híbrida e engenharia de precisão",
             "persona": "architect",
             "system_prompt": f"{BASE_INSTRUCTION}\n\n{PERSONA_INSTRUCTIONS['architect']}"
         },
         {
+            "id": "career-evolution-biographer",
+            "title": "📜 Biógrafo / Evolução Estratégica",
+            "subtitle": "Narrativa coesa da jornada profissional, contexto de negócio e legado sustentável",
+            "persona": "historian",
+            "system_prompt": f"{BASE_INSTRUCTION}\n\n{PERSONA_INSTRUCTIONS['historian']}"
+        },
+        {
             "id": "career-transition-didactic",
-            "title": "🎓 Didático / Transição de Carreira & Velocidade de Aprendizado",
-            "subtitle": "Foco em raciocínio analítico, comunicação técnica e aprendizado acelerado",
+            "title": "🎓 Didático / Learning Velocity & Mentoria",
+            "subtitle": "Foco em raciocínio analítico, comunicação técnica e velocidade de aprendizado",
             "persona": "didactic",
             "system_prompt": f"{BASE_INSTRUCTION}\n\n{PERSONA_INSTRUCTIONS['didactic']}"
         },
         {
+            "id": "alien-field-observer",
+            "title": "🤖 Observador / Relatório Extraterrestre (Sci-Fi & Humor)",
+            "subtitle": "Relatório biológico intergaláctico sobre o espécime terráqueo e sua relação com código e café",
+            "persona": "alien",
+            "system_prompt": f"{BASE_INSTRUCTION}\n\n{PERSONA_INSTRUCTIONS['alien']}"
+        },
+        {
             "id": "ats-tailor-engine",
             "title": "🎯 Alfaiataria ATS (Match 100% com a Vaga)",
-            "subtitle": "Otimização milimétrica de palavras-chave contra uma Job Description",
+            "subtitle": "Otimização milimétrica de palavras-chave contra uma Job Description sem fabricação",
             "persona": "tailor",
             "system_prompt": f"{BASE_INSTRUCTION}\n\nTASK ADICIONAL: Adapte o currículo para dar match com os requisitos essenciais da vaga informada sem inventar dados."
         }
