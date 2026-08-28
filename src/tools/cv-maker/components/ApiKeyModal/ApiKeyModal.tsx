@@ -254,7 +254,23 @@ curl -X POST "https://ocorrencias-pdf-writer.onrender.com/api/v1/cv/tailor" \\
               </div>
 
               <div>
-                <strong>3. Geração 100% Autônoma de Chave (Sem abrir o site):</strong>
+                <strong>3. Exportar HTML Estilizado & PDF (Python):</strong>
+                <pre style={{ background: '#020617', padding: '0.6rem', borderRadius: '4px', border: '1px solid #1e293b', color: '#a78bfa', fontSize: '0.75rem', overflowX: 'auto', margin: '0.3rem 0 0 0' }}>
+{`import requests
+
+res = requests.post(
+    "https://ocorrencias-pdf-writer.onrender.com/api/v1/cv/render",
+    headers={"X-API-Key": "${currentKeyDisplay}"},
+    json={"raw_text": open("cv.yaml").read(), "theme": "executive"}
+)
+with open("meu_curriculo.html", "w", encoding="utf-8") as f:
+    f.write(res.text)
+# Pronto! O arquivo HTML possui botão nativo de impressão A4.`}
+                </pre>
+              </div>
+
+              <div>
+                <strong>4. Geração 100% Autônoma de Chave (Sem abrir o site):</strong>
                 <pre style={{ background: '#020617', padding: '0.6rem', borderRadius: '4px', border: '1px solid #1e293b', color: '#f59e0b', fontSize: '0.75rem', overflowX: 'auto', margin: '0.3rem 0 0 0' }}>
 {`# Dispare para auto-provisionar uma nova chave em milissegundos:
 curl -X POST "https://ocorrencias-pdf-writer.onrender.com/api/v1/api-keys/generate" \\
