@@ -125,19 +125,33 @@ def render_cv_to_standalone_html(yaml_or_dict: Any, theme: str = "executive", la
     t = I18N[selected_lang]
     theme_cfg = THEME_COLORS.get(theme, THEME_COLORS["executive"])
 
+    import re
+    email_val = basics.get("email", "")
+    phone_val = basics.get("phone", "")
+    clean_phone = re.sub(r"[^\d+]", "", str(phone_val))
+    city = basics.get("location", {}).get("city", "")
+    region = basics.get("location", {}).get("region", "")
+    loc_str = f"{city} - {region}" if city and region else (city or region or "")
+    url_val = basics.get("url", "")
+
     # Profiles list
-    profiles_html = ""
+    profiles_links = []
     for p in basics.get("profiles", []):
         network = html.escape(p.get("network", ""))
         url = html.escape(p.get("url", ""))
         user = html.escape(p.get("username", ""))
-        profiles_html += f'<a href="{url}" target="_blank" class="meta-link">🔗 {network}: {user}</a> '
+        if url:
+            profiles_links.append(f'<a href="{url}" target="_blank" class="cv-link">🔗 {network}: @{user}</a>')
+        elif user:
+            profiles_links.append(f'<span>{network}: {user}</span>')
+    profiles_html = " &nbsp;•&nbsp; ".join(profiles_links)
 
     # Work Timeline
     work_html = ""
     for w in work:
         pos = html.escape(w.get("position", ""))
         company = html.escape(w.get("name", ""))
+        w_url = html.escape(w.get("url", ""))
         start = html.escape(str(w.get("startDate", "")))
         end_val = w.get("endDate", "")
         end = html.escape(str(end_val)) if end_val else t["present"]
@@ -148,13 +162,15 @@ def render_cv_to_standalone_html(yaml_or_dict: Any, theme: str = "executive", la
         if highlights:
             bullets_html = "<ul class='bullets'>" + "".join(f"<li>{html.escape(h)}</li>" for h in highlights) + "</ul>"
 
+        company_html = f'<a href="{w_url}" target="_blank" class="cv-link">{company} ↗</a>' if w_url else company
+
         work_html += f"""
         <div class="card avoid-break">
             <div class="item-header">
                 <span class="item-title">{pos}</span>
                 <span class="item-date">{start} — {end}</span>
             </div>
-            <div class="item-sub">{company}</div>
+            <div class="item-sub">{company_html}</div>
             {f'<p class="item-desc">{summary}</p>' if summary else ''}
             {bullets_html}
         </div>
@@ -477,7 +493,14 @@ def render_cv_to_standalone_html(yaml_or_dict: Any, theme: str = "executive", la
       page-break-inside: avoid !important;
     }}
 
-    a {{ color: inherit; text-decoration: none; }}
+    a, .cv-link {{
+      color: var(--accent);
+      text-decoration: none;
+      font-weight: 500;
+    }}
+    a:hover, .cv-link:hover {{
+      text-decoration: underline;
+    }}
 
     /* ── @media print ── */
     @media print {{
@@ -492,6 +515,10 @@ def render_cv_to_standalone_html(yaml_or_dict: Any, theme: str = "executive", la
         border-radius: 0 !important;
         padding: 0 !important;
         max-width: 100% !important;
+      }}
+      a, .cv-link {{
+        color: #0284c7 !important;
+        text-decoration: none !important;
       }}
       @page {{
         size: A4 portrait;
@@ -513,10 +540,11 @@ def render_cv_to_standalone_html(yaml_or_dict: Any, theme: str = "executive", la
         <div class="label">{html.escape(basics.get("label", ""))}</div>
       </div>
       <div class="contacts">
-        {f'<div>✉ {html.escape(basics.get("email", ""))}</div>' if basics.get("email") else ''}
-        {f'<div>📞 {html.escape(basics.get("phone", ""))}</div>' if basics.get("phone") else ''}
-        {f'<div>📍 {html.escape(basics.get("location", {}).get("city", ""))} - {html.escape(basics.get("location", {}).get("region", ""))}</div>' if basics.get("location") else ''}
-        {f'<div>🌐 <a href="{html.escape(basics.get("url", ""))}">{html.escape(basics.get("url", ""))}</a></div>' if basics.get("url") else ''}
+        {f'<div>✉ <a href="mailto:{html.escape(email_val)}" class="cv-link">{html.escape(email_val)}</a></div>' if email_val else ''}
+        {f'<div>📞 <a href="tel:{clean_phone}" class="cv-link">{html.escape(phone_val)}</a></div>' if phone_val else ''}
+        {f'<div>📍 {html.escape(loc_str)}</div>' if loc_str else ''}
+        {f'<div>🌐 <a href="{html.escape(url_val)}" target="_blank" class="cv-link">{html.escape(url_val)}</a></div>' if url_val else ''}
+        {f'<div style="margin-top: 0.25rem;">{profiles_html}</div>' if profiles_html else ''}
       </div>
     </header>
 
