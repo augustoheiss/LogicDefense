@@ -236,7 +236,7 @@ export const CVStoreModal: React.FC<CVStoreModalProps> = ({
               <div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#f8fafc', margin: '0.35rem 0' }}>R$ 20<span style={{ fontSize: '0.8rem', fontWeight: 500, color: '#94a3b8' }}>/mês</span></div>
               <ul style={{ listStyle: 'none', padding: 0, margin: '0.75rem 0', fontSize: '0.78rem', color: '#cbd5e1', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
                 <li>✓ <strong>1.000.000</strong> tokens/mês</li>
-                <li>✓ 5 Arquétipos com Gemini 2.5</li>
+                <li>✓ 5 Arquétipos com Gemini 3.7</li>
                 <li>✓ Alfaiataria ATS Automática</li>
                 <li>✓ Compartilhado com Assistente Moeda</li>
               </ul>
@@ -262,7 +262,7 @@ export const CVStoreModal: React.FC<CVStoreModalProps> = ({
               <div style={{ fontSize: '0.72rem', color: '#34d399', marginBottom: '0.5rem' }}>Equivalente a apenas R$ 10/mês</div>
               <ul style={{ listStyle: 'none', padding: 0, margin: '0.5rem 0', fontSize: '0.78rem', color: '#cbd5e1', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
                 <li>✓ <strong>12.000.000</strong> tokens no ano</li>
-                <li>✓ Prioridade na fila do Gemini 2.5</li>
+                <li>✓ Prioridade na fila do Gemini 3.7</li>
                 <li>✓ Todas as Personas Liberadas</li>
                 <li>✓ Licença Universal Pro</li>
               </ul>

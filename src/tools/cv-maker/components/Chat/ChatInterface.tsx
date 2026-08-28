@@ -179,7 +179,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
           <div className="cv-loading-indicator">
             <div className="cv-spinner" />
             <div>
-              <strong>Executando 4 chamadas concorrentes ao Gemini 2.5...</strong>
+              <strong>Executando 5 chamadas concorrentes ao Gemini 3.7...</strong>
               <div style={{ fontSize: '0.75rem', opacity: 0.8, marginTop: '0.2rem' }}>
                 Formatando JSON Resume, aplicando métricas X-Y-Z e normalizando YAMLs.
               </div>

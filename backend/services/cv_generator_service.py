@@ -15,7 +15,7 @@ from google.genai import types
 
 from prompts.cv_prompts import BASE_INSTRUCTION, PERSONA_INSTRUCTIONS
 
-MODEL = os.getenv("CV_AI_MODEL", "gemini-2.5-flash")
+MODEL = os.getenv("CV_AI_MODEL", "gemini-3.7-flash")
 MAX_TOKENS = 8192
 MAX_RETRIES = 3
 RETRY_DELAY = 1.5
