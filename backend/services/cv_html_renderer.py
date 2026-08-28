@@ -177,11 +177,50 @@ def render_cv_to_standalone_html(yaml_or_dict: Any, theme: str = "executive") ->
         for l in languages
     )
 
+    # Certificates
+    certificates_html = ""
+    for cert in certificates:
+        name = html.escape(cert.get("name", ""))
+        issuer = html.escape(cert.get("issuer", ""))
+        date = html.escape(str(cert.get("date", "")))
+        url = html.escape(cert.get("url", ""))
+
+        certificates_html += f"""
+        <div class="card avoid-break" style="margin-bottom: 0.4rem;">
+            <div class="item-header" style="font-size: 0.88rem;">
+                <span class="item-title">{f'<a href="{url}" target="_blank">{name} ↗</a>' if url else name}</span>
+                <span class="item-date">{date}</span>
+            </div>
+            <div class="item-sub" style="margin-bottom: 0;">{issuer}</div>
+        </div>
+        """
+
+    # Publications
+    publications = data.get("publications", [])
+    publications_html = ""
+    for pub in publications:
+        p_name = html.escape(pub.get("name", ""))
+        p_pub = html.escape(pub.get("publisher", ""))
+        p_date = html.escape(str(pub.get("releaseDate", "")))
+        p_url = html.escape(pub.get("url", ""))
+        p_sum = html.escape(pub.get("summary", ""))
+
+        publications_html += f"""
+        <div class="card avoid-break" style="margin-bottom: 0.5rem;">
+            <div class="item-header" style="font-size: 0.88rem;">
+                <span class="item-title">{f'<a href="{p_url}" target="_blank">{p_name} ↗</a>' if p_url else p_name}</span>
+                <span class="item-date">{p_date}</span>
+            </div>
+            <div class="item-sub">{p_pub}</div>
+            {f'<p class="item-desc">{p_sum}</p>' if p_sum else ''}
+        </div>
+        """
+
     # Interests
     interest_html = ""
     for it in interests:
         kws = "".join(f"<span class='badge'>{html.escape(k)}</span>" for k in it.get("keywords", []))
-        interest_html += f"<div class='avoid-break'><strong>{html.escape(it.get('name', ''))}:</strong> {kws}</div>"
+        interest_html += f"<div class='avoid-break' style='margin-bottom: 0.3rem;'><strong>{html.escape(it.get('name', ''))}:</strong> {kws}</div>"
 
     html_content = f"""<!DOCTYPE html>
 <html lang="pt-BR">
@@ -444,6 +483,10 @@ def render_cv_to_standalone_html(yaml_or_dict: Any, theme: str = "executive") ->
     {f'<section class="avoid-break"><h2 class="section-title">⚡ Competências & Habilidades Técnicas</h2><div class="skills-grid">{skills_html}</div></section>' if skills else ''}
 
     {f'<section><h2 class="section-title">🎓 Formação Acadêmica</h2>{education_html}</section>' if education else ''}
+
+    {f'<section class="avoid-break"><h2 class="section-title">📜 Licenças & Certificações</h2>{certificates_html}</section>' if certificates else ''}
+
+    {f'<section class="avoid-break"><h2 class="section-title">✍️ Artigos & Publicações</h2>{publications_html}</section>' if publications else ''}
 
     {f'<section class="avoid-break"><h2 class="section-title">🌐 Idiomas</h2><div class="tags">{lang_html}</div></section>' if languages else ''}
 
