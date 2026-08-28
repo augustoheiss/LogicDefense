@@ -11,16 +11,21 @@ export const CVLanguages: React.FC<CVLanguagesProps> = ({ languages }) => {
   return (
     <section className="cv-section cv-avoid-break">
       <h2 className="cv-section-title">
-        <span>🌐</span> Idiomas
+        <span>🌐</span> Idiomas & Fluência
       </h2>
 
-      <div className="cv-skill-tags">
+      <div className="cv-languages-grid">
         {languages.map((lang, index) => (
-          <span key={index} className="cv-skill-tag" style={{ padding: '0.3rem 0.6rem' }}>
-            <strong>{lang.language}:</strong> {lang.fluency}
-          </span>
+          <div key={index} className="cv-language-card cv-avoid-break">
+            <div className="cv-lang-name">
+              <span className="cv-geo-bullet">◆</span>
+              <strong>{lang.language}</strong>
+            </div>
+            <span className="cv-lang-fluency">{lang.fluency}</span>
+          </div>
         ))}
       </div>
     </section>
   )
 }
+

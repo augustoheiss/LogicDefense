@@ -11,13 +11,15 @@ export const CVInterests: React.FC<CVInterestsProps> = ({ interests }) => {
   return (
     <section className="cv-section cv-avoid-break">
       <h2 className="cv-section-title">
-        <span>🎯</span> Interesses & Pesquisa
+        <span>🎯</span> Interesses & Frentes de Pesquisa
       </h2>
 
-      <div className="cv-skills-masonry">
+      <div className="cv-interests-grid">
         {interests.map((interest, index) => (
-          <div key={index} className="cv-skills-group">
-            <h4>{interest.name}</h4>
+          <div key={index} className="cv-interest-card cv-avoid-break">
+            <h4 className="cv-interest-title">
+              <span className="cv-geo-bullet">◈</span> {interest.name}
+            </h4>
             {interest.keywords && interest.keywords.length > 0 && (
               <div className="cv-skill-tags">
                 {interest.keywords.map((kw, idx) => (
@@ -31,3 +33,4 @@ export const CVInterests: React.FC<CVInterestsProps> = ({ interests }) => {
     </section>
   )
 }
+

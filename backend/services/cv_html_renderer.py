@@ -221,21 +221,25 @@ def render_cv_to_standalone_html(yaml_or_dict: Any, theme: str = "executive", la
         area = html.escape(edu.get("area", ""))
         study = html.escape(edu.get("studyType", ""))
         start = html.escape(str(edu.get("startDate", "")))
-        end = html.escape(str(edu.get("endDate", "") or "Em andamento"))
+        end = html.escape(str(edu.get("endDate", "") or "Presente"))
+        date_str = f"{start} — {end}" if start else end
 
         education_html += f"""
-        <div class="card avoid-break">
-            <div class="item-header">
-                <span class="item-title">{area} ({study})</span>
-                <span class="item-date">{f'{start} — {end}' if start else end}</span>
-            </div>
-            <div class="item-sub">{inst}</div>
+        <div class="geo-card avoid-break">
+            <div class="card-top"><span class="geo-icon">🏛️</span><span class="item-date">{date_str}</span></div>
+            <div class="item-title" style="font-weight: 700; font-size: 0.88rem;">{area} ({study})</div>
+            <div class="item-sub" style="font-size: 0.8rem; color: #475569;">{inst}</div>
         </div>
         """
 
     # Languages
-    lang_html = "".join(
-        f"<span class='badge'>🌐 {html.escape(l.get('language', ''))}: {html.escape(l.get('fluency', ''))}</span>"
+    lang_cards_html = "".join(
+        f"""
+        <div class="lang-card avoid-break">
+            <span>◆ <strong>{html.escape(l.get('language', ''))}</strong></span>
+            <span style="font-size: 0.76rem; color: #64748b;">{html.escape(l.get('fluency', ''))}</span>
+        </div>
+        """
         for l in languages
     )
 
@@ -248,12 +252,10 @@ def render_cv_to_standalone_html(yaml_or_dict: Any, theme: str = "executive", la
         url = html.escape(cert.get("url", ""))
 
         certificates_html += f"""
-        <div class="card avoid-break" style="margin-bottom: 0.4rem;">
-            <div class="item-header" style="font-size: 0.88rem;">
-                <span class="item-title">{f'<a href="{url}" target="_blank">{name} ↗</a>' if url else name}</span>
-                <span class="item-date">{date}</span>
-            </div>
-            <div class="item-sub" style="margin-bottom: 0;">{issuer}</div>
+        <div class="geo-card avoid-break">
+            <div class="card-top"><span class="geo-icon">🎖️</span><span class="item-date">{date}</span></div>
+            <div class="item-title" style="font-weight: 700; font-size: 0.85rem;">{f'<a href="{url}" target="_blank">{name} ↗</a>' if url else name}</div>
+            <div class="issuer-pill">{issuer}</div>
         </div>
         """
 
@@ -282,7 +284,12 @@ def render_cv_to_standalone_html(yaml_or_dict: Any, theme: str = "executive", la
     interest_html = ""
     for it in interests:
         kws = "".join(f"<span class='badge'>{html.escape(k)}</span>" for k in it.get("keywords", []))
-        interest_html += f"<div class='avoid-break' style='margin-bottom: 0.3rem;'><strong>{html.escape(it.get('name', ''))}:</strong> {kws}</div>"
+        interest_html += f"""
+        <div class="interest-card avoid-break">
+            <div style="font-weight: 700; font-size: 0.85rem; margin-bottom: 0.3rem;">◈ {html.escape(it.get('name', ''))}</div>
+            <div class="tags">{kws}</div>
+        </div>
+        """
 
     html_content = f"""<!DOCTYPE html>
 <html lang="pt-BR">
@@ -451,17 +458,67 @@ def render_cv_to_standalone_html(yaml_or_dict: Any, theme: str = "executive", la
       border-radius: 6px;
     }}
 
-    .skills-grid {{
+    .skills-grid,
+    .education-grid,
+    .certs-grid,
+    .interests-grid,
+    .languages-grid {{
       display: grid;
       grid-template-columns: repeat(3, 1fr);
-      gap: 0.75rem;
+      gap: 0.65rem;
     }}
 
-    .skill-group {{
+    .skill-group,
+    .geo-card,
+    .interest-card {{
       background: #f8fafc;
       border: 1px solid var(--border);
+      border-left: 3px solid var(--primary);
       padding: 0.6rem;
       border-radius: 6px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }}
+
+    .geo-card {{
+      border-left: 3px solid var(--accent);
+    }}
+
+    .card-top {{
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.25rem;
+    }}
+
+    .geo-icon {{
+      font-size: 0.85rem;
+    }}
+
+    .lang-card {{
+      background: #f8fafc;
+      border: 1px solid var(--border);
+      border-left: 3px solid #10b981;
+      padding: 0.5rem 0.65rem;
+      border-radius: 6px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.82rem;
+    }}
+
+    .issuer-pill {{
+      display: inline-block;
+      font-size: 0.7rem;
+      font-weight: 600;
+      padding: 0.1rem 0.4rem;
+      background: var(--bg-badge);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      color: var(--sub);
+      margin-top: 0.25rem;
+      width: fit-content;
     }}
 
     .skill-title {{
@@ -507,7 +564,7 @@ def render_cv_to_standalone_html(yaml_or_dict: Any, theme: str = "executive", la
       body {{
         background: #ffffff !important;
         padding: 0 !important;
-        font-size: 9.2pt !important;
+        font-size: 9pt !important;
       }}
       .toolbar {{ display: none !important; }}
       .container {{
@@ -556,15 +613,15 @@ def render_cv_to_standalone_html(yaml_or_dict: Any, theme: str = "executive", la
 
     {f'<section class="avoid-break"><h2 class="section-title">{t["skills"]}</h2><div class="skills-grid">{skills_html}</div></section>' if skills else ''}
 
-    {f'<section><h2 class="section-title">{t["education"]}</h2>{education_html}</section>' if education else ''}
+    {f'<section class="avoid-break"><h2 class="section-title">{t["education"]}</h2><div class="education-grid">{education_html}</div></section>' if education else ''}
 
-    {f'<section class="avoid-break"><h2 class="section-title">{t["certificates"]}</h2>{certificates_html}</section>' if certificates else ''}
+    {f'<section class="avoid-break"><h2 class="section-title">{t["certificates"]}</h2><div class="certs-grid">{certificates_html}</div></section>' if certificates else ''}
 
     {f'<section class="avoid-break"><h2 class="section-title">{t["publications"]}</h2>{publications_html}</section>' if publications else ''}
 
-    {f'<section class="avoid-break"><h2 class="section-title">{t["languages"]}</h2><div class="tags">{lang_html}</div></section>' if languages else ''}
+    {f'<section class="avoid-break"><h2 class="section-title">{t["languages"]}</h2><div class="languages-grid">{lang_cards_html}</div></section>' if languages else ''}
 
-    {f'<section class="avoid-break"><h2 class="section-title">{t["interests"]}</h2>{interest_html}</section>' if interests else ''}
+    {f'<section class="avoid-break"><h2 class="section-title">{t["interests"]}</h2><div class="interests-grid">{interest_html}</div></section>' if interests else ''}
   </div>
 
 </body>

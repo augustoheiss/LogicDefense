@@ -14,17 +14,23 @@ export const CVEducation: React.FC<CVEducationProps> = ({ education }) => {
         <span>🎓</span> Formação Acadêmica
       </h2>
 
-      <div className="cv-grid-2col">
+      <div className="cv-education-grid">
         {education.map((item, index) => {
           const dateRange = item.endDate
             ? (item.startDate ? `${item.startDate} — ${item.endDate}` : item.endDate)
             : (item.startDate ? `${item.startDate} — Presente` : '')
 
           return (
-            <div key={index} className="cv-simple-item">
-              <h4 className="cv-item-title">{item.studyType ? `${item.studyType} em ${item.area || ''}` : item.area}</h4>
-              <p>
-                <strong>{item.institution}</strong> {dateRange && <span className="cv-meta-tag">{dateRange}</span>}
+            <div key={index} className="cv-education-card cv-avoid-break">
+              <div className="cv-card-top">
+                <span className="cv-geo-icon">🏛️</span>
+                <span className="cv-meta-tag">{dateRange}</span>
+              </div>
+              <h4 className="cv-item-title">
+                {item.studyType ? `${item.studyType} em ${item.area || ''}` : item.area}
+              </h4>
+              <p className="cv-item-inst">
+                <strong>{item.institution}</strong>
               </p>
               {item.score && <p className="cv-item-summary">Nota/Desempenho: {item.score}</p>}
             </div>
@@ -34,3 +40,4 @@ export const CVEducation: React.FC<CVEducationProps> = ({ education }) => {
     </section>
   )
 }
+
