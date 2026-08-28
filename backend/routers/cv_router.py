@@ -44,6 +44,20 @@ class CVRenderRequest(BaseModel):
     model_config = {"populate_by_name": True}
 
 
+@router.get("/prompts")
+async def get_cv_prompts_endpoint():
+    """
+    Retorna os prompts de sistema e arquétipos para agentes externos (Claude, ChatGPT, Cursor).
+    """
+    return {
+        "service": "CV Maker 2.0 Engine",
+        "description": "Prompts de Sistema Especializados para Geração e Alfaiataria (ATS Tailoring) de Currículos.",
+        "archetypes": PERSONA_INSTRUCTIONS,
+        "schema_guidance": "Gere a saída estritamente no padrão JSON Resume formatado em YAML válido.",
+        "available_themes": ["executive", "creative", "minimalist", "white", "terminal"]
+    }
+
+
 @router.post("/generate", response_model=CVGenerateResponse)
 async def generate_cv_endpoint(
     payload: CVGenerateRequest,

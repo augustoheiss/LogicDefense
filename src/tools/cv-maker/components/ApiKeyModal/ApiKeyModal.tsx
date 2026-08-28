@@ -7,8 +7,41 @@ interface ApiKeyModalProps {
   onKeyUpdated: (newKey: string | null) => void
 }
 
+const SYSTEM_PROMPTS = [
+  {
+    title: '👔 Executivo / IBM Senior Lead',
+    tag: 'Foco: Impacto, Arquitetura & Liderança',
+    content: `Você é um Arquiteto de Dados de Currículos e Redator Executivo sênior especializado no Padrão IBM e Big Tech.
+Transforme as informações do candidato em um JSON Resume (YAML) de alto impacto.
+DIRETRIZES:
+1. Aplique a fórmula X-Y-Z do Google/IBM: "Alcançou [X], medido por [Y], implementando/liderando [Z]".
+2. Destaque arquitetura de sistemas, resiliência, liderança e valor entregue ao negócio.
+3. Formate estritamente no padrão JSON Resume formatado em YAML.`
+  },
+  {
+    title: '🎯 Alfaiataria ATS (Vaga Específica)',
+    tag: 'Foco: Match de Palavras-Chave & Vaga Alvo',
+    content: `Você é um Especialista em Otimização de Currículos para Robôs ATS e Recrutadores Técnicos.
+Analise o currículo base e a Descrição da Vaga Alvo.
+DIRETRIZES:
+1. Identifique as 10 principais keywords técnicas e comportamentais da vaga.
+2. Reorganize e reescreva os tópicos do currículo para criar um match de 90%+ com os requisitos.
+3. Mantenha 100% de veracidade histórica (sem inventar experiências).
+4. Devolva apenas o YAML compatível com o padrão JSON Resume.`
+  },
+  {
+    title: '🌐 Tradutor Internacional (EN-US)',
+    tag: 'Foco: Vagas Globais & Vocabulário Nativo',
+    content: `Você é um Redator Técnico Nativo em Inglês especializado no mercado de tecnologia dos EUA e Europa.
+Traduza e adapte o currículo para o padrão internacional:
+1. Converta termos brasileiros para os equivalentes corporativos globais (ex: "Licenciatura" -> "Bachelor's Degree in Education").
+2. Utilize verbos de ação no passado no início de cada bullet (Architected, Streamlined, Spearheaded).
+3. Mantenha o formato estruturado em YAML do JSON Resume.`
+  }
+]
+
 export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ isOpen, onClose, onKeyUpdated }) => {
-  const [activeTab, setActiveTab] = useState<'key' | 'guide'>('key')
+  const [activeTab, setActiveTab] = useState<'key' | 'guide' | 'prompts'>('key')
   const [activeKey, setActiveKey] = useState<string | null>(null)
   const [keyHint, setKeyHint] = useState<string | null>(null)
   const [expiresAt, setExpiresAt] = useState<string | null>(null)
@@ -16,6 +49,7 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ isOpen, onClose, onKey
   const [selectedTtl, setSelectedTtl] = useState<number>(1)
   const [loading, setLoading] = useState<boolean>(false)
   const [copied, setCopied] = useState<boolean>(false)
+  const [copiedPromptIndex, setCopiedPromptIndex] = useState<number | null>(null)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [justGeneratedRawKey, setJustGeneratedRawKey] = useState<string | null>(null)
 
@@ -90,11 +124,17 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ isOpen, onClose, onKey
     setTimeout(() => setCopied(false), 2000)
   }
 
+  const handleCopyPrompt = (index: number, text: string) => {
+    navigator.clipboard.writeText(text)
+    setCopiedPromptIndex(index)
+    setTimeout(() => setCopiedPromptIndex(null), 2500)
+  }
+
   const currentKeyDisplay = justGeneratedRawKey || activeKey || 'am_sheet_live_sua_chave_aqui'
 
   return (
     <div className="cv-modal-backdrop" onClick={onClose}>
-      <div className="cv-modal-card" style={{ maxWidth: '650px' }} onClick={e => e.stopPropagation()}>
+      <div className="cv-modal-card" style={{ maxWidth: '680px' }} onClick={e => e.stopPropagation()}>
         <div className="cv-modal-header">
           <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
             <h3 style={{ margin: 0 }}>🔑 Automação & Chave de API</h3>
@@ -109,14 +149,21 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ isOpen, onClose, onKey
             style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem' }}
             onClick={() => setActiveTab('key')}
           >
-            🔐 Gerenciar Chave
+            🔐 Minha Chave
           </button>
           <button
             className={`cv-btn-secondary ${activeTab === 'guide' ? 'cv-sidebar-tab--active' : ''}`}
             style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem' }}
             onClick={() => setActiveTab('guide')}
           >
-            📖 Guia: Usar no PC sem Acessar o Site
+            📖 Guia de Integração
+          </button>
+          <button
+            className={`cv-btn-secondary ${activeTab === 'prompts' ? 'cv-sidebar-tab--active' : ''}`}
+            style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem' }}
+            onClick={() => setActiveTab('prompts')}
+          >
+            💡 Prompts de Sistema
           </button>
         </div>
 
@@ -166,7 +213,7 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ isOpen, onClose, onKey
                   )}
 
                   <div style={{ fontSize: '0.78rem', color: '#94a3b8', background: '#090d16', padding: '0.75rem', borderRadius: '0.375rem', border: '1px solid #1e293b' }}>
-                    <strong>Header de Autenticação:</strong>
+                    <strong>Header de Autenticação Universal:</strong>
                     <pre style={{ margin: '0.4rem 0 0 0', color: '#34d399', fontFamily: 'monospace', fontSize: '0.75rem' }}>
                       X-API-Key: {currentKeyDisplay}
                     </pre>
@@ -261,7 +308,7 @@ curl -X POST "https://ocorrencias-pdf-writer.onrender.com/api/v1/cv/tailor" \\
 res = requests.post(
     "https://ocorrencias-pdf-writer.onrender.com/api/v1/cv/render",
     headers={"X-API-Key": "${currentKeyDisplay}"},
-    json={"raw_text": open("cv.yaml").read(), "theme": "executive"}
+    json={"raw_text": open("cv.yaml", encoding="utf-8").read(), "theme": "executive"}
 )
 with open("meu_curriculo.html", "w", encoding="utf-8") as f:
     f.write(res.text)
@@ -278,6 +325,35 @@ curl -X POST "https://ocorrencias-pdf-writer.onrender.com/api/v1/api-keys/genera
   -d '{"ttlDays": 1}'`}
                 </pre>
               </div>
+            </div>
+          )}
+
+          {activeTab === 'prompts' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <p style={{ margin: 0, fontSize: '0.82rem', color: '#94a3b8' }}>
+                Copie estes prompts de sistema para usar no <strong>ChatGPT, Claude, Cursor ou seus agentes n8n</strong>. O agente gera o YAML e você usa nossa API para renderizar o PDF final:
+              </p>
+
+              {SYSTEM_PROMPTS.map((p, idx) => (
+                <div key={idx} style={{ background: '#06090f', border: '1px solid #1e293b', padding: '0.85rem', borderRadius: '6px', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontWeight: 700, fontSize: '0.85rem', color: '#f8fafc' }}>{p.title}</span>
+                    <span style={{ fontSize: '0.7rem', color: '#38bdf8', background: 'rgba(56, 189, 248, 0.1)', padding: '0.15rem 0.4rem', borderRadius: '4px' }}>
+                      {p.tag}
+                    </span>
+                  </div>
+                  <pre style={{ background: '#020617', padding: '0.5rem', borderRadius: '4px', fontSize: '0.72rem', color: '#94a3b8', whiteSpace: 'pre-wrap', maxHeight: '120px', overflowY: 'auto' }}>
+                    {p.content}
+                  </pre>
+                  <button
+                    className="cv-btn-secondary"
+                    style={{ alignSelf: 'flex-end', padding: '0.3rem 0.7rem', fontSize: '0.75rem' }}
+                    onClick={() => handleCopyPrompt(idx, p.content)}
+                  >
+                    {copiedPromptIndex === idx ? '✓ Prompt Copiado!' : '📋 Copiar Prompt'}
+                  </button>
+                </div>
+              ))}
             </div>
           )}
         </div>
