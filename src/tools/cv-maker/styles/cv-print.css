@@ -56,7 +56,7 @@
     margin: 6mm 8mm 6mm 8mm !important;
   }
 
-  /* Ocultar rigorosamente todos os elementos da interface do portal e app */
+  /* Ocultar rigorosamente apenas os elementos de navegacao do portal e app, mantendo o cabecalho do curriculo */
   .cv-no-print,
   .navbar,
   .portal-navbar,
@@ -74,8 +74,7 @@
   .cv-toolbar,
   .toolbar,
   nav,
-  footer,
-  header {
+  footer {
     display: none !important;
     visibility: hidden !important;
     height: 0 !important;
@@ -87,15 +86,34 @@
     top: -9999px !important;
   }
 
-  /* ── Header do Currículo no Print ── */
+  /* ── Header do Currículo no Print (Nome, Foto, Contatos e Resumo) ── */
+  header.cv-header,
   .cv-header {
+    display: block !important;
+    visibility: visible !important;
+    height: auto !important;
+    width: 100% !important;
+    max-height: none !important;
+    position: static !important;
+    top: auto !important;
     margin-bottom: 0.6rem !important;
     padding-bottom: 0.3rem !important;
     border-bottom: 1.5px solid #1e293b !important;
   }
 
   .cv-header__top {
+    display: flex !important;
+    visibility: visible !important;
     gap: 0.75rem !important;
+    justify-content: space-between !important;
+    align-items: flex-start !important;
+  }
+
+  .cv-header__profile {
+    display: flex !important;
+    visibility: visible !important;
+    gap: 0.75rem !important;
+    align-items: center !important;
   }
 
   .cv-avatar-container {
@@ -118,7 +136,11 @@
     gap: 0.12rem !important;
   }
 
-  .cv-summary-card {
+  .cv-summary-card,
+  .cv-summary {
+    display: block !important;
+    visibility: visible !important;
+    margin-top: 0.4rem !important;
     margin-bottom: 0.6rem !important;
     font-size: 8.3pt !important;
     line-height: 1.4 !important;
