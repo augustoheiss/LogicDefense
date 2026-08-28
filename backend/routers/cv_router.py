@@ -129,20 +129,6 @@ async def render_cv_endpoint(
     if payload.format == "yaml":
         return Response(content=yaml_text, media_type="text/yaml")
 
-    html_template = f"""<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-  <meta charset="UTF-8">
-  <title>Currículo Renderizado — LogicDefense</title>
-  <style>
-    body {{ font-family: sans-serif; padding: 2rem; max-width: 850px; margin: auto; }}
-    pre {{ background: #f4f4f5; padding: 1rem; border-radius: 6px; overflow-x: auto; }}
-  </style>
-</head>
-<body class="theme-{theme_name}">
-  <h2>Currículo Formatado (Tema: {theme_name})</h2>
-  <pre>{yaml_text}</pre>
-</body>
-</html>"""
-
-    return HTMLResponse(content=html_template)
+    from services.cv_html_renderer import render_cv_to_standalone_html
+    html_content = render_cv_to_standalone_html(yaml_text, theme=theme_name)
+    return HTMLResponse(content=html_content)
