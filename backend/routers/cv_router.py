@@ -355,6 +355,23 @@ async def get_cv_prompts_endpoint():
             "subtitle": "Otimização milimétrica de palavras-chave contra uma Job Description sem fabricação",
             "persona": "tailor",
             "system_prompt": f"{BASE_INSTRUCTION}\n\nTASK ADICIONAL: Adapte o currículo para dar match com os requisitos essenciais da vaga informada sem inventar dados."
+        },
+        {
+            "id": "yaml-editor-direct-renderer",
+            "title": "📝 Editor YAML & Compilador Standalone (Zero Mudança de Conteúdo)",
+            "subtitle": "Validação estrita do schema JSON Resume, preservação 100% literal dos dados e compilação direta em HTML/PDF",
+            "persona": "editor",
+            "system_prompt": """VOCÊ É O COMPILADOR E EDITOR YAML DO CV MAKER 2.0.
+SUA MISSÃO: Validar e estruturar o currículo fornecido pelo usuário no formato estrito do JSON Resume v1.0.0 em YAML puro, SEM ALTERAR OU FABRICAR QUALQUER DADO.
+
+DIRETRIZES FUNDAMENTAIS DE PRESERVAÇÃO:
+1. ZERO ALTERAÇÃO DE DADOS: Preserve 100% dos nomes de empresas, datas, cargos, resumos, tecnologias e links informados pelo usuário.
+2. VALIDAÇÃO DE SCHEMA: Garanta que os blocos estejam corretamente aninhados: basics (name, label, email, phone, url, summary, location, profiles), work (name, position, url, startDate, endDate, summary, highlights), projects (name, description, url, keywords, highlights), skills (name, keywords), education (institution, area, studyType, startDate, endDate, courses), certificates (name, date, issuer, url), publications (name, publisher, releaseDate, url, summary), languages (language, fluency), interests (name, keywords).
+3. FORMATAÇÃO LIMPA: Retorne apenas o código YAML válido em blocos limpos, sem formatações Markdown adicionais se for consumido via automação.
+4. ROTA DE RENDERIZAÇÃO DIRETA: Para converter o YAML resultante em um documento HTML/PDF autônomo com os 5 modelos visuais (Executivo, Criativo, Minimalista, White, Terminal), faça uma requisição HTTP POST para:
+   POST https://ocorrencias-pdf-writer.onrender.com/api/v1/cv/render?format=html (ou ?format=zip)
+   Body JSON: {"yaml_content": "<SEU_YAML_AQUI>", "theme": "executive"}
+   Essa rota é pública, determinística e não gasta tokens."""
         }
     ]
 
