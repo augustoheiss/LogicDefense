@@ -1,19 +1,49 @@
 """
 CV HTML Renderer Service — LogicDefense & CV Maker 2.0
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Converte YAML / JSON Resume em um documento HTML 100% autônomo e standalone,
-com estilos embutidos de todos os 5 Temas, troca dinâmica em tempo real (sem servidor),
-botões de download/cópia de YAML e paginação A4 de alta precisão.
+Converte múltiplos arquétipos YAML / JSON Resume em um Super Dashboard HTML
+100% autônomo e standalone, com troca dinâmica de 5 Personas e 5 Temas Visuais
+em tempo real (sem servidor), botões de download de YAML individual, cópia
+e exportação de Pacote ZIP com todos os 5 YAMLs.
 """
 
 import html
 import yaml
 from typing import Dict, Any, Optional
 
+PERSONA_METADATA = {
+    "professional": {
+        "label": "💼 1. Executivo IBM (Senior Lead)",
+        "desc": "Foco em liderança, governança, métricas de ROI e arquiteturas de alta criticidade.",
+        "filename": "curriculo_executivo.yaml"
+    },
+    "architect": {
+        "label": "🧠 2. Arquiteto de IA & Soluções",
+        "desc": "Foco em microsserviços FastAPI, RAG, pipelines assíncronos e nuvem híbrida.",
+        "filename": "curriculo_arquiteto_ia.yaml"
+    },
+    "historian": {
+        "label": "📜 3. Biógrafo / Evolução Estratégica",
+        "desc": "Narrativa coesa da jornada, contexto de negócios e legado sustentável.",
+        "filename": "curriculo_biografo.yaml"
+    },
+    "didactic": {
+        "label": "🎓 4. Didático / Learning Velocity",
+        "desc": "Foco em raciocínio analítico, comunicação técnica e velocidade de aprendizado.",
+        "filename": "curriculo_didatico.yaml"
+    },
+    "alien": {
+        "label": "🤖 5. Relatório Alien (Sci-Fi & Humor)",
+        "desc": "Relatório biológico e técnico intergaláctico sobre o espécime e seu código.",
+        "filename": "curriculo_alien.yaml"
+    },
+}
+
 I18N = {
     "pt": {
         "print_btn": "🖨️ Imprimir / Salvar PDF",
         "download_yaml": "📥 Baixar YAML",
+        "download_zip": "📦 Baixar 5 Versões (ZIP)",
         "copy_yaml": "📋 Copiar YAML",
         "yaml_copied": "Copiado!",
         "work": "💼 Experiência Profissional",
@@ -26,6 +56,7 @@ I18N = {
         "interests": "🎯 Interesses & Pesquisa",
         "present": "Presente",
         "in_progress": "Em andamento",
+        "persona_label": "Persona IA:",
         "theme_label": "Modelo:",
         "opt_executive": "👔 Executivo",
         "opt_creative": "🎨 Criativo",
@@ -36,6 +67,7 @@ I18N = {
     "en": {
         "print_btn": "🖨️ Print / Save as PDF",
         "download_yaml": "📥 Download YAML",
+        "download_zip": "📦 Download 5 CVs (ZIP)",
         "copy_yaml": "📋 Copy YAML",
         "yaml_copied": "Copied!",
         "work": "💼 Professional Experience",
@@ -48,6 +80,7 @@ I18N = {
         "interests": "🎯 Technical Research & Interests",
         "present": "Present",
         "in_progress": "In Progress",
+        "persona_label": "AI Persona:",
         "theme_label": "Theme:",
         "opt_executive": "👔 Executive",
         "opt_creative": "🎨 Creative",
@@ -57,21 +90,10 @@ I18N = {
     },
 }
 
-def render_cv_to_standalone_html(yaml_or_dict: Any, theme: str = "executive", lang: str = "auto") -> str:
-    """
-    Gera um HTML standalone de alta fidelidade visual com TODOS os 5 temas embutidos.
-    O usuário pode alternar entre os temas diretamente no navegador sem precisar de internet ou servidor!
-    """
-    raw_str = ""
-    if isinstance(yaml_or_dict, str):
-        raw_str = yaml_or_dict
-        try:
-            data = yaml.safe_load(yaml_or_dict) or {}
-        except Exception:
-            data = {}
-    else:
-        data = yaml_or_dict or {}
 
+def _render_cv_body_html(data: dict, t: dict) -> str:
+    """Gera o corpo visual estruturado de um currículo a partir do dicionário JSON Resume."""
+    import re
     basics = data.get("basics", {})
     work = data.get("work", [])
     education = data.get("education", [])
@@ -80,23 +102,8 @@ def render_cv_to_standalone_html(yaml_or_dict: Any, theme: str = "executive", la
     languages = data.get("languages", [])
     interests = data.get("interests", [])
     certificates = data.get("certificates", [])
+    publications = data.get("publications", [])
 
-    # Auto-detect language
-    if lang == "auto":
-        txt_to_check = (raw_str or "") + " " + str(basics.get("label", "")) + " " + str(basics.get("summary", ""))
-        if any(w in txt_to_check.lower() for w in ["developer", "software engineer", "intern", "experience", "education"]):
-            if "desenvolvedor" in txt_to_check.lower() or "experiência" in txt_to_check.lower():
-                selected_lang = "pt"
-            else:
-                selected_lang = "en"
-        else:
-            selected_lang = "pt"
-    else:
-        selected_lang = lang if lang in I18N else "pt"
-
-    t = I18N[selected_lang]
-
-    import re
     email_val = basics.get("email", "")
     phone_val = basics.get("phone", "")
     clean_phone = re.sub(r"[^\d+]", "", str(phone_val))
@@ -231,7 +238,6 @@ def render_cv_to_standalone_html(yaml_or_dict: Any, theme: str = "executive", la
         """
 
     # Publications
-    publications = data.get("publications", [])
     publications_html = ""
     for pub in publications:
         p_name = html.escape(pub.get("name", ""))
@@ -262,55 +268,189 @@ def render_cv_to_standalone_html(yaml_or_dict: Any, theme: str = "executive", la
         </div>
         """
 
-    valid_theme = theme if theme in ["executive", "creative", "minimalist", "white", "terminal"] else "executive"
+    return f"""
+    <header class="header">
+      <div>
+        <h1 class="name">{html.escape(basics.get("name", ""))}</h1>
+        <div class="label">{html.escape(basics.get("label", ""))}</div>
+      </div>
+      <div class="contacts">
+        {f'<div>✉ <a href="mailto:{html.escape(email_val)}" class="cv-link">{html.escape(email_val)}</a></div>' if email_val else ''}
+        {f'<div>📞 <a href="tel:{clean_phone}" class="cv-link">{html.escape(phone_val)}</a></div>' if phone_val else ''}
+        {f'<div>📍 {html.escape(loc_str)}</div>' if loc_str else ''}
+        {f'<div>🌐 <a href="{html.escape(url_val)}" target="_blank" class="cv-link">{html.escape(url_val)}</a></div>' if url_val else ''}
+        {f'<div style="margin-top: 0.25rem;">{profiles_html}</div>' if profiles_html else ''}
+      </div>
+    </header>
+
+    {f'<div class="summary">{html.escape(basics.get("summary", "")).replace(chr(10), "<br>")}</div>' if basics.get("summary") else ''}
+
+    {f'<section><h2 class="section-title">{t["work"]}</h2>{work_html}</section>' if work else ''}
+
+    {f'<section><h2 class="section-title">{t["projects"]}</h2><div class="projects-grid">{projects_html}</div></section>' if projects else ''}
+
+    {f'<section class="avoid-break"><h2 class="section-title">{t["skills"]}</h2><div class="skills-grid">{skills_html}</div></section>' if skills else ''}
+
+    {f'<section class="avoid-break"><h2 class="section-title">{t["education"]}</h2><div class="education-grid">{education_html}</div></section>' if education else ''}
+
+    {f'<section class="avoid-break"><h2 class="section-title">{t["certificates"]}</h2><div class="certs-grid">{certificates_html}</div></section>' if certificates else ''}
+
+    {f'<section class="avoid-break"><h2 class="section-title">{t["publications"]}</h2>{publications_html}</section>' if publications else ''}
+
+    {f'<section class="avoid-break"><h2 class="section-title">{t["languages"]}</h2><div class="languages-grid">{lang_cards_html}</div></section>' if languages else ''}
+
+    {f'<section class="avoid-break"><h2 class="section-title">{t["interests"]}</h2><div class="interests-grid">{interest_html}</div></section>' if interests else ''}
+    """
+
+
+def render_multi_cv_dashboard_html(
+    archetypes: Dict[str, Any],
+    default_persona: str = "professional",
+    default_theme: str = "executive",
+    lang: str = "auto"
+) -> str:
+    """
+    Renderiza um Super Dashboard HTML Standalone contendo TODOS os 5 arquétipos gerados.
+    Permite ao usuário alternar entre as 5 Personas e 5 Modelos Visuais em tempo real,
+    com botões de Impressão PDF, download de YAML individual e exportação em lote (ZIP).
+    """
+    # Se recebeu um único YAML ou dict, envelopa como professional
+    if isinstance(archetypes, str) or not isinstance(archetypes, dict):
+        archetypes = {"professional": archetypes}
+
+    # Normaliza chaves
+    parsed_archetypes = {}
+    raw_yamls = {}
+
+    for key, val in archetypes.items():
+        if isinstance(val, str):
+            raw_yamls[key] = val
+            try:
+                parsed_archetypes[key] = yaml.safe_load(val) or {}
+            except Exception:
+                parsed_archetypes[key] = {}
+        elif isinstance(val, dict):
+            parsed_archetypes[key] = val
+            raw_yamls[key] = yaml.dump(val, sort_keys=False, allow_unicode=True)
+
+    # Detect language
+    sample_text = ""
+    for v in raw_yamls.values():
+        sample_text += v + " "
+
+    if lang == "auto":
+        if any(w in sample_text.lower() for w in ["developer", "software engineer", "intern", "experience", "education"]):
+            if "desenvolvedor" in sample_text.lower() or "experiência" in sample_text.lower():
+                selected_lang = "pt"
+            else:
+                selected_lang = "en"
+        else:
+            selected_lang = "pt"
+    else:
+        selected_lang = lang if lang in I18N else "pt"
+
+    t = I18N[selected_lang]
+    valid_theme = default_theme if default_theme in ["executive", "creative", "minimalist", "white", "terminal"] else "executive"
+
+    # Define a ordem canônica das personas
+    persona_order = ["professional", "architect", "historian", "didactic", "alien"]
+    available_keys = [k for k in persona_order if k in parsed_archetypes] or list(parsed_archetypes.keys())
+    active_persona = default_persona if default_persona in available_keys else available_keys[0]
+
+    # Renderiza os painéis de cada persona
+    panels_html = ""
+    scripts_yaml_html = ""
+
+    for p_key in available_keys:
+        p_data = parsed_archetypes[p_key]
+        p_raw = raw_yamls.get(p_key, "")
+        p_body = _render_cv_body_html(p_data, t)
+        is_active = (p_key == active_persona)
+
+        panels_html += f"""
+        <div id="cv-persona-{p_key}" class="cv-persona-panel {'active' if is_active else ''}" style="{'display:block;' if is_active else 'display:none;'}">
+            {p_body}
+        </div>
+        """
+
+        scripts_yaml_html += f"""
+        <script id="raw-yaml-{p_key}" type="text/yaml">
+{html.escape(p_raw)}
+        </script>
+        """
+
+    # Opções do seletor de persona
+    persona_options_html = ""
+    for p_key in available_keys:
+        meta = PERSONA_METADATA.get(p_key, {"label": p_key.capitalize(), "desc": ""})
+        selected = "selected" if p_key == active_persona else ""
+        persona_options_html += f'<option value="{p_key}" {selected}>{meta["label"]}</option>'
+
+    # Nome principal para título da página
+    first_data = parsed_archetypes.get(active_persona, {})
+    candidate_name = first_data.get("basics", {}).get("name", "Currículo")
 
     html_content = f"""<!DOCTYPE html>
 <html lang="{selected_lang}">
 <head>
   <meta charset="UTF-8">
-  <title>{html.escape(basics.get("name", "Currículo"))} — CV Maker 2.0</title>
+  <title>{html.escape(candidate_name)} — Central de Currículos Multi-Persona</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&family=Inter:wght@400;500;600;700;800&family=Merriweather:wght@300;400;700&family=Poppins:wght@400;600;700;800&display=swap');
 
     * {{ box-sizing: border-box; margin: 0; padding: 0; }}
 
     body {{
-      background: #0f172a;
+      background: #0b0f19;
       color: #1e293b;
       line-height: 1.55;
       font-size: 10pt;
-      padding: 2.5rem 1rem;
+      padding: 3.5rem 1rem 2rem 1rem;
       transition: background 0.2s ease;
     }}
 
     /* ── Floating Toolbar ── */
     .toolbar {{
       position: fixed;
-      top: 1rem;
-      right: 1rem;
+      top: 0.75rem;
+      left: 50%;
+      transform: translateX(-50%);
       display: flex;
+      flex-wrap: wrap;
       gap: 0.45rem;
       z-index: 999;
-      background: rgba(15, 23, 42, 0.92);
-      padding: 0.45rem 0.75rem;
+      background: rgba(15, 23, 42, 0.94);
+      padding: 0.45rem 0.85rem;
       border-radius: 9999px;
-      backdrop-filter: blur(12px);
-      box-shadow: 0 6px 24px rgba(0,0,0,0.35);
-      border: 1px solid rgba(255,255,255,0.1);
+      backdrop-filter: blur(14px);
+      box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+      border: 1px solid rgba(255,255,255,0.12);
       align-items: center;
+      max-width: 95vw;
+    }}
+
+    .toolbar-group {{
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
     }}
 
     .toolbar select {{
       background: #1e293b;
       color: #f8fafc;
       border: 1px solid #475569;
-      padding: 0.35rem 0.65rem;
+      padding: 0.4rem 0.75rem;
       border-radius: 9999px;
-      font-size: 0.8rem;
+      font-size: 0.82rem;
       font-weight: 600;
       cursor: pointer;
       outline: none;
+      transition: all 0.2s;
+    }}
+    .toolbar select:hover {{
+      border-color: #38bdf8;
     }}
 
     .toolbar button {{
@@ -325,6 +465,7 @@ def render_cv_to_standalone_html(yaml_or_dict: Any, theme: str = "executive", la
       display: flex;
       align-items: center;
       gap: 0.3rem;
+      white-space: nowrap;
       transition: all 0.2s ease;
     }}
     .toolbar button:hover {{ background: #0369a1; transform: translateY(-1px); }}
@@ -336,6 +477,13 @@ def render_cv_to_standalone_html(yaml_or_dict: Any, theme: str = "executive", la
       background: #475569;
     }}
 
+    .toolbar button.btn-accent {{
+      background: #059669;
+    }}
+    .toolbar button.btn-accent:hover {{
+      background: #047857;
+    }}
+
     /* ── Base Container ── */
     .container {{
       max-width: 860px;
@@ -343,7 +491,7 @@ def render_cv_to_standalone_html(yaml_or_dict: Any, theme: str = "executive", la
       background: #ffffff;
       padding: 2.5rem 3rem;
       border-radius: 12px;
-      box-shadow: 0 12px 40px rgba(0,0,0,0.15);
+      box-shadow: 0 12px 40px rgba(0,0,0,0.2);
       transition: all 0.2s ease;
     }}
 
@@ -466,9 +614,7 @@ def render_cv_to_standalone_html(yaml_or_dict: Any, theme: str = "executive", la
       margin-bottom: 0.25rem;
     }}
 
-    .geo-icon {{
-      font-size: 0.85rem;
-    }}
+    .geo-icon {{ font-size: 0.85rem; }}
 
     .lang-card {{
       padding: 0.5rem 0.65rem;
@@ -518,9 +664,7 @@ def render_cv_to_standalone_html(yaml_or_dict: Any, theme: str = "executive", la
       text-decoration: none;
       font-weight: 500;
     }}
-    a:hover, .cv-link:hover {{
-      text-decoration: underline;
-    }}
+    a:hover, .cv-link:hover {{ text-decoration: underline; }}
 
     /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
        ■  1. TEMA EXECUTIVO (theme-executive)
@@ -729,6 +873,12 @@ def render_cv_to_standalone_html(yaml_or_dict: Any, theme: str = "executive", la
         padding: 0 !important;
         max-width: 100% !important;
       }}
+      .cv-persona-panel {{
+        display: none !important;
+      }}
+      .cv-persona-panel.active {{
+        display: block !important;
+      }}
       @page {{
         size: A4 portrait;
         margin: 6mm 8mm 6mm 8mm !important;
@@ -738,93 +888,126 @@ def render_cv_to_standalone_html(yaml_or_dict: Any, theme: str = "executive", la
 </head>
 <body>
 
+  <!-- Floating Multi-Control Toolbar -->
   <div class="toolbar">
-    <select id="theme-switcher" onchange="switchTheme(this.value)" title="{t['theme_label']}">
-      <option value="executive">{t["opt_executive"]}</option>
-      <option value="creative">{t["opt_creative"]}</option>
-      <option value="minimalist">{t["opt_minimalist"]}</option>
-      <option value="white">{t["opt_white"]}</option>
-      <option value="terminal">{t["opt_terminal"]}</option>
-    </select>
+    <div class="toolbar-group">
+      <select id="persona-switcher" onchange="switchPersona(this.value)" title="{t['persona_label']}">
+        {persona_options_html}
+      </select>
+    </div>
+
+    <div class="toolbar-group">
+      <select id="theme-switcher" onchange="switchTheme(this.value)" title="{t['theme_label']}">
+        <option value="executive">{t["opt_executive"]}</option>
+        <option value="creative">{t["opt_creative"]}</option>
+        <option value="minimalist">{t["opt_minimalist"]}</option>
+        <option value="white">{t["opt_white"]}</option>
+        <option value="terminal">{t["opt_terminal"]}</option>
+      </select>
+    </div>
+
     <button onclick="window.print()">{t["print_btn"]}</button>
-    <button onclick="downloadYaml()" class="btn-sec">{t["download_yaml"]}</button>
-    <button id="copy-btn" onclick="copyYaml()" class="btn-sec">{t["copy_yaml"]}</button>
+    <button onclick="downloadActiveYaml()" class="btn-sec">{t["download_yaml"]}</button>
+    <button onclick="downloadAllZip()" class="btn-accent">{t["download_zip"]}</button>
+    <button id="copy-btn" onclick="copyActiveYaml()" class="btn-sec">{t["copy_yaml"]}</button>
   </div>
 
-  <div id="cv-container" class="container theme-{valid_theme}">
-    <header class="header">
-      <div>
-        <h1 class="name">{html.escape(basics.get("name", ""))}</h1>
-        <div class="label">{html.escape(basics.get("label", ""))}</div>
-      </div>
-      <div class="contacts">
-        {f'<div>✉ <a href="mailto:{html.escape(email_val)}" class="cv-link">{html.escape(email_val)}</a></div>' if email_val else ''}
-        {f'<div>📞 <a href="tel:{clean_phone}" class="cv-link">{html.escape(phone_val)}</a></div>' if phone_val else ''}
-        {f'<div>📍 {html.escape(loc_str)}</div>' if loc_str else ''}
-        {f'<div>🌐 <a href="{html.escape(url_val)}" target="_blank" class="cv-link">{html.escape(url_val)}</a></div>' if url_val else ''}
-        {f'<div style="margin-top: 0.25rem;">{profiles_html}</div>' if profiles_html else ''}
-      </div>
-    </header>
-
-    {f'<div class="summary">{html.escape(basics.get("summary", "")).replace(chr(10), "<br>")}</div>' if basics.get("summary") else ''}
-
-    {f'<section><h2 class="section-title">{t["work"]}</h2>{work_html}</section>' if work else ''}
-
-    {f'<section><h2 class="section-title">{t["projects"]}</h2><div class="projects-grid">{projects_html}</div></section>' if projects else ''}
-
-    {f'<section class="avoid-break"><h2 class="section-title">{t["skills"]}</h2><div class="skills-grid">{skills_html}</div></section>' if skills else ''}
-
-    {f'<section class="avoid-break"><h2 class="section-title">{t["education"]}</h2><div class="education-grid">{education_html}</div></section>' if education else ''}
-
-    {f'<section class="avoid-break"><h2 class="section-title">{t["certificates"]}</h2><div class="certs-grid">{certificates_html}</div></section>' if certificates else ''}
-
-    {f'<section class="avoid-break"><h2 class="section-title">{t["publications"]}</h2>{publications_html}</section>' if publications else ''}
-
-    {f'<section class="avoid-break"><h2 class="section-title">{t["languages"]}</h2><div class="languages-grid">{lang_cards_html}</div></section>' if languages else ''}
-
-    {f'<section class="avoid-break"><h2 class="section-title">{t["interests"]}</h2><div class="interests-grid">{interest_html}</div></section>' if interests else ''}
+  <!-- Main Viewport Container -->
+  <div id="cv-viewport" class="container theme-{valid_theme}">
+    {panels_html}
   </div>
 
-  <script id="raw-yaml-data" type="text/yaml">
-{html.escape(raw_str)}
-  </script>
+  <!-- Raw Embedded YAMLs -->
+  {scripts_yaml_html}
 
   <script>
-    function switchTheme(newTheme) {{
-      const container = document.getElementById('cv-container');
-      if (container) {{
-        container.className = 'container theme-' + newTheme;
+    let currentPersona = '{active_persona}';
+    let currentTheme = '{valid_theme}';
+
+    const PERSONA_FILENAMES = {{
+        'professional': 'curriculo_executivo_ibm.yaml',
+        'architect': 'curriculo_arquiteto_ia.yaml',
+        'historian': 'curriculo_biografo.yaml',
+        'didactic': 'curriculo_didatico.yaml',
+        'alien': 'curriculo_alien.yaml'
+    }};
+
+    function switchPersona(newPersona) {{
+      const panels = document.querySelectorAll('.cv-persona-panel');
+      panels.forEach(p => {{
+        p.style.display = 'none';
+        p.classList.remove('active');
+      }});
+
+      const target = document.getElementById('cv-persona-' + newPersona);
+      if (target) {{
+        target.style.display = 'block';
+        target.classList.add('active');
+        currentPersona = newPersona;
       }}
+      localStorage.setItem('cv_active_persona', newPersona);
+    }}
+
+    function switchTheme(newTheme) {{
+      const viewport = document.getElementById('cv-viewport');
+      if (viewport) {{
+        viewport.className = 'container theme-' + newTheme;
+      }}
+      currentTheme = newTheme;
       localStorage.setItem('cv_standalone_theme', newTheme);
     }}
 
-    // Auto-carregar o tema selecionado
-    (function() {{
-      const initialTheme = '{valid_theme}';
-      const sel = document.getElementById('theme-switcher');
-      if (sel) {{
-        sel.value = initialTheme;
-      }}
-      switchTheme(initialTheme);
-    }})();
+    function getActiveYaml() {{
+      const el = document.getElementById('raw-yaml-' + currentPersona);
+      return el ? el.textContent.trim() : '';
+    }}
 
-    function downloadYaml() {{
-      const el = document.getElementById('raw-yaml-data');
-      if (!el) return;
-      const content = el.textContent.trim();
+    function downloadActiveYaml() {{
+      const content = getActiveYaml();
+      if (!content) return;
+      const fname = PERSONA_FILENAMES[currentPersona] || ('curriculo_' + currentPersona + '.yaml');
       const blob = new Blob([content], {{ type: 'text/yaml;charset=utf-8' }});
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = 'curriculo.yaml';
+      a.download = fname;
       a.click();
       URL.revokeObjectURL(url);
     }}
 
-    function copyYaml() {{
-      const el = document.getElementById('raw-yaml-data');
-      if (!el) return;
-      const content = el.textContent.trim();
+    async function downloadAllZip() {{
+      if (typeof JSZip === 'undefined') {{
+        alert('Carregando biblioteca ZIP... Tente novamente em 2 segundos.');
+        return;
+      }}
+
+      const zip = new JSZip();
+      const personaKeys = ['professional', 'architect', 'historian', 'didactic', 'alien'];
+
+      personaKeys.forEach(k => {{
+        const el = document.getElementById('raw-yaml-' + k);
+        if (el) {{
+          const fname = PERSONA_FILENAMES[k] || ('curriculo_' + k + '.yaml');
+          zip.file(fname, el.textContent.trim());
+        }}
+      }});
+
+      // Adiciona o HTML da dashboard inteira dentro do ZIP
+      const fullHtml = '<!DOCTYPE html>\\n' + document.documentElement.outerHTML;
+      zip.file('dashboard_curriculos_completo.html', fullHtml);
+
+      const zipBlob = await zip.generateAsync({{ type: 'blob' }});
+      const url = URL.createObjectURL(zipBlob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'pacote_completo_curriculos_5_versoes.zip';
+      a.click();
+      URL.revokeObjectURL(url);
+    }}
+
+    function copyActiveYaml() {{
+      const content = getActiveYaml();
+      if (!content) return;
       navigator.clipboard.writeText(content).then(() => {{
         const btn = document.getElementById('copy-btn');
         if (btn) {{
@@ -847,8 +1030,31 @@ def render_cv_to_standalone_html(yaml_or_dict: Any, theme: str = "executive", la
         }}
       }});
     }}
+
+    // Auto-restore saved persona and theme
+    (function() {{
+      const savedTheme = localStorage.getItem('cv_standalone_theme') || '{valid_theme}';
+      const savedPersona = localStorage.getItem('cv_active_persona') || '{active_persona}';
+
+      const pSel = document.getElementById('persona-switcher');
+      if (pSel && pSel.querySelector('option[value="' + savedPersona + '"]')) {{
+        pSel.value = savedPersona;
+        switchPersona(savedPersona);
+      }}
+
+      const tSel = document.getElementById('theme-switcher');
+      if (tSel) {{
+        tSel.value = savedTheme;
+        switchTheme(savedTheme);
+      }}
+    }})();
   </script>
 </body>
 </html>
 """
     return html_content
+
+
+def render_cv_to_standalone_html(yaml_or_dict: Any, theme: str = "executive", lang: str = "auto") -> str:
+    """Compatibilidade para renderização individual delegando para a engine multi-dashboard."""
+    return render_multi_cv_dashboard_html({"professional": yaml_or_dict}, default_persona="professional", default_theme=theme, lang=lang)

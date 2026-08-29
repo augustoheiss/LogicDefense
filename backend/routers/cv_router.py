@@ -1,6 +1,7 @@
 """
 cv_router.py — Roteador de Endpoints para o CV Maker 2.0
 Suporta chamadas web do laboratório e integração com agentes externos via API Keys.
+Suporta geração e renderização síncrona dos 5 arquétipos em HTML, ZIP ou JSON.
 """
 
 import logging
@@ -8,7 +9,7 @@ import io
 import os
 import zipfile
 import yaml
-from typing import Optional
+from typing import Optional, Dict, Any
 from fastapi import APIRouter, HTTPException, Header, Query, status
 from fastapi.responses import HTMLResponse, Response
 from pydantic import BaseModel, Field
@@ -32,6 +33,7 @@ class CVGenerateResponse(BaseModel):
     historian: str = Field(..., description="YAML arquétipo Biográfico / Narrativo")
     didactic: str = Field(..., description="YAML arquétipo Didático / Learning Speed")
     alien: str = Field(..., description="YAML arquétipo Observador Extraterrestre")
+    html_dashboard: Optional[str] = Field(default=None, description="HTML Standalone Dashboard com os 5 arquétipos embutidos e interativos")
 
 
 class CVTailorRequest(BaseModel):
@@ -105,9 +107,11 @@ async def verify_cv_license_and_quota(raw_key: Optional[str], estimated_text: st
     )
 
 
-@router.post("/generate", response_model=CVGenerateResponse)
+@router.post("/generate")
 async def generate_cv_endpoint(
     payload: CVGenerateRequest,
+    format: Optional[str] = Query("json", description="Formato de retorno: json, html, zip"),
+    theme: Optional[str] = Query("executive", description="Tema visual inicial: executive, creative, minimalist, white, terminal"),
     x_license_key: Optional[str] = Header(None, alias="X-License-Key"),
     x_api_key: Optional[str] = Header(None, alias="X-API-Key"),
     x_cv_key: Optional[str] = Header(None, alias="X-CV-Key"),
@@ -115,13 +119,16 @@ async def generate_cv_endpoint(
     authorization: Optional[str] = Header(None),
 ):
     """
-    Gera até 5 arquétipos em paralelo usando o Gemini 2.5 Flash.
-    Verifica a licença Pro e debita os tokens consumidos via Turso SQLite.
+    Gera todos os 5 arquétipos em paralelo usando o Gemini 2.5 Flash de forma síncrona.
+    Permite retornar diretamente:
+    - format=html -> Super Dashboard HTML Standalone com os 5 currículos e 5 temas interativos
+    - format=zip  -> Pacote .ZIP com os 5 arquivos .YAML separados + o HTML Dashboard
+    - format=json -> Objeto JSON com os 5 YAMLs e o HTML embutido
     """
     raw_key = x_license_key or x_api_key or x_cv_key or x_spreadsheet_key or authorization
     license_rec = await verify_cv_license_and_quota(raw_key, payload.raw_text, num_calls=5)
 
-    log.info("[CV Router] service='cv' action='generate' tier='%s' chars=%d", license_rec.get("tier"), len(payload.raw_text))
+    log.info("[CV Router] service='cv' action='generate' format='%s' tier='%s' chars=%d", format, license_rec.get("tier"), len(payload.raw_text))
 
     try:
         results, total_tokens = await generate_all_archetypes(
@@ -136,12 +143,47 @@ async def generate_cv_endpoint(
             except Exception as d_err:
                 log.warning("[CV Router] Falha ao debitar tokens: %s", d_err)
 
+        from services.cv_html_renderer import render_multi_cv_dashboard_html
+
+        target_format = (format or "json").strip().lower()
+        target_theme = (theme or "executive").strip().lower()
+
+        # Renderiza o Super Dashboard HTML com os 5 arquétipos
+        html_dashboard = render_multi_cv_dashboard_html(
+            archetypes=results,
+            default_persona="professional",
+            default_theme=target_theme,
+        )
+
+        # 1. Retorno Direto em HTML Standalone
+        if target_format == "html":
+            return HTMLResponse(content=html_dashboard)
+
+        # 2. Retorno em Pacote ZIP com os 5 YAMLs e o Dashboard HTML
+        if target_format == "zip":
+            zip_buffer = io.BytesIO()
+            with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
+                zip_file.writestr("curriculo_executivo_ibm.yaml", results.get("professional", ""))
+                zip_file.writestr("curriculo_arquiteto_ia.yaml", results.get("architect", ""))
+                zip_file.writestr("curriculo_biografo.yaml", results.get("historian", ""))
+                zip_file.writestr("curriculo_didatico.yaml", results.get("didactic", ""))
+                zip_file.writestr("curriculo_alien.yaml", results.get("alien", ""))
+                zip_file.writestr("dashboard_curriculos_completo.html", html_dashboard)
+
+            return Response(
+                content=zip_buffer.getvalue(),
+                media_type="application/zip",
+                headers={"Content-Disposition": 'attachment; filename="curriculos_completo_5_versoes.zip"'}
+            )
+
+        # 3. Retorno Padrão em JSON Estruturado
         return CVGenerateResponse(
             professional=results.get("professional", ""),
             architect=results.get("architect", results.get("professional", "")),
             historian=results.get("historian", ""),
             didactic=results.get("didactic", ""),
             alien=results.get("alien", ""),
+            html_dashboard=html_dashboard,
         )
     except Exception as e:
         log.error("[CV Router] service='cv' Generation error: %s", e, exc_info=True)
