@@ -13,7 +13,7 @@ import yaml
 from google import genai
 from google.genai import types
 
-from prompts.cv_prompts import BASE_INSTRUCTION, PERSONA_INSTRUCTIONS
+from prompts.cv_prompts import BASE_INSTRUCTION, BASE_INSTRUCTION_EN, PERSONA_INSTRUCTIONS, PERSONA_INSTRUCTIONS_EN
 
 MODEL = os.getenv("CV_AI_MODEL", "gemini-3.7-flash")
 MAX_TOKENS = 8192
@@ -61,7 +61,19 @@ async def generate_single_archetype(
     if index > 0:
         await asyncio.sleep(index * STAGGER_STEP)
 
-    system_instruction = f"{BASE_INSTRUCTION}\n\n{persona_instruction}"
+    # Auto-detect language of raw input
+    is_english = any(w in raw_text.lower() for w in ["software engineer", "intern", "experience", "education", "hybrid cloud"]) and ("desenvolvedor" not in raw_text.lower() and "experiência" not in raw_text.lower())
+
+    if is_english:
+        base_inst = BASE_INSTRUCTION_EN
+        p_inst = PERSONA_INSTRUCTIONS_EN.get(archetype, persona_instruction)
+        lang_directive = "IMPORTANT LANGUAGE RULE: Output 100% of all fields, labels, summaries and descriptions in fluent Professional English."
+    else:
+        base_inst = BASE_INSTRUCTION
+        p_inst = PERSONA_INSTRUCTIONS.get(archetype, persona_instruction)
+        lang_directive = "IMPORTANT LANGUAGE RULE: Output 100% of all fields, labels, summaries and descriptions in Brazilian Portuguese (PT-BR)."
+
+    system_instruction = f"{base_inst}\n\n{p_inst}"
 
     job_desc_section = ""
     if job_description and job_description.strip():
@@ -69,7 +81,7 @@ async def generate_single_archetype(
 
     user_prompt = (
         f"Rewrite the candidate's background as a single JSON Resume object "
-        f"in the {archetype.upper()} archetype persona style.{job_desc_section}\n\n"
+        f"in the {archetype.upper()} archetype persona style.\n{lang_directive}{job_desc_section}\n\n"
         "--- CANDIDATE RAW DATA START ---\n"
         f"{raw_text}\n"
         "--- CANDIDATE RAW DATA END ---"
