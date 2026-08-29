@@ -46,6 +46,14 @@ I18N = {
         "download_zip": "📦 Baixar 5 Versões (ZIP)",
         "copy_yaml": "📋 Copiar YAML",
         "yaml_copied": "Copiado!",
+        "photo_btn": "📷 Foto / Avatar",
+        "photo_modal_title": "📷 Foto / Avatar Profissional",
+        "photo_modal_desc": "Carregue sua foto de perfil ou insira o link direto de uma imagem (ex: LinkedIn, GitHub ou CDN).",
+        "photo_choose_file": "📁 Escolher do Computador",
+        "photo_remove": "🗑️ Remover Foto",
+        "photo_url_label": "Ou cole o link direto da imagem:",
+        "photo_no_photo": "Deixar sem Foto",
+        "photo_save": "Salvar e Aplicar",
         "work": "💼 Experiência Profissional",
         "projects": "🚀 Projetos em Destaque",
         "skills": "⚡ Competências & Habilidades Técnicas",
@@ -70,6 +78,14 @@ I18N = {
         "download_zip": "📦 Download 5 CVs (ZIP)",
         "copy_yaml": "📋 Copy YAML",
         "yaml_copied": "Copied!",
+        "photo_btn": "📷 Photo / Avatar",
+        "photo_modal_title": "📷 Profile Photo / Avatar",
+        "photo_modal_desc": "Upload your profile photo or insert a direct image URL (e.g., LinkedIn, GitHub or CDN).",
+        "photo_choose_file": "📁 Upload from Device",
+        "photo_remove": "🗑️ Remove Photo",
+        "photo_url_label": "Or paste a direct image URL:",
+        "photo_no_photo": "No Photo",
+        "photo_save": "Save & Apply",
         "work": "💼 Professional Experience",
         "projects": "🚀 Featured Projects & Systems",
         "skills": "⚡ Core Competencies & Technical Skills",
@@ -268,11 +284,28 @@ def _render_cv_body_html(data: dict, t: dict) -> str:
         </div>
         """
 
+    # Photo / Avatar
+    image_val = html.escape(str(basics.get("image", "") or ""))
+    has_image = bool(image_val and image_val.strip() and image_val != "None")
+
+    avatar_html = f"""
+      <div class="cv-avatar-container {'has-photo' if has_image else ''}" onclick="openPhotoModal()" title="{t['photo_btn']}">
+        <img class="cv-avatar-img" src="{image_val if has_image else ''}" alt="Avatar" style="{'display:block;' if has_image else 'display:none;'}" />
+        <div class="cv-avatar-placeholder" style="{'display:none;' if has_image else 'display:flex;'}">
+          <span class="avatar-icon">👤</span>
+          <span class="avatar-hint" style="font-size: 0.65rem; opacity: 0.85;">{t['photo_btn']}</span>
+        </div>
+      </div>
+    """
+
     return f"""
     <header class="header">
-      <div>
-        <h1 class="name">{html.escape(basics.get("name", ""))}</h1>
-        <div class="label">{html.escape(basics.get("label", ""))}</div>
+      <div class="cv-header-profile">
+        {avatar_html}
+        <div>
+          <h1 class="name">{html.escape(basics.get("name", ""))}</h1>
+          <div class="label">{html.escape(basics.get("label", ""))}</div>
+        </div>
       </div>
       <div class="contacts">
         {f'<div>✉ <a href="mailto:{html.escape(email_val)}" class="cv-link">{html.escape(email_val)}</a></div>' if email_val else ''}
@@ -493,6 +526,169 @@ def render_multi_cv_dashboard_html(
       border-radius: 12px;
       box-shadow: 0 12px 40px rgba(0,0,0,0.2);
       transition: all 0.2s ease;
+    }}
+
+    /* ── Avatar Profile & Photo Styling ── */
+    .cv-header-profile {{
+      display: flex;
+      align-items: center;
+      gap: 1.25rem;
+    }}
+
+    .cv-avatar-container {{
+      position: relative;
+      width: 78px;
+      height: 78px;
+      flex-shrink: 0;
+      border-radius: 50%;
+      overflow: hidden;
+      border: 2.5px solid currentColor;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #f1f5f9;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }}
+    .cv-avatar-container:hover {{
+      transform: scale(1.06);
+      box-shadow: 0 6px 18px rgba(0,0,0,0.18);
+    }}
+    .cv-avatar-img {{
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }}
+    .cv-avatar-placeholder {{
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.65rem;
+      color: #64748b;
+      background: rgba(0, 0, 0, 0.04);
+      text-align: center;
+      padding: 0.2rem;
+      user-select: none;
+    }}
+    .cv-avatar-placeholder .avatar-icon {{
+      font-size: 1.4rem;
+      line-height: 1;
+      margin-bottom: 0.15rem;
+    }}
+
+    /* Modal Backdrop & Dialog */
+    .cv-modal-backdrop {{
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.85);
+      backdrop-filter: blur(8px);
+      z-index: 10000;
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+    }}
+    .cv-modal-backdrop.active {{
+      display: flex;
+    }}
+    .cv-modal-card {{
+      background: #0f172a;
+      color: #f8fafc;
+      border: 1px solid #334155;
+      border-radius: 12px;
+      max-width: 480px;
+      width: 100%;
+      box-shadow: 0 20px 45px rgba(0,0,0,0.6);
+      overflow: hidden;
+      animation: modalFadeIn 0.2s ease-out;
+    }}
+    @keyframes modalFadeIn {{
+      from {{ opacity: 0; transform: scale(0.95) translateY(10px); }}
+      to {{ opacity: 1; transform: scale(1) translateY(0); }}
+    }}
+    .cv-modal-header {{
+      padding: 1rem 1.25rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid #334155;
+    }}
+    .cv-modal-header h3 {{
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: #f8fafc;
+      margin: 0;
+    }}
+    .cv-modal-close {{
+      background: transparent;
+      border: none;
+      color: #94a3b8;
+      font-size: 1.25rem;
+      cursor: pointer;
+      line-height: 1;
+      padding: 0.2rem 0.5rem;
+      border-radius: 4px;
+    }}
+    .cv-modal-close:hover {{
+      color: #fff;
+      background: #334155;
+    }}
+    .cv-modal-body {{
+      padding: 1.25rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }}
+    .cv-modal-footer {{
+      padding: 1rem 1.25rem;
+      background: #0b0f19;
+      border-top: 1px solid #334155;
+      display: flex;
+      justify-content: flex-end;
+      gap: 0.75rem;
+    }}
+    .modal-btn {{
+      padding: 0.5rem 1rem;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+      transition: all 0.2s ease;
+    }}
+    .modal-btn-sec {{
+      background: #1e293b;
+      color: #cbd5e1;
+      border: 1px solid #475569;
+    }}
+    .modal-btn-sec:hover {{
+      background: #334155;
+      color: #fff;
+    }}
+    .modal-btn-pri {{
+      background: #059669;
+      color: #fff;
+    }}
+    .modal-btn-pri:hover {{
+      background: #047857;
+    }}
+    .modal-input {{
+      width: 100%;
+      background: #1e293b;
+      border: 1px solid #475569;
+      color: #f8fafc;
+      padding: 0.5rem 0.75rem;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      outline: none;
+      box-sizing: border-box;
+    }}
+    .modal-input:focus {{
+      border-color: #10b981;
     }}
 
     .header {{
@@ -879,6 +1075,16 @@ def render_multi_cv_dashboard_html(
       .cv-persona-panel.active {{
         display: block !important;
       }}
+      .cv-avatar-container {{
+        border-width: 2px !important;
+        box-shadow: none !important;
+      }}
+      .cv-avatar-container:not(.has-photo) {{
+        display: none !important;
+      }}
+      .cv-avatar-placeholder {{
+        display: none !important;
+      }}
       @page {{
         size: A4 portrait;
         margin: 6mm 8mm 6mm 8mm !important;
@@ -906,6 +1112,7 @@ def render_multi_cv_dashboard_html(
       </select>
     </div>
 
+    <button onclick="openPhotoModal()" class="btn-sec" title="{t['photo_btn']}">{t["photo_btn"]}</button>
     <button onclick="window.print()">{t["print_btn"]}</button>
     <button onclick="downloadActiveYaml()" class="btn-sec">{t["download_yaml"]}</button>
     <button onclick="downloadAllZip()" class="btn-accent">{t["download_zip"]}</button>
@@ -917,12 +1124,63 @@ def render_multi_cv_dashboard_html(
     {panels_html}
   </div>
 
+  <!-- Photo Uploader Modal -->
+  <div id="photo-modal" class="cv-modal-backdrop" onclick="closePhotoModal(event)">
+    <div class="cv-modal-card" onclick="event.stopPropagation()">
+      <div class="cv-modal-header">
+        <h3>{t['photo_modal_title']}</h3>
+        <button class="cv-modal-close" onclick="closePhotoModal()">✕</button>
+      </div>
+      <div class="cv-modal-body">
+        <p style="margin: 0; font-size: 0.85rem; color: #94a3b8;">
+          {t['photo_modal_desc']}
+        </p>
+
+        <div style="display: flex; align-items: center; justify-content: center; gap: 1.5rem; padding: 1rem; background: #06090f; border-radius: 8px;">
+          <div style="width: 82px; height: 82px; border-radius: 50%; overflow: hidden; border: 2.5px solid #10b981; display: flex; align-items: center; justify-content: center; background: #1e293b; flex-shrink: 0;">
+            <img id="modal-preview-img" src="" alt="Preview" style="width: 100%; height: 100%; object-fit: cover; display: none;" onerror="onPhotoPreviewError()" />
+            <span id="modal-preview-placeholder" style="font-size: 2rem;">👤</span>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+            <label class="modal-btn modal-btn-sec" style="cursor: pointer; text-align: center; display: inline-block;">
+              {t['photo_choose_file']}
+              <input type="file" accept="image/*" onchange="handlePhotoFileUpload(event)" style="display: none;" />
+            </label>
+            <button id="modal-remove-btn" class="modal-btn modal-btn-sec" style="color: #f87171; display: none;" onclick="removeModalPhoto()">
+              {t['photo_remove']}
+            </button>
+          </div>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 0.4rem;">
+          <label style="font-size: 0.8rem; font-weight: 600; color: #cbd5e1;">{t['photo_url_label']}</label>
+          <input
+            id="modal-url-input"
+            type="url"
+            class="modal-input"
+            placeholder="https://exemplo.com/minha-foto.jpg"
+            oninput="handlePhotoUrlInput(this.value)"
+          />
+        </div>
+      </div>
+      <div class="cv-modal-footer">
+        <button class="modal-btn modal-btn-sec" onclick="clearAndSaveNoPhoto()">
+          {t['photo_no_photo']}
+        </button>
+        <button class="modal-btn modal-btn-pri" onclick="saveAndApplyPhoto()">
+          {t['photo_save']}
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- Raw Embedded YAMLs -->
   {scripts_yaml_html}
 
   <script>
     let currentPersona = '{active_persona}';
     let currentTheme = '{valid_theme}';
+    let currentPhoto = '';
 
     const PERSONA_FILENAMES = {{
         'professional': 'curriculo_executivo_ibm.yaml',
@@ -1031,10 +1289,122 @@ def render_multi_cv_dashboard_html(
       }});
     }}
 
-    // Auto-restore saved persona and theme
+    /* ── Photo Modal & Avatar Handlers ── */
+    function openPhotoModal() {{
+      const modal = document.getElementById('photo-modal');
+      const urlInput = document.getElementById('modal-url-input');
+      const previewImg = document.getElementById('modal-preview-img');
+      const previewPh = document.getElementById('modal-preview-placeholder');
+      const removeBtn = document.getElementById('modal-remove-btn');
+
+      if (urlInput) urlInput.value = currentPhoto.startsWith('data:') ? '' : currentPhoto;
+      if (currentPhoto) {{
+        if (previewImg) {{ previewImg.src = currentPhoto; previewImg.style.display = 'block'; }}
+        if (previewPh) previewPh.style.display = 'none';
+        if (removeBtn) removeBtn.style.display = 'block';
+      }} else {{
+        if (previewImg) {{ previewImg.src = ''; previewImg.style.display = 'none'; }}
+        if (previewPh) previewPh.style.display = 'block';
+        if (removeBtn) removeBtn.style.display = 'none';
+      }}
+      if (modal) modal.classList.add('active');
+    }}
+
+    function closePhotoModal(e) {{
+      if (e && e.target && e.target.id !== 'photo-modal' && !e.target.classList.contains('cv-modal-close')) return;
+      const modal = document.getElementById('photo-modal');
+      if (modal) modal.classList.remove('active');
+    }}
+
+    function handlePhotoFileUpload(e) {{
+      const file = e.target.files && e.target.files[0];
+      if (!file) return;
+      if (!file.type.startsWith('image/')) {{
+        alert('Por favor, selecione um arquivo de imagem válido (JPG, PNG, WebP).');
+        return;
+      }}
+      const reader = new FileReader();
+      reader.onload = function(evt) {{
+        const res = evt.target.result;
+        updateModalPreview(res);
+      }};
+      reader.readAsDataURL(file);
+    }}
+
+    function handlePhotoUrlInput(val) {{
+      updateModalPreview(val.trim());
+    }}
+
+    function updateModalPreview(src) {{
+      const previewImg = document.getElementById('modal-preview-img');
+      const previewPh = document.getElementById('modal-preview-placeholder');
+      const removeBtn = document.getElementById('modal-remove-btn');
+      if (src) {{
+        if (previewImg) {{ previewImg.src = src; previewImg.style.display = 'block'; }}
+        if (previewPh) previewPh.style.display = 'none';
+        if (removeBtn) removeBtn.style.display = 'block';
+      }} else {{
+        if (previewImg) {{ previewImg.src = ''; previewImg.style.display = 'none'; }}
+        if (previewPh) previewPh.style.display = 'block';
+        if (removeBtn) removeBtn.style.display = 'none';
+      }}
+    }}
+
+    function onPhotoPreviewError() {{
+      const previewImg = document.getElementById('modal-preview-img');
+      const previewPh = document.getElementById('modal-preview-placeholder');
+      if (previewImg) previewImg.style.display = 'none';
+      if (previewPh) previewPh.style.display = 'block';
+    }}
+
+    function removeModalPhoto() {{
+      const urlInput = document.getElementById('modal-url-input');
+      if (urlInput) urlInput.value = '';
+      updateModalPreview('');
+    }}
+
+    function clearAndSaveNoPhoto() {{
+      currentPhoto = '';
+      localStorage.removeItem('cv_user_photo');
+      applyPhotoToAll('');
+      closePhotoModal();
+    }}
+
+    function saveAndApplyPhoto() {{
+      const previewImg = document.getElementById('modal-preview-img');
+      const photoSrc = (previewImg && previewImg.style.display !== 'none') ? previewImg.src : '';
+      currentPhoto = photoSrc;
+      if (photoSrc) {{
+        localStorage.setItem('cv_user_photo', photoSrc);
+      }} else {{
+        localStorage.removeItem('cv_user_photo');
+      }}
+      applyPhotoToAll(photoSrc);
+      closePhotoModal();
+    }}
+
+    function applyPhotoToAll(photoSrc) {{
+      const containers = document.querySelectorAll('.cv-avatar-container');
+      containers.forEach(c => {{
+        const img = c.querySelector('.cv-avatar-img');
+        const ph = c.querySelector('.cv-avatar-placeholder');
+        if (photoSrc) {{
+          c.classList.add('has-photo');
+          if (img) {{ img.src = photoSrc; img.style.display = 'block'; }}
+          if (ph) ph.style.display = 'none';
+        }} else {{
+          c.classList.remove('has-photo');
+          if (img) {{ img.src = ''; img.style.display = 'none'; }}
+          if (ph) ph.style.display = 'flex';
+        }}
+      }});
+    }}
+
+    // Auto-restore saved persona, theme, and photo
     (function() {{
       const savedTheme = localStorage.getItem('cv_standalone_theme') || '{valid_theme}';
       const savedPersona = localStorage.getItem('cv_active_persona') || '{active_persona}';
+      const savedPhoto = localStorage.getItem('cv_user_photo');
 
       const pSel = document.getElementById('persona-switcher');
       if (pSel && pSel.querySelector('option[value="' + savedPersona + '"]')) {{
@@ -1046,6 +1416,11 @@ def render_multi_cv_dashboard_html(
       if (tSel) {{
         tSel.value = savedTheme;
         switchTheme(savedTheme);
+      }}
+
+      if (savedPhoto) {{
+        currentPhoto = savedPhoto;
+        applyPhotoToAll(savedPhoto);
       }}
     }})();
   </script>
