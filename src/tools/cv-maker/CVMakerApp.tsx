@@ -14,6 +14,7 @@ import { CVViewer } from './components/CVViewer/CVViewer'
 import { ChatInterface } from './components/Chat/ChatInterface'
 import { CVToolbar } from './components/Toolbar/CVToolbar'
 import { CVHistoryTab } from './components/History/CVHistoryTab'
+import { OpenPromptsModal } from './components/PromptsModal/OpenPromptsModal'
 import { PhotoUploader } from './components/Toolbar/PhotoUploader'
 import { ApiKeyModal } from './components/ApiKeyModal/ApiKeyModal'
 import { CVStoreModal } from './components/StoreModal/CVStoreModal'
@@ -24,6 +25,7 @@ import './styles/cv-print.css'
 import './styles/cv-viewer.css'
 import './styles/chat-interface.css'
 import './styles/cv-history.css'
+import './styles/cv-prompts-modal.css'
 import './styles/cv-maker.css'
 
 const STORAGE_DRAFT_KEY = 'ld_cv_draft_v2'
@@ -54,6 +56,7 @@ export const CVMakerApp: React.FC = () => {
   const [isPhotoModalOpen, setIsPhotoModalOpen] = useState<boolean>(false)
   const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState<boolean>(false)
   const [isStoreModalOpen, setIsStoreModalOpen] = useState<boolean>(false)
+  const [isOpenPromptsModalOpen, setIsOpenPromptsModalOpen] = useState<boolean>(false)
   const [isPro, setIsPro] = useState<boolean>(false)
   const [tokenBalance, setTokenBalance] = useState<number>(0)
   const [hasActiveKey, setHasActiveKey] = useState<boolean>(() => {
@@ -290,6 +293,14 @@ export const CVMakerApp: React.FC = () => {
         </div>
 
         <div className="cv-app-controls">
+          <button
+            className="cv-btn-secondary"
+            onClick={() => setIsOpenPromptsModalOpen(true)}
+            style={{ borderColor: 'rgba(56, 189, 248, 0.4)', color: '#38bdf8' }}
+            title="Ver e copiar os System Prompts abertos para usar no ChatGPT ou Claude"
+          >
+            📖 Prompts Abertos (IA Grátis)
+          </button>
           <button className="cv-btn-secondary" onClick={handleReset} title="Restaurar modelo padrão de exemplo">
             🔄 Resetar Modelo
           </button>
@@ -433,6 +444,11 @@ export const CVMakerApp: React.FC = () => {
           setIsPro(true)
           setTokenBalance(bal)
         }}
+      />
+
+      <OpenPromptsModal
+        isOpen={isOpenPromptsModalOpen}
+        onClose={() => setIsOpenPromptsModalOpen(false)}
       />
     </div>
   )
