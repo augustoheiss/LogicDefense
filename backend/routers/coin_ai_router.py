@@ -50,7 +50,7 @@ from services.context_builder import build_financial_context, get_system_prompt
 load_dotenv()
 log = logging.getLogger(__name__)
 
-MODEL = os.getenv("COIN_AI_MODEL", "gemini-2.5-flash")
+MODEL = os.getenv("COIN_AI_MODEL", "gemini-3.7-flash")
 MAX_OUTPUT_TOKENS = 16384    # Budget shared between thinking + visible output
 THINKING_BUDGET = 4096       # Cap internal reasoning to reserve tokens for actual response
 

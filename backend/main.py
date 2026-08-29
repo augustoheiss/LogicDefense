@@ -36,7 +36,7 @@ from pydantic import BaseModel, Field
 # ── Environment ──────────────────────────────────────────────────────────────
 load_dotenv()
 
-MODEL         = "gemini-2.5-flash"
+MODEL         = "gemini-3.7-flash"
 MAX_TOKENS    = 8192     # one CV per call; 8 k gives headroom for rich resumes
 MAX_RETRIES   = 3        # attempts per archetype before giving up
 RETRY_DELAY   = 1.5      # seconds to wait between retries

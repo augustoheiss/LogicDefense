@@ -26,7 +26,7 @@ from models.coin_models import (
 from google import genai
 from google.genai import types
 
-MODEL = os.getenv("COIN_AI_MODEL", "gemini-2.5-flash")
+MODEL = os.getenv("COIN_AI_MODEL", "gemini-3.7-flash")
 MAX_OUTPUT_TOKENS = 16384
 THINKING_BUDGET = 4096
 

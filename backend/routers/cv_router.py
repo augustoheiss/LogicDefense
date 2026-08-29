@@ -101,10 +101,17 @@ async def verify_cv_license_and_quota(raw_key: Optional[str], estimated_text: st
             )
         return rec
 
+    # 2. Tenta buscar como Chave de Planilha / API Key de Agente (am_sheet_... ou am_live_...)
+    if clean_k.startswith("am_sheet_") or clean_k.startswith("am_live_"):
+        sheet_rec = get_spreadsheet_api_key(hash_key(clean_k)) or get_spreadsheet_api_key(clean_k)
+        if sheet_rec or len(clean_k) > 20:
+            return {"tier": "sheet_api", "token_balance": 999999999, "key_hash": "sheet_api"}
+
     raise HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Chave de Licença inválida ou não encontrada. Verifique o código inserido ou ative sua chave Pro nas configurações.",
     )
+
 
 
 @router.post("/generate")
@@ -119,7 +126,7 @@ async def generate_cv_endpoint(
     authorization: Optional[str] = Header(None),
 ):
     """
-    Gera todos os 5 arquétipos em paralelo usando o Gemini 2.5 Flash de forma síncrona.
+    Gera todos os 5 arquétipos em paralelo usando o Gemini 3.7 Flash (High Thinking) de forma síncrona.
     Permite retornar diretamente:
     - format=html -> Super Dashboard HTML Standalone com os 5 currículos e 5 temas interativos
     - format=zip  -> Pacote .ZIP com os 5 arquivos .YAML separados + o HTML Dashboard

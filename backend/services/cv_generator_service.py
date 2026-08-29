@@ -98,6 +98,7 @@ async def generate_single_archetype(
                     response_mime_type="application/json",
                     temperature=0.65,
                     max_output_tokens=MAX_TOKENS,
+                    thinking_config=types.ThinkingConfig(thinking_budget=2048),
                 ),
             )
 
