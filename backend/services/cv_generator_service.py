@@ -101,17 +101,19 @@ async def generate_single_archetype(
 
         response: Any = None
         try:
+            gen_config = types.GenerateContentConfig(
+                system_instruction=system_instruction,
+                response_mime_type="application/json",
+                temperature=0.65,
+                max_output_tokens=MAX_TOKENS,
+            )
+            gen_config.thinking_config = types.ThinkingConfig(thinking_budget=2048)
+
             response = await asyncio.to_thread(
                 client.models.generate_content,
                 model=MODEL,
                 contents=user_prompt,
-                config=types.GenerateContentConfig(
-                    system_instruction=system_instruction,
-                    response_mime_type="application/json",
-                    temperature=0.65,
-                    max_output_tokens=MAX_TOKENS,
-                    thinking_config=types.ThinkingConfig(thinking_budget=2048),
-                ),
+                config=gen_config,
             )
 
             raw_json = (response.text or "").strip()
