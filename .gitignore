@@ -48,3 +48,8 @@ scripts/youtube_auto_uploader.py
 scripts/youtube_batch_uploader.py
 youtube_uploaded_log.json
 youtube_token.json
+
+# Chaves e Licencas Secretas
+*CHAVES*.md
+CHAVES_PRO_CV_MAKER_E_MOEDA.md
+generate_batch_keys_fast.py
