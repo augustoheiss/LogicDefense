@@ -1,6 +1,6 @@
 /* =============================================================
    cv-print.css — Regras de Impressão A4 de Alta Densidade e Fidelidade
-   Harmonizado com a tipografia rica do HTML standalone da API
+   Preserva a identidade visual única de cada um dos 5 Temas na Impressão!
    ============================================================= */
 
 @media print {
@@ -44,37 +44,6 @@
     display: block !important;
   }
 
-  /* ── Preserva a Família Tipográfica do Tema Selecionado na Impressão ── */
-  .theme-executive,
-  .theme-executive .cv-card,
-  .theme-executive * {
-    font-family: 'Merriweather', Georgia, 'Times New Roman', serif !important;
-  }
-
-  .theme-creative,
-  .theme-creative .cv-card,
-  .theme-creative * {
-    font-family: 'Poppins', 'Segoe UI', system-ui, sans-serif !important;
-  }
-
-  .theme-minimalist,
-  .theme-minimalist .cv-card,
-  .theme-minimalist * {
-    font-family: 'Inter', system-ui, -apple-system, sans-serif !important;
-  }
-
-  .theme-white,
-  .theme-white .cv-card,
-  .theme-white * {
-    font-family: 'Inter', system-ui, sans-serif !important;
-  }
-
-  .theme-terminal,
-  .theme-terminal .cv-card,
-  .theme-terminal * {
-    font-family: 'Inter', monospace, system-ui, sans-serif !important;
-  }
-
   @page {
     size: A4 portrait;
     margin: 6mm 8mm 6mm 8mm !important;
@@ -110,7 +79,7 @@
     top: -9999px !important;
   }
 
-  /* ── Header do Currículo no Print (Nome, Foto, Contatos e Resumo) ── */
+  /* ── Header do Currículo Base no Print ── */
   header.cv-header,
   .cv-header {
     display: block !important;
@@ -122,7 +91,6 @@
     top: auto !important;
     margin-bottom: 0.8rem !important;
     padding-bottom: 0.4rem !important;
-    border-bottom: 2px solid #111827 !important;
   }
 
   .cv-header__top {
@@ -149,14 +117,12 @@
     font-size: 1.75rem !important;
     font-weight: 700 !important;
     margin-bottom: 0.2rem !important;
-    color: #0f172a !important;
     line-height: 1.15 !important;
   }
 
   .cv-label {
     font-size: 0.95rem !important;
     font-weight: 600 !important;
-    color: #334155 !important;
   }
 
   .cv-contacts {
@@ -174,11 +140,10 @@
     margin-bottom: 0.85rem !important;
     font-size: 9.4pt !important;
     line-height: 1.55 !important;
-    color: #334155 !important;
     text-align: justify !important;
   }
 
-  /* ── Regras de Quebra de Página e Títulos de Seção ── */
+  /* ── Regras de Quebra de Página ── */
   .cv-section-title {
     break-after: avoid !important;
     page-break-after: avoid !important;
@@ -189,8 +154,6 @@
     margin-top: 0.85rem !important;
     margin-bottom: 0.45rem !important;
     padding-bottom: 0.25rem !important;
-    border-bottom: 1.5px solid #334155 !important;
-    color: #0f172a !important;
   }
 
   .cv-header,
@@ -213,7 +176,7 @@
     page-break-inside: avoid !important;
   }
 
-  /* ── Itens de Experiência Profissional ── */
+  /* ── Estrutura dos Itens ── */
   .cv-section {
     margin-bottom: 0.85rem !important;
   }
@@ -234,14 +197,12 @@
   .cv-item-title {
     font-size: 9.8pt !important;
     font-weight: 700 !important;
-    color: #0f172a !important;
   }
 
   .cv-work-company,
   .cv-item-company {
     font-size: 9pt !important;
     font-weight: 600 !important;
-    color: #0284c7 !important;
     margin-bottom: 0.18rem !important;
   }
 
@@ -257,7 +218,6 @@
     font-size: 9.1pt !important;
     line-height: 1.5 !important;
     margin-bottom: 0.25rem !important;
-    color: #475569 !important;
   }
 
   .cv-work-highlights,
@@ -267,7 +227,6 @@
     gap: 0.15rem !important;
     font-size: 9pt !important;
     line-height: 1.48 !important;
-    color: #334155 !important;
   }
 
   .cv-bullets li,
@@ -275,7 +234,6 @@
     margin-bottom: 0.2rem !important;
   }
 
-  /* ── Projetos em Grid de 2 Colunas ── */
   .cv-projects-grid {
     display: grid !important;
     grid-template-columns: 1fr 1fr !important;
@@ -284,8 +242,6 @@
 
   .cv-project-card {
     padding: 0.6rem 0.75rem !important;
-    background: #f8fafc !important;
-    border: 1px solid #e2e8f0 !important;
     border-radius: 6px !important;
     display: flex !important;
     flex-direction: column !important;
@@ -296,7 +252,6 @@
   .cv-project-card h4 {
     font-size: 9.6pt !important;
     font-weight: 700 !important;
-    color: #0f172a !important;
     margin-bottom: 0.25rem !important;
   }
 
@@ -304,21 +259,23 @@
   .cv-project-card p {
     font-size: 8.8pt !important;
     line-height: 1.45 !important;
-    color: #475569 !important;
     margin-bottom: 0.4rem !important;
   }
 
-  /* ── Formação Acadêmica em Grid de 3 Colunas ── */
-  .cv-education-grid {
+  .cv-education-grid,
+  .cv-certs-grid,
+  .cv-awards-grid,
+  .cv-languages-grid,
+  .cv-interests-grid {
     display: grid !important;
     grid-template-columns: repeat(3, 1fr) !important;
     gap: 0.65rem !important;
   }
 
-  .cv-education-card {
-    background: #f8fafc !important;
-    border: 1px solid #e2e8f0 !important;
-    border-left: 3px solid #0f172a !important;
+  .cv-education-card,
+  .cv-cert-card,
+  .cv-award-card,
+  .cv-interest-card {
     border-radius: 6px !important;
     padding: 0.55rem 0.7rem !important;
     display: flex !important;
@@ -326,47 +283,18 @@
     justify-content: space-between !important;
   }
 
-  .cv-education-card .cv-item-title {
+  .cv-education-card .cv-item-title,
+  .cv-cert-card .cv-item-title,
+  .cv-interest-title {
     font-size: 9.2pt !important;
     font-weight: 700 !important;
     line-height: 1.3 !important;
     margin: 0 0 0.2rem 0 !important;
-    color: #0f172a !important;
   }
 
   .cv-item-inst {
     font-size: 8.5pt !important;
     margin: 0 !important;
-    color: #334155 !important;
-  }
-
-  /* ── Certificações & Licenças em Grid de 3 Colunas ── */
-  .cv-certs-grid,
-  .cv-awards-grid {
-    display: grid !important;
-    grid-template-columns: repeat(3, 1fr) !important;
-    gap: 0.65rem !important;
-  }
-
-  .cv-cert-card,
-  .cv-award-card {
-    background: #f8fafc !important;
-    border: 1px solid #e2e8f0 !important;
-    border-left: 3px solid #0284c7 !important;
-    border-radius: 6px !important;
-    padding: 0.55rem 0.7rem !important;
-    display: flex !important;
-    flex-direction: column !important;
-    justify-content: space-between !important;
-  }
-
-  .cv-cert-card .cv-item-title,
-  .cv-award-card .cv-item-title {
-    font-size: 9.2pt !important;
-    font-weight: 700 !important;
-    line-height: 1.3 !important;
-    margin: 0 0 0.25rem 0 !important;
-    color: #0f172a !important;
   }
 
   .cv-issuer-pill {
@@ -374,24 +302,11 @@
     font-weight: 600 !important;
     padding: 0.1rem 0.45rem !important;
     border-radius: 4px !important;
-    background: #f1f5f9 !important;
-    color: #334155 !important;
-    border: 1px solid #e2e8f0 !important;
     display: inline-block !important;
     margin-top: 0.25rem !important;
   }
 
-  /* ── Idiomas & Fluência em Grid de 3 Colunas ── */
-  .cv-languages-grid {
-    display: grid !important;
-    grid-template-columns: repeat(3, 1fr) !important;
-    gap: 0.65rem !important;
-  }
-
   .cv-language-card {
-    background: #f8fafc !important;
-    border: 1px solid #e2e8f0 !important;
-    border-left: 3px solid #10b981 !important;
     border-radius: 6px !important;
     padding: 0.5rem 0.7rem !important;
     display: flex !important;
@@ -403,7 +318,6 @@
   .cv-lang-name {
     font-size: 8.8pt !important;
     font-weight: 600 !important;
-    color: #0f172a !important;
   }
 
   .cv-lang-fluency {
@@ -411,57 +325,22 @@
     color: #475569 !important;
   }
 
-  /* ── Interesses em Grid de 3 Colunas ── */
-  .cv-interests-grid {
-    display: grid !important;
-    grid-template-columns: repeat(3, 1fr) !important;
-    gap: 0.65rem !important;
-  }
-
-  .cv-interest-card {
-    background: #f8fafc !important;
-    border: 1px solid #e2e8f0 !important;
-    border-left: 3px solid #8b5cf6 !important;
-    border-radius: 6px !important;
-    padding: 0.55rem 0.7rem !important;
-    display: flex !important;
-    flex-direction: column !important;
-    justify-content: space-between !important;
-  }
-
-  .cv-interest-title {
-    font-size: 9.2pt !important;
-    font-weight: 700 !important;
-    margin: 0 0 0.25rem 0 !important;
-    color: #0f172a !important;
-  }
-
-  /* ── Skills em Masonry / 3 Colunas ── */
   .cv-skills-masonry {
     display: grid !important;
     grid-template-columns: repeat(3, 1fr) !important;
     gap: 0.65rem !important;
-    column-count: auto !important;
-    break-inside: avoid !important;
-    page-break-inside: avoid !important;
   }
 
   .cv-skills-group {
-    background: #f8fafc !important;
-    border: 1px solid #e2e8f0 !important;
-    border-left: 3px solid #0284c7 !important;
     border-radius: 6px !important;
     padding: 0.6rem !important;
     margin-bottom: 0 !important;
-    break-inside: avoid !important;
-    page-break-inside: avoid !important;
   }
 
   .cv-skill-category,
   .cv-skills-group h4 {
     font-size: 8.8pt !important;
     font-weight: 700 !important;
-    color: #0f172a !important;
     margin-bottom: 0.35rem !important;
   }
 
@@ -475,16 +354,360 @@
     font-size: 8pt !important;
     font-weight: 600 !important;
     padding: 0.12rem 0.45rem !important;
-    background: #f1f5f9 !important;
-    color: #334155 !important;
-    border: 1px solid #e2e8f0 !important;
     border-radius: 4px !important;
   }
 
-  /* Links clicáveis em azul profissional no PDF */
-  a, .cv-link {
-    text-decoration: none !important;
-    color: #0284c7 !important;
+  /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+     ■ 1. IMPRESSÃO DO TEMA EXECUTIVO (theme-executive)
+     Merriweather · Preto / Chumbo · Clássico Corporativo
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+  .theme-executive,
+  .theme-executive .cv-card,
+  .theme-executive * {
+    font-family: 'Merriweather', Georgia, 'Times New Roman', serif !important;
+    color: #1a1a1a !important;
+  }
+
+  .theme-executive header.cv-header {
+    border-bottom: 2px solid #111827 !important;
+  }
+
+  .theme-executive h1.cv-name {
+    color: #050505 !important;
+  }
+
+  .theme-executive .cv-label {
+    color: #374151 !important;
+  }
+
+  .theme-executive h2.cv-section-title {
+    color: #111827 !important;
+    border-bottom: 1.5px solid #374151 !important;
+  }
+
+  .theme-executive .cv-work-company,
+  .theme-executive .cv-item-company {
+    color: #1f2937 !important;
+  }
+
+  .theme-executive .cv-project-card,
+  .theme-executive .cv-education-card,
+  .theme-executive .cv-cert-card,
+  .theme-executive .cv-interest-card,
+  .theme-executive .cv-skills-group {
+    background: #ffffff !important;
+    border: 1px solid #d1d5db !important;
+    border-left: 3px solid #111827 !important;
+    border-radius: 0 !important;
+  }
+
+  .theme-executive .cv-language-card {
+    background: #ffffff !important;
+    border: 1px solid #d1d5db !important;
+    border-left: 3px solid #111827 !important;
+    border-radius: 0 !important;
+  }
+
+  .theme-executive .cv-skill-tag,
+  .theme-executive .cv-issuer-pill {
+    background: transparent !important;
+    color: #374151 !important;
+    border: 1px solid #9ca3af !important;
+    border-radius: 0 !important;
+    font-family: 'Courier Prime', monospace !important;
+  }
+
+  .theme-executive a,
+  .theme-executive .cv-link {
+    color: #1f2937 !important;
+    text-decoration: underline !important;
+  }
+
+  /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+     ■ 2. IMPRESSÃO DO TEMA CRIATIVO (theme-creative)
+     Poppins · Azul Royal + Laranja · Design Moderno de Agência
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+  .theme-creative,
+  .theme-creative .cv-card,
+  .theme-creative * {
+    font-family: 'Poppins', 'Segoe UI', system-ui, sans-serif !important;
+    color: #1e293b !important;
+  }
+
+  .theme-creative header.cv-header {
+    border-bottom: 3px solid #2563eb !important;
+  }
+
+  .theme-creative h1.cv-name {
+    color: #1e3a8a !important;
+    font-weight: 800 !important;
+  }
+
+  .theme-creative .cv-label {
+    color: #f97316 !important;
+    font-weight: 600 !important;
+  }
+
+  .theme-creative h2.cv-section-title {
+    color: #1e3a8a !important;
+    border-bottom: 2px solid #bfdbfe !important;
+  }
+
+  .theme-creative .cv-work-company,
+  .theme-creative .cv-item-company {
+    color: #2563eb !important;
+  }
+
+  .theme-creative .cv-project-card {
+    background: #eff6ff !important;
+    border: 1px solid #bfdbfe !important;
+    border-radius: 8px !important;
+  }
+
+  .theme-creative .cv-education-card {
+    background: #eff6ff !important;
+    border: 1px solid #bfdbfe !important;
+    border-left: 3px solid #2563eb !important;
+    border-radius: 8px !important;
+  }
+
+  .theme-creative .cv-cert-card {
+    background: #fff7ed !important;
+    border: 1px solid #fed7aa !important;
+    border-left: 3px solid #f97316 !important;
+    border-radius: 8px !important;
+  }
+
+  .theme-creative .cv-language-card {
+    background: #eff6ff !important;
+    border: 1px solid #bfdbfe !important;
+    border-left: 3px solid #2563eb !important;
+    border-radius: 8px !important;
+  }
+
+  .theme-creative .cv-interest-card {
+    background: #faf5ff !important;
+    border: 1px solid #e9d5ff !important;
+    border-left: 3px solid #9333ea !important;
+    border-radius: 8px !important;
+  }
+
+  .theme-creative .cv-skills-group {
+    background: #eff6ff !important;
+    border: 1px solid #bfdbfe !important;
+    border-left: 3px solid #2563eb !important;
+    border-radius: 8px !important;
+  }
+
+  .theme-creative .cv-skill-tag {
+    background: #dbeafe !important;
+    color: #1e3a8a !important;
+    border: 1px solid #bfdbfe !important;
+    border-radius: 4px !important;
+  }
+
+  .theme-creative .cv-issuer-pill {
+    background: #ffedd5 !important;
+    color: #c2410c !important;
+    border: 1px solid #fed7aa !important;
+    border-radius: 4px !important;
+  }
+
+  .theme-creative a,
+  .theme-creative .cv-link {
+    color: #2563eb !important;
+  }
+
+  /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+     ■ 3. IMPRESSÃO DO TEMA MINIMALISTA (theme-minimalist)
+     Inter · Clean, Linhas Finas, Foco em Tipografia
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+  .theme-minimalist,
+  .theme-minimalist .cv-card,
+  .theme-minimalist * {
+    font-family: 'Inter', system-ui, -apple-system, sans-serif !important;
+    color: #0f172a !important;
+  }
+
+  .theme-minimalist header.cv-header {
+    border-bottom: 1px solid #e2e8f0 !important;
+  }
+
+  .theme-minimalist h1.cv-name {
+    color: #0f172a !important;
+    font-weight: 800 !important;
+    letter-spacing: -0.04em !important;
+  }
+
+  .theme-minimalist .cv-label {
+    color: #64748b !important;
     font-weight: 500 !important;
+  }
+
+  .theme-minimalist h2.cv-section-title {
+    color: #475569 !important;
+    border-bottom: 1px solid #e2e8f0 !important;
+    letter-spacing: 0.1em !important;
+  }
+
+  .theme-minimalist .cv-work-company,
+  .theme-minimalist .cv-item-company {
+    color: #334155 !important;
+  }
+
+  .theme-minimalist .cv-project-card,
+  .theme-minimalist .cv-education-card,
+  .theme-minimalist .cv-cert-card,
+  .theme-minimalist .cv-interest-card,
+  .theme-minimalist .cv-skills-group,
+  .theme-minimalist .cv-language-card {
+    background: #ffffff !important;
+    border: 1px solid #e2e8f0 !important;
+    border-left: 2px solid #64748b !important;
+    border-radius: 4px !important;
+  }
+
+  .theme-minimalist .cv-skill-tag,
+  .theme-minimalist .cv-issuer-pill {
+    background: transparent !important;
+    color: #475569 !important;
+    border: 1px solid #cbd5e1 !important;
+    border-radius: 3px !important;
+  }
+
+  .theme-minimalist a,
+  .theme-minimalist .cv-link {
+    color: #475569 !important;
+  }
+
+  /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+     ■ 4. IMPRESSÃO DO TEMA WHITE (theme-white)
+     Inter · Branco Puro com Acentos em Verde Esmeralda
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+  .theme-white,
+  .theme-white .cv-card,
+  .theme-white * {
+    font-family: 'Inter', system-ui, sans-serif !important;
+    color: #334155 !important;
+  }
+
+  .theme-white header.cv-header {
+    border-bottom: 2.5px solid #059669 !important;
+  }
+
+  .theme-white h1.cv-name {
+    color: #0f172a !important;
+    font-weight: 800 !important;
+  }
+
+  .theme-white .cv-label {
+    color: #059669 !important;
+    font-weight: 600 !important;
+  }
+
+  .theme-white h2.cv-section-title {
+    color: #059669 !important;
+    border-bottom: 1.5px solid #cbd5e1 !important;
+  }
+
+  .theme-white .cv-work-company,
+  .theme-white .cv-item-company {
+    color: #059669 !important;
+  }
+
+  .theme-white .cv-project-card,
+  .theme-white .cv-education-card,
+  .theme-white .cv-cert-card,
+  .theme-white .cv-interest-card,
+  .theme-white .cv-skills-group,
+  .theme-white .cv-language-card {
+    background: #ffffff !important;
+    border: 1px solid #cbd5e1 !important;
+    border-left: 3px solid #059669 !important;
+    border-radius: 6px !important;
+  }
+
+  .theme-white .cv-skill-tag {
+    background: #f1f5f9 !important;
+    color: #334155 !important;
+    border: 1px solid #cbd5e1 !important;
+    border-radius: 4px !important;
+  }
+
+  .theme-white .cv-issuer-pill {
+    background: #ecfdf5 !important;
+    color: #047857 !important;
+    border: 1px solid #a7f3d0 !important;
+    border-radius: 4px !important;
+  }
+
+  .theme-white a,
+  .theme-white .cv-link {
+    color: #059669 !important;
+  }
+
+  /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+     ■ 5. IMPRESSÃO DO TEMA TERMINAL (theme-terminal)
+     Courier Prime / Monospace · Estilo Engenheiro / Hacker
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+  .theme-terminal,
+  .theme-terminal .cv-card,
+  .theme-terminal * {
+    font-family: 'Courier Prime', 'Fira Code', monospace, 'Inter', sans-serif !important;
+    color: #0f172a !important;
+  }
+
+  .theme-terminal header.cv-header {
+    border-bottom: 2.5px solid #10b981 !important;
+  }
+
+  .theme-terminal h1.cv-name {
+    color: #000000 !important;
+    font-weight: 800 !important;
+    font-family: 'Courier Prime', monospace !important;
+  }
+
+  .theme-terminal .cv-label {
+    color: #059669 !important;
+    font-family: 'Courier Prime', monospace !important;
+    font-weight: 700 !important;
+  }
+
+  .theme-terminal h2.cv-section-title {
+    color: #059669 !important;
+    border-bottom: 1.5px solid #10b981 !important;
+    font-family: 'Courier Prime', monospace !important;
+  }
+
+  .theme-terminal .cv-work-company,
+  .theme-terminal .cv-item-company {
+    color: #059669 !important;
+    font-family: 'Courier Prime', monospace !important;
+  }
+
+  .theme-terminal .cv-project-card,
+  .theme-terminal .cv-education-card,
+  .theme-terminal .cv-cert-card,
+  .theme-terminal .cv-interest-card,
+  .theme-terminal .cv-skills-group,
+  .theme-terminal .cv-language-card {
+    background: #f8fafc !important;
+    border: 1px solid #cbd5e1 !important;
+    border-left: 3px solid #10b981 !important;
+    border-radius: 4px !important;
+  }
+
+  .theme-terminal .cv-skill-tag,
+  .theme-terminal .cv-issuer-pill {
+    background: #f1f5f9 !important;
+    color: #0f172a !important;
+    border: 1px solid #94a3b8 !important;
+    border-radius: 3px !important;
+    font-family: 'Courier Prime', monospace !important;
+  }
+
+  .theme-terminal a,
+  .theme-terminal .cv-link {
+    color: #059669 !important;
   }
 }
