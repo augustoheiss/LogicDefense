@@ -53,3 +53,5 @@ youtube_token.json
 *CHAVES*.md
 CHAVES_PRO_CV_MAKER_E_MOEDA.md
 generate_batch_keys_fast.py
+generate_batch_keys.py
+backend/rotate_keys.py
