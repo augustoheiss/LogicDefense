@@ -145,6 +145,17 @@ async def generate_cv_endpoint(
 
     custom_gemini = license_rec.get("gemini_key") or x_gemini_api_key
 
+    # Proteção Estrita de Custo: Chaves de automação gratuitas (am_sheet_...) exigem chave própria (BYOK)
+    if license_rec.get("tier") == "sheet_api" and not custom_gemini:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "A API opera no modelo BYOK (Bring-Your-Own-Key) para chamadas de IA. "
+                "Informe sua chave própria do Google Gemini no header 'X-Gemini-API-Key' para gerar os arquétipos, "
+                "ou envie o YAML pronto diretamente para '/api/v1/cv/render' (renderização e compilação de PDFs 100% gratuita)."
+            ),
+        )
+
     log.info("[CV Router] service='cv' action='generate' format='%s' tier='%s' byok=%s chars=%d", format, license_rec.get("tier"), bool(custom_gemini), len(payload.raw_text))
 
     try:
@@ -228,6 +239,17 @@ async def tailor_cv_endpoint(
     license_rec = await verify_cv_license_and_quota(raw_key, full_text, num_calls=1, x_gemini_key=x_gemini_api_key)
 
     custom_gemini = license_rec.get("gemini_key") or x_gemini_api_key
+
+    # Proteção Estrita de Custo: Chaves de automação gratuitas (am_sheet_...) exigem chave própria (BYOK)
+    if license_rec.get("tier") == "sheet_api" and not custom_gemini:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "A rota de alfaiataria via API opera no modelo BYOK. "
+                "Informe sua chave do Google Gemini no header 'X-Gemini-API-Key' para executar o tailoring."
+            ),
+        )
+
     persona_key = payload.persona if payload.persona in PERSONA_INSTRUCTIONS else "professional"
     persona_inst = PERSONA_INSTRUCTIONS[persona_key]
 
