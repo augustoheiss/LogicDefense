@@ -121,7 +121,7 @@ export const CVMakerApp: React.FC = () => {
       const label = cvData.basics.label ? ` - ${cvData.basics.label.trim()}` : ''
       document.title = `${name}${label}`
     } else {
-      document.title = 'CV Maker 2.0 — Gerador de Currículos'
+      document.title = 'Currículo Profissional'
     }
   }, [cvData])
 
