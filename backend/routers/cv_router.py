@@ -51,6 +51,17 @@ class CVRenderRequest(BaseModel):
     model_config = {"populate_by_name": True}
 
 
+class CVCompileBundleRequest(BaseModel):
+    professional: Optional[str] = Field(default="", description="YAML do arquétipo Executivo / IBM Senior Lead")
+    architect: Optional[str] = Field(default="", description="YAML do arquétipo AI Solutions Architect")
+    historian: Optional[str] = Field(default="", description="YAML do arquétipo Biográfico / Narrativo")
+    didactic: Optional[str] = Field(default="", description="YAML do arquétipo Didático / Learning Velocity")
+    alien: Optional[str] = Field(default="", description="YAML do arquétipo Observador Extraterrestre")
+    default_theme: Optional[str] = Field(default="executive", description="Tema visual inicial: executive, creative, minimalist, white, terminal")
+    format: Optional[str] = Field(default="html", description="Formato de saída: html, zip, json")
+    filename: Optional[str] = Field(default="curriculos_5_versoes", description="Nome base para download do arquivo")
+
+
 def get_default_yaml_content() -> str:
     """Carrega o YAML de currículo padrão do repositório como fallback."""
     possible_paths = [
@@ -347,6 +358,64 @@ async def render_cv_endpoint(
 
     # 4. HTML Standalone (Padrão)
     return HTMLResponse(content=html_content)
+
+
+@router.post("/compile")
+async def compile_cv_bundle_endpoint(
+    payload: CVCompileBundleRequest,
+    format: Optional[str] = Query(None, description="Formato de saída: html, zip, json"),
+    theme: Optional[str] = Query(None, description="Tema visual: executive, creative, minimalist, white, terminal"),
+    x_api_key: Optional[str] = Header(None, alias="X-API-Key"),
+):
+    """
+    Endpoint 100% Agent-Native (Zero Custo de Tokens de LLM no Servidor).
+    Recebe os 5 YAMLs gerados pelo Agente de IA do próprio usuário (Claude, Cursor, Antigravity, GPT)
+    e compila instantaneamente o Super Dashboard HTML Standalone e o pacote .ZIP.
+    """
+    from services.cv_html_renderer import render_multi_cv_dashboard_html
+
+    target_theme = theme or payload.default_theme or "executive"
+    target_format = (format or payload.format or "html").strip().lower()
+    base_filename = (payload.filename or "curriculos_5_versoes").strip()
+
+    archetypes_map = {
+        "professional": payload.professional or "",
+        "architect": payload.architect or payload.professional or "",
+        "historian": payload.historian or "",
+        "didactic": payload.didactic or "",
+        "alien": payload.alien or "",
+    }
+
+    html_dashboard = render_multi_cv_dashboard_html(
+        archetypes=archetypes_map,
+        default_persona="professional",
+        default_theme=target_theme,
+    )
+
+    if target_format == "zip":
+        zip_buffer = io.BytesIO()
+        with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
+            zip_file.writestr("curriculo_executivo_ibm.yaml", archetypes_map.get("professional", ""))
+            zip_file.writestr("curriculo_arquiteto_ia.yaml", archetypes_map.get("architect", ""))
+            zip_file.writestr("curriculo_biografo.yaml", archetypes_map.get("historian", ""))
+            zip_file.writestr("curriculo_didatico.yaml", archetypes_map.get("didactic", ""))
+            zip_file.writestr("curriculo_alien.yaml", archetypes_map.get("alien", ""))
+            zip_file.writestr(f"{base_filename}_dashboard.html", html_dashboard)
+
+        return Response(
+            content=zip_buffer.getvalue(),
+            media_type="application/zip",
+            headers={"Content-Disposition": f'attachment; filename="{base_filename}.zip"'}
+        )
+
+    if target_format == "json":
+        return {
+            "html_dashboard": html_dashboard,
+            "archetypes": archetypes_map,
+            "theme": target_theme,
+        }
+
+    return HTMLResponse(content=html_dashboard)
 
 
 @router.get("/prompts")

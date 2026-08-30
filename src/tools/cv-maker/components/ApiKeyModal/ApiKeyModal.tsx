@@ -97,83 +97,49 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ isOpen, onClose, onKey
     {
       openapi: '3.1.0',
       info: {
-        title: 'CV Maker 2.0 & Heiss-Lab AI Engine',
+        title: 'CV Maker 2.0 & Heiss-Lab AI Engine (100% Agent-Native)',
         version: '3.0.0',
         description:
-          'API de Inteligência Artificial para geração paralela de 5 arquétipos de currículos, alfaiataria contra Job Descriptions (ATS Tailoring) e compilação em HTML Standalone e ZIP.',
+          'API de Renderização e Compilação de Currículos de Alta Fidelidade para Agentes de IA (Claude, Cursor, Antigravity, ChatGPT). O seu agente gera os 5 YAMLs e a API compila em Super Dashboard HTML Standalone e Pacote ZIP com zero custo de tokens de servidor.',
       },
       servers: [
         { url: 'https://ocorrencias-pdf-writer.onrender.com', description: 'Servidor Primário (Render)' },
         { url: 'https://heiss-cv-engine.onrender.com', description: 'Servidor Secundário (Failover)' },
       ],
       paths: {
-        '/api/v1/cv/generate': {
+        '/api/v1/cv/compile': {
           post: {
-            summary: 'Gera 5 arquétipos de currículo em paralelo com Gemini 3.7 Flash',
+            summary: 'Compila os 5 arquétipos gerados pelo Agente em Super Dashboard HTML e ZIP',
             description:
-              'O roteador cv_router.py dispara 5 corrotinas concorrentes e integra diretamente o cv_html_renderer.py. Suporta retornos em JSON estruturado, Super Dashboard HTML Standalone (com os 5 currículos e 5 temas interativos) ou pacote .ZIP completo.',
-            parameters: [
-              {
-                name: 'format',
-                in: 'query',
-                schema: { type: 'string', enum: ['json', 'html', 'zip'], default: 'json' },
-                description: 'Formato de resposta: json (5 YAMLs), html (Super Dashboard Standalone) ou zip (5 YAMLs + HTML)',
-              },
-              {
-                name: 'theme',
-                in: 'query',
-                schema: { type: 'string', enum: ['executive', 'creative', 'minimalist', 'white', 'terminal'], default: 'executive' },
-                description: 'Tema visual inicial do documento',
-              },
-            ],
+              'Recebe os 5 YAMLs gerados pelo próprio Agente de IA do usuário (Executivo, Arquiteto, Biógrafo, Didático e Alien) e compila instantaneamente em um Dashboard HTML interativo com fotos, 5 temas e botão nativo de impressão A4.',
             requestBody: {
               required: true,
               content: {
                 'application/json': {
                   schema: {
                     type: 'object',
-                    required: ['raw_text'],
                     properties: {
-                      raw_text: { type: 'string', description: 'Texto bruto do currículo, LinkedIn ou anotações de carreira' },
-                      job_description: { type: 'string', description: 'Descrição da vaga corporativa para tailoring semântico' },
+                      professional: { type: 'string', description: 'YAML do arquétipo Executivo / IBM Lead' },
+                      architect: { type: 'string', description: 'YAML do arquétipo Arquiteto de Soluções IA' },
+                      historian: { type: 'string', description: 'YAML do arquétipo Biográfico / Narrativo' },
+                      didactic: { type: 'string', description: 'YAML do arquétipo Didático / Learning Velocity' },
+                      alien: { type: 'string', description: 'YAML do arquétipo Observador Extraterrestre' },
+                      default_theme: { type: 'string', enum: ['executive', 'creative', 'minimalist', 'white', 'terminal'], default: 'executive' },
+                      format: { type: 'string', enum: ['html', 'zip', 'json'], default: 'html' },
+                      filename: { type: 'string', default: 'curriculos_5_versoes' },
                     },
                   },
                 },
               },
             },
             responses: {
-              '200': { description: 'Sucesso na geração dos 5 arquétipos' },
-              '401': { description: 'Chave de Licença/API ausente ou inválida' },
-              '402': { description: 'Saldo de tokens insuficiente' },
+              '200': { description: 'Super Dashboard HTML Standalone ou Pacote .ZIP retornado' },
             },
-          },
-        },
-        '/api/v1/cv/tailor': {
-          post: {
-            summary: 'Alfaiataria de Currículo (ATS Target Tailoring)',
-            description: 'Adapta um YAML base às exigências e frameworks de uma vaga específica (ex: IBM Growth Behaviors).',
-            requestBody: {
-              required: true,
-              content: {
-                'application/json': {
-                  schema: {
-                    type: 'object',
-                    required: ['base_yaml', 'job_description'],
-                    properties: {
-                      base_yaml: { type: 'string', description: 'YAML original do currículo' },
-                      job_description: { type: 'string', description: 'Requisitos da vaga corporativa' },
-                      persona: { type: 'string', enum: ['professional', 'architect', 'historian', 'didactic'], default: 'professional' },
-                    },
-                  },
-                },
-              },
-            },
-            responses: { '200': { description: 'YAML customizado e métricas de tokens' } },
           },
         },
         '/api/v1/cv/render': {
           post: {
-            summary: 'Renderiza YAML em HTML Standalone de Alta Fidelidade',
+            summary: 'Renderiza 1 YAML em HTML Standalone de Alta Fidelidade',
             description: 'Converte um esquema YAML para HTML puro com estilos embutidos, suporte a avatar e impressão A4 perfeita.',
             requestBody: {
               required: true,
@@ -192,6 +158,13 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ isOpen, onClose, onKey
               },
             },
             responses: { '200': { description: 'Arquivo HTML, YAML ou ZIP retornado' } },
+          },
+        },
+        '/api/v1/cv/prompts': {
+          get: {
+            summary: 'Retorna as diretrizes das 5 personas para o Agente de IA',
+            description: 'Retorna os System Prompts completos (JSON Resume, fórmulas X-Y-Z e personas) para o Agente ler e gerar os YAMLs.',
+            responses: { '200': { description: 'Lista de prompts em JSON' } },
           },
         },
         '/api/v1/api-keys/generate': {
@@ -360,42 +333,49 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ isOpen, onClose, onKey
           {activeTab === 'openapi' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', fontSize: '0.82rem', color: '#cbd5e1', lineHeight: 1.6 }}>
               <div style={{ background: 'rgba(16, 185, 129, 0.08)', padding: '0.75rem', borderRadius: '6px', border: '1px solid rgba(16, 185, 129, 0.25)' }}>
-                <strong style={{ color: '#34d399' }}>⚙️ Como o Backend do CV Maker 2.0 Opera:</strong>
+                <strong style={{ color: '#34d399' }}>🚀 100% Agent-Native (Zero Chave do Google AI Studio):</strong>
                 <p style={{ margin: '0.3rem 0 0 0', color: '#94a3b8' }}>
-                  Quando o cliente ou um agente de IA faz a requisição para a rota <code>/api/v1/cv/generate</code> ou <code>/api/v1/cv/render</code>, o roteador <code>cv_router.py</code> importa diretamente o motor <code>cv_html_renderer.py</code>. Ele suporta devolver:
+                  Você <strong>não precisa criar conta no Google Cloud nem colocar créditos de API</strong>. O seu próprio Agente de IA (Claude Code, Antigravity, Cursor, ChatGPT) lê as diretrizes e gera os 5 arquétipos YAML diretamente no seu ambiente. A API do LogicDefense é usada apenas para compilar o Super Dashboard HTML Standalone e os arquivos ZIP:
                 </p>
                 <ul style={{ margin: '0.4rem 0 0 1.2rem', padding: 0 }}>
-                  <li><strong>Super Dashboard HTML Standalone</strong> (<code>format=html</code>): HTML completo interativo com os 5 arquétipos, fotos, 5 temas e botão de impressão A4.</li>
-                  <li><strong>Pacote .ZIP Completo</strong> (<code>format=zip</code>): Com os 5 arquivos <code>.yaml</code> separados + o <code>dashboard_curriculos_completo.html</code>.</li>
-                  <li><strong>JSON Estruturado</strong> (<code>format=json</code>): Para agentes ou frontends renderizarem os dados de carreira em tempo real.</li>
+                  <li><strong>POST /api/v1/cv/compile</strong>: O Agente envia os 5 YAMLs gerados e recebe o Super Dashboard HTML interativo com os 5 currículos, fotos e botão de impressão A4.</li>
+                  <li><strong>POST /api/v1/cv/render</strong>: Converte qualquer YAML único em HTML de alta densidade pronto para PDF.</li>
+                  <li><strong>GET /api/v1/cv/prompts</strong>: Retorna as diretrizes das 5 personas prontas para o Agente executar.</li>
                 </ul>
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <strong style={{ color: '#38bdf8' }}>📄 Especificação OpenAPI 3.1.0 para Agentes (Custom GPT / Cursor / Claude):</strong>
+                <strong style={{ color: '#38bdf8' }}>📄 Especificação OpenAPI 3.1.0 (Para Custom GPTs / Cursor / Claude):</strong>
                 <button className="cv-btn-secondary" style={{ fontSize: '0.75rem', padding: '0.3rem 0.6rem' }} onClick={handleCopyOpenApi}>
                   {copiedOpenApi ? '✓ OpenAPI Copiada!' : '📋 Copiar OpenAPI JSON'}
                 </button>
               </div>
 
-              <pre style={{ background: '#020617', padding: '0.75rem', borderRadius: '4px', border: '1px solid #1e293b', color: '#7dd3fc', fontSize: '0.73rem', maxHeight: '220px', overflowY: 'auto', fontFamily: 'monospace' }}>
+              <pre style={{ background: '#020617', padding: '0.75rem', borderRadius: '4px', border: '1px solid #1e293b', color: '#7dd3fc', fontSize: '0.73rem', maxHeight: '200px', overflowY: 'auto', fontFamily: 'monospace' }}>
                 {openApiSpecJson}
               </pre>
 
               <div style={{ background: 'rgba(56, 189, 248, 0.06)', padding: '0.75rem', borderRadius: '6px', border: '1px solid rgba(56, 189, 248, 0.2)' }}>
-                <strong style={{ color: '#38bdf8' }}>🧠 System Prompt Recomendado para Configurar o Agente de IA:</strong>
+                <strong style={{ color: '#38bdf8' }}>🧠 Prompt Mestre para Colar no seu Agente de IA:</strong>
                 <pre style={{ background: '#090d16', padding: '0.6rem', borderRadius: '4px', border: '1px solid #1e293b', color: '#e2e8f0', fontSize: '0.73rem', whiteSpace: 'pre-wrap', marginTop: '0.4rem', fontFamily: 'monospace' }}>
-{`Você tem acesso à API de Currículos CV Maker 2.0 (Heiss-Lab Engine).
-Para gerar 5 versões de currículo a partir de anotações ou vagas:
-- Base URL: https://ocorrencias-pdf-writer.onrender.com
-- Fallback URL: https://heiss-cv-engine.onrender.com
-- Header: X-API-Key: ${currentKeyDisplay}
-- Chame POST /api/v1/cv/generate com {"raw_text": "...", "job_description": "..."}
-- Se desejar baixar o pacote completo, adicione o parâmetro de query ?format=zip`}
+{`Você é um especialista em engenharia de currículos.
+Para criar e compilar os currículos de alta fidelidade:
+1. Gere os 5 arquétipos em YAML no formato JSON Resume:
+   - professional (Executivo IBM / Tech Lead)
+   - architect (AI Solutions Architect)
+   - historian (Biógrafo de Carreira)
+   - didactic (Didático / Learning Velocity)
+   - alien (Relatório Extraterrestre)
+2. Para compilar o Super Dashboard HTML Standalone e os PDFs:
+   - Endpoint: POST https://ocorrencias-pdf-writer.onrender.com/api/v1/cv/compile
+   - Header: X-API-Key: ${currentKeyDisplay}
+   - Body: {"professional": "...", "architect": "...", "historian": "...", "didactic": "...", "alien": "..."}
+3. Salve o arquivo HTML retornado e abra no navegador para imprimir em PDF A4!`}
                 </pre>
               </div>
             </div>
           )}
+
 
           {activeTab === 'guide' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem', fontSize: '0.82rem', color: '#cbd5e1', lineHeight: 1.6 }}>
