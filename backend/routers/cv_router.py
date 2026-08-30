@@ -71,15 +71,18 @@ def get_default_yaml_content() -> str:
 from db.license_db import get_license_by_raw_key, deduct_license_tokens, is_godmode_key, get_spreadsheet_api_key, hash_key
 
 
-async def verify_cv_license_and_quota(raw_key: Optional[str], estimated_text: str, num_calls: int = 1) -> dict:
+async def verify_cv_license_and_quota(raw_key: Optional[str], estimated_text: str, num_calls: int = 1, x_gemini_key: Optional[str] = None) -> dict:
     """
     Valida a chave de licença ou API Key e verifica se há saldo de tokens suficiente com margem de segurança.
-    Suporta chaves Pro (am_pro_...), chaves de planilha (am_sheet_...) e God Mode (Mateus7:12@).
+    Suporta chaves Pro (am_pro_...), chaves de planilha (am_sheet_...), Bring-Your-Own-Key Gemini (AIzaSy...) e God Mode (Mateus7:12@).
     """
+    if x_gemini_key and x_gemini_key.strip().startswith("AIzaSy"):
+        return {"tier": "byok_gemini", "token_balance": 999999999, "key_hash": "byok_gemini", "gemini_key": x_gemini_key.strip()}
+
     if not raw_key:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Chave de Licença Pro necessária para utilizar a IA do CV Maker. Ative sua chave ou assine um plano.",
+            detail="Chave de Licença Pro ou Chave Gemini (BYOK) necessária para utilizar a IA do CV Maker. Ative sua chave ou informe sua chave própria de API.",
         )
 
     clean_k = raw_key.strip()
@@ -89,7 +92,11 @@ async def verify_cv_license_and_quota(raw_key: Optional[str], estimated_text: st
     if is_godmode_key(clean_k):
         return {"tier": "godmode", "token_balance": 999999999, "key_hash": "godmode"}
 
-    # 1. Tenta buscar como Chave de Licença de Usuário Pro (Turso DB)
+    # 1. Bring Your Own Key (Google Gemini API Key direta: AIzaSy...)
+    if clean_k.startswith("AIzaSy"):
+        return {"tier": "byok_gemini", "token_balance": 999999999, "key_hash": "byok_gemini", "gemini_key": clean_k}
+
+    # 2. Tenta buscar como Chave de Licença de Usuário Pro (Turso DB)
     rec = get_license_by_raw_key(clean_k)
     if rec:
         # Estima tokens: (~4 chars por token) * chamadas + buffer de segurança de 15%
@@ -101,7 +108,7 @@ async def verify_cv_license_and_quota(raw_key: Optional[str], estimated_text: st
             )
         return rec
 
-    # 2. Tenta buscar como Chave de Planilha / API Key de Agente (am_sheet_... ou am_live_...)
+    # 3. Tenta buscar como Chave de Planilha / API Key de Agente (am_sheet_... ou am_live_...)
     if clean_k.startswith("am_sheet_") or clean_k.startswith("am_live_"):
         sheet_rec = get_spreadsheet_api_key(hash_key(clean_k)) or get_spreadsheet_api_key(clean_k)
         if sheet_rec or len(clean_k) > 20:
@@ -121,6 +128,7 @@ async def generate_cv_endpoint(
     theme: Optional[str] = Query("executive", description="Tema visual inicial: executive, creative, minimalist, white, terminal"),
     x_license_key: Optional[str] = Header(None, alias="X-License-Key"),
     x_api_key: Optional[str] = Header(None, alias="X-API-Key"),
+    x_gemini_api_key: Optional[str] = Header(None, alias="X-Gemini-API-Key"),
     x_cv_key: Optional[str] = Header(None, alias="X-CV-Key"),
     x_spreadsheet_key: Optional[str] = Header(None, alias="X-Spreadsheet-Key"),
     authorization: Optional[str] = Header(None),
@@ -133,18 +141,21 @@ async def generate_cv_endpoint(
     - format=json -> Objeto JSON com os 5 YAMLs e o HTML embutido
     """
     raw_key = x_license_key or x_api_key or x_cv_key or x_spreadsheet_key or authorization
-    license_rec = await verify_cv_license_and_quota(raw_key, payload.raw_text, num_calls=5)
+    license_rec = await verify_cv_license_and_quota(raw_key, payload.raw_text, num_calls=5, x_gemini_key=x_gemini_api_key)
 
-    log.info("[CV Router] service='cv' action='generate' format='%s' tier='%s' chars=%d", format, license_rec.get("tier"), len(payload.raw_text))
+    custom_gemini = license_rec.get("gemini_key") or x_gemini_api_key
+
+    log.info("[CV Router] service='cv' action='generate' format='%s' tier='%s' byok=%s chars=%d", format, license_rec.get("tier"), bool(custom_gemini), len(payload.raw_text))
 
     try:
         results, total_tokens = await generate_all_archetypes(
             raw_text=payload.raw_text,
             job_description=payload.job_description,
+            custom_api_key=custom_gemini,
         )
 
-        # Debita os tokens consumidos da chave do usuário no banco
-        if total_tokens > 0 and license_rec.get("key_hash") not in ("godmode", "sheet_api"):
+        # Debita os tokens consumidos da chave do usuário no banco se for licença do servidor
+        if total_tokens > 0 and license_rec.get("key_hash") not in ("godmode", "sheet_api", "byok_gemini"):
             try:
                 deduct_license_tokens(license_rec["key_hash"], total_tokens, endpoint="/api/v1/cv/generate")
             except Exception as d_err:
@@ -205,20 +216,22 @@ async def tailor_cv_endpoint(
     payload: CVTailorRequest,
     x_license_key: Optional[str] = Header(None, alias="X-License-Key"),
     x_api_key: Optional[str] = Header(None, alias="X-API-Key"),
+    x_gemini_api_key: Optional[str] = Header(None, alias="X-Gemini-API-Key"),
     authorization: Optional[str] = Header(None),
 ):
     """
     Endpoint para alfaiataria (tailoring) do currículo contra uma Job Description específica.
-    Verifica a licença Pro e debita os tokens consumidos via Turso SQLite.
+    Verifica a licença Pro ou aceita chave Gemini própria (BYOK) e debita os tokens se for servidor.
     """
     raw_key = x_license_key or x_api_key or authorization
     full_text = payload.base_yaml + "\n" + payload.job_description
-    license_rec = await verify_cv_license_and_quota(raw_key, full_text, num_calls=1)
+    license_rec = await verify_cv_license_and_quota(raw_key, full_text, num_calls=1, x_gemini_key=x_gemini_api_key)
 
+    custom_gemini = license_rec.get("gemini_key") or x_gemini_api_key
     persona_key = payload.persona if payload.persona in PERSONA_INSTRUCTIONS else "professional"
     persona_inst = PERSONA_INSTRUCTIONS[persona_key]
 
-    log.info("[CV Router] service='cv' action='tailor' persona='%s' tier='%s'", persona_key, license_rec.get("tier"))
+    log.info("[CV Router] service='cv' action='tailor' persona='%s' tier='%s' byok=%s", persona_key, license_rec.get("tier"), bool(custom_gemini))
 
     try:
         tailored_yaml, total_tokens = await generate_single_archetype(
@@ -227,9 +240,10 @@ async def tailor_cv_endpoint(
             raw_text=payload.base_yaml,
             job_description=payload.job_description,
             index=0,
+            custom_api_key=custom_gemini,
         )
 
-        if total_tokens > 0 and license_rec.get("key_hash") not in ("godmode", "sheet_api"):
+        if total_tokens > 0 and license_rec.get("key_hash") not in ("godmode", "sheet_api", "byok_gemini"):
             try:
                 deduct_license_tokens(license_rec["key_hash"], total_tokens, endpoint="/api/v1/cv/tailor")
             except Exception as d_err:

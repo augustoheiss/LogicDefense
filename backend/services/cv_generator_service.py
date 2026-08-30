@@ -58,13 +58,16 @@ async def generate_single_archetype(
     job_description: str | None = None,
     lang: str = "auto",
     index: int = 0,
+    custom_api_key: str | None = None,
 ) -> tuple[str, int]:
     """
     Generates ONE CV archetype as a clean YAML string with retry logic.
+    Supports Bring-Your-Own-Key (BYOK) via custom_api_key.
     Returns (yaml_string, total_tokens_used).
     """
-    if not client:
-        raise RuntimeError("GEMINI_API_KEY não configurada no servidor.")
+    active_client = genai.Client(api_key=custom_api_key) if custom_api_key else client
+    if not active_client:
+        raise RuntimeError("Nenhuma GEMINI_API_KEY configurada no servidor ou fornecida na requisição.")
 
     if index > 0:
         await asyncio.sleep(index * STAGGER_STEP)
@@ -108,7 +111,7 @@ async def generate_single_archetype(
         "--- CANDIDATE RAW DATA END ---"
     )
 
-    log.info("[CV Engine] service='cv' archetype='%s' lang='%s' index=%d chars=%d", archetype, target_lang, index, len(raw_text))
+    log.info("[CV Engine] service='cv' archetype='%s' lang='%s' index=%d chars=%d byok=%s", archetype, target_lang, index, len(raw_text), bool(custom_api_key))
 
     last_exc: Exception = RuntimeError(f"Falha na geração do arquétipo '{archetype}'")
 
@@ -131,7 +134,7 @@ async def generate_single_archetype(
             gen_config.thinking_config = types.ThinkingConfig(thinking_budget=2048)
 
             response = await asyncio.to_thread(
-                client.models.generate_content,
+                active_client.models.generate_content,
                 model=MODEL,
                 contents=user_prompt,
                 config=gen_config,
@@ -168,9 +171,11 @@ async def generate_all_archetypes(
     raw_text: str,
     job_description: str | None = None,
     lang: str = "auto",
+    custom_api_key: str | None = None,
 ) -> tuple[Dict[str, str], int]:
     """
     Launches concurrent calls for all personas in parallel via asyncio.gather().
+    Supports Bring-Your-Own-Key (BYOK) via custom_api_key.
     Returns (dict_of_archetypes, total_tokens_used).
     """
     tasks = [
@@ -181,6 +186,7 @@ async def generate_all_archetypes(
             job_description=job_description,
             lang=lang,
             index=i,
+            custom_api_key=custom_api_key,
         )
         for i, (arch, persona) in enumerate(PERSONA_INSTRUCTIONS.items())
     ]
@@ -196,4 +202,5 @@ async def generate_all_archetypes(
         total_tokens += tokens
 
     return archetypes_map, total_tokens
+
 
