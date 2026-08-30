@@ -1221,7 +1221,7 @@ def render_multi_cv_dashboard_html(
     </div>
 
     <button onclick="openPhotoModal()" class="btn-sec" title="{t['photo_btn']}">{t["photo_btn"]}</button>
-    <button onclick="window.print()">{t["print_btn"]}</button>
+    <button onclick="printCV()">{t["print_btn"]}</button>
     <button onclick="downloadActiveYaml()" class="btn-sec">{t["download_yaml"]}</button>
     <button onclick="downloadAllZip()" class="btn-accent">{t["download_zip"]}</button>
     <button id="copy-btn" onclick="copyActiveYaml()" class="btn-sec">{t["copy_yaml"]}</button>
@@ -1298,6 +1298,24 @@ def render_multi_cv_dashboard_html(
         'alien': 'curriculo_alien.yaml'
     }};
 
+    function updateDocTitle() {{
+      const activePanel = document.querySelector('.cv-persona-panel.active') || document.getElementById('cv-persona-' + currentPersona);
+      if (activePanel) {{
+        const nameEl = activePanel.querySelector('.name');
+        const labelEl = activePanel.querySelector('.label');
+        if (nameEl && nameEl.innerText.trim()) {{
+          const name = nameEl.innerText.trim();
+          const label = labelEl && labelEl.innerText.trim() ? ' - ' + labelEl.innerText.trim() : '';
+          document.title = name + label;
+        }}
+      }}
+    }}
+
+    function printCV() {{
+      updateDocTitle();
+      window.print();
+    }}
+
     function switchPersona(newPersona) {{
       const panels = document.querySelectorAll('.cv-persona-panel');
       panels.forEach(p => {{
@@ -1310,6 +1328,7 @@ def render_multi_cv_dashboard_html(
         target.style.display = 'block';
         target.classList.add('active');
         currentPersona = newPersona;
+        updateDocTitle();
       }}
       localStorage.setItem('cv_active_persona', newPersona);
     }}
@@ -1530,6 +1549,8 @@ def render_multi_cv_dashboard_html(
         currentPhoto = savedPhoto;
         applyPhotoToAll(savedPhoto);
       }}
+
+      updateDocTitle();
     }})();
   </script>
 </body>

@@ -114,6 +114,17 @@ export const CVMakerApp: React.FC = () => {
     handleParse(yamlInput)
   }, [])
 
+  // Dynamically sync document.title with candidate name and label for clean PDF export & browser title
+  useEffect(() => {
+    if (cvData?.basics?.name) {
+      const name = cvData.basics.name.trim()
+      const label = cvData.basics.label ? ` - ${cvData.basics.label.trim()}` : ''
+      document.title = `${name}${label}`
+    } else {
+      document.title = 'CV Maker 2.0 — Gerador de Currículos'
+    }
+  }, [cvData])
+
   // Refresh history state
   const refreshHistory = useCallback(() => {
     setHistoryList(getCVHistory())
@@ -280,6 +291,11 @@ export const CVMakerApp: React.FC = () => {
 
   // Print PDF
   const handlePrintPdf = () => {
+    if (cvData?.basics?.name) {
+      const name = cvData.basics.name.trim()
+      const label = cvData.basics.label ? ` - ${cvData.basics.label.trim()}` : ''
+      document.title = `${name}${label}`
+    }
     window.print()
   }
 
