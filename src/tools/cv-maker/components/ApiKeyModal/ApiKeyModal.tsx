@@ -401,19 +401,25 @@ Para criar e compilar os currículos de alta fidelidade:
               </div>
 
               <div>
-                <strong>2. Executar via Terminal (cURL):</strong>
+                <strong>2. Compilar os 5 Arquétipos em Super Dashboard HTML Standalone (cURL):</strong>
                 <pre style={{ background: '#020617', padding: '0.6rem', borderRadius: '4px', border: '1px solid #1e293b', color: '#34d399', fontSize: '0.75rem', overflowX: 'auto', margin: '0.3rem 0 0 0' }}>
-{`# Gerar pacote .ZIP com 5 versões + Super Dashboard HTML:
-curl -X POST "https://ocorrencias-pdf-writer.onrender.com/api/v1/cv/generate?format=zip" \\
+{`# Envia os 5 YAMLs gerados pelo seu Agente e recebe o Super Dashboard HTML pronto:
+curl -X POST "https://ocorrencias-pdf-writer.onrender.com/api/v1/cv/compile" \\
   -H "Content-Type: application/json" \\
   -H "X-API-Key: ${currentKeyDisplay}" \\
-  -d '{"raw_text": "Alexandre Silva...", "job_description": "Vaga IBM..."}' \\
-  --output "curriculos_completo.zip"`}
+  -d '{
+    "professional": "basics:\\n  name: Alexandre Silva...",
+    "architect": "basics:\\n  name: Alexandre Silva...",
+    "historian": "basics:\\n  name: Alexandre Silva...",
+    "didactic": "basics:\\n  name: Alexandre Silva...",
+    "alien": "basics:\\n  name: Alexandre Silva..."
+  }' \\
+  --output "dashboard_curriculos.html"`}
                 </pre>
               </div>
 
               <div>
-                <strong>3. Exportar HTML Estilizado & PDF (Python):</strong>
+                <strong>3. Renderizar 1 YAML em HTML Estilizado & PDF (Python):</strong>
                 <pre style={{ background: '#020617', padding: '0.6rem', borderRadius: '4px', border: '1px solid #1e293b', color: '#a78bfa', fontSize: '0.75rem', overflowX: 'auto', margin: '0.3rem 0 0 0' }}>
 {`import requests
 
@@ -424,7 +430,7 @@ res = requests.post(
 )
 with open("meu_curriculo.html", "w", encoding="utf-8") as f:
     f.write(res.text)
-# Pronto! O arquivo HTML possui botão nativo de impressão A4.`}
+# Pronto! O arquivo HTML abre no navegador com botão nativo de impressão A4.`}
                 </pre>
               </div>
 
