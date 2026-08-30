@@ -2,13 +2,22 @@ import { NavLink, Outlet, Link } from 'react-router-dom'
 import '../styles/portal.css'
 
 const NAV_LINKS = [
-  { to: '/laboratorio/cv-maker',       label: 'CV Maker',          icon: '📄', isExternal: false },
-  { to: '/laboratorio/assistente-moeda', label: 'Assistente Moeda', icon: '💰', isExternal: true },
-  { to: '/',                           label: 'Início',            icon: '🏛️', isExternal: false },
-  { to: '/jogos',                      label: 'Jogos',             icon: '🎮', isExternal: false },
-  { to: '/laboratorio',                label: 'Laboratório',       icon: '🔬', isExternal: false },
-  { to: '/repositorio',                label: 'Repositório',       icon: '📚', isExternal: false },
-  { to: '/sobre',                      label: 'Sobre',             icon: '✦',  isExternal: false },
+  { to: '/',           label: 'Início',      icon: '🏛️'  },
+  { to: '/jogos',      label: 'Jogos',        icon: '🎮'  },
+  {
+    to: '/laboratorio',
+    label: 'Laboratório',
+    icon: '🔬',
+    children: [
+      { to: '/laboratorio/cv-maker',       label: 'CV Maker 2.0',            icon: '📄', desc: '5 Arquétipos YAML & Super Dashboard', isExternal: false },
+      { to: '/laboratorio/assistente-moeda', label: 'Assistente Moeda',        icon: '💰', desc: 'Gestão Financeira & Relatórios',      isExternal: true },
+      { to: '/laboratorio/ocorrencias',    label: 'Gerador de Ocorrências',  icon: '📋', desc: 'Preenchimento inteligente de PDFs',   isExternal: false },
+      { to: '/laboratorio/api-port',       label: 'Porta USB — API Port',    icon: '🔌', desc: 'Leitor dinâmico de contratos OpenAPI',isExternal: false },
+      { to: '/laboratorio/sekundo',        label: 'Sekundo Event Scheduler', icon: '📅', desc: 'Planejador de Eventos Local-First',   isExternal: true },
+    ]
+  },
+  { to: '/repositorio',label: 'Repositório',  icon: '📚'  },
+  { to: '/sobre',      label: 'Sobre',        icon: '✦'   },
 ]
 
 export function Layout() {
@@ -25,27 +34,63 @@ export function Layout() {
         </NavLink>
 
         <ul className="navbar__links">
-          {NAV_LINKS.map(({ to, label, icon, isExternal }) => (
-            <li key={to}>
-              {isExternal ? (
-                <a href={to} className="navbar__link">
-                  <span>{icon}</span>
-                  {label}
-                </a>
-              ) : (
+          {NAV_LINKS.map((item) => {
+            const hasChildren = 'children' in item && item.children && item.children.length > 0
+
+            if (hasChildren) {
+              return (
+                <li key={item.to} className="navbar__item-dropdown">
+                  <NavLink
+                    to={item.to}
+                    className={({ isActive }) =>
+                      `navbar__link${isActive ? ' active' : ''}`
+                    }
+                  >
+                    <span>{item.icon}</span>
+                    {item.label}
+                    <span className="navbar__dropdown-arrow">▾</span>
+                  </NavLink>
+
+                  <div className="navbar__dropdown-menu">
+                    {item.children.map((sub) => (
+                      sub.isExternal ? (
+                        <a key={sub.to} href={sub.to} className="navbar__dropdown-item">
+                          <span className="navbar__dropdown-icon">{sub.icon}</span>
+                          <div className="navbar__dropdown-info">
+                            <span className="navbar__dropdown-title">{sub.label}</span>
+                            <span className="navbar__dropdown-desc">{sub.desc}</span>
+                          </div>
+                        </a>
+                      ) : (
+                        <Link key={sub.to} to={sub.to} className="navbar__dropdown-item">
+                          <span className="navbar__dropdown-icon">{sub.icon}</span>
+                          <div className="navbar__dropdown-info">
+                            <span className="navbar__dropdown-title">{sub.label}</span>
+                            <span className="navbar__dropdown-desc">{sub.desc}</span>
+                          </div>
+                        </Link>
+                      )
+                    ))}
+                  </div>
+                </li>
+              )
+            }
+
+            return (
+              <li key={item.to}>
                 <NavLink
-                  to={to}
-                  end={to === '/'}
+                  to={item.to}
+                  end={item.to === '/'}
                   className={({ isActive }) =>
                     `navbar__link${isActive ? ' active' : ''}`
                   }
                 >
-                  <span>{icon}</span>
-                  {label}
+                  <span>{item.icon}</span>
+                  {item.label}
                 </NavLink>
-              )}
-            </li>
-          ))}
+              </li>
+            )
+          })}
         </ul>
 
         <div className="navbar__spacer" />

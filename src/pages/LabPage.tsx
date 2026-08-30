@@ -32,6 +32,21 @@ export function LabPage() {
           </div>
         </div>
 
+        {/* ── CV Maker tool card ── */}
+        <div className="cv-lab-card">
+          <div className="cv-lab-card__icon">📄</div>
+          <div className="cv-lab-card__body">
+            <span className="cv-lab-card__tag">SaaS Tool · IA & Carreiras</span>
+            <h2 className="cv-lab-card__title">CV Maker 2.0 — Engenharia de Currículos</h2>
+            <p className="cv-lab-card__desc">
+              Gere 5 arquétipos profissionais em YAML (Executivo IBM, Arquiteto IA, Biógrafo, Didático e Alien) com fórmulas X-Y-Z do Google, 5 temas visuais, fotos e exportação PDF/HTML de alta densidade. 100% Agent-Native.
+            </p>
+          </div>
+          <Link to="/laboratorio/cv-maker" className="cv-lab-card__cta">
+            Abrir CV Maker ↗
+          </Link>
+        </div>
+
         {/* ── Assistente Moeda tool card ── */}
         <div className="cv-lab-card">
           <div className="cv-lab-card__icon">💰</div>
@@ -90,21 +105,6 @@ export function LabPage() {
           <a href="/laboratorio/sekundo" className="cv-lab-card__cta">
             Abrir Sekundo ↗
           </a>
-        </div>
-
-        {/* ── CV YAML tool card ── */}
-        <div className="cv-lab-card">
-          <div className="cv-lab-card__icon">📄</div>
-          <div className="cv-lab-card__body">
-            <span className="cv-lab-card__tag">SaaS Tool · MVP</span>
-            <h2 className="cv-lab-card__title">CV YAML — Crush the Bureaucracy</h2>
-            <p className="cv-lab-card__desc">
-              Paste your AI-generated YAML resume, choose a persona and a visual theme, then export a pixel-perfect PDF — all processed locally, zero data leaves your browser.
-            </p>
-          </div>
-          <Link to="/laboratorio/cv-maker" className="cv-lab-card__cta">
-            Open CV Maker ↗
-          </Link>
         </div>
 
 
