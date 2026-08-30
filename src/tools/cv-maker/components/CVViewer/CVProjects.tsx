@@ -1,5 +1,6 @@
 import React from 'react'
 import type { CVProject } from '../../types/cv'
+import { getGridClass } from '../../utils/gridUtils'
 
 interface CVProjectsProps {
   projects: CVProject[]
@@ -14,7 +15,7 @@ export const CVProjects: React.FC<CVProjectsProps> = ({ projects }) => {
         <span>🚀</span> Projetos em Destaque & Repositórios
       </h2>
 
-      <div className="cv-projects-grid">
+      <div className={`cv-projects-grid ${getGridClass(projects.length)}`}>
         {projects.map((project, index) => (
           <div key={index} className="cv-project-card cv-avoid-break">
             <div>

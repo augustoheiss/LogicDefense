@@ -1,5 +1,6 @@
 import React from 'react'
 import type { CVInterest } from '../../types/cv'
+import { getGridClass } from '../../utils/gridUtils'
 
 interface CVInterestsProps {
   interests: CVInterest[]
@@ -14,7 +15,7 @@ export const CVInterests: React.FC<CVInterestsProps> = ({ interests }) => {
         <span>🎯</span> Interesses & Frentes de Pesquisa
       </h2>
 
-      <div className="cv-interests-grid">
+      <div className={`cv-interests-grid ${getGridClass(interests.length)}`}>
         {interests.map((interest, index) => (
           <div key={index} className="cv-interest-card cv-avoid-break">
             <h4 className="cv-interest-title">

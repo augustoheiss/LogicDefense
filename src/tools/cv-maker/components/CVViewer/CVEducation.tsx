@@ -1,5 +1,6 @@
 import React from 'react'
 import type { CVEducation as CVEducationType } from '../../types/cv'
+import { getGridClass } from '../../utils/gridUtils'
 
 interface CVEducationProps {
   education: CVEducationType[]
@@ -14,7 +15,7 @@ export const CVEducation: React.FC<CVEducationProps> = ({ education }) => {
         <span>🎓</span> Formação Acadêmica
       </h2>
 
-      <div className="cv-education-grid">
+      <div className={`cv-education-grid ${getGridClass(education.length)}`}>
         {education.map((item, index) => {
           const dateRange = item.endDate
             ? (item.startDate ? `${item.startDate} — ${item.endDate}` : item.endDate)

@@ -234,6 +234,124 @@
     margin-bottom: 0.2rem !important;
   }
 
+  /* ── Dynamic Grid System no Print A4 ── */
+  .cv-grid-1,
+  .cv-projects-grid.cv-grid-1,
+  .cv-skills-grid.cv-grid-1,
+  .cv-education-grid.cv-grid-1,
+  .cv-certs-grid.cv-grid-1,
+  .cv-languages-grid.cv-grid-1,
+  .cv-interests-grid.cv-grid-1,
+  .cv-awards-grid.cv-grid-1,
+  .cv-projects-grid:has(> :only-child),
+  .cv-skills-grid:has(> :only-child),
+  .cv-education-grid:has(> :only-child),
+  .cv-certs-grid:has(> :only-child),
+  .cv-languages-grid:has(> :only-child),
+  .cv-interests-grid:has(> :only-child),
+  .cv-awards-grid:has(> :only-child) {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    width: 100% !important;
+    gap: 0.65rem !important;
+  }
+  .cv-grid-1 > *,
+  .cv-projects-grid.cv-grid-1 > *,
+  .cv-skills-grid.cv-grid-1 > * {
+    grid-column: 1 / -1 !important;
+    width: 100% !important;
+  }
+
+  .cv-grid-2,
+  .cv-grid-4,
+  .cv-projects-grid.cv-grid-2,
+  .cv-projects-grid.cv-grid-4,
+  .cv-skills-grid.cv-grid-2,
+  .cv-skills-grid.cv-grid-4,
+  .cv-education-grid.cv-grid-2,
+  .cv-education-grid.cv-grid-4,
+  .cv-certs-grid.cv-grid-2,
+  .cv-certs-grid.cv-grid-4,
+  .cv-languages-grid.cv-grid-2,
+  .cv-languages-grid.cv-grid-4,
+  .cv-interests-grid.cv-grid-2,
+  .cv-interests-grid.cv-grid-4,
+  .cv-awards-grid.cv-grid-2,
+  .cv-awards-grid.cv-grid-4,
+  .cv-projects-grid:has(> :nth-child(2):last-child),
+  .cv-projects-grid:has(> :nth-child(4):last-child),
+  .cv-skills-grid:has(> :nth-child(2):last-child),
+  .cv-skills-grid:has(> :nth-child(4):last-child),
+  .cv-education-grid:has(> :nth-child(2):last-child),
+  .cv-education-grid:has(> :nth-child(4):last-child),
+  .cv-certs-grid:has(> :nth-child(2):last-child),
+  .cv-certs-grid:has(> :nth-child(4):last-child),
+  .cv-languages-grid:has(> :nth-child(2):last-child),
+  .cv-languages-grid:has(> :nth-child(4):last-child),
+  .cv-interests-grid:has(> :nth-child(2):last-child),
+  .cv-interests-grid:has(> :nth-child(4):last-child),
+  .cv-awards-grid:has(> :nth-child(2):last-child),
+  .cv-awards-grid:has(> :nth-child(4):last-child) {
+    display: grid !important;
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 0.65rem !important;
+  }
+
+  .cv-grid-3,
+  .cv-projects-grid.cv-grid-3,
+  .cv-skills-grid.cv-grid-3,
+  .cv-education-grid.cv-grid-3,
+  .cv-certs-grid.cv-grid-3,
+  .cv-languages-grid.cv-grid-3,
+  .cv-interests-grid.cv-grid-3,
+  .cv-awards-grid.cv-grid-3,
+  .cv-projects-grid:has(> :nth-child(3):last-child),
+  .cv-skills-grid:has(> :nth-child(3):last-child),
+  .cv-education-grid:has(> :nth-child(3):last-child),
+  .cv-certs-grid:has(> :nth-child(3):last-child),
+  .cv-languages-grid:has(> :nth-child(3):last-child),
+  .cv-interests-grid:has(> :nth-child(3):last-child),
+  .cv-awards-grid:has(> :nth-child(3):last-child) {
+    display: grid !important;
+    grid-template-columns: repeat(3, 1fr) !important;
+    gap: 0.65rem !important;
+  }
+
+  .cv-grid-5,
+  .cv-grid-split-3-2,
+  .cv-projects-grid.cv-grid-5,
+  .cv-skills-grid.cv-grid-5,
+  .cv-education-grid.cv-grid-5,
+  .cv-certs-grid.cv-grid-5,
+  .cv-languages-grid.cv-grid-5,
+  .cv-interests-grid.cv-grid-5,
+  .cv-awards-grid.cv-grid-5,
+  .cv-projects-grid.cv-grid-split-3-2,
+  .cv-skills-grid.cv-grid-split-3-2,
+  .cv-education-grid.cv-grid-split-3-2,
+  .cv-certs-grid.cv-grid-split-3-2,
+  .cv-languages-grid.cv-grid-split-3-2,
+  .cv-interests-grid.cv-grid-split-3-2,
+  .cv-awards-grid.cv-grid-split-3-2 {
+    display: grid !important;
+    grid-template-columns: repeat(6, 1fr) !important;
+    gap: 0.65rem !important;
+  }
+  .cv-grid-5 > *,
+  .cv-grid-split-3-2 > * {
+    grid-column: span 2 !important;
+  }
+  .cv-grid-5 > *:nth-last-child(2):nth-child(3n+4),
+  .cv-grid-5 > *:last-child:nth-child(3n+5),
+  .cv-grid-5 > *:nth-last-child(2):nth-child(4),
+  .cv-grid-5 > *:last-child:nth-child(5),
+  .cv-grid-split-3-2 > *:nth-last-child(2):nth-child(3n+4),
+  .cv-grid-split-3-2 > *:last-child:nth-child(3n+5),
+  .cv-grid-split-3-2 > *:nth-last-child(2):nth-child(4),
+  .cv-grid-split-3-2 > *:last-child:nth-child(5) {
+    grid-column: span 3 !important;
+  }
+
   .cv-projects-grid {
     display: grid !important;
     grid-template-columns: 1fr 1fr !important;
@@ -325,9 +443,9 @@
     color: #475569 !important;
   }
 
+  .cv-skills-grid,
   .cv-skills-masonry {
     display: grid !important;
-    grid-template-columns: repeat(3, 1fr) !important;
     gap: 0.65rem !important;
   }
 

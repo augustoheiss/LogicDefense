@@ -172,6 +172,110 @@
   line-height: 1.5;
 }
 
+/* ── Dynamic Grid System ── */
+.cv-grid-1 {
+  display: grid;
+  grid-template-columns: 1fr !important;
+  width: 100%;
+}
+.cv-grid-1 > * {
+  grid-column: 1 / -1 !important;
+  width: 100%;
+}
+
+.cv-grid-2,
+.cv-grid-4 {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1rem;
+}
+@media (min-width: 640px) {
+  .cv-grid-2,
+  .cv-grid-4 {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+}
+
+.cv-grid-3 {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1rem;
+}
+@media (min-width: 640px) {
+  .cv-grid-3 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+@media (min-width: 900px) {
+  .cv-grid-3 {
+    grid-template-columns: repeat(3, 1fr) !important;
+  }
+}
+
+.cv-grid-5,
+.cv-grid-split-3-2 {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1rem;
+}
+@media (min-width: 640px) {
+  .cv-grid-5,
+  .cv-grid-split-3-2 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+@media (min-width: 900px) {
+  .cv-grid-5,
+  .cv-grid-split-3-2 {
+    grid-template-columns: repeat(6, 1fr) !important;
+  }
+  .cv-grid-5 > *,
+  .cv-grid-split-3-2 > * {
+    grid-column: span 2;
+  }
+  .cv-grid-5 > *:nth-last-child(2):nth-child(3n+4),
+  .cv-grid-5 > *:last-child:nth-child(3n+5),
+  .cv-grid-5 > *:nth-last-child(2):nth-child(4),
+  .cv-grid-5 > *:last-child:nth-child(5),
+  .cv-grid-split-3-2 > *:nth-last-child(2):nth-child(3n+4),
+  .cv-grid-split-3-2 > *:last-child:nth-child(3n+5),
+  .cv-grid-split-3-2 > *:nth-last-child(2):nth-child(4),
+  .cv-grid-split-3-2 > *:last-child:nth-child(5) {
+    grid-column: span 3;
+  }
+}
+
+/* Fallback com seletores :has() */
+.cv-projects-grid:has(> :only-child),
+.cv-skills-grid:has(> :only-child),
+.cv-education-grid:has(> :only-child),
+.cv-certs-grid:has(> :only-child),
+.cv-languages-grid:has(> :only-child),
+.cv-interests-grid:has(> :only-child),
+.cv-awards-grid:has(> :only-child) {
+  grid-template-columns: 1fr !important;
+}
+
+.cv-projects-grid:has(> :nth-child(2):last-child),
+.cv-skills-grid:has(> :nth-child(2):last-child),
+.cv-education-grid:has(> :nth-child(2):last-child),
+.cv-certs-grid:has(> :nth-child(2):last-child),
+.cv-languages-grid:has(> :nth-child(2):last-child),
+.cv-interests-grid:has(> :nth-child(2):last-child),
+.cv-awards-grid:has(> :nth-child(2):last-child) {
+  grid-template-columns: repeat(2, 1fr) !important;
+}
+
+.cv-projects-grid:has(> :nth-child(4):last-child),
+.cv-skills-grid:has(> :nth-child(4):last-child),
+.cv-education-grid:has(> :nth-child(4):last-child),
+.cv-certs-grid:has(> :nth-child(4):last-child),
+.cv-languages-grid:has(> :nth-child(4):last-child),
+.cv-interests-grid:has(> :nth-child(4):last-child),
+.cv-awards-grid:has(> :nth-child(4):last-child) {
+  grid-template-columns: repeat(2, 1fr) !important;
+}
+
 /* ── Projects Grid ── */
 .cv-projects-grid {
   display: grid;
@@ -205,7 +309,19 @@
   line-height: 1.5;
 }
 
-/* ── Skills Masonry ── */
+/* ── Skills Grid & Masonry ── */
+.cv-skills-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.85rem;
+}
+
+@media (min-width: 768px) {
+  .cv-skills-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
 .cv-skills-masonry {
   column-count: 1;
   column-gap: 1.5rem;
@@ -220,7 +336,7 @@
 .cv-skills-group {
   break-inside: avoid;
   page-break-inside: avoid;
-  margin-bottom: 1rem;
+  margin-bottom: 0.5rem;
 }
 
 .cv-skills-group h4 {

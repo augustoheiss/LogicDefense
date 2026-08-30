@@ -1,5 +1,6 @@
 import React from 'react'
 import type { CVCertificate, CVAward, CVVolunteer } from '../../types/cv'
+import { getGridClass } from '../../utils/gridUtils'
 
 interface CVOptionalProps {
   certificates?: CVCertificate[]
@@ -15,7 +16,7 @@ export const CVOptional: React.FC<CVOptionalProps> = ({ certificates, awards, vo
           <h2 className="cv-section-title">
             <span>📜</span> Certificações & Licenças
           </h2>
-          <div className="cv-certs-grid">
+          <div className={`cv-certs-grid ${getGridClass(certificates.length)}`}>
             {certificates.map((cert, idx) => (
               <div key={idx} className="cv-cert-card cv-avoid-break">
                 <div className="cv-card-top">
@@ -45,7 +46,7 @@ export const CVOptional: React.FC<CVOptionalProps> = ({ certificates, awards, vo
           <h2 className="cv-section-title">
             <span>🏆</span> Reconhecimentos & Prêmios
           </h2>
-          <div className="cv-awards-grid">
+          <div className={`cv-awards-grid ${getGridClass(awards.length)}`}>
             {awards.map((award, idx) => (
               <div key={idx} className="cv-award-card cv-avoid-break">
                 <div className="cv-card-top">

@@ -1,4 +1,5 @@
 import type { CVSkill } from '../../types/cv'
+import { getGridClass } from '../../utils/gridUtils'
 
 interface CVSkillsProps {
   skills: CVSkill[]
@@ -13,7 +14,7 @@ export const CVSkills: React.FC<CVSkillsProps> = ({ skills }) => {
         <span>⚡</span> Competências & Habilidades Técnicas
       </h2>
 
-      <div className="cv-skills-masonry">
+      <div className={`cv-skills-grid ${getGridClass(skills.length)}`}>
         {skills.map((skillGroup, index) => (
           <div key={index} className="cv-skills-group cv-avoid-break">
             <h4>

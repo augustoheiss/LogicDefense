@@ -1,5 +1,6 @@
 import React from 'react'
 import type { CVLanguage } from '../../types/cv'
+import { getGridClass } from '../../utils/gridUtils'
 
 interface CVLanguagesProps {
   languages: CVLanguage[]
@@ -14,7 +15,7 @@ export const CVLanguages: React.FC<CVLanguagesProps> = ({ languages }) => {
         <span>🌐</span> Idiomas & Fluência
       </h2>
 
-      <div className="cv-languages-grid">
+      <div className={`cv-languages-grid ${getGridClass(languages.length)}`}>
         {languages.map((lang, index) => (
           <div key={index} className="cv-language-card cv-avoid-break">
             <div className="cv-lang-name">
