@@ -8,7 +8,7 @@ interface ApiKeyModalProps {
 }
 
 export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ isOpen, onClose, onKeyUpdated }) => {
-  const [activeTab, setActiveTab] = useState<'key' | 'guide'>('key')
+  const [activeTab, setActiveTab] = useState<'key' | 'openapi' | 'guide'>('key')
   const [activeKey, setActiveKey] = useState<string | null>(null)
   const [keyHint, setKeyHint] = useState<string | null>(null)
   const [expiresAt, setExpiresAt] = useState<string | null>(null)
@@ -16,6 +16,7 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ isOpen, onClose, onKey
   const [selectedTtl, setSelectedTtl] = useState<number>(1)
   const [loading, setLoading] = useState<boolean>(false)
   const [copied, setCopied] = useState<boolean>(false)
+  const [copiedOpenApi, setCopiedOpenApi] = useState<boolean>(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [justGeneratedRawKey, setJustGeneratedRawKey] = useState<string | null>(null)
 
@@ -92,12 +93,142 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ isOpen, onClose, onKey
 
   const currentKeyDisplay = justGeneratedRawKey || activeKey || 'am_sheet_live_sua_chave_aqui'
 
+  const openApiSpecJson = JSON.stringify(
+    {
+      openapi: '3.1.0',
+      info: {
+        title: 'CV Maker 2.0 & Heiss-Lab AI Engine',
+        version: '3.0.0',
+        description:
+          'API de Inteligência Artificial para geração paralela de 5 arquétipos de currículos, alfaiataria contra Job Descriptions (ATS Tailoring) e compilação em HTML Standalone e ZIP.',
+      },
+      servers: [
+        { url: 'https://ocorrencias-pdf-writer.onrender.com', description: 'Servidor Primário (Render)' },
+        { url: 'https://heiss-cv-engine.onrender.com', description: 'Servidor Secundário (Failover)' },
+      ],
+      paths: {
+        '/api/v1/cv/generate': {
+          post: {
+            summary: 'Gera 5 arquétipos de currículo em paralelo com Gemini 3.7 Flash',
+            description:
+              'O roteador cv_router.py dispara 5 corrotinas concorrentes e integra diretamente o cv_html_renderer.py. Suporta retornos em JSON estruturado, Super Dashboard HTML Standalone (com os 5 currículos e 5 temas interativos) ou pacote .ZIP completo.',
+            parameters: [
+              {
+                name: 'format',
+                in: 'query',
+                schema: { type: 'string', enum: ['json', 'html', 'zip'], default: 'json' },
+                description: 'Formato de resposta: json (5 YAMLs), html (Super Dashboard Standalone) ou zip (5 YAMLs + HTML)',
+              },
+              {
+                name: 'theme',
+                in: 'query',
+                schema: { type: 'string', enum: ['executive', 'creative', 'minimalist', 'white', 'terminal'], default: 'executive' },
+                description: 'Tema visual inicial do documento',
+              },
+            ],
+            requestBody: {
+              required: true,
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    required: ['raw_text'],
+                    properties: {
+                      raw_text: { type: 'string', description: 'Texto bruto do currículo, LinkedIn ou anotações de carreira' },
+                      job_description: { type: 'string', description: 'Descrição da vaga corporativa para tailoring semântico' },
+                    },
+                  },
+                },
+              },
+            },
+            responses: {
+              '200': { description: 'Sucesso na geração dos 5 arquétipos' },
+              '401': { description: 'Chave de Licença/API ausente ou inválida' },
+              '402': { description: 'Saldo de tokens insuficiente' },
+            },
+          },
+        },
+        '/api/v1/cv/tailor': {
+          post: {
+            summary: 'Alfaiataria de Currículo (ATS Target Tailoring)',
+            description: 'Adapta um YAML base às exigências e frameworks de uma vaga específica (ex: IBM Growth Behaviors).',
+            requestBody: {
+              required: true,
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    required: ['base_yaml', 'job_description'],
+                    properties: {
+                      base_yaml: { type: 'string', description: 'YAML original do currículo' },
+                      job_description: { type: 'string', description: 'Requisitos da vaga corporativa' },
+                      persona: { type: 'string', enum: ['professional', 'architect', 'historian', 'didactic'], default: 'professional' },
+                    },
+                  },
+                },
+              },
+            },
+            responses: { '200': { description: 'YAML customizado e métricas de tokens' } },
+          },
+        },
+        '/api/v1/cv/render': {
+          post: {
+            summary: 'Renderiza YAML em HTML Standalone de Alta Fidelidade',
+            description: 'Converte um esquema YAML para HTML puro com estilos embutidos, suporte a avatar e impressão A4 perfeita.',
+            requestBody: {
+              required: true,
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    properties: {
+                      yaml_content: { type: 'string', description: 'YAML do currículo' },
+                      theme: { type: 'string', enum: ['executive', 'creative', 'minimalist', 'white', 'terminal'], default: 'executive' },
+                      format: { type: 'string', enum: ['html', 'yaml', 'zip', 'json'], default: 'html' },
+                      filename: { type: 'string', default: 'curriculo' },
+                    },
+                  },
+                },
+              },
+            },
+            responses: { '200': { description: 'Arquivo HTML, YAML ou ZIP retornado' } },
+          },
+        },
+        '/api/v1/api-keys/generate': {
+          post: {
+            summary: 'Auto-provisionamento de Chave Temporária de API',
+            description: 'Gera uma chave SHA-256 no SQLite Turso para uso autônomo por bots e agentes.',
+            requestBody: {
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    properties: { ttlDays: { type: 'integer', enum: [1, 7, 30], default: 1 } },
+                  },
+                },
+              },
+            },
+            responses: { '200': { description: 'Chave criada com hint e data de expiração' } },
+          },
+        },
+      },
+    },
+    null,
+    2
+  )
+
+  const handleCopyOpenApi = () => {
+    navigator.clipboard.writeText(openApiSpecJson)
+    setCopiedOpenApi(true)
+    setTimeout(() => setCopiedOpenApi(false), 2000)
+  }
+
   return (
     <div className="cv-modal-backdrop" onClick={onClose}>
-      <div className="cv-modal-card" style={{ maxWidth: '650px' }} onClick={e => e.stopPropagation()}>
+      <div className="cv-modal-card" style={{ maxWidth: '720px' }} onClick={e => e.stopPropagation()}>
         <div className="cv-modal-header">
           <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
-            <h3 style={{ margin: 0 }}>🔑 Automação & Chave de API</h3>
+            <h3 style={{ margin: 0 }}>🔑 Automação, Chave de API & Hub OpenAPI</h3>
           </div>
           <button className="cv-modal-close" onClick={onClose}>✕</button>
         </div>
@@ -112,15 +243,22 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ isOpen, onClose, onKey
             🔐 Gerenciar Chave
           </button>
           <button
+            className={`cv-btn-secondary ${activeTab === 'openapi' ? 'cv-sidebar-tab--active' : ''}`}
+            style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem' }}
+            onClick={() => setActiveTab('openapi')}
+          >
+            🤖 OpenAPI & Agentes IA
+          </button>
+          <button
             className={`cv-btn-secondary ${activeTab === 'guide' ? 'cv-sidebar-tab--active' : ''}`}
             style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem' }}
             onClick={() => setActiveTab('guide')}
           >
-            📖 Guia: Usar no PC sem Acessar o Site
+            📖 Guia: PC & Terminal
           </button>
         </div>
 
-        <div className="cv-modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '1rem', maxHeight: '70vh', overflowY: 'auto' }}>
+        <div className="cv-modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '1rem', maxHeight: '72vh', overflowY: 'auto' }}>
           {errorMsg && (
             <div className="cv-editor-error">
               {errorMsg}
@@ -130,7 +268,7 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ isOpen, onClose, onKey
           {activeTab === 'key' && (
             <>
               <p style={{ margin: 0, fontSize: '0.85rem', color: '#94a3b8', lineHeight: 1.5 }}>
-                Conecte agentes autônomos (Claude, Cursor, n8n, Python bots) aos serviços do <strong>LogicDefense</strong> (Assistente Moeda & CV Maker). As chaves utilizam criptografia SHA-256 no banco local, validade temporária e revogação imediata.
+                Conecte agentes autônomos (Claude, Cursor, Antigravity, n8n, Python bots) aos serviços do <strong>LogicDefense</strong> (Assistente Moeda & CV Maker). As chaves utilizam criptografia SHA-256 no banco local, validade temporária e revogação imediata.
               </p>
 
               {activeKey ? (
@@ -219,6 +357,46 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ isOpen, onClose, onKey
             </>
           )}
 
+          {activeTab === 'openapi' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', fontSize: '0.82rem', color: '#cbd5e1', lineHeight: 1.6 }}>
+              <div style={{ background: 'rgba(16, 185, 129, 0.08)', padding: '0.75rem', borderRadius: '6px', border: '1px solid rgba(16, 185, 129, 0.25)' }}>
+                <strong style={{ color: '#34d399' }}>⚙️ Como o Backend do CV Maker 2.0 Opera:</strong>
+                <p style={{ margin: '0.3rem 0 0 0', color: '#94a3b8' }}>
+                  Quando o cliente ou um agente de IA faz a requisição para a rota <code>/api/v1/cv/generate</code> ou <code>/api/v1/cv/render</code>, o roteador <code>cv_router.py</code> importa diretamente o motor <code>cv_html_renderer.py</code>. Ele suporta devolver:
+                </p>
+                <ul style={{ margin: '0.4rem 0 0 1.2rem', padding: 0 }}>
+                  <li><strong>Super Dashboard HTML Standalone</strong> (<code>format=html</code>): HTML completo interativo com os 5 arquétipos, fotos, 5 temas e botão de impressão A4.</li>
+                  <li><strong>Pacote .ZIP Completo</strong> (<code>format=zip</code>): Com os 5 arquivos <code>.yaml</code> separados + o <code>dashboard_curriculos_completo.html</code>.</li>
+                  <li><strong>JSON Estruturado</strong> (<code>format=json</code>): Para agentes ou frontends renderizarem os dados de carreira em tempo real.</li>
+                </ul>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <strong style={{ color: '#38bdf8' }}>📄 Especificação OpenAPI 3.1.0 para Agentes (Custom GPT / Cursor / Claude):</strong>
+                <button className="cv-btn-secondary" style={{ fontSize: '0.75rem', padding: '0.3rem 0.6rem' }} onClick={handleCopyOpenApi}>
+                  {copiedOpenApi ? '✓ OpenAPI Copiada!' : '📋 Copiar OpenAPI JSON'}
+                </button>
+              </div>
+
+              <pre style={{ background: '#020617', padding: '0.75rem', borderRadius: '4px', border: '1px solid #1e293b', color: '#7dd3fc', fontSize: '0.73rem', maxHeight: '220px', overflowY: 'auto', fontFamily: 'monospace' }}>
+                {openApiSpecJson}
+              </pre>
+
+              <div style={{ background: 'rgba(56, 189, 248, 0.06)', padding: '0.75rem', borderRadius: '6px', border: '1px solid rgba(56, 189, 248, 0.2)' }}>
+                <strong style={{ color: '#38bdf8' }}>🧠 System Prompt Recomendado para Configurar o Agente de IA:</strong>
+                <pre style={{ background: '#090d16', padding: '0.6rem', borderRadius: '4px', border: '1px solid #1e293b', color: '#e2e8f0', fontSize: '0.73rem', whiteSpace: 'pre-wrap', marginTop: '0.4rem', fontFamily: 'monospace' }}>
+{`Você tem acesso à API de Currículos CV Maker 2.0 (Heiss-Lab Engine).
+Para gerar 5 versões de currículo a partir de anotações ou vagas:
+- Base URL: https://ocorrencias-pdf-writer.onrender.com
+- Fallback URL: https://heiss-cv-engine.onrender.com
+- Header: X-API-Key: ${currentKeyDisplay}
+- Chame POST /api/v1/cv/generate com {"raw_text": "...", "job_description": "..."}
+- Se desejar baixar o pacote completo, adicione o parâmetro de query ?format=zip`}
+                </pre>
+              </div>
+            </div>
+          )}
+
           {activeTab === 'guide' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem', fontSize: '0.82rem', color: '#cbd5e1', lineHeight: 1.6 }}>
               <div style={{ background: 'rgba(56, 189, 248, 0.08)', padding: '0.75rem', borderRadius: '6px', border: '1px solid rgba(56, 189, 248, 0.2)' }}>
@@ -245,11 +423,12 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ isOpen, onClose, onKey
               <div>
                 <strong>2. Executar via Terminal (cURL):</strong>
                 <pre style={{ background: '#020617', padding: '0.6rem', borderRadius: '4px', border: '1px solid #1e293b', color: '#34d399', fontSize: '0.75rem', overflowX: 'auto', margin: '0.3rem 0 0 0' }}>
-{`# Otimizar currículo para uma vaga (ATS Tailoring):
-curl -X POST "https://ocorrencias-pdf-writer.onrender.com/api/v1/cv/tailor" \\
+{`# Gerar pacote .ZIP com 5 versões + Super Dashboard HTML:
+curl -X POST "https://ocorrencias-pdf-writer.onrender.com/api/v1/cv/generate?format=zip" \\
   -H "Content-Type: application/json" \\
   -H "X-API-Key: ${currentKeyDisplay}" \\
-  -d '{"raw_text": "Alexandre Silva...", "job_description": "Vaga IBM..."}'`}
+  -d '{"raw_text": "Alexandre Silva...", "job_description": "Vaga IBM..."}' \\
+  --output "curriculos_completo.zip"`}
                 </pre>
               </div>
 
@@ -285,3 +464,4 @@ curl -X POST "https://ocorrencias-pdf-writer.onrender.com/api/v1/api-keys/genera
     </div>
   )
 }
+
