@@ -342,19 +342,27 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ isOpen, onClose, onKey
               <div style={{ background: 'rgba(56, 189, 248, 0.06)', padding: '0.85rem', borderRadius: '6px', border: '1px solid rgba(56, 189, 248, 0.2)' }}>
                 <strong style={{ color: '#38bdf8' }}>🧠 Prompt Mestre para Colar no seu Agente de IA (Cursor / Claude / GPT):</strong>
                 <pre style={{ background: '#090d16', padding: '0.65rem', borderRadius: '4px', border: '1px solid #1e293b', color: '#e2e8f0', fontSize: '0.73rem', whiteSpace: 'pre-wrap', marginTop: '0.4rem', fontFamily: 'monospace' }}>
-{`Você é um especialista em engenharia de currículos de alta fidelidade.
-Para criar e compilar os currículos:
-1. Gere os 5 arquétipos em YAML no formato JSON Resume:
-   - professional (Executivo IBM / Senior Tech Lead com fórmula X-Y-Z)
-   - architect (AI & Cloud Solutions Architect focado em sistemas)
-   - historian (Biógrafo de Carreira com narrativa profissional contínua)
-   - didactic (Didático focado em Learning Velocity e mentorias)
-   - alien (Relatório Extraterrestre de alta eficiência cognitiva)
-2. Para compilar o Super Dashboard HTML Standalone e os PDFs:
-   - Endpoint: POST https://ocorrencias-pdf-writer.onrender.com/api/v1/cv/compile
-   - Header: X-API-Key: ${currentKeyDisplay}
-   - Body: {"professional": "...", "architect": "...", "historian": "...", "didactic": "...", "alien": "..."}
-3. Salve o arquivo HTML retornado e abra no navegador para imprimir em PDF A4!`}
+{`Você é um especialista em engenharia de currículos de alta fidelidade (CV Maker 2.0).
+Siga OBRIGATORIAMENTE este fluxo em 3 etapas para criar e compilar os currículos:
+
+PASSO 1: (DIRETRIZES OFICIAIS)
+Consulte as regras de schema e System Prompts das 5 personas fazendo uma requisição HTTP GET:
+-> GET https://ocorrencias-pdf-writer.onrender.com/api/v1/cv/prompts
+
+PASSO 2: (GERAÇÃO DOS 5 ARQUÉTIPOS EM YAML)
+Com base nas diretrizes recebidas no Passo 1, gere os 5 arquivos YAML no formato JSON Resume:
+- professional: Executivo IBM / Senior Tech Lead (Fórmula X-Y-Z do Google/IBM, métricas de ROI)
+- architect: AI & Cloud Solutions Architect (Arquiteturas assíncronas, RAG, microsserviços)
+- historian: Biógrafo / Evolução Estratégica (Narrativa profissional contínua e legado)
+- didactic: Didático / Learning Velocity (Velocidade de aprendizado, tutorias e mentoria)
+- alien: Observador Extraterrestre (Relatório biológico e técnico intergaláctico com tom sci-fi)
+
+PASSO 3: (COMPILAÇÃO DO SUPER DASHBOARD HTML & ZIP)
+Envie os 5 YAMLs gerados para compilação instantânea no servidor:
+- Endpoint: POST https://ocorrencias-pdf-writer.onrender.com/api/v1/cv/compile
+- Header: X-API-Key: ${currentKeyDisplay}
+- Body: {"professional": "...", "architect": "...", "historian": "...", "didactic": "...", "alien": "..."}
+- Salve o arquivo HTML retornado e abra no navegador para navegar nos 5 temas e imprimir em PDF A4!`}
                 </pre>
               </div>
 
