@@ -139,6 +139,36 @@ I18N = {
 }
 
 
+def get_grid_class(count: int) -> str:
+    """
+    Retorna a classe CSS de grid dinâmico com base na contagem exata de itens:
+    - count == 1 -> 'cv-grid-1' (1 coluna, 100% largura)
+    - count == 2 -> 'cv-grid-2' (2 colunas)
+    - count == 3 -> 'cv-grid-3' (3 colunas)
+    - count == 4 -> 'cv-grid-4' (2 colunas: 2x2)
+    - count == 5 -> 'cv-grid-5' (3 colunas na 1ª linha, 2 na 2ª linha)
+    - count % 3 == 0 -> 'cv-grid-3' (3 colunas)
+    - count % 3 == 1 -> 'cv-grid-2' (2 colunas para não sobrar 1 isolado)
+    - count % 3 == 2 -> 'cv-grid-split-3-2' (3 na 1ª linha, 2 na 2ª linha)
+    """
+    if count <= 1:
+        return "cv-grid-1"
+    elif count == 2:
+        return "cv-grid-2"
+    elif count == 3:
+        return "cv-grid-3"
+    elif count == 4:
+        return "cv-grid-4"
+    elif count == 5:
+        return "cv-grid-5"
+    elif count % 3 == 0:
+        return "cv-grid-3"
+    elif count % 3 == 1:
+        return "cv-grid-2"
+    else:
+        return "cv-grid-split-3-2"
+
+
 def _render_cv_body_html(data: dict, t: dict) -> str:
     """Gera o corpo visual estruturado de um currículo a partir do dicionário JSON Resume."""
     import re
@@ -352,19 +382,19 @@ def _render_cv_body_html(data: dict, t: dict) -> str:
 
     {f'<section><h2 class="section-title">{t["work"]}</h2>{work_html}</section>' if work else ''}
 
-    {f'<section><h2 class="section-title">{t["projects"]}</h2><div class="projects-grid">{projects_html}</div></section>' if projects else ''}
+    {f'<section><h2 class="section-title">{t["projects"]}</h2><div class="projects-grid {get_grid_class(len(projects))}">{projects_html}</div></section>' if projects else ''}
 
-    {f'<section class="avoid-break"><h2 class="section-title">{t["skills"]}</h2><div class="skills-grid">{skills_html}</div></section>' if skills else ''}
+    {f'<section class="avoid-break"><h2 class="section-title">{t["skills"]}</h2><div class="skills-grid {get_grid_class(len(skills))}">{skills_html}</div></section>' if skills else ''}
 
-    {f'<section class="avoid-break"><h2 class="section-title">{t["education"]}</h2><div class="education-grid">{education_html}</div></section>' if education else ''}
+    {f'<section class="avoid-break"><h2 class="section-title">{t["education"]}</h2><div class="education-grid {get_grid_class(len(education))}">{education_html}</div></section>' if education else ''}
 
-    {f'<section class="avoid-break"><h2 class="section-title">{t["certificates"]}</h2><div class="certs-grid">{certificates_html}</div></section>' if certificates else ''}
+    {f'<section class="avoid-break"><h2 class="section-title">{t["certificates"]}</h2><div class="certs-grid {get_grid_class(len(certificates))}">{certificates_html}</div></section>' if certificates else ''}
 
     {f'<section class="avoid-break"><h2 class="section-title">{t["publications"]}</h2>{publications_html}</section>' if publications else ''}
 
-    {f'<section class="avoid-break"><h2 class="section-title">{t["languages"]}</h2><div class="languages-grid">{lang_cards_html}</div></section>' if languages else ''}
+    {f'<section class="avoid-break"><h2 class="section-title">{t["languages"]}</h2><div class="languages-grid {get_grid_class(len(languages))}">{lang_cards_html}</div></section>' if languages else ''}
 
-    {f'<section class="avoid-break"><h2 class="section-title">{t["interests"]}</h2><div class="interests-grid">{interest_html}</div></section>' if interests else ''}
+    {f'<section class="avoid-break"><h2 class="section-title">{t["interests"]}</h2><div class="interests-grid {get_grid_class(len(interests))}">{interest_html}</div></section>' if interests else ''}
     """
 
 
@@ -804,25 +834,71 @@ def render_multi_cv_dashboard_html(
 
     .bullets li {{ margin-bottom: 0.2rem; }}
 
-    .projects-grid {{
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 0.75rem;
-    }}
-
-    .project-card {{
-      padding: 0.75rem;
-      border-radius: 6px;
-    }}
-
+    /* ── Dynamic Grid System (Smart Responsive & Print Flow) ── */
+    .projects-grid,
     .skills-grid,
     .education-grid,
     .certs-grid,
     .interests-grid,
     .languages-grid {{
       display: grid;
-      grid-template-columns: repeat(3, 1fr);
       gap: 0.65rem;
+    }}
+
+    .cv-grid-1,
+    .projects-grid:has(> :only-child),
+    .skills-grid:has(> :only-child),
+    .education-grid:has(> :only-child),
+    .certs-grid:has(> :only-child),
+    .interests-grid:has(> :only-child),
+    .languages-grid:has(> :only-child) {{
+      grid-template-columns: 1fr !important;
+    }}
+
+    .cv-grid-2,
+    .projects-grid:has(> :nth-child(2):last-child),
+    .skills-grid:has(> :nth-child(2):last-child) {{
+      grid-template-columns: repeat(2, 1fr) !important;
+    }}
+
+    .cv-grid-3,
+    .projects-grid:has(> :nth-child(3):last-child),
+    .skills-grid:has(> :nth-child(3):last-child) {{
+      grid-template-columns: repeat(3, 1fr) !important;
+    }}
+
+    .cv-grid-4,
+    .projects-grid:has(> :nth-child(4):last-child),
+    .skills-grid:has(> :nth-child(4):last-child) {{
+      grid-template-columns: repeat(2, 1fr) !important;
+    }}
+
+    .cv-grid-5,
+    .cv-grid-split-3-2 {{
+      display: grid !important;
+      grid-template-columns: repeat(6, 1fr) !important;
+    }}
+    .cv-grid-5 > *:nth-child(1),
+    .cv-grid-5 > *:nth-child(2),
+    .cv-grid-5 > *:nth-child(3) {{
+      grid-column: span 2 !important;
+    }}
+    .cv-grid-5 > *:nth-child(4),
+    .cv-grid-5 > *:nth-child(5) {{
+      grid-column: span 3 !important;
+    }}
+
+    .cv-grid-split-3-2 > * {{
+      grid-column: span 2 !important;
+    }}
+    .cv-grid-split-3-2 > *:nth-last-child(1),
+    .cv-grid-split-3-2 > *:nth-last-child(2) {{
+      grid-column: span 3 !important;
+    }}
+
+    .project-card {{
+      padding: 0.75rem;
+      border-radius: 6px;
     }}
 
     .skill-group,
