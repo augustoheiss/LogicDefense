@@ -2,11 +2,13 @@ import { NavLink, Outlet, Link } from 'react-router-dom'
 import '../styles/portal.css'
 
 const NAV_LINKS = [
-  { to: '/',           label: 'Início',      icon: '🏛️'  },
-  { to: '/jogos',      label: 'Jogos',        icon: '🎮'  },
-  { to: '/laboratorio',label: 'Laboratório',  icon: '🔬'  },
-  { to: '/repositorio',label: 'Repositório',  icon: '📚'  },
-  { to: '/sobre',      label: 'Sobre',        icon: '✦'   },
+  { to: '/laboratorio/cv-maker',       label: 'CV Maker',          icon: '📄', isExternal: false },
+  { to: '/laboratorio/assistente-moeda', label: 'Assistente Moeda', icon: '💰', isExternal: true },
+  { to: '/',                           label: 'Início',            icon: '🏛️', isExternal: false },
+  { to: '/jogos',                      label: 'Jogos',             icon: '🎮', isExternal: false },
+  { to: '/laboratorio',                label: 'Laboratório',       icon: '🔬', isExternal: false },
+  { to: '/repositorio',                label: 'Repositório',       icon: '📚', isExternal: false },
+  { to: '/sobre',                      label: 'Sobre',             icon: '✦',  isExternal: false },
 ]
 
 export function Layout() {
@@ -23,18 +25,25 @@ export function Layout() {
         </NavLink>
 
         <ul className="navbar__links">
-          {NAV_LINKS.map(({ to, label, icon }) => (
+          {NAV_LINKS.map(({ to, label, icon, isExternal }) => (
             <li key={to}>
-              <NavLink
-                to={to}
-                end={to === '/'}
-                className={({ isActive }) =>
-                  `navbar__link${isActive ? ' active' : ''}`
-                }
-              >
-                <span>{icon}</span>
-                {label}
-              </NavLink>
+              {isExternal ? (
+                <a href={to} className="navbar__link">
+                  <span>{icon}</span>
+                  {label}
+                </a>
+              ) : (
+                <NavLink
+                  to={to}
+                  end={to === '/'}
+                  className={({ isActive }) =>
+                    `navbar__link${isActive ? ' active' : ''}`
+                  }
+                >
+                  <span>{icon}</span>
+                  {label}
+                </NavLink>
+              )}
             </li>
           ))}
         </ul>
