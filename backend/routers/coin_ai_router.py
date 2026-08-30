@@ -150,11 +150,12 @@ def parse_payload_data(payload: AIAnalystPayload) -> tuple[list[TableRow], Table
 
 from db.license_db import get_license_by_raw_key, deduct_license_tokens
 
-async def verify_license_key_and_quota(x_license_key: str | None, estimated_text: str) -> dict:
-    """
-    Validates license key and checks/deducts token quota (with 15% safety buffer).
-    Raises HTTP 401 if missing/invalid key, or HTTP 402 if tokens are exhausted.
-    """
+# Multiplicador de Queima de Tokens para cobrir Raciocínio (Thinking Budget) e Margem Operacional
+AI_TOKEN_BURN_MULTIPLIER = 3.0
+
+
+async def verify_license_key_and_quota(x_license_key: str | None, estimated_text: str) -> dict | None:
+    """Verifica e consome quota da chave de licença (Assistente Moeda)."""
     if not x_license_key:
         raise HTTPException(
             status_code=401,
@@ -168,14 +169,13 @@ async def verify_license_key_and_quota(x_license_key: str | None, estimated_text
             detail="Chave de Licença inválida. Verifique o código inserido ou recupere sua chave por e-mail."
         )
 
-    # Estimate tokens: ~4 chars per token + 15% safety buffer
-    est_prompt_tokens = int((len(estimated_text) / 4) * 1.15) + 500
+    # Estimate tokens: ~3.5 chars per token + thinking buffer (2.000 tokens) * multiplicador 3x
+    est_prompt_tokens = int(((len(estimated_text) / 3.5) + 2000) * AI_TOKEN_BURN_MULTIPLIER)
     if rec.get("token_balance", 0) < est_prompt_tokens:
         raise HTTPException(
             status_code=402,
             detail=f"Saldo de tokens insuficiente ({rec.get('token_balance', 0):,} restantes, necessário {est_prompt_tokens:,}). Faça um upgrade para renovar seus tokens."
         )
-
     return rec
 
 @router.post("/ai-analyst", response_model=AIAnalystResponse)
@@ -274,9 +274,11 @@ async def ai_analyst(
         if response.usage_metadata:
             total_tokens = response.usage_metadata.total_token_count or 0
 
-        # Deduct actual tokens used from license key
+        # Deduct actual tokens used from license key with 3x burn multiplier
         if total_tokens > 0 and license_rec:
-            deduct_license_tokens(license_rec["key_hash"], total_tokens, endpoint="/api/coin/ai-analyst")
+            charged_tokens = int(total_tokens * AI_TOKEN_BURN_MULTIPLIER)
+            deduct_license_tokens(license_rec["key_hash"], charged_tokens, endpoint="/api/coin/ai-analyst")
+            log.info("[Coin AI] Tokens debitados: %d (brutos: %d, multiplicador: %.1fx)", charged_tokens, total_tokens, AI_TOKEN_BURN_MULTIPLIER)
 
     except Exception as exc:
         log.exception("Gemini API call failed: %s", exc)

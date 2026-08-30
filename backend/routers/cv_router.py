@@ -81,6 +81,9 @@ def get_default_yaml_content() -> str:
 
 from db.license_db import get_license_by_raw_key, deduct_license_tokens, is_godmode_key, get_spreadsheet_api_key, hash_key
 
+# Multiplicador de Queima de Tokens para cobrir Raciocínio Pesado (Gemini 3.7 Thinking) e Margem Operacional
+AI_TOKEN_BURN_MULTIPLIER = 3.0
+
 
 async def verify_cv_license_and_quota(raw_key: Optional[str], estimated_text: str, num_calls: int = 1, x_gemini_key: Optional[str] = None) -> dict:
     """
@@ -110,8 +113,8 @@ async def verify_cv_license_and_quota(raw_key: Optional[str], estimated_text: st
     # 2. Tenta buscar como Chave de Licença de Usuário Pro (Turso DB)
     rec = get_license_by_raw_key(clean_k)
     if rec:
-        # Estima tokens: (~4 chars por token) * chamadas + buffer de segurança de 15%
-        est_prompt_tokens = int((len(estimated_text) / 4) * 1.15 * num_calls) + (500 * num_calls)
+        # Estima tokens: (~3.5 chars por token) + System Prompts e Thinking Budget (3.500 por chamada) * multiplicador 3x
+        est_prompt_tokens = int(((len(estimated_text) / 3.5) + (3500 * num_calls)) * AI_TOKEN_BURN_MULTIPLIER)
         if rec.get("token_balance", 0) < est_prompt_tokens:
             raise HTTPException(
                 status_code=status.HTTP_402_PAYMENT_REQUIRED,
@@ -176,10 +179,12 @@ async def generate_cv_endpoint(
             custom_api_key=custom_gemini,
         )
 
-        # Debita os tokens consumidos da chave do usuário no banco se for licença do servidor
+        # Debita os tokens consumidos da chave do usuário com multiplicador de queima 3x
         if total_tokens > 0 and license_rec.get("key_hash") not in ("godmode", "sheet_api", "byok_gemini"):
+            charged_tokens = int(total_tokens * AI_TOKEN_BURN_MULTIPLIER)
             try:
-                deduct_license_tokens(license_rec["key_hash"], total_tokens, endpoint="/api/v1/cv/generate")
+                deduct_license_tokens(license_rec["key_hash"], charged_tokens, endpoint="/api/v1/cv/generate")
+                log.info("[CV Router] Tokens debitados: %d (brutos: %d, multiplicador: %.1fx)", charged_tokens, total_tokens, AI_TOKEN_BURN_MULTIPLIER)
             except Exception as d_err:
                 log.warning("[CV Router] Falha ao debitar tokens: %s", d_err)
 
@@ -277,8 +282,10 @@ async def tailor_cv_endpoint(
         )
 
         if total_tokens > 0 and license_rec.get("key_hash") not in ("godmode", "sheet_api", "byok_gemini"):
+            charged_tokens = int(total_tokens * AI_TOKEN_BURN_MULTIPLIER)
             try:
-                deduct_license_tokens(license_rec["key_hash"], total_tokens, endpoint="/api/v1/cv/tailor")
+                deduct_license_tokens(license_rec["key_hash"], charged_tokens, endpoint="/api/v1/cv/tailor")
+                log.info("[CV Router] Tokens debitados (tailor): %d (brutos: %d, multiplicador: %.1fx)", charged_tokens, total_tokens, AI_TOKEN_BURN_MULTIPLIER)
             except Exception as d_err:
                 log.warning("[CV Router] Falha ao debitar tokens: %s", d_err)
 
