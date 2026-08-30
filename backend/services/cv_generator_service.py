@@ -13,7 +13,14 @@ import yaml
 from google import genai
 from google.genai import types
 
-from prompts.cv_prompts import BASE_INSTRUCTION, BASE_INSTRUCTION_EN, PERSONA_INSTRUCTIONS, PERSONA_INSTRUCTIONS_EN
+from prompts.cv_prompts import (
+    BASE_INSTRUCTION,
+    BASE_INSTRUCTION_EN,
+    BASE_INSTRUCTION_ES,
+    PERSONA_INSTRUCTIONS,
+    PERSONA_INSTRUCTIONS_EN,
+    PERSONA_INSTRUCTIONS_ES,
+)
 
 MODEL = os.getenv("CV_AI_MODEL", "gemini-3.7-flash")
 MAX_TOKENS = 8192
@@ -49,6 +56,7 @@ async def generate_single_archetype(
     persona_instruction: str,
     raw_text: str,
     job_description: str | None = None,
+    lang: str = "auto",
     index: int = 0,
 ) -> tuple[str, int]:
     """
@@ -61,13 +69,26 @@ async def generate_single_archetype(
     if index > 0:
         await asyncio.sleep(index * STAGGER_STEP)
 
-    # Auto-detect language of raw input
-    is_english = any(w in raw_text.lower() for w in ["software engineer", "intern", "experience", "education", "hybrid cloud"]) and ("desenvolvedor" not in raw_text.lower() and "experiência" not in raw_text.lower())
+    # Language resolution: auto, pt, en, es
+    target_lang = lang.lower() if lang and lang != "auto" else ""
+    if not target_lang:
+        is_english = any(w in raw_text.lower() for w in ["software engineer", "intern", "experience", "education", "hybrid cloud"]) and ("desenvolvedor" not in raw_text.lower() and "experiência" not in raw_text.lower())
+        is_spanish = any(w in raw_text.lower() for w in ["experiencia", "educación", "contabilidad", "español", "habilidades", "resumen"]) and ("ciências contábeis" not in raw_text.lower() and "experiência" not in raw_text.lower())
+        if is_english:
+            target_lang = "en"
+        elif is_spanish:
+            target_lang = "es"
+        else:
+            target_lang = "pt"
 
-    if is_english:
+    if target_lang == "en":
         base_inst = BASE_INSTRUCTION_EN
         p_inst = PERSONA_INSTRUCTIONS_EN.get(archetype, persona_instruction)
         lang_directive = "IMPORTANT LANGUAGE RULE: Output 100% of all fields, labels, summaries and descriptions in fluent Professional English."
+    elif target_lang == "es":
+        base_inst = BASE_INSTRUCTION_ES
+        p_inst = PERSONA_INSTRUCTIONS_ES.get(archetype, persona_instruction)
+        lang_directive = "IMPORTANT LANGUAGE RULE: Output 100% of all fields, labels, summaries and descriptions in fluent Professional Spanish (Español)."
     else:
         base_inst = BASE_INSTRUCTION
         p_inst = PERSONA_INSTRUCTIONS.get(archetype, persona_instruction)
@@ -87,7 +108,7 @@ async def generate_single_archetype(
         "--- CANDIDATE RAW DATA END ---"
     )
 
-    log.info("[CV Engine] service='cv' archetype='%s' index=%d chars=%d", archetype, index, len(raw_text))
+    log.info("[CV Engine] service='cv' archetype='%s' lang='%s' index=%d chars=%d", archetype, target_lang, index, len(raw_text))
 
     last_exc: Exception = RuntimeError(f"Falha na geração do arquétipo '{archetype}'")
 
@@ -143,7 +164,11 @@ async def generate_single_archetype(
     raise last_exc
 
 
-async def generate_all_archetypes(raw_text: str, job_description: str | None = None) -> tuple[Dict[str, str], int]:
+async def generate_all_archetypes(
+    raw_text: str,
+    job_description: str | None = None,
+    lang: str = "auto",
+) -> tuple[Dict[str, str], int]:
     """
     Launches concurrent calls for all personas in parallel via asyncio.gather().
     Returns (dict_of_archetypes, total_tokens_used).
@@ -154,6 +179,7 @@ async def generate_all_archetypes(raw_text: str, job_description: str | None = N
             persona_instruction=persona,
             raw_text=raw_text,
             job_description=job_description,
+            lang=lang,
             index=i,
         )
         for i, (arch, persona) in enumerate(PERSONA_INSTRUCTIONS.items())
@@ -170,3 +196,4 @@ async def generate_all_archetypes(raw_text: str, job_description: str | None = N
         total_tokens += tokens
 
     return archetypes_map, total_tokens
+
