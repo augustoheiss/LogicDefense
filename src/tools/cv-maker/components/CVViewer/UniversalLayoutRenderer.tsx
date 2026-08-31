@@ -1,5 +1,5 @@
 import React from 'react'
-import type { CVData, LayoutBlueprint, ThemeVariant, ViewMode } from '../../types/cv'
+import type { CVData, LayoutBlueprint, ThemeVariant, ViewMode, CVDesignConfig } from '../../types/cv'
 import { BlockHeader } from '../blocks/BlockHeader'
 import { BlockContacts } from '../blocks/BlockContacts'
 import { BlockCivilData } from '../blocks/BlockCivilData'
@@ -20,6 +20,7 @@ interface UniversalLayoutRendererProps {
   blueprint: LayoutBlueprint
   theme: ThemeVariant
   viewMode: ViewMode
+  designConfig?: CVDesignConfig
   onRequestGenerateCoverLetter?: () => void
 }
 
@@ -28,9 +29,33 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
   blueprint,
   theme,
   viewMode,
+  designConfig,
   onRequestGenerateCoverLetter
 }) => {
   const { basics } = data
+
+  const customRootStyles: React.CSSProperties = {
+    '--cv-avatar-pos-x': `${basics.imagePosX ?? 50}%`,
+    '--cv-avatar-pos-y': `${basics.imagePosY ?? 50}%`,
+    '--cv-avatar-scale': `${basics.imageScale ?? 1.0}`,
+    ...(designConfig ? {
+      '--cv-font-heading': `'${designConfig.fontHeading}', sans-serif`,
+      '--cv-font-body': `'${designConfig.fontBody}', sans-serif`,
+      '--cv-font-scale': `${designConfig.fontScale}`,
+      '--cv-font-size-base': designConfig.fontSizeBase,
+      '--cv-color-primary': designConfig.colorPrimary,
+      '--cv-color-secondary': designConfig.colorSecondary,
+      '--cv-color-text': designConfig.colorText,
+      '--cv-color-text-muted': designConfig.colorTextMuted,
+      '--cv-color-bg': designConfig.colorBg,
+      '--cv-color-surface': designConfig.colorSurface,
+      '--cv-color-border': designConfig.colorBorder,
+      '--cv-color-accent': designConfig.colorAccent,
+      ...(designConfig.backgroundPattern && designConfig.backgroundPattern !== 'none' ? {
+        '--cv-bg-image': `url("${designConfig.backgroundPattern}")`,
+      } : {})
+    } : {})
+  } as React.CSSProperties
 
   const renderCVPage = () => {
     // ── Modelo A4 05: Brand Accent Block (Basil Hailward) ──
@@ -607,7 +632,7 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
   }
 
   return (
-    <div className={`cv-root theme-${theme} ${blueprint.customClass || ''}`}>
+    <div className={`cv-root theme-${theme} ${blueprint.customClass || ''}`} style={customRootStyles}>
       {viewMode === 'cv' && renderCVPage()}
       {viewMode === 'cover_letter' && renderCoverLetterPage()}
       {viewMode === 'both' && (

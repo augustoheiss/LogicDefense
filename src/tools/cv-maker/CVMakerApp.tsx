@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react'
-import type { CVData, CVVersions, TextVariant, ThemeVariant, LayoutVariant, ViewMode, CoverLetter } from './types/cv'
+import type { CVData, CVVersions, TextVariant, ThemeVariant, LayoutVariant, ViewMode, CoverLetter, CVDesignConfig } from './types/cv'
+import { DEFAULT_DESIGN_CONFIG } from './types/cv'
 import { DEFAULT_JOHN_DOE_YAML } from './templates/defaultTemplate'
 import { parseYamlToCV, cvToYaml, debounce } from './services/yamlService'
 import {
@@ -16,6 +17,7 @@ import { CVToolbar } from './components/Toolbar/CVToolbar'
 import { CVHistoryTab } from './components/History/CVHistoryTab'
 import { OpenPromptsModal } from './components/PromptsModal/OpenPromptsModal'
 import { PhotoUploader } from './components/Toolbar/PhotoUploader'
+import { DesignCustomizerDrawer } from './components/Toolbar/DesignCustomizerDrawer'
 import { ApiKeyModal } from './components/ApiKeyModal/ApiKeyModal'
 import { CVStoreModal } from './components/StoreModal/CVStoreModal'
 import { GenerateCoverLetterModal } from './components/Modals/GenerateCoverLetterModal'
@@ -80,6 +82,23 @@ export const CVMakerApp: React.FC = () => {
   })
 
   // Modals & Pro Licensing State
+  const STORAGE_DESIGN_KEY = 'cv_maker_design_config_v1'
+  const [designConfig, setDesignConfig] = useState<CVDesignConfig>(() => {
+    const saved = localStorage.getItem(STORAGE_DESIGN_KEY)
+    if (!saved) return DEFAULT_DESIGN_CONFIG
+    try {
+      return { ...DEFAULT_DESIGN_CONFIG, ...JSON.parse(saved) }
+    } catch {
+      return DEFAULT_DESIGN_CONFIG
+    }
+  })
+  const [isDesignModalOpen, setIsDesignModalOpen] = useState<boolean>(false)
+
+  const handleDesignConfigChange = (newConfig: CVDesignConfig) => {
+    setDesignConfig(newConfig)
+    localStorage.setItem(STORAGE_DESIGN_KEY, JSON.stringify(newConfig))
+  }
+
   const [isPhotoModalOpen, setIsPhotoModalOpen] = useState<boolean>(false)
   const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState<boolean>(false)
   const [isStoreModalOpen, setIsStoreModalOpen] = useState<boolean>(false)
@@ -258,13 +277,16 @@ export const CVMakerApp: React.FC = () => {
   }
 
   // Avatar / Photo Save
-  const handleSavePhoto = (photoUrlOrBase64?: string) => {
+  const handleSavePhoto = (photoUrlOrBase64?: string, posX = 50, posY = 50, scale = 1.0) => {
     if (!cvData) return
     const updatedData: CVData = {
       ...cvData,
       basics: {
         ...cvData.basics,
         image: photoUrlOrBase64,
+        imagePosX: posX,
+        imagePosY: posY,
+        imageScale: scale,
       },
     }
     setCvData(updatedData)
@@ -488,6 +510,7 @@ export const CVMakerApp: React.FC = () => {
             onPrintPdf={handlePrintPdf}
             onOpenPhotoModal={() => setIsPhotoModalOpen(true)}
             hasPhoto={Boolean(cvData?.basics?.image)}
+            onOpenDesignModal={() => setIsDesignModalOpen(true)}
             onOpenApiKeyModal={() => setIsApiKeyModalOpen(true)}
             hasActiveKey={hasActiveKey}
             isPro={isPro}
@@ -500,15 +523,26 @@ export const CVMakerApp: React.FC = () => {
             theme={activeTheme}
             layout={activeLayout}
             viewMode={activeViewMode}
+            designConfig={designConfig}
             onRequestGenerateCoverLetter={() => setIsCoverLetterModalOpen(true)}
           />
         </main>
       </div>
 
       {/* ── Modais ── */}
+      <DesignCustomizerDrawer
+        isOpen={isDesignModalOpen}
+        onClose={() => setIsDesignModalOpen(false)}
+        config={designConfig}
+        onChangeConfig={handleDesignConfigChange}
+      />
+
       {isPhotoModalOpen && (
         <PhotoUploader
           currentPhoto={cvData?.basics.image}
+          currentPosX={cvData?.basics.imagePosX ?? 50}
+          currentPosY={cvData?.basics.imagePosY ?? 50}
+          currentScale={cvData?.basics.imageScale ?? 1.0}
           onSavePhoto={handleSavePhoto}
           onClose={() => setIsPhotoModalOpen(false)}
         />

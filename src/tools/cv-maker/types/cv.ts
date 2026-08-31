@@ -106,6 +106,9 @@ export interface CVBasics {
   name: string
   label?: string
   image?: string // Profile avatar Base64 or URL
+  imagePosX?: number // 0% a 100% (default: 50)
+  imagePosY?: number // 0% a 100% (default: 50)
+  imageScale?: number // 1.0 a 2.5 (default: 1.0)
   email?: string
   phone?: string
   url?: string
@@ -304,5 +307,59 @@ export function getSkillPercentage(level?: string, levelPercent?: number): numbe
   if (normalized.includes('pleno') || normalized.includes('intermediár') || normalized.includes('proficient')) return 70
   if (normalized.includes('júnior') || normalized.includes('básic') || normalized.includes('basic') || normalized.includes('iniciante')) return 40
   return 75
+}
+
+/**
+ * Configurações de Design Tokens e Estilização Dinâmica
+ */
+export interface CVDesignConfig {
+  fontHeading: string
+  fontBody: string
+  fontScale: number // 0.85 a 1.25
+  fontSizeBase: string // e.g. "0.85rem"
+  colorPrimary: string
+  colorSecondary: string
+  colorText: string
+  colorTextMuted: string
+  colorBg: string
+  colorSurface: string
+  colorBorder: string
+  colorAccent: string
+  backgroundPattern?: string
+  backgroundOpacity?: number
+}
+
+export const DEFAULT_DESIGN_CONFIG: CVDesignConfig = {
+  fontHeading: 'Plus Jakarta Sans',
+  fontBody: 'Inter',
+  fontScale: 1.0,
+  fontSizeBase: '0.85rem',
+  colorPrimary: '#0284c7',
+  colorSecondary: '#0369a1',
+  colorText: '#0f172a',
+  colorTextMuted: '#64748b',
+  colorBg: '#ffffff',
+  colorSurface: '#f8fafc',
+  colorBorder: '#e2e8f0',
+  colorAccent: '#f97316',
+  backgroundPattern: 'none',
+  backgroundOpacity: 1.0
+}
+
+/**
+ * Estrutura de um Bloco no Canvas Livre (YAML Block Builder)
+ */
+export interface CanvasBlock {
+  id: string
+  type: BlockIdentifier
+  title: string
+  x: number // Posição X em porcentagem ou px
+  y: number // Posição Y em porcentagem ou px
+  width: number // Largura em porcentagem (ex: 50% ou 100%)
+  minHeight: number // Altura mínima em px
+  fontSizeScale?: number // Escala de fonte específica do bloco
+  customBgColor?: string
+  customTextColor?: string
+  customBorderColor?: string
 }
 

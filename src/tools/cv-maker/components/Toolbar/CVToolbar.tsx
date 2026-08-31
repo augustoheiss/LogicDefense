@@ -20,6 +20,7 @@ interface CVToolbarProps {
   onPrintPdf: () => void
   onOpenPhotoModal: () => void
   hasPhoto?: boolean
+  onOpenDesignModal?: () => void
   onOpenApiKeyModal: () => void
   hasActiveKey: boolean
   isPro?: boolean
@@ -67,6 +68,7 @@ export const CVToolbar: React.FC<CVToolbarProps> = ({
   onPrintPdf,
   onOpenPhotoModal,
   hasPhoto = false,
+  onOpenDesignModal,
   onOpenApiKeyModal,
   hasActiveKey,
   isPro = false,
@@ -174,6 +176,17 @@ export const CVToolbar: React.FC<CVToolbarProps> = ({
             }
           >
             {isPro ? `💎 Pro (${formattedBalance})` : '💎 Ativar Pro'}
+          </button>
+        )}
+
+        {onOpenDesignModal && (
+          <button
+            className="cv-btn-secondary"
+            onClick={onOpenDesignModal}
+            title="Personalizar fontes, escala de tamanho, cores e layouts de fundo do currículo"
+            style={{ borderColor: '#f59e0b', color: '#fcd34d', background: 'rgba(245, 158, 11, 0.12)', fontWeight: 600 }}
+          >
+            🎨 Design & Estilo
           </button>
         )}
 

@@ -41,6 +41,9 @@ export function validateAndNormalizeCV(raw: any): { valid: boolean; data: CVData
     customBadges: Array.isArray(basicsRaw.customBadges)
       ? basicsRaw.customBadges.map((b: any) => String(b).trim()).filter(Boolean)
       : [],
+    imagePosX: typeof basicsRaw.imagePosX === 'number' ? basicsRaw.imagePosX : undefined,
+    imagePosY: typeof basicsRaw.imagePosY === 'number' ? basicsRaw.imagePosY : undefined,
+    imageScale: typeof basicsRaw.imageScale === 'number' ? basicsRaw.imageScale : undefined,
   }
 
   const cleanWork: CVWork[] = Array.isArray(raw.work)

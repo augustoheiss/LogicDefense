@@ -133,6 +133,15 @@
     display: block !important;
   }
 
+  .cv-avatar-img {
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: cover !important;
+    object-position: var(--cv-avatar-pos-x, 50%) var(--cv-avatar-pos-y, 50%) !important;
+    transform: scale(var(--cv-avatar-scale, 1)) !important;
+    transform-origin: var(--cv-avatar-pos-x, 50%) var(--cv-avatar-pos-y, 50%) !important;
+  }
+
   .cv-name {
     font-size: 1.75rem !important;
     font-weight: 700 !important;

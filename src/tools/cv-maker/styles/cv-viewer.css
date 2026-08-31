@@ -26,7 +26,11 @@
   position: relative;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12);
   border-radius: 4px;
-  background: #ffffff;
+  background-color: var(--cv-color-bg, #ffffff);
+  background-image: var(--cv-bg-image, none);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
 }
 
 .cv-cover-letter-page {
@@ -114,6 +118,10 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
+  object-position: var(--cv-avatar-pos-x, 50%) var(--cv-avatar-pos-y, 50%);
+  transform: scale(var(--cv-avatar-scale, 1));
+  transform-origin: var(--cv-avatar-pos-x, 50%) var(--cv-avatar-pos-y, 50%);
+  transition: transform 0.1s ease-out;
 }
 
 .cv-avatar-placeholder {
