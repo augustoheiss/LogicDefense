@@ -1,9 +1,9 @@
 export const DEFAULT_JOHN_DOE_YAML = `basics:
   name: "Alexandre Silva"
   label: "Senior Software Architect & AI Systems Specialist"
-  email: "alexandre.silva@example.com"
+  email: "alexandre.silva.demo@exemplo-ficticio.com"
   phone: "+55 (11) 98765-4321"
-  url: "https://linkedin.com/in/alexandresilva"
+  url: "https://linkedin.com/in/alexandre-silva-ficticio-demo-99999"
   summary: "Arquiteto de software sênior com 8+ anos de experiência liderando a modernização de sistemas corporativos de alta escala, pipelines de inteligência artificial e governança de dados. Especialista em microserviços, cloud hibrída e aceleração de squads de engenharia."
   location:
     city: "São Paulo"
@@ -12,11 +12,11 @@ export const DEFAULT_JOHN_DOE_YAML = `basics:
     countryCode: "BR"
   profiles:
     - network: "GitHub"
-      username: "alexandresilva"
-      url: "https://github.com/alexandresilva"
+      username: "alexandre-silva-demo"
+      url: "https://github.com/alexandre-silva-ficticio-demo-99999"
     - network: "LinkedIn"
-      username: "alexandresilva"
-      url: "https://linkedin.com/in/alexandresilva"
+      username: "alexandre-silva-demo"
+      url: "https://linkedin.com/in/alexandre-silva-ficticio-demo-99999"
   customBadges:
     - "Cloud Architect"
     - "AI Systems"
@@ -45,12 +45,12 @@ projects:
     highlights:
       - "Redução comprovada de 35% nos custos de inferência LLM em ambientes de produção."
       - "Mais de 800 stars no GitHub e utilizado por 15+ empresas parceiras."
-    url: "https://github.com/alexandresilva/ai-gateway"
+    url: "https://github.com/alexandre-silva-ficticio-demo-99999/ai-gateway"
   - name: "Local-First Financial Engine"
     description: "Motor analítico de dados financeiros que processa DREs e fluxos de caixa 100% no navegador sem persistência remota de dados sensíveis."
     highlights:
       - "Arquitetura offline-first com sincronismo seguro e isolamento de tenant via chaves SHA-256."
-    url: "https://github.com/alexandresilva/local-financial"
+    url: "https://github.com/alexandre-silva-ficticio-demo-99999/local-financial"
 
 education:
   - institution: "Universidade de São Paulo (USP)"

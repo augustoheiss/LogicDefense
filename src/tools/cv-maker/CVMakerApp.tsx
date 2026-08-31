@@ -37,7 +37,19 @@ export const CVMakerApp: React.FC = () => {
 
   // Storage and Draft State
   const [yamlInput, setYamlInput] = useState<string>(() => {
-    return localStorage.getItem(STORAGE_DRAFT_KEY) || DEFAULT_JOHN_DOE_YAML
+    const saved = localStorage.getItem(STORAGE_DRAFT_KEY)
+    if (!saved) return DEFAULT_JOHN_DOE_YAML
+    // Auto-sanitização de links de exemplo para evitar redirecionamento a perfis reais no LinkedIn/GitHub
+    if (saved.includes('https://linkedin.com/in/alexandresilva') || saved.includes('https://github.com/alexandresilva')) {
+      const sanitized = saved
+        .split('https://linkedin.com/in/alexandresilva').join('https://linkedin.com/in/alexandre-silva-ficticio-demo-99999')
+        .split('https://github.com/alexandresilva').join('https://github.com/alexandre-silva-ficticio-demo-99999')
+        .split('username: "alexandresilva"').join('username: "alexandre-silva-demo"')
+        .split('alexandre.silva@example.com').join('alexandre.silva.demo@exemplo-ficticio.com')
+      localStorage.setItem(STORAGE_DRAFT_KEY, sanitized)
+      return sanitized
+    }
+    return saved
   })
   const [cvVersions, setCvVersions] = useState<CVVersions | null>(null)
   const [cvData, setCvData] = useState<CVData | null>(null)
