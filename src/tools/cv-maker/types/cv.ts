@@ -9,6 +9,7 @@ export type LayoutVariant =
   | 'corporate_timeline'  // Modelo A4 06 - Navy Solid Timeline (Wilkins Micawber)
   | 'warm_magazine'       // Modelo A4 07 - Warm Editorial & Stamp (Editorial Cream)
   | 'hero_matrix'         // Modelo A4 08 - Hero Banner Matrix (Mary Smith)
+  | 'dynamic_math'        // Modelo A4 09 - Dynamic Grid Math (Augusto Heiss / Mathematical Balance)
 
 export type ViewMode = 'cv' | 'cover_letter' | 'both'
 export type LanguageCode = 'pt' | 'en'
@@ -77,6 +78,13 @@ export const LAYOUT_OPTIONS: LayoutOption[] = [
     label: '🖼️ Modelo A4 08 (Hero Matrix)',
     icon: '🖼️',
     description: 'Barra superior de contatos, hero header com foto à direita, grid duplo e matriz inferior de habilidades.'
+  },
+  {
+    id: 'dynamic_math',
+    name: 'Modelo A4 09',
+    label: '🧮 Modelo A4 09 (Grid Math)',
+    icon: '🧮',
+    description: 'Grid matemático balanceado (3x2, 2x2, 3x3) com caixas em acento, divisor colorido e densidade editorial.'
   }
 ]
 

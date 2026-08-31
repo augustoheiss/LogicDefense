@@ -1086,5 +1086,83 @@
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
+
+  /* ── Modelo A4 09: Dynamic Grid Math Print Rules ── */
+  .layout-dynamic_math {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 1rem !important;
+  }
+
+  .layout-dynamic_math .cv-math-header {
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: flex-start !important;
+    gap: 1.25rem !important;
+    border-bottom: 2px solid rgba(125, 125, 125, 0.3) !important;
+    padding-bottom: 1rem !important;
+  }
+
+  .layout-dynamic_math .cv-math-header-profile {
+    display: flex !important;
+    align-items: center !important;
+    gap: 1rem !important;
+  }
+
+  .layout-dynamic_math .cv-math-avatar {
+    width: 75px !important;
+    height: 75px !important;
+    border-radius: 50% !important;
+    overflow: hidden !important;
+    border: 2px solid currentColor !important;
+    flex-shrink: 0 !important;
+  }
+
+  .layout-dynamic_math .cv-math-name {
+    font-size: 1.65rem !important;
+    font-weight: 800 !important;
+    line-height: 1.15 !important;
+  }
+
+  .layout-dynamic_math .cv-math-contacts {
+    font-size: 0.78rem !important;
+    line-height: 1.45 !important;
+    text-align: right !important;
+  }
+
+  .layout-dynamic_math .cv-math-summary {
+    font-size: 0.85rem !important;
+    line-height: 1.55 !important;
+    text-align: justify !important;
+  }
+
+  .layout-dynamic_math .cv-math-section-title {
+    font-size: 0.92rem !important;
+    font-weight: 800 !important;
+    letter-spacing: 0.04em !important;
+    text-transform: uppercase !important;
+    border-bottom: 1.5px solid currentColor !important;
+    padding-bottom: 0.3rem !important;
+    margin-bottom: 0.75rem !important;
+  }
+
+  .layout-dynamic_math .cv-math-project-card,
+  .layout-dynamic_math .cv-math-skill-card,
+  .layout-dynamic_math .cv-math-edu-card,
+  .layout-dynamic_math .cv-math-cert-card,
+  .layout-dynamic_math .cv-math-interest-card {
+    background: rgba(125, 125, 125, 0.04) !important;
+    border: 1px solid rgba(125, 125, 125, 0.25) !important;
+    border-radius: 4px !important;
+    padding: 0.75rem !important;
+    box-sizing: border-box !important;
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  .layout-dynamic_math .cv-math-project-card {
+    border-left: 3.5px solid currentColor !important;
+  }
 }
+
 

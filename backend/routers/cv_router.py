@@ -323,7 +323,7 @@ async def get_all_layouts_endpoint():
     """
     return {
         "service": "CV Maker 2.0 Declarative Layout Blueprints",
-        "count": 8,
+        "count": 9,
         "layouts": [
             {
                 "id": "modular",
@@ -394,6 +394,15 @@ async def get_all_layouts_endpoint():
                 "icon": "🖼️",
                 "description": "Barra superior de contatos, hero header com foto à direita, grid duplo e matriz inferior de habilidades.",
                 "grid": "1fr",
+                "supports_photo": True,
+                "supports_cover_letter": True,
+            },
+            {
+                "id": "dynamic_math",
+                "name": "Modelo A4 09 - Dynamic Grid Math (Augusto Heiss / Mathematical Balance)",
+                "icon": "🧮",
+                "description": "Grid matemático dinâmico balanceado (3x2, 2x2, 3x3) com caixas em acento, divisor colorido e densidade editorial.",
+                "grid": "dynamic-math",
                 "supports_photo": True,
                 "supports_cover_letter": True,
             },

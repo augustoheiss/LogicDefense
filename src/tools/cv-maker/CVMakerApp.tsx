@@ -487,6 +487,7 @@ export const CVMakerApp: React.FC = () => {
             onDownloadZip={handleDownloadZip}
             onPrintPdf={handlePrintPdf}
             onOpenPhotoModal={() => setIsPhotoModalOpen(true)}
+            hasPhoto={Boolean(cvData?.basics?.image)}
             onOpenApiKeyModal={() => setIsApiKeyModalOpen(true)}
             hasActiveKey={hasActiveKey}
             isPro={isPro}

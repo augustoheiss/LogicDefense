@@ -251,13 +251,290 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
               {data.references && <BlockReferences references={data.references} />}
               {data.interests && <BlockInterests interests={data.interests} />}
             </aside>
-
             <main className="cv-main-col">
               {basics.summary && <BlockSummary basics={basics} title="Sobre Mim" />}
               {data.work && <BlockWork work={data.work} />}
               {data.projects && <BlockProjects projects={data.projects} />}
               {data.education && <BlockEducation education={data.education} />}
             </main>
+          </div>
+        </div>
+      )
+    }
+
+    // ── Modelo A4 09: Dynamic Grid Math (Augusto Heiss / Mathematical Balance) ──
+    if (blueprint.id === 'dynamic_math') {
+      const getGridClass = (count: number) => {
+        if (count <= 1) return 'cv-grid-1'
+        if (count === 2) return 'cv-grid-2'
+        if (count === 3) return 'cv-grid-3'
+        if (count === 4) return 'cv-grid-4'
+        if (count === 5) return 'cv-grid-5'
+        if (count % 3 === 0) return 'cv-grid-3'
+        if (count % 3 === 1) return 'cv-grid-2'
+        return 'cv-grid-split-3-2'
+      }
+
+      return (
+        <div className="cv-page-a4">
+          <div className="cv-card layout-dynamic_math">
+            {/* Header: Avatar + Nome & Cargo à esquerda; Contatos e Redes à direita */}
+            <header className="cv-math-header">
+              <div className="cv-math-header-profile">
+                {basics.image && (
+                  <div className="cv-avatar-container cv-math-avatar">
+                    <img src={basics.image} alt={basics.name} className="cv-avatar-img" />
+                  </div>
+                )}
+                <div>
+                  <h1 className="cv-math-name cv-name">{basics.name}</h1>
+                  {basics.label && <div className="cv-math-label cv-label">{basics.label}</div>}
+                </div>
+              </div>
+
+              <div className="cv-math-contacts">
+                {basics.email && (
+                  <div>✉ <a href={`mailto:${basics.email}`} className="cv-link">{basics.email}</a></div>
+                )}
+                {basics.phone && (
+                  <div>📞 <a href={`tel:${basics.phone.replace(/[^\d+]/g, '')}`} className="cv-link">{basics.phone}</a></div>
+                )}
+                {basics.location && (
+                  <div>📍 {[basics.location.city, basics.location.region, basics.location.countryCode].filter(Boolean).join(', ')}</div>
+                )}
+                {basics.url && (
+                  <div>🌐 <a href={basics.url} target="_blank" rel="noreferrer" className="cv-link">{basics.url.replace(/^https?:\/\//, '')}</a></div>
+                )}
+                {basics.profiles && basics.profiles.length > 0 && (
+                  <div className="cv-math-profiles">
+                    {basics.profiles.map((p, idx) => (
+                      <div key={idx}>
+                        <a href={p.url} target="_blank" rel="noreferrer" className="cv-link">
+                          🔗 {p.network}: {p.username}
+                        </a>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </header>
+
+            {/* Resumo / Sobre Mim */}
+            {basics.summary && (
+              <div className="cv-math-summary">
+                {basics.summary}
+              </div>
+            )}
+
+            {/* Experiência Profissional */}
+            {data.work && data.work.length > 0 && (
+              <section className="cv-section cv-avoid-break">
+                <h2 className="cv-math-section-title">
+                  💼 EXPERIÊNCIA PROFISSIONAL
+                </h2>
+                <div className="cv-math-work-list">
+                  {data.work.map((w, idx) => (
+                    <div key={idx} className="cv-math-work-item cv-avoid-break">
+                      <div className="cv-item-header">
+                        <span className="cv-item-title">{w.position}</span>
+                        <span className="cv-item-date">
+                          {w.startDate} — {w.endDate || 'Presente'}
+                        </span>
+                      </div>
+                      <div className="cv-item-sub">
+                        {w.url ? (
+                          <a href={w.url} target="_blank" rel="noreferrer" className="cv-link">
+                            {w.name} ↗
+                          </a>
+                        ) : (
+                          w.name
+                        )}
+                      </div>
+                      {w.summary && <p className="cv-item-desc">{w.summary}</p>}
+                      {w.highlights && w.highlights.length > 0 && (
+                        <ul className="cv-math-bullets">
+                          {w.highlights.map((hl, hIdx) => (
+                            <li key={hIdx}>{hl}</li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {/* Projetos em Destaque & Repositórios (Grid Matemático) */}
+            {data.projects && data.projects.length > 0 && (
+              <section className="cv-section cv-avoid-break">
+                <h2 className="cv-math-section-title">
+                  🚀 PROJETOS EM DESTAQUE & REPOSITÓRIOS
+                </h2>
+                <div className={`cv-math-grid projects-grid ${getGridClass(data.projects.length)}`}>
+                  {data.projects.map((pr, idx) => (
+                    <div key={idx} className="cv-math-project-card cv-avoid-break">
+                      <div className="cv-item-header">
+                        <span className="cv-item-title">
+                          {pr.url ? (
+                            <a href={pr.url} target="_blank" rel="noreferrer" className="cv-link">
+                              {pr.name} ↗
+                            </a>
+                          ) : (
+                            pr.name
+                          )}
+                        </span>
+                      </div>
+                      {pr.description && <p className="cv-item-desc">{pr.description}</p>}
+                      {pr.highlights && pr.highlights.length > 0 && (
+                        <ul className="cv-math-bullets">
+                          {pr.highlights.map((hl, hIdx) => (
+                            <li key={hIdx}>{hl}</li>
+                          ))}
+                        </ul>
+                      )}
+                      {pr.keywords && pr.keywords.length > 0 && (
+                        <div className="cv-math-tags">
+                          {pr.keywords.map((kw, kIdx) => (
+                            <span key={kIdx} className="cv-badge">{kw}</span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {/* Competências & Habilidades Técnicas (Grid Matemático) */}
+            {data.skills && data.skills.length > 0 && (
+              <section className="cv-section cv-avoid-break">
+                <h2 className="cv-math-section-title">
+                  ⚡ COMPETÊNCIAS & HABILIDADES TÉCNICAS
+                </h2>
+                <div className={`cv-math-grid skills-grid ${getGridClass(data.skills.length)}`}>
+                  {data.skills.map((sk, idx) => (
+                    <div key={idx} className="cv-math-skill-card cv-avoid-break">
+                      <div className="cv-math-skill-title">
+                        {sk.name.toUpperCase()} {sk.level ? `(${sk.level.toUpperCase()})` : ''}
+                      </div>
+                      {sk.keywords && sk.keywords.length > 0 && (
+                        <div className="cv-math-tags">
+                          {sk.keywords.map((kw, kIdx) => (
+                            <span key={kIdx} className="cv-badge">{kw}</span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {/* Formação Acadêmica (Grid Matemático) */}
+            {data.education && data.education.length > 0 && (
+              <section className="cv-section cv-avoid-break">
+                <h2 className="cv-math-section-title">
+                  🎓 FORMAÇÃO ACADÊMICA
+                </h2>
+                <div className={`cv-math-grid education-grid ${getGridClass(data.education.length)}`}>
+                  {data.education.map((edu, idx) => (
+                    <div key={idx} className="cv-math-edu-card cv-avoid-break">
+                      <div className="cv-item-header" style={{ marginBottom: '0.2rem' }}>
+                        <span style={{ fontSize: '1rem' }}>🏛️</span>
+                        <span className="cv-item-date">{edu.startDate} — {edu.endDate || 'Presente'}</span>
+                      </div>
+                      <div style={{ fontWeight: 700, fontSize: '0.88rem' }}>
+                        {edu.studyType ? `${edu.studyType} em ` : ''}{edu.area}
+                      </div>
+                      <div style={{ fontSize: '0.8rem', opacity: 0.85, marginTop: '0.15rem' }}>
+                        {edu.institution}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {/* Idiomas & Fluência (Grid Matemático) */}
+            {data.languages && data.languages.length > 0 && (
+              <section className="cv-section cv-avoid-break">
+                <h2 className="cv-math-section-title">
+                  🌐 IDIOMAS & FLUÊNCIA
+                </h2>
+                <div className={`cv-math-grid languages-grid ${getGridClass(data.languages.length)}`}>
+                  {data.languages.map((l, idx) => (
+                    <div key={idx} className="cv-math-lang-card cv-avoid-break">
+                      <span className="cv-lang-bullet">◆</span>
+                      <span style={{ fontWeight: 700 }}>{l.language}</span>
+                      <span style={{ fontSize: '0.8rem', opacity: 0.85 }}>{l.fluency}</span>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {/* Certificações & Licenças (Grid Matemático) */}
+            {data.certificates && data.certificates.length > 0 && (
+              <section className="cv-section cv-avoid-break">
+                <h2 className="cv-math-section-title">
+                  📜 CERTIFICAÇÕES & LICENÇAS
+                </h2>
+                <div className={`cv-math-grid certs-grid ${getGridClass(data.certificates.length)}`}>
+                  {data.certificates.map((c, idx) => (
+                    <div key={idx} className="cv-math-cert-card cv-avoid-break">
+                      <div className="cv-item-header" style={{ marginBottom: '0.2rem' }}>
+                        <span style={{ fontSize: '1rem' }}>📜</span>
+                        <span className="cv-item-date">{c.date}</span>
+                      </div>
+                      <div style={{ fontWeight: 700, fontSize: '0.85rem' }}>
+                        {c.url ? (
+                          <a href={c.url} target="_blank" rel="noreferrer" className="cv-link">
+                            {c.name} ↗
+                          </a>
+                        ) : (
+                          c.name
+                        )}
+                      </div>
+                      {c.issuer && (
+                        <div className="cv-math-issuer-tag">
+                          {c.issuer}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {/* Interesses & Frentes de Pesquisa (Grid Matemático) */}
+            {data.interests && data.interests.length > 0 && (
+              <section className="cv-section cv-avoid-break">
+                <h2 className="cv-math-section-title">
+                  🎯 INTERESSES & FRENTES DE PESQUISA
+                </h2>
+                <div className={`cv-math-grid interests-grid ${getGridClass(data.interests.length)}`}>
+                  {data.interests.map((it, idx) => (
+                    <div key={idx} className="cv-math-interest-card cv-avoid-break">
+                      <div style={{ fontWeight: 700, fontSize: '0.85rem', marginBottom: '0.35rem' }}>
+                        ◈ {it.name}
+                      </div>
+                      {it.keywords && it.keywords.length > 0 && (
+                        <div className="cv-math-tags">
+                          {it.keywords.map((kw, kIdx) => (
+                            <span key={kIdx} className="cv-badge">{kw}</span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {/* Referências Profissionais */}
+            {data.references && data.references.length > 0 && (
+              <BlockReferences references={data.references} />
+            )}
           </div>
         </div>
       )

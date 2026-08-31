@@ -19,6 +19,7 @@ interface CVToolbarProps {
   onDownloadZip?: () => void
   onPrintPdf: () => void
   onOpenPhotoModal: () => void
+  hasPhoto?: boolean
   onOpenApiKeyModal: () => void
   hasActiveKey: boolean
   isPro?: boolean
@@ -65,6 +66,7 @@ export const CVToolbar: React.FC<CVToolbarProps> = ({
   onDownloadZip,
   onPrintPdf,
   onOpenPhotoModal,
+  hasPhoto = false,
   onOpenApiKeyModal,
   hasActiveKey,
   isPro = false,
@@ -178,9 +180,10 @@ export const CVToolbar: React.FC<CVToolbarProps> = ({
         <button
           className="cv-btn-secondary"
           onClick={onOpenPhotoModal}
-          title="Adicionar ou alterar foto de perfil"
+          title={hasPhoto ? "Alterar ou remover foto do perfil" : "Incluir foto de perfil no currículo"}
+          style={hasPhoto ? { borderColor: '#10b981', color: '#34d399', background: 'rgba(16, 185, 129, 0.1)' } : {}}
         >
-          📷 Foto
+          {hasPhoto ? '📷 Foto (Ativa)' : '📷 + Foto'}
         </button>
 
         <button

@@ -209,6 +209,29 @@ export const LAYOUT_BLUEPRINTS: Record<LayoutVariant, LayoutBlueprint> = {
     ],
     hasHeroBanner: true,
     customClass: 'layout-hero_matrix'
+  },
+  dynamic_math: {
+    id: 'dynamic_math',
+    name: 'Modelo A4 09 - Dynamic Grid Math (Augusto Heiss / Mathematical Balance)',
+    label: '🧮 Modelo A4 09 (Grid Math)',
+    icon: '🧮',
+    description: 'Grid matemático balanceado (3x2, 2x2, 3x3) com caixas em acento, divisor colorido e densidade editorial.',
+    gridTemplate: '1fr',
+    sidebarPosition: 'none',
+    heroZone: ['header', 'contacts'],
+    mainZone: [
+      'summary',
+      'work',
+      'projects',
+      'skills_tags',
+      'education',
+      'certificates',
+      'languages',
+      'interests',
+      'references'
+    ],
+    hasHeroBanner: false,
+    customClass: 'layout-dynamic_math'
   }
 }
 
