@@ -116,9 +116,21 @@
     align-items: center !important;
   }
 
-  .cv-avatar-container {
+  .cv-avatar-container:not(.has-photo),
+  .cv-avatar-placeholder,
+  .cv-avatar-container:not(.has-photo) * {
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+  }
+
+  .cv-avatar-container.has-photo {
     width: 68px !important;
     height: 68px !important;
+    display: block !important;
   }
 
   .cv-name {
