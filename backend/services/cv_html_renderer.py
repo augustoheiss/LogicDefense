@@ -1674,6 +1674,85 @@ def render_multi_cv_dashboard_html(
         box-shadow: none !important;
         display: block !important;
       }}
+      /* ── Impressão Tema Terminal: Fundo Branco + Tipografia Verde Monospace ── */
+      .theme-terminal,
+      .theme-terminal .container,
+      .theme-terminal .cv-card {{
+        background: #ffffff !important;
+        background-color: #ffffff !important;
+        color: #166534 !important;
+        font-family: 'Courier Prime', 'Fira Code', monospace !important;
+      }}
+      .theme-terminal p,
+      .theme-terminal span,
+      .theme-terminal li,
+      .theme-terminal div,
+      .theme-terminal .summary,
+      .theme-terminal .item-desc,
+      .theme-terminal .contacts,
+      .theme-terminal .bullets li {{
+        color: #15803d !important;
+        font-family: 'Courier Prime', monospace !important;
+      }}
+      .theme-terminal h1,
+      .theme-terminal h2,
+      .theme-terminal h3,
+      .theme-terminal h4,
+      .theme-terminal .name {{
+        color: #14532d !important;
+        font-weight: 800 !important;
+        font-family: 'Courier Prime', monospace !important;
+      }}
+      .theme-terminal .label {{
+        color: #16a34a !important;
+        font-family: 'Courier Prime', monospace !important;
+        font-weight: 700 !important;
+      }}
+      .theme-terminal .section-title,
+      .theme-terminal .cv-math-section-title {{
+        color: #15803d !important;
+        border-bottom: 1.5px dashed #22c55e !important;
+        font-family: 'Courier Prime', monospace !important;
+      }}
+      .theme-terminal .item-title {{
+        color: #14532d !important;
+        font-family: 'Courier Prime', monospace !important;
+        font-weight: 700 !important;
+      }}
+      .theme-terminal .item-sub,
+      .theme-terminal .item-date {{
+        color: #16a34a !important;
+        font-family: 'Courier Prime', monospace !important;
+      }}
+      .theme-terminal .project-card,
+      .theme-terminal .skill-group,
+      .theme-terminal .geo-card,
+      .theme-terminal .interest-card,
+      .theme-terminal .lang-card,
+      .theme-terminal .cv-math-project-card,
+      .theme-terminal .cv-math-skill-card,
+      .theme-terminal .cv-math-edu-card,
+      .theme-terminal .cv-math-cert-card,
+      .theme-terminal .cv-math-interest-card {{
+        background: #f0fdf4 !important;
+        border: 1px solid #bbf7d0 !important;
+        border-left: 3.5px solid #22c55e !important;
+        border-radius: 4px !important;
+      }}
+      .theme-terminal .badge,
+      .theme-terminal .issuer-pill {{
+        background: #dcfce7 !important;
+        color: #14532d !important;
+        border: 1px solid #86efac !important;
+        border-radius: 3px !important;
+        font-family: 'Courier Prime', monospace !important;
+        font-weight: 600 !important;
+      }}
+      .theme-terminal a,
+      .theme-terminal .cv-link {{
+        color: #15803d !important;
+        text-decoration: underline !important;
+      }}
       @page {{
         size: A4 portrait;
         margin: 6mm 8mm 6mm 8mm !important;

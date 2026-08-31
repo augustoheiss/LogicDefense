@@ -1055,67 +1055,129 @@
 
   /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
      ■ 5. IMPRESSÃO DO TEMA TERMINAL (theme-terminal)
-     Courier Prime / Monospace · Estilo Engenheiro / Hacker
+     Fundo Branco e Tipografia Verde Terminal Monospace (Green Matrix Print)
      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
   .theme-terminal,
-  .theme-terminal .cv-card,
-  .theme-terminal * {
+  .theme-terminal .cv-card {
+    background: #ffffff !important;
+    background-color: #ffffff !important;
+    color: #166534 !important;
     font-family: 'Courier Prime', 'Fira Code', monospace, 'Inter', sans-serif !important;
-    color: #0f172a !important;
   }
 
-  .theme-terminal header.cv-header {
-    border-bottom: 2.5px solid #10b981 !important;
+  .theme-terminal p,
+  .theme-terminal span,
+  .theme-terminal li,
+  .theme-terminal div,
+  .theme-terminal .cv-summary-text,
+  .theme-terminal .cv-item__description,
+  .theme-terminal .item-desc,
+  .theme-terminal .cv-work-summary,
+  .theme-terminal .cv-contacts,
+  .theme-terminal .cv-contacts span,
+  .theme-terminal .bullets li {
+    color: #15803d !important;
+    font-family: 'Courier Prime', monospace !important;
   }
 
-  .theme-terminal h1.cv-name {
-    color: #000000 !important;
+  .theme-terminal header.cv-header,
+  .theme-terminal .cv-header,
+  .theme-terminal .header,
+  .theme-terminal .cv-math-header {
+    border-bottom: 2px solid #16a34a !important;
+  }
+
+  .theme-terminal h1,
+  .theme-terminal h2,
+  .theme-terminal h3,
+  .theme-terminal h4,
+  .theme-terminal .cv-name,
+  .theme-terminal .name,
+  .theme-terminal .cv-math-name {
+    color: #14532d !important;
     font-weight: 800 !important;
     font-family: 'Courier Prime', monospace !important;
   }
 
-  .theme-terminal .cv-label {
-    color: #059669 !important;
+  .theme-terminal .cv-label,
+  .theme-terminal .label,
+  .theme-terminal .cv-math-label {
+    color: #16a34a !important;
     font-family: 'Courier Prime', monospace !important;
     font-weight: 700 !important;
   }
 
-  .theme-terminal h2.cv-section-title {
-    color: #059669 !important;
-    border-bottom: 1.5px solid #10b981 !important;
+  .theme-terminal h2.cv-section-title,
+  .theme-terminal .cv-section-title,
+  .theme-terminal .section-title,
+  .theme-terminal .cv-math-section-title {
+    color: #15803d !important;
+    border-bottom: 1.5px dashed #22c55e !important;
     font-family: 'Courier Prime', monospace !important;
   }
 
   .theme-terminal .cv-work-company,
-  .theme-terminal .cv-item-company {
-    color: #059669 !important;
+  .theme-terminal .cv-item-company,
+  .theme-terminal .item-sub,
+  .theme-terminal .cv-item__subtitle {
+    color: #16a34a !important;
     font-family: 'Courier Prime', monospace !important;
+    font-weight: 600 !important;
   }
 
+  .theme-terminal .item-title,
+  .theme-terminal .cv-item__title {
+    color: #14532d !important;
+    font-family: 'Courier Prime', monospace !important;
+    font-weight: 700 !important;
+  }
+
+  .theme-terminal .item-date,
+  .theme-terminal .cv-item__date {
+    color: #16a34a !important;
+    font-family: 'Courier Prime', monospace !important;
+    font-weight: 600 !important;
+  }
+
+  .theme-terminal .project-card,
+  .theme-terminal .skill-group,
+  .theme-terminal .geo-card,
+  .theme-terminal .interest-card,
+  .theme-terminal .lang-card,
+  .theme-terminal .cv-card-box,
   .theme-terminal .cv-project-card,
   .theme-terminal .cv-education-card,
   .theme-terminal .cv-cert-card,
   .theme-terminal .cv-interest-card,
   .theme-terminal .cv-skills-group,
-  .theme-terminal .cv-language-card {
-    background: #f8fafc !important;
-    border: 1px solid #cbd5e1 !important;
-    border-left: 3px solid #10b981 !important;
+  .theme-terminal .cv-language-card,
+  .theme-terminal .cv-math-project-card,
+  .theme-terminal .cv-math-skill-card,
+  .theme-terminal .cv-math-edu-card,
+  .theme-terminal .cv-math-cert-card,
+  .theme-terminal .cv-math-interest-card {
+    background: #f0fdf4 !important;
+    border: 1px solid #bbf7d0 !important;
+    border-left: 3.5px solid #22c55e !important;
     border-radius: 4px !important;
   }
 
   .theme-terminal .cv-skill-tag,
-  .theme-terminal .cv-issuer-pill {
-    background: #f1f5f9 !important;
-    color: #0f172a !important;
-    border: 1px solid #94a3b8 !important;
+  .theme-terminal .cv-issuer-pill,
+  .theme-terminal .badge,
+  .theme-terminal .issuer-pill {
+    background: #dcfce7 !important;
+    color: #14532d !important;
+    border: 1px solid #86efac !important;
     border-radius: 3px !important;
     font-family: 'Courier Prime', monospace !important;
+    font-weight: 600 !important;
   }
 
   .theme-terminal a,
   .theme-terminal .cv-link {
-    color: #059669 !important;
+    color: #15803d !important;
+    text-decoration: underline !important;
   }
 
   /* ── Regras de Alto Contraste para Áreas Escuras no Print ── */
