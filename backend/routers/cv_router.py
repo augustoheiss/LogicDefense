@@ -708,7 +708,7 @@ async def render_cv_endpoint(
     payload: Optional[CVRenderRequest] = None,
     format: Optional[str] = Query(None, description="Formato de saída: html, yaml, zip, json"),
     theme: Optional[str] = Query(None, description="Tema visual: executive, creative, minimalist, white, terminal"),
-    layout: Optional[str] = Query(None, description="Modelo A4 de Layout: modular, linear, sidebar, compact_split, editorial_accent, corporate_timeline, warm_magazine, hero_matrix"),
+    layout: Optional[str] = Query(None, description="Modelo A4 de Layout: modular, linear, sidebar, compact_split, editorial_accent, corporate_timeline, warm_magazine, hero_matrix, dynamic_math"),
     view_mode: Optional[str] = Query(None, description="Modo de visualização: cv, cover_letter, both"),
     lang: Optional[str] = Query(None, description="Idioma forçado: pt, en ou auto"),
     filename: Optional[str] = Query(None, description="Nome base para download do arquivo (sem extensão)"),
@@ -730,7 +730,7 @@ async def render_cv_endpoint(
 
     yaml_text = (payload.yaml_content if payload and payload.yaml_content else None) or get_default_yaml_content()
     theme_name = q_theme or (payload.theme if payload and payload.theme else None) or "executive"
-    layout_name = q_layout or (payload.layout if payload and payload.layout else None) or "modular"
+    layout_name = q_layout or (payload.layout if payload and payload.layout else None) or "dynamic_math"
     view_mode_name = q_view_mode or (payload.view_mode if payload and payload.view_mode else None) or "cv"
     target_format = (q_format or (payload.format if payload and payload.format else None) or "html").strip().lower()
     base_filename = (q_filename or (payload.filename if payload and payload.filename else None) or "curriculo").strip()
@@ -788,7 +788,7 @@ async def compile_cv_bundle_endpoint(
     payload: CVCompileBundleRequest,
     format: Optional[str] = Query(None, description="Formato de saída: html, zip, json"),
     theme: Optional[str] = Query(None, description="Tema visual: executive, creative, minimalist, white, terminal"),
-    layout: Optional[str] = Query(None, description="Modelo A4 de Layout: modular, linear, sidebar"),
+    layout: Optional[str] = Query(None, description="Modelo A4 de Layout: modular, linear, sidebar, compact_split, editorial_accent, corporate_timeline, warm_magazine, hero_matrix, dynamic_math"),
     x_api_key: Optional[str] = Header(None, alias="X-API-Key"),
 ):
     """
@@ -799,7 +799,7 @@ async def compile_cv_bundle_endpoint(
     from services.cv_html_renderer import render_multi_cv_dashboard_html
 
     target_theme = theme or payload.default_theme or "executive"
-    target_layout = layout or payload.default_layout or "modular"
+    target_layout = layout or payload.default_layout or "dynamic_math"
     target_format = (format or payload.format or "html").strip().lower()
     base_filename = (payload.filename or "curriculos_5_versoes").strip()
 
