@@ -22,7 +22,6 @@
   .cv-split-layout,
   .cv-preview-area,
   .cv-viewer-container,
-  .cv-card,
   .cv-wrapper,
   .cv-maker,
   .cv-maker__showcase {
@@ -44,9 +43,18 @@
     display: block !important;
   }
 
+  .cv-card {
+    background: #ffffff !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    box-shadow: none !important;
+    border: none !important;
+  }
+
   @page {
     size: A4 portrait;
-    margin: 6mm 8mm 6mm 8mm !important;
+    margin: 8mm 10mm 8mm 10mm !important;
   }
 
   /* Ocultar rigorosamente apenas os elementos de navegação do portal e app */
@@ -354,7 +362,7 @@
 
   .cv-projects-grid {
     display: grid !important;
-    grid-template-columns: 1fr 1fr !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
     gap: 0.65rem !important;
   }
 
@@ -364,6 +372,9 @@
     display: flex !important;
     flex-direction: column !important;
     justify-content: space-between !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    overflow-wrap: break-word !important;
   }
 
   .cv-project-title,
@@ -386,19 +397,190 @@
   .cv-languages-grid,
   .cv-interests-grid {
     display: grid !important;
-    grid-template-columns: repeat(3, 1fr) !important;
     gap: 0.65rem !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
   }
 
   .cv-education-card,
   .cv-cert-card,
   .cv-award-card,
-  .cv-interest-card {
+  .cv-interest-card,
+  .cv-language-card,
+  .cv-skills-group {
     border-radius: 6px !important;
     padding: 0.55rem 0.7rem !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+    overflow-wrap: break-word !important;
+  }
+
+  /* ── Preservação de Layouts dos 8 Modelos A4 no Print ── */
+  .layout-sidebar .cv-sidebar-layout {
+    display: grid !important;
+    grid-template-columns: 210px 1fr !important;
+    gap: 1.5rem !important;
+    align-items: start !important;
+  }
+  .layout-sidebar .cv-sidebar-col {
+    border-right: 1.5px solid rgba(125, 125, 125, 0.25) !important;
+    padding-right: 1.25rem !important;
     display: flex !important;
     flex-direction: column !important;
+    gap: 1rem !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    overflow: hidden !important;
+  }
+
+  .layout-compact_split .cv-duo-layout {
+    display: grid !important;
+    grid-template-columns: 200px 1fr !important;
+    gap: 1.5rem !important;
+    align-items: start !important;
+  }
+  .layout-compact_split .cv-duo-left {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 1rem !important;
+    border-right: 1px solid rgba(125, 125, 125, 0.25) !important;
+    padding-right: 1.25rem !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    overflow: hidden !important;
+  }
+
+  .layout-corporate_timeline .cv-navy-layout {
+    display: grid !important;
+    grid-template-columns: 210px 1fr !important;
+    min-height: 297mm !important;
+    margin: -1rem -1rem !important;
+  }
+  .layout-corporate_timeline .cv-navy-sidebar {
+    padding: 1.5rem 1.2rem !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 1rem !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    overflow: hidden !important;
+  }
+
+  .layout-editorial_accent .cv-editorial-grid {
+    display: grid !important;
+    grid-template-columns: 200px 1fr !important;
+    gap: 1.5rem !important;
+  }
+  .layout-editorial_accent .cv-editorial-grid aside {
+    min-width: 0 !important;
+    max-width: 100% !important;
+    overflow: hidden !important;
+  }
+
+  .layout-hero_matrix .cv-hero-banner {
+    display: grid !important;
+    grid-template-columns: 1fr 100px !important;
+    gap: 1.25rem !important;
+    align-items: center !important;
+  }
+
+  /* ── Regras de Contenção Estrita em Todas as Colunas Laterais / Sidebars no Print ── */
+  .cv-sidebar-col,
+  .cv-duo-left,
+  .cv-navy-sidebar,
+  .cv-editorial-grid aside {
+    min-width: 0 !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+    overflow: hidden !important;
+  }
+
+  .cv-sidebar-col .cv-languages-grid,
+  .cv-duo-left .cv-languages-grid,
+  .cv-navy-sidebar .cv-languages-grid,
+  .cv-editorial-grid aside .cv-languages-grid,
+  .cv-sidebar-col .cv-skills-grid,
+  .cv-duo-left .cv-skills-grid,
+  .cv-navy-sidebar .cv-skills-grid,
+  .cv-editorial-grid aside .cv-skills-grid,
+  .cv-sidebar-col .cv-interests-grid,
+  .cv-duo-left .cv-interests-grid,
+  .cv-navy-sidebar .cv-interests-grid,
+  .cv-editorial-grid aside .cv-interests-grid {
+    display: flex !important;
+    flex-direction: column !important;
+    grid-template-columns: 1fr !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    gap: 0.4rem !important;
+  }
+
+  .cv-sidebar-col .cv-language-card,
+  .cv-duo-left .cv-language-card,
+  .cv-navy-sidebar .cv-language-card,
+  .cv-editorial-grid aside .cv-language-card {
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+    display: flex !important;
+    flex-direction: row !important;
     justify-content: space-between !important;
+    align-items: center !important;
+    gap: 0.25rem !important;
+    flex-wrap: wrap !important;
+    padding: 0.35rem 0.5rem !important;
+  }
+
+  .cv-sidebar-col .cv-skills-group,
+  .cv-duo-left .cv-skills-group,
+  .cv-navy-sidebar .cv-skills-group,
+  .cv-editorial-grid aside .cv-skills-group {
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+  }
+
+  .cv-sidebar-col .cv-skill-tags,
+  .cv-duo-left .cv-skill-tags,
+  .cv-navy-sidebar .cv-skill-tags,
+  .cv-editorial-grid aside .cv-skill-tags {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 0.2rem !important;
+    max-width: 100% !important;
+  }
+
+  .cv-sidebar-col .cv-skill-tag,
+  .cv-duo-left .cv-skill-tag,
+  .cv-navy-sidebar .cv-skill-tag,
+  .cv-editorial-grid aside .cv-skill-tag {
+    white-space: normal !important;
+    word-break: break-word !important;
+    max-width: 100% !important;
+    font-size: 7.6pt !important;
+  }
+
+  .cv-sidebar-col .cv-contacts,
+  .cv-duo-left .cv-contacts,
+  .cv-navy-sidebar .cv-contacts,
+  .cv-editorial-grid aside .cv-contacts,
+  .cv-sidebar-contacts {
+    text-align: left !important;
+    align-items: flex-start !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    word-break: break-word !important;
+    overflow-wrap: anywhere !important;
+  }
+
+  .cv-sidebar-col a,
+  .cv-duo-left a,
+  .cv-navy-sidebar a,
+  .cv-editorial-grid aside a {
+    word-break: break-word !important;
+    overflow-wrap: anywhere !important;
   }
 
   .cv-education-card .cv-item-title,

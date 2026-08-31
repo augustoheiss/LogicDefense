@@ -12,7 +12,7 @@
 
 .cv-viewer-container {
   width: 100%;
-  max-width: 900px;
+  max-width: 210mm;
   margin: 0 auto;
   transition: all 0.3s ease;
 }
@@ -24,8 +24,9 @@
   margin: 0 auto 2rem auto;
   box-sizing: border-box;
   position: relative;
-  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12);
   border-radius: 4px;
+  background: #ffffff;
 }
 
 .cv-cover-letter-page {
@@ -53,16 +54,16 @@
     padding: 0 !important;
   }
   .cv-page-a4 {
-    width: 210mm !important;
-    height: 297mm !important;
-    max-height: 297mm !important;
-    overflow: hidden !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-height: 297mm !important;
+    overflow: visible !important;
     margin: 0 !important;
-    padding: 10mm 12mm !important;
+    padding: 0 !important;
     box-shadow: none !important;
     border-radius: 0 !important;
-    page-break-inside: avoid !important;
-    break-inside: avoid !important;
+    page-break-after: always !important;
+    break-after: page !important;
   }
   .cv-cover-letter-page {
     page-break-before: always !important;
@@ -71,11 +72,12 @@
 }
 
 .cv-card {
-  padding: 2.2rem 2.5rem;
-  border-radius: 0.75rem;
+  padding: 2rem 2.25rem;
+  border-radius: 0.5rem;
   transition: all 0.2s ease;
   min-height: 100%;
   box-sizing: border-box;
+  width: 100%;
 }
 
 /* ── Header Padrão ── */
@@ -237,17 +239,83 @@
   margin-bottom: 0.2rem;
 }
 
-/* ── Grids de Cards ── */
+/* ── Grids de Cards com Proteção Anti-Transbordamento ── */
+.cv-languages-grid,
+.cv-skills-grid,
+.cv-projects-grid,
+.cv-education-grid,
+.cv-certs-grid,
+.cv-awards-grid,
+.cv-interests-grid,
+.cv-references-grid {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.cv-language-card,
+.cv-skills-group,
+.cv-project-card,
+.cv-education-card,
+.cv-cert-card,
+.cv-award-card,
+.cv-interest-card,
+.cv-ref-card {
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+
+.cv-grid-1 {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.75rem;
+  width: 100%;
+}
+
 .cv-grid-2 {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.75rem;
+  width: 100%;
 }
 
 .cv-grid-3 {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.75rem;
+  width: 100%;
+}
+
+.cv-grid-4 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+  width: 100%;
+}
+
+.cv-grid-5,
+.cv-grid-split-3-2 {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 0.75rem;
+  width: 100%;
+}
+.cv-grid-5 > *,
+.cv-grid-split-3-2 > * {
+  grid-column: span 2;
+}
+.cv-grid-5 > *:nth-last-child(2):nth-child(3n+4),
+.cv-grid-5 > *:last-child:nth-child(3n+5),
+.cv-grid-5 > *:nth-last-child(2):nth-child(4),
+.cv-grid-5 > *:last-child:nth-child(5),
+.cv-grid-split-3-2 > *:nth-last-child(2):nth-child(3n+4),
+.cv-grid-split-3-2 > *:last-child:nth-child(3n+5),
+.cv-grid-split-3-2 > *:nth-last-child(2):nth-child(4),
+.cv-grid-split-3-2 > *:last-child:nth-child(5) {
+  grid-column: span 3;
 }
 
 .cv-card-box {
@@ -262,6 +330,7 @@
   flex-wrap: wrap;
   gap: 0.35rem;
   margin-top: 0.35rem;
+  max-width: 100%;
 }
 
 .cv-tag {
@@ -269,6 +338,25 @@
   padding: 0.1rem 0.4rem;
   border-radius: 0.25rem;
   background: rgba(125, 125, 125, 0.12);
+  white-space: normal;
+  word-break: break-word;
+}
+
+.cv-skill-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin-top: 0.35rem;
+  max-width: 100%;
+}
+
+.cv-skill-tag {
+  font-size: 0.75rem;
+  padding: 0.15rem 0.45rem;
+  border-radius: 0.25rem;
+  white-space: normal;
+  word-break: break-word;
+  max-width: 100%;
 }
 
 /* ── Barras de Nível de Habilidade & Expertise ── */
@@ -460,6 +548,104 @@
   display: flex;
   flex-direction: column;
   gap: 1.25rem;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+/* ── Regras de Contenção Estrita para Todas as Colunas Laterais / Sidebars ── */
+.cv-sidebar-col,
+.cv-duo-left,
+.cv-navy-sidebar,
+.cv-editorial-grid aside {
+  min-width: 0 !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+  overflow: hidden !important;
+}
+
+.cv-sidebar-col .cv-languages-grid,
+.cv-duo-left .cv-languages-grid,
+.cv-navy-sidebar .cv-languages-grid,
+.cv-editorial-grid aside .cv-languages-grid,
+.cv-sidebar-col .cv-skills-grid,
+.cv-duo-left .cv-skills-grid,
+.cv-navy-sidebar .cv-skills-grid,
+.cv-editorial-grid aside .cv-skills-grid,
+.cv-sidebar-col .cv-interests-grid,
+.cv-duo-left .cv-interests-grid,
+.cv-navy-sidebar .cv-interests-grid,
+.cv-editorial-grid aside .cv-interests-grid {
+  display: flex !important;
+  flex-direction: column !important;
+  grid-template-columns: 1fr !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  gap: 0.5rem !important;
+}
+
+.cv-sidebar-col .cv-language-card,
+.cv-duo-left .cv-language-card,
+.cv-navy-sidebar .cv-language-card,
+.cv-editorial-grid aside .cv-language-card {
+  width: 100% !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+  display: flex !important;
+  flex-direction: row !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  gap: 0.35rem !important;
+  flex-wrap: wrap !important;
+}
+
+.cv-sidebar-col .cv-skills-group,
+.cv-duo-left .cv-skills-group,
+.cv-navy-sidebar .cv-skills-group,
+.cv-editorial-grid aside .cv-skills-group {
+  width: 100% !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+.cv-sidebar-col .cv-skill-tags,
+.cv-duo-left .cv-skill-tags,
+.cv-navy-sidebar .cv-skill-tags,
+.cv-editorial-grid aside .cv-skill-tags {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 0.25rem !important;
+  max-width: 100% !important;
+}
+
+.cv-sidebar-col .cv-skill-tag,
+.cv-duo-left .cv-skill-tag,
+.cv-navy-sidebar .cv-skill-tag,
+.cv-editorial-grid aside .cv-skill-tag {
+  white-space: normal !important;
+  word-break: break-word !important;
+  max-width: 100% !important;
+}
+
+.cv-sidebar-col .cv-contacts,
+.cv-duo-left .cv-contacts,
+.cv-navy-sidebar .cv-contacts,
+.cv-editorial-grid aside .cv-contacts,
+.cv-sidebar-contacts {
+  text-align: left !important;
+  align-items: flex-start !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  word-break: break-word !important;
+  overflow-wrap: anywhere !important;
+}
+
+.cv-sidebar-col a,
+.cv-duo-left a,
+.cv-navy-sidebar a,
+.cv-editorial-grid aside a {
+  word-break: break-word !important;
+  overflow-wrap: anywhere !important;
 }
 
 /* ── Modelo A4 04: Executive Duo (Victoria Wotton) ── */

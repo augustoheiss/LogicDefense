@@ -845,6 +845,9 @@ def render_multi_cv_dashboard_html(
     .languages-grid {{
       display: grid;
       gap: 0.65rem;
+      width: 100%;
+      max-width: 100%;
+      box-sizing: border-box;
     }}
 
     .cv-grid-1,
@@ -860,25 +863,25 @@ def render_multi_cv_dashboard_html(
     .cv-grid-2,
     .projects-grid:has(> :nth-child(2):last-child),
     .skills-grid:has(> :nth-child(2):last-child) {{
-      grid-template-columns: repeat(2, 1fr) !important;
+      grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
     }}
 
     .cv-grid-3,
     .projects-grid:has(> :nth-child(3):last-child),
     .skills-grid:has(> :nth-child(3):last-child) {{
-      grid-template-columns: repeat(3, 1fr) !important;
+      grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
     }}
 
     .cv-grid-4,
     .projects-grid:has(> :nth-child(4):last-child),
     .skills-grid:has(> :nth-child(4):last-child) {{
-      grid-template-columns: repeat(2, 1fr) !important;
+      grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
     }}
 
     .cv-grid-5,
     .cv-grid-split-3-2 {{
       display: grid !important;
-      grid-template-columns: repeat(6, 1fr) !important;
+      grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
     }}
     .cv-grid-5 > *:nth-child(1),
     .cv-grid-5 > *:nth-child(2),
@@ -896,6 +899,18 @@ def render_multi_cv_dashboard_html(
     .cv-grid-split-3-2 > *:nth-last-child(1),
     .cv-grid-split-3-2 > *:nth-last-child(2) {{
       grid-column: span 3 !important;
+    }}
+
+    .project-card,
+    .skill-group,
+    .geo-card,
+    .interest-card,
+    .lang-card {{
+      min-width: 0 !important;
+      max-width: 100% !important;
+      box-sizing: border-box !important;
+      overflow-wrap: break-word !important;
+      word-break: break-word !important;
     }}
 
     .project-card {{
@@ -929,6 +944,8 @@ def render_multi_cv_dashboard_html(
       justify-content: space-between;
       align-items: center;
       font-size: 0.82rem;
+      flex-wrap: wrap;
+      gap: 0.35rem;
     }}
 
     .issuer-pill {{
@@ -951,6 +968,7 @@ def render_multi_cv_dashboard_html(
       display: flex;
       flex-wrap: wrap;
       gap: 0.3rem;
+      max-width: 100%;
     }}
 
     .badge {{
@@ -959,6 +977,9 @@ def render_multi_cv_dashboard_html(
       font-weight: 600;
       padding: 0.15rem 0.45rem;
       border-radius: 4px;
+      white-space: normal;
+      word-break: break-word;
+      max-width: 100%;
     }}
 
     .avoid-break {{
@@ -969,6 +990,8 @@ def render_multi_cv_dashboard_html(
     a, .cv-link {{
       text-decoration: none;
       font-weight: 500;
+      word-break: break-word;
+      overflow-wrap: anywhere;
     }}
     a:hover, .cv-link:hover {{ text-decoration: underline; }}
 

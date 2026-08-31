@@ -140,12 +140,14 @@ function getEmbeddedCss(): string {
 
     .cv-page-a4 {
       width: 100%;
+      max-width: 210mm;
       min-height: 297mm;
       margin-bottom: 2rem;
       box-sizing: border-box;
-      box-shadow: 0 12px 36px rgba(0, 0, 0, 0.2);
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12);
       border-radius: 4px;
       position: relative;
+      background: #ffffff;
     }
 
     .cv-cover-letter-page {
@@ -154,9 +156,10 @@ function getEmbeddedCss(): string {
     }
 
     .cv-card {
-      padding: 2.2rem 2.5rem;
+      padding: 2rem 2.25rem;
       min-height: 100%;
       box-sizing: border-box;
+      width: 100%;
     }
 
     /* ── Controles de Visibilidade das Folhas ── */
@@ -183,16 +186,19 @@ function getEmbeddedCss(): string {
         padding: 0 !important;
       }
       .cv-page-a4 {
-        width: 210mm !important;
-        height: 297mm !important;
-        max-height: 297mm !important;
-        overflow: hidden !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        min-height: 297mm !important;
+        overflow: visible !important;
         margin: 0 !important;
-        padding: 10mm 12mm !important;
+        padding: 0 !important;
         box-shadow: none !important;
         border-radius: 0 !important;
-        page-break-inside: avoid !important;
-        break-inside: avoid !important;
+        page-break-after: always !important;
+        break-after: page !important;
+      }
+      .cv-card {
+        padding: 0 !important;
       }
       .cv-cover-letter-page {
         page-break-before: always !important;
@@ -218,18 +224,101 @@ function getEmbeddedCss(): string {
     .cv-signature-cursive { font-family: 'Caveat', cursive, sans-serif; font-size: 2.2rem; line-height: 1.1; margin-top: 0.5rem; }
     .cv-signature-img { max-height: 52px; max-width: 180px; object-fit: contain; margin-top: 0.4rem; }
 
-    /* ── Layouts Wireframe ── */
+    /* ── Grids de Cards com Proteção Anti-Transbordamento ── */
+    .cv-languages-grid,
+    .cv-skills-grid,
+    .cv-projects-grid,
+    .cv-education-grid,
+    .cv-certs-grid,
+    .cv-awards-grid,
+    .cv-interests-grid,
+    .cv-references-grid {
+      width: 100%;
+      max-width: 100%;
+      box-sizing: border-box;
+    }
+
+    .cv-language-card,
+    .cv-skills-group,
+    .cv-project-card,
+    .cv-education-card,
+    .cv-cert-card,
+    .cv-award-card,
+    .cv-interest-card,
+    .cv-ref-card {
+      min-width: 0;
+      max-width: 100%;
+      box-sizing: border-box;
+      overflow-wrap: break-word;
+      word-break: break-word;
+    }
+
+    .cv-grid-1 { display: grid; grid-template-columns: 1fr; gap: 0.75rem; width: 100%; }
+    .cv-grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem; width: 100%; }
+    .cv-grid-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.75rem; width: 100%; }
+    .cv-grid-4 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem; width: 100%; }
+    .cv-grid-5, .cv-grid-split-3-2 { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 0.75rem; width: 100%; }
+    .cv-grid-5 > *, .cv-grid-split-3-2 > * { grid-column: span 2; }
+    .cv-grid-5 > *:nth-last-child(2):nth-child(3n+4), .cv-grid-5 > *:last-child:nth-child(3n+5),
+    .cv-grid-split-3-2 > *:nth-last-child(2):nth-child(3n+4), .cv-grid-split-3-2 > *:last-child:nth-child(3n+5) { grid-column: span 3; }
+
+    .cv-tags, .cv-skill-tags { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-top: 0.35rem; max-width: 100%; }
+    .cv-tag, .cv-skill-tag { font-size: 0.75rem; padding: 0.15rem 0.45rem; border-radius: 0.25rem; white-space: normal; word-break: break-word; max-width: 100%; }
+
+    /* ── Layouts Wireframe & Contenção de Sidebar ── */
     .layout-sidebar .cv-sidebar-layout,
     .layout-compact_split .cv-duo-layout,
     .layout-corporate_timeline .cv-navy-layout {
       display: grid;
       grid-template-columns: 240px 1fr;
       gap: 2rem;
+      align-items: start;
     }
     .layout-corporate_timeline .cv-navy-sidebar { background: #0f172a; color: #f8fafc; padding: 2.2rem 1.5rem; }
     .layout-editorial_accent .cv-editorial-grid { display: grid; grid-template-columns: 220px 1fr; gap: 1.75rem; }
     .layout-editorial_accent .cv-brand-greeting { padding: 0.3rem 0.6rem; background: currentColor; color: #fff; border-radius: 4px; font-weight: 800; }
     .layout-hero_matrix .cv-hero-banner { display: grid; grid-template-columns: 1fr 120px; gap: 1.5rem; background: rgba(125,125,125,0.06); padding: 1.25rem; border-radius: 6px; }
+
+    /* Contenção de Sidebar */
+    .cv-sidebar-col, .cv-duo-left, .cv-navy-sidebar, .cv-editorial-grid aside {
+      min-width: 0 !important;
+      max-width: 100% !important;
+      box-sizing: border-box !important;
+      overflow: hidden !important;
+    }
+    .cv-sidebar-col .cv-languages-grid, .cv-duo-left .cv-languages-grid, .cv-navy-sidebar .cv-languages-grid, .cv-editorial-grid aside .cv-languages-grid,
+    .cv-sidebar-col .cv-skills-grid, .cv-duo-left .cv-skills-grid, .cv-navy-sidebar .cv-skills-grid, .cv-editorial-grid aside .cv-skills-grid,
+    .cv-sidebar-col .cv-interests-grid, .cv-duo-left .cv-interests-grid, .cv-navy-sidebar .cv-interests-grid, .cv-editorial-grid aside .cv-interests-grid {
+      display: flex !important;
+      flex-direction: column !important;
+      grid-template-columns: 1fr !important;
+      width: 100% !important;
+      max-width: 100% !important;
+      gap: 0.5rem !important;
+    }
+    .cv-sidebar-col .cv-language-card, .cv-duo-left .cv-language-card, .cv-navy-sidebar .cv-language-card, .cv-editorial-grid aside .cv-language-card {
+      width: 100% !important;
+      max-width: 100% !important;
+      box-sizing: border-box !important;
+      display: flex !important;
+      flex-direction: row !important;
+      justify-content: space-between !important;
+      align-items: center !important;
+      gap: 0.35rem !important;
+      flex-wrap: wrap !important;
+    }
+    .cv-sidebar-col .cv-contacts, .cv-duo-left .cv-contacts, .cv-navy-sidebar .cv-contacts, .cv-editorial-grid aside .cv-contacts, .cv-sidebar-contacts {
+      text-align: left !important;
+      align-items: flex-start !important;
+      width: 100% !important;
+      max-width: 100% !important;
+      word-break: break-word !important;
+      overflow-wrap: anywhere !important;
+    }
+    .cv-sidebar-col a, .cv-duo-left a, .cv-navy-sidebar a, .cv-editorial-grid aside a {
+      word-break: break-word !important;
+      overflow-wrap: anywhere !important;
+    }
 
     /* ── Temas ── */
     .theme-executive { background: #ffffff; color: #0f172a; }
