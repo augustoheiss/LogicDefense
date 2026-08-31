@@ -582,6 +582,16 @@ aside .cv-education-grid,
 aside .cv-projects-grid,
 aside .cv-hobbies-grid,
 aside .cv-math-grid,
+.layout-hero_matrix .cv-projects-grid,
+.layout-hero_matrix .cv-education-grid,
+.layout-compact_split .cv-projects-grid,
+.layout-compact_split .cv-education-grid,
+.layout-sidebar .cv-projects-grid,
+.layout-sidebar .cv-education-grid,
+.layout-editorial_accent .cv-projects-grid,
+.layout-editorial_accent .cv-education-grid,
+.layout-corporate_timeline .cv-projects-grid,
+.layout-corporate_timeline .cv-education-grid,
 .cv-sidebar-col .cv-languages-grid,
 .cv-duo-left .cv-languages-grid,
 .cv-navy-sidebar .cv-languages-grid,
@@ -600,13 +610,27 @@ aside .cv-math-grid,
 .cv-sidebar-stack .cv-languages-grid,
 .cv-sidebar-stack .cv-interests-grid,
 .cv-sidebar-stack .cv-certs-grid,
-.cv-sidebar-stack .cv-skills-grid {
+.cv-sidebar-stack .cv-skills-grid,
+.cv-sidebar-stack .cv-projects-grid,
+.cv-sidebar-stack .cv-education-grid {
   display: flex !important;
   flex-direction: column !important;
   grid-template-columns: 1fr !important;
   width: 100% !important;
   max-width: 100% !important;
   gap: 0.5rem !important;
+}
+
+.layout-hero_matrix .cv-project-card,
+.layout-compact_split .cv-project-card,
+.layout-sidebar .cv-project-card,
+.layout-editorial_accent .cv-project-card,
+.layout-corporate_timeline .cv-project-card,
+aside .cv-project-card,
+.cv-sidebar-stack .cv-project-card {
+  width: 100% !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
 }
 
 aside .cv-language-card,

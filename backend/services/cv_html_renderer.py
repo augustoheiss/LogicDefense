@@ -401,20 +401,7 @@ def _render_cv_layout_html(data: dict, layout: str, t: dict, view_mode: str = "c
         pr_url = html.escape(pr.get("url", ""))
         kws = "".join(f"<span class='badge'>{html.escape(k)}</span>" for k in pr.get("keywords", []))
         highlights = pr.get("highlights", [])
-        hl_html = "".join(f"<li>{html.escape(h)}</li>" for h in highlights)
-
-        projects_items_html += f"""
-        <div class="project-card cv-math-project-card avoid-break">
-            <div class="item-header">
-                <span class="item-title">{f'<a href="{pr_url}" target="_blank">{name} ↗</a>' if pr_url else name}</span>
-            </div>
-            <p class="item-desc">{desc}</p>
-            {f'<ul class="bullets" style="margin-bottom: 0.4rem;">{hl_html}</ul>' if highlights else ''}
-            <div class="tags cv-math-tags">{kws}</div>
-        </div>
-        """
-
-    # Skills (Horizontal / Grid & Vertical Stack)
+        hl_html = "".join    # Skills (Horizontal / Grid & Vertical Stack)
     skills_items_html = ""
     for sk in skills:
         cat_name = html.escape(sk.get("name", ""))
@@ -423,6 +410,40 @@ def _render_cv_layout_html(data: dict, layout: str, t: dict, view_mode: str = "c
         <div class="skill-group cv-math-skill-card avoid-break">
             <div class="skill-title cv-math-skill-title">⚡ {cat_name}</div>
             <div class="tags cv-math-tags">{kws}</div>
+        </div>
+        """
+
+    # Skills com Barras de Progresso (Expertise / Matriz de Competências)
+    def _calc_skill_percent(lvl_str, lvl_pct):
+        if isinstance(lvl_pct, (int, float)) and 0 <= lvl_pct <= 100:
+            return int(lvl_pct)
+        if not lvl_str:
+            return 75
+        norm = str(lvl_str).lower().strip()
+        if any(w in norm for w in ["expert", "especialista", "master", "principal", "lead", "staff"]):
+            return 95
+        if any(w in norm for w in ["senior", "sênior", "avançad", "advanced", "alto"]):
+            return 85
+        if any(w in norm for w in ["pleno", "intermediár", "intermediate", "proficient", "médio"]):
+            return 70
+        if any(w in norm for w in ["júnior", "junior", "básic", "basic", "iniciante"]):
+            return 40
+        return 75
+
+    skills_bars_html = ""
+    for sk in skills:
+        sk_name = html.escape(sk.get("name", ""))
+        sk_level = html.escape(sk.get("level", ""))
+        sk_pct = _calc_skill_percent(sk.get("level"), sk.get("levelPercent"))
+        skills_bars_html += f"""
+        <div class="cv-skill-bar-wrapper avoid-break" style="width: 100%; margin-bottom: 0.45rem;">
+            <div class="cv-skill-bar-label" style="display: flex; justify-content: space-between; align-items: center; font-size: 0.82rem; font-weight: 700; margin-bottom: 0.2rem;">
+                <span>{sk_name}</span>
+                <span style="opacity: 0.8; font-size: 0.75rem; font-weight: 600;">{sk_level or f'{sk_pct}%'}</span>
+            </div>
+            <div class="cv-skill-bar-bg" style="width: 100%; height: 5px; background: rgba(125,125,125,0.2); border-radius: 999px; overflow: hidden;">
+                <div class="cv-skill-bar-fill" style="width: {sk_pct}%; height: 100%; background: currentColor; border-radius: 999px;"></div>
+            </div>
         </div>
         """
 
@@ -507,6 +528,24 @@ def _render_cv_layout_html(data: dict, layout: str, t: dict, view_mode: str = "c
         </div>
         """
 
+    # Hobbies com Ícones Circulares (Modelo 04 Executive Duo)
+    hobby_icons_map = {
+        "camera": "📷", "palette": "🎨", "plane": "✈️", "book": "📚",
+        "code": "💻", "music": "🎵", "coffee": "☕", "globe": "🌐",
+        "chess": "♟️", "gym": "🏋️"
+    }
+    hobbies_circles_html = ""
+    for it in interests:
+        it_name = html.escape(it.get("name", ""))
+        it_icon_key = str(it.get("icon", "")).lower()
+        it_icon = hobby_icons_map.get(it_icon_key, "🎯")
+        hobbies_circles_html += f"""
+        <div style="display: flex; flex-direction: column; align-items: center; gap: 0.2rem;">
+            <div class="cv-hobby-circle" style="width: 36px; height: 36px; border-radius: 50%; border: 1.5px solid currentColor; display: flex; align-items: center; justify-content: center; font-size: 1.1rem; margin: 0 auto 0.2rem auto;">{it_icon}</div>
+            <div class="cv-hobby-label" style="font-size: 0.72rem; font-weight: 700; text-align: center; max-width: 75px; word-break: break-word;">{it_name}</div>
+        </div>
+        """
+
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     # 1. MODELO A4 09: Dynamic Grid Math (Augusto Heiss / Mathematical Balance)
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -576,7 +615,7 @@ def _render_cv_layout_html(data: dict, layout: str, t: dict, view_mode: str = "c
                             {f'<div>🌐 <a href="{html.escape(url_val)}" target="_blank" class="cv-link">{html.escape(url_val)}</a></div>' if url_val else ''}
                         </div>
                     </div>
-                    {f'<div class="sidebar-section"><h4 class="section-title" style="font-size: 0.85rem;">{t["skills"]}</h4><div class="cv-sidebar-stack">{skills_items_html}</div></div>' if skills else ''}
+                    {f'<div class="sidebar-section"><h4 class="section-title" style="font-size: 0.85rem;">EXPERTISE</h4><div class="cv-skills-progress-list">{skills_bars_html}</div></div>' if skills else ''}
                     {f'<div class="sidebar-section"><h4 class="section-title" style="font-size: 0.85rem;">{t["languages"]}</h4><div class="cv-sidebar-stack">{lang_cards_html}</div></div>' if languages else ''}
                     {f'<div class="sidebar-section"><h4 class="section-title" style="font-size: 0.85rem;">{t["certificates"]}</h4><div class="cv-sidebar-stack">{certificates_items_html}</div></div>' if certificates else ''}
                     {f'<div class="sidebar-section"><h4 class="section-title" style="font-size: 0.85rem;">{t["interests"]}</h4><div class="cv-sidebar-stack">{interest_items_html}</div></div>' if interests else ''}
@@ -585,8 +624,8 @@ def _render_cv_layout_html(data: dict, layout: str, t: dict, view_mode: str = "c
                 <main class="cv-editorial-main">
                     {f'<div class="summary" style="margin-bottom: 1.25rem;">{html.escape(basics.get("summary", "")).replace(chr(10), "<br>")}</div>' if basics.get("summary") else ''}
                     {f'<section class="avoid-break"><h2 class="section-title">{t["work"]}</h2>{work_items_html}</section>' if work else ''}
-                    {f'<section class="avoid-break"><h2 class="section-title">{t["projects"]}</h2><div class="projects-grid cv-math-grid {get_grid_class(len(projects))}">{projects_items_html}</div></section>' if projects else ''}
-                    {f'<section class="avoid-break"><h2 class="section-title">{t["education"]}</h2><div class="education-grid cv-math-grid {get_grid_class(len(education))}">{education_items_html}</div></section>' if education else ''}
+                    {f'<section class="avoid-break"><h2 class="section-title">{t["projects"]}</h2><div class="cv-sidebar-stack" style="display: flex; flex-direction: column; gap: 0.65rem; width: 100%;">{projects_items_html}</div></section>' if projects else ''}
+                    {f'<section class="avoid-break"><h2 class="section-title">{t["education"]}</h2><div class="cv-sidebar-stack" style="display: flex; flex-direction: column; gap: 0.65rem; width: 100%;">{education_items_html}</div></section>' if education else ''}
                 </main>
             </div>
         </div>
@@ -610,7 +649,7 @@ def _render_cv_layout_html(data: dict, layout: str, t: dict, view_mode: str = "c
                         {f'<div>📞 {html.escape(phone_val)}</div>' if phone_val else ''}
                         {f'<div>📍 {html.escape(loc_str)}</div>' if loc_str else ''}
                     </div>
-                    {f'<div><h4 style="font-size: 0.85rem; color: #f8fafc; border-bottom: 1px solid rgba(255,255,255,0.2); padding-bottom: 0.25rem; margin-bottom: 0.5rem;">{t["skills"]}</h4><div class="cv-sidebar-stack">{skills_items_html}</div></div>' if skills else ''}
+                    {f'<div><h4 style="font-size: 0.85rem; color: #f8fafc; border-bottom: 1px solid rgba(255,255,255,0.2); padding-bottom: 0.25rem; margin-bottom: 0.5rem;">EXPERTISE</h4><div class="cv-skills-progress-list">{skills_bars_html}</div></div>' if skills else ''}
                     {f'<div><h4 style="font-size: 0.85rem; color: #f8fafc; border-bottom: 1px solid rgba(255,255,255,0.2); padding-bottom: 0.25rem; margin-bottom: 0.5rem;">{t["languages"]}</h4><div class="cv-sidebar-stack">{lang_cards_html}</div></div>' if languages else ''}
                     {f'<div><h4 style="font-size: 0.85rem; color: #f8fafc; border-bottom: 1px solid rgba(255,255,255,0.2); padding-bottom: 0.25rem; margin-bottom: 0.5rem;">{t["interests"]}</h4><div class="cv-sidebar-stack">{interest_items_html}</div></div>' if interests else ''}
                 </aside>
@@ -618,16 +657,16 @@ def _render_cv_layout_html(data: dict, layout: str, t: dict, view_mode: str = "c
                 <main class="cv-navy-main">
                     {f'<div class="summary">{html.escape(basics.get("summary", "")).replace(chr(10), "<br>")}</div>' if basics.get("summary") else ''}
                     {f'<section class="avoid-break"><h2 class="section-title">{t["work"]}</h2>{work_items_html}</section>' if work else ''}
-                    {f'<section class="avoid-break"><h2 class="section-title">{t["education"]}</h2><div class="education-grid cv-math-grid {get_grid_class(len(education))}">{education_items_html}</div></section>' if education else ''}
-                    {f'<section class="avoid-break"><h2 class="section-title">{t["projects"]}</h2><div class="projects-grid cv-math-grid {get_grid_class(len(projects))}">{projects_items_html}</div></section>' if projects else ''}
-                    {f'<section class="avoid-break"><h2 class="section-title">{t["certificates"]}</h2><div class="certs-grid cv-math-grid {get_grid_class(len(certificates))}">{certificates_items_html}</div></section>' if certificates else ''}
+                    {f'<section class="avoid-break"><h2 class="section-title">{t["education"]}</h2><div class="cv-sidebar-stack" style="display: flex; flex-direction: column; gap: 0.65rem; width: 100%;">{education_items_html}</div></section>' if education else ''}
+                    {f'<section class="avoid-break"><h2 class="section-title">{t["projects"]}</h2><div class="cv-sidebar-stack" style="display: flex; flex-direction: column; gap: 0.65rem; width: 100%;">{projects_items_html}</div></section>' if projects else ''}
+                    {f'<section class="avoid-break"><h2 class="section-title">{t["certificates"]}</h2><div class="cv-sidebar-stack" style="display: flex; flex-direction: column; gap: 0.65rem; width: 100%;">{certificates_items_html}</div></section>' if certificates else ''}
                 </main>
             </div>
         </div>
         """
 
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    # 4. MODELO A4 08: Hero Matrix
+    # 4. MODELO A4 08: Hero Matrix (Mary Smith)
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     elif layout == "hero_matrix":
         cv_body = f"""
@@ -647,17 +686,17 @@ def _render_cv_layout_html(data: dict, layout: str, t: dict, view_mode: str = "c
 
             {f'<div class="summary" style="margin-bottom: 1rem;">{html.escape(basics.get("summary", "")).replace(chr(10), "<br>")}</div>' if basics.get("summary") else ''}
 
-            <div style="display: grid; grid-template-columns: 1.2fr 1fr; gap: 1.25rem; margin-bottom: 1rem;">
+            <div style="display: grid; grid-template-columns: 1.2fr 1fr; gap: 1.5rem; margin-bottom: 1.25rem; align-items: start;">
                 <div>
                     {f'<section class="avoid-break"><h2 class="section-title">{t["work"]}</h2>{work_items_html}</section>' if work else ''}
                 </div>
                 <div>
-                    {f'<section class="avoid-break"><h2 class="section-title">{t["education"]}</h2><div class="education-grid cv-math-grid {get_grid_class(len(education))}">{education_items_html}</div></section>' if education else ''}
-                    {f'<section class="avoid-break"><h2 class="section-title">{t["projects"]}</h2><div class="projects-grid cv-math-grid {get_grid_class(len(projects))}">{projects_items_html}</div></section>' if projects else ''}
+                    {f'<section class="avoid-break"><h2 class="section-title">{t["education"]}</h2><div class="cv-sidebar-stack" style="display: flex; flex-direction: column; gap: 0.65rem; width: 100%;">{education_items_html}</div></section>' if education else ''}
+                    {f'<section class="avoid-break"><h2 class="section-title">{t["projects"]}</h2><div class="cv-sidebar-stack" style="display: flex; flex-direction: column; gap: 0.65rem; width: 100%;">{projects_items_html}</div></section>' if projects else ''}
                 </div>
             </div>
 
-            {f'<section class="avoid-break"><h2 class="section-title">{t["skills"]}</h2><div class="skills-grid cv-math-grid {get_grid_class(len(skills))}">{skills_items_html}</div></section>' if skills else ''}
+            {f'<section class="avoid-break" style="border-top: 1px solid rgba(125,125,125,0.2); padding-top: 0.85rem; margin-top: 0.5rem;"><h2 class="section-title">⚡ MATRIZ DE COMPETÊNCIAS</h2><div class="cv-skills-progress-list">{skills_bars_html}</div></section>' if skills else ''}
             {f'<section class="avoid-break"><h2 class="section-title">{t["languages"]}</h2><div class="languages-grid cv-math-grid {get_grid_class(len(languages))}">{lang_cards_html}</div></section>' if languages else ''}
             {f'<section class="avoid-break"><h2 class="section-title">{t["certificates"]}</h2><div class="certs-grid cv-math-grid {get_grid_class(len(certificates))}">{certificates_items_html}</div></section>' if certificates else ''}
             {f'<section class="avoid-break"><h2 class="section-title">{t["interests"]}</h2><div class="interests-grid cv-math-grid {get_grid_class(len(interests))}">{interest_items_html}</div></section>' if interests else ''}
@@ -665,11 +704,48 @@ def _render_cv_layout_html(data: dict, layout: str, t: dict, view_mode: str = "c
         """
 
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    # 5. MODELO A4 03: Executive Sidebar & 04: Compact Split Duo
+    # 5. MODELO A4 04: Split Duo / Executive Duo (Victoria Wotton)
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    elif layout in ["sidebar", "compact_split"]:
+    elif layout == "compact_split":
         cv_body = f"""
-        <div class="layout-{layout}">
+        <div class="layout-compact_split">
+            <div class="cv-duo-layout" style="display: grid; grid-template-columns: 210px 1fr; gap: 1.5rem; align-items: start;">
+                <aside class="cv-duo-left cv-sidebar-stack" style="border-right: 1px solid rgba(125,125,125,0.25); padding-right: 1.25rem;">
+                    {avatar_html}
+                    {f'<div class="sidebar-section avoid-break"><h4 class="section-title" style="font-size: 0.85rem; margin-top: 0;">PERFIL</h4><p class="summary" style="font-size: 0.82rem; line-height: 1.5;">{html.escape(basics.get("summary", "")).replace(chr(10), "<br>")}</p></div>' if basics.get("summary") else ''}
+                    {f'<div class="sidebar-section avoid-break"><h4 class="section-title" style="font-size: 0.85rem;">EXPERTISE</h4><div class="cv-skills-progress-list">{skills_bars_html}</div></div>' if skills else ''}
+                    {f'<div class="sidebar-section avoid-break"><h4 class="section-title" style="font-size: 0.85rem;">HOBBIES</h4><div class="cv-hobbies-grid" style="display: flex; justify-content: space-around; width: 100%;">{hobbies_circles_html}</div></div>' if interests else ''}
+                    {f'<div class="sidebar-section avoid-break"><h4 class="section-title" style="font-size: 0.85rem;">{t["languages"]}</h4><div class="cv-sidebar-stack">{lang_cards_html}</div></div>' if languages else ''}
+                </aside>
+
+                <main class="cv-duo-right">
+                    <header class="header" style="border-bottom: 2px solid currentColor; padding-bottom: 0.85rem; margin-bottom: 1.25rem;">
+                        <h1 class="name" style="font-size: 1.85rem; font-weight: 800; margin: 0 0 0.25rem 0;">{html.escape(basics.get("name", ""))}</h1>
+                        <div class="label" style="font-size: 0.95rem; font-weight: 700; opacity: 0.9; margin-bottom: 0.5rem;">{html.escape(basics.get("label", ""))}</div>
+                        <div class="contacts" style="display: flex; flex-wrap: wrap; gap: 0.85rem; font-size: 0.82rem; text-align: left;">
+                            {f'<span>✉ <a href="mailto:{html.escape(email_val)}" class="cv-link">{html.escape(email_val)}</a></span>' if email_val else ''}
+                            {f'<span>📞 <a href="tel:{clean_phone}" class="cv-link">{html.escape(phone_val)}</a></span>' if phone_val else ''}
+                            {f'<span>📍 {html.escape(loc_str)}</span>' if loc_str else ''}
+                            {f'<span>🌐 <a href="{html.escape(url_val)}" target="_blank" class="cv-link">{html.escape(url_val)}</a></span>' if url_val else ''}
+                            {f'<span>{profiles_html}</span>' if profiles_html else ''}
+                        </div>
+                    </header>
+
+                    {f'<section class="avoid-break"><h2 class="section-title">{t["work"]}</h2>{work_items_html}</section>' if work else ''}
+                    {f'<section class="avoid-break"><h2 class="section-title">{t["education"]}</h2><div class="cv-sidebar-stack" style="display: flex; flex-direction: column; gap: 0.65rem; width: 100%;">{education_items_html}</div></section>' if education else ''}
+                    {f'<section class="avoid-break"><h2 class="section-title">{t["projects"]}</h2><div class="cv-sidebar-stack" style="display: flex; flex-direction: column; gap: 0.65rem; width: 100%;">{projects_items_html}</div></section>' if projects else ''}
+                    {f'<section class="avoid-break"><h2 class="section-title">{t["certificates"]}</h2><div class="cv-sidebar-stack" style="display: flex; flex-direction: column; gap: 0.65rem; width: 100%;">{certificates_items_html}</div></section>' if certificates else ''}
+                </main>
+            </div>
+        </div>
+        """
+
+    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    # 6. MODELO A4 03: Executive Sidebar
+    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    elif layout == "sidebar":
+        cv_body = f"""
+        <div class="layout-sidebar">
             <div style="display: grid; grid-template-columns: 230px 1fr; gap: 1.5rem; align-items: start;">
                 <aside class="cv-sidebar-stack" style="border-right: 1px solid rgba(125,125,125,0.2); padding-right: 1.25rem;">
                     {avatar_html}
@@ -692,8 +768,8 @@ def _render_cv_layout_html(data: dict, layout: str, t: dict, view_mode: str = "c
                 <main>
                     {f'<div class="summary">{html.escape(basics.get("summary", "")).replace(chr(10), "<br>")}</div>' if basics.get("summary") else ''}
                     {f'<section class="avoid-break"><h2 class="section-title">{t["work"]}</h2>{work_items_html}</section>' if work else ''}
-                    {f'<section class="avoid-break"><h2 class="section-title">{t["projects"]}</h2><div class="projects-grid cv-math-grid {get_grid_class(len(projects))}">{projects_items_html}</div></section>' if projects else ''}
-                    {f'<section class="avoid-break"><h2 class="section-title">{t["education"]}</h2><div class="education-grid cv-math-grid {get_grid_class(len(education))}">{education_items_html}</div></section>' if education else ''}
+                    {f'<section class="avoid-break"><h2 class="section-title">{t["projects"]}</h2><div class="cv-sidebar-stack" style="display: flex; flex-direction: column; gap: 0.65rem; width: 100%;">{projects_items_html}</div></section>' if projects else ''}
+                    {f'<section class="avoid-break"><h2 class="section-title">{t["education"]}</h2><div class="cv-sidebar-stack" style="display: flex; flex-direction: column; gap: 0.65rem; width: 100%;">{education_items_html}</div></section>' if education else ''}
                 </main>
             </div>
         </div>
@@ -2019,6 +2095,36 @@ def render_multi_cv_dashboard_html(
         `;
       }});
 
+      // Skills com Barras de Progresso
+      function calcSkillPercent(lvlStr, lvlPct) {{
+        if (typeof lvlPct === 'number' && lvlPct >= 0 && lvlPct <= 100) return lvlPct;
+        if (!lvlStr) return 75;
+        const norm = String(lvlStr).toLowerCase().trim();
+        if (norm.includes('expert') || norm.includes('especialista') || norm.includes('master') || norm.includes('lead') || norm.includes('staff')) return 95;
+        if (norm.includes('senior') || norm.includes('sênior') || norm.includes('avançad') || norm.includes('advanced')) return 85;
+        if (norm.includes('pleno') || norm.includes('intermediár') || norm.includes('intermediate') || norm.includes('proficient')) return 70;
+        if (norm.includes('júnior') || norm.includes('junior') || norm.includes('básic') || norm.includes('basic') || norm.includes('iniciante')) return 40;
+        return 75;
+      }}
+
+      let skillsBarsHtml = '';
+      (data.skills || []).forEach(sk => {{
+        const skName = sk.name || '';
+        const skLevel = sk.level || '';
+        const pct = calcSkillPercent(sk.level, sk.levelPercent);
+        skillsBarsHtml += `
+          <div class="cv-skill-bar-wrapper avoid-break" style="width: 100%; margin-bottom: 0.45rem;">
+            <div class="cv-skill-bar-label" style="display: flex; justify-content: space-between; align-items: center; font-size: 0.82rem; font-weight: 700; margin-bottom: 0.2rem;">
+              <span>${{skName}}</span>
+              <span style="opacity: 0.8; font-size: 0.75rem; font-weight: 600;">${{skLevel || pct + '%'}}</span>
+            </div>
+            <div class="cv-skill-bar-bg" style="width: 100%; height: 5px; background: rgba(125,125,125,0.2); border-radius: 999px; overflow: hidden;">
+              <div class="cv-skill-bar-fill" style="width: ${{pct}}%; height: 100%; background: currentColor; border-radius: 999px;"></div>
+            </div>
+          </div>
+        `;
+      }});
+
       // Education
       let eduHtml = '';
       (data.education || []).forEach(ed => {{
@@ -2054,7 +2160,7 @@ def render_multi_cv_dashboard_html(
         `;
       }});
 
-      // Idiomas (Full width row)
+      // Idiomas
       let langHtml = (data.languages || []).map(l => `
         <div class="lang-card avoid-break" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
           <span style="font-weight: 600;">${{l.language || ''}}</span>
@@ -2071,6 +2177,25 @@ def render_multi_cv_dashboard_html(
           <div class="interest-card cv-math-interest-card avoid-break">
             <div style="font-weight: 700; font-size: 0.85rem; margin-bottom: 0.3rem;">◈ ${{itName}}</div>
             <div class="tags cv-math-tags">${{kws}}</div>
+          </div>
+        `;
+      }});
+
+      // Hobbies Circulares
+      const hobbyIconsMap = {{
+        camera: '📷', palette: '🎨', plane: '✈️', book: '📚',
+        code: '💻', music: '🎵', coffee: '☕', globe: '🌐',
+        chess: '♟️', gym: '🏋️'
+      }};
+      let hobbiesCirclesHtml = '';
+      (data.interests || []).forEach(it => {{
+        const itName = it.name || '';
+        const itIconKey = String(it.icon || '').toLowerCase();
+        const icon = hobbyIconsMap[itIconKey] || '🎯';
+        hobbiesCirclesHtml += `
+          <div style="display: flex; flex-direction: column; align-items: center; gap: 0.2rem;">
+            <div class="cv-hobby-circle" style="width: 36px; height: 36px; border-radius: 50%; border: 1.5px solid currentColor; display: flex; align-items: center; justify-content: center; font-size: 1.1rem; margin: 0 auto 0.2rem auto;">${{icon}}</div>
+            <div class="cv-hobby-label" style="font-size: 0.72rem; font-weight: 700; text-align: center; max-width: 75px; word-break: break-word;">${{itName}}</div>
           </div>
         `;
       }});
@@ -2137,7 +2262,7 @@ def render_multi_cv_dashboard_html(
                     ${{url ? `<div>🌐 <a href="${{url}}" target="_blank" class="cv-link">${{url}}</a></div>` : ''}}
                   </div>
                 </div>
-                ${{skillsHtml ? `<div class="sidebar-section"><h4 class="section-title" style="font-size: 0.85rem;">${{I18N_T.skills || 'Competências'}}</h4><div class="cv-sidebar-stack">${{skillsHtml}}</div></div>` : ''}}
+                ${{skillsBarsHtml ? `<div class="sidebar-section"><h4 class="section-title" style="font-size: 0.85rem;">EXPERTISE</h4><div class="cv-skills-progress-list">${{skillsBarsHtml}}</div></div>` : ''}}
                 ${{langHtml ? `<div class="sidebar-section"><h4 class="section-title" style="font-size: 0.85rem;">${{I18N_T.languages || 'Idiomas'}}</h4><div class="cv-sidebar-stack">${{langHtml}}</div></div>` : ''}}
                 ${{certHtml ? `<div class="sidebar-section"><h4 class="section-title" style="font-size: 0.85rem;">${{I18N_T.certificates || 'Certificações'}}</h4><div class="cv-sidebar-stack">${{certHtml}}</div></div>` : ''}}
                 ${{intHtml ? `<div class="sidebar-section"><h4 class="section-title" style="font-size: 0.85rem;">${{I18N_T.interests || 'Interesses'}}</h4><div class="cv-sidebar-stack">${{intHtml}}</div></div>` : ''}}
@@ -2145,8 +2270,8 @@ def render_multi_cv_dashboard_html(
               <main class="cv-editorial-main">
                 ${{summary ? `<div class="summary" style="margin-bottom: 1.25rem;">${{summary}}</div>` : ''}}
                 ${{workHtml ? `<section class="avoid-break"><h2 class="section-title">${{I18N_T.work || 'Experiência'}}</h2>${{workHtml}}</section>` : ''}}
-                ${{projHtml ? `<section class="avoid-break"><h2 class="section-title">${{I18N_T.projects || 'Projetos'}}</h2><div class="projects-grid cv-math-grid ${{getGridClass((data.projects||[]).length)}}">${{projHtml}}</div></section>` : ''}}
-                ${{eduHtml ? `<section class="avoid-break"><h2 class="section-title">${{I18N_T.education || 'Formação'}}</h2><div class="education-grid cv-math-grid ${{getGridClass((data.education||[]).length)}}">${{eduHtml}}</div></section>` : ''}}
+                ${{projHtml ? `<section class="avoid-break"><h2 class="section-title">${{I18N_T.projects || 'Projetos'}}</h2><div class="cv-sidebar-stack" style="display: flex; flex-direction: column; gap: 0.65rem; width: 100%;">${{projHtml}}</div></section>` : ''}}
+                ${{eduHtml ? `<section class="avoid-break"><h2 class="section-title">${{I18N_T.education || 'Formação'}}</h2><div class="cv-sidebar-stack" style="display: flex; flex-direction: column; gap: 0.65rem; width: 100%;">${{eduHtml}}</div></section>` : ''}}
               </main>
             </div>
           </div>
@@ -2169,16 +2294,16 @@ def render_multi_cv_dashboard_html(
                   ${{phone ? `<div>📞 ${{phone}}</div>` : ''}}
                   ${{locStr ? `<div>📍 ${{locStr}}</div>` : ''}}
                 </div>
-                ${{skillsHtml ? `<div><h4 style="font-size: 0.85rem; color: #f8fafc; border-bottom: 1px solid rgba(255,255,255,0.2); padding-bottom: 0.25rem; margin-bottom: 0.5rem;">${{I18N_T.skills || 'Competências'}}</h4><div class="cv-sidebar-stack">${{skillsHtml}}</div></div>` : ''}}
+                ${{skillsBarsHtml ? `<div><h4 style="font-size: 0.85rem; color: #f8fafc; border-bottom: 1px solid rgba(255,255,255,0.2); padding-bottom: 0.25rem; margin-bottom: 0.5rem;">EXPERTISE</h4><div class="cv-skills-progress-list">${{skillsBarsHtml}}</div></div>` : ''}}
                 ${{langHtml ? `<div><h4 style="font-size: 0.85rem; color: #f8fafc; border-bottom: 1px solid rgba(255,255,255,0.2); padding-bottom: 0.25rem; margin-bottom: 0.5rem;">${{I18N_T.languages || 'Idiomas'}}</h4><div class="cv-sidebar-stack">${{langHtml}}</div></div>` : ''}}
                 ${{intHtml ? `<div><h4 style="font-size: 0.85rem; color: #f8fafc; border-bottom: 1px solid rgba(255,255,255,0.2); padding-bottom: 0.25rem; margin-bottom: 0.5rem;">${{I18N_T.interests || 'Interesses'}}</h4><div class="cv-sidebar-stack">${{intHtml}}</div></div>` : ''}}
               </aside>
               <main class="cv-navy-main">
                 ${{summary ? `<div class="summary">${{summary}}</div>` : ''}}
                 ${{workHtml ? `<section class="avoid-break"><h2 class="section-title">${{I18N_T.work || 'Experiência'}}</h2>${{workHtml}}</section>` : ''}}
-                ${{eduHtml ? `<section class="avoid-break"><h2 class="section-title">${{I18N_T.education || 'Formação'}}</h2><div class="education-grid cv-math-grid ${{getGridClass((data.education||[]).length)}}">${{eduHtml}}</div></section>` : ''}}
-                ${{projHtml ? `<section class="avoid-break"><h2 class="section-title">${{I18N_T.projects || 'Projetos'}}</h2><div class="projects-grid cv-math-grid ${{getGridClass((data.projects||[]).length)}}">${{projHtml}}</div></section>` : ''}}
-                ${{certHtml ? `<section class="avoid-break"><h2 class="section-title">${{I18N_T.certificates || 'Certificações'}}</h2><div class="certs-grid cv-math-grid ${{getGridClass((data.certificates||[]).length)}}">${{certHtml}}</div></section>` : ''}}
+                ${{eduHtml ? `<section class="avoid-break"><h2 class="section-title">${{I18N_T.education || 'Formação'}}</h2><div class="cv-sidebar-stack" style="display: flex; flex-direction: column; gap: 0.65rem; width: 100%;">${{eduHtml}}</div></section>` : ''}}
+                ${{projHtml ? `<section class="avoid-break"><h2 class="section-title">${{I18N_T.projects || 'Projetos'}}</h2><div class="cv-sidebar-stack" style="display: flex; flex-direction: column; gap: 0.65rem; width: 100%;">${{projHtml}}</div></section>` : ''}}
+                ${{certHtml ? `<section class="avoid-break"><h2 class="section-title">${{I18N_T.certificates || 'Certificações'}}</h2><div class="cv-sidebar-stack" style="display: flex; flex-direction: column; gap: 0.65rem; width: 100%;">${{certHtml}}</div></section>` : ''}}
               </main>
             </div>
           </div>
@@ -2212,14 +2337,14 @@ def render_multi_cv_dashboard_html(
               ${{avatarRectHtml}}
             </header>
             ${{summary ? `<div class="summary" style="margin-bottom: 1rem;">${{summary}}</div>` : ''}}
-            <div style="display: grid; grid-template-columns: 1.2fr 1fr; gap: 1.25rem; margin-bottom: 1rem;">
+            <div style="display: grid; grid-template-columns: 1.2fr 1fr; gap: 1.5rem; margin-bottom: 1.25rem; align-items: start;">
               <div>${{workHtml ? `<section class="avoid-break"><h2 class="section-title">${{I18N_T.work || 'Experiência'}}</h2>${{workHtml}}</section>` : ''}}</div>
               <div>
-                ${{eduHtml ? `<section class="avoid-break"><h2 class="section-title">${{I18N_T.education || 'Formação'}}</h2><div class="education-grid cv-math-grid ${{getGridClass((data.education||[]).length)}}">${{eduHtml}}</div></section>` : ''}}
-                ${{projHtml ? `<section class="avoid-break"><h2 class="section-title">${{I18N_T.projects || 'Projetos'}}</h2><div class="projects-grid cv-math-grid ${{getGridClass((data.projects||[]).length)}}">${{projHtml}}</div></section>` : ''}}
+                ${{eduHtml ? `<section class="avoid-break"><h2 class="section-title">${{I18N_T.education || 'Formação'}}</h2><div class="cv-sidebar-stack" style="display: flex; flex-direction: column; gap: 0.65rem; width: 100%;">${{eduHtml}}</div></section>` : ''}}
+                ${{projHtml ? `<section class="avoid-break"><h2 class="section-title">${{I18N_T.projects || 'Projetos'}}</h2><div class="cv-sidebar-stack" style="display: flex; flex-direction: column; gap: 0.65rem; width: 100%;">${{projHtml}}</div></section>` : ''}}
               </div>
             </div>
-            ${{skillsHtml ? `<section class="avoid-break"><h2 class="section-title">${{I18N_T.skills || 'Competências'}}</h2><div class="skills-grid cv-math-grid ${{getGridClass((data.skills||[]).length)}}">${{skillsHtml}}</div></section>` : ''}}
+            ${{skillsBarsHtml ? `<section class="avoid-break" style="border-top: 1px solid rgba(125,125,125,0.2); padding-top: 0.85rem; margin-top: 0.5rem;"><h2 class="section-title">⚡ MATRIZ DE COMPETÊNCIAS</h2><div class="cv-skills-progress-list">${{skillsBarsHtml}}</div></section>` : ''}}
             ${{langHtml ? `<section class="avoid-break"><h2 class="section-title">${{I18N_T.languages || 'Idiomas'}}</h2><div class="languages-grid cv-math-grid ${{getGridClass((data.languages||[]).length)}}">${{langHtml}}</div></section>` : ''}}
             ${{certHtml ? `<section class="avoid-break"><h2 class="section-title">${{I18N_T.certificates || 'Certificações'}}</h2><div class="certs-grid cv-math-grid ${{getGridClass((data.certificates||[]).length)}}">${{certHtml}}</div></section>` : ''}}
             ${{intHtml ? `<section class="avoid-break"><h2 class="section-title">${{I18N_T.interests || 'Interesses'}}</h2><div class="interests-grid cv-math-grid ${{getGridClass((data.interests||[]).length)}}">${{intHtml}}</div></section>` : ''}}
@@ -2227,10 +2352,46 @@ def render_multi_cv_dashboard_html(
         `;
       }}
 
-      // ── 5. Sidebar (Modelo A4 03) & Compact Split Duo (Modelo A4 04) ──
-      if (layout === 'sidebar' || layout === 'compact_split') {{
+      // ── 5. Compact Split Duo / Executive Duo (Modelo A4 04) ──
+      if (layout === 'compact_split') {{
         return `
-          <div class="layout-${{layout}}">
+          <div class="layout-compact_split">
+            <div class="cv-duo-layout" style="display: grid; grid-template-columns: 210px 1fr; gap: 1.5rem; align-items: start;">
+              <aside class="cv-duo-left cv-sidebar-stack" style="border-right: 1px solid rgba(125,125,125,0.25); padding-right: 1.25rem;">
+                ${{avatarHtml}}
+                ${{summary ? `<div class="sidebar-section avoid-break"><h4 class="section-title" style="font-size: 0.85rem; margin-top: 0;">PERFIL</h4><p class="summary" style="font-size: 0.82rem; line-height: 1.5;">${{summary}}</p></div>` : ''}}
+                ${{skillsBarsHtml ? `<div class="sidebar-section avoid-break"><h4 class="section-title" style="font-size: 0.85rem;">EXPERTISE</h4><div class="cv-skills-progress-list">${{skillsBarsHtml}}</div></div>` : ''}}
+                ${{hobbiesCirclesHtml ? `<div class="sidebar-section avoid-break"><h4 class="section-title" style="font-size: 0.85rem;">HOBBIES</h4><div class="cv-hobbies-grid" style="display: flex; justify-content: space-around; width: 100%;">${{hobbiesCirclesHtml}}</div></div>` : ''}}
+                ${{langHtml ? `<div class="sidebar-section avoid-break"><h4 class="section-title" style="font-size: 0.85rem;">${{I18N_T.languages || 'Idiomas'}}</h4><div class="cv-sidebar-stack">${{langHtml}}</div></div>` : ''}}
+              </aside>
+
+              <main class="cv-duo-right">
+                <header class="header" style="border-bottom: 2px solid currentColor; padding-bottom: 0.85rem; margin-bottom: 1.25rem;">
+                  <h1 class="name" style="font-size: 1.85rem; font-weight: 800; margin: 0 0 0.25rem 0;">${{name}}</h1>
+                  <div class="label" style="font-size: 0.95rem; font-weight: 700; opacity: 0.9; margin-bottom: 0.5rem;">${{label}}</div>
+                  <div class="contacts" style="display: flex; flex-wrap: wrap; gap: 0.85rem; font-size: 0.82rem; text-align: left;">
+                    ${{email ? `<span>✉ <a href="mailto:${{email}}" class="cv-link">${{email}}</a></span>` : ''}}
+                    ${{phone ? `<span>📞 <a href="tel:${{cleanPhone}}" class="cv-link">${{phone}}</a></span>` : ''}}
+                    ${{locStr ? `<span>📍 ${{locStr}}</span>` : ''}}
+                    ${{url ? `<span>🌐 <a href="${{url}}" target="_blank" class="cv-link">${{url}}</a></span>` : ''}}
+                    ${{profLinks ? `<span>${{profLinks}}</span>` : ''}}
+                  </div>
+                </header>
+
+                ${{workHtml ? `<section class="avoid-break"><h2 class="section-title">${{I18N_T.work || 'Experiência'}}</h2>${{workHtml}}</section>` : ''}}
+                ${{eduHtml ? `<section class="avoid-break"><h2 class="section-title">${{I18N_T.education || 'Formação'}}</h2><div class="cv-sidebar-stack" style="display: flex; flex-direction: column; gap: 0.65rem; width: 100%;">${{eduHtml}}</div></section>` : ''}}
+                ${{projHtml ? `<section class="avoid-break"><h2 class="section-title">${{I18N_T.projects || 'Projetos'}}</h2><div class="cv-sidebar-stack" style="display: flex; flex-direction: column; gap: 0.65rem; width: 100%;">${{projHtml}}</div></section>` : ''}}
+                ${{certHtml ? `<section class="avoid-break"><h2 class="section-title">${{I18N_T.certificates || 'Certificações'}}</h2><div class="cv-sidebar-stack" style="display: flex; flex-direction: column; gap: 0.65rem; width: 100%;">${{certHtml}}</div></section>` : ''}}
+              </main>
+            </div>
+          </div>
+        `;
+      }}
+
+      // ── 6. Sidebar (Modelo A4 03) ──
+      if (layout === 'sidebar') {{
+        return `
+          <div class="layout-sidebar">
             <div style="display: grid; grid-template-columns: 230px 1fr; gap: 1.5rem; align-items: start;">
               <aside class="cv-sidebar-stack" style="border-right: 1px solid rgba(125,125,125,0.2); padding-right: 1.25rem;">
                 ${{avatarHtml}}
@@ -2252,8 +2413,8 @@ def render_multi_cv_dashboard_html(
               <main>
                 ${{summary ? `<div class="summary">${{summary}}</div>` : ''}}
                 ${{workHtml ? `<section class="avoid-break"><h2 class="section-title">${{I18N_T.work || 'Experiência'}}</h2>${{workHtml}}</section>` : ''}}
-                ${{projHtml ? `<section class="avoid-break"><h2 class="section-title">${{I18N_T.projects || 'Projetos'}}</h2><div class="projects-grid cv-math-grid ${{getGridClass((data.projects||[]).length)}}">${{projHtml}}</div></section>` : ''}}
-                ${{eduHtml ? `<section class="avoid-break"><h2 class="section-title">${{I18N_T.education || 'Formação'}}</h2><div class="education-grid cv-math-grid ${{getGridClass((data.education||[]).length)}}">${{eduHtml}}</div></section>` : ''}}
+                ${{projHtml ? `<section class="avoid-break"><h2 class="section-title">${{I18N_T.projects || 'Projetos'}}</h2><div class="cv-sidebar-stack" style="display: flex; flex-direction: column; gap: 0.65rem; width: 100%;">${{projHtml}}</div></section>` : ''}}
+                ${{eduHtml ? `<section class="avoid-break"><h2 class="section-title">${{I18N_T.education || 'Formação'}}</h2><div class="cv-sidebar-stack" style="display: flex; flex-direction: column; gap: 0.65rem; width: 100%;">${{eduHtml}}</div></section>` : ''}}
               </main>
             </div>
           </div>
