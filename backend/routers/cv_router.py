@@ -42,10 +42,20 @@ class CVTailorRequest(BaseModel):
     persona: Optional[str] = Field(default="professional", description="Persona desejada: professional, architect, historian, didactic")
 
 
+class CVCoverLetterRequest(BaseModel):
+    cv_data: Dict[str, Any] = Field(..., description="Dados estruturados do currículo JSON Resume")
+    job_description: Optional[str] = Field(default=None, description="Descrição da vaga ou requisitos")
+    target_company: Optional[str] = Field(default=None, description="Nome da empresa contratante")
+    recipient_name: Optional[str] = Field(default=None, description="Nome do recrutador ou gestor")
+    tone: Optional[str] = Field(default="professional", description="Tom de voz: professional, enthusiastic, direct")
+    language: Optional[str] = Field(default="pt", description="Idioma: pt ou en")
+
+
 class CVRenderRequest(BaseModel):
     yaml_content: Optional[str] = Field(default=None, alias="raw_text", description="Conteúdo do currículo em YAML ou texto")
     theme: Optional[str] = Field(default="executive", description="Tema visual: executive, creative, minimalist, white, terminal")
-    layout: Optional[str] = Field(default="modular", description="Modelo A4 de Layout: modular, linear, sidebar")
+    layout: Optional[str] = Field(default="modular", description="Modelo A4 de Layout: modular, linear, sidebar, compact_split, editorial_accent, corporate_timeline, warm_magazine, hero_matrix")
+    view_mode: Optional[str] = Field(default="cv", description="Modo de visualização: cv, cover_letter, both")
     format: Optional[str] = Field(default="html", description="Formato de saída: html, yaml, zip, json")
     filename: Optional[str] = Field(default="curriculo", description="Nome base para download do arquivo")
 
@@ -135,6 +145,115 @@ async def verify_cv_license_and_quota(raw_key: Optional[str], estimated_text: st
         detail="Chave de Licença inválida ou não encontrada. Verifique o código inserido ou ative sua chave Pro nas configurações.",
     )
 
+
+@router.get("/prompts")
+async def get_all_prompts_endpoint(
+    lang: Optional[str] = Query("pt", description="Idioma dos prompts: pt, en ou es")
+):
+    """
+    Retorna todos os System Prompts e schemas abertos do CV Maker 2.0.
+    Permite que agentes autônomos externos (ChatGPT, Claude, Cursor, n8n, Python)
+    leiam as instruções e guardrails antes de gerar JSON Resume ou Cover Letters.
+    """
+    from prompts.cv_prompts import (
+        BASE_INSTRUCTION,
+        BASE_INSTRUCTION_EN,
+        BASE_INSTRUCTION_ES,
+        PERSONA_INSTRUCTIONS,
+        PERSONA_INSTRUCTIONS_EN,
+        PERSONA_INSTRUCTIONS_ES,
+        COVER_LETTER_GENERATION_PROMPT,
+        COVER_LETTER_GENERATION_PROMPT_EN,
+        COVER_LETTER_GENERATION_PROMPT_ES,
+    )
+
+    if lang == "en":
+        base_inst = BASE_INSTRUCTION_EN
+        personas = PERSONA_INSTRUCTIONS_EN
+        cover_prompt = COVER_LETTER_GENERATION_PROMPT_EN
+    elif lang == "es":
+        base_inst = BASE_INSTRUCTION_ES
+        personas = PERSONA_INSTRUCTIONS_ES
+        cover_prompt = COVER_LETTER_GENERATION_PROMPT_ES
+    else:
+        base_inst = BASE_INSTRUCTION
+        personas = PERSONA_INSTRUCTIONS
+        cover_prompt = COVER_LETTER_GENERATION_PROMPT
+
+    return {
+        "service": "CV Maker 2.0 Open Prompts Engine",
+        "description": "Engenharia de Prompts Padrão Enterprise para geração de currículos e cover letters.",
+        "usage_guide": "Para gerar um currículo compatível, envie o prompt 'base' concatenado com a persona desejada como System Prompt no seu LLM.",
+        "prompts": {
+            "base": {
+                "title": "Instrução Base & Schema JSON Resume Completo",
+                "content": base_inst.strip(),
+            },
+            "cover_letter": {
+                "title": "Gerador de Cover Letter & Schema Persuasivo (Skill: agency-resume-tailor)",
+                "content": cover_prompt.strip(),
+            },
+            "personas": {
+                k: {
+                    "archetype": k,
+                    "content": v.strip(),
+                }
+                for k, v in personas.items()
+            },
+        },
+    }
+
+
+@router.get("/prompts/{prompt_key}")
+async def get_single_prompt_endpoint(
+    prompt_key: str,
+    lang: Optional[str] = Query("pt", description="Idioma do prompt: pt, en ou es")
+):
+    """
+    Retorna um prompt específico (base, cover_letter, professional, architect, historian, didactic, alien).
+    """
+    from prompts.cv_prompts import (
+        BASE_INSTRUCTION,
+        BASE_INSTRUCTION_EN,
+        BASE_INSTRUCTION_ES,
+        PERSONA_INSTRUCTIONS,
+        PERSONA_INSTRUCTIONS_EN,
+        PERSONA_INSTRUCTIONS_ES,
+        COVER_LETTER_GENERATION_PROMPT,
+        COVER_LETTER_GENERATION_PROMPT_EN,
+        COVER_LETTER_GENERATION_PROMPT_ES,
+    )
+
+    if lang == "en":
+        base_inst = BASE_INSTRUCTION_EN
+        personas = PERSONA_INSTRUCTIONS_EN
+        cover_prompt = COVER_LETTER_GENERATION_PROMPT_EN
+    elif lang == "es":
+        base_inst = BASE_INSTRUCTION_ES
+        personas = PERSONA_INSTRUCTIONS_ES
+        cover_prompt = COVER_LETTER_GENERATION_PROMPT_ES
+    else:
+        base_inst = BASE_INSTRUCTION
+        personas = PERSONA_INSTRUCTIONS
+        cover_prompt = COVER_LETTER_GENERATION_PROMPT
+
+    key = prompt_key.lower().strip()
+    if key == "base":
+        return {"prompt_key": "base", "content": base_inst.strip()}
+    elif key in ("cover_letter", "coverletter", "carta"):
+        return {"prompt_key": "cover_letter", "content": cover_prompt.strip()}
+    elif key in personas:
+        return {
+            "prompt_key": key,
+            "system_instruction": base_inst.strip(),
+            "archetype_instruction": personas[key].strip(),
+            "combined_prompt": f"{base_inst.strip()}\n\n========================================\n{personas[key].strip()}",
+        }
+    else:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Prompt '{prompt_key}' não encontrado. Chaves disponíveis: base, cover_letter, {', '.join(personas.keys())}",
+        )
 
 
 @router.post("/generate")
@@ -300,6 +419,65 @@ async def tailor_cv_endpoint(
         )
 
 
+@router.post("/generate-cover-letter")
+async def generate_cover_letter_endpoint(
+    payload: CVCoverLetterRequest,
+    x_license_key: Optional[str] = Header(None, alias="X-License-Key"),
+    x_api_key: Optional[str] = Header(None, alias="X-API-Key"),
+    x_gemini_api_key: Optional[str] = Header(None, alias="X-Gemini-API-Key"),
+    authorization: Optional[str] = Header(None),
+):
+    """
+    Endpoint dedicado sob demanda para geração de Carta de Apresentação (Cover Letter) com IA.
+    Recebe o CV atual + dados da vaga e retorna apenas o nó estruturado coverLetter,
+    sem alterar as experiências, educação ou competências já customizadas no currículo.
+    """
+    from services.cv_generator_service import generate_standalone_cover_letter
+
+    raw_key = x_license_key or x_api_key or authorization
+    full_text = yaml.dump(payload.cv_data, allow_unicode=True) + "\n" + (payload.job_description or "")
+    license_rec = await verify_cv_license_and_quota(raw_key, full_text, num_calls=1, x_gemini_key=x_gemini_api_key)
+    custom_gemini = license_rec.get("gemini_key") or x_gemini_api_key
+
+    if license_rec.get("tier") == "sheet_api" and not custom_gemini:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "A rota de Cover Letter via API opera no modelo BYOK. "
+                "Informe sua chave do Google Gemini no header 'X-Gemini-API-Key' para executar a geração."
+            ),
+        )
+
+    log.info("[CV Router] service='cv' action='generate_cover_letter' tier='%s' byok=%s", license_rec.get("tier"), bool(custom_gemini))
+
+    try:
+        cover_letter_data, total_tokens = await generate_standalone_cover_letter(
+            cv_data=payload.cv_data,
+            job_description=payload.job_description,
+            target_company=payload.target_company,
+            recipient_name=payload.recipient_name,
+            tone=payload.tone or "professional",
+            language=payload.language or "pt",
+            custom_api_key=custom_gemini,
+        )
+
+        if total_tokens > 0 and license_rec.get("key_hash") not in ("godmode", "sheet_api", "byok_gemini"):
+            charged_tokens = int(total_tokens * AI_TOKEN_BURN_MULTIPLIER)
+            try:
+                deduct_license_tokens(license_rec["key_hash"], charged_tokens, endpoint="/api/v1/cv/generate-cover-letter")
+                log.info("[CV Router] Tokens debitados (cover_letter): %d (brutos: %d, multiplicador: %.1fx)", charged_tokens, total_tokens, AI_TOKEN_BURN_MULTIPLIER)
+            except Exception as d_err:
+                log.warning("[CV Router] Falha ao debitar tokens: %s", d_err)
+
+        return cover_letter_data
+    except Exception as e:
+        log.error("[CV Router] service='cv' Cover Letter error: %s", e)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Erro na geração de carta de apresentação: {str(e)}",
+        )
+
+
 @router.get("/download")
 @router.get("/render")
 @router.post("/render")
@@ -307,7 +485,8 @@ async def render_cv_endpoint(
     payload: Optional[CVRenderRequest] = None,
     format: Optional[str] = Query(None, description="Formato de saída: html, yaml, zip, json"),
     theme: Optional[str] = Query(None, description="Tema visual: executive, creative, minimalist, white, terminal"),
-    layout: Optional[str] = Query(None, description="Modelo A4 de Layout: modular, linear, sidebar"),
+    layout: Optional[str] = Query(None, description="Modelo A4 de Layout: modular, linear, sidebar, compact_split, editorial_accent, corporate_timeline, warm_magazine, hero_matrix"),
+    view_mode: Optional[str] = Query(None, description="Modo de visualização: cv, cover_letter, both"),
     lang: Optional[str] = Query(None, description="Idioma forçado: pt, en ou auto"),
     filename: Optional[str] = Query(None, description="Nome base para download do arquivo (sem extensão)"),
     x_api_key: Optional[str] = Header(None, alias="X-API-Key"),
@@ -322,12 +501,14 @@ async def render_cv_endpoint(
     q_format = format if isinstance(format, str) else None
     q_theme = theme if isinstance(theme, str) else None
     q_layout = layout if isinstance(layout, str) else None
+    q_view_mode = view_mode if isinstance(view_mode, str) else None
     q_lang = lang if isinstance(lang, str) else None
     q_filename = filename if isinstance(filename, str) else None
 
     yaml_text = (payload.yaml_content if payload and payload.yaml_content else None) or get_default_yaml_content()
     theme_name = q_theme or (payload.theme if payload and payload.theme else None) or "executive"
     layout_name = q_layout or (payload.layout if payload and payload.layout else None) or "modular"
+    view_mode_name = q_view_mode or (payload.view_mode if payload and payload.view_mode else None) or "cv"
     target_format = (q_format or (payload.format if payload and payload.format else None) or "html").strip().lower()
     base_filename = (q_filename or (payload.filename if payload and payload.filename else None) or "curriculo").strip()
     target_lang = q_lang or "auto"
@@ -343,7 +524,13 @@ async def render_cv_endpoint(
         )
 
     # Gera o HTML standalone
-    html_content = render_cv_to_standalone_html(yaml_text, theme=theme_name, layout=layout_name, lang=target_lang)
+    html_content = render_cv_to_standalone_html(
+        yaml_text,
+        theme=theme_name,
+        layout=layout_name,
+        lang=target_lang,
+        view_mode=view_mode_name
+    )
 
     # 2. Pacote ZIP (HTML + YAML)
     if target_format == "zip":

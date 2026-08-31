@@ -52,7 +52,7 @@ client = None
 if GEMINI_API_KEY:
     client = genai.Client(api_key=GEMINI_API_KEY)
 else:
-    print("⚠️ AVISO: GEMINI_API_KEY não encontrada. Iniciando servidor sem suporte à IA.")
+    print("[AVISO] GEMINI_API_KEY nao configurada no ambiente. Algumas operacoes operarao em modo BYOK.")
 
 # ── FastAPI app ──────────────────────────────────────────────────────────────
 app = FastAPI(

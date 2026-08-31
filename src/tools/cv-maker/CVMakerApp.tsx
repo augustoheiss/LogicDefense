@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react'
-import type { CVData, CVVersions, TextVariant, ThemeVariant, LayoutVariant } from './types/cv'
+import type { CVData, CVVersions, TextVariant, ThemeVariant, LayoutVariant, ViewMode, CoverLetter } from './types/cv'
 import { DEFAULT_JOHN_DOE_YAML } from './templates/defaultTemplate'
 import { parseYamlToCV, cvToYaml, debounce } from './services/yamlService'
 import {
@@ -18,8 +18,9 @@ import { OpenPromptsModal } from './components/PromptsModal/OpenPromptsModal'
 import { PhotoUploader } from './components/Toolbar/PhotoUploader'
 import { ApiKeyModal } from './components/ApiKeyModal/ApiKeyModal'
 import { CVStoreModal } from './components/StoreModal/CVStoreModal'
+import { GenerateCoverLetterModal } from './components/Modals/GenerateCoverLetterModal'
 import { validateLicenseKey } from './services/cvService'
-import { downloadCVHtmlFile, downloadCVZipPackage } from './services/standaloneHtmlService'
+import { downloadCVHtmlFile, downloadCVCoverLetterHtml, downloadCVZipPackage } from './services/standaloneHtmlService'
 
 import './styles/cv-themes.css'
 import './styles/cv-print.css'
@@ -29,24 +30,24 @@ import './styles/cv-history.css'
 import './styles/cv-prompts-modal.css'
 import './styles/cv-maker.css'
 
-const STORAGE_DRAFT_KEY = 'ld_cv_draft_v2'
-const STORAGE_THEME_KEY = 'ld_cv_theme_v2'
-const STORAGE_LAYOUT_KEY = 'ld_cv_layout_v2'
+const STORAGE_DRAFT_KEY = 'cv_maker_active_yaml_draft_v1'
+const STORAGE_THEME_KEY = 'cv_maker_theme_v1'
+const STORAGE_LAYOUT_KEY = 'cv_maker_layout_v1'
+const STORAGE_VIEW_MODE_KEY = 'cv_maker_view_mode_v1'
 
 export const CVMakerApp: React.FC = () => {
-  // Sidebar mode: 'chat' (AI Assistant), 'editor' (Raw YAML Editor) or 'history' (20 Local Versions)
-  const [activeTab, setActiveTab] = useState<'chat' | 'editor' | 'history'>('chat')
+  // Navigation
+  const [activeTab, setActiveTab] = useState<'chat' | 'editor' | 'history'>('editor')
 
-  // Storage and Draft State
+  // Core Data
   const [yamlInput, setYamlInput] = useState<string>(() => {
     const saved = localStorage.getItem(STORAGE_DRAFT_KEY)
     if (!saved) return DEFAULT_JOHN_DOE_YAML
-    // Auto-sanitização de links de exemplo para evitar redirecionamento a perfis reais no LinkedIn/GitHub
-    if (saved.includes('https://linkedin.com/in/alexandresilva') || saved.includes('https://github.com/alexandresilva')) {
+    if (saved.includes('alexandresilva') || saved.includes('alexandre.silva@example.com')) {
       const sanitized = saved
         .split('https://linkedin.com/in/alexandresilva').join('https://linkedin.com/in/alexandre-silva-ficticio-demo-99999')
         .split('https://github.com/alexandresilva').join('https://github.com/alexandre-silva-ficticio-demo-99999')
-        .split('username: "alexandresilva"').join('username: "alexandre-silva-demo"')
+        .split('alexandresilva').join('alexandre-silva-demo')
         .split('alexandre.silva@example.com').join('alexandre.silva.demo@exemplo-ficticio.com')
       localStorage.setItem(STORAGE_DRAFT_KEY, sanitized)
       return sanitized
@@ -60,7 +61,7 @@ export const CVMakerApp: React.FC = () => {
   // Local-First History Ledger (Up to 20 items)
   const [historyList, setHistoryList] = useState<CVHistoryItem[]>(() => getCVHistory())
 
-  // Personas, Themes & Layouts
+  // Personas, Themes, Layouts & View Modes
   const [activePersona, setActivePersona] = useState<TextVariant>('professional')
   const [activeTheme, setActiveTheme] = useState<ThemeVariant>(() => {
     return (localStorage.getItem(STORAGE_THEME_KEY) as ThemeVariant) || 'executive'
@@ -68,12 +69,16 @@ export const CVMakerApp: React.FC = () => {
   const [activeLayout, setActiveLayout] = useState<LayoutVariant>(() => {
     return (localStorage.getItem(STORAGE_LAYOUT_KEY) as LayoutVariant) || 'modular'
   })
+  const [activeViewMode, setActiveViewMode] = useState<ViewMode>(() => {
+    return (localStorage.getItem(STORAGE_VIEW_MODE_KEY) as ViewMode) || 'cv'
+  })
 
   // Modals & Pro Licensing State
   const [isPhotoModalOpen, setIsPhotoModalOpen] = useState<boolean>(false)
   const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState<boolean>(false)
   const [isStoreModalOpen, setIsStoreModalOpen] = useState<boolean>(false)
   const [isOpenPromptsModalOpen, setIsOpenPromptsModalOpen] = useState<boolean>(false)
+  const [isCoverLetterModalOpen, setIsCoverLetterModalOpen] = useState<boolean>(false)
   const [isPro, setIsPro] = useState<boolean>(false)
   const [tokenBalance, setTokenBalance] = useState<number>(0)
   const [saveHistoryFeedback, setSaveHistoryFeedback] = useState<boolean>(false)
@@ -109,142 +114,141 @@ export const CVMakerApp: React.FC = () => {
   // Debounced LocalStorage Saver (500ms)
   const debouncedSaveDraft = useMemo(
     () =>
-      debounce((content: string) => {
-        localStorage.setItem(STORAGE_DRAFT_KEY, content)
-        localStorage.setItem('ld_cv_last_modified', new Date().toISOString())
+      debounce((val: string) => {
+        try {
+          localStorage.setItem(STORAGE_DRAFT_KEY, val)
+        } catch {
+          // Quota storage exceeded handling
+        }
       }, 500),
     []
   )
 
-  // Parse YAML into structured CVData
-  const handleParse = useCallback((raw: string) => {
-    const res = parseYamlToCV(raw)
-    if (res.data) {
-      setCvData(res.data)
-      setParseError(null)
-    } else {
+  // Parse YAML to data structure
+  const handleParse = useCallback((yamlStr: string) => {
+    const res = parseYamlToCV(yamlStr)
+    if (res.error) {
       setParseError(res.error)
+    } else {
+      setParseError(null)
+      setCvData(res.data)
     }
   }, [])
 
   // Initial parse on mount
   useEffect(() => {
     handleParse(yamlInput)
-  }, [])
+  }, [handleParse, yamlInput])
 
-  // Dynamically sync document.title with candidate name and label for clean PDF export & browser title
-  useEffect(() => {
-    if (cvData?.basics?.name) {
-      const name = cvData.basics.name.trim()
-      const label = cvData.basics.label ? ` - ${cvData.basics.label.trim()}` : ''
-      document.title = `${name}${label}`
-    } else {
-      document.title = 'Currículo Profissional'
-    }
-  }, [cvData])
-
-  // Refresh history state
-  const refreshHistory = useCallback(() => {
+  // Manual save current version to Local-First History
+  const handleManualSaveHistory = () => {
+    if (!cvData?.basics?.name) return
+    saveCVToHistory({
+      yaml: yamlInput,
+      persona: activePersona,
+      theme: activeTheme,
+      source: 'yaml_editor',
+      customName: cvData.basics.name,
+      customLabel: cvData.basics.label,
+    })
     setHistoryList(getCVHistory())
-  }, [])
-
-  // When AI generates new versions, switch active version and save all 5 to history!
-  const handleCVGenerated = (versions: CVVersions) => {
-    setCvVersions(versions)
-    const activeVersionText = versions[activePersona] || versions.professional
-    setYamlInput(activeVersionText)
-    handleParse(activeVersionText)
-    debouncedSaveDraft(activeVersionText)
-
-    // Salva automaticamente todas as 5 versões geradas no Histórico Local
-    const updatedHistory = saveMultipleCVsToHistory(versions, 'ai_generated')
-    setHistoryList(updatedHistory)
+    setSaveHistoryFeedback(true)
+    setTimeout(() => setSaveHistoryFeedback(false), 2500)
   }
 
-  // Persona change
-  const handlePersonaChange = (newPersona: TextVariant) => {
-    setActivePersona(newPersona)
-    if (cvVersions) {
-      const selectedText = cvVersions[newPersona] || cvVersions.professional
-      setYamlInput(selectedText)
-      handleParse(selectedText)
-      debouncedSaveDraft(selectedText)
-    }
+  // Refresh history list helper
+  const refreshHistory = () => {
+    setHistoryList(getCVHistory())
   }
 
-  // Theme change
+  // Select historical version
+  const handleSelectHistoryVersion = (item: CVHistoryItem) => {
+    setYamlInput(item.yaml)
+    handleParse(item.yaml)
+    setActivePersona(item.persona)
+    setActiveTheme(item.theme || 'executive')
+    debouncedSaveDraft(item.yaml)
+    setActiveTab('editor')
+  }
+
+  // Delete historical version
+  const handleDeleteHistoryVersion = (id: string) => {
+    deleteHistoryItem(id)
+    setHistoryList(getCVHistory())
+  }
+
+  // LGPD Wipe all data
+  const handleWipeAllLGPD = () => {
+    clearAllCVDataAndHistory()
+    setHistoryList([])
+    setCvVersions(null)
+    setYamlInput(DEFAULT_JOHN_DOE_YAML)
+    handleParse(DEFAULT_JOHN_DOE_YAML)
+    debouncedSaveDraft(DEFAULT_JOHN_DOE_YAML)
+    setActiveTab('editor')
+  }
+
+  // Handle Theme Change
   const handleThemeChange = (newTheme: ThemeVariant) => {
     setActiveTheme(newTheme)
     localStorage.setItem(STORAGE_THEME_KEY, newTheme)
   }
 
-  // Layout change
+  // Handle Layout Change (Modelos A4 01 a 08)
   const handleLayoutChange = (newLayout: LayoutVariant) => {
     setActiveLayout(newLayout)
     localStorage.setItem(STORAGE_LAYOUT_KEY, newLayout)
   }
 
-  // Manual save version to history ledger
-  const handleManualSaveHistory = () => {
-    const parsed = parseYamlToCV(yamlInput)
-    if (!parsed.data || !parsed.data.basics.name) {
-      alert('⚠️ Não foi possível salvar: O YAML contém erros de sintaxe ou o campo basics.name está vazio.')
-      return
-    }
-    const updated = saveCVToHistory({
-      yaml: yamlInput,
-      persona: activePersona,
-      theme: activeTheme,
-      source: 'yaml_editor',
-    })
-    setHistoryList(updated)
-    setSaveHistoryFeedback(true)
-    setTimeout(() => setSaveHistoryFeedback(false), 2500)
+  // Handle View Mode Change (Currículo / Cover Letter / Dossiê 2 Páginas)
+  const handleViewModeChange = (newViewMode: ViewMode) => {
+    setActiveViewMode(newViewMode)
+    localStorage.setItem(STORAGE_VIEW_MODE_KEY, newViewMode)
   }
 
-  // Direct editor change (saves draft only, does NOT create rapid history snapshots)
+  // Handle Persona Change
+  const handlePersonaChange = (p: TextVariant) => {
+    setActivePersona(p)
+    if (cvVersions && cvVersions[p]) {
+      const selectedYaml = cvVersions[p]!
+      setYamlInput(selectedYaml)
+      handleParse(selectedYaml)
+      debouncedSaveDraft(selectedYaml)
+    }
+  }
+
+  // Editor onChange
   const handleEditorChange = (val: string) => {
     setYamlInput(val)
     handleParse(val)
     debouncedSaveDraft(val)
   }
 
-  // Load selected version from history into editor and active view
-  const handleSelectHistoryVersion = (item: CVHistoryItem) => {
-    setYamlInput(item.yaml)
-    setActivePersona(item.persona)
-    if (item.theme) {
-      setActiveTheme(item.theme)
-      localStorage.setItem(STORAGE_THEME_KEY, item.theme)
+  // Non-destructive Cover Letter injection
+  const handleCoverLetterGenerated = (newCoverLetter: CoverLetter) => {
+    if (!cvData) return
+    const updatedData: CVData = {
+      ...cvData,
+      coverLetter: newCoverLetter
     }
-    handleParse(item.yaml)
-    debouncedSaveDraft(item.yaml)
+    setCvData(updatedData)
+    const newYaml = cvToYaml(updatedData)
+    setYamlInput(newYaml)
+    debouncedSaveDraft(newYaml)
+    setActiveViewMode('cover_letter')
   }
 
-  // Delete version from history
-  const handleDeleteHistoryVersion = (id: string) => {
-    const updated = deleteHistoryItem(id)
-    setHistoryList(updated)
-  }
+  // AI Chat generation callback
+  const handleCVGenerated = (versions: CVVersions) => {
+    setCvVersions(versions)
+    const primaryYaml = versions[activePersona] || versions.professional
+    setYamlInput(primaryYaml)
+    handleParse(primaryYaml)
+    debouncedSaveDraft(primaryYaml)
+    setActiveTab('editor')
 
-  // Full LGPD & Privacy Reset
-  const handleWipeAllLGPD = () => {
-    const confirmed = window.confirm(
-      '⚠️ ATENÇÃO — LIMPEZA TOTAL DE PRIVACIDADE / LGPD\n\n' +
-      'Esta ação irá apagar permanentemente todos os 20 currículos do histórico, ' +
-      'rascunhos e preferências salvas no seu navegador, restaurando o modelo padrão de exemplo.\n\n' +
-      'Deseja realmente limpar todos os seus dados deste dispositivo?'
-    )
-    if (!confirmed) return
-
-    clearAllCVDataAndHistory()
-    setHistoryList([])
-    setCvVersions(null)
-    setYamlInput(DEFAULT_JOHN_DOE_YAML)
-    handleParse(DEFAULT_JOHN_DOE_YAML)
-    setActivePersona('professional')
-    setActiveTheme('executive')
-    alert('✅ Sucesso! Todos os dados locais foram excluídos. O modelo padrão foi restaurado.')
+    saveMultipleCVsToHistory(versions, 'ai_generated')
+    setHistoryList(getCVHistory())
   }
 
   // Avatar / Photo Save
@@ -284,12 +288,23 @@ export const CVMakerApp: React.FC = () => {
     URL.revokeObjectURL(url)
   }
 
-  // Download HTML Standalone
+  // Download HTML Standalone (conforme o modo ativo)
   const handleDownloadHtml = () => {
     downloadCVHtmlFile({
       yaml: yamlInput,
       name: cvData?.basics?.name || 'curriculo',
       persona: activePersona,
+      theme: activeTheme,
+      layout: activeLayout,
+      viewMode: activeViewMode,
+    })
+  }
+
+  // Download Cover Letter HTML
+  const handleDownloadCoverLetterHtml = () => {
+    downloadCVCoverLetterHtml({
+      yaml: yamlInput,
+      name: cvData?.basics?.name || 'candidato',
       theme: activeTheme,
       layout: activeLayout,
     })
@@ -311,7 +326,8 @@ export const CVMakerApp: React.FC = () => {
     if (cvData?.basics?.name) {
       const name = cvData.basics.name.trim()
       const label = cvData.basics.label ? ` - ${cvData.basics.label.trim()}` : ''
-      document.title = `${name}${label}`
+      const modeSuffix = activeViewMode === 'cover_letter' ? ' - Carta de Apresentação' : activeViewMode === 'both' ? ' - Dossiê Completo' : ''
+      document.title = `${name}${label}${modeSuffix}`
     }
     window.print()
   }
@@ -322,7 +338,7 @@ export const CVMakerApp: React.FC = () => {
       <div className="cv-app-header cv-no-print">
         <div className="cv-app-brand">
           <span className="cv-badge-pill">⚡ CV Maker 2.0</span>
-          <h2 className="cv-app-title">Gerador de Currículos de Alta Precisão</h2>
+          <h2 className="cv-app-title">Gerador de Currículos & Cover Letter</h2>
         </div>
 
         <div className="cv-app-controls">
@@ -455,8 +471,13 @@ export const CVMakerApp: React.FC = () => {
             onLayoutChange={handleLayoutChange}
             activeTheme={activeTheme}
             onThemeChange={handleThemeChange}
+            activeViewMode={activeViewMode}
+            onViewModeChange={handleViewModeChange}
+            onOpenCoverLetterModal={() => setIsCoverLetterModalOpen(true)}
+            hasCoverLetter={Boolean(cvData?.coverLetter?.paragraphs?.length)}
             onDownloadYaml={handleDownloadYaml}
             onDownloadHtml={handleDownloadHtml}
+            onDownloadCoverLetterHtml={handleDownloadCoverLetterHtml}
             onDownloadZip={handleDownloadZip}
             onPrintPdf={handlePrintPdf}
             onOpenPhotoModal={() => setIsPhotoModalOpen(true)}
@@ -467,7 +488,13 @@ export const CVMakerApp: React.FC = () => {
             onOpenStoreModal={() => setIsStoreModalOpen(true)}
           />
 
-          <CVViewer data={cvData} theme={activeTheme} layout={activeLayout} />
+          <CVViewer
+            data={cvData}
+            theme={activeTheme}
+            layout={activeLayout}
+            viewMode={activeViewMode}
+            onRequestGenerateCoverLetter={() => setIsCoverLetterModalOpen(true)}
+          />
         </main>
       </div>
 
@@ -501,6 +528,13 @@ export const CVMakerApp: React.FC = () => {
       <OpenPromptsModal
         isOpen={isOpenPromptsModalOpen}
         onClose={() => setIsOpenPromptsModalOpen(false)}
+      />
+
+      <GenerateCoverLetterModal
+        isOpen={isCoverLetterModalOpen}
+        onClose={() => setIsCoverLetterModalOpen(false)}
+        cvData={cvData || { basics: { name: 'Candidato' } }}
+        onCoverLetterGenerated={handleCoverLetterGenerated}
       />
     </div>
   )

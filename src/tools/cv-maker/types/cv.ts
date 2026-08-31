@@ -1,6 +1,16 @@
 export type TextVariant = 'professional' | 'architect' | 'historian' | 'didactic' | 'alien'
 export type ThemeVariant = 'executive' | 'creative' | 'minimalist' | 'white' | 'terminal'
-export type LayoutVariant = 'modular' | 'linear' | 'sidebar'
+export type LayoutVariant = 
+  | 'modular'             // Modelo A4 01 - Modular Cards
+  | 'linear'              // Modelo A4 02 - Linear Clássico ATS
+  | 'sidebar'             // Modelo A4 03 - Executive Sidebar
+  | 'compact_split'       // Modelo A4 04 - Split Duo (Victoria Wotton)
+  | 'editorial_accent'    // Modelo A4 05 - Brand Accent Block (Basil Hailward)
+  | 'corporate_timeline'  // Modelo A4 06 - Navy Solid Timeline (Wilkins Micawber)
+  | 'warm_magazine'       // Modelo A4 07 - Warm Editorial & Stamp (Editorial Cream)
+  | 'hero_matrix'         // Modelo A4 08 - Hero Banner Matrix (Mary Smith)
+
+export type ViewMode = 'cv' | 'cover_letter' | 'both'
 export type LanguageCode = 'pt' | 'en'
 
 export interface LayoutOption {
@@ -17,7 +27,7 @@ export const LAYOUT_OPTIONS: LayoutOption[] = [
     name: 'Modelo A4 01',
     label: '📐 Modelo A4 01 (Modular)',
     icon: '📐',
-    description: 'Header destacado com avatar, badges em pílula e blocos modulares em caixas suaves.'
+    description: 'Header dinâmico com avatar, badges em pílula e blocos modulares em caixas suaves.'
   },
   {
     id: 'linear',
@@ -32,6 +42,41 @@ export const LAYOUT_OPTIONS: LayoutOption[] = [
     label: '📑 Modelo A4 03 (Sidebar)',
     icon: '📑',
     description: '2 Colunas com barra lateral dedicada para perfil, contatos, competências e idiomas.'
+  },
+  {
+    id: 'compact_split',
+    name: 'Modelo A4 04',
+    label: '🏛️ Modelo A4 04 (Executive Duo)',
+    icon: '🏛️',
+    description: 'Coluna esquerda com bio, barras de expertise e hobbies circulares; coluna direita com timeline e referências.'
+  },
+  {
+    id: 'editorial_accent',
+    name: 'Modelo A4 05',
+    label: '🏷️ Modelo A4 05 (Brand Block)',
+    icon: '🏷️',
+    description: 'Bloco de topo marcante ("hello, i\'m"), foto vertical, badges de ano sólidos e marcadores em seta.'
+  },
+  {
+    id: 'corporate_timeline',
+    name: 'Modelo A4 06',
+    label: '⏱️ Modelo A4 06 (Navy Timeline)',
+    icon: '⏱️',
+    description: 'Sidebar sólida em Dark Navy, timeline com nós conectados, dados civis/CNH e barras de nível.'
+  },
+  {
+    id: 'warm_magazine',
+    name: 'Modelo A4 07',
+    label: '📰 Modelo A4 07 (Warm Editorial)',
+    icon: '📰',
+    description: 'Fundo bege editorial elegante, tipografia imponente, selo circular sobre o avatar e medidores visuais.'
+  },
+  {
+    id: 'hero_matrix',
+    name: 'Modelo A4 08',
+    label: '🖼️ Modelo A4 08 (Hero Matrix)',
+    icon: '🖼️',
+    description: 'Barra superior de contatos, hero header com foto à direita, grid duplo e matriz inferior de habilidades.'
   }
 ]
 
@@ -60,6 +105,11 @@ export interface CVBasics {
   location?: CVLocation
   profiles?: CVProfile[]
   customBadges?: string[] // e.g. ["PcD", "Open to Relocate"]
+  age?: string | number
+  civilStatus?: string    // "Solteiro(a)", "Casado(a)"
+  nationality?: string    // "Brasileira", "Portuguesa"
+  driverLicense?: string  // "CNH B", "Sim"
+  quote?: string          // Frase de impacto / bio sintética
 }
 
 export interface CVWork {
@@ -92,17 +142,20 @@ export interface CVProject {
 
 export interface CVSkill {
   name: string
-  level?: string
+  level?: string          // "Básico", "Intermediário", "Avançado", "Especialista"
+  levelPercent?: number   // 0 a 100
   keywords?: string[]
 }
 
 export interface CVLanguage {
   language: string
   fluency: string
+  levelPercent?: number   // 0 a 100
 }
 
 export interface CVInterest {
   name: string
+  icon?: string           // "camera" | "palette" | "plane" | "book" | "code" | "music" | "coffee" | "globe"
   keywords?: string[]
 }
 
@@ -130,6 +183,35 @@ export interface CVVolunteer {
   highlights?: string[]
 }
 
+export interface CVReference {
+  name: string
+  position?: string
+  company?: string
+  phone?: string
+  email?: string
+  address?: string
+  url?: string
+  description?: string
+}
+
+export interface CoverLetterRecipient {
+  name?: string
+  title?: string
+  company?: string
+  address?: string
+}
+
+export interface CoverLetter {
+  recipient?: CoverLetterRecipient
+  date?: string
+  subject?: string
+  salutation?: string
+  paragraphs: string[]
+  closing?: string
+  signature?: string
+  signatureImage?: string // Base64 or direct image URL
+}
+
 export interface CVData {
   basics: CVBasics
   work?: CVWork[]
@@ -141,10 +223,13 @@ export interface CVData {
   certificates?: CVCertificate[]
   awards?: CVAward[]
   volunteer?: CVVolunteer[]
+  references?: CVReference[]
+  coverLetter?: CoverLetter
   meta?: {
     lastModified?: string
     version?: string
     theme?: ThemeVariant
+    layout?: LayoutVariant
     language?: LanguageCode
   }
 }
@@ -155,4 +240,20 @@ export interface CVVersions {
   historian: string
   didactic: string
   alien: string
+}
+
+/**
+ * Mapeia níveis de habilidade descritivos para percentuais visuais de barra (0 a 100).
+ */
+export function getSkillPercentage(level?: string, levelPercent?: number): number {
+  if (typeof levelPercent === 'number' && levelPercent >= 0 && levelPercent <= 100) {
+    return levelPercent
+  }
+  if (!level) return 75
+  const normalized = level.toLowerCase().trim()
+  if (normalized.includes('expert') || normalized.includes('especialista') || normalized.includes('master')) return 95
+  if (normalized.includes('senior') || normalized.includes('avançad') || normalized.includes('advanced')) return 85
+  if (normalized.includes('pleno') || normalized.includes('intermediár') || normalized.includes('proficient')) return 70
+  if (normalized.includes('júnior') || normalized.includes('básic') || normalized.includes('basic') || normalized.includes('iniciante')) return 40
+  return 75
 }

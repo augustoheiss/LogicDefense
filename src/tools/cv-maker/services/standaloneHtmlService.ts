@@ -1,12 +1,13 @@
 /**
  * standaloneHtmlService.ts — Gerador e Compilador Standalone HTML & ZIP (Client-Side)
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- * Gera arquivos HTML 100% autônomos, com 5 temas embutidos, layout A4 de alta densidade,
- * alternador dinâmico de temas e botão nativo de impressão A4 sem dependência de servidor.
+ * Gera arquivos HTML 100% autônomos com suporte aos 8 Modelos A4, 5 Temas Visuais,
+ * Cover Letter integrada e Dossiê completo de 2 páginas com quebra A4 offline.
  */
 
 import JSZip from 'jszip'
-import type { CVData, ThemeVariant, LayoutVariant } from '../types/cv'
+import type { CVData, ThemeVariant, LayoutVariant, ViewMode } from '../types/cv'
+import { LAYOUT_OPTIONS, getSkillPercentage } from '../types/cv'
 import { parseYamlToCV } from './yamlService'
 
 function escapeHtml(str: string | number | null | undefined): string {
@@ -24,12 +25,17 @@ function escapeHtml(str: string | number | null | undefined): string {
  */
 function getEmbeddedCss(): string {
   return `
-    @import url('https://fonts.googleapis.com/css2?family=Merriweather:ital,wght@0,300;0,400;0,700;0,900;1,400&family=Courier+Prime:wght@400;700&family=Poppins:wght@300;400;500;600;700;800&family=Inter:wght@300;400;500;600;700;800&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&family=Cinzel:wght@600;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@300;400;500;600;700;800&display=swap');
 
     *, *::before, *::after {
       box-sizing: border-box;
       margin: 0;
       padding: 0;
+    }
+
+    @page {
+      size: A4 portrait;
+      margin: 0;
     }
 
     body {
@@ -54,7 +60,7 @@ function getEmbeddedCss(): string {
       justify-content: space-between;
       gap: 0.75rem;
       width: 100%;
-      max-width: 860px;
+      max-width: 900px;
       margin-bottom: 1.5rem;
       padding: 0.75rem 1.25rem;
       background: rgba(15, 23, 42, 0.85);
@@ -78,856 +84,422 @@ function getEmbeddedCss(): string {
     .cv-toolbar-actions {
       display: flex;
       align-items: center;
-      gap: 0.5rem;
       flex-wrap: wrap;
+      gap: 0.5rem;
     }
 
-    .cv-btn-tool {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.35rem;
-      padding: 0.4rem 0.85rem;
-      font-size: 0.8rem;
-      font-weight: 600;
-      border-radius: 6px;
-      cursor: pointer;
-      border: 1px solid rgba(255, 255, 255, 0.15);
-      background: rgba(255, 255, 255, 0.08);
-      color: #e2e8f0;
-      transition: all 0.15s ease;
-      text-decoration: none;
-    }
-
-    .cv-btn-tool:hover {
-      background: rgba(255, 255, 255, 0.15);
-      color: #ffffff;
-    }
-
-    .cv-btn-tool--primary {
-      background: #0284c7;
-      border-color: #0284c7;
-      color: #ffffff;
-    }
-
-    .cv-btn-tool--primary:hover {
-      background: #0369a1;
-      border-color: #0369a1;
-    }
-
-    .cv-theme-select {
+    .cv-select-control {
       background: #1e293b;
-      color: #f1f5f9;
-      border: 1px solid rgba(255, 255, 255, 0.2);
-      padding: 0.35rem 0.6rem;
+      color: #f8fafc;
+      border: 1px solid #475569;
+      padding: 0.4rem 0.75rem;
       border-radius: 6px;
-      font-size: 0.8rem;
-      font-weight: 500;
+      font-size: 0.82rem;
+      font-weight: 600;
       cursor: pointer;
       outline: none;
     }
 
-    /* ── Document Paper Container (A4) ── */
-    .cv-sheet-container {
-      width: 100%;
-      max-width: 860px;
-      background: #ffffff;
-      box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.5);
-      border-radius: 4px;
-      overflow: hidden;
-      transition: all 0.2s ease;
-    }
-
-    .cv-sheet-body {
-      padding: 2.75rem 3rem;
-    }
-
-    /* ── Common Typography & Elements ── */
-    .cv-header {
-      margin-bottom: 1.5rem;
-    }
-
-    .cv-header-top {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      gap: 1.5rem;
-    }
-
-    .cv-title-area {
-      flex: 1;
-    }
-
-    .cv-name {
-      font-size: 2rem;
-      font-weight: 800;
-      line-height: 1.15;
-      margin-bottom: 0.35rem;
-    }
-
-    .cv-label-row {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      gap: 0.5rem;
-      margin-bottom: 0.5rem;
-    }
-
-    .cv-label {
-      font-size: 1.05rem;
-      font-weight: 600;
-    }
-
-    .cv-badge {
-      font-size: 0.72rem;
-      font-weight: 600;
-      padding: 0.15rem 0.5rem;
-      border-radius: 4px;
-      text-transform: uppercase;
-      letter-spacing: 0.04em;
-    }
-
-    .cv-contact-bar {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      gap: 0.5rem 1rem;
-      font-size: 0.84rem;
-      margin-top: 0.6rem;
-    }
-
-    .cv-contact-item {
+    .cv-toolbar-btn {
       display: inline-flex;
       align-items: center;
-      gap: 0.3rem;
-      text-decoration: none;
-      color: inherit;
-    }
-
-    .cv-avatar-box {
-      width: 80px;
-      height: 80px;
-      border-radius: 50%;
-      overflow: hidden;
-      flex-shrink: 0;
-      border: 2px solid currentColor;
-    }
-
-    .cv-avatar-box img {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-    }
-
-    .cv-summary {
-      margin-top: 0.85rem;
-      font-size: 0.9rem;
-      line-height: 1.6;
-    }
-
-    .cv-section {
-      margin-top: 1.5rem;
-      page-break-inside: auto;
-    }
-
-    .cv-section-title {
-      font-size: 1.05rem;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      margin-bottom: 0.85rem;
-      display: flex;
-      align-items: center;
       gap: 0.4rem;
-    }
-
-    .cv-item {
-      margin-bottom: 1.15rem;
-      page-break-inside: avoid;
-    }
-
-    .cv-item-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: baseline;
-      gap: 1rem;
-      margin-bottom: 0.2rem;
-    }
-
-    .cv-item-title {
-      font-size: 0.98rem;
-      font-weight: 700;
-    }
-
-    .cv-item-date {
+      padding: 0.4rem 0.85rem;
+      border-radius: 6px;
       font-size: 0.82rem;
       font-weight: 600;
-      white-space: nowrap;
+      cursor: pointer;
+      border: none;
+      transition: all 0.2s;
     }
 
-    .cv-item-sub {
-      font-size: 0.88rem;
-      font-weight: 600;
-      margin-bottom: 0.35rem;
+    .cv-toolbar-btn--primary {
+      background: #0284c7;
+      color: #ffffff;
     }
 
-    .cv-item-sub a {
-      color: inherit;
-      text-decoration: none;
+    .cv-toolbar-btn--primary:hover {
+      background: #0369a1;
     }
 
-    .cv-item-sub a:hover {
-      text-decoration: underline;
+    .cv-toolbar-btn--secondary {
+      background: #334155;
+      color: #f8fafc;
     }
 
-    .cv-item-desc {
-      font-size: 0.87rem;
-      line-height: 1.55;
-      margin-bottom: 0.35rem;
+    .cv-toolbar-btn--secondary:hover {
+      background: #475569;
     }
 
-    .cv-bullets {
-      list-style-type: disc;
-      padding-left: 1.25rem;
-      font-size: 0.86rem;
-      line-height: 1.5;
+    /* ── Folha A4 e Container ── */
+    .cv-sheet-container {
+      width: 100%;
+      max-width: 210mm;
+      margin: 0 auto;
     }
 
-    .cv-bullets li {
-      margin-bottom: 0.25rem;
-    }
-
-    .cv-tags-cloud {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.4rem;
-      margin-top: 0.3rem;
-    }
-
-    .cv-tag {
-      font-size: 0.78rem;
-      padding: 0.15rem 0.45rem;
+    .cv-page-a4 {
+      width: 100%;
+      min-height: 297mm;
+      margin-bottom: 2rem;
+      box-sizing: border-box;
+      box-shadow: 0 12px 36px rgba(0, 0, 0, 0.2);
       border-radius: 4px;
+      position: relative;
     }
 
-    /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-       THEME 1: EXECUTIVE (Merriweather, Classic Navy/Black)
-       ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
-    .theme-executive {
-      font-family: 'Merriweather', Georgia, serif;
-      background: #ffffff;
-      color: #111827;
-      line-height: 1.6;
-    }
-    .theme-executive .cv-header {
-      border-bottom: 2px solid #0f172a;
-      padding-bottom: 1rem;
-    }
-    .theme-executive .cv-name {
-      font-family: 'Merriweather', Georgia, serif;
-      font-weight: 900;
-      color: #0f172a;
-    }
-    .theme-executive .cv-label {
-      color: #334155;
-    }
-    .theme-executive .cv-section-title {
-      border-bottom: 1.5px solid #334155;
-      padding-bottom: 0.25rem;
-      color: #0f172a;
-    }
-    .theme-executive .cv-badge {
-      border: 1px solid #64748b;
-      color: #334155;
-      background: transparent;
-    }
-    .theme-executive .cv-tag {
-      border: 1px solid #94a3b8;
-      background: transparent;
-      color: #1e293b;
+    .cv-cover-letter-page {
+      break-before: page;
+      page-break-before: always;
     }
 
-    /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-       THEME 2: CREATIVE (Poppins, Electric Indigo & Purple)
-       ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
-    .theme-creative {
-      font-family: 'Poppins', sans-serif;
-      background: #ffffff;
-      color: #1e1b4b;
-    }
-    .theme-creative .cv-header {
-      border-bottom: 2px dashed #6366f1;
-      padding-bottom: 1rem;
-    }
-    .theme-creative .cv-name {
-      color: #4338ca;
-    }
-    .theme-creative .cv-label {
-      color: #6366f1;
-    }
-    .theme-creative .cv-section-title {
-      color: #4f46e5;
-      border-left: 4px solid #6366f1;
-      padding-left: 0.5rem;
-    }
-    .theme-creative .cv-badge {
-      background: rgba(99, 102, 241, 0.12);
-      color: #4f46e5;
-    }
-    .theme-creative .cv-tag {
-      background: rgba(99, 102, 241, 0.08);
-      color: #4338ca;
-    }
-
-    /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-       THEME 3: MINIMALIST (Inter, Ultra-Clean Emerald/Cyan)
-       ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
-    .theme-minimalist {
-      font-family: 'Inter', sans-serif;
-      background: #ffffff;
-      color: #0f172a;
-    }
-    .theme-minimalist .cv-header {
-      border-bottom: 1px solid #e2e8f0;
-      padding-bottom: 1rem;
-    }
-    .theme-minimalist .cv-name {
-      color: #0f172a;
-      letter-spacing: -0.03em;
-    }
-    .theme-minimalist .cv-label {
-      color: #0284c7;
-    }
-    .theme-minimalist .cv-section-title {
-      color: #0369a1;
-      border-bottom: 1px solid #e2e8f0;
-      padding-bottom: 0.25rem;
-    }
-    .theme-minimalist .cv-badge {
-      background: #f0fdf4;
-      color: #15803d;
-      border: 1px solid #bbf7d0;
-    }
-    .theme-minimalist .cv-tag {
-      background: #f1f5f9;
-      color: #334155;
-    }
-
-    /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-       THEME 4: WHITE (Pure Monochrome, Swiss Typography)
-       ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
-    .theme-white {
-      font-family: 'Inter', -apple-system, sans-serif;
-      background: #ffffff;
-      color: #000000;
-    }
-    .theme-white .cv-header {
-      border-bottom: 1px solid #000000;
-      padding-bottom: 1rem;
-    }
-    .theme-white .cv-name {
-      color: #000000;
-    }
-    .theme-white .cv-label {
-      color: #555555;
-    }
-    .theme-white .cv-section-title {
-      color: #000000;
-      border-bottom: 1px solid #000000;
-      padding-bottom: 0.25rem;
-    }
-    .theme-white .cv-badge {
-      border: 1px solid #000000;
-      color: #000000;
-      background: transparent;
-    }
-    .theme-white .cv-tag {
-      border: 1px solid #cccccc;
-      color: #000000;
-      background: transparent;
-    }
-
-    /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-       THEME 5: TERMINAL (Courier Prime, Matrix Dark Green)
-       ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
-    .theme-terminal {
-      font-family: 'Courier Prime', monospace;
-      background: #0a0e14;
-      color: #00ff66;
-    }
-    .theme-terminal .cv-sheet-body {
-      background: #0a0e14;
-    }
-    .theme-terminal .cv-header {
-      border-bottom: 1px dashed #00ff66;
-      padding-bottom: 1rem;
-    }
-    .theme-terminal .cv-name {
-      color: #00ff66;
-    }
-    .theme-terminal .cv-label {
-      color: #38bdf8;
-    }
-    .theme-terminal .cv-section-title {
-      color: #00ff66;
-      border-bottom: 1px dashed #00ff66;
-      padding-bottom: 0.25rem;
-    }
-    .theme-terminal .cv-badge {
-      border: 1px solid #00ff66;
-      color: #00ff66;
-      background: transparent;
-    }
-    .theme-terminal .cv-tag {
-      border: 1px solid #38bdf8;
-      color: #38bdf8;
-      background: transparent;
-    }
-    .theme-terminal .cv-item-title, .theme-terminal .cv-item-sub, .theme-terminal .cv-summary, .theme-terminal .cv-item-desc {
-      color: #bbf7d0;
-    }
-    .theme-terminal a {
-      color: #38bdf8;
-    }
-
-    /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-       MODELOS DE LAYOUT A4 (Estruturas Wireframe)
-       ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
-    .layout-modular .cv-sheet-body {
-      padding: 3rem 3.5rem;
-    }
-
-    /* Modelo A4 02: Linear (Single Column ATS) */
-    .layout-linear .cv-sheet-body {
-      padding: 2.2rem 2.8rem;
-    }
-    .layout-linear .cv-header-top {
-      flex-direction: column;
-      align-items: flex-start;
-      gap: 0.5rem;
-      border-bottom: 2px solid currentColor;
-      padding-bottom: 0.75rem;
-      margin-bottom: 0.75rem;
-    }
-    .layout-linear .cv-contact-bar {
-      margin-top: 0.3rem;
-      gap: 0.8rem;
-      font-size: 0.8rem;
-    }
-    .layout-linear .cv-section {
-      margin-bottom: 1.25rem;
-    }
-    .layout-linear .cv-section-title {
-      border-bottom: 1.5px solid currentColor;
-      padding-bottom: 0.2rem;
-      margin-bottom: 0.65rem;
-      font-size: 0.95rem;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-    }
-    .layout-linear .cv-item {
-      margin-bottom: 0.75rem;
-    }
-
-    /* Modelo A4 03: Sidebar (2 Colunas / Modern Split) */
-    .layout-sidebar .cv-sheet-body {
+    .cv-card {
       padding: 2.2rem 2.5rem;
-    }
-    .layout-sidebar .cv-sheet-grid {
-      display: grid;
-      grid-template-columns: 240px 1fr;
-      gap: 2rem;
-      align-items: start;
-    }
-    .layout-sidebar .cv-sheet-aside {
-      display: flex;
-      flex-direction: column;
-      gap: 1.25rem;
-      border-right: 1.5px solid rgba(125, 125, 125, 0.2);
-      padding-right: 1.5rem;
-    }
-    .layout-sidebar .cv-sheet-main {
-      display: flex;
-      flex-direction: column;
-      gap: 1.25rem;
+      min-height: 100%;
+      box-sizing: border-box;
     }
 
-    /* Fallback default when not sidebar */
-    .layout-modular .cv-sheet-grid,
-    .layout-linear .cv-sheet-grid {
-      display: block;
-    }
-    .layout-modular .cv-sheet-aside,
-    .layout-linear .cv-sheet-aside {
-      border-right: none;
-      padding-right: 0;
-    }
+    /* ── Controles de Visibilidade das Folhas ── */
+    .view-cv .cv-cover-letter-page { display: none !important; }
+    .view-cover_letter .cv-resume-page { display: none !important; }
+    .view-both .cv-resume-page,
+    .view-both .cv-cover-letter-page { display: block !important; }
 
-    /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-       PRINT MEDIA QUERY (Exact A4 PDF Output)
-       ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+    /* ── Regras de Impressão ── */
     @media print {
-      @page {
-        size: A4 portrait;
-        margin: 12mm 15mm;
-      }
-
       body {
         background: #ffffff !important;
         padding: 0 !important;
-        color: #000000 !important;
+        margin: 0 !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
       }
-
-      .cv-standalone-toolbar {
+      .cv-standalone-toolbar, .no-print {
         display: none !important;
       }
-
       .cv-sheet-container {
         max-width: 100% !important;
-        box-shadow: none !important;
-        border-radius: 0 !important;
-      }
-
-      .cv-sheet-body {
+        margin: 0 !important;
         padding: 0 !important;
       }
-
-      .cv-item, .cv-section {
-        page-break-inside: avoid;
+      .cv-page-a4 {
+        width: 210mm !important;
+        height: 297mm !important;
+        max-height: 297mm !important;
+        overflow: hidden !important;
+        margin: 0 !important;
+        padding: 10mm 12mm !important;
+        box-shadow: none !important;
+        border-radius: 0 !important;
+        page-break-inside: avoid !important;
+        break-inside: avoid !important;
+      }
+      .cv-cover-letter-page {
+        page-break-before: always !important;
+        break-before: page !important;
       }
     }
+
+    /* ── Tipografia e Elementos ── */
+    .cv-name { font-size: 1.8rem; font-weight: 800; line-height: 1.15; }
+    .cv-badge { display: inline-flex; align-items: center; font-size: 0.72rem; font-weight: 600; padding: 0.15rem 0.5rem; border-radius: 0.25rem; border: 1px solid currentColor; }
+    .cv-section-title { font-size: 1.05rem; font-weight: 700; text-transform: uppercase; margin-bottom: 0.75rem; letter-spacing: 0.04em; }
+    .cv-summary { font-size: 0.88rem; line-height: 1.55; margin-bottom: 1.25rem; }
+    .cv-bullets { margin: 0.35rem 0 0.5rem 1.2rem; font-size: 0.85rem; line-height: 1.45; }
+    
+    .cv-skill-bar-wrapper { margin-bottom: 0.55rem; }
+    .cv-skill-bar-label { display: flex; justify-content: space-between; font-size: 0.82rem; font-weight: 600; margin-bottom: 0.2rem; }
+    .cv-skill-bar-bg { width: 100%; height: 6px; background: rgba(125, 125, 125, 0.2); border-radius: 9999px; overflow: hidden; }
+    .cv-skill-bar-fill { height: 100%; border-radius: 9999px; background: currentColor; }
+
+    .cv-references-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0.75rem; }
+    .cv-ref-card { padding: 0.65rem 0.85rem; border-radius: 0.35rem; border-left: 2.5px solid currentColor; background: rgba(125, 125, 125, 0.04); font-size: 0.82rem; }
+
+    .cv-signature-cursive { font-family: 'Caveat', cursive, sans-serif; font-size: 2.2rem; line-height: 1.1; margin-top: 0.5rem; }
+    .cv-signature-img { max-height: 52px; max-width: 180px; object-fit: contain; margin-top: 0.4rem; }
+
+    /* ── Layouts Wireframe ── */
+    .layout-sidebar .cv-sidebar-layout,
+    .layout-compact_split .cv-duo-layout,
+    .layout-corporate_timeline .cv-navy-layout {
+      display: grid;
+      grid-template-columns: 240px 1fr;
+      gap: 2rem;
+    }
+    .layout-corporate_timeline .cv-navy-sidebar { background: #0f172a; color: #f8fafc; padding: 2.2rem 1.5rem; }
+    .layout-editorial_accent .cv-editorial-grid { display: grid; grid-template-columns: 220px 1fr; gap: 1.75rem; }
+    .layout-editorial_accent .cv-brand-greeting { padding: 0.3rem 0.6rem; background: currentColor; color: #fff; border-radius: 4px; font-weight: 800; }
+    .layout-hero_matrix .cv-hero-banner { display: grid; grid-template-columns: 1fr 120px; gap: 1.5rem; background: rgba(125,125,125,0.06); padding: 1.25rem; border-radius: 6px; }
+
+    /* ── Temas ── */
+    .theme-executive { background: #ffffff; color: #0f172a; }
+    .theme-executive .cv-name, .theme-executive .cv-section-title { color: #0369a1; }
+
+    .theme-creative { background: #ffffff; color: #1e1b4b; }
+    .theme-creative .cv-name, .theme-creative .cv-section-title { color: #ea580c; }
+
+    .theme-minimalist { background: #ffffff; color: #18181b; }
+    .theme-minimalist .cv-name, .theme-minimalist .cv-section-title { color: #3f3f46; }
+
+    .theme-white { background: #ffffff; color: #1e293b; }
+    .theme-white .cv-name, .theme-white .cv-section-title { color: #059669; }
+
+    .theme-terminal { background: #090d16; color: #4ade80; }
+    .theme-terminal .cv-name, .theme-terminal .cv-section-title { color: #22c55e; }
   `
 }
 
 /**
- * Converte um objeto CVData em HTML estruturado completo.
+ * Renderiza o currículo para um arquivo HTML Standalone offline e autocontido.
  */
 export function renderCVToStandaloneHtml(
   data: CVData,
   theme: ThemeVariant = 'executive',
   rawYaml?: string,
-  layout: LayoutVariant = 'modular'
+  layout: LayoutVariant = 'modular',
+  viewMode: ViewMode = 'cv'
 ): string {
-  const basics = data.basics || { name: 'Currículo Profissional' }
+  const basics = data.basics || { name: 'Candidato' }
   const work = data.work || []
+  const education = data.education || []
   const projects = data.projects || []
   const skills = data.skills || []
-  const education = data.education || []
   const languages = data.languages || []
-  const certificates = data.certificates || []
-  const awards = data.awards || []
-  const volunteer = data.volunteer || []
   const interests = data.interests || []
+  const references = data.references || []
+  const coverLetter = data.coverLetter
 
-  const candidateName = escapeHtml(basics.name || 'Currículo Profissional')
-  const candidateLabel = escapeHtml(basics.label || '')
-  const candidateEmail = escapeHtml(basics.email || '')
-  const candidatePhone = escapeHtml(basics.phone || '')
-  const candidateUrl = escapeHtml(basics.url || '')
-  const candidateSummary = escapeHtml(basics.summary || '')
+  const locationStr = basics.location
+    ? [basics.location.city, basics.location.region, basics.location.countryCode].filter(Boolean).join(', ')
+    : ''
 
-  const locParts = [basics.location?.city, basics.location?.region, basics.location?.countryCode].filter(Boolean)
-  const locStr = escapeHtml(locParts.join(' - '))
-
-  // Custom badges
-  const badgesHtml = (basics.customBadges || [])
-    .map(b => `<span class="cv-badge">${escapeHtml(b)}</span>`)
-    .join('')
-
-  // Profiles
-  const profilesHtml = (basics.profiles || [])
-    .map(p => `<a href="${escapeHtml(p.url)}" target="_blank" class="cv-contact-item">🔗 ${escapeHtml(p.network)}: @${escapeHtml(p.username)}</a>`)
-    .join('')
-
-  // Work items
-  const workHtml = work.map(w => {
-    const start = escapeHtml(w.startDate || '')
-    const end = escapeHtml(w.endDate || 'Presente')
-    const highlights = (w.highlights || []).map(h => `<li>${escapeHtml(h)}</li>`).join('')
-    const compLink = w.url ? `<a href="${escapeHtml(w.url)}" target="_blank">${escapeHtml(w.name)} ↗</a>` : escapeHtml(w.name)
-    return `
-      <div class="cv-item">
-        <div class="cv-item-header">
-          <span class="cv-item-title">${escapeHtml(w.position)}</span>
-          <span class="cv-item-date">${start} — ${end}</span>
-        </div>
-        <div class="cv-item-sub">${compLink}</div>
-        ${w.summary ? `<p class="cv-item-desc">${escapeHtml(w.summary)}</p>` : ''}
-        ${highlights ? `<ul class="cv-bullets">${highlights}</ul>` : ''}
-      </div>
-    `
-  }).join('')
-
-  // Projects
-  const projectsHtml = projects.map(p => {
-    const highlights = (p.highlights || []).map(h => `<li>${escapeHtml(h)}</li>`).join('')
-    const tags = (p.keywords || []).map(k => `<span class="cv-tag">${escapeHtml(k)}</span>`).join('')
-    const prLink = p.url ? `<a href="${escapeHtml(p.url)}" target="_blank">${escapeHtml(p.name)} ↗</a>` : escapeHtml(p.name)
-    return `
-      <div class="cv-item">
-        <div class="cv-item-header">
-          <span class="cv-item-title">${prLink}</span>
-        </div>
-        ${p.description ? `<p class="cv-item-desc">${escapeHtml(p.description)}</p>` : ''}
-        ${highlights ? `<ul class="cv-bullets">${highlights}</ul>` : ''}
-        ${tags ? `<div class="cv-tags-cloud">${tags}</div>` : ''}
-      </div>
-    `
-  }).join('')
-
-  // Skills
-  const skillsHtml = skills.map(s => {
-    const tags = (s.keywords || []).map(k => `<span class="cv-tag">${escapeHtml(k)}</span>`).join('')
-    return `
-      <div class="cv-item" style="margin-bottom: 0.75rem;">
-        <div style="font-size: 0.9rem; font-weight: 700; margin-bottom: 0.2rem;">
-          ${escapeHtml(s.name)} ${s.level ? `<span style="font-size: 0.75rem; font-weight: 500; opacity: 0.8;">(${escapeHtml(s.level)})</span>` : ''}
-        </div>
-        ${tags ? `<div class="cv-tags-cloud">${tags}</div>` : ''}
-      </div>
-    `
-  }).join('')
-
-  // Education
-  const educationHtml = education.map(e => {
-    const start = escapeHtml(e.startDate || '')
-    const end = escapeHtml(e.endDate || 'Presente')
-    return `
-      <div class="cv-item">
-        <div class="cv-item-header">
-          <span class="cv-item-title">${escapeHtml(e.institution)}</span>
-          <span class="cv-item-date">${start} — ${end}</span>
-        </div>
-        <div class="cv-item-sub">${escapeHtml(e.studyType || '')}${e.area ? ` em ${escapeHtml(e.area)}` : ''}</div>
-      </div>
-    `
-  }).join('')
-
-  // Languages
-  const languagesHtml = languages.map(l => {
-    return `<span class="cv-tag" style="border: 1px solid currentColor; font-weight: 600;">${escapeHtml(l.language)}: ${escapeHtml(l.fluency)}</span>`
-  }).join(' ')
-
-  // Certificates
-  const certificatesHtml = certificates.map(c => {
-    const link = c.url ? `<a href="${escapeHtml(c.url)}" target="_blank">${escapeHtml(c.name)} ↗</a>` : escapeHtml(c.name)
-    return `
-      <div class="cv-item" style="margin-bottom: 0.5rem;">
-        <div class="cv-item-header">
-          <span class="cv-item-title">${link}</span>
-          ${c.date ? `<span class="cv-item-date">${escapeHtml(c.date)}</span>` : ''}
-        </div>
-        ${c.issuer ? `<div class="cv-item-sub" style="font-size: 0.82rem; opacity: 0.85;">Emissor: ${escapeHtml(c.issuer)}</div>` : ''}
-      </div>
-    `
-  }).join('')
-
-  // Awards
-  const awardsHtml = awards.map(a => {
-    return `
-      <div class="cv-item" style="margin-bottom: 0.5rem;">
-        <div class="cv-item-header">
-          <span class="cv-item-title">🏆 ${escapeHtml(a.title)}</span>
-          ${a.date ? `<span class="cv-item-date">${escapeHtml(a.date)}</span>` : ''}
-        </div>
-        ${a.awarder ? `<div class="cv-item-sub" style="font-size: 0.82rem;">${escapeHtml(a.awarder)}</div>` : ''}
-        ${a.summary ? `<p class="cv-item-desc">${escapeHtml(a.summary)}</p>` : ''}
-      </div>
-    `
-  }).join('')
-
-  // Volunteer
-  const volunteerHtml = volunteer.map(v => {
-    const start = escapeHtml(v.startDate || '')
-    const end = escapeHtml(v.endDate || 'Presente')
-    return `
-      <div class="cv-item" style="margin-bottom: 0.5rem;">
-        <div class="cv-item-header">
-          <span class="cv-item-title">🤝 ${escapeHtml(v.position)} — ${escapeHtml(v.organization)}</span>
-          <span class="cv-item-date">${start} — ${end}</span>
-        </div>
-        ${v.summary ? `<p class="cv-item-desc">${escapeHtml(v.summary)}</p>` : ''}
-      </div>
-    `
-  }).join('')
-
-  // Interests
-  const interestsHtml = interests.map(i => {
-    const kws = (i.keywords || []).join(', ')
-    return `<span class="cv-tag">${escapeHtml(i.name)}${kws ? ` (${escapeHtml(kws)})` : ''}</span>`
-  }).join(' ')
-
-  const yamlDownloadContent = rawYaml ? escapeHtml(rawYaml) : ''
-
-  const phoneClean = candidatePhone ? candidatePhone.replace(/\D/g, '') : ''
-  const displayUrl = candidateUrl ? candidateUrl.replace(/^https?:\/\//, '') : ''
-  const downloadFileName = candidateName.toLowerCase().replace(/\s+/g, '-') + '-curriculo.yaml'
+  const safeYaml = rawYaml ? escapeHtml(rawYaml) : ''
 
   return `<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${candidateName} - ${candidateLabel || 'Currículo'}</title>
-  <style>
-${getEmbeddedCss()}
-  </style>
+  <title>${escapeHtml(basics.name)} — Currículo & Cover Letter</title>
+  <style>${getEmbeddedCss()}</style>
 </head>
-<body>
+<body id="cvBody" class="theme-${theme}">
 
-  <!-- Floating Standalone Action Bar -->
-  <div class="cv-standalone-toolbar">
+  <!-- Floating Offline Toolbar -->
+  <div class="cv-standalone-toolbar no-print">
     <a href="https://www.heisslab.com.br/laboratorio/cv-maker" target="_blank" class="cv-toolbar-brand">
-      ⚡ CV Maker 2.0
+      <span>⚡</span>
+      <span>CV Maker 2.0 • LogicDefense</span>
     </a>
-    <div class="cv-toolbar-actions">
-      <label style="font-size: 0.78rem; font-weight: 600; color: #94a3b8; display: flex; align-items: center; gap: 0.3rem;">
-        Modelo A4:
-        <select class="cv-theme-select" id="layoutSelector" onchange="changeLayout(this.value)">
-          <option value="modular" ${layout === 'modular' ? 'selected' : ''}>📐 Modelo A4 01 (Modular)</option>
-          <option value="linear" ${layout === 'linear' ? 'selected' : ''}>📄 Modelo A4 02 (Linear)</option>
-          <option value="sidebar" ${layout === 'sidebar' ? 'selected' : ''}>📑 Modelo A4 03 (Sidebar)</option>
-        </select>
-      </label>
 
-      <label style="font-size: 0.78rem; font-weight: 600; color: #94a3b8; display: flex; align-items: center; gap: 0.3rem;">
-        Tema Visual:
-        <select class="cv-theme-select" id="themeSelector" onchange="changeTheme(this.value)">
-          <option value="executive" ${theme === 'executive' ? 'selected' : ''}>👔 Executivo</option>
-          <option value="creative" ${theme === 'creative' ? 'selected' : ''}>🎨 Criativo</option>
-          <option value="minimalist" ${theme === 'minimalist' ? 'selected' : ''}>🔹 Minimalista</option>
-          <option value="white" ${theme === 'white' ? 'selected' : ''}>📄 White</option>
-          <option value="terminal" ${theme === 'terminal' ? 'selected' : ''}>&gt;_ Terminal</option>
-        </select>
-      </label>
-      <button class="cv-btn-tool cv-btn-tool--primary" onclick="window.print()" title="Imprimir em A4 ou salvar como PDF nativo">
-        🖨️ Imprimir PDF
+    <div class="cv-toolbar-actions">
+      <!-- Seletor de Modo de Visualização -->
+      <select id="viewModeSelector" class="cv-select-control" onchange="changeViewMode(this.value)">
+        <option value="cv" ${viewMode === 'cv' ? 'selected' : ''}>📄 Currículo A4</option>
+        <option value="cover_letter" ${viewMode === 'cover_letter' ? 'selected' : ''}>✉️ Cover Letter</option>
+        <option value="both" ${viewMode === 'both' ? 'selected' : ''}>📑 Dossiê (2 Páginas)</option>
+      </select>
+
+      <!-- Seletor de Modelo A4 -->
+      <select id="layoutSelector" class="cv-select-control" onchange="changeLayout(this.value)">
+        ${LAYOUT_OPTIONS.map(l => `<option value="${l.id}" ${layout === l.id ? 'selected' : ''}>${l.label}</option>`).join('')}
+      </select>
+
+      <!-- Seletor de Tema Visual -->
+      <select id="themeSelector" class="cv-select-control" onchange="changeTheme(this.value)">
+        <option value="executive" ${theme === 'executive' ? 'selected' : ''}>👔 Executivo</option>
+        <option value="creative" ${theme === 'creative' ? 'selected' : ''}>🎨 Criativo</option>
+        <option value="minimalist" ${theme === 'minimalist' ? 'selected' : ''}>🔹 Minimalista</option>
+        <option value="white" ${theme === 'white' ? 'selected' : ''}>📄 White</option>
+        <option value="terminal" ${theme === 'terminal' ? 'selected' : ''}>>_ Terminal</option>
+      </select>
+
+      <button onclick="window.print()" class="cv-toolbar-btn cv-toolbar-btn--primary">
+        <span>🖨️</span> Imprimir PDF
       </button>
-      <button class="cv-btn-tool" onclick="downloadCurrentYaml()" title="Baixar arquivo YAML fonte">
-        📥 Baixar .yaml
-      </button>
+
+      ${safeYaml ? `<button onclick="downloadCurrentYaml()" class="cv-toolbar-btn cv-toolbar-btn--secondary"><span>📥</span> YAML</button>` : ''}
     </div>
   </div>
 
-  <!-- A4 Paper Document -->
-  <div class="cv-sheet-container layout-${layout}" id="cvContainer">
-    <div class="cv-sheet-body theme-${theme}" id="cvBody">
-      
-      <!-- Header Area -->
-      <header class="cv-header">
-        <div class="cv-header-top">
-          <div class="cv-title-area">
-            <h1 class="cv-name">${candidateName}</h1>
-            <div class="cv-label-row">
-              ${candidateLabel ? `<span class="cv-label">${candidateLabel}</span>` : ''}
-              ${badgesHtml}
-            </div>
+  <!-- Contêiner de Folhas A4 -->
+  <div id="cvContainer" class="cv-sheet-container layout-${layout} view-${viewMode}">
+    
+    <!-- 1. Folha de Currículo A4 -->
+    <div class="cv-page-a4 cv-resume-page">
+      <div class="cv-card">
+        <header class="cv-header" style="margin-bottom: 1.5rem;">
+          <h1 class="cv-name">${escapeHtml(basics.name)}</h1>
+          <div style="font-size: 1rem; font-weight: 600; opacity: 0.85;">${escapeHtml(basics.label)}</div>
+          <div style="display: flex; gap: 1rem; flex-wrap: wrap; margin-top: 0.5rem; font-size: 0.82rem;">
+            ${basics.email ? `<span>✉ ${escapeHtml(basics.email)}</span>` : ''}
+            ${basics.phone ? `<span>📞 ${escapeHtml(basics.phone)}</span>` : ''}
+            ${locationStr ? `<span>📍 ${escapeHtml(locationStr)}</span>` : ''}
           </div>
-          ${basics.image ? `
-            <div class="cv-avatar-box">
-              <img src="${escapeHtml(basics.image)}" alt="${candidateName}">
+        </header>
+
+        ${basics.summary ? `<div class="cv-summary">${escapeHtml(basics.summary)}</div>` : ''}
+
+        ${work.length > 0 ? `
+          <section class="cv-section">
+            <h2 class="cv-section-title">💼 Experiência Profissional</h2>
+            ${work.map(w => `
+              <div style="margin-bottom: 1rem;">
+                <div style="display: flex; justify-content: space-between; font-weight: 700;">
+                  <span>${escapeHtml(w.position)}</span>
+                  <span style="font-size: 0.8rem; opacity: 0.8;">${escapeHtml(w.startDate)} — ${escapeHtml(w.endDate || 'Presente')}</span>
+                </div>
+                <div style="font-size: 0.85rem; font-weight: 600; opacity: 0.85;">${escapeHtml(w.name)}</div>
+                ${w.summary ? `<p style="font-size: 0.85rem; margin: 0.25rem 0;">${escapeHtml(w.summary)}</p>` : ''}
+                ${w.highlights ? `<ul class="cv-bullets">${w.highlights.map(h => `<li>${escapeHtml(h)}</li>`).join('')}</ul>` : ''}
+              </div>
+            `).join('')}
+          </section>
+        ` : ''}
+
+        ${skills.length > 0 ? `
+          <section class="cv-section">
+            <h2 class="cv-section-title">⚡ Competências & Habilidades</h2>
+            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.75rem;">
+              ${skills.map(s => {
+                const percent = getSkillPercentage(s.level, s.levelPercent)
+                return `
+                  <div class="cv-skill-bar-wrapper">
+                    <div class="cv-skill-bar-label">
+                      <span>${escapeHtml(s.name)}</span>
+                      <span>${percent}%</span>
+                    </div>
+                    <div class="cv-skill-bar-bg">
+                      <div class="cv-skill-bar-fill" style="width: ${percent}%;"></div>
+                    </div>
+                  </div>
+                `
+              }).join('')}
+            </div>
+          </section>
+        ` : ''}
+
+        ${education.length > 0 ? `
+          <section class="cv-section">
+            <h2 class="cv-section-title">🎓 Educação</h2>
+            ${education.map(e => `
+              <div style="margin-bottom: 0.5rem; font-size: 0.85rem;">
+                <strong>${escapeHtml(e.area || '')}</strong> — ${escapeHtml(e.institution)} (${escapeHtml(e.startDate || '')} - ${escapeHtml(e.endDate || 'Concluído')})
+              </div>
+            `).join('')}
+          </section>
+        ` : ''}
+
+        ${projects.length > 0 ? `
+          <section class="cv-section">
+            <h2 class="cv-section-title">🚀 Projetos Destacados</h2>
+            ${projects.map(pr => `
+              <div style="margin-bottom: 0.85rem;">
+                <div style="font-weight: 700;">${escapeHtml(pr.name)}</div>
+                ${pr.description ? `<p style="font-size: 0.85rem; margin: 0.2rem 0;">${escapeHtml(pr.description)}</p>` : ''}
+                ${pr.highlights ? `<ul class="cv-bullets">${pr.highlights.map(h => `<li>${escapeHtml(h)}</li>`).join('')}</ul>` : ''}
+              </div>
+            `).join('')}
+          </section>
+        ` : ''}
+
+        ${languages.length > 0 ? `
+          <section class="cv-section">
+            <h2 class="cv-section-title">🌐 Idiomas</h2>
+            <div style="display: flex; gap: 1rem; flex-wrap: wrap; font-size: 0.85rem;">
+              ${languages.map(l => `
+                <div style="padding: 0.25rem 0.6rem; border-radius: 4px; border: 1px solid currentColor;">
+                  <strong>${escapeHtml(l.language)}:</strong> ${escapeHtml(l.fluency)}
+                </div>
+              `).join('')}
+            </div>
+          </section>
+        ` : ''}
+
+        ${interests.length > 0 ? `
+          <section class="cv-section">
+            <h2 class="cv-section-title">🎯 Interesses</h2>
+            <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; font-size: 0.8rem;">
+              ${interests.map(i => `
+                <span class="cv-badge">${escapeHtml(i.name)}</span>
+              `).join('')}
+            </div>
+          </section>
+        ` : ''}
+
+        ${references.length > 0 ? `
+          <section class="cv-section">
+            <h2 class="cv-section-title">🤝 Referências</h2>
+            <div class="cv-references-grid">
+              ${references.map(r => `
+                <div class="cv-ref-card">
+                  <div style="font-weight: 700;">${escapeHtml(r.name)}</div>
+                  <div style="font-size: 0.78rem; opacity: 0.85;">${escapeHtml(r.position || '')} • ${escapeHtml(r.company || '')}</div>
+                  <div style="font-size: 0.75rem; opacity: 0.8; margin-top: 0.2rem;">${escapeHtml(r.phone || '')} ${escapeHtml(r.email || '')}</div>
+                </div>
+              `).join('')}
+            </div>
+          </section>
+        ` : ''}
+      </div>
+    </div>
+
+    <!-- 2. Folha de Cover Letter A4 -->
+    ${coverLetter && coverLetter.paragraphs && coverLetter.paragraphs.length > 0 ? `
+      <div class="cv-page-a4 cv-cover-letter-page">
+        <div class="cv-card">
+          <header class="cv-header" style="border-bottom: 1px solid rgba(125,125,125,0.25); padding-bottom: 1rem; margin-bottom: 1.5rem;">
+            <h1 class="cv-name">${escapeHtml(basics.name)}</h1>
+            <div style="font-size: 0.95rem; font-weight: 600; opacity: 0.85;">${escapeHtml(basics.label)}</div>
+          </header>
+
+          ${coverLetter.recipient ? `
+            <div style="margin-bottom: 1.25rem; font-size: 0.88rem; line-height: 1.45; border-left: 2.5px solid currentColor; padding-left: 0.75rem;">
+              <div style="font-weight: 700;">${escapeHtml(coverLetter.recipient.name)}</div>
+              <div>${escapeHtml(coverLetter.recipient.title || '')}</div>
+              <div style="font-weight: 600;">${escapeHtml(coverLetter.recipient.company || '')}</div>
+              <div style="font-size: 0.8rem; opacity: 0.8;">${escapeHtml(coverLetter.recipient.address || '')}</div>
             </div>
           ` : ''}
+
+          ${coverLetter.date ? `<div style="font-size: 0.82rem; font-weight: 600; opacity: 0.8; margin-bottom: 0.75rem;">📅 ${escapeHtml(coverLetter.date)}</div>` : ''}
+
+          <main style="font-size: 0.9rem; line-height: 1.65;">
+            <h2 class="cv-section-title">Carta de Apresentação</h2>
+            ${coverLetter.subject ? `<div style="font-weight: 700; margin-bottom: 0.75rem;">${escapeHtml(coverLetter.subject)}</div>` : ''}
+            ${coverLetter.salutation ? `<div style="font-weight: 600; margin-bottom: 0.75rem;">${escapeHtml(coverLetter.salutation)}</div>` : ''}
+            ${coverLetter.paragraphs.map(p => `<p style="margin-bottom: 0.85rem; text-align: justify;">${escapeHtml(p)}</p>`).join('')}
+            ${coverLetter.closing ? `<div style="margin-top: 1.25rem; font-weight: 600;">${escapeHtml(coverLetter.closing)}</div>` : ''}
+            <div class="cv-signature-cursive">${escapeHtml(coverLetter.signature || basics.name)}</div>
+            <div style="font-weight: 700; font-size: 0.88rem; margin-top: 0.2rem;">${escapeHtml(coverLetter.signature || basics.name)}</div>
+          </main>
         </div>
+      </div>
+    ` : ''}
 
-        <div class="cv-contact-bar">
-          ${candidateEmail ? `<a href="mailto:${candidateEmail}" class="cv-contact-item">✉️ ${candidateEmail}</a>` : ''}
-          ${candidatePhone ? `<a href="tel:${phoneClean}" class="cv-contact-item">📱 ${candidatePhone}</a>` : ''}
-          ${locStr ? `<span class="cv-contact-item">📍 ${locStr}</span>` : ''}
-          ${candidateUrl ? `<a href="${candidateUrl}" target="_blank" class="cv-contact-item">🌐 ${displayUrl}</a>` : ''}
-        </div>
-
-        ${profilesHtml ? `<div class="cv-contact-bar" style="margin-top: 0.4rem;">${profilesHtml}</div>` : ''}
-
-        ${candidateSummary ? `<p class="cv-summary">${candidateSummary}</p>` : ''}
-      </header>
-
-      <!-- Work Experience -->
-      ${work.length > 0 ? `
-        <section class="cv-section">
-          <h2 class="cv-section-title">💼 Experiência Profissional</h2>
-          ${workHtml}
-        </section>
-      ` : ''}
-
-      <!-- Featured Projects -->
-      ${projects.length > 0 ? `
-        <section class="cv-section">
-          <h2 class="cv-section-title">🚀 Projetos em Destaque</h2>
-          ${projectsHtml}
-        </section>
-      ` : ''}
-
-      <!-- Skills -->
-      ${skills.length > 0 ? `
-        <section class="cv-section">
-          <h2 class="cv-section-title">⚡ Habilidades & Competências</h2>
-          ${skillsHtml}
-        </section>
-      ` : ''}
-
-      <!-- Education -->
-      ${education.length > 0 ? `
-        <section class="cv-section">
-          <h2 class="cv-section-title">🎓 Formação Acadêmica</h2>
-          ${educationHtml}
-        </section>
-      ` : ''}
-
-      <!-- Certifications -->
-      ${certificates.length > 0 ? `
-        <section class="cv-section">
-          <h2 class="cv-section-title">📜 Certificações & Licenças</h2>
-          ${certificatesHtml}
-        </section>
-      ` : ''}
-
-      <!-- Awards -->
-      ${awards.length > 0 ? `
-        <section class="cv-section">
-          <h2 class="cv-section-title">🏆 Prêmios & Reconhecimentos</h2>
-          ${awardsHtml}
-        </section>
-      ` : ''}
-
-      <!-- Volunteer -->
-      ${volunteer.length > 0 ? `
-        <section class="cv-section">
-          <h2 class="cv-section-title">🤝 Voluntariado & Projetos Sociais</h2>
-          ${volunteerHtml}
-        </section>
-      ` : ''}
-
-      <!-- Languages -->
-      ${languages.length > 0 ? `
-        <section class="cv-section">
-          <h2 class="cv-section-title">🌐 Idiomas</h2>
-          <div class="cv-tags-cloud">${languagesHtml}</div>
-        </section>
-      ` : ''}
-
-      <!-- Interests -->
-      ${interests.length > 0 ? `
-        <section class="cv-section">
-          <h2 class="cv-section-title">🎯 Interesses & Pesquisa</h2>
-          <div class="cv-tags-cloud">${interestsHtml}</div>
-        </section>
-      ` : ''}
-
-    </div>
   </div>
 
   <script>
+    function changeViewMode(mode) {
+      var container = document.getElementById('cvContainer');
+      if (container) {
+        container.classList.remove('view-cv', 'view-cover_letter', 'view-both');
+        container.classList.add('view-' + mode);
+      }
+    }
+
     function changeLayout(layoutName) {
       var container = document.getElementById('cvContainer');
       if (container) {
-        container.className = 'cv-sheet-container layout-' + layoutName;
+        container.className = container.className.replace(/layout-[a-z0-9_]+/g, '').trim();
+        container.classList.add('layout-' + layoutName);
       }
     }
 
     function changeTheme(themeName) {
       var bodyEl = document.getElementById('cvBody');
       if (bodyEl) {
-        bodyEl.className = 'cv-sheet-body theme-' + themeName;
+        bodyEl.className = 'theme-' + themeName;
       }
     }
 
@@ -941,19 +513,19 @@ ${getEmbeddedCss()}
       var url = URL.createObjectURL(blob);
       var a = document.createElement('a');
       a.href = url;
-      a.download = '${downloadFileName}';
+      a.download = 'curriculo.yaml';
       a.click();
       URL.revokeObjectURL(url);
     }
   </script>
 
-  <script type="text/plain" id="rawYamlStore">${yamlDownloadContent}</script>
+  ${safeYaml ? `<script type="text/plain" id="rawYamlStore">${safeYaml}</script>` : ''}
 </body>
 </html>`
 }
 
 /**
- * Dispara o download de um arquivo HTML Standalone no navegador
+ * Dispara o download do Currículo em HTML Standalone
  */
 export function downloadCVHtmlFile(params: {
   yaml: string
@@ -961,6 +533,7 @@ export function downloadCVHtmlFile(params: {
   persona?: string
   theme?: ThemeVariant
   layout?: LayoutVariant
+  viewMode?: ViewMode
 }): void {
   const parsed = parseYamlToCV(params.yaml)
   if (!parsed.data) {
@@ -972,12 +545,12 @@ export function downloadCVHtmlFile(params: {
     parsed.data,
     params.theme || 'executive',
     params.yaml,
-    params.layout || 'modular'
+    params.layout || 'modular',
+    params.viewMode || 'cv'
   )
 
   const cleanName = params.name.toLowerCase().replace(/\s+/g, '-') || 'curriculo'
-  const personaSuffix = params.persona ? `-${params.persona}` : ''
-  const filename = `curriculo-${cleanName}${personaSuffix}.html`
+  const filename = `curriculo-${cleanName}.html`
 
   const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' })
   const url = URL.createObjectURL(blob)
@@ -989,7 +562,37 @@ export function downloadCVHtmlFile(params: {
 }
 
 /**
- * Dispara o download de um pacote ZIP contendo o HTML Standalone e o YAML estruturado
+ * Dispara o download da Cover Letter em HTML Standalone
+ */
+export function downloadCVCoverLetterHtml(params: {
+  yaml: string
+  name: string
+  theme?: ThemeVariant
+  layout?: LayoutVariant
+}): void {
+  const parsed = parseYamlToCV(params.yaml)
+  if (!parsed.data) return
+
+  const htmlContent = renderCVToStandaloneHtml(
+    parsed.data,
+    params.theme || 'executive',
+    params.yaml,
+    params.layout || 'modular',
+    'cover_letter'
+  )
+
+  const cleanName = params.name.toLowerCase().replace(/\s+/g, '-') || 'candidato'
+  const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `cover-letter-${cleanName}.html`
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+/**
+ * Dispara o download do pacote ZIP completo (Currículo + Cover Letter + Dossiê + YAML)
  */
 export async function downloadCVZipPackage(params: {
   yaml: string
@@ -1001,28 +604,41 @@ export async function downloadCVZipPackage(params: {
   try {
     const parsed = parseYamlToCV(params.yaml)
     const cleanName = params.name.toLowerCase().replace(/\s+/g, '-') || 'curriculo'
-    const personaSuffix = params.persona ? `-${params.persona}` : ''
-    const baseName = `curriculo-${cleanName}${personaSuffix}`
+    const baseName = `dossie-${cleanName}`
 
-    const htmlContent = parsed.data
-      ? renderCVToStandaloneHtml(parsed.data, params.theme || 'executive', params.yaml, params.layout || 'modular')
-      : '<html><body><pre>' + escapeHtml(params.yaml) + '</pre></body></html>'
+    const cvHtml = parsed.data
+      ? renderCVToStandaloneHtml(parsed.data, params.theme || 'executive', params.yaml, params.layout || 'modular', 'cv')
+      : ''
+
+    const coverHtml = parsed.data
+      ? renderCVToStandaloneHtml(parsed.data, params.theme || 'executive', params.yaml, params.layout || 'modular', 'cover_letter')
+      : ''
+
+    const dossierHtml = parsed.data
+      ? renderCVToStandaloneHtml(parsed.data, params.theme || 'executive', params.yaml, params.layout || 'modular', 'both')
+      : ''
 
     const zip = new JSZip()
-    zip.file(`${baseName}.html`, htmlContent)
-    zip.file(`${baseName}.yaml`, params.yaml)
+    zip.file(`1_curriculo_${cleanName}.html`, cvHtml)
+    if (parsed.data?.coverLetter) {
+      zip.file(`2_cover_letter_${cleanName}.html`, coverHtml)
+      zip.file(`3_dossie_completo_2paginas_${cleanName}.html`, dossierHtml)
+    }
+    zip.file(`dados_${cleanName}.yaml`, params.yaml)
+
     const readmeText = [
-      'CV Maker 2.0 - Pacote de Curriculo Profissional',
+      'CV Maker 2.0 - Dossiê Profissional Completo',
       '================================================================',
       `Candidato: ${params.name}`,
-      `Data de Exportacao: ${new Date().toLocaleString('pt-BR')}`,
+      `Data de Exportação: ${new Date().toLocaleString('pt-BR')}`,
       `Modelo A4: ${params.layout || 'modular'}`,
       `Tema Visual: ${params.theme || 'executive'}`,
-      'Formato: JSON Resume Standard v1.0.0 (YAML & Standalone HTML)',
       '',
-      'Arquivos incluidos:',
-      `1. ${baseName}.html -> Curriculo Standalone interativo pronto para abrir no navegador e imprimir em PDF A4.`,
-      `2. ${baseName}.yaml -> Fonte unica de verdade dos dados estruturados.`,
+      'Arquivos incluídos:',
+      `1. 1_curriculo_${cleanName}.html -> Currículo A4 (1 página).`,
+      `2. 2_cover_letter_${cleanName}.html -> Carta de Apresentação A4 espelhada.`,
+      `3. 3_dossie_completo_2paginas_${cleanName}.html -> Dossiê unificado para impressão/salvar em PDF único.`,
+      `4. dados_${cleanName}.yaml -> Fonte única de verdade em YAML (JSON Resume).`,
       '',
       'Gerado com tecnologia LogicDefense & HeissLab: https://www.heisslab.com.br/laboratorio/cv-maker'
     ].join('\n')
@@ -1038,13 +654,5 @@ export async function downloadCVZipPackage(params: {
     URL.revokeObjectURL(url)
   } catch (err) {
     console.error('Falha ao gerar ZIP local:', err)
-    alert('Nao foi possivel gerar o arquivo ZIP. Baixando versao YAML como alternativa.')
-    const blob = new Blob([params.yaml], { type: 'text/yaml;charset=utf-8' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `curriculo-${params.name.toLowerCase().replace(/\s+/g, '-')}.yaml`
-    a.click()
-    URL.revokeObjectURL(url)
   }
 }

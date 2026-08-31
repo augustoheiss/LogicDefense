@@ -1,5 +1,5 @@
 import React from 'react'
-import type { TextVariant, ThemeVariant, LayoutVariant } from '../../types/cv'
+import type { TextVariant, ThemeVariant, LayoutVariant, ViewMode } from '../../types/cv'
 import { LAYOUT_OPTIONS } from '../../types/cv'
 
 interface CVToolbarProps {
@@ -9,8 +9,13 @@ interface CVToolbarProps {
   onLayoutChange: (l: LayoutVariant) => void
   activeTheme: ThemeVariant
   onThemeChange: (t: ThemeVariant) => void
+  activeViewMode: ViewMode
+  onViewModeChange: (v: ViewMode) => void
+  onOpenCoverLetterModal?: () => void
+  hasCoverLetter?: boolean
   onDownloadYaml: () => void
   onDownloadHtml?: () => void
+  onDownloadCoverLetterHtml?: () => void
   onDownloadZip?: () => void
   onPrintPdf: () => void
   onOpenPhotoModal: () => void
@@ -37,6 +42,12 @@ const THEMES: { id: ThemeVariant; label: string; icon: string }[] = [
   { id: 'terminal',   label: 'Terminal',    icon: '>_' },
 ]
 
+const VIEW_MODES: { id: ViewMode; label: string; icon: string }[] = [
+  { id: 'cv',           label: 'Currículo A4',         icon: '📄' },
+  { id: 'cover_letter', label: 'Cover Letter',         icon: '✉️' },
+  { id: 'both',         label: 'Dossiê (2 Páginas)',   icon: '📑' },
+]
+
 export const CVToolbar: React.FC<CVToolbarProps> = ({
   activePersona,
   onPersonaChange,
@@ -44,8 +55,13 @@ export const CVToolbar: React.FC<CVToolbarProps> = ({
   onLayoutChange,
   activeTheme,
   onThemeChange,
+  activeViewMode,
+  onViewModeChange,
+  onOpenCoverLetterModal,
+  hasCoverLetter = false,
   onDownloadYaml,
   onDownloadHtml,
+  onDownloadCoverLetterHtml,
   onDownloadZip,
   onPrintPdf,
   onOpenPhotoModal,
@@ -63,24 +79,24 @@ export const CVToolbar: React.FC<CVToolbarProps> = ({
 
   return (
     <div className="cv-preview-toolbar cv-no-print">
-      {/* Grupo de Personas de IA */}
+      {/* Grupo 1: Modo de Visualização (Currículo / Cover Letter / Dossiê) */}
       <div className="cv-toolbar-group">
-        <span className="cv-toolbar-label">Persona IA</span>
+        <span className="cv-toolbar-label">Visualização</span>
         <div className="cv-btn-pill-group">
-          {PERSONAS.map(p => (
+          {VIEW_MODES.map(v => (
             <button
-              key={p.id}
-              className={`cv-btn-pill ${activePersona === p.id ? 'cv-btn-pill--active' : ''}`}
-              onClick={() => onPersonaChange(p.id)}
-              title={`Ver versão com a persona ${p.label}`}
+              key={v.id}
+              className={`cv-btn-pill ${activeViewMode === v.id ? 'cv-btn-pill--active' : ''}`}
+              onClick={() => onViewModeChange(v.id)}
+              title={`Exibir ${v.label}`}
             >
-              <span>{p.icon}</span> {p.label}
+              <span>{v.icon}</span> {v.label}
             </button>
           ))}
         </div>
       </div>
 
-      {/* Grupo de Modelos de Layout A4 */}
+      {/* Grupo 2: Modelos A4 (01 a 08) */}
       <div className="cv-toolbar-group">
         <span className="cv-toolbar-label">Modelo A4</span>
         <div className="cv-btn-pill-group">
@@ -97,7 +113,7 @@ export const CVToolbar: React.FC<CVToolbarProps> = ({
         </div>
       </div>
 
-      {/* Grupo de Temas Visuais / Cores */}
+      {/* Grupo 3: Temas Visuais / Cores */}
       <div className="cv-toolbar-group">
         <span className="cv-toolbar-label">Tema Visual</span>
         <div className="cv-btn-pill-group">
@@ -114,8 +130,36 @@ export const CVToolbar: React.FC<CVToolbarProps> = ({
         </div>
       </div>
 
-      {/* Ações Rápidas */}
+      {/* Grupo 4: Personas de IA */}
       <div className="cv-toolbar-group">
+        <span className="cv-toolbar-label">Persona IA</span>
+        <div className="cv-btn-pill-group">
+          {PERSONAS.map(p => (
+            <button
+              key={p.id}
+              className={`cv-btn-pill ${activePersona === p.id ? 'cv-btn-pill--active' : ''}`}
+              onClick={() => onPersonaChange(p.id)}
+              title={`Ver versão com a persona ${p.label}`}
+            >
+              <span>{p.icon}</span> {p.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Grupo 5: Ações Rápidas & Downloads */}
+      <div className="cv-toolbar-group">
+        {onOpenCoverLetterModal && (
+          <button
+            className="cv-btn-secondary"
+            onClick={onOpenCoverLetterModal}
+            title="Gerar ou adaptar carta de apresentação sob medida para uma vaga com IA"
+            style={{ borderColor: '#6366f1', color: '#c7d2fe', background: 'rgba(99, 102, 241, 0.15)', fontWeight: 700 }}
+          >
+            ✨ {hasCoverLetter ? 'Adaptar Carta' : 'Gerar Carta'}
+          </button>
+        )}
+
         {onOpenStoreModal && (
           <button
             className="cv-btn-secondary"
@@ -160,9 +204,19 @@ export const CVToolbar: React.FC<CVToolbarProps> = ({
           <button
             className="cv-btn-secondary"
             onClick={onDownloadHtml}
-            title="Baixar currículo em HTML Standalone (com temas e impressão A4)"
+            title="Baixar currículo em HTML Standalone offline (com seletores embutidos)"
           >
             🌐 .html
+          </button>
+        )}
+
+        {hasCoverLetter && onDownloadCoverLetterHtml && (
+          <button
+            className="cv-btn-secondary"
+            onClick={onDownloadCoverLetterHtml}
+            title="Baixar carta de apresentação em HTML Standalone individual"
+          >
+            ✉️ Carta .html
           </button>
         )}
 
@@ -170,7 +224,7 @@ export const CVToolbar: React.FC<CVToolbarProps> = ({
           <button
             className="cv-btn-secondary"
             onClick={onDownloadZip}
-            title="Baixar pacote completo em ZIP (HTML + YAML)"
+            title="Baixar pacote completo em ZIP (Currículo, Carta de Apresentação, Dossiê e YAML)"
           >
             📦 .zip
           </button>
@@ -179,9 +233,9 @@ export const CVToolbar: React.FC<CVToolbarProps> = ({
         <button
           className="cv-btn-primary"
           onClick={onPrintPdf}
-          title="Exportar para PDF formatado em A4"
+          title="Exportar para PDF formatado em A4 (1 página ou 2 páginas conforme o modo ativo)"
         >
-          🖨️ Imprimir PDF
+          🖨️ Imprimir / Salvar PDF
         </button>
       </div>
     </div>

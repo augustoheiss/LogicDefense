@@ -5,7 +5,7 @@ interface OpenPromptsModalProps {
   onClose: () => void
 }
 
-type PromptTab = 'base' | 'professional' | 'architect' | 'historian' | 'didactic' | 'alien'
+type PromptTab = 'base' | 'cover_letter' | 'api_guide' | 'professional' | 'architect' | 'historian' | 'didactic' | 'alien'
 
 const PROMPTS_DATA: Record<
   PromptTab,
@@ -21,7 +21,7 @@ const PROMPTS_DATA: Record<
     title: 'Instrução Base & Schema JSON Resume',
     icon: '📋',
     badge: 'Core Engine',
-    desc: 'Prompt mestre com as diretrizes de fidelidade (Zero Fabricação), fórmula Google X-Y-Z e schema padronizado.',
+    desc: 'Prompt mestre com as diretrizes de fidelidade (Zero Fabricação), fórmula Google X-Y-Z e schema padronizado com Cover Letter e Referências.',
     content: `Você é um Arquiteto Sênior de Dados de Carreira e Especialista Executivo em Currículos para Big Techs e Mercado Enterprise (Padrão IBM / Google).
 
 SUA MISSÃO:
@@ -35,7 +35,7 @@ REGRAS CRÍTICAS DE ENGENHARIA DE CURRÍCULO (AGENCY-RESUME-TAILOR GUARDRAILS):
 5. ATS ALIGNMENT: Inclua palavras-chave técnicas exatas (ex: Python, FastAPI, RAG, Docker, APIs REST, Asyncio, SQLite, Turso, Cloud, Nuvem Híbrida) agrupadas de forma clara na seção skills.
 6. FORMATO EXCLUSIVO: Retorne APENAS o JSON puro. Não inclua markdown fences (\`\`\`json), explicações adicionais ou preâmbulos.
 
-SCHEMA OBRIGATÓRIO (JSON RESUME STANDARD):
+SCHEMA OBRIGATÓRIO (JSON RESUME EXTENDED STANDARD):
 {
   "basics": {
     "name": "string",
@@ -44,6 +44,11 @@ SCHEMA OBRIGATÓRIO (JSON RESUME STANDARD):
     "phone": "string",
     "url": "string",
     "summary": "string",
+    "image": "string (URL da foto ou base64 data:image/...)",
+    "nationality": "string (opcional)",
+    "civilStatus": "string (opcional)",
+    "driverLicense": "string (opcional)",
+    "quote": "string (frase de impacto opcional)",
     "location": { "city": "string", "region": "string", "postalCode": "string", "countryCode": "string" },
     "profiles": [ { "network": "string", "username": "string", "url": "string" } ]
   },
@@ -80,12 +85,125 @@ SCHEMA OBRIGATÓRIO (JSON RESUME STANDARD):
     {
       "name": "string",
       "level": "Avançado | Intermediário | Conhecimento Prático",
+      "levelPercent": 85,
       "keywords": [ "string" ]
     }
   ],
   "languages": [ { "language": "string", "fluency": "string" } ],
-  "interests": [ { "name": "string", "keywords": [ "string" ] } ]
+  "interests": [ { "name": "string", "icon": "⚡", "keywords": [ "string" ] } ],
+  "references": [
+    {
+      "name": "string",
+      "position": "string",
+      "company": "string",
+      "phone": "string",
+      "email": "string"
+    }
+  ],
+  "coverLetter": {
+    "recipient": {
+      "name": "string",
+      "title": "string",
+      "company": "string",
+      "address": "string"
+    },
+    "date": "string (ex: 31 de Agosto de 2026)",
+    "subject": "string",
+    "salutation": "string (ex: Prezado(a) Comitê de Seleção,)",
+    "paragraphs": [
+      "Parágrafo 1...",
+      "Parágrafo 2...",
+      "Parágrafo 3..."
+    ],
+    "closing": "Atenciosamente,",
+    "signature": "string (Nome do candidato)",
+    "signatureImage": "string (opcional URL ou base64)"
+  }
 }`,
+  },
+  cover_letter: {
+    title: 'Carta de Apresentação (Cover Letter)',
+    icon: '✉️',
+    badge: 'ResumeTailor Engine',
+    desc: 'Prompt executivo focado em conectar as realizações do CV às dores e desafios da vaga em 4 parágrafos persuasivos.',
+    content: `Você é o ResumeTailor, Arquiteto Sênior de Estratégia de Carreira e Especialista em Otimização de Candidaturas (Skill: agency-resume-tailor).
+
+SUA MISSÃO:
+Analisar os dados estruturados do currículo do candidato e os requisitos/desafios da vaga alvo para redigir uma CARTA DE APRESENTAÇÃO (Cover Letter) executiva, hiper-personalizada, factual e persuasiva, que atue como a ponte perfeita entre as realizações comprovadas do candidato e as dores de negócio da empresa.
+
+DIRETRIZES FUNDAMENTAIS DE ENGENHARIA (AGENCY-RESUME-TAILOR GUARDRAILS):
+1. ZERO FABRICAÇÃO (STRICT FIDELITY): Jamais invente ferramentas, métricas, empresas, projetos ou responsabilidades ausentes no currículo fornecido. Cada argumento persuasivo deve ser fundamentado exclusivamente em evidências reais do histórico do candidato.
+2. ALINHAMENTO VERDADEIRO DE PALAVRAS-CHAVE: Utilize os termos técnicos exatos da descrição da vaga (linguagens, frameworks, metodologias, processos) somente onde houver suporte comprovado no perfil. Evite jargões vazios ("sou esforçado", "penso fora da caixa").
+3. ESTRUTURA NARRATIVA PERSUASIVA EM 4 PARÁGRAFOS:
+   - PARÁGRAFO 1 (Gancho & Tese de Posicionamento): Declare imediatamente o cargo alvo e a proposta de valor central. Conecte de forma autêntica o momento profissional do candidato à missão e desafios estratégicos da empresa contratante.
+   - PARÁGRAFO 2 (Evidências Reais & Impacto Mensurável): Selecione de 2 a 3 conquistas concretas do currículo (usando a fórmula Ação + Escopo + Métrica/Impacto + Tecnologia/Método) e demonstre como essa experiência prévia resolve os principais problemas técnicos ou operacionais da vaga.
+   - PARÁGRAFO 3 (Governança, Cultura & Valor Futuro): Explique como o candidato opera no dia a dia (colaboração, governança de código/processos, velocidade de aprendizado, liderança técnica) e de que forma acelerará os objetivos da equipe.
+   - PARÁGRAFO 4 (Fechamento Assertivo & Call-to-Action): Conclusão elegante, segura e educada, agradecendo a atenção e convidando o recrutador/comitê para uma entrevista técnica ou executiva.
+4. RETORNE APENAS O OBJETO JSON PURO:
+{
+  "recipient": {
+    "name": "Nome do Gestor ou 'Comitê de Seleção'",
+    "title": "Cargo do Destinatário (ex: 'Diretoria de Engenharia')",
+    "company": "Nome da Empresa Contratante",
+    "address": "Cidade / Localização da Empresa"
+  },
+  "date": "Data formatada por extenso (ex: '31 de Agosto de 2026')",
+  "subject": "Candidatura: Posição de [Nome do Cargo Alvo]",
+  "salutation": "Prezado(a) [Nome ou Comitê de Seleção],",
+  "paragraphs": [
+    "Parágrafo 1 (Gancho de Abertura & Tese de Valor)...",
+    "Parágrafo 2 (Resultados Comprovados & Solução de Dores da Vaga)...",
+    "Parágrafo 3 (Fit Cultural, Governança & Dinâmica de Entrega)...",
+    "Parágrafo 4 (Fechamento Assertivo & Convite para Entrevista)..."
+  ],
+  "closing": "Atenciosamente,",
+  "signature": "Nome Completo do Candidato"
+}`,
+  },
+  api_guide: {
+    title: 'Integração via API (Robôs & Agentes)',
+    icon: '🤖',
+    badge: 'API Open Engine',
+    desc: 'Como agentes autônomos (ChatGPT, Claude, n8n, Python) leem os prompts via API e geram CVs sem gastar saldo do servidor.',
+    content: `# FLUXO DE INTEGRAÇÃO VIA API (PADRÃO HEISS-LAB CV MAKER 2.0)
+
+## 1. Leitura Prévia dos Prompts e Regras pelo Agente
+Antes de processar o texto do usuário, seu robô ou script pode consultar a biblioteca oficial de prompts:
+
+GET /api/v1/cv/prompts?lang=pt
+-> Retorna todos os prompts (Base, Cover Letter e as 5 Personas) em JSON estruturado.
+
+GET /api/v1/cv/prompts/cover_letter
+-> Retorna o prompt específico de Carta de Apresentação.
+
+GET /api/v1/cv/prompts/professional
+-> Retorna o prompt combinado (Base + Diretrizes Executivas).
+
+---
+
+## 2. Geração do JSON Resume com IA Própria (Zero Custo de Servidor)
+Envie o prompt obtido na etapa 1 para o seu próprio modelo (OpenAI GPT-4o, Anthropic Claude 3.5, Google Gemini, Ollama ou DeepSeek).
+O modelo retornará o JSON Resume rigorosamente validado.
+
+---
+
+## 3. Renderização e Compilação Standalone Gratuita
+Envie o JSON/YAML gerado para o endpoint de renderização da API:
+
+curl -X POST "https://www.heisslab.com.br/api/v1/cv/render?format=html&theme=executive&layout=compact_split&view_mode=both" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "raw_text": "basics:\\n  name: Alexandre Silva\\n...",
+    "theme": "executive",
+    "layout": "compact_split",
+    "view_mode": "both"
+  }'
+
+Parâmetros suportados no endpoint:
+- format: "html" (HTML standalone offline), "zip" (Pacote ZIP com HTML+YAML), "yaml" ou "json"
+- layout: "modular", "linear", "sidebar", "compact_split", "editorial_accent", "corporate_timeline", "warm_magazine", "hero_matrix"
+- view_mode: "cv" (Currículo 1 pág), "cover_letter" (Carta 1 pág), "both" (Dossiê 2 págs)
+- theme: "executive", "creative", "minimalist", "white", "terminal"`,
   },
   professional: {
     title: '1. Executivo IBM / Senior Tech Lead',
@@ -164,9 +282,9 @@ export const OpenPromptsModal: React.FC<OpenPromptsModalProps> = ({ isOpen, onCl
   const current = PROMPTS_DATA[activeTab]
 
   const handleCopy = () => {
-    // Monta o prompt completo: se não for a base, combina a base com a persona!
+    // Monta o prompt completo: se não for a base nem api_guide, combina a base com a persona!
     const fullText =
-      activeTab === 'base'
+      activeTab === 'base' || activeTab === 'cover_letter' || activeTab === 'api_guide'
         ? current.content
         : `${PROMPTS_DATA.base.content}\n\n========================================\n${current.content}`
 
@@ -180,7 +298,7 @@ export const OpenPromptsModal: React.FC<OpenPromptsModalProps> = ({ isOpen, onCl
       <div
         className="cv-modal-content cv-prompts-modal"
         onClick={(e) => e.stopPropagation()}
-        style={{ maxWidth: '820px', width: '95%' }}
+        style={{ maxWidth: '860px', width: '95%' }}
       >
         {/* ── Modal Header ── */}
         <div className="cv-modal-header">
@@ -191,7 +309,7 @@ export const OpenPromptsModal: React.FC<OpenPromptsModalProps> = ({ isOpen, onCl
                 Engenharia de Prompts Aberta (100% Grátis)
               </h3>
               <p className="cv-modal-desc" style={{ fontSize: '0.8rem', color: '#94a3b8' }}>
-                Utilize nossos System Prompts otimizados no ChatGPT, Claude, Cursor ou Ollama local.
+                Utilize nossos System Prompts otimizados no ChatGPT, Claude, Cursor, n8n ou via API direta.
               </p>
             </div>
           </div>
@@ -204,12 +322,12 @@ export const OpenPromptsModal: React.FC<OpenPromptsModalProps> = ({ isOpen, onCl
         <div className="cv-prompts-tutorial-banner">
           <span style={{ fontSize: '1.2rem' }}>💡</span>
           <div>
-            <strong>Como usar gratuitamente nos seus próprios modelos:</strong>
+            <strong>Como usar gratuitamente com sua própria IA ou via API:</strong>
             <ol style={{ margin: '0.25rem 0 0 1.2rem', padding: 0, fontSize: '0.78rem' }}>
-              <li>Escolha o arquétipo abaixo e clique em <strong>"📋 Copiar Prompt Completo"</strong>.</li>
-              <li>Cole no <strong>ChatGPT (GPT-4o)</strong> ou <strong>Claude 3.5 Sonnet</strong> como System Prompt.</li>
-              <li>Envie seu currículo bruto no chat e receba o JSON Resume gerado.</li>
-              <li>Cole o JSON no nosso <strong>Editor YAML</strong> para exportar o PDF A4 na hora!</li>
+              <li>Escolha a aba abaixo e clique em <strong>"📋 Copiar Prompt Completo"</strong>.</li>
+              <li>Cole no <strong>ChatGPT (GPT-4o)</strong>, <strong>Claude 3.5</strong> ou no seu script de automação como System Prompt.</li>
+              <li>Envie seu histórico ou descrição de vaga para gerar o JSON Resume ou a Cover Letter.</li>
+              <li>Cole no nosso <strong>Editor YAML</strong> ou envie para <code>/api/v1/cv/render</code> para compilar os PDFs e HTMLs!</li>
             </ol>
           </div>
         </div>
@@ -218,6 +336,12 @@ export const OpenPromptsModal: React.FC<OpenPromptsModalProps> = ({ isOpen, onCl
         <div className="cv-prompts-tabs">
           {(Object.keys(PROMPTS_DATA) as PromptTab[]).map((tabKey) => {
             const tab = PROMPTS_DATA[tabKey]
+            let label = tab.title
+            if (tabKey === 'base') label = 'Instrução Base'
+            else if (tabKey === 'cover_letter') label = 'Cover Letter'
+            else if (tabKey === 'api_guide') label = 'Guia API'
+            else if (tab.title.includes('.')) label = tab.title.split('.')[1]
+
             return (
               <button
                 key={tabKey}
@@ -225,7 +349,7 @@ export const OpenPromptsModal: React.FC<OpenPromptsModalProps> = ({ isOpen, onCl
                 onClick={() => setActiveTab(tabKey)}
               >
                 <span>{tab.icon}</span>
-                <span>{tabKey === 'base' ? 'Instrução Base' : tab.title.split('.')[1] || tab.title}</span>
+                <span>{label}</span>
               </button>
             )
           })}
@@ -235,7 +359,7 @@ export const OpenPromptsModal: React.FC<OpenPromptsModalProps> = ({ isOpen, onCl
         <div className="cv-prompts-viewer">
           <div className="cv-prompts-viewer__header">
             <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
                 <h4 style={{ margin: 0, fontSize: '1rem', color: '#f8fafc' }}>
                   {current.icon} {current.title}
                 </h4>
@@ -250,13 +374,13 @@ export const OpenPromptsModal: React.FC<OpenPromptsModalProps> = ({ isOpen, onCl
               className={`cv-prompts-copy-btn ${copied ? 'cv-prompts-copy-btn--copied' : ''}`}
               onClick={handleCopy}
             >
-              {copied ? '✅ Prompt Copiado!' : '📋 Copiar Prompt Completo'}
+              {copied ? '✅ Copiado!' : '📋 Copiar Conteúdo'}
             </button>
           </div>
 
           <pre className="cv-prompts-codeblock">
             <code>
-              {activeTab === 'base'
+              {activeTab === 'base' || activeTab === 'cover_letter' || activeTab === 'api_guide'
                 ? current.content
                 : `/* =========================================================================\n   1. INSTRUÇÃO BASE & REGRAS ENTERPRISE\n   ========================================================================= */\n${PROMPTS_DATA.base.content}\n\n/* =========================================================================\n   2. DIRETRIZES ESPECÍFICAS DO ARQUÉTIPO (${current.title.toUpperCase()})\n   ========================================================================= */\n${current.content}`}
             </code>
@@ -266,7 +390,7 @@ export const OpenPromptsModal: React.FC<OpenPromptsModalProps> = ({ isOpen, onCl
         {/* ── Footer ── */}
         <div className="cv-modal-actions" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
           <span style={{ fontSize: '0.75rem', color: '#64748b' }}>
-            LogicDefense CV Maker 2.0 • Engenharia de Prompts Padrão Enterprise
+            LogicDefense CV Maker 2.0 • Endpoints abertos em <code>/api/v1/cv/prompts</code>
           </span>
           <button className="cv-btn-secondary" onClick={onClose}>
             Fechar

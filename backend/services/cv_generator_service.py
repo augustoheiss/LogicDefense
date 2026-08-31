@@ -201,6 +201,64 @@ async def generate_all_archetypes(
         archetypes_map[arch] = yaml_content
         total_tokens += tokens
 
-    return archetypes_map, total_tokens
+async def generate_standalone_cover_letter(
+    cv_data: dict[str, Any],
+    job_description: str | None = None,
+    target_company: str | None = None,
+    recipient_name: str | None = None,
+    tone: str = "professional",
+    language: str = "pt",
+    custom_api_key: str | None = None,
+) -> tuple[dict[str, Any], int]:
+    """
+    Gera uma carta de apresentação (Cover Letter) sob medida para o candidato e a vaga.
+    """
+    from prompts.cv_prompts import COVER_LETTER_GENERATION_PROMPT
+
+    active_client = genai.Client(api_key=custom_api_key) if custom_api_key else client
+    if not active_client:
+        raise RuntimeError("Nenhuma GEMINI_API_KEY configurada no servidor ou fornecida na requisição.")
+
+    user_prompt = f"""
+DADOS ESTRUTURADOS DO CANDIDATO:
+{yaml.dump(cv_data, allow_unicode=True)}
+
+EMPRESA ALVO: {target_company or 'Não especificada'}
+DESTINATÁRIO: {recipient_name or 'Comitê de Seleção'}
+TOM DE VOZ: {tone}
+IDIOMA: {language}
+
+DESCRIÇÃO DA VAGA / REQUISITOS:
+{job_description or 'Vaga alinhada com as principais competências e histórico de liderança do candidato.'}
+"""
+
+    response = await active_client.aio.models.generate_content(
+        model=MODEL,
+        contents=user_prompt,
+        config=types.GenerateContentConfig(
+            system_instruction=COVER_LETTER_GENERATION_PROMPT,
+            temperature=0.4,
+            max_output_tokens=3072,
+            response_mime_type="application/json",
+        ),
+    )
+
+    raw_text = (response.text or "").strip()
+    try:
+        data = json.loads(raw_text)
+    except Exception:
+        # Tenta extrair bloco JSON se vier com caracteres extras
+        import re
+        m = re.search(r'\{.*\}', raw_text, re.DOTALL)
+        if m:
+            data = json.loads(m.group(0))
+        else:
+            raise ValueError("Resposta do modelo não pôde ser convertida em JSON válido.")
+
+    tokens_used = 0
+    if hasattr(response, 'usage_metadata') and response.usage_metadata:
+        tokens_used = (response.usage_metadata.prompt_token_count or 0) + (response.usage_metadata.candidates_token_count or 0)
+
+    return data, tokens_used
 
 
