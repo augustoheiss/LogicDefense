@@ -874,18 +874,162 @@
 /* ── 5. Terminal Dark (theme-terminal) ── */
 .theme-terminal {
   background: #090d16;
-  color: #4ade80;
+  color: #e2e8f0;
 }
 .theme-terminal .cv-card {
-  background: #090d16;
-  border: 1px solid rgba(74, 222, 128, 0.2);
+  background: #0d1117 !important;
+  border: 1px solid rgba(74, 222, 128, 0.25);
+  color: #e2e8f0 !important;
 }
 .theme-terminal .cv-name,
 .theme-terminal .cv-section-title,
-.theme-terminal .cv-item__title {
-  color: #22c55e;
+.theme-terminal .cv-item__title,
+.theme-terminal h1,
+.theme-terminal h2,
+.theme-terminal h3,
+.theme-terminal h4 {
+  color: #4ade80 !important;
+}
+.theme-terminal a,
+.theme-terminal .cv-link {
+  color: #38bdf8 !important;
 }
 .theme-terminal .cv-card-box {
   background: rgba(34, 197, 94, 0.05);
   border-color: rgba(34, 197, 94, 0.25);
 }
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   REGRAS DE ALTO CONTRASTE PARA ÁREAS ESCURAS (NAVY SIDEBAR & BRAND)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+.cv-navy-sidebar,
+.layout-corporate_timeline .cv-navy-sidebar {
+  background: #0f172a !important;
+  color: #f8fafc !important;
+}
+
+.cv-navy-sidebar *,
+.layout-corporate_timeline .cv-navy-sidebar * {
+  color: #f8fafc;
+}
+
+.cv-navy-sidebar h1,
+.cv-navy-sidebar h2,
+.cv-navy-sidebar h3,
+.cv-navy-sidebar h4,
+.cv-navy-sidebar .cv-name,
+.cv-navy-sidebar .cv-section-title,
+.cv-navy-sidebar .cv-sidebar-title,
+.layout-corporate_timeline .cv-navy-sidebar h1,
+.layout-corporate_timeline .cv-navy-sidebar h2,
+.layout-corporate_timeline .cv-navy-sidebar h3,
+.layout-corporate_timeline .cv-navy-sidebar h4,
+.layout-corporate_timeline .cv-navy-sidebar .cv-name,
+.layout-corporate_timeline .cv-navy-sidebar .cv-section-title,
+.layout-corporate_timeline .cv-navy-sidebar .cv-sidebar-title {
+  color: #ffffff !important;
+  border-bottom-color: rgba(255, 255, 255, 0.25) !important;
+}
+
+.cv-navy-sidebar a,
+.cv-navy-sidebar .cv-link,
+.layout-corporate_timeline .cv-navy-sidebar a,
+.layout-corporate_timeline .cv-navy-sidebar .cv-link {
+  color: #38bdf8 !important;
+  text-decoration: underline !important;
+}
+
+.cv-navy-sidebar .cv-badge,
+.cv-navy-sidebar .cv-skill-tag,
+.layout-corporate_timeline .cv-navy-sidebar .cv-badge,
+.layout-corporate_timeline .cv-navy-sidebar .cv-skill-tag {
+  background: rgba(255, 255, 255, 0.12) !important;
+  color: #f8fafc !important;
+  border: 1px solid rgba(255, 255, 255, 0.25) !important;
+}
+
+.cv-navy-sidebar .cv-skill-bar-bg,
+.layout-corporate_timeline .cv-navy-sidebar .cv-skill-bar-bg {
+  background: rgba(255, 255, 255, 0.2) !important;
+}
+
+.cv-navy-sidebar .cv-skill-bar-fill,
+.layout-corporate_timeline .cv-navy-sidebar .cv-skill-bar-fill {
+  background: #38bdf8 !important;
+}
+
+.cv-navy-sidebar .cv-language-card,
+.cv-navy-sidebar .cv-interest-card,
+.layout-corporate_timeline .cv-navy-sidebar .cv-language-card,
+.layout-corporate_timeline .cv-navy-sidebar .cv-interest-card {
+  background: rgba(255, 255, 255, 0.08) !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  color: #f8fafc !important;
+}
+
+.cv-navy-sidebar .cv-navy-civildata,
+.layout-corporate_timeline .cv-navy-sidebar .cv-navy-civildata {
+  color: #cbd5e1 !important;
+  font-size: 0.78rem !important;
+}
+
+/* ── Brand Header ── */
+.cv-brand-header {
+  display: flex;
+  gap: 1.5rem;
+  align-items: center;
+  margin-bottom: 1.75rem;
+  border-bottom: 2px solid currentColor;
+  padding-bottom: 1rem;
+}
+
+.cv-brand-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.cv-avatar-square {
+  width: 85px;
+  height: 85px;
+  flex-shrink: 0;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 2px solid currentColor;
+}
+
+.cv-avatar-square img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.cv-brand-greeting {
+  font-size: 1.05rem;
+  font-weight: 800;
+  text-transform: lowercase;
+  line-height: 1;
+  padding: 0.3rem 0.6rem;
+  background: #0f172a;
+  color: #ffffff !important;
+  border-radius: 4px;
+  display: inline-block;
+  margin-bottom: 0.25rem;
+  width: fit-content;
+}
+
+.theme-creative .cv-brand-greeting {
+  background: #6366f1 !important;
+  color: #ffffff !important;
+}
+
+.theme-white .cv-brand-greeting {
+  background: #059669 !important;
+  color: #ffffff !important;
+}
+
+.theme-terminal .cv-brand-greeting {
+  background: #238636 !important;
+  color: #ffffff !important;
+}
+

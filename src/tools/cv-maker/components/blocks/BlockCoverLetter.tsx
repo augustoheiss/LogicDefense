@@ -1,6 +1,26 @@
 import React from 'react'
 import type { CoverLetter, CVBasics } from '../../types/cv'
 
+export const DEFAULT_SAMPLE_COVER_LETTER: CoverLetter = {
+  recipient: {
+    name: 'Dr. Roberto William',
+    title: 'Diretor de Engenharia & Contratação',
+    company: 'Tech Global Innovations Inc.',
+    address: 'Av. Faria Lima, 3500 - São Paulo, SP'
+  },
+  date: '31 de Agosto de 2026',
+  subject: 'Candidatura: Posição de Staff Software Architect & Lead de IA',
+  salutation: 'Prezado Dr. Roberto William e comitê de seleção,',
+  paragraphs: [
+    'Acompanho com grande admiração a liderança da Tech Global Innovations no desenvolvimento de sistemas autônomos de alta confiabilidade. Com mais de 8 anos de experiência sólida em arquitetura de microsserviços distribuídos, engenharia de inteligência artificial e liderança de squads técnicas multidisciplinares, vejo uma sinergia ímpar entre os meus resultados e os desafios estratégicos da sua organização.',
+    'Na minha atuação recente como Staff Architect na Enterprise Tech Solutions, fui o responsável direto por desenhar a migração de nossa infraestrutura central para microsserviços event-driven, sustentando mais de 2 milhões de transações diárias com redução de 45% na latência p99. Adicionalmente, estruturei nossos primeiros pipelines corporativos de IA generativa, integrando guardrails de segurança e otimização de cache que cortaram os custos de inferência em 60%.',
+    'Acredito firmemente que a excelência arquitetural deve sempre caminhar junto com a governança prática e a autonomia das equipes. Minha missão é traduzir visões de negócio ambiciosas em sistemas robustos, seguros e escaláveis que entreguem valor tangível de ponta a ponta.',
+    'Agradeço sinceramente a atenção e coloco-me à disposição para um diálogo aprofundado sobre como posso alavancar os objetivos técnicos e de expansão da Tech Global Innovations neste ano.'
+  ],
+  closing: 'Atenciosamente,',
+  signature: 'Alexandre Silva'
+}
+
 interface BlockCoverLetterProps {
   coverLetter?: CoverLetter
   basics: CVBasics
@@ -12,29 +32,8 @@ export const BlockCoverLetter: React.FC<BlockCoverLetterProps> = ({
   basics,
   onRequestGenerate
 }) => {
-  if (!coverLetter) {
-    return (
-      <div className="cv-cover-letter-placeholder">
-        <span style={{ fontSize: '2.5rem', marginBottom: '1rem' }}>✉️</span>
-        <h3>Nenhuma Carta de Apresentação Gerada</h3>
-        <p>
-          Adicione a seção <code>coverLetter:</code> ao seu YAML ou utilize a nossa IA para redigir
-          uma carta de apresentação altamente persuasiva e personalizada.
-        </p>
-        {onRequestGenerate && (
-          <button
-            onClick={onRequestGenerate}
-            className="cv-btn cv-btn-primary"
-            style={{ marginTop: '1rem' }}
-          >
-            ✨ Gerar Cover Letter com IA
-          </button>
-        )}
-      </div>
-    )
-  }
-
-  const { recipient, date, subject, salutation, paragraphs, closing, signature, signatureImage } = coverLetter
+  const letter = coverLetter || DEFAULT_SAMPLE_COVER_LETTER
+  const { recipient, date, subject, salutation, paragraphs, closing, signature, signatureImage } = letter
 
   return (
     <article className="cv-cover-letter-body">
@@ -67,6 +66,18 @@ export const BlockCoverLetter: React.FC<BlockCoverLetterProps> = ({
         <div className="cv-cover-signature">{signature || basics.name}</div>
         {basics.label && <div className="cv-cover-signer-label">{basics.label}</div>}
       </div>
+
+      {onRequestGenerate && (
+        <div className="cv-cover-generate-bar cv-no-print" style={{ marginTop: '2rem', textAlign: 'center' }}>
+          <button
+            onClick={onRequestGenerate}
+            className="cv-btn-secondary"
+            style={{ fontSize: '0.82rem', padding: '0.4rem 0.8rem' }}
+          >
+            ✨ Gerar Nova Versão de Cover Letter com IA
+          </button>
+        </div>
+      )}
     </article>
   )
 }

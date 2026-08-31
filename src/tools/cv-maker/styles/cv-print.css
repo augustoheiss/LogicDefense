@@ -1010,4 +1010,81 @@
   .theme-terminal .cv-link {
     color: #059669 !important;
   }
+
+  /* ── Regras de Alto Contraste para Áreas Escuras no Print ── */
+  .cv-navy-sidebar,
+  .layout-corporate_timeline .cv-navy-sidebar {
+    background: #0f172a !important;
+    color: #f8fafc !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  .cv-navy-sidebar *,
+  .layout-corporate_timeline .cv-navy-sidebar * {
+    color: #f8fafc !important;
+  }
+
+  .cv-navy-sidebar h1,
+  .cv-navy-sidebar h2,
+  .cv-navy-sidebar h3,
+  .cv-navy-sidebar h4,
+  .cv-navy-sidebar .cv-name,
+  .cv-navy-sidebar .cv-section-title,
+  .cv-navy-sidebar .cv-sidebar-title,
+  .layout-corporate_timeline .cv-navy-sidebar h1,
+  .layout-corporate_timeline .cv-navy-sidebar h2,
+  .layout-corporate_timeline .cv-navy-sidebar h3,
+  .layout-corporate_timeline .cv-navy-sidebar h4,
+  .layout-corporate_timeline .cv-navy-sidebar .cv-name,
+  .layout-corporate_timeline .cv-navy-sidebar .cv-section-title,
+  .layout-corporate_timeline .cv-navy-sidebar .cv-sidebar-title {
+    color: #ffffff !important;
+    border-bottom-color: rgba(255, 255, 255, 0.35) !important;
+  }
+
+  .cv-navy-sidebar a,
+  .cv-navy-sidebar .cv-link,
+  .layout-corporate_timeline .cv-navy-sidebar a,
+  .layout-corporate_timeline .cv-navy-sidebar .cv-link {
+    color: #38bdf8 !important;
+  }
+
+  .cv-navy-sidebar .cv-badge,
+  .cv-navy-sidebar .cv-skill-tag,
+  .layout-corporate_timeline .cv-navy-sidebar .cv-badge,
+  .layout-corporate_timeline .cv-navy-sidebar .cv-skill-tag {
+    background: rgba(255, 255, 255, 0.15) !important;
+    color: #ffffff !important;
+    border: 1px solid rgba(255, 255, 255, 0.3) !important;
+  }
+
+  .cv-navy-sidebar .cv-skill-bar-bg,
+  .layout-corporate_timeline .cv-navy-sidebar .cv-skill-bar-bg {
+    background: rgba(255, 255, 255, 0.25) !important;
+  }
+
+  .cv-navy-sidebar .cv-skill-bar-fill,
+  .layout-corporate_timeline .cv-navy-sidebar .cv-skill-bar-fill {
+    background: #38bdf8 !important;
+  }
+
+  .cv-brand-header {
+    display: flex !important;
+    gap: 1.5rem !important;
+    align-items: center !important;
+    margin-bottom: 1.5rem !important;
+    border-bottom: 2px solid currentColor !important;
+    padding-bottom: 1rem !important;
+  }
+
+  .cv-brand-greeting {
+    background: #0f172a !important;
+    color: #ffffff !important;
+    padding: 0.25rem 0.5rem !important;
+    border-radius: 3px !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
 }
+
