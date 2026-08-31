@@ -523,3 +523,146 @@
   font-size: 3rem;
   margin-bottom: 1rem;
 }
+
+/* =============================================================
+   MODELOS DE LAYOUT A4 (Estruturas Wireframe)
+   ============================================================= */
+
+/* ── Modelo A4 01: Modular (Cards Grid) ── */
+.layout-modular .cv-card {
+  padding: 2.5rem 3rem;
+}
+
+/* ── Modelo A4 02: Linear (Single Column ATS / High Density) ── */
+.layout-linear .cv-card {
+  padding: 2rem 2.5rem;
+}
+
+.layout-linear .cv-header__top {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.75rem;
+  border-bottom: 2px solid currentColor;
+  padding-bottom: 1rem;
+}
+
+.layout-linear .cv-contacts {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0.85rem;
+  font-size: 0.8rem;
+  text-align: left;
+}
+
+.layout-linear .cv-section {
+  margin-bottom: 1.25rem;
+}
+
+.layout-linear .cv-section-title {
+  border-bottom: 1.5px solid currentColor;
+  padding-bottom: 0.25rem;
+  margin-bottom: 0.75rem;
+  font-size: 0.95rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.layout-linear .cv-item {
+  margin-bottom: 0.85rem;
+}
+
+.layout-linear .cv-bullets li {
+  margin-bottom: 0.15rem;
+  font-size: 0.84rem;
+}
+
+/* ── Modelo A4 03: Sidebar (2 Colunas / Modern Split) ── */
+.layout-sidebar .cv-card {
+  padding: 2rem 2.2rem;
+}
+
+.cv-sidebar-layout {
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  gap: 2rem;
+  align-items: start;
+}
+
+.cv-sidebar-col {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  border-right: 1.5px solid rgba(125, 125, 125, 0.2);
+  padding-right: 1.5rem;
+}
+
+.cv-sidebar-profile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 0.75rem;
+}
+
+.cv-sidebar-profile .cv-avatar-container {
+  width: 96px;
+  height: 96px;
+}
+
+.cv-sidebar-contacts {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  font-size: 0.8rem;
+}
+
+.cv-sidebar-contacts a,
+.cv-sidebar-contacts span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  word-break: break-all;
+}
+
+.cv-sidebar-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.cv-sidebar-title {
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-bottom: 1px solid currentColor;
+  padding-bottom: 0.2rem;
+  margin: 0;
+  opacity: 0.9;
+}
+
+.cv-main-col {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.cv-main-header {
+  margin-bottom: 0.5rem;
+}
+
+@media (max-width: 768px) {
+  .cv-sidebar-layout {
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+  }
+  .cv-sidebar-col {
+    border-right: none;
+    border-bottom: 1.5px solid rgba(125, 125, 125, 0.2);
+    padding-right: 0;
+    padding-bottom: 1.5rem;
+  }
+}
+

@@ -1,6 +1,39 @@
 export type TextVariant = 'professional' | 'architect' | 'historian' | 'didactic' | 'alien'
 export type ThemeVariant = 'executive' | 'creative' | 'minimalist' | 'white' | 'terminal'
+export type LayoutVariant = 'modular' | 'linear' | 'sidebar'
 export type LanguageCode = 'pt' | 'en'
+
+export interface LayoutOption {
+  id: LayoutVariant
+  name: string
+  label: string
+  icon: string
+  description: string
+}
+
+export const LAYOUT_OPTIONS: LayoutOption[] = [
+  {
+    id: 'modular',
+    name: 'Modelo A4 01',
+    label: '📐 Modelo A4 01 (Modular)',
+    icon: '📐',
+    description: 'Header destacado com avatar, badges em pílula e blocos modulares em caixas suaves.'
+  },
+  {
+    id: 'linear',
+    name: 'Modelo A4 02',
+    label: '📄 Modelo A4 02 (Linear)',
+    icon: '📄',
+    description: 'Linha contínua compacta estilo clássico/ATS com divisores finos e alta densidade.'
+  },
+  {
+    id: 'sidebar',
+    name: 'Modelo A4 03',
+    label: '📑 Modelo A4 03 (Sidebar)',
+    icon: '📑',
+    description: '2 Colunas com barra lateral dedicada para perfil, contatos, competências e idiomas.'
+  }
+]
 
 export interface CVProfile {
   network: string

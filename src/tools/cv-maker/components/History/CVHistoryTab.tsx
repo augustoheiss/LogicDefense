@@ -1,6 +1,6 @@
 import React, { useRef } from 'react'
 import type { CVHistoryItem } from '../../services/historyService'
-import type { TextVariant } from '../../types/cv'
+import type { TextVariant, LayoutVariant } from '../../types/cv'
 import { exportHistoryAsJSON, importHistoryFromJSON } from '../../services/historyService'
 import { downloadCVHtmlFile, downloadCVZipPackage } from '../../services/standaloneHtmlService'
 
@@ -12,6 +12,7 @@ interface CVHistoryTabProps {
   onHistoryUpdated: () => void
   onSaveCurrentVersion: () => void
   activeYaml: string
+  activeLayout?: LayoutVariant
 }
 
 const PERSONA_INFO: Record<TextVariant, { icon: string; label: string; color: string }> = {
@@ -37,6 +38,7 @@ export const CVHistoryTab: React.FC<CVHistoryTabProps> = ({
   onHistoryUpdated,
   onSaveCurrentVersion,
   activeYaml,
+  activeLayout = 'modular',
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -60,6 +62,7 @@ export const CVHistoryTab: React.FC<CVHistoryTabProps> = ({
       name: item.name,
       persona: item.persona,
       theme: item.theme,
+      layout: activeLayout,
     })
   }
 
@@ -71,6 +74,7 @@ export const CVHistoryTab: React.FC<CVHistoryTabProps> = ({
       name: item.name,
       persona: item.persona,
       theme: item.theme,
+      layout: activeLayout,
     })
   }
 

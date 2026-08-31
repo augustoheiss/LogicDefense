@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react'
-import type { CVData, CVVersions, TextVariant, ThemeVariant } from './types/cv'
+import type { CVData, CVVersions, TextVariant, ThemeVariant, LayoutVariant } from './types/cv'
 import { DEFAULT_JOHN_DOE_YAML } from './templates/defaultTemplate'
 import { parseYamlToCV, cvToYaml, debounce } from './services/yamlService'
 import {
@@ -31,6 +31,7 @@ import './styles/cv-maker.css'
 
 const STORAGE_DRAFT_KEY = 'ld_cv_draft_v2'
 const STORAGE_THEME_KEY = 'ld_cv_theme_v2'
+const STORAGE_LAYOUT_KEY = 'ld_cv_layout_v2'
 
 export const CVMakerApp: React.FC = () => {
   // Sidebar mode: 'chat' (AI Assistant), 'editor' (Raw YAML Editor) or 'history' (20 Local Versions)
@@ -59,10 +60,13 @@ export const CVMakerApp: React.FC = () => {
   // Local-First History Ledger (Up to 20 items)
   const [historyList, setHistoryList] = useState<CVHistoryItem[]>(() => getCVHistory())
 
-  // Personas & Themes
+  // Personas, Themes & Layouts
   const [activePersona, setActivePersona] = useState<TextVariant>('professional')
   const [activeTheme, setActiveTheme] = useState<ThemeVariant>(() => {
     return (localStorage.getItem(STORAGE_THEME_KEY) as ThemeVariant) || 'executive'
+  })
+  const [activeLayout, setActiveLayout] = useState<LayoutVariant>(() => {
+    return (localStorage.getItem(STORAGE_LAYOUT_KEY) as LayoutVariant) || 'modular'
   })
 
   // Modals & Pro Licensing State
@@ -174,6 +178,12 @@ export const CVMakerApp: React.FC = () => {
     localStorage.setItem(STORAGE_THEME_KEY, newTheme)
   }
 
+  // Layout change
+  const handleLayoutChange = (newLayout: LayoutVariant) => {
+    setActiveLayout(newLayout)
+    localStorage.setItem(STORAGE_LAYOUT_KEY, newLayout)
+  }
+
   // Manual save version to history ledger
   const handleManualSaveHistory = () => {
     const parsed = parseYamlToCV(yamlInput)
@@ -281,6 +291,7 @@ export const CVMakerApp: React.FC = () => {
       name: cvData?.basics?.name || 'curriculo',
       persona: activePersona,
       theme: activeTheme,
+      layout: activeLayout,
     })
   }
 
@@ -291,6 +302,7 @@ export const CVMakerApp: React.FC = () => {
       name: cvData?.basics?.name || 'curriculo',
       persona: activePersona,
       theme: activeTheme,
+      layout: activeLayout,
     })
   }
 
@@ -428,6 +440,7 @@ export const CVMakerApp: React.FC = () => {
                 onHistoryUpdated={refreshHistory}
                 onSaveCurrentVersion={handleManualSaveHistory}
                 activeYaml={yamlInput}
+                activeLayout={activeLayout}
               />
             )}
           </div>
@@ -438,6 +451,8 @@ export const CVMakerApp: React.FC = () => {
           <CVToolbar
             activePersona={activePersona}
             onPersonaChange={handlePersonaChange}
+            activeLayout={activeLayout}
+            onLayoutChange={handleLayoutChange}
             activeTheme={activeTheme}
             onThemeChange={handleThemeChange}
             onDownloadYaml={handleDownloadYaml}
@@ -452,7 +467,7 @@ export const CVMakerApp: React.FC = () => {
             onOpenStoreModal={() => setIsStoreModalOpen(true)}
           />
 
-          <CVViewer data={cvData} theme={activeTheme} />
+          <CVViewer data={cvData} theme={activeTheme} layout={activeLayout} />
         </main>
       </div>
 

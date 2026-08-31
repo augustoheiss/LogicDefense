@@ -402,6 +402,7 @@ def render_multi_cv_dashboard_html(
     archetypes: Dict[str, Any],
     default_persona: str = "professional",
     default_theme: str = "executive",
+    default_layout: str = "modular",
     lang: str = "auto"
 ) -> str:
     """
@@ -1559,6 +1560,6 @@ def render_multi_cv_dashboard_html(
     return html_content
 
 
-def render_cv_to_standalone_html(yaml_or_dict: Any, theme: str = "executive", lang: str = "auto") -> str:
+def render_cv_to_standalone_html(yaml_or_dict: Any, theme: str = "executive", layout: str = "modular", lang: str = "auto") -> str:
     """Compatibilidade para renderização individual delegando para a engine multi-dashboard."""
-    return render_multi_cv_dashboard_html({"professional": yaml_or_dict}, default_persona="professional", default_theme=theme, lang=lang)
+    return render_multi_cv_dashboard_html({"professional": yaml_or_dict}, default_persona="professional", default_theme=theme, default_layout=layout, lang=lang)

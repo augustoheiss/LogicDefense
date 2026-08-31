@@ -6,7 +6,7 @@
  */
 
 import JSZip from 'jszip'
-import type { CVData, ThemeVariant } from '../types/cv'
+import type { CVData, ThemeVariant, LayoutVariant } from '../types/cv'
 import { parseYamlToCV } from './yamlService'
 
 function escapeHtml(str: string | number | null | undefined): string {
@@ -490,6 +490,79 @@ function getEmbeddedCss(): string {
     }
 
     /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+       MODELOS DE LAYOUT A4 (Estruturas Wireframe)
+       ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+    .layout-modular .cv-sheet-body {
+      padding: 3rem 3.5rem;
+    }
+
+    /* Modelo A4 02: Linear (Single Column ATS) */
+    .layout-linear .cv-sheet-body {
+      padding: 2.2rem 2.8rem;
+    }
+    .layout-linear .cv-header-top {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 0.5rem;
+      border-bottom: 2px solid currentColor;
+      padding-bottom: 0.75rem;
+      margin-bottom: 0.75rem;
+    }
+    .layout-linear .cv-contact-bar {
+      margin-top: 0.3rem;
+      gap: 0.8rem;
+      font-size: 0.8rem;
+    }
+    .layout-linear .cv-section {
+      margin-bottom: 1.25rem;
+    }
+    .layout-linear .cv-section-title {
+      border-bottom: 1.5px solid currentColor;
+      padding-bottom: 0.2rem;
+      margin-bottom: 0.65rem;
+      font-size: 0.95rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .layout-linear .cv-item {
+      margin-bottom: 0.75rem;
+    }
+
+    /* Modelo A4 03: Sidebar (2 Colunas / Modern Split) */
+    .layout-sidebar .cv-sheet-body {
+      padding: 2.2rem 2.5rem;
+    }
+    .layout-sidebar .cv-sheet-grid {
+      display: grid;
+      grid-template-columns: 240px 1fr;
+      gap: 2rem;
+      align-items: start;
+    }
+    .layout-sidebar .cv-sheet-aside {
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+      border-right: 1.5px solid rgba(125, 125, 125, 0.2);
+      padding-right: 1.5rem;
+    }
+    .layout-sidebar .cv-sheet-main {
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+    }
+
+    /* Fallback default when not sidebar */
+    .layout-modular .cv-sheet-grid,
+    .layout-linear .cv-sheet-grid {
+      display: block;
+    }
+    .layout-modular .cv-sheet-aside,
+    .layout-linear .cv-sheet-aside {
+      border-right: none;
+      padding-right: 0;
+    }
+
+    /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
        PRINT MEDIA QUERY (Exact A4 PDF Output)
        ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
     @media print {
@@ -528,7 +601,12 @@ function getEmbeddedCss(): string {
 /**
  * Converte um objeto CVData em HTML estruturado completo.
  */
-export function renderCVToStandaloneHtml(data: CVData, theme: ThemeVariant = 'executive', rawYaml?: string): string {
+export function renderCVToStandaloneHtml(
+  data: CVData,
+  theme: ThemeVariant = 'executive',
+  rawYaml?: string,
+  layout: LayoutVariant = 'modular'
+): string {
   const basics = data.basics || { name: 'Currículo Profissional' }
   const work = data.work || []
   const projects = data.projects || []
@@ -703,13 +781,22 @@ ${getEmbeddedCss()}
     </a>
     <div class="cv-toolbar-actions">
       <label style="font-size: 0.78rem; font-weight: 600; color: #94a3b8; display: flex; align-items: center; gap: 0.3rem;">
-        Tema:
+        Modelo A4:
+        <select class="cv-theme-select" id="layoutSelector" onchange="changeLayout(this.value)">
+          <option value="modular" ${layout === 'modular' ? 'selected' : ''}>📐 Modelo A4 01 (Modular)</option>
+          <option value="linear" ${layout === 'linear' ? 'selected' : ''}>📄 Modelo A4 02 (Linear)</option>
+          <option value="sidebar" ${layout === 'sidebar' ? 'selected' : ''}>📑 Modelo A4 03 (Sidebar)</option>
+        </select>
+      </label>
+
+      <label style="font-size: 0.78rem; font-weight: 600; color: #94a3b8; display: flex; align-items: center; gap: 0.3rem;">
+        Tema Visual:
         <select class="cv-theme-select" id="themeSelector" onchange="changeTheme(this.value)">
-          <option value="executive" ${theme === 'executive' ? 'selected' : ''}>👔 Executivo (Classic)</option>
-          <option value="creative" ${theme === 'creative' ? 'selected' : ''}>🎨 Criativo (Indigo)</option>
-          <option value="minimalist" ${theme === 'minimalist' ? 'selected' : ''}>🔹 Minimalista (Clean)</option>
-          <option value="white" ${theme === 'white' ? 'selected' : ''}>📄 White (Monochrome)</option>
-          <option value="terminal" ${theme === 'terminal' ? 'selected' : ''}>&gt;_ Terminal (Matrix)</option>
+          <option value="executive" ${theme === 'executive' ? 'selected' : ''}>👔 Executivo</option>
+          <option value="creative" ${theme === 'creative' ? 'selected' : ''}>🎨 Criativo</option>
+          <option value="minimalist" ${theme === 'minimalist' ? 'selected' : ''}>🔹 Minimalista</option>
+          <option value="white" ${theme === 'white' ? 'selected' : ''}>📄 White</option>
+          <option value="terminal" ${theme === 'terminal' ? 'selected' : ''}>&gt;_ Terminal</option>
         </select>
       </label>
       <button class="cv-btn-tool cv-btn-tool--primary" onclick="window.print()" title="Imprimir em A4 ou salvar como PDF nativo">
@@ -722,7 +809,7 @@ ${getEmbeddedCss()}
   </div>
 
   <!-- A4 Paper Document -->
-  <div class="cv-sheet-container" id="cvContainer">
+  <div class="cv-sheet-container layout-${layout}" id="cvContainer">
     <div class="cv-sheet-body theme-${theme}" id="cvBody">
       
       <!-- Header Area -->
@@ -830,6 +917,13 @@ ${getEmbeddedCss()}
   </div>
 
   <script>
+    function changeLayout(layoutName) {
+      var container = document.getElementById('cvContainer');
+      if (container) {
+        container.className = 'cv-sheet-container layout-' + layoutName;
+      }
+    }
+
     function changeTheme(themeName) {
       var bodyEl = document.getElementById('cvBody');
       if (bodyEl) {
@@ -866,6 +960,7 @@ export function downloadCVHtmlFile(params: {
   name: string
   persona?: string
   theme?: ThemeVariant
+  layout?: LayoutVariant
 }): void {
   const parsed = parseYamlToCV(params.yaml)
   if (!parsed.data) {
@@ -876,7 +971,8 @@ export function downloadCVHtmlFile(params: {
   const htmlContent = renderCVToStandaloneHtml(
     parsed.data,
     params.theme || 'executive',
-    params.yaml
+    params.yaml,
+    params.layout || 'modular'
   )
 
   const cleanName = params.name.toLowerCase().replace(/\s+/g, '-') || 'curriculo'
@@ -900,6 +996,7 @@ export async function downloadCVZipPackage(params: {
   name: string
   persona?: string
   theme?: ThemeVariant
+  layout?: LayoutVariant
 }): Promise<void> {
   try {
     const parsed = parseYamlToCV(params.yaml)
@@ -908,7 +1005,7 @@ export async function downloadCVZipPackage(params: {
     const baseName = `curriculo-${cleanName}${personaSuffix}`
 
     const htmlContent = parsed.data
-      ? renderCVToStandaloneHtml(parsed.data, params.theme || 'executive', params.yaml)
+      ? renderCVToStandaloneHtml(parsed.data, params.theme || 'executive', params.yaml, params.layout || 'modular')
       : '<html><body><pre>' + escapeHtml(params.yaml) + '</pre></body></html>'
 
     const zip = new JSZip()
@@ -919,6 +1016,8 @@ export async function downloadCVZipPackage(params: {
       '================================================================',
       `Candidato: ${params.name}`,
       `Data de Exportacao: ${new Date().toLocaleString('pt-BR')}`,
+      `Modelo A4: ${params.layout || 'modular'}`,
+      `Tema Visual: ${params.theme || 'executive'}`,
       'Formato: JSON Resume Standard v1.0.0 (YAML & Standalone HTML)',
       '',
       'Arquivos incluidos:',

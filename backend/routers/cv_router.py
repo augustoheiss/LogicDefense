@@ -45,6 +45,7 @@ class CVTailorRequest(BaseModel):
 class CVRenderRequest(BaseModel):
     yaml_content: Optional[str] = Field(default=None, alias="raw_text", description="Conteúdo do currículo em YAML ou texto")
     theme: Optional[str] = Field(default="executive", description="Tema visual: executive, creative, minimalist, white, terminal")
+    layout: Optional[str] = Field(default="modular", description="Modelo A4 de Layout: modular, linear, sidebar")
     format: Optional[str] = Field(default="html", description="Formato de saída: html, yaml, zip, json")
     filename: Optional[str] = Field(default="curriculo", description="Nome base para download do arquivo")
 
@@ -58,6 +59,7 @@ class CVCompileBundleRequest(BaseModel):
     didactic: Optional[str] = Field(default="", description="YAML do arquétipo Didático / Learning Velocity")
     alien: Optional[str] = Field(default="", description="YAML do arquétipo Observador Extraterrestre")
     default_theme: Optional[str] = Field(default="executive", description="Tema visual inicial: executive, creative, minimalist, white, terminal")
+    default_layout: Optional[str] = Field(default="modular", description="Modelo A4 inicial: modular, linear, sidebar")
     format: Optional[str] = Field(default="html", description="Formato de saída: html, zip, json")
     filename: Optional[str] = Field(default="curriculos_5_versoes", description="Nome base para download do arquivo")
 
@@ -305,6 +307,7 @@ async def render_cv_endpoint(
     payload: Optional[CVRenderRequest] = None,
     format: Optional[str] = Query(None, description="Formato de saída: html, yaml, zip, json"),
     theme: Optional[str] = Query(None, description="Tema visual: executive, creative, minimalist, white, terminal"),
+    layout: Optional[str] = Query(None, description="Modelo A4 de Layout: modular, linear, sidebar"),
     lang: Optional[str] = Query(None, description="Idioma forçado: pt, en ou auto"),
     filename: Optional[str] = Query(None, description="Nome base para download do arquivo (sem extensão)"),
     x_api_key: Optional[str] = Header(None, alias="X-API-Key"),
@@ -318,11 +321,13 @@ async def render_cv_endpoint(
     """
     q_format = format if isinstance(format, str) else None
     q_theme = theme if isinstance(theme, str) else None
+    q_layout = layout if isinstance(layout, str) else None
     q_lang = lang if isinstance(lang, str) else None
     q_filename = filename if isinstance(filename, str) else None
 
     yaml_text = (payload.yaml_content if payload and payload.yaml_content else None) or get_default_yaml_content()
     theme_name = q_theme or (payload.theme if payload and payload.theme else None) or "executive"
+    layout_name = q_layout or (payload.layout if payload and payload.layout else None) or "modular"
     target_format = (q_format or (payload.format if payload and payload.format else None) or "html").strip().lower()
     base_filename = (q_filename or (payload.filename if payload and payload.filename else None) or "curriculo").strip()
     target_lang = q_lang or "auto"
@@ -338,7 +343,7 @@ async def render_cv_endpoint(
         )
 
     # Gera o HTML standalone
-    html_content = render_cv_to_standalone_html(yaml_text, theme=theme_name, lang=target_lang)
+    html_content = render_cv_to_standalone_html(yaml_text, theme=theme_name, layout=layout_name, lang=target_lang)
 
     # 2. Pacote ZIP (HTML + YAML)
     if target_format == "zip":
@@ -359,6 +364,7 @@ async def render_cv_endpoint(
             "html": html_content,
             "yaml": yaml_text,
             "theme": theme_name,
+            "layout": layout_name,
             "filename": base_filename,
             "lang": target_lang
         }
@@ -372,6 +378,7 @@ async def compile_cv_bundle_endpoint(
     payload: CVCompileBundleRequest,
     format: Optional[str] = Query(None, description="Formato de saída: html, zip, json"),
     theme: Optional[str] = Query(None, description="Tema visual: executive, creative, minimalist, white, terminal"),
+    layout: Optional[str] = Query(None, description="Modelo A4 de Layout: modular, linear, sidebar"),
     x_api_key: Optional[str] = Header(None, alias="X-API-Key"),
 ):
     """
@@ -382,6 +389,7 @@ async def compile_cv_bundle_endpoint(
     from services.cv_html_renderer import render_multi_cv_dashboard_html
 
     target_theme = theme or payload.default_theme or "executive"
+    target_layout = layout or payload.default_layout or "modular"
     target_format = (format or payload.format or "html").strip().lower()
     base_filename = (payload.filename or "curriculos_5_versoes").strip()
 
@@ -397,6 +405,7 @@ async def compile_cv_bundle_endpoint(
         archetypes=archetypes_map,
         default_persona="professional",
         default_theme=target_theme,
+        default_layout=target_layout,
     )
 
     if target_format == "zip":

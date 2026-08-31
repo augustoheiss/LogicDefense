@@ -1,9 +1,12 @@
 import React from 'react'
-import type { TextVariant, ThemeVariant } from '../../types/cv'
+import type { TextVariant, ThemeVariant, LayoutVariant } from '../../types/cv'
+import { LAYOUT_OPTIONS } from '../../types/cv'
 
 interface CVToolbarProps {
   activePersona: TextVariant
   onPersonaChange: (p: TextVariant) => void
+  activeLayout: LayoutVariant
+  onLayoutChange: (l: LayoutVariant) => void
   activeTheme: ThemeVariant
   onThemeChange: (t: ThemeVariant) => void
   onDownloadYaml: () => void
@@ -37,6 +40,8 @@ const THEMES: { id: ThemeVariant; label: string; icon: string }[] = [
 export const CVToolbar: React.FC<CVToolbarProps> = ({
   activePersona,
   onPersonaChange,
+  activeLayout,
+  onLayoutChange,
   activeTheme,
   onThemeChange,
   onDownloadYaml,
@@ -75,9 +80,26 @@ export const CVToolbar: React.FC<CVToolbarProps> = ({
         </div>
       </div>
 
-      {/* Grupo de Temas Visuais / Modelos */}
+      {/* Grupo de Modelos de Layout A4 */}
       <div className="cv-toolbar-group">
         <span className="cv-toolbar-label">Modelo A4</span>
+        <div className="cv-btn-pill-group">
+          {LAYOUT_OPTIONS.map(l => (
+            <button
+              key={l.id}
+              className={`cv-btn-pill ${activeLayout === l.id ? 'cv-btn-pill--active' : ''}`}
+              onClick={() => onLayoutChange(l.id)}
+              title={`${l.label} — ${l.description}`}
+            >
+              <span>{l.icon}</span> {l.name}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Grupo de Temas Visuais / Cores */}
+      <div className="cv-toolbar-group">
+        <span className="cv-toolbar-label">Tema Visual</span>
         <div className="cv-btn-pill-group">
           {THEMES.map(t => (
             <button
