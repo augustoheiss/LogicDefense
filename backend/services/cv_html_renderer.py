@@ -355,6 +355,16 @@ def _render_cv_layout_html(data: dict, layout: str, t: dict, view_mode: str = "c
       </div>
     """
 
+    avatar_rect_html = f"""
+      <div class="cv-avatar-container cv-avatar-rect {'has-photo' if has_image else ''}" onclick="openPhotoModal()" title="{t['photo_btn']}">
+        <img class="cv-avatar-img" src="{image_val if has_image else ''}" alt="Avatar" style="{'display:block;' if has_image else 'display:none;'}" />
+        <div class="cv-avatar-placeholder" style="{'display:none;' if has_image else 'display:flex;'}">
+          <span class="avatar-icon">👤</span>
+          <span class="avatar-hint" style="font-size: 0.65rem; opacity: 0.85;">{t['photo_btn']}</span>
+        </div>
+      </div>
+    """
+
     # Work Timeline items
     work_items_html = ""
     for w in work:
@@ -632,7 +642,7 @@ def _render_cv_layout_html(data: dict, layout: str, t: dict, view_mode: str = "c
                     <h1 class="name" style="font-size: 1.85rem; font-weight: 800; margin: 0 0 0.25rem 0;">{html.escape(basics.get("name", ""))}</h1>
                     <div class="label" style="font-size: 0.95rem; font-weight: 600; opacity: 0.9;">{html.escape(basics.get("label", ""))}</div>
                 </div>
-                {avatar_html}
+                {avatar_rect_html}
             </header>
 
             {f'<div class="summary" style="margin-bottom: 1rem;">{html.escape(basics.get("summary", "")).replace(chr(10), "<br>")}</div>' if basics.get("summary") else ''}
@@ -690,7 +700,48 @@ def _render_cv_layout_html(data: dict, layout: str, t: dict, view_mode: str = "c
         """
 
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    # 6. MODELO A4 01 (Modular), 02 (Linear) e 07 (Warm Magazine)
+    # 6. MODELO A4 02: Linear ATS (Foto Retangular à Direita)
+    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    elif layout == "linear":
+        cv_body = f"""
+        <div class="layout-linear">
+            <header class="header layout-linear-header" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid currentColor; padding-bottom: 0.85rem; margin-bottom: 1.25rem;">
+              <div style="flex: 1; padding-right: 1.5rem;">
+                <h1 class="name" style="font-size: 1.85rem; font-weight: 800; margin: 0 0 0.25rem 0;">{html.escape(basics.get("name", ""))}</h1>
+                <div class="label" style="font-size: 0.95rem; font-weight: 700; opacity: 0.9; margin-bottom: 0.5rem;">{html.escape(basics.get("label", ""))}</div>
+                <div class="contacts" style="display: flex; flex-wrap: wrap; gap: 0.85rem; font-size: 0.82rem; text-align: left;">
+                  {f'<span>✉ <a href="mailto:{html.escape(email_val)}" class="cv-link">{html.escape(email_val)}</a></span>' if email_val else ''}
+                  {f'<span>📞 <a href="tel:{clean_phone}" class="cv-link">{html.escape(phone_val)}</a></span>' if phone_val else ''}
+                  {f'<span>📍 {html.escape(loc_str)}</span>' if loc_str else ''}
+                  {f'<span>🌐 <a href="{html.escape(url_val)}" target="_blank" class="cv-link">{html.escape(url_val)}</a></span>' if url_val else ''}
+                  {f'<span>{profiles_html}</span>' if profiles_html else ''}
+                </div>
+              </div>
+              {avatar_rect_html}
+            </header>
+
+            {f'<div class="summary">{html.escape(basics.get("summary", "")).replace(chr(10), "<br>")}</div>' if basics.get("summary") else ''}
+
+            {f'<section class="avoid-break"><h2 class="section-title">{t["work"]}</h2>{work_items_html}</section>' if work else ''}
+
+            {f'<section class="avoid-break"><h2 class="section-title">{t["projects"]}</h2><div class="projects-grid cv-math-grid {get_grid_class(len(projects))}">{projects_items_html}</div></section>' if projects else ''}
+
+            {f'<section class="avoid-break"><h2 class="section-title">{t["skills"]}</h2><div class="skills-grid cv-math-grid {get_grid_class(len(skills))}">{skills_items_html}</div></section>' if skills else ''}
+
+            {f'<section class="avoid-break"><h2 class="section-title">{t["education"]}</h2><div class="education-grid cv-math-grid {get_grid_class(len(education))}">{education_items_html}</div></section>' if education else ''}
+
+            {f'<section class="avoid-break"><h2 class="section-title">{t["certificates"]}</h2><div class="certs-grid cv-math-grid {get_grid_class(len(certificates))}">{certificates_items_html}</div></section>' if certificates else ''}
+
+            {f'<section class="avoid-break"><h2 class="section-title">{t["publications"]}</h2>{publications_html}</section>' if publications else ''}
+
+            {f'<section class="avoid-break"><h2 class="section-title">{t["languages"]}</h2><div class="languages-grid cv-math-grid {get_grid_class(len(languages))}">{lang_cards_html}</div></section>' if languages else ''}
+
+            {f'<section class="avoid-break"><h2 class="section-title">{t["interests"]}</h2><div class="interests-grid cv-math-grid {get_grid_class(len(interests))}">{interest_items_html}</div></section>' if interests else ''}
+        </div>
+        """
+
+    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    # 7. MODELO A4 01 (Modular) e 07 (Warm Magazine)
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     else:
         cv_body = f"""
@@ -1504,6 +1555,85 @@ def render_multi_cv_dashboard_html(
       gap: 0.4rem;
     }}
 
+    /* ── Avatar Retangular (Modelo 02 Linear & Modelo 08 Hero Matrix) ── */
+    .cv-avatar-container.cv-avatar-rect {{
+      width: 85px !important;
+      height: 95px !important;
+      border-radius: 8px !important;
+      overflow: hidden !important;
+      border: 2px solid currentColor !important;
+      flex-shrink: 0 !important;
+    }}
+    .cv-avatar-container.cv-avatar-rect .cv-avatar-img {{
+      width: 100% !important;
+      height: 100% !important;
+      object-fit: cover !important;
+      border-radius: 6px !important;
+    }}
+
+    /* ── Regras de Contenção de Sidebars ── */
+    aside,
+    .cv-sidebar-stack,
+    .cv-navy-sidebar,
+    .cv-editorial-left,
+    .cv-duo-left,
+    .cv-sidebar-col,
+    .layout-corporate_timeline aside,
+    .layout-editorial_accent aside,
+    .layout-sidebar aside,
+    .layout-compact_split aside {{
+      min-width: 0 !important;
+      max-width: 100% !important;
+      box-sizing: border-box !important;
+      display: flex !important;
+      flex-direction: column !important;
+      gap: 0.65rem !important;
+    }}
+
+    aside .languages-grid,
+    aside .interests-grid,
+    aside .certs-grid,
+    aside .skills-grid,
+    aside .education-grid,
+    aside .projects-grid,
+    aside .cv-math-grid,
+    .cv-sidebar-stack .languages-grid,
+    .cv-sidebar-stack .interests-grid,
+    .cv-sidebar-stack .certs-grid,
+    .cv-sidebar-stack .skills-grid,
+    .cv-sidebar-stack .education-grid,
+    .cv-sidebar-stack .projects-grid,
+    .cv-sidebar-stack .cv-math-grid {{
+      display: flex !important;
+      flex-direction: column !important;
+      grid-template-columns: 1fr !important;
+      width: 100% !important;
+      max-width: 100% !important;
+      gap: 0.45rem !important;
+    }}
+
+    aside .lang-card,
+    .cv-sidebar-stack .lang-card {{
+      width: 100% !important;
+      max-width: 100% !important;
+      box-sizing: border-box !important;
+      display: flex !important;
+      flex-direction: row !important;
+      justify-content: space-between !important;
+      align-items: center !important;
+      padding: 0.35rem 0.6rem !important;
+    }}
+
+    aside .interest-card,
+    .cv-sidebar-stack .interest-card {{
+      width: 100% !important;
+      max-width: 100% !important;
+      box-sizing: border-box !important;
+      display: flex !important;
+      flex-direction: column !important;
+      padding: 0.45rem 0.6rem !important;
+    }}
+
     /* ── Print Media Optimization (Strict CSS Paged Media) ── */
     @media print {{
       body {{
@@ -1976,6 +2106,16 @@ def render_multi_cv_dashboard_html(
         `;
       }}
 
+      const avatarRectHtml = `
+        <div class="cv-avatar-container cv-avatar-rect ${{hasPhoto ? 'has-photo' : ''}}" onclick="openPhotoModal()" title="${{I18N_T.photo_btn || 'Foto'}}">
+          <img class="cv-avatar-img" src="${{hasPhoto ? photoSrc : ''}}" alt="Avatar" style="${{hasPhoto ? 'display:block;' : 'display:none;'}}" />
+          <div class="cv-avatar-placeholder" style="${{hasPhoto ? 'display:none;' : 'display:flex;'}}">
+            <span class="avatar-icon">👤</span>
+            <span class="avatar-hint" style="font-size: 0.65rem; opacity: 0.85;">${{I18N_T.photo_btn || 'Foto'}}</span>
+          </div>
+        </div>
+      `;
+
       // ── 4. Hero Matrix (Modelo A4 08) ──
       if (layout === 'hero_matrix') {{
         return `
@@ -1990,7 +2130,7 @@ def render_multi_cv_dashboard_html(
                 <h1 class="name" style="font-size: 1.85rem; font-weight: 800; margin: 0 0 0.25rem 0;">${{name}}</h1>
                 <div class="label" style="font-size: 0.95rem; font-weight: 600; opacity: 0.9;">${{label}}</div>
               </div>
-              ${{avatarHtml}}
+              ${{avatarRectHtml}}
             </header>
             ${{summary ? `<div class="summary" style="margin-bottom: 1rem;">${{summary}}</div>` : ''}}
             <div style="display: grid; grid-template-columns: 1.2fr 1fr; gap: 1.25rem; margin-bottom: 1rem;">
@@ -2041,7 +2181,37 @@ def render_multi_cv_dashboard_html(
         `;
       }}
 
-      // ── 6. Default (Modular 01, Linear 02, Warm Magazine 07) ──
+      // ── 6. Modelo A4 02: Linear ATS (Foto Retangular à Direita) ──
+      if (layout === 'linear') {{
+        return `
+          <div class="layout-linear">
+            <header class="header layout-linear-header" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid currentColor; padding-bottom: 0.85rem; margin-bottom: 1.25rem;">
+              <div style="flex: 1; padding-right: 1.5rem;">
+                <h1 class="name" style="font-size: 1.85rem; font-weight: 800; margin: 0 0 0.25rem 0;">${{name}}</h1>
+                <div class="label" style="font-size: 0.95rem; font-weight: 700; opacity: 0.9; margin-bottom: 0.5rem;">${{label}}</div>
+                <div class="contacts" style="display: flex; flex-wrap: wrap; gap: 0.85rem; font-size: 0.82rem; text-align: left;">
+                  ${{email ? `<span>✉ <a href="mailto:${{email}}" class="cv-link">${{email}}</a></span>` : ''}}
+                  ${{phone ? `<span>📞 <a href="tel:${{cleanPhone}}" class="cv-link">${{phone}}</a></span>` : ''}}
+                  ${{locStr ? `<span>📍 ${{locStr}}</span>` : ''}}
+                  ${{url ? `<span>🌐 <a href="${{url}}" target="_blank" class="cv-link">${{url}}</a></span>` : ''}}
+                  ${{profLinks ? `<span>${{profLinks}}</span>` : ''}}
+                </div>
+              </div>
+              ${{avatarRectHtml}}
+            </header>
+            ${{summary ? `<div class="summary">${{summary}}</div>` : ''}}
+            ${{workHtml ? `<section class="avoid-break"><h2 class="section-title">${{I18N_T.work || 'Experiência'}}</h2>${{workHtml}}</section>` : ''}}
+            ${{projHtml ? `<section class="avoid-break"><h2 class="section-title">${{I18N_T.projects || 'Projetos'}}</h2><div class="projects-grid cv-math-grid ${{getGridClass((data.projects||[]).length)}}">${{projHtml}}</div></section>` : ''}}
+            ${{skillsHtml ? `<section class="avoid-break"><h2 class="section-title">${{I18N_T.skills || 'Competências'}}</h2><div class="skills-grid cv-math-grid ${{getGridClass((data.skills||[]).length)}}">${{skillsHtml}}</div></section>` : ''}}
+            ${{eduHtml ? `<section class="avoid-break"><h2 class="section-title">${{I18N_T.education || 'Formação'}}</h2><div class="education-grid cv-math-grid ${{getGridClass((data.education||[]).length)}}">${{eduHtml}}</div></section>` : ''}}
+            ${{certHtml ? `<section class="avoid-break"><h2 class="section-title">${{I18N_T.certificates || 'Certificações'}}</h2><div class="certs-grid cv-math-grid ${{getGridClass((data.certificates||[]).length)}}">${{certHtml}}</div></section>` : ''}}
+            ${{langHtml ? `<section class="avoid-break"><h2 class="section-title">${{I18N_T.languages || 'Idiomas'}}</h2><div class="languages-grid cv-math-grid ${{getGridClass((data.languages||[]).length)}}">${{langHtml}}</div></section>` : ''}}
+            ${{intHtml ? `<section class="avoid-break"><h2 class="section-title">${{I18N_T.interests || 'Interesses'}}</h2><div class="interests-grid cv-math-grid ${{getGridClass((data.interests||[]).length)}}">${{intHtml}}</div></section>` : ''}}
+          </div>
+        `;
+      }}
+
+      // ── 7. Default (Modular 01, Warm Magazine 07) ──
       return `
         <div class="layout-${{layout}}">
           <header class="header">

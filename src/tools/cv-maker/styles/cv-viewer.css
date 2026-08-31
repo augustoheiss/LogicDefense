@@ -554,28 +554,53 @@
 }
 
 /* ── Regras de Contenção Estrita para Todas as Colunas Laterais / Sidebars ── */
+aside,
 .cv-sidebar-col,
 .cv-duo-left,
 .cv-navy-sidebar,
-.cv-editorial-grid aside {
+.cv-editorial-left,
+.cv-editorial-grid aside,
+.cv-sidebar-stack,
+.layout-sidebar aside,
+.layout-compact_split aside,
+.layout-editorial_accent aside,
+.layout-corporate_timeline aside {
   min-width: 0 !important;
   max-width: 100% !important;
   box-sizing: border-box !important;
   overflow: hidden !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 0.65rem !important;
 }
 
+aside .cv-languages-grid,
+aside .cv-interests-grid,
+aside .cv-certs-grid,
+aside .cv-skills-grid,
+aside .cv-education-grid,
+aside .cv-projects-grid,
+aside .cv-hobbies-grid,
+aside .cv-math-grid,
 .cv-sidebar-col .cv-languages-grid,
 .cv-duo-left .cv-languages-grid,
 .cv-navy-sidebar .cv-languages-grid,
+.cv-editorial-left .cv-languages-grid,
 .cv-editorial-grid aside .cv-languages-grid,
 .cv-sidebar-col .cv-skills-grid,
 .cv-duo-left .cv-skills-grid,
 .cv-navy-sidebar .cv-skills-grid,
+.cv-editorial-left .cv-skills-grid,
 .cv-editorial-grid aside .cv-skills-grid,
 .cv-sidebar-col .cv-interests-grid,
 .cv-duo-left .cv-interests-grid,
 .cv-navy-sidebar .cv-interests-grid,
-.cv-editorial-grid aside .cv-interests-grid {
+.cv-editorial-left .cv-interests-grid,
+.cv-editorial-grid aside .cv-interests-grid,
+.cv-sidebar-stack .cv-languages-grid,
+.cv-sidebar-stack .cv-interests-grid,
+.cv-sidebar-stack .cv-certs-grid,
+.cv-sidebar-stack .cv-skills-grid {
   display: flex !important;
   flex-direction: column !important;
   grid-template-columns: 1fr !important;
@@ -584,10 +609,13 @@
   gap: 0.5rem !important;
 }
 
+aside .cv-language-card,
 .cv-sidebar-col .cv-language-card,
 .cv-duo-left .cv-language-card,
 .cv-navy-sidebar .cv-language-card,
-.cv-editorial-grid aside .cv-language-card {
+.cv-editorial-left .cv-language-card,
+.cv-editorial-grid aside .cv-language-card,
+.cv-sidebar-stack .cv-language-card {
   width: 100% !important;
   max-width: 100% !important;
   box-sizing: border-box !important;
@@ -597,20 +625,78 @@
   align-items: center !important;
   gap: 0.35rem !important;
   flex-wrap: wrap !important;
+  padding: 0.35rem 0.6rem !important;
 }
 
+aside .cv-interest-card,
+.cv-sidebar-col .cv-interest-card,
+.cv-duo-left .cv-interest-card,
+.cv-navy-sidebar .cv-interest-card,
+.cv-editorial-left .cv-interest-card,
+.cv-editorial-grid aside .cv-interest-card,
+.cv-sidebar-stack .cv-interest-card {
+  width: 100% !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+  display: flex !important;
+  flex-direction: column !important;
+  padding: 0.5rem 0.6rem !important;
+  gap: 0.25rem !important;
+}
+
+aside .cv-interest-info,
+.cv-sidebar-col .cv-interest-info,
+.cv-duo-left .cv-interest-info,
+.cv-navy-sidebar .cv-interest-info,
+.cv-editorial-left .cv-interest-info,
+.cv-editorial-grid aside .cv-interest-info,
+.cv-sidebar-stack .cv-interest-info {
+  display: flex !important;
+  flex-direction: column !important;
+  width: 100% !important;
+  min-width: 0 !important;
+}
+
+aside .cv-interest-name,
+.cv-sidebar-col .cv-interest-name,
+.cv-duo-left .cv-interest-name,
+.cv-navy-sidebar .cv-interest-name,
+.cv-editorial-left .cv-interest-name,
+.cv-editorial-grid aside .cv-interest-name {
+  font-weight: 700 !important;
+  font-size: 0.82rem !important;
+  word-break: normal !important;
+  white-space: normal !important;
+}
+
+aside .cv-interest-keywords,
+.cv-sidebar-col .cv-interest-keywords,
+.cv-duo-left .cv-interest-keywords,
+.cv-navy-sidebar .cv-interest-keywords,
+.cv-editorial-left .cv-interest-keywords,
+.cv-editorial-grid aside .cv-interest-keywords {
+  font-size: 0.72rem !important;
+  opacity: 0.85 !important;
+  word-break: normal !important;
+  white-space: normal !important;
+}
+
+aside .cv-skills-group,
 .cv-sidebar-col .cv-skills-group,
 .cv-duo-left .cv-skills-group,
 .cv-navy-sidebar .cv-skills-group,
+.cv-editorial-left .cv-skills-group,
 .cv-editorial-grid aside .cv-skills-group {
   width: 100% !important;
   max-width: 100% !important;
   box-sizing: border-box !important;
 }
 
+aside .cv-skill-tags,
 .cv-sidebar-col .cv-skill-tags,
 .cv-duo-left .cv-skill-tags,
 .cv-navy-sidebar .cv-skill-tags,
+.cv-editorial-left .cv-skill-tags,
 .cv-editorial-grid aside .cv-skill-tags {
   display: flex !important;
   flex-wrap: wrap !important;
@@ -618,18 +704,22 @@
   max-width: 100% !important;
 }
 
+aside .cv-skill-tag,
 .cv-sidebar-col .cv-skill-tag,
 .cv-duo-left .cv-skill-tag,
 .cv-navy-sidebar .cv-skill-tag,
+.cv-editorial-left .cv-skill-tag,
 .cv-editorial-grid aside .cv-skill-tag {
   white-space: normal !important;
   word-break: break-word !important;
   max-width: 100% !important;
 }
 
+aside .cv-contacts,
 .cv-sidebar-col .cv-contacts,
 .cv-duo-left .cv-contacts,
 .cv-navy-sidebar .cv-contacts,
+.cv-editorial-left .cv-contacts,
 .cv-editorial-grid aside .cv-contacts,
 .cv-sidebar-contacts {
   text-align: left !important;
@@ -638,6 +728,21 @@
   max-width: 100% !important;
   word-break: break-word !important;
   overflow-wrap: anywhere !important;
+}
+
+/* ── Avatar Retangular (Modelo 02 Linear & Modelo 08 Hero Matrix) ── */
+.cv-avatar-container.cv-avatar-rect {
+  width: 85px !important;
+  height: 95px !important;
+  border-radius: 8px !important;
+  overflow: hidden !important;
+  border: 2px solid currentColor !important;
+  flex-shrink: 0 !important;
+}
+.cv-avatar-container.cv-avatar-rect .cv-avatar-img {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
 }
 
 .cv-sidebar-col a,

@@ -3,7 +3,7 @@ import type { CVBasics } from '../../types/cv'
 
 interface BlockHeaderProps {
   basics: CVBasics
-  variant?: 'standard' | 'brand_block' | 'hero' | 'minimal'
+  variant?: 'standard' | 'brand_block' | 'hero' | 'minimal' | 'linear'
 }
 
 export const BlockHeader: React.FC<BlockHeaderProps> = ({ basics, variant = 'standard' }) => {
@@ -42,12 +42,41 @@ export const BlockHeader: React.FC<BlockHeaderProps> = ({ basics, variant = 'sta
     )
   }
 
+  if (variant === 'linear') {
+    return (
+      <header className="cv-header cv-header-linear" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1.5rem', borderBottom: '2px solid currentColor', paddingBottom: '0.85rem', marginBottom: '0.85rem' }}>
+        <div className="cv-linear-info" style={{ flex: 1 }}>
+          <h1 className="cv-name" style={{ margin: '0 0 0.2rem 0', fontSize: '1.9rem', fontWeight: 800, letterSpacing: '-0.02em' }}>
+            {basics.name}
+          </h1>
+          {basics.label && (
+            <div className="cv-label" style={{ fontSize: '0.95rem', fontWeight: 600, opacity: 0.88, marginBottom: '0.35rem' }}>
+              {basics.label}
+            </div>
+          )}
+          {basics.customBadges && basics.customBadges.length > 0 && (
+            <div className="cv-badges" style={{ marginTop: '0.35rem' }}>
+              {basics.customBadges.map((badge, idx) => (
+                <span key={idx} className="cv-badge">{badge}</span>
+              ))}
+            </div>
+          )}
+        </div>
+        {basics.image && (
+          <div className="cv-avatar-container cv-avatar-rect has-photo" style={{ width: '85px', height: '95px', borderRadius: '8px', overflow: 'hidden', border: '2px solid currentColor', flexShrink: 0 }}>
+            <img src={basics.image} alt={basics.name} className="cv-avatar-img" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+          </div>
+        )}
+      </header>
+    )
+  }
+
   return (
     <header className="cv-header">
       <div className="cv-header__top">
         <div className="cv-header__profile">
           {basics.image && (
-            <div className="cv-avatar-container">
+            <div className="cv-avatar-container has-photo">
               <img src={basics.image} alt={basics.name} className="cv-avatar-img" />
             </div>
           )}

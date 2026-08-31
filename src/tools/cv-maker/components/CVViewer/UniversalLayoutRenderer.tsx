@@ -40,7 +40,7 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
           <div className="cv-card layout-editorial_accent">
             <BlockHeader basics={basics} variant="brand_block" />
             <div className="cv-editorial-grid">
-              <aside className="cv-editorial-left">
+              <aside className="cv-editorial-left cv-sidebar-stack">
                 <div className="cv-sidebar-section">
                   <h4 className="cv-sidebar-title">Contato</h4>
                   <BlockContacts basics={basics} layoutStyle="list" />
@@ -91,9 +91,9 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
       return (
         <div className="cv-page-a4">
           <div className="cv-card cv-navy-layout layout-corporate_timeline">
-            <aside className="cv-navy-sidebar">
+            <aside className="cv-navy-sidebar cv-sidebar-stack">
               {basics.image && (
-                <div className="cv-avatar-container">
+                <div className="cv-avatar-container has-photo">
                   <img src={basics.image} alt={basics.name} className="cv-avatar-img" />
                 </div>
               )}
@@ -153,8 +153,8 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
             <header className="cv-hero-banner">
               <BlockHeader basics={basics} variant="hero" />
               {basics.image && (
-                <div className="cv-avatar-container">
-                  <img src={basics.image} alt={basics.name} className="cv-avatar-img" />
+                <div className="cv-avatar-container cv-avatar-rect has-photo" style={{ width: '85px', height: '95px', borderRadius: '8px', overflow: 'hidden', border: '2px solid currentColor', flexShrink: 0 }}>
+                  <img src={basics.image} alt={basics.name} className="cv-avatar-img" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 </div>
               )}
             </header>
@@ -189,9 +189,9 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
       return (
         <div className="cv-page-a4">
           <div className="cv-card cv-duo-layout layout-compact_split">
-            <aside className="cv-duo-left">
+            <aside className="cv-duo-left cv-sidebar-stack">
               {basics.image && (
-                <div className="cv-avatar-container">
+                <div className="cv-avatar-container has-photo">
                   <img src={basics.image} alt={basics.name} className="cv-avatar-img" />
                 </div>
               )}
@@ -229,10 +229,10 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
       return (
         <div className="cv-page-a4">
           <div className="cv-card cv-sidebar-layout layout-sidebar">
-            <aside className="cv-sidebar-col">
+            <aside className="cv-sidebar-col cv-sidebar-stack">
               <div className="cv-sidebar-profile">
                 {basics.image && (
-                  <div className="cv-avatar-container">
+                  <div className="cv-avatar-container has-photo">
                     <img src={basics.image} alt={basics.name} className="cv-avatar-img" />
                   </div>
                 )}
@@ -540,12 +540,32 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
       )
     }
 
-    // ── Modelo A4 01 (Modular), 02 (Linear) e 07 (Warm Magazine) ──
+    // ── Modelo A4 02 (Linear) ──
+    if (blueprint.id === 'linear') {
+      return (
+        <div className="cv-page-a4">
+          <div className="cv-card layout-linear">
+            <BlockHeader basics={basics} variant="linear" />
+            <BlockContacts basics={basics} layoutStyle="row" />
+            {basics.summary && <BlockSummary basics={basics} />}
+            {data.work && <BlockWork work={data.work} />}
+            {data.projects && <BlockProjects projects={data.projects} />}
+            {data.skills && <BlockSkillsTags skills={data.skills} />}
+            {data.education && <BlockEducation education={data.education} />}
+            {data.languages && <BlockLanguages languages={data.languages} />}
+            {data.certificates && <BlockCertificates certificates={data.certificates} />}
+            {data.references && <BlockReferences references={data.references} />}
+            {data.interests && <BlockInterests interests={data.interests} />}
+          </div>
+        </div>
+      )
+    }
+
+    // ── Modelo A4 01 (Modular) e 07 (Warm Magazine) ──
     return (
       <div className="cv-page-a4">
         <div className={`cv-card ${blueprint.customClass || ''}`}>
-          <BlockHeader basics={basics} />
-          {blueprint.id === 'linear' && <BlockContacts basics={basics} layoutStyle="row" />}
+          <BlockHeader basics={basics} variant="standard" />
           {basics.summary && <BlockSummary basics={basics} />}
           {data.work && <BlockWork work={data.work} />}
           {data.projects && <BlockProjects projects={data.projects} />}
