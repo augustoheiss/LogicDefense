@@ -243,6 +243,46 @@ export interface CVVersions {
 }
 
 /**
+ * Identificadores de blocos atômicos puros no motor de documentos.
+ */
+export type BlockIdentifier =
+  | 'header'
+  | 'photo'
+  | 'contacts'
+  | 'civil'
+  | 'summary'
+  | 'quote'
+  | 'work'
+  | 'projects'
+  | 'education'
+  | 'skills_tags'
+  | 'skills_bars'
+  | 'languages'
+  | 'certificates'
+  | 'references'
+  | 'interests'
+  | 'cover_letter'
+
+/**
+ * Definição declarativa de um Blueprint de Layout A4.
+ */
+export interface LayoutBlueprint {
+  id: LayoutVariant
+  name: string
+  label: string
+  icon: string
+  description: string
+  gridTemplate: string // ex: '1fr', '240px 1fr', '1fr 240px'
+  heroZone?: BlockIdentifier[]
+  sidebarZone?: BlockIdentifier[]
+  mainZone: BlockIdentifier[]
+  footerZone?: BlockIdentifier[]
+  sidebarPosition?: 'left' | 'right' | 'none'
+  hasHeroBanner?: boolean
+  customClass?: string
+}
+
+/**
  * Mapeia níveis de habilidade descritivos para percentuais visuais de barra (0 a 100).
  */
 export function getSkillPercentage(level?: string, levelPercent?: number): number {
@@ -257,3 +297,4 @@ export function getSkillPercentage(level?: string, levelPercent?: number): numbe
   if (normalized.includes('júnior') || normalized.includes('básic') || normalized.includes('basic') || normalized.includes('iniciante')) return 40
   return 75
 }
+

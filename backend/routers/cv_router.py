@@ -315,6 +315,109 @@ async def get_all_prompts_endpoint(
     }
 
 
+@router.get("/layouts")
+async def get_all_layouts_endpoint():
+    """
+    Retorna o catálogo de todos os Blueprints A4 declarativos disponíveis no motor de documentos.
+    Permite que agentes e automações (n8n, Python) descubram os modelos disponíveis.
+    """
+    return {
+        "service": "CV Maker 2.0 Declarative Layout Blueprints",
+        "count": 8,
+        "layouts": [
+            {
+                "id": "modular",
+                "name": "Modelo A4 01 - Modular Cards",
+                "icon": "📐",
+                "description": "Header dinâmico com avatar, badges em pílula e blocos modulares em caixas suaves.",
+                "grid": "1fr",
+                "supports_photo": True,
+                "supports_cover_letter": True,
+            },
+            {
+                "id": "linear",
+                "name": "Modelo A4 02 - Linear Clássico ATS",
+                "icon": "📄",
+                "description": "Linha contínua compacta estilo clássico/ATS com divisores finos e alta densidade.",
+                "grid": "1fr",
+                "supports_photo": False,
+                "supports_cover_letter": True,
+            },
+            {
+                "id": "sidebar",
+                "name": "Modelo A4 03 - Executive Sidebar",
+                "icon": "📑",
+                "description": "2 Colunas com barra lateral dedicada para perfil, contatos, competências e idiomas.",
+                "grid": "230px 1fr",
+                "supports_photo": True,
+                "supports_cover_letter": True,
+            },
+            {
+                "id": "compact_split",
+                "name": "Modelo A4 04 - Split Duo (Victoria Wotton)",
+                "icon": "🏛️",
+                "description": "Coluna esquerda com bio, barras de expertise e hobbies circulares; coluna direita com timeline e referências.",
+                "grid": "240px 1fr",
+                "supports_photo": True,
+                "supports_cover_letter": True,
+            },
+            {
+                "id": "editorial_accent",
+                "name": "Modelo A4 05 - Brand Accent Block (Basil Hailward)",
+                "icon": "🏷️",
+                "description": "Bloco de topo marcante ('hello, i am'), foto vertical, badges de ano sólidos e marcadores em seta.",
+                "grid": "220px 1fr",
+                "supports_photo": True,
+                "supports_cover_letter": True,
+            },
+            {
+                "id": "corporate_timeline",
+                "name": "Modelo A4 06 - Navy Solid Timeline (Wilkins Micawber)",
+                "icon": "⏱️",
+                "description": "Sidebar sólida em Dark Navy, timeline com nós conectados, dados civis/CNH e barras de nível.",
+                "grid": "250px 1fr",
+                "supports_photo": True,
+                "supports_cover_letter": True,
+            },
+            {
+                "id": "warm_magazine",
+                "name": "Modelo A4 07 - Warm Editorial & Stamp (Editorial Cream)",
+                "icon": "📰",
+                "description": "Fundo bege editorial elegante, tipografia imponente, selo circular sobre o avatar e medidores visuais.",
+                "grid": "230px 1fr",
+                "supports_photo": True,
+                "supports_cover_letter": True,
+            },
+            {
+                "id": "hero_matrix",
+                "name": "Modelo A4 08 - Hero Banner Matrix (Mary Smith)",
+                "icon": "🖼️",
+                "description": "Barra superior de contatos, hero header com foto à direita, grid duplo e matriz inferior de habilidades.",
+                "grid": "1fr",
+                "supports_photo": True,
+                "supports_cover_letter": True,
+            },
+        ],
+    }
+
+
+@router.get("/themes")
+async def get_all_themes_endpoint():
+    """
+    Retorna a lista de temas visuais com seus estilos e paletas de cores.
+    """
+    return {
+        "service": "CV Maker 2.0 Visual Themes",
+        "themes": [
+            {"id": "executive", "name": "👔 Executivo", "description": "Tipografia serifada clássica, tons neutros sóbrios e elegância corporativa."},
+            {"id": "creative", "name": "🎨 Criativo", "description": "Acentos modernos em roxo/índigo, cards com bordas suaves e arrojado."},
+            {"id": "minimalist", "name": "🔹 Minimalista", "description": "Linhas puras, contraste limpo, foco total em legibilidade técnica."},
+            {"id": "white", "name": "📄 White", "description": "Fundo ultra-clean, máxima economia de tinta e contraste nítido."},
+            {"id": "terminal", "name": ">_ Terminal", "description": "Estilo dark mode hacker/developer com fonte monoespaçada e acentos verdes/cyan."},
+        ]
+    }
+
+
 @router.get("/prompts/{prompt_key}")
 async def get_single_prompt_endpoint(
     prompt_key: str,

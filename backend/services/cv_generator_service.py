@@ -65,9 +65,10 @@ async def generate_single_archetype(
     Supports Bring-Your-Own-Key (BYOK) via custom_api_key.
     Returns (yaml_string, total_tokens_used).
     """
-    active_client = genai.Client(api_key=custom_api_key) if custom_api_key else client
-    if not active_client:
-        raise RuntimeError("Nenhuma GEMINI_API_KEY configurada no servidor ou fornecida na requisição.")
+    if not custom_api_key:
+        raise RuntimeError("Chave de API do Gemini não fornecida na requisição. A geração de arquétipos opera em modelo BYOK (informe no header X-Gemini-API-Key) ou utilize a arquitetura 100% Agent-Native gerando os YAMLs no seu próprio agente.")
+
+    active_client = genai.Client(api_key=custom_api_key)
 
     if index > 0:
         await asyncio.sleep(index * STAGGER_STEP)
@@ -215,9 +216,10 @@ async def generate_standalone_cover_letter(
     """
     from prompts.cv_prompts import COVER_LETTER_GENERATION_PROMPT
 
-    active_client = genai.Client(api_key=custom_api_key) if custom_api_key else client
-    if not active_client:
-        raise RuntimeError("Nenhuma GEMINI_API_KEY configurada no servidor ou fornecida na requisição.")
+    if not custom_api_key:
+        raise RuntimeError("Chave de API do Gemini não fornecida na requisição. A geração de cover letter opera em modelo BYOK (informe no header X-Gemini-API-Key) ou utilize seu próprio agente de IA.")
+
+    active_client = genai.Client(api_key=custom_api_key)
 
     user_prompt = f"""
 DADOS ESTRUTURADOS DO CANDIDATO:

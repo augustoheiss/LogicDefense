@@ -43,6 +43,12 @@ export const CVMakerApp: React.FC = () => {
   const [yamlInput, setYamlInput] = useState<string>(() => {
     const saved = localStorage.getItem(STORAGE_DRAFT_KEY)
     if (!saved) return DEFAULT_JOHN_DOE_YAML
+    if (!saved.includes('coverLetter:')) {
+      if (saved.includes('Alexandre Silva') || saved.includes('Senior Software Architect') || saved.includes('Enterprise Tech Solutions')) {
+        localStorage.setItem(STORAGE_DRAFT_KEY, DEFAULT_JOHN_DOE_YAML)
+        return DEFAULT_JOHN_DOE_YAML
+      }
+    }
     if (saved.includes('alexandresilva') || saved.includes('alexandre.silva@example.com')) {
       const sanitized = saved
         .split('https://linkedin.com/in/alexandresilva').join('https://linkedin.com/in/alexandre-silva-ficticio-demo-99999')
