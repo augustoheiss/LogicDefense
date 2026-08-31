@@ -2,6 +2,7 @@ import React, { useRef } from 'react'
 import type { CVHistoryItem } from '../../services/historyService'
 import type { TextVariant } from '../../types/cv'
 import { exportHistoryAsJSON, importHistoryFromJSON } from '../../services/historyService'
+import { downloadCVHtmlFile, downloadCVZipPackage } from '../../services/standaloneHtmlService'
 
 interface CVHistoryTabProps {
   history: CVHistoryItem[]
@@ -14,15 +15,15 @@ interface CVHistoryTabProps {
 }
 
 const PERSONA_INFO: Record<TextVariant, { icon: string; label: string; color: string }> = {
-  professional: { icon: '👔', label: 'Profissional Executivo', color: '#0284c7' },
-  architect: { icon: '⚙️', label: 'Arquiteto Técnico', color: '#6366f1' },
+  professional: { icon: '💼', label: 'Profissional Executivo', color: '#0284c7' },
+  architect: { icon: '🧠', label: 'Arquiteto Técnico', color: '#6366f1' },
   historian: { icon: '📜', label: 'Narrativa & Histórico', color: '#d97706' },
   didactic: { icon: '🎓', label: 'Didático & Educacional', color: '#10b981' },
-  alien: { icon: '👽', label: 'Vanguarda & Inovação', color: '#8b5cf6' },
+  alien: { icon: '🤖', label: 'Vanguarda & Inovação', color: '#8b5cf6' },
 }
 
 const SOURCE_INFO: Record<CVHistoryItem['source'], { icon: string; label: string }> = {
-  ai_generated: { icon: '🤖', label: 'IA Gemini' },
+  ai_generated: { icon: '✨', label: 'IA Gemini' },
   yaml_editor: { icon: '📝', label: 'Editor Manual' },
   file_upload: { icon: '📁', label: 'Arquivo Importado' },
   backup_restore: { icon: '📦', label: 'Restaurado de Backup' },
@@ -51,30 +52,26 @@ export const CVHistoryTab: React.FC<CVHistoryTabProps> = ({
     URL.revokeObjectURL(url)
   }
 
-  // Download ZIP via API for a specific history item
+  // Download Standalone HTML file for a specific history item
+  const handleDownloadHtml = (item: CVHistoryItem, e: React.MouseEvent) => {
+    e.stopPropagation()
+    downloadCVHtmlFile({
+      yaml: item.yaml,
+      name: item.name,
+      persona: item.persona,
+      theme: item.theme,
+    })
+  }
+
+  // Download ZIP package (Standalone HTML + YAML) for a specific history item
   const handleDownloadZip = async (item: CVHistoryItem, e: React.MouseEvent) => {
     e.stopPropagation()
-    try {
-      const response = await fetch('/api/v1/cv/render?format=zip', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          raw_text: item.yaml,
-          theme: item.theme || 'executive',
-          filename: `curriculo-${item.name.toLowerCase().replace(/\s+/g, '-')}-${item.persona}`
-        })
-      })
-      if (!response.ok) throw new Error('Falha na API')
-      const blob = await response.blob()
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `curriculo-${item.name.toLowerCase().replace(/\s+/g, '-')}-${item.persona}-completo.zip`
-      a.click()
-      URL.revokeObjectURL(url)
-    } catch {
-      handleDownloadYaml(item, e)
-    }
+    await downloadCVZipPackage({
+      yaml: item.yaml,
+      name: item.name,
+      persona: item.persona,
+      theme: item.theme,
+    })
   }
 
   // Export Full History Backup as JSON
@@ -245,14 +242,21 @@ export const CVHistoryTab: React.FC<CVHistoryTabProps> = ({
                     <button
                       className="cv-history-icon-btn"
                       onClick={(e) => handleDownloadYaml(item, e)}
-                      title="Baixar arquivo YAML desta versão"
+                      title="Baixar arquivo estruturado .yaml"
                     >
-                      📥 .yaml
+                      📄 .yaml
+                    </button>
+                    <button
+                      className="cv-history-icon-btn"
+                      onClick={(e) => handleDownloadHtml(item, e)}
+                      title="Baixar currículo em HTML Standalone (com temas e impressão A4)"
+                    >
+                      🌐 .html
                     </button>
                     <button
                       className="cv-history-icon-btn"
                       onClick={(e) => handleDownloadZip(item, e)}
-                      title="Baixar pacote ZIP (HTML + YAML)"
+                      title="Baixar pacote ZIP completo (HTML + YAML)"
                     >
                       📦 .zip
                     </button>

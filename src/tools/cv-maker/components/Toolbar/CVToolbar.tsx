@@ -7,6 +7,7 @@ interface CVToolbarProps {
   activeTheme: ThemeVariant
   onThemeChange: (t: ThemeVariant) => void
   onDownloadYaml: () => void
+  onDownloadHtml?: () => void
   onDownloadZip?: () => void
   onPrintPdf: () => void
   onOpenPhotoModal: () => void
@@ -39,6 +40,7 @@ export const CVToolbar: React.FC<CVToolbarProps> = ({
   activeTheme,
   onThemeChange,
   onDownloadYaml,
+  onDownloadHtml,
   onDownloadZip,
   onPrintPdf,
   onOpenPhotoModal,
@@ -132,11 +134,21 @@ export const CVToolbar: React.FC<CVToolbarProps> = ({
           ⬇ .yaml
         </button>
 
+        {onDownloadHtml && (
+          <button
+            className="cv-btn-secondary"
+            onClick={onDownloadHtml}
+            title="Baixar currículo em HTML Standalone (com temas e impressão A4)"
+          >
+            🌐 .html
+          </button>
+        )}
+
         {onDownloadZip && (
           <button
             className="cv-btn-secondary"
             onClick={onDownloadZip}
-            title="Baixar pacote completo em ZIP"
+            title="Baixar pacote completo em ZIP (HTML + YAML)"
           >
             📦 .zip
           </button>

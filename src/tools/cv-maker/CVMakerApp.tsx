@@ -19,6 +19,7 @@ import { PhotoUploader } from './components/Toolbar/PhotoUploader'
 import { ApiKeyModal } from './components/ApiKeyModal/ApiKeyModal'
 import { CVStoreModal } from './components/StoreModal/CVStoreModal'
 import { validateLicenseKey } from './services/cvService'
+import { downloadCVHtmlFile, downloadCVZipPackage } from './services/standaloneHtmlService'
 
 import './styles/cv-themes.css'
 import './styles/cv-print.css'
@@ -273,31 +274,24 @@ export const CVMakerApp: React.FC = () => {
     URL.revokeObjectURL(url)
   }
 
+  // Download HTML Standalone
+  const handleDownloadHtml = () => {
+    downloadCVHtmlFile({
+      yaml: yamlInput,
+      name: cvData?.basics?.name || 'curriculo',
+      persona: activePersona,
+      theme: activeTheme,
+    })
+  }
+
   // Download ZIP Package (.html + .yaml)
   const handleDownloadZip = async () => {
-    try {
-      const response = await fetch('/api/v1/cv/render?format=zip', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          raw_text: yamlInput,
-          theme: activeTheme,
-          filename: `curriculo-${cvData?.basics.name.toLowerCase().replace(/\s+/g, '-') || 'cv'}`
-        })
-      })
-      if (!response.ok) throw new Error('Falha ao gerar ZIP')
-      const blob = await response.blob()
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `curriculo-${cvData?.basics.name.toLowerCase().replace(/\s+/g, '-') || 'cv'}-completo.zip`
-      a.click()
-      URL.revokeObjectURL(url)
-    } catch (e) {
-      console.error(e)
-      alert('Erro ao gerar pacote ZIP na API. Baixando YAML diretamente...')
-      handleDownloadYaml()
-    }
+    await downloadCVZipPackage({
+      yaml: yamlInput,
+      name: cvData?.basics?.name || 'curriculo',
+      persona: activePersona,
+      theme: activeTheme,
+    })
   }
 
   // Print PDF
@@ -447,6 +441,7 @@ export const CVMakerApp: React.FC = () => {
             activeTheme={activeTheme}
             onThemeChange={handleThemeChange}
             onDownloadYaml={handleDownloadYaml}
+            onDownloadHtml={handleDownloadHtml}
             onDownloadZip={handleDownloadZip}
             onPrintPdf={handlePrintPdf}
             onOpenPhotoModal={() => setIsPhotoModalOpen(true)}
