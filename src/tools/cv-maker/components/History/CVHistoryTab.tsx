@@ -9,6 +9,7 @@ interface CVHistoryTabProps {
   onDeleteVersion: (id: string) => void
   onWipeAllLGPD: () => void
   onHistoryUpdated: () => void
+  onSaveCurrentVersion: () => void
   activeYaml: string
 }
 
@@ -22,7 +23,7 @@ const PERSONA_INFO: Record<TextVariant, { icon: string; label: string; color: st
 
 const SOURCE_INFO: Record<CVHistoryItem['source'], { icon: string; label: string }> = {
   ai_generated: { icon: '🤖', label: 'IA Gemini' },
-  yaml_editor: { icon: '📝', label: 'Editor YAML' },
+  yaml_editor: { icon: '📝', label: 'Editor Manual' },
   file_upload: { icon: '📁', label: 'Arquivo Importado' },
   backup_restore: { icon: '📦', label: 'Restaurado de Backup' },
 }
@@ -33,6 +34,7 @@ export const CVHistoryTab: React.FC<CVHistoryTabProps> = ({
   onDeleteVersion,
   onWipeAllLGPD,
   onHistoryUpdated,
+  onSaveCurrentVersion,
   activeYaml,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -123,7 +125,7 @@ export const CVHistoryTab: React.FC<CVHistoryTabProps> = ({
               📜 Histórico Local-First
             </h4>
             <p className="cv-history-header__subtitle">
-              Até 20 versões recentes guardadas automaticamente na memória do seu navegador.
+              Até 20 versões salvas manualmente por você ou geradas pela IA, guardadas no seu navegador.
             </p>
           </div>
           <span className="cv-history-counter">
@@ -142,20 +144,20 @@ export const CVHistoryTab: React.FC<CVHistoryTabProps> = ({
         {/* ── Global Toolbar Actions ── */}
         <div className="cv-history-actions-bar">
           <button
-            className="cv-history-btn cv-history-btn--danger"
-            onClick={onWipeAllLGPD}
-            title="Exclui todos os currículos e rascunhos salvos, restaurando o modelo padrão"
+            className="cv-history-btn cv-history-btn--primary"
+            onClick={onSaveCurrentVersion}
+            title="Salva a versão atual do editor no histórico local"
           >
-            🗑️ Limpar Tudo (LGPD)
+            💾 Salvar Versão Atual
           </button>
 
-          <div style={{ display: 'flex', gap: '0.4rem' }}>
+          <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
             <button
               className="cv-history-btn cv-history-btn--secondary"
               onClick={handleExportBackup}
               title="Exportar arquivo JSON com todos os 20 currículos"
             >
-              💾 Exportar Backup
+              📤 Backup
             </button>
             <button
               className="cv-history-btn cv-history-btn--secondary"
@@ -163,6 +165,13 @@ export const CVHistoryTab: React.FC<CVHistoryTabProps> = ({
               title="Importar arquivo JSON de backup"
             >
               📥 Importar
+            </button>
+            <button
+              className="cv-history-btn cv-history-btn--danger"
+              onClick={onWipeAllLGPD}
+              title="Exclui todos os currículos e rascunhos salvos, restaurando o modelo padrão"
+            >
+              🗑️ Limpar Tudo
             </button>
             <input
               ref={fileInputRef}

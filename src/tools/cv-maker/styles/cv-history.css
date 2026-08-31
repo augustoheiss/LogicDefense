@@ -92,6 +92,18 @@
   gap: 0.3rem;
 }
 
+.cv-history-btn--primary {
+  background: #0284c7;
+  color: #ffffff;
+  border: 1px solid #0284c7;
+}
+
+.cv-history-btn--primary:hover {
+  background: #0369a1;
+  border-color: #0369a1;
+  color: #ffffff;
+}
+
 .cv-history-btn--danger {
   background: rgba(239, 68, 68, 0.12);
   color: #f87171;

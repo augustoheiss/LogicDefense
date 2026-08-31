@@ -59,6 +59,7 @@ export const CVMakerApp: React.FC = () => {
   const [isOpenPromptsModalOpen, setIsOpenPromptsModalOpen] = useState<boolean>(false)
   const [isPro, setIsPro] = useState<boolean>(false)
   const [tokenBalance, setTokenBalance] = useState<number>(0)
+  const [saveHistoryFeedback, setSaveHistoryFeedback] = useState<boolean>(false)
   const [hasActiveKey, setHasActiveKey] = useState<boolean>(() => {
     return Boolean(localStorage.getItem('ld_universal_api_key'))
   })
@@ -160,23 +161,29 @@ export const CVMakerApp: React.FC = () => {
     localStorage.setItem(STORAGE_THEME_KEY, newTheme)
   }
 
-  // Direct editor change
+  // Manual save version to history ledger
+  const handleManualSaveHistory = () => {
+    const parsed = parseYamlToCV(yamlInput)
+    if (!parsed.data || !parsed.data.basics.name) {
+      alert('⚠️ Não foi possível salvar: O YAML contém erros de sintaxe ou o campo basics.name está vazio.')
+      return
+    }
+    const updated = saveCVToHistory({
+      yaml: yamlInput,
+      persona: activePersona,
+      theme: activeTheme,
+      source: 'yaml_editor',
+    })
+    setHistoryList(updated)
+    setSaveHistoryFeedback(true)
+    setTimeout(() => setSaveHistoryFeedback(false), 2500)
+  }
+
+  // Direct editor change (saves draft only, does NOT create rapid history snapshots)
   const handleEditorChange = (val: string) => {
     setYamlInput(val)
     handleParse(val)
     debouncedSaveDraft(val)
-
-    // Salva no histórico se for um YAML válido e não trivial
-    const parsed = parseYamlToCV(val)
-    if (parsed.data && parsed.data.basics.name) {
-      const updated = saveCVToHistory({
-        yaml: val,
-        persona: activePersona,
-        theme: activeTheme,
-        source: 'yaml_editor',
-      })
-      setHistoryList(updated)
-    }
   }
 
   // Load selected version from history into editor and active view
@@ -231,14 +238,6 @@ export const CVMakerApp: React.FC = () => {
     const newYaml = cvToYaml(updatedData)
     setYamlInput(newYaml)
     debouncedSaveDraft(newYaml)
-
-    const updated = saveCVToHistory({
-      yaml: newYaml,
-      persona: activePersona,
-      theme: activeTheme,
-      source: 'yaml_editor',
-    })
-    setHistoryList(updated)
   }
 
   // Reset to default
@@ -370,19 +369,33 @@ export const CVMakerApp: React.FC = () => {
 
             {activeTab === 'editor' && (
               <div className="cv-raw-editor">
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem', flexWrap: 'wrap', gap: '0.4rem' }}>
                   <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#94a3b8' }}>
                     Código YAML (Fonte Única de Verdade)
                   </span>
-                  {parseError ? (
-                    <span style={{ fontSize: '0.75rem', color: '#f87171', fontWeight: 600 }}>
-                      ✗ Erro de Sintaxe
-                    </span>
-                  ) : (
-                    <span style={{ fontSize: '0.75rem', color: '#34d399', fontWeight: 600 }}>
-                      ✓ YAML Válido
-                    </span>
-                  )}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+                    <button
+                      className="cv-btn-secondary"
+                      onClick={handleManualSaveHistory}
+                      style={
+                        saveHistoryFeedback
+                          ? { background: 'rgba(16, 185, 129, 0.2)', color: '#34d399', borderColor: '#10b981', fontWeight: 600, fontSize: '0.74rem', padding: '0.25rem 0.6rem' }
+                          : { fontSize: '0.74rem', padding: '0.25rem 0.6rem' }
+                      }
+                      title="Salva a versão atual do YAML no Histórico Local"
+                    >
+                      {saveHistoryFeedback ? '✓ Salvo no Histórico!' : '💾 Salvar Versão'}
+                    </button>
+                    {parseError ? (
+                      <span style={{ fontSize: '0.75rem', color: '#f87171', fontWeight: 600 }}>
+                        ✗ Erro de Sintaxe
+                      </span>
+                    ) : (
+                      <span style={{ fontSize: '0.75rem', color: '#34d399', fontWeight: 600 }}>
+                        ✓ YAML Válido
+                      </span>
+                    )}
+                  </div>
                 </div>
 
                 <textarea
@@ -407,6 +420,7 @@ export const CVMakerApp: React.FC = () => {
                 onDeleteVersion={handleDeleteHistoryVersion}
                 onWipeAllLGPD={handleWipeAllLGPD}
                 onHistoryUpdated={refreshHistory}
+                onSaveCurrentVersion={handleManualSaveHistory}
                 activeYaml={yamlInput}
               />
             )}
