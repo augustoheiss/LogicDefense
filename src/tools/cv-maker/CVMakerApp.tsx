@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react'
-import type { CVData, CVVersions, TextVariant, ThemeVariant, LayoutVariant, ViewMode, CoverLetter, CVDesignConfig } from './types/cv'
+import type { CVData, CVVersions, TextVariant, ThemeVariant, LayoutVariant, ViewMode, CoverLetter, CVDesignConfig, AppMode } from './types/cv'
 import { DEFAULT_DESIGN_CONFIG } from './types/cv'
 import { DEFAULT_JOHN_DOE_YAML } from './templates/defaultTemplate'
 import { parseYamlToCV, cvToYaml, debounce } from './services/yamlService'
@@ -12,6 +12,7 @@ import {
   type CVHistoryItem
 } from './services/historyService'
 import { CVViewer } from './components/CVViewer/CVViewer'
+import { CanvasBuilderWorkspace } from './components/CanvasBuilder/CanvasBuilderWorkspace'
 import { ChatInterface } from './components/Chat/ChatInterface'
 import { CVToolbar } from './components/Toolbar/CVToolbar'
 import { CVHistoryTab } from './components/History/CVHistoryTab'
@@ -27,6 +28,7 @@ import { downloadCVHtmlFile, downloadCVCoverLetterHtml, downloadCVZipPackage } f
 import './styles/cv-themes.css'
 import './styles/cv-print.css'
 import './styles/cv-viewer.css'
+import './styles/cv-canvas-builder.css'
 import './styles/chat-interface.css'
 import './styles/cv-history.css'
 import './styles/cv-prompts-modal.css'
@@ -36,6 +38,7 @@ const STORAGE_DRAFT_KEY = 'cv_maker_active_yaml_draft_v1'
 const STORAGE_THEME_KEY = 'cv_maker_theme_v1'
 const STORAGE_LAYOUT_KEY = 'cv_maker_layout_v1'
 const STORAGE_VIEW_MODE_KEY = 'cv_maker_view_mode_v1'
+const STORAGE_APP_MODE_KEY = 'cv_maker_app_mode_v1'
 
 export const CVMakerApp: React.FC = () => {
   // Navigation
@@ -68,6 +71,16 @@ export const CVMakerApp: React.FC = () => {
 
   // Local-First History Ledger (Up to 20 items)
   const [historyList, setHistoryList] = useState<CVHistoryItem[]>(() => getCVHistory())
+
+  // App Mode (Modelos Prontos A4 vs Canvas Livre)
+  const [appMode, setAppMode] = useState<AppMode>(() => {
+    return (localStorage.getItem(STORAGE_APP_MODE_KEY) as AppMode) || 'templates'
+  })
+
+  const handleAppModeChange = (mode: AppMode) => {
+    setAppMode(mode)
+    localStorage.setItem(STORAGE_APP_MODE_KEY, mode)
+  }
 
   // Personas, Themes, Layouts & View Modes
   const [activePersona, setActivePersona] = useState<TextVariant>('professional')
@@ -496,6 +509,8 @@ export const CVMakerApp: React.FC = () => {
         {/* Right Column: Preview & Floating Toolbar */}
         <main className="cv-preview-area" aria-label="Visualização do Currículo">
           <CVToolbar
+            appMode={appMode}
+            onAppModeChange={handleAppModeChange}
             activePersona={activePersona}
             onPersonaChange={handlePersonaChange}
             activeLayout={activeLayout}
@@ -521,14 +536,22 @@ export const CVMakerApp: React.FC = () => {
             onOpenStoreModal={() => setIsStoreModalOpen(true)}
           />
 
-          <CVViewer
-            data={cvData}
-            theme={activeTheme}
-            layout={activeLayout}
-            viewMode={activeViewMode}
-            designConfig={designConfig}
-            onRequestGenerateCoverLetter={() => setIsCoverLetterModalOpen(true)}
-          />
+          {appMode === 'templates' ? (
+            <CVViewer
+              data={cvData}
+              theme={activeTheme}
+              layout={activeLayout}
+              viewMode={activeViewMode}
+              designConfig={designConfig}
+              onRequestGenerateCoverLetter={() => setIsCoverLetterModalOpen(true)}
+            />
+          ) : (
+            <CanvasBuilderWorkspace
+              data={cvData}
+              designConfig={designConfig}
+              onRequestGenerateCoverLetter={() => setIsCoverLetterModalOpen(true)}
+            />
+          )}
         </main>
       </div>
 

@@ -347,19 +347,41 @@ export const DEFAULT_DESIGN_CONFIG: CVDesignConfig = {
 }
 
 /**
- * Estrutura de um Bloco no Canvas Livre (YAML Block Builder)
+ * Modos de Criação do CV Maker
  */
-export interface CanvasBlock {
+export type AppMode = 'templates' | 'canvas_builder'
+
+/**
+ * Largura em Grid de 12 Colunas
+ * 3 = 25% (1/4) | 4 = 33.3% (1/3) | 6 = 50% (1/2) | 8 = 66.6% (2/3) | 12 = 100% (Full)
+ */
+export type CanvasColSpan = 3 | 4 | 6 | 8 | 12
+
+/**
+ * Estrutura de Configuração de um Bloco no Canvas Livre
+ */
+export interface CanvasBlockConfig {
   id: string
   type: BlockIdentifier
-  title: string
-  x: number // Posição X em porcentagem ou px
-  y: number // Posição Y em porcentagem ou px
-  width: number // Largura em porcentagem (ex: 50% ou 100%)
-  minHeight: number // Altura mínima em px
-  fontSizeScale?: number // Escala de fonte específica do bloco
-  customBgColor?: string
+  customTitle?: string
+  colSpan: CanvasColSpan
+  fontFamily?: string
+  fontSizeScale?: number // 0.75 a 1.5 (padrão: 1.0)
   customTextColor?: string
+  customBgColor?: string
   customBorderColor?: string
+  padding?: 'none' | 'compact' | 'normal' | 'spacious'
+  align?: 'left' | 'center' | 'right'
+  minHeight?: number // px
+  showCardBackground?: boolean
+  showBorder?: boolean
+}
+
+export interface CanvasPreset {
+  id: string
+  name: string
+  description: string
+  icon: string
+  blocks: CanvasBlockConfig[]
 }
 

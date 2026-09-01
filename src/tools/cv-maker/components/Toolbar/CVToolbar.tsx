@@ -1,8 +1,10 @@
 import React from 'react'
-import type { TextVariant, ThemeVariant, LayoutVariant, ViewMode } from '../../types/cv'
+import type { TextVariant, ThemeVariant, LayoutVariant, ViewMode, AppMode } from '../../types/cv'
 import { LAYOUT_OPTIONS } from '../../types/cv'
 
 interface CVToolbarProps {
+  appMode?: AppMode
+  onAppModeChange?: (mode: AppMode) => void
   activePersona: TextVariant
   onPersonaChange: (p: TextVariant) => void
   activeLayout: LayoutVariant
@@ -51,6 +53,8 @@ const VIEW_MODES: { id: ViewMode; label: string; icon: string }[] = [
 ]
 
 export const CVToolbar: React.FC<CVToolbarProps> = ({
+  appMode = 'templates',
+  onAppModeChange,
   activePersona,
   onPersonaChange,
   activeLayout,
@@ -83,39 +87,68 @@ export const CVToolbar: React.FC<CVToolbarProps> = ({
 
   return (
     <div className="cv-preview-toolbar cv-no-print">
-      {/* Grupo 1: Modo de Visualização (Currículo / Cover Letter / Dossiê) */}
-      <div className="cv-toolbar-group">
-        <span className="cv-toolbar-label">Visualização</span>
+      {/* Grupo 0: Alternador de Modo Principal (Modelos Prontos vs Canvas Livre) */}
+      <div className="cv-toolbar-group" style={{ borderRight: '1.5px solid #334155', paddingRight: '0.85rem' }}>
+        <span className="cv-toolbar-label" style={{ color: '#38bdf8' }}>Modo do Editor</span>
         <div className="cv-btn-pill-group">
-          {VIEW_MODES.map(v => (
-            <button
-              key={v.id}
-              className={`cv-btn-pill ${activeViewMode === v.id ? 'cv-btn-pill--active' : ''}`}
-              onClick={() => onViewModeChange(v.id)}
-              title={`Exibir ${v.label}`}
-            >
-              <span>{v.icon}</span> {v.label}
-            </button>
-          ))}
+          <button
+            type="button"
+            className={`cv-btn-pill ${appMode === 'templates' ? 'cv-btn-pill--active' : ''}`}
+            onClick={() => onAppModeChange?.('templates')}
+            style={appMode === 'templates' ? { background: '#0284c7', color: '#fff', fontWeight: 700 } : {}}
+            title="Modelos A4 Prontos (01 a 09) com diagramação matemática e balanceamento automático"
+          >
+            <span>📐</span> Modelos A4 Prontos
+          </button>
+          <button
+            type="button"
+            className={`cv-btn-pill ${appMode === 'canvas_builder' ? 'cv-btn-pill--active' : ''}`}
+            onClick={() => onAppModeChange?.('canvas_builder')}
+            style={appMode === 'canvas_builder' ? { background: '#10b981', color: '#fff', fontWeight: 700 } : {}}
+            title="Canvas Livre: adicione blocos na folha A4 em branco e personalize fontes, cores e tamanhos"
+          >
+            <span>🎨</span> Canvas Livre
+          </button>
         </div>
       </div>
 
-      {/* Grupo 2: Modelos A4 (01 a 08) */}
-      <div className="cv-toolbar-group">
-        <span className="cv-toolbar-label">Modelo A4</span>
-        <div className="cv-btn-pill-group">
-          {LAYOUT_OPTIONS.map(l => (
-            <button
-              key={l.id}
-              className={`cv-btn-pill ${activeLayout === l.id ? 'cv-btn-pill--active' : ''}`}
-              onClick={() => onLayoutChange(l.id)}
-              title={`${l.label} — ${l.description}`}
-            >
-              <span>{l.icon}</span> {l.name}
-            </button>
-          ))}
+      {/* Grupo 1: Modo de Visualização (Currículo / Cover Letter / Dossiê) */}
+      {appMode === 'templates' && (
+        <div className="cv-toolbar-group">
+          <span className="cv-toolbar-label">Visualização</span>
+          <div className="cv-btn-pill-group">
+            {VIEW_MODES.map(v => (
+              <button
+                key={v.id}
+                className={`cv-btn-pill ${activeViewMode === v.id ? 'cv-btn-pill--active' : ''}`}
+                onClick={() => onViewModeChange(v.id)}
+                title={`Exibir ${v.label}`}
+              >
+                <span>{v.icon}</span> {v.label}
+              </button>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
+
+      {/* Grupo 2: Modelos A4 (01 a 09) */}
+      {appMode === 'templates' && (
+        <div className="cv-toolbar-group">
+          <span className="cv-toolbar-label">Modelo A4</span>
+          <div className="cv-btn-pill-group">
+            {LAYOUT_OPTIONS.map(l => (
+              <button
+                key={l.id}
+                className={`cv-btn-pill ${activeLayout === l.id ? 'cv-btn-pill--active' : ''}`}
+                onClick={() => onLayoutChange(l.id)}
+                title={`${l.label} — ${l.description}`}
+              >
+                <span>{l.icon}</span> {l.name}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Grupo 3: Temas Visuais / Cores */}
       <div className="cv-toolbar-group">
