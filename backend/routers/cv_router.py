@@ -217,7 +217,7 @@ AI_TOKEN_BURN_MULTIPLIER = 3.0
 async def verify_cv_license_and_quota(raw_key: Optional[str], estimated_text: str, num_calls: int = 1, x_gemini_key: Optional[str] = None) -> dict:
     """
     Valida a chave de licença ou API Key e verifica se há saldo de tokens suficiente com margem de segurança.
-    Suporta chaves Pro (am_pro_...), chaves de planilha (am_sheet_...), Bring-Your-Own-Key Gemini (AIzaSy...) e God Mode (Mateus7:12@).
+    Suporta chaves Pro (am_pro_...), chaves de planilha (am_sheet_...), Bring-Your-Own-Key Gemini (AIzaSy...) e God Mode (GODMODE_SECRET_KEY).
     """
     if x_gemini_key and x_gemini_key.strip().startswith("AIzaSy"):
         return {"tier": "byok_gemini", "token_balance": 999999999, "key_hash": "byok_gemini", "gemini_key": x_gemini_key.strip()}

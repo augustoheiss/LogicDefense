@@ -21,8 +21,6 @@ def is_godmode_key(raw_key: str) -> bool:
     clean_k = raw_key.strip()
     if not clean_k:
         return False
-    if clean_k == "Mateus7:12@":
-        return True
     godmode_secret = get_godmode_secret()
     if godmode_secret and clean_k == godmode_secret:
         return True
@@ -280,12 +278,13 @@ def hash_key(key: str) -> str:
     return hashlib.sha256(key.strip().encode("utf-8")).hexdigest()
 
 def seed_godmode_keys():
-    """Seeds and updates God Mode / Admin license keys in DB on startup."""
+    """Seeds and updates God Mode / Admin license keys in DB on startup if configured."""
     try:
-        god_keys = ["Mateus7:12@"]
         godmode_secret = get_godmode_secret()
-        if godmode_secret:
-            god_keys.append(godmode_secret)
+        if not godmode_secret:
+            return
+
+        god_keys = [godmode_secret]
 
         now = datetime.now(timezone.utc).isoformat()
         with get_connection() as conn:
@@ -312,7 +311,7 @@ def seed_godmode_keys():
                     cursor.execute("""
                         INSERT INTO license_keys (license_key, key_hash, email, tier, token_balance, token_cap, expires_at, stripe_customer_id, created_at, updated_at)
                         VALUES (?, ?, ?, 'godmode_owner', 999999999, -1, '2099-12-31T23:59:59Z', 'cust_godmode', ?, ?)
-                    """, (clean_k, k_hash, 'augustoheiss@heisslab.com.br', now, now))
+                    """, (clean_k, k_hash, 'admin@logicdefense.local', now, now))
 
             cursor.execute("""
                 UPDATE license_keys
@@ -667,7 +666,7 @@ def get_spreadsheet_api_key(key_hash: str) -> dict | None:
             "table_id": "1786238740535-4iyjdbh",
             "key_hash": key_hash,
             "key_hint": f"...{env_key[-4:]}",
-            "license_key_hash": hash_key(get_godmode_secret() or "Mateus7:12@"),
+            "license_key_hash": hash_key(get_godmode_secret() or "godmode_admin_key"),
             "permissions": "read:write",
             "is_active": 1,
             "token_balance": 999_999_999,
