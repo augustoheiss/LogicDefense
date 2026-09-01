@@ -93,7 +93,24 @@ export const CanvasA4Sheet: React.FC<CanvasA4SheetProps> = ({
           style={{
             fontFamily: `"${designConfig.fontBody}", sans-serif`,
             backgroundColor: designConfig.colorBg || '#ffffff',
-            color: designConfig.colorText || '#0f172a'
+            color: designConfig.colorText || '#0f172a',
+            backgroundImage: designConfig.backgroundPattern && designConfig.backgroundPattern !== 'none'
+              ? `url("${designConfig.backgroundPattern}")`
+              : 'none',
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+            ['--cv-font-heading' as any]: `"${designConfig.fontHeading}", sans-serif`,
+            ['--cv-font-body' as any]: `"${designConfig.fontBody}", sans-serif`,
+            ['--cv-font-scale' as any]: designConfig.fontScale,
+            ['--cv-color-primary' as any]: designConfig.colorPrimary,
+            ['--cv-color-secondary' as any]: designConfig.colorSecondary,
+            ['--cv-color-accent' as any]: designConfig.colorAccent,
+            ['--cv-color-surface' as any]: designConfig.colorSurface,
+            ['--cv-color-bg' as any]: designConfig.colorBg,
+            ['--cv-color-text' as any]: designConfig.colorText,
+            ['--cv-bg-image' as any]: designConfig.backgroundPattern && designConfig.backgroundPattern !== 'none'
+              ? `url("${designConfig.backgroundPattern}")`
+              : 'none'
           }}
           onClick={() => onSelectBlock(null)}
         >

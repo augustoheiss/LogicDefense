@@ -207,8 +207,12 @@
   width: 100%;
   max-width: 820px;
   min-height: 1160px; /* A4 aspect ratio */
-  background: #ffffff;
-  color: #0f172a;
+  background-color: var(--cv-color-bg, #ffffff);
+  background-image: var(--cv-bg-image, none);
+  background-size: cover;
+  background-position: center;
+  font-family: var(--cv-font-body, 'Inter', sans-serif);
+  color: var(--cv-color-text, #0f172a);
   box-shadow: 0 15px 35px -5px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(0, 0, 0, 0.08);
   border-radius: 4px;
   padding: 2.2rem 2.2rem;

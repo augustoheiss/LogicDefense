@@ -45,6 +45,22 @@ PERSONA_METADATA = {
     },
 }
 
+TEXTURE_PRESETS = {
+    "none": "none",
+    "bg-grid-tech": "https://www.heisslab.com.br/cv-backgrounds/bg-grid-tech.jpg",
+    "bg-luxury-minimal": "https://www.heisslab.com.br/cv-backgrounds/bg-luxury-minimal.jpg",
+    "bg-geometric-line": "https://www.heisslab.com.br/cv-backgrounds/bg-geometric-line.jpg",
+    "bg-corporate-waves": "https://www.heisslab.com.br/cv-backgrounds/bg-corporate-waves.jpg",
+    "bg-stationery-clean": "https://www.heisslab.com.br/cv-backgrounds/bg-stationery-clean.jpg",
+    "bg-technical-blueprint": "https://www.heisslab.com.br/cv-backgrounds/bg-technical-blueprint.jpg",
+    "/cv-backgrounds/bg-grid-tech.jpg": "https://www.heisslab.com.br/cv-backgrounds/bg-grid-tech.jpg",
+    "/cv-backgrounds/bg-luxury-minimal.jpg": "https://www.heisslab.com.br/cv-backgrounds/bg-luxury-minimal.jpg",
+    "/cv-backgrounds/bg-geometric-line.jpg": "https://www.heisslab.com.br/cv-backgrounds/bg-geometric-line.jpg",
+    "/cv-backgrounds/bg-corporate-waves.jpg": "https://www.heisslab.com.br/cv-backgrounds/bg-corporate-waves.jpg",
+    "/cv-backgrounds/bg-stationery-clean.jpg": "https://www.heisslab.com.br/cv-backgrounds/bg-stationery-clean.jpg",
+    "/cv-backgrounds/bg-technical-blueprint.jpg": "https://www.heisslab.com.br/cv-backgrounds/bg-technical-blueprint.jpg",
+}
+
 LAYOUT_METADATA = {
     "modular": {
         "label": "📐 Modelo A4 01 (Modular)",
@@ -1143,7 +1159,9 @@ def render_multi_cv_dashboard_html(
     default_theme: str = "executive",
     default_layout: str = "dynamic_math",
     lang: str = "auto",
-    view_mode: str = "cv"
+    view_mode: str = "cv",
+    background_pattern: Optional[str] = None,
+    design_config: Optional[dict] = None
 ) -> str:
     """
     Renderiza um Super Dashboard HTML Standalone contendo TODOS os 5 arquétipos gerados.
@@ -1187,6 +1205,14 @@ def render_multi_cv_dashboard_html(
     t = I18N[selected_lang]
     valid_theme = default_theme if default_theme in ["executive", "creative", "minimalist", "white", "terminal"] else "executive"
     valid_layout = default_layout if default_layout in LAYOUT_METADATA else "dynamic_math"
+
+    # Resolução da textura de fundo
+    resolved_bg = "none"
+    if background_pattern:
+        resolved_bg = TEXTURE_PRESETS.get(background_pattern, background_pattern)
+    elif design_config and design_config.get("backgroundPattern"):
+        bp = design_config.get("backgroundPattern")
+        resolved_bg = TEXTURE_PRESETS.get(bp, bp)
 
     persona_order = ["professional", "architect", "historian", "didactic", "alien"]
     available_keys = [k for k in persona_order if k in parsed_archetypes] or list(parsed_archetypes.keys())
@@ -1250,6 +1276,8 @@ def render_multi_cv_dashboard_html(
     i18n_json_str = json.dumps(t, ensure_ascii=False)
     archetypes_json_str = json.dumps(parsed_archetypes, ensure_ascii=False)
 
+    bg_css_val = f'url("{resolved_bg}")' if resolved_bg and resolved_bg != "none" else "none"
+
     html_content = f"""<!DOCTYPE html>
 <html lang="{selected_lang}">
 <head>
@@ -1275,7 +1303,7 @@ def render_multi_cv_dashboard_html(
       --cv-avatar-pos-x: {initial_pos_x}%;
       --cv-avatar-pos-y: {initial_pos_y}%;
       --cv-avatar-scale: {initial_scale};
-      --cv-bg-image: none;
+      --cv-bg-image: {bg_css_val};
     }}
 
     * {{ box-sizing: border-box; margin: 0; padding: 0; }}
@@ -2258,8 +2286,12 @@ def render_multi_cv_dashboard_html(
       width: 100%;
       max-width: 820px;
       min-height: 1160px;
-      background: #ffffff;
-      color: #0f172a;
+      background-color: var(--cv-color-bg, #ffffff);
+      background-image: var(--cv-bg-image, none);
+      background-size: cover;
+      background-position: center;
+      font-family: var(--cv-font-body, 'Inter', sans-serif);
+      color: var(--cv-color-text, #0f172a);
       box-shadow: 0 15px 35px -5px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(0, 0, 0, 0.08);
       border-radius: 4px;
       padding: 2.2rem 2.2rem;
@@ -4361,18 +4393,34 @@ def render_multi_cv_dashboard_html(
     }}
 
     let currentDesign = {{
-      fontHeading: 'Plus Jakarta Sans',
-      fontBody: 'Inter',
-      fontScale: 1.0,
-      colorPrimary: '#0284c7',
-      colorSecondary: '#0369a1',
-      colorAccent: '#f97316',
-      colorSurface: '#f8fafc',
-      colorBg: '#ffffff',
-      colorText: '#0f172a',
-      colorSidebar: '#0f172a',
-      colorWorkspaceBg: '#0b0f19',
-      backgroundPattern: 'none'
+      fontHeading: '{design_config.get("fontHeading", "Plus Jakarta Sans") if design_config else "Plus Jakarta Sans"}',
+      fontBody: '{design_config.get("fontBody", "Inter") if design_config else "Inter"}',
+      fontScale: {design_config.get("fontScale", 1.0) if design_config else 1.0},
+      colorPrimary: '{design_config.get("colorPrimary", "#0284c7") if design_config else "#0284c7"}',
+      colorSecondary: '{design_config.get("colorSecondary", "#0369a1") if design_config else "#0369a1"}',
+      colorAccent: '{design_config.get("colorAccent", "#f97316") if design_config else "#f97316"}',
+      colorSurface: '{design_config.get("colorSurface", "#f8fafc") if design_config else "#f8fafc"}',
+      colorBg: '{design_config.get("colorBg", "#ffffff") if design_config else "#ffffff"}',
+      colorText: '{design_config.get("colorText", "#0f172a") if design_config else "#0f172a"}',
+      colorSidebar: '{design_config.get("colorSidebar", "#0f172a") if design_config else "#0f172a"}',
+      colorWorkspaceBg: '{design_config.get("colorWorkspaceBg", "#0b0f19") if design_config else "#0b0f19"}',
+      backgroundPattern: '{resolved_bg}'
+    }};
+
+    const TEXTURE_MAP = {{
+      'none': 'none',
+      'bg-grid-tech': 'https://www.heisslab.com.br/cv-backgrounds/bg-grid-tech.jpg',
+      'bg-luxury-minimal': 'https://www.heisslab.com.br/cv-backgrounds/bg-luxury-minimal.jpg',
+      'bg-geometric-line': 'https://www.heisslab.com.br/cv-backgrounds/bg-geometric-line.jpg',
+      'bg-corporate-waves': 'https://www.heisslab.com.br/cv-backgrounds/bg-corporate-waves.jpg',
+      'bg-stationery-clean': 'https://www.heisslab.com.br/cv-backgrounds/bg-stationery-clean.jpg',
+      'bg-technical-blueprint': 'https://www.heisslab.com.br/cv-backgrounds/bg-technical-blueprint.jpg',
+      '/cv-backgrounds/bg-grid-tech.jpg': 'https://www.heisslab.com.br/cv-backgrounds/bg-grid-tech.jpg',
+      '/cv-backgrounds/bg-luxury-minimal.jpg': 'https://www.heisslab.com.br/cv-backgrounds/bg-luxury-minimal.jpg',
+      '/cv-backgrounds/bg-geometric-line.jpg': 'https://www.heisslab.com.br/cv-backgrounds/bg-geometric-line.jpg',
+      '/cv-backgrounds/bg-corporate-waves.jpg': 'https://www.heisslab.com.br/cv-backgrounds/bg-corporate-waves.jpg',
+      '/cv-backgrounds/bg-stationery-clean.jpg': 'https://www.heisslab.com.br/cv-backgrounds/bg-stationery-clean.jpg',
+      '/cv-backgrounds/bg-technical-blueprint.jpg': 'https://www.heisslab.com.br/cv-backgrounds/bg-technical-blueprint.jpg'
     }};
 
     function openDesignModal() {{
@@ -4412,7 +4460,8 @@ def render_multi_cv_dashboard_html(
     }}
 
     function applyBgPattern(url) {{
-      currentDesign.backgroundPattern = url;
+      const resolved = TEXTURE_MAP[url] || (url && url.startsWith('/') ? 'https://www.heisslab.com.br' + url : url);
+      currentDesign.backgroundPattern = (url === 'none' ? 'none' : (resolved || 'none'));
       saveAndApplyDesign();
     }}
 
@@ -4429,7 +4478,7 @@ def render_multi_cv_dashboard_html(
         colorText: '#0f172a',
         colorSidebar: '#0f172a',
         colorWorkspaceBg: '#0b0f19',
-        backgroundPattern: 'none'
+        backgroundPattern: '{resolved_bg}'
       }};
       localStorage.removeItem('cv_design_config');
       applyDesignToViewport();
@@ -4533,6 +4582,23 @@ def render_multi_cv_dashboard_html(
     return html_content
 
 
-def render_cv_to_standalone_html(yaml_or_dict: Any, theme: str = "executive", layout: str = "dynamic_math", lang: str = "auto", view_mode: str = "cv") -> str:
+def render_cv_to_standalone_html(
+    yaml_or_dict: Any,
+    theme: str = "executive",
+    layout: str = "dynamic_math",
+    lang: str = "auto",
+    view_mode: str = "cv",
+    background_pattern: Optional[str] = None,
+    design_config: Optional[dict] = None
+) -> str:
     """Compatibilidade para renderização individual delegando para a engine multi-dashboard."""
-    return render_multi_cv_dashboard_html({"professional": yaml_or_dict}, default_persona="professional", default_theme=theme, default_layout=layout, lang=lang, view_mode=view_mode)
+    return render_multi_cv_dashboard_html(
+        {"professional": yaml_or_dict},
+        default_persona="professional",
+        default_theme=theme,
+        default_layout=layout,
+        lang=lang,
+        view_mode=view_mode,
+        background_pattern=background_pattern,
+        design_config=design_config
+    )

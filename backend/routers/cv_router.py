@@ -54,10 +54,12 @@ class CVCoverLetterRequest(BaseModel):
 class CVRenderRequest(BaseModel):
     yaml_content: Optional[str] = Field(default=None, alias="raw_text", description="Conteúdo do currículo em YAML ou texto")
     theme: Optional[str] = Field(default="executive", description="Tema visual: executive, creative, minimalist, white, terminal")
-    layout: Optional[str] = Field(default="modular", description="Modelo A4 de Layout: modular, linear, sidebar, compact_split, editorial_accent, corporate_timeline, warm_magazine, hero_matrix")
+    layout: Optional[str] = Field(default="dynamic_math", description="Modelo A4 de Layout: modular, linear, sidebar, compact_split, editorial_accent, corporate_timeline, warm_magazine, hero_matrix, dynamic_math, canvas_livre")
     view_mode: Optional[str] = Field(default="cv", description="Modo de visualização: cv, cover_letter, both")
     format: Optional[str] = Field(default="html", description="Formato de saída: html, yaml, zip, json")
     filename: Optional[str] = Field(default="curriculo", description="Nome base para download do arquivo")
+    background_pattern: Optional[str] = Field(default=None, alias="texture", description="Textura de fundo IA: bg-grid-tech, bg-luxury-minimal, bg-geometric-line, bg-corporate-waves, bg-stationery-clean, bg-technical-blueprint, none ou URL direta")
+    design_config: Optional[Dict[str, Any]] = Field(default=None, description="Configurações personalizadas de tipografia, cores e textura de fundo")
 
     model_config = {"populate_by_name": True}
 
@@ -69,9 +71,13 @@ class CVCompileBundleRequest(BaseModel):
     didactic: Optional[str] = Field(default="", description="YAML do arquétipo Didático / Learning Velocity")
     alien: Optional[str] = Field(default="", description="YAML do arquétipo Observador Extraterrestre")
     default_theme: Optional[str] = Field(default="executive", description="Tema visual inicial: executive, creative, minimalist, white, terminal")
-    default_layout: Optional[str] = Field(default="modular", description="Modelo A4 inicial: modular, linear, sidebar")
+    default_layout: Optional[str] = Field(default="dynamic_math", description="Modelo A4 inicial: modular, linear, sidebar, compact_split, editorial_accent, corporate_timeline, warm_magazine, hero_matrix, dynamic_math, canvas_livre")
+    background_pattern: Optional[str] = Field(default=None, alias="texture", description="Textura de fundo IA inicial")
+    design_config: Optional[Dict[str, Any]] = Field(default=None, description="Configurações personalizadas de tipografia, cores e textura de fundo")
     format: Optional[str] = Field(default="html", description="Formato de saída: html, zip, json")
     filename: Optional[str] = Field(default="curriculos_5_versoes", description="Nome base para download do arquivo")
+
+    model_config = {"populate_by_name": True}
 
 
 DEFAULT_FALLBACK_YAML = """basics:
@@ -323,7 +329,7 @@ async def get_all_layouts_endpoint():
     """
     return {
         "service": "CV Maker 2.0 Declarative Layout Blueprints",
-        "count": 9,
+        "count": 10,
         "layouts": [
             {
                 "id": "modular",
@@ -406,6 +412,15 @@ async def get_all_layouts_endpoint():
                 "supports_photo": True,
                 "supports_cover_letter": True,
             },
+            {
+                "id": "canvas_livre",
+                "name": "Modo Livre (Block Canvas A4 Builder)",
+                "icon": "🎨",
+                "description": "Editor modular visual livre em grid de 12 colunas, reordenação de blocos, foto com 8 molduras geométricas e texturas de fundo IA.",
+                "grid": "12-column-canvas",
+                "supports_photo": True,
+                "supports_cover_letter": True,
+            },
         ],
     }
 
@@ -413,16 +428,25 @@ async def get_all_layouts_endpoint():
 @router.get("/themes")
 async def get_all_themes_endpoint():
     """
-    Retorna a lista de temas visuais com seus estilos e paletas de cores.
+    Retorna a lista de temas visuais e texturas de fundo com seus estilos e paletas de cores.
     """
     return {
-        "service": "CV Maker 2.0 Visual Themes",
+        "service": "CV Maker 2.0 Visual Themes & Backgrounds",
         "themes": [
             {"id": "executive", "name": "👔 Executivo", "description": "Tipografia serifada clássica, tons neutros sóbrios e elegância corporativa."},
             {"id": "creative", "name": "🎨 Criativo", "description": "Acentos modernos em roxo/índigo, cards com bordas suaves e arrojado."},
             {"id": "minimalist", "name": "🔹 Minimalista", "description": "Linhas puras, contraste limpo, foco total em legibilidade técnica."},
             {"id": "white", "name": "📄 White", "description": "Fundo ultra-clean, máxima economia de tinta e contraste nítido."},
             {"id": "terminal", "name": ">_ Terminal", "description": "Estilo dark mode hacker/developer com fonte monoespaçada e acentos verdes/cyan."},
+        ],
+        "background_textures": [
+            {"id": "none", "name": "Branco Puro ATS", "description": "Fundo clássico 100% limpo para sistemas ATS e máxima economia de impressão.", "url": "none"},
+            {"id": "bg-grid-tech", "name": "Grade Técnica & Engenharia", "description": "Grid sutil com acentos técnicos perfeito para Devs, Arquitetos de Software e Engenheiros.", "url": "https://www.heisslab.com.br/cv-backgrounds/bg-grid-tech.jpg"},
+            {"id": "bg-luxury-minimal", "name": "Minimalista Luxo Dourado", "description": "Textura refinada com suaves veios dourados e elegância executiva discreta.", "url": "https://www.heisslab.com.br/cv-backgrounds/bg-luxury-minimal.jpg"},
+            {"id": "bg-geometric-line", "name": "Geométrico Poligonal Suave", "description": "Linhas poligonais finas e modernas que trazem sofisticação visual sem poluição.", "url": "https://www.heisslab.com.br/cv-backgrounds/bg-geometric-line.jpg"},
+            {"id": "bg-corporate-waves", "name": "Corporativo Ondas Executivas", "description": "Curvas dinâmicas e fluidas em gradiente suave corporativo para cargos de liderança.", "url": "https://www.heisslab.com.br/cv-backgrounds/bg-corporate-waves.jpg"},
+            {"id": "bg-stationery-clean", "name": "Papelaria Editorial Cream", "description": "Textura de papel nobre e encorpado com tom acolhedor tipo revista de negócios.", "url": "https://www.heisslab.com.br/cv-backgrounds/bg-stationery-clean.jpg"},
+            {"id": "bg-technical-blueprint", "name": "Blueprint Arquitetura", "description": "Estilo blueprint técnico em tom cyan suave para projetos de infraestrutura e engenharia.", "url": "https://www.heisslab.com.br/cv-backgrounds/bg-technical-blueprint.jpg"},
         ]
     }
 
@@ -708,7 +732,8 @@ async def render_cv_endpoint(
     payload: Optional[CVRenderRequest] = None,
     format: Optional[str] = Query(None, description="Formato de saída: html, yaml, zip, json"),
     theme: Optional[str] = Query(None, description="Tema visual: executive, creative, minimalist, white, terminal"),
-    layout: Optional[str] = Query(None, description="Modelo A4 de Layout: modular, linear, sidebar, compact_split, editorial_accent, corporate_timeline, warm_magazine, hero_matrix, dynamic_math"),
+    layout: Optional[str] = Query(None, description="Modelo A4 de Layout: modular, linear, sidebar, compact_split, editorial_accent, corporate_timeline, warm_magazine, hero_matrix, dynamic_math, canvas_livre"),
+    texture: Optional[str] = Query(None, alias="background_pattern", description="Textura de fundo IA: bg-grid-tech, bg-luxury-minimal, bg-geometric-line, bg-corporate-waves, bg-stationery-clean, bg-technical-blueprint, none"),
     view_mode: Optional[str] = Query(None, description="Modo de visualização: cv, cover_letter, both"),
     lang: Optional[str] = Query(None, description="Idioma forçado: pt, en ou auto"),
     filename: Optional[str] = Query(None, description="Nome base para download do arquivo (sem extensão)"),
@@ -724,6 +749,7 @@ async def render_cv_endpoint(
     q_format = format if isinstance(format, str) else None
     q_theme = theme if isinstance(theme, str) else None
     q_layout = layout if isinstance(layout, str) else None
+    q_texture = texture if isinstance(texture, str) else None
     q_view_mode = view_mode if isinstance(view_mode, str) else None
     q_lang = lang if isinstance(lang, str) else None
     q_filename = filename if isinstance(filename, str) else None
@@ -735,6 +761,8 @@ async def render_cv_endpoint(
     target_format = (q_format or (payload.format if payload and payload.format else None) or "html").strip().lower()
     base_filename = (q_filename or (payload.filename if payload and payload.filename else None) or "curriculo").strip()
     target_lang = q_lang or "auto"
+    bg_pattern = q_texture or (payload.background_pattern if payload else None)
+    d_config = payload.design_config if payload else None
 
     from services.cv_html_renderer import render_cv_to_standalone_html
 
@@ -752,7 +780,9 @@ async def render_cv_endpoint(
         theme=theme_name,
         layout=layout_name,
         lang=target_lang,
-        view_mode=view_mode_name
+        view_mode=view_mode_name,
+        background_pattern=bg_pattern,
+        design_config=d_config
     )
 
     # 2. Pacote ZIP (HTML + YAML)
@@ -775,6 +805,7 @@ async def render_cv_endpoint(
             "yaml": yaml_text,
             "theme": theme_name,
             "layout": layout_name,
+            "background_pattern": bg_pattern,
             "filename": base_filename,
             "lang": target_lang
         }
@@ -788,7 +819,8 @@ async def compile_cv_bundle_endpoint(
     payload: CVCompileBundleRequest,
     format: Optional[str] = Query(None, description="Formato de saída: html, zip, json"),
     theme: Optional[str] = Query(None, description="Tema visual: executive, creative, minimalist, white, terminal"),
-    layout: Optional[str] = Query(None, description="Modelo A4 de Layout: modular, linear, sidebar, compact_split, editorial_accent, corporate_timeline, warm_magazine, hero_matrix, dynamic_math"),
+    layout: Optional[str] = Query(None, description="Modelo A4 de Layout: modular, linear, sidebar, compact_split, editorial_accent, corporate_timeline, warm_magazine, hero_matrix, dynamic_math, canvas_livre"),
+    texture: Optional[str] = Query(None, alias="background_pattern", description="Textura de fundo inicial"),
     x_api_key: Optional[str] = Header(None, alias="X-API-Key"),
 ):
     """
@@ -800,6 +832,7 @@ async def compile_cv_bundle_endpoint(
 
     target_theme = theme or payload.default_theme or "executive"
     target_layout = layout or payload.default_layout or "dynamic_math"
+    target_texture = texture or payload.background_pattern or None
     target_format = (format or payload.format or "html").strip().lower()
     base_filename = (payload.filename or "curriculos_5_versoes").strip()
 
@@ -816,6 +849,8 @@ async def compile_cv_bundle_endpoint(
         default_persona="professional",
         default_theme=target_theme,
         default_layout=target_layout,
+        background_pattern=target_texture,
+        design_config=payload.design_config
     )
 
     if target_format == "zip":

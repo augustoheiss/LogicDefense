@@ -1006,8 +1006,12 @@
       width: 100%;
       max-width: 820px;
       min-height: 1160px;
-      background: #ffffff;
-      color: #0f172a;
+      background-color: var(--cv-color-bg, #ffffff);
+      background-image: var(--cv-bg-image, none);
+      background-size: cover;
+      background-position: center;
+      font-family: var(--cv-font-body, 'Inter', sans-serif);
+      color: var(--cv-color-text, #0f172a);
       box-shadow: 0 15px 35px -5px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(0, 0, 0, 0.08);
       border-radius: 4px;
       padding: 2.2rem 2.2rem;
@@ -3412,6 +3416,22 @@ coverLetter:
       backgroundPattern: 'none'
     };
 
+    const TEXTURE_MAP = {
+      'none': 'none',
+      'bg-grid-tech': 'https://www.heisslab.com.br/cv-backgrounds/bg-grid-tech.jpg',
+      'bg-luxury-minimal': 'https://www.heisslab.com.br/cv-backgrounds/bg-luxury-minimal.jpg',
+      'bg-geometric-line': 'https://www.heisslab.com.br/cv-backgrounds/bg-geometric-line.jpg',
+      'bg-corporate-waves': 'https://www.heisslab.com.br/cv-backgrounds/bg-corporate-waves.jpg',
+      'bg-stationery-clean': 'https://www.heisslab.com.br/cv-backgrounds/bg-stationery-clean.jpg',
+      'bg-technical-blueprint': 'https://www.heisslab.com.br/cv-backgrounds/bg-technical-blueprint.jpg',
+      '/cv-backgrounds/bg-grid-tech.jpg': 'https://www.heisslab.com.br/cv-backgrounds/bg-grid-tech.jpg',
+      '/cv-backgrounds/bg-luxury-minimal.jpg': 'https://www.heisslab.com.br/cv-backgrounds/bg-luxury-minimal.jpg',
+      '/cv-backgrounds/bg-geometric-line.jpg': 'https://www.heisslab.com.br/cv-backgrounds/bg-geometric-line.jpg',
+      '/cv-backgrounds/bg-corporate-waves.jpg': 'https://www.heisslab.com.br/cv-backgrounds/bg-corporate-waves.jpg',
+      '/cv-backgrounds/bg-stationery-clean.jpg': 'https://www.heisslab.com.br/cv-backgrounds/bg-stationery-clean.jpg',
+      '/cv-backgrounds/bg-technical-blueprint.jpg': 'https://www.heisslab.com.br/cv-backgrounds/bg-technical-blueprint.jpg'
+    };
+
     function openDesignModal() {
       const modal = document.getElementById('design-modal');
       if (modal) modal.classList.add('active');
@@ -3449,7 +3469,8 @@ coverLetter:
     }
 
     function applyBgPattern(url) {
-      currentDesign.backgroundPattern = url;
+      const resolved = TEXTURE_MAP[url] || (url && url.startsWith('/') ? 'https://www.heisslab.com.br' + url : url);
+      currentDesign.backgroundPattern = (url === 'none' ? 'none' : (resolved || 'none'));
       saveAndApplyDesign();
     }
 
