@@ -1,364 +1,259 @@
 /* =============================================================
-   cv-themes.css — 5 Temas Visuais de Alta Densidade (CV Maker 2.0)
-   Inspirado no ecossistema cv-yaml e adaptado para React / Modern CSS
+   cv-themes.css — Token-Driven Design Engine & Temas Visuais
+   Google Fonts + CSS Custom Properties Reativas em Tempo Real
    ============================================================= */
 
-@import url('https://fonts.googleapis.com/css2?family=Merriweather:ital,wght@0,300;0,400;0,700;0,900;1,400&family=Courier+Prime:wght@400;700&family=Poppins:wght@300;400;500;600;700;800&family=Inter:wght@300;400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700;800;900&family=Courier+Prime:ital,wght@0,400;0,700;1,400&family=Fira+Code:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700;800&family=Lora:ital,wght@0,400;0,600;0,700;1,400&family=Merriweather:ital,wght@0,300;0,400;0,700;0,900;1,400&family=Montserrat:wght@400;500;600;700;800&family=Open+Sans:ital,wght@0,300;0,400;0,600;0,700;1,400&family=Outfit:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&family=Poppins:wght@300;400;500;600;700;800&family=Roboto:ital,wght@0,300;0,400;0,500;0,700;1,400&display=swap');
 
 /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-   ■  1. TEMA EXECUTIVO (tema-executivo)
-      Merriweather · Preto / Cinza Chumbo / Branco
-      Layout denso, linhas finas, documento corporativo/jurídico
+   ■  VALORES PADRÃO DE DESIGN TOKENS
    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+:root {
+  --cv-font-heading: 'Plus Jakarta Sans', sans-serif;
+  --cv-font-body: 'Inter', sans-serif;
+  --cv-font-scale: 1.0;
+  --cv-font-size-base: 0.85rem;
+  --cv-color-primary: #0284c7;
+  --cv-color-secondary: #0369a1;
+  --cv-color-text: #0f172a;
+  --cv-color-text-muted: #64748b;
+  --cv-color-bg: #ffffff;
+  --cv-color-surface: #f8fafc;
+  --cv-color-border: #e2e8f0;
+  --cv-color-accent: #f97316;
+  --cv-bg-image: none;
+  --cv-avatar-pos-x: 50%;
+  --cv-avatar-pos-y: 50%;
+  --cv-avatar-scale: 1.0;
+}
 
 /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-   ■  1. TEMA EXECUTIVO (tema-executivo)
-      Merriweather · Preto / Cinza Chumbo / Branco
-      Layout denso, linhas finas, documento corporativo/jurídico
+   ■  1. TEMA EXECUTIVO (theme-executive)
    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
-
 .theme-executive {
-  background-color: #fdfdfd;
-  font-family: 'Merriweather', Georgia, 'Times New Roman', serif;
-  font-size: 15.5px;
-  line-height: 1.62;
-  color: #1a1a1a;
-  letter-spacing: 0.01em;
-}
-
-.theme-executive .cv-card {
-  background-color: #ffffff;
-  border-radius: 0;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
-  border: 1px solid #d1d5db;
-}
-
-.theme-executive header.cv-header {
-  border-bottom: 2px solid #111827;
-  padding-bottom: 1.25rem;
-}
-
-.theme-executive h1.cv-name {
-  font-family: 'Merriweather', Georgia, serif;
-  font-size: 1.95rem;
-  font-weight: 900;
-  letter-spacing: -0.02em;
-  color: #050505;
-}
-
-.theme-executive .cv-label {
-  font-family: 'Merriweather', Georgia, serif;
-  font-size: 1rem;
-  font-weight: 700;
-  color: #374151;
-}
-
-.theme-executive h2.cv-section-title {
-  font-family: 'Merriweather', Georgia, serif;
-  font-size: 1.05rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: #111827;
-  border-bottom: 1.5px solid #374151;
-  padding-bottom: 0.3rem;
-  margin-bottom: 1rem;
-}
-
-.theme-executive h3.cv-item-title {
-  font-family: 'Merriweather', Georgia, serif;
-  font-weight: 700;
-  font-size: 1.02rem;
-  color: #111827;
-}
-
-.theme-executive .cv-meta-tag {
-  background-color: transparent;
-  color: #374151;
-  border: 1px solid #9ca3af;
-  border-radius: 0;
-  font-family: 'Courier Prime', monospace;
-  font-size: 0.8rem;
-}
-
-.theme-executive .cv-skill-tag {
-  background-color: transparent;
-  color: #374151;
-  border: 1px solid #9ca3af;
-  border-radius: 0;
-  font-size: 0.82rem;
-  padding: 0.2rem 0.55rem;
-}
-
-.theme-executive .cv-link {
-  color: #1f2937;
-  text-decoration: underline;
-  text-decoration-color: #9ca3af;
+  --theme-default-heading: 'Merriweather', Georgia, serif;
+  --theme-default-body: 'Merriweather', Georgia, serif;
+  --theme-default-primary: #111827;
+  --theme-default-secondary: #374151;
+  --theme-default-text: #1a1a1a;
+  --theme-default-bg: #ffffff;
+  --theme-default-surface: #ffffff;
+  --theme-default-border: #d1d5db;
+  --theme-default-accent: #9ca3af;
 }
 
 /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
    ■  2. TEMA CRIATIVO (theme-creative)
-      Poppins · Azul Royal + Laranja · Design Moderno de Agência
    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
-
 .theme-creative {
-  background: linear-gradient(145deg, #eff6ff 0%, #eef2ff 100%);
-  font-family: 'Poppins', 'Segoe UI', system-ui, sans-serif;
-  font-size: 15.5px;
-  line-height: 1.62;
-  color: #1e293b;
-}
-
-.theme-creative .cv-card {
-  background-color: #ffffff;
-  border-radius: 1.25rem;
-  box-shadow: 0 20px 40px -10px rgba(37, 99, 235, 0.12);
-  border: 1px solid #dbeafe;
-}
-
-.theme-creative header.cv-header {
-  border-bottom: 3px solid #2563eb;
-  padding-bottom: 1.5rem;
-}
-
-.theme-creative h1.cv-name {
-  font-family: 'Poppins', sans-serif;
-  font-size: 2.15rem;
-  font-weight: 800;
-  letter-spacing: -0.04em;
-  color: #1e3a8a;
-}
-
-.theme-creative .cv-label {
-  font-family: 'Poppins', sans-serif;
-  font-size: 1rem;
-  font-weight: 600;
-  color: #f97316;
-}
-
-.theme-creative h2.cv-section-title {
-  font-family: 'Poppins', sans-serif;
-  font-size: 1.05rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: #1e3a8a;
-  border-bottom: 2px solid #bfdbfe;
-  padding-bottom: 0.35rem;
-  margin-bottom: 1.25rem;
-}
-
-.theme-creative h3.cv-item-title {
-  font-family: 'Poppins', sans-serif;
-  font-weight: 600;
-  font-size: 1.02rem;
-  color: #1e293b;
-}
-
-.theme-creative .cv-project-card {
-  background-color: #eff6ff;
-  border: 1px solid #bfdbfe;
-  border-radius: 0.75rem;
-  padding: 1rem;
-}
-
-.theme-creative .cv-skill-tag {
-  background-color: #dbeafe;
-  color: #1e3a8a;
-  border: 1px solid #bfdbfe;
-  border-radius: 0.375rem;
-  font-size: 0.82rem;
-  font-weight: 500;
-}
-
-.theme-creative .cv-link {
-  color: #2563eb;
+  --theme-default-heading: 'Poppins', sans-serif;
+  --theme-default-body: 'Poppins', sans-serif;
+  --theme-default-primary: #1e3a8a;
+  --theme-default-secondary: #2563eb;
+  --theme-default-text: #1e293b;
+  --theme-default-bg: #ffffff;
+  --theme-default-surface: #eff6ff;
+  --theme-default-border: #bfdbfe;
+  --theme-default-accent: #f97316;
 }
 
 /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
    ■  3. TEMA MINIMALISTA (theme-minimalist)
-      Inter / System UI · Clean, Branco Puro, Hierarquia Tipográfica
    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
-
 .theme-minimalist {
-  background-color: #ffffff;
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
-  font-size: 15.5px;
-  line-height: 1.65;
-  color: #0f172a;
-}
-
-.theme-minimalist .cv-card {
-  background-color: #ffffff;
-  border-radius: 0;
-  box-shadow: none;
-  border: none;
-}
-
-.theme-minimalist header.cv-header {
-  border-bottom: 1px solid #e2e8f0;
-  padding-bottom: 1.25rem;
-}
-
-.theme-minimalist h1.cv-name {
-  font-family: 'Inter', sans-serif;
-  font-size: 2.3rem;
-  font-weight: 800;
-  letter-spacing: -0.05em;
-  color: #0f172a;
-}
-
-.theme-minimalist .cv-label {
-  font-size: 1rem;
-  font-weight: 500;
-  color: #64748b;
-}
-
-.theme-minimalist h2.cv-section-title {
-  font-family: 'Inter', sans-serif;
-  font-size: 0.95rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
-  color: #475569;
-  border-bottom: 1px solid #e2e8f0;
-  padding-bottom: 0.25rem;
-  margin-bottom: 1rem;
-}
-
-.theme-minimalist h3.cv-item-title {
-  font-weight: 700;
-  font-size: 1.02rem;
-  color: #0f172a;
-}
-
-.theme-minimalist .cv-skill-tag {
-  background-color: transparent;
-  color: #475569;
-  border: 1px solid #e2e8f0;
-  border-radius: 4px;
-  font-size: 0.82rem;
-}
-
-.theme-minimalist .cv-link {
-  color: #475569;
+  --theme-default-heading: 'Inter', sans-serif;
+  --theme-default-body: 'Inter', sans-serif;
+  --theme-default-primary: #0f172a;
+  --theme-default-secondary: #475569;
+  --theme-default-text: #0f172a;
+  --theme-default-bg: #ffffff;
+  --theme-default-surface: #f8fafc;
+  --theme-default-border: #e2e8f0;
+  --theme-default-accent: #0284c7;
 }
 
 /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
    ■  4. TEMA WHITE (theme-white)
-      Foco em Leitura Rápida e Impressão Limpa
    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
-
 .theme-white {
-  background-color: #ffffff;
-  font-family: 'Inter', system-ui, sans-serif;
-  font-size: 15.5px;
-  line-height: 1.62;
-  color: #334155;
-}
-
-.theme-white .cv-card {
-  background-color: #ffffff;
-  border: 1px solid #e2e8f0;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.04);
-}
-
-.theme-white header.cv-header {
-  border-bottom: 2px solid #059669;
-}
-
-.theme-white h1.cv-name {
-  color: #0f172a;
-  font-size: 2.1rem;
-  font-weight: 800;
-}
-
-.theme-white .cv-label {
-  color: #059669;
-  font-size: 1rem;
-  font-weight: 600;
-}
-
-.theme-white h2.cv-section-title {
-  color: #059669;
-  font-size: 1.05rem;
-  font-weight: 700;
-  border-bottom: 1px solid #cbd5e1;
-}
-
-.theme-white h3.cv-item-title {
-  font-size: 1.02rem;
-  font-weight: 700;
-}
-
-.theme-white .cv-skill-tag {
-  background-color: #f1f5f9;
-  color: #475569;
-  border: 1px solid #cbd5e1;
-  font-size: 0.82rem;
+  --theme-default-heading: 'Inter', sans-serif;
+  --theme-default-body: 'Inter', sans-serif;
+  --theme-default-primary: #0284c7;
+  --theme-default-secondary: #0369a1;
+  --theme-default-text: #0f172a;
+  --theme-default-bg: #ffffff;
+  --theme-default-surface: #f8fafc;
+  --theme-default-border: #e2e8f0;
+  --theme-default-accent: #f97316;
 }
 
 /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-   ■  5. TEMA TERMINAL / DARK (theme-terminal)
-      O Clássico Dark Mode com Tons Esmeralda para Engenheiros
+   ■  5. TEMA TERMINAL (theme-terminal)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+.theme-terminal {
+  --theme-default-heading: 'Courier Prime', monospace;
+  --theme-default-body: 'Courier Prime', monospace;
+  --theme-default-primary: #4ade80;
+  --theme-default-secondary: #22c55e;
+  --theme-default-text: #86efac;
+  --theme-default-bg: #090d16;
+  --theme-default-surface: #0f172a;
+  --theme-default-border: #166534;
+  --theme-default-accent: #22c55e;
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   ■  REGRAS TOKEN-DRIVEN DINÂMICAS PARA TODOS OS TEMAS E MODELOS
    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
 
-.theme-terminal {
-  background-color: #090d16;
-  font-family: 'Inter', monospace, system-ui, sans-serif;
-  font-size: 15.5px;
-  line-height: 1.62;
-  color: #cbd5e1;
+.cv-root {
+  font-family: var(--cv-font-body, var(--theme-default-body, 'Inter', sans-serif)) !important;
+  color: var(--cv-color-text, var(--theme-default-text, #0f172a)) !important;
 }
 
-.theme-terminal .cv-card {
-  background-color: #0f172a;
-  border: 1px solid #1e293b;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+/* Fundo da Página A4 e Card */
+.cv-root .cv-page-a4 {
+  background-color: var(--cv-color-bg, var(--theme-default-bg, #ffffff)) !important;
+  background-image: var(--cv-bg-image, none) !important;
+  background-size: cover !important;
+  background-position: center !important;
+  background-repeat: no-repeat !important;
 }
 
-.theme-terminal header.cv-header {
-  border-bottom: 2px solid #10b981;
+.cv-root .cv-card {
+  background-color: var(--cv-color-bg, var(--theme-default-bg, #ffffff)) !important;
+  background-image: var(--cv-bg-image, none) !important;
+  background-size: cover !important;
+  background-position: center !important;
+  color: var(--cv-color-text, var(--theme-default-text, #0f172a)) !important;
 }
 
-.theme-terminal h1.cv-name {
-  color: #ffffff;
-  font-size: 2.1rem;
-  font-weight: 800;
+/* Nome Principal / Títulos H1 */
+.cv-root h1,
+.cv-root .cv-name,
+.cv-root .name,
+.cv-root .cv-hero-name,
+.cv-root .cv-math-name {
+  font-family: var(--cv-font-heading, var(--theme-default-heading, 'Plus Jakarta Sans', sans-serif)) !important;
+  color: var(--cv-color-primary, var(--theme-default-primary, #0284c7)) !important;
+  font-size: calc(1.9rem * var(--cv-font-scale, 1.0)) !important;
+  line-height: 1.15 !important;
 }
 
-.theme-terminal .cv-label {
-  color: #34d399;
-  font-size: 1rem;
-  font-family: 'Courier Prime', monospace;
+/* Cargo / Subtítulo */
+.cv-root .cv-label,
+.cv-root .label,
+.cv-root .cv-brand-label,
+.cv-root .cv-hero-role,
+.cv-root .cv-math-label {
+  font-family: var(--cv-font-body, var(--theme-default-body, 'Inter', sans-serif)) !important;
+  color: var(--cv-color-secondary, var(--theme-default-secondary, #0369a1)) !important;
+  font-size: calc(0.95rem * var(--cv-font-scale, 1.0)) !important;
 }
 
-.theme-terminal h2.cv-section-title {
-  color: #34d399;
-  font-size: 1.05rem;
-  font-weight: 700;
-  border-bottom: 1px solid #334155;
+/* Títulos de Seção H2 / H3 */
+.cv-root h2.cv-section-title,
+.cv-root .cv-section-title,
+.cv-root .section-title,
+.cv-root .cv-math-section-title,
+.cv-root .cv-sidebar-title {
+  font-family: var(--cv-font-heading, var(--theme-default-heading, 'Plus Jakarta Sans', sans-serif)) !important;
+  color: var(--cv-color-primary, var(--theme-default-primary, #0284c7)) !important;
+  font-size: calc(1.05rem * var(--cv-font-scale, 1.0)) !important;
+  border-bottom-color: var(--cv-color-border, var(--theme-default-border, #e2e8f0)) !important;
 }
 
-.theme-terminal h3.cv-item-title {
-  font-size: 1.02rem;
-  font-weight: 700;
+/* Títulos de Itens de Experiência e Projetos */
+.cv-root .cv-item-title,
+.cv-root .cv-item__title,
+.cv-root .item-title,
+.cv-root h3.cv-item-title,
+.cv-root .cv-project-title {
+  font-family: var(--cv-font-heading, var(--theme-default-heading, 'Plus Jakarta Sans', sans-serif)) !important;
+  color: var(--cv-color-text, var(--theme-default-text, #0f172a)) !important;
+  font-size: calc(0.96rem * var(--cv-font-scale, 1.0)) !important;
 }
 
-.theme-terminal .cv-project-card {
-  background-color: rgba(30, 41, 59, 0.6);
-  border: 1px solid #334155;
-  border-radius: 0.5rem;
-  padding: 1rem;
+/* Empresa / Instituição / Subtítulos */
+.cv-root .cv-item-sub,
+.cv-root .cv-item__subtitle,
+.cv-root .item-sub,
+.cv-root .cv-item-company,
+.cv-root .cv-item-institution {
+  color: var(--cv-color-secondary, var(--theme-default-secondary, #0369a1)) !important;
+  font-size: calc(0.85rem * var(--cv-font-scale, 1.0)) !important;
 }
 
-.theme-terminal .cv-skill-tag {
-  background-color: #1e293b;
-  color: #e2e8f0;
-  border: 1px solid #334155;
-  font-size: 0.82rem;
+/* Datas e Períodos */
+.cv-root .cv-item-date,
+.cv-root .cv-item__date,
+.cv-root .item-date,
+.cv-root .cv-timeline-date {
+  color: var(--cv-color-text-muted, #64748b) !important;
+  font-size: calc(0.78rem * var(--cv-font-scale, 1.0)) !important;
 }
 
-.theme-terminal .cv-link {
-  color: #34d399;
+/* Corpo de Texto, Resumos e Listas */
+.cv-root .cv-summary-text,
+.cv-root .cv-item-desc,
+.cv-root .cv-item__description,
+.cv-root .item-desc,
+.cv-root .cv-work-summary,
+.cv-root .cover-letter-body,
+.cv-root p,
+.cv-root li {
+  font-family: var(--cv-font-body, var(--theme-default-body, 'Inter', sans-serif)) !important;
+  font-size: calc(0.84rem * var(--cv-font-scale, 1.0)) !important;
+  line-height: calc(1.5 * var(--cv-font-scale, 1.0)) !important;
+  color: var(--cv-color-text, var(--theme-default-text, #0f172a)) !important;
+}
+
+/* Badges e Tags */
+.cv-root .cv-badge,
+.cv-root .cv-skill-tag,
+.cv-root .cv-meta-tag,
+.cv-root .cv-badge-pill {
+  border-color: var(--cv-color-accent, var(--theme-default-accent, #f97316)) !important;
+  color: var(--cv-color-primary, var(--theme-default-primary, #0284c7)) !important;
+  background-color: var(--cv-color-surface, var(--theme-default-surface, #f8fafc)) !important;
+  font-size: calc(0.75rem * var(--cv-font-scale, 1.0)) !important;
+}
+
+/* Cards, Boxes e Superfícies Modulares */
+.cv-root .cv-project-card,
+.cv-root .cv-card-box,
+.cv-root .cv-math-box,
+.cv-root .cv-duo-box,
+.cv-root .cv-item-box {
+  background-color: var(--cv-color-surface, var(--theme-default-surface, #f8fafc)) !important;
+  border-color: var(--cv-color-border, var(--theme-default-border, #e2e8f0)) !important;
+}
+
+/* Barras de Nível de Habilidade */
+.cv-root .cv-skill-bar-fill,
+.cv-root .cv-bar-fill {
+  background: var(--cv-color-primary, var(--theme-default-primary, #0284c7)) !important;
+}
+
+.cv-root .cv-skill-bar-bg,
+.cv-root .cv-bar-bg {
+  background: var(--cv-color-border, var(--theme-default-border, #e2e8f0)) !important;
+}
+
+/* Links e Contatos */
+.cv-root .cv-link,
+.cv-root a {
+  color: var(--cv-color-secondary, var(--theme-default-secondary, #0284c7)) !important;
+}
+
+.cv-root .cv-contacts,
+.cv-root .contacts {
+  font-size: calc(0.82rem * var(--cv-font-scale, 1.0)) !important;
+}
+
+/* Citações / Quotes */
+.cv-root .cv-quote,
+.cv-root .cv-hero-quote {
+  color: var(--cv-color-secondary, var(--theme-default-secondary, #0369a1)) !important;
+  font-size: calc(0.86rem * var(--cv-font-scale, 1.0)) !important;
 }

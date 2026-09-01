@@ -6,7 +6,7 @@
  */
 
 import JSZip from 'jszip'
-import type { CVData, ThemeVariant, LayoutVariant, ViewMode } from '../types/cv'
+import type { CVData, ThemeVariant, LayoutVariant, ViewMode, CVDesignConfig } from '../types/cv'
 import { LAYOUT_OPTIONS, getSkillPercentage } from '../types/cv'
 import { parseYamlToCV } from './yamlService'
 
@@ -25,7 +25,7 @@ function escapeHtml(str: string | number | null | undefined): string {
  */
 function getEmbeddedCss(): string {
   return `
-    @import url('https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&family=Cinzel:wght@600;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@300;400;500;600;700;800&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700;800;900&family=Courier+Prime:ital,wght@0,400;0,700;1,400&family=Fira+Code:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700;800&family=Lora:ital,wght@0,400;0,600;0,700;1,400&family=Merriweather:ital,wght@0,300;0,400;0,700;0,900;1,400&family=Montserrat:wght@400;500;600;700;800&family=Open+Sans:ital,wght@0,300;0,400;0,600;0,700;1,400&family=Outfit:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&family=Poppins:wght@300;400;500;600;700;800&family=Roboto:ital,wght@0,300;0,400;0,500;0,700;1,400&display=swap');
 
     *, *::before, *::after {
       box-sizing: border-box;
@@ -346,7 +346,8 @@ export function renderCVToStandaloneHtml(
   theme: ThemeVariant = 'executive',
   rawYaml?: string,
   layout: LayoutVariant = 'modular',
-  viewMode: ViewMode = 'cv'
+  viewMode: ViewMode = 'cv',
+  designConfig?: CVDesignConfig
 ): string {
   const basics = data.basics || { name: 'Candidato' }
   const work = data.work || []
@@ -364,6 +365,27 @@ export function renderCVToStandaloneHtml(
 
   const safeYaml = rawYaml ? escapeHtml(rawYaml) : ''
 
+  const customStyleVars = `
+    --cv-avatar-pos-x: ${basics.imagePosX ?? 50}%;
+    --cv-avatar-pos-y: ${basics.imagePosY ?? 50}%;
+    --cv-avatar-scale: ${basics.imageScale ?? 1.0};
+    ${designConfig ? `
+    --cv-font-heading: "${designConfig.fontHeading}", sans-serif;
+    --cv-font-body: "${designConfig.fontBody}", sans-serif;
+    --cv-font-scale: ${designConfig.fontScale};
+    --cv-font-size-base: ${designConfig.fontSizeBase};
+    --cv-color-primary: ${designConfig.colorPrimary};
+    --cv-color-secondary: ${designConfig.colorSecondary};
+    --cv-color-text: ${designConfig.colorText};
+    --cv-color-text-muted: ${designConfig.colorTextMuted};
+    --cv-color-bg: ${designConfig.colorBg};
+    --cv-color-surface: ${designConfig.colorSurface};
+    --cv-color-border: ${designConfig.colorBorder};
+    --cv-color-accent: ${designConfig.colorAccent};
+    ${designConfig.backgroundPattern && designConfig.backgroundPattern !== 'none' ? `--cv-bg-image: url('${designConfig.backgroundPattern}');` : ''}
+    ` : ''}
+  `
+
   return `<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -372,7 +394,7 @@ export function renderCVToStandaloneHtml(
   <title>${escapeHtml(basics.name)} — Currículo & Cover Letter</title>
   <style>${getEmbeddedCss()}</style>
 </head>
-<body id="cvBody" class="theme-${theme}">
+<body id="cvBody" class="theme-${theme}" style="${customStyleVars}">
 
   <!-- Floating Offline Toolbar -->
   <div class="cv-standalone-toolbar no-print">
@@ -623,6 +645,7 @@ export function downloadCVHtmlFile(params: {
   theme?: ThemeVariant
   layout?: LayoutVariant
   viewMode?: ViewMode
+  designConfig?: CVDesignConfig
 }): void {
   const parsed = parseYamlToCV(params.yaml)
   if (!parsed.data) {
@@ -635,7 +658,8 @@ export function downloadCVHtmlFile(params: {
     params.theme || 'executive',
     params.yaml,
     params.layout || 'modular',
-    params.viewMode || 'cv'
+    params.viewMode || 'cv',
+    params.designConfig
   )
 
   const cleanName = params.name.toLowerCase().replace(/\s+/g, '-') || 'curriculo'
@@ -658,6 +682,7 @@ export function downloadCVCoverLetterHtml(params: {
   name: string
   theme?: ThemeVariant
   layout?: LayoutVariant
+  designConfig?: CVDesignConfig
 }): void {
   const parsed = parseYamlToCV(params.yaml)
   if (!parsed.data) return
@@ -667,7 +692,8 @@ export function downloadCVCoverLetterHtml(params: {
     params.theme || 'executive',
     params.yaml,
     params.layout || 'modular',
-    'cover_letter'
+    'cover_letter',
+    params.designConfig
   )
 
   const cleanName = params.name.toLowerCase().replace(/\s+/g, '-') || 'candidato'
@@ -689,6 +715,7 @@ export async function downloadCVZipPackage(params: {
   persona?: string
   theme?: ThemeVariant
   layout?: LayoutVariant
+  designConfig?: CVDesignConfig
 }): Promise<void> {
   try {
     const parsed = parseYamlToCV(params.yaml)
@@ -696,15 +723,15 @@ export async function downloadCVZipPackage(params: {
     const baseName = `dossie-${cleanName}`
 
     const cvHtml = parsed.data
-      ? renderCVToStandaloneHtml(parsed.data, params.theme || 'executive', params.yaml, params.layout || 'modular', 'cv')
+      ? renderCVToStandaloneHtml(parsed.data, params.theme || 'executive', params.yaml, params.layout || 'modular', 'cv', params.designConfig)
       : ''
 
     const coverHtml = parsed.data
-      ? renderCVToStandaloneHtml(parsed.data, params.theme || 'executive', params.yaml, params.layout || 'modular', 'cover_letter')
+      ? renderCVToStandaloneHtml(parsed.data, params.theme || 'executive', params.yaml, params.layout || 'modular', 'cover_letter', params.designConfig)
       : ''
 
     const dossierHtml = parsed.data
-      ? renderCVToStandaloneHtml(parsed.data, params.theme || 'executive', params.yaml, params.layout || 'modular', 'both')
+      ? renderCVToStandaloneHtml(parsed.data, params.theme || 'executive', params.yaml, params.layout || 'modular', 'both', params.designConfig)
       : ''
 
     const zip = new JSZip()

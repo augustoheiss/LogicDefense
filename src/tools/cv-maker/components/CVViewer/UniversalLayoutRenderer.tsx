@@ -39,8 +39,8 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
     '--cv-avatar-pos-y': `${basics.imagePosY ?? 50}%`,
     '--cv-avatar-scale': `${basics.imageScale ?? 1.0}`,
     ...(designConfig ? {
-      '--cv-font-heading': `'${designConfig.fontHeading}', sans-serif`,
-      '--cv-font-body': `'${designConfig.fontBody}', sans-serif`,
+      '--cv-font-heading': `${designConfig.fontHeading}, sans-serif`,
+      '--cv-font-body': `${designConfig.fontBody}, sans-serif`,
       '--cv-font-scale': `${designConfig.fontScale}`,
       '--cv-font-size-base': designConfig.fontSizeBase,
       '--cv-color-primary': designConfig.colorPrimary,

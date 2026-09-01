@@ -130,6 +130,14 @@ I18N = {
         "opt_minimalist": "🔹 Minimalista",
         "opt_white": "📄 White",
         "opt_terminal": ">_ Terminal",
+        "design_btn": "🎨 Design & Estilo",
+        "design_modal_title": "🎨 Personalizar Design & Estilo",
+        "design_font_pair": "Tipografia & Fontes",
+        "design_font_scale": "Escala de Fonte",
+        "design_colors": "Paleta de Cores",
+        "design_background": "Textura de Fundo (IA)",
+        "design_reset": "Restaurar Padrão",
+        "design_close": "Concluir",
     },
     "en": {
         "print_btn": "🖨️ Print / Save as PDF",
@@ -167,6 +175,14 @@ I18N = {
         "opt_minimalist": "🔹 Minimalist",
         "opt_white": "📄 White",
         "opt_terminal": ">_ Terminal",
+        "design_btn": "🎨 Design & Style",
+        "design_modal_title": "🎨 Customize Design & Style",
+        "design_font_pair": "Typography & Fonts",
+        "design_font_scale": "Font Scale",
+        "design_colors": "Color Palette",
+        "design_background": "Background Texture (AI)",
+        "design_reset": "Reset to Default",
+        "design_close": "Done",
     },
     "es": {
         "print_btn": "🖨️ Imprimir / Guardar PDF",
@@ -204,6 +220,14 @@ I18N = {
         "opt_minimalist": "🔹 Minimalista",
         "opt_white": "📄 White",
         "opt_terminal": ">_ Terminal",
+        "design_btn": "🎨 Diseño y Estilo",
+        "design_modal_title": "🎨 Personalizar Diseño y Estilo",
+        "design_font_pair": "Tipografía y Fuentes",
+        "design_font_scale": "Escala de Fuente",
+        "design_colors": "Paleta de Colores",
+        "design_background": "Textura de Fondo (IA)",
+        "design_reset": "Restaurar Predeterminado",
+        "design_close": "Listo",
     },
 }
 
@@ -982,7 +1006,22 @@ def render_multi_cv_dashboard_html(
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&family=Inter:wght@400;500;600;700;800&family=Merriweather:wght@300;400;700&family=Poppins:wght@400;600;700;800&family=Cinzel:wght@600;800&family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700;800;900&family=Courier+Prime:ital,wght@0,400;0,700;1,400&family=Fira+Code:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700;800&family=Lora:ital,wght@0,400;0,600;0,700;1,400&family=Merriweather:ital,wght@0,300;0,400;0,700;0,900;1,400&family=Montserrat:wght@400;500;600;700;800&family=Open+Sans:ital,wght@0,300;0,400;0,600;0,700;1,400&family=Outfit:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&family=Poppins:wght@300;400;500;600;700;800&family=Roboto:ital,wght@0,300;0,400;0,500;0,700;1,400&display=swap');
+
+    :root {{
+      --cv-font-heading: 'Plus Jakarta Sans', sans-serif;
+      --cv-font-body: 'Inter', sans-serif;
+      --cv-font-scale: 1.0;
+      --cv-color-primary: #0284c7;
+      --cv-color-secondary: #0369a1;
+      --cv-color-text: #0f172a;
+      --cv-color-text-muted: #64748b;
+      --cv-color-bg: #ffffff;
+      --cv-color-surface: #f8fafc;
+      --cv-color-border: #e2e8f0;
+      --cv-color-accent: #f97316;
+      --cv-bg-image: none;
+    }}
 
     * {{ box-sizing: border-box; margin: 0; padding: 0; }}
 
@@ -1072,12 +1111,17 @@ def render_multi_cv_dashboard_html(
     .container {{
       max-width: 880px;
       margin: 0 auto;
-      background: #ffffff;
+      background-color: var(--cv-color-bg, #ffffff);
+      background-image: var(--cv-bg-image, none);
+      background-size: cover;
+      background-position: center;
       padding: 2.5rem 3rem;
       border-radius: 12px;
       box-shadow: 0 12px 40px rgba(0,0,0,0.2);
       transition: all 0.2s ease;
       min-height: 297mm;
+      font-family: var(--cv-font-body, 'Inter', sans-serif);
+      color: var(--cv-color-text, #0f172a);
     }}
 
     /* ── Avatar Profile & Photo Styling ── */
@@ -1243,31 +1287,39 @@ def render_multi_cv_dashboard_html(
       gap: 1.5rem;
     }}
     .name {{
-      font-size: 1.8rem;
+      font-family: var(--cv-font-heading, 'Plus Jakarta Sans', sans-serif) !important;
+      color: var(--cv-color-primary, #0284c7) !important;
+      font-size: calc(1.85rem * var(--cv-font-scale, 1.0)) !important;
       font-weight: 800;
       line-height: 1.15;
       margin-bottom: 0.25rem;
     }}
     .label {{
-      font-size: 0.95rem;
+      font-family: var(--cv-font-body, 'Inter', sans-serif) !important;
+      color: var(--cv-color-secondary, #0369a1) !important;
+      font-size: calc(0.95rem * var(--cv-font-scale, 1.0)) !important;
       font-weight: 600;
       line-height: 1.35;
     }}
     .contacts {{
-      font-size: 0.8rem;
+      font-size: calc(0.8rem * var(--cv-font-scale, 1.0)) !important;
       line-height: 1.5;
       text-align: right;
       flex-shrink: 0;
     }}
     .summary {{
-      font-size: 0.88rem;
-      line-height: 1.6;
+      font-family: var(--cv-font-body, 'Inter', sans-serif) !important;
+      color: var(--cv-color-text, #0f172a) !important;
+      font-size: calc(0.86rem * var(--cv-font-scale, 1.0)) !important;
+      line-height: calc(1.55 * var(--cv-font-scale, 1.0)) !important;
       text-align: justify;
       margin-bottom: 1.25rem;
     }}
 
-    .section-title {{
-      font-size: 0.95rem;
+    .section-title, .cv-math-section-title {{
+      font-family: var(--cv-font-heading, 'Plus Jakarta Sans', sans-serif) !important;
+      color: var(--cv-color-primary, #0284c7) !important;
+      font-size: calc(0.98rem * var(--cv-font-scale, 1.0)) !important;
       font-weight: 800;
       letter-spacing: 0.04em;
       text-transform: uppercase;
@@ -1277,34 +1329,41 @@ def render_multi_cv_dashboard_html(
       display: flex;
       align-items: center;
       gap: 0.4rem;
+      border-bottom: 1.5px solid var(--cv-color-border, #e2e8f0);
     }}
 
-    .card {{
-      margin-bottom: 0.9rem;
+    .item {{
+      margin-bottom: 1rem;
     }}
     .item-header {{
       display: flex;
       justify-content: space-between;
       align-items: baseline;
-      font-weight: 700;
-      font-size: 0.92rem;
-      margin-bottom: 0.15rem;
+      gap: 0.75rem;
     }}
-    .item-title {{ font-weight: 700; }}
+    .item-title {{
+      font-family: var(--cv-font-heading, 'Plus Jakarta Sans', sans-serif) !important;
+      color: var(--cv-color-text, #0f172a) !important;
+      font-size: calc(0.92rem * var(--cv-font-scale, 1.0)) !important;
+      font-weight: 700;
+    }}
     .item-date {{
-      font-size: 0.78rem;
-      font-weight: 600;
-      opacity: 0.85;
+      font-size: calc(0.78rem * var(--cv-font-scale, 1.0)) !important;
+      color: var(--cv-color-text-muted, #64748b) !important;
       white-space: nowrap;
+      flex-shrink: 0;
     }}
     .item-sub {{
-      font-size: 0.82rem;
+      color: var(--cv-color-secondary, #0369a1) !important;
+      font-size: calc(0.84rem * var(--cv-font-scale, 1.0)) !important;
       font-weight: 600;
       margin-bottom: 0.3rem;
     }}
     .item-desc {{
-      font-size: 0.82rem;
-      line-height: 1.5;
+      font-family: var(--cv-font-body, 'Inter', sans-serif) !important;
+      color: var(--cv-color-text, #0f172a) !important;
+      font-size: calc(0.84rem * var(--cv-font-scale, 1.0)) !important;
+      line-height: calc(1.5 * var(--cv-font-scale, 1.0)) !important;
       margin-bottom: 0.35rem;
       text-align: justify;
     }}
@@ -1870,6 +1929,7 @@ def render_multi_cv_dashboard_html(
       </select>
     </div>
 
+    <button onclick="openDesignModal()" class="btn-sec" title="{t['design_btn']}">{t["design_btn"]}</button>
     <button onclick="openPhotoModal()" class="btn-sec" title="{t['photo_btn']}">{t["photo_btn"]}</button>
     <button onclick="printCV()">{t["print_btn"]}</button>
     <button onclick="downloadActiveYaml()" class="btn-sec">{t["download_yaml"]}</button>
@@ -1880,6 +1940,121 @@ def render_multi_cv_dashboard_html(
   <!-- Main Viewport Container -->
   <div id="cv-viewport" class="container theme-{valid_theme}">
     {panels_html}
+  </div>
+
+  <!-- Design & Estilo Customizer Modal -->
+  <div id="design-modal" class="cv-modal-backdrop" onclick="closeDesignModal(event)">
+    <div class="cv-modal-card" style="max-width: 540px; max-height: 85vh; overflow-y: auto;" onclick="event.stopPropagation()">
+      <div class="cv-modal-header">
+        <h3>{t['design_modal_title']}</h3>
+        <button class="cv-modal-close" onclick="closeDesignModal()">✕</button>
+      </div>
+      <div class="cv-modal-body">
+        <!-- 1. Font Presets -->
+        <div>
+          <div style="font-size: 0.85rem; font-weight: 700; color: #38bdf8; margin-bottom: 0.5rem;">{t['design_font_pair']}</div>
+          <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.4rem;">
+            <button class="modal-btn modal-btn-sec" style="text-align: left; padding: 0.4rem 0.6rem;" onclick="applyFontPreset('Plus Jakarta Sans', 'Inter')">
+              <div style="font-weight: 700; font-family: 'Plus Jakarta Sans', sans-serif;">Modern Clean</div>
+              <div style="font-size: 0.72rem; opacity: 0.75;">Plus Jakarta + Inter</div>
+            </button>
+            <button class="modal-btn modal-btn-sec" style="text-align: left; padding: 0.4rem 0.6rem;" onclick="applyFontPreset('Merriweather', 'Lora')">
+              <div style="font-weight: 700; font-family: 'Merriweather', serif;">Executive Serif</div>
+              <div style="font-size: 0.72rem; opacity: 0.75;">Merriweather + Lora</div>
+            </button>
+            <button class="modal-btn modal-btn-sec" style="text-align: left; padding: 0.4rem 0.6rem;" onclick="applyFontPreset('Cinzel', 'Montserrat')">
+              <div style="font-weight: 700; font-family: 'Cinzel', serif;">Editorial High-End</div>
+              <div style="font-size: 0.72rem; opacity: 0.75;">Cinzel + Montserrat</div>
+            </button>
+            <button class="modal-btn modal-btn-sec" style="text-align: left; padding: 0.4rem 0.6rem;" onclick="applyFontPreset('Roboto', 'Open Sans')">
+              <div style="font-weight: 700; font-family: 'Roboto', sans-serif;">Tech Minimalist</div>
+              <div style="font-size: 0.72rem; opacity: 0.75;">Roboto + Open Sans</div>
+            </button>
+            <button class="modal-btn modal-btn-sec" style="text-align: left; padding: 0.4rem 0.6rem;" onclick="applyFontPreset('Poppins', 'Inter')">
+              <div style="font-weight: 700; font-family: 'Poppins', sans-serif;">Creative Geometric</div>
+              <div style="font-size: 0.72rem; opacity: 0.75;">Poppins + Inter</div>
+            </button>
+            <button class="modal-btn modal-btn-sec" style="text-align: left; padding: 0.4rem 0.6rem;" onclick="applyFontPreset('Courier Prime', 'Courier Prime')">
+              <div style="font-weight: 700; font-family: 'Courier Prime', monospace;">Terminal Code</div>
+              <div style="font-size: 0.72rem; opacity: 0.75;">Courier Prime Monospace</div>
+            </button>
+          </div>
+        </div>
+
+        <!-- 2. Font Scale Slider -->
+        <div style="margin-top: 0.5rem;">
+          <div style="display: flex; justify-content: space-between; font-size: 0.85rem; font-weight: 700; color: #38bdf8; margin-bottom: 0.35rem;">
+            <span>{t['design_font_scale']}</span>
+            <span id="font-scale-val">1.00x</span>
+          </div>
+          <input id="font-scale-slider" type="range" min="0.85" max="1.20" step="0.05" value="1.0" style="width: 100%; cursor: pointer;" oninput="applyFontScale(this.value)" />
+        </div>
+
+        <!-- 3. Color Palettes -->
+        <div style="margin-top: 0.5rem;">
+          <div style="font-size: 0.85rem; font-weight: 700; color: #38bdf8; margin-bottom: 0.5rem;">{t['design_colors']}</div>
+          <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.4rem;">
+            <button class="modal-btn modal-btn-sec" style="display: flex; align-items: center; gap: 0.4rem; padding: 0.4rem;" onclick="applyColorPreset('#0284c7', '#0369a1', '#f97316', '#f8fafc', '#ffffff', '#0f172a')">
+              <span style="width: 14px; height: 14px; border-radius: 50%; background: #0284c7; display: inline-block;"></span>
+              <span style="font-size: 0.75rem;">Executive Navy</span>
+            </button>
+            <button class="modal-btn modal-btn-sec" style="display: flex; align-items: center; gap: 0.4rem; padding: 0.4rem;" onclick="applyColorPreset('#4f46e5', '#6366f1', '#ec4899', '#eef2ff', '#ffffff', '#1e1b4b')">
+              <span style="width: 14px; height: 14px; border-radius: 50%; background: #4f46e5; display: inline-block;"></span>
+              <span style="font-size: 0.75rem;">Criativo Indigo</span>
+            </button>
+            <button class="modal-btn modal-btn-sec" style="display: flex; align-items: center; gap: 0.4rem; padding: 0.4rem;" onclick="applyColorPreset('#059669', '#10b981', '#065f46', '#ecfdf5', '#ffffff', '#064e3b')">
+              <span style="width: 14px; height: 14px; border-radius: 50%; background: #059669; display: inline-block;"></span>
+              <span style="font-size: 0.75rem;">Emerald Tech</span>
+            </button>
+            <button class="modal-btn modal-btn-sec" style="display: flex; align-items: center; gap: 0.4rem; padding: 0.4rem;" onclick="applyColorPreset('#b45309', '#d97706', '#78350f', '#fffbeb', '#ffffff', '#1c1917')">
+              <span style="width: 14px; height: 14px; border-radius: 50%; background: #b45309; display: inline-block;"></span>
+              <span style="font-size: 0.75rem;">Amber Editorial</span>
+            </button>
+            <button class="modal-btn modal-btn-sec" style="display: flex; align-items: center; gap: 0.4rem; padding: 0.4rem;" onclick="applyColorPreset('#334155', '#475569', '#0284c7', '#f1f5f9', '#ffffff', '#0f172a')">
+              <span style="width: 14px; height: 14px; border-radius: 50%; background: #334155; display: inline-block;"></span>
+              <span style="font-size: 0.75rem;">Slate Minimal</span>
+            </button>
+            <button class="modal-btn modal-btn-sec" style="display: flex; align-items: center; gap: 0.4rem; padding: 0.4rem;" onclick="applyColorPreset('#9f1239', '#881337', '#e11d48', '#fff1f2', '#ffffff', '#1c1917')">
+              <span style="width: 14px; height: 14px; border-radius: 50%; background: #9f1239; display: inline-block;"></span>
+              <span style="font-size: 0.75rem;">Burgundy</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- 4. Backgrounds -->
+        <div style="margin-top: 0.5rem;">
+          <div style="font-size: 0.85rem; font-weight: 700; color: #38bdf8; margin-bottom: 0.5rem;">{t['design_background']}</div>
+          <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.4rem;">
+            <button class="modal-btn modal-btn-sec" style="padding: 0.4rem; font-size: 0.75rem;" onclick="applyBgPattern('none')">
+              Branco ATS
+            </button>
+            <button class="modal-btn modal-btn-sec" style="padding: 0.4rem; font-size: 0.75rem;" onclick="applyBgPattern('/cv-backgrounds/Minimalist_luxury_resume_stationery_bac_202608312017.jpeg')">
+              Luxury Gold
+            </button>
+            <button class="modal-btn modal-btn-sec" style="padding: 0.4rem; font-size: 0.75rem;" onclick="applyBgPattern('/cv-backgrounds/Abstract_corporate_A4_background._202608312017.jpeg')">
+              Corporate Blue
+            </button>
+            <button class="modal-btn modal-btn-sec" style="padding: 0.4rem; font-size: 0.75rem;" onclick="applyBgPattern('/cv-backgrounds/Engineering_resume_background_grid_202608312017.jpeg')">
+              Blueprint Grid
+            </button>
+            <button class="modal-btn modal-btn-sec" style="padding: 0.4rem; font-size: 0.75rem;" onclick="applyBgPattern('/cv-backgrounds/Geometric_line_art_resume_statio._202608312017.jpeg')">
+              Geometric Line
+            </button>
+            <button class="modal-btn modal-btn-sec" style="padding: 0.4rem; font-size: 0.75rem;" onclick="applyBgPattern('/cv-backgrounds/Corporate_background_with_curved._202608312017.jpeg')">
+              Curved Wave
+            </button>
+          </div>
+        </div>
+      </div>
+      <div class="cv-modal-footer">
+        <button class="modal-btn modal-btn-sec" onclick="resetDesign()">
+          {t['design_reset']}
+        </button>
+        <button class="modal-btn modal-btn-pri" onclick="closeDesignModal()">
+          {t['design_close']}
+        </button>
+      </div>
+    </div>
   </div>
 
   <!-- Photo Uploader Modal -->
@@ -2733,6 +2908,100 @@ def render_multi_cv_dashboard_html(
       }});
     }}
 
+    let currentDesign = {{
+      fontHeading: 'Plus Jakarta Sans',
+      fontBody: 'Inter',
+      fontScale: 1.0,
+      colorPrimary: '#0284c7',
+      colorSecondary: '#0369a1',
+      colorAccent: '#f97316',
+      colorSurface: '#f8fafc',
+      colorBg: '#ffffff',
+      colorText: '#0f172a',
+      backgroundPattern: 'none'
+    }};
+
+    function openDesignModal() {{
+      const modal = document.getElementById('design-modal');
+      if (modal) modal.classList.add('active');
+    }}
+
+    function closeDesignModal(event) {{
+      if (event && event.target !== event.currentTarget) return;
+      const modal = document.getElementById('design-modal');
+      if (modal) modal.classList.remove('active');
+    }}
+
+    function applyFontPreset(heading, body) {{
+      currentDesign.fontHeading = heading;
+      currentDesign.fontBody = body;
+      saveAndApplyDesign();
+    }}
+
+    function applyFontScale(val) {{
+      const num = parseFloat(val) || 1.0;
+      currentDesign.fontScale = num;
+      const lbl = document.getElementById('font-scale-val');
+      if (lbl) lbl.innerText = num.toFixed(2) + 'x';
+      saveAndApplyDesign();
+    }}
+
+    function applyColorPreset(primary, secondary, accent, surface, bg, text) {{
+      currentDesign.colorPrimary = primary;
+      currentDesign.colorSecondary = secondary;
+      currentDesign.colorAccent = accent;
+      currentDesign.colorSurface = surface;
+      currentDesign.colorBg = bg;
+      currentDesign.colorText = text;
+      saveAndApplyDesign();
+    }}
+
+    function applyBgPattern(url) {{
+      currentDesign.backgroundPattern = url;
+      saveAndApplyDesign();
+    }}
+
+    function resetDesign() {{
+      currentDesign = {{
+        fontHeading: 'Plus Jakarta Sans',
+        fontBody: 'Inter',
+        fontScale: 1.0,
+        colorPrimary: '#0284c7',
+        colorSecondary: '#0369a1',
+        colorAccent: '#f97316',
+        colorSurface: '#f8fafc',
+        colorBg: '#ffffff',
+        colorText: '#0f172a',
+        backgroundPattern: 'none'
+      }};
+      localStorage.removeItem('cv_design_config');
+      applyDesignToViewport();
+      const slider = document.getElementById('font-scale-slider');
+      if (slider) slider.value = '1.0';
+      const lbl = document.getElementById('font-scale-val');
+      if (lbl) lbl.innerText = '1.00x';
+    }}
+
+    function saveAndApplyDesign() {{
+      localStorage.setItem('cv_design_config', JSON.stringify(currentDesign));
+      applyDesignToViewport();
+    }}
+
+    function applyDesignToViewport() {{
+      const vp = document.getElementById('cv-viewport');
+      if (!vp) return;
+      vp.style.setProperty('--cv-font-heading', '"' + currentDesign.fontHeading + '", sans-serif');
+      vp.style.setProperty('--cv-font-body', '"' + currentDesign.fontBody + '", sans-serif');
+      vp.style.setProperty('--cv-font-scale', currentDesign.fontScale);
+      vp.style.setProperty('--cv-color-primary', currentDesign.colorPrimary);
+      vp.style.setProperty('--cv-color-secondary', currentDesign.colorSecondary);
+      vp.style.setProperty('--cv-color-accent', currentDesign.colorAccent);
+      vp.style.setProperty('--cv-color-surface', currentDesign.colorSurface);
+      vp.style.setProperty('--cv-color-bg', currentDesign.colorBg);
+      vp.style.setProperty('--cv-color-text', currentDesign.colorText);
+      vp.style.setProperty('--cv-bg-image', currentDesign.backgroundPattern && currentDesign.backgroundPattern !== 'none' ? 'url("' + currentDesign.backgroundPattern + '")' : 'none');
+    }}
+
     // Auto-restore saved preferences
     (function() {{
       const savedTheme = localStorage.getItem('cv_standalone_theme') || '{valid_theme}';
@@ -2740,6 +3009,18 @@ def render_multi_cv_dashboard_html(
       const savedLayout = localStorage.getItem('cv_standalone_layout') || '{valid_layout}';
       const savedViewMode = localStorage.getItem('cv_standalone_viewmode') || '{view_mode}';
       const savedPhoto = localStorage.getItem('cv_user_photo');
+      const savedDesign = localStorage.getItem('cv_design_config');
+
+      if (savedDesign) {{
+        try {{
+          currentDesign = Object.assign(currentDesign, JSON.parse(savedDesign));
+          const slider = document.getElementById('font-scale-slider');
+          if (slider) slider.value = currentDesign.fontScale;
+          const lbl = document.getElementById('font-scale-val');
+          if (lbl) lbl.innerText = Number(currentDesign.fontScale).toFixed(2) + 'x';
+        }} catch(e) {{}}
+      }}
+      applyDesignToViewport();
 
       const pSel = document.getElementById('persona-switcher');
       if (pSel && pSel.querySelector('option[value="' + savedPersona + '"]')) {{

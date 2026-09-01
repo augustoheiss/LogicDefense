@@ -325,6 +325,7 @@ export const CVMakerApp: React.FC = () => {
       theme: activeTheme,
       layout: activeLayout,
       viewMode: activeViewMode,
+      designConfig,
     })
   }
 
@@ -335,6 +336,7 @@ export const CVMakerApp: React.FC = () => {
       name: cvData?.basics?.name || 'candidato',
       theme: activeTheme,
       layout: activeLayout,
+      designConfig,
     })
   }
 
@@ -346,6 +348,7 @@ export const CVMakerApp: React.FC = () => {
       persona: activePersona,
       theme: activeTheme,
       layout: activeLayout,
+      designConfig,
     })
   }
 
