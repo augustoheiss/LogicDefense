@@ -125,7 +125,8 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ isOpen, onClose, onKey
                       didactic: { type: 'string', description: 'YAML do arquétipo Didático / Learning Velocity' },
                       alien: { type: 'string', description: 'YAML do arquétipo Observador Extraterrestre' },
                       default_theme: { type: 'string', enum: ['executive', 'creative', 'minimalist', 'white', 'terminal'], default: 'executive' },
-                      default_layout: { type: 'string', enum: ['modular', 'linear', 'sidebar', 'compact_split', 'editorial_accent', 'corporate_timeline', 'warm_magazine', 'hero_matrix', 'dynamic_math'], default: 'dynamic_math' },
+                      default_layout: { type: 'string', enum: ['modular', 'linear', 'sidebar', 'compact_split', 'editorial_accent', 'corporate_timeline', 'warm_magazine', 'hero_matrix', 'dynamic_math', 'canvas_livre'], default: 'dynamic_math' },
+                      texture: { type: 'string', enum: ['none', 'bg-grid-tech', 'bg-luxury-minimal', 'bg-geometric-line', 'bg-corporate-waves', 'bg-stationery-clean', 'bg-technical-blueprint'], default: 'none', description: 'Textura de fundo IA da folha A4' },
                       format: { type: 'string', enum: ['html', 'zip', 'json'], default: 'html' },
                       filename: { type: 'string', default: 'curriculos_5_versoes' },
                     },
@@ -141,7 +142,7 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ isOpen, onClose, onKey
         '/api/v1/cv/render': {
           post: {
             summary: 'Renderiza 1 YAML em HTML Standalone de Alta Fidelidade',
-            description: 'Converte um esquema YAML para HTML puro com estilos embutidos, suporte a avatar/framing, escolha de Layout A4 01 a 09 e impressão A4 perfeita.',
+            description: 'Converte um esquema YAML para HTML puro com estilos embutidos, suporte a avatar/framing, escolha de Layout A4 01 a 10 (incluindo Canvas Livre), texturas IA e impressão A4 perfeita.',
             requestBody: {
               required: true,
               content: {
@@ -151,7 +152,8 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ isOpen, onClose, onKey
                     properties: {
                       yaml_content: { type: 'string', description: 'YAML do currículo' },
                       theme: { type: 'string', enum: ['executive', 'creative', 'minimalist', 'white', 'terminal'], default: 'executive' },
-                      layout: { type: 'string', enum: ['modular', 'linear', 'sidebar', 'compact_split', 'editorial_accent', 'corporate_timeline', 'warm_magazine', 'hero_matrix', 'dynamic_math'], default: 'dynamic_math' },
+                      layout: { type: 'string', enum: ['modular', 'linear', 'sidebar', 'compact_split', 'editorial_accent', 'corporate_timeline', 'warm_magazine', 'hero_matrix', 'dynamic_math', 'canvas_livre'], default: 'dynamic_math' },
+                      texture: { type: 'string', enum: ['none', 'bg-grid-tech', 'bg-luxury-minimal', 'bg-geometric-line', 'bg-corporate-waves', 'bg-stationery-clean', 'bg-technical-blueprint'], default: 'none', description: 'Textura de fundo IA da folha A4' },
                       view_mode: { type: 'string', enum: ['cv', 'cover_letter', 'both'], default: 'cv' },
                       format: { type: 'string', enum: ['html', 'yaml', 'zip', 'json'], default: 'html' },
                       filename: { type: 'string', default: 'curriculo' },
@@ -165,16 +167,16 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ isOpen, onClose, onKey
         },
         '/api/v1/cv/layouts': {
           get: {
-            summary: 'Retorna o catálogo dos 9 modelos A4 declarativos',
-            description: 'Lista todos os Blueprints disponíveis com metadados de layout, colunas e suporte a foto/cover letter.',
+            summary: 'Retorna o catálogo dos 10 modelos A4 declarativos (incluindo Canvas Livre)',
+            description: 'Lista todos os 10 Blueprints disponíveis com metadados de layout, colunas e suporte a foto/cover letter.',
             responses: { '200': { description: 'Catálogo de layouts em JSON' } },
           },
         },
         '/api/v1/cv/themes': {
           get: {
-            summary: 'Retorna a lista de temas visuais e paletas',
-            description: 'Lista os 5 temas de design disponíveis no motor de renderização.',
-            responses: { '200': { description: 'Lista de temas em JSON' } },
+            summary: 'Retorna a lista de temas visuais, paletas e texturas de fundo IA',
+            description: 'Lista os 5 temas de design e 7 texturas gráficas disponíveis no motor de renderização.',
+            responses: { '200': { description: 'Lista de temas e texturas em JSON' } },
           },
         },
         '/api/v1/cv/prompts': {
@@ -358,10 +360,10 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ isOpen, onClose, onKey
                   Você <strong>não precisa criar conta no Google AI Studio nem adicionar cartão de crédito</strong>. O seu próprio Agente de IA (Claude Code, Antigravity, Cursor, ChatGPT) gera os 5 arquétipos YAML diretamente no seu ambiente. A API do LogicDefense é usada de forma ultra-rápida e gratuita apenas para compilar o Super Dashboard HTML Standalone e os arquivos ZIP:
                 </p>
                 <ul style={{ margin: '0.4rem 0 0 1.2rem', padding: 0 }}>
-                  <li><strong>POST /api/v1/cv/compile</strong>: Compila os 5 YAMLs no Super Dashboard HTML / ZIP com Design & Estilo, enquadramento de fotos, 5 temas, 9 modelos A4 e impressão nativa.</li>
-                  <li><strong>POST /api/v1/cv/render</strong>: Converte qualquer YAML único em HTML puro no modelo A4 desejado (<code>modular</code>, <code>linear</code>, <code>sidebar</code>, <code>compact_split</code>, <code>editorial_accent</code>, <code>corporate_timeline</code>, <code>warm_magazine</code>, <code>hero_matrix</code>, <code>dynamic_math</code>).</li>
-                  <li><strong>GET /api/v1/cv/layouts</strong>: Retorna o catálogo dos 9 layouts declarativos A4 e suas especificações de grid.</li>
-                  <li><strong>GET /api/v1/cv/themes</strong>: Retorna os 5 temas visuais (executive, creative, minimalist, white, terminal).</li>
+                  <li><strong>POST /api/v1/cv/compile</strong>: Compila os 5 YAMLs no Super Dashboard HTML / ZIP com Design & Estilo, enquadramento de fotos, 5 temas, 10 modelos A4 (incluindo Canvas Livre), 7 texturas IA e impressão nativa.</li>
+                  <li><strong>POST /api/v1/cv/render</strong>: Converte qualquer YAML único em HTML puro no modelo A4 desejado (<code>modular</code>, <code>linear</code>, <code>sidebar</code>, <code>compact_split</code>, <code>editorial_accent</code>, <code>corporate_timeline</code>, <code>warm_magazine</code>, <code>hero_matrix</code>, <code>dynamic_math</code>, <code>canvas_livre</code>) e textura opcional (<code>bg-grid-tech</code>, <code>bg-luxury-minimal</code>, etc.).</li>
+                  <li><strong>GET /api/v1/cv/layouts</strong>: Retorna o catálogo dos 10 layouts declarativos A4 e suas especificações de grid.</li>
+                  <li><strong>GET /api/v1/cv/themes</strong>: Retorna os 5 temas visuais e as 7 texturas de fundo IA.</li>
                   <li><strong>GET /api/v1/cv/prompts</strong>: Retorna as diretrizes das 5 personas prontas para o Agente executar.</li>
                   <li><strong>POST /api/v1/cv/tailor</strong>: Alfaiataria ATS automática contra uma Job Description sem fabricação de dados.</li>
                   <li><strong>POST /api/v1/cv/generate-cover-letter</strong>: Gerador dedicado de Carta de Apresentação com IA preservando o currículo intacto.</li>
@@ -374,10 +376,11 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ isOpen, onClose, onKey
 {`Você é um especialista em engenharia de currículos de alta fidelidade (CV Maker 2.0).
 Siga OBRIGATORIAMENTE este fluxo em 3 etapas para criar e compilar os currículos:
 
-PASSO 1: (DIRETRIZES OFICIAIS & MODELOS A4)
+PASSO 1: (DIRETRIZES OFICIAIS, MODELOS A4 & TEXTURAS IA)
 Consulte as regras de schema e System Prompts das 5 personas fazendo uma requisição HTTP GET:
 -> GET https://ocorrencias-pdf-writer.onrender.com/api/v1/cv/prompts
 -> GET https://ocorrencias-pdf-writer.onrender.com/api/v1/cv/layouts
+-> GET https://ocorrencias-pdf-writer.onrender.com/api/v1/cv/themes
 
 PASSO 2: (GERAÇÃO DOS 5 ARQUÉTIPOS EM YAML)
 Com base nas diretrizes recebidas no Passo 1, gere os 5 arquivos YAML no formato JSON Resume:
@@ -397,10 +400,11 @@ Envie os 5 YAMLs gerados para compilação instantânea no servidor:
     "historian": "...", 
     "didactic": "...", 
     "alien": "...",
-    "default_layout": "dynamic_math",
+    "default_layout": "canvas_livre",
+    "texture": "bg-grid-tech",
     "default_theme": "executive"
   }
-- Salve o arquivo HTML retornado e abra no navegador para alternar entre os 9 Modelos A4, 5 temas, editar fotos/cores e imprimir em PDF A4!`}
+- Salve o arquivo HTML retornado e abra no navegador para alternar entre os 10 Modelos A4, 5 temas, 7 texturas IA, editar fotos/cores e imprimir em PDF A4!`}
                 </pre>
               </div>
 
