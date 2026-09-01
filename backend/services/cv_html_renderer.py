@@ -287,14 +287,27 @@ def _render_cover_letter_html(data: dict, t: dict) -> str:
     loc_str = html.escape(f"{city} - {region}" if city and region else (city or region or ""))
 
     cover_letter = data.get("coverLetter") or {}
-    recipient = html.escape(cover_letter.get("recipient", "Prezada Equipe de Recrutamento"))
-    company = html.escape(cover_letter.get("company", "Empresa Contratante"))
-    subject = html.escape(cover_letter.get("subject", f"Candidatura à Oportunidade em {label or 'Tecnologia'}"))
-    date_val = html.escape(cover_letter.get("date", "São Paulo, SP"))
-    body = cover_letter.get("body", "")
+    raw_recipient = cover_letter.get("recipient", "Prezada Equipe de Recrutamento")
+    if isinstance(raw_recipient, dict):
+        rec_name = raw_recipient.get("name") or "Prezada Equipe"
+        rec_title = raw_recipient.get("title") or ""
+        rec_comp = raw_recipient.get("company") or cover_letter.get("company", "Empresa Contratante")
+        recipient = html.escape(f"{rec_name} ({rec_title})" if rec_title else rec_name)
+        company = html.escape(str(rec_comp))
+    else:
+        recipient = html.escape(str(raw_recipient))
+        company = html.escape(str(cover_letter.get("company", "Empresa Contratante")))
 
-    if not body:
-        body = f"""Gostaria de apresentar minha candidatura à oportunidade em sua organização. Com sólida trajetória técnica e de liderança em engenharia de software e inteligência artificial, tenho dedicado minha carreira ao desenvolvimento de sistemas escaláveis, seguros e de alta performance.
+    subject = html.escape(str(cover_letter.get("subject", f"Candidatura à Oportunidade em {label or 'Tecnologia'}")))
+    date_val = html.escape(str(cover_letter.get("date", "São Paulo, SP")))
+    
+    raw_paragraphs = cover_letter.get("paragraphs")
+    if isinstance(raw_paragraphs, list) and raw_paragraphs:
+        body_paragraphs = [html.escape(str(p)).strip() for p in raw_paragraphs if str(p).strip()]
+    else:
+        body = cover_letter.get("body", "")
+        if not body:
+            body = f"""Gostaria de apresentar minha candidatura à oportunidade em sua organização. Com sólida trajetória técnica e de liderança em engenharia de software e inteligência artificial, tenho dedicado minha carreira ao desenvolvimento de sistemas escaláveis, seguros e de alta performance.
 
 Ao longo da minha jornada, liderei a concepção de arquiteturas críticas, automações inteligentes e microsserviços de alto throughput, sempre com rigoroso foco em governança, código limpo e impacto mensurável de negócios.
 
@@ -302,8 +315,8 @@ Estou entusiasmado com a possibilidade de agregar essa experiência aos objetivo
 
 Atenciosamente,
 {name}"""
+        body_paragraphs = [html.escape(p).strip() for p in str(body).split("\n\n") if p.strip()]
 
-    body_paragraphs = [html.escape(p).strip() for p in str(body).split("\n\n") if p.strip()]
     body_html = "".join(f"<p style='margin-bottom: 1.15rem; line-height: 1.65; text-align: justify;'>{p.replace(chr(10), '<br>')}</p>" for p in body_paragraphs)
 
     return f"""
