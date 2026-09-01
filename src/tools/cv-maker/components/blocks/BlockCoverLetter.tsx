@@ -33,7 +33,14 @@ export const BlockCoverLetter: React.FC<BlockCoverLetterProps> = ({
   onRequestGenerate
 }) => {
   const letter = coverLetter || DEFAULT_SAMPLE_COVER_LETTER
-  const { recipient, date, subject, salutation, paragraphs, closing, signature, signatureImage } = letter
+  const { date, subject, salutation, closing, signature, signatureImage } = letter
+  const rawRecipient = letter.recipient
+  const recipient = typeof rawRecipient === 'string'
+    ? { name: rawRecipient, company: letter.company }
+    : (rawRecipient ? { ...rawRecipient, company: rawRecipient.company || letter.company } : undefined)
+  const paragraphs = letter.paragraphs && letter.paragraphs.length > 0
+    ? letter.paragraphs
+    : (letter.body ? letter.body.split('\n\n').map(p => p.trim()).filter(Boolean) : [])
 
   return (
     <article className="cv-cover-letter-body cv-section-cover_letter">

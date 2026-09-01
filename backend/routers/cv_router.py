@@ -28,12 +28,28 @@ class CVGenerateRequest(BaseModel):
 
 
 class CVGenerateResponse(BaseModel):
+    official_master: Optional[str] = Field(default=None, description="YAML arquétipo Síntese Magna / Versão Oficial Definitiva")
     professional: str = Field(..., description="YAML arquétipo Executivo / IBM Senior Lead")
     architect: Optional[str] = Field(default=None, description="YAML arquétipo AI Solutions Architect")
     historian: str = Field(..., description="YAML arquétipo Biográfico / Narrativo")
     didactic: str = Field(..., description="YAML arquétipo Didático / Learning Speed")
     alien: str = Field(..., description="YAML arquétipo Observador Extraterrestre")
-    html_dashboard: Optional[str] = Field(default=None, description="HTML Standalone Dashboard com os 5 arquétipos embutidos e interativos")
+    html_dashboard: Optional[str] = Field(default=None, description="HTML Standalone Dashboard com os arquétipos embutidos e interativos")
+
+
+class CVSynthesizeRequest(BaseModel):
+    professional: Optional[str] = Field(default="", description="YAML do arquétipo Executivo / IBM Senior Lead")
+    architect: Optional[str] = Field(default="", description="YAML do arquétipo AI Solutions Architect")
+    historian: Optional[str] = Field(default="", description="YAML do arquétipo Biográfico / Narrativo")
+    didactic: Optional[str] = Field(default="", description="YAML do arquétipo Didático / Learning Velocity")
+    alien: Optional[str] = Field(default="", description="YAML do arquétipo Observador Extraterrestre")
+    job_description: Optional[str] = Field(default=None, description="Descrição da vaga para tailoring ATS da síntese")
+    lang: Optional[str] = Field(default="auto", description="Idioma de saída: auto, pt, en, es")
+
+
+class CVSynthesizeResponse(BaseModel):
+    official_master: str = Field(..., description="YAML da Síntese Magna (6ª Versão Oficial Definitiva)")
+    tokens_used: int = Field(default=0, description="Tokens consumidos na síntese")
 
 
 class CVTailorRequest(BaseModel):
@@ -65,6 +81,7 @@ class CVRenderRequest(BaseModel):
 
 
 class CVCompileBundleRequest(BaseModel):
+    official_master: Optional[str] = Field(default="", description="YAML da Síntese Magna / Versão Oficial Definitiva")
     professional: Optional[str] = Field(default="", description="YAML do arquétipo Executivo / IBM Senior Lead")
     architect: Optional[str] = Field(default="", description="YAML do arquétipo AI Solutions Architect")
     historian: Optional[str] = Field(default="", description="YAML do arquétipo Biográfico / Narrativo")
@@ -75,7 +92,7 @@ class CVCompileBundleRequest(BaseModel):
     background_pattern: Optional[str] = Field(default=None, alias="texture", description="Textura de fundo IA inicial")
     design_config: Optional[Dict[str, Any]] = Field(default=None, description="Configurações personalizadas de tipografia, cores e textura de fundo")
     format: Optional[str] = Field(default="html", description="Formato de saída: html, zip, json")
-    filename: Optional[str] = Field(default="curriculos_5_versoes", description="Nome base para download do arquivo")
+    filename: Optional[str] = Field(default="curriculos_6_versoes", description="Nome base para download do arquivo")
 
     model_config = {"populate_by_name": True}
 
@@ -270,7 +287,7 @@ async def get_all_prompts_endpoint(
     """
     Retorna todos os System Prompts e schemas abertos do CV Maker 2.0.
     Permite que agentes autônomos externos (ChatGPT, Claude, Cursor, n8n, Python)
-    leiam as instruções e guardrails antes de gerar JSON Resume ou Cover Letters.
+    leiam as instruções e guardrails antes de gerar JSON Resume, Síntese Magna (Nível 2) ou Cover Letters.
     """
     from prompts.cv_prompts import (
         BASE_INSTRUCTION,
@@ -279,6 +296,9 @@ async def get_all_prompts_endpoint(
         PERSONA_INSTRUCTIONS,
         PERSONA_INSTRUCTIONS_EN,
         PERSONA_INSTRUCTIONS_ES,
+        MASTER_SYNTHESIS_INSTRUCTION,
+        MASTER_SYNTHESIS_INSTRUCTION_EN,
+        MASTER_SYNTHESIS_INSTRUCTION_ES,
         COVER_LETTER_GENERATION_PROMPT,
         COVER_LETTER_GENERATION_PROMPT_EN,
         COVER_LETTER_GENERATION_PROMPT_ES,
@@ -287,24 +307,31 @@ async def get_all_prompts_endpoint(
     if lang == "en":
         base_inst = BASE_INSTRUCTION_EN
         personas = PERSONA_INSTRUCTIONS_EN
+        master_synth = MASTER_SYNTHESIS_INSTRUCTION_EN
         cover_prompt = COVER_LETTER_GENERATION_PROMPT_EN
     elif lang == "es":
         base_inst = BASE_INSTRUCTION_ES
         personas = PERSONA_INSTRUCTIONS_ES
+        master_synth = MASTER_SYNTHESIS_INSTRUCTION_ES
         cover_prompt = COVER_LETTER_GENERATION_PROMPT_ES
     else:
         base_inst = BASE_INSTRUCTION
         personas = PERSONA_INSTRUCTIONS
+        master_synth = MASTER_SYNTHESIS_INSTRUCTION
         cover_prompt = COVER_LETTER_GENERATION_PROMPT
 
     return {
         "service": "CV Maker 2.0 Open Prompts Engine",
-        "description": "Engenharia de Prompts Padrão Enterprise para geração de currículos e cover letters.",
+        "description": "Engenharia de Prompts Padrão Enterprise para geração de currículos, síntese magna (Nível 2) e cover letters.",
         "usage_guide": "Para gerar um currículo compatível, envie o prompt 'base' concatenado com a persona desejada como System Prompt no seu LLM.",
         "prompts": {
             "base": {
                 "title": "Instrução Base & Schema JSON Resume Completo",
                 "content": base_inst.strip(),
+            },
+            "master_synthesis": {
+                "title": "🏆 Síntese Magna Oficial (Nível 2 - Multi-Agent Synthesis)",
+                "content": master_synth.strip(),
             },
             "cover_letter": {
                 "title": "Gerador de Cover Letter & Schema Persuasivo (Skill: agency-resume-tailor)",
@@ -560,11 +587,12 @@ async def generate_cv_endpoint(
 
         target_format = (format or "json").strip().lower()
         target_theme = (theme or "executive").strip().lower()
+        default_p = "official_master" if results.get("official_master") else "professional"
 
-        # Renderiza o Super Dashboard HTML com os 5 arquétipos
+        # Renderiza o Super Dashboard HTML com os arquétipos e a síntese oficial
         html_dashboard = render_multi_cv_dashboard_html(
             archetypes=results,
-            default_persona="professional",
+            default_persona=default_p,
             default_theme=target_theme,
         )
 
@@ -572,10 +600,12 @@ async def generate_cv_endpoint(
         if target_format == "html":
             return HTMLResponse(content=html_dashboard)
 
-        # 2. Retorno em Pacote ZIP com os 5 YAMLs e o Dashboard HTML
+        # 2. Retorno em Pacote ZIP com os YAMLs e o Dashboard HTML
         if target_format == "zip":
             zip_buffer = io.BytesIO()
             with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
+                if results.get("official_master"):
+                    zip_file.writestr("curriculo_oficial_master.yaml", results.get("official_master", ""))
                 zip_file.writestr("curriculo_executivo_ibm.yaml", results.get("professional", ""))
                 zip_file.writestr("curriculo_arquiteto_ia.yaml", results.get("architect", ""))
                 zip_file.writestr("curriculo_biografo.yaml", results.get("historian", ""))
@@ -583,14 +613,16 @@ async def generate_cv_endpoint(
                 zip_file.writestr("curriculo_alien.yaml", results.get("alien", ""))
                 zip_file.writestr("dashboard_curriculos_completo.html", html_dashboard)
 
+            zip_name = "curriculos_completo_6_versoes.zip" if results.get("official_master") else "curriculos_completo_5_versoes.zip"
             return Response(
                 content=zip_buffer.getvalue(),
                 media_type="application/zip",
-                headers={"Content-Disposition": 'attachment; filename="curriculos_completo_5_versoes.zip"'}
+                headers={"Content-Disposition": f'attachment; filename="{zip_name}"'}
             )
 
         # 3. Retorno Padrão em JSON Estruturado
         return CVGenerateResponse(
+            official_master=results.get("official_master", None),
             professional=results.get("professional", ""),
             architect=results.get("architect", results.get("professional", "")),
             historian=results.get("historian", ""),
@@ -814,6 +846,77 @@ async def render_cv_endpoint(
     return HTMLResponse(content=html_content)
 
 
+@router.post("/synthesize")
+async def synthesize_cv_endpoint(
+    payload: CVSynthesizeRequest,
+    x_license_key: Optional[str] = Header(None, alias="X-License-Key"),
+    x_api_key: Optional[str] = Header(None, alias="X-API-Key"),
+    x_gemini_api_key: Optional[str] = Header(None, alias="X-Gemini-API-Key"),
+    authorization: Optional[str] = Header(None),
+):
+    """
+    NÍVEL 2 — Endpoint de Síntese Magna.
+    Recebe os 5 arquétipos em YAML gerados pelo agente e executa a síntese do
+    6º perfil oficial definitivo (Master Opus) selecionando as melhores métricas e ROI.
+    """
+    from services.cv_generator_service import generate_master_synthesis
+
+    raw_key = x_license_key or x_api_key or authorization
+    combined_text = (
+        (payload.professional or "") + "\n" +
+        (payload.architect or "") + "\n" +
+        (payload.historian or "") + "\n" +
+        (payload.didactic or "") + "\n" +
+        (payload.alien or "") + "\n" +
+        (payload.job_description or "")
+    )
+    license_rec = await verify_cv_license_and_quota(raw_key, combined_text, num_calls=1, x_gemini_key=x_gemini_api_key)
+    custom_gemini = license_rec.get("gemini_key") or x_gemini_api_key
+
+    if license_rec.get("tier") == "sheet_api" and not custom_gemini:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "A rota de síntese Nível 2 via API opera no modelo BYOK. "
+                "Informe sua chave do Google Gemini no header 'X-Gemini-API-Key' para executar a síntese."
+            ),
+        )
+
+    archetypes_map = {
+        "professional": payload.professional or "",
+        "architect": payload.architect or payload.professional or "",
+        "historian": payload.historian or "",
+        "didactic": payload.didactic or "",
+        "alien": payload.alien or "",
+    }
+
+    log.info("[CV Router] service='cv' action='synthesize_level2' tier='%s' byok=%s", license_rec.get("tier"), bool(custom_gemini))
+
+    try:
+        master_yaml, total_tokens = await generate_master_synthesis(
+            archetypes=archetypes_map,
+            job_description=payload.job_description,
+            lang=payload.lang or "auto",
+            custom_api_key=custom_gemini,
+        )
+
+        if total_tokens > 0 and license_rec.get("key_hash") not in ("godmode", "sheet_api", "byok_gemini"):
+            charged_tokens = int(total_tokens * AI_TOKEN_BURN_MULTIPLIER)
+            try:
+                deduct_license_tokens(license_rec["key_hash"], charged_tokens, endpoint="/api/v1/cv/synthesize")
+                log.info("[CV Router] Tokens debitados (synthesize): %d (brutos: %d, multiplicador: %.1fx)", charged_tokens, total_tokens, AI_TOKEN_BURN_MULTIPLIER)
+            except Exception as d_err:
+                log.warning("[CV Router] Falha ao debitar tokens: %s", d_err)
+
+        return {"official_master": master_yaml, "tokens_used": total_tokens}
+    except Exception as e:
+        log.error("[CV Router] service='cv' Synthesis error: %s", e)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Erro na síntese de currículo Nível 2: {str(e)}",
+        )
+
+
 @router.post("/compile")
 async def compile_cv_bundle_endpoint(
     payload: CVCompileBundleRequest,
@@ -825,7 +928,7 @@ async def compile_cv_bundle_endpoint(
 ):
     """
     Endpoint 100% Agent-Native (Zero Custo de Tokens de LLM no Servidor).
-    Recebe os 5 YAMLs gerados pelo Agente de IA do próprio usuário (Claude, Cursor, Antigravity, GPT)
+    Recebe os 5 ou 6 YAMLs gerados pelo Agente de IA do próprio usuário (Claude, Cursor, Antigravity, GPT)
     e compila instantaneamente o Super Dashboard HTML Standalone e o pacote .ZIP.
     """
     from services.cv_html_renderer import render_multi_cv_dashboard_html
@@ -834,9 +937,10 @@ async def compile_cv_bundle_endpoint(
     target_layout = layout or payload.default_layout or "dynamic_math"
     target_texture = texture or payload.background_pattern or None
     target_format = (format or payload.format or "html").strip().lower()
-    base_filename = (payload.filename or "curriculos_5_versoes").strip()
+    base_filename = (payload.filename or "curriculos_6_versoes").strip()
 
     archetypes_map = {
+        "official_master": payload.official_master or "",
         "professional": payload.professional or "",
         "architect": payload.architect or payload.professional or "",
         "historian": payload.historian or "",
@@ -844,9 +948,11 @@ async def compile_cv_bundle_endpoint(
         "alien": payload.alien or "",
     }
 
+    default_persona = "official_master" if payload.official_master else "professional"
+
     html_dashboard = render_multi_cv_dashboard_html(
         archetypes=archetypes_map,
-        default_persona="professional",
+        default_persona=default_persona,
         default_theme=target_theme,
         default_layout=target_layout,
         background_pattern=target_texture,
@@ -856,6 +962,8 @@ async def compile_cv_bundle_endpoint(
     if target_format == "zip":
         zip_buffer = io.BytesIO()
         with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
+            if payload.official_master:
+                zip_file.writestr("curriculo_oficial_master.yaml", payload.official_master)
             zip_file.writestr("curriculo_executivo_ibm.yaml", archetypes_map.get("professional", ""))
             zip_file.writestr("curriculo_arquiteto_ia.yaml", archetypes_map.get("architect", ""))
             zip_file.writestr("curriculo_biografo.yaml", archetypes_map.get("historian", ""))
@@ -877,79 +985,3 @@ async def compile_cv_bundle_endpoint(
         }
 
     return HTMLResponse(content=html_dashboard)
-
-
-@router.get("/prompts")
-async def get_cv_prompts_endpoint():
-    """
-    Retorna os System Prompts e instruções de arquétipos para agentes de IA externos (Claude, Cursor, GPT).
-    """
-    from prompts.cv_prompts import BASE_INSTRUCTION, PERSONA_INSTRUCTIONS
-
-    prompts_list = [
-        {
-            "id": "ibm-executive",
-            "title": "💼 Executivo IBM / Senior Tech Lead",
-            "subtitle": "Fórmula X-Y-Z do Google/IBM, foco em impacto, governança e métricas de ROI",
-            "persona": "professional",
-            "system_prompt": f"{BASE_INSTRUCTION}\n\n{PERSONA_INSTRUCTIONS['professional']}"
-        },
-        {
-            "id": "ai-solutions-architect",
-            "title": "🧠 AI & Cloud Solutions Architect",
-            "subtitle": "Pipelines de RAG, microsserviços assíncronos, cloud híbrida e engenharia de precisão",
-            "persona": "architect",
-            "system_prompt": f"{BASE_INSTRUCTION}\n\n{PERSONA_INSTRUCTIONS['architect']}"
-        },
-        {
-            "id": "career-evolution-biographer",
-            "title": "📜 Biógrafo / Evolução Estratégica",
-            "subtitle": "Narrativa coesa da jornada profissional, contexto de negócio e legado sustentável",
-            "persona": "historian",
-            "system_prompt": f"{BASE_INSTRUCTION}\n\n{PERSONA_INSTRUCTIONS['historian']}"
-        },
-        {
-            "id": "career-transition-didactic",
-            "title": "🎓 Didático / Learning Velocity & Mentoria",
-            "subtitle": "Foco em raciocínio analítico, comunicação técnica e velocidade de aprendizado",
-            "persona": "didactic",
-            "system_prompt": f"{BASE_INSTRUCTION}\n\n{PERSONA_INSTRUCTIONS['didactic']}"
-        },
-        {
-            "id": "alien-field-observer",
-            "title": "🤖 Observador / Relatório Extraterrestre (Sci-Fi & Humor)",
-            "subtitle": "Relatório biológico intergaláctico sobre o espécime terráqueo e sua relação com código e café",
-            "persona": "alien",
-            "system_prompt": f"{BASE_INSTRUCTION}\n\n{PERSONA_INSTRUCTIONS['alien']}"
-        },
-        {
-            "id": "ats-tailor-engine",
-            "title": "🎯 Alfaiataria ATS (Match 100% com a Vaga)",
-            "subtitle": "Otimização milimétrica de palavras-chave contra uma Job Description sem fabricação",
-            "persona": "tailor",
-            "system_prompt": f"{BASE_INSTRUCTION}\n\nTASK ADICIONAL: Adapte o currículo para dar match com os requisitos essenciais da vaga informada sem inventar dados."
-        },
-        {
-            "id": "yaml-editor-direct-renderer",
-            "title": "📝 Editor YAML & Compilador Standalone (Zero Mudança de Conteúdo)",
-            "subtitle": "Validação estrita do schema JSON Resume, preservação 100% literal dos dados e compilação direta em HTML/PDF",
-            "persona": "editor",
-            "system_prompt": """VOCÊ É O COMPILADOR E EDITOR YAML DO CV MAKER 2.0.
-SUA MISSÃO: Validar e estruturar o currículo fornecido pelo usuário no formato estrito do JSON Resume v1.0.0 em YAML puro, SEM ALTERAR OU FABRICAR QUALQUER DADO.
-
-DIRETRIZES FUNDAMENTAIS DE PRESERVAÇÃO:
-1. ZERO ALTERAÇÃO DE DADOS: Preserve 100% dos nomes de empresas, datas, cargos, resumos, tecnologias e links informados pelo usuário.
-2. VALIDAÇÃO DE SCHEMA: Garanta que os blocos estejam corretamente aninhados: basics (name, label, email, phone, url, summary, location, profiles), work (name, position, url, startDate, endDate, summary, highlights), projects (name, description, url, keywords, highlights), skills (name, keywords), education (institution, area, studyType, startDate, endDate, courses), certificates (name, date, issuer, url), publications (name, publisher, releaseDate, url, summary), languages (language, fluency), interests (name, keywords).
-3. FORMATAÇÃO LIMPA: Retorne apenas o código YAML válido em blocos limpos, sem formatações Markdown adicionais se for consumido via automação.
-4. ROTA DE RENDERIZAÇÃO DIRETA: Para converter o YAML resultante em um documento HTML/PDF autônomo com os 5 modelos visuais (Executivo, Criativo, Minimalista, White, Terminal), faça uma requisição HTTP POST para:
-   POST https://ocorrencias-pdf-writer.onrender.com/api/v1/cv/render?format=html (ou ?format=zip)
-   Body JSON: {"yaml_content": "<SEU_YAML_AQUI>", "theme": "executive"}
-   Essa rota é pública, determinística e não gasta tokens."""
-        }
-    ]
-
-    return {
-        "service": "CV Maker 2.0 Engine",
-        "description": "System Prompts corporativos para geração de currículos JSON Resume / YAML.",
-        "prompts": prompts_list
-    }

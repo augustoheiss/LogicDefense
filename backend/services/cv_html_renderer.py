@@ -18,6 +18,11 @@ import yaml
 from typing import Dict, Any, Optional
 
 PERSONA_METADATA = {
+    "official_master": {
+        "label": "🏆 6. Versão Oficial (Síntese Master)",
+        "desc": "Síntese Magna dos pontos mais fortes, métricas de ouro e ROI das 5 versões.",
+        "filename": "curriculo_oficial_master.yaml"
+    },
     "professional": {
         "label": "💼 1. Executivo IBM (Senior Lead)",
         "desc": "Foco em liderança, governança, métricas de ROI e arquiteturas de alta criticidade.",
@@ -1320,7 +1325,7 @@ def render_multi_cv_dashboard_html(
         bp = design_config.get("backgroundPattern")
         resolved_bg = TEXTURE_PRESETS.get(bp, bp)
 
-    persona_order = ["professional", "architect", "historian", "didactic", "alien"]
+    persona_order = ["official_master", "professional", "architect", "historian", "didactic", "alien"]
     available_keys = [k for k in persona_order if k in parsed_archetypes] or list(parsed_archetypes.keys())
     active_persona = default_persona if default_persona in available_keys else available_keys[0]
 

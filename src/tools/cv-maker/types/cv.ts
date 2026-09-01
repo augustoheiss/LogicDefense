@@ -1,4 +1,4 @@
-export type TextVariant = 'professional' | 'architect' | 'historian' | 'didactic' | 'alien'
+export type TextVariant = 'official_master' | 'professional' | 'architect' | 'historian' | 'didactic' | 'alien'
 export type ThemeVariant = 'executive' | 'creative' | 'minimalist' | 'white' | 'terminal'
 export type LayoutVariant = 
   | 'modular'             // Modelo A4 01 - Modular Cards
@@ -48,87 +48,80 @@ export const LAYOUT_OPTIONS: LayoutOption[] = [
   {
     id: 'compact_split',
     name: 'Modelo A4 04',
-    label: '🏛️ Modelo A4 04 (Executive Duo)',
-    icon: '🏛️',
-    description: 'Coluna esquerda com bio, barras de expertise e hobbies circulares; coluna direita com timeline e referências.'
+    label: '📑 Modelo A4 04 (Compact Split)',
+    icon: '📑',
+    description: 'Design moderno com split assimétrico, cards com ícones geométricos e badge sutil.'
   },
   {
     id: 'editorial_accent',
     name: 'Modelo A4 05',
-    label: '🏷️ Modelo A4 05 (Brand Block)',
-    icon: '🏷️',
-    description: 'Bloco de topo marcante ("hello, i\'m"), foto vertical, badges de ano sólidos e marcadores em seta.'
+    label: '🎨 Modelo A4 05 (Editorial Accent)',
+    icon: '🎨',
+    description: 'Header com bloco de cor sólida (marca registrada), grid balanceado e tipografia editorial.'
   },
   {
     id: 'corporate_timeline',
     name: 'Modelo A4 06',
-    label: '⏱️ Modelo A4 06 (Navy Timeline)',
-    icon: '⏱️',
-    description: 'Sidebar sólida em Dark Navy, timeline com nós conectados, dados civis/CNH e barras de nível.'
+    label: '🏛️ Modelo A4 06 (Corporate Timeline)',
+    icon: '🏛️',
+    description: 'Navy corporate com timeline vertical contínua, conectores temporais e resumo em destaque.'
   },
   {
     id: 'warm_magazine',
     name: 'Modelo A4 07',
-    label: '📰 Modelo A4 07 (Warm Editorial)',
+    label: '📰 Modelo A4 07 (Warm Magazine)',
     icon: '📰',
-    description: 'Fundo bege editorial elegante, tipografia imponente, selo circular sobre o avatar e medidores visuais.'
+    description: 'Estilo editorial creme com selo/stamp lateral, badges suaves e cards estruturados.'
   },
   {
     id: 'hero_matrix',
     name: 'Modelo A4 08',
-    label: '🖼️ Modelo A4 08 (Hero Matrix)',
-    icon: '🖼️',
-    description: 'Barra superior de contatos, hero header com foto à direita, grid duplo e matriz inferior de habilidades.'
+    label: '⚡ Modelo A4 08 (Hero Matrix)',
+    icon: '⚡',
+    description: 'Hero banner proeminente com foto redonda central/offset e grid matricial em 2 colunas.'
   },
   {
     id: 'dynamic_math',
     name: 'Modelo A4 09',
-    label: '🧮 Modelo A4 09 (Grid Math)',
-    icon: '🧮',
-    description: 'Grid matemático balanceado (3x2, 2x2, 3x3) com caixas em acento, divisor colorido e densidade editorial.'
+    label: '📐 Modelo A4 09 (Grid Math)',
+    icon: '📐',
+    description: 'Equilíbrio e proporção matemática pura com tipografia IBM Plex, micro-cards compactos e alta densidade A4.'
   },
   {
     id: 'canvas_livre',
     name: 'Modelo A4 10',
-    label: '🎨 Modelo A4 10 (Modo Livre)',
-    icon: '🎨',
-    description: 'Editor modular visual livre em grid de 12 colunas, reordenação de blocos, foto com 8 molduras geométricas e texturas IA.'
+    label: '🧩 Modelo A4 10 (Canvas Livre A4)',
+    icon: '🧩',
+    description: 'Layout flexível por blocos configuráveis (reordene, oculte e ajuste largura dos blocos no preview).'
   }
 ]
 
-export interface CVProfile {
-  network: string
-  username: string
-  url: string
-}
-
-export interface CVLocation {
-  city?: string
-  region?: string
-  postalCode?: string
-  countryCode?: string
-  address?: string
-}
-
 export interface CVBasics {
   name: string
-  label?: string
-  image?: string // Profile avatar Base64 or URL
-  imagePosX?: number // 0% a 100% (default: 50)
-  imagePosY?: number // 0% a 100% (default: 50)
-  imageScale?: number // 1.0 a 2.5 (default: 1.0)
-  email?: string
-  phone?: string
+  label: string
+  image?: string
+  email: string
+  phone: string
   url?: string
-  summary?: string
-  location?: CVLocation
-  profiles?: CVProfile[]
-  customBadges?: string[] // e.g. ["PcD", "Open to Relocate"]
-  age?: string | number
-  civilStatus?: string    // "Solteiro(a)", "Casado(a)"
-  nationality?: string    // "Brasileira", "Portuguesa"
-  driverLicense?: string  // "CNH B", "Sim"
-  quote?: string          // Frase de impacto / bio sintética
+  summary: string
+  quote?: string
+  civilStatus?: string
+  birthDate?: string
+  location: {
+    address?: string
+    postalCode?: string
+    city: string
+    countryCode: string
+    region: string
+  }
+  profiles: Array<{
+    network: string
+    username: string
+    url: string
+  }>
+  imageScale?: number
+  imagePosX?: number
+  imagePosY?: number
 }
 
 export interface CVWork {
@@ -136,19 +129,9 @@ export interface CVWork {
   position: string
   url?: string
   startDate: string
-  endDate?: string // Omit or leave empty for "Present"
-  summary?: string
-  highlights?: string[]
-}
-
-export interface CVEducation {
-  institution: string
-  area?: string
-  studyType?: string
-  startDate?: string
   endDate?: string
-  score?: string
-  courses?: string[]
+  summary: string
+  highlights: string[]
 }
 
 export interface CVProject {
@@ -159,58 +142,72 @@ export interface CVProject {
   url?: string
 }
 
-export interface CVSkill {
-  name: string
-  level?: string          // "Básico", "Intermediário", "Avançado", "Especialista"
-  levelPercent?: number   // 0 a 100
-  keywords?: string[]
-}
-
-export interface CVLanguage {
-  language: string
-  fluency: string
-  levelPercent?: number   // 0 a 100
-}
-
-export interface CVInterest {
-  name: string
-  icon?: string           // "camera" | "palette" | "plane" | "book" | "code" | "music" | "coffee" | "globe"
-  keywords?: string[]
+export interface CVEducation {
+  institution: string
+  url?: string
+  area: string
+  studyType: string
+  startDate: string
+  endDate: string
+  score?: string
+  courses?: string[]
 }
 
 export interface CVCertificate {
   name: string
-  date?: string
-  issuer?: string
+  date: string
+  issuer: string
   url?: string
 }
 
 export interface CVAward {
   title: string
-  date?: string
-  awarder?: string
-  summary?: string
+  date: string
+  awarder: string
+  summary: string
+}
+
+export interface CVPublication {
+  name: string
+  publisher: string
+  releaseDate: string
+  url: string
+  summary: string
+}
+
+export interface CVSkill {
+  name: string
+  level?: string
+  keywords: string[]
+}
+
+export interface CVLanguage {
+  language: string
+  fluency: string
+}
+
+export interface CVInterest {
+  name: string
+  keywords: string[]
 }
 
 export interface CVVolunteer {
   organization: string
   position: string
   url?: string
-  startDate?: string
+  startDate: string
   endDate?: string
-  summary?: string
-  highlights?: string[]
+  summary: string
+  highlights: string[]
 }
 
 export interface CVReference {
   name: string
-  position?: string
-  company?: string
+  reference?: string
   phone?: string
   email?: string
-  address?: string
-  url?: string
-  description?: string
+  company?: string
+  position?: string
 }
 
 export interface CoverLetterRecipient {
@@ -256,6 +253,7 @@ export interface CVData {
 }
 
 export interface CVVersions {
+  official_master?: string
   professional: string
   architect?: string
   historian: string

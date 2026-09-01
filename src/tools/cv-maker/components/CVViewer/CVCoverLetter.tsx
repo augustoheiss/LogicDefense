@@ -15,7 +15,11 @@ export const CVCoverLetter: React.FC<CVCoverLetterProps> = ({
   layout,
   onRequestGenerate
 }) => {
-  if (!coverLetter || !coverLetter.paragraphs || coverLetter.paragraphs.length === 0) {
+  const paragraphs = coverLetter?.paragraphs && coverLetter.paragraphs.length > 0
+    ? coverLetter.paragraphs
+    : (coverLetter?.body ? coverLetter.body.split('\n\n').map(p => p.trim()).filter(Boolean) : [])
+
+  if (!coverLetter || paragraphs.length === 0) {
     return (
       <div className="cv-page-a4 cv-cover-letter-page" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <div className="cv-card" style={{ textAlign: 'center', maxWidth: '480px', padding: '3rem 2rem' }}>
@@ -48,7 +52,11 @@ export const CVCoverLetter: React.FC<CVCoverLetterProps> = ({
     )
   }
 
-  const { recipient, date, subject, salutation, paragraphs, closing, signature, signatureImage } = coverLetter
+  const { date, subject, salutation, closing, signature, signatureImage } = coverLetter
+  const rawRecipient = coverLetter.recipient
+  const recipient = typeof rawRecipient === 'string'
+    ? { name: rawRecipient, company: coverLetter.company }
+    : (rawRecipient ? { ...rawRecipient, company: rawRecipient.company || coverLetter.company } : undefined)
   const locationStr = basics.location
     ? [basics.location.city, basics.location.region, basics.location.countryCode].filter(Boolean).join(', ')
     : ''
