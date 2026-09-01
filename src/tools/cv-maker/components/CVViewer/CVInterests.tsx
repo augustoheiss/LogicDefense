@@ -10,7 +10,7 @@ export const CVInterests: React.FC<CVInterestsProps> = ({ interests }) => {
   if (!interests || interests.length === 0) return null
 
   return (
-    <section className="cv-section cv-avoid-break">
+    <section className="cv-section">
       <h2 className="cv-section-title">
         <span>🎯</span> Interesses & Frentes de Pesquisa
       </h2>

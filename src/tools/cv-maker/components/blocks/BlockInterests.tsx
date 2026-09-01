@@ -29,13 +29,13 @@ export const BlockInterests: React.FC<BlockInterestsProps> = ({
 
   if (layoutStyle === 'circles') {
     return (
-      <section className="cv-section cv-section-interests cv-avoid-break">
+      <section className="cv-section cv-section-interests">
         {title && <h4 className="cv-section-title" style={{ fontSize: '0.88rem' }}>{title}</h4>}
         <div className="cv-hobbies-grid">
           {interests.map((item, idx) => {
             const icon = item.icon && HOBBY_ICONS[item.icon] ? HOBBY_ICONS[item.icon] : '🎯'
             return (
-              <div key={idx}>
+              <div key={idx} className="cv-avoid-break">
                 <div className="cv-hobby-circle">{icon}</div>
                 <div className="cv-hobby-label">{item.name}</div>
               </div>
@@ -47,13 +47,13 @@ export const BlockInterests: React.FC<BlockInterestsProps> = ({
   }
 
   return (
-    <section className="cv-section cv-section-interests cv-avoid-break">
+    <section className="cv-section cv-section-interests">
       <h3 className="cv-section-title">{title}</h3>
       <div className="cv-interests-grid">
         {interests.map((item, idx) => {
           const icon = item.icon && HOBBY_ICONS[item.icon] ? HOBBY_ICONS[item.icon] : '🎯'
           return (
-            <div key={idx} className="cv-interest-card">
+            <div key={idx} className="cv-interest-card cv-avoid-break">
               <span className="cv-interest-icon">{icon}</span>
               <div className="cv-interest-info">
                 <span className="cv-interest-name">{item.name}</span>

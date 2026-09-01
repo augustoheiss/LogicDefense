@@ -365,7 +365,7 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
 
             {/* Experiência Profissional */}
             {data.work && data.work.length > 0 && (
-              <section className="cv-section cv-avoid-break">
+              <section className="cv-section">
                 <h2 className="cv-math-section-title">
                   💼 EXPERIÊNCIA PROFISSIONAL
                 </h2>
@@ -403,7 +403,7 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
 
             {/* Projetos em Destaque & Repositórios (Grid Matemático) */}
             {data.projects && data.projects.length > 0 && (
-              <section className="cv-section cv-avoid-break">
+              <section className="cv-section">
                 <h2 className="cv-math-section-title">
                   🚀 PROJETOS EM DESTAQUE & REPOSITÓRIOS
                 </h2>
@@ -444,7 +444,7 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
 
             {/* Competências & Habilidades Técnicas (Grid Matemático) */}
             {data.skills && data.skills.length > 0 && (
-              <section className="cv-section cv-avoid-break">
+              <section className="cv-section">
                 <h2 className="cv-math-section-title">
                   ⚡ COMPETÊNCIAS & HABILIDADES TÉCNICAS
                 </h2>
@@ -469,7 +469,7 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
 
             {/* Formação Acadêmica (Grid Matemático) */}
             {data.education && data.education.length > 0 && (
-              <section className="cv-section cv-avoid-break">
+              <section className="cv-section">
                 <h2 className="cv-math-section-title">
                   🎓 FORMAÇÃO ACADÊMICA
                 </h2>
@@ -494,7 +494,7 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
 
             {/* Idiomas & Fluência (Grid Matemático) */}
             {data.languages && data.languages.length > 0 && (
-              <section className="cv-section cv-avoid-break">
+              <section className="cv-section">
                 <h2 className="cv-math-section-title">
                   🌐 IDIOMAS & FLUÊNCIA
                 </h2>
@@ -512,7 +512,7 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
 
             {/* Certificações & Licenças (Grid Matemático) */}
             {data.certificates && data.certificates.length > 0 && (
-              <section className="cv-section cv-avoid-break">
+              <section className="cv-section">
                 <h2 className="cv-math-section-title">
                   📜 CERTIFICAÇÕES & LICENÇAS
                 </h2>
@@ -545,7 +545,7 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
 
             {/* Interesses & Frentes de Pesquisa (Grid Matemático) */}
             {data.interests && data.interests.length > 0 && (
-              <section className="cv-section cv-avoid-break">
+              <section className="cv-section">
                 <h2 className="cv-math-section-title">
                   🎯 INTERESSES & FRENTES DE PESQUISA
                 </h2>

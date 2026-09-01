@@ -9,7 +9,7 @@ export const CVSkills: React.FC<CVSkillsProps> = ({ skills }) => {
   if (!skills || skills.length === 0) return null
 
   return (
-    <section className="cv-section cv-section-skills cv-avoid-break">
+    <section className="cv-section cv-section-skills">
       <h2 className="cv-section-title">
         <span>⚡</span> Competências & Habilidades Técnicas
       </h2>

@@ -10,7 +10,7 @@ export const CVLanguages: React.FC<CVLanguagesProps> = ({ languages }) => {
   if (!languages || languages.length === 0) return null
 
   return (
-    <section className="cv-section cv-avoid-break">
+    <section className="cv-section">
       <h2 className="cv-section-title">
         <span>🌐</span> Idiomas & Fluência
       </h2>

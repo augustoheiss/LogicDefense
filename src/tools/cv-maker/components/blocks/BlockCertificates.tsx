@@ -13,11 +13,11 @@ export const BlockCertificates: React.FC<BlockCertificatesProps> = ({
   if (!certificates || certificates.length === 0) return null
 
   return (
-    <section className="cv-section cv-section-certificates cv-avoid-break">
+    <section className="cv-section cv-section-certificates">
       <h3 className="cv-section-title">{title}</h3>
       <div className="cv-items-list">
         {certificates.map((cert, idx) => (
-          <div key={idx} className="cv-item" style={{ marginBottom: '0.4rem' }}>
+          <div key={idx} className="cv-item cv-avoid-break" style={{ marginBottom: '0.4rem' }}>
             <div className="cv-item-header">
               <span className="cv-item-title" style={{ fontSize: '0.85rem' }}>{cert.name}</span>
               {cert.date && <span className="cv-item-date">{cert.date}</span>}

@@ -14,13 +14,13 @@ export const BlockSkillsBars: React.FC<BlockSkillsBarsProps> = ({
   if (!skills || skills.length === 0) return null
 
   return (
-    <section className="cv-section cv-section-skills cv-avoid-break">
+    <section className="cv-section cv-section-skills">
       {title && <h4 className="cv-section-title" style={{ fontSize: '0.88rem' }}>{title}</h4>}
       <div className="cv-skills-progress-list">
         {skills.map((skill, idx) => {
           const percent = getSkillPercentage(skill.level, skill.levelPercent)
           return (
-            <div key={idx} className="cv-skill-bar-wrapper">
+            <div key={idx} className="cv-skill-bar-wrapper cv-avoid-break">
               <div className="cv-skill-bar-label">
                 <span>{skill.name}</span>
                 <span style={{ opacity: 0.8, fontSize: '0.75rem' }}>{skill.level || `${percent}%`}</span>

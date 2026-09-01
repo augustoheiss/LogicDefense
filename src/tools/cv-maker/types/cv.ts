@@ -221,11 +221,13 @@ export interface CoverLetterRecipient {
 }
 
 export interface CoverLetter {
-  recipient?: CoverLetterRecipient
+  recipient?: CoverLetterRecipient | string
+  company?: string
   date?: string
   subject?: string
   salutation?: string
-  paragraphs: string[]
+  paragraphs?: string[]
+  body?: string
   closing?: string
   signature?: string
   signatureImage?: string // Base64 or direct image URL

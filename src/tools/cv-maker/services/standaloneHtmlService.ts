@@ -204,6 +204,24 @@ function getEmbeddedCss(): string {
         page-break-before: always !important;
         break-before: page !important;
       }
+
+      /* ── CSS Paged Media & Page Fragmentation (Anti-Invisble Box) ── */
+      .cv-section, section, .cv-math-work-list, .cv-items-list, .cv-projects-grid, .cv-skills-grid, .cv-education-grid, .cv-languages-grid, .cv-certs-grid, .cv-interests-grid, .cv-references-grid {
+        break-inside: auto !important;
+        page-break-inside: auto !important;
+      }
+
+      .cv-section-title, .cv-math-section-title, h2, h3, h4 {
+        break-after: avoid !important;
+        page-break-after: avoid !important;
+        orphans: 3;
+        widows: 3;
+      }
+
+      .cv-item, .cv-project-card, .cv-skills-group, .cv-education-card, .cv-cert-card, .cv-award-card, .cv-language-card, .cv-interest-card, .cv-ref-card, .cv-skill-bar-wrapper, .cv-math-work-item, .cv-math-project-card, .cv-math-skill-card, .cv-math-edu-card, .cv-math-cert-card, .cv-math-lang-card, .cv-math-interest-card, .cv-avoid-break {
+        break-inside: avoid !important;
+        page-break-inside: avoid !important;
+      }
     }
 
     /* ── Tipografia e Elementos ── */
@@ -613,7 +631,7 @@ export function renderCVToStandaloneHtml(
     </div>
 
     <!-- 2. Folha de Cover Letter A4 -->
-    ${coverLetter && coverLetter.paragraphs && coverLetter.paragraphs.length > 0 ? `
+    ${coverLetter && (coverLetter.paragraphs || coverLetter.body) ? `
       <div class="cv-page-a4 cv-cover-letter-page">
         <div class="cv-card">
           <header class="cv-header" style="border-bottom: 1px solid rgba(125,125,125,0.25); padding-bottom: 1rem; margin-bottom: 1.5rem;">
@@ -623,10 +641,10 @@ export function renderCVToStandaloneHtml(
 
           ${coverLetter.recipient ? `
             <div style="margin-bottom: 1.25rem; font-size: 0.88rem; line-height: 1.45; border-left: 2.5px solid currentColor; padding-left: 0.75rem;">
-              <div style="font-weight: 700;">${escapeHtml(coverLetter.recipient.name)}</div>
-              <div>${escapeHtml(coverLetter.recipient.title || '')}</div>
-              <div style="font-weight: 600;">${escapeHtml(coverLetter.recipient.company || '')}</div>
-              <div style="font-size: 0.8rem; opacity: 0.8;">${escapeHtml(coverLetter.recipient.address || '')}</div>
+              <div style="font-weight: 700;">${escapeHtml(typeof coverLetter.recipient === 'object' ? coverLetter.recipient.name : coverLetter.recipient)}</div>
+              ${typeof coverLetter.recipient === 'object' && coverLetter.recipient.title ? `<div>${escapeHtml(coverLetter.recipient.title)}</div>` : ''}
+              <div style="font-weight: 600;">${escapeHtml((typeof coverLetter.recipient === 'object' ? coverLetter.recipient.company : coverLetter.company) || '')}</div>
+              ${typeof coverLetter.recipient === 'object' && coverLetter.recipient.address ? `<div style="font-size: 0.8rem; opacity: 0.8;">${escapeHtml(coverLetter.recipient.address)}</div>` : ''}
             </div>
           ` : ''}
 
@@ -636,7 +654,7 @@ export function renderCVToStandaloneHtml(
             <h2 class="cv-section-title">Carta de Apresentação</h2>
             ${coverLetter.subject ? `<div style="font-weight: 700; margin-bottom: 0.75rem;">${escapeHtml(coverLetter.subject)}</div>` : ''}
             ${coverLetter.salutation ? `<div style="font-weight: 600; margin-bottom: 0.75rem;">${escapeHtml(coverLetter.salutation)}</div>` : ''}
-            ${coverLetter.paragraphs.map(p => `<p style="margin-bottom: 0.85rem; text-align: justify;">${escapeHtml(p)}</p>`).join('')}
+            ${(Array.isArray(coverLetter.paragraphs) && coverLetter.paragraphs.length > 0 ? coverLetter.paragraphs : String(coverLetter.body || '').split('\n\n').filter(Boolean)).map(p => `<p style="margin-bottom: 0.85rem; text-align: justify;">${escapeHtml(p)}</p>`).join('')}
             ${coverLetter.closing ? `<div style="margin-top: 1.25rem; font-weight: 600;">${escapeHtml(coverLetter.closing)}</div>` : ''}
             <div class="cv-signature-cursive">${escapeHtml(coverLetter.signature || basics.name)}</div>
             <div style="font-weight: 700; font-size: 0.88rem; margin-top: 0.2rem;">${escapeHtml(coverLetter.signature || basics.name)}</div>

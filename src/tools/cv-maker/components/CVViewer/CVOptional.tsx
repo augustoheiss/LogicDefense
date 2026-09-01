@@ -12,7 +12,7 @@ export const CVOptional: React.FC<CVOptionalProps> = ({ certificates, awards, vo
   return (
     <>
       {certificates && certificates.length > 0 && (
-        <section className="cv-section cv-avoid-break">
+        <section className="cv-section">
           <h2 className="cv-section-title">
             <span>📜</span> Certificações & Licenças
           </h2>
@@ -42,7 +42,7 @@ export const CVOptional: React.FC<CVOptionalProps> = ({ certificates, awards, vo
       )}
 
       {awards && awards.length > 0 && (
-        <section className="cv-section cv-avoid-break">
+        <section className="cv-section">
           <h2 className="cv-section-title">
             <span>🏆</span> Reconhecimentos & Prêmios
           </h2>
@@ -65,7 +65,7 @@ export const CVOptional: React.FC<CVOptionalProps> = ({ certificates, awards, vo
       )}
 
       {volunteer && volunteer.length > 0 && (
-        <section className="cv-section cv-avoid-break">
+        <section className="cv-section">
           <h2 className="cv-section-title">
             <span>🤝</span> Voluntariado & Comunidade
           </h2>

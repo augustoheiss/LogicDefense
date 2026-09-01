@@ -13,11 +13,11 @@ export const BlockReferences: React.FC<BlockReferencesProps> = ({
   if (!references || references.length === 0) return null
 
   return (
-    <section className="cv-section cv-avoid-break">
+    <section className="cv-section">
       <h3 className="cv-section-title">{title}</h3>
       <div className="cv-references-grid">
         {references.map((ref, idx) => (
-          <div key={idx} className="cv-ref-card">
+          <div key={idx} className="cv-ref-card cv-avoid-break">
             <div className="cv-ref-name">{ref.name}</div>
             <div className="cv-ref-sub">
               {ref.position && <span>{ref.position}</span>}

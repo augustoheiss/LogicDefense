@@ -13,11 +13,11 @@ export const BlockEducation: React.FC<BlockEducationProps> = ({
   if (!education || education.length === 0) return null
 
   return (
-    <section className="cv-section cv-section-education cv-avoid-break">
+    <section className="cv-section cv-section-education">
       <h3 className="cv-section-title">{title}</h3>
       <div className="cv-items-list">
         {education.map((item, idx) => (
-          <div key={idx} className="cv-item">
+          <div key={idx} className="cv-item cv-avoid-break">
             <div className="cv-item-header">
               <span className="cv-item-title">
                 {item.studyType ? `${item.studyType} em ` : ''}{item.area || 'Graduação'}

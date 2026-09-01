@@ -10,7 +10,7 @@ export const CVEducation: React.FC<CVEducationProps> = ({ education }) => {
   if (!education || education.length === 0) return null
 
   return (
-    <section className="cv-section cv-avoid-break">
+    <section className="cv-section">
       <h2 className="cv-section-title">
         <span>🎓</span> Formação Acadêmica
       </h2>

@@ -179,10 +179,27 @@
     text-align: justify !important;
   }
 
-  /* ── Regras de Quebra de Página ── */
-  .cv-section-title {
+  /* ── Regras de Quebra de Página (CSS Paged Media Fragmentation) ── */
+  .cv-section,
+  section,
+  .cv-math-work-list,
+  .projects-grid,
+  .skills-grid,
+  .education-grid,
+  .cv-languages-row,
+  .cv-interests-wrap {
+    break-inside: auto !important;
+    page-break-inside: auto !important;
+  }
+
+  .cv-section-title,
+  .section-title,
+  .cv-math-section-title,
+  h2, h3 {
     break-after: avoid !important;
     page-break-after: avoid !important;
+    orphans: 3;
+    widows: 3;
     font-size: 10.2pt !important;
     font-weight: 700 !important;
     text-transform: uppercase !important;
@@ -195,18 +212,30 @@
   .cv-header,
   .cv-summary-card,
   .cv-work-item,
+  .cv-item,
+  .card,
+  .project-card,
+  .geo-card,
+  .cv-math-work-item,
+  .cv-math-project-card,
+  .cv-math-skill-card,
+  .cv-math-edu-card,
+  .cv-math-cert-card,
+  .cv-math-interest-card,
+  .cv-math-lang-card,
   .cv-education-item,
-  .cv-project-card,
   .cv-education-card,
   .cv-cert-card,
   .cv-award-card,
   .cv-language-card,
   .cv-interest-card,
   .cv-skills-group,
-  .cv-section-skills,
+  .cv-ref-card,
+  .cv-skill-bar-wrapper,
   .cv-optional-item,
-  .cv-languages-row,
-  .cv-interests-wrap,
+  .timeline-entry,
+  .signature-block,
+  tr,
   .cv-avoid-break {
     break-inside: avoid !important;
     page-break-inside: avoid !important;

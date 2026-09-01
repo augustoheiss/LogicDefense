@@ -309,10 +309,12 @@ def _render_cover_letter_html(data: dict, t: dict) -> str:
 
     cover_letter = data.get("coverLetter") or {}
     raw_recipient = cover_letter.get("recipient", "Prezada Equipe de Recrutamento")
+    rec_addr = ""
     if isinstance(raw_recipient, dict):
         rec_name = raw_recipient.get("name") or "Prezada Equipe"
         rec_title = raw_recipient.get("title") or ""
         rec_comp = raw_recipient.get("company") or cover_letter.get("company", "Empresa Contratante")
+        rec_addr = raw_recipient.get("address") or ""
         recipient = html.escape(f"{rec_name} ({rec_title})" if rec_title else rec_name)
         company = html.escape(str(rec_comp))
     else:
@@ -321,6 +323,8 @@ def _render_cover_letter_html(data: dict, t: dict) -> str:
 
     subject = html.escape(str(cover_letter.get("subject", f"Candidatura à Oportunidade em {label or 'Tecnologia'}")))
     date_val = html.escape(str(cover_letter.get("date", "São Paulo, SP")))
+    salutation_val = cover_letter.get("salutation")
+    salutation_html = f"<p style='margin-bottom: 1.15rem; font-weight: 700;'>{html.escape(str(salutation_val))}</p>" if salutation_val else ""
     
     raw_paragraphs = cover_letter.get("paragraphs")
     if isinstance(raw_paragraphs, list) and raw_paragraphs:
@@ -339,6 +343,9 @@ Atenciosamente,
         body_paragraphs = [html.escape(p).strip() for p in str(body).split("\n\n") if p.strip()]
 
     body_html = "".join(f"<p style='margin-bottom: 1.15rem; line-height: 1.65; text-align: justify;'>{p.replace(chr(10), '<br>')}</p>" for p in body_paragraphs)
+    closing_val = html.escape(str(cover_letter.get("closing", "Atenciosamente,")))
+    signature_val = html.escape(str(cover_letter.get("signature", name)))
+    addr_html = f"<div style='font-size: 0.78rem; opacity: 0.8;'>{html.escape(str(rec_addr))}</div>" if rec_addr else ""
 
     return f"""
     <div class="cv-page-a4 cv-cover-letter-page">
@@ -355,18 +362,22 @@ Atenciosamente,
 
         <div style="font-size: 0.88rem; color: inherit; line-height: 1.6;">
           <div style="display: flex; justify-content: space-between; margin-bottom: 1.25rem; font-weight: 600; opacity: 0.85;">
-            <div>Para: <strong>{recipient}</strong> — {company}</div>
+            <div>
+              <div>Para: <strong>{recipient}</strong> — {company}</div>
+              {addr_html}
+            </div>
             <div>{date_val}</div>
           </div>
           <div style="font-size: 1rem; font-weight: 700; margin-bottom: 1.25rem; border-left: 3px solid currentColor; padding-left: 0.6rem;">
             Assunto: {subject}
           </div>
           <div class="cover-letter-body">
+            {salutation_html}
             {body_html}
           </div>
           <div style="margin-top: 2.5rem;">
-            <div>Atenciosamente,</div>
-            <div style="font-weight: 800; font-size: 1.05rem; margin-top: 0.35rem;">{name}</div>
+            <div>{closing_val}</div>
+            <div style="font-weight: 800; font-size: 1.05rem; margin-top: 0.35rem;">{signature_val}</div>
             <div style="font-size: 0.82rem; opacity: 0.85;">{label}</div>
           </div>
         </div>
@@ -532,22 +543,22 @@ def _render_canvas_livre_html(data: dict, t: dict) -> str:
               {f'<div class="summary">{summary_val}</div>' if summary_val else ''}
             </div>
             <div class="cv-canvas-block cv-col-12">
-              {f'<section class="avoid-break"><h2 class="section-title">{t["work"]}</h2>{work_items}</section>' if work_items else ''}
+              {f'<section class="cv-section"><h2 class="section-title">{t["work"]}</h2>{work_items}</section>' if work_items else ''}
             </div>
             <div class="cv-canvas-block cv-col-6">
-              {f'<section class="avoid-break"><h2 class="section-title">{t["skills"]}</h2><div class="skills-grid cv-math-grid cv-grid-2">{skills_tags}</div></section>' if skills_tags else ''}
+              {f'<section class="cv-section"><h2 class="section-title">{t["skills"]}</h2><div class="skills-grid cv-math-grid cv-grid-2">{skills_tags}</div></section>' if skills_tags else ''}
             </div>
             <div class="cv-canvas-block cv-col-6">
-              {f'<section class="avoid-break"><h2 class="section-title">{t["education"]}</h2><div class="education-grid cv-math-grid cv-grid-2">{edu_items}</div></section>' if edu_items else ''}
+              {f'<section class="cv-section"><h2 class="section-title">{t["education"]}</h2><div class="education-grid cv-math-grid cv-grid-2">{edu_items}</div></section>' if edu_items else ''}
             </div>
             <div class="cv-canvas-block cv-col-12">
-              {f'<section class="avoid-break"><h2 class="section-title">{t["projects"]}</h2><div class="projects-grid cv-math-grid cv-grid-2">{projects_items}</div></section>' if projects_items else ''}
+              {f'<section class="cv-section"><h2 class="section-title">{t["projects"]}</h2><div class="projects-grid cv-math-grid cv-grid-2">{projects_items}</div></section>' if projects_items else ''}
             </div>
             <div class="cv-canvas-block cv-col-6">
-              {f'<section class="avoid-break"><h2 class="section-title">{t["languages"]}</h2><div class="languages-grid cv-math-grid cv-grid-2">{langs_items}</div></section>' if langs_items else ''}
+              {f'<section class="cv-section"><h2 class="section-title">{t["languages"]}</h2><div class="languages-grid cv-math-grid cv-grid-2">{langs_items}</div></section>' if langs_items else ''}
             </div>
             <div class="cv-canvas-block cv-col-6">
-              {f'<section class="avoid-break"><h2 class="section-title">{t["interests"]}</h2><div class="interests-grid cv-math-grid cv-grid-2">{ints_items}</div></section>' if ints_items else ''}
+              {f'<section class="cv-section"><h2 class="section-title">{t["interests"]}</h2><div class="interests-grid cv-math-grid cv-grid-2">{ints_items}</div></section>' if ints_items else ''}
             </div>
           </div>
         </div>
@@ -941,21 +952,21 @@ def _render_cv_layout_html(data: dict, layout: str, t: dict, view_mode: str = "c
 
             {f'<div class="cv-math-summary summary">{html.escape(basics.get("summary", "")).replace(chr(10), "<br>")}</div>' if basics.get("summary") else ''}
 
-            {f'<section class="avoid-break"><h2 class="cv-math-section-title section-title">{t["work"]}</h2><div class="cv-math-work-list">{work_items_html}</div></section>' if work else ''}
+            {f'<section class="cv-section"><h2 class="cv-math-section-title section-title">{t["work"]}</h2><div class="cv-math-work-list">{work_items_html}</div></section>' if work else ''}
 
-            {f'<section class="avoid-break"><h2 class="cv-math-section-title section-title">{t["projects"]}</h2><div class="projects-grid cv-math-grid {get_grid_class(len(projects))}">{projects_items_html}</div></section>' if projects else ''}
+            {f'<section class="cv-section"><h2 class="cv-math-section-title section-title">{t["projects"]}</h2><div class="projects-grid cv-math-grid {get_grid_class(len(projects))}">{projects_items_html}</div></section>' if projects else ''}
 
-            {f'<section class="avoid-break"><h2 class="cv-math-section-title section-title">{t["skills"]}</h2><div class="skills-grid cv-math-grid {get_grid_class(len(skills))}">{skills_items_html}</div></section>' if skills else ''}
+            {f'<section class="cv-section"><h2 class="cv-math-section-title section-title">{t["skills"]}</h2><div class="skills-grid cv-math-grid {get_grid_class(len(skills))}">{skills_items_html}</div></section>' if skills else ''}
 
-            {f'<section class="avoid-break"><h2 class="cv-math-section-title section-title">{t["education"]}</h2><div class="education-grid cv-math-grid {get_grid_class(len(education))}">{education_items_html}</div></section>' if education else ''}
+            {f'<section class="cv-section"><h2 class="cv-math-section-title section-title">{t["education"]}</h2><div class="education-grid cv-math-grid {get_grid_class(len(education))}">{education_items_html}</div></section>' if education else ''}
 
-            {f'<section class="avoid-break"><h2 class="cv-math-section-title section-title">{t["certificates"]}</h2><div class="certs-grid cv-math-grid {get_grid_class(len(certificates))}">{certificates_items_html}</div></section>' if certificates else ''}
+            {f'<section class="cv-section"><h2 class="cv-math-section-title section-title">{t["certificates"]}</h2><div class="certs-grid cv-math-grid {get_grid_class(len(certificates))}">{certificates_items_html}</div></section>' if certificates else ''}
 
-            {f'<section class="avoid-break"><h2 class="cv-math-section-title section-title">{t["publications"]}</h2>{publications_html}</section>' if publications else ''}
+            {f'<section class="cv-section"><h2 class="cv-math-section-title section-title">{t["publications"]}</h2>{publications_html}</section>' if publications else ''}
 
-            {f'<section class="avoid-break"><h2 class="cv-math-section-title section-title">{t["languages"]}</h2><div class="languages-grid cv-math-grid {get_grid_class(len(languages))}">{lang_cards_html}</div></section>' if languages else ''}
+            {f'<section class="cv-section"><h2 class="cv-math-section-title section-title">{t["languages"]}</h2><div class="languages-grid cv-math-grid {get_grid_class(len(languages))}">{lang_cards_html}</div></section>' if languages else ''}
 
-            {f'<section class="avoid-break"><h2 class="cv-math-section-title section-title">{t["interests"]}</h2><div class="interests-grid cv-math-grid {get_grid_class(len(interests))}">{interest_items_html}</div></section>' if interests else ''}
+            {f'<section class="cv-section"><h2 class="cv-math-section-title section-title">{t["interests"]}</h2><div class="interests-grid cv-math-grid {get_grid_class(len(interests))}">{interest_items_html}</div></section>' if interests else ''}
         </div>
         """
 
@@ -993,9 +1004,9 @@ def _render_cv_layout_html(data: dict, layout: str, t: dict, view_mode: str = "c
 
                 <main class="cv-editorial-main">
                     {f'<div class="summary" style="margin-bottom: 1.25rem;">{html.escape(basics.get("summary", "")).replace(chr(10), "<br>")}</div>' if basics.get("summary") else ''}
-                    {f'<section class="avoid-break"><h2 class="section-title">{t["work"]}</h2>{work_items_html}</section>' if work else ''}
-                    {f'<section class="avoid-break"><h2 class="section-title">{t["projects"]}</h2><div class="cv-sidebar-stack" style="display: flex; flex-direction: column; gap: 0.65rem; width: 100%;">{projects_items_html}</div></section>' if projects else ''}
-                    {f'<section class="avoid-break"><h2 class="section-title">{t["education"]}</h2><div class="cv-sidebar-stack" style="display: flex; flex-direction: column; gap: 0.65rem; width: 100%;">{education_items_html}</div></section>' if education else ''}
+                    {f'<section class="cv-section"><h2 class="section-title">{t["work"]}</h2>{work_items_html}</section>' if work else ''}
+                    {f'<section class="cv-section"><h2 class="section-title">{t["projects"]}</h2><div class="cv-sidebar-stack" style="display: flex; flex-direction: column; gap: 0.65rem; width: 100%;">{projects_items_html}</div></section>' if projects else ''}
+                    {f'<section class="cv-section"><h2 class="section-title">{t["education"]}</h2><div class="cv-sidebar-stack" style="display: flex; flex-direction: column; gap: 0.65rem; width: 100%;">{education_items_html}</div></section>' if education else ''}
                 </main>
             </div>
         </div>
@@ -1026,10 +1037,10 @@ def _render_cv_layout_html(data: dict, layout: str, t: dict, view_mode: str = "c
 
                 <main class="cv-navy-main">
                     {f'<div class="summary">{html.escape(basics.get("summary", "")).replace(chr(10), "<br>")}</div>' if basics.get("summary") else ''}
-                    {f'<section class="avoid-break"><h2 class="section-title">{t["work"]}</h2>{work_items_html}</section>' if work else ''}
-                    {f'<section class="avoid-break"><h2 class="section-title">{t["education"]}</h2><div class="cv-sidebar-stack" style="display: flex; flex-direction: column; gap: 0.65rem; width: 100%;">{education_items_html}</div></section>' if education else ''}
-                    {f'<section class="avoid-break"><h2 class="section-title">{t["projects"]}</h2><div class="cv-sidebar-stack" style="display: flex; flex-direction: column; gap: 0.65rem; width: 100%;">{projects_items_html}</div></section>' if projects else ''}
-                    {f'<section class="avoid-break"><h2 class="section-title">{t["certificates"]}</h2><div class="cv-sidebar-stack" style="display: flex; flex-direction: column; gap: 0.65rem; width: 100%;">{certificates_items_html}</div></section>' if certificates else ''}
+                    {f'<section class="cv-section"><h2 class="section-title">{t["work"]}</h2>{work_items_html}</section>' if work else ''}
+                    {f'<section class="cv-section"><h2 class="section-title">{t["education"]}</h2><div class="cv-sidebar-stack" style="display: flex; flex-direction: column; gap: 0.65rem; width: 100%;">{education_items_html}</div></section>' if education else ''}
+                    {f'<section class="cv-section"><h2 class="section-title">{t["projects"]}</h2><div class="cv-sidebar-stack" style="display: flex; flex-direction: column; gap: 0.65rem; width: 100%;">{projects_items_html}</div></section>' if projects else ''}
+                    {f'<section class="cv-section"><h2 class="section-title">{t["certificates"]}</h2><div class="cv-sidebar-stack" style="display: flex; flex-direction: column; gap: 0.65rem; width: 100%;">{certificates_items_html}</div></section>' if certificates else ''}
                 </main>
             </div>
         </div>
@@ -1058,18 +1069,18 @@ def _render_cv_layout_html(data: dict, layout: str, t: dict, view_mode: str = "c
 
             <div style="display: grid; grid-template-columns: 1.2fr 1fr; gap: 1.5rem; margin-bottom: 1.25rem; align-items: start;">
                 <div>
-                    {f'<section class="avoid-break"><h2 class="section-title">{t["work"]}</h2>{work_items_html}</section>' if work else ''}
+                    {f'<section class="cv-section"><h2 class="section-title">{t["work"]}</h2>{work_items_html}</section>' if work else ''}
                 </div>
                 <div>
-                    {f'<section class="avoid-break"><h2 class="section-title">{t["education"]}</h2><div class="cv-sidebar-stack" style="display: flex; flex-direction: column; gap: 0.65rem; width: 100%;">{education_items_html}</div></section>' if education else ''}
-                    {f'<section class="avoid-break"><h2 class="section-title">{t["projects"]}</h2><div class="cv-sidebar-stack" style="display: flex; flex-direction: column; gap: 0.65rem; width: 100%;">{projects_items_html}</div></section>' if projects else ''}
+                    {f'<section class="cv-section"><h2 class="section-title">{t["education"]}</h2><div class="cv-sidebar-stack" style="display: flex; flex-direction: column; gap: 0.65rem; width: 100%;">{education_items_html}</div></section>' if education else ''}
+                    {f'<section class="cv-section"><h2 class="section-title">{t["projects"]}</h2><div class="cv-sidebar-stack" style="display: flex; flex-direction: column; gap: 0.65rem; width: 100%;">{projects_items_html}</div></section>' if projects else ''}
                 </div>
             </div>
 
-            {f'<section class="avoid-break" style="border-top: 1px solid rgba(125,125,125,0.2); padding-top: 0.85rem; margin-top: 0.5rem;"><h2 class="section-title">⚡ MATRIZ DE COMPETÊNCIAS</h2><div class="cv-skills-progress-list">{skills_bars_html}</div></section>' if skills else ''}
-            {f'<section class="avoid-break"><h2 class="section-title">{t["languages"]}</h2><div class="languages-grid cv-math-grid {get_grid_class(len(languages))}">{lang_cards_html}</div></section>' if languages else ''}
-            {f'<section class="avoid-break"><h2 class="section-title">{t["certificates"]}</h2><div class="certs-grid cv-math-grid {get_grid_class(len(certificates))}">{certificates_items_html}</div></section>' if certificates else ''}
-            {f'<section class="avoid-break"><h2 class="section-title">{t["interests"]}</h2><div class="interests-grid cv-math-grid {get_grid_class(len(interests))}">{interest_items_html}</div></section>' if interests else ''}
+            {f'<section class="cv-section" style="border-top: 1px solid rgba(125,125,125,0.2); padding-top: 0.85rem; margin-top: 0.5rem;"><h2 class="section-title">⚡ MATRIZ DE COMPETÊNCIAS</h2><div class="cv-skills-progress-list">{skills_bars_html}</div></section>' if skills else ''}
+            {f'<section class="cv-section"><h2 class="section-title">{t["languages"]}</h2><div class="languages-grid cv-math-grid {get_grid_class(len(languages))}">{lang_cards_html}</div></section>' if languages else ''}
+            {f'<section class="cv-section"><h2 class="section-title">{t["certificates"]}</h2><div class="certs-grid cv-math-grid {get_grid_class(len(certificates))}">{certificates_items_html}</div></section>' if certificates else ''}
+            {f'<section class="cv-section"><h2 class="section-title">{t["interests"]}</h2><div class="interests-grid cv-math-grid {get_grid_class(len(interests))}">{interest_items_html}</div></section>' if interests else ''}
         </div>
         """
 
@@ -1082,10 +1093,10 @@ def _render_cv_layout_html(data: dict, layout: str, t: dict, view_mode: str = "c
             <div class="cv-duo-layout" style="display: grid; grid-template-columns: 210px 1fr; gap: 1.5rem; align-items: start;">
                 <aside class="cv-duo-left cv-sidebar-stack" style="border-right: 1px solid rgba(125,125,125,0.25); padding-right: 1.25rem;">
                     {avatar_html}
-                    {f'<div class="sidebar-section avoid-break"><h4 class="section-title" style="font-size: 0.85rem; margin-top: 0;">PERFIL</h4><p class="summary" style="font-size: 0.82rem; line-height: 1.5;">{html.escape(basics.get("summary", "")).replace(chr(10), "<br>")}</p></div>' if basics.get("summary") else ''}
-                    {f'<div class="sidebar-section avoid-break"><h4 class="section-title" style="font-size: 0.85rem;">EXPERTISE</h4><div class="cv-skills-progress-list">{skills_bars_html}</div></div>' if skills else ''}
-                    {f'<div class="sidebar-section avoid-break"><h4 class="section-title" style="font-size: 0.85rem;">HOBBIES</h4><div class="cv-hobbies-grid" style="display: flex; justify-content: space-around; width: 100%;">{hobbies_circles_html}</div></div>' if interests else ''}
-                    {f'<div class="sidebar-section avoid-break"><h4 class="section-title" style="font-size: 0.85rem;">{t["languages"]}</h4><div class="cv-sidebar-stack">{lang_cards_html}</div></div>' if languages else ''}
+                    {f'<div class="sidebar-section"><h4 class="section-title" style="font-size: 0.85rem; margin-top: 0;">PERFIL</h4><p class="summary" style="font-size: 0.82rem; line-height: 1.5;">{html.escape(basics.get("summary", "")).replace(chr(10), "<br>")}</p></div>' if basics.get("summary") else ''}
+                    {f'<div class="sidebar-section"><h4 class="section-title" style="font-size: 0.85rem;">EXPERTISE</h4><div class="cv-skills-progress-list">{skills_bars_html}</div></div>' if skills else ''}
+                    {f'<div class="sidebar-section"><h4 class="section-title" style="font-size: 0.85rem;">HOBBIES</h4><div class="cv-hobbies-grid" style="display: flex; justify-content: space-around; width: 100%;">{hobbies_circles_html}</div></div>' if interests else ''}
+                    {f'<div class="sidebar-section"><h4 class="section-title" style="font-size: 0.85rem;">{t["languages"]}</h4><div class="cv-sidebar-stack">{lang_cards_html}</div></div>' if languages else ''}
                 </aside>
 
                 <main class="cv-duo-right">
@@ -1101,10 +1112,10 @@ def _render_cv_layout_html(data: dict, layout: str, t: dict, view_mode: str = "c
                         </div>
                     </header>
 
-                    {f'<section class="avoid-break"><h2 class="section-title">{t["work"]}</h2>{work_items_html}</section>' if work else ''}
-                    {f'<section class="avoid-break"><h2 class="section-title">{t["education"]}</h2><div class="cv-sidebar-stack" style="display: flex; flex-direction: column; gap: 0.65rem; width: 100%;">{education_items_html}</div></section>' if education else ''}
-                    {f'<section class="avoid-break"><h2 class="section-title">{t["projects"]}</h2><div class="cv-sidebar-stack" style="display: flex; flex-direction: column; gap: 0.65rem; width: 100%;">{projects_items_html}</div></section>' if projects else ''}
-                    {f'<section class="avoid-break"><h2 class="section-title">{t["certificates"]}</h2><div class="cv-sidebar-stack" style="display: flex; flex-direction: column; gap: 0.65rem; width: 100%;">{certificates_items_html}</div></section>' if certificates else ''}
+                    {f'<section class="cv-section"><h2 class="section-title">{t["work"]}</h2>{work_items_html}</section>' if work else ''}
+                    {f'<section class="cv-section"><h2 class="section-title">{t["education"]}</h2><div class="cv-sidebar-stack" style="display: flex; flex-direction: column; gap: 0.65rem; width: 100%;">{education_items_html}</div></section>' if education else ''}
+                    {f'<section class="cv-section"><h2 class="section-title">{t["projects"]}</h2><div class="cv-sidebar-stack" style="display: flex; flex-direction: column; gap: 0.65rem; width: 100%;">{projects_items_html}</div></section>' if projects else ''}
+                    {f'<section class="cv-section"><h2 class="section-title">{t["certificates"]}</h2><div class="cv-sidebar-stack" style="display: flex; flex-direction: column; gap: 0.65rem; width: 100%;">{certificates_items_html}</div></section>' if certificates else ''}
                 </main>
             </div>
         </div>
@@ -1137,9 +1148,9 @@ def _render_cv_layout_html(data: dict, layout: str, t: dict, view_mode: str = "c
 
                 <main>
                     {f'<div class="summary">{html.escape(basics.get("summary", "")).replace(chr(10), "<br>")}</div>' if basics.get("summary") else ''}
-                    {f'<section class="avoid-break"><h2 class="section-title">{t["work"]}</h2>{work_items_html}</section>' if work else ''}
-                    {f'<section class="avoid-break"><h2 class="section-title">{t["projects"]}</h2><div class="cv-sidebar-stack" style="display: flex; flex-direction: column; gap: 0.65rem; width: 100%;">{projects_items_html}</div></section>' if projects else ''}
-                    {f'<section class="avoid-break"><h2 class="section-title">{t["education"]}</h2><div class="cv-sidebar-stack" style="display: flex; flex-direction: column; gap: 0.65rem; width: 100%;">{education_items_html}</div></section>' if education else ''}
+                    {f'<section class="cv-section"><h2 class="section-title">{t["work"]}</h2>{work_items_html}</section>' if work else ''}
+                    {f'<section class="cv-section"><h2 class="section-title">{t["projects"]}</h2><div class="cv-sidebar-stack" style="display: flex; flex-direction: column; gap: 0.65rem; width: 100%;">{projects_items_html}</div></section>' if projects else ''}
+                    {f'<section class="cv-section"><h2 class="section-title">{t["education"]}</h2><div class="cv-sidebar-stack" style="display: flex; flex-direction: column; gap: 0.65rem; width: 100%;">{education_items_html}</div></section>' if education else ''}
                 </main>
             </div>
         </div>
@@ -1168,21 +1179,21 @@ def _render_cv_layout_html(data: dict, layout: str, t: dict, view_mode: str = "c
 
             {f'<div class="summary">{html.escape(basics.get("summary", "")).replace(chr(10), "<br>")}</div>' if basics.get("summary") else ''}
 
-            {f'<section class="avoid-break"><h2 class="section-title">{t["work"]}</h2>{work_items_html}</section>' if work else ''}
+            {f'<section class="cv-section"><h2 class="section-title">{t["work"]}</h2>{work_items_html}</section>' if work else ''}
 
-            {f'<section class="avoid-break"><h2 class="section-title">{t["projects"]}</h2><div class="projects-grid cv-math-grid {get_grid_class(len(projects))}">{projects_items_html}</div></section>' if projects else ''}
+            {f'<section class="cv-section"><h2 class="section-title">{t["projects"]}</h2><div class="projects-grid cv-math-grid {get_grid_class(len(projects))}">{projects_items_html}</div></section>' if projects else ''}
 
-            {f'<section class="avoid-break"><h2 class="section-title">{t["skills"]}</h2><div class="skills-grid cv-math-grid {get_grid_class(len(skills))}">{skills_items_html}</div></section>' if skills else ''}
+            {f'<section class="cv-section"><h2 class="section-title">{t["skills"]}</h2><div class="skills-grid cv-math-grid {get_grid_class(len(skills))}">{skills_items_html}</div></section>' if skills else ''}
 
-            {f'<section class="avoid-break"><h2 class="section-title">{t["education"]}</h2><div class="education-grid cv-math-grid {get_grid_class(len(education))}">{education_items_html}</div></section>' if education else ''}
+            {f'<section class="cv-section"><h2 class="section-title">{t["education"]}</h2><div class="education-grid cv-math-grid {get_grid_class(len(education))}">{education_items_html}</div></section>' if education else ''}
 
-            {f'<section class="avoid-break"><h2 class="section-title">{t["certificates"]}</h2><div class="certs-grid cv-math-grid {get_grid_class(len(certificates))}">{certificates_items_html}</div></section>' if certificates else ''}
+            {f'<section class="cv-section"><h2 class="section-title">{t["certificates"]}</h2><div class="certs-grid cv-math-grid {get_grid_class(len(certificates))}">{certificates_items_html}</div></section>' if certificates else ''}
 
-            {f'<section class="avoid-break"><h2 class="section-title">{t["publications"]}</h2>{publications_html}</section>' if publications else ''}
+            {f'<section class="cv-section"><h2 class="section-title">{t["publications"]}</h2>{publications_html}</section>' if publications else ''}
 
-            {f'<section class="avoid-break"><h2 class="section-title">{t["languages"]}</h2><div class="languages-grid cv-math-grid {get_grid_class(len(languages))}">{lang_cards_html}</div></section>' if languages else ''}
+            {f'<section class="cv-section"><h2 class="section-title">{t["languages"]}</h2><div class="languages-grid cv-math-grid {get_grid_class(len(languages))}">{lang_cards_html}</div></section>' if languages else ''}
 
-            {f'<section class="avoid-break"><h2 class="section-title">{t["interests"]}</h2><div class="interests-grid cv-math-grid {get_grid_class(len(interests))}">{interest_items_html}</div></section>' if interests else ''}
+            {f'<section class="cv-section"><h2 class="section-title">{t["interests"]}</h2><div class="interests-grid cv-math-grid {get_grid_class(len(interests))}">{interest_items_html}</div></section>' if interests else ''}
         </div>
         """
 
@@ -1211,21 +1222,21 @@ def _render_cv_layout_html(data: dict, layout: str, t: dict, view_mode: str = "c
 
             {f'<div class="summary">{html.escape(basics.get("summary", "")).replace(chr(10), "<br>")}</div>' if basics.get("summary") else ''}
 
-            {f'<section class="avoid-break"><h2 class="section-title">{t["work"]}</h2>{work_items_html}</section>' if work else ''}
+            {f'<section class="cv-section"><h2 class="section-title">{t["work"]}</h2>{work_items_html}</section>' if work else ''}
 
-            {f'<section class="avoid-break"><h2 class="section-title">{t["projects"]}</h2><div class="projects-grid cv-math-grid {get_grid_class(len(projects))}">{projects_items_html}</div></section>' if projects else ''}
+            {f'<section class="cv-section"><h2 class="section-title">{t["projects"]}</h2><div class="projects-grid cv-math-grid {get_grid_class(len(projects))}">{projects_items_html}</div></section>' if projects else ''}
 
-            {f'<section class="avoid-break"><h2 class="section-title">{t["skills"]}</h2><div class="skills-grid cv-math-grid {get_grid_class(len(skills))}">{skills_items_html}</div></section>' if skills else ''}
+            {f'<section class="cv-section"><h2 class="section-title">{t["skills"]}</h2><div class="skills-grid cv-math-grid {get_grid_class(len(skills))}">{skills_items_html}</div></section>' if skills else ''}
 
-            {f'<section class="avoid-break"><h2 class="section-title">{t["education"]}</h2><div class="education-grid cv-math-grid {get_grid_class(len(education))}">{education_items_html}</div></section>' if education else ''}
+            {f'<section class="cv-section"><h2 class="section-title">{t["education"]}</h2><div class="education-grid cv-math-grid {get_grid_class(len(education))}">{education_items_html}</div></section>' if education else ''}
 
-            {f'<section class="avoid-break"><h2 class="section-title">{t["certificates"]}</h2><div class="certs-grid cv-math-grid {get_grid_class(len(certificates))}">{certificates_items_html}</div></section>' if certificates else ''}
+            {f'<section class="cv-section"><h2 class="section-title">{t["certificates"]}</h2><div class="certs-grid cv-math-grid {get_grid_class(len(certificates))}">{certificates_items_html}</div></section>' if certificates else ''}
 
-            {f'<section class="avoid-break"><h2 class="section-title">{t["publications"]}</h2>{publications_html}</section>' if publications else ''}
+            {f'<section class="cv-section"><h2 class="section-title">{t["publications"]}</h2>{publications_html}</section>' if publications else ''}
 
-            {f'<section class="avoid-break"><h2 class="section-title">{t["languages"]}</h2><div class="languages-grid cv-math-grid {get_grid_class(len(languages))}">{lang_cards_html}</div></section>' if languages else ''}
+            {f'<section class="cv-section"><h2 class="section-title">{t["languages"]}</h2><div class="languages-grid cv-math-grid {get_grid_class(len(languages))}">{lang_cards_html}</div></section>' if languages else ''}
 
-            {f'<section class="avoid-break"><h2 class="section-title">{t["interests"]}</h2><div class="interests-grid cv-math-grid {get_grid_class(len(interests))}">{interest_items_html}</div></section>' if interests else ''}
+            {f'<section class="cv-section"><h2 class="section-title">{t["interests"]}</h2><div class="interests-grid cv-math-grid {get_grid_class(len(interests))}">{interest_items_html}</div></section>' if interests else ''}
         </div>
         """
 
@@ -1380,6 +1391,7 @@ def render_multi_cv_dashboard_html(
   <title>{html.escape(candidate_name)} — Central de Currículos Multi-Persona</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/js-yaml/4.1.0/js-yaml.min.js"></script>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700;800;900&family=Courier+Prime:ital,wght@0,400;0,700;1,400&family=Fira+Code:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700;800&family=Lora:ital,wght@0,400;0,600;0,700;1,400&family=Merriweather:ital,wght@0,300;0,400;0,700;0,900;1,400&family=Montserrat:wght@400;500;600;700;800&family=Open+Sans:ital,wght@0,300;0,400;0,600;0,700;1,400&family=Outfit:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&family=Poppins:wght@300;400;500;600;700;800&family=Roboto:ital,wght@0,300;0,400;0,500;0,700;1,400&display=swap');
 
@@ -1837,6 +1849,23 @@ def render_multi_cv_dashboard_html(
       max-width: 100%;
     }}
 
+    /* ── CSS Paged Media & Page Fragmentation (Anti-Invisble Box) ── */
+    .cv-section, section, .cv-math-work-list, .projects-grid, .skills-grid, .education-grid, .cv-languages-row, .cv-interests-wrap {{
+      break-inside: auto !important;
+      page-break-inside: auto !important;
+    }}
+
+    .section-title, .cv-section-title, .cv-math-section-title, h2, h3 {{
+      break-after: avoid !important;
+      page-break-after: avoid !important;
+      orphans: 3;
+      widows: 3;
+    }}
+
+    .card, .project-card, .geo-card,
+    .cv-math-work-item, .cv-math-project-card, .cv-math-skill-card, .cv-math-edu-card, .cv-math-cert-card, .cv-math-interest-card, .cv-math-lang-card,
+    .cv-work-item, .cv-item, .cv-education-card, .cv-cert-card, .cv-award-card, .cv-language-card, .cv-interest-card,
+    .cv-skills-group, .cv-ref-card, .cv-skill-bar-wrapper, .timeline-entry, .signature-block, tr,
     .avoid-break {{
       break-inside: avoid !important;
       page-break-inside: avoid !important;
@@ -2653,6 +2682,7 @@ def render_multi_cv_dashboard_html(
 
     <button onclick="openDesignModal()" class="btn-sec" title="{t['design_btn']}">{t["design_btn"]}</button>
     <button onclick="openPhotoModal()" class="btn-sec" title="{t['photo_btn']}">{t["photo_btn"]}</button>
+    <button onclick="openYamlEditorModal()" class="btn-sec" style="background:#0f766e;color:#ffffff;border-color:#14b8a6;font-weight:700;" title="📝 Editar YAML ao Vivo">📝 Editor YAML</button>
     <button onclick="printCV()">{t["print_btn"]}</button>
     <button onclick="downloadActiveYaml()" class="btn-sec">{t["download_yaml"]}</button>
     <button onclick="downloadAllZip()" class="btn-accent">{t["download_zip"]}</button>
@@ -2928,6 +2958,38 @@ def render_multi_cv_dashboard_html(
       </div>
       <div class="cv-modal-footer">
         <button class="modal-btn modal-btn-pri" onclick="closeCanvasBlockInspector()">Salvar & Fechar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Live Editor YAML Modal -->
+  <div id="yaml-editor-modal" class="cv-modal-backdrop" onclick="closeYamlEditorModal(event)">
+    <div class="cv-modal-card" style="max-width: 920px; width: 94vw; max-height: 92vh; display: flex; flex-direction: column; padding: 0; overflow: hidden; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.7); border: 1px solid #0284c7;" onclick="event.stopPropagation()">
+      <div class="cv-modal-header" style="padding: 0.85rem 1.25rem; border-bottom: 1px solid #1e293b; background: #0b1329; display: flex; justify-content: space-between; align-items: center;">
+        <div style="display: flex; align-items: center; gap: 0.75rem;">
+          <h3 style="margin: 0; font-size: 1.1rem; color: #38bdf8; display: flex; align-items: center; gap: 0.4rem;">📝 Editor YAML ao Vivo</h3>
+          <span id="yaml-editor-badge" style="font-size: 0.72rem; padding: 0.2rem 0.6rem; border-radius: 9999px; background: #1e293b; color: #38bdf8; border: 1px solid #0284c7; font-weight: 600;">Persona Ativa</span>
+        </div>
+        <button class="cv-modal-close" onclick="closeYamlEditorModal()" style="background: none; border: none; color: #94a3b8; font-size: 1.2rem; cursor: pointer;">✕</button>
+      </div>
+      <div class="cv-modal-body" style="padding: 1rem 1.25rem; flex: 1; display: flex; flex-direction: column; gap: 0.65rem; background: #06090f; overflow: hidden;">
+        <div style="font-size: 0.8rem; color: #94a3b8; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+          <span>Edite qualquer campo do currículo ou cover letter. O documento A4 atualiza em tempo real:</span>
+          <span id="yaml-editor-status" style="font-size: 0.75rem; color: #10b981; font-weight: 600; background: rgba(16,185,129,0.1); padding: 0.15rem 0.5rem; border-radius: 4px;">✓ Sincronizado</span>
+        </div>
+        <div id="yaml-error-alert" style="display: none; padding: 0.5rem 0.75rem; border-radius: 6px; background: rgba(239, 68, 68, 0.15); border: 1px solid #ef4444; color: #fca5a5; font-size: 0.78rem; font-family: monospace; white-space: pre-wrap;"></div>
+        <textarea id="yaml-editor-textarea" style="flex: 1; min-height: 420px; width: 100%; background: #020617; color: #e0f2fe; font-family: 'Courier Prime', 'Fira Code', monospace; font-size: 0.85rem; line-height: 1.5; padding: 1rem; border: 1px solid #1e293b; border-radius: 8px; outline: none; resize: none; tab-size: 2; white-space: pre; box-sizing: border-box;" spellcheck="false"></textarea>
+      </div>
+      <div class="cv-modal-footer" style="padding: 0.75rem 1.25rem; border-top: 1px solid #1e293b; background: #0b1329; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+        <div style="display: flex; gap: 0.4rem; flex-wrap: wrap;">
+          <button type="button" onclick="restoreOriginalYaml()" class="modal-btn modal-btn-sec" style="font-size: 0.75rem; padding: 0.35rem 0.65rem;">🔄 Restaurar Original</button>
+          <button type="button" onclick="copyYamlFromEditor()" class="modal-btn modal-btn-sec" style="font-size: 0.75rem; padding: 0.35rem 0.65rem;">📋 Copiar</button>
+          <button type="button" onclick="downloadYamlFromEditor()" class="modal-btn modal-btn-sec" style="font-size: 0.75rem; padding: 0.35rem 0.65rem;">📥 Baixar .yaml</button>
+        </div>
+        <div style="display: flex; gap: 0.5rem;">
+          <button type="button" onclick="closeYamlEditorModal()" class="modal-btn modal-btn-sec" style="font-size: 0.8rem; padding: 0.4rem 0.85rem;">Fechar</button>
+          <button type="button" onclick="applyYamlEditorChanges(true)" class="modal-btn modal-btn-pri" style="font-size: 0.8rem; padding: 0.4rem 1.1rem; background: #0284c7; font-weight: 700;">⚡ Aplicar no Currículo</button>
+        </div>
       </div>
     </div>
   </div>
@@ -3363,7 +3425,7 @@ def render_multi_cv_dashboard_html(
                 </div>
               `;
             }});
-            return wHtml ? `<section class="avoid-break"><h2 class="section-title">${{I18N_T.work || 'Experiência'}}</h2>${{wHtml}}</section>` : '';
+            return wHtml ? `<section class="cv-section"><h2 class="section-title">${{I18N_T.work || 'Experiência'}}</h2>${{wHtml}}</section>` : '';
           case 'projects':
             let pjHtml = '';
             (data.projects || []).forEach(pr => {{
@@ -3378,7 +3440,7 @@ def render_multi_cv_dashboard_html(
                 </div>
               `;
             }});
-            return pjHtml ? `<section class="avoid-break"><h2 class="section-title">${{I18N_T.projects || 'Projetos'}}</h2><div class="projects-grid cv-math-grid cv-grid-2">${{pjHtml}}</div></section>` : '';
+            return pjHtml ? `<section class="cv-section"><h2 class="section-title">${{I18N_T.projects || 'Projetos'}}</h2><div class="projects-grid cv-math-grid cv-grid-2">${{pjHtml}}</div></section>` : '';
           case 'skills_tags':
             let skHtml = '';
             (data.skills || []).forEach(sk => {{
@@ -3391,7 +3453,7 @@ def render_multi_cv_dashboard_html(
                 </div>
               `;
             }});
-            return skHtml ? `<section class="avoid-break"><h2 class="section-title">${{I18N_T.skills || 'Competências'}}</h2><div class="skills-grid cv-math-grid cv-grid-2">${{skHtml}}</div></section>` : '';
+            return skHtml ? `<section class="cv-section"><h2 class="section-title">${{I18N_T.skills || 'Competências'}}</h2><div class="skills-grid cv-math-grid cv-grid-2">${{skHtml}}</div></section>` : '';
           case 'skills_bars':
             let sbHtml = (data.skills || []).map(sk => {{
               const sName = sk.name || '';
@@ -3408,7 +3470,7 @@ def render_multi_cv_dashboard_html(
                 </div>
               `;
             }}).join('');
-            return sbHtml ? `<section class="avoid-break"><h2 class="section-title">⚡ NÍVEIS DE HABILIDADE</h2><div class="cv-skills-progress-list">${{sbHtml}}</div></section>` : '';
+            return sbHtml ? `<section class="cv-section"><h2 class="section-title">⚡ NÍVEIS DE HABILIDADE</h2><div class="cv-skills-progress-list">${{sbHtml}}</div></section>` : '';
           case 'education':
             let edHtml = '';
             (data.education || []).forEach(ed => {{
@@ -3424,7 +3486,7 @@ def render_multi_cv_dashboard_html(
                 </div>
               `;
             }});
-            return edHtml ? `<section class="avoid-break"><h2 class="section-title">${{I18N_T.education || 'Formação'}}</h2><div class="education-grid cv-math-grid cv-grid-2">${{edHtml}}</div></section>` : '';
+            return edHtml ? `<section class="cv-section"><h2 class="section-title">${{I18N_T.education || 'Formação'}}</h2><div class="education-grid cv-math-grid cv-grid-2">${{edHtml}}</div></section>` : '';
           case 'certificates':
             let cHtml = '';
             (data.certificates || []).forEach(cert => {{
@@ -3439,7 +3501,7 @@ def render_multi_cv_dashboard_html(
                 </div>
               `;
             }});
-            return cHtml ? `<section class="avoid-break"><h2 class="section-title">${{I18N_T.certificates || 'Certificações'}}</h2><div class="certs-grid cv-math-grid cv-grid-2">${{cHtml}}</div></section>` : '';
+            return cHtml ? `<section class="cv-section"><h2 class="section-title">${{I18N_T.certificates || 'Certificações'}}</h2><div class="certs-grid cv-math-grid cv-grid-2">${{cHtml}}</div></section>` : '';
           case 'languages':
             let lgHtml = (data.languages || []).map(l => `
               <div class="lang-card avoid-break" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
@@ -3447,7 +3509,7 @@ def render_multi_cv_dashboard_html(
                 <span class="badge">${{l.fluency || ''}}</span>
               </div>
             `).join('');
-            return lgHtml ? `<section class="avoid-break"><h2 class="section-title">${{I18N_T.languages || 'Idiomas'}}</h2><div class="languages-grid cv-math-grid cv-grid-2">${{lgHtml}}</div></section>` : '';
+            return lgHtml ? `<section class="cv-section"><h2 class="section-title">${{I18N_T.languages || 'Idiomas'}}</h2><div class="languages-grid cv-math-grid cv-grid-2">${{lgHtml}}</div></section>` : '';
           case 'interests':
             let itHtml = '';
             (data.interests || []).forEach(it => {{
@@ -3460,7 +3522,7 @@ def render_multi_cv_dashboard_html(
                 </div>
               `;
             }});
-            return itHtml ? `<section class="avoid-break"><h2 class="section-title">${{I18N_T.interests || 'Interesses'}}</h2><div class="interests-grid cv-math-grid cv-grid-2">${{itHtml}}</div></section>` : '';
+            return itHtml ? `<section class="cv-section"><h2 class="section-title">${{I18N_T.interests || 'Interesses'}}</h2><div class="interests-grid cv-math-grid cv-grid-2">${{itHtml}}</div></section>` : '';
           default:
             return '';
         }}
@@ -3570,7 +3632,88 @@ def render_multi_cv_dashboard_html(
       `;
     }}
 
-    function renderClientLayout(data, layout, viewMode) {{
+    function renderClientCoverLetter(data) {{
+      const basics = data.basics || {{}};
+      const name = basics.name || 'Candidato';
+      const label = basics.label || '';
+      const email = basics.email || '';
+      const phone = basics.phone || '';
+      const cleanPhone = phone.replace(/[^\\d+]/g, '');
+      const city = (basics.location && basics.location.city) || '';
+      const region = (basics.location && basics.location.region) || '';
+      const locStr = (city && region) ? (city + ' - ' + region) : (city || region || '');
+
+      const cl = data.coverLetter || {{}};
+      const rawRec = cl.recipient || 'Prezada Equipe de Recrutamento';
+      let recipient = 'Prezada Equipe';
+      let company = cl.company || 'Empresa Contratante';
+      let addrHtml = '';
+      if (typeof rawRec === 'object' && rawRec !== null) {{
+        const recName = rawRec.name || 'Prezada Equipe';
+        const recTitle = rawRec.title || '';
+        recipient = recTitle ? (recName + ' (' + recTitle + ')') : recName;
+        company = rawRec.company || cl.company || 'Empresa Contratante';
+        if (rawRec.address) {{
+          addrHtml = `<div style="font-size: 0.78rem; opacity: 0.8;">${{rawRec.address}}</div>`;
+        }}
+      }} else {{
+        recipient = String(rawRec);
+      }}
+
+      const subject = cl.subject || ('Candidatura à Oportunidade em ' + (label || 'Tecnologia'));
+      const dateVal = cl.date || 'São Paulo, SP';
+      const salutation = cl.salutation ? (`<p style="margin-bottom: 1.15rem; font-weight: 700;">${{cl.salutation}}</p>`) : '';
+      
+      let bodyHtml = '';
+      if (Array.isArray(cl.paragraphs) && cl.paragraphs.length > 0) {{
+        bodyHtml = cl.paragraphs.map(p => `<p style="margin-bottom: 1.15rem; line-height: 1.65; text-align: justify;">${{String(p).replace(/\\n/g, '<br>')}}</p>`).join('');
+      }} else {{
+        const bodyText = cl.body || (`Gostaria de apresentar minha candidatura à oportunidade em sua organização. Com sólida trajetória técnica e de liderança em engenharia de software e inteligência artificial, tenho dedicado minha carreira ao desenvolvimento de sistemas escaláveis, seguros e de alta performance.\\n\\nAo longo da minha jornada, liderei a concepção de arquiteturas críticas, automações inteligentes e microsserviços de alto throughput, sempre com rigoroso foco em governança, código limpo e impacto mensurável de negócios.\\n\\nEstou entusiasmado com a possibilidade de agregar essa experiência aos objetivos estratégicos de sua equipe e fico à disposição para uma conversa detalhada.`);
+        bodyHtml = bodyText.split('\\n\\n').map(p => `<p style="margin-bottom: 1.15rem; line-height: 1.65; text-align: justify;">${{p.replace(/\\n/g, '<br>')}}</p>`).join('');
+      }}
+
+      const closing = cl.closing || 'Atenciosamente,';
+      const signature = cl.signature || name;
+
+      return `
+        <div class="cv-page-a4 cv-cover-letter-page">
+          <div class="cv-card cv-cover-letter-card">
+            <header class="cv-cover-letter-header" style="border-bottom: 2px solid currentColor; padding-bottom: 1rem; margin-bottom: 1.5rem;">
+              <h1 class="cv-name" style="font-size: 1.8rem; font-weight: 800; margin: 0 0 0.25rem 0;">${{name}}</h1>
+              ${{label ? `<div class="cv-label" style="font-size: 0.95rem; font-weight: 600; opacity: 0.9;">${{label}}</div>` : ''}}
+              <div class="cv-contacts" style="display: flex; flex-wrap: wrap; gap: 0.85rem; margin-top: 0.6rem; font-size: 0.82rem;">
+                ${{email ? `<span>✉ ${{email}}</span>` : ''}}
+                ${{phone ? `<span>📞 ${{phone}}</span>` : ''}}
+                ${{locStr ? `<span>📍 ${{locStr}}</span>` : ''}}
+              </div>
+            </header>
+            <div style="font-size: 0.88rem; color: inherit; line-height: 1.6;">
+              <div style="display: flex; justify-content: space-between; margin-bottom: 1.25rem; font-weight: 600; opacity: 0.85;">
+                <div>
+                  <div>Para: <strong>${{recipient}}</strong> — ${{company}}</div>
+                  ${{addrHtml}}
+                </div>
+                <div>${{dateVal}}</div>
+              </div>
+              <div style="font-size: 1rem; font-weight: 700; margin-bottom: 1.25rem; border-left: 3px solid currentColor; padding-left: 0.6rem;">
+                Assunto: ${{subject}}
+              </div>
+              <div class="cover-letter-body">
+                ${{salutation}}
+                ${{bodyHtml}}
+              </div>
+              <div style="margin-top: 2.5rem;">
+                <div>${{closing}}</div>
+                <div style="font-weight: 800; font-size: 1.05rem; margin-top: 0.35rem;">${{signature}}</div>
+                <div style="font-size: 0.82rem; opacity: 0.85;">${{label}}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+    }}
+
+    function renderClientCV(data, layout) {{
       const basics = data.basics || {{}};
       const name = basics.name || 'Candidato';
       const label = basics.label || '';
@@ -3598,49 +3741,6 @@ def render_multi_cv_dashboard_html(
           </div>
         </div>
       `;
-
-      if (viewMode === 'cover_letter') {{
-        const cl = data.coverLetter || {{}};
-        const recipient = cl.recipient || 'Prezada Equipe de Recrutamento';
-        const company = cl.company || 'Empresa Contratante';
-        const subject = cl.subject || ('Candidatura à Oportunidade em ' + (label || 'Tecnologia'));
-        const dateVal = cl.date || 'São Paulo, SP';
-        const bodyText = cl.body || (`Gostaria de apresentar minha candidatura à oportunidade em sua organização. Com sólida trajetória técnica e de liderança em engenharia de software e inteligência artificial, tenho dedicado minha carreira ao desenvolvimento de sistemas escaláveis, seguros e de alta performance.\\n\\nAo longo da minha jornada, liderei a concepção de arquiteturas críticas, automações inteligentes e microsserviços de alto throughput, sempre com rigoroso foco em governança, código limpo e impacto mensurável de negócios.\\n\\nEstou entusiasmado com a possibilidade de agregar essa experiência aos objetivos estratégicos de sua equipe e fico à disposição para uma conversa detalhada.\\n\\nAtenciosamente,\\n${{name}}`);
-        const paragraphs = bodyText.split('\\n\\n').map(p => `<p style="margin-bottom: 1.15rem; line-height: 1.65; text-align: justify;">${{p.replace(/\\n/g, '<br>')}}</p>`).join('');
-
-        return `
-          <div class="cv-page-a4 cv-cover-letter-page">
-            <div class="cv-card cv-cover-letter-card">
-              <header class="cv-cover-letter-header" style="border-bottom: 2px solid currentColor; padding-bottom: 1rem; margin-bottom: 1.5rem;">
-                <h1 class="cv-name" style="font-size: 1.8rem; font-weight: 800; margin: 0 0 0.25rem 0;">${{name}}</h1>
-                ${{label ? `<div class="cv-label" style="font-size: 0.95rem; font-weight: 600; opacity: 0.9;">${{label}}</div>` : ''}}
-                <div class="cv-contacts" style="display: flex; flex-wrap: wrap; gap: 0.85rem; margin-top: 0.6rem; font-size: 0.82rem;">
-                  ${{email ? `<span>✉ ${{email}}</span>` : ''}}
-                  ${{phone ? `<span>📞 ${{phone}}</span>` : ''}}
-                  ${{locStr ? `<span>📍 ${{locStr}}</span>` : ''}}
-                </div>
-              </header>
-              <div style="font-size: 0.88rem; color: inherit; line-height: 1.6;">
-                <div style="display: flex; justify-content: space-between; margin-bottom: 1.25rem; font-weight: 600; opacity: 0.85;">
-                  <div>Para: <strong>${{recipient}}</strong> — ${{company}}</div>
-                  <div>${{dateVal}}</div>
-                </div>
-                <div style="font-size: 1rem; font-weight: 700; margin-bottom: 1.25rem; border-left: 3px solid currentColor; padding-left: 0.6rem;">
-                  Assunto: ${{subject}}
-                </div>
-                <div class="cover-letter-body">
-                  ${{paragraphs}}
-                </div>
-                <div style="margin-top: 2.5rem;">
-                  <div>Atenciosamente,</div>
-                  <div style="font-weight: 800; font-size: 1.05rem; margin-top: 0.35rem;">${{name}}</div>
-                  <div style="font-size: 0.82rem; opacity: 0.85;">${{label}}</div>
-                </div>
-              </div>
-            </div>
-          </div>
-        `;
-      }}
 
       // Timeline de trabalho
       let workHtml = '';
@@ -3836,13 +3936,13 @@ def render_multi_cv_dashboard_html(
               </div>
             </header>
             ${{summary ? `<div class="cv-math-summary summary">${{summary}}</div>` : ''}}
-            ${{workHtml ? `<section class="avoid-break"><h2 class="cv-math-section-title section-title">${{I18N_T.work || 'Experiência'}}</h2><div class="cv-math-work-list">${{workHtml}}</div></section>` : ''}}
-            ${{projHtml ? `<section class="avoid-break"><h2 class="cv-math-section-title section-title">${{I18N_T.projects || 'Projetos'}}</h2><div class="projects-grid cv-math-grid ${{getGridClass((data.projects||[]).length)}}">${{projHtml}}</div></section>` : ''}}
-            ${{skillsHtml ? `<section class="avoid-break"><h2 class="cv-math-section-title section-title">${{I18N_T.skills || 'Competências'}}</h2><div class="skills-grid cv-math-grid ${{getGridClass((data.skills||[]).length)}}">${{skillsHtml}}</div></section>` : ''}}
-            ${{eduHtml ? `<section class="avoid-break"><h2 class="cv-math-section-title section-title">${{I18N_T.education || 'Formação'}}</h2><div class="education-grid cv-math-grid ${{getGridClass((data.education||[]).length)}}">${{eduHtml}}</div></section>` : ''}}
-            ${{certHtml ? `<section class="avoid-break"><h2 class="cv-math-section-title section-title">${{I18N_T.certificates || 'Certificações'}}</h2><div class="certs-grid cv-math-grid ${{getGridClass((data.certificates||[]).length)}}">${{certHtml}}</div></section>` : ''}}
-            ${{langHtml ? `<section class="avoid-break"><h2 class="cv-math-section-title section-title">${{I18N_T.languages || 'Idiomas'}}</h2><div class="languages-grid cv-math-grid ${{getGridClass((data.languages||[]).length)}}">${{langHtml}}</div></section>` : ''}}
-            ${{intHtml ? `<section class="avoid-break"><h2 class="cv-math-section-title section-title">${{I18N_T.interests || 'Interesses'}}</h2><div class="interests-grid cv-math-grid ${{getGridClass((data.interests||[]).length)}}">${{intHtml}}</div></section>` : ''}}
+            ${{workHtml ? `<section class="cv-section"><h2 class="cv-math-section-title section-title">${{I18N_T.work || 'Experiência'}}</h2><div class="cv-math-work-list">${{workHtml}}</div></section>` : ''}}
+            ${{projHtml ? `<section class="cv-section"><h2 class="cv-math-section-title section-title">${{I18N_T.projects || 'Projetos'}}</h2><div class="projects-grid cv-math-grid ${{getGridClass((data.projects||[]).length)}}">${{projHtml}}</div></section>` : ''}}
+            ${{skillsHtml ? `<section class="cv-section"><h2 class="cv-math-section-title section-title">${{I18N_T.skills || 'Competências'}}</h2><div class="skills-grid cv-math-grid ${{getGridClass((data.skills||[]).length)}}">${{skillsHtml}}</div></section>` : ''}}
+            ${{eduHtml ? `<section class="cv-section"><h2 class="cv-math-section-title section-title">${{I18N_T.education || 'Formação'}}</h2><div class="education-grid cv-math-grid ${{getGridClass((data.education||[]).length)}}">${{eduHtml}}</div></section>` : ''}}
+            ${{certHtml ? `<section class="cv-section"><h2 class="cv-math-section-title section-title">${{I18N_T.certificates || 'Certificações'}}</h2><div class="certs-grid cv-math-grid ${{getGridClass((data.certificates||[]).length)}}">${{certHtml}}</div></section>` : ''}}
+            ${{langHtml ? `<section class="cv-section"><h2 class="cv-math-section-title section-title">${{I18N_T.languages || 'Idiomas'}}</h2><div class="languages-grid cv-math-grid ${{getGridClass((data.languages||[]).length)}}">${{langHtml}}</div></section>` : ''}}
+            ${{intHtml ? `<section class="cv-section"><h2 class="cv-math-section-title section-title">${{I18N_T.interests || 'Interesses'}}</h2><div class="interests-grid cv-math-grid ${{getGridClass((data.interests||[]).length)}}">${{intHtml}}</div></section>` : ''}}
           </div>
         `;
       }}
@@ -3877,9 +3977,9 @@ def render_multi_cv_dashboard_html(
               </aside>
               <main class="cv-editorial-main">
                 ${{summary ? `<div class="summary" style="margin-bottom: 1.25rem;">${{summary}}</div>` : ''}}
-                ${{workHtml ? `<section class="avoid-break"><h2 class="section-title">${{I18N_T.work || 'Experiência'}}</h2>${{workHtml}}</section>` : ''}}
-                ${{projHtml ? `<section class="avoid-break"><h2 class="section-title">${{I18N_T.projects || 'Projetos'}}</h2><div class="cv-sidebar-stack" style="display: flex; flex-direction: column; gap: 0.65rem; width: 100%;">${{projHtml}}</div></section>` : ''}}
-                ${{eduHtml ? `<section class="avoid-break"><h2 class="section-title">${{I18N_T.education || 'Formação'}}</h2><div class="cv-sidebar-stack" style="display: flex; flex-direction: column; gap: 0.65rem; width: 100%;">${{eduHtml}}</div></section>` : ''}}
+                ${{workHtml ? `<section class="cv-section"><h2 class="section-title">${{I18N_T.work || 'Experiência'}}</h2>${{workHtml}}</section>` : ''}}
+                ${{projHtml ? `<section class="cv-section"><h2 class="section-title">${{I18N_T.projects || 'Projetos'}}</h2><div class="cv-sidebar-stack" style="display: flex; flex-direction: column; gap: 0.65rem; width: 100%;">${{projHtml}}</div></section>` : ''}}
+                ${{eduHtml ? `<section class="cv-section"><h2 class="section-title">${{I18N_T.education || 'Formação'}}</h2><div class="cv-sidebar-stack" style="display: flex; flex-direction: column; gap: 0.65rem; width: 100%;">${{eduHtml}}</div></section>` : ''}}
               </main>
             </div>
           </div>
@@ -3908,10 +4008,10 @@ def render_multi_cv_dashboard_html(
               </aside>
               <main class="cv-navy-main">
                 ${{summary ? `<div class="summary">${{summary}}</div>` : ''}}
-                ${{workHtml ? `<section class="avoid-break"><h2 class="section-title">${{I18N_T.work || 'Experiência'}}</h2>${{workHtml}}</section>` : ''}}
-                ${{eduHtml ? `<section class="avoid-break"><h2 class="section-title">${{I18N_T.education || 'Formação'}}</h2><div class="cv-sidebar-stack" style="display: flex; flex-direction: column; gap: 0.65rem; width: 100%;">${{eduHtml}}</div></section>` : ''}}
-                ${{projHtml ? `<section class="avoid-break"><h2 class="section-title">${{I18N_T.projects || 'Projetos'}}</h2><div class="cv-sidebar-stack" style="display: flex; flex-direction: column; gap: 0.65rem; width: 100%;">${{projHtml}}</div></section>` : ''}}
-                ${{certHtml ? `<section class="avoid-break"><h2 class="section-title">${{I18N_T.certificates || 'Certificações'}}</h2><div class="cv-sidebar-stack" style="display: flex; flex-direction: column; gap: 0.65rem; width: 100%;">${{certHtml}}</div></section>` : ''}}
+                ${{workHtml ? `<section class="cv-section"><h2 class="section-title">${{I18N_T.work || 'Experiência'}}</h2>${{workHtml}}</section>` : ''}}
+                ${{eduHtml ? `<section class="cv-section"><h2 class="section-title">${{I18N_T.education || 'Formação'}}</h2><div class="cv-sidebar-stack" style="display: flex; flex-direction: column; gap: 0.65rem; width: 100%;">${{eduHtml}}</div></section>` : ''}}
+                ${{projHtml ? `<section class="cv-section"><h2 class="section-title">${{I18N_T.projects || 'Projetos'}}</h2><div class="cv-sidebar-stack" style="display: flex; flex-direction: column; gap: 0.65rem; width: 100%;">${{projHtml}}</div></section>` : ''}}
+                ${{certHtml ? `<section class="cv-section"><h2 class="section-title">${{I18N_T.certificates || 'Certificações'}}</h2><div class="cv-sidebar-stack" style="display: flex; flex-direction: column; gap: 0.65rem; width: 100%;">${{certHtml}}</div></section>` : ''}}
               </main>
             </div>
           </div>
@@ -3946,16 +4046,16 @@ def render_multi_cv_dashboard_html(
             </header>
             ${{summary ? `<div class="summary" style="margin-bottom: 1rem;">${{summary}}</div>` : ''}}
             <div style="display: grid; grid-template-columns: 1.2fr 1fr; gap: 1.5rem; margin-bottom: 1.25rem; align-items: start;">
-              <div>${{workHtml ? `<section class="avoid-break"><h2 class="section-title">${{I18N_T.work || 'Experiência'}}</h2>${{workHtml}}</section>` : ''}}</div>
+              <div>${{workHtml ? `<section class="cv-section"><h2 class="section-title">${{I18N_T.work || 'Experiência'}}</h2>${{workHtml}}</section>` : ''}}</div>
               <div>
-                ${{eduHtml ? `<section class="avoid-break"><h2 class="section-title">${{I18N_T.education || 'Formação'}}</h2><div class="cv-sidebar-stack" style="display: flex; flex-direction: column; gap: 0.65rem; width: 100%;">${{eduHtml}}</div></section>` : ''}}
-                ${{projHtml ? `<section class="avoid-break"><h2 class="section-title">${{I18N_T.projects || 'Projetos'}}</h2><div class="cv-sidebar-stack" style="display: flex; flex-direction: column; gap: 0.65rem; width: 100%;">${{projHtml}}</div></section>` : ''}}
+                ${{eduHtml ? `<section class="cv-section"><h2 class="section-title">${{I18N_T.education || 'Formação'}}</h2><div class="cv-sidebar-stack" style="display: flex; flex-direction: column; gap: 0.65rem; width: 100%;">${{eduHtml}}</div></section>` : ''}}
+                ${{projHtml ? `<section class="cv-section"><h2 class="section-title">${{I18N_T.projects || 'Projetos'}}</h2><div class="cv-sidebar-stack" style="display: flex; flex-direction: column; gap: 0.65rem; width: 100%;">${{projHtml}}</div></section>` : ''}}
               </div>
             </div>
-            ${{skillsBarsHtml ? `<section class="avoid-break" style="border-top: 1px solid rgba(125,125,125,0.2); padding-top: 0.85rem; margin-top: 0.5rem;"><h2 class="section-title">⚡ MATRIZ DE COMPETÊNCIAS</h2><div class="cv-skills-progress-list">${{skillsBarsHtml}}</div></section>` : ''}}
-            ${{langHtml ? `<section class="avoid-break"><h2 class="section-title">${{I18N_T.languages || 'Idiomas'}}</h2><div class="languages-grid cv-math-grid ${{getGridClass((data.languages||[]).length)}}">${{langHtml}}</div></section>` : ''}}
-            ${{certHtml ? `<section class="avoid-break"><h2 class="section-title">${{I18N_T.certificates || 'Certificações'}}</h2><div class="certs-grid cv-math-grid ${{getGridClass((data.certificates||[]).length)}}">${{certHtml}}</div></section>` : ''}}
-            ${{intHtml ? `<section class="avoid-break"><h2 class="section-title">${{I18N_T.interests || 'Interesses'}}</h2><div class="interests-grid cv-math-grid ${{getGridClass((data.interests||[]).length)}}">${{intHtml}}</div></section>` : ''}}
+            ${{skillsBarsHtml ? `<section class="cv-section" style="border-top: 1px solid rgba(125,125,125,0.2); padding-top: 0.85rem; margin-top: 0.5rem;"><h2 class="section-title">⚡ MATRIZ DE COMPETÊNCIAS</h2><div class="cv-skills-progress-list">${{skillsBarsHtml}}</div></section>` : ''}}
+            ${{langHtml ? `<section class="cv-section"><h2 class="section-title">${{I18N_T.languages || 'Idiomas'}}</h2><div class="languages-grid cv-math-grid ${{getGridClass((data.languages||[]).length)}}">${{langHtml}}</div></section>` : ''}}
+            ${{certHtml ? `<section class="cv-section"><h2 class="section-title">${{I18N_T.certificates || 'Certificações'}}</h2><div class="certs-grid cv-math-grid ${{getGridClass((data.certificates||[]).length)}}">${{certHtml}}</div></section>` : ''}}
+            ${{intHtml ? `<section class="cv-section"><h2 class="section-title">${{I18N_T.interests || 'Interesses'}}</h2><div class="interests-grid cv-math-grid ${{getGridClass((data.interests||[]).length)}}">${{intHtml}}</div></section>` : ''}}
           </div>
         `;
       }}
@@ -3967,10 +4067,10 @@ def render_multi_cv_dashboard_html(
             <div class="cv-duo-layout" style="display: grid; grid-template-columns: 210px 1fr; gap: 1.5rem; align-items: start;">
               <aside class="cv-duo-left cv-sidebar-stack" style="border-right: 1px solid rgba(125,125,125,0.25); padding-right: 1.25rem;">
                 ${{avatarHtml}}
-                ${{summary ? `<div class="sidebar-section avoid-break"><h4 class="section-title" style="font-size: 0.85rem; margin-top: 0;">PERFIL</h4><p class="summary" style="font-size: 0.82rem; line-height: 1.5;">${{summary}}</p></div>` : ''}}
-                ${{skillsBarsHtml ? `<div class="sidebar-section avoid-break"><h4 class="section-title" style="font-size: 0.85rem;">EXPERTISE</h4><div class="cv-skills-progress-list">${{skillsBarsHtml}}</div></div>` : ''}}
-                ${{hobbiesCirclesHtml ? `<div class="sidebar-section avoid-break"><h4 class="section-title" style="font-size: 0.85rem;">HOBBIES</h4><div class="cv-hobbies-grid" style="display: flex; justify-content: space-around; width: 100%;">${{hobbiesCirclesHtml}}</div></div>` : ''}}
-                ${{langHtml ? `<div class="sidebar-section avoid-break"><h4 class="section-title" style="font-size: 0.85rem;">${{I18N_T.languages || 'Idiomas'}}</h4><div class="cv-sidebar-stack">${{langHtml}}</div></div>` : ''}}
+                ${{summary ? `<div class="sidebar-section"><h4 class="section-title" style="font-size: 0.85rem; margin-top: 0;">PERFIL</h4><p class="summary" style="font-size: 0.82rem; line-height: 1.5;">${{summary}}</p></div>` : ''}}
+                ${{skillsBarsHtml ? `<div class="sidebar-section"><h4 class="section-title" style="font-size: 0.85rem;">EXPERTISE</h4><div class="cv-skills-progress-list">${{skillsBarsHtml}}</div></div>` : ''}}
+                ${{hobbiesCirclesHtml ? `<div class="sidebar-section"><h4 class="section-title" style="font-size: 0.85rem;">HOBBIES</h4><div class="cv-hobbies-grid" style="display: flex; justify-content: space-around; width: 100%;">${{hobbiesCirclesHtml}}</div></div>` : ''}}
+                ${{langHtml ? `<div class="sidebar-section"><h4 class="section-title" style="font-size: 0.85rem;">${{I18N_T.languages || 'Idiomas'}}</h4><div class="cv-sidebar-stack">${{langHtml}}</div></div>` : ''}}
               </aside>
 
               <main class="cv-duo-right">
@@ -3986,10 +4086,10 @@ def render_multi_cv_dashboard_html(
                   </div>
                 </header>
 
-                ${{workHtml ? `<section class="avoid-break"><h2 class="section-title">${{I18N_T.work || 'Experiência'}}</h2>${{workHtml}}</section>` : ''}}
-                ${{eduHtml ? `<section class="avoid-break"><h2 class="section-title">${{I18N_T.education || 'Formação'}}</h2><div class="cv-sidebar-stack" style="display: flex; flex-direction: column; gap: 0.65rem; width: 100%;">${{eduHtml}}</div></section>` : ''}}
-                ${{projHtml ? `<section class="avoid-break"><h2 class="section-title">${{I18N_T.projects || 'Projetos'}}</h2><div class="cv-sidebar-stack" style="display: flex; flex-direction: column; gap: 0.65rem; width: 100%;">${{projHtml}}</div></section>` : ''}}
-                ${{certHtml ? `<section class="avoid-break"><h2 class="section-title">${{I18N_T.certificates || 'Certificações'}}</h2><div class="cv-sidebar-stack" style="display: flex; flex-direction: column; gap: 0.65rem; width: 100%;">${{certHtml}}</div></section>` : ''}}
+                ${{workHtml ? `<section class="cv-section"><h2 class="section-title">${{I18N_T.work || 'Experiência'}}</h2>${{workHtml}}</section>` : ''}}
+                ${{eduHtml ? `<section class="cv-section"><h2 class="section-title">${{I18N_T.education || 'Formação'}}</h2><div class="cv-sidebar-stack" style="display: flex; flex-direction: column; gap: 0.65rem; width: 100%;">${{eduHtml}}</div></section>` : ''}}
+                ${{projHtml ? `<section class="cv-section"><h2 class="section-title">${{I18N_T.projects || 'Projetos'}}</h2><div class="cv-sidebar-stack" style="display: flex; flex-direction: column; gap: 0.65rem; width: 100%;">${{projHtml}}</div></section>` : ''}}
+                ${{certHtml ? `<section class="cv-section"><h2 class="section-title">${{I18N_T.certificates || 'Certificações'}}</h2><div class="cv-sidebar-stack" style="display: flex; flex-direction: column; gap: 0.65rem; width: 100%;">${{certHtml}}</div></section>` : ''}}
               </main>
             </div>
           </div>
@@ -4020,9 +4120,9 @@ def render_multi_cv_dashboard_html(
               </aside>
               <main>
                 ${{summary ? `<div class="summary">${{summary}}</div>` : ''}}
-                ${{workHtml ? `<section class="avoid-break"><h2 class="section-title">${{I18N_T.work || 'Experiência'}}</h2>${{workHtml}}</section>` : ''}}
-                ${{projHtml ? `<section class="avoid-break"><h2 class="section-title">${{I18N_T.projects || 'Projetos'}}</h2><div class="cv-sidebar-stack" style="display: flex; flex-direction: column; gap: 0.65rem; width: 100%;">${{projHtml}}</div></section>` : ''}}
-                ${{eduHtml ? `<section class="avoid-break"><h2 class="section-title">${{I18N_T.education || 'Formação'}}</h2><div class="cv-sidebar-stack" style="display: flex; flex-direction: column; gap: 0.65rem; width: 100%;">${{eduHtml}}</div></section>` : ''}}
+                ${{workHtml ? `<section class="cv-section"><h2 class="section-title">${{I18N_T.work || 'Experiência'}}</h2>${{workHtml}}</section>` : ''}}
+                ${{projHtml ? `<section class="cv-section"><h2 class="section-title">${{I18N_T.projects || 'Projetos'}}</h2><div class="cv-sidebar-stack" style="display: flex; flex-direction: column; gap: 0.65rem; width: 100%;">${{projHtml}}</div></section>` : ''}}
+                ${{eduHtml ? `<section class="cv-section"><h2 class="section-title">${{I18N_T.education || 'Formação'}}</h2><div class="cv-sidebar-stack" style="display: flex; flex-direction: column; gap: 0.65rem; width: 100%;">${{eduHtml}}</div></section>` : ''}}
               </main>
             </div>
           </div>
@@ -4048,13 +4148,13 @@ def render_multi_cv_dashboard_html(
               ${{avatarRectHtml}}
             </header>
             ${{summary ? `<div class="summary">${{summary}}</div>` : ''}}
-            ${{workHtml ? `<section class="avoid-break"><h2 class="section-title">${{I18N_T.work || 'Experiência'}}</h2>${{workHtml}}</section>` : ''}}
-            ${{projHtml ? `<section class="avoid-break"><h2 class="section-title">${{I18N_T.projects || 'Projetos'}}</h2><div class="projects-grid cv-math-grid ${{getGridClass((data.projects||[]).length)}}">${{projHtml}}</div></section>` : ''}}
-            ${{skillsHtml ? `<section class="avoid-break"><h2 class="section-title">${{I18N_T.skills || 'Competências'}}</h2><div class="skills-grid cv-math-grid ${{getGridClass((data.skills||[]).length)}}">${{skillsHtml}}</div></section>` : ''}}
-            ${{eduHtml ? `<section class="avoid-break"><h2 class="section-title">${{I18N_T.education || 'Formação'}}</h2><div class="education-grid cv-math-grid ${{getGridClass((data.education||[]).length)}}">${{eduHtml}}</div></section>` : ''}}
-            ${{certHtml ? `<section class="avoid-break"><h2 class="section-title">${{I18N_T.certificates || 'Certificações'}}</h2><div class="certs-grid cv-math-grid ${{getGridClass((data.certificates||[]).length)}}">${{certHtml}}</div></section>` : ''}}
-            ${{langHtml ? `<section class="avoid-break"><h2 class="section-title">${{I18N_T.languages || 'Idiomas'}}</h2><div class="languages-grid cv-math-grid ${{getGridClass((data.languages||[]).length)}}">${{langHtml}}</div></section>` : ''}}
-            ${{intHtml ? `<section class="avoid-break"><h2 class="section-title">${{I18N_T.interests || 'Interesses'}}</h2><div class="interests-grid cv-math-grid ${{getGridClass((data.interests||[]).length)}}">${{intHtml}}</div></section>` : ''}}
+            ${{workHtml ? `<section class="cv-section"><h2 class="section-title">${{I18N_T.work || 'Experiência'}}</h2>${{workHtml}}</section>` : ''}}
+            ${{projHtml ? `<section class="cv-section"><h2 class="section-title">${{I18N_T.projects || 'Projetos'}}</h2><div class="projects-grid cv-math-grid ${{getGridClass((data.projects||[]).length)}}">${{projHtml}}</div></section>` : ''}}
+            ${{skillsHtml ? `<section class="cv-section"><h2 class="section-title">${{I18N_T.skills || 'Competências'}}</h2><div class="skills-grid cv-math-grid ${{getGridClass((data.skills||[]).length)}}">${{skillsHtml}}</div></section>` : ''}}
+            ${{eduHtml ? `<section class="cv-section"><h2 class="section-title">${{I18N_T.education || 'Formação'}}</h2><div class="education-grid cv-math-grid ${{getGridClass((data.education||[]).length)}}">${{eduHtml}}</div></section>` : ''}}
+            ${{certHtml ? `<section class="cv-section"><h2 class="section-title">${{I18N_T.certificates || 'Certificações'}}</h2><div class="certs-grid cv-math-grid ${{getGridClass((data.certificates||[]).length)}}">${{certHtml}}</div></section>` : ''}}
+            ${{langHtml ? `<section class="cv-section"><h2 class="section-title">${{I18N_T.languages || 'Idiomas'}}</h2><div class="languages-grid cv-math-grid ${{getGridClass((data.languages||[]).length)}}">${{langHtml}}</div></section>` : ''}}
+            ${{intHtml ? `<section class="cv-section"><h2 class="section-title">${{I18N_T.interests || 'Interesses'}}</h2><div class="interests-grid cv-math-grid ${{getGridClass((data.interests||[]).length)}}">${{intHtml}}</div></section>` : ''}}
           </div>
         `;
       }}
@@ -4079,15 +4179,26 @@ def render_multi_cv_dashboard_html(
             </div>
           </header>
           ${{summary ? `<div class="summary">${{summary}}</div>` : ''}}
-          ${{workHtml ? `<section class="avoid-break"><h2 class="section-title">${{I18N_T.work || 'Experiência'}}</h2>${{workHtml}}</section>` : ''}}
-          ${{projHtml ? `<section class="avoid-break"><h2 class="section-title">${{I18N_T.projects || 'Projetos'}}</h2><div class="projects-grid cv-math-grid ${{getGridClass((data.projects||[]).length)}}">${{projHtml}}</div></section>` : ''}}
-          ${{skillsHtml ? `<section class="avoid-break"><h2 class="section-title">${{I18N_T.skills || 'Competências'}}</h2><div class="skills-grid cv-math-grid ${{getGridClass((data.skills||[]).length)}}">${{skillsHtml}}</div></section>` : ''}}
-          ${{eduHtml ? `<section class="avoid-break"><h2 class="section-title">${{I18N_T.education || 'Formação'}}</h2><div class="education-grid cv-math-grid ${{getGridClass((data.education||[]).length)}}">${{eduHtml}}</div></section>` : ''}}
-          ${{certHtml ? `<section class="avoid-break"><h2 class="section-title">${{I18N_T.certificates || 'Certificações'}}</h2><div class="certs-grid cv-math-grid ${{getGridClass((data.certificates||[]).length)}}">${{certHtml}}</div></section>` : ''}}
-          ${{langHtml ? `<section class="avoid-break"><h2 class="section-title">${{I18N_T.languages || 'Idiomas'}}</h2><div class="languages-grid cv-math-grid ${{getGridClass((data.languages||[]).length)}}">${{langHtml}}</div></section>` : ''}}
-          ${{intHtml ? `<section class="avoid-break"><h2 class="section-title">${{I18N_T.interests || 'Interesses'}}</h2><div class="interests-grid cv-math-grid ${{getGridClass((data.interests||[]).length)}}">${{intHtml}}</div></section>` : ''}}
+          ${{workHtml ? `<section class="cv-section"><h2 class="section-title">${{I18N_T.work || 'Experiência'}}</h2>${{workHtml}}</section>` : ''}}
+          ${{projHtml ? `<section class="cv-section"><h2 class="section-title">${{I18N_T.projects || 'Projetos'}}</h2><div class="projects-grid cv-math-grid ${{getGridClass((data.projects||[]).length)}}">${{projHtml}}</div></section>` : ''}}
+          ${{skillsHtml ? `<section class="cv-section"><h2 class="section-title">${{I18N_T.skills || 'Competências'}}</h2><div class="skills-grid cv-math-grid ${{getGridClass((data.skills||[]).length)}}">${{skillsHtml}}</div></section>` : ''}}
+          ${{eduHtml ? `<section class="cv-section"><h2 class="section-title">${{I18N_T.education || 'Formação'}}</h2><div class="education-grid cv-math-grid ${{getGridClass((data.education||[]).length)}}">${{eduHtml}}</div></section>` : ''}}
+          ${{certHtml ? `<section class="cv-section"><h2 class="section-title">${{I18N_T.certificates || 'Certificações'}}</h2><div class="certs-grid cv-math-grid ${{getGridClass((data.certificates||[]).length)}}">${{certHtml}}</div></section>` : ''}}
+          ${{langHtml ? `<section class="cv-section"><h2 class="section-title">${{I18N_T.languages || 'Idiomas'}}</h2><div class="languages-grid cv-math-grid ${{getGridClass((data.languages||[]).length)}}">${{langHtml}}</div></section>` : ''}}
+          ${{intHtml ? `<section class="cv-section"><h2 class="section-title">${{I18N_T.interests || 'Interesses'}}</h2><div class="interests-grid cv-math-grid ${{getGridClass((data.interests||[]).length)}}">${{intHtml}}</div></section>` : ''}}
         </div>
       `;
+    }}
+
+    function renderClientLayout(data, layout, viewMode) {{
+      if (viewMode === 'cover_letter') {{
+        return renderClientCoverLetter(data);
+      }}
+      const cvHtml = renderClientCV(data, layout);
+      if (viewMode === 'both') {{
+        return cvHtml + '<div class="cv-page-break" style="page-break-before: always; margin-top: 2rem;"></div>' + renderClientCoverLetter(data);
+      }}
+      return cvHtml;
     }}
 
     function updateActivePanelContent() {{
@@ -4228,6 +4339,183 @@ def render_multi_cv_dashboard_html(
           setTimeout(() => {{ btn.innerText = original; }}, 2000);
         }}
       }});
+    }}
+
+    /* ── Live YAML Editor Engine ── */
+    let originalPersonaYamls = {{}};
+    let yamlEditorDebounceTimer = null;
+
+    function openYamlEditorModal() {{
+      const modal = document.getElementById('yaml-editor-modal');
+      const badge = document.getElementById('yaml-editor-badge');
+      const textarea = document.getElementById('yaml-editor-textarea');
+      const errorAlert = document.getElementById('yaml-error-alert');
+      const statusEl = document.getElementById('yaml-editor-status');
+      
+      if (!modal || !textarea) return;
+      
+      const pKey = typeof currentPersona !== 'undefined' ? currentPersona : 'professional';
+      if (badge) {{
+        const personaNames = {{
+          'professional': '1. Executivo IBM',
+          'architect': '2. Arquiteto de IA & Soluções',
+          'historian': '3. Biógrafo / Evolução',
+          'didactic': '4. Didático / Learning Velocity',
+          'alien': '5. Relatório Alien'
+        }};
+        badge.innerText = 'Persona: ' + (personaNames[pKey] || pKey);
+      }}
+      
+      if (!originalPersonaYamls[pKey]) {{
+        const rawEl = document.getElementById('raw-yaml-' + pKey);
+        if (rawEl) {{
+          originalPersonaYamls[pKey] = rawEl.textContent.trim();
+        }} else if (typeof getActiveYaml === 'function') {{
+          originalPersonaYamls[pKey] = getActiveYaml();
+        }}
+      }}
+      
+      const savedEditedYaml = localStorage.getItem('cv_standalone_yaml_' + pKey);
+      if (savedEditedYaml) {{
+        textarea.value = savedEditedYaml;
+      }} else if (originalPersonaYamls[pKey]) {{
+        textarea.value = originalPersonaYamls[pKey];
+      }} else if (typeof getActiveYaml === 'function') {{
+        textarea.value = getActiveYaml();
+      }}
+      
+      if (errorAlert) errorAlert.style.display = 'none';
+      if (statusEl) {{
+        statusEl.innerText = '✓ Sincronizado';
+        statusEl.style.color = '#10b981';
+      }}
+      
+      modal.classList.add('active');
+      modal.style.display = 'flex';
+      
+      if (!textarea.dataset.hasListener) {{
+        textarea.dataset.hasListener = 'true';
+        textarea.addEventListener('input', function() {{
+          clearTimeout(yamlEditorDebounceTimer);
+          if (statusEl) {{
+            statusEl.innerText = '⏳ Atualizando...';
+            statusEl.style.color = '#f59e0b';
+          }}
+          yamlEditorDebounceTimer = setTimeout(function() {{
+            applyYamlEditorChanges(false);
+          }}, 350);
+        }});
+        
+        textarea.addEventListener('keydown', function(e) {{
+          if (e.key === 'Tab') {{
+            e.preventDefault();
+            const start = this.selectionStart;
+            const end = this.selectionEnd;
+            this.value = this.value.substring(0, start) + '  ' + this.value.substring(end);
+            this.selectionStart = this.selectionEnd = start + 2;
+          }}
+        }});
+      }}
+    }}
+
+    function closeYamlEditorModal(event) {{
+      if (event && event.target && event.target.id !== 'yaml-editor-modal' && !event.target.classList.contains('cv-modal-close')) return;
+      const modal = document.getElementById('yaml-editor-modal');
+      if (modal) {{
+        modal.classList.remove('active');
+        modal.style.display = 'none';
+      }}
+    }}
+
+    function applyYamlEditorChanges(shouldClose) {{
+      const textarea = document.getElementById('yaml-editor-textarea');
+      const errorAlert = document.getElementById('yaml-error-alert');
+      const statusEl = document.getElementById('yaml-editor-status');
+      const pKey = typeof currentPersona !== 'undefined' ? currentPersona : 'professional';
+      
+      if (!textarea) return;
+      const yamlText = textarea.value;
+      
+      try {{
+        let parsed = null;
+        if (window.jsyaml && typeof window.jsyaml.load === 'function') {{
+          parsed = window.jsyaml.load(yamlText);
+        }}
+        
+        if (parsed && typeof parsed === 'object') {{
+          if (typeof EMBEDDED_DATA !== 'undefined') {{
+            EMBEDDED_DATA[pKey] = parsed;
+          }}
+          const rawEl = document.getElementById('raw-yaml-' + pKey);
+          if (rawEl) rawEl.textContent = yamlText;
+          
+          localStorage.setItem('cv_standalone_yaml_' + pKey, yamlText);
+          
+          if (typeof updateActivePanelContent === 'function') {{
+            updateActivePanelContent();
+          }}
+          
+          if (errorAlert) errorAlert.style.display = 'none';
+          if (statusEl) {{
+            statusEl.innerText = '✓ Aplicado em Tempo Real';
+            statusEl.style.color = '#10b981';
+          }}
+          
+          if (shouldClose) {{
+            closeYamlEditorModal();
+          }}
+        }}
+      }} catch (err) {{
+        if (errorAlert) {{
+          errorAlert.innerText = 'Erro de Sintaxe YAML:\\n' + (err.message || err);
+          errorAlert.style.display = 'block';
+        }}
+        if (statusEl) {{
+          statusEl.innerText = '⚠️ Erro de sintaxe';
+          statusEl.style.color = '#ef4444';
+        }}
+      }}
+    }}
+
+    function restoreOriginalYaml() {{
+      const pKey = typeof currentPersona !== 'undefined' ? currentPersona : 'professional';
+      const orig = originalPersonaYamls[pKey];
+      if (!orig) return;
+      if (confirm('Deseja realmente restaurar a versão original deste YAML? Todas as edições não salvas serão perdidas.')) {{
+        const textarea = document.getElementById('yaml-editor-textarea');
+        if (textarea) {{
+          textarea.value = orig;
+          localStorage.removeItem('cv_standalone_yaml_' + pKey);
+          applyYamlEditorChanges(false);
+        }}
+      }}
+    }}
+
+    function copyYamlFromEditor() {{
+      const textarea = document.getElementById('yaml-editor-textarea');
+      if (!textarea || !textarea.value) return;
+      navigator.clipboard.writeText(textarea.value).then(function() {{
+        const statusEl = document.getElementById('yaml-editor-status');
+        if (statusEl) {{
+          const old = statusEl.innerText;
+          statusEl.innerText = '📋 YAML Copiado!';
+          setTimeout(function() {{ statusEl.innerText = old; }}, 2000);
+        }}
+      }});
+    }}
+
+    function downloadYamlFromEditor() {{
+      const textarea = document.getElementById('yaml-editor-textarea');
+      if (!textarea || !textarea.value) return;
+      const pKey = typeof currentPersona !== 'undefined' ? currentPersona : 'professional';
+      const filename = (typeof PERSONA_FILENAMES !== 'undefined' && PERSONA_FILENAMES[pKey]) ? PERSONA_FILENAMES[pKey] : ('curriculo_' + pKey + '_editado.yaml');
+      const blob = new Blob([textarea.value], {{ type: 'text/yaml;charset=utf-8' }});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
     }}
 
     /* ── Photo Modal & Framing Handlers ── */
@@ -4625,6 +4913,23 @@ def render_multi_cv_dashboard_html(
     (function() {{
       const fileLayout = '{valid_layout}';
       const fileBg = '{resolved_bg}';
+
+      // Restaurar YAML customizado salvo por persona
+      if (window.jsyaml && typeof EMBEDDED_DATA !== 'undefined') {{
+        ['professional', 'architect', 'historian', 'didactic', 'alien'].forEach(k => {{
+          const savedY = localStorage.getItem('cv_standalone_yaml_' + k);
+          if (savedY) {{
+            try {{
+              const p = window.jsyaml.load(savedY);
+              if (p && typeof p === 'object') {{
+                EMBEDDED_DATA[k] = p;
+                const rawEl = document.getElementById('raw-yaml-' + k);
+                if (rawEl) rawEl.textContent = savedY;
+              }}
+            }} catch(e) {{}}
+          }}
+        }});
+      }}
 
       const savedTheme = localStorage.getItem('cv_standalone_theme') || '{valid_theme}';
       const savedPersona = localStorage.getItem('cv_active_persona') || '{active_persona}';
