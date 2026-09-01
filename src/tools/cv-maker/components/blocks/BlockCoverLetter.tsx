@@ -36,7 +36,7 @@ export const BlockCoverLetter: React.FC<BlockCoverLetterProps> = ({
   const { recipient, date, subject, salutation, paragraphs, closing, signature, signatureImage } = letter
 
   return (
-    <article className="cv-cover-letter-body">
+    <article className="cv-cover-letter-body cv-section-cover_letter">
       {recipient && (
         <div className="cv-cover-recipient">
           {recipient.name && <div className="cv-cover-recipient-name">{recipient.name}</div>}

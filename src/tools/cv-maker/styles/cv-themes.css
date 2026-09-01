@@ -210,10 +210,12 @@
 .cv-root .cv-badge,
 .cv-root .cv-skill-tag,
 .cv-root .cv-meta-tag,
-.cv-root .cv-badge-pill {
-  border-color: var(--cv-color-accent, var(--theme-default-accent, #f97316)) !important;
-  color: var(--cv-color-primary, var(--theme-default-primary, #0284c7)) !important;
-  background-color: var(--cv-color-surface, var(--theme-default-surface, #f8fafc)) !important;
+.cv-root .cv-badge-pill,
+.cv-root .issuer-pill,
+.cv-root .tag {
+  border-color: var(--sec-skills-accent, var(--cv-color-accent, var(--theme-default-accent, #f97316))) !important;
+  color: var(--sec-skills-accent, var(--cv-color-accent, var(--theme-default-accent, #0284c7))) !important;
+  background-color: var(--sec-skills-bg, var(--cv-color-surface, var(--theme-default-surface, #f8fafc))) !important;
   font-size: calc(0.75rem * var(--cv-font-scale, 1.0)) !important;
 }
 
@@ -239,18 +241,277 @@
 .cv-root .cv-editorial-left,
 .cv-root .cv-sidebar-col,
 .cv-root aside.cv-navy-sidebar {
-  background-color: var(--cv-color-sidebar, #0f172a) !important;
+  background-color: var(--sec-sidebar-bg, var(--cv-color-sidebar, #0f172a)) !important;
 }
 
 /* Barras de Nível de Habilidade */
 .cv-root .cv-skill-bar-fill,
 .cv-root .cv-bar-fill {
-  background: var(--cv-color-primary, var(--theme-default-primary, #0284c7)) !important;
+  background: var(--sec-skills-accent, var(--cv-color-accent, var(--cv-color-primary, #0284c7))) !important;
 }
 
 .cv-root .cv-skill-bar-bg,
 .cv-root .cv-bar-bg {
-  background: var(--cv-color-border, var(--theme-default-border, #e2e8f0)) !important;
+  background: var(--sec-skills-border, var(--cv-color-border, var(--theme-default-border, #e2e8f0))) !important;
+}
+
+/* Círculos de Hobbies */
+.cv-root .cv-hobby-circle {
+  border-color: var(--sec-interests-border, var(--cv-color-border, #e2e8f0)) !important;
+  background-color: var(--sec-interests-bg, var(--cv-color-surface, #f8fafc)) !important;
+  color: var(--sec-interests-text, var(--cv-color-text, #0f172a)) !important;
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   ■  SCOPED SECTION OVERRIDES (CUSTOMIZAÇÃO GRANULAR POR SEÇÃO)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+/* 1. Lateral / Sidebar */
+.cv-root .cv-section-sidebar,
+.cv-root aside.cv-sidebar-stack,
+.cv-root .cv-navy-sidebar,
+.cv-root .cv-duo-left,
+.cv-root .cv-editorial-left,
+.cv-root .cv-sidebar-col,
+.cv-root aside.cv-navy-sidebar {
+  background-color: var(--sec-sidebar-bg, var(--cv-color-sidebar, #0f172a)) !important;
+  color: var(--sec-sidebar-text, #f8fafc) !important;
+  border-color: var(--sec-sidebar-border, var(--cv-color-border, #1e293b)) !important;
+}
+
+.cv-root .cv-navy-sidebar h1,
+.cv-root .cv-navy-sidebar h2,
+.cv-root .cv-navy-sidebar h3,
+.cv-root .cv-navy-sidebar h4,
+.cv-root .cv-navy-sidebar .cv-sidebar-title,
+.cv-root aside.cv-sidebar-stack .cv-sidebar-title,
+.cv-root .cv-duo-left .cv-sidebar-title,
+.cv-root .cv-editorial-left .cv-sidebar-title {
+  color: var(--sec-sidebar-title, var(--sec-sidebar-text, #38bdf8)) !important;
+}
+
+.cv-root aside.cv-sidebar-stack p,
+.cv-root aside.cv-sidebar-stack span,
+.cv-root aside.cv-sidebar-stack li,
+.cv-root aside.cv-sidebar-stack a,
+.cv-root .cv-navy-sidebar p,
+.cv-root .cv-navy-sidebar span,
+.cv-root .cv-navy-sidebar li {
+  color: var(--sec-sidebar-text, #cbd5e1) !important;
+}
+
+/* 2. Cabeçalho / Header */
+.cv-root .cv-section-header,
+.cv-root .cv-header-profile,
+.cv-root .cv-duo-header,
+.cv-root .cv-brand-block,
+.cv-root .cv-hero-top-bar,
+.cv-root .cv-math-header {
+  background-color: var(--sec-header-bg, transparent) !important;
+  border-color: var(--sec-header-border, var(--cv-color-border, #e2e8f0)) !important;
+}
+
+.cv-root .cv-section-header h1,
+.cv-root .cv-header-profile h1,
+.cv-root .cv-name,
+.cv-root .cv-hero-name {
+  color: var(--sec-header-title, var(--cv-color-primary, #0284c7)) !important;
+}
+
+.cv-root .cv-section-header p,
+.cv-root .cv-section-header span,
+.cv-root .cv-header-profile p,
+.cv-root .cv-header-profile span {
+  color: var(--sec-header-text, var(--cv-color-text, #0f172a)) !important;
+}
+
+/* 3. Experiência Profissional */
+.cv-root .cv-section-work {
+  background-color: var(--sec-work-bg, transparent) !important;
+  border-color: var(--sec-work-border, var(--cv-color-border, #e2e8f0)) !important;
+}
+
+.cv-root .cv-section-work h2,
+.cv-root .cv-section-work h3,
+.cv-root .cv-section-work .cv-section-title {
+  color: var(--sec-work-title, var(--cv-color-primary, #0284c7)) !important;
+}
+
+.cv-root .cv-section-work p,
+.cv-root .cv-section-work li,
+.cv-root .cv-section-work .cv-item-title,
+.cv-root .cv-section-work .cv-item-desc {
+  color: var(--sec-work-text, var(--cv-color-text, #0f172a)) !important;
+}
+
+.cv-root .cv-section-work .cv-item-box,
+.cv-root .cv-section-work .cv-card-box {
+  background-color: var(--sec-work-bg, var(--cv-color-surface, #f8fafc)) !important;
+  border-color: var(--sec-work-border, var(--cv-color-border, #e2e8f0)) !important;
+}
+
+/* 4. Formação Acadêmica */
+.cv-root .cv-section-education {
+  background-color: var(--sec-education-bg, transparent) !important;
+  border-color: var(--sec-education-border, var(--cv-color-border, #e2e8f0)) !important;
+}
+
+.cv-root .cv-section-education h2,
+.cv-root .cv-section-education h3,
+.cv-root .cv-section-education .cv-section-title {
+  color: var(--sec-education-title, var(--cv-color-primary, #0284c7)) !important;
+}
+
+.cv-root .cv-section-education p,
+.cv-root .cv-section-education span,
+.cv-root .cv-section-education .cv-item-title,
+.cv-root .cv-section-education .cv-item-sub {
+  color: var(--sec-education-text, var(--cv-color-text, #0f172a)) !important;
+}
+
+.cv-root .cv-section-education .cv-education-card,
+.cv-root .cv-section-education .cv-item-box,
+.cv-root .cv-section-education .cv-card-box {
+  background-color: var(--sec-education-bg, var(--cv-color-surface, #f8fafc)) !important;
+  border-color: var(--sec-education-border, var(--cv-color-border, #e2e8f0)) !important;
+}
+
+/* 5. Competências / Skills */
+.cv-root .cv-section-skills {
+  background-color: var(--sec-skills-bg, transparent) !important;
+  border-color: var(--sec-skills-border, var(--cv-color-border, #e2e8f0)) !important;
+}
+
+.cv-root .cv-section-skills h2,
+.cv-root .cv-section-skills h3,
+.cv-root .cv-section-skills .cv-section-title {
+  color: var(--sec-skills-title, var(--cv-color-primary, #0284c7)) !important;
+}
+
+.cv-root .cv-section-skills p,
+.cv-root .cv-section-skills span,
+.cv-root .cv-section-skills .cv-skill-title {
+  color: var(--sec-skills-text, var(--cv-color-text, #0f172a)) !important;
+}
+
+.cv-root .cv-section-skills .cv-badge,
+.cv-root .cv-section-skills .cv-skill-tag {
+  background-color: var(--sec-skills-bg, var(--cv-color-surface, #f8fafc)) !important;
+  border-color: var(--sec-skills-accent, var(--cv-color-accent, #f97316)) !important;
+  color: var(--sec-skills-text, var(--sec-skills-accent, var(--cv-color-primary, #0284c7))) !important;
+}
+
+/* 6. Projetos */
+.cv-root .cv-section-projects {
+  background-color: var(--sec-projects-bg, transparent) !important;
+  border-color: var(--sec-projects-border, var(--cv-color-border, #e2e8f0)) !important;
+}
+
+.cv-root .cv-section-projects h2,
+.cv-root .cv-section-projects h3,
+.cv-root .cv-section-projects .cv-section-title {
+  color: var(--sec-projects-title, var(--cv-color-primary, #0284c7)) !important;
+}
+
+.cv-root .cv-section-projects p,
+.cv-root .cv-section-projects li,
+.cv-root .cv-section-projects .cv-item-title,
+.cv-root .cv-section-projects .cv-item-desc {
+  color: var(--sec-projects-text, var(--cv-color-text, #0f172a)) !important;
+}
+
+.cv-root .cv-section-projects .cv-project-card,
+.cv-root .cv-section-projects .cv-card-box {
+  background-color: var(--sec-projects-bg, var(--cv-color-surface, #f8fafc)) !important;
+  border-color: var(--sec-projects-border, var(--cv-color-border, #e2e8f0)) !important;
+}
+
+/* 7. Idiomas */
+.cv-root .cv-section-languages {
+  background-color: var(--sec-languages-bg, transparent) !important;
+  border-color: var(--sec-languages-border, var(--cv-color-border, #e2e8f0)) !important;
+}
+
+.cv-root .cv-section-languages h2,
+.cv-root .cv-section-languages h3,
+.cv-root .cv-section-languages .cv-section-title {
+  color: var(--sec-languages-title, var(--cv-color-primary, #0284c7)) !important;
+}
+
+.cv-root .cv-section-languages p,
+.cv-root .cv-section-languages span,
+.cv-root .cv-section-languages .cv-lang-name,
+.cv-root .cv-section-languages .cv-lang-fluency {
+  color: var(--sec-languages-text, var(--cv-color-text, #0f172a)) !important;
+}
+
+.cv-root .cv-section-languages .cv-language-card,
+.cv-root .cv-section-languages .cv-card-box {
+  background-color: var(--sec-languages-bg, var(--cv-color-surface, #f8fafc)) !important;
+  border-color: var(--sec-languages-border, var(--cv-color-border, #e2e8f0)) !important;
+}
+
+/* 8. Certificações */
+.cv-root .cv-section-certificates {
+  background-color: var(--sec-certificates-bg, transparent) !important;
+  border-color: var(--sec-certificates-border, var(--cv-color-border, #e2e8f0)) !important;
+}
+
+.cv-root .cv-section-certificates h2,
+.cv-root .cv-section-certificates h3,
+.cv-root .cv-section-certificates .cv-section-title {
+  color: var(--sec-certificates-title, var(--cv-color-primary, #0284c7)) !important;
+}
+
+.cv-root .cv-section-certificates p,
+.cv-root .cv-section-certificates span,
+.cv-root .cv-section-certificates .cv-item-title,
+.cv-root .cv-section-certificates .cv-item-sub {
+  color: var(--sec-certificates-text, var(--cv-color-text, #0f172a)) !important;
+}
+
+.cv-root .cv-section-certificates .cv-certificate-card,
+.cv-root .cv-section-certificates .cv-card-box {
+  background-color: var(--sec-certificates-bg, var(--cv-color-surface, #f8fafc)) !important;
+  border-color: var(--sec-certificates-border, var(--cv-color-border, #e2e8f0)) !important;
+}
+
+/* 9. Interesses & Hobbies */
+.cv-root .cv-section-interests {
+  background-color: var(--sec-interests-bg, transparent) !important;
+  border-color: var(--sec-interests-border, var(--cv-color-border, #e2e8f0)) !important;
+}
+
+.cv-root .cv-section-interests h2,
+.cv-root .cv-section-interests h3,
+.cv-root .cv-section-interests .cv-section-title {
+  color: var(--sec-interests-title, var(--cv-color-primary, #0284c7)) !important;
+}
+
+.cv-root .cv-section-interests p,
+.cv-root .cv-section-interests span,
+.cv-root .cv-section-interests .cv-interest-name,
+.cv-root .cv-section-interests .cv-hobby-label {
+  color: var(--sec-interests-text, var(--cv-color-text, #0f172a)) !important;
+}
+
+.cv-root .cv-section-interests .cv-interest-card,
+.cv-root .cv-section-interests .cv-card-box {
+  background-color: var(--sec-interests-bg, var(--cv-color-surface, #f8fafc)) !important;
+  border-color: var(--sec-interests-border, var(--cv-color-border, #e2e8f0)) !important;
+}
+
+/* 10. Cover Letter */
+.cv-root .cv-section-cover_letter,
+.cv-root .cv-cover-letter-body {
+  background-color: var(--sec-cover_letter-bg, transparent) !important;
+  color: var(--sec-cover_letter-text, var(--cv-color-text, #0f172a)) !important;
+  border-color: var(--sec-cover_letter-border, var(--cv-color-border, #e2e8f0)) !important;
+}
+
+.cv-root .cv-section-cover_letter p,
+.cv-root .cv-cover-letter-body p {
+  color: var(--sec-cover_letter-text, var(--cv-color-text, #0f172a)) !important;
 }
 
 /* Links e Contatos com Escala Dinâmica */

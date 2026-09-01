@@ -29,7 +29,7 @@ export const BlockInterests: React.FC<BlockInterestsProps> = ({
 
   if (layoutStyle === 'circles') {
     return (
-      <section className="cv-section cv-avoid-break">
+      <section className="cv-section cv-section-interests cv-avoid-break">
         {title && <h4 className="cv-section-title" style={{ fontSize: '0.88rem' }}>{title}</h4>}
         <div className="cv-hobbies-grid">
           {interests.map((item, idx) => {
@@ -47,7 +47,7 @@ export const BlockInterests: React.FC<BlockInterestsProps> = ({
   }
 
   return (
-    <section className="cv-section cv-avoid-break">
+    <section className="cv-section cv-section-interests cv-avoid-break">
       <h3 className="cv-section-title">{title}</h3>
       <div className="cv-interests-grid">
         {interests.map((item, idx) => {

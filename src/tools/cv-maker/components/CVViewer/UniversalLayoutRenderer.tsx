@@ -57,7 +57,15 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
         '--cv-bg-image': `url("${designConfig.backgroundPattern}")`,
       } : {
         '--cv-bg-image': 'none'
-      })
+      }),
+      ...(designConfig.sectionOverrides ? Object.entries(designConfig.sectionOverrides).reduce((acc, [secId, override]) => {
+        if (override.textColor) acc[`--sec-${secId}-text`] = override.textColor
+        if (override.titleColor) acc[`--sec-${secId}-title`] = override.titleColor
+        if (override.bgColor) acc[`--sec-${secId}-bg`] = override.bgColor
+        if (override.borderColor) acc[`--sec-${secId}-border`] = override.borderColor
+        if (override.accentColor) acc[`--sec-${secId}-accent`] = override.accentColor
+        return acc
+      }, {} as Record<string, string>) : {})
     } : {})
   } as React.CSSProperties
 

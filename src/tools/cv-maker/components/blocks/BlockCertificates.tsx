@@ -13,7 +13,7 @@ export const BlockCertificates: React.FC<BlockCertificatesProps> = ({
   if (!certificates || certificates.length === 0) return null
 
   return (
-    <section className="cv-section cv-avoid-break">
+    <section className="cv-section cv-section-certificates cv-avoid-break">
       <h3 className="cv-section-title">{title}</h3>
       <div className="cv-items-list">
         {certificates.map((cert, idx) => (

@@ -14,7 +14,7 @@ export const BlockSkillsBars: React.FC<BlockSkillsBarsProps> = ({
   if (!skills || skills.length === 0) return null
 
   return (
-    <section className="cv-section cv-avoid-break">
+    <section className="cv-section cv-section-skills cv-avoid-break">
       {title && <h4 className="cv-section-title" style={{ fontSize: '0.88rem' }}>{title}</h4>}
       <div className="cv-skills-progress-list">
         {skills.map((skill, idx) => {

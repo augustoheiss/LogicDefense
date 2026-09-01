@@ -318,6 +318,17 @@ export function getSkillPercentage(level?: string, levelPercent?: number): numbe
 }
 
 /**
+ * Override de Estilo Granular por Seção
+ */
+export interface SectionStyleOverride {
+  textColor?: string
+  titleColor?: string
+  bgColor?: string
+  borderColor?: string
+  accentColor?: string
+}
+
+/**
  * Configurações de Design Tokens e Estilização Dinâmica
  */
 export interface CVDesignConfig {
@@ -337,6 +348,7 @@ export interface CVDesignConfig {
   colorWorkspaceBg?: string
   backgroundPattern?: string
   backgroundOpacity?: number
+  sectionOverrides?: Record<string, SectionStyleOverride>
 }
 
 export const DEFAULT_DESIGN_CONFIG: CVDesignConfig = {
@@ -355,7 +367,8 @@ export const DEFAULT_DESIGN_CONFIG: CVDesignConfig = {
   colorSidebar: '#0f172a',
   colorWorkspaceBg: '#0b1120',
   backgroundPattern: 'none',
-  backgroundOpacity: 1.0
+  backgroundOpacity: 1.0,
+  sectionOverrides: {}
 }
 
 /**

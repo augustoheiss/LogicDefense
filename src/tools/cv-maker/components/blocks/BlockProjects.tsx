@@ -13,7 +13,7 @@ export const BlockProjects: React.FC<BlockProjectsProps> = ({
   if (!projects || projects.length === 0) return null
 
   return (
-    <section className="cv-section">
+    <section className="cv-section cv-section-projects">
       <h3 className="cv-section-title">{title}</h3>
       <div className="cv-projects-grid">
         {projects.map((proj, idx) => (

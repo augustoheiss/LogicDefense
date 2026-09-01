@@ -15,7 +15,7 @@ export const BlockSummary: React.FC<BlockSummaryProps> = ({
   if (!basics.summary && !basics.quote) return null
 
   return (
-    <section className="cv-section cv-avoid-break">
+    <section className="cv-section cv-section-summary cv-avoid-break">
       <h3 className="cv-section-title">{title}</h3>
       {basics.summary && <p className="cv-summary-text">{basics.summary}</p>}
       {showQuote && basics.quote && (

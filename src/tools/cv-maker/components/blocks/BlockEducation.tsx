@@ -13,7 +13,7 @@ export const BlockEducation: React.FC<BlockEducationProps> = ({
   if (!education || education.length === 0) return null
 
   return (
-    <section className="cv-section cv-avoid-break">
+    <section className="cv-section cv-section-education cv-avoid-break">
       <h3 className="cv-section-title">{title}</h3>
       <div className="cv-items-list">
         {education.map((item, idx) => (

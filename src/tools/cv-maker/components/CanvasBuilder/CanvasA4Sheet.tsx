@@ -110,7 +110,15 @@ export const CanvasA4Sheet: React.FC<CanvasA4SheetProps> = ({
             ['--cv-color-text' as any]: designConfig.colorText,
             ['--cv-bg-image' as any]: designConfig.backgroundPattern && designConfig.backgroundPattern !== 'none'
               ? `url("${designConfig.backgroundPattern}")`
-              : 'none'
+              : 'none',
+            ...(designConfig.sectionOverrides ? Object.entries(designConfig.sectionOverrides).reduce((acc, [secId, override]) => {
+              if (override.textColor) acc[`--sec-${secId}-text`] = override.textColor
+              if (override.titleColor) acc[`--sec-${secId}-title`] = override.titleColor
+              if (override.bgColor) acc[`--sec-${secId}-bg`] = override.bgColor
+              if (override.borderColor) acc[`--sec-${secId}-border`] = override.borderColor
+              if (override.accentColor) acc[`--sec-${secId}-accent`] = override.accentColor
+              return acc
+            }, {} as Record<string, string>) : {})
           }}
           onClick={() => onSelectBlock(null)}
         >

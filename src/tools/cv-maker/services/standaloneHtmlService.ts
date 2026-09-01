@@ -431,6 +431,15 @@ export function renderCVToStandaloneHtml(
     --cv-color-sidebar: ${designConfig.colorSidebar || '#0f172a'};
     --cv-color-workspace-bg: ${designConfig.colorWorkspaceBg || '#0b1120'};
     ${designConfig.backgroundPattern && designConfig.backgroundPattern !== 'none' ? `--cv-bg-image: url('${designConfig.backgroundPattern}');` : '--cv-bg-image: none;'}
+    ${designConfig.sectionOverrides ? Object.entries(designConfig.sectionOverrides).map(([secId, override]) => {
+      let vars = ''
+      if (override.textColor) vars += `--sec-${secId}-text: ${override.textColor}; `
+      if (override.titleColor) vars += `--sec-${secId}-title: ${override.titleColor}; `
+      if (override.bgColor) vars += `--sec-${secId}-bg: ${override.bgColor}; `
+      if (override.borderColor) vars += `--sec-${secId}-border: ${override.borderColor}; `
+      if (override.accentColor) vars += `--sec-${secId}-accent: ${override.accentColor}; `
+      return vars
+    }).join('\n    ') : ''}
     ` : ''}
   `
 

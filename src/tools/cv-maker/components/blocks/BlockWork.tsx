@@ -13,7 +13,7 @@ export const BlockWork: React.FC<BlockWorkProps> = ({
   if (!work || work.length === 0) return null
 
   return (
-    <section className="cv-section">
+    <section className="cv-section cv-section-work">
       <h3 className="cv-section-title">{title}</h3>
       <div className="cv-items-list">
         {work.map((item, idx) => (

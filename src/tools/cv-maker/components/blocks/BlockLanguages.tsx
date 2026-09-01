@@ -13,7 +13,7 @@ export const BlockLanguages: React.FC<BlockLanguagesProps> = ({
   if (!languages || languages.length === 0) return null
 
   return (
-    <section className="cv-section cv-avoid-break">
+    <section className="cv-section cv-section-languages cv-avoid-break">
       <h3 className="cv-section-title">{title}</h3>
       <div className="cv-languages-grid">
         {languages.map((lang, idx) => (

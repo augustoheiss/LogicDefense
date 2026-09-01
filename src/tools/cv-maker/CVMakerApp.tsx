@@ -507,7 +507,14 @@ export const CVMakerApp: React.FC = () => {
         </aside>
 
         {/* Right Column: Preview & Floating Toolbar */}
-        <main className="cv-preview-area" aria-label="Visualização do Currículo">
+        <main
+          className="cv-preview-area"
+          aria-label="Visualização do Currículo"
+          style={{
+            backgroundColor: designConfig.colorWorkspaceBg || '#0b1120',
+            transition: 'background-color 0.25s ease'
+          }}
+        >
           <CVToolbar
             appMode={appMode}
             onAppModeChange={handleAppModeChange}
