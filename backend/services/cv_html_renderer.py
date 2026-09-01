@@ -106,6 +106,13 @@ I18N = {
         "photo_choose_file": "📁 Escolher do Computador",
         "photo_remove": "🗑️ Remover Foto",
         "photo_url_label": "Ou cole o link direto da imagem:",
+        "photo_shape_circle": "⚪ Círculo (Modelos 01, 03, 04, 05, 06, 09)",
+        "photo_shape_rect": "🔲 Retângulo (Modelos 02, 08)",
+        "photo_zoom": "🔍 Zoom / Escala",
+        "photo_pos_x": "↔ Posição Horizontal (X)",
+        "photo_pos_y": "↕ Posição Vertical (Y)",
+        "photo_drag_hint": "💡 Dica: Clique e arraste dentro do quadro para mover a foto livremente.",
+        "photo_reset_framing": "Resetar",
         "photo_no_photo": "Deixar sem Foto",
         "photo_save": "Salvar e Aplicar",
         "work": "💼 Experiência Profissional",
@@ -146,11 +153,18 @@ I18N = {
         "copy_yaml": "📋 Copy YAML",
         "yaml_copied": "Copied!",
         "photo_btn": "📷 Photo / Avatar",
-        "photo_modal_title": "📷 Profile Photo / Avatar",
-        "photo_modal_desc": "Upload your profile photo or insert a direct image URL (e.g., LinkedIn, GitHub or CDN).",
+        "photo_modal_title": "📷 Profile Photo & Framing",
+        "photo_modal_desc": "Upload your photo and adjust position (Pan) and zoom (Scale) by dragging the preview or using the sliders.",
         "photo_choose_file": "📁 Upload from Device",
         "photo_remove": "🗑️ Remove Photo",
         "photo_url_label": "Or paste a direct image URL:",
+        "photo_shape_circle": "⚪ Circle (Layouts 01, 03, 04, 05, 06, 09)",
+        "photo_shape_rect": "🔲 Rectangle (Layouts 02, 08)",
+        "photo_zoom": "🔍 Zoom / Scale",
+        "photo_pos_x": "↔ Horizontal Position (X)",
+        "photo_pos_y": "↕ Vertical Position (Y)",
+        "photo_drag_hint": "💡 Tip: Click and drag inside the frame to move photo freely.",
+        "photo_reset_framing": "Reset",
         "photo_no_photo": "No Photo",
         "photo_save": "Save & Apply",
         "work": "💼 Professional Experience",
@@ -355,6 +369,25 @@ def _render_cv_layout_html(data: dict, layout: str, t: dict, view_mode: str = "c
     url_val = basics.get("url", "")
     image_val = html.escape(str(basics.get("image", "") or ""))
     has_image = bool(image_val and image_val.strip() and image_val != "None")
+    
+    # Enquadramento de foto (Pan e Zoom)
+    image_pos_x = basics.get("imagePosX", 50)
+    image_pos_y = basics.get("imagePosY", 50)
+    image_scale = basics.get("imageScale", 1.0)
+    try:
+        image_pos_x = int(image_pos_x) if image_pos_x is not None else 50
+    except Exception:
+        image_pos_x = 50
+    try:
+        image_pos_y = int(image_pos_y) if image_pos_y is not None else 50
+    except Exception:
+        image_pos_y = 50
+    try:
+        image_scale = float(image_scale) if image_scale is not None else 1.0
+    except Exception:
+        image_scale = 1.0
+
+    img_style = f"object-position: {image_pos_x}% {image_pos_y}%; transform: scale({image_scale}); transform-origin: {image_pos_x}% {image_pos_y}%; {'display:block;' if has_image else 'display:none;'}"
 
     # Links de perfis sociais
     profiles_links = []
@@ -371,7 +404,7 @@ def _render_cv_layout_html(data: dict, layout: str, t: dict, view_mode: str = "c
     # Avatar Component: em tela interativa mostra gatilho; na impressão (@media print) se !has_image é completamente ocultado
     avatar_html = f"""
       <div class="cv-avatar-container {'has-photo' if has_image else ''}" onclick="openPhotoModal()" title="{t['photo_btn']}">
-        <img class="cv-avatar-img" src="{image_val if has_image else ''}" alt="Avatar" style="{'display:block;' if has_image else 'display:none;'}" />
+        <img class="cv-avatar-img" src="{image_val if has_image else ''}" alt="Avatar" style="{img_style}" />
         <div class="cv-avatar-placeholder" style="{'display:none;' if has_image else 'display:flex;'}">
           <span class="avatar-icon">👤</span>
           <span class="avatar-hint" style="font-size: 0.65rem; opacity: 0.85;">{t['photo_btn']}</span>
@@ -381,7 +414,7 @@ def _render_cv_layout_html(data: dict, layout: str, t: dict, view_mode: str = "c
 
     avatar_rect_html = f"""
       <div class="cv-avatar-container cv-avatar-rect {'has-photo' if has_image else ''}" onclick="openPhotoModal()" title="{t['photo_btn']}">
-        <img class="cv-avatar-img" src="{image_val if has_image else ''}" alt="Avatar" style="{'display:block;' if has_image else 'display:none;'}" />
+        <img class="cv-avatar-img" src="{image_val if has_image else ''}" alt="Avatar" style="{img_style}" />
         <div class="cv-avatar-placeholder" style="{'display:none;' if has_image else 'display:flex;'}">
           <span class="avatar-icon">👤</span>
           <span class="avatar-hint" style="font-size: 0.65rem; opacity: 0.85;">{t['photo_btn']}</span>
@@ -994,6 +1027,23 @@ def render_multi_cv_dashboard_html(
 
     first_data = parsed_archetypes.get(active_persona, {})
     candidate_name = first_data.get("basics", {}).get("name", "Currículo")
+    active_basics = first_data.get("basics", {})
+    initial_image = str(active_basics.get("image", "") or "")
+    initial_pos_x = active_basics.get("imagePosX", 50)
+    initial_pos_y = active_basics.get("imagePosY", 50)
+    initial_scale = active_basics.get("imageScale", 1.0)
+    try:
+        initial_pos_x = int(initial_pos_x) if initial_pos_x is not None else 50
+    except Exception:
+        initial_pos_x = 50
+    try:
+        initial_pos_y = int(initial_pos_y) if initial_pos_y is not None else 50
+    except Exception:
+        initial_pos_y = 50
+    try:
+        initial_scale = float(initial_scale) if initial_scale is not None else 1.0
+    except Exception:
+        initial_scale = 1.0
 
     i18n_json_str = json.dumps(t, ensure_ascii=False)
     archetypes_json_str = json.dumps(parsed_archetypes, ensure_ascii=False)
@@ -1020,6 +1070,9 @@ def render_multi_cv_dashboard_html(
       --cv-color-surface: #f8fafc;
       --cv-color-border: #e2e8f0;
       --cv-color-accent: #f97316;
+      --cv-avatar-pos-x: {initial_pos_x}%;
+      --cv-avatar-pos-y: {initial_pos_y}%;
+      --cv-avatar-scale: {initial_scale};
       --cv-bg-image: none;
     }}
 
@@ -1155,6 +1208,10 @@ def render_multi_cv_dashboard_html(
       width: 100%;
       height: 100%;
       object-fit: cover;
+      object-position: var(--cv-avatar-pos-x, 50%) var(--cv-avatar-pos-y, 50%);
+      transform: scale(var(--cv-avatar-scale, 1.0));
+      transform-origin: var(--cv-avatar-pos-x, 50%) var(--cv-avatar-pos-y, 50%);
+      transition: transform 0.1s ease-out;
     }}
     .cv-avatar-placeholder {{
       width: 100%;
@@ -2122,25 +2179,109 @@ def render_multi_cv_dashboard_html(
     </div>
   </div>
 
-  <!-- Photo Uploader Modal -->
+  <!-- Photo Uploader Modal with Interactive Framing -->
   <div id="photo-modal" class="cv-modal-backdrop" onclick="closePhotoModal(event)">
-    <div class="cv-modal-card" onclick="event.stopPropagation()">
+    <div class="cv-modal-card" style="max-width: 500px; max-height: 90vh; overflow-y: auto;" onclick="event.stopPropagation()">
       <div class="cv-modal-header">
         <h3>{t['photo_modal_title']}</h3>
         <button class="cv-modal-close" onclick="closePhotoModal()">✕</button>
       </div>
-      <div class="cv-modal-body">
+      <div class="cv-modal-body" style="display: flex; flex-direction: column; gap: 1rem;">
         <p style="margin: 0; font-size: 0.85rem; color: #94a3b8;">
           {t['photo_modal_desc']}
         </p>
 
-        <div style="display: flex; align-items: center; justify-content: center; gap: 1.5rem; padding: 1rem; background: #06090f; border-radius: 8px;">
-          <div style="width: 82px; height: 82px; border-radius: 50%; overflow: hidden; border: 2.5px solid #10b981; display: flex; align-items: center; justify-content: center; background: #1e293b; flex-shrink: 0;">
-            <img id="modal-preview-img" src="" alt="Preview" style="width: 100%; height: 100%; object-fit: cover; display: none;" onerror="onPhotoPreviewError()" />
-            <span id="modal-preview-placeholder" style="font-size: 2rem;">👤</span>
+        <!-- Preview Box and Controls -->
+        <div style="display: flex; flex-direction: column; align-items: center; gap: 0.85rem; padding: 1.25rem; background: #06090f; border-radius: 0.75rem; border: 1px solid #1e293b;">
+          <div style="display: flex; gap: 0.5rem; margin-bottom: 0.25rem;">
+            <button
+              id="shape-btn-circle"
+              type="button"
+              class="modal-btn modal-btn-sec active"
+              style="font-size: 0.75rem; padding: 0.25rem 0.6rem; border: 1.5px solid #10b981;"
+              onclick="setModalPreviewShape('circle')"
+            >
+              {t['photo_shape_circle']}
+            </button>
+            <button
+              id="shape-btn-rect"
+              type="button"
+              class="modal-btn modal-btn-sec"
+              style="font-size: 0.75rem; padding: 0.25rem 0.6rem;"
+              onclick="setModalPreviewShape('rect')"
+            >
+              {t['photo_shape_rect']}
+            </button>
           </div>
-          <div style="display: flex; flex-direction: column; gap: 0.5rem;">
-            <label class="modal-btn modal-btn-sec" style="cursor: pointer; text-align: center; display: inline-block;">
+
+          <div
+            id="modal-preview-box"
+            style="width: 120px; height: 120px; border-radius: 50%; overflow: hidden; border: 3px solid #10b981; display: flex; align-items: center; justify-content: center; background: #1e293b; position: relative; cursor: grab; user-select: none; box-shadow: 0 8px 24px rgba(0,0,0,0.5);"
+            title="{t['photo_drag_hint']}"
+          >
+            <img
+              id="modal-preview-img"
+              src=""
+              alt="Preview"
+              draggable="false"
+              style="width: 100%; height: 100%; object-fit: cover; object-position: 50% 50%; transform: scale(1); transform-origin: 50% 50%; display: none;"
+              onerror="onPhotoPreviewError()"
+            />
+            <span id="modal-preview-placeholder" style="font-size: 2.5rem;">👤</span>
+          </div>
+
+          <span id="modal-drag-hint-text" style="font-size: 0.75rem; color: #64748b; text-align: center; display: none;">
+            {t['photo_drag_hint']}
+          </span>
+
+          <!-- Controls for Scale and Position -->
+          <div id="modal-framing-controls" style="width: 100%; display: none; flex-direction: column; gap: 0.75rem; background: #0b1120; padding: 0.85rem; border-radius: 6px; box-sizing: border-box;">
+            <div style="display: flex; align-items: center; justify-content: space-between;">
+              <label style="font-size: 0.78rem; font-weight: 600; color: #cbd5e1;">{t['photo_zoom']}: <strong id="modal-scale-label">1.0x</strong></label>
+              <button type="button" onclick="resetModalFraming()" style="background: transparent; border: none; color: #38bdf8; font-size: 0.75rem; cursor: pointer;">{t['photo_reset_framing']}</button>
+            </div>
+            <input
+              id="modal-scale-slider"
+              type="range"
+              min="1.0"
+              max="2.5"
+              step="0.05"
+              value="1.0"
+              oninput="onModalScaleChange(parseFloat(this.value))"
+              style="width: 100%; accent-color: #10b981; cursor: pointer;"
+            />
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.85rem;">
+              <div>
+                <label style="font-size: 0.75rem; color: #94a3b8; display: block; margin-bottom: 0.2rem;">{t['photo_pos_x']}: <strong id="modal-posx-label">50%</strong></label>
+                <input
+                  id="modal-posx-slider"
+                  type="range"
+                  min="0"
+                  max="100"
+                  value="50"
+                  oninput="onModalPosXChange(parseInt(this.value))"
+                  style="width: 100%; accent-color: #38bdf8; cursor: pointer;"
+                />
+              </div>
+              <div>
+                <label style="font-size: 0.75rem; color: #94a3b8; display: block; margin-bottom: 0.2rem;">{t['photo_pos_y']}: <strong id="modal-posy-label">50%</strong></label>
+                <input
+                  id="modal-posy-slider"
+                  type="range"
+                  min="0"
+                  max="100"
+                  value="50"
+                  oninput="onModalPosYChange(parseInt(this.value))"
+                  style="width: 100%; accent-color: #38bdf8; cursor: pointer;"
+                />
+              </div>
+            </div>
+          </div>
+
+          <!-- File Upload & Remove Buttons -->
+          <div style="display: flex; gap: 0.75rem; width: 100%; justify-content: center;">
+            <label class="modal-btn modal-btn-sec" style="cursor: pointer; text-align: center; flex: 1;">
               {t['photo_choose_file']}
               <input type="file" accept="image/*" onchange="handlePhotoFileUpload(event)" style="display: none;" />
             </label>
@@ -2180,7 +2321,17 @@ def render_multi_cv_dashboard_html(
     let currentTheme = '{valid_theme}';
     let currentLayout = '{valid_layout}';
     let currentViewMode = '{view_mode}';
-    let currentPhoto = '';
+    let currentPhoto = localStorage.getItem('cv_user_photo') || '{initial_image}';
+    let currentPhotoPosX = parseInt(localStorage.getItem('cv_user_photo_pos_x') || '{initial_pos_x}') || 50;
+    let currentPhotoPosY = parseInt(localStorage.getItem('cv_user_photo_pos_y') || '{initial_pos_y}') || 50;
+    let currentPhotoScale = parseFloat(localStorage.getItem('cv_user_photo_scale') || '{initial_scale}') || 1.0;
+    let modalPreviewShape = 'circle';
+    let modalPhotoInput = currentPhoto;
+    let modalPosX = currentPhotoPosX;
+    let modalPosY = currentPhotoPosY;
+    let modalScale = currentPhotoScale;
+    let isDragging = false;
+    let dragStartX = 0, dragStartY = 0, dragInitPosX = 50, dragInitPosY = 50;
 
     const PERSONA_FILENAMES = {{
         'professional': 'curriculo_executivo_ibm.yaml',
@@ -2225,10 +2376,14 @@ def render_multi_cv_dashboard_html(
       const summary = (basics.summary || '').replace(/\\n/g, '<br>');
       const photoSrc = currentPhoto || (basics.image || '');
       const hasPhoto = Boolean(photoSrc && photoSrc.trim() && photoSrc !== 'None');
+      const posX = currentPhotoPosX ?? basics.imagePosX ?? 50;
+      const posY = currentPhotoPosY ?? basics.imagePosY ?? 50;
+      const scale = currentPhotoScale ?? basics.imageScale ?? 1.0;
+      const imgStyle = `object-position: ${{posX}}% ${{posY}}%; transform: scale(${{scale}}); transform-origin: ${{posX}}% ${{posY}}%; ${{hasPhoto ? 'display:block;' : 'display:none;'}}`;
 
       const avatarHtml = `
         <div class="cv-avatar-container ${{hasPhoto ? 'has-photo' : ''}}" onclick="openPhotoModal()" title="${{I18N_T.photo_btn || 'Foto'}}">
-          <img class="cv-avatar-img" src="${{hasPhoto ? photoSrc : ''}}" alt="Avatar" style="${{hasPhoto ? 'display:block;' : 'display:none;'}}" />
+          <img class="cv-avatar-img" src="${{hasPhoto ? photoSrc : ''}}" alt="Avatar" style="${{imgStyle}}" />
           <div class="cv-avatar-placeholder" style="${{hasPhoto ? 'display:none;' : 'display:flex;'}}">
             <span class="avatar-icon">👤</span>
             <span class="avatar-hint" style="font-size: 0.65rem; opacity: 0.85;">${{I18N_T.photo_btn || 'Foto'}}</span>
@@ -2552,7 +2707,7 @@ def render_multi_cv_dashboard_html(
 
       const avatarRectHtml = `
         <div class="cv-avatar-container cv-avatar-rect ${{hasPhoto ? 'has-photo' : ''}}" onclick="openPhotoModal()" title="${{I18N_T.photo_btn || 'Foto'}}">
-          <img class="cv-avatar-img" src="${{hasPhoto ? photoSrc : ''}}" alt="Avatar" style="${{hasPhoto ? 'display:block;' : 'display:none;'}}" />
+          <img class="cv-avatar-img" src="${{hasPhoto ? photoSrc : ''}}" alt="Avatar" style="${{imgStyle}}" />
           <div class="cv-avatar-placeholder" style="${{hasPhoto ? 'display:none;' : 'display:flex;'}}">
             <span class="avatar-icon">👤</span>
             <span class="avatar-hint" style="font-size: 0.65rem; opacity: 0.85;">${{I18N_T.photo_btn || 'Foto'}}</span>
@@ -2862,24 +3017,17 @@ def render_multi_cv_dashboard_html(
       }});
     }}
 
-    /* ── Photo Modal & Avatar Handlers ── */
+    /* ── Photo Modal & Framing Handlers ── */
     function openPhotoModal() {{
       const modal = document.getElementById('photo-modal');
       const urlInput = document.getElementById('modal-url-input');
-      const previewImg = document.getElementById('modal-preview-img');
-      const previewPh = document.getElementById('modal-preview-placeholder');
-      const removeBtn = document.getElementById('modal-remove-btn');
+      modalPhotoInput = currentPhoto;
+      modalPosX = currentPhotoPosX;
+      modalPosY = currentPhotoPosY;
+      modalScale = currentPhotoScale;
 
       if (urlInput) urlInput.value = currentPhoto.startsWith('data:') ? '' : currentPhoto;
-      if (currentPhoto) {{
-        if (previewImg) {{ previewImg.src = currentPhoto; previewImg.style.display = 'block'; }}
-        if (previewPh) previewPh.style.display = 'none';
-        if (removeBtn) removeBtn.style.display = 'block';
-      }} else {{
-        if (previewImg) {{ previewImg.src = ''; previewImg.style.display = 'none'; }}
-        if (previewPh) previewPh.style.display = 'block';
-        if (removeBtn) removeBtn.style.display = 'none';
-      }}
+      updateModalFramingUI();
       if (modal) modal.classList.add('active');
     }}
 
@@ -2887,6 +3035,94 @@ def render_multi_cv_dashboard_html(
       if (e && e.target && e.target.id !== 'photo-modal' && !e.target.classList.contains('cv-modal-close')) return;
       const modal = document.getElementById('photo-modal');
       if (modal) modal.classList.remove('active');
+    }}
+
+    function setModalPreviewShape(shape) {{
+      modalPreviewShape = shape;
+      const btnCircle = document.getElementById('shape-btn-circle');
+      const btnRect = document.getElementById('shape-btn-rect');
+      const box = document.getElementById('modal-preview-box');
+      if (shape === 'circle') {{
+        if (btnCircle) {{ btnCircle.classList.add('active'); btnCircle.style.border = '1.5px solid #10b981'; }}
+        if (btnRect) {{ btnRect.classList.remove('active'); btnRect.style.border = 'none'; }}
+        if (box) {{
+          box.style.width = '120px';
+          box.style.height = '120px';
+          box.style.borderRadius = '50%';
+        }}
+      }} else {{
+        if (btnCircle) {{ btnCircle.classList.remove('active'); btnCircle.style.border = 'none'; }}
+        if (btnRect) {{ btnRect.classList.add('active'); btnRect.style.border = '1.5px solid #10b981'; }}
+        if (box) {{
+          box.style.width = '100px';
+          box.style.height = '135px';
+          box.style.borderRadius = '8px';
+        }}
+      }}
+    }}
+
+    function updateModalFramingUI() {{
+      const previewImg = document.getElementById('modal-preview-img');
+      const previewPh = document.getElementById('modal-preview-placeholder');
+      const removeBtn = document.getElementById('modal-remove-btn');
+      const controls = document.getElementById('modal-framing-controls');
+      const dragHint = document.getElementById('modal-drag-hint-text');
+
+      const scaleLabel = document.getElementById('modal-scale-label');
+      const scaleSlider = document.getElementById('modal-scale-slider');
+      const posxLabel = document.getElementById('modal-posx-label');
+      const posxSlider = document.getElementById('modal-posx-slider');
+      const posyLabel = document.getElementById('modal-posy-label');
+      const posySlider = document.getElementById('modal-posy-slider');
+
+      if (scaleLabel) scaleLabel.innerText = modalScale.toFixed(2) + 'x';
+      if (scaleSlider) scaleSlider.value = modalScale;
+      if (posxLabel) posxLabel.innerText = modalPosX + '%';
+      if (posxSlider) posxSlider.value = modalPosX;
+      if (posyLabel) posyLabel.innerText = modalPosY + '%';
+      if (posySlider) posySlider.value = modalPosY;
+
+      if (modalPhotoInput) {{
+        if (previewImg) {{
+          previewImg.src = modalPhotoInput;
+          previewImg.style.display = 'block';
+          previewImg.style.objectPosition = modalPosX + '% ' + modalPosY + '%';
+          previewImg.style.transform = 'scale(' + modalScale + ')';
+          previewImg.style.transformOrigin = modalPosX + '% ' + modalPosY + '%';
+        }}
+        if (previewPh) previewPh.style.display = 'none';
+        if (removeBtn) removeBtn.style.display = 'block';
+        if (controls) controls.style.display = 'flex';
+        if (dragHint) dragHint.style.display = 'block';
+      }} else {{
+        if (previewImg) {{ previewImg.src = ''; previewImg.style.display = 'none'; }}
+        if (previewPh) previewPh.style.display = 'block';
+        if (removeBtn) removeBtn.style.display = 'none';
+        if (controls) controls.style.display = 'none';
+        if (dragHint) dragHint.style.display = 'none';
+      }}
+    }}
+
+    function onModalScaleChange(val) {{
+      modalScale = parseFloat(val) || 1.0;
+      updateModalFramingUI();
+    }}
+
+    function onModalPosXChange(val) {{
+      modalPosX = parseInt(val) || 50;
+      updateModalFramingUI();
+    }}
+
+    function onModalPosYChange(val) {{
+      modalPosY = parseInt(val) || 50;
+      updateModalFramingUI();
+    }}
+
+    function resetModalFraming() {{
+      modalPosX = 50;
+      modalPosY = 50;
+      modalScale = 1.0;
+      updateModalFramingUI();
     }}
 
     function handlePhotoFileUpload(e) {{
@@ -2898,29 +3134,15 @@ def render_multi_cv_dashboard_html(
       }}
       const reader = new FileReader();
       reader.onload = function(evt) {{
-        const res = evt.target.result;
-        updateModalPreview(res);
+        modalPhotoInput = evt.target.result;
+        updateModalFramingUI();
       }};
       reader.readAsDataURL(file);
     }}
 
     function handlePhotoUrlInput(val) {{
-      updateModalPreview(val.trim());
-    }}
-
-    function updateModalPreview(src) {{
-      const previewImg = document.getElementById('modal-preview-img');
-      const previewPh = document.getElementById('modal-preview-placeholder');
-      const removeBtn = document.getElementById('modal-remove-btn');
-      if (src) {{
-        if (previewImg) {{ previewImg.src = src; previewImg.style.display = 'block'; }}
-        if (previewPh) previewPh.style.display = 'none';
-        if (removeBtn) removeBtn.style.display = 'block';
-      }} else {{
-        if (previewImg) {{ previewImg.src = ''; previewImg.style.display = 'none'; }}
-        if (previewPh) previewPh.style.display = 'block';
-        if (removeBtn) removeBtn.style.display = 'none';
-      }}
+      modalPhotoInput = val.trim();
+      updateModalFramingUI();
     }}
 
     function onPhotoPreviewError() {{
@@ -2933,37 +3155,64 @@ def render_multi_cv_dashboard_html(
     function removeModalPhoto() {{
       const urlInput = document.getElementById('modal-url-input');
       if (urlInput) urlInput.value = '';
-      updateModalPreview('');
+      modalPhotoInput = '';
+      updateModalFramingUI();
     }}
 
     function clearAndSaveNoPhoto() {{
       currentPhoto = '';
+      currentPhotoPosX = 50;
+      currentPhotoPosY = 50;
+      currentPhotoScale = 1.0;
       localStorage.removeItem('cv_user_photo');
-      applyPhotoToAll('');
+      localStorage.removeItem('cv_user_photo_pos_x');
+      localStorage.removeItem('cv_user_photo_pos_y');
+      localStorage.removeItem('cv_user_photo_scale');
+      applyPhotoToAll('', 50, 50, 1.0);
       closePhotoModal();
     }}
 
     function saveAndApplyPhoto() {{
-      const previewImg = document.getElementById('modal-preview-img');
-      const photoSrc = (previewImg && previewImg.style.display !== 'none') ? previewImg.src : '';
-      currentPhoto = photoSrc;
-      if (photoSrc) {{
-        localStorage.setItem('cv_user_photo', photoSrc);
+      currentPhoto = modalPhotoInput;
+      currentPhotoPosX = modalPosX;
+      currentPhotoPosY = modalPosY;
+      currentPhotoScale = modalScale;
+
+      if (currentPhoto) {{
+        localStorage.setItem('cv_user_photo', currentPhoto);
+        localStorage.setItem('cv_user_photo_pos_x', currentPhotoPosX);
+        localStorage.setItem('cv_user_photo_pos_y', currentPhotoPosY);
+        localStorage.setItem('cv_user_photo_scale', currentPhotoScale);
       }} else {{
         localStorage.removeItem('cv_user_photo');
+        localStorage.removeItem('cv_user_photo_pos_x');
+        localStorage.removeItem('cv_user_photo_pos_y');
+        localStorage.removeItem('cv_user_photo_scale');
       }}
-      applyPhotoToAll(photoSrc);
+      applyPhotoToAll(currentPhoto, currentPhotoPosX, currentPhotoPosY, currentPhotoScale);
       closePhotoModal();
     }}
 
-    function applyPhotoToAll(photoSrc) {{
+    function applyPhotoToAll(photoSrc, posX = currentPhotoPosX, posY = currentPhotoPosY, scale = currentPhotoScale) {{
+      const root = document.getElementById('cv-viewport') || document.documentElement;
+      if (root) {{
+        root.style.setProperty('--cv-avatar-pos-x', posX + '%');
+        root.style.setProperty('--cv-avatar-pos-y', posY + '%');
+        root.style.setProperty('--cv-avatar-scale', scale);
+      }}
       const containers = document.querySelectorAll('.cv-avatar-container');
       containers.forEach(c => {{
         const img = c.querySelector('.cv-avatar-img');
         const ph = c.querySelector('.cv-avatar-placeholder');
         if (photoSrc) {{
           c.classList.add('has-photo');
-          if (img) {{ img.src = photoSrc; img.style.display = 'block'; }}
+          if (img) {{
+            img.src = photoSrc;
+            img.style.display = 'block';
+            img.style.objectPosition = posX + '% ' + posY + '%';
+            img.style.transform = 'scale(' + scale + ')';
+            img.style.transformOrigin = posX + '% ' + posY + '%';
+          }}
           if (ph) ph.style.display = 'none';
         }} else {{
           c.classList.remove('has-photo');
@@ -2971,6 +3220,58 @@ def render_multi_cv_dashboard_html(
           if (ph) ph.style.display = 'flex';
         }}
       }});
+    }}
+
+    function initPhotoDragListeners() {{
+      const box = document.getElementById('modal-preview-box');
+      if (!box) return;
+
+      function startDrag(clientX, clientY) {{
+        if (!modalPhotoInput) return;
+        isDragging = true;
+        dragStartX = clientX;
+        dragStartY = clientY;
+        dragInitPosX = modalPosX;
+        dragInitPosY = modalPosY;
+        box.style.cursor = 'grabbing';
+      }}
+
+      function moveDrag(clientX, clientY) {{
+        if (!isDragging) return;
+        const deltaX = clientX - dragStartX;
+        const deltaY = clientY - dragStartY;
+        modalPosX = Math.min(100, Math.max(0, Math.round(dragInitPosX - deltaX * 0.4)));
+        modalPosY = Math.min(100, Math.max(0, Math.round(dragInitPosY - deltaY * 0.4)));
+        updateModalFramingUI();
+      }}
+
+      function endDrag() {{
+        if (isDragging) {{
+          isDragging = false;
+          box.style.cursor = 'grab';
+        }}
+      }}
+
+      box.addEventListener('mousedown', function(e) {{
+        e.preventDefault();
+        startDrag(e.clientX, e.clientY);
+      }});
+      window.addEventListener('mousemove', function(e) {{
+        moveDrag(e.clientX, e.clientY);
+      }});
+      window.addEventListener('mouseup', endDrag);
+
+      box.addEventListener('touchstart', function(e) {{
+        if (e.touches && e.touches[0]) {{
+          startDrag(e.touches[0].clientX, e.touches[0].clientY);
+        }}
+      }}, {{ passive: true }});
+      window.addEventListener('touchmove', function(e) {{
+        if (e.touches && e.touches[0]) {{
+          moveDrag(e.touches[0].clientX, e.touches[0].clientY);
+        }}
+      }}, {{ passive: true }});
+      window.addEventListener('touchend', endDrag);
     }}
 
     let currentDesign = {{
@@ -3067,13 +3368,16 @@ def render_multi_cv_dashboard_html(
       vp.style.setProperty('--cv-bg-image', currentDesign.backgroundPattern && currentDesign.backgroundPattern !== 'none' ? 'url("' + currentDesign.backgroundPattern + '")' : 'none');
     }}
 
-    // Auto-restore saved preferences
+    // Auto-restore saved preferences & setup listeners
     (function() {{
       const savedTheme = localStorage.getItem('cv_standalone_theme') || '{valid_theme}';
       const savedPersona = localStorage.getItem('cv_active_persona') || '{active_persona}';
       const savedLayout = localStorage.getItem('cv_standalone_layout') || '{valid_layout}';
       const savedViewMode = localStorage.getItem('cv_standalone_viewmode') || '{view_mode}';
       const savedPhoto = localStorage.getItem('cv_user_photo');
+      const savedPosX = localStorage.getItem('cv_user_photo_pos_x');
+      const savedPosY = localStorage.getItem('cv_user_photo_pos_y');
+      const savedScale = localStorage.getItem('cv_user_photo_scale');
       const savedDesign = localStorage.getItem('cv_design_config');
 
       if (savedDesign) {{
@@ -3113,9 +3417,19 @@ def render_multi_cv_dashboard_html(
 
       if (savedPhoto) {{
         currentPhoto = savedPhoto;
-        applyPhotoToAll(savedPhoto);
+      }}
+      if (savedPosX !== null) {{
+        currentPhotoPosX = parseInt(savedPosX) || 50;
+      }}
+      if (savedPosY !== null) {{
+        currentPhotoPosY = parseInt(savedPosY) || 50;
+      }}
+      if (savedScale !== null) {{
+        currentPhotoScale = parseFloat(savedScale) || 1.0;
       }}
 
+      applyPhotoToAll(currentPhoto, currentPhotoPosX, currentPhotoPosY, currentPhotoScale);
+      initPhotoDragListeners();
       switchPersona(currentPersona);
     }})();
   </script>
