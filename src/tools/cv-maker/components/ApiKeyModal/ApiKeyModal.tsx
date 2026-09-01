@@ -301,7 +301,9 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ isOpen, onClose, onKey
               {activeKey ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                   <div style={{ background: '#020617', padding: '1rem', borderRadius: '6px', border: '1px solid #1e293b' }}>
-                    <div style={{ fontSize: '0.8rem', color: '#94a3b8', marginBottom: '0.25rem' }}>Sua Chave de API Ativa (Universal):</div>
+                    <div style={{ fontSize: '0.8rem', color: '#94a3b8', marginBottom: '0.25rem' }}>
+                      Sua Chave de API Ativa (Universal{keyHint ? ` - ${keyHint}` : ''}):
+                    </div>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem' }}>
                       <code style={{ color: '#38bdf8', fontSize: '0.9rem', wordBreak: 'break-all' }}>{activeKey}</code>
                       <button className="cv-btn-secondary" style={{ padding: '0.3rem 0.6rem', fontSize: '0.75rem' }} onClick={() => handleCopy(activeKey)}>
@@ -478,4 +480,4 @@ with open("meu_curriculo_navy.html", "w", encoding="utf-8") as f:
       </div>
     </div>
   )
-
+}
