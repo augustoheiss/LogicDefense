@@ -325,6 +325,8 @@ export interface CVDesignConfig {
   colorSurface: string
   colorBorder: string
   colorAccent: string
+  colorSidebar?: string
+  colorWorkspaceBg?: string
   backgroundPattern?: string
   backgroundOpacity?: number
 }
@@ -342,6 +344,8 @@ export const DEFAULT_DESIGN_CONFIG: CVDesignConfig = {
   colorSurface: '#f8fafc',
   colorBorder: '#e2e8f0',
   colorAccent: '#f97316',
+  colorSidebar: '#0f172a',
+  colorWorkspaceBg: '#0b1120',
   backgroundPattern: 'none',
   backgroundOpacity: 1.0
 }

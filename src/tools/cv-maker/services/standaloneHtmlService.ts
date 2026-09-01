@@ -428,7 +428,9 @@ export function renderCVToStandaloneHtml(
     --cv-color-surface: ${designConfig.colorSurface};
     --cv-color-border: ${designConfig.colorBorder};
     --cv-color-accent: ${designConfig.colorAccent};
-    ${designConfig.backgroundPattern && designConfig.backgroundPattern !== 'none' ? `--cv-bg-image: url('${designConfig.backgroundPattern}');` : ''}
+    --cv-color-sidebar: ${designConfig.colorSidebar || '#0f172a'};
+    --cv-color-workspace-bg: ${designConfig.colorWorkspaceBg || '#0b1120'};
+    ${designConfig.backgroundPattern && designConfig.backgroundPattern !== 'none' ? `--cv-bg-image: url('${designConfig.backgroundPattern}');` : '--cv-bg-image: none;'}
     ` : ''}
   `
 

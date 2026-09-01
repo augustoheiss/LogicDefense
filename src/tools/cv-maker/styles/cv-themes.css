@@ -219,14 +219,30 @@
   font-size: calc(0.75rem * var(--cv-font-scale, 1.0)) !important;
 }
 
-/* Cards, Boxes e Superfícies Modulares */
+/* Cards, Boxes, Módulos e Superfícies */
 .cv-root .cv-project-card,
 .cv-root .cv-card-box,
 .cv-root .cv-math-box,
 .cv-root .cv-duo-box,
-.cv-root .cv-item-box {
+.cv-root .cv-item-box,
+.cv-root .cv-language-card,
+.cv-root .cv-interest-card,
+.cv-root .cv-certificate-card,
+.cv-root .cv-education-card,
+.cv-root .cv-navy-civildata,
+.cv-root .cv-civil-item {
   background-color: var(--cv-color-surface, var(--theme-default-surface, #f8fafc)) !important;
   border-color: var(--cv-color-border, var(--theme-default-border, #e2e8f0)) !important;
+}
+
+/* Laterais / Sidebars Escuras ou Contrastantes */
+.cv-root .cv-navy-sidebar,
+.cv-root .cv-duo-left,
+.cv-root .cv-editorial-left,
+.cv-root .cv-sidebar-col,
+.cv-root aside.cv-navy-sidebar,
+.cv-root .cv-sidebar-stack {
+  background-color: var(--cv-color-sidebar, #0f172a) !important;
 }
 
 /* Barras de Nível de Habilidade */
@@ -240,15 +256,46 @@
   background: var(--cv-color-border, var(--theme-default-border, #e2e8f0)) !important;
 }
 
-/* Links e Contatos */
+/* Links e Contatos com Escala Dinâmica */
 .cv-root .cv-link,
 .cv-root a {
   color: var(--cv-color-secondary, var(--theme-default-secondary, #0284c7)) !important;
 }
 
 .cv-root .cv-contacts,
-.cv-root .contacts {
+.cv-root .contacts,
+.cv-root .cv-contact-item,
+.cv-root .cv-contacts a,
+.cv-root .cv-contacts span,
+.cv-root .cv-hero-top-bar,
+.cv-root .cv-hero-top-bar span,
+.cv-root .cv-hero-top-bar a {
   font-size: calc(0.82rem * var(--cv-font-scale, 1.0)) !important;
+}
+
+/* Cover Letter com Escala Dinâmica */
+.cv-root .cv-cover-letter-body,
+.cv-root .cv-cover-letter-body p,
+.cv-root .cv-cover-para,
+.cv-root .cv-cover-recipient,
+.cv-root .cv-cover-recipient-name,
+.cv-root .cv-cover-recipient-title,
+.cv-root .cv-cover-recipient-company,
+.cv-root .cv-cover-recipient-address,
+.cv-root .cv-cover-salutation,
+.cv-root .cv-cover-closing,
+.cv-root .cv-cover-signature,
+.cv-root .cv-cover-paragraphs p {
+  font-size: calc(0.92rem * var(--cv-font-scale, 1.0)) !important;
+  line-height: calc(1.65 * var(--cv-font-scale, 1.0)) !important;
+}
+
+.cv-root .cv-cover-subject {
+  font-size: calc(0.96rem * var(--cv-font-scale, 1.0)) !important;
+}
+
+.cv-root .cv-cover-date {
+  font-size: calc(0.84rem * var(--cv-font-scale, 1.0)) !important;
 }
 
 /* Citações / Quotes */
@@ -256,4 +303,11 @@
 .cv-root .cv-hero-quote {
   color: var(--cv-color-secondary, var(--theme-default-secondary, #0369a1)) !important;
   font-size: calc(0.86rem * var(--cv-font-scale, 1.0)) !important;
+}
+
+/* Ambiente de Trabalho / Workspace Background */
+.cv-preview-area,
+.cv-print-wrapper,
+.cv-canvas-workspace {
+  background-color: var(--cv-color-workspace-bg, #0b1120) !important;
 }

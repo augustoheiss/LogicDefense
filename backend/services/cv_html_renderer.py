@@ -2150,20 +2150,23 @@ def render_multi_cv_dashboard_html(
             <button class="modal-btn modal-btn-sec" style="padding: 0.4rem; font-size: 0.75rem;" onclick="applyBgPattern('none')">
               Branco ATS
             </button>
-            <button class="modal-btn modal-btn-sec" style="padding: 0.4rem; font-size: 0.75rem;" onclick="applyBgPattern('/cv-backgrounds/Minimalist_luxury_resume_stationery_bac_202608312017.jpeg')">
+            <button class="modal-btn modal-btn-sec" style="padding: 0.4rem; font-size: 0.75rem;" onclick="applyBgPattern('/cv-backgrounds/bg-grid-tech.jpg')">
+              Tech Grid
+            </button>
+            <button class="modal-btn modal-btn-sec" style="padding: 0.4rem; font-size: 0.75rem;" onclick="applyBgPattern('/cv-backgrounds/bg-luxury-minimal.jpg')">
               Luxury Gold
             </button>
-            <button class="modal-btn modal-btn-sec" style="padding: 0.4rem; font-size: 0.75rem;" onclick="applyBgPattern('/cv-backgrounds/Abstract_corporate_A4_background._202608312017.jpeg')">
-              Corporate Blue
-            </button>
-            <button class="modal-btn modal-btn-sec" style="padding: 0.4rem; font-size: 0.75rem;" onclick="applyBgPattern('/cv-backgrounds/Engineering_resume_background_grid_202608312017.jpeg')">
-              Blueprint Grid
-            </button>
-            <button class="modal-btn modal-btn-sec" style="padding: 0.4rem; font-size: 0.75rem;" onclick="applyBgPattern('/cv-backgrounds/Geometric_line_art_resume_statio._202608312017.jpeg')">
+            <button class="modal-btn modal-btn-sec" style="padding: 0.4rem; font-size: 0.75rem;" onclick="applyBgPattern('/cv-backgrounds/bg-geometric-line.jpg')">
               Geometric Line
             </button>
-            <button class="modal-btn modal-btn-sec" style="padding: 0.4rem; font-size: 0.75rem;" onclick="applyBgPattern('/cv-backgrounds/Corporate_background_with_curved._202608312017.jpeg')">
-              Curved Wave
+            <button class="modal-btn modal-btn-sec" style="padding: 0.4rem; font-size: 0.75rem;" onclick="applyBgPattern('/cv-backgrounds/bg-corporate-waves.jpg')">
+              Corporate Wave
+            </button>
+            <button class="modal-btn modal-btn-sec" style="padding: 0.4rem; font-size: 0.75rem;" onclick="applyBgPattern('/cv-backgrounds/bg-stationery-clean.jpg')">
+              Stationery Cream
+            </button>
+            <button class="modal-btn modal-btn-sec" style="padding: 0.4rem; font-size: 0.75rem;" onclick="applyBgPattern('/cv-backgrounds/bg-technical-blueprint.jpg')">
+              Blueprint Arq
             </button>
           </div>
         </div>
@@ -3284,6 +3287,8 @@ def render_multi_cv_dashboard_html(
       colorSurface: '#f8fafc',
       colorBg: '#ffffff',
       colorText: '#0f172a',
+      colorSidebar: '#0f172a',
+      colorWorkspaceBg: '#0b0f19',
       backgroundPattern: 'none'
     }};
 
@@ -3312,13 +3317,14 @@ def render_multi_cv_dashboard_html(
       saveAndApplyDesign();
     }}
 
-    function applyColorPreset(primary, secondary, accent, surface, bg, text) {{
+    function applyColorPreset(primary, secondary, accent, surface, bg, text, sidebar = '#0f172a') {{
       currentDesign.colorPrimary = primary;
       currentDesign.colorSecondary = secondary;
       currentDesign.colorAccent = accent;
       currentDesign.colorSurface = surface;
       currentDesign.colorBg = bg;
       currentDesign.colorText = text;
+      currentDesign.colorSidebar = sidebar;
       saveAndApplyDesign();
     }}
 
@@ -3338,6 +3344,8 @@ def render_multi_cv_dashboard_html(
         colorSurface: '#f8fafc',
         colorBg: '#ffffff',
         colorText: '#0f172a',
+        colorSidebar: '#0f172a',
+        colorWorkspaceBg: '#0b0f19',
         backgroundPattern: 'none'
       }};
       localStorage.removeItem('cv_design_config');
@@ -3365,6 +3373,9 @@ def render_multi_cv_dashboard_html(
       vp.style.setProperty('--cv-color-surface', currentDesign.colorSurface);
       vp.style.setProperty('--cv-color-bg', currentDesign.colorBg);
       vp.style.setProperty('--cv-color-text', currentDesign.colorText);
+      vp.style.setProperty('--cv-color-sidebar', currentDesign.colorSidebar || '#0f172a');
+      vp.style.setProperty('--cv-color-workspace-bg', currentDesign.colorWorkspaceBg || '#0b0f19');
+      document.body.style.background = currentDesign.colorWorkspaceBg || '#0b0f19';
       vp.style.setProperty('--cv-bg-image', currentDesign.backgroundPattern && currentDesign.backgroundPattern !== 'none' ? 'url("' + currentDesign.backgroundPattern + '")' : 'none');
     }}
 

@@ -127,34 +127,40 @@ const BACKGROUND_OPTIONS = [
     previewColor: '#ffffff'
   },
   {
-    id: 'bg-minimalist-gold',
-    name: 'Minimalist Luxury Gold',
-    url: '/cv-backgrounds/Minimalist_luxury_resume_stationery_bac_202608312017.jpeg',
-    previewColor: '#fefce8'
-  },
-  {
-    id: 'bg-abstract-blue',
-    name: 'Abstract Corporate Blue',
-    url: '/cv-backgrounds/Abstract_corporate_A4_background._202608312017.jpeg',
-    previewColor: '#f0f9ff'
-  },
-  {
-    id: 'bg-engineering-grid',
-    name: 'Engineering Blueprint Grid',
-    url: '/cv-backgrounds/Engineering_resume_background_grid_202608312017.jpeg',
+    id: 'bg-grid-tech',
+    name: 'Grade Técnica & Engenharia',
+    url: '/cv-backgrounds/bg-grid-tech.jpg',
     previewColor: '#f8fafc'
   },
   {
-    id: 'bg-geometric-lines',
-    name: 'Geometric Line Art',
-    url: '/cv-backgrounds/Geometric_line_art_resume_statio._202608312017.jpeg',
+    id: 'bg-luxury-minimal',
+    name: 'Minimalista Luxo Dourado',
+    url: '/cv-backgrounds/bg-luxury-minimal.jpg',
+    previewColor: '#fefce8'
+  },
+  {
+    id: 'bg-geometric-line',
+    name: 'Geométrico Poligonal Suave',
+    url: '/cv-backgrounds/bg-geometric-line.jpg',
     previewColor: '#f5f3ff'
   },
   {
-    id: 'bg-corporate-curved',
-    name: 'Corporate Curved Wave',
-    url: '/cv-backgrounds/Corporate_background_with_curved._202608312017.jpeg',
-    previewColor: '#f0fdf4'
+    id: 'bg-corporate-waves',
+    name: 'Corporativo Ondas Executivas',
+    url: '/cv-backgrounds/bg-corporate-waves.jpg',
+    previewColor: '#f0f9ff'
+  },
+  {
+    id: 'bg-stationery-clean',
+    name: 'Papelaria Editorial Cream',
+    url: '/cv-backgrounds/bg-stationery-clean.jpg',
+    previewColor: '#fdfbf7'
+  },
+  {
+    id: 'bg-technical-blueprint',
+    name: 'Blueprint Arquitetura',
+    url: '/cv-backgrounds/bg-technical-blueprint.jpg',
+    previewColor: '#f1f5f9'
   }
 ]
 
@@ -182,7 +188,8 @@ export const DesignCustomizerDrawer: React.FC<DesignCustomizerDrawerProps> = ({
       colorAccent: palette.accent,
       colorSurface: palette.surface,
       colorBg: palette.bg,
-      colorText: palette.text
+      colorText: palette.text,
+      colorSidebar: palette.primary === '#334155' ? '#1e293b' : palette.primary === '#9f1239' ? '#4c0519' : palette.primary === '#059669' ? '#064e3b' : '#0f172a'
     })
   }
 
@@ -195,8 +202,8 @@ export const DesignCustomizerDrawer: React.FC<DesignCustomizerDrawerProps> = ({
       <div
         className="cv-modal-card"
         style={{
-          maxWidth: '560px',
-          maxHeight: '90vh',
+          maxWidth: '600px',
+          maxHeight: '92vh',
           display: 'flex',
           flexDirection: 'column',
           overflow: 'hidden'
@@ -208,8 +215,8 @@ export const DesignCustomizerDrawer: React.FC<DesignCustomizerDrawerProps> = ({
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
             <span style={{ fontSize: '1.4rem' }}>🎨</span>
             <div>
-              <h3 style={{ margin: 0, fontSize: '1.1rem', color: '#f8fafc' }}>Customização de Design & Estilo</h3>
-              <p style={{ margin: 0, fontSize: '0.75rem', color: '#94a3b8' }}>Personalize fontes, cores, escala e fundos com aplicação em tempo real.</p>
+              <h3 style={{ margin: 0, fontSize: '1.1rem', color: '#f8fafc' }}>Design, Estilo & Ambiente</h3>
+              <p style={{ margin: 0, fontSize: '0.75rem', color: '#94a3b8' }}>Personalize fontes, cores dos boxes, laterais, fundo do ambiente e texturas.</p>
             </div>
           </div>
           <button className="cv-modal-close" onClick={onClose}>✕</button>
@@ -237,7 +244,7 @@ export const DesignCustomizerDrawer: React.FC<DesignCustomizerDrawerProps> = ({
               <input
                 type="range"
                 min="0.80"
-                max="1.25"
+                max="1.30"
                 step="0.05"
                 value={config.fontScale}
                 onChange={e => onChangeConfig({ ...config, fontScale: parseFloat(e.target.value) })}
@@ -279,14 +286,14 @@ export const DesignCustomizerDrawer: React.FC<DesignCustomizerDrawerProps> = ({
             </div>
           </section>
 
-          {/* ── 2. Paleta Cromática ── */}
+          {/* ── 2. Cores do Ambiente, Folha, Boxes e Laterais ── */}
           <section style={{ background: '#0b1120', padding: '1rem', borderRadius: '8px', border: '1px solid #1e293b' }}>
             <h4 style={{ margin: '0 0 0.85rem 0', fontSize: '0.9rem', color: '#34d399', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-              🌈 Paletas de Cores Semânticas
+              🌈 Cores da Folha, Boxes, Laterais & Ambiente
             </h4>
 
             {/* Presets Cromáticos */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '0.5rem', marginBottom: '1rem' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '0.5rem', marginBottom: '1.25rem' }}>
               {COLOR_PRESETS.map(palette => {
                 const isActive = config.colorPrimary === palette.primary
                 return (
@@ -312,10 +319,62 @@ export const DesignCustomizerDrawer: React.FC<DesignCustomizerDrawerProps> = ({
               })}
             </div>
 
-            {/* Pickers Manuais */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', background: '#06090f', padding: '0.75rem', borderRadius: '6px' }}>
+            {/* Pickers Manuais Detalhados */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', background: '#06090f', padding: '0.85rem', borderRadius: '6px', border: '1px solid #1e293b' }}>
               <div>
-                <label style={{ fontSize: '0.72rem', color: '#94a3b8', display: 'block', marginBottom: '0.25rem' }}>Cor Primária (Títulos/Bordas):</label>
+                <label style={{ fontSize: '0.72rem', color: '#94a3b8', display: 'block', marginBottom: '0.25rem' }}>🎨 Cor da Folha A4:</label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                  <input
+                    type="color"
+                    value={config.colorBg || '#ffffff'}
+                    onChange={e => onChangeConfig({ ...config, colorBg: e.target.value })}
+                    style={{ width: '32px', height: '28px', border: 'none', background: 'transparent', cursor: 'pointer' }}
+                  />
+                  <span style={{ fontSize: '0.75rem', color: '#e2e8f0', fontFamily: 'monospace' }}>{config.colorBg || '#ffffff'}</span>
+                </div>
+              </div>
+
+              <div>
+                <label style={{ fontSize: '0.72rem', color: '#94a3b8', display: 'block', marginBottom: '0.25rem' }}>🏢 Cor dos Boxes / Cards:</label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                  <input
+                    type="color"
+                    value={config.colorSurface || '#f8fafc'}
+                    onChange={e => onChangeConfig({ ...config, colorSurface: e.target.value })}
+                    style={{ width: '32px', height: '28px', border: 'none', background: 'transparent', cursor: 'pointer' }}
+                  />
+                  <span style={{ fontSize: '0.75rem', color: '#e2e8f0', fontFamily: 'monospace' }}>{config.colorSurface || '#f8fafc'}</span>
+                </div>
+              </div>
+
+              <div>
+                <label style={{ fontSize: '0.72rem', color: '#94a3b8', display: 'block', marginBottom: '0.25rem' }}>🌑 Cor da Lateral / Sidebar:</label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                  <input
+                    type="color"
+                    value={config.colorSidebar || '#0f172a'}
+                    onChange={e => onChangeConfig({ ...config, colorSidebar: e.target.value })}
+                    style={{ width: '32px', height: '28px', border: 'none', background: 'transparent', cursor: 'pointer' }}
+                  />
+                  <span style={{ fontSize: '0.75rem', color: '#e2e8f0', fontFamily: 'monospace' }}>{config.colorSidebar || '#0f172a'}</span>
+                </div>
+              </div>
+
+              <div>
+                <label style={{ fontSize: '0.72rem', color: '#94a3b8', display: 'block', marginBottom: '0.25rem' }}>🖼️ Cor do Fundo do Ambiente:</label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                  <input
+                    type="color"
+                    value={config.colorWorkspaceBg || '#0b1120'}
+                    onChange={e => onChangeConfig({ ...config, colorWorkspaceBg: e.target.value })}
+                    style={{ width: '32px', height: '28px', border: 'none', background: 'transparent', cursor: 'pointer' }}
+                  />
+                  <span style={{ fontSize: '0.75rem', color: '#e2e8f0', fontFamily: 'monospace' }}>{config.colorWorkspaceBg || '#0b1120'}</span>
+                </div>
+              </div>
+
+              <div>
+                <label style={{ fontSize: '0.72rem', color: '#94a3b8', display: 'block', marginBottom: '0.25rem' }}>🔤 Cor Primária (Títulos/Destaques):</label>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                   <input
                     type="color"
@@ -326,8 +385,9 @@ export const DesignCustomizerDrawer: React.FC<DesignCustomizerDrawerProps> = ({
                   <span style={{ fontSize: '0.75rem', color: '#e2e8f0', fontFamily: 'monospace' }}>{config.colorPrimary}</span>
                 </div>
               </div>
+
               <div>
-                <label style={{ fontSize: '0.72rem', color: '#94a3b8', display: 'block', marginBottom: '0.25rem' }}>Cor de Destaque / Badges:</label>
+                <label style={{ fontSize: '0.72rem', color: '#94a3b8', display: 'block', marginBottom: '0.25rem' }}>⚡ Cor de Acento / Badges:</label>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                   <input
                     type="color"
@@ -338,13 +398,39 @@ export const DesignCustomizerDrawer: React.FC<DesignCustomizerDrawerProps> = ({
                   <span style={{ fontSize: '0.75rem', color: '#e2e8f0', fontFamily: 'monospace' }}>{config.colorAccent}</span>
                 </div>
               </div>
+
+              <div>
+                <label style={{ fontSize: '0.72rem', color: '#94a3b8', display: 'block', marginBottom: '0.25rem' }}>✍️ Cor do Texto Principal:</label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                  <input
+                    type="color"
+                    value={config.colorText || '#0f172a'}
+                    onChange={e => onChangeConfig({ ...config, colorText: e.target.value })}
+                    style={{ width: '32px', height: '28px', border: 'none', background: 'transparent', cursor: 'pointer' }}
+                  />
+                  <span style={{ fontSize: '0.75rem', color: '#e2e8f0', fontFamily: 'monospace' }}>{config.colorText || '#0f172a'}</span>
+                </div>
+              </div>
+
+              <div>
+                <label style={{ fontSize: '0.72rem', color: '#94a3b8', display: 'block', marginBottom: '0.25rem' }}>🔲 Cor das Bordas & Divisores:</label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                  <input
+                    type="color"
+                    value={config.colorBorder || '#e2e8f0'}
+                    onChange={e => onChangeConfig({ ...config, colorBorder: e.target.value })}
+                    style={{ width: '32px', height: '28px', border: 'none', background: 'transparent', cursor: 'pointer' }}
+                  />
+                  <span style={{ fontSize: '0.75rem', color: '#e2e8f0', fontFamily: 'monospace' }}>{config.colorBorder || '#e2e8f0'}</span>
+                </div>
+              </div>
             </div>
           </section>
 
           {/* ── 3. Fundos Gráficos & Texturas ── */}
           <section style={{ background: '#0b1120', padding: '1rem', borderRadius: '8px', border: '1px solid #1e293b' }}>
             <h4 style={{ margin: '0 0 0.85rem 0', fontSize: '0.9rem', color: '#f59e0b', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-              🖼️ Fundo da Folha & Texturas Gráficas
+              🖼️ Fundo da Folha & Texturas Gráficas (IA)
             </h4>
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '0.6rem' }}>
@@ -367,11 +453,22 @@ export const DesignCustomizerDrawer: React.FC<DesignCustomizerDrawerProps> = ({
                       textAlign: 'left'
                     }}
                   >
-                    <div style={{ width: '100%', height: '40px', borderRadius: '4px', background: bg.previewColor, border: '1px solid #334155', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      {bg.id === 'none' ? (
+                    <div
+                      style={{
+                        width: '100%',
+                        height: '46px',
+                        borderRadius: '4px',
+                        background: bg.url === 'none' ? '#ffffff' : `url(${bg.url}) center/cover no-repeat`,
+                        backgroundColor: bg.previewColor,
+                        border: '1px solid #334155',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.1)'
+                      }}
+                    >
+                      {bg.id === 'none' && (
                         <span style={{ fontSize: '0.7rem', color: '#64748b' }}>Branco Puro</span>
-                      ) : (
-                        <span style={{ fontSize: '0.7rem', color: '#0f172a', fontWeight: 600 }}>Textura IA</span>
                       )}
                     </div>
                     <span style={{ fontSize: '0.74rem', fontWeight: 600, color: isActive ? '#f59e0b' : '#f1f5f9' }}>
