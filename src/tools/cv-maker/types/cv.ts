@@ -379,6 +379,14 @@ export interface CanvasBlockConfig {
   minHeight?: number // px
   showCardBackground?: boolean
   showBorder?: boolean
+  // Configurações especializadas para o bloco de Foto / Avatar
+  photoShape?: 'circle' | 'square' | 'rounded' | 'vertical' | 'pill' | 'hexagon' | 'diamond' | 'shield'
+  photoSize?: number // px de largura (ex: 50 a 240, default: 90)
+  photoBorderWidth?: number // px (ex: 0, 2, 4, 6)
+  photoBorderColor?: string
+  photoShadow?: boolean
+  photoAlign?: 'left' | 'center' | 'right'
+  hideContainerBox?: boolean // Se true, remove qualquer fundo/caixa e exibe apenas a foto pura
 }
 
 export interface CanvasPreset {

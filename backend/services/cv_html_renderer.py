@@ -90,6 +90,11 @@ LAYOUT_METADATA = {
         "label": "🧮 Modelo A4 09 (Grid Math)",
         "icon": "🧮",
         "desc": "Grid matemático balanceado (3x2, 2x2, 3x3) com caixas em acento, divisor colorido e densidade editorial."
+    },
+    "canvas_livre": {
+        "label": "🎨 Modo Livre (Block Canvas)",
+        "icon": "🎨",
+        "desc": "Construtor de blocos atômicos livre com 12 colunas, arrastar/reordenar, formas de foto e tipografia independente."
     }
 }
 
@@ -354,14 +359,196 @@ Atenciosamente,
     """
 
 
+def _render_canvas_livre_html(data: dict, t: dict) -> str:
+    basics = data.get("basics", {})
+    work = data.get("work", [])
+    education = data.get("education", [])
+    projects = data.get("projects", [])
+    skills = data.get("skills", [])
+    languages = data.get("languages", [])
+    interests = data.get("interests", [])
+
+    name = html.escape(basics.get("name", "Candidato"))
+    label = html.escape(basics.get("label", ""))
+    summary_val = html.escape(basics.get("summary", "")).replace("\n", "<br>")
+    image_val = html.escape(str(basics.get("image", "") or ""))
+    has_image = bool(image_val and image_val.strip() and image_val != "None")
+    image_pos_x = basics.get("imagePosX", 50)
+    image_pos_y = basics.get("imagePosY", 50)
+    image_scale = basics.get("imageScale", 1.0)
+    try:
+        image_pos_x = int(image_pos_x) if image_pos_x is not None else 50
+    except:
+        image_pos_x = 50
+    try:
+        image_pos_y = int(image_pos_y) if image_pos_y is not None else 50
+    except:
+        image_pos_y = 50
+    try:
+        image_scale = float(image_scale) if image_scale is not None else 1.0
+    except:
+        image_scale = 1.0
+
+    img_style = f"object-position: {image_pos_x}% {image_pos_y}%; transform: scale({image_scale}); transform-origin: {image_pos_x}% {image_pos_y}%; {'display:block;' if has_image else 'display:none;'}"
+
+    work_items = "".join(f"""
+      <div class="card avoid-break">
+        <div class="item-header">
+          <span class="item-title">{html.escape(w.get("position", ""))}</span>
+          <span class="item-date">{html.escape(str(w.get("startDate", "")))} — {html.escape(str(w.get("endDate", t["present"])))}</span>
+        </div>
+        <div class="item-sub">{html.escape(w.get("name", ""))}</div>
+        {f'<p class="item-desc">{html.escape(w.get("summary", ""))}</p>' if w.get("summary") else ''}
+      </div>
+    """ for w in work)
+
+    skills_tags = "".join(f"""
+      <div class="skill-group cv-math-skill-card avoid-break">
+        <div class="skill-title">⚡ {html.escape(sk.get("name", ""))}</div>
+        <div class="tags">{"".join(f'<span class="badge">{html.escape(k)}</span>' for k in sk.get("keywords", []))}</div>
+      </div>
+    """ for sk in skills)
+
+    projects_items = "".join(f"""
+      <div class="project-card avoid-break">
+        <div class="item-header"><span class="item-title">{html.escape(pr.get("name", ""))}</span></div>
+        <p class="item-desc">{html.escape(pr.get("description", ""))}</p>
+        <div class="tags">{"".join(f'<span class="badge">{html.escape(k)}</span>' for k in pr.get("keywords", []))}</div>
+      </div>
+    """ for pr in projects)
+
+    edu_items = "".join(f"""
+      <div class="geo-card avoid-break">
+        <div class="card-top"><span class="geo-icon">🎓</span><span class="item-date">{html.escape(str(ed.get("startDate", "")))} — {html.escape(str(ed.get("endDate", t["in_progress"])))}</span></div>
+        <div class="item-title">{html.escape(ed.get("area", ""))}</div>
+        <div class="item-sub">{html.escape(ed.get("institution", ""))}</div>
+      </div>
+    """ for ed in education)
+
+    langs_items = "".join(f"""
+      <div class="lang-card avoid-break" style="display:flex; justify-content:space-between; align-items:center; width:100%;">
+        <span>{html.escape(l.get("language", ""))}</span>
+        <span class="badge">{html.escape(l.get("fluency", ""))}</span>
+      </div>
+    """ for l in languages)
+
+    ints_items = "".join(f"""
+      <div class="interest-card avoid-break">
+        <div style="font-weight:700; margin-bottom:0.25rem;">◈ {html.escape(it.get("name", ""))}</div>
+        <div class="tags">{"".join(f'<span class="badge">{html.escape(k)}</span>' for k in it.get("keywords", []))}</div>
+      </div>
+    """ for it in interests)
+
+    return f"""
+    <div class="cv-canvas-workspace">
+      <aside class="cv-canvas-palette cv-no-print" aria-label="Paleta de Blocos do YAML">
+        <div class="cv-canvas-palette__header">
+          <h3 class="cv-canvas-palette__title"><span>📦</span> Campos do YAML</h3>
+          <span style="font-size: 0.72rem; color: #10b981; font-weight: 700; background: rgba(16,185,129,0.1); padding: 0.15rem 0.45rem; border-radius: 4px;">
+            9 blocos
+          </span>
+        </div>
+        <div class="cv-canvas-palette__presets">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.2rem;">
+            <span style="font-size: 0.72rem; font-weight: 700; color: #94a3b8; text-transform: uppercase;">Templates Rápidos</span>
+            <button type="button" onclick="clearCanvasBlocks()" style="background: transparent; border: none; color: #f87171; font-size: 0.7rem; cursor: pointer; font-weight: 600;">🗑️ Limpar</button>
+          </div>
+          <button type="button" class="cv-canvas-preset-btn" onclick="applyCanvasPreset('executive_balanced')"><span>👔 Executivo Balanceado</span><span style="opacity: 0.6; font-size: 0.7rem;">9 blocos</span></button>
+          <button type="button" class="cv-canvas-preset-btn" onclick="applyCanvasPreset('two_column')"><span>📑 Duas Colunas</span><span style="opacity: 0.6; font-size: 0.7rem;">9 blocos</span></button>
+          <button type="button" class="cv-canvas-preset-btn" onclick="applyCanvasPreset('tech_hero')"><span>🚀 Hero Tech & Projetos</span><span style="opacity: 0.6; font-size: 0.7rem;">9 blocos</span></button>
+        </div>
+        <div class="cv-canvas-palette__section">
+          <div class="cv-canvas-palette__sec-title">👤 Identidade & Contato</div>
+          <button type="button" class="cv-canvas-item-btn" onclick="addCanvasBlock('header')"><span>👤 Nome & Título</span><span class="item-add-plus">+</span></button>
+          <button type="button" class="cv-canvas-item-btn" onclick="addCanvasBlock('photo')"><span>📷 Foto / Avatar</span><span class="item-add-plus">+</span></button>
+          <button type="button" class="cv-canvas-item-btn" onclick="addCanvasBlock('contacts')"><span>📞 Contatos & Links</span><span class="item-add-plus">+</span></button>
+        </div>
+        <div class="cv-canvas-palette__section">
+          <div class="cv-canvas-palette__sec-title">📝 Trajetória & Conteúdo</div>
+          <button type="button" class="cv-canvas-item-btn" onclick="addCanvasBlock('summary')"><span>📄 Sobre Mim / Resumo</span><span class="item-add-plus">+</span></button>
+          <button type="button" class="cv-canvas-item-btn" onclick="addCanvasBlock('work')"><span>💼 Experiência Profissional</span><span class="item-add-plus">+</span></button>
+          <button type="button" class="cv-canvas-item-btn" onclick="addCanvasBlock('projects')"><span>🚀 Projetos em Destaque</span><span class="item-add-plus">+</span></button>
+        </div>
+        <div class="cv-canvas-palette__section">
+          <div class="cv-canvas-palette__sec-title">⚡ Competências & Níveis</div>
+          <button type="button" class="cv-canvas-item-btn" onclick="addCanvasBlock('skills_tags')"><span>⚡ Competências (Tags)</span><span class="item-add-plus">+</span></button>
+          <button type="button" class="cv-canvas-item-btn" onclick="addCanvasBlock('skills_bars')"><span>📊 Barras de Nível</span><span class="item-add-plus">+</span></button>
+        </div>
+        <div class="cv-canvas-palette__section">
+          <div class="cv-canvas-palette__sec-title">🎓 Formação & Certificações</div>
+          <button type="button" class="cv-canvas-item-btn" onclick="addCanvasBlock('education')"><span>🎓 Formação Acadêmica</span><span class="item-add-plus">+</span></button>
+          <button type="button" class="cv-canvas-item-btn" onclick="addCanvasBlock('certificates')"><span>📜 Certificações</span><span class="item-add-plus">+</span></button>
+        </div>
+        <div class="cv-canvas-palette__section">
+          <div class="cv-canvas-palette__sec-title">🌐 Idiomas & Interesses</div>
+          <button type="button" class="cv-canvas-item-btn" onclick="addCanvasBlock('languages')"><span>🌐 Idiomas</span><span class="item-add-plus">+</span></button>
+          <button type="button" class="cv-canvas-item-btn" onclick="addCanvasBlock('interests')"><span>🎯 Interesses</span><span class="item-add-plus">+</span></button>
+        </div>
+      </aside>
+
+      <main class="cv-canvas-center-stage">
+        <div class="cv-canvas-sheet-info-bar cv-no-print">
+          <span>📄 <strong>Folha A4 Livre</strong> (210 × 297 mm) | 9 blocos</span>
+          <span style="font-size: 0.74rem; color: #34d399; font-weight: 700;">Pronto para Impressão A4</span>
+        </div>
+        <div class="cv-canvas-sheet-wrapper">
+          <div class="cv-canvas-sheet">
+            <div class="cv-canvas-block cv-col-12">
+              <div class="cv-header" style="margin-bottom: 0.5rem;">
+                <h1 class="name" style="font-size: 1.85rem; font-weight: 800; margin: 0 0 0.2rem 0;">{name}</h1>
+                <div class="label" style="font-size: 0.95rem; font-weight: 600; opacity: 0.9;">{label}</div>
+              </div>
+            </div>
+            <div class="cv-canvas-block cv-col-4">
+              <div style="display: flex; justify-content: center; width: 100%; margin: 0.25rem 0;">
+                <div class="cv-avatar-container {'has-photo' if has_image else ''}" onclick="openPhotoModal()" style="width: 95px; height: 95px; border-radius: 50%; overflow: hidden; display: block; background: #e2e8f0; cursor: pointer;">
+                  <img class="cv-avatar-img" src="{image_val if has_image else ''}" alt="Avatar" style="{img_style}" />
+                  <div class="cv-avatar-placeholder" style="{'display:none;' if has_image else 'display:flex;'}">
+                    <span class="avatar-icon">👤</span>
+                    <span class="avatar-hint" style="font-size: 0.65rem;">+ Foto</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="cv-canvas-block cv-col-8">
+              {f'<div class="summary">{summary_val}</div>' if summary_val else ''}
+            </div>
+            <div class="cv-canvas-block cv-col-12">
+              {f'<section class="avoid-break"><h2 class="section-title">{t["work"]}</h2>{work_items}</section>' if work_items else ''}
+            </div>
+            <div class="cv-canvas-block cv-col-6">
+              {f'<section class="avoid-break"><h2 class="section-title">{t["skills"]}</h2><div class="skills-grid cv-math-grid cv-grid-2">{skills_tags}</div></section>' if skills_tags else ''}
+            </div>
+            <div class="cv-canvas-block cv-col-6">
+              {f'<section class="avoid-break"><h2 class="section-title">{t["education"]}</h2><div class="education-grid cv-math-grid cv-grid-2">{edu_items}</div></section>' if edu_items else ''}
+            </div>
+            <div class="cv-canvas-block cv-col-12">
+              {f'<section class="avoid-break"><h2 class="section-title">{t["projects"]}</h2><div class="projects-grid cv-math-grid cv-grid-2">{projects_items}</div></section>' if projects_items else ''}
+            </div>
+            <div class="cv-canvas-block cv-col-6">
+              {f'<section class="avoid-break"><h2 class="section-title">{t["languages"]}</h2><div class="languages-grid cv-math-grid cv-grid-2">{langs_items}</div></section>' if langs_items else ''}
+            </div>
+            <div class="cv-canvas-block cv-col-6">
+              {f'<section class="avoid-break"><h2 class="section-title">{t["interests"]}</h2><div class="interests-grid cv-math-grid cv-grid-2">{ints_items}</div></section>' if ints_items else ''}
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+    """
+
+
 def _render_cv_layout_html(data: dict, layout: str, t: dict, view_mode: str = "cv") -> str:
     """
     Renderiza o HTML do currículo aplicando o Blueprint de Layout correspondente
     (modular, linear, sidebar, compact_split, editorial_accent, corporate_timeline,
-    warm_magazine, hero_matrix, dynamic_math).
+    warm_magazine, hero_matrix, dynamic_math, canvas_livre).
     """
     if view_mode == "cover_letter":
         return _render_cover_letter_html(data, t)
+
+    if layout == "canvas_livre":
+        return _render_canvas_livre_html(data, t)
 
     basics = data.get("basics", {})
     work = data.get("work", [])
@@ -1904,6 +2091,221 @@ def render_multi_cv_dashboard_html(
       gap: 0.25rem !important;
     }}
 
+    /* ── Canvas Livre (Interactive Block Builder) ── */
+    .cv-canvas-workspace {{
+      display: grid;
+      grid-template-columns: 280px 1fr;
+      gap: 1.5rem;
+      width: 100%;
+      min-height: calc(100vh - 120px);
+      box-sizing: border-box;
+      align-items: start;
+    }}
+    @media (max-width: 1100px) {{
+      .cv-canvas-workspace {{
+        grid-template-columns: 1fr;
+      }}
+    }}
+    .cv-canvas-palette {{
+      background: #090d16;
+      border: 1px solid #1e293b;
+      border-radius: 12px;
+      padding: 1.25rem 1.25rem 3.5rem 1.25rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4);
+      position: sticky;
+      top: 1rem;
+      max-height: calc(100vh - 100px);
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      scrollbar-width: thin;
+      scrollbar-color: #38bdf8 #0f172a;
+    }}
+    .cv-canvas-palette::-webkit-scrollbar {{
+      width: 6px;
+    }}
+    .cv-canvas-palette::-webkit-scrollbar-track {{
+      background: #0f172a;
+      border-radius: 4px;
+    }}
+    .cv-canvas-palette::-webkit-scrollbar-thumb {{
+      background: #38bdf8;
+      border-radius: 4px;
+    }}
+    .cv-canvas-palette__header {{
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid #1e293b;
+      padding-bottom: 0.75rem;
+    }}
+    .cv-canvas-palette__title {{
+      font-size: 0.95rem;
+      font-weight: 700;
+      color: #f8fafc;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin: 0;
+    }}
+    .cv-canvas-palette__presets {{
+      display: flex;
+      flex-direction: column;
+      gap: 0.45rem;
+      background: #0f172a;
+      padding: 0.75rem;
+      border-radius: 8px;
+      border: 1px solid #1e293b;
+    }}
+    .cv-canvas-preset-btn {{
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: #1e293b;
+      border: 1px solid #334155;
+      color: #e2e8f0;
+      padding: 0.45rem 0.65rem;
+      border-radius: 6px;
+      font-size: 0.78rem;
+      font-weight: 600;
+      cursor: pointer;
+      text-align: left;
+    }}
+    .cv-canvas-preset-btn:hover {{
+      background: #0284c7;
+      border-color: #38bdf8;
+      color: #fff;
+    }}
+    .cv-canvas-palette__section {{
+      display: flex;
+      flex-direction: column;
+      gap: 0.45rem;
+    }}
+    .cv-canvas-palette__sec-title {{
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #64748b;
+      font-weight: 700;
+      margin: 0.25rem 0 0.15rem 0;
+    }}
+    .cv-canvas-item-btn {{
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.6rem;
+      background: #0b1120;
+      border: 1px solid #1e293b;
+      color: #cbd5e1;
+      padding: 0.55rem 0.75rem;
+      border-radius: 8px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      cursor: pointer;
+      text-align: left;
+    }}
+    .cv-canvas-item-btn:hover {{
+      background: #1e293b;
+      border-color: #10b981;
+      color: #fff;
+    }}
+    .cv-canvas-center-stage {{
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 1rem;
+      width: 100%;
+    }}
+    .cv-canvas-sheet-info-bar {{
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      width: 100%;
+      max-width: 820px;
+      background: #090d16;
+      border: 1px solid #1e293b;
+      padding: 0.5rem 1rem;
+      border-radius: 8px;
+      font-size: 0.8rem;
+      color: #94a3b8;
+    }}
+    .cv-canvas-sheet-wrapper {{
+      position: relative;
+      display: flex;
+      justify-content: center;
+      width: 100%;
+    }}
+    .cv-canvas-sheet {{
+      width: 100%;
+      max-width: 820px;
+      min-height: 1160px;
+      background: #ffffff;
+      color: #0f172a;
+      box-shadow: 0 15px 35px -5px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(0, 0, 0, 0.08);
+      border-radius: 4px;
+      padding: 2.2rem 2.2rem;
+      box-sizing: border-box;
+      position: relative;
+      display: grid;
+      grid-template-columns: repeat(12, 1fr);
+      gap: 1.25rem 1.25rem;
+      align-content: start;
+    }}
+    .cv-canvas-block {{
+      position: relative;
+      border-radius: 6px;
+      transition: all 0.2s ease;
+      min-width: 0;
+      box-sizing: border-box;
+    }}
+    .cv-canvas-block:hover {{
+      outline: 2px dashed rgba(56, 189, 248, 0.6);
+      outline-offset: 4px;
+    }}
+    .cv-canvas-block__actions {{
+      position: absolute;
+      top: -16px;
+      right: 8px;
+      display: none;
+      align-items: center;
+      gap: 4px;
+      background: #0f172a;
+      border: 1px solid #38bdf8;
+      border-radius: 6px;
+      padding: 3px 6px;
+      z-index: 100;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+    }}
+    .cv-canvas-block:hover .cv-canvas-block__actions {{
+      display: flex;
+    }}
+    .cv-canvas-act-btn {{
+      background: #1e293b;
+      color: #f8fafc;
+      border: 1px solid #334155;
+      border-radius: 4px;
+      padding: 2px 6px;
+      font-size: 0.72rem;
+      font-weight: 700;
+      cursor: pointer;
+    }}
+    .cv-canvas-act-btn:hover {{
+      background: #0284c7;
+      color: #fff;
+    }}
+    .cv-canvas-act-btn--danger:hover {{
+      background: #ef4444;
+      border-color: #f87171;
+    }}
+    /* Col Spans */
+    .cv-col-12 {{ grid-column: span 12 / span 12; }}
+    .cv-col-8 {{ grid-column: span 8 / span 12; }}
+    .cv-col-6 {{ grid-column: span 6 / span 12; }}
+    .cv-col-4 {{ grid-column: span 4 / span 12; }}
+    .cv-col-3 {{ grid-column: span 3 / span 12; }}
+
     /* ── Print Media Optimization (Strict CSS Paged Media) ── */
     @media print {{
       body {{
@@ -1943,6 +2345,47 @@ def render_multi_cv_dashboard_html(
         border-width: 2px !important;
         box-shadow: none !important;
         display: block !important;
+        visibility: visible !important;
+        overflow: hidden !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+      }}
+      .cv-avatar-img {{
+        display: block !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+        width: 100% !important;
+        height: 100% !important;
+        object-fit: cover !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+      }}
+      /* ── Impressão do Canvas Livre ── */
+      .cv-canvas-workspace {{
+        display: block !important;
+        padding: 0 !important;
+        margin: 0 !important;
+      }}
+      .cv-canvas-palette,
+      .cv-canvas-sheet-info-bar,
+      .cv-canvas-block__actions,
+      .cv-canvas-overflow-badge,
+      .cv-no-print {{
+        display: none !important;
+        visibility: hidden !important;
+      }}
+      .cv-canvas-sheet {{
+        box-shadow: none !important;
+        border: none !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        max-width: 100% !important;
+        min-height: auto !important;
+      }}
+      .cv-canvas-block {{
+        border: none !important;
+        box-shadow: none !important;
+        page-break-inside: avoid !important;
       }}
       /* ── Impressão Tema Terminal: Fundo Branco + Tipografia Verde Monospace ── */
       .theme-terminal,
@@ -2329,6 +2772,22 @@ def render_multi_cv_dashboard_html(
     </div>
   </div>
 
+  <!-- Canvas Block Inspector Modal -->
+  <div id="canvas-inspector-modal" class="cv-modal-backdrop" onclick="if(event.target===this) closeCanvasBlockInspector()">
+    <div class="cv-modal-box" style="max-width: 500px; max-height: 90vh; overflow-y: auto;">
+      <div class="cv-modal-header">
+        <h3 id="inspector-modal-title" style="margin: 0; font-size: 1.1rem; color: #38bdf8;">⚙️ Configurar Bloco</h3>
+        <button class="cv-modal-close" onclick="closeCanvasBlockInspector()">✕</button>
+      </div>
+      <div class="cv-modal-body" id="inspector-modal-content" style="display: flex; flex-direction: column; gap: 1rem; padding: 1.25rem;">
+        <!-- Preenchido dinamicamente por openCanvasBlockInspector -->
+      </div>
+      <div class="cv-modal-footer">
+        <button class="modal-btn modal-btn-pri" onclick="closeCanvasBlockInspector()">Salvar & Fechar</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Raw Embedded YAMLs -->
   {scripts_yaml_html}
 
@@ -2376,6 +2835,593 @@ def render_multi_cv_dashboard_html(
         return EMBEDDED_DATA[personaKey];
       }}
       return {{}};
+    }}
+
+    /* ── Canvas Livre State & Actions ── */
+    function loadSavedCanvasBlocks() {{
+      try {{
+        const saved = localStorage.getItem('cv_standalone_canvas_blocks');
+        if (saved) {{
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        }}
+      }} catch(e) {{}}
+      return [
+        {{ id: 'b_hdr', type: 'header', colSpan: 12 }},
+        {{ id: 'b_pht', type: 'photo', colSpan: 4, photoShape: 'circle', photoSize: 95, photoShadow: true, photoAlign: 'center', hideContainerBox: false }},
+        {{ id: 'b_sum', type: 'summary', colSpan: 8 }},
+        {{ id: 'b_wrk', type: 'work', colSpan: 12 }},
+        {{ id: 'b_skl', type: 'skills_tags', colSpan: 6 }},
+        {{ id: 'b_edu', type: 'education', colSpan: 6 }},
+        {{ id: 'b_prj', type: 'projects', colSpan: 12 }},
+        {{ id: 'b_lng', type: 'languages', colSpan: 6 }},
+        {{ id: 'b_int', type: 'interests', colSpan: 6 }}
+      ];
+    }}
+
+    let standaloneCanvasBlocks = loadSavedCanvasBlocks();
+    let currentInspectedBlockId = null;
+
+    function saveCanvasBlocks() {{
+      localStorage.setItem('cv_standalone_canvas_blocks', JSON.stringify(standaloneCanvasBlocks));
+    }}
+
+    function addCanvasBlock(type) {{
+      const id = 'b_' + Date.now() + '_' + Math.floor(Math.random()*1000);
+      const isPhoto = type === 'photo';
+      const defaultSpan = (type === 'header' || type === 'work' || type === 'projects') ? 12 : (isPhoto ? 4 : 6);
+      standaloneCanvasBlocks.push({{
+        id: id,
+        type: type,
+        colSpan: defaultSpan,
+        photoShape: 'circle',
+        photoSize: 95,
+        photoShadow: true,
+        photoAlign: 'center',
+        hideContainerBox: false
+      }});
+      saveCanvasBlocks();
+      updateActivePanelContent();
+    }}
+
+    function moveCanvasBlock(idx, dir) {{
+      const targetIdx = idx + dir;
+      if (targetIdx < 0 || targetIdx >= standaloneCanvasBlocks.length) return;
+      const temp = standaloneCanvasBlocks[idx];
+      standaloneCanvasBlocks[idx] = standaloneCanvasBlocks[targetIdx];
+      standaloneCanvasBlocks[targetIdx] = temp;
+      saveCanvasBlocks();
+      updateActivePanelContent();
+    }}
+
+    function changeCanvasBlockColSpan(id, colSpan) {{
+      const b = standaloneCanvasBlocks.find(x => x.id === id);
+      if (b) {{
+        b.colSpan = parseInt(colSpan) || 12;
+        saveCanvasBlocks();
+        updateActivePanelContent();
+      }}
+    }}
+
+    function deleteCanvasBlock(id) {{
+      standaloneCanvasBlocks = standaloneCanvasBlocks.filter(x => x.id !== id);
+      saveCanvasBlocks();
+      updateActivePanelContent();
+    }}
+
+    function clearCanvasBlocks() {{
+      if (confirm('Deseja limpar todos os blocos do modo livre?')) {{
+        standaloneCanvasBlocks = [];
+        saveCanvasBlocks();
+        updateActivePanelContent();
+      }}
+    }}
+
+    function applyCanvasPreset(name) {{
+      if (name === 'executive_balanced') {{
+        standaloneCanvasBlocks = [
+          {{ id: 'b_hdr', type: 'header', colSpan: 12 }},
+          {{ id: 'b_pht', type: 'photo', colSpan: 4, photoShape: 'circle', photoSize: 95, photoShadow: true, photoAlign: 'center', hideContainerBox: false }},
+          {{ id: 'b_sum', type: 'summary', colSpan: 8 }},
+          {{ id: 'b_wrk', type: 'work', colSpan: 12 }},
+          {{ id: 'b_skl', type: 'skills_tags', colSpan: 6 }},
+          {{ id: 'b_edu', type: 'education', colSpan: 6 }},
+          {{ id: 'b_prj', type: 'projects', colSpan: 12 }},
+          {{ id: 'b_lng', type: 'languages', colSpan: 6 }},
+          {{ id: 'b_int', type: 'interests', colSpan: 6 }}
+        ];
+      }} else if (name === 'two_column') {{
+        standaloneCanvasBlocks = [
+          {{ id: 'b_hdr', type: 'header', colSpan: 12 }},
+          {{ id: 'b_pht', type: 'photo', colSpan: 4, photoShape: 'rounded', photoSize: 110, photoShadow: true, photoAlign: 'center', hideContainerBox: false }},
+          {{ id: 'b_cnt', type: 'contacts', colSpan: 4 }},
+          {{ id: 'b_sum', type: 'summary', colSpan: 4 }},
+          {{ id: 'b_wrk', type: 'work', colSpan: 7 }},
+          {{ id: 'b_skl', type: 'skills_bars', colSpan: 5 }},
+          {{ id: 'b_prj', type: 'projects', colSpan: 7 }},
+          {{ id: 'b_edu', type: 'education', colSpan: 5 }},
+          {{ id: 'b_lng', type: 'languages', colSpan: 12 }}
+        ];
+      }} else if (name === 'tech_hero') {{
+        standaloneCanvasBlocks = [
+          {{ id: 'b_hdr', type: 'header', colSpan: 8 }},
+          {{ id: 'b_pht', type: 'photo', colSpan: 4, photoShape: 'hexagon', photoSize: 105, photoShadow: true, photoAlign: 'center', hideContainerBox: false }},
+          {{ id: 'b_sum', type: 'summary', colSpan: 12 }},
+          {{ id: 'b_skl', type: 'skills_tags', colSpan: 12 }},
+          {{ id: 'b_prj', type: 'projects', colSpan: 12 }},
+          {{ id: 'b_wrk', type: 'work', colSpan: 12 }},
+          {{ id: 'b_edu', type: 'education', colSpan: 6 }},
+          {{ id: 'b_int', type: 'interests', colSpan: 6 }}
+        ];
+      }}
+      saveCanvasBlocks();
+      updateActivePanelContent();
+    }}
+
+    function openCanvasBlockInspector(id) {{
+      const b = standaloneCanvasBlocks.find(x => x.id === id);
+      if (!b) return;
+      currentInspectedBlockId = id;
+      const modal = document.getElementById('canvas-inspector-modal');
+      const title = document.getElementById('inspector-modal-title');
+      const content = document.getElementById('inspector-modal-content');
+      if (!modal || !content) return;
+
+      const typeLabels = {{
+        header: '👤 Cabeçalho (Nome & Título)',
+        photo: '📷 Foto / Avatar',
+        contacts: '📞 Contatos & Links',
+        summary: '📄 Resumo / Sobre Mim',
+        work: '💼 Experiência Profissional',
+        projects: '🚀 Projetos em Destaque',
+        skills_tags: '⚡ Competências (Tags)',
+        skills_bars: '📊 Barras de Nível',
+        education: '🎓 Formação Acadêmica',
+        certificates: '📜 Certificações',
+        languages: '🌐 Idiomas',
+        interests: '🎯 Interesses'
+      }};
+
+      title.innerText = '⚙️ ' + (typeLabels[b.type] || 'Configurar Bloco');
+
+      let htmlFields = '';
+
+      if (b.type === 'photo') {{
+        const curShape = b.photoShape || 'circle';
+        const curSize = b.photoSize || 90;
+        const curAlign = b.photoAlign || 'center';
+        const curBorder = b.photoBorderWidth || 0;
+        const curShadow = b.photoShadow !== false;
+        const curFloating = b.hideContainerBox !== false;
+
+        const shapes = [
+          {{ key: 'circle', label: '⚪ Círculo' }},
+          {{ key: 'square', label: '🔲 Quadrado' }},
+          {{ key: 'rounded', label: '🔲 Arredondado' }},
+          {{ key: 'vertical', label: '📱 Editorial 3:4' }},
+          {{ key: 'pill', label: '💊 Pílula' }},
+          {{ key: 'hexagon', label: '⬡ Hexágono' }},
+          {{ key: 'diamond', label: '💎 Losango' }},
+          {{ key: 'shield', label: '🛡️ Brasão' }}
+        ];
+
+        htmlFields += `
+          <div>
+            <label style="font-size: 0.8rem; font-weight: 700; color: #38bdf8; display: block; margin-bottom: 0.35rem;">Formato Geométrico da Foto</label>
+            <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.35rem;">
+              ${{shapes.map(s => `
+                <button type="button" class="modal-btn ${{curShape === s.key ? 'modal-btn-pri' : 'modal-btn-sec'}}" style="font-size: 0.72rem; padding: 0.4rem 0.2rem; text-align: center;" onclick="updateInspectorPhotoField('photoShape', '${{s.key}}')">
+                  ${{s.label}}
+                </button>
+              `).join('')}}
+            </div>
+          </div>
+
+          <div>
+            <div style="display: flex; justify-content: space-between; font-size: 0.8rem; font-weight: 700; color: #38bdf8; margin-bottom: 0.25rem;">
+              <span>Tamanho da Foto</span>
+              <span id="insp-photo-size-lbl">${{curSize}}px</span>
+            </div>
+            <input type="range" min="50" max="240" step="5" value="${{curSize}}" style="width: 100%; accent-color: #38bdf8; cursor: pointer;" oninput="updateInspectorPhotoField('photoSize', parseInt(this.value)); document.getElementById('insp-photo-size-lbl').innerText = this.value + 'px';" />
+          </div>
+
+          <div>
+            <label style="font-size: 0.8rem; font-weight: 700; color: #38bdf8; display: block; margin-bottom: 0.35rem;">Alinhamento</label>
+            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.35rem;">
+              <button type="button" class="modal-btn ${{curAlign === 'left' ? 'modal-btn-pri' : 'modal-btn-sec'}}" style="font-size: 0.75rem; padding: 0.35rem;" onclick="updateInspectorPhotoField('photoAlign', 'left')">⬅ Esquerda</button>
+              <button type="button" class="modal-btn ${{curAlign === 'center' ? 'modal-btn-pri' : 'modal-btn-sec'}}" style="font-size: 0.75rem; padding: 0.35rem;" onclick="updateInspectorPhotoField('photoAlign', 'center')">↔ Centro</button>
+              <button type="button" class="modal-btn ${{curAlign === 'right' ? 'modal-btn-pri' : 'modal-btn-sec'}}" style="font-size: 0.75rem; padding: 0.35rem;" onclick="updateInspectorPhotoField('photoAlign', 'right')">➡ Direita</button>
+            </div>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
+            <div>
+              <label style="font-size: 0.8rem; font-weight: 700; color: #38bdf8; display: block; margin-bottom: 0.25rem;">Borda</label>
+              <select class="modal-input" onchange="updateInspectorPhotoField('photoBorderWidth', parseInt(this.value))">
+                <option value="0" ${{curBorder === 0 ? 'selected' : ''}}>Sem borda</option>
+                <option value="2" ${{curBorder === 2 ? 'selected' : ''}}>Fina (2px)</option>
+                <option value="4" ${{curBorder === 4 ? 'selected' : ''}}>Média (4px)</option>
+                <option value="6" ${{curBorder === 6 ? 'selected' : ''}}>Grossa (6px)</option>
+              </select>
+            </div>
+            <div>
+              <label style="font-size: 0.8rem; font-weight: 700; color: #38bdf8; display: block; margin-bottom: 0.25rem;">Sombra</label>
+              <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.8rem; color: #cbd5e1; margin-top: 0.4rem; cursor: pointer;">
+                <input type="checkbox" ${{curShadow ? 'checked' : ''}} onchange="updateInspectorPhotoField('photoShadow', this.checked)" />
+                Sombra suave
+              </label>
+            </div>
+          </div>
+
+          <div style="background: rgba(15,23,42,0.6); padding: 0.65rem; border-radius: 6px; border: 1px solid rgba(255,255,255,0.08);">
+            <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.8rem; color: #cbd5e1; cursor: pointer;">
+              <input type="checkbox" ${{curFloating ? 'checked' : ''}} onchange="updateInspectorPhotoField('hideContainerBox', this.checked)" />
+              <strong>Foto Flutuante</strong> (Sem card / sem caixa ao redor)
+            </label>
+          </div>
+        `;
+      }} else {{
+        const curFont = b.fontFamily || 'inherit';
+        const curScale = b.fontSizeScale || 1.0;
+        const curTitle = b.customTitle || '';
+
+        htmlFields += `
+          <div>
+            <label style="font-size: 0.8rem; font-weight: 700; color: #38bdf8; display: block; margin-bottom: 0.25rem;">Título Customizado do Bloco</label>
+            <input type="text" class="modal-input" placeholder="Ex: Formação & Cursos" value="${{curTitle}}" oninput="updateInspectorBlockField('customTitle', this.value)" />
+          </div>
+
+          <div>
+            <div style="display: flex; justify-content: space-between; font-size: 0.8rem; font-weight: 700; color: #38bdf8; margin-bottom: 0.25rem;">
+              <span>Escala da Fonte</span>
+              <span id="insp-font-scale-lbl">${{curScale}}x</span>
+            </div>
+            <input type="range" min="0.75" max="1.40" step="0.05" value="${{curScale}}" style="width: 100%; accent-color: #38bdf8; cursor: pointer;" oninput="updateInspectorBlockField('fontSizeScale', parseFloat(this.value)); document.getElementById('insp-font-scale-lbl').innerText = this.value + 'x';" />
+          </div>
+
+          <div>
+            <label style="font-size: 0.8rem; font-weight: 700; color: #38bdf8; display: block; margin-bottom: 0.25rem;">Tipografia</label>
+            <select class="modal-input" onchange="updateInspectorBlockField('fontFamily', this.value)">
+              <option value="inherit" ${{curFont === 'inherit' ? 'selected' : ''}}>Padrão do Tema</option>
+              <option value="Inter" ${{curFont === 'Inter' ? 'selected' : ''}}>Inter (Moderna)</option>
+              <option value="Merriweather" ${{curFont === 'Merriweather' ? 'selected' : ''}}>Merriweather (Executiva)</option>
+              <option value="Poppins" ${{curFont === 'Poppins' ? 'selected' : ''}}>Poppins (Geométrica)</option>
+              <option value="Courier Prime" ${{curFont === 'Courier Prime' ? 'selected' : ''}}>Courier Prime (Monospace)</option>
+            </select>
+          </div>
+        `;
+      }}
+
+      content.innerHTML = htmlFields;
+      modal.style.display = 'flex';
+    }}
+
+    function updateInspectorPhotoField(field, value) {{
+      const b = standaloneCanvasBlocks.find(x => x.id === currentInspectedBlockId);
+      if (b) {{
+        b[field] = value;
+        saveCanvasBlocks();
+        updateActivePanelContent();
+        openCanvasBlockInspector(currentInspectedBlockId);
+      }}
+    }}
+
+    function updateInspectorBlockField(field, value) {{
+      const b = standaloneCanvasBlocks.find(x => x.id === currentInspectedBlockId);
+      if (b) {{
+        b[field] = value;
+        saveCanvasBlocks();
+        updateActivePanelContent();
+      }}
+    }}
+
+    function closeCanvasBlockInspector() {{
+      const modal = document.getElementById('canvas-inspector-modal');
+      if (modal) modal.style.display = 'none';
+      currentInspectedBlockId = null;
+    }}
+
+    function renderCanvasLivreLayout(data) {{
+      const basics = data.basics || {{}};
+      const name = basics.name || 'Candidato';
+      const label = basics.label || '';
+      const email = basics.email || '';
+      const phone = basics.phone || '';
+      const cleanPhone = phone.replace(/[^\\d+]/g, '');
+      const city = (basics.location && basics.location.city) || '';
+      const region = (basics.location && basics.location.region) || '';
+      const locStr = (city && region) ? (city + ' - ' + region) : (city || region || '');
+      const url = basics.url || '';
+      const summary = (basics.summary || '').replace(/\\n/g, '<br>');
+      const photoSrc = currentPhoto || (basics.image || '');
+      const hasPhoto = Boolean(photoSrc && photoSrc.trim() && photoSrc !== 'None');
+
+      // Helper rendering atomic blocks
+      function renderBlockInner(b) {{
+        switch (b.type) {{
+          case 'header':
+            return `
+              <div class="cv-header" style="margin-bottom: 0.5rem;">
+                <h1 class="name" style="font-size: 1.85rem; font-weight: 800; margin: 0 0 0.2rem 0;">${{name}}</h1>
+                <div class="label" style="font-size: 0.95rem; font-weight: 600; opacity: 0.9;">${{label}}</div>
+              </div>
+            `;
+          case 'photo':
+            const shape = b.photoShape || 'circle';
+            const size = b.photoSize || 90;
+            const bWidth = b.photoBorderWidth || 0;
+            const bColor = b.photoBorderColor || '#0284c7';
+            const shadow = b.photoShadow !== false;
+            const align = b.photoAlign || 'center';
+            const clipMap = {{
+              hexagon: 'polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%)',
+              diamond: 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)',
+              shield: 'polygon(0% 0%, 100% 0%, 100% 70%, 50% 100%, 0% 70%)'
+            }};
+            const radMap = {{
+              circle: '50%',
+              pill: '50%',
+              rounded: '14px',
+              vertical: '8px',
+              square: '0px'
+            }};
+            const rad = clipMap[shape] ? '0' : (radMap[shape] || '50%');
+            const hPx = shape === 'vertical' ? Math.round(size * 1.32) : size;
+            const cClip = clipMap[shape] ? `clip-path: ${{clipMap[shape]}};` : '';
+            const cBorder = bWidth > 0 ? `border: ${{bWidth}}px solid ${{bColor}};` : 'border: none;';
+            const cShadow = shadow && !clipMap[shape] ? 'box-shadow: 0 8px 20px -4px rgba(0,0,0,0.25);' : '';
+            const justify = align === 'left' ? 'flex-start' : align === 'right' ? 'flex-end' : 'center';
+
+            if (!hasPhoto) {{
+              return `
+                <div style="display: flex; justify-content: ${{justify}}; width: 100%;">
+                  <div class="cv-avatar-container cv-no-print" onclick="openPhotoModal()" style="width: ${{size}}px; height: ${{hPx}}px; border-radius: ${{rad}}; ${{cClip}} border: 2px dashed #475569; display: flex; flex-direction: column; align-items: center; justify-content: center; background: rgba(15,23,42,0.5); color: #94a3b8; cursor: pointer;">
+                    <span style="font-size: 1.5rem;">👤</span>
+                    <span style="font-size: 0.7rem;">+ Foto</span>
+                  </div>
+                </div>
+              `;
+            }}
+
+            return `
+              <div style="display: flex; justify-content: ${{justify}}; width: 100%; margin: 0.25rem 0;">
+                <div class="cv-avatar-container has-photo" onclick="openPhotoModal()" style="width: ${{size}}px; height: ${{hPx}}px; border-radius: ${{rad}}; ${{cClip}} ${{cBorder}} ${{cShadow}} overflow: hidden; display: block; background: #e2e8f0; cursor: pointer;">
+                  <img class="cv-avatar-img" src="${{photoSrc}}" alt="Avatar" style="width: 100%; height: 100%; object-fit: cover; object-position: ${{currentPhotoPosX}}% ${{currentPhotoPosY}}%; transform: scale(${{currentPhotoScale}}); transform-origin: ${{currentPhotoPosX}}% ${{currentPhotoPosY}}%; display: block;" />
+                </div>
+              </div>
+            `;
+          case 'contacts':
+            return `
+              <div class="contacts" style="display: flex; flex-wrap: wrap; gap: 0.65rem 1rem; font-size: 0.85rem;">
+                ${{email ? `<div>✉ <a href="mailto:${{email}}" class="cv-link">${{email}}</a></div>` : ''}}
+                ${{phone ? `<div>📞 <a href="tel:${{cleanPhone}}" class="cv-link">${{phone}}</a></div>` : ''}}
+                ${{locStr ? `<div>📍 ${{locStr}}</div>` : ''}}
+                ${{url ? `<div>🌐 <a href="${{url}}" target="_blank" class="cv-link">${{url}}</a></div>` : ''}}
+              </div>
+            `;
+          case 'summary':
+            return summary ? `<div class="summary">${{summary}}</div>` : '';
+          case 'work':
+            let wHtml = '';
+            (data.work || []).forEach(w => {{
+              const pos = w.position || '';
+              const comp = w.name || '';
+              const start = w.startDate || '';
+              const end = w.endDate || I18N_T.present || 'Presente';
+              const sum = w.summary || '';
+              const hl = (w.highlights || []).map(h => `<li>${{h}}</li>`).join('');
+              wHtml += `
+                <div class="card avoid-break">
+                  <div class="item-header"><span class="item-title">${{pos}}</span><span class="item-date">${{start}} — ${{end}}</span></div>
+                  <div class="item-sub">${{comp}}</div>
+                  ${{sum ? `<p class="item-desc">${{sum}}</p>` : ''}}
+                  ${{hl ? `<ul class="item-highlights">${{hl}}</ul>` : ''}}
+                </div>
+              `;
+            }});
+            return wHtml ? `<section class="avoid-break"><h2 class="section-title">${{I18N_T.work || 'Experiência'}}</h2>${{wHtml}}</section>` : '';
+          case 'projects':
+            let pjHtml = '';
+            (data.projects || []).forEach(pr => {{
+              const pName = pr.name || '';
+              const pDesc = pr.description || '';
+              const kws = (pr.keywords || []).map(k => `<span class="badge">${{k}}</span>`).join('');
+              pjHtml += `
+                <div class="project-card avoid-break">
+                  <div class="item-header"><span class="item-title">${{pName}}</span></div>
+                  ${{pDesc ? `<p class="item-desc">${{pDesc}}</p>` : ''}}
+                  ${{kws ? `<div class="tags">${{kws}}</div>` : ''}}
+                </div>
+              `;
+            }});
+            return pjHtml ? `<section class="avoid-break"><h2 class="section-title">${{I18N_T.projects || 'Projetos'}}</h2><div class="projects-grid cv-math-grid cv-grid-2">${{pjHtml}}</div></section>` : '';
+          case 'skills_tags':
+            let skHtml = '';
+            (data.skills || []).forEach(sk => {{
+              const sName = sk.name || '';
+              const kws = (sk.keywords || []).map(k => `<span class="badge">${{k}}</span>`).join('');
+              skHtml += `
+                <div class="skill-group cv-math-skill-card avoid-break">
+                  <div class="skill-title">⚡ ${{sName}}</div>
+                  <div class="tags">${{kws}}</div>
+                </div>
+              `;
+            }});
+            return skHtml ? `<section class="avoid-break"><h2 class="section-title">${{I18N_T.skills || 'Competências'}}</h2><div class="skills-grid cv-math-grid cv-grid-2">${{skHtml}}</div></section>` : '';
+          case 'skills_bars':
+            let sbHtml = (data.skills || []).map(sk => {{
+              const sName = sk.name || '';
+              const lvl = parseInt(sk.level || 85);
+              return `
+                <div class="cv-skill-bar-item avoid-break" style="margin-bottom: 0.5rem; width: 100%;">
+                  <div style="display: flex; justify-content: space-between; font-size: 0.78rem; font-weight: 700; margin-bottom: 0.2rem;">
+                    <span>${{sName}}</span>
+                    <span>${{lvl}}%</span>
+                  </div>
+                  <div style="height: 6px; background: rgba(125,125,125,0.2); border-radius: 3px; overflow: hidden;">
+                    <div style="height: 100%; width: ${{lvl}}%; background: currentColor; border-radius: 3px;"></div>
+                  </div>
+                </div>
+              `;
+            }}).join('');
+            return sbHtml ? `<section class="avoid-break"><h2 class="section-title">⚡ NÍVEIS DE HABILIDADE</h2><div class="cv-skills-progress-list">${{sbHtml}}</div></section>` : '';
+          case 'education':
+            let edHtml = '';
+            (data.education || []).forEach(ed => {{
+              const inst = ed.institution || '';
+              const area = ed.area || '';
+              const start = ed.startDate || '';
+              const end = ed.endDate || I18N_T.in_progress || 'Em andamento';
+              edHtml += `
+                <div class="geo-card avoid-break">
+                  <div class="card-top"><span class="geo-icon">🎓</span><span class="item-date">${{start}} — ${{end}}</span></div>
+                  <div class="item-title">${{area}}</div>
+                  <div class="item-sub">${{inst}}</div>
+                </div>
+              `;
+            }});
+            return edHtml ? `<section class="avoid-break"><h2 class="section-title">${{I18N_T.education || 'Formação'}}</h2><div class="education-grid cv-math-grid cv-grid-2">${{edHtml}}</div></section>` : '';
+          case 'certificates':
+            let cHtml = '';
+            (data.certificates || []).forEach(cert => {{
+              const cName = cert.name || '';
+              const cIssuer = cert.issuer || '';
+              const cDate = cert.date || '';
+              cHtml += `
+                <div class="geo-card avoid-break">
+                  <div class="card-top"><span class="geo-icon">🎖️</span><span class="item-date">${{cDate}}</span></div>
+                  <div class="item-title">${{cName}}</div>
+                  <div class="item-sub">${{cIssuer}}</div>
+                </div>
+              `;
+            }});
+            return cHtml ? `<section class="avoid-break"><h2 class="section-title">${{I18N_T.certificates || 'Certificações'}}</h2><div class="certs-grid cv-math-grid cv-grid-2">${{cHtml}}</div></section>` : '';
+          case 'languages':
+            let lgHtml = (data.languages || []).map(l => `
+              <div class="lang-card avoid-break" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                <span style="font-weight: 600;">${{l.language || ''}}</span>
+                <span class="badge">${{l.fluency || ''}}</span>
+              </div>
+            `).join('');
+            return lgHtml ? `<section class="avoid-break"><h2 class="section-title">${{I18N_T.languages || 'Idiomas'}}</h2><div class="languages-grid cv-math-grid cv-grid-2">${{lgHtml}}</div></section>` : '';
+          case 'interests':
+            let itHtml = '';
+            (data.interests || []).forEach(it => {{
+              const itName = it.name || '';
+              const kws = (it.keywords || []).map(k => `<span class="badge">${{k}}</span>`).join('');
+              itHtml += `
+                <div class="interest-card avoid-break">
+                  <div style="font-weight: 700; margin-bottom: 0.25rem;">◈ ${{itName}}</div>
+                  <div class="tags">${{kws}}</div>
+                </div>
+              `;
+            }});
+            return itHtml ? `<section class="avoid-break"><h2 class="section-title">${{I18N_T.interests || 'Interesses'}}</h2><div class="interests-grid cv-math-grid cv-grid-2">${{itHtml}}</div></section>` : '';
+          default:
+            return '';
+        }}
+      }}
+
+      // Render blocks inside 12-col grid
+      let blocksHtml = '';
+      standaloneCanvasBlocks.forEach((b, idx) => {{
+        const colClass = 'cv-col-' + (b.colSpan || 12);
+        const isPhoto = b.type === 'photo';
+        const isFloating = isPhoto && b.hideContainerBox !== false;
+        const fontFam = b.fontFamily && b.fontFamily !== 'inherit' ? `font-family: "${{b.fontFamily}}", sans-serif;` : '';
+        const fontSc = b.fontSizeScale ? `font-size: ${{b.fontSizeScale}}em;` : '';
+        const tColor = b.customTextColor ? `color: ${{b.customTextColor}};` : '';
+        const bBg = isFloating ? 'background: transparent;' : (b.customBgColor && b.customBgColor !== 'transparent' ? `background: ${{b.customBgColor}};` : '');
+        const pMap = {{ none: '0', compact: '0.35rem', normal: '0.65rem', spacious: '1.15rem' }};
+        const bPad = isFloating ? 'padding: 0;' : `padding: ${{pMap[b.padding || 'normal']}};`;
+
+        blocksHtml += `
+          <div class="cv-canvas-block ${{colClass}}" style="${{fontFam}} ${{fontSc}} ${{tColor}} ${{bBg}} ${{bPad}}">
+            <div class="cv-canvas-block__actions cv-no-print">
+              <button type="button" class="cv-canvas-act-btn" onclick="moveCanvasBlock(${{idx}}, -1)" ${{idx === 0 ? 'disabled' : ''}} title="Mover para cima">▲</button>
+              <button type="button" class="cv-canvas-act-btn" onclick="moveCanvasBlock(${{idx}}, 1)" ${{idx === standaloneCanvasBlocks.length - 1 ? 'disabled' : ''}} title="Mover para baixo">▼</button>
+              <select class="cv-canvas-act-btn" onchange="changeCanvasBlockColSpan('${{b.id}}', this.value)" title="Largura da coluna">
+                <option value="12" ${{b.colSpan === 12 ? 'selected' : ''}}>100%</option>
+                <option value="8" ${{b.colSpan === 8 ? 'selected' : ''}}>66%</option>
+                <option value="6" ${{b.colSpan === 6 ? 'selected' : ''}}>50%</option>
+                <option value="4" ${{b.colSpan === 4 ? 'selected' : ''}}>33%</option>
+                <option value="3" ${{b.colSpan === 3 ? 'selected' : ''}}>25%</option>
+              </select>
+              <button type="button" class="cv-canvas-act-btn" onclick="openCanvasBlockInspector('${{b.id}}')" title="Personalizar bloco">⚙️</button>
+              <button type="button" class="cv-canvas-act-btn cv-canvas-act-btn--danger" onclick="deleteCanvasBlock('${{b.id}}')" title="Excluir bloco">🗑️</button>
+            </div>
+            ${{b.customTitle ? `<h4 style="font-size: 0.9rem; font-weight: 800; text-transform: uppercase; margin: 0 0 0.4rem 0; border-bottom: 1.5px solid currentColor; padding-bottom: 0.2rem;">${{b.customTitle}}</h4>` : ''}}
+            ${{renderBlockInner(b)}}
+          </div>
+        `;
+      }});
+
+      return `
+        <div class="cv-canvas-workspace">
+          <aside class="cv-canvas-palette cv-no-print" aria-label="Paleta de Blocos do YAML">
+            <div class="cv-canvas-palette__header">
+              <h3 class="cv-canvas-palette__title"><span>📦</span> Campos do YAML</h3>
+              <span style="font-size: 0.72rem; color: #10b981; font-weight: 700; background: rgba(16,185,129,0.1); padding: 0.15rem 0.45rem; border-radius: 4px;">
+                ${{standaloneCanvasBlocks.length}} blocos
+              </span>
+            </div>
+
+            <div class="cv-canvas-palette__presets">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.2rem;">
+                <span style="font-size: 0.72rem; font-weight: 700; color: #94a3b8; text-transform: uppercase;">Templates Rápidos</span>
+                <button type="button" onclick="clearCanvasBlocks()" style="background: transparent; border: none; color: #f87171; font-size: 0.7rem; cursor: pointer; font-weight: 600;">🗑️ Limpar</button>
+              </div>
+              <button type="button" class="cv-canvas-preset-btn" onclick="applyCanvasPreset('executive_balanced')"><span>👔 Executivo Balanceado</span><span style="opacity: 0.6; font-size: 0.7rem;">9 blocos</span></button>
+              <button type="button" class="cv-canvas-preset-btn" onclick="applyCanvasPreset('two_column')"><span>📑 Duas Colunas</span><span style="opacity: 0.6; font-size: 0.7rem;">9 blocos</span></button>
+              <button type="button" class="cv-canvas-preset-btn" onclick="applyCanvasPreset('tech_hero')"><span>🚀 Hero Tech & Projetos</span><span style="opacity: 0.6; font-size: 0.7rem;">9 blocos</span></button>
+            </div>
+
+            <div class="cv-canvas-palette__section">
+              <div class="cv-canvas-palette__sec-title">👤 Identidade & Contato</div>
+              <button type="button" class="cv-canvas-item-btn" onclick="addCanvasBlock('header')"><span>👤 Nome & Título</span><span class="item-add-plus">+</span></button>
+              <button type="button" class="cv-canvas-item-btn" onclick="addCanvasBlock('photo')"><span>📷 Foto / Avatar</span><span class="item-add-plus">+</span></button>
+              <button type="button" class="cv-canvas-item-btn" onclick="addCanvasBlock('contacts')"><span>📞 Contatos & Links</span><span class="item-add-plus">+</span></button>
+            </div>
+
+            <div class="cv-canvas-palette__section">
+              <div class="cv-canvas-palette__sec-title">📝 Trajetória & Conteúdo</div>
+              <button type="button" class="cv-canvas-item-btn" onclick="addCanvasBlock('summary')"><span>📄 Sobre Mim / Resumo</span><span class="item-add-plus">+</span></button>
+              <button type="button" class="cv-canvas-item-btn" onclick="addCanvasBlock('work')"><span>💼 Experiência Profissional</span><span class="item-add-plus">+</span></button>
+              <button type="button" class="cv-canvas-item-btn" onclick="addCanvasBlock('projects')"><span>🚀 Projetos em Destaque</span><span class="item-add-plus">+</span></button>
+            </div>
+
+            <div class="cv-canvas-palette__section">
+              <div class="cv-canvas-palette__sec-title">⚡ Competências & Níveis</div>
+              <button type="button" class="cv-canvas-item-btn" onclick="addCanvasBlock('skills_tags')"><span>⚡ Competências (Tags)</span><span class="item-add-plus">+</span></button>
+              <button type="button" class="cv-canvas-item-btn" onclick="addCanvasBlock('skills_bars')"><span>📊 Barras de Nível</span><span class="item-add-plus">+</span></button>
+            </div>
+
+            <div class="cv-canvas-palette__section">
+              <div class="cv-canvas-palette__sec-title">🎓 Formação & Certificações</div>
+              <button type="button" class="cv-canvas-item-btn" onclick="addCanvasBlock('education')"><span>🎓 Formação Acadêmica</span><span class="item-add-plus">+</span></button>
+              <button type="button" class="cv-canvas-item-btn" onclick="addCanvasBlock('certificates')"><span>📜 Certificações</span><span class="item-add-plus">+</span></button>
+            </div>
+
+            <div class="cv-canvas-palette__section">
+              <div class="cv-canvas-palette__sec-title">🌐 Idiomas & Interesses</div>
+              <button type="button" class="cv-canvas-item-btn" onclick="addCanvasBlock('languages')"><span>🌐 Idiomas</span><span class="item-add-plus">+</span></button>
+              <button type="button" class="cv-canvas-item-btn" onclick="addCanvasBlock('interests')"><span>🎯 Interesses</span><span class="item-add-plus">+</span></button>
+            </div>
+          </aside>
+
+          <main class="cv-canvas-center-stage">
+            <div class="cv-canvas-sheet-info-bar cv-no-print">
+              <span>📄 <strong>Folha A4 Livre</strong> (210 × 297 mm) | ${{standaloneCanvasBlocks.length}} blocos</span>
+              <span style="font-size: 0.74rem; color: #34d399; font-weight: 700;">Pronto para Impressão A4</span>
+            </div>
+            <div class="cv-canvas-sheet-wrapper">
+              <div class="cv-canvas-sheet">
+                ${{blocksHtml}}
+              </div>
+            </div>
+          </main>
+        </div>
+      `;
     }}
 
     function renderClientLayout(data, layout, viewMode) {{
@@ -2617,6 +3663,11 @@ def render_multi_cv_dashboard_html(
         if (p.username) return `<span>${{p.network}}: ${{p.username}}</span>`;
         return '';
       }}).filter(Boolean).join(' &nbsp;•&nbsp; ');
+
+      // ── 0. Canvas Livre (Block Builder A4) ──
+      if (layout === 'canvas_livre') {{
+        return renderCanvasLivreLayout(data);
+      }}
 
       // ── 1. Dynamic Math (Modelo A4 09) ──
       if (layout === 'dynamic_math') {{

@@ -128,18 +128,25 @@
   }
 
   .cv-avatar-container.has-photo {
-    width: 68px !important;
-    height: 68px !important;
     display: block !important;
+    visibility: visible !important;
+    overflow: hidden !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
 
   .cv-avatar-img {
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
     width: 100% !important;
     height: 100% !important;
     object-fit: cover !important;
     object-position: var(--cv-avatar-pos-x, 50%) var(--cv-avatar-pos-y, 50%) !important;
     transform: scale(var(--cv-avatar-scale, 1)) !important;
     transform-origin: var(--cv-avatar-pos-x, 50%) var(--cv-avatar-pos-y, 50%) !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
 
   .cv-name {

@@ -22,22 +22,29 @@
   background: #090d16;
   border: 1px solid #1e293b;
   border-radius: 12px;
-  padding: 1.25rem;
+  padding: 1.25rem 1.25rem 3.5rem 1.25rem;
   display: flex;
   flex-direction: column;
   gap: 1.25rem;
   box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4);
   position: sticky;
   top: 1rem;
-  max-height: calc(100vh - 140px);
+  max-height: calc(100vh - 100px);
   overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: #38bdf8 #0f172a;
 }
 
 .cv-canvas-palette::-webkit-scrollbar {
-  width: 5px;
+  width: 6px;
+}
+.cv-canvas-palette::-webkit-scrollbar-track {
+  background: #0f172a;
+  border-radius: 4px;
 }
 .cv-canvas-palette::-webkit-scrollbar-thumb {
-  background: #334155;
+  background: #38bdf8;
   border-radius: 4px;
 }
 

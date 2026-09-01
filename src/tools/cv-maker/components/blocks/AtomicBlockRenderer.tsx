@@ -1,5 +1,5 @@
 import React from 'react'
-import type { BlockIdentifier, CVData, LayoutBlueprint } from '../../types/cv'
+import type { BlockIdentifier, CanvasBlockConfig, CVData, LayoutBlueprint } from '../../types/cv'
 import { BlockHeader } from './BlockHeader'
 import { BlockContacts } from './BlockContacts'
 import { BlockCivilData } from './BlockCivilData'
@@ -22,6 +22,7 @@ interface AtomicBlockRendererProps {
   blueprint: LayoutBlueprint
   zoneName: 'hero' | 'sidebar' | 'main' | 'footer'
   onRequestGenerateCoverLetter?: () => void
+  blockConfig?: CanvasBlockConfig
 }
 
 export const AtomicBlockRenderer: React.FC<AtomicBlockRendererProps> = ({
@@ -29,7 +30,8 @@ export const AtomicBlockRenderer: React.FC<AtomicBlockRendererProps> = ({
   data,
   blueprint,
   zoneName,
-  onRequestGenerateCoverLetter
+  onRequestGenerateCoverLetter,
+  blockConfig
 }) => {
   const { basics } = data
   const isSidebar = zoneName === 'sidebar'
@@ -55,12 +57,21 @@ export const AtomicBlockRenderer: React.FC<AtomicBlockRendererProps> = ({
           image={basics.image}
           altName={basics.name}
           shape={
-            blueprint.id === 'editorial_accent'
+            blockConfig?.photoShape ||
+            (blueprint.id === 'editorial_accent'
               ? 'vertical'
               : blueprint.id === 'corporate_timeline'
               ? 'square'
-              : 'circle'
+              : 'circle')
           }
+          size={blockConfig?.photoSize || 90}
+          borderWidth={blockConfig?.photoBorderWidth ?? 0}
+          borderColor={blockConfig?.photoBorderColor || '#0284c7'}
+          shadow={blockConfig?.photoShadow ?? true}
+          align={blockConfig?.photoAlign || (isSidebar ? 'center' : 'center')}
+          posX={basics.imagePosX ?? 50}
+          posY={basics.imagePosY ?? 50}
+          scale={basics.imageScale ?? 1.0}
         />
       )
 

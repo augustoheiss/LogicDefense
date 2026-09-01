@@ -82,13 +82,14 @@ export const CanvasBlockWrapper: React.FC<CanvasBlockWrapperProps> = ({
     normal: '0.65rem',
     spacious: '1.15rem'
   }
+  const isPhotoFloating = block.type === 'photo' && block.hideContainerBox !== false
 
   const customStyle: React.CSSProperties = {
     fontFamily: block.fontFamily && block.fontFamily !== 'inherit' ? `"${block.fontFamily}", sans-serif` : undefined,
     fontSize: block.fontSizeScale ? `${block.fontSizeScale}em` : undefined,
     color: block.customTextColor || undefined,
-    backgroundColor: block.customBgColor && block.customBgColor !== 'transparent' ? block.customBgColor : undefined,
-    padding: paddingMap[block.padding || 'normal'],
+    backgroundColor: isPhotoFloating ? 'transparent' : (block.customBgColor && block.customBgColor !== 'transparent' ? block.customBgColor : undefined),
+    padding: isPhotoFloating ? '0' : paddingMap[block.padding || 'normal'],
     borderRadius: block.customBgColor && block.customBgColor !== 'transparent' ? '8px' : '4px',
     minHeight: block.minHeight ? `${block.minHeight}px` : undefined
   }
@@ -120,7 +121,7 @@ export const CanvasBlockWrapper: React.FC<CanvasBlockWrapperProps> = ({
           ▼
         </button>
 
-        {/* Quick ColSpan Switcher */}
+        {/* Column Width Selector */}
         <select
           className="cv-canvas-act-btn"
           value={block.colSpan}
@@ -139,7 +140,7 @@ export const CanvasBlockWrapper: React.FC<CanvasBlockWrapperProps> = ({
           type="button"
           className="cv-canvas-act-btn"
           onClick={() => onOpenInspector(block)}
-          title="Personalizar fonte, cores e espaçamento deste bloco"
+          title="Personalizar fonte, formato da foto, cores e espaçamento deste bloco"
         >
           ⚙️
         </button>
@@ -181,6 +182,7 @@ export const CanvasBlockWrapper: React.FC<CanvasBlockWrapperProps> = ({
           blueprint={DUMMY_CANVAS_BLUEPRINT}
           zoneName="main"
           onRequestGenerateCoverLetter={onRequestGenerateCoverLetter}
+          blockConfig={block}
         />
       </div>
 
