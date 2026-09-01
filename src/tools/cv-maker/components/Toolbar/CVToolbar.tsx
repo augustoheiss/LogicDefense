@@ -423,15 +423,19 @@ export const CVToolbar: React.FC<CVToolbarProps> = ({
           </button>
         )}
 
-        {/* Chave API para Agentes Externos */}
+        {/* Hub do Agente de IA, Prompts & API */}
         <button
           type="button"
           className="cv-btn-secondary"
           onClick={onOpenApiKeyModal}
-          title="Gerenciar Chave de API para agentes externos"
-          style={hasActiveKey ? { borderColor: '#10b981', color: '#34d399' } : {}}
+          title="Abrir Hub de Agentes de IA, Prompts Mestre Nível 2, OpenAPI e Chaves de API"
+          style={
+            hasActiveKey
+              ? { borderColor: '#10b981', color: '#34d399', fontWeight: 600 }
+              : { borderColor: 'rgba(56, 189, 248, 0.4)', color: '#38bdf8', fontWeight: 600 }
+          }
         >
-          🔑 {hasActiveKey ? 'Chave API' : 'API Key'}
+          🤖 {hasActiveKey ? 'Agente & API (Ativo)' : 'Hub Agente & API'}
         </button>
 
         {/* Menu Unificado: Exportar & PDF */}

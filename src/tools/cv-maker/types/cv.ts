@@ -96,32 +96,40 @@ export const LAYOUT_OPTIONS: LayoutOption[] = [
   }
 ]
 
+export interface CVProfile {
+  network: string
+  username: string
+  url: string
+}
+
+export interface CVLocation {
+  city?: string
+  region?: string
+  postalCode?: string
+  countryCode?: string
+  address?: string
+}
+
 export interface CVBasics {
   name: string
-  label: string
-  image?: string
-  email: string
-  phone: string
+  label?: string
+  image?: string // Profile avatar Base64 or URL
+  imagePosX?: number // 0% a 100% (default: 50)
+  imagePosY?: number // 0% a 100% (default: 50)
+  imageScale?: number // 1.0 a 2.5 (default: 1.0)
+  email?: string
+  phone?: string
   url?: string
-  summary: string
-  quote?: string
-  civilStatus?: string
+  summary?: string
+  location?: CVLocation
+  profiles?: CVProfile[]
+  customBadges?: string[] // e.g. ["PcD", "Open to Relocate"]
+  age?: string | number
+  civilStatus?: string    // "Solteiro(a)", "Casado(a)"
+  nationality?: string    // "Brasileira", "Portuguesa"
+  driverLicense?: string  // "CNH B", "Sim"
+  quote?: string          // Frase de impacto / bio sintética
   birthDate?: string
-  location: {
-    address?: string
-    postalCode?: string
-    city: string
-    countryCode: string
-    region: string
-  }
-  profiles: Array<{
-    network: string
-    username: string
-    url: string
-  }>
-  imageScale?: number
-  imagePosX?: number
-  imagePosY?: number
 }
 
 export interface CVWork {
@@ -177,18 +185,21 @@ export interface CVPublication {
 
 export interface CVSkill {
   name: string
-  level?: string
+  level?: string          // "Básico", "Intermediário", "Avançado", "Especialista"
+  levelPercent?: number   // 0 a 100
   keywords: string[]
 }
 
 export interface CVLanguage {
   language: string
   fluency: string
+  levelPercent?: number   // 0 a 100
 }
 
 export interface CVInterest {
   name: string
-  keywords: string[]
+  icon?: string           // "camera" | "palette" | "plane" | "book" | "code" | "music" | "coffee" | "globe"
+  keywords?: string[]
 }
 
 export interface CVVolunteer {
@@ -208,6 +219,9 @@ export interface CVReference {
   email?: string
   company?: string
   position?: string
+  address?: string
+  url?: string
+  description?: string
 }
 
 export interface CoverLetterRecipient {

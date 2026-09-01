@@ -16,6 +16,7 @@ interface CVHistoryTabProps {
 }
 
 const PERSONA_INFO: Record<TextVariant, { icon: string; label: string; color: string }> = {
+  official_master: { icon: '🏆', label: 'Síntese Master Oficial', color: '#eab308' },
   professional: { icon: '💼', label: 'Profissional Executivo', color: '#0284c7' },
   architect: { icon: '🧠', label: 'Arquiteto Técnico', color: '#6366f1' },
   historian: { icon: '📜', label: 'Narrativa & Histórico', color: '#d97706' },

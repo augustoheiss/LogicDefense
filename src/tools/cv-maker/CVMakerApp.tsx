@@ -16,10 +16,9 @@ import { CanvasBuilderWorkspace } from './components/CanvasBuilder/CanvasBuilder
 import { ChatInterface } from './components/Chat/ChatInterface'
 import { CVToolbar } from './components/Toolbar/CVToolbar'
 import { CVHistoryTab } from './components/History/CVHistoryTab'
-import { OpenPromptsModal } from './components/PromptsModal/OpenPromptsModal'
 import { PhotoUploader } from './components/Toolbar/PhotoUploader'
 import { DesignCustomizerDrawer } from './components/Toolbar/DesignCustomizerDrawer'
-import { ApiKeyModal } from './components/ApiKeyModal/ApiKeyModal'
+import { AgentHubModal } from './components/Modals/AgentHubModal'
 import { CVStoreModal } from './components/StoreModal/CVStoreModal'
 import { GenerateCoverLetterModal } from './components/Modals/GenerateCoverLetterModal'
 import { validateLicenseKey } from './services/cvService'
@@ -113,9 +112,9 @@ export const CVMakerApp: React.FC = () => {
   }
 
   const [isPhotoModalOpen, setIsPhotoModalOpen] = useState<boolean>(false)
-  const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState<boolean>(false)
+  const [isAgentHubModalOpen, setIsAgentHubModalOpen] = useState<boolean>(false)
+  const [agentHubInitialTab, setAgentHubInitialTab] = useState<'agent_prompt' | 'master_synthesis' | 'prompts_library' | 'openapi_hub' | 'api_key'>('agent_prompt')
   const [isStoreModalOpen, setIsStoreModalOpen] = useState<boolean>(false)
-  const [isOpenPromptsModalOpen, setIsOpenPromptsModalOpen] = useState<boolean>(false)
   const [isCoverLetterModalOpen, setIsCoverLetterModalOpen] = useState<boolean>(false)
   const [isPro, setIsPro] = useState<boolean>(false)
   const [tokenBalance, setTokenBalance] = useState<number>(0)
@@ -123,6 +122,11 @@ export const CVMakerApp: React.FC = () => {
   const [hasActiveKey, setHasActiveKey] = useState<boolean>(() => {
     return Boolean(localStorage.getItem('ld_universal_api_key'))
   })
+
+  const handleOpenAgentHub = (tab: 'agent_prompt' | 'master_synthesis' | 'prompts_library' | 'openapi_hub' | 'api_key' = 'agent_prompt') => {
+    setAgentHubInitialTab(tab)
+    setIsAgentHubModalOpen(true)
+  }
 
   // Fetch / Validate Pro license on mount
   const checkLicense = useCallback(async () => {
@@ -388,21 +392,22 @@ export const CVMakerApp: React.FC = () => {
         <div className="cv-app-controls">
           <button
             className="cv-btn-secondary"
-            onClick={() => setIsOpenPromptsModalOpen(true)}
-            style={{ borderColor: 'rgba(56, 189, 248, 0.4)', color: '#38bdf8' }}
-            title="Ver e copiar os System Prompts abertos para usar no ChatGPT ou Claude"
+            onClick={() => handleOpenAgentHub('agent_prompt')}
+            style={{ borderColor: 'rgba(56, 189, 248, 0.5)', color: '#38bdf8', background: 'rgba(56, 189, 248, 0.1)', fontWeight: 700 }}
+            title="Hub do Agente de IA, Prompts Mestre Nível 2 e OpenAPI"
           >
-            📖 Prompts Abertos (IA Grátis)
+            🤖 Hub do Agente & Prompts
           </button>
           <button className="cv-btn-secondary" onClick={handleReset} title="Restaurar modelo padrão de exemplo">
             🔄 Resetar Modelo
           </button>
           <button
             className="cv-btn-secondary"
-            onClick={() => setIsApiKeyModalOpen(true)}
+            onClick={() => handleOpenAgentHub('api_key')}
             style={hasActiveKey ? { borderColor: '#10b981', color: '#34d399' } : {}}
+            title="Gerenciar chaves de API temporárias para bots"
           >
-            🔑 {hasActiveKey ? 'API Key Ativa' : 'Habilitar Chave API'}
+            🔑 {hasActiveKey ? 'Chave API Ativa' : 'Chave API'}
           </button>
         </div>
       </div>
@@ -536,7 +541,7 @@ export const CVMakerApp: React.FC = () => {
             onOpenPhotoModal={() => setIsPhotoModalOpen(true)}
             hasPhoto={Boolean(cvData?.basics?.image)}
             onOpenDesignModal={() => setIsDesignModalOpen(true)}
-            onOpenApiKeyModal={() => setIsApiKeyModalOpen(true)}
+            onOpenApiKeyModal={() => handleOpenAgentHub('agent_prompt')}
             hasActiveKey={hasActiveKey}
             isPro={isPro}
             tokenBalance={tokenBalance}
@@ -581,10 +586,11 @@ export const CVMakerApp: React.FC = () => {
         />
       )}
 
-      <ApiKeyModal
-        isOpen={isApiKeyModalOpen}
-        onClose={() => setIsApiKeyModalOpen(false)}
+      <AgentHubModal
+        isOpen={isAgentHubModalOpen}
+        onClose={() => setIsAgentHubModalOpen(false)}
         onKeyUpdated={key => setHasActiveKey(Boolean(key))}
+        initialTab={agentHubInitialTab}
       />
 
       <CVStoreModal
@@ -597,11 +603,6 @@ export const CVMakerApp: React.FC = () => {
           setIsPro(true)
           setTokenBalance(bal)
         }}
-      />
-
-      <OpenPromptsModal
-        isOpen={isOpenPromptsModalOpen}
-        onClose={() => setIsOpenPromptsModalOpen(false)}
       />
 
       <GenerateCoverLetterModal
