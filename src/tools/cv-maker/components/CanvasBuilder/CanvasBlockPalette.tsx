@@ -68,75 +68,78 @@ export const CanvasBlockPalette: React.FC<CanvasBlockPaletteProps> = ({
         </span>
       </div>
 
-      {/* Modelos / Presets de Partida */}
-      <div className="cv-canvas-palette__presets">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.2rem' }}>
-          <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase' }}>
-            Templates Rápidos
-          </span>
-          <button
-            type="button"
-            onClick={onClearCanvas}
-            style={{ background: 'transparent', border: 'none', color: '#f87171', fontSize: '0.7rem', cursor: 'pointer', fontWeight: 600 }}
-            title="Limpa todos os blocos para começar do zero"
-          >
-            🗑️ Limpar
-          </button>
-        </div>
-        {CANVAS_PRESETS.map(preset => (
-          <button
-            key={preset.id}
-            type="button"
-            className="cv-canvas-preset-btn"
-            onClick={() => onApplyPreset(preset.id)}
-            title={preset.description}
-          >
-            <span>{preset.icon} {preset.name}</span>
-            <span style={{ opacity: 0.6, fontSize: '0.7rem' }}>
-              {preset.blocks.length ? `${preset.blocks.length} blocos` : '0 blocos'}
+      {/* Body com Scroll Independente e Suave */}
+      <div className="cv-canvas-palette__body">
+        {/* Modelos / Presets de Partida */}
+        <div className="cv-canvas-palette__presets">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.2rem' }}>
+            <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase' }}>
+              Templates Rápidos
             </span>
-          </button>
-        ))}
-      </div>
-
-      {/* Categorias de Blocos */}
-      {categories.map(cat => {
-        const items = AVAILABLE_PALETTE_ITEMS.filter(item => item.category === cat.id)
-        if (!items.length) return null
-
-        return (
-          <div key={cat.id} className="cv-canvas-palette__section">
-            <div className="cv-canvas-palette__sec-title">{cat.label}</div>
-            {items.map(item => {
-              const countBadge = getFieldCount(item.type)
-              return (
-                <button
-                  key={item.type}
-                  type="button"
-                  className="cv-canvas-item-btn"
-                  onClick={() => onAddBlock(createBlockFromType(item.type))}
-                  title={`Adicionar ${item.label} à folha A4`}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', overflow: 'hidden' }}>
-                    <span className="item-icon">{item.icon}</span>
-                    <div style={{ display: 'flex', flexDirection: 'column', textAlign: 'left' }}>
-                      <span style={{ fontSize: '0.78rem', color: '#f1f5f9', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>
-                        {item.label}
-                      </span>
-                      {countBadge && (
-                        <span style={{ fontSize: '0.66rem', color: countBadge === 'vazio' || countBadge === 'sem foto' ? '#64748b' : '#38bdf8' }}>
-                          {countBadge}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  <span className="item-add-plus">+</span>
-                </button>
-              )
-            })}
+            <button
+              type="button"
+              onClick={onClearCanvas}
+              style={{ background: 'transparent', border: 'none', color: '#f87171', fontSize: '0.7rem', cursor: 'pointer', fontWeight: 600 }}
+              title="Limpa todos os blocos para começar do zero"
+            >
+              🗑️ Limpar
+            </button>
           </div>
-        )
-      })}
+          {CANVAS_PRESETS.map(preset => (
+            <button
+              key={preset.id}
+              type="button"
+              className="cv-canvas-preset-btn"
+              onClick={() => onApplyPreset(preset.id)}
+              title={preset.description}
+            >
+              <span>{preset.icon} {preset.name}</span>
+              <span style={{ opacity: 0.6, fontSize: '0.7rem' }}>
+                {preset.blocks.length ? `${preset.blocks.length} blocos` : '0 blocos'}
+              </span>
+            </button>
+          ))}
+        </div>
+
+        {/* Categorias de Blocos */}
+        {categories.map(cat => {
+          const items = AVAILABLE_PALETTE_ITEMS.filter(item => item.category === cat.id)
+          if (!items.length) return null
+
+          return (
+            <div key={cat.id} className="cv-canvas-palette__section">
+              <div className="cv-canvas-palette__sec-title">{cat.label}</div>
+              {items.map(item => {
+                const countBadge = getFieldCount(item.type)
+                return (
+                  <button
+                    key={item.type}
+                    type="button"
+                    className="cv-canvas-item-btn"
+                    onClick={() => onAddBlock(createBlockFromType(item.type))}
+                    title={`Adicionar ${item.label} à folha A4`}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', overflow: 'hidden' }}>
+                      <span className="item-icon">{item.icon}</span>
+                      <div style={{ display: 'flex', flexDirection: 'column', textAlign: 'left' }}>
+                        <span style={{ fontSize: '0.78rem', color: '#f1f5f9', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>
+                          {item.label}
+                        </span>
+                        {countBadge && (
+                          <span style={{ fontSize: '0.66rem', color: countBadge === 'vazio' || countBadge === 'sem foto' ? '#64748b' : '#38bdf8' }}>
+                            {countBadge}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <span className="item-add-plus">+</span>
+                  </button>
+                )
+              })}
+            </div>
+          )
+        })}
+      </div>
     </aside>
   )
 }

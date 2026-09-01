@@ -860,36 +860,51 @@
       background: #090d16;
       border: 1px solid #1e293b;
       border-radius: 12px;
-      padding: 1.25rem 1.25rem 3.5rem 1.25rem;
       display: flex;
       flex-direction: column;
-      gap: 1.25rem;
       box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4);
       position: sticky;
-      top: 1rem;
-      max-height: calc(100vh - 100px);
-      overflow-y: auto;
-      overscroll-behavior: contain;
-      scrollbar-width: thin;
-      scrollbar-color: #38bdf8 #0f172a;
-    }
-    .cv-canvas-palette::-webkit-scrollbar {
-      width: 6px;
-    }
-    .cv-canvas-palette::-webkit-scrollbar-track {
-      background: #0f172a;
-      border-radius: 4px;
-    }
-    .cv-canvas-palette::-webkit-scrollbar-thumb {
-      background: #38bdf8;
-      border-radius: 4px;
+      top: 5.5rem;
+      height: calc(100vh - 160px);
+      max-height: calc(100vh - 160px);
+      min-height: 380px;
+      overflow: hidden;
+      z-index: 20;
     }
     .cv-canvas-palette__header {
       display: flex;
       justify-content: space-between;
       align-items: center;
       border-bottom: 1px solid #1e293b;
-      padding-bottom: 0.75rem;
+      padding: 1rem 1.15rem;
+      background: #090d16;
+      flex-shrink: 0;
+    }
+    .cv-canvas-palette__body {
+      flex: 1;
+      overflow-y: auto !important;
+      overflow-x: hidden;
+      padding: 1rem 1.15rem 2.5rem 1.15rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.15rem;
+      overscroll-behavior: contain;
+      scrollbar-width: thin;
+      scrollbar-color: #38bdf8 #0f172a;
+    }
+    .cv-canvas-palette__body::-webkit-scrollbar {
+      width: 6px;
+    }
+    .cv-canvas-palette__body::-webkit-scrollbar-track {
+      background: #0f172a;
+      border-radius: 4px;
+    }
+    .cv-canvas-palette__body::-webkit-scrollbar-thumb {
+      background: #38bdf8;
+      border-radius: 4px;
+    }
+    .cv-canvas-palette__body::-webkit-scrollbar-thumb:hover {
+      background: #0284c7;
     }
     .cv-canvas-palette__title {
       font-size: 0.95rem;
@@ -2394,46 +2409,48 @@ coverLetter:
               </span>
             </div>
 
-            <div class="cv-canvas-palette__presets">
-              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.2rem;">
-                <span style="font-size: 0.72rem; font-weight: 700; color: #94a3b8; text-transform: uppercase;">Templates Rápidos</span>
-                <button type="button" onclick="clearCanvasBlocks()" style="background: transparent; border: none; color: #f87171; font-size: 0.7rem; cursor: pointer; font-weight: 600;">🗑️ Limpar</button>
+            <div class="cv-canvas-palette__body">
+              <div class="cv-canvas-palette__presets">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.2rem;">
+                  <span style="font-size: 0.72rem; font-weight: 700; color: #94a3b8; text-transform: uppercase;">Templates Rápidos</span>
+                  <button type="button" onclick="clearCanvasBlocks()" style="background: transparent; border: none; color: #f87171; font-size: 0.7rem; cursor: pointer; font-weight: 600;">🗑️ Limpar</button>
+                </div>
+                <button type="button" class="cv-canvas-preset-btn" onclick="applyCanvasPreset('executive_balanced')"><span>👔 Executivo Balanceado</span><span style="opacity: 0.6; font-size: 0.7rem;">9 blocos</span></button>
+                <button type="button" class="cv-canvas-preset-btn" onclick="applyCanvasPreset('two_column')"><span>📑 Duas Colunas</span><span style="opacity: 0.6; font-size: 0.7rem;">9 blocos</span></button>
+                <button type="button" class="cv-canvas-preset-btn" onclick="applyCanvasPreset('tech_hero')"><span>🚀 Hero Tech & Projetos</span><span style="opacity: 0.6; font-size: 0.7rem;">9 blocos</span></button>
               </div>
-              <button type="button" class="cv-canvas-preset-btn" onclick="applyCanvasPreset('executive_balanced')"><span>👔 Executivo Balanceado</span><span style="opacity: 0.6; font-size: 0.7rem;">9 blocos</span></button>
-              <button type="button" class="cv-canvas-preset-btn" onclick="applyCanvasPreset('two_column')"><span>📑 Duas Colunas</span><span style="opacity: 0.6; font-size: 0.7rem;">9 blocos</span></button>
-              <button type="button" class="cv-canvas-preset-btn" onclick="applyCanvasPreset('tech_hero')"><span>🚀 Hero Tech & Projetos</span><span style="opacity: 0.6; font-size: 0.7rem;">9 blocos</span></button>
-            </div>
 
-            <div class="cv-canvas-palette__section">
-              <div class="cv-canvas-palette__sec-title">👤 Identidade & Contato</div>
-              <button type="button" class="cv-canvas-item-btn" onclick="addCanvasBlock('header')"><span>👤 Nome & Título</span><span class="item-add-plus">+</span></button>
-              <button type="button" class="cv-canvas-item-btn" onclick="addCanvasBlock('photo')"><span>📷 Foto / Avatar</span><span class="item-add-plus">+</span></button>
-              <button type="button" class="cv-canvas-item-btn" onclick="addCanvasBlock('contacts')"><span>📞 Contatos & Links</span><span class="item-add-plus">+</span></button>
-            </div>
+              <div class="cv-canvas-palette__section">
+                <div class="cv-canvas-palette__sec-title">👤 Identidade & Contato</div>
+                <button type="button" class="cv-canvas-item-btn" onclick="addCanvasBlock('header')"><span>👤 Nome & Título</span><span class="item-add-plus">+</span></button>
+                <button type="button" class="cv-canvas-item-btn" onclick="addCanvasBlock('photo')"><span>📷 Foto / Avatar</span><span class="item-add-plus">+</span></button>
+                <button type="button" class="cv-canvas-item-btn" onclick="addCanvasBlock('contacts')"><span>📞 Contatos & Links</span><span class="item-add-plus">+</span></button>
+              </div>
 
-            <div class="cv-canvas-palette__section">
-              <div class="cv-canvas-palette__sec-title">📝 Trajetória & Conteúdo</div>
-              <button type="button" class="cv-canvas-item-btn" onclick="addCanvasBlock('summary')"><span>📄 Sobre Mim / Resumo</span><span class="item-add-plus">+</span></button>
-              <button type="button" class="cv-canvas-item-btn" onclick="addCanvasBlock('work')"><span>💼 Experiência Profissional</span><span class="item-add-plus">+</span></button>
-              <button type="button" class="cv-canvas-item-btn" onclick="addCanvasBlock('projects')"><span>🚀 Projetos em Destaque</span><span class="item-add-plus">+</span></button>
-            </div>
+              <div class="cv-canvas-palette__section">
+                <div class="cv-canvas-palette__sec-title">📝 Trajetória & Conteúdo</div>
+                <button type="button" class="cv-canvas-item-btn" onclick="addCanvasBlock('summary')"><span>📄 Sobre Mim / Resumo</span><span class="item-add-plus">+</span></button>
+                <button type="button" class="cv-canvas-item-btn" onclick="addCanvasBlock('work')"><span>💼 Experiência Profissional</span><span class="item-add-plus">+</span></button>
+                <button type="button" class="cv-canvas-item-btn" onclick="addCanvasBlock('projects')"><span>🚀 Projetos em Destaque</span><span class="item-add-plus">+</span></button>
+              </div>
 
-            <div class="cv-canvas-palette__section">
-              <div class="cv-canvas-palette__sec-title">⚡ Competências & Níveis</div>
-              <button type="button" class="cv-canvas-item-btn" onclick="addCanvasBlock('skills_tags')"><span>⚡ Competências (Tags)</span><span class="item-add-plus">+</span></button>
-              <button type="button" class="cv-canvas-item-btn" onclick="addCanvasBlock('skills_bars')"><span>📊 Barras de Nível</span><span class="item-add-plus">+</span></button>
-            </div>
+              <div class="cv-canvas-palette__section">
+                <div class="cv-canvas-palette__sec-title">⚡ Competências & Níveis</div>
+                <button type="button" class="cv-canvas-item-btn" onclick="addCanvasBlock('skills_tags')"><span>⚡ Competências (Tags)</span><span class="item-add-plus">+</span></button>
+                <button type="button" class="cv-canvas-item-btn" onclick="addCanvasBlock('skills_bars')"><span>📊 Barras de Nível</span><span class="item-add-plus">+</span></button>
+              </div>
 
-            <div class="cv-canvas-palette__section">
-              <div class="cv-canvas-palette__sec-title">🎓 Formação & Certificações</div>
-              <button type="button" class="cv-canvas-item-btn" onclick="addCanvasBlock('education')"><span>🎓 Formação Acadêmica</span><span class="item-add-plus">+</span></button>
-              <button type="button" class="cv-canvas-item-btn" onclick="addCanvasBlock('certificates')"><span>📜 Certificações</span><span class="item-add-plus">+</span></button>
-            </div>
+              <div class="cv-canvas-palette__section">
+                <div class="cv-canvas-palette__sec-title">🎓 Formação & Certificações</div>
+                <button type="button" class="cv-canvas-item-btn" onclick="addCanvasBlock('education')"><span>🎓 Formação Acadêmica</span><span class="item-add-plus">+</span></button>
+                <button type="button" class="cv-canvas-item-btn" onclick="addCanvasBlock('certificates')"><span>📜 Certificações</span><span class="item-add-plus">+</span></button>
+              </div>
 
-            <div class="cv-canvas-palette__section">
-              <div class="cv-canvas-palette__sec-title">🌐 Idiomas & Interesses</div>
-              <button type="button" class="cv-canvas-item-btn" onclick="addCanvasBlock('languages')"><span>🌐 Idiomas</span><span class="item-add-plus">+</span></button>
-              <button type="button" class="cv-canvas-item-btn" onclick="addCanvasBlock('interests')"><span>🎯 Interesses</span><span class="item-add-plus">+</span></button>
+              <div class="cv-canvas-palette__section">
+                <div class="cv-canvas-palette__sec-title">🌐 Idiomas & Interesses</div>
+                <button type="button" class="cv-canvas-item-btn" onclick="addCanvasBlock('languages')"><span>🌐 Idiomas</span><span class="item-add-plus">+</span></button>
+                <button type="button" class="cv-canvas-item-btn" onclick="addCanvasBlock('interests')"><span>🎯 Interesses</span><span class="item-add-plus">+</span></button>
+              </div>
             </div>
           </aside>
 
