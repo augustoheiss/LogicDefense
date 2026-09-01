@@ -320,6 +320,52 @@ function getEmbeddedCss(): string {
       overflow-wrap: anywhere !important;
     }
 
+    .layout-compact_split .cv-duo-right {
+      min-width: 0 !important;
+      max-width: 100% !important;
+      box-sizing: border-box !important;
+    }
+    .layout-compact_split .cv-duo-header {
+      display: flex !important;
+      flex-direction: column !important;
+      align-items: flex-start !important;
+      border-bottom: 2px solid currentColor !important;
+      padding-bottom: 0.75rem !important;
+      margin-bottom: 1.15rem !important;
+      width: 100% !important;
+      box-sizing: border-box !important;
+    }
+    .layout-compact_split .cv-duo-header .cv-name {
+      width: 100% !important;
+      margin: 0 0 0.2rem 0 !important;
+    }
+    .layout-compact_split .cv-duo-header .cv-label {
+      width: 100% !important;
+      margin-bottom: 0.4rem !important;
+    }
+    .layout-compact_split .cv-contacts,
+    .layout-compact_split .cv-contacts-row,
+    .layout-compact_split .cv-duo-contacts {
+      display: flex !important;
+      flex-direction: row !important;
+      flex-wrap: wrap !important;
+      gap: 0.45rem 0.85rem !important;
+      font-size: 0.82rem !important;
+      width: 100% !important;
+      max-width: 100% !important;
+      box-sizing: border-box !important;
+      word-break: break-word !important;
+      overflow-wrap: anywhere !important;
+      text-align: left !important;
+    }
+    .layout-compact_split .cv-contact-item,
+    .layout-compact_split .cv-contacts span,
+    .layout-compact_split .cv-contacts a {
+      word-break: break-word !important;
+      overflow-wrap: anywhere !important;
+      max-width: 100% !important;
+    }
+
     /* ── Temas ── */
     .theme-executive { background: #ffffff; color: #0f172a; }
     .theme-executive .cv-name, .theme-executive .cv-section-title { color: #0369a1; }

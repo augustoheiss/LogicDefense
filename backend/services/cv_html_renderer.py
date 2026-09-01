@@ -743,10 +743,10 @@ def _render_cv_layout_html(data: dict, layout: str, t: dict, view_mode: str = "c
                 </aside>
 
                 <main class="cv-duo-right">
-                    <header class="header" style="border-bottom: 2px solid currentColor; padding-bottom: 0.85rem; margin-bottom: 1.25rem;">
+                    <header class="cv-duo-header" style="display: flex; flex-direction: column; align-items: flex-start; border-bottom: 2px solid currentColor; padding-bottom: 0.85rem; margin-bottom: 1.25rem; width: 100%;">
                         <h1 class="name" style="font-size: 1.85rem; font-weight: 800; margin: 0 0 0.25rem 0;">{html.escape(basics.get("name", ""))}</h1>
                         <div class="label" style="font-size: 0.95rem; font-weight: 700; opacity: 0.9; margin-bottom: 0.5rem;">{html.escape(basics.get("label", ""))}</div>
-                        <div class="contacts" style="display: flex; flex-wrap: wrap; gap: 0.85rem; font-size: 0.82rem; text-align: left;">
+                        <div class="contacts" style="display: flex; flex-wrap: wrap; gap: 0.45rem 0.85rem; font-size: 0.82rem; text-align: left; width: 100%; word-break: break-word; overflow-wrap: anywhere;">
                             {f'<span>✉ <a href="mailto:{html.escape(email_val)}" class="cv-link">{html.escape(email_val)}</a></span>' if email_val else ''}
                             {f'<span>📞 <a href="tel:{clean_phone}" class="cv-link">{html.escape(phone_val)}</a></span>' if phone_val else ''}
                             {f'<span>📍 {html.escape(loc_str)}</span>' if loc_str else ''}
@@ -1769,6 +1769,71 @@ def render_multi_cv_dashboard_html(
       padding: 0.45rem 0.6rem !important;
     }}
 
+    /* ── Contenção e Layout Compact Split (Modelo A4 04) ── */
+    .layout-compact_split .cv-duo-layout {{
+      display: grid !important;
+      grid-template-columns: 210px 1fr !important;
+      gap: 1.5rem !important;
+      align-items: start !important;
+      width: 100% !important;
+      max-width: 100% !important;
+      box-sizing: border-box !important;
+    }}
+    .layout-compact_split .cv-duo-right {{
+      min-width: 0 !important;
+      max-width: 100% !important;
+      box-sizing: border-box !important;
+    }}
+    .layout-compact_split .cv-duo-header,
+    .layout-compact_split .header {{
+      display: flex !important;
+      flex-direction: column !important;
+      align-items: flex-start !important;
+      justify-content: flex-start !important;
+      width: 100% !important;
+      max-width: 100% !important;
+      border-bottom: 2px solid currentColor !important;
+      padding-bottom: 0.85rem !important;
+      margin-bottom: 1.25rem !important;
+      box-sizing: border-box !important;
+    }}
+    .layout-compact_split .cv-duo-header .name,
+    .layout-compact_split .header .name {{
+      width: 100% !important;
+      margin: 0 0 0.25rem 0 !important;
+    }}
+    .layout-compact_split .cv-duo-header .label,
+    .layout-compact_split .header .label {{
+      width: 100% !important;
+      margin-bottom: 0.5rem !important;
+    }}
+    .layout-compact_split .cv-duo-header .contacts,
+    .layout-compact_split .header .contacts,
+    .layout-compact_split .contacts,
+    .cv-duo-right .contacts {{
+      display: flex !important;
+      flex-direction: row !important;
+      flex-wrap: wrap !important;
+      gap: 0.45rem 0.85rem !important;
+      width: 100% !important;
+      max-width: 100% !important;
+      box-sizing: border-box !important;
+      word-break: break-word !important;
+      overflow-wrap: anywhere !important;
+      text-align: left !important;
+    }}
+    .layout-compact_split .contacts span,
+    .layout-compact_split .contacts a,
+    .cv-duo-right .contacts span,
+    .cv-duo-right .contacts a {{
+      word-break: break-word !important;
+      overflow-wrap: anywhere !important;
+      max-width: 100% !important;
+      display: inline-flex !important;
+      align-items: center !important;
+      gap: 0.25rem !important;
+    }}
+
     /* ── Print Media Optimization (Strict CSS Paged Media) ── */
     @media print {{
       body {{
@@ -2541,10 +2606,10 @@ def render_multi_cv_dashboard_html(
               </aside>
 
               <main class="cv-duo-right">
-                <header class="header" style="border-bottom: 2px solid currentColor; padding-bottom: 0.85rem; margin-bottom: 1.25rem;">
+                <header class="cv-duo-header" style="display: flex; flex-direction: column; align-items: flex-start; border-bottom: 2px solid currentColor; padding-bottom: 0.85rem; margin-bottom: 1.25rem; width: 100%;">
                   <h1 class="name" style="font-size: 1.85rem; font-weight: 800; margin: 0 0 0.25rem 0;">${{name}}</h1>
                   <div class="label" style="font-size: 0.95rem; font-weight: 700; opacity: 0.9; margin-bottom: 0.5rem;">${{label}}</div>
-                  <div class="contacts" style="display: flex; flex-wrap: wrap; gap: 0.85rem; font-size: 0.82rem; text-align: left;">
+                  <div class="contacts" style="display: flex; flex-wrap: wrap; gap: 0.45rem 0.85rem; font-size: 0.82rem; text-align: left; width: 100%; word-break: break-word; overflow-wrap: anywhere;">
                     ${{email ? `<span>✉ <a href="mailto:${{email}}" class="cv-link">${{email}}</a></span>` : ''}}
                     ${{phone ? `<span>📞 <a href="tel:${{cleanPhone}}" class="cv-link">${{phone}}</a></span>` : ''}}
                     ${{locStr ? `<span>📍 ${{locStr}}</span>` : ''}}
