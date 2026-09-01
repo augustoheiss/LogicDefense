@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useState, useRef, useEffect } from 'react'
 import type { TextVariant, ThemeVariant, LayoutVariant, ViewMode, AppMode } from '../../types/cv'
 import { LAYOUT_OPTIONS } from '../../types/cv'
 
@@ -30,20 +30,20 @@ interface CVToolbarProps {
   onOpenStoreModal?: () => void
 }
 
-const PERSONAS: { id: TextVariant; label: string; icon: string }[] = [
-  { id: 'professional', label: 'Executivo IBM', icon: '💼' },
-  { id: 'architect',    label: 'AI Architect', icon: '🧠' },
-  { id: 'historian',    label: 'Biógrafo',     icon: '📜' },
-  { id: 'didactic',     label: 'Didático',     icon: '🎓' },
-  { id: 'alien',        label: 'Observador',   icon: '🤖' },
+const PERSONAS: { id: TextVariant; label: string; icon: string; desc: string }[] = [
+  { id: 'professional', label: 'Executivo IBM', icon: '💼', desc: 'Foco em governança, KPIs e impacto corporativo' },
+  { id: 'architect',    label: 'AI Architect', icon: '🧠', desc: 'Foco em engenharia, algoritmos e arquitetura' },
+  { id: 'historian',    label: 'Biógrafo',     icon: '📜', desc: 'Narrativa cronológica detalhada e marcos' },
+  { id: 'didactic',     label: 'Didático',     icon: '🎓', desc: 'Clareza pedagógica, liderança e mentoria' },
+  { id: 'alien',        label: 'Observador',   icon: '🤖', desc: 'Visão sistêmica, lógica matemática e síntese' },
 ]
 
-const THEMES: { id: ThemeVariant; label: string; icon: string }[] = [
-  { id: 'executive',  label: 'Executivo',   icon: '👔' },
-  { id: 'creative',   label: 'Criativo',    icon: '🎨' },
-  { id: 'minimalist', label: 'Minimalista', icon: '🔹' },
-  { id: 'white',      label: 'White',       icon: '📄' },
-  { id: 'terminal',   label: 'Terminal',    icon: '>_' },
+const THEMES: { id: ThemeVariant; label: string; icon: string; desc: string }[] = [
+  { id: 'executive',  label: 'Executivo',   icon: '👔', desc: 'Azul marinho e acentos corporativos sóbrios' },
+  { id: 'creative',   label: 'Criativo',    icon: '🎨', desc: 'Índigo moderno e gradientes expressivos' },
+  { id: 'minimalist', label: 'Minimalista', icon: '🔹', desc: 'Esmeralda tech com linhas limpas' },
+  { id: 'white',      label: 'White Clean', icon: '📄', desc: 'Fundo branco puro de alto contraste' },
+  { id: 'terminal',   label: 'Terminal >_', icon: '📟', desc: 'Estilo monospace com estética hacker/dev' },
 ]
 
 const VIEW_MODES: { id: ViewMode; label: string; icon: string }[] = [
@@ -79,143 +79,340 @@ export const CVToolbar: React.FC<CVToolbarProps> = ({
   tokenBalance = 0,
   onOpenStoreModal,
 }) => {
+  const [openDropdown, setOpenDropdown] = useState<string | null>(null)
+  const toolbarRef = useRef<HTMLDivElement>(null)
+
+  // Fecha qualquer dropdown ao clicar fora da toolbar
+  useEffect(() => {
+    const handleOutsideClick = (e: MouseEvent) => {
+      if (toolbarRef.current && !toolbarRef.current.contains(e.target as Node)) {
+        setOpenDropdown(null)
+      }
+    }
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpenDropdown(null)
+    }
+
+    document.addEventListener('mousedown', handleOutsideClick)
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('mousedown', handleOutsideClick)
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [])
+
+  const toggleDropdown = (name: string) => {
+    setOpenDropdown(prev => (prev === name ? null : name))
+  }
+
+  const closeDropdowns = () => setOpenDropdown(null)
+
   const formattedBalance = tokenBalance >= 1000000
     ? `${(tokenBalance / 1000000).toFixed(1)}M`
     : tokenBalance >= 1000
     ? `${(tokenBalance / 1000).toFixed(0)}k`
     : tokenBalance.toString()
 
-  return (
-    <div className="cv-preview-toolbar cv-no-print">
-      {/* Grupo 0: Alternador de Modo Principal (Modelos Prontos vs Canvas Livre) */}
-      <div className="cv-toolbar-group" style={{ borderRight: '1.5px solid #334155', paddingRight: '0.85rem' }}>
-        <span className="cv-toolbar-label" style={{ color: '#38bdf8' }}>Modo do Editor</span>
-        <div className="cv-btn-pill-group">
-          <button
-            type="button"
-            className={`cv-btn-pill ${appMode === 'templates' && activeLayout !== 'canvas_livre' ? 'cv-btn-pill--active' : ''}`}
-            onClick={() => {
-              onAppModeChange?.('templates')
-              if (activeLayout === 'canvas_livre') {
-                onLayoutChange('dynamic_math')
-              }
-            }}
-            style={appMode === 'templates' && activeLayout !== 'canvas_livre' ? { background: '#0284c7', color: '#fff', fontWeight: 700 } : {}}
-            title="Modelos A4 Prontos (01 a 09) com diagramação matemática e balanceamento automático"
-          >
-            <span>📐</span> Modelos A4 Prontos
-          </button>
-          <button
-            type="button"
-            className={`cv-btn-pill ${appMode === 'canvas_builder' || activeLayout === 'canvas_livre' ? 'cv-btn-pill--active' : ''}`}
-            onClick={() => {
-              onAppModeChange?.('canvas_builder')
-              onLayoutChange('canvas_livre')
-            }}
-            style={appMode === 'canvas_builder' || activeLayout === 'canvas_livre' ? { background: '#10b981', color: '#fff', fontWeight: 700 } : {}}
-            title="Canvas Livre: adicione blocos na folha A4 em branco e personalize fontes, cores e tamanhos"
-          >
-            <span>🎨</span> Canvas Livre
-          </button>
-        </div>
-      </div>
+  const currentPersonaObj = PERSONAS.find(p => p.id === activePersona) || PERSONAS[0]
+  const currentThemeObj = THEMES.find(t => t.id === activeTheme) || THEMES[0]
+  const currentLayoutObj = LAYOUT_OPTIONS.find(l => l.id === activeLayout) || LAYOUT_OPTIONS[0]
+  const currentViewModeObj = VIEW_MODES.find(v => v.id === activeViewMode) || VIEW_MODES[0]
 
-      {/* Grupo 1: Modo de Visualização (Currículo / Cover Letter / Dossiê) */}
-      {appMode === 'templates' && activeLayout !== 'canvas_livre' && (
+  const isCanvasMode = appMode === 'canvas_builder' || activeLayout === 'canvas_livre'
+
+  return (
+    <div className="cv-preview-toolbar cv-no-print" ref={toolbarRef}>
+      {/* LINHA 1: Menus de Seleção & Configuração Declarativa */}
+      <div className="cv-toolbar-row">
+        {/* 1. Menu Modo do Editor */}
         <div className="cv-toolbar-group">
-          <span className="cv-toolbar-label">Visualização</span>
-          <div className="cv-btn-pill-group">
-            {VIEW_MODES.map(v => (
-              <button
-                key={v.id}
-                className={`cv-btn-pill ${activeViewMode === v.id ? 'cv-btn-pill--active' : ''}`}
-                onClick={() => onViewModeChange(v.id)}
-                title={`Exibir ${v.label}`}
-              >
-                <span>{v.icon}</span> {v.label}
-              </button>
-            ))}
+          <span className="cv-toolbar-label">Modo:</span>
+          <div className={`cv-dropdown-wrapper ${openDropdown === 'mode' ? 'is-open' : ''}`}>
+            <button
+              type="button"
+              className={`cv-dropdown-trigger ${isCanvasMode ? 'cv-dropdown-trigger--active' : ''}`}
+              onClick={() => toggleDropdown('mode')}
+              title="Alternar entre Modelos A4 Prontos e Canvas Livre"
+              style={isCanvasMode ? { borderColor: '#10b981', color: '#34d399', background: 'rgba(16, 185, 129, 0.12)' } : {}}
+            >
+              <span className="cv-dropdown-trigger__icon">{isCanvasMode ? '🎨' : '📐'}</span>
+              <span className="cv-dropdown-trigger__text">
+                {isCanvasMode ? 'Canvas Livre' : 'Modelos A4 Prontos'}
+              </span>
+              <span className="cv-dropdown-trigger__chevron">▼</span>
+            </button>
+
+            {openDropdown === 'mode' && (
+              <div className="cv-dropdown-menu">
+                <button
+                  type="button"
+                  className={`cv-dropdown-item ${!isCanvasMode ? 'cv-dropdown-item--active' : ''}`}
+                  onClick={() => {
+                    onAppModeChange?.('templates')
+                    if (activeLayout === 'canvas_livre') {
+                      onLayoutChange('dynamic_math')
+                    }
+                    closeDropdowns()
+                  }}
+                >
+                  <div className="cv-dropdown-item__content">
+                    <div className="cv-dropdown-item__title">
+                      <span>📐</span> <strong>Modelos A4 Prontos</strong>
+                    </div>
+                    <div className="cv-dropdown-item__desc">Modelos 01 a 09 com diagramação matemática automática</div>
+                  </div>
+                  {!isCanvasMode && <span className="cv-dropdown-item__check">✓</span>}
+                </button>
+
+                <button
+                  type="button"
+                  className={`cv-dropdown-item ${isCanvasMode ? 'cv-dropdown-item--active' : ''}`}
+                  onClick={() => {
+                    onAppModeChange?.('canvas_builder')
+                    onLayoutChange('canvas_livre')
+                    closeDropdowns()
+                  }}
+                >
+                  <div className="cv-dropdown-item__content">
+                    <div className="cv-dropdown-item__title">
+                      <span>🎨</span> <strong>Canvas Livre (Modelo 10)</strong>
+                    </div>
+                    <div className="cv-dropdown-item__desc">Monte a folha A4 adicionando e organizando blocos</div>
+                  </div>
+                  {isCanvasMode && <span className="cv-dropdown-item__check">✓</span>}
+                </button>
+              </div>
+            )}
           </div>
         </div>
-      )}
 
-      {/* Grupo 2: Modelos A4 (01 a 10) */}
-      <div className="cv-toolbar-group">
-        <span className="cv-toolbar-label">Modelo A4</span>
-        <div className="cv-btn-pill-group">
-          {LAYOUT_OPTIONS.map(l => (
+        {/* 2. Menu Modelo A4 (10 Modelos) */}
+        <div className="cv-toolbar-group">
+          <span className="cv-toolbar-label">Modelo A4:</span>
+          <div className={`cv-dropdown-wrapper ${openDropdown === 'layout' ? 'is-open' : ''}`}>
             <button
-              key={l.id}
-              className={`cv-btn-pill ${activeLayout === l.id ? 'cv-btn-pill--active' : ''}`}
-              onClick={() => {
-                onLayoutChange(l.id)
-                if (l.id === 'canvas_livre') {
-                  onAppModeChange?.('canvas_builder')
-                } else {
-                  onAppModeChange?.('templates')
-                }
-              }}
-              style={l.id === 'canvas_livre' && activeLayout === 'canvas_livre' ? { background: '#10b981', color: '#fff', fontWeight: 700 } : {}}
-              title={`${l.label} — ${l.description}`}
+              type="button"
+              className="cv-dropdown-trigger"
+              onClick={() => toggleDropdown('layout')}
+              title={`Modelo Atual: ${currentLayoutObj.label}`}
             >
-              <span>{l.icon}</span> {l.name}
+              <span className="cv-dropdown-trigger__icon">{currentLayoutObj.icon}</span>
+              <span className="cv-dropdown-trigger__text">{currentLayoutObj.name}</span>
+              <span className="cv-dropdown-trigger__chevron">▼</span>
             </button>
-          ))}
+
+            {openDropdown === 'layout' && (
+              <div className="cv-dropdown-menu" style={{ minWidth: '280px', maxHeight: '380px', overflowY: 'auto' }}>
+                {LAYOUT_OPTIONS.map(l => {
+                  const isSelected = activeLayout === l.id
+                  return (
+                    <button
+                      key={l.id}
+                      type="button"
+                      className={`cv-dropdown-item ${isSelected ? 'cv-dropdown-item--active' : ''}`}
+                      onClick={() => {
+                        onLayoutChange(l.id)
+                        if (l.id === 'canvas_livre') {
+                          onAppModeChange?.('canvas_builder')
+                        } else {
+                          onAppModeChange?.('templates')
+                        }
+                        closeDropdowns()
+                      }}
+                    >
+                      <div className="cv-dropdown-item__content">
+                        <div className="cv-dropdown-item__title">
+                          <span>{l.icon}</span> <strong>{l.name}</strong>
+                        </div>
+                        <div className="cv-dropdown-item__desc">{l.label}</div>
+                      </div>
+                      {isSelected && <span className="cv-dropdown-item__check">✓</span>}
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+          </div>
         </div>
+
+        {/* 3. Menu Tema Visual */}
+        <div className="cv-toolbar-group">
+          <span className="cv-toolbar-label">Tema:</span>
+          <div className={`cv-dropdown-wrapper ${openDropdown === 'theme' ? 'is-open' : ''}`}>
+            <button
+              type="button"
+              className="cv-dropdown-trigger"
+              onClick={() => toggleDropdown('theme')}
+              title={`Tema Visual: ${currentThemeObj.label}`}
+            >
+              <span className="cv-dropdown-trigger__icon">{currentThemeObj.icon}</span>
+              <span className="cv-dropdown-trigger__text">{currentThemeObj.label}</span>
+              <span className="cv-dropdown-trigger__chevron">▼</span>
+            </button>
+
+            {openDropdown === 'theme' && (
+              <div className="cv-dropdown-menu" style={{ minWidth: '260px' }}>
+                {THEMES.map(t => {
+                  const isSelected = activeTheme === t.id
+                  return (
+                    <button
+                      key={t.id}
+                      type="button"
+                      className={`cv-dropdown-item ${isSelected ? 'cv-dropdown-item--active' : ''}`}
+                      onClick={() => {
+                        onThemeChange(t.id)
+                        closeDropdowns()
+                      }}
+                    >
+                      <div className="cv-dropdown-item__content">
+                        <div className="cv-dropdown-item__title">
+                          <span>{t.icon}</span> <strong>{t.label}</strong>
+                        </div>
+                        <div className="cv-dropdown-item__desc">{t.desc}</div>
+                      </div>
+                      {isSelected && <span className="cv-dropdown-item__check">✓</span>}
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* 4. Menu Persona IA */}
+        <div className="cv-toolbar-group">
+          <span className="cv-toolbar-label">Persona IA:</span>
+          <div className={`cv-dropdown-wrapper ${openDropdown === 'persona' ? 'is-open' : ''}`}>
+            <button
+              type="button"
+              className="cv-dropdown-trigger"
+              onClick={() => toggleDropdown('persona')}
+              title={`Persona Ativa: ${currentPersonaObj.label}`}
+            >
+              <span className="cv-dropdown-trigger__icon">{currentPersonaObj.icon}</span>
+              <span className="cv-dropdown-trigger__text">{currentPersonaObj.label}</span>
+              <span className="cv-dropdown-trigger__chevron">▼</span>
+            </button>
+
+            {openDropdown === 'persona' && (
+              <div className="cv-dropdown-menu" style={{ minWidth: '270px' }}>
+                {PERSONAS.map(p => {
+                  const isSelected = activePersona === p.id
+                  return (
+                    <button
+                      key={p.id}
+                      type="button"
+                      className={`cv-dropdown-item ${isSelected ? 'cv-dropdown-item--active' : ''}`}
+                      onClick={() => {
+                        onPersonaChange(p.id)
+                        closeDropdowns()
+                      }}
+                    >
+                      <div className="cv-dropdown-item__content">
+                        <div className="cv-dropdown-item__title">
+                          <span>{p.icon}</span> <strong>{p.label}</strong>
+                        </div>
+                        <div className="cv-dropdown-item__desc">{p.desc}</div>
+                      </div>
+                      {isSelected && <span className="cv-dropdown-item__check">✓</span>}
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* 5. Menu Modo de Visualização (Currículo / Carta / Dossiê) - apenas em Templates */}
+        {!isCanvasMode && (
+          <div className="cv-toolbar-group">
+            <span className="cv-toolbar-label">Visualização:</span>
+            <div className={`cv-dropdown-wrapper ${openDropdown === 'viewmode' ? 'is-open' : ''}`}>
+              <button
+                type="button"
+                className="cv-dropdown-trigger"
+                onClick={() => toggleDropdown('viewmode')}
+                title={`Visualização: ${currentViewModeObj.label}`}
+              >
+                <span className="cv-dropdown-trigger__icon">{currentViewModeObj.icon}</span>
+                <span className="cv-dropdown-trigger__text">{currentViewModeObj.label}</span>
+                <span className="cv-dropdown-trigger__chevron">▼</span>
+              </button>
+
+              {openDropdown === 'viewmode' && (
+                <div className="cv-dropdown-menu" style={{ minWidth: '220px' }}>
+                  {VIEW_MODES.map(v => {
+                    const isSelected = activeViewMode === v.id
+                    return (
+                      <button
+                        key={v.id}
+                        type="button"
+                        className={`cv-dropdown-item ${isSelected ? 'cv-dropdown-item--active' : ''}`}
+                        onClick={() => {
+                          onViewModeChange(v.id)
+                          closeDropdowns()
+                        }}
+                      >
+                        <div className="cv-dropdown-item__title">
+                          <span>{v.icon}</span> <strong>{v.label}</strong>
+                        </div>
+                        {isSelected && <span className="cv-dropdown-item__check">✓</span>}
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* Grupo 3: Temas Visuais / Cores */}
-      <div className="cv-toolbar-group">
-        <span className="cv-toolbar-label">Tema Visual</span>
-        <div className="cv-btn-pill-group">
-          {THEMES.map(t => (
-            <button
-              key={t.id}
-              className={`cv-btn-pill ${activeTheme === t.id ? 'cv-btn-pill--active' : ''}`}
-              onClick={() => onThemeChange(t.id)}
-              title={`Aplicar tema visual ${t.label} no PDF`}
-            >
-              <span>{t.icon}</span> {t.label}
-            </button>
-          ))}
-        </div>
-      </div>
+      {/* LINHA 2: Ações Rápidas, Design & Estilo e Menu Exportar & PDF */}
+      <div className="cv-toolbar-row cv-toolbar-row--actions">
+        {/* Design & Estilo Modal (Acessível em ambos os modos: Templates e Canvas Livre) */}
+        {onOpenDesignModal && (
+          <button
+            type="button"
+            className="cv-btn-secondary"
+            onClick={onOpenDesignModal}
+            title="Personalizar fontes, escala tipográfica, paleta de cores e texturas de fundo IA"
+            style={{ borderColor: '#f59e0b', color: '#fcd34d', background: 'rgba(245, 158, 11, 0.12)', fontWeight: 700 }}
+          >
+            🎨 Design & Estilo
+          </button>
+        )}
 
-      {/* Grupo 4: Personas de IA */}
-      <div className="cv-toolbar-group">
-        <span className="cv-toolbar-label">Persona IA</span>
-        <div className="cv-btn-pill-group">
-          {PERSONAS.map(p => (
-            <button
-              key={p.id}
-              className={`cv-btn-pill ${activePersona === p.id ? 'cv-btn-pill--active' : ''}`}
-              onClick={() => onPersonaChange(p.id)}
-              title={`Ver versão com a persona ${p.label}`}
-            >
-              <span>{p.icon}</span> {p.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Grupo 5: Ações Rápidas & Downloads */}
-      <div className="cv-toolbar-group">
+        {/* Gerar / Adaptar Carta de Apresentação */}
         {onOpenCoverLetterModal && (
           <button
+            type="button"
             className="cv-btn-secondary"
             onClick={onOpenCoverLetterModal}
-            title="Gerar ou adaptar carta de apresentação sob medida para uma vaga com IA"
-            style={{ borderColor: '#6366f1', color: '#c7d2fe', background: 'rgba(99, 102, 241, 0.15)', fontWeight: 700 }}
+            title="Gerar ou adaptar carta de apresentação sob medida com IA"
+            style={{ borderColor: '#6366f1', color: '#c7d2fe', background: 'rgba(99, 102, 241, 0.15)', fontWeight: 600 }}
           >
             ✨ {hasCoverLetter ? 'Adaptar Carta' : 'Gerar Carta'}
           </button>
         )}
 
+        {/* Enquadramento de Foto */}
+        <button
+          type="button"
+          className="cv-btn-secondary"
+          onClick={onOpenPhotoModal}
+          title={hasPhoto ? "Alterar ou enquadrar foto do perfil" : "Incluir foto de perfil no currículo"}
+          style={hasPhoto ? { borderColor: '#10b981', color: '#34d399', background: 'rgba(16, 185, 129, 0.12)', fontWeight: 600 } : {}}
+        >
+          {hasPhoto ? '📷 Foto Ativa' : '📷 + Foto'}
+        </button>
+
+        {/* Licença Pro */}
         {onOpenStoreModal && (
           <button
+            type="button"
             className="cv-btn-secondary"
             onClick={onOpenStoreModal}
-            title={isPro ? `Licença Pro Ativa: ${tokenBalance.toLocaleString()} tokens` : 'Desbloquear IA Pro e Geração de Arquétipos'}
+            title={isPro ? `Licença Pro Ativa: ${tokenBalance.toLocaleString()} tokens` : 'Desbloquear IA Pro'}
             style={
               isPro
                 ? { borderColor: '#38bdf8', color: '#38bdf8', background: 'rgba(56, 189, 248, 0.12)', fontWeight: 600 }
@@ -226,27 +423,9 @@ export const CVToolbar: React.FC<CVToolbarProps> = ({
           </button>
         )}
 
-        {onOpenDesignModal && (
-          <button
-            className="cv-btn-secondary"
-            onClick={onOpenDesignModal}
-            title="Personalizar fontes, escala de tamanho, cores e layouts de fundo do currículo"
-            style={{ borderColor: '#f59e0b', color: '#fcd34d', background: 'rgba(245, 158, 11, 0.12)', fontWeight: 600 }}
-          >
-            🎨 Design & Estilo
-          </button>
-        )}
-
+        {/* Chave API para Agentes Externos */}
         <button
-          className="cv-btn-secondary"
-          onClick={onOpenPhotoModal}
-          title={hasPhoto ? "Alterar ou remover foto do perfil" : "Incluir foto de perfil no currículo"}
-          style={hasPhoto ? { borderColor: '#10b981', color: '#34d399', background: 'rgba(16, 185, 129, 0.1)' } : {}}
-        >
-          {hasPhoto ? '📷 Foto (Ativa)' : '📷 + Foto'}
-        </button>
-
-        <button
+          type="button"
           className="cv-btn-secondary"
           onClick={onOpenApiKeyModal}
           title="Gerenciar Chave de API para agentes externos"
@@ -255,52 +434,129 @@ export const CVToolbar: React.FC<CVToolbarProps> = ({
           🔑 {hasActiveKey ? 'Chave API' : 'API Key'}
         </button>
 
-        <button
-          className="cv-btn-secondary"
-          onClick={onDownloadYaml}
-          title="Baixar arquivo estruturado .yaml"
-        >
-          ⬇ .yaml
-        </button>
-
-        {onDownloadHtml && (
+        {/* Menu Unificado: Exportar & PDF */}
+        <div className={`cv-dropdown-wrapper ${openDropdown === 'exports' ? 'is-open' : ''}`} style={{ marginLeft: 'auto' }}>
           <button
-            className="cv-btn-secondary"
-            onClick={onDownloadHtml}
-            title="Baixar currículo em HTML Standalone offline (com seletores embutidos)"
+            type="button"
+            className="cv-dropdown-trigger"
+            onClick={() => toggleDropdown('exports')}
+            title="Exportar em PDF, YAML, HTML Standalone ou Pacote ZIP"
+            style={{
+              background: '#047857',
+              borderColor: '#10b981',
+              color: '#ffffff',
+              fontWeight: 700,
+              padding: '0.42rem 0.85rem',
+              boxShadow: '0 4px 14px rgba(16, 185, 129, 0.25)',
+            }}
           >
-            🌐 .html
+            <span className="cv-dropdown-trigger__icon">📥</span>
+            <span className="cv-dropdown-trigger__text">Exportar & PDF</span>
+            <span className="cv-dropdown-trigger__chevron" style={{ color: '#ffffff' }}>▼</span>
           </button>
-        )}
 
-        {hasCoverLetter && onDownloadCoverLetterHtml && (
-          <button
-            className="cv-btn-secondary"
-            onClick={onDownloadCoverLetterHtml}
-            title="Baixar carta de apresentação em HTML Standalone individual"
-          >
-            ✉️ Carta .html
-          </button>
-        )}
+          {openDropdown === 'exports' && (
+            <div className="cv-dropdown-menu cv-dropdown-menu--right" style={{ minWidth: '270px' }}>
+              {/* Opção Principal: Imprimir / Salvar PDF */}
+              <button
+                type="button"
+                className="cv-dropdown-item"
+                onClick={() => {
+                  closeDropdowns()
+                  onPrintPdf()
+                }}
+                style={{ background: 'rgba(16, 185, 129, 0.18)', color: '#34d399', fontWeight: 700 }}
+              >
+                <div className="cv-dropdown-item__content">
+                  <div className="cv-dropdown-item__title">
+                    <span>🖨️</span> <strong>Imprimir / Salvar PDF</strong>
+                  </div>
+                  <div className="cv-dropdown-item__desc" style={{ color: '#a7f3d0' }}>
+                    Exportação nativa A4 (1 ou 2 páginas sem corte)
+                  </div>
+                </div>
+              </button>
 
-        {onDownloadZip && (
-          <button
-            className="cv-btn-secondary"
-            onClick={onDownloadZip}
-            title="Baixar pacote completo em ZIP (Currículo, Carta de Apresentação, Dossiê e YAML)"
-          >
-            📦 .zip
-          </button>
-        )}
+              <div className="cv-dropdown-divider" />
 
-        <button
-          className="cv-btn-primary"
-          onClick={onPrintPdf}
-          title="Exportar para PDF formatado em A4 (1 página ou 2 páginas conforme o modo ativo)"
-        >
-          🖨️ Imprimir / Salvar PDF
-        </button>
+              {/* Baixar .yaml */}
+              <button
+                type="button"
+                className="cv-dropdown-item"
+                onClick={() => {
+                  closeDropdowns()
+                  onDownloadYaml()
+                }}
+              >
+                <div className="cv-dropdown-item__content">
+                  <div className="cv-dropdown-item__title">
+                    <span>⬇️</span> <strong>Baixar .yaml</strong>
+                  </div>
+                  <div className="cv-dropdown-item__desc">Arquivo fonte estruturado pronto para IA</div>
+                </div>
+              </button>
+
+              {/* Baixar .html Standalone */}
+              {onDownloadHtml && (
+                <button
+                  type="button"
+                  className="cv-dropdown-item"
+                  onClick={() => {
+                    closeDropdowns()
+                    onDownloadHtml()
+                  }}
+                >
+                  <div className="cv-dropdown-item__content">
+                    <div className="cv-dropdown-item__title">
+                      <span>🌐</span> <strong>Baixar .html Standalone</strong>
+                    </div>
+                    <div className="cv-dropdown-item__desc">Visualizador offline com seletores embutidos</div>
+                  </div>
+                </button>
+              )}
+
+              {/* Baixar Carta .html se existir */}
+              {hasCoverLetter && onDownloadCoverLetterHtml && (
+                <button
+                  type="button"
+                  className="cv-dropdown-item"
+                  onClick={() => {
+                    closeDropdowns()
+                    onDownloadCoverLetterHtml()
+                  }}
+                >
+                  <div className="cv-dropdown-item__content">
+                    <div className="cv-dropdown-item__title">
+                      <span>✉️</span> <strong>Baixar Carta .html</strong>
+                    </div>
+                    <div className="cv-dropdown-item__desc">Carta de apresentação standalone individual</div>
+                  </div>
+                </button>
+              )}
+
+              {/* Baixar Pacote Completo .zip */}
+              {onDownloadZip && (
+                <button
+                  type="button"
+                  className="cv-dropdown-item"
+                  onClick={() => {
+                    closeDropdowns()
+                    onDownloadZip()
+                  }}
+                >
+                  <div className="cv-dropdown-item__content">
+                    <div className="cv-dropdown-item__title">
+                      <span>📦</span> <strong>Baixar Pacote .zip</strong>
+                    </div>
+                    <div className="cv-dropdown-item__desc">Todos os arquivos (5 YAMLs, HTML e Dossiê)</div>
+                  </div>
+                </button>
+              )}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )
 }
+
