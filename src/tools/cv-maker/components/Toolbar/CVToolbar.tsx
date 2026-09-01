@@ -93,18 +93,26 @@ export const CVToolbar: React.FC<CVToolbarProps> = ({
         <div className="cv-btn-pill-group">
           <button
             type="button"
-            className={`cv-btn-pill ${appMode === 'templates' ? 'cv-btn-pill--active' : ''}`}
-            onClick={() => onAppModeChange?.('templates')}
-            style={appMode === 'templates' ? { background: '#0284c7', color: '#fff', fontWeight: 700 } : {}}
+            className={`cv-btn-pill ${appMode === 'templates' && activeLayout !== 'canvas_livre' ? 'cv-btn-pill--active' : ''}`}
+            onClick={() => {
+              onAppModeChange?.('templates')
+              if (activeLayout === 'canvas_livre') {
+                onLayoutChange('dynamic_math')
+              }
+            }}
+            style={appMode === 'templates' && activeLayout !== 'canvas_livre' ? { background: '#0284c7', color: '#fff', fontWeight: 700 } : {}}
             title="Modelos A4 Prontos (01 a 09) com diagramação matemática e balanceamento automático"
           >
             <span>📐</span> Modelos A4 Prontos
           </button>
           <button
             type="button"
-            className={`cv-btn-pill ${appMode === 'canvas_builder' ? 'cv-btn-pill--active' : ''}`}
-            onClick={() => onAppModeChange?.('canvas_builder')}
-            style={appMode === 'canvas_builder' ? { background: '#10b981', color: '#fff', fontWeight: 700 } : {}}
+            className={`cv-btn-pill ${appMode === 'canvas_builder' || activeLayout === 'canvas_livre' ? 'cv-btn-pill--active' : ''}`}
+            onClick={() => {
+              onAppModeChange?.('canvas_builder')
+              onLayoutChange('canvas_livre')
+            }}
+            style={appMode === 'canvas_builder' || activeLayout === 'canvas_livre' ? { background: '#10b981', color: '#fff', fontWeight: 700 } : {}}
             title="Canvas Livre: adicione blocos na folha A4 em branco e personalize fontes, cores e tamanhos"
           >
             <span>🎨</span> Canvas Livre
@@ -113,7 +121,7 @@ export const CVToolbar: React.FC<CVToolbarProps> = ({
       </div>
 
       {/* Grupo 1: Modo de Visualização (Currículo / Cover Letter / Dossiê) */}
-      {appMode === 'templates' && (
+      {appMode === 'templates' && activeLayout !== 'canvas_livre' && (
         <div className="cv-toolbar-group">
           <span className="cv-toolbar-label">Visualização</span>
           <div className="cv-btn-pill-group">
@@ -131,24 +139,30 @@ export const CVToolbar: React.FC<CVToolbarProps> = ({
         </div>
       )}
 
-      {/* Grupo 2: Modelos A4 (01 a 09) */}
-      {appMode === 'templates' && (
-        <div className="cv-toolbar-group">
-          <span className="cv-toolbar-label">Modelo A4</span>
-          <div className="cv-btn-pill-group">
-            {LAYOUT_OPTIONS.map(l => (
-              <button
-                key={l.id}
-                className={`cv-btn-pill ${activeLayout === l.id ? 'cv-btn-pill--active' : ''}`}
-                onClick={() => onLayoutChange(l.id)}
-                title={`${l.label} — ${l.description}`}
-              >
-                <span>{l.icon}</span> {l.name}
-              </button>
-            ))}
-          </div>
+      {/* Grupo 2: Modelos A4 (01 a 10) */}
+      <div className="cv-toolbar-group">
+        <span className="cv-toolbar-label">Modelo A4</span>
+        <div className="cv-btn-pill-group">
+          {LAYOUT_OPTIONS.map(l => (
+            <button
+              key={l.id}
+              className={`cv-btn-pill ${activeLayout === l.id ? 'cv-btn-pill--active' : ''}`}
+              onClick={() => {
+                onLayoutChange(l.id)
+                if (l.id === 'canvas_livre') {
+                  onAppModeChange?.('canvas_builder')
+                } else {
+                  onAppModeChange?.('templates')
+                }
+              }}
+              style={l.id === 'canvas_livre' && activeLayout === 'canvas_livre' ? { background: '#10b981', color: '#fff', fontWeight: 700 } : {}}
+              title={`${l.label} — ${l.description}`}
+            >
+              <span>{l.icon}</span> {l.name}
+            </button>
+          ))}
         </div>
-      )}
+      </div>
 
       {/* Grupo 3: Temas Visuais / Cores */}
       <div className="cv-toolbar-group">

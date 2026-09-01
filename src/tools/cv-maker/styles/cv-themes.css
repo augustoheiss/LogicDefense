@@ -111,8 +111,9 @@
   color: var(--cv-color-text, var(--theme-default-text, #0f172a)) !important;
 }
 
-/* Fundo da Página A4 e Card */
-.cv-root .cv-page-a4 {
+/* Fundo da Página A4, Card e Canvas Livre */
+.cv-root .cv-page-a4,
+.cv-root .cv-canvas-sheet {
   background-color: var(--cv-color-bg, var(--theme-default-bg, #ffffff)) !important;
   background-image: var(--cv-bg-image, none) !important;
   background-size: cover !important;
@@ -121,10 +122,7 @@
 }
 
 .cv-root .cv-card {
-  background-color: var(--cv-color-bg, var(--theme-default-bg, #ffffff)) !important;
-  background-image: var(--cv-bg-image, none) !important;
-  background-size: cover !important;
-  background-position: center !important;
+  background-color: transparent !important;
   color: var(--cv-color-text, var(--theme-default-text, #0f172a)) !important;
 }
 
@@ -240,8 +238,7 @@
 .cv-root .cv-duo-left,
 .cv-root .cv-editorial-left,
 .cv-root .cv-sidebar-col,
-.cv-root aside.cv-navy-sidebar,
-.cv-root .cv-sidebar-stack {
+.cv-root aside.cv-navy-sidebar {
   background-color: var(--cv-color-sidebar, #0f172a) !important;
 }
 

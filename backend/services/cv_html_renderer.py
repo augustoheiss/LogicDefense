@@ -822,9 +822,104 @@ def _render_cv_layout_html(data: dict, layout: str, t: dict, view_mode: str = "c
         """
 
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    # 0. MODELO A4 10: Canvas Livre (Block Canvas A4 Builder)
+    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    if layout == "canvas_livre":
+        cv_body = f"""
+        <div class="cv-canvas-workspace">
+          <aside class="cv-canvas-palette cv-no-print" aria-label="Paleta de Blocos do YAML">
+            <div class="cv-canvas-palette__header">
+              <h3 class="cv-canvas-palette__title"><span>📦</span> Campos do YAML</h3>
+              <span style="font-size: 0.72rem; color: #10b981; font-weight: 700; background: rgba(16,185,129,0.1); padding: 0.15rem 0.45rem; border-radius: 4px;">
+                Canvas A4
+              </span>
+            </div>
+
+            <div class="cv-canvas-palette__body">
+              <div class="cv-canvas-palette__presets">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.2rem;">
+                  <span style="font-size: 0.72rem; font-weight: 700; color: #94a3b8; text-transform: uppercase;">Templates Rápidos</span>
+                  <button type="button" onclick="clearCanvasBlocks()" style="background: transparent; border: none; color: #f87171; font-size: 0.7rem; cursor: pointer; font-weight: 600;">🗑️ Limpar</button>
+                </div>
+                <button type="button" class="cv-canvas-preset-btn" onclick="applyCanvasPreset('executive_balanced')"><span>👔 Executivo Balanceado</span><span style="opacity: 0.6; font-size: 0.7rem;">9 blocos</span></button>
+                <button type="button" class="cv-canvas-preset-btn" onclick="applyCanvasPreset('two_column')"><span>📑 Duas Colunas</span><span style="opacity: 0.6; font-size: 0.7rem;">9 blocos</span></button>
+                <button type="button" class="cv-canvas-preset-btn" onclick="applyCanvasPreset('tech_hero')"><span>🚀 Hero Tech & Projetos</span><span style="opacity: 0.6; font-size: 0.7rem;">9 blocos</span></button>
+              </div>
+
+              <div class="cv-canvas-palette__section">
+                <div class="cv-canvas-palette__sec-title">👤 Identidade & Contato</div>
+                <button type="button" class="cv-canvas-item-btn" onclick="addCanvasBlock('header')"><span>👤 Nome & Título</span><span class="item-add-plus">+</span></button>
+                <button type="button" class="cv-canvas-item-btn" onclick="addCanvasBlock('photo')"><span>📷 Foto / Avatar</span><span class="item-add-plus">+</span></button>
+                <button type="button" class="cv-canvas-item-btn" onclick="addCanvasBlock('contacts')"><span>📞 Contatos & Links</span><span class="item-add-plus">+</span></button>
+              </div>
+
+              <div class="cv-canvas-palette__section">
+                <div class="cv-canvas-palette__sec-title">📝 Trajetória & Conteúdo</div>
+                <button type="button" class="cv-canvas-item-btn" onclick="addCanvasBlock('summary')"><span>📄 Sobre Mim / Resumo</span><span class="item-add-plus">+</span></button>
+                <button type="button" class="cv-canvas-item-btn" onclick="addCanvasBlock('work')"><span>💼 Experiência Profissional</span><span class="item-add-plus">+</span></button>
+                <button type="button" class="cv-canvas-item-btn" onclick="addCanvasBlock('projects')"><span>🚀 Projetos em Destaque</span><span class="item-add-plus">+</span></button>
+              </div>
+
+              <div class="cv-canvas-palette__section">
+                <div class="cv-canvas-palette__sec-title">⚡ Competências & Níveis</div>
+                <button type="button" class="cv-canvas-item-btn" onclick="addCanvasBlock('skills_tags')"><span>⚡ Competências (Tags)</span><span class="item-add-plus">+</span></button>
+                <button type="button" class="cv-canvas-item-btn" onclick="addCanvasBlock('skills_bars')"><span>📊 Barras de Nível</span><span class="item-add-plus">+</span></button>
+              </div>
+
+              <div class="cv-canvas-palette__section">
+                <div class="cv-canvas-palette__sec-title">🎓 Formação & Certificações</div>
+                <button type="button" class="cv-canvas-item-btn" onclick="addCanvasBlock('education')"><span>🎓 Formação Acadêmica</span><span class="item-add-plus">+</span></button>
+                <button type="button" class="cv-canvas-item-btn" onclick="addCanvasBlock('certificates')"><span>📜 Certificações</span><span class="item-add-plus">+</span></button>
+              </div>
+
+              <div class="cv-canvas-palette__section">
+                <div class="cv-canvas-palette__sec-title">🌐 Idiomas & Interesses</div>
+                <button type="button" class="cv-canvas-item-btn" onclick="addCanvasBlock('languages')"><span>🌐 Idiomas</span><span class="item-add-plus">+</span></button>
+                <button type="button" class="cv-canvas-item-btn" onclick="addCanvasBlock('interests')"><span>🎯 Interesses</span><span class="item-add-plus">+</span></button>
+              </div>
+            </div>
+          </aside>
+
+          <main class="cv-canvas-center-stage">
+            <div class="cv-canvas-sheet-info-bar cv-no-print">
+              <span>📄 <strong>Folha A4 Livre</strong> (210 × 297 mm) | 12 Colunas</span>
+              <span style="font-size: 0.74rem; color: #34d399; font-weight: 700;">Pronto para Impressão A4</span>
+            </div>
+            <div class="cv-canvas-sheet-wrapper">
+              <div class="cv-canvas-sheet">
+                <div class="cv-canvas-block col-span-9" style="padding: 0.65rem;">
+                  <h1 class="name" style="font-size: 1.85rem; font-weight: 800; margin: 0 0 0.25rem 0;">{html.escape(basics.get("name", ""))}</h1>
+                  <div class="label" style="font-size: 0.95rem; font-weight: 700; opacity: 0.9; margin-bottom: 0.35rem;">{html.escape(basics.get("label", ""))}</div>
+                </div>
+                <div class="cv-canvas-block col-span-3" style="display: flex; justify-content: flex-end; align-items: center; padding: 0.65rem;">
+                  {avatar_html}
+                </div>
+                <div class="cv-canvas-block col-span-12" style="padding: 0.35rem 0.65rem; border-top: 1px solid rgba(125,125,125,0.2); border-bottom: 1px solid rgba(125,125,125,0.2);">
+                  <div class="contacts" style="display: flex; flex-wrap: wrap; gap: 0.85rem; font-size: 0.82rem;">
+                    {f'<span>✉ <a href="mailto:{html.escape(email_val)}" class="cv-link">{html.escape(email_val)}</a></span>' if email_val else ''}
+                    {f'<span>📞 <a href="tel:{clean_phone}" class="cv-link">{html.escape(phone_val)}</a></span>' if phone_val else ''}
+                    {f'<span>📍 {html.escape(loc_str)}</span>' if loc_str else ''}
+                    {f'<span>🌐 <a href="{html.escape(url_val)}" target="_blank" class="cv-link">{html.escape(url_val)}</a></span>' if url_val else ''}
+                    {f'<span>{profiles_html}</span>' if profiles_html else ''}
+                  </div>
+                </div>
+                {f'<div class="cv-canvas-block col-span-12" style="padding: 0.65rem;"><div class="summary">{html.escape(basics.get("summary", "")).replace(chr(10), "<br>")}</div></div>' if basics.get("summary") else ''}
+                {f'<div class="cv-canvas-block col-span-12" style="padding: 0.65rem;"><h2 class="section-title">{t["work"]}</h2>{work_items_html}</div>' if work else ''}
+                {f'<div class="cv-canvas-block col-span-6" style="padding: 0.65rem;"><h2 class="section-title">{t["skills"]}</h2><div class="skills-grid cv-math-grid {get_grid_class(len(skills))}">{skills_items_html}</div></div>' if skills else ''}
+                {f'<div class="cv-canvas-block col-span-6" style="padding: 0.65rem;"><h2 class="section-title">{t["education"]}</h2><div class="education-grid cv-math-grid {get_grid_class(len(education))}">{education_items_html}</div></div>' if education else ''}
+                {f'<div class="cv-canvas-block col-span-12" style="padding: 0.65rem;"><h2 class="section-title">{t["projects"]}</h2><div class="projects-grid cv-math-grid {get_grid_class(len(projects))}">{projects_items_html}</div></div>' if projects else ''}
+                {f'<div class="cv-canvas-block col-span-6" style="padding: 0.65rem;"><h2 class="section-title">{t["languages"]}</h2><div class="languages-grid cv-math-grid {get_grid_class(len(languages))}">{lang_cards_html}</div></div>' if languages else ''}
+                {f'<div class="cv-canvas-block col-span-6" style="padding: 0.65rem;"><h2 class="section-title">{t["certificates"]}</h2><div class="certs-grid cv-math-grid {get_grid_class(len(certificates))}">{certificates_items_html}</div></div>' if certificates else ''}
+              </div>
+            </div>
+          </main>
+        </div>
+        """
+
+    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     # 1. MODELO A4 09: Dynamic Grid Math (Augusto Heiss / Mathematical Balance)
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    if layout == "dynamic_math":
+    elif layout == "dynamic_math":
         cv_body = f"""
         <div class="layout-dynamic_math">
             <header class="cv-math-header">
@@ -1791,7 +1886,7 @@ def render_multi_cv_dashboard_html(
     .theme-creative {{
       font-family: 'Poppins', 'Segoe UI', sans-serif;
       color: #1e293b;
-      background: #ffffff;
+      background-color: #ffffff;
     }}
     .theme-creative .header {{ border-bottom: 3px solid #2563eb; }}
     .theme-creative .name {{ color: #1e3a8a; font-weight: 800; }}
@@ -1835,7 +1930,7 @@ def render_multi_cv_dashboard_html(
     .theme-minimalist {{
       font-family: 'Inter', system-ui, sans-serif;
       color: #0f172a;
-      background: #ffffff;
+      background-color: #ffffff;
     }}
     .theme-minimalist .header {{ border-bottom: 1px solid #e2e8f0; }}
     .theme-minimalist .name {{ color: #0f172a; font-weight: 800; letter-spacing: -0.04em; }}
@@ -1864,7 +1959,7 @@ def render_multi_cv_dashboard_html(
     .theme-white {{
       font-family: 'Inter', system-ui, sans-serif;
       color: #000000;
-      background: #ffffff;
+      background-color: #ffffff;
     }}
     .theme-white .header {{ border-bottom: 1.5px solid #000000; }}
     .theme-white .name {{ color: #000000; font-weight: 800; }}
@@ -1893,7 +1988,7 @@ def render_multi_cv_dashboard_html(
     .theme-terminal {{
       font-family: 'Courier Prime', monospace;
       color: #22c55e;
-      background: #020617;
+      background-color: #020617;
     }}
     .theme-terminal .header {{ border-bottom: 2px solid #22c55e; }}
     .theme-terminal .name {{ color: #4ade80; font-weight: 700; }}
@@ -4495,27 +4590,45 @@ def render_multi_cv_dashboard_html(
 
     function applyDesignToViewport() {{
       const vp = document.getElementById('cv-viewport');
-      if (!vp) return;
-      vp.style.setProperty('--cv-font-heading', '"' + currentDesign.fontHeading + '", sans-serif');
-      vp.style.setProperty('--cv-font-body', '"' + currentDesign.fontBody + '", sans-serif');
-      vp.style.setProperty('--cv-font-scale', currentDesign.fontScale);
-      vp.style.setProperty('--cv-color-primary', currentDesign.colorPrimary);
-      vp.style.setProperty('--cv-color-secondary', currentDesign.colorSecondary);
-      vp.style.setProperty('--cv-color-accent', currentDesign.colorAccent);
-      vp.style.setProperty('--cv-color-surface', currentDesign.colorSurface);
-      vp.style.setProperty('--cv-color-bg', currentDesign.colorBg);
-      vp.style.setProperty('--cv-color-text', currentDesign.colorText);
-      vp.style.setProperty('--cv-color-sidebar', currentDesign.colorSidebar || '#0f172a');
-      vp.style.setProperty('--cv-color-workspace-bg', currentDesign.colorWorkspaceBg || '#0b0f19');
+      const bgVal = currentDesign.backgroundPattern && currentDesign.backgroundPattern !== 'none' ? 'url("' + currentDesign.backgroundPattern + '")' : 'none';
+      
+      document.documentElement.style.setProperty('--cv-bg-image', bgVal);
+      if (vp) {{
+        vp.style.setProperty('--cv-font-heading', '"' + currentDesign.fontHeading + '", sans-serif');
+        vp.style.setProperty('--cv-font-body', '"' + currentDesign.fontBody + '", sans-serif');
+        vp.style.setProperty('--cv-font-scale', currentDesign.fontScale);
+        vp.style.setProperty('--cv-color-primary', currentDesign.colorPrimary);
+        vp.style.setProperty('--cv-color-secondary', currentDesign.colorSecondary);
+        vp.style.setProperty('--cv-color-accent', currentDesign.colorAccent);
+        vp.style.setProperty('--cv-color-surface', currentDesign.colorSurface);
+        vp.style.setProperty('--cv-color-bg', currentDesign.colorBg);
+        vp.style.setProperty('--cv-color-text', currentDesign.colorText);
+        vp.style.setProperty('--cv-color-sidebar', currentDesign.colorSidebar || '#0f172a');
+        vp.style.setProperty('--cv-color-workspace-bg', currentDesign.colorWorkspaceBg || '#0b0f19');
+        vp.style.setProperty('--cv-bg-image', bgVal);
+        vp.style.backgroundImage = bgVal;
+        vp.style.backgroundSize = 'cover';
+        vp.style.backgroundPosition = 'center';
+      }}
       document.body.style.background = currentDesign.colorWorkspaceBg || '#0b0f19';
-      vp.style.setProperty('--cv-bg-image', currentDesign.backgroundPattern && currentDesign.backgroundPattern !== 'none' ? 'url("' + currentDesign.backgroundPattern + '")' : 'none');
+      
+      const sheets = document.querySelectorAll('.cv-canvas-sheet');
+      sheets.forEach(s => {{
+        s.style.setProperty('--cv-bg-image', bgVal);
+        s.style.backgroundImage = bgVal;
+        s.style.backgroundSize = 'cover';
+        s.style.backgroundPosition = 'center';
+      }});
     }}
 
     // Auto-restore saved preferences & setup listeners
     (function() {{
+      const fileLayout = '{valid_layout}';
+      const fileBg = '{resolved_bg}';
+
       const savedTheme = localStorage.getItem('cv_standalone_theme') || '{valid_theme}';
       const savedPersona = localStorage.getItem('cv_active_persona') || '{active_persona}';
-      const savedLayout = localStorage.getItem('cv_standalone_layout') || '{valid_layout}';
+      const savedLayout = (fileLayout && fileLayout !== 'dynamic_math') ? fileLayout : (localStorage.getItem('cv_standalone_layout') || fileLayout || 'dynamic_math');
       const savedViewMode = localStorage.getItem('cv_standalone_viewmode') || '{view_mode}';
       const savedPhoto = localStorage.getItem('cv_user_photo');
       const savedPosX = localStorage.getItem('cv_user_photo_pos_x');
@@ -4526,11 +4639,16 @@ def render_multi_cv_dashboard_html(
       if (savedDesign) {{
         try {{
           currentDesign = Object.assign(currentDesign, JSON.parse(savedDesign));
+          if (fileBg && fileBg !== 'none') {{
+            currentDesign.backgroundPattern = fileBg;
+          }}
           const slider = document.getElementById('font-scale-slider');
           if (slider) slider.value = currentDesign.fontScale;
           const lbl = document.getElementById('font-scale-val');
           if (lbl) lbl.innerText = Number(currentDesign.fontScale).toFixed(2) + 'x';
         }} catch(e) {{}}
+      }} else if (fileBg && fileBg !== 'none') {{
+        currentDesign.backgroundPattern = fileBg;
       }}
       applyDesignToViewport();
 

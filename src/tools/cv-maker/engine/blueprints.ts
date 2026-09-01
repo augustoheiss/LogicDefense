@@ -232,6 +232,29 @@ export const LAYOUT_BLUEPRINTS: Record<LayoutVariant, LayoutBlueprint> = {
     ],
     hasHeroBanner: false,
     customClass: 'layout-dynamic_math'
+  },
+  canvas_livre: {
+    id: 'canvas_livre',
+    name: 'Modelo A4 10 - Block Canvas A4 Builder (Modo Livre)',
+    label: '🎨 Modelo A4 10 (Modo Livre)',
+    icon: '🎨',
+    description: 'Editor modular visual livre em grid de 12 colunas, reordenação de blocos, foto com 8 molduras geométricas e texturas IA.',
+    gridTemplate: 'repeat(12, 1fr)',
+    sidebarPosition: 'none',
+    mainZone: [
+      'header',
+      'photo',
+      'contacts',
+      'summary',
+      'work',
+      'projects',
+      'skills_tags',
+      'education',
+      'certificates',
+      'languages',
+      'interests'
+    ],
+    customClass: 'layout-canvas_livre'
   }
 }
 
