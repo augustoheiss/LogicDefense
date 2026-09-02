@@ -197,6 +197,11 @@ function getEmbeddedCss(): string {
         page-break-after: always !important;
         break-after: page !important;
       }
+      .cv-page-a4:last-of-type,
+      .cv-page-a4:last-child {
+        page-break-after: auto !important;
+        break-after: auto !important;
+      }
       .cv-card {
         padding: 0 !important;
       }
@@ -500,8 +505,8 @@ export function renderCVToStandaloneHtml(
         <option value="terminal" ${theme === 'terminal' ? 'selected' : ''}>>_ Terminal</option>
       </select>
 
-      <button onclick="window.print()" class="cv-toolbar-btn cv-toolbar-btn--primary">
-        <span>🖨️</span> Imprimir PDF
+      <button onclick="printDocument()" class="cv-toolbar-btn cv-toolbar-btn--primary">
+        <span>🖨️</span> Imprimir PDF (A4)
       </button>
 
       ${safeYaml ? `<button onclick="downloadCurrentYaml()" class="cv-toolbar-btn cv-toolbar-btn--secondary"><span>📥</span> YAML</button>` : ''}
@@ -687,6 +692,17 @@ export function renderCVToStandaloneHtml(
       if (bodyEl) {
         bodyEl.className = 'theme-' + themeName;
       }
+    }
+
+    async function printDocument() {
+      if (document.fonts && document.fonts.ready) {
+        try {
+          await document.fonts.ready;
+        } catch (e) {
+          console.warn('Font loading check error:', e);
+        }
+      }
+      window.print();
     }
 
     function downloadCurrentYaml() {

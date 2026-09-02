@@ -370,12 +370,19 @@ export const CVMakerApp: React.FC = () => {
   }
 
   // Print PDF
-  const handlePrintPdf = () => {
+  const handlePrintPdf = async () => {
     if (cvData?.basics?.name) {
       const name = cvData.basics.name.trim()
       const label = cvData.basics.label ? ` - ${cvData.basics.label.trim()}` : ''
       const modeSuffix = activeViewMode === 'cover_letter' ? ' - Carta de Apresentação' : activeViewMode === 'both' ? ' - Dossiê Completo' : ''
       document.title = `${name}${label}${modeSuffix}`
+    }
+    if (document.fonts && document.fonts.ready) {
+      try {
+        await document.fonts.ready
+      } catch (e) {
+        console.warn('Font loading check error:', e)
+      }
     }
     window.print()
   }

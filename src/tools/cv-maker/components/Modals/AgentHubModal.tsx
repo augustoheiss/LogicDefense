@@ -386,12 +386,12 @@ Analise os 5 YAMLs criados no Passo 2 e realize a Síntese Magna Oficial (Best-o
 - Estruture a 6ª versão oficial como "official_master".
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-PASSO 4: (COMPILAÇÃO DO SUPER DASHBOARD HTML & PACOTE ZIP)
+PASSO 4: (COMPILAÇÃO DE PACOTE ZIP & VALIDAÇÃO VIA API)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Envie os YAMLs gerados para o endpoint de compilação:
 - Endpoint: POST https://ocorrencias-pdf-writer.onrender.com/api/v1/cv/compile
 - Header: Content-Type: application/json
-- Header Opcional (se tiver chave): X-API-Key: ${currentKeyDisplay}
+- Header Opcional (se tiver chave): Authorization: Bearer ${currentKeyDisplay}
 - Body:
   {
     "official_master": "basics:\\n  name: ...",
@@ -402,10 +402,9 @@ Envie os YAMLs gerados para o endpoint de compilação:
     "alien": "basics:\\n  name: ...",
     "default_layout": "dynamic_math",
     "default_theme": "executive",
-    "texture": "bg-grid-tech",
-    "format": "html"
+    "format": "zip"
   }
-- Salve o arquivo HTML retornado (ou o ZIP com os 6 YAMLs e PDFs) e entregue ao usuário!`
+- Salve o arquivo ZIP retornado (com os 6 YAMLs validados) ou importe o YAML diretamente no CV Maker Web para compilação visual e PDF instantâneo!`
 
   const openApiSpecJson = JSON.stringify(
     {
@@ -1055,17 +1054,15 @@ Envie os YAMLs gerados para o endpoint de compilação:
                 </p>
                 <ul style={{ margin: '0.4rem 0 0 1.2rem', padding: 0, lineHeight: 1.6 }}>
                   <li>
-                    <strong>POST /api/v1/cv/compile</strong>: Compila as 6 versões (5 arquétipos + 6ª Master) no Super Dashboard
-                    HTML / ZIP com Design & Estilo, enquadramento de fotos, 5 temas, 10 modelos A4 (incluindo Canvas Livre) e 7
-                    texturas IA.
+                    <strong>POST /api/v1/cv/compile</strong>: Valida e empacota as 6 versões (5 arquétipos + 6ª Master) em arquivo ZIP oficial,
+                    pronto para importação no CV Maker Web e exportação em alta fidelidade.
                   </li>
                   <li>
-                    <strong>POST /api/v1/cv/synthesize</strong>: Nível 2 — Síntese Master Oficial automática via Gemini Pro ou
-                    BYOK (<code>X-Gemini-API-Key</code>).
+                    <strong>POST /api/v1/cv/synthesize</strong>: Nível 2 — Síntese Master Oficial automática via IA do Agente ou
+                    BYOK opcional (<code>X-Gemini-API-Key</code>).
                   </li>
                   <li>
-                    <strong>POST /api/v1/cv/render</strong>: Converte qualquer YAML único em HTML puro no modelo A4 desejado e
-                    textura opcional.
+                    <strong>POST /api/v1/cv/render</strong>: Valida e formata esquemas YAML únicos nos modelos de dados A4 (formatos YAML/JSON/ZIP).
                   </li>
                   <li>
                     <strong>GET /api/v1/cv/layouts</strong>: Retorna o catálogo dos 10 layouts declarativos A4 e suas especificações de
@@ -1139,7 +1136,7 @@ Envie os YAMLs gerados para o endpoint de compilação:
                   >
 {`curl -X POST "https://ocorrencias-pdf-writer.onrender.com/api/v1/cv/compile" \\
   -H "Content-Type: application/json" \\
-  -H "X-API-Key: ${currentKeyDisplay}" \\
+  -H "Authorization: Bearer ${currentKeyDisplay}" \\
   -d '{
     "official_master": "basics:\\n  name: Alexandre Silva...",
     "professional": "basics:\\n  name: Alexandre Silva...",
@@ -1148,15 +1145,15 @@ Envie os YAMLs gerados para o endpoint de compilação:
     "didactic": "basics:\\n  name: Alexandre Silva...",
     "alien": "basics:\\n  name: Alexandre Silva...",
     "default_layout": "dynamic_math",
-    "texture": "bg-grid-tech"
+    "format": "zip"
   }' \\
-  --output "dashboard_curriculos.html"`}
+  --output "pacote_curriculos.zip"`}
                   </pre>
                 </div>
 
                 <div>
                   <span style={{ fontSize: '0.78rem', color: '#94a3b8' }}>
-                    <strong>B. Renderizar 1 YAML em Modelo A4 Específico (Python):</strong>
+                    <strong>B. Validar / Formatar 1 YAML via API (Python):</strong>
                   </span>
                   <pre
                     style={{
@@ -1174,15 +1171,15 @@ Envie os YAMLs gerados para o endpoint de compilação:
 
 res = requests.post(
     "https://ocorrencias-pdf-writer.onrender.com/api/v1/cv/render",
-    headers={"X-API-Key": "${currentKeyDisplay}"},
+    headers={"Authorization": "Bearer ${currentKeyDisplay}"},
     json={
         "yaml_content": open("cv.yaml").read(), 
         "theme": "executive",
         "layout": "corporate_timeline",
-        "view_mode": "cv"
+        "format": "yaml"
     }
 )
-with open("meu_curriculo_navy.html", "w", encoding="utf-8") as f:
+with open("meu_curriculo_validado.yaml", "w", encoding="utf-8") as f:
     f.write(res.text)`}
                   </pre>
                 </div>
