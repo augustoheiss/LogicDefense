@@ -390,24 +390,8 @@ export const CVMakerApp: React.FC = () => {
         </div>
 
         <div className="cv-app-controls">
-          <button
-            className="cv-btn-secondary"
-            onClick={() => handleOpenAgentHub('agent_prompt')}
-            style={{ borderColor: 'rgba(56, 189, 248, 0.5)', color: '#38bdf8', background: 'rgba(56, 189, 248, 0.1)', fontWeight: 700 }}
-            title="Hub do Agente de IA, Prompts Mestre Nível 2 e OpenAPI"
-          >
-            🤖 Hub do Agente & Prompts
-          </button>
           <button className="cv-btn-secondary" onClick={handleReset} title="Restaurar modelo padrão de exemplo">
             🔄 Resetar Modelo
-          </button>
-          <button
-            className="cv-btn-secondary"
-            onClick={() => handleOpenAgentHub('api_key')}
-            style={hasActiveKey ? { borderColor: '#10b981', color: '#34d399' } : {}}
-            title="Gerenciar chaves de API temporárias para bots"
-          >
-            🔑 {hasActiveKey ? 'Chave API Ativa' : 'Chave API'}
           </button>
         </div>
       </div>
