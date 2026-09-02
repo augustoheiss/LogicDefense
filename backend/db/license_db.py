@@ -493,7 +493,7 @@ def deduct_license_tokens(key_hash: str, amount: int, endpoint: str = "/api/coin
         cursor = conn.cursor()
         cursor.execute("SELECT token_balance, tier FROM license_keys WHERE key_hash = ?", (key_hash,))
         row = cursor.fetchone()
-        if not row or row.get("tier") == "godmode_owner":
+        if not row or dict(row).get("tier") == "godmode_owner":
             return True
         if row["token_balance"] < amount:
             return False

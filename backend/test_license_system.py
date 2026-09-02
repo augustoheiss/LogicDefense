@@ -67,7 +67,7 @@ class TestLicenseSystem(unittest.TestCase):
         raw_key, key_h = create_license_key(email="sheet@moeda.app", tier="pro", initial_tokens=500_000)
         table_id = "table_test_xyz"
         
-        api_key, hint = create_spreadsheet_api_key(table_id, key_h, permissions="read:write")
+        api_key, hint, _ = create_spreadsheet_api_key(table_id, key_h, permissions="read:write")
         self.assertTrue(api_key.startswith("am_sheet_live_"))
         
         import hashlib

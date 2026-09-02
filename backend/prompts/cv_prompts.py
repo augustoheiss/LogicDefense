@@ -491,3 +491,39 @@ DIRECTRICES DE SÍNTESIS MAGNA:
 """.strip()
 
 
+# ── Metadados das Personas / Arquétipos ───────────────────────────────────────
+PERSONA_METADATA = {
+    "official_master": {
+        "label": "🏆 6. Versão Oficial (Síntese Master)",
+        "desc": "Síntese Magna dos pontos mais fortes, métricas de ouro e ROI das 5 versões.",
+        "filename": "curriculo_oficial_master.yaml",
+    },
+    "professional": {
+        "label": "💼 1. Executivo IBM (Senior Lead)",
+        "desc": "Foco em liderança, governança, métricas de ROI e arquiteturas de alta criticidade.",
+        "filename": "curriculo_executivo.yaml",
+    },
+    "architect": {
+        "label": "🧠 2. Arquiteto de IA & Soluções",
+        "desc": "Foco em microsserviços FastAPI, RAG, pipelines assíncronos e nuvem híbrida.",
+        "filename": "curriculo_arquiteto_ia.yaml",
+    },
+    "historian": {
+        "label": "📜 3. Biógrafo / Evolução Estratégica",
+        "desc": "Narrativa coesa da jornada, contexto de negócios e legado sustentável.",
+        "filename": "curriculo_biografo.yaml",
+    },
+    "didactic": {
+        "label": "🎓 4. Didático / Learning Velocity",
+        "desc": "Foco em raciocínio analítico, comunicação técnica e velocidade de aprendizado.",
+        "filename": "curriculo_didatico.yaml",
+    },
+    "alien": {
+        "label": "🛸 5. Observador Extraterrestre",
+        "desc": "Perspectiva de alta densidade sistêmica, desconstrução de jargões e eficiência algorítmica.",
+        "filename": "curriculo_alien.yaml",
+    },
+}
+
+
+

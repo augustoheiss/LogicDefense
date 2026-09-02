@@ -35,7 +35,6 @@ export async function generateCVFromText(req: GenerateCVRequest): Promise<CVVers
 
   const storedKey = req.api_key || localStorage.getItem('ld_pro_license_key') || localStorage.getItem('am_license_key')
   if (storedKey) {
-    headers['X-License-Key'] = storedKey
     headers['Authorization'] = `Bearer ${storedKey}`
   }
 

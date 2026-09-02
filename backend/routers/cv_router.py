@@ -1,7 +1,10 @@
 """
-cv_router.py — Roteador de Endpoints para o CV Maker 2.0
-Suporta chamadas web do laboratório e integração com agentes externos via API Keys.
-Suporta geração e renderização síncrona dos 5 arquétipos em HTML, ZIP ou JSON.
+cv_router.py — Roteador de Endpoints para o CV Maker 2.0 (Agent-Native / YAML-Only)
+
+Arquitetura refatorada (Set/2026):
+  O backend retorna exclusivamente YAML/JSON. A renderização visual (HTML/PDF)
+  é responsabilidade do frontend React (standaloneHtmlService.ts + Blueprints).
+  Endpoints de IA (generate/tailor/synthesize) suportam BYOK e Agent-Native.
 """
 
 import logging
@@ -11,11 +14,12 @@ import zipfile
 import yaml
 from typing import Optional, Dict, Any
 from fastapi import APIRouter, HTTPException, Header, Query, status
-from fastapi.responses import HTMLResponse, Response
+from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
 from services.cv_generator_service import generate_all_archetypes, generate_single_archetype, dict_to_yaml
 from prompts.cv_prompts import PERSONA_INSTRUCTIONS
+from routers.auth_helpers import extract_auth_key
 
 log = logging.getLogger(__name__)
 
@@ -34,7 +38,7 @@ class CVGenerateResponse(BaseModel):
     historian: str = Field(..., description="YAML arquétipo Biográfico / Narrativo")
     didactic: str = Field(..., description="YAML arquétipo Didático / Learning Speed")
     alien: str = Field(..., description="YAML arquétipo Observador Extraterrestre")
-    html_dashboard: Optional[str] = Field(default=None, description="HTML Standalone Dashboard com os arquétipos embutidos e interativos")
+    html_dashboard: Optional[str] = Field(default=None, deprecated=True, description="[DEPRECATED] Renderização HTML foi migrada para o frontend React. Este campo retorna None.")
 
 
 class CVSynthesizeRequest(BaseModel):
@@ -97,123 +101,17 @@ class CVCompileBundleRequest(BaseModel):
     model_config = {"populate_by_name": True}
 
 
-DEFAULT_FALLBACK_YAML = """basics:
-  name: "Alexandre Silva"
-  label: "Senior Software Architect & AI Systems Lead"
-  email: "alexandre.silva.demo@exemplo-ficticio.com"
-  phone: "+55 (11) 98765-4321"
-  url: "https://linkedin.com/in/alexandre-silva-ficticio-demo-99999"
-  summary: "Arquiteto de software sênior com 8+ anos de experiência liderando a modernização de sistemas corporativos de alta escala, pipelines de inteligência artificial generativa e governança de dados. Especialista em microsserviços orientados a eventos, arquiteturas cloud híbridas e aceleração de squads de engenharia."
-  quote: "Construindo plataformas resilientes que unem governança rigorosa à velocidade da IA generativa."
-  location:
-    city: "São Paulo"
-    region: "SP"
-    countryCode: "BR"
-  profiles:
-    - network: "GitHub"
-      username: "alexandre-silva-demo"
-      url: "https://github.com/alexandre-silva-ficticio-demo-99999"
-    - network: "LinkedIn"
-      username: "alexandre-silva-demo"
-      url: "https://linkedin.com/in/alexandre-silva-ficticio-demo-99999"
-
-work:
-  - name: "Enterprise Tech Solutions"
-    position: "Staff Software Architect & Lead"
-    startDate: "2022-01-01"
-    summary: "Liderança técnica da plataforma de microsserviços distribuídos atendendo 2M+ requisições diárias com 99.99% de disponibilidade."
-    highlights:
-      - "Arquitetou a migração de monólito para microsserviços event-driven, reduzindo a latência p99 em 45%."
-      - "Implementou pipeline de governança de IA com guardrails de segurança e redução de 60% no consumo de tokens."
-      - "Mentorou e coordenou tecnicamente 4 squads multidisciplinares (28 engenheiros)."
-  - name: "Fintech Horizon"
-    position: "Senior Backend Engineer"
-    startDate: "2019-03-01"
-    endDate: "2021-12-31"
-    summary: "Desenvolvimento e sustentação de motores de transações financeiras e conciliação em tempo real."
-    highlights:
-      - "Redesenhou a camada de conciliação bancária processando R$ 120M/mês com zero inconsistência contábil."
-      - "Otimizou queries e índices PostgreSQL reduzindo tempo de relatório mensal de 4 horas para 12 minutos."
-
-projects:
-  - name: "Universal AI Gateway"
-    description: "Gateway autônomo com rate-limiting, failover multi-provedor (Gemini/OpenAI/Claude) e cache semântico."
-    highlights:
-      - "Redução comprovada de 35% nos custos de inferência LLM em ambientes de produção."
-      - "Mais de 800 stars no GitHub e utilizado por 15+ empresas parceiras."
-    url: "https://github.com/alexandre-silva-ficticio-demo-99999/ai-gateway"
-  - name: "Local-First Financial Engine"
-    description: "Motor analítico de dados financeiros que processa DREs e fluxos de caixa 100% no navegador."
-    highlights:
-      - "Arquitetura offline-first com sincronismo seguro e isolamento de tenant via chaves SHA-256."
-    url: "https://github.com/alexandre-silva-ficticio-demo-99999/local-financial"
-
-education:
-  - institution: "Universidade de São Paulo (USP)"
-    area: "Engenharia de Computação"
-    studyType: "Bacharelado"
-    startDate: "2014-01-01"
-    endDate: "2018-12-31"
-
-skills:
-  - name: "Arquitetura & Microsserviços"
-    level: "Especialista"
-    levelPercent: 95
-    keywords: ["TypeScript", "Node.js", "Python", "FastAPI", "Go", "Event-Driven", "Kafka"]
-  - name: "Cloud & DevOps"
-    level: "Avançado"
-    levelPercent: 90
-    keywords: ["Docker", "Kubernetes", "AWS", "Google Cloud", "CI/CD", "Terraform"]
-  - name: "Engenharia de IA & LLMs"
-    level: "Avançado"
-    levelPercent: 88
-    keywords: ["RAG Pipelines", "Vector Databases", "Prompt Engineering", "watsonx", "Gemini 3.7"]
-  - name: "Bancos de Dados & Resiliência"
-    level: "Especialista"
-    levelPercent: 92
-    keywords: ["PostgreSQL", "Redis", "SQLite/Turso", "Supabase", "Zero-Downtime"]
-
-languages:
-  - language: "Português"
-    fluency: "Nativo"
-  - language: "Inglês"
-    fluency: "Fluente / Profissional"
-  - language: "Espanhol"
-    fluency: "Intermediário"
-
-certificates:
-  - name: "AWS Certified Solutions Architect – Professional"
-    date: "2023-05-20"
-    issuer: "Amazon Web Services"
-  - name: "OpenShift Enterprise Application Developer"
-    date: "2022-09-10"
-    issuer: "Red Hat"
-
-coverLetter:
-  recipient:
-    name: "Dr. Roberto William"
-    title: "Diretor de Engenharia & Contratação"
-    company: "Tech Global Innovations Inc."
-    address: "Av. Faria Lima, 3500 - São Paulo, SP"
-  date: "31 de Agosto de 2026"
-  subject: "Candidatura: Posição de Staff Software Architect & Lead de IA"
-  salutation: "Prezado Dr. Roberto William e comitê de seleção,"
-  paragraphs:
-    - "Acompanho com grande admiração a liderança da Tech Global Innovations no desenvolvimento de sistemas autônomos de alta confiabilidade. Com mais de 8 anos de experiência sólida em arquitetura de microsserviços distribuídos, engenharia de inteligência artificial e liderança de squads técnicas multidisciplinares, vejo uma sinergia ímpar entre os meus resultados e os desafios estratégicos da sua organização."
-    - "Na minha atuação recente como Staff Architect na Enterprise Tech Solutions, fui o responsável direto por desenhar a migração de nossa infraestrutura central para microsserviços event-driven, sustentando mais de 2 milhões de transações diárias com redução de 45% na latência p99. Adicionalmente, estruturei nossos primeiros pipelines corporativos de IA generativa, integrando guardrails de segurança e otimização de cache que cortaram os custos de inferência em 60%."
-    - "Acredito firmemente que a excelência arquitetural deve sempre caminhar junto com a governança prática e a autonomia das equipes. Minha missão é traduzir visões de negócio ambiciosas em sistemas robustos, seguros e escaláveis que entreguem valor tangível de ponta a ponta."
-    - "Agradeço sinceramente a atenção e coloco-me à disposição para um diálogo aprofundado sobre como posso alavancar os objetivos técnicos e de expansão da Tech Global Innovations neste ano."
-  closing: "Atenciosamente,"
-  signature: "Alexandre Silva"
-"""
+# Caminho do CV de demonstração extraído para arquivo externo (eliminando 110 linhas inline)
+_DEFAULT_CV_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "default_cv.yaml")
 
 
 def get_default_yaml_content() -> str:
-    """Carrega o YAML de currículo padrão do repositório como fallback."""
+    """Carrega o YAML de currículo padrão do repositório ou do arquivo de demo."""
     possible_paths = [
         os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "cv-yaml", "cv-ptbr.yaml")),
         os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "cv-yaml", "cv-ptbr.yaml")),
         os.path.abspath("cv-yaml/cv-ptbr.yaml"),
+        os.path.abspath(_DEFAULT_CV_PATH),
     ]
     for p in possible_paths:
         if os.path.exists(p):
@@ -222,7 +120,7 @@ def get_default_yaml_content() -> str:
                     return f.read()
             except Exception:
                 pass
-    return DEFAULT_FALLBACK_YAML
+    return "basics:\n  name: Demo\n  label: Software Engineer\n"
 
 
 from db.license_db import get_license_by_raw_key, deduct_license_tokens, is_godmode_key, get_spreadsheet_api_key, hash_key
@@ -533,23 +431,25 @@ async def get_single_prompt_endpoint(
 @router.post("/generate")
 async def generate_cv_endpoint(
     payload: CVGenerateRequest,
-    format: Optional[str] = Query("json", description="Formato de retorno: json, html, zip"),
+    format: Optional[str] = Query("json", description="Formato de retorno: json, zip"),
     theme: Optional[str] = Query("executive", description="Tema visual inicial: executive, creative, minimalist, white, terminal"),
+    authorization: Optional[str] = Header(None),
     x_license_key: Optional[str] = Header(None, alias="X-License-Key"),
     x_api_key: Optional[str] = Header(None, alias="X-API-Key"),
     x_gemini_api_key: Optional[str] = Header(None, alias="X-Gemini-API-Key"),
     x_cv_key: Optional[str] = Header(None, alias="X-CV-Key"),
     x_spreadsheet_key: Optional[str] = Header(None, alias="X-Spreadsheet-Key"),
-    authorization: Optional[str] = Header(None),
 ):
     """
-    Gera todos os 5 arquétipos em paralelo usando o Gemini 3.7 Flash (High Thinking) de forma síncrona.
-    Permite retornar diretamente:
-    - format=html -> Super Dashboard HTML Standalone com os 5 currículos e 5 temas interativos
-    - format=zip  -> Pacote .ZIP com os 5 arquivos .YAML separados + o HTML Dashboard
-    - format=json -> Objeto JSON com os 5 YAMLs e o HTML embutido
+    Gera todos os 5 arquétipos em paralelo usando o Gemini 3.7 Flash (High Thinking).
+    Retorna exclusivamente YAML/JSON. Renderização HTML foi migrada para o frontend.
+
+    Formatos:
+    - format=json -> Objeto JSON com os 5 YAMLs (padrão)
+    - format=zip  -> Pacote .ZIP com os 5/6 arquivos .YAML separados
+    - format=html -> [DEPRECATED] Retorna JSON com aviso de deprecação
     """
-    raw_key = x_license_key or x_api_key or x_cv_key or x_spreadsheet_key or authorization
+    raw_key = extract_auth_key(authorization, x_api_key, x_license_key, x_cv_key, x_spreadsheet_key)
     license_rec = await verify_cv_license_and_quota(raw_key, payload.raw_text, num_calls=5, x_gemini_key=x_gemini_api_key)
 
     custom_gemini = license_rec.get("gemini_key") or x_gemini_api_key
@@ -583,24 +483,24 @@ async def generate_cv_endpoint(
             except Exception as d_err:
                 log.warning("[CV Router] Falha ao debitar tokens: %s", d_err)
 
-        from services.cv_html_renderer import render_multi_cv_dashboard_html
-
         target_format = (format or "json").strip().lower()
-        target_theme = (theme or "executive").strip().lower()
-        default_p = "official_master" if results.get("official_master") else "professional"
 
-        # Renderiza o Super Dashboard HTML com os arquétipos e a síntese oficial
-        html_dashboard = render_multi_cv_dashboard_html(
-            archetypes=results,
-            default_persona=default_p,
-            default_theme=target_theme,
-        )
-
-        # 1. Retorno Direto em HTML Standalone
+        # [DEPRECATED] Soft deprecation para format=html — retorna JSON com aviso
         if target_format == "html":
-            return HTMLResponse(content=html_dashboard)
+            log.info("[CV Router] format=html deprecado em /generate. Retornando JSON com aviso.")
+            return {
+                "status": "deprecated",
+                "format": "html",
+                "message": "A renderização de HTML no backend foi descontinuada em favor do compilador visual no frontend (standaloneHtmlService.ts / React). Use format='json'.",
+                "official_master": results.get("official_master", None),
+                "professional": results.get("professional", ""),
+                "architect": results.get("architect", results.get("professional", "")),
+                "historian": results.get("historian", ""),
+                "didactic": results.get("didactic", ""),
+                "alien": results.get("alien", ""),
+            }
 
-        # 2. Retorno em Pacote ZIP com os YAMLs e o Dashboard HTML
+        # ZIP com apenas os YAMLs (sem HTML dashboard)
         if target_format == "zip":
             zip_buffer = io.BytesIO()
             with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
@@ -611,7 +511,6 @@ async def generate_cv_endpoint(
                 zip_file.writestr("curriculo_biografo.yaml", results.get("historian", ""))
                 zip_file.writestr("curriculo_didatico.yaml", results.get("didactic", ""))
                 zip_file.writestr("curriculo_alien.yaml", results.get("alien", ""))
-                zip_file.writestr("dashboard_curriculos_completo.html", html_dashboard)
 
             zip_name = "curriculos_completo_6_versoes.zip" if results.get("official_master") else "curriculos_completo_5_versoes.zip"
             return Response(
@@ -620,7 +519,7 @@ async def generate_cv_endpoint(
                 headers={"Content-Disposition": f'attachment; filename="{zip_name}"'}
             )
 
-        # 3. Retorno Padrão em JSON Estruturado
+        # JSON Estruturado (padrão) — html_dashboard retorna None (deprecated)
         return CVGenerateResponse(
             official_master=results.get("official_master", None),
             professional=results.get("professional", ""),
@@ -628,7 +527,7 @@ async def generate_cv_endpoint(
             historian=results.get("historian", ""),
             didactic=results.get("didactic", ""),
             alien=results.get("alien", ""),
-            html_dashboard=html_dashboard,
+            html_dashboard=None,
         )
     except Exception as e:
         log.error("[CV Router] service='cv' Generation error: %s", e, exc_info=True)
@@ -641,16 +540,16 @@ async def generate_cv_endpoint(
 @router.post("/tailor")
 async def tailor_cv_endpoint(
     payload: CVTailorRequest,
+    authorization: Optional[str] = Header(None),
     x_license_key: Optional[str] = Header(None, alias="X-License-Key"),
     x_api_key: Optional[str] = Header(None, alias="X-API-Key"),
     x_gemini_api_key: Optional[str] = Header(None, alias="X-Gemini-API-Key"),
-    authorization: Optional[str] = Header(None),
 ):
     """
     Endpoint para alfaiataria (tailoring) do currículo contra uma Job Description específica.
     Verifica a licença Pro ou aceita chave Gemini própria (BYOK) e debita os tokens se for servidor.
     """
-    raw_key = x_license_key or x_api_key or authorization
+    raw_key = extract_auth_key(authorization, x_api_key, x_license_key)
     full_text = payload.base_yaml + "\n" + payload.job_description
     license_rec = await verify_cv_license_and_quota(raw_key, full_text, num_calls=1, x_gemini_key=x_gemini_api_key)
 
@@ -701,10 +600,10 @@ async def tailor_cv_endpoint(
 @router.post("/generate-cover-letter")
 async def generate_cover_letter_endpoint(
     payload: CVCoverLetterRequest,
+    authorization: Optional[str] = Header(None),
     x_license_key: Optional[str] = Header(None, alias="X-License-Key"),
     x_api_key: Optional[str] = Header(None, alias="X-API-Key"),
     x_gemini_api_key: Optional[str] = Header(None, alias="X-Gemini-API-Key"),
-    authorization: Optional[str] = Header(None),
 ):
     """
     Endpoint dedicado sob demanda para geração de Carta de Apresentação (Cover Letter) com IA.
@@ -713,7 +612,7 @@ async def generate_cover_letter_endpoint(
     """
     from services.cv_generator_service import generate_standalone_cover_letter
 
-    raw_key = x_license_key or x_api_key or authorization
+    raw_key = extract_auth_key(authorization, x_api_key, x_license_key)
     full_text = yaml.dump(payload.cv_data, allow_unicode=True) + "\n" + (payload.job_description or "")
     license_rec = await verify_cv_license_and_quota(raw_key, full_text, num_calls=1, x_gemini_key=x_gemini_api_key)
     custom_gemini = license_rec.get("gemini_key") or x_gemini_api_key
@@ -762,7 +661,7 @@ async def generate_cover_letter_endpoint(
 @router.post("/render")
 async def render_cv_endpoint(
     payload: Optional[CVRenderRequest] = None,
-    format: Optional[str] = Query(None, description="Formato de saída: html, yaml, zip, json"),
+    format: Optional[str] = Query(None, description="Formato de saída: yaml, json (html deprecated)"),
     theme: Optional[str] = Query(None, description="Tema visual: executive, creative, minimalist, white, terminal"),
     layout: Optional[str] = Query(None, description="Modelo A4 de Layout: modular, linear, sidebar, compact_split, editorial_accent, corporate_timeline, warm_magazine, hero_matrix, dynamic_math, canvas_livre"),
     texture: Optional[str] = Query(None, alias="background_pattern", description="Textura de fundo IA: bg-grid-tech, bg-luxury-minimal, bg-geometric-line, bg-corporate-waves, bg-stationery-clean, bg-technical-blueprint, none"),
@@ -770,13 +669,14 @@ async def render_cv_endpoint(
     lang: Optional[str] = Query(None, description="Idioma forçado: pt, en ou auto"),
     filename: Optional[str] = Query(None, description="Nome base para download do arquivo (sem extensão)"),
     x_api_key: Optional[str] = Header(None, alias="X-API-Key"),
+    authorization: Optional[str] = Header(None),
 ):
     """
-    Renderiza ou baixa o currículo em múltiplos formatos:
-    - format=zip  -> Retorna pacote .zip com curriculo.html e curriculo.yaml
+    Renderiza ou baixa o currículo em múltiplos formatos (refatorado para YAML-Only):
     - format=yaml -> Retorna o arquivo .yaml estruturado puro
-    - format=html -> Retorna o HTML standalone interativo de alta densidade
-    - format=json -> Retorna JSON {"html": ..., "yaml": ..., "theme": ...}
+    - format=json -> Retorna JSON {"yaml": ..., "theme": ..., "layout": ...}
+    - format=zip  -> Retorna pacote .zip com curriculo.yaml
+    - format=html -> [DEPRECATED] Retorna JSON com aviso de deprecação e o YAML incluso
     """
     q_format = format if isinstance(format, str) else None
     q_theme = theme if isinstance(theme, str) else None
@@ -790,15 +690,13 @@ async def render_cv_endpoint(
     theme_name = q_theme or (payload.theme if payload and payload.theme else None) or "executive"
     layout_name = q_layout or (payload.layout if payload and payload.layout else None) or "dynamic_math"
     view_mode_name = q_view_mode or (payload.view_mode if payload and payload.view_mode else None) or "cv"
-    target_format = (q_format or (payload.format if payload and payload.format else None) or "html").strip().lower()
+    target_format = (q_format or (payload.format if payload and payload.format else None) or "yaml").strip().lower()
     base_filename = (q_filename or (payload.filename if payload and payload.filename else None) or "curriculo").strip()
     target_lang = q_lang or "auto"
     bg_pattern = q_texture or (payload.background_pattern if payload else None)
     d_config = payload.design_config if payload else None
 
-    from services.cv_html_renderer import render_cv_to_standalone_html
-
-    # 1. YAML Puro
+    # 1. YAML Puro (padrão)
     if target_format in ("yaml", "yml"):
         return Response(
             content=yaml_text,
@@ -806,22 +704,10 @@ async def render_cv_endpoint(
             headers={"Content-Disposition": f'attachment; filename="{base_filename}.yaml"'}
         )
 
-    # Gera o HTML standalone
-    html_content = render_cv_to_standalone_html(
-        yaml_text,
-        theme=theme_name,
-        layout=layout_name,
-        lang=target_lang,
-        view_mode=view_mode_name,
-        background_pattern=bg_pattern,
-        design_config=d_config
-    )
-
-    # 2. Pacote ZIP (HTML + YAML)
+    # 2. Pacote ZIP (apenas YAML — sem HTML)
     if target_format == "zip":
         zip_buffer = io.BytesIO()
         with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
-            zip_file.writestr(f"{base_filename}.html", html_content)
             zip_file.writestr(f"{base_filename}.yaml", yaml_text)
 
         return Response(
@@ -830,29 +716,49 @@ async def render_cv_endpoint(
             headers={"Content-Disposition": f'attachment; filename="{base_filename}_completo.zip"'}
         )
 
-    # 3. JSON Estruturado para integrações
+    # 3. JSON Estruturado para integrações (sem HTML)
     if target_format == "json":
         return {
-            "html": html_content,
             "yaml": yaml_text,
             "theme": theme_name,
             "layout": layout_name,
+            "view_mode": view_mode_name,
             "background_pattern": bg_pattern,
+            "design_config": d_config,
             "filename": base_filename,
-            "lang": target_lang
+            "lang": target_lang,
         }
 
-    # 4. HTML Standalone (Padrão)
-    return HTMLResponse(content=html_content)
+    # 4. [DEPRECATED] HTML — Soft deprecation: retorna JSON com aviso e o YAML
+    if target_format == "html":
+        log.info("[CV Router] format=html deprecado em /render. Retornando JSON com aviso de migração.")
+        return {
+            "status": "deprecated",
+            "format": "html",
+            "message": (
+                "A renderização de HTML no backend foi descontinuada em favor do compilador visual "
+                "no frontend (standaloneHtmlService.ts / React). Use format='yaml' ou format='json'."
+            ),
+            "yaml": yaml_text,
+            "theme": theme_name,
+            "layout": layout_name,
+        }
+
+    # Fallback: retorna YAML puro se formato desconhecido
+    return Response(
+        content=yaml_text,
+        media_type="text/yaml; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{base_filename}.yaml"'}
+    )
 
 
 @router.post("/synthesize")
 async def synthesize_cv_endpoint(
     payload: CVSynthesizeRequest,
+    authorization: Optional[str] = Header(None),
     x_license_key: Optional[str] = Header(None, alias="X-License-Key"),
     x_api_key: Optional[str] = Header(None, alias="X-API-Key"),
     x_gemini_api_key: Optional[str] = Header(None, alias="X-Gemini-API-Key"),
-    authorization: Optional[str] = Header(None),
 ):
     """
     NÍVEL 2 — Endpoint de Síntese Magna.
@@ -861,7 +767,7 @@ async def synthesize_cv_endpoint(
     """
     from services.cv_generator_service import generate_master_synthesis
 
-    raw_key = x_license_key or x_api_key or authorization
+    raw_key = extract_auth_key(authorization, x_api_key, x_license_key)
     combined_text = (
         (payload.professional or "") + "\n" +
         (payload.architect or "") + "\n" +
@@ -920,23 +826,27 @@ async def synthesize_cv_endpoint(
 @router.post("/compile")
 async def compile_cv_bundle_endpoint(
     payload: CVCompileBundleRequest,
-    format: Optional[str] = Query(None, description="Formato de saída: html, zip, json"),
+    format: Optional[str] = Query(None, description="Formato de saída: json, zip (html deprecated)"),
     theme: Optional[str] = Query(None, description="Tema visual: executive, creative, minimalist, white, terminal"),
     layout: Optional[str] = Query(None, description="Modelo A4 de Layout: modular, linear, sidebar, compact_split, editorial_accent, corporate_timeline, warm_magazine, hero_matrix, dynamic_math, canvas_livre"),
     texture: Optional[str] = Query(None, alias="background_pattern", description="Textura de fundo inicial"),
+    authorization: Optional[str] = Header(None),
     x_api_key: Optional[str] = Header(None, alias="X-API-Key"),
 ):
     """
     Endpoint 100% Agent-Native (Zero Custo de Tokens de LLM no Servidor).
-    Recebe os 5 ou 6 YAMLs gerados pelo Agente de IA do próprio usuário (Claude, Cursor, Antigravity, GPT)
-    e compila instantaneamente o Super Dashboard HTML Standalone e o pacote .ZIP.
-    """
-    from services.cv_html_renderer import render_multi_cv_dashboard_html
+    Recebe os 5 ou 6 YAMLs gerados pelo Agente de IA do próprio usuário
+    e retorna os dados estruturados para renderização no frontend.
 
+    Formatos:
+    - format=json -> JSON com archetypes, theme, layout (padrão)
+    - format=zip  -> Pacote .ZIP com os 6 arquivos .YAML separados
+    - format=html -> [DEPRECATED] Retorna JSON com aviso de deprecação
+    """
     target_theme = theme or payload.default_theme or "executive"
     target_layout = layout or payload.default_layout or "dynamic_math"
     target_texture = texture or payload.background_pattern or None
-    target_format = (format or payload.format or "html").strip().lower()
+    target_format = (format or payload.format or "json").strip().lower()
     base_filename = (payload.filename or "curriculos_6_versoes").strip()
 
     archetypes_map = {
@@ -948,17 +858,7 @@ async def compile_cv_bundle_endpoint(
         "alien": payload.alien or "",
     }
 
-    default_persona = "official_master" if payload.official_master else "professional"
-
-    html_dashboard = render_multi_cv_dashboard_html(
-        archetypes=archetypes_map,
-        default_persona=default_persona,
-        default_theme=target_theme,
-        default_layout=target_layout,
-        background_pattern=target_texture,
-        design_config=payload.design_config
-    )
-
+    # ZIP com apenas os YAMLs (sem HTML dashboard)
     if target_format == "zip":
         zip_buffer = io.BytesIO()
         with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
@@ -969,7 +869,6 @@ async def compile_cv_bundle_endpoint(
             zip_file.writestr("curriculo_biografo.yaml", archetypes_map.get("historian", ""))
             zip_file.writestr("curriculo_didatico.yaml", archetypes_map.get("didactic", ""))
             zip_file.writestr("curriculo_alien.yaml", archetypes_map.get("alien", ""))
-            zip_file.writestr(f"{base_filename}_dashboard.html", html_dashboard)
 
         return Response(
             content=zip_buffer.getvalue(),
@@ -977,11 +876,26 @@ async def compile_cv_bundle_endpoint(
             headers={"Content-Disposition": f'attachment; filename="{base_filename}.zip"'}
         )
 
-    if target_format == "json":
+    # [DEPRECATED] Soft deprecation para format=html
+    if target_format == "html":
+        log.info("[CV Router] format=html deprecado em /compile. Retornando JSON com aviso.")
         return {
-            "html_dashboard": html_dashboard,
+            "status": "deprecated",
+            "format": "html",
+            "message": (
+                "A renderização de HTML no backend foi descontinuada em favor do compilador visual "
+                "no frontend (standaloneHtmlService.ts / React). Use format='json' ou format='zip'."
+            ),
             "archetypes": archetypes_map,
             "theme": target_theme,
+            "layout": target_layout,
         }
 
-    return HTMLResponse(content=html_dashboard)
+    # JSON Estruturado (padrão)
+    return {
+        "archetypes": archetypes_map,
+        "theme": target_theme,
+        "layout": target_layout,
+        "background_pattern": target_texture,
+        "design_config": payload.design_config,
+    }
