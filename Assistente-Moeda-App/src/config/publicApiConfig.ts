@@ -58,12 +58,37 @@ export interface PublicAIAnalystResponse {
   modelUsed: string;
 }
 
+export interface PublicWorkflowStep {
+  step: number;
+  name: string;
+  route: string;
+  status: string;
+  description?: string;
+}
+
+export interface PublicSkillItem {
+  skill: string;
+  name: string;
+  focus: string;
+}
+
+export interface PublicAgentPromptResponse {
+  status: string;
+  version: string;
+  workflow_steps: PublicWorkflowStep[];
+  skills_integrated: PublicSkillItem[];
+  prompt: string;
+  profile_used: string;
+  mandatory_next_route: string;
+  api_key_status: string;
+}
+
 export const OPENAPI_SPEC_V1 = {
   "openapi": "3.1.0",
   "info": {
     "title": "Assistente Moeda - Public API Integration",
     "description": "Public endpoints to integrate your spreadsheet with external IAs (ChatGPT, Claude) and automated tools.",
-    "version": "1.0.0"
+    "version": "2.0.0"
   },
   "servers": [
     {
@@ -72,6 +97,30 @@ export const OPENAPI_SPEC_V1 = {
     }
   ],
   "paths": {
+    "/api/v1/public/agent-prompt": {
+      "get": {
+        "tags": ["Public API Integration"],
+        "summary": "[ROTA OBRIGATÓRIA #0] Ingestão de Prompt & Skills Financeiras",
+        "description": "Ponto de partida inegociável. Entrega o papel executivo, as 8 skills integradas e estipula o protocolo: SEMPRE consultar a rota AI-analyst primeiro (POST /api/v1/public/ai-analyst).",
+        "operationId": "get_agent_prompt_api_v1_public_agent_prompt_get",
+        "parameters": [
+          {
+            "name": "profile",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "string", "default": "native" },
+            "description": "Perfil: native (padrão / Agent Native), cfo, operational, goals, dev"
+          },
+          {
+            "name": "format",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "string", "default": "json" },
+            "description": "Formato: json (padrão), text ou markdown"
+          }
+        ]
+      }
+    },
     "/api/v1/public/analysis-context": {
       "get": {
         "tags": ["Public API Integration"],

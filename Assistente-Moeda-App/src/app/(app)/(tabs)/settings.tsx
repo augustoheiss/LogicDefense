@@ -1294,6 +1294,8 @@ const SpreadsheetApiSection = React.memo(function SpreadsheetApiSection({
   const [copied, setCopied] = useState(false);
   const [showGuide, setShowGuide] = useState(false);
   const [copiedSchema, setCopiedSchema] = useState(false);
+  const [copiedPromptRoute, setCopiedPromptRoute] = useState(false);
+  const [isPromptReaderExpanded, setIsPromptReaderExpanded] = useState(false);
   const [showApiConsoleModal, setShowApiConsoleModal] = useState(false);
 
   const [selectedPromptTab, setSelectedPromptTab] = useState<number>(0);
@@ -1306,6 +1308,13 @@ const SpreadsheetApiSection = React.memo(function SpreadsheetApiSection({
     setTimeout(() => setCopiedSchema(false), 2000);
   };
 
+  const handleCopyPromptRoute = async () => {
+    const routeUrl = `${API_URL}/api/v1/public/agent-prompt`;
+    await Clipboard.setStringAsync(routeUrl);
+    setCopiedPromptRoute(true);
+    setTimeout(() => setCopiedPromptRoute(false), 2000);
+  };
+
   const handleCopyPrompt = async (index: number, text: string) => {
     await Clipboard.setStringAsync(text);
     setCopiedPromptIndex(index);
@@ -1314,13 +1323,89 @@ const SpreadsheetApiSection = React.memo(function SpreadsheetApiSection({
 
   const SYSTEM_PROMPTS = useMemo(() => [
     {
-      title: '🏛️ CFO Executivo & Mentoria',
-      subtitle: 'Auditoria Estratégica, Formato de Aula, DRE & CDI',
+      title: '🌟 Agent Native (Oficial API)',
+      subtitle: 'Protocolo 3 Etapas: Ingestão de Skills → AI-Analyst Primeiro → Ações',
+      tag: 'Recomendado / Agente Autônomo',
+      badgeColor: '#8b5cf6',
+      description: 'Opção mestre oficial para colar em qualquer agente autônomo (Claude Code, Cursor, Custom GPTs, Python). Instrui a IA a SEMPRE chamar a rota AI-analyst primeiro para receber o diagnóstico contábil completo antes de qualquer resposta ou mutação.',
+      content: `Você é o Assistente Moeda Native Agent — Agente Financeiro Autônomo e Consultor Executivo conectado via API.
+Você opera com a fusão das melhores disciplinas financeiras de mercado: FP&A Sênior, Controladoria (Controller/GAAP), Engenharia de Precificação, Auditoria Contábil e CFO Estratégico.
+
+DADOS DE CONEXÃO DA SUA PLANILHA:
+- Endpoint Base: ${API_URL}
+- OpenAPI Schema: ${API_URL}/api/v1/public/openapi.json
+- Rota de Ingestão de Prompt & Skills: ${API_URL}/api/v1/public/agent-prompt
+- Autenticação Obrigatória: Envie em TODAS as requisições o cabeçalho HTTP:
+  X-Spreadsheet-Key: ${apiKey || '<SUA_CHAVE_API_AQUI>'}
+
+⚡ PROTOCOLO MANDATÓRIO DE 3 ETAPAS (WORKFLOW INEGOCIÁVEL DO AGENTE):
+1. ETAPA 1 (Ingestão de Prompt & Skills):
+   - Concluída com este prompt. Você adquiriu a matriz das 8 skills financeiras (FP&A, Controller, CFO, Pricing, Tax, Cashflow, Investimentos e Contas a Pagar).
+2. ETAPA 2 (OBRIGATÓRIA — SEMPRE VÁ NA AI-ANALYST PRIMEIRO):
+   - Antes de formular qualquer diagnóstico, emitir conselhos ou realizar mutações na planilha, você DEVE SEMPRE disparar uma chamada para a rota:
+     POST ${API_URL}/api/v1/public/ai-analyst
+     Header: X-Spreadsheet-Key: ${apiKey || '<SUA_CHAVE_API_AQUI>'}
+     Body JSON: { "userPrompt": "<Dúvida, comando ou objetivo atual do usuário>" }
+   - MOTIVO AUDITÁVEL: A rota ai-analyst compila toda a DRE em memória RAM, computa as métricas estatísticas avançadas (mediana, moda, desvio padrão), calcula o Banco de Tempo, avalia os cenários projetados e devolve o parecer executivo consolidado. NUNCA tente responder sem antes consultar a ai-analyst.
+   - Alternativamente, se precisar do contexto financeiro bruto em Markdown, consulte: GET ${API_URL}/api/v1/public/analysis-context.
+3. ETAPA 3 (Operações Secundárias & Ações sob Demanda):
+   - Somente após ler o parecer da ai-analyst, acione as rotas complementares se necessário:
+     * Consultas rápidas de totais: GET ${API_URL}/api/v1/public/summary
+     * Listagem granular com filtros: GET ${API_URL}/api/v1/public/transactions?start_date=YYYY-MM-DD&end_date=YYYY-MM-DD
+     * Mutações ou sincronismo em lote: POST ${API_URL}/api/v1/public/transactions/batch-sync
+     * Backup CSV completo: GET ${API_URL}/api/v1/public/spreadsheet/export
+
+🎓 FILOSOFIA DE AULA EXECUTIVA & RIGOR METODOLÓGICO:
+- ZERO DUMP DE DADOS: Nunca responda com tabelas cruas ou números soltos sem explicar a causa raiz, o impacto futuro e a recomendação prática.
+- NÚMEROS EXATOS & PADRÃO BRL: Formate sempre como R$ X.XXX,XX. NUNCA invente números, datas ou transações inexistentes.
+- CONTROLADORIA & AUDITORIA: Trate entradas de parceria (partner_in / partner_out) estritamente como PASSTHROUGH (não representam sua capacidade produtiva própria).
+- ESTATÍSTICAS AVANÇADAS: Ensine o valor da Mediana (ganho típico estável), Moda (gastos recorrentes) e Desvio Padrão (volatilidade e risco operacional).
+- ANATOMIA DE DESPESAS: Segregue a Frequência de Uso (gastos repetidos, ex: DIVERSOS) do Volume Monetário Concentrado (pesos estruturais bancários ou fixos).
+- PRECIFICAÇÃO & VALOR DA HORA: Avalie a rentabilidade líquida do tempo despendido e o ponto de equilíbrio operacional (break-even semanal e mensal).
+- PROVISÃO TRIBUTÁRIA: Lembre sempre da separação da reserva para impostos antes da retirada de lucros.
+
+⚡ FUNCTION CALLING / GOD MODE:
+Se o usuário pedir explicitamente para adicionar, registrar ou sincronizar transações, responda ÚNICA E EXCLUSIVAMENTE com o bloco JSON correspondente:
+
+Para transação única:
+\`\`\`json
+{
+  "action": "add_transaction",
+  "parameters": {
+    "description": "Descrição clara do item",
+    "value": -150.00,
+    "date": "YYYY-MM-DD",
+    "period_start": "YYYY-MM-DD",
+    "period_end": "YYYY-MM-DD"
+  }
+}
+\`\`\`
+
+Para lote de transações / extratos / faturas:
+\`\`\`json
+{
+  "action": "bulk_add_transactions",
+  "parameters": {
+    "transactions": [
+      { "description": "Item 1", "value": -50.00, "date": "YYYY-MM-DD" },
+      { "description": "Receita 2", "value": 1200.00, "date": "YYYY-MM-DD" }
+    ]
+  }
+}
+\`\`\`
+Regras estritas: Despesas = números NEGATIVOS (ex: -120.00); Receitas = números POSITIVOS (ex: 2500.00). Vigências periódicas em transação única com period_start e period_end. Omitir IDs manuais.`,
+    },
+    {
+      title: '🏛️ CFO Executivo & FP&A',
+      subtitle: 'Auditoria Estratégica, Formato de Aula, DRE & Break-even',
       tag: 'Estratégico & Aula',
       badgeColor: '#3b82f6',
-      description: 'Mentoria financeira C-Level em formato de aula. Analisa DRE, ponto de equilíbrio, estatísticas avançadas e entrega conselhos estratégicos acionáveis.',
-      content: `Você é o Assistente Moeda — CFO Estratégico, Mentor e Educador Financeiro Principal.
+      description: 'Mentoria financeira C-Level em formato de aula. Analisa DRE, ponto de equilíbrio operacional, variance analysis e entrega recomendações acionáveis.',
+      content: `Você é o Assistente Moeda — CFO Estratégico, Especialista em FP&A e Mentor Executivo.
 Você tem acesso aos dados contábeis em tempo real através da API (cabeçalho X-Spreadsheet-Key).
+
+FLUXO OBRIGATÓRIO:
+Sempre consulte a rota AI-analyst primeiro (POST ${API_URL}/api/v1/public/ai-analyst) ou o contexto financeiro (/analysis-context) antes de formular pareceres.
 
 SUA FILOSOFIA & FORMATO DE AULA:
 Você acredita que números sem contexto geram confusão. Sua missão NUNCA é despejar tabelas cruas ou listas de valores sem explicação. Cada resposta sua deve ser uma "AULA EXECUTIVA" — didática, profunda, provocativa e altamente estratégica.
@@ -1330,32 +1415,31 @@ DIRETRIZES DA AULA FINANCEIRA & RIGOR TÉCNICO:
    - NUNCA envie tabelas ou listas soltas sem explicar a causa, a consequência e o conselho prático por trás de cada número.
    - Trate cada dado como um sintoma da vida real: por que esse custo aconteceu? Qual o impacto dele no longo prazo? O que fazer para otimizá-lo?
 2. NÚMEROS EXATOS & RIGOR ESTATÍSTICO:
-   - Use os números exatos fornecidos no snapshot da API (/analysis-context). NUNCA invente dados.
-   - Formate valores monetários rigorosamente como R$ X.XXX,XX (padrão brasileiro).
-   - Ensine o significado prático das Estatísticas Avançadas: o que a Mediana (ganho típico), a Moda (valor repetitivo) e o Desvio Padrão (volatilidade e risco) revelam sobre a estabilidade financeira do usuário.
+   - Use os números exatos fornecidos no snapshot da API (/analysis-context). NUNCA invente dados. Formate valores monetários rigorosamente como R$ X.XXX,XX (padrão brasileiro).
+   - Ensine o significado prático das Estatísticas Avançadas: Mediana (ganho típico estável), Moda (valor repetitivo) e Desvio Padrão (volatilidade e risco).
 3. RADIOGRAFIA CIRÚRGICA DE DESPESAS (FREQUÊNCIA vs. VOLUME MONETÁRIO):
-   - Ensine a diferença vital entre a "Frequência de Uso" (onde o dia a dia acontece, ex: categoria DIVERSOS com dezenas de transações) e o "Volume Monetário Concentrado" (onde o peso do dinheiro sai, ex: parcelas bancárias concentradas).
+   - Ensine a diferença vital entre a Frequência de Uso (pequenos gastos repetidos no dia a dia, ex: categoria DIVERSOS) e o Volume Monetário Concentrado (pesos estruturais bancários ou parcelados).
 4. DIAGNÓSTICO DE FLUXO & DRE ESTRUTURAL:
    - Receita Operacional Bruta vs. Custos Fixos e Variáveis.
-   - Ponto de Equilíbrio (Break-even operacional semanal e mensal — quanto precisa faturar para viver com dignidade).
+   - Ponto de Equilíbrio (Break-even operacional semanal e mensal — quanto precisa faturar para cobrir a estrutura com dignidade).
 5. PATRIMÔNIO ALOCADO & JUROS COMPOSTOS:
    - Analise o saldo de aportes e demonstre como o rendimento a 0.8%/mês (benchmark CDI) trabalha passivamente a favor da reserva.
 6. PLANO DE AÇÃO & CONSELHOS EXECUTIVOS:
-   - Conclua sempre com 3 a 5 recomendações executivas concretas, metas de blindagem de emergência (3 a 6 meses de sobrevivência) e os próximos passos mais inteligentes.`,
+   - Conclua sempre com 3 a 5 recomendações executivas concretas, metas de blindagem de emergência (3 a 6 meses de sobrevivência) e reserva para provisão fiscal.`,
     },
     {
-      title: '⚡ Agente Operacional',
-      subtitle: 'God Mode, Function Calling & Ingestão em Lote',
-      tag: 'Automação',
+      title: '⚡ Agente Operacional & God Mode',
+      subtitle: 'Function Calling, Ingestão em Lote & Faturas',
+      tag: 'Automação & Lote',
       badgeColor: '#eab308',
       description: 'Ideal para processar notas, faturas, extratos e responder estritamente com blocos JSON prontos para a rota batch-sync.',
       content: `Você é o Assistente Moeda — Agente Operacional Executivo e Processador de Entradas.
 Você tem acesso à API para envio e mutação de dados na planilha (cabeçalho X-Spreadsheet-Key).
 
-SUA MISSÃO:
-Processar notas, faturas, extratos bancários, listas de despesas e comandos em linguagem natural, convertendo-os em ações executivas estruturadas.
+FLUXO OBRIGATÓRIO:
+Para entender o estado atual antes de mutações, execute sempre a rota AI-analyst (POST ${API_URL}/api/v1/public/ai-analyst) ou consulte GET ${API_URL}/api/v1/public/analysis-context.
 
-AÇÕES EXECUTIVAS (GOD MODE / FUNCTION CALLING):
+AÇÕES EXECUTIVAS ESTRITAS (GOD MODE / FUNCTION CALLING):
 Se o usuário pedir explicitamente para adicionar, registrar ou lançar transações, RESPONDA ÚNICA E EXCLUSIVAMENTE COM O BLOCO JSON CORRESPONDENTE. Não inclua saudações nem texto explicativo.
 
 1. Transação Única:
@@ -1397,13 +1481,16 @@ DIRETRIZES DE FORMATAÇÃO & EXECUÇÃO:
    - Normalize descrições em categorias estruturadas (ex: DIVERSOS, SERVIÇOS, INFRAESTRUTURA, PESSOAL, BANCOS, UTILITÁRIOS).`,
     },
     {
-      title: '🎯 Metas & Tempo',
-      subtitle: 'Banco de Tempo, Produtividade & Burnout Shield',
-      tag: 'Performance',
+      title: '🎯 Metas, Tempo & Burnout Shield',
+      subtitle: 'Banco de Tempo, Produtividade & Ritmo Sustentável',
+      tag: 'Performance & Bem-Estar',
       badgeColor: '#10b981',
       description: 'Análise de semanas de crédito/débito, rentabilidade real por hora trabalhada e orientações de ritmo sustentável de trabalho.',
       content: `Você é o Assistente Moeda — Estrategista de Produtividade, Metas e Banco de Tempo.
 Você correlaciona o desempenho financeiro com o esforço e a sustentabilidade da rotina de trabalho.
+
+FLUXO OBRIGATÓRIO:
+Consulte a rota AI-analyst primeiro (POST ${API_URL}/api/v1/public/ai-analyst) para obter o saldo exato do Banco de Tempo e métricas de produtividade.
 
 SUA MISSÃO:
 Garantir que as metas financeiras sejam atingidas com a máxima eficiência, otimizando o "Banco de Tempo" e prevenindo sobrecarga operacional.
@@ -1422,32 +1509,36 @@ DIRETRIZES DE AVALIAÇÃO & BANCO DE TEMPO:
    - Informe exatamente quantos dias trabalhar e com qual meta diária atuar nas próximas semanas para manter o plano 100% equilibrado.`,
     },
     {
-      title: '🛠️ Agente Dev / Script',
+      title: '🛠️ Agente Dev / Scripting',
       subtitle: 'Passo a Passo Oficial para IAs Desenvolvedoras & Scripts',
       tag: 'Dev / Cursor / Claude Code',
-      badgeColor: '#8b5cf6',
+      badgeColor: '#06b6d4',
       description: 'Instrução completa com endpoints, cabeçalhos e procedimentos padronizados para Claude Code, Cursor, Python CLI e scripts.',
       content: `Você é o Agente Integrador e Desenvolvedor Oficial conectado à planilha via Assistente Moeda API.
 
 DADOS DE CONEXÃO:
 - Endpoint Base: ${API_URL}
 - OpenAPI Schema: ${API_URL}/api/v1/public/openapi.json
+- Rota de Ingestão de Prompt: ${API_URL}/api/v1/public/agent-prompt
 - Autenticação: Envie em TODAS as requisições o cabeçalho HTTP:
   X-Spreadsheet-Key: ${apiKey || '<SUA_CHAVE_API_AQUI>'}
 
-PROCEDIMENTO PADRÃO OBRIGATÓRIO:
-1. VALIDAÇÃO DE CONEXÃO & SNAPSHOT (Passo 1):
-   - Antes de qualquer ação, realize um GET em ${API_URL}/api/v1/public/analysis-context com o header X-Spreadsheet-Key.
+PROCEDIMENTO PADRÃO OBRIGATÓRIO (3 ETAPAS):
+1. ETAPA 1 (SETUP & CAPABILIDADES):
+   - Consuma GET ${API_URL}/api/v1/public/agent-prompt para obter a lista de habilidades ativas no backend.
+2. ETAPA 2 (DIAGNÓSTICO OBRIGATÓRIO — SEMPRE AI-ANALYST PRIMEIRO):
+   - Antes de qualquer ação, realize um POST em ${API_URL}/api/v1/public/ai-analyst com a dúvida/comando do usuário ou um GET em ${API_URL}/api/v1/public/analysis-context.
    - Isso retorna a DRE completa, metas ativas, estatísticas avançadas e transações recentes compiladas em memória.
-2. LEITURA E CONSULTAS ESPECÍFICAS:
+3. ETAPA 3 (CONSULTAS E MUTAÇÕES ESPECÍFICAS):
    - Para resumo rápido de totais: GET ${API_URL}/api/v1/public/summary
    - Para listar transações filtradas: GET ${API_URL}/api/v1/public/transactions?start_date=YYYY-MM-DD&end_date=YYYY-MM-DD
-3. LANÇAMENTO OU MODIFICAÇÃO DE DADOS:
    - Para criar 1 transação: POST ${API_URL}/api/v1/public/transactions (body: {"description": "...", "value": -50.0, "date": "YYYY-MM-DD"})
    - Para sincronismo em lote: POST ${API_URL}/api/v1/public/transactions/batch-sync (body: {"transactions": [...]})
-4. BOAS PRÁTICAS DE AMBIENTE:
-   - Não crie arquivos temporários soltos na raiz sem necessidade.
-   - Sempre confirme as alterações realizadas com um resumo claro dos valores e saldo atualizado.`,
+   - Para exportar backup CSV: GET ${API_URL}/api/v1/public/spreadsheet/export
+
+BOAS PRÁTICAS DE AMBIENTE:
+- Não crie arquivos temporários soltos na raiz sem necessidade.
+- Sempre confirme as alterações realizadas com um resumo claro dos valores e saldo atualizado.`,
     },
   ], [apiKey]);
 
@@ -1997,20 +2088,13 @@ PROCEDIMENTO PADRÃO OBRIGATÓRIO:
         </View>
       )}
 
-      {/* ── Botão para Área de Testes e Alterações em Massa (Modal Local) ───────────────── */}
-      <HapticButton
-        onPress={() => setShowApiConsoleModal(true)}
-        style={{
-          backgroundColor: colors.accent.purple,
-          paddingVertical: spacing.sm + 2,
-          paddingHorizontal: spacing.md,
-          borderRadius: radius.md,
-          alignItems: 'center',
-          marginTop: spacing.md,
-        }}
+      {/* ── Central Unificada: Hub de Conexão, Console de Testes & Agentes IA ───────────────────────── */}
+      <HapticButton 
+        onPress={() => setShowGuide(!showGuide)} 
+        style={[styles.guideHeader, { marginTop: spacing.md }]}
       >
-        <Text style={{ color: '#ffffff', fontWeight: '700', fontSize: 13 }}>
-          🚀 Abrir Console de Testes & Alterações em Massa via API
+        <Text style={styles.guideHeaderTitle}>
+          {showGuide ? '🔌 Ocultar Central de Agentes IA & Console API ▲' : '⚡ Central de Integração, Agentes IA & Console API ▼'}
         </Text>
       </HapticButton>
 
@@ -2045,93 +2129,137 @@ PROCEDIMENTO PADRÃO OBRIGATÓRIO:
         </SafeAreaView>
       </Modal>
 
-      {/* ── Hub de Conexão & System Prompts Turbocharged ───────────────────────── */}
-      <HapticButton 
-        onPress={() => setShowGuide(!showGuide)} 
-        style={styles.guideHeader}
-      >
-        <Text style={styles.guideHeaderTitle}>
-          {showGuide ? '🔌 Ocultar Hub de Prompts & Integração ▲' : '🔌 Hub de Conexão & System Prompts Turbocharged ▼'}
-        </Text>
-      </HapticButton>
-
       {showGuide && (
         <View style={styles.guideContent}>
-          {/* 1. Schema OpenAPI & Chave de Autenticação */}
-          <Text style={styles.guideStepTitle}>1. Schema OpenAPI & Autenticação:</Text>
-          <Text style={styles.guideText}>
-            Para IAs externas (como ChatGPT ou Claude) saberem quais rotas chamar, importe o link OpenAPI e configure o cabeçalho obrigatório:
-          </Text>
-
-          <HapticButton 
-            onPress={handleCopySchema} 
-            style={[styles.copySchemaBtn, copiedSchema && styles.copyBtnSuccess]}
-          >
-            <Text style={styles.copySchemaBtnText}>
-              {copiedSchema ? 'Link OpenAPI Copiado! ✓' : 'Copiar Link do Schema OpenAPI 📋'}
-            </Text>
-          </HapticButton>
-
+          {/* 1. Barra de Ações Rápidas & Infraestrutura */}
           <View style={{
             backgroundColor: colors.background.secondary,
             padding: spacing.sm,
-            borderRadius: radius.sm,
-            borderLeftWidth: 3,
-            borderLeftColor: colors.accent.purple,
-            marginBottom: spacing.xs,
+            borderRadius: radius.md,
+            borderWidth: 1,
+            borderColor: colors.border.strong,
+            gap: spacing.xs,
+            marginBottom: spacing.sm,
           }}>
-            <Text style={{ fontSize: 11, color: colors.text.secondary }}>
-              Cabeçalho de Autenticação: <Text style={{ color: colors.text.primary, fontWeight: '700', fontFamily: 'monospace' }}>X-Spreadsheet-Key</Text>
-            </Text>
-            <Text style={{ fontSize: 11, color: colors.text.secondary, marginTop: 2 }}>
-              Status da Chave: <Text style={{ color: colors.accent.purple, fontWeight: '700', fontFamily: 'monospace' }}>{keyHint ? `Ativa (${keyHint})` : 'Gere uma chave acima'}</Text>
-            </Text>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Text style={{ fontSize: 12, fontWeight: '700', color: colors.text.primary }}>
+                Console de Testes & Links da API
+              </Text>
+              <View style={{
+                backgroundColor: keyHint ? colors.success.light : colors.accent.purple + '22',
+                paddingHorizontal: 8,
+                paddingVertical: 2,
+                borderRadius: 12,
+              }}>
+                <Text style={{ fontSize: 10, fontWeight: '700', color: keyHint ? colors.success.main : colors.accent.purple }}>
+                  {keyHint ? `Chave Ativa (${keyHint})` : 'Gere uma chave acima'}
+                </Text>
+              </View>
+            </View>
+
+            {/* Botão de Destaque para o Console de Testes */}
+            <HapticButton
+              onPress={() => setShowApiConsoleModal(true)}
+              style={{
+                backgroundColor: colors.accent.purple,
+                paddingVertical: spacing.xs + 4,
+                paddingHorizontal: spacing.md,
+                borderRadius: radius.sm,
+                alignItems: 'center',
+                marginVertical: 2,
+              }}
+            >
+              <Text style={{ color: '#ffffff', fontWeight: '700', fontSize: 12 }}>
+                🚀 Abrir Console de Testes & Alterações em Massa via API
+              </Text>
+            </HapticButton>
+
+            {/* Linha com Schema OpenAPI e Rota de Prompt Obrigatória */}
+            <View style={{ flexDirection: 'row', gap: spacing.xs }}>
+              <HapticButton 
+                onPress={handleCopySchema} 
+                style={[
+                  styles.copySchemaBtn, 
+                  copiedSchema && styles.copyBtnSuccess,
+                  { flex: 1, marginTop: 0 }
+                ]}
+              >
+                <Text style={styles.copySchemaBtnText} numberOfLines={1}>
+                  {copiedSchema ? 'Schema Copiado! ✓' : '📋 Copiar Schema OpenAPI'}
+                </Text>
+              </HapticButton>
+
+              <HapticButton 
+                onPress={handleCopyPromptRoute} 
+                style={[
+                  styles.copySchemaBtn, 
+                  copiedPromptRoute && styles.copyBtnSuccess,
+                  { flex: 1, marginTop: 0, backgroundColor: colors.accent.purple + '22', borderColor: colors.accent.purple }
+                ]}
+              >
+                <Text style={[styles.copySchemaBtnText, { color: colors.accent.purple }]} numberOfLines={1}>
+                  {copiedPromptRoute ? 'Rota Copiada! ✓' : '🔗 Rota /agent-prompt'}
+                </Text>
+              </HapticButton>
+            </View>
+
+            <View style={{
+              backgroundColor: colors.background.tertiary,
+              padding: spacing.xs + 2,
+              borderRadius: radius.xs || 4,
+              borderLeftWidth: 3,
+              borderLeftColor: colors.accent.purple,
+            }}>
+              <Text style={{ fontSize: 10, color: colors.text.secondary }}>
+                Cabeçalho: <Text style={{ color: colors.text.primary, fontWeight: '700', fontFamily: 'monospace' }}>X-Spreadsheet-Key</Text> • Protocolo: <Text style={{ color: colors.accent.purple, fontWeight: '700' }}>Etapa 1: /agent-prompt → Etapa 2: SEMPRE ai-analyst primeiro!</Text>
+              </Text>
+            </View>
           </View>
 
-          {/* 2. Seletor de System Prompts Turbocharged */}
-          <Text style={[styles.guideStepTitle, { marginTop: spacing.sm }]}>
-            2. System Prompts Prontos para Uso (Turbocharged):
+          {/* 2. Seletor de Perfis do Agente de IA */}
+          <Text style={styles.guideStepTitle}>
+            Instruções & Prompts Prontos para Uso:
           </Text>
           <Text style={styles.guideText}>
-            Escolha o perfil desejado para copiar e colar diretamente nas instruções da sua IA externa (sem limite de tokens, foco em eficiência máxima):
+            Selecione o perfil desejado para ler na íntegra no leitor abaixo ou copiar diretamente para seu agente:
           </Text>
 
           {/* Tabs de Seleção de Prompts */}
-          <View style={{ flexDirection: 'row', gap: 4, marginVertical: spacing.xs }}>
-            {SYSTEM_PROMPTS.map((p, idx) => {
-              const active = selectedPromptTab === idx;
-              return (
-                <Pressable
-                  key={idx}
-                  onPress={() => setSelectedPromptTab(idx)}
-                  style={{
-                    flex: 1,
-                    paddingVertical: 7,
-                    paddingHorizontal: 4,
-                    borderRadius: radius.xs || 6,
-                    backgroundColor: active ? colors.accent.purple : colors.background.secondary,
-                    alignItems: 'center',
-                    borderWidth: 1,
-                    borderColor: active ? colors.accent.purple : colors.border.default,
-                  }}
-                >
-                  <Text
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginVertical: spacing.xs }}>
+            <View style={{ flexDirection: 'row', gap: 6, paddingVertical: 2 }}>
+              {SYSTEM_PROMPTS.map((p, idx) => {
+                const active = selectedPromptTab === idx;
+                const tabColor = p.badgeColor || colors.accent.purple;
+                return (
+                  <Pressable
+                    key={idx}
+                    onPress={() => setSelectedPromptTab(idx)}
                     style={{
-                      fontSize: 10,
-                      fontWeight: active ? '700' : '600',
-                      color: active ? '#ffffff' : colors.text.secondary,
-                      textAlign: 'center',
+                      paddingVertical: 7,
+                      paddingHorizontal: 10,
+                      borderRadius: radius.sm || 6,
+                      backgroundColor: active ? tabColor : colors.background.secondary,
+                      alignItems: 'center',
+                      borderWidth: 1,
+                      borderColor: active ? tabColor : colors.border.default,
                     }}
-                    numberOfLines={1}
                   >
-                    {p.title}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
+                    <Text
+                      style={{
+                        fontSize: 11,
+                        fontWeight: active ? '700' : '600',
+                        color: active ? '#ffffff' : colors.text.secondary,
+                      }}
+                    >
+                      {p.title}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </ScrollView>
 
-          {/* Card do Prompt Selecionado */}
+          {/* 3. Card do Prompt Selecionado & Leitor Completo */}
           {SYSTEM_PROMPTS[selectedPromptTab] && (
             <View style={{
               backgroundColor: colors.background.secondary,
@@ -2168,42 +2296,75 @@ PROCEDIMENTO PADRÃO OBRIGATÓRIO:
                 💡 <Text style={{ fontStyle: 'italic' }}>{SYSTEM_PROMPTS[selectedPromptTab].description}</Text>
               </Text>
 
-              <TextInput
-                style={{
-                  backgroundColor: colors.background.tertiary,
-                  borderRadius: radius.sm,
-                  padding: spacing.sm,
-                  fontSize: 11,
-                  color: colors.text.primary,
-                  fontFamily: 'monospace',
-                  maxHeight: 180,
-                  borderWidth: 1,
-                  borderColor: colors.border.default,
-                }}
-                value={SYSTEM_PROMPTS[selectedPromptTab].content}
-                multiline
-                editable={false}
-                selectTextOnFocus
-              />
+              {/* Barra de Ferramentas do Leitor */}
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: spacing.xs }}>
+                <Text style={{ fontSize: 11, fontWeight: '700', color: colors.text.secondary }}>
+                  📖 Espaço de Leitura & Inspeção do Prompt:
+                </Text>
+                <Pressable
+                  onPress={() => setIsPromptReaderExpanded(!isPromptReaderExpanded)}
+                  style={{
+                    paddingVertical: 3,
+                    paddingHorizontal: 8,
+                    borderRadius: 4,
+                    backgroundColor: colors.background.tertiary,
+                    borderWidth: 1,
+                    borderColor: colors.border.default,
+                  }}
+                >
+                  <Text style={{ fontSize: 10, fontWeight: '600', color: colors.accent.purple }}>
+                    {isPromptReaderExpanded ? '🔼 Recolher Altura' : '🔽 Expandir Leitura'}
+                  </Text>
+                </Pressable>
+              </View>
 
+              {/* Visualizador Confortável com Scroll */}
+              <View style={{
+                backgroundColor: colors.background.tertiary,
+                borderRadius: radius.sm,
+                borderWidth: 1,
+                borderColor: colors.border.default,
+                height: isPromptReaderExpanded ? 460 : 220,
+                padding: spacing.xs,
+              }}>
+                <ScrollView 
+                  nestedScrollEnabled
+                  showsVerticalScrollIndicator={true}
+                  contentContainerStyle={{ padding: spacing.xs }}
+                >
+                  <Text 
+                    selectable
+                    style={{
+                      fontSize: 11,
+                      color: colors.text.primary,
+                      fontFamily: Platform.select({ ios: 'Menlo', android: 'monospace', default: 'monospace' }),
+                      lineHeight: 16,
+                    }}
+                  >
+                    {SYSTEM_PROMPTS[selectedPromptTab].content}
+                  </Text>
+                </ScrollView>
+              </View>
+
+              {/* Botão de Copiar Prompt */}
               <HapticButton
                 onPress={() => handleCopyPrompt(selectedPromptTab, SYSTEM_PROMPTS[selectedPromptTab].content)}
                 style={[
                   styles.copyBtn,
                   copiedPromptIndex === selectedPromptTab && styles.copyBtnSuccess,
-                  { marginTop: spacing.xxs }
+                  { marginTop: spacing.xs }
                 ]}
               >
                 <Text style={styles.copyBtnText}>
-                  {copiedPromptIndex === selectedPromptTab ? 'Prompt Copiado com Sucesso! ✓' : 'Copiar System Prompt 📋'}
+                  {copiedPromptIndex === selectedPromptTab ? 'Prompt Copiado com Sucesso! ✓' : 'Copiar System Prompt Completo 📋'}
                 </Text>
               </HapticButton>
             </View>
           )}
 
-          {/* 3. Guia Rápido por Plataforma */}
+          {/* 4. Guia Rápido por Plataforma */}
           <Text style={[styles.guideStepTitle, { marginTop: spacing.md }]}>
-            3. Como Configurar na sua Plataforma:
+            4. Como Configurar na sua Plataforma:
           </Text>
 
           <View style={styles.guideStepsBox}>
@@ -2212,20 +2373,25 @@ PROCEDIMENTO PADRÃO OBRIGATÓRIO:
             </Text>
             <Text style={styles.guideStepItem}>• Explore GPTs → Create → Configure.</Text>
             <Text style={styles.guideStepItem}>• Cole o System Prompt desejado no campo "Instructions".</Text>
-            <Text style={styles.guideStepItem}>• Role até o final e clique em "Create new action" → "Import from URL".</Text>
-            <Text style={styles.guideStepItem}>• Cole o Link do Schema OpenAPI copiado acima.</Text>
-            <Text style={styles.guideStepItem}>• Em Authentication: Auth Type = Custom, Header Name = X-Spreadsheet-Key e cole sua Chave API.</Text>
+            <Text style={styles.guideStepItem}>• Em "Actions" → Import from URL → Cole o Link OpenAPI.</Text>
+            <Text style={styles.guideStepItem}>• Em Authentication: Auth Type = Custom, Header = X-Spreadsheet-Key com sua chave.</Text>
+            <Text style={[styles.guideStepItem, { color: colors.accent.purple, fontWeight: '600' }]}>
+              • O GPT está instruído a SEMPRE chamar a rota ai-analyst primeiro para o diagnóstico.
+            </Text>
 
             <Text style={[styles.guideStepItem, { fontWeight: '700', color: colors.text.primary, marginTop: spacing.xs }]}>
               ⚡ Claude (Projects / Claude Code):
             </Text>
-            <Text style={styles.guideStepItem}>• Crie um Project no Claude e cole o System Prompt nas instruções.</Text>
-            <Text style={styles.guideStepItem}>• Forneça o link do OpenAPI e sua chave X-Spreadsheet-Key para consultas via ferramentas.</Text>
+            <Text style={styles.guideStepItem}>• Crie um Project e cole o System Prompt do "🌟 Agent Native" nas instruções.</Text>
+            <Text style={styles.guideStepItem}>• Forneça o link do OpenAPI e a chave X-Spreadsheet-Key.</Text>
+            <Text style={[styles.guideStepItem, { color: colors.accent.purple, fontWeight: '600' }]}>
+              • O Claude executará a Etapa 1 (/agent-prompt) e Etapa 2 (ai-analyst) antes de responder.
+            </Text>
 
             <Text style={[styles.guideStepItem, { fontWeight: '700', color: colors.text.primary, marginTop: spacing.xs }]}>
               🛠️ Cursor / Claude Code / Python / n8n:
             </Text>
-            <Text style={styles.guideStepItem}>• Use o Prompt "🛠️ Agente Dev / Script" para que a IA siga o passo a passo oficial de validação e leitura sem poluir o ambiente.</Text>
+            <Text style={styles.guideStepItem}>• Use o Prompt "🛠️ Agente Dev / Scripting" para seguir o protocolo estrito de 3 etapas sem poluir o ambiente.</Text>
           </View>
         </View>
       )}

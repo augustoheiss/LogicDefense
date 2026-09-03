@@ -16,6 +16,14 @@ from pydantic import BaseModel, Field
 # Import backend metrics engine and models
 from services.coin_metrics_engine import compute_metrics
 from services.context_builder import build_financial_context, get_system_prompt
+from prompts.finance_prompts import (
+    SKILLS_MANIFEST,
+    get_agent_native_master_prompt,
+    get_cfo_fpa_prompt,
+    get_operational_godmode_prompt,
+    get_goals_timebank_prompt,
+    get_developer_script_prompt,
+)
 from models.coin_models import (
     TableRow,
     TableGoals,
@@ -38,6 +46,17 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s  %(message)s")
 log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/public", tags=["Public API Integration"])
+
+
+class PublicAgentPromptResponse(BaseModel):
+    status: str = Field("success", description="Status da resposta.")
+    version: str = Field("2.0.0", description="Versão da especificação de Prompts & Habilidades.")
+    workflow_steps: List[Dict[str, Any]] = Field(..., description="Sequência mandatória de execução do agente.")
+    skills_integrated: List[Dict[str, str]] = Field(..., description="Manifesto das 8 skills financeiras integradas.")
+    prompt: str = Field(..., description="Texto do prompt de instrução selecionado.")
+    profile_used: str = Field(..., description="Perfil de prompt retornado.")
+    mandatory_next_route: str = Field("POST /api/v1/public/ai-analyst", description="Próxima rota mandatória a ser chamada pela IA.")
+    api_key_status: str = Field("anonymous", description="Status da chave informada ('active' ou 'anonymous').")
 
 @router.get("/openapi.json", include_in_schema=False)
 async def get_public_openapi(request: Request):
@@ -569,6 +588,90 @@ async def sync_pending_queue(
         "pendingCount": len(parsed_events),
         "events": parsed_events
     }
+
+@router.get("/agent-prompt", response_model=PublicAgentPromptResponse, summary="[ROTA OBRIGATÓRIA #0] Ingestão de Prompt & Habilidades Financeiras")
+@router.get("/prompt", response_model=PublicAgentPromptResponse, summary="[ROTA OBRIGATÓRIA #0] Ingestão de Prompt & Habilidades Financeiras")
+async def get_agent_prompt(
+    request: Request,
+    profile: str = Query("native", description="Perfil do prompt: 'native' (padrão / Agent Native), 'cfo' (CFO & FP&A), 'operational' (God Mode Batch), 'goals' (Metas & Tempo), 'dev' (Scripting)"),
+    format: str = Query("json", description="Formato de saída: 'json' (padrão), 'text' ou 'markdown'"),
+    x_spreadsheet_key: Optional[str] = Header(None, alias="X-Spreadsheet-Key")
+):
+    """
+    [ROTA OBRIGATÓRIA #0] Ponto de partida inegociável para agentes de IA e integrações externas.
+    Entrega a matriz das 8 habilidades financeiras integradas e estipula o protocolo obrigatório:
+    SEMPRE consultar a rota AI-analyst primeiro (POST /api/v1/public/ai-analyst) antes de responder ou mutar dados.
+    """
+    server_base_url = str(request.base_url).rstrip("/")
+    api_key_str = "<SUA_CHAVE_API>"
+    api_key_status = "anonymous"
+
+    if x_spreadsheet_key and x_spreadsheet_key.strip().startswith("am_sheet_live_"):
+        try:
+            k_hash = hashlib.sha256(x_spreadsheet_key.strip().encode("utf-8")).hexdigest()
+            from db.license_db import get_spreadsheet_api_key
+            rec = get_spreadsheet_api_key(k_hash)
+            if rec and not rec.get("is_expired") and rec.get("is_active", 1):
+                api_key_str = x_spreadsheet_key.strip()
+                api_key_status = "active"
+        except Exception:
+            pass
+
+    prof = (profile or "native").strip().lower()
+    if prof in ["cfo", "fpa", "mentoria"]:
+        selected_prompt = get_cfo_fpa_prompt(base_url=server_base_url, api_key=api_key_str)
+        profile_label = "cfo_fpa"
+    elif prof in ["operational", "operacional", "godmode", "batch"]:
+        selected_prompt = get_operational_godmode_prompt(base_url=server_base_url, api_key=api_key_str)
+        profile_label = "operational_godmode"
+    elif prof in ["goals", "metas", "timebank", "burnout"]:
+        selected_prompt = get_goals_timebank_prompt(base_url=server_base_url, api_key=api_key_str)
+        profile_label = "goals_timebank"
+    elif prof in ["dev", "script", "cli", "curl"]:
+        selected_prompt = get_developer_script_prompt(base_url=server_base_url, api_key=api_key_str)
+        profile_label = "developer_script"
+    else:
+        selected_prompt = get_agent_native_master_prompt(base_url=server_base_url, api_key=api_key_str)
+        profile_label = "agent_native_master"
+
+    accept_hdr = request.headers.get("accept", "")
+    if format.lower() in ["text", "txt", "markdown", "md"] or "text/plain" in accept_hdr:
+        return Response(content=selected_prompt, media_type="text/plain; charset=utf-8")
+
+    workflow_steps = [
+        {
+            "step": 1,
+            "name": "Ingestão de Prompt & Skills (Atual)",
+            "route": "GET /api/v1/public/agent-prompt",
+            "status": "completed",
+            "description": "Adquirir identidade executiva e o ecossistema de 8 skills financeiras integradas."
+        },
+        {
+            "step": 2,
+            "name": "Consulta Obrigatória à AI-Analyst (SEMPRE A AI-ANALYST PRIMEIRO)",
+            "route": "POST /api/v1/public/ai-analyst",
+            "status": "mandatory_next_step",
+            "description": "Disparar a solicitação para a ai-analyst obter o diagnóstico em memória, métricas estatísticas avançadas e análise estratégica antes de qualquer decisão."
+        },
+        {
+            "step": 3,
+            "name": "Operações Secundárias sob Demanda",
+            "route": "GET /summary, GET /transactions, POST /transactions/batch-sync, GET /spreadsheet/export",
+            "status": "on_demand",
+            "description": "Executar consultas analíticas ou mutações em lote conforme a recomendação do diagnóstico."
+        }
+    ]
+
+    return PublicAgentPromptResponse(
+        status="success",
+        version="2.0.0",
+        workflow_steps=workflow_steps,
+        skills_integrated=SKILLS_MANIFEST,
+        prompt=selected_prompt,
+        profile_used=profile_label,
+        mandatory_next_route="POST /api/v1/public/ai-analyst",
+        api_key_status=api_key_status
+    )
 
 @router.get("", response_model=PublicAnalysisContextResponse, summary="[ROTA PRINCIPAL #1] Snapshot Financeiro Completo")
 @router.get("/", response_model=PublicAnalysisContextResponse, summary="[ROTA PRINCIPAL #1] Snapshot Financeiro Completo")

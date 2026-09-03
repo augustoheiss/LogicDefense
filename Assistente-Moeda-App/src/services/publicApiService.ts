@@ -18,6 +18,7 @@ import {
   AppendSpreadsheetResponse,
   PublicAIAnalystPayload,
   PublicAIAnalystResponse,
+  PublicAgentPromptResponse,
 } from '@/config/publicApiConfig';
 
 export interface APIExecutionResult<T> {
@@ -247,3 +248,69 @@ export async function publicAiAnalyst(
     };
   }
 }
+
+/**
+ * 0. GET /api/v1/public/agent-prompt
+ * [ROTA OBRIGATÓRIA #0] Obter instruções e skills financeiras de elite para o agente.
+ */
+export async function getAgentPrompt(
+  profile: string = 'native',
+  format: 'json' | 'text' = 'json',
+  apiKey: string = DEFAULT_PUBLIC_API_KEY,
+  baseUrl: string = DEFAULT_PUBLIC_API_URL
+): Promise<APIExecutionResult<PublicAgentPromptResponse | string>> {
+  const startTime = Date.now();
+  try {
+    const url = new URL(`${baseUrl.replace(/\/$/, '')}/api/v1/public/agent-prompt`);
+    if (profile) url.searchParams.append('profile', profile);
+    if (format) url.searchParams.append('format', format);
+
+    const headers = apiKey ? getPublicApiHeaders(apiKey) : { 'Content-Type': 'application/json' };
+    const res = await fetch(url.toString(), {
+      method: 'GET',
+      headers,
+    });
+
+    const latencyMs = Date.now() - startTime;
+    const text = await res.text();
+
+    if (!res.ok) {
+      return {
+        success: false,
+        status: res.status,
+        data: null,
+        error: `HTTP ${res.status}: ${text}`,
+        latencyMs,
+        rawResponse: text,
+      };
+    }
+
+    if (format === 'text') {
+      return {
+        success: true,
+        status: res.status,
+        data: text,
+        latencyMs,
+        rawResponse: text,
+      };
+    }
+
+    const data = JSON.parse(text) as PublicAgentPromptResponse;
+    return {
+      success: true,
+      status: res.status,
+      data,
+      latencyMs,
+      rawResponse: text,
+    };
+  } catch (err: any) {
+    return {
+      success: false,
+      status: 0,
+      data: null,
+      error: err?.message || 'Erro de conexão com o servidor',
+      latencyMs: Date.now() - startTime,
+    };
+  }
+}
+
