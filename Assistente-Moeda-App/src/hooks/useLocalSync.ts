@@ -10,8 +10,9 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { Platform } from 'react-native';
 import { useCoinDB } from './useCoinDB';
 import type { TableRow } from '../core/types';
+import { DEFAULT_PUBLIC_API_URL } from '../config/publicApiConfig';
 
-const API_BASE_URL = 'http://127.0.0.1:8000/api/v1/public';
+const API_BASE_URL = `${DEFAULT_PUBLIC_API_URL.replace(/\/$/, '')}/api/v1/public`;
 
 export interface AuditLogItem {
   id: string;

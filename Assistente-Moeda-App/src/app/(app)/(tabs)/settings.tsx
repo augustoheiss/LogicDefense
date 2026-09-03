@@ -772,6 +772,7 @@ export default function SettingsScreen() {
           <Section title="🔌 Integração via API (IA)">
             <SpreadsheetApiSection 
               tableId={db.activeTable.id} 
+              activeTable={db.activeTable}
               onShowStore={() => setShowStoreModal(true)} 
             />
           </Section>
@@ -1277,9 +1278,11 @@ const Section = React.memo(function Section({ title, children }: { title: string
 
 const SpreadsheetApiSection = React.memo(function SpreadsheetApiSection({
   tableId,
+  activeTable,
   onShowStore,
 }: {
   tableId: string;
+  activeTable?: CoinTable | null;
   onShowStore: () => void;
 }) {
   const router = useRouter();
@@ -1297,6 +1300,46 @@ const SpreadsheetApiSection = React.memo(function SpreadsheetApiSection({
   const [copiedPromptRoute, setCopiedPromptRoute] = useState(false);
   const [isPromptReaderExpanded, setIsPromptReaderExpanded] = useState(false);
   const [showApiConsoleModal, setShowApiConsoleModal] = useState(false);
+  const [syncingSnapshot, setSyncingSnapshot] = useState(false);
+  const [syncSuccessMessage, setSyncSuccessMessage] = useState<string | null>(null);
+
+  const handlePushSnapshot = useCallback(async (keyOverride?: string) => {
+    const keyToUse = keyOverride || apiKey;
+    if (!keyToUse || !activeTable?.rows || activeTable.rows.length === 0) return;
+    setSyncingSnapshot(true);
+    try {
+      const res = await fetch(`${API_URL}/api/v1/public/transactions/batch-sync`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Spreadsheet-Key': keyToUse,
+          'X-Origin-Browser': 'true',
+        },
+        body: JSON.stringify({
+          mode: 'replace',
+          transactions: activeTable.rows.map((r) => ({
+            date: r.date,
+            value: r.entryType === 'expense' ? -Math.abs(r.value) : Math.abs(r.value),
+            description: r.description,
+            entry_type: r.entryType,
+            category: r.category,
+            tags: r.tags,
+            external_id: r.id,
+            period_start: r.periodStart,
+            period_end: r.periodEnd,
+          }))
+        })
+      });
+      if (res.ok) {
+        setSyncSuccessMessage(`✓ ${activeTable.rows.length} lançamentos enviados para a API!`);
+        setTimeout(() => setSyncSuccessMessage(null), 3500);
+      }
+    } catch (err) {
+      console.warn('Falha ao enviar snapshot:', err);
+    } finally {
+      setSyncingSnapshot(false);
+    }
+  }, [apiKey, activeTable?.rows]);
 
   const [selectedPromptTab, setSelectedPromptTab] = useState<number>(0);
   const [copiedPromptIndex, setCopiedPromptIndex] = useState<number | null>(null);
@@ -1775,6 +1818,10 @@ BOAS PRÁTICAS DE AMBIENTE:
           window.localStorage.setItem(`coin_expires_at_${tableId}`, newExp);
         }
       }
+
+      if (newKey && activeTable?.rows && activeTable.rows.length > 0) {
+        handlePushSnapshot(newKey);
+      }
     } catch (error: any) {
       if (Platform.OS === 'web') {
         window.alert(`Erro de rede: ${error.message}`);
@@ -2173,6 +2220,32 @@ BOAS PRÁTICAS DE AMBIENTE:
                 🚀 Abrir Console de Testes & Alterações em Massa via API
               </Text>
             </HapticButton>
+
+            {/* Botão de Sincronismo dos Dados Locais para a Nuvem */}
+            {activeTable && activeTable.rows && activeTable.rows.length > 0 && (
+              <HapticButton
+                onPress={() => handlePushSnapshot()}
+                disabled={syncingSnapshot}
+                style={{
+                  backgroundColor: syncSuccessMessage ? colors.success.main : colors.background.tertiary,
+                  borderWidth: 1,
+                  borderColor: syncSuccessMessage ? colors.success.border : colors.border.strong,
+                  paddingVertical: spacing.xs + 3,
+                  paddingHorizontal: spacing.md,
+                  borderRadius: radius.sm,
+                  alignItems: 'center',
+                  marginVertical: 2,
+                }}
+              >
+                {syncingSnapshot ? (
+                  <ActivityIndicator size="small" color="#ffffff" />
+                ) : (
+                  <Text style={{ color: syncSuccessMessage ? '#ffffff' : colors.text.primary, fontWeight: '700', fontSize: 12 }}>
+                    {syncSuccessMessage || `📤 Sincronizar ${activeTable.rows.length} Lançamentos Locais com a API`}
+                  </Text>
+                )}
+              </HapticButton>
+            )}
 
             {/* Linha com Schema OpenAPI e Rota de Prompt Obrigatória */}
             <View style={{ flexDirection: 'row', gap: spacing.xs }}>
