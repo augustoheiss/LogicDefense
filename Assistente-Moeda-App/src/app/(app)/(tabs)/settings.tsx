@@ -8,7 +8,7 @@
  *   - Annual costs by year
  */
 
-import React, { useState, useCallback, useMemo, useEffect } from 'react';
+import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import {
   View,
@@ -1341,6 +1341,23 @@ const SpreadsheetApiSection = React.memo(function SpreadsheetApiSection({
     }
   }, [apiKey, activeTable?.rows]);
 
+  // Auto-sync transparente em background sempre que os lançamentos mudarem
+  const lastRowsHashRef = useRef<string>('');
+  useEffect(() => {
+    const keyToUse = apiKey || (typeof window !== 'undefined' ? window.localStorage?.getItem(`coin_api_key_${tableId}`) : null);
+    if (!keyToUse || !activeTable?.rows || activeTable.rows.length === 0) return;
+
+    const currentHash = `${activeTable.rows.length}_${activeTable.rows[activeTable.rows.length - 1]?.id || ''}_${activeTable.rows[0]?.id || ''}`;
+    if (lastRowsHashRef.current === currentHash) return;
+
+    const timer = setTimeout(() => {
+      lastRowsHashRef.current = currentHash;
+      handlePushSnapshot(keyToUse);
+    }, 1200);
+
+    return () => clearTimeout(timer);
+  }, [apiKey, tableId, activeTable?.rows, handlePushSnapshot]);
+
   const [selectedPromptTab, setSelectedPromptTab] = useState<number>(0);
   const [copiedPromptIndex, setCopiedPromptIndex] = useState<number | null>(null);
 
@@ -2054,6 +2071,66 @@ BOAS PRÁTICAS DE AMBIENTE:
               <Text style={{ fontSize: 11, color: colors.success.main, marginTop: spacing.xxs }}>
                 ✓ Planilha com chave ativa vinculada (carregada do backup/localStorage).
               </Text>
+
+              {/* ── Banner de Sincronização em Tempo Real (Altamente Visível) ── */}
+              {activeTable && activeTable.rows && activeTable.rows.length > 0 && (
+                <View style={{
+                  backgroundColor: 'rgba(16, 185, 129, 0.08)',
+                  borderColor: syncSuccessMessage ? colors.success.main : 'rgba(16, 185, 129, 0.28)',
+                  borderWidth: 1,
+                  borderRadius: radius.sm,
+                  padding: spacing.sm,
+                  marginTop: spacing.sm,
+                  marginBottom: spacing.xxs,
+                  gap: 6,
+                }}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Text style={{ fontSize: 14 }}>☁️</Text>
+                      <Text style={{ fontSize: 13, fontWeight: '700', color: colors.text.primary }}>
+                        Sincronização em Tempo Real
+                      </Text>
+                    </View>
+                    <View style={{
+                      backgroundColor: colors.success.light,
+                      paddingHorizontal: 8,
+                      paddingVertical: 2,
+                      borderRadius: 10,
+                      borderWidth: 1,
+                      borderColor: colors.success.border,
+                    }}>
+                      <Text style={{ fontSize: 10, fontWeight: '700', color: colors.success.main }}>
+                        ⚡ Auto-Sync Ativo
+                      </Text>
+                    </View>
+                  </View>
+
+                  <Text style={{ fontSize: 11, color: colors.text.secondary, lineHeight: 15 }}>
+                    {activeTable.rows.length} lançamentos locais. O app sincroniza automaticamente suas alterações com a API em background (sem custo de tokens ou quotas).
+                  </Text>
+
+                  <HapticButton
+                    onPress={() => handlePushSnapshot()}
+                    disabled={syncingSnapshot}
+                    style={{
+                      backgroundColor: syncSuccessMessage ? colors.success.main : colors.accent.purple,
+                      paddingVertical: spacing.xs + 3,
+                      paddingHorizontal: spacing.md,
+                      borderRadius: radius.xs || 6,
+                      alignItems: 'center',
+                      marginTop: 4,
+                    }}
+                  >
+                    {syncingSnapshot ? (
+                      <ActivityIndicator size="small" color="#ffffff" />
+                    ) : (
+                      <Text style={{ color: '#ffffff', fontWeight: '700', fontSize: 12 }}>
+                        {syncSuccessMessage || `📤 Sincronizar ${activeTable.rows.length} Lançamentos Agora`}
+                      </Text>
+                    )}
+                  </HapticButton>
+                </View>
+              )}
 
               {renderTtlPicker()}
 
