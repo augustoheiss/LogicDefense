@@ -1,5 +1,6 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react'
 import type { SectionBoxDimensions } from '../../types/cv'
+import { CATEGORY_VARIANTS_MAP } from '../../types/variants'
 
 interface StructuralBoxWrapperProps {
   sectionId: string
@@ -8,12 +9,15 @@ interface StructuralBoxWrapperProps {
   dimensions?: SectionBoxDimensions
   canSwitchZone?: boolean
   currentZone?: 'left' | 'right'
+  category?: string
   onUpdateDimensions?: (dims: SectionBoxDimensions) => void
   onMoveUp?: () => void
   onMoveDown?: () => void
   onSwapWithSection?: (targetSectionId: string) => void
   onSwitchZone?: () => void
   onResetDimensions?: () => void
+  onToggleHide?: () => void
+  onSelectVariant?: (variant: string) => void
   children: React.ReactNode
 }
 
@@ -24,11 +28,14 @@ export const StructuralBoxWrapper: React.FC<StructuralBoxWrapperProps> = ({
   dimensions,
   canSwitchZone,
   currentZone,
+  category,
   onUpdateDimensions,
   onMoveUp,
   onMoveDown,
   onSwitchZone,
   onResetDimensions,
+  onToggleHide,
+  onSelectVariant,
   children
 }) => {
   const containerRef = useRef<HTMLDivElement>(null)
@@ -281,6 +288,11 @@ export const StructuralBoxWrapper: React.FC<StructuralBoxWrapperProps> = ({
     })
   }
 
+  // Se o item estiver ocultado pelo usuário no Canvas/Paleta, não renderiza
+  if (dimensions?.hidden) {
+    return null
+  }
+
   // Se o modo Canvas Livre estiver inativo, renderiza puramente o conteúdo sem custo DOM
   if (!isFreeCanvasActive) {
     return <>{children}</>
@@ -466,7 +478,35 @@ export const StructuralBoxWrapper: React.FC<StructuralBoxWrapperProps> = ({
               ▼
             </button>
           )}
-          {onResetDimensions && (dimensions?.widthPercent || dimensions?.minHeightPx || dimensions?.marginTopPx || dimensions?.marginLeftPx || dimensions?.alignment) && (
+          {/* Seletor de Variante de Layout do Bloco */}
+          {category && CATEGORY_VARIANTS_MAP[category] && onSelectVariant && (
+            <select
+              className="cv-toolbar-variant-select"
+              value={dimensions?.variant || CATEGORY_VARIANTS_MAP[category][0].id}
+              onChange={e => onSelectVariant(e.target.value)}
+              title="Alterar layout / formato deste bloco"
+            >
+              {CATEGORY_VARIANTS_MAP[category].map(v => (
+                <option key={v.id} value={v.id}>
+                  {v.icon} {v.label}
+                </option>
+              ))}
+            </select>
+          )}
+
+          {/* Botão de Ocultar / Visibilidade */}
+          {onToggleHide && (
+            <button
+              type="button"
+              className="cv-structural-act-btn cv-structural-act-btn--hide"
+              onClick={onToggleHide}
+              title="Ocultar este item da folha A4 (restaurável na paleta)"
+            >
+              👁️
+            </button>
+          )}
+
+          {onResetDimensions && (dimensions?.widthPercent || dimensions?.minHeightPx || dimensions?.marginTopPx || dimensions?.marginLeftPx || dimensions?.alignment || dimensions?.variant) && (
             <button
               type="button"
               className="cv-structural-act-btn cv-structural-act-btn--reset"

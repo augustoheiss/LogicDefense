@@ -17,6 +17,7 @@ import { CVToolbar } from './components/Toolbar/CVToolbar'
 import { CVHistoryTab } from './components/History/CVHistoryTab'
 import { PhotoUploader } from './components/Toolbar/PhotoUploader'
 import { DesignCustomizerDrawer } from './components/Toolbar/DesignCustomizerDrawer'
+import { CanvasElementsPalette } from './components/CanvasBuilder/CanvasElementsPalette'
 import { AgentHubModal } from './components/Modals/AgentHubModal'
 import { CVStoreModal } from './components/StoreModal/CVStoreModal'
 import { GenerateCoverLetterModal } from './components/Modals/GenerateCoverLetterModal'
@@ -40,7 +41,7 @@ const STORAGE_STRUCTURES_KEY = 'cv_maker_layout_structures_v1'
 
 export const CVMakerApp: React.FC = () => {
   // Navigation
-  const [activeTab, setActiveTab] = useState<'chat' | 'editor' | 'history'>('editor')
+  const [activeTab, setActiveTab] = useState<'chat' | 'editor' | 'history' | 'canvas'>('editor')
 
   // Core Data
   const [yamlInput, setYamlInput] = useState<string>(() => {
@@ -113,10 +114,14 @@ export const CVMakerApp: React.FC = () => {
   }
 
   const handleToggleFreeCanvas = () => {
+    const nextState = !currentStructureConfig.isFreeCanvasActive
     handleUpdateStructureConfig({
       ...currentStructureConfig,
-      isFreeCanvasActive: !currentStructureConfig.isFreeCanvasActive
+      isFreeCanvasActive: nextState
     })
+    if (nextState) {
+      setActiveTab('canvas')
+    }
   }
 
   const handleResetStructure = () => {
@@ -464,6 +469,13 @@ export const CVMakerApp: React.FC = () => {
             >
               <span>📜</span> Histórico ({historyList.length})
             </button>
+            <button
+              className={`cv-sidebar-tab ${activeTab === 'canvas' ? 'cv-sidebar-tab--active' : ''}`}
+              onClick={() => setActiveTab('canvas')}
+              title="Paleta de Elementos e Variantes do Canvas Livre"
+            >
+              <span>🎨</span> Elementos {currentStructureConfig.isFreeCanvasActive ? '✨' : ''}
+            </button>
           </div>
 
           <div className="cv-sidebar-content">
@@ -532,6 +544,15 @@ export const CVMakerApp: React.FC = () => {
                 onSaveCurrentVersion={handleManualSaveHistory}
                 activeYaml={yamlInput}
                 activeLayout={activeLayout}
+              />
+            )}
+
+            {activeTab === 'canvas' && (
+              <CanvasElementsPalette
+                data={cvData}
+                structureConfig={currentStructureConfig}
+                onUpdateStructureConfig={handleUpdateStructureConfig}
+                onResetStructure={handleResetStructure}
               />
             )}
           </div>

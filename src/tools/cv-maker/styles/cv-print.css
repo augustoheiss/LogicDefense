@@ -43,14 +43,18 @@
     display: block !important;
   }
 
-  .cv-card,
-  .cv-structural-box {
+  .cv-card {
     background: #ffffff !important;
-    margin: 0 !important;
-    padding: 0 !important;
-    width: 100% !important;
     box-shadow: none !important;
     border: none !important;
+  }
+
+  .cv-structural-box {
+    border: none !important;
+    box-shadow: none !important;
+    box-sizing: border-box !important;
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
   }
 
   @page {

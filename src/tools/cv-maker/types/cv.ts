@@ -127,12 +127,14 @@ export interface CVBasics {
 
 export interface CVWork {
   name: string
+  company?: string
   position: string
   url?: string
   startDate: string
   endDate?: string
   summary: string
   highlights: string[]
+  location?: string
 }
 
 export interface CVProject {
@@ -437,6 +439,8 @@ export interface SectionBoxDimensions {
   marginLeftPx?: number       // Deslocamento lateral / margem esquerda em pixels (-40px a +400px)
   marginLeftPercent?: number  // Recuo lateral em percentual
   alignment?: 'left' | 'center' | 'right' // Alinhamento no plano horizontal
+  variant?: string            // Variante de layout visual do bloco
+  hidden?: boolean            // Indica se o item/bloco está ocultado da folha A4
 }
 
 /**
