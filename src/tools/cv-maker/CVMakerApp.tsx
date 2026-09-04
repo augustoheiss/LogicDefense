@@ -21,7 +21,7 @@ import { AgentHubModal } from './components/Modals/AgentHubModal'
 import { CVStoreModal } from './components/StoreModal/CVStoreModal'
 import { GenerateCoverLetterModal } from './components/Modals/GenerateCoverLetterModal'
 import { validateLicenseKey } from './services/cvService'
-import { downloadCVHtmlFile, downloadCVCoverLetterHtml, downloadCVZipPackage } from './services/standaloneHtmlService'
+import { downloadCVZipPackage } from './services/standaloneHtmlService'
 
 import './styles/cv-themes.css'
 import './styles/cv-print.css'
@@ -371,29 +371,6 @@ export const CVMakerApp: React.FC = () => {
     URL.revokeObjectURL(url)
   }
 
-  // Download HTML Standalone (conforme o modo ativo)
-  const handleDownloadHtml = () => {
-    downloadCVHtmlFile({
-      yaml: yamlInput,
-      name: cvData?.basics?.name || 'curriculo',
-      persona: activePersona,
-      theme: activeTheme,
-      layout: activeLayout,
-      viewMode: activeViewMode,
-      designConfig,
-    })
-  }
-
-  // Download Cover Letter HTML
-  const handleDownloadCoverLetterHtml = () => {
-    downloadCVCoverLetterHtml({
-      yaml: yamlInput,
-      name: cvData?.basics?.name || 'candidato',
-      theme: activeTheme,
-      layout: activeLayout,
-      designConfig,
-    })
-  }
 
   // Download ZIP Package (.html + .yaml)
   const handleDownloadZip = async () => {
@@ -612,8 +589,6 @@ export const CVMakerApp: React.FC = () => {
             onOpenCoverLetterModal={() => setIsCoverLetterModalOpen(true)}
             hasCoverLetter={Boolean(cvData?.coverLetter?.paragraphs?.length)}
             onDownloadYaml={handleDownloadYaml}
-            onDownloadHtml={handleDownloadHtml}
-            onDownloadCoverLetterHtml={handleDownloadCoverLetterHtml}
             onDownloadZip={handleDownloadZip}
             onPrintPdf={handlePrintPdf}
             onOpenDesignModal={() => setIsDesignModalOpen(true)}

@@ -2,7 +2,7 @@ import React, { useRef } from 'react'
 import type { CVHistoryItem } from '../../services/historyService'
 import type { TextVariant, LayoutVariant } from '../../types/cv'
 import { exportHistoryAsJSON, importHistoryFromJSON } from '../../services/historyService'
-import { downloadCVHtmlFile, downloadCVZipPackage } from '../../services/standaloneHtmlService'
+import { downloadCVZipPackage } from '../../services/standaloneHtmlService'
 
 interface CVHistoryTabProps {
   history: CVHistoryItem[]
@@ -55,19 +55,7 @@ export const CVHistoryTab: React.FC<CVHistoryTabProps> = ({
     URL.revokeObjectURL(url)
   }
 
-  // Download Standalone HTML file for a specific history item
-  const handleDownloadHtml = (item: CVHistoryItem, e: React.MouseEvent) => {
-    e.stopPropagation()
-    downloadCVHtmlFile({
-      yaml: item.yaml,
-      name: item.name,
-      persona: item.persona,
-      theme: item.theme,
-      layout: activeLayout,
-    })
-  }
-
-  // Download ZIP package (Standalone HTML + YAML) for a specific history item
+  // Download ZIP package (YAML + metadados) for a specific history item
   const handleDownloadZip = async (item: CVHistoryItem, e: React.MouseEvent) => {
     e.stopPropagation()
     await downloadCVZipPackage({
@@ -253,15 +241,8 @@ export const CVHistoryTab: React.FC<CVHistoryTabProps> = ({
                     </button>
                     <button
                       className="cv-history-icon-btn"
-                      onClick={(e) => handleDownloadHtml(item, e)}
-                      title="Baixar currículo em HTML Standalone (com temas e impressão A4)"
-                    >
-                      🌐 .html
-                    </button>
-                    <button
-                      className="cv-history-icon-btn"
                       onClick={(e) => handleDownloadZip(item, e)}
-                      title="Baixar pacote ZIP completo (HTML + YAML)"
+                      title="Baixar pacote ZIP de dados (.yaml + metadados)"
                     >
                       📦 .zip
                     </button>

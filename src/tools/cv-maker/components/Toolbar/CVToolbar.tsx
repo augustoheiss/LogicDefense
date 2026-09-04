@@ -59,8 +59,6 @@ export const CVToolbar: React.FC<CVToolbarProps> = ({
   onOpenCoverLetterModal,
   hasCoverLetter = false,
   onDownloadYaml,
-  onDownloadHtml,
-  onDownloadCoverLetterHtml,
   onDownloadZip,
   onPrintPdf,
   onOpenDesignModal,
@@ -400,45 +398,7 @@ export const CVToolbar: React.FC<CVToolbarProps> = ({
                 </div>
               </button>
 
-              {/* Baixar .html Standalone */}
-              {onDownloadHtml && (
-                <button
-                  type="button"
-                  className="cv-dropdown-item"
-                  onClick={() => {
-                    closeDropdowns()
-                    onDownloadHtml()
-                  }}
-                >
-                  <div className="cv-dropdown-item__content">
-                    <div className="cv-dropdown-item__title">
-                      <span>🌐</span> <strong>Baixar .html Standalone</strong>
-                    </div>
-                    <div className="cv-dropdown-item__desc">Visualizador offline com seletores embutidos</div>
-                  </div>
-                </button>
-              )}
-
-              {/* Baixar Carta .html se existir */}
-              {hasCoverLetter && onDownloadCoverLetterHtml && (
-                <button
-                  type="button"
-                  className="cv-dropdown-item"
-                  onClick={() => {
-                    closeDropdowns()
-                    onDownloadCoverLetterHtml()
-                  }}
-                >
-                  <div className="cv-dropdown-item__content">
-                    <div className="cv-dropdown-item__title">
-                      <span>✉️</span> <strong>Baixar Carta .html</strong>
-                    </div>
-                    <div className="cv-dropdown-item__desc">Carta de apresentação standalone individual</div>
-                  </div>
-                </button>
-              )}
-
-              {/* Baixar Pacote Completo .zip */}
+              {/* Baixar Pacote de Dados .zip */}
               {onDownloadZip && (
                 <button
                   type="button"
@@ -452,7 +412,7 @@ export const CVToolbar: React.FC<CVToolbarProps> = ({
                     <div className="cv-dropdown-item__title">
                       <span>📦</span> <strong>Baixar Pacote .zip</strong>
                     </div>
-                    <div className="cv-dropdown-item__desc">Todos os arquivos (5 YAMLs, HTML e Dossiê)</div>
+                    <div className="cv-dropdown-item__desc">Dados estruturados prontos para IA (.yaml + carta + guia)</div>
                   </div>
                 </button>
               )}
