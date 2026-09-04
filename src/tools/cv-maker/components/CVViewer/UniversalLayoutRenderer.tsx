@@ -96,9 +96,38 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
     })
   }
 
-  const wrapSection = (sectionId: string, title: string, node: React.ReactNode) => {
+  const isMultiColumnLayout = ['compact_split', 'sidebar', 'editorial_accent', 'corporate_timeline'].includes(blueprint.id)
+
+  const handleSwitchZone = (sectionId: string, defaultZone: 'left' | 'right') => {
+    if (!structureConfig || !onUpdateStructureConfig) return
+    const currentZones = structureConfig.sectionZone || {}
+    const activeZone = currentZones[sectionId] || defaultZone
+    const nextZone = activeZone === 'left' ? 'right' : 'left'
+
+    onUpdateStructureConfig({
+      ...structureConfig,
+      sectionZone: {
+        ...currentZones,
+        [sectionId]: nextZone
+      }
+    })
+  }
+
+  const getSectionZone = (sectionId: string, defaultZone: 'left' | 'right'): 'left' | 'right' => {
+    return structureConfig?.sectionZone?.[sectionId] || defaultZone
+  }
+
+  const wrapSection = (
+    sectionId: string,
+    title: string,
+    node: React.ReactNode,
+    defaultZone?: 'left' | 'right'
+  ) => {
     if (!node) return null
     if (!isFreeCanvas) return node
+    const canSwitch = isMultiColumnLayout && Boolean(defaultZone)
+    const currentZone = defaultZone ? getSectionZone(sectionId, defaultZone) : undefined
+
     return (
       <StructuralBoxWrapper
         key={sectionId}
@@ -106,6 +135,9 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
         title={title}
         isFreeCanvasActive={isFreeCanvas}
         dimensions={structureConfig?.sectionDimensions?.[sectionId]}
+        canSwitchZone={canSwitch}
+        currentZone={currentZone}
+        onSwitchZone={canSwitch && defaultZone ? () => handleSwitchZone(sectionId, defaultZone) : undefined}
         onUpdateDimensions={(dims: SectionBoxDimensions) => {
           if (!structureConfig || !onUpdateStructureConfig) return
           onUpdateStructureConfig({
@@ -123,15 +155,30 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
           if (!structureConfig || !onUpdateStructureConfig) return
           const next = { ...structureConfig.sectionDimensions }
           delete next[sectionId]
+          const nextZones = { ...(structureConfig.sectionZone || {}) }
+          delete nextZones[sectionId]
           onUpdateStructureConfig({
             ...structureConfig,
-            sectionDimensions: next
+            sectionDimensions: next,
+            sectionZone: nextZones
           })
         }}
       >
         {node}
       </StructuralBoxWrapper>
     )
+  }
+
+  const renderZoneSection = (
+    secId: string,
+    targetZone: 'left' | 'right',
+    defZone: 'left' | 'right',
+    title: string,
+    node: React.ReactNode
+  ) => {
+    if (!node) return null
+    if (getSectionZone(secId, defZone) !== targetZone) return null
+    return wrapSection(secId, title, node, defZone)
   }
 
   const handleUpdateSplitRatio = (newRatio: number) => {
@@ -198,48 +245,79 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
                 isFreeCanvasActive={isFreeCanvas}
               />
               <aside className="cv-editorial-left cv-sidebar-stack">
-                {wrapSection('contacts', 'Contatos', (
+                {renderZoneSection('contacts', 'left', 'left', 'Contatos', (
                   <div className="cv-sidebar-section">
                     <h4 className="cv-sidebar-title">Contato</h4>
                     <BlockContacts basics={basics} layoutStyle="list" />
                   </div>
                 ))}
                 {basics.driverLicense || basics.nationality || basics.age ? (
-                  wrapSection('civil', 'Dados Civis', (
+                  renderZoneSection('civil', 'left', 'left', 'Dados Civis', (
                     <div className="cv-sidebar-section">
                       <h4 className="cv-sidebar-title">Dados Civis</h4>
                       <BlockCivilData basics={basics} />
                     </div>
                   ))
                 ) : null}
-                {data.skills && wrapSection('skills', 'Competências', (
+                {data.skills && renderZoneSection('skills', 'left', 'left', 'Competências', (
                   <div className="cv-sidebar-section">
                     <BlockSkillsBars skills={data.skills} title="Expertise" />
                   </div>
                 ))}
-                {data.languages && wrapSection('languages', 'Idiomas', (
+                {data.languages && renderZoneSection('languages', 'left', 'left', 'Idiomas', (
                   <div className="cv-sidebar-section">
                     <BlockLanguages languages={data.languages} />
                   </div>
                 ))}
-                {data.certificates && wrapSection('certificates', 'Certificações', (
+                {data.certificates && renderZoneSection('certificates', 'left', 'left', 'Certificações', (
                   <div className="cv-sidebar-section">
                     <BlockCertificates certificates={data.certificates} />
                   </div>
                 ))}
-                {data.interests && wrapSection('interests', 'Interesses', (
+                {data.interests && renderZoneSection('interests', 'left', 'left', 'Interesses', (
                   <div className="cv-sidebar-section">
                     <BlockInterests interests={data.interests} />
                   </div>
                 ))}
+                {basics.summary && renderZoneSection('summary', 'left', 'right', 'Sobre Mim', <BlockSummary basics={basics} title="Sobre Mim" />)}
+                {data.work && renderZoneSection('work', 'left', 'right', 'Experiência Profissional', <BlockWork work={data.work} />)}
+                {data.projects && renderZoneSection('projects', 'left', 'right', 'Projetos em Destaque', <BlockProjects projects={data.projects} />)}
+                {data.education && renderZoneSection('education', 'left', 'right', 'Formação Acadêmica', <BlockEducation education={data.education} />)}
+                {data.references && renderZoneSection('references', 'left', 'right', 'Referências', <BlockReferences references={data.references} />)}
               </aside>
 
               <main className="cv-editorial-main">
-                {basics.summary && wrapSection('summary', 'Sobre Mim', <BlockSummary basics={basics} title="Sobre Mim" />)}
-                {data.work && wrapSection('work', 'Experiência Profissional', <BlockWork work={data.work} />)}
-                {data.projects && wrapSection('projects', 'Projetos em Destaque', <BlockProjects projects={data.projects} />)}
-                {data.education && wrapSection('education', 'Formação Acadêmica', <BlockEducation education={data.education} />)}
-                {data.references && wrapSection('references', 'Referências', <BlockReferences references={data.references} />)}
+                {basics.summary && renderZoneSection('summary', 'right', 'right', 'Sobre Mim', <BlockSummary basics={basics} title="Sobre Mim" />)}
+                {data.work && renderZoneSection('work', 'right', 'right', 'Experiência Profissional', <BlockWork work={data.work} />)}
+                {data.projects && renderZoneSection('projects', 'right', 'right', 'Projetos em Destaque', <BlockProjects projects={data.projects} />)}
+                {data.education && renderZoneSection('education', 'right', 'right', 'Formação Acadêmica', <BlockEducation education={data.education} />)}
+                {data.references && renderZoneSection('references', 'right', 'right', 'Referências', <BlockReferences references={data.references} />)}
+                {renderZoneSection('contacts', 'right', 'left', 'Contatos', (
+                  <div className="cv-sidebar-section">
+                    <h4 className="cv-sidebar-title">Contato</h4>
+                    <BlockContacts basics={basics} layoutStyle="list" />
+                  </div>
+                ))}
+                {data.skills && renderZoneSection('skills', 'right', 'left', 'Competências', (
+                  <div className="cv-sidebar-section">
+                    <BlockSkillsBars skills={data.skills} title="Expertise" />
+                  </div>
+                ))}
+                {data.languages && renderZoneSection('languages', 'right', 'left', 'Idiomas', (
+                  <div className="cv-sidebar-section">
+                    <BlockLanguages languages={data.languages} />
+                  </div>
+                ))}
+                {data.certificates && renderZoneSection('certificates', 'right', 'left', 'Certificações', (
+                  <div className="cv-sidebar-section">
+                    <BlockCertificates certificates={data.certificates} />
+                  </div>
+                ))}
+                {data.interests && renderZoneSection('interests', 'right', 'left', 'Interesses', (
+                  <div className="cv-sidebar-section">
+                    <BlockInterests interests={data.interests} />
+                  </div>
+                ))}
               </main>
             </div>
           </div>
@@ -265,7 +343,7 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
               isFreeCanvasActive={isFreeCanvas}
             />
             <aside className="cv-navy-sidebar cv-sidebar-stack">
-              {wrapSection('header_profile', 'Perfil & Foto', (
+              {renderZoneSection('header_profile', 'left', 'left', 'Perfil & Foto', (
                 <div>
                   {basics.image && (
                     <div className="cv-avatar-container has-photo">
@@ -285,7 +363,7 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
                   <BlockCivilData basics={basics} />
                 </div>
               ))}
-              {wrapSection('contacts', 'Contatos', (
+              {renderZoneSection('contacts', 'left', 'left', 'Contatos', (
                 <div className="cv-sidebar-section">
                   <h4 className="cv-sidebar-title" style={{ color: '#f8fafc', borderBottomColor: 'rgba(255,255,255,0.2)' }}>
                     Contato
@@ -293,30 +371,79 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
                   <BlockContacts basics={basics} layoutStyle="list" />
                 </div>
               ))}
-              {data.skills && wrapSection('skills', 'Competências', (
+              {data.skills && renderZoneSection('skills', 'left', 'left', 'Competências', (
                 <div className="cv-sidebar-section">
                   <BlockSkillsBars skills={data.skills} title="Expertise" />
                 </div>
               ))}
-              {data.languages && wrapSection('languages', 'Idiomas', (
+              {data.languages && renderZoneSection('languages', 'left', 'left', 'Idiomas', (
                 <div className="cv-sidebar-section">
                   <BlockLanguages languages={data.languages} />
                 </div>
               ))}
-              {data.interests && wrapSection('interests', 'Interesses', (
+              {data.interests && renderZoneSection('interests', 'left', 'left', 'Interesses', (
                 <div className="cv-sidebar-section">
                   <BlockInterests interests={data.interests} />
                 </div>
               ))}
+              {basics.summary && renderZoneSection('summary', 'left', 'right', 'Sobre Mim', <BlockSummary basics={basics} title="Sobre Mim" />)}
+              {data.work && renderZoneSection('work', 'left', 'right', 'Experiência Profissional', <BlockWork work={data.work} />)}
+              {data.education && renderZoneSection('education', 'left', 'right', 'Formação Acadêmica', <BlockEducation education={data.education} />)}
+              {data.projects && renderZoneSection('projects', 'left', 'right', 'Projetos em Destaque', <BlockProjects projects={data.projects} />)}
+              {data.certificates && renderZoneSection('certificates', 'left', 'right', 'Certificações', <BlockCertificates certificates={data.certificates} />)}
+              {data.references && renderZoneSection('references', 'left', 'right', 'Referências', <BlockReferences references={data.references} />)}
             </aside>
 
             <main className="cv-navy-main">
-              {basics.summary && wrapSection('summary', 'Sobre Mim', <BlockSummary basics={basics} title="Sobre Mim" />)}
-              {data.work && wrapSection('work', 'Experiência Profissional', <BlockWork work={data.work} />)}
-              {data.education && wrapSection('education', 'Formação Acadêmica', <BlockEducation education={data.education} />)}
-              {data.projects && wrapSection('projects', 'Projetos em Destaque', <BlockProjects projects={data.projects} />)}
-              {data.certificates && wrapSection('certificates', 'Certificações', <BlockCertificates certificates={data.certificates} />)}
-              {data.references && wrapSection('references', 'Referências', <BlockReferences references={data.references} />)}
+              {basics.summary && renderZoneSection('summary', 'right', 'right', 'Sobre Mim', <BlockSummary basics={basics} title="Sobre Mim" />)}
+              {data.work && renderZoneSection('work', 'right', 'right', 'Experiência Profissional', <BlockWork work={data.work} />)}
+              {data.education && renderZoneSection('education', 'right', 'right', 'Formação Acadêmica', <BlockEducation education={data.education} />)}
+              {data.projects && renderZoneSection('projects', 'right', 'right', 'Projetos em Destaque', <BlockProjects projects={data.projects} />)}
+              {data.certificates && renderZoneSection('certificates', 'right', 'right', 'Certificações', <BlockCertificates certificates={data.certificates} />)}
+              {data.references && renderZoneSection('references', 'right', 'right', 'Referências', <BlockReferences references={data.references} />)}
+              {renderZoneSection('header_profile', 'right', 'left', 'Perfil & Foto', (
+                <div>
+                  {basics.image && (
+                    <div className="cv-avatar-container has-photo">
+                      <img src={basics.image} alt={basics.name} className="cv-avatar-img" />
+                    </div>
+                  )}
+                  <div style={{ textAlign: 'center', marginBottom: '0.5rem' }}>
+                    <h2 style={{ fontSize: '1.35rem', margin: '0 0 0.25rem 0', fontWeight: 800, color: '#ffffff' }}>
+                      {basics.name}
+                    </h2>
+                    {basics.label && (
+                      <div style={{ fontSize: '0.85rem', color: '#f97316', fontWeight: 700, letterSpacing: '0.04em' }}>
+                        {basics.label}
+                      </div>
+                    )}
+                  </div>
+                  <BlockCivilData basics={basics} />
+                </div>
+              ))}
+              {renderZoneSection('contacts', 'right', 'left', 'Contatos', (
+                <div className="cv-sidebar-section">
+                  <h4 className="cv-sidebar-title" style={{ color: '#f8fafc', borderBottomColor: 'rgba(255,255,255,0.2)' }}>
+                    Contato
+                  </h4>
+                  <BlockContacts basics={basics} layoutStyle="list" />
+                </div>
+              ))}
+              {data.skills && renderZoneSection('skills', 'right', 'left', 'Competências', (
+                <div className="cv-sidebar-section">
+                  <BlockSkillsBars skills={data.skills} title="Expertise" />
+                </div>
+              ))}
+              {data.languages && renderZoneSection('languages', 'right', 'left', 'Idiomas', (
+                <div className="cv-sidebar-section">
+                  <BlockLanguages languages={data.languages} />
+                </div>
+              ))}
+              {data.interests && renderZoneSection('interests', 'right', 'left', 'Interesses', (
+                <div className="cv-sidebar-section">
+                  <BlockInterests interests={data.interests} />
+                </div>
+              ))}
             </main>
           </div>
         </div>
@@ -383,36 +510,63 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
               isFreeCanvasActive={isFreeCanvas}
             />
             <aside className="cv-duo-left cv-sidebar-stack">
-              {basics.image && wrapSection('photo', 'Foto de Perfil', (
+              {basics.image && renderZoneSection('photo', 'left', 'left', 'Foto de Perfil', (
                 <div className="cv-avatar-container has-photo">
                   <img src={basics.image} alt={basics.name} className="cv-avatar-img" />
                 </div>
               ))}
-              {basics.summary && wrapSection('summary', 'Perfil / Resumo', (
+              {basics.summary && renderZoneSection('summary', 'left', 'left', 'Perfil / Resumo', (
                 <section className="cv-section cv-avoid-break">
                   <h4 className="cv-section-title" style={{ fontSize: '0.88rem' }}>Perfil</h4>
                   <p className="cv-summary-text" style={{ fontSize: '0.82rem' }}>{basics.summary}</p>
                 </section>
               ))}
-              {data.skills && wrapSection('skills', 'Competências', <BlockSkillsBars skills={data.skills} title="Expertise" />)}
-              {data.interests && wrapSection('interests', 'Hobbies', <BlockInterests interests={data.interests} layoutStyle="circles" title="Hobbies" />)}
-              {wrapSection('civil', 'Dados Civis', <BlockCivilData basics={basics} />)}
-              {data.languages && wrapSection('languages', 'Idiomas', <BlockLanguages languages={data.languages} />)}
-            </aside>
-
-            <main className="cv-duo-right">
-              {wrapSection('header', 'Identificação & Contatos', (
+              {data.skills && renderZoneSection('skills', 'left', 'left', 'Competências', <BlockSkillsBars skills={data.skills} title="Expertise" />)}
+              {data.interests && renderZoneSection('interests', 'left', 'left', 'Hobbies', <BlockInterests interests={data.interests} layoutStyle="circles" title="Hobbies" />)}
+              {renderZoneSection('civil', 'left', 'left', 'Dados Civis', <BlockCivilData basics={basics} />)}
+              {data.languages && renderZoneSection('languages', 'left', 'left', 'Idiomas', <BlockLanguages languages={data.languages} />)}
+              {renderZoneSection('header', 'left', 'right', 'Identificação & Contatos', (
                 <header className="cv-duo-header">
                   <h1 className="cv-name">{basics.name}</h1>
                   {basics.label && <div className="cv-label">{basics.label}</div>}
                   <BlockContacts basics={basics} layoutStyle="row" />
                 </header>
               ))}
-              {data.work && wrapSection('work', 'Experiência Profissional', <BlockWork work={data.work} />)}
-              {data.education && wrapSection('education', 'Formação Acadêmica', <BlockEducation education={data.education} />)}
-              {data.projects && wrapSection('projects', 'Projetos em Destaque', <BlockProjects projects={data.projects} />)}
-              {data.certificates && wrapSection('certificates', 'Certificações', <BlockCertificates certificates={data.certificates} />)}
-              {data.references && wrapSection('references', 'Referências', <BlockReferences references={data.references} />)}
+              {data.work && renderZoneSection('work', 'left', 'right', 'Experiência Profissional', <BlockWork work={data.work} />)}
+              {data.education && renderZoneSection('education', 'left', 'right', 'Formação Acadêmica', <BlockEducation education={data.education} />)}
+              {data.projects && renderZoneSection('projects', 'left', 'right', 'Projetos em Destaque', <BlockProjects projects={data.projects} />)}
+              {data.certificates && renderZoneSection('certificates', 'left', 'right', 'Certificações', <BlockCertificates certificates={data.certificates} />)}
+              {data.references && renderZoneSection('references', 'left', 'right', 'Referências', <BlockReferences references={data.references} />)}
+            </aside>
+
+            <main className="cv-duo-right">
+              {renderZoneSection('header', 'right', 'right', 'Identificação & Contatos', (
+                <header className="cv-duo-header">
+                  <h1 className="cv-name">{basics.name}</h1>
+                  {basics.label && <div className="cv-label">{basics.label}</div>}
+                  <BlockContacts basics={basics} layoutStyle="row" />
+                </header>
+              ))}
+              {basics.image && renderZoneSection('photo', 'right', 'left', 'Foto de Perfil', (
+                <div className="cv-avatar-container has-photo">
+                  <img src={basics.image} alt={basics.name} className="cv-avatar-img" />
+                </div>
+              ))}
+              {basics.summary && renderZoneSection('summary', 'right', 'left', 'Perfil / Resumo', (
+                <section className="cv-section cv-avoid-break">
+                  <h4 className="cv-section-title" style={{ fontSize: '0.88rem' }}>Perfil</h4>
+                  <p className="cv-summary-text" style={{ fontSize: '0.82rem' }}>{basics.summary}</p>
+                </section>
+              ))}
+              {data.skills && renderZoneSection('skills', 'right', 'left', 'Competências', <BlockSkillsBars skills={data.skills} title="Expertise" />)}
+              {data.work && renderZoneSection('work', 'right', 'right', 'Experiência Profissional', <BlockWork work={data.work} />)}
+              {data.education && renderZoneSection('education', 'right', 'right', 'Formação Acadêmica', <BlockEducation education={data.education} />)}
+              {data.projects && renderZoneSection('projects', 'right', 'right', 'Projetos em Destaque', <BlockProjects projects={data.projects} />)}
+              {data.certificates && renderZoneSection('certificates', 'right', 'right', 'Certificações', <BlockCertificates certificates={data.certificates} />)}
+              {renderZoneSection('civil', 'right', 'left', 'Dados Civis', <BlockCivilData basics={basics} />)}
+              {data.languages && renderZoneSection('languages', 'right', 'left', 'Idiomas', <BlockLanguages languages={data.languages} />)}
+              {data.interests && renderZoneSection('interests', 'right', 'left', 'Hobbies', <BlockInterests interests={data.interests} layoutStyle="circles" title="Hobbies" />)}
+              {data.references && renderZoneSection('references', 'right', 'right', 'Referências', <BlockReferences references={data.references} />)}
             </main>
           </div>
         </div>
@@ -437,7 +591,7 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
               isFreeCanvasActive={isFreeCanvas}
             />
             <aside className="cv-sidebar-col cv-sidebar-stack">
-              {wrapSection('header_profile', 'Perfil & Foto', (
+              {renderZoneSection('header_profile', 'left', 'left', 'Perfil & Foto', (
                 <div className="cv-sidebar-profile">
                   {basics.image && (
                     <div className="cv-avatar-container has-photo">
@@ -450,23 +604,51 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
                   </div>
                 </div>
               ))}
-              {wrapSection('contacts', 'Contatos', (
+              {renderZoneSection('contacts', 'left', 'left', 'Contatos', (
                 <div className="cv-sidebar-section">
                   <h4 className="cv-sidebar-title">Contato</h4>
                   <BlockContacts basics={basics} layoutStyle="list" />
                 </div>
               ))}
-              {data.skills && wrapSection('skills', 'Competências', <BlockSkillsTags skills={data.skills} title="Competências" />)}
-              {data.languages && wrapSection('languages', 'Idiomas', <BlockLanguages languages={data.languages} />)}
-              {data.certificates && wrapSection('certificates', 'Certificações', <BlockCertificates certificates={data.certificates} />)}
-              {data.references && wrapSection('references', 'Referências', <BlockReferences references={data.references} />)}
-              {data.interests && wrapSection('interests', 'Interesses', <BlockInterests interests={data.interests} />)}
+              {data.skills && renderZoneSection('skills', 'left', 'left', 'Competências', <BlockSkillsTags skills={data.skills} title="Competências" />)}
+              {data.languages && renderZoneSection('languages', 'left', 'left', 'Idiomas', <BlockLanguages languages={data.languages} />)}
+              {data.certificates && renderZoneSection('certificates', 'left', 'left', 'Certificações', <BlockCertificates certificates={data.certificates} />)}
+              {data.references && renderZoneSection('references', 'left', 'left', 'Referências', <BlockReferences references={data.references} />)}
+              {data.interests && renderZoneSection('interests', 'left', 'left', 'Interesses', <BlockInterests interests={data.interests} />)}
+              {basics.summary && renderZoneSection('summary', 'left', 'right', 'Sobre Mim', <BlockSummary basics={basics} title="Sobre Mim" />)}
+              {data.work && renderZoneSection('work', 'left', 'right', 'Experiência Profissional', <BlockWork work={data.work} />)}
+              {data.projects && renderZoneSection('projects', 'left', 'right', 'Projetos em Destaque', <BlockProjects projects={data.projects} />)}
+              {data.education && renderZoneSection('education', 'left', 'right', 'Formação Acadêmica', <BlockEducation education={data.education} />)}
             </aside>
             <main className="cv-main-col">
-              {basics.summary && wrapSection('summary', 'Sobre Mim', <BlockSummary basics={basics} title="Sobre Mim" />)}
-              {data.work && wrapSection('work', 'Experiência Profissional', <BlockWork work={data.work} />)}
-              {data.projects && wrapSection('projects', 'Projetos em Destaque', <BlockProjects projects={data.projects} />)}
-              {data.education && wrapSection('education', 'Formação Acadêmica', <BlockEducation education={data.education} />)}
+              {basics.summary && renderZoneSection('summary', 'right', 'right', 'Sobre Mim', <BlockSummary basics={basics} title="Sobre Mim" />)}
+              {data.work && renderZoneSection('work', 'right', 'right', 'Experiência Profissional', <BlockWork work={data.work} />)}
+              {data.projects && renderZoneSection('projects', 'right', 'right', 'Projetos em Destaque', <BlockProjects projects={data.projects} />)}
+              {data.education && renderZoneSection('education', 'right', 'right', 'Formação Acadêmica', <BlockEducation education={data.education} />)}
+              {renderZoneSection('header_profile', 'right', 'left', 'Perfil & Foto', (
+                <div className="cv-sidebar-profile">
+                  {basics.image && (
+                    <div className="cv-avatar-container has-photo">
+                      <img src={basics.image} alt={basics.name} className="cv-avatar-img" />
+                    </div>
+                  )}
+                  <div style={{ textAlign: 'center' }}>
+                    <h2 style={{ fontSize: '1.25rem', margin: '0 0 0.2rem 0', fontWeight: 800 }}>{basics.name}</h2>
+                    {basics.label && <div style={{ fontSize: '0.85rem', opacity: 0.85, fontWeight: 600 }}>{basics.label}</div>}
+                  </div>
+                </div>
+              ))}
+              {renderZoneSection('contacts', 'right', 'left', 'Contatos', (
+                <div className="cv-sidebar-section">
+                  <h4 className="cv-sidebar-title">Contato</h4>
+                  <BlockContacts basics={basics} layoutStyle="list" />
+                </div>
+              ))}
+              {data.skills && renderZoneSection('skills', 'right', 'left', 'Competências', <BlockSkillsTags skills={data.skills} title="Competências" />)}
+              {data.languages && renderZoneSection('languages', 'right', 'left', 'Idiomas', <BlockLanguages languages={data.languages} />)}
+              {data.certificates && renderZoneSection('certificates', 'right', 'left', 'Certificações', <BlockCertificates certificates={data.certificates} />)}
+              {data.references && renderZoneSection('references', 'right', 'left', 'Referências', <BlockReferences references={data.references} />)}
+              {data.interests && renderZoneSection('interests', 'right', 'left', 'Interesses', <BlockInterests interests={data.interests} />)}
             </main>
           </div>
         </div>

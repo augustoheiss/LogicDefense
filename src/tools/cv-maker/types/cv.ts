@@ -434,7 +434,9 @@ export interface SectionBoxDimensions {
   maxHeightPx?: number        // Altura máxima em pixels
   order?: number              // Ordem visual no container (CSS order)
   marginTopPx?: number        // Margem superior ajustável em pixels (-20px a +80px)
-  marginLeftPercent?: number  // Recuo/margem lateral em percentual
+  marginLeftPx?: number       // Deslocamento lateral / margem esquerda em pixels (-40px a +400px)
+  marginLeftPercent?: number  // Recuo lateral em percentual
+  alignment?: 'left' | 'center' | 'right' // Alinhamento no plano horizontal
 }
 
 /**
@@ -445,6 +447,7 @@ export interface LayoutStructureConfig {
   columnSplitRatio?: number   // Proporção percentual da coluna esquerda/sidebar (ex: 28 = 28% / 72%)
   sectionDimensions: Record<string, SectionBoxDimensions>
   sectionOrder?: string[]     // Ordem sequencial explícita das seções no layout ativo
+  sectionZone?: Record<string, 'left' | 'right'> // Coluna/zona atribuída à seção em layouts de múltiplas colunas
 }
 
 
