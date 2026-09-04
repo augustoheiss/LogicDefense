@@ -466,6 +466,7 @@
   .cv-structural-box__toolbar,
   .cv-structural-handle,
   .cv-structural-box__overflow-badge,
+  .cv-structural-box__collision-badge,
   .cv-column-splitter {
     display: none !important;
   }
@@ -907,4 +908,54 @@
   }
 }
 
+/* ── Ativação do Motor Flex Column para Reordenação CSS order ── */
+.cv-duo-left,
+.cv-duo-right,
+.cv-sidebar-col,
+.cv-main-col,
+.cv-editorial-left,
+.cv-editorial-main,
+.cv-navy-sidebar,
+.cv-navy-main,
+.cv-card,
+.cv-dossier-wrapper,
+.cv-page-a4 main,
+.cv-page-a4 aside {
+  display: flex !important;
+  flex-direction: column !important;
+}
 
+/* ── Alerta de Sobreposição / Colisão de Blocos ── */
+.cv-structural-box.is-collision {
+  border-color: #f59e0b !important;
+  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.45) !important;
+  background-color: rgba(245, 158, 11, 0.04) !important;
+}
+
+.cv-structural-box__collision-badge {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  background: #fef3c7;
+  border: 1px solid #f59e0b;
+  color: #92400e;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 0.35rem 0.65rem;
+  border-radius: 4px;
+  margin-top: 0.45rem;
+  line-height: 1.35;
+  box-shadow: 0 2px 6px rgba(245, 158, 11, 0.2);
+  animation: cvPulseCollision 2s infinite ease-in-out;
+}
+
+@keyframes cvPulseCollision {
+  0%, 100% {
+    border-color: #f59e0b;
+    box-shadow: 0 2px 6px rgba(245, 158, 11, 0.2);
+  }
+  50% {
+    border-color: #d97706;
+    box-shadow: 0 2px 12px rgba(217, 119, 6, 0.35);
+  }
+}

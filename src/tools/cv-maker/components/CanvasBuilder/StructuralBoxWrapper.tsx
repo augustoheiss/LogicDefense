@@ -27,7 +27,6 @@ export const StructuralBoxWrapper: React.FC<StructuralBoxWrapperProps> = ({
   onUpdateDimensions,
   onMoveUp,
   onMoveDown,
-  onSwapWithSection,
   onSwitchZone,
   onResetDimensions,
   children
@@ -35,6 +34,7 @@ export const StructuralBoxWrapper: React.FC<StructuralBoxWrapperProps> = ({
   const containerRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
   const [isOverflowing, setIsOverflowing] = useState<boolean>(false)
+  const [hasCollision, setHasCollision] = useState<boolean>(false)
   const [isResizing, setIsResizing] = useState<boolean>(false)
   const [isMoving, setIsMoving] = useState<boolean>(false)
   const [resizeType, setResizeType] = useState<'width' | 'height' | 'both' | null>(null)
@@ -64,6 +64,42 @@ export const StructuralBoxWrapper: React.FC<StructuralBoxWrapperProps> = ({
     observer.observe(contentEl)
     return () => observer.disconnect()
   }, [isFreeCanvasActive, dimensions?.minHeightPx, dimensions?.maxHeightPx, dimensions?.widthPercent])
+
+  // Detecção de colisão física e sobreposição com outros blocos
+  useEffect(() => {
+    if (!isFreeCanvasActive || isMoving) {
+      setHasCollision(false)
+      return
+    }
+
+    const checkCollision = () => {
+      const el = containerRef.current
+      if (!el) return
+      const myRect = el.getBoundingClientRect()
+      if (myRect.width === 0 || myRect.height === 0) return
+
+      const allBoxes = Array.from(document.querySelectorAll('.cv-structural-box')) as HTMLElement[]
+      let collided = false
+      for (const other of allBoxes) {
+        if (other === el) continue
+        const oRect = other.getBoundingClientRect()
+        const overlapX = Math.max(0, Math.min(myRect.right, oRect.right) - Math.max(myRect.left, oRect.left))
+        const overlapY = Math.max(0, Math.min(myRect.bottom, oRect.bottom) - Math.max(myRect.top, oRect.top))
+        if (overlapX > 20 && overlapY > 20) {
+          collided = true
+          break
+        }
+      }
+      setHasCollision(collided)
+    }
+
+    const timer = setTimeout(checkCollision, 100)
+    window.addEventListener('cv-box-moved', checkCollision)
+    return () => {
+      clearTimeout(timer)
+      window.removeEventListener('cv-box-moved', checkCollision)
+    }
+  }, [isFreeCanvasActive, dimensions, isMoving])
 
   // Manipulação contínua de redimensionamento via PointerEvents (Mouse + Touch)
   const handlePointerDown = useCallback((
@@ -163,31 +199,9 @@ export const StructuralBoxWrapper: React.FC<StructuralBoxWrapperProps> = ({
 
       // Detecção de migração de coluna por arraste lateral (se cruzar a divisória)
       if (canSwitchZone && onSwitchZone && !hasCrossedZone) {
-        if ((currentZone === 'left' && deltaX > 180) || (currentZone === 'right' && deltaX < -180)) {
+        if ((currentZone === 'left' && deltaX > 160) || (currentZone === 'right' && deltaX < -160)) {
           hasCrossedZone = true
           onSwitchZone()
-        }
-      }
-
-      // Detecta sobre qual seção o cursor está pairando para trocar de posição
-      const allBoxes = Array.from(document.querySelectorAll('.cv-structural-box')) as HTMLElement[]
-      for (const sib of allBoxes) {
-        if (sib === containerRef.current) continue
-        const rect = sib.getBoundingClientRect()
-        if (
-          moveEvt.clientY >= rect.top &&
-          moveEvt.clientY <= rect.bottom &&
-          moveEvt.clientX >= rect.left &&
-          moveEvt.clientX <= rect.right
-        ) {
-          const targetId = sib.getAttribute('data-section-id')
-          if (targetId && onSwapWithSection) {
-            const midY = rect.top + rect.height / 2
-            if ((deltaY > 0 && moveEvt.clientY > midY) || (deltaY < 0 && moveEvt.clientY < midY)) {
-              onSwapWithSection(targetId)
-              break
-            }
-          }
         }
       }
     }
@@ -202,17 +216,40 @@ export const StructuralBoxWrapper: React.FC<StructuralBoxWrapperProps> = ({
       window.removeEventListener('pointermove', onPointerMove)
       window.removeEventListener('pointerup', onPointerUp)
 
+      const finalDeltaX = upEvt.clientX - startX
+      const finalDeltaY = upEvt.clientY - startY
+
       if (containerRef.current) {
         containerRef.current.style.transform = ''
         containerRef.current.style.zIndex = ''
         containerRef.current.style.boxShadow = ''
       }
       setIsMoving(false)
+
+      // Grava a nova posição livre no plano permanentemente (sem travas ou efeito elástico de retorno)
+      if (Math.abs(finalDeltaX) > 3 || Math.abs(finalDeltaY) > 3) {
+        const curX = dimensions?.marginLeftPx || 0
+        const curY = dimensions?.marginTopPx || 0
+        const nextX = Math.round(curX + finalDeltaX)
+        const nextY = Math.round(curY + finalDeltaY)
+
+        onUpdateDimensions?.({
+          ...dimensions,
+          marginLeftPx: nextX,
+          marginTopPx: nextY,
+          alignment: undefined // Limpa alinhamento estático para fixar onde foi solto
+        })
+
+        // Notifica todos os blocos para checarem sobreposição/colisão física
+        setTimeout(() => {
+          window.dispatchEvent(new CustomEvent('cv-box-moved'))
+        }, 50)
+      }
     }
 
     window.addEventListener('pointermove', onPointerMove)
     window.addEventListener('pointerup', onPointerUp)
-  }, [canSwitchZone, currentZone, onSwapWithSection, onSwitchZone])
+  }, [canSwitchZone, currentZone, dimensions, onSwitchZone, onUpdateDimensions])
 
   // Ajuste rápido de margem vertical (Y)
   const handleAdjustMarginY = (delta: number) => {
@@ -259,17 +296,20 @@ export const StructuralBoxWrapper: React.FC<StructuralBoxWrapperProps> = ({
       ? `${dimensions.minHeightPx}px`
       : undefined
 
-  const marginTopStyle = typeof dimensions?.marginTopPx === 'number' && dimensions.marginTopPx !== 0
+  // Deslocamento 2D no plano livre (sem quebrar o fluxo de página)
+  const topStyle = typeof dimensions?.marginTopPx === 'number' && dimensions.marginTopPx !== 0
     ? `${dimensions.marginTopPx}px`
+    : undefined
+
+  const leftStyle = !dimensions?.alignment && typeof dimensions?.marginLeftPx === 'number' && dimensions.marginLeftPx !== 0
+    ? `${dimensions.marginLeftPx}px`
     : undefined
 
   const marginLeftStyle = dimensions?.alignment === 'center'
     ? 'auto'
     : dimensions?.alignment === 'right'
       ? 'auto'
-      : typeof dimensions?.marginLeftPx === 'number' && dimensions.marginLeftPx !== 0
-        ? `${dimensions.marginLeftPx}px`
-        : undefined
+      : undefined
 
   const marginRightStyle = dimensions?.alignment === 'center'
     ? 'auto'
@@ -280,13 +320,14 @@ export const StructuralBoxWrapper: React.FC<StructuralBoxWrapperProps> = ({
   return (
     <div
       ref={containerRef}
-      className={`cv-structural-box cv-structural-box--active ${isResizing ? `is-resizing is-resizing-${resizeType}` : ''} ${isMoving ? 'is-moving' : ''} ${isOverflowing ? 'is-overflowing' : ''}`}
+      className={`cv-structural-box cv-structural-box--active ${isResizing ? `is-resizing is-resizing-${resizeType}` : ''} ${isMoving ? 'is-moving' : ''} ${isOverflowing ? 'is-overflowing' : ''} ${hasCollision ? 'is-collision' : ''}`}
       style={{
         width: widthStyle,
         minHeight: heightStyle,
         maxHeight: dimensions?.maxHeightPx ? heightStyle : undefined,
         overflow: dimensions?.maxHeightPx ? 'hidden' : 'visible',
-        marginTop: marginTopStyle,
+        top: topStyle,
+        left: leftStyle,
         marginLeft: marginLeftStyle,
         marginRight: marginRightStyle,
         order: dimensions?.order
@@ -448,6 +489,14 @@ export const StructuralBoxWrapper: React.FC<StructuralBoxWrapperProps> = ({
         <div className="cv-structural-box__overflow-badge cv-no-print">
           <span>⚠️</span>
           <span>Texto excede o tamanho fixado. Aumente a altura ou o excedente será cortado na impressão A4.</span>
+        </div>
+      )}
+
+      {/* Alerta de Sobreposição / Colisão com outro bloco */}
+      {hasCollision && !isMoving && (
+        <div className="cv-structural-box__collision-badge cv-no-print">
+          <span>⚠️</span>
+          <span>Sobreposição detectada: este bloco está sobreposto por outro. Mova ou ajuste as margens para desobstruir.</span>
         </div>
       )}
 

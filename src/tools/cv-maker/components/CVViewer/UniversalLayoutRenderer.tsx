@@ -67,33 +67,128 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
   const handleSwapOrder = (sourceId: string, targetId: string) => {
     if (!structureConfig || !onUpdateStructureConfig || sourceId === targetId) return
     const currentDims = structureConfig.sectionDimensions || {}
+
+    const sourceEl = document.querySelector(`[data-section-id="${sourceId}"]`)
+    const targetEl = document.querySelector(`[data-section-id="${targetId}"]`)
+
+    if (sourceEl?.parentElement && sourceEl.parentElement === targetEl?.parentElement) {
+      const parent = sourceEl.parentElement
+      const siblingBoxes = Array.from(parent.children).filter(el =>
+        el.classList.contains('cv-structural-box') && el.hasAttribute('data-section-id')
+      ) as HTMLElement[]
+
+      siblingBoxes.sort((a, b) => {
+        const idA = a.getAttribute('data-section-id') || ''
+        const idB = b.getAttribute('data-section-id') || ''
+        const orderA = currentDims[idA]?.order ?? 0
+        const orderB = currentDims[idB]?.order ?? 0
+        if (orderA !== orderB) return orderA - orderB
+        return siblingBoxes.indexOf(a) - siblingBoxes.indexOf(b)
+      })
+
+      const sortedIds = siblingBoxes.map(b => b.getAttribute('data-section-id')!).filter(Boolean)
+      const srcIdx = sortedIds.indexOf(sourceId)
+      const tgtIdx = sortedIds.indexOf(targetId)
+
+      if (srcIdx !== -1 && tgtIdx !== -1) {
+        const newSortedIds = [...sortedIds]
+        const temp = newSortedIds[srcIdx]
+        newSortedIds[srcIdx] = newSortedIds[tgtIdx]
+        newSortedIds[tgtIdx] = temp
+
+        const nextDims = { ...currentDims }
+        newSortedIds.forEach((id, idx) => {
+          nextDims[id] = {
+            ...(nextDims[id] || {}),
+            order: idx * 10
+          }
+        })
+
+        onUpdateStructureConfig({
+          ...structureConfig,
+          sectionDimensions: nextDims
+        })
+        setTimeout(() => {
+          window.dispatchEvent(new CustomEvent('cv-box-moved'))
+        }, 50)
+        return
+      }
+    }
+
     const sourceOrder = currentDims[sourceId]?.order ?? 0
-    const targetOrder = currentDims[targetId]?.order ?? (sourceOrder + 1)
-
-    const newSourceOrder = targetOrder
-    const newTargetOrder = sourceOrder === targetOrder ? sourceOrder + 1 : sourceOrder
-
+    const targetOrder = currentDims[targetId]?.order ?? 10
     onUpdateStructureConfig({
       ...structureConfig,
       sectionDimensions: {
         ...currentDims,
-        [sourceId]: { ...(currentDims[sourceId] || {}), order: newSourceOrder },
-        [targetId]: { ...(currentDims[targetId] || {}), order: newTargetOrder }
+        [sourceId]: { ...(currentDims[sourceId] || {}), order: targetOrder },
+        [targetId]: { ...(currentDims[targetId] || {}), order: sourceOrder }
       }
     })
+    setTimeout(() => {
+      window.dispatchEvent(new CustomEvent('cv-box-moved'))
+    }, 50)
   }
 
   const handleMoveStep = (secId: string, direction: -1 | 1) => {
     if (!structureConfig || !onUpdateStructureConfig) return
     const currentDims = structureConfig.sectionDimensions || {}
-    const currentOrder = currentDims[secId]?.order ?? 0
-    onUpdateStructureConfig({
-      ...structureConfig,
-      sectionDimensions: {
-        ...currentDims,
-        [secId]: { ...(currentDims[secId] || {}), order: currentOrder + direction }
+
+    // Localiza o elemento e seus irmãos imediatos no mesmo container do layout
+    const currentEl = document.querySelector(`[data-section-id="${secId}"]`)
+    const parent = currentEl?.parentElement
+    if (!parent) return
+
+    const siblingBoxes = Array.from(parent.children).filter(el =>
+      el.classList.contains('cv-structural-box') && el.hasAttribute('data-section-id')
+    ) as HTMLElement[]
+
+    if (siblingBoxes.length <= 1) return
+
+    // Ordena de acordo com o CSS order atual, ou posição no DOM em caso de empate
+    siblingBoxes.sort((a, b) => {
+      const idA = a.getAttribute('data-section-id') || ''
+      const idB = b.getAttribute('data-section-id') || ''
+      const orderA = currentDims[idA]?.order ?? 0
+      const orderB = currentDims[idB]?.order ?? 0
+      if (orderA !== orderB) return orderA - orderB
+      return siblingBoxes.indexOf(a) - siblingBoxes.indexOf(b)
+    })
+
+    const sortedIds = siblingBoxes.map(b => b.getAttribute('data-section-id')!).filter(Boolean)
+    const currentIndex = sortedIds.indexOf(secId)
+    if (currentIndex === -1) return
+
+    const targetIndex = currentIndex + direction
+    if (targetIndex < 0 || targetIndex >= sortedIds.length) {
+      // Já está no extremo (topo ou fim do container)
+      return
+    }
+
+    // Troca as posições exatas dos dois elementos vizinhos
+    const newSortedIds = [...sortedIds]
+    const temp = newSortedIds[currentIndex]
+    newSortedIds[currentIndex] = newSortedIds[targetIndex]
+    newSortedIds[targetIndex] = temp
+
+    // Atribui valores de order com espaçamento de 10 para todos os irmãos
+    const nextDims = { ...currentDims }
+    newSortedIds.forEach((id, idx) => {
+      nextDims[id] = {
+        ...(nextDims[id] || {}),
+        order: idx * 10
       }
     })
+
+    onUpdateStructureConfig({
+      ...structureConfig,
+      sectionDimensions: nextDims
+    })
+
+    // Dispara evento para reavaliar colisões após troca de ordem
+    setTimeout(() => {
+      window.dispatchEvent(new CustomEvent('cv-box-moved'))
+    }, 50)
   }
 
   const isMultiColumnLayout = ['compact_split', 'sidebar', 'editorial_accent', 'corporate_timeline'].includes(blueprint.id)
