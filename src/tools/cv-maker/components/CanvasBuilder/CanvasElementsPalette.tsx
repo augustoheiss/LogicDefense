@@ -1,5 +1,10 @@
 import React from 'react'
-import type { CVData, LayoutStructureConfig } from '../../types/cv'
+import {
+  AVAILABLE_BOX_FONTS,
+  type CVData,
+  type LayoutStructureConfig,
+  type SectionBoxDimensions
+} from '../../types/cv'
 import { getAtomicItemId } from '../../utils/atomicIdUtils'
 
 interface CanvasElementsPaletteProps {
@@ -34,6 +39,7 @@ export const CanvasElementsPalette: React.FC<CanvasElementsPaletteProps> = ({
   const fileInputRef = React.useRef<HTMLInputElement>(null)
   const [urlInputValue, setUrlInputValue] = React.useState<string>('')
   const [isPhotoControlsOpen, setIsPhotoControlsOpen] = React.useState<boolean>(true)
+  const [openTypoId, setOpenTypoId] = React.useState<string | null>(null)
 
   if (!data) {
     return (
@@ -133,6 +139,149 @@ export const CanvasElementsPalette: React.FC<CanvasElementsPaletteProps> = ({
     })
   }
 
+  // Atualiza propriedades parciais de dimensões de qualquer bloco ou item atômico
+  const handleUpdateSectionDimensions = (key: string, updates: Partial<SectionBoxDimensions>) => {
+    const cur = dimensions[key] || {}
+    onUpdateStructureConfig({
+      ...structureConfig,
+      sectionDimensions: {
+        ...dimensions,
+        [key]: {
+          ...cur,
+          ...updates
+        }
+      }
+    })
+  }
+
+  const handleSelectFontFamily = (key: string, fontVal: string) => {
+    handleUpdateSectionDimensions(key, {
+      fontFamily: fontVal === 'inherit' ? undefined : fontVal
+    })
+  }
+
+  const handleSetFontScale = (key: string, scale: number) => {
+    const clamped = Math.round(Math.min(1.4, Math.max(0.7, scale)) * 100) / 100
+    handleUpdateSectionDimensions(key, {
+      fontSizeScale: clamped === 1 ? undefined : clamped
+    })
+  }
+
+  const handleAdjustFontScale = (key: string, delta: number) => {
+    const curScale = dimensions[key]?.fontSizeScale ?? 1.0
+    handleSetFontScale(key, curScale + delta)
+  }
+
+  const renderTypoButton = (key: string, tooltip = 'Ajustar fonte e tamanho da letra') => {
+    const curDims = dimensions[key] || {}
+    const hasCustom = Boolean(curDims.fontSizeScale || curDims.fontFamily)
+    const isOpen = openTypoId === key
+
+    return (
+      <button
+        type="button"
+        className={`cv-palette-typo-btn ${hasCustom ? 'is-custom' : ''} ${isOpen ? 'is-open' : ''}`}
+        onClick={() => setOpenTypoId(isOpen ? null : key)}
+        title={hasCustom ? 'Tipografia personalizada ativa - Clique para editar' : tooltip}
+      >
+        🔤
+      </button>
+    )
+  }
+
+  const renderTypographyPanel = (key: string, itemLabel?: string) => {
+    if (openTypoId !== key) return null
+    const curDims = dimensions[key] || {}
+    const activeFont = curDims.fontFamily || 'inherit'
+    const activeScale = curDims.fontSizeScale ?? 1.0
+    const activePercent = Math.round(activeScale * 100)
+
+    return (
+      <div className="cv-palette-typo-panel">
+        <div className="cv-palette-typo-header">
+          <span title={itemLabel || key}>
+            🔤 {itemLabel ? `Tipografia: ${itemLabel}` : 'Tipografia & Escala'}
+          </span>
+          <button
+            type="button"
+            className="cv-palette-typo-close-btn"
+            onClick={() => setOpenTypoId(null)}
+            title="Fechar controles de tipografia"
+          >
+            ✕
+          </button>
+        </div>
+
+        {/* Seletor de Família Tipográfica (Design & Estilo) */}
+        <div className="cv-palette-typo-field">
+          <label className="cv-palette-typo-label">Tipo de Fonte:</label>
+          <select
+            className="cv-palette-typo-select"
+            value={activeFont}
+            onChange={e => handleSelectFontFamily(key, e.target.value)}
+          >
+            {AVAILABLE_BOX_FONTS.map(f => {
+              const fontVal = f.family || 'inherit'
+              return (
+                <option key={f.id} value={fontVal} style={{ fontFamily: fontVal !== 'inherit' ? fontVal : 'inherit' }}>
+                  {f.label}
+                </option>
+              )
+            })}
+          </select>
+        </div>
+
+        {/* Slider Contínuo de Escala de Fonte com A- e A+ */}
+        <div className="cv-palette-typo-field">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <label className="cv-palette-typo-label">Tamanho da Fonte:</label>
+            <span className="cv-palette-typo-badge">{activePercent}%</span>
+          </div>
+          <div className="cv-palette-typo-slider-row">
+            <button
+              type="button"
+              className="cv-palette-stepper-btn"
+              onClick={() => handleAdjustFontScale(key, -0.02)}
+              title="Diminuir fonte em 2%"
+            >
+              A-
+            </button>
+            <input
+              type="range"
+              min="0.70"
+              max="1.40"
+              step="0.02"
+              value={activeScale}
+              onChange={e => handleSetFontScale(key, parseFloat(e.target.value))}
+              className="cv-palette-typo-slider"
+              title={`Ajuste contínuo: ${activePercent}%`}
+            />
+            <button
+              type="button"
+              className="cv-palette-stepper-btn"
+              onClick={() => handleAdjustFontScale(key, 0.02)}
+              title="Aumentar fonte em 2%"
+            >
+              A+
+            </button>
+          </div>
+        </div>
+
+        {/* Reset para Padrão do Tema */}
+        {(curDims.fontSizeScale || curDims.fontFamily) && (
+          <button
+            type="button"
+            className="cv-palette-typo-reset-btn"
+            onClick={() => handleUpdateSectionDimensions(key, { fontSizeScale: undefined, fontFamily: undefined })}
+            title="Restaurar tamanho e tipo de fonte para o padrão do tema global"
+          >
+            ↺ Restaurar Padrão do Tema
+          </button>
+        )}
+      </div>
+    )
+  }
+
   // Contagem de itens visíveis vs ocultos
   const totalHidden = Object.values(dimensions).filter(d => d.hidden).length
 
@@ -183,15 +332,19 @@ export const CanvasElementsPalette: React.FC<CanvasElementsPaletteProps> = ({
               <span className="cv-palette-item__icon">🏷️</span>
               <span className="cv-palette-item__name">Nome & Título</span>
             </div>
-            <button
-              type="button"
-              className={`cv-eye-btn ${dimensions['header']?.hidden ? 'is-hidden' : ''}`}
-              onClick={() => handleToggleHide('header')}
-              title={dimensions['header']?.hidden ? 'Exibir na folha' : 'Ocultar da folha'}
-            >
-              {dimensions['header']?.hidden ? '👁️‍🗨️ Oculto' : '👁️ Visível'}
-            </button>
+            <div className="cv-palette-item__actions">
+              {renderTypoButton('header', 'Ajustar fonte do Nome & Título')}
+              <button
+                type="button"
+                className={`cv-eye-btn ${dimensions['header']?.hidden ? 'is-hidden' : ''}`}
+                onClick={() => handleToggleHide('header')}
+                title={dimensions['header']?.hidden ? 'Exibir na folha' : 'Ocultar da folha'}
+              >
+                {dimensions['header']?.hidden ? '👁️‍🗨️ Oculto' : '👁️ Visível'}
+              </button>
+            </div>
           </div>
+          {renderTypographyPanel('header', 'Nome & Título')}
 
           {/* Módulo Centralizado de Foto de Perfil */}
           <div className="cv-palette-photo-card" style={{ background: '#090e1a', border: '1px solid #1e293b', borderRadius: '8px', padding: '0.75rem', marginTop: '0.4rem', display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
@@ -567,92 +720,115 @@ export const CanvasElementsPalette: React.FC<CanvasElementsPaletteProps> = ({
               <span className="cv-palette-item__icon">📞</span>
               <span className="cv-palette-item__name">Contatos & Redes</span>
             </div>
-            <button
-              type="button"
-              className={`cv-eye-btn ${dimensions['contacts']?.hidden ? 'is-hidden' : ''}`}
-              onClick={() => handleToggleHide('contacts')}
-              title={dimensions['contacts']?.hidden ? 'Exibir contatos' : 'Ocultar contatos'}
-            >
-              {dimensions['contacts']?.hidden ? '👁️‍🗨️ Oculto' : '👁️ Visível'}
-            </button>
-          </div>
-
-          {(data.basics.driverLicense || data.basics.nationality || data.basics.age || data.basics.civilStatus) && (
-            <div className="cv-palette-item">
-              <div className="cv-palette-item__info">
-                <span className="cv-palette-item__icon">🪪</span>
-                <span className="cv-palette-item__name">Dados Civis</span>
-              </div>
+            <div className="cv-palette-item__actions">
+              {renderTypoButton('contacts', 'Ajustar fonte dos Contatos')}
               <button
                 type="button"
-                className={`cv-eye-btn ${dimensions['civil']?.hidden ? 'is-hidden' : ''}`}
-                onClick={() => handleToggleHide('civil')}
-                title={dimensions['civil']?.hidden ? 'Exibir dados civis' : 'Ocultar dados civis'}
+                className={`cv-eye-btn ${dimensions['contacts']?.hidden ? 'is-hidden' : ''}`}
+                onClick={() => handleToggleHide('contacts')}
+                title={dimensions['contacts']?.hidden ? 'Exibir contatos' : 'Ocultar contatos'}
               >
-                {dimensions['civil']?.hidden ? '👁️‍🗨️ Oculto' : '👁️ Visível'}
+                {dimensions['contacts']?.hidden ? '👁️‍🗨️ Oculto' : '👁️ Visível'}
               </button>
             </div>
+          </div>
+          {renderTypographyPanel('contacts', 'Contatos & Redes')}
+
+          {(data.basics.driverLicense || data.basics.nationality || data.basics.age || data.basics.civilStatus) && (
+            <>
+              <div className="cv-palette-item">
+                <div className="cv-palette-item__info">
+                  <span className="cv-palette-item__icon">🪪</span>
+                  <span className="cv-palette-item__name">Dados Civis</span>
+                </div>
+                <div className="cv-palette-item__actions">
+                  {renderTypoButton('civil', 'Ajustar fonte dos Dados Civis')}
+                  <button
+                    type="button"
+                    className={`cv-eye-btn ${dimensions['civil']?.hidden ? 'is-hidden' : ''}`}
+                    onClick={() => handleToggleHide('civil')}
+                    title={dimensions['civil']?.hidden ? 'Exibir dados civis' : 'Ocultar dados civis'}
+                  >
+                    {dimensions['civil']?.hidden ? '👁️‍🗨️ Oculto' : '👁️ Visível'}
+                  </button>
+                </div>
+              </div>
+              {renderTypographyPanel('civil', 'Dados Civis')}
+            </>
           )}
 
           {data.basics.summary && (
-            <div className="cv-palette-item">
-              <div className="cv-palette-item__info">
-                <span className="cv-palette-item__icon">📝</span>
-                <span className="cv-palette-item__name">Sobre Mim / Resumo</span>
+            <>
+              <div className="cv-palette-item">
+                <div className="cv-palette-item__info">
+                  <span className="cv-palette-item__icon">📝</span>
+                  <span className="cv-palette-item__name">Sobre Mim / Resumo</span>
+                </div>
+                <div className="cv-palette-item__actions">
+                  {renderTypoButton('summary', 'Ajustar fonte do Resumo')}
+                  <button
+                    type="button"
+                    className={`cv-eye-btn ${dimensions['summary']?.hidden ? 'is-hidden' : ''}`}
+                    onClick={() => handleToggleHide('summary')}
+                  >
+                    {dimensions['summary']?.hidden ? '👁️‍🗨️ Oculto' : '👁️ Visível'}
+                  </button>
+                </div>
               </div>
-              <button
-                type="button"
-                className={`cv-eye-btn ${dimensions['summary']?.hidden ? 'is-hidden' : ''}`}
-                onClick={() => handleToggleHide('summary')}
-              >
-                {dimensions['summary']?.hidden ? '👁️‍🗨️ Oculto' : '👁️ Visível'}
-              </button>
-            </div>
+              {renderTypographyPanel('summary', 'Sobre Mim / Resumo')}
+            </>
           )}
         </div>
 
         {/* ── Categoria: Experiências Profissionais (Desmembradas Atômicas) ── */}
         {data.work && data.work.length > 0 && (
           <div className="cv-palette-group">
-            <div className="cv-palette-group__title">
-              💼 Experiência Profissional ({data.work.length})
+            <div className="cv-palette-group__title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span>💼 Experiência Profissional ({data.work.length})</span>
+              {renderTypoButton('work', 'Ajustar fonte da seção geral de Experiências')}
             </div>
+            {renderTypographyPanel('work', 'Seção Geral: Experiências')}
             {data.work.map((w, idx) => {
               const itemId = getAtomicItemId('work', w, idx)
               const itemDims = dimensions[itemId] || {}
               const isHidden = Boolean(itemDims.hidden)
+              const itemLabel = w.company || w.name || `Empresa ${idx + 1}`
 
               return (
-                <div key={itemId} className={`cv-palette-item cv-palette-item--sub ${isHidden ? 'is-dimmed' : ''}`}>
-                  <div className="cv-palette-item__info">
-                    <span className="cv-palette-item__icon">🏢</span>
-                    <div className="cv-palette-item__texts">
-                      <strong className="cv-palette-item__bold">{w.company || w.name || `Empresa ${idx + 1}`}</strong>
-                      <span className="cv-palette-item__tiny">{w.position || 'Cargo'}</span>
+                <React.Fragment key={itemId}>
+                  <div className={`cv-palette-item cv-palette-item--sub ${isHidden ? 'is-dimmed' : ''}`}>
+                    <div className="cv-palette-item__info">
+                      <span className="cv-palette-item__icon">🏢</span>
+                      <div className="cv-palette-item__texts">
+                        <strong className="cv-palette-item__bold">{itemLabel}</strong>
+                        <span className="cv-palette-item__tiny">{w.position || 'Cargo'}</span>
+                      </div>
+                    </div>
+                    <div className="cv-palette-item__actions">
+                      <select
+                        className="cv-palette-select"
+                        value={itemDims.variant || 'card_box'}
+                        onChange={e => handleSelectVariant(itemId, e.target.value)}
+                        title="Variante de exibição deste cargo"
+                      >
+                        <option value="card_box">📦 Box Card</option>
+                        <option value="timeline">⏱️ Timeline</option>
+                        <option value="minimal">📄 Minimal</option>
+                        <option value="ultra_compact">📏 1 Linha (A4)</option>
+                      </select>
+                      {renderTypoButton(itemId, `Ajustar fonte de ${itemLabel}`)}
+                      <button
+                        type="button"
+                        className={`cv-eye-btn ${isHidden ? 'is-hidden' : ''}`}
+                        onClick={() => handleToggleHide(itemId)}
+                        title={isHidden ? 'Exibir na folha' : 'Ocultar cargo'}
+                      >
+                        {isHidden ? '👁️‍🗨️' : '👁️'}
+                      </button>
                     </div>
                   </div>
-                  <div className="cv-palette-item__actions">
-                    <select
-                      className="cv-palette-select"
-                      value={itemDims.variant || 'card_box'}
-                      onChange={e => handleSelectVariant(itemId, e.target.value)}
-                      title="Variante de exibição deste cargo"
-                    >
-                      <option value="card_box">📦 Box Card</option>
-                      <option value="timeline">⏱️ Timeline</option>
-                      <option value="minimal">📄 Minimal</option>
-                      <option value="ultra_compact">📏 1 Linha (A4)</option>
-                    </select>
-                    <button
-                      type="button"
-                      className={`cv-eye-btn ${isHidden ? 'is-hidden' : ''}`}
-                      onClick={() => handleToggleHide(itemId)}
-                      title={isHidden ? 'Exibir na folha' : 'Ocultar cargo'}
-                    >
-                      {isHidden ? '👁️‍🗨️' : '👁️'}
-                    </button>
-                  </div>
-                </div>
+                  {renderTypographyPanel(itemId, itemLabel)}
+                </React.Fragment>
               )
             })}
           </div>
@@ -661,44 +837,51 @@ export const CanvasElementsPalette: React.FC<CanvasElementsPaletteProps> = ({
         {/* ── Categoria: Formação Acadêmica (Desmembrada Atômica) ── */}
         {data.education && data.education.length > 0 && (
           <div className="cv-palette-group">
-            <div className="cv-palette-group__title">
-              🎓 Formação Acadêmica ({data.education.length})
+            <div className="cv-palette-group__title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span>🎓 Formação Acadêmica ({data.education.length})</span>
+              {renderTypoButton('education', 'Ajustar fonte da seção geral de Formação')}
             </div>
+            {renderTypographyPanel('education', 'Seção Geral: Formação Acadêmica')}
             {data.education.map((ed, idx) => {
               const itemId = getAtomicItemId('education', ed, idx)
               const itemDims = dimensions[itemId] || {}
               const isHidden = Boolean(itemDims.hidden)
+              const itemLabel = ed.area || ed.studyType || `Curso ${idx + 1}`
 
               return (
-                <div key={itemId} className={`cv-palette-item cv-palette-item--sub ${isHidden ? 'is-dimmed' : ''}`}>
-                  <div className="cv-palette-item__info">
-                    <span className="cv-palette-item__icon">🏛️</span>
-                    <div className="cv-palette-item__texts">
-                      <strong className="cv-palette-item__bold">{ed.area || ed.studyType || `Curso ${idx + 1}`}</strong>
-                      <span className="cv-palette-item__tiny">{ed.institution}</span>
+                <React.Fragment key={itemId}>
+                  <div className={`cv-palette-item cv-palette-item--sub ${isHidden ? 'is-dimmed' : ''}`}>
+                    <div className="cv-palette-item__info">
+                      <span className="cv-palette-item__icon">🏛️</span>
+                      <div className="cv-palette-item__texts">
+                        <strong className="cv-palette-item__bold">{itemLabel}</strong>
+                        <span className="cv-palette-item__tiny">{ed.institution}</span>
+                      </div>
+                    </div>
+                    <div className="cv-palette-item__actions">
+                      <select
+                        className="cv-palette-select"
+                        value={itemDims.variant || 'card_box'}
+                        onChange={e => handleSelectVariant(itemId, e.target.value)}
+                        title="Variante de layout desta formação"
+                      >
+                        <option value="card_box">📦 Box Card</option>
+                        <option value="timeline">⏱️ Timeline</option>
+                        <option value="ultra_compact">📏 1 Linha (A4)</option>
+                      </select>
+                      {renderTypoButton(itemId, `Ajustar fonte de ${itemLabel}`)}
+                      <button
+                        type="button"
+                        className={`cv-eye-btn ${isHidden ? 'is-hidden' : ''}`}
+                        onClick={() => handleToggleHide(itemId)}
+                        title={isHidden ? 'Exibir na folha' : 'Ocultar curso'}
+                      >
+                        {isHidden ? '👁️‍🗨️' : '👁️'}
+                      </button>
                     </div>
                   </div>
-                  <div className="cv-palette-item__actions">
-                    <select
-                      className="cv-palette-select"
-                      value={itemDims.variant || 'card_box'}
-                      onChange={e => handleSelectVariant(itemId, e.target.value)}
-                      title="Variante de layout desta formação"
-                    >
-                      <option value="card_box">📦 Box Card</option>
-                      <option value="timeline">⏱️ Timeline</option>
-                      <option value="ultra_compact">📏 1 Linha (A4)</option>
-                    </select>
-                    <button
-                      type="button"
-                      className={`cv-eye-btn ${isHidden ? 'is-hidden' : ''}`}
-                      onClick={() => handleToggleHide(itemId)}
-                      title={isHidden ? 'Exibir na folha' : 'Ocultar curso'}
-                    >
-                      {isHidden ? '👁️‍🗨️' : '👁️'}
-                    </button>
-                  </div>
-                </div>
+                  {renderTypographyPanel(itemId, itemLabel)}
+                </React.Fragment>
               )
             })}
           </div>
@@ -707,44 +890,51 @@ export const CanvasElementsPalette: React.FC<CanvasElementsPaletteProps> = ({
         {/* ── Categoria: Projetos em Destaque (Desmembrados Atômicos) ── */}
         {data.projects && data.projects.length > 0 && (
           <div className="cv-palette-group">
-            <div className="cv-palette-group__title">
-              🚀 Projetos em Destaque ({data.projects.length})
+            <div className="cv-palette-group__title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span>🚀 Projetos em Destaque ({data.projects.length})</span>
+              {renderTypoButton('projects', 'Ajustar fonte da seção geral de Projetos')}
             </div>
+            {renderTypographyPanel('projects', 'Seção Geral: Projetos')}
             {data.projects.map((p, idx) => {
               const itemId = getAtomicItemId('projects', p, idx)
               const itemDims = dimensions[itemId] || {}
               const isHidden = Boolean(itemDims.hidden)
+              const itemLabel = p.name || `Projeto ${idx + 1}`
 
               return (
-                <div key={itemId} className={`cv-palette-item cv-palette-item--sub ${isHidden ? 'is-dimmed' : ''}`}>
-                  <div className="cv-palette-item__info">
-                    <span className="cv-palette-item__icon">💻</span>
-                    <div className="cv-palette-item__texts">
-                      <strong className="cv-palette-item__bold">{p.name || `Projeto ${idx + 1}`}</strong>
-                      {p.url && <span className="cv-palette-item__tiny">🔗 Link ativo</span>}
+                <React.Fragment key={itemId}>
+                  <div className={`cv-palette-item cv-palette-item--sub ${isHidden ? 'is-dimmed' : ''}`}>
+                    <div className="cv-palette-item__info">
+                      <span className="cv-palette-item__icon">💻</span>
+                      <div className="cv-palette-item__texts">
+                        <strong className="cv-palette-item__bold">{itemLabel}</strong>
+                        {p.url && <span className="cv-palette-item__tiny">🔗 Link ativo</span>}
+                      </div>
+                    </div>
+                    <div className="cv-palette-item__actions">
+                      <select
+                        className="cv-palette-select"
+                        value={itemDims.variant || 'card_box'}
+                        onChange={e => handleSelectVariant(itemId, e.target.value)}
+                        title="Variante deste projeto"
+                      >
+                        <option value="card_box">📦 Showcase Box</option>
+                        <option value="minimal">📄 Minimal Link</option>
+                        <option value="ultra_compact">📏 1 Linha (A4)</option>
+                      </select>
+                      {renderTypoButton(itemId, `Ajustar fonte de ${itemLabel}`)}
+                      <button
+                        type="button"
+                        className={`cv-eye-btn ${isHidden ? 'is-hidden' : ''}`}
+                        onClick={() => handleToggleHide(itemId)}
+                        title={isHidden ? 'Exibir na folha' : 'Ocultar projeto'}
+                      >
+                        {isHidden ? '👁️‍🗨️' : '👁️'}
+                      </button>
                     </div>
                   </div>
-                  <div className="cv-palette-item__actions">
-                    <select
-                      className="cv-palette-select"
-                      value={itemDims.variant || 'card_box'}
-                      onChange={e => handleSelectVariant(itemId, e.target.value)}
-                      title="Variante deste projeto"
-                    >
-                      <option value="card_box">📦 Showcase Box</option>
-                      <option value="minimal">📄 Minimal Link</option>
-                      <option value="ultra_compact">📏 1 Linha (A4)</option>
-                    </select>
-                    <button
-                      type="button"
-                      className={`cv-eye-btn ${isHidden ? 'is-hidden' : ''}`}
-                      onClick={() => handleToggleHide(itemId)}
-                      title={isHidden ? 'Exibir na folha' : 'Ocultar projeto'}
-                    >
-                      {isHidden ? '👁️‍🗨️' : '👁️'}
-                    </button>
-                  </div>
-                </div>
+                  {renderTypographyPanel(itemId, itemLabel)}
+                </React.Fragment>
               )
             })}
           </div>
@@ -753,44 +943,51 @@ export const CanvasElementsPalette: React.FC<CanvasElementsPaletteProps> = ({
         {/* ── Categoria: Competências & Habilidades (Atômicas) ── */}
         {data.skills && data.skills.length > 0 && (
           <div className="cv-palette-group">
-            <div className="cv-palette-group__title">
-              ⚡ Competências & Grupos ({data.skills.length})
+            <div className="cv-palette-group__title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span>⚡ Competências & Grupos ({data.skills.length})</span>
+              {renderTypoButton('skills', 'Ajustar fonte da seção geral de Competências')}
             </div>
+            {renderTypographyPanel('skills', 'Seção Geral: Competências')}
             {data.skills.map((s, idx) => {
               const itemId = getAtomicItemId('skills', s, idx)
               const itemDims = dimensions[itemId] || {}
               const isHidden = Boolean(itemDims.hidden)
+              const itemLabel = s.name || `Grupo ${idx + 1}`
 
               return (
-                <div key={itemId} className={`cv-palette-item cv-palette-item--sub ${isHidden ? 'is-dimmed' : ''}`}>
-                  <div className="cv-palette-item__info">
-                    <span className="cv-palette-item__icon">🎯</span>
-                    <div className="cv-palette-item__texts">
-                      <strong className="cv-palette-item__bold">{s.name || `Grupo ${idx + 1}`}</strong>
-                      <span className="cv-palette-item__tiny">{s.keywords?.length || 0} termos</span>
+                <React.Fragment key={itemId}>
+                  <div className={`cv-palette-item cv-palette-item--sub ${isHidden ? 'is-dimmed' : ''}`}>
+                    <div className="cv-palette-item__info">
+                      <span className="cv-palette-item__icon">🎯</span>
+                      <div className="cv-palette-item__texts">
+                        <strong className="cv-palette-item__bold">{itemLabel}</strong>
+                        <span className="cv-palette-item__tiny">{s.keywords?.length || 0} termos</span>
+                      </div>
+                    </div>
+                    <div className="cv-palette-item__actions">
+                      <select
+                        className="cv-palette-select"
+                        value={itemDims.variant || 'badges'}
+                        onChange={e => handleSelectVariant(itemId, e.target.value)}
+                        title="Variante deste grupo de skills"
+                      >
+                        <option value="badges">🏷️ Pílulas / Badges</option>
+                        <option value="bars">📊 Barras de Nível</option>
+                        <option value="minimal">📝 Texto Simples</option>
+                      </select>
+                      {renderTypoButton(itemId, `Ajustar fonte de ${itemLabel}`)}
+                      <button
+                        type="button"
+                        className={`cv-eye-btn ${isHidden ? 'is-hidden' : ''}`}
+                        onClick={() => handleToggleHide(itemId)}
+                        title={isHidden ? 'Exibir na folha' : 'Ocultar grupo'}
+                      >
+                        {isHidden ? '👁️‍🗨️' : '👁️'}
+                      </button>
                     </div>
                   </div>
-                  <div className="cv-palette-item__actions">
-                    <select
-                      className="cv-palette-select"
-                      value={itemDims.variant || 'badges'}
-                      onChange={e => handleSelectVariant(itemId, e.target.value)}
-                      title="Variante deste grupo de skills"
-                    >
-                      <option value="badges">🏷️ Pílulas / Badges</option>
-                      <option value="bars">📊 Barras de Nível</option>
-                      <option value="minimal">📝 Texto Simples</option>
-                    </select>
-                    <button
-                      type="button"
-                      className={`cv-eye-btn ${isHidden ? 'is-hidden' : ''}`}
-                      onClick={() => handleToggleHide(itemId)}
-                      title={isHidden ? 'Exibir na folha' : 'Ocultar grupo'}
-                    >
-                      {isHidden ? '👁️‍🗨️' : '👁️'}
-                    </button>
-                  </div>
-                </div>
+                  {renderTypographyPanel(itemId, itemLabel)}
+                </React.Fragment>
               )
             })}
           </div>
@@ -799,44 +996,51 @@ export const CanvasElementsPalette: React.FC<CanvasElementsPaletteProps> = ({
         {/* ── Categoria: Idiomas (Atômicos) ── */}
         {data.languages && data.languages.length > 0 && (
           <div className="cv-palette-group">
-            <div className="cv-palette-group__title">
-              🌐 Idiomas ({data.languages.length})
+            <div className="cv-palette-group__title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span>🌐 Idiomas ({data.languages.length})</span>
+              {renderTypoButton('languages', 'Ajustar fonte da seção geral de Idiomas')}
             </div>
+            {renderTypographyPanel('languages', 'Seção Geral: Idiomas')}
             {data.languages.map((l, idx) => {
               const itemId = getAtomicItemId('languages', l, idx)
               const itemDims = dimensions[itemId] || {}
               const isHidden = Boolean(itemDims.hidden)
+              const itemLabel = l.language
 
               return (
-                <div key={itemId} className={`cv-palette-item cv-palette-item--sub ${isHidden ? 'is-dimmed' : ''}`}>
-                  <div className="cv-palette-item__info">
-                    <span className="cv-palette-item__icon">🗣️</span>
-                    <div className="cv-palette-item__texts">
-                      <strong className="cv-palette-item__bold">{l.language}</strong>
-                      <span className="cv-palette-item__tiny">{l.fluency || 'Básico'}</span>
+                <React.Fragment key={itemId}>
+                  <div className={`cv-palette-item cv-palette-item--sub ${isHidden ? 'is-dimmed' : ''}`}>
+                    <div className="cv-palette-item__info">
+                      <span className="cv-palette-item__icon">🗣️</span>
+                      <div className="cv-palette-item__texts">
+                        <strong className="cv-palette-item__bold">{itemLabel}</strong>
+                        <span className="cv-palette-item__tiny">{l.fluency || 'Básico'}</span>
+                      </div>
+                    </div>
+                    <div className="cv-palette-item__actions">
+                      <select
+                        className="cv-palette-select"
+                        value={itemDims.variant || 'pill_badge'}
+                        onChange={e => handleSelectVariant(itemId, e.target.value)}
+                        title="Variante deste idioma"
+                      >
+                        <option value="pill_badge">🏷️ Pill Badge</option>
+                        <option value="dots">⚪ Pontos (Dots)</option>
+                        <option value="minimal">📄 Texto Simples</option>
+                      </select>
+                      {renderTypoButton(itemId, `Ajustar fonte de ${itemLabel}`)}
+                      <button
+                        type="button"
+                        className={`cv-eye-btn ${isHidden ? 'is-hidden' : ''}`}
+                        onClick={() => handleToggleHide(itemId)}
+                        title={isHidden ? 'Exibir na folha' : 'Ocultar idioma'}
+                      >
+                        {isHidden ? '👁️‍🗨️' : '👁️'}
+                      </button>
                     </div>
                   </div>
-                  <div className="cv-palette-item__actions">
-                    <select
-                      className="cv-palette-select"
-                      value={itemDims.variant || 'pill_badge'}
-                      onChange={e => handleSelectVariant(itemId, e.target.value)}
-                      title="Variante deste idioma"
-                    >
-                      <option value="pill_badge">🏷️ Pill Badge</option>
-                      <option value="dots">⚪ Pontos (Dots)</option>
-                      <option value="minimal">📄 Texto Simples</option>
-                    </select>
-                    <button
-                      type="button"
-                      className={`cv-eye-btn ${isHidden ? 'is-hidden' : ''}`}
-                      onClick={() => handleToggleHide(itemId)}
-                      title={isHidden ? 'Exibir na folha' : 'Ocultar idioma'}
-                    >
-                      {isHidden ? '👁️‍🗨️' : '👁️'}
-                    </button>
-                  </div>
-                </div>
+                  {renderTypographyPanel(itemId, itemLabel)}
+                </React.Fragment>
               )
             })}
           </div>
@@ -845,44 +1049,51 @@ export const CanvasElementsPalette: React.FC<CanvasElementsPaletteProps> = ({
         {/* ── Categoria: Licenças & Certificações (Atômicas) ── */}
         {data.certificates && data.certificates.length > 0 && (
           <div className="cv-palette-group">
-            <div className="cv-palette-group__title">
-              📜 Licenças & Certificações ({data.certificates.length})
+            <div className="cv-palette-group__title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span>📜 Licenças & Certificações ({data.certificates.length})</span>
+              {renderTypoButton('certificates', 'Ajustar fonte da seção geral de Certificados')}
             </div>
+            {renderTypographyPanel('certificates', 'Seção Geral: Certificados')}
             {data.certificates.map((c, idx) => {
               const itemId = getAtomicItemId('certificates', c, idx)
               const itemDims = dimensions[itemId] || {}
               const isHidden = Boolean(itemDims.hidden)
+              const itemLabel = c.name || `Certificado ${idx + 1}`
 
               return (
-                <div key={itemId} className={`cv-palette-item cv-palette-item--sub ${isHidden ? 'is-dimmed' : ''}`}>
-                  <div className="cv-palette-item__info">
-                    <span className="cv-palette-item__icon">📜</span>
-                    <div className="cv-palette-item__texts">
-                      <strong className="cv-palette-item__bold">{c.name || `Certificado ${idx + 1}`}</strong>
-                      <span className="cv-palette-item__tiny">{c.issuer || c.date || 'Certificação'}</span>
+                <React.Fragment key={itemId}>
+                  <div className={`cv-palette-item cv-palette-item--sub ${isHidden ? 'is-dimmed' : ''}`}>
+                    <div className="cv-palette-item__info">
+                      <span className="cv-palette-item__icon">📜</span>
+                      <div className="cv-palette-item__texts">
+                        <strong className="cv-palette-item__bold">{itemLabel}</strong>
+                        <span className="cv-palette-item__tiny">{c.issuer || c.date || 'Certificação'}</span>
+                      </div>
+                    </div>
+                    <div className="cv-palette-item__actions">
+                      <select
+                        className="cv-palette-select"
+                        value={itemDims.variant || 'card_box'}
+                        onChange={e => handleSelectVariant(itemId, e.target.value)}
+                        title="Variante visual deste certificado"
+                      >
+                        <option value="card_box">📦 Box Card</option>
+                        <option value="pill_badge">🏷️ Badge Pill</option>
+                        <option value="minimal">📄 Linha Simples</option>
+                      </select>
+                      {renderTypoButton(itemId, `Ajustar fonte de ${itemLabel}`)}
+                      <button
+                        type="button"
+                        className={`cv-eye-btn ${isHidden ? 'is-hidden' : ''}`}
+                        onClick={() => handleToggleHide(itemId)}
+                        title={isHidden ? 'Exibir na folha' : 'Ocultar certificação'}
+                      >
+                        {isHidden ? '👁️‍🗨️' : '👁️'}
+                      </button>
                     </div>
                   </div>
-                  <div className="cv-palette-item__actions">
-                    <select
-                      className="cv-palette-select"
-                      value={itemDims.variant || 'card_box'}
-                      onChange={e => handleSelectVariant(itemId, e.target.value)}
-                      title="Variante visual deste certificado"
-                    >
-                      <option value="card_box">📦 Box Card</option>
-                      <option value="pill_badge">🏷️ Badge Pill</option>
-                      <option value="minimal">📄 Linha Simples</option>
-                    </select>
-                    <button
-                      type="button"
-                      className={`cv-eye-btn ${isHidden ? 'is-hidden' : ''}`}
-                      onClick={() => handleToggleHide(itemId)}
-                      title={isHidden ? 'Exibir na folha' : 'Ocultar certificação'}
-                    >
-                      {isHidden ? '👁️‍🗨️' : '👁️'}
-                    </button>
-                  </div>
-                </div>
+                  {renderTypographyPanel(itemId, itemLabel)}
+                </React.Fragment>
               )
             })}
           </div>
@@ -891,44 +1102,51 @@ export const CanvasElementsPalette: React.FC<CanvasElementsPaletteProps> = ({
         {/* ── Categoria: Interesses & Pesquisa (Atômicos) ── */}
         {data.interests && data.interests.length > 0 && (
           <div className="cv-palette-group">
-            <div className="cv-palette-group__title">
-              💡 Interesses & Pesquisa ({data.interests.length})
+            <div className="cv-palette-group__title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span>💡 Interesses & Pesquisa ({data.interests.length})</span>
+              {renderTypoButton('interests', 'Ajustar fonte da seção geral de Interesses')}
             </div>
+            {renderTypographyPanel('interests', 'Seção Geral: Interesses')}
             {data.interests.map((it, idx) => {
               const itemId = getAtomicItemId('interests', it, idx)
               const itemDims = dimensions[itemId] || {}
               const isHidden = Boolean(itemDims.hidden)
+              const itemLabel = it.name || `Interesse ${idx + 1}`
 
               return (
-                <div key={itemId} className={`cv-palette-item cv-palette-item--sub ${isHidden ? 'is-dimmed' : ''}`}>
-                  <div className="cv-palette-item__info">
-                    <span className="cv-palette-item__icon">💡</span>
-                    <div className="cv-palette-item__texts">
-                      <strong className="cv-palette-item__bold">{it.name || `Interesse ${idx + 1}`}</strong>
-                      <span className="cv-palette-item__tiny">{it.keywords?.length ? `${it.keywords.length} tópicos` : 'Área de interesse'}</span>
+                <React.Fragment key={itemId}>
+                  <div className={`cv-palette-item cv-palette-item--sub ${isHidden ? 'is-dimmed' : ''}`}>
+                    <div className="cv-palette-item__info">
+                      <span className="cv-palette-item__icon">💡</span>
+                      <div className="cv-palette-item__texts">
+                        <strong className="cv-palette-item__bold">{itemLabel}</strong>
+                        <span className="cv-palette-item__tiny">{it.keywords?.length ? `${it.keywords.length} tópicos` : 'Área de interesse'}</span>
+                      </div>
+                    </div>
+                    <div className="cv-palette-item__actions">
+                      <select
+                        className="cv-palette-select"
+                        value={itemDims.variant || 'card_box'}
+                        onChange={e => handleSelectVariant(itemId, e.target.value)}
+                        title="Variante deste tópico de interesse"
+                      >
+                        <option value="card_box">📦 Card com Tags</option>
+                        <option value="circles">⭕ Círculo Hobbies</option>
+                        <option value="minimal">📝 Linha Textual</option>
+                      </select>
+                      {renderTypoButton(itemId, `Ajustar fonte de ${itemLabel}`)}
+                      <button
+                        type="button"
+                        className={`cv-eye-btn ${isHidden ? 'is-hidden' : ''}`}
+                        onClick={() => handleToggleHide(itemId)}
+                        title={isHidden ? 'Exibir na folha' : 'Ocultar interesse'}
+                      >
+                        {isHidden ? '👁️‍🗨️' : '👁️'}
+                      </button>
                     </div>
                   </div>
-                  <div className="cv-palette-item__actions">
-                    <select
-                      className="cv-palette-select"
-                      value={itemDims.variant || 'card_box'}
-                      onChange={e => handleSelectVariant(itemId, e.target.value)}
-                      title="Variante deste tópico de interesse"
-                    >
-                      <option value="card_box">📦 Card com Tags</option>
-                      <option value="circles">⭕ Círculo Hobbies</option>
-                      <option value="minimal">📝 Linha Textual</option>
-                    </select>
-                    <button
-                      type="button"
-                      className={`cv-eye-btn ${isHidden ? 'is-hidden' : ''}`}
-                      onClick={() => handleToggleHide(itemId)}
-                      title={isHidden ? 'Exibir na folha' : 'Ocultar interesse'}
-                    >
-                      {isHidden ? '👁️‍🗨️' : '👁️'}
-                    </button>
-                  </div>
-                </div>
+                  {renderTypographyPanel(itemId, itemLabel)}
+                </React.Fragment>
               )
             })}
           </div>
@@ -937,32 +1155,41 @@ export const CanvasElementsPalette: React.FC<CanvasElementsPaletteProps> = ({
         {/* ── Categoria: Referências (Atômicas) ── */}
         {data.references && data.references.length > 0 && (
           <div className="cv-palette-group">
-            <div className="cv-palette-group__title">
-              👥 Referências Profissionais ({data.references.length})
+            <div className="cv-palette-group__title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span>👥 Referências Profissionais ({data.references.length})</span>
+              {renderTypoButton('references', 'Ajustar fonte da seção geral de Referências')}
             </div>
+            {renderTypographyPanel('references', 'Seção Geral: Referências')}
             {data.references.map((r, idx) => {
               const itemId = getAtomicItemId('references', r, idx)
               const itemDims = dimensions[itemId] || {}
               const isHidden = Boolean(itemDims.hidden)
+              const itemLabel = r.name || `Referência ${idx + 1}`
 
               return (
-                <div key={itemId} className={`cv-palette-item cv-palette-item--sub ${isHidden ? 'is-dimmed' : ''}`}>
-                  <div className="cv-palette-item__info">
-                    <span className="cv-palette-item__icon">👥</span>
-                    <div className="cv-palette-item__texts">
-                      <strong className="cv-palette-item__bold">{r.name || `Referência ${idx + 1}`}</strong>
-                      <span className="cv-palette-item__tiny">{r.company || r.position || r.reference || 'Contato'}</span>
+                <React.Fragment key={itemId}>
+                  <div className={`cv-palette-item cv-palette-item--sub ${isHidden ? 'is-dimmed' : ''}`}>
+                    <div className="cv-palette-item__info">
+                      <span className="cv-palette-item__icon">👥</span>
+                      <div className="cv-palette-item__texts">
+                        <strong className="cv-palette-item__bold">{itemLabel}</strong>
+                        <span className="cv-palette-item__tiny">{r.company || r.position || r.reference || 'Contato'}</span>
+                      </div>
+                    </div>
+                    <div className="cv-palette-item__actions">
+                      {renderTypoButton(itemId, `Ajustar fonte de ${itemLabel}`)}
+                      <button
+                        type="button"
+                        className={`cv-eye-btn ${isHidden ? 'is-hidden' : ''}`}
+                        onClick={() => handleToggleHide(itemId)}
+                        title={isHidden ? 'Exibir na folha' : 'Ocultar referência'}
+                      >
+                        {isHidden ? '👁️‍🗨️' : '👁️'}
+                      </button>
                     </div>
                   </div>
-                  <button
-                    type="button"
-                    className={`cv-eye-btn ${isHidden ? 'is-hidden' : ''}`}
-                    onClick={() => handleToggleHide(itemId)}
-                    title={isHidden ? 'Exibir na folha' : 'Ocultar referência'}
-                  >
-                    {isHidden ? '👁️‍🗨️' : '👁️'}
-                  </button>
-                </div>
+                  {renderTypographyPanel(itemId, itemLabel)}
+                </React.Fragment>
               )
             })}
           </div>
@@ -971,32 +1198,41 @@ export const CanvasElementsPalette: React.FC<CanvasElementsPaletteProps> = ({
         {/* ── Categoria: Prêmios & Distinções (Se existir no YAML) ── */}
         {data.awards && data.awards.length > 0 && (
           <div className="cv-palette-group">
-            <div className="cv-palette-group__title">
-              🏆 Prêmios & Distinções ({data.awards.length})
+            <div className="cv-palette-group__title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span>🏆 Prêmios & Distinções ({data.awards.length})</span>
+              {renderTypoButton('awards', 'Ajustar fonte da seção geral de Prêmios')}
             </div>
+            {renderTypographyPanel('awards', 'Seção Geral: Prêmios')}
             {data.awards.map((aw, idx) => {
               const itemId = getAtomicItemId('awards', aw, idx)
               const itemDims = dimensions[itemId] || {}
               const isHidden = Boolean(itemDims.hidden)
+              const itemLabel = aw.title || `Prêmio ${idx + 1}`
 
               return (
-                <div key={itemId} className={`cv-palette-item cv-palette-item--sub ${isHidden ? 'is-dimmed' : ''}`}>
-                  <div className="cv-palette-item__info">
-                    <span className="cv-palette-item__icon">🏆</span>
-                    <div className="cv-palette-item__texts">
-                      <strong className="cv-palette-item__bold">{aw.title || `Prêmio ${idx + 1}`}</strong>
-                      <span className="cv-palette-item__tiny">{aw.awarder || aw.date || 'Distinção'}</span>
+                <React.Fragment key={itemId}>
+                  <div className={`cv-palette-item cv-palette-item--sub ${isHidden ? 'is-dimmed' : ''}`}>
+                    <div className="cv-palette-item__info">
+                      <span className="cv-palette-item__icon">🏆</span>
+                      <div className="cv-palette-item__texts">
+                        <strong className="cv-palette-item__bold">{itemLabel}</strong>
+                        <span className="cv-palette-item__tiny">{aw.awarder || aw.date || 'Distinção'}</span>
+                      </div>
+                    </div>
+                    <div className="cv-palette-item__actions">
+                      {renderTypoButton(itemId, `Ajustar fonte de ${itemLabel}`)}
+                      <button
+                        type="button"
+                        className={`cv-eye-btn ${isHidden ? 'is-hidden' : ''}`}
+                        onClick={() => handleToggleHide(itemId)}
+                        title={isHidden ? 'Exibir na folha' : 'Ocultar prêmio'}
+                      >
+                        {isHidden ? '👁️‍🗨️' : '👁️'}
+                      </button>
                     </div>
                   </div>
-                  <button
-                    type="button"
-                    className={`cv-eye-btn ${isHidden ? 'is-hidden' : ''}`}
-                    onClick={() => handleToggleHide(itemId)}
-                    title={isHidden ? 'Exibir na folha' : 'Ocultar prêmio'}
-                  >
-                    {isHidden ? '👁️‍🗨️' : '👁️'}
-                  </button>
-                </div>
+                  {renderTypographyPanel(itemId, itemLabel)}
+                </React.Fragment>
               )
             })}
           </div>
@@ -1005,32 +1241,41 @@ export const CanvasElementsPalette: React.FC<CanvasElementsPaletteProps> = ({
         {/* ── Categoria: Trabalho Voluntário (Se existir no YAML) ── */}
         {data.volunteer && data.volunteer.length > 0 && (
           <div className="cv-palette-group">
-            <div className="cv-palette-group__title">
-              🤝 Trabalho Voluntário ({data.volunteer.length})
+            <div className="cv-palette-group__title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span>🤝 Trabalho Voluntário ({data.volunteer.length})</span>
+              {renderTypoButton('volunteer', 'Ajustar fonte da seção geral de Voluntariado')}
             </div>
+            {renderTypographyPanel('volunteer', 'Seção Geral: Trabalho Voluntário')}
             {data.volunteer.map((v, idx) => {
               const itemId = getAtomicItemId('volunteer', v, idx)
               const itemDims = dimensions[itemId] || {}
               const isHidden = Boolean(itemDims.hidden)
+              const itemLabel = v.organization || `Voluntariado ${idx + 1}`
 
               return (
-                <div key={itemId} className={`cv-palette-item cv-palette-item--sub ${isHidden ? 'is-dimmed' : ''}`}>
-                  <div className="cv-palette-item__info">
-                    <span className="cv-palette-item__icon">🤝</span>
-                    <div className="cv-palette-item__texts">
-                      <strong className="cv-palette-item__bold">{v.organization || `Voluntariado ${idx + 1}`}</strong>
-                      <span className="cv-palette-item__tiny">{v.position || 'Voluntário'}</span>
+                <React.Fragment key={itemId}>
+                  <div className={`cv-palette-item cv-palette-item--sub ${isHidden ? 'is-dimmed' : ''}`}>
+                    <div className="cv-palette-item__info">
+                      <span className="cv-palette-item__icon">🤝</span>
+                      <div className="cv-palette-item__texts">
+                        <strong className="cv-palette-item__bold">{itemLabel}</strong>
+                        <span className="cv-palette-item__tiny">{v.position || 'Voluntário'}</span>
+                      </div>
+                    </div>
+                    <div className="cv-palette-item__actions">
+                      {renderTypoButton(itemId, `Ajustar fonte de ${itemLabel}`)}
+                      <button
+                        type="button"
+                        className={`cv-eye-btn ${isHidden ? 'is-hidden' : ''}`}
+                        onClick={() => handleToggleHide(itemId)}
+                        title={isHidden ? 'Exibir na folha' : 'Ocultar voluntariado'}
+                      >
+                        {isHidden ? '👁️‍🗨️' : '👁️'}
+                      </button>
                     </div>
                   </div>
-                  <button
-                    type="button"
-                    className={`cv-eye-btn ${isHidden ? 'is-hidden' : ''}`}
-                    onClick={() => handleToggleHide(itemId)}
-                    title={isHidden ? 'Exibir na folha' : 'Ocultar voluntariado'}
-                  >
-                    {isHidden ? '👁️‍🗨️' : '👁️'}
-                  </button>
-                </div>
+                  {renderTypographyPanel(itemId, itemLabel)}
+                </React.Fragment>
               )
             })}
           </div>

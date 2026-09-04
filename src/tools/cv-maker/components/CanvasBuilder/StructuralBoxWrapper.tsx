@@ -1,5 +1,6 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react'
 import type { SectionBoxDimensions } from '../../types/cv'
+import { AVAILABLE_BOX_FONTS } from '../../types/cv'
 import { CATEGORY_VARIANTS_MAP } from '../../types/variants'
 
 interface StructuralBoxWrapperProps {
@@ -288,6 +289,36 @@ export const StructuralBoxWrapper: React.FC<StructuralBoxWrapperProps> = ({
     })
   }
 
+  // Ajuste de Família Tipográfica específica do Box
+  const handleSelectFontFamily = useCallback((fontFamily: string) => {
+    onUpdateDimensions?.({
+      ...dimensions,
+      fontFamily: fontFamily === 'inherit' ? undefined : fontFamily
+    })
+  }, [dimensions, onUpdateDimensions])
+
+  // Ajuste de Escala Contínua de Fonte via Botões (A- / A+)
+  const handleAdjustFontScale = useCallback((deltaPercent: number) => {
+    const curScale = dimensions?.fontSizeScale ?? 1.0
+    const curPercent = Math.round(curScale * 100)
+    const nextPercent = Math.max(70, Math.min(140, curPercent + deltaPercent))
+    const nextScale = Number((nextPercent / 100).toFixed(2))
+    onUpdateDimensions?.({
+      ...dimensions,
+      fontSizeScale: nextScale === 1.0 ? undefined : nextScale
+    })
+  }, [dimensions, onUpdateDimensions])
+
+  // Ajuste de Escala Contínua de Fonte via Slider (70% a 140%)
+  const handleSetFontScaleSlider = useCallback((percentVal: number) => {
+    const clampedPercent = Math.max(70, Math.min(140, percentVal))
+    const nextScale = Number((clampedPercent / 100).toFixed(2))
+    onUpdateDimensions?.({
+      ...dimensions,
+      fontSizeScale: nextScale === 1.0 ? undefined : nextScale
+    })
+  }, [dimensions, onUpdateDimensions])
+
   // Se o item estiver ocultado pelo usuário no Canvas/Paleta, não renderiza
   if (dimensions?.hidden) {
     return null
@@ -329,6 +360,9 @@ export const StructuralBoxWrapper: React.FC<StructuralBoxWrapperProps> = ({
       ? '0'
       : undefined
 
+  const fontScaleVal = dimensions?.fontSizeScale ?? 1.0
+  const fontPercentVal = Math.round(fontScaleVal * 100)
+
   return (
     <div
       ref={containerRef}
@@ -342,7 +376,11 @@ export const StructuralBoxWrapper: React.FC<StructuralBoxWrapperProps> = ({
         left: leftStyle,
         marginLeft: marginLeftStyle,
         marginRight: marginRightStyle,
-        order: dimensions?.order
+        order: dimensions?.order,
+        fontFamily: dimensions?.fontFamily ? `"${dimensions.fontFamily}", sans-serif` : undefined,
+        fontSize: dimensions?.fontSizeScale && dimensions.fontSizeScale !== 1 ? `${dimensions.fontSizeScale}em` : undefined,
+        ['--cv-box-font-scale' as any]: fontScaleVal,
+        ['--cv-box-font-family' as any]: dimensions?.fontFamily ? `"${dimensions.fontFamily}", sans-serif` : undefined
       }}
       data-section-id={sectionId}
     >
@@ -529,6 +567,62 @@ export const StructuralBoxWrapper: React.FC<StructuralBoxWrapperProps> = ({
                 </button>
               </div>
             )}
+          </div>
+
+          {/* Linha 4: Tipografia Específica do Box (Fonte & Escala Contínua 70% a 140%) */}
+          <div className="cv-box-menu-typography-row">
+            {/* Seletor de Família de Fonte com Catálogo Completo */}
+            <div className="cv-box-menu-font-group" title="Alterar a fonte tipográfica deste box específico">
+              <span className="cv-box-menu-section-label">Fonte:</span>
+              <select
+                className="cv-box-menu-font-select"
+                value={dimensions?.fontFamily || 'inherit'}
+                onChange={e => handleSelectFontFamily(e.target.value)}
+              >
+                {AVAILABLE_BOX_FONTS.map(f => (
+                  <option key={f.id} value={f.family || 'inherit'}>
+                    {f.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Slider Contínuo de Tamanho com Botões A- e A+ e Porcentagem em Tempo Real */}
+            <div className="cv-box-menu-font-slider-group" title="Ajuste contínuo do tamanho da fonte deste box (70% a 140%)">
+              <span className="cv-box-menu-section-label">Tam:</span>
+              <button
+                type="button"
+                className="cv-stepper-btn cv-stepper-btn--font"
+                onClick={() => handleAdjustFontScale(-4)}
+                title="Reduzir tamanho da fonte (-4%)"
+              >
+                A-
+              </button>
+
+              <input
+                type="range"
+                className="cv-box-menu-range"
+                min={70}
+                max={140}
+                step={2}
+                value={fontPercentVal}
+                onChange={e => handleSetFontScaleSlider(Number(e.target.value))}
+                title={`Tamanho: ${fontPercentVal}% (arraste para ajustar)`}
+              />
+
+              <span className="cv-box-menu-font-value">
+                {fontPercentVal}%
+              </span>
+
+              <button
+                type="button"
+                className="cv-stepper-btn cv-stepper-btn--font"
+                onClick={() => handleAdjustFontScale(+4)}
+                title="Aumentar tamanho da fonte (+4%)"
+              >
+                A+
+              </button>
+            </div>
           </div>
         </div>
       </div>

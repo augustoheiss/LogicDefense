@@ -65,6 +65,22 @@
     page-break-inside: avoid !important;
   }
 
+  .cv-structural-box {
+    font-family: var(--cv-box-font-family, inherit);
+  }
+
+  .cv-structural-box .cv-structural-box__content {
+    font-family: var(--cv-box-font-family, inherit);
+    font-size: calc(1em * var(--cv-box-font-scale, 1));
+  }
+
+  .cv-structural-box .cv-item-title,
+  .cv-structural-box .cv-item-header,
+  .cv-structural-box .cv-section-title,
+  .cv-structural-box .cv-company-name {
+    font-family: var(--cv-box-font-family, inherit);
+  }
+
   @page {
     size: A4 portrait;
     margin: 8mm 10mm 8mm 10mm !important;

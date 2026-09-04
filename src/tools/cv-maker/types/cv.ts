@@ -452,7 +452,35 @@ export interface SectionBoxDimensions {
   photoPosX?: number          // Enquadramento Pan X (0% a 100%)
   photoPosY?: number          // Enquadramento Pan Y (0% a 100%)
   photoScale?: number         // Zoom / Escala (1.0 a 2.5)
+
+  // Propriedades Estendidas de Tipografia do Box (Canvas Livre)
+  fontSizeScale?: number      // Escala de fonte contínua (ex: 0.70 a 1.40, 1.0 = 100%)
+  fontFamily?: string         // Família tipográfica específica do box (ex: 'Cinzel', 'Fira Code', etc.)
 }
+
+export interface BoxFontOption {
+  id: string
+  name: string
+  label: string
+  family: string
+  category: 'sans' | 'serif' | 'mono'
+}
+
+export const AVAILABLE_BOX_FONTS: BoxFontOption[] = [
+  { id: 'inherit', name: 'Padrão do Tema', label: '🎨 Padrão do Tema', family: '', category: 'sans' },
+  { id: 'plus_jakarta', name: 'Plus Jakarta Sans', label: '🚀 Plus Jakarta Sans', family: 'Plus Jakarta Sans', category: 'sans' },
+  { id: 'inter', name: 'Inter', label: '📐 Inter', family: 'Inter', category: 'sans' },
+  { id: 'cinzel', name: 'Cinzel', label: '🏛️ Cinzel', family: 'Cinzel', category: 'serif' },
+  { id: 'merriweather', name: 'Merriweather', label: '📰 Merriweather', family: 'Merriweather', category: 'serif' },
+  { id: 'lora', name: 'Lora', label: '📖 Lora', family: 'Lora', category: 'serif' },
+  { id: 'poppins', name: 'Poppins', label: '🎨 Poppins', family: 'Poppins', category: 'sans' },
+  { id: 'roboto', name: 'Roboto', label: '🏢 Roboto', family: 'Roboto', category: 'sans' },
+  { id: 'open_sans', name: 'Open Sans', label: '🌐 Open Sans', family: 'Open Sans', category: 'sans' },
+  { id: 'courier_prime', name: 'Courier Prime', label: '⌨️ Courier Prime', family: 'Courier Prime', category: 'mono' },
+  { id: 'fira_code', name: 'Fira Code', label: '💻 Fira Code', family: 'Fira Code', category: 'mono' },
+  { id: 'montserrat', name: 'Montserrat', label: '🏔️ Montserrat', family: 'Montserrat', category: 'sans' },
+  { id: 'outfit', name: 'Outfit', label: '⚡ Outfit', family: 'Outfit', category: 'sans' },
+]
 
 /**
  * Configuração Estrutural de um Modelo no Modo Canvas Livre Universal
