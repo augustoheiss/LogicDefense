@@ -463,8 +463,14 @@
   }
 
   .cv-structural-box,
-  .cv-structural-box--active {
+  .cv-structural-box--active,
+  .cv-structural-box.is-collision,
+  .cv-structural-box.is-overflowing,
+  .cv-structural-box.is-moving,
+  .cv-structural-box.is-resizing {
     border: none !important;
+    border-color: transparent !important;
+    outline: none !important;
     box-shadow: none !important;
     background: transparent !important;
     padding: 0 !important;
@@ -479,6 +485,17 @@
   .cv-column-splitter,
   .cv-page-overflow-banner {
     display: none !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
+    height: 0 !important;
+    width: 0 !important;
+    max-height: 0 !important;
+    max-width: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    position: absolute !important;
+    top: -9999px !important;
+    pointer-events: none !important;
   }
 
   .cv-skill-bar-fill,
@@ -1210,6 +1227,40 @@ aside .cv-structural-box,
     border-color: #d97706;
     box-shadow: 0 2px 12px rgba(217, 119, 6, 0.35);
   }
+}
+
+/* Supressão Total de Avisos e Efeitos de Colisão no Estado de Impressão/PDF */
+.cv-is-printing .cv-structural-box,
+.cv-is-printing .cv-structural-box--active,
+.cv-is-printing .cv-structural-box.is-collision,
+.cv-is-printing .cv-structural-box.is-overflowing,
+.cv-is-printing .cv-structural-box.is-moving,
+.cv-is-printing .cv-structural-box.is-resizing {
+  border: none !important;
+  border-color: transparent !important;
+  outline: none !important;
+  box-shadow: none !important;
+  background: transparent !important;
+  background-color: transparent !important;
+}
+
+.cv-is-printing .cv-structural-box__collision-badge,
+.cv-is-printing .cv-structural-box__overflow-badge,
+.cv-is-printing .cv-structural-box__overlay-menu,
+.cv-is-printing .cv-structural-box__toolbar,
+.cv-is-printing .cv-structural-handle,
+.cv-is-printing .cv-column-splitter,
+.cv-is-printing .cv-page-overflow-banner {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  height: 0 !important;
+  width: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  position: absolute !important;
+  top: -9999px !important;
+  pointer-events: none !important;
 }
 
 /* ═════════════════════════════════════════════════════════════════════════

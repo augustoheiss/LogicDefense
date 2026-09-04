@@ -407,6 +407,24 @@ export const CVMakerApp: React.FC = () => {
     })
   }
 
+  // Listeners de impressão para supressão rigorosa de badges e bordas no PDF
+  useEffect(() => {
+    const handleBeforePrint = () => {
+      document.body.classList.add('cv-is-printing')
+      document.documentElement.classList.add('cv-is-printing')
+    }
+    const handleAfterPrint = () => {
+      document.body.classList.remove('cv-is-printing')
+      document.documentElement.classList.remove('cv-is-printing')
+    }
+    window.addEventListener('beforeprint', handleBeforePrint)
+    window.addEventListener('afterprint', handleAfterPrint)
+    return () => {
+      window.removeEventListener('beforeprint', handleBeforePrint)
+      window.removeEventListener('afterprint', handleAfterPrint)
+    }
+  }, [])
+
   // Print PDF
   const handlePrintPdf = async () => {
     if (cvData?.basics?.name) {
@@ -422,7 +440,20 @@ export const CVMakerApp: React.FC = () => {
         console.warn('Font loading check error:', e)
       }
     }
+
+    document.body.classList.add('cv-is-printing')
+    document.documentElement.classList.add('cv-is-printing')
+
+    const cleanupPrint = () => {
+      document.body.classList.remove('cv-is-printing')
+      document.documentElement.classList.remove('cv-is-printing')
+      window.removeEventListener('afterprint', cleanupPrint)
+    }
+    window.addEventListener('afterprint', cleanupPrint)
+
     window.print()
+
+    setTimeout(cleanupPrint, 2500)
   }
 
   return (

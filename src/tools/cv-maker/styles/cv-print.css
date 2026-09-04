@@ -49,9 +49,17 @@
     border: none !important;
   }
 
-  .cv-structural-box {
+  .cv-structural-box,
+  .cv-structural-box--active,
+  .cv-structural-box.is-collision,
+  .cv-structural-box.is-overflowing,
+  .cv-structural-box.is-moving,
+  .cv-structural-box.is-resizing {
     border: none !important;
+    border-color: transparent !important;
+    outline: none !important;
     box-shadow: none !important;
+    background: transparent !important;
     box-sizing: border-box !important;
     break-inside: avoid !important;
     page-break-inside: avoid !important;
@@ -62,8 +70,16 @@
     margin: 8mm 10mm 8mm 10mm !important;
   }
 
-  /* Ocultar rigorosamente apenas os elementos de navegação do portal e app */
+  /* Ocultar rigorosamente todos os elementos auxiliares, menus, badges de colisão e navegação */
   .cv-no-print,
+  .no-print,
+  .cv-structural-box__collision-badge,
+  .cv-structural-box__overflow-badge,
+  .cv-structural-box__overlay-menu,
+  .cv-structural-box__toolbar,
+  .cv-structural-handle,
+  .cv-column-splitter,
+  .cv-page-overflow-banner,
   .navbar,
   .portal-navbar,
   .footer,
@@ -83,13 +99,16 @@
   footer {
     display: none !important;
     visibility: hidden !important;
+    opacity: 0 !important;
     height: 0 !important;
     width: 0 !important;
     max-height: 0 !important;
+    max-width: 0 !important;
     margin: 0 !important;
     padding: 0 !important;
     position: absolute !important;
     top: -9999px !important;
+    pointer-events: none !important;
   }
 
   /* ── Header do Currículo Base no Print ── */

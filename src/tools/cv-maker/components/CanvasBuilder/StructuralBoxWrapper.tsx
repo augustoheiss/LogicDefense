@@ -540,7 +540,7 @@ export const StructuralBoxWrapper: React.FC<StructuralBoxWrapperProps> = ({
 
       {/* Alerta de Overflow Protetivo (se o texto não couber) */}
       {isOverflowing && (
-        <div className="cv-structural-box__overflow-badge cv-no-print">
+        <div className="cv-structural-box__overflow-badge cv-no-print no-print">
           <span>⚠️</span>
           <span>Texto excede o tamanho fixado. Aumente a altura ou o excedente será cortado na impressão A4.</span>
         </div>
@@ -548,7 +548,7 @@ export const StructuralBoxWrapper: React.FC<StructuralBoxWrapperProps> = ({
 
       {/* Alerta de Sobreposição / Colisão com outro bloco */}
       {hasCollision && !isMoving && (
-        <div className="cv-structural-box__collision-badge cv-no-print">
+        <div className="cv-structural-box__collision-badge cv-no-print no-print">
           <span>⚠️</span>
           <span>Sobreposição detectada: este bloco está sobreposto por outro. Mova ou ajuste as margens para desobstruir.</span>
         </div>
