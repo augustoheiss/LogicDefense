@@ -1012,7 +1012,7 @@ aside .cv-structural-box,
   user-select: none;
 }
 
-/* ── Regras de Cascata Tipográfica Escopada por Box ── */
+/* ── Regras de Cascata Tipográfica Escopada por Box no Canvas Livre ── */
 .cv-structural-box {
   font-family: var(--cv-box-font-family, inherit);
 }
@@ -1022,11 +1022,104 @@ aside .cv-structural-box,
   font-size: calc(1em * var(--cv-box-font-scale, 1));
 }
 
-.cv-structural-box .cv-item-title,
-.cv-structural-box .cv-item-header,
-.cv-structural-box .cv-section-title,
-.cv-structural-box .cv-company-name {
-  font-family: var(--cv-box-font-family, inherit);
+/* 1. Aplicação Soberana da Família Tipográfica em TODOS os elementos de conteúdo interno do box */
+.cv-root .cv-structural-box[data-has-custom-font="true"] .cv-structural-box__content,
+.cv-root .cv-structural-box[data-has-custom-font="true"] .cv-structural-box__content *,
+.cv-root .cv-structural-box[data-has-custom-font="true"] .cv-item-title,
+.cv-root .cv-structural-box[data-has-custom-font="true"] .cv-section-title,
+.cv-root .cv-structural-box[data-has-custom-font="true"] .cv-sidebar-title,
+.cv-root .cv-structural-box[data-has-custom-font="true"] .cv-item-sub,
+.cv-root .cv-structural-box[data-has-custom-font="true"] .cv-company-name,
+.cv-root .cv-structural-box[data-has-custom-font="true"] .cv-item-institution,
+.cv-root .cv-structural-box[data-has-custom-font="true"] .cv-item-desc,
+.cv-root .cv-structural-box[data-has-custom-font="true"] .cv-work-summary,
+.cv-root .cv-structural-box[data-has-custom-font="true"] .cv-summary-text,
+.cv-root .cv-structural-box[data-has-custom-font="true"] .cv-item-date,
+.cv-root .cv-structural-box[data-has-custom-font="true"] .cv-period-badge,
+.cv-root .cv-structural-box[data-has-custom-font="true"] .cv-timeline-date,
+.cv-root .cv-structural-box[data-has-custom-font="true"] .cv-one-liner,
+.cv-root .cv-structural-box[data-has-custom-font="true"] .cv-one-liner__main,
+.cv-root .cv-structural-box[data-has-custom-font="true"] .cv-one-liner__sub,
+.cv-root .cv-structural-box[data-has-custom-font="true"] .cv-one-liner__desc,
+.cv-root .cv-structural-box[data-has-custom-font="true"] p,
+.cv-root .cv-structural-box[data-has-custom-font="true"] li,
+.cv-root .cv-structural-box[data-has-custom-font="true"] span,
+.cv-root .cv-structural-box[data-has-custom-font="true"] strong,
+.cv-root .cv-structural-box[data-has-custom-font="true"] a,
+.cv-root .cv-structural-box[data-has-custom-font="true"] h1,
+.cv-root .cv-structural-box[data-has-custom-font="true"] h2,
+.cv-root .cv-structural-box[data-has-custom-font="true"] h3,
+.cv-root .cv-structural-box[data-has-custom-font="true"] h4,
+.cv-root .cv-structural-box[data-has-custom-font="true"] h5,
+.cv-root .cv-structural-box[data-has-custom-font="true"] h6 {
+  font-family: var(--cv-box-font-family) !important;
+}
+
+/* Proteção Estrita dos Controles de Edição do Menu Interno (UI sempre nítida) */
+.cv-structural-box .cv-structural-box__overlay-menu,
+.cv-structural-box .cv-structural-box__overlay-menu * {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif !important;
+}
+
+/* 2. Escala Contínua Proporcional do Box (70% a 140%) com Sobrescrita Total de !important */
+.cv-root .cv-structural-box[data-has-custom-scale="true"] .cv-section-title,
+.cv-root .cv-structural-box[data-has-custom-scale="true"] h2.cv-section-title,
+.cv-root .cv-structural-box[data-has-custom-scale="true"] h3.cv-section-title,
+.cv-root .cv-structural-box[data-has-custom-scale="true"] h4.cv-sidebar-title {
+  font-size: calc(1.05rem * var(--cv-font-scale, 1.0) * var(--cv-box-font-scale, 1.0)) !important;
+}
+
+.cv-root .cv-structural-box[data-has-custom-scale="true"] .cv-item-title,
+.cv-root .cv-structural-box[data-has-custom-scale="true"] h3.cv-item-title,
+.cv-root .cv-structural-box[data-has-custom-scale="true"] h4.cv-item-title,
+.cv-root .cv-structural-box[data-has-custom-scale="true"] .cv-project-title {
+  font-size: calc(0.96rem * var(--cv-font-scale, 1.0) * var(--cv-box-font-scale, 1.0)) !important;
+}
+
+.cv-root .cv-structural-box[data-has-custom-scale="true"] .cv-item-sub,
+.cv-root .cv-structural-box[data-has-custom-scale="true"] .cv-company-name,
+.cv-root .cv-structural-box[data-has-custom-scale="true"] .cv-item-institution {
+  font-size: calc(0.85rem * var(--cv-font-scale, 1.0) * var(--cv-box-font-scale, 1.0)) !important;
+}
+
+.cv-root .cv-structural-box[data-has-custom-scale="true"] .cv-item-desc,
+.cv-root .cv-structural-box[data-has-custom-scale="true"] .cv-work-summary,
+.cv-root .cv-structural-box[data-has-custom-scale="true"] .cv-summary-text,
+.cv-root .cv-structural-box[data-has-custom-scale="true"] .cv-one-liner__desc,
+.cv-root .cv-structural-box[data-has-custom-scale="true"] p,
+.cv-root .cv-structural-box[data-has-custom-scale="true"] li {
+  font-size: calc(0.84rem * var(--cv-font-scale, 1.0) * var(--cv-box-font-scale, 1.0)) !important;
+  line-height: calc(1.5 * var(--cv-box-font-scale, 1.0)) !important;
+}
+
+.cv-root .cv-structural-box[data-has-custom-scale="true"] .cv-item-date,
+.cv-root .cv-structural-box[data-has-custom-scale="true"] .cv-period-badge,
+.cv-root .cv-structural-box[data-has-custom-scale="true"] .cv-timeline-date {
+  font-size: calc(0.78rem * var(--cv-font-scale, 1.0) * var(--cv-box-font-scale, 1.0)) !important;
+}
+
+.cv-root .cv-structural-box[data-has-custom-scale="true"] .cv-badge,
+.cv-root .cv-structural-box[data-has-custom-scale="true"] .cv-badge-pill,
+.cv-root .cv-structural-box[data-has-custom-scale="true"] .cv-skill-tag,
+.cv-root .cv-structural-box[data-has-custom-scale="true"] .tag {
+  font-size: calc(0.75rem * var(--cv-font-scale, 1.0) * var(--cv-box-font-scale, 1.0)) !important;
+}
+
+.cv-root .cv-structural-box[data-has-custom-scale="true"] h1,
+.cv-root .cv-structural-box[data-has-custom-scale="true"] .cv-name {
+  font-size: calc(1.9rem * var(--cv-font-scale, 1.0) * var(--cv-box-font-scale, 1.0)) !important;
+}
+
+.cv-root .cv-structural-box[data-has-custom-scale="true"] .cv-label {
+  font-size: calc(0.95rem * var(--cv-font-scale, 1.0) * var(--cv-box-font-scale, 1.0)) !important;
+}
+
+.cv-root .cv-structural-box[data-has-custom-scale="true"] .cv-one-liner {
+  font-size: calc(0.84rem * var(--cv-font-scale, 1.0) * var(--cv-box-font-scale, 1.0)) !important;
+}
+
+.cv-root .cv-structural-box[data-has-custom-scale="true"] .cv-one-liner__main {
+  font-size: calc(0.92rem * var(--cv-font-scale, 1.0) * var(--cv-box-font-scale, 1.0)) !important;
 }
 
 /* Resize Handles */

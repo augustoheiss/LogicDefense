@@ -240,14 +240,25 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
     const canSwitch = isMultiColumnLayout && Boolean(defaultZone)
     const currentZone = defaultZone ? getSectionZone(sectionId, defaultZone) : undefined
 
+    const baseCategory = category || (sectionId.endsWith('_title') ? sectionId.replace('_title', '') : undefined)
+    const rawDims = structureConfig?.sectionDimensions?.[sectionId]
+    const parentDims = baseCategory ? structureConfig?.sectionDimensions?.[baseCategory] : undefined
+    const effectiveDims = {
+      ...parentDims,
+      ...rawDims,
+      fontFamily: rawDims?.fontFamily || parentDims?.fontFamily,
+      fontSizeScale: rawDims?.fontSizeScale ?? parentDims?.fontSizeScale,
+      variant: rawDims?.variant || parentDims?.variant
+    }
+
     return (
       <StructuralBoxWrapper
         key={sectionId}
         sectionId={sectionId}
         title={title}
-        category={category}
+        category={category || baseCategory}
         isFreeCanvasActive={isFreeCanvas}
-        dimensions={structureConfig?.sectionDimensions?.[sectionId]}
+        dimensions={effectiveDims}
         canSwitchZone={canSwitch}
         currentZone={currentZone}
         onSwitchZone={canSwitch && defaultZone ? () => handleSwitchZone(sectionId, defaultZone) : undefined}
@@ -390,8 +401,8 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
 
     const titleNode = <h3 className="cv-section-title">💼 {fallbackTitle}</h3>
     const titleBox = targetZone
-      ? renderZoneSection('work_title', targetZone, defZone, `Título: ${fallbackTitle}`, titleNode)
-      : wrapSection('work_title', `Título: ${fallbackTitle}`, titleNode, defZone)
+      ? renderZoneSection('work_title', targetZone, defZone, `Título: ${fallbackTitle}`, titleNode, 'work')
+      : wrapSection('work_title', `Título: ${fallbackTitle}`, titleNode, defZone, 'work')
 
     const itemBoxes = data.work.map((w, idx) => {
       const itemId = getAtomicItemId('work', w, idx)
@@ -431,8 +442,8 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
 
     const titleNode = <h3 className="cv-section-title">🎓 {fallbackTitle}</h3>
     const titleBox = targetZone
-      ? renderZoneSection('education_title', targetZone, defZone, `Título: ${fallbackTitle}`, titleNode)
-      : wrapSection('education_title', `Título: ${fallbackTitle}`, titleNode, defZone)
+      ? renderZoneSection('education_title', targetZone, defZone, `Título: ${fallbackTitle}`, titleNode, 'education')
+      : wrapSection('education_title', `Título: ${fallbackTitle}`, titleNode, defZone, 'education')
 
     const itemBoxes = data.education.map((ed, idx) => {
       const itemId = getAtomicItemId('education', ed, idx)
@@ -471,8 +482,8 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
 
     const titleNode = <h3 className="cv-section-title">🚀 {fallbackTitle}</h3>
     const titleBox = targetZone
-      ? renderZoneSection('projects_title', targetZone, defZone, `Título: ${fallbackTitle}`, titleNode)
-      : wrapSection('projects_title', `Título: ${fallbackTitle}`, titleNode, defZone)
+      ? renderZoneSection('projects_title', targetZone, defZone, `Título: ${fallbackTitle}`, titleNode, 'projects')
+      : wrapSection('projects_title', `Título: ${fallbackTitle}`, titleNode, defZone, 'projects')
 
     const itemBoxes = data.projects.map((p, idx) => {
       const itemId = getAtomicItemId('projects', p, idx)
@@ -511,8 +522,8 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
 
     const titleNode = <h4 className="cv-sidebar-title">🌐 {fallbackTitle}</h4>
     const titleBox = targetZone
-      ? renderZoneSection('languages_title', targetZone, defZone, `Título: ${fallbackTitle}`, titleNode)
-      : wrapSection('languages_title', `Título: ${fallbackTitle}`, titleNode, defZone)
+      ? renderZoneSection('languages_title', targetZone, defZone, `Título: ${fallbackTitle}`, titleNode, 'languages')
+      : wrapSection('languages_title', `Título: ${fallbackTitle}`, titleNode, defZone, 'languages')
 
     const itemBoxes = data.languages.map((l, idx) => {
       const itemId = getAtomicItemId('languages', l, idx)
@@ -551,8 +562,8 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
 
     const titleNode = <h4 className="cv-sidebar-title">⚡ {fallbackTitle}</h4>
     const titleBox = targetZone
-      ? renderZoneSection('skills_title', targetZone, defZone, `Título: ${fallbackTitle}`, titleNode)
-      : wrapSection('skills_title', `Título: ${fallbackTitle}`, titleNode, defZone)
+      ? renderZoneSection('skills_title', targetZone, defZone, `Título: ${fallbackTitle}`, titleNode, 'skills')
+      : wrapSection('skills_title', `Título: ${fallbackTitle}`, titleNode, defZone, 'skills')
 
     const itemBoxes = data.skills.map((s, idx) => {
       const itemId = getAtomicItemId('skills', s, idx)
@@ -591,8 +602,8 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
 
     const titleNode = <h3 className="cv-section-title">📜 {fallbackTitle}</h3>
     const titleBox = targetZone
-      ? renderZoneSection('certificates_title', targetZone, defZone, `Título: ${fallbackTitle}`, titleNode)
-      : wrapSection('certificates_title', `Título: ${fallbackTitle}`, titleNode, defZone)
+      ? renderZoneSection('certificates_title', targetZone, defZone, `Título: ${fallbackTitle}`, titleNode, 'certificates')
+      : wrapSection('certificates_title', `Título: ${fallbackTitle}`, titleNode, defZone, 'certificates')
 
     const itemBoxes = data.certificates.map((c, idx) => {
       const itemId = getAtomicItemId('certificates', c, idx)
@@ -631,8 +642,8 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
 
     const titleNode = <h4 className="cv-sidebar-title">💡 {fallbackTitle}</h4>
     const titleBox = targetZone
-      ? renderZoneSection('interests_title', targetZone, defZone, `Título: ${fallbackTitle}`, titleNode)
-      : wrapSection('interests_title', `Título: ${fallbackTitle}`, titleNode, defZone)
+      ? renderZoneSection('interests_title', targetZone, defZone, `Título: ${fallbackTitle}`, titleNode, 'interests')
+      : wrapSection('interests_title', `Título: ${fallbackTitle}`, titleNode, defZone, 'interests')
 
     const itemBoxes = data.interests.map((it, idx) => {
       const itemId = getAtomicItemId('interests', it, idx)
@@ -671,8 +682,8 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
 
     const titleNode = <h3 className="cv-section-title">👥 {fallbackTitle}</h3>
     const titleBox = targetZone
-      ? renderZoneSection('references_title', targetZone, defZone, `Título: ${fallbackTitle}`, titleNode)
-      : wrapSection('references_title', `Título: ${fallbackTitle}`, titleNode, defZone)
+      ? renderZoneSection('references_title', targetZone, defZone, `Título: ${fallbackTitle}`, titleNode, 'references')
+      : wrapSection('references_title', `Título: ${fallbackTitle}`, titleNode, defZone, 'references')
 
     const itemBoxes = data.references.map((r, idx) => {
       const itemId = getAtomicItemId('references', r, idx)

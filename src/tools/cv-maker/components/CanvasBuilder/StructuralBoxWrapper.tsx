@@ -380,9 +380,13 @@ export const StructuralBoxWrapper: React.FC<StructuralBoxWrapperProps> = ({
         fontFamily: dimensions?.fontFamily ? `"${dimensions.fontFamily}", sans-serif` : undefined,
         fontSize: dimensions?.fontSizeScale && dimensions.fontSizeScale !== 1 ? `${dimensions.fontSizeScale}em` : undefined,
         ['--cv-box-font-scale' as any]: fontScaleVal,
-        ['--cv-box-font-family' as any]: dimensions?.fontFamily ? `"${dimensions.fontFamily}", sans-serif` : undefined
+        ['--cv-box-font-family' as any]: dimensions?.fontFamily ? `"${dimensions.fontFamily}", sans-serif` : undefined,
+        ['--cv-font-heading' as any]: dimensions?.fontFamily ? `"${dimensions.fontFamily}", sans-serif` : undefined,
+        ['--cv-font-body' as any]: dimensions?.fontFamily ? `"${dimensions.fontFamily}", sans-serif` : undefined
       }}
       data-section-id={sectionId}
+      data-has-custom-font={dimensions?.fontFamily ? 'true' : undefined}
+      data-has-custom-scale={dimensions?.fontSizeScale && dimensions.fontSizeScale !== 1 ? 'true' : undefined}
     >
       {/* Menu Interno do Canvas Livre (Preenche o interior do box ao passar o mouse) */}
       <div

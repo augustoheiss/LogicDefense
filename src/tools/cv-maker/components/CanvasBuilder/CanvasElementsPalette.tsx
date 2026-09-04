@@ -142,6 +142,18 @@ export const CanvasElementsPalette: React.FC<CanvasElementsPaletteProps> = ({
   // Atualiza propriedades parciais de dimensões de qualquer bloco ou item atômico
   const handleUpdateSectionDimensions = (key: string, updates: Partial<SectionBoxDimensions>) => {
     const cur = dimensions[key] || {}
+    const titleKey = `${key}_title`
+    const curTitle = dimensions[titleKey] || {}
+
+    // Sincroniza também o box de título correspondente no canvas caso seja categoria geral
+    const extraUpdates: Record<string, SectionBoxDimensions> = {}
+    if (['work', 'education', 'projects', 'languages', 'skills', 'certificates', 'interests', 'references', 'awards', 'volunteer'].includes(key)) {
+      extraUpdates[titleKey] = {
+        ...curTitle,
+        ...updates
+      }
+    }
+
     onUpdateStructureConfig({
       ...structureConfig,
       sectionDimensions: {
@@ -149,7 +161,8 @@ export const CanvasElementsPalette: React.FC<CanvasElementsPaletteProps> = ({
         [key]: {
           ...cur,
           ...updates
-        }
+        },
+        ...extraUpdates
       }
     })
   }
