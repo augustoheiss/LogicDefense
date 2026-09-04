@@ -212,7 +212,7 @@ export const DesignCustomizerDrawer: React.FC<DesignCustomizerDrawerProps> = ({
       colorSurface: palette.surface,
       colorBg: palette.bg,
       colorText: palette.text,
-      colorSidebar: palette.primary === '#334155' ? '#1e293b' : palette.primary === '#9f1239' ? '#4c0519' : palette.primary === '#059669' ? '#064e3b' : '#0f172a'
+      colorSidebar: palette.surface || '#f8fafc'
     })
   }
 
@@ -484,15 +484,15 @@ export const DesignCustomizerDrawer: React.FC<DesignCustomizerDrawerProps> = ({
                   </div>
 
                   <div>
-                    <label style={{ fontSize: '0.72rem', color: '#94a3b8', display: 'block', marginBottom: '0.25rem' }}>🌑 Cor da Lateral / Sidebar (Geral):</label>
+                    <label style={{ fontSize: '0.72rem', color: '#94a3b8', display: 'block', marginBottom: '0.25rem' }}>📑 Cor da Lateral / Sidebar (Geral):</label>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                       <input
                         type="color"
-                        value={config.colorSidebar || '#0f172a'}
+                        value={config.colorSidebar || '#f8fafc'}
                         onChange={e => onChangeConfig({ ...config, colorSidebar: e.target.value })}
                         style={{ width: '32px', height: '28px', border: 'none', background: 'transparent', cursor: 'pointer' }}
                       />
-                      <span style={{ fontSize: '0.75rem', color: '#e2e8f0', fontFamily: 'monospace' }}>{config.colorSidebar || '#0f172a'}</span>
+                      <span style={{ fontSize: '0.75rem', color: '#e2e8f0', fontFamily: 'monospace' }}>{config.colorSidebar || '#f8fafc'}</span>
                     </div>
                   </div>
 
@@ -718,7 +718,7 @@ export const DesignCustomizerDrawer: React.FC<DesignCustomizerDrawerProps> = ({
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                       <input
                         type="color"
-                        value={currentSectionOverride.bgColor || (selectedSectionId === 'sidebar' ? config.colorSidebar || '#0f172a' : config.colorSurface || '#f8fafc')}
+                        value={currentSectionOverride.bgColor || (selectedSectionId === 'sidebar' ? config.colorSidebar || '#f8fafc' : config.colorSurface || '#f8fafc')}
                         onChange={e => handleUpdateSectionOverride(selectedSectionId, 'bgColor', e.target.value)}
                         style={{ width: '32px', height: '28px', border: 'none', background: 'transparent', cursor: 'pointer' }}
                       />

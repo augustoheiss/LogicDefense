@@ -235,13 +235,13 @@
   border-color: var(--cv-color-border, var(--theme-default-border, #e2e8f0)) !important;
 }
 
-/* Laterais / Sidebars Escuras ou Contrastantes */
+/* Laterais / Sidebars Neutras Claras Executivas */
 .cv-root .cv-navy-sidebar,
 .cv-root .cv-duo-left,
 .cv-root .cv-editorial-left,
 .cv-root .cv-sidebar-col,
 .cv-root aside.cv-navy-sidebar {
-  background-color: var(--sec-sidebar-bg, var(--cv-color-sidebar, #0f172a)) !important;
+  background-color: var(--sec-sidebar-bg, var(--cv-color-sidebar, #f8fafc)) !important;
 }
 
 /* Barras de Nível de Habilidade */
@@ -266,7 +266,7 @@
    ■  SCOPED SECTION OVERRIDES (CUSTOMIZAÇÃO GRANULAR POR SEÇÃO)
    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
 
-/* 1. Lateral / Sidebar */
+/* 1. Lateral / Sidebar - Padrão Neutro Claro com Tipografia Escura de Alto Contraste */
 .cv-root .cv-section-sidebar,
 .cv-root aside.cv-sidebar-stack,
 .cv-root .cv-navy-sidebar,
@@ -274,20 +274,23 @@
 .cv-root .cv-editorial-left,
 .cv-root .cv-sidebar-col,
 .cv-root aside.cv-navy-sidebar {
-  background-color: var(--sec-sidebar-bg, var(--cv-color-sidebar, #0f172a)) !important;
-  color: var(--sec-sidebar-text, #f8fafc) !important;
-  border-color: var(--sec-sidebar-border, var(--cv-color-border, #1e293b)) !important;
+  background-color: var(--sec-sidebar-bg, var(--cv-color-sidebar, #f8fafc)) !important;
+  color: var(--sec-sidebar-text, var(--cv-color-text, #1e293b)) !important;
+  border-color: var(--sec-sidebar-border, var(--cv-color-border, #e2e8f0)) !important;
 }
 
 .cv-root .cv-navy-sidebar h1,
 .cv-root .cv-navy-sidebar h2,
 .cv-root .cv-navy-sidebar h3,
 .cv-root .cv-navy-sidebar h4,
+.cv-root .cv-navy-sidebar .cv-name,
 .cv-root .cv-navy-sidebar .cv-sidebar-title,
 .cv-root aside.cv-sidebar-stack .cv-sidebar-title,
 .cv-root .cv-duo-left .cv-sidebar-title,
-.cv-root .cv-editorial-left .cv-sidebar-title {
-  color: var(--sec-sidebar-title, var(--sec-sidebar-text, #38bdf8)) !important;
+.cv-root .cv-editorial-left .cv-sidebar-title,
+.cv-root .cv-sidebar-col .cv-sidebar-title {
+  color: var(--sec-sidebar-title, var(--cv-color-primary, #0284c7)) !important;
+  border-bottom-color: var(--sec-sidebar-border, var(--cv-color-border, #e2e8f0)) !important;
 }
 
 .cv-root aside.cv-sidebar-stack p,
@@ -296,8 +299,29 @@
 .cv-root aside.cv-sidebar-stack a,
 .cv-root .cv-navy-sidebar p,
 .cv-root .cv-navy-sidebar span,
-.cv-root .cv-navy-sidebar li {
-  color: var(--sec-sidebar-text, #cbd5e1) !important;
+.cv-root .cv-navy-sidebar li,
+.cv-root .cv-navy-sidebar a,
+.cv-root .cv-duo-left p,
+.cv-root .cv-duo-left span,
+.cv-root .cv-duo-left li,
+.cv-root .cv-duo-left a,
+.cv-root .cv-editorial-left p,
+.cv-root .cv-editorial-left span,
+.cv-root .cv-editorial-left li,
+.cv-root .cv-editorial-left a,
+.cv-root .cv-sidebar-col p,
+.cv-root .cv-sidebar-col span,
+.cv-root .cv-sidebar-col li,
+.cv-root .cv-sidebar-col a {
+  color: var(--sec-sidebar-text, var(--cv-color-text, #334155)) !important;
+}
+
+.cv-root aside.cv-sidebar-stack strong,
+.cv-root .cv-navy-sidebar strong,
+.cv-root .cv-duo-left strong,
+.cv-root .cv-editorial-left strong,
+.cv-root .cv-sidebar-col strong {
+  color: var(--cv-color-text, #0f172a) !important;
 }
 
 /* 2. Cabeçalho / Header */

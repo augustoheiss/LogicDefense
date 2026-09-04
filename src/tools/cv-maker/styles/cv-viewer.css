@@ -939,8 +939,9 @@ aside .cv-contacts,
   margin: 0;
 }
 .layout-corporate_timeline .cv-navy-sidebar {
-  background: #0f172a;
-  color: #f8fafc;
+  background: var(--cv-color-sidebar, #f8fafc);
+  color: var(--cv-color-text, #0f172a);
+  border-right: 1.5px solid var(--cv-color-border, #e2e8f0);
   padding: 2.2rem 1.5rem;
   display: flex;
   flex-direction: column;
@@ -1314,18 +1315,19 @@ aside .cv-contacts,
 }
 
 /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-   REGRAS DE ALTO CONTRASTE PARA ÁREAS ESCURAS (NAVY SIDEBAR & BRAND)
+   REGRAS DE ALTO CONTRASTE E PADRÃO EXECUTIVO PARA SIDEBARS
    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
 
 .cv-navy-sidebar,
 .layout-corporate_timeline .cv-navy-sidebar {
-  background: #0f172a !important;
-  color: #f8fafc !important;
+  background: var(--cv-color-sidebar, #f8fafc) !important;
+  color: var(--cv-color-text, #1e293b) !important;
+  border-right: 1.5px solid var(--cv-color-border, #e2e8f0);
 }
 
 .cv-navy-sidebar *,
 .layout-corporate_timeline .cv-navy-sidebar * {
-  color: #f8fafc;
+  color: var(--cv-color-text, #1e293b);
 }
 
 .cv-navy-sidebar h1,
@@ -1342,15 +1344,15 @@ aside .cv-contacts,
 .layout-corporate_timeline .cv-navy-sidebar .cv-name,
 .layout-corporate_timeline .cv-navy-sidebar .cv-section-title,
 .layout-corporate_timeline .cv-navy-sidebar .cv-sidebar-title {
-  color: #ffffff !important;
-  border-bottom-color: rgba(255, 255, 255, 0.25) !important;
+  color: var(--cv-color-primary, #0284c7) !important;
+  border-bottom-color: var(--cv-color-border, #e2e8f0) !important;
 }
 
 .cv-navy-sidebar a,
 .cv-navy-sidebar .cv-link,
 .layout-corporate_timeline .cv-navy-sidebar a,
 .layout-corporate_timeline .cv-navy-sidebar .cv-link {
-  color: #38bdf8 !important;
+  color: var(--cv-color-primary, #0284c7) !important;
   text-decoration: underline !important;
 }
 
@@ -1358,33 +1360,33 @@ aside .cv-contacts,
 .cv-navy-sidebar .cv-skill-tag,
 .layout-corporate_timeline .cv-navy-sidebar .cv-badge,
 .layout-corporate_timeline .cv-navy-sidebar .cv-skill-tag {
-  background: rgba(255, 255, 255, 0.12) !important;
-  color: #f8fafc !important;
-  border: 1px solid rgba(255, 255, 255, 0.25) !important;
+  background: #ffffff !important;
+  color: #0f172a !important;
+  border: 1px solid #cbd5e1 !important;
 }
 
 .cv-navy-sidebar .cv-skill-bar-bg,
 .layout-corporate_timeline .cv-navy-sidebar .cv-skill-bar-bg {
-  background: rgba(255, 255, 255, 0.2) !important;
+  background: #e2e8f0 !important;
 }
 
 .cv-navy-sidebar .cv-skill-bar-fill,
 .layout-corporate_timeline .cv-navy-sidebar .cv-skill-bar-fill {
-  background: #38bdf8 !important;
+  background: var(--cv-color-primary, #0284c7) !important;
 }
 
 .cv-navy-sidebar .cv-language-card,
 .cv-navy-sidebar .cv-interest-card,
 .layout-corporate_timeline .cv-navy-sidebar .cv-language-card,
 .layout-corporate_timeline .cv-navy-sidebar .cv-interest-card {
-  background: rgba(255, 255, 255, 0.08) !important;
-  border: 1px solid rgba(255, 255, 255, 0.15) !important;
-  color: #f8fafc !important;
+  background: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+  color: #0f172a !important;
 }
 
 .cv-navy-sidebar .cv-navy-civildata,
 .layout-corporate_timeline .cv-navy-sidebar .cv-navy-civildata {
-  color: #cbd5e1 !important;
+  color: #475569 !important;
   font-size: 0.78rem !important;
 }
 

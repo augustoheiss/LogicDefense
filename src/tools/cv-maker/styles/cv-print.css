@@ -690,8 +690,9 @@
     box-sizing: border-box !important;
   }
   .layout-corporate_timeline .cv-navy-sidebar {
-    background: var(--cv-color-sidebar, #0f172a) !important;
-    color: #f8fafc !important;
+    background: var(--cv-color-sidebar, #f8fafc) !important;
+    color: var(--cv-color-text, #0f172a) !important;
+    border-right: 1.5px solid var(--cv-color-border, #e2e8f0) !important;
     padding: 1.25rem 1.1rem !important;
     display: flex !important;
     flex-direction: column !important;
