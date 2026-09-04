@@ -14,6 +14,7 @@ export const getAtomicItemId = (category: string, item: any, index: number): str
   // Extrai nome semântico principal
   const rawIdentifier = 
     item?.company ||
+    item?.organization ||
     item?.institution ||
     item?.name ||
     item?.title ||

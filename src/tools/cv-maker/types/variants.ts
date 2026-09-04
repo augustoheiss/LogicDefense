@@ -155,5 +155,45 @@ export const CATEGORY_VARIANTS_MAP: Record<string, BlockVariantOption[]> = {
       icon: '⊞',
       description: 'Grade compacta de contatos'
     }
+  ],
+  certificates: [
+    {
+      id: 'card_box',
+      label: 'Box Card',
+      icon: '📜',
+      description: 'Card com nome da certificação, emissor e data'
+    },
+    {
+      id: 'minimal',
+      label: 'Linha Simples',
+      icon: '📄',
+      description: 'One-liner compacto (Nome • Emissor • Ano)'
+    },
+    {
+      id: 'pill_badge',
+      label: 'Badge Pill',
+      icon: '🏷️',
+      description: 'Pílula moderna com etiqueta de emissor'
+    }
+  ],
+  interests: [
+    {
+      id: 'card_box',
+      label: 'Card com Tags',
+      icon: '💡',
+      description: 'Card com ícone, nome e nuvem de tags'
+    },
+    {
+      id: 'circles',
+      label: 'Círculo de Hobbies',
+      icon: '⭕',
+      description: 'Emblema circular minimalista com ícone central'
+    },
+    {
+      id: 'minimal',
+      label: 'Linha Textual',
+      icon: '📝',
+      description: 'Lista textual alinhada e compacta'
+    }
   ]
 }

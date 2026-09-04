@@ -151,6 +151,23 @@ export const CanvasElementsPalette: React.FC<CanvasElementsPaletteProps> = ({
             </button>
           </div>
 
+          {(data.basics.driverLicense || data.basics.nationality || data.basics.age || data.basics.civilStatus) && (
+            <div className="cv-palette-item">
+              <div className="cv-palette-item__info">
+                <span className="cv-palette-item__icon">🪪</span>
+                <span className="cv-palette-item__name">Dados Civis</span>
+              </div>
+              <button
+                type="button"
+                className={`cv-eye-btn ${dimensions['civil']?.hidden ? 'is-hidden' : ''}`}
+                onClick={() => handleToggleHide('civil')}
+                title={dimensions['civil']?.hidden ? 'Exibir dados civis' : 'Ocultar dados civis'}
+              >
+                {dimensions['civil']?.hidden ? '👁️‍🗨️ Oculto' : '👁️ Visível'}
+              </button>
+            </div>
+          )}
+
           {data.basics.summary && (
             <div className="cv-palette-item">
               <div className="cv-palette-item__info">
@@ -393,6 +410,200 @@ export const CanvasElementsPalette: React.FC<CanvasElementsPaletteProps> = ({
                       {isHidden ? '👁️‍🗨️' : '👁️'}
                     </button>
                   </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+
+        {/* ── Categoria: Licenças & Certificações (Atômicas) ── */}
+        {data.certificates && data.certificates.length > 0 && (
+          <div className="cv-palette-group">
+            <div className="cv-palette-group__title">
+              📜 Licenças & Certificações ({data.certificates.length})
+            </div>
+            {data.certificates.map((c, idx) => {
+              const itemId = getAtomicItemId('certificates', c, idx)
+              const itemDims = dimensions[itemId] || {}
+              const isHidden = Boolean(itemDims.hidden)
+
+              return (
+                <div key={itemId} className={`cv-palette-item cv-palette-item--sub ${isHidden ? 'is-dimmed' : ''}`}>
+                  <div className="cv-palette-item__info">
+                    <span className="cv-palette-item__icon">📜</span>
+                    <div className="cv-palette-item__texts">
+                      <strong className="cv-palette-item__bold">{c.name || `Certificado ${idx + 1}`}</strong>
+                      <span className="cv-palette-item__tiny">{c.issuer || c.date || 'Certificação'}</span>
+                    </div>
+                  </div>
+                  <div className="cv-palette-item__actions">
+                    <select
+                      className="cv-palette-select"
+                      value={itemDims.variant || 'card_box'}
+                      onChange={e => handleSelectVariant(itemId, e.target.value)}
+                      title="Variante visual deste certificado"
+                    >
+                      <option value="card_box">📦 Box Card</option>
+                      <option value="pill_badge">🏷️ Badge Pill</option>
+                      <option value="minimal">📄 Linha Simples</option>
+                    </select>
+                    <button
+                      type="button"
+                      className={`cv-eye-btn ${isHidden ? 'is-hidden' : ''}`}
+                      onClick={() => handleToggleHide(itemId)}
+                      title={isHidden ? 'Exibir na folha' : 'Ocultar certificação'}
+                    >
+                      {isHidden ? '👁️‍🗨️' : '👁️'}
+                    </button>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+
+        {/* ── Categoria: Interesses & Pesquisa (Atômicos) ── */}
+        {data.interests && data.interests.length > 0 && (
+          <div className="cv-palette-group">
+            <div className="cv-palette-group__title">
+              💡 Interesses & Pesquisa ({data.interests.length})
+            </div>
+            {data.interests.map((it, idx) => {
+              const itemId = getAtomicItemId('interests', it, idx)
+              const itemDims = dimensions[itemId] || {}
+              const isHidden = Boolean(itemDims.hidden)
+
+              return (
+                <div key={itemId} className={`cv-palette-item cv-palette-item--sub ${isHidden ? 'is-dimmed' : ''}`}>
+                  <div className="cv-palette-item__info">
+                    <span className="cv-palette-item__icon">💡</span>
+                    <div className="cv-palette-item__texts">
+                      <strong className="cv-palette-item__bold">{it.name || `Interesse ${idx + 1}`}</strong>
+                      <span className="cv-palette-item__tiny">{it.keywords?.length ? `${it.keywords.length} tópicos` : 'Área de interesse'}</span>
+                    </div>
+                  </div>
+                  <div className="cv-palette-item__actions">
+                    <select
+                      className="cv-palette-select"
+                      value={itemDims.variant || 'card_box'}
+                      onChange={e => handleSelectVariant(itemId, e.target.value)}
+                      title="Variante deste tópico de interesse"
+                    >
+                      <option value="card_box">📦 Card com Tags</option>
+                      <option value="circles">⭕ Círculo Hobbies</option>
+                      <option value="minimal">📝 Linha Textual</option>
+                    </select>
+                    <button
+                      type="button"
+                      className={`cv-eye-btn ${isHidden ? 'is-hidden' : ''}`}
+                      onClick={() => handleToggleHide(itemId)}
+                      title={isHidden ? 'Exibir na folha' : 'Ocultar interesse'}
+                    >
+                      {isHidden ? '👁️‍🗨️' : '👁️'}
+                    </button>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+
+        {/* ── Categoria: Referências (Atômicas) ── */}
+        {data.references && data.references.length > 0 && (
+          <div className="cv-palette-group">
+            <div className="cv-palette-group__title">
+              👥 Referências Profissionais ({data.references.length})
+            </div>
+            {data.references.map((r, idx) => {
+              const itemId = getAtomicItemId('references', r, idx)
+              const itemDims = dimensions[itemId] || {}
+              const isHidden = Boolean(itemDims.hidden)
+
+              return (
+                <div key={itemId} className={`cv-palette-item cv-palette-item--sub ${isHidden ? 'is-dimmed' : ''}`}>
+                  <div className="cv-palette-item__info">
+                    <span className="cv-palette-item__icon">👥</span>
+                    <div className="cv-palette-item__texts">
+                      <strong className="cv-palette-item__bold">{r.name || `Referência ${idx + 1}`}</strong>
+                      <span className="cv-palette-item__tiny">{r.company || r.position || r.reference || 'Contato'}</span>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className={`cv-eye-btn ${isHidden ? 'is-hidden' : ''}`}
+                    onClick={() => handleToggleHide(itemId)}
+                    title={isHidden ? 'Exibir na folha' : 'Ocultar referência'}
+                  >
+                    {isHidden ? '👁️‍🗨️' : '👁️'}
+                  </button>
+                </div>
+              )
+            })}
+          </div>
+        )}
+
+        {/* ── Categoria: Prêmios & Distinções (Se existir no YAML) ── */}
+        {data.awards && data.awards.length > 0 && (
+          <div className="cv-palette-group">
+            <div className="cv-palette-group__title">
+              🏆 Prêmios & Distinções ({data.awards.length})
+            </div>
+            {data.awards.map((aw, idx) => {
+              const itemId = getAtomicItemId('awards', aw, idx)
+              const itemDims = dimensions[itemId] || {}
+              const isHidden = Boolean(itemDims.hidden)
+
+              return (
+                <div key={itemId} className={`cv-palette-item cv-palette-item--sub ${isHidden ? 'is-dimmed' : ''}`}>
+                  <div className="cv-palette-item__info">
+                    <span className="cv-palette-item__icon">🏆</span>
+                    <div className="cv-palette-item__texts">
+                      <strong className="cv-palette-item__bold">{aw.title || `Prêmio ${idx + 1}`}</strong>
+                      <span className="cv-palette-item__tiny">{aw.awarder || aw.date || 'Distinção'}</span>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className={`cv-eye-btn ${isHidden ? 'is-hidden' : ''}`}
+                    onClick={() => handleToggleHide(itemId)}
+                    title={isHidden ? 'Exibir na folha' : 'Ocultar prêmio'}
+                  >
+                    {isHidden ? '👁️‍🗨️' : '👁️'}
+                  </button>
+                </div>
+              )
+            })}
+          </div>
+        )}
+
+        {/* ── Categoria: Trabalho Voluntário (Se existir no YAML) ── */}
+        {data.volunteer && data.volunteer.length > 0 && (
+          <div className="cv-palette-group">
+            <div className="cv-palette-group__title">
+              🤝 Trabalho Voluntário ({data.volunteer.length})
+            </div>
+            {data.volunteer.map((v, idx) => {
+              const itemId = getAtomicItemId('volunteer', v, idx)
+              const itemDims = dimensions[itemId] || {}
+              const isHidden = Boolean(itemDims.hidden)
+
+              return (
+                <div key={itemId} className={`cv-palette-item cv-palette-item--sub ${isHidden ? 'is-dimmed' : ''}`}>
+                  <div className="cv-palette-item__info">
+                    <span className="cv-palette-item__icon">🤝</span>
+                    <div className="cv-palette-item__texts">
+                      <strong className="cv-palette-item__bold">{v.organization || `Voluntariado ${idx + 1}`}</strong>
+                      <span className="cv-palette-item__tiny">{v.position || 'Voluntário'}</span>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className={`cv-eye-btn ${isHidden ? 'is-hidden' : ''}`}
+                    onClick={() => handleToggleHide(itemId)}
+                    title={isHidden ? 'Exibir na folha' : 'Ocultar voluntariado'}
+                  >
+                    {isHidden ? '👁️‍🗨️' : '👁️'}
+                  </button>
                 </div>
               )
             })}

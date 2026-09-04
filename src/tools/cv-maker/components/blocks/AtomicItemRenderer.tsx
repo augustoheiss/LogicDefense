@@ -1,9 +1,9 @@
 import React from 'react'
-import type { CVWork, CVEducation, CVProject, CVLanguage, CVSkill } from '../../types/cv'
+import type { CVWork, CVEducation, CVProject, CVLanguage, CVSkill, CVCertificate, CVInterest, CVReference } from '../../types/cv'
 import { getSkillPercentage } from '../../types/cv'
 
 interface AtomicItemRendererProps {
-  category: 'work' | 'education' | 'projects' | 'languages' | 'skills'
+  category: 'work' | 'education' | 'projects' | 'languages' | 'skills' | 'certificates' | 'interests' | 'references'
   item: any
   variant?: string
 }
@@ -238,16 +238,20 @@ export const AtomicItemRenderer: React.FC<AtomicItemRendererProps> = ({
     const getDotCount = (f: string) => {
       const lower = f.toLowerCase()
       if (lower.includes('nat') || lower.includes('flu')) return 5
-      if (lower.includes('ava')) return 4
+      if (lower.includes('ava') || lower.includes('avanç')) return 4
       if (lower.includes('inter')) return 3
       return 2
     }
 
+    // Variante 1: Barra de Pontos (Dots)
     if (variant === 'dots') {
       const dots = getDotCount(fluency)
       return (
-        <div className="cv-atomic-item cv-atomic-item--lang-dots">
-          <span className="cv-lang-name">{l.language}</span>
+        <div className="cv-atomic-item cv-atomic-item--lang-dots cv-lang-dots-box">
+          <div className="cv-lang-dots-header">
+            <span className="cv-lang-name">{l.language}</span>
+            <span className="cv-lang-level-text">{fluency}</span>
+          </div>
           <div className="cv-lang-dots-bar" title={fluency}>
             {[1, 2, 3, 4, 5].map(d => (
               <span key={d} className={`cv-lang-dot ${d <= dots ? 'is-filled' : ''}`} />
@@ -257,16 +261,20 @@ export const AtomicItemRenderer: React.FC<AtomicItemRendererProps> = ({
       )
     }
 
+    // Variante 2: Linha Simples Minimalista
     if (variant === 'minimal') {
       return (
-        <div className="cv-atomic-item cv-atomic-item--minimal cv-lang-line">
-          <strong>{l.language}</strong> — <span>{fluency}</span>
+        <div className="cv-atomic-item cv-atomic-item--minimal cv-lang-minimal">
+          <strong className="cv-lang-minimal-name">{l.language}</strong>
+          <span className="cv-lang-minimal-sep">•</span>
+          <span className="cv-lang-minimal-level">{fluency}</span>
         </div>
       )
     }
 
+    // Variante 3: Pill Badge (Default)
     return (
-      <div className="cv-atomic-item cv-atomic-item--pill">
+      <div className="cv-atomic-item cv-atomic-item--pill cv-lang-pill-box">
         <span className="cv-lang-name">{l.language}</span>
         <span className="cv-lang-level-pill">{fluency}</span>
       </div>
@@ -333,6 +341,146 @@ export const AtomicItemRenderer: React.FC<AtomicItemRendererProps> = ({
               <span key={i} className="cv-skill-chip-item">{k}</span>
             ))}
           </div>
+        )}
+      </div>
+    )
+  }
+
+  // ── Renderização de Certificação Individual (certificates) ──
+  if (category === 'certificates') {
+    const c = item as CVCertificate
+
+    if (variant === 'minimal') {
+      return (
+        <div className="cv-atomic-item cv-atomic-item--minimal cv-cert-minimal">
+          <div className="cv-one-liner">
+            <strong className="cv-one-liner__main">{c.name}</strong>
+            {c.issuer && (
+              <>
+                <span className="cv-one-liner__sep">•</span>
+                <span className="cv-one-liner__sub">{c.issuer}</span>
+              </>
+            )}
+            {c.date && <span className="cv-one-liner__date">{c.date}</span>}
+          </div>
+        </div>
+      )
+    }
+
+    if (variant === 'pill_badge') {
+      return (
+        <div className="cv-atomic-item cv-cert-pill-box">
+          <div className="cv-cert-pill-content">
+            <span className="cv-cert-name">{c.name}</span>
+            {c.issuer && <span className="cv-cert-issuer-badge">{c.issuer}</span>}
+          </div>
+          {c.date && <span className="cv-cert-date-tag">{c.date}</span>}
+        </div>
+      )
+    }
+
+    // Default: card_box
+    return (
+      <div className="cv-atomic-item cv-atomic-item--box cv-cert-card-box">
+        <div className="cv-item-header">
+          <span className="cv-item-title" style={{ fontSize: '0.86rem', fontWeight: 700 }}>{c.name}</span>
+          {c.date && <span className="cv-item-date">{c.date}</span>}
+        </div>
+        {c.issuer && (
+          <div className="cv-item-sub" style={{ marginTop: '0.2rem' }}>
+            {c.url ? (
+              <a href={c.url} target="_blank" rel="noopener noreferrer" className="cv-project-link">
+                {c.issuer} 🔗
+              </a>
+            ) : (
+              <span>{c.issuer}</span>
+            )}
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  // ── Renderização de Interesses & Pesquisa (interests) ──
+  if (category === 'interests') {
+    const it = item as CVInterest
+    const HOBBY_ICONS: Record<string, string> = {
+      camera: '📷',
+      palette: '🎨',
+      plane: '✈️',
+      book: '📚',
+      code: '💻',
+      music: '🎵',
+      coffee: '☕',
+      globe: '🌐',
+      chess: '♟️',
+      gym: '🏋️'
+    }
+    const icon = it.icon && HOBBY_ICONS[it.icon] ? HOBBY_ICONS[it.icon] : '🎯'
+
+    if (variant === 'circles') {
+      return (
+        <div className="cv-atomic-item cv-interest-circle-item">
+          <div className="cv-hobby-circle">{icon}</div>
+          <div className="cv-hobby-label">{it.name}</div>
+        </div>
+      )
+    }
+
+    if (variant === 'minimal') {
+      return (
+        <div className="cv-atomic-item cv-atomic-item--minimal cv-interest-minimal">
+          <span className="cv-interest-mini-icon">{icon}</span>
+          <strong className="cv-interest-mini-title">{it.name}</strong>
+          {it.keywords && it.keywords.length > 0 && (
+            <span className="cv-interest-mini-kw">— {it.keywords.join(', ')}</span>
+          )}
+        </div>
+      )
+    }
+
+    // Default: card_box
+    return (
+      <div className="cv-atomic-item cv-atomic-item--box cv-interest-box">
+        <div className="cv-interest-header">
+          <span className="cv-interest-icon">{icon}</span>
+          <strong className="cv-interest-name">{it.name}</strong>
+        </div>
+        {it.keywords && it.keywords.length > 0 && (
+          <div className="cv-interest-tags">
+            {it.keywords.map((k, i) => (
+              <span key={i} className="cv-interest-tag">{k}</span>
+            ))}
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  // ── Renderização de Referência Individual (references) ──
+  if (category === 'references') {
+    const r = item as CVReference
+    return (
+      <div className="cv-atomic-item cv-atomic-item--box cv-reference-card-box">
+        <div className="cv-item-header">
+          <strong className="cv-item-title" style={{ fontSize: '0.86rem' }}>{r.name}</strong>
+          {r.position && <span className="cv-reference-pos" style={{ fontSize: '0.75rem', color: '#64748b' }}>{r.position}</span>}
+        </div>
+        {(r.company || r.reference) && (
+          <div className="cv-item-sub" style={{ fontSize: '0.78rem', color: '#475569', marginTop: '0.15rem' }}>
+            {r.company || r.reference}
+          </div>
+        )}
+        {(r.phone || r.email) && (
+          <div className="cv-reference-contacts" style={{ fontSize: '0.74rem', marginTop: '0.2rem', display: 'flex', gap: '0.6rem', color: '#64748b' }}>
+            {r.email && <span>✉ {r.email}</span>}
+            {r.phone && <span>📞 {r.phone}</span>}
+          </div>
+        )}
+        {r.description && (
+          <p className="cv-reference-desc" style={{ fontSize: '0.76rem', fontStyle: 'italic', margin: '0.25rem 0 0 0', color: '#475569' }}>
+            "{r.description}"
+          </p>
         )}
       </div>
     )

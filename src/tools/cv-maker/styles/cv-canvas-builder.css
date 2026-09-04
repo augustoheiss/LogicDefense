@@ -483,7 +483,15 @@
   .cv-skill-bar-fill,
   .cv-skill-bar-track,
   .cv-skill-chip-item,
-  .cv-skill-level-pill {
+  .cv-skill-level-pill,
+  .cv-lang-pill-box,
+  .cv-lang-level-pill,
+  .cv-lang-dot,
+  .cv-lang-dot.is-filled,
+  .cv-cert-issuer-badge,
+  .cv-cert-pill-box,
+  .cv-hobby-circle,
+  .cv-interest-tag {
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
@@ -1592,3 +1600,268 @@
   background: rgba(37, 99, 235, 0.14);
   border-color: rgba(37, 99, 235, 0.35);
 }
+
+/* =============================================================
+   ── Variantes Atômicas: IDIOMAS (Languages) ──
+   ============================================================= */
+
+/* 1. Variante Pílula / Pill Badge (Padrão) */
+.cv-lang-pill-box {
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  padding: 0.35rem 0.65rem !important;
+  background: rgba(248, 250, 252, 0.75) !important;
+  border: 1px solid rgba(226, 232, 240, 0.9) !important;
+  border-radius: 6px !important;
+  box-sizing: border-box !important;
+}
+
+.cv-lang-name {
+  font-size: 0.85rem !important;
+  font-weight: 700 !important;
+  color: var(--cv-color-primary, #0f172a) !important;
+}
+
+.cv-lang-level-pill {
+  font-size: 0.72rem !important;
+  font-weight: 600 !important;
+  color: var(--cv-color-primary, #2563eb) !important;
+  background: rgba(37, 99, 235, 0.08) !important;
+  border: 1px solid rgba(37, 99, 235, 0.2) !important;
+  padding: 0.12rem 0.5rem !important;
+  border-radius: 9999px !important;
+  white-space: nowrap !important;
+}
+
+/* 2. Variante Barra de Pontos / Dots */
+.cv-lang-dots-box {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 0.25rem !important;
+  padding: 0.35rem 0.45rem !important;
+  box-sizing: border-box !important;
+}
+
+.cv-lang-dots-header {
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: baseline !important;
+}
+
+.cv-lang-level-text {
+  font-size: 0.75rem !important;
+  color: #64748b !important;
+  font-weight: 500 !important;
+}
+
+.cv-lang-dots-bar {
+  display: flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  margin-top: 0.15rem !important;
+}
+
+.cv-lang-dot {
+  width: 9px !important;
+  height: 9px !important;
+  border-radius: 50% !important;
+  background: rgba(203, 213, 225, 0.8) !important;
+  display: inline-block !important;
+  transition: background 0.2s ease !important;
+}
+
+.cv-lang-dot.is-filled {
+  background: var(--cv-color-primary, #2563eb) !important;
+}
+
+/* 3. Variante Minimalista / Linha Simples */
+.cv-lang-minimal {
+  display: flex !important;
+  align-items: baseline !important;
+  gap: 0.4rem !important;
+  padding: 0.2rem 0.3rem !important;
+  font-size: 0.84rem !important;
+}
+
+.cv-lang-minimal-name {
+  font-weight: 700 !important;
+  color: var(--cv-color-primary, #0f172a) !important;
+}
+
+.cv-lang-minimal-sep {
+  color: #94a3b8 !important;
+}
+
+.cv-lang-minimal-level {
+  color: #475569 !important;
+  font-size: 0.78rem !important;
+}
+
+/* =============================================================
+   ── Variantes Atômicas: LICENÇAS & CERTIFICAÇÕES (Certificates) ──
+   ============================================================= */
+
+/* 1. Variante Box Card */
+.cv-cert-card-box {
+  padding: 0.45rem 0.65rem !important;
+  background: rgba(248, 250, 252, 0.75) !important;
+  border: 1px solid rgba(226, 232, 240, 0.9) !important;
+  border-radius: 6px !important;
+  box-sizing: border-box !important;
+}
+
+/* 2. Variante Badge Pill */
+.cv-cert-pill-box {
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  padding: 0.35rem 0.65rem !important;
+  background: rgba(241, 245, 249, 0.6) !important;
+  border: 1px solid rgba(226, 232, 240, 0.9) !important;
+  border-radius: 6px !important;
+  box-sizing: border-box !important;
+}
+
+.cv-cert-pill-content {
+  display: flex !important;
+  align-items: center !important;
+  gap: 0.5rem !important;
+  flex-wrap: wrap !important;
+}
+
+.cv-cert-name {
+  font-size: 0.85rem !important;
+  font-weight: 700 !important;
+  color: var(--cv-color-primary, #0f172a) !important;
+}
+
+.cv-cert-issuer-badge {
+  font-size: 0.72rem !important;
+  font-weight: 600 !important;
+  color: var(--cv-color-primary, #2563eb) !important;
+  background: rgba(37, 99, 235, 0.08) !important;
+  border: 1px solid rgba(37, 99, 235, 0.18) !important;
+  padding: 0.1rem 0.45rem !important;
+  border-radius: 4px !important;
+}
+
+.cv-cert-date-tag {
+  font-size: 0.72rem !important;
+  color: #64748b !important;
+  white-space: nowrap !important;
+}
+
+/* 3. Variante Minimal */
+.cv-cert-minimal {
+  padding: 0.2rem 0.3rem !important;
+}
+
+/* =============================================================
+   ── Variantes Atômicas: INTERESSES & PESQUISA (Interests) ──
+   ============================================================= */
+
+/* 1. Variante Card com Tags */
+.cv-interest-box {
+  padding: 0.45rem 0.65rem !important;
+  background: rgba(248, 250, 252, 0.75) !important;
+  border: 1px solid rgba(226, 232, 240, 0.9) !important;
+  border-radius: 6px !important;
+  box-sizing: border-box !important;
+}
+
+.cv-interest-header {
+  display: flex !important;
+  align-items: center !important;
+  gap: 0.45rem !important;
+  margin-bottom: 0.3rem !important;
+}
+
+.cv-interest-icon {
+  font-size: 1rem !important;
+}
+
+.cv-interest-name {
+  font-size: 0.86rem !important;
+  font-weight: 700 !important;
+  color: var(--cv-color-primary, #0f172a) !important;
+}
+
+.cv-interest-tags {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 0.3rem !important;
+}
+
+.cv-interest-tag {
+  font-size: 0.72rem !important;
+  background: rgba(241, 245, 249, 0.85) !important;
+  border: 1px solid #e2e8f0 !important;
+  color: #475569 !important;
+  padding: 0.1rem 0.45rem !important;
+  border-radius: 4px !important;
+  font-weight: 500 !important;
+}
+
+/* 2. Variante Círculos de Hobbies */
+.cv-interest-circle-item {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  text-align: center !important;
+  gap: 0.3rem !important;
+  padding: 0.35rem !important;
+}
+
+.cv-hobby-circle {
+  width: 38px !important;
+  height: 38px !important;
+  border-radius: 50% !important;
+  background: rgba(37, 99, 235, 0.08) !important;
+  border: 1px solid rgba(37, 99, 235, 0.25) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  font-size: 1.15rem !important;
+}
+
+.cv-hobby-label {
+  font-size: 0.75rem !important;
+  font-weight: 600 !important;
+  color: #334155 !important;
+}
+
+/* 3. Variante Minimal */
+.cv-interest-minimal {
+  display: flex !important;
+  align-items: baseline !important;
+  gap: 0.4rem !important;
+  font-size: 0.82rem !important;
+  padding: 0.2rem 0.3rem !important;
+}
+
+.cv-interest-mini-icon {
+  font-size: 0.9rem !important;
+}
+
+.cv-interest-mini-title {
+  font-weight: 700 !important;
+  color: var(--cv-color-primary, #0f172a) !important;
+}
+
+.cv-interest-mini-kw {
+  color: #64748b !important;
+  font-size: 0.76rem !important;
+}
+
+/* =============================================================
+   ── Variantes Atômicas: REFERÊNCIAS (References) ──
+   ============================================================= */
+.cv-reference-card-box {
+  padding: 0.45rem 0.65rem !important;
+  background: rgba(248, 250, 252, 0.75) !important;
+  border: 1px solid rgba(226, 232, 240, 0.9) !important;
+  border-radius: 6px !important;
+  box-sizing: border-box !important;
+}
+

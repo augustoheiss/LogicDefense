@@ -232,7 +232,7 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
     title: string,
     node: React.ReactNode,
     defaultZone?: 'left' | 'right',
-    category?: 'work' | 'education' | 'projects' | 'languages' | 'skills' | 'identity' | 'summary' | 'photo'
+    category?: 'work' | 'education' | 'projects' | 'languages' | 'skills' | 'identity' | 'summary' | 'photo' | 'certificates' | 'interests' | 'references' | string
   ) => {
     if (!node) return null
     if (!isFreeCanvas) return node
@@ -309,7 +309,7 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
     defZone: 'left' | 'right',
     title: string,
     node: React.ReactNode,
-    category?: 'work' | 'education' | 'projects' | 'languages' | 'skills' | 'identity' | 'summary' | 'photo'
+    category?: 'work' | 'education' | 'projects' | 'languages' | 'skills' | 'identity' | 'summary' | 'photo' | 'certificates' | 'interests' | 'references' | string
   ) => {
     if (!node) return null
     if (getSectionZone(secId, defZone) !== targetZone) return null
@@ -462,7 +462,7 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
     const itemBoxes = data.languages.map((l, idx) => {
       const itemId = getAtomicItemId('languages', l, idx)
       const itemDims = structureConfig?.sectionDimensions?.[itemId]
-      const variant = itemDims?.variant || 'dots'
+      const variant = itemDims?.variant || 'pill_badge'
       const boxTitle = `Idioma: ${l.language}`
       const content = <AtomicItemRenderer category="languages" item={l} variant={variant} />
 
@@ -513,6 +513,124 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
 
     return (
       <React.Fragment key="skills_atomic_group">
+        {titleBox}
+        {itemBoxes}
+      </React.Fragment>
+    )
+  }
+
+  const renderCertificatesSection = (
+    targetZone?: 'left' | 'right',
+    defZone: 'left' | 'right' = 'right',
+    fallbackTitle = 'Licenças & Certificações',
+    fallbackNode?: React.ReactNode
+  ) => {
+    if (!data.certificates || data.certificates.length === 0) return null
+
+    if (!isFreeCanvas) {
+      const node = fallbackNode || <BlockCertificates certificates={data.certificates} title={fallbackTitle} />
+      return targetZone
+        ? renderZoneSection('certificates', targetZone, defZone, fallbackTitle, node, 'certificates')
+        : wrapSection('certificates', fallbackTitle, node, defZone, 'certificates')
+    }
+
+    const titleNode = <h3 className="cv-section-title">📜 {fallbackTitle}</h3>
+    const titleBox = targetZone
+      ? renderZoneSection('certificates_title', targetZone, defZone, `Título: ${fallbackTitle}`, titleNode)
+      : wrapSection('certificates_title', `Título: ${fallbackTitle}`, titleNode, defZone)
+
+    const itemBoxes = data.certificates.map((c, idx) => {
+      const itemId = getAtomicItemId('certificates', c, idx)
+      const itemDims = structureConfig?.sectionDimensions?.[itemId]
+      const variant = itemDims?.variant || 'card_box'
+      const boxTitle = c.name ? `Certificação: ${c.name}` : `Certificação #${idx + 1}`
+      const content = <AtomicItemRenderer category="certificates" item={c} variant={variant} />
+
+      return targetZone
+        ? renderZoneSection(itemId, targetZone, defZone, boxTitle, content, 'certificates')
+        : wrapSection(itemId, boxTitle, content, defZone, 'certificates')
+    })
+
+    return (
+      <React.Fragment key="certificates_atomic_group">
+        {titleBox}
+        {itemBoxes}
+      </React.Fragment>
+    )
+  }
+
+  const renderInterestsSection = (
+    targetZone?: 'left' | 'right',
+    defZone: 'left' | 'right' = 'left',
+    fallbackTitle = 'Interesses & Pesquisa',
+    fallbackNode?: React.ReactNode
+  ) => {
+    if (!data.interests || data.interests.length === 0) return null
+
+    if (!isFreeCanvas) {
+      const node = fallbackNode || <BlockInterests interests={data.interests} title={fallbackTitle} />
+      return targetZone
+        ? renderZoneSection('interests', targetZone, defZone, fallbackTitle, node, 'interests')
+        : wrapSection('interests', fallbackTitle, node, defZone, 'interests')
+    }
+
+    const titleNode = <h4 className="cv-sidebar-title">💡 {fallbackTitle}</h4>
+    const titleBox = targetZone
+      ? renderZoneSection('interests_title', targetZone, defZone, `Título: ${fallbackTitle}`, titleNode)
+      : wrapSection('interests_title', `Título: ${fallbackTitle}`, titleNode, defZone)
+
+    const itemBoxes = data.interests.map((it, idx) => {
+      const itemId = getAtomicItemId('interests', it, idx)
+      const itemDims = structureConfig?.sectionDimensions?.[itemId]
+      const variant = itemDims?.variant || 'card_box'
+      const boxTitle = it.name ? `Interesse: ${it.name}` : `Interesse #${idx + 1}`
+      const content = <AtomicItemRenderer category="interests" item={it} variant={variant} />
+
+      return targetZone
+        ? renderZoneSection(itemId, targetZone, defZone, boxTitle, content, 'interests')
+        : wrapSection(itemId, boxTitle, content, defZone, 'interests')
+    })
+
+    return (
+      <React.Fragment key="interests_atomic_group">
+        {titleBox}
+        {itemBoxes}
+      </React.Fragment>
+    )
+  }
+
+  const renderReferencesSection = (
+    targetZone?: 'left' | 'right',
+    defZone: 'left' | 'right' = 'right',
+    fallbackTitle = 'Referências',
+    fallbackNode?: React.ReactNode
+  ) => {
+    if (!data.references || data.references.length === 0) return null
+
+    if (!isFreeCanvas) {
+      const node = fallbackNode || <BlockReferences references={data.references} title={fallbackTitle} />
+      return targetZone
+        ? renderZoneSection('references', targetZone, defZone, fallbackTitle, node, 'references')
+        : wrapSection('references', fallbackTitle, node, defZone, 'references')
+    }
+
+    const titleNode = <h3 className="cv-section-title">👥 {fallbackTitle}</h3>
+    const titleBox = targetZone
+      ? renderZoneSection('references_title', targetZone, defZone, `Título: ${fallbackTitle}`, titleNode)
+      : wrapSection('references_title', `Título: ${fallbackTitle}`, titleNode, defZone)
+
+    const itemBoxes = data.references.map((r, idx) => {
+      const itemId = getAtomicItemId('references', r, idx)
+      const boxTitle = r.name ? `Referência: ${r.name}` : `Referência #${idx + 1}`
+      const content = <AtomicItemRenderer category="references" item={r} />
+
+      return targetZone
+        ? renderZoneSection(itemId, targetZone, defZone, boxTitle, content, 'references')
+        : wrapSection(itemId, boxTitle, content, defZone, 'references')
+    })
+
+    return (
+      <React.Fragment key="references_atomic_group">
         {titleBox}
         {itemBoxes}
       </React.Fragment>
@@ -599,21 +717,13 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
                 ) : null}
                 {renderSkillsSection('left', 'left', 'Expertise')}
                 {renderLanguagesSection('left', 'left', 'Idiomas')}
-                {data.certificates && renderZoneSection('certificates', 'left', 'left', 'Certificações', (
-                  <div className="cv-sidebar-section">
-                    <BlockCertificates certificates={data.certificates} />
-                  </div>
-                ))}
-                {data.interests && renderZoneSection('interests', 'left', 'left', 'Interesses', (
-                  <div className="cv-sidebar-section">
-                    <BlockInterests interests={data.interests} />
-                  </div>
-                ))}
+                {renderCertificatesSection('left', 'left', 'Certificações')}
+                {renderInterestsSection('left', 'left', 'Interesses')}
                 {basics.summary && renderZoneSection('summary', 'left', 'right', 'Sobre Mim', <BlockSummary basics={basics} title="Sobre Mim" />)}
                 {renderWorkSection('left', 'right')}
                 {renderProjectsSection('left', 'right')}
                 {renderEducationSection('left', 'right')}
-                {data.references && renderZoneSection('references', 'left', 'right', 'Referências', <BlockReferences references={data.references} />)}
+                {renderReferencesSection('left', 'right', 'Referências')}
               </aside>
 
               <main className="cv-editorial-main">
@@ -621,7 +731,7 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
                 {renderWorkSection('right', 'right')}
                 {renderProjectsSection('right', 'right')}
                 {renderEducationSection('right', 'right')}
-                {data.references && renderZoneSection('references', 'right', 'right', 'Referências', <BlockReferences references={data.references} />)}
+                {renderReferencesSection('right', 'right', 'Referências')}
                 {renderZoneSection('contacts', 'right', 'left', 'Contatos', (
                   <div className="cv-sidebar-section">
                     <h4 className="cv-sidebar-title">Contato</h4>
@@ -630,16 +740,8 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
                 ))}
                 {renderSkillsSection('right', 'left', 'Expertise')}
                 {renderLanguagesSection('right', 'left', 'Idiomas')}
-                {data.certificates && renderZoneSection('certificates', 'right', 'left', 'Certificações', (
-                  <div className="cv-sidebar-section">
-                    <BlockCertificates certificates={data.certificates} />
-                  </div>
-                ))}
-                {data.interests && renderZoneSection('interests', 'right', 'left', 'Interesses', (
-                  <div className="cv-sidebar-section">
-                    <BlockInterests interests={data.interests} />
-                  </div>
-                ))}
+                {renderCertificatesSection('right', 'left', 'Certificações')}
+                {renderInterestsSection('right', 'left', 'Interesses')}
               </main>
             </div>
           </div>
@@ -695,17 +797,13 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
               ))}
               {renderSkillsSection('left', 'left', 'Expertise')}
               {renderLanguagesSection('left', 'left', 'Idiomas')}
-              {data.interests && renderZoneSection('interests', 'left', 'left', 'Interesses', (
-                <div className="cv-sidebar-section">
-                  <BlockInterests interests={data.interests} />
-                </div>
-              ))}
+              {renderInterestsSection('left', 'left', 'Interesses')}
               {basics.summary && renderZoneSection('summary', 'left', 'right', 'Sobre Mim', <BlockSummary basics={basics} title="Sobre Mim" />)}
               {renderWorkSection('left', 'right')}
               {renderEducationSection('left', 'right')}
               {renderProjectsSection('left', 'right')}
-              {data.certificates && renderZoneSection('certificates', 'left', 'right', 'Certificações', <BlockCertificates certificates={data.certificates} />)}
-              {data.references && renderZoneSection('references', 'left', 'right', 'Referências', <BlockReferences references={data.references} />)}
+              {renderCertificatesSection('left', 'right', 'Certificações')}
+              {renderReferencesSection('left', 'right', 'Referências')}
             </aside>
 
             <main className="cv-navy-main">
@@ -713,8 +811,8 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
               {renderWorkSection('right', 'right')}
               {renderEducationSection('right', 'right')}
               {renderProjectsSection('right', 'right')}
-              {data.certificates && renderZoneSection('certificates', 'right', 'right', 'Certificações', <BlockCertificates certificates={data.certificates} />)}
-              {data.references && renderZoneSection('references', 'right', 'right', 'Referências', <BlockReferences references={data.references} />)}
+              {renderCertificatesSection('right', 'right', 'Certificações')}
+              {renderReferencesSection('right', 'right', 'Referências')}
               {renderZoneSection('header_profile', 'right', 'left', 'Perfil & Foto', (
                 <div>
                   {basics.image && (
@@ -745,11 +843,7 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
               ))}
               {renderSkillsSection('right', 'left', 'Expertise')}
               {renderLanguagesSection('right', 'left', 'Idiomas')}
-              {data.interests && renderZoneSection('interests', 'right', 'left', 'Interesses', (
-                <div className="cv-sidebar-section">
-                  <BlockInterests interests={data.interests} />
-                </div>
-              ))}
+              {renderInterestsSection('right', 'left', 'Interesses')}
             </main>
           </div>
         </div>
@@ -780,14 +874,14 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
               <div>
                 {renderEducationSection()}
                 {renderProjectsSection()}
-                {data.references && wrapSection('references', 'Referências', <BlockReferences references={data.references} />)}
+                {renderReferencesSection()}
               </div>
             </div>
 
             {renderSkillsSection(undefined, undefined, 'Matriz de Competências')}
             {renderLanguagesSection()}
-            {data.certificates && wrapSection('certificates', 'Certificações', <BlockCertificates certificates={data.certificates} />)}
-            {data.interests && wrapSection('interests', 'Interesses', <BlockInterests interests={data.interests} />)}
+            {renderCertificatesSection()}
+            {renderInterestsSection()}
           </div>
         </div>
       )
@@ -823,7 +917,7 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
                 </section>
               ))}
               {renderSkillsSection('left', 'left', 'Expertise')}
-              {data.interests && renderZoneSection('interests', 'left', 'left', 'Hobbies', <BlockInterests interests={data.interests} layoutStyle="circles" title="Hobbies" />)}
+              {renderInterestsSection('left', 'left', 'Hobbies')}
               {renderZoneSection('civil', 'left', 'left', 'Dados Civis', <BlockCivilData basics={basics} />)}
               {renderLanguagesSection('left', 'left', 'Idiomas')}
               {renderZoneSection('header', 'left', 'right', 'Identificação & Contatos', (
@@ -836,8 +930,8 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
               {renderWorkSection('left', 'right')}
               {renderEducationSection('left', 'right')}
               {renderProjectsSection('left', 'right')}
-              {data.certificates && renderZoneSection('certificates', 'left', 'right', 'Certificações', <BlockCertificates certificates={data.certificates} />)}
-              {data.references && renderZoneSection('references', 'left', 'right', 'Referências', <BlockReferences references={data.references} />)}
+              {renderCertificatesSection('left', 'right', 'Certificações')}
+              {renderReferencesSection('left', 'right', 'Referências')}
             </aside>
 
             <main className="cv-duo-right">
@@ -863,11 +957,11 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
               {renderWorkSection('right', 'right')}
               {renderEducationSection('right', 'right')}
               {renderProjectsSection('right', 'right')}
-              {data.certificates && renderZoneSection('certificates', 'right', 'right', 'Certificações', <BlockCertificates certificates={data.certificates} />)}
+              {renderCertificatesSection('right', 'right', 'Certificações')}
               {renderZoneSection('civil', 'right', 'left', 'Dados Civis', <BlockCivilData basics={basics} />)}
               {renderLanguagesSection('right', 'left', 'Idiomas')}
-              {data.interests && renderZoneSection('interests', 'right', 'left', 'Hobbies', <BlockInterests interests={data.interests} layoutStyle="circles" title="Hobbies" />)}
-              {data.references && renderZoneSection('references', 'right', 'right', 'Referências', <BlockReferences references={data.references} />)}
+              {renderInterestsSection('right', 'left', 'Hobbies')}
+              {renderReferencesSection('right', 'right', 'Referências')}
             </main>
           </div>
         </div>
@@ -913,9 +1007,9 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
               ))}
               {renderSkillsSection('left', 'left', 'Competências', <BlockSkillsTags skills={data.skills} title="Competências" />)}
               {renderLanguagesSection('left', 'left', 'Idiomas')}
-              {data.certificates && renderZoneSection('certificates', 'left', 'left', 'Certificações', <BlockCertificates certificates={data.certificates} />)}
-              {data.references && renderZoneSection('references', 'left', 'left', 'Referências', <BlockReferences references={data.references} />)}
-              {data.interests && renderZoneSection('interests', 'left', 'left', 'Interesses', <BlockInterests interests={data.interests} />)}
+              {renderCertificatesSection('left', 'left', 'Certificações')}
+              {renderReferencesSection('left', 'left', 'Referências')}
+              {renderInterestsSection('left', 'left', 'Interesses')}
               {basics.summary && renderZoneSection('summary', 'left', 'right', 'Sobre Mim', <BlockSummary basics={basics} title="Sobre Mim" />)}
               {renderWorkSection('left', 'right')}
               {renderProjectsSection('left', 'right')}
@@ -947,9 +1041,9 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
               ))}
               {renderSkillsSection('right', 'left', 'Competências', <BlockSkillsTags skills={data.skills} title="Competências" />)}
               {renderLanguagesSection('right', 'left', 'Idiomas')}
-              {data.certificates && renderZoneSection('certificates', 'right', 'left', 'Certificações', <BlockCertificates certificates={data.certificates} />)}
-              {data.references && renderZoneSection('references', 'right', 'left', 'Referências', <BlockReferences references={data.references} />)}
-              {data.interests && renderZoneSection('interests', 'right', 'left', 'Interesses', <BlockInterests interests={data.interests} />)}
+              {renderCertificatesSection('right', 'left', 'Certificações')}
+              {renderReferencesSection('right', 'left', 'Referências')}
+              {renderInterestsSection('right', 'left', 'Interesses')}
             </main>
           </div>
         </div>
@@ -1162,65 +1256,9 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
               </section>
             ))}
 
-            {data.certificates && data.certificates.length > 0 && wrapSection('certificates', 'Certificações & Licenças', (
-              <section className="cv-section">
-                <h2 className="cv-math-section-title">
-                  📜 CERTIFICAÇÕES & LICENÇAS
-                </h2>
-                <div className={`cv-math-grid certs-grid ${getGridClass(data.certificates.length)}`}>
-                  {data.certificates.map((c, idx) => (
-                    <div key={idx} className="cv-math-cert-card cv-avoid-break">
-                      <div className="cv-item-header" style={{ marginBottom: '0.2rem' }}>
-                        <span style={{ fontSize: '1rem' }}>📜</span>
-                        <span className="cv-item-date">{c.date}</span>
-                      </div>
-                      <div style={{ fontWeight: 700, fontSize: '0.85rem' }}>
-                        {c.url ? (
-                          <a href={c.url} target="_blank" rel="noreferrer" className="cv-link">
-                            {c.name} ↗
-                          </a>
-                        ) : (
-                          c.name
-                        )}
-                      </div>
-                      {c.issuer && (
-                        <div className="cv-math-issuer-tag">
-                          {c.issuer}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </section>
-            ))}
-
-            {data.interests && data.interests.length > 0 && wrapSection('interests', 'Interesses & Pesquisa', (
-              <section className="cv-section">
-                <h2 className="cv-math-section-title">
-                  🎯 INTERESSES & FRENTES DE PESQUISA
-                </h2>
-                <div className={`cv-math-grid interests-grid ${getGridClass(data.interests.length)}`}>
-                  {data.interests.map((it, idx) => (
-                    <div key={idx} className="cv-math-interest-card cv-avoid-break">
-                      <div style={{ fontWeight: 700, fontSize: '0.85rem', marginBottom: '0.35rem' }}>
-                        ◈ {it.name}
-                      </div>
-                      {it.keywords && it.keywords.length > 0 && (
-                        <div className="cv-math-tags">
-                          {it.keywords.map((kw, kIdx) => (
-                            <span key={kIdx} className="cv-badge">{kw}</span>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </section>
-            ))}
-
-            {data.references && data.references.length > 0 && wrapSection('references', 'Referências', (
-              <BlockReferences references={data.references} />
-            ))}
+            {renderCertificatesSection(undefined, undefined, 'CERTIFICAÇÕES & LICENÇAS')}
+            {renderInterestsSection(undefined, undefined, 'INTERESSES & FRENTES DE PESQUISA')}
+            {renderReferencesSection(undefined, undefined, 'REFERÊNCIAS')}
           </div>
         </div>
       )
@@ -1239,9 +1277,9 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
             {renderSkillsSection(undefined, undefined, 'Competências', <BlockSkillsTags skills={data.skills} />)}
             {renderEducationSection()}
             {renderLanguagesSection()}
-            {data.certificates && wrapSection('certificates', 'Certificações', <BlockCertificates certificates={data.certificates} />)}
-            {data.references && wrapSection('references', 'Referências', <BlockReferences references={data.references} />)}
-            {data.interests && wrapSection('interests', 'Interesses', <BlockInterests interests={data.interests} />)}
+            {renderCertificatesSection()}
+            {renderReferencesSection()}
+            {renderInterestsSection()}
           </div>
         </div>
       )
@@ -1258,9 +1296,9 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
           {renderSkillsSection(undefined, undefined, 'Competências', <BlockSkillsTags skills={data.skills} />)}
           {renderEducationSection()}
           {renderLanguagesSection()}
-          {data.certificates && wrapSection('certificates', 'Certificações', <BlockCertificates certificates={data.certificates} />)}
-          {data.references && wrapSection('references', 'Referências', <BlockReferences references={data.references} />)}
-          {data.interests && wrapSection('interests', 'Interesses', <BlockInterests interests={data.interests} />)}
+          {renderCertificatesSection()}
+          {renderReferencesSection()}
+          {renderInterestsSection()}
         </div>
       </div>
     )
