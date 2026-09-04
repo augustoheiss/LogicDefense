@@ -45,6 +45,7 @@ import {
   PaywallModal,
   CSVTextImporterModal,
   SectorGuard,
+  ErrorBoundary,
   SMBSectorWidget,
   RealEstateSectorWidget,
   VehiclesSectorWidget,
@@ -412,51 +413,56 @@ export default function SpreadsheetScreen() {
     monthSummary,
   ]);
 
+  const safeFilteredRows = useMemo(() => {
+    if (!Array.isArray(db.filteredRows)) return [];
+    return db.filteredRows.filter((r): r is TableRow => !!r && typeof r === 'object' && !!r.id);
+  }, [db.filteredRows]);
+
   return (
-    <SafeAreaView style={styles.container} edges={[]}>
-      {/* Header */}
-      <View style={styles.header}>
-        <View style={styles.headerTitleContainer}>
-          <Text style={styles.headerTitle} numberOfLines={1}>
-            📋 {db.activeTable?.name || 'Planilha'}
-          </Text>
-          <Text style={styles.headerSubtitle}>
-            {db.filteredRows.length} {db.filteredRows.length === 1 ? 'entrada' : 'entradas'}
-          </Text>
+    <ErrorBoundary fallbackTitle="Falha na Visualização da Planilha" componentName="SpreadsheetScreen">
+      <SafeAreaView style={styles.container} edges={[]}>
+        {/* Header */}
+        <View style={styles.header}>
+          <View style={styles.headerTitleContainer}>
+            <Text style={styles.headerTitle} numberOfLines={1}>
+              📋 {db.activeTable?.name || 'Planilha'}
+            </Text>
+            <Text style={styles.headerSubtitle}>
+              {safeFilteredRows.length} {safeFilteredRows.length === 1 ? 'entrada' : 'entradas'}
+            </Text>
+          </View>
+          <View style={styles.headerActions}>
+            <Pressable
+              style={({ pressed }) => [
+                styles.undoButton,
+                pressed && styles.pressed,
+                (!db.activeTable || db.activeTable.rows.length === 0) && styles.disabledButton,
+              ]}
+              onPress={handleDeleteLastRow}
+              disabled={!db.activeTable || db.activeTable.rows.length === 0}
+            >
+              <Text style={styles.undoButtonText}>↩ Desfazer</Text>
+            </Pressable>
+            <Pressable
+              style={({ pressed }) => [
+                styles.addButton,
+                pressed && styles.pressed,
+              ]}
+              onPress={() => {
+                ensureTable();
+                setEditingRow(null);
+                setShowAddModal(true);
+              }}
+            >
+              <Text style={styles.addButtonText}>+ Novo</Text>
+            </Pressable>
+          </View>
         </View>
-        <View style={styles.headerActions}>
-          <Pressable
-            style={({ pressed }) => [
-              styles.undoButton,
-              pressed && styles.pressed,
-              (!db.activeTable || db.activeTable.rows.length === 0) && styles.disabledButton,
-            ]}
-            onPress={handleDeleteLastRow}
-            disabled={!db.activeTable || db.activeTable.rows.length === 0}
-          >
-            <Text style={styles.undoButtonText}>↩ Desfazer</Text>
-          </Pressable>
-          <Pressable
-            style={({ pressed }) => [
-              styles.addButton,
-              pressed && styles.pressed,
-            ]}
-            onPress={() => {
-              ensureTable();
-              setEditingRow(null);
-              setShowAddModal(true);
-            }}
-          >
-            <Text style={styles.addButtonText}>+ Novo</Text>
-          </Pressable>
-        </View>
-      </View>
 
-
-      {/* Row List */}
-      <FlatList
-        data={db.filteredRows}
-        keyExtractor={(item) => item.id}
+        {/* Row List */}
+        <FlatList
+          data={safeFilteredRows}
+          keyExtractor={(item, index) => item?.id || `row_${index}`}
         ListHeaderComponent={renderHeader}
         renderItem={({ item }) => (
           <SwipeableRowCard
@@ -662,16 +668,21 @@ export default function SpreadsheetScreen() {
         }}
       />
     </SafeAreaView>
+    </ErrorBoundary>
   );
 }
 
-function formatMonthLabel(ym: string): string {
-  const [y, m] = ym.split('-');
+function formatMonthLabel(ym?: string | null): string {
+  if (!ym || ym === 'all' || typeof ym !== 'string') return 'Todos';
+  const parts = ym.split('-');
+  if (parts.length < 2) return ym;
+  const [y, m] = parts;
   const months = [
     'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
     'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro',
   ];
   const idx = parseInt(m, 10) - 1;
+  if (idx < 0 || idx >= 12 || isNaN(idx)) return ym;
   return `${months[idx]} ${y}`;
 }
 

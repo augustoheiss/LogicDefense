@@ -124,6 +124,8 @@ export function useCoinDB(): CoinDBState {
   return context;
 }
 
+const safeDateSort = (a: TableRow, b: TableRow) => (a?.date || '').localeCompare(b?.date || '');
+
 // ── Hook ─────────────────────────────────────────────────────────────────────
 
 function useCoinDBInternal(): CoinDBState {
@@ -400,35 +402,37 @@ function useCoinDBInternal(): CoinDBState {
 
   // ── Metrics (computed from active table) ───────────────
   const metrics = useMemo(() => {
-    if (!activeTable) return emptyMetrics();
+    if (!activeTable || !Array.isArray(activeTable.rows)) return emptyMetrics();
     const rowsToUse = cutoffDate
-      ? activeTable.rows.filter((r) => r.date <= cutoffDate)
-      : activeTable.rows;
+      ? activeTable.rows.filter((r) => r && typeof r.date === 'string' && r.date <= cutoffDate)
+      : (activeTable.rows || []);
     return computeMetrics(rowsToUse, activeTable.goals, cutoffDate || undefined);
   }, [activeTable, cutoffDate]);
 
   // ── Available months ───────────────────────────────────
   const availableMonths = useMemo(() => {
-    if (!activeTable) return [];
+    if (!activeTable || !Array.isArray(activeTable.rows)) return [];
     const months = new Set<string>();
     const rowsToUse = cutoffDate
-      ? activeTable.rows.filter((r) => r.date <= cutoffDate)
+      ? activeTable.rows.filter((r) => r && typeof r.date === 'string' && r.date <= cutoffDate)
       : activeTable.rows;
     for (const row of rowsToUse) {
-      months.add(row.date.slice(0, 7));
+      if (row && typeof row.date === 'string' && row.date.length >= 7) {
+        months.add(row.date.slice(0, 7));
+      }
     }
     return Array.from(months).sort().reverse();
   }, [activeTable, cutoffDate]);
 
   // ── Filtered rows ─────────────────────────────────────
   const filteredRows = useMemo(() => {
-    if (!activeTable) return [];
-    let rowsToUse = activeTable.rows;
+    if (!activeTable || !Array.isArray(activeTable.rows)) return [];
+    let rowsToUse = activeTable.rows.filter((r): r is TableRow => !!r && typeof r === 'object');
     if (cutoffDate) {
-      rowsToUse = rowsToUse.filter((r) => r.date <= cutoffDate);
+      rowsToUse = rowsToUse.filter((r) => typeof r.date === 'string' && r.date <= cutoffDate);
     }
     if (selectedMonth === 'all') return rowsToUse;
-    return rowsToUse.filter((r) => r.date.startsWith(selectedMonth));
+    return rowsToUse.filter((r) => typeof r.date === 'string' && r.date.startsWith(selectedMonth));
   }, [activeTable, selectedMonth, cutoffDate]);
 
   // ── Table Operations ──────────────────────────────────
@@ -509,7 +513,7 @@ function useCoinDBInternal(): CoinDBState {
       if (t.id !== targetTable.id) return t;
       return {
         ...t,
-        rows: [...t.rows, newRow].sort((a, b) => a.date.localeCompare(b.date)),
+        rows: [...t.rows, newRow].sort(safeDateSort),
         updatedAt: new Date().toISOString(),
       };
     });
@@ -549,7 +553,7 @@ function useCoinDBInternal(): CoinDBState {
       if (t.id !== targetTable!.id) return t;
       return {
         ...t,
-        rows: [...t.rows, ...newRows].sort((a, b) => a.date.localeCompare(b.date)),
+        rows: [...t.rows, ...newRows].sort(safeDateSort),
         updatedAt: new Date().toISOString(),
       };
     });
@@ -615,7 +619,7 @@ function useCoinDBInternal(): CoinDBState {
       if (t.id !== targetTable!.id) return t;
       return {
         ...t,
-        rows: [...formattedRows].sort((a, b) => a.date.localeCompare(b.date)),
+        rows: [...formattedRows].sort(safeDateSort),
         updatedAt: new Date().toISOString(),
       };
     });
@@ -708,7 +712,7 @@ function useCoinDBInternal(): CoinDBState {
       if (t.id !== activeTable.id) return t;
       const originalLength = t.rows.length;
       const keptRows = t.rows.filter((r) => {
-        if (r.date.startsWith(prefix)) return false;
+        if (r?.date && r.date.startsWith(prefix)) return false;
         return true;
       });
       deletedCount = originalLength - keptRows.length;
@@ -730,7 +734,7 @@ function useCoinDBInternal(): CoinDBState {
       const originalLength = t.rows.length;
       const keptRows = t.rows.filter((r) => {
         if (!r.generatedBy) return true;
-        if (prefix && !r.date.startsWith(prefix)) return true;
+        if (prefix && (!r.date || !r.date.startsWith(prefix))) return true;
         return false;
       });
       deletedCount = originalLength - keptRows.length;
@@ -751,7 +755,7 @@ function useCoinDBInternal(): CoinDBState {
       if (t.id !== activeTable.id) return t;
       const updatedRows = t.rows.map((r) => {
         if (!r.generatedBy) return r;
-        if (prefix && !r.date.startsWith(prefix)) return r;
+        if (prefix && (!r.date || !r.date.startsWith(prefix))) return r;
         effectuatedCount++;
         const { generatedBy, clonedFrom, ...realRow } = r;
         return realRow as TableRow;
@@ -945,7 +949,7 @@ function useCoinDBInternal(): CoinDBState {
 
       const finalRows = mode === 'merge'
         ? mergeRows(t.rows || [], formattedRows)
-        : [...formattedRows].sort((a, b) => a.date.localeCompare(b.date));
+        : [...formattedRows].sort(safeDateSort);
 
       return {
         ...t,

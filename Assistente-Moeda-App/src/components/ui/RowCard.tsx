@@ -38,13 +38,25 @@ const entryTypeColors: Record<string, string> = {
   partner_out: colors.entryType.partner_out,
 };
 
-function formatDateBR(dateStr: string): string {
-  const [y, m, d] = dateStr.split('-');
-  return `${d}/${m}`;
+function formatDateBR(dateStr?: string | null): string {
+  if (!dateStr || typeof dateStr !== 'string') return '--/--';
+  if (dateStr.includes('/')) {
+    const parts = dateStr.split('/');
+    if (parts.length >= 2) return `${parts[0]}/${parts[1]}`;
+    return dateStr;
+  }
+  const parts = dateStr.split('-');
+  if (parts.length === 3) {
+    const [, m, d] = parts;
+    return `${d}/${m}`;
+  }
+  return dateStr;
 }
 
 export function RowCard({ row, runningBalance, onPress, onDelete }: RowCardProps) {
   const { isSectorActive } = useSectorRegistry();
+
+  if (!row) return null;
 
   const entryType = row.entryType || 'revenue';
   const valueColor = entryTypeColors[entryType] ?? colors.text.primary;

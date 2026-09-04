@@ -24,7 +24,10 @@ const SUFFIXES: [number, string][] = [
  * Abbreviated currency for compact UI cards.
  * Use this in MetricCard values, quick stats, etc.
  */
-export function formatCurrencyShort(value: number): string {
+export function formatCurrencyShort(value: number | undefined | null): string {
+  if (value === undefined || value === null || typeof value !== 'number' || isNaN(value) || !isFinite(value)) {
+    return 'R$ 0,00';
+  }
   const sign = value < 0 ? '-' : '';
   const abs  = Math.abs(value);
 
@@ -58,7 +61,10 @@ export function formatCurrencyShort(value: number): string {
  * Full precision BRL formatting (the legacy `fmt` function).
  * Use in tooltips, CSV export, detailed views, and WhatsApp reports.
  */
-export function formatCurrencyFull(value: number): string {
+export function formatCurrencyFull(value: number | undefined | null): string {
+  if (value === undefined || value === null || typeof value !== 'number' || isNaN(value) || !isFinite(value)) {
+    return 'R$ 0,00';
+  }
   return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 }
 
@@ -66,7 +72,10 @@ export function formatCurrencyFull(value: number): string {
  * Signed balance formatting: +R$ 1,2k or -R$ 800,00
  * Always shows explicit sign for positive values.
  */
-export function formatBalanceShort(value: number): string {
+export function formatBalanceShort(value: number | undefined | null): string {
+  if (value === undefined || value === null || typeof value !== 'number' || isNaN(value) || !isFinite(value)) {
+    return 'R$ 0,00';
+  }
   const prefix = value >= 0 ? '+' : '';
   return `${prefix}${formatCurrencyShort(value)}`;
 }

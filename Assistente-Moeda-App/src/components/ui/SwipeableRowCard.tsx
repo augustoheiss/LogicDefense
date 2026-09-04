@@ -40,6 +40,8 @@ export function SwipeableRowCard({
   onDelete,
   onDuplicate,
 }: SwipeableRowCardProps) {
+  if (!row) return null;
+
   if (Platform.OS === 'web') {
     return (
       <WebRowCard

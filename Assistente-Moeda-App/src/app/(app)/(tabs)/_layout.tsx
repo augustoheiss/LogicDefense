@@ -25,13 +25,16 @@ function TabIcon({ emoji, focused }: { emoji: string; focused: boolean }) {
   );
 }
 
+import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
+
 export default function TabsLayout() {
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <TimeMachineBar />
-      <UniversalHeaderSheetBar />
-      <View style={{ flex: 1 }}>
-        <Tabs
+    <ErrorBoundary fallbackTitle="Erro na Navegação de Abas" componentName="TabsLayout">
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <TimeMachineBar />
+        <UniversalHeaderSheetBar />
+        <View style={{ flex: 1 }}>
+          <Tabs
           screenOptions={{
             headerShown: false,
             tabBarStyle: styles.tabBar,
@@ -70,7 +73,8 @@ export default function TabsLayout() {
           />
         </Tabs>
       </View>
-    </SafeAreaView>
+      </SafeAreaView>
+    </ErrorBoundary>
   );
 }
 

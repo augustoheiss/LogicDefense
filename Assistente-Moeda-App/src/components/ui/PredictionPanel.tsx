@@ -53,24 +53,32 @@ function todayYM(): string {
 }
 
 function availableYears(rows: TableRow[]): string[] {
+  if (!Array.isArray(rows)) return [];
   const years = new Set<string>();
   for (const r of rows) {
-    if (!r.generatedBy) years.add(r.date.slice(0, 4));
+    if (r && !r.generatedBy && typeof r.date === 'string' && r.date.length >= 4) {
+      years.add(r.date.slice(0, 4));
+    }
   }
   return Array.from(years).sort().reverse();
 }
 
 function availableMonths(rows: TableRow[]): string[] {
+  if (!Array.isArray(rows)) return [];
   const months = new Set<string>();
   for (const r of rows) {
-    if (!r.generatedBy) months.add(r.date.slice(0, 7));
+    if (r && !r.generatedBy && typeof r.date === 'string' && r.date.length >= 7) {
+      months.add(r.date.slice(0, 7));
+    }
   }
   return Array.from(months).sort().reverse();
 }
 
-function formatMonthShort(ym: string): string {
-  if (!ym) return '';
-  const [y, m] = ym.split('-');
+function formatMonthShort(ym?: string | null): string {
+  if (!ym || typeof ym !== 'string') return '';
+  const parts = ym.split('-');
+  if (parts.length < 2) return ym;
+  const [y, m] = parts;
   const shortMonths = [
     'Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun',
     'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'

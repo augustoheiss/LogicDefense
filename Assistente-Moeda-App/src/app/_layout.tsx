@@ -97,8 +97,14 @@ function RootNavigator() {
   );
 }
 
+import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
+
 export default function RootLayout() {
-  return <RootNavigator />;
+  return (
+    <ErrorBoundary fallbackTitle="Assistente Moeda — Recuperação do Sistema" componentName="RootLayout">
+      <RootNavigator />
+    </ErrorBoundary>
+  );
 }
 
 const styles = StyleSheet.create({

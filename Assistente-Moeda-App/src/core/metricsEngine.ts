@@ -29,13 +29,24 @@ export function computeMetrics(
   /** When set, the engine treats this date as "today" for all calculations. */
   asOfDate?: string,
 ): TableMetrics {
-  if (rows.length === 0) return emptyMetrics();
+  if (!Array.isArray(rows) || rows.length === 0) return emptyMetrics();
+
+  // Defensive sanitization: exclude any undefined/null or corrupted rows without valid date or number value
+  const validRows = rows.filter((r): r is TableRow => (
+    !!r &&
+    typeof r === 'object' &&
+    typeof r.date === 'string' &&
+    r.date.length >= 4 &&
+    typeof r.value === 'number' &&
+    !isNaN(r.value)
+  ));
+  if (validRows.length === 0) return emptyMetrics();
 
   // Find all YYYY-MM months in the entire rows dataset (including ranges) to populate byMonthAcc
   const allMonths = new Set<string>();
-  for (const r of rows) {
-    const start = r.periodStart || r.date;
-    const end = r.periodEnd || r.date;
+  for (const r of validRows) {
+    const start = (r.periodStart && typeof r.periodStart === 'string' && r.periodStart.length >= 7) ? r.periodStart : r.date;
+    const end = (r.periodEnd && typeof r.periodEnd === 'string' && r.periodEnd.length >= 7) ? r.periodEnd : r.date;
     const startYM = start.slice(0, 7);
     const endYM = end.slice(0, 7);
     
@@ -55,8 +66,8 @@ export function computeMetrics(
   }
 
   // ── Prorated monthly calculations for deposits and expenses ─────────────────
-  const depositRows = rows.filter((r) => r.entryType === 'deposit' && r.value > 0);
-  const expenseRows = rows.filter((r) => r.entryType === 'expense');
+  const depositRows = validRows.filter((r) => r.entryType === 'deposit' && r.value > 0);
+  const expenseRows = validRows.filter((r) => r.entryType === 'expense');
 
   const depositByMonth: Record<string, number> = {};
   for (const row of depositRows) {
@@ -75,7 +86,7 @@ export function computeMetrics(
   }
 
   // FIREWALL: partner_in and partner_out are isolated from operational revenue.
-  const revenueRows = rows.filter(
+  const revenueRows = validRows.filter(
     (r) => r.entryType !== 'deposit' && r.entryType !== 'waiver' && r.entryType !== 'expense' && r.entryType !== 'partner_out' && r.entryType !== 'partner_in',
   );
 
@@ -86,8 +97,8 @@ export function computeMetrics(
 
   for (const row of expenseRows) {
     totalExpenses += row.value;
-    const expStart = row.periodStart || row.date;
-    const expEnd   = row.periodEnd   || row.date;
+    const expStart = (row.periodStart && typeof row.periodStart === 'string' && row.periodStart.length >= 7) ? row.periodStart : row.date;
+    const expEnd   = (row.periodEnd && typeof row.periodEnd === 'string' && row.periodEnd.length >= 7) ? row.periodEnd : row.date;
     if (row.value > 0) {
       if (!expEarliest || expStart < expEarliest) expEarliest = expStart;
       if (!expLatest   || expEnd   > expLatest)   expLatest   = expEnd;
@@ -95,8 +106,8 @@ export function computeMetrics(
   }
 
   // ── Partnership ledger ────────────────────────────────────────────────────
-  const partnerInRows = rows.filter((r) => r.entryType === 'partner_in');
-  const partnerOutRows = rows.filter((r) => r.entryType === 'partner_out');
+  const partnerInRows = validRows.filter((r) => r.entryType === 'partner_in');
+  const partnerOutRows = validRows.filter((r) => r.entryType === 'partner_out');
   const totalPartnerIn = round2(partnerInRows.reduce((s, r) => s + r.value, 0));
   const totalPartnerOut = round2(partnerOutRows.reduce((s, r) => s + r.value, 0));
 
@@ -178,7 +189,7 @@ export function computeMetrics(
   };
 
   // ── Advanced Statistics ───────────────────────────────────────────────────
-  const positiveRevenueValues = rows
+  const positiveRevenueValues = validRows
     .filter((r) => r.entryType !== 'deposit' && r.entryType !== 'waiver' && r.entryType !== 'expense' && r.entryType !== 'partner_out' && r.entryType !== 'partner_in' && r.value > 0)
     .map((r) => r.value);
 
@@ -374,7 +385,7 @@ export function computeMetrics(
   let totalWaiverCredits = 0;
   let totalWaivedDays = 0;
   let waiverTotalWeeks = 0;
-  const waiverRows = rows.filter((r) => r.entryType === 'waiver' && r.value > 0);
+  const waiverRows = validRows.filter((r) => r.entryType === 'waiver' && r.value > 0);
 
   for (const row of waiverRows) {
     totalWaiverCredits += row.value;
@@ -561,9 +572,12 @@ export function emptyMetrics(): TableMetrics {
  * Returns a complete TableGoals object ready to persist.
  */
 export function computeBaselineGoals(rows: Omit<TableRow, 'id'>[]): TableGoals {
+  if (!Array.isArray(rows) || rows.length === 0) {
+    return { dailyGoals: {}, weeklyGoals: {}, annualCosts: {} };
+  }
   // Filter for revenue-only rows (entryType undefined or 'revenue') with positive value
   const revenueRows = rows.filter(
-    (r) => (!r.entryType || r.entryType === 'revenue') && r.value > 0,
+    (r) => r && typeof r === 'object' && (!r.entryType || r.entryType === 'revenue') && typeof r.value === 'number' && r.value > 0 && typeof r.date === 'string' && r.date.length >= 4,
   );
 
   if (revenueRows.length === 0) {
@@ -646,14 +660,18 @@ function getConsecutiveMonths(startYM: string, endYM: string): string[] {
  * Single-day rows: Returns a single entry with full row.value at row.date.
  */
 export function rowContributions(row: TableRow): Array<{ date: string; value: number }> {
+  if (!row) return [];
+  const val = typeof row.value === 'number' && !isNaN(row.value) ? row.value : 0;
+  const d = typeof row.date === 'string' ? row.date : new Date().toISOString().slice(0, 10);
+
   if (row.periodStart && row.periodEnd && row.periodStart !== row.periodEnd) {
     const msPerDay = 86_400_000;
     const startMs  = new Date(row.periodStart + 'T12:00:00').getTime();
     const endMs    = new Date(row.periodEnd   + 'T12:00:00').getTime();
-    if (endMs < startMs) return [{ date: row.date, value: row.value }];
+    if (isNaN(startMs) || isNaN(endMs) || endMs < startMs) return [{ date: d, value: val }];
 
     const periodDays = Math.max(1, Math.round((endMs - startMs) / msPerDay) + 1);
-    const dailyValue = row.value / periodDays;
+    const dailyValue = val / periodDays;
     const contributions: Array<{ date: string; value: number }> = [];
 
     for (let ms = startMs; ms <= endMs; ms += msPerDay) {
@@ -661,5 +679,5 @@ export function rowContributions(row: TableRow): Array<{ date: string; value: nu
     }
     return contributions;
   }
-  return [{ date: row.date, value: row.value }];
+  return [{ date: d, value: val }];
 }

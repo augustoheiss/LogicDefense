@@ -36,5 +36,6 @@ export { SMBSectorWidget, RealEstateSectorWidget, VehiclesSectorWidget, LegalTax
 export { SyncAuditPanel } from './SyncAuditPanel';
 export { APIManagementTester } from './APIManagementTester';
 export { UniversalHeaderSheetBar } from './UniversalHeaderSheetBar';
+export { ErrorBoundary } from './ErrorBoundary';
 
 

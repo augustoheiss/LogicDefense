@@ -17,20 +17,26 @@ interface MonthPickerProps {
   onSelect: (month: string) => void;
 }
 
-function formatMonthLabel(ym: string): string {
-  const [y, m] = ym.split('-');
+function formatMonthLabel(ym?: string | null): string {
+  if (!ym || ym === 'all' || typeof ym !== 'string') return 'Todos';
+  const parts = ym.split('-');
+  if (parts.length < 2) return ym;
+  const [y, m] = parts;
   const shortMonths = [
     'Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun',
     'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez',
   ];
   const monthIdx = parseInt(m, 10) - 1;
-  return `${shortMonths[monthIdx]} ${y.slice(2)}`;
+  if (monthIdx < 0 || monthIdx >= 12 || isNaN(monthIdx)) return ym;
+  const yearSuffix = y && y.length >= 2 ? y.slice(2) : y || '';
+  return `${shortMonths[monthIdx]} ${yearSuffix}`.trim();
 }
 
-export function MonthPicker({ months, selected, onSelect }: MonthPickerProps) {
+export function MonthPicker({ months = [], selected, onSelect }: MonthPickerProps) {
   const [isCollapsed, setIsCollapsed] = useState(true);
 
-  const activeLabel = selected === 'all' ? 'Todos' : formatMonthLabel(selected);
+  const activeLabel = !selected || selected === 'all' ? 'Todos' : formatMonthLabel(selected);
+  const safeMonths = Array.isArray(months) ? months.filter((m): m is string => typeof m === 'string' && m.includes('-')) : [];
 
   if (isCollapsed) {
     return (
@@ -60,13 +66,13 @@ export function MonthPicker({ months, selected, onSelect }: MonthPickerProps) {
       >
         <Pill
           label="Todos"
-          isActive={selected === 'all'}
+          isActive={!selected || selected === 'all'}
           onPress={() => {
             onSelect('all');
             setIsCollapsed(true);
           }}
         />
-        {months.map((m) => (
+        {safeMonths.map((m) => (
           <Pill
             key={m}
             label={formatMonthLabel(m)}
