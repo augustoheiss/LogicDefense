@@ -462,18 +462,30 @@
     padding: 0 !important;
   }
 
-  .cv-structural-box {
+  .cv-structural-box,
+  .cv-structural-box--active {
     border: none !important;
     box-shadow: none !important;
-    background: transparent;
+    background: transparent !important;
+    padding: 0 !important;
+    margin-bottom: 0.25rem !important;
   }
 
   .cv-structural-box__toolbar,
   .cv-structural-handle,
   .cv-structural-box__overflow-badge,
   .cv-structural-box__collision-badge,
-  .cv-column-splitter {
+  .cv-column-splitter,
+  .cv-page-overflow-banner {
     display: none !important;
+  }
+
+  .cv-skill-bar-fill,
+  .cv-skill-bar-track,
+  .cv-skill-chip-item,
+  .cv-skill-level-pill {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
 }
 
@@ -488,10 +500,10 @@
 }
 
 .cv-structural-box--active {
-  border: 1.5px dashed rgba(59, 130, 246, 0.4);
-  border-radius: 6px;
-  padding: 0.45rem;
-  margin-bottom: 0.65rem;
+  border: 1.5px dashed rgba(59, 130, 246, 0.35);
+  border-radius: 4px;
+  padding: 0.25rem 0.35rem;
+  margin-bottom: 0.35rem;
 }
 
 .cv-structural-box--active:hover {
@@ -911,6 +923,28 @@
     border-color: rgba(239, 68, 68, 0.85);
     box-shadow: 0 4px 20px rgba(239, 68, 68, 0.3);
   }
+}
+
+.cv-page-overflow-close {
+  background: transparent;
+  border: none;
+  color: #fca5a5;
+  opacity: 0.7;
+  font-size: 1.1rem;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  margin-left: auto;
+  flex-shrink: 0;
+  line-height: 1;
+  transition: opacity 0.15s, background 0.15s, color 0.15s;
+}
+
+.cv-page-overflow-close:hover {
+  opacity: 1;
+  color: #ffffff;
+  background: rgba(239, 68, 68, 0.25);
 }
 
 /* ── Ativação do Motor Flex Column para Reordenação CSS order ── */
@@ -1411,29 +1445,150 @@
   border-radius: 3px;
 }
 
-/* ── Variante Competências Chips & Badges ── */
-.cv-skills-chips {
+/* ── Variante Competências: 1. Barras de Nível de Progresso ── */
+.cv-atomic-item--skill-bar {
+  padding: 0.35rem 0;
+}
+
+.cv-skill-bar-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.5rem;
+  margin-bottom: 0.35rem;
+}
+
+.cv-skill-name {
+  font-size: 0.86rem;
+  font-weight: 700;
+  color: var(--cv-color-primary, #0f172a);
+}
+
+.cv-skill-level-pill {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--cv-color-primary, #2563eb);
+  background: rgba(37, 99, 235, 0.08);
+  border: 1px solid rgba(37, 99, 235, 0.18);
+  padding: 0.12rem 0.5rem;
+  border-radius: 9999px;
+  white-space: nowrap;
+}
+
+.cv-skill-bar-track {
+  width: 100%;
+  height: 7px;
+  background: rgba(148, 163, 184, 0.22);
+  border-radius: 9999px;
+  overflow: hidden;
+  margin-bottom: 0.45rem;
+}
+
+.cv-skill-bar-fill {
+  height: 100%;
+  border-radius: 9999px;
+  background: linear-gradient(90deg, var(--cv-color-primary, #2563eb), var(--cv-color-accent, #38bdf8));
+  transition: width 0.4s ease;
+}
+
+.cv-skill-keywords-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin-top: 0.25rem;
+}
+
+.cv-skill-keyword-tag {
+  font-size: 0.72rem;
+  color: #475569;
+  background: rgba(241, 245, 249, 0.85);
+  border: 1px solid #e2e8f0;
+  padding: 0.12rem 0.45rem;
+  border-radius: 4px;
+  font-weight: 500;
+}
+
+/* ── Variante Competências: 2. Texto Simples / Minimalista ── */
+.cv-skill-minimal {
+  padding: 0.3rem 0;
+}
+
+.cv-skill-minimal-header {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  margin-bottom: 0.2rem;
+}
+
+.cv-skill-minimal-title {
+  font-size: 0.86rem;
+  font-weight: 700;
+  color: var(--cv-color-primary, #0f172a);
+}
+
+.cv-skill-minimal-level {
+  font-size: 0.76rem;
+  font-weight: 500;
+  color: #64748b;
+}
+
+.cv-skill-minimal-keywords {
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: #334155;
+}
+
+/* ── Variante Competências: 3. Pílulas / Badges (Showcase Cloud) ── */
+.cv-skill-badges-box {
+  padding: 0.5rem 0.65rem;
+  background: rgba(248, 250, 252, 0.75);
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  border-radius: 6px;
+}
+
+.cv-skill-badge-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.45rem;
+}
+
+.cv-skill-group-title {
+  font-size: 0.86rem;
+  font-weight: 700;
+  margin: 0;
+  color: var(--cv-color-primary, #0f172a);
+}
+
+.cv-skill-level-badge {
+  font-size: 0.7rem;
+  font-weight: 600;
+  background: #e2e8f0;
+  color: #334155;
+  border-radius: 4px;
+  padding: 0.12rem 0.45rem;
+  white-space: nowrap;
+}
+
+.cv-skill-chips-cloud {
   display: flex;
   flex-wrap: wrap;
   gap: 0.35rem;
 }
 
-.cv-skill-chip {
+.cv-skill-chip-item {
   background: rgba(37, 99, 235, 0.08);
-  border: 1px solid rgba(37, 99, 235, 0.2);
-  color: var(--cv-color-primary, #2563eb);
-  font-size: 0.72rem;
-  padding: 0.15rem 0.45rem;
-  border-radius: 12px;
+  border: 1px solid rgba(37, 99, 235, 0.22);
+  color: var(--cv-color-primary, #1d4ed8);
+  font-size: 0.73rem;
   font-weight: 500;
+  padding: 0.18rem 0.55rem;
+  border-radius: 9999px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+  transition: background 0.15s ease, border-color 0.15s ease;
 }
 
-.cv-skill-badge {
-  background: #f1f5f9;
-  border: 1px solid #e2e8f0;
-  color: #1e293b;
-  font-size: 0.72rem;
-  padding: 0.15rem 0.45rem;
-  border-radius: 4px;
-  font-weight: 500;
+.cv-skill-chip-item:hover {
+  background: rgba(37, 99, 235, 0.14);
+  border-color: rgba(37, 99, 235, 0.35);
 }

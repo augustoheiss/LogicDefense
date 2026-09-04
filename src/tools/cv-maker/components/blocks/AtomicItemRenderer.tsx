@@ -1,5 +1,6 @@
 import React from 'react'
 import type { CVWork, CVEducation, CVProject, CVLanguage, CVSkill } from '../../types/cv'
+import { getSkillPercentage } from '../../types/cv'
 
 interface AtomicItemRendererProps {
   category: 'work' | 'education' | 'projects' | 'languages' | 'skills'
@@ -275,45 +276,61 @@ export const AtomicItemRenderer: React.FC<AtomicItemRendererProps> = ({
   // ── Renderização de Grupo de Habilidades Individual (skills) ──
   if (category === 'skills') {
     const s = item as CVSkill
+    const percent = getSkillPercentage(s.level, s.levelPercent)
 
+    // Variante 1: Barras de Nível de Habilidade
     if (variant === 'bars') {
       return (
         <div className="cv-atomic-item cv-atomic-item--skill-bar">
-          <div className="cv-skill-header">
-            <strong>{s.name}</strong>
-            {s.level && <span className="cv-skill-level">{s.level}</span>}
+          <div className="cv-skill-bar-header">
+            <span className="cv-skill-name">{s.name}</span>
+            <span className="cv-skill-level-pill">{s.level ? `${s.level} • ` : ''}{percent}%</span>
           </div>
           <div className="cv-skill-bar-track">
             <div
               className="cv-skill-bar-fill"
-              style={{
-                width: s.level?.toLowerCase().includes('sênior') || s.level?.toLowerCase().includes('avanç')
-                  ? '90%'
-                  : s.level?.toLowerCase().includes('pleno')
-                    ? '70%'
-                    : '50%'
-              }}
+              style={{ width: `${percent}%` }}
             />
           </div>
           {s.keywords && s.keywords.length > 0 && (
-            <div className="cv-skill-keywords-text">
-              {s.keywords.join(' • ')}
+            <div className="cv-skill-keywords-row">
+              {s.keywords.map((k, i) => (
+                <span key={i} className="cv-skill-keyword-tag">{k}</span>
+              ))}
             </div>
           )}
         </div>
       )
     }
 
+    // Variante 2: Texto Simples / Minimalista
+    if (variant === 'minimal') {
+      return (
+        <div className="cv-atomic-item cv-atomic-item--minimal cv-skill-minimal">
+          <div className="cv-skill-minimal-header">
+            <strong className="cv-skill-minimal-title">{s.name}</strong>
+            {s.level && <span className="cv-skill-minimal-level">({s.level})</span>}
+          </div>
+          {s.keywords && s.keywords.length > 0 && (
+            <div className="cv-skill-minimal-keywords">
+              {s.keywords.join('  •  ')}
+            </div>
+          )}
+        </div>
+      )
+    }
+
+    // Variante 3: Pílulas / Badges (Default / Showcase Box)
     return (
-      <div className="cv-atomic-item cv-atomic-item--box">
-        <div className="cv-skill-header">
+      <div className="cv-atomic-item cv-atomic-item--box cv-skill-badges-box">
+        <div className="cv-skill-badge-header">
           <h5 className="cv-skill-group-title">{s.name}</h5>
           {s.level && <span className="cv-skill-level-badge">{s.level}</span>}
         </div>
         {s.keywords && s.keywords.length > 0 && (
-          <div className="cv-skill-tags-cloud">
+          <div className="cv-skill-chips-cloud">
             {s.keywords.map((k, i) => (
-              <span key={i} className="cv-skill-tag">{k}</span>
+              <span key={i} className="cv-skill-chip-item">{k}</span>
             ))}
           </div>
         )}

@@ -45,22 +45,31 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
   const isFreeCanvas = Boolean(structureConfig?.isFreeCanvasActive)
   const pageRef = React.useRef<HTMLDivElement>(null)
   const [hasPageOverflow, setHasPageOverflow] = React.useState<boolean>(false)
+  const [isOverflowBannerDismissed, setIsOverflowBannerDismissed] = React.useState<boolean>(false)
 
   // Monitora se o conteúdo acumulado excede a altura útil da folha A4 (1122px)
   React.useEffect(() => {
     if (!isFreeCanvas) {
       setHasPageOverflow(false)
+      setIsOverflowBannerDismissed(false)
       return
     }
 
     const checkPageHeight = () => {
       const cardEl = pageRef.current?.querySelector('.cv-card') as HTMLElement | null
       if (cardEl) {
-        // Altura padrão da folha A4 a 96 DPI é 1122.5px.
-        // Tolerância de 1180px para não disparar falso positivo com as bordas e paddings transitórios de edição do Canvas.
-        setHasPageOverflow(cardEl.scrollHeight > 1180)
+        // Quantidade de caixas atômicas e seções ativas no modo de edição do Canvas
+        const activeBoxes = cardEl.querySelectorAll('.cv-structural-box--active')
+        const boxCount = activeBoxes.length
+
+        // Cada box ativo introduz paddings, bordas pontilhadas e espaçamentos no DOM do editor.
+        // Descontamos esse overhead artificial do editor para não acusar overflow em currículos que cabem na A4:
+        const editorOverhead = Math.round(boxCount * 22)
+        const dynamicThreshold = 1180 + editorOverhead
+
+        setHasPageOverflow(cardEl.scrollHeight > dynamicThreshold)
       } else if (pageRef.current) {
-        setHasPageOverflow(pageRef.current.scrollHeight > 1220)
+        setHasPageOverflow(pageRef.current.scrollHeight > 1250)
       }
     }
 
@@ -1289,13 +1298,21 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
 
   return (
     <div className={`cv-root theme-${theme} ${blueprint.customClass || ''}`} style={customRootStyles}>
-      {hasPageOverflow && isFreeCanvas && (
+      {hasPageOverflow && isFreeCanvas && !isOverflowBannerDismissed && (
         <div className="cv-page-overflow-banner cv-no-print">
           <span className="cv-page-overflow-icon">⚠️</span>
           <div className="cv-page-overflow-text">
             <strong>Atenção à Altura A4:</strong> O conteúdo reorganizado ultrapassou a altura física de 1 folha A4.
             Encurte caixas ou reduza margens para evitar que o conteúdo vaze para uma página extra na impressão/PDF.
           </div>
+          <button
+            type="button"
+            className="cv-page-overflow-close"
+            onClick={() => setIsOverflowBannerDismissed(true)}
+            title="Dispensar aviso de altura A4"
+          >
+            ✕
+          </button>
         </div>
       )}
       <div ref={pageRef} className="cv-render-wrapper">
