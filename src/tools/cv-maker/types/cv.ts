@@ -432,7 +432,9 @@ export interface SectionBoxDimensions {
   widthPercent?: number       // Largura contínua de 10% a 100%
   minHeightPx?: number        // Altura mínima em pixels
   maxHeightPx?: number        // Altura máxima em pixels
-  order?: number              // Ordem visual no container
+  order?: number              // Ordem visual no container (CSS order)
+  marginTopPx?: number        // Margem superior ajustável em pixels (-20px a +80px)
+  marginLeftPercent?: number  // Recuo/margem lateral em percentual
 }
 
 /**
@@ -442,5 +444,7 @@ export interface LayoutStructureConfig {
   isFreeCanvasActive: boolean
   columnSplitRatio?: number   // Proporção percentual da coluna esquerda/sidebar (ex: 28 = 28% / 72%)
   sectionDimensions: Record<string, SectionBoxDimensions>
+  sectionOrder?: string[]     // Ordem sequencial explícita das seções no layout ativo
 }
+
 

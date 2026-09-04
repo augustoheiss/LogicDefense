@@ -9,6 +9,7 @@ interface StructuralBoxWrapperProps {
   onUpdateDimensions?: (dims: SectionBoxDimensions) => void
   onMoveUp?: () => void
   onMoveDown?: () => void
+  onSwapWithSection?: (targetSectionId: string) => void
   onResetDimensions?: () => void
   children: React.ReactNode
 }
@@ -21,6 +22,7 @@ export const StructuralBoxWrapper: React.FC<StructuralBoxWrapperProps> = ({
   onUpdateDimensions,
   onMoveUp,
   onMoveDown,
+  onSwapWithSection,
   onResetDimensions,
   children
 }) => {
@@ -28,6 +30,7 @@ export const StructuralBoxWrapper: React.FC<StructuralBoxWrapperProps> = ({
   const contentRef = useRef<HTMLDivElement>(null)
   const [isOverflowing, setIsOverflowing] = useState<boolean>(false)
   const [isResizing, setIsResizing] = useState<boolean>(false)
+  const [isMoving, setIsMoving] = useState<boolean>(false)
   const [resizeType, setResizeType] = useState<'width' | 'height' | 'both' | null>(null)
 
   // Medição contínua de overflow para evitar estouro da folha A4
@@ -126,6 +129,80 @@ export const StructuralBoxWrapper: React.FC<StructuralBoxWrapperProps> = ({
     window.addEventListener('pointerup', onPointerUp)
   }, [dimensions, onUpdateDimensions])
 
+  // Manipulação de Arraste / Movimentação pelo Label
+  const handleMovePointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.button !== 0) return
+    e.preventDefault()
+    e.stopPropagation()
+
+    const targetEl = e.currentTarget
+    targetEl.setPointerCapture(e.pointerId)
+    setIsMoving(true)
+
+    const startY = e.clientY
+    const parentContainer = containerRef.current?.parentElement
+
+    const onPointerMove = (moveEvt: PointerEvent) => {
+      moveEvt.preventDefault()
+      const deltaY = moveEvt.clientY - startY
+      if (containerRef.current) {
+        containerRef.current.style.transform = `translateY(${deltaY}px)`
+        containerRef.current.style.zIndex = '120'
+        containerRef.current.style.boxShadow = '0 12px 28px rgba(0, 0, 0, 0.35)'
+      }
+
+      // Detecta sobre qual seção irmã o cursor está pairando para trocar de posição
+      if (parentContainer) {
+        const siblings = Array.from(parentContainer.querySelectorAll('.cv-structural-box')) as HTMLElement[]
+        for (const sib of siblings) {
+          if (sib === containerRef.current) continue
+          const rect = sib.getBoundingClientRect()
+          if (moveEvt.clientY >= rect.top && moveEvt.clientY <= rect.bottom) {
+            const targetId = sib.getAttribute('data-section-id')
+            if (targetId && onSwapWithSection) {
+              const midY = rect.top + rect.height / 2
+              if ((deltaY > 0 && moveEvt.clientY > midY) || (deltaY < 0 && moveEvt.clientY < midY)) {
+                onSwapWithSection(targetId)
+                break
+              }
+            }
+          }
+        }
+      }
+    }
+
+    const onPointerUp = (upEvt: PointerEvent) => {
+      upEvt.preventDefault()
+      try {
+        targetEl.releasePointerCapture(upEvt.pointerId)
+      } catch {
+        // Ignora caso já liberado
+      }
+      window.removeEventListener('pointermove', onPointerMove)
+      window.removeEventListener('pointerup', onPointerUp)
+
+      if (containerRef.current) {
+        containerRef.current.style.transform = ''
+        containerRef.current.style.zIndex = ''
+        containerRef.current.style.boxShadow = ''
+      }
+      setIsMoving(false)
+    }
+
+    window.addEventListener('pointermove', onPointerMove)
+    window.addEventListener('pointerup', onPointerUp)
+  }, [onSwapWithSection])
+
+  // Ajuste rápido de margem superior (incrementar / decrementar)
+  const handleAdjustMargin = (delta: number) => {
+    const current = dimensions?.marginTopPx || 0
+    const next = Math.max(-15, Math.min(60, current + delta))
+    onUpdateDimensions?.({
+      ...dimensions,
+      marginTopPx: next
+    })
+  }
+
   // Se o modo Canvas Livre estiver inativo, renderiza puramente o conteúdo sem custo DOM
   if (!isFreeCanvasActive) {
     return <>{children}</>
@@ -141,23 +218,60 @@ export const StructuralBoxWrapper: React.FC<StructuralBoxWrapperProps> = ({
       ? `${dimensions.minHeightPx}px`
       : undefined
 
+  const marginStyle = typeof dimensions?.marginTopPx === 'number' && dimensions.marginTopPx !== 0
+    ? `${dimensions.marginTopPx}px`
+    : undefined
+
   return (
     <div
       ref={containerRef}
-      className={`cv-structural-box cv-structural-box--active ${isResizing ? `is-resizing is-resizing-${resizeType}` : ''} ${isOverflowing ? 'is-overflowing' : ''}`}
+      className={`cv-structural-box cv-structural-box--active ${isResizing ? `is-resizing is-resizing-${resizeType}` : ''} ${isMoving ? 'is-moving' : ''} ${isOverflowing ? 'is-overflowing' : ''}`}
       style={{
         width: widthStyle,
         minHeight: heightStyle,
         maxHeight: dimensions?.maxHeightPx ? heightStyle : undefined,
-        overflow: dimensions?.maxHeightPx ? 'hidden' : 'visible'
+        overflow: dimensions?.maxHeightPx ? 'hidden' : 'visible',
+        marginTop: marginStyle,
+        order: dimensions?.order
       }}
       data-section-id={sectionId}
     >
       {/* Barra de Ações Flutuante (Oculta na Impressão) */}
       <div className="cv-structural-box__toolbar cv-no-print" onClick={e => e.stopPropagation()}>
-        <span className="cv-structural-box__tag">{title}</span>
+        {/* Tag com alça de arraste integrada */}
+        <div
+          className={`cv-structural-box__tag ${isMoving ? 'is-dragging' : ''}`}
+          onPointerDown={handleMovePointerDown}
+          title="Segure e arraste pelo label para mover este bloco e trocar de posição"
+        >
+          <span className="cv-drag-grip">⠿</span>
+          <span>{title}</span>
+        </div>
 
         <div className="cv-structural-box__actions">
+          {/* Indicador de Margem Superior com botões de ajuste fino */}
+          <div className="cv-structural-margin-ctrl" title="Ajustar margem superior deste bloco">
+            <button
+              type="button"
+              className="cv-margin-btn"
+              onClick={() => handleAdjustMargin(-4)}
+              title="Reduzir margem (-4px)"
+            >
+              -
+            </button>
+            <span className="cv-margin-indicator">
+              ↕ {dimensions?.marginTopPx ?? 0}px
+            </span>
+            <button
+              type="button"
+              className="cv-margin-btn"
+              onClick={() => handleAdjustMargin(+4)}
+              title="Aumentar margem (+4px)"
+            >
+              +
+            </button>
+          </div>
+
           {dimensions?.widthPercent && dimensions.widthPercent < 100 && (
             <span className="cv-structural-box__dimension-indicator">
               {dimensions.widthPercent}%
@@ -174,7 +288,7 @@ export const StructuralBoxWrapper: React.FC<StructuralBoxWrapperProps> = ({
               type="button"
               className="cv-structural-act-btn"
               onClick={onMoveUp}
-              title="Mover para cima"
+              title="Mover seção para cima"
             >
               ▲
             </button>
@@ -184,17 +298,17 @@ export const StructuralBoxWrapper: React.FC<StructuralBoxWrapperProps> = ({
               type="button"
               className="cv-structural-act-btn"
               onClick={onMoveDown}
-              title="Mover para baixo"
+              title="Mover seção para baixo"
             >
               ▼
             </button>
           )}
-          {onResetDimensions && (dimensions?.widthPercent || dimensions?.minHeightPx) && (
+          {onResetDimensions && (dimensions?.widthPercent || dimensions?.minHeightPx || dimensions?.marginTopPx) && (
             <button
               type="button"
               className="cv-structural-act-btn cv-structural-act-btn--reset"
               onClick={onResetDimensions}
-              title="Redefinir tamanho padrão deste bloco"
+              title="Redefinir tamanho e margem deste bloco"
             >
               ↺
             </button>
@@ -211,7 +325,7 @@ export const StructuralBoxWrapper: React.FC<StructuralBoxWrapperProps> = ({
       {isOverflowing && (
         <div className="cv-structural-box__overflow-badge cv-no-print">
           <span>⚠️</span>
-          <span>Texto excede o tamanho fixado. Aumente a altura ou o excedente será omitido na impressão A4.</span>
+          <span>Texto excede o tamanho fixado. Aumente a altura ou o excedente será cortado na impressão A4.</span>
         </div>
       )}
 

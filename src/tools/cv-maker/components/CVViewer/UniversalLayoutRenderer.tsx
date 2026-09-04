@@ -41,6 +41,60 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
 }) => {
   const { basics } = data
   const isFreeCanvas = Boolean(structureConfig?.isFreeCanvasActive)
+  const pageRef = React.useRef<HTMLDivElement>(null)
+  const [hasPageOverflow, setHasPageOverflow] = React.useState<boolean>(false)
+
+  // Monitora se o conteúdo acumulado excede a altura útil da folha A4 (1122px)
+  React.useEffect(() => {
+    if (!isFreeCanvas) {
+      setHasPageOverflow(false)
+      return
+    }
+
+    const checkPageHeight = () => {
+      if (pageRef.current) {
+        // Altura padrão da folha A4 a 96 DPI é 1122.5px
+        setHasPageOverflow(pageRef.current.scrollHeight > 1130)
+      }
+    }
+
+    checkPageHeight()
+    const observer = new ResizeObserver(() => checkPageHeight())
+    if (pageRef.current) observer.observe(pageRef.current)
+    return () => observer.disconnect()
+  }, [isFreeCanvas, structureConfig])
+
+  const handleSwapOrder = (sourceId: string, targetId: string) => {
+    if (!structureConfig || !onUpdateStructureConfig || sourceId === targetId) return
+    const currentDims = structureConfig.sectionDimensions || {}
+    const sourceOrder = currentDims[sourceId]?.order ?? 0
+    const targetOrder = currentDims[targetId]?.order ?? (sourceOrder + 1)
+
+    const newSourceOrder = targetOrder
+    const newTargetOrder = sourceOrder === targetOrder ? sourceOrder + 1 : sourceOrder
+
+    onUpdateStructureConfig({
+      ...structureConfig,
+      sectionDimensions: {
+        ...currentDims,
+        [sourceId]: { ...(currentDims[sourceId] || {}), order: newSourceOrder },
+        [targetId]: { ...(currentDims[targetId] || {}), order: newTargetOrder }
+      }
+    })
+  }
+
+  const handleMoveStep = (secId: string, direction: -1 | 1) => {
+    if (!structureConfig || !onUpdateStructureConfig) return
+    const currentDims = structureConfig.sectionDimensions || {}
+    const currentOrder = currentDims[secId]?.order ?? 0
+    onUpdateStructureConfig({
+      ...structureConfig,
+      sectionDimensions: {
+        ...currentDims,
+        [secId]: { ...(currentDims[secId] || {}), order: currentOrder + direction }
+      }
+    })
+  }
 
   const wrapSection = (sectionId: string, title: string, node: React.ReactNode) => {
     if (!node) return null
@@ -62,6 +116,9 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
             }
           })
         }}
+        onMoveUp={() => handleMoveStep(sectionId, -1)}
+        onMoveDown={() => handleMoveStep(sectionId, +1)}
+        onSwapWithSection={(targetId) => handleSwapOrder(sectionId, targetId)}
         onResetDimensions={() => {
           if (!structureConfig || !onUpdateStructureConfig) return
           const next = { ...structureConfig.sectionDimensions }
@@ -758,17 +815,28 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
 
   return (
     <div className={`cv-root theme-${theme} ${blueprint.customClass || ''}`} style={customRootStyles}>
-      {viewMode === 'cv' && renderCVPage()}
-      {viewMode === 'cover_letter' && renderCoverLetterPage()}
-      {viewMode === 'both' && (
-        <div className="cv-dossier-wrapper">
-          {renderCVPage()}
-          <div className="cv-page-break-indicator">
-            <span>✂ ─── Quebra de Página A4 (Dossiê de 2 Páginas) ───</span>
+      {hasPageOverflow && isFreeCanvas && (
+        <div className="cv-page-overflow-banner cv-no-print">
+          <span className="cv-page-overflow-icon">⚠️</span>
+          <div className="cv-page-overflow-text">
+            <strong>Atenção à Altura A4:</strong> O conteúdo reorganizado ultrapassou a altura física de 1 folha A4.
+            Encurte caixas ou reduza margens para evitar que o conteúdo vaze para uma página extra na impressão/PDF.
           </div>
-          {renderCoverLetterPage()}
         </div>
       )}
+      <div ref={pageRef} className="cv-render-wrapper">
+        {viewMode === 'cv' && renderCVPage()}
+        {viewMode === 'cover_letter' && renderCoverLetterPage()}
+        {viewMode === 'both' && (
+          <div className="cv-dossier-wrapper">
+            {renderCVPage()}
+            <div className="cv-page-break-indicator">
+              <span>✂ ─── Quebra de Página A4 (Dossiê de 2 Páginas) ───</span>
+            </div>
+            {renderCoverLetterPage()}
+          </div>
+        )}
+      </div>
     </div>
   )
 }
