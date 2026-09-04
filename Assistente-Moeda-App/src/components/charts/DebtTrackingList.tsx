@@ -252,12 +252,12 @@ function WeekCard({ entry, selected, onToggleSelect }: WeekCardProps) {
           style={styles.cardRight}
           onPress={() => setExpanded(!expanded)}
         >
-          <View style={[styles.statusBadge, { backgroundColor: status.bg }]}>
-            <Text style={[styles.statusText, { color: status.color }]}>
-              {status.icon} {status.label}
+          <View style={[styles.statusBadge, { backgroundColor: status?.bg || colors.warning.light }]}>
+            <Text style={[styles.statusText, { color: status?.color || colors.warning.main }]}>
+              {status?.icon || '🟡'} {status?.label || 'STATUS'}
             </Text>
           </View>
-          <Text style={[styles.cumBalance, { color: status.color }]}>
+          <Text style={[styles.cumBalance, { color: status?.color || colors.warning.main }]}>
             {formatCurrencySmart(entry.cumulativeBalance)}
           </Text>
         </Pressable>

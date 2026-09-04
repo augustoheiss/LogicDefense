@@ -27,6 +27,14 @@ const entryTypeLabels: Record<string, string> = {
   expense: 'Despesa',
   partner_in: 'Sócio ↓',
   partner_out: 'Sócio ↑',
+  receita: 'Receita',
+  despesa: 'Despesa',
+  custo: 'Despesa',
+  custos: 'Despesa',
+  gasto: 'Despesa',
+  gastos: 'Despesa',
+  deposito: 'Depósito',
+  abono: 'Abono',
 };
 
 const entryTypeColors: Record<string, string> = {
@@ -36,7 +44,27 @@ const entryTypeColors: Record<string, string> = {
   expense: colors.entryType.expense,
   partner_in: colors.entryType.partner_in,
   partner_out: colors.entryType.partner_out,
+  receita: colors.entryType.revenue,
+  despesa: colors.entryType.expense,
+  custo: colors.entryType.expense,
+  custos: colors.entryType.expense,
+  gasto: colors.entryType.expense,
+  gastos: colors.entryType.expense,
+  deposito: colors.entryType.deposit,
+  abono: colors.entryType.waiver,
 };
+
+function normalizeEntryType(type?: string): 'revenue' | 'expense' | 'deposit' | 'waiver' | 'partner_in' | 'partner_out' {
+  if (!type) return 'revenue';
+  const t = String(type).toLowerCase().trim();
+  if (t === 'receita' || t === 'renda' || t === 'revenue') return 'revenue';
+  if (t === 'despesa' || t === 'gasto' || t === 'gastos' || t === 'custo' || t === 'custos' || t === 'expense') return 'expense';
+  if (t === 'deposito' || t === 'deposit') return 'deposit';
+  if (t === 'abono' || t === 'waiver') return 'waiver';
+  if (t === 'partner_in' || t === 'socio_in' || t === 'socio ↓') return 'partner_in';
+  if (t === 'partner_out' || t === 'socio_out' || t === 'socio ↑') return 'partner_out';
+  return 'revenue';
+}
 
 function formatDateBR(dateStr?: string | null): string {
   if (!dateStr || typeof dateStr !== 'string') return '--/--';
@@ -58,8 +86,10 @@ export function RowCard({ row, runningBalance, onPress, onDelete }: RowCardProps
 
   if (!row) return null;
 
-  const entryType = row.entryType || 'revenue';
-  const valueColor = entryTypeColors[entryType] ?? colors.text.primary;
+  const normalizedType = normalizeEntryType(row.entryType);
+  const rawType = row.entryType || normalizedType;
+  const entryType = normalizedType;
+  const valueColor = (row.entryType && entryTypeColors[row.entryType]) || entryTypeColors[normalizedType] || colors.text.primary;
   const isGenerated = !!row.generatedBy;
 
   // Strict Sector & Core Module Guards
@@ -141,8 +171,8 @@ export function RowCard({ row, runningBalance, onPress, onDelete }: RowCardProps
         <View style={styles.bottomRow}>
           {(showRevenue || showCosts || isSectorActive('personal_finance')) && (
             <Badge
-              label={entryTypeLabels[entryType] ?? entryType}
-              variant={entryType as any}
+              label={entryTypeLabels[rawType] ?? entryTypeLabels[entryType] ?? rawType}
+              variant={entryType}
             />
           )}
           {row.category && (showRevenue || showCosts || isSectorActive('personal_finance')) && (

@@ -68,8 +68,8 @@ export function SyncAuditPanel() {
       {/* Header & Status Badge */}
       <View style={styles.header}>
         <Text style={styles.title}>Auditoria & Sincronismo Local em Tempo Real</Text>
-        <View style={[styles.badge, { backgroundColor: badge.bg }]}>
-          <Text style={[styles.badgeText, { color: badge.color }]}>{badge.label}</Text>
+        <View style={[styles.badge, { backgroundColor: badge?.bg || colors.background.tertiary }]}>
+          <Text style={[styles.badgeText, { color: badge?.color || colors.text.secondary }]}>{badge?.label || ''}</Text>
         </View>
       </View>
 
