@@ -304,9 +304,21 @@ export const CVMakerApp: React.FC = () => {
     debouncedSaveDraft(val)
   }
 
-  // Non-destructive Cover Letter injection
+  // Non-destructive Cover Letter injection with safety history snapshot
   const handleCoverLetterGenerated = (newCoverLetter: CoverLetter) => {
     if (!cvData) return
+
+    // 1. Snapshot de Segurança no Histórico: salva o currículo atual ANTES de injetar a carta
+    if (yamlInput && yamlInput.trim().length > 20) {
+      saveCVToHistory({
+        yaml: yamlInput,
+        persona: activePersona,
+        theme: activeTheme,
+        source: 'yaml_editor',
+        customLabel: `${cvData.basics?.label || 'Currículo'} (Snapshot Pré-Carta)`
+      })
+    }
+
     const updatedData: CVData = {
       ...cvData,
       coverLetter: newCoverLetter
@@ -315,6 +327,18 @@ export const CVMakerApp: React.FC = () => {
     const newYaml = cvToYaml(updatedData)
     setYamlInput(newYaml)
     debouncedSaveDraft(newYaml)
+
+    // 2. Salva a nova versão com Carta no Histórico e atualiza lista
+    const updatedHistory = saveCVToHistory({
+      yaml: newYaml,
+      persona: activePersona,
+      theme: activeTheme,
+      source: 'ai_generated',
+      customLabel: `${cvData.basics?.label || 'Currículo'} + Carta de Apresentação`
+    })
+    setHistoryList(updatedHistory)
+
+    // 3. Muda a visualização para a Cover Letter
     setActiveViewMode('cover_letter')
   }
 
