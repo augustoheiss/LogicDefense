@@ -4,13 +4,14 @@ import type { CVBasics } from '../../types/cv'
 interface BlockHeaderProps {
   basics: CVBasics
   variant?: 'standard' | 'brand_block' | 'hero' | 'minimal' | 'linear'
+  hideImage?: boolean
 }
 
-export const BlockHeader: React.FC<BlockHeaderProps> = ({ basics, variant = 'standard' }) => {
+export const BlockHeader: React.FC<BlockHeaderProps> = ({ basics, variant = 'standard', hideImage = false }) => {
   if (variant === 'brand_block') {
     return (
       <header className="cv-brand-header">
-        {basics.image && (
+        {!hideImage && basics.image && (
           <div className="cv-avatar-square">
             <img src={basics.image} alt={basics.name} className="cv-avatar-img" />
           </div>
@@ -62,7 +63,7 @@ export const BlockHeader: React.FC<BlockHeaderProps> = ({ basics, variant = 'sta
             </div>
           )}
         </div>
-        {basics.image && (
+        {!hideImage && basics.image && (
           <div className="cv-avatar-container cv-avatar-rect has-photo" style={{ width: '85px', height: '95px', borderRadius: '8px', overflow: 'hidden', border: '2px solid currentColor', flexShrink: 0 }}>
             <img src={basics.image} alt={basics.name} className="cv-avatar-img" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
           </div>
@@ -75,7 +76,7 @@ export const BlockHeader: React.FC<BlockHeaderProps> = ({ basics, variant = 'sta
     <header className="cv-header">
       <div className="cv-header__top">
         <div className="cv-header__profile">
-          {basics.image && (
+          {!hideImage && basics.image && (
             <div className="cv-avatar-container has-photo">
               <img src={basics.image} alt={basics.name} className="cv-avatar-img" />
             </div>

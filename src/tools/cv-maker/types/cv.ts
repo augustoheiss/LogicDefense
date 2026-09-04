@@ -441,6 +441,17 @@ export interface SectionBoxDimensions {
   alignment?: 'left' | 'center' | 'right' // Alinhamento no plano horizontal
   variant?: string            // Variante de layout visual do bloco
   hidden?: boolean            // Indica se o item/bloco está ocultado da folha A4
+
+  // Propriedades Estendidas de Foto no Canvas Livre
+  photoShape?: 'circle' | 'square' | 'rounded' | 'vertical' | 'pill' | 'hexagon' | 'diamond' | 'shield' | 'octagon' | 'teardrop' | 'editorial_stamp'
+  photoSize?: number          // Tamanho da foto em pixels (40 a 240)
+  photoBorderWidth?: number   // Espessura da borda em pixels (0 a 6)
+  photoBorderColor?: string   // Cor da borda
+  photoShadow?: boolean       // Sombra suave ativada
+  photoAlign?: 'left' | 'center' | 'right' // Alinhamento na coluna
+  photoPosX?: number          // Enquadramento Pan X (0% a 100%)
+  photoPosY?: number          // Enquadramento Pan Y (0% a 100%)
+  photoScale?: number         // Zoom / Escala (1.0 a 2.5)
 }
 
 /**

@@ -15,6 +15,7 @@ import { BlockReferences } from '../blocks/BlockReferences'
 import { BlockInterests } from '../blocks/BlockInterests'
 import { BlockCoverLetter } from '../blocks/BlockCoverLetter'
 import { AtomicItemRenderer } from '../blocks/AtomicItemRenderer'
+import { BlockPhoto } from '../blocks/BlockPhoto'
 import { getAtomicItemId } from '../../utils/atomicIdUtils'
 import { StructuralBoxWrapper } from '../CanvasBuilder/StructuralBoxWrapper'
 import { ColumnSplitterHandle } from '../CanvasBuilder/ColumnSplitterHandle'
@@ -317,6 +318,60 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
   }
 
   // ── Renderizadores com Granularidade Atômica de Itens (Canvas Livre) ──
+
+  const renderPhotoSection = (
+    targetZone?: 'left' | 'right',
+    defZone: 'left' | 'right' = 'left',
+    fallbackTitle = 'Foto de Perfil',
+    onlyInFreeCanvas = false
+  ) => {
+    const photoDims = structureConfig?.sectionDimensions?.['photo']
+    if (photoDims?.hidden) return null
+
+    // No modo Canvas Livre: foto soberana com suporte a polígonos, tamanho em px, borda, sombra e pan/zoom
+    if (isFreeCanvas) {
+      const photoContent = (
+        <BlockPhoto
+          image={basics.image}
+          altName={basics.name}
+          shape={photoDims?.photoShape || 'circle'}
+          size={photoDims?.photoSize ?? 96}
+          borderWidth={photoDims?.photoBorderWidth ?? 0}
+          borderColor={photoDims?.photoBorderColor || '#0284c7'}
+          shadow={photoDims?.photoShadow ?? true}
+          align={photoDims?.photoAlign || 'center'}
+          posX={basics.imagePosX ?? 50}
+          posY={basics.imagePosY ?? 50}
+          scale={basics.imageScale ?? 1.0}
+        />
+      )
+
+      return targetZone
+        ? renderZoneSection('photo', targetZone, defZone, fallbackTitle, photoContent, 'photo')
+        : wrapSection('photo', fallbackTitle, photoContent, defZone, 'photo')
+    }
+
+    // No modo Template tradicional:
+    if (onlyInFreeCanvas || !basics.image) return null
+    const standardNode = (
+      <BlockPhoto
+        image={basics.image}
+        altName={basics.name}
+        shape="circle"
+        size={96}
+        borderWidth={0}
+        shadow={false}
+        align="center"
+        posX={basics.imagePosX ?? 50}
+        posY={basics.imagePosY ?? 50}
+        scale={basics.imageScale ?? 1.0}
+      />
+    )
+    if (targetZone) {
+      return getSectionZone('photo', defZone) === targetZone ? standardNode : null
+    }
+    return standardNode
+  }
 
   const renderWorkSection = (
     targetZone?: 'left' | 'right',
@@ -687,7 +742,7 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
       return (
         <div className="cv-page-a4">
           <div className="cv-card layout-editorial_accent">
-            {wrapSection('header', 'Cabeçalho / Identificação', <BlockHeader basics={basics} variant="brand_block" />)}
+            {wrapSection('header', 'Cabeçalho / Identificação', <BlockHeader basics={basics} variant="brand_block" hideImage={isFreeCanvas} />)}
             <div
               className="cv-editorial-grid"
               style={{
@@ -701,6 +756,7 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
                 isFreeCanvasActive={isFreeCanvas}
               />
               <aside className="cv-editorial-left cv-sidebar-stack">
+                {renderPhotoSection('left', 'left', 'Foto de Perfil', true)}
                 {renderZoneSection('contacts', 'left', 'left', 'Contatos', (
                   <div className="cv-sidebar-section">
                     <h4 className="cv-sidebar-title">Contato</h4>
@@ -727,6 +783,7 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
               </aside>
 
               <main className="cv-editorial-main">
+                {renderPhotoSection('right', 'left', 'Foto de Perfil', true)}
                 {basics.summary && renderZoneSection('summary', 'right', 'right', 'Sobre Mim', <BlockSummary basics={basics} title="Sobre Mim" />)}
                 {renderWorkSection('right', 'right')}
                 {renderProjectsSection('right', 'right')}
@@ -769,9 +826,10 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
                 isFreeCanvasActive={isFreeCanvas}
               />
               <aside className="cv-navy-sidebar cv-sidebar-stack">
+                {renderPhotoSection('left', 'left', 'Foto de Perfil', true)}
                 {renderZoneSection('header_profile', 'left', 'left', 'Perfil & Foto', (
                   <div>
-                    {basics.image && (
+                    {!isFreeCanvas && basics.image && (
                       <div className="cv-avatar-container has-photo">
                         <img src={basics.image} alt={basics.name} className="cv-avatar-img" />
                       </div>
@@ -809,6 +867,7 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
               </aside>
 
               <main className="cv-navy-main">
+                {renderPhotoSection('right', 'left', 'Foto de Perfil', true)}
                 {basics.summary && renderZoneSection('summary', 'right', 'right', 'Sobre Mim', <BlockSummary basics={basics} title="Sobre Mim" />)}
                 {renderWorkSection('right', 'right')}
                 {renderEducationSection('right', 'right')}
@@ -817,7 +876,7 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
                 {renderReferencesSection('right', 'right', 'Referências')}
                 {renderZoneSection('header_profile', 'right', 'left', 'Perfil & Foto', (
                   <div>
-                    {basics.image && (
+                    {!isFreeCanvas && basics.image && (
                       <div className="cv-avatar-container has-photo">
                         <img src={basics.image} alt={basics.name} className="cv-avatar-img" />
                       </div>
@@ -862,13 +921,14 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
             {wrapSection('hero_banner', 'Banner Principal', (
               <header className="cv-hero-banner">
                 <BlockHeader basics={basics} variant="hero" />
-                {basics.image && (
+                {!isFreeCanvas && basics.image && (
                   <div className="cv-avatar-container cv-avatar-rect has-photo" style={{ width: '85px', height: '95px', borderRadius: '8px', overflow: 'hidden', border: '2px solid currentColor', flexShrink: 0 }}>
                     <img src={basics.image} alt={basics.name} className="cv-avatar-img" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                   </div>
                 )}
               </header>
             ))}
+            {isFreeCanvas && renderPhotoSection(undefined, undefined, 'Foto de Perfil', true)}
 
             <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '1.5rem', marginBottom: '1.5rem' }}>
               <div>
@@ -910,11 +970,7 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
                 isFreeCanvasActive={isFreeCanvas}
               />
               <aside className="cv-duo-left cv-sidebar-stack">
-                {basics.image && renderZoneSection('photo', 'left', 'left', 'Foto de Perfil', (
-                  <div className="cv-avatar-container has-photo">
-                    <img src={basics.image} alt={basics.name} className="cv-avatar-img" />
-                  </div>
-                ))}
+                {renderPhotoSection('left', 'left', 'Foto de Perfil', false)}
                 {basics.summary && renderZoneSection('summary', 'left', 'left', 'Perfil / Resumo', (
                   <section className="cv-section cv-avoid-break">
                     <h4 className="cv-section-title" style={{ fontSize: '0.88rem' }}>Perfil</h4>
@@ -947,11 +1003,7 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
                     <BlockContacts basics={basics} layoutStyle="row" />
                   </header>
                 ))}
-                {basics.image && renderZoneSection('photo', 'right', 'left', 'Foto de Perfil', (
-                  <div className="cv-avatar-container has-photo">
-                    <img src={basics.image} alt={basics.name} className="cv-avatar-img" />
-                  </div>
-                ))}
+                {renderPhotoSection('right', 'left', 'Foto de Perfil', false)}
                 {basics.summary && renderZoneSection('summary', 'right', 'left', 'Perfil / Resumo', (
                   <section className="cv-section cv-avoid-break">
                     <h4 className="cv-section-title" style={{ fontSize: '0.88rem' }}>Perfil</h4>
@@ -994,9 +1046,10 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
                 isFreeCanvasActive={isFreeCanvas}
               />
               <aside className="cv-sidebar-col cv-sidebar-stack">
+                {renderPhotoSection('left', 'left', 'Foto de Perfil', true)}
                 {renderZoneSection('header_profile', 'left', 'left', 'Perfil & Foto', (
                   <div className="cv-sidebar-profile">
-                    {basics.image && (
+                    {!isFreeCanvas && basics.image && (
                       <div className="cv-avatar-container has-photo">
                         <img src={basics.image} alt={basics.name} className="cv-avatar-img" />
                       </div>
@@ -1024,13 +1077,14 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
                 {renderEducationSection('left', 'right')}
               </aside>
               <main className="cv-main-col">
+                {renderPhotoSection('right', 'left', 'Foto de Perfil', true)}
                 {basics.summary && renderZoneSection('summary', 'right', 'right', 'Sobre Mim', <BlockSummary basics={basics} title="Sobre Mim" />)}
                 {renderWorkSection('right', 'right')}
                 {renderProjectsSection('right', 'right')}
                 {renderEducationSection('right', 'right')}
                 {renderZoneSection('header_profile', 'right', 'left', 'Perfil & Foto', (
                   <div className="cv-sidebar-profile">
-                    {basics.image && (
+                    {!isFreeCanvas && basics.image && (
                       <div className="cv-avatar-container has-photo">
                         <img src={basics.image} alt={basics.name} className="cv-avatar-img" />
                       </div>
@@ -1075,10 +1129,11 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
       return (
         <div className="cv-page-a4">
           <div className="cv-card layout-dynamic_math">
+            {isFreeCanvas && renderPhotoSection(undefined, undefined, 'Foto de Perfil', true)}
             {wrapSection('header', 'Perfil & Contatos', (
               <header className="cv-math-header">
                 <div className="cv-math-header-profile">
-                  {basics.image && (
+                  {!isFreeCanvas && basics.image && (
                     <div className="cv-avatar-container cv-math-avatar">
                       <img src={basics.image} alt={basics.name} className="cv-avatar-img" />
                     </div>
@@ -1278,7 +1333,8 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
       return (
         <div className="cv-page-a4">
           <div className="cv-card layout-linear">
-            {wrapSection('header', 'Cabeçalho Linear', <BlockHeader basics={basics} variant="linear" />)}
+            {isFreeCanvas && renderPhotoSection(undefined, undefined, 'Foto de Perfil', true)}
+            {wrapSection('header', 'Cabeçalho Linear', <BlockHeader basics={basics} variant="linear" hideImage={isFreeCanvas} />)}
             {wrapSection('contacts', 'Contatos', <BlockContacts basics={basics} layoutStyle="row" />)}
             {basics.summary && wrapSection('summary', 'Resumo', <BlockSummary basics={basics} />)}
             {renderWorkSection()}
@@ -1298,7 +1354,8 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
     return (
       <div className="cv-page-a4">
         <div className={`cv-card ${blueprint.customClass || ''}`}>
-          {wrapSection('header', 'Cabeçalho Padrão', <BlockHeader basics={basics} variant="standard" />)}
+          {isFreeCanvas && renderPhotoSection(undefined, undefined, 'Foto de Perfil', true)}
+          {wrapSection('header', 'Cabeçalho Padrão', <BlockHeader basics={basics} variant="standard" hideImage={isFreeCanvas} />)}
           {basics.summary && wrapSection('summary', 'Resumo', <BlockSummary basics={basics} />)}
           {renderWorkSection()}
           {renderProjectsSection()}

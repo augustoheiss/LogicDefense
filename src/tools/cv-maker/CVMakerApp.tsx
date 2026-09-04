@@ -15,7 +15,6 @@ import { CVViewer } from './components/CVViewer/CVViewer'
 import { ChatInterface } from './components/Chat/ChatInterface'
 import { CVToolbar } from './components/Toolbar/CVToolbar'
 import { CVHistoryTab } from './components/History/CVHistoryTab'
-import { PhotoUploader } from './components/Toolbar/PhotoUploader'
 import { DesignCustomizerDrawer } from './components/Toolbar/DesignCustomizerDrawer'
 import { CanvasElementsPalette } from './components/CanvasBuilder/CanvasElementsPalette'
 import { AgentHubModal } from './components/Modals/AgentHubModal'
@@ -151,7 +150,6 @@ export const CVMakerApp: React.FC = () => {
     localStorage.setItem(STORAGE_DESIGN_KEY, JSON.stringify(newConfig))
   }
 
-  const [isPhotoModalOpen, setIsPhotoModalOpen] = useState<boolean>(false)
   const [isAgentHubModalOpen, setIsAgentHubModalOpen] = useState<boolean>(false)
   const [agentHubInitialTab, setAgentHubInitialTab] = useState<'agent_prompt' | 'master_synthesis' | 'prompts_library' | 'openapi_hub' | 'api_key'>('agent_prompt')
   const [isStoreModalOpen, setIsStoreModalOpen] = useState<boolean>(false)
@@ -553,6 +551,7 @@ export const CVMakerApp: React.FC = () => {
                 structureConfig={currentStructureConfig}
                 onUpdateStructureConfig={handleUpdateStructureConfig}
                 onResetStructure={handleResetStructure}
+                onUpdatePhoto={handleSavePhoto}
               />
             )}
           </div>
@@ -586,8 +585,6 @@ export const CVMakerApp: React.FC = () => {
             onDownloadCoverLetterHtml={handleDownloadCoverLetterHtml}
             onDownloadZip={handleDownloadZip}
             onPrintPdf={handlePrintPdf}
-            onOpenPhotoModal={() => setIsPhotoModalOpen(true)}
-            hasPhoto={Boolean(cvData?.basics?.image)}
             onOpenDesignModal={() => setIsDesignModalOpen(true)}
             onOpenApiKeyModal={() => handleOpenAgentHub('agent_prompt')}
             hasActiveKey={hasActiveKey}
@@ -616,17 +613,6 @@ export const CVMakerApp: React.FC = () => {
         config={designConfig}
         onChangeConfig={handleDesignConfigChange}
       />
-
-      {isPhotoModalOpen && (
-        <PhotoUploader
-          currentPhoto={cvData?.basics.image}
-          currentPosX={cvData?.basics.imagePosX ?? 50}
-          currentPosY={cvData?.basics.imagePosY ?? 50}
-          currentScale={cvData?.basics.imageScale ?? 1.0}
-          onSavePhoto={handleSavePhoto}
-          onClose={() => setIsPhotoModalOpen(false)}
-        />
-      )}
 
       <AgentHubModal
         isOpen={isAgentHubModalOpen}

@@ -21,8 +21,6 @@ interface CVToolbarProps {
   onDownloadCoverLetterHtml?: () => void
   onDownloadZip?: () => void
   onPrintPdf: () => void
-  onOpenPhotoModal: () => void
-  hasPhoto?: boolean
   onOpenDesignModal?: () => void
   onOpenApiKeyModal: () => void
   hasActiveKey: boolean
@@ -72,8 +70,6 @@ export const CVToolbar: React.FC<CVToolbarProps> = ({
   onDownloadCoverLetterHtml,
   onDownloadZip,
   onPrintPdf,
-  onOpenPhotoModal,
-  hasPhoto = false,
   onOpenDesignModal,
   onOpenApiKeyModal,
   hasActiveKey,
@@ -360,16 +356,6 @@ export const CVToolbar: React.FC<CVToolbarProps> = ({
           </button>
         )}
 
-        {/* Enquadramento de Foto */}
-        <button
-          type="button"
-          className="cv-btn-secondary"
-          onClick={onOpenPhotoModal}
-          title={hasPhoto ? "Alterar ou enquadrar foto do perfil" : "Incluir foto de perfil no currículo"}
-          style={hasPhoto ? { borderColor: '#10b981', color: '#34d399', background: 'rgba(16, 185, 129, 0.12)', fontWeight: 600 } : {}}
-        >
-          {hasPhoto ? '📷 Foto Ativa' : '📷 + Foto'}
-        </button>
 
         {/* Licença Pro */}
         {onOpenStoreModal && (
