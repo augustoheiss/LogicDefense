@@ -1,10 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react'
-import type { TextVariant, ThemeVariant, LayoutVariant, ViewMode, AppMode } from '../../types/cv'
+import type { TextVariant, ThemeVariant, LayoutVariant, ViewMode } from '../../types/cv'
 import { LAYOUT_OPTIONS } from '../../types/cv'
 
 interface CVToolbarProps {
-  appMode?: AppMode
-  onAppModeChange?: (mode: AppMode) => void
+  isFreeCanvasActive?: boolean
+  onToggleFreeCanvas?: () => void
+  onResetStructure?: () => void
   activePersona: TextVariant
   onPersonaChange: (p: TextVariant) => void
   activeLayout: LayoutVariant
@@ -53,8 +54,9 @@ const VIEW_MODES: { id: ViewMode; label: string; icon: string }[] = [
 ]
 
 export const CVToolbar: React.FC<CVToolbarProps> = ({
-  appMode = 'templates',
-  onAppModeChange,
+  isFreeCanvasActive = false,
+  onToggleFreeCanvas,
+  onResetStructure,
   activePersona,
   onPersonaChange,
   activeLayout,
@@ -118,75 +120,45 @@ export const CVToolbar: React.FC<CVToolbarProps> = ({
   const currentLayoutObj = LAYOUT_OPTIONS.find(l => l.id === activeLayout) || LAYOUT_OPTIONS[0]
   const currentViewModeObj = VIEW_MODES.find(v => v.id === activeViewMode) || VIEW_MODES[0]
 
-  const isCanvasMode = appMode === 'canvas_builder' || activeLayout === 'canvas_livre'
-
   return (
     <div className="cv-preview-toolbar cv-no-print" ref={toolbarRef}>
       {/* LINHA 1: Menus de Seleção & Configuração Declarativa */}
       <div className="cv-toolbar-row">
-        {/* 1. Menu Modo do Editor */}
-        <div className="cv-toolbar-group">
-          <span className="cv-toolbar-label">Modo:</span>
-          <div className={`cv-dropdown-wrapper ${openDropdown === 'mode' ? 'is-open' : ''}`}>
+        {/* 1. Botão Canvas Livre Universal (Ativa manipulação livre no layout atual) */}
+        <div className="cv-toolbar-group" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+          <button
+            type="button"
+            className={`cv-btn-canvas-toggle ${isFreeCanvasActive ? 'is-active' : ''}`}
+            onClick={onToggleFreeCanvas}
+            title={isFreeCanvasActive ? 'Desativar Canvas Livre (Travar layout estrutural)' : 'Ativar Canvas Livre (Destravar redimensionamento livre de blocos e colunas)'}
+          >
+            <span>{isFreeCanvasActive ? '🔓' : '🔒'}</span>
+            <span>{isFreeCanvasActive ? 'Canvas Livre: Ativo' : 'Destravar Estrutura (Canvas)'}</span>
+          </button>
+
+          {isFreeCanvasActive && onResetStructure && (
             <button
               type="button"
-              className={`cv-dropdown-trigger ${isCanvasMode ? 'cv-dropdown-trigger--active' : ''}`}
-              onClick={() => toggleDropdown('mode')}
-              title="Alternar entre Modelos A4 Prontos e Canvas Livre"
-              style={isCanvasMode ? { borderColor: '#10b981', color: '#34d399', background: 'rgba(16, 185, 129, 0.12)' } : {}}
+              className="cv-btn-canvas-reset"
+              onClick={onResetStructure}
+              title="Restaurar proporções e dimensões padrão deste modelo"
+              style={{
+                padding: '0.35rem 0.6rem',
+                fontSize: '0.78rem',
+                borderRadius: '6px',
+                border: '1px solid rgba(239, 68, 68, 0.4)',
+                background: 'rgba(239, 68, 68, 0.12)',
+                color: '#fca5a5',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease'
+              }}
             >
-              <span className="cv-dropdown-trigger__icon">{isCanvasMode ? '🎨' : '📐'}</span>
-              <span className="cv-dropdown-trigger__text">
-                {isCanvasMode ? 'Canvas Livre' : 'Modelos A4 Prontos'}
-              </span>
-              <span className="cv-dropdown-trigger__chevron">▼</span>
+              ↺ Resetar
             </button>
-
-            {openDropdown === 'mode' && (
-              <div className="cv-dropdown-menu">
-                <button
-                  type="button"
-                  className={`cv-dropdown-item ${!isCanvasMode ? 'cv-dropdown-item--active' : ''}`}
-                  onClick={() => {
-                    onAppModeChange?.('templates')
-                    if (activeLayout === 'canvas_livre') {
-                      onLayoutChange('dynamic_math')
-                    }
-                    closeDropdowns()
-                  }}
-                >
-                  <div className="cv-dropdown-item__content">
-                    <div className="cv-dropdown-item__title">
-                      <span>📐</span> <strong>Modelos A4 Prontos</strong>
-                    </div>
-                    <div className="cv-dropdown-item__desc">Modelos 01 a 09 com diagramação matemática automática</div>
-                  </div>
-                  {!isCanvasMode && <span className="cv-dropdown-item__check">✓</span>}
-                </button>
-
-                <button
-                  type="button"
-                  className={`cv-dropdown-item ${isCanvasMode ? 'cv-dropdown-item--active' : ''}`}
-                  onClick={() => {
-                    onAppModeChange?.('canvas_builder')
-                    onLayoutChange('canvas_livre')
-                    closeDropdowns()
-                  }}
-                >
-                  <div className="cv-dropdown-item__content">
-                    <div className="cv-dropdown-item__title">
-                      <span>🎨</span> <strong>Canvas Livre (Modelo 10)</strong>
-                    </div>
-                    <div className="cv-dropdown-item__desc">Monte a folha A4 adicionando e organizando blocos</div>
-                  </div>
-                  {isCanvasMode && <span className="cv-dropdown-item__check">✓</span>}
-                </button>
-              </div>
-            )}
-          </div>
+          )}
         </div>
 
-        {/* 2. Menu Modelo A4 (10 Modelos) */}
+        {/* 2. Menu Modelo A4 (Modelos 01 a 09) */}
         <div className="cv-toolbar-group">
           <span className="cv-toolbar-label">Modelo A4:</span>
           <div className={`cv-dropdown-wrapper ${openDropdown === 'layout' ? 'is-open' : ''}`}>
@@ -212,11 +184,6 @@ export const CVToolbar: React.FC<CVToolbarProps> = ({
                       className={`cv-dropdown-item ${isSelected ? 'cv-dropdown-item--active' : ''}`}
                       onClick={() => {
                         onLayoutChange(l.id)
-                        if (l.id === 'canvas_livre') {
-                          onAppModeChange?.('canvas_builder')
-                        } else {
-                          onAppModeChange?.('templates')
-                        }
                         closeDropdowns()
                       }}
                     >
@@ -323,48 +290,46 @@ export const CVToolbar: React.FC<CVToolbarProps> = ({
           </div>
         </div>
 
-        {/* 5. Menu Modo de Visualização (Currículo / Carta / Dossiê) - apenas em Templates */}
-        {!isCanvasMode && (
-          <div className="cv-toolbar-group">
-            <span className="cv-toolbar-label">Visualização:</span>
-            <div className={`cv-dropdown-wrapper ${openDropdown === 'viewmode' ? 'is-open' : ''}`}>
-              <button
-                type="button"
-                className="cv-dropdown-trigger"
-                onClick={() => toggleDropdown('viewmode')}
-                title={`Visualização: ${currentViewModeObj.label}`}
-              >
-                <span className="cv-dropdown-trigger__icon">{currentViewModeObj.icon}</span>
-                <span className="cv-dropdown-trigger__text">{currentViewModeObj.label}</span>
-                <span className="cv-dropdown-trigger__chevron">▼</span>
-              </button>
+        {/* 5. Menu Modo de Visualização (Currículo / Carta / Dossiê) */}
+        <div className="cv-toolbar-group">
+          <span className="cv-toolbar-label">Visualização:</span>
+          <div className={`cv-dropdown-wrapper ${openDropdown === 'viewmode' ? 'is-open' : ''}`}>
+            <button
+              type="button"
+              className="cv-dropdown-trigger"
+              onClick={() => toggleDropdown('viewmode')}
+              title={`Visualização: ${currentViewModeObj.label}`}
+            >
+              <span className="cv-dropdown-trigger__icon">{currentViewModeObj.icon}</span>
+              <span className="cv-dropdown-trigger__text">{currentViewModeObj.label}</span>
+              <span className="cv-dropdown-trigger__chevron">▼</span>
+            </button>
 
-              {openDropdown === 'viewmode' && (
-                <div className="cv-dropdown-menu" style={{ minWidth: '220px' }}>
-                  {VIEW_MODES.map(v => {
-                    const isSelected = activeViewMode === v.id
-                    return (
-                      <button
-                        key={v.id}
-                        type="button"
-                        className={`cv-dropdown-item ${isSelected ? 'cv-dropdown-item--active' : ''}`}
-                        onClick={() => {
-                          onViewModeChange(v.id)
-                          closeDropdowns()
-                        }}
-                      >
-                        <div className="cv-dropdown-item__title">
-                          <span>{v.icon}</span> <strong>{v.label}</strong>
-                        </div>
-                        {isSelected && <span className="cv-dropdown-item__check">✓</span>}
-                      </button>
-                    )
-                  })}
-                </div>
-              )}
-            </div>
+            {openDropdown === 'viewmode' && (
+              <div className="cv-dropdown-menu" style={{ minWidth: '220px' }}>
+                {VIEW_MODES.map(v => {
+                  const isSelected = activeViewMode === v.id
+                  return (
+                    <button
+                      key={v.id}
+                      type="button"
+                      className={`cv-dropdown-item ${isSelected ? 'cv-dropdown-item--active' : ''}`}
+                      onClick={() => {
+                        onViewModeChange(v.id)
+                        closeDropdowns()
+                      }}
+                    >
+                      <div className="cv-dropdown-item__title">
+                        <span>{v.icon}</span> <strong>{v.label}</strong>
+                      </div>
+                      {isSelected && <span className="cv-dropdown-item__check">✓</span>}
+                    </button>
+                  )
+                })}
+              </div>
+            )}
           </div>
-        )}
+        </div>
       </div>
 
       {/* LINHA 2: Ações Rápidas, Design & Estilo e Menu Exportar & PDF */}

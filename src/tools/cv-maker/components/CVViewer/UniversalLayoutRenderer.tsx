@@ -14,6 +14,9 @@ import { BlockCertificates } from '../blocks/BlockCertificates'
 import { BlockReferences } from '../blocks/BlockReferences'
 import { BlockInterests } from '../blocks/BlockInterests'
 import { BlockCoverLetter } from '../blocks/BlockCoverLetter'
+import { StructuralBoxWrapper } from '../CanvasBuilder/StructuralBoxWrapper'
+import { ColumnSplitterHandle } from '../CanvasBuilder/ColumnSplitterHandle'
+import type { LayoutStructureConfig, SectionBoxDimensions } from '../../types/cv'
 
 interface UniversalLayoutRendererProps {
   data: CVData
@@ -22,6 +25,8 @@ interface UniversalLayoutRendererProps {
   viewMode: ViewMode
   designConfig?: CVDesignConfig
   onRequestGenerateCoverLetter?: () => void
+  structureConfig?: LayoutStructureConfig
+  onUpdateStructureConfig?: (newConfig: LayoutStructureConfig) => void
 }
 
 export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = ({
@@ -30,9 +35,55 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
   theme,
   viewMode,
   designConfig,
-  onRequestGenerateCoverLetter
+  onRequestGenerateCoverLetter,
+  structureConfig,
+  onUpdateStructureConfig
 }) => {
   const { basics } = data
+  const isFreeCanvas = Boolean(structureConfig?.isFreeCanvasActive)
+
+  const wrapSection = (sectionId: string, title: string, node: React.ReactNode) => {
+    if (!node) return null
+    if (!isFreeCanvas) return node
+    return (
+      <StructuralBoxWrapper
+        key={sectionId}
+        sectionId={sectionId}
+        title={title}
+        isFreeCanvasActive={isFreeCanvas}
+        dimensions={structureConfig?.sectionDimensions?.[sectionId]}
+        onUpdateDimensions={(dims: SectionBoxDimensions) => {
+          if (!structureConfig || !onUpdateStructureConfig) return
+          onUpdateStructureConfig({
+            ...structureConfig,
+            sectionDimensions: {
+              ...structureConfig.sectionDimensions,
+              [sectionId]: dims
+            }
+          })
+        }}
+        onResetDimensions={() => {
+          if (!structureConfig || !onUpdateStructureConfig) return
+          const next = { ...structureConfig.sectionDimensions }
+          delete next[sectionId]
+          onUpdateStructureConfig({
+            ...structureConfig,
+            sectionDimensions: next
+          })
+        }}
+      >
+        {node}
+      </StructuralBoxWrapper>
+    )
+  }
+
+  const handleUpdateSplitRatio = (newRatio: number) => {
+    if (!structureConfig || !onUpdateStructureConfig) return
+    onUpdateStructureConfig({
+      ...structureConfig,
+      columnSplitRatio: newRatio
+    })
+  }
 
   const customRootStyles: React.CSSProperties = {
     '--cv-avatar-pos-x': `${basics.imagePosX ?? 50}%`,
@@ -72,50 +123,66 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
   const renderCVPage = () => {
     // ── Modelo A4 05: Brand Accent Block (Basil Hailward) ──
     if (blueprint.id === 'editorial_accent') {
+      const splitRatio = structureConfig?.columnSplitRatio || 34
       return (
         <div className="cv-page-a4">
           <div className="cv-card layout-editorial_accent">
-            <BlockHeader basics={basics} variant="brand_block" />
-            <div className="cv-editorial-grid">
+            {wrapSection('header', 'Cabeçalho / Identificação', <BlockHeader basics={basics} variant="brand_block" />)}
+            <div
+              className="cv-editorial-grid"
+              style={{
+                position: 'relative',
+                ...(structureConfig?.columnSplitRatio ? { gridTemplateColumns: `${structureConfig.columnSplitRatio}% 1fr` } : {})
+              }}
+            >
+              <ColumnSplitterHandle
+                splitRatio={splitRatio}
+                onUpdateSplitRatio={handleUpdateSplitRatio}
+                isFreeCanvasActive={isFreeCanvas}
+              />
               <aside className="cv-editorial-left cv-sidebar-stack">
-                <div className="cv-sidebar-section">
-                  <h4 className="cv-sidebar-title">Contato</h4>
-                  <BlockContacts basics={basics} layoutStyle="list" />
-                </div>
-                {basics.driverLicense || basics.nationality || basics.age ? (
+                {wrapSection('contacts', 'Contatos', (
                   <div className="cv-sidebar-section">
-                    <h4 className="cv-sidebar-title">Dados Civis</h4>
-                    <BlockCivilData basics={basics} />
+                    <h4 className="cv-sidebar-title">Contato</h4>
+                    <BlockContacts basics={basics} layoutStyle="list" />
                   </div>
+                ))}
+                {basics.driverLicense || basics.nationality || basics.age ? (
+                  wrapSection('civil', 'Dados Civis', (
+                    <div className="cv-sidebar-section">
+                      <h4 className="cv-sidebar-title">Dados Civis</h4>
+                      <BlockCivilData basics={basics} />
+                    </div>
+                  ))
                 ) : null}
-                {data.skills && (
+                {data.skills && wrapSection('skills', 'Competências', (
                   <div className="cv-sidebar-section">
                     <BlockSkillsBars skills={data.skills} title="Expertise" />
                   </div>
-                )}
-                {data.languages && (
+                ))}
+                {data.languages && wrapSection('languages', 'Idiomas', (
                   <div className="cv-sidebar-section">
                     <BlockLanguages languages={data.languages} />
                   </div>
-                )}
-                {data.certificates && (
+                ))}
+                {data.certificates && wrapSection('certificates', 'Certificações', (
                   <div className="cv-sidebar-section">
                     <BlockCertificates certificates={data.certificates} />
                   </div>
-                )}
-                {data.interests && (
+                ))}
+                {data.interests && wrapSection('interests', 'Interesses', (
                   <div className="cv-sidebar-section">
                     <BlockInterests interests={data.interests} />
                   </div>
-                )}
+                ))}
               </aside>
 
               <main className="cv-editorial-main">
-                {basics.summary && <BlockSummary basics={basics} title="Sobre Mim" />}
-                {data.work && <BlockWork work={data.work} />}
-                {data.projects && <BlockProjects projects={data.projects} />}
-                {data.education && <BlockEducation education={data.education} />}
-                {data.references && <BlockReferences references={data.references} />}
+                {basics.summary && wrapSection('summary', 'Sobre Mim', <BlockSummary basics={basics} title="Sobre Mim" />)}
+                {data.work && wrapSection('work', 'Experiência Profissional', <BlockWork work={data.work} />)}
+                {data.projects && wrapSection('projects', 'Projetos em Destaque', <BlockProjects projects={data.projects} />)}
+                {data.education && wrapSection('education', 'Formação Acadêmica', <BlockEducation education={data.education} />)}
+                {data.references && wrapSection('references', 'Referências', <BlockReferences references={data.references} />)}
               </main>
             </div>
           </div>
@@ -125,56 +192,74 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
 
     // ── Modelo A4 06: Navy Solid Timeline (Wilkins Micawber) ──
     if (blueprint.id === 'corporate_timeline') {
+      const splitRatio = structureConfig?.columnSplitRatio || 32
       return (
         <div className="cv-page-a4">
-          <div className="cv-card cv-navy-layout layout-corporate_timeline">
+          <div
+            className="cv-card cv-navy-layout layout-corporate_timeline"
+            style={{
+              position: 'relative',
+              ...(structureConfig?.columnSplitRatio ? { gridTemplateColumns: `${structureConfig.columnSplitRatio}% 1fr` } : {})
+            }}
+          >
+            <ColumnSplitterHandle
+              splitRatio={splitRatio}
+              onUpdateSplitRatio={handleUpdateSplitRatio}
+              isFreeCanvasActive={isFreeCanvas}
+            />
             <aside className="cv-navy-sidebar cv-sidebar-stack">
-              {basics.image && (
-                <div className="cv-avatar-container has-photo">
-                  <img src={basics.image} alt={basics.name} className="cv-avatar-img" />
-                </div>
-              )}
-              <div style={{ textAlign: 'center', marginBottom: '0.5rem' }}>
-                <h2 style={{ fontSize: '1.35rem', margin: '0 0 0.25rem 0', fontWeight: 800, color: '#ffffff' }}>
-                  {basics.name}
-                </h2>
-                {basics.label && (
-                  <div style={{ fontSize: '0.85rem', color: '#f97316', fontWeight: 700, letterSpacing: '0.04em' }}>
-                    {basics.label}
+              {wrapSection('header_profile', 'Perfil & Foto', (
+                <div>
+                  {basics.image && (
+                    <div className="cv-avatar-container has-photo">
+                      <img src={basics.image} alt={basics.name} className="cv-avatar-img" />
+                    </div>
+                  )}
+                  <div style={{ textAlign: 'center', marginBottom: '0.5rem' }}>
+                    <h2 style={{ fontSize: '1.35rem', margin: '0 0 0.25rem 0', fontWeight: 800, color: '#ffffff' }}>
+                      {basics.name}
+                    </h2>
+                    {basics.label && (
+                      <div style={{ fontSize: '0.85rem', color: '#f97316', fontWeight: 700, letterSpacing: '0.04em' }}>
+                        {basics.label}
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
-              <BlockCivilData basics={basics} />
-              <div className="cv-sidebar-section">
-                <h4 className="cv-sidebar-title" style={{ color: '#f8fafc', borderBottomColor: 'rgba(255,255,255,0.2)' }}>
-                  Contato
-                </h4>
-                <BlockContacts basics={basics} layoutStyle="list" />
-              </div>
-              {data.skills && (
+                  <BlockCivilData basics={basics} />
+                </div>
+              ))}
+              {wrapSection('contacts', 'Contatos', (
+                <div className="cv-sidebar-section">
+                  <h4 className="cv-sidebar-title" style={{ color: '#f8fafc', borderBottomColor: 'rgba(255,255,255,0.2)' }}>
+                    Contato
+                  </h4>
+                  <BlockContacts basics={basics} layoutStyle="list" />
+                </div>
+              ))}
+              {data.skills && wrapSection('skills', 'Competências', (
                 <div className="cv-sidebar-section">
                   <BlockSkillsBars skills={data.skills} title="Expertise" />
                 </div>
-              )}
-              {data.languages && (
+              ))}
+              {data.languages && wrapSection('languages', 'Idiomas', (
                 <div className="cv-sidebar-section">
                   <BlockLanguages languages={data.languages} />
                 </div>
-              )}
-              {data.interests && (
+              ))}
+              {data.interests && wrapSection('interests', 'Interesses', (
                 <div className="cv-sidebar-section">
                   <BlockInterests interests={data.interests} />
                 </div>
-              )}
+              ))}
             </aside>
 
             <main className="cv-navy-main">
-              {basics.summary && <BlockSummary basics={basics} title="Sobre Mim" />}
-              {data.work && <BlockWork work={data.work} />}
-              {data.education && <BlockEducation education={data.education} />}
-              {data.projects && <BlockProjects projects={data.projects} />}
-              {data.certificates && <BlockCertificates certificates={data.certificates} />}
-              {data.references && <BlockReferences references={data.references} />}
+              {basics.summary && wrapSection('summary', 'Sobre Mim', <BlockSummary basics={basics} title="Sobre Mim" />)}
+              {data.work && wrapSection('work', 'Experiência Profissional', <BlockWork work={data.work} />)}
+              {data.education && wrapSection('education', 'Formação Acadêmica', <BlockEducation education={data.education} />)}
+              {data.projects && wrapSection('projects', 'Projetos em Destaque', <BlockProjects projects={data.projects} />)}
+              {data.certificates && wrapSection('certificates', 'Certificações', <BlockCertificates certificates={data.certificates} />)}
+              {data.references && wrapSection('references', 'Referências', <BlockReferences references={data.references} />)}
             </main>
           </div>
         </div>
@@ -186,36 +271,38 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
       return (
         <div className="cv-page-a4">
           <div className="cv-card layout-hero_matrix">
-            <BlockContacts basics={basics} layoutStyle="top_bar" />
-            <header className="cv-hero-banner">
-              <BlockHeader basics={basics} variant="hero" />
-              {basics.image && (
-                <div className="cv-avatar-container cv-avatar-rect has-photo" style={{ width: '85px', height: '95px', borderRadius: '8px', overflow: 'hidden', border: '2px solid currentColor', flexShrink: 0 }}>
-                  <img src={basics.image} alt={basics.name} className="cv-avatar-img" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                </div>
-              )}
-            </header>
+            {wrapSection('contacts_top', 'Contatos no Topo', <BlockContacts basics={basics} layoutStyle="top_bar" />)}
+            {wrapSection('hero_banner', 'Banner Principal', (
+              <header className="cv-hero-banner">
+                <BlockHeader basics={basics} variant="hero" />
+                {basics.image && (
+                  <div className="cv-avatar-container cv-avatar-rect has-photo" style={{ width: '85px', height: '95px', borderRadius: '8px', overflow: 'hidden', border: '2px solid currentColor', flexShrink: 0 }}>
+                    <img src={basics.image} alt={basics.name} className="cv-avatar-img" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  </div>
+                )}
+              </header>
+            ))}
 
             <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '1.5rem', marginBottom: '1.5rem' }}>
               <div>
-                {data.work && <BlockWork work={data.work} />}
+                {data.work && wrapSection('work', 'Experiência Profissional', <BlockWork work={data.work} />)}
               </div>
               <div>
-                {data.education && <BlockEducation education={data.education} />}
-                {data.projects && <BlockProjects projects={data.projects} />}
-                {data.references && <BlockReferences references={data.references} />}
+                {data.education && wrapSection('education', 'Formação Acadêmica', <BlockEducation education={data.education} />)}
+                {data.projects && wrapSection('projects', 'Projetos em Destaque', <BlockProjects projects={data.projects} />)}
+                {data.references && wrapSection('references', 'Referências', <BlockReferences references={data.references} />)}
               </div>
             </div>
 
-            {data.skills && (
+            {data.skills && wrapSection('skills', 'Matriz de Competências', (
               <div style={{ borderTop: '1px solid rgba(125,125,125,0.2)', paddingTop: '1rem' }}>
                 <h3 className="cv-section-title">⚡ Matriz de Competências</h3>
                 <BlockSkillsBars skills={data.skills} title="" />
               </div>
-            )}
-            {data.languages && <BlockLanguages languages={data.languages} />}
-            {data.certificates && <BlockCertificates certificates={data.certificates} />}
-            {data.interests && <BlockInterests interests={data.interests} />}
+            ))}
+            {data.languages && wrapSection('languages', 'Idiomas', <BlockLanguages languages={data.languages} />)}
+            {data.certificates && wrapSection('certificates', 'Certificações', <BlockCertificates certificates={data.certificates} />)}
+            {data.interests && wrapSection('interests', 'Interesses', <BlockInterests interests={data.interests} />)}
           </div>
         </div>
       )
@@ -223,38 +310,52 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
 
     // ── Modelo A4 04: Split Duo (Victoria Wotton) ──
     if (blueprint.id === 'compact_split') {
+      const splitRatio = structureConfig?.columnSplitRatio || 34
       return (
         <div className="cv-page-a4">
-          <div className="cv-card cv-duo-layout layout-compact_split">
+          <div
+            className="cv-card cv-duo-layout layout-compact_split"
+            style={{
+              position: 'relative',
+              ...(structureConfig?.columnSplitRatio ? { gridTemplateColumns: `${structureConfig.columnSplitRatio}% 1fr` } : {})
+            }}
+          >
+            <ColumnSplitterHandle
+              splitRatio={splitRatio}
+              onUpdateSplitRatio={handleUpdateSplitRatio}
+              isFreeCanvasActive={isFreeCanvas}
+            />
             <aside className="cv-duo-left cv-sidebar-stack">
-              {basics.image && (
+              {basics.image && wrapSection('photo', 'Foto de Perfil', (
                 <div className="cv-avatar-container has-photo">
                   <img src={basics.image} alt={basics.name} className="cv-avatar-img" />
                 </div>
-              )}
-              {basics.summary && (
+              ))}
+              {basics.summary && wrapSection('summary', 'Perfil / Resumo', (
                 <section className="cv-section cv-avoid-break">
                   <h4 className="cv-section-title" style={{ fontSize: '0.88rem' }}>Perfil</h4>
                   <p className="cv-summary-text" style={{ fontSize: '0.82rem' }}>{basics.summary}</p>
                 </section>
-              )}
-              {data.skills && <BlockSkillsBars skills={data.skills} title="Expertise" />}
-              {data.interests && <BlockInterests interests={data.interests} layoutStyle="circles" title="Hobbies" />}
-              <BlockCivilData basics={basics} />
-              {data.languages && <BlockLanguages languages={data.languages} />}
+              ))}
+              {data.skills && wrapSection('skills', 'Competências', <BlockSkillsBars skills={data.skills} title="Expertise" />)}
+              {data.interests && wrapSection('interests', 'Hobbies', <BlockInterests interests={data.interests} layoutStyle="circles" title="Hobbies" />)}
+              {wrapSection('civil', 'Dados Civis', <BlockCivilData basics={basics} />)}
+              {data.languages && wrapSection('languages', 'Idiomas', <BlockLanguages languages={data.languages} />)}
             </aside>
 
             <main className="cv-duo-right">
-              <header className="cv-duo-header">
-                <h1 className="cv-name">{basics.name}</h1>
-                {basics.label && <div className="cv-label">{basics.label}</div>}
-                <BlockContacts basics={basics} layoutStyle="row" />
-              </header>
-              {data.work && <BlockWork work={data.work} />}
-              {data.education && <BlockEducation education={data.education} />}
-              {data.projects && <BlockProjects projects={data.projects} />}
-              {data.certificates && <BlockCertificates certificates={data.certificates} />}
-              {data.references && <BlockReferences references={data.references} />}
+              {wrapSection('header', 'Identificação & Contatos', (
+                <header className="cv-duo-header">
+                  <h1 className="cv-name">{basics.name}</h1>
+                  {basics.label && <div className="cv-label">{basics.label}</div>}
+                  <BlockContacts basics={basics} layoutStyle="row" />
+                </header>
+              ))}
+              {data.work && wrapSection('work', 'Experiência Profissional', <BlockWork work={data.work} />)}
+              {data.education && wrapSection('education', 'Formação Acadêmica', <BlockEducation education={data.education} />)}
+              {data.projects && wrapSection('projects', 'Projetos em Destaque', <BlockProjects projects={data.projects} />)}
+              {data.certificates && wrapSection('certificates', 'Certificações', <BlockCertificates certificates={data.certificates} />)}
+              {data.references && wrapSection('references', 'Referências', <BlockReferences references={data.references} />)}
             </main>
           </div>
         </div>
@@ -263,36 +364,52 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
 
     // ── Modelo A4 03: Executive Sidebar ──
     if (blueprint.id === 'sidebar') {
+      const splitRatio = structureConfig?.columnSplitRatio || 32
       return (
         <div className="cv-page-a4">
-          <div className="cv-card cv-sidebar-layout layout-sidebar">
+          <div
+            className="cv-card cv-sidebar-layout layout-sidebar"
+            style={{
+              position: 'relative',
+              ...(structureConfig?.columnSplitRatio ? { gridTemplateColumns: `${structureConfig.columnSplitRatio}% 1fr` } : {})
+            }}
+          >
+            <ColumnSplitterHandle
+              splitRatio={splitRatio}
+              onUpdateSplitRatio={handleUpdateSplitRatio}
+              isFreeCanvasActive={isFreeCanvas}
+            />
             <aside className="cv-sidebar-col cv-sidebar-stack">
-              <div className="cv-sidebar-profile">
-                {basics.image && (
-                  <div className="cv-avatar-container has-photo">
-                    <img src={basics.image} alt={basics.name} className="cv-avatar-img" />
+              {wrapSection('header_profile', 'Perfil & Foto', (
+                <div className="cv-sidebar-profile">
+                  {basics.image && (
+                    <div className="cv-avatar-container has-photo">
+                      <img src={basics.image} alt={basics.name} className="cv-avatar-img" />
+                    </div>
+                  )}
+                  <div style={{ textAlign: 'center' }}>
+                    <h2 style={{ fontSize: '1.25rem', margin: '0 0 0.2rem 0', fontWeight: 800 }}>{basics.name}</h2>
+                    {basics.label && <div style={{ fontSize: '0.85rem', opacity: 0.85, fontWeight: 600 }}>{basics.label}</div>}
                   </div>
-                )}
-                <div style={{ textAlign: 'center' }}>
-                  <h2 style={{ fontSize: '1.25rem', margin: '0 0 0.2rem 0', fontWeight: 800 }}>{basics.name}</h2>
-                  {basics.label && <div style={{ fontSize: '0.85rem', opacity: 0.85, fontWeight: 600 }}>{basics.label}</div>}
                 </div>
-              </div>
-              <div className="cv-sidebar-section">
-                <h4 className="cv-sidebar-title">Contato</h4>
-                <BlockContacts basics={basics} layoutStyle="list" />
-              </div>
-              {data.skills && <BlockSkillsTags skills={data.skills} title="Competências" />}
-              {data.languages && <BlockLanguages languages={data.languages} />}
-              {data.certificates && <BlockCertificates certificates={data.certificates} />}
-              {data.references && <BlockReferences references={data.references} />}
-              {data.interests && <BlockInterests interests={data.interests} />}
+              ))}
+              {wrapSection('contacts', 'Contatos', (
+                <div className="cv-sidebar-section">
+                  <h4 className="cv-sidebar-title">Contato</h4>
+                  <BlockContacts basics={basics} layoutStyle="list" />
+                </div>
+              ))}
+              {data.skills && wrapSection('skills', 'Competências', <BlockSkillsTags skills={data.skills} title="Competências" />)}
+              {data.languages && wrapSection('languages', 'Idiomas', <BlockLanguages languages={data.languages} />)}
+              {data.certificates && wrapSection('certificates', 'Certificações', <BlockCertificates certificates={data.certificates} />)}
+              {data.references && wrapSection('references', 'Referências', <BlockReferences references={data.references} />)}
+              {data.interests && wrapSection('interests', 'Interesses', <BlockInterests interests={data.interests} />)}
             </aside>
             <main className="cv-main-col">
-              {basics.summary && <BlockSummary basics={basics} title="Sobre Mim" />}
-              {data.work && <BlockWork work={data.work} />}
-              {data.projects && <BlockProjects projects={data.projects} />}
-              {data.education && <BlockEducation education={data.education} />}
+              {basics.summary && wrapSection('summary', 'Sobre Mim', <BlockSummary basics={basics} title="Sobre Mim" />)}
+              {data.work && wrapSection('work', 'Experiência Profissional', <BlockWork work={data.work} />)}
+              {data.projects && wrapSection('projects', 'Projetos em Destaque', <BlockProjects projects={data.projects} />)}
+              {data.education && wrapSection('education', 'Formação Acadêmica', <BlockEducation education={data.education} />)}
             </main>
           </div>
         </div>
@@ -315,56 +432,55 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
       return (
         <div className="cv-page-a4">
           <div className="cv-card layout-dynamic_math">
-            {/* Header: Avatar + Nome & Cargo à esquerda; Contatos e Redes à direita */}
-            <header className="cv-math-header">
-              <div className="cv-math-header-profile">
-                {basics.image && (
-                  <div className="cv-avatar-container cv-math-avatar">
-                    <img src={basics.image} alt={basics.name} className="cv-avatar-img" />
+            {wrapSection('header', 'Perfil & Contatos', (
+              <header className="cv-math-header">
+                <div className="cv-math-header-profile">
+                  {basics.image && (
+                    <div className="cv-avatar-container cv-math-avatar">
+                      <img src={basics.image} alt={basics.name} className="cv-avatar-img" />
+                    </div>
+                  )}
+                  <div>
+                    <h1 className="cv-math-name cv-name">{basics.name}</h1>
+                    {basics.label && <div className="cv-math-label cv-label">{basics.label}</div>}
                   </div>
-                )}
-                <div>
-                  <h1 className="cv-math-name cv-name">{basics.name}</h1>
-                  {basics.label && <div className="cv-math-label cv-label">{basics.label}</div>}
                 </div>
-              </div>
 
-              <div className="cv-math-contacts">
-                {basics.email && (
-                  <div>✉ <a href={`mailto:${basics.email}`} className="cv-link">{basics.email}</a></div>
-                )}
-                {basics.phone && (
-                  <div>📞 <a href={`tel:${basics.phone.replace(/[^\d+]/g, '')}`} className="cv-link">{basics.phone}</a></div>
-                )}
-                {basics.location && (
-                  <div>📍 {[basics.location.city, basics.location.region, basics.location.countryCode].filter(Boolean).join(', ')}</div>
-                )}
-                {basics.url && (
-                  <div>🌐 <a href={basics.url} target="_blank" rel="noreferrer" className="cv-link">{basics.url.replace(/^https?:\/\//, '')}</a></div>
-                )}
-                {basics.profiles && basics.profiles.length > 0 && (
-                  <div className="cv-math-profiles">
-                    {basics.profiles.map((p, idx) => (
-                      <div key={idx}>
-                        <a href={p.url} target="_blank" rel="noreferrer" className="cv-link">
-                          🔗 {p.network}: {p.username}
-                        </a>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </header>
+                <div className="cv-math-contacts">
+                  {basics.email && (
+                    <div>✉ <a href={`mailto:${basics.email}`} className="cv-link">{basics.email}</a></div>
+                  )}
+                  {basics.phone && (
+                    <div>📞 <a href={`tel:${basics.phone.replace(/[^\d+]/g, '')}`} className="cv-link">{basics.phone}</a></div>
+                  )}
+                  {basics.location && (
+                    <div>📍 {[basics.location.city, basics.location.region, basics.location.countryCode].filter(Boolean).join(', ')}</div>
+                  )}
+                  {basics.url && (
+                    <div>🌐 <a href={basics.url} target="_blank" rel="noreferrer" className="cv-link">{basics.url.replace(/^https?:\/\//, '')}</a></div>
+                  )}
+                  {basics.profiles && basics.profiles.length > 0 && (
+                    <div className="cv-math-profiles">
+                      {basics.profiles.map((p, idx) => (
+                        <div key={idx}>
+                          <a href={p.url} target="_blank" rel="noreferrer" className="cv-link">
+                            🔗 {p.network}: {p.username}
+                          </a>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </header>
+            ))}
 
-            {/* Resumo / Sobre Mim */}
-            {basics.summary && (
+            {basics.summary && wrapSection('summary', 'Resumo / Sobre Mim', (
               <div className="cv-math-summary">
                 {basics.summary}
               </div>
-            )}
+            ))}
 
-            {/* Experiência Profissional */}
-            {data.work && data.work.length > 0 && (
+            {data.work && data.work.length > 0 && wrapSection('work', 'Experiência Profissional', (
               <section className="cv-section">
                 <h2 className="cv-math-section-title">
                   💼 EXPERIÊNCIA PROFISSIONAL
@@ -399,10 +515,9 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
                   ))}
                 </div>
               </section>
-            )}
+            ))}
 
-            {/* Projetos em Destaque & Repositórios (Grid Matemático) */}
-            {data.projects && data.projects.length > 0 && (
+            {data.projects && data.projects.length > 0 && wrapSection('projects', 'Projetos em Destaque', (
               <section className="cv-section">
                 <h2 className="cv-math-section-title">
                   🚀 PROJETOS EM DESTAQUE & REPOSITÓRIOS
@@ -440,10 +555,9 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
                   ))}
                 </div>
               </section>
-            )}
+            ))}
 
-            {/* Competências & Habilidades Técnicas (Grid Matemático) */}
-            {data.skills && data.skills.length > 0 && (
+            {data.skills && data.skills.length > 0 && wrapSection('skills', 'Competências Técnicas', (
               <section className="cv-section">
                 <h2 className="cv-math-section-title">
                   ⚡ COMPETÊNCIAS & HABILIDADES TÉCNICAS
@@ -465,10 +579,9 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
                   ))}
                 </div>
               </section>
-            )}
+            ))}
 
-            {/* Formação Acadêmica (Grid Matemático) */}
-            {data.education && data.education.length > 0 && (
+            {data.education && data.education.length > 0 && wrapSection('education', 'Formação Acadêmica', (
               <section className="cv-section">
                 <h2 className="cv-math-section-title">
                   🎓 FORMAÇÃO ACADÊMICA
@@ -490,10 +603,9 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
                   ))}
                 </div>
               </section>
-            )}
+            ))}
 
-            {/* Idiomas & Fluência (Grid Matemático) */}
-            {data.languages && data.languages.length > 0 && (
+            {data.languages && data.languages.length > 0 && wrapSection('languages', 'Idiomas & Fluência', (
               <section className="cv-section">
                 <h2 className="cv-math-section-title">
                   🌐 IDIOMAS & FLUÊNCIA
@@ -508,10 +620,9 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
                   ))}
                 </div>
               </section>
-            )}
+            ))}
 
-            {/* Certificações & Licenças (Grid Matemático) */}
-            {data.certificates && data.certificates.length > 0 && (
+            {data.certificates && data.certificates.length > 0 && wrapSection('certificates', 'Certificações & Licenças', (
               <section className="cv-section">
                 <h2 className="cv-math-section-title">
                   📜 CERTIFICAÇÕES & LICENÇAS
@@ -541,10 +652,9 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
                   ))}
                 </div>
               </section>
-            )}
+            ))}
 
-            {/* Interesses & Frentes de Pesquisa (Grid Matemático) */}
-            {data.interests && data.interests.length > 0 && (
+            {data.interests && data.interests.length > 0 && wrapSection('interests', 'Interesses & Pesquisa', (
               <section className="cv-section">
                 <h2 className="cv-math-section-title">
                   🎯 INTERESSES & FRENTES DE PESQUISA
@@ -566,12 +676,11 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
                   ))}
                 </div>
               </section>
-            )}
+            ))}
 
-            {/* Referências Profissionais */}
-            {data.references && data.references.length > 0 && (
+            {data.references && data.references.length > 0 && wrapSection('references', 'Referências', (
               <BlockReferences references={data.references} />
-            )}
+            ))}
           </div>
         </div>
       )
@@ -582,17 +691,17 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
       return (
         <div className="cv-page-a4">
           <div className="cv-card layout-linear">
-            <BlockHeader basics={basics} variant="linear" />
-            <BlockContacts basics={basics} layoutStyle="row" />
-            {basics.summary && <BlockSummary basics={basics} />}
-            {data.work && <BlockWork work={data.work} />}
-            {data.projects && <BlockProjects projects={data.projects} />}
-            {data.skills && <BlockSkillsTags skills={data.skills} />}
-            {data.education && <BlockEducation education={data.education} />}
-            {data.languages && <BlockLanguages languages={data.languages} />}
-            {data.certificates && <BlockCertificates certificates={data.certificates} />}
-            {data.references && <BlockReferences references={data.references} />}
-            {data.interests && <BlockInterests interests={data.interests} />}
+            {wrapSection('header', 'Cabeçalho Linear', <BlockHeader basics={basics} variant="linear" />)}
+            {wrapSection('contacts', 'Contatos', <BlockContacts basics={basics} layoutStyle="row" />)}
+            {basics.summary && wrapSection('summary', 'Resumo', <BlockSummary basics={basics} />)}
+            {data.work && wrapSection('work', 'Experiência Profissional', <BlockWork work={data.work} />)}
+            {data.projects && wrapSection('projects', 'Projetos em Destaque', <BlockProjects projects={data.projects} />)}
+            {data.skills && wrapSection('skills', 'Competências', <BlockSkillsTags skills={data.skills} />)}
+            {data.education && wrapSection('education', 'Formação Acadêmica', <BlockEducation education={data.education} />)}
+            {data.languages && wrapSection('languages', 'Idiomas', <BlockLanguages languages={data.languages} />)}
+            {data.certificates && wrapSection('certificates', 'Certificações', <BlockCertificates certificates={data.certificates} />)}
+            {data.references && wrapSection('references', 'Referências', <BlockReferences references={data.references} />)}
+            {data.interests && wrapSection('interests', 'Interesses', <BlockInterests interests={data.interests} />)}
           </div>
         </div>
       )
@@ -602,16 +711,16 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
     return (
       <div className="cv-page-a4">
         <div className={`cv-card ${blueprint.customClass || ''}`}>
-          <BlockHeader basics={basics} variant="standard" />
-          {basics.summary && <BlockSummary basics={basics} />}
-          {data.work && <BlockWork work={data.work} />}
-          {data.projects && <BlockProjects projects={data.projects} />}
-          {data.skills && <BlockSkillsTags skills={data.skills} />}
-          {data.education && <BlockEducation education={data.education} />}
-          {data.languages && <BlockLanguages languages={data.languages} />}
-          {data.certificates && <BlockCertificates certificates={data.certificates} />}
-          {data.references && <BlockReferences references={data.references} />}
-          {data.interests && <BlockInterests interests={data.interests} />}
+          {wrapSection('header', 'Cabeçalho Padrão', <BlockHeader basics={basics} variant="standard" />)}
+          {basics.summary && wrapSection('summary', 'Resumo', <BlockSummary basics={basics} />)}
+          {data.work && wrapSection('work', 'Experiência Profissional', <BlockWork work={data.work} />)}
+          {data.projects && wrapSection('projects', 'Projetos em Destaque', <BlockProjects projects={data.projects} />)}
+          {data.skills && wrapSection('skills', 'Competências', <BlockSkillsTags skills={data.skills} />)}
+          {data.education && wrapSection('education', 'Formação Acadêmica', <BlockEducation education={data.education} />)}
+          {data.languages && wrapSection('languages', 'Idiomas', <BlockLanguages languages={data.languages} />)}
+          {data.certificates && wrapSection('certificates', 'Certificações', <BlockCertificates certificates={data.certificates} />)}
+          {data.references && wrapSection('references', 'Referências', <BlockReferences references={data.references} />)}
+          {data.interests && wrapSection('interests', 'Interesses', <BlockInterests interests={data.interests} />)}
         </div>
       </div>
     )
@@ -621,23 +730,27 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
     return (
       <div className="cv-page-a4 cv-cover-letter-page">
         <div className="cv-card cv-cover-letter-card">
-          <header className="cv-cover-letter-header">
-            <h1 className="cv-name">{basics.name}</h1>
-            {basics.label && <div className="cv-label">{basics.label}</div>}
-            <div className="cv-contacts cv-contacts-row" style={{ marginTop: '0.4rem' }}>
-              {basics.email && <span>✉ {basics.email}</span>}
-              {basics.phone && <span>📞 {basics.phone}</span>}
-              {basics.location && (
-                <span>📍 {[basics.location.city, basics.location.region].filter(Boolean).join(', ')}</span>
-              )}
-            </div>
-          </header>
+          {wrapSection('cover_header', 'Cabeçalho da Carta', (
+            <header className="cv-cover-letter-header">
+              <h1 className="cv-name">{basics.name}</h1>
+              {basics.label && <div className="cv-label">{basics.label}</div>}
+              <div className="cv-contacts cv-contacts-row" style={{ marginTop: '0.4rem' }}>
+                {basics.email && <span>✉ {basics.email}</span>}
+                {basics.phone && <span>📞 {basics.phone}</span>}
+                {basics.location && (
+                  <span>📍 {[basics.location.city, basics.location.region].filter(Boolean).join(', ')}</span>
+                )}
+              </div>
+            </header>
+          ))}
           <div className="cv-cover-letter-divider" />
-          <BlockCoverLetter
-            coverLetter={data.coverLetter}
-            basics={basics}
-            onRequestGenerate={onRequestGenerateCoverLetter}
-          />
+          {wrapSection('cover_body', 'Corpo da Carta de Apresentação', (
+            <BlockCoverLetter
+              coverLetter={data.coverLetter}
+              basics={basics}
+              onRequestGenerate={onRequestGenerateCoverLetter}
+            />
+          ))}
         </div>
       </div>
     )

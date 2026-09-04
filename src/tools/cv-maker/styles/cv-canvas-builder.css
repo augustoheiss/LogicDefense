@@ -455,10 +455,314 @@
     margin: 0 !important;
   }
 
-  .cv-canvas-block {
+  .cv-canvas-block,
+  .cv-structural-box {
     border: none !important;
     background: transparent !important;
     box-shadow: none !important;
     padding: 0 !important;
   }
+
+  .cv-structural-box__toolbar,
+  .cv-structural-handle,
+  .cv-structural-box__overflow-badge,
+  .cv-column-splitter {
+    display: none !important;
+  }
 }
+
+/* =============================================================
+   ── Universal Structural Canvas Mode (Continuous Resize & Splitter) ──
+   ============================================================= */
+
+.cv-structural-box {
+  position: relative;
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+  box-sizing: border-box;
+}
+
+.cv-structural-box--active {
+  border: 1.5px dashed rgba(59, 130, 246, 0.4);
+  border-radius: 6px;
+  padding: 0.45rem;
+  margin-bottom: 0.65rem;
+}
+
+.cv-structural-box--active:hover {
+  border-color: rgba(59, 130, 246, 0.85);
+  background: rgba(59, 130, 246, 0.02);
+}
+
+.cv-structural-box.is-resizing {
+  border-color: #3b82f6 !important;
+  user-select: none;
+}
+
+.cv-structural-box__toolbar {
+  display: none;
+  position: absolute;
+  top: -14px;
+  left: 6px;
+  right: 6px;
+  justify-content: space-between;
+  align-items: center;
+  z-index: 20;
+  pointer-events: none;
+}
+
+.cv-structural-box--active:hover .cv-structural-box__toolbar,
+.cv-structural-box.is-resizing .cv-structural-box__toolbar {
+  display: flex;
+}
+
+.cv-structural-box__tag {
+  background: #0f172a;
+  color: #38bdf8;
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 0.15rem 0.5rem;
+  border-radius: 4px;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+  pointer-events: auto;
+  border: 1px solid #1e293b;
+}
+
+.cv-structural-box__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  pointer-events: auto;
+  background: #0f172a;
+  padding: 0.15rem 0.4rem;
+  border-radius: 4px;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+  border: 1px solid #1e293b;
+}
+
+.cv-structural-box__dimension-indicator {
+  color: #94a3b8;
+  font-size: 0.68rem;
+  font-weight: 600;
+  padding: 0 0.2rem;
+}
+
+.cv-structural-act-btn {
+  background: transparent;
+  border: none;
+  color: #cbd5e1;
+  font-size: 0.72rem;
+  cursor: pointer;
+  padding: 0.1rem 0.3rem;
+  border-radius: 3px;
+  transition: all 0.15s;
+}
+
+.cv-structural-act-btn:hover {
+  background: #1e293b;
+  color: #ffffff;
+}
+
+.cv-structural-act-btn--reset:hover {
+  color: #f87171;
+}
+
+/* Resize Handles */
+.cv-structural-handle {
+  position: absolute;
+  z-index: 25;
+  touch-action: none;
+}
+
+.cv-structural-handle--x {
+  top: 0;
+  bottom: 0;
+  right: -6px;
+  width: 12px;
+  cursor: col-resize;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cv-handle-pill {
+  width: 4px;
+  height: 28px;
+  background: #3b82f6;
+  border-radius: 2px;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.cv-structural-handle--x:hover .cv-handle-pill,
+.cv-structural-box:hover .cv-handle-pill {
+  opacity: 1;
+}
+
+.cv-structural-handle--y {
+  left: 0;
+  right: 0;
+  bottom: -6px;
+  height: 12px;
+  cursor: row-resize;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cv-handle-pill-horizontal {
+  height: 4px;
+  width: 28px;
+  background: #3b82f6;
+  border-radius: 2px;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.cv-structural-handle--y:hover .cv-handle-pill-horizontal,
+.cv-structural-box:hover .cv-handle-pill-horizontal {
+  opacity: 1;
+}
+
+.cv-structural-handle--xy {
+  right: -6px;
+  bottom: -6px;
+  width: 16px;
+  height: 16px;
+  cursor: nwse-resize;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cv-handle-corner {
+  width: 9px;
+  height: 9px;
+  background: #3b82f6;
+  border-radius: 2px;
+  border: 1px solid #ffffff;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.cv-structural-handle--xy:hover .cv-handle-corner,
+.cv-structural-box:hover .cv-handle-corner {
+  opacity: 1;
+}
+
+/* Overflow Warning Badge */
+.cv-structural-box__overflow-badge {
+  position: absolute;
+  bottom: 4px;
+  right: 8px;
+  background: rgba(239, 68, 68, 0.95);
+  color: #ffffff;
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  box-shadow: 0 4px 10px rgba(239, 68, 68, 0.3);
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  z-index: 30;
+}
+
+/* Column Splitter Handle (Excel / Splitter Style) */
+.cv-column-splitter {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 18px;
+  margin-left: -9px;
+  cursor: col-resize;
+  z-index: 40;
+  touch-action: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cv-column-splitter__line {
+  width: 2px;
+  height: 100%;
+  background: rgba(59, 130, 246, 0.35);
+  transition: all 0.15s ease;
+}
+
+.cv-column-splitter:hover .cv-column-splitter__line,
+.cv-column-splitter.is-dragging .cv-column-splitter__line {
+  background: #3b82f6;
+  width: 3px;
+}
+
+.cv-column-splitter__knob {
+  position: absolute;
+  top: 35px;
+  background: #0f172a;
+  border: 1.5px solid #3b82f6;
+  color: #38bdf8;
+  border-radius: 12px;
+  padding: 0.2rem 0.5rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  user-select: none;
+}
+
+.cv-column-splitter:hover .cv-column-splitter__knob,
+.cv-column-splitter.is-dragging .cv-column-splitter__knob {
+  opacity: 1;
+}
+
+/* Toggle Button in Toolbar */
+.cv-btn-canvas-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.42rem 0.85rem;
+  border-radius: 8px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  border: 1px solid #334155;
+  background: #1e293b;
+  color: #94a3b8;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.cv-btn-canvas-toggle:hover {
+  background: #334155;
+  color: #f8fafc;
+}
+
+.cv-btn-canvas-toggle.is-active {
+  background: rgba(16, 185, 129, 0.15);
+  border-color: #10b981;
+  color: #34d399;
+  box-shadow: 0 0 12px rgba(16, 185, 129, 0.2);
+}
+
+.cv-btn-reset-structure {
+  background: transparent;
+  border: 1px dashed #475569;
+  color: #94a3b8;
+  font-size: 0.76rem;
+  padding: 0.35rem 0.6rem;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.cv-btn-reset-structure:hover {
+  border-color: #f87171;
+  color: #f87171;
+}
+

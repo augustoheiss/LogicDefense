@@ -43,7 +43,8 @@
     display: block !important;
   }
 
-  .cv-card {
+  .cv-card,
+  .cv-structural-box {
     background: #ffffff !important;
     margin: 0 !important;
     padding: 0 !important;

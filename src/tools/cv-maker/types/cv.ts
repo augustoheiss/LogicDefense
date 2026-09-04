@@ -86,13 +86,6 @@ export const LAYOUT_OPTIONS: LayoutOption[] = [
     label: '📐 Modelo A4 09 (Grid Math)',
     icon: '📐',
     description: 'Equilíbrio e proporção matemática pura com tipografia IBM Plex, micro-cards compactos e alta densidade A4.'
-  },
-  {
-    id: 'canvas_livre',
-    name: 'Modelo A4 10',
-    label: '🧩 Modelo A4 10 (Canvas Livre A4)',
-    icon: '🧩',
-    description: 'Layout flexível por blocos configuráveis (reordene, oculte e ajuste largura dos blocos no preview).'
   }
 ]
 
@@ -430,5 +423,24 @@ export interface CanvasPreset {
   description: string
   icon: string
   blocks: CanvasBlockConfig[]
+}
+
+/**
+ * Dimensões e comportamento contínuo de uma caixa de seção no Modo Canvas Livre Universal
+ */
+export interface SectionBoxDimensions {
+  widthPercent?: number       // Largura contínua de 10% a 100%
+  minHeightPx?: number        // Altura mínima em pixels
+  maxHeightPx?: number        // Altura máxima em pixels
+  order?: number              // Ordem visual no container
+}
+
+/**
+ * Configuração Estrutural de um Modelo no Modo Canvas Livre Universal
+ */
+export interface LayoutStructureConfig {
+  isFreeCanvasActive: boolean
+  columnSplitRatio?: number   // Proporção percentual da coluna esquerda/sidebar (ex: 28 = 28% / 72%)
+  sectionDimensions: Record<string, SectionBoxDimensions>
 }
 

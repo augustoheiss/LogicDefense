@@ -1,5 +1,5 @@
 import React from 'react'
-import type { CVData, ThemeVariant, LayoutVariant, ViewMode, CVDesignConfig } from '../../types/cv'
+import type { CVData, ThemeVariant, LayoutVariant, ViewMode, CVDesignConfig, LayoutStructureConfig } from '../../types/cv'
 import { getLayoutBlueprint } from '../../engine/blueprints'
 import { CVPrintContainer } from './CVPrintContainer'
 import { UniversalLayoutRenderer } from './UniversalLayoutRenderer'
@@ -11,6 +11,8 @@ interface CVViewerProps {
   viewMode?: ViewMode
   designConfig?: CVDesignConfig
   onRequestGenerateCoverLetter?: () => void
+  structureConfig?: LayoutStructureConfig
+  onUpdateStructureConfig?: (newConfig: LayoutStructureConfig) => void
 }
 
 export const CVViewer: React.FC<CVViewerProps> = ({
@@ -19,7 +21,9 @@ export const CVViewer: React.FC<CVViewerProps> = ({
   layout = 'modular',
   viewMode = 'cv',
   designConfig,
-  onRequestGenerateCoverLetter
+  onRequestGenerateCoverLetter,
+  structureConfig,
+  onUpdateStructureConfig
 }) => {
   if (!data || !data.basics) {
     return (
@@ -42,6 +46,8 @@ export const CVViewer: React.FC<CVViewerProps> = ({
         viewMode={viewMode}
         designConfig={designConfig}
         onRequestGenerateCoverLetter={onRequestGenerateCoverLetter}
+        structureConfig={structureConfig}
+        onUpdateStructureConfig={onUpdateStructureConfig}
       />
     </CVPrintContainer>
   )
