@@ -290,13 +290,17 @@ function getEmbeddedCss(): string {
 
     /* ── Layouts Wireframe & Contenção de Sidebar ── */
     .layout-sidebar .cv-sidebar-layout,
+    .layout-sidebar.cv-sidebar-layout,
     .layout-compact_split .cv-duo-layout,
-    .layout-corporate_timeline .cv-navy-layout {
+    .layout-compact_split.cv-duo-layout,
+    .layout-corporate_timeline .cv-navy-layout,
+    .layout-corporate_timeline.cv-navy-layout {
       display: grid;
       grid-template-columns: 240px 1fr;
       gap: 2rem;
       align-items: start;
     }
+    .layout-corporate_timeline.cv-bleed-card { padding: 0 !important; }
     .layout-corporate_timeline .cv-navy-sidebar { background: #0f172a; color: #f8fafc; padding: 2.2rem 1.5rem; }
     .layout-editorial_accent .cv-editorial-grid { display: grid; grid-template-columns: 220px 1fr; gap: 1.75rem; }
     .layout-editorial_accent .cv-brand-greeting { padding: 0.3rem 0.6rem; background: currentColor; color: #fff; border-radius: 4px; font-weight: 800; }

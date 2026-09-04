@@ -754,97 +754,100 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
       const splitRatio = structureConfig?.columnSplitRatio || 32
       return (
         <div className="cv-page-a4">
-          <div
-            className="cv-card cv-navy-layout layout-corporate_timeline"
-            style={{
-              position: 'relative',
-              ...(structureConfig?.columnSplitRatio ? { gridTemplateColumns: `${structureConfig.columnSplitRatio}% 1fr` } : {})
-            }}
-          >
-            <ColumnSplitterHandle
-              splitRatio={splitRatio}
-              onUpdateSplitRatio={handleUpdateSplitRatio}
-              isFreeCanvasActive={isFreeCanvas}
-            />
-            <aside className="cv-navy-sidebar cv-sidebar-stack">
-              {renderZoneSection('header_profile', 'left', 'left', 'Perfil & Foto', (
-                <div>
-                  {basics.image && (
-                    <div className="cv-avatar-container has-photo">
-                      <img src={basics.image} alt={basics.name} className="cv-avatar-img" />
-                    </div>
-                  )}
-                  <div style={{ textAlign: 'center', marginBottom: '0.5rem' }}>
-                    <h2 style={{ fontSize: '1.35rem', margin: '0 0 0.25rem 0', fontWeight: 800, color: '#ffffff' }}>
-                      {basics.name}
-                    </h2>
-                    {basics.label && (
-                      <div style={{ fontSize: '0.85rem', color: '#f97316', fontWeight: 700, letterSpacing: '0.04em' }}>
-                        {basics.label}
+          <div className="cv-card layout-corporate_timeline cv-bleed-card">
+            <div
+              className="cv-navy-layout"
+              style={{
+                display: 'grid',
+                position: 'relative',
+                ...(structureConfig?.columnSplitRatio ? { gridTemplateColumns: `${structureConfig.columnSplitRatio}% 1fr` } : {})
+              }}
+            >
+              <ColumnSplitterHandle
+                splitRatio={splitRatio}
+                onUpdateSplitRatio={handleUpdateSplitRatio}
+                isFreeCanvasActive={isFreeCanvas}
+              />
+              <aside className="cv-navy-sidebar cv-sidebar-stack">
+                {renderZoneSection('header_profile', 'left', 'left', 'Perfil & Foto', (
+                  <div>
+                    {basics.image && (
+                      <div className="cv-avatar-container has-photo">
+                        <img src={basics.image} alt={basics.name} className="cv-avatar-img" />
                       </div>
                     )}
+                    <div style={{ textAlign: 'center', marginBottom: '0.5rem' }}>
+                      <h2 style={{ fontSize: '1.35rem', margin: '0 0 0.25rem 0', fontWeight: 800, color: '#ffffff' }}>
+                        {basics.name}
+                      </h2>
+                      {basics.label && (
+                        <div style={{ fontSize: '0.85rem', color: '#f97316', fontWeight: 700, letterSpacing: '0.04em' }}>
+                          {basics.label}
+                        </div>
+                      )}
+                    </div>
+                    <BlockCivilData basics={basics} />
                   </div>
-                  <BlockCivilData basics={basics} />
-                </div>
-              ))}
-              {renderZoneSection('contacts', 'left', 'left', 'Contatos', (
-                <div className="cv-sidebar-section">
-                  <h4 className="cv-sidebar-title" style={{ color: '#f8fafc', borderBottomColor: 'rgba(255,255,255,0.2)' }}>
-                    Contato
-                  </h4>
-                  <BlockContacts basics={basics} layoutStyle="list" />
-                </div>
-              ))}
-              {renderSkillsSection('left', 'left', 'Expertise')}
-              {renderLanguagesSection('left', 'left', 'Idiomas')}
-              {renderInterestsSection('left', 'left', 'Interesses')}
-              {basics.summary && renderZoneSection('summary', 'left', 'right', 'Sobre Mim', <BlockSummary basics={basics} title="Sobre Mim" />)}
-              {renderWorkSection('left', 'right')}
-              {renderEducationSection('left', 'right')}
-              {renderProjectsSection('left', 'right')}
-              {renderCertificatesSection('left', 'right', 'Certificações')}
-              {renderReferencesSection('left', 'right', 'Referências')}
-            </aside>
+                ))}
+                {renderZoneSection('contacts', 'left', 'left', 'Contatos', (
+                  <div className="cv-sidebar-section">
+                    <h4 className="cv-sidebar-title" style={{ color: '#f8fafc', borderBottomColor: 'rgba(255,255,255,0.2)' }}>
+                      Contato
+                    </h4>
+                    <BlockContacts basics={basics} layoutStyle="list" />
+                  </div>
+                ))}
+                {renderSkillsSection('left', 'left', 'Expertise')}
+                {renderLanguagesSection('left', 'left', 'Idiomas')}
+                {renderInterestsSection('left', 'left', 'Interesses')}
+                {basics.summary && renderZoneSection('summary', 'left', 'right', 'Sobre Mim', <BlockSummary basics={basics} title="Sobre Mim" />)}
+                {renderWorkSection('left', 'right')}
+                {renderEducationSection('left', 'right')}
+                {renderProjectsSection('left', 'right')}
+                {renderCertificatesSection('left', 'right', 'Certificações')}
+                {renderReferencesSection('left', 'right', 'Referências')}
+              </aside>
 
-            <main className="cv-navy-main">
-              {basics.summary && renderZoneSection('summary', 'right', 'right', 'Sobre Mim', <BlockSummary basics={basics} title="Sobre Mim" />)}
-              {renderWorkSection('right', 'right')}
-              {renderEducationSection('right', 'right')}
-              {renderProjectsSection('right', 'right')}
-              {renderCertificatesSection('right', 'right', 'Certificações')}
-              {renderReferencesSection('right', 'right', 'Referências')}
-              {renderZoneSection('header_profile', 'right', 'left', 'Perfil & Foto', (
-                <div>
-                  {basics.image && (
-                    <div className="cv-avatar-container has-photo">
-                      <img src={basics.image} alt={basics.name} className="cv-avatar-img" />
-                    </div>
-                  )}
-                  <div style={{ textAlign: 'center', marginBottom: '0.5rem' }}>
-                    <h2 style={{ fontSize: '1.35rem', margin: '0 0 0.25rem 0', fontWeight: 800, color: '#ffffff' }}>
-                      {basics.name}
-                    </h2>
-                    {basics.label && (
-                      <div style={{ fontSize: '0.85rem', color: '#f97316', fontWeight: 700, letterSpacing: '0.04em' }}>
-                        {basics.label}
+              <main className="cv-navy-main">
+                {basics.summary && renderZoneSection('summary', 'right', 'right', 'Sobre Mim', <BlockSummary basics={basics} title="Sobre Mim" />)}
+                {renderWorkSection('right', 'right')}
+                {renderEducationSection('right', 'right')}
+                {renderProjectsSection('right', 'right')}
+                {renderCertificatesSection('right', 'right', 'Certificações')}
+                {renderReferencesSection('right', 'right', 'Referências')}
+                {renderZoneSection('header_profile', 'right', 'left', 'Perfil & Foto', (
+                  <div>
+                    {basics.image && (
+                      <div className="cv-avatar-container has-photo">
+                        <img src={basics.image} alt={basics.name} className="cv-avatar-img" />
                       </div>
                     )}
+                    <div style={{ textAlign: 'center', marginBottom: '0.5rem' }}>
+                      <h2 style={{ fontSize: '1.35rem', margin: '0 0 0.25rem 0', fontWeight: 800, color: '#ffffff' }}>
+                        {basics.name}
+                      </h2>
+                      {basics.label && (
+                        <div style={{ fontSize: '0.85rem', color: '#f97316', fontWeight: 700, letterSpacing: '0.04em' }}>
+                          {basics.label}
+                        </div>
+                      )}
+                    </div>
+                    <BlockCivilData basics={basics} />
                   </div>
-                  <BlockCivilData basics={basics} />
-                </div>
-              ))}
-              {renderZoneSection('contacts', 'right', 'left', 'Contatos', (
-                <div className="cv-sidebar-section">
-                  <h4 className="cv-sidebar-title" style={{ color: '#f8fafc', borderBottomColor: 'rgba(255,255,255,0.2)' }}>
-                    Contato
-                  </h4>
-                  <BlockContacts basics={basics} layoutStyle="list" />
-                </div>
-              ))}
-              {renderSkillsSection('right', 'left', 'Expertise')}
-              {renderLanguagesSection('right', 'left', 'Idiomas')}
-              {renderInterestsSection('right', 'left', 'Interesses')}
-            </main>
+                ))}
+                {renderZoneSection('contacts', 'right', 'left', 'Contatos', (
+                  <div className="cv-sidebar-section">
+                    <h4 className="cv-sidebar-title" style={{ color: '#f8fafc', borderBottomColor: 'rgba(255,255,255,0.2)' }}>
+                      Contato
+                    </h4>
+                    <BlockContacts basics={basics} layoutStyle="list" />
+                  </div>
+                ))}
+                {renderSkillsSection('right', 'left', 'Expertise')}
+                {renderLanguagesSection('right', 'left', 'Idiomas')}
+                {renderInterestsSection('right', 'left', 'Interesses')}
+              </main>
+            </div>
           </div>
         </div>
       )
@@ -892,77 +895,80 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
       const splitRatio = structureConfig?.columnSplitRatio || 34
       return (
         <div className="cv-page-a4">
-          <div
-            className="cv-card cv-duo-layout layout-compact_split"
-            style={{
-              position: 'relative',
-              ...(structureConfig?.columnSplitRatio ? { gridTemplateColumns: `${structureConfig.columnSplitRatio}% 1fr` } : {})
-            }}
-          >
-            <ColumnSplitterHandle
-              splitRatio={splitRatio}
-              onUpdateSplitRatio={handleUpdateSplitRatio}
-              isFreeCanvasActive={isFreeCanvas}
-            />
-            <aside className="cv-duo-left cv-sidebar-stack">
-              {basics.image && renderZoneSection('photo', 'left', 'left', 'Foto de Perfil', (
-                <div className="cv-avatar-container has-photo">
-                  <img src={basics.image} alt={basics.name} className="cv-avatar-img" />
-                </div>
-              ))}
-              {basics.summary && renderZoneSection('summary', 'left', 'left', 'Perfil / Resumo', (
-                <section className="cv-section cv-avoid-break">
-                  <h4 className="cv-section-title" style={{ fontSize: '0.88rem' }}>Perfil</h4>
-                  <p className="cv-summary-text" style={{ fontSize: '0.82rem' }}>{basics.summary}</p>
-                </section>
-              ))}
-              {renderSkillsSection('left', 'left', 'Expertise')}
-              {renderInterestsSection('left', 'left', 'Hobbies')}
-              {renderZoneSection('civil', 'left', 'left', 'Dados Civis', <BlockCivilData basics={basics} />)}
-              {renderLanguagesSection('left', 'left', 'Idiomas')}
-              {renderZoneSection('header', 'left', 'right', 'Identificação & Contatos', (
-                <header className="cv-duo-header">
-                  <h1 className="cv-name">{basics.name}</h1>
-                  {basics.label && <div className="cv-label">{basics.label}</div>}
-                  <BlockContacts basics={basics} layoutStyle="row" />
-                </header>
-              ))}
-              {renderWorkSection('left', 'right')}
-              {renderEducationSection('left', 'right')}
-              {renderProjectsSection('left', 'right')}
-              {renderCertificatesSection('left', 'right', 'Certificações')}
-              {renderReferencesSection('left', 'right', 'Referências')}
-            </aside>
+          <div className="cv-card layout-compact_split">
+            <div
+              className="cv-duo-layout"
+              style={{
+                display: 'grid',
+                position: 'relative',
+                ...(structureConfig?.columnSplitRatio ? { gridTemplateColumns: `${structureConfig.columnSplitRatio}% 1fr` } : {})
+              }}
+            >
+              <ColumnSplitterHandle
+                splitRatio={splitRatio}
+                onUpdateSplitRatio={handleUpdateSplitRatio}
+                isFreeCanvasActive={isFreeCanvas}
+              />
+              <aside className="cv-duo-left cv-sidebar-stack">
+                {basics.image && renderZoneSection('photo', 'left', 'left', 'Foto de Perfil', (
+                  <div className="cv-avatar-container has-photo">
+                    <img src={basics.image} alt={basics.name} className="cv-avatar-img" />
+                  </div>
+                ))}
+                {basics.summary && renderZoneSection('summary', 'left', 'left', 'Perfil / Resumo', (
+                  <section className="cv-section cv-avoid-break">
+                    <h4 className="cv-section-title" style={{ fontSize: '0.88rem' }}>Perfil</h4>
+                    <p className="cv-summary-text" style={{ fontSize: '0.82rem' }}>{basics.summary}</p>
+                  </section>
+                ))}
+                {renderSkillsSection('left', 'left', 'Expertise')}
+                {renderInterestsSection('left', 'left', 'Hobbies')}
+                {renderZoneSection('civil', 'left', 'left', 'Dados Civis', <BlockCivilData basics={basics} />)}
+                {renderLanguagesSection('left', 'left', 'Idiomas')}
+                {renderZoneSection('header', 'left', 'right', 'Identificação & Contatos', (
+                  <header className="cv-duo-header">
+                    <h1 className="cv-name">{basics.name}</h1>
+                    {basics.label && <div className="cv-label">{basics.label}</div>}
+                    <BlockContacts basics={basics} layoutStyle="row" />
+                  </header>
+                ))}
+                {renderWorkSection('left', 'right')}
+                {renderEducationSection('left', 'right')}
+                {renderProjectsSection('left', 'right')}
+                {renderCertificatesSection('left', 'right', 'Certificações')}
+                {renderReferencesSection('left', 'right', 'Referências')}
+              </aside>
 
-            <main className="cv-duo-right">
-              {renderZoneSection('header', 'right', 'right', 'Identificação & Contatos', (
-                <header className="cv-duo-header">
-                  <h1 className="cv-name">{basics.name}</h1>
-                  {basics.label && <div className="cv-label">{basics.label}</div>}
-                  <BlockContacts basics={basics} layoutStyle="row" />
-                </header>
-              ))}
-              {basics.image && renderZoneSection('photo', 'right', 'left', 'Foto de Perfil', (
-                <div className="cv-avatar-container has-photo">
-                  <img src={basics.image} alt={basics.name} className="cv-avatar-img" />
-                </div>
-              ))}
-              {basics.summary && renderZoneSection('summary', 'right', 'left', 'Perfil / Resumo', (
-                <section className="cv-section cv-avoid-break">
-                  <h4 className="cv-section-title" style={{ fontSize: '0.88rem' }}>Perfil</h4>
-                  <p className="cv-summary-text" style={{ fontSize: '0.82rem' }}>{basics.summary}</p>
-                </section>
-              ))}
-              {renderSkillsSection('right', 'left', 'Expertise')}
-              {renderWorkSection('right', 'right')}
-              {renderEducationSection('right', 'right')}
-              {renderProjectsSection('right', 'right')}
-              {renderCertificatesSection('right', 'right', 'Certificações')}
-              {renderZoneSection('civil', 'right', 'left', 'Dados Civis', <BlockCivilData basics={basics} />)}
-              {renderLanguagesSection('right', 'left', 'Idiomas')}
-              {renderInterestsSection('right', 'left', 'Hobbies')}
-              {renderReferencesSection('right', 'right', 'Referências')}
-            </main>
+              <main className="cv-duo-right">
+                {renderZoneSection('header', 'right', 'right', 'Identificação & Contatos', (
+                  <header className="cv-duo-header">
+                    <h1 className="cv-name">{basics.name}</h1>
+                    {basics.label && <div className="cv-label">{basics.label}</div>}
+                    <BlockContacts basics={basics} layoutStyle="row" />
+                  </header>
+                ))}
+                {basics.image && renderZoneSection('photo', 'right', 'left', 'Foto de Perfil', (
+                  <div className="cv-avatar-container has-photo">
+                    <img src={basics.image} alt={basics.name} className="cv-avatar-img" />
+                  </div>
+                ))}
+                {basics.summary && renderZoneSection('summary', 'right', 'left', 'Perfil / Resumo', (
+                  <section className="cv-section cv-avoid-break">
+                    <h4 className="cv-section-title" style={{ fontSize: '0.88rem' }}>Perfil</h4>
+                    <p className="cv-summary-text" style={{ fontSize: '0.82rem' }}>{basics.summary}</p>
+                  </section>
+                ))}
+                {renderSkillsSection('right', 'left', 'Expertise')}
+                {renderWorkSection('right', 'right')}
+                {renderEducationSection('right', 'right')}
+                {renderProjectsSection('right', 'right')}
+                {renderCertificatesSection('right', 'right', 'Certificações')}
+                {renderZoneSection('civil', 'right', 'left', 'Dados Civis', <BlockCivilData basics={basics} />)}
+                {renderLanguagesSection('right', 'left', 'Idiomas')}
+                {renderInterestsSection('right', 'left', 'Hobbies')}
+                {renderReferencesSection('right', 'right', 'Referências')}
+              </main>
+            </div>
           </div>
         </div>
       )
@@ -973,78 +979,81 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
       const splitRatio = structureConfig?.columnSplitRatio || 32
       return (
         <div className="cv-page-a4">
-          <div
-            className="cv-card cv-sidebar-layout layout-sidebar"
-            style={{
-              position: 'relative',
-              ...(structureConfig?.columnSplitRatio ? { gridTemplateColumns: `${structureConfig.columnSplitRatio}% 1fr` } : {})
-            }}
-          >
-            <ColumnSplitterHandle
-              splitRatio={splitRatio}
-              onUpdateSplitRatio={handleUpdateSplitRatio}
-              isFreeCanvasActive={isFreeCanvas}
-            />
-            <aside className="cv-sidebar-col cv-sidebar-stack">
-              {renderZoneSection('header_profile', 'left', 'left', 'Perfil & Foto', (
-                <div className="cv-sidebar-profile">
-                  {basics.image && (
-                    <div className="cv-avatar-container has-photo">
-                      <img src={basics.image} alt={basics.name} className="cv-avatar-img" />
+          <div className="cv-card layout-sidebar">
+            <div
+              className="cv-sidebar-layout"
+              style={{
+                display: 'grid',
+                position: 'relative',
+                ...(structureConfig?.columnSplitRatio ? { gridTemplateColumns: `${structureConfig.columnSplitRatio}% 1fr` } : {})
+              }}
+            >
+              <ColumnSplitterHandle
+                splitRatio={splitRatio}
+                onUpdateSplitRatio={handleUpdateSplitRatio}
+                isFreeCanvasActive={isFreeCanvas}
+              />
+              <aside className="cv-sidebar-col cv-sidebar-stack">
+                {renderZoneSection('header_profile', 'left', 'left', 'Perfil & Foto', (
+                  <div className="cv-sidebar-profile">
+                    {basics.image && (
+                      <div className="cv-avatar-container has-photo">
+                        <img src={basics.image} alt={basics.name} className="cv-avatar-img" />
+                      </div>
+                    )}
+                    <div style={{ textAlign: 'center' }}>
+                      <h2 style={{ fontSize: '1.25rem', margin: '0 0 0.2rem 0', fontWeight: 800 }}>{basics.name}</h2>
+                      {basics.label && <div style={{ fontSize: '0.85rem', opacity: 0.85, fontWeight: 600 }}>{basics.label}</div>}
                     </div>
-                  )}
-                  <div style={{ textAlign: 'center' }}>
-                    <h2 style={{ fontSize: '1.25rem', margin: '0 0 0.2rem 0', fontWeight: 800 }}>{basics.name}</h2>
-                    {basics.label && <div style={{ fontSize: '0.85rem', opacity: 0.85, fontWeight: 600 }}>{basics.label}</div>}
                   </div>
-                </div>
-              ))}
-              {renderZoneSection('contacts', 'left', 'left', 'Contatos', (
-                <div className="cv-sidebar-section">
-                  <h4 className="cv-sidebar-title">Contato</h4>
-                  <BlockContacts basics={basics} layoutStyle="list" />
-                </div>
-              ))}
-              {renderSkillsSection('left', 'left', 'Competências', <BlockSkillsTags skills={data.skills} title="Competências" />)}
-              {renderLanguagesSection('left', 'left', 'Idiomas')}
-              {renderCertificatesSection('left', 'left', 'Certificações')}
-              {renderReferencesSection('left', 'left', 'Referências')}
-              {renderInterestsSection('left', 'left', 'Interesses')}
-              {basics.summary && renderZoneSection('summary', 'left', 'right', 'Sobre Mim', <BlockSummary basics={basics} title="Sobre Mim" />)}
-              {renderWorkSection('left', 'right')}
-              {renderProjectsSection('left', 'right')}
-              {renderEducationSection('left', 'right')}
-            </aside>
-            <main className="cv-main-col">
-              {basics.summary && renderZoneSection('summary', 'right', 'right', 'Sobre Mim', <BlockSummary basics={basics} title="Sobre Mim" />)}
-              {renderWorkSection('right', 'right')}
-              {renderProjectsSection('right', 'right')}
-              {renderEducationSection('right', 'right')}
-              {renderZoneSection('header_profile', 'right', 'left', 'Perfil & Foto', (
-                <div className="cv-sidebar-profile">
-                  {basics.image && (
-                    <div className="cv-avatar-container has-photo">
-                      <img src={basics.image} alt={basics.name} className="cv-avatar-img" />
+                ))}
+                {renderZoneSection('contacts', 'left', 'left', 'Contatos', (
+                  <div className="cv-sidebar-section">
+                    <h4 className="cv-sidebar-title">Contato</h4>
+                    <BlockContacts basics={basics} layoutStyle="list" />
+                  </div>
+                ))}
+                {renderSkillsSection('left', 'left', 'Competências', <BlockSkillsTags skills={data.skills} title="Competências" />)}
+                {renderLanguagesSection('left', 'left', 'Idiomas')}
+                {renderCertificatesSection('left', 'left', 'Certificações')}
+                {renderReferencesSection('left', 'left', 'Referências')}
+                {renderInterestsSection('left', 'left', 'Interesses')}
+                {basics.summary && renderZoneSection('summary', 'left', 'right', 'Sobre Mim', <BlockSummary basics={basics} title="Sobre Mim" />)}
+                {renderWorkSection('left', 'right')}
+                {renderProjectsSection('left', 'right')}
+                {renderEducationSection('left', 'right')}
+              </aside>
+              <main className="cv-main-col">
+                {basics.summary && renderZoneSection('summary', 'right', 'right', 'Sobre Mim', <BlockSummary basics={basics} title="Sobre Mim" />)}
+                {renderWorkSection('right', 'right')}
+                {renderProjectsSection('right', 'right')}
+                {renderEducationSection('right', 'right')}
+                {renderZoneSection('header_profile', 'right', 'left', 'Perfil & Foto', (
+                  <div className="cv-sidebar-profile">
+                    {basics.image && (
+                      <div className="cv-avatar-container has-photo">
+                        <img src={basics.image} alt={basics.name} className="cv-avatar-img" />
+                      </div>
+                    )}
+                    <div style={{ textAlign: 'center' }}>
+                      <h2 style={{ fontSize: '1.25rem', margin: '0 0 0.2rem 0', fontWeight: 800 }}>{basics.name}</h2>
+                      {basics.label && <div style={{ fontSize: '0.85rem', opacity: 0.85, fontWeight: 600 }}>{basics.label}</div>}
                     </div>
-                  )}
-                  <div style={{ textAlign: 'center' }}>
-                    <h2 style={{ fontSize: '1.25rem', margin: '0 0 0.2rem 0', fontWeight: 800 }}>{basics.name}</h2>
-                    {basics.label && <div style={{ fontSize: '0.85rem', opacity: 0.85, fontWeight: 600 }}>{basics.label}</div>}
                   </div>
-                </div>
-              ))}
-              {renderZoneSection('contacts', 'right', 'left', 'Contatos', (
-                <div className="cv-sidebar-section">
-                  <h4 className="cv-sidebar-title">Contato</h4>
-                  <BlockContacts basics={basics} layoutStyle="list" />
-                </div>
-              ))}
-              {renderSkillsSection('right', 'left', 'Competências', <BlockSkillsTags skills={data.skills} title="Competências" />)}
-              {renderLanguagesSection('right', 'left', 'Idiomas')}
-              {renderCertificatesSection('right', 'left', 'Certificações')}
-              {renderReferencesSection('right', 'left', 'Referências')}
-              {renderInterestsSection('right', 'left', 'Interesses')}
-            </main>
+                ))}
+                {renderZoneSection('contacts', 'right', 'left', 'Contatos', (
+                  <div className="cv-sidebar-section">
+                    <h4 className="cv-sidebar-title">Contato</h4>
+                    <BlockContacts basics={basics} layoutStyle="list" />
+                  </div>
+                ))}
+                {renderSkillsSection('right', 'left', 'Competências', <BlockSkillsTags skills={data.skills} title="Competências" />)}
+                {renderLanguagesSection('right', 'left', 'Idiomas')}
+                {renderCertificatesSection('right', 'left', 'Certificações')}
+                {renderReferencesSection('right', 'left', 'Referências')}
+                {renderInterestsSection('right', 'left', 'Interesses')}
+              </main>
+            </div>
           </div>
         </div>
       )

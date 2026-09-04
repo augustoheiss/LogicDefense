@@ -577,7 +577,8 @@
 }
 
 /* ── Modelo A4 03: Sidebar ── */
-.layout-sidebar .cv-sidebar-layout {
+.layout-sidebar .cv-sidebar-layout,
+.layout-sidebar.cv-sidebar-layout {
   display: grid;
   grid-template-columns: 240px 1fr;
   gap: 2rem;
@@ -819,7 +820,8 @@ aside .cv-contacts,
 }
 
 /* ── Modelo A4 04: Executive Duo (Victoria Wotton) ── */
-.layout-compact_split .cv-duo-layout {
+.layout-compact_split .cv-duo-layout,
+.layout-compact_split.cv-duo-layout {
   display: grid;
   grid-template-columns: 230px 1fr;
   gap: 2.2rem;
@@ -926,11 +928,15 @@ aside .cv-contacts,
 }
 
 /* ── Modelo A4 06: Navy Solid Timeline (Wilkins Micawber) ── */
-.layout-corporate_timeline .cv-navy-layout {
+.layout-corporate_timeline.cv-bleed-card {
+  padding: 0 !important;
+}
+.layout-corporate_timeline .cv-navy-layout,
+.layout-corporate_timeline.cv-navy-layout {
   display: grid;
   grid-template-columns: 240px 1fr;
-  min-height: 297mm;
-  margin: -2.2rem -2.5rem;
+  min-height: 100%;
+  margin: 0;
 }
 .layout-corporate_timeline .cv-navy-sidebar {
   background: #0f172a;

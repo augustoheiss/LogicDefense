@@ -524,6 +524,18 @@
   user-select: none;
 }
 
+/* Contenção estrita para caixas estruturais em colunas laterais / sidebars */
+aside .cv-structural-box,
+.cv-sidebar-col .cv-structural-box,
+.cv-duo-left .cv-structural-box,
+.cv-navy-sidebar .cv-structural-box,
+.cv-editorial-left .cv-structural-box {
+  max-width: 100% !important;
+  min-width: 0 !important;
+  box-sizing: border-box !important;
+  overflow-wrap: break-word !important;
+}
+
 .cv-structural-box__toolbar {
   display: none;
   position: absolute;

@@ -471,7 +471,8 @@
   }
 
   /* ── Preservação de Layouts dos 8 Modelos A4 no Print ── */
-  .layout-sidebar .cv-sidebar-layout {
+  .layout-sidebar .cv-sidebar-layout,
+  .layout-sidebar.cv-sidebar-layout {
     display: grid !important;
     grid-template-columns: 210px 1fr !important;
     gap: 1.5rem !important;
@@ -488,7 +489,8 @@
     overflow: hidden !important;
   }
 
-  .layout-compact_split .cv-duo-layout {
+  .layout-compact_split .cv-duo-layout,
+  .layout-compact_split.cv-duo-layout {
     display: grid !important;
     grid-template-columns: 200px 1fr !important;
     gap: 1.5rem !important;
@@ -552,7 +554,11 @@
     max-width: 100% !important;
   }
 
-  .layout-corporate_timeline .cv-navy-layout {
+  .layout-corporate_timeline.cv-bleed-card {
+    padding: 0 !important;
+  }
+  .layout-corporate_timeline .cv-navy-layout,
+  .layout-corporate_timeline.cv-navy-layout {
     display: grid !important;
     grid-template-columns: 215px 1fr !important;
     min-height: auto !important;
