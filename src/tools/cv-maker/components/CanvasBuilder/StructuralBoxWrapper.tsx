@@ -346,176 +346,190 @@ export const StructuralBoxWrapper: React.FC<StructuralBoxWrapperProps> = ({
       }}
       data-section-id={sectionId}
     >
-      {/* Barra de Ações Flutuante (Oculta na Impressão) */}
-      <div className="cv-structural-box__toolbar cv-no-print" onClick={e => e.stopPropagation()}>
-        {/* Tag com alça de arraste 2D integrada */}
-        <div
-          className={`cv-structural-box__tag ${isMoving ? 'is-dragging' : ''}`}
-          onPointerDown={handleMovePointerDown}
-          title="Segure e arraste pelo label para mover livremente em qualquer direção no plano X/Y"
-        >
-          <span className="cv-drag-grip">⠿</span>
-          <span>{title}</span>
-        </div>
+      {/* Menu Interno do Canvas Livre (Preenche o interior do box ao passar o mouse) */}
+      <div
+        className="cv-structural-box__overlay-menu cv-no-print"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="cv-box-menu-inner">
+          {/* Linha 1: Cabeçalho com Título Truncado, Grip de Arraste e Botões de Ação */}
+          <div className="cv-box-menu-header">
+            <div
+              className={`cv-box-menu-title-tag ${isMoving ? 'is-dragging' : ''}`}
+              onPointerDown={handleMovePointerDown}
+              title="Segure e arraste pelo título para mover livremente no plano"
+            >
+              <span className="cv-drag-grip">⠿</span>
+              <span className="cv-box-menu-title-text" title={title}>{title}</span>
+            </div>
 
-        <div className="cv-structural-box__actions">
-          {/* Indicador de Margem Lateral (X) com botões de ajuste fino */}
-          <div className="cv-structural-margin-ctrl" title="Ajustar recuo lateral (Eixo X)">
-            <button
-              type="button"
-              className="cv-margin-btn"
-              onClick={() => handleAdjustMarginX(-8)}
-              title="Mover para esquerda (-8px)"
-            >
-              ◀
-            </button>
-            <span className="cv-margin-indicator">
-              ↔ {dimensions?.marginLeftPx ?? 0}px
-            </span>
-            <button
-              type="button"
-              className="cv-margin-btn"
-              onClick={() => handleAdjustMarginX(+8)}
-              title="Mover para direita (+8px)"
-            >
-              ▶
-            </button>
+            <div className="cv-box-menu-header-actions">
+              {dimensions?.widthPercent && dimensions.widthPercent < 100 && (
+                <span className="cv-box-menu-badge">{dimensions.widthPercent}%</span>
+              )}
+
+              {onToggleHide && (
+                <button
+                  type="button"
+                  className="cv-box-menu-header-btn cv-box-menu-header-btn--hide"
+                  onClick={onToggleHide}
+                  title="Ocultar este item da folha A4 (restaurável na paleta Elementos)"
+                >
+                  👁️ Ocultar
+                </button>
+              )}
+
+              {onResetDimensions && (dimensions?.widthPercent || dimensions?.minHeightPx || dimensions?.marginTopPx || dimensions?.marginLeftPx || dimensions?.alignment || dimensions?.variant) && (
+                <button
+                  type="button"
+                  className="cv-box-menu-header-btn cv-box-menu-header-btn--reset"
+                  onClick={onResetDimensions}
+                  title="Redefinir tamanho, margens e formato deste bloco"
+                >
+                  ↺ Redefinir
+                </button>
+              )}
+            </div>
           </div>
 
-          {/* Indicador de Margem Superior (Y) com botões de ajuste fino */}
-          <div className="cv-structural-margin-ctrl" title="Ajustar margem superior (Eixo Y)">
-            <button
-              type="button"
-              className="cv-margin-btn"
-              onClick={() => handleAdjustMarginY(-4)}
-              title="Reduzir margem vertical (-4px)"
-            >
-              -
-            </button>
-            <span className="cv-margin-indicator">
-              ↕ {dimensions?.marginTopPx ?? 0}px
-            </span>
-            <button
-              type="button"
-              className="cv-margin-btn"
-              onClick={() => handleAdjustMarginY(+4)}
-              title="Aumentar margem vertical (+4px)"
-            >
-              +
-            </button>
+          {/* Linha 2: Ações Principais de Layout e Movimentação com Botões Maiores */}
+          <div className="cv-box-menu-main-row">
+            {/* Seletor de Variante de Layout Grande e Legível */}
+            {category && CATEGORY_VARIANTS_MAP[category] && onSelectVariant && (
+              <div className="cv-box-menu-variant-group">
+                <span className="cv-box-menu-section-label">Estilo:</span>
+                <select
+                  className="cv-box-menu-variant-select"
+                  value={dimensions?.variant || CATEGORY_VARIANTS_MAP[category][0].id}
+                  onChange={e => onSelectVariant(e.target.value)}
+                  title="Alterar o formato/layout deste bloco"
+                >
+                  {CATEGORY_VARIANTS_MAP[category].map(v => (
+                    <option key={v.id} value={v.id}>
+                      {v.icon} {v.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {/* Mover para Cima e para Baixo */}
+            <div className="cv-box-menu-btn-group">
+              {onMoveUp && (
+                <button
+                  type="button"
+                  className="cv-box-menu-btn cv-box-menu-btn--nav"
+                  onClick={onMoveUp}
+                  title="Mover seção para cima"
+                >
+                  ▲ Subir
+                </button>
+              )}
+              {onMoveDown && (
+                <button
+                  type="button"
+                  className="cv-box-menu-btn cv-box-menu-btn--nav"
+                  onClick={onMoveDown}
+                  title="Mover seção para baixo"
+                >
+                  ▼ Descer
+                </button>
+              )}
+            </div>
+
+            {/* Troca de Coluna em Layouts Multi-coluna */}
+            {canSwitchZone && onSwitchZone && (
+              <button
+                type="button"
+                className="cv-box-menu-btn cv-box-menu-btn--zone"
+                onClick={onSwitchZone}
+                title={`Transferir para coluna ${currentZone === 'left' ? 'Direita' : 'Esquerda'}`}
+              >
+                ⇄ Para Coluna {currentZone === 'left' ? 'Direita' : 'Esquerda'}
+              </button>
+            )}
           </div>
 
-          {/* Alinhamento rápido se largura for menor que 100% */}
-          {dimensions?.widthPercent && dimensions.widthPercent < 100 && (
-            <div className="cv-structural-align-ctrl" title="Alinhamento na linha">
+          {/* Linha 3: Ajustes Finos de Posição, Margens e Alinhamento */}
+          <div className="cv-box-menu-controls-row">
+            {/* Margem Vertical (Y) */}
+            <div className="cv-box-menu-stepper" title="Ajustar margem vertical (Eixo Y)">
+              <span className="cv-stepper-label">Margem Y:</span>
               <button
                 type="button"
-                className={`cv-margin-btn ${dimensions?.alignment === 'left' || !dimensions?.alignment ? 'is-active' : ''}`}
-                onClick={() => handleSetAlignment('left')}
-                title="Alinhar à Esquerda"
+                className="cv-stepper-btn"
+                onClick={() => handleAdjustMarginY(-4)}
+                title="Reduzir margem vertical (-4px)"
               >
-                |◀
+                -
               </button>
+              <span className="cv-stepper-value">
+                {dimensions?.marginTopPx ?? 0}px
+              </span>
               <button
                 type="button"
-                className={`cv-margin-btn ${dimensions?.alignment === 'center' ? 'is-active' : ''}`}
-                onClick={() => handleSetAlignment('center')}
-                title="Centralizar"
+                className="cv-stepper-btn"
+                onClick={() => handleAdjustMarginY(+4)}
+                title="Aumentar margem vertical (+4px)"
               >
-                |■|
-              </button>
-              <button
-                type="button"
-                className={`cv-margin-btn ${dimensions?.alignment === 'right' ? 'is-active' : ''}`}
-                onClick={() => handleSetAlignment('right')}
-                title="Alinhar à Direita"
-              >
-                ▶|
+                +
               </button>
             </div>
-          )}
 
-          {/* Botão de Troca de Coluna (Esquerda <-> Direita) */}
-          {canSwitchZone && onSwitchZone && (
-            <button
-              type="button"
-              className="cv-structural-act-btn cv-structural-act-btn--zone"
-              onClick={onSwitchZone}
-              title={`Transferir para coluna ${currentZone === 'left' ? 'Direita' : 'Esquerda'}`}
-            >
-              ⇄ {currentZone === 'left' ? 'Dir' : 'Esq'}
-            </button>
-          )}
+            {/* Recuo Horizontal (X) */}
+            <div className="cv-box-menu-stepper" title="Ajustar recuo lateral (Eixo X)">
+              <span className="cv-stepper-label">Recuo X:</span>
+              <button
+                type="button"
+                className="cv-stepper-btn"
+                onClick={() => handleAdjustMarginX(-8)}
+                title="Mover para esquerda (-8px)"
+              >
+                ◀
+              </button>
+              <span className="cv-stepper-value">
+                {dimensions?.marginLeftPx ?? 0}px
+              </span>
+              <button
+                type="button"
+                className="cv-stepper-btn"
+                onClick={() => handleAdjustMarginX(+8)}
+                title="Mover para direita (+8px)"
+              >
+                ▶
+              </button>
+            </div>
 
-          {dimensions?.widthPercent && dimensions.widthPercent < 100 && (
-            <span className="cv-structural-box__dimension-indicator">
-              {dimensions.widthPercent}%
-            </span>
-          )}
-          {dimensions?.maxHeightPx && (
-            <span className="cv-structural-box__dimension-indicator">
-              {dimensions.maxHeightPx}px
-            </span>
-          )}
-
-          {onMoveUp && (
-            <button
-              type="button"
-              className="cv-structural-act-btn"
-              onClick={onMoveUp}
-              title="Mover seção para cima"
-            >
-              ▲
-            </button>
-          )}
-          {onMoveDown && (
-            <button
-              type="button"
-              className="cv-structural-act-btn"
-              onClick={onMoveDown}
-              title="Mover seção para baixo"
-            >
-              ▼
-            </button>
-          )}
-          {/* Seletor de Variante de Layout do Bloco */}
-          {category && CATEGORY_VARIANTS_MAP[category] && onSelectVariant && (
-            <select
-              className="cv-toolbar-variant-select"
-              value={dimensions?.variant || CATEGORY_VARIANTS_MAP[category][0].id}
-              onChange={e => onSelectVariant(e.target.value)}
-              title="Alterar layout / formato deste bloco"
-            >
-              {CATEGORY_VARIANTS_MAP[category].map(v => (
-                <option key={v.id} value={v.id}>
-                  {v.icon} {v.label}
-                </option>
-              ))}
-            </select>
-          )}
-
-          {/* Botão de Ocultar / Visibilidade */}
-          {onToggleHide && (
-            <button
-              type="button"
-              className="cv-structural-act-btn cv-structural-act-btn--hide"
-              onClick={onToggleHide}
-              title="Ocultar este item da folha A4 (restaurável na paleta)"
-            >
-              👁️
-            </button>
-          )}
-
-          {onResetDimensions && (dimensions?.widthPercent || dimensions?.minHeightPx || dimensions?.marginTopPx || dimensions?.marginLeftPx || dimensions?.alignment || dimensions?.variant) && (
-            <button
-              type="button"
-              className="cv-structural-act-btn cv-structural-act-btn--reset"
-              onClick={onResetDimensions}
-              title="Redefinir tamanho, margens e posição deste bloco"
-            >
-              ↺
-            </button>
-          )}
+            {/* Alinhamento rápido se largura for menor que 100% */}
+            {dimensions?.widthPercent && dimensions.widthPercent < 100 && (
+              <div className="cv-box-menu-align-group" title="Alinhamento na linha">
+                <button
+                  type="button"
+                  className={`cv-align-btn ${dimensions?.alignment === 'left' || !dimensions?.alignment ? 'is-active' : ''}`}
+                  onClick={() => handleSetAlignment('left')}
+                  title="Alinhar à Esquerda"
+                >
+                  ⬅️ Esq
+                </button>
+                <button
+                  type="button"
+                  className={`cv-align-btn ${dimensions?.alignment === 'center' ? 'is-active' : ''}`}
+                  onClick={() => handleSetAlignment('center')}
+                  title="Centralizar"
+                >
+                  ⏺️ Centro
+                </button>
+                <button
+                  type="button"
+                  className={`cv-align-btn ${dimensions?.alignment === 'right' ? 'is-active' : ''}`}
+                  onClick={() => handleSetAlignment('right')}
+                  title="Alinhar à Direita"
+                >
+                  ➡️ Dir
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
