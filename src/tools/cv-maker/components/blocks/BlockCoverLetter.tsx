@@ -30,7 +30,7 @@ interface BlockCoverLetterProps {
 export const BlockCoverLetter: React.FC<BlockCoverLetterProps> = ({
   coverLetter,
   basics,
-  onRequestGenerate
+  onRequestGenerate: _onRequestGenerate
 }) => {
   const letter = coverLetter || DEFAULT_SAMPLE_COVER_LETTER
   const { date, subject, salutation, closing, signature, signatureImage } = letter
@@ -73,18 +73,6 @@ export const BlockCoverLetter: React.FC<BlockCoverLetterProps> = ({
         <div className="cv-cover-signature">{signature || basics.name}</div>
         {basics.label && <div className="cv-cover-signer-label">{basics.label}</div>}
       </div>
-
-      {onRequestGenerate && (
-        <div className="cv-cover-generate-bar cv-no-print" style={{ marginTop: '2rem', textAlign: 'center' }}>
-          <button
-            onClick={onRequestGenerate}
-            className="cv-btn-secondary"
-            style={{ fontSize: '0.82rem', padding: '0.4rem 0.8rem' }}
-          >
-            ✨ Gerar Nova Versão de Cover Letter com IA
-          </button>
-        </div>
-      )}
     </article>
   )
 }

@@ -57,7 +57,7 @@ export const CVToolbar: React.FC<CVToolbarProps> = ({
   activeViewMode,
   onViewModeChange,
   onOpenCoverLetterModal,
-  hasCoverLetter = false,
+  hasCoverLetter: _hasCoverLetter = false,
   onDownloadYaml,
   onDownloadZip,
   onPrintPdf,
@@ -290,16 +290,16 @@ export const CVToolbar: React.FC<CVToolbarProps> = ({
           </button>
         )}
 
-        {/* Gerar / Adaptar Carta de Apresentação */}
+        {/* Adaptar Carta de Apresentação com IA */}
         {onOpenCoverLetterModal && (
           <button
             type="button"
             className="cv-btn-secondary"
             onClick={onOpenCoverLetterModal}
-            title="Gerar ou adaptar carta de apresentação sob medida com IA"
+            title="Adaptar carta de apresentação sob medida com IA (Pro)"
             style={{ borderColor: '#6366f1', color: '#c7d2fe', background: 'rgba(99, 102, 241, 0.15)', fontWeight: 600 }}
           >
-            ✨ {hasCoverLetter ? 'Adaptar Carta' : 'Gerar Carta'}
+            ✨ Adaptar Carta
           </button>
         )}
 

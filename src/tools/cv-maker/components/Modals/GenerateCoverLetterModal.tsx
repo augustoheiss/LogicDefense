@@ -6,13 +6,15 @@ interface GenerateCoverLetterModalProps {
   onClose: () => void
   cvData: CVData
   onCoverLetterGenerated: (coverLetter: CoverLetter) => void
+  onOpenStoreModal?: () => void
 }
 
 export const GenerateCoverLetterModal: React.FC<GenerateCoverLetterModalProps> = ({
   isOpen,
   onClose,
   cvData,
-  onCoverLetterGenerated
+  onCoverLetterGenerated,
+  onOpenStoreModal
 }) => {
   const [jobDescription, setJobDescription] = useState('')
   const [companyName, setCompanyName] = useState('')
@@ -32,15 +34,22 @@ export const GenerateCoverLetterModal: React.FC<GenerateCoverLetterModalProps> =
     const effectiveLanguage = language === 'custom' ? (customLanguage.trim() || 'Português') : language
 
     try {
-      const apiKey = localStorage.getItem('ld_universal_api_key') || localStorage.getItem('am_user_license_key')
+      const apiKey = localStorage.getItem('ld_pro_license_key') || 
+                     localStorage.getItem('am_user_license_key') || 
+                     localStorage.getItem('am_license_key') || 
+                     localStorage.getItem('ld_universal_api_key')
       const geminiKey = localStorage.getItem('gemini_api_key')
+
+      if (!apiKey && !geminiKey) {
+        throw new Error('A adaptação de Carta com IA requer uma Chave de Licença Pro (Turso) ativada ou Chave Gemini própria (BYOK). Ative sua chave Pro para prosseguir.')
+      }
 
       const response = await fetch('/api/v1/cv/generate-cover-letter', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(apiKey ? { 'X-API-Key': apiKey } : {}),
-          ...(geminiKey ? { 'X-Gemini-Key': geminiKey } : {})
+          ...(apiKey ? { 'Authorization': `Bearer ${apiKey}`, 'X-License-Key': apiKey, 'X-API-Key': apiKey } : {}),
+          ...(geminiKey ? { 'X-Gemini-API-Key': geminiKey, 'X-Gemini-Key': geminiKey } : {})
         },
         body: JSON.stringify({
           cv_data: cvData,
@@ -54,52 +63,15 @@ export const GenerateCoverLetterModal: React.FC<GenerateCoverLetterModalProps> =
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData.detail || 'Falha ao gerar carta de apresentação com IA.')
+        throw new Error(errorData.detail || `Falha ao gerar carta de apresentação com IA (${response.status}).`)
       }
 
       const generatedLetter: CoverLetter = await response.json()
       onCoverLetterGenerated(generatedLetter)
       onClose()
     } catch (err: any) {
-      console.warn('Erro ao chamar endpoint do backend, utilizando gerador local inteligente:', err)
-      // Fallback inteligente caso a API esteja sem chave ou offline
-      const name = cvData.basics?.name || 'Profissional'
-      const label = cvData.basics?.label || 'Especialista'
-      const targetCo = companyName.trim() || 'sua conceituada organização'
-      const targetRec = recipientName.trim() || 'Comitê de Seleção'
-
-      const isPt = effectiveLanguage === 'pt' || effectiveLanguage.toLowerCase().includes('portug');
-      const isEs = effectiveLanguage === 'es' || effectiveLanguage.toLowerCase().includes('espan') || effectiveLanguage.toLowerCase().includes('span');
-
-      const fallbackLetter: CoverLetter = {
-        recipient: {
-          name: targetRec,
-          title: isPt ? 'Diretoria de Talentos & Contratação' : isEs ? 'Dirección de Talento y Selección' : 'Talent Acquisition Team',
-          company: targetCo,
-          address: isPt ? 'São Paulo, SP' : isEs ? 'Ciudad de México / Madrid' : 'Headquarters'
-        },
-        date: new Date().toLocaleDateString(isPt ? 'pt-BR' : isEs ? 'es-ES' : 'en-US', { day: 'numeric', month: 'long', year: 'numeric' }),
-        subject: isPt ? `Candidatura: Posição para ${label}` : isEs ? `Candidatura: Posición para ${label}` : `Application: ${label} Position`,
-        salutation: isPt ? `Prezado(a) ${targetRec},` : isEs ? `Estimado(a) ${targetRec},` : `Dear ${targetRec},`,
-        paragraphs: isPt ? [
-          `Acompanho com grande admiração as realizações da ${targetCo} no mercado. Com sólida experiência como ${label}, apresento meu currículo em anexo para somar à sua equipe de alto desempenho.`,
-          `Ao longo da minha trajetória, liderei projetos estratégicos focados em eficiência, governança técnica e impacto de negócio. Minhas competências centrais em ${cvData.skills?.map(s => s.name).slice(0, 3).join(', ') || 'tecnologia'} alinham-se perfeitamente com os desafios de expansão da empresa.`,
-          `Estou à disposição para uma entrevista técnica e agradeço a oportunidade de apresentar como minha experiência pode acelerar os resultados da ${targetCo}.`
-        ] : isEs ? [
-          `Sigo con gran admiración el crecimiento y liderazgo de ${targetCo} en el sector. Con una sólida trayectoria como ${label}, presento mi postulación para integrarme a su equipo de alto rendimiento.`,
-          `A lo largo de mi carrera, he liderado iniciativas enfocadas en eficiencia operativa, rigor técnico e impacto de negocio. Mis competencias clave en ${cvData.skills?.map(s => s.name).slice(0, 3).join(', ') || 'ingeniería'} se alinean directamente con los objetivos de su organización.`,
-          `Agradezco su tiempo y quedo a su entera disposición para coordinar una entrevista y profundizar en cómo mi experiencia puede sumar valor inmediato.`
-        ] : [
-          `I am writing to express my strong interest in joining ${targetCo} as a ${label}.`,
-          `Throughout my career, I have driven high-impact initiatives combining technical excellence with operational efficiency. My expertise in ${cvData.skills?.map(s => s.name).slice(0, 3).join(', ') || 'software engineering'} directly aligns with your strategic goals.`,
-          `I welcome the opportunity to discuss how my qualifications can add value to your team.`
-        ],
-        closing: isPt ? 'Atenciosamente,' : isEs ? 'Atentamente,' : 'Sincerely yours,',
-        signature: name
-      }
-
-      onCoverLetterGenerated(fallbackLetter)
-      onClose()
+      console.warn('Erro na geração da Cover Letter com IA:', err)
+      setErrorMsg(err.message || 'Falha ao conectar com o serviço de IA. Verifique sua chave de licença Pro.')
     } finally {
       setLoading(false)
     }
@@ -130,7 +102,7 @@ export const GenerateCoverLetterModal: React.FC<GenerateCoverLetterModalProps> =
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
             <span style={{ fontSize: '1.3rem' }}>✨</span>
-            <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 700 }}>Gerar / Adaptar Cover Letter com IA</h3>
+            <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 700 }}>Adaptar Carta de Apresentação com IA (Pro)</h3>
           </div>
           <button
             onClick={onClose}
@@ -145,8 +117,44 @@ export const GenerateCoverLetterModal: React.FC<GenerateCoverLetterModalProps> =
         </p>
 
         {errorMsg && (
-          <div style={{ padding: '0.6rem 0.8rem', backgroundColor: 'rgba(239, 68, 68, 0.2)', border: '1px solid #ef4444', borderRadius: '0.5rem', color: '#fca5a5', fontSize: '0.82rem', marginBottom: '1rem' }}>
-            {errorMsg}
+          <div style={{
+            padding: '0.75rem',
+            backgroundColor: 'rgba(239, 68, 68, 0.15)',
+            border: '1px solid rgba(239, 68, 68, 0.4)',
+            borderRadius: '0.5rem',
+            color: '#fca5a5',
+            fontSize: '0.82rem',
+            marginBottom: '1rem',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '0.5rem'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+              <span>⚠️</span>
+              <span>{errorMsg}</span>
+            </div>
+            {onOpenStoreModal && (
+              <button
+                type="button"
+                onClick={() => {
+                  onClose()
+                  onOpenStoreModal()
+                }}
+                style={{
+                  alignSelf: 'flex-start',
+                  background: 'linear-gradient(90deg, #38bdf8, #3b82f6)',
+                  color: '#0f172a',
+                  border: 'none',
+                  borderRadius: '6px',
+                  padding: '0.35rem 0.75rem',
+                  fontWeight: 700,
+                  fontSize: '0.78rem',
+                  cursor: 'pointer',
+                }}
+              >
+                💎 Abrir Planos e Ativar Chave Pro ↗
+              </button>
+            )}
           </div>
         )}
 
@@ -335,7 +343,7 @@ export const GenerateCoverLetterModal: React.FC<GenerateCoverLetterModalProps> =
               gap: '0.45rem'
             }}
           >
-            {loading ? '✨ Gerando com IA...' : '✨ Gerar Carta de Apresentação'}
+            {loading ? '✨ Adaptando com IA...' : '✨ Adaptar Carta com IA'}
           </button>
         </div>
 

@@ -644,6 +644,7 @@ export const CVMakerApp: React.FC = () => {
         onClose={() => setIsCoverLetterModalOpen(false)}
         cvData={cvData || { basics: { name: 'Candidato' } }}
         onCoverLetterGenerated={handleCoverLetterGenerated}
+        onOpenStoreModal={() => setIsStoreModalOpen(true)}
       />
     </div>
   )
