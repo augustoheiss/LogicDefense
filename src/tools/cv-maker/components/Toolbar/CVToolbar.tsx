@@ -10,8 +10,8 @@ interface CVToolbarProps {
   onPersonaChange: (p: TextVariant) => void
   activeLayout: LayoutVariant
   onLayoutChange: (l: LayoutVariant) => void
-  activeTheme: ThemeVariant
-  onThemeChange: (t: ThemeVariant) => void
+  activeTheme?: ThemeVariant
+  onThemeChange?: (t: ThemeVariant) => void
   activeViewMode: ViewMode
   onViewModeChange: (v: ViewMode) => void
   onOpenCoverLetterModal?: () => void
@@ -37,13 +37,6 @@ const PERSONAS: { id: TextVariant; label: string; icon: string; desc: string }[]
   { id: 'alien',        label: 'Observador',   icon: '🤖', desc: 'Visão sistêmica, lógica matemática e síntese' },
 ]
 
-const THEMES: { id: ThemeVariant; label: string; icon: string; desc: string }[] = [
-  { id: 'executive',  label: 'Executivo',   icon: '👔', desc: 'Azul marinho e acentos corporativos sóbrios' },
-  { id: 'creative',   label: 'Criativo',    icon: '🎨', desc: 'Índigo moderno e gradientes expressivos' },
-  { id: 'minimalist', label: 'Minimalista', icon: '🔹', desc: 'Esmeralda tech com linhas limpas' },
-  { id: 'white',      label: 'White Clean', icon: '📄', desc: 'Fundo branco puro de alto contraste' },
-  { id: 'terminal',   label: 'Terminal >_', icon: '📟', desc: 'Estilo monospace com estética hacker/dev' },
-]
 
 const VIEW_MODES: { id: ViewMode; label: string; icon: string }[] = [
   { id: 'cv',           label: 'Currículo A4',         icon: '📄' },
@@ -59,8 +52,8 @@ export const CVToolbar: React.FC<CVToolbarProps> = ({
   onPersonaChange,
   activeLayout,
   onLayoutChange,
-  activeTheme,
-  onThemeChange,
+  activeTheme: _activeTheme,
+  onThemeChange: _onThemeChange,
   activeViewMode,
   onViewModeChange,
   onOpenCoverLetterModal,
@@ -112,7 +105,6 @@ export const CVToolbar: React.FC<CVToolbarProps> = ({
     : tokenBalance.toString()
 
   const currentPersonaObj = PERSONAS.find(p => p.id === activePersona) || PERSONAS[0]
-  const currentThemeObj = THEMES.find(t => t.id === activeTheme) || THEMES[0]
   const currentLayoutObj = LAYOUT_OPTIONS.find(l => l.id === activeLayout) || LAYOUT_OPTIONS[0]
   const currentViewModeObj = VIEW_MODES.find(v => v.id === activeViewMode) || VIEW_MODES[0]
 
@@ -198,49 +190,6 @@ export const CVToolbar: React.FC<CVToolbarProps> = ({
           </div>
         </div>
 
-        {/* 3. Menu Tema Visual */}
-        <div className="cv-toolbar-group">
-          <span className="cv-toolbar-label">Tema:</span>
-          <div className={`cv-dropdown-wrapper ${openDropdown === 'theme' ? 'is-open' : ''}`}>
-            <button
-              type="button"
-              className="cv-dropdown-trigger"
-              onClick={() => toggleDropdown('theme')}
-              title={`Tema Visual: ${currentThemeObj.label}`}
-            >
-              <span className="cv-dropdown-trigger__icon">{currentThemeObj.icon}</span>
-              <span className="cv-dropdown-trigger__text">{currentThemeObj.label}</span>
-              <span className="cv-dropdown-trigger__chevron">▼</span>
-            </button>
-
-            {openDropdown === 'theme' && (
-              <div className="cv-dropdown-menu" style={{ minWidth: '260px' }}>
-                {THEMES.map(t => {
-                  const isSelected = activeTheme === t.id
-                  return (
-                    <button
-                      key={t.id}
-                      type="button"
-                      className={`cv-dropdown-item ${isSelected ? 'cv-dropdown-item--active' : ''}`}
-                      onClick={() => {
-                        onThemeChange(t.id)
-                        closeDropdowns()
-                      }}
-                    >
-                      <div className="cv-dropdown-item__content">
-                        <div className="cv-dropdown-item__title">
-                          <span>{t.icon}</span> <strong>{t.label}</strong>
-                        </div>
-                        <div className="cv-dropdown-item__desc">{t.desc}</div>
-                      </div>
-                      {isSelected && <span className="cv-dropdown-item__check">✓</span>}
-                    </button>
-                  )
-                })}
-              </div>
-            )}
-          </div>
-        </div>
 
         {/* 4. Menu Persona IA */}
         <div className="cv-toolbar-group">
