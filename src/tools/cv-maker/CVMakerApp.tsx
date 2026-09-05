@@ -17,10 +17,9 @@ import { CVToolbar } from './components/Toolbar/CVToolbar'
 import { CVHistoryTab } from './components/History/CVHistoryTab'
 import { DesignCustomizerDrawer } from './components/Toolbar/DesignCustomizerDrawer'
 import { CanvasElementsPalette } from './components/CanvasBuilder/CanvasElementsPalette'
-import { AgentHubModal } from './components/Modals/AgentHubModal'
 import { CVStoreModal } from './components/StoreModal/CVStoreModal'
 import { GenerateCoverLetterModal } from './components/Modals/GenerateCoverLetterModal'
-import { TemplateGalleryModal } from './components/Modals/TemplateGalleryModal'
+import { AgentAndAcademyLandingPage, LandingTabType } from './components/Landing/AgentAndAcademyLandingPage'
 import { validateLicenseKey } from './services/cvService'
 import { downloadCVZipPackage } from './services/standaloneHtmlService'
 import { CVPrintEngine } from './services/CVPrintEngine'
@@ -162,11 +161,11 @@ export const CVMakerApp: React.FC = () => {
     localStorage.setItem(STORAGE_DESIGN_KEY, JSON.stringify(newConfig))
   }
 
-  const [isAgentHubModalOpen, setIsAgentHubModalOpen] = useState<boolean>(false)
-  const [agentHubInitialTab, setAgentHubInitialTab] = useState<'agent_prompt' | 'master_synthesis' | 'prompts_library' | 'openapi_hub' | 'api_key'>('agent_prompt')
+  const [activeScreen, setActiveScreen] = useState<'editor' | 'landing_page'>('editor')
+  const [landingInitialTab, setLandingInitialTab] = useState<LandingTabType>('academy')
+  const [landingHubSubTab, setLandingHubSubTab] = useState<'agent_prompt' | 'master_synthesis' | 'prompts_library' | 'openapi_hub' | 'api_key'>('agent_prompt')
   const [isStoreModalOpen, setIsStoreModalOpen] = useState<boolean>(false)
   const [isCoverLetterModalOpen, setIsCoverLetterModalOpen] = useState<boolean>(false)
-  const [isTemplateGalleryOpen, setIsTemplateGalleryOpen] = useState<boolean>(false)
   const [isPro, setIsPro] = useState<boolean>(false)
   const [tokenBalance, setTokenBalance] = useState<number>(0)
   const [saveHistoryFeedback, setSaveHistoryFeedback] = useState<boolean>(false)
@@ -174,9 +173,13 @@ export const CVMakerApp: React.FC = () => {
     return Boolean(localStorage.getItem('ld_universal_api_key'))
   })
 
-  const handleOpenAgentHub = (tab: 'agent_prompt' | 'master_synthesis' | 'prompts_library' | 'openapi_hub' | 'api_key' = 'agent_prompt') => {
-    setAgentHubInitialTab(tab)
-    setIsAgentHubModalOpen(true)
+  const handleOpenLandingPage = (
+    tab: LandingTabType = 'academy',
+    hubSubTab: 'agent_prompt' | 'master_synthesis' | 'prompts_library' | 'openapi_hub' | 'api_key' = 'agent_prompt'
+  ) => {
+    setLandingInitialTab(tab)
+    setLandingHubSubTab(hubSubTab)
+    setActiveScreen('landing_page')
   }
 
   // Fetch / Validate Pro license on mount
@@ -497,9 +500,26 @@ export const CVMakerApp: React.FC = () => {
   }
 
   return (
-    <div className="cv-maker-app">
-      {/* ── App Top Header ── */}
-      <div className="cv-app-header cv-no-print">
+    <div className="cv-maker-app-wrapper" style={{ minHeight: '100vh', width: '100%' }}>
+      {/* ── Super Landing Page (Hub Agente, Galeria A4, Academia & Certificado) ── */}
+      {activeScreen === 'landing_page' && (
+        <AgentAndAcademyLandingPage
+          initialTab={landingInitialTab}
+          hubSubTab={landingHubSubTab}
+          onReturnToEditor={() => setActiveScreen('editor')}
+          activeLayout={activeLayout}
+          onSelectLayout={handleLayoutChange}
+          onKeyUpdated={key => setHasActiveKey(Boolean(key))}
+        />
+      )}
+
+      {/* ── Editor Principal (Preservado para zero perda de estado) ── */}
+      <div
+        className="cv-maker-app"
+        style={{ display: activeScreen === 'editor' ? 'flex' : 'none' }}
+      >
+        {/* ── App Top Header ── */}
+        <div className="cv-app-header cv-no-print">
         <div className="cv-app-brand">
           <span className="cv-badge-pill">⚡ CV Maker 2.0</span>
           <h2 className="cv-app-title">Gerador de Currículos & Cover Letter</h2>
@@ -656,12 +676,13 @@ export const CVMakerApp: React.FC = () => {
             onPrintPdf={handlePrintPdf}
             onAutoFitSinglePage={handleAutoFitSinglePage}
             onOpenDesignModal={() => setIsDesignModalOpen(true)}
-            onOpenApiKeyModal={() => handleOpenAgentHub('agent_prompt')}
+            onOpenApiKeyModal={() => handleOpenLandingPage('hub', 'agent_prompt')}
             hasActiveKey={hasActiveKey}
             isPro={isPro}
             tokenBalance={tokenBalance}
             onOpenStoreModal={() => setIsStoreModalOpen(true)}
-            onOpenTemplateGallery={() => setIsTemplateGalleryOpen(true)}
+            onOpenTemplateGallery={() => handleOpenLandingPage('gallery')}
+            onOpenAcademy={() => handleOpenLandingPage('academy')}
           />
 
           <CVViewer
@@ -685,13 +706,6 @@ export const CVMakerApp: React.FC = () => {
         onChangeConfig={handleDesignConfigChange}
       />
 
-      <AgentHubModal
-        isOpen={isAgentHubModalOpen}
-        onClose={() => setIsAgentHubModalOpen(false)}
-        onKeyUpdated={key => setHasActiveKey(Boolean(key))}
-        initialTab={agentHubInitialTab}
-      />
-
       <CVStoreModal
         isOpen={isStoreModalOpen}
         onClose={() => {
@@ -711,13 +725,7 @@ export const CVMakerApp: React.FC = () => {
         onCoverLetterGenerated={handleCoverLetterGenerated}
         onOpenStoreModal={() => setIsStoreModalOpen(true)}
       />
-
-      <TemplateGalleryModal
-        isOpen={isTemplateGalleryOpen}
-        onClose={() => setIsTemplateGalleryOpen(false)}
-        activeLayout={activeLayout}
-        onSelectLayout={handleLayoutChange}
-      />
+      </div>
     </div>
   )
 }

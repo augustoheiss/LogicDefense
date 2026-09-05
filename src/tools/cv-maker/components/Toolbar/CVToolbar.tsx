@@ -27,6 +27,7 @@ interface CVToolbarProps {
   tokenBalance?: number
   onOpenStoreModal?: () => void
   onOpenTemplateGallery?: () => void
+  onOpenAcademy?: () => void
 }
 
 const PERSONAS: { id: TextVariant; label: string; icon: string; desc: string }[] = [
@@ -69,6 +70,7 @@ export const CVToolbar: React.FC<CVToolbarProps> = ({
   tokenBalance = 0,
   onOpenStoreModal,
   onOpenTemplateGallery,
+  onOpenAcademy,
 }) => {
   const [openDropdown, setOpenDropdown] = useState<string | null>(null)
   const toolbarRef = useRef<HTMLDivElement>(null)
@@ -347,7 +349,7 @@ export const CVToolbar: React.FC<CVToolbarProps> = ({
           type="button"
           className="cv-btn-secondary"
           onClick={onOpenApiKeyModal}
-          title="Abrir Hub de Agentes de IA, Prompts Mestre Nível 2, OpenAPI e Chaves de API"
+          title="Abrir Hub de Agentes de IA, Prompts Mestre Nível 2, OpenAPI e Chaves de API na Landing Page"
           style={
             hasActiveKey
               ? { borderColor: '#10b981', color: '#34d399', fontWeight: 600 }
@@ -356,6 +358,24 @@ export const CVToolbar: React.FC<CVToolbarProps> = ({
         >
           🤖 {hasActiveKey ? 'Agente & API (Ativo)' : 'Hub Agente & API'}
         </button>
+
+        {/* Academia de Bastidores & Certificado */}
+        {onOpenAcademy && (
+          <button
+            type="button"
+            className="cv-btn-secondary"
+            onClick={onOpenAcademy}
+            title="Abrir Academia de Bastidores de Engenharia e Certificados"
+            style={{
+              borderColor: 'rgba(245, 158, 11, 0.4)',
+              color: '#fbbf24',
+              background: 'rgba(245, 158, 11, 0.08)',
+              fontWeight: 600
+            }}
+          >
+            🎓 Academia & Bastidores
+          </button>
+        )}
 
         {/* Menu Unificado: Exportar & PDF */}
         <div className={`cv-dropdown-wrapper ${openDropdown === 'exports' ? 'is-open' : ''}`} style={{ marginLeft: 'auto' }}>
