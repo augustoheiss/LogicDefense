@@ -88,6 +88,7 @@ export const CanvasA4Sheet: React.FC<CanvasA4SheetProps> = ({
 
       {/* A4 Sheet Container */}
       <div className="cv-canvas-sheet-wrapper">
+        <div className="cv-print-page-background" aria-hidden="true" />
         <div
           id="cv-canvas-sheet"
           ref={sheetRef}

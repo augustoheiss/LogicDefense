@@ -209,6 +209,10 @@ function getEmbeddedCss(): string {
       background: transparent !important;
     }
 
+    .cv-print-page-background {
+      display: none;
+    }
+
     /* ── Controles de Visibilidade das Folhas ── */
     .view-cv .cv-cover-letter-page { display: none !important; }
     .view-cover_letter .cv-resume-page { display: none !important; }
@@ -221,13 +225,37 @@ function getEmbeddedCss(): string {
       body {
         background-color: var(--cv-color-bg, #ffffff) !important;
         background-image: var(--cv-bg-image, none) !important;
-        background-size: cover !important;
-        background-position: center !important;
-        background-repeat: no-repeat !important;
+        background-size: 210mm 297mm !important;
+        background-position: top left !important;
+        background-repeat: repeat-y !important;
         padding: 0 !important;
         margin: 0 !important;
         -webkit-print-color-adjust: exact !important;
         print-color-adjust: exact !important;
+      }
+      .cv-print-page-background {
+        display: block !important;
+        position: fixed !important;
+        top: 0 !important;
+        left: 0 !important;
+        width: 210mm !important;
+        height: 297mm !important;
+        min-width: 210mm !important;
+        min-height: 297mm !important;
+        max-width: 210mm !important;
+        max-height: 297mm !important;
+        box-sizing: border-box !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        background-color: var(--cv-color-bg, #ffffff) !important;
+        background-image: var(--cv-bg-image, none) !important;
+        background-size: cover !important;
+        background-position: center top !important;
+        background-repeat: no-repeat !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+        z-index: -9999 !important;
+        pointer-events: none !important;
       }
       .cv-standalone-toolbar, .no-print {
         display: none !important;
@@ -246,6 +274,9 @@ function getEmbeddedCss(): string {
         padding: 0 !important;
         box-shadow: none !important;
         border-radius: 0 !important;
+        background: transparent !important;
+        background-color: transparent !important;
+        background-image: none !important;
         page-break-after: always !important;
         break-after: page !important;
       }
@@ -256,10 +287,18 @@ function getEmbeddedCss(): string {
       }
       .cv-card {
         padding: 0 !important;
+        background: transparent !important;
+        background-color: transparent !important;
       }
       .cv-cover-letter-page {
         page-break-before: always !important;
         break-before: page !important;
+        min-height: 297mm !important;
+        height: 297mm !important;
+        box-sizing: border-box !important;
+        background: transparent !important;
+        background-color: transparent !important;
+        background-image: none !important;
       }
 
       /* ── CSS Paged Media & Page Fragmentation (Anti-Invisble Box) ── */
@@ -576,6 +615,7 @@ export function renderCVToStandaloneHtml(
 
   <!-- Contêiner de Folhas A4 -->
   <div id="cvContainer" class="cv-sheet-container layout-${layout} view-${viewMode}">
+    <div class="cv-print-page-background" aria-hidden="true"></div>
     
     <!-- 1. Folha de Currículo A4 -->
     <div class="cv-page-a4 cv-resume-page">

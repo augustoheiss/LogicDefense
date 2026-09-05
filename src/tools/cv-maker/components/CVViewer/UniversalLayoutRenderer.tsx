@@ -2266,6 +2266,7 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
         </div>
       )}
       <div ref={pageRef} className="cv-render-wrapper">
+        <div className="cv-print-page-background" aria-hidden="true" />
         {viewMode === 'cv' && renderCVPage()}
         {viewMode === 'cover_letter' && renderCoverLetterPage()}
         {viewMode === 'both' && (
