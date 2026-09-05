@@ -4,6 +4,7 @@ import { SKILLS_CATALOG, SkillItem } from './skillsData'
 export const SkillDownloadSection: React.FC = () => {
   const [selectedSkillId, setSelectedSkillId] = useState<string>('pdf-engine-architect')
   const [copied, setCopied] = useState<boolean>(false)
+  const [copiedLink, setCopiedLink] = useState<boolean>(false)
 
   const currentSkill: SkillItem =
     SKILLS_CATALOG.find(s => s.id === selectedSkillId) || SKILLS_CATALOG[0]
@@ -15,16 +16,11 @@ export const SkillDownloadSection: React.FC = () => {
     })
   }
 
-  const handleDownload = () => {
-    const blob = new Blob([currentSkill.content], { type: 'text/markdown;charset=utf-8' })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = currentSkill.filename
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    URL.revokeObjectURL(url)
+  const handleCopyRawUrl = () => {
+    navigator.clipboard.writeText(currentSkill.rawUrl).then(() => {
+      setCopiedLink(true)
+      setTimeout(() => setCopiedLink(false), 2500)
+    })
   }
 
   return (
@@ -97,15 +93,69 @@ export const SkillDownloadSection: React.FC = () => {
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
             <span style={{ fontSize: '1.4rem' }}>{currentSkill.emoji}</span>
             <h3 style={{ margin: 0, fontSize: '1.15rem', color: '#f8fafc', fontWeight: 800 }}>
-              Skill Ativa: <code>{currentSkill.filename}</code>
+              Skill Canônica: <code>{currentSkill.filename}</code>
             </h3>
           </div>
           <p style={{ margin: '0.3rem 0 0 0', fontSize: '0.82rem', color: '#94a3b8' }}>
-            Copie o markdown ou baixe o arquivo para integrar em Claude Desktop, Cursor, Antigravity ou outros agentes de IA.
+            Hospedada oficialmente em <code>src/tools/cv-maker/skills/</code> no GitHub para garantir versionamento contínuo e atualizações em tempo real.
           </p>
         </div>
 
         <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+          <a
+            href={currentSkill.githubUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.5rem',
+              padding: '0.55rem 1.25rem',
+              background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)',
+              color: '#ffffff',
+              border: '1px solid #38bdf8',
+              borderRadius: '8px',
+              fontSize: '0.84rem',
+              fontWeight: 700,
+              textDecoration: 'none',
+              cursor: 'pointer',
+              boxShadow: '0 4px 14px rgba(56, 189, 248, 0.25)',
+              transition: 'all 0.2s ease'
+            }}
+          >
+            <svg
+              height="16"
+              width="16"
+              viewBox="0 0 16 16"
+              fill="currentColor"
+              style={{ display: 'inline-block' }}
+            >
+              <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z" />
+            </svg>
+            Ver no GitHub ↗
+          </a>
+
+          <button
+            type="button"
+            onClick={handleCopyRawUrl}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.45rem',
+              padding: '0.55rem 1.05rem',
+              background: copiedLink ? '#0284c7' : '#1e293b',
+              color: '#f8fafc',
+              border: copiedLink ? '1px solid #38bdf8' : '1px solid #475569',
+              borderRadius: '8px',
+              fontSize: '0.84rem',
+              fontWeight: 600,
+              cursor: 'pointer',
+              transition: 'all 0.2s ease'
+            }}
+          >
+            {copiedLink ? '✅ Link Raw Copiado!' : '🌐 Copiar Link Raw'}
+          </button>
+
           <button
             type="button"
             onClick={handleCopy}
@@ -124,28 +174,7 @@ export const SkillDownloadSection: React.FC = () => {
               transition: 'all 0.2s ease'
             }}
           >
-            {copied ? '✅ Copiado com Sucesso!' : '📋 Copiar Markdown'}
-          </button>
-
-          <button
-            type="button"
-            onClick={handleDownload}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '0.45rem',
-              padding: '0.55rem 1.25rem',
-              background: 'linear-gradient(135deg, #0284c7 0%, #2563eb 100%)',
-              color: '#ffffff',
-              border: 'none',
-              borderRadius: '8px',
-              fontSize: '0.84rem',
-              fontWeight: 700,
-              cursor: 'pointer',
-              boxShadow: '0 4px 12px rgba(37, 99, 235, 0.3)'
-            }}
-          >
-            💾 Baixar {currentSkill.filename}
+            {copied ? '✅ Markdown Copiado!' : '📋 Copiar Markdown'}
           </button>
         </div>
       </div>
@@ -168,7 +197,7 @@ export const SkillDownloadSection: React.FC = () => {
         >
           <div style={{ fontSize: '1.2rem', marginBottom: '0.4rem' }}>1️⃣ No Claude Desktop</div>
           <p style={{ margin: 0, fontSize: '0.84rem', color: '#94a3b8', lineHeight: 1.5 }}>
-            Salve o arquivo como <code>SKILL.md</code> na pasta de skills do Claude ou anexe nas diretrizes de Projeto para instruir o modelo.
+            Clone ou copie de <code>src/tools/cv-maker/skills/{currentSkill.filename}</code> no GitHub para sua pasta de skills ou anexe nas diretrizes de Projeto.
           </p>
         </div>
 
@@ -182,7 +211,7 @@ export const SkillDownloadSection: React.FC = () => {
         >
           <div style={{ fontSize: '1.2rem', marginBottom: '0.4rem' }}>2️⃣ No Cursor / Windsurf</div>
           <p style={{ margin: 0, fontSize: '0.84rem', color: '#94a3b8', lineHeight: 1.5 }}>
-            Copie o conteúdo e cole dentro de <code>.cursor/rules/{currentSkill.filename}</code> para transformar seu assistente num especialista sênior.
+            Aponte suas regras de projeto para <code>src/tools/cv-maker/skills/{currentSkill.filename}</code> para manter a persona sincronizada com o GitHub.
           </p>
         </div>
 
@@ -196,7 +225,7 @@ export const SkillDownloadSection: React.FC = () => {
         >
           <div style={{ fontSize: '1.2rem', marginBottom: '0.4rem' }}>3️⃣ No Antigravity IDE</div>
           <p style={{ margin: 0, fontSize: '0.84rem', color: '#94a3b8', lineHeight: 1.5 }}>
-            Invoque diretamente no chat com <code>/{currentSkill.id}</code> para acionar a persona com todas as ferramentas e guardrails ativos.
+            Invoque diretamente no chat digitando <code>/{currentSkill.id}</code> para acionar a persona com todas as ferramentas e guardrails ativos.
           </p>
         </div>
       </div>

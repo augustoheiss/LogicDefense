@@ -6,6 +6,8 @@ export interface SkillItem {
   emoji: string
   description: string
   content: string
+  githubUrl: string
+  rawUrl: string
 }
 
 export const PDF_ENGINE_ARCHITECT_SKILL_MD = `---
@@ -218,7 +220,9 @@ export const SKILLS_CATALOG: SkillItem[] = [
     badge: 'Arquitetura de Compilação',
     emoji: '📑',
     description: 'Especialista em compilação determinística HTML-to-PDF, anti-rasterização Skia, bisseção matemática e eliminação do Dual-Template Divergence.',
-    content: PDF_ENGINE_ARCHITECT_SKILL_MD
+    content: PDF_ENGINE_ARCHITECT_SKILL_MD,
+    githubUrl: 'https://github.com/augustoheiss/LogicDefense/blob/main/src/tools/cv-maker/skills/agency-pdf-engine-architect.md',
+    rawUrl: 'https://raw.githubusercontent.com/augustoheiss/LogicDefense/main/src/tools/cv-maker/skills/agency-pdf-engine-architect.md'
   },
   {
     id: 'resume-tailor',
@@ -227,6 +231,8 @@ export const SKILLS_CATALOG: SkillItem[] = [
     badge: 'Otimização ATS & Zero Fabricação',
     emoji: '🎯',
     description: 'Especialista em análise de Job Descriptions, alinhamento ético de palavras-chave, métricas Google/IBM X-Y-Z e zero alucinação.',
-    content: RESUME_TAILOR_SKILL_MD
+    content: RESUME_TAILOR_SKILL_MD,
+    githubUrl: 'https://github.com/augustoheiss/LogicDefense/blob/main/src/tools/cv-maker/skills/agency-resume-tailor.md',
+    rawUrl: 'https://raw.githubusercontent.com/augustoheiss/LogicDefense/main/src/tools/cv-maker/skills/agency-resume-tailor.md'
   }
 ]
