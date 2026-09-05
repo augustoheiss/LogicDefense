@@ -9,7 +9,7 @@ interface CVPrintContainerProps {
  */
 export const CVPrintContainer: React.FC<CVPrintContainerProps> = ({ children }) => {
   return (
-    <div className="cv-print-wrapper">
+    <div id="cv-printable-document" className="cv-print-wrapper" data-cv-engine="p3">
       {children}
     </div>
   )

@@ -1,5 +1,5 @@
 import React from 'react'
-import type { CVData, LayoutBlueprint, ThemeVariant, ViewMode, CVDesignConfig } from '../../types/cv'
+import type { CVData, LayoutBlueprint, ThemeVariant, ViewMode, CVDesignConfig, CustomCanvasZone, LayoutStructureConfig, SectionBoxDimensions } from '../../types/cv'
 import { BlockHeader } from '../blocks/BlockHeader'
 import { BlockContacts } from '../blocks/BlockContacts'
 import { BlockCivilData } from '../blocks/BlockCivilData'
@@ -19,7 +19,6 @@ import { BlockPhoto } from '../blocks/BlockPhoto'
 import { getAtomicItemId } from '../../utils/atomicIdUtils'
 import { StructuralBoxWrapper } from '../CanvasBuilder/StructuralBoxWrapper'
 import { ColumnSplitterHandle } from '../CanvasBuilder/ColumnSplitterHandle'
-import type { LayoutStructureConfig, SectionBoxDimensions } from '../../types/cv'
 
 interface UniversalLayoutRendererProps {
   data: CVData
@@ -713,7 +712,7 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
     })
   }
 
-  const customRootStyles: React.CSSProperties = {
+  const customRootStyles: React.CSSProperties = ({
     '--cv-avatar-pos-x': `${basics.imagePosX ?? 50}%`,
     '--cv-avatar-pos-y': `${basics.imagePosY ?? 50}%`,
     '--cv-avatar-scale': `${basics.imageScale ?? 1.0}`,
@@ -747,7 +746,413 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
         return acc
       }, {} as Record<string, string>) : {})
     } : {})
-  } as React.CSSProperties
+  } as React.CSSProperties)
+
+  // Estados de Zonas Customizadas e Desenho Interativo (Paint / Polígono)
+  const [selectedZoneId, setSelectedZoneId] = React.useState<string | null>(null)
+  const [drawingMode, setDrawingMode] = React.useState<'rect' | 'polygon' | null>(null)
+  const [drawingStart, setDrawingStart] = React.useState<{ x: number; y: number } | null>(null)
+  const [drawingCurrent, setDrawingCurrent] = React.useState<{ x: number; y: number } | null>(null)
+  const [polygonPoints, setPolygonPoints] = React.useState<Array<{ x: number; y: number }>>([])
+  const [mousePos, setMousePos] = React.useState<{ x: number; y: number } | null>(null)
+  const drawingOverlayRef = React.useRef<HTMLDivElement>(null)
+
+  // Escuta de eventos globais de desenho e seleção vindos da barra lateral
+  React.useEffect(() => {
+    const handleStartDraw = (e: any) => {
+      setDrawingMode(e.detail?.mode || 'rect')
+      setDrawingStart(null)
+      setDrawingCurrent(null)
+      setPolygonPoints([])
+      setMousePos(null)
+    }
+
+    const handleCancelDraw = () => {
+      setDrawingMode(null)
+      setDrawingStart(null)
+      setDrawingCurrent(null)
+      setPolygonPoints([])
+      setMousePos(null)
+    }
+
+    const handleSelectZoneEvent = (e: any) => {
+      setSelectedZoneId(e.detail?.zoneId || null)
+    }
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        handleCancelDraw()
+      }
+    }
+
+    window.addEventListener('cv-canvas-start-draw' as any, handleStartDraw)
+    window.addEventListener('cv-canvas-cancel-draw' as any, handleCancelDraw)
+    window.addEventListener('cv-canvas-select-zone' as any, handleSelectZoneEvent)
+    window.addEventListener('keydown', handleKeyDown)
+
+    return () => {
+      window.removeEventListener('cv-canvas-start-draw' as any, handleStartDraw)
+      window.removeEventListener('cv-canvas-cancel-draw' as any, handleCancelDraw)
+      window.removeEventListener('cv-canvas-select-zone' as any, handleSelectZoneEvent)
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [])
+
+  const handleSelectZone = (zoneId: string) => {
+    setSelectedZoneId(zoneId)
+    window.dispatchEvent(new CustomEvent('cv-canvas-zone-selected', { detail: { zoneId } }))
+  }
+
+  const handleDeleteZone = (zoneId: string) => {
+    if (!structureConfig || !onUpdateStructureConfig) return
+    const nextZones = (structureConfig.customZones || []).filter(z => z.id !== zoneId)
+    onUpdateStructureConfig({
+      ...structureConfig,
+      customZones: nextZones
+    })
+    if (selectedZoneId === zoneId) setSelectedZoneId(null)
+    window.dispatchEvent(new CustomEvent('cv-canvas-zone-selected', { detail: { zoneId: null } }))
+  }
+
+  const handleCancelDrawing = () => {
+    setDrawingMode(null)
+    setDrawingStart(null)
+    setDrawingCurrent(null)
+    setPolygonPoints([])
+    setMousePos(null)
+    window.dispatchEvent(new CustomEvent('cv-canvas-cancel-draw'))
+  }
+
+  const getPointFromEvent = (e: React.MouseEvent<HTMLDivElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect()
+    const x = Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100))
+    const y = Math.max(0, Math.min(100, ((e.clientY - rect.top) / rect.height) * 100))
+    return { x: Math.round(x * 10) / 10, y: Math.round(y * 10) / 10 }
+  }
+
+  const handleDrawingMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (drawingMode !== 'rect') return
+    const pt = getPointFromEvent(e)
+    setDrawingStart(pt)
+    setDrawingCurrent(pt)
+  }
+
+  const handleDrawingMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    const pt = getPointFromEvent(e)
+    if (drawingMode === 'rect' && drawingStart) {
+      setDrawingCurrent(pt)
+    } else if (drawingMode === 'polygon') {
+      setMousePos(pt)
+    }
+  }
+
+  const handleDrawingMouseUp = () => {
+    if (drawingMode !== 'rect' || !drawingStart || !drawingCurrent) return
+    const minX = Math.min(drawingStart.x, drawingCurrent.x)
+    const minY = Math.min(drawingStart.y, drawingCurrent.y)
+    const width = Math.abs(drawingCurrent.x - drawingStart.x)
+    const height = Math.abs(drawingCurrent.y - drawingStart.y)
+
+    if (width < 2 || height < 2) {
+      setDrawingStart(null)
+      setDrawingCurrent(null)
+      return
+    }
+
+    const newZone: CustomCanvasZone = {
+      id: `zone_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      label: width < 40 && height > 50 ? 'Sidebar Personalizada' : 'Box Personalizado',
+      shape: 'rect',
+      x: Math.round(minX * 10) / 10,
+      y: Math.round(minY * 10) / 10,
+      width: Math.round(width * 10) / 10,
+      height: Math.round(height * 10) / 10,
+      backgroundColor: 'rgba(30, 41, 59, 0.12)',
+      borderColor: '#0284c7',
+      borderWidth: 1,
+      borderStyle: 'dashed',
+      borderRadius: 6,
+      backgroundOpacity: 1
+    }
+
+    const updatedZones = [...(structureConfig?.customZones || []), newZone]
+    if (onUpdateStructureConfig && structureConfig) {
+      onUpdateStructureConfig({
+        ...structureConfig,
+        customZones: updatedZones
+      })
+    }
+
+    setSelectedZoneId(newZone.id)
+    setDrawingMode(null)
+    setDrawingStart(null)
+    setDrawingCurrent(null)
+    window.dispatchEvent(new CustomEvent('cv-canvas-zone-selected', { detail: { zoneId: newZone.id } }))
+  }
+
+  const finishPolygon = (points: Array<{ x: number; y: number }>) => {
+    const newZone: CustomCanvasZone = {
+      id: `zone_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      label: 'Polígono Personalizado',
+      shape: 'polygon',
+      x: 0,
+      y: 0,
+      width: 100,
+      height: 100,
+      points: points,
+      backgroundColor: 'rgba(30, 41, 59, 0.12)',
+      borderColor: '#0284c7',
+      borderWidth: 1,
+      borderStyle: 'solid',
+      borderRadius: 0,
+      backgroundOpacity: 1
+    }
+
+    const updatedZones = [...(structureConfig?.customZones || []), newZone]
+    if (onUpdateStructureConfig && structureConfig) {
+      onUpdateStructureConfig({
+        ...structureConfig,
+        customZones: updatedZones
+      })
+    }
+
+    setSelectedZoneId(newZone.id)
+    setDrawingMode(null)
+    setPolygonPoints([])
+    setMousePos(null)
+    window.dispatchEvent(new CustomEvent('cv-canvas-zone-selected', { detail: { zoneId: newZone.id } }))
+  }
+
+  const handleDrawingClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (drawingMode !== 'polygon') return
+    const pt = getPointFromEvent(e)
+
+    if (polygonPoints.length >= 3) {
+      const p0 = polygonPoints[0]
+      const dist = Math.hypot(pt.x - p0.x, pt.y - p0.y)
+      if (dist < 4) {
+        finishPolygon(polygonPoints)
+        return
+      }
+    }
+
+    setPolygonPoints(prev => [...prev, pt])
+  }
+
+  const handleDrawingDoubleClick = () => {
+    if (drawingMode !== 'polygon' || polygonPoints.length < 3) return
+    finishPolygon(polygonPoints)
+  }
+
+  const renderCustomZonesLayer = () => {
+    const zones = structureConfig?.customZones || []
+    if (zones.length === 0) return null
+
+    return (
+      <div className="cv-custom-zones-container">
+        {zones.map(zone => {
+          const isSelected = selectedZoneId === zone.id
+
+          if (zone.shape === 'polygon' && zone.points && zone.points.length >= 3) {
+            const clipPathVal = `polygon(${zone.points.map(p => `${p.x}% ${p.y}%`).join(', ')})`
+            return (
+              <div
+                key={zone.id}
+                className={`cv-custom-zone-item cv-custom-zone-polygon ${isSelected ? 'is-selected' : ''}`}
+                style={{
+                  position: 'absolute',
+                  left: 0,
+                  top: 0,
+                  width: '100%',
+                  height: '100%',
+                  clipPath: clipPathVal,
+                  backgroundColor: zone.backgroundColor || 'rgba(30, 41, 59, 0.12)',
+                  opacity: zone.backgroundOpacity ?? 1,
+                  backgroundImage: zone.backgroundImage && zone.backgroundImage !== 'none' ? `url("${zone.backgroundImage}")` : undefined,
+                  backgroundSize: 'cover',
+                  backgroundPosition: 'center',
+                  zIndex: 0,
+                  pointerEvents: isFreeCanvas ? 'auto' : 'none'
+                }}
+                onClick={(e) => {
+                  if (isFreeCanvas) {
+                    e.stopPropagation()
+                    handleSelectZone(zone.id)
+                  }
+                }}
+              >
+                {isFreeCanvas && isSelected && (
+                  <div className="cv-custom-zone-badge cv-no-print" data-cv-interactive="true" style={{ left: `${zone.points[0].x}%`, top: `${zone.points[0].y}%` }}>
+                    <span>📐 {zone.label}</span>
+                    <button
+                      type="button"
+                      className="cv-custom-zone-del"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleDeleteZone(zone.id)
+                      }}
+                      title="Excluir polígono"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                )}
+              </div>
+            )
+          }
+
+          return (
+            <div
+              key={zone.id}
+              className={`cv-custom-zone-item cv-custom-zone-rect ${isSelected ? 'is-selected' : ''}`}
+              style={{
+                position: 'absolute',
+                left: `${zone.x}%`,
+                top: `${zone.y}%`,
+                width: `${zone.width}%`,
+                height: `${zone.height}%`,
+                backgroundColor: zone.backgroundColor || 'rgba(30, 41, 59, 0.12)',
+                opacity: zone.backgroundOpacity ?? 1,
+                backgroundImage: zone.backgroundImage && zone.backgroundImage !== 'none' ? `url("${zone.backgroundImage}")` : undefined,
+                backgroundSize: 'cover',
+                backgroundPosition: 'center',
+                borderColor: zone.borderColor || 'transparent',
+                borderWidth: `${zone.borderWidth ?? 0}px`,
+                borderStyle: zone.borderStyle || 'solid',
+                borderRadius: `${zone.borderRadius ?? 0}px`,
+                zIndex: 0,
+                pointerEvents: isFreeCanvas ? 'auto' : 'none',
+                boxSizing: 'border-box'
+              }}
+              onClick={(e) => {
+                if (isFreeCanvas) {
+                  e.stopPropagation()
+                  handleSelectZone(zone.id)
+                }
+              }}
+            >
+              {isFreeCanvas && isSelected && (
+                <div className="cv-custom-zone-badge cv-no-print" data-cv-interactive="true">
+                  <span>📐 {zone.label}</span>
+                  <button
+                    type="button"
+                    className="cv-custom-zone-del"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleDeleteZone(zone.id)
+                    }}
+                    title="Excluir área"
+                  >
+                    ✕
+                  </button>
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+    )
+  }
+
+  const renderDrawingOverlay = () => {
+    if (!drawingMode) return null
+
+    let previewRectStyle: React.CSSProperties | null = null
+    if (drawingMode === 'rect' && drawingStart && drawingCurrent) {
+      const minX = Math.min(drawingStart.x, drawingCurrent.x)
+      const minY = Math.min(drawingStart.y, drawingCurrent.y)
+      const width = Math.abs(drawingCurrent.x - drawingStart.x)
+      const height = Math.abs(drawingCurrent.y - drawingStart.y)
+      previewRectStyle = {
+        position: 'absolute',
+        left: `${minX}%`,
+        top: `${minY}%`,
+        width: `${width}%`,
+        height: `${height}%`,
+        border: '2px dashed #38bdf8',
+        backgroundColor: 'rgba(56, 189, 248, 0.2)',
+        borderRadius: '6px',
+        pointerEvents: 'none'
+      }
+    }
+
+    return (
+      <div
+        ref={drawingOverlayRef}
+        className="cv-canvas-drawing-overlay cv-no-print"
+        data-cv-interactive="true"
+        onMouseDown={handleDrawingMouseDown}
+        onMouseMove={handleDrawingMouseMove}
+        onMouseUp={handleDrawingMouseUp}
+        onClick={handleDrawingClick}
+        onDoubleClick={handleDrawingDoubleClick}
+      >
+        <div className="cv-drawing-instruction-banner">
+          {drawingMode === 'rect' ? (
+            <span>🖱️ <strong>Modo Desenho:</strong> Clique e arraste para delimitar a Sidebar ou Box</span>
+          ) : (
+            <span>📐 <strong>Modo Polígono:</strong> Clique para marcar os vértices ({polygonPoints.length} marcados). Duplo clique para fechar.</span>
+          )}
+          <button
+            type="button"
+            className="cv-drawing-cancel-btn"
+            onClick={handleCancelDrawing}
+          >
+            Cancelar (Esc)
+          </button>
+        </div>
+
+        {previewRectStyle && <div style={previewRectStyle} />}
+
+        {drawingMode === 'polygon' && (
+          <svg
+            viewBox="0 0 100 100"
+            preserveAspectRatio="none"
+            style={{
+              position: 'absolute',
+              inset: 0,
+              width: '100%',
+              height: '100%',
+              pointerEvents: 'none'
+            }}
+          >
+            {polygonPoints.length > 0 && (
+              <polyline
+                points={
+                  polygonPoints.map(p => `${p.x},${p.y}`).join(' ') +
+                  (mousePos ? ` ${mousePos.x},${mousePos.y}` : '')
+                }
+                fill="rgba(56, 189, 248, 0.15)"
+                stroke="#38bdf8"
+                strokeWidth="0.6"
+                strokeDasharray="1 1"
+              />
+            )}
+            {polygonPoints.map((p, idx) => (
+              <circle
+                key={idx}
+                cx={p.x}
+                cy={p.y}
+                r="1"
+                fill="#38bdf8"
+                stroke="#ffffff"
+                strokeWidth="0.3"
+              />
+            ))}
+          </svg>
+        )}
+      </div>
+    )
+  }
+
+  const renderCanvasDecorations = () => {
+    return (
+      <>
+        {renderCustomZonesLayer()}
+        {isFreeCanvas && renderDrawingOverlay()}
+      </>
+    )
+  }
 
   const renderCVPage = () => {
     // ── Modelo A4 05: Brand Accent Block (Basil Hailward) ──
@@ -756,6 +1161,7 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
       return (
         <div className="cv-page-a4">
           <div className="cv-card layout-editorial_accent">
+            {renderCanvasDecorations()}
             {wrapSection('header', 'Cabeçalho / Identificação', <BlockHeader basics={basics} variant="brand_block" hideImage={isFreeCanvas} />)}
             <div
               className="cv-editorial-grid"
@@ -826,6 +1232,7 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
       return (
         <div className="cv-page-a4">
           <div className="cv-card layout-corporate_timeline cv-bleed-card">
+            {renderCanvasDecorations()}
             <div
               className="cv-navy-layout"
               style={{
@@ -931,6 +1338,7 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
       return (
         <div className="cv-page-a4">
           <div className="cv-card layout-hero_matrix">
+            {renderCanvasDecorations()}
             {wrapSection('contacts_top', 'Contatos no Topo', <BlockContacts basics={basics} layoutStyle="top_bar" />)}
             {wrapSection('hero_banner', 'Banner Principal', (
               <header className="cv-hero-banner">
@@ -970,6 +1378,7 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
       return (
         <div className="cv-page-a4">
           <div className="cv-card layout-compact_split">
+            {renderCanvasDecorations()}
             <div
               className="cv-duo-layout"
               style={{
@@ -1046,6 +1455,7 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
       return (
         <div className="cv-page-a4">
           <div className="cv-card layout-sidebar">
+            {renderCanvasDecorations()}
             <div
               className="cv-sidebar-layout"
               style={{
@@ -1143,6 +1553,7 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
       return (
         <div className="cv-page-a4">
           <div className="cv-card layout-dynamic_math">
+            {renderCanvasDecorations()}
             {isFreeCanvas && renderPhotoSection(undefined, undefined, 'Foto de Perfil', true)}
             {wrapSection('header', 'Perfil & Contatos', (
               <header className="cv-math-header">
@@ -1347,6 +1758,7 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
       return (
         <div className="cv-page-a4">
           <div className="cv-card layout-linear">
+            {renderCanvasDecorations()}
             {isFreeCanvas && renderPhotoSection(undefined, undefined, 'Foto de Perfil', true)}
             {wrapSection('header', 'Cabeçalho Linear', <BlockHeader basics={basics} variant="linear" hideImage={isFreeCanvas} />)}
             {wrapSection('contacts', 'Contatos', <BlockContacts basics={basics} layoutStyle="row" />)}
@@ -1364,10 +1776,70 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
       )
     }
 
+    // ── Modelo A4 10: Canvas Livre (Folha em Branco) ──
+    if (blueprint.id === 'canvas_livre') {
+      const hasAnyContent = (
+        (structureConfig?.sectionOrder && structureConfig.sectionOrder.length > 0) ||
+        ((structureConfig?.customZones || []).length > 0)
+      )
+
+      return (
+        <div className="cv-page-a4">
+          <div className="cv-card layout-canvas_livre" style={{ minHeight: '100%', position: 'relative' }}>
+            {renderCanvasDecorations()}
+
+            {/* Renderizar seções que o usuário adicionar ao canvas livre */}
+            {(structureConfig?.sectionOrder || []).map((secId) => {
+              if (secId === 'photo') return renderPhotoSection(undefined, undefined, 'Foto de Perfil', true)
+              if (secId === 'header') return wrapSection('header', 'Cabeçalho', <BlockHeader basics={basics} variant="standard" hideImage={isFreeCanvas} />)
+              if (secId === 'summary' && basics.summary) return wrapSection('summary', 'Resumo Profissional', <BlockSummary basics={basics} />)
+              if (secId === 'contacts') return wrapSection('contacts', 'Contatos', <BlockContacts basics={basics} layoutStyle="row" />)
+              if (secId === 'civil') return wrapSection('civil', 'Dados Civis', <BlockCivilData basics={basics} />)
+              if (secId.startsWith('work')) return renderWorkSection()
+              if (secId.startsWith('education')) return renderEducationSection()
+              if (secId.startsWith('projects')) return renderProjectsSection()
+              if (secId.startsWith('skills')) return renderSkillsSection(undefined, undefined, 'Competências', <BlockSkillsTags skills={data.skills} />)
+              if (secId.startsWith('languages')) return renderLanguagesSection()
+              if (secId.startsWith('certificates')) return renderCertificatesSection()
+              if (secId.startsWith('interests')) return renderInterestsSection()
+              if (secId.startsWith('references')) return renderReferencesSection()
+              return null
+            })}
+
+            {/* Placeholder de folha em branco quando nada foi adicionado ainda */}
+            {!hasAnyContent && (
+              <div className="cv-canvas-blank-placeholder cv-no-print" data-cv-interactive="true">
+                <div className="cv-blank-icon">🎨</div>
+                <h3>Folha em Branco - Canvas Livre</h3>
+                <p>
+                  Sua página está pronta para criação! Use o menu lateral <strong>"🎨 Elementos (Canvas)"</strong> para:
+                </p>
+                <div className="cv-canvas-blank-tips">
+                  <div className="cv-blank-tip-item">
+                    <span>📐</span>
+                    <strong>Zonas & Sidebars:</strong> Desenhe caixas, colunas ou sidebars arrastando com o mouse.
+                  </div>
+                  <div className="cv-blank-tip-item">
+                    <span>🖼️</span>
+                    <strong>Fundos & Texturas:</strong> Aplique cores elegantes ou texturas IA com opacidade.
+                  </div>
+                  <div className="cv-blank-tip-item">
+                    <span>🧱</span>
+                    <strong>Blocos de Conteúdo:</strong> Ative seções de Experiência, Formação e Habilidades.
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )
+    }
+
     // ── Modelo A4 01 (Modular) e 07 (Warm Magazine) ──
     return (
       <div className="cv-page-a4">
         <div className={`cv-card ${blueprint.customClass || ''}`}>
+          {renderCanvasDecorations()}
           {isFreeCanvas && renderPhotoSection(undefined, undefined, 'Foto de Perfil', true)}
           {wrapSection('header', 'Cabeçalho Padrão', <BlockHeader basics={basics} variant="standard" hideImage={isFreeCanvas} />)}
           {basics.summary && wrapSection('summary', 'Resumo', <BlockSummary basics={basics} />)}

@@ -19,6 +19,7 @@ interface CVToolbarProps {
   onDownloadYaml: () => void
   onDownloadZip?: () => void
   onPrintPdf: () => void
+  onAutoFitSinglePage?: () => void
   onOpenDesignModal?: () => void
   onOpenApiKeyModal: () => void
   hasActiveKey: boolean
@@ -60,6 +61,7 @@ export const CVToolbar: React.FC<CVToolbarProps> = ({
   onDownloadYaml,
   onDownloadZip,
   onPrintPdf,
+  onAutoFitSinglePage,
   onOpenDesignModal,
   onOpenApiKeyModal,
   hasActiveKey,
@@ -393,10 +395,32 @@ export const CVToolbar: React.FC<CVToolbarProps> = ({
                     <span>🖨️</span> <strong>Imprimir / Salvar PDF</strong>
                   </div>
                   <div className="cv-dropdown-item__desc" style={{ color: '#a7f3d0' }}>
-                    Exportação nativa A4 (1 ou 2 páginas sem corte)
+                    Exportação nativa A4 vetorial (Engine P3 sem corte)
                   </div>
                 </div>
               </button>
+
+              {/* Opção 2: Auto-ajustar 1 Página (P3 Real-DOM) */}
+              {onAutoFitSinglePage && (
+                <button
+                  type="button"
+                  className="cv-dropdown-item"
+                  onClick={() => {
+                    closeDropdowns()
+                    onAutoFitSinglePage()
+                  }}
+                  style={{ background: 'rgba(56, 189, 248, 0.12)', color: '#38bdf8', fontWeight: 600 }}
+                >
+                  <div className="cv-dropdown-item__content">
+                    <div className="cv-dropdown-item__title">
+                      <span>⚡</span> <strong>Auto-ajustar 1 Página A4</strong>
+                    </div>
+                    <div className="cv-dropdown-item__desc" style={{ color: '#bae6fd' }}>
+                      Bissecção Real-DOM para caber perfeitamente em 1 folha
+                    </div>
+                  </div>
+                </button>
+              )}
 
               <div className="cv-dropdown-divider" />
 

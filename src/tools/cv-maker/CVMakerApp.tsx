@@ -23,6 +23,7 @@ import { GenerateCoverLetterModal } from './components/Modals/GenerateCoverLette
 import { TemplateGalleryModal } from './components/Modals/TemplateGalleryModal'
 import { validateLicenseKey } from './services/cvService'
 import { downloadCVZipPackage } from './services/standaloneHtmlService'
+import { CVPrintEngine } from './services/CVPrintEngine'
 
 import './styles/cv-themes.css'
 import './styles/cv-print.css'
@@ -95,8 +96,18 @@ export const CVMakerApp: React.FC = () => {
   })
 
   const currentStructureConfig = useMemo<LayoutStructureConfig>(() => {
-    return layoutStructures[activeLayout] || {
-      isFreeCanvasActive: false,
+    const existing = layoutStructures[activeLayout]
+    if (existing) {
+      if (activeLayout === 'canvas_livre') {
+        return {
+          ...existing,
+          isFreeCanvasActive: existing.isFreeCanvasActive ?? true
+        }
+      }
+      return existing
+    }
+    return {
+      isFreeCanvasActive: activeLayout === 'canvas_livre',
       columnSplitRatio: 32,
       sectionDimensions: {}
     }
@@ -276,10 +287,25 @@ export const CVMakerApp: React.FC = () => {
     localStorage.setItem(STORAGE_THEME_KEY, newTheme)
   }
 
-  // Handle Layout Change (Modelos A4 01 a 08)
+  // Handle Layout Change (Modelos A4 01 a 10)
   const handleLayoutChange = (newLayout: LayoutVariant) => {
     setActiveLayout(newLayout)
     localStorage.setItem(STORAGE_LAYOUT_KEY, newLayout)
+    if (newLayout === 'canvas_livre') {
+      setActiveTab('canvas')
+      setLayoutStructures(prev => {
+        const cur = prev['canvas_livre'] || { columnSplitRatio: 32, sectionDimensions: {} }
+        const updated = {
+          ...prev,
+          canvas_livre: {
+            ...cur,
+            isFreeCanvasActive: true
+          }
+        }
+        localStorage.setItem(STORAGE_STRUCTURES_KEY, JSON.stringify(updated))
+        return updated
+      })
+    }
   }
 
   // Handle View Mode Change (Currículo / Cover Letter / Dossiê 2 Páginas)
@@ -428,35 +454,33 @@ export const CVMakerApp: React.FC = () => {
     }
   }, [])
 
-  // Print PDF
+  // Print PDF via Unified Deterministic DOM-to-PDF Engine (P3)
   const handlePrintPdf = async () => {
-    if (cvData?.basics?.name) {
-      const name = cvData.basics.name.trim()
-      const label = cvData.basics.label ? ` - ${cvData.basics.label.trim()}` : ''
-      const modeSuffix = activeViewMode === 'cover_letter' ? ' - Carta de Apresentação' : activeViewMode === 'both' ? ' - Dossiê Completo' : ''
-      document.title = `${name}${label}${modeSuffix}`
+    try {
+      await CVPrintEngine.triggerDirectPrint({
+        candidateName: cvData?.basics?.name,
+        candidateLabel: cvData?.basics?.label,
+        viewMode: activeViewMode,
+        sourceElement: document.getElementById('cv-printable-document')
+      })
+    } catch (e) {
+      console.warn('[CVMakerApp] Fallback direto para window.print:', e)
+      window.print()
     }
-    if (document.fonts && document.fonts.ready) {
-      try {
-        await document.fonts.ready
-      } catch (e) {
-        console.warn('Font loading check error:', e)
+  }
+
+  // Auto-ajuste de página única via Bissecção Real-DOM (P3)
+  const handleAutoFitSinglePage = async () => {
+    try {
+      const result = await CVPrintEngine.autoFitSinglePage(document.getElementById('cv-printable-document'))
+      if (result.converged) {
+        alert(`⚡ Ajuste perfeito para 1 página concluído!\n• Fator de escala: ${(result.optimalT * 100).toFixed(0)}%\n• Iterações de bissecção: ${result.iterationsUsed}\n• Altura final: ${result.finalHeightPx}px (orçamento: 1119px)`)
+      } else {
+        alert(`⚠️ O currículo possui volume extenso de conteúdo textual para uma folha só.\n• Densidade compactada ao limite máximo (escala 0%).\n• Dica: considere o modo Dossiê (2 páginas) ou remova itens secundários.`)
       }
+    } catch (e) {
+      console.error('[CVMakerApp] Erro ao executar auto-fit:', e)
     }
-
-    document.body.classList.add('cv-is-printing')
-    document.documentElement.classList.add('cv-is-printing')
-
-    const cleanupPrint = () => {
-      document.body.classList.remove('cv-is-printing')
-      document.documentElement.classList.remove('cv-is-printing')
-      window.removeEventListener('afterprint', cleanupPrint)
-    }
-    window.addEventListener('afterprint', cleanupPrint)
-
-    window.print()
-
-    setTimeout(cleanupPrint, 2500)
   }
 
   return (
@@ -617,6 +641,7 @@ export const CVMakerApp: React.FC = () => {
             onDownloadYaml={handleDownloadYaml}
             onDownloadZip={handleDownloadZip}
             onPrintPdf={handlePrintPdf}
+            onAutoFitSinglePage={handleAutoFitSinglePage}
             onOpenDesignModal={() => setIsDesignModalOpen(true)}
             onOpenApiKeyModal={() => handleOpenAgentHub('agent_prompt')}
             hasActiveKey={hasActiveKey}

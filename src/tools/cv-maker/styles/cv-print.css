@@ -9,8 +9,12 @@
   *::after {
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
-    box-shadow: none !important;
     text-shadow: none !important;
+    /* Skia Anti-Rasterization: Elimina o fallback do Chromium para bitmap 72 DPI */
+    filter: none !important;
+    backdrop-filter: none !important;
+    perspective: none !important;
+    transform-style: flat !important;
   }
 
   html,

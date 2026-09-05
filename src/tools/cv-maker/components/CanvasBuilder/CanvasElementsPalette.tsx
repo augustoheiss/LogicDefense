@@ -2,9 +2,11 @@ import React from 'react'
 import {
   AVAILABLE_BOX_FONTS,
   type CVData,
+  type CustomCanvasZone,
   type LayoutStructureConfig,
   type SectionBoxDimensions
 } from '../../types/cv'
+import { BACKGROUND_CATALOG } from '../../engine/backgroundCatalog'
 import { getAtomicItemId } from '../../utils/atomicIdUtils'
 import { compressImageFile } from '../../utils/imageCompressor'
 
@@ -41,6 +43,28 @@ export const CanvasElementsPalette: React.FC<CanvasElementsPaletteProps> = ({
   const [urlInputValue, setUrlInputValue] = React.useState<string>('')
   const [isPhotoControlsOpen, setIsPhotoControlsOpen] = React.useState<boolean>(true)
   const [openTypoId, setOpenTypoId] = React.useState<string | null>(null)
+  const [selectedZoneId, setSelectedZoneId] = React.useState<string | null>(null)
+  const [activeDrawingMode, setActiveDrawingMode] = React.useState<'rect' | 'polygon' | null>(null)
+
+  React.useEffect(() => {
+    const handleZoneSelected = (e: any) => {
+      setSelectedZoneId(e.detail?.zoneId || null)
+    }
+    const handleStartDrawEvent = (e: any) => {
+      setActiveDrawingMode(e.detail?.mode || null)
+    }
+    const handleCancelDrawEvent = () => {
+      setActiveDrawingMode(null)
+    }
+    window.addEventListener('cv-canvas-zone-selected' as any, handleZoneSelected)
+    window.addEventListener('cv-canvas-start-draw' as any, handleStartDrawEvent)
+    window.addEventListener('cv-canvas-cancel-draw' as any, handleCancelDrawEvent)
+    return () => {
+      window.removeEventListener('cv-canvas-zone-selected' as any, handleZoneSelected)
+      window.removeEventListener('cv-canvas-start-draw' as any, handleStartDrawEvent)
+      window.removeEventListener('cv-canvas-cancel-draw' as any, handleCancelDrawEvent)
+    }
+  }, [])
 
   if (!data) {
     return (
@@ -297,6 +321,116 @@ export const CanvasElementsPalette: React.FC<CanvasElementsPaletteProps> = ({
     )
   }
 
+  const handleStartDraw = (mode: 'rect' | 'polygon') => {
+    if (activeDrawingMode === mode) {
+      setActiveDrawingMode(null)
+      window.dispatchEvent(new CustomEvent('cv-canvas-cancel-draw'))
+    } else {
+      setActiveDrawingMode(mode)
+      window.dispatchEvent(new CustomEvent('cv-canvas-start-draw', { detail: { mode } }))
+    }
+  }
+
+  const handleSelectZone = (zoneId: string) => {
+    const nextId = selectedZoneId === zoneId ? null : zoneId
+    setSelectedZoneId(nextId)
+    window.dispatchEvent(new CustomEvent('cv-canvas-select-zone', { detail: { zoneId: nextId } }))
+  }
+
+  const handleUpdateZone = (zoneId: string, updates: Partial<CustomCanvasZone>) => {
+    const nextZones = (structureConfig.customZones || []).map(z => {
+      if (z.id === zoneId) {
+        return { ...z, ...updates }
+      }
+      return z
+    })
+    onUpdateStructureConfig({
+      ...structureConfig,
+      customZones: nextZones
+    })
+  }
+
+  const handleDeleteZone = (zoneId: string) => {
+    const nextZones = (structureConfig.customZones || []).filter(z => z.id !== zoneId)
+    onUpdateStructureConfig({
+      ...structureConfig,
+      customZones: nextZones
+    })
+    if (selectedZoneId === zoneId) {
+      setSelectedZoneId(null)
+      window.dispatchEvent(new CustomEvent('cv-canvas-select-zone', { detail: { zoneId: null } }))
+    }
+  }
+
+  const handleAddQuickZone = (type: 'sidebar_left' | 'sidebar_right' | 'banner_top' | 'box_bottom') => {
+    let newZone: CustomCanvasZone
+    const id = `zone_${Date.now()}`
+    if (type === 'sidebar_left') {
+      newZone = {
+        id,
+        label: 'Sidebar Esquerda',
+        shape: 'rect',
+        x: 0,
+        y: 0,
+        width: 32,
+        height: 100,
+        backgroundColor: '#0f172a',
+        backgroundOpacity: 1,
+        borderRadius: 0
+      }
+    } else if (type === 'sidebar_right') {
+      newZone = {
+        id,
+        label: 'Sidebar Direita',
+        shape: 'rect',
+        x: 68,
+        y: 0,
+        width: 32,
+        height: 100,
+        backgroundColor: '#0f172a',
+        backgroundOpacity: 1,
+        borderRadius: 0
+      }
+    } else if (type === 'banner_top') {
+      newZone = {
+        id,
+        label: 'Banner Superior',
+        shape: 'rect',
+        x: 0,
+        y: 0,
+        width: 100,
+        height: 16,
+        backgroundColor: '#0f172a',
+        backgroundOpacity: 1,
+        borderRadius: 0
+      }
+    } else {
+      newZone = {
+        id,
+        label: 'Box de Destaque',
+        shape: 'rect',
+        x: 5,
+        y: 50,
+        width: 45,
+        height: 30,
+        backgroundColor: 'rgba(30, 41, 59, 0.08)',
+        borderColor: '#38bdf8',
+        borderWidth: 1,
+        borderStyle: 'dashed',
+        borderRadius: 8,
+        backgroundOpacity: 1
+      }
+    }
+
+    const nextZones = [...(structureConfig.customZones || []), newZone]
+    onUpdateStructureConfig({
+      ...structureConfig,
+      customZones: nextZones
+    })
+    setSelectedZoneId(newZone.id)
+    window.dispatchEvent(new CustomEvent('cv-canvas-select-zone', { detail: { zoneId: newZone.id } }))
+  }
+
   // Contagem de itens visíveis vs ocultos
   const totalHidden = Object.values(dimensions).filter(d => d.hidden).length
 
@@ -337,6 +471,321 @@ export const CanvasElementsPalette: React.FC<CanvasElementsPaletteProps> = ({
 
       {/* Lista de Categorias & Itens Atômicos */}
       <div className="cv-elements-palette__sections">
+        
+        {/* ── Seção: Zonas, Sidebars & Boxes de Fundo (Canvas Livre) ── */}
+        <div className="cv-palette-group cv-palette-zones-section">
+          <div className="cv-palette-group__title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span>📐 Zonas, Sidebars & Boxes de Fundo</span>
+            {(structureConfig.customZones || []).length > 0 && (
+              <span className="cv-zones-counter-badge">
+                {(structureConfig.customZones || []).length} {(structureConfig.customZones || []).length === 1 ? 'área' : 'áreas'}
+              </span>
+            )}
+          </div>
+
+          <div style={{ padding: '0.5rem 0.75rem 0.75rem 0.75rem', display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
+            <p style={{ margin: 0, fontSize: '0.74rem', color: '#94a3b8', lineHeight: 1.4 }}>
+              Desenhe setores de destaque, sidebars coloridas ou boxes agrupadas para personalizar o fundo de qualquer layout:
+            </p>
+
+            {/* Botões de Ação de Desenho */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.4rem' }}>
+              <button
+                type="button"
+                className={`cv-draw-mode-btn ${activeDrawingMode === 'rect' ? 'is-active' : ''}`}
+                onClick={() => handleStartDraw('rect')}
+                title="Clique e arraste com o mouse sobre o currículo para criar um retângulo ou sidebar"
+              >
+                <span>🖱️</span>
+                <span>{activeDrawingMode === 'rect' ? 'Desenhando...' : 'Desenhar Box'}</span>
+              </button>
+
+              <button
+                type="button"
+                className={`cv-draw-mode-btn ${activeDrawingMode === 'polygon' ? 'is-active' : ''}`}
+                onClick={() => handleStartDraw('polygon')}
+                title="Clique para marcar vértices retos e duplo-clique para fechar a forma"
+              >
+                <span>📐</span>
+                <span>{activeDrawingMode === 'polygon' ? 'Marcando...' : 'Polígono'}</span>
+              </button>
+            </div>
+
+            {activeDrawingMode && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.4rem 0.6rem', background: 'rgba(56, 189, 248, 0.12)', border: '1px solid #38bdf8', borderRadius: '6px' }}>
+                <span style={{ fontSize: '0.72rem', color: '#38bdf8', fontWeight: 600 }}>
+                  Modo desenho ativo na folha!
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveDrawingMode(null)
+                    window.dispatchEvent(new CustomEvent('cv-canvas-cancel-draw'))
+                  }}
+                  style={{ background: 'none', border: 'none', color: '#cbd5e1', cursor: 'pointer', fontSize: '0.72rem', textDecoration: 'underline' }}
+                >
+                  Cancelar (Esc)
+                </button>
+              </div>
+            )}
+
+            {/* Atalhos de 1 Clique */}
+            <div>
+              <div style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '0.35rem' }}>
+                Atalhos Rápidos:
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.35rem' }}>
+                <button
+                  type="button"
+                  className="cv-quick-zone-btn"
+                  onClick={() => handleAddQuickZone('sidebar_left')}
+                  title="Criar sidebar vertical à esquerda (32% de largura)"
+                >
+                  📑 Sidebar Esq (32%)
+                </button>
+                <button
+                  type="button"
+                  className="cv-quick-zone-btn"
+                  onClick={() => handleAddQuickZone('sidebar_right')}
+                  title="Criar sidebar vertical à direita (32% de largura)"
+                >
+                  📑 Sidebar Dir (32%)
+                </button>
+                <button
+                  type="button"
+                  className="cv-quick-zone-btn"
+                  onClick={() => handleAddQuickZone('banner_top')}
+                  title="Criar banner superior horizontal (16% de altura)"
+                >
+                  🖼️ Banner Topo (16%)
+                </button>
+                <button
+                  type="button"
+                  className="cv-quick-zone-btn"
+                  onClick={() => handleAddQuickZone('box_bottom')}
+                  title="Criar box de destaque com fundo suave"
+                >
+                  🔲 Box Destaque
+                </button>
+              </div>
+            </div>
+
+            {/* Lista de Zonas Existentes */}
+            {(structureConfig.customZones || []).length > 0 && (
+              <div style={{ marginTop: '0.4rem', borderTop: '1px solid #1e293b', paddingTop: '0.5rem' }}>
+                <div style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '0.35rem' }}>
+                  Zonas Criadas ({structureConfig.customZones!.length}):
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                  {structureConfig.customZones!.map(zone => {
+                    const isSelected = selectedZoneId === zone.id
+                    return (
+                      <div
+                        key={zone.id}
+                        className={`cv-palette-zone-item ${isSelected ? 'is-selected' : ''}`}
+                        onClick={() => handleSelectZone(zone.id)}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flex: 1, minWidth: 0 }}>
+                          <span
+                            className="cv-zone-color-chip"
+                            style={{
+                              backgroundColor: zone.backgroundColor || '#1e293b',
+                              opacity: zone.backgroundOpacity ?? 1
+                            }}
+                          />
+                          <span style={{ fontSize: '0.76rem', fontWeight: 600, color: '#f8fafc', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {zone.shape === 'polygon' ? '📐' : '🔲'} {zone.label}
+                          </span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
+                          <button
+                            type="button"
+                            className="cv-zone-item-btn"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleDeleteZone(zone.id)
+                            }}
+                            title="Excluir zona"
+                          >
+                            🗑️
+                          </button>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Inspector da Zona Ativa */}
+            {selectedZoneId && (() => {
+              const zone = (structureConfig.customZones || []).find(z => z.id === selectedZoneId)
+              if (!zone) return null
+
+              const ZONE_COLORS = [
+                { name: 'Navy', hex: '#0f172a' },
+                { name: 'Slate', hex: '#1e293b' },
+                { name: 'Zinc', hex: '#27272a' },
+                { name: 'Warm Charcoal', hex: '#292524' },
+                { name: 'Ocean', hex: '#0284c7' },
+                { name: 'Emerald', hex: '#064e3b' },
+                { name: 'Burgundy', hex: '#4c0519' },
+                { name: 'Light Slate', hex: '#f1f5f9' },
+                { name: 'White', hex: '#ffffff' }
+              ]
+
+              return (
+                <div className="cv-zone-inspector-panel">
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem', borderBottom: '1px solid #334155', paddingBottom: '0.35rem' }}>
+                    <strong style={{ fontSize: '0.76rem', color: '#38bdf8' }}>
+                      ⚙️ Editar: {zone.label}
+                    </strong>
+                    <button
+                      type="button"
+                      onClick={() => handleSelectZone(zone.id)}
+                      style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: '0.7rem' }}
+                    >
+                      ✕ Fechar
+                    </button>
+                  </div>
+
+                  {/* Nome da Zona */}
+                  <div style={{ marginBottom: '0.45rem' }}>
+                    <label style={{ display: 'block', fontSize: '0.7rem', color: '#94a3b8', marginBottom: '0.2rem' }}>
+                      Rótulo / Nome:
+                    </label>
+                    <input
+                      type="text"
+                      className="cv-zone-text-input"
+                      value={zone.label}
+                      onChange={(e) => handleUpdateZone(zone.id, { label: e.target.value })}
+                    />
+                  </div>
+
+                  {/* Cor de Fundo */}
+                  <div style={{ marginBottom: '0.45rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem' }}>
+                      <label style={{ fontSize: '0.7rem', color: '#94a3b8' }}>Cor de Fundo:</label>
+                      <input
+                        type="color"
+                        value={zone.backgroundColor?.startsWith('#') ? zone.backgroundColor : '#1e293b'}
+                        onChange={(e) => handleUpdateZone(zone.id, { backgroundColor: e.target.value })}
+                        style={{ width: '24px', height: '20px', padding: 0, border: 'none', cursor: 'pointer', background: 'transparent' }}
+                      />
+                    </div>
+                    {/* Swatches Rápidos */}
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.25rem' }}>
+                      {ZONE_COLORS.map(c => (
+                        <button
+                          key={c.hex}
+                          type="button"
+                          onClick={() => handleUpdateZone(zone.id, { backgroundColor: c.hex })}
+                          title={c.name}
+                          style={{
+                            width: '18px',
+                            height: '18px',
+                            borderRadius: '3px',
+                            backgroundColor: c.hex,
+                            border: zone.backgroundColor === c.hex ? '2px solid #38bdf8' : '1px solid #475569',
+                            cursor: 'pointer',
+                            padding: 0
+                          }}
+                        />
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Opacidade de Fundo */}
+                  <div style={{ marginBottom: '0.45rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', color: '#94a3b8', marginBottom: '0.2rem' }}>
+                      <span>Opacidade:</span>
+                      <strong style={{ color: '#f8fafc' }}>{Math.round((zone.backgroundOpacity ?? 1) * 100)}%</strong>
+                    </div>
+                    <input
+                      type="range"
+                      min="0.1"
+                      max="1"
+                      step="0.05"
+                      value={zone.backgroundOpacity ?? 1}
+                      onChange={(e) => handleUpdateZone(zone.id, { backgroundOpacity: parseFloat(e.target.value) })}
+                      style={{ width: '100%', accentColor: '#38bdf8' }}
+                    />
+                  </div>
+
+                  {/* Textura IA / Background Catalog */}
+                  <div style={{ marginBottom: '0.45rem' }}>
+                    <label style={{ display: 'block', fontSize: '0.7rem', color: '#94a3b8', marginBottom: '0.2rem' }}>
+                      Textura / Imagem IA:
+                    </label>
+                    <select
+                      className="cv-zone-select-input"
+                      value={zone.backgroundImage || 'none'}
+                      onChange={(e) => handleUpdateZone(zone.id, { backgroundImage: e.target.value === 'none' ? undefined : e.target.value })}
+                    >
+                      <option value="none">Nenhuma (Cor Lisa Sólida)</option>
+                      {BACKGROUND_CATALOG.filter(b => b.id !== 'none').map(bg => (
+                        <option key={bg.id} value={bg.url}>
+                          {bg.name} ({bg.category})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Borda e Cantos (somente para retângulos) */}
+                  {zone.shape === 'rect' && (
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.4rem', marginBottom: '0.45rem' }}>
+                      <div>
+                        <label style={{ display: 'block', fontSize: '0.7rem', color: '#94a3b8', marginBottom: '0.2rem' }}>
+                          Borda:
+                        </label>
+                        <select
+                          className="cv-zone-select-input"
+                          value={zone.borderStyle || 'none'}
+                          onChange={(e) => handleUpdateZone(zone.id, {
+                            borderStyle: e.target.value as any,
+                            borderWidth: e.target.value === 'none' ? 0 : (zone.borderWidth || 1),
+                            borderColor: zone.borderColor || '#38bdf8'
+                          })}
+                        >
+                          <option value="none">Sem Borda</option>
+                          <option value="solid">Sólida</option>
+                          <option value="dashed">Tracejada</option>
+                          <option value="dotted">Pontilhada</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label style={{ display: 'block', fontSize: '0.7rem', color: '#94a3b8', marginBottom: '0.2rem' }}>
+                          Cantos (Radius):
+                        </label>
+                        <select
+                          className="cv-zone-select-input"
+                          value={zone.borderRadius ?? 0}
+                          onChange={(e) => handleUpdateZone(zone.id, { borderRadius: parseInt(e.target.value) })}
+                        >
+                          <option value={0}>Reto (0px)</option>
+                          <option value={4}>Suave (4px)</option>
+                          <option value={8}>Médio (8px)</option>
+                          <option value={16}>Arredondado (16px)</option>
+                          <option value={24}>Curvo (24px)</option>
+                        </select>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Botão de Excluir */}
+                  <button
+                    type="button"
+                    className="cv-zone-delete-btn"
+                    onClick={() => handleDeleteZone(zone.id)}
+                  >
+                    🗑️ Excluir esta Área
+                  </button>
+                </div>
+              )
+            })()}
+          </div>
+        </div>
         
         {/* ── Categoria: Identidade & Foto com Edição Total ── */}
         <div className="cv-palette-group">

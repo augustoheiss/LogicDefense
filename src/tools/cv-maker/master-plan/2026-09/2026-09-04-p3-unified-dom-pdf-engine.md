@@ -156,19 +156,25 @@ LogicDefense/src/tools/cv-maker/
 │
 ├── services/                                 # [CAMADA DE SERVIÇOS DO MOTOR P3]
 │   ├── DOMSnapshotSerializer.ts              # [NOVO] Serializador profundo do DOM vivo do React
-│   ├── RealDOMSpatialBudgeter.ts             # [NOVO] Bissecção matemática no sandbox isolado
-│   ├── VirtualPageSplitter.ts                # [NOVO] Paginação inteligente e balanceamento de páginas
-│   ├── CVPrintEngine.ts                      # [NOVO] Fachada unificada de impressão e exportação
-│   └── exportStandaloneHtml.ts               # [DEPRECIADO/SUBSTITUÍDO por DOMSnapshotSerializer]
+│   ├── RealDOMSpatialBudgeter.ts             # [NOVO] Bissecção matemática no sandbox isolado (contain: layout style size)
+│   ├── VirtualPageSplitter.ts                # [NOVO] Paginação inteligente e balanceamento de páginas A4
+│   ├── CVPrintEngine.ts                      # [NOVO] Fachada unificada de impressão e exportação de alta fidelidade
+│   └── standaloneHtmlService.ts              # [MANTIDO APENAS PARA BACKWARD COMPAT; IMPRESSÃO MIGRADA PARA CVPrintEngine]
 │
 ├── components/
-│   ├── CanvasLivre/
-│   │   ├── CanvasLivreA4.tsx                 # [MODIFICAR] Injetar hooks do P3, CSS vars e data-fit
-│   │   └── CanvasLivreA4.css                 # [MODIFICAR] Blindagem Skia e regras @media print
+│   ├── CVViewer/
+│   │   ├── CVPrintContainer.tsx              # [MODIFICAR] Injetar contêiner de impressão isolado e atributos P3
+│   │   ├── UniversalLayoutRenderer.tsx       # [MODIFICAR] Suporte a CSS variables do P3 e tags data-fit-priority
+│   │   └── UniversalLayoutRenderer.css       # [MODIFICAR] Blindagem Skia e regras @media print vetoriais
+│   │
+│   ├── CanvasBuilder/
+│   │   └── CanvasA4Sheet.tsx                 # [MODIFICAR] Sincronizar orçamento de altura A4 com RealDOMSpatialBudgeter
 │   │
 │   └── Toolbar/
-│       ├── TopToolbar.tsx                    # [MODIFICAR] Conectar botão de exportação ao CVPrintEngine
-│       └── DesignCustomizerDrawer.tsx        # [JÁ ALINHADO] Controles de background e densidade
+│       ├── CVToolbar.tsx                     # [MODIFICAR] Conectar botão "Imprimir / Salvar PDF" ao CVPrintEngine
+│       └── DesignCustomizerDrawer.tsx        # [JÁ ALINHADO] Controles de background e densidade visual
+│
+└── CVMakerApp.tsx                            # [MODIFICAR] Delegar handlePrintPdf para o CVPrintEngine unificado
 ```
 
 ---

@@ -86,6 +86,13 @@ export const LAYOUT_OPTIONS: LayoutOption[] = [
     label: '📐 Modelo A4 09 (Grid Math)',
     icon: '📐',
     description: 'Equilíbrio e proporção matemática pura com tipografia IBM Plex, micro-cards compactos e alta densidade A4.'
+  },
+  {
+    id: 'canvas_livre',
+    name: 'Modelo A4 10',
+    label: '🎨 Modelo A4 10 (Folha em Branco)',
+    icon: '🎨',
+    description: 'Folha em branco para construção totalmente livre com blocos, sidebars e áreas desenhadas do zero.'
   }
 ]
 
@@ -510,6 +517,30 @@ export const AVAILABLE_BOX_FONTS: BoxFontOption[] = [
 ]
 
 /**
+ * Definição de uma Zona, Sidebar ou Box Customizada no Canvas Livre
+ */
+export interface CustomCanvasZone {
+  id: string
+  label: string
+  shape: 'rect' | 'polygon'
+  // Coordenadas percentuais relativas à folha A4 (0 a 100%)
+  x: number
+  y: number
+  width: number
+  height: number
+  // Para polígonos: vértices em percentual da folha A4
+  points?: Array<{ x: number; y: number }>
+  // Estilização visual da zona
+  backgroundColor?: string
+  backgroundImage?: string
+  backgroundOpacity?: number
+  borderColor?: string
+  borderWidth?: number
+  borderStyle?: 'solid' | 'dashed' | 'dotted' | 'none'
+  borderRadius?: number
+}
+
+/**
  * Configuração Estrutural de um Modelo no Modo Canvas Livre Universal
  */
 export interface LayoutStructureConfig {
@@ -518,6 +549,7 @@ export interface LayoutStructureConfig {
   sectionDimensions: Record<string, SectionBoxDimensions>
   sectionOrder?: string[]     // Ordem sequencial explícita das seções no layout ativo
   sectionZone?: Record<string, 'left' | 'right'> // Coluna/zona atribuída à seção em layouts de múltiplas colunas
+  customZones?: CustomCanvasZone[] // Zonas, sidebars e boxes agrupadas desenhadas livremente
 }
 
 
