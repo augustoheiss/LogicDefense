@@ -126,9 +126,17 @@ export class DOMSnapshotSerializer {
         html, body {
           margin: 0;
           padding: 0;
-          background: #ffffff !important;
+          background-color: var(--cv-color-bg, #ffffff) !important;
+          background-image: var(--cv-bg-image, none) !important;
+          background-size: cover !important;
+          background-position: center !important;
+          background-repeat: no-repeat !important;
           text-rendering: geometricPrecision;
           -webkit-font-smoothing: antialiased;
+        }
+        .cv-card {
+          background: transparent !important;
+          background-color: transparent !important;
         }
         .cv-print-wrapper, #cv-printable-document {
           width: 210mm !important;

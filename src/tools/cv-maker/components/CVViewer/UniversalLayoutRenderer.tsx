@@ -49,6 +49,25 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
   const [isTemporalBannerDismissed, setIsTemporalBannerDismissed] = React.useState<boolean>(false)
   const [isTemporalExpanded, setIsTemporalExpanded] = React.useState<boolean>(false)
 
+  // Sincroniza em tempo real as variáveis de fundo no :root (<html>)
+  // Isso assegura que na impressão (PDF/Papel) o Chromium preencha 100% da folha física e qualquer margem personalizada
+  React.useEffect(() => {
+    const root = document.documentElement
+    const themeDefaultBg = theme === 'terminal' ? '#090d16' : '#ffffff'
+    const effectiveBgColor = designConfig?.colorBg || themeDefaultBg
+    const effectiveBgPattern = designConfig?.backgroundPattern && designConfig.backgroundPattern !== 'none'
+      ? `url("${designConfig.backgroundPattern}")`
+      : 'none'
+
+    root.style.setProperty('--cv-color-bg', effectiveBgColor)
+    root.style.setProperty('--cv-bg-image', effectiveBgPattern)
+
+    return () => {
+      root.style.removeProperty('--cv-color-bg')
+      root.style.removeProperty('--cv-bg-image')
+    }
+  }, [designConfig?.colorBg, designConfig?.backgroundPattern, theme])
+
   // Monitora se o conteúdo acumulado excede a altura útil da folha A4 (1122px)
   React.useEffect(() => {
     if (!isFreeCanvas) {

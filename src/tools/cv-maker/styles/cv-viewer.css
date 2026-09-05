@@ -42,7 +42,11 @@
   body {
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
-    background: #ffffff !important;
+    background-color: var(--cv-color-bg, #ffffff) !important;
+    background-image: var(--cv-bg-image, none) !important;
+    background-size: cover !important;
+    background-position: center !important;
+    background-repeat: no-repeat !important;
     padding: 0 !important;
     margin: 0 !important;
   }

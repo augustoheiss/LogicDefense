@@ -417,7 +417,11 @@
 /* ── Print Media Optimization ── */
 @media print {
   body {
-    background: #ffffff !important;
+    background-color: var(--cv-color-bg, #ffffff) !important;
+    background-image: var(--cv-bg-image, none) !important;
+    background-size: cover !important;
+    background-position: center !important;
+    background-repeat: no-repeat !important;
     margin: 0 !important;
     padding: 0 !important;
   }

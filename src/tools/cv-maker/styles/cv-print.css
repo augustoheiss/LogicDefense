@@ -18,7 +18,26 @@
   }
 
   html,
-  body,
+  body {
+    background-color: var(--cv-color-bg, #ffffff) !important;
+    background-image: var(--cv-bg-image, none) !important;
+    background-size: cover !important;
+    background-position: center !important;
+    background-repeat: no-repeat !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    color: #111827 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 100% !important;
+    font-size: 9.8pt !important;
+    line-height: 1.55 !important;
+    overflow: visible !important;
+    display: block !important;
+  }
+
   #root,
   .portal-root,
   .portal-main,
@@ -28,27 +47,53 @@
   .cv-viewer-container,
   .cv-wrapper,
   .cv-maker,
-  .cv-maker__showcase {
-    background: #ffffff !important;
-    background-color: #ffffff !important;
-    color: #111827 !important;
+  .cv-maker__showcase,
+  .cv-print-wrapper,
+  .cv-render-wrapper,
+  .cv-dossier-wrapper {
+    background: transparent !important;
+    background-color: transparent !important;
+    color: inherit !important;
     margin: 0 !important;
     padding: 0 !important;
-    padding-top: 0 !important;
-    margin-top: 0 !important;
     width: 100% !important;
     max-width: 100% !important;
     min-width: 100% !important;
     box-shadow: none !important;
     border: none !important;
-    font-size: 9.8pt !important;
-    line-height: 1.55 !important;
     overflow: visible !important;
     display: block !important;
   }
 
+  .cv-page-a4 {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-height: 297mm !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    box-sizing: border-box !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    background-color: var(--cv-color-bg, #ffffff) !important;
+    background-image: var(--cv-bg-image, none) !important;
+    background-size: cover !important;
+    background-position: center !important;
+    background-repeat: no-repeat !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    page-break-after: always !important;
+    break-after: page !important;
+  }
+
+  .cv-page-a4:last-of-type,
+  .cv-page-a4:last-child {
+    page-break-after: auto !important;
+    break-after: auto !important;
+  }
+
   .cv-card {
-    background: #ffffff !important;
+    background: transparent !important;
+    background-color: transparent !important;
     box-shadow: none !important;
     border: none !important;
   }
@@ -174,19 +219,21 @@
 
   @page {
     size: A4 portrait;
-    margin: 8mm 10mm 8mm 10mm !important;
+    margin: 0 !important;
   }
 
   /* Ocultar rigorosamente todos os elementos auxiliares, menus, badges de colisão e navegação */
   .cv-no-print,
   .no-print,
+  .cv-page-break-indicator,
+  .cv-page-temporal-banner,
+  .cv-page-overflow-banner,
   .cv-structural-box__collision-badge,
   .cv-structural-box__overflow-badge,
   .cv-structural-box__overlay-menu,
   .cv-structural-box__toolbar,
   .cv-structural-handle,
   .cv-column-splitter,
-  .cv-page-overflow-banner,
   .navbar,
   .portal-navbar,
   .footer,
@@ -1327,18 +1374,16 @@
      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
   .theme-terminal,
   .cv-root.theme-terminal,
-  .theme-terminal.cv-root,
-  .theme-terminal .cv-card,
-  .theme-terminal .cv-page-a4,
-  .theme-terminal .cv-print-wrapper,
-  .theme-terminal .cv-preview-area,
-  .theme-terminal .cv-dossier-wrapper {
-    background: #ffffff !important;
-    background-color: #ffffff !important;
+  .theme-terminal.cv-root {
     color: #166534 !important;
+    font-family: 'Courier Prime', 'Fira Code', monospace, 'Inter', sans-serif !important;
+  }
+
+  .theme-terminal .cv-card {
+    background: transparent !important;
+    background-color: transparent !important;
     box-shadow: none !important;
     border: none !important;
-    font-family: 'Courier Prime', 'Fira Code', monospace, 'Inter', sans-serif !important;
   }
 
   .theme-terminal p,

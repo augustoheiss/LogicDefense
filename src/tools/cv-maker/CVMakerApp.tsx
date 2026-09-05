@@ -441,6 +441,19 @@ export const CVMakerApp: React.FC = () => {
     const handleBeforePrint = () => {
       document.body.classList.add('cv-is-printing')
       document.documentElement.classList.add('cv-is-printing')
+      const cvRoot = document.querySelector('.cv-root') as HTMLElement | null
+      if (cvRoot) {
+        const computed = window.getComputedStyle(cvRoot)
+        const bgColor = computed.getPropertyValue('--cv-color-bg').trim()
+        const bgImage = computed.getPropertyValue('--cv-bg-image').trim()
+        if (bgColor) document.documentElement.style.setProperty('--cv-color-bg', bgColor)
+        if (bgImage) document.documentElement.style.setProperty('--cv-bg-image', bgImage)
+      } else if (designConfig?.colorBg) {
+        document.documentElement.style.setProperty('--cv-color-bg', designConfig.colorBg)
+        if (designConfig.backgroundPattern && designConfig.backgroundPattern !== 'none') {
+          document.documentElement.style.setProperty('--cv-bg-image', `url("${designConfig.backgroundPattern}")`)
+        }
+      }
     }
     const handleAfterPrint = () => {
       document.body.classList.remove('cv-is-printing')

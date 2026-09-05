@@ -85,6 +85,16 @@ export class CVPrintEngine {
     document.body.classList.add('cv-is-printing')
     document.documentElement.classList.add('cv-is-printing')
 
+    // Sincroniza tokens de fundo no :root (<html>) para preenchimento total em sangria e margens
+    const cvRoot = (rootEl.querySelector('.cv-root') || rootEl) as HTMLElement
+    if (cvRoot) {
+      const computed = window.getComputedStyle(cvRoot)
+      const bgColor = computed.getPropertyValue('--cv-color-bg').trim()
+      const bgImage = computed.getPropertyValue('--cv-bg-image').trim()
+      if (bgColor) document.documentElement.style.setProperty('--cv-color-bg', bgColor)
+      if (bgImage) document.documentElement.style.setProperty('--cv-bg-image', bgImage)
+    }
+
     const cleanupPrint = () => {
       document.body.classList.remove('cv-is-printing')
       document.documentElement.classList.remove('cv-is-printing')

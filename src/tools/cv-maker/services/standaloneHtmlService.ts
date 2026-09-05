@@ -189,7 +189,11 @@ function getEmbeddedCss(): string {
       box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12);
       border-radius: 4px;
       position: relative;
-      background: #ffffff;
+      background-color: var(--cv-color-bg, #ffffff);
+      background-image: var(--cv-bg-image, none);
+      background-size: cover;
+      background-position: center;
+      background-repeat: no-repeat;
     }
 
     .cv-cover-letter-page {
@@ -202,6 +206,7 @@ function getEmbeddedCss(): string {
       min-height: 100%;
       box-sizing: border-box;
       width: 100%;
+      background: transparent !important;
     }
 
     /* ── Controles de Visibilidade das Folhas ── */
@@ -212,8 +217,13 @@ function getEmbeddedCss(): string {
 
     /* ── Regras de Impressão ── */
     @media print {
+      html,
       body {
-        background: #ffffff !important;
+        background-color: var(--cv-color-bg, #ffffff) !important;
+        background-image: var(--cv-bg-image, none) !important;
+        background-size: cover !important;
+        background-position: center !important;
+        background-repeat: no-repeat !important;
         padding: 0 !important;
         margin: 0 !important;
         -webkit-print-color-adjust: exact !important;
@@ -518,7 +528,7 @@ export function renderCVToStandaloneHtml(
   `
 
   return `<!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="pt-BR" style="${customStyleVars}">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
