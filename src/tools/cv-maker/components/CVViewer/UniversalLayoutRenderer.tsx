@@ -750,6 +750,7 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
 
   // Estados de Zonas Customizadas e Desenho Interativo (Paint / Polígono)
   const [selectedZoneId, setSelectedZoneId] = React.useState<string | null>(null)
+  const [draggingZoneId, setDraggingZoneId] = React.useState<string | null>(null)
   const [drawingMode, setDrawingMode] = React.useState<'rect' | 'polygon' | null>(null)
   const [drawingStart, setDrawingStart] = React.useState<{ x: number; y: number } | null>(null)
   const [drawingCurrent, setDrawingCurrent] = React.useState<{ x: number; y: number } | null>(null)
@@ -760,6 +761,13 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
   // Escuta de eventos globais de desenho e seleção vindos da barra lateral
   React.useEffect(() => {
     const handleStartDraw = (e: any) => {
+      // Assegura que o modo canvas seja ativado caso ainda não estivesse
+      if (!structureConfig?.isFreeCanvasActive && onUpdateStructureConfig && structureConfig) {
+        onUpdateStructureConfig({
+          ...structureConfig,
+          isFreeCanvasActive: true
+        })
+      }
       setDrawingMode(e.detail?.mode || 'rect')
       setDrawingStart(null)
       setDrawingCurrent(null)
@@ -796,7 +804,7 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
       window.removeEventListener('cv-canvas-select-zone' as any, handleSelectZoneEvent)
       window.removeEventListener('keydown', handleKeyDown)
     }
-  }, [])
+  }, [structureConfig, onUpdateStructureConfig])
 
   const handleSelectZone = (zoneId: string) => {
     setSelectedZoneId(zoneId)
@@ -823,21 +831,27 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
     window.dispatchEvent(new CustomEvent('cv-canvas-cancel-draw'))
   }
 
-  const getPointFromEvent = (e: React.MouseEvent<HTMLDivElement>) => {
+  const getPointFromEvent = (e: React.PointerEvent<HTMLDivElement> | React.MouseEvent<HTMLDivElement>) => {
     const rect = e.currentTarget.getBoundingClientRect()
     const x = Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100))
     const y = Math.max(0, Math.min(100, ((e.clientY - rect.top) / rect.height) * 100))
     return { x: Math.round(x * 10) / 10, y: Math.round(y * 10) / 10 }
   }
 
-  const handleDrawingMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+  const handleDrawingPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.button !== 0) return
     if (drawingMode !== 'rect') return
+    e.preventDefault()
+    e.stopPropagation()
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId)
+    } catch {}
     const pt = getPointFromEvent(e)
     setDrawingStart(pt)
     setDrawingCurrent(pt)
   }
 
-  const handleDrawingMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+  const handleDrawingPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
     const pt = getPointFromEvent(e)
     if (drawingMode === 'rect' && drawingStart) {
       setDrawingCurrent(pt)
@@ -846,27 +860,40 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
     }
   }
 
-  const handleDrawingMouseUp = () => {
-    if (drawingMode !== 'rect' || !drawingStart || !drawingCurrent) return
-    const minX = Math.min(drawingStart.x, drawingCurrent.x)
-    const minY = Math.min(drawingStart.y, drawingCurrent.y)
-    const width = Math.abs(drawingCurrent.x - drawingStart.x)
-    const height = Math.abs(drawingCurrent.y - drawingStart.y)
+  const handleDrawingPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (drawingMode !== 'rect' || !drawingStart) return
+    e.preventDefault()
+    try {
+      e.currentTarget.releasePointerCapture(e.pointerId)
+    } catch {}
 
-    if (width < 2 || height < 2) {
-      setDrawingStart(null)
-      setDrawingCurrent(null)
-      return
+    const cur = drawingCurrent || drawingStart
+    const minX = Math.min(drawingStart.x, cur.x)
+    const minY = Math.min(drawingStart.y, cur.y)
+    const rawW = Math.abs(cur.x - drawingStart.x)
+    const rawH = Math.abs(cur.y - drawingStart.y)
+
+    let finalX = minX
+    let finalY = minY
+    let finalW = rawW
+    let finalH = rawH
+
+    // Se o usuário apenas clicou sem arrastar (menos de 2%), cria um box padrão de 35% x 25% centralizado
+    if (rawW < 2 && rawH < 2) {
+      finalW = 35
+      finalH = 25
+      finalX = Math.max(0, Math.min(65, Math.round((drawingStart.x - 17.5) * 10) / 10))
+      finalY = Math.max(0, Math.min(75, Math.round((drawingStart.y - 12.5) * 10) / 10))
     }
 
     const newZone: CustomCanvasZone = {
       id: `zone_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-      label: width < 40 && height > 50 ? 'Sidebar Personalizada' : 'Box Personalizado',
+      label: finalW < 40 && finalH > 50 ? 'Sidebar Personalizada' : 'Box Personalizado',
       shape: 'rect',
-      x: Math.round(minX * 10) / 10,
-      y: Math.round(minY * 10) / 10,
-      width: Math.round(width * 10) / 10,
-      height: Math.round(height * 10) / 10,
+      x: Math.round(finalX * 10) / 10,
+      y: Math.round(finalY * 10) / 10,
+      width: Math.round(finalW * 10) / 10,
+      height: Math.round(finalH * 10) / 10,
       backgroundColor: 'rgba(30, 41, 59, 0.12)',
       borderColor: '#0284c7',
       borderWidth: 1,
@@ -879,6 +906,7 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
     if (onUpdateStructureConfig && structureConfig) {
       onUpdateStructureConfig({
         ...structureConfig,
+        isFreeCanvasActive: true,
         customZones: updatedZones
       })
     }
@@ -912,6 +940,7 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
     if (onUpdateStructureConfig && structureConfig) {
       onUpdateStructureConfig({
         ...structureConfig,
+        isFreeCanvasActive: true,
         customZones: updatedZones
       })
     }
@@ -944,6 +973,176 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
     finishPolygon(polygonPoints)
   }
 
+  // Arraste livre da Zona no plano 2D (Mouse + Touch)
+  const handleZoneMovePointerDown = (
+    e: React.PointerEvent<HTMLElement>,
+    zone: CustomCanvasZone
+  ) => {
+    if (e.button !== 0) return
+    e.preventDefault()
+    e.stopPropagation()
+
+    setSelectedZoneId(zone.id)
+    window.dispatchEvent(new CustomEvent('cv-canvas-zone-selected', { detail: { zoneId: zone.id } }))
+
+    const targetEl = e.currentTarget
+    targetEl.setPointerCapture(e.pointerId)
+    setDraggingZoneId(zone.id)
+
+    const startX = e.clientX
+    const startY = e.clientY
+    const startZoneX = zone.x
+    const startZoneY = zone.y
+
+    const zoneEl = document.getElementById(`custom_zone_${zone.id}`)
+    const cardEl = zoneEl?.closest('.cv-card') || pageRef.current
+    const cardRect = cardEl?.getBoundingClientRect() || { width: 794, height: 1122 }
+
+    let latestX = startZoneX
+    let latestY = startZoneY
+
+    const onPointerMove = (moveEvt: PointerEvent) => {
+      moveEvt.preventDefault()
+      const dxPx = moveEvt.clientX - startX
+      const dyPx = moveEvt.clientY - startY
+
+      const dxPct = (dxPx / cardRect.width) * 100
+      const dyPct = (dyPx / cardRect.height) * 100
+
+      latestX = Math.max(0, Math.min(100 - zone.width, Math.round((startZoneX + dxPct) * 10) / 10))
+      latestY = Math.max(0, Math.min(100 - zone.height, Math.round((startZoneY + dyPct) * 10) / 10))
+
+      if (zoneEl) {
+        zoneEl.style.left = `${latestX}%`
+        zoneEl.style.top = `${latestY}%`
+      }
+    }
+
+    const onPointerUp = (upEvt: PointerEvent) => {
+      upEvt.preventDefault()
+      try {
+        targetEl.releasePointerCapture(upEvt.pointerId)
+      } catch {}
+      window.removeEventListener('pointermove', onPointerMove)
+      window.removeEventListener('pointerup', onPointerUp)
+      setDraggingZoneId(null)
+
+      if (!structureConfig || !onUpdateStructureConfig) return
+      const nextZones = (structureConfig.customZones || []).map(z => {
+        if (z.id === zone.id) {
+          return { ...z, x: latestX, y: latestY }
+        }
+        return z
+      })
+      onUpdateStructureConfig({
+        ...structureConfig,
+        customZones: nextZones
+      })
+    }
+
+    window.addEventListener('pointermove', onPointerMove)
+    window.addEventListener('pointerup', onPointerUp)
+  }
+
+  // Redimensionamento manual em 8 direções (Estilo Paint / Figma)
+  const handleZoneResizePointerDown = (
+    e: React.PointerEvent<HTMLElement>,
+    zone: CustomCanvasZone,
+    handle: 'n' | 's' | 'e' | 'w' | 'nw' | 'ne' | 'se' | 'sw'
+  ) => {
+    if (e.button !== 0) return
+    e.preventDefault()
+    e.stopPropagation()
+
+    setSelectedZoneId(zone.id)
+    window.dispatchEvent(new CustomEvent('cv-canvas-zone-selected', { detail: { zoneId: zone.id } }))
+
+    const targetEl = e.currentTarget
+    targetEl.setPointerCapture(e.pointerId)
+
+    const startX = e.clientX
+    const startY = e.clientY
+    const startZoneX = zone.x
+    const startZoneY = zone.y
+    const startZoneW = zone.width
+    const startZoneH = zone.height
+
+    const zoneEl = document.getElementById(`custom_zone_${zone.id}`)
+    const cardEl = zoneEl?.closest('.cv-card') || pageRef.current
+    const cardRect = cardEl?.getBoundingClientRect() || { width: 794, height: 1122 }
+
+    let latestX = startZoneX
+    let latestY = startZoneY
+    let latestW = startZoneW
+    let latestH = startZoneH
+
+    const onPointerMove = (moveEvt: PointerEvent) => {
+      moveEvt.preventDefault()
+      const dxPx = moveEvt.clientX - startX
+      const dyPx = moveEvt.clientY - startY
+
+      const dxPct = (dxPx / cardRect.width) * 100
+      const dyPct = (dyPx / cardRect.height) * 100
+
+      // Ajuste horizontal
+      if (handle === 'w' || handle === 'nw' || handle === 'sw') {
+        const candidateX = Math.max(0, Math.min(startZoneX + startZoneW - 4, startZoneX + dxPct))
+        latestX = Math.round(candidateX * 10) / 10
+        latestW = Math.round((startZoneW - (latestX - startZoneX)) * 10) / 10
+      } else if (handle === 'e' || handle === 'ne' || handle === 'se') {
+        const candidateW = Math.max(4, Math.min(100 - startZoneX, startZoneW + dxPct))
+        latestW = Math.round(candidateW * 10) / 10
+      }
+
+      // Ajuste vertical
+      if (handle === 'n' || handle === 'nw' || handle === 'ne') {
+        const candidateY = Math.max(0, Math.min(startZoneY + startZoneH - 3, startZoneY + dyPct))
+        latestY = Math.round(candidateY * 10) / 10
+        latestH = Math.round((startZoneH - (latestY - startZoneY)) * 10) / 10
+      } else if (handle === 's' || handle === 'sw' || handle === 'se') {
+        const candidateH = Math.max(3, Math.min(100 - startZoneY, startZoneH + dyPct))
+        latestH = Math.round(candidateH * 10) / 10
+      }
+
+      if (zoneEl) {
+        zoneEl.style.left = `${latestX}%`
+        zoneEl.style.top = `${latestY}%`
+        zoneEl.style.width = `${latestW}%`
+        zoneEl.style.height = `${latestH}%`
+      }
+    }
+
+    const onPointerUp = (upEvt: PointerEvent) => {
+      upEvt.preventDefault()
+      try {
+        targetEl.releasePointerCapture(upEvt.pointerId)
+      } catch {}
+      window.removeEventListener('pointermove', onPointerMove)
+      window.removeEventListener('pointerup', onPointerUp)
+
+      if (!structureConfig || !onUpdateStructureConfig) return
+      const nextZones = (structureConfig.customZones || []).map(z => {
+        if (z.id === zone.id) {
+          return {
+            ...z,
+            x: latestX,
+            y: latestY,
+            width: latestW,
+            height: latestH
+          }
+        }
+        return z
+      })
+      onUpdateStructureConfig({
+        ...structureConfig,
+        customZones: nextZones
+      })
+    }
+
+    window.addEventListener('pointermove', onPointerMove)
+    window.addEventListener('pointerup', onPointerUp)
+  }
+
   const renderCustomZonesLayer = () => {
     const zones = structureConfig?.customZones || []
     if (zones.length === 0) return null
@@ -958,6 +1157,7 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
             return (
               <div
                 key={zone.id}
+                id={`custom_zone_${zone.id}`}
                 className={`cv-custom-zone-item cv-custom-zone-polygon ${isSelected ? 'is-selected' : ''}`}
                 style={{
                   position: 'absolute',
@@ -1004,7 +1204,8 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
           return (
             <div
               key={zone.id}
-              className={`cv-custom-zone-item cv-custom-zone-rect ${isSelected ? 'is-selected' : ''}`}
+              id={`custom_zone_${zone.id}`}
+              className={`cv-custom-zone-item cv-custom-zone-rect ${isSelected ? 'is-selected' : ''} ${draggingZoneId === zone.id ? 'is-dragging' : ''}`}
               style={{
                 position: 'absolute',
                 left: `${zone.x}%`,
@@ -1030,22 +1231,90 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
                   handleSelectZone(zone.id)
                 }
               }}
+              onPointerDown={(e) => {
+                if (isFreeCanvas && isSelected) {
+                  handleZoneMovePointerDown(e, zone)
+                }
+              }}
             >
               {isFreeCanvas && isSelected && (
-                <div className="cv-custom-zone-badge cv-no-print" data-cv-interactive="true">
-                  <span>📐 {zone.label}</span>
-                  <button
-                    type="button"
-                    className="cv-custom-zone-del"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      handleDeleteZone(zone.id)
-                    }}
-                    title="Excluir área"
-                  >
-                    ✕
-                  </button>
-                </div>
+                <>
+                  {/* Cabeçalho de Controle e Arraste */}
+                  <div className="cv-custom-zone-badge cv-no-print" data-cv-interactive="true">
+                    <span
+                      className="cv-zone-drag-handle"
+                      onPointerDown={(e) => handleZoneMovePointerDown(e, zone)}
+                      title="Arrastar para reposicionar na folha"
+                    >
+                      ⠿ Mover
+                    </span>
+                    <span>📐 {zone.label}</span>
+                    <span className="cv-zone-dim-pill">
+                      L: {Math.round(zone.width)}% | A: {Math.round(zone.height)}%
+                    </span>
+                    <button
+                      type="button"
+                      className="cv-custom-zone-del"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleDeleteZone(zone.id)
+                      }}
+                      title="Excluir área"
+                    >
+                      ✕
+                    </button>
+                  </div>
+
+                  {/* 8 Alças de Redimensionamento Manual (Paint / Figma) */}
+                  <div
+                    className="cv-zone-resize-handle cv-zone-resize-handle--nw cv-no-print"
+                    data-cv-interactive="true"
+                    onPointerDown={(e) => handleZoneResizePointerDown(e, zone, 'nw')}
+                    title="Redimensionar canto superior esquerdo"
+                  />
+                  <div
+                    className="cv-zone-resize-handle cv-zone-resize-handle--ne cv-no-print"
+                    data-cv-interactive="true"
+                    onPointerDown={(e) => handleZoneResizePointerDown(e, zone, 'ne')}
+                    title="Redimensionar canto superior direito"
+                  />
+                  <div
+                    className="cv-zone-resize-handle cv-zone-resize-handle--se cv-no-print"
+                    data-cv-interactive="true"
+                    onPointerDown={(e) => handleZoneResizePointerDown(e, zone, 'se')}
+                    title="Redimensionar canto inferior direito"
+                  />
+                  <div
+                    className="cv-zone-resize-handle cv-zone-resize-handle--sw cv-no-print"
+                    data-cv-interactive="true"
+                    onPointerDown={(e) => handleZoneResizePointerDown(e, zone, 'sw')}
+                    title="Redimensionar canto inferior esquerdo"
+                  />
+                  <div
+                    className="cv-zone-resize-handle cv-zone-resize-handle--n cv-no-print"
+                    data-cv-interactive="true"
+                    onPointerDown={(e) => handleZoneResizePointerDown(e, zone, 'n')}
+                    title="Redimensionar topo (altura)"
+                  />
+                  <div
+                    className="cv-zone-resize-handle cv-zone-resize-handle--s cv-no-print"
+                    data-cv-interactive="true"
+                    onPointerDown={(e) => handleZoneResizePointerDown(e, zone, 's')}
+                    title="Redimensionar base (altura)"
+                  />
+                  <div
+                    className="cv-zone-resize-handle cv-zone-resize-handle--w cv-no-print"
+                    data-cv-interactive="true"
+                    onPointerDown={(e) => handleZoneResizePointerDown(e, zone, 'w')}
+                    title="Redimensionar esquerda (largura)"
+                  />
+                  <div
+                    className="cv-zone-resize-handle cv-zone-resize-handle--e cv-no-print"
+                    data-cv-interactive="true"
+                    onPointerDown={(e) => handleZoneResizePointerDown(e, zone, 'e')}
+                    title="Redimensionar direita (largura)"
+                  />
+                </>
               )}
             </div>
           )
@@ -1081,15 +1350,15 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
         ref={drawingOverlayRef}
         className="cv-canvas-drawing-overlay cv-no-print"
         data-cv-interactive="true"
-        onMouseDown={handleDrawingMouseDown}
-        onMouseMove={handleDrawingMouseMove}
-        onMouseUp={handleDrawingMouseUp}
+        onPointerDown={handleDrawingPointerDown}
+        onPointerMove={handleDrawingPointerMove}
+        onPointerUp={handleDrawingPointerUp}
         onClick={handleDrawingClick}
         onDoubleClick={handleDrawingDoubleClick}
       >
         <div className="cv-drawing-instruction-banner">
           {drawingMode === 'rect' ? (
-            <span>🖱️ <strong>Modo Desenho:</strong> Clique e arraste para delimitar a Sidebar ou Box</span>
+            <span>🖱️ <strong>Modo Desenho:</strong> Clique e arraste para desenhar (ou clique para criar um box padrão)</span>
           ) : (
             <span>📐 <strong>Modo Polígono:</strong> Clique para marcar os vértices ({polygonPoints.length} marcados). Duplo clique para fechar.</span>
           )}
@@ -1149,7 +1418,7 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
     return (
       <>
         {renderCustomZonesLayer()}
-        {isFreeCanvas && renderDrawingOverlay()}
+        {Boolean(drawingMode) && renderDrawingOverlay()}
       </>
     )
   }

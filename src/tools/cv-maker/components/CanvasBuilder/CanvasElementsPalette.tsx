@@ -327,6 +327,12 @@ export const CanvasElementsPalette: React.FC<CanvasElementsPaletteProps> = ({
       window.dispatchEvent(new CustomEvent('cv-canvas-cancel-draw'))
     } else {
       setActiveDrawingMode(mode)
+      if (!structureConfig.isFreeCanvasActive) {
+        onUpdateStructureConfig({
+          ...structureConfig,
+          isFreeCanvasActive: true
+        })
+      }
       window.dispatchEvent(new CustomEvent('cv-canvas-start-draw', { detail: { mode } }))
     }
   }
@@ -425,6 +431,7 @@ export const CanvasElementsPalette: React.FC<CanvasElementsPaletteProps> = ({
     const nextZones = [...(structureConfig.customZones || []), newZone]
     onUpdateStructureConfig({
       ...structureConfig,
+      isFreeCanvasActive: true,
       customZones: nextZones
     })
     setSelectedZoneId(newZone.id)
@@ -661,6 +668,143 @@ export const CanvasElementsPalette: React.FC<CanvasElementsPaletteProps> = ({
                       onChange={(e) => handleUpdateZone(zone.id, { label: e.target.value })}
                     />
                   </div>
+
+                  {/* Dimensões e Posições Manuais Livres */}
+                  {zone.shape === 'rect' && (
+                    <div className="cv-zone-dimension-controls" style={{ marginBottom: '0.55rem' }}>
+                      <div style={{ fontSize: '0.72rem', color: '#38bdf8', fontWeight: 700 }}>
+                        📐 Dimensões & Posição (Manual Livre)
+                      </div>
+
+                      {/* Largura */}
+                      <div className="cv-zone-slider-row">
+                        <div className="cv-zone-slider-header">
+                          <span>Largura:</span>
+                          <strong>{Math.round(zone.width)}%</strong>
+                        </div>
+                        <div className="cv-zone-slider-inputs">
+                          <input
+                            type="range"
+                            min="5"
+                            max="100"
+                            step="1"
+                            value={Math.round(zone.width)}
+                            onChange={(e) => handleUpdateZone(zone.id, { width: parseInt(e.target.value) })}
+                          />
+                          <input
+                            type="number"
+                            min="5"
+                            max="100"
+                            className="cv-zone-num-input"
+                            value={Math.round(zone.width)}
+                            onChange={(e) => handleUpdateZone(zone.id, { width: Math.max(5, Math.min(100, parseInt(e.target.value) || 5)) })}
+                          />
+                        </div>
+                        <div className="cv-zone-quick-chips">
+                          <button type="button" className="cv-zone-quick-chip-btn" onClick={() => handleUpdateZone(zone.id, { width: 25 })}>25% Fina</button>
+                          <button type="button" className="cv-zone-quick-chip-btn" onClick={() => handleUpdateZone(zone.id, { width: 32 })}>32% Sidebar</button>
+                          <button type="button" className="cv-zone-quick-chip-btn" onClick={() => handleUpdateZone(zone.id, { width: 50 })}>50% Meio</button>
+                          <button type="button" className="cv-zone-quick-chip-btn" onClick={() => handleUpdateZone(zone.id, { width: 100 })}>100% Total</button>
+                        </div>
+                      </div>
+
+                      {/* Altura */}
+                      <div className="cv-zone-slider-row">
+                        <div className="cv-zone-slider-header">
+                          <span>Altura (Vertical):</span>
+                          <strong>{Math.round(zone.height)}%</strong>
+                        </div>
+                        <div className="cv-zone-slider-inputs">
+                          <input
+                            type="range"
+                            min="4"
+                            max="100"
+                            step="1"
+                            value={Math.round(zone.height)}
+                            onChange={(e) => handleUpdateZone(zone.id, { height: parseInt(e.target.value) })}
+                          />
+                          <input
+                            type="number"
+                            min="4"
+                            max="100"
+                            className="cv-zone-num-input"
+                            value={Math.round(zone.height)}
+                            onChange={(e) => handleUpdateZone(zone.id, { height: Math.max(4, Math.min(100, parseInt(e.target.value) || 4)) })}
+                          />
+                        </div>
+                        <div className="cv-zone-quick-chips">
+                          <button type="button" className="cv-zone-quick-chip-btn" onClick={() => handleUpdateZone(zone.id, { height: 100 })}>100% Toda</button>
+                          <button type="button" className="cv-zone-quick-chip-btn" onClick={() => handleUpdateZone(zone.id, { height: 75 })}>75%</button>
+                          <button type="button" className="cv-zone-quick-chip-btn" onClick={() => handleUpdateZone(zone.id, { height: 50 })}>50% Meia</button>
+                          <button type="button" className="cv-zone-quick-chip-btn" onClick={() => handleUpdateZone(zone.id, { height: 30 })}>30% Box</button>
+                          <button type="button" className="cv-zone-quick-chip-btn" onClick={() => handleUpdateZone(zone.id, { height: 16 })}>16% Banner</button>
+                        </div>
+                      </div>
+
+                      {/* Posição X */}
+                      <div className="cv-zone-slider-row">
+                        <div className="cv-zone-slider-header">
+                          <span>Posição X (Horizontal):</span>
+                          <strong>{Math.round(zone.x)}%</strong>
+                        </div>
+                        <div className="cv-zone-slider-inputs">
+                          <input
+                            type="range"
+                            min="0"
+                            max="95"
+                            step="1"
+                            value={Math.round(zone.x)}
+                            onChange={(e) => handleUpdateZone(zone.id, { x: parseInt(e.target.value) })}
+                          />
+                          <input
+                            type="number"
+                            min="0"
+                            max="95"
+                            className="cv-zone-num-input"
+                            value={Math.round(zone.x)}
+                            onChange={(e) => handleUpdateZone(zone.id, { x: Math.max(0, Math.min(95, parseInt(e.target.value) || 0)) })}
+                          />
+                        </div>
+                        <div className="cv-zone-quick-chips">
+                          <button type="button" className="cv-zone-quick-chip-btn" onClick={() => handleUpdateZone(zone.id, { x: 0 })}>0% Esq</button>
+                          <button type="button" className="cv-zone-quick-chip-btn" onClick={() => handleUpdateZone(zone.id, { x: 34 })}>34% Centro</button>
+                          <button type="button" className="cv-zone-quick-chip-btn" onClick={() => handleUpdateZone(zone.id, { x: 68 })}>68% Dir</button>
+                        </div>
+                      </div>
+
+                      {/* Posição Y */}
+                      <div className="cv-zone-slider-row">
+                        <div className="cv-zone-slider-header">
+                          <span>Posição Y (Vertical):</span>
+                          <strong>{Math.round(zone.y)}%</strong>
+                        </div>
+                        <div className="cv-zone-slider-inputs">
+                          <input
+                            type="range"
+                            min="0"
+                            max="95"
+                            step="1"
+                            value={Math.round(zone.y)}
+                            onChange={(e) => handleUpdateZone(zone.id, { y: parseInt(e.target.value) })}
+                          />
+                          <input
+                            type="number"
+                            min="0"
+                            max="95"
+                            className="cv-zone-num-input"
+                            value={Math.round(zone.y)}
+                            onChange={(e) => handleUpdateZone(zone.id, { y: Math.max(0, Math.min(95, parseInt(e.target.value) || 0)) })}
+                          />
+                        </div>
+                        <div className="cv-zone-quick-chips">
+                          <button type="button" className="cv-zone-quick-chip-btn" onClick={() => handleUpdateZone(zone.id, { y: 0 })}>0% Topo</button>
+                          <button type="button" className="cv-zone-quick-chip-btn" onClick={() => handleUpdateZone(zone.id, { y: 30 })}>30% Meio</button>
+                          <button type="button" className="cv-zone-quick-chip-btn" onClick={() => handleUpdateZone(zone.id, { y: 60 })}>60% Base</button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
 
                   {/* Cor de Fundo */}
                   <div style={{ marginBottom: '0.45rem' }}>

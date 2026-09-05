@@ -45,7 +45,7 @@ export const StructuralBoxWrapper: React.FC<StructuralBoxWrapperProps> = ({
   const [hasCollision, setHasCollision] = useState<boolean>(false)
   const [isResizing, setIsResizing] = useState<boolean>(false)
   const [isMoving, setIsMoving] = useState<boolean>(false)
-  const [resizeType, setResizeType] = useState<'width' | 'height' | 'both' | null>(null)
+  const [resizeType, setResizeType] = useState<'width' | 'height' | 'both' | string | null>(null)
 
   // Medição contínua de overflow para evitar estouro da folha A4
   useEffect(() => {
@@ -109,10 +109,10 @@ export const StructuralBoxWrapper: React.FC<StructuralBoxWrapperProps> = ({
     }
   }, [isFreeCanvasActive, dimensions, isMoving])
 
-  // Manipulação contínua de redimensionamento via PointerEvents (Mouse + Touch)
+  // Manipulação contínua de redimensionamento nos 4 cantos e bordas via PointerEvents (Mouse + Touch)
   const handlePointerDown = useCallback((
     e: React.PointerEvent<HTMLDivElement>,
-    type: 'width' | 'height' | 'both'
+    type: 'width' | 'height' | 'both' | 'corner-se' | 'corner-sw' | 'corner-ne' | 'corner-nw'
   ) => {
     e.preventDefault()
     e.stopPropagation()
@@ -137,16 +137,30 @@ export const StructuralBoxWrapper: React.FC<StructuralBoxWrapperProps> = ({
       const deltaX = moveEvt.clientX - startX
       const deltaY = moveEvt.clientY - startY
 
-      if (type === 'width' || type === 'both') {
+      // Largura: cantos direitos aumentam com deltaX; esquerdos com deltaX invertido
+      if (type === 'width' || type === 'both' || type === 'corner-se' || type === 'corner-ne') {
         const newWidthPx = Math.max(120, Math.min(parentWidth, startWidth + deltaX))
+        latestWidthPercent = Math.round((newWidthPx / parentWidth) * 100)
+        if (containerRef.current) {
+          containerRef.current.style.width = `${latestWidthPercent}%`
+        }
+      } else if (type === 'corner-sw' || type === 'corner-nw') {
+        const newWidthPx = Math.max(120, Math.min(parentWidth, startWidth - deltaX))
         latestWidthPercent = Math.round((newWidthPx / parentWidth) * 100)
         if (containerRef.current) {
           containerRef.current.style.width = `${latestWidthPercent}%`
         }
       }
 
-      if (type === 'height' || type === 'both') {
+      // Altura: cantos inferiores aumentam com deltaY; superiores com deltaY invertido
+      if (type === 'height' || type === 'both' || type === 'corner-se' || type === 'corner-sw') {
         latestHeightPx = Math.max(36, Math.min(950, Math.round(startHeight + deltaY)))
+        if (containerRef.current) {
+          containerRef.current.style.minHeight = `${latestHeightPx}px`
+          containerRef.current.style.maxHeight = `${latestHeightPx}px`
+        }
+      } else if (type === 'corner-ne' || type === 'corner-nw') {
+        latestHeightPx = Math.max(36, Math.min(950, Math.round(startHeight - deltaY)))
         if (containerRef.current) {
           containerRef.current.style.minHeight = `${latestHeightPx}px`
           containerRef.current.style.maxHeight = `${latestHeightPx}px`
@@ -169,9 +183,9 @@ export const StructuralBoxWrapper: React.FC<StructuralBoxWrapperProps> = ({
 
       onUpdateDimensions?.({
         ...dimensions,
-        widthPercent: type === 'width' || type === 'both' ? latestWidthPercent : dimensions?.widthPercent,
-        minHeightPx: type === 'height' || type === 'both' ? latestHeightPx : dimensions?.minHeightPx,
-        maxHeightPx: type === 'height' || type === 'both' ? latestHeightPx : dimensions?.maxHeightPx
+        widthPercent: latestWidthPercent,
+        minHeightPx: latestHeightPx,
+        maxHeightPx: latestHeightPx
       })
     }
 
@@ -673,15 +687,43 @@ export const StructuralBoxWrapper: React.FC<StructuralBoxWrapperProps> = ({
         <span className="cv-handle-pill-horizontal" />
       </div>
 
-      {/* Resize Handle: Ambos (Canto Inferior Direito) */}
+      {/* Resize Handles: 4 Cantos (Estilo Paint / Imagem) */}
       <div
         className="cv-structural-handle cv-structural-handle--xy cv-no-print"
         data-cv-interactive="true"
-        onPointerDown={e => handlePointerDown(e, 'both')}
-        title="Arrastar para redimensionar largura e altura simultaneamente"
+        onPointerDown={e => handlePointerDown(e, 'corner-se')}
+        title="Canto inferior direito: redimensionar largura e altura"
+      >
+        <span className="cv-handle-corner" />
+      </div>
+
+      <div
+        className="cv-structural-handle cv-structural-handle--corner-sw cv-no-print"
+        data-cv-interactive="true"
+        onPointerDown={e => handlePointerDown(e, 'corner-sw')}
+        title="Canto inferior esquerdo: redimensionar largura e altura"
+      >
+        <span className="cv-handle-corner" />
+      </div>
+
+      <div
+        className="cv-structural-handle cv-structural-handle--corner-ne cv-no-print"
+        data-cv-interactive="true"
+        onPointerDown={e => handlePointerDown(e, 'corner-ne')}
+        title="Canto superior direito: redimensionar largura e altura"
+      >
+        <span className="cv-handle-corner" />
+      </div>
+
+      <div
+        className="cv-structural-handle cv-structural-handle--corner-nw cv-no-print"
+        data-cv-interactive="true"
+        onPointerDown={e => handlePointerDown(e, 'corner-nw')}
+        title="Canto superior esquerdo: redimensionar largura e altura"
       >
         <span className="cv-handle-corner" />
       </div>
     </div>
   )
 }
+
