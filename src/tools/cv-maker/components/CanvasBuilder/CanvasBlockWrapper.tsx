@@ -102,7 +102,7 @@ export const CanvasBlockWrapper: React.FC<CanvasBlockWrapperProps> = ({
       onClick={() => onSelect(block)}
     >
       {/* Floating Actions Toolbar on Hover / Focus */}
-      <div className="cv-canvas-block__actions cv-no-print" onClick={e => e.stopPropagation()}>
+      <div className="cv-canvas-block__actions cv-no-print" data-cv-interactive="true" onClick={e => e.stopPropagation()}>
         {/* Reorder Buttons */}
         <button
           type="button"
@@ -191,7 +191,7 @@ export const CanvasBlockWrapper: React.FC<CanvasBlockWrapperProps> = ({
 
       {/* Overflow Warning Badge */}
       {isOverflowing && (
-        <div className="cv-canvas-overflow-badge cv-no-print" title="Ajuste o bloco para evitar cortes na impressão">
+        <div className="cv-canvas-overflow-badge cv-no-print" data-cv-interactive="true" title="Ajuste o bloco para evitar cortes na impressão">
           <span>⚠️</span>
           <span>Texto muito grande para este bloco! Aumente a largura ou reduza a fonte.</span>
         </div>

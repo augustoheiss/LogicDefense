@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react'
 import type { CVDesignConfig, SectionStyleOverride } from '../../types/cv'
 import { DEFAULT_DESIGN_CONFIG } from '../../types/cv'
 import { BACKGROUND_CATALOG, BACKGROUND_CATEGORIES } from '../../engine/backgroundCatalog'
+import { compressImageFile } from '../../utils/imageCompressor'
 
 interface DesignCustomizerDrawerProps {
   isOpen: boolean
@@ -152,23 +153,21 @@ export const DesignCustomizerDrawer: React.FC<DesignCustomizerDrawerProps> = ({
   const fileInputRef = useRef<HTMLInputElement>(null)
   const sectionFileInputRef = useRef<HTMLInputElement>(null)
 
-  const handleUploadCustomBg = (e: React.ChangeEvent<HTMLInputElement>, secId?: string) => {
+  const handleUploadCustomBg = async (e: React.ChangeEvent<HTMLInputElement>, secId?: string) => {
     const file = e.target.files?.[0]
     if (!file) return
-    if (file.size > 2 * 1024 * 1024) {
-      alert('A imagem excede 2MB. Escolha uma imagem de até 2MB.')
-      return
-    }
-    const reader = new FileReader()
-    reader.onload = () => {
-      const base64 = reader.result as string
+    try {
+      // Comprime a imagem client-side (max 1600x1200, qualidade 0.82) para caber com segurança no localStorage (< 150KB)
+      const base64 = await compressImageFile(file, { maxWidth: 1600, maxHeight: 1200, quality: 0.82 })
       if (secId) {
         handleUpdateSectionOverride(secId, 'bgImage', base64)
       } else {
         onChangeConfig({ ...config, backgroundPattern: base64 })
       }
+    } catch (err) {
+      console.error('Falha ao processar imagem de fundo:', err)
+      alert('Não foi possível processar a imagem. Escolha outro arquivo.')
     }
-    reader.readAsDataURL(file)
   }
 
   if (!isOpen) return null

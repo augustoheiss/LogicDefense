@@ -1,5 +1,6 @@
 import React, { useRef } from 'react'
 import type { CanvasBlockConfig } from '../../types/cv'
+import { compressImageFile } from '../../utils/imageCompressor'
 
 interface CanvasBlockInspectorProps {
   block: CanvasBlockConfig | null
@@ -71,17 +72,19 @@ export const CanvasBlockInspector: React.FC<CanvasBlockInspectorProps> = ({
   const isCustomImage = block.type === 'custom_image'
   const imageInputRef = useRef<HTMLInputElement>(null)
 
-  const handleImageFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
-    const reader = new FileReader()
-    reader.onload = (event) => {
-      const dataUrl = event.target?.result as string
+    try {
+      // Comprime imagens do bloco client-side (max 1200x1200, qualidade 0.82) para caber sem estouro de cota (< 150KB)
+      const dataUrl = await compressImageFile(file, { maxWidth: 1200, maxHeight: 1200, quality: 0.82 })
       if (dataUrl) {
         handleChange('imageUrl', dataUrl)
       }
+    } catch (err) {
+      console.error('Falha ao processar imagem do bloco:', err)
+      alert('Não foi possível processar a imagem. Escolha outro arquivo.')
     }
-    reader.readAsDataURL(file)
   }
 
   return (

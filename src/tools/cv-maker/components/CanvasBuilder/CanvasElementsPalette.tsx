@@ -6,6 +6,7 @@ import {
   type SectionBoxDimensions
 } from '../../types/cv'
 import { getAtomicItemId } from '../../utils/atomicIdUtils'
+import { compressImageFile } from '../../utils/imageCompressor'
 
 interface CanvasElementsPaletteProps {
   data: CVData | null
@@ -72,23 +73,24 @@ export const CanvasElementsPalette: React.FC<CanvasElementsPaletteProps> = ({
     })
   }
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
     if (!file.type.startsWith('image/')) {
       alert('Por favor, selecione um arquivo de imagem válido (PNG, JPG, WebP).')
       return
     }
-    const reader = new FileReader()
-    reader.onload = () => {
-      if (typeof reader.result === 'string') {
-        if (onUpdatePhoto) {
-          onUpdatePhoto(reader.result, activePosX, activePosY, activeScale)
-        }
-        handleUpdatePhotoDimensions({ hidden: false })
+    try {
+      // Comprime a foto de perfil client-side (max 800x800, qualidade 0.85) para caber sem peso no storage (< 80KB)
+      const compressedBase64 = await compressImageFile(file, { maxWidth: 800, maxHeight: 800, quality: 0.85 })
+      if (onUpdatePhoto) {
+        onUpdatePhoto(compressedBase64, activePosX, activePosY, activeScale)
       }
+      handleUpdatePhotoDimensions({ hidden: false })
+    } catch (err) {
+      console.error('Falha ao processar foto de perfil:', err)
+      alert('Não foi possível processar a imagem. Escolha outro arquivo.')
     }
-    reader.readAsDataURL(file)
   }
 
   const handleApplyUrl = () => {

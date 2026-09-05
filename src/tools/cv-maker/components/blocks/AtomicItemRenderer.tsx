@@ -1,11 +1,40 @@
 import React from 'react'
-import type { CVWork, CVEducation, CVProject, CVLanguage, CVSkill, CVCertificate, CVInterest, CVReference } from '../../types/cv'
+import type { CVWork, CVEducation, CVProject, CVLanguage, CVSkill, CVCertificate, CVInterest, CVReference, AtomicCVItem } from '../../types/cv'
 import { getSkillPercentage } from '../../types/cv'
 
 interface AtomicItemRendererProps {
   category: 'work' | 'education' | 'projects' | 'languages' | 'skills' | 'certificates' | 'interests' | 'references'
-  item: any
+  item: AtomicCVItem
   variant?: string
+}
+
+const renderEstimatedBadge = (isEstimated?: boolean, ...dateStrings: (string | undefined)[]) => {
+  const hasEst = isEstimated || dateStrings.some(d => d && (d.includes('[ESTIMADO]') || d.toLowerCase().includes('estimad')))
+  if (!hasEst) return null
+  return (
+    <span
+      className="cv-no-print"
+      data-cv-interactive="true"
+      title="Data estimada ou inferida automaticamente pela IA — por favor confira antes de exportar"
+      style={{
+        marginLeft: '0.4rem',
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: '0.2rem',
+        fontSize: '0.65rem',
+        fontWeight: 700,
+        padding: '1px 5px',
+        borderRadius: '4px',
+        backgroundColor: 'rgba(234, 179, 8, 0.15)',
+        color: '#b45309',
+        border: '1px solid rgba(234, 179, 8, 0.4)',
+        verticalAlign: 'middle',
+        cursor: 'help'
+      }}
+    >
+      ⚠️ Estimado
+    </span>
+  )
 }
 
 export const AtomicItemRenderer: React.FC<AtomicItemRendererProps> = ({
@@ -25,14 +54,24 @@ export const AtomicItemRenderer: React.FC<AtomicItemRendererProps> = ({
     if (variant === 'ultra_compact') {
       return (
         <div className="cv-atomic-item cv-atomic-item--ultra-compact">
-          <div className="cv-one-liner">
+          <div className="cv-one-liner" style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '0.3rem' }}>
+            {w.logo && (
+              <img
+                src={w.logo}
+                alt={companyName}
+                style={{ width: '16px', height: '16px', objectFit: 'contain', borderRadius: '3px', flexShrink: 0 }}
+              />
+            )}
             <strong className="cv-one-liner__main">{companyName}</strong>
             <span className="cv-one-liner__sep">•</span>
             <span className="cv-one-liner__sub">{w.position}</span>
             {period && (
               <>
                 <span className="cv-one-liner__sep">•</span>
-                <span className="cv-one-liner__date">{period}</span>
+                <span className="cv-one-liner__date">
+                  {period}
+                  {renderEstimatedBadge(w.isEstimated, w.startDate, w.endDate)}
+                </span>
               </>
             )}
           </div>
@@ -48,8 +87,20 @@ export const AtomicItemRenderer: React.FC<AtomicItemRendererProps> = ({
           <div className="cv-timeline-bullet" />
           <div className="cv-timeline-content">
             <div className="cv-item-header">
-              <span className="cv-item-title">{w.position}</span>
-              <span className="cv-item-date">{period}</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+                {w.logo && (
+                  <img
+                    src={w.logo}
+                    alt={companyName}
+                    style={{ width: '20px', height: '20px', objectFit: 'contain', borderRadius: '4px', flexShrink: 0 }}
+                  />
+                )}
+                <span className="cv-item-title">{w.position}</span>
+              </div>
+              <span className="cv-item-date">
+                {period}
+                {renderEstimatedBadge(w.isEstimated, w.startDate, w.endDate)}
+              </span>
             </div>
             <div className="cv-item-sub">
               {companyName} {w.location && `• ${w.location}`}
@@ -72,11 +123,23 @@ export const AtomicItemRenderer: React.FC<AtomicItemRendererProps> = ({
       return (
         <div className="cv-atomic-item cv-atomic-item--minimal">
           <div className="cv-item-header">
-            <div>
-              <strong className="cv-item-title">{w.position}</strong>
-              <div className="cv-item-sub">{companyName} {w.location && `| ${w.location}`}</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+              {w.logo && (
+                <img
+                  src={w.logo}
+                  alt={companyName}
+                  style={{ width: '20px', height: '20px', objectFit: 'contain', borderRadius: '4px', flexShrink: 0 }}
+                />
+              )}
+              <div>
+                <strong className="cv-item-title">{w.position}</strong>
+                <div className="cv-item-sub">{companyName} {w.location && `| ${w.location}`}</div>
+              </div>
             </div>
-            <span className="cv-item-date">{period}</span>
+            <span className="cv-item-date">
+              {period}
+              {renderEstimatedBadge(w.isEstimated, w.startDate, w.endDate)}
+            </span>
           </div>
           {w.summary && <p className="cv-item-desc">{w.summary}</p>}
           {w.highlights && w.highlights.length > 0 && (
@@ -94,14 +157,28 @@ export const AtomicItemRenderer: React.FC<AtomicItemRendererProps> = ({
     return (
       <div className="cv-atomic-item cv-atomic-item--box">
         <div className="cv-item-header">
-          <div>
-            <h4 className="cv-item-title">{w.position}</h4>
-            <div className="cv-item-sub">
-              <span className="cv-company-name">{companyName}</span>
-              {w.location && <span className="cv-location-badge">📍 {w.location}</span>}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            {w.logo && (
+              <img
+                src={w.logo}
+                alt={companyName}
+                style={{ width: '24px', height: '24px', objectFit: 'contain', borderRadius: '4px', flexShrink: 0 }}
+              />
+            )}
+            <div>
+              <h4 className="cv-item-title">{w.position}</h4>
+              <div className="cv-item-sub">
+                <span className="cv-company-name">{companyName}</span>
+                {w.location && <span className="cv-location-badge">📍 {w.location}</span>}
+              </div>
             </div>
           </div>
-          {period && <span className="cv-period-badge">{period}</span>}
+          {period && (
+            <span className="cv-period-badge">
+              {period}
+              {renderEstimatedBadge(w.isEstimated, w.startDate, w.endDate)}
+            </span>
+          )}
         </div>
         {w.summary && <p className="cv-item-desc">{w.summary}</p>}
         {w.highlights && w.highlights.length > 0 && (
@@ -123,14 +200,24 @@ export const AtomicItemRenderer: React.FC<AtomicItemRendererProps> = ({
     if (variant === 'ultra_compact') {
       return (
         <div className="cv-atomic-item cv-atomic-item--ultra-compact">
-          <div className="cv-one-liner">
+          <div className="cv-one-liner" style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '0.3rem' }}>
+            {ed.logo && (
+              <img
+                src={ed.logo}
+                alt={ed.institution}
+                style={{ width: '16px', height: '16px', objectFit: 'contain', borderRadius: '3px', flexShrink: 0 }}
+              />
+            )}
             <strong className="cv-one-liner__main">{ed.studyType ? `${ed.studyType} em ${ed.area}` : ed.area || 'Curso'}</strong>
             <span className="cv-one-liner__sep">•</span>
             <span className="cv-one-liner__sub">{ed.institution}</span>
             {period && (
               <>
                 <span className="cv-one-liner__sep">•</span>
-                <span className="cv-one-liner__date">{period}</span>
+                <span className="cv-one-liner__date">
+                  {period}
+                  {renderEstimatedBadge(ed.isEstimated, ed.startDate, ed.endDate)}
+                </span>
               </>
             )}
           </div>
@@ -144,8 +231,20 @@ export const AtomicItemRenderer: React.FC<AtomicItemRendererProps> = ({
           <div className="cv-timeline-bullet" />
           <div className="cv-timeline-content">
             <div className="cv-item-header">
-              <span className="cv-item-title">{ed.studyType ? `${ed.studyType} em ${ed.area}` : ed.area}</span>
-              <span className="cv-item-date">{period}</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+                {ed.logo && (
+                  <img
+                    src={ed.logo}
+                    alt={ed.institution}
+                    style={{ width: '20px', height: '20px', objectFit: 'contain', borderRadius: '4px', flexShrink: 0 }}
+                  />
+                )}
+                <span className="cv-item-title">{ed.studyType ? `${ed.studyType} em ${ed.area}` : ed.area}</span>
+              </div>
+              <span className="cv-item-date">
+                {period}
+                {renderEstimatedBadge(ed.isEstimated, ed.startDate, ed.endDate)}
+              </span>
             </div>
             <div className="cv-item-sub">{ed.institution}</div>
             {ed.score && <div className="cv-item-desc">Média/Score: {ed.score}</div>}
@@ -157,11 +256,25 @@ export const AtomicItemRenderer: React.FC<AtomicItemRendererProps> = ({
     return (
       <div className="cv-atomic-item cv-atomic-item--box">
         <div className="cv-item-header">
-          <div>
-            <h4 className="cv-item-title">{ed.studyType ? `${ed.studyType} em ${ed.area}` : ed.area}</h4>
-            <div className="cv-item-sub">{ed.institution}</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            {ed.logo && (
+              <img
+                src={ed.logo}
+                alt={ed.institution}
+                style={{ width: '24px', height: '24px', objectFit: 'contain', borderRadius: '4px', flexShrink: 0 }}
+              />
+            )}
+            <div>
+              <h4 className="cv-item-title">{ed.studyType ? `${ed.studyType} em ${ed.area}` : ed.area}</h4>
+              <div className="cv-item-sub">{ed.institution}</div>
+            </div>
           </div>
-          {period && <span className="cv-period-badge">{period}</span>}
+          {period && (
+            <span className="cv-period-badge">
+              {period}
+              {renderEstimatedBadge(ed.isEstimated, ed.startDate, ed.endDate)}
+            </span>
+          )}
         </div>
         {ed.score && <div className="cv-item-desc">Média/Score: {ed.score}</div>}
       </div>

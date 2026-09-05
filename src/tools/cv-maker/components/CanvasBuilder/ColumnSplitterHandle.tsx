@@ -64,6 +64,7 @@ export const ColumnSplitterHandle: React.FC<ColumnSplitterHandleProps> = ({
   return (
     <div
       className={`cv-column-splitter cv-no-print ${isDragging ? 'is-dragging' : ''}`}
+      data-cv-interactive="true"
       onPointerDown={handlePointerDown}
       title="Arrastar para alterar largura da coluna lateral (estilo Excel/Splitter)"
       style={{ left: `${activeRatio}%` }}

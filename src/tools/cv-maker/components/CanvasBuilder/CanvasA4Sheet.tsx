@@ -60,7 +60,7 @@ export const CanvasA4Sheet: React.FC<CanvasA4SheetProps> = ({
   return (
     <div className="cv-canvas-center-stage">
       {/* Top Status & Height Budget Bar */}
-      <div className="cv-canvas-sheet-info-bar cv-no-print">
+      <div className="cv-canvas-sheet-info-bar cv-no-print" data-cv-interactive="true">
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
           <span>📄 <strong>Folha A4 Livre</strong> (210 × 297 mm)</span>
           <span style={{ opacity: 0.4 }}>|</span>

@@ -286,7 +286,7 @@ interface CVCustomImage {
 O Resume Tailor skill está disponível no repositório Agency Agents:
 
 ```
-https://github.com/phdheiss/agency-agents/tree/main/skills/agency-resume-tailor
+https://github.com/msitarzewski/agency-agents/blob/main/specialized/resume-tailor.md
 ```
 
 ### 6.2 Onde Integrar no CV Maker
@@ -307,7 +307,7 @@ https://github.com/phdheiss/agency-agents/tree/main/skills/agency-resume-tailor
   icon: '🎯',
   badge: 'GitHub • Open Source',
   desc: 'Skill especializado em otimização de currículos com fórmula X-Y-Z, ATS alignment e zero fabricação.',
-  link: 'https://github.com/phdheiss/agency-agents/tree/main/skills/agency-resume-tailor',
+  link: 'https://github.com/msitarzewski/agency-agents/blob/main/specialized/resume-tailor.md',
   action: 'open_link'
 }
 ```
@@ -361,7 +361,7 @@ https://github.com/phdheiss/agency-agents/tree/main/skills/agency-resume-tailor
 
 | Ferramenta | Link |
 |-----------|------|
-| Resume Tailor Skill | [agency-resume-tailor](https://github.com/phdheiss/agency-agents/tree/main/skills/agency-resume-tailor) |
+| Resume Tailor Skill | [agency-resume-tailor](https://github.com/msitarzewski/agency-agents/blob/main/specialized/resume-tailor.md) |
 | CV Maker (Produção) | [heisslab.com.br/laboratorio/cv-maker](https://www.heisslab.com.br/laboratorio/cv-maker) |
 | JSON Resume Standard | [jsonresume.org](https://jsonresume.org/) |
 

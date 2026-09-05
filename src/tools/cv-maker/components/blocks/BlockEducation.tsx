@@ -33,6 +33,30 @@ export const BlockEducation: React.FC<BlockEducationProps> = ({
               </div>
               <span className="cv-item-date">
                 {item.startDate} — {item.endDate || 'Presente'}
+                {(item.isEstimated || item.startDate?.includes('[ESTIMADO]') || item.endDate?.includes('[ESTIMADO]')) && (
+                  <span
+                    className="cv-no-print"
+                    data-cv-interactive="true"
+                    title="Data estimada ou inferida automaticamente pela IA — por favor confira antes de exportar"
+                    style={{
+                      marginLeft: '0.45rem',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '0.2rem',
+                      fontSize: '0.68rem',
+                      fontWeight: 700,
+                      padding: '1px 6px',
+                      borderRadius: '4px',
+                      backgroundColor: 'rgba(234, 179, 8, 0.15)',
+                      color: '#b45309',
+                      border: '1px solid rgba(234, 179, 8, 0.4)',
+                      verticalAlign: 'middle',
+                      cursor: 'help'
+                    }}
+                  >
+                    ⚠️ Estimado
+                  </span>
+                )}
               </span>
             </div>
             <div className="cv-item-sub">{item.institution}</div>

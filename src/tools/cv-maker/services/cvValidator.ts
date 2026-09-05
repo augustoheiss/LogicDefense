@@ -166,6 +166,8 @@ export function validateAndNormalizeCV(raw: any): {
           const rangeRes = validateDateRange(startRes.value, endRes?.value, compName)
           if (rangeRes.warning) warnings.push(rangeRes.warning)
 
+          const isEstimated = Boolean(w.isEstimated || startRes.isEstimated || endRes?.isEstimated)
+
           return {
             name: compName,
             position: String(w.position || '').trim(),
@@ -176,6 +178,8 @@ export function validateAndNormalizeCV(raw: any): {
             highlights: Array.isArray(w.highlights)
               ? w.highlights.map((h: any) => String(h).trim()).filter(Boolean)
               : [],
+            logo: w.logo ? String(w.logo).trim() : undefined,
+            isEstimated: isEstimated || undefined,
           }
         })
     : []
@@ -196,6 +200,8 @@ export function validateAndNormalizeCV(raw: any): {
             if (rangeRes.warning) warnings.push(rangeRes.warning)
           }
 
+          const isEstimated = Boolean(e.isEstimated || startRes?.isEstimated || endRes?.isEstimated)
+
           return {
             institution: instName,
             area: e.area ? String(e.area).trim() : undefined,
@@ -206,6 +212,8 @@ export function validateAndNormalizeCV(raw: any): {
             courses: Array.isArray(e.courses)
               ? e.courses.map((c: any) => String(c).trim()).filter(Boolean)
               : [],
+            logo: e.logo ? String(e.logo).trim() : undefined,
+            isEstimated: isEstimated || undefined,
           }
         })
     : []

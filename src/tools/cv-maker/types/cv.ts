@@ -136,6 +136,7 @@ export interface CVWork {
   highlights: string[]
   location?: string
   logo?: string
+  isEstimated?: boolean
 }
 
 export interface CVProject {
@@ -157,7 +158,18 @@ export interface CVEducation {
   score?: string
   courses?: string[]
   logo?: string
+  isEstimated?: boolean
 }
+
+export type AtomicCVItem =
+  | CVWork
+  | CVEducation
+  | CVProject
+  | CVLanguage
+  | CVSkill
+  | CVCertificate
+  | CVInterest
+  | CVReference
 
 export interface CVCertificate {
   name: string

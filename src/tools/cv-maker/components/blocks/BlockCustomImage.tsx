@@ -1,5 +1,6 @@
-import React, { useRef } from 'react'
+import React, { useRef, useState } from 'react'
 import type { CanvasBlockConfig } from '../../types/cv'
+import { compressImageFile } from '../../utils/imageCompressor'
 
 interface BlockCustomImageProps {
   blockConfig?: CanvasBlockConfig
@@ -11,19 +12,36 @@ export const BlockCustomImage: React.FC<BlockCustomImageProps> = ({
   onUploadImage
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const [isCompressing, setIsCompressing] = useState(false)
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
 
-    const reader = new FileReader()
-    reader.onload = (event) => {
-      const dataUrl = event.target?.result as string
-      if (dataUrl && onUploadImage) {
-        onUploadImage(dataUrl)
+    try {
+      setIsCompressing(true)
+      const compressedDataUrl = await compressImageFile(file, {
+        maxWidth: 1200,
+        maxHeight: 1200,
+        quality: 0.82
+      })
+      if (onUploadImage) {
+        onUploadImage(compressedDataUrl)
       }
+    } catch (err) {
+      console.error('[BlockCustomImage] Erro ao comprimir imagem:', err)
+      // Fallback: leitura padrão se a compressão falhar
+      const reader = new FileReader()
+      reader.onload = (event) => {
+        const fallbackDataUrl = event.target?.result as string
+        if (fallbackDataUrl && onUploadImage) {
+          onUploadImage(fallbackDataUrl)
+        }
+      }
+      reader.readAsDataURL(file)
+    } finally {
+      setIsCompressing(false)
     }
-    reader.readAsDataURL(file)
   }
 
   const imageUrl = blockConfig?.imageUrl
@@ -66,6 +84,7 @@ export const BlockCustomImage: React.FC<BlockCustomImageProps> = ({
             />
             <button
               type="button"
+              disabled={isCompressing}
               onClick={() => fileInputRef.current?.click()}
               style={{
                 fontSize: '0.76rem',
@@ -73,12 +92,12 @@ export const BlockCustomImage: React.FC<BlockCustomImageProps> = ({
                 borderRadius: '6px',
                 border: '1px solid #cbd5e1',
                 background: '#ffffff',
-                color: '#0f172a',
-                cursor: 'pointer',
+                color: isCompressing ? '#94a3b8' : '#0f172a',
+                cursor: isCompressing ? 'not-allowed' : 'pointer',
                 fontWeight: 600
               }}
             >
-              📤 Carregar Imagem do Computador
+              {isCompressing ? '⏳ Otimizando Imagem...' : '📤 Carregar Imagem do Computador'}
             </button>
           </div>
         )}

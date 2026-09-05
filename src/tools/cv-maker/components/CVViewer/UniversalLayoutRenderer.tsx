@@ -47,6 +47,8 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
   const pageRef = React.useRef<HTMLDivElement>(null)
   const [hasPageOverflow, setHasPageOverflow] = React.useState<boolean>(false)
   const [isOverflowBannerDismissed, setIsOverflowBannerDismissed] = React.useState<boolean>(false)
+  const [isTemporalBannerDismissed, setIsTemporalBannerDismissed] = React.useState<boolean>(false)
+  const [isTemporalExpanded, setIsTemporalExpanded] = React.useState<boolean>(false)
 
   // Monitora se o conteúdo acumulado excede a altura útil da folha A4 (1122px)
   React.useEffect(() => {
@@ -1415,7 +1417,7 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
   return (
     <div className={`cv-root theme-${theme} ${blueprint.customClass || ''}`} style={customRootStyles}>
       {hasPageOverflow && isFreeCanvas && !isOverflowBannerDismissed && (
-        <div className="cv-page-overflow-banner cv-no-print">
+        <div className="cv-page-overflow-banner cv-no-print" data-cv-interactive="true">
           <span className="cv-page-overflow-icon">⚠️</span>
           <div className="cv-page-overflow-text">
             <strong>Atenção à Altura A4:</strong> O conteúdo reorganizado ultrapassou a altura física de 1 folha A4.
@@ -1426,6 +1428,78 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
             className="cv-page-overflow-close"
             onClick={() => setIsOverflowBannerDismissed(true)}
             title="Dispensar aviso de altura A4"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
+      {data.meta?.temporalWarnings && data.meta.temporalWarnings.length > 0 && !isTemporalBannerDismissed && (
+        <div
+          className="cv-page-temporal-banner cv-no-print"
+          data-cv-interactive="true"
+          style={{
+            margin: '0.75rem auto',
+            maxWidth: '210mm',
+            padding: '0.75rem 1rem',
+            backgroundColor: 'rgba(254, 243, 199, 0.95)',
+            border: '1px solid #f59e0b',
+            borderRadius: '8px',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: '0.75rem',
+            fontSize: '0.82rem',
+            color: '#92400e',
+            lineHeight: 1.4
+          }}
+        >
+          <span style={{ fontSize: '1.25rem', lineHeight: 1 }}>⚠️</span>
+          <div style={{ flex: 1 }}>
+            <strong style={{ display: 'block', marginBottom: '0.2rem', color: '#78350f' }}>
+              Auditoria de Datas e Integridade Temporal ({data.meta.temporalWarnings.length} {data.meta.temporalWarnings.length === 1 ? 'alerta' : 'alertas'})
+            </strong>
+            <p style={{ margin: '0 0 0.4rem 0' }}>
+              A IA identificou datas ausentes ou potencialmente estimadas no documento. Por favor, confira os itens antes de exportar:
+            </p>
+            <ul style={{ margin: 0, paddingLeft: '1.2rem' }}>
+              {data.meta.temporalWarnings.slice(0, isTemporalExpanded ? undefined : 2).map((w, idx) => (
+                <li key={idx} style={{ marginBottom: '0.15rem' }}>{w}</li>
+              ))}
+            </ul>
+            {data.meta.temporalWarnings.length > 2 && (
+              <button
+                type="button"
+                onClick={() => setIsTemporalExpanded(!isTemporalExpanded)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  padding: 0,
+                  color: '#b45309',
+                  fontWeight: 700,
+                  fontSize: '0.75rem',
+                  cursor: 'pointer',
+                  textDecoration: 'underline',
+                  marginTop: '0.25rem'
+                }}
+              >
+                {isTemporalExpanded ? 'Mostrar menos' : `Ver todos os ${data.meta.temporalWarnings.length} alertas...`}
+              </button>
+            )}
+          </div>
+          <button
+            type="button"
+            className="cv-page-overflow-close"
+            onClick={() => setIsTemporalBannerDismissed(true)}
+            title="Dispensar aviso temporal"
+            style={{
+              background: 'transparent',
+              border: 'none',
+              cursor: 'pointer',
+              fontSize: '1rem',
+              color: '#92400e',
+              padding: '0 0.25rem'
+            }}
           >
             ✕
           </button>
