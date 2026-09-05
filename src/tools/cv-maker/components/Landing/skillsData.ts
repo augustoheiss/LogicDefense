@@ -232,7 +232,7 @@ export const SKILLS_CATALOG: SkillItem[] = [
     emoji: '🎯',
     description: 'Especialista em análise de Job Descriptions, alinhamento ético de palavras-chave, métricas Google/IBM X-Y-Z e zero alucinação.',
     content: RESUME_TAILOR_SKILL_MD,
-    githubUrl: 'https://github.com/augustoheiss/LogicDefense/blob/main/src/tools/cv-maker/skills/agency-resume-tailor.md',
-    rawUrl: 'https://raw.githubusercontent.com/augustoheiss/LogicDefense/main/src/tools/cv-maker/skills/agency-resume-tailor.md'
+    githubUrl: 'https://github.com/msitarzewski/agency-agents/blob/main/specialized/resume-tailor.md',
+    rawUrl: 'https://raw.githubusercontent.com/msitarzewski/agency-agents/main/specialized/resume-tailor.md'
   }
 ]

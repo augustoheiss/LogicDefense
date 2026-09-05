@@ -97,7 +97,7 @@ export const SkillDownloadSection: React.FC = () => {
             </h3>
           </div>
           <p style={{ margin: '0.3rem 0 0 0', fontSize: '0.82rem', color: '#94a3b8' }}>
-            Hospedada oficialmente em <code>src/tools/cv-maker/skills/</code> no GitHub para garantir versionamento contínuo e atualizações em tempo real.
+            Hospedada oficialmente no GitHub para garantir versionamento contínuo e atualizações em tempo real.
           </p>
         </div>
 
@@ -197,7 +197,7 @@ export const SkillDownloadSection: React.FC = () => {
         >
           <div style={{ fontSize: '1.2rem', marginBottom: '0.4rem' }}>1️⃣ No Claude Desktop</div>
           <p style={{ margin: 0, fontSize: '0.84rem', color: '#94a3b8', lineHeight: 1.5 }}>
-            Clone ou copie de <code>src/tools/cv-maker/skills/{currentSkill.filename}</code> no GitHub para sua pasta de skills ou anexe nas diretrizes de Projeto.
+            Clone ou copie o markdown diretamente do repositório oficial no GitHub para sua pasta de skills ou anexe nas diretrizes de Projeto.
           </p>
         </div>
 
@@ -211,7 +211,7 @@ export const SkillDownloadSection: React.FC = () => {
         >
           <div style={{ fontSize: '1.2rem', marginBottom: '0.4rem' }}>2️⃣ No Cursor / Windsurf</div>
           <p style={{ margin: 0, fontSize: '0.84rem', color: '#94a3b8', lineHeight: 1.5 }}>
-            Aponte suas regras de projeto para <code>src/tools/cv-maker/skills/{currentSkill.filename}</code> para manter a persona sincronizada com o GitHub.
+            Aponte suas regras de projeto para a skill oficial no GitHub ou cole o conteúdo dentro de <code>.cursor/rules/{currentSkill.filename}</code>.
           </p>
         </div>
 
