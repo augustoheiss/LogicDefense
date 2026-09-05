@@ -20,6 +20,7 @@ import { CanvasElementsPalette } from './components/CanvasBuilder/CanvasElements
 import { AgentHubModal } from './components/Modals/AgentHubModal'
 import { CVStoreModal } from './components/StoreModal/CVStoreModal'
 import { GenerateCoverLetterModal } from './components/Modals/GenerateCoverLetterModal'
+import { TemplateGalleryModal } from './components/Modals/TemplateGalleryModal'
 import { validateLicenseKey } from './services/cvService'
 import { downloadCVZipPackage } from './services/standaloneHtmlService'
 
@@ -154,6 +155,7 @@ export const CVMakerApp: React.FC = () => {
   const [agentHubInitialTab, setAgentHubInitialTab] = useState<'agent_prompt' | 'master_synthesis' | 'prompts_library' | 'openapi_hub' | 'api_key'>('agent_prompt')
   const [isStoreModalOpen, setIsStoreModalOpen] = useState<boolean>(false)
   const [isCoverLetterModalOpen, setIsCoverLetterModalOpen] = useState<boolean>(false)
+  const [isTemplateGalleryOpen, setIsTemplateGalleryOpen] = useState<boolean>(false)
   const [isPro, setIsPro] = useState<boolean>(false)
   const [tokenBalance, setTokenBalance] = useState<number>(0)
   const [saveHistoryFeedback, setSaveHistoryFeedback] = useState<boolean>(false)
@@ -621,6 +623,7 @@ export const CVMakerApp: React.FC = () => {
             isPro={isPro}
             tokenBalance={tokenBalance}
             onOpenStoreModal={() => setIsStoreModalOpen(true)}
+            onOpenTemplateGallery={() => setIsTemplateGalleryOpen(true)}
           />
 
           <CVViewer
@@ -669,6 +672,13 @@ export const CVMakerApp: React.FC = () => {
         cvData={cvData || { basics: { name: 'Candidato' } }}
         onCoverLetterGenerated={handleCoverLetterGenerated}
         onOpenStoreModal={() => setIsStoreModalOpen(true)}
+      />
+
+      <TemplateGalleryModal
+        isOpen={isTemplateGalleryOpen}
+        onClose={() => setIsTemplateGalleryOpen(false)}
+        activeLayout={activeLayout}
+        onSelectLayout={handleLayoutChange}
       />
     </div>
   )

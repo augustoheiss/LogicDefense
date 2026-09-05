@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useRef } from 'react'
 import type { CanvasBlockConfig } from '../../types/cv'
 
 interface CanvasBlockInspectorProps {
@@ -68,13 +68,32 @@ export const CanvasBlockInspector: React.FC<CanvasBlockInspectorProps> = ({
   }
 
   const isPhoto = block.type === 'photo'
+  const isCustomImage = block.type === 'custom_image'
+  const imageInputRef = useRef<HTMLInputElement>(null)
+
+  const handleImageFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = (event) => {
+      const dataUrl = event.target?.result as string
+      if (dataUrl) {
+        handleChange('imageUrl', dataUrl)
+      }
+    }
+    reader.readAsDataURL(file)
+  }
 
   return (
     <div className="cv-canvas-inspector-backdrop" onClick={onClose}>
       <aside className="cv-canvas-inspector" onClick={e => e.stopPropagation()}>
         <div className="cv-canvas-inspector__header">
           <h3 className="cv-canvas-inspector__title">
-            {isPhoto ? '📷 Personalizar Foto & Avatar' : '⚙️ Personalizar Bloco'}
+            {isPhoto
+              ? '📷 Personalizar Foto & Avatar'
+              : isCustomImage
+              ? '🖼️ Personalizar Imagem / Logo'
+              : '⚙️ Personalizar Bloco'}
           </h3>
           <button
             type="button"
@@ -286,8 +305,169 @@ export const CanvasBlockInspector: React.FC<CanvasBlockInspectorProps> = ({
           </div>
         )}
 
+        {/* CONTROLES ESPECÍFICOS DE IMAGEM PERSONALIZADA / LOGO / QR CODE */}
+        {isCustomImage && (
+          <div style={{ background: '#0b1120', padding: '0.85rem', borderRadius: '8px', border: '1px solid #1e293b', display: 'flex', flexDirection: 'column', gap: '0.9rem' }}>
+            {/* Upload de Arquivo ou URL */}
+            <div>
+              <label className="cv-canvas-inspector__label" style={{ color: '#38bdf8' }}>
+                Origem da Imagem
+              </label>
+              <input
+                ref={imageInputRef}
+                type="file"
+                accept="image/*"
+                style={{ display: 'none' }}
+                onChange={handleImageFileUpload}
+              />
+              <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.35rem' }}>
+                <button
+                  type="button"
+                  className="cv-btn-secondary"
+                  style={{ flex: 1, fontSize: '0.78rem', padding: '0.45rem', justifyContent: 'center' }}
+                  onClick={() => imageInputRef.current?.click()}
+                >
+                  📁 Carregar do Computador
+                </button>
+                {block.imageUrl && (
+                  <button
+                    type="button"
+                    className="cv-btn-secondary"
+                    style={{ color: '#f87171', borderColor: 'rgba(239, 68, 68, 0.4)', fontSize: '0.78rem', padding: '0.45rem' }}
+                    onClick={() => handleChange('imageUrl', '')}
+                    title="Remover imagem"
+                  >
+                    🗑️
+                  </button>
+                )}
+              </div>
+              <input
+                type="text"
+                className="cv-canvas-inspector__input"
+                style={{ marginTop: '0.5rem', fontSize: '0.78rem' }}
+                value={block.imageUrl?.startsWith('data:') ? '[Imagem Carregada do Computador]' : (block.imageUrl || '')}
+                onChange={e => handleChange('imageUrl', e.target.value)}
+                placeholder="Ou cole uma URL (https://...)"
+              />
+            </div>
+
+            {/* Alt Text */}
+            <div>
+              <label className="cv-canvas-inspector__label">Descrição da Imagem (Acessibilidade)</label>
+              <input
+                type="text"
+                className="cv-canvas-inspector__input"
+                value={block.imageAlt || ''}
+                onChange={e => handleChange('imageAlt', e.target.value)}
+                placeholder="Ex: Logotipo da Empresa ou Selo de Certificação"
+              />
+            </div>
+
+            {/* Altura da Imagem */}
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <label className="cv-canvas-inspector__label">Altura Máxima</label>
+                <span style={{ fontSize: '0.75rem', color: '#38bdf8', fontWeight: 700 }}>
+                  {block.imageHeight || 120} px
+                </span>
+              </div>
+              <input
+                type="range"
+                min="40"
+                max="350"
+                step="5"
+                value={block.imageHeight || 120}
+                onChange={e => handleChange('imageHeight', Number(e.target.value))}
+                style={{ width: '100%', marginTop: '0.35rem', accentColor: '#0284c7' }}
+              />
+            </div>
+
+            {/* Ajuste / Fit */}
+            <div>
+              <label className="cv-canvas-inspector__label">Enquadramento</label>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.4rem', marginTop: '0.35rem' }}>
+                <button
+                  type="button"
+                  onClick={() => handleChange('imageFit', 'contain')}
+                  style={{
+                    padding: '0.45rem',
+                    background: (block.imageFit || 'contain') === 'contain' ? '#0284c7' : '#1e293b',
+                    color: (block.imageFit || 'contain') === 'contain' ? '#fff' : '#cbd5e1',
+                    border: '1px solid #334155',
+                    borderRadius: '6px',
+                    fontSize: '0.76rem',
+                    fontWeight: 600,
+                    cursor: 'pointer'
+                  }}
+                >
+                  📐 Proporcional (Sem corte)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleChange('imageFit', 'cover')}
+                  style={{
+                    padding: '0.45rem',
+                    background: block.imageFit === 'cover' ? '#0284c7' : '#1e293b',
+                    color: block.imageFit === 'cover' ? '#fff' : '#cbd5e1',
+                    border: '1px solid #334155',
+                    borderRadius: '6px',
+                    fontSize: '0.76rem',
+                    fontWeight: 600,
+                    cursor: 'pointer'
+                  }}
+                >
+                  🖼️ Preencher Caixa
+                </button>
+              </div>
+            </div>
+
+            {/* Raio da Borda */}
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <label className="cv-canvas-inspector__label">Bordas Arredondadas</label>
+                <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
+                  {block.imageBorderRadius ?? 6} px
+                </span>
+              </div>
+              <input
+                type="range"
+                min="0"
+                max="32"
+                step="2"
+                value={block.imageBorderRadius ?? 6}
+                onChange={e => handleChange('imageBorderRadius', Number(e.target.value))}
+                style={{ width: '100%', marginTop: '0.35rem', accentColor: '#0284c7' }}
+              />
+            </div>
+
+            {/* Legenda Opcional */}
+            <div>
+              <label className="cv-canvas-inspector__label">Legenda (Opcional)</label>
+              <input
+                type="text"
+                className="cv-canvas-inspector__input"
+                value={block.imageCaption || ''}
+                onChange={e => handleChange('imageCaption', e.target.value)}
+                placeholder="Ex: Arquitetura de Nuvem AWS - 2025"
+              />
+            </div>
+
+            {/* Link Opcional */}
+            <div>
+              <label className="cv-canvas-inspector__label">Link de Redirecionamento (Opcional)</label>
+              <input
+                type="text"
+                className="cv-canvas-inspector__input"
+                value={block.imageLink || ''}
+                onChange={e => handleChange('imageLink', e.target.value)}
+                placeholder="https://credly.com/badges/... ou https://portfolio.com"
+              />
+            </div>
+          </div>
+        )}
+
         {/* Tipografia / Fonte (para blocos com texto) */}
-        {!isPhoto && (
+        {!isPhoto && !isCustomImage && (
           <>
             <div className="cv-canvas-inspector__group">
               <label className="cv-canvas-inspector__label">Família da Fonte</label>

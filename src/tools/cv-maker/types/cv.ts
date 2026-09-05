@@ -135,6 +135,7 @@ export interface CVWork {
   summary: string
   highlights: string[]
   location?: string
+  logo?: string
 }
 
 export interface CVProject {
@@ -143,6 +144,7 @@ export interface CVProject {
   highlights?: string[]
   keywords?: string[]
   url?: string
+  image?: string
 }
 
 export interface CVEducation {
@@ -154,6 +156,7 @@ export interface CVEducation {
   endDate: string
   score?: string
   courses?: string[]
+  logo?: string
 }
 
 export interface CVCertificate {
@@ -258,6 +261,7 @@ export interface CVData {
     theme?: ThemeVariant
     layout?: LayoutVariant
     language?: LanguageCode
+    temporalWarnings?: string[]
   }
 }
 
@@ -290,6 +294,7 @@ export type BlockIdentifier =
   | 'references'
   | 'interests'
   | 'cover_letter'
+  | 'custom_image'
 
 /**
  * Definição declarativa de um Blueprint de Layout A4.
@@ -335,6 +340,8 @@ export interface SectionStyleOverride {
   bgColor?: string
   borderColor?: string
   accentColor?: string
+  bgImage?: string
+  bgOpacity?: number
 }
 
 /**
@@ -417,6 +424,14 @@ export interface CanvasBlockConfig {
   photoShadow?: boolean
   photoAlign?: 'left' | 'center' | 'right'
   hideContainerBox?: boolean // Se true, remove qualquer fundo/caixa e exibe apenas a foto pura
+  // Configurações para o bloco de Imagem Personalizada / Logo / Badge / Selo / QR Code
+  imageUrl?: string
+  imageAlt?: string
+  imageCaption?: string
+  imageHeight?: number // px (ex: 40 a 350, default: 120)
+  imageFit?: 'contain' | 'cover'
+  imageBorderRadius?: number // px (0 a 32)
+  imageLink?: string // Link de redirecionamento opcional
 }
 
 export interface CanvasPreset {

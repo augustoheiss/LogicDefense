@@ -21,6 +21,48 @@ function escapeHtml(str: string | number | null | undefined): string {
 }
 
 /**
+ * Sanitiza valores de cor CSS para garantir que são apenas Hex, RGB, HSL ou nomes seguros.
+ */
+function sanitizeCssColor(colorStr?: string): string {
+  if (!colorStr || typeof colorStr !== 'string') return ''
+  const trimmed = colorStr.trim()
+  if (/^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(trimmed)) {
+    return trimmed
+  }
+  if (/^(rgba?|hsla?)\(\s*[\d.%\s,+-]+\s*\)$/i.test(trimmed)) {
+    return trimmed
+  }
+  if (/^[a-zA-Z]{3,20}$/.test(trimmed)) {
+    return trimmed
+  }
+  return ''
+}
+
+/**
+ * Sanitiza padrões de fundo para evitar CSS Injection ou quebra de tags (CWE-79 / S-4).
+ */
+function sanitizeBackgroundPattern(pattern?: string): string {
+  if (!pattern || typeof pattern !== 'string' || pattern === 'none') return 'none'
+  const trimmed = pattern.trim()
+  if (/['"\\;{}]/.test(trimmed) || /javascript:/i.test(trimmed)) {
+    return 'none'
+  }
+  if (trimmed.startsWith('data:image/')) {
+    if (/^data:image\/(png|jpeg|jpg|webp|svg\+xml);base64,[A-Za-z0-9+/=]+$/.test(trimmed)) {
+      return `url('${trimmed}')`
+    }
+    return 'none'
+  }
+  if (/^https?:\/\/[a-zA-Z0-9\-._~:/?#[\]@!$&()*+,;=]+$/.test(trimmed)) {
+    return `url('${trimmed}')`
+  }
+  if (/^(linear|radial)-gradient\([^;{}]+\)$/i.test(trimmed)) {
+    return trimmed
+  }
+  return 'none'
+}
+
+/**
  * Retorna o CSS completo embutido para renderização standalone idêntica ao aplicativo.
  */
 function getEmbeddedCss(): string {
@@ -457,14 +499,19 @@ export function renderCVToStandaloneHtml(
     --cv-color-accent: ${designConfig.colorAccent};
     --cv-color-sidebar: ${designConfig.colorSidebar || '#f8fafc'};
     --cv-color-workspace-bg: ${designConfig.colorWorkspaceBg || '#0b1120'};
-    ${designConfig.backgroundPattern && designConfig.backgroundPattern !== 'none' ? `--cv-bg-image: url('${designConfig.backgroundPattern}');` : '--cv-bg-image: none;'}
+    --cv-bg-image: ${sanitizeBackgroundPattern(designConfig.backgroundPattern)};
     ${designConfig.sectionOverrides ? Object.entries(designConfig.sectionOverrides).map(([secId, override]) => {
       let vars = ''
-      if (override.textColor) vars += `--sec-${secId}-text: ${override.textColor}; `
-      if (override.titleColor) vars += `--sec-${secId}-title: ${override.titleColor}; `
-      if (override.bgColor) vars += `--sec-${secId}-bg: ${override.bgColor}; `
-      if (override.borderColor) vars += `--sec-${secId}-border: ${override.borderColor}; `
-      if (override.accentColor) vars += `--sec-${secId}-accent: ${override.accentColor}; `
+      const safeText = sanitizeCssColor(override.textColor)
+      const safeTitle = sanitizeCssColor(override.titleColor)
+      const safeBg = sanitizeCssColor(override.bgColor)
+      const safeBorder = sanitizeCssColor(override.borderColor)
+      const safeAccent = sanitizeCssColor(override.accentColor)
+      if (safeText) vars += `--sec-${secId}-text: ${safeText}; `
+      if (safeTitle) vars += `--sec-${secId}-title: ${safeTitle}; `
+      if (safeBg) vars += `--sec-${secId}-bg: ${safeBg}; `
+      if (safeBorder) vars += `--sec-${secId}-border: ${safeBorder}; `
+      if (safeAccent) vars += `--sec-${secId}-accent: ${safeAccent}; `
       return vars
     }).join('\n    ') : ''}
     ` : ''}
@@ -731,74 +778,17 @@ export function renderCVToStandaloneHtml(
 }
 
 /**
- * Dispara o download do Currículo em HTML Standalone
+ * @deprecated O exportador para HTML standalone foi desativado conforme decisão arquitetural (foco em PDF nativo e YAML/ZIP).
  */
-export function downloadCVHtmlFile(params: {
-  yaml: string
-  name: string
-  persona?: string
-  theme?: ThemeVariant
-  layout?: LayoutVariant
-  viewMode?: ViewMode
-  designConfig?: CVDesignConfig
-}): void {
-  const parsed = parseYamlToCV(params.yaml)
-  if (!parsed.data) {
-    alert('Erro ao converter YAML para HTML: formato inválido.')
-    return
-  }
-
-  const htmlContent = renderCVToStandaloneHtml(
-    parsed.data,
-    params.theme || 'executive',
-    params.yaml,
-    params.layout || 'modular',
-    params.viewMode || 'cv',
-    params.designConfig
-  )
-
-  const cleanName = params.name.toLowerCase().replace(/\s+/g, '-') || 'curriculo'
-  const filename = `curriculo-${cleanName}.html`
-
-  const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = filename
-  a.click()
-  URL.revokeObjectURL(url)
+export function downloadCVHtmlFile(): void {
+  console.warn('[CV-Maker] Exportação para HTML standalone desativada. Utilize Imprimir / Salvar PDF ou Baixar .yaml / .zip.')
 }
 
 /**
- * Dispara o download da Cover Letter em HTML Standalone
+ * @deprecated O exportador para HTML standalone foi desativado conforme decisão arquitetural.
  */
-export function downloadCVCoverLetterHtml(params: {
-  yaml: string
-  name: string
-  theme?: ThemeVariant
-  layout?: LayoutVariant
-  designConfig?: CVDesignConfig
-}): void {
-  const parsed = parseYamlToCV(params.yaml)
-  if (!parsed.data) return
-
-  const htmlContent = renderCVToStandaloneHtml(
-    parsed.data,
-    params.theme || 'executive',
-    params.yaml,
-    params.layout || 'modular',
-    'cover_letter',
-    params.designConfig
-  )
-
-  const cleanName = params.name.toLowerCase().replace(/\s+/g, '-') || 'candidato'
-  const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `cover-letter-${cleanName}.html`
-  a.click()
-  URL.revokeObjectURL(url)
+export function downloadCVCoverLetterHtml(): void {
+  console.warn('[CV-Maker] Exportação para HTML standalone desativada. Utilize Imprimir / Salvar PDF ou Baixar .yaml / .zip.')
 }
 
 /**

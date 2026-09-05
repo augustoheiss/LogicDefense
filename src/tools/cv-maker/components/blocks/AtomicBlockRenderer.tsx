@@ -15,6 +15,7 @@ import { BlockCertificates } from './BlockCertificates'
 import { BlockReferences } from './BlockReferences'
 import { BlockInterests } from './BlockInterests'
 import { BlockCoverLetter } from './BlockCoverLetter'
+import { BlockCustomImage } from './BlockCustomImage'
 
 interface AtomicBlockRendererProps {
   blockId: BlockIdentifier
@@ -23,6 +24,7 @@ interface AtomicBlockRendererProps {
   zoneName: 'hero' | 'sidebar' | 'main' | 'footer'
   onRequestGenerateCoverLetter?: () => void
   blockConfig?: CanvasBlockConfig
+  onUploadImage?: (dataUrl: string) => void
 }
 
 export const AtomicBlockRenderer: React.FC<AtomicBlockRendererProps> = ({
@@ -31,7 +33,8 @@ export const AtomicBlockRenderer: React.FC<AtomicBlockRendererProps> = ({
   blueprint,
   zoneName,
   onRequestGenerateCoverLetter,
-  blockConfig
+  blockConfig,
+  onUploadImage
 }) => {
   const { basics } = data
   const isSidebar = zoneName === 'sidebar'
@@ -144,6 +147,14 @@ export const AtomicBlockRenderer: React.FC<AtomicBlockRendererProps> = ({
           coverLetter={data.coverLetter}
           basics={basics}
           onRequestGenerate={onRequestGenerateCoverLetter}
+        />
+      )
+
+    case 'custom_image':
+      return (
+        <BlockCustomImage
+          blockConfig={blockConfig}
+          onUploadImage={onUploadImage}
         />
       )
 

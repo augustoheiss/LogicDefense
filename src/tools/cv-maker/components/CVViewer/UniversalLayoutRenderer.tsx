@@ -741,6 +741,7 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
         if (override.bgColor) acc[`--sec-${secId}-bg`] = override.bgColor
         if (override.borderColor) acc[`--sec-${secId}-border`] = override.borderColor
         if (override.accentColor) acc[`--sec-${secId}-accent`] = override.accentColor
+        if (override.bgImage && override.bgImage !== 'none') acc[`--sec-${secId}-bg-image`] = `url("${override.bgImage}")`
         return acc
       }, {} as Record<string, string>) : {})
     } : {})

@@ -17,8 +17,6 @@ interface CVToolbarProps {
   onOpenCoverLetterModal?: () => void
   hasCoverLetter?: boolean
   onDownloadYaml: () => void
-  onDownloadHtml?: () => void
-  onDownloadCoverLetterHtml?: () => void
   onDownloadZip?: () => void
   onPrintPdf: () => void
   onOpenDesignModal?: () => void
@@ -27,6 +25,7 @@ interface CVToolbarProps {
   isPro?: boolean
   tokenBalance?: number
   onOpenStoreModal?: () => void
+  onOpenTemplateGallery?: () => void
 }
 
 const PERSONAS: { id: TextVariant; label: string; icon: string; desc: string }[] = [
@@ -67,6 +66,7 @@ export const CVToolbar: React.FC<CVToolbarProps> = ({
   isPro = false,
   tokenBalance = 0,
   onOpenStoreModal,
+  onOpenTemplateGallery,
 }) => {
   const [openDropdown, setOpenDropdown] = useState<string | null>(null)
   const toolbarRef = useRef<HTMLDivElement>(null)
@@ -186,6 +186,25 @@ export const CVToolbar: React.FC<CVToolbarProps> = ({
               </div>
             )}
           </div>
+
+          {onOpenTemplateGallery && (
+            <button
+              type="button"
+              className="cv-btn-secondary"
+              onClick={onOpenTemplateGallery}
+              title="Abrir Galeria Visual com 10 Modelos A4"
+              style={{
+                padding: '0.35rem 0.65rem',
+                fontSize: '0.78rem',
+                borderColor: '#38bdf8',
+                color: '#38bdf8',
+                background: 'rgba(56, 189, 248, 0.1)',
+                fontWeight: 600
+              }}
+            >
+              🖼️ Galeria
+            </button>
+          )}
         </div>
 
 
@@ -342,7 +361,7 @@ export const CVToolbar: React.FC<CVToolbarProps> = ({
             type="button"
             className="cv-dropdown-trigger"
             onClick={() => toggleDropdown('exports')}
-            title="Exportar em PDF, YAML, HTML Standalone ou Pacote ZIP"
+            title="Exportar em PDF A4, YAML ou Pacote ZIP"
             style={{
               background: '#047857',
               borderColor: '#10b981',

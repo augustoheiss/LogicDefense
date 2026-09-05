@@ -15,6 +15,7 @@ interface CanvasBlockWrapperProps {
   onOpenInspector: (block: CanvasBlockConfig) => void
   onDelete: (id: string) => void
   onRequestGenerateCoverLetter?: () => void
+  onUpdateBlock?: (updated: CanvasBlockConfig) => void
 }
 
 // Mock dummy blueprint to satisfy AtomicBlockRenderer interface
@@ -40,7 +41,8 @@ export const CanvasBlockWrapper: React.FC<CanvasBlockWrapperProps> = ({
   onChangeColSpan,
   onOpenInspector,
   onDelete,
-  onRequestGenerateCoverLetter
+  onRequestGenerateCoverLetter,
+  onUpdateBlock
 }) => {
   const contentRef = useRef<HTMLDivElement>(null)
   const [isOverflowing, setIsOverflowing] = useState<boolean>(false)
@@ -183,6 +185,7 @@ export const CanvasBlockWrapper: React.FC<CanvasBlockWrapperProps> = ({
           zoneName="main"
           onRequestGenerateCoverLetter={onRequestGenerateCoverLetter}
           blockConfig={block}
+          onUploadImage={(dataUrl) => onUpdateBlock?.({ ...block, imageUrl: dataUrl })}
         />
       </div>
 

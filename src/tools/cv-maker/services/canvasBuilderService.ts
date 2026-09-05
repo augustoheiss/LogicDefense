@@ -147,6 +147,15 @@ export const AVAILABLE_PALETTE_ITEMS: PaletteItemDef[] = [
     category: 'content',
     defaultColSpan: 12,
     defaultTitle: 'Carta de Apresentação'
+  },
+  {
+    type: 'custom_image',
+    label: 'Imagem / Logo / Selo / QR',
+    icon: '🖼️',
+    description: 'Insira qualquer imagem: logotipo, certificado, QR Code ou portfólio',
+    category: 'extras',
+    defaultColSpan: 6,
+    defaultTitle: 'Destaque Visual'
   }
 ]
 
@@ -222,6 +231,13 @@ export function createBlockFromType(type: BlockIdentifier, overrides?: Partial<C
     padding: overrides?.padding || 'normal',
     showCardBackground: overrides?.showCardBackground ?? false,
     showBorder: overrides?.showBorder ?? false,
+    ...(type === 'custom_image' ? {
+      imageUrl: overrides?.imageUrl || '',
+      imageAlt: overrides?.imageAlt || 'Imagem ilustrativa',
+      imageHeight: overrides?.imageHeight || 120,
+      imageFit: overrides?.imageFit || 'contain',
+      imageBorderRadius: overrides?.imageBorderRadius ?? 6,
+    } : {}),
     ...overrides
   }
 }

@@ -1,6 +1,7 @@
-import React, { useState } from 'react'
+import React, { useState, useRef } from 'react'
 import type { CVDesignConfig, SectionStyleOverride } from '../../types/cv'
 import { DEFAULT_DESIGN_CONFIG } from '../../types/cv'
+import { BACKGROUND_CATALOG, BACKGROUND_CATEGORIES } from '../../engine/backgroundCatalog'
 
 interface DesignCustomizerDrawerProps {
   isOpen: boolean
@@ -119,51 +120,6 @@ const COLOR_PRESETS = [
   }
 ]
 
-const BACKGROUND_OPTIONS = [
-  {
-    id: 'none',
-    name: 'Branco Puro (ATS Clean)',
-    url: 'none',
-    previewColor: '#ffffff'
-  },
-  {
-    id: 'bg-grid-tech',
-    name: 'Grade Técnica & Engenharia',
-    url: '/cv-backgrounds/bg-grid-tech.jpg',
-    previewColor: '#f8fafc'
-  },
-  {
-    id: 'bg-luxury-minimal',
-    name: 'Minimalista Luxo Dourado',
-    url: '/cv-backgrounds/bg-luxury-minimal.jpg',
-    previewColor: '#fefce8'
-  },
-  {
-    id: 'bg-geometric-line',
-    name: 'Geométrico Poligonal Suave',
-    url: '/cv-backgrounds/bg-geometric-line.jpg',
-    previewColor: '#f5f3ff'
-  },
-  {
-    id: 'bg-corporate-waves',
-    name: 'Corporativo Ondas Executivas',
-    url: '/cv-backgrounds/bg-corporate-waves.jpg',
-    previewColor: '#f0f9ff'
-  },
-  {
-    id: 'bg-stationery-clean',
-    name: 'Papelaria Editorial Cream',
-    url: '/cv-backgrounds/bg-stationery-clean.jpg',
-    previewColor: '#fdfbf7'
-  },
-  {
-    id: 'bg-technical-blueprint',
-    name: 'Blueprint Arquitetura',
-    url: '/cv-backgrounds/bg-technical-blueprint.jpg',
-    previewColor: '#f1f5f9'
-  }
-]
-
 interface SectionMeta {
   id: string
   name: string
@@ -192,6 +148,28 @@ export const DesignCustomizerDrawer: React.FC<DesignCustomizerDrawerProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState<'global' | 'sections'>('global')
   const [selectedSectionId, setSelectedSectionId] = useState<string>('sidebar')
+  const [selectedBgCategory, setSelectedBgCategory] = useState<string>('all')
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const sectionFileInputRef = useRef<HTMLInputElement>(null)
+
+  const handleUploadCustomBg = (e: React.ChangeEvent<HTMLInputElement>, secId?: string) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (file.size > 2 * 1024 * 1024) {
+      alert('A imagem excede 2MB. Escolha uma imagem de até 2MB.')
+      return
+    }
+    const reader = new FileReader()
+    reader.onload = () => {
+      const base64 = reader.result as string
+      if (secId) {
+        handleUpdateSectionOverride(secId, 'bgImage', base64)
+      } else {
+        onChangeConfig({ ...config, backgroundPattern: base64 })
+      }
+    }
+    reader.readAsDataURL(file)
+  }
 
   if (!isOpen) return null
 
@@ -552,54 +530,131 @@ export const DesignCustomizerDrawer: React.FC<DesignCustomizerDrawerProps> = ({
 
               {/* 3. Fundos Gráficos & Texturas */}
               <section style={{ background: '#0b1120', padding: '1rem', borderRadius: '8px', border: '1px solid #1e293b' }}>
-                <h4 style={{ margin: '0 0 0.85rem 0', fontSize: '0.9rem', color: '#f59e0b', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                  🖼️ Fundo da Folha & Texturas Gráficas (IA)
-                </h4>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.85rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+                  <h4 style={{ margin: 0, fontSize: '0.9rem', color: '#f59e0b', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                    🖼️ Fundo da Folha & Texturas IA (44 Opções)
+                  </h4>
+                  <div style={{ display: 'flex', gap: '0.4rem' }}>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      style={{ display: 'none' }}
+                      onChange={e => handleUploadCustomBg(e)}
+                    />
+                    <button
+                      type="button"
+                      className="cv-btn-secondary"
+                      onClick={() => fileInputRef.current?.click()}
+                      style={{ padding: '0.25rem 0.55rem', fontSize: '0.72rem', borderColor: '#f59e0b', color: '#f59e0b' }}
+                    >
+                      📁 Enviar Própria
+                    </button>
+                    {config.backgroundPattern && config.backgroundPattern !== 'none' && (
+                      <button
+                        type="button"
+                        className="cv-btn-secondary"
+                        onClick={() => onChangeConfig({ ...config, backgroundPattern: 'none' })}
+                        style={{ padding: '0.25rem 0.55rem', fontSize: '0.72rem', borderColor: '#64748b', color: '#94a3b8' }}
+                      >
+                        Limpar
+                      </button>
+                    )}
+                  </div>
+                </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '0.6rem' }}>
-                  {BACKGROUND_OPTIONS.map(bg => {
-                    const isActive = (config.backgroundPattern || 'none') === bg.url
+                {/* Filtro de Categorias de Fundo */}
+                <div style={{ display: 'flex', gap: '0.35rem', overflowX: 'auto', paddingBottom: '0.4rem', marginBottom: '0.75rem' }}>
+                  {BACKGROUND_CATEGORIES.map(cat => {
+                    const isCatActive = selectedBgCategory === cat.id
                     return (
                       <button
-                        key={bg.id}
+                        key={cat.id}
                         type="button"
-                        onClick={() => onChangeConfig({ ...config, backgroundPattern: bg.url })}
+                        onClick={() => setSelectedBgCategory(cat.id)}
                         style={{
-                          background: isActive ? 'rgba(245, 158, 11, 0.15)' : '#06090f',
-                          border: isActive ? '1.5px solid #f59e0b' : '1px solid #1e293b',
-                          borderRadius: '6px',
-                          padding: '0.6rem 0.5rem',
-                          display: 'flex',
-                          flexDirection: 'column',
-                          gap: '0.35rem',
+                          background: isCatActive ? 'rgba(245, 158, 11, 0.2)' : '#06090f',
+                          border: isCatActive ? '1px solid #f59e0b' : '1px solid #1e293b',
+                          color: isCatActive ? '#fbbf24' : '#94a3b8',
+                          padding: '0.25rem 0.55rem',
+                          borderRadius: '4px',
+                          fontSize: '0.72rem',
+                          fontWeight: isCatActive ? 700 : 500,
                           cursor: 'pointer',
-                          textAlign: 'left'
+                          whiteSpace: 'nowrap',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '0.3rem'
                         }}
                       >
-                        <div
-                          style={{
-                            width: '100%',
-                            height: '46px',
-                            borderRadius: '4px',
-                            background: bg.url === 'none' ? '#ffffff' : `url(${bg.url}) center/cover no-repeat`,
-                            backgroundColor: bg.previewColor,
-                            border: '1px solid #334155',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.1)'
-                          }}
-                        >
-                          {bg.id === 'none' && (
-                            <span style={{ fontSize: '0.7rem', color: '#64748b' }}>Branco Puro</span>
-                          )}
-                        </div>
-                        <span style={{ fontSize: '0.74rem', fontWeight: 600, color: isActive ? '#f59e0b' : '#f1f5f9' }}>
-                          {bg.name}
-                        </span>
+                        <span>{cat.icon}</span> <span>{cat.label}</span>
                       </button>
                     )
                   })}
+                </div>
+
+                {/* Grid com Altura Limitada e Rolagem Suave */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '0.5rem', maxHeight: '280px', overflowY: 'auto', paddingRight: '0.2rem' }}>
+                  {BACKGROUND_CATALOG
+                    .filter(bg => selectedBgCategory === 'all' || bg.zone === selectedBgCategory || bg.id === 'none')
+                    .map(bg => {
+                      const isActive = (config.backgroundPattern || 'none') === bg.url
+                      return (
+                        <button
+                          key={bg.id}
+                          type="button"
+                          onClick={() => onChangeConfig({ ...config, backgroundPattern: bg.url })}
+                          style={{
+                            background: isActive ? 'rgba(245, 158, 11, 0.15)' : '#06090f',
+                            border: isActive ? '1.5px solid #f59e0b' : '1px solid #1e293b',
+                            borderRadius: '6px',
+                            padding: '0.45rem',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '0.3rem',
+                            cursor: 'pointer',
+                            textAlign: 'left'
+                          }}
+                        >
+                          <div
+                            style={{
+                              width: '100%',
+                              height: '42px',
+                              borderRadius: '4px',
+                              background: bg.url === 'none' ? '#ffffff' : `url(${bg.url}) center/cover no-repeat`,
+                              backgroundColor: bg.previewColor,
+                              border: '1px solid #334155',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              position: 'relative'
+                            }}
+                          >
+                            {bg.id === 'none' && (
+                              <span style={{ fontSize: '0.68rem', color: '#64748b' }}>Branco</span>
+                            )}
+                            {bg.aspectRatio && bg.id !== 'none' && (
+                              <span style={{
+                                position: 'absolute',
+                                bottom: '2px',
+                                right: '2px',
+                                fontSize: '0.58rem',
+                                background: 'rgba(0,0,0,0.7)',
+                                color: '#e2e8f0',
+                                padding: '1px 3px',
+                                borderRadius: '2px',
+                                fontWeight: 600
+                              }}>
+                                {bg.aspectRatio}
+                              </span>
+                            )}
+                          </div>
+                          <span style={{ fontSize: '0.7rem', fontWeight: 600, color: isActive ? '#f59e0b' : '#f1f5f9', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {bg.name}
+                          </span>
+                        </button>
+                      )
+                    })}
                 </div>
               </section>
             </>
@@ -761,6 +816,83 @@ export const DesignCustomizerDrawer: React.FC<DesignCustomizerDrawerProps> = ({
                       <span style={{ fontSize: '0.75rem', color: '#e2e8f0', fontFamily: 'monospace' }}>
                         {currentSectionOverride.accentColor || 'Padrão'}
                       </span>
+                    </div>
+                  </div>
+
+                  {/* Fundo com Imagem / Textura Específica desta Seção */}
+                  <div style={{ background: '#0b1120', padding: '0.65rem', borderRadius: '6px', border: '1px solid #1e293b', gridColumn: 'span 2' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem', flexWrap: 'wrap', gap: '0.4rem' }}>
+                      <label style={{ fontSize: '0.74rem', color: '#10b981', fontWeight: 600 }}>
+                        🖼️ Imagem / Textura de Fundo desta Seção:
+                      </label>
+                      <div style={{ display: 'flex', gap: '0.35rem' }}>
+                        <input
+                          ref={sectionFileInputRef}
+                          type="file"
+                          accept="image/*"
+                          style={{ display: 'none' }}
+                          onChange={e => handleUploadCustomBg(e, selectedSectionId)}
+                        />
+                        <button
+                          type="button"
+                          className="cv-btn-secondary"
+                          onClick={() => sectionFileInputRef.current?.click()}
+                          style={{ padding: '0.2rem 0.5rem', fontSize: '0.68rem', borderColor: '#10b981', color: '#34d399' }}
+                        >
+                          📁 Subir Imagem
+                        </button>
+                        {Boolean(currentSectionOverride.bgImage) && (
+                          <button
+                            type="button"
+                            className="cv-btn-secondary"
+                            onClick={() => handleUpdateSectionOverride(selectedSectionId, 'bgImage', '')}
+                            style={{ padding: '0.2rem 0.5rem', fontSize: '0.68rem', borderColor: '#ef4444', color: '#f87171' }}
+                          >
+                            Remover Fundo
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Mini-grid com texturas do catálogo */}
+                    <div style={{ display: 'flex', gap: '0.4rem', overflowX: 'auto', paddingBottom: '0.4rem' }}>
+                      {BACKGROUND_CATALOG
+                        .filter(bg => bg.id !== 'none')
+                        .map(bg => {
+                          const isBgActive = currentSectionOverride.bgImage === bg.url
+                          return (
+                            <button
+                              key={bg.id}
+                              type="button"
+                              onClick={() => handleUpdateSectionOverride(selectedSectionId, 'bgImage', bg.url)}
+                              style={{
+                                flex: '0 0 76px',
+                                height: '44px',
+                                borderRadius: '4px',
+                                background: `url(${bg.url}) center/cover no-repeat`,
+                                border: isBgActive ? '2.5px solid #10b981' : '1px solid #334155',
+                                cursor: 'pointer',
+                                position: 'relative',
+                                boxShadow: isBgActive ? '0 0 8px rgba(16, 185, 129, 0.4)' : 'none'
+                              }}
+                              title={bg.name}
+                            >
+                              <span style={{
+                                position: 'absolute',
+                                bottom: '2px',
+                                right: '2px',
+                                fontSize: '0.55rem',
+                                background: 'rgba(0,0,0,0.7)',
+                                color: '#e2e8f0',
+                                padding: '1px 3px',
+                                borderRadius: '2px',
+                                fontWeight: 600
+                              }}>
+                                {bg.aspectRatio}
+                              </span>
+                            </button>
+                          )
+                        })}
                     </div>
                   </div>
                 </div>

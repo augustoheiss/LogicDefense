@@ -129,6 +129,7 @@ export const CanvasBuilderWorkspace: React.FC<CanvasBuilderWorkspaceProps> = ({
         onDeleteBlock={handleDeleteBlock}
         onRequestGenerateCoverLetter={onRequestGenerateCoverLetter}
         onLoadPreset={handleApplyPreset}
+        onUpdateBlock={handleUpdateBlock}
       />
 
       {/* Property Inspector Drawer */}

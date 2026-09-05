@@ -15,6 +15,7 @@ interface CanvasA4SheetProps {
   onDeleteBlock: (id: string) => void
   onRequestGenerateCoverLetter?: () => void
   onLoadPreset: (presetId: string) => void
+  onUpdateBlock?: (updated: CanvasBlockConfig) => void
 }
 
 export const CanvasA4Sheet: React.FC<CanvasA4SheetProps> = ({
@@ -29,7 +30,8 @@ export const CanvasA4Sheet: React.FC<CanvasA4SheetProps> = ({
   onOpenInspector,
   onDeleteBlock,
   onRequestGenerateCoverLetter,
-  onLoadPreset
+  onLoadPreset,
+  onUpdateBlock
 }) => {
   const sheetRef = useRef<HTMLDivElement>(null)
   const [sheetHeight, setSheetHeight] = useState<number>(0)
@@ -117,6 +119,7 @@ export const CanvasA4Sheet: React.FC<CanvasA4SheetProps> = ({
               if (override.bgColor) acc[`--sec-${secId}-bg`] = override.bgColor
               if (override.borderColor) acc[`--sec-${secId}-border`] = override.borderColor
               if (override.accentColor) acc[`--sec-${secId}-accent`] = override.accentColor
+              if (override.bgImage && override.bgImage !== 'none') acc[`--sec-${secId}-bg-image`] = `url("${override.bgImage}")`
               return acc
             }, {} as Record<string, string>) : {})
           }}
@@ -164,6 +167,7 @@ export const CanvasA4Sheet: React.FC<CanvasA4SheetProps> = ({
                 onOpenInspector={onOpenInspector}
                 onDelete={onDeleteBlock}
                 onRequestGenerateCoverLetter={onRequestGenerateCoverLetter}
+                onUpdateBlock={onUpdateBlock}
               />
             ))
           )}

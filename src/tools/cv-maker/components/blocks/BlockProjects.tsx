@@ -18,6 +18,19 @@ export const BlockProjects: React.FC<BlockProjectsProps> = ({
       <div className="cv-projects-grid">
         {projects.map((proj, idx) => (
           <div key={idx} className="cv-project-card cv-avoid-break">
+            {proj.image && (
+              <img
+                src={proj.image}
+                alt={proj.name}
+                style={{
+                  width: '100%',
+                  maxHeight: '130px',
+                  objectFit: 'cover',
+                  borderRadius: '6px',
+                  marginBottom: '0.45rem'
+                }}
+              />
+            )}
             <div className="cv-item-header">
               <span className="cv-item-title">{proj.name}</span>
               {proj.url && (

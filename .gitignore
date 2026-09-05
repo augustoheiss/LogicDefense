@@ -40,9 +40,8 @@ backend/test_*.py
 .agents/
 .cursor/
 
-# Master Plan
-master-plan/
-master-plan
+# Master Plan (root only)
+/master-plan/
 client_secret.json
 scripts/youtube_auto_uploader.py
 scripts/youtube_batch_uploader.py

@@ -19,7 +19,16 @@ export const BlockWork: React.FC<BlockWorkProps> = ({
         {work.map((item, idx) => (
           <div key={idx} className="cv-item cv-avoid-break">
             <div className="cv-item-header">
-              <span className="cv-item-title">{item.position}</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+                {item.logo && (
+                  <img
+                    src={item.logo}
+                    alt={item.name}
+                    style={{ width: '22px', height: '22px', objectFit: 'contain', borderRadius: '4px', flexShrink: 0 }}
+                  />
+                )}
+                <span className="cv-item-title">{item.position}</span>
+              </div>
               <span className="cv-item-date">
                 {item.startDate} — {item.endDate || 'Presente'}
               </span>

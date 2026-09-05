@@ -32,7 +32,7 @@ SUA MISSÃO:
 Receber anotações brutas de carreira, texto de currículo ou dados do LinkedIn e transformá-los em UM ÚNICO objeto JSON Resume válido, polido, profissional e rigorosamente alinhado ao ARQUÉTIPO selecionado.
 
 REGRAS CRÍTICAS DE ENGENHARIA DE CURRÍCULO (AGENCY-RESUME-TAILOR GUARDRAILS):
-1. ZERO FABRICAÇÃO: Jamais invente empresas, graduações, datas ou tecnologias que o candidato não mencionou. Mantenha fidelidade factual total. Se uma métrica estiver ausente, estruture o bullet com foco em escopo, entrega técnica e impacto qualitativo ou use um indicador realista.
+1. ZERO FABRICAÇÃO DE DATAS OU FATOS: Jamais invente empresas, graduações, datas ou tecnologias que o candidato não mencionou. Mantenha fidelidade factual total. Se o candidato NÃO mencionou o dia ou mês em que trabalhou ou estudou, forneça apenas o ano ('YYYY') ou ano e mês ('YYYY-MM'). Se o candidato NÃO informou nenhuma data para a experiência ou formação, DEIXE startDate como string vazia "" ou omita o campo. NUNCA invente dias fictícios como '15' ou '01', nem anos aproximados sem indicação explícita.
 2. FÓRMULA GOOGLE/IBM X-Y-Z: Em work[].highlights, escreva conquistas no formato: "[Verbo de Ação Forte] + [Desafio/Tarefa Técnica] + medido por [Métrica de Latência/Throughput/Escala/Confiabilidade] + através de [Tecnologia/Padrão de Engenharia]".
 3. BLINDAGEM TEMPORAL PARA CARGOS ATUAIS: Para empregos em andamento (onde o candidato ainda trabalha), OMITA a chave endDate ou defina explicitamente "endDate": null. NUNCA repita o startDate no endDate.
 4. VERBOS DE AÇÃO PODEROSOS: Comece cada bullet com verbos fortes no pretérito perfeito, variando a linguagem: "Orquestrou", "Desacoplou", "Mitigou", "Otimizou", "Projetou", "Desenvolveu", "Estruturou", "Automatizou", "Reduziu", "Implementou".
@@ -61,8 +61,8 @@ SCHEMA OBRIGATÓRIO (JSON RESUME EXTENDED STANDARD):
       "name": "string",
       "position": "string",
       "url": "string",
-      "startDate": "YYYY-MM-DD",
-      "endDate": "YYYY-MM-DD ou null se for o emprego atual",
+      "startDate": "YYYY-MM-DD, YYYY-MM, YYYY ou '' se não informada",
+      "endDate": "YYYY-MM-DD, YYYY-MM, YYYY, null se for emprego atual, ou '' se não informada",
       "summary": "string",
       "highlights": [ "string" ]
     }
@@ -72,8 +72,8 @@ SCHEMA OBRIGATÓRIO (JSON RESUME EXTENDED STANDARD):
       "institution": "string",
       "area": "string",
       "studyType": "string",
-      "startDate": "YYYY-MM-DD",
-      "endDate": "YYYY-MM-DD"
+      "startDate": "YYYY-MM-DD, YYYY-MM, YYYY ou '' se não informada",
+      "endDate": "YYYY-MM-DD, YYYY-MM, YYYY ou '' se não informada"
     }
   ],
   "projects": [
@@ -916,6 +916,60 @@ Envie os YAMLs gerados para o endpoint de compilação:
           ═════════════════════════════════════════════════════════════ */}
           {activeTab === 'prompts_library' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              {/* Agency Resume Tailor Official Skill Banner */}
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: '1rem',
+                  padding: '0.85rem 1.15rem',
+                  background: 'linear-gradient(90deg, rgba(15, 23, 42, 0.9) 0%, rgba(30, 41, 59, 0.7) 100%)',
+                  borderRadius: '8px',
+                  border: '1px solid rgba(56, 189, 248, 0.35)',
+                  boxShadow: '0 4px 12px rgba(0, 0, 0, 0.25)',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
+                  <span style={{ fontSize: '1.6rem' }}>🎯</span>
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <span style={{ fontSize: '0.88rem', fontWeight: 700, color: '#38bdf8' }}>
+                        Agency Resume Tailor Skill
+                      </span>
+                      <span style={{ fontSize: '0.65rem', padding: '0.15rem 0.45rem', background: '#0284c7', color: '#fff', borderRadius: '4px', fontWeight: 600 }}>
+                        GitHub • Open Source
+                      </span>
+                    </div>
+                    <p style={{ margin: '0.2rem 0 0 0', fontSize: '0.76rem', color: '#94a3b8', lineHeight: 1.3 }}>
+                      Skill de engenharia de carreira: fórmula Google/IBM X-Y-Z, ATS alignment e blindagem contra alucinações.
+                    </p>
+                  </div>
+                </div>
+                <a
+                  href="https://github.com/phdheiss/agency-agents/tree/main/skills/agency-resume-tailor"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="cv-btn-secondary"
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.4rem',
+                    padding: '0.45rem 0.85rem',
+                    fontSize: '0.78rem',
+                    fontWeight: 600,
+                    color: '#38bdf8',
+                    borderColor: '#38bdf8',
+                    textDecoration: 'none',
+                    whiteSpace: 'nowrap',
+                    borderRadius: '6px',
+                    transition: 'all 0.15s ease',
+                  }}
+                >
+                  <span>Ver Skill no GitHub</span> <span>↗</span>
+                </a>
+              </div>
+
               {/* Subtabs das Personas */}
               <div
                 style={{
