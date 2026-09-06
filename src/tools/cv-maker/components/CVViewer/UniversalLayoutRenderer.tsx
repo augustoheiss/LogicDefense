@@ -4,15 +4,7 @@ import { BlockHeader } from '../blocks/BlockHeader'
 import { BlockContacts } from '../blocks/BlockContacts'
 import { BlockCivilData } from '../blocks/BlockCivilData'
 import { BlockSummary } from '../blocks/BlockSummary'
-import { BlockWork } from '../blocks/BlockWork'
-import { BlockProjects } from '../blocks/BlockProjects'
-import { BlockEducation } from '../blocks/BlockEducation'
 import { BlockSkillsTags } from '../blocks/BlockSkillsTags'
-import { BlockSkillsBars } from '../blocks/BlockSkillsBars'
-import { BlockLanguages } from '../blocks/BlockLanguages'
-import { BlockCertificates } from '../blocks/BlockCertificates'
-import { BlockReferences } from '../blocks/BlockReferences'
-import { BlockInterests } from '../blocks/BlockInterests'
 import { BlockCoverLetter } from '../blocks/BlockCoverLetter'
 import { AtomicItemRenderer } from '../blocks/AtomicItemRenderer'
 import { BlockPhoto } from '../blocks/BlockPhoto'
@@ -255,11 +247,6 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
     defaultZone?: 'left' | 'right',
     category?: 'work' | 'education' | 'projects' | 'languages' | 'skills' | 'identity' | 'summary' | 'photo' | 'certificates' | 'interests' | 'references' | string
   ) => {
-    if (!node) return null
-    if (!isFreeCanvas) return node
-    const canSwitch = isMultiColumnLayout && Boolean(defaultZone)
-    const currentZone = defaultZone ? getSectionZone(sectionId, defaultZone) : undefined
-
     const baseCategory = category || (sectionId.endsWith('_title') ? sectionId.replace('_title', '') : undefined)
     const rawDims = structureConfig?.sectionDimensions?.[sectionId]
     const parentDims = baseCategory ? structureConfig?.sectionDimensions?.[baseCategory] : undefined
@@ -268,8 +255,51 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
       ...rawDims,
       fontFamily: rawDims?.fontFamily || parentDims?.fontFamily,
       fontSizeScale: rawDims?.fontSizeScale ?? parentDims?.fontSizeScale,
-      variant: rawDims?.variant || parentDims?.variant
+      variant: rawDims?.variant || parentDims?.variant,
+      hidden: rawDims?.hidden ?? parentDims?.hidden
     }
+
+    if (effectiveDims.hidden && !isFreeCanvas) {
+      return null
+    }
+
+    if (!isFreeCanvas) {
+      const widthPercent = effectiveDims.widthPercent
+      const hasCustomWidth = typeof widthPercent === 'number' && widthPercent > 0 && widthPercent < 100
+      const hasCustomFont = Boolean(effectiveDims.fontFamily)
+      const hasCustomScale = typeof effectiveDims.fontSizeScale === 'number' && effectiveDims.fontSizeScale !== 1
+      const alignment = effectiveDims.alignment
+
+      if (hasCustomWidth || hasCustomFont || hasCustomScale || alignment || effectiveDims.order !== undefined) {
+        const marginLeftStyle = alignment === 'center' || alignment === 'right' ? 'auto' : undefined
+        const marginRightStyle = alignment === 'center' ? 'auto' : alignment === 'right' ? '0' : undefined
+
+        return (
+          <div
+            key={sectionId}
+            className="cv-atomic-box-wrapper cv-avoid-break"
+            style={{
+              width: hasCustomWidth ? `${widthPercent}%` : undefined,
+              display: hasCustomWidth ? 'inline-block' : undefined,
+              verticalAlign: hasCustomWidth ? 'top' : undefined,
+              boxSizing: 'border-box',
+              marginLeft: marginLeftStyle,
+              marginRight: marginRightStyle,
+              order: effectiveDims.order,
+              fontFamily: effectiveDims.fontFamily ? `"${effectiveDims.fontFamily}", sans-serif` : undefined,
+              fontSize: hasCustomScale ? `${effectiveDims.fontSizeScale}em` : undefined
+            }}
+            data-section-id={sectionId}
+          >
+            {node}
+          </div>
+        )
+      }
+      return node
+    }
+
+    const canSwitch = isMultiColumnLayout && Boolean(defaultZone)
+    const currentZone = defaultZone ? getSectionZone(sectionId, defaultZone) : undefined
 
     return (
       <StructuralBoxWrapper
@@ -408,21 +438,16 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
     targetZone?: 'left' | 'right',
     defZone: 'left' | 'right' = 'right',
     fallbackTitle = 'Experiência Profissional',
-    fallbackNode?: React.ReactNode
+    customTitleNode?: React.ReactNode,
+    containerWrapper?: (items: React.ReactNode) => React.ReactNode
   ) => {
     if (!data.work || data.work.length === 0) return null
 
-    if (!isFreeCanvas) {
-      const node = fallbackNode || <BlockWork work={data.work} />
-      return targetZone
-        ? renderZoneSection('work', targetZone, defZone, fallbackTitle, node, 'work')
-        : wrapSection('work', fallbackTitle, node, defZone, 'work')
-    }
-
-    const titleNode = <h3 className="cv-section-title">💼 {fallbackTitle}</h3>
+    const titleText = fallbackTitle
+    const titleNode = customTitleNode || <h3 className="cv-section-title">💼 {titleText}</h3>
     const titleBox = targetZone
-      ? renderZoneSection('work_title', targetZone, defZone, `Título: ${fallbackTitle}`, titleNode, 'work')
-      : wrapSection('work_title', `Título: ${fallbackTitle}`, titleNode, defZone, 'work')
+      ? renderZoneSection('work_title', targetZone, defZone, `Título: ${titleText}`, titleNode, 'work')
+      : wrapSection('work_title', `Título: ${titleText}`, titleNode, defZone, 'work')
 
     const itemBoxes = data.work.map((w, idx) => {
       const itemId = getAtomicItemId('work', w, idx)
@@ -437,10 +462,18 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
         : wrapSection(itemId, boxTitle, content, defZone, 'work')
     })
 
+    const wrappedItems = containerWrapper
+      ? containerWrapper(itemBoxes)
+      : (
+        <div className="cv-atomic-items-container cv-work-list" style={{ display: 'flex', flexWrap: 'wrap', gap: '0.65rem' }}>
+          {itemBoxes}
+        </div>
+      )
+
     return (
       <React.Fragment key="work_atomic_group">
         {titleBox}
-        {itemBoxes}
+        {wrappedItems}
       </React.Fragment>
     )
   }
@@ -449,21 +482,16 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
     targetZone?: 'left' | 'right',
     defZone: 'left' | 'right' = 'right',
     fallbackTitle = 'Formação Acadêmica',
-    fallbackNode?: React.ReactNode
+    customTitleNode?: React.ReactNode,
+    containerWrapper?: (items: React.ReactNode) => React.ReactNode
   ) => {
     if (!data.education || data.education.length === 0) return null
 
-    if (!isFreeCanvas) {
-      const node = fallbackNode || <BlockEducation education={data.education} />
-      return targetZone
-        ? renderZoneSection('education', targetZone, defZone, fallbackTitle, node, 'education')
-        : wrapSection('education', fallbackTitle, node, defZone, 'education')
-    }
-
-    const titleNode = <h3 className="cv-section-title">🎓 {fallbackTitle}</h3>
+    const titleText = fallbackTitle
+    const titleNode = customTitleNode || <h3 className="cv-section-title">🎓 {titleText}</h3>
     const titleBox = targetZone
-      ? renderZoneSection('education_title', targetZone, defZone, `Título: ${fallbackTitle}`, titleNode, 'education')
-      : wrapSection('education_title', `Título: ${fallbackTitle}`, titleNode, defZone, 'education')
+      ? renderZoneSection('education_title', targetZone, defZone, `Título: ${titleText}`, titleNode, 'education')
+      : wrapSection('education_title', `Título: ${titleText}`, titleNode, defZone, 'education')
 
     const itemBoxes = data.education.map((ed, idx) => {
       const itemId = getAtomicItemId('education', ed, idx)
@@ -477,10 +505,18 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
         : wrapSection(itemId, boxTitle, content, defZone, 'education')
     })
 
+    const wrappedItems = containerWrapper
+      ? containerWrapper(itemBoxes)
+      : (
+        <div className="cv-atomic-items-container cv-education-list" style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+          {itemBoxes}
+        </div>
+      )
+
     return (
       <React.Fragment key="education_atomic_group">
         {titleBox}
-        {itemBoxes}
+        {wrappedItems}
       </React.Fragment>
     )
   }
@@ -489,21 +525,16 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
     targetZone?: 'left' | 'right',
     defZone: 'left' | 'right' = 'right',
     fallbackTitle = 'Projetos em Destaque',
-    fallbackNode?: React.ReactNode
+    customTitleNode?: React.ReactNode,
+    containerWrapper?: (items: React.ReactNode) => React.ReactNode
   ) => {
     if (!data.projects || data.projects.length === 0) return null
 
-    if (!isFreeCanvas) {
-      const node = fallbackNode || <BlockProjects projects={data.projects} />
-      return targetZone
-        ? renderZoneSection('projects', targetZone, defZone, fallbackTitle, node, 'projects')
-        : wrapSection('projects', fallbackTitle, node, defZone, 'projects')
-    }
-
-    const titleNode = <h3 className="cv-section-title">🚀 {fallbackTitle}</h3>
+    const titleText = fallbackTitle
+    const titleNode = customTitleNode || <h3 className="cv-section-title">🚀 {titleText}</h3>
     const titleBox = targetZone
-      ? renderZoneSection('projects_title', targetZone, defZone, `Título: ${fallbackTitle}`, titleNode, 'projects')
-      : wrapSection('projects_title', `Título: ${fallbackTitle}`, titleNode, defZone, 'projects')
+      ? renderZoneSection('projects_title', targetZone, defZone, `Título: ${titleText}`, titleNode, 'projects')
+      : wrapSection('projects_title', `Título: ${titleText}`, titleNode, defZone, 'projects')
 
     const itemBoxes = data.projects.map((p, idx) => {
       const itemId = getAtomicItemId('projects', p, idx)
@@ -517,10 +548,18 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
         : wrapSection(itemId, boxTitle, content, defZone, 'projects')
     })
 
+    const wrappedItems = containerWrapper
+      ? containerWrapper(itemBoxes)
+      : (
+        <div className="cv-atomic-items-container cv-projects-list" style={{ display: 'flex', flexWrap: 'wrap', gap: '0.65rem' }}>
+          {itemBoxes}
+        </div>
+      )
+
     return (
       <React.Fragment key="projects_atomic_group">
         {titleBox}
-        {itemBoxes}
+        {wrappedItems}
       </React.Fragment>
     )
   }
@@ -529,21 +568,16 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
     targetZone?: 'left' | 'right',
     defZone: 'left' | 'right' = 'left',
     fallbackTitle = 'Idiomas',
-    fallbackNode?: React.ReactNode
+    customTitleNode?: React.ReactNode,
+    containerWrapper?: (items: React.ReactNode) => React.ReactNode
   ) => {
     if (!data.languages || data.languages.length === 0) return null
 
-    if (!isFreeCanvas) {
-      const node = fallbackNode || <BlockLanguages languages={data.languages} />
-      return targetZone
-        ? renderZoneSection('languages', targetZone, defZone, fallbackTitle, node, 'languages')
-        : wrapSection('languages', fallbackTitle, node, defZone, 'languages')
-    }
-
-    const titleNode = <h4 className="cv-sidebar-title">🌐 {fallbackTitle}</h4>
+    const titleText = fallbackTitle
+    const titleNode = customTitleNode || <h4 className="cv-sidebar-title">🌐 {titleText}</h4>
     const titleBox = targetZone
-      ? renderZoneSection('languages_title', targetZone, defZone, `Título: ${fallbackTitle}`, titleNode, 'languages')
-      : wrapSection('languages_title', `Título: ${fallbackTitle}`, titleNode, defZone, 'languages')
+      ? renderZoneSection('languages_title', targetZone, defZone, `Título: ${titleText}`, titleNode, 'languages')
+      : wrapSection('languages_title', `Título: ${titleText}`, titleNode, defZone, 'languages')
 
     const itemBoxes = data.languages.map((l, idx) => {
       const itemId = getAtomicItemId('languages', l, idx)
@@ -557,10 +591,18 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
         : wrapSection(itemId, boxTitle, content, defZone, 'languages')
     })
 
+    const wrappedItems = containerWrapper
+      ? containerWrapper(itemBoxes)
+      : (
+        <div className="cv-atomic-items-container cv-languages-list" style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
+          {itemBoxes}
+        </div>
+      )
+
     return (
       <React.Fragment key="languages_atomic_group">
         {titleBox}
-        {itemBoxes}
+        {wrappedItems}
       </React.Fragment>
     )
   }
@@ -569,21 +611,16 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
     targetZone?: 'left' | 'right',
     defZone: 'left' | 'right' = 'left',
     fallbackTitle = 'Competências',
-    fallbackNode?: React.ReactNode
+    customTitleNode?: React.ReactNode,
+    containerWrapper?: (items: React.ReactNode) => React.ReactNode
   ) => {
     if (!data.skills || data.skills.length === 0) return null
 
-    if (!isFreeCanvas) {
-      const node = fallbackNode || <BlockSkillsBars skills={data.skills} title={fallbackTitle} />
-      return targetZone
-        ? renderZoneSection('skills', targetZone, defZone, fallbackTitle, node, 'skills')
-        : wrapSection('skills', fallbackTitle, node, defZone, 'skills')
-    }
-
-    const titleNode = <h4 className="cv-sidebar-title">⚡ {fallbackTitle}</h4>
+    const titleText = fallbackTitle
+    const titleNode = customTitleNode || <h4 className="cv-sidebar-title">⚡ {titleText}</h4>
     const titleBox = targetZone
-      ? renderZoneSection('skills_title', targetZone, defZone, `Título: ${fallbackTitle}`, titleNode, 'skills')
-      : wrapSection('skills_title', `Título: ${fallbackTitle}`, titleNode, defZone, 'skills')
+      ? renderZoneSection('skills_title', targetZone, defZone, `Título: ${titleText}`, titleNode, 'skills')
+      : wrapSection('skills_title', `Título: ${titleText}`, titleNode, defZone, 'skills')
 
     const itemBoxes = data.skills.map((s, idx) => {
       const itemId = getAtomicItemId('skills', s, idx)
@@ -597,10 +634,18 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
         : wrapSection(itemId, boxTitle, content, defZone, 'skills')
     })
 
+    const wrappedItems = containerWrapper
+      ? containerWrapper(itemBoxes)
+      : (
+        <div className="cv-atomic-items-container cv-skills-list" style={{ display: 'flex', flexWrap: 'wrap', gap: '0.45rem' }}>
+          {itemBoxes}
+        </div>
+      )
+
     return (
       <React.Fragment key="skills_atomic_group">
         {titleBox}
-        {itemBoxes}
+        {wrappedItems}
       </React.Fragment>
     )
   }
@@ -609,21 +654,16 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
     targetZone?: 'left' | 'right',
     defZone: 'left' | 'right' = 'right',
     fallbackTitle = 'Licenças & Certificações',
-    fallbackNode?: React.ReactNode
+    customTitleNode?: React.ReactNode,
+    containerWrapper?: (items: React.ReactNode) => React.ReactNode
   ) => {
     if (!data.certificates || data.certificates.length === 0) return null
 
-    if (!isFreeCanvas) {
-      const node = fallbackNode || <BlockCertificates certificates={data.certificates} title={fallbackTitle} />
-      return targetZone
-        ? renderZoneSection('certificates', targetZone, defZone, fallbackTitle, node, 'certificates')
-        : wrapSection('certificates', fallbackTitle, node, defZone, 'certificates')
-    }
-
-    const titleNode = <h3 className="cv-section-title">📜 {fallbackTitle}</h3>
+    const titleText = fallbackTitle
+    const titleNode = customTitleNode || <h3 className="cv-section-title">📜 {titleText}</h3>
     const titleBox = targetZone
-      ? renderZoneSection('certificates_title', targetZone, defZone, `Título: ${fallbackTitle}`, titleNode, 'certificates')
-      : wrapSection('certificates_title', `Título: ${fallbackTitle}`, titleNode, defZone, 'certificates')
+      ? renderZoneSection('certificates_title', targetZone, defZone, `Título: ${titleText}`, titleNode, 'certificates')
+      : wrapSection('certificates_title', `Título: ${titleText}`, titleNode, defZone, 'certificates')
 
     const itemBoxes = data.certificates.map((c, idx) => {
       const itemId = getAtomicItemId('certificates', c, idx)
@@ -637,10 +677,18 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
         : wrapSection(itemId, boxTitle, content, defZone, 'certificates')
     })
 
+    const wrappedItems = containerWrapper
+      ? containerWrapper(itemBoxes)
+      : (
+        <div className="cv-atomic-items-container cv-certificates-list" style={{ display: 'flex', flexWrap: 'wrap', gap: '0.45rem' }}>
+          {itemBoxes}
+        </div>
+      )
+
     return (
       <React.Fragment key="certificates_atomic_group">
         {titleBox}
-        {itemBoxes}
+        {wrappedItems}
       </React.Fragment>
     )
   }
@@ -649,26 +697,21 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
     targetZone?: 'left' | 'right',
     defZone: 'left' | 'right' = 'left',
     fallbackTitle = 'Interesses & Pesquisa',
-    fallbackNode?: React.ReactNode
+    customTitleNode?: React.ReactNode,
+    containerWrapper?: (items: React.ReactNode) => React.ReactNode
   ) => {
     if (!data.interests || data.interests.length === 0) return null
 
-    if (!isFreeCanvas) {
-      const node = fallbackNode || <BlockInterests interests={data.interests} title={fallbackTitle} />
-      return targetZone
-        ? renderZoneSection('interests', targetZone, defZone, fallbackTitle, node, 'interests')
-        : wrapSection('interests', fallbackTitle, node, defZone, 'interests')
-    }
-
-    const titleNode = <h4 className="cv-sidebar-title">💡 {fallbackTitle}</h4>
+    const titleText = fallbackTitle
+    const titleNode = customTitleNode || <h4 className="cv-sidebar-title">💡 {titleText}</h4>
     const titleBox = targetZone
-      ? renderZoneSection('interests_title', targetZone, defZone, `Título: ${fallbackTitle}`, titleNode, 'interests')
-      : wrapSection('interests_title', `Título: ${fallbackTitle}`, titleNode, defZone, 'interests')
+      ? renderZoneSection('interests_title', targetZone, defZone, `Título: ${titleText}`, titleNode, 'interests')
+      : wrapSection('interests_title', `Título: ${titleText}`, titleNode, defZone, 'interests')
 
     const itemBoxes = data.interests.map((it, idx) => {
       const itemId = getAtomicItemId('interests', it, idx)
       const itemDims = structureConfig?.sectionDimensions?.[itemId]
-      const variant = itemDims?.variant || 'card_box'
+      const variant = itemDims?.variant || 'pill_badge'
       const boxTitle = it.name ? `Interesse: ${it.name}` : `Interesse #${idx + 1}`
       const content = <AtomicItemRenderer category="interests" item={it} variant={variant} />
 
@@ -677,10 +720,18 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
         : wrapSection(itemId, boxTitle, content, defZone, 'interests')
     })
 
+    const wrappedItems = containerWrapper
+      ? containerWrapper(itemBoxes)
+      : (
+        <div className="cv-atomic-items-container cv-interests-list" style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
+          {itemBoxes}
+        </div>
+      )
+
     return (
       <React.Fragment key="interests_atomic_group">
         {titleBox}
-        {itemBoxes}
+        {wrappedItems}
       </React.Fragment>
     )
   }
@@ -689,21 +740,16 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
     targetZone?: 'left' | 'right',
     defZone: 'left' | 'right' = 'right',
     fallbackTitle = 'Referências',
-    fallbackNode?: React.ReactNode
+    customTitleNode?: React.ReactNode,
+    containerWrapper?: (items: React.ReactNode) => React.ReactNode
   ) => {
     if (!data.references || data.references.length === 0) return null
 
-    if (!isFreeCanvas) {
-      const node = fallbackNode || <BlockReferences references={data.references} title={fallbackTitle} />
-      return targetZone
-        ? renderZoneSection('references', targetZone, defZone, fallbackTitle, node, 'references')
-        : wrapSection('references', fallbackTitle, node, defZone, 'references')
-    }
-
-    const titleNode = <h3 className="cv-section-title">👥 {fallbackTitle}</h3>
+    const titleText = fallbackTitle
+    const titleNode = customTitleNode || <h3 className="cv-section-title">👥 {titleText}</h3>
     const titleBox = targetZone
-      ? renderZoneSection('references_title', targetZone, defZone, `Título: ${fallbackTitle}`, titleNode, 'references')
-      : wrapSection('references_title', `Título: ${fallbackTitle}`, titleNode, defZone, 'references')
+      ? renderZoneSection('references_title', targetZone, defZone, `Título: ${titleText}`, titleNode, 'references')
+      : wrapSection('references_title', `Título: ${titleText}`, titleNode, defZone, 'references')
 
     const itemBoxes = data.references.map((r, idx) => {
       const itemId = getAtomicItemId('references', r, idx)
@@ -715,10 +761,18 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
         : wrapSection(itemId, boxTitle, content, defZone, 'references')
     })
 
+    const wrappedItems = containerWrapper
+      ? containerWrapper(itemBoxes)
+      : (
+        <div className="cv-atomic-items-container cv-references-list" style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+          {itemBoxes}
+        </div>
+      )
+
     return (
       <React.Fragment key="references_atomic_group">
         {titleBox}
-        {itemBoxes}
+        {wrappedItems}
       </React.Fragment>
     )
   }
@@ -1891,151 +1945,125 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
               </div>
             ))}
 
-            {renderWorkSection(undefined, undefined, 'EXPERIÊNCIA PROFISSIONAL', (
-              <section className="cv-section">
-                <h2 className="cv-math-section-title">
-                  💼 EXPERIÊNCIA PROFISSIONAL
-                </h2>
-                <div className="cv-math-work-list">
-                  {data.work?.map((w, idx) => (
-                    <div key={idx} className="cv-math-work-item cv-avoid-break">
-                      <div className="cv-item-header">
-                        <span className="cv-item-title">{w.position}</span>
-                        <span className="cv-item-date">
-                          {w.startDate} — {w.endDate || 'Presente'}
-                        </span>
-                      </div>
-                      <div className="cv-item-sub">
-                        {w.url ? (
-                          <a href={w.url} target="_blank" rel="noreferrer" className="cv-link">
-                            {w.name} ↗
-                          </a>
-                        ) : (
-                          w.name
-                        )}
-                      </div>
-                      {w.summary && <p className="cv-item-desc">{w.summary}</p>}
-                      {w.highlights && w.highlights.length > 0 && (
-                        <ul className="cv-math-bullets">
-                          {w.highlights.map((hl, hIdx) => (
-                            <li key={hIdx}>{hl}</li>
-                          ))}
-                        </ul>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </section>
-            ))}
+            {renderWorkSection(
+              undefined,
+              undefined,
+              'EXPERIÊNCIA PROFISSIONAL',
+              <h2 className="cv-math-section-title">
+                💼 EXPERIÊNCIA PROFISSIONAL
+              </h2>,
+              (items) => (
+                <section className="cv-section">
+                  <div className="cv-math-work-list">
+                    {items}
+                  </div>
+                </section>
+              )
+            )}
 
-            {renderProjectsSection(undefined, undefined, 'PROJETOS EM DESTAQUE & REPOSITÓRIOS', (
-              <section className="cv-section">
-                <h2 className="cv-math-section-title">
-                  🚀 PROJETOS EM DESTAQUE & REPOSITÓRIOS
-                </h2>
-                <div className={`cv-math-grid projects-grid ${getGridClass(data.projects?.length || 0)}`}>
-                  {data.projects?.map((pr, idx) => (
-                    <div key={idx} className="cv-math-project-card cv-avoid-break">
-                      <div className="cv-item-header">
-                        <span className="cv-item-title">
-                          {pr.url ? (
-                            <a href={pr.url} target="_blank" rel="noreferrer" className="cv-link">
-                              {pr.name} ↗
-                            </a>
-                          ) : (
-                            pr.name
-                          )}
-                        </span>
-                      </div>
-                      {pr.description && <p className="cv-item-desc">{pr.description}</p>}
-                      {pr.highlights && pr.highlights.length > 0 && (
-                        <ul className="cv-math-bullets">
-                          {pr.highlights.map((hl, hIdx) => (
-                            <li key={hIdx}>{hl}</li>
-                          ))}
-                        </ul>
-                      )}
-                      {pr.keywords && pr.keywords.length > 0 && (
-                        <div className="cv-math-tags">
-                          {pr.keywords.map((kw, kIdx) => (
-                            <span key={kIdx} className="cv-badge">{kw}</span>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </section>
-            ))}
+            {renderProjectsSection(
+              undefined,
+              undefined,
+              'PROJETOS EM DESTAQUE & REPOSITÓRIOS',
+              <h2 className="cv-math-section-title">
+                🚀 PROJETOS EM DESTAQUE & REPOSITÓRIOS
+              </h2>,
+              (items) => (
+                <section className="cv-section">
+                  <div className={`cv-math-grid projects-grid ${getGridClass(data.projects?.length || 0)}`}>
+                    {items}
+                  </div>
+                </section>
+              )
+            )}
 
-            {renderSkillsSection(undefined, undefined, 'COMPETÊNCIAS & HABILIDADES TÉCNICAS', (
-              <section className="cv-section">
-                <h2 className="cv-math-section-title">
-                  ⚡ COMPETÊNCIAS & HABILIDADES TÉCNICAS
-                </h2>
-                <div className={`cv-math-grid skills-grid ${getGridClass(data.skills?.length || 0)}`}>
-                  {data.skills?.map((sk, idx) => (
-                    <div key={idx} className="cv-math-skill-card cv-avoid-break">
-                      <div className="cv-math-skill-title">
-                        {sk.name.toUpperCase()} {sk.level ? `(${sk.level.toUpperCase()})` : ''}
-                      </div>
-                      {sk.keywords && sk.keywords.length > 0 && (
-                        <div className="cv-math-tags">
-                          {sk.keywords.map((kw, kIdx) => (
-                            <span key={kIdx} className="cv-badge">{kw}</span>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </section>
-            ))}
+            {renderSkillsSection(
+              undefined,
+              undefined,
+              'COMPETÊNCIAS & HABILIDADES TÉCNICAS',
+              <h2 className="cv-math-section-title">
+                ⚡ COMPETÊNCIAS & HABILIDADES TÉCNICAS
+              </h2>,
+              (items) => (
+                <section className="cv-section">
+                  <div className={`cv-math-grid skills-grid ${getGridClass(data.skills?.length || 0)}`}>
+                    {items}
+                  </div>
+                </section>
+              )
+            )}
 
-            {renderEducationSection(undefined, undefined, 'FORMAÇÃO ACADÊMICA', (
-              <section className="cv-section">
-                <h2 className="cv-math-section-title">
-                  🎓 FORMAÇÃO ACADÊMICA
-                </h2>
-                <div className={`cv-math-grid education-grid ${getGridClass(data.education?.length || 0)}`}>
-                  {data.education?.map((edu, idx) => (
-                    <div key={idx} className="cv-math-edu-card cv-avoid-break">
-                      <div className="cv-item-header" style={{ marginBottom: '0.2rem' }}>
-                        <span style={{ fontSize: '1rem' }}>🏛️</span>
-                        <span className="cv-item-date">{edu.startDate} — {edu.endDate || 'Presente'}</span>
-                      </div>
-                      <div style={{ fontWeight: 700, fontSize: '0.88rem' }}>
-                        {edu.studyType ? `${edu.studyType} em ` : ''}{edu.area}
-                      </div>
-                      <div style={{ fontSize: '0.8rem', opacity: 0.85, marginTop: '0.15rem' }}>
-                        {edu.institution}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </section>
-            ))}
+            {renderEducationSection(
+              undefined,
+              undefined,
+              'FORMAÇÃO ACADÊMICA',
+              <h2 className="cv-math-section-title">
+                🎓 FORMAÇÃO ACADÊMICA
+              </h2>,
+              (items) => (
+                <section className="cv-section">
+                  <div className={`cv-math-grid education-grid ${getGridClass(data.education?.length || 0)}`}>
+                    {items}
+                  </div>
+                </section>
+              )
+            )}
 
-            {renderLanguagesSection(undefined, undefined, 'IDIOMAS & FLUÊNCIA', (
-              <section className="cv-section">
-                <h2 className="cv-math-section-title">
-                  🌐 IDIOMAS & FLUÊNCIA
-                </h2>
-                <div className={`cv-math-grid languages-grid ${getGridClass(data.languages?.length || 0)}`}>
-                  {data.languages?.map((l, idx) => (
-                    <div key={idx} className="cv-math-lang-card cv-avoid-break">
-                      <span className="cv-lang-bullet">◆</span>
-                      <span style={{ fontWeight: 700 }}>{l.language}</span>
-                      <span style={{ fontSize: '0.8rem', opacity: 0.85 }}>{l.fluency}</span>
-                    </div>
-                  ))}
-                </div>
-              </section>
-            ))}
+            {renderLanguagesSection(
+              undefined,
+              undefined,
+              'IDIOMAS & FLUÊNCIA',
+              <h2 className="cv-math-section-title">
+                🌐 IDIOMAS & FLUÊNCIA
+              </h2>,
+              (items) => (
+                <section className="cv-section">
+                  <div className={`cv-math-grid languages-grid ${getGridClass(data.languages?.length || 0)}`}>
+                    {items}
+                  </div>
+                </section>
+              )
+            )}
 
-            {renderCertificatesSection(undefined, undefined, 'CERTIFICAÇÕES & LICENÇAS')}
-            {renderInterestsSection(undefined, undefined, 'INTERESSES & FRENTES DE PESQUISA')}
-            {renderReferencesSection(undefined, undefined, 'REFERÊNCIAS')}
+            {renderCertificatesSection(
+              undefined,
+              undefined,
+              'CERTIFICAÇÕES & LICENÇAS',
+              <h2 className="cv-math-section-title">📜 CERTIFICAÇÕES & LICENÇAS</h2>,
+              (items) => (
+                <section className="cv-section">
+                  <div className={`cv-math-grid certificates-grid ${getGridClass(data.certificates?.length || 0)}`}>
+                    {items}
+                  </div>
+                </section>
+              )
+            )}
+            {renderInterestsSection(
+              undefined,
+              undefined,
+              'INTERESSES & FRENTES DE PESQUISA',
+              <h2 className="cv-math-section-title">💡 INTERESSES & FRENTES DE PESQUISA</h2>,
+              (items) => (
+                <section className="cv-section">
+                  <div className={`cv-math-grid interests-grid ${getGridClass(data.interests?.length || 0)}`}>
+                    {items}
+                  </div>
+                </section>
+              )
+            )}
+            {renderReferencesSection(
+              undefined,
+              undefined,
+              'REFERÊNCIAS',
+              <h2 className="cv-math-section-title">👥 REFERÊNCIAS</h2>,
+              (items) => (
+                <section className="cv-section">
+                  <div className="cv-math-work-list">
+                    {items}
+                  </div>
+                </section>
+              )
+            )}
           </div>
         </div>
       )

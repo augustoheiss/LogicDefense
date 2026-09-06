@@ -15,6 +15,7 @@ interface CanvasElementsPaletteProps {
   structureConfig: LayoutStructureConfig
   onUpdateStructureConfig: (config: LayoutStructureConfig) => void
   onResetStructure: () => void
+  onAutoPackBlocks?: () => void
   onUpdatePhoto?: (photoUrlOrBase64?: string, posX?: number, posY?: number, scale?: number) => void
 }
 
@@ -37,6 +38,7 @@ export const CanvasElementsPalette: React.FC<CanvasElementsPaletteProps> = ({
   structureConfig,
   onUpdateStructureConfig,
   onResetStructure,
+  onAutoPackBlocks,
   onUpdatePhoto
 }) => {
   const fileInputRef = React.useRef<HTMLInputElement>(null)
@@ -460,14 +462,40 @@ export const CanvasElementsPalette: React.FC<CanvasElementsPaletteProps> = ({
             Personalize variantes, visibilidade e ordem dos blocos
           </span>
         </div>
-        <button
-          type="button"
-          className="cv-elements-palette__reset-btn"
-          onClick={onResetStructure}
-          title="Redefinir todas as alterações estruturais para o padrão do modelo"
-        >
-          ↺ Restaurar
-        </button>
+        <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+          {onAutoPackBlocks && (
+            <button
+              type="button"
+              className="cv-elements-palette__pack-btn"
+              onClick={onAutoPackBlocks}
+              title="Compactar blocos e eliminar espaços vazios/vácuos automaticamente"
+              style={{
+                padding: '0.35rem 0.65rem',
+                fontSize: '0.74rem',
+                borderRadius: '6px',
+                border: '1px solid rgba(16, 185, 129, 0.4)',
+                background: 'rgba(16, 185, 129, 0.15)',
+                color: '#6ee7b7',
+                cursor: 'pointer',
+                fontWeight: 600,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.25rem'
+              }}
+            >
+              <span>⚡</span>
+              <span>Compactar</span>
+            </button>
+          )}
+          <button
+            type="button"
+            className="cv-elements-palette__reset-btn"
+            onClick={onResetStructure}
+            title="Redefinir todas as alterações estruturais para o padrão do modelo"
+          >
+            ↺ Restaurar
+          </button>
+        </div>
       </div>
 
       {totalHidden > 0 && (

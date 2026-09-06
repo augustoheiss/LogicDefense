@@ -331,6 +331,13 @@ export const AtomicItemRenderer: React.FC<AtomicItemRendererProps> = ({
           )}
         </div>
         {p.description && <p className="cv-item-desc">{p.description}</p>}
+        {p.highlights && p.highlights.length > 0 && (
+          <ul className="cv-item-bullets">
+            {p.highlights.map((h, i) => (
+              <li key={i}>{h}</li>
+            ))}
+          </ul>
+        )}
         {p.keywords && p.keywords.length > 0 && (
           <div className="cv-project-tags">
             {p.keywords.map((k, i) => (

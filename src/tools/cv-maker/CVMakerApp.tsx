@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react'
-import type { CVData, CVVersions, TextVariant, ThemeVariant, LayoutVariant, ViewMode, CoverLetter, CVDesignConfig, LayoutStructureConfig } from './types/cv'
+import type { CVData, CVVersions, TextVariant, ThemeVariant, LayoutVariant, ViewMode, CoverLetter, CVDesignConfig, LayoutStructureConfig, SectionBoxDimensions } from './types/cv'
 import { DEFAULT_DESIGN_CONFIG } from './types/cv'
 import { DEFAULT_JOHN_DOE_YAML } from './templates/defaultTemplate'
 import { parseYamlToCV, cvToYaml, debounce } from './services/yamlService'
@@ -141,6 +141,46 @@ export const CVMakerApp: React.FC = () => {
       localStorage.setItem(STORAGE_STRUCTURES_KEY, JSON.stringify(updated))
       return updated
     })
+  }
+
+  // Compactar Blocos e Eliminar Vácuos Artificiais (Opção A)
+  const handleAutoPackBlocks = () => {
+    if (!currentStructureConfig || !currentStructureConfig.sectionDimensions) return
+    const currentDims = currentStructureConfig.sectionDimensions
+    const cleanedDims: Record<string, SectionBoxDimensions> = {}
+    let countCleaned = 0
+
+    Object.entries(currentDims).forEach(([key, dims]) => {
+      if (!dims) return
+      const {
+        minHeightPx,
+        maxHeightPx,
+        marginTopPx,
+        marginLeftPx,
+        ...keepProperties
+      } = dims
+
+      if (minHeightPx || maxHeightPx || marginTopPx || marginLeftPx) {
+        countCleaned++
+      }
+
+      cleanedDims[key] = {
+        ...keepProperties
+      }
+    })
+
+    const updatedConfig: LayoutStructureConfig = {
+      ...currentStructureConfig,
+      sectionDimensions: cleanedDims
+    }
+
+    handleUpdateStructureConfig(updatedConfig)
+
+    setTimeout(() => {
+      window.dispatchEvent(new CustomEvent('cv-box-moved'))
+    }, 50)
+
+    alert(`⚡ ${countCleaned > 0 ? `${countCleaned} blocos foram compactados` : 'Blocos já se encontram compactados'}!\n• Alturas forçadas e margens desnecessárias foram eliminadas.\n• Variantes visuais, larguras de coluna e ordem foram preservadas.`)
   }
 
   // Modals & Pro Licensing State
@@ -642,6 +682,7 @@ export const CVMakerApp: React.FC = () => {
                 structureConfig={currentStructureConfig}
                 onUpdateStructureConfig={handleUpdateStructureConfig}
                 onResetStructure={handleResetStructure}
+                onAutoPackBlocks={handleAutoPackBlocks}
                 onUpdatePhoto={handleSavePhoto}
               />
             )}
@@ -661,6 +702,7 @@ export const CVMakerApp: React.FC = () => {
             isFreeCanvasActive={currentStructureConfig.isFreeCanvasActive}
             onToggleFreeCanvas={handleToggleFreeCanvas}
             onResetStructure={handleResetStructure}
+            onAutoPackBlocks={handleAutoPackBlocks}
             activePersona={activePersona}
             onPersonaChange={handlePersonaChange}
             activeLayout={activeLayout}

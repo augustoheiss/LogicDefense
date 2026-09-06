@@ -6,6 +6,7 @@ interface CVToolbarProps {
   isFreeCanvasActive?: boolean
   onToggleFreeCanvas?: () => void
   onResetStructure?: () => void
+  onAutoPackBlocks?: () => void
   activePersona: TextVariant
   onPersonaChange: (p: TextVariant) => void
   activeLayout: LayoutVariant
@@ -49,6 +50,7 @@ export const CVToolbar: React.FC<CVToolbarProps> = ({
   isFreeCanvasActive = false,
   onToggleFreeCanvas,
   onResetStructure,
+  onAutoPackBlocks,
   activePersona,
   onPersonaChange,
   activeLayout,
@@ -144,6 +146,32 @@ export const CVToolbar: React.FC<CVToolbarProps> = ({
               }}
             >
               ↺ Resetar
+            </button>
+          )}
+
+          {onAutoPackBlocks && (
+            <button
+              type="button"
+              className="cv-btn-canvas-pack"
+              onClick={onAutoPackBlocks}
+              title="Compactar blocos e eliminar espaços vazios/vácuos automaticamente"
+              style={{
+                padding: '0.35rem 0.65rem',
+                fontSize: '0.78rem',
+                borderRadius: '6px',
+                border: '1px solid rgba(16, 185, 129, 0.4)',
+                background: 'rgba(16, 185, 129, 0.15)',
+                color: '#6ee7b7',
+                cursor: 'pointer',
+                fontWeight: 600,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.25rem',
+                transition: 'all 0.2s ease'
+              }}
+            >
+              <span>⚡</span>
+              <span>Compactar</span>
             </button>
           )}
         </div>
@@ -437,6 +465,28 @@ export const CVToolbar: React.FC<CVToolbarProps> = ({
                     </div>
                     <div className="cv-dropdown-item__desc" style={{ color: '#bae6fd' }}>
                       Bissecção Real-DOM para caber perfeitamente em 1 folha
+                    </div>
+                  </div>
+                </button>
+              )}
+
+              {/* Opção 3: Compactar Blocos (Eliminar Vácuos e Espaços Vazios) */}
+              {onAutoPackBlocks && (
+                <button
+                  type="button"
+                  className="cv-dropdown-item"
+                  onClick={() => {
+                    closeDropdowns()
+                    onAutoPackBlocks()
+                  }}
+                  style={{ background: 'rgba(16, 185, 129, 0.12)', color: '#34d399', fontWeight: 600 }}
+                >
+                  <div className="cv-dropdown-item__content">
+                    <div className="cv-dropdown-item__title">
+                      <span>⚡</span> <strong>Compactar Blocos (Eliminar Vácuos)</strong>
+                    </div>
+                    <div className="cv-dropdown-item__desc" style={{ color: '#a7f3d0' }}>
+                      Remove alturas e margens forçadas, unindo blocos automaticamente
                     </div>
                   </div>
                 </button>
