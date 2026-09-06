@@ -611,18 +611,27 @@ aside .cv-structural-box,
   user-select: none;
 }
 
-/* Exibe a mini-toolbar no hover ou durante movimentação */
+/* Exibe a mini-toolbar no hover, durante movimentação ou quando o bloco está SELECIONADO */
 .cv-structural-box--active:hover .cv-box-mini-toolbar,
+.cv-structural-box.is-selected .cv-box-mini-toolbar,
+.cv-box-mini-toolbar.is-selected,
 .cv-structural-box.is-moving .cv-box-mini-toolbar {
-  opacity: 1;
-  visibility: visible;
-  pointer-events: auto;
+  opacity: 1 !important;
+  visibility: visible !important;
+  pointer-events: auto !important;
 }
 
 .cv-structural-box:has(.cv-box-popover) .cv-box-mini-toolbar {
   opacity: 1 !important;
   visibility: visible !important;
   pointer-events: auto !important;
+}
+
+/* Bloco Selecionado - Borda destacada e z-index elevado para garantir acesso total */
+.cv-structural-box.is-selected {
+  border-color: #38bdf8 !important;
+  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.45), 0 8px 24px rgba(0, 0, 0, 0.35) !important;
+  z-index: 80 !important;
 }
 
 .cv-structural-box.is-moving {
@@ -955,6 +964,45 @@ aside .cv-structural-box,
 .cv-popover-zero-btn:hover {
   background: rgba(255, 255, 255, 0.2);
   color: #ffffff;
+}
+
+/* Controle de Camadas e Z-Index no Popover */
+.cv-popover-layer-row {
+  border-top: 1px solid rgba(51, 65, 85, 0.4);
+  padding-top: 6px;
+}
+
+.cv-popover-layer-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.cv-layer-btn {
+  height: 24px;
+  padding: 0 6px;
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 4px;
+  color: #cbd5e1;
+  font-size: 0.7rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.cv-layer-btn:hover {
+  background: #0284c7;
+  color: #ffffff;
+  border-color: #38bdf8;
+}
+
+.cv-layer-val {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #38bdf8;
+  min-width: 24px;
+  text-align: center;
 }
 
 .cv-popover-align-row {
@@ -1552,6 +1600,7 @@ aside .cv-structural-box--active,
 /* Supressão Total de Avisos e Efeitos de Colisão no Estado de Impressão/PDF */
 .cv-is-printing .cv-structural-box,
 .cv-is-printing .cv-structural-box--active,
+.cv-is-printing .cv-structural-box.is-selected,
 .cv-is-printing .cv-structural-box.is-collision,
 .cv-is-printing .cv-structural-box.is-overflowing,
 .cv-is-printing .cv-structural-box.is-moving,

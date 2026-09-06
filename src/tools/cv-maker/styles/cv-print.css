@@ -135,6 +135,7 @@
 
   .cv-structural-box,
   .cv-structural-box--active,
+  .cv-structural-box.is-selected,
   .cv-structural-box.is-collision,
   .cv-structural-box.is-overflowing,
   .cv-structural-box.is-moving,

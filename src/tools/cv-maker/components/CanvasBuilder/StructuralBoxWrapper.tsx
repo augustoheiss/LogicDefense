@@ -1,7 +1,6 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react'
 import type { SectionBoxDimensions } from '../../types/cv'
 import { AVAILABLE_BOX_FONTS } from '../../types/cv'
-import { CATEGORY_VARIANTS_MAP } from '../../types/variants'
 
 interface StructuralBoxWrapperProps {
   sectionId: string
@@ -34,7 +33,6 @@ export const StructuralBoxWrapper: React.FC<StructuralBoxWrapperProps> = ({
   onSwitchZone,
   onResetDimensions,
   onToggleHide,
-  onSelectVariant,
   children
 }) => {
   const containerRef = useRef<HTMLDivElement>(null)
@@ -44,20 +42,33 @@ export const StructuralBoxWrapper: React.FC<StructuralBoxWrapperProps> = ({
   const [hasCollision, setHasCollision] = useState<boolean>(false)
   const [isResizing, setIsResizing] = useState<boolean>(false)
   const [isMoving, setIsMoving] = useState<boolean>(false)
+  const [isSelected, setIsSelected] = useState<boolean>(false)
   const [resizeType, setResizeType] = useState<string | null>(null)
-  const [activePopover, setActivePopover] = useState<'style' | 'position' | 'font' | null>(null)
+  const [activePopover, setActivePopover] = useState<'position' | 'font' | null>(null)
 
-  // Fecha o popover ativo ao clicar fora da mini-toolbar
+  // Gerenciamento de foco / seleção ativa global para trazer bloco sobreposto imediatamente para a frente
   useEffect(() => {
-    if (!activePopover) return
+    const handleBoxSelected = (e: any) => {
+      if (e.detail?.id) {
+        setIsSelected(e.detail.id === sectionId)
+      }
+    }
+    window.addEventListener('cv-select-box' as any, handleBoxSelected)
+    return () => window.removeEventListener('cv-select-box' as any, handleBoxSelected)
+  }, [sectionId])
+
+  // Desseleciona e fecha popover ao clicar fora deste box na folha
+  useEffect(() => {
+    if (!isSelected && !activePopover) return
     const handleClickOutside = (e: MouseEvent) => {
-      if (toolbarRef.current && !toolbarRef.current.contains(e.target as Node)) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setIsSelected(false)
         setActivePopover(null)
       }
     }
     document.addEventListener('pointerdown', handleClickOutside)
     return () => document.removeEventListener('pointerdown', handleClickOutside)
-  }, [activePopover])
+  }, [isSelected, activePopover])
 
   // Medição contínua de overflow para evitar estouro da folha A4
   useEffect(() => {
@@ -121,6 +132,13 @@ export const StructuralBoxWrapper: React.FC<StructuralBoxWrapperProps> = ({
     }
   }, [isFreeCanvasActive, dimensions, isMoving])
 
+  // Selecionar box ao clicar nele
+  const handleSelectThisBox = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    setIsSelected(true)
+    window.dispatchEvent(new CustomEvent('cv-select-box', { detail: { id: sectionId } }))
+  }
+
   // Manipulação contínua de redimensionamento nas 4 bordas e 4 cantos com área ampla de toque/mouse
   const handlePointerDown = useCallback((
     e: React.PointerEvent<HTMLDivElement>,
@@ -128,6 +146,10 @@ export const StructuralBoxWrapper: React.FC<StructuralBoxWrapperProps> = ({
   ) => {
     e.preventDefault()
     e.stopPropagation()
+
+    // Ao começar a redimensionar, seleciona imediatamente o box
+    setIsSelected(true)
+    window.dispatchEvent(new CustomEvent('cv-select-box', { detail: { id: sectionId } }))
 
     const targetEl = e.currentTarget
     targetEl.setPointerCapture(e.pointerId)
@@ -138,7 +160,6 @@ export const StructuralBoxWrapper: React.FC<StructuralBoxWrapperProps> = ({
     const startWidth = currentContainer?.getBoundingClientRect().width || 200
     const startHeight = currentContainer?.getBoundingClientRect().height || 100
 
-    // Referência de largura: preferencialmente o card A4 útil para cálculo proporcional sem travas de colunas estreitas
     const a4Card = currentContainer?.closest('.cv-card') as HTMLElement | null
     const parentContainer = currentContainer?.parentElement as HTMLElement | null
     const baseWidth = a4Card?.clientWidth || parentContainer?.clientWidth || 800
@@ -154,7 +175,7 @@ export const StructuralBoxWrapper: React.FC<StructuralBoxWrapperProps> = ({
       const deltaX = moveEvt.clientX - startX
       const deltaY = moveEvt.clientY - startY
 
-      // Largura: cantos e bordas direitas aumentam com deltaX; esquerdas com deltaX invertido
+      // Largura
       if (type === 'width' || type === 'corner-se' || type === 'corner-ne') {
         const newWidthPx = Math.max(40, startWidth + deltaX)
         latestWidthPercent = Math.max(10, Math.min(100, Math.round((newWidthPx / baseWidth) * 100)))
@@ -171,20 +192,26 @@ export const StructuralBoxWrapper: React.FC<StructuralBoxWrapperProps> = ({
         }
       }
 
-      // Altura: bordas e cantos inferiores aumentam com deltaY; superiores com deltaY invertido
+      // Altura
       if (type === 'height' || type === 'corner-se' || type === 'corner-sw') {
         latestHeightPx = Math.max(20, Math.min(1500, Math.round(startHeight + deltaY)))
         if (containerRef.current) {
           containerRef.current.style.minHeight = `${latestHeightPx}px`
           containerRef.current.style.maxHeight = `${latestHeightPx}px`
-          containerRef.current.style.overflow = 'hidden'
+        }
+        if (contentRef.current) {
+          contentRef.current.style.maxHeight = `${latestHeightPx}px`
+          contentRef.current.style.overflow = 'hidden'
         }
       } else if (type === 'height-top' || type === 'corner-ne' || type === 'corner-nw') {
         latestHeightPx = Math.max(20, Math.min(1500, Math.round(startHeight - deltaY)))
         if (containerRef.current) {
           containerRef.current.style.minHeight = `${latestHeightPx}px`
           containerRef.current.style.maxHeight = `${latestHeightPx}px`
-          containerRef.current.style.overflow = 'hidden'
+        }
+        if (contentRef.current) {
+          contentRef.current.style.maxHeight = `${latestHeightPx}px`
+          contentRef.current.style.overflow = 'hidden'
         }
       }
     }
@@ -194,7 +221,7 @@ export const StructuralBoxWrapper: React.FC<StructuralBoxWrapperProps> = ({
       try {
         targetEl.releasePointerCapture(upEvt.pointerId)
       } catch {
-        // Ignora se já liberado
+        // Ignora
       }
       window.removeEventListener('pointermove', onPointerMove)
       window.removeEventListener('pointerup', onPointerUp)
@@ -212,13 +239,16 @@ export const StructuralBoxWrapper: React.FC<StructuralBoxWrapperProps> = ({
 
     window.addEventListener('pointermove', onPointerMove)
     window.addEventListener('pointerup', onPointerUp)
-  }, [dimensions, onUpdateDimensions])
+  }, [dimensions, onUpdateDimensions, sectionId])
 
   // Manipulação de Arraste 2D Bidimensional pelo Grip da Mini-Toolbar
   const handleMovePointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     if (e.button !== 0) return
     e.preventDefault()
     e.stopPropagation()
+
+    setIsSelected(true)
+    window.dispatchEvent(new CustomEvent('cv-select-box', { detail: { id: sectionId } }))
 
     const targetEl = e.currentTarget
     targetEl.setPointerCapture(e.pointerId)
@@ -235,7 +265,7 @@ export const StructuralBoxWrapper: React.FC<StructuralBoxWrapperProps> = ({
 
       if (containerRef.current) {
         containerRef.current.style.transform = `translate(${deltaX}px, ${deltaY}px)`
-        containerRef.current.style.zIndex = '120'
+        containerRef.current.style.zIndex = '130'
         containerRef.current.style.boxShadow = '0 14px 32px rgba(0, 0, 0, 0.45)'
       }
 
@@ -252,7 +282,7 @@ export const StructuralBoxWrapper: React.FC<StructuralBoxWrapperProps> = ({
       try {
         targetEl.releasePointerCapture(upEvt.pointerId)
       } catch {
-        // Ignora caso já liberado
+        // Ignora
       }
       window.removeEventListener('pointermove', onPointerMove)
       window.removeEventListener('pointerup', onPointerUp)
@@ -288,7 +318,7 @@ export const StructuralBoxWrapper: React.FC<StructuralBoxWrapperProps> = ({
 
     window.addEventListener('pointermove', onPointerMove)
     window.addEventListener('pointerup', onPointerUp)
-  }, [canSwitchZone, currentZone, dimensions, onSwitchZone, onUpdateDimensions])
+  }, [canSwitchZone, currentZone, dimensions, onSwitchZone, onUpdateDimensions, sectionId])
 
   // Ajuste rápido de margem vertical (Y)
   const handleAdjustMarginY = (delta: number) => {
@@ -308,6 +338,16 @@ export const StructuralBoxWrapper: React.FC<StructuralBoxWrapperProps> = ({
       ...dimensions,
       marginLeftPx: next,
       alignment: undefined
+    })
+  }
+
+  // Ajuste de nível de camada (Z-Index) em sobreposição
+  const handleAdjustZIndex = (delta: number) => {
+    const current = dimensions?.zIndex ?? 0
+    const next = Math.max(0, Math.min(50, current + delta))
+    onUpdateDimensions?.({
+      ...dimensions,
+      zIndex: next === 0 ? undefined : next
     })
   }
 
@@ -464,7 +504,6 @@ export const StructuralBoxWrapper: React.FC<StructuralBoxWrapperProps> = ({
 
   const fontScaleVal = dimensions?.fontSizeScale ?? 1.0
   const fontPercentVal = Math.round(fontScaleVal * 100)
-  const hasVariants = Boolean(category && CATEGORY_VARIANTS_MAP[category] && onSelectVariant)
   const hasCustomizations = Boolean(
     dimensions?.widthPercent ||
     dimensions?.minHeightPx ||
@@ -473,22 +512,36 @@ export const StructuralBoxWrapper: React.FC<StructuralBoxWrapperProps> = ({
     dimensions?.alignment ||
     dimensions?.variant ||
     dimensions?.fontFamily ||
+    dimensions?.zIndex ||
     (dimensions?.fontSizeScale && dimensions.fontSizeScale !== 1)
   )
+
+  // Z-Index Soberano: Selecionado > Arrastando > Camada definida > Colisão detectada
+  const activeZIndex = isMoving
+    ? 130
+    : isSelected
+      ? 85 + (dimensions?.zIndex ?? 0)
+      : typeof dimensions?.zIndex === 'number'
+        ? 10 + dimensions.zIndex
+        : hasCollision
+          ? 12
+          : undefined
 
   return (
     <div
       ref={containerRef}
-      className={`cv-structural-box cv-structural-box--active ${isResizing ? `is-resizing is-resizing-${resizeType}` : ''} ${isMoving ? 'is-moving' : ''} ${isOverflowing ? 'is-overflowing' : ''} ${hasCollision ? 'is-collision' : ''}`}
+      className={`cv-structural-box cv-structural-box--active ${isSelected ? 'is-selected' : ''} ${isResizing ? `is-resizing is-resizing-${resizeType}` : ''} ${isMoving ? 'is-moving' : ''} ${isOverflowing ? 'is-overflowing' : ''} ${hasCollision ? 'is-collision' : ''}`}
+      onClick={handleSelectThisBox}
       style={{
         width: widthStyle,
         minHeight: heightStyle,
         maxHeight: dimensions?.maxHeightPx ? heightStyle : undefined,
-        overflow: dimensions?.maxHeightPx ? 'hidden' : 'visible',
+        overflow: 'visible', // NUNCA corta alças ou mini-toolbar
         top: topStyle,
         left: leftStyle,
         marginLeft: marginLeftStyle,
         marginRight: marginRightStyle,
+        zIndex: activeZIndex,
         order: dimensions?.order,
         fontFamily: dimensions?.fontFamily ? `"${dimensions.fontFamily}", sans-serif` : undefined,
         fontSize: dimensions?.fontSizeScale && dimensions.fontSizeScale !== 1 ? `${dimensions.fontSizeScale}em` : undefined,
@@ -501,10 +554,10 @@ export const StructuralBoxWrapper: React.FC<StructuralBoxWrapperProps> = ({
       data-has-custom-font={dimensions?.fontFamily ? 'true' : undefined}
       data-has-custom-scale={dimensions?.fontSizeScale && dimensions.fontSizeScale !== 1 ? 'true' : undefined}
     >
-      {/* ── Nova Mini-Toolbar Compacta Flutuante (Estilo Notion/Figma) ── */}
+      {/* ── Mini-Toolbar Compacta Flutuante (Estilo Notion/Figma - NUNCA some ao sobrepor) ── */}
       <div
         ref={toolbarRef}
-        className="cv-box-mini-toolbar cv-no-print"
+        className={`cv-box-mini-toolbar cv-no-print ${isSelected ? 'is-selected' : ''}`}
         data-cv-interactive="true"
         onClick={e => e.stopPropagation()}
       >
@@ -522,24 +575,12 @@ export const StructuralBoxWrapper: React.FC<StructuralBoxWrapperProps> = ({
           <span className="cv-mini-badge">{dimensions.widthPercent}%</span>
         )}
 
-        {/* Botão 🎨 Estilo */}
-        {hasVariants && (
-          <button
-            type="button"
-            className={`cv-mini-btn ${activePopover === 'style' ? 'is-active' : ''}`}
-            onClick={() => setActivePopover(prev => prev === 'style' ? null : 'style')}
-            title="Escolher estilo/variante de visualização"
-          >
-            🎨 Estilo
-          </button>
-        )}
-
-        {/* Botão 📏 Posição & Margens */}
+        {/* Botão 📏 Posição & Margens & Camadas */}
         <button
           type="button"
           className={`cv-mini-btn ${activePopover === 'position' ? 'is-active' : ''}`}
           onClick={() => setActivePopover(prev => prev === 'position' ? null : 'position')}
-          title="Ajustar margens, recuos e encostar em blocos"
+          title="Ajustar margens, recuos, encostar e nível de camada"
         >
           📏 Posição
         </button>
@@ -590,37 +631,11 @@ export const StructuralBoxWrapper: React.FC<StructuralBoxWrapperProps> = ({
           </button>
         )}
 
-        {/* ── Popover 1: Estilo / Variantes ── */}
-        {activePopover === 'style' && hasVariants && (
-          <div className="cv-box-popover cv-box-popover--style" onClick={e => e.stopPropagation()}>
-            <div className="cv-popover-header">
-              <span>🎨 Formato do Bloco</span>
-              <button type="button" className="cv-popover-close" onClick={() => setActivePopover(null)}>✕</button>
-            </div>
-            <div className="cv-popover-body">
-              <select
-                className="cv-popover-select"
-                value={dimensions?.variant || (category && CATEGORY_VARIANTS_MAP[category]?.[0]?.id) || 'card_box'}
-                onChange={e => {
-                  onSelectVariant?.(e.target.value)
-                  setActivePopover(null)
-                }}
-              >
-                {category && CATEGORY_VARIANTS_MAP[category]?.map(v => (
-                  <option key={v.id} value={v.id}>
-                    {v.icon} {v.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-        )}
-
-        {/* ── Popover 2: Posição & Margens (Com Encostar Acima e Abaixo) ── */}
+        {/* ── Popover: Posição, Margens, Encostar & Nível de Camada ── */}
         {activePopover === 'position' && (
           <div className="cv-box-popover cv-box-popover--position" onClick={e => e.stopPropagation()}>
             <div className="cv-popover-header">
-              <span>📏 Posição & Encostar</span>
+              <span>📏 Posição & Camadas</span>
               <button type="button" className="cv-popover-close" onClick={() => setActivePopover(null)}>✕</button>
             </div>
             <div className="cv-popover-body">
@@ -715,6 +730,32 @@ export const StructuralBoxWrapper: React.FC<StructuralBoxWrapperProps> = ({
                 </div>
               </div>
 
+              {/* Controle de Nível de Camada / Sobreposição (Z-Index) */}
+              <div className="cv-popover-row cv-popover-layer-row">
+                <span className="cv-popover-row-label">Camada:</span>
+                <div className="cv-popover-layer-controls">
+                  <button
+                    type="button"
+                    className="cv-layer-btn"
+                    onClick={() => handleAdjustZIndex(-1)}
+                    title="Enviar bloco para trás"
+                  >
+                    🔽 Trás
+                  </button>
+                  <span className="cv-layer-val" title="Nível da camada deste bloco">
+                    {dimensions?.zIndex ?? 0}
+                  </span>
+                  <button
+                    type="button"
+                    className="cv-layer-btn"
+                    onClick={() => handleAdjustZIndex(+1)}
+                    title="Trazer bloco para frente"
+                  >
+                    🔼 Frente
+                  </button>
+                </div>
+              </div>
+
               {/* Alinhamento Horizontal */}
               {dimensions?.widthPercent && dimensions.widthPercent < 100 && (
                 <div className="cv-popover-row cv-popover-align-row">
@@ -748,7 +789,7 @@ export const StructuralBoxWrapper: React.FC<StructuralBoxWrapperProps> = ({
           </div>
         )}
 
-        {/* ── Popover 3: Tipografia (Fonte e Tamanho) ── */}
+        {/* ── Popover: Tipografia (Fonte e Tamanho) ── */}
         {activePopover === 'font' && (
           <div className="cv-box-popover cv-box-popover--font" onClick={e => e.stopPropagation()}>
             <div className="cv-popover-header">
@@ -807,8 +848,15 @@ export const StructuralBoxWrapper: React.FC<StructuralBoxWrapperProps> = ({
         )}
       </div>
 
-      {/* Conteúdo Real da Seção */}
-      <div ref={contentRef} className="cv-structural-box__content">
+      {/* Conteúdo Real da Seção (Clipping interno apenas aqui se maxHeightPx estiver definido) */}
+      <div
+        ref={contentRef}
+        className="cv-structural-box__content"
+        style={{
+          maxHeight: dimensions?.maxHeightPx ? `${dimensions.maxHeightPx}px` : undefined,
+          overflow: dimensions?.maxHeightPx ? 'hidden' : 'visible'
+        }}
+      >
         {children}
       </div>
 

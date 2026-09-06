@@ -475,6 +475,7 @@ export interface SectionBoxDimensions {
   alignment?: 'left' | 'center' | 'right' // Alinhamento no plano horizontal
   variant?: string            // Variante de layout visual do bloco
   hidden?: boolean            // Indica se o item/bloco está ocultado da folha A4
+  zIndex?: number             // Nível de camada em sobreposição (0 a 50)
 
   // Propriedades Estendidas de Foto no Canvas Livre
   photoShape?: 'circle' | 'square' | 'rounded' | 'vertical' | 'pill' | 'hexagon' | 'diamond' | 'shield' | 'octagon' | 'teardrop' | 'editorial_stamp'
