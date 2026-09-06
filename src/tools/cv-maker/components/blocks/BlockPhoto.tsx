@@ -141,7 +141,7 @@ export const BlockPhoto: React.FC<BlockPhotoProps> = ({
         display: 'flex',
         justifyContent: align === 'left' ? 'flex-start' : align === 'right' ? 'flex-end' : 'center',
         width: '100%',
-        margin: '0.25rem 0'
+        margin: 0
       }}
     >
       <div className={`cv-avatar-container has-photo cv-avatar--${shape}`} style={containerStyle}>
@@ -149,7 +149,13 @@ export const BlockPhoto: React.FC<BlockPhotoProps> = ({
           src={image}
           alt={altName || 'Foto de Perfil'}
           className="cv-avatar-img"
-          style={imgStyle}
+          draggable={false}
+          style={{
+            ...imgStyle,
+            userSelect: 'none',
+            ['WebkitUserDrag' as any]: 'none',
+            pointerEvents: 'none'
+          }}
         />
       </div>
     </div>

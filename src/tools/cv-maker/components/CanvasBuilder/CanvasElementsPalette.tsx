@@ -136,6 +136,11 @@ export const CanvasElementsPalette: React.FC<CanvasElementsPaletteProps> = ({
     }
   }
 
+  // Foca e seleciona imediatamente qualquer bloco no Canvas (trazendo-o para a frente)
+  const handleFocusBox = (key: string) => {
+    window.dispatchEvent(new CustomEvent('cv-select-box', { detail: { id: key } }))
+  }
+
   // Alterna visibilidade (ocultar / exibir) de um bloco ou item atômico
   const handleToggleHide = (key: string) => {
     const cur = dimensions[key] || {}
@@ -985,9 +990,14 @@ export const CanvasElementsPalette: React.FC<CanvasElementsPaletteProps> = ({
           {/* Módulo Centralizado de Foto de Perfil */}
           <div className="cv-palette-photo-card" style={{ background: '#090e1a', border: '1px solid #1e293b', borderRadius: '8px', padding: '0.75rem', marginTop: '0.4rem', display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+              <div
+                style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', cursor: 'pointer' }}
+                onClick={() => handleFocusBox('photo')}
+                title="Clique para selecionar e trazer a foto para frente no Canvas"
+              >
                 <span style={{ fontSize: '1rem' }}>📷</span>
                 <span style={{ fontSize: '0.82rem', fontWeight: 700, color: '#38bdf8' }}>Foto de Perfil</span>
+                <span style={{ fontSize: '0.62rem', background: 'rgba(2, 132, 199, 0.2)', border: '1px solid #0284c7', borderRadius: '4px', padding: '1px 5px', color: '#7dd3fc', fontWeight: 600 }}>🎯 Focar</span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                 <button

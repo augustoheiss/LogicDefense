@@ -1562,46 +1562,24 @@ aside .cv-structural-box--active,
   flex-direction: column !important;
 }
 
-/* ── Alerta de Sobreposição / Colisão de Blocos ── */
-.cv-structural-box.is-collision {
-  border-color: #f59e0b !important;
-  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.45) !important;
-  background-color: rgba(245, 158, 11, 0.04) !important;
+/* ── Estilização de Caixa e Arraste Direto da Foto de Perfil ── */
+.is-photo-box {
+  user-select: none;
 }
 
-.cv-structural-box__collision-badge {
-  display: flex;
-  align-items: center;
-  gap: 0.45rem;
-  background: #fef3c7;
-  border: 1px solid #f59e0b;
-  color: #92400e;
-  font-size: 0.72rem;
-  font-weight: 600;
-  padding: 0.35rem 0.65rem;
-  border-radius: 4px;
-  margin-top: 0.45rem;
-  line-height: 1.35;
-  box-shadow: 0 2px 6px rgba(245, 158, 11, 0.2);
-  animation: cvPulseCollision 2s infinite ease-in-out;
+.is-photo-draggable {
+  cursor: grab;
+  user-select: none;
 }
 
-@keyframes cvPulseCollision {
-  0%, 100% {
-    border-color: #f59e0b;
-    box-shadow: 0 2px 6px rgba(245, 158, 11, 0.2);
-  }
-  50% {
-    border-color: #d97706;
-    box-shadow: 0 2px 12px rgba(217, 119, 6, 0.35);
-  }
+.is-photo-draggable:active {
+  cursor: grabbing;
 }
 
-/* Supressão Total de Avisos e Efeitos de Colisão no Estado de Impressão/PDF */
+/* Supressão Total de Menus e Alças no Estado de Impressão/PDF */
 .cv-is-printing .cv-structural-box,
 .cv-is-printing .cv-structural-box--active,
 .cv-is-printing .cv-structural-box.is-selected,
-.cv-is-printing .cv-structural-box.is-collision,
 .cv-is-printing .cv-structural-box.is-overflowing,
 .cv-is-printing .cv-structural-box.is-moving,
 .cv-is-printing .cv-structural-box.is-resizing {

@@ -39,7 +39,6 @@ export const StructuralBoxWrapper: React.FC<StructuralBoxWrapperProps> = ({
   const contentRef = useRef<HTMLDivElement>(null)
   const toolbarRef = useRef<HTMLDivElement>(null)
   const [isOverflowing, setIsOverflowing] = useState<boolean>(false)
-  const [hasCollision, setHasCollision] = useState<boolean>(false)
   const [isResizing, setIsResizing] = useState<boolean>(false)
   const [isMoving, setIsMoving] = useState<boolean>(false)
   const [isSelected, setIsSelected] = useState<boolean>(false)
@@ -95,42 +94,6 @@ export const StructuralBoxWrapper: React.FC<StructuralBoxWrapperProps> = ({
     observer.observe(contentEl)
     return () => observer.disconnect()
   }, [isFreeCanvasActive, dimensions?.minHeightPx, dimensions?.maxHeightPx, dimensions?.widthPercent])
-
-  // Detecção de colisão física e sobreposição com outros blocos
-  useEffect(() => {
-    if (!isFreeCanvasActive || isMoving) {
-      setHasCollision(false)
-      return
-    }
-
-    const checkCollision = () => {
-      const el = containerRef.current
-      if (!el) return
-      const myRect = el.getBoundingClientRect()
-      if (myRect.width === 0 || myRect.height === 0) return
-
-      const allBoxes = Array.from(document.querySelectorAll('.cv-structural-box')) as HTMLElement[]
-      let collided = false
-      for (const other of allBoxes) {
-        if (other === el) continue
-        const oRect = other.getBoundingClientRect()
-        const overlapX = Math.max(0, Math.min(myRect.right, oRect.right) - Math.max(myRect.left, oRect.left))
-        const overlapY = Math.max(0, Math.min(myRect.bottom, oRect.bottom) - Math.max(myRect.top, oRect.top))
-        if (overlapX > 20 && overlapY > 20) {
-          collided = true
-          break
-        }
-      }
-      setHasCollision(collided)
-    }
-
-    const timer = setTimeout(checkCollision, 100)
-    window.addEventListener('cv-box-moved', checkCollision)
-    return () => {
-      clearTimeout(timer)
-      window.removeEventListener('cv-box-moved', checkCollision)
-    }
-  }, [isFreeCanvasActive, dimensions, isMoving])
 
   // Selecionar box ao clicar nele
   const handleSelectThisBox = (e: React.MouseEvent) => {
@@ -469,17 +432,24 @@ export const StructuralBoxWrapper: React.FC<StructuralBoxWrapperProps> = ({
   }
 
   const isPhoto = category === 'photo' || sectionId === 'photo'
+  const photoSizePx = dimensions?.photoSize ?? 96
+  const photoHeightPx = isPhoto && dimensions?.photoShape === 'vertical'
+    ? Math.round(photoSizePx * 1.32)
+    : photoSizePx
+
   const widthStyle = dimensions?.widthPercent
     ? `${dimensions.widthPercent}%`
     : isPhoto
-      ? 'fit-content'
+      ? `${photoSizePx}px`
       : '100%'
 
   const heightStyle = dimensions?.maxHeightPx
     ? `${dimensions.maxHeightPx}px`
     : dimensions?.minHeightPx
       ? `${dimensions.minHeightPx}px`
-      : undefined
+      : isPhoto
+        ? `${photoHeightPx}px`
+        : undefined
 
   // Deslocamento 2D no plano livre
   const topStyle = typeof dimensions?.marginTopPx === 'number' && dimensions.marginTopPx !== 0
@@ -516,21 +486,20 @@ export const StructuralBoxWrapper: React.FC<StructuralBoxWrapperProps> = ({
     (dimensions?.fontSizeScale && dimensions.fontSizeScale !== 1)
   )
 
-  // Z-Index Soberano: Selecionado > Arrastando > Camada definida > Colisão detectada
+  // Z-Index Soberano: Foto tem base superior (30) para flutuar naturalmente sobre cartões (10)
+  const baseZIndex = isPhoto ? 30 : 10
   const activeZIndex = isMoving
     ? 130
     : isSelected
       ? 85 + (dimensions?.zIndex ?? 0)
       : typeof dimensions?.zIndex === 'number'
-        ? 10 + dimensions.zIndex
-        : hasCollision
-          ? 12
-          : undefined
+        ? baseZIndex + dimensions.zIndex
+        : baseZIndex
 
   return (
     <div
       ref={containerRef}
-      className={`cv-structural-box cv-structural-box--active ${isSelected ? 'is-selected' : ''} ${isResizing ? `is-resizing is-resizing-${resizeType}` : ''} ${isMoving ? 'is-moving' : ''} ${isOverflowing ? 'is-overflowing' : ''} ${hasCollision ? 'is-collision' : ''}`}
+      className={`cv-structural-box cv-structural-box--active ${isSelected ? 'is-selected' : ''} ${isResizing ? `is-resizing is-resizing-${resizeType}` : ''} ${isMoving ? 'is-moving' : ''} ${isOverflowing ? 'is-overflowing' : ''} ${isPhoto ? 'is-photo-box' : ''}`}
       onClick={handleSelectThisBox}
       style={{
         width: widthStyle,
@@ -848,13 +817,16 @@ export const StructuralBoxWrapper: React.FC<StructuralBoxWrapperProps> = ({
         )}
       </div>
 
-      {/* Conteúdo Real da Seção (Clipping interno apenas aqui se maxHeightPx estiver definido) */}
+      {/* Conteúdo Real da Seção (Clipping interno apenas se maxHeightPx estiver definido; arraste direto para foto) */}
       <div
         ref={contentRef}
-        className="cv-structural-box__content"
+        className={`cv-structural-box__content ${isPhoto ? 'is-photo-draggable' : ''}`}
+        onPointerDown={isPhoto ? handleMovePointerDown : undefined}
         style={{
           maxHeight: dimensions?.maxHeightPx ? `${dimensions.maxHeightPx}px` : undefined,
-          overflow: dimensions?.maxHeightPx ? 'hidden' : 'visible'
+          overflow: dimensions?.maxHeightPx ? 'hidden' : 'visible',
+          cursor: isPhoto ? (isMoving ? 'grabbing' : 'grab') : undefined,
+          userSelect: isPhoto ? 'none' : undefined
         }}
       >
         {children}
@@ -865,14 +837,6 @@ export const StructuralBoxWrapper: React.FC<StructuralBoxWrapperProps> = ({
         <div className="cv-structural-box__overflow-badge cv-no-print no-print" data-cv-interactive="true">
           <span>⚠️</span>
           <span>Texto excede o tamanho fixado. Aumente a altura se desejar que apareça completo no A4.</span>
-        </div>
-      )}
-
-      {/* Alerta de Sobreposição / Colisão com outro bloco */}
-      {hasCollision && !isMoving && (
-        <div className="cv-structural-box__collision-badge cv-no-print no-print" data-cv-interactive="true">
-          <span>⚠️</span>
-          <span>Sobreposição detectada: bloco sobreposto por outro no plano livre.</span>
         </div>
       )}
 
