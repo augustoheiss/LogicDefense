@@ -273,25 +273,58 @@ export const StructuralBoxWrapper: React.FC<StructuralBoxWrapperProps> = ({
     window.addEventListener('pointerup', onPointerUp)
   }, [canSwitchZone, currentZone, dimensions, onSwitchZone, onUpdateDimensions])
 
-  // Ajuste rápido de margem vertical (Y)
+  // Ajuste rápido de margem vertical (Y) sem travas artificiais estreitas
   const handleAdjustMarginY = (delta: number) => {
     const current = dimensions?.marginTopPx || 0
-    const next = Math.max(-15, Math.min(60, current + delta))
+    const next = Math.max(-500, Math.min(1000, current + delta))
     onUpdateDimensions?.({
       ...dimensions,
       marginTopPx: next
     })
   }
 
-  // Ajuste fino de margem / recuo horizontal (X)
+  // Ajuste fino de margem / recuo horizontal (X) sem travas artificiais
   const handleAdjustMarginX = (delta: number) => {
     const current = dimensions?.marginLeftPx || 0
-    const next = Math.max(-30, Math.min(350, current + delta))
+    const next = Math.max(-500, Math.min(1000, current + delta))
     onUpdateDimensions?.({
       ...dimensions,
       marginLeftPx: next,
       alignment: undefined
     })
+  }
+
+  // Encostar diretamente no bloco de cima (elimina vácuo vertical com precisão de pixel)
+  const handleSnapToAbove = () => {
+    const el = containerRef.current
+    if (!el) return
+
+    let prev = el.previousElementSibling as HTMLElement | null
+    while (prev && (prev.offsetParent === null || prev.classList.contains('cv-no-print'))) {
+      prev = prev.previousElementSibling as HTMLElement | null
+    }
+
+    if (prev) {
+      const prevRect = prev.getBoundingClientRect()
+      const myRect = el.getBoundingClientRect()
+      const visualGap = myRect.top - prevRect.bottom
+      const curMarginY = dimensions?.marginTopPx || 0
+      const targetMarginY = Math.round(curMarginY - visualGap)
+
+      onUpdateDimensions?.({
+        ...dimensions,
+        marginTopPx: targetMarginY
+      })
+    } else {
+      onUpdateDimensions?.({
+        ...dimensions,
+        marginTopPx: 0
+      })
+    }
+
+    setTimeout(() => {
+      window.dispatchEvent(new CustomEvent('cv-box-moved'))
+    }, 50)
   }
 
   // Alinhamento rápido no plano
@@ -343,9 +376,12 @@ export const StructuralBoxWrapper: React.FC<StructuralBoxWrapperProps> = ({
     return <>{children}</>
   }
 
+  const isPhoto = category === 'photo' || sectionId === 'photo'
   const widthStyle = dimensions?.widthPercent && dimensions.widthPercent < 100
     ? `${dimensions.widthPercent}%`
-    : '100%'
+    : isPhoto
+      ? 'fit-content'
+      : '100%'
 
   const heightStyle = dimensions?.maxHeightPx
     ? `${dimensions.maxHeightPx}px`
@@ -509,7 +545,7 @@ export const StructuralBoxWrapper: React.FC<StructuralBoxWrapperProps> = ({
 
           {/* Linha 3: Ajustes Finos de Posição, Margens e Alinhamento */}
           <div className="cv-box-menu-controls-row">
-            {/* Margem Vertical (Y) */}
+            {/* Margem Vertical (Y) com botão rápido para Encostar no Bloco de Cima */}
             <div className="cv-box-menu-stepper" title="Ajustar margem vertical (Eixo Y)">
               <span className="cv-stepper-label">Margem Y:</span>
               <button
@@ -531,6 +567,46 @@ export const StructuralBoxWrapper: React.FC<StructuralBoxWrapperProps> = ({
               >
                 +
               </button>
+              <button
+                type="button"
+                className="cv-stepper-btn cv-stepper-btn--snap"
+                onClick={handleSnapToAbove}
+                title="Encostar diretamente no bloco de cima (elimina espaços vazios e vácuo)"
+                style={{
+                  padding: '0.15rem 0.45rem',
+                  fontSize: '0.72rem',
+                  fontWeight: 600,
+                  borderRadius: '4px',
+                  background: 'rgba(16, 185, 129, 0.2)',
+                  border: '1px solid rgba(16, 185, 129, 0.4)',
+                  color: '#6ee7b7',
+                  cursor: 'pointer',
+                  marginLeft: '0.35rem',
+                  whiteSpace: 'nowrap'
+                }}
+              >
+                ⤒ Encostar
+              </button>
+              {(dimensions?.marginTopPx !== undefined && dimensions.marginTopPx !== 0) && (
+                <button
+                  type="button"
+                  className="cv-stepper-btn cv-stepper-btn--zero"
+                  onClick={() => onUpdateDimensions?.({ ...dimensions, marginTopPx: 0 })}
+                  title="Zerar margem vertical (0px)"
+                  style={{
+                    padding: '0.15rem 0.35rem',
+                    fontSize: '0.7rem',
+                    borderRadius: '4px',
+                    background: 'rgba(255, 255, 255, 0.1)',
+                    border: '1px solid rgba(255, 255, 255, 0.2)',
+                    color: '#e2e8f0',
+                    cursor: 'pointer',
+                    marginLeft: '0.2rem'
+                  }}
+                >
+                  0px
+                </button>
+              )}
             </div>
 
             {/* Recuo Horizontal (X) */}
@@ -555,6 +631,26 @@ export const StructuralBoxWrapper: React.FC<StructuralBoxWrapperProps> = ({
               >
                 ▶
               </button>
+              {(dimensions?.marginLeftPx !== undefined && dimensions.marginLeftPx !== 0) && (
+                <button
+                  type="button"
+                  className="cv-stepper-btn cv-stepper-btn--zero"
+                  onClick={() => onUpdateDimensions?.({ ...dimensions, marginLeftPx: 0 })}
+                  title="Zerar recuo horizontal (0px)"
+                  style={{
+                    padding: '0.15rem 0.35rem',
+                    fontSize: '0.7rem',
+                    borderRadius: '4px',
+                    background: 'rgba(255, 255, 255, 0.1)',
+                    border: '1px solid rgba(255, 255, 255, 0.2)',
+                    color: '#e2e8f0',
+                    cursor: 'pointer',
+                    marginLeft: '0.2rem'
+                  }}
+                >
+                  0px
+                </button>
+              )}
             </div>
 
             {/* Alinhamento rápido se largura for menor que 100% */}

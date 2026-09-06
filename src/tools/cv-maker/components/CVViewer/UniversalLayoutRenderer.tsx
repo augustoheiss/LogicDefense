@@ -158,11 +158,138 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
     }, 50)
   }
 
+  const getSortedItems = React.useCallback(<T,>(
+    _category: string,
+    items: T[] | undefined,
+    getId: (item: T, index: number) => string
+  ): { item: T; originalIndex: number; itemId: string }[] => {
+    if (!items || items.length === 0) return []
+    return items
+      .map((item, originalIndex) => ({
+        item,
+        originalIndex,
+        itemId: getId(item, originalIndex)
+      }))
+      .sort((a, b) => {
+        const orderA = structureConfig?.sectionDimensions?.[a.itemId]?.order ?? (a.originalIndex * 10)
+        const orderB = structureConfig?.sectionDimensions?.[b.itemId]?.order ?? (b.originalIndex * 10)
+        return orderA - orderB
+      })
+  }, [structureConfig?.sectionDimensions])
+
+  const getDynamicMathSections = React.useCallback(() => {
+    const defaultSections = [
+      'photo',
+      'header',
+      ...(data.basics?.summary ? ['summary'] : []),
+      ...(data.work && data.work.length > 0 ? ['work'] : []),
+      ...(data.projects && data.projects.length > 0 ? ['projects'] : []),
+      ...(data.skills && data.skills.length > 0 ? ['skills_tags'] : []),
+      ...(data.education && data.education.length > 0 ? ['education'] : []),
+      ...(data.languages && data.languages.length > 0 ? ['languages'] : []),
+      ...(data.certificates && data.certificates.length > 0 ? ['certificates'] : []),
+      ...(data.interests && data.interests.length > 0 ? ['interests'] : []),
+      ...(data.references && data.references.length > 0 ? ['references'] : [])
+    ]
+
+    return [...defaultSections].sort((a, b) => {
+      const titleA = `${a.replace('_tags', '')}_title`
+      const titleB = `${b.replace('_tags', '')}_title`
+      const orderA = structureConfig?.sectionDimensions?.[titleA]?.order ??
+                     structureConfig?.sectionDimensions?.[a]?.order ??
+                     (defaultSections.indexOf(a) * 10)
+      const orderB = structureConfig?.sectionDimensions?.[titleB]?.order ??
+                     structureConfig?.sectionDimensions?.[b]?.order ??
+                     (defaultSections.indexOf(b) * 10)
+      return orderA - orderB
+    })
+  }, [data, structureConfig?.sectionDimensions])
+
   const handleMoveStep = (secId: string, direction: -1 | 1) => {
     if (!structureConfig || !onUpdateStructureConfig) return
     const currentDims = structureConfig.sectionDimensions || {}
 
-    // Localiza o elemento e seus irmãos imediatos no mesmo container do layout
+    // 1. Caso item atômico (ex: work-0, proj-1, edu-2)
+    const atomicPrefixes = [
+      { prefix: 'work-', category: 'work', list: data.work, getId: (w: any, i: number) => getAtomicItemId('work', w, i) },
+      { prefix: 'proj-', category: 'projects', list: data.projects, getId: (p: any, i: number) => getAtomicItemId('projects', p, i) },
+      { prefix: 'edu-', category: 'education', list: data.education, getId: (e: any, i: number) => getAtomicItemId('education', e, i) },
+      { prefix: 'lang-', category: 'languages', list: data.languages, getId: (l: any, i: number) => getAtomicItemId('languages', l, i) },
+      { prefix: 'skill-', category: 'skills', list: data.skills, getId: (s: any, i: number) => getAtomicItemId('skills', s, i) },
+      { prefix: 'cert-', category: 'certificates', list: data.certificates, getId: (c: any, i: number) => getAtomicItemId('certificates', c, i) },
+      { prefix: 'int-', category: 'interests', list: data.interests, getId: (it: any, i: number) => getAtomicItemId('interests', it, i) },
+      { prefix: 'ref-', category: 'references', list: data.references, getId: (r: any, i: number) => getAtomicItemId('references', r, i) }
+    ]
+
+    const matchedAtomic = atomicPrefixes.find(a => secId.startsWith(a.prefix))
+    if (matchedAtomic && matchedAtomic.list) {
+      const sorted = getSortedItems(matchedAtomic.category, matchedAtomic.list, matchedAtomic.getId)
+      const idList = sorted.map(x => x.itemId)
+      const curIndex = idList.indexOf(secId)
+      if (curIndex !== -1) {
+        const targetIndex = curIndex + direction
+        if (targetIndex >= 0 && targetIndex < idList.length) {
+          const newIdList = [...idList]
+          const temp = newIdList[curIndex]
+          newIdList[curIndex] = newIdList[targetIndex]
+          newIdList[targetIndex] = temp
+
+          const nextDims = { ...currentDims }
+          newIdList.forEach((id, idx) => {
+            nextDims[id] = {
+              ...(nextDims[id] || {}),
+              order: idx * 10
+            }
+          })
+
+          onUpdateStructureConfig({
+            ...structureConfig,
+            sectionDimensions: nextDims
+          })
+
+          setTimeout(() => {
+            window.dispatchEvent(new CustomEvent('cv-box-moved'))
+          }, 50)
+          return
+        }
+      }
+    }
+
+    // 2. Caso seção de alto nível (ex: projects_title, work_title, header, photo, summary)
+    const normSec = secId.replace('_title', '')
+    const activeSections = getDynamicMathSections()
+    const mappedSec = normSec === 'skills' ? 'skills_tags' : normSec
+    const curIndex = activeSections.indexOf(mappedSec)
+
+    if (curIndex !== -1) {
+      const targetIndex = curIndex + direction
+      if (targetIndex >= 0 && targetIndex < activeSections.length) {
+        const newSecList = [...activeSections]
+        const temp = newSecList[curIndex]
+        newSecList[curIndex] = newSecList[targetIndex]
+        newSecList[targetIndex] = temp
+
+        const nextDims = { ...currentDims }
+        newSecList.forEach((key, idx) => {
+          const titleKey = `${key.replace('_tags', '')}_title`
+          const newOrder = idx * 10
+          nextDims[key] = { ...(nextDims[key] || {}), order: newOrder }
+          nextDims[titleKey] = { ...(nextDims[titleKey] || {}), order: newOrder }
+        })
+
+        onUpdateStructureConfig({
+          ...structureConfig,
+          sectionDimensions: nextDims
+        })
+
+        setTimeout(() => {
+          window.dispatchEvent(new CustomEvent('cv-box-moved'))
+        }, 50)
+        return
+      }
+    }
+
+    // 3. Fallback genérico para irmãos no DOM
     const currentEl = document.querySelector(`[data-section-id="${secId}"]`)
     const parent = currentEl?.parentElement
     if (!parent) return
@@ -173,7 +300,6 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
 
     if (siblingBoxes.length <= 1) return
 
-    // Ordena de acordo com o CSS order atual, ou posição no DOM em caso de empate
     siblingBoxes.sort((a, b) => {
       const idA = a.getAttribute('data-section-id') || ''
       const idB = b.getAttribute('data-section-id') || ''
@@ -188,18 +314,13 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
     if (currentIndex === -1) return
 
     const targetIndex = currentIndex + direction
-    if (targetIndex < 0 || targetIndex >= sortedIds.length) {
-      // Já está no extremo (topo ou fim do container)
-      return
-    }
+    if (targetIndex < 0 || targetIndex >= sortedIds.length) return
 
-    // Troca as posições exatas dos dois elementos vizinhos
     const newSortedIds = [...sortedIds]
     const temp = newSortedIds[currentIndex]
     newSortedIds[currentIndex] = newSortedIds[targetIndex]
     newSortedIds[targetIndex] = temp
 
-    // Atribui valores de order com espaçamento de 10 para todos os irmãos
     const nextDims = { ...currentDims }
     newSortedIds.forEach((id, idx) => {
       nextDims[id] = {
@@ -213,7 +334,6 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
       sectionDimensions: nextDims
     })
 
-    // Dispara evento para reavaliar colisões após troca de ordem
     setTimeout(() => {
       window.dispatchEvent(new CustomEvent('cv-box-moved'))
     }, 50)
@@ -449,8 +569,8 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
       ? renderZoneSection('work_title', targetZone, defZone, `Título: ${titleText}`, titleNode, 'work')
       : wrapSection('work_title', `Título: ${titleText}`, titleNode, defZone, 'work')
 
-    const itemBoxes = data.work.map((w, idx) => {
-      const itemId = getAtomicItemId('work', w, idx)
+    const sorted = getSortedItems('work', data.work, (w, i) => getAtomicItemId('work', w, i))
+    const itemBoxes = sorted.map(({ item: w, originalIndex: idx, itemId }) => {
       const itemDims = structureConfig?.sectionDimensions?.[itemId]
       const variant = itemDims?.variant || 'card_box'
       const companyName = w.company || w.name
@@ -493,8 +613,8 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
       ? renderZoneSection('education_title', targetZone, defZone, `Título: ${titleText}`, titleNode, 'education')
       : wrapSection('education_title', `Título: ${titleText}`, titleNode, defZone, 'education')
 
-    const itemBoxes = data.education.map((ed, idx) => {
-      const itemId = getAtomicItemId('education', ed, idx)
+    const sorted = getSortedItems('education', data.education, (ed, i) => getAtomicItemId('education', ed, i))
+    const itemBoxes = sorted.map(({ item: ed, originalIndex: idx, itemId }) => {
       const itemDims = structureConfig?.sectionDimensions?.[itemId]
       const variant = itemDims?.variant || 'card_box'
       const boxTitle = ed.institution ? `${ed.area || ed.studyType || 'Formação'} • ${ed.institution}` : `Formação #${idx + 1}`
@@ -536,8 +656,8 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
       ? renderZoneSection('projects_title', targetZone, defZone, `Título: ${titleText}`, titleNode, 'projects')
       : wrapSection('projects_title', `Título: ${titleText}`, titleNode, defZone, 'projects')
 
-    const itemBoxes = data.projects.map((p, idx) => {
-      const itemId = getAtomicItemId('projects', p, idx)
+    const sorted = getSortedItems('projects', data.projects, (p, i) => getAtomicItemId('projects', p, i))
+    const itemBoxes = sorted.map(({ item: p, originalIndex: idx, itemId }) => {
       const itemDims = structureConfig?.sectionDimensions?.[itemId]
       const variant = itemDims?.variant || 'card_box'
       const boxTitle = p.name ? `Projeto: ${p.name}` : `Projeto #${idx + 1}`
@@ -579,8 +699,8 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
       ? renderZoneSection('languages_title', targetZone, defZone, `Título: ${titleText}`, titleNode, 'languages')
       : wrapSection('languages_title', `Título: ${titleText}`, titleNode, defZone, 'languages')
 
-    const itemBoxes = data.languages.map((l, idx) => {
-      const itemId = getAtomicItemId('languages', l, idx)
+    const sorted = getSortedItems('languages', data.languages, (l, i) => getAtomicItemId('languages', l, i))
+    const itemBoxes = sorted.map(({ item: l, originalIndex: _idx, itemId }) => {
       const itemDims = structureConfig?.sectionDimensions?.[itemId]
       const variant = itemDims?.variant || 'pill_badge'
       const boxTitle = `Idioma: ${l.language}`
@@ -622,8 +742,8 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
       ? renderZoneSection('skills_title', targetZone, defZone, `Título: ${titleText}`, titleNode, 'skills')
       : wrapSection('skills_title', `Título: ${titleText}`, titleNode, defZone, 'skills')
 
-    const itemBoxes = data.skills.map((s, idx) => {
-      const itemId = getAtomicItemId('skills', s, idx)
+    const sorted = getSortedItems('skills', data.skills, (s, i) => getAtomicItemId('skills', s, i))
+    const itemBoxes = sorted.map(({ item: s, originalIndex: idx, itemId }) => {
       const itemDims = structureConfig?.sectionDimensions?.[itemId]
       const variant = itemDims?.variant || 'badges'
       const boxTitle = s.name ? `Competência: ${s.name}` : `Skill #${idx + 1}`
@@ -665,8 +785,8 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
       ? renderZoneSection('certificates_title', targetZone, defZone, `Título: ${titleText}`, titleNode, 'certificates')
       : wrapSection('certificates_title', `Título: ${titleText}`, titleNode, defZone, 'certificates')
 
-    const itemBoxes = data.certificates.map((c, idx) => {
-      const itemId = getAtomicItemId('certificates', c, idx)
+    const sorted = getSortedItems('certificates', data.certificates, (c, i) => getAtomicItemId('certificates', c, i))
+    const itemBoxes = sorted.map(({ item: c, originalIndex: idx, itemId }) => {
       const itemDims = structureConfig?.sectionDimensions?.[itemId]
       const variant = itemDims?.variant || 'card_box'
       const boxTitle = c.name ? `Certificação: ${c.name}` : `Certificação #${idx + 1}`
@@ -708,8 +828,8 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
       ? renderZoneSection('interests_title', targetZone, defZone, `Título: ${titleText}`, titleNode, 'interests')
       : wrapSection('interests_title', `Título: ${titleText}`, titleNode, defZone, 'interests')
 
-    const itemBoxes = data.interests.map((it, idx) => {
-      const itemId = getAtomicItemId('interests', it, idx)
+    const sorted = getSortedItems('interests', data.interests, (it, i) => getAtomicItemId('interests', it, i))
+    const itemBoxes = sorted.map(({ item: it, originalIndex: idx, itemId }) => {
       const itemDims = structureConfig?.sectionDimensions?.[itemId]
       const variant = itemDims?.variant || 'pill_badge'
       const boxTitle = it.name ? `Interesse: ${it.name}` : `Interesse #${idx + 1}`
@@ -751,8 +871,8 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
       ? renderZoneSection('references_title', targetZone, defZone, `Título: ${titleText}`, titleNode, 'references')
       : wrapSection('references_title', `Título: ${titleText}`, titleNode, defZone, 'references')
 
-    const itemBoxes = data.references.map((r, idx) => {
-      const itemId = getAtomicItemId('references', r, idx)
+    const sorted = getSortedItems('references', data.references, (r, i) => getAtomicItemId('references', r, i))
+    const itemBoxes = sorted.map(({ item: r, originalIndex: idx, itemId }) => {
       const boxTitle = r.name ? `Referência: ${r.name}` : `Referência #${idx + 1}`
       const content = <AtomicItemRenderer category="references" item={r} />
 
@@ -1896,174 +2016,240 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
         <div className="cv-page-a4">
           <div className="cv-card layout-dynamic_math">
             {renderCanvasDecorations()}
-            {isFreeCanvas && renderPhotoSection(undefined, undefined, 'Foto de Perfil', true)}
-            {wrapSection('header', 'Perfil & Contatos', (
-              <header className="cv-math-header">
-                <div className="cv-math-header-profile">
-                  {!isFreeCanvas && basics.image && (
-                    <div className="cv-avatar-container cv-math-avatar">
-                      <img src={basics.image} alt={basics.name} className="cv-avatar-img" />
-                    </div>
-                  )}
-                  <div>
-                    <h1 className="cv-math-name cv-name">{basics.name}</h1>
-                    {basics.label && <div className="cv-math-label cv-label">{basics.label}</div>}
-                  </div>
-                </div>
+            {getDynamicMathSections().map(secKey => {
+              switch (secKey) {
+                case 'photo':
+                  return isFreeCanvas ? (
+                    <React.Fragment key="dyn_photo">
+                      {renderPhotoSection(undefined, undefined, 'Foto de Perfil', true)}
+                    </React.Fragment>
+                  ) : null
 
-                <div className="cv-math-contacts">
-                  {basics.email && (
-                    <div>✉ <a href={`mailto:${basics.email}`} className="cv-link">{basics.email}</a></div>
-                  )}
-                  {basics.phone && (
-                    <div>📞 <a href={`tel:${basics.phone.replace(/[^\d+]/g, '')}`} className="cv-link">{basics.phone}</a></div>
-                  )}
-                  {basics.location && (
-                    <div>📍 {[basics.location.city, basics.location.region, basics.location.countryCode].filter(Boolean).join(', ')}</div>
-                  )}
-                  {basics.url && (
-                    <div>🌐 <a href={basics.url} target="_blank" rel="noreferrer" className="cv-link">{basics.url.replace(/^https?:\/\//, '')}</a></div>
-                  )}
-                  {basics.profiles && basics.profiles.length > 0 && (
-                    <div className="cv-math-profiles">
-                      {basics.profiles.map((p, idx) => (
-                        <div key={idx}>
-                          <a href={p.url} target="_blank" rel="noreferrer" className="cv-link">
-                            🔗 {p.network}: {p.username}
-                          </a>
+                case 'header':
+                  return (
+                    <React.Fragment key="dyn_header">
+                      {wrapSection('header', 'Perfil & Contatos', (
+                        <header className="cv-math-header">
+                          <div className="cv-math-header-profile">
+                            {!isFreeCanvas && basics.image && (
+                              <div className="cv-avatar-container cv-math-avatar">
+                                <img src={basics.image} alt={basics.name} className="cv-avatar-img" />
+                              </div>
+                            )}
+                            <div>
+                              <h1 className="cv-math-name cv-name">{basics.name}</h1>
+                              {basics.label && <div className="cv-math-label cv-label">{basics.label}</div>}
+                            </div>
+                          </div>
+
+                          <div className="cv-math-contacts">
+                            {basics.email && (
+                              <div>✉ <a href={`mailto:${basics.email}`} className="cv-link">{basics.email}</a></div>
+                            )}
+                            {basics.phone && (
+                              <div>📞 <a href={`tel:${basics.phone.replace(/[^\d+]/g, '')}`} className="cv-link">{basics.phone}</a></div>
+                            )}
+                            {basics.location && (
+                              <div>📍 {[basics.location.city, basics.location.region, basics.location.countryCode].filter(Boolean).join(', ')}</div>
+                            )}
+                            {basics.url && (
+                              <div>🌐 <a href={basics.url} target="_blank" rel="noreferrer" className="cv-link">{basics.url.replace(/^https?:\/\//, '')}</a></div>
+                            )}
+                            {basics.profiles && basics.profiles.length > 0 && (
+                              <div className="cv-math-profiles">
+                                {basics.profiles.map((p, idx) => (
+                                  <div key={idx}>
+                                    <a href={p.url} target="_blank" rel="noreferrer" className="cv-link">
+                                      🔗 {p.network}: {p.username}
+                                    </a>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </header>
+                      ))}
+                    </React.Fragment>
+                  )
+
+                case 'summary':
+                  return basics.summary ? (
+                    <React.Fragment key="dyn_summary">
+                      {wrapSection('summary', 'Resumo / Sobre Mim', (
+                        <div className="cv-math-summary">
+                          {basics.summary}
                         </div>
                       ))}
-                    </div>
-                  )}
-                </div>
-              </header>
-            ))}
+                    </React.Fragment>
+                  ) : null
 
-            {basics.summary && wrapSection('summary', 'Resumo / Sobre Mim', (
-              <div className="cv-math-summary">
-                {basics.summary}
-              </div>
-            ))}
+                case 'work':
+                  return (
+                    <React.Fragment key="dyn_work">
+                      {renderWorkSection(
+                        undefined,
+                        undefined,
+                        'EXPERIÊNCIA PROFISSIONAL',
+                        <h2 className="cv-math-section-title">
+                          💼 EXPERIÊNCIA PROFISSIONAL
+                        </h2>,
+                        (items) => (
+                          <section className="cv-section">
+                            <div className="cv-math-work-list">
+                              {items}
+                            </div>
+                          </section>
+                        )
+                      )}
+                    </React.Fragment>
+                  )
 
-            {renderWorkSection(
-              undefined,
-              undefined,
-              'EXPERIÊNCIA PROFISSIONAL',
-              <h2 className="cv-math-section-title">
-                💼 EXPERIÊNCIA PROFISSIONAL
-              </h2>,
-              (items) => (
-                <section className="cv-section">
-                  <div className="cv-math-work-list">
-                    {items}
-                  </div>
-                </section>
-              )
-            )}
+                case 'projects':
+                  return (
+                    <React.Fragment key="dyn_projects">
+                      {renderProjectsSection(
+                        undefined,
+                        undefined,
+                        'PROJETOS EM DESTAQUE & REPOSITÓRIOS',
+                        <h2 className="cv-math-section-title">
+                          🚀 PROJETOS EM DESTAQUE & REPOSITÓRIOS
+                        </h2>,
+                        (items) => (
+                          <section className="cv-section">
+                            <div className={`cv-math-grid projects-grid ${getGridClass(data.projects?.length || 0)}`}>
+                              {items}
+                            </div>
+                          </section>
+                        )
+                      )}
+                    </React.Fragment>
+                  )
 
-            {renderProjectsSection(
-              undefined,
-              undefined,
-              'PROJETOS EM DESTAQUE & REPOSITÓRIOS',
-              <h2 className="cv-math-section-title">
-                🚀 PROJETOS EM DESTAQUE & REPOSITÓRIOS
-              </h2>,
-              (items) => (
-                <section className="cv-section">
-                  <div className={`cv-math-grid projects-grid ${getGridClass(data.projects?.length || 0)}`}>
-                    {items}
-                  </div>
-                </section>
-              )
-            )}
+                case 'skills':
+                case 'skills_tags':
+                  return (
+                    <React.Fragment key="dyn_skills">
+                      {renderSkillsSection(
+                        undefined,
+                        undefined,
+                        'COMPETÊNCIAS & HABILIDADES TÉCNICAS',
+                        <h2 className="cv-math-section-title">
+                          ⚡ COMPETÊNCIAS & HABILIDADES TÉCNICAS
+                        </h2>,
+                        (items) => (
+                          <section className="cv-section">
+                            <div className={`cv-math-grid skills-grid ${getGridClass(data.skills?.length || 0)}`}>
+                              {items}
+                            </div>
+                          </section>
+                        )
+                      )}
+                    </React.Fragment>
+                  )
 
-            {renderSkillsSection(
-              undefined,
-              undefined,
-              'COMPETÊNCIAS & HABILIDADES TÉCNICAS',
-              <h2 className="cv-math-section-title">
-                ⚡ COMPETÊNCIAS & HABILIDADES TÉCNICAS
-              </h2>,
-              (items) => (
-                <section className="cv-section">
-                  <div className={`cv-math-grid skills-grid ${getGridClass(data.skills?.length || 0)}`}>
-                    {items}
-                  </div>
-                </section>
-              )
-            )}
+                case 'education':
+                  return (
+                    <React.Fragment key="dyn_education">
+                      {renderEducationSection(
+                        undefined,
+                        undefined,
+                        'FORMAÇÃO ACADÊMICA',
+                        <h2 className="cv-math-section-title">
+                          🎓 FORMAÇÃO ACADÊMICA
+                        </h2>,
+                        (items) => (
+                          <section className="cv-section">
+                            <div className={`cv-math-grid education-grid ${getGridClass(data.education?.length || 0)}`}>
+                              {items}
+                            </div>
+                          </section>
+                        )
+                      )}
+                    </React.Fragment>
+                  )
 
-            {renderEducationSection(
-              undefined,
-              undefined,
-              'FORMAÇÃO ACADÊMICA',
-              <h2 className="cv-math-section-title">
-                🎓 FORMAÇÃO ACADÊMICA
-              </h2>,
-              (items) => (
-                <section className="cv-section">
-                  <div className={`cv-math-grid education-grid ${getGridClass(data.education?.length || 0)}`}>
-                    {items}
-                  </div>
-                </section>
-              )
-            )}
+                case 'languages':
+                  return (
+                    <React.Fragment key="dyn_languages">
+                      {renderLanguagesSection(
+                        undefined,
+                        undefined,
+                        'IDIOMAS & FLUÊNCIA',
+                        <h2 className="cv-math-section-title">
+                          🌐 IDIOMAS & FLUÊNCIA
+                        </h2>,
+                        (items) => (
+                          <section className="cv-section">
+                            <div className={`cv-math-grid languages-grid ${getGridClass(data.languages?.length || 0)}`}>
+                              {items}
+                            </div>
+                          </section>
+                        )
+                      )}
+                    </React.Fragment>
+                  )
 
-            {renderLanguagesSection(
-              undefined,
-              undefined,
-              'IDIOMAS & FLUÊNCIA',
-              <h2 className="cv-math-section-title">
-                🌐 IDIOMAS & FLUÊNCIA
-              </h2>,
-              (items) => (
-                <section className="cv-section">
-                  <div className={`cv-math-grid languages-grid ${getGridClass(data.languages?.length || 0)}`}>
-                    {items}
-                  </div>
-                </section>
-              )
-            )}
+                case 'certificates':
+                  return (
+                    <React.Fragment key="dyn_certificates">
+                      {renderCertificatesSection(
+                        undefined,
+                        undefined,
+                        'CERTIFICAÇÕES & LICENÇAS',
+                        <h2 className="cv-math-section-title">📜 CERTIFICAÇÕES & LICENÇAS</h2>,
+                        (items) => (
+                          <section className="cv-section">
+                            <div className={`cv-math-grid certificates-grid ${getGridClass(data.certificates?.length || 0)}`}>
+                              {items}
+                            </div>
+                          </section>
+                        )
+                      )}
+                    </React.Fragment>
+                  )
 
-            {renderCertificatesSection(
-              undefined,
-              undefined,
-              'CERTIFICAÇÕES & LICENÇAS',
-              <h2 className="cv-math-section-title">📜 CERTIFICAÇÕES & LICENÇAS</h2>,
-              (items) => (
-                <section className="cv-section">
-                  <div className={`cv-math-grid certificates-grid ${getGridClass(data.certificates?.length || 0)}`}>
-                    {items}
-                  </div>
-                </section>
-              )
-            )}
-            {renderInterestsSection(
-              undefined,
-              undefined,
-              'INTERESSES & FRENTES DE PESQUISA',
-              <h2 className="cv-math-section-title">💡 INTERESSES & FRENTES DE PESQUISA</h2>,
-              (items) => (
-                <section className="cv-section">
-                  <div className={`cv-math-grid interests-grid ${getGridClass(data.interests?.length || 0)}`}>
-                    {items}
-                  </div>
-                </section>
-              )
-            )}
-            {renderReferencesSection(
-              undefined,
-              undefined,
-              'REFERÊNCIAS',
-              <h2 className="cv-math-section-title">👥 REFERÊNCIAS</h2>,
-              (items) => (
-                <section className="cv-section">
-                  <div className="cv-math-work-list">
-                    {items}
-                  </div>
-                </section>
-              )
-            )}
+                case 'interests':
+                  return (
+                    <React.Fragment key="dyn_interests">
+                      {renderInterestsSection(
+                        undefined,
+                        undefined,
+                        'INTERESSES & FRENTES DE PESQUISA',
+                        <h2 className="cv-math-section-title">💡 INTERESSES & FRENTES DE PESQUISA</h2>,
+                        (items) => (
+                          <section className="cv-section">
+                            <div className={`cv-math-grid interests-grid ${getGridClass(data.interests?.length || 0)}`}>
+                              {items}
+                            </div>
+                          </section>
+                        )
+                      )}
+                    </React.Fragment>
+                  )
+
+                case 'references':
+                  return (
+                    <React.Fragment key="dyn_references">
+                      {renderReferencesSection(
+                        undefined,
+                        undefined,
+                        'REFERÊNCIAS',
+                        <h2 className="cv-math-section-title">👥 REFERÊNCIAS</h2>,
+                        (items) => (
+                          <section className="cv-section">
+                            <div className="cv-math-work-list">
+                              {items}
+                            </div>
+                          </section>
+                        )
+                      )}
+                    </React.Fragment>
+                  )
+
+                default:
+                  return null
+              }
+            })}
           </div>
         </div>
       )
