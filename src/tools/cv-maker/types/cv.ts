@@ -553,4 +553,9 @@ export interface LayoutStructureConfig {
   customZones?: CustomCanvasZone[] // Zonas, sidebars e boxes agrupadas desenhadas livremente
 }
 
+export type PageFormat = 'a4' | 'letter' | 'legal'
+
+export type ZoomMode = 'auto' | '100' | 'fit-width' | number
+
+
 

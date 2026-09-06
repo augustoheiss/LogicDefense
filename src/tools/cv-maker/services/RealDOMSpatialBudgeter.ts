@@ -43,7 +43,15 @@ export class RealDOMSpatialBudgeter {
     sourceElement: HTMLElement,
     config: Partial<BudgetConfig> = {}
   ): Promise<BudgeterResult> {
-    const cfg: BudgetConfig = { ...this.DEFAULT_CONFIG, ...config }
+    const rootStyle = typeof window !== 'undefined' ? getComputedStyle(document.documentElement) : null
+    const dynamicWidth = rootStyle ? (parseFloat(rootStyle.getPropertyValue('--cv-page-width-px')) || 793.70) : 793.70
+    const dynamicHeight = rootStyle ? (parseFloat(rootStyle.getPropertyValue('--cv-page-height-px')) || 1122.52) : 1122.52
+
+    const cfg: BudgetConfig = {
+      ...this.DEFAULT_CONFIG,
+      pageHeightPx: dynamicHeight,
+      ...config
+    }
     const hBudget = cfg.pageHeightPx - cfg.marginTopPx - cfg.marginBottomPx - cfg.epsilonPx
 
     // 1. Criar sandbox offscreen isolado para evitar qualquer repaints ou layout thrashing
@@ -53,11 +61,12 @@ export class RealDOMSpatialBudgeter {
       position: fixed !important;
       top: -10000px !important;
       left: -10000px !important;
-      width: 793.7px !important; /* Largura física A4 a 96 DPI */
+      width: ${dynamicWidth}px !important; /* Largura física sincronizada com o formato ativo */
       visibility: hidden !important;
       pointer-events: none !important;
       z-index: -9999 !important;
     `
+
 
     const clone = sourceElement.cloneNode(true) as HTMLElement
     // Remove artefatos interativos do clone para medir apenas o conteúdo real de impressão

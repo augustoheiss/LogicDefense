@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react'
-import type { CVData, CVVersions, TextVariant, ThemeVariant, LayoutVariant, ViewMode, CoverLetter, CVDesignConfig, LayoutStructureConfig, SectionBoxDimensions } from './types/cv'
+import type { CVData, CVVersions, TextVariant, ThemeVariant, LayoutVariant, ViewMode, CoverLetter, CVDesignConfig, LayoutStructureConfig, SectionBoxDimensions, PageFormat, ZoomMode } from './types/cv'
 import { DEFAULT_DESIGN_CONFIG } from './types/cv'
 import { DEFAULT_JOHN_DOE_YAML } from './templates/defaultTemplate'
 import { parseYamlToCV, cvToYaml, debounce } from './services/yamlService'
@@ -23,6 +23,7 @@ import { AgentAndAcademyLandingPage, LandingTabType } from './components/Landing
 import { validateLicenseKey } from './services/cvService'
 import { downloadCVZipPackage } from './services/standaloneHtmlService'
 import { CVPrintEngine } from './services/CVPrintEngine'
+import { PageFormatEngine } from './engine/PageFormatEngine'
 
 import './styles/cv-themes.css'
 import './styles/cv-print.css'
@@ -38,10 +39,26 @@ const STORAGE_THEME_KEY = 'cv_maker_theme_v1'
 const STORAGE_LAYOUT_KEY = 'cv_maker_layout_v1'
 const STORAGE_VIEW_MODE_KEY = 'cv_maker_view_mode_v1'
 const STORAGE_STRUCTURES_KEY = 'cv_maker_layout_structures_v1'
+const STORAGE_WORKSPACE_MODE_KEY = 'cv_maker_workspace_mode_v1'
+const STORAGE_PAGE_FORMAT_KEY = 'cv_maker_page_format_v1'
+const STORAGE_ZOOM_MODE_KEY = 'cv_maker_zoom_mode_v1'
+
+export type WorkspaceMode = 'split' | 'canvas-focus' | 'sidebar-focus'
 
 export const CVMakerApp: React.FC = () => {
-  // Navigation
+  // Navigation & Workspace Layout Modes
   const [activeTab, setActiveTab] = useState<'chat' | 'editor' | 'history' | 'canvas'>('editor')
+  const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>(() => {
+    const saved = localStorage.getItem(STORAGE_WORKSPACE_MODE_KEY) as WorkspaceMode
+    return saved || 'split'
+  })
+  const [isMobileDrawerOpen, setIsMobileDrawerOpen] = useState<boolean>(false)
+
+  const handleWorkspaceModeChange = (mode: WorkspaceMode) => {
+    setWorkspaceMode(mode)
+    localStorage.setItem(STORAGE_WORKSPACE_MODE_KEY, mode)
+    if (mode !== 'canvas-focus') setIsMobileDrawerOpen(false)
+  }
 
   // Core Data
   const [yamlInput, setYamlInput] = useState<string>(() => {
@@ -82,6 +99,35 @@ export const CVMakerApp: React.FC = () => {
   const [activeViewMode, setActiveViewMode] = useState<ViewMode>(() => {
     return (localStorage.getItem(STORAGE_VIEW_MODE_KEY) as ViewMode) || 'cv'
   })
+
+  // Paper Format & Optical Preview Zoom (Paridade Matemática 1:1)
+  const [activePageFormat, setActivePageFormat] = useState<PageFormat>(() => {
+    const saved = localStorage.getItem(STORAGE_PAGE_FORMAT_KEY) as PageFormat
+    return saved || 'a4'
+  })
+  const [activeZoomMode, setActiveZoomMode] = useState<ZoomMode>(() => {
+    const saved = localStorage.getItem(STORAGE_ZOOM_MODE_KEY)
+    if (!saved) return 'auto'
+    if (saved === 'auto' || saved === '100' || saved === 'fit-width') return saved as ZoomMode
+    const num = parseFloat(saved)
+    return isNaN(num) ? 'auto' : num
+  })
+  const [currentScale, setCurrentScale] = useState<number>(1.0)
+
+  const handlePageFormatChange = (format: PageFormat) => {
+    setActivePageFormat(format)
+    localStorage.setItem(STORAGE_PAGE_FORMAT_KEY, format)
+    PageFormatEngine.applyFormat(format)
+  }
+
+  const handleZoomModeChange = (zoom: ZoomMode | number) => {
+    setActiveZoomMode(zoom)
+    localStorage.setItem(STORAGE_ZOOM_MODE_KEY, String(zoom))
+  }
+
+  useEffect(() => {
+    PageFormatEngine.applyFormat(activePageFormat)
+  }, [activePageFormat])
 
   // Per-Layout Universal Structure & Free Canvas Config
   const [layoutStructures, setLayoutStructures] = useState<Record<string, LayoutStructureConfig>>(() => {
@@ -513,6 +559,7 @@ export const CVMakerApp: React.FC = () => {
   // Print PDF via Unified Deterministic DOM-to-PDF Engine (P3)
   const handlePrintPdf = async () => {
     try {
+      PageFormatEngine.applyFormat(activePageFormat)
       await CVPrintEngine.triggerDirectPrint({
         candidateName: cvData?.basics?.name,
         candidateLabel: cvData?.basics?.label,
@@ -561,49 +608,127 @@ export const CVMakerApp: React.FC = () => {
         {/* ── App Top Header ── */}
         <div className="cv-app-header cv-no-print">
         <div className="cv-app-brand">
+          <button
+            className="cv-mobile-open-menu-btn"
+            onClick={() => setIsMobileDrawerOpen(true)}
+            title="Abrir Menu Lateral"
+          >
+            <span>☰</span> Menu & IA
+          </button>
           <span className="cv-badge-pill">⚡ CV Maker 2.0</span>
           <h2 className="cv-app-title">Gerador de Currículos & Cover Letter</h2>
         </div>
 
         <div className="cv-app-controls">
+          {/* Seletor Tri-Modal de Distribuição de Espaço (Desktop / Laptops) */}
+          <div className="cv-viewmode-switcher" title="Modos de Distribuição de Espaço">
+            <button
+              className={`cv-viewmode-btn ${workspaceMode === 'sidebar-focus' ? 'is-active' : ''}`}
+              onClick={() => handleWorkspaceModeChange('sidebar-focus')}
+              title="Foco no Menu (60% da tela para YAML, IA e Elementos)"
+            >
+              <span>📝</span> Foco no Menu
+            </button>
+            <button
+              className={`cv-viewmode-btn ${workspaceMode === 'split' ? 'is-active' : ''}`}
+              onClick={() => handleWorkspaceModeChange('split')}
+              title="Dividir Tela (50/50 balanceado)"
+            >
+              <span>◨</span> Dividir 50/50
+            </button>
+            <button
+              className={`cv-viewmode-btn ${workspaceMode === 'canvas-focus' ? 'is-active' : ''}`}
+              onClick={() => handleWorkspaceModeChange('canvas-focus')}
+              title="Foco no Preview (Minimizar menu e usar 100% da folha A4)"
+            >
+              <span>🖥️</span> Foco no Preview
+            </button>
+          </div>
+
           <button className="cv-btn-secondary" onClick={handleReset} title="Restaurar modelo padrão de exemplo">
             🔄 Resetar Modelo
           </button>
         </div>
       </div>
 
-      {/* ── Split Layout (Sidebar ↔ Preview) ── */}
-      <div className="cv-split-layout">
-        {/* Left Column: Sidebar (Chat / YAML Editor / History) */}
+      {/* ── Split Layout (Sidebar ↔ Preview com Suporte Tri-Modal) ── */}
+      <div className={`cv-split-layout cv-layout-mode--${workspaceMode} ${isMobileDrawerOpen ? 'cv-mobile-drawer-open' : ''}`}>
+        {/* Backdrop para mobile drawer */}
+        <div
+          className="cv-mobile-drawer-backdrop"
+          onClick={() => setIsMobileDrawerOpen(false)}
+          aria-hidden="true"
+        />
+
+        {/* Left Column: Sidebar (Chat / YAML Editor / History / Elementos) */}
         <aside className="cv-sidebar cv-no-print" aria-label="Painel de Controle">
+          {/* Barra Superior da Sidebar com Ações de Minimizar/Expandir */}
+          <div className="cv-sidebar-header-bar">
+            <span>
+              {activeTab === 'chat' && '✨ Assistente IA'}
+              {activeTab === 'editor' && '📝 Editor YAML'}
+              {activeTab === 'history' && '📜 Histórico'}
+              {activeTab === 'canvas' && '🎨 Elementos'}
+            </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+              <button
+                className="cv-mobile-close-btn"
+                onClick={() => setIsMobileDrawerOpen(false)}
+                title="Fechar Menu"
+              >
+                ✕ Fechar
+              </button>
+              <button
+                className="cv-sidebar-collapse-btn"
+                onClick={() => handleWorkspaceModeChange(workspaceMode === 'canvas-focus' ? 'split' : 'canvas-focus')}
+                title={workspaceMode === 'canvas-focus' ? 'Expandir Painel' : 'Minimizar Painel'}
+              >
+                {workspaceMode === 'canvas-focus' ? '▶ Expandir' : '◀ Minimizar'}
+              </button>
+            </div>
+          </div>
+
           <div className="cv-sidebar-tabs">
             <button
               className={`cv-sidebar-tab ${activeTab === 'chat' ? 'cv-sidebar-tab--active' : ''}`}
-              onClick={() => setActiveTab('chat')}
+              onClick={() => {
+                setActiveTab('chat')
+                if (workspaceMode === 'canvas-focus') handleWorkspaceModeChange('split')
+              }}
+              title="Assistente IA"
             >
-              <span>✨</span> Assistente IA
+              <span>✨</span> <span className="cv-sidebar-tab-text">Assistente IA</span>
             </button>
             <button
               className={`cv-sidebar-tab ${activeTab === 'editor' ? 'cv-sidebar-tab--active' : ''}`}
-              onClick={() => setActiveTab('editor')}
+              onClick={() => {
+                setActiveTab('editor')
+                if (workspaceMode === 'canvas-focus') handleWorkspaceModeChange('split')
+              }}
+              title="Editor YAML"
             >
-              <span>📝</span> Editor YAML {parseError ? '⚠️' : '✓'}
+              <span>📝</span> <span className="cv-sidebar-tab-text">Editor YAML {parseError ? '⚠️' : '✓'}</span>
             </button>
             <button
               className={`cv-sidebar-tab ${activeTab === 'history' ? 'cv-sidebar-tab--active' : ''}`}
               onClick={() => {
                 refreshHistory()
                 setActiveTab('history')
+                if (workspaceMode === 'canvas-focus') handleWorkspaceModeChange('split')
               }}
+              title="Histórico"
             >
-              <span>📜</span> Histórico ({historyList.length})
+              <span>📜</span> <span className="cv-sidebar-tab-text">Histórico ({historyList.length})</span>
             </button>
             <button
               className={`cv-sidebar-tab ${activeTab === 'canvas' ? 'cv-sidebar-tab--active' : ''}`}
-              onClick={() => setActiveTab('canvas')}
+              onClick={() => {
+                setActiveTab('canvas')
+                if (workspaceMode === 'canvas-focus') handleWorkspaceModeChange('split')
+              }}
               title="Paleta de Elementos e Variantes do Canvas Livre"
             >
-              <span>🎨</span> Elementos {currentStructureConfig.isFreeCanvasActive ? '✨' : ''}
+              <span>🎨</span> <span className="cv-sidebar-tab-text">Elementos {currentStructureConfig.isFreeCanvasActive ? '✨' : ''}</span>
             </button>
           </div>
 
@@ -717,6 +842,11 @@ export const CVMakerApp: React.FC = () => {
             onDownloadZip={handleDownloadZip}
             onPrintPdf={handlePrintPdf}
             onAutoFitSinglePage={handleAutoFitSinglePage}
+            activePageFormat={activePageFormat}
+            onPageFormatChange={handlePageFormatChange}
+            activeZoomMode={activeZoomMode}
+            onZoomModeChange={handleZoomModeChange}
+            currentScale={currentScale}
             onOpenDesignModal={() => setIsDesignModalOpen(true)}
             onOpenApiKeyModal={() => handleOpenLandingPage('hub', 'agent_prompt')}
             hasActiveKey={hasActiveKey}
@@ -727,16 +857,21 @@ export const CVMakerApp: React.FC = () => {
             onOpenAcademy={() => handleOpenLandingPage('academy')}
           />
 
-          <CVViewer
-            data={cvData}
-            theme={activeTheme}
-            layout={activeLayout}
-            viewMode={activeViewMode}
-            designConfig={designConfig}
-            onRequestGenerateCoverLetter={() => setIsCoverLetterModalOpen(true)}
-            structureConfig={currentStructureConfig}
-            onUpdateStructureConfig={handleUpdateStructureConfig}
-          />
+          <div className="cv-preview-viewport">
+            <CVViewer
+              data={cvData}
+              theme={activeTheme}
+              layout={activeLayout}
+              viewMode={activeViewMode}
+              designConfig={designConfig}
+              onRequestGenerateCoverLetter={() => setIsCoverLetterModalOpen(true)}
+              structureConfig={currentStructureConfig}
+              onUpdateStructureConfig={handleUpdateStructureConfig}
+              pageFormat={activePageFormat}
+              zoomMode={activeZoomMode}
+              onScaleChange={setCurrentScale}
+            />
+          </div>
         </main>
       </div>
 

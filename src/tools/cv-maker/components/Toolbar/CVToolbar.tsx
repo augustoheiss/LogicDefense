@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react'
-import type { TextVariant, ThemeVariant, LayoutVariant, ViewMode } from '../../types/cv'
+import type { TextVariant, ThemeVariant, LayoutVariant, ViewMode, PageFormat, ZoomMode } from '../../types/cv'
 import { LAYOUT_OPTIONS } from '../../types/cv'
+import { PAGE_FORMATS } from '../../engine/PageFormatEngine'
 
 interface CVToolbarProps {
   isFreeCanvasActive?: boolean
@@ -15,6 +16,11 @@ interface CVToolbarProps {
   onThemeChange?: (t: ThemeVariant) => void
   activeViewMode: ViewMode
   onViewModeChange: (v: ViewMode) => void
+  activePageFormat?: PageFormat
+  onPageFormatChange?: (format: PageFormat) => void
+  activeZoomMode?: ZoomMode
+  onZoomModeChange?: (zoom: ZoomMode | number) => void
+  currentScale?: number
   onOpenCoverLetterModal?: () => void
   hasCoverLetter?: boolean
   onDownloadYaml: () => void
@@ -59,6 +65,11 @@ export const CVToolbar: React.FC<CVToolbarProps> = ({
   onThemeChange: _onThemeChange,
   activeViewMode,
   onViewModeChange,
+  activePageFormat = 'a4',
+  onPageFormatChange,
+  activeZoomMode = 'auto',
+  onZoomModeChange,
+  currentScale = 1.0,
   onOpenCoverLetterModal,
   hasCoverLetter: _hasCoverLetter = false,
   onDownloadYaml,
@@ -111,12 +122,23 @@ export const CVToolbar: React.FC<CVToolbarProps> = ({
   const currentPersonaObj = PERSONAS.find(p => p.id === activePersona) || PERSONAS[0]
   const currentLayoutObj = LAYOUT_OPTIONS.find(l => l.id === activeLayout) || LAYOUT_OPTIONS[0]
   const currentViewModeObj = VIEW_MODES.find(v => v.id === activeViewMode) || VIEW_MODES[0]
+  const currentPageFormatObj = PAGE_FORMATS[activePageFormat] || PAGE_FORMATS.a4
+
+  const handleZoomIn = () => {
+    const nextScale = Math.min(1.5, Math.round(((currentScale || 1.0) + 0.1) * 10) / 10)
+    onZoomModeChange?.(nextScale)
+  }
+
+  const handleZoomOut = () => {
+    const nextScale = Math.max(0.4, Math.round(((currentScale || 1.0) - 0.1) * 10) / 10)
+    onZoomModeChange?.(nextScale)
+  }
 
   return (
     <div className="cv-preview-toolbar cv-no-print" ref={toolbarRef}>
       {/* LINHA 1: Menus de Seleção & Configuração Declarativa */}
       <div className="cv-toolbar-row">
-        {/* 1. Botão Canvas Livre Universal (Ativa manipulação livre no layout atual) */}
+        {/* 1. Botão Canvas Livre Universal */}
         <div className="cv-toolbar-group" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
           <button
             type="button"
@@ -138,53 +160,48 @@ export const CVToolbar: React.FC<CVToolbarProps> = ({
                 padding: '0.35rem 0.6rem',
                 fontSize: '0.78rem',
                 borderRadius: '6px',
-                border: '1px solid rgba(239, 68, 68, 0.4)',
-                background: 'rgba(239, 68, 68, 0.12)',
+                border: '1px solid rgba(248, 113, 113, 0.4)',
+                background: 'rgba(239, 68, 68, 0.15)',
                 color: '#fca5a5',
                 cursor: 'pointer',
-                transition: 'all 0.2s ease'
+                fontWeight: 600
               }}
             >
-              ↺ Resetar
+              ↩ Reset
             </button>
           )}
 
-          {onAutoPackBlocks && (
+          {isFreeCanvasActive && onAutoPackBlocks && (
             <button
               type="button"
-              className="cv-btn-canvas-pack"
+              className="cv-btn-canvas-autopack"
               onClick={onAutoPackBlocks}
-              title="Compactar blocos e eliminar espaços vazios/vácuos automaticamente"
+              title="Auto-organizar blocos sem sobreposição no espaço disponível"
               style={{
-                padding: '0.35rem 0.65rem',
+                padding: '0.35rem 0.6rem',
                 fontSize: '0.78rem',
                 borderRadius: '6px',
-                border: '1px solid rgba(16, 185, 129, 0.4)',
-                background: 'rgba(16, 185, 129, 0.15)',
-                color: '#6ee7b7',
+                border: '1px solid rgba(56, 189, 248, 0.4)',
+                background: 'rgba(56, 189, 248, 0.15)',
+                color: '#7dd3fc',
                 cursor: 'pointer',
-                fontWeight: 600,
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '0.25rem',
-                transition: 'all 0.2s ease'
+                fontWeight: 600
               }}
             >
-              <span>⚡</span>
-              <span>Compactar</span>
+              📦 Empacotar
             </button>
           )}
         </div>
 
-        {/* 2. Menu Modelo A4 (Modelos 01 a 09) */}
-        <div className="cv-toolbar-group">
-          <span className="cv-toolbar-label">Modelo A4:</span>
+        {/* 2. Menu Layouts & Modelos */}
+        <div className="cv-toolbar-group" style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+          <span className="cv-toolbar-label">Modelo:</span>
           <div className={`cv-dropdown-wrapper ${openDropdown === 'layout' ? 'is-open' : ''}`}>
             <button
               type="button"
               className="cv-dropdown-trigger"
               onClick={() => toggleDropdown('layout')}
-              title={`Modelo Atual: ${currentLayoutObj.label}`}
+              title={`Modelo Ativo: ${currentLayoutObj.name}`}
             >
               <span className="cv-dropdown-trigger__icon">{currentLayoutObj.icon}</span>
               <span className="cv-dropdown-trigger__text">{currentLayoutObj.name}</span>
@@ -192,7 +209,7 @@ export const CVToolbar: React.FC<CVToolbarProps> = ({
             </button>
 
             {openDropdown === 'layout' && (
-              <div className="cv-dropdown-menu" style={{ minWidth: '280px', maxHeight: '380px', overflowY: 'auto' }}>
+              <div className="cv-dropdown-menu" style={{ minWidth: '260px' }}>
                 {LAYOUT_OPTIONS.map(l => {
                   const isSelected = activeLayout === l.id
                   return (
@@ -239,8 +256,7 @@ export const CVToolbar: React.FC<CVToolbarProps> = ({
           )}
         </div>
 
-
-        {/* 4. Menu Persona IA */}
+        {/* 3. Menu Persona IA */}
         <div className="cv-toolbar-group">
           <span className="cv-toolbar-label">Persona IA:</span>
           <div className={`cv-dropdown-wrapper ${openDropdown === 'persona' ? 'is-open' : ''}`}>
@@ -284,7 +300,7 @@ export const CVToolbar: React.FC<CVToolbarProps> = ({
           </div>
         </div>
 
-        {/* 5. Menu Modo de Visualização (Currículo / Carta / Dossiê) */}
+        {/* 4. Menu Modo de Visualização (Currículo / Carta / Dossiê) */}
         <div className="cv-toolbar-group">
           <span className="cv-toolbar-label">Visualização:</span>
           <div className={`cv-dropdown-wrapper ${openDropdown === 'viewmode' ? 'is-open' : ''}`}>
@@ -324,11 +340,56 @@ export const CVToolbar: React.FC<CVToolbarProps> = ({
             )}
           </div>
         </div>
+
+        {/* 5. Formato de Folha Física: A4 vs US Letter */}
+        <div className="cv-toolbar-group">
+          <span className="cv-toolbar-label">Folha:</span>
+          <div className={`cv-dropdown-wrapper ${openDropdown === 'pageformat' ? 'is-open' : ''}`}>
+            <button
+              type="button"
+              className="cv-dropdown-trigger"
+              onClick={() => toggleDropdown('pageformat')}
+              title={`Formato Físico Ativo: ${currentPageFormatObj.label}`}
+              style={{ fontWeight: 600 }}
+            >
+              <span className="cv-dropdown-trigger__icon">{currentPageFormatObj.id === 'letter' ? '🇺🇸' : '📄'}</span>
+              <span className="cv-dropdown-trigger__text">{currentPageFormatObj.name}</span>
+              <span className="cv-dropdown-trigger__chevron">▼</span>
+            </button>
+
+            {openDropdown === 'pageformat' && (
+              <div className="cv-dropdown-menu" style={{ minWidth: '220px' }}>
+                {Object.values(PAGE_FORMATS).map(pf => {
+                  const isSelected = activePageFormat === pf.id
+                  return (
+                    <button
+                      key={pf.id}
+                      type="button"
+                      className={`cv-dropdown-item ${isSelected ? 'cv-dropdown-item--active' : ''}`}
+                      onClick={() => {
+                        onPageFormatChange?.(pf.id)
+                        closeDropdowns()
+                      }}
+                    >
+                      <div className="cv-dropdown-item__content">
+                        <div className="cv-dropdown-item__title">
+                          <span>{pf.id === 'letter' ? '🇺🇸' : '📄'}</span> <strong>{pf.name}</strong>
+                        </div>
+                        <div className="cv-dropdown-item__desc">{pf.widthMm} × {pf.heightMm} mm</div>
+                      </div>
+                      {isSelected && <span className="cv-dropdown-item__check">✓</span>}
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* LINHA 2: Ações Rápidas, Design & Estilo e Menu Exportar & PDF */}
       <div className="cv-toolbar-row cv-toolbar-row--actions">
-        {/* Design & Estilo Modal (Acessível em ambos os modos: Templates e Canvas Livre) */}
+        {/* Design & Estilo Modal */}
         {onOpenDesignModal && (
           <button
             type="button"
@@ -372,7 +433,7 @@ export const CVToolbar: React.FC<CVToolbarProps> = ({
           </button>
         )}
 
-        {/* Hub do Agente de IA, Prompts & API */}
+        {/* Hub do Agente de IA */}
         <button
           type="button"
           className="cv-btn-secondary"
@@ -387,7 +448,7 @@ export const CVToolbar: React.FC<CVToolbarProps> = ({
           🤖 {hasActiveKey ? 'Agente & API (Ativo)' : 'Hub Agente & API'}
         </button>
 
-        {/* Academia de Bastidores & Certificado */}
+        {/* Academia de Bastidores */}
         {onOpenAcademy && (
           <button
             type="button"
@@ -405,8 +466,109 @@ export const CVToolbar: React.FC<CVToolbarProps> = ({
           </button>
         )}
 
+        {/* Controles de Zoom Óptico do Preview */}
+        <div
+          className="cv-toolbar-group cv-zoom-controls"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.25rem',
+            background: 'rgba(15, 23, 42, 0.65)',
+            padding: '0.15rem 0.35rem',
+            borderRadius: '6px',
+            border: '1px solid rgba(148, 163, 184, 0.2)',
+            marginLeft: 'auto'
+          }}
+        >
+          <span style={{ fontSize: '0.72rem', color: '#94a3b8', fontWeight: 600, paddingLeft: '0.15rem' }}>Zoom:</span>
+          <button
+            type="button"
+            className="cv-zoom-btn"
+            onClick={() => onZoomModeChange?.('auto')}
+            title="Ajustar automaticamente à largura livre do monitor (Fit Width)"
+            style={{
+              padding: '0.22rem 0.45rem',
+              fontSize: '0.74rem',
+              borderRadius: '4px',
+              border: '1px solid rgba(148, 163, 184, 0.25)',
+              background: (activeZoomMode === 'auto' || activeZoomMode === 'fit-width') ? 'rgba(56, 189, 248, 0.22)' : 'transparent',
+              color: (activeZoomMode === 'auto' || activeZoomMode === 'fit-width') ? '#38bdf8' : '#cbd5e1',
+              fontWeight: 600,
+              cursor: 'pointer'
+            }}
+          >
+            Ajustar
+          </button>
+          <button
+            type="button"
+            className="cv-zoom-btn"
+            onClick={() => onZoomModeChange?.('100')}
+            title="Zoom 100% Real (Dimensão Física 1:1)"
+            style={{
+              padding: '0.22rem 0.45rem',
+              fontSize: '0.74rem',
+              borderRadius: '4px',
+              border: '1px solid rgba(148, 163, 184, 0.25)',
+              background: activeZoomMode === '100' ? 'rgba(56, 189, 248, 0.22)' : 'transparent',
+              color: activeZoomMode === '100' ? '#38bdf8' : '#cbd5e1',
+              fontWeight: 600,
+              cursor: 'pointer'
+            }}
+          >
+            100%
+          </button>
+          <button
+            type="button"
+            className="cv-zoom-btn"
+            onClick={handleZoomOut}
+            title="Diminuir Zoom (-10%)"
+            style={{
+              padding: '0.22rem 0.4rem',
+              fontSize: '0.8rem',
+              borderRadius: '4px',
+              border: '1px solid rgba(148, 163, 184, 0.25)',
+              background: 'transparent',
+              color: '#cbd5e1',
+              fontWeight: 700,
+              cursor: 'pointer'
+            }}
+          >
+            −
+          </button>
+          <span
+            style={{
+              fontSize: '0.72rem',
+              fontWeight: 700,
+              color: '#38bdf8',
+              minWidth: '2.5rem',
+              textAlign: 'center'
+            }}
+            title="Fator de escala óptico aplicado"
+          >
+            {Math.round((currentScale || 1.0) * 100)}%
+          </span>
+          <button
+            type="button"
+            className="cv-zoom-btn"
+            onClick={handleZoomIn}
+            title="Aumentar Zoom (+10%)"
+            style={{
+              padding: '0.22rem 0.4rem',
+              fontSize: '0.8rem',
+              borderRadius: '4px',
+              border: '1px solid rgba(148, 163, 184, 0.25)',
+              background: 'transparent',
+              color: '#cbd5e1',
+              fontWeight: 700,
+              cursor: 'pointer'
+            }}
+          >
+            +
+          </button>
+        </div>
+
         {/* Menu Unificado: Exportar & PDF */}
-        <div className={`cv-dropdown-wrapper ${openDropdown === 'exports' ? 'is-open' : ''}`} style={{ marginLeft: 'auto' }}>
+        <div className={`cv-dropdown-wrapper ${openDropdown === 'exports' ? 'is-open' : ''}`} style={{ marginLeft: '0.4rem' }}>
           <button
             type="button"
             className="cv-dropdown-trigger"
@@ -443,7 +605,7 @@ export const CVToolbar: React.FC<CVToolbarProps> = ({
                     <span>🖨️</span> <strong>Imprimir / Salvar PDF</strong>
                   </div>
                   <div className="cv-dropdown-item__desc" style={{ color: '#a7f3d0' }}>
-                    Exportação nativa A4 vetorial (Engine P3 sem corte)
+                    Exportação nativa {currentPageFormatObj.name} vetorial (Engine P3 sem corte)
                   </div>
                 </div>
               </button>

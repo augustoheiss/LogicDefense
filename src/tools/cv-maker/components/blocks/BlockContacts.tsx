@@ -13,7 +13,7 @@ export const BlockContacts: React.FC<BlockContactsProps> = ({ basics, layoutStyl
 
   if (layoutStyle === 'top_bar') {
     return (
-      <div className="cv-hero-top-bar">
+      <div className="cv-hero-top-bar cv-top-contact-bar">
         {basics.email && <span>✉ {basics.email}</span>}
         {basics.phone && <span>📞 {basics.phone}</span>}
         {locationStr && <span>📍 {locationStr}</span>}

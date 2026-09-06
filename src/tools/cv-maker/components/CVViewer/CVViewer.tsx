@@ -1,8 +1,10 @@
 import React from 'react'
-import type { CVData, ThemeVariant, LayoutVariant, ViewMode, CVDesignConfig, LayoutStructureConfig } from '../../types/cv'
+import type { CVData, ThemeVariant, LayoutVariant, ViewMode, CVDesignConfig, LayoutStructureConfig, PageFormat, ZoomMode } from '../../types/cv'
 import { getLayoutBlueprint } from '../../engine/blueprints'
+import { PageFormatEngine } from '../../engine/PageFormatEngine'
 import { CVPrintContainer } from './CVPrintContainer'
 import { UniversalLayoutRenderer } from './UniversalLayoutRenderer'
+import { CVPageViewportScaler } from './CVPageViewportScaler'
 
 interface CVViewerProps {
   data: CVData | null
@@ -13,6 +15,9 @@ interface CVViewerProps {
   onRequestGenerateCoverLetter?: () => void
   structureConfig?: LayoutStructureConfig
   onUpdateStructureConfig?: (newConfig: LayoutStructureConfig) => void
+  pageFormat?: PageFormat
+  zoomMode?: ZoomMode
+  onScaleChange?: (currentScale: number) => void
 }
 
 export const CVViewer: React.FC<CVViewerProps> = ({
@@ -23,7 +28,10 @@ export const CVViewer: React.FC<CVViewerProps> = ({
   designConfig,
   onRequestGenerateCoverLetter,
   structureConfig,
-  onUpdateStructureConfig
+  onUpdateStructureConfig,
+  pageFormat = 'a4',
+  zoomMode = 'auto',
+  onScaleChange
 }) => {
   if (!data || !data.basics) {
     return (
@@ -36,19 +44,28 @@ export const CVViewer: React.FC<CVViewerProps> = ({
   }
 
   const blueprint = getLayoutBlueprint(layout)
+  const dimension = PageFormatEngine.getDimension(pageFormat)
 
   return (
-    <CVPrintContainer>
-      <UniversalLayoutRenderer
-        data={data}
-        blueprint={blueprint}
-        theme={theme}
-        viewMode={viewMode}
-        designConfig={designConfig}
-        onRequestGenerateCoverLetter={onRequestGenerateCoverLetter}
-        structureConfig={structureConfig}
-        onUpdateStructureConfig={onUpdateStructureConfig}
-      />
-    </CVPrintContainer>
+    <CVPageViewportScaler
+      pageWidthPx={dimension.widthPx}
+      pageHeightPx={dimension.heightPx}
+      zoomMode={zoomMode}
+      onScaleChange={onScaleChange}
+    >
+      <CVPrintContainer>
+        <UniversalLayoutRenderer
+          data={data}
+          blueprint={blueprint}
+          theme={theme}
+          viewMode={viewMode}
+          designConfig={designConfig}
+          onRequestGenerateCoverLetter={onRequestGenerateCoverLetter}
+          structureConfig={structureConfig}
+          onUpdateStructureConfig={onUpdateStructureConfig}
+        />
+      </CVPrintContainer>
+    </CVPageViewportScaler>
   )
 }
+
