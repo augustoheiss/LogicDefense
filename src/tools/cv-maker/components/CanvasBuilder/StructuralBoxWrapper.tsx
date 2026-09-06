@@ -31,8 +31,6 @@ export const StructuralBoxWrapper: React.FC<StructuralBoxWrapperProps> = ({
   currentZone,
   category,
   onUpdateDimensions,
-  onMoveUp,
-  onMoveDown,
   onSwitchZone,
   onResetDimensions,
   onToggleHide,
@@ -41,11 +39,25 @@ export const StructuralBoxWrapper: React.FC<StructuralBoxWrapperProps> = ({
 }) => {
   const containerRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
+  const toolbarRef = useRef<HTMLDivElement>(null)
   const [isOverflowing, setIsOverflowing] = useState<boolean>(false)
   const [hasCollision, setHasCollision] = useState<boolean>(false)
   const [isResizing, setIsResizing] = useState<boolean>(false)
   const [isMoving, setIsMoving] = useState<boolean>(false)
-  const [resizeType, setResizeType] = useState<'width' | 'height' | 'both' | string | null>(null)
+  const [resizeType, setResizeType] = useState<string | null>(null)
+  const [activePopover, setActivePopover] = useState<'style' | 'position' | 'font' | null>(null)
+
+  // Fecha o popover ativo ao clicar fora da mini-toolbar
+  useEffect(() => {
+    if (!activePopover) return
+    const handleClickOutside = (e: MouseEvent) => {
+      if (toolbarRef.current && !toolbarRef.current.contains(e.target as Node)) {
+        setActivePopover(null)
+      }
+    }
+    document.addEventListener('pointerdown', handleClickOutside)
+    return () => document.removeEventListener('pointerdown', handleClickOutside)
+  }, [activePopover])
 
   // Medição contínua de overflow para evitar estouro da folha A4
   useEffect(() => {
@@ -109,10 +121,10 @@ export const StructuralBoxWrapper: React.FC<StructuralBoxWrapperProps> = ({
     }
   }, [isFreeCanvasActive, dimensions, isMoving])
 
-  // Manipulação contínua de redimensionamento nos 4 cantos e bordas via PointerEvents (Mouse + Touch)
+  // Manipulação contínua de redimensionamento nas 4 bordas e 4 cantos com área ampla de toque/mouse
   const handlePointerDown = useCallback((
     e: React.PointerEvent<HTMLDivElement>,
-    type: 'width' | 'height' | 'both' | 'corner-se' | 'corner-sw' | 'corner-ne' | 'corner-nw'
+    type: 'width' | 'width-left' | 'height' | 'height-top' | 'corner-se' | 'corner-sw' | 'corner-ne' | 'corner-nw'
   ) => {
     e.preventDefault()
     e.stopPropagation()
@@ -122,9 +134,14 @@ export const StructuralBoxWrapper: React.FC<StructuralBoxWrapperProps> = ({
 
     const startX = e.clientX
     const startY = e.clientY
-    const startWidth = containerRef.current?.getBoundingClientRect().width || 200
-    const startHeight = containerRef.current?.getBoundingClientRect().height || 100
-    const parentWidth = containerRef.current?.parentElement?.getBoundingClientRect().width || 800
+    const currentContainer = containerRef.current
+    const startWidth = currentContainer?.getBoundingClientRect().width || 200
+    const startHeight = currentContainer?.getBoundingClientRect().height || 100
+
+    // Referência de largura: preferencialmente o card A4 útil para cálculo proporcional sem travas de colunas estreitas
+    const a4Card = currentContainer?.closest('.cv-card') as HTMLElement | null
+    const parentContainer = currentContainer?.parentElement as HTMLElement | null
+    const baseWidth = a4Card?.clientWidth || parentContainer?.clientWidth || 800
 
     setIsResizing(true)
     setResizeType(type)
@@ -137,33 +154,37 @@ export const StructuralBoxWrapper: React.FC<StructuralBoxWrapperProps> = ({
       const deltaX = moveEvt.clientX - startX
       const deltaY = moveEvt.clientY - startY
 
-      // Largura: cantos direitos aumentam com deltaX; esquerdos com deltaX invertido
-      if (type === 'width' || type === 'both' || type === 'corner-se' || type === 'corner-ne') {
-        const newWidthPx = Math.max(120, Math.min(parentWidth, startWidth + deltaX))
-        latestWidthPercent = Math.round((newWidthPx / parentWidth) * 100)
+      // Largura: cantos e bordas direitas aumentam com deltaX; esquerdas com deltaX invertido
+      if (type === 'width' || type === 'corner-se' || type === 'corner-ne') {
+        const newWidthPx = Math.max(40, startWidth + deltaX)
+        latestWidthPercent = Math.max(10, Math.min(100, Math.round((newWidthPx / baseWidth) * 100)))
         if (containerRef.current) {
           containerRef.current.style.width = `${latestWidthPercent}%`
+          containerRef.current.style.flex = `0 0 ${latestWidthPercent}%`
         }
-      } else if (type === 'corner-sw' || type === 'corner-nw') {
-        const newWidthPx = Math.max(120, Math.min(parentWidth, startWidth - deltaX))
-        latestWidthPercent = Math.round((newWidthPx / parentWidth) * 100)
+      } else if (type === 'width-left' || type === 'corner-sw' || type === 'corner-nw') {
+        const newWidthPx = Math.max(40, startWidth - deltaX)
+        latestWidthPercent = Math.max(10, Math.min(100, Math.round((newWidthPx / baseWidth) * 100)))
         if (containerRef.current) {
           containerRef.current.style.width = `${latestWidthPercent}%`
+          containerRef.current.style.flex = `0 0 ${latestWidthPercent}%`
         }
       }
 
-      // Altura: cantos inferiores aumentam com deltaY; superiores com deltaY invertido
-      if (type === 'height' || type === 'both' || type === 'corner-se' || type === 'corner-sw') {
-        latestHeightPx = Math.max(36, Math.min(950, Math.round(startHeight + deltaY)))
+      // Altura: bordas e cantos inferiores aumentam com deltaY; superiores com deltaY invertido
+      if (type === 'height' || type === 'corner-se' || type === 'corner-sw') {
+        latestHeightPx = Math.max(20, Math.min(1500, Math.round(startHeight + deltaY)))
         if (containerRef.current) {
           containerRef.current.style.minHeight = `${latestHeightPx}px`
           containerRef.current.style.maxHeight = `${latestHeightPx}px`
+          containerRef.current.style.overflow = 'hidden'
         }
-      } else if (type === 'corner-ne' || type === 'corner-nw') {
-        latestHeightPx = Math.max(36, Math.min(950, Math.round(startHeight - deltaY)))
+      } else if (type === 'height-top' || type === 'corner-ne' || type === 'corner-nw') {
+        latestHeightPx = Math.max(20, Math.min(1500, Math.round(startHeight - deltaY)))
         if (containerRef.current) {
           containerRef.current.style.minHeight = `${latestHeightPx}px`
           containerRef.current.style.maxHeight = `${latestHeightPx}px`
+          containerRef.current.style.overflow = 'hidden'
         }
       }
     }
@@ -173,7 +194,7 @@ export const StructuralBoxWrapper: React.FC<StructuralBoxWrapperProps> = ({
       try {
         targetEl.releasePointerCapture(upEvt.pointerId)
       } catch {
-        // Ignora caso já liberado
+        // Ignora se já liberado
       }
       window.removeEventListener('pointermove', onPointerMove)
       window.removeEventListener('pointerup', onPointerUp)
@@ -193,7 +214,7 @@ export const StructuralBoxWrapper: React.FC<StructuralBoxWrapperProps> = ({
     window.addEventListener('pointerup', onPointerUp)
   }, [dimensions, onUpdateDimensions])
 
-  // Manipulação de Arraste 2D Bidimensional pelo Label (Mouse + Touch)
+  // Manipulação de Arraste 2D Bidimensional pelo Grip da Mini-Toolbar
   const handleMovePointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     if (e.button !== 0) return
     e.preventDefault()
@@ -213,13 +234,11 @@ export const StructuralBoxWrapper: React.FC<StructuralBoxWrapperProps> = ({
       const deltaY = moveEvt.clientY - startY
 
       if (containerRef.current) {
-        // Movimentação livre no plano 2D (ambos os eixos X e Y)
         containerRef.current.style.transform = `translate(${deltaX}px, ${deltaY}px)`
         containerRef.current.style.zIndex = '120'
         containerRef.current.style.boxShadow = '0 14px 32px rgba(0, 0, 0, 0.45)'
       }
 
-      // Detecção de migração de coluna por arraste lateral (se cruzar a divisória)
       if (canSwitchZone && onSwitchZone && !hasCrossedZone) {
         if ((currentZone === 'left' && deltaX > 160) || (currentZone === 'right' && deltaX < -160)) {
           hasCrossedZone = true
@@ -248,7 +267,6 @@ export const StructuralBoxWrapper: React.FC<StructuralBoxWrapperProps> = ({
       }
       setIsMoving(false)
 
-      // Grava a nova posição livre no plano permanentemente (sem travas ou efeito elástico de retorno)
       if (Math.abs(finalDeltaX) > 3 || Math.abs(finalDeltaY) > 3) {
         const curX = dimensions?.marginLeftPx || 0
         const curY = dimensions?.marginTopPx || 0
@@ -259,10 +277,9 @@ export const StructuralBoxWrapper: React.FC<StructuralBoxWrapperProps> = ({
           ...dimensions,
           marginLeftPx: nextX,
           marginTopPx: nextY,
-          alignment: undefined // Limpa alinhamento estático para fixar onde foi solto
+          alignment: undefined
         })
 
-        // Notifica todos os blocos para checarem sobreposição/colisão física
         setTimeout(() => {
           window.dispatchEvent(new CustomEvent('cv-box-moved'))
         }, 50)
@@ -273,7 +290,7 @@ export const StructuralBoxWrapper: React.FC<StructuralBoxWrapperProps> = ({
     window.addEventListener('pointerup', onPointerUp)
   }, [canSwitchZone, currentZone, dimensions, onSwitchZone, onUpdateDimensions])
 
-  // Ajuste rápido de margem vertical (Y) sem travas artificiais estreitas
+  // Ajuste rápido de margem vertical (Y)
   const handleAdjustMarginY = (delta: number) => {
     const current = dimensions?.marginTopPx || 0
     const next = Math.max(-500, Math.min(1000, current + delta))
@@ -283,7 +300,7 @@ export const StructuralBoxWrapper: React.FC<StructuralBoxWrapperProps> = ({
     })
   }
 
-  // Ajuste fino de margem / recuo horizontal (X) sem travas artificiais
+  // Ajuste fino de margem / recuo horizontal (X)
   const handleAdjustMarginX = (delta: number) => {
     const current = dimensions?.marginLeftPx || 0
     const next = Math.max(-500, Math.min(1000, current + delta))
@@ -294,8 +311,9 @@ export const StructuralBoxWrapper: React.FC<StructuralBoxWrapperProps> = ({
     })
   }
 
-  // Encostar diretamente no bloco de cima (elimina vácuo vertical com precisão de pixel)
-  const handleSnapToAbove = () => {
+  // ⤒ Encostar no bloco de cima (elimina vácuo entre este bloco e o anterior)
+  const handleSnapToAbove = (e: React.MouseEvent) => {
+    e.stopPropagation()
     const el = containerRef.current
     if (!el) return
 
@@ -310,6 +328,40 @@ export const StructuralBoxWrapper: React.FC<StructuralBoxWrapperProps> = ({
       const visualGap = myRect.top - prevRect.bottom
       const curMarginY = dimensions?.marginTopPx || 0
       const targetMarginY = Math.round(curMarginY - visualGap)
+
+      onUpdateDimensions?.({
+        ...dimensions,
+        marginTopPx: targetMarginY
+      })
+    } else {
+      onUpdateDimensions?.({
+        ...dimensions,
+        marginTopPx: 0
+      })
+    }
+
+    setTimeout(() => {
+      window.dispatchEvent(new CustomEvent('cv-box-moved'))
+    }, 50)
+  }
+
+  // ⤓ Encostar no bloco de baixo (elimina vácuo entre este bloco e o próximo)
+  const handleSnapToBelow = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    const el = containerRef.current
+    if (!el) return
+
+    let next = el.nextElementSibling as HTMLElement | null
+    while (next && (next.offsetParent === null || next.classList.contains('cv-no-print'))) {
+      next = next.nextElementSibling as HTMLElement | null
+    }
+
+    if (next) {
+      const nextRect = next.getBoundingClientRect()
+      const myRect = el.getBoundingClientRect()
+      const visualGap = nextRect.top - myRect.bottom
+      const curMarginY = dimensions?.marginTopPx || 0
+      const targetMarginY = Math.round(curMarginY + visualGap)
 
       onUpdateDimensions?.({
         ...dimensions,
@@ -377,7 +429,7 @@ export const StructuralBoxWrapper: React.FC<StructuralBoxWrapperProps> = ({
   }
 
   const isPhoto = category === 'photo' || sectionId === 'photo'
-  const widthStyle = dimensions?.widthPercent && dimensions.widthPercent < 100
+  const widthStyle = dimensions?.widthPercent
     ? `${dimensions.widthPercent}%`
     : isPhoto
       ? 'fit-content'
@@ -389,7 +441,7 @@ export const StructuralBoxWrapper: React.FC<StructuralBoxWrapperProps> = ({
       ? `${dimensions.minHeightPx}px`
       : undefined
 
-  // Deslocamento 2D no plano livre (sem quebrar o fluxo de página)
+  // Deslocamento 2D no plano livre
   const topStyle = typeof dimensions?.marginTopPx === 'number' && dimensions.marginTopPx !== 0
     ? `${dimensions.marginTopPx}px`
     : undefined
@@ -412,6 +464,17 @@ export const StructuralBoxWrapper: React.FC<StructuralBoxWrapperProps> = ({
 
   const fontScaleVal = dimensions?.fontSizeScale ?? 1.0
   const fontPercentVal = Math.round(fontScaleVal * 100)
+  const hasVariants = Boolean(category && CATEGORY_VARIANTS_MAP[category] && onSelectVariant)
+  const hasCustomizations = Boolean(
+    dimensions?.widthPercent ||
+    dimensions?.minHeightPx ||
+    dimensions?.marginTopPx ||
+    dimensions?.marginLeftPx ||
+    dimensions?.alignment ||
+    dimensions?.variant ||
+    dimensions?.fontFamily ||
+    (dimensions?.fontSizeScale && dimensions.fontSizeScale !== 1)
+  )
 
   return (
     <div
@@ -438,308 +501,310 @@ export const StructuralBoxWrapper: React.FC<StructuralBoxWrapperProps> = ({
       data-has-custom-font={dimensions?.fontFamily ? 'true' : undefined}
       data-has-custom-scale={dimensions?.fontSizeScale && dimensions.fontSizeScale !== 1 ? 'true' : undefined}
     >
-      {/* Menu Interno do Canvas Livre (Preenche o interior do box ao passar o mouse) */}
+      {/* ── Nova Mini-Toolbar Compacta Flutuante (Estilo Notion/Figma) ── */}
       <div
-        className="cv-structural-box__overlay-menu cv-no-print"
+        ref={toolbarRef}
+        className="cv-box-mini-toolbar cv-no-print"
         data-cv-interactive="true"
         onClick={e => e.stopPropagation()}
       >
-        <div className="cv-box-menu-inner">
-          {/* Linha 1: Cabeçalho com Título Truncado, Grip de Arraste e Botões de Ação */}
-          <div className="cv-box-menu-header">
-            <div
-              className={`cv-box-menu-title-tag ${isMoving ? 'is-dragging' : ''}`}
-              onPointerDown={handleMovePointerDown}
-              title="Segure e arraste pelo título para mover livremente no plano"
-            >
-              <span className="cv-drag-grip">⠿</span>
-              <span className="cv-box-menu-title-text" title={title}>{title}</span>
+        {/* Grip de Arraste com Título Truncado */}
+        <div
+          className={`cv-mini-toolbar-drag ${isMoving ? 'is-dragging' : ''}`}
+          onPointerDown={handleMovePointerDown}
+          title="Segure e arraste pelo título para mover livremente no plano"
+        >
+          <span className="cv-mini-drag-icon">⠿</span>
+          <span className="cv-mini-title-text" title={title}>{title}</span>
+        </div>
+
+        {dimensions?.widthPercent && dimensions.widthPercent < 100 && (
+          <span className="cv-mini-badge">{dimensions.widthPercent}%</span>
+        )}
+
+        {/* Botão 🎨 Estilo */}
+        {hasVariants && (
+          <button
+            type="button"
+            className={`cv-mini-btn ${activePopover === 'style' ? 'is-active' : ''}`}
+            onClick={() => setActivePopover(prev => prev === 'style' ? null : 'style')}
+            title="Escolher estilo/variante de visualização"
+          >
+            🎨 Estilo
+          </button>
+        )}
+
+        {/* Botão 📏 Posição & Margens */}
+        <button
+          type="button"
+          className={`cv-mini-btn ${activePopover === 'position' ? 'is-active' : ''}`}
+          onClick={() => setActivePopover(prev => prev === 'position' ? null : 'position')}
+          title="Ajustar margens, recuos e encostar em blocos"
+        >
+          📏 Posição
+        </button>
+
+        {/* Botão 🔤 Tipografia */}
+        <button
+          type="button"
+          className={`cv-mini-btn ${activePopover === 'font' ? 'is-active' : ''}`}
+          onClick={() => setActivePopover(prev => prev === 'font' ? null : 'font')}
+          title="Ajustar fonte e tamanho do texto deste bloco"
+        >
+          🔤 Fonte
+        </button>
+
+        {/* Botão Trocar Coluna (quando aplicável) */}
+        {canSwitchZone && onSwitchZone && (
+          <button
+            type="button"
+            className="cv-mini-btn cv-mini-btn--zone"
+            onClick={onSwitchZone}
+            title={`Transferir para coluna ${currentZone === 'left' ? 'Direita' : 'Esquerda'}`}
+          >
+            ⇄ Coluna {currentZone === 'left' ? 'Dir' : 'Esq'}
+          </button>
+        )}
+
+        {/* Botão Ocultar */}
+        {onToggleHide && (
+          <button
+            type="button"
+            className="cv-mini-btn cv-mini-btn--icon cv-mini-btn--hide"
+            onClick={onToggleHide}
+            title="Ocultar este item da folha A4 (restaurável na paleta Elementos)"
+          >
+            👁️
+          </button>
+        )}
+
+        {/* Botão Redefinir */}
+        {onResetDimensions && hasCustomizations && (
+          <button
+            type="button"
+            className="cv-mini-btn cv-mini-btn--icon cv-mini-btn--reset"
+            onClick={onResetDimensions}
+            title="Redefinir tamanho, margens e formato deste bloco"
+          >
+            ↺
+          </button>
+        )}
+
+        {/* ── Popover 1: Estilo / Variantes ── */}
+        {activePopover === 'style' && hasVariants && (
+          <div className="cv-box-popover cv-box-popover--style" onClick={e => e.stopPropagation()}>
+            <div className="cv-popover-header">
+              <span>🎨 Formato do Bloco</span>
+              <button type="button" className="cv-popover-close" onClick={() => setActivePopover(null)}>✕</button>
             </div>
-
-            <div className="cv-box-menu-header-actions">
-              {dimensions?.widthPercent && dimensions.widthPercent < 100 && (
-                <span className="cv-box-menu-badge">{dimensions.widthPercent}%</span>
-              )}
-
-              {onToggleHide && (
-                <button
-                  type="button"
-                  className="cv-box-menu-header-btn cv-box-menu-header-btn--hide"
-                  onClick={onToggleHide}
-                  title="Ocultar este item da folha A4 (restaurável na paleta Elementos)"
-                >
-                  👁️ Ocultar
-                </button>
-              )}
-
-              {onResetDimensions && (dimensions?.widthPercent || dimensions?.minHeightPx || dimensions?.marginTopPx || dimensions?.marginLeftPx || dimensions?.alignment || dimensions?.variant) && (
-                <button
-                  type="button"
-                  className="cv-box-menu-header-btn cv-box-menu-header-btn--reset"
-                  onClick={onResetDimensions}
-                  title="Redefinir tamanho, margens e formato deste bloco"
-                >
-                  ↺ Redefinir
-                </button>
-              )}
-            </div>
-          </div>
-
-          {/* Linha 2: Ações Principais de Layout e Movimentação com Botões Maiores */}
-          <div className="cv-box-menu-main-row">
-            {/* Seletor de Variante de Layout Grande e Legível */}
-            {category && CATEGORY_VARIANTS_MAP[category] && onSelectVariant && (
-              <div className="cv-box-menu-variant-group">
-                <span className="cv-box-menu-section-label">Estilo:</span>
-                <select
-                  className="cv-box-menu-variant-select"
-                  value={dimensions?.variant || CATEGORY_VARIANTS_MAP[category][0].id}
-                  onChange={e => onSelectVariant(e.target.value)}
-                  title="Alterar o formato/layout deste bloco"
-                >
-                  {CATEGORY_VARIANTS_MAP[category].map(v => (
-                    <option key={v.id} value={v.id}>
-                      {v.icon} {v.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
-
-            {/* Mover para Cima e para Baixo */}
-            <div className="cv-box-menu-btn-group">
-              {onMoveUp && (
-                <button
-                  type="button"
-                  className="cv-box-menu-btn cv-box-menu-btn--nav"
-                  onClick={onMoveUp}
-                  title="Mover seção para cima"
-                >
-                  ▲ Subir
-                </button>
-              )}
-              {onMoveDown && (
-                <button
-                  type="button"
-                  className="cv-box-menu-btn cv-box-menu-btn--nav"
-                  onClick={onMoveDown}
-                  title="Mover seção para baixo"
-                >
-                  ▼ Descer
-                </button>
-              )}
-            </div>
-
-            {/* Troca de Coluna em Layouts Multi-coluna */}
-            {canSwitchZone && onSwitchZone && (
-              <button
-                type="button"
-                className="cv-box-menu-btn cv-box-menu-btn--zone"
-                onClick={onSwitchZone}
-                title={`Transferir para coluna ${currentZone === 'left' ? 'Direita' : 'Esquerda'}`}
-              >
-                ⇄ Para Coluna {currentZone === 'left' ? 'Direita' : 'Esquerda'}
-              </button>
-            )}
-          </div>
-
-          {/* Linha 3: Ajustes Finos de Posição, Margens e Alinhamento */}
-          <div className="cv-box-menu-controls-row">
-            {/* Margem Vertical (Y) com botão rápido para Encostar no Bloco de Cima */}
-            <div className="cv-box-menu-stepper" title="Ajustar margem vertical (Eixo Y)">
-              <span className="cv-stepper-label">Margem Y:</span>
-              <button
-                type="button"
-                className="cv-stepper-btn"
-                onClick={() => handleAdjustMarginY(-4)}
-                title="Reduzir margem vertical (-4px)"
-              >
-                -
-              </button>
-              <span className="cv-stepper-value">
-                {dimensions?.marginTopPx ?? 0}px
-              </span>
-              <button
-                type="button"
-                className="cv-stepper-btn"
-                onClick={() => handleAdjustMarginY(+4)}
-                title="Aumentar margem vertical (+4px)"
-              >
-                +
-              </button>
-              <button
-                type="button"
-                className="cv-stepper-btn cv-stepper-btn--snap"
-                onClick={handleSnapToAbove}
-                title="Encostar diretamente no bloco de cima (elimina espaços vazios e vácuo)"
-                style={{
-                  padding: '0.15rem 0.45rem',
-                  fontSize: '0.72rem',
-                  fontWeight: 600,
-                  borderRadius: '4px',
-                  background: 'rgba(16, 185, 129, 0.2)',
-                  border: '1px solid rgba(16, 185, 129, 0.4)',
-                  color: '#6ee7b7',
-                  cursor: 'pointer',
-                  marginLeft: '0.35rem',
-                  whiteSpace: 'nowrap'
+            <div className="cv-popover-body">
+              <select
+                className="cv-popover-select"
+                value={dimensions?.variant || (category && CATEGORY_VARIANTS_MAP[category]?.[0]?.id) || 'card_box'}
+                onChange={e => {
+                  onSelectVariant?.(e.target.value)
+                  setActivePopover(null)
                 }}
               >
-                ⤒ Encostar
-              </button>
-              {(dimensions?.marginTopPx !== undefined && dimensions.marginTopPx !== 0) && (
-                <button
-                  type="button"
-                  className="cv-stepper-btn cv-stepper-btn--zero"
-                  onClick={() => onUpdateDimensions?.({ ...dimensions, marginTopPx: 0 })}
-                  title="Zerar margem vertical (0px)"
-                  style={{
-                    padding: '0.15rem 0.35rem',
-                    fontSize: '0.7rem',
-                    borderRadius: '4px',
-                    background: 'rgba(255, 255, 255, 0.1)',
-                    border: '1px solid rgba(255, 255, 255, 0.2)',
-                    color: '#e2e8f0',
-                    cursor: 'pointer',
-                    marginLeft: '0.2rem'
-                  }}
-                >
-                  0px
-                </button>
-              )}
-            </div>
-
-            {/* Recuo Horizontal (X) */}
-            <div className="cv-box-menu-stepper" title="Ajustar recuo lateral (Eixo X)">
-              <span className="cv-stepper-label">Recuo X:</span>
-              <button
-                type="button"
-                className="cv-stepper-btn"
-                onClick={() => handleAdjustMarginX(-8)}
-                title="Mover para esquerda (-8px)"
-              >
-                ◀
-              </button>
-              <span className="cv-stepper-value">
-                {dimensions?.marginLeftPx ?? 0}px
-              </span>
-              <button
-                type="button"
-                className="cv-stepper-btn"
-                onClick={() => handleAdjustMarginX(+8)}
-                title="Mover para direita (+8px)"
-              >
-                ▶
-              </button>
-              {(dimensions?.marginLeftPx !== undefined && dimensions.marginLeftPx !== 0) && (
-                <button
-                  type="button"
-                  className="cv-stepper-btn cv-stepper-btn--zero"
-                  onClick={() => onUpdateDimensions?.({ ...dimensions, marginLeftPx: 0 })}
-                  title="Zerar recuo horizontal (0px)"
-                  style={{
-                    padding: '0.15rem 0.35rem',
-                    fontSize: '0.7rem',
-                    borderRadius: '4px',
-                    background: 'rgba(255, 255, 255, 0.1)',
-                    border: '1px solid rgba(255, 255, 255, 0.2)',
-                    color: '#e2e8f0',
-                    cursor: 'pointer',
-                    marginLeft: '0.2rem'
-                  }}
-                >
-                  0px
-                </button>
-              )}
-            </div>
-
-            {/* Alinhamento rápido se largura for menor que 100% */}
-            {dimensions?.widthPercent && dimensions.widthPercent < 100 && (
-              <div className="cv-box-menu-align-group" title="Alinhamento na linha">
-                <button
-                  type="button"
-                  className={`cv-align-btn ${dimensions?.alignment === 'left' || !dimensions?.alignment ? 'is-active' : ''}`}
-                  onClick={() => handleSetAlignment('left')}
-                  title="Alinhar à Esquerda"
-                >
-                  ⬅️ Esq
-                </button>
-                <button
-                  type="button"
-                  className={`cv-align-btn ${dimensions?.alignment === 'center' ? 'is-active' : ''}`}
-                  onClick={() => handleSetAlignment('center')}
-                  title="Centralizar"
-                >
-                  ⏺️ Centro
-                </button>
-                <button
-                  type="button"
-                  className={`cv-align-btn ${dimensions?.alignment === 'right' ? 'is-active' : ''}`}
-                  onClick={() => handleSetAlignment('right')}
-                  title="Alinhar à Direita"
-                >
-                  ➡️ Dir
-                </button>
-              </div>
-            )}
-          </div>
-
-          {/* Linha 4: Tipografia Específica do Box (Fonte & Escala Contínua 70% a 140%) */}
-          <div className="cv-box-menu-typography-row">
-            {/* Seletor de Família de Fonte com Catálogo Completo */}
-            <div className="cv-box-menu-font-group" title="Alterar a fonte tipográfica deste box específico">
-              <span className="cv-box-menu-section-label">Fonte:</span>
-              <select
-                className="cv-box-menu-font-select"
-                value={dimensions?.fontFamily || 'inherit'}
-                onChange={e => handleSelectFontFamily(e.target.value)}
-              >
-                {AVAILABLE_BOX_FONTS.map(f => (
-                  <option key={f.id} value={f.family || 'inherit'}>
-                    {f.label}
+                {category && CATEGORY_VARIANTS_MAP[category]?.map(v => (
+                  <option key={v.id} value={v.id}>
+                    {v.icon} {v.label}
                   </option>
                 ))}
               </select>
             </div>
+          </div>
+        )}
 
-            {/* Slider Contínuo de Tamanho com Botões A- e A+ e Porcentagem em Tempo Real */}
-            <div className="cv-box-menu-font-slider-group" title="Ajuste contínuo do tamanho da fonte deste box (70% a 140%)">
-              <span className="cv-box-menu-section-label">Tam:</span>
-              <button
-                type="button"
-                className="cv-stepper-btn cv-stepper-btn--font"
-                onClick={() => handleAdjustFontScale(-4)}
-                title="Reduzir tamanho da fonte (-4%)"
-              >
-                A-
-              </button>
+        {/* ── Popover 2: Posição & Margens (Com Encostar Acima e Abaixo) ── */}
+        {activePopover === 'position' && (
+          <div className="cv-box-popover cv-box-popover--position" onClick={e => e.stopPropagation()}>
+            <div className="cv-popover-header">
+              <span>📏 Posição & Encostar</span>
+              <button type="button" className="cv-popover-close" onClick={() => setActivePopover(null)}>✕</button>
+            </div>
+            <div className="cv-popover-body">
+              {/* Botões de Encostar Rápido (Snap Acima e Abaixo) */}
+              <div className="cv-popover-snap-group">
+                <span className="cv-popover-sublabel">Encostar sem vão:</span>
+                <div className="cv-popover-snap-buttons">
+                  <button
+                    type="button"
+                    className="cv-snap-btn cv-snap-btn--up"
+                    onClick={handleSnapToAbove}
+                    title="Encostar o topo deste bloco na base do bloco de cima"
+                  >
+                    ⤒ Acima
+                  </button>
+                  <button
+                    type="button"
+                    className="cv-snap-btn cv-snap-btn--down"
+                    onClick={handleSnapToBelow}
+                    title="Encostar a base deste bloco no topo do bloco de baixo"
+                  >
+                    ⤓ Abaixo
+                  </button>
+                </div>
+              </div>
 
-              <input
-                type="range"
-                className="cv-box-menu-range"
-                min={70}
-                max={140}
-                step={2}
-                value={fontPercentVal}
-                onChange={e => handleSetFontScaleSlider(Number(e.target.value))}
-                title={`Tamanho: ${fontPercentVal}% (arraste para ajustar)`}
-              />
+              {/* Ajuste de Margem Vertical (Y) */}
+              <div className="cv-popover-row">
+                <span className="cv-popover-row-label">Margem Y:</span>
+                <div className="cv-popover-stepper">
+                  <button
+                    type="button"
+                    className="cv-popover-step-btn"
+                    onClick={() => handleAdjustMarginY(-4)}
+                    title="Reduzir margem (-4px)"
+                  >
+                    -
+                  </button>
+                  <span className="cv-popover-step-val">{dimensions?.marginTopPx ?? 0}px</span>
+                  <button
+                    type="button"
+                    className="cv-popover-step-btn"
+                    onClick={() => handleAdjustMarginY(+4)}
+                    title="Aumentar margem (+4px)"
+                  >
+                    +
+                  </button>
+                  {(dimensions?.marginTopPx !== undefined && dimensions.marginTopPx !== 0) && (
+                    <button
+                      type="button"
+                      className="cv-popover-zero-btn"
+                      onClick={() => onUpdateDimensions?.({ ...dimensions, marginTopPx: 0 })}
+                      title="Zerar margem Y"
+                    >
+                      0px
+                    </button>
+                  )}
+                </div>
+              </div>
 
-              <span className="cv-box-menu-font-value">
-                {fontPercentVal}%
-              </span>
+              {/* Ajuste de Recuo Horizontal (X) */}
+              <div className="cv-popover-row">
+                <span className="cv-popover-row-label">Recuo X:</span>
+                <div className="cv-popover-stepper">
+                  <button
+                    type="button"
+                    className="cv-popover-step-btn"
+                    onClick={() => handleAdjustMarginX(-8)}
+                    title="Mover para esquerda (-8px)"
+                  >
+                    ◀
+                  </button>
+                  <span className="cv-popover-step-val">{dimensions?.marginLeftPx ?? 0}px</span>
+                  <button
+                    type="button"
+                    className="cv-popover-step-btn"
+                    onClick={() => handleAdjustMarginX(+8)}
+                    title="Mover para direita (+8px)"
+                  >
+                    ▶
+                  </button>
+                  {(dimensions?.marginLeftPx !== undefined && dimensions.marginLeftPx !== 0) && (
+                    <button
+                      type="button"
+                      className="cv-popover-zero-btn"
+                      onClick={() => onUpdateDimensions?.({ ...dimensions, marginLeftPx: 0 })}
+                      title="Zerar recuo X"
+                    >
+                      0px
+                    </button>
+                  )}
+                </div>
+              </div>
 
-              <button
-                type="button"
-                className="cv-stepper-btn cv-stepper-btn--font"
-                onClick={() => handleAdjustFontScale(+4)}
-                title="Aumentar tamanho da fonte (+4%)"
-              >
-                A+
-              </button>
+              {/* Alinhamento Horizontal */}
+              {dimensions?.widthPercent && dimensions.widthPercent < 100 && (
+                <div className="cv-popover-row cv-popover-align-row">
+                  <span className="cv-popover-row-label">Alinhar:</span>
+                  <div className="cv-popover-align-buttons">
+                    <button
+                      type="button"
+                      className={`cv-popover-align-btn ${dimensions?.alignment === 'left' || !dimensions?.alignment ? 'is-active' : ''}`}
+                      onClick={() => handleSetAlignment('left')}
+                    >
+                      ⬅ Esq
+                    </button>
+                    <button
+                      type="button"
+                      className={`cv-popover-align-btn ${dimensions?.alignment === 'center' ? 'is-active' : ''}`}
+                      onClick={() => handleSetAlignment('center')}
+                    >
+                      ⏺ Centro
+                    </button>
+                    <button
+                      type="button"
+                      className={`cv-popover-align-btn ${dimensions?.alignment === 'right' ? 'is-active' : ''}`}
+                      onClick={() => handleSetAlignment('right')}
+                    >
+                      ➡ Dir
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
-        </div>
+        )}
+
+        {/* ── Popover 3: Tipografia (Fonte e Tamanho) ── */}
+        {activePopover === 'font' && (
+          <div className="cv-box-popover cv-box-popover--font" onClick={e => e.stopPropagation()}>
+            <div className="cv-popover-header">
+              <span>🔤 Tipografia do Bloco</span>
+              <button type="button" className="cv-popover-close" onClick={() => setActivePopover(null)}>✕</button>
+            </div>
+            <div className="cv-popover-body">
+              <div className="cv-popover-row">
+                <span className="cv-popover-row-label">Fonte:</span>
+                <select
+                  className="cv-popover-select"
+                  value={dimensions?.fontFamily || 'inherit'}
+                  onChange={e => handleSelectFontFamily(e.target.value)}
+                >
+                  {AVAILABLE_BOX_FONTS.map(f => (
+                    <option key={f.id} value={f.family || 'inherit'}>
+                      {f.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="cv-popover-row cv-popover-font-scale-row">
+                <span className="cv-popover-row-label">Tamanho:</span>
+                <div className="cv-popover-slider-group">
+                  <button
+                    type="button"
+                    className="cv-popover-step-btn"
+                    onClick={() => handleAdjustFontScale(-4)}
+                    title="Reduzir tamanho (-4%)"
+                  >
+                    A-
+                  </button>
+                  <input
+                    type="range"
+                    className="cv-popover-range"
+                    min={70}
+                    max={140}
+                    step={2}
+                    value={fontPercentVal}
+                    onChange={e => handleSetFontScaleSlider(Number(e.target.value))}
+                  />
+                  <span className="cv-popover-font-val">{fontPercentVal}%</span>
+                  <button
+                    type="button"
+                    className="cv-popover-step-btn"
+                    onClick={() => handleAdjustFontScale(+4)}
+                    title="Aumentar tamanho (+4%)"
+                  >
+                    A+
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Conteúdo Real da Seção */}
@@ -751,7 +816,7 @@ export const StructuralBoxWrapper: React.FC<StructuralBoxWrapperProps> = ({
       {isOverflowing && (
         <div className="cv-structural-box__overflow-badge cv-no-print no-print" data-cv-interactive="true">
           <span>⚠️</span>
-          <span>Texto excede o tamanho fixado. Aumente a altura ou o excedente será cortado na impressão A4.</span>
+          <span>Texto excede o tamanho fixado. Aumente a altura se desejar que apareça completo no A4.</span>
         </div>
       )}
 
@@ -759,36 +824,58 @@ export const StructuralBoxWrapper: React.FC<StructuralBoxWrapperProps> = ({
       {hasCollision && !isMoving && (
         <div className="cv-structural-box__collision-badge cv-no-print no-print" data-cv-interactive="true">
           <span>⚠️</span>
-          <span>Sobreposição detectada: este bloco está sobreposto por outro. Mova ou ajuste as margens para desobstruir.</span>
+          <span>Sobreposição detectada: bloco sobreposto por outro no plano livre.</span>
         </div>
       )}
 
-      {/* Resize Handle: Largura (Borda Direita) */}
+      {/* ── ALÇAS LARGAS DE REDIMENSIONAMENTO (Fáceis de acionar com mouse e toque) ── */}
+
+      {/* Borda Direita (Largura) */}
       <div
         className="cv-structural-handle cv-structural-handle--x cv-no-print"
         data-cv-interactive="true"
         onPointerDown={e => handlePointerDown(e, 'width')}
-        title="Arrastar para alterar largura (Mouse ou Toque)"
+        title="Arrastar borda direita para redimensionar largura"
       >
         <span className="cv-handle-pill" />
       </div>
 
-      {/* Resize Handle: Altura (Borda Inferior) */}
+      {/* Borda Esquerda (Largura) */}
+      <div
+        className="cv-structural-handle cv-structural-handle--x-left cv-no-print"
+        data-cv-interactive="true"
+        onPointerDown={e => handlePointerDown(e, 'width-left')}
+        title="Arrastar borda esquerda para redimensionar largura"
+      >
+        <span className="cv-handle-pill" />
+      </div>
+
+      {/* Borda Inferior (Altura) */}
       <div
         className="cv-structural-handle cv-structural-handle--y cv-no-print"
         data-cv-interactive="true"
         onPointerDown={e => handlePointerDown(e, 'height')}
-        title="Arrastar para alterar altura (Mouse ou Toque)"
+        title="Arrastar borda inferior para redimensionar altura"
       >
         <span className="cv-handle-pill-horizontal" />
       </div>
 
-      {/* Resize Handles: 4 Cantos (Estilo Paint / Imagem) */}
+      {/* Borda Superior (Altura) */}
+      <div
+        className="cv-structural-handle cv-structural-handle--y-top cv-no-print"
+        data-cv-interactive="true"
+        onPointerDown={e => handlePointerDown(e, 'height-top')}
+        title="Arrastar borda superior para redimensionar altura"
+      >
+        <span className="cv-handle-pill-horizontal" />
+      </div>
+
+      {/* 4 Cantos de Redimensionamento Bidirecional */}
       <div
         className="cv-structural-handle cv-structural-handle--xy cv-no-print"
         data-cv-interactive="true"
         onPointerDown={e => handlePointerDown(e, 'corner-se')}
-        title="Canto inferior direito: redimensionar largura e altura"
+        title="Canto inferior direito: redimensionar largura e altura livremente"
       >
         <span className="cv-handle-corner" />
       </div>
@@ -797,7 +884,7 @@ export const StructuralBoxWrapper: React.FC<StructuralBoxWrapperProps> = ({
         className="cv-structural-handle cv-structural-handle--corner-sw cv-no-print"
         data-cv-interactive="true"
         onPointerDown={e => handlePointerDown(e, 'corner-sw')}
-        title="Canto inferior esquerdo: redimensionar largura e altura"
+        title="Canto inferior esquerdo: redimensionar largura e altura livremente"
       >
         <span className="cv-handle-corner" />
       </div>
@@ -806,7 +893,7 @@ export const StructuralBoxWrapper: React.FC<StructuralBoxWrapperProps> = ({
         className="cv-structural-handle cv-structural-handle--corner-ne cv-no-print"
         data-cv-interactive="true"
         onPointerDown={e => handlePointerDown(e, 'corner-ne')}
-        title="Canto superior direito: redimensionar largura e altura"
+        title="Canto superior direito: redimensionar largura e altura livremente"
       >
         <span className="cv-handle-corner" />
       </div>
@@ -815,11 +902,10 @@ export const StructuralBoxWrapper: React.FC<StructuralBoxWrapperProps> = ({
         className="cv-structural-handle cv-structural-handle--corner-nw cv-no-print"
         data-cv-interactive="true"
         onPointerDown={e => handlePointerDown(e, 'corner-nw')}
-        title="Canto superior esquerdo: redimensionar largura e altura"
+        title="Canto superior esquerdo: redimensionar largura e altura livremente"
       >
         <span className="cv-handle-corner" />
       </div>
     </div>
   )
 }
-
