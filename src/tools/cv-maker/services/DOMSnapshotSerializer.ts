@@ -95,7 +95,7 @@ export class DOMSnapshotSerializer {
     }
 
     // 4.1. Inspecionar e embutir Texturas de Fundo (--cv-bg-image) em Base64 Data URI
-    const cvRootEl = (rootElement.querySelector('.cv-root') || clone.querySelector('.cv-root')) as HTMLElement | null
+    const cvRootEl = (sourceElement.querySelector('.cv-root') || clone.querySelector('.cv-root')) as HTMLElement | null
     let rawBgImage = (
       (options.backgroundPattern ? options.backgroundPattern.trim() : '') ||
       (typeof document !== 'undefined' ? document.documentElement.style.getPropertyValue('--cv-bg-image').trim() : '') ||
