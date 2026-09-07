@@ -176,6 +176,29 @@ async def get_unified_v1_openapi(request: Request):
     })
 
 
+# ── Lifecycle Events ─────────────────────────────────────────────────────────
+
+@app.on_event("startup")
+async def startup_event():
+    """Pré-aquecimento assíncrono do motor Chromium Headless em background."""
+    try:
+        import asyncio
+        from services.cv_pdf_service import PlaywrightPDFService
+        asyncio.create_task(PlaywrightPDFService.warmup())
+    except Exception as e:
+        log.warning(f"[Startup] Warmup do Playwright ignorado: {e}")
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Encerra instâncias ativas do Chromium Headless no shutdown."""
+    try:
+        from services.cv_pdf_service import PlaywrightPDFService
+        await PlaywrightPDFService.close()
+    except Exception as e:
+        log.warning(f"[Shutdown] Erro ao fechar Playwright: {e}")
+
+
 # ── Dev entrypoint ───────────────────────────────────────────────────────────
 
 if __name__ == "__main__":

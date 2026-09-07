@@ -91,6 +91,17 @@ async def root_index():
 
 # ── Lifecycle Events ─────────────────────────────────────────────────────────
 
+@app.on_event("startup")
+async def startup_event():
+    """Pré-aquecimento assíncrono do motor Chromium Headless em background."""
+    try:
+        import asyncio
+        from services.cv_pdf_service import PlaywrightPDFService
+        asyncio.create_task(PlaywrightPDFService.warmup())
+    except Exception as e:
+        log.warning(f"[main_cv] Warmup do Playwright ignorado: {e}")
+
+
 @app.on_event("shutdown")
 async def shutdown_event():
     """Fecha instâncias ativas do Chromium Headless no encerramento da aplicação."""

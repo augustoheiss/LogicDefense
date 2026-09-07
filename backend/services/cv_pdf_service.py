@@ -53,20 +53,52 @@ class PlaywrightPDFService:
                 if cls._playwright is None:
                     cls._playwright = await async_playwright().start()
                 log.info("[PlaywrightPDF] Inicializando Chromium Headless...")
-                cls._browser = await cls._playwright.chromium.launch(
-                    headless=True,
-                    args=[
-                        "--no-sandbox",
-                        "--disable-setuid-sandbox",
-                        "--disable-dev-shm-usage",
-                        "--disable-accelerated-2d-canvas",
-                        "--no-first-run",
-                        "--no-zygote",
-                        "--disable-gpu"
-                    ]
-                )
+                launch_args = [
+                    "--no-sandbox",
+                    "--disable-setuid-sandbox",
+                    "--disable-dev-shm-usage",
+                    "--disable-accelerated-2d-canvas",
+                    "--no-first-run",
+                    "--no-zygote",
+                    "--disable-gpu"
+                ]
+                try:
+                    cls._browser = await cls._playwright.chromium.launch(
+                        headless=True,
+                        args=launch_args
+                    )
+                except Exception as launch_err:
+                    err_str = str(launch_err)
+                    if "Executable doesn't exist" in err_str or "playwright install" in err_str:
+                        log.warning("[PlaywrightPDF] Executável do Chromium ausente. Tentando auto-instalação resiliente com 'playwright install chromium'...")
+                        import subprocess
+                        import sys
+                        install_res = await asyncio.to_thread(
+                            subprocess.run,
+                            [sys.executable, "-m", "playwright", "install", "chromium"],
+                            capture_output=True,
+                            text=True,
+                            timeout=300
+                        )
+                        log.info(f"[PlaywrightPDF] Auto-instalação concluída (retorno={install_res.returncode}). Inicializando Chromium novamente...")
+                        cls._browser = await cls._playwright.chromium.launch(
+                            headless=True,
+                            args=launch_args
+                        )
+                    else:
+                        raise launch_err
                 log.info("[PlaywrightPDF] Chromium Headless inicializado com sucesso.")
             return cls._browser
+
+    @classmethod
+    async def warmup(cls):
+        """Pré-aquece o Chromium Headless em background para garantir disponibilidade imediata."""
+        try:
+            log.info("[PlaywrightPDF] Iniciando pré-aquecimento do Chromium Headless...")
+            await cls.get_browser()
+            log.info("[PlaywrightPDF] Chromium Headless pré-aquecido com sucesso.")
+        except Exception as e:
+            log.warning(f"[PlaywrightPDF] Aviso no pré-aquecimento do Chromium: {e}")
 
     @classmethod
     async def render_pdf_from_html(

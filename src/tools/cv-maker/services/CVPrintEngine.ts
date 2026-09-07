@@ -212,14 +212,23 @@ export class CVPrintEngine {
           setTimeout(() => URL.revokeObjectURL(url), 1500)
           return true
         } else {
-          lastError = new Error(`Servidor respondeu com status ${response.status}`)
+          let errDetail = ''
+          try {
+            const errJson = await response.json()
+            errDetail = errJson.detail || JSON.stringify(errJson)
+          } catch {
+            errDetail = await response.text().catch(() => '')
+          }
+          console.warn(`[CVPrintEngine] Servidor ${endpoint} retornou status ${response.status}:`, errDetail)
+          lastError = new Error(`Servidor (${baseUrl || 'local'}) respondeu ${response.status}: ${errDetail || 'Erro interno'}`)
         }
       } catch (err) {
+        console.warn(`[CVPrintEngine] Exceção ao conectar com ${baseUrl}:`, err)
         lastError = err
       }
     }
 
-    console.warn('[CVPrintEngine] Nenhum servidor Playwright headless disponível. Erro:', lastError)
+    console.warn('[CVPrintEngine] Nenhum servidor Playwright headless disponível. Último erro:', lastError)
     throw lastError || new Error('Falha ao conectar com o serviço Playwright.')
   }
 }
