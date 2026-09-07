@@ -19,7 +19,7 @@ export const CVPageCard: React.FC<CVPageCardProps> = ({
   candidateName,
   candidateLabel,
   pageLabel,
-  showContinuationHeader = true,
+  showContinuationHeader = false,
   showPageFooter = true,
   className = '',
   style,

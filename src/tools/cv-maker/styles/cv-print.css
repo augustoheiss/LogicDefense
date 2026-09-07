@@ -128,12 +128,20 @@
   }
 
   .cv-page-card {
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: flex-start !important;
     page-break-after: always !important;
     break-after: page !important;
     margin: 0 !important;
     box-shadow: none !important;
     border-radius: 0 !important;
     background: transparent !important;
+  }
+
+  .cv-page-card .cv-print-flow-table {
+    flex: 1 1 auto !important;
+    width: 100% !important;
   }
 
   .cv-page-card:last-of-type,
@@ -229,10 +237,15 @@
   }
 
   .cv-card {
+    padding-top: 0 !important;
     background: transparent !important;
     background-color: transparent !important;
     box-shadow: none !important;
     border: none !important;
+  }
+
+  .cv-cover-letter-card {
+    padding-top: 0 !important;
   }
 
   .cv-structural-box,
@@ -921,11 +934,19 @@
     overflow: hidden !important;
   }
 
+  .layout-hero_matrix .cv-hero-top-bar,
+  .layout-hero_matrix .cv-top-contact-bar {
+    margin-bottom: 0.35rem !important;
+    padding-bottom: 0.2rem !important;
+  }
+
   .layout-hero_matrix .cv-hero-banner {
     display: grid !important;
     grid-template-columns: 1fr 100px !important;
-    gap: 1.25rem !important;
+    gap: 1rem !important;
     align-items: center !important;
+    padding: 0.45rem 0.85rem !important;
+    margin-bottom: 0.6rem !important;
   }
 
   .cv-hero-matrix-grid {

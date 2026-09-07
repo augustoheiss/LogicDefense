@@ -633,6 +633,15 @@ export const CVMakerApp: React.FC = () => {
     setDirectPdfStatus('Conectando ao worker PDF...')
     try {
       PageFormatEngine.applyFormat(activePageFormat, document.documentElement, customPageDimensions)
+      if (designConfig?.backgroundPattern && designConfig.backgroundPattern !== 'none') {
+        document.documentElement.style.setProperty('--cv-bg-image', `url("${designConfig.backgroundPattern}")`)
+      } else {
+        document.documentElement.style.setProperty('--cv-bg-image', 'none')
+      }
+      if (designConfig?.colorBg) {
+        document.documentElement.style.setProperty('--cv-color-bg', designConfig.colorBg)
+      }
+
       await CVPrintEngine.downloadDirectHeadlessPdf({
         candidateName: cvData?.basics?.name,
         candidateLabel: cvData?.basics?.label,
@@ -641,6 +650,8 @@ export const CVMakerApp: React.FC = () => {
         pageFormat: activePageFormat,
         customWidthMm: customPageDimensions?.widthMm,
         customHeightMm: customPageDimensions?.heightMm,
+        backgroundPattern: designConfig?.backgroundPattern,
+        colorBg: designConfig?.colorBg,
         onProgress: (statusText) => {
           setDirectPdfStatus(statusText)
         }

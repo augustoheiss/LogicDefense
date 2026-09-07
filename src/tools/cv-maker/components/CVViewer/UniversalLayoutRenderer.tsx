@@ -186,7 +186,7 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
         candidateLabel={basics.label}
         pageLabel="Carta de Apresentação"
         showPageFooter={structureConfig?.showPageNumbers ?? totalPages > 1}
-        showContinuationHeader={structureConfig?.showContinuationHeader ?? true}
+        showContinuationHeader={false}
       >
         <div className="cv-card cv-cover-letter-card">
           {renderers.wrapSection('cover_header', 'Cabeçalho da Carta', (

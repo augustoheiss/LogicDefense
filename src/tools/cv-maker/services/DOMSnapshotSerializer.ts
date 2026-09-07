@@ -16,6 +16,8 @@ export interface SnapshotOptions {
   pageWidthMm?: number
   pageHeightMm?: number
   cssPageSize?: string
+  backgroundPattern?: string
+  colorBg?: string
 }
 
 export class DOMSnapshotSerializer {
@@ -93,13 +95,36 @@ export class DOMSnapshotSerializer {
     }
 
     // 4.1. Inspecionar e embutir Texturas de Fundo (--cv-bg-image) em Base64 Data URI
-    let rawBgImage = (computedStyle.getPropertyValue('--cv-bg-image') || (rootStyle ? rootStyle.getPropertyValue('--cv-bg-image') : '')).trim()
+    const cvRootEl = (rootElement.querySelector('.cv-root') || clone.querySelector('.cv-root')) as HTMLElement | null
+    let rawBgImage = (
+      (options.backgroundPattern ? options.backgroundPattern.trim() : '') ||
+      (typeof document !== 'undefined' ? document.documentElement.style.getPropertyValue('--cv-bg-image').trim() : '') ||
+      (cvRootEl ? cvRootEl.style.getPropertyValue('--cv-bg-image').trim() : '') ||
+      (typeof window !== 'undefined' ? window.getComputedStyle(document.documentElement).getPropertyValue('--cv-bg-image').trim() : '') ||
+      (computedStyle ? computedStyle.getPropertyValue('--cv-bg-image').trim() : '') ||
+      (rootStyle ? rootStyle.getPropertyValue('--cv-bg-image').trim() : '')
+    )
+
+    const effectiveColorBg = (
+      (options.colorBg ? options.colorBg.trim() : '') ||
+      (typeof document !== 'undefined' ? document.documentElement.style.getPropertyValue('--cv-color-bg').trim() : '') ||
+      (cvRootEl ? cvRootEl.style.getPropertyValue('--cv-color-bg').trim() : '') ||
+      (computedStyle ? computedStyle.getPropertyValue('--cv-color-bg').trim() : '') ||
+      '#ffffff'
+    )
+
     let inlinedBgImage = 'none'
 
-    if (rawBgImage && rawBgImage !== 'none') {
+    if (rawBgImage && rawBgImage !== 'none' && rawBgImage !== 'undefined') {
+      let bgUrl = rawBgImage
       const match = rawBgImage.match(/url\s*\(\s*["']?([^"')]+)["']?\s*\)/i)
       if (match && match[1]) {
-        const bgUrl = match[1].trim()
+        bgUrl = match[1].trim()
+      } else {
+        bgUrl = rawBgImage.trim().replace(/^["']|["']$/g, '')
+      }
+
+      if (bgUrl && bgUrl !== 'none') {
         if (bgUrl.startsWith('data:')) {
           inlinedBgImage = `url("${bgUrl}")`
         } else if (options.inlineAssets !== false) {
@@ -117,23 +142,53 @@ export class DOMSnapshotSerializer {
             inlinedBgImage = `url("${fallbackUrl}")`
           }
         } else {
-          inlinedBgImage = rawBgImage
+          inlinedBgImage = `url("${bgUrl}")`
         }
       }
     }
     rootVariablesCss += `  --cv-bg-image: ${inlinedBgImage};\n`
+    rootVariablesCss += `  --cv-color-bg: ${effectiveColorBg};\n`
     rootVariablesCss += '}\n'
 
     const pageWidthCss = (rootStyle && rootStyle.getPropertyValue('--cv-page-width').trim()) || (options.pageWidthMm ? `${options.pageWidthMm}mm` : '210mm')
     const pageHeightCss = (rootStyle && rootStyle.getPropertyValue('--cv-page-height').trim()) || (options.pageHeightMm ? `${options.pageHeightMm}mm` : '297mm')
     const pageSizeRule = options.cssPageSize || (rootStyle && rootStyle.getPropertyValue('--cv-page-size').trim()) || `${pageWidthCss} ${pageHeightCss}`
 
-    // 5. Remover artefatos interativos do editor (alças de drag, botões, bordas ativas)
+    // 5. Remover artefatos interativos do editor e cabeçalhos textuais redundantes de continuação
     if (options.stripInteractive !== false) {
       const interactiveElements = clone.querySelectorAll(
-        '[data-cv-interactive="true"], button, .cv-no-print, .no-print'
+        '[data-cv-interactive="true"], button, .cv-no-print, .no-print, .cv-continuation-header'
       )
       interactiveElements.forEach((el) => el.remove())
+    } else {
+      // Sempre remove o cabeçalho textual de continuação conforme solicitação expressa de design limpo
+      clone.querySelectorAll('.cv-continuation-header').forEach((el) => el.remove())
+    }
+
+    // 5.1. Garantir Camada Soberana de Fundo A4/Letter por Página no clone (Full Bleed em 100% das Folhas)
+    let bgLayer = clone.querySelector('.cv-print-page-background') as HTMLElement
+    if (!bgLayer) {
+      bgLayer = document.createElement('div')
+      bgLayer.className = 'cv-print-page-background'
+      bgLayer.setAttribute('aria-hidden', 'true')
+      clone.insertBefore(bgLayer, clone.firstChild)
+    }
+    bgLayer.style.display = 'block'
+    bgLayer.style.position = 'fixed'
+    bgLayer.style.top = '0'
+    bgLayer.style.left = '0'
+    bgLayer.style.width = pageWidthCss
+    bgLayer.style.height = pageHeightCss
+    bgLayer.style.zIndex = '-9999'
+    bgLayer.style.backgroundColor = effectiveColorBg
+    bgLayer.style.backgroundImage = inlinedBgImage
+    bgLayer.style.backgroundSize = 'cover'
+    bgLayer.style.backgroundPosition = 'center top'
+    bgLayer.style.backgroundRepeat = 'no-repeat'
+
+    if (cvRootEl) {
+      cvRootEl.style.setProperty('--cv-bg-image', inlinedBgImage)
+      cvRootEl.style.setProperty('--cv-color-bg', effectiveColorBg)
     }
 
     // 6. Converter imagens externas para Base64 Data URI com validação de protocolo
@@ -235,14 +290,37 @@ export class DOMSnapshotSerializer {
           background: transparent !important;
           background-color: transparent !important;
         }
+        :root, html, body, #cv-printable-document, .cv-root {
+          --cv-bg-image: ${inlinedBgImage} !important;
+          --cv-color-bg: ${effectiveColorBg} !important;
+        }
+        .cv-print-page-background {
+          display: block !important;
+          position: fixed !important;
+          top: 0 !important;
+          left: 0 !important;
+          width: ${pageWidthCss} !important;
+          height: ${pageHeightCss} !important;
+          min-width: ${pageWidthCss} !important;
+          min-height: ${pageHeightCss} !important;
+          background-color: ${effectiveColorBg} !important;
+          background-image: ${inlinedBgImage} !important;
+          background-size: cover !important;
+          background-position: center top !important;
+          background-repeat: no-repeat !important;
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
+          z-index: -9999 !important;
+          pointer-events: none !important;
+        }
         html, body {
           margin: 0;
           padding: 0;
           width: ${pageWidthCss} !important;
           max-width: ${pageWidthCss} !important;
           min-width: ${pageWidthCss} !important;
-          background-color: var(--cv-color-bg, #ffffff) !important;
-          background-image: var(--cv-bg-image, none) !important;
+          background-color: ${effectiveColorBg} !important;
+          background-image: ${inlinedBgImage} !important;
           background-size: cover !important;
           background-position: center !important;
           background-repeat: no-repeat !important;
@@ -250,8 +328,41 @@ export class DOMSnapshotSerializer {
           -webkit-font-smoothing: antialiased;
         }
         .cv-card {
+          padding-top: 0 !important;
           background: transparent !important;
           background-color: transparent !important;
+        }
+        .cv-cover-letter-card {
+          padding-top: 0 !important;
+        }
+        .cv-page-card {
+          display: flex !important;
+          flex-direction: column !important;
+          justify-content: flex-start !important;
+        }
+        .cv-page-card .cv-print-flow-table {
+          flex: 1 1 auto !important;
+          width: 100% !important;
+        }
+        .layout-hero_matrix .cv-hero-top-bar,
+        .layout-hero_matrix .cv-top-contact-bar {
+          margin-bottom: 0.35rem !important;
+          padding-bottom: 0.2rem !important;
+        }
+        .layout-hero_matrix .cv-hero-banner {
+          padding: 0.45rem 0.85rem !important;
+          margin-bottom: 0.6rem !important;
+        }
+        .cv-math-header {
+          margin-bottom: 0.5rem !important;
+          padding-bottom: 0.5rem !important;
+        }
+        .cv-continuation-header {
+          display: none !important;
+          visibility: hidden !important;
+          height: 0 !important;
+          margin: 0 !important;
+          padding: 0 !important;
         }
         .cv-print-wrapper, #cv-printable-document {
           width: ${pageWidthCss} !important;

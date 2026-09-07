@@ -18,6 +18,8 @@ export interface DirectPrintOptions {
   pageFormat?: string
   customWidthMm?: number
   customHeightMm?: number
+  backgroundPattern?: string
+  colorBg?: string
   onProgress?: (status: string) => void
 }
 
@@ -153,6 +155,8 @@ export class CVPrintEngine {
     const snapshotHtml = await DOMSnapshotSerializer.serialize(rootEl, {
       stripInteractive: true,
       inlineAssets: true,
+      backgroundPattern: options.backgroundPattern,
+      colorBg: options.colorBg,
       ...snapshotOptions
     })
 

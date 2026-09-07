@@ -1553,9 +1553,14 @@ aside .cv-contacts,
   position: relative;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
+  justify-content: flex-start;
   margin: 0 auto;
   box-sizing: border-box;
+}
+
+.cv-page-card .cv-print-flow-table {
+  flex: 1 1 auto;
+  width: 100%;
 }
 
 /* Badge de Identificação da Folha no Editor (Figma Style) */
