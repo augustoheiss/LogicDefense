@@ -81,11 +81,24 @@ async def root_index():
             "themes": "/api/v1/cv/themes",
             "render_data": "/api/v1/cv/render",
             "compile_data": "/api/v1/cv/compile",
+            "export_pdf_headless": "/api/v1/cv/export-pdf-headless",
             "api_keys": "/api/v1/api-keys/generate",
             "license_validate": "/api/license/validate",
         },
         "description": "API stateless de inteligência de carreira e geração de currículos A4.",
     }
+
+
+# ── Lifecycle Events ─────────────────────────────────────────────────────────
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Fecha instâncias ativas do Chromium Headless no encerramento da aplicação."""
+    try:
+        from services.cv_pdf_service import PlaywrightPDFService
+        await PlaywrightPDFService.close()
+    except Exception as e:
+        log.warning(f"[main_cv] Erro ao encerrar Playwright no shutdown: {e}")
 
 
 # ── OpenAPI Schema Dedicado do CV Maker ───────────────────────────────────────

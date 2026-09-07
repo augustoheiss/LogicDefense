@@ -1539,3 +1539,138 @@ aside .cv-contacts,
   color: #ffffff !important;
 }
 
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   EIXO 4: CANVAS MULTI-PÁGINAS VISUALMENTE SEGMENTADO (FIGMA / DOCS STYLE)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+.cv-render-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 28px;
+}
+
+.cv-page-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  margin: 0 auto;
+  box-sizing: border-box;
+}
+
+/* Badge de Identificação da Folha no Editor (Figma Style) */
+.cv-page-indicator-badge {
+  position: absolute;
+  top: -24px;
+  left: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #64748b;
+  background: rgba(15, 23, 42, 0.75);
+  backdrop-filter: blur(8px);
+  padding: 3px 12px;
+  border-radius: 6px 6px 0 0;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-bottom: none;
+  user-select: none;
+  pointer-events: none;
+  letter-spacing: 0.02em;
+}
+
+.cv-page-badge-icon {
+  font-size: 0.8rem;
+}
+
+.cv-page-badge-text {
+  color: #e2e8f0;
+}
+
+.cv-page-badge-sub {
+  color: #94a3b8;
+  font-weight: 500;
+}
+
+/* Cabeçalho de Continuação Automático (Folha 2+) */
+.cv-continuation-header {
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.35rem;
+}
+
+.cv-continuation-inner {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+}
+
+.cv-continuation-name {
+  font-weight: 800;
+  color: var(--cv-color-text, #0f172a);
+  letter-spacing: -0.01em;
+}
+
+.cv-continuation-label {
+  font-weight: 600;
+  color: var(--cv-color-text-muted, #64748b);
+  font-size: 0.78rem;
+}
+
+.cv-continuation-tag {
+  font-weight: 700;
+  color: var(--cv-color-primary, #0284c7);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-left: auto;
+}
+
+.cv-continuation-rule {
+  height: 1.5px;
+  background: currentColor;
+  opacity: 0.15;
+  margin-top: 0.25rem;
+}
+
+/* Conteúdo da Página */
+.cv-page-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Rodapé Numerado da Folha A4 */
+.cv-page-footer {
+  margin-top: auto;
+  padding-top: 0.5rem;
+}
+
+.cv-footer-rule {
+  height: 1px;
+  background: currentColor;
+  opacity: 0.12;
+  margin-bottom: 0.35rem;
+}
+
+.cv-footer-inner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.72rem;
+  color: var(--cv-color-text-muted, #64748b);
+  font-weight: 500;
+}
+
+.cv-footer-candidate {
+  opacity: 0.85;
+}
+
+.cv-footer-pagination {
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+
+

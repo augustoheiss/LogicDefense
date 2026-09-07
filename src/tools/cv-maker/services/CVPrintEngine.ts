@@ -125,4 +125,95 @@ export class CVPrintEngine {
     const rootEl = this.getPrintableRoot(options.sourceElement)
     return await DOMSnapshotSerializer.serialize(rootEl, snapshotOptions)
   }
+
+  /**
+   * Compila o snapshot HTML do currículo diretamente no servidor via Chromium Headless Playwright.
+   * Não abre diálogo de impressão do navegador; realiza o download direto do binário PDF vetorial de alta definição.
+   */
+  public static async downloadDirectHeadlessPdf(
+    options: DirectPrintOptions = {},
+    snapshotOptions: SnapshotOptions = {}
+  ): Promise<boolean> {
+    const rootEl = this.getPrintableRoot(options.sourceElement)
+
+    // 1. Garante carregamento das fontes antes do snapshot
+    if (document.fonts && document.fonts.ready) {
+      try {
+        await document.fonts.ready
+      } catch (e) {
+        console.warn('[CVPrintEngine] Aviso ao sincronizar fontes:', e)
+      }
+    }
+
+    // 2. Gera snapshot HTML limpo e autocontido
+    const snapshotHtml = await DOMSnapshotSerializer.serialize(rootEl, {
+      stripInteractive: true,
+      inlineAssets: true,
+      ...snapshotOptions
+    })
+
+    // 3. Formata nome amigável do arquivo
+    const candidateName = (options.candidateName || 'curriculo').trim().toLowerCase().replace(/\s+/g, '-')
+    const label = options.candidateLabel ? `-${options.candidateLabel.trim().toLowerCase().replace(/\s+/g, '-')}` : ''
+    const modeSuffix =
+      options.viewMode === 'cover_letter'
+        ? '-carta'
+        : options.viewMode === 'both'
+        ? '-dossie'
+        : ''
+    const filename = `curriculo-${candidateName}${label}${modeSuffix}.pdf`
+
+    // 4. Candidatos de Backend (local 8001, local 8000, relativo, produção)
+    const envUrl = (import.meta as any).env?.VITE_BACKEND_URL
+    const isLocal =
+      typeof window !== 'undefined' &&
+      (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+    const candidates: string[] = []
+    if (envUrl) candidates.push(envUrl.replace(/\/$/, ''))
+    if (isLocal) {
+      candidates.push('http://localhost:8001')
+      candidates.push('http://localhost:8000')
+      candidates.push('')
+    }
+    candidates.push('https://ocorrencias-pdf-writer.onrender.com')
+    candidates.push('https://heiss-cv-engine.onrender.com')
+
+    let lastError: any = null
+
+    for (const baseUrl of candidates) {
+      try {
+        const endpoint = baseUrl ? `${baseUrl}/api/v1/cv/export-pdf-headless` : '/api/v1/cv/export-pdf-headless'
+        const response = await fetch(endpoint, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            html: snapshotHtml,
+            filename
+          })
+        })
+
+        if (response.ok) {
+          const blob = await response.blob()
+          const url = URL.createObjectURL(blob)
+          const a = document.createElement('a')
+          a.href = url
+          a.download = filename
+          document.body.appendChild(a)
+          a.click()
+          document.body.removeChild(a)
+          setTimeout(() => URL.revokeObjectURL(url), 1500)
+          return true
+        } else {
+          lastError = new Error(`Servidor respondeu com status ${response.status}`)
+        }
+      } catch (err) {
+        lastError = err
+      }
+    }
+
+    console.warn('[CVPrintEngine] Nenhum servidor Playwright headless disponível. Erro:', lastError)
+    throw lastError || new Error('Falha ao conectar com o serviço Playwright.')
+  }
 }

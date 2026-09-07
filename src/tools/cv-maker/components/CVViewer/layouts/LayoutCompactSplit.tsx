@@ -3,6 +3,7 @@ import type { BaseLayoutProps } from './types'
 import { BlockContacts } from '../../blocks/BlockContacts'
 import { BlockCivilData } from '../../blocks/BlockCivilData'
 import { ColumnSplitterHandle } from '../../CanvasBuilder/ColumnSplitterHandle'
+import { CVPageCard } from '../renderers/CVPageCard'
 
 export const LayoutCompactSplit: React.FC<BaseLayoutProps> = ({
   data,
@@ -11,7 +12,12 @@ export const LayoutCompactSplit: React.FC<BaseLayoutProps> = ({
   isFreeCanvas,
   renderers,
   handleUpdateSplitRatio,
-  renderCanvasDecorations
+  renderCanvasDecorations,
+  pageNumber = 1,
+  totalPages = 1,
+  showPageFooter,
+  showContinuationHeader,
+  pageLabel
 }) => {
   const { basics } = data
   const {
@@ -45,7 +51,15 @@ export const LayoutCompactSplit: React.FC<BaseLayoutProps> = ({
   )
 
   return (
-    <div className="cv-page-a4">
+    <CVPageCard
+      pageNumber={pageNumber}
+      totalPages={totalPages}
+      candidateName={basics.name}
+      candidateLabel={basics.label}
+      pageLabel={pageLabel || 'Currículo'}
+      showPageFooter={showPageFooter ?? (structureConfig?.showPageNumbers ?? totalPages > 1)}
+      showContinuationHeader={showContinuationHeader ?? (structureConfig?.showContinuationHeader ?? true)}
+    >
       <div className="cv-card layout-compact_split">
         {renderCanvasDecorations()}
         <div
@@ -92,6 +106,6 @@ export const LayoutCompactSplit: React.FC<BaseLayoutProps> = ({
           </main>
         </div>
       </div>
-    </div>
+    </CVPageCard>
   )
 }

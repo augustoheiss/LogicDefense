@@ -5,6 +5,7 @@ import { BlockContacts } from '../../blocks/BlockContacts'
 import { BlockCivilData } from '../../blocks/BlockCivilData'
 import { BlockSummary } from '../../blocks/BlockSummary'
 import { BlockSkillsTags } from '../../blocks/BlockSkillsTags'
+import { CVPageCard } from '../renderers/CVPageCard'
 
 export const LayoutCanvasLivre: React.FC<BaseLayoutProps> = ({
   data,
@@ -12,7 +13,12 @@ export const LayoutCanvasLivre: React.FC<BaseLayoutProps> = ({
   structureConfig,
   isFreeCanvas,
   renderers,
-  renderCanvasDecorations
+  renderCanvasDecorations,
+  pageNumber = 1,
+  totalPages = 1,
+  showPageFooter,
+  showContinuationHeader,
+  pageLabel
 }) => {
   const { basics } = data
   const {
@@ -34,7 +40,15 @@ export const LayoutCanvasLivre: React.FC<BaseLayoutProps> = ({
   )
 
   return (
-    <div className="cv-page-a4">
+    <CVPageCard
+      pageNumber={pageNumber}
+      totalPages={totalPages}
+      candidateName={basics.name}
+      candidateLabel={basics.label}
+      pageLabel={pageLabel || 'Currículo'}
+      showPageFooter={showPageFooter ?? (structureConfig?.showPageNumbers ?? totalPages > 1)}
+      showContinuationHeader={showContinuationHeader ?? (structureConfig?.showContinuationHeader ?? true)}
+    >
       <div className="cv-card layout-canvas_livre" style={{ minHeight: '100%', position: 'relative' }}>
         {renderCanvasDecorations()}
 
@@ -81,6 +95,6 @@ export const LayoutCanvasLivre: React.FC<BaseLayoutProps> = ({
           </div>
         )}
       </div>
-    </div>
+    </CVPageCard>
   )
 }

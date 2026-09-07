@@ -101,4 +101,9 @@ export interface BaseLayoutProps {
   renderers: SectionRenderers
   handleUpdateSplitRatio: (ratio: number) => void
   renderCanvasDecorations: () => React.ReactNode
+  pageNumber?: number
+  totalPages?: number
+  showPageFooter?: boolean
+  showContinuationHeader?: boolean
+  pageLabel?: string
 }

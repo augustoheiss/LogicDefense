@@ -551,6 +551,10 @@ export interface LayoutStructureConfig {
   sectionOrder?: string[]     // Ordem sequencial explícita das seções no layout ativo
   sectionZone?: Record<string, 'left' | 'right'> // Coluna/zona atribuída à seção em layouts de múltiplas colunas
   customZones?: CustomCanvasZone[] // Zonas, sidebars e boxes agrupadas desenhadas livremente
+  // Configurações de Múltiplas Páginas Físicas (Eixo 4)
+  pageBreaks?: string[]       // IDs de seções após as quais deve ocorrer uma quebra de página
+  showPageNumbers?: boolean   // Exibe rodapé com "Página X de Y" (padrão true quando > 1 página)
+  showContinuationHeader?: boolean // Exibe cabeçalho "Nome — Continuação" na Folha 2+
 }
 
 export type PageFormat = 'a4' | 'letter' | 'legal'

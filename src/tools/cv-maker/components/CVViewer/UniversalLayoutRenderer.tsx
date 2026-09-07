@@ -2,6 +2,7 @@ import React from 'react'
 import type { CVData, LayoutBlueprint, ThemeVariant, ViewMode, CVDesignConfig, LayoutStructureConfig } from '../../types/cv'
 import { BlockCoverLetter } from '../blocks/BlockCoverLetter'
 import { CanvasDecorations } from './renderers/CanvasDecorations'
+import { CVPageCard } from './renderers/CVPageCard'
 import { useSectionOrdering } from './hooks/useSectionOrdering'
 import { useSectionRenderers } from './renderers/SectionRendererHub'
 import { getLayoutComponent } from './layouts'
@@ -158,7 +159,7 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
     />
   )
 
-  const renderCVPage = () => {
+  const renderCVPage = (pageNumber = 1, totalPages = 1) => {
     const LayoutComponent = getLayoutComponent(blueprint.id)
     return (
       <LayoutComponent
@@ -169,13 +170,24 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
         renderers={renderers}
         handleUpdateSplitRatio={handleUpdateSplitRatio}
         renderCanvasDecorations={renderCanvasDecorations}
+        pageNumber={pageNumber}
+        totalPages={totalPages}
+        pageLabel="Currículo"
       />
     )
   }
 
-  const renderCoverLetterPage = () => {
+  const renderCoverLetterPage = (pageNumber = 1, totalPages = 1) => {
     return (
-      <div className="cv-page-a4 cv-cover-letter-page">
+      <CVPageCard
+        pageNumber={pageNumber}
+        totalPages={totalPages}
+        candidateName={basics.name}
+        candidateLabel={basics.label}
+        pageLabel="Carta de Apresentação"
+        showPageFooter={structureConfig?.showPageNumbers ?? totalPages > 1}
+        showContinuationHeader={structureConfig?.showContinuationHeader ?? true}
+      >
         <div className="cv-card cv-cover-letter-card">
           {renderers.wrapSection('cover_header', 'Cabeçalho da Carta', (
             <header className="cv-cover-letter-header">
@@ -199,7 +211,7 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
             />
           ))}
         </div>
-      </div>
+      </CVPageCard>
     )
   }
 
@@ -297,15 +309,12 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
 
       <div ref={pageRef} className="cv-render-wrapper">
         <div className="cv-print-page-background" aria-hidden="true" />
-        {viewMode === 'cv' && renderCVPage()}
-        {viewMode === 'cover_letter' && renderCoverLetterPage()}
+        {viewMode === 'cv' && renderCVPage(1, 1)}
+        {viewMode === 'cover_letter' && renderCoverLetterPage(1, 1)}
         {viewMode === 'both' && (
-          <div className="cv-dossier-wrapper">
-            {renderCVPage()}
-            <div className="cv-page-break-indicator">
-              <span>✂ ─── Quebra de Página A4 (Dossiê de 2 Páginas) ───</span>
-            </div>
-            {renderCoverLetterPage()}
+          <div className="cv-dossier-wrapper" style={{ display: 'flex', flexDirection: 'column', gap: '32px', alignItems: 'center' }}>
+            {renderCVPage(1, 2)}
+            {renderCoverLetterPage(2, 2)}
           </div>
         )}
       </div>

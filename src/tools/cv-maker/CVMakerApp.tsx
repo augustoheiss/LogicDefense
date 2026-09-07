@@ -133,6 +133,9 @@ export const CVMakerApp: React.FC = () => {
     PageFormatEngine.applyFormat(activePageFormat)
   }, [activePageFormat])
 
+  // Headless PDF Generation State
+  const [isGeneratingDirectPdf, setIsGeneratingDirectPdf] = useState<boolean>(false)
+
   // ATS State, Job Description & Heatmap
   const [isAtsDrawerOpen, setIsAtsDrawerOpen] = useState<boolean>(false)
   const [isAtsHeatmapActive, setIsAtsHeatmapActive] = useState<boolean>(() => {
@@ -602,6 +605,32 @@ export const CVMakerApp: React.FC = () => {
     }
   }
 
+  // Exportação Direta de PDF via Playwright Chromium Headless (Eixo 1)
+  const handleDownloadDirectPdf = async () => {
+    if (isGeneratingDirectPdf) return
+    setIsGeneratingDirectPdf(true)
+    try {
+      PageFormatEngine.applyFormat(activePageFormat)
+      await CVPrintEngine.downloadDirectHeadlessPdf({
+        candidateName: cvData?.basics?.name,
+        candidateLabel: cvData?.basics?.label,
+        viewMode: activeViewMode,
+        sourceElement: document.getElementById('cv-printable-document')
+      })
+    } catch (err: any) {
+      console.error('[CVMakerApp] Falha na compilação direta via Playwright:', err)
+      const shouldFallback = window.confirm(
+        'Não foi possível conectar ao worker Playwright no backend.\n\n' +
+        'Deseja abrir a caixa de diálogo nativa de impressão (Salvar como PDF no navegador)?'
+      )
+      if (shouldFallback) {
+        handlePrintPdf()
+      }
+    } finally {
+      setIsGeneratingDirectPdf(false)
+    }
+  }
+
   // Auto-ajuste de página única via Bissecção Real-DOM (P3)
   const handleAutoFitSinglePage = async () => {
     try {
@@ -871,6 +900,8 @@ export const CVMakerApp: React.FC = () => {
             onDownloadYaml={handleDownloadYaml}
             onDownloadZip={handleDownloadZip}
             onPrintPdf={handlePrintPdf}
+            onDownloadDirectPdf={handleDownloadDirectPdf}
+            isGeneratingPdf={isGeneratingDirectPdf}
             onAutoFitSinglePage={handleAutoFitSinglePage}
             activePageFormat={activePageFormat}
             onPageFormatChange={handlePageFormatChange}

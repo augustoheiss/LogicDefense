@@ -26,6 +26,8 @@ interface CVToolbarProps {
   onDownloadYaml: () => void
   onDownloadZip?: () => void
   onPrintPdf: () => void
+  onDownloadDirectPdf?: () => void
+  isGeneratingPdf?: boolean
   onAutoFitSinglePage?: () => void
   onOpenDesignModal?: () => void
   isAtsInspectorActive?: boolean
@@ -78,6 +80,8 @@ export const CVToolbar: React.FC<CVToolbarProps> = ({
   onDownloadYaml,
   onDownloadZip,
   onPrintPdf,
+  onDownloadDirectPdf,
+  isGeneratingPdf = false,
   onAutoFitSinglePage,
   onOpenDesignModal,
   isAtsInspectorActive = false,
@@ -607,14 +611,43 @@ export const CVToolbar: React.FC<CVToolbarProps> = ({
               boxShadow: '0 4px 14px rgba(16, 185, 129, 0.25)',
             }}
           >
-            <span className="cv-dropdown-trigger__icon">📥</span>
-            <span className="cv-dropdown-trigger__text">Exportar & PDF</span>
+            <span className="cv-dropdown-trigger__icon">{isGeneratingPdf ? '⏳' : '📥'}</span>
+            <span className="cv-dropdown-trigger__text">{isGeneratingPdf ? 'Gerando PDF...' : 'Exportar & PDF'}</span>
             <span className="cv-dropdown-trigger__chevron" style={{ color: '#ffffff' }}>▼</span>
           </button>
 
           {openDropdown === 'exports' && (
-            <div className="cv-dropdown-menu cv-dropdown-menu--right" style={{ minWidth: '270px' }}>
-              {/* Opção Principal: Imprimir / Salvar PDF */}
+            <div className="cv-dropdown-menu cv-dropdown-menu--right" style={{ minWidth: '290px' }}>
+              {/* Opção Destaque 1: Baixar PDF Direto (Playwright Engine) */}
+              {onDownloadDirectPdf && (
+                <button
+                  type="button"
+                  className="cv-dropdown-item"
+                  onClick={() => {
+                    closeDropdowns()
+                    onDownloadDirectPdf()
+                  }}
+                  disabled={isGeneratingPdf}
+                  style={{
+                    background: 'rgba(16, 185, 129, 0.25)',
+                    color: '#34d399',
+                    fontWeight: 800,
+                    borderLeft: '4px solid #10b981',
+                    marginBottom: '0.35rem'
+                  }}
+                >
+                  <div className="cv-dropdown-item__content">
+                    <div className="cv-dropdown-item__title">
+                      <span>{isGeneratingPdf ? '⏳' : '📥'}</span> <strong>{isGeneratingPdf ? 'Gerando PDF no Servidor...' : 'Baixar PDF Direto (Playwright)'}</strong>
+                    </div>
+                    <div className="cv-dropdown-item__desc" style={{ color: '#a7f3d0' }}>
+                      Renderização Chromium no servidor: 100% fiel, tagged PDF para ATS, download direto sem diálogo
+                    </div>
+                  </div>
+                </button>
+              )}
+
+              {/* Opção 2: Imprimir / Salvar PDF no Navegador */}
               <button
                 type="button"
                 className="cv-dropdown-item"
@@ -622,14 +655,14 @@ export const CVToolbar: React.FC<CVToolbarProps> = ({
                   closeDropdowns()
                   onPrintPdf()
                 }}
-                style={{ background: 'rgba(16, 185, 129, 0.18)', color: '#34d399', fontWeight: 700 }}
+                style={{ background: 'rgba(255, 255, 255, 0.05)', color: '#f8fafc', fontWeight: 600 }}
               >
                 <div className="cv-dropdown-item__content">
                   <div className="cv-dropdown-item__title">
-                    <span>🖨️</span> <strong>Imprimir / Salvar PDF</strong>
+                    <span>🖨️</span> <strong>Imprimir / Diálogo do Navegador</strong>
                   </div>
-                  <div className="cv-dropdown-item__desc" style={{ color: '#a7f3d0' }}>
-                    Exportação nativa {currentPageFormatObj.name} vetorial (Engine P3 sem corte)
+                  <div className="cv-dropdown-item__desc" style={{ color: '#94a3b8' }}>
+                    Abre a tela de impressão do sistema (Ctrl+P / Salvar como PDF)
                   </div>
                 </div>
               </button>

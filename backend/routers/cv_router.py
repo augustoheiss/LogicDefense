@@ -899,3 +899,38 @@ async def compile_cv_bundle_endpoint(
         "background_pattern": target_texture,
         "design_config": payload.design_config,
     }
+
+
+class CVExportPDFRequest(BaseModel):
+    html: str = Field(..., min_length=20, description="Snapshot HTML completo e autocontido gerado pelo cliente (DOMSnapshotSerializer)")
+    filename: Optional[str] = Field(default="curriculo.pdf", description="Nome do arquivo PDF para download")
+
+
+@router.post("/export-pdf-headless", summary="Exportar PDF A4 vetorial direto via Playwright Headless")
+async def export_pdf_headless(payload: CVExportPDFRequest):
+    """
+    Compila o snapshot HTML fornecido pelo cliente em um documento PDF A4 de alta fidelidade
+    utilizando Playwright Chromium Headless com Tagged PDF para ATS.
+    """
+    try:
+        from services.cv_pdf_service import PlaywrightPDFService
+        pdf_bytes = await PlaywrightPDFService.render_pdf_from_html(payload.html)
+        safe_filename = payload.filename.strip() if payload.filename else "curriculo.pdf"
+        if not safe_filename.endswith(".pdf"):
+            safe_filename += ".pdf"
+
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": f'attachment; filename="{safe_filename}"',
+                "Access-Control-Expose-Headers": "Content-Disposition"
+            }
+        )
+    except Exception as e:
+        log.error(f"[CV Router] Falha na exportação de PDF headless: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erro ao compilar PDF headless: {str(e)}"
+        )
+
