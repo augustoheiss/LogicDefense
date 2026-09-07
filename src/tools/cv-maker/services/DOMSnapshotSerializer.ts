@@ -24,6 +24,10 @@ export class DOMSnapshotSerializer {
     if (document.fonts && document.fonts.ready) {
       try {
         await document.fonts.ready
+        const checkFamilies = ['Inter', 'Plus Jakarta Sans', 'Merriweather', 'Fira Code', 'Outfit', 'Poppins']
+        for (const fam of checkFamilies) {
+          document.fonts.check(`12px "${fam}"`)
+        }
       } catch (e) {
         console.warn('[DOMSnapshotSerializer] Aviso ao aguardar fonts.ready:', e)
       }

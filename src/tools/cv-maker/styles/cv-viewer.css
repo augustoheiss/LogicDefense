@@ -2,6 +2,7 @@
    cv-viewer.css — Estrutura e Estilização dos 8 Modelos A4 + Cover Letter
    ============================================================= */
 
+@import './cv-fonts.css';
 @import url('https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&family=Cinzel:wght@600;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
 
 /* ── Regras Globais A4 e Motor de Impressão ── */

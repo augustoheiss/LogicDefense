@@ -1,0 +1,168 @@
+/* ==========================================================================
+   cv-fonts.css — Fontes Corporativas Auto-Hospedadas & 100% Offline
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   Fornece os subsets WOFF2 locais para eliminar variação métrica de glifos
+   (Font Metric Shift) em caso de queda de conexão, proxy restrito ou offline.
+   Prioriza fontes instaladas localmente no SO via local() antes do arquivo /fonts/.
+   ========================================================================== */
+
+/* ── 1. Inter (Corpo Padrão, Modelo Minimalista) ── */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: local('Inter Regular'), local('Inter-Regular'), local('Inter'),
+       url('/fonts/Inter-400.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: local('Inter SemiBold'), local('Inter-SemiBold'),
+       url('/fonts/Inter-600.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: local('Inter Bold'), local('Inter-Bold'),
+       url('/fonts/Inter-700.woff2') format('woff2');
+}
+
+/* ── 2. Plus Jakarta Sans (Títulos Padrão e Destaques Modernos) ── */
+@font-face {
+  font-family: 'Plus Jakarta Sans';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: local('Plus Jakarta Sans Medium'), local('PlusJakartaSans-Medium'),
+       url('/fonts/PlusJakartaSans-500.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Plus Jakarta Sans';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: local('Plus Jakarta Sans SemiBold'), local('PlusJakartaSans-SemiBold'),
+       url('/fonts/PlusJakartaSans-600.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Plus Jakarta Sans';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: local('Plus Jakarta Sans Bold'), local('PlusJakartaSans-Bold'),
+       url('/fonts/PlusJakartaSans-700.woff2') format('woff2');
+}
+
+/* ── 3. Merriweather (Tema Executivo Serif) ── */
+@font-face {
+  font-family: 'Merriweather';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: local('Merriweather Regular'), local('Merriweather'),
+       url('/fonts/Merriweather-400.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Merriweather';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: local('Merriweather Bold'), local('Merriweather-Bold'),
+       url('/fonts/Merriweather-700.woff2') format('woff2');
+}
+
+/* ── 4. Fira Code (Tema Terminal Monospace) ── */
+@font-face {
+  font-family: 'Fira Code';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: local('Fira Code Regular'), local('FiraCode-Regular'), local('Fira Code'),
+       url('/fonts/FiraCode-400.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Fira Code';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: local('Fira Code SemiBold'), local('FiraCode-SemiBold'),
+       url('/fonts/FiraCode-600.woff2') format('woff2');
+}
+
+/* ── 5. Outfit (Tema Branco / Moderno) ── */
+@font-face {
+  font-family: 'Outfit';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: local('Outfit Regular'), local('Outfit'),
+       url('/fonts/Outfit-400.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Outfit';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: local('Outfit SemiBold'), local('Outfit-SemiBold'),
+       url('/fonts/Outfit-600.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Outfit';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: local('Outfit Bold'), local('Outfit-Bold'),
+       url('/fonts/Outfit-700.woff2') format('woff2');
+}
+
+/* ── 6. Poppins (Tema Criativo) ── */
+@font-face {
+  font-family: 'Poppins';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: local('Poppins Regular'), local('Poppins'),
+       url('/fonts/Poppins-400.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Poppins';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: local('Poppins SemiBold'), local('Poppins-SemiBold'),
+       url('/fonts/Poppins-600.woff2') format('woff2');
+}
+
+/* ── 7. Caveat (Assinatura Manuscrita da Carta de Apresentação) ── */
+@font-face {
+  font-family: 'Caveat';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: local('Caveat Bold'), local('Caveat-Bold'), local('Caveat'),
+       url('/fonts/Caveat-700.woff2') format('woff2');
+}
+
+/* ── 8. Cinzel (Títulos Nobres e Selos) ── */
+@font-face {
+  font-family: 'Cinzel';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: local('Cinzel Bold'), local('Cinzel-Bold'), local('Cinzel'),
+       url('/fonts/Cinzel-700.woff2') format('woff2');
+}

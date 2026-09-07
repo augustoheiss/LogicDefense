@@ -28,6 +28,9 @@ interface CVToolbarProps {
   onPrintPdf: () => void
   onAutoFitSinglePage?: () => void
   onOpenDesignModal?: () => void
+  isAtsInspectorActive?: boolean
+  onToggleAtsInspector?: () => void
+  atsScore?: number
   onOpenApiKeyModal: () => void
   hasActiveKey: boolean
   isPro?: boolean
@@ -77,6 +80,9 @@ export const CVToolbar: React.FC<CVToolbarProps> = ({
   onPrintPdf,
   onAutoFitSinglePage,
   onOpenDesignModal,
+  isAtsInspectorActive = false,
+  onToggleAtsInspector,
+  atsScore,
   onOpenApiKeyModal,
   hasActiveKey,
   isPro = false,
@@ -399,6 +405,24 @@ export const CVToolbar: React.FC<CVToolbarProps> = ({
             style={{ borderColor: '#f59e0b', color: '#fcd34d', background: 'rgba(245, 158, 11, 0.12)', fontWeight: 700 }}
           >
             🎨 Design & Estilo
+          </button>
+        )}
+
+        {/* Auditoria ATS */}
+        {onToggleAtsInspector && (
+          <button
+            type="button"
+            className="cv-btn-secondary"
+            onClick={onToggleAtsInspector}
+            title="Abrir Painel de Inteligência e Validador ATS (0 Tokens)"
+            style={{
+              borderColor: isAtsInspectorActive ? '#22c55e' : 'rgba(34, 197, 94, 0.4)',
+              color: isAtsInspectorActive ? '#4ade80' : '#86efac',
+              background: isAtsInspectorActive ? 'rgba(34, 197, 94, 0.2)' : 'rgba(34, 197, 94, 0.08)',
+              fontWeight: 700
+            }}
+          >
+            🎯 ATS {atsScore !== undefined ? `(${atsScore}%)` : ''}
           </button>
         )}
 

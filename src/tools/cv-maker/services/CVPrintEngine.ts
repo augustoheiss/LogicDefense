@@ -67,6 +67,11 @@ export class CVPrintEngine {
     if (document.fonts && document.fonts.ready) {
       try {
         await document.fonts.ready
+        // Verificação determinística das famílias tipográficas essenciais
+        const checkFamilies = ['Inter', 'Plus Jakarta Sans', 'Merriweather', 'Fira Code', 'Outfit', 'Poppins']
+        for (const fam of checkFamilies) {
+          document.fonts.check(`12px "${fam}"`)
+        }
       } catch (e) {
         console.warn('[CVPrintEngine] Aviso ao sincronizar fontes antes da impressão:', e)
       }

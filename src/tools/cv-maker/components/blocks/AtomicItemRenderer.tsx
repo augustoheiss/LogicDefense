@@ -1,11 +1,13 @@
-import React from 'react'
+import React, { useState, useEffect } from 'react'
 import type { CVWork, CVEducation, CVProject, CVLanguage, CVSkill, CVCertificate, CVInterest, CVReference, AtomicCVItem } from '../../types/cv'
 import { getSkillPercentage } from '../../types/cv'
+import { AtsBulletBadge } from '../ATS/AtsBulletBadge'
 
 interface AtomicItemRendererProps {
   category: 'work' | 'education' | 'projects' | 'languages' | 'skills' | 'certificates' | 'interests' | 'references'
   item: AtomicCVItem
   variant?: string
+  isAtsActive?: boolean
 }
 
 const renderEstimatedBadge = (isEstimated?: boolean, ...dateStrings: (string | undefined)[]) => {
@@ -40,8 +42,29 @@ const renderEstimatedBadge = (isEstimated?: boolean, ...dateStrings: (string | u
 export const AtomicItemRenderer: React.FC<AtomicItemRendererProps> = ({
   category,
   item,
-  variant = 'card_box'
+  variant = 'card_box',
+  isAtsActive: propIsAtsActive
 }) => {
+  const [isAtsActive, setIsAtsActive] = useState<boolean>(() => {
+    if (propIsAtsActive !== undefined) return propIsAtsActive
+    return typeof window !== 'undefined' && localStorage.getItem('cv_ats_heatmap_active') === 'true'
+  })
+
+  useEffect(() => {
+    if (propIsAtsActive !== undefined) {
+      setIsAtsActive(propIsAtsActive)
+    }
+  }, [propIsAtsActive])
+
+  useEffect(() => {
+    const handleToggle = () => {
+      const active = localStorage.getItem('cv_ats_heatmap_active') === 'true'
+      setIsAtsActive(active)
+    }
+    window.addEventListener('cv_ats_toggle', handleToggle)
+    return () => window.removeEventListener('cv_ats_toggle', handleToggle)
+  }, [])
+
   if (!item) return null
 
   // ── Renderização de Experiência Individual (work) ──
@@ -109,7 +132,10 @@ export const AtomicItemRenderer: React.FC<AtomicItemRendererProps> = ({
             {w.highlights && w.highlights.length > 0 && (
               <ul className="cv-item-bullets">
                 {w.highlights.map((h, i) => (
-                  <li key={i}>{h}</li>
+                  <li key={i}>
+                    <span>{h}</span>
+                    <AtsBulletBadge bullet={h} isActive={isAtsActive} />
+                  </li>
                 ))}
               </ul>
             )}
@@ -145,7 +171,10 @@ export const AtomicItemRenderer: React.FC<AtomicItemRendererProps> = ({
           {w.highlights && w.highlights.length > 0 && (
             <ul className="cv-item-bullets">
               {w.highlights.map((h, i) => (
-                <li key={i}>{h}</li>
+                <li key={i}>
+                  <span>{h}</span>
+                  <AtsBulletBadge bullet={h} isActive={isAtsActive} />
+                </li>
               ))}
             </ul>
           )}
@@ -184,7 +213,10 @@ export const AtomicItemRenderer: React.FC<AtomicItemRendererProps> = ({
         {w.highlights && w.highlights.length > 0 && (
           <ul className="cv-item-bullets">
             {w.highlights.map((h, i) => (
-              <li key={i}>{h}</li>
+              <li key={i}>
+                <span>{h}</span>
+                <AtsBulletBadge bullet={h} isActive={isAtsActive} />
+              </li>
             ))}
           </ul>
         )}

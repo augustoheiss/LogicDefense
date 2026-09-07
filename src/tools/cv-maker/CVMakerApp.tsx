@@ -24,6 +24,8 @@ import { validateLicenseKey } from './services/cvService'
 import { downloadCVZipPackage } from './services/standaloneHtmlService'
 import { CVPrintEngine } from './services/CVPrintEngine'
 import { PageFormatEngine } from './engine/PageFormatEngine'
+import { AtsInspectorDrawer } from './components/ATS/AtsInspectorDrawer'
+import { calculateAtsReport } from './engine/AtsEngine'
 
 import './styles/cv-themes.css'
 import './styles/cv-print.css'
@@ -42,6 +44,8 @@ const STORAGE_STRUCTURES_KEY = 'cv_maker_layout_structures_v1'
 const STORAGE_WORKSPACE_MODE_KEY = 'cv_maker_workspace_mode_v1'
 const STORAGE_PAGE_FORMAT_KEY = 'cv_maker_page_format_v1'
 const STORAGE_ZOOM_MODE_KEY = 'cv_maker_zoom_mode_v1'
+const STORAGE_ATS_JD_KEY = 'cv_ats_jd_text'
+const STORAGE_ATS_HEATMAP_KEY = 'cv_ats_heatmap_active'
 
 export type WorkspaceMode = 'split' | 'canvas-focus' | 'sidebar-focus'
 
@@ -128,6 +132,32 @@ export const CVMakerApp: React.FC = () => {
   useEffect(() => {
     PageFormatEngine.applyFormat(activePageFormat)
   }, [activePageFormat])
+
+  // ATS State, Job Description & Heatmap
+  const [isAtsDrawerOpen, setIsAtsDrawerOpen] = useState<boolean>(false)
+  const [isAtsHeatmapActive, setIsAtsHeatmapActive] = useState<boolean>(() => {
+    return localStorage.getItem(STORAGE_ATS_HEATMAP_KEY) === 'true'
+  })
+  const [jdText, setJdText] = useState<string>(() => {
+    return localStorage.getItem(STORAGE_ATS_JD_KEY) || ''
+  })
+
+  const handleJdTextChange = (text: string) => {
+    setJdText(text)
+    localStorage.setItem(STORAGE_ATS_JD_KEY, text)
+  }
+
+  const handleToggleAtsHeatmap = () => {
+    const next = !isAtsHeatmapActive
+    setIsAtsHeatmapActive(next)
+    localStorage.setItem(STORAGE_ATS_HEATMAP_KEY, String(next))
+    window.dispatchEvent(new CustomEvent('cv_ats_toggle'))
+  }
+
+  // Relatório de Auditoria ATS reativo em tempo real (< 5ms, 0 tokens)
+  const atsReport = useMemo(() => {
+    return calculateAtsReport(cvData, jdText)
+  }, [cvData, jdText])
 
   // Per-Layout Universal Structure & Free Canvas Config
   const [layoutStructures, setLayoutStructures] = useState<Record<string, LayoutStructureConfig>>(() => {
@@ -848,6 +878,9 @@ export const CVMakerApp: React.FC = () => {
             onZoomModeChange={handleZoomModeChange}
             currentScale={currentScale}
             onOpenDesignModal={() => setIsDesignModalOpen(true)}
+            isAtsInspectorActive={isAtsDrawerOpen}
+            onToggleAtsInspector={() => setIsAtsDrawerOpen(!isAtsDrawerOpen)}
+            atsScore={atsReport.overallScore}
             onOpenApiKeyModal={() => handleOpenLandingPage('hub', 'agent_prompt')}
             hasActiveKey={hasActiveKey}
             isPro={isPro}
@@ -875,7 +908,17 @@ export const CVMakerApp: React.FC = () => {
         </main>
       </div>
 
-      {/* ── Modais ── */}
+      {/* ── Modais & Drawers ── */}
+      <AtsInspectorDrawer
+        isOpen={isAtsDrawerOpen}
+        onClose={() => setIsAtsDrawerOpen(false)}
+        cvData={cvData}
+        jdText={jdText}
+        onJdTextChange={handleJdTextChange}
+        isVisualHeatmapActive={isAtsHeatmapActive}
+        onToggleVisualHeatmap={handleToggleAtsHeatmap}
+      />
+
       <DesignCustomizerDrawer
         isOpen={isDesignModalOpen}
         onClose={() => setIsDesignModalOpen(false)}

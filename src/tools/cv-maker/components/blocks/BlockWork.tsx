@@ -1,15 +1,38 @@
-import React from 'react'
+import React, { useState, useEffect } from 'react'
 import type { CVWork } from '../../types/cv'
+import { AtsBulletBadge } from '../ATS/AtsBulletBadge'
 
 interface BlockWorkProps {
   work?: CVWork[]
   title?: string
+  isAtsActive?: boolean
 }
 
 export const BlockWork: React.FC<BlockWorkProps> = ({
   work,
-  title = 'Experiência Profissional'
+  title = 'Experiência Profissional',
+  isAtsActive: propIsAtsActive
 }) => {
+  const [isAtsActive, setIsAtsActive] = useState<boolean>(() => {
+    if (propIsAtsActive !== undefined) return propIsAtsActive
+    return typeof window !== 'undefined' && localStorage.getItem('cv_ats_heatmap_active') === 'true'
+  })
+
+  useEffect(() => {
+    if (propIsAtsActive !== undefined) {
+      setIsAtsActive(propIsAtsActive)
+    }
+  }, [propIsAtsActive])
+
+  useEffect(() => {
+    const handleToggle = () => {
+      const active = localStorage.getItem('cv_ats_heatmap_active') === 'true'
+      setIsAtsActive(active)
+    }
+    window.addEventListener('cv_ats_toggle', handleToggle)
+    return () => window.removeEventListener('cv_ats_toggle', handleToggle)
+  }, [])
+
   if (!work || work.length === 0) return null
 
   return (
@@ -70,7 +93,10 @@ export const BlockWork: React.FC<BlockWorkProps> = ({
             {item.highlights && item.highlights.length > 0 && (
               <ul className="cv-bullets">
                 {item.highlights.map((high, hIdx) => (
-                  <li key={hIdx}>{high}</li>
+                  <li key={hIdx}>
+                    <span>{high}</span>
+                    <AtsBulletBadge bullet={high} isActive={isAtsActive} />
+                  </li>
                 ))}
               </ul>
             )}
