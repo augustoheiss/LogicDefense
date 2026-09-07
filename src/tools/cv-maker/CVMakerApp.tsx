@@ -155,6 +155,7 @@ export const CVMakerApp: React.FC = () => {
 
   // Headless PDF Generation State
   const [isGeneratingDirectPdf, setIsGeneratingDirectPdf] = useState<boolean>(false)
+  const [directPdfStatus, setDirectPdfStatus] = useState<string>('')
 
   // ATS State, Job Description & Heatmap
   const [isAtsDrawerOpen, setIsAtsDrawerOpen] = useState<boolean>(false)
@@ -629,6 +630,7 @@ export const CVMakerApp: React.FC = () => {
   const handleDownloadDirectPdf = async () => {
     if (isGeneratingDirectPdf) return
     setIsGeneratingDirectPdf(true)
+    setDirectPdfStatus('Conectando ao worker PDF...')
     try {
       PageFormatEngine.applyFormat(activePageFormat, document.documentElement, customPageDimensions)
       await CVPrintEngine.downloadDirectHeadlessPdf({
@@ -639,6 +641,9 @@ export const CVMakerApp: React.FC = () => {
         pageFormat: activePageFormat,
         customWidthMm: customPageDimensions?.widthMm,
         customHeightMm: customPageDimensions?.heightMm,
+        onProgress: (statusText) => {
+          setDirectPdfStatus(statusText)
+        }
       })
     } catch (err: any) {
       console.error('[CVMakerApp] Falha na compilação direta via Playwright:', err)
@@ -651,6 +656,7 @@ export const CVMakerApp: React.FC = () => {
       }
     } finally {
       setIsGeneratingDirectPdf(false)
+      setDirectPdfStatus('')
     }
   }
 
@@ -925,6 +931,7 @@ export const CVMakerApp: React.FC = () => {
             onPrintPdf={handlePrintPdf}
             onDownloadDirectPdf={handleDownloadDirectPdf}
             isGeneratingPdf={isGeneratingDirectPdf}
+            pdfProgressStatus={directPdfStatus}
             onAutoFitSinglePage={handleAutoFitSinglePage}
             activePageFormat={activePageFormat}
             customPageDimensions={customPageDimensions}

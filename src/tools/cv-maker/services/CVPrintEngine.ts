@@ -18,6 +18,7 @@ export interface DirectPrintOptions {
   pageFormat?: string
   customWidthMm?: number
   customHeightMm?: number
+  onProgress?: (status: string) => void
 }
 
 export class CVPrintEngine {
@@ -182,15 +183,30 @@ export class CVPrintEngine {
     candidates.push('https://heiss-cv-engine.onrender.com')
 
     let lastError: any = null
+    options.onProgress?.('Preparando documento e conectando ao worker...')
 
-    for (const baseUrl of candidates) {
+    for (let i = 0; i < candidates.length; i++) {
+      const baseUrl = candidates[i]
+      const endpoint = baseUrl ? `${baseUrl}/api/v1/cv/export-pdf-headless` : '/api/v1/cv/export-pdf-headless'
+      const isLast = i === candidates.length - 1
+      const timeoutMs = isLocal ? 15000 : (isLast ? 45000 : 9000)
+
       try {
-        const endpoint = baseUrl ? `${baseUrl}/api/v1/cv/export-pdf-headless` : '/api/v1/cv/export-pdf-headless'
+        options.onProgress?.(
+          i > 0
+            ? `Failover ativo: conectando ao servidor reserva (${i + 1}/${candidates.length})...`
+            : 'Compilando PDF vetorial no servidor...'
+        )
+
+        const controller = new AbortController()
+        const timerId = setTimeout(() => controller.abort(), timeoutMs)
+
         const response = await fetch(endpoint, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json'
           },
+          signal: controller.signal,
           body: JSON.stringify({
             html: snapshotHtml,
             filename,
@@ -199,8 +215,10 @@ export class CVPrintEngine {
             height: options.customHeightMm ? `${options.customHeightMm}mm` : undefined
           })
         })
+        clearTimeout(timerId)
 
         if (response.ok) {
+          options.onProgress?.('PDF gerado com sucesso! Iniciando download...')
           const blob = await response.blob()
           const url = URL.createObjectURL(blob)
           const a = document.createElement('a')
@@ -222,9 +240,14 @@ export class CVPrintEngine {
           console.warn(`[CVPrintEngine] Servidor ${endpoint} retornou status ${response.status}:`, errDetail)
           lastError = new Error(`Servidor (${baseUrl || 'local'}) respondeu ${response.status}: ${errDetail || 'Erro interno'}`)
         }
-      } catch (err) {
-        console.warn(`[CVPrintEngine] Exceção ao conectar com ${baseUrl}:`, err)
-        lastError = err
+      } catch (err: any) {
+        if (err.name === 'AbortError') {
+          console.warn(`[CVPrintEngine] Timeout de ${timeoutMs}ms ao aguardar ${baseUrl}. Acionando failover...`)
+          lastError = new Error(`Timeout de conexão com ${baseUrl || 'servidor'}`)
+        } else {
+          console.warn(`[CVPrintEngine] Exceção ao conectar com ${baseUrl}:`, err)
+          lastError = err
+        }
       }
     }
 

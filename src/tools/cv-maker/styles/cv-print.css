@@ -439,10 +439,7 @@
   section,
   .cv-math-work-list,
   .projects-grid,
-  .skills-grid,
-  .education-grid,
-  .cv-languages-row,
-  .cv-interests-wrap {
+  .education-grid {
     break-inside: auto !important;
     page-break-inside: auto !important;
   }
@@ -462,6 +459,11 @@
     margin-top: 0.85rem !important;
     margin-bottom: 0.45rem !important;
     padding-bottom: 0.25rem !important;
+  }
+
+  p, li, .cv-bullet-item, .cv-description, .cv-bio {
+    orphans: 2 !important;
+    widows: 2 !important;
   }
 
   .cv-header,
@@ -485,10 +487,15 @@
   .cv-language-card,
   .cv-interest-card,
   .cv-skills-group,
+  .skills-grid,
+  .cv-section-languages,
+  .cv-languages-row,
+  .cv-interests-wrap,
   .cv-ref-card,
   .cv-skill-bar-wrapper,
   .cv-optional-item,
   .timeline-entry,
+  .cv-section-atomic,
   .signature-block,
   tr,
   .cv-avoid-break {

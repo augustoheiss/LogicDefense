@@ -30,6 +30,7 @@ interface CVToolbarProps {
   onPrintPdf: () => void
   onDownloadDirectPdf?: () => void
   isGeneratingPdf?: boolean
+  pdfProgressStatus?: string
   onAutoFitSinglePage?: () => void
   onOpenDesignModal?: () => void
   isAtsInspectorActive?: boolean
@@ -86,6 +87,7 @@ export const CVToolbar: React.FC<CVToolbarProps> = ({
   onPrintPdf,
   onDownloadDirectPdf,
   isGeneratingPdf = false,
+  pdfProgressStatus = '',
   onAutoFitSinglePage,
   onOpenDesignModal,
   isAtsInspectorActive = false,
@@ -721,7 +723,9 @@ export const CVToolbar: React.FC<CVToolbarProps> = ({
             }}
           >
             <span className="cv-dropdown-trigger__icon">{isGeneratingPdf ? '⏳' : '📥'}</span>
-            <span className="cv-dropdown-trigger__text">{isGeneratingPdf ? 'Gerando PDF...' : 'Exportar & PDF'}</span>
+            <span className="cv-dropdown-trigger__text">
+              {isGeneratingPdf ? (pdfProgressStatus || 'Gerando PDF...') : 'Exportar & PDF'}
+            </span>
             <span className="cv-dropdown-trigger__chevron" style={{ color: '#ffffff' }}>▼</span>
           </button>
 
@@ -747,7 +751,7 @@ export const CVToolbar: React.FC<CVToolbarProps> = ({
                 >
                   <div className="cv-dropdown-item__content">
                     <div className="cv-dropdown-item__title">
-                      <span>{isGeneratingPdf ? '⏳' : '📥'}</span> <strong>{isGeneratingPdf ? 'Gerando PDF no Servidor...' : 'Baixar PDF Direto (Playwright)'}</strong>
+                      <span>{isGeneratingPdf ? '⏳' : '📥'}</span> <strong>{isGeneratingPdf ? (pdfProgressStatus || 'Gerando PDF no Servidor...') : 'Baixar PDF Direto (Playwright)'}</strong>
                     </div>
                     <div className="cv-dropdown-item__desc" style={{ color: '#a7f3d0' }}>
                       Renderização Chromium no servidor: 100% fiel, tagged PDF para ATS, download direto sem diálogo

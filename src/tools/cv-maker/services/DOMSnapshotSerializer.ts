@@ -72,6 +72,16 @@ export class DOMSnapshotSerializer {
       '--cv-page-ratio',
       '--cv-page-size',
       '--cv-page-epsilon-buffer',
+      '--cv-color-primary',
+      '--cv-color-secondary',
+      '--cv-color-text',
+      '--cv-color-text-muted',
+      '--cv-color-bg',
+      '--cv-color-surface',
+      '--cv-color-border',
+      '--cv-color-accent',
+      '--cv-color-sidebar',
+      '--cv-color-workspace-bg',
     ]
 
     let rootVariablesCss = ':root {\n'
@@ -81,6 +91,37 @@ export class DOMSnapshotSerializer {
         rootVariablesCss += `  ${prop}: ${val};\n`
       }
     }
+
+    // 4.1. Inspecionar e embutir Texturas de Fundo (--cv-bg-image) em Base64 Data URI
+    let rawBgImage = (computedStyle.getPropertyValue('--cv-bg-image') || (rootStyle ? rootStyle.getPropertyValue('--cv-bg-image') : '')).trim()
+    let inlinedBgImage = 'none'
+
+    if (rawBgImage && rawBgImage !== 'none') {
+      const match = rawBgImage.match(/url\s*\(\s*["']?([^"')]+)["']?\s*\)/i)
+      if (match && match[1]) {
+        const bgUrl = match[1].trim()
+        if (bgUrl.startsWith('data:')) {
+          inlinedBgImage = `url("${bgUrl}")`
+        } else if (options.inlineAssets !== false) {
+          try {
+            const absoluteUrl = bgUrl.startsWith('/') && typeof window !== 'undefined'
+              ? `${window.location.origin}${bgUrl}`
+              : bgUrl
+            const base64Bg = await this.urlToBase64(absoluteUrl)
+            inlinedBgImage = `url("${base64Bg}")`
+          } catch (err) {
+            console.warn('[DOMSnapshotSerializer] Não foi possível embutir background em Base64:', err)
+            const fallbackUrl = bgUrl.startsWith('/') && typeof window !== 'undefined'
+              ? `${window.location.origin}${bgUrl}`
+              : bgUrl
+            inlinedBgImage = `url("${fallbackUrl}")`
+          }
+        } else {
+          inlinedBgImage = rawBgImage
+        }
+      }
+    }
+    rootVariablesCss += `  --cv-bg-image: ${inlinedBgImage};\n`
     rootVariablesCss += '}\n'
 
     const pageWidthCss = (rootStyle && rootStyle.getPropertyValue('--cv-page-width').trim()) || (options.pageWidthMm ? `${options.pageWidthMm}mm` : '210mm')
@@ -140,9 +181,19 @@ export class DOMSnapshotSerializer {
         .cv-card, .cv-shadow, .cv-box-shadow {
           box-shadow: 0 1pt 0 rgba(0, 0, 0, 0.08) !important; /* Zero-blur vetorial */
         }
+        /* Paged Media: Folha 1 sem margem externa (capa total); Folhas 2+ com margem nobre de cabeçalho */
         @page {
           size: ${pageSizeRule};
-          margin: 0;
+          margin-top: 15mm;
+          margin-bottom: 12mm;
+          margin-left: 0mm;
+          margin-right: 0mm;
+        }
+        @page :first {
+          margin-top: 0mm;
+          margin-bottom: 0mm;
+          margin-left: 0mm;
+          margin-right: 0mm;
         }
         html, body {
           margin: 0;
@@ -162,21 +213,66 @@ export class DOMSnapshotSerializer {
           background: transparent !important;
           background-color: transparent !important;
         }
-        .cv-print-wrapper, #cv-printable-document, .cv-page-a4, .sheet-page-container, .physical-page-sheet {
+        .cv-print-wrapper, #cv-printable-document {
           width: ${pageWidthCss} !important;
           max-width: ${pageWidthCss} !important;
           min-width: ${pageWidthCss} !important;
-          min-height: ${pageHeightCss} !important;
-          /* Subpixel LayoutUnit Epsilon Buffer (Blink LayoutNG 24.6 fixed-point) */
-          height: calc(100% - 0.5px) !important;
-          overflow: hidden !important;
           margin: 0 auto !important;
           padding: 0 !important;
           box-sizing: border-box !important;
           box-shadow: none !important;
           border: none !important;
-          page-break-inside: avoid !important;
+        }
+        .cv-page-a4, .sheet-page-container, .physical-page-sheet {
+          width: ${pageWidthCss} !important;
+          max-width: ${pageWidthCss} !important;
+          min-width: ${pageWidthCss} !important;
+          min-height: ${pageHeightCss} !important;
+          box-sizing: border-box !important;
+          box-shadow: none !important;
+          border: none !important;
+        }
+        /* ── Fragmentação e Quebras Limpas (Zero quebras no meio de textos ou seções) ── */
+        .cv-work-item,
+        .cv-item,
+        .timeline-entry,
+        .cv-math-work-item,
+        .project-card,
+        .cv-math-project-card,
+        .cv-education-item,
+        .cv-education-card,
+        .cv-math-edu-card,
+        .cv-skills-group,
+        .skills-grid,
+        .cv-math-skill-card,
+        .cv-section-languages,
+        .cv-languages-row,
+        .cv-language-card,
+        .cv-math-lang-card,
+        .cv-interests-wrap,
+        .cv-interest-card,
+        .cv-math-interest-card,
+        .cv-cert-card,
+        .cv-award-card,
+        .cv-section-atomic,
+        .cv-avoid-break,
+        .signature-block,
+        tr {
           break-inside: avoid !important;
+          page-break-inside: avoid !important;
+        }
+        .cv-section-title,
+        .section-title,
+        .cv-math-section-title,
+        h2, h3 {
+          break-after: avoid !important;
+          page-break-after: avoid !important;
+          orphans: 3;
+          widows: 3;
+        }
+        p, li, .cv-bullet-item, .cv-description, .cv-bio {
+          orphans: 2;
+          widows: 2;
         }
         /* Elimina folha em branco acidental no final */
         :last-child {
