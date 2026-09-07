@@ -40,8 +40,10 @@ backend/test_*.py
 .agents/
 .cursor/
 
-# Master Plan (root only)
-/master-plan/
+# Master Plan (todas as pastas em qualquer nivel do projeto)
+master-plan/
+**/master-plan/
+master-plan
 client_secret.json
 scripts/youtube_auto_uploader.py
 scripts/youtube_batch_uploader.py
