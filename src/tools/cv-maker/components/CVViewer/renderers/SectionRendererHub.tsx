@@ -38,6 +38,7 @@ export function useSectionRenderers({
   getDynamicMathSections
 }: UseSectionRenderersProps): SectionRenderers {
   const { basics } = data
+  const showIcons = Boolean(structureConfig?.showSectionIcons)
 
   const wrapSection = (
     sectionId: string,
@@ -58,8 +59,8 @@ export function useSectionRenderers({
         defaultZone={defaultZone}
         isMultiColumnLayout={isMultiColumnLayout}
         isFreeCanvas={isFreeCanvas}
-        structureConfig={structureConfig}
         onUpdateStructureConfig={onUpdateStructureConfig}
+        structureConfig={structureConfig}
         onMoveStep={handleMoveStep}
         onSwapWithSection={(targetId) => handleSwapOrder(sectionId, targetId)}
         onSwitchZone={canSwitch && defaultZone ? () => handleSwitchZone(sectionId, defaultZone) : undefined}
@@ -71,62 +72,35 @@ export function useSectionRenderers({
   }
 
   const renderZoneSection = (
-    secId: string,
+    sectionId: string,
     targetZone: 'left' | 'right',
     defZone: 'left' | 'right',
     title: string,
     node: React.ReactNode,
     category?: string
   ): React.ReactNode => {
-    if (!node) return null
-    if (getSectionZone(secId, defZone) !== targetZone) return null
-    return wrapSection(secId, title, node, defZone, category)
+    const assignedZone = getSectionZone(sectionId, defZone)
+    if (assignedZone !== targetZone) return null
+    return wrapSection(sectionId, title, node, defZone, category)
   }
 
-  const renderPhotoSection = (
-    targetZone?: 'left' | 'right',
-    defZone: 'left' | 'right' = 'left',
-    fallbackTitle = 'Foto de Perfil',
-    onlyInFreeCanvas = false
-  ): React.ReactNode => {
-    const photoDims = structureConfig?.sectionDimensions?.['photo']
-    if (photoDims?.hidden) return null
+  const renderPhotoSection = (targetZone?: 'left' | 'right', defZone: 'left' | 'right' = 'left'): React.ReactNode => {
+    const dims = structureConfig?.sectionDimensions?.['photo']
+    if (dims?.hidden) return null
 
-    if (isFreeCanvas) {
-      const photoContent = (
-        <BlockPhoto
-          image={basics.image}
-          altName={basics.name}
-          shape={photoDims?.photoShape || 'circle'}
-          size={photoDims?.photoSize ?? 96}
-          borderWidth={photoDims?.photoBorderWidth ?? 0}
-          borderColor={photoDims?.photoBorderColor || '#0284c7'}
-          shadow={photoDims?.photoShadow ?? true}
-          align={photoDims?.photoAlign || 'center'}
-          posX={basics.imagePosX ?? 50}
-          posY={basics.imagePosY ?? 50}
-          scale={basics.imageScale ?? 1.0}
-        />
-      )
-
-      return targetZone
-        ? renderZoneSection('photo', targetZone, defZone, fallbackTitle, photoContent, 'photo')
-        : wrapSection('photo', fallbackTitle, photoContent, defZone, 'photo')
-    }
-
-    if (onlyInFreeCanvas || !basics.image) return null
     const standardNode = (
       <BlockPhoto
         image={basics.image}
         altName={basics.name}
-        shape="circle"
-        size={96}
-        borderWidth={0}
-        shadow={false}
-        align="center"
-        posX={basics.imagePosX ?? 50}
-        posY={basics.imagePosY ?? 50}
-        scale={basics.imageScale ?? 1.0}
+        shape={(dims?.photoShape || dims?.variant || 'circle') as any}
+        size={dims?.photoSize}
+        borderWidth={dims?.photoBorderWidth}
+        borderColor={dims?.photoBorderColor}
+        shadow={dims?.photoShadow}
+        align={dims?.alignment || dims?.photoAlign}
+        posX={dims?.photoPosX ?? basics.imagePosX}
+        posY={dims?.photoPosY ?? basics.imagePosY}
+        scale={dims?.photoScale ?? basics.imageScale}
       />
     )
     if (targetZone) {
@@ -145,7 +119,7 @@ export function useSectionRenderers({
     if (!data.work || data.work.length === 0) return null
 
     const titleText = fallbackTitle
-    const titleNode = customTitleNode || <h3 className="cv-section-title">💼 {titleText}</h3>
+    const titleNode = customTitleNode || <h3 className="cv-section-title">{showIcons ? '💼 ' : ''}{titleText}</h3>
     const titleBox = targetZone
       ? renderZoneSection('work_title', targetZone, defZone, `Título: ${titleText}`, titleNode, 'work')
       : wrapSection('work_title', `Título: ${titleText}`, titleNode, defZone, 'work')
@@ -189,7 +163,7 @@ export function useSectionRenderers({
     if (!data.education || data.education.length === 0) return null
 
     const titleText = fallbackTitle
-    const titleNode = customTitleNode || <h3 className="cv-section-title">🎓 {titleText}</h3>
+    const titleNode = customTitleNode || <h3 className="cv-section-title">{showIcons ? '🎓 ' : ''}{titleText}</h3>
     const titleBox = targetZone
       ? renderZoneSection('education_title', targetZone, defZone, `Título: ${titleText}`, titleNode, 'education')
       : wrapSection('education_title', `Título: ${titleText}`, titleNode, defZone, 'education')
@@ -232,7 +206,7 @@ export function useSectionRenderers({
     if (!data.projects || data.projects.length === 0) return null
 
     const titleText = fallbackTitle
-    const titleNode = customTitleNode || <h3 className="cv-section-title">🚀 {titleText}</h3>
+    const titleNode = customTitleNode || <h3 className="cv-section-title">{showIcons ? '🚀 ' : ''}{titleText}</h3>
     const titleBox = targetZone
       ? renderZoneSection('projects_title', targetZone, defZone, `Título: ${titleText}`, titleNode, 'projects')
       : wrapSection('projects_title', `Título: ${titleText}`, titleNode, defZone, 'projects')
@@ -275,7 +249,7 @@ export function useSectionRenderers({
     if (!data.languages || data.languages.length === 0) return null
 
     const titleText = fallbackTitle
-    const titleNode = customTitleNode || <h4 className="cv-sidebar-title">🌐 {titleText}</h4>
+    const titleNode = customTitleNode || <h4 className="cv-sidebar-title">{showIcons ? '🌐 ' : ''}{titleText}</h4>
     const titleBox = targetZone
       ? renderZoneSection('languages_title', targetZone, defZone, `Título: ${titleText}`, titleNode, 'languages')
       : wrapSection('languages_title', `Título: ${titleText}`, titleNode, defZone, 'languages')
@@ -318,7 +292,7 @@ export function useSectionRenderers({
     if (!data.skills || data.skills.length === 0) return null
 
     const titleText = fallbackTitle
-    const titleNode = customTitleNode || <h4 className="cv-sidebar-title">⚡ {titleText}</h4>
+    const titleNode = customTitleNode || <h4 className="cv-sidebar-title">{showIcons ? '⚡ ' : ''}{titleText}</h4>
     const titleBox = targetZone
       ? renderZoneSection('skills_title', targetZone, defZone, `Título: ${titleText}`, titleNode, 'skills')
       : wrapSection('skills_title', `Título: ${titleText}`, titleNode, defZone, 'skills')
@@ -361,7 +335,7 @@ export function useSectionRenderers({
     if (!data.certificates || data.certificates.length === 0) return null
 
     const titleText = fallbackTitle
-    const titleNode = customTitleNode || <h3 className="cv-section-title">📜 {titleText}</h3>
+    const titleNode = customTitleNode || <h3 className="cv-section-title">{showIcons ? '📜 ' : ''}{titleText}</h3>
     const titleBox = targetZone
       ? renderZoneSection('certificates_title', targetZone, defZone, `Título: ${titleText}`, titleNode, 'certificates')
       : wrapSection('certificates_title', `Título: ${titleText}`, titleNode, defZone, 'certificates')
@@ -404,7 +378,7 @@ export function useSectionRenderers({
     if (!data.interests || data.interests.length === 0) return null
 
     const titleText = fallbackTitle
-    const titleNode = customTitleNode || <h4 className="cv-sidebar-title">💡 {titleText}</h4>
+    const titleNode = customTitleNode || <h4 className="cv-sidebar-title">{showIcons ? '💡 ' : ''}{titleText}</h4>
     const titleBox = targetZone
       ? renderZoneSection('interests_title', targetZone, defZone, `Título: ${titleText}`, titleNode, 'interests')
       : wrapSection('interests_title', `Título: ${titleText}`, titleNode, defZone, 'interests')
@@ -447,7 +421,7 @@ export function useSectionRenderers({
     if (!data.references || data.references.length === 0) return null
 
     const titleText = fallbackTitle
-    const titleNode = customTitleNode || <h3 className="cv-section-title">👥 {titleText}</h3>
+    const titleNode = customTitleNode || <h3 className="cv-section-title">{showIcons ? '👥 ' : ''}{titleText}</h3>
     const titleBox = targetZone
       ? renderZoneSection('references_title', targetZone, defZone, `Título: ${titleText}`, titleNode, 'references')
       : wrapSection('references_title', `Título: ${titleText}`, titleNode, defZone, 'references')

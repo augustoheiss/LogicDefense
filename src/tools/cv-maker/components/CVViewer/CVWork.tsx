@@ -11,7 +11,7 @@ export const CVWork: React.FC<CVWorkProps> = ({ work }) => {
   return (
     <section className="cv-section">
       <h2 className="cv-section-title">
-        <span>💼</span> Experiência Profissional
+        Experiência Profissional
       </h2>
 
       <div className="cv-work-list">

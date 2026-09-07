@@ -148,51 +148,10 @@
   }
 
   /* =============================================================
-     Paged Media Running Continuation Header & Margin Spacer (W3C Standard)
-     Garante cabeçalho em todas as folhas de continuação (página 2+)
-     e respiro de 16mm no topo para não colar no corte físico da folha!
+     Paged Media Running Margin Spacer (W3C Standard)
+     Garante respiro transparente de 14mm no topo da folha para não colar
+     no corte físico da folha, mantendo a textura/fundo 100% contínuo e visível!
      ============================================================= */
-  .cv-print-running-continuation-header {
-    display: flex !important;
-    position: fixed !important;
-    top: 0 !important;
-    left: 0 !important;
-    right: 0 !important;
-    width: var(--cv-page-width, 210mm) !important;
-    height: 14mm !important;
-    padding: 0 16mm !important;
-    box-sizing: border-box !important;
-    align-items: center !important;
-    justify-content: space-between !important;
-    background-color: var(--cv-color-bg, #ffffff) !important;
-    border-bottom: 1.5px solid var(--cv-color-border, #cbd5e1) !important;
-    z-index: 10 !important;
-    font-size: 8.5pt !important;
-    font-weight: 600 !important;
-    color: var(--cv-color-text-muted, #475569) !important;
-    pointer-events: none !important;
-    -webkit-print-color-adjust: exact !important;
-    print-color-adjust: exact !important;
-  }
-
-  .cv-running-header__candidate strong {
-    color: var(--cv-color-text, #0f172a) !important;
-    font-weight: 700 !important;
-  }
-
-  .cv-running-header__label {
-    color: var(--cv-color-text-muted, #64748b) !important;
-    font-weight: 500 !important;
-  }
-
-  .cv-running-header__tag {
-    color: var(--cv-color-primary, #0284c7) !important;
-    font-weight: 700 !important;
-    font-size: 8pt !important;
-    text-transform: uppercase !important;
-    letter-spacing: 0.05em !important;
-  }
-
   table.cv-print-flow-table {
     display: table !important;
     width: 100% !important;
@@ -208,11 +167,12 @@
   }
 
   thead.cv-print-flow-spacer td {
-    height: 16mm !important;
+    height: 14mm !important;
     margin: 0 !important;
     padding: 0 !important;
     border: none !important;
     background: transparent !important;
+    background-color: transparent !important;
   }
 
   tbody {
@@ -225,9 +185,10 @@
     margin: 0 !important;
     border: none !important;
     width: 100% !important;
+    background: transparent !important;
   }
 
-  /* Na folha 1, o cabeçalho original sobrepõe o header fixo e anula o espaçador inicial */
+  /* Cabeçalhos e estruturas com fundo 100% transparente para incorporar a textura de fundo */
   .cv-card > header,
   .cv-card > div.cv-brand-header,
   .cv-card > div.cv-sidebar-layout,
@@ -246,8 +207,8 @@
   .cv-header-corporate {
     position: relative !important;
     z-index: 50 !important;
-    background-color: var(--cv-color-bg, #ffffff) !important;
-    margin-top: -16mm !important;
+    background: transparent !important;
+    background-color: transparent !important;
   }
 
   .cv-page-footer {

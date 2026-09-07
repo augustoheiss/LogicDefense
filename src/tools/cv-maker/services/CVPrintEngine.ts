@@ -156,16 +156,25 @@ export class CVPrintEngine {
       ...snapshotOptions
     })
 
-    // 3. Formata nome amigável do arquivo
-    const candidateName = (options.candidateName || 'curriculo').trim().toLowerCase().replace(/\s+/g, '-')
-    const label = options.candidateLabel ? `-${options.candidateLabel.trim().toLowerCase().replace(/\s+/g, '-')}` : ''
+    // 3. Formata nome amigável e seguro do arquivo PDF (compatível com Windows, Chrome e SmartScreen)
+    const sanitizePart = (str: string) =>
+      str
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .replace(/[^a-z0-9_-]/g, '-')
+        .replace(/-+/g, '-')
+        .replace(/^-|-$/g, '')
+
+    const cleanCandidate = sanitizePart(options.candidateName || 'curriculo')
+    const cleanLabel = options.candidateLabel ? `-${sanitizePart(options.candidateLabel)}` : ''
     const modeSuffix =
       options.viewMode === 'cover_letter'
         ? '-carta'
         : options.viewMode === 'both'
         ? '-dossie'
         : ''
-    const filename = `curriculo-${candidateName}${label}${modeSuffix}.pdf`
+    const filename = `curriculo-${cleanCandidate || 'profissional'}${cleanLabel}${modeSuffix}.pdf`
 
     // 4. Candidatos de Backend (local 8001, local 8000, relativo, produção)
     const envUrl = (import.meta as any).env?.VITE_BACKEND_URL || (import.meta as any).env?.VITE_API_URL
@@ -226,15 +235,24 @@ export class CVPrintEngine {
 
         if (response.ok) {
           options.onProgress?.('PDF gerado com sucesso! Iniciando download...')
-          const blob = await response.blob()
+          const arrayBuffer = await response.arrayBuffer()
+          const blob = new Blob([arrayBuffer], { type: 'application/pdf' })
           const url = URL.createObjectURL(blob)
           const a = document.createElement('a')
+          a.style.display = 'none'
           a.href = url
+          a.setAttribute('download', filename)
           a.download = filename
           document.body.appendChild(a)
           a.click()
-          document.body.removeChild(a)
-          setTimeout(() => URL.revokeObjectURL(url), 1500)
+          // Mantém o Blob URL ativo por 60 segundos para que o download manager do Chromium
+          // no Windows não aborte a gravação do arquivo e reverta para nome UUID sem extensão
+          setTimeout(() => {
+            try {
+              if (document.body.contains(a)) document.body.removeChild(a)
+            } catch {}
+            URL.revokeObjectURL(url)
+          }, 60000)
           return true
         } else {
           let errDetail = ''

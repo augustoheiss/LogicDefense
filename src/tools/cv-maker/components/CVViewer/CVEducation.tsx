@@ -12,7 +12,7 @@ export const CVEducation: React.FC<CVEducationProps> = ({ education }) => {
   return (
     <section className="cv-section">
       <h2 className="cv-section-title">
-        <span>🎓</span> Formação Acadêmica
+        Formação Acadêmica
       </h2>
 
       <div className={`cv-education-grid ${getGridClass(education.length)}`}>

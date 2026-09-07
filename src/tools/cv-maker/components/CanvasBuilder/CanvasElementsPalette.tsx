@@ -512,6 +512,59 @@ export const CanvasElementsPalette: React.FC<CanvasElementsPaletteProps> = ({
       {/* Lista de Categorias & Itens Atômicos */}
       <div className="cv-elements-palette__sections">
         
+        {/* ── Opção de Layout: Ícones nos Títulos das Seções (💼 🚀 🎓) ── */}
+        <div className="cv-palette-group" style={{ border: '1px solid #1e293b', borderRadius: '8px', background: 'rgba(15, 23, 42, 0.4)', padding: '0.65rem 0.75rem', display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '0.5rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+              <span style={{ fontSize: '1rem' }}>💼</span>
+              <div>
+                <strong style={{ display: 'block', fontSize: '0.78rem', color: '#f8fafc' }}>Ícones nos Títulos</strong>
+                <span style={{ fontSize: '0.68rem', color: '#94a3b8' }}>Exibir símbolos (💼 🚀 🎓) antes de cada seção</span>
+              </div>
+            </div>
+            <label className="cv-switch" style={{ position: 'relative', display: 'inline-block', width: '38px', height: '20px', cursor: 'pointer', margin: 0 }}>
+              <input
+                type="checkbox"
+                checked={Boolean(structureConfig.showSectionIcons)}
+                onChange={(e) => {
+                  onUpdateStructureConfig({
+                    ...structureConfig,
+                    showSectionIcons: e.target.checked
+                  })
+                }}
+                style={{ opacity: 0, width: 0, height: 0 }}
+              />
+              <span
+                style={{
+                  position: 'absolute',
+                  cursor: 'pointer',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  backgroundColor: structureConfig.showSectionIcons ? '#0284c7' : '#334155',
+                  transition: '0.2s',
+                  borderRadius: '20px'
+                }}
+              >
+                <span
+                  style={{
+                    position: 'absolute',
+                    content: '""',
+                    height: '14px',
+                    width: '14px',
+                    left: structureConfig.showSectionIcons ? '20px' : '3px',
+                    bottom: '3px',
+                    backgroundColor: '#ffffff',
+                    transition: '0.2s',
+                    borderRadius: '50%'
+                  }}
+                />
+              </span>
+            </label>
+          </div>
+        </div>
+
         {/* ── Seção: Zonas, Sidebars & Boxes de Fundo (Canvas Livre) ── */}
         <div className="cv-palette-group cv-palette-zones-section">
           <div className="cv-palette-group__title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

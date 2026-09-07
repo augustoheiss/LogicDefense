@@ -41,6 +41,8 @@ export const LayoutDynamicMath: React.FC<BaseLayoutProps> = ({
     return 'cv-grid-split-3-2'
   }
 
+  const showIcons = Boolean(structureConfig?.showSectionIcons)
+
   return (
     <CVPageCard
       pageNumber={pageNumber}
@@ -49,7 +51,7 @@ export const LayoutDynamicMath: React.FC<BaseLayoutProps> = ({
       candidateLabel={basics.label}
       pageLabel={pageLabel || 'Currículo'}
       showPageFooter={showPageFooter ?? (structureConfig?.showPageNumbers ?? totalPages > 1)}
-      showContinuationHeader={showContinuationHeader ?? (structureConfig?.showContinuationHeader ?? true)}
+      showContinuationHeader={showContinuationHeader ?? (structureConfig?.showContinuationHeader ?? false)}
     >
       <div className="cv-card layout-dynamic_math">
         {renderCanvasDecorations()}
@@ -90,33 +92,23 @@ export const LayoutDynamicMath: React.FC<BaseLayoutProps> = ({
                           <div>📍 {[basics.location.city, basics.location.region, basics.location.countryCode].filter(Boolean).join(', ')}</div>
                         )}
                         {basics.url && (
-                          <div>🌐 <a href={basics.url} target="_blank" rel="noreferrer" className="cv-link">{basics.url.replace(/^https?:\/\//, '')}</a></div>
-                        )}
-                        {basics.profiles && basics.profiles.length > 0 && (
-                          <div className="cv-math-profiles">
-                            {basics.profiles.map((p, idx) => (
-                              <div key={idx}>
-                                <a href={p.url} target="_blank" rel="noreferrer" className="cv-link">
-                                  🔗 {p.network}: {p.username}
-                                </a>
-                              </div>
-                            ))}
-                          </div>
+                          <div>🔗 <a href={basics.url} target="_blank" rel="noopener noreferrer" className="cv-link">{basics.url.replace(/^https?:\/\//, '')}</a></div>
                         )}
                       </div>
                     </header>
-                  ))}
+                  ), undefined, 'header')}
                 </React.Fragment>
               )
 
             case 'summary':
               return basics.summary ? (
                 <React.Fragment key="dyn_summary">
-                  {wrapSection('summary', 'Resumo / Sobre Mim', (
-                    <div className="cv-math-summary">
-                      {basics.summary}
-                    </div>
-                  ))}
+                  {wrapSection('summary', 'Sobre Mim', (
+                    <section className="cv-section cv-math-summary-box">
+                      <h2 className="cv-math-section-title">SOBRE MIM</h2>
+                      <p className="cv-math-summary-text">{basics.summary}</p>
+                    </section>
+                  ), undefined, 'summary')}
                 </React.Fragment>
               ) : null
 
@@ -128,7 +120,7 @@ export const LayoutDynamicMath: React.FC<BaseLayoutProps> = ({
                     undefined,
                     'EXPERIÊNCIA PROFISSIONAL',
                     <h2 className="cv-math-section-title">
-                      💼 EXPERIÊNCIA PROFISSIONAL
+                      {showIcons ? '💼 ' : ''}EXPERIÊNCIA PROFISSIONAL
                     </h2>,
                     (items) => (
                       <section className="cv-section">
@@ -149,7 +141,7 @@ export const LayoutDynamicMath: React.FC<BaseLayoutProps> = ({
                     undefined,
                     'PROJETOS EM DESTAQUE & REPOSITÓRIOS',
                     <h2 className="cv-math-section-title">
-                      🚀 PROJETOS EM DESTAQUE & REPOSITÓRIOS
+                      {showIcons ? '🚀 ' : ''}PROJETOS EM DESTAQUE & REPOSITÓRIOS
                     </h2>,
                     (items) => (
                       <section className="cv-section">
@@ -171,7 +163,7 @@ export const LayoutDynamicMath: React.FC<BaseLayoutProps> = ({
                     undefined,
                     'COMPETÊNCIAS & HABILIDADES TÉCNICAS',
                     <h2 className="cv-math-section-title">
-                      ⚡ COMPETÊNCIAS & HABILIDADES TÉCNICAS
+                      {showIcons ? '⚡ ' : ''}COMPETÊNCIAS & HABILIDADES TÉCNICAS
                     </h2>,
                     (items) => (
                       <section className="cv-section">
@@ -192,7 +184,7 @@ export const LayoutDynamicMath: React.FC<BaseLayoutProps> = ({
                     undefined,
                     'FORMAÇÃO ACADÊMICA',
                     <h2 className="cv-math-section-title">
-                      🎓 FORMAÇÃO ACADÊMICA
+                      {showIcons ? '🎓 ' : ''}FORMAÇÃO ACADÊMICA
                     </h2>,
                     (items) => (
                       <section className="cv-section">
@@ -213,7 +205,7 @@ export const LayoutDynamicMath: React.FC<BaseLayoutProps> = ({
                     undefined,
                     'IDIOMAS & FLUÊNCIA',
                     <h2 className="cv-math-section-title">
-                      🌐 IDIOMAS & FLUÊNCIA
+                      {showIcons ? '🌐 ' : ''}IDIOMAS & FLUÊNCIA
                     </h2>,
                     (items) => (
                       <section className="cv-section">
@@ -233,7 +225,7 @@ export const LayoutDynamicMath: React.FC<BaseLayoutProps> = ({
                     undefined,
                     undefined,
                     'CERTIFICAÇÕES & LICENÇAS',
-                    <h2 className="cv-math-section-title">📜 CERTIFICAÇÕES & LICENÇAS</h2>,
+                    <h2 className="cv-math-section-title">{showIcons ? '📜 ' : ''}CERTIFICAÇÕES & LICENÇAS</h2>,
                     (items) => (
                       <section className="cv-section">
                         <div className={`cv-math-grid certificates-grid ${getGridClass(data.certificates?.length || 0)}`}>
@@ -252,7 +244,7 @@ export const LayoutDynamicMath: React.FC<BaseLayoutProps> = ({
                     undefined,
                     undefined,
                     'INTERESSES & FRENTES DE PESQUISA',
-                    <h2 className="cv-math-section-title">💡 INTERESSES & FRENTES DE PESQUISA</h2>,
+                    <h2 className="cv-math-section-title">{showIcons ? '💡 ' : ''}INTERESSES & FRENTES DE PESQUISA</h2>,
                     (items) => (
                       <section className="cv-section">
                         <div className={`cv-math-grid interests-grid ${getGridClass(data.interests?.length || 0)}`}>
@@ -271,7 +263,7 @@ export const LayoutDynamicMath: React.FC<BaseLayoutProps> = ({
                     undefined,
                     undefined,
                     'REFERÊNCIAS',
-                    <h2 className="cv-math-section-title">👥 REFERÊNCIAS</h2>,
+                    <h2 className="cv-math-section-title">{showIcons ? '👥 ' : ''}REFERÊNCIAS</h2>,
                     (items) => (
                       <section className="cv-section">
                         <div className="cv-math-work-list">

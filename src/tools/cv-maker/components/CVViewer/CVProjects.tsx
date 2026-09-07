@@ -12,7 +12,7 @@ export const CVProjects: React.FC<CVProjectsProps> = ({ projects }) => {
   return (
     <section className="cv-section">
       <h2 className="cv-section-title">
-        <span>🚀</span> Projetos em Destaque & Repositórios
+        Projetos em Destaque & Repositórios
       </h2>
 
       <div className={`cv-projects-grid ${getGridClass(projects.length)}`}>

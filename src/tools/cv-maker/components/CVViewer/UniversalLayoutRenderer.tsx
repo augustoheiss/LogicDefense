@@ -309,16 +309,6 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
 
       <div ref={pageRef} className="cv-render-wrapper">
         <div className="cv-print-page-background" aria-hidden="true" />
-        {/* Running Continuation Header para Folha 2+ em Impressão/PDF (W3C Fixed Pattern) */}
-        {basics?.name && (
-          <div className="cv-print-running-continuation-header" aria-hidden="true">
-            <span className="cv-running-header__candidate">
-              <strong>{basics.name}</strong>
-              {basics.label && <span className="cv-running-header__label"> • {basics.label}</span>}
-            </span>
-            <span className="cv-running-header__tag">— Continuação</span>
-          </div>
-        )}
         {viewMode === 'cv' && renderCVPage(1, 1)}
         {viewMode === 'cover_letter' && renderCoverLetterPage(1, 1)}
         {viewMode === 'both' && (

@@ -923,7 +923,10 @@ async def export_pdf_headless(payload: CVExportPDFRequest):
             page_width=payload.width,
             page_height=payload.height
         )
-        safe_filename = payload.filename.strip() if payload.filename else "documento.pdf"
+        import re
+        raw_name = payload.filename.strip() if payload.filename else "curriculo.pdf"
+        safe_filename = re.sub(r'[^a-zA-Z0-9_.-]', '-', raw_name)
+        safe_filename = re.sub(r'-+', '-', safe_filename).strip('-')
         if not safe_filename.endswith(".pdf"):
             safe_filename += ".pdf"
 
@@ -932,6 +935,7 @@ async def export_pdf_headless(payload: CVExportPDFRequest):
             media_type="application/pdf",
             headers={
                 "Content-Disposition": f'attachment; filename="{safe_filename}"',
+                "Content-Type": "application/pdf",
                 "Access-Control-Expose-Headers": "Content-Disposition"
             }
         )
