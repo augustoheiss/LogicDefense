@@ -7,8 +7,20 @@ de alta fidelidade utilizando o Chromium Headless com suporte a tagged PDF (aces
 
 import asyncio
 import logging
-from typing import Optional
-from playwright.async_api import async_playwright, Browser, Playwright
+from typing import Optional, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from playwright.async_api import Browser, Playwright
+else:
+    Browser = object
+    Playwright = object
+
+try:
+    from playwright.async_api import async_playwright
+    PLAYWRIGHT_AVAILABLE = True
+except ImportError:
+    async_playwright = None  # type: ignore
+    PLAYWRIGHT_AVAILABLE = False
 
 log = logging.getLogger("cv-maker-pdf-service")
 
@@ -29,6 +41,12 @@ class PlaywrightPDFService:
 
     @classmethod
     async def get_browser(cls) -> Browser:
+        if not PLAYWRIGHT_AVAILABLE or async_playwright is None:
+            raise RuntimeError(
+                "O pacote 'playwright' não está disponível no interpretador ativo. "
+                "Execute no terminal: pip install playwright && playwright install chromium"
+            )
+
         lock = cls._get_lock()
         async with lock:
             if cls._browser is None or not cls._browser.is_connected():

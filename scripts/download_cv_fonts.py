@@ -36,6 +36,11 @@ FONTS_TO_FETCH = [
     {"family": "Poppins", "weights": [400, 600]},
     {"family": "Caveat", "weights": [700]},
     {"family": "Cinzel", "weights": [700]},
+    {"family": "Roboto", "weights": [400, 500, 700]},
+    {"family": "Courier Prime", "weights": [400, 700]},
+    {"family": "Lora", "weights": [400, 600, 700]},
+    {"family": "Open Sans", "weights": [400, 600, 700]},
+    {"family": "Montserrat", "weights": [500, 600, 700]},
 ]
 
 
