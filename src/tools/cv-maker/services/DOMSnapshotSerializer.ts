@@ -181,19 +181,94 @@ export class DOMSnapshotSerializer {
         .cv-card, .cv-shadow, .cv-box-shadow {
           box-shadow: 0 1pt 0 rgba(0, 0, 0, 0.08) !important; /* Zero-blur vetorial */
         }
-        /* Paged Media: Folha 1 sem margem externa (capa total); Folhas 2+ com margem nobre de cabeçalho */
+        /* Paged Media: Impressão A4/Letter com margens zeradas para controle total via W3C Table-Flow */
         @page {
           size: ${pageSizeRule};
-          margin-top: 15mm;
-          margin-bottom: 12mm;
-          margin-left: 0mm;
-          margin-right: 0mm;
+          margin: 0;
         }
-        @page :first {
-          margin-top: 0mm;
-          margin-bottom: 0mm;
-          margin-left: 0mm;
-          margin-right: 0mm;
+        .cv-print-running-continuation-header {
+          display: flex !important;
+          position: fixed !important;
+          top: 0 !important;
+          left: 0 !important;
+          right: 0 !important;
+          width: ${pageWidthCss} !important;
+          height: 14mm !important;
+          padding: 0 16mm !important;
+          box-sizing: border-box !important;
+          align-items: center !important;
+          justify-content: space-between !important;
+          background-color: var(--cv-color-bg, #ffffff) !important;
+          border-bottom: 1.5px solid var(--cv-color-border, #cbd5e1) !important;
+          z-index: 10 !important;
+          font-size: 8.5pt !important;
+          font-weight: 600 !important;
+          color: var(--cv-color-text-muted, #475569) !important;
+          pointer-events: none !important;
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
+        }
+        .cv-running-header__candidate strong {
+          color: var(--cv-color-text, #0f172a) !important;
+          font-weight: 700 !important;
+        }
+        .cv-running-header__label {
+          color: var(--cv-color-text-muted, #64748b) !important;
+          font-weight: 500 !important;
+        }
+        .cv-running-header__tag {
+          color: var(--cv-color-primary, #0284c7) !important;
+          font-weight: 700 !important;
+          font-size: 8pt !important;
+          text-transform: uppercase !important;
+          letter-spacing: 0.05em !important;
+        }
+        table.cv-print-flow-table {
+          display: table !important;
+          width: 100% !important;
+          border-collapse: collapse !important;
+          border-spacing: 0 !important;
+          margin: 0 !important;
+          padding: 0 !important;
+          border: none !important;
+        }
+        thead.cv-print-flow-spacer {
+          display: table-header-group !important;
+        }
+        thead.cv-print-flow-spacer td {
+          height: 16mm !important;
+          margin: 0 !important;
+          padding: 0 !important;
+          border: none !important;
+          background: transparent !important;
+        }
+        td.cv-print-flow-body-cell {
+          display: table-cell !important;
+          padding: 0 !important;
+          margin: 0 !important;
+          border: none !important;
+          width: 100% !important;
+        }
+        .cv-card > header,
+        .cv-card > div.cv-brand-header,
+        .cv-card > div.cv-sidebar-layout,
+        .cv-sidebar-layout,
+        .cv-header,
+        .cv-brand-header,
+        .cv-math-header,
+        .cv-hero-header,
+        .cv-hero-text,
+        .cv-cover-letter-header,
+        .cv-header-standard,
+        .cv-header-banner,
+        .cv-header-creative,
+        .cv-header-split,
+        .cv-header-minimal,
+        .cv-header-corporate {
+          position: relative !important;
+          z-index: 50 !important;
+          background-color: var(--cv-color-bg, #ffffff) !important;
+          margin-top: -16mm !important;
         }
         html, body {
           margin: 0;

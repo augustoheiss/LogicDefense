@@ -1672,4 +1672,32 @@ aside .cv-contacts,
   letter-spacing: 0.03em;
 }
 
+/* Suporte de Impressão W3C Paged Media na tela: neutro/invisível no editor interativo */
+.cv-print-running-continuation-header {
+  display: none;
+}
+
+table.cv-print-flow-table {
+  display: block;
+  width: 100%;
+  border-collapse: collapse;
+  border: none;
+  margin: 0;
+  padding: 0;
+}
+
+thead.cv-print-flow-spacer {
+  display: none;
+}
+
+tbody,
+tr,
+td.cv-print-flow-body-cell {
+  display: block;
+  width: 100%;
+  padding: 0;
+  margin: 0;
+  border: none;
+}
+
 

@@ -168,7 +168,7 @@ export class CVPrintEngine {
     const filename = `curriculo-${candidateName}${label}${modeSuffix}.pdf`
 
     // 4. Candidatos de Backend (local 8001, local 8000, relativo, produção)
-    const envUrl = (import.meta as any).env?.VITE_BACKEND_URL
+    const envUrl = (import.meta as any).env?.VITE_BACKEND_URL || (import.meta as any).env?.VITE_API_URL
     const isLocal =
       typeof window !== 'undefined' &&
       (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
@@ -179,8 +179,14 @@ export class CVPrintEngine {
       candidates.push('http://localhost:8000')
       candidates.push('')
     }
-    candidates.push('https://ocorrencias-pdf-writer.onrender.com')
-    candidates.push('https://heiss-cv-engine.onrender.com')
+    // Adiciona instâncias oficiais garantindo unicidade
+    const defaultWorkers = [
+      'https://ocorrencias-pdf-writer.onrender.com',
+      'https://heiss-cv-engine.onrender.com'
+    ]
+    for (const w of defaultWorkers) {
+      if (!candidates.includes(w)) candidates.push(w)
+    }
 
     let lastError: any = null
     options.onProgress?.('Preparando documento e conectando ao worker...')
@@ -189,13 +195,14 @@ export class CVPrintEngine {
       const baseUrl = candidates[i]
       const endpoint = baseUrl ? `${baseUrl}/api/v1/cv/export-pdf-headless` : '/api/v1/cv/export-pdf-headless'
       const isLast = i === candidates.length - 1
-      const timeoutMs = isLocal ? 15000 : (isLast ? 45000 : 9000)
+      // Timeout resiliente: permite que workers em cold-start (hibernação) acordem sem abortar a requisição prematuramente
+      const timeoutMs = isLocal ? 15000 : (isLast ? 50000 : 40000)
 
       try {
         options.onProgress?.(
           i > 0
-            ? `Failover ativo: conectando ao servidor reserva (${i + 1}/${candidates.length})...`
-            : 'Compilando PDF vetorial no servidor...'
+            ? `Failover ativo: compilando no servidor reserva (${i + 1}/${candidates.length})...`
+            : 'Conectando ao worker Playwright (aguarde alguns instantes se o servidor estiver hibernando)...'
         )
 
         const controller = new AbortController()

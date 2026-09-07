@@ -56,10 +56,21 @@ export const CVPageCard: React.FC<CVPageCardProps> = ({
         </header>
       )}
 
-      {/* Conteúdo principal da folha */}
-      <div className="cv-page-content">
-        {children}
-      </div>
+      {/* Conteúdo principal da folha com tabela de fluxo de impressão */}
+      <table className="cv-print-flow-table">
+        <thead className="cv-print-flow-spacer" aria-hidden="true">
+          <tr><td></td></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td className="cv-print-flow-body-cell">
+              <div className="cv-page-content">
+                {children}
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
 
       {/* Rodapé numerado oficial para documentos multi-páginas */}
       {isMultiPage && showPageFooter && (
