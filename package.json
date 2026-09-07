@@ -8,7 +8,8 @@
     "build": "node scripts/build-all.js",
     "build:vite": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:cv": "python tests/e2e_cv_maker_suite.py"
   },
   "dependencies": {
     "@react-three/drei": "^10.7.7",
