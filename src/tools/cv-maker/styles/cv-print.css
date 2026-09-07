@@ -100,6 +100,9 @@
     min-width: var(--cv-page-width, 210mm) !important;
     max-width: var(--cv-page-width, 210mm) !important;
     min-height: var(--cv-page-height, 297mm) !important;
+    /* Subpixel LayoutUnit Epsilon Buffer (Blink LayoutNG 24.6 fixed-point) */
+    height: calc(100% - 0.5px) !important;
+    overflow: hidden !important;
     margin: 0 !important;
     padding: 0 !important;
     box-sizing: border-box !important;

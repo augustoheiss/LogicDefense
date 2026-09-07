@@ -10,13 +10,13 @@ import logging
 from typing import Optional, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from playwright.async_api import Browser, Playwright
+    from playwright.async_api import Browser, Playwright  # type: ignore
 else:
     Browser = object
     Playwright = object
 
 try:
-    from playwright.async_api import async_playwright
+    from playwright.async_api import async_playwright  # type: ignore
     PLAYWRIGHT_AVAILABLE = True
 except ImportError:
     async_playwright = None  # type: ignore
@@ -73,10 +73,14 @@ class PlaywrightPDFService:
         cls,
         html_content: str,
         wait_for_fonts: bool = True,
-        timeout_ms: int = 20000
+        timeout_ms: int = 20000,
+        page_format: Optional[str] = None,
+        page_width: Optional[str] = None,
+        page_height: Optional[str] = None,
     ) -> bytes:
         """
-        Renderiza um HTML completo em PDF A4 vetorial com alta definição e suporte a ATS.
+        Renderiza um HTML completo em PDF vetorial com alta definição, geometria euclidiana
+        e suporte a Tagged PDF (PDF/UA-1 para máxima acessibilidade e pontuação ATS).
         """
         browser = await cls.get_browser()
         context = await browser.new_context(
@@ -105,14 +109,39 @@ class PlaywrightPDFService:
             # 4. Pequeno delay para acomodação de micro-layouts e CSS flex/grid
             await asyncio.sleep(0.1)
 
-            # 5. Disparar geração nativa do PDF via CDP
-            pdf_bytes = await page.pdf(
-                format="A4",
-                print_background=True,
-                prefer_css_page_size=True,
-                margin={"top": "0mm", "right": "0mm", "bottom": "0mm", "left": "0mm"},
-                tagged=True  # Tagged PDF para máxima pontuação em parsers ATS
-            )
+            # 5. Parâmetros de geração nativa do PDF via CDP
+            pdf_kwargs: dict = {
+                "print_background": True,
+                "prefer_css_page_size": True,
+                "margin": {"top": "0mm", "right": "0mm", "bottom": "0mm", "left": "0mm"},
+                "tagged": True  # Tagged PDF para máxima pontuação em parsers ATS / PDF/UA-1
+            }
+
+            if page_width and page_height:
+                pdf_kwargs["width"] = page_width
+                pdf_kwargs["height"] = page_height
+            elif page_format and page_format.lower() in ("a4", "a3", "a5", "letter", "legal", "tabloid"):
+                pdf_kwargs["format"] = page_format.upper()
+
+            pdf_bytes = await page.pdf(**pdf_kwargs)
+
+            # 6. Pós-processamento de conformidade com pikepdf (se disponível)
+            try:
+                import io
+                import pikepdf  # type: ignore
+                with pikepdf.open(io.BytesIO(pdf_bytes)) as pdf:
+                    if "/MarkInfo" not in pdf.Root:
+                        pdf.Root.MarkInfo = pikepdf.Dictionary(Marked=True)
+                    else:
+                        pdf.Root.MarkInfo.Marked = True
+                    out_io = io.BytesIO()
+                    pdf.save(out_io)
+                    pdf_bytes = out_io.getvalue()
+            except ImportError:
+                pass
+            except Exception as pike_err:
+                log.warning(f"[PlaywrightPDF] pikepdf post-processing ignorado: {pike_err}")
+
             log.info(f"[PlaywrightPDF] PDF gerado com sucesso: {len(pdf_bytes)} bytes.")
             return pdf_bytes
         except Exception as e:

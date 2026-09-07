@@ -903,19 +903,27 @@ async def compile_cv_bundle_endpoint(
 
 class CVExportPDFRequest(BaseModel):
     html: str = Field(..., min_length=20, description="Snapshot HTML completo e autocontido gerado pelo cliente (DOMSnapshotSerializer)")
-    filename: Optional[str] = Field(default="curriculo.pdf", description="Nome do arquivo PDF para download")
+    filename: Optional[str] = Field(default="documento.pdf", description="Nome do arquivo PDF para download")
+    format: Optional[str] = Field(default=None, description="Formato padrão opcional: a4, a3, a5, letter, legal, tabloid")
+    width: Optional[str] = Field(default=None, description="Largura euclidiana customizada (ex: '210mm')")
+    height: Optional[str] = Field(default=None, description="Altura euclidiana customizada (ex: '297mm')")
 
 
-@router.post("/export-pdf-headless", summary="Exportar PDF A4 vetorial direto via Playwright Headless")
+@router.post("/export-pdf-headless", summary="Exportar PDF vetorial direto via Playwright Headless")
 async def export_pdf_headless(payload: CVExportPDFRequest):
     """
-    Compila o snapshot HTML fornecido pelo cliente em um documento PDF A4 de alta fidelidade
-    utilizando Playwright Chromium Headless com Tagged PDF para ATS.
+    Compila o snapshot HTML fornecido pelo cliente em um documento PDF de alta fidelidade
+    utilizando Playwright Chromium Headless com geometria euclidiana arbitrária e Tagged PDF para ATS.
     """
     try:
         from services.cv_pdf_service import PlaywrightPDFService
-        pdf_bytes = await PlaywrightPDFService.render_pdf_from_html(payload.html)
-        safe_filename = payload.filename.strip() if payload.filename else "curriculo.pdf"
+        pdf_bytes = await PlaywrightPDFService.render_pdf_from_html(
+            html_content=payload.html,
+            page_format=payload.format,
+            page_width=payload.width,
+            page_height=payload.height
+        )
+        safe_filename = payload.filename.strip() if payload.filename else "documento.pdf"
         if not safe_filename.endswith(".pdf"):
             safe_filename += ".pdf"
 

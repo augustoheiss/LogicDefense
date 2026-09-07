@@ -13,6 +13,9 @@ export interface SnapshotOptions {
   allowedOrigins?: string[]
   extraStyles?: string
   targetOrientation?: 'portrait' | 'landscape'
+  pageWidthMm?: number
+  pageHeightMm?: number
+  cssPageSize?: string
 }
 
 export class DOMSnapshotSerializer {
@@ -50,6 +53,7 @@ export class DOMSnapshotSerializer {
     })
 
     // 4. Capturar e embutir CSS Custom Properties calculadas do elemento raiz
+    const rootStyle = typeof window !== 'undefined' ? window.getComputedStyle(document.documentElement) : null
     const computedStyle = window.getComputedStyle(sourceElement)
     const customProps = [
       '--cv-font-scale',
@@ -59,16 +63,29 @@ export class DOMSnapshotSerializer {
       '--cv-primary-color',
       '--cv-bg-color',
       '--cv-sidebar-width',
+      '--cv-page-width',
+      '--cv-page-height',
+      '--cv-page-width-px',
+      '--cv-page-height-px',
+      '--cv-page-width-pt',
+      '--cv-page-height-pt',
+      '--cv-page-ratio',
+      '--cv-page-size',
+      '--cv-page-epsilon-buffer',
     ]
 
     let rootVariablesCss = ':root {\n'
     for (const prop of customProps) {
-      const val = computedStyle.getPropertyValue(prop).trim()
+      const val = computedStyle.getPropertyValue(prop).trim() || (rootStyle ? rootStyle.getPropertyValue(prop).trim() : '')
       if (val) {
         rootVariablesCss += `  ${prop}: ${val};\n`
       }
     }
     rootVariablesCss += '}\n'
+
+    const pageWidthCss = (rootStyle && rootStyle.getPropertyValue('--cv-page-width').trim()) || (options.pageWidthMm ? `${options.pageWidthMm}mm` : '210mm')
+    const pageHeightCss = (rootStyle && rootStyle.getPropertyValue('--cv-page-height').trim()) || (options.pageHeightMm ? `${options.pageHeightMm}mm` : '297mm')
+    const pageSizeRule = options.cssPageSize || (rootStyle && rootStyle.getPropertyValue('--cv-page-size').trim()) || `${pageWidthCss} ${pageHeightCss}`
 
     // 5. Remover artefatos interativos do editor (alças de drag, botões, bordas ativas)
     if (options.stripInteractive !== false) {
@@ -107,7 +124,7 @@ export class DOMSnapshotSerializer {
       }
     }
 
-    // 8. Injetar blindagem vetorial Skia contra rasterização em 72 DPI
+    // 8. Injetar blindagem vetorial Skia contra rasterização em 72 DPI e geometria euclidiana
     const skiaVectorOverrides = `
       @media print, all {
         * {
@@ -124,12 +141,15 @@ export class DOMSnapshotSerializer {
           box-shadow: 0 1pt 0 rgba(0, 0, 0, 0.08) !important; /* Zero-blur vetorial */
         }
         @page {
-          size: A4 ${options.targetOrientation || 'portrait'};
+          size: ${pageSizeRule};
           margin: 0;
         }
         html, body {
           margin: 0;
           padding: 0;
+          width: ${pageWidthCss} !important;
+          max-width: ${pageWidthCss} !important;
+          min-width: ${pageWidthCss} !important;
           background-color: var(--cv-color-bg, #ffffff) !important;
           background-image: var(--cv-bg-image, none) !important;
           background-size: cover !important;
@@ -142,13 +162,21 @@ export class DOMSnapshotSerializer {
           background: transparent !important;
           background-color: transparent !important;
         }
-        .cv-print-wrapper, #cv-printable-document {
-          width: 210mm !important;
-          max-width: 210mm !important;
+        .cv-print-wrapper, #cv-printable-document, .cv-page-a4, .sheet-page-container, .physical-page-sheet {
+          width: ${pageWidthCss} !important;
+          max-width: ${pageWidthCss} !important;
+          min-width: ${pageWidthCss} !important;
+          min-height: ${pageHeightCss} !important;
+          /* Subpixel LayoutUnit Epsilon Buffer (Blink LayoutNG 24.6 fixed-point) */
+          height: calc(100% - 0.5px) !important;
+          overflow: hidden !important;
           margin: 0 auto !important;
           padding: 0 !important;
+          box-sizing: border-box !important;
           box-shadow: none !important;
           border: none !important;
+          page-break-inside: avoid !important;
+          break-inside: avoid !important;
         }
         /* Elimina folha em branco acidental no final */
         :last-child {

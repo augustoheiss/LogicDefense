@@ -15,6 +15,9 @@ export interface DirectPrintOptions {
   viewMode?: string
   autoFitFirst?: boolean
   sourceElement?: HTMLElement | null
+  pageFormat?: string
+  customWidthMm?: number
+  customHeightMm?: number
 }
 
 export class CVPrintEngine {
@@ -190,7 +193,10 @@ export class CVPrintEngine {
           },
           body: JSON.stringify({
             html: snapshotHtml,
-            filename
+            filename,
+            format: options.pageFormat,
+            width: options.customWidthMm ? `${options.customWidthMm}mm` : undefined,
+            height: options.customHeightMm ? `${options.customHeightMm}mm` : undefined
           })
         })
 

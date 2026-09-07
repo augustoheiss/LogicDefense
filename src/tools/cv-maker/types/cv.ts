@@ -557,9 +557,15 @@ export interface LayoutStructureConfig {
   showContinuationHeader?: boolean // Exibe cabeçalho "Nome — Continuação" na Folha 2+
 }
 
-export type PageFormat = 'a4' | 'letter' | 'legal'
+export type StandardPageFormat = 'a4' | 'a3' | 'a5' | 'letter' | 'legal' | 'tabloid' | 'executive'
+export type PageFormat = StandardPageFormat | 'custom'
+
+export interface CustomPageDimensions {
+  widthMm: number
+  heightMm: number
+  name?: string
+}
 
 export type ZoomMode = 'auto' | '100' | 'fit-width' | number
 
-
-
+export type { DocumentDomain } from './documentDomain'

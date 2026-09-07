@@ -1,5 +1,5 @@
 import React from 'react'
-import type { CVData, ThemeVariant, LayoutVariant, ViewMode, CVDesignConfig, LayoutStructureConfig, PageFormat, ZoomMode } from '../../types/cv'
+import type { CVData, ThemeVariant, LayoutVariant, ViewMode, CVDesignConfig, LayoutStructureConfig, PageFormat, ZoomMode, CustomPageDimensions } from '../../types/cv'
 import { getLayoutBlueprint } from '../../engine/blueprints'
 import { PageFormatEngine } from '../../engine/PageFormatEngine'
 import { CVPrintContainer } from './CVPrintContainer'
@@ -16,6 +16,7 @@ interface CVViewerProps {
   structureConfig?: LayoutStructureConfig
   onUpdateStructureConfig?: (newConfig: LayoutStructureConfig) => void
   pageFormat?: PageFormat
+  customPageDimensions?: CustomPageDimensions
   zoomMode?: ZoomMode
   onScaleChange?: (currentScale: number) => void
 }
@@ -30,6 +31,7 @@ export const CVViewer: React.FC<CVViewerProps> = ({
   structureConfig,
   onUpdateStructureConfig,
   pageFormat = 'a4',
+  customPageDimensions,
   zoomMode = 'auto',
   onScaleChange
 }) => {
@@ -44,7 +46,7 @@ export const CVViewer: React.FC<CVViewerProps> = ({
   }
 
   const blueprint = getLayoutBlueprint(layout)
-  const dimension = PageFormatEngine.getDimension(pageFormat)
+  const dimension = PageFormatEngine.getDimension(pageFormat, customPageDimensions)
 
   return (
     <CVPageViewportScaler

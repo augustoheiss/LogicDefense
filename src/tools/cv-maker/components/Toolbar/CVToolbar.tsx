@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react'
-import type { TextVariant, ThemeVariant, LayoutVariant, ViewMode, PageFormat, ZoomMode } from '../../types/cv'
+import type { TextVariant, ThemeVariant, LayoutVariant, ViewMode, PageFormat, ZoomMode, CustomPageDimensions } from '../../types/cv'
 import { LAYOUT_OPTIONS } from '../../types/cv'
-import { PAGE_FORMATS } from '../../engine/PageFormatEngine'
+import { PageFormatEngine, PAGE_FORMATS } from '../../engine/PageFormatEngine'
 
 interface CVToolbarProps {
   isFreeCanvasActive?: boolean
@@ -17,7 +17,9 @@ interface CVToolbarProps {
   activeViewMode: ViewMode
   onViewModeChange: (v: ViewMode) => void
   activePageFormat?: PageFormat
-  onPageFormatChange?: (format: PageFormat) => void
+  customPageDimensions?: CustomPageDimensions
+  onPageFormatChange?: (format: PageFormat, customDims?: CustomPageDimensions) => void
+  onCustomPageDimensionsChange?: (dims: CustomPageDimensions) => void
   activeZoomMode?: ZoomMode
   onZoomModeChange?: (zoom: ZoomMode | number) => void
   currentScale?: number
@@ -71,7 +73,9 @@ export const CVToolbar: React.FC<CVToolbarProps> = ({
   activeViewMode,
   onViewModeChange,
   activePageFormat = 'a4',
+  customPageDimensions,
   onPageFormatChange,
+  onCustomPageDimensionsChange,
   activeZoomMode = 'auto',
   onZoomModeChange,
   currentScale = 1.0,
@@ -132,7 +136,11 @@ export const CVToolbar: React.FC<CVToolbarProps> = ({
   const currentPersonaObj = PERSONAS.find(p => p.id === activePersona) || PERSONAS[0]
   const currentLayoutObj = LAYOUT_OPTIONS.find(l => l.id === activeLayout) || LAYOUT_OPTIONS[0]
   const currentViewModeObj = VIEW_MODES.find(v => v.id === activeViewMode) || VIEW_MODES[0]
-  const currentPageFormatObj = PAGE_FORMATS[activePageFormat] || PAGE_FORMATS.a4
+  const currentPageFormatObj = PageFormatEngine.getDimension(activePageFormat, customPageDimensions)
+
+  const [customW, setCustomW] = useState<number>(customPageDimensions?.widthMm || 210)
+  const [customH, setCustomH] = useState<number>(customPageDimensions?.heightMm || 297)
+  const [showCustomInputs, setShowCustomInputs] = useState<boolean>(activePageFormat === 'custom')
 
   const handleZoomIn = () => {
     const nextScale = Math.min(1.5, Math.round(((currentScale || 1.0) + 0.1) * 10) / 10)
@@ -362,14 +370,19 @@ export const CVToolbar: React.FC<CVToolbarProps> = ({
               title={`Formato Físico Ativo: ${currentPageFormatObj.label}`}
               style={{ fontWeight: 600 }}
             >
-              <span className="cv-dropdown-trigger__icon">{currentPageFormatObj.id === 'letter' ? '🇺🇸' : '📄'}</span>
+              <span className="cv-dropdown-trigger__icon">
+                {currentPageFormatObj.id === 'letter' ? '🇺🇸' : currentPageFormatObj.id === 'custom' ? '📐' : '📄'}
+              </span>
               <span className="cv-dropdown-trigger__text">{currentPageFormatObj.name}</span>
               <span className="cv-dropdown-trigger__chevron">▼</span>
             </button>
 
             {openDropdown === 'pageformat' && (
-              <div className="cv-dropdown-menu" style={{ minWidth: '220px' }}>
-                {Object.values(PAGE_FORMATS).map(pf => {
+              <div className="cv-dropdown-menu" style={{ minWidth: '260px', maxHeight: '420px', overflowY: 'auto' }}>
+                <div style={{ padding: '6px 12px', fontSize: '11px', fontWeight: 700, color: '#888', textTransform: 'uppercase' }}>
+                  Norma ISO (Métrica)
+                </div>
+                {Object.values(PAGE_FORMATS).filter(p => p.category === 'iso').map(pf => {
                   const isSelected = activePageFormat === pf.id
                   return (
                     <button
@@ -378,12 +391,13 @@ export const CVToolbar: React.FC<CVToolbarProps> = ({
                       className={`cv-dropdown-item ${isSelected ? 'cv-dropdown-item--active' : ''}`}
                       onClick={() => {
                         onPageFormatChange?.(pf.id)
+                        setShowCustomInputs(false)
                         closeDropdowns()
                       }}
                     >
                       <div className="cv-dropdown-item__content">
                         <div className="cv-dropdown-item__title">
-                          <span>{pf.id === 'letter' ? '🇺🇸' : '📄'}</span> <strong>{pf.name}</strong>
+                          <span>📄</span> <strong>{pf.name}</strong>
                         </div>
                         <div className="cv-dropdown-item__desc">{pf.widthMm} × {pf.heightMm} mm</div>
                       </div>
@@ -391,6 +405,101 @@ export const CVToolbar: React.FC<CVToolbarProps> = ({
                     </button>
                   )
                 })}
+
+                <div style={{ padding: '6px 12px', fontSize: '11px', fontWeight: 700, color: '#888', textTransform: 'uppercase', borderTop: '1px solid #eee', marginTop: '4px' }}>
+                  Norma ANSI / EUA
+                </div>
+                {Object.values(PAGE_FORMATS).filter(p => p.category === 'ansi').map(pf => {
+                  const isSelected = activePageFormat === pf.id
+                  return (
+                    <button
+                      key={pf.id}
+                      type="button"
+                      className={`cv-dropdown-item ${isSelected ? 'cv-dropdown-item--active' : ''}`}
+                      onClick={() => {
+                        onPageFormatChange?.(pf.id)
+                        setShowCustomInputs(false)
+                        closeDropdowns()
+                      }}
+                    >
+                      <div className="cv-dropdown-item__content">
+                        <div className="cv-dropdown-item__title">
+                          <span>🇺🇸</span> <strong>{pf.name}</strong>
+                        </div>
+                        <div className="cv-dropdown-item__desc">{pf.widthMm} × {pf.heightMm} mm</div>
+                      </div>
+                      {isSelected && <span className="cv-dropdown-item__check">✓</span>}
+                    </button>
+                  )
+                })}
+
+                <div style={{ padding: '6px 12px', fontSize: '11px', fontWeight: 700, color: '#888', textTransform: 'uppercase', borderTop: '1px solid #eee', marginTop: '4px' }}>
+                  Personalizado (Euclidiano)
+                </div>
+                <button
+                  type="button"
+                  className={`cv-dropdown-item ${activePageFormat === 'custom' ? 'cv-dropdown-item--active' : ''}`}
+                  onClick={() => setShowCustomInputs(prev => !prev)}
+                >
+                  <div className="cv-dropdown-item__content">
+                    <div className="cv-dropdown-item__title">
+                      <span>📐</span> <strong>Dimensões Livres (mm)</strong>
+                    </div>
+                    <div className="cv-dropdown-item__desc">Defina largura e altura em milímetros</div>
+                  </div>
+                  {activePageFormat === 'custom' && <span className="cv-dropdown-item__check">✓</span>}
+                </button>
+
+                {(showCustomInputs || activePageFormat === 'custom') && (
+                  <div style={{ padding: '8px 12px', background: '#f8fafc', borderTop: '1px dashed #cbd5e1', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                      <label style={{ fontSize: '11px', color: '#475569', minWidth: '40px' }}>Larg:</label>
+                      <input
+                        type="number"
+                        min="50"
+                        max="1000"
+                        value={customW}
+                        onChange={e => setCustomW(Math.max(50, Number(e.target.value)))}
+                        style={{ width: '70px', padding: '3px 6px', fontSize: '12px', border: '1px solid #cbd5e1', borderRadius: '4px' }}
+                      />
+                      <span style={{ fontSize: '11px', color: '#64748b' }}>mm</span>
+                    </div>
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                      <label style={{ fontSize: '11px', color: '#475569', minWidth: '40px' }}>Alt:</label>
+                      <input
+                        type="number"
+                        min="50"
+                        max="1500"
+                        value={customH}
+                        onChange={e => setCustomH(Math.max(50, Number(e.target.value)))}
+                        style={{ width: '70px', padding: '3px 6px', fontSize: '12px', border: '1px solid #cbd5e1', borderRadius: '4px' }}
+                      />
+                      <span style={{ fontSize: '11px', color: '#64748b' }}>mm</span>
+                    </div>
+                    <button
+                      type="button"
+                      style={{
+                        padding: '5px 10px',
+                        background: '#2563eb',
+                        color: '#fff',
+                        border: 'none',
+                        borderRadius: '4px',
+                        fontSize: '11px',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        marginTop: '4px'
+                      }}
+                      onClick={() => {
+                        const dims = { widthMm: customW, heightMm: customH }
+                        onCustomPageDimensionsChange?.(dims)
+                        onPageFormatChange?.('custom', dims)
+                        closeDropdowns()
+                      }}
+                    >
+                      Aplicar Geometria
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </div>

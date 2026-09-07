@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react'
-import type { CVData, CVVersions, TextVariant, ThemeVariant, LayoutVariant, ViewMode, CoverLetter, CVDesignConfig, LayoutStructureConfig, SectionBoxDimensions, PageFormat, ZoomMode } from './types/cv'
+import type { CVData, CVVersions, TextVariant, ThemeVariant, LayoutVariant, ViewMode, CoverLetter, CVDesignConfig, LayoutStructureConfig, SectionBoxDimensions, PageFormat, ZoomMode, CustomPageDimensions } from './types/cv'
 import { DEFAULT_DESIGN_CONFIG } from './types/cv'
 import { DEFAULT_JOHN_DOE_YAML } from './templates/defaultTemplate'
 import { parseYamlToCV, cvToYaml, debounce } from './services/yamlService'
@@ -109,6 +109,14 @@ export const CVMakerApp: React.FC = () => {
     const saved = localStorage.getItem(STORAGE_PAGE_FORMAT_KEY) as PageFormat
     return saved || 'a4'
   })
+  const [customPageDimensions, setCustomPageDimensions] = useState<CustomPageDimensions | undefined>(() => {
+    try {
+      const saved = localStorage.getItem('cv_maker_custom_dimensions')
+      return saved ? JSON.parse(saved) : undefined
+    } catch {
+      return undefined
+    }
+  })
   const [activeZoomMode, setActiveZoomMode] = useState<ZoomMode>(() => {
     const saved = localStorage.getItem(STORAGE_ZOOM_MODE_KEY)
     if (!saved) return 'auto'
@@ -118,10 +126,22 @@ export const CVMakerApp: React.FC = () => {
   })
   const [currentScale, setCurrentScale] = useState<number>(1.0)
 
-  const handlePageFormatChange = (format: PageFormat) => {
+  const handlePageFormatChange = (format: PageFormat, customDims?: CustomPageDimensions) => {
     setActivePageFormat(format)
+    if (customDims) {
+      setCustomPageDimensions(customDims)
+      localStorage.setItem('cv_maker_custom_dimensions', JSON.stringify(customDims))
+    }
     localStorage.setItem(STORAGE_PAGE_FORMAT_KEY, format)
-    PageFormatEngine.applyFormat(format)
+    PageFormatEngine.applyFormat(format, document.documentElement, customDims || customPageDimensions)
+  }
+
+  const handleCustomPageDimensionsChange = (dims: CustomPageDimensions) => {
+    setCustomPageDimensions(dims)
+    localStorage.setItem('cv_maker_custom_dimensions', JSON.stringify(dims))
+    if (activePageFormat === 'custom') {
+      PageFormatEngine.applyFormat('custom', document.documentElement, dims)
+    }
   }
 
   const handleZoomModeChange = (zoom: ZoomMode | number) => {
@@ -130,8 +150,8 @@ export const CVMakerApp: React.FC = () => {
   }
 
   useEffect(() => {
-    PageFormatEngine.applyFormat(activePageFormat)
-  }, [activePageFormat])
+    PageFormatEngine.applyFormat(activePageFormat, document.documentElement, customPageDimensions)
+  }, [activePageFormat, customPageDimensions])
 
   // Headless PDF Generation State
   const [isGeneratingDirectPdf, setIsGeneratingDirectPdf] = useState<boolean>(false)
@@ -610,12 +630,15 @@ export const CVMakerApp: React.FC = () => {
     if (isGeneratingDirectPdf) return
     setIsGeneratingDirectPdf(true)
     try {
-      PageFormatEngine.applyFormat(activePageFormat)
+      PageFormatEngine.applyFormat(activePageFormat, document.documentElement, customPageDimensions)
       await CVPrintEngine.downloadDirectHeadlessPdf({
         candidateName: cvData?.basics?.name,
         candidateLabel: cvData?.basics?.label,
         viewMode: activeViewMode,
-        sourceElement: document.getElementById('cv-printable-document')
+        sourceElement: document.getElementById('cv-printable-document'),
+        pageFormat: activePageFormat,
+        customWidthMm: customPageDimensions?.widthMm,
+        customHeightMm: customPageDimensions?.heightMm,
       })
     } catch (err: any) {
       console.error('[CVMakerApp] Falha na compilação direta via Playwright:', err)
@@ -904,7 +927,9 @@ export const CVMakerApp: React.FC = () => {
             isGeneratingPdf={isGeneratingDirectPdf}
             onAutoFitSinglePage={handleAutoFitSinglePage}
             activePageFormat={activePageFormat}
+            customPageDimensions={customPageDimensions}
             onPageFormatChange={handlePageFormatChange}
+            onCustomPageDimensionsChange={handleCustomPageDimensionsChange}
             activeZoomMode={activeZoomMode}
             onZoomModeChange={handleZoomModeChange}
             currentScale={currentScale}
@@ -932,6 +957,7 @@ export const CVMakerApp: React.FC = () => {
               structureConfig={currentStructureConfig}
               onUpdateStructureConfig={handleUpdateStructureConfig}
               pageFormat={activePageFormat}
+              customPageDimensions={customPageDimensions}
               zoomMode={activeZoomMode}
               onScaleChange={setCurrentScale}
             />
