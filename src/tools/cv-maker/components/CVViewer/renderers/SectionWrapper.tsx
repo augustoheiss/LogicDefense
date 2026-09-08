@@ -18,6 +18,24 @@ interface SectionWrapperProps {
   currentZone?: 'left' | 'right'
 }
 
+export function getSectionBaseCategory(sectionId: string, category?: string): string {
+  if (category) return category
+  if (sectionId.endsWith('_title')) return sectionId.replace('_title', '')
+  if (sectionId.startsWith('work')) return 'work'
+  if (sectionId.startsWith('education')) return 'education'
+  if (sectionId.startsWith('projects') || sectionId.startsWith('project')) return 'projects'
+  if (sectionId.startsWith('skills') || sectionId.startsWith('skill')) return 'skills'
+  if (sectionId.startsWith('languages') || sectionId.startsWith('language')) return 'languages'
+  if (sectionId.startsWith('certificates') || sectionId.startsWith('cert')) return 'certificates'
+  if (sectionId.startsWith('interests') || sectionId.startsWith('interest')) return 'interests'
+  if (sectionId.startsWith('references') || sectionId.startsWith('reference')) return 'references'
+  if (sectionId.startsWith('header')) return 'header'
+  if (sectionId.startsWith('contact')) return 'contacts'
+  if (sectionId.startsWith('summary')) return 'summary'
+  if (sectionId.startsWith('cover')) return 'cover_letter'
+  return sectionId
+}
+
 export const SectionWrapper: React.FC<SectionWrapperProps> = ({
   sectionId,
   title,
@@ -33,9 +51,9 @@ export const SectionWrapper: React.FC<SectionWrapperProps> = ({
   onSwitchZone,
   currentZone
 }) => {
-  const baseCategory = category || (sectionId.endsWith('_title') ? sectionId.replace('_title', '') : undefined)
+  const baseCategory = getSectionBaseCategory(sectionId, category)
   const rawDims = structureConfig?.sectionDimensions?.[sectionId]
-  const parentDims = baseCategory ? structureConfig?.sectionDimensions?.[baseCategory] : undefined
+  const parentDims = baseCategory && baseCategory !== sectionId ? structureConfig?.sectionDimensions?.[baseCategory] : undefined
   const effectiveDims: SectionBoxDimensions = {
     ...parentDims,
     ...rawDims,
@@ -54,34 +72,39 @@ export const SectionWrapper: React.FC<SectionWrapperProps> = ({
     const hasCustomWidth = typeof widthPercent === 'number' && widthPercent > 0 && widthPercent < 100
     const hasCustomFont = Boolean(effectiveDims.fontFamily)
     const hasCustomScale = typeof effectiveDims.fontSizeScale === 'number' && effectiveDims.fontSizeScale !== 1
+    const fontScaleVal = effectiveDims.fontSizeScale ?? 1.0
     const alignment = effectiveDims.alignment
 
-    if (hasCustomWidth || hasCustomFont || hasCustomScale || alignment || effectiveDims.order !== undefined) {
-      const marginLeftStyle = alignment === 'center' || alignment === 'right' ? 'auto' : undefined
-      const marginRightStyle = alignment === 'center' ? 'auto' : alignment === 'right' ? '0' : undefined
+    const marginLeftStyle = alignment === 'center' || alignment === 'right' ? 'auto' : undefined
+    const marginRightStyle = alignment === 'center' ? 'auto' : alignment === 'right' ? '0' : undefined
 
-      return (
-        <div
-          key={sectionId}
-          className="cv-atomic-box-wrapper cv-avoid-break"
-          style={{
-            width: hasCustomWidth ? `${widthPercent}%` : undefined,
-            display: hasCustomWidth ? 'inline-block' : undefined,
-            verticalAlign: hasCustomWidth ? 'top' : undefined,
-            boxSizing: 'border-box',
-            marginLeft: marginLeftStyle,
-            marginRight: marginRightStyle,
-            order: effectiveDims.order,
-            fontFamily: effectiveDims.fontFamily ? `"${effectiveDims.fontFamily}", sans-serif` : undefined,
-            fontSize: hasCustomScale ? `${effectiveDims.fontSizeScale}em` : undefined
-          }}
-          data-section-id={sectionId}
-        >
-          {children}
-        </div>
-      )
-    }
-    return <React.Fragment key={sectionId}>{children}</React.Fragment>
+    return (
+      <div
+        key={sectionId}
+        className={`cv-atomic-box-wrapper cv-section-${baseCategory} cv-avoid-break`}
+        style={{
+          width: hasCustomWidth ? `${widthPercent}%` : undefined,
+          display: hasCustomWidth ? 'inline-block' : undefined,
+          verticalAlign: hasCustomWidth ? 'top' : undefined,
+          boxSizing: 'border-box',
+          marginLeft: marginLeftStyle,
+          marginRight: marginRightStyle,
+          order: effectiveDims.order,
+          fontFamily: effectiveDims.fontFamily ? `"${effectiveDims.fontFamily}", sans-serif` : undefined,
+          fontSize: hasCustomScale ? `${effectiveDims.fontSizeScale}em` : undefined,
+          ['--cv-box-font-scale' as any]: fontScaleVal,
+          ['--cv-box-font-family' as any]: effectiveDims.fontFamily ? `"${effectiveDims.fontFamily}", sans-serif` : undefined,
+          ['--cv-font-heading' as any]: effectiveDims.fontFamily ? `"${effectiveDims.fontFamily}", sans-serif` : undefined,
+          ['--cv-font-body' as any]: effectiveDims.fontFamily ? `"${effectiveDims.fontFamily}", sans-serif` : undefined
+        }}
+        data-section-id={sectionId}
+        data-category={baseCategory}
+        data-has-custom-font={hasCustomFont ? 'true' : undefined}
+        data-has-custom-scale={hasCustomScale ? 'true' : undefined}
+      >
+        {children}
+      </div>
+    )
   }
 
   const canSwitch = Boolean(isMultiColumnLayout && defaultZone && onSwitchZone)

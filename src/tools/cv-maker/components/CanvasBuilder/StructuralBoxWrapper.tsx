@@ -499,7 +499,7 @@ export const StructuralBoxWrapper: React.FC<StructuralBoxWrapperProps> = ({
   return (
     <div
       ref={containerRef}
-      className={`cv-structural-box cv-structural-box--active ${isSelected ? 'is-selected' : ''} ${isResizing ? `is-resizing is-resizing-${resizeType}` : ''} ${isMoving ? 'is-moving' : ''} ${isOverflowing ? 'is-overflowing' : ''} ${isPhoto ? 'is-photo-box' : ''}`}
+      className={`cv-structural-box cv-structural-box--active cv-section-${category || 'general'} ${isSelected ? 'is-selected' : ''} ${isResizing ? `is-resizing is-resizing-${resizeType}` : ''} ${isMoving ? 'is-moving' : ''} ${isOverflowing ? 'is-overflowing' : ''} ${isPhoto ? 'is-photo-box' : ''}`}
       onClick={handleSelectThisBox}
       style={{
         width: widthStyle,
@@ -520,6 +520,7 @@ export const StructuralBoxWrapper: React.FC<StructuralBoxWrapperProps> = ({
         ['--cv-font-body' as any]: dimensions?.fontFamily ? `"${dimensions.fontFamily}", sans-serif` : undefined
       }}
       data-section-id={sectionId}
+      data-category={category || 'general'}
       data-has-custom-font={dimensions?.fontFamily ? 'true' : undefined}
       data-has-custom-scale={dimensions?.fontSizeScale && dimensions.fontSizeScale !== 1 ? 'true' : undefined}
     >

@@ -280,8 +280,13 @@
 .cv-root .cv-duo-left,
 .cv-root .cv-editorial-left,
 .cv-root .cv-sidebar-col,
-.cv-root aside.cv-navy-sidebar {
+.cv-root aside.cv-navy-sidebar,
+.cv-root [data-category="sidebar"],
+.cv-root [data-section-id="sidebar"] {
   background-color: var(--sec-sidebar-bg, var(--cv-color-sidebar, #f8fafc)) !important;
+  background-image: var(--sec-sidebar-bg-image, none) !important;
+  background-size: cover !important;
+  background-repeat: no-repeat !important;
   color: var(--sec-sidebar-text, var(--cv-color-text, #1e293b)) !important;
   border-color: var(--sec-sidebar-border, var(--cv-color-border, #e2e8f0)) !important;
 }
@@ -293,9 +298,17 @@
 .cv-root .cv-navy-sidebar .cv-name,
 .cv-root .cv-navy-sidebar .cv-sidebar-title,
 .cv-root aside.cv-sidebar-stack .cv-sidebar-title,
+.cv-root aside.cv-sidebar-stack .cv-section-title,
 .cv-root .cv-duo-left .cv-sidebar-title,
 .cv-root .cv-editorial-left .cv-sidebar-title,
-.cv-root .cv-sidebar-col .cv-sidebar-title {
+.cv-root .cv-sidebar-col .cv-sidebar-title,
+.cv-root .cv-sidebar-col .cv-section-title,
+.cv-root aside.cv-sidebar-stack h2,
+.cv-root aside.cv-sidebar-stack h3,
+.cv-root aside.cv-sidebar-stack h4,
+.cv-root .cv-sidebar-col h2,
+.cv-root .cv-sidebar-col h3,
+.cv-root .cv-sidebar-col h4 {
   color: var(--sec-sidebar-title, var(--cv-color-primary, #0284c7)) !important;
   border-bottom-color: var(--sec-sidebar-border, var(--cv-color-border, #e2e8f0)) !important;
 }
@@ -304,6 +317,10 @@
 .cv-root aside.cv-sidebar-stack span,
 .cv-root aside.cv-sidebar-stack li,
 .cv-root aside.cv-sidebar-stack a,
+.cv-root aside.cv-sidebar-stack .cv-item-title,
+.cv-root aside.cv-sidebar-stack .cv-item-sub,
+.cv-root aside.cv-sidebar-stack .cv-item-desc,
+.cv-root aside.cv-sidebar-stack .cv-item-date,
 .cv-root .cv-navy-sidebar p,
 .cv-root .cv-navy-sidebar span,
 .cv-root .cv-navy-sidebar li,
@@ -319,7 +336,11 @@
 .cv-root .cv-sidebar-col p,
 .cv-root .cv-sidebar-col span,
 .cv-root .cv-sidebar-col li,
-.cv-root .cv-sidebar-col a {
+.cv-root .cv-sidebar-col a,
+.cv-root .cv-sidebar-col .cv-item-title,
+.cv-root .cv-sidebar-col .cv-item-sub,
+.cv-root .cv-sidebar-col .cv-item-desc,
+.cv-root .cv-sidebar-col .cv-item-date {
   color: var(--sec-sidebar-text, var(--cv-color-text, #334155)) !important;
 }
 
@@ -328,220 +349,514 @@
 .cv-root .cv-duo-left strong,
 .cv-root .cv-editorial-left strong,
 .cv-root .cv-sidebar-col strong {
-  color: var(--cv-color-text, #0f172a) !important;
+  color: var(--sec-sidebar-text, var(--cv-color-text, #0f172a)) !important;
+}
+
+.cv-root aside.cv-sidebar-stack .cv-badge,
+.cv-root aside.cv-sidebar-stack .cv-badge-pill,
+.cv-root aside.cv-sidebar-stack .cv-skill-tag,
+.cv-root aside.cv-sidebar-stack .cv-period-badge,
+.cv-root .cv-sidebar-col .cv-badge,
+.cv-root .cv-sidebar-col .cv-badge-pill,
+.cv-root .cv-sidebar-col .cv-skill-tag,
+.cv-root .cv-sidebar-col .cv-period-badge {
+  border-color: var(--sec-sidebar-accent, var(--cv-color-accent, #f97316)) !important;
+  color: var(--sec-sidebar-accent, var(--cv-color-accent, #f97316)) !important;
 }
 
 /* 2. Cabeçalho / Header */
 .cv-root .cv-section-header,
+.cv-root [data-category="header"],
+.cv-root [data-section-id="header"],
+.cv-root [data-section-id="header_profile"],
 .cv-root .cv-header-profile,
+.cv-root .cv-brand-header,
 .cv-root .cv-duo-header,
 .cv-root .cv-brand-block,
 .cv-root .cv-hero-top-bar,
-.cv-root .cv-math-header {
+.cv-root .cv-math-header,
+.cv-root .cv-hero-text {
   background-color: var(--sec-header-bg, transparent) !important;
+  background-image: var(--sec-header-bg-image, none) !important;
+  background-size: cover !important;
+  background-repeat: no-repeat !important;
   border-color: var(--sec-header-border, var(--cv-color-border, #e2e8f0)) !important;
 }
 
 .cv-root .cv-section-header h1,
+.cv-root .cv-section-header h2,
+.cv-root [data-category="header"] h1,
+.cv-root [data-category="header"] h2,
+.cv-root [data-section-id="header"] h1,
+.cv-root [data-section-id="header"] h2,
+.cv-root [data-section-id="header_profile"] h1,
+.cv-root [data-section-id="header_profile"] h2,
 .cv-root .cv-header-profile h1,
+.cv-root .cv-header-profile h2,
 .cv-root .cv-name,
-.cv-root .cv-hero-name {
+.cv-root .cv-hero-name,
+.cv-root .cv-brand-greeting {
   color: var(--sec-header-title, var(--cv-color-primary, #0284c7)) !important;
 }
 
 .cv-root .cv-section-header p,
 .cv-root .cv-section-header span,
+.cv-root .cv-section-header div,
+.cv-root [data-category="header"] p,
+.cv-root [data-category="header"] span,
+.cv-root [data-category="header"] div,
+.cv-root [data-section-id="header"] p,
+.cv-root [data-section-id="header"] span,
+.cv-root [data-section-id="header"] div,
+.cv-root [data-section-id="header_profile"] p,
+.cv-root [data-section-id="header_profile"] span,
+.cv-root [data-section-id="header_profile"] div,
 .cv-root .cv-header-profile p,
-.cv-root .cv-header-profile span {
+.cv-root .cv-header-profile span,
+.cv-root .cv-hero-role,
+.cv-root .cv-brand-label {
   color: var(--sec-header-text, var(--cv-color-text, #0f172a)) !important;
 }
 
 /* 3. Experiência Profissional */
-.cv-root .cv-section-work {
-  background-color: var(--sec-work-bg, transparent) !important;
+.cv-root .cv-section-work,
+.cv-root [data-category="work"],
+.cv-root [data-section-id^="work"],
+.cv-root .cv-work-list {
   border-color: var(--sec-work-border, var(--cv-color-border, #e2e8f0)) !important;
 }
 
 .cv-root .cv-section-work h2,
 .cv-root .cv-section-work h3,
-.cv-root .cv-section-work .cv-section-title {
+.cv-root .cv-section-work .cv-section-title,
+.cv-root [data-category="work"] h2,
+.cv-root [data-category="work"] h3,
+.cv-root [data-category="work"] .cv-section-title,
+.cv-root [data-section-id="work_title"] .cv-section-title,
+.cv-root [data-category="work"] .cv-item-title,
+.cv-root .cv-work-list .cv-item-title,
+.cv-root [data-section-id^="work"] .cv-item-title {
   color: var(--sec-work-title, var(--cv-color-primary, #0284c7)) !important;
 }
 
 .cv-root .cv-section-work p,
 .cv-root .cv-section-work li,
-.cv-root .cv-section-work .cv-item-title,
-.cv-root .cv-section-work .cv-item-desc {
+.cv-root .cv-section-work span,
+.cv-root .cv-section-work .cv-item-desc,
+.cv-root .cv-section-work .cv-item-sub,
+.cv-root .cv-section-work .cv-company-name,
+.cv-root [data-category="work"] p,
+.cv-root [data-category="work"] li,
+.cv-root [data-category="work"] span,
+.cv-root [data-category="work"] .cv-item-desc,
+.cv-root [data-category="work"] .cv-item-sub,
+.cv-root [data-category="work"] .cv-company-name,
+.cv-root .cv-work-list p,
+.cv-root .cv-work-list li,
+.cv-root .cv-work-list span,
+.cv-root .cv-work-list .cv-item-desc,
+.cv-root .cv-work-list .cv-item-sub,
+.cv-root .cv-work-list .cv-company-name {
   color: var(--sec-work-text, var(--cv-color-text, #0f172a)) !important;
 }
 
+.cv-root .cv-section-work .cv-atomic-item,
+.cv-root .cv-section-work .cv-atomic-item--box,
 .cv-root .cv-section-work .cv-item-box,
-.cv-root .cv-section-work .cv-card-box {
+.cv-root .cv-section-work .cv-card-box,
+.cv-root [data-category="work"] .cv-atomic-item,
+.cv-root [data-category="work"] .cv-atomic-item--box,
+.cv-root [data-category="work"] .cv-item-box,
+.cv-root [data-category="work"] .cv-card-box,
+.cv-root .cv-work-list .cv-atomic-item,
+.cv-root .cv-work-list .cv-atomic-item--box,
+.cv-root [data-category="work"].cv-atomic-box-wrapper:not([data-section-id="work_title"]) {
   background-color: var(--sec-work-bg, var(--cv-color-surface, #f8fafc)) !important;
+  background-image: var(--sec-work-bg-image, none) !important;
+  background-size: cover !important;
+  background-repeat: no-repeat !important;
   border-color: var(--sec-work-border, var(--cv-color-border, #e2e8f0)) !important;
 }
 
+.cv-root [data-category="work"] .cv-period-badge,
+.cv-root .cv-work-list .cv-period-badge,
+.cv-root [data-category="work"] .cv-timeline-bullet {
+  background-color: var(--sec-work-accent, var(--cv-color-accent, #0284c7)) !important;
+  border-color: var(--sec-work-accent, var(--cv-color-accent, #0284c7)) !important;
+  color: #ffffff !important;
+}
+
 /* 4. Formação Acadêmica */
-.cv-root .cv-section-education {
-  background-color: var(--sec-education-bg, transparent) !important;
+.cv-root .cv-section-education,
+.cv-root [data-category="education"],
+.cv-root [data-section-id^="education"],
+.cv-root .cv-education-list {
   border-color: var(--sec-education-border, var(--cv-color-border, #e2e8f0)) !important;
 }
 
 .cv-root .cv-section-education h2,
 .cv-root .cv-section-education h3,
-.cv-root .cv-section-education .cv-section-title {
+.cv-root .cv-section-education .cv-section-title,
+.cv-root [data-category="education"] h2,
+.cv-root [data-category="education"] h3,
+.cv-root [data-category="education"] .cv-section-title,
+.cv-root [data-section-id="education_title"] .cv-section-title,
+.cv-root [data-category="education"] .cv-item-title,
+.cv-root .cv-education-list .cv-item-title,
+.cv-root [data-section-id^="education"] .cv-item-title {
   color: var(--sec-education-title, var(--cv-color-primary, #0284c7)) !important;
 }
 
 .cv-root .cv-section-education p,
 .cv-root .cv-section-education span,
-.cv-root .cv-section-education .cv-item-title,
-.cv-root .cv-section-education .cv-item-sub {
+.cv-root .cv-section-education li,
+.cv-root .cv-section-education .cv-item-sub,
+.cv-root .cv-section-education .cv-item-institution,
+.cv-root [data-category="education"] p,
+.cv-root [data-category="education"] span,
+.cv-root [data-category="education"] li,
+.cv-root [data-category="education"] .cv-item-sub,
+.cv-root [data-category="education"] .cv-item-institution,
+.cv-root .cv-education-list p,
+.cv-root .cv-education-list span,
+.cv-root .cv-education-list li,
+.cv-root .cv-education-list .cv-item-sub,
+.cv-root .cv-education-list .cv-item-institution {
   color: var(--sec-education-text, var(--cv-color-text, #0f172a)) !important;
 }
 
 .cv-root .cv-section-education .cv-education-card,
+.cv-root .cv-section-education .cv-atomic-item,
+.cv-root .cv-section-education .cv-atomic-item--box,
 .cv-root .cv-section-education .cv-item-box,
-.cv-root .cv-section-education .cv-card-box {
+.cv-root .cv-section-education .cv-card-box,
+.cv-root [data-category="education"] .cv-education-card,
+.cv-root [data-category="education"] .cv-atomic-item,
+.cv-root [data-category="education"] .cv-atomic-item--box,
+.cv-root [data-category="education"] .cv-item-box,
+.cv-root [data-category="education"] .cv-card-box,
+.cv-root .cv-education-list .cv-atomic-item,
+.cv-root .cv-education-list .cv-atomic-item--box,
+.cv-root [data-category="education"].cv-atomic-box-wrapper:not([data-section-id="education_title"]) {
   background-color: var(--sec-education-bg, var(--cv-color-surface, #f8fafc)) !important;
+  background-image: var(--sec-education-bg-image, none) !important;
+  background-size: cover !important;
+  background-repeat: no-repeat !important;
   border-color: var(--sec-education-border, var(--cv-color-border, #e2e8f0)) !important;
 }
 
+.cv-root [data-category="education"] .cv-period-badge,
+.cv-root .cv-education-list .cv-period-badge {
+  background-color: var(--sec-education-accent, var(--cv-color-accent, #0284c7)) !important;
+  border-color: var(--sec-education-accent, var(--cv-color-accent, #0284c7)) !important;
+  color: #ffffff !important;
+}
+
 /* 5. Competências / Skills */
-.cv-root .cv-section-skills {
-  background-color: var(--sec-skills-bg, transparent) !important;
+.cv-root .cv-section-skills,
+.cv-root [data-category="skills"],
+.cv-root [data-section-id^="skill"],
+.cv-root .cv-skills-tags,
+.cv-root .cv-skills-list {
   border-color: var(--sec-skills-border, var(--cv-color-border, #e2e8f0)) !important;
 }
 
 .cv-root .cv-section-skills h2,
 .cv-root .cv-section-skills h3,
-.cv-root .cv-section-skills .cv-section-title {
+.cv-root .cv-section-skills .cv-section-title,
+.cv-root [data-category="skills"] h2,
+.cv-root [data-category="skills"] h3,
+.cv-root [data-category="skills"] .cv-section-title,
+.cv-root [data-category="skills"] .cv-skill-title {
   color: var(--sec-skills-title, var(--cv-color-primary, #0284c7)) !important;
 }
 
 .cv-root .cv-section-skills p,
 .cv-root .cv-section-skills span,
-.cv-root .cv-section-skills .cv-skill-title {
+.cv-root [data-category="skills"] p,
+.cv-root [data-category="skills"] span,
+.cv-root .cv-skills-tags span {
   color: var(--sec-skills-text, var(--cv-color-text, #0f172a)) !important;
 }
 
 .cv-root .cv-section-skills .cv-badge,
-.cv-root .cv-section-skills .cv-skill-tag {
+.cv-root .cv-section-skills .cv-badge-pill,
+.cv-root .cv-section-skills .cv-skill-tag,
+.cv-root [data-category="skills"] .cv-badge,
+.cv-root [data-category="skills"] .cv-badge-pill,
+.cv-root [data-category="skills"] .cv-skill-tag,
+.cv-root .cv-skills-tags .cv-skill-tag,
+.cv-root [data-category="skills"] .cv-atomic-item,
+.cv-root [data-category="skills"] .cv-atomic-item--box {
   background-color: var(--sec-skills-bg, var(--cv-color-surface, #f8fafc)) !important;
-  border-color: var(--sec-skills-accent, var(--cv-color-accent, #f97316)) !important;
-  color: var(--sec-skills-text, var(--sec-skills-accent, var(--cv-color-primary, #0284c7))) !important;
+  background-image: var(--sec-skills-bg-image, none) !important;
+  background-size: cover !important;
+  background-repeat: no-repeat !important;
+  border-color: var(--sec-skills-accent, var(--sec-skills-border, var(--cv-color-accent, #f97316))) !important;
+  color: var(--sec-skills-text, var(--cv-color-text, #0f172a)) !important;
+}
+
+.cv-root [data-category="skills"] .cv-skill-bar-fill,
+.cv-root [data-category="skills"] .cv-bar-fill {
+  background: var(--sec-skills-accent, var(--cv-color-accent, #0284c7)) !important;
+}
+
+.cv-root [data-category="skills"] .cv-skill-bar-bg,
+.cv-root [data-category="skills"] .cv-bar-bg {
+  background: var(--sec-skills-border, var(--cv-color-border, #e2e8f0)) !important;
 }
 
 /* 6. Projetos */
-.cv-root .cv-section-projects {
-  background-color: var(--sec-projects-bg, transparent) !important;
+.cv-root .cv-section-projects,
+.cv-root [data-category="projects"],
+.cv-root [data-section-id^="project"],
+.cv-root .cv-projects-list {
   border-color: var(--sec-projects-border, var(--cv-color-border, #e2e8f0)) !important;
 }
 
 .cv-root .cv-section-projects h2,
 .cv-root .cv-section-projects h3,
-.cv-root .cv-section-projects .cv-section-title {
+.cv-root .cv-section-projects .cv-section-title,
+.cv-root [data-category="projects"] h2,
+.cv-root [data-category="projects"] h3,
+.cv-root [data-category="projects"] .cv-section-title,
+.cv-root [data-section-id="projects_title"] .cv-section-title,
+.cv-root [data-category="projects"] .cv-item-title,
+.cv-root [data-category="projects"] .cv-project-title,
+.cv-root .cv-projects-list .cv-item-title {
   color: var(--sec-projects-title, var(--cv-color-primary, #0284c7)) !important;
 }
 
 .cv-root .cv-section-projects p,
 .cv-root .cv-section-projects li,
-.cv-root .cv-section-projects .cv-item-title,
-.cv-root .cv-section-projects .cv-item-desc {
+.cv-root .cv-section-projects span,
+.cv-root .cv-section-projects .cv-item-desc,
+.cv-root [data-category="projects"] p,
+.cv-root [data-category="projects"] li,
+.cv-root [data-category="projects"] span,
+.cv-root [data-category="projects"] .cv-item-desc,
+.cv-root .cv-projects-list p,
+.cv-root .cv-projects-list li,
+.cv-root .cv-projects-list span,
+.cv-root .cv-projects-list .cv-item-desc {
   color: var(--sec-projects-text, var(--cv-color-text, #0f172a)) !important;
 }
 
 .cv-root .cv-section-projects .cv-project-card,
-.cv-root .cv-section-projects .cv-card-box {
+.cv-root .cv-section-projects .cv-atomic-item,
+.cv-root .cv-section-projects .cv-atomic-item--box,
+.cv-root .cv-section-projects .cv-card-box,
+.cv-root [data-category="projects"] .cv-project-card,
+.cv-root [data-category="projects"] .cv-atomic-item,
+.cv-root [data-category="projects"] .cv-atomic-item--box,
+.cv-root [data-category="projects"] .cv-card-box,
+.cv-root .cv-projects-list .cv-atomic-item,
+.cv-root .cv-projects-list .cv-atomic-item--box,
+.cv-root [data-category="projects"].cv-atomic-box-wrapper:not([data-section-id="projects_title"]) {
   background-color: var(--sec-projects-bg, var(--cv-color-surface, #f8fafc)) !important;
+  background-image: var(--sec-projects-bg-image, none) !important;
+  background-size: cover !important;
+  background-repeat: no-repeat !important;
   border-color: var(--sec-projects-border, var(--cv-color-border, #e2e8f0)) !important;
 }
 
+.cv-root [data-category="projects"] .cv-period-badge,
+.cv-root .cv-projects-list .cv-period-badge,
+.cv-root [data-category="projects"] .cv-badge-pill {
+  background-color: var(--sec-projects-accent, var(--cv-color-accent, #0284c7)) !important;
+  border-color: var(--sec-projects-accent, var(--cv-color-accent, #0284c7)) !important;
+  color: #ffffff !important;
+}
+
 /* 7. Idiomas */
-.cv-root .cv-section-languages {
-  background-color: var(--sec-languages-bg, transparent) !important;
+.cv-root .cv-section-languages,
+.cv-root [data-category="languages"],
+.cv-root [data-section-id^="language"],
+.cv-root .cv-languages-list {
   border-color: var(--sec-languages-border, var(--cv-color-border, #e2e8f0)) !important;
 }
 
 .cv-root .cv-section-languages h2,
 .cv-root .cv-section-languages h3,
-.cv-root .cv-section-languages .cv-section-title {
+.cv-root .cv-section-languages .cv-section-title,
+.cv-root [data-category="languages"] h2,
+.cv-root [data-category="languages"] h3,
+.cv-root [data-category="languages"] .cv-section-title,
+.cv-root [data-section-id="languages_title"] .cv-section-title,
+.cv-root [data-category="languages"] .cv-lang-name,
+.cv-root [data-category="languages"] .cv-item-title {
   color: var(--sec-languages-title, var(--cv-color-primary, #0284c7)) !important;
 }
 
 .cv-root .cv-section-languages p,
 .cv-root .cv-section-languages span,
-.cv-root .cv-section-languages .cv-lang-name,
-.cv-root .cv-section-languages .cv-lang-fluency {
+.cv-root .cv-section-languages .cv-lang-fluency,
+.cv-root [data-category="languages"] p,
+.cv-root [data-category="languages"] span,
+.cv-root [data-category="languages"] .cv-lang-fluency,
+.cv-root .cv-languages-list p,
+.cv-root .cv-languages-list span,
+.cv-root .cv-languages-list .cv-lang-fluency {
   color: var(--sec-languages-text, var(--cv-color-text, #0f172a)) !important;
 }
 
 .cv-root .cv-section-languages .cv-language-card,
-.cv-root .cv-section-languages .cv-card-box {
+.cv-root .cv-section-languages .cv-atomic-item,
+.cv-root .cv-section-languages .cv-atomic-item--box,
+.cv-root .cv-section-languages .cv-card-box,
+.cv-root [data-category="languages"] .cv-language-card,
+.cv-root [data-category="languages"] .cv-atomic-item,
+.cv-root [data-category="languages"] .cv-atomic-item--box,
+.cv-root [data-category="languages"] .cv-card-box,
+.cv-root .cv-languages-list .cv-atomic-item,
+.cv-root .cv-languages-list .cv-atomic-item--box,
+.cv-root [data-category="languages"].cv-atomic-box-wrapper:not([data-section-id="languages_title"]) {
   background-color: var(--sec-languages-bg, var(--cv-color-surface, #f8fafc)) !important;
+  background-image: var(--sec-languages-bg-image, none) !important;
+  background-size: cover !important;
+  background-repeat: no-repeat !important;
   border-color: var(--sec-languages-border, var(--cv-color-border, #e2e8f0)) !important;
 }
 
+.cv-root [data-category="languages"] .cv-period-badge,
+.cv-root .cv-languages-list .cv-period-badge,
+.cv-root [data-category="languages"] .cv-badge-pill {
+  background-color: var(--sec-languages-accent, var(--cv-color-accent, #0284c7)) !important;
+  border-color: var(--sec-languages-accent, var(--cv-color-accent, #0284c7)) !important;
+  color: #ffffff !important;
+}
+
 /* 8. Certificações */
-.cv-root .cv-section-certificates {
-  background-color: var(--sec-certificates-bg, transparent) !important;
+.cv-root .cv-section-certificates,
+.cv-root [data-category="certificates"],
+.cv-root [data-section-id^="cert"],
+.cv-root .cv-certificates-list {
   border-color: var(--sec-certificates-border, var(--cv-color-border, #e2e8f0)) !important;
 }
 
 .cv-root .cv-section-certificates h2,
 .cv-root .cv-section-certificates h3,
-.cv-root .cv-section-certificates .cv-section-title {
+.cv-root .cv-section-certificates .cv-section-title,
+.cv-root [data-category="certificates"] h2,
+.cv-root [data-category="certificates"] h3,
+.cv-root [data-category="certificates"] .cv-section-title,
+.cv-root [data-section-id="certificates_title"] .cv-section-title,
+.cv-root [data-category="certificates"] .cv-item-title,
+.cv-root .cv-certificates-list .cv-item-title {
   color: var(--sec-certificates-title, var(--cv-color-primary, #0284c7)) !important;
 }
 
 .cv-root .cv-section-certificates p,
 .cv-root .cv-section-certificates span,
-.cv-root .cv-section-certificates .cv-item-title,
-.cv-root .cv-section-certificates .cv-item-sub {
+.cv-root .cv-section-certificates .cv-item-sub,
+.cv-root [data-category="certificates"] p,
+.cv-root [data-category="certificates"] span,
+.cv-root [data-category="certificates"] .cv-item-sub,
+.cv-root .cv-certificates-list p,
+.cv-root .cv-certificates-list span,
+.cv-root .cv-certificates-list .cv-item-sub {
   color: var(--sec-certificates-text, var(--cv-color-text, #0f172a)) !important;
 }
 
 .cv-root .cv-section-certificates .cv-certificate-card,
-.cv-root .cv-section-certificates .cv-card-box {
+.cv-root .cv-section-certificates .cv-atomic-item,
+.cv-root .cv-section-certificates .cv-atomic-item--box,
+.cv-root .cv-section-certificates .cv-card-box,
+.cv-root [data-category="certificates"] .cv-certificate-card,
+.cv-root [data-category="certificates"] .cv-atomic-item,
+.cv-root [data-category="certificates"] .cv-atomic-item--box,
+.cv-root [data-category="certificates"] .cv-card-box,
+.cv-root .cv-certificates-list .cv-atomic-item,
+.cv-root .cv-certificates-list .cv-atomic-item--box,
+.cv-root [data-category="certificates"].cv-atomic-box-wrapper:not([data-section-id="certificates_title"]) {
   background-color: var(--sec-certificates-bg, var(--cv-color-surface, #f8fafc)) !important;
+  background-image: var(--sec-certificates-bg-image, none) !important;
+  background-size: cover !important;
+  background-repeat: no-repeat !important;
   border-color: var(--sec-certificates-border, var(--cv-color-border, #e2e8f0)) !important;
 }
 
+.cv-root [data-category="certificates"] .cv-period-badge,
+.cv-root .cv-certificates-list .cv-period-badge,
+.cv-root [data-category="certificates"] .cv-badge-pill {
+  background-color: var(--sec-certificates-accent, var(--cv-color-accent, #0284c7)) !important;
+  border-color: var(--sec-certificates-accent, var(--cv-color-accent, #0284c7)) !important;
+  color: #ffffff !important;
+}
+
 /* 9. Interesses & Hobbies */
-.cv-root .cv-section-interests {
-  background-color: var(--sec-interests-bg, transparent) !important;
+.cv-root .cv-section-interests,
+.cv-root [data-category="interests"],
+.cv-root [data-section-id^="interest"],
+.cv-root .cv-interests-list {
   border-color: var(--sec-interests-border, var(--cv-color-border, #e2e8f0)) !important;
 }
 
 .cv-root .cv-section-interests h2,
 .cv-root .cv-section-interests h3,
-.cv-root .cv-section-interests .cv-section-title {
+.cv-root .cv-section-interests .cv-section-title,
+.cv-root [data-category="interests"] h2,
+.cv-root [data-category="interests"] h3,
+.cv-root [data-category="interests"] .cv-section-title,
+.cv-root [data-section-id="interests_title"] .cv-section-title,
+.cv-root [data-category="interests"] .cv-interest-name,
+.cv-root [data-category="interests"] .cv-hobby-label {
   color: var(--sec-interests-title, var(--cv-color-primary, #0284c7)) !important;
 }
 
 .cv-root .cv-section-interests p,
 .cv-root .cv-section-interests span,
-.cv-root .cv-section-interests .cv-interest-name,
-.cv-root .cv-section-interests .cv-hobby-label {
+.cv-root [data-category="interests"] p,
+.cv-root [data-category="interests"] span,
+.cv-root .cv-interests-list p,
+.cv-root .cv-interests-list span {
   color: var(--sec-interests-text, var(--cv-color-text, #0f172a)) !important;
 }
 
 .cv-root .cv-section-interests .cv-interest-card,
-.cv-root .cv-section-interests .cv-card-box {
+.cv-root .cv-section-interests .cv-atomic-item,
+.cv-root .cv-section-interests .cv-atomic-item--box,
+.cv-root .cv-section-interests .cv-card-box,
+.cv-root .cv-section-interests .cv-hobby-circle,
+.cv-root [data-category="interests"] .cv-interest-card,
+.cv-root [data-category="interests"] .cv-atomic-item,
+.cv-root [data-category="interests"] .cv-atomic-item--box,
+.cv-root [data-category="interests"] .cv-card-box,
+.cv-root [data-category="interests"] .cv-hobby-circle,
+.cv-root .cv-interests-list .cv-atomic-item,
+.cv-root .cv-interests-list .cv-atomic-item--box,
+.cv-root [data-category="interests"].cv-atomic-box-wrapper:not([data-section-id="interests_title"]) {
   background-color: var(--sec-interests-bg, var(--cv-color-surface, #f8fafc)) !important;
+  background-image: var(--sec-interests-bg-image, none) !important;
+  background-size: cover !important;
+  background-repeat: no-repeat !important;
   border-color: var(--sec-interests-border, var(--cv-color-border, #e2e8f0)) !important;
+}
+
+.cv-root [data-category="interests"] .cv-period-badge,
+.cv-root [data-category="interests"] .cv-badge-pill {
+  background-color: var(--sec-interests-accent, var(--cv-color-accent, #0284c7)) !important;
+  border-color: var(--sec-interests-accent, var(--cv-color-accent, #0284c7)) !important;
+  color: #ffffff !important;
 }
 
 /* 10. Cover Letter */
 .cv-root .cv-section-cover_letter,
-.cv-root .cv-cover-letter-body {
+.cv-root .cv-cover-letter-body,
+.cv-root [data-category="cover_letter"],
+.cv-root [data-section-id="cover_body"] {
   background-color: var(--sec-cover_letter-bg, transparent) !important;
+  background-image: var(--sec-cover_letter-bg-image, none) !important;
+  background-size: cover !important;
+  background-repeat: no-repeat !important;
   color: var(--sec-cover_letter-text, var(--cv-color-text, #0f172a)) !important;
   border-color: var(--sec-cover_letter-border, var(--cv-color-border, #e2e8f0)) !important;
 }
 
 .cv-root .cv-section-cover_letter p,
-.cv-root .cv-cover-letter-body p {
+.cv-root .cv-cover-letter-body p,
+.cv-root [data-category="cover_letter"] p,
+.cv-root [data-section-id="cover_body"] p {
   color: var(--sec-cover_letter-text, var(--cv-color-text, #0f172a)) !important;
 }
 
