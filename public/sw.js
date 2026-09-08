@@ -4,7 +4,7 @@
  * Garante disponibilidade 100% offline para renderização tipográfica sem Font Metric Shift.
  */
 
-const CACHE_NAME = 'cv-maker-offline-v1'
+const CACHE_NAME = 'cv-maker-offline-v2'
 
 const STATIC_ASSETS = [
   '/',
