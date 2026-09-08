@@ -233,6 +233,15 @@ export class PageFormatEngine {
           size: ${dim.cssPageSize};
           margin: 0;
         }
+        @page :first {
+          margin: 0;
+        }
+        @page :left {
+          margin: 0;
+        }
+        @page :right {
+          margin: 0;
+        }
         @media print {
           /* Blindagem vetorial Skia: suprimir filtros que provocam fallback de 72 DPI */
           * {

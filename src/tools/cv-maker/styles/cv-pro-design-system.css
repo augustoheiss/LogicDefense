@@ -981,6 +981,15 @@
 /* ==========================================================================
    Supressão Rigorosa de UI Chrome e Isolamento de Folha no Modo de Impressão
    ========================================================================== */
+@page {
+  size: A4 portrait;
+  margin: 0;
+}
+
+@page :first {
+  margin: 0;
+}
+
 @media print {
   .cv-pro-header,
   .cv-pro-left-dock,
