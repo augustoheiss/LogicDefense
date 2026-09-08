@@ -10,7 +10,8 @@ import {
   TargetIcon,
   CheckIcon,
   FileTextIcon,
-  SlidersIcon
+  SlidersIcon,
+  LayersIcon
 } from '../Icons/ProIcons'
 
 export type InspectorTab = 'templates' | 'design' | 'ats' | 'format'
@@ -34,6 +35,8 @@ interface RightInspectorDrawerProps {
   onPageFormatChange: (format: PageFormat, customDims?: CustomPageDimensions) => void
   onCustomPageDimensionsChange?: (dims: CustomPageDimensions) => void
   onOpenFullscreenGallery?: () => void
+  isFreeCanvasActive?: boolean
+  onToggleFreeCanvas?: () => void
 }
 
 // Miniaturas em SVG com esqueleto arquitetônico dos layouts
@@ -138,7 +141,9 @@ export const RightInspectorDrawer: React.FC<RightInspectorDrawerProps> = ({
   customPageDimensions,
   onPageFormatChange,
   onCustomPageDimensionsChange,
-  onOpenFullscreenGallery
+  onOpenFullscreenGallery,
+  isFreeCanvasActive = false,
+  onToggleFreeCanvas
 }) => {
   if (!isOpen) return null
 
@@ -212,6 +217,63 @@ export const RightInspectorDrawer: React.FC<RightInspectorDrawerProps> = ({
                   style={{ fontSize: '0.7rem', padding: '0.2rem 0.5rem' }}
                 >
                   Tela Cheia
+                </button>
+              )}
+            </div>
+
+            {/* ── Switch Executivo: Ativar/Desativar Modo Canvas Livre ── */}
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '0.65rem 0.75rem',
+                borderRadius: '8px',
+                background: isFreeCanvasActive ? 'rgba(56, 189, 248, 0.1)' : 'rgba(30, 41, 59, 0.35)',
+                border: isFreeCanvasActive ? '1px solid rgba(56, 189, 248, 0.4)' : '1px solid rgba(51, 65, 85, 0.3)',
+                marginBottom: '1rem',
+                gap: '0.6rem'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.55rem' }}>
+                <div
+                  style={{
+                    width: '28px',
+                    height: '28px',
+                    borderRadius: '6px',
+                    background: isFreeCanvasActive ? 'var(--cv-pro-sky)' : '#1e293b',
+                    color: isFreeCanvasActive ? '#090d16' : '#94a3b8',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0
+                  }}
+                >
+                  <LayersIcon size={14} />
+                </div>
+                <div>
+                  <div style={{ fontSize: '0.76rem', fontWeight: 700, color: isFreeCanvasActive ? '#38bdf8' : '#e2e8f0' }}>
+                    Modo Canvas Livre
+                  </div>
+                  <div style={{ fontSize: '0.68rem', color: '#94a3b8', lineHeight: 1.2 }}>
+                    {isFreeCanvasActive ? 'Blocos soltos arrastáveis por mouse' : 'Layout estático em grid padrão'}
+                  </div>
+                </div>
+              </div>
+
+              {onToggleFreeCanvas && (
+                <button
+                  type="button"
+                  className={`cv-pro-btn ${isFreeCanvasActive ? 'cv-pro-btn--hero' : ''}`}
+                  onClick={onToggleFreeCanvas}
+                  style={{
+                    padding: '0.25rem 0.55rem',
+                    fontSize: '0.72rem',
+                    minWidth: '65px',
+                    justifyContent: 'center'
+                  }}
+                >
+                  {isFreeCanvasActive ? 'Ativo ✓' : 'Ativar'}
                 </button>
               )}
             </div>

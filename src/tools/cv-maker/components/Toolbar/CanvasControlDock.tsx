@@ -6,7 +6,8 @@ import {
   MaximizeIcon,
   RotateCcwIcon,
   SparklesIcon,
-  PackageIcon
+  PackageIcon,
+  LayersIcon
 } from '../Icons/ProIcons'
 
 interface CanvasControlDockProps {
@@ -16,6 +17,7 @@ interface CanvasControlDockProps {
   onAutoFitSinglePage?: () => void
   onAutoPackBlocks?: () => void
   isFreeCanvasActive?: boolean
+  onToggleFreeCanvas?: () => void
   onResetModel?: () => void
 }
 
@@ -26,6 +28,7 @@ export const CanvasControlDock: React.FC<CanvasControlDockProps> = ({
   onAutoFitSinglePage,
   onAutoPackBlocks,
   isFreeCanvasActive = false,
+  onToggleFreeCanvas,
   onResetModel
 }) => {
   const handleZoomIn = () => {
@@ -40,6 +43,19 @@ export const CanvasControlDock: React.FC<CanvasControlDockProps> = ({
 
   return (
     <div className="cv-pro-floating-dock cv-no-print" role="toolbar" aria-label="Controles do Canvas">
+      {/* Alternar Modo Canvas Livre */}
+      {onToggleFreeCanvas && (
+        <button
+          type="button"
+          className={`cv-pro-dock-btn ${isFreeCanvasActive ? 'is-active' : ''}`}
+          onClick={onToggleFreeCanvas}
+          title={isFreeCanvasActive ? 'Modo Canvas Livre Ativo - Clique para travar em grid' : 'Ativar Modo Canvas Livre (arrastar blocos com mouse)'}
+        >
+          <LayersIcon size={13} style={{ color: isFreeCanvasActive ? 'var(--cv-pro-sky)' : undefined }} />
+          <span>Canvas {isFreeCanvasActive ? 'Livre ✓' : 'Livre'}</span>
+        </button>
+      )}
+
       {/* Auto-ajustar 1 página */}
       {onAutoFitSinglePage && (
         <button

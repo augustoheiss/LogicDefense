@@ -512,6 +512,77 @@ export const CanvasElementsPalette: React.FC<CanvasElementsPaletteProps> = ({
       {/* Lista de Categorias & Itens Atômicos */}
       <div className="cv-elements-palette__sections">
         
+        {/* ── Controle Central: Modo Canvas Livre (Arrastar & Soltar Blocos) ── */}
+        <div
+          className="cv-palette-group"
+          style={{
+            border: structureConfig.isFreeCanvasActive ? '1px solid rgba(56, 189, 248, 0.4)' : '1px solid #1e293b',
+            borderRadius: '8px',
+            background: structureConfig.isFreeCanvasActive ? 'rgba(56, 189, 248, 0.08)' : 'rgba(15, 23, 42, 0.4)',
+            padding: '0.65rem 0.75rem',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '0.5rem',
+            marginBottom: '0.65rem'
+          }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+              <span style={{ fontSize: '1.1rem' }}>📐</span>
+              <div>
+                <strong style={{ display: 'block', fontSize: '0.8rem', color: structureConfig.isFreeCanvasActive ? '#38bdf8' : '#f8fafc' }}>
+                  Modo Canvas Livre
+                </strong>
+                <span style={{ fontSize: '0.68rem', color: '#94a3b8' }}>
+                  {structureConfig.isFreeCanvasActive
+                    ? 'Ativado: Arraste e solte blocos livremente na folha'
+                    : 'Desativado: Blocos estáticos na ordem do grid'}
+                </span>
+              </div>
+            </div>
+            <label className="cv-switch" style={{ position: 'relative', display: 'inline-block', width: '38px', height: '20px', cursor: 'pointer', margin: 0 }}>
+              <input
+                type="checkbox"
+                checked={Boolean(structureConfig.isFreeCanvasActive)}
+                onChange={(e) => {
+                  onUpdateStructureConfig({
+                    ...structureConfig,
+                    isFreeCanvasActive: e.target.checked
+                  })
+                }}
+                style={{ opacity: 0, width: 0, height: 0 }}
+              />
+              <span
+                style={{
+                  position: 'absolute',
+                  cursor: 'pointer',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  backgroundColor: structureConfig.isFreeCanvasActive ? '#0284c7' : '#334155',
+                  transition: '0.2s',
+                  borderRadius: '20px'
+                }}
+              >
+                <span
+                  style={{
+                    position: 'absolute',
+                    content: '""',
+                    height: '14px',
+                    width: '14px',
+                    left: structureConfig.isFreeCanvasActive ? '20px' : '3px',
+                    bottom: '3px',
+                    backgroundColor: 'white',
+                    transition: '0.2s',
+                    borderRadius: '50%'
+                  }}
+                />
+              </span>
+            </label>
+          </div>
+        </div>
+
         {/* ── Opção de Layout: Ícones nos Títulos das Seções (💼 🚀 🎓) ── */}
         <div className="cv-palette-group" style={{ border: '1px solid #1e293b', borderRadius: '8px', background: 'rgba(15, 23, 42, 0.4)', padding: '0.65rem 0.75rem', display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '0.5rem' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

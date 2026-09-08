@@ -246,6 +246,14 @@ export const CVMakerApp: React.FC = () => {
     })
   }
 
+  const handleToggleFreeCanvas = () => {
+    const nextState = !currentStructureConfig.isFreeCanvasActive
+    handleUpdateStructureConfig({
+      ...currentStructureConfig,
+      isFreeCanvasActive: nextState
+    })
+  }
+
   // Compactar Blocos e Eliminar Vácuos Artificiais (Opção A)
   const handleAutoPackBlocks = () => {
     if (!currentStructureConfig || !currentStructureConfig.sectionDimensions) return
@@ -862,6 +870,7 @@ export const CVMakerApp: React.FC = () => {
               onAutoFitSinglePage={handleAutoFitSinglePage}
               onAutoPackBlocks={handleAutoPackBlocks}
               isFreeCanvasActive={currentStructureConfig.isFreeCanvasActive}
+              onToggleFreeCanvas={handleToggleFreeCanvas}
               onResetModel={handleReset}
             />
           </main>
@@ -886,6 +895,8 @@ export const CVMakerApp: React.FC = () => {
             onPageFormatChange={handlePageFormatChange}
             onCustomPageDimensionsChange={handleCustomPageDimensionsChange}
             onOpenFullscreenGallery={() => handleOpenLandingPage('gallery')}
+            isFreeCanvasActive={currentStructureConfig.isFreeCanvasActive}
+            onToggleFreeCanvas={handleToggleFreeCanvas}
           />
         </div>
 
