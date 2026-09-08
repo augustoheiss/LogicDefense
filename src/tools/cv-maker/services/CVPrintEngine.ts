@@ -164,6 +164,56 @@ export class CVPrintEngine {
   }
 
   /**
+   * Sonda ativa de despertar (Wakeup Probe):
+   * Verifica se o backend já está acordado ou monitora o boot frio pingando /health a cada 2s.
+   * O milissegundo exato em que o container no Render acorda e responde 200 OK,
+   * a compilação do PDF é disparada automaticamente na hora, sem exigir que o usuário fique clicando!
+   */
+  private static async waitForServerAwake(
+    baseUrl: string,
+    masterSignal: AbortSignal,
+    maxWaitMs: number,
+    onProgress?: (status: string) => void
+  ): Promise<boolean> {
+    if (!baseUrl) return true // Local ou relativo dispensa sonda
+
+    const healthUrl = `${baseUrl}/health`
+    const startTime = Date.now()
+
+    while (Date.now() - startTime < maxWaitMs) {
+      if (masterSignal.aborted) {
+        throw new DOMException('Operação abortada pelo usuário.', 'AbortError')
+      }
+
+      const elapsedSec = Math.floor((Date.now() - startTime) / 1000)
+      if (onProgress) {
+        if (elapsedSec > 0) {
+          onProgress(`Servidor acordando da hibernação do Render (${elapsedSec}s decorridos, gerando o PDF assim que acordar)...`)
+        } else {
+          onProgress('Verificando status do servidor Playwright...')
+        }
+      }
+
+      try {
+        const pingCtrl = new AbortController()
+        const pingTimer = setTimeout(() => pingCtrl.abort(), 3000)
+        const res = await fetch(healthUrl, { method: 'GET', signal: pingCtrl.signal, mode: 'cors' }).catch(() => null)
+        clearTimeout(pingTimer)
+
+        if (res && res.ok) {
+          // SERVIDOR ACORDADO! Libera na hora!
+          return true
+        }
+      } catch {}
+
+      // Aguarda 2 segundos antes do próximo ping
+      await new Promise((r) => setTimeout(r, 2000))
+    }
+
+    return false
+  }
+
+  /**
    * Compila o snapshot HTML do currículo diretamente no servidor via Chromium Headless Playwright.
    * Não abre diálogo de impressão do navegador; realiza o download direto do binário PDF vetorial de alta definição.
    */
@@ -248,14 +298,28 @@ export class CVPrintEngine {
 
         const baseUrl = candidates[i]
         const endpoint = baseUrl ? `${baseUrl}/api/v1/cv/export-pdf-headless` : '/api/v1/cv/export-pdf-headless'
-        // Timeout ágil por candidato: reduzido para 40s (em vez de 85s) para acelerar o failover
         const timeoutMs = isLocal ? 15000 : 40000
 
         try {
+          // 1. Sonda ativa de despertar: pinga /health e libera no instante exato em que o servidor acordar
+          if (baseUrl) {
+            const isAwake = await this.waitForServerAwake(
+              baseUrl,
+              masterController.signal,
+              isLocal ? 4000 : 38000,
+              options.onProgress
+            )
+            if (!isAwake) {
+              console.warn(`[CVPrintEngine] Servidor ${baseUrl} não respondeu ao health check a tempo. Acionando failover...`)
+              lastError = new Error(`Servidor ${baseUrl} demorou mais que o esperado para acordar.`)
+              continue
+            }
+          }
+
           options.onProgress?.(
             i > 0
-              ? `Compilando no servidor reserva (${i + 1}/${candidates.length})...`
-              : 'Conectando ao worker Playwright (se o servidor estiver acordando da hibernação, aguarde cerca de 30-40s)...'
+              ? `Servidor reserva acordado! Compilando PDF (${i + 1}/${candidates.length})...`
+              : 'Servidor acordado! Compilando PDF vetorial de alta definição...'
           )
 
           const candidateController = new AbortController()

@@ -32,12 +32,19 @@ class PlaywrightPDFService:
     _playwright: Optional[Playwright] = None
     _browser: Optional[Browser] = None
     _lock: Optional[asyncio.Lock] = None
+    _render_semaphore: Optional[asyncio.Semaphore] = None
 
     @classmethod
     def _get_lock(cls) -> asyncio.Lock:
         if cls._lock is None:
             cls._lock = asyncio.Lock()
         return cls._lock
+
+    @classmethod
+    def _get_render_semaphore(cls) -> asyncio.Semaphore:
+        if cls._render_semaphore is None:
+            cls._render_semaphore = asyncio.Semaphore(1)
+        return cls._render_semaphore
 
     @classmethod
     async def get_browser(cls) -> Browser:
@@ -60,7 +67,17 @@ class PlaywrightPDFService:
                     "--disable-accelerated-2d-canvas",
                     "--no-first-run",
                     "--no-zygote",
-                    "--disable-gpu"
+                    "--disable-gpu",
+                    "--disable-extensions",
+                    "--disable-default-apps",
+                    "--mute-audio",
+                    "--no-default-browser-check",
+                    "--disable-background-networking",
+                    "--disable-background-timer-throttling",
+                    "--disable-backgrounding-occluded-windows",
+                    "--disable-breakpad",
+                    "--disable-sync",
+                    "--metrics-recording-only",
                 ]
                 try:
                     cls._browser = await cls._playwright.chromium.launch(
@@ -114,77 +131,84 @@ class PlaywrightPDFService:
         Renderiza um HTML completo em PDF vetorial com alta definição, geometria euclidiana
         e suporte a Tagged PDF (PDF/UA-1 para máxima acessibilidade e pontuação ATS).
         """
-        browser = await cls.get_browser()
-        context = await browser.new_context(
-            viewport={"width": 1240, "height": 1754},
-            device_scale_factor=2
-        )
-        page = await context.new_page()
-        try:
-            # 1. Configurar emulação de mídia de impressão (@media print)
-            await page.emulate_media(media="print")
-
-            # 2. Carregar o HTML autocontido
-            await page.set_content(
-                html_content,
-                wait_until="load",
-                timeout=timeout_ms
+        sem = cls._get_render_semaphore()
+        async with sem:
+            browser = await cls.get_browser()
+            context = await browser.new_context(
+                viewport={"width": 1240, "height": 1754},
+                device_scale_factor=2
             )
+            page = await context.new_page()
+            try:
+                # 1. Configurar emulação de mídia de impressão (@media print)
+                await page.emulate_media(media="print")
 
-            # 3. Aguardar fontes nativas e da web
-            if wait_for_fonts:
+                # 2. Carregar o HTML autocontido
+                await page.set_content(
+                    html_content,
+                    wait_until="load",
+                    timeout=timeout_ms
+                )
+
+                # 3. Aguardar fontes nativas e da web
+                if wait_for_fonts:
+                    try:
+                        await page.evaluate("() => document.fonts ? document.fonts.ready : Promise.resolve()")
+                    except Exception as font_err:
+                        log.warning(f"[PlaywrightPDF] Aviso ao aguardar fonts.ready: {font_err}")
+
+                # 4. Pequeno delay para acomodação de micro-layouts e CSS flex/grid
+                await asyncio.sleep(0.1)
+
+                # 5. Parâmetros de geração nativa do PDF via CDP
+                pdf_kwargs: dict = {
+                    "print_background": True,
+                    "prefer_css_page_size": True,
+                    "margin": {"top": "0mm", "right": "0mm", "bottom": "0mm", "left": "0mm"},
+                    "tagged": True  # Tagged PDF para máxima pontuação em parsers ATS / PDF/UA-1
+                }
+
+                if page_width and page_height:
+                    pdf_kwargs["width"] = page_width
+                    pdf_kwargs["height"] = page_height
+                elif page_format and page_format.lower() in ("a4", "a3", "a5", "letter", "legal", "tabloid"):
+                    pdf_kwargs["format"] = page_format.upper()
+
+                pdf_bytes = await page.pdf(**pdf_kwargs)
+
+                # 6. Pós-processamento de conformidade com pikepdf (se disponível)
                 try:
-                    await page.evaluate("() => document.fonts ? document.fonts.ready : Promise.resolve()")
-                except Exception as font_err:
-                    log.warning(f"[PlaywrightPDF] Aviso ao aguardar fonts.ready: {font_err}")
+                    import io
+                    import pikepdf  # type: ignore
+                    with pikepdf.open(io.BytesIO(pdf_bytes)) as pdf:
+                        if "/MarkInfo" not in pdf.Root:
+                            pdf.Root.MarkInfo = pikepdf.Dictionary(Marked=True)
+                        else:
+                            pdf.Root.MarkInfo.Marked = True
+                        out_io = io.BytesIO()
+                        pdf.save(out_io)
+                        pdf_bytes = out_io.getvalue()
+                except ImportError:
+                    pass
+                except Exception as pike_err:
+                    log.warning(f"[PlaywrightPDF] pikepdf post-processing ignorado: {pike_err}")
 
-            # 4. Pequeno delay para acomodação de micro-layouts e CSS flex/grid
-            await asyncio.sleep(0.1)
-
-            # 5. Parâmetros de geração nativa do PDF via CDP
-            pdf_kwargs: dict = {
-                "print_background": True,
-                "prefer_css_page_size": True,
-                "margin": {"top": "0mm", "right": "0mm", "bottom": "0mm", "left": "0mm"},
-                "tagged": True  # Tagged PDF para máxima pontuação em parsers ATS / PDF/UA-1
-            }
-
-            if page_width and page_height:
-                pdf_kwargs["width"] = page_width
-                pdf_kwargs["height"] = page_height
-            elif page_format and page_format.lower() in ("a4", "a3", "a5", "letter", "legal", "tabloid"):
-                pdf_kwargs["format"] = page_format.upper()
-
-            pdf_bytes = await page.pdf(**pdf_kwargs)
-
-            # 6. Pós-processamento de conformidade com pikepdf (se disponível)
-            try:
-                import io
-                import pikepdf  # type: ignore
-                with pikepdf.open(io.BytesIO(pdf_bytes)) as pdf:
-                    if "/MarkInfo" not in pdf.Root:
-                        pdf.Root.MarkInfo = pikepdf.Dictionary(Marked=True)
-                    else:
-                        pdf.Root.MarkInfo.Marked = True
-                    out_io = io.BytesIO()
-                    pdf.save(out_io)
-                    pdf_bytes = out_io.getvalue()
-            except ImportError:
-                pass
-            except Exception as pike_err:
-                log.warning(f"[PlaywrightPDF] pikepdf post-processing ignorado: {pike_err}")
-
-            log.info(f"[PlaywrightPDF] PDF gerado com sucesso: {len(pdf_bytes)} bytes.")
-            return pdf_bytes
-        except Exception as e:
-            log.error(f"[PlaywrightPDF] Erro ao renderizar PDF: {e}", exc_info=True)
-            raise e
-        finally:
-            try:
-                await page.close()
-                await context.close()
-            except Exception:
-                pass
+                log.info(f"[PlaywrightPDF] PDF gerado com sucesso: {len(pdf_bytes)} bytes.")
+                return pdf_bytes
+            except Exception as e:
+                log.error(f"[PlaywrightPDF] Erro ao renderizar PDF: {e}", exc_info=True)
+                raise e
+            finally:
+                try:
+                    await page.close()
+                except Exception:
+                    pass
+                try:
+                    await context.close()
+                except Exception:
+                    pass
+                import gc
+                gc.collect()
 
     @classmethod
     async def close(cls):
