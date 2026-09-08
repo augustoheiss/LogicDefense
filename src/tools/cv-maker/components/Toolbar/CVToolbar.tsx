@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react'
 import type { TextVariant, ThemeVariant, LayoutVariant, ViewMode, PageFormat, ZoomMode, CustomPageDimensions } from '../../types/cv'
 import { LAYOUT_OPTIONS } from '../../types/cv'
 import { PageFormatEngine, PAGE_FORMATS } from '../../engine/PageFormatEngine'
+import { CVPrintEngine } from '../../services/CVPrintEngine'
 
 interface CVToolbarProps {
   isFreeCanvasActive?: boolean
@@ -712,6 +713,7 @@ export const CVToolbar: React.FC<CVToolbarProps> = ({
             type="button"
             className="cv-dropdown-trigger"
             onClick={() => toggleDropdown('exports')}
+            onMouseEnter={() => CVPrintEngine.prewarmWorkers()}
             title="Exportar em PDF A4, YAML ou Pacote ZIP"
             style={{
               background: '#047857',
@@ -736,6 +738,7 @@ export const CVToolbar: React.FC<CVToolbarProps> = ({
                 <button
                   type="button"
                   className="cv-dropdown-item"
+                  onMouseEnter={() => CVPrintEngine.prewarmWorkers()}
                   onClick={() => {
                     closeDropdowns()
                     onDownloadDirectPdf()

@@ -133,6 +133,22 @@ export class CVPrintEngine {
   }
 
   /**
+   * Acorda silenciosamente as instâncias em hibernação no Render (Cold Start prevention).
+   * Dispara requisições assíncronas /health em background sem bloquear o usuário.
+   */
+  public static prewarmWorkers(): void {
+    const workers = [
+      'https://ocorrencias-pdf-writer.onrender.com/health',
+      'https://heiss-cv-engine.onrender.com/health'
+    ]
+    for (const url of workers) {
+      try {
+        fetch(url, { method: 'GET', mode: 'cors' }).catch(() => {})
+      } catch {}
+    }
+  }
+
+  /**
    * Compila o snapshot HTML do currículo diretamente no servidor via Chromium Headless Playwright.
    * Não abre diálogo de impressão do navegador; realiza o download direto do binário PDF vetorial de alta definição.
    */
@@ -207,15 +223,15 @@ export class CVPrintEngine {
     for (let i = 0; i < candidates.length; i++) {
       const baseUrl = candidates[i]
       const endpoint = baseUrl ? `${baseUrl}/api/v1/cv/export-pdf-headless` : '/api/v1/cv/export-pdf-headless'
-      const isLast = i === candidates.length - 1
-      // Timeout resiliente: permite que workers em cold-start (hibernação) acordem sem abortar a requisição prematuramente
-      const timeoutMs = isLocal ? 15000 : (isLast ? 50000 : 40000)
+      // Timeout resiliente: permite que workers em cold-start (hibernação do Render) acordem
+      // sem abortar a requisição prematuramente (cold boot pode levar 50-75s)
+      const timeoutMs = isLocal ? 15000 : 85000
 
       try {
         options.onProgress?.(
           i > 0
             ? `Failover ativo: compilando no servidor reserva (${i + 1}/${candidates.length})...`
-            : 'Conectando ao worker Playwright (aguarde alguns instantes se o servidor estiver hibernando)...'
+            : 'Conectando ao worker Playwright (se o servidor estiver acordando da hibernação, aguarde cerca de 45-60s)...'
         )
 
         const controller = new AbortController()

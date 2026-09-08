@@ -247,7 +247,11 @@ export class PageFormatEngine {
             width: ${dim.widthMm}mm !important;
             max-width: ${dim.widthMm}mm !important;
             min-width: ${dim.widthMm}mm !important;
-            background: #ffffff !important;
+            background-color: var(--cv-color-bg, #ffffff) !important;
+            background-image: var(--cv-bg-image, none) !important;
+            background-size: ${dim.widthMm}mm ${dim.heightMm}mm !important;
+            background-position: top left !important;
+            background-repeat: repeat-y !important;
           }
           .cv-page-a4,
           .sheet-page-container,

@@ -151,8 +151,11 @@
   }
 
   .cv-continuation-header {
-    margin-top: 0 !important;
-    margin-bottom: 0.5rem !important;
+    display: none !important;
+    visibility: hidden !important;
+    height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
   }
 
   /* =============================================================
@@ -194,6 +197,12 @@
     border: none !important;
     width: 100% !important;
     background: transparent !important;
+  }
+
+  /* Offset de topo da Página 1: compensa os 14mm de thead na folha inicial para iniciar no respiro ideal (~3-5mm),
+     enquanto a Página 2+ preserva os 14mm de respiro de continuação garantidos pela fragmentação de tabela W3C */
+  .cv-page-content {
+    margin-top: -11mm !important;
   }
 
   /* Cabeçalhos e estruturas com fundo 100% transparente para incorporar a textura de fundo */
@@ -371,7 +380,7 @@
 
   @page {
     size: A4 portrait;
-    margin: 0 !important;
+    margin: 0;
   }
 
   /* Ocultar rigorosamente todos os elementos auxiliares, menus, badges de colisão e navegação */

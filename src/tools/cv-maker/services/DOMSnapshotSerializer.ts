@@ -269,6 +269,10 @@ export class DOMSnapshotSerializer {
           width: 100% !important;
           background: transparent !important;
         }
+        /* Offset de topo da Página 1: compensa os 14mm de thead na folha inicial */
+        .cv-page-content {
+          margin-top: -11mm !important;
+        }
         .cv-card > header,
         .cv-card > div.cv-brand-header,
         .cv-card > div.cv-sidebar-layout,

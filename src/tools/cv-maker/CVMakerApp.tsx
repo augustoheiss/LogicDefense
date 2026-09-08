@@ -153,6 +153,11 @@ export const CVMakerApp: React.FC = () => {
     PageFormatEngine.applyFormat(activePageFormat, document.documentElement, customPageDimensions)
   }, [activePageFormat, customPageDimensions])
 
+  // Pre-warm silencioso dos workers Playwright em background (evita cold start de 60s no Render)
+  useEffect(() => {
+    CVPrintEngine.prewarmWorkers()
+  }, [])
+
   // Headless PDF Generation State
   const [isGeneratingDirectPdf, setIsGeneratingDirectPdf] = useState<boolean>(false)
   const [directPdfStatus, setDirectPdfStatus] = useState<string>('')
