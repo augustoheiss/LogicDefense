@@ -38,30 +38,36 @@
     display: block !important;
   }
 
-  /* Camada Soberana de Fundo A4/Letter por Página (Full Bleed em 100% das Folhas) */
+  /* Camada Soberana de Fundo A4/Letter por Página é tratada via html, body com repeat-y */
   .cv-print-page-background {
+    display: none !important;
+  }
+
+  :root .cv-root .cv-page-a4,
+  :root .cv-root .cv-canvas-sheet,
+  .cv-root .cv-page-a4,
+  .cv-root .cv-canvas-sheet,
+  .cv-page-a4,
+  .cv-page-card,
+  .cv-card,
+  .cv-cover-letter-card,
+  .cv-cover-letter-page,
+  .cv-dossier-wrapper,
+  .cv-render-wrapper,
+  #cv-printable-document,
+  .cv-print-wrapper {
+    background: transparent !important;
+    background-color: transparent !important;
+    background-image: none !important;
+    box-shadow: none !important;
+  }
+
+  .cv-dossier-wrapper {
     display: block !important;
-    position: fixed !important;
-    top: 0 !important;
-    left: 0 !important;
-    width: var(--cv-page-width, 210mm) !important;
-    height: var(--cv-page-height, 297mm) !important;
-    min-width: var(--cv-page-width, 210mm) !important;
-    min-height: var(--cv-page-height, 297mm) !important;
-    max-width: var(--cv-page-width, 210mm) !important;
-    max-height: var(--cv-page-height, 297mm) !important;
-    box-sizing: border-box !important;
+    gap: 0 !important;
     margin: 0 !important;
     padding: 0 !important;
-    background-color: var(--cv-color-bg, #ffffff) !important;
-    background-image: var(--cv-bg-image, none) !important;
-    background-size: cover !important;
-    background-position: center top !important;
-    background-repeat: no-repeat !important;
-    -webkit-print-color-adjust: exact !important;
-    print-color-adjust: exact !important;
-    z-index: -9999 !important;
-    pointer-events: none !important;
+    width: 100% !important;
   }
 
   #root,

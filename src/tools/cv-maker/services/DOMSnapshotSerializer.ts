@@ -165,26 +165,8 @@ export class DOMSnapshotSerializer {
       clone.querySelectorAll('.cv-continuation-header').forEach((el) => el.remove())
     }
 
-    // 5.1. Garantir Camada Soberana de Fundo A4/Letter por Página no clone (Full Bleed em 100% das Folhas)
-    let bgLayer = clone.querySelector('.cv-print-page-background') as HTMLElement
-    if (!bgLayer) {
-      bgLayer = document.createElement('div')
-      bgLayer.className = 'cv-print-page-background'
-      bgLayer.setAttribute('aria-hidden', 'true')
-      clone.insertBefore(bgLayer, clone.firstChild)
-    }
-    bgLayer.style.display = 'block'
-    bgLayer.style.position = 'fixed'
-    bgLayer.style.top = '0'
-    bgLayer.style.left = '0'
-    bgLayer.style.width = pageWidthCss
-    bgLayer.style.height = pageHeightCss
-    bgLayer.style.zIndex = '-9999'
-    bgLayer.style.backgroundColor = effectiveColorBg
-    bgLayer.style.backgroundImage = inlinedBgImage
-    bgLayer.style.backgroundSize = 'cover'
-    bgLayer.style.backgroundPosition = 'center top'
-    bgLayer.style.backgroundRepeat = 'no-repeat'
+    // 5.1. Camada de fundo soberana é tratada diretamente via html, body (repeat-y euclidiano)
+    clone.querySelectorAll('.cv-print-page-background').forEach((el) => el.remove())
 
     if (cvRootEl) {
       cvRootEl.style.setProperty('--cv-bg-image', inlinedBgImage)
@@ -299,37 +281,50 @@ export class DOMSnapshotSerializer {
           --cv-color-bg: ${effectiveColorBg} !important;
         }
         .cv-print-page-background {
-          display: block !important;
-          position: fixed !important;
-          top: 0 !important;
-          left: 0 !important;
-          width: ${pageWidthCss} !important;
-          height: ${pageHeightCss} !important;
-          min-width: ${pageWidthCss} !important;
-          min-height: ${pageHeightCss} !important;
-          background-color: ${effectiveColorBg} !important;
-          background-image: ${inlinedBgImage} !important;
-          background-size: cover !important;
-          background-position: center top !important;
-          background-repeat: no-repeat !important;
-          -webkit-print-color-adjust: exact !important;
-          print-color-adjust: exact !important;
-          z-index: -9999 !important;
-          pointer-events: none !important;
+          display: none !important;
         }
         html, body {
-          margin: 0;
-          padding: 0;
+          margin: 0 !important;
+          padding: 0 !important;
           width: ${pageWidthCss} !important;
           max-width: ${pageWidthCss} !important;
           min-width: ${pageWidthCss} !important;
           background-color: ${effectiveColorBg} !important;
           background-image: ${inlinedBgImage} !important;
-          background-size: cover !important;
-          background-position: center !important;
-          background-repeat: no-repeat !important;
+          background-size: ${pageWidthCss} ${pageHeightCss} !important;
+          background-position: top left !important;
+          background-repeat: repeat-y !important;
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
           text-rendering: geometricPrecision;
           -webkit-font-smoothing: antialiased;
+        }
+        :root .cv-root .cv-page-a4,
+        :root .cv-root .cv-canvas-sheet,
+        .cv-root .cv-page-a4,
+        .cv-root .cv-canvas-sheet,
+        .cv-page-a4,
+        .cv-page-card,
+        .cv-card,
+        .cv-cover-letter-card,
+        .cv-cover-letter-page,
+        .cv-dossier-wrapper,
+        .cv-render-wrapper,
+        #cv-printable-document,
+        .cv-print-wrapper,
+        .sheet-page-container,
+        .physical-page-sheet {
+          background: transparent !important;
+          background-color: transparent !important;
+          background-image: none !important;
+          box-shadow: none !important;
+        }
+        .cv-dossier-wrapper {
+          display: block !important;
+          gap: 0 !important;
+          margin: 0 !important;
+          padding: 0 !important;
+          width: 100% !important;
         }
         .cv-card {
           padding-top: 0 !important;

@@ -712,11 +712,22 @@ export const CVToolbar: React.FC<CVToolbarProps> = ({
           <button
             type="button"
             className="cv-dropdown-trigger"
-            onClick={() => toggleDropdown('exports')}
+            onClick={(e) => {
+              if (isGeneratingPdf && onDownloadDirectPdf) {
+                e.stopPropagation()
+                onDownloadDirectPdf()
+              } else {
+                toggleDropdown('exports')
+              }
+            }}
             onMouseEnter={() => CVPrintEngine.prewarmWorkers()}
-            title="Exportar em PDF A4, YAML ou Pacote ZIP"
+            title={
+              isGeneratingPdf
+                ? (pdfProgressStatus ? `${pdfProgressStatus} (Clique para tentar novamente se já acordou)` : "Clique novamente para reconectar se o servidor já acordou")
+                : "Exportar em PDF A4, YAML ou Pacote ZIP"
+            }
             style={{
-              background: '#047857',
+              background: isGeneratingPdf ? '#059669' : '#047857',
               borderColor: '#10b981',
               color: '#ffffff',
               fontWeight: 700,
@@ -724,9 +735,9 @@ export const CVToolbar: React.FC<CVToolbarProps> = ({
               boxShadow: '0 4px 14px rgba(16, 185, 129, 0.25)',
             }}
           >
-            <span className="cv-dropdown-trigger__icon">{isGeneratingPdf ? '⏳' : '📥'}</span>
+            <span className="cv-dropdown-trigger__icon">{isGeneratingPdf ? '🔄' : '📥'}</span>
             <span className="cv-dropdown-trigger__text">
-              {isGeneratingPdf ? (pdfProgressStatus || 'Gerando PDF...') : 'Exportar & PDF'}
+              {isGeneratingPdf ? 'Clique novamente se acordou' : 'Exportar & PDF'}
             </span>
             <span className="cv-dropdown-trigger__chevron" style={{ color: '#ffffff' }}>▼</span>
           </button>
@@ -743,21 +754,23 @@ export const CVToolbar: React.FC<CVToolbarProps> = ({
                     closeDropdowns()
                     onDownloadDirectPdf()
                   }}
-                  disabled={isGeneratingPdf}
+                  disabled={false}
                   style={{
-                    background: 'rgba(16, 185, 129, 0.25)',
-                    color: '#34d399',
+                    background: isGeneratingPdf ? 'rgba(234, 179, 8, 0.2)' : 'rgba(16, 185, 129, 0.25)',
+                    color: isGeneratingPdf ? '#fde047' : '#34d399',
                     fontWeight: 800,
-                    borderLeft: '4px solid #10b981',
+                    borderLeft: isGeneratingPdf ? '4px solid #eab308' : '4px solid #10b981',
                     marginBottom: '0.35rem'
                   }}
                 >
                   <div className="cv-dropdown-item__content">
                     <div className="cv-dropdown-item__title">
-                      <span>{isGeneratingPdf ? '⏳' : '📥'}</span> <strong>{isGeneratingPdf ? (pdfProgressStatus || 'Gerando PDF no Servidor...') : 'Baixar PDF Direto (Playwright)'}</strong>
+                      <span>{isGeneratingPdf ? '🔄' : '📥'}</span> <strong>{isGeneratingPdf ? 'Clique novamente se o servidor acordou' : 'Baixar PDF Direto (Playwright)'}</strong>
                     </div>
                     <div className="cv-dropdown-item__desc" style={{ color: '#a7f3d0' }}>
-                      Renderização Chromium no servidor: 100% fiel, tagged PDF para ATS, download direto sem diálogo
+                      {isGeneratingPdf
+                        ? 'Interrompe a espera anterior e dispara nova tentativa instantânea'
+                        : 'Renderização Chromium no servidor: 100% fiel, tagged PDF para ATS, download direto sem diálogo'}
                     </div>
                   </div>
                 </button>

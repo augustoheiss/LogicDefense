@@ -24,6 +24,21 @@ export interface DirectPrintOptions {
 }
 
 export class CVPrintEngine {
+  private static activeAbortController: AbortController | null = null
+
+  /**
+   * Cancela imediatamente qualquer requisição ativa de compilação Playwright,
+   * liberando a thread para retry imediato quando o usuário solicitar.
+   */
+  public static abortActive(): void {
+    if (this.activeAbortController) {
+      try {
+        this.activeAbortController.abort()
+      } catch {}
+      this.activeAbortController = null
+    }
+  }
+
   /**
    * Localiza o nó raiz imprimível do currículo no DOM.
    */
@@ -220,83 +235,111 @@ export class CVPrintEngine {
     let lastError: any = null
     options.onProgress?.('Preparando documento e conectando ao worker...')
 
-    for (let i = 0; i < candidates.length; i++) {
-      const baseUrl = candidates[i]
-      const endpoint = baseUrl ? `${baseUrl}/api/v1/cv/export-pdf-headless` : '/api/v1/cv/export-pdf-headless'
-      // Timeout resiliente: permite que workers em cold-start (hibernação do Render) acordem
-      // sem abortar a requisição prematuramente (cold boot pode levar 50-75s)
-      const timeoutMs = isLocal ? 15000 : 85000
+    // Configura controle de cancelamento mestre para esta sessão
+    this.abortActive()
+    const masterController = new AbortController()
+    this.activeAbortController = masterController
 
-      try {
-        options.onProgress?.(
-          i > 0
-            ? `Failover ativo: compilando no servidor reserva (${i + 1}/${candidates.length})...`
-            : 'Conectando ao worker Playwright (se o servidor estiver acordando da hibernação, aguarde cerca de 45-60s)...'
-        )
-
-        const controller = new AbortController()
-        const timerId = setTimeout(() => controller.abort(), timeoutMs)
-
-        const response = await fetch(endpoint, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          signal: controller.signal,
-          body: JSON.stringify({
-            html: snapshotHtml,
-            filename,
-            format: options.pageFormat,
-            width: options.customWidthMm ? `${options.customWidthMm}mm` : undefined,
-            height: options.customHeightMm ? `${options.customHeightMm}mm` : undefined
-          })
-        })
-        clearTimeout(timerId)
-
-        if (response.ok) {
-          options.onProgress?.('PDF gerado com sucesso! Iniciando download...')
-          const arrayBuffer = await response.arrayBuffer()
-          const blob = new Blob([arrayBuffer], { type: 'application/pdf' })
-          const url = URL.createObjectURL(blob)
-          const a = document.createElement('a')
-          a.style.display = 'none'
-          a.href = url
-          a.setAttribute('download', filename)
-          a.download = filename
-          document.body.appendChild(a)
-          a.click()
-          // Mantém o Blob URL ativo por 60 segundos para que o download manager do Chromium
-          // no Windows não aborte a gravação do arquivo e reverta para nome UUID sem extensão
-          setTimeout(() => {
-            try {
-              if (document.body.contains(a)) document.body.removeChild(a)
-            } catch {}
-            URL.revokeObjectURL(url)
-          }, 60000)
-          return true
-        } else {
-          let errDetail = ''
-          try {
-            const errJson = await response.json()
-            errDetail = errJson.detail || JSON.stringify(errJson)
-          } catch {
-            errDetail = await response.text().catch(() => '')
-          }
-          console.warn(`[CVPrintEngine] Servidor ${endpoint} retornou status ${response.status}:`, errDetail)
-          lastError = new Error(`Servidor (${baseUrl || 'local'}) respondeu ${response.status}: ${errDetail || 'Erro interno'}`)
+    try {
+      for (let i = 0; i < candidates.length; i++) {
+        if (masterController.signal.aborted) {
+          throw new DOMException('Operação abortada pelo usuário para nova tentativa.', 'AbortError')
         }
-      } catch (err: any) {
-        if (err.name === 'AbortError') {
-          console.warn(`[CVPrintEngine] Timeout de ${timeoutMs}ms ao aguardar ${baseUrl}. Acionando failover...`)
-          lastError = new Error(`Timeout de conexão com ${baseUrl || 'servidor'}`)
-        } else {
-          console.warn(`[CVPrintEngine] Exceção ao conectar com ${baseUrl}:`, err)
-          lastError = err
+
+        const baseUrl = candidates[i]
+        const endpoint = baseUrl ? `${baseUrl}/api/v1/cv/export-pdf-headless` : '/api/v1/cv/export-pdf-headless'
+        // Timeout ágil por candidato: reduzido para 40s (em vez de 85s) para acelerar o failover
+        const timeoutMs = isLocal ? 15000 : 40000
+
+        try {
+          options.onProgress?.(
+            i > 0
+              ? `Compilando no servidor reserva (${i + 1}/${candidates.length})...`
+              : 'Conectando ao worker Playwright (se o servidor estiver acordando da hibernação, aguarde cerca de 30-40s)...'
+          )
+
+          const candidateController = new AbortController()
+          const timerId = setTimeout(() => candidateController.abort(), timeoutMs)
+
+          const onMasterAbort = () => {
+            try { candidateController.abort() } catch {}
+          }
+          masterController.signal.addEventListener('abort', onMasterAbort, { once: true })
+
+          try {
+            const response = await fetch(endpoint, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json'
+              },
+              signal: candidateController.signal,
+              body: JSON.stringify({
+                html: snapshotHtml,
+                filename,
+                format: options.pageFormat,
+                width: options.customWidthMm ? `${options.customWidthMm}mm` : undefined,
+                height: options.customHeightMm ? `${options.customHeightMm}mm` : undefined
+              })
+            })
+            clearTimeout(timerId)
+            masterController.signal.removeEventListener('abort', onMasterAbort)
+
+            if (response.ok) {
+              options.onProgress?.('PDF gerado com sucesso! Iniciando download...')
+              const arrayBuffer = await response.arrayBuffer()
+              const blob = new Blob([arrayBuffer], { type: 'application/pdf' })
+              const url = URL.createObjectURL(blob)
+              const a = document.createElement('a')
+              a.style.display = 'none'
+              a.href = url
+              a.setAttribute('download', filename)
+              a.download = filename
+              document.body.appendChild(a)
+              a.click()
+              // Mantém o Blob URL ativo por 60 segundos para que o download manager do Chromium
+              // no Windows não aborte a gravação do arquivo e reverta para nome UUID sem extensão
+              setTimeout(() => {
+                try {
+                  if (document.body.contains(a)) document.body.removeChild(a)
+                } catch {}
+                URL.revokeObjectURL(url)
+              }, 60000)
+              return true
+            } else {
+              let errDetail = ''
+              try {
+                const errJson = await response.json()
+                errDetail = errJson.detail || JSON.stringify(errJson)
+              } catch {
+                errDetail = await response.text().catch(() => '')
+              }
+              console.warn(`[CVPrintEngine] Servidor ${endpoint} retornou status ${response.status}:`, errDetail)
+              lastError = new Error(`Servidor (${baseUrl || 'local'}) respondeu ${response.status}: ${errDetail || 'Erro interno'}`)
+            }
+          } finally {
+            clearTimeout(timerId)
+            masterController.signal.removeEventListener('abort', onMasterAbort)
+          }
+        } catch (err: any) {
+          if (masterController.signal.aborted) {
+            throw new DOMException('Operação abortada pelo usuário para nova tentativa.', 'AbortError')
+          }
+          if (err.name === 'AbortError') {
+            console.warn(`[CVPrintEngine] Timeout de ${timeoutMs}ms ao aguardar ${baseUrl}. Acionando failover...`)
+            lastError = new Error(`Timeout de conexão com ${baseUrl || 'servidor'}`)
+          } else {
+            console.warn(`[CVPrintEngine] Exceção ao conectar com ${baseUrl}:`, err)
+            lastError = err
+          }
         }
       }
-    }
 
-    console.warn('[CVPrintEngine] Nenhum servidor Playwright headless disponível. Último erro:', lastError)
-    throw lastError || new Error('Falha ao conectar com o serviço Playwright.')
+      console.warn('[CVPrintEngine] Nenhum servidor Playwright headless disponível. Último erro:', lastError)
+      throw lastError || new Error('Falha ao conectar com o serviço Playwright.')
+    } finally {
+      if (this.activeAbortController === masterController) {
+        this.activeAbortController = null
+      }
+    }
   }
 }

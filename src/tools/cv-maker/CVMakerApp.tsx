@@ -633,9 +633,13 @@ export const CVMakerApp: React.FC = () => {
 
   // Exportação Direta de PDF via Playwright Chromium Headless (Eixo 1)
   const handleDownloadDirectPdf = async () => {
-    if (isGeneratingDirectPdf) return
+    if (isGeneratingDirectPdf) {
+      // Aborta a requisição estagnada anterior para liberar e reconectar imediatamente
+      CVPrintEngine.abortActive()
+      await new Promise((r) => setTimeout(r, 60))
+    }
     setIsGeneratingDirectPdf(true)
-    setDirectPdfStatus('Conectando ao worker PDF...')
+    setDirectPdfStatus('Conectando ao worker Playwright...')
     try {
       PageFormatEngine.applyFormat(activePageFormat, document.documentElement, customPageDimensions)
       if (designConfig?.backgroundPattern && designConfig.backgroundPattern !== 'none') {
@@ -662,6 +666,10 @@ export const CVMakerApp: React.FC = () => {
         }
       })
     } catch (err: any) {
+      if (err?.name === 'AbortError' || err?.message?.includes('abort') || err?.message?.includes('cancelad')) {
+        console.log('[CVMakerApp] Requisição Playwright reiniciada ou cancelada pelo usuário.')
+        return
+      }
       console.error('[CVMakerApp] Falha na compilação direta via Playwright:', err)
       const shouldFallback = window.confirm(
         'Não foi possível conectar ao worker Playwright no backend.\n\n' +
@@ -674,6 +682,12 @@ export const CVMakerApp: React.FC = () => {
       setIsGeneratingDirectPdf(false)
       setDirectPdfStatus('')
     }
+  }
+
+  const handleCancelDirectPdf = () => {
+    CVPrintEngine.abortActive()
+    setIsGeneratingDirectPdf(false)
+    setDirectPdfStatus('')
   }
 
   // Auto-ajuste de página única via Bissecção Real-DOM (P3)
@@ -968,6 +982,80 @@ export const CVMakerApp: React.FC = () => {
             onOpenTemplateGallery={() => handleOpenLandingPage('gallery')}
             onOpenAcademy={() => handleOpenLandingPage('academy')}
           />
+
+          {/* Banner Dedicado de Progresso do Playwright Engine (Aviso fora do botão com Retry Imediato) */}
+          {isGeneratingDirectPdf && (
+            <div
+              className="cv-pdf-generation-banner cv-no-print"
+              role="status"
+              aria-live="polite"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: '0.75rem',
+                padding: '0.65rem 1.25rem',
+                margin: '0.5rem 1rem 0 1rem',
+                borderRadius: '8px',
+                background: 'linear-gradient(90deg, rgba(6, 78, 59, 0.95), rgba(15, 23, 42, 0.95))',
+                border: '1px solid rgba(16, 185, 129, 0.4)',
+                boxShadow: '0 4px 20px rgba(0, 0, 0, 0.35)',
+                color: '#ecfdf5',
+                fontSize: '0.88rem',
+                zIndex: 40
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', flex: '1 1 320px' }}>
+                <span style={{ fontSize: '1.25rem' }}>⏳</span>
+                <div>
+                  <div style={{ fontWeight: 700, color: '#6ee7b7' }}>
+                    {directPdfStatus || 'Compilando PDF no servidor Playwright...'}
+                  </div>
+                  <div style={{ fontSize: '0.78rem', color: '#a7f3d0', opacity: 0.9 }}>
+                    Se o worker estiver acordando da hibernação do Render, o primeiro boot pode levar ~30-40s.
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <button
+                  type="button"
+                  onClick={handleDownloadDirectPdf}
+                  style={{
+                    background: '#10b981',
+                    color: '#064e3b',
+                    border: 'none',
+                    borderRadius: '6px',
+                    padding: '0.4rem 0.85rem',
+                    fontWeight: 700,
+                    fontSize: '0.82rem',
+                    cursor: 'pointer',
+                    boxShadow: '0 2px 8px rgba(16, 185, 129, 0.3)'
+                  }}
+                  title="Aborta a conexão atual e dispara uma nova tentativa imediatamente"
+                >
+                  🔄 Clique novamente se o servidor acordou
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCancelDirectPdf}
+                  style={{
+                    background: 'transparent',
+                    color: '#94a3b8',
+                    border: '1px solid rgba(148, 163, 184, 0.3)',
+                    borderRadius: '6px',
+                    padding: '0.4rem 0.65rem',
+                    fontSize: '0.82rem',
+                    cursor: 'pointer'
+                  }}
+                  title="Cancelar exportação"
+                >
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          )}
 
           <div className="cv-preview-viewport">
             <CVViewer
