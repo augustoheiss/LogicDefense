@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import {
   AVAILABLE_BOX_FONTS,
   type CVData,
@@ -6,9 +6,32 @@ import {
   type LayoutStructureConfig,
   type SectionBoxDimensions
 } from '../../types/cv'
-import { BACKGROUND_CATALOG } from '../../engine/backgroundCatalog'
 import { getAtomicItemId } from '../../utils/atomicIdUtils'
 import { compressImageFile } from '../../utils/imageCompressor'
+import {
+  LayersIcon,
+  SearchIcon,
+  ZapIcon,
+  RotateCcwIcon,
+  CameraIcon,
+  UploadIcon,
+  TrashIcon,
+  EyeIcon,
+  EyeOffIcon,
+  BriefcaseIcon,
+  GraduationCapIcon,
+  RocketIcon,
+  GlobeIcon,
+  AwardIcon,
+  BookmarkIcon,
+  GripVerticalIcon,
+  SquareIcon,
+  HexagonIcon,
+  TypeIcon,
+  ChevronDownIcon,
+  ChevronRightIcon,
+  PlusIcon
+} from '../Icons/ProIcons'
 
 interface CanvasElementsPaletteProps {
   data: CVData | null
@@ -20,17 +43,17 @@ interface CanvasElementsPaletteProps {
 }
 
 const PHOTO_SHAPES_LIST = [
-  { id: 'circle', label: '⚪ Círculo', icon: '⭕' },
-  { id: 'square', label: '🔲 Quadrado', icon: '⏹️' },
-  { id: 'rounded', label: '🔲 Cantos Suaves', icon: '🔲' },
-  { id: 'vertical', label: '📱 Editorial 3:4', icon: '📱' },
-  { id: 'pill', label: '💊 Pílula / Oval', icon: '💊' },
-  { id: 'hexagon', label: '⬡ Hexágono', icon: '⬡' },
-  { id: 'diamond', label: '💎 Losango', icon: '💎' },
-  { id: 'shield', label: '🛡️ Brasão', icon: '🛡️' },
-  { id: 'octagon', label: '🛑 Octógono', icon: '🛑' },
-  { id: 'teardrop', label: '💧 Gota', icon: '💧' },
-  { id: 'editorial_stamp', label: '📰 Selo Stamp', icon: '📰' },
+  { id: 'circle', label: 'Círculo' },
+  { id: 'square', label: 'Quadrado' },
+  { id: 'rounded', label: 'Cantos Suaves' },
+  { id: 'vertical', label: 'Editorial 3:4' },
+  { id: 'pill', label: 'Pílula' },
+  { id: 'hexagon', label: 'Hexágono' },
+  { id: 'diamond', label: 'Losango' },
+  { id: 'shield', label: 'Brasão' },
+  { id: 'octagon', label: 'Octógono' },
+  { id: 'teardrop', label: 'Gota' },
+  { id: 'editorial_stamp', label: 'Selo Stamp' },
 ] as const
 
 export const CanvasElementsPalette: React.FC<CanvasElementsPaletteProps> = ({
@@ -41,14 +64,24 @@ export const CanvasElementsPalette: React.FC<CanvasElementsPaletteProps> = ({
   onAutoPackBlocks,
   onUpdatePhoto
 }) => {
-  const fileInputRef = React.useRef<HTMLInputElement>(null)
-  const [urlInputValue, setUrlInputValue] = React.useState<string>('')
-  const [isPhotoControlsOpen, setIsPhotoControlsOpen] = React.useState<boolean>(true)
-  const [openTypoId, setOpenTypoId] = React.useState<string | null>(null)
-  const [selectedZoneId, setSelectedZoneId] = React.useState<string | null>(null)
-  const [activeDrawingMode, setActiveDrawingMode] = React.useState<'rect' | 'polygon' | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [urlInputValue, setUrlInputValue] = useState<string>('')
+  const [openTypoId, setOpenTypoId] = useState<string | null>(null)
+  const [selectedZoneId, setSelectedZoneId] = useState<string | null>(null)
+  const [activeDrawingMode, setActiveDrawingMode] = useState<'rect' | 'polygon' | null>(null)
+  const [searchFilter, setSearchFilter] = useState<string>('')
 
-  React.useEffect(() => {
+  // Estado de colapso das seções (por padrão, apenas as primeiras abertas)
+  const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({
+    zones: true,
+    projects: false,
+    skills: false,
+    languages: true,
+    certificates: true,
+    interests: true
+  })
+
+  useEffect(() => {
     const handleZoneSelected = (e: any) => {
       setSelectedZoneId(e.detail?.zoneId || null)
     }
@@ -83,10 +116,30 @@ export const CanvasElementsPalette: React.FC<CanvasElementsPaletteProps> = ({
   const activeBorderWidth = photoDims.photoBorderWidth ?? 0
   const activeBorderColor = photoDims.photoBorderColor || '#0284c7'
   const activeShadow = photoDims.photoShadow ?? true
-  const activeAlign = photoDims.alignment || photoDims.photoAlign || 'center'
-  const activeScale = photoDims.photoScale ?? data.basics.imageScale ?? 1.0
-  const activePosX = photoDims.photoPosX ?? data.basics.imagePosX ?? 50
-  const activePosY = photoDims.photoPosY ?? data.basics.imagePosY ?? 50
+  const activeScale = photoDims.photoScale ?? data.basics?.imageScale ?? 1.0
+  const activePosX = photoDims.photoPosX ?? data.basics?.imagePosX ?? 50
+  const activePosY = photoDims.photoPosY ?? data.basics?.imagePosY ?? 50
+
+  const toggleSectionCollapse = (sectionKey: string) => {
+    setCollapsedSections(prev => ({
+      ...prev,
+      [sectionKey]: !prev[sectionKey]
+    }))
+  }
+
+  const handleUpdateSectionDimensions = (key: string, updates: Partial<SectionBoxDimensions>) => {
+    const nextDims = { ...dimensions, [key]: { ...(dimensions[key] || {}), ...updates } }
+    onUpdateStructureConfig({ ...structureConfig, sectionDimensions: nextDims })
+  }
+
+  const handleToggleHide = (key: string) => {
+    const cur = dimensions[key] || {}
+    handleUpdateSectionDimensions(key, { hidden: !cur.hidden })
+  }
+
+  const handleSelectVariant = (key: string, variant: string) => {
+    handleUpdateSectionDimensions(key, { variant: variant as any })
+  }
 
   const handleUpdatePhotoDimensions = (updates: Partial<typeof photoDims>) => {
     const nextPhotoDims = { ...photoDims, ...updates }
@@ -102,230 +155,28 @@ export const CanvasElementsPalette: React.FC<CanvasElementsPaletteProps> = ({
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
-    if (!file.type.startsWith('image/')) {
-      alert('Por favor, selecione um arquivo de imagem válido (PNG, JPG, WebP).')
-      return
-    }
     try {
-      // Comprime a foto de perfil client-side (max 800x800, qualidade 0.85) para caber sem peso no storage (< 80KB)
-      const compressedBase64 = await compressImageFile(file, { maxWidth: 800, maxHeight: 800, quality: 0.85 })
-      if (onUpdatePhoto) {
-        onUpdatePhoto(compressedBase64, activePosX, activePosY, activeScale)
-      }
+      const base64 = await compressImageFile(file, { maxWidth: 800, maxHeight: 800, quality: 0.85 })
+      onUpdatePhoto?.(base64, activePosX, activePosY, activeScale)
       handleUpdatePhotoDimensions({ hidden: false })
     } catch (err) {
-      console.error('Falha ao processar foto de perfil:', err)
-      alert('Não foi possível processar a imagem. Escolha outro arquivo.')
+      console.error('[CanvasElementsPalette] Erro ao carregar foto:', err)
+    } finally {
+      if (fileInputRef.current) fileInputRef.current.value = ''
     }
   }
 
   const handleApplyUrl = () => {
-    if (!urlInputValue.trim()) return
-    if (onUpdatePhoto) {
-      onUpdatePhoto(urlInputValue.trim(), activePosX, activePosY, activeScale)
-      handleUpdatePhotoDimensions({ hidden: false })
-      setUrlInputValue('')
-    }
+    const url = urlInputValue.trim()
+    if (!url) return
+    onUpdatePhoto?.(url, activePosX, activePosY, activeScale)
+    handleUpdatePhotoDimensions({ hidden: false })
+    setUrlInputValue('')
   }
 
   const handleRemovePhoto = () => {
-    if (window.confirm('Deseja remover a foto de perfil do currículo?')) {
-      if (onUpdatePhoto) {
-        onUpdatePhoto(undefined)
-      }
-    }
-  }
-
-  // Foca e seleciona imediatamente qualquer bloco no Canvas (trazendo-o para a frente)
-  const handleFocusBox = (key: string) => {
-    window.dispatchEvent(new CustomEvent('cv-select-box', { detail: { id: key } }))
-  }
-
-  // Alterna visibilidade (ocultar / exibir) de um bloco ou item atômico
-  const handleToggleHide = (key: string) => {
-    const cur = dimensions[key] || {}
-    const nextHidden = !cur.hidden
-    onUpdateStructureConfig({
-      ...structureConfig,
-      sectionDimensions: {
-        ...dimensions,
-        [key]: {
-          ...cur,
-          hidden: nextHidden
-        }
-      }
-    })
-  }
-
-  // Altera a variante visual de um bloco
-  const handleSelectVariant = (key: string, variantId: string) => {
-    const cur = dimensions[key] || {}
-    onUpdateStructureConfig({
-      ...structureConfig,
-      sectionDimensions: {
-        ...dimensions,
-        [key]: {
-          ...cur,
-          variant: variantId
-        }
-      }
-    })
-  }
-
-  // Atualiza propriedades parciais de dimensões de qualquer bloco ou item atômico
-  const handleUpdateSectionDimensions = (key: string, updates: Partial<SectionBoxDimensions>) => {
-    const cur = dimensions[key] || {}
-    const titleKey = `${key}_title`
-    const curTitle = dimensions[titleKey] || {}
-
-    // Sincroniza também o box de título correspondente no canvas caso seja categoria geral
-    const extraUpdates: Record<string, SectionBoxDimensions> = {}
-    if (['work', 'education', 'projects', 'languages', 'skills', 'certificates', 'interests', 'references', 'awards', 'volunteer'].includes(key)) {
-      extraUpdates[titleKey] = {
-        ...curTitle,
-        ...updates
-      }
-    }
-
-    onUpdateStructureConfig({
-      ...structureConfig,
-      sectionDimensions: {
-        ...dimensions,
-        [key]: {
-          ...cur,
-          ...updates
-        },
-        ...extraUpdates
-      }
-    })
-  }
-
-  const handleSelectFontFamily = (key: string, fontVal: string) => {
-    handleUpdateSectionDimensions(key, {
-      fontFamily: fontVal === 'inherit' ? undefined : fontVal
-    })
-  }
-
-  const handleSetFontScale = (key: string, scale: number) => {
-    const clamped = Math.round(Math.min(1.4, Math.max(0.7, scale)) * 100) / 100
-    handleUpdateSectionDimensions(key, {
-      fontSizeScale: clamped === 1 ? undefined : clamped
-    })
-  }
-
-  const handleAdjustFontScale = (key: string, delta: number) => {
-    const curScale = dimensions[key]?.fontSizeScale ?? 1.0
-    handleSetFontScale(key, curScale + delta)
-  }
-
-  const renderTypoButton = (key: string, tooltip = 'Ajustar fonte e tamanho da letra') => {
-    const curDims = dimensions[key] || {}
-    const hasCustom = Boolean(curDims.fontSizeScale || curDims.fontFamily)
-    const isOpen = openTypoId === key
-
-    return (
-      <button
-        type="button"
-        className={`cv-palette-typo-btn ${hasCustom ? 'is-custom' : ''} ${isOpen ? 'is-open' : ''}`}
-        onClick={() => setOpenTypoId(isOpen ? null : key)}
-        title={hasCustom ? 'Tipografia personalizada ativa - Clique para editar' : tooltip}
-      >
-        🔤
-      </button>
-    )
-  }
-
-  const renderTypographyPanel = (key: string, itemLabel?: string) => {
-    if (openTypoId !== key) return null
-    const curDims = dimensions[key] || {}
-    const activeFont = curDims.fontFamily || 'inherit'
-    const activeScale = curDims.fontSizeScale ?? 1.0
-    const activePercent = Math.round(activeScale * 100)
-
-    return (
-      <div className="cv-palette-typo-panel">
-        <div className="cv-palette-typo-header">
-          <span title={itemLabel || key}>
-            🔤 {itemLabel ? `Tipografia: ${itemLabel}` : 'Tipografia & Escala'}
-          </span>
-          <button
-            type="button"
-            className="cv-palette-typo-close-btn"
-            onClick={() => setOpenTypoId(null)}
-            title="Fechar controles de tipografia"
-          >
-            ✕
-          </button>
-        </div>
-
-        {/* Seletor de Família Tipográfica (Design & Estilo) */}
-        <div className="cv-palette-typo-field">
-          <label className="cv-palette-typo-label">Tipo de Fonte:</label>
-          <select
-            className="cv-palette-typo-select"
-            value={activeFont}
-            onChange={e => handleSelectFontFamily(key, e.target.value)}
-          >
-            {AVAILABLE_BOX_FONTS.map(f => {
-              const fontVal = f.family || 'inherit'
-              return (
-                <option key={f.id} value={fontVal} style={{ fontFamily: fontVal !== 'inherit' ? fontVal : 'inherit' }}>
-                  {f.label}
-                </option>
-              )
-            })}
-          </select>
-        </div>
-
-        {/* Slider Contínuo de Escala de Fonte com A- e A+ */}
-        <div className="cv-palette-typo-field">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <label className="cv-palette-typo-label">Tamanho da Fonte:</label>
-            <span className="cv-palette-typo-badge">{activePercent}%</span>
-          </div>
-          <div className="cv-palette-typo-slider-row">
-            <button
-              type="button"
-              className="cv-palette-stepper-btn"
-              onClick={() => handleAdjustFontScale(key, -0.02)}
-              title="Diminuir fonte em 2%"
-            >
-              A-
-            </button>
-            <input
-              type="range"
-              min="0.70"
-              max="1.40"
-              step="0.02"
-              value={activeScale}
-              onChange={e => handleSetFontScale(key, parseFloat(e.target.value))}
-              className="cv-palette-typo-slider"
-              title={`Ajuste contínuo: ${activePercent}%`}
-            />
-            <button
-              type="button"
-              className="cv-palette-stepper-btn"
-              onClick={() => handleAdjustFontScale(key, 0.02)}
-              title="Aumentar fonte em 2%"
-            >
-              A+
-            </button>
-          </div>
-        </div>
-
-        {/* Reset para Padrão do Tema */}
-        {(curDims.fontSizeScale || curDims.fontFamily) && (
-          <button
-            type="button"
-            className="cv-palette-typo-reset-btn"
-            onClick={() => handleUpdateSectionDimensions(key, { fontSizeScale: undefined, fontFamily: undefined })}
-            title="Restaurar tamanho e tipo de fonte para o padrão do tema global"
-          >
-            ↺ Restaurar Padrão do Tema
-          </button>
-        )}
-      </div>
-    )
+    onUpdatePhoto?.('', 50, 50, 1.0)
+    handleUpdatePhotoDimensions({ hidden: true })
   }
 
   const handleStartDraw = (mode: 'rect' | 'polygon') => {
@@ -350,107 +201,200 @@ export const CanvasElementsPalette: React.FC<CanvasElementsPaletteProps> = ({
     window.dispatchEvent(new CustomEvent('cv-canvas-select-zone', { detail: { zoneId: nextId } }))
   }
 
-  const handleUpdateZone = (zoneId: string, updates: Partial<CustomCanvasZone>) => {
-    const nextZones = (structureConfig.customZones || []).map(z => {
-      if (z.id === zoneId) {
-        return { ...z, ...updates }
-      }
-      return z
-    })
-    onUpdateStructureConfig({
-      ...structureConfig,
-      customZones: nextZones
-    })
-  }
-
   const handleDeleteZone = (zoneId: string) => {
-    const nextZones = (structureConfig.customZones || []).filter(z => z.id !== zoneId)
-    onUpdateStructureConfig({
-      ...structureConfig,
-      customZones: nextZones
-    })
-    if (selectedZoneId === zoneId) {
-      setSelectedZoneId(null)
-      window.dispatchEvent(new CustomEvent('cv-canvas-select-zone', { detail: { zoneId: null } }))
-    }
+    const next = (structureConfig.customZones || []).filter(z => z.id !== zoneId)
+    onUpdateStructureConfig({ ...structureConfig, customZones: next })
+    if (selectedZoneId === zoneId) setSelectedZoneId(null)
   }
 
   const handleAddQuickZone = (type: 'sidebar_left' | 'sidebar_right' | 'banner_top' | 'box_bottom') => {
     let newZone: CustomCanvasZone
-    const id = `zone_${Date.now()}`
+    const existing = structureConfig.customZones || []
+
     if (type === 'sidebar_left') {
       newZone = {
-        id,
-        label: 'Sidebar Esquerda',
+        id: `zone_sidebar_l_${Date.now()}`,
+        label: 'Sidebar Esquerda (32%)',
         shape: 'rect',
         x: 0,
         y: 0,
         width: 32,
         height: 100,
         backgroundColor: '#0f172a',
-        backgroundOpacity: 1,
-        borderRadius: 0
+        backgroundOpacity: 0.96
       }
     } else if (type === 'sidebar_right') {
       newZone = {
-        id,
-        label: 'Sidebar Direita',
+        id: `zone_sidebar_r_${Date.now()}`,
+        label: 'Sidebar Direita (32%)',
         shape: 'rect',
         x: 68,
         y: 0,
         width: 32,
         height: 100,
         backgroundColor: '#0f172a',
-        backgroundOpacity: 1,
-        borderRadius: 0
+        backgroundOpacity: 0.96
       }
     } else if (type === 'banner_top') {
       newZone = {
-        id,
-        label: 'Banner Superior',
+        id: `zone_banner_t_${Date.now()}`,
+        label: 'Banner Superior (16%)',
         shape: 'rect',
         x: 0,
         y: 0,
         width: 100,
         height: 16,
-        backgroundColor: '#0f172a',
-        backgroundOpacity: 1,
-        borderRadius: 0
+        backgroundColor: '#1e293b',
+        backgroundOpacity: 0.95
       }
     } else {
       newZone = {
-        id,
+        id: `zone_box_b_${Date.now()}`,
         label: 'Box de Destaque',
         shape: 'rect',
-        x: 5,
-        y: 50,
-        width: 45,
-        height: 30,
-        backgroundColor: 'rgba(30, 41, 59, 0.08)',
-        borderColor: '#38bdf8',
-        borderWidth: 1,
-        borderStyle: 'dashed',
-        borderRadius: 8,
-        backgroundOpacity: 1
+        x: 4,
+        y: 65,
+        width: 92,
+        height: 28,
+        backgroundColor: '#1e293b',
+        backgroundOpacity: 0.85,
+        borderRadius: 8
       }
     }
 
-    const nextZones = [...(structureConfig.customZones || []), newZone]
     onUpdateStructureConfig({
       ...structureConfig,
       isFreeCanvasActive: true,
-      customZones: nextZones
+      customZones: [...existing, newZone]
     })
     setSelectedZoneId(newZone.id)
     window.dispatchEvent(new CustomEvent('cv-canvas-select-zone', { detail: { zoneId: newZone.id } }))
   }
 
-  // Contagem de itens visíveis vs ocultos
+  // Filtragem de busca por texto
+  const filterQuery = searchFilter.trim().toLowerCase()
+  const isFiltering = filterQuery.length > 0
+
+  const matchesFilter = (text1?: string, text2?: string) => {
+    if (!isFiltering) return true
+    return (
+      (text1 && text1.toLowerCase().includes(filterQuery)) ||
+      (text2 && text2.toLowerCase().includes(filterQuery))
+    )
+  }
+
+  // Contagem de itens ocultados
   const totalHidden = Object.values(dimensions).filter(d => d.hidden).length
 
+  // Helper de Tipografia Popover
+  const renderTypographyPanel = (key: string, itemLabel?: string) => {
+    if (openTypoId !== key) return null
+    const curDims = dimensions[key] || {}
+    const activeFont = curDims.fontFamily || 'inherit'
+    const activeScale = curDims.fontSizeScale ?? 1.0
+    const activePercent = Math.round(activeScale * 100)
+
+    return (
+      <div className="cv-palette-typo-panel" style={{ marginTop: '0.35rem', marginBottom: '0.45rem' }}>
+        <div className="cv-palette-typo-header">
+          <span style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+            <TypeIcon size={13} />
+            <span>{itemLabel ? `Tipografia: ${itemLabel}` : 'Tipografia & Escala'}</span>
+          </span>
+          <button
+            type="button"
+            className="cv-palette-typo-close-btn"
+            onClick={() => setOpenTypoId(null)}
+            title="Fechar"
+          >
+            ✕
+          </button>
+        </div>
+
+        <div className="cv-palette-typo-field">
+          <label className="cv-palette-typo-label">Tipo de Fonte:</label>
+          <select
+            className="cv-palette-typo-select"
+            value={activeFont}
+            onChange={e => handleUpdateSectionDimensions(key, { fontFamily: e.target.value })}
+          >
+            {AVAILABLE_BOX_FONTS.map(f => (
+              <option key={f.id} value={f.family || 'inherit'}>
+                {f.label}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="cv-palette-typo-field">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <label className="cv-palette-typo-label">Escala Tipográfica:</label>
+            <span className="cv-palette-typo-badge">{activePercent}%</span>
+          </div>
+          <div className="cv-palette-typo-slider-row">
+            <button
+              type="button"
+              className="cv-palette-stepper-btn"
+              onClick={() => handleUpdateSectionDimensions(key, { fontSizeScale: Math.max(0.70, Number((activeScale - 0.02).toFixed(2))) })}
+              title="Diminuir fonte em 2%"
+            >
+              -2%
+            </button>
+            <input
+              type="range"
+              min="0.70"
+              max="1.40"
+              step="0.02"
+              value={activeScale}
+              onChange={e => handleUpdateSectionDimensions(key, { fontSizeScale: parseFloat(e.target.value) })}
+              className="cv-palette-typo-slider"
+            />
+            <button
+              type="button"
+              className="cv-palette-stepper-btn"
+              onClick={() => handleUpdateSectionDimensions(key, { fontSizeScale: Math.min(1.40, Number((activeScale + 0.02).toFixed(2))) })}
+              title="Aumentar fonte em 2%"
+            >
+              +2%
+            </button>
+          </div>
+        </div>
+
+        {(curDims.fontSizeScale || curDims.fontFamily) && (
+          <button
+            type="button"
+            className="cv-palette-typo-reset-btn"
+            onClick={() => handleUpdateSectionDimensions(key, { fontSizeScale: undefined, fontFamily: undefined })}
+            title="Restaurar padrão do tema"
+          >
+            Restaurar Padrão do Tema
+          </button>
+        )}
+      </div>
+    )
+  }
+
+  const renderTypoButton = (key: string, title = 'Tipografia do bloco') => {
+    const curDims = dimensions[key] || {}
+    const hasCustom = Boolean(curDims.fontSizeScale || curDims.fontFamily)
+    const isOpen = openTypoId === key
+
+    return (
+      <button
+        type="button"
+        className={`cv-palette-typo-btn ${hasCustom ? 'is-custom' : ''} ${isOpen ? 'is-open' : ''}`}
+        onClick={() => setOpenTypoId(isOpen ? null : key)}
+        title={hasCustom ? 'Tipografia personalizada ativa' : title}
+        style={{ padding: '0.2rem 0.35rem', fontSize: '0.68rem', fontWeight: 700 }}
+      >
+        Aa
+      </button>
+    )
+  }
+
   return (
-    <div className="cv-elements-palette">
-      {/* Input invisível para upload de arquivo local */}
+    <div className="cv-pro-elements-palette">
+      {/* Input oculto para upload de foto local */}
       <input
         type="file"
         ref={fileInputRef}
@@ -459,812 +403,261 @@ export const CanvasElementsPalette: React.FC<CanvasElementsPaletteProps> = ({
         onChange={handleFileUpload}
       />
 
-      {/* Cabeçalho da Paleta */}
-      <div className="cv-elements-palette__header">
+      {/* ── Topo do Menu: Título, Subtítulo & Ações ── */}
+      <div className="cv-pro-elements-header">
         <div>
-          <h4 className="cv-elements-palette__title">🎨 Elementos do Canvas</h4>
-          <span className="cv-elements-palette__subtitle">
-            Personalize variantes, visibilidade e ordem dos blocos
+          <h4 className="cv-pro-elements-title">
+            <LayersIcon size={16} style={{ color: 'var(--cv-pro-sky)' }} />
+            <span>Elementos do Canvas</span>
+          </h4>
+          <span className="cv-pro-elements-subtitle">
+            Camadas, variantes, visibilidade e proporções
           </span>
         </div>
-        <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+        <div className="cv-pro-elements-actions">
           {onAutoPackBlocks && (
             <button
               type="button"
-              className="cv-elements-palette__pack-btn"
+              className="cv-pro-btn"
               onClick={onAutoPackBlocks}
-              title="Compactar blocos e eliminar espaços vazios/vácuos automaticamente"
-              style={{
-                padding: '0.35rem 0.65rem',
-                fontSize: '0.74rem',
-                borderRadius: '6px',
-                border: '1px solid rgba(16, 185, 129, 0.4)',
-                background: 'rgba(16, 185, 129, 0.15)',
-                color: '#6ee7b7',
-                cursor: 'pointer',
-                fontWeight: 600,
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '0.25rem'
-              }}
+              title="Compactar blocos e eliminar espaços vazios automaticamente"
+              style={{ padding: '0.25rem 0.55rem', fontSize: '0.72rem' }}
             >
-              <span>⚡</span>
+              <ZapIcon size={12} style={{ color: 'var(--cv-pro-accent)' }} />
               <span>Compactar</span>
             </button>
           )}
           <button
             type="button"
-            className="cv-elements-palette__reset-btn"
+            className="cv-pro-btn"
             onClick={onResetStructure}
-            title="Redefinir todas as alterações estruturais para o padrão do modelo"
+            title="Redefinir todas as variantes e posições para o padrão do modelo"
+            style={{ padding: '0.25rem 0.55rem', fontSize: '0.72rem' }}
           >
-            ↺ Restaurar
+            <RotateCcwIcon size={12} />
+            <span>Restaurar</span>
           </button>
         </div>
       </div>
 
-      {totalHidden > 0 && (
-        <div className="cv-elements-palette__alert">
-          <span>👁️‍🗨️ {totalHidden} {totalHidden === 1 ? 'item ocultado' : 'itens ocultados'} da folha A4</span>
+      {/* ── Campo de Busca Rápida de Camadas ── */}
+      <div className="cv-pro-search-box">
+        <SearchIcon size={13} style={{ color: 'var(--cv-pro-text-muted)', flexShrink: 0 }} />
+        <input
+          type="text"
+          className="cv-pro-search-input"
+          placeholder="Filtrar camadas e elementos..."
+          value={searchFilter}
+          onChange={e => setSearchFilter(e.target.value)}
+        />
+        {isFiltering && (
+          <button
+            type="button"
+            className="cv-pro-search-clear"
+            onClick={() => setSearchFilter('')}
+            title="Limpar filtro"
+          >
+            ✕
+          </button>
+        )}
+      </div>
+
+      {/* Alerta discreto de itens ocultados */}
+      {totalHidden > 0 && !isFiltering && (
+        <div
+          style={{
+            background: 'rgba(234, 179, 8, 0.1)',
+            border: '1px solid rgba(234, 179, 8, 0.3)',
+            borderRadius: '6px',
+            padding: '0.35rem 0.6rem',
+            fontSize: '0.72rem',
+            color: '#fde047',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.4rem'
+          }}
+        >
+          <EyeOffIcon size={13} />
+          <span>{totalHidden} {totalHidden === 1 ? 'camada ocultada' : 'camadas ocultadas'} na folha</span>
         </div>
       )}
 
-      {/* Lista de Categorias & Itens Atômicos */}
-      <div className="cv-elements-palette__sections">
-        
-        {/* ── Controle Central: Modo Canvas Livre (Arrastar & Soltar Blocos) ── */}
-        <div
-          className="cv-palette-group"
-          style={{
-            border: structureConfig.isFreeCanvasActive ? '1px solid rgba(56, 189, 248, 0.4)' : '1px solid #1e293b',
-            borderRadius: '8px',
-            background: structureConfig.isFreeCanvasActive ? 'rgba(56, 189, 248, 0.08)' : 'rgba(15, 23, 42, 0.4)',
-            padding: '0.65rem 0.75rem',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '0.5rem',
-            marginBottom: '0.65rem'
-          }}
-        >
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
-              <span style={{ fontSize: '1.1rem' }}>📐</span>
-              <div>
-                <strong style={{ display: 'block', fontSize: '0.8rem', color: structureConfig.isFreeCanvasActive ? '#38bdf8' : '#f8fafc' }}>
-                  Modo Canvas Livre
-                </strong>
-                <span style={{ fontSize: '0.68rem', color: '#94a3b8' }}>
-                  {structureConfig.isFreeCanvasActive
-                    ? 'Ativado: Arraste e solte blocos livremente na folha'
-                    : 'Desativado: Blocos estáticos na ordem do grid'}
-                </span>
-              </div>
-            </div>
-            <label className="cv-switch" style={{ position: 'relative', display: 'inline-block', width: '38px', height: '20px', cursor: 'pointer', margin: 0 }}>
-              <input
-                type="checkbox"
-                checked={Boolean(structureConfig.isFreeCanvasActive)}
-                onChange={(e) => {
-                  onUpdateStructureConfig({
-                    ...structureConfig,
-                    isFreeCanvasActive: e.target.checked
-                  })
-                }}
-                style={{ opacity: 0, width: 0, height: 0 }}
-              />
-              <span
-                style={{
-                  position: 'absolute',
-                  cursor: 'pointer',
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  backgroundColor: structureConfig.isFreeCanvasActive ? '#0284c7' : '#334155',
-                  transition: '0.2s',
-                  borderRadius: '20px'
-                }}
-              >
-                <span
-                  style={{
-                    position: 'absolute',
-                    content: '""',
-                    height: '14px',
-                    width: '14px',
-                    left: structureConfig.isFreeCanvasActive ? '20px' : '3px',
-                    bottom: '3px',
-                    backgroundColor: 'white',
-                    transition: '0.2s',
-                    borderRadius: '50%'
-                  }}
-                />
-              </span>
-            </label>
+      {/* ── Switches Mestres: Canvas Livre & Ícones nos Títulos ── */}
+      <div className="cv-pro-switches-grid">
+        <div className={`cv-pro-switch-card ${structureConfig.isFreeCanvasActive ? 'is-active' : ''}`}>
+          <div className="cv-pro-switch-card-info">
+            <span className="cv-pro-switch-card-label">Canvas Livre</span>
+            <span className="cv-pro-switch-card-desc">
+              {structureConfig.isFreeCanvasActive ? 'Arrastar blocos' : 'Alinhado em grid'}
+            </span>
           </div>
+          <label className="cv-pro-toggle">
+            <input
+              type="checkbox"
+              checked={Boolean(structureConfig.isFreeCanvasActive)}
+              onChange={e => onUpdateStructureConfig({ ...structureConfig, isFreeCanvasActive: e.target.checked })}
+            />
+            <span className="cv-pro-toggle-slider" />
+          </label>
         </div>
 
-        {/* ── Opção de Layout: Ícones nos Títulos das Seções (💼 🚀 🎓) ── */}
-        <div className="cv-palette-group" style={{ border: '1px solid #1e293b', borderRadius: '8px', background: 'rgba(15, 23, 42, 0.4)', padding: '0.65rem 0.75rem', display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '0.5rem' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
-              <span style={{ fontSize: '1rem' }}>💼</span>
-              <div>
-                <strong style={{ display: 'block', fontSize: '0.78rem', color: '#f8fafc' }}>Ícones nos Títulos</strong>
-                <span style={{ fontSize: '0.68rem', color: '#94a3b8' }}>Exibir símbolos (💼 🚀 🎓) antes de cada seção</span>
-              </div>
-            </div>
-            <label className="cv-switch" style={{ position: 'relative', display: 'inline-block', width: '38px', height: '20px', cursor: 'pointer', margin: 0 }}>
-              <input
-                type="checkbox"
-                checked={Boolean(structureConfig.showSectionIcons)}
-                onChange={(e) => {
-                  onUpdateStructureConfig({
-                    ...structureConfig,
-                    showSectionIcons: e.target.checked
-                  })
-                }}
-                style={{ opacity: 0, width: 0, height: 0 }}
-              />
-              <span
-                style={{
-                  position: 'absolute',
-                  cursor: 'pointer',
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  backgroundColor: structureConfig.showSectionIcons ? '#0284c7' : '#334155',
-                  transition: '0.2s',
-                  borderRadius: '20px'
-                }}
-              >
-                <span
-                  style={{
-                    position: 'absolute',
-                    content: '""',
-                    height: '14px',
-                    width: '14px',
-                    left: structureConfig.showSectionIcons ? '20px' : '3px',
-                    bottom: '3px',
-                    backgroundColor: '#ffffff',
-                    transition: '0.2s',
-                    borderRadius: '50%'
-                  }}
-                />
-              </span>
-            </label>
+        <div className={`cv-pro-switch-card ${structureConfig.showSectionIcons ? 'is-active' : ''}`}>
+          <div className="cv-pro-switch-card-info">
+            <span className="cv-pro-switch-card-label">Ícones Títulos</span>
+            <span className="cv-pro-switch-card-desc">
+              {structureConfig.showSectionIcons ? 'Exibindo na folha' : 'Apenas texto'}
+            </span>
           </div>
+          <label className="cv-pro-toggle">
+            <input
+              type="checkbox"
+              checked={Boolean(structureConfig.showSectionIcons)}
+              onChange={e => onUpdateStructureConfig({ ...structureConfig, showSectionIcons: e.target.checked })}
+            />
+            <span className="cv-pro-toggle-slider" />
+          </label>
         </div>
+      </div>
 
-        {/* ── Seção: Zonas, Sidebars & Boxes de Fundo (Canvas Livre) ── */}
-        <div className="cv-palette-group cv-palette-zones-section">
-          <div className="cv-palette-group__title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span>📐 Zonas, Sidebars & Boxes de Fundo</span>
-            {(structureConfig.customZones || []).length > 0 && (
-              <span className="cv-zones-counter-badge">
-                {(structureConfig.customZones || []).length} {(structureConfig.customZones || []).length === 1 ? 'área' : 'áreas'}
-              </span>
-            )}
+      {/* ── 1. Accordion: Identidade & Foto de Perfil ── */}
+      {matchesFilter('foto', 'identidade') && (
+        <div className={`cv-pro-layer-group ${!collapsedSections['identity'] ? 'is-open' : ''}`}>
+          <div
+            className="cv-pro-layer-group__header"
+            onClick={() => toggleSectionCollapse('identity')}
+          >
+            <span className="cv-pro-layer-group__title">
+              <CameraIcon size={14} style={{ color: 'var(--cv-pro-sky)' }} />
+              <span>Identidade & Foto</span>
+            </span>
+            <div className="cv-pro-layer-group__actions" onClick={e => e.stopPropagation()}>
+              <button
+                type="button"
+                className="cv-pro-btn"
+                style={{ padding: '0.15rem 0.35rem', background: 'transparent', border: 'none' }}
+                onClick={() => toggleSectionCollapse('identity')}
+              >
+                {!collapsedSections['identity'] ? <ChevronDownIcon size={13} /> : <ChevronRightIcon size={13} />}
+              </button>
+            </div>
           </div>
 
-          <div style={{ padding: '0.5rem 0.75rem 0.75rem 0.75rem', display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
-            <p style={{ margin: 0, fontSize: '0.74rem', color: '#94a3b8', lineHeight: 1.4 }}>
-              Desenhe setores de destaque, sidebars coloridas ou boxes agrupadas para personalizar o fundo de qualquer layout:
-            </p>
+          {!collapsedSections['identity'] && (
+            <div className="cv-pro-layer-group__content">
+              {/* Foto de Perfil: Preview, Upload e Geometria */}
+              <div className="cv-pro-photo-card">
+                <div className="cv-pro-photo-preview-wrap">
+                  {data.basics?.image ? (
+                    <img
+                      src={data.basics.image}
+                      alt="Foto de perfil"
+                      className="cv-pro-photo-avatar"
+                      style={{
+                        borderRadius: activeShape === 'circle' ? '50%' : activeShape === 'rounded' ? '8px' : '0px',
+                        borderWidth: `${activeBorderWidth}px`,
+                        borderColor: activeBorderColor,
+                        borderStyle: activeBorderWidth > 0 ? 'solid' : 'none',
+                        boxShadow: activeShadow ? '0 4px 14px rgba(0,0,0,0.5)' : 'none'
+                      }}
+                    />
+                  ) : (
+                    <div
+                      className="cv-pro-photo-avatar"
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: 'var(--cv-pro-text-muted)',
+                        fontSize: '0.7rem'
+                      }}
+                    >
+                      <CameraIcon size={20} />
+                    </div>
+                  )}
 
-            {/* Botões de Ação de Desenho */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.4rem' }}>
-              <button
-                type="button"
-                className={`cv-draw-mode-btn ${activeDrawingMode === 'rect' ? 'is-active' : ''}`}
-                onClick={() => handleStartDraw('rect')}
-                title="Clique e arraste com o mouse sobre o currículo para criar um retângulo ou sidebar"
-              >
-                <span>🖱️</span>
-                <span>{activeDrawingMode === 'rect' ? 'Desenhando...' : 'Desenhar Box'}</span>
-              </button>
-
-              <button
-                type="button"
-                className={`cv-draw-mode-btn ${activeDrawingMode === 'polygon' ? 'is-active' : ''}`}
-                onClick={() => handleStartDraw('polygon')}
-                title="Clique para marcar vértices retos e duplo-clique para fechar a forma"
-              >
-                <span>📐</span>
-                <span>{activeDrawingMode === 'polygon' ? 'Marcando...' : 'Polígono'}</span>
-              </button>
-            </div>
-
-            {activeDrawingMode && (
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.4rem 0.6rem', background: 'rgba(56, 189, 248, 0.12)', border: '1px solid #38bdf8', borderRadius: '6px' }}>
-                <span style={{ fontSize: '0.72rem', color: '#38bdf8', fontWeight: 600 }}>
-                  Modo desenho ativo na folha!
-                </span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setActiveDrawingMode(null)
-                    window.dispatchEvent(new CustomEvent('cv-canvas-cancel-draw'))
-                  }}
-                  style={{ background: 'none', border: 'none', color: '#cbd5e1', cursor: 'pointer', fontSize: '0.72rem', textDecoration: 'underline' }}
-                >
-                  Cancelar (Esc)
-                </button>
-              </div>
-            )}
-
-            {/* Atalhos de 1 Clique */}
-            <div>
-              <div style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '0.35rem' }}>
-                Atalhos Rápidos:
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.35rem' }}>
-                <button
-                  type="button"
-                  className="cv-quick-zone-btn"
-                  onClick={() => handleAddQuickZone('sidebar_left')}
-                  title="Criar sidebar vertical à esquerda (32% de largura)"
-                >
-                  📑 Sidebar Esq (32%)
-                </button>
-                <button
-                  type="button"
-                  className="cv-quick-zone-btn"
-                  onClick={() => handleAddQuickZone('sidebar_right')}
-                  title="Criar sidebar vertical à direita (32% de largura)"
-                >
-                  📑 Sidebar Dir (32%)
-                </button>
-                <button
-                  type="button"
-                  className="cv-quick-zone-btn"
-                  onClick={() => handleAddQuickZone('banner_top')}
-                  title="Criar banner superior horizontal (16% de altura)"
-                >
-                  🖼️ Banner Topo (16%)
-                </button>
-                <button
-                  type="button"
-                  className="cv-quick-zone-btn"
-                  onClick={() => handleAddQuickZone('box_bottom')}
-                  title="Criar box de destaque com fundo suave"
-                >
-                  🔲 Box Destaque
-                </button>
-              </div>
-            </div>
-
-            {/* Lista de Zonas Existentes */}
-            {(structureConfig.customZones || []).length > 0 && (
-              <div style={{ marginTop: '0.4rem', borderTop: '1px solid #1e293b', paddingTop: '0.5rem' }}>
-                <div style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '0.35rem' }}>
-                  Zonas Criadas ({structureConfig.customZones!.length}):
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
-                  {structureConfig.customZones!.map(zone => {
-                    const isSelected = selectedZoneId === zone.id
-                    return (
-                      <div
-                        key={zone.id}
-                        className={`cv-palette-zone-item ${isSelected ? 'is-selected' : ''}`}
-                        onClick={() => handleSelectZone(zone.id)}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', flex: 1 }}>
+                    <div style={{ display: 'flex', gap: '0.3rem' }}>
+                      <button
+                        type="button"
+                        className="cv-pro-btn cv-pro-btn--hero"
+                        style={{ flex: 1, padding: '0.28rem 0.5rem', fontSize: '0.72rem' }}
+                        onClick={() => fileInputRef.current?.click()}
                       >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flex: 1, minWidth: 0 }}>
-                          <span
-                            className="cv-zone-color-chip"
-                            style={{
-                              backgroundColor: zone.backgroundColor || '#1e293b',
-                              opacity: zone.backgroundOpacity ?? 1
-                            }}
-                          />
-                          <span style={{ fontSize: '0.76rem', fontWeight: 600, color: '#f8fafc', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                            {zone.shape === 'polygon' ? '📐' : '🔲'} {zone.label}
-                          </span>
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
-                          <button
-                            type="button"
-                            className="cv-zone-item-btn"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              handleDeleteZone(zone.id)
-                            }}
-                            title="Excluir zona"
-                          >
-                            🗑️
-                          </button>
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-            )}
+                        <UploadIcon size={12} />
+                        <span>{data.basics?.image ? 'Trocar Imagem' : 'Carregar Imagem'}</span>
+                      </button>
 
-            {/* Inspector da Zona Ativa */}
-            {selectedZoneId && (() => {
-              const zone = (structureConfig.customZones || []).find(z => z.id === selectedZoneId)
-              if (!zone) return null
-
-              const ZONE_COLORS = [
-                { name: 'Navy', hex: '#0f172a' },
-                { name: 'Slate', hex: '#1e293b' },
-                { name: 'Zinc', hex: '#27272a' },
-                { name: 'Warm Charcoal', hex: '#292524' },
-                { name: 'Ocean', hex: '#0284c7' },
-                { name: 'Emerald', hex: '#064e3b' },
-                { name: 'Burgundy', hex: '#4c0519' },
-                { name: 'Light Slate', hex: '#f1f5f9' },
-                { name: 'White', hex: '#ffffff' }
-              ]
-
-              return (
-                <div className="cv-zone-inspector-panel">
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem', borderBottom: '1px solid #334155', paddingBottom: '0.35rem' }}>
-                    <strong style={{ fontSize: '0.76rem', color: '#38bdf8' }}>
-                      ⚙️ Editar: {zone.label}
-                    </strong>
-                    <button
-                      type="button"
-                      onClick={() => handleSelectZone(zone.id)}
-                      style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: '0.7rem' }}
-                    >
-                      ✕ Fechar
-                    </button>
-                  </div>
-
-                  {/* Nome da Zona */}
-                  <div style={{ marginBottom: '0.45rem' }}>
-                    <label style={{ display: 'block', fontSize: '0.7rem', color: '#94a3b8', marginBottom: '0.2rem' }}>
-                      Rótulo / Nome:
-                    </label>
-                    <input
-                      type="text"
-                      className="cv-zone-text-input"
-                      value={zone.label}
-                      onChange={(e) => handleUpdateZone(zone.id, { label: e.target.value })}
-                    />
-                  </div>
-
-                  {/* Dimensões e Posições Manuais Livres */}
-                  {zone.shape === 'rect' && (
-                    <div className="cv-zone-dimension-controls" style={{ marginBottom: '0.55rem' }}>
-                      <div style={{ fontSize: '0.72rem', color: '#38bdf8', fontWeight: 700 }}>
-                        📐 Dimensões & Posição (Manual Livre)
-                      </div>
-
-                      {/* Largura */}
-                      <div className="cv-zone-slider-row">
-                        <div className="cv-zone-slider-header">
-                          <span>Largura:</span>
-                          <strong>{Math.round(zone.width)}%</strong>
-                        </div>
-                        <div className="cv-zone-slider-inputs">
-                          <input
-                            type="range"
-                            min="5"
-                            max="100"
-                            step="1"
-                            value={Math.round(zone.width)}
-                            onChange={(e) => handleUpdateZone(zone.id, { width: parseInt(e.target.value) })}
-                          />
-                          <input
-                            type="number"
-                            min="5"
-                            max="100"
-                            className="cv-zone-num-input"
-                            value={Math.round(zone.width)}
-                            onChange={(e) => handleUpdateZone(zone.id, { width: Math.max(5, Math.min(100, parseInt(e.target.value) || 5)) })}
-                          />
-                        </div>
-                        <div className="cv-zone-quick-chips">
-                          <button type="button" className="cv-zone-quick-chip-btn" onClick={() => handleUpdateZone(zone.id, { width: 25 })}>25% Fina</button>
-                          <button type="button" className="cv-zone-quick-chip-btn" onClick={() => handleUpdateZone(zone.id, { width: 32 })}>32% Sidebar</button>
-                          <button type="button" className="cv-zone-quick-chip-btn" onClick={() => handleUpdateZone(zone.id, { width: 50 })}>50% Meio</button>
-                          <button type="button" className="cv-zone-quick-chip-btn" onClick={() => handleUpdateZone(zone.id, { width: 100 })}>100% Total</button>
-                        </div>
-                      </div>
-
-                      {/* Altura */}
-                      <div className="cv-zone-slider-row">
-                        <div className="cv-zone-slider-header">
-                          <span>Altura (Vertical):</span>
-                          <strong>{Math.round(zone.height)}%</strong>
-                        </div>
-                        <div className="cv-zone-slider-inputs">
-                          <input
-                            type="range"
-                            min="4"
-                            max="100"
-                            step="1"
-                            value={Math.round(zone.height)}
-                            onChange={(e) => handleUpdateZone(zone.id, { height: parseInt(e.target.value) })}
-                          />
-                          <input
-                            type="number"
-                            min="4"
-                            max="100"
-                            className="cv-zone-num-input"
-                            value={Math.round(zone.height)}
-                            onChange={(e) => handleUpdateZone(zone.id, { height: Math.max(4, Math.min(100, parseInt(e.target.value) || 4)) })}
-                          />
-                        </div>
-                        <div className="cv-zone-quick-chips">
-                          <button type="button" className="cv-zone-quick-chip-btn" onClick={() => handleUpdateZone(zone.id, { height: 100 })}>100% Toda</button>
-                          <button type="button" className="cv-zone-quick-chip-btn" onClick={() => handleUpdateZone(zone.id, { height: 75 })}>75%</button>
-                          <button type="button" className="cv-zone-quick-chip-btn" onClick={() => handleUpdateZone(zone.id, { height: 50 })}>50% Meia</button>
-                          <button type="button" className="cv-zone-quick-chip-btn" onClick={() => handleUpdateZone(zone.id, { height: 30 })}>30% Box</button>
-                          <button type="button" className="cv-zone-quick-chip-btn" onClick={() => handleUpdateZone(zone.id, { height: 16 })}>16% Banner</button>
-                        </div>
-                      </div>
-
-                      {/* Posição X */}
-                      <div className="cv-zone-slider-row">
-                        <div className="cv-zone-slider-header">
-                          <span>Posição X (Horizontal):</span>
-                          <strong>{Math.round(zone.x)}%</strong>
-                        </div>
-                        <div className="cv-zone-slider-inputs">
-                          <input
-                            type="range"
-                            min="0"
-                            max="95"
-                            step="1"
-                            value={Math.round(zone.x)}
-                            onChange={(e) => handleUpdateZone(zone.id, { x: parseInt(e.target.value) })}
-                          />
-                          <input
-                            type="number"
-                            min="0"
-                            max="95"
-                            className="cv-zone-num-input"
-                            value={Math.round(zone.x)}
-                            onChange={(e) => handleUpdateZone(zone.id, { x: Math.max(0, Math.min(95, parseInt(e.target.value) || 0)) })}
-                          />
-                        </div>
-                        <div className="cv-zone-quick-chips">
-                          <button type="button" className="cv-zone-quick-chip-btn" onClick={() => handleUpdateZone(zone.id, { x: 0 })}>0% Esq</button>
-                          <button type="button" className="cv-zone-quick-chip-btn" onClick={() => handleUpdateZone(zone.id, { x: 34 })}>34% Centro</button>
-                          <button type="button" className="cv-zone-quick-chip-btn" onClick={() => handleUpdateZone(zone.id, { x: 68 })}>68% Dir</button>
-                        </div>
-                      </div>
-
-                      {/* Posição Y */}
-                      <div className="cv-zone-slider-row">
-                        <div className="cv-zone-slider-header">
-                          <span>Posição Y (Vertical):</span>
-                          <strong>{Math.round(zone.y)}%</strong>
-                        </div>
-                        <div className="cv-zone-slider-inputs">
-                          <input
-                            type="range"
-                            min="0"
-                            max="95"
-                            step="1"
-                            value={Math.round(zone.y)}
-                            onChange={(e) => handleUpdateZone(zone.id, { y: parseInt(e.target.value) })}
-                          />
-                          <input
-                            type="number"
-                            min="0"
-                            max="95"
-                            className="cv-zone-num-input"
-                            value={Math.round(zone.y)}
-                            onChange={(e) => handleUpdateZone(zone.id, { y: Math.max(0, Math.min(95, parseInt(e.target.value) || 0)) })}
-                          />
-                        </div>
-                        <div className="cv-zone-quick-chips">
-                          <button type="button" className="cv-zone-quick-chip-btn" onClick={() => handleUpdateZone(zone.id, { y: 0 })}>0% Topo</button>
-                          <button type="button" className="cv-zone-quick-chip-btn" onClick={() => handleUpdateZone(zone.id, { y: 30 })}>30% Meio</button>
-                          <button type="button" className="cv-zone-quick-chip-btn" onClick={() => handleUpdateZone(zone.id, { y: 60 })}>60% Base</button>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-
-                  {/* Cor de Fundo */}
-                  <div style={{ marginBottom: '0.45rem' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem' }}>
-                      <label style={{ fontSize: '0.7rem', color: '#94a3b8' }}>Cor de Fundo:</label>
-                      <input
-                        type="color"
-                        value={zone.backgroundColor?.startsWith('#') ? zone.backgroundColor : '#1e293b'}
-                        onChange={(e) => handleUpdateZone(zone.id, { backgroundColor: e.target.value })}
-                        style={{ width: '24px', height: '20px', padding: 0, border: 'none', cursor: 'pointer', background: 'transparent' }}
-                      />
-                    </div>
-                    {/* Swatches Rápidos */}
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.25rem' }}>
-                      {ZONE_COLORS.map(c => (
+                      {data.basics?.image && (
                         <button
-                          key={c.hex}
                           type="button"
-                          onClick={() => handleUpdateZone(zone.id, { backgroundColor: c.hex })}
-                          title={c.name}
-                          style={{
-                            width: '18px',
-                            height: '18px',
-                            borderRadius: '3px',
-                            backgroundColor: c.hex,
-                            border: zone.backgroundColor === c.hex ? '2px solid #38bdf8' : '1px solid #475569',
-                            cursor: 'pointer',
-                            padding: 0
-                          }}
-                        />
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Opacidade de Fundo */}
-                  <div style={{ marginBottom: '0.45rem' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', color: '#94a3b8', marginBottom: '0.2rem' }}>
-                      <span>Opacidade:</span>
-                      <strong style={{ color: '#f8fafc' }}>{Math.round((zone.backgroundOpacity ?? 1) * 100)}%</strong>
-                    </div>
-                    <input
-                      type="range"
-                      min="0.1"
-                      max="1"
-                      step="0.05"
-                      value={zone.backgroundOpacity ?? 1}
-                      onChange={(e) => handleUpdateZone(zone.id, { backgroundOpacity: parseFloat(e.target.value) })}
-                      style={{ width: '100%', accentColor: '#38bdf8' }}
-                    />
-                  </div>
-
-                  {/* Textura IA / Background Catalog */}
-                  <div style={{ marginBottom: '0.45rem' }}>
-                    <label style={{ display: 'block', fontSize: '0.7rem', color: '#94a3b8', marginBottom: '0.2rem' }}>
-                      Textura / Imagem IA:
-                    </label>
-                    <select
-                      className="cv-zone-select-input"
-                      value={zone.backgroundImage || 'none'}
-                      onChange={(e) => handleUpdateZone(zone.id, { backgroundImage: e.target.value === 'none' ? undefined : e.target.value })}
-                    >
-                      <option value="none">Nenhuma (Cor Lisa Sólida)</option>
-                      {BACKGROUND_CATALOG.filter(b => b.id !== 'none').map(bg => (
-                        <option key={bg.id} value={bg.url}>
-                          {bg.name} ({bg.category})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {/* Borda e Cantos (somente para retângulos) */}
-                  {zone.shape === 'rect' && (
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.4rem', marginBottom: '0.45rem' }}>
-                      <div>
-                        <label style={{ display: 'block', fontSize: '0.7rem', color: '#94a3b8', marginBottom: '0.2rem' }}>
-                          Borda:
-                        </label>
-                        <select
-                          className="cv-zone-select-input"
-                          value={zone.borderStyle || 'none'}
-                          onChange={(e) => handleUpdateZone(zone.id, {
-                            borderStyle: e.target.value as any,
-                            borderWidth: e.target.value === 'none' ? 0 : (zone.borderWidth || 1),
-                            borderColor: zone.borderColor || '#38bdf8'
-                          })}
+                          className="cv-pro-btn"
+                          style={{ padding: '0.28rem 0.45rem', color: '#f87171' }}
+                          onClick={handleRemovePhoto}
+                          title="Remover foto"
                         >
-                          <option value="none">Sem Borda</option>
-                          <option value="solid">Sólida</option>
-                          <option value="dashed">Tracejada</option>
-                          <option value="dotted">Pontilhada</option>
-                        </select>
-                      </div>
+                          <TrashIcon size={13} />
+                        </button>
+                      )}
 
-                      <div>
-                        <label style={{ display: 'block', fontSize: '0.7rem', color: '#94a3b8', marginBottom: '0.2rem' }}>
-                          Cantos (Radius):
-                        </label>
-                        <select
-                          className="cv-zone-select-input"
-                          value={zone.borderRadius ?? 0}
-                          onChange={(e) => handleUpdateZone(zone.id, { borderRadius: parseInt(e.target.value) })}
-                        >
-                          <option value={0}>Reto (0px)</option>
-                          <option value={4}>Suave (4px)</option>
-                          <option value={8}>Médio (8px)</option>
-                          <option value={16}>Arredondado (16px)</option>
-                          <option value={24}>Curvo (24px)</option>
-                        </select>
-                      </div>
+                      <button
+                        type="button"
+                        className={`cv-pro-eye-btn ${dimensions['photo']?.hidden ? 'is-hidden' : ''}`}
+                        onClick={() => handleToggleHide('photo')}
+                        title={dimensions['photo']?.hidden ? 'Exibir foto no currículo' : 'Ocultar foto'}
+                      >
+                        {dimensions['photo']?.hidden ? <EyeOffIcon size={13} /> : <EyeIcon size={13} />}
+                      </button>
                     </div>
-                  )}
 
-                  {/* Botão de Excluir */}
-                  <button
-                    type="button"
-                    className="cv-zone-delete-btn"
-                    onClick={() => handleDeleteZone(zone.id)}
-                  >
-                    🗑️ Excluir esta Área
-                  </button>
+                    {/* Input de URL discreto */}
+                    <div style={{ display: 'flex', gap: '0.25rem' }}>
+                      <input
+                        type="text"
+                        placeholder="Ou cole URL da foto..."
+                        value={urlInputValue}
+                        onChange={e => setUrlInputValue(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter') handleApplyUrl() }}
+                        className="cv-pro-search-input"
+                        style={{
+                          fontSize: '0.68rem',
+                          background: 'rgba(15, 23, 42, 0.8)',
+                          border: '1px solid var(--cv-pro-border-subtle)',
+                          borderRadius: '4px',
+                          padding: '0.25rem 0.45rem'
+                        }}
+                      />
+                      <button
+                        type="button"
+                        className="cv-pro-btn"
+                        style={{ padding: '0.2rem 0.45rem', fontSize: '0.68rem' }}
+                        onClick={handleApplyUrl}
+                        disabled={!urlInputValue.trim()}
+                      >
+                        OK
+                      </button>
+                    </div>
+                  </div>
                 </div>
-              )
-            })()}
-          </div>
-        </div>
-        
-        {/* ── Categoria: Identidade & Foto com Edição Total ── */}
-        <div className="cv-palette-group">
-          <div className="cv-palette-group__title">👤 Identidade & Foto</div>
 
-          <div className="cv-palette-item">
-            <div className="cv-palette-item__info">
-              <span className="cv-palette-item__icon">🏷️</span>
-              <span className="cv-palette-item__name">Nome & Título</span>
-            </div>
-            <div className="cv-palette-item__actions">
-              {renderTypoButton('header', 'Ajustar fonte do Nome & Título')}
-              <button
-                type="button"
-                className={`cv-eye-btn ${dimensions['header']?.hidden ? 'is-hidden' : ''}`}
-                onClick={() => handleToggleHide('header')}
-                title={dimensions['header']?.hidden ? 'Exibir na folha' : 'Ocultar da folha'}
-              >
-                {dimensions['header']?.hidden ? '👁️‍🗨️ Oculto' : '👁️ Visível'}
-              </button>
-            </div>
-          </div>
-          {renderTypographyPanel('header', 'Nome & Título')}
-
-          {/* Módulo Centralizado de Foto de Perfil */}
-          <div className="cv-palette-photo-card" style={{ background: '#090e1a', border: '1px solid #1e293b', borderRadius: '8px', padding: '0.75rem', marginTop: '0.4rem', display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div
-                style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', cursor: 'pointer' }}
-                onClick={() => handleFocusBox('photo')}
-                title="Clique para selecionar e trazer a foto para frente no Canvas"
-              >
-                <span style={{ fontSize: '1rem' }}>📷</span>
-                <span style={{ fontSize: '0.82rem', fontWeight: 700, color: '#38bdf8' }}>Foto de Perfil</span>
-                <span style={{ fontSize: '0.62rem', background: 'rgba(2, 132, 199, 0.2)', border: '1px solid #0284c7', borderRadius: '4px', padding: '1px 5px', color: '#7dd3fc', fontWeight: 600 }}>🎯 Focar</span>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                <button
-                  type="button"
-                  className={`cv-eye-btn ${dimensions['photo']?.hidden ? 'is-hidden' : ''}`}
-                  onClick={() => handleToggleHide('photo')}
-                  title={dimensions['photo']?.hidden ? 'Exibir foto no currículo' : 'Ocultar foto do currículo'}
-                  style={{ fontSize: '0.7rem', padding: '0.15rem 0.45rem' }}
-                >
-                  {dimensions['photo']?.hidden ? '👁️‍🗨️ Oculta' : '👁️ Visível'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setIsPhotoControlsOpen(!isPhotoControlsOpen)}
-                  style={{ background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: '0.8rem', padding: '0.2rem' }}
-                  title={isPhotoControlsOpen ? 'Recolher controles' : 'Expandir controles'}
-                >
-                  {isPhotoControlsOpen ? '▲' : '▼'}
-                </button>
-              </div>
-            </div>
-
-            {/* Ações de Upload / URL / Remoção */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-              <div style={{ display: 'flex', gap: '0.4rem' }}>
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  style={{
-                    flex: 1,
-                    background: '#0284c7',
-                    color: '#ffffff',
-                    border: '1px solid #38bdf8',
-                    borderRadius: '6px',
-                    padding: '0.35rem 0.5rem',
-                    fontSize: '0.74rem',
-                    fontWeight: 700,
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '0.3rem'
-                  }}
-                  title="Carregar imagem do seu computador ou celular"
-                >
-                  <span>📁</span> {data.basics.image ? 'Trocar Foto' : 'Carregar Foto'}
-                </button>
-                {data.basics.image && (
-                  <button
-                    type="button"
-                    onClick={handleRemovePhoto}
-                    style={{
-                      background: 'rgba(239, 68, 68, 0.15)',
-                      color: '#f87171',
-                      border: '1px solid rgba(239, 68, 68, 0.3)',
-                      borderRadius: '6px',
-                      padding: '0.35rem 0.5rem',
-                      fontSize: '0.74rem',
-                      fontWeight: 600,
-                      cursor: 'pointer'
-                    }}
-                    title="Remover foto do currículo"
-                  >
-                    🗑️
-                  </button>
-                )}
-              </div>
-
-              {/* Campo para colar URL direta */}
-              <div style={{ display: 'flex', gap: '0.3rem' }}>
-                <input
-                  type="text"
-                  placeholder="Ou cole a URL da foto..."
-                  value={urlInputValue}
-                  onChange={e => setUrlInputValue(e.target.value)}
-                  onKeyDown={e => { if (e.key === 'Enter') handleApplyUrl() }}
-                  style={{
-                    flex: 1,
-                    background: '#0f172a',
-                    border: '1px solid #334155',
-                    color: '#e2e8f0',
-                    fontSize: '0.72rem',
-                    padding: '0.3rem 0.5rem',
-                    borderRadius: '4px'
-                  }}
-                />
-                <button
-                  type="button"
-                  onClick={handleApplyUrl}
-                  disabled={!urlInputValue.trim()}
-                  style={{
-                    background: urlInputValue.trim() ? '#1e293b' : '#0f172a',
-                    color: urlInputValue.trim() ? '#38bdf8' : '#64748b',
-                    border: '1px solid #334155',
-                    borderRadius: '4px',
-                    padding: '0.25rem 0.5rem',
-                    fontSize: '0.72rem',
-                    cursor: urlInputValue.trim() ? 'pointer' : 'default',
-                    fontWeight: 600
-                  }}
-                >
-                  OK
-                </button>
-              </div>
-            </div>
-
-            {/* Painel Avançado de Molduras, Tamanho e Polígonos */}
-            {isPhotoControlsOpen && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginTop: '0.25rem', borderTop: '1px solid #1e293b', paddingTop: '0.65rem' }}>
-                
-                {/* 1. Grade de Formas & Polígonos */}
+                {/* Formatos e Polígonos */}
                 <div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
-                    <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#94a3b8' }}>
-                      📐 Formato & Polígono
+                    <span style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--cv-pro-text-secondary)' }}>
+                      Formato da Foto
                     </span>
-                    <span style={{ fontSize: '0.68rem', color: '#38bdf8', fontWeight: 600 }}>
-                      {PHOTO_SHAPES_LIST.find(s => s.id === activeShape)?.label || '⚪ Círculo'}
+                    <span style={{ fontSize: '0.66rem', color: 'var(--cv-pro-sky)', fontWeight: 600 }}>
+                      {PHOTO_SHAPES_LIST.find(s => s.id === activeShape)?.label || 'Círculo'}
                     </span>
                   </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.3rem' }}>
+                  <div className="cv-pro-shapes-grid">
                     {PHOTO_SHAPES_LIST.map(shape => {
                       const isSel = activeShape === shape.id
                       return (
                         <button
                           key={shape.id}
                           type="button"
-                          onClick={() => handleUpdatePhotoDimensions({ photoShape: shape.id as any, variant: shape.id })}
-                          style={{
-                            padding: '0.35rem 0.25rem',
-                            background: isSel ? 'rgba(2, 132, 199, 0.35)' : '#0f172a',
-                            color: isSel ? '#38bdf8' : '#94a3b8',
-                            border: isSel ? '1.5px solid #38bdf8' : '1px solid #1e293b',
-                            borderRadius: '5px',
-                            fontSize: '0.68rem',
-                            fontWeight: isSel ? 700 : 500,
-                            cursor: 'pointer',
-                            textAlign: 'center',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            whiteSpace: 'nowrap'
-                          }}
-                          title={`Selecionar moldura ${shape.label}`}
+                          className={`cv-pro-shape-chip ${isSel ? 'is-active' : ''}`}
+                          onClick={() => handleUpdatePhotoDimensions({ photoShape: shape.id as any })}
                         >
                           {shape.label}
                         </button>
@@ -1273,785 +666,842 @@ export const CanvasElementsPalette: React.FC<CanvasElementsPaletteProps> = ({
                   </div>
                 </div>
 
-                {/* 2. Slider Contínuo de Tamanho Real em Pixels */}
-                <div>
+                {/* Sliders de Dimensão & Ajuste Facial */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.45rem', borderTop: '1px solid var(--cv-pro-border-subtle)', paddingTop: '0.5rem' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#94a3b8' }}>
-                      📏 Tamanho Real
-                    </span>
-                    <span style={{ fontSize: '0.72rem', color: '#10b981', fontWeight: 800, background: 'rgba(16,185,129,0.15)', padding: '0.1rem 0.4rem', borderRadius: '4px' }}>
-                      {activeSize} px
-                    </span>
+                    <span style={{ fontSize: '0.68rem', color: 'var(--cv-pro-text-secondary)' }}>Tamanho:</span>
+                    <span style={{ fontSize: '0.68rem', color: 'var(--cv-pro-sky)', fontWeight: 600 }}>{activeSize}px</span>
                   </div>
                   <input
                     type="range"
-                    min="40"
-                    max="220"
-                    step="5"
+                    min="50"
+                    max="180"
+                    step="2"
                     value={activeSize}
-                    onChange={e => handleUpdatePhotoDimensions({ photoSize: parseInt(e.target.value, 10) })}
-                    style={{ width: '100%', accentColor: '#10b981', marginTop: '0.35rem', cursor: 'pointer' }}
+                    onChange={e => handleUpdatePhotoDimensions({ photoSize: parseInt(e.target.value) })}
+                    className="cv-palette-typo-slider"
+                  />
+
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.2rem' }}>
+                    <span style={{ fontSize: '0.68rem', color: 'var(--cv-pro-text-secondary)' }}>Zoom Facial:</span>
+                    <span style={{ fontSize: '0.68rem', color: 'var(--cv-pro-sky)', fontWeight: 600 }}>{Number(activeScale).toFixed(2)}x</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0.8"
+                    max="2.5"
+                    step="0.05"
+                    value={activeScale}
+                    onChange={e => {
+                      const sc = parseFloat(e.target.value)
+                      handleUpdatePhotoDimensions({ photoScale: sc })
+                      onUpdatePhoto?.(data.basics?.image, activePosX, activePosY, sc)
+                    }}
+                    className="cv-palette-typo-slider"
                   />
                 </div>
-
-                {/* 3. Alinhamento na Coluna */}
-                <div>
-                  <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#94a3b8' }}>
-                    ↔️ Alinhamento
-                  </span>
-                  <div style={{ display: 'flex', gap: '0.3rem', marginTop: '0.3rem' }}>
-                    {(['left', 'center', 'right'] as const).map(align => {
-                      const isSel = activeAlign === align
-                      const labels = { left: '⬅️ Esq', center: '⏺️ Centro', right: '➡️ Dir' }
-                      return (
-                        <button
-                          key={align}
-                          type="button"
-                          onClick={() => handleUpdatePhotoDimensions({ alignment: align, photoAlign: align })}
-                          style={{
-                            flex: 1,
-                            padding: '0.3rem',
-                            background: isSel ? '#0284c7' : '#0f172a',
-                            color: isSel ? '#ffffff' : '#94a3b8',
-                            border: isSel ? '1px solid #38bdf8' : '1px solid #1e293b',
-                            borderRadius: '4px',
-                            fontSize: '0.7rem',
-                            fontWeight: 600,
-                            cursor: 'pointer'
-                          }}
-                        >
-                          {labels[align]}
-                        </button>
-                      )
-                    })}
-                  </div>
-                </div>
-
-                {/* 4. Bordas e Sombra */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#94a3b8' }}>
-                      🔘 Espessura da Borda
-                    </span>
-                    <span style={{ fontSize: '0.68rem', color: '#cbd5e1' }}>
-                      {activeBorderWidth === 0 ? 'Sem borda' : `${activeBorderWidth}px`}
-                    </span>
-                  </div>
-                  <div style={{ display: 'flex', gap: '0.3rem' }}>
-                    {[0, 1, 2, 3, 4].map(bw => (
-                      <button
-                        key={bw}
-                        type="button"
-                        onClick={() => handleUpdatePhotoDimensions({ photoBorderWidth: bw })}
-                        style={{
-                          flex: 1,
-                          padding: '0.25rem 0',
-                          background: activeBorderWidth === bw ? '#0284c7' : '#0f172a',
-                          color: activeBorderWidth === bw ? '#ffffff' : '#94a3b8',
-                          border: '1px solid #1e293b',
-                          borderRadius: '4px',
-                          fontSize: '0.68rem',
-                          fontWeight: 600,
-                          cursor: 'pointer'
-                        }}
-                      >
-                        {bw === 0 ? '0' : `${bw}px`}
-                      </button>
-                    ))}
-                  </div>
-
-                  {/* Cores Rápidas de Borda */}
-                  {activeBorderWidth > 0 && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', marginTop: '0.2rem' }}>
-                      <span style={{ fontSize: '0.68rem', color: '#94a3b8' }}>Cor:</span>
-                      {['#0284c7', '#10b981', '#f97316', '#a855f7', '#ffffff', '#0f172a'].map(c => (
-                        <button
-                          key={c}
-                          type="button"
-                          onClick={() => handleUpdatePhotoDimensions({ photoBorderColor: c })}
-                          style={{
-                            width: '18px',
-                            height: '18px',
-                            borderRadius: '50%',
-                            background: c,
-                            border: activeBorderColor === c ? '2px solid #38bdf8' : '1px solid rgba(255,255,255,0.2)',
-                            cursor: 'pointer'
-                          }}
-                          title={`Cor da borda: ${c}`}
-                        />
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Toggle Sombra */}
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.2rem' }}>
-                    <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>Sombra Suave</span>
-                    <button
-                      type="button"
-                      onClick={() => handleUpdatePhotoDimensions({ photoShadow: !activeShadow })}
-                      style={{
-                        padding: '0.2rem 0.5rem',
-                        background: activeShadow ? 'rgba(16, 185, 129, 0.2)' : '#0f172a',
-                        color: activeShadow ? '#34d399' : '#64748b',
-                        border: activeShadow ? '1px solid #10b981' : '1px solid #334155',
-                        borderRadius: '4px',
-                        fontSize: '0.68rem',
-                        fontWeight: 600,
-                        cursor: 'pointer'
-                      }}
-                    >
-                      {activeShadow ? '✓ Ativa' : 'Desativada'}
-                    </button>
-                  </div>
-                </div>
-
-                {/* 5. Enquadramento e Zoom */}
-                <div style={{ borderTop: '1px solid #1e293b', paddingTop: '0.5rem', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-                  <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#94a3b8' }}>
-                    🎯 Zoom & Enquadramento Facial
-                  </span>
-                  
-                  {/* Slider de Zoom */}
-                  <div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.68rem', color: '#94a3b8' }}>
-                      <span>Zoom / Escala</span>
-                      <span style={{ color: '#38bdf8', fontWeight: 700 }}>{activeScale.toFixed(2)}x</span>
-                    </div>
-                    <input
-                      type="range"
-                      min="1.0"
-                      max="2.5"
-                      step="0.05"
-                      value={activeScale}
-                      onChange={e => {
-                        const nextScale = parseFloat(e.target.value)
-                        handleUpdatePhotoDimensions({ photoScale: nextScale })
-                        if (onUpdatePhoto) {
-                          onUpdatePhoto(data.basics.image, activePosX, activePosY, nextScale)
-                        }
-                      }}
-                      style={{ width: '100%', accentColor: '#38bdf8', cursor: 'pointer' }}
-                    />
-                  </div>
-
-                  {/* Sliders X e Y */}
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.4rem' }}>
-                    <div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.65rem', color: '#94a3b8' }}>
-                        <span>Pan X</span>
-                        <span>{activePosX}%</span>
-                      </div>
-                      <input
-                        type="range"
-                        min="0"
-                        max="100"
-                        step="2"
-                        value={activePosX}
-                        onChange={e => {
-                          const nextX = parseInt(e.target.value, 10)
-                          handleUpdatePhotoDimensions({ photoPosX: nextX })
-                          if (onUpdatePhoto) {
-                            onUpdatePhoto(data.basics.image, nextX, activePosY, activeScale)
-                          }
-                        }}
-                        style={{ width: '100%', accentColor: '#38bdf8', cursor: 'pointer' }}
-                      />
-                    </div>
-                    <div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.65rem', color: '#94a3b8' }}>
-                        <span>Pan Y</span>
-                        <span>{activePosY}%</span>
-                      </div>
-                      <input
-                        type="range"
-                        min="0"
-                        max="100"
-                        step="2"
-                        value={activePosY}
-                        onChange={e => {
-                          const nextY = parseInt(e.target.value, 10)
-                          handleUpdatePhotoDimensions({ photoPosY: nextY })
-                          if (onUpdatePhoto) {
-                            onUpdatePhoto(data.basics.image, activePosX, nextY, activeScale)
-                          }
-                        }}
-                        style={{ width: '100%', accentColor: '#38bdf8', cursor: 'pointer' }}
-                      />
-                    </div>
-                  </div>
-                </div>
-
               </div>
-            )}
-          </div>
 
-          <div className="cv-palette-item">
-            <div className="cv-palette-item__info">
-              <span className="cv-palette-item__icon">📞</span>
-              <span className="cv-palette-item__name">Contatos & Redes</span>
+              {/* Camadas Base: Nome, Contatos, Resumo */}
+              <div className="cv-pro-layer-row">
+                <div className="cv-pro-layer-row__info">
+                  <span className="cv-pro-layer-row__primary">Nome & Título</span>
+                  <span className="cv-pro-layer-row__secondary">{data.basics?.name || 'Candidato'}</span>
+                </div>
+                <div className="cv-pro-layer-row__actions">
+                  {renderTypoButton('header', 'Ajustar fonte do Nome & Título')}
+                  <button
+                    type="button"
+                    className={`cv-pro-eye-btn ${dimensions['header']?.hidden ? 'is-hidden' : ''}`}
+                    onClick={() => handleToggleHide('header')}
+                    title={dimensions['header']?.hidden ? 'Exibir' : 'Ocultar'}
+                  >
+                    {dimensions['header']?.hidden ? <EyeOffIcon size={13} /> : <EyeIcon size={13} />}
+                  </button>
+                </div>
+              </div>
+              {renderTypographyPanel('header', 'Nome & Título')}
+
+              <div className="cv-pro-layer-row">
+                <div className="cv-pro-layer-row__info">
+                  <span className="cv-pro-layer-row__primary">Contatos & Redes</span>
+                  <span className="cv-pro-layer-row__secondary">{data.basics?.email || 'Email, telefone, links'}</span>
+                </div>
+                <div className="cv-pro-layer-row__actions">
+                  {renderTypoButton('contacts', 'Ajustar fonte dos Contatos')}
+                  <button
+                    type="button"
+                    className={`cv-pro-eye-btn ${dimensions['contacts']?.hidden ? 'is-hidden' : ''}`}
+                    onClick={() => handleToggleHide('contacts')}
+                    title={dimensions['contacts']?.hidden ? 'Exibir' : 'Ocultar'}
+                  >
+                    {dimensions['contacts']?.hidden ? <EyeOffIcon size={13} /> : <EyeIcon size={13} />}
+                  </button>
+                </div>
+              </div>
+              {renderTypographyPanel('contacts', 'Contatos & Redes')}
+
+              {data.basics?.summary && (
+                <>
+                  <div className="cv-pro-layer-row">
+                    <div className="cv-pro-layer-row__info">
+                      <span className="cv-pro-layer-row__primary">Sobre Mim / Resumo</span>
+                      <span className="cv-pro-layer-row__secondary">Perfil profissional</span>
+                    </div>
+                    <div className="cv-pro-layer-row__actions">
+                      {renderTypoButton('summary', 'Ajustar fonte do Resumo')}
+                      <button
+                        type="button"
+                        className={`cv-pro-eye-btn ${dimensions['summary']?.hidden ? 'is-hidden' : ''}`}
+                        onClick={() => handleToggleHide('summary')}
+                        title={dimensions['summary']?.hidden ? 'Exibir' : 'Ocultar'}
+                      >
+                        {dimensions['summary']?.hidden ? <EyeOffIcon size={13} /> : <EyeIcon size={13} />}
+                      </button>
+                    </div>
+                  </div>
+                  {renderTypographyPanel('summary', 'Sobre Mim / Resumo')}
+                </>
+              )}
             </div>
-            <div className="cv-palette-item__actions">
-              {renderTypoButton('contacts', 'Ajustar fonte dos Contatos')}
+          )}
+        </div>
+      )}
+
+      {/* ── 2. Accordion: Zonas, Sidebars & Boxes de Fundo ── */}
+      {matchesFilter('zonas', 'sidebar') && (
+        <div className={`cv-pro-layer-group ${!collapsedSections['zones'] ? 'is-open' : ''}`}>
+          <div
+            className="cv-pro-layer-group__header"
+            onClick={() => toggleSectionCollapse('zones')}
+          >
+            <span className="cv-pro-layer-group__title">
+              <SquareIcon size={14} style={{ color: 'var(--cv-pro-sky)' }} />
+              <span>Zonas & Sidebars</span>
+              {(structureConfig.customZones || []).length > 0 && (
+                <span className="cv-pro-layer-group__count">
+                  {(structureConfig.customZones || []).length}
+                </span>
+              )}
+            </span>
+            <div className="cv-pro-layer-group__actions" onClick={e => e.stopPropagation()}>
               <button
                 type="button"
-                className={`cv-eye-btn ${dimensions['contacts']?.hidden ? 'is-hidden' : ''}`}
-                onClick={() => handleToggleHide('contacts')}
-                title={dimensions['contacts']?.hidden ? 'Exibir contatos' : 'Ocultar contatos'}
+                className="cv-pro-btn"
+                style={{ padding: '0.15rem 0.35rem', background: 'transparent', border: 'none' }}
+                onClick={() => toggleSectionCollapse('zones')}
               >
-                {dimensions['contacts']?.hidden ? '👁️‍🗨️ Oculto' : '👁️ Visível'}
+                {!collapsedSections['zones'] ? <ChevronDownIcon size={13} /> : <ChevronRightIcon size={13} />}
               </button>
             </div>
           </div>
-          {renderTypographyPanel('contacts', 'Contatos & Redes')}
 
-          {(data.basics.driverLicense || data.basics.nationality || data.basics.age || data.basics.civilStatus) && (
-            <>
-              <div className="cv-palette-item">
-                <div className="cv-palette-item__info">
-                  <span className="cv-palette-item__icon">🪪</span>
-                  <span className="cv-palette-item__name">Dados Civis</span>
-                </div>
-                <div className="cv-palette-item__actions">
-                  {renderTypoButton('civil', 'Ajustar fonte dos Dados Civis')}
+          {!collapsedSections['zones'] && (
+            <div className="cv-pro-layer-group__content">
+              {/* Modos de Desenho */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.35rem' }}>
+                <button
+                  type="button"
+                  className={`cv-pro-btn ${activeDrawingMode === 'rect' ? 'cv-pro-btn--active' : ''}`}
+                  onClick={() => handleStartDraw('rect')}
+                  title="Desenhar box ou sidebar retangular no canvas"
+                  style={{ fontSize: '0.72rem', padding: '0.3rem 0.5rem' }}
+                >
+                  <PlusIcon size={12} />
+                  <span>{activeDrawingMode === 'rect' ? 'Desenhando...' : 'Desenhar Box'}</span>
+                </button>
+                <button
+                  type="button"
+                  className={`cv-pro-btn ${activeDrawingMode === 'polygon' ? 'cv-pro-btn--active' : ''}`}
+                  onClick={() => handleStartDraw('polygon')}
+                  title="Desenhar polígono livre com vértices retos"
+                  style={{ fontSize: '0.72rem', padding: '0.3rem 0.5rem' }}
+                >
+                  <HexagonIcon size={12} />
+                  <span>{activeDrawingMode === 'polygon' ? 'Marcando...' : 'Polígono'}</span>
+                </button>
+              </div>
+
+              {/* Atalhos Rápidos de Layout */}
+              <div>
+                <span style={{ fontSize: '0.66rem', color: 'var(--cv-pro-text-muted)', fontWeight: 700, textTransform: 'uppercase', display: 'block', margin: '0.35rem 0 0.25rem 0' }}>
+                  Atalhos Rápidos:
+                </span>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.3rem' }}>
                   <button
                     type="button"
-                    className={`cv-eye-btn ${dimensions['civil']?.hidden ? 'is-hidden' : ''}`}
-                    onClick={() => handleToggleHide('civil')}
-                    title={dimensions['civil']?.hidden ? 'Exibir dados civis' : 'Ocultar dados civis'}
+                    className="cv-pro-shape-chip"
+                    onClick={() => handleAddQuickZone('sidebar_left')}
                   >
-                    {dimensions['civil']?.hidden ? '👁️‍🗨️ Oculto' : '👁️ Visível'}
+                    Sidebar Esq (32%)
+                  </button>
+                  <button
+                    type="button"
+                    className="cv-pro-shape-chip"
+                    onClick={() => handleAddQuickZone('sidebar_right')}
+                  >
+                    Sidebar Dir (32%)
+                  </button>
+                  <button
+                    type="button"
+                    className="cv-pro-shape-chip"
+                    onClick={() => handleAddQuickZone('banner_top')}
+                  >
+                    Banner Topo (16%)
+                  </button>
+                  <button
+                    type="button"
+                    className="cv-pro-shape-chip"
+                    onClick={() => handleAddQuickZone('box_bottom')}
+                  >
+                    Box Destaque
                   </button>
                 </div>
               </div>
-              {renderTypographyPanel('civil', 'Dados Civis')}
-            </>
-          )}
 
-          {data.basics.summary && (
-            <>
-              <div className="cv-palette-item">
-                <div className="cv-palette-item__info">
-                  <span className="cv-palette-item__icon">📝</span>
-                  <span className="cv-palette-item__name">Sobre Mim / Resumo</span>
+              {/* Zonas Criadas */}
+              {(structureConfig.customZones || []).length > 0 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', marginTop: '0.25rem' }}>
+                  {structureConfig.customZones!.map(zone => {
+                    const isSelected = selectedZoneId === zone.id
+                    return (
+                      <div
+                        key={zone.id}
+                        className={`cv-pro-layer-row ${isSelected ? 'cv-pro-btn--active' : ''}`}
+                        onClick={() => handleSelectZone(zone.id)}
+                        style={{ cursor: 'pointer' }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flex: 1, minWidth: 0 }}>
+                          <span
+                            style={{
+                              width: '10px',
+                              height: '10px',
+                              borderRadius: '2px',
+                              backgroundColor: zone.backgroundColor || '#1e293b',
+                              border: '1px solid var(--cv-pro-border)',
+                              flexShrink: 0
+                            }}
+                          />
+                          <span className="cv-pro-layer-row__primary">{zone.label}</span>
+                        </div>
+                        <button
+                          type="button"
+                          className="cv-pro-btn"
+                          style={{ padding: '0.15rem 0.35rem', color: '#f87171' }}
+                          onClick={e => {
+                            e.stopPropagation()
+                            handleDeleteZone(zone.id)
+                          }}
+                          title="Excluir zona"
+                        >
+                          <TrashIcon size={12} />
+                        </button>
+                      </div>
+                    )
+                  })}
                 </div>
-                <div className="cv-palette-item__actions">
-                  {renderTypoButton('summary', 'Ajustar fonte do Resumo')}
-                  <button
-                    type="button"
-                    className={`cv-eye-btn ${dimensions['summary']?.hidden ? 'is-hidden' : ''}`}
-                    onClick={() => handleToggleHide('summary')}
-                  >
-                    {dimensions['summary']?.hidden ? '👁️‍🗨️ Oculto' : '👁️ Visível'}
-                  </button>
-                </div>
-              </div>
-              {renderTypographyPanel('summary', 'Sobre Mim / Resumo')}
-            </>
+              )}
+            </div>
           )}
         </div>
+      )}
 
-        {/* ── Categoria: Experiências Profissionais (Desmembradas Atômicas) ── */}
-        {data.work && data.work.length > 0 && (
-          <div className="cv-palette-group">
-            <div className="cv-palette-group__title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span>💼 Experiência Profissional ({data.work.length})</span>
-              {renderTypoButton('work', 'Ajustar fonte da seção geral de Experiências')}
+      {/* ── 3. Accordion: Experiência Profissional ── */}
+      {data.work && data.work.length > 0 && (
+        <div className={`cv-pro-layer-group ${!collapsedSections['work'] ? 'is-open' : ''}`}>
+          <div
+            className="cv-pro-layer-group__header"
+            onClick={() => toggleSectionCollapse('work')}
+          >
+            <span className="cv-pro-layer-group__title">
+              <BriefcaseIcon size={14} style={{ color: 'var(--cv-pro-sky)' }} />
+              <span>Experiência Profissional</span>
+              <span className="cv-pro-layer-group__count">{data.work.length}</span>
+            </span>
+            <div className="cv-pro-layer-group__actions" onClick={e => e.stopPropagation()}>
+              {renderTypoButton('work', 'Fonte de toda a seção de Experiências')}
+              <button
+                type="button"
+                className={`cv-pro-eye-btn ${dimensions['work']?.hidden ? 'is-hidden' : ''}`}
+                onClick={() => handleToggleHide('work')}
+                title={dimensions['work']?.hidden ? 'Exibir seção' : 'Ocultar seção'}
+              >
+                {dimensions['work']?.hidden ? <EyeOffIcon size={13} /> : <EyeIcon size={13} />}
+              </button>
+              <button
+                type="button"
+                className="cv-pro-btn"
+                style={{ padding: '0.15rem 0.35rem', background: 'transparent', border: 'none' }}
+                onClick={() => toggleSectionCollapse('work')}
+              >
+                {!collapsedSections['work'] ? <ChevronDownIcon size={13} /> : <ChevronRightIcon size={13} />}
+              </button>
             </div>
-            {renderTypographyPanel('work', 'Seção Geral: Experiências')}
-            {data.work.map((w, idx) => {
-              const itemId = getAtomicItemId('work', w, idx)
-              const itemDims = dimensions[itemId] || {}
-              const isHidden = Boolean(itemDims.hidden)
-              const itemLabel = w.company || w.name || `Empresa ${idx + 1}`
+          </div>
+          {renderTypographyPanel('work', 'Seção: Experiência')}
 
-              return (
-                <React.Fragment key={itemId}>
-                  <div className={`cv-palette-item cv-palette-item--sub ${isHidden ? 'is-dimmed' : ''}`}>
-                    <div className="cv-palette-item__info">
-                      <span className="cv-palette-item__icon">🏢</span>
-                      <div className="cv-palette-item__texts">
-                        <strong className="cv-palette-item__bold">{itemLabel}</strong>
-                        <span className="cv-palette-item__tiny">{w.position || 'Cargo'}</span>
+          {!collapsedSections['work'] && (
+            <div className="cv-pro-layer-group__content">
+              {data.work.map((w, idx) => {
+                const itemId = getAtomicItemId('work', w, idx)
+                const itemDims = dimensions[itemId] || {}
+                const isHidden = Boolean(itemDims.hidden)
+                const itemLabel = w.company || w.name || `Empresa ${idx + 1}`
+                const itemSub = w.position || 'Cargo'
+
+                if (!matchesFilter(itemLabel, itemSub)) return null
+
+                return (
+                  <React.Fragment key={itemId}>
+                    <div className={`cv-pro-layer-row ${isHidden ? 'is-dimmed' : ''}`}>
+                      <div className="cv-pro-layer-row__handle" title="Camada atômica">
+                        <GripVerticalIcon size={12} />
+                      </div>
+                      <div className="cv-pro-layer-row__info">
+                        <span className="cv-pro-layer-row__primary" title={itemLabel}>{itemLabel}</span>
+                        <span className="cv-pro-layer-row__secondary" title={itemSub}>{itemSub}</span>
+                      </div>
+                      <div className="cv-pro-layer-row__actions">
+                        <select
+                          className="cv-pro-variant-select"
+                          value={itemDims.variant || 'card_box'}
+                          onChange={e => handleSelectVariant(itemId, e.target.value)}
+                        >
+                          <option value="card_box">Box Card</option>
+                          <option value="timeline">Timeline</option>
+                          <option value="minimal">Minimal</option>
+                          <option value="ultra_compact">1 Linha A4</option>
+                        </select>
+                        {renderTypoButton(itemId, `Fonte de ${itemLabel}`)}
+                        <button
+                          type="button"
+                          className={`cv-pro-eye-btn ${isHidden ? 'is-hidden' : ''}`}
+                          onClick={() => handleToggleHide(itemId)}
+                          title={isHidden ? 'Exibir cargo' : 'Ocultar cargo'}
+                        >
+                          {isHidden ? <EyeOffIcon size={13} /> : <EyeIcon size={13} />}
+                        </button>
                       </div>
                     </div>
-                    <div className="cv-palette-item__actions">
-                      <select
-                        className="cv-palette-select"
-                        value={itemDims.variant || 'card_box'}
-                        onChange={e => handleSelectVariant(itemId, e.target.value)}
-                        title="Variante de exibição deste cargo"
-                      >
-                        <option value="card_box">📦 Box Card</option>
-                        <option value="timeline">⏱️ Timeline</option>
-                        <option value="minimal">📄 Minimal</option>
-                        <option value="ultra_compact">📏 1 Linha (A4)</option>
-                      </select>
-                      {renderTypoButton(itemId, `Ajustar fonte de ${itemLabel}`)}
-                      <button
-                        type="button"
-                        className={`cv-eye-btn ${isHidden ? 'is-hidden' : ''}`}
-                        onClick={() => handleToggleHide(itemId)}
-                        title={isHidden ? 'Exibir na folha' : 'Ocultar cargo'}
-                      >
-                        {isHidden ? '👁️‍🗨️' : '👁️'}
-                      </button>
-                    </div>
-                  </div>
-                  {renderTypographyPanel(itemId, itemLabel)}
-                </React.Fragment>
-              )
-            })}
-          </div>
-        )}
-
-        {/* ── Categoria: Formação Acadêmica (Desmembrada Atômica) ── */}
-        {data.education && data.education.length > 0 && (
-          <div className="cv-palette-group">
-            <div className="cv-palette-group__title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span>🎓 Formação Acadêmica ({data.education.length})</span>
-              {renderTypoButton('education', 'Ajustar fonte da seção geral de Formação')}
+                    {renderTypographyPanel(itemId, itemLabel)}
+                  </React.Fragment>
+                )
+              })}
             </div>
-            {renderTypographyPanel('education', 'Seção Geral: Formação Acadêmica')}
-            {data.education.map((ed, idx) => {
-              const itemId = getAtomicItemId('education', ed, idx)
-              const itemDims = dimensions[itemId] || {}
-              const isHidden = Boolean(itemDims.hidden)
-              const itemLabel = ed.area || ed.studyType || `Curso ${idx + 1}`
+          )}
+        </div>
+      )}
 
-              return (
-                <React.Fragment key={itemId}>
-                  <div className={`cv-palette-item cv-palette-item--sub ${isHidden ? 'is-dimmed' : ''}`}>
-                    <div className="cv-palette-item__info">
-                      <span className="cv-palette-item__icon">🏛️</span>
-                      <div className="cv-palette-item__texts">
-                        <strong className="cv-palette-item__bold">{itemLabel}</strong>
-                        <span className="cv-palette-item__tiny">{ed.institution}</span>
+      {/* ── 4. Accordion: Formação Acadêmica ── */}
+      {data.education && data.education.length > 0 && (
+        <div className={`cv-pro-layer-group ${!collapsedSections['education'] ? 'is-open' : ''}`}>
+          <div
+            className="cv-pro-layer-group__header"
+            onClick={() => toggleSectionCollapse('education')}
+          >
+            <span className="cv-pro-layer-group__title">
+              <GraduationCapIcon size={14} style={{ color: 'var(--cv-pro-sky)' }} />
+              <span>Formação Acadêmica</span>
+              <span className="cv-pro-layer-group__count">{data.education.length}</span>
+            </span>
+            <div className="cv-pro-layer-group__actions" onClick={e => e.stopPropagation()}>
+              {renderTypoButton('education', 'Fonte de Formação')}
+              <button
+                type="button"
+                className={`cv-pro-eye-btn ${dimensions['education']?.hidden ? 'is-hidden' : ''}`}
+                onClick={() => handleToggleHide('education')}
+                title={dimensions['education']?.hidden ? 'Exibir seção' : 'Ocultar seção'}
+              >
+                {dimensions['education']?.hidden ? <EyeOffIcon size={13} /> : <EyeIcon size={13} />}
+              </button>
+              <button
+                type="button"
+                className="cv-pro-btn"
+                style={{ padding: '0.15rem 0.35rem', background: 'transparent', border: 'none' }}
+                onClick={() => toggleSectionCollapse('education')}
+              >
+                {!collapsedSections['education'] ? <ChevronDownIcon size={13} /> : <ChevronRightIcon size={13} />}
+              </button>
+            </div>
+          </div>
+          {renderTypographyPanel('education', 'Seção: Formação')}
+
+          {!collapsedSections['education'] && (
+            <div className="cv-pro-layer-group__content">
+              {data.education.map((ed, idx) => {
+                const itemId = getAtomicItemId('education', ed, idx)
+                const itemDims = dimensions[itemId] || {}
+                const isHidden = Boolean(itemDims.hidden)
+                const itemLabel = ed.area || ed.studyType || `Curso ${idx + 1}`
+                const itemSub = ed.institution || 'Instituição'
+
+                if (!matchesFilter(itemLabel, itemSub)) return null
+
+                return (
+                  <React.Fragment key={itemId}>
+                    <div className={`cv-pro-layer-row ${isHidden ? 'is-dimmed' : ''}`}>
+                      <div className="cv-pro-layer-row__handle">
+                        <GripVerticalIcon size={12} />
+                      </div>
+                      <div className="cv-pro-layer-row__info">
+                        <span className="cv-pro-layer-row__primary" title={itemLabel}>{itemLabel}</span>
+                        <span className="cv-pro-layer-row__secondary" title={itemSub}>{itemSub}</span>
+                      </div>
+                      <div className="cv-pro-layer-row__actions">
+                        <select
+                          className="cv-pro-variant-select"
+                          value={itemDims.variant || 'card_box'}
+                          onChange={e => handleSelectVariant(itemId, e.target.value)}
+                        >
+                          <option value="card_box">Box Card</option>
+                          <option value="timeline">Timeline</option>
+                          <option value="ultra_compact">1 Linha A4</option>
+                        </select>
+                        {renderTypoButton(itemId, `Fonte de ${itemLabel}`)}
+                        <button
+                          type="button"
+                          className={`cv-pro-eye-btn ${isHidden ? 'is-hidden' : ''}`}
+                          onClick={() => handleToggleHide(itemId)}
+                          title={isHidden ? 'Exibir' : 'Ocultar'}
+                        >
+                          {isHidden ? <EyeOffIcon size={13} /> : <EyeIcon size={13} />}
+                        </button>
                       </div>
                     </div>
-                    <div className="cv-palette-item__actions">
-                      <select
-                        className="cv-palette-select"
-                        value={itemDims.variant || 'card_box'}
-                        onChange={e => handleSelectVariant(itemId, e.target.value)}
-                        title="Variante de layout desta formação"
-                      >
-                        <option value="card_box">📦 Box Card</option>
-                        <option value="timeline">⏱️ Timeline</option>
-                        <option value="ultra_compact">📏 1 Linha (A4)</option>
-                      </select>
-                      {renderTypoButton(itemId, `Ajustar fonte de ${itemLabel}`)}
-                      <button
-                        type="button"
-                        className={`cv-eye-btn ${isHidden ? 'is-hidden' : ''}`}
-                        onClick={() => handleToggleHide(itemId)}
-                        title={isHidden ? 'Exibir na folha' : 'Ocultar curso'}
-                      >
-                        {isHidden ? '👁️‍🗨️' : '👁️'}
-                      </button>
-                    </div>
-                  </div>
-                  {renderTypographyPanel(itemId, itemLabel)}
-                </React.Fragment>
-              )
-            })}
-          </div>
-        )}
-
-        {/* ── Categoria: Projetos em Destaque (Desmembrados Atômicos) ── */}
-        {data.projects && data.projects.length > 0 && (
-          <div className="cv-palette-group">
-            <div className="cv-palette-group__title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span>🚀 Projetos em Destaque ({data.projects.length})</span>
-              {renderTypoButton('projects', 'Ajustar fonte da seção geral de Projetos')}
+                    {renderTypographyPanel(itemId, itemLabel)}
+                  </React.Fragment>
+                )
+              })}
             </div>
-            {renderTypographyPanel('projects', 'Seção Geral: Projetos')}
-            {data.projects.map((p, idx) => {
-              const itemId = getAtomicItemId('projects', p, idx)
-              const itemDims = dimensions[itemId] || {}
-              const isHidden = Boolean(itemDims.hidden)
-              const itemLabel = p.name || `Projeto ${idx + 1}`
+          )}
+        </div>
+      )}
 
-              return (
-                <React.Fragment key={itemId}>
-                  <div className={`cv-palette-item cv-palette-item--sub ${isHidden ? 'is-dimmed' : ''}`}>
-                    <div className="cv-palette-item__info">
-                      <span className="cv-palette-item__icon">💻</span>
-                      <div className="cv-palette-item__texts">
-                        <strong className="cv-palette-item__bold">{itemLabel}</strong>
-                        {p.url && <span className="cv-palette-item__tiny">🔗 Link ativo</span>}
+      {/* ── 5. Accordion: Projetos em Destaque ── */}
+      {data.projects && data.projects.length > 0 && (
+        <div className={`cv-pro-layer-group ${!collapsedSections['projects'] ? 'is-open' : ''}`}>
+          <div
+            className="cv-pro-layer-group__header"
+            onClick={() => toggleSectionCollapse('projects')}
+          >
+            <span className="cv-pro-layer-group__title">
+              <RocketIcon size={14} style={{ color: 'var(--cv-pro-sky)' }} />
+              <span>Projetos em Destaque</span>
+              <span className="cv-pro-layer-group__count">{data.projects.length}</span>
+            </span>
+            <div className="cv-pro-layer-group__actions" onClick={e => e.stopPropagation()}>
+              {renderTypoButton('projects', 'Fonte de Projetos')}
+              <button
+                type="button"
+                className={`cv-pro-eye-btn ${dimensions['projects']?.hidden ? 'is-hidden' : ''}`}
+                onClick={() => handleToggleHide('projects')}
+                title={dimensions['projects']?.hidden ? 'Exibir seção' : 'Ocultar seção'}
+              >
+                {dimensions['projects']?.hidden ? <EyeOffIcon size={13} /> : <EyeIcon size={13} />}
+              </button>
+              <button
+                type="button"
+                className="cv-pro-btn"
+                style={{ padding: '0.15rem 0.35rem', background: 'transparent', border: 'none' }}
+                onClick={() => toggleSectionCollapse('projects')}
+              >
+                {!collapsedSections['projects'] ? <ChevronDownIcon size={13} /> : <ChevronRightIcon size={13} />}
+              </button>
+            </div>
+          </div>
+          {renderTypographyPanel('projects', 'Seção: Projetos')}
+
+          {!collapsedSections['projects'] && (
+            <div className="cv-pro-layer-group__content">
+              {data.projects.map((proj, idx) => {
+                const itemId = getAtomicItemId('projects', proj, idx)
+                const itemDims = dimensions[itemId] || {}
+                const isHidden = Boolean(itemDims.hidden)
+                const itemLabel = proj.name || `Projeto ${idx + 1}`
+                const itemSub = proj.description || 'Descrição'
+
+                if (!matchesFilter(itemLabel, itemSub)) return null
+
+                return (
+                  <React.Fragment key={itemId}>
+                    <div className={`cv-pro-layer-row ${isHidden ? 'is-dimmed' : ''}`}>
+                      <div className="cv-pro-layer-row__handle">
+                        <GripVerticalIcon size={12} />
+                      </div>
+                      <div className="cv-pro-layer-row__info">
+                        <span className="cv-pro-layer-row__primary" title={itemLabel}>{itemLabel}</span>
+                        <span className="cv-pro-layer-row__secondary" title={itemSub}>{itemSub}</span>
+                      </div>
+                      <div className="cv-pro-layer-row__actions">
+                        <select
+                          className="cv-pro-variant-select"
+                          value={itemDims.variant || 'card_box'}
+                          onChange={e => handleSelectVariant(itemId, e.target.value)}
+                        >
+                          <option value="card_box">Box Card</option>
+                          <option value="minimal">Minimal</option>
+                          <option value="ultra_compact">1 Linha A4</option>
+                        </select>
+                        {renderTypoButton(itemId, `Fonte de ${itemLabel}`)}
+                        <button
+                          type="button"
+                          className={`cv-pro-eye-btn ${isHidden ? 'is-hidden' : ''}`}
+                          onClick={() => handleToggleHide(itemId)}
+                          title={isHidden ? 'Exibir' : 'Ocultar'}
+                        >
+                          {isHidden ? <EyeOffIcon size={13} /> : <EyeIcon size={13} />}
+                        </button>
                       </div>
                     </div>
-                    <div className="cv-palette-item__actions">
-                      <select
-                        className="cv-palette-select"
-                        value={itemDims.variant || 'card_box'}
-                        onChange={e => handleSelectVariant(itemId, e.target.value)}
-                        title="Variante deste projeto"
-                      >
-                        <option value="card_box">📦 Showcase Box</option>
-                        <option value="minimal">📄 Minimal Link</option>
-                        <option value="ultra_compact">📏 1 Linha (A4)</option>
-                      </select>
-                      {renderTypoButton(itemId, `Ajustar fonte de ${itemLabel}`)}
-                      <button
-                        type="button"
-                        className={`cv-eye-btn ${isHidden ? 'is-hidden' : ''}`}
-                        onClick={() => handleToggleHide(itemId)}
-                        title={isHidden ? 'Exibir na folha' : 'Ocultar projeto'}
-                      >
-                        {isHidden ? '👁️‍🗨️' : '👁️'}
-                      </button>
-                    </div>
-                  </div>
-                  {renderTypographyPanel(itemId, itemLabel)}
-                </React.Fragment>
-              )
-            })}
-          </div>
-        )}
-
-        {/* ── Categoria: Competências & Habilidades (Atômicas) ── */}
-        {data.skills && data.skills.length > 0 && (
-          <div className="cv-palette-group">
-            <div className="cv-palette-group__title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span>⚡ Competências & Grupos ({data.skills.length})</span>
-              {renderTypoButton('skills', 'Ajustar fonte da seção geral de Competências')}
+                    {renderTypographyPanel(itemId, itemLabel)}
+                  </React.Fragment>
+                )
+              })}
             </div>
-            {renderTypographyPanel('skills', 'Seção Geral: Competências')}
-            {data.skills.map((s, idx) => {
-              const itemId = getAtomicItemId('skills', s, idx)
-              const itemDims = dimensions[itemId] || {}
-              const isHidden = Boolean(itemDims.hidden)
-              const itemLabel = s.name || `Grupo ${idx + 1}`
+          )}
+        </div>
+      )}
 
-              return (
-                <React.Fragment key={itemId}>
-                  <div className={`cv-palette-item cv-palette-item--sub ${isHidden ? 'is-dimmed' : ''}`}>
-                    <div className="cv-palette-item__info">
-                      <span className="cv-palette-item__icon">🎯</span>
-                      <div className="cv-palette-item__texts">
-                        <strong className="cv-palette-item__bold">{itemLabel}</strong>
-                        <span className="cv-palette-item__tiny">{s.keywords?.length || 0} termos</span>
+      {/* ── 6. Accordion: Competências & Grupos ── */}
+      {data.skills && data.skills.length > 0 && (
+        <div className={`cv-pro-layer-group ${!collapsedSections['skills'] ? 'is-open' : ''}`}>
+          <div
+            className="cv-pro-layer-group__header"
+            onClick={() => toggleSectionCollapse('skills')}
+          >
+            <span className="cv-pro-layer-group__title">
+              <ZapIcon size={14} style={{ color: 'var(--cv-pro-sky)' }} />
+              <span>Competências & Habilidades</span>
+              <span className="cv-pro-layer-group__count">{data.skills.length}</span>
+            </span>
+            <div className="cv-pro-layer-group__actions" onClick={e => e.stopPropagation()}>
+              {renderTypoButton('skills', 'Fonte de Competências')}
+              <button
+                type="button"
+                className={`cv-pro-eye-btn ${dimensions['skills']?.hidden ? 'is-hidden' : ''}`}
+                onClick={() => handleToggleHide('skills')}
+                title={dimensions['skills']?.hidden ? 'Exibir seção' : 'Ocultar seção'}
+              >
+                {dimensions['skills']?.hidden ? <EyeOffIcon size={13} /> : <EyeIcon size={13} />}
+              </button>
+              <button
+                type="button"
+                className="cv-pro-btn"
+                style={{ padding: '0.15rem 0.35rem', background: 'transparent', border: 'none' }}
+                onClick={() => toggleSectionCollapse('skills')}
+              >
+                {!collapsedSections['skills'] ? <ChevronDownIcon size={13} /> : <ChevronRightIcon size={13} />}
+              </button>
+            </div>
+          </div>
+          {renderTypographyPanel('skills', 'Seção: Competências')}
+
+          {!collapsedSections['skills'] && (
+            <div className="cv-pro-layer-group__content">
+              {data.skills.map((sk, idx) => {
+                const itemId = getAtomicItemId('skills', sk, idx)
+                const itemDims = dimensions[itemId] || {}
+                const isHidden = Boolean(itemDims.hidden)
+                const itemLabel = sk.name || `Grupo ${idx + 1}`
+                const itemSub = Array.isArray(sk.keywords) ? `${sk.keywords.length} itens` : 'Habilidades'
+
+                if (!matchesFilter(itemLabel, itemSub)) return null
+
+                return (
+                  <React.Fragment key={itemId}>
+                    <div className={`cv-pro-layer-row ${isHidden ? 'is-dimmed' : ''}`}>
+                      <div className="cv-pro-layer-row__handle">
+                        <GripVerticalIcon size={12} />
+                      </div>
+                      <div className="cv-pro-layer-row__info">
+                        <span className="cv-pro-layer-row__primary" title={itemLabel}>{itemLabel}</span>
+                        <span className="cv-pro-layer-row__secondary">{itemSub}</span>
+                      </div>
+                      <div className="cv-pro-layer-row__actions">
+                        <select
+                          className="cv-pro-variant-select"
+                          value={itemDims.variant || 'pills'}
+                          onChange={e => handleSelectVariant(itemId, e.target.value)}
+                        >
+                          <option value="pills">Pílulas / Badges</option>
+                          <option value="grid">Grade 2 Col</option>
+                          <option value="bars">Barras Nível</option>
+                          <option value="minimal">Minimal</option>
+                        </select>
+                        {renderTypoButton(itemId, `Fonte de ${itemLabel}`)}
+                        <button
+                          type="button"
+                          className={`cv-pro-eye-btn ${isHidden ? 'is-hidden' : ''}`}
+                          onClick={() => handleToggleHide(itemId)}
+                          title={isHidden ? 'Exibir' : 'Ocultar'}
+                        >
+                          {isHidden ? <EyeOffIcon size={13} /> : <EyeIcon size={13} />}
+                        </button>
                       </div>
                     </div>
-                    <div className="cv-palette-item__actions">
-                      <select
-                        className="cv-palette-select"
-                        value={itemDims.variant || 'badges'}
-                        onChange={e => handleSelectVariant(itemId, e.target.value)}
-                        title="Variante deste grupo de skills"
-                      >
-                        <option value="badges">🏷️ Pílulas / Badges</option>
-                        <option value="bars">📊 Barras de Nível</option>
-                        <option value="minimal">📝 Texto Simples</option>
-                      </select>
-                      {renderTypoButton(itemId, `Ajustar fonte de ${itemLabel}`)}
-                      <button
-                        type="button"
-                        className={`cv-eye-btn ${isHidden ? 'is-hidden' : ''}`}
-                        onClick={() => handleToggleHide(itemId)}
-                        title={isHidden ? 'Exibir na folha' : 'Ocultar grupo'}
-                      >
-                        {isHidden ? '👁️‍🗨️' : '👁️'}
-                      </button>
-                    </div>
-                  </div>
-                  {renderTypographyPanel(itemId, itemLabel)}
-                </React.Fragment>
-              )
-            })}
-          </div>
-        )}
-
-        {/* ── Categoria: Idiomas (Atômicos) ── */}
-        {data.languages && data.languages.length > 0 && (
-          <div className="cv-palette-group">
-            <div className="cv-palette-group__title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span>🌐 Idiomas ({data.languages.length})</span>
-              {renderTypoButton('languages', 'Ajustar fonte da seção geral de Idiomas')}
+                    {renderTypographyPanel(itemId, itemLabel)}
+                  </React.Fragment>
+                )
+              })}
             </div>
-            {renderTypographyPanel('languages', 'Seção Geral: Idiomas')}
-            {data.languages.map((l, idx) => {
-              const itemId = getAtomicItemId('languages', l, idx)
-              const itemDims = dimensions[itemId] || {}
-              const isHidden = Boolean(itemDims.hidden)
-              const itemLabel = l.language
+          )}
+        </div>
+      )}
 
-              return (
-                <React.Fragment key={itemId}>
-                  <div className={`cv-palette-item cv-palette-item--sub ${isHidden ? 'is-dimmed' : ''}`}>
-                    <div className="cv-palette-item__info">
-                      <span className="cv-palette-item__icon">🗣️</span>
-                      <div className="cv-palette-item__texts">
-                        <strong className="cv-palette-item__bold">{itemLabel}</strong>
-                        <span className="cv-palette-item__tiny">{l.fluency || 'Básico'}</span>
+      {/* ── 7. Accordion: Idiomas ── */}
+      {data.languages && data.languages.length > 0 && (
+        <div className={`cv-pro-layer-group ${!collapsedSections['languages'] ? 'is-open' : ''}`}>
+          <div
+            className="cv-pro-layer-group__header"
+            onClick={() => toggleSectionCollapse('languages')}
+          >
+            <span className="cv-pro-layer-group__title">
+              <GlobeIcon size={14} style={{ color: 'var(--cv-pro-sky)' }} />
+              <span>Idiomas</span>
+              <span className="cv-pro-layer-group__count">{data.languages.length}</span>
+            </span>
+            <div className="cv-pro-layer-group__actions" onClick={e => e.stopPropagation()}>
+              {renderTypoButton('languages', 'Fonte de Idiomas')}
+              <button
+                type="button"
+                className={`cv-pro-eye-btn ${dimensions['languages']?.hidden ? 'is-hidden' : ''}`}
+                onClick={() => handleToggleHide('languages')}
+                title={dimensions['languages']?.hidden ? 'Exibir seção' : 'Ocultar seção'}
+              >
+                {dimensions['languages']?.hidden ? <EyeOffIcon size={13} /> : <EyeIcon size={13} />}
+              </button>
+              <button
+                type="button"
+                className="cv-pro-btn"
+                style={{ padding: '0.15rem 0.35rem', background: 'transparent', border: 'none' }}
+                onClick={() => toggleSectionCollapse('languages')}
+              >
+                {!collapsedSections['languages'] ? <ChevronDownIcon size={13} /> : <ChevronRightIcon size={13} />}
+              </button>
+            </div>
+          </div>
+          {renderTypographyPanel('languages', 'Seção: Idiomas')}
+
+          {!collapsedSections['languages'] && (
+            <div className="cv-pro-layer-group__content">
+              {data.languages.map((lang, idx) => {
+                const itemId = getAtomicItemId('languages', lang, idx)
+                const itemDims = dimensions[itemId] || {}
+                const isHidden = Boolean(itemDims.hidden)
+                const itemLabel = lang.language || `Idioma ${idx + 1}`
+                const itemSub = lang.fluency || 'Fluência'
+
+                if (!matchesFilter(itemLabel, itemSub)) return null
+
+                return (
+                  <React.Fragment key={itemId}>
+                    <div className={`cv-pro-layer-row ${isHidden ? 'is-dimmed' : ''}`}>
+                      <div className="cv-pro-layer-row__handle">
+                        <GripVerticalIcon size={12} />
+                      </div>
+                      <div className="cv-pro-layer-row__info">
+                        <span className="cv-pro-layer-row__primary" title={itemLabel}>{itemLabel}</span>
+                        <span className="cv-pro-layer-row__secondary">{itemSub}</span>
+                      </div>
+                      <div className="cv-pro-layer-row__actions">
+                        <select
+                          className="cv-pro-variant-select"
+                          value={itemDims.variant || 'pills'}
+                          onChange={e => handleSelectVariant(itemId, e.target.value)}
+                        >
+                          <option value="pills">Pill Badge</option>
+                          <option value="dots">Pontos</option>
+                          <option value="inline">Linha</option>
+                        </select>
+                        {renderTypoButton(itemId, `Fonte de ${itemLabel}`)}
+                        <button
+                          type="button"
+                          className={`cv-pro-eye-btn ${isHidden ? 'is-hidden' : ''}`}
+                          onClick={() => handleToggleHide(itemId)}
+                          title={isHidden ? 'Exibir' : 'Ocultar'}
+                        >
+                          {isHidden ? <EyeOffIcon size={13} /> : <EyeIcon size={13} />}
+                        </button>
                       </div>
                     </div>
-                    <div className="cv-palette-item__actions">
-                      <select
-                        className="cv-palette-select"
-                        value={itemDims.variant || 'pill_badge'}
-                        onChange={e => handleSelectVariant(itemId, e.target.value)}
-                        title="Variante deste idioma"
-                      >
-                        <option value="pill_badge">🏷️ Pill Badge</option>
-                        <option value="dots">⚪ Pontos (Dots)</option>
-                        <option value="minimal">📄 Texto Simples</option>
-                      </select>
-                      {renderTypoButton(itemId, `Ajustar fonte de ${itemLabel}`)}
-                      <button
-                        type="button"
-                        className={`cv-eye-btn ${isHidden ? 'is-hidden' : ''}`}
-                        onClick={() => handleToggleHide(itemId)}
-                        title={isHidden ? 'Exibir na folha' : 'Ocultar idioma'}
-                      >
-                        {isHidden ? '👁️‍🗨️' : '👁️'}
-                      </button>
-                    </div>
-                  </div>
-                  {renderTypographyPanel(itemId, itemLabel)}
-                </React.Fragment>
-              )
-            })}
-          </div>
-        )}
-
-        {/* ── Categoria: Licenças & Certificações (Atômicas) ── */}
-        {data.certificates && data.certificates.length > 0 && (
-          <div className="cv-palette-group">
-            <div className="cv-palette-group__title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span>📜 Licenças & Certificações ({data.certificates.length})</span>
-              {renderTypoButton('certificates', 'Ajustar fonte da seção geral de Certificados')}
+                    {renderTypographyPanel(itemId, itemLabel)}
+                  </React.Fragment>
+                )
+              })}
             </div>
-            {renderTypographyPanel('certificates', 'Seção Geral: Certificados')}
-            {data.certificates.map((c, idx) => {
-              const itemId = getAtomicItemId('certificates', c, idx)
-              const itemDims = dimensions[itemId] || {}
-              const isHidden = Boolean(itemDims.hidden)
-              const itemLabel = c.name || `Certificado ${idx + 1}`
+          )}
+        </div>
+      )}
 
-              return (
-                <React.Fragment key={itemId}>
-                  <div className={`cv-palette-item cv-palette-item--sub ${isHidden ? 'is-dimmed' : ''}`}>
-                    <div className="cv-palette-item__info">
-                      <span className="cv-palette-item__icon">📜</span>
-                      <div className="cv-palette-item__texts">
-                        <strong className="cv-palette-item__bold">{itemLabel}</strong>
-                        <span className="cv-palette-item__tiny">{c.issuer || c.date || 'Certificação'}</span>
+      {/* ── 8. Accordion: Licenças & Certificações ── */}
+      {data.certificates && data.certificates.length > 0 && (
+        <div className={`cv-pro-layer-group ${!collapsedSections['certificates'] ? 'is-open' : ''}`}>
+          <div
+            className="cv-pro-layer-group__header"
+            onClick={() => toggleSectionCollapse('certificates')}
+          >
+            <span className="cv-pro-layer-group__title">
+              <AwardIcon size={14} style={{ color: 'var(--cv-pro-sky)' }} />
+              <span>Licenças & Certificações</span>
+              <span className="cv-pro-layer-group__count">{data.certificates.length}</span>
+            </span>
+            <div className="cv-pro-layer-group__actions" onClick={e => e.stopPropagation()}>
+              {renderTypoButton('certificates', 'Fonte de Certificações')}
+              <button
+                type="button"
+                className={`cv-pro-eye-btn ${dimensions['certificates']?.hidden ? 'is-hidden' : ''}`}
+                onClick={() => handleToggleHide('certificates')}
+                title={dimensions['certificates']?.hidden ? 'Exibir seção' : 'Ocultar seção'}
+              >
+                {dimensions['certificates']?.hidden ? <EyeOffIcon size={13} /> : <EyeIcon size={13} />}
+              </button>
+              <button
+                type="button"
+                className="cv-pro-btn"
+                style={{ padding: '0.15rem 0.35rem', background: 'transparent', border: 'none' }}
+                onClick={() => toggleSectionCollapse('certificates')}
+              >
+                {!collapsedSections['certificates'] ? <ChevronDownIcon size={13} /> : <ChevronRightIcon size={13} />}
+              </button>
+            </div>
+          </div>
+          {renderTypographyPanel('certificates', 'Seção: Certificações')}
+
+          {!collapsedSections['certificates'] && (
+            <div className="cv-pro-layer-group__content">
+              {data.certificates.map((cert, idx) => {
+                const itemId = getAtomicItemId('certificates', cert, idx)
+                const itemDims = dimensions[itemId] || {}
+                const isHidden = Boolean(itemDims.hidden)
+                const itemLabel = cert.name || `Certificado ${idx + 1}`
+                const itemSub = cert.issuer || 'Emissor'
+
+                if (!matchesFilter(itemLabel, itemSub)) return null
+
+                return (
+                  <React.Fragment key={itemId}>
+                    <div className={`cv-pro-layer-row ${isHidden ? 'is-dimmed' : ''}`}>
+                      <div className="cv-pro-layer-row__handle">
+                        <GripVerticalIcon size={12} />
+                      </div>
+                      <div className="cv-pro-layer-row__info">
+                        <span className="cv-pro-layer-row__primary" title={itemLabel}>{itemLabel}</span>
+                        <span className="cv-pro-layer-row__secondary" title={itemSub}>{itemSub}</span>
+                      </div>
+                      <div className="cv-pro-layer-row__actions">
+                        <select
+                          className="cv-pro-variant-select"
+                          value={itemDims.variant || 'card_box'}
+                          onChange={e => handleSelectVariant(itemId, e.target.value)}
+                        >
+                          <option value="card_box">Box Card</option>
+                          <option value="badges">Badge</option>
+                          <option value="minimal">Minimal</option>
+                        </select>
+                        {renderTypoButton(itemId, `Fonte de ${itemLabel}`)}
+                        <button
+                          type="button"
+                          className={`cv-pro-eye-btn ${isHidden ? 'is-hidden' : ''}`}
+                          onClick={() => handleToggleHide(itemId)}
+                          title={isHidden ? 'Exibir' : 'Ocultar'}
+                        >
+                          {isHidden ? <EyeOffIcon size={13} /> : <EyeIcon size={13} />}
+                        </button>
                       </div>
                     </div>
-                    <div className="cv-palette-item__actions">
-                      <select
-                        className="cv-palette-select"
-                        value={itemDims.variant || 'card_box'}
-                        onChange={e => handleSelectVariant(itemId, e.target.value)}
-                        title="Variante visual deste certificado"
-                      >
-                        <option value="card_box">📦 Box Card</option>
-                        <option value="pill_badge">🏷️ Badge Pill</option>
-                        <option value="minimal">📄 Linha Simples</option>
-                      </select>
-                      {renderTypoButton(itemId, `Ajustar fonte de ${itemLabel}`)}
-                      <button
-                        type="button"
-                        className={`cv-eye-btn ${isHidden ? 'is-hidden' : ''}`}
-                        onClick={() => handleToggleHide(itemId)}
-                        title={isHidden ? 'Exibir na folha' : 'Ocultar certificação'}
-                      >
-                        {isHidden ? '👁️‍🗨️' : '👁️'}
-                      </button>
-                    </div>
-                  </div>
-                  {renderTypographyPanel(itemId, itemLabel)}
-                </React.Fragment>
-              )
-            })}
-          </div>
-        )}
-
-        {/* ── Categoria: Interesses & Pesquisa (Atômicos) ── */}
-        {data.interests && data.interests.length > 0 && (
-          <div className="cv-palette-group">
-            <div className="cv-palette-group__title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span>💡 Interesses & Pesquisa ({data.interests.length})</span>
-              {renderTypoButton('interests', 'Ajustar fonte da seção geral de Interesses')}
+                    {renderTypographyPanel(itemId, itemLabel)}
+                  </React.Fragment>
+                )
+              })}
             </div>
-            {renderTypographyPanel('interests', 'Seção Geral: Interesses')}
-            {data.interests.map((it, idx) => {
-              const itemId = getAtomicItemId('interests', it, idx)
-              const itemDims = dimensions[itemId] || {}
-              const isHidden = Boolean(itemDims.hidden)
-              const itemLabel = it.name || `Interesse ${idx + 1}`
+          )}
+        </div>
+      )}
 
-              return (
-                <React.Fragment key={itemId}>
-                  <div className={`cv-palette-item cv-palette-item--sub ${isHidden ? 'is-dimmed' : ''}`}>
-                    <div className="cv-palette-item__info">
-                      <span className="cv-palette-item__icon">💡</span>
-                      <div className="cv-palette-item__texts">
-                        <strong className="cv-palette-item__bold">{itemLabel}</strong>
-                        <span className="cv-palette-item__tiny">{it.keywords?.length ? `${it.keywords.length} tópicos` : 'Área de interesse'}</span>
+      {/* ── 9. Accordion: Interesses & Pesquisa ── */}
+      {data.interests && data.interests.length > 0 && (
+        <div className={`cv-pro-layer-group ${!collapsedSections['interests'] ? 'is-open' : ''}`}>
+          <div
+            className="cv-pro-layer-group__header"
+            onClick={() => toggleSectionCollapse('interests')}
+          >
+            <span className="cv-pro-layer-group__title">
+              <BookmarkIcon size={14} style={{ color: 'var(--cv-pro-sky)' }} />
+              <span>Interesses & Pesquisa</span>
+              <span className="cv-pro-layer-group__count">{data.interests.length}</span>
+            </span>
+            <div className="cv-pro-layer-group__actions" onClick={e => e.stopPropagation()}>
+              {renderTypoButton('interests', 'Fonte de Interesses')}
+              <button
+                type="button"
+                className={`cv-pro-eye-btn ${dimensions['interests']?.hidden ? 'is-hidden' : ''}`}
+                onClick={() => handleToggleHide('interests')}
+                title={dimensions['interests']?.hidden ? 'Exibir seção' : 'Ocultar seção'}
+              >
+                {dimensions['interests']?.hidden ? <EyeOffIcon size={13} /> : <EyeIcon size={13} />}
+              </button>
+              <button
+                type="button"
+                className="cv-pro-btn"
+                style={{ padding: '0.15rem 0.35rem', background: 'transparent', border: 'none' }}
+                onClick={() => toggleSectionCollapse('interests')}
+              >
+                {!collapsedSections['interests'] ? <ChevronDownIcon size={13} /> : <ChevronRightIcon size={13} />}
+              </button>
+            </div>
+          </div>
+          {renderTypographyPanel('interests', 'Seção: Interesses')}
+
+          {!collapsedSections['interests'] && (
+            <div className="cv-pro-layer-group__content">
+              {data.interests.map((it, idx) => {
+                const itemId = getAtomicItemId('interests', it, idx)
+                const itemDims = dimensions[itemId] || {}
+                const isHidden = Boolean(itemDims.hidden)
+                const itemLabel = it.name || `Tópico ${idx + 1}`
+                const itemSub = Array.isArray(it.keywords) ? `${it.keywords.length} tópicos` : 'Interesses'
+
+                if (!matchesFilter(itemLabel, itemSub)) return null
+
+                return (
+                  <React.Fragment key={itemId}>
+                    <div className={`cv-pro-layer-row ${isHidden ? 'is-dimmed' : ''}`}>
+                      <div className="cv-pro-layer-row__handle">
+                        <GripVerticalIcon size={12} />
+                      </div>
+                      <div className="cv-pro-layer-row__info">
+                        <span className="cv-pro-layer-row__primary" title={itemLabel}>{itemLabel}</span>
+                        <span className="cv-pro-layer-row__secondary">{itemSub}</span>
+                      </div>
+                      <div className="cv-pro-layer-row__actions">
+                        <select
+                          className="cv-pro-variant-select"
+                          value={itemDims.variant || 'pills'}
+                          onChange={e => handleSelectVariant(itemId, e.target.value)}
+                        >
+                          <option value="pills">Pill Badge</option>
+                          <option value="inline">Linha</option>
+                          <option value="cloud">Nuvem Tags</option>
+                        </select>
+                        {renderTypoButton(itemId, `Fonte de ${itemLabel}`)}
+                        <button
+                          type="button"
+                          className={`cv-pro-eye-btn ${isHidden ? 'is-hidden' : ''}`}
+                          onClick={() => handleToggleHide(itemId)}
+                          title={isHidden ? 'Exibir' : 'Ocultar'}
+                        >
+                          {isHidden ? <EyeOffIcon size={13} /> : <EyeIcon size={13} />}
+                        </button>
                       </div>
                     </div>
-                    <div className="cv-palette-item__actions">
-                      <select
-                        className="cv-palette-select"
-                        value={itemDims.variant || 'card_box'}
-                        onChange={e => handleSelectVariant(itemId, e.target.value)}
-                        title="Variante deste tópico de interesse"
-                      >
-                        <option value="card_box">📦 Card com Tags</option>
-                        <option value="circles">⭕ Círculo Hobbies</option>
-                        <option value="minimal">📝 Linha Textual</option>
-                      </select>
-                      {renderTypoButton(itemId, `Ajustar fonte de ${itemLabel}`)}
-                      <button
-                        type="button"
-                        className={`cv-eye-btn ${isHidden ? 'is-hidden' : ''}`}
-                        onClick={() => handleToggleHide(itemId)}
-                        title={isHidden ? 'Exibir na folha' : 'Ocultar interesse'}
-                      >
-                        {isHidden ? '👁️‍🗨️' : '👁️'}
-                      </button>
-                    </div>
-                  </div>
-                  {renderTypographyPanel(itemId, itemLabel)}
-                </React.Fragment>
-              )
-            })}
-          </div>
-        )}
-
-        {/* ── Categoria: Referências (Atômicas) ── */}
-        {data.references && data.references.length > 0 && (
-          <div className="cv-palette-group">
-            <div className="cv-palette-group__title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span>👥 Referências Profissionais ({data.references.length})</span>
-              {renderTypoButton('references', 'Ajustar fonte da seção geral de Referências')}
+                    {renderTypographyPanel(itemId, itemLabel)}
+                  </React.Fragment>
+                )
+              })}
             </div>
-            {renderTypographyPanel('references', 'Seção Geral: Referências')}
-            {data.references.map((r, idx) => {
-              const itemId = getAtomicItemId('references', r, idx)
-              const itemDims = dimensions[itemId] || {}
-              const isHidden = Boolean(itemDims.hidden)
-              const itemLabel = r.name || `Referência ${idx + 1}`
-
-              return (
-                <React.Fragment key={itemId}>
-                  <div className={`cv-palette-item cv-palette-item--sub ${isHidden ? 'is-dimmed' : ''}`}>
-                    <div className="cv-palette-item__info">
-                      <span className="cv-palette-item__icon">👥</span>
-                      <div className="cv-palette-item__texts">
-                        <strong className="cv-palette-item__bold">{itemLabel}</strong>
-                        <span className="cv-palette-item__tiny">{r.company || r.position || r.reference || 'Contato'}</span>
-                      </div>
-                    </div>
-                    <div className="cv-palette-item__actions">
-                      {renderTypoButton(itemId, `Ajustar fonte de ${itemLabel}`)}
-                      <button
-                        type="button"
-                        className={`cv-eye-btn ${isHidden ? 'is-hidden' : ''}`}
-                        onClick={() => handleToggleHide(itemId)}
-                        title={isHidden ? 'Exibir na folha' : 'Ocultar referência'}
-                      >
-                        {isHidden ? '👁️‍🗨️' : '👁️'}
-                      </button>
-                    </div>
-                  </div>
-                  {renderTypographyPanel(itemId, itemLabel)}
-                </React.Fragment>
-              )
-            })}
-          </div>
-        )}
-
-        {/* ── Categoria: Prêmios & Distinções (Se existir no YAML) ── */}
-        {data.awards && data.awards.length > 0 && (
-          <div className="cv-palette-group">
-            <div className="cv-palette-group__title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span>🏆 Prêmios & Distinções ({data.awards.length})</span>
-              {renderTypoButton('awards', 'Ajustar fonte da seção geral de Prêmios')}
-            </div>
-            {renderTypographyPanel('awards', 'Seção Geral: Prêmios')}
-            {data.awards.map((aw, idx) => {
-              const itemId = getAtomicItemId('awards', aw, idx)
-              const itemDims = dimensions[itemId] || {}
-              const isHidden = Boolean(itemDims.hidden)
-              const itemLabel = aw.title || `Prêmio ${idx + 1}`
-
-              return (
-                <React.Fragment key={itemId}>
-                  <div className={`cv-palette-item cv-palette-item--sub ${isHidden ? 'is-dimmed' : ''}`}>
-                    <div className="cv-palette-item__info">
-                      <span className="cv-palette-item__icon">🏆</span>
-                      <div className="cv-palette-item__texts">
-                        <strong className="cv-palette-item__bold">{itemLabel}</strong>
-                        <span className="cv-palette-item__tiny">{aw.awarder || aw.date || 'Distinção'}</span>
-                      </div>
-                    </div>
-                    <div className="cv-palette-item__actions">
-                      {renderTypoButton(itemId, `Ajustar fonte de ${itemLabel}`)}
-                      <button
-                        type="button"
-                        className={`cv-eye-btn ${isHidden ? 'is-hidden' : ''}`}
-                        onClick={() => handleToggleHide(itemId)}
-                        title={isHidden ? 'Exibir na folha' : 'Ocultar prêmio'}
-                      >
-                        {isHidden ? '👁️‍🗨️' : '👁️'}
-                      </button>
-                    </div>
-                  </div>
-                  {renderTypographyPanel(itemId, itemLabel)}
-                </React.Fragment>
-              )
-            })}
-          </div>
-        )}
-
-        {/* ── Categoria: Trabalho Voluntário (Se existir no YAML) ── */}
-        {data.volunteer && data.volunteer.length > 0 && (
-          <div className="cv-palette-group">
-            <div className="cv-palette-group__title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span>🤝 Trabalho Voluntário ({data.volunteer.length})</span>
-              {renderTypoButton('volunteer', 'Ajustar fonte da seção geral de Voluntariado')}
-            </div>
-            {renderTypographyPanel('volunteer', 'Seção Geral: Trabalho Voluntário')}
-            {data.volunteer.map((v, idx) => {
-              const itemId = getAtomicItemId('volunteer', v, idx)
-              const itemDims = dimensions[itemId] || {}
-              const isHidden = Boolean(itemDims.hidden)
-              const itemLabel = v.organization || `Voluntariado ${idx + 1}`
-
-              return (
-                <React.Fragment key={itemId}>
-                  <div className={`cv-palette-item cv-palette-item--sub ${isHidden ? 'is-dimmed' : ''}`}>
-                    <div className="cv-palette-item__info">
-                      <span className="cv-palette-item__icon">🤝</span>
-                      <div className="cv-palette-item__texts">
-                        <strong className="cv-palette-item__bold">{itemLabel}</strong>
-                        <span className="cv-palette-item__tiny">{v.position || 'Voluntário'}</span>
-                      </div>
-                    </div>
-                    <div className="cv-palette-item__actions">
-                      {renderTypoButton(itemId, `Ajustar fonte de ${itemLabel}`)}
-                      <button
-                        type="button"
-                        className={`cv-eye-btn ${isHidden ? 'is-hidden' : ''}`}
-                        onClick={() => handleToggleHide(itemId)}
-                        title={isHidden ? 'Exibir na folha' : 'Ocultar voluntariado'}
-                      >
-                        {isHidden ? '👁️‍🗨️' : '👁️'}
-                      </button>
-                    </div>
-                  </div>
-                  {renderTypographyPanel(itemId, itemLabel)}
-                </React.Fragment>
-              )
-            })}
-          </div>
-        )}
-
-      </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }
