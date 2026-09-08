@@ -545,11 +545,25 @@ export const CVMakerApp: React.FC = () => {
     })
   }
 
-  // Listeners de impressão para supressão rigorosa de badges e bordas no PDF
+  // Aplicação contínua e determinística da geometria euclidiana de página (@page) e tokens CSS
+  useEffect(() => {
+    try {
+      PageFormatEngine.applyFormat(activePageFormat, document.documentElement, customPageDimensions)
+    } catch (e) {
+      console.warn('[CVMakerApp] Erro ao sincronizar geometria de página:', e)
+    }
+  }, [activePageFormat, customPageDimensions])
+
+  // Listeners de impressão para supressão rigorosa de badges e bordas no PDF (Ctrl+P / window.print)
   useEffect(() => {
     const handleBeforePrint = () => {
       document.body.classList.add('cv-is-printing')
       document.documentElement.classList.add('cv-is-printing')
+      try {
+        PageFormatEngine.applyFormat(activePageFormat, document.documentElement, customPageDimensions)
+      } catch (e) {
+        console.warn('[CVMakerApp] Erro ao aplicar formato na impressão:', e)
+      }
       const cvRoot = document.querySelector('.cv-root') as HTMLElement | null
       if (cvRoot) {
         const computed = window.getComputedStyle(cvRoot)
@@ -574,7 +588,7 @@ export const CVMakerApp: React.FC = () => {
       window.removeEventListener('beforeprint', handleBeforePrint)
       window.removeEventListener('afterprint', handleAfterPrint)
     }
-  }, [])
+  }, [activePageFormat, customPageDimensions, designConfig])
 
   // Print PDF via Unified Deterministic DOM-to-PDF Engine (P3)
   const handlePrintPdf = async () => {
@@ -718,7 +732,7 @@ export const CVMakerApp: React.FC = () => {
         <div className={`cv-pro-workspace-container ${isMobileDrawerOpen ? 'cv-mobile-drawer-open' : ''}`}>
           {/* Backdrop para mobile drawer */}
           <div
-            className="cv-mobile-drawer-backdrop"
+            className="cv-mobile-drawer-backdrop cv-no-print"
             onClick={() => setIsMobileDrawerOpen(false)}
             aria-hidden="true"
           />

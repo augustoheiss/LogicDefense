@@ -44,7 +44,7 @@ export const ResizableSplitter: React.FC<ResizableSplitterProps> = ({
 
   return (
     <div
-      className={`cv-pro-splitter ${isDragging ? 'is-dragging' : ''}`}
+      className={`cv-pro-splitter cv-no-print ${isDragging ? 'is-dragging' : ''}`}
       onMouseDown={handleMouseDown}
       onDoubleClick={onReset}
       title="Arraste para redimensionar o painel. Dê um duplo clique para redefinir para 50/50."

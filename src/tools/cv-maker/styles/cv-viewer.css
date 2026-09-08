@@ -86,6 +86,14 @@
     pointer-events: none !important;
   }
   .no-print, 
+  .cv-no-print,
+  .cv-pro-header,
+  .cv-pro-left-dock,
+  .cv-pro-splitter,
+  .cv-pro-inspector,
+  .cv-pro-floating-dock,
+  .cv-mobile-drawer-backdrop,
+  .cv-mobile-open-menu-btn,
   .cv-toolbar-container,
   .cv-tab-switcher,
   .no-print-area {

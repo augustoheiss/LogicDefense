@@ -556,3 +556,58 @@
   font-size: 0.7rem;
   color: var(--cv-pro-text-muted);
 }
+
+/* ==========================================================================
+   Supressão Rigorosa de UI Chrome e Isolamento de Folha no Modo de Impressão
+   ========================================================================== */
+@media print {
+  .cv-pro-header,
+  .cv-pro-left-dock,
+  .cv-pro-splitter,
+  .cv-pro-inspector,
+  .cv-pro-floating-dock,
+  .cv-mobile-drawer-backdrop,
+  .cv-mobile-open-menu-btn {
+    display: none !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
+    width: 0 !important;
+    height: 0 !important;
+    max-width: 0 !important;
+    max-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    position: absolute !important;
+    top: -9999px !important;
+    left: -9999px !important;
+    pointer-events: none !important;
+  }
+
+  .cv-maker-app-wrapper,
+  .cv-maker-app,
+  .cv-pro-studio,
+  .cv-pro-workspace-container,
+  .cv-pro-canvas-area,
+  .cv-pro-paper-wrapper {
+    display: block !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 100% !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+    background: transparent !important;
+    background-color: transparent !important;
+    background-image: none !important;
+    overflow: visible !important;
+    transform: none !important;
+  }
+
+  .cv-pro-paper-wrapper {
+    margin: 0 auto !important;
+  }
+}

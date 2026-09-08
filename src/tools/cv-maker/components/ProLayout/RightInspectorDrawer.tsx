@@ -151,7 +151,7 @@ export const RightInspectorDrawer: React.FC<RightInspectorDrawerProps> = ({
   const scoreColor = atsReport.overallScore >= 80 ? '#22c55e' : atsReport.overallScore >= 60 ? '#eab308' : '#ef4444'
 
   return (
-    <aside className="cv-pro-inspector" aria-label="Inspetor de Propriedades">
+    <aside className="cv-pro-inspector cv-no-print" aria-label="Inspetor de Propriedades">
       {/* Cabeçalho do Inspetor */}
       <div className="cv-pro-inspector__header">
         <div className="cv-pro-inspector__title">

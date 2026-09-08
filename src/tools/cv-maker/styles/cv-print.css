@@ -83,7 +83,12 @@
   #root,
   .portal-root,
   .portal-main,
+  .cv-maker-app-wrapper,
   .cv-maker-app,
+  .cv-pro-studio,
+  .cv-pro-workspace-container,
+  .cv-pro-canvas-area,
+  .cv-pro-paper-wrapper,
   .cv-split-layout,
   .cv-preview-area,
   .cv-preview-viewport,
@@ -403,6 +408,17 @@
   /* Ocultar rigorosamente todos os elementos auxiliares, menus, badges de colisão e navegação */
   .cv-no-print,
   .no-print,
+  .cv-pro-header,
+  .cv-pro-left-dock,
+  .cv-pro-splitter,
+  .cv-pro-inspector,
+  .cv-pro-floating-dock,
+  .cv-mobile-drawer-backdrop,
+  .cv-mobile-open-menu-btn,
+  .cv-studio-status-pill,
+  .cv-free-canvas-badge,
+  .cv-pro-badge-count,
+  .cv-pro-btn,
   .cv-page-break-indicator,
   .cv-page-temporal-banner,
   .cv-page-overflow-banner,
@@ -442,7 +458,57 @@
     padding: 0 !important;
     position: absolute !important;
     top: -9999px !important;
+    left: -9999px !important;
     pointer-events: none !important;
+  }
+
+  /* ── Isolamento Arquitetônico do Canvas e Folha Pro no Print ── */
+  .cv-pro-workspace-container {
+    display: block !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    width: 100% !important;
+    overflow: visible !important;
+    background: transparent !important;
+    background-color: transparent !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+  }
+
+  .cv-pro-canvas-area {
+    display: block !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    width: 100% !important;
+    overflow: visible !important;
+    background: transparent !important;
+    background-color: transparent !important;
+    background-image: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+  }
+
+  .cv-pro-paper-wrapper {
+    display: block !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    width: 100% !important;
+    overflow: visible !important;
+    background: transparent !important;
+    background-color: transparent !important;
+    background-image: none !important;
+    margin: 0 auto !important;
+    padding: 0 !important;
+    border: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    transform: none !important;
   }
 
   /* ── Header do Currículo Base no Print ── */
