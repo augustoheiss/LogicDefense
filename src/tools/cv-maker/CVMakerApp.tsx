@@ -13,19 +13,28 @@ import {
 } from './services/historyService'
 import { CVViewer } from './components/CVViewer/CVViewer'
 import { ChatInterface } from './components/Chat/ChatInterface'
-import { CVToolbar } from './components/Toolbar/CVToolbar'
 import { CVHistoryTab } from './components/History/CVHistoryTab'
-import { DesignCustomizerDrawer } from './components/Toolbar/DesignCustomizerDrawer'
 import { CanvasElementsPalette } from './components/CanvasBuilder/CanvasElementsPalette'
 import { CVStoreModal } from './components/StoreModal/CVStoreModal'
 import { GenerateCoverLetterModal } from './components/Modals/GenerateCoverLetterModal'
 import { AgentAndAcademyLandingPage, LandingTabType } from './components/Landing/AgentAndAcademyLandingPage'
-import { validateLicenseKey } from './services/cvService'
 import { downloadCVZipPackage } from './services/standaloneHtmlService'
 import { CVPrintEngine } from './services/CVPrintEngine'
 import { PageFormatEngine } from './engine/PageFormatEngine'
-import { AtsInspectorDrawer } from './components/ATS/AtsInspectorDrawer'
 import { calculateAtsReport } from './engine/AtsEngine'
+
+// Pro Layout Architecture Components
+import { AppHeaderPro } from './components/ProLayout/AppHeaderPro'
+import { ResizableSplitter } from './components/ProLayout/ResizableSplitter'
+import { RightInspectorDrawer, type InspectorTab } from './components/ProLayout/RightInspectorDrawer'
+import { YamlCodeEditorPro } from './components/Editor/YamlCodeEditorPro'
+import { CanvasControlDock } from './components/Toolbar/CanvasControlDock'
+import {
+  SparklesIcon,
+  CodeIcon,
+  HistoryIcon,
+  PaletteIcon
+} from './components/Icons/ProIcons'
 
 import './styles/cv-themes.css'
 import './styles/cv-print.css'
@@ -35,33 +44,34 @@ import './styles/chat-interface.css'
 import './styles/cv-history.css'
 import './styles/cv-prompts-modal.css'
 import './styles/cv-maker.css'
+import './styles/cv-pro-design-system.css'
 
 const STORAGE_DRAFT_KEY = 'cv_maker_active_yaml_draft_v1'
 const STORAGE_THEME_KEY = 'cv_maker_theme_v1'
 const STORAGE_LAYOUT_KEY = 'cv_maker_layout_v1'
 const STORAGE_VIEW_MODE_KEY = 'cv_maker_view_mode_v1'
 const STORAGE_STRUCTURES_KEY = 'cv_maker_layout_structures_v1'
-const STORAGE_WORKSPACE_MODE_KEY = 'cv_maker_workspace_mode_v1'
 const STORAGE_PAGE_FORMAT_KEY = 'cv_maker_page_format_v1'
 const STORAGE_ZOOM_MODE_KEY = 'cv_maker_zoom_mode_v1'
 const STORAGE_ATS_JD_KEY = 'cv_ats_jd_text'
 const STORAGE_ATS_HEATMAP_KEY = 'cv_ats_heatmap_active'
 
-export type WorkspaceMode = 'split' | 'canvas-focus' | 'sidebar-focus'
-
 export const CVMakerApp: React.FC = () => {
-  // Navigation & Workspace Layout Modes
+  // Navigation & Workspace State
   const [activeTab, setActiveTab] = useState<'chat' | 'editor' | 'history' | 'canvas'>('editor')
-  const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>(() => {
-    const saved = localStorage.getItem(STORAGE_WORKSPACE_MODE_KEY) as WorkspaceMode
-    return saved || 'split'
-  })
   const [isMobileDrawerOpen, setIsMobileDrawerOpen] = useState<boolean>(false)
 
-  const handleWorkspaceModeChange = (mode: WorkspaceMode) => {
-    setWorkspaceMode(mode)
-    localStorage.setItem(STORAGE_WORKSPACE_MODE_KEY, mode)
-    if (mode !== 'canvas-focus') setIsMobileDrawerOpen(false)
+  // Pro Inspector Drawer & Flexible Splitter State
+  const [leftDockWidth, setLeftDockWidth] = useState<number>(() => {
+    const saved = localStorage.getItem('cv_maker_left_dock_width_px')
+    return saved ? Math.max(320, Math.min(1100, parseInt(saved, 10))) : 480
+  })
+  const [isInspectorOpen, setIsInspectorOpen] = useState<boolean>(false)
+  const [inspectorTab, setInspectorTab] = useState<InspectorTab>('templates')
+
+  const handleOpenInspector = (tab: InspectorTab = 'templates') => {
+    setInspectorTab(tab)
+    setIsInspectorOpen(true)
   }
 
   // Core Data
@@ -163,7 +173,6 @@ export const CVMakerApp: React.FC = () => {
   const [directPdfStatus, setDirectPdfStatus] = useState<string>('')
 
   // ATS State, Job Description & Heatmap
-  const [isAtsDrawerOpen, setIsAtsDrawerOpen] = useState<boolean>(false)
   const [isAtsHeatmapActive, setIsAtsHeatmapActive] = useState<boolean>(() => {
     return localStorage.getItem(STORAGE_ATS_HEATMAP_KEY) === 'true'
   })
@@ -228,17 +237,6 @@ export const CVMakerApp: React.FC = () => {
     })
   }
 
-  const handleToggleFreeCanvas = () => {
-    const nextState = !currentStructureConfig.isFreeCanvasActive
-    handleUpdateStructureConfig({
-      ...currentStructureConfig,
-      isFreeCanvasActive: nextState
-    })
-    if (nextState) {
-      setActiveTab('canvas')
-    }
-  }
-
   const handleResetStructure = () => {
     setLayoutStructures(prev => {
       const updated = { ...prev }
@@ -299,7 +297,6 @@ export const CVMakerApp: React.FC = () => {
       return DEFAULT_DESIGN_CONFIG
     }
   })
-  const [isDesignModalOpen, setIsDesignModalOpen] = useState<boolean>(false)
 
   const handleDesignConfigChange = (newConfig: CVDesignConfig) => {
     setDesignConfig(newConfig)
@@ -311,8 +308,6 @@ export const CVMakerApp: React.FC = () => {
   const [landingHubSubTab, setLandingHubSubTab] = useState<'agent_prompt' | 'master_synthesis' | 'prompts_library' | 'openapi_hub' | 'api_key'>('agent_prompt')
   const [isStoreModalOpen, setIsStoreModalOpen] = useState<boolean>(false)
   const [isCoverLetterModalOpen, setIsCoverLetterModalOpen] = useState<boolean>(false)
-  const [isPro, setIsPro] = useState<boolean>(false)
-  const [tokenBalance, setTokenBalance] = useState<number>(0)
   const [saveHistoryFeedback, setSaveHistoryFeedback] = useState<boolean>(false)
   const [hasActiveKey, setHasActiveKey] = useState<boolean>(() => {
     return Boolean(localStorage.getItem('ld_universal_api_key'))
@@ -326,31 +321,6 @@ export const CVMakerApp: React.FC = () => {
     setLandingHubSubTab(hubSubTab)
     setActiveScreen('landing_page')
   }
-
-  // Fetch / Validate Pro license on mount
-  const checkLicense = useCallback(async () => {
-    const key = localStorage.getItem('ld_pro_license_key') || localStorage.getItem('am_license_key')
-    if (!key) {
-      setIsPro(false)
-      setTokenBalance(0)
-      return
-    }
-    try {
-      const res = await validateLicenseKey(key)
-      if (res.valid) {
-        setIsPro(true)
-        setTokenBalance(res.token_balance ?? res.tokenBalance ?? 0)
-      } else {
-        setIsPro(false)
-      }
-    } catch {
-      // Falha silenciosa de rede
-    }
-  }, [])
-
-  useEffect(() => {
-    checkLicense()
-  }, [checkLicense])
 
   // Debounced LocalStorage Saver (500ms)
   const debouncedSaveDraft = useMemo(
@@ -429,12 +399,6 @@ export const CVMakerApp: React.FC = () => {
     setActiveTab('editor')
   }
 
-  // Handle Theme Change
-  const handleThemeChange = (newTheme: ThemeVariant) => {
-    setActiveTheme(newTheme)
-    localStorage.setItem(STORAGE_THEME_KEY, newTheme)
-  }
-
   // Handle Layout Change (Modelos A4 01 a 10)
   const handleLayoutChange = (newLayout: LayoutVariant) => {
     setActiveLayout(newLayout)
@@ -460,17 +424,6 @@ export const CVMakerApp: React.FC = () => {
   const handleViewModeChange = (newViewMode: ViewMode) => {
     setActiveViewMode(newViewMode)
     localStorage.setItem(STORAGE_VIEW_MODE_KEY, newViewMode)
-  }
-
-  // Handle Persona Change
-  const handlePersonaChange = (p: TextVariant) => {
-    setActivePersona(p)
-    if (cvVersions && cvVersions[p]) {
-      const selectedYaml = cvVersions[p]!
-      setYamlInput(selectedYaml)
-      handleParse(selectedYaml)
-      debouncedSaveDraft(selectedYaml)
-    }
   }
 
   // Editor onChange
@@ -718,401 +671,237 @@ export const CVMakerApp: React.FC = () => {
         />
       )}
 
-      {/* ── Editor Principal (Preservado para zero perda de estado) ── */}
+      {/* ── Editor Principal Pro (Preservado para zero perda de estado) ── */}
       <div
         className="cv-maker-app"
-        style={{ display: activeScreen === 'editor' ? 'flex' : 'none' }}
+        style={{
+          display: activeScreen === 'editor' ? 'flex' : 'none',
+          flexDirection: 'column',
+          height: '100vh',
+          overflow: 'hidden'
+        }}
       >
-        {/* ── App Top Header ── */}
-        <div className="cv-app-header cv-no-print">
-        <div className="cv-app-brand">
-          <button
-            className="cv-mobile-open-menu-btn"
-            onClick={() => setIsMobileDrawerOpen(true)}
-            title="Abrir Menu Lateral"
-          >
-            <span>☰</span> Menu & IA
-          </button>
-          <span className="cv-badge-pill">⚡ CV Maker 2.0</span>
-          <h2 className="cv-app-title">Gerador de Currículos & Cover Letter</h2>
-        </div>
-
-        <div className="cv-app-controls">
-          {/* Seletor Tri-Modal de Distribuição de Espaço (Desktop / Laptops) */}
-          <div className="cv-viewmode-switcher" title="Modos de Distribuição de Espaço">
-            <button
-              className={`cv-viewmode-btn ${workspaceMode === 'sidebar-focus' ? 'is-active' : ''}`}
-              onClick={() => handleWorkspaceModeChange('sidebar-focus')}
-              title="Foco no Menu (60% da tela para YAML, IA e Elementos)"
-            >
-              <span>📝</span> Foco no Menu
-            </button>
-            <button
-              className={`cv-viewmode-btn ${workspaceMode === 'split' ? 'is-active' : ''}`}
-              onClick={() => handleWorkspaceModeChange('split')}
-              title="Dividir Tela (50/50 balanceado)"
-            >
-              <span>◨</span> Dividir 50/50
-            </button>
-            <button
-              className={`cv-viewmode-btn ${workspaceMode === 'canvas-focus' ? 'is-active' : ''}`}
-              onClick={() => handleWorkspaceModeChange('canvas-focus')}
-              title="Foco no Preview (Minimizar menu e usar 100% da folha A4)"
-            >
-              <span>🖥️</span> Foco no Preview
-            </button>
-          </div>
-
-          <button className="cv-btn-secondary" onClick={handleReset} title="Restaurar modelo padrão de exemplo">
-            🔄 Resetar Modelo
-          </button>
-        </div>
-      </div>
-
-      {/* ── Split Layout (Sidebar ↔ Preview com Suporte Tri-Modal) ── */}
-      <div className={`cv-split-layout cv-layout-mode--${workspaceMode} ${isMobileDrawerOpen ? 'cv-mobile-drawer-open' : ''}`}>
-        {/* Backdrop para mobile drawer */}
-        <div
-          className="cv-mobile-drawer-backdrop"
-          onClick={() => setIsMobileDrawerOpen(false)}
-          aria-hidden="true"
+        {/* ── App Top Header Executivo Pro ── */}
+        <AppHeaderPro
+          documentTitle={
+            cvData?.basics?.name
+              ? `${cvData.basics.name} — ${cvData.basics.label || 'Currículo'}`
+              : 'Currículo Profissional'
+          }
+          activeViewMode={activeViewMode}
+          onViewModeChange={handleViewModeChange}
+          onOpenInspector={handleOpenInspector}
+          isInspectorOpen={isInspectorOpen}
+          atsScore={atsReport.overallScore}
+          onOpenApiKeyModal={() => handleOpenLandingPage('hub', 'agent_prompt')}
+          hasActiveKey={hasActiveKey}
+          onDownloadYaml={handleDownloadYaml}
+          onDownloadZip={handleDownloadZip}
+          onPrintPdf={handlePrintPdf}
+          onDownloadDirectPdf={handleDownloadDirectPdf}
+          isGeneratingPdf={isGeneratingDirectPdf}
+          pdfProgressStatus={directPdfStatus}
+          isSaved={!saveHistoryFeedback}
+          onToggleMobileDrawer={() => setIsMobileDrawerOpen((prev) => !prev)}
+          onCancelDirectPdf={handleCancelDirectPdf}
         />
 
-        {/* Left Column: Sidebar (Chat / YAML Editor / History / Elementos) */}
-        <aside className="cv-sidebar cv-no-print" aria-label="Painel de Controle">
-          {/* Barra Superior da Sidebar com Ações de Minimizar/Expandir */}
-          <div className="cv-sidebar-header-bar">
-            <span>
-              {activeTab === 'chat' && '✨ Assistente IA'}
-              {activeTab === 'editor' && '📝 Editor YAML'}
-              {activeTab === 'history' && '📜 Histórico'}
-              {activeTab === 'canvas' && '🎨 Elementos'}
-            </span>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+        {/* ── Workspace Flexível com Splitter Arrastável ── */}
+        <div className={`cv-pro-workspace-container ${isMobileDrawerOpen ? 'cv-mobile-drawer-open' : ''}`}>
+          {/* Backdrop para mobile drawer */}
+          <div
+            className="cv-mobile-drawer-backdrop"
+            onClick={() => setIsMobileDrawerOpen(false)}
+            aria-hidden="true"
+          />
+
+          {/* Left Dock: Editor / IA / Histórico / Elementos */}
+          <aside
+            className="cv-pro-left-dock cv-no-print"
+            style={{ width: `${leftDockWidth}px` }}
+            aria-label="Painel de Edição e Código"
+          >
+            {/* Abas da Doca Esquerda com Ícones SVG Monolineares */}
+            <div className="cv-sidebar-tabs">
               <button
-                className="cv-mobile-close-btn"
-                onClick={() => setIsMobileDrawerOpen(false)}
-                title="Fechar Menu"
+                className={`cv-sidebar-tab ${activeTab === 'editor' ? 'cv-sidebar-tab--active' : ''}`}
+                onClick={() => setActiveTab('editor')}
+                title="Editor YAML Estruturado"
               >
-                ✕ Fechar
+                <CodeIcon size={14} />
+                <span className="cv-sidebar-tab-text">Editor YAML</span>
               </button>
               <button
-                className="cv-sidebar-collapse-btn"
-                onClick={() => handleWorkspaceModeChange(workspaceMode === 'canvas-focus' ? 'split' : 'canvas-focus')}
-                title={workspaceMode === 'canvas-focus' ? 'Expandir Painel' : 'Minimizar Painel'}
+                className={`cv-sidebar-tab ${activeTab === 'chat' ? 'cv-sidebar-tab--active' : ''}`}
+                onClick={() => setActiveTab('chat')}
+                title="Assistente IA"
               >
-                {workspaceMode === 'canvas-focus' ? '▶ Expandir' : '◀ Minimizar'}
+                <SparklesIcon size={14} />
+                <span className="cv-sidebar-tab-text">Assistente IA</span>
+              </button>
+              <button
+                className={`cv-sidebar-tab ${activeTab === 'history' ? 'cv-sidebar-tab--active' : ''}`}
+                onClick={() => {
+                  refreshHistory()
+                  setActiveTab('history')
+                }}
+                title="Histórico de Versões"
+              >
+                <HistoryIcon size={14} />
+                <span className="cv-sidebar-tab-text">Histórico ({historyList.length})</span>
+              </button>
+              <button
+                className={`cv-sidebar-tab ${activeTab === 'canvas' ? 'cv-sidebar-tab--active' : ''}`}
+                onClick={() => setActiveTab('canvas')}
+                title="Paleta de Elementos Livres"
+              >
+                <PaletteIcon size={14} />
+                <span className="cv-sidebar-tab-text">Elementos</span>
               </button>
             </div>
-          </div>
 
-          <div className="cv-sidebar-tabs">
-            <button
-              className={`cv-sidebar-tab ${activeTab === 'chat' ? 'cv-sidebar-tab--active' : ''}`}
-              onClick={() => {
-                setActiveTab('chat')
-                if (workspaceMode === 'canvas-focus') handleWorkspaceModeChange('split')
-              }}
-              title="Assistente IA"
-            >
-              <span>✨</span> <span className="cv-sidebar-tab-text">Assistente IA</span>
-            </button>
-            <button
-              className={`cv-sidebar-tab ${activeTab === 'editor' ? 'cv-sidebar-tab--active' : ''}`}
-              onClick={() => {
-                setActiveTab('editor')
-                if (workspaceMode === 'canvas-focus') handleWorkspaceModeChange('split')
-              }}
-              title="Editor YAML"
-            >
-              <span>📝</span> <span className="cv-sidebar-tab-text">Editor YAML {parseError ? '⚠️' : '✓'}</span>
-            </button>
-            <button
-              className={`cv-sidebar-tab ${activeTab === 'history' ? 'cv-sidebar-tab--active' : ''}`}
-              onClick={() => {
-                refreshHistory()
-                setActiveTab('history')
-                if (workspaceMode === 'canvas-focus') handleWorkspaceModeChange('split')
-              }}
-              title="Histórico"
-            >
-              <span>📜</span> <span className="cv-sidebar-tab-text">Histórico ({historyList.length})</span>
-            </button>
-            <button
-              className={`cv-sidebar-tab ${activeTab === 'canvas' ? 'cv-sidebar-tab--active' : ''}`}
-              onClick={() => {
-                setActiveTab('canvas')
-                if (workspaceMode === 'canvas-focus') handleWorkspaceModeChange('split')
-              }}
-              title="Paleta de Elementos e Variantes do Canvas Livre"
-            >
-              <span>🎨</span> <span className="cv-sidebar-tab-text">Elementos {currentStructureConfig.isFreeCanvasActive ? '✨' : ''}</span>
-            </button>
-          </div>
-
-          <div className="cv-sidebar-content">
-            {activeTab === 'chat' && (
-              <ChatInterface
-                onCVGenerated={handleCVGenerated}
-                hasGeneratedCVs={cvVersions !== null}
-                onReset={handleReset}
-                onOpenStoreModal={() => setIsStoreModalOpen(true)}
-              />
-            )}
-
-            {activeTab === 'editor' && (
-              <div className="cv-raw-editor">
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem', flexWrap: 'wrap', gap: '0.4rem' }}>
-                  <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#94a3b8' }}>
-                    Código YAML (Fonte Única de Verdade)
-                  </span>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
-                    <button
-                      className="cv-btn-secondary"
-                      onClick={handleManualSaveHistory}
-                      style={
-                        saveHistoryFeedback
-                          ? { background: 'rgba(16, 185, 129, 0.2)', color: '#34d399', borderColor: '#10b981', fontWeight: 600, fontSize: '0.74rem', padding: '0.25rem 0.6rem' }
-                          : { fontSize: '0.74rem', padding: '0.25rem 0.6rem' }
-                      }
-                      title="Salva a versão atual do YAML no Histórico Local"
-                    >
-                      {saveHistoryFeedback ? '✓ Salvo no Histórico!' : '💾 Salvar Versão'}
-                    </button>
-                    {parseError ? (
-                      <span style={{ fontSize: '0.75rem', color: '#f87171', fontWeight: 600 }}>
-                        ✗ Erro de Sintaxe
-                      </span>
-                    ) : (
-                      <span style={{ fontSize: '0.75rem', color: '#34d399', fontWeight: 600 }}>
-                        ✓ YAML Válido
-                      </span>
-                    )}
-                  </div>
-                </div>
-
-                <textarea
-                  className={`cv-raw-editor__textarea ${parseError ? 'cv-raw-editor__textarea--error' : ''}`}
+            {/* Conteúdo da Doca */}
+            <div className="cv-sidebar-content" style={{ flex: 1, padding: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+              {activeTab === 'editor' && (
+                <YamlCodeEditorPro
                   value={yamlInput}
-                  onChange={e => handleEditorChange(e.target.value)}
-                  spellCheck={false}
+                  onChange={handleEditorChange}
+                  parseError={parseError}
+                  onSave={handleManualSaveHistory}
+                  isSavedFeedback={saveHistoryFeedback}
                 />
+              )}
 
-                {parseError && (
-                  <div className="cv-editor-error">
-                    {parseError}
-                  </div>
-                )}
-              </div>
-            )}
+              {activeTab === 'chat' && (
+                <div style={{ height: '100%', overflowY: 'auto', padding: '1.25rem' }}>
+                  <ChatInterface
+                    onCVGenerated={handleCVGenerated}
+                    hasGeneratedCVs={cvVersions !== null}
+                    onReset={handleReset}
+                    onOpenStoreModal={() => setIsStoreModalOpen(true)}
+                  />
+                </div>
+              )}
 
-            {activeTab === 'history' && (
-              <CVHistoryTab
-                history={historyList}
-                onSelectVersion={handleSelectHistoryVersion}
-                onDeleteVersion={handleDeleteHistoryVersion}
-                onWipeAllLGPD={handleWipeAllLGPD}
-                onHistoryUpdated={refreshHistory}
-                onSaveCurrentVersion={handleManualSaveHistory}
-                activeYaml={yamlInput}
-                activeLayout={activeLayout}
-              />
-            )}
+              {activeTab === 'history' && (
+                <div style={{ height: '100%', overflowY: 'auto', padding: '1.25rem' }}>
+                  <CVHistoryTab
+                    history={historyList}
+                    onSelectVersion={handleSelectHistoryVersion}
+                    onDeleteVersion={handleDeleteHistoryVersion}
+                    onWipeAllLGPD={handleWipeAllLGPD}
+                    onHistoryUpdated={refreshHistory}
+                    onSaveCurrentVersion={handleManualSaveHistory}
+                    activeYaml={yamlInput}
+                    activeLayout={activeLayout}
+                  />
+                </div>
+              )}
 
-            {activeTab === 'canvas' && (
-              <CanvasElementsPalette
+              {activeTab === 'canvas' && (
+                <div style={{ height: '100%', overflowY: 'auto', padding: '1.25rem' }}>
+                  <CanvasElementsPalette
+                    data={cvData}
+                    structureConfig={currentStructureConfig}
+                    onUpdateStructureConfig={handleUpdateStructureConfig}
+                    onResetStructure={handleResetStructure}
+                    onAutoPackBlocks={handleAutoPackBlocks}
+                    onUpdatePhoto={handleSavePhoto}
+                  />
+                </div>
+              )}
+            </div>
+          </aside>
+
+          {/* Divisor Arrastável Interativo (Splitter) */}
+          <ResizableSplitter
+            onResize={(newWidth) => {
+              setLeftDockWidth(newWidth)
+              localStorage.setItem('cv_maker_left_dock_width_px', String(newWidth))
+            }}
+            onReset={() => {
+              const defaultWidth = Math.round(window.innerWidth * 0.45)
+              setLeftDockWidth(defaultWidth)
+              localStorage.setItem('cv_maker_left_dock_width_px', String(defaultWidth))
+            }}
+            minWidth={320}
+            maxWidth={1100}
+          />
+
+          {/* Área Central: Mesa de Trabalho com Sombra de Estúdio e Folha A4 */}
+          <main
+            className="cv-pro-canvas-area"
+            aria-label="Visualização do Currículo"
+            style={{
+              backgroundColor: designConfig.colorWorkspaceBg || '#080c14'
+            }}
+          >
+            {/* Visualizador da Folha com Sombra Arquitetônica */}
+            <div className="cv-pro-paper-wrapper">
+              <CVViewer
                 data={cvData}
+                theme={activeTheme}
+                layout={activeLayout}
+                viewMode={activeViewMode}
+                designConfig={designConfig}
+                onRequestGenerateCoverLetter={() => setIsCoverLetterModalOpen(true)}
                 structureConfig={currentStructureConfig}
                 onUpdateStructureConfig={handleUpdateStructureConfig}
-                onResetStructure={handleResetStructure}
-                onAutoPackBlocks={handleAutoPackBlocks}
-                onUpdatePhoto={handleSavePhoto}
+                pageFormat={activePageFormat}
+                customPageDimensions={customPageDimensions}
+                zoomMode={activeZoomMode}
+                onScaleChange={setCurrentScale}
               />
-            )}
-          </div>
-        </aside>
+            </div>
 
-        {/* Right Column: Preview & Floating Toolbar */}
-        <main
-          className="cv-preview-area"
-          aria-label="Visualização do Currículo"
-          style={{
-            backgroundColor: designConfig.colorWorkspaceBg || '#0b1120',
-            transition: 'background-color 0.25s ease'
-          }}
-        >
-          <CVToolbar
-            isFreeCanvasActive={currentStructureConfig.isFreeCanvasActive}
-            onToggleFreeCanvas={handleToggleFreeCanvas}
-            onResetStructure={handleResetStructure}
-            onAutoPackBlocks={handleAutoPackBlocks}
-            activePersona={activePersona}
-            onPersonaChange={handlePersonaChange}
+            {/* Barra Flutuante de Controle do Canvas */}
+            <CanvasControlDock
+              activeZoomMode={activeZoomMode}
+              onZoomModeChange={handleZoomModeChange}
+              currentScale={currentScale}
+              onAutoFitSinglePage={handleAutoFitSinglePage}
+              onAutoPackBlocks={handleAutoPackBlocks}
+              isFreeCanvasActive={currentStructureConfig.isFreeCanvasActive}
+              onResetModel={handleReset}
+            />
+          </main>
+
+          {/* Inspetor Lateral Deslizante à Direita (Figma Style) */}
+          <RightInspectorDrawer
+            isOpen={isInspectorOpen}
+            onClose={() => setIsInspectorOpen(false)}
+            activeTab={inspectorTab}
+            onTabChange={setInspectorTab}
             activeLayout={activeLayout}
             onLayoutChange={handleLayoutChange}
-            activeTheme={activeTheme}
-            onThemeChange={handleThemeChange}
-            activeViewMode={activeViewMode}
-            onViewModeChange={handleViewModeChange}
-            onOpenCoverLetterModal={() => setIsCoverLetterModalOpen(true)}
-            hasCoverLetter={Boolean(cvData?.coverLetter?.paragraphs?.length)}
-            onDownloadYaml={handleDownloadYaml}
-            onDownloadZip={handleDownloadZip}
-            onPrintPdf={handlePrintPdf}
-            onDownloadDirectPdf={handleDownloadDirectPdf}
-            isGeneratingPdf={isGeneratingDirectPdf}
-            pdfProgressStatus={directPdfStatus}
-            onAutoFitSinglePage={handleAutoFitSinglePage}
+            designConfig={designConfig}
+            onChangeDesignConfig={handleDesignConfigChange}
+            cvData={cvData}
+            jdText={jdText}
+            onJdTextChange={handleJdTextChange}
+            isVisualHeatmapActive={isAtsHeatmapActive}
+            onToggleVisualHeatmap={handleToggleAtsHeatmap}
             activePageFormat={activePageFormat}
             customPageDimensions={customPageDimensions}
             onPageFormatChange={handlePageFormatChange}
             onCustomPageDimensionsChange={handleCustomPageDimensionsChange}
-            activeZoomMode={activeZoomMode}
-            onZoomModeChange={handleZoomModeChange}
-            currentScale={currentScale}
-            onOpenDesignModal={() => setIsDesignModalOpen(true)}
-            isAtsInspectorActive={isAtsDrawerOpen}
-            onToggleAtsInspector={() => setIsAtsDrawerOpen(!isAtsDrawerOpen)}
-            atsScore={atsReport.overallScore}
-            onOpenApiKeyModal={() => handleOpenLandingPage('hub', 'agent_prompt')}
-            hasActiveKey={hasActiveKey}
-            isPro={isPro}
-            tokenBalance={tokenBalance}
-            onOpenStoreModal={() => setIsStoreModalOpen(true)}
-            onOpenTemplateGallery={() => handleOpenLandingPage('gallery')}
-            onOpenAcademy={() => handleOpenLandingPage('academy')}
+            onOpenFullscreenGallery={() => handleOpenLandingPage('gallery')}
           />
+        </div>
 
-          {/* Banner Dedicado de Progresso do Playwright Engine (Aviso fora do botão com Retry Imediato) */}
-          {isGeneratingDirectPdf && (
-            <div
-              className="cv-pdf-generation-banner cv-no-print"
-              role="status"
-              aria-live="polite"
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                flexWrap: 'wrap',
-                gap: '0.75rem',
-                padding: '0.65rem 1.25rem',
-                margin: '0.5rem 1rem 0 1rem',
-                borderRadius: '8px',
-                background: 'linear-gradient(90deg, rgba(6, 78, 59, 0.95), rgba(15, 23, 42, 0.95))',
-                border: '1px solid rgba(16, 185, 129, 0.4)',
-                boxShadow: '0 4px 20px rgba(0, 0, 0, 0.35)',
-                color: '#ecfdf5',
-                fontSize: '0.88rem',
-                zIndex: 40
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', flex: '1 1 320px' }}>
-                <span style={{ fontSize: '1.25rem' }}>⏳</span>
-                <div>
-                  <div style={{ fontWeight: 700, color: '#6ee7b7' }}>
-                    {directPdfStatus || 'Compilando PDF no servidor Playwright...'}
-                  </div>
-                  <div style={{ fontSize: '0.78rem', color: '#a7f3d0', opacity: 0.9 }}>
-                    Se o worker estiver acordando da hibernação do Render, o primeiro boot pode levar ~30-40s.
-                  </div>
-                </div>
-              </div>
+        {/* ── Modais de Pagamento e Geração IA ── */}
+        <CVStoreModal
+          isOpen={isStoreModalOpen}
+          onClose={() => setIsStoreModalOpen(false)}
+        />
 
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <button
-                  type="button"
-                  onClick={handleDownloadDirectPdf}
-                  style={{
-                    background: '#10b981',
-                    color: '#064e3b',
-                    border: 'none',
-                    borderRadius: '6px',
-                    padding: '0.4rem 0.85rem',
-                    fontWeight: 700,
-                    fontSize: '0.82rem',
-                    cursor: 'pointer',
-                    boxShadow: '0 2px 8px rgba(16, 185, 129, 0.3)'
-                  }}
-                  title="Aborta a conexão atual e dispara uma nova tentativa imediatamente"
-                >
-                  🔄 Clique novamente se o servidor acordou
-                </button>
-                <button
-                  type="button"
-                  onClick={handleCancelDirectPdf}
-                  style={{
-                    background: 'transparent',
-                    color: '#94a3b8',
-                    border: '1px solid rgba(148, 163, 184, 0.3)',
-                    borderRadius: '6px',
-                    padding: '0.4rem 0.65rem',
-                    fontSize: '0.82rem',
-                    cursor: 'pointer'
-                  }}
-                  title="Cancelar exportação"
-                >
-                  Cancelar
-                </button>
-              </div>
-            </div>
-          )}
-
-          <div className="cv-preview-viewport">
-            <CVViewer
-              data={cvData}
-              theme={activeTheme}
-              layout={activeLayout}
-              viewMode={activeViewMode}
-              designConfig={designConfig}
-              onRequestGenerateCoverLetter={() => setIsCoverLetterModalOpen(true)}
-              structureConfig={currentStructureConfig}
-              onUpdateStructureConfig={handleUpdateStructureConfig}
-              pageFormat={activePageFormat}
-              customPageDimensions={customPageDimensions}
-              zoomMode={activeZoomMode}
-              onScaleChange={setCurrentScale}
-            />
-          </div>
-        </main>
-      </div>
-
-      {/* ── Modais & Drawers ── */}
-      <AtsInspectorDrawer
-        isOpen={isAtsDrawerOpen}
-        onClose={() => setIsAtsDrawerOpen(false)}
-        cvData={cvData}
-        jdText={jdText}
-        onJdTextChange={handleJdTextChange}
-        isVisualHeatmapActive={isAtsHeatmapActive}
-        onToggleVisualHeatmap={handleToggleAtsHeatmap}
-      />
-
-      <DesignCustomizerDrawer
-        isOpen={isDesignModalOpen}
-        onClose={() => setIsDesignModalOpen(false)}
-        config={designConfig}
-        onChangeConfig={handleDesignConfigChange}
-      />
-
-      <CVStoreModal
-        isOpen={isStoreModalOpen}
-        onClose={() => {
-          setIsStoreModalOpen(false)
-          checkLicense()
-        }}
-        onLicenseActivated={(_key, _tier, bal) => {
-          setIsPro(true)
-          setTokenBalance(bal)
-        }}
-      />
-
-      <GenerateCoverLetterModal
-        isOpen={isCoverLetterModalOpen}
-        onClose={() => setIsCoverLetterModalOpen(false)}
-        cvData={cvData || { basics: { name: 'Candidato' } }}
-        onCoverLetterGenerated={handleCoverLetterGenerated}
-        onOpenStoreModal={() => setIsStoreModalOpen(true)}
-      />
+        <GenerateCoverLetterModal
+          isOpen={isCoverLetterModalOpen}
+          onClose={() => setIsCoverLetterModalOpen(false)}
+          cvData={cvData || { basics: { name: 'Candidato' } }}
+          onCoverLetterGenerated={handleCoverLetterGenerated}
+          onOpenStoreModal={() => setIsStoreModalOpen(true)}
+        />
       </div>
     </div>
   )
