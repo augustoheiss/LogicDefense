@@ -170,10 +170,12 @@ export const CertificateView: React.FC<CertificateViewProps> = ({
         <div className="cv-cert-student-name">{studentName}</div>
 
         <p className="cv-cert-statement">
-          concluiu com êxito todos os módulos da trilha intensiva de{' '}
-          <strong>Engenharia de Documentos A4, Compilação Vetorial Skia em Headless Chromium, Orçamento Matemático de Altura por Bisseção</strong> e{' '}
-          <strong>Orquestração Multi-Agente com Síntese Magna de Currículos</strong> no ecossistema{' '}
-          <strong>LogicDefense / HeissLab</strong>, demonstrando proficiência no uso de agentes de IA avançados e padrões de Zero Fabricação documental.
+          concluiu com êxito os 10 módulos da formação avançada de{' '}
+          <strong>
+            Engenharia de Documentos A4, Compilação Vetorial Skia em Headless Chromium, Semáforos de Concorrência em Containers de Baixa Memória, Sondas Ativas de Cold Boot, Tagged PDF (PDF/UA-1 / ATS)
+          </strong>{' '}
+          e <strong>Orquestração Multi-Agente com Síntese Magna de Currículos</strong> no ecossistema{' '}
+          <strong>LogicDefense / HeissLab</strong>, demonstrando proficiência no uso de agentes de IA autônomos, geometria euclidiana e governança com Zero Fabricação documental.
         </p>
 
         <div className="cv-cert-footer-grid">

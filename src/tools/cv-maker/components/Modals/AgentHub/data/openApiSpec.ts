@@ -102,6 +102,44 @@ export function getOpenApiSpecJson(): string {
             responses: { '200': { description: 'Arquivo HTML, YAML ou ZIP retornado' } },
           },
         },
+        '/api/v1/cv/export-pdf-headless': {
+          post: {
+            summary: 'Exportação Direta de PDF Vetorial A4 via Playwright Chromium Headless (Agent-Native)',
+            description:
+              'Compila um snapshot HTML completo em documento PDF vetorial de alta definição com geometria euclidiana, suporte a Tagged PDF (PDF/UA-1 para pontuação máxima em parsers ATS de RH), semáforo atômico de memória e zero margens fantasmas.',
+            requestBody: {
+              required: true,
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    properties: {
+                      html: { type: 'string', minLength: 20, description: 'Snapshot HTML autocontido com estilos inline' },
+                      filename: { type: 'string', default: 'curriculo_exportado.pdf', description: 'Nome do arquivo de saída' },
+                      format: { type: 'string', enum: ['a4', 'a3', 'a5', 'letter', 'legal', 'tabloid'], default: 'a4', description: 'Formato de página padrão' },
+                      width: { type: 'string', description: 'Largura euclidiana arbitrária (ex: 210mm)' },
+                      height: { type: 'string', description: 'Altura euclidiana arbitrária (ex: 297mm)' },
+                    },
+                    required: ['html'],
+                  },
+                },
+              },
+            },
+            responses: {
+              '200': {
+                description: 'Binário do PDF retornado diretamente como application/pdf',
+                content: {
+                  'application/pdf': {
+                    schema: {
+                      type: 'string',
+                      format: 'binary',
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
         '/api/v1/cv/layouts': {
           get: {
             summary: 'Retorna o catálogo dos 10 modelos A4 declarativos (incluindo Canvas Livre)',

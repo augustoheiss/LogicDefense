@@ -218,7 +218,176 @@ export const AcademySection: React.FC<AcademySectionProps> = ({ onOpenCertificat
             </li>
           </ol>
           <div className="cv-lesson-callout">
-            <strong>Missão Cumprida!</strong> Você agora conhece cada engrenagem que faz este sistema funcionar. Ao marcar todos os módulos como concluídos, você liberará o seu <strong>Certificado de Conclusão Simbólico</strong> para imprimir ou guardar como recordação deste aprendizado!
+            <strong>Fundamentos Concluídos!</strong> Agora que você domina a base teórica e ética, prepare o café (ou a saideira): os 4 módulos seguintes trazem a engenharia de ponta que desenvolvemos para domar o Playwright e a nuvem em 2026.
+          </div>
+        </div>
+      )
+    },
+    {
+      id: 'modulo_7',
+      number: 7,
+      tag: 'Engenharia de Concorrência',
+      title: '🤹‍♂️ O Bouncer da Balada: Como Domar o Chromium Voraz em 512 MB de RAM',
+      body: (
+        <div>
+          <p>
+            Pede mais uma rodada e senta direito na cadeira, porque agora vamos falar da vida real em produção: <em>como rodar um monstro devorador de memória como o Google Chromium num container modesto de 512 MB de RAM sem tomar uma voadora do sistema operacional?</em>
+          </p>
+          <p>
+            No ambiente de produção (como o plano gratuito do Render), o container tem um limite rígido de 512 MB. Quando o Playwright sobe uma instância do Chromium, ele consome de cara cerca de <strong>280 a 350 MB de RAM</strong>.
+          </p>
+          <div className="cv-lesson-callout">
+            <strong>O Apocalipse do OOM (Out-Of-Memory):</strong>
+            <br />
+            Se dois usuários clicarem juntos em "Exportar PDF" — ou se o mesmo usuário afobado clicar 3 vezes seguidas —, o servidor tenta abrir duas instâncias do navegador. 350 MB + 350 MB = <strong>700 MB</strong>! O cgroup do Linux entra em desespero e dispara um impiedoso <code>SIGKILL (OOM Killer)</code>. O container reinicia na hora e a requisição falha com erro 502/504.
+          </div>
+          <p>
+            <strong>A Solução de Mestre: O Padrão Semáforo (`asyncio.Semaphore(1)`)</strong>
+          </p>
+          <p>
+            Em vez de virar um caos de concorrência, colocamos um verdadeiro <em>Bouncer (Segurança de Balada)</em> na porta do serviço de PDF:
+          </p>
+          <ol>
+            <li>
+              <strong>Fila Atômica Unificada:</strong> Usamos <code>async with sem:</code>. Apenas 1 renderização de PDF roda por vez. Qualquer clique extra entra numa fila ordenada e aguarda a sua vez sem criar processos concorrentes.
+            </li>
+            <li>
+              <strong>Faxina Imediata com Coleta Forçada de Lixo:</strong> Assim que o PDF é gerado, o código executa <code>await page.close()</code>, <code>await context.close()</code> e imediatamente chama <code>import gc; gc.collect()</code> no bloco <code>finally</code>, forçando o Python e o Chromium a devolverem a memória física ao sistema operacional instantaneamente.
+            </li>
+            <li>
+              <strong>Chromium em Dieta Espartana:</strong> Desabilitamos extensões inúteis, áudio, sincronização de fundo e telemetria através de flags cirúrgicas:
+              <br />
+              <code>--disable-extensions --mute-audio --no-zygote --disable-background-networking --disable-breakpad</code>.
+            </li>
+          </ol>
+          <p>
+            Resultado: o consumo de pico nunca ultrapassa ~300 MB. O elefante agora anda de skate com folga e segurança!
+          </p>
+        </div>
+      )
+    },
+    {
+      id: 'modulo_8',
+      number: 8,
+      tag: 'Resiliência & UX de Rede',
+      title: '⏰ A Sonda de Despertar: Transformando o Cold Boot numa Experiência Mágica',
+      body: (
+        <div>
+          <p>
+            Você com certeza já viveu essa frustração na web: você clica num botão e a tela congela. Fica uma rodinha girando no vazio por 40 segundos. Você não sabe se o site travou, se sua internet caiu ou se o servidor explodiu. Você clica de novo... e recebe um erro 504 Gateway Timeout.
+          </p>
+          <p>
+            Na arquitetura serverless moderna e em tiers gratuitos (como Render, Koyeb ou Fly.io), servidores sem acesso entram em <strong>hibernação profunda</strong> após 15 minutos de inatividade para poupar energia. Esse é o famoso <strong>Cold Boot</strong>: a máquina leva de 30 a 45 segundos para descompactar o container, inicializar o FastAPI e preparar o Playwright.
+          </p>
+          <div className="cv-lesson-callout">
+            <strong>O Antipadrão da Espera Cega:</strong>
+            <br />
+            Muitas aplicações resolvem isso colocando um timeout longo (tipo 90 segundos) num único POST. Se houver qualquer oscilação de rede, o usuário fica olhando para o nada, clica repetidamente no desespero e o navegador corta a conexão.
+          </div>
+          <p>
+            <strong>A Engenharia da Sonda Ativa (Wakeup Probe):</strong>
+          </p>
+          <p>
+            No CV Maker 2.0, nós transformamos o Cold Boot em uma conversa transparente e em tempo real com o usuário:
+          </p>
+          <ul>
+            <li>
+              <strong>Pings Leves em Background:</strong> Antes de enviar o payload pesado de HTML, o frontend inicia uma sonda que faz requisições ultra-leves de 150ms no endpoint <code>/health</code> a cada 2 segundos.
+            </li>
+            <li>
+              <strong>Feedback Visual Humano:</strong> A interface avisa exatamente o que está acontecendo:
+              <br />
+              <em>"Servidor acordando da hibernação do Render (14s decorridos, gerando o PDF assim que acordar)..."</em>
+            </li>
+            <li>
+              <strong>Disparo Instantâneo:</strong> <strong>No milissegundo exato em que o servidor acorda e cospe <code>200 OK</code></strong>, a sonda conclui e dispara a geração do PDF de imediato!
+            </li>
+          </ul>
+          <p>
+            Você não precisa clicar de novo nem ficar adivinhando se o servidor acordou. A tecnologia trabalha para você, não o contrário.
+          </p>
+        </div>
+      )
+    },
+    {
+      id: 'modulo_9',
+      number: 9,
+      tag: 'Agent-Native & Automação',
+      title: '🤖 A Rota Secreta dos Agentes: O Poder do POST /export-pdf-headless',
+      body: (
+        <div>
+          <p>
+            Imagine a seguinte cena: é 3 horas da manhã. O seu Agente de IA autônomo (seja ele no Claude Code, Cursor, Antigravity ou um script Python rodando no seu terminal) acabou de minerar seu histórico, adaptou seu currículo para uma vaga dos sonhos e agora quer compilar o PDF final sem que você precise sequer abrir o navegador.
+          </p>
+          <p>
+            É aqui que brilha a filosofia <strong>100% Agent-Native</strong> do ecossistema HeissLab:
+          </p>
+          <div className="cv-lesson-callout">
+            <strong>O Endpoint Headless:</strong>
+            <br />
+            Disponibilizamos a rota pública <code>POST /api/v1/cv/export-pdf-headless</code>. Ela é uma API REST pura, stateless e direta. Você envia um JSON com o HTML estilizado e recebe diretamente os bytes brutos do PDF (<code>application/pdf</code>).
+          </div>
+          <p>
+            <strong>Superpoder Oculto: Tagged PDF (PDF/UA-1 para Máxima Pontuação ATS)</strong>
+          </p>
+          <p>
+            Sabe por que muitos currículos bonitos são rejeitados pelas plataformas de RH (como Gupy, Greenhouse e Workday)? Porque muitos geradores de PDF transformam blocos de texto em curvas ou imagens achatadas. O robô leitor do RH tenta ler e só encontra hieróglifos!
+          </p>
+          <p>
+            No nosso endpoint headless, o Chromium compila com a flag <code>tagged: true</code> e pós-processamento <code>pikepdf</code>, inserindo árvores semânticas completas de acessibilidade (PDF/UA-1). Títulos são <code>&lt;H1&gt;</code>, listas são <code>&lt;L&gt;</code> e parágrafos são <code>&lt;P&gt;</code> dentro do binário. O leitor do ATS lê cada palavra com 100% de clareza!
+          </p>
+          <p>
+            Exemplo com uma única linha de terminal:
+          </p>
+          <pre style={{ background: '#020617', padding: '0.65rem', borderRadius: '6px', color: '#38bdf8', fontSize: '0.78rem', overflowX: 'auto' }}>
+{`curl -X POST "https://logicdefense-production.up.railway.app/api/v1/cv/export-pdf-headless" \\
+  -H "Content-Type: application/json" \\
+  -d '{"html": "<h1>Meu CV</h1>", "filename": "cv.pdf", "format": "A4"}' \\
+  --output meu_curriculo.pdf`}
+          </pre>
+        </div>
+      )
+    },
+    {
+      id: 'modulo_10',
+      number: 10,
+      tag: 'Geometria Euclidiana & CSS',
+      title: '📐 O Mistério da Faixa Branca: Geometria Euclidiana e a Lei da Última Folha',
+      body: (
+        <div>
+          <p>
+            Para fechar a nossa jornada na academia com chave de ouro, vamos desvendar o mistério que quase enlouqueceu nossa equipe na semana passada: <em>o enigma da última página cortada no Dossiê Completo.</em>
+          </p>
+          <p>
+            O usuário gerava um dossiê completo: Carta de Apresentação na Página 1, e o Currículo fluindo nas Páginas 2 e 3. Na primeira página, a textura de fundo da IA saía impecável. Mas na página 3, onde o currículo terminava no meio da folha... <strong>a textura era cortada abruptamente e dali até o fim da folha ficava um pedaço branco grotesco!</strong>
+          </p>
+          <div className="cv-lesson-callout">
+            <strong>O Diagnóstico de Raio-X do Chromium:</strong>
+            <br />
+            Por padrão, em CSS de mídia impressa (<code>@media print</code>), containers com <code>height: auto</code> só esticam até a coordenada Y do último elemento filho. Se o seu texto parou em 140mm de altura, o navegador simplesmente para de pintar a textura ali! Ele não assume que a folha física A4 continua até os 297mm.
+          </div>
+          <p>
+            <strong>A Solução Euclidiana:</strong>
+          </p>
+          <p>
+            Resolvemos isso combinando três regras de geometria pura no <code>cv-print.css</code>:
+          </p>
+          <ol>
+            <li>
+              <strong>Ancoragem de Página Física:</strong> Definimos <code>@page &#123; size: A4 portrait; margin: 0; &#125;</code> para remover qualquer margem padrão do driver da impressora.
+            </li>
+            <li>
+              <strong>Pseudo-elemento de Fundo Contínuo:</strong> Injetamos camadas fixas em cada folha (<code>page-break-after: always</code>) com altura mínima garantida de <code>297mm</code> (ou <code>100vh</code> de impressão), assegurando que o papel inteiro seja preenchido pela textura de alta resolução.
+            </li>
+            <li>
+              <strong>Prevenção de Quebras Órfãs:</strong> Aplicamos <code>break-inside: avoid</code> nas caixas de experiência para que nenhum cargo seja fatiado ao meio entre duas folhas.
+            </li>
+          </ol>
+          <p>
+            Agora você tem a certeza matemática de que o seu documento sairá com acabamento editorial de gráfica profissional — da primeira à última linha da folha A4.
+          </p>
+          <div className="cv-lesson-callout" style={{ borderColor: '#10b981', background: 'rgba(16, 185, 129, 0.08)' }}>
+            <strong>🏆 Parabéns, Engenheiro(a)!</strong> Você concluiu todos os 10 módulos da Academia de Arquitetura & Engenharia de Documentos. Agora você conhece os bastidores mais profundos de renderização vetorial, concorrência, cold boots e geometria gráfica. Clique no botão acima para resgatar o seu <strong>Certificado de Conclusão Oficial</strong>!
           </div>
         </div>
       )

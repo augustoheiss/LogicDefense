@@ -66,6 +66,9 @@ export const OpenApiTab: React.FC<OpenApiTabProps> = ({ currentKeyDisplay }) => 
             <strong>POST /api/v1/cv/generate-cover-letter</strong>: Gerador dedicado de Carta de Apresentação com IA
             preservando o currículo intacto.
           </li>
+          <li>
+            <strong>POST /api/v1/cv/export-pdf-headless</strong>: 👑 Exportação direta de PDF vetorial A4 de alta definição via Chromium Playwright (Tagged PDF / ATS-compliant, semáforo atômico de concorrência e zero margens fantasmas).
+          </li>
         </ul>
       </div>
 
@@ -164,6 +167,34 @@ res = requests.post(
 )
 with open("meu_curriculo_validado.yaml", "w", encoding="utf-8") as f:
     f.write(res.text)`}
+          </pre>
+        </div>
+
+        <div>
+          <span style={{ fontSize: '0.78rem', color: '#94a3b8' }}>
+            <strong>C. Exportar PDF Vetorial A4 Direto via Playwright Headless (cURL / Agente):</strong>
+          </span>
+          <pre
+            style={{
+              background: '#020617',
+              padding: '0.6rem',
+              borderRadius: '4px',
+              border: '1px solid #1e293b',
+              color: '#38bdf8',
+              fontSize: '0.74rem',
+              overflowX: 'auto',
+              margin: '0.25rem 0 0 0',
+            }}
+          >
+{`curl -X POST "https://ocorrencias-pdf-writer.onrender.com/api/v1/cv/export-pdf-headless" \\
+  -H "Content-Type: application/json" \\
+  -H "Authorization: Bearer ${currentKeyDisplay}" \\
+  -d '{
+    "html": "<html><body><h1>Currículo do Agente</h1></body></html>",
+    "filename": "curriculo_master.pdf",
+    "format": "a4"
+  }' \\
+  --output "curriculo_master.pdf"`}
           </pre>
         </div>
       </div>
