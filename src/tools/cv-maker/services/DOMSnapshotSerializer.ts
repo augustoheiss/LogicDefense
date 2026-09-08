@@ -299,6 +299,14 @@ export class DOMSnapshotSerializer {
           text-rendering: geometricPrecision;
           -webkit-font-smoothing: antialiased;
         }
+        .cv-root,
+        [class*="theme-"],
+        .theme-executive,
+        .theme-creative,
+        .theme-minimalist,
+        .theme-white,
+        .theme-terminal,
+        :root .cv-root,
         :root .cv-root .cv-page-a4,
         :root .cv-root .cv-canvas-sheet,
         .cv-root .cv-page-a4,
@@ -306,6 +314,8 @@ export class DOMSnapshotSerializer {
         .cv-page-a4,
         .cv-page-card,
         .cv-card,
+        :root .theme-terminal .cv-card,
+        .theme-terminal .cv-card,
         .cv-cover-letter-card,
         .cv-cover-letter-page,
         .cv-dossier-wrapper,

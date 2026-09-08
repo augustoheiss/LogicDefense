@@ -43,6 +43,14 @@
     display: none !important;
   }
 
+  .cv-root,
+  [class*="theme-"],
+  .theme-executive,
+  .theme-creative,
+  .theme-minimalist,
+  .theme-white,
+  .theme-terminal,
+  :root .cv-root,
   :root .cv-root .cv-page-a4,
   :root .cv-root .cv-canvas-sheet,
   .cv-root .cv-page-a4,
@@ -50,6 +58,8 @@
   .cv-page-a4,
   .cv-page-card,
   .cv-card,
+  :root .theme-terminal .cv-card,
+  .theme-terminal .cv-card,
   .cv-cover-letter-card,
   .cv-cover-letter-page,
   .cv-dossier-wrapper,
@@ -85,7 +95,8 @@
   .cv-maker__showcase,
   .cv-print-wrapper,
   .cv-render-wrapper,
-  .cv-dossier-wrapper {
+  .cv-dossier-wrapper,
+  .cv-root {
     background: transparent !important;
     background-color: transparent !important;
     color: inherit !important;
