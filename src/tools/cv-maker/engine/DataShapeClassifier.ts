@@ -129,7 +129,8 @@ export function classifyNode(
     // 2.1 Array de strings primitivas (ex: tags, skills, pilares)
     const allPrimitives = rawValue.every((it) => typeof it === 'string' || typeof it === 'number')
     if (allPrimitives) {
-      const avgLen = rawValue.reduce((acc, it) => acc + String(it).length, 0) / rawValue.length
+      const totalLen: number = rawValue.reduce((acc: number, it: any) => acc + String(it).length, 0)
+      const avgLen = totalLen / rawValue.length
       if (avgLen <= 40) {
         return buildClassification(
           'badge_list',
