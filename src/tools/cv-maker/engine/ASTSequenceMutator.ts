@@ -75,9 +75,10 @@ export class ASTSequenceMutator {
   }
 
   /**
-   * Reordena uma seção top-level pelo nome da chave (ex: mover "kpis_desempenho" para a posição 1)
+   * Reordena uma seção top-level pelo nome da chave (ex: mover "kpis_desempenho" para a posição 1 ou 'up' / 'down').
+   * Quando 'up' ou 'down' for especificado, realiza a troca diretamente com o vizinho adjacente no YAML.
    */
-  public static reorderTopLevelKey(yamlSource: string, sourceKey: string, targetIndex: number): string {
+  public static reorderTopLevelKey(yamlSource: string, sourceKey: string, target: number | 'up' | 'down'): string {
     if (!yamlSource || !sourceKey) return yamlSource
 
     try {
@@ -87,6 +88,15 @@ export class ASTSequenceMutator {
       const items: Pair<any, any>[] = doc.contents.items
       const sourceIdx = items.findIndex((p) => String(p.key?.value ?? p.key) === sourceKey)
       if (sourceIdx === -1) return yamlSource
+
+      let targetIndex: number
+      if (target === 'up') {
+        targetIndex = sourceIdx - 1
+      } else if (target === 'down') {
+        targetIndex = sourceIdx + 1
+      } else {
+        targetIndex = target
+      }
 
       const clampedTarget = Math.max(0, Math.min(items.length - 1, targetIndex))
       if (sourceIdx === clampedTarget) return yamlSource

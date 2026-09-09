@@ -479,20 +479,34 @@ export const CVMakerApp: React.FC = () => {
       const ast = cvData?.meta?.universalAST
       const blocks = ast?.blocks || []
       const currentIdx = blocks.findIndex(b => b.key === sectionKey || (sectionKey === 'header' && b.key === 'basics'))
-      if (currentIdx === -1) return
+      const actualKey = currentIdx !== -1 ? blocks[currentIdx].key : (sectionKey === 'header' ? 'basics' : sectionKey)
 
-      const actualKey = blocks[currentIdx].key
-      const targetIdx = direction === 'up' ? currentIdx - 1 : currentIdx + 1
-      if (targetIdx < 0 || targetIdx >= blocks.length) return
-
-      const mutatedYaml = ASTSequenceMutator.reorderTopLevelKey(yamlInput, actualKey, targetIdx)
+      const mutatedYaml = ASTSequenceMutator.reorderTopLevelKey(yamlInput, actualKey, direction)
       if (mutatedYaml && mutatedYaml !== yamlInput) {
+        // Se houver sectionOrder explícito configurado na estrutura, reordena também
+        if (currentStructureConfig?.sectionOrder && currentStructureConfig.sectionOrder.length > 0) {
+          const sOrder = [...currentStructureConfig.sectionOrder]
+          const sIdx = sOrder.indexOf(actualKey)
+          if (sIdx !== -1) {
+            const targetSIdx = direction === 'up' ? sIdx - 1 : sIdx + 1
+            if (targetSIdx >= 0 && targetSIdx < sOrder.length) {
+              const temp = sOrder[sIdx]
+              sOrder[sIdx] = sOrder[targetSIdx]
+              sOrder[targetSIdx] = temp
+              handleUpdateStructureConfig({
+                ...currentStructureConfig,
+                sectionOrder: sOrder
+              })
+            }
+          }
+        }
+
         setYamlInput(mutatedYaml)
         handleParse(mutatedYaml)
         debouncedSaveDraft(mutatedYaml)
       }
     }, `/[section='${sectionKey}']`, { direction })
-  }, [cvData, yamlInput, handleParse, debouncedSaveDraft])
+  }, [cvData, yamlInput, handleParse, debouncedSaveDraft, currentStructureConfig, handleUpdateStructureConfig])
 
   // Reordenação de nós de sequência interna (ex: trocar ordem de 2 itens dentro de uma seção)
   const handleReorderSequenceItem = useCallback((parentKey: string, sourceIndex: number, targetIndex: number) => {
@@ -970,6 +984,7 @@ export const CVMakerApp: React.FC = () => {
                 onUpdateArchetype={handleUpdateArchetypeOverride}
                 onReorderSections={handleReorderSections}
                 onReorderSectionKey={handleReorderSectionKey}
+                onReorderSequenceItem={handleReorderSequenceItem}
               />
             </div>
 

@@ -8,6 +8,7 @@ import { TimelineRenderer } from './TimelineRenderer'
 import { BadgeListRenderer } from './BadgeListRenderer'
 import { KeyValueTableRenderer } from './KeyValueTableRenderer'
 import { ProseFlowRenderer } from './ProseFlowRenderer'
+import { UniversalSingleItemRenderer } from './UniversalSingleItemRenderer'
 
 interface UniversalSectionDispatcherProps {
   block: UniversalBlockNode
@@ -18,6 +19,7 @@ interface UniversalSectionDispatcherProps {
   isFreeCanvas?: boolean
   onMoveUp?: () => void
   onMoveDown?: () => void
+  onReorderSequenceItem?: (parentKey: string, sourceIndex: number, targetIndex: number) => void
 }
 
 export const UniversalSectionDispatcher: React.FC<UniversalSectionDispatcherProps> = ({
@@ -28,7 +30,8 @@ export const UniversalSectionDispatcher: React.FC<UniversalSectionDispatcherProp
   onUpdateStructureConfig,
   isFreeCanvas = false,
   onMoveUp,
-  onMoveDown
+  onMoveDown,
+  onReorderSequenceItem
 }) => {
   const [isMenuOpen, setIsMenuOpen] = useState<boolean>(false)
   const effectiveArchetype = block.classification.effective
@@ -45,105 +48,67 @@ export const UniversalSectionDispatcher: React.FC<UniversalSectionDispatcherProp
     }
   }
 
-  const renderContent = () => {
-    switch (effectiveArchetype) {
-      case 'card_grid':
-        return <CardGridRenderer items={block.items} sectionKey={block.key} />
-      case 'timeline':
-        return <TimelineRenderer items={block.items} sectionKey={block.key} />
-      case 'badge_list':
-        return <BadgeListRenderer items={block.items} sectionKey={block.key} />
-      case 'key_value_table':
-        return <KeyValueTableRenderer items={block.items} sectionKey={block.key} />
-      case 'prose_flow':
-        return <ProseFlowRenderer items={block.items} sectionKey={block.key} />
-      default:
-        return <CardGridRenderer items={block.items} sectionKey={block.key} />
-    }
-  }
+  const hasMultipleItems = Boolean(block.items && block.items.length > 1)
 
-  if (dims?.hidden && !isFreeCanvas) {
-    return null
-  }
-
-  const sectionContent = (
-    <section
-      className={`cv-universal-section cv-section-${block.key}`}
-      data-section-key={block.key}
-      data-archetype={effectiveArchetype}
+  // ── CABEÇALHO DA SEÇÃO (Título, Botão YAML e Seletor do Arquétipo) ──
+  const renderHeaderContent = () => (
+    <div
+      className="cv-universal-section-header"
       style={{
-        position: 'relative',
-        marginBottom: isFreeCanvas ? '0' : '1.4rem',
-        backgroundColor: `var(--sec-${block.key}-bg, transparent)`,
-        backgroundImage: `var(--sec-${block.key}-bg-image, none)`,
-        backgroundSize: 'cover',
-        backgroundPosition: 'center',
-        color: `var(--sec-${block.key}-text, inherit)`,
-        borderRadius: '6px',
-        border: isFreeCanvas ? 'none' : `1px solid var(--sec-${block.key}-border, transparent)`,
-        ['--cv-color-primary' as any]: `var(--sec-${block.key}-title, var(--cv-color-primary, #0f172a))`,
-        ['--cv-color-text' as any]: `var(--sec-${block.key}-text, var(--cv-color-text, #334155))`,
-        ['--cv-color-border' as any]: `var(--sec-${block.key}-border, var(--cv-color-border, #cbd5e1))`,
-        ['--cv-color-accent' as any]: `var(--sec-${block.key}-accent, var(--cv-color-accent, #f97316))`,
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingBottom: '0.4rem',
+        borderBottom: `1.5px solid var(--sec-${block.key}-border, var(--cv-color-border, #cbd5e1))`,
+        marginBottom: isFreeCanvas ? 0 : '0.6rem'
       }}
     >
-      {/* Cabeçalho da Seção com Título, Botão YAML e Seletor do Arquétipo */}
-      <div
+      <h2
         style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          paddingBottom: '0.4rem',
-          borderBottom: `1.5px solid var(--sec-${block.key}-border, var(--cv-color-border, #cbd5e1))`,
-          marginBottom: '0.5rem'
+          fontSize: '1.05rem',
+          fontWeight: 800,
+          textTransform: 'uppercase',
+          letterSpacing: '0.05em',
+          color: `var(--sec-${block.key}-title, var(--cv-color-primary, #0f172a))`,
+          margin: 0
         }}
       >
-        <h2
+        {block.title}
+      </h2>
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }} className="cv-no-print">
+        {/* Botão de Localização Bidirecional no YAML */}
+        <button
+          type="button"
+          onClick={() => window.dispatchEvent(new CustomEvent('cv_locate_yaml_key', { detail: { key: block.key } }))}
+          title={`Localizar "${block.key}" no editor de código YAML`}
           style={{
-            fontSize: '1.05rem',
-            fontWeight: 800,
-            textTransform: 'uppercase',
-            letterSpacing: '0.05em',
-            color: `var(--sec-${block.key}-title, var(--cv-color-primary, #0f172a))`,
-            margin: 0
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '0.25rem',
+            fontSize: '0.64rem',
+            fontWeight: 600,
+            padding: '0.15rem 0.45rem',
+            borderRadius: '4px',
+            background: 'var(--cv-color-surface, #f8fafc)',
+            color: 'var(--cv-color-text-muted, #64748b)',
+            border: '1px solid var(--cv-color-border, #cbd5e1)',
+            cursor: 'pointer',
+            transition: 'all 0.15s ease'
           }}
         >
-          {block.title}
-        </h2>
+          <span>📝</span>
+          <span>YAML</span>
+        </button>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }} className="cv-no-print">
-          {/* Botão de Localização Bidirecional no YAML */}
-          <button
-            type="button"
-            onClick={() => window.dispatchEvent(new CustomEvent('cv_locate_yaml_key', { detail: { key: block.key } }))}
-            title={`Localizar "${block.key}" no editor de código YAML`}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '0.25rem',
-              fontSize: '0.64rem',
-              fontWeight: 600,
-              padding: '0.15rem 0.45rem',
-              borderRadius: '4px',
-              background: 'var(--cv-color-surface, #f8fafc)',
-              color: 'var(--cv-color-text-muted, #64748b)',
-              border: '1px solid var(--cv-color-border, #cbd5e1)',
-              cursor: 'pointer',
-              transition: 'all 0.15s ease'
-            }}
-          >
-            <span>📝</span>
-            <span>YAML</span>
-          </button>
-
-          {/* Badge do Arquétipo com Menu Suspenso Interativo (Soberania do Usuário) */}
-          {isEditable && onUpdateArchetype && (
-            <div style={{ position: 'relative' }}>
-              <button
-                type="button"
-                onClick={() => setIsMenuOpen(!isMenuOpen)}
-                title={`Arquétipo: ${archetypeDef.label} (Confiança: ${(block.classification.confidence * 100).toFixed(0)}%). Clique para alternar.`}
-                style={{
+        {/* Badge do Arquétipo com Menu Suspenso Interativo (Soberania do Usuário) */}
+        {isEditable && onUpdateArchetype && (
+          <div style={{ position: 'relative' }}>
+            <button
+              type="button"
+              onClick={() => setIsMenuOpen(!isMenuOpen)}
+              title={`Arquétipo: ${archetypeDef.label} (Confiança: ${(block.classification.confidence * 100).toFixed(0)}%). Clique para alternar.`}
+              style={{
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: '0.35rem',
@@ -240,10 +205,311 @@ export const UniversalSectionDispatcher: React.FC<UniversalSectionDispatcherProp
             )}
           </div>
         )}
-        </div>
       </div>
+    </div>
+  )
 
-      {/* Conteúdo do Arquétipo */}
+  // ── CASO A: SETOR COM MÚLTIPLOS ITENS (CADA ITEM TEM SEU PRÓPRIO BOX) ──
+  if (hasMultipleItems) {
+    const titleKey = `${block.key}_title`
+    const titleDims = structureConfig?.sectionDimensions?.[titleKey] || structureConfig?.sectionDimensions?.[block.key]
+
+    const headerBox = isFreeCanvas ? (
+      <StructuralBoxWrapper
+        key={titleKey}
+        sectionId={titleKey}
+        title={`Título: ${block.title}`}
+        category={effectiveArchetype}
+        isFreeCanvasActive={isFreeCanvas}
+        dimensions={titleDims}
+        onMoveUp={onMoveUp}
+        onMoveDown={onMoveDown}
+        onToggleHide={() => {
+          if (!structureConfig || !onUpdateStructureConfig) return
+          const cur = structureConfig.sectionDimensions?.[titleKey] || {}
+          onUpdateStructureConfig({
+            ...structureConfig,
+            sectionDimensions: {
+              ...structureConfig.sectionDimensions,
+              [titleKey]: { ...cur, hidden: !cur.hidden }
+            }
+          })
+        }}
+        onUpdateDimensions={(newDims) => {
+          if (!structureConfig || !onUpdateStructureConfig) return
+          onUpdateStructureConfig({
+            ...structureConfig,
+            sectionDimensions: {
+              ...structureConfig.sectionDimensions,
+              [titleKey]: newDims
+            }
+          })
+        }}
+        onResetDimensions={() => {
+          if (!structureConfig || !onUpdateStructureConfig) return
+          const next = { ...structureConfig.sectionDimensions }
+          delete next[titleKey]
+          onUpdateStructureConfig({
+            ...structureConfig,
+            sectionDimensions: next
+          })
+        }}
+      >
+        {renderHeaderContent()}
+      </StructuralBoxWrapper>
+    ) : titleDims?.hidden ? null : (
+      <div
+        key={titleKey}
+        className={`cv-atomic-box-wrapper cv-section-${block.key}-title cv-avoid-break`}
+        style={{
+          width: titleDims?.widthPercent ? `${titleDims.widthPercent}%` : undefined,
+          display: titleDims?.widthPercent ? 'inline-block' : undefined,
+          marginLeft: titleDims?.alignment === 'center' || titleDims?.alignment === 'right' ? 'auto' : undefined,
+          marginRight: titleDims?.alignment === 'center' ? 'auto' : titleDims?.alignment === 'right' ? '0' : undefined,
+          fontFamily: titleDims?.fontFamily ? `"${titleDims.fontFamily}", sans-serif` : undefined,
+          fontSize: titleDims?.fontSizeScale ? `${titleDims.fontSizeScale}em` : undefined,
+          order: titleDims?.order
+        }}
+        data-section-id={titleKey}
+      >
+        {renderHeaderContent()}
+      </div>
+    )
+
+    // Renderiza cada item individual em seu próprio box estrutural
+    const itemBoxes = block.items.map((item, idx) => {
+      const itemId = `${block.key}_item_${idx}`
+      const itemDims = structureConfig?.sectionDimensions?.[itemId] || (item.id ? structureConfig?.sectionDimensions?.[`${block.key}_${item.id}`] : undefined)
+      const itemTitle = item.title ? `${item.title} (${block.title})` : `${block.title} #${idx + 1}`
+
+      if (itemDims?.hidden && !isFreeCanvas) {
+        return null
+      }
+
+      const singleItemNode = (
+        <UniversalSingleItemRenderer
+          item={item}
+          index={idx}
+          archetype={effectiveArchetype}
+          sectionKey={block.key}
+          isFreeCanvas={isFreeCanvas}
+        />
+      )
+
+      if (!isFreeCanvas) {
+        const widthPercent = itemDims?.widthPercent
+        const hasCustomWidth = typeof widthPercent === 'number' && widthPercent > 0 && widthPercent < 100
+        const hasCustomScale = typeof itemDims?.fontSizeScale === 'number' && itemDims.fontSizeScale !== 1
+        const fontScaleVal = itemDims?.fontSizeScale ?? 1.0
+
+        const marginLeftStyle = itemDims?.alignment === 'center' || itemDims?.alignment === 'right' ? 'auto' : undefined
+        const marginRightStyle = itemDims?.alignment === 'center' ? 'auto' : itemDims?.alignment === 'right' ? '0' : undefined
+
+        return (
+          <div
+            key={itemId}
+            className={`cv-atomic-box-wrapper cv-section-${block.key}-item cv-avoid-break`}
+            style={{
+              width: hasCustomWidth ? `${widthPercent}%` : (effectiveArchetype === 'card_grid' ? undefined : undefined),
+              flex: effectiveArchetype === 'card_grid' && !hasCustomWidth ? '1 1 260px' : undefined,
+              boxSizing: 'border-box',
+              marginLeft: marginLeftStyle,
+              marginRight: marginRightStyle,
+              order: itemDims?.order,
+              fontFamily: itemDims?.fontFamily ? `"${itemDims.fontFamily}", sans-serif` : undefined,
+              fontSize: hasCustomScale ? `${itemDims.fontSizeScale}em` : undefined,
+              ['--cv-box-font-scale' as any]: fontScaleVal,
+              ['--cv-box-font-family' as any]: itemDims?.fontFamily ? `"${itemDims.fontFamily}", sans-serif` : undefined,
+            }}
+            data-section-id={itemId}
+          >
+            {singleItemNode}
+          </div>
+        )
+      }
+
+      return (
+        <StructuralBoxWrapper
+          key={itemId}
+          sectionId={itemId}
+          title={itemTitle}
+          category={effectiveArchetype}
+          isFreeCanvasActive={isFreeCanvas}
+          dimensions={itemDims}
+          onMoveUp={idx > 0 ? () => onReorderSequenceItem?.(block.key, idx, idx - 1) : undefined}
+          onMoveDown={idx < block.items.length - 1 ? () => onReorderSequenceItem?.(block.key, idx, idx + 1) : undefined}
+          onToggleHide={() => {
+            if (!structureConfig || !onUpdateStructureConfig) return
+            const cur = structureConfig.sectionDimensions?.[itemId] || {}
+            onUpdateStructureConfig({
+              ...structureConfig,
+              sectionDimensions: {
+                ...structureConfig.sectionDimensions,
+                [itemId]: { ...cur, hidden: !cur.hidden }
+              }
+            })
+          }}
+          onUpdateDimensions={(newDims) => {
+            if (!structureConfig || !onUpdateStructureConfig) return
+            onUpdateStructureConfig({
+              ...structureConfig,
+              sectionDimensions: {
+                ...structureConfig.sectionDimensions,
+                [itemId]: newDims
+              }
+            })
+          }}
+          onResetDimensions={() => {
+            if (!structureConfig || !onUpdateStructureConfig) return
+            const next = { ...structureConfig.sectionDimensions }
+            delete next[itemId]
+            onUpdateStructureConfig({
+              ...structureConfig,
+              sectionDimensions: next
+            })
+          }}
+        >
+          {singleItemNode}
+        </StructuralBoxWrapper>
+      )
+    })
+
+    const renderItemsContainer = () => {
+      switch (effectiveArchetype) {
+        case 'timeline':
+          return (
+            <div
+              className="cv-universal-items-container cv-timeline-items"
+              style={{
+                position: 'relative',
+                paddingLeft: '1rem',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '0.85rem'
+              }}
+            >
+              <div
+                style={{
+                  position: 'absolute',
+                  left: '6px',
+                  top: '12px',
+                  bottom: '12px',
+                  width: '2px',
+                  background: 'var(--cv-color-border, #cbd5e1)',
+                  borderRadius: '1px'
+                }}
+                aria-hidden="true"
+              />
+              {itemBoxes}
+            </div>
+          )
+        case 'badge_list':
+          return (
+            <div
+              className="cv-universal-items-container cv-badge-items"
+              style={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                gap: '0.5rem',
+                alignItems: 'flex-start'
+              }}
+            >
+              {itemBoxes}
+            </div>
+          )
+        case 'key_value_table':
+        case 'prose_flow':
+          return (
+            <div
+              className="cv-universal-items-container cv-vertical-items"
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '0.65rem'
+              }}
+            >
+              {itemBoxes}
+            </div>
+          )
+        case 'card_grid':
+        default:
+          return (
+            <div
+              className="cv-universal-items-container cv-card-grid-items"
+              style={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                gap: '0.85rem',
+                alignItems: 'stretch'
+              }}
+            >
+              {itemBoxes}
+            </div>
+          )
+      }
+    }
+
+    return (
+      <section
+        key={block.key}
+        className={`cv-universal-section cv-section-${block.key} cv-section-multi-items`}
+        data-section-key={block.key}
+        data-archetype={effectiveArchetype}
+        style={{
+          position: 'relative',
+          marginBottom: isFreeCanvas ? '0' : '1.4rem'
+        }}
+      >
+        {headerBox}
+        {renderItemsContainer()}
+      </section>
+    )
+  }
+
+  // ── CASO B: SETOR DE ITEM ÚNICO OU ESCALAR (UM ÚNICO BOX INTEGRADO) ──
+  const renderContent = () => {
+    switch (effectiveArchetype) {
+      case 'card_grid':
+        return <CardGridRenderer items={block.items} sectionKey={block.key} />
+      case 'timeline':
+        return <TimelineRenderer items={block.items} sectionKey={block.key} />
+      case 'badge_list':
+        return <BadgeListRenderer items={block.items} sectionKey={block.key} />
+      case 'key_value_table':
+        return <KeyValueTableRenderer items={block.items} sectionKey={block.key} />
+      case 'prose_flow':
+        return <ProseFlowRenderer items={block.items} sectionKey={block.key} />
+      default:
+        return <CardGridRenderer items={block.items} sectionKey={block.key} />
+    }
+  }
+
+  if (dims?.hidden && !isFreeCanvas) {
+    return null
+  }
+
+  const sectionContent = (
+    <section
+      className={`cv-universal-section cv-section-${block.key}`}
+      data-section-key={block.key}
+      data-archetype={effectiveArchetype}
+      style={{
+        position: 'relative',
+        marginBottom: isFreeCanvas ? '0' : '1.4rem',
+        backgroundColor: `var(--sec-${block.key}-bg, transparent)`,
+        backgroundImage: `var(--sec-${block.key}-bg-image, none)`,
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+        color: `var(--sec-${block.key}-text, inherit)`,
+        borderRadius: '6px',
+        border: isFreeCanvas ? 'none' : `1px solid var(--sec-${block.key}-border, transparent)`,
+        ['--cv-color-primary' as any]: `var(--sec-${block.key}-title, var(--cv-color-primary, #0f172a))`,
+        ['--cv-color-text' as any]: `var(--sec-${block.key}-text, var(--cv-color-text, #334155))`,
+        ['--cv-color-border' as any]: `var(--sec-${block.key}-border, var(--cv-color-border, #cbd5e1))`,
+        ['--cv-color-accent' as any]: `var(--sec-${block.key}-accent, var(--cv-color-accent, #f97316))`,
+      }}
+    >
+      {renderHeaderContent()}
       {renderContent()}
     </section>
   )

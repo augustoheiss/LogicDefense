@@ -23,6 +23,7 @@ interface CVViewerProps {
   onUpdateArchetype?: (sectionKey: string, newArchetype: LayoutArchetype) => void
   onReorderSections?: (sourceIndex: number, targetIndex: number) => void
   onReorderSectionKey?: (sectionKey: string, direction: 'up' | 'down') => void
+  onReorderSequenceItem?: (parentKey: string, sourceIndex: number, targetIndex: number) => void
 }
 
 export const CVViewer: React.FC<CVViewerProps> = ({
@@ -40,7 +41,8 @@ export const CVViewer: React.FC<CVViewerProps> = ({
   onScaleChange,
   onUpdateArchetype,
   onReorderSections,
-  onReorderSectionKey
+  onReorderSectionKey,
+  onReorderSequenceItem
 }) => {
   if (!data || !data.basics) {
     return (
@@ -75,6 +77,7 @@ export const CVViewer: React.FC<CVViewerProps> = ({
           onUpdateArchetype={onUpdateArchetype}
           onReorderSections={onReorderSections}
           onReorderSectionKey={onReorderSectionKey}
+          onReorderSequenceItem={onReorderSequenceItem}
         />
       </CVPrintContainer>
     </CVPageViewportScaler>

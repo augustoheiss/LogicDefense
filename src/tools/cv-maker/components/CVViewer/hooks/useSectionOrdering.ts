@@ -242,6 +242,7 @@ export function useSectionOrdering({
 
         onUpdateStructureConfig({
           ...structureConfig,
+          sectionOrder: newSecList,
           sectionDimensions: nextDims
         })
 

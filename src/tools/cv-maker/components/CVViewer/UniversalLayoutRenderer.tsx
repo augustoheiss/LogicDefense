@@ -21,6 +21,7 @@ interface UniversalLayoutRendererProps {
   onUpdateArchetype?: (sectionKey: string, newArchetype: LayoutArchetype) => void
   onReorderSections?: (sourceIndex: number, targetIndex: number) => void
   onReorderSectionKey?: (sectionKey: string, direction: 'up' | 'down') => void
+  onReorderSequenceItem?: (parentKey: string, sourceIndex: number, targetIndex: number) => void
 }
 
 export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = ({
@@ -34,7 +35,8 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
   onUpdateStructureConfig,
   onUpdateArchetype,
   onReorderSections,
-  onReorderSectionKey
+  onReorderSectionKey,
+  onReorderSequenceItem
 }) => {
   const { basics } = data
   const isFreeCanvas = Boolean(structureConfig?.isFreeCanvasActive)
@@ -182,6 +184,7 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
           isFreeCanvas={isFreeCanvas}
           onReorderSections={onReorderSections}
           onReorderSectionKey={onReorderSectionKey}
+          onReorderSequenceItem={onReorderSequenceItem}
         />
       )
     }
@@ -200,6 +203,7 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
         pageNumber={pageNumber}
         totalPages={totalPages}
         pageLabel="Currículo"
+        onReorderSequenceItem={onReorderSequenceItem}
       />
     )
   }

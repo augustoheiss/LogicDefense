@@ -20,7 +20,8 @@ export const LayoutCanvasLivre: React.FC<BaseLayoutProps> = ({
   totalPages = 1,
   showPageFooter,
   showContinuationHeader,
-  pageLabel
+  pageLabel,
+  onReorderSequenceItem
 }) => {
   const { basics } = data
   const {
@@ -69,6 +70,7 @@ export const LayoutCanvasLivre: React.FC<BaseLayoutProps> = ({
           isFreeCanvas={isFreeCanvas}
           onMoveUp={() => renderers.handleMoveStep?.(block.key, -1)}
           onMoveDown={() => renderers.handleMoveStep?.(block.key, 1)}
+          onReorderSequenceItem={onReorderSequenceItem}
         />
       )
     }
@@ -95,6 +97,7 @@ export const LayoutCanvasLivre: React.FC<BaseLayoutProps> = ({
         isFreeCanvas={isFreeCanvas}
         onMoveUp={() => renderers.handleMoveStep?.(block.key, -1)}
         onMoveDown={() => renderers.handleMoveStep?.(block.key, 1)}
+        onReorderSequenceItem={onReorderSequenceItem}
       />
     ))
 

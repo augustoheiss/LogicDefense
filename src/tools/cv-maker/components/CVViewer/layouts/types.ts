@@ -114,4 +114,5 @@ export interface BaseLayoutProps {
   showPageFooter?: boolean
   showContinuationHeader?: boolean
   pageLabel?: string
+  onReorderSequenceItem?: (parentKey: string, sourceIndex: number, targetIndex: number) => void
 }

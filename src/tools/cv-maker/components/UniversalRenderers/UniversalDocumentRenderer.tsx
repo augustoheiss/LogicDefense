@@ -15,6 +15,7 @@ interface UniversalDocumentRendererProps {
   isFreeCanvas?: boolean
   onReorderSections?: (sourceIndex: number, targetIndex: number) => void
   onReorderSectionKey?: (sectionKey: string, direction: 'up' | 'down') => void
+  onReorderSequenceItem?: (parentKey: string, sourceIndex: number, targetIndex: number) => void
 }
 
 export const UniversalDocumentRenderer: React.FC<UniversalDocumentRendererProps> = ({
@@ -26,7 +27,8 @@ export const UniversalDocumentRenderer: React.FC<UniversalDocumentRendererProps>
   onUpdateStructureConfig,
   isFreeCanvas = false,
   onReorderSections,
-  onReorderSectionKey
+  onReorderSectionKey,
+  onReorderSequenceItem
 }) => {
   const ast = data.meta?.universalAST
   const blocks = ast?.blocks || []
@@ -459,6 +461,7 @@ export const UniversalDocumentRenderer: React.FC<UniversalDocumentRendererProps>
               isFreeCanvas={isFreeCanvas}
               onMoveUp={() => onReorderSectionKey?.(block.key, 'up')}
               onMoveDown={() => onReorderSectionKey?.(block.key, 'down')}
+              onReorderSequenceItem={onReorderSequenceItem}
             />
           )
         }
@@ -477,6 +480,7 @@ export const UniversalDocumentRenderer: React.FC<UniversalDocumentRendererProps>
               isFreeCanvas={isFreeCanvas}
               onMoveUp={() => onReorderSectionKey?.(block.key, 'up')}
               onMoveDown={() => onReorderSectionKey?.(block.key, 'down')}
+              onReorderSequenceItem={onReorderSequenceItem}
             />
           )
         }
@@ -514,6 +518,7 @@ export const UniversalDocumentRenderer: React.FC<UniversalDocumentRendererProps>
                   onReorderSections(idx, idx + 1)
                 }
               } : undefined}
+              onReorderSequenceItem={onReorderSequenceItem}
             />
           ))}
 
