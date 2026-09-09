@@ -564,6 +564,7 @@ export interface LayoutStructureConfig {
   showPageNumbers?: boolean   // Exibe rodapé com "Página X de Y" (padrão true quando > 1 página)
   showContinuationHeader?: boolean // Exibe cabeçalho "Nome — Continuação" na Folha 2+
   showSectionIcons?: boolean  // Exibe ícones/símbolos nos títulos das seções (💼 🚀 🎓). Padrão false.
+  hiddenSections?: string[]   // IDs das seções ocultadas/visibilidade desmarcada na paleta de elementos
 }
 
 export type StandardPageFormat = 'a4' | 'a3' | 'a5' | 'letter' | 'legal' | 'tabloid' | 'executive'
