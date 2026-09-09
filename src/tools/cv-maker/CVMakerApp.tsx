@@ -24,6 +24,8 @@ import { downloadCVZipPackage } from './services/standaloneHtmlService'
 import { CVPrintEngine } from './services/CVPrintEngine'
 import { PageFormatEngine } from './engine/PageFormatEngine'
 import { calculateAtsReport } from './engine/AtsEngine'
+import { ASTSequenceMutator } from './engine/ASTSequenceMutator'
+import { provenanceBus } from './services/provenanceBus'
 
 // Pro Layout Architecture Components
 import { AppHeaderPro } from './components/ProLayout/AppHeaderPro'
@@ -464,10 +466,70 @@ export const CVMakerApp: React.FC = () => {
 
   // Editor onChange
   const handleEditorChange = (val: string) => {
-    setYamlInput(val)
-    handleParse(val)
-    debouncedSaveDraft(val)
+    provenanceBus.execute('editor', 'content_text', () => {
+      setYamlInput(val)
+      handleParse(val)
+      debouncedSaveDraft(val)
+    })
   }
+
+  // Reordenação atômica de seções top-level disparada pelo Canvas Livre ou pela UniversalLayerTree
+  const handleReorderSectionKey = useCallback((sectionKey: string, direction: 'up' | 'down') => {
+    provenanceBus.execute('canvas', 'reorder_sequence', () => {
+      const ast = cvData?.meta?.universalAST
+      const blocks = ast?.blocks || []
+      const currentIdx = blocks.findIndex(b => b.key === sectionKey)
+      if (currentIdx === -1) return
+
+      const targetIdx = direction === 'up' ? currentIdx - 1 : currentIdx + 1
+      if (targetIdx < 0 || targetIdx >= blocks.length) return
+
+      const mutatedYaml = ASTSequenceMutator.reorderTopLevelKey(yamlInput, sectionKey, targetIdx)
+      if (mutatedYaml && mutatedYaml !== yamlInput) {
+        setYamlInput(mutatedYaml)
+        handleParse(mutatedYaml)
+        debouncedSaveDraft(mutatedYaml)
+      }
+    }, `/[section='${sectionKey}']`, { direction })
+  }, [cvData, yamlInput, handleParse, debouncedSaveDraft])
+
+  // Reordenação de nós de sequência interna (ex: trocar ordem de 2 itens dentro de uma seção)
+  const handleReorderSequenceItem = useCallback((parentKey: string, sourceIndex: number, targetIndex: number) => {
+    provenanceBus.execute('tree', 'reorder_sequence', () => {
+      const mutatedYaml = ASTSequenceMutator.reorder(yamlInput, {
+        parentKey,
+        sourceIndex,
+        targetIndex
+      })
+      if (mutatedYaml && mutatedYaml !== yamlInput) {
+        setYamlInput(mutatedYaml)
+        handleParse(mutatedYaml)
+        debouncedSaveDraft(mutatedYaml)
+      }
+    }, `/[section='${parentKey}']`, { sourceIndex, targetIndex })
+  }, [yamlInput, handleParse, debouncedSaveDraft])
+
+  // Reordenação direta por índices de seção no documento
+  const handleReorderSections = useCallback((sourceIndex: number, targetIndex: number) => {
+    provenanceBus.execute('canvas', 'reorder_sequence', () => {
+      const ast = cvData?.meta?.universalAST
+      const blocks = (ast?.blocks || []).filter(b => b.key !== 'basics' && b.key !== 'meta' && b.key !== 'document_title' && b.key !== 'title')
+      const sourceBlock = blocks[sourceIndex]
+      const targetBlock = blocks[targetIndex]
+      if (!sourceBlock || !targetBlock) return
+
+      const allBlocks = ast?.blocks || []
+      const realTargetIdx = allBlocks.findIndex(b => b.key === targetBlock.key)
+      if (realTargetIdx === -1) return
+
+      const mutatedYaml = ASTSequenceMutator.reorderTopLevelKey(yamlInput, sourceBlock.key, realTargetIdx)
+      if (mutatedYaml && mutatedYaml !== yamlInput) {
+        setYamlInput(mutatedYaml)
+        handleParse(mutatedYaml)
+        debouncedSaveDraft(mutatedYaml)
+      }
+    }, undefined, { sourceIndex, targetIndex })
+  }, [cvData, yamlInput, handleParse, debouncedSaveDraft])
 
   // Non-destructive Cover Letter injection with safety history snapshot
   const handleCoverLetterGenerated = (newCoverLetter: CoverLetter) => {
@@ -858,6 +920,8 @@ export const CVMakerApp: React.FC = () => {
                     onAutoPackBlocks={handleAutoPackBlocks}
                     onUpdatePhoto={handleSavePhoto}
                     onUpdateArchetypeOverride={handleUpdateArchetypeOverride}
+                    onReorderSectionKey={handleReorderSectionKey}
+                    onReorderSequenceItem={handleReorderSequenceItem}
                   />
                 </div>
               )}
@@ -903,6 +967,8 @@ export const CVMakerApp: React.FC = () => {
                 zoomMode={activeZoomMode}
                 onScaleChange={setCurrentScale}
                 onUpdateArchetype={handleUpdateArchetypeOverride}
+                onReorderSections={handleReorderSections}
+                onReorderSectionKey={handleReorderSectionKey}
               />
             </div>
 

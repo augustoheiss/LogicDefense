@@ -17,13 +17,17 @@ interface UniversalLayerTreeProps {
   onUpdateArchetypeOverride: (sectionKey: string, archetype: LayoutArchetype) => void
   hiddenSections?: Set<string>
   onToggleSectionVisibility?: (sectionKey: string) => void
+  onReorderSectionKey?: (sectionKey: string, direction: 'up' | 'down') => void
+  onReorderSequenceItem?: (parentKey: string, sourceIndex: number, targetIndex: number) => void
 }
 
 export const UniversalLayerTree: React.FC<UniversalLayerTreeProps> = ({
   ast,
   onUpdateArchetypeOverride,
   hiddenSections = new Set(),
-  onToggleSectionVisibility
+  onToggleSectionVisibility,
+  onReorderSectionKey,
+  onReorderSequenceItem
 }) => {
   const [expandedBlocks, setExpandedBlocks] = useState<Record<string, boolean>>({})
   const [activeMenuBlockKey, setActiveMenuBlockKey] = useState<string | null>(null)
@@ -357,6 +361,54 @@ export const UniversalLayerTree: React.FC<UniversalLayerTreeProps> = ({
                     )}
                   </div>
 
+                  {/* Botões de Reordenação da Seção (Mover Acima / Abaixo no YAML) */}
+                  {onReorderSectionKey && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          onReorderSectionKey(block.key, 'up')
+                        }}
+                        title="Mover seção para cima no documento"
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          padding: '0.15rem 0.25rem',
+                          color: '#94a3b8',
+                          cursor: 'pointer',
+                          fontSize: '0.68rem',
+                          borderRadius: '3px'
+                        }}
+                        onMouseEnter={(e) => (e.currentTarget.style.color = '#38bdf8')}
+                        onMouseLeave={(e) => (e.currentTarget.style.color = '#94a3b8')}
+                      >
+                        ▲
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          onReorderSectionKey(block.key, 'down')
+                        }}
+                        title="Mover seção para baixo no documento"
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          padding: '0.15rem 0.25rem',
+                          color: '#94a3b8',
+                          cursor: 'pointer',
+                          fontSize: '0.68rem',
+                          borderRadius: '3px'
+                        }}
+                        onMouseEnter={(e) => (e.currentTarget.style.color = '#38bdf8')}
+                        onMouseLeave={(e) => (e.currentTarget.style.color = '#94a3b8')}
+                      >
+                        ▼
+                      </button>
+                    </div>
+                  )}
+
                   {/* Toggle Visibilidade (Olho) */}
                   {onToggleSectionVisibility && (
                     <button
@@ -440,12 +492,56 @@ export const UniversalLayerTree: React.FC<UniversalLayerTreeProps> = ({
                         <span style={{ fontWeight: 600, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', maxWidth: '180px' }}>
                           {it.title || `Item #${idx + 1}`}
                         </span>
-                        {it.date && (
-                          <span style={{ fontSize: '0.64rem', color: '#94a3b8' }}>{it.date}</span>
-                        )}
-                        {it.badges && it.badges.length > 0 && (
-                          <span style={{ fontSize: '0.64rem', color: '#38bdf8' }}>{it.badges.length} tags</span>
-                        )}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                          {it.date && (
+                            <span style={{ fontSize: '0.64rem', color: '#94a3b8' }}>{it.date}</span>
+                          )}
+                          {it.badges && it.badges.length > 0 && (
+                            <span style={{ fontSize: '0.64rem', color: '#38bdf8' }}>{it.badges.length} tags</span>
+                          )}
+                          {onReorderSequenceItem && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '2px', marginLeft: '0.2rem' }}>
+                              <button
+                                type="button"
+                                disabled={idx === 0}
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  onReorderSequenceItem(block.key, idx, idx - 1)
+                                }}
+                                title="Mover item para cima"
+                                style={{
+                                  background: 'none',
+                                  border: 'none',
+                                  padding: '0.1rem 0.2rem',
+                                  color: idx === 0 ? '#475569' : '#94a3b8',
+                                  cursor: idx === 0 ? 'default' : 'pointer',
+                                  fontSize: '0.62rem'
+                                }}
+                              >
+                                ▲
+                              </button>
+                              <button
+                                type="button"
+                                disabled={idx === block.items.length - 1}
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  onReorderSequenceItem(block.key, idx, idx + 1)
+                                }}
+                                title="Mover item para baixo"
+                                style={{
+                                  background: 'none',
+                                  border: 'none',
+                                  padding: '0.1rem 0.2rem',
+                                  color: idx === block.items.length - 1 ? '#475569' : '#94a3b8',
+                                  cursor: idx === block.items.length - 1 ? 'default' : 'pointer',
+                                  fontSize: '0.62rem'
+                                }}
+                              >
+                                ▼
+                              </button>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     ))}
                     {block.items.length > 6 && (

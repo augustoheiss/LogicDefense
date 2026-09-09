@@ -1,6 +1,8 @@
 import React, { useState } from 'react'
 import type { UniversalBlockNode, LayoutArchetype } from '../../types/universalAST'
+import type { LayoutStructureConfig, SectionBoxDimensions } from '../../types/cv'
 import { ARCHETYPE_DEFINITIONS, ALL_CANONICAL_ARCHETYPES } from '../../types/universalAST'
+import { StructuralBoxWrapper } from '../CanvasBuilder/StructuralBoxWrapper'
 import { CardGridRenderer } from './CardGridRenderer'
 import { TimelineRenderer } from './TimelineRenderer'
 import { BadgeListRenderer } from './BadgeListRenderer'
@@ -11,16 +13,30 @@ interface UniversalSectionDispatcherProps {
   block: UniversalBlockNode
   onUpdateArchetype?: (sectionKey: string, newArchetype: LayoutArchetype) => void
   isEditable?: boolean
+  structureConfig?: LayoutStructureConfig
+  onUpdateStructureConfig?: (newConfig: LayoutStructureConfig) => void
+  isFreeCanvas?: boolean
+  onMoveUp?: () => void
+  onMoveDown?: () => void
 }
 
 export const UniversalSectionDispatcher: React.FC<UniversalSectionDispatcherProps> = ({
   block,
   onUpdateArchetype,
-  isEditable = true
+  isEditable = true,
+  structureConfig,
+  onUpdateStructureConfig,
+  isFreeCanvas = false,
+  onMoveUp,
+  onMoveDown
 }) => {
   const [isMenuOpen, setIsMenuOpen] = useState<boolean>(false)
   const effectiveArchetype = block.classification.effective
   const archetypeDef = ARCHETYPE_DEFINITIONS[effectiveArchetype] || ARCHETYPE_DEFINITIONS.card_grid
+
+  const pointerKey = block.pointer.semanticPath || `/[section='${block.key}']`
+  const rawDims = structureConfig?.sectionDimensions?.[block.key] || structureConfig?.sectionDimensions?.[pointerKey]
+  const dims: SectionBoxDimensions | undefined = rawDims
 
   const handleSelectArchetype = (arch: LayoutArchetype) => {
     setIsMenuOpen(false)
@@ -46,21 +62,25 @@ export const UniversalSectionDispatcher: React.FC<UniversalSectionDispatcherProp
     }
   }
 
-  return (
+  if (dims?.hidden && !isFreeCanvas) {
+    return null
+  }
+
+  const sectionContent = (
     <section
       className={`cv-universal-section cv-section-${block.key}`}
       data-section-key={block.key}
       data-archetype={effectiveArchetype}
       style={{
         position: 'relative',
-        marginBottom: '1.4rem',
+        marginBottom: isFreeCanvas ? '0' : '1.4rem',
         backgroundColor: `var(--sec-${block.key}-bg, transparent)`,
         backgroundImage: `var(--sec-${block.key}-bg-image, none)`,
         backgroundSize: 'cover',
         backgroundPosition: 'center',
         color: `var(--sec-${block.key}-text, inherit)`,
         borderRadius: '6px',
-        border: `1px solid var(--sec-${block.key}-border, transparent)`,
+        border: isFreeCanvas ? 'none' : `1px solid var(--sec-${block.key}-border, transparent)`,
         ['--cv-color-primary' as any]: `var(--sec-${block.key}-title, var(--cv-color-primary, #0f172a))`,
         ['--cv-color-text' as any]: `var(--sec-${block.key}-text, var(--cv-color-text, #334155))`,
         ['--cv-color-border' as any]: `var(--sec-${block.key}-border, var(--cv-color-border, #cbd5e1))`,
@@ -226,5 +246,86 @@ export const UniversalSectionDispatcher: React.FC<UniversalSectionDispatcherProp
       {/* Conteúdo do Arquétipo */}
       {renderContent()}
     </section>
+  )
+
+  if (!isFreeCanvas) {
+    const widthPercent = dims?.widthPercent
+    const hasCustomWidth = typeof widthPercent === 'number' && widthPercent > 0 && widthPercent < 100
+    const hasCustomScale = typeof dims?.fontSizeScale === 'number' && dims.fontSizeScale !== 1
+    const fontScaleVal = dims?.fontSizeScale ?? 1.0
+
+    const marginLeftStyle = dims?.alignment === 'center' || dims?.alignment === 'right' ? 'auto' : undefined
+    const marginRightStyle = dims?.alignment === 'center' ? 'auto' : dims?.alignment === 'right' ? '0' : undefined
+
+    return (
+      <div
+        key={block.key}
+        className={`cv-atomic-box-wrapper cv-section-${block.key} cv-avoid-break`}
+        style={{
+          width: hasCustomWidth ? `${widthPercent}%` : undefined,
+          display: hasCustomWidth ? 'inline-block' : undefined,
+          verticalAlign: hasCustomWidth ? 'top' : undefined,
+          boxSizing: 'border-box',
+          marginLeft: marginLeftStyle,
+          marginRight: marginRightStyle,
+          order: dims?.order,
+          fontFamily: dims?.fontFamily ? `"${dims.fontFamily}", sans-serif` : undefined,
+          fontSize: hasCustomScale ? `${dims.fontSizeScale}em` : undefined,
+          ['--cv-box-font-scale' as any]: fontScaleVal,
+          ['--cv-box-font-family' as any]: dims?.fontFamily ? `"${dims.fontFamily}", sans-serif` : undefined,
+        }}
+        data-section-id={block.key}
+      >
+        {sectionContent}
+      </div>
+    )
+  }
+
+  return (
+    <StructuralBoxWrapper
+      key={block.key}
+      sectionId={block.key}
+      title={block.title}
+      category={effectiveArchetype}
+      isFreeCanvasActive={isFreeCanvas}
+      dimensions={dims}
+      onMoveUp={onMoveUp}
+      onMoveDown={onMoveDown}
+      onToggleHide={() => {
+        if (!structureConfig || !onUpdateStructureConfig) return
+        const cur = structureConfig.sectionDimensions?.[block.key] || {}
+        onUpdateStructureConfig({
+          ...structureConfig,
+          sectionDimensions: {
+            ...structureConfig.sectionDimensions,
+            [block.key]: { ...cur, hidden: !cur.hidden },
+            [pointerKey]: { ...cur, hidden: !cur.hidden }
+          }
+        })
+      }}
+      onUpdateDimensions={(newDims) => {
+        if (!structureConfig || !onUpdateStructureConfig) return
+        onUpdateStructureConfig({
+          ...structureConfig,
+          sectionDimensions: {
+            ...structureConfig.sectionDimensions,
+            [block.key]: newDims,
+            [pointerKey]: newDims
+          }
+        })
+      }}
+      onResetDimensions={() => {
+        if (!structureConfig || !onUpdateStructureConfig) return
+        const next = { ...structureConfig.sectionDimensions }
+        delete next[block.key]
+        delete next[pointerKey]
+        onUpdateStructureConfig({
+          ...structureConfig,
+          sectionDimensions: next
+        })
+      }}
+    >
+      {sectionContent}
+    </StructuralBoxWrapper>
   )
 }

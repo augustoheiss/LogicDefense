@@ -1,5 +1,5 @@
 import React from 'react'
-import type { CVData, LayoutArchetype } from '../../types/cv'
+import type { CVData, LayoutArchetype, LayoutStructureConfig } from '../../types/cv'
 import { CVPageCard } from '../CVViewer/renderers/CVPageCard'
 import { UniversalSectionDispatcher } from './UniversalSectionDispatcher'
 
@@ -8,20 +8,41 @@ interface UniversalDocumentRendererProps {
   onUpdateArchetype?: (sectionKey: string, newArchetype: LayoutArchetype) => void
   pageNumber?: number
   totalPages?: number
+  structureConfig?: LayoutStructureConfig
+  onUpdateStructureConfig?: (cfg: LayoutStructureConfig) => void
+  isFreeCanvas?: boolean
+  onReorderSections?: (sourceIndex: number, targetIndex: number) => void
+  onReorderSectionKey?: (sectionKey: string, direction: 'up' | 'down') => void
 }
 
 export const UniversalDocumentRenderer: React.FC<UniversalDocumentRendererProps> = ({
   data,
   onUpdateArchetype,
   pageNumber = 1,
-  totalPages = 1
+  totalPages = 1,
+  structureConfig,
+  onUpdateStructureConfig,
+  isFreeCanvas = false,
+  onReorderSections,
+  onReorderSectionKey
 }) => {
   const ast = data.meta?.universalAST
   const blocks = ast?.blocks || []
   const { basics } = data
 
   // Filtra blocos: seções padrão de contato/basics são sintetizadas no cabeçalho executivo
-  const bodyBlocks = blocks.filter(b => b.key !== 'basics' && b.key !== 'meta' && b.key !== 'document_title' && b.key !== 'title')
+  let bodyBlocks = blocks.filter(b => b.key !== 'basics' && b.key !== 'meta' && b.key !== 'document_title' && b.key !== 'title')
+
+  // Se structureConfig.sectionOrder foi definido, prioriza a ordenação personalizada do usuário
+  if (structureConfig?.sectionOrder && structureConfig.sectionOrder.length > 0) {
+    const orderMap = new Map<string, number>()
+    structureConfig.sectionOrder.forEach((key, idx) => orderMap.set(key, idx))
+    bodyBlocks = [...bodyBlocks].sort((a, b) => {
+      const idxA = orderMap.has(a.key) ? (orderMap.get(a.key) as number) : 9999
+      const idxB = orderMap.has(b.key) ? (orderMap.get(b.key) as number) : 9999
+      return idxA - idxB
+    })
+  }
 
   return (
     <CVPageCard
@@ -141,11 +162,28 @@ export const UniversalDocumentRenderer: React.FC<UniversalDocumentRendererProps>
 
         {/* Corpo com Todas as Seções do AST Universal */}
         <main className="cv-universal-body" style={{ flex: 1 }}>
-          {bodyBlocks.map((block) => (
+          {bodyBlocks.map((block, idx) => (
             <UniversalSectionDispatcher
               key={block.key}
               block={block}
               onUpdateArchetype={onUpdateArchetype}
+              structureConfig={structureConfig}
+              onUpdateStructureConfig={onUpdateStructureConfig}
+              isFreeCanvas={isFreeCanvas}
+              onMoveUp={idx > 0 ? () => {
+                if (onReorderSectionKey) {
+                  onReorderSectionKey(block.key, 'up')
+                } else if (onReorderSections) {
+                  onReorderSections(idx, idx - 1)
+                }
+              } : undefined}
+              onMoveDown={idx < bodyBlocks.length - 1 ? () => {
+                if (onReorderSectionKey) {
+                  onReorderSectionKey(block.key, 'down')
+                } else if (onReorderSections) {
+                  onReorderSections(idx, idx + 1)
+                }
+              } : undefined}
             />
           ))}
 

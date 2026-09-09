@@ -21,6 +21,8 @@ interface CVViewerProps {
   zoomMode?: ZoomMode
   onScaleChange?: (currentScale: number) => void
   onUpdateArchetype?: (sectionKey: string, newArchetype: LayoutArchetype) => void
+  onReorderSections?: (sourceIndex: number, targetIndex: number) => void
+  onReorderSectionKey?: (sectionKey: string, direction: 'up' | 'down') => void
 }
 
 export const CVViewer: React.FC<CVViewerProps> = ({
@@ -36,7 +38,9 @@ export const CVViewer: React.FC<CVViewerProps> = ({
   customPageDimensions,
   zoomMode = 'auto',
   onScaleChange,
-  onUpdateArchetype
+  onUpdateArchetype,
+  onReorderSections,
+  onReorderSectionKey
 }) => {
   if (!data || !data.basics) {
     return (
@@ -69,6 +73,8 @@ export const CVViewer: React.FC<CVViewerProps> = ({
           structureConfig={structureConfig}
           onUpdateStructureConfig={onUpdateStructureConfig}
           onUpdateArchetype={onUpdateArchetype}
+          onReorderSections={onReorderSections}
+          onReorderSectionKey={onReorderSectionKey}
         />
       </CVPrintContainer>
     </CVPageViewportScaler>

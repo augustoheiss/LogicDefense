@@ -30,6 +30,8 @@ export const StructuralBoxWrapper: React.FC<StructuralBoxWrapperProps> = ({
   currentZone,
   category,
   onUpdateDimensions,
+  onMoveUp,
+  onMoveDown,
   onSwitchZone,
   onResetDimensions,
   onToggleHide,
@@ -574,6 +576,34 @@ export const StructuralBoxWrapper: React.FC<StructuralBoxWrapperProps> = ({
             title={`Transferir para coluna ${currentZone === 'left' ? 'Direita' : 'Esquerda'}`}
           >
             ⇄ Coluna {currentZone === 'left' ? 'Dir' : 'Esq'}
+          </button>
+        )}
+
+        {/* Botões Reordenar Acima / Abaixo */}
+        {onMoveUp && (
+          <button
+            type="button"
+            className="cv-mini-btn cv-mini-btn--icon"
+            onClick={(e) => {
+              e.stopPropagation()
+              onMoveUp()
+            }}
+            title="Mover este bloco para cima"
+          >
+            ▲
+          </button>
+        )}
+        {onMoveDown && (
+          <button
+            type="button"
+            className="cv-mini-btn cv-mini-btn--icon"
+            onClick={(e) => {
+              e.stopPropagation()
+              onMoveDown()
+            }}
+            title="Mover este bloco para baixo"
+          >
+            ▼
           </button>
         )}
 

@@ -43,6 +43,8 @@ interface CanvasElementsPaletteProps {
   onAutoPackBlocks?: () => void
   onUpdatePhoto?: (photoUrlOrBase64?: string, posX?: number, posY?: number, scale?: number) => void
   onUpdateArchetypeOverride?: (sectionKey: string, archetype: LayoutArchetype) => void
+  onReorderSectionKey?: (sectionKey: string, direction: 'up' | 'down') => void
+  onReorderSequenceItem?: (parentKey: string, sourceIndex: number, targetIndex: number) => void
 }
 
 const PHOTO_SHAPES_LIST = [
@@ -66,7 +68,9 @@ export const CanvasElementsPalette: React.FC<CanvasElementsPaletteProps> = ({
   onResetStructure,
   onAutoPackBlocks,
   onUpdatePhoto,
-  onUpdateArchetypeOverride
+  onUpdateArchetypeOverride,
+  onReorderSectionKey,
+  onReorderSequenceItem
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [paletteSubTab, setPaletteSubTab] = useState<'layers' | 'canvas_tools'>('layers')
@@ -522,6 +526,8 @@ export const CanvasElementsPalette: React.FC<CanvasElementsPaletteProps> = ({
           onUpdateArchetypeOverride={onUpdateArchetypeOverride || (() => {})}
           hiddenSections={new Set(structureConfig.hiddenSections || [])}
           onToggleSectionVisibility={handleToggleSectionVisibility}
+          onReorderSectionKey={onReorderSectionKey}
+          onReorderSequenceItem={onReorderSequenceItem}
         />
       )}
 

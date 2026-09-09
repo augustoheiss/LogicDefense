@@ -116,6 +116,7 @@ export interface UniversalItemNode {
   keyValues?: Record<string, any>
   prose?: string
   raw: any
+  cstRange?: [start: number, valueEnd: number, nodeEnd: number]
 }
 
 /**
@@ -129,6 +130,7 @@ export interface UniversalBlockNode {
   classification: ArchetypeClassification
   items: UniversalItemNode[]
   raw: any
+  cstRange?: [start: number, valueEnd: number, nodeEnd: number]
 }
 
 /**
