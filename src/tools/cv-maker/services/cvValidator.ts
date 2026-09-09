@@ -130,7 +130,19 @@ export function validateAndNormalizeCV(
     basicsRaw.name.trim().length > 0
   )
 
-  const isUniversalDoc = !hasBasicsName
+  const hasWorkOrEdu = Boolean(
+    (Array.isArray(raw.work) && raw.work.length > 0) ||
+    (Array.isArray(raw.education) && raw.education.length > 0)
+  )
+
+  const isUniversalDoc = Boolean(
+    raw.meta?.isUniversalDocument ||
+    raw.isUniversalDocument ||
+    raw.document_title ||
+    raw.document_type ||
+    !hasBasicsName ||
+    (!hasWorkOrEdu && (raw.cronograma_entregas || raw.modulos_sistema || raw.metricas_observabilidade || raw.historico_melhorias || raw.pilares_tecnologicos))
+  )
   const docTitle = raw.title || raw.name || raw.document_title || 'Documento Universal'
 
   const cleanBasics: CVBasics = hasBasicsName

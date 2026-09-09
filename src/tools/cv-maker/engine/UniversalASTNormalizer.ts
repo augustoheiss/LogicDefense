@@ -69,16 +69,29 @@ export function normalizeToUniversalAST(
 ): UniversalDocumentAST {
   const safeRaw = raw && typeof raw === 'object' ? raw : {}
   const hasBasics = Boolean(safeRaw.basics && typeof safeRaw.basics === 'object' && safeRaw.basics.name)
+  const hasWorkOrEdu = Boolean(
+    (Array.isArray(safeRaw.work) && safeRaw.work.length > 0) ||
+    (Array.isArray(safeRaw.education) && safeRaw.education.length > 0)
+  )
+
+  const isUniversalDoc = Boolean(
+    safeRaw.meta?.isUniversalDocument ||
+    safeRaw.isUniversalDocument ||
+    safeRaw.document_title ||
+    safeRaw.document_type ||
+    !hasBasics ||
+    (!hasWorkOrEdu && (safeRaw.cronograma_entregas || safeRaw.modulos_sistema || safeRaw.metricas_observabilidade || safeRaw.historico_melhorias || safeRaw.pilares_tecnologicos))
+  )
 
   const meta: UniversalDocumentMeta = {
-    title: safeRaw.title || safeRaw.basics?.name || 'Documento Universal',
+    title: safeRaw.title || safeRaw.document_title || safeRaw.basics?.name || 'Documento Universal',
     author: safeRaw.author || safeRaw.basics?.name || undefined,
     lastModified: safeRaw.meta?.lastModified || new Date().toISOString(),
     version: '3.0.0',
     language: safeRaw.meta?.language || 'pt',
     theme: safeRaw.meta?.theme || 'executive',
     formatId: safeRaw.meta?.formatId || 'a4',
-    isUniversalDocument: !hasBasics,
+    isUniversalDocument: isUniversalDoc,
     hasBasicsPreset: hasBasics,
   }
 

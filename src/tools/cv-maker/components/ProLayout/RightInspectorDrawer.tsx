@@ -5,6 +5,7 @@ import { PAGE_FORMATS } from '../../engine/PageFormatEngine'
 import { calculateAtsReport } from '../../engine/AtsEngine'
 import { BACKGROUND_CATALOG, BACKGROUND_CATEGORIES } from '../../engine/backgroundCatalog'
 import { compressImageFile } from '../../utils/imageCompressor'
+import { UNIVERSAL_BLUEPRINTS, type DocumentBlueprint } from '../../templates/universalBlueprints'
 import {
   CloseIcon,
   LayoutIcon,
@@ -52,6 +53,7 @@ interface RightInspectorDrawerProps {
   onOpenFullscreenGallery?: () => void
   isFreeCanvasActive?: boolean
   onToggleFreeCanvas?: () => void
+  onSelectBlueprint?: (blueprint: DocumentBlueprint) => void
 }
 
 // Miniaturas em SVG com esqueleto arquitetônico dos layouts
@@ -263,7 +265,8 @@ export const RightInspectorDrawer: React.FC<RightInspectorDrawerProps> = ({
   onCustomPageDimensionsChange,
   onOpenFullscreenGallery,
   isFreeCanvasActive = false,
-  onToggleFreeCanvas
+  onToggleFreeCanvas,
+  onSelectBlueprint
 }) => {
   const [designSubTab, setDesignSubTab] = useState<'general' | 'textures' | 'sections'>('general')
   const [selectedSectionId, setSelectedSectionId] = useState<string>('sidebar')
@@ -380,6 +383,67 @@ export const RightInspectorDrawer: React.FC<RightInspectorDrawerProps> = ({
         {/* ── ABA 1: MODELOS & TEMPLATES ── */}
         {activeTab === 'templates' && (
           <div>
+            {/* ── Seletor de Blueprints de Documentos Universais ── */}
+            <div style={{ marginBottom: '1.25rem', paddingBottom: '1rem', borderBottom: '1px solid #1e293b' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.45rem' }}>
+                <span style={{ fontSize: '0.78rem', color: '#38bdf8', fontWeight: 700 }}>
+                  Blueprints & Documentos
+                </span>
+                <span style={{ fontSize: '0.65rem', color: '#64748b' }}>
+                  Compilador Universal
+                </span>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.45rem' }}>
+                {UNIVERSAL_BLUEPRINTS.map(bp => (
+                  <button
+                    key={bp.id}
+                    type="button"
+                    onClick={() => onSelectBlueprint && onSelectBlueprint(bp)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: '0.55rem 0.7rem',
+                      borderRadius: '6px',
+                      background: '#0f172a',
+                      border: '1px solid #334155',
+                      color: '#f8fafc',
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                      transition: 'all 0.15s ease',
+                      gap: '0.5rem'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.55rem', minWidth: 0, flex: 1 }}>
+                      <span style={{ fontSize: '1.1rem', flexShrink: 0 }}>{bp.icon}</span>
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#f1f5f9', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                          {bp.title}
+                        </div>
+                        <div style={{ fontSize: '0.64rem', color: '#94a3b8', lineHeight: 1.25 }}>
+                          {bp.description}
+                        </div>
+                      </div>
+                    </div>
+                    <span
+                      style={{
+                        fontSize: '0.62rem',
+                        fontWeight: 700,
+                        padding: '0.2rem 0.45rem',
+                        borderRadius: '4px',
+                        background: 'rgba(56, 189, 248, 0.15)',
+                        color: '#38bdf8',
+                        whiteSpace: 'nowrap',
+                        flexShrink: 0
+                      }}
+                    >
+                      Carregar
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
               <span style={{ fontSize: '0.78rem', color: '#94a3b8', fontWeight: 600 }}>
                 10 Modelos A4 Declarativos

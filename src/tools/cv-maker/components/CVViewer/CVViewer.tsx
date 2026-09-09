@@ -1,5 +1,6 @@
 import React from 'react'
 import type { CVData, ThemeVariant, LayoutVariant, ViewMode, CVDesignConfig, LayoutStructureConfig, PageFormat, ZoomMode, CustomPageDimensions } from '../../types/cv'
+import type { LayoutArchetype } from '../../types/universalAST'
 import { getLayoutBlueprint } from '../../engine/blueprints'
 import { PageFormatEngine } from '../../engine/PageFormatEngine'
 import { CVPrintContainer } from './CVPrintContainer'
@@ -19,6 +20,7 @@ interface CVViewerProps {
   customPageDimensions?: CustomPageDimensions
   zoomMode?: ZoomMode
   onScaleChange?: (currentScale: number) => void
+  onUpdateArchetype?: (sectionKey: string, newArchetype: LayoutArchetype) => void
 }
 
 export const CVViewer: React.FC<CVViewerProps> = ({
@@ -33,7 +35,8 @@ export const CVViewer: React.FC<CVViewerProps> = ({
   pageFormat = 'a4',
   customPageDimensions,
   zoomMode = 'auto',
-  onScaleChange
+  onScaleChange,
+  onUpdateArchetype
 }) => {
   if (!data || !data.basics) {
     return (
@@ -65,6 +68,7 @@ export const CVViewer: React.FC<CVViewerProps> = ({
           onRequestGenerateCoverLetter={onRequestGenerateCoverLetter}
           structureConfig={structureConfig}
           onUpdateStructureConfig={onUpdateStructureConfig}
+          onUpdateArchetype={onUpdateArchetype}
         />
       </CVPrintContainer>
     </CVPageViewportScaler>

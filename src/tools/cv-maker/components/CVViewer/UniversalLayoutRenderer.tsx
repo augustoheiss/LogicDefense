@@ -6,6 +6,8 @@ import { CVPageCard } from './renderers/CVPageCard'
 import { useSectionOrdering } from './hooks/useSectionOrdering'
 import { useSectionRenderers } from './renderers/SectionRendererHub'
 import { getLayoutComponent } from './layouts'
+import { UniversalDocumentRenderer } from '../UniversalRenderers/UniversalDocumentRenderer'
+import type { LayoutArchetype } from '../../types/universalAST'
 
 interface UniversalLayoutRendererProps {
   data: CVData
@@ -16,6 +18,7 @@ interface UniversalLayoutRendererProps {
   onRequestGenerateCoverLetter?: () => void
   structureConfig?: LayoutStructureConfig
   onUpdateStructureConfig?: (newConfig: LayoutStructureConfig) => void
+  onUpdateArchetype?: (sectionKey: string, newArchetype: LayoutArchetype) => void
 }
 
 export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = ({
@@ -26,7 +29,8 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
   designConfig,
   onRequestGenerateCoverLetter,
   structureConfig,
-  onUpdateStructureConfig
+  onUpdateStructureConfig,
+  onUpdateArchetype
 }) => {
   const { basics } = data
   const isFreeCanvas = Boolean(structureConfig?.isFreeCanvasActive)
@@ -162,6 +166,17 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
   )
 
   const renderCVPage = (pageNumber = 1, totalPages = 1) => {
+    if (data.meta?.isUniversalDocument) {
+      return (
+        <UniversalDocumentRenderer
+          data={data}
+          onUpdateArchetype={onUpdateArchetype}
+          pageNumber={pageNumber}
+          totalPages={totalPages}
+        />
+      )
+    }
+
     const LayoutComponent = getLayoutComponent(blueprint.id)
     return (
       <LayoutComponent

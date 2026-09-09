@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import type { CVData, CVVersions, TextVariant, ThemeVariant, LayoutVariant, ViewMode, CoverLetter, CVDesignConfig, LayoutStructureConfig, SectionBoxDimensions, PageFormat, ZoomMode, CustomPageDimensions } from './types/cv'
+import type { LayoutArchetype } from './types/universalAST'
+import type { DocumentBlueprint } from './templates/universalBlueprints'
 import { DEFAULT_DESIGN_CONFIG } from './types/cv'
 import { DEFAULT_JOHN_DOE_YAML } from './templates/defaultTemplate'
 import { parseYamlToCV, cvToYaml, debounce } from './services/yamlService'
@@ -343,16 +345,33 @@ export const CVMakerApp: React.FC = () => {
     []
   )
 
-  // Parse YAML to data structure
-  const handleParse = useCallback((yamlStr: string) => {
-    const res = parseYamlToCV(yamlStr)
+  // Universal AST Section Archetype Overrides
+  const [sectionArchetypeOverrides, setSectionArchetypeOverrides] = useState<Record<string, LayoutArchetype>>({})
+
+  // Parse YAML to data structure with archetype overrides
+  const handleParse = useCallback((yamlStr: string, overrides?: Record<string, LayoutArchetype>) => {
+    const effectiveOverrides = overrides !== undefined ? overrides : sectionArchetypeOverrides
+    const res = parseYamlToCV(yamlStr, effectiveOverrides)
     if (res.error) {
       setParseError(res.error)
     } else {
       setParseError(null)
       setCvData(res.data)
     }
-  }, [])
+  }, [sectionArchetypeOverrides])
+
+  const handleUpdateArchetypeOverride = (sectionKey: string, archetype: LayoutArchetype) => {
+    const updated = { ...sectionArchetypeOverrides, [sectionKey]: archetype }
+    setSectionArchetypeOverrides(updated)
+    handleParse(yamlInput, updated)
+  }
+
+  const handleSelectBlueprint = (blueprint: DocumentBlueprint) => {
+    setYamlInput(blueprint.yamlContent)
+    setSectionArchetypeOverrides({})
+    handleParse(blueprint.yamlContent, {})
+    debouncedSaveDraft(blueprint.yamlContent)
+  }
 
   // Initial parse on mount
   useEffect(() => {
@@ -829,6 +848,7 @@ export const CVMakerApp: React.FC = () => {
                     onResetStructure={handleResetStructure}
                     onAutoPackBlocks={handleAutoPackBlocks}
                     onUpdatePhoto={handleSavePhoto}
+                    onUpdateArchetypeOverride={handleUpdateArchetypeOverride}
                   />
                 </div>
               )}
@@ -873,6 +893,7 @@ export const CVMakerApp: React.FC = () => {
                 customPageDimensions={customPageDimensions}
                 zoomMode={activeZoomMode}
                 onScaleChange={setCurrentScale}
+                onUpdateArchetype={handleUpdateArchetypeOverride}
               />
             </div>
 
@@ -911,6 +932,7 @@ export const CVMakerApp: React.FC = () => {
             onOpenFullscreenGallery={() => handleOpenLandingPage('gallery')}
             isFreeCanvasActive={currentStructureConfig.isFreeCanvasActive}
             onToggleFreeCanvas={handleToggleFreeCanvas}
+            onSelectBlueprint={handleSelectBlueprint}
           />
         </div>
 

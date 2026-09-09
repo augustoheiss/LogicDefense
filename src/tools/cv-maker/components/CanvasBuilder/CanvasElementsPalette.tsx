@@ -6,6 +6,8 @@ import {
   type LayoutStructureConfig,
   type SectionBoxDimensions
 } from '../../types/cv'
+import { UniversalLayerTree } from './UniversalLayerTree'
+import type { LayoutArchetype } from '../../types/universalAST'
 import { getAtomicItemId } from '../../utils/atomicIdUtils'
 import { compressImageFile } from '../../utils/imageCompressor'
 import {
@@ -40,6 +42,7 @@ interface CanvasElementsPaletteProps {
   onResetStructure: () => void
   onAutoPackBlocks?: () => void
   onUpdatePhoto?: (photoUrlOrBase64?: string, posX?: number, posY?: number, scale?: number) => void
+  onUpdateArchetypeOverride?: (sectionKey: string, archetype: LayoutArchetype) => void
 }
 
 const PHOTO_SHAPES_LIST = [
@@ -62,14 +65,29 @@ export const CanvasElementsPalette: React.FC<CanvasElementsPaletteProps> = ({
   onUpdateStructureConfig,
   onResetStructure,
   onAutoPackBlocks,
-  onUpdatePhoto
+  onUpdatePhoto,
+  onUpdateArchetypeOverride
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const [paletteSubTab, setPaletteSubTab] = useState<'layers' | 'canvas_tools'>('layers')
   const [urlInputValue, setUrlInputValue] = useState<string>('')
   const [openTypoId, setOpenTypoId] = useState<string | null>(null)
   const [selectedZoneId, setSelectedZoneId] = useState<string | null>(null)
   const [activeDrawingMode, setActiveDrawingMode] = useState<'rect' | 'polygon' | null>(null)
   const [searchFilter, setSearchFilter] = useState<string>('')
+
+  const handleToggleSectionVisibility = (secKey: string) => {
+    const currentHidden = new Set(structureConfig.hiddenSections || [])
+    if (currentHidden.has(secKey)) {
+      currentHidden.delete(secKey)
+    } else {
+      currentHidden.add(secKey)
+    }
+    onUpdateStructureConfig({
+      ...structureConfig,
+      hiddenSections: Array.from(currentHidden)
+    })
+  }
 
   // Estado de colapso das seções (por padrão, apenas as primeiras abertas)
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({
@@ -440,8 +458,77 @@ export const CanvasElementsPalette: React.FC<CanvasElementsPaletteProps> = ({
         </div>
       </div>
 
-      {/* ── Campo de Busca Rápida de Camadas ── */}
-      <div className="cv-pro-search-box">
+      {/* ── Sub-Abas: Árvore de Camadas (AST) vs Ferramentas Clássicas de Canvas ── */}
+      <div
+        style={{
+          display: 'flex',
+          gap: '0.35rem',
+          margin: '0.75rem 0 0.85rem 0',
+          background: '#090d16',
+          padding: '0.25rem',
+          borderRadius: '6px',
+          border: '1px solid #1e293b'
+        }}
+      >
+        <button
+          type="button"
+          onClick={() => setPaletteSubTab('layers')}
+          style={{
+            flex: 1,
+            padding: '0.35rem 0.5rem',
+            fontSize: '0.72rem',
+            fontWeight: 700,
+            background: paletteSubTab === 'layers' ? '#1e293b' : 'transparent',
+            color: paletteSubTab === 'layers' ? '#38bdf8' : '#94a3b8',
+            border: 'none',
+            borderRadius: '4px',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '0.35rem'
+          }}
+        >
+          <LayersIcon size={13} />
+          <span>Camadas (AST)</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setPaletteSubTab('canvas_tools')}
+          style={{
+            flex: 1,
+            padding: '0.35rem 0.5rem',
+            fontSize: '0.72rem',
+            fontWeight: 700,
+            background: paletteSubTab === 'canvas_tools' ? '#1e293b' : 'transparent',
+            color: paletteSubTab === 'canvas_tools' ? '#38bdf8' : '#94a3b8',
+            border: 'none',
+            borderRadius: '4px',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '0.35rem'
+          }}
+        >
+          <CameraIcon size={13} />
+          <span>Foto & Zonas</span>
+        </button>
+      </div>
+
+      {paletteSubTab === 'layers' && (
+        <UniversalLayerTree
+          ast={data.meta?.universalAST}
+          onUpdateArchetypeOverride={onUpdateArchetypeOverride || (() => {})}
+          hiddenSections={new Set(structureConfig.hiddenSections || [])}
+          onToggleSectionVisibility={handleToggleSectionVisibility}
+        />
+      )}
+
+      {paletteSubTab === 'canvas_tools' && (
+        <>
+          {/* ── Campo de Busca Rápida de Camadas ── */}
+          <div className="cv-pro-search-box">
         <SearchIcon size={13} style={{ color: 'var(--cv-pro-text-muted)', flexShrink: 0 }} />
         <input
           type="text"
@@ -1501,6 +1588,8 @@ export const CanvasElementsPalette: React.FC<CanvasElementsPaletteProps> = ({
             </div>
           )}
         </div>
+      )}
+        </>
       )}
     </div>
   )
