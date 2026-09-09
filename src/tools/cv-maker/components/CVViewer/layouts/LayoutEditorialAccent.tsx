@@ -88,6 +88,7 @@ export const LayoutEditorialAccent: React.FC<BaseLayoutProps> = ({
             {renderProjectsSection('left', 'right')}
             {renderEducationSection('left', 'right')}
             {renderReferencesSection('left', 'right', 'Referências')}
+            {renderers.renderCustomAstSections?.('left', 'left')}
           </aside>
 
           <main className="cv-editorial-main">
@@ -107,6 +108,7 @@ export const LayoutEditorialAccent: React.FC<BaseLayoutProps> = ({
             {renderLanguagesSection('right', 'left', 'Idiomas')}
             {renderCertificatesSection('right', 'left', 'Certificações')}
             {renderInterestsSection('right', 'left', 'Interesses')}
+            {renderers.renderCustomAstSections?.('right', 'right')}
           </main>
         </div>
       </div>

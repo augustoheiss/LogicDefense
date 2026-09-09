@@ -478,13 +478,14 @@ export const CVMakerApp: React.FC = () => {
     provenanceBus.execute('canvas', 'reorder_sequence', () => {
       const ast = cvData?.meta?.universalAST
       const blocks = ast?.blocks || []
-      const currentIdx = blocks.findIndex(b => b.key === sectionKey)
+      const currentIdx = blocks.findIndex(b => b.key === sectionKey || (sectionKey === 'header' && b.key === 'basics'))
       if (currentIdx === -1) return
 
+      const actualKey = blocks[currentIdx].key
       const targetIdx = direction === 'up' ? currentIdx - 1 : currentIdx + 1
       if (targetIdx < 0 || targetIdx >= blocks.length) return
 
-      const mutatedYaml = ASTSequenceMutator.reorderTopLevelKey(yamlInput, sectionKey, targetIdx)
+      const mutatedYaml = ASTSequenceMutator.reorderTopLevelKey(yamlInput, actualKey, targetIdx)
       if (mutatedYaml && mutatedYaml !== yamlInput) {
         setYamlInput(mutatedYaml)
         handleParse(mutatedYaml)

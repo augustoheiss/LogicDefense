@@ -55,6 +55,7 @@ export const LayoutModular: React.FC<BaseLayoutProps> = ({
         {renderCertificatesSection()}
         {renderReferencesSection()}
         {renderInterestsSection()}
+        {renderers.renderCustomAstSections?.()}
       </div>
     </CVPageCard>
   )

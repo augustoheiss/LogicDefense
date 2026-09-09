@@ -63,6 +63,17 @@ export function useSectionOrdering({
   }, [structureConfig?.sectionDimensions])
 
   const getDynamicMathSections = React.useCallback(() => {
+    const astBlocks = data.meta?.universalAST?.blocks || []
+    const standardKeys = new Set([
+      'basics', 'meta', 'document_title', 'title', 'themeConfig',
+      'work', 'education', 'projects', 'skills', 'languages',
+      'certificates', 'interests', 'references', 'photo', 'summary',
+      'resumo', 'contacts', 'civil', 'header', 'cover_letter'
+    ])
+    const customSectionKeys = astBlocks
+      .map(b => b.key)
+      .filter(k => !standardKeys.has(k))
+
     const defaultSections = [
       'photo',
       'header',
@@ -74,7 +85,8 @@ export function useSectionOrdering({
       ...(data.languages && data.languages.length > 0 ? ['languages'] : []),
       ...(data.certificates && data.certificates.length > 0 ? ['certificates'] : []),
       ...(data.interests && data.interests.length > 0 ? ['interests'] : []),
-      ...(data.references && data.references.length > 0 ? ['references'] : [])
+      ...(data.references && data.references.length > 0 ? ['references'] : []),
+      ...customSectionKeys
     ]
 
     return [...defaultSections].sort((a, b) => {

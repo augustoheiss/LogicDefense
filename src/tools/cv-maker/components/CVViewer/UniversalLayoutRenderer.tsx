@@ -192,6 +192,7 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
         data={data}
         blueprint={blueprint}
         structureConfig={structureConfig}
+        onUpdateStructureConfig={onUpdateStructureConfig}
         isFreeCanvas={isFreeCanvas}
         renderers={renderers}
         handleUpdateSplitRatio={handleUpdateSplitRatio}

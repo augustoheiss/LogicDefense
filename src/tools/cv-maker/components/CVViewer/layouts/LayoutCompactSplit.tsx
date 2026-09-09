@@ -88,6 +88,7 @@ export const LayoutCompactSplit: React.FC<BaseLayoutProps> = ({
             {renderProjectsSection('left', 'right')}
             {renderCertificatesSection('left', 'right', 'Certificações')}
             {renderReferencesSection('left', 'right', 'Referências')}
+            {renderers.renderCustomAstSections?.('left', 'left')}
           </aside>
 
           <main className="cv-duo-right">
@@ -103,6 +104,7 @@ export const LayoutCompactSplit: React.FC<BaseLayoutProps> = ({
             {renderLanguagesSection('right', 'left', 'Idiomas')}
             {renderInterestsSection('right', 'left', 'Hobbies')}
             {renderReferencesSection('right', 'right', 'Referências')}
+            {renderers.renderCustomAstSections?.('right', 'right')}
           </main>
         </div>
       </div>

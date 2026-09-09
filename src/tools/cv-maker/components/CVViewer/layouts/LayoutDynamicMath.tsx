@@ -1,11 +1,13 @@
 import React from 'react'
 import type { BaseLayoutProps } from './types'
 import { CVPageCard } from '../renderers/CVPageCard'
+import { UniversalSectionDispatcher } from '../../UniversalRenderers/UniversalSectionDispatcher'
 
 export const LayoutDynamicMath: React.FC<BaseLayoutProps> = ({
   data,
   blueprint: _blueprint,
   structureConfig,
+  onUpdateStructureConfig,
   isFreeCanvas,
   renderers,
   renderCanvasDecorations,
@@ -275,8 +277,24 @@ export const LayoutDynamicMath: React.FC<BaseLayoutProps> = ({
                 </React.Fragment>
               )
 
-            default:
+            default: {
+              const customBlock = data.meta?.universalAST?.blocks?.find(b => b.key === secKey)
+              if (customBlock) {
+                return (
+                  <React.Fragment key={`dyn_${secKey}`}>
+                    <UniversalSectionDispatcher
+                      block={customBlock}
+                      structureConfig={structureConfig}
+                      onUpdateStructureConfig={onUpdateStructureConfig}
+                      isFreeCanvas={isFreeCanvas}
+                      onMoveUp={() => renderers.handleMoveStep?.(customBlock.key, -1)}
+                      onMoveDown={() => renderers.handleMoveStep?.(customBlock.key, 1)}
+                    />
+                  </React.Fragment>
+                )
+              }
               return null
+            }
           }
         })}
       </div>

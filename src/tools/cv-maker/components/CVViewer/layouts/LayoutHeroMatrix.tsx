@@ -71,6 +71,7 @@ export const LayoutHeroMatrix: React.FC<BaseLayoutProps> = ({
         {renderLanguagesSection()}
         {renderCertificatesSection()}
         {renderInterestsSection()}
+        {renderers.renderCustomAstSections?.()}
       </div>
     </CVPageCard>
   )

@@ -95,6 +95,7 @@ export const LayoutSidebar: React.FC<BaseLayoutProps> = ({
             {renderWorkSection('left', 'right')}
             {renderProjectsSection('left', 'right')}
             {renderEducationSection('left', 'right')}
+            {renderers.renderCustomAstSections?.('left', 'left')}
           </aside>
           <main className="cv-main-col">
             {renderPhotoSection('right', 'left', 'Foto de Perfil', true)}
@@ -109,6 +110,7 @@ export const LayoutSidebar: React.FC<BaseLayoutProps> = ({
             {renderCertificatesSection('right', 'left', 'Certificações')}
             {renderReferencesSection('right', 'left', 'Referências')}
             {renderInterestsSection('right', 'left', 'Interesses')}
+            {renderers.renderCustomAstSections?.('right', 'right')}
           </main>
         </div>
       </div>

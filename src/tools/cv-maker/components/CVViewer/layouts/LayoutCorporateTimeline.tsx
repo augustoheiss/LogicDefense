@@ -102,6 +102,7 @@ export const LayoutCorporateTimeline: React.FC<BaseLayoutProps> = ({
             {renderProjectsSection('left', 'right')}
             {renderCertificatesSection('left', 'right', 'Certificações')}
             {renderReferencesSection('left', 'right', 'Referências')}
+            {renderers.renderCustomAstSections?.('left', 'left')}
           </aside>
 
           <main className="cv-navy-main">
@@ -124,6 +125,7 @@ export const LayoutCorporateTimeline: React.FC<BaseLayoutProps> = ({
             {renderSkillsSection('right', 'left', 'Expertise')}
             {renderLanguagesSection('right', 'left', 'Idiomas')}
             {renderInterestsSection('right', 'left', 'Interesses')}
+            {renderers.renderCustomAstSections?.('right', 'right')}
           </main>
         </div>
       </div>

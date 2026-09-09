@@ -90,6 +90,13 @@ export interface SectionRenderers {
     containerWrapper?: (items: React.ReactNode) => React.ReactNode
   ) => React.ReactNode
 
+  renderCustomAstSections?: (
+    targetZone?: 'left' | 'right',
+    defZone?: 'left' | 'right'
+  ) => React.ReactNode
+
+  handleMoveStep?: (secId: string, direction: -1 | 1) => void
+
   getDynamicMathSections: () => string[]
 }
 
@@ -97,6 +104,7 @@ export interface BaseLayoutProps {
   data: CVData
   blueprint: LayoutBlueprint
   structureConfig?: LayoutStructureConfig
+  onUpdateStructureConfig?: (newConfig: LayoutStructureConfig) => void
   isFreeCanvas: boolean
   renderers: SectionRenderers
   handleUpdateSplitRatio: (ratio: number) => void

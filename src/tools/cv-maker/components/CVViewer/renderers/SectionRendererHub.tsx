@@ -5,6 +5,7 @@ import { AtomicItemRenderer } from '../../blocks/AtomicItemRenderer'
 import { SectionWrapper } from './SectionWrapper'
 import { getAtomicItemId } from '../../../utils/atomicIdUtils'
 import type { SectionRenderers } from '../layouts/types'
+import { UniversalSectionDispatcher } from '../../UniversalRenderers/UniversalSectionDispatcher'
 
 interface UseSectionRenderersProps {
   data: CVData
@@ -452,6 +453,47 @@ export function useSectionRenderers({
     )
   }
 
+  const renderCustomAstSections = (
+    targetZone?: 'left' | 'right',
+    defZone: 'left' | 'right' = 'right'
+  ): React.ReactNode => {
+    const ast = data.meta?.universalAST
+    if (!ast?.blocks || ast.blocks.length === 0) return null
+
+    const standardKeys = new Set([
+      'basics', 'meta', 'document_title', 'title', 'themeConfig',
+      'work', 'education', 'projects', 'skills', 'languages',
+      'certificates', 'interests', 'references', 'photo', 'summary',
+      'resumo', 'contacts', 'civil', 'header', 'cover_letter'
+    ])
+
+    const customBlocks = ast.blocks.filter(b => !standardKeys.has(b.key))
+    if (customBlocks.length === 0) return null
+
+    return (
+      <React.Fragment key="custom_ast_sections_group">
+        {customBlocks.map((block) => {
+          if (targetZone) {
+            const assignedZone = getSectionZone(block.key, defZone)
+            if (assignedZone !== targetZone) return null
+          }
+
+          return (
+            <UniversalSectionDispatcher
+              key={block.key}
+              block={block}
+              structureConfig={structureConfig}
+              onUpdateStructureConfig={onUpdateStructureConfig}
+              isFreeCanvas={isFreeCanvas}
+              onMoveUp={() => handleMoveStep(block.key, -1)}
+              onMoveDown={() => handleMoveStep(block.key, 1)}
+            />
+          )
+        })}
+      </React.Fragment>
+    )
+  }
+
   return {
     wrapSection,
     renderZoneSection,
@@ -464,6 +506,8 @@ export function useSectionRenderers({
     renderCertificatesSection,
     renderInterestsSection,
     renderReferencesSection,
+    renderCustomAstSections,
+    handleMoveStep,
     getDynamicMathSections
   }
 }
