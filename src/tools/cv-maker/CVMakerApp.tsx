@@ -63,6 +63,15 @@ export const CVMakerApp: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'chat' | 'editor' | 'history' | 'canvas'>('editor')
   const [isMobileDrawerOpen, setIsMobileDrawerOpen] = useState<boolean>(false)
 
+  // Alterna automaticamente para a aba do editor quando o usuário clica para localizar uma chave YAML no AST ou Canvas
+  useEffect(() => {
+    const handleLocateKey = () => {
+      setActiveTab('editor')
+    }
+    window.addEventListener('cv_locate_yaml_key', handleLocateKey)
+    return () => window.removeEventListener('cv_locate_yaml_key', handleLocateKey)
+  }, [])
+
   // Pro Inspector Drawer & Flexible Splitter State
   const [leftDockWidth, setLeftDockWidth] = useState<number>(() => {
     const saved = localStorage.getItem('cv_maker_left_dock_width_px')

@@ -53,17 +53,28 @@ export const UniversalSectionDispatcher: React.FC<UniversalSectionDispatcherProp
       data-archetype={effectiveArchetype}
       style={{
         position: 'relative',
-        marginBottom: '1.4rem'
+        marginBottom: '1.4rem',
+        backgroundColor: `var(--sec-${block.key}-bg, transparent)`,
+        backgroundImage: `var(--sec-${block.key}-bg-image, none)`,
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+        color: `var(--sec-${block.key}-text, inherit)`,
+        borderRadius: '6px',
+        border: `1px solid var(--sec-${block.key}-border, transparent)`,
+        ['--cv-color-primary' as any]: `var(--sec-${block.key}-title, var(--cv-color-primary, #0f172a))`,
+        ['--cv-color-text' as any]: `var(--sec-${block.key}-text, var(--cv-color-text, #334155))`,
+        ['--cv-color-border' as any]: `var(--sec-${block.key}-border, var(--cv-color-border, #cbd5e1))`,
+        ['--cv-color-accent' as any]: `var(--sec-${block.key}-accent, var(--cv-color-accent, #f97316))`,
       }}
     >
-      {/* Cabeçalho da Seção com Título e Seletor do Arquétipo */}
+      {/* Cabeçalho da Seção com Título, Botão YAML e Seletor do Arquétipo */}
       <div
         style={{
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
           paddingBottom: '0.4rem',
-          borderBottom: '1.5px solid var(--cv-color-border, #cbd5e1)',
+          borderBottom: `1.5px solid var(--sec-${block.key}-border, var(--cv-color-border, #cbd5e1))`,
           marginBottom: '0.5rem'
         }}
       >
@@ -73,21 +84,46 @@ export const UniversalSectionDispatcher: React.FC<UniversalSectionDispatcherProp
             fontWeight: 800,
             textTransform: 'uppercase',
             letterSpacing: '0.05em',
-            color: 'var(--cv-color-primary, #0f172a)',
+            color: `var(--sec-${block.key}-title, var(--cv-color-primary, #0f172a))`,
             margin: 0
           }}
         >
           {block.title}
         </h2>
 
-        {/* Badge do Arquétipo com Menu Suspenso Interativo (Soberania do Usuário) */}
-        {isEditable && onUpdateArchetype && (
-          <div style={{ position: 'relative' }} className="cv-no-print">
-            <button
-              type="button"
-              onClick={() => setIsMenuOpen(!isMenuOpen)}
-              title={`Arquétipo: ${archetypeDef.label} (Confiança: ${(block.classification.confidence * 100).toFixed(0)}%). Clique para alternar.`}
-              style={{
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }} className="cv-no-print">
+          {/* Botão de Localização Bidirecional no YAML */}
+          <button
+            type="button"
+            onClick={() => window.dispatchEvent(new CustomEvent('cv_locate_yaml_key', { detail: { key: block.key } }))}
+            title={`Localizar "${block.key}" no editor de código YAML`}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.25rem',
+              fontSize: '0.64rem',
+              fontWeight: 600,
+              padding: '0.15rem 0.45rem',
+              borderRadius: '4px',
+              background: 'var(--cv-color-surface, #f8fafc)',
+              color: 'var(--cv-color-text-muted, #64748b)',
+              border: '1px solid var(--cv-color-border, #cbd5e1)',
+              cursor: 'pointer',
+              transition: 'all 0.15s ease'
+            }}
+          >
+            <span>📝</span>
+            <span>YAML</span>
+          </button>
+
+          {/* Badge do Arquétipo com Menu Suspenso Interativo (Soberania do Usuário) */}
+          {isEditable && onUpdateArchetype && (
+            <div style={{ position: 'relative' }}>
+              <button
+                type="button"
+                onClick={() => setIsMenuOpen(!isMenuOpen)}
+                title={`Arquétipo: ${archetypeDef.label} (Confiança: ${(block.classification.confidence * 100).toFixed(0)}%). Clique para alternar.`}
+                style={{
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: '0.35rem',
@@ -184,6 +220,7 @@ export const UniversalSectionDispatcher: React.FC<UniversalSectionDispatcherProp
             )}
           </div>
         )}
+        </div>
       </div>
 
       {/* Conteúdo do Arquétipo */}

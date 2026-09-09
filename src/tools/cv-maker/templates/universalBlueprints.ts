@@ -3,7 +3,7 @@ import { DEFAULT_JOHN_DOE_YAML } from './defaultTemplate'
 export interface DocumentBlueprint {
   id: string
   title: string
-  category: 'cv' | 'proposal' | 'report' | 'technical'
+  category: 'cv' | 'proposal' | 'report' | 'technical' | 'clinical' | 'contract'
   icon: string
   badge: string
   description: string
@@ -130,6 +130,123 @@ diretrizes_governanca: |
   Recomenda-se a adoção de rotinas trimestrais de Chaos Engineering (Chaos Mesh) a partir de Q4/2026 para testar a resiliência a partições de rede transatlânticas.
 `
 
+export const PRONTUARIO_MEDICO_BLUEPRINT_YAML = `document_title: "Prontuário Médico & Evolução Clínica Especializada"
+meta:
+  isUniversalDocument: true
+basics:
+  name: "Prontuário de Evolução Clínica #HC-98421"
+  label: "Hospital Israelita Albert Einstein • Cardiologia & Metabologia"
+  email: "dr.ricardo.moraes@einstein.br"
+  phone: "+55 (11) 2151-1233"
+  url: "https://portal.einstein.br/paciente/98421"
+  summary: "Paciente masculino, 48 anos, em acompanhamento multidisciplinar no ambulatório de cardiologia. Evolução altamente favorável pós-ajuste terapêutico com normalização pressórica e remissão laboratorial de glicemia alterada."
+
+dados_paciente:
+  nome_paciente: "Carlos Eduardo Silveira"
+  idade_nascimento: "48 anos (14/05/1978)"
+  registro_hospitalar: "HC-98421-SP"
+  convenio_plano: "Bradesco Saúde Top Nacional"
+  pressao_arterial: "125 x 80 mmHg"
+  frequencia_cardiaca: "66 bpm (Ritmo Sinusal)"
+  indice_massa_corporal: "24.6 kg/m² (Eutrófico)"
+
+historico_atendimentos:
+  - consulta: "Consulta Inicial: Queixa de Cansaço e Dispneia"
+    startDate: "2026-03-15"
+    endDate: "2026-03-15"
+    conduta: "Investigação de fadiga matinal aos moderados esforços. Solicitados ecocardiograma com Doppler tecidual e painel lipídico completo."
+  - consulta: "Retorno com Laudos & Início de Terapêutica"
+    startDate: "2026-05-20"
+    endDate: "2026-05-20"
+    conduta: "Função ventricular preservada (FE 64%). Pré-diabetes detectado. Prescrita intervenção farmacológica associada a reeducação alimentar."
+  - consulta: "Evolução Semestral & Titulação de Dosagem"
+    startDate: "2026-08-10"
+    endDate: "2026-08-10"
+    conduta: "Perda ponderal de 4.2kg. Excelente adesão ao treino resistido. Ausência total de queixas cardiovasculares."
+
+exames_laboratoriais:
+  hemoglobina_glicada_hba1c: "5.3% (Valor de Referência < 5.7%)"
+  glicemia_em_jejum: "89 mg/dL (Normal: 70 a 99 mg/dL)"
+  colesterol_ldl: "64 mg/dL (Alvo Terapêutico < 70)"
+  colesterol_hdl: "56 mg/dL (Desejável > 40)"
+  creatinina_serica: "0.92 mg/dL (Normal)"
+  taxa_filtracao_glomerular: "> 90 mL/min/1.73m²"
+
+prescricoes_ativas:
+  - "Losartana Potássica 50mg (1 comp via oral às 08h)"
+  - "Metformina XR 500mg (2 comp via oral no jantar)"
+  - "Rosuvastatina 10mg (1 comp via oral antes de dormir)"
+  - "Coenzima Q10 100mg (1 cápsula no almoço)"
+  - "Vitamina D3 2.000 UI (1 cápsula pela manhã)"
+
+diagnosticos_e_estadiamento:
+  - cid: "CID-10 I10 - Hipertensão Arterial Sistêmica"
+    estagio: "Estágio 1 - Controlada"
+    prognostico: "Excelente controle ambulatorial sem lesão em órgãos-alvo."
+  - cid: "CID-10 E11.9 - Disglicemia Pré-Diabética"
+    estagio: "Remissão Metabólica Funcional"
+    prognostico: "HbA1c normalizada através de estilo de vida e metformina."
+
+parecer_clinico_prosa: |
+  Paciente segue em ótimo estado geral, corado, hidratado e eupneico. Ausência de sopros à ausculta cardíaca e ruídos adventícios pulmonares.
+  Manter o esquema posológico atual sem interrupções. Estimulada a continuidade das atividades físicas aeróbicas combinadas com musculação (mínimo 180 min/semana).
+  Retorno ambulatorial agendado para 6 (seis) meses com novos controles bioquímicos e teste ergométrico de acompanhamento.
+`
+
+export const CONTRATO_PRESTACAO_SERVICOS_BLUEPRINT_YAML = `document_title: "Instrumento Particular de Prestação de Serviços Técnicos em TI & SLA"
+meta:
+  isUniversalDocument: true
+basics:
+  name: "Contrato de Serviços Técnicos & Soluções em Nuvem"
+  label: "Instrumento Contratual Nº 2026/CT-048 • Vigência 12 Meses"
+  email: "juridico@apexlogic.io"
+  phone: "+55 (11) 3456-7890"
+  url: "https://apexlogic.io/contratos/ct-048"
+  summary: "Contrato celebrado entre Apex Logic Systems Ltda. (CONTRATADA) e Omnia Global Retail S.A. (CONTRATANTE) para modernização da arquitetura de microsserviços, implantação de agentes de inteligência artificial e sustentação continuada em nuvem."
+
+partes_contratantes:
+  contratada_razao_social: "Apex Logic Systems Ltda."
+  contratada_cnpj: "42.891.002/0001-94"
+  contratada_sede: "Av. Paulista, 1842, 14º andar, Bela Vista - São Paulo/SP"
+  contratante_razao_social: "Omnia Global Retail S.A."
+  contratante_cnpj: "18.304.551/0001-20"
+  contratante_sede: "Av. Brigadeiro Faria Lima, 3477, Itaim Bibi - São Paulo/SP"
+  foro_de_eleicao: "Comarca da Capital do Estado de São Paulo"
+
+pacotes_entregaveis:
+  - pacote: "Pacote 1: Documento de Arquitetura & Blueprint Técnico"
+    prazo: "30 (trinta) dias corridos"
+    valor: "R$ 45.000,00"
+    descricao: "Mapeamento minucioso do monolito legado, matriz de dependências, arquitetura de eventos Kafka e especificações OpenAPI 3.1."
+  - pacote: "Pacote 2: Malha de Agentes de IA & Pipelines de RAG"
+    prazo: "60 (sessenta) dias corridos"
+    valor: "R$ 85.000,00"
+    descricao: "Desenvolvimento e orquestração de microsserviços de IA, integração segura com banco vetorial pgvector e isolamento multi-inquilino."
+  - pacote: "Pacote 3: Homologação, Testes de Carga & Go-Live"
+    prazo: "30 (trinta) dias corridos"
+    valor: "R$ 50.000,00"
+    descricao: "Execução de testes de estresse para 120k req/s, auditoria de segurança SOC 2 e transição assistida com virada de DNS canário."
+
+condicoes_faturamento:
+  parcela_1_sinal: "R$ 36.000,00 (10 dias após a assinatura)"
+  parcela_2_pacote_1: "R$ 45.000,00 (Após homologação do Pacote 1)"
+  parcela_3_pacote_2: "R$ 49.000,00 (Após homologação do Pacote 2)"
+  parcela_4_conclusao: "R$ 50.000,00 (Após conclusão do Go-Live)"
+  valor_global_contrato: "R$ 180.000,00 (Cento e oitenta mil reais)"
+
+niveis_garantia_sla:
+  - "Disponibilidade da Solução: 99.95% em Regime 24/7/365"
+  - "Tempo de Atendimento P1 (Crítico): < 30 minutos"
+  - "Tempo de Resolução P1: < 4 horas corridas"
+  - "Backups com RPO = 0 segundos e RTO < 15 minutos"
+  - "Multa de 2% sobre a fatura por infração de SLA"
+
+clausulas_gerais_prosa: |
+  CLÁUSULA PRIMEIRA - DO OBJETO E ESCOPO: O presente contrato tem por objeto a prestação, pela CONTRATADA à CONTRATANTE, de serviços de engenharia de software e implantação de agentes de inteligência artificial descritos nos pacotes anexos.
+  CLÁUSULA SEGUNDA - DA CONFIDENCIALIDADE: As partes comprometem-se a resguardar o sigilo absoluto sobre todas as informações confidenciais, segredos industriais e dados protegidos pela LGPD pelo prazo de 5 (cinco) anos.
+  CLÁUSULA TERCEIRA - DA PROPRIEDADE INTELECTUAL: Todos os códigos-fonte, pipelines e configurações personalizadas desenvolvidas especificamente no âmbito deste contrato serão de propriedade exclusiva da CONTRATANTE após a liquidação integral das obrigações.
+`
+
 export const UNIVERSAL_BLUEPRINTS: DocumentBlueprint[] = [
   {
     id: 'canonical_cv',
@@ -157,5 +274,24 @@ export const UNIVERSAL_BLUEPRINTS: DocumentBlueprint[] = [
     badge: 'Relatório Técnico',
     description: 'Relatório corporativo com métricas de observabilidade, histórico de melhorias, serviços auditados e conformidade.',
     yamlContent: RELATORIO_ARQUITETURA_BLUEPRINT_YAML
+  },
+  {
+    id: 'clinical_record',
+    title: 'Prontuário Médico & Evolução Clínica',
+    category: 'clinical',
+    icon: '🩺',
+    badge: 'Saúde & Medicina',
+    description: 'Prontuário médico com histórico de atendimentos (Timeline), exames (Tabela), medicamentos (Badges) e diagnóstico (Cards).',
+    yamlContent: PRONTUARIO_MEDICO_BLUEPRINT_YAML
+  },
+  {
+    id: 'commercial_contract',
+    title: 'Contrato de Serviços Técnicos & SLA',
+    category: 'contract',
+    icon: '📜',
+    badge: 'Jurídico & Negócios',
+    description: 'Instrumento contratual completo com partes (Tabela), entregáveis (Cards), faturamento (Tabela), SLA (Badges) e cláusulas (Prosa).',
+    yamlContent: CONTRATO_PRESTACAO_SERVICOS_BLUEPRINT_YAML
   }
 ]
+

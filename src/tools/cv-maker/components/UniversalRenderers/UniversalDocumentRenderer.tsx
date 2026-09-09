@@ -49,7 +49,12 @@ export const UniversalDocumentRenderer: React.FC<UniversalDocumentRendererProps>
           style={{
             marginBottom: '1.6rem',
             paddingBottom: '1.2rem',
-            borderBottom: '2.5px solid var(--cv-color-primary, #0f172a)'
+            borderBottom: '2.5px solid var(--sec-header-border, var(--cv-color-primary, #0f172a))',
+            backgroundColor: 'var(--sec-header-bg, transparent)',
+            backgroundImage: 'var(--sec-header-bg-image, none)',
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+            color: 'var(--sec-header-text, inherit)'
           }}
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem' }}>
@@ -60,7 +65,7 @@ export const UniversalDocumentRenderer: React.FC<UniversalDocumentRendererProps>
                   fontSize: '1.75rem',
                   fontWeight: 900,
                   letterSpacing: '-0.025em',
-                  color: 'var(--cv-color-primary, #0f172a)',
+                  color: 'var(--sec-header-title, var(--cv-color-primary, #0f172a))',
                   margin: '0 0 0.4rem 0',
                   lineHeight: 1.2
                 }}

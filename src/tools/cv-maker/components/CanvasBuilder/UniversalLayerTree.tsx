@@ -166,13 +166,47 @@ export const UniversalLayerTree: React.FC<UniversalLayerTreeProps> = ({
                       {block.title}
                     </div>
                     <div style={{ fontSize: '0.65rem', color: '#64748b' }}>
-                      <code>/{block.key}</code> • {block.items.length} {block.items.length === 1 ? 'item' : 'itens'}
+                      <code
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          window.dispatchEvent(new CustomEvent('cv_locate_yaml_key', { detail: { key: block.key } }))
+                        }}
+                        title={`Clique para localizar "${block.key}" no editor YAML`}
+                        style={{ cursor: 'pointer', color: '#38bdf8' }}
+                      >
+                        /{block.key}
+                      </code> • {block.items.length} {block.items.length === 1 ? 'item' : 'itens'}
                     </div>
                   </div>
                 </div>
 
-                {/* Controles da Camada (Arquétipo Dropdown + Visibilidade) */}
+                {/* Controles da Camada (Localizador YAML + Arquétipo Dropdown + Visibilidade) */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexShrink: 0 }} onClick={(e) => e.stopPropagation()}>
+                  {/* Botão Localizar no YAML */}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      window.dispatchEvent(new CustomEvent('cv_locate_yaml_key', { detail: { key: block.key } }))
+                    }}
+                    title={`Localizar "${block.key}" no editor YAML`}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      padding: '0.2rem',
+                      color: '#94a3b8',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      fontSize: '0.72rem',
+                      transition: 'color 0.15s ease'
+                    }}
+                    onMouseEnter={(e) => (e.currentTarget.style.color = '#38bdf8')}
+                    onMouseLeave={(e) => (e.currentTarget.style.color = '#94a3b8')}
+                  >
+                    <span>📝</span>
+                  </button>
+
                   {/* Botão Seletor de Arquétipo com Popover */}
                   <div style={{ position: 'relative' }}>
                     <button
@@ -383,6 +417,11 @@ export const UniversalLayerTree: React.FC<UniversalLayerTreeProps> = ({
                     {block.items.slice(0, 6).map((it, idx) => (
                       <div
                         key={it.id || idx}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          window.dispatchEvent(new CustomEvent('cv_locate_yaml_key', { detail: { key: block.key, itemTitle: it.title } }))
+                        }}
+                        title={`Localizar "${it.title || block.key}" no editor YAML`}
                         style={{
                           display: 'flex',
                           justifyContent: 'space-between',
@@ -391,8 +430,12 @@ export const UniversalLayerTree: React.FC<UniversalLayerTreeProps> = ({
                           background: '#1e293b',
                           borderRadius: '4px',
                           color: '#e2e8f0',
-                          fontSize: '0.7rem'
+                          fontSize: '0.7rem',
+                          cursor: 'pointer',
+                          transition: 'background 0.15s ease'
                         }}
+                        onMouseEnter={(e) => (e.currentTarget.style.background = '#334155')}
+                        onMouseLeave={(e) => (e.currentTarget.style.background = '#1e293b')}
                       >
                         <span style={{ fontWeight: 600, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', maxWidth: '180px' }}>
                           {it.title || `Item #${idx + 1}`}

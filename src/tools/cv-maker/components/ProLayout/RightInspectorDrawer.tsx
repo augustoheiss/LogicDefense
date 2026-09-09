@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react'
+import React, { useState, useRef, useMemo } from 'react'
 import type { LayoutVariant, CVDesignConfig, SectionStyleOverride, PageFormat, CustomPageDimensions, CVData } from '../../types/cv'
 import { LAYOUT_OPTIONS, DEFAULT_DESIGN_CONFIG } from '../../types/cv'
 import { PAGE_FORMATS } from '../../engine/PageFormatEngine'
@@ -6,6 +6,7 @@ import { calculateAtsReport } from '../../engine/AtsEngine'
 import { BACKGROUND_CATALOG, BACKGROUND_CATEGORIES } from '../../engine/backgroundCatalog'
 import { compressImageFile } from '../../utils/imageCompressor'
 import { UNIVERSAL_BLUEPRINTS, type DocumentBlueprint } from '../../templates/universalBlueprints'
+import { ARCHETYPE_DEFINITIONS } from '../../types/universalAST'
 import {
   CloseIcon,
   LayoutIcon,
@@ -274,8 +275,6 @@ export const RightInspectorDrawer: React.FC<RightInspectorDrawerProps> = ({
   const fileInputRef = useRef<HTMLInputElement>(null)
   const sectionFileInputRef = useRef<HTMLInputElement>(null)
 
-  if (!isOpen) return null
-
   const atsReport = calculateAtsReport(cvData, jdText)
   const scoreColor = atsReport.overallScore >= 80 ? '#22c55e' : atsReport.overallScore >= 60 ? '#eab308' : '#ef4444'
 
@@ -323,10 +322,47 @@ export const RightInspectorDrawer: React.FC<RightInspectorDrawerProps> = ({
     onChangeDesignConfig(DEFAULT_DESIGN_CONFIG)
   }
 
+  const dynamicSectionsList: SectionMeta[] = useMemo(() => {
+    const isUniversal = Boolean(cvData?.meta?.isUniversalDocument)
+    const blocks = cvData?.meta?.universalAST?.blocks || []
+
+    if (isUniversal && blocks.length > 0) {
+      const list: SectionMeta[] = [
+        { id: 'header', name: 'Cabeçalho / Header', icon: TypeIcon, description: 'Título, autor, contatos e topo' }
+      ]
+      for (const b of blocks) {
+        const arch = b.classification?.effective || 'card_grid'
+        let SecIcon = LayersIcon
+        if (arch === 'timeline') SecIcon = BriefcaseIcon
+        else if (arch === 'badge_list') SecIcon = ZapIcon
+        else if (arch === 'key_value_table') SecIcon = SlidersIcon
+        else if (arch === 'prose_flow') SecIcon = FileTextIcon
+        else if (arch === 'card_grid') SecIcon = RocketIcon
+
+        const archDef = ARCHETYPE_DEFINITIONS[arch]
+        list.push({
+          id: b.key,
+          name: b.title || b.key,
+          icon: SecIcon,
+          description: `${archDef?.label || 'Seção Universal'} • /${b.key} (${b.items?.length || 0} itens)`
+        })
+      }
+      return list
+    }
+
+    return SECTIONS_LIST
+  }, [cvData])
+
+  const effectiveSectionId = dynamicSectionsList.some(s => s.id === selectedSectionId)
+    ? selectedSectionId
+    : (dynamicSectionsList[0]?.id || 'header')
+
   const activeOverridesCount = Object.keys(designConfig.sectionOverrides || {}).length
-  const currentSectionMeta = SECTIONS_LIST.find(s => s.id === selectedSectionId) || SECTIONS_LIST[0]
-  const currentSectionOverride = designConfig.sectionOverrides?.[selectedSectionId] || {}
+  const currentSectionMeta = dynamicSectionsList.find(s => s.id === effectiveSectionId) || dynamicSectionsList[0]
+  const currentSectionOverride = designConfig.sectionOverrides?.[effectiveSectionId] || {}
   const CurrentSectionIcon = currentSectionMeta.icon
+
+  if (!isOpen) return null
 
   return (
     <aside className="cv-pro-inspector cv-no-print" aria-label="Inspetor de Propriedades">
@@ -1069,7 +1105,7 @@ export const RightInspectorDrawer: React.FC<RightInspectorDrawerProps> = ({
                     Selecione o Setor do Currículo:
                   </label>
                   <select
-                    value={selectedSectionId}
+                    value={effectiveSectionId}
                     onChange={(e) => setSelectedSectionId(e.target.value)}
                     style={{
                       width: '100%',
@@ -1083,7 +1119,7 @@ export const RightInspectorDrawer: React.FC<RightInspectorDrawerProps> = ({
                       cursor: 'pointer'
                     }}
                   >
-                    {SECTIONS_LIST.map((sec) => {
+                    {dynamicSectionsList.map((sec) => {
                       const hasOverride = Boolean(designConfig.sectionOverrides?.[sec.id])
                       return (
                         <option key={sec.id} value={sec.id}>
@@ -1111,10 +1147,10 @@ export const RightInspectorDrawer: React.FC<RightInspectorDrawerProps> = ({
                       </div>
                     </div>
 
-                    {Boolean(designConfig.sectionOverrides?.[selectedSectionId]) && (
+                    {Boolean(designConfig.sectionOverrides?.[effectiveSectionId]) && (
                       <button
                         type="button"
-                        onClick={() => handleResetSectionOverride(selectedSectionId)}
+                        onClick={() => handleResetSectionOverride(effectiveSectionId)}
                         className="cv-pro-btn"
                         style={{ padding: '0.2rem 0.45rem', fontSize: '0.68rem', borderColor: '#ef4444', color: '#f87171' }}
                         title="Restaurar valores padrão deste setor"
@@ -1133,8 +1169,8 @@ export const RightInspectorDrawer: React.FC<RightInspectorDrawerProps> = ({
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                         <input
                           type="color"
-                          value={currentSectionOverride.textColor || (selectedSectionId === 'sidebar' ? '#cbd5e1' : designConfig.colorText || '#0f172a')}
-                          onChange={(e) => handleUpdateSectionOverride(selectedSectionId, 'textColor', e.target.value)}
+                          value={currentSectionOverride.textColor || (effectiveSectionId === 'sidebar' ? '#cbd5e1' : designConfig.colorText || '#0f172a')}
+                          onChange={(e) => handleUpdateSectionOverride(effectiveSectionId, 'textColor', e.target.value)}
                           style={{ width: '28px', height: '24px', border: 'none', background: 'transparent', cursor: 'pointer', padding: 0 }}
                         />
                         <span style={{ fontSize: '0.72rem', color: '#e2e8f0', fontFamily: 'monospace' }}>
@@ -1149,8 +1185,8 @@ export const RightInspectorDrawer: React.FC<RightInspectorDrawerProps> = ({
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                         <input
                           type="color"
-                          value={currentSectionOverride.titleColor || (selectedSectionId === 'sidebar' ? '#38bdf8' : designConfig.colorPrimary || '#0284c7')}
-                          onChange={(e) => handleUpdateSectionOverride(selectedSectionId, 'titleColor', e.target.value)}
+                          value={currentSectionOverride.titleColor || (effectiveSectionId === 'sidebar' ? '#38bdf8' : designConfig.colorPrimary || '#0284c7')}
+                          onChange={(e) => handleUpdateSectionOverride(effectiveSectionId, 'titleColor', e.target.value)}
                           style={{ width: '28px', height: '24px', border: 'none', background: 'transparent', cursor: 'pointer', padding: 0 }}
                         />
                         <span style={{ fontSize: '0.72rem', color: '#e2e8f0', fontFamily: 'monospace' }}>
@@ -1165,8 +1201,8 @@ export const RightInspectorDrawer: React.FC<RightInspectorDrawerProps> = ({
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                         <input
                           type="color"
-                          value={currentSectionOverride.bgColor || (selectedSectionId === 'sidebar' ? designConfig.colorSidebar || '#f8fafc' : designConfig.colorSurface || '#f8fafc')}
-                          onChange={(e) => handleUpdateSectionOverride(selectedSectionId, 'bgColor', e.target.value)}
+                          value={currentSectionOverride.bgColor || (effectiveSectionId === 'sidebar' ? designConfig.colorSidebar || '#f8fafc' : designConfig.colorSurface || '#f8fafc')}
+                          onChange={(e) => handleUpdateSectionOverride(effectiveSectionId, 'bgColor', e.target.value)}
                           style={{ width: '28px', height: '24px', border: 'none', background: 'transparent', cursor: 'pointer', padding: 0 }}
                         />
                         <span style={{ fontSize: '0.72rem', color: '#e2e8f0', fontFamily: 'monospace' }}>
@@ -1182,7 +1218,7 @@ export const RightInspectorDrawer: React.FC<RightInspectorDrawerProps> = ({
                         <input
                           type="color"
                           value={currentSectionOverride.borderColor || designConfig.colorBorder || '#e2e8f0'}
-                          onChange={(e) => handleUpdateSectionOverride(selectedSectionId, 'borderColor', e.target.value)}
+                          onChange={(e) => handleUpdateSectionOverride(effectiveSectionId, 'borderColor', e.target.value)}
                           style={{ width: '28px', height: '24px', border: 'none', background: 'transparent', cursor: 'pointer', padding: 0 }}
                         />
                         <span style={{ fontSize: '0.72rem', color: '#e2e8f0', fontFamily: 'monospace' }}>
@@ -1198,7 +1234,7 @@ export const RightInspectorDrawer: React.FC<RightInspectorDrawerProps> = ({
                         <input
                           type="color"
                           value={currentSectionOverride.accentColor || designConfig.colorAccent || '#f97316'}
-                          onChange={(e) => handleUpdateSectionOverride(selectedSectionId, 'accentColor', e.target.value)}
+                          onChange={(e) => handleUpdateSectionOverride(effectiveSectionId, 'accentColor', e.target.value)}
                           style={{ width: '28px', height: '24px', border: 'none', background: 'transparent', cursor: 'pointer', padding: 0 }}
                         />
                         <span style={{ fontSize: '0.72rem', color: '#e2e8f0', fontFamily: 'monospace' }}>
@@ -1217,7 +1253,7 @@ export const RightInspectorDrawer: React.FC<RightInspectorDrawerProps> = ({
                             type="file"
                             accept="image/*"
                             style={{ display: 'none' }}
-                            onChange={(e) => handleUploadCustomBg(e, selectedSectionId)}
+                            onChange={(e) => handleUploadCustomBg(e, effectiveSectionId)}
                           />
                           <button
                             type="button"
@@ -1232,7 +1268,7 @@ export const RightInspectorDrawer: React.FC<RightInspectorDrawerProps> = ({
                             <button
                               type="button"
                               className="cv-pro-btn"
-                              onClick={() => handleUpdateSectionOverride(selectedSectionId, 'bgImage', '')}
+                              onClick={() => handleUpdateSectionOverride(effectiveSectionId, 'bgImage', '')}
                               style={{ padding: '0.15rem 0.45rem', fontSize: '0.66rem', borderColor: '#ef4444', color: '#f87171' }}
                             >
                               <TrashIcon size={11} />
@@ -1252,7 +1288,7 @@ export const RightInspectorDrawer: React.FC<RightInspectorDrawerProps> = ({
                               <button
                                 key={bg.id}
                                 type="button"
-                                onClick={() => handleUpdateSectionOverride(selectedSectionId, 'bgImage', bg.url)}
+                                onClick={() => handleUpdateSectionOverride(effectiveSectionId, 'bgImage', bg.url)}
                                 style={{
                                   flex: '0 0 64px',
                                   height: '38px',
@@ -1294,8 +1330,8 @@ export const RightInspectorDrawer: React.FC<RightInspectorDrawerProps> = ({
                     Atalhos de Seleção Rápida:
                   </label>
                   <div style={{ display: 'flex', gap: '0.3rem', flexWrap: 'wrap' }}>
-                    {SECTIONS_LIST.map((sec) => {
-                      const isSelected = sec.id === selectedSectionId
+                    {dynamicSectionsList.map((sec) => {
+                      const isSelected = sec.id === effectiveSectionId
                       const isOverridden = Boolean(designConfig.sectionOverrides?.[sec.id])
                       const SecIcon = sec.icon
                       return (
