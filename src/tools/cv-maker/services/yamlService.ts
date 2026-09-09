@@ -1,14 +1,19 @@
 import * as yaml from 'js-yaml'
 import type { CVData } from '../types/cv'
+import type { LayoutArchetype } from '../types/universalAST'
 import { validateAndNormalizeCV } from './cvValidator'
 
 /**
  * Parses raw YAML text into a validated, safe CVData object.
+ * Accepts optional section layout archetype overrides.
  */
-export function parseYamlToCV(rawYaml: string): { data: CVData | null; error: string | null } {
+export function parseYamlToCV(
+  rawYaml: string, 
+  overrides?: Record<string, LayoutArchetype>
+): { data: CVData | null; error: string | null } {
   try {
     const rawParsed = yaml.load(rawYaml)
-    const result = validateAndNormalizeCV(rawParsed)
+    const result = validateAndNormalizeCV(rawParsed, overrides)
     if (!result.valid || !result.data) {
       return { data: null, error: result.error || 'Estrutura do YAML inválida.' }
     }
@@ -20,10 +25,18 @@ export function parseYamlToCV(rawYaml: string): { data: CVData | null; error: st
 
 /**
  * Serializes a CVData object into clean, block-style YAML with stable keys.
+ * Omits transient runtime AST metadata to ensure the user YAML stays pure.
  */
 export function cvToYaml(data: CVData): string {
   try {
-    return yaml.dump(data, {
+    const { meta, ...rest } = data
+    const cleanMeta = meta ? { ...meta } : undefined
+    if (cleanMeta) {
+      delete cleanMeta.universalAST
+    }
+    const payloadToDump = cleanMeta ? { ...rest, meta: cleanMeta } : rest
+
+    return yaml.dump(payloadToDump, {
       indent: 2,
       noArrayIndent: false,
       skipInvalid: true,

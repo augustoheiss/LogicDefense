@@ -1,3 +1,6 @@
+export * from './universalAST'
+import type { UniversalDocumentAST, LayoutArchetype } from './universalAST'
+
 export type TextVariant = 'official_master' | 'professional' | 'architect' | 'historian' | 'didactic' | 'alien'
 export type ThemeVariant = 'executive' | 'creative' | 'minimalist' | 'white' | 'terminal'
 export type LayoutVariant = 
@@ -274,6 +277,8 @@ export interface CVData {
   volunteer?: CVVolunteer[]
   references?: CVReference[]
   coverLetter?: CoverLetter
+  // Metadados universais e compatibilidade aberta com qualquer chave customizada do YAML
+  [key: string]: any
   meta?: {
     lastModified?: string
     version?: string
@@ -281,6 +286,9 @@ export interface CVData {
     layout?: LayoutVariant
     language?: LanguageCode
     temporalWarnings?: string[]
+    universalAST?: UniversalDocumentAST
+    isUniversalDocument?: boolean
+    sectionArchetypeOverrides?: Record<string, LayoutArchetype>
   }
 }
 

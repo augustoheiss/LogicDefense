@@ -1,4 +1,6 @@
 import type { CVData, CVBasics, CVWork, CVEducation, CVProject, CVSkill, CVLanguage, CVInterest, CVCertificate, CVAward, CVVolunteer } from '../types/cv'
+import { normalizeToUniversalAST } from '../engine/UniversalASTNormalizer'
+import type { LayoutArchetype } from '../types/universalAST'
 
 /**
  * Regex canônico para formatos de data suportados pelo padrão JSON Resume:
@@ -101,9 +103,13 @@ export function validateDateRange(
 
 /**
  * Validates and normalizes raw JSON/YAML data into a clean, crash-proof CVData object.
+ * Supports both canonical CV schemas and arbitrary Universal Document trees.
  * Applies safe defaults (e.g. empty arrays for missing optional sections).
  */
-export function validateAndNormalizeCV(raw: any): { 
+export function validateAndNormalizeCV(
+  raw: any,
+  overrides?: Record<string, LayoutArchetype>
+): { 
   valid: boolean
   data: CVData | null
   warnings?: string[]
@@ -116,41 +122,59 @@ export function validateAndNormalizeCV(raw: any): {
   const warnings: string[] = []
 
   const basicsRaw = raw.basics
-  if (!basicsRaw || typeof basicsRaw !== 'object' || !basicsRaw.name || typeof basicsRaw.name !== 'string') {
-    return { valid: false, data: null, error: 'O currículo precisa conter ao menos a seção "basics" com o campo "name".' }
-  }
+  const hasBasicsName = Boolean(
+    basicsRaw &&
+    typeof basicsRaw === 'object' &&
+    basicsRaw.name &&
+    typeof basicsRaw.name === 'string' &&
+    basicsRaw.name.trim().length > 0
+  )
 
-  const cleanBasics: CVBasics = {
-    name: String(basicsRaw.name || '').trim(),
-    label: basicsRaw.label ? String(basicsRaw.label).trim() : undefined,
-    image: basicsRaw.image ? String(basicsRaw.image).trim() : undefined,
-    email: basicsRaw.email ? String(basicsRaw.email).trim() : undefined,
-    phone: basicsRaw.phone ? String(basicsRaw.phone).trim() : undefined,
-    url: basicsRaw.url ? String(basicsRaw.url).trim() : undefined,
-    summary: basicsRaw.summary ? String(basicsRaw.summary).trim() : undefined,
-    location: basicsRaw.location && typeof basicsRaw.location === 'object' ? {
-      city: basicsRaw.location.city ? String(basicsRaw.location.city).trim() : undefined,
-      region: basicsRaw.location.region ? String(basicsRaw.location.region).trim() : undefined,
-      postalCode: basicsRaw.location.postalCode ? String(basicsRaw.location.postalCode).trim() : undefined,
-      countryCode: basicsRaw.location.countryCode ? String(basicsRaw.location.countryCode).trim() : undefined,
-      address: basicsRaw.location.address ? String(basicsRaw.location.address).trim() : undefined,
-    } : undefined,
-    profiles: Array.isArray(basicsRaw.profiles)
-      ? basicsRaw.profiles
-          .filter((p: any) => p && typeof p === 'object' && p.network && p.url)
-          .map((p: any) => ({
-            network: String(p.network).trim(),
-            username: String(p.username || '').trim(),
-            url: String(p.url).trim(),
-          }))
-      : [],
-    customBadges: Array.isArray(basicsRaw.customBadges)
-      ? basicsRaw.customBadges.map((b: any) => String(b).trim()).filter(Boolean)
-      : [],
-    imagePosX: typeof basicsRaw.imagePosX === 'number' ? basicsRaw.imagePosX : undefined,
-    imagePosY: typeof basicsRaw.imagePosY === 'number' ? basicsRaw.imagePosY : undefined,
-    imageScale: typeof basicsRaw.imageScale === 'number' ? basicsRaw.imageScale : undefined,
-  }
+  const isUniversalDoc = !hasBasicsName
+  const docTitle = raw.title || raw.name || raw.document_title || 'Documento Universal'
+
+  const cleanBasics: CVBasics = hasBasicsName
+    ? {
+        name: String(basicsRaw.name || '').trim(),
+        label: basicsRaw.label ? String(basicsRaw.label).trim() : undefined,
+        image: basicsRaw.image ? String(basicsRaw.image).trim() : undefined,
+        email: basicsRaw.email ? String(basicsRaw.email).trim() : undefined,
+        phone: basicsRaw.phone ? String(basicsRaw.phone).trim() : undefined,
+        url: basicsRaw.url ? String(basicsRaw.url).trim() : undefined,
+        summary: basicsRaw.summary ? String(basicsRaw.summary).trim() : undefined,
+        location: basicsRaw.location && typeof basicsRaw.location === 'object' ? {
+          city: basicsRaw.location.city ? String(basicsRaw.location.city).trim() : undefined,
+          region: basicsRaw.location.region ? String(basicsRaw.location.region).trim() : undefined,
+          postalCode: basicsRaw.location.postalCode ? String(basicsRaw.location.postalCode).trim() : undefined,
+          countryCode: basicsRaw.location.countryCode ? String(basicsRaw.location.countryCode).trim() : undefined,
+          address: basicsRaw.location.address ? String(basicsRaw.location.address).trim() : undefined,
+        } : undefined,
+        profiles: Array.isArray(basicsRaw.profiles)
+          ? basicsRaw.profiles
+              .filter((p: any) => p && typeof p === 'object' && p.network && p.url)
+              .map((p: any) => ({
+                network: String(p.network).trim(),
+                username: String(p.username || '').trim(),
+                url: String(p.url).trim(),
+              }))
+          : [],
+        customBadges: Array.isArray(basicsRaw.customBadges)
+          ? basicsRaw.customBadges.map((b: any) => String(b).trim()).filter(Boolean)
+          : [],
+        imagePosX: typeof basicsRaw.imagePosX === 'number' ? basicsRaw.imagePosX : undefined,
+        imagePosY: typeof basicsRaw.imagePosY === 'number' ? basicsRaw.imagePosY : undefined,
+        imageScale: typeof basicsRaw.imageScale === 'number' ? basicsRaw.imageScale : undefined,
+      }
+    : {
+        name: String(docTitle).trim(),
+        label: raw.subtitle || raw.description || undefined,
+        email: raw.contact?.email || undefined,
+        phone: raw.contact?.phone || undefined,
+        url: raw.website || raw.url || undefined,
+        summary: raw.summary || raw.overview || undefined,
+        profiles: [],
+        customBadges: [],
+      }
 
   const cleanWork: CVWork[] = Array.isArray(raw.work)
     ? raw.work
@@ -330,6 +354,10 @@ export function validateAndNormalizeCV(raw: any): {
         })
     : []
 
+  // Constrói o AST universal preservando overrides do usuário
+  const effectiveOverrides = overrides || raw.meta?.sectionArchetypeOverrides
+  const universalAST = normalizeToUniversalAST(raw, effectiveOverrides)
+
   // Normalização padronizada: seções opcionais retornam [] em vez de undefined, eliminando falhas de renderização
   const normalized: CVData = {
     basics: cleanBasics,
@@ -348,7 +376,30 @@ export function validateAndNormalizeCV(raw: any): {
       theme: raw.meta?.theme || 'executive',
       language: raw.meta?.language || 'pt',
       temporalWarnings: warnings.length > 0 ? warnings : undefined,
+      universalAST,
+      isUniversalDocument: isUniversalDoc,
+      sectionArchetypeOverrides: effectiveOverrides,
     },
+  }
+
+  // Preserva seções conhecidas opcionais (references, coverLetter)
+  if (raw.references && Array.isArray(raw.references)) {
+    (normalized as any).references = raw.references
+  }
+  if (raw.coverLetter && typeof raw.coverLetter === 'object') {
+    (normalized as any).coverLetter = raw.coverLetter
+  }
+
+  // Preserva todas as chaves arbitrárias/customizadas do YAML original
+  const standardKeys = new Set([
+    'basics', 'work', 'education', 'projects', 'skills', 
+    'languages', 'interests', 'certificates', 'awards', 
+    'volunteer', 'references', 'coverLetter', 'meta'
+  ])
+  for (const key of Object.keys(raw)) {
+    if (!standardKeys.has(key) && (normalized as any)[key] === undefined) {
+      (normalized as any)[key] = raw[key]
+    }
   }
 
   return { 
