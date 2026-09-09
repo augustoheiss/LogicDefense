@@ -140,9 +140,8 @@
     min-width: var(--cv-page-width, 210mm) !important;
     max-width: var(--cv-page-width, 210mm) !important;
     min-height: var(--cv-page-height, 297mm) !important;
-    /* Subpixel LayoutUnit Epsilon Buffer (Blink LayoutNG 24.6 fixed-point) */
-    height: calc(100% - 0.5px) !important;
-    overflow: hidden !important;
+    height: auto !important;
+    overflow: visible !important;
     margin: 0 !important;
     padding: 0 !important;
     box-sizing: border-box !important;
@@ -153,14 +152,13 @@
     background-image: none !important;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
-    page-break-after: always !important;
-    break-after: page !important;
-  }
-
-  .cv-page-a4:last-of-type,
-  .cv-page-a4:last-child {
     page-break-after: auto !important;
     break-after: auto !important;
+  }
+
+  .cv-page-a4 + .cv-page-a4 {
+    page-break-before: always !important;
+    break-before: page !important;
   }
 
   .cv-page-indicator-badge {
@@ -168,11 +166,8 @@
   }
 
   .cv-page-card {
-    display: flex !important;
-    flex-direction: column !important;
-    justify-content: flex-start !important;
-    page-break-after: always !important;
-    break-after: page !important;
+    display: block !important;
+    width: 100% !important;
     margin: 0 !important;
     box-shadow: none !important;
     border-radius: 0 !important;
@@ -180,14 +175,65 @@
   }
 
   .cv-page-card .cv-print-flow-table {
-    flex: 1 1 auto !important;
+    display: table !important;
     width: 100% !important;
   }
 
-  .cv-page-card:last-of-type,
-  .cv-page-card:last-child {
-    page-break-after: auto !important;
-    break-after: auto !important;
+  /* ── Desativação de Flexbox na Impressão para Prevenir Sobreposição de Fragmentação no Chromium ── */
+  .cv-card,
+  .cv-universal-document-card,
+  .cv-universal-body,
+  .cv-universal-section,
+  .cv-universal-items-container,
+  .cv-timeline-items,
+  .cv-vertical-items,
+  .cv-card-grid-items,
+  .cv-badge-items {
+    display: block !important;
+    flex-direction: unset !important;
+    flex: none !important;
+    gap: 0 !important;
+  }
+
+  .cv-universal-section {
+    position: relative !important;
+    margin-bottom: 1.1rem !important;
+    break-inside: auto !important;
+    page-break-inside: auto !important;
+  }
+
+  .cv-universal-section-header,
+  .cv-universal-header {
+    break-after: avoid !important;
+    page-break-after: avoid !important;
+    margin-bottom: 0.5rem !important;
+  }
+
+  .cv-universal-items-container > .cv-atomic-box-wrapper,
+  .cv-universal-items-container > .cv-structural-box {
+    display: block !important;
+    width: 100% !important;
+    margin-bottom: 0.65rem !important;
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  .cv-universal-items-container > .cv-atomic-box-wrapper:last-child,
+  .cv-universal-items-container > .cv-structural-box:last-child {
+    margin-bottom: 0 !important;
+  }
+
+  /* Caixas Estruturais e Atômicas no Print: Fluxo Sequencial Limpo sem Sobreposição Relativa */
+  .cv-structural-box,
+  .cv-atomic-box-wrapper {
+    display: block !important;
+    position: relative !important;
+    top: auto !important;
+    left: auto !important;
+    margin-top: max(0px, var(--cv-box-margin-top, 0px)) !important;
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+    box-sizing: border-box !important;
   }
 
   .cv-continuation-header {
@@ -740,6 +786,10 @@
   .cv-section-atomic,
   .signature-block,
   tr,
+  .cv-structural-box,
+  .cv-atomic-box-wrapper,
+  .cv-universal-summary-box,
+  .cv-universal-header,
   .cv-avoid-break {
     break-inside: avoid !important;
     page-break-inside: avoid !important;

@@ -188,7 +188,7 @@ export class CVPrintEngine {
       const elapsedSec = Math.floor((Date.now() - startTime) / 1000)
       if (onProgress) {
         if (elapsedSec > 0) {
-          onProgress(`Servidor acordando da hibernação do Render (${elapsedSec}s decorridos, gerando o PDF assim que acordar)...`)
+          onProgress(`Aguardando inicialização do servidor Playwright (${elapsedSec}s decorridos)...`)
         } else {
           onProgress('Verificando status do servidor Playwright...')
         }
@@ -196,7 +196,7 @@ export class CVPrintEngine {
 
       try {
         const pingCtrl = new AbortController()
-        const pingTimer = setTimeout(() => pingCtrl.abort(), 3000)
+        const pingTimer = setTimeout(() => pingCtrl.abort(), 8000)
         const res = await fetch(healthUrl, { method: 'GET', signal: pingCtrl.signal, mode: 'cors' }).catch(() => null)
         clearTimeout(pingTimer)
 
@@ -261,25 +261,43 @@ export class CVPrintEngine {
         : ''
     const filename = `curriculo-${cleanCandidate || 'profissional'}${cleanLabel}${modeSuffix}.pdf`
 
-    // 4. Candidatos de Backend (local 8001, local 8000, relativo, produção)
-    const envUrl = (import.meta as any).env?.VITE_BACKEND_URL || (import.meta as any).env?.VITE_API_URL
+    // 4. Candidatos de Backend priorizando o worker oficial do CV Maker (heiss-cv-engine)
+    const cvWorkerEnv = (import.meta as any).env?.VITE_CV_WORKER_URL
+    const backendEnv = (import.meta as any).env?.VITE_BACKEND_URL
     const isLocal =
       typeof window !== 'undefined' &&
       (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
     const candidates: string[] = []
-    if (envUrl) candidates.push(envUrl.replace(/\/$/, ''))
+
+    // 4.1. Prioridade 1: URL customizada explícita no ambiente (.env)
+    if (cvWorkerEnv) candidates.push(cvWorkerEnv.replace(/\/$/, ''))
+    if (backendEnv && !candidates.includes(backendEnv.replace(/\/$/, ''))) {
+      candidates.push(backendEnv.replace(/\/$/, ''))
+    }
+
+    // 4.2. Se rodando localmente no desktop, tenta workers locais
     if (isLocal) {
       candidates.push('http://localhost:8001')
       candidates.push('http://localhost:8000')
       candidates.push('')
     }
-    // Adiciona instâncias oficiais garantindo unicidade
-    const defaultWorkers = [
-      'https://ocorrencias-pdf-writer.onrender.com',
-      'https://heiss-cv-engine.onrender.com'
-    ]
-    for (const w of defaultWorkers) {
-      if (!candidates.includes(w)) candidates.push(w)
+
+    // 4.3. Worker oficial de alta velocidade do CV Maker no Render (heiss-cv-engine)
+    const officialCvWorker = 'https://heiss-cv-engine.onrender.com'
+    if (!candidates.includes(officialCvWorker)) {
+      candidates.push(officialCvWorker)
+    }
+
+    // 4.4. Worker de contingência (ocorrencias-pdf-writer)
+    const backupWorker = 'https://ocorrencias-pdf-writer.onrender.com'
+    if (!candidates.includes(backupWorker)) {
+      candidates.push(backupWorker)
+    }
+
+    // 4.5. Fallback para VITE_API_URL se definida e diferente
+    const apiUrlEnv = (import.meta as any).env?.VITE_API_URL
+    if (apiUrlEnv && !candidates.includes(apiUrlEnv.replace(/\/$/, ''))) {
+      candidates.push(apiUrlEnv.replace(/\/$/, ''))
     }
 
     let lastError: any = null
@@ -298,7 +316,7 @@ export class CVPrintEngine {
 
         const baseUrl = candidates[i]
         const endpoint = baseUrl ? `${baseUrl}/api/v1/cv/export-pdf-headless` : '/api/v1/cv/export-pdf-headless'
-        const timeoutMs = isLocal ? 15000 : 40000
+        const timeoutMs = isLocal ? 15000 : 25000
 
         try {
           // 1. Sonda ativa de despertar: pinga /health e libera no instante exato em que o servidor acordar
@@ -306,7 +324,7 @@ export class CVPrintEngine {
             const isAwake = await this.waitForServerAwake(
               baseUrl,
               masterController.signal,
-              isLocal ? 4000 : 38000,
+              isLocal ? 4000 : 65000,
               options.onProgress
             )
             if (!isAwake) {

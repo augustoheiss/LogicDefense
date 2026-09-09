@@ -547,8 +547,7 @@ export const UniversalDocumentRenderer: React.FC<UniversalDocumentRendererProps>
         style={{
           padding: '2.2rem 2.4rem',
           minHeight: '100%',
-          display: 'flex',
-          flexDirection: 'column',
+          display: 'block',
           boxSizing: 'border-box'
         }}
       >

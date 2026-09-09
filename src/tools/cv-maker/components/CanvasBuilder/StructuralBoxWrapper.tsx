@@ -501,7 +501,7 @@ export const StructuralBoxWrapper: React.FC<StructuralBoxWrapperProps> = ({
   return (
     <div
       ref={containerRef}
-      className={`cv-structural-box cv-structural-box--active cv-section-${category || 'general'} ${isSelected ? 'is-selected' : ''} ${isResizing ? `is-resizing is-resizing-${resizeType}` : ''} ${isMoving ? 'is-moving' : ''} ${isOverflowing ? 'is-overflowing' : ''} ${isPhoto ? 'is-photo-box' : ''}`}
+      className={`cv-structural-box cv-structural-box--active cv-avoid-break cv-section-${category || 'general'} ${isSelected ? 'is-selected' : ''} ${isResizing ? `is-resizing is-resizing-${resizeType}` : ''} ${isMoving ? 'is-moving' : ''} ${isOverflowing ? 'is-overflowing' : ''} ${isPhoto ? 'is-photo-box' : ''}`}
       onClick={handleSelectThisBox}
       style={{
         width: widthStyle,
@@ -516,6 +516,7 @@ export const StructuralBoxWrapper: React.FC<StructuralBoxWrapperProps> = ({
         order: dimensions?.order,
         fontFamily: dimensions?.fontFamily ? `"${dimensions.fontFamily}", sans-serif` : undefined,
         fontSize: dimensions?.fontSizeScale && dimensions.fontSizeScale !== 1 ? `${dimensions.fontSizeScale}em` : undefined,
+        ['--cv-box-margin-top' as any]: typeof dimensions?.marginTopPx === 'number' && dimensions.marginTopPx > 0 ? `${dimensions.marginTopPx}px` : undefined,
         ['--cv-box-font-scale' as any]: fontScaleVal,
         ['--cv-box-font-family' as any]: dimensions?.fontFamily ? `"${dimensions.fontFamily}", sans-serif` : undefined,
         ['--cv-font-heading' as any]: dimensions?.fontFamily ? `"${dimensions.fontFamily}", sans-serif` : undefined,

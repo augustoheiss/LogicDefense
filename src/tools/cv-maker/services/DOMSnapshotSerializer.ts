@@ -345,13 +345,69 @@ export class DOMSnapshotSerializer {
           padding-top: 0 !important;
         }
         .cv-page-card {
-          display: flex !important;
-          flex-direction: column !important;
-          justify-content: flex-start !important;
+          display: block !important;
+          width: 100% !important;
         }
         .cv-page-card .cv-print-flow-table {
-          flex: 1 1 auto !important;
+          display: table !important;
           width: 100% !important;
+        }
+
+        /* ── Desativação de Flexbox na Impressão para Prevenir Sobreposição de Fragmentação no Chromium ── */
+        .cv-card,
+        .cv-universal-document-card,
+        .cv-universal-body,
+        .cv-universal-section,
+        .cv-universal-items-container,
+        .cv-timeline-items,
+        .cv-vertical-items,
+        .cv-card-grid-items,
+        .cv-badge-items {
+          display: block !important;
+          flex-direction: unset !important;
+          flex: none !important;
+          gap: 0 !important;
+        }
+
+        .cv-universal-section {
+          position: relative !important;
+          margin-bottom: 1.1rem !important;
+          break-inside: auto !important;
+          page-break-inside: auto !important;
+        }
+
+        .cv-universal-section-header,
+        .cv-universal-header {
+          break-after: avoid !important;
+          page-break-after: avoid !important;
+          margin-bottom: 0.5rem !important;
+        }
+
+        .cv-universal-items-container > .cv-atomic-box-wrapper,
+        .cv-universal-items-container > .cv-structural-box {
+          display: block !important;
+          width: 100% !important;
+          margin-bottom: 0.65rem !important;
+          break-inside: avoid !important;
+          page-break-inside: avoid !important;
+        }
+
+        .cv-universal-items-container > .cv-atomic-box-wrapper:last-child,
+        .cv-universal-items-container > .cv-structural-box:last-child {
+          margin-bottom: 0 !important;
+        }
+
+        /* Caixas Estruturais e Atômicas no Print: Fluxo Sequencial Limpo sem Sobreposição Relativa */
+        .cv-structural-box,
+        .cv-atomic-box-wrapper {
+          display: block !important;
+          position: relative !important;
+          top: auto !important;
+          left: auto !important;
+          margin-top: max(0px, var(--cv-box-margin-top, 0px)) !important;
+          break-inside: avoid !important;
+          page-break-inside: avoid !important;
+          box-sizing: border-box !important;
         }
         .layout-hero_matrix .cv-hero-top-bar,
         .layout-hero_matrix .cv-top-contact-bar {
@@ -415,6 +471,10 @@ export class DOMSnapshotSerializer {
         .cv-cert-card,
         .cv-award-card,
         .cv-section-atomic,
+        .cv-structural-box,
+        .cv-atomic-box-wrapper,
+        .cv-universal-summary-box,
+        .cv-universal-header,
         .cv-avoid-break,
         .signature-block,
         tr {
@@ -424,6 +484,8 @@ export class DOMSnapshotSerializer {
         .cv-section-title,
         .section-title,
         .cv-math-section-title,
+        .cv-universal-section-header,
+        .cv-universal-header,
         h2, h3 {
           break-after: avoid !important;
           page-break-after: avoid !important;
