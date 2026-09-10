@@ -368,6 +368,14 @@ export const CVMakerApp: React.FC = () => {
     } else {
       setParseError(null)
       setCvData(res.data)
+
+      const yamlTheme = res.data?.meta?.themeConfig || (res.data as any)?.themeConfig || (res.data as any)?.designConfig
+      if (yamlTheme && typeof yamlTheme === 'object') {
+        setDesignConfig(prev => ({
+          ...prev,
+          ...yamlTheme
+        }))
+      }
     }
   }, [sectionArchetypeOverrides])
 

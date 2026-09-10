@@ -12,8 +12,15 @@ interface UniversalSingleItemRendererProps {
 export const UniversalSingleItemRenderer: React.FC<UniversalSingleItemRendererProps> = ({
   item,
   index: idx,
-  archetype
+  archetype,
+  sectionKey
 }) => {
+  const titleColor = sectionKey ? `var(--sec-${sectionKey}-title, var(--cv-color-primary, #0284c7))` : 'var(--cv-color-primary, #0284c7)'
+  const subtitleColor = sectionKey ? `var(--sec-${sectionKey}-subtitle, var(--cv-color-secondary, #0369a1))` : 'var(--cv-color-secondary, #0369a1)'
+  const textColor = sectionKey ? `var(--sec-${sectionKey}-text, var(--cv-color-text, #334155))` : 'var(--cv-color-text, #334155)'
+  const cardBg = sectionKey ? `var(--sec-${sectionKey}-bg, var(--sec-card-bg, rgba(255, 255, 255, 0.85)))` : 'var(--sec-card-bg, rgba(255, 255, 255, 0.85))'
+  const borderColor = sectionKey ? `var(--sec-${sectionKey}-border, var(--cv-color-border, rgba(226, 232, 240, 0.8)))` : 'var(--cv-color-border, rgba(226, 232, 240, 0.8))'
+
   const dateDisplay = item.period
     ? `${item.period.start || ''}${item.period.end ? ` - ${item.period.end}` : item.period.current ? ' - Atual' : ''}`
     : item.date
@@ -39,16 +46,16 @@ export const UniversalSingleItemRenderer: React.FC<UniversalSingleItemRendererPr
               width: '10px',
               height: '10px',
               borderRadius: '50%',
-              background: 'var(--cv-color-primary, #0284c7)',
+              background: titleColor,
               border: '2px solid #ffffff',
-              boxShadow: '0 0 0 1px var(--cv-color-border, #cbd5e1)',
+              boxShadow: `0 0 0 1px ${borderColor}`,
               zIndex: 2
             }}
             aria-hidden="true"
           />
 
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: '0.4rem', marginBottom: '0.2rem' }}>
-            <h3 style={{ fontSize: '0.92rem', fontWeight: 700, color: 'var(--cv-color-primary, #0284c7)', margin: 0, lineHeight: 1.3 }}>
+            <h3 style={{ fontSize: '0.92rem', fontWeight: 700, color: titleColor, margin: 0, lineHeight: 1.3 }}>
               {item.title || `Marco #${idx + 1}`}
             </h3>
             {dateDisplay && (
@@ -70,13 +77,13 @@ export const UniversalSingleItemRenderer: React.FC<UniversalSingleItemRendererPr
           </div>
 
           {item.subtitle && (
-            <div style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--cv-color-secondary, #0369a1)', marginBottom: '0.35rem' }}>
+            <div style={{ fontSize: '0.8rem', fontWeight: 600, color: subtitleColor, marginBottom: '0.35rem' }}>
               {item.subtitle}
             </div>
           )}
 
           {item.prose && (
-            <p style={{ fontSize: '0.78rem', color: 'var(--cv-color-text, #334155)', lineHeight: 1.45, margin: '0 0 0.4rem 0' }}>
+            <p style={{ fontSize: '0.78rem', color: textColor, lineHeight: 1.45, margin: '0 0 0.4rem 0' }}>
               {item.prose}
             </p>
           )}
@@ -113,8 +120,8 @@ export const UniversalSingleItemRenderer: React.FC<UniversalSingleItemRendererPr
             flexWrap: 'wrap',
             alignItems: 'center',
             gap: '0.4rem',
-            background: 'var(--sec-card-bg, rgba(255, 255, 255, 0.7))',
-            border: '1px solid var(--cv-color-border, #e2e8f0)',
+            background: cardBg,
+            border: `1px solid ${borderColor}`,
             borderRadius: '6px',
             padding: '0.55rem 0.8rem',
             width: '100%',
@@ -122,7 +129,7 @@ export const UniversalSingleItemRenderer: React.FC<UniversalSingleItemRendererPr
           }}
         >
           {item.title && (
-            <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--cv-color-primary, #0284c7)', minWidth: '90px' }}>
+            <span style={{ fontSize: '0.8rem', fontWeight: 700, color: titleColor, minWidth: '90px' }}>
               {item.title}:
             </span>
           )}
@@ -137,8 +144,8 @@ export const UniversalSingleItemRenderer: React.FC<UniversalSingleItemRendererPr
                   padding: '0.2rem 0.6rem',
                   borderRadius: '999px',
                   background: 'var(--cv-color-surface, #f8fafc)',
-                  color: 'var(--cv-color-text, #1e293b)',
-                  border: '1px solid var(--cv-color-border, #cbd5e1)',
+                  color: textColor,
+                  border: `1px solid ${borderColor}`,
                   letterSpacing: '0.01em'
                 }}
               >
@@ -171,10 +178,10 @@ export const UniversalSingleItemRenderer: React.FC<UniversalSingleItemRendererPr
         <div
           className="cv-universal-table-item"
           style={{
-            border: '1px solid var(--cv-color-border, #e2e8f0)',
+            border: `1px solid ${borderColor}`,
             borderRadius: '6px',
             overflow: 'hidden',
-            background: 'var(--sec-table-bg, rgba(255, 255, 255, 0.7))',
+            background: cardBg,
             width: '100%',
             boxSizing: 'border-box'
           }}
@@ -185,7 +192,7 @@ export const UniversalSingleItemRenderer: React.FC<UniversalSingleItemRendererPr
                 <tr
                   key={rIdx}
                   style={{
-                    borderBottom: rIdx === rows.length - 1 ? 'none' : '1px solid var(--cv-color-border, #f1f5f9)',
+                    borderBottom: rIdx === rows.length - 1 ? 'none' : `1px solid ${borderColor}`,
                     background: rIdx % 2 === 0 ? 'transparent' : 'var(--cv-color-surface, rgba(248, 250, 252, 0.7))'
                   }}
                 >
@@ -193,21 +200,21 @@ export const UniversalSingleItemRenderer: React.FC<UniversalSingleItemRendererPr
                     style={{
                       padding: '0.45rem 0.75rem',
                       fontWeight: 700,
-                      color: 'var(--cv-color-primary, #0284c7)',
+                      color: titleColor,
                       width: '40%',
                       textTransform: 'capitalize',
                       verticalAlign: 'top',
-                      borderRight: '1px solid var(--cv-color-border, #f1f5f9)'
+                      borderRight: `1px solid ${borderColor}`
                     }}
                   >
                     {row.key}
                     {row.hint && (
-                      <span style={{ display: 'block', fontSize: '0.68rem', fontWeight: 600, color: 'var(--cv-color-secondary, #0369a1)' }}>
+                      <span style={{ display: 'block', fontSize: '0.68rem', fontWeight: 600, color: subtitleColor }}>
                         {row.hint}
                       </span>
                     )}
                   </td>
-                  <td style={{ padding: '0.45rem 0.75rem', color: 'var(--cv-color-text, #334155)', verticalAlign: 'top' }}>
+                  <td style={{ padding: '0.45rem 0.75rem', color: textColor, verticalAlign: 'top' }}>
                     {row.value}
                   </td>
                 </tr>
@@ -223,8 +230,8 @@ export const UniversalSingleItemRenderer: React.FC<UniversalSingleItemRendererPr
         <div
           className="cv-universal-prose-block"
           style={{
-            background: 'var(--sec-card-bg, rgba(255, 255, 255, 0.7))',
-            border: '1px solid var(--cv-color-border, #e2e8f0)',
+            background: cardBg,
+            border: `1px solid ${borderColor}`,
             borderRadius: '6px',
             padding: '0.75rem 0.95rem',
             width: '100%',
@@ -233,17 +240,17 @@ export const UniversalSingleItemRenderer: React.FC<UniversalSingleItemRendererPr
           }}
         >
           {item.title && (
-            <h4 style={{ fontSize: '0.88rem', fontWeight: 700, color: 'var(--cv-color-primary, #0284c7)', margin: '0 0 0.25rem 0' }}>
+            <h4 style={{ fontSize: '0.88rem', fontWeight: 700, color: titleColor, margin: '0 0 0.25rem 0' }}>
               {item.title}
             </h4>
           )}
           {item.subtitle && (
-            <div style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--cv-color-secondary, #0369a1)', marginBottom: '0.3rem' }}>
+            <div style={{ fontSize: '0.78rem', fontWeight: 600, color: subtitleColor, marginBottom: '0.3rem' }}>
               {item.subtitle}
             </div>
           )}
           {item.prose && (
-            <div style={{ fontSize: '0.82rem', color: 'var(--cv-color-text, #334155)', whiteSpace: 'pre-line', textAlign: 'justify' }}>
+            <div style={{ fontSize: '0.82rem', color: textColor, whiteSpace: 'pre-line', textAlign: 'justify' }}>
               {item.prose}
             </div>
           )}
@@ -259,7 +266,7 @@ export const UniversalSingleItemRenderer: React.FC<UniversalSingleItemRendererPr
                     borderRadius: '4px',
                     background: 'var(--cv-color-surface, #f1f5f9)',
                     color: 'var(--cv-color-text-muted, #475569)',
-                    border: '1px solid var(--cv-color-border, #e2e8f0)'
+                    border: `1px solid ${borderColor}`
                   }}
                 >
                   {b}
@@ -276,8 +283,8 @@ export const UniversalSingleItemRenderer: React.FC<UniversalSingleItemRendererPr
         <div
           className="cv-universal-card"
           style={{
-            background: 'var(--sec-card-bg, rgba(255, 255, 255, 0.85))',
-            border: '1px solid var(--cv-color-border, rgba(226, 232, 240, 0.8))',
+            background: cardBg,
+            border: `1px solid ${borderColor}`,
             borderRadius: '8px',
             padding: '0.85rem',
             boxShadow: '0 1px 3px rgba(0, 0, 0, 0.04)',
@@ -291,7 +298,7 @@ export const UniversalSingleItemRenderer: React.FC<UniversalSingleItemRendererPr
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: '0.5rem', marginBottom: '0.3rem' }}>
               {item.title && (
-                <h3 style={{ fontSize: '0.92rem', fontWeight: 700, color: 'var(--cv-color-primary, #0284c7)', margin: 0, lineHeight: 1.25 }}>
+                <h3 style={{ fontSize: '0.92rem', fontWeight: 700, color: titleColor, margin: 0, lineHeight: 1.25 }}>
                   {item.title}
                 </h3>
               )}
@@ -303,13 +310,13 @@ export const UniversalSingleItemRenderer: React.FC<UniversalSingleItemRendererPr
             </div>
 
             {item.subtitle && (
-              <div style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--cv-color-secondary, #0369a1)', marginBottom: '0.45rem' }}>
+              <div style={{ fontSize: '0.8rem', fontWeight: 600, color: subtitleColor, marginBottom: '0.45rem' }}>
                 {item.subtitle}
               </div>
             )}
 
             {item.prose && (
-              <p style={{ fontSize: '0.78rem', color: 'var(--cv-color-text, #334155)', lineHeight: 1.45, margin: '0 0 0.5rem 0' }}>
+              <p style={{ fontSize: '0.78rem', color: textColor, lineHeight: 1.45, margin: '0 0 0.5rem 0' }}>
                 {item.prose}
               </p>
             )}
@@ -321,7 +328,7 @@ export const UniversalSingleItemRenderer: React.FC<UniversalSingleItemRendererPr
                     <span style={{ color: 'var(--cv-color-text-muted, #64748b)', fontWeight: 600, textTransform: 'capitalize' }}>
                       {k.replace(/_/g, ' ')}:
                     </span>
-                    <span style={{ color: 'var(--cv-color-text, #1e293b)', fontWeight: 500 }}>
+                    <span style={{ color: textColor, fontWeight: 500 }}>
                       {String(v)}
                     </span>
                   </div>
@@ -331,7 +338,7 @@ export const UniversalSingleItemRenderer: React.FC<UniversalSingleItemRendererPr
           </div>
 
           {item.badges && item.badges.length > 0 && (
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.3rem', marginTop: '0.4rem', paddingTop: '0.4rem', borderTop: '1px dashed var(--cv-color-border, rgba(226, 232, 240, 0.6))' }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.3rem', marginTop: '0.4rem', paddingTop: '0.4rem', borderTop: `1px dashed ${borderColor}` }}>
               {item.badges.map((badge, bIdx) => (
                 <span
                   key={bIdx}
@@ -341,8 +348,8 @@ export const UniversalSingleItemRenderer: React.FC<UniversalSingleItemRendererPr
                     padding: '0.15rem 0.45rem',
                     borderRadius: '999px',
                     background: 'var(--cv-color-surface, #f1f5f9)',
-                    color: 'var(--cv-color-text, #334155)',
-                    border: '1px solid var(--cv-color-border, #e2e8f0)',
+                    color: textColor,
+                    border: `1px solid ${borderColor}`,
                     letterSpacing: '0.01em'
                   }}
                 >

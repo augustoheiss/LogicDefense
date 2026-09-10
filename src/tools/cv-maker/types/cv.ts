@@ -289,6 +289,7 @@ export interface CVData {
     universalAST?: UniversalDocumentAST
     isUniversalDocument?: boolean
     sectionArchetypeOverrides?: Record<string, LayoutArchetype>
+    themeConfig?: any
   }
 }
 

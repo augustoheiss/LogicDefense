@@ -6,8 +6,12 @@ interface ProseFlowRendererProps {
   sectionKey?: string
 }
 
-export const ProseFlowRenderer: React.FC<ProseFlowRendererProps> = ({ items }) => {
+export const ProseFlowRenderer: React.FC<ProseFlowRendererProps> = ({ items, sectionKey }) => {
   if (!items || items.length === 0) return null
+
+  const titleColor = sectionKey ? `var(--sec-${sectionKey}-title, var(--cv-color-primary, #0284c7))` : 'var(--cv-color-primary, #0284c7)'
+  const subtitleColor = sectionKey ? `var(--sec-${sectionKey}-subtitle, var(--cv-color-secondary, #0369a1))` : 'var(--cv-color-secondary, #0369a1)'
+  const textColor = sectionKey ? `var(--sec-${sectionKey}-text, var(--cv-color-text, #334155))` : 'var(--cv-color-text, #334155)'
 
   return (
     <div
@@ -31,7 +35,7 @@ export const ProseFlowRenderer: React.FC<ProseFlowRendererProps> = ({ items }) =
                 style={{
                   fontSize: '0.88rem',
                   fontWeight: 700,
-                  color: 'var(--cv-color-primary, #0284c7)',
+                  color: titleColor,
                   margin: '0 0 0.25rem 0'
                 }}
               >
@@ -45,7 +49,7 @@ export const ProseFlowRenderer: React.FC<ProseFlowRendererProps> = ({ items }) =
                 style={{
                   fontSize: '0.78rem',
                   fontWeight: 600,
-                  color: 'var(--cv-color-secondary, #0369a1)',
+                  color: subtitleColor,
                   marginBottom: '0.3rem'
                 }}
               >
@@ -58,7 +62,7 @@ export const ProseFlowRenderer: React.FC<ProseFlowRendererProps> = ({ items }) =
               <div
                 style={{
                   fontSize: '0.82rem',
-                  color: 'var(--cv-color-text, #334155)',
+                  color: textColor,
                   whiteSpace: 'pre-line',
                   textAlign: 'justify'
                 }}

@@ -6,12 +6,18 @@ interface CardGridRendererProps {
   sectionKey?: string
 }
 
-export const CardGridRenderer: React.FC<CardGridRendererProps> = ({ items }) => {
+export const CardGridRenderer: React.FC<CardGridRendererProps> = ({ items, sectionKey }) => {
   if (!items || items.length === 0) return null
 
   // Ajusta colunas dinamicamente com base na quantidade e densidade de conteúdo
   const hasDenseContent = items.some(it => (it.prose && it.prose.length > 80) || (it.badges && it.badges.length > 4))
   const gridColumns = hasDenseContent || items.length <= 2 ? 'repeat(auto-fit, minmax(260px, 1fr))' : 'repeat(auto-fit, minmax(220px, 1fr))'
+
+  const titleColor = sectionKey ? `var(--sec-${sectionKey}-title, var(--cv-color-primary, #0284c7))` : 'var(--cv-color-primary, #0284c7)'
+  const subtitleColor = sectionKey ? `var(--sec-${sectionKey}-subtitle, var(--cv-color-secondary, #0369a1))` : 'var(--cv-color-secondary, #0369a1)'
+  const textColor = sectionKey ? `var(--sec-${sectionKey}-text, var(--cv-color-text, #334155))` : 'var(--cv-color-text, #334155)'
+  const cardBg = sectionKey ? `var(--sec-${sectionKey}-bg, var(--sec-card-bg, rgba(255, 255, 255, 0.75)))` : 'var(--sec-card-bg, rgba(255, 255, 255, 0.75))'
+  const borderColor = sectionKey ? `var(--sec-${sectionKey}-border, var(--cv-color-border, rgba(226, 232, 240, 0.8)))` : 'var(--cv-color-border, rgba(226, 232, 240, 0.8))'
 
   return (
     <div
@@ -34,8 +40,8 @@ export const CardGridRenderer: React.FC<CardGridRendererProps> = ({ items }) => 
             key={itemKey}
             className="cv-universal-card"
             style={{
-              background: 'var(--sec-card-bg, rgba(255, 255, 255, 0.75))',
-              border: '1px solid var(--cv-color-border, rgba(226, 232, 240, 0.8))',
+              background: cardBg,
+              border: `1px solid ${borderColor}`,
               borderRadius: '8px',
               padding: '0.85rem',
               boxShadow: '0 1px 3px rgba(0, 0, 0, 0.04)',
@@ -53,7 +59,7 @@ export const CardGridRenderer: React.FC<CardGridRendererProps> = ({ items }) => 
                     style={{
                       fontSize: '0.92rem',
                       fontWeight: 700,
-                      color: 'var(--cv-color-primary, #0284c7)',
+                      color: titleColor,
                       margin: 0,
                       lineHeight: 1.25
                     }}
@@ -82,7 +88,7 @@ export const CardGridRenderer: React.FC<CardGridRendererProps> = ({ items }) => 
                   style={{
                     fontSize: '0.8rem',
                     fontWeight: 600,
-                    color: 'var(--cv-color-secondary, #0369a1)',
+                    color: subtitleColor,
                     marginBottom: '0.45rem'
                   }}
                 >
@@ -95,7 +101,7 @@ export const CardGridRenderer: React.FC<CardGridRendererProps> = ({ items }) => 
                 <p
                   style={{
                     fontSize: '0.78rem',
-                    color: 'var(--cv-color-text, #334155)',
+                    color: textColor,
                     lineHeight: 1.45,
                     margin: '0 0 0.5rem 0'
                   }}

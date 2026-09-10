@@ -135,13 +135,29 @@ export function validateAndNormalizeCV(
     (Array.isArray(raw.education) && raw.education.length > 0)
   )
 
+  const STANDARD_RESUME_KEYS = new Set([
+    'basics', 'work', 'education', 'skills', 'projects', 'languages',
+    'certificates', 'interests', 'publications', 'volunteer', 'awards',
+    'references', 'coverLetter', 'meta', '$schema', '_schema', '_layoutManifest',
+    'themeConfig', 'designConfig', 'photo', 'summary', 'resumo'
+  ])
+
+  // Detecta se o YAML possui quaisquer chaves customizadas/arbitrárias de outros domínios
+  const hasNonStandardKeys = Object.keys(raw).some(
+    (k) => !STANDARD_RESUME_KEYS.has(k) && raw[k] !== undefined && raw[k] !== null
+  )
+
   const isUniversalDoc = Boolean(
-    raw.meta?.isUniversalDocument ||
-    raw.isUniversalDocument ||
-    raw.document_title ||
-    raw.document_type ||
-    !hasBasicsName ||
-    (!hasWorkOrEdu && (raw.cronograma_entregas || raw.modulos_sistema || raw.metricas_observabilidade || raw.historico_melhorias || raw.pilares_tecnologicos))
+    raw.meta?.isUniversalDocument !== undefined
+      ? raw.meta.isUniversalDocument
+      : (
+          raw.isUniversalDocument ||
+          raw.document_title ||
+          raw.document_type ||
+          hasNonStandardKeys ||
+          !hasBasicsName ||
+          !hasWorkOrEdu
+        )
   )
   const docTitle = raw.title || raw.name || raw.document_title || 'Documento Universal'
 
@@ -391,6 +407,7 @@ export function validateAndNormalizeCV(
       universalAST,
       isUniversalDocument: isUniversalDoc,
       sectionArchetypeOverrides: effectiveOverrides,
+      themeConfig: raw.themeConfig || raw.designConfig || raw.meta?.themeConfig || undefined,
     },
   }
 

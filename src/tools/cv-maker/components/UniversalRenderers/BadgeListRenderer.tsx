@@ -6,8 +6,12 @@ interface BadgeListRendererProps {
   sectionKey?: string
 }
 
-export const BadgeListRenderer: React.FC<BadgeListRendererProps> = ({ items }) => {
+export const BadgeListRenderer: React.FC<BadgeListRendererProps> = ({ items, sectionKey }) => {
   if (!items || items.length === 0) return null
+
+  const titleColor = sectionKey ? `var(--sec-${sectionKey}-title, var(--cv-color-primary, #0284c7))` : 'var(--cv-color-primary, #0284c7)'
+  const textColor = sectionKey ? `var(--sec-${sectionKey}-text, var(--cv-color-text, #1e293b))` : 'var(--cv-color-text, #1e293b)'
+  const borderColor = sectionKey ? `var(--sec-${sectionKey}-border, var(--cv-color-border, #cbd5e1))` : 'var(--cv-color-border, #cbd5e1)'
 
   // Verifica se temos categorias agrupadas (itens com title e badges próprios)
   const hasGroupedCategories = items.some(it => it.title && it.badges && it.badges.length > 0)
@@ -30,7 +34,7 @@ export const BadgeListRenderer: React.FC<BadgeListRendererProps> = ({ items }) =
                 style={{
                   fontSize: '0.8rem',
                   fontWeight: 700,
-                  color: 'var(--cv-color-primary, #0284c7)',
+                  color: titleColor,
                   marginRight: '0.25rem',
                   minWidth: '100px'
                 }}
@@ -49,8 +53,8 @@ export const BadgeListRenderer: React.FC<BadgeListRendererProps> = ({ items }) =
                     padding: '0.2rem 0.6rem',
                     borderRadius: '999px',
                     background: 'var(--cv-color-surface, #f8fafc)',
-                    color: 'var(--cv-color-text, #1e293b)',
-                    border: '1px solid var(--cv-color-border, #cbd5e1)',
+                    color: textColor,
+                    border: `1px solid ${borderColor}`,
                     boxShadow: '0 1px 2px rgba(0, 0, 0, 0.02)',
                     letterSpacing: '0.01em'
                   }}

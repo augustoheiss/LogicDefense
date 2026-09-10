@@ -350,6 +350,9 @@ export const RightInspectorDrawer: React.FC<RightInspectorDrawerProps> = ({
         { id: 'header', name: 'Cabeçalho / Header', icon: TypeIcon, description: 'Título, autor, contatos e topo' }
       ]
       for (const b of blocks) {
+        if (['meta', 'themeConfig', 'designConfig', 'document_title', 'title', '$schema', '_schema', '_layoutManifest'].includes(b.key)) {
+          continue
+        }
         const arch = b.classification?.effective || 'card_grid'
         let SecIcon = LayersIcon
         if (arch === 'timeline') SecIcon = BriefcaseIcon

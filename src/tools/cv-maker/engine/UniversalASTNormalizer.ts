@@ -74,13 +74,29 @@ export function normalizeToUniversalAST(
     (Array.isArray(safeRaw.education) && safeRaw.education.length > 0)
   )
 
+  const STANDARD_RESUME_KEYS = new Set([
+    'basics', 'work', 'education', 'skills', 'projects', 'languages',
+    'certificates', 'interests', 'publications', 'volunteer', 'awards',
+    'references', 'coverLetter', 'meta', '$schema', '_schema', '_layoutManifest',
+    'themeConfig', 'designConfig', 'photo', 'summary', 'resumo'
+  ])
+
+  // Detecta se o YAML possui quaisquer chaves customizadas/arbitrárias de outros domínios
+  const hasNonStandardKeys = Object.keys(safeRaw).some(
+    (k) => !STANDARD_RESUME_KEYS.has(k) && safeRaw[k] !== undefined && safeRaw[k] !== null
+  )
+
   const isUniversalDoc = Boolean(
-    safeRaw.meta?.isUniversalDocument ||
-    safeRaw.isUniversalDocument ||
-    safeRaw.document_title ||
-    safeRaw.document_type ||
-    !hasBasics ||
-    (!hasWorkOrEdu && (safeRaw.cronograma_entregas || safeRaw.modulos_sistema || safeRaw.metricas_observabilidade || safeRaw.historico_melhorias || safeRaw.pilares_tecnologicos))
+    safeRaw.meta?.isUniversalDocument !== undefined
+      ? safeRaw.meta.isUniversalDocument
+      : (
+          safeRaw.isUniversalDocument ||
+          safeRaw.document_title ||
+          safeRaw.document_type ||
+          hasNonStandardKeys ||
+          !hasBasics ||
+          !hasWorkOrEdu
+        )
   )
 
   const meta: UniversalDocumentMeta = {
@@ -98,7 +114,7 @@ export function normalizeToUniversalAST(
   const blocks: UniversalBlockNode[] = []
 
   // Filtra chaves reservadas de metadados para não poluir os blocos visuais
-  const reservedKeys = new Set(['meta', '$schema', '_schema', '_layoutManifest', 'themeConfig'])
+  const reservedKeys = new Set(['meta', '$schema', '_schema', '_layoutManifest', 'themeConfig', 'designConfig'])
 
   for (const [key, value] of Object.entries(safeRaw)) {
     if (reservedKeys.has(key) || value === undefined || value === null) {
@@ -146,7 +162,7 @@ function normalizeItemsForBlock(
   // 1. Caso valor seja um array
   if (Array.isArray(value)) {
     return value.map((item, index) => {
-      // 1.1 Array de strings primitivas (ex: badges)
+      // 1.1 Array de strings primitivas (ex: badges, ingredientes simples, termos)
       if (typeof item === 'string' || typeof item === 'number') {
         const strVal = String(item).trim()
         return {
@@ -163,22 +179,89 @@ function normalizeItemsForBlock(
         }
       }
 
-      // 1.2 Array de objetos
+      // 1.2 Array de objetos (médicos, receitas, legais, comerciais, TI, etc.)
       if (item && typeof item === 'object') {
-        const title =
+        // Heurística Polimórfica: Título do Item (Cor Primária)
+        const explicitTitle =
           item.name ||
           item.title ||
+          item.titulo ||
+          item.nome ||
+          item.medicamento ||
+          item.remedio ||
+          item.droga ||
+          item.exame ||
+          item.procedimento ||
+          item.ingrediente ||
+          item.prato ||
+          item.alimento ||
+          item.clausula ||
+          item.artigo ||
+          item.termo ||
+          item.foro ||
+          item.produto ||
+          item.servico ||
+          item.item ||
+          item.peca ||
+          item.etapa ||
+          item.passo ||
+          item.fase ||
+          item.tarefa ||
+          item.atividade ||
+          item.milestone ||
           item.cargo ||
           item.position ||
           item.role ||
+          item.roleTitle ||
           item.company ||
           item.empresa ||
           item.instituicao ||
           item.institution ||
-          item.label ||
-          `Item ${index + 1}`
+          item.topico ||
+          item.assunto ||
+          item.categoria ||
+          item.pilar ||
+          item.label
 
-        const subtitle =
+        // Se não houver campo explícito, encontra a 1ª propriedade do tipo string válida
+        const firstStringProp = !explicitTitle
+          ? Object.entries(item).find(
+              ([k, v]) =>
+                typeof v === 'string' &&
+                v.trim().length > 0 &&
+                k !== 'id' &&
+                k !== 'date' &&
+                k !== 'data' &&
+                k !== 'period' &&
+                k !== 'periodo'
+            )?.[1]
+          : undefined
+
+        const title = explicitTitle || firstStringProp || `Item ${index + 1}`
+
+        // Heurística Polimórfica: Subtítulo do Item (Cor Secundária)
+        const explicitSubtitle =
+          item.subtitle ||
+          item.subtitulo ||
+          item.posologia ||
+          item.dose ||
+          item.dosagem ||
+          item.frequencia ||
+          item.via ||
+          item.quantidade ||
+          item.porcao ||
+          item.medida ||
+          item.tempo_preparo ||
+          item.temperatura ||
+          item.preco ||
+          item.valor ||
+          item.custo ||
+          item.taxa ||
+          item.total ||
+          item.objeto ||
+          item.partes ||
+          item.prazo ||
+          item.vigencia ||
           item.company ||
           item.empresa ||
           item.organization ||
@@ -188,28 +271,82 @@ function normalizeItemsForBlock(
           item.studyType ||
           item.awarder ||
           item.issuer ||
+          item.department ||
+          item.departamento ||
+          item.responsavel ||
+          item.autor ||
+          item.status ||
+          item.prioridade
+
+        // Se não houver campo explícito de subtítulo, busca uma 2ª propriedade de string curta
+        const secondStringProp = !explicitSubtitle
+          ? Object.entries(item).find(
+              ([k, v]) =>
+                typeof v === 'string' &&
+                v.trim().length > 0 &&
+                v !== title &&
+                v.length <= 120 &&
+                k !== 'id' &&
+                k !== 'date' &&
+                k !== 'data' &&
+                k !== 'period' &&
+                k !== 'periodo' &&
+                k !== 'summary' &&
+                k !== 'description'
+            )?.[1]
+          : undefined
+
+        const subtitle = explicitSubtitle || secondStringProp || undefined
+
+        // Datas e Períodos
+        const date =
+          item.date ||
+          item.data ||
+          item.ano ||
+          item.year ||
+          item.releaseDate ||
+          item.periodo ||
+          item.validade ||
           undefined
 
-        const date = item.date || item.ano || item.year || item.releaseDate || undefined
         const period =
-          item.startDate || item.endDate
+          item.startDate || item.endDate || item.inicio || item.fim
             ? {
-                start: item.startDate,
-                end: item.endDate,
-                current: !item.endDate || /presente|current|atual/i.test(String(item.endDate)),
+                start: item.startDate || item.inicio,
+                end: item.endDate || item.fim,
+                current:
+                  !item.endDate && !item.fim
+                    ? true
+                    : /presente|current|atual/i.test(String(item.endDate || item.fim)),
               }
             : undefined
 
-        // Extração de badges (habilidades, tags, tecnologias)
+        // Extração de badges (habilidades, tags, categorias, tecnologias)
         let badges: string[] = []
         if (Array.isArray(item.keywords)) badges = badges.concat(item.keywords)
         if (Array.isArray(item.skills)) badges = badges.concat(item.skills)
         if (Array.isArray(item.highlights)) badges = badges.concat(item.highlights)
         if (Array.isArray(item.tags)) badges = badges.concat(item.tags)
         if (Array.isArray(item.tecnologias)) badges = badges.concat(item.tecnologias)
+        if (Array.isArray(item.categorias)) badges = badges.concat(item.categorias)
+        if (Array.isArray(item.ingredientes)) badges = badges.concat(item.ingredientes)
 
         // Extração de texto/prosa
-        const prose = item.summary || item.description || item.detalhes || item.texto || item.text || undefined
+        const prose =
+          item.summary ||
+          item.description ||
+          item.detalhes ||
+          item.texto ||
+          item.text ||
+          item.instrucoes ||
+          item.preparo ||
+          item.modo_preparo ||
+          item.laudo ||
+          item.observacoes ||
+          item.parecer ||
+          item.notes ||
+          item.notas ||
+          undefined
 
         // Extração de pares chave/valor associativos
         const keyValues: Record<string, any> = {}

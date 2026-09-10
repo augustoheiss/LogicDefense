@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react'
-import type { CVDesignConfig, SectionStyleOverride } from '../../types/cv'
+import type { CVData, CVDesignConfig, SectionStyleOverride } from '../../types/cv'
 import { DEFAULT_DESIGN_CONFIG } from '../../types/cv'
 import { BACKGROUND_CATALOG, BACKGROUND_CATEGORIES } from '../../engine/backgroundCatalog'
 import { compressImageFile } from '../../utils/imageCompressor'
@@ -10,6 +10,7 @@ interface DesignCustomizerDrawerProps {
   onClose: () => void
   config: CVDesignConfig
   onChangeConfig: (newConfig: CVDesignConfig) => void
+  cvData?: CVData | null
 }
 
 interface FontPairPreset {
@@ -164,13 +165,43 @@ export const DesignCustomizerDrawer: React.FC<DesignCustomizerDrawerProps> = ({
   isOpen,
   onClose,
   config,
-  onChangeConfig
+  onChangeConfig,
+  cvData
 }) => {
   const [activeTab, setActiveTab] = useState<'global' | 'sections'>('global')
   const [selectedSectionId, setSelectedSectionId] = useState<string>('sidebar')
   const [selectedBgCategory, setSelectedBgCategory] = useState<string>('all')
   const fileInputRef = useRef<HTMLInputElement>(null)
   const sectionFileInputRef = useRef<HTMLInputElement>(null)
+
+  const dynamicSectionsList: SectionMeta[] = React.useMemo(() => {
+    const isUniversal = Boolean(cvData?.meta?.isUniversalDocument)
+    const blocks = cvData?.meta?.universalAST?.blocks || []
+
+    if (isUniversal && blocks.length > 0) {
+      const list: SectionMeta[] = [
+        { id: 'header', name: 'Cabeçalho / Header', icon: '👤', description: 'Título, autor, contatos e topo' }
+      ]
+      for (const b of blocks) {
+        if (['meta', 'themeConfig', 'designConfig', 'document_title', 'title', '$schema', '_schema', '_layoutManifest'].includes(b.key)) {
+          continue
+        }
+        list.push({
+          id: b.key,
+          name: b.title || b.key,
+          icon: '📦',
+          description: `Seção Universal • /${b.key} (${b.items?.length || 0} itens)`
+        })
+      }
+      return list
+    }
+
+    return SECTIONS_LIST
+  }, [cvData])
+
+  const effectiveSectionId = dynamicSectionsList.some(s => s.id === selectedSectionId)
+    ? selectedSectionId
+    : (dynamicSectionsList[0]?.id || 'header')
 
   const handleUploadCustomBg = async (e: React.ChangeEvent<HTMLInputElement>, secId?: string) => {
     const file = e.target.files?.[0]
@@ -241,8 +272,8 @@ export const DesignCustomizerDrawer: React.FC<DesignCustomizerDrawerProps> = ({
   }
 
   const activeOverridesCount = Object.keys(config.sectionOverrides || {}).length
-  const currentSectionMeta = SECTIONS_LIST.find(s => s.id === selectedSectionId) || SECTIONS_LIST[0]
-  const currentSectionOverride = config.sectionOverrides?.[selectedSectionId] || {}
+  const currentSectionMeta = dynamicSectionsList.find(s => s.id === effectiveSectionId) || dynamicSectionsList[0]
+  const currentSectionOverride = config.sectionOverrides?.[effectiveSectionId] || {}
 
   return (
     <div className="cv-modal-backdrop" onClick={onClose}>
@@ -709,7 +740,7 @@ export const DesignCustomizerDrawer: React.FC<DesignCustomizerDrawerProps> = ({
                   📌 Escolha a Seção para Customizar:
                 </label>
                 <select
-                  value={selectedSectionId}
+                  value={effectiveSectionId}
                   onChange={e => setSelectedSectionId(e.target.value)}
                   style={{
                     width: '100%',
@@ -723,7 +754,7 @@ export const DesignCustomizerDrawer: React.FC<DesignCustomizerDrawerProps> = ({
                     cursor: 'pointer'
                   }}
                 >
-                  {SECTIONS_LIST.map(sec => {
+                  {dynamicSectionsList.map(sec => {
                     const hasOverride = Boolean(config.sectionOverrides?.[sec.id])
                     return (
                       <option key={sec.id} value={sec.id}>
@@ -746,10 +777,10 @@ export const DesignCustomizerDrawer: React.FC<DesignCustomizerDrawerProps> = ({
                     </p>
                   </div>
 
-                  {Boolean(config.sectionOverrides?.[selectedSectionId]) && (
+                  {Boolean(config.sectionOverrides?.[effectiveSectionId]) && (
                     <button
                       type="button"
-                      onClick={() => handleResetSectionOverride(selectedSectionId)}
+                      onClick={() => handleResetSectionOverride(effectiveSectionId)}
                       style={{
                         background: 'rgba(239, 68, 68, 0.1)',
                         border: '1px solid rgba(239, 68, 68, 0.4)',
@@ -776,8 +807,8 @@ export const DesignCustomizerDrawer: React.FC<DesignCustomizerDrawerProps> = ({
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                       <input
                         type="color"
-                        value={currentSectionOverride.textColor || (selectedSectionId === 'sidebar' ? '#cbd5e1' : config.colorText || '#0f172a')}
-                        onChange={e => handleUpdateSectionOverride(selectedSectionId, 'textColor', e.target.value)}
+                        value={currentSectionOverride.textColor || (effectiveSectionId === 'sidebar' ? '#cbd5e1' : config.colorText || '#0f172a')}
+                        onChange={e => handleUpdateSectionOverride(effectiveSectionId, 'textColor', e.target.value)}
                         style={{ width: '32px', height: '28px', border: 'none', background: 'transparent', cursor: 'pointer' }}
                       />
                       <span style={{ fontSize: '0.75rem', color: '#e2e8f0', fontFamily: 'monospace' }}>
@@ -794,8 +825,8 @@ export const DesignCustomizerDrawer: React.FC<DesignCustomizerDrawerProps> = ({
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                       <input
                         type="color"
-                        value={currentSectionOverride.titleColor || (selectedSectionId === 'sidebar' ? '#38bdf8' : config.colorPrimary || '#0284c7')}
-                        onChange={e => handleUpdateSectionOverride(selectedSectionId, 'titleColor', e.target.value)}
+                        value={currentSectionOverride.titleColor || (effectiveSectionId === 'sidebar' ? '#38bdf8' : config.colorPrimary || '#0284c7')}
+                        onChange={e => handleUpdateSectionOverride(effectiveSectionId, 'titleColor', e.target.value)}
                         style={{ width: '32px', height: '28px', border: 'none', background: 'transparent', cursor: 'pointer' }}
                       />
                       <span style={{ fontSize: '0.75rem', color: '#e2e8f0', fontFamily: 'monospace' }}>
@@ -813,7 +844,7 @@ export const DesignCustomizerDrawer: React.FC<DesignCustomizerDrawerProps> = ({
                       <input
                         type="color"
                         value={currentSectionOverride.subtitleColor || config.colorSecondary || '#0369a1'}
-                        onChange={e => handleUpdateSectionOverride(selectedSectionId, 'subtitleColor', e.target.value)}
+                        onChange={e => handleUpdateSectionOverride(effectiveSectionId, 'subtitleColor', e.target.value)}
                         style={{ width: '32px', height: '28px', border: 'none', background: 'transparent', cursor: 'pointer' }}
                       />
                       <span style={{ fontSize: '0.75rem', color: '#e2e8f0', fontFamily: 'monospace' }}>
@@ -830,8 +861,8 @@ export const DesignCustomizerDrawer: React.FC<DesignCustomizerDrawerProps> = ({
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                       <input
                         type="color"
-                        value={currentSectionOverride.bgColor || (selectedSectionId === 'sidebar' ? config.colorSidebar || '#f8fafc' : config.colorSurface || '#f8fafc')}
-                        onChange={e => handleUpdateSectionOverride(selectedSectionId, 'bgColor', e.target.value)}
+                        value={currentSectionOverride.bgColor || (effectiveSectionId === 'sidebar' ? config.colorSidebar || '#f8fafc' : config.colorSurface || '#f8fafc')}
+                        onChange={e => handleUpdateSectionOverride(effectiveSectionId, 'bgColor', e.target.value)}
                         style={{ width: '32px', height: '28px', border: 'none', background: 'transparent', cursor: 'pointer' }}
                       />
                       <span style={{ fontSize: '0.75rem', color: '#e2e8f0', fontFamily: 'monospace' }}>
@@ -849,7 +880,7 @@ export const DesignCustomizerDrawer: React.FC<DesignCustomizerDrawerProps> = ({
                       <input
                         type="color"
                         value={currentSectionOverride.borderColor || config.colorBorder || '#e2e8f0'}
-                        onChange={e => handleUpdateSectionOverride(selectedSectionId, 'borderColor', e.target.value)}
+                        onChange={e => handleUpdateSectionOverride(effectiveSectionId, 'borderColor', e.target.value)}
                         style={{ width: '32px', height: '28px', border: 'none', background: 'transparent', cursor: 'pointer' }}
                       />
                       <span style={{ fontSize: '0.75rem', color: '#e2e8f0', fontFamily: 'monospace' }}>
@@ -867,7 +898,7 @@ export const DesignCustomizerDrawer: React.FC<DesignCustomizerDrawerProps> = ({
                       <input
                         type="color"
                         value={currentSectionOverride.accentColor || config.colorAccent || '#f97316'}
-                        onChange={e => handleUpdateSectionOverride(selectedSectionId, 'accentColor', e.target.value)}
+                        onChange={e => handleUpdateSectionOverride(effectiveSectionId, 'accentColor', e.target.value)}
                         style={{ width: '32px', height: '28px', border: 'none', background: 'transparent', cursor: 'pointer' }}
                       />
                       <span style={{ fontSize: '0.75rem', color: '#e2e8f0', fontFamily: 'monospace' }}>
@@ -888,7 +919,7 @@ export const DesignCustomizerDrawer: React.FC<DesignCustomizerDrawerProps> = ({
                           type="file"
                           accept="image/*"
                           style={{ display: 'none' }}
-                          onChange={e => handleUploadCustomBg(e, selectedSectionId)}
+                          onChange={e => handleUploadCustomBg(e, effectiveSectionId)}
                         />
                         <button
                           type="button"
@@ -902,7 +933,7 @@ export const DesignCustomizerDrawer: React.FC<DesignCustomizerDrawerProps> = ({
                           <button
                             type="button"
                             className="cv-btn-secondary"
-                            onClick={() => handleUpdateSectionOverride(selectedSectionId, 'bgImage', '')}
+                            onClick={() => handleUpdateSectionOverride(effectiveSectionId, 'bgImage', '')}
                             style={{ padding: '0.2rem 0.5rem', fontSize: '0.68rem', borderColor: '#ef4444', color: '#f87171' }}
                           >
                             Remover Fundo
@@ -921,7 +952,7 @@ export const DesignCustomizerDrawer: React.FC<DesignCustomizerDrawerProps> = ({
                             <button
                               key={bg.id}
                               type="button"
-                              onClick={() => handleUpdateSectionOverride(selectedSectionId, 'bgImage', bg.url)}
+                              onClick={() => handleUpdateSectionOverride(effectiveSectionId, 'bgImage', bg.url)}
                               style={{
                                 flex: '0 0 76px',
                                 height: '44px',

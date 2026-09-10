@@ -6,8 +6,14 @@ interface KeyValueTableRendererProps {
   sectionKey?: string
 }
 
-export const KeyValueTableRenderer: React.FC<KeyValueTableRendererProps> = ({ items }) => {
+export const KeyValueTableRenderer: React.FC<KeyValueTableRendererProps> = ({ items, sectionKey }) => {
   if (!items || items.length === 0) return null
+
+  const titleColor = sectionKey ? `var(--sec-${sectionKey}-title, var(--cv-color-primary, #0284c7))` : 'var(--cv-color-primary, #0284c7)'
+  const subtitleColor = sectionKey ? `var(--sec-${sectionKey}-subtitle, var(--cv-color-secondary, #0369a1))` : 'var(--cv-color-secondary, #0369a1)'
+  const textColor = sectionKey ? `var(--sec-${sectionKey}-text, var(--cv-color-text, #334155))` : 'var(--cv-color-text, #334155)'
+  const tableBg = sectionKey ? `var(--sec-${sectionKey}-bg, var(--sec-table-bg, rgba(255, 255, 255, 0.6)))` : 'var(--sec-table-bg, rgba(255, 255, 255, 0.6))'
+  const borderColor = sectionKey ? `var(--sec-${sectionKey}-border, var(--cv-color-border, #e2e8f0))` : 'var(--cv-color-border, #e2e8f0)'
 
   // Flatten todos os pares de chave-valor para apresentação tabular uniforme
   const rows: Array<{ key: string; value: string; hint?: string }> = []
@@ -18,7 +24,7 @@ export const KeyValueTableRenderer: React.FC<KeyValueTableRendererProps> = ({ it
         rows.push({
           key: k.replace(/_/g, ' '),
           value: String(v),
-          hint: item.title && item.title !== k ? item.title : undefined
+          hint: item.subtitle || (items.length > 1 && item.title !== k ? item.title : undefined)
         })
       })
     } else if (item.title && item.prose) {
@@ -55,10 +61,10 @@ export const KeyValueTableRenderer: React.FC<KeyValueTableRendererProps> = ({ it
     >
       <div
         style={{
-          border: '1px solid var(--cv-color-border, #e2e8f0)',
+          border: `1px solid ${borderColor}`,
           borderRadius: '6px',
           overflow: 'hidden',
-          background: 'var(--sec-table-bg, rgba(255, 255, 255, 0.6))'
+          background: tableBg
         }}
       >
         <table
@@ -74,7 +80,7 @@ export const KeyValueTableRenderer: React.FC<KeyValueTableRendererProps> = ({ it
               <tr
                 key={idx}
                 style={{
-                  borderBottom: idx === rows.length - 1 ? 'none' : '1px solid var(--cv-color-border, #f1f5f9)',
+                  borderBottom: idx === rows.length - 1 ? 'none' : `1px solid ${borderColor}`,
                   background: idx % 2 === 0 ? 'transparent' : 'var(--cv-color-surface, rgba(248, 250, 252, 0.7))'
                 }}
               >
@@ -82,16 +88,16 @@ export const KeyValueTableRenderer: React.FC<KeyValueTableRendererProps> = ({ it
                   style={{
                     padding: '0.45rem 0.75rem',
                     fontWeight: 700,
-                    color: 'var(--cv-color-primary, #0284c7)',
+                    color: titleColor,
                     width: '40%',
                     textTransform: 'capitalize',
                     verticalAlign: 'top',
-                    borderRight: '1px solid var(--cv-color-border, #f1f5f9)'
+                    borderRight: `1px solid ${borderColor}`
                   }}
                 >
                   {row.key}
                   {row.hint && (
-                    <span style={{ display: 'block', fontSize: '0.68rem', fontWeight: 600, color: 'var(--cv-color-secondary, #0369a1)' }}>
+                    <span style={{ display: 'block', fontSize: '0.68rem', fontWeight: 600, color: subtitleColor }}>
                       {row.hint}
                     </span>
                   )}
@@ -99,7 +105,7 @@ export const KeyValueTableRenderer: React.FC<KeyValueTableRendererProps> = ({ it
                 <td
                   style={{
                     padding: '0.45rem 0.75rem',
-                    color: 'var(--cv-color-text, #334155)',
+                    color: textColor,
                     fontWeight: 500,
                     verticalAlign: 'top'
                   }}

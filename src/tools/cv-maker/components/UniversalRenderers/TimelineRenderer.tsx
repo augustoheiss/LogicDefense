@@ -6,8 +6,13 @@ interface TimelineRendererProps {
   sectionKey?: string
 }
 
-export const TimelineRenderer: React.FC<TimelineRendererProps> = ({ items }) => {
+export const TimelineRenderer: React.FC<TimelineRendererProps> = ({ items, sectionKey }) => {
   if (!items || items.length === 0) return null
+
+  const titleColor = sectionKey ? `var(--sec-${sectionKey}-title, var(--cv-color-primary, #0284c7))` : 'var(--cv-color-primary, #0284c7)'
+  const subtitleColor = sectionKey ? `var(--sec-${sectionKey}-subtitle, var(--cv-color-secondary, #0369a1))` : 'var(--cv-color-secondary, #0369a1)'
+  const textColor = sectionKey ? `var(--sec-${sectionKey}-text, var(--cv-color-text, #334155))` : 'var(--cv-color-text, #334155)'
+  const borderColor = sectionKey ? `var(--sec-${sectionKey}-border, var(--cv-color-border, #cbd5e1))` : 'var(--cv-color-border, #cbd5e1)'
 
   return (
     <div
@@ -29,7 +34,7 @@ export const TimelineRenderer: React.FC<TimelineRendererProps> = ({ items }) => 
           top: '6px',
           bottom: '10px',
           width: '2px',
-          background: 'var(--cv-color-border, #cbd5e1)',
+          background: borderColor,
           borderRadius: '1px'
         }}
         aria-hidden="true"
@@ -58,9 +63,9 @@ export const TimelineRenderer: React.FC<TimelineRendererProps> = ({ items }) => 
                 width: '12px',
                 height: '12px',
                 borderRadius: '50%',
-                background: 'var(--cv-color-primary, #0284c7)',
+                background: titleColor,
                 border: '2px solid #ffffff',
-                boxShadow: '0 0 0 1px var(--cv-color-border, #cbd5e1)',
+                boxShadow: `0 0 0 1px ${borderColor}`,
                 zIndex: 2
               }}
               aria-hidden="true"
@@ -81,7 +86,7 @@ export const TimelineRenderer: React.FC<TimelineRendererProps> = ({ items }) => 
                 style={{
                   fontSize: '0.92rem',
                   fontWeight: 700,
-                  color: 'var(--cv-color-primary, #0284c7)',
+                  color: titleColor,
                   margin: 0,
                   lineHeight: 1.3
                 }}
@@ -112,7 +117,7 @@ export const TimelineRenderer: React.FC<TimelineRendererProps> = ({ items }) => 
                 style={{
                   fontSize: '0.82rem',
                   fontWeight: 600,
-                  color: 'var(--cv-color-secondary, #0369a1)',
+                  color: subtitleColor,
                   marginBottom: '0.35rem'
                 }}
               >
@@ -125,7 +130,7 @@ export const TimelineRenderer: React.FC<TimelineRendererProps> = ({ items }) => 
               <p
                 style={{
                   fontSize: '0.8rem',
-                  color: 'var(--cv-color-text, #334155)',
+                  color: textColor,
                   lineHeight: 1.5,
                   margin: '0 0 0.4rem 0'
                 }}

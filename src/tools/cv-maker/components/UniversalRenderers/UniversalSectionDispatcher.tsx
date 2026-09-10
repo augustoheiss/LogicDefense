@@ -64,6 +64,7 @@ export const UniversalSectionDispatcher: React.FC<UniversalSectionDispatcherProp
       }}
     >
       <h2
+        className="cv-section-title cv-universal-section-title"
         style={{
           fontSize: '1.05rem',
           fontWeight: 800,
