@@ -43,7 +43,8 @@ class PlaywrightPDFService:
     @classmethod
     def _get_render_semaphore(cls) -> asyncio.Semaphore:
         if cls._render_semaphore is None:
-            cls._render_semaphore = asyncio.Semaphore(1)
+            # Permite até 2 renderizações paralelas sem fila de espera travada
+            cls._render_semaphore = asyncio.Semaphore(2)
         return cls._render_semaphore
 
     @classmethod
@@ -136,29 +137,32 @@ class PlaywrightPDFService:
             browser = await cls.get_browser()
             context = await browser.new_context(
                 viewport={"width": 1240, "height": 1754},
-                device_scale_factor=2
+                device_scale_factor=1
             )
             page = await context.new_page()
             try:
                 # 1. Configurar emulação de mídia de impressão (@media print)
                 await page.emulate_media(media="print")
 
-                # 2. Carregar o HTML autocontido
+                # 2. Carregar o HTML autocontido com domcontentloaded (instantâneo para snapshots)
                 await page.set_content(
                     html_content,
-                    wait_until="load",
+                    wait_until="domcontentloaded",
                     timeout=timeout_ms
                 )
 
-                # 3. Aguardar fontes nativas e da web
+                # 3. Aguardar fontes nativas e da web com timeout defensivo de 2.5s
                 if wait_for_fonts:
                     try:
-                        await page.evaluate("() => document.fonts ? document.fonts.ready : Promise.resolve()")
+                        await asyncio.wait_for(
+                            page.evaluate("() => document.fonts ? document.fonts.ready : Promise.resolve()"),
+                            timeout=2.5
+                        )
                     except Exception as font_err:
-                        log.warning(f"[PlaywrightPDF] Aviso ao aguardar fonts.ready: {font_err}")
+                        log.warning(f"[PlaywrightPDF] fonts.ready concluído por timeout de segurança ou fallback: {font_err}")
 
                 # 4. Pequeno delay para acomodação de micro-layouts e CSS flex/grid
-                await asyncio.sleep(0.1)
+                await asyncio.sleep(0.08)
 
                 # 5. Parâmetros de geração nativa do PDF via CDP
                 pdf_kwargs: dict = {

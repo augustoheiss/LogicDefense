@@ -86,12 +86,48 @@ export class DOMSnapshotSerializer {
       '--cv-color-workspace-bg',
     ]
 
-    let rootVariablesCss = ':root {\n'
+    const capturedVariables = new Map<string, string>()
+
     for (const prop of customProps) {
       const val = computedStyle.getPropertyValue(prop).trim() || (rootStyle ? rootStyle.getPropertyValue(prop).trim() : '')
       if (val) {
-        rootVariablesCss += `  ${prop}: ${val};\n`
+        capturedVariables.set(prop, val)
       }
+    }
+
+    // Varredura dinâmica de variáveis customizadas (--sec-*, --cv-*, etc.)
+    const scanElementCustomVars = (el: Element | null) => {
+      if (!el) return
+      const htmlEl = el as HTMLElement
+      if (htmlEl.style) {
+        for (let i = 0; i < htmlEl.style.length; i++) {
+          const propName = htmlEl.style[i]
+          if (propName && propName.startsWith('--')) {
+            const val = htmlEl.style.getPropertyValue(propName).trim()
+            if (val) {
+              capturedVariables.set(propName, val)
+            }
+          }
+        }
+      }
+    }
+
+    if (typeof document !== 'undefined') {
+      scanElementCustomVars(document.documentElement)
+      scanElementCustomVars(document.body)
+    }
+    scanElementCustomVars(sourceElement)
+
+    if (sourceElement.querySelectorAll) {
+      const elementsWithVars = sourceElement.querySelectorAll('[style*="--"]')
+      elementsWithVars.forEach((elem) => {
+        scanElementCustomVars(elem)
+      })
+    }
+
+    let rootVariablesCss = ':root {\n'
+    for (const [prop, val] of capturedVariables.entries()) {
+      rootVariablesCss += `  ${prop}: ${val};\n`
     }
 
     // 4.1. Inspecionar e embutir Texturas de Fundo (--cv-bg-image) em Base64 Data URI
@@ -500,6 +536,52 @@ export class DOMSnapshotSerializer {
         :last-child {
           page-break-after: auto !important;
           break-after: auto !important;
+        }
+
+        /* ── Regras Soberanas para Documentos Universais no Snapshot ── */
+        .cv-universal-title,
+        h1.cv-universal-title,
+        .cv-universal-header h1 {
+          color: var(--sec-header-title, var(--cv-color-primary, #1e3a8a)) !important;
+          -webkit-text-fill-color: var(--sec-header-title, var(--cv-color-primary, #1e3a8a)) !important;
+        }
+        .cv-universal-subtitle,
+        .cv-universal-header p,
+        .cv-universal-header span {
+          color: var(--sec-header-subtitle, var(--cv-color-secondary, #2563eb)) !important;
+        }
+        .cv-universal-section-title,
+        h2.cv-universal-section-title,
+        .cv-universal-section h2 {
+          color: var(--sec-work-title, var(--cv-color-primary, #1e3a8a)) !important;
+          -webkit-text-fill-color: var(--sec-work-title, var(--cv-color-primary, #1e3a8a)) !important;
+          border-bottom-color: var(--cv-color-border, #e2e8f0) !important;
+        }
+        .cv-universal-item-title,
+        .cv-universal-card h3,
+        .cv-universal-timeline-item h3 {
+          color: var(--sec-work-title, var(--cv-color-primary, #1e3a8a)) !important;
+          -webkit-text-fill-color: var(--sec-work-title, var(--cv-color-primary, #1e3a8a)) !important;
+        }
+        .cv-universal-item-subtitle,
+        .cv-universal-card h4,
+        .cv-universal-prose-block h4,
+        .cv-universal-timeline-item h4 {
+          color: var(--sec-work-subtitle, var(--cv-color-secondary, #2563eb)) !important;
+        }
+        .cv-universal-table-key,
+        .cv-universal-key-value-table td:first-child,
+        .cv-universal-key-value-table th {
+          color: var(--sec-work-title, var(--cv-color-primary, #1e3a8a)) !important;
+          font-weight: 700 !important;
+        }
+        .cv-universal-table-hint,
+        .cv-universal-item-meta {
+          color: var(--sec-work-subtitle, var(--cv-color-secondary, #64748b)) !important;
+        }
+        .cv-universal-timeline-dot {
+          background-color: var(--cv-color-primary, #2563eb) !important;
+          border-color: #ffffff !important;
         }
       }
     `

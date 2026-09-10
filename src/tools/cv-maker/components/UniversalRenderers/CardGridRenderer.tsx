@@ -56,6 +56,7 @@ export const CardGridRenderer: React.FC<CardGridRendererProps> = ({ items, secti
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: '0.5rem', marginBottom: '0.3rem' }}>
                 {item.title && (
                   <h3
+                    className="cv-universal-item-title"
                     style={{
                       fontSize: '0.92rem',
                       fontWeight: 700,
@@ -85,6 +86,7 @@ export const CardGridRenderer: React.FC<CardGridRendererProps> = ({ items, secti
               {/* Subtítulo / Empresa / Função */}
               {item.subtitle && (
                 <div
+                  className="cv-universal-item-subtitle"
                   style={{
                     fontSize: '0.8rem',
                     fontWeight: 600,

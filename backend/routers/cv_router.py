@@ -13,7 +13,7 @@ import os
 import zipfile
 import yaml
 from typing import Optional, Dict, Any
-from fastapi import APIRouter, HTTPException, Header, Query, status
+from fastapi import APIRouter, HTTPException, Header, Query, Request, status
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
@@ -910,19 +910,37 @@ class CVExportPDFRequest(BaseModel):
 
 
 @router.post("/export-pdf-headless", summary="Exportar PDF vetorial direto via Playwright Headless")
-async def export_pdf_headless(payload: CVExportPDFRequest):
+async def export_pdf_headless(payload: CVExportPDFRequest, request: Request):
     """
     Compila o snapshot HTML fornecido pelo cliente em um documento PDF de alta fidelidade
     utilizando Playwright Chromium Headless com geometria euclidiana arbitrária e Tagged PDF para ATS.
+    Detecta desconexão do cliente para liberar semáforos e recursos imediatamente.
     """
+    if await request.is_disconnected():
+        log.warning("[CV Router] Cliente desconectado antes de iniciar renderização do PDF.")
+        raise HTTPException(status_code=499, detail="Client Closed Request")
+
     try:
+        import asyncio
         from services.cv_pdf_service import PlaywrightPDFService
-        pdf_bytes = await PlaywrightPDFService.render_pdf_from_html(
-            html_content=payload.html,
-            page_format=payload.format,
-            page_width=payload.width,
-            page_height=payload.height
+
+        render_task = asyncio.create_task(
+            PlaywrightPDFService.render_pdf_from_html(
+                html_content=payload.html,
+                page_format=payload.format,
+                page_width=payload.width,
+                page_height=payload.height
+            )
         )
+
+        while not render_task.done():
+            if await request.is_disconnected():
+                log.warning("[CV Router] Cliente desconectou durante renderização. Cancelando tarefa Playwright...")
+                render_task.cancel()
+                raise HTTPException(status_code=499, detail="Client Closed Request")
+            await asyncio.sleep(0.5)
+
+        pdf_bytes = await render_task
         import re
         raw_name = payload.filename.strip() if payload.filename else "curriculo.pdf"
         safe_filename = re.sub(r'[^a-zA-Z0-9_.-]', '-', raw_name)
@@ -939,6 +957,11 @@ async def export_pdf_headless(payload: CVExportPDFRequest):
                 "Access-Control-Expose-Headers": "Content-Disposition"
             }
         )
+    except asyncio.CancelledError:
+        log.info("[CV Router] Tarefa Playwright cancelada por desconexão do cliente.")
+        raise HTTPException(status_code=499, detail="Client Closed Request")
+    except HTTPException:
+        raise
     except Exception as e:
         log.error(f"[CV Router] Falha na exportação de PDF headless: {e}", exc_info=True)
         raise HTTPException(

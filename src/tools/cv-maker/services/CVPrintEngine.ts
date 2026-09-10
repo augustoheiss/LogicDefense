@@ -153,8 +153,8 @@ export class CVPrintEngine {
    */
   public static prewarmWorkers(): void {
     const workers = [
-      'https://ocorrencias-pdf-writer.onrender.com/health',
-      'https://heiss-cv-engine.onrender.com/health'
+      'https://heiss-cv-engine.onrender.com/health',
+      'https://ocorrencias-pdf-writer.onrender.com/health'
     ]
     for (const url of workers) {
       try {
@@ -316,7 +316,7 @@ export class CVPrintEngine {
 
         const baseUrl = candidates[i]
         const endpoint = baseUrl ? `${baseUrl}/api/v1/cv/export-pdf-headless` : '/api/v1/cv/export-pdf-headless'
-        const timeoutMs = isLocal ? 15000 : 25000
+        const timeoutMs = isLocal ? 20000 : 55000
 
         try {
           // 1. Sonda ativa de despertar: pinga /health e libera no instante exato em que o servidor acordar

@@ -1476,9 +1476,9 @@
      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
   .theme-executive,
   .theme-executive .cv-card,
-  .theme-executive * {
+  .theme-executive .cv-universal-document-card {
     font-family: 'Merriweather', Georgia, 'Times New Roman', serif !important;
-    color: #1a1a1a !important;
+    color: var(--cv-color-text, #1a1a1a) !important;
   }
 
   .theme-executive header.cv-header {
@@ -1542,9 +1542,9 @@
      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
   .theme-creative,
   .theme-creative .cv-card,
-  .theme-creative * {
+  .theme-creative .cv-universal-document-card {
     font-family: 'Poppins', 'Segoe UI', system-ui, sans-serif !important;
-    color: #1e293b !important;
+    color: var(--cv-color-text, #1e293b) !important;
   }
 
   .theme-creative header.cv-header {
@@ -1637,9 +1637,9 @@
      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
   .theme-minimalist,
   .theme-minimalist .cv-card,
-  .theme-minimalist * {
+  .theme-minimalist .cv-universal-document-card {
     font-family: 'Inter', system-ui, -apple-system, sans-serif !important;
-    color: #0f172a !important;
+    color: var(--cv-color-text, #0f172a) !important;
   }
 
   .theme-minimalist header.cv-header {
@@ -1699,9 +1699,9 @@
      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
   .theme-white,
   .theme-white .cv-card,
-  .theme-white * {
+  .theme-white .cv-universal-document-card {
     font-family: 'Inter', system-ui, sans-serif !important;
-    color: #334155 !important;
+    color: var(--cv-color-text, #334155) !important;
   }
 
   .theme-white header.cv-header {
@@ -2043,6 +2043,85 @@
 
   .layout-dynamic_math .cv-math-project-card {
     border-left: 3.5px solid currentColor !important;
+  }
+
+  /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+     ■ REGRAS SOBERANAS DE IMPRESSÃO PARA DOCUMENTOS UNIVERSAIS
+     Garante fidelidade cromática absoluta para contratos, receitas,
+     prontuários médicos, laudos, tabelas e fluxos de texto.
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+  .cv-universal-container,
+  .cv-universal-document-card {
+    background: transparent !important;
+    color: var(--cv-color-text, #1e293b) !important;
+  }
+
+  .cv-universal-title,
+  h1.cv-universal-title,
+  .cv-universal-header h1 {
+    color: var(--sec-header-title, var(--cv-color-primary, #1e3a8a)) !important;
+    -webkit-text-fill-color: var(--sec-header-title, var(--cv-color-primary, #1e3a8a)) !important;
+    print-color-adjust: exact !important;
+    -webkit-print-color-adjust: exact !important;
+  }
+
+  .cv-universal-subtitle,
+  .cv-universal-header p,
+  .cv-universal-header span {
+    color: var(--sec-header-subtitle, var(--cv-color-secondary, #2563eb)) !important;
+    print-color-adjust: exact !important;
+    -webkit-print-color-adjust: exact !important;
+  }
+
+  .cv-universal-section-title,
+  h2.cv-universal-section-title,
+  .cv-universal-section h2 {
+    color: var(--sec-work-title, var(--cv-color-primary, #1e3a8a)) !important;
+    -webkit-text-fill-color: var(--sec-work-title, var(--cv-color-primary, #1e3a8a)) !important;
+    border-bottom-color: var(--cv-color-border, #e2e8f0) !important;
+    print-color-adjust: exact !important;
+    -webkit-print-color-adjust: exact !important;
+  }
+
+  .cv-universal-item-title,
+  .cv-universal-card h3,
+  .cv-universal-timeline-item h3 {
+    color: var(--sec-work-title, var(--cv-color-primary, #1e3a8a)) !important;
+    -webkit-text-fill-color: var(--sec-work-title, var(--cv-color-primary, #1e3a8a)) !important;
+    print-color-adjust: exact !important;
+    -webkit-print-color-adjust: exact !important;
+  }
+
+  .cv-universal-item-subtitle,
+  .cv-universal-card h4,
+  .cv-universal-prose-block h4,
+  .cv-universal-timeline-item h4 {
+    color: var(--sec-work-subtitle, var(--cv-color-secondary, #2563eb)) !important;
+    print-color-adjust: exact !important;
+    -webkit-print-color-adjust: exact !important;
+  }
+
+  .cv-universal-table-key,
+  .cv-universal-key-value-table td:first-child,
+  .cv-universal-key-value-table th {
+    color: var(--sec-work-title, var(--cv-color-primary, #1e3a8a)) !important;
+    font-weight: 700 !important;
+    print-color-adjust: exact !important;
+    -webkit-print-color-adjust: exact !important;
+  }
+
+  .cv-universal-table-hint,
+  .cv-universal-item-meta {
+    color: var(--sec-work-subtitle, var(--cv-color-secondary, #64748b)) !important;
+    print-color-adjust: exact !important;
+    -webkit-print-color-adjust: exact !important;
+  }
+
+  .cv-universal-timeline-dot {
+    background-color: var(--cv-color-primary, #2563eb) !important;
+    border-color: #ffffff !important;
+    print-color-adjust: exact !important;
+    -webkit-print-color-adjust: exact !important;
   }
 }
 

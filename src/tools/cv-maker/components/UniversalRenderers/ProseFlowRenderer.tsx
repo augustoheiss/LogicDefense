@@ -32,6 +32,7 @@ export const ProseFlowRenderer: React.FC<ProseFlowRendererProps> = ({ items, sec
             {/* Título de Subseção se houver */}
             {item.title && (
               <h4
+                className="cv-universal-item-title"
                 style={{
                   fontSize: '0.88rem',
                   fontWeight: 700,
@@ -46,6 +47,7 @@ export const ProseFlowRenderer: React.FC<ProseFlowRendererProps> = ({ items, sec
             {/* Subtítulo / Referência */}
             {item.subtitle && (
               <div
+                className="cv-universal-item-subtitle"
                 style={{
                   fontSize: '0.78rem',
                   fontWeight: 600,

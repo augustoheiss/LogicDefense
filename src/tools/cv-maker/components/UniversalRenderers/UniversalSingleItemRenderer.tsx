@@ -39,6 +39,7 @@ export const UniversalSingleItemRenderer: React.FC<UniversalSingleItemRendererPr
         >
           {/* Marcador Geométrico */}
           <div
+            className="cv-universal-timeline-dot"
             style={{
               position: 'absolute',
               left: '0.2rem',
@@ -55,7 +56,7 @@ export const UniversalSingleItemRenderer: React.FC<UniversalSingleItemRendererPr
           />
 
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: '0.4rem', marginBottom: '0.2rem' }}>
-            <h3 style={{ fontSize: '0.92rem', fontWeight: 700, color: titleColor, margin: 0, lineHeight: 1.3 }}>
+            <h3 className="cv-universal-item-title" style={{ fontSize: '0.92rem', fontWeight: 700, color: titleColor, margin: 0, lineHeight: 1.3 }}>
               {item.title || `Marco #${idx + 1}`}
             </h3>
             {dateDisplay && (
@@ -77,7 +78,7 @@ export const UniversalSingleItemRenderer: React.FC<UniversalSingleItemRendererPr
           </div>
 
           {item.subtitle && (
-            <div style={{ fontSize: '0.8rem', fontWeight: 600, color: subtitleColor, marginBottom: '0.35rem' }}>
+            <div className="cv-universal-item-subtitle" style={{ fontSize: '0.8rem', fontWeight: 600, color: subtitleColor, marginBottom: '0.35rem' }}>
               {item.subtitle}
             </div>
           )}
@@ -197,6 +198,7 @@ export const UniversalSingleItemRenderer: React.FC<UniversalSingleItemRendererPr
                   }}
                 >
                   <td
+                    className="cv-universal-table-key"
                     style={{
                       padding: '0.45rem 0.75rem',
                       fontWeight: 700,
@@ -209,7 +211,7 @@ export const UniversalSingleItemRenderer: React.FC<UniversalSingleItemRendererPr
                   >
                     {row.key}
                     {row.hint && (
-                      <span style={{ display: 'block', fontSize: '0.68rem', fontWeight: 600, color: subtitleColor }}>
+                      <span className="cv-universal-table-hint" style={{ display: 'block', fontSize: '0.68rem', fontWeight: 600, color: subtitleColor }}>
                         {row.hint}
                       </span>
                     )}
@@ -240,12 +242,12 @@ export const UniversalSingleItemRenderer: React.FC<UniversalSingleItemRendererPr
           }}
         >
           {item.title && (
-            <h4 style={{ fontSize: '0.88rem', fontWeight: 700, color: titleColor, margin: '0 0 0.25rem 0' }}>
+            <h4 className="cv-universal-item-title" style={{ fontSize: '0.88rem', fontWeight: 700, color: titleColor, margin: '0 0 0.25rem 0' }}>
               {item.title}
             </h4>
           )}
           {item.subtitle && (
-            <div style={{ fontSize: '0.78rem', fontWeight: 600, color: subtitleColor, marginBottom: '0.3rem' }}>
+            <div className="cv-universal-item-subtitle" style={{ fontSize: '0.78rem', fontWeight: 600, color: subtitleColor, marginBottom: '0.3rem' }}>
               {item.subtitle}
             </div>
           )}
@@ -298,7 +300,7 @@ export const UniversalSingleItemRenderer: React.FC<UniversalSingleItemRendererPr
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: '0.5rem', marginBottom: '0.3rem' }}>
               {item.title && (
-                <h3 style={{ fontSize: '0.92rem', fontWeight: 700, color: titleColor, margin: 0, lineHeight: 1.25 }}>
+                <h3 className="cv-universal-item-title" style={{ fontSize: '0.92rem', fontWeight: 700, color: titleColor, margin: 0, lineHeight: 1.25 }}>
                   {item.title}
                 </h3>
               )}
@@ -310,7 +312,7 @@ export const UniversalSingleItemRenderer: React.FC<UniversalSingleItemRendererPr
             </div>
 
             {item.subtitle && (
-              <div style={{ fontSize: '0.8rem', fontWeight: 600, color: subtitleColor, marginBottom: '0.45rem' }}>
+              <div className="cv-universal-item-subtitle" style={{ fontSize: '0.8rem', fontWeight: 600, color: subtitleColor, marginBottom: '0.45rem' }}>
                 {item.subtitle}
               </div>
             )}

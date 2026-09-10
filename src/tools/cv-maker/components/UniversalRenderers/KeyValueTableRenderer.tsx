@@ -85,6 +85,7 @@ export const KeyValueTableRenderer: React.FC<KeyValueTableRendererProps> = ({ it
                 }}
               >
                 <td
+                  className="cv-universal-table-key"
                   style={{
                     padding: '0.45rem 0.75rem',
                     fontWeight: 700,
@@ -97,7 +98,7 @@ export const KeyValueTableRenderer: React.FC<KeyValueTableRendererProps> = ({ it
                 >
                   {row.key}
                   {row.hint && (
-                    <span style={{ display: 'block', fontSize: '0.68rem', fontWeight: 600, color: subtitleColor }}>
+                    <span className="cv-universal-table-hint" style={{ display: 'block', fontSize: '0.68rem', fontWeight: 600, color: subtitleColor }}>
                       {row.hint}
                     </span>
                   )}

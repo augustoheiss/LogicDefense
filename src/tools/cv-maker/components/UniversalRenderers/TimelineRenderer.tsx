@@ -56,6 +56,7 @@ export const TimelineRenderer: React.FC<TimelineRendererProps> = ({ items, secti
           >
             {/* Marcador Geométrico da Linha do Tempo */}
             <div
+              className="cv-universal-timeline-dot"
               style={{
                 position: 'absolute',
                 left: '-1.25rem',
@@ -83,6 +84,7 @@ export const TimelineRenderer: React.FC<TimelineRendererProps> = ({ items, secti
               }}
             >
               <h3
+                className="cv-universal-item-title"
                 style={{
                   fontSize: '0.92rem',
                   fontWeight: 700,
@@ -114,6 +116,7 @@ export const TimelineRenderer: React.FC<TimelineRendererProps> = ({ items, secti
             {/* Subtítulo / Cargo / Instituição */}
             {item.subtitle && (
               <div
+                className="cv-universal-item-subtitle"
                 style={{
                   fontSize: '0.82rem',
                   fontWeight: 600,
