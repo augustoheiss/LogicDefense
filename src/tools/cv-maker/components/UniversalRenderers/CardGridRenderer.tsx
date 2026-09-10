@@ -53,7 +53,7 @@ export const CardGridRenderer: React.FC<CardGridRendererProps> = ({ items }) => 
                     style={{
                       fontSize: '0.92rem',
                       fontWeight: 700,
-                      color: 'var(--cv-color-primary, #0f172a)',
+                      color: 'var(--cv-color-primary, #0284c7)',
                       margin: 0,
                       lineHeight: 1.25
                     }}
@@ -82,7 +82,7 @@ export const CardGridRenderer: React.FC<CardGridRendererProps> = ({ items }) => 
                   style={{
                     fontSize: '0.8rem',
                     fontWeight: 600,
-                    color: 'var(--cv-color-secondary, #2563eb)',
+                    color: 'var(--cv-color-secondary, #0369a1)',
                     marginBottom: '0.45rem'
                   }}
                 >

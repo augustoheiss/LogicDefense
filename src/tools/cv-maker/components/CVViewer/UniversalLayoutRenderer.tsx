@@ -151,6 +151,7 @@ export const UniversalLayoutRenderer: React.FC<UniversalLayoutRendererProps> = (
       ...(designConfig.sectionOverrides ? Object.entries(designConfig.sectionOverrides).reduce((acc, [secId, override]) => {
         if (override.textColor) acc[`--sec-${secId}-text`] = override.textColor
         if (override.titleColor) acc[`--sec-${secId}-title`] = override.titleColor
+        if (override.subtitleColor) acc[`--sec-${secId}-subtitle`] = override.subtitleColor
         if (override.bgColor) acc[`--sec-${secId}-bg`] = override.bgColor
         if (override.borderColor) acc[`--sec-${secId}-border`] = override.borderColor
         if (override.accentColor) acc[`--sec-${secId}-accent`] = override.accentColor

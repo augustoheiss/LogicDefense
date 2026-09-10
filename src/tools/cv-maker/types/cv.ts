@@ -364,6 +364,7 @@ export function getSkillPercentage(level?: string, levelPercent?: number): numbe
 export interface SectionStyleOverride {
   textColor?: string
   titleColor?: string
+  subtitleColor?: string
   bgColor?: string
   borderColor?: string
   accentColor?: string

@@ -3,6 +3,7 @@ import type { CVDesignConfig, SectionStyleOverride } from '../../types/cv'
 import { DEFAULT_DESIGN_CONFIG } from '../../types/cv'
 import { BACKGROUND_CATALOG, BACKGROUND_CATEGORIES } from '../../engine/backgroundCatalog'
 import { compressImageFile } from '../../utils/imageCompressor'
+import { deriveHarmoniousSecondary } from '../../utils/colorUtils'
 
 interface DesignCustomizerDrawerProps {
   isOpen: boolean
@@ -118,6 +119,24 @@ const COLOR_PRESETS = [
     surface: '#fff1f2',
     bg: '#ffffff',
     text: '#1c1917'
+  },
+  {
+    name: 'Crimson Executive',
+    primary: '#dc2626',
+    secondary: '#991b1b',
+    accent: '#f97316',
+    surface: '#fef2f2',
+    bg: '#ffffff',
+    text: '#1c1917'
+  },
+  {
+    name: 'Deep Indigo Modern',
+    primary: '#4f46e5',
+    secondary: '#3730a3',
+    accent: '#06b6d4',
+    surface: '#eef2ff',
+    bg: '#ffffff',
+    text: '#0f172a'
   }
 ]
 
@@ -478,11 +497,32 @@ export const DesignCustomizerDrawer: React.FC<DesignCustomizerDrawerProps> = ({
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                       <input
                         type="color"
-                        value={config.colorPrimary}
-                        onChange={e => onChangeConfig({ ...config, colorPrimary: e.target.value })}
+                        value={config.colorPrimary || '#0284c7'}
+                        onChange={e => {
+                          const newPrimary = e.target.value
+                          const derivedSecondary = deriveHarmoniousSecondary(newPrimary)
+                          onChangeConfig({
+                            ...config,
+                            colorPrimary: newPrimary,
+                            colorSecondary: derivedSecondary
+                          })
+                        }}
                         style={{ width: '32px', height: '28px', border: 'none', background: 'transparent', cursor: 'pointer' }}
                       />
-                      <span style={{ fontSize: '0.75rem', color: '#e2e8f0', fontFamily: 'monospace' }}>{config.colorPrimary}</span>
+                      <span style={{ fontSize: '0.75rem', color: '#e2e8f0', fontFamily: 'monospace' }}>{config.colorPrimary || '#0284c7'}</span>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label style={{ fontSize: '0.72rem', color: '#94a3b8', display: 'block', marginBottom: '0.25rem' }}>🎯 Cor Secundária (Subtítulos/Cargos):</label>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                      <input
+                        type="color"
+                        value={config.colorSecondary || '#0369a1'}
+                        onChange={e => onChangeConfig({ ...config, colorSecondary: e.target.value })}
+                        style={{ width: '32px', height: '28px', border: 'none', background: 'transparent', cursor: 'pointer' }}
+                      />
+                      <span style={{ fontSize: '0.75rem', color: '#e2e8f0', fontFamily: 'monospace' }}>{config.colorSecondary || '#0369a1'}</span>
                     </div>
                   </div>
 
@@ -760,6 +800,24 @@ export const DesignCustomizerDrawer: React.FC<DesignCustomizerDrawerProps> = ({
                       />
                       <span style={{ fontSize: '0.75rem', color: '#e2e8f0', fontFamily: 'monospace' }}>
                         {currentSectionOverride.titleColor || 'Padrão'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Cor dos Subtítulos da Seção */}
+                  <div style={{ background: '#0b1120', padding: '0.6rem', borderRadius: '6px', border: '1px solid #1e293b' }}>
+                    <label style={{ fontSize: '0.72rem', color: '#94a3b8', display: 'block', marginBottom: '0.25rem' }}>
+                      🎯 Cor do Subtítulo / Cargos:
+                    </label>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                      <input
+                        type="color"
+                        value={currentSectionOverride.subtitleColor || config.colorSecondary || '#0369a1'}
+                        onChange={e => handleUpdateSectionOverride(selectedSectionId, 'subtitleColor', e.target.value)}
+                        style={{ width: '32px', height: '28px', border: 'none', background: 'transparent', cursor: 'pointer' }}
+                      />
+                      <span style={{ fontSize: '0.75rem', color: '#e2e8f0', fontFamily: 'monospace' }}>
+                        {currentSectionOverride.subtitleColor || 'Padrão'}
                       </span>
                     </div>
                   </div>

@@ -31,7 +31,7 @@ export const ProseFlowRenderer: React.FC<ProseFlowRendererProps> = ({ items }) =
                 style={{
                   fontSize: '0.88rem',
                   fontWeight: 700,
-                  color: 'var(--cv-color-primary, #0f172a)',
+                  color: 'var(--cv-color-primary, #0284c7)',
                   margin: '0 0 0.25rem 0'
                 }}
               >
@@ -45,7 +45,7 @@ export const ProseFlowRenderer: React.FC<ProseFlowRendererProps> = ({ items }) =
                 style={{
                   fontSize: '0.78rem',
                   fontWeight: 600,
-                  color: 'var(--cv-color-secondary, #2563eb)',
+                  color: 'var(--cv-color-secondary, #0369a1)',
                   marginBottom: '0.3rem'
                 }}
               >

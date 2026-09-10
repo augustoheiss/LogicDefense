@@ -69,7 +69,7 @@ export const UniversalSectionDispatcher: React.FC<UniversalSectionDispatcherProp
           fontWeight: 800,
           textTransform: 'uppercase',
           letterSpacing: '0.05em',
-          color: `var(--sec-${block.key}-title, var(--cv-color-primary, #0f172a))`,
+          color: `var(--sec-${block.key}-title, var(--cv-color-primary, #0284c7))`,
           margin: 0
         }}
       >
@@ -457,7 +457,17 @@ export const UniversalSectionDispatcher: React.FC<UniversalSectionDispatcherProp
         data-archetype={effectiveArchetype}
         style={{
           position: 'relative',
-          marginBottom: isFreeCanvas ? '0' : '1.4rem'
+          marginBottom: isFreeCanvas ? '0' : '1.4rem',
+          backgroundColor: `var(--sec-${block.key}-bg, transparent)`,
+          backgroundImage: `var(--sec-${block.key}-bg-image, none)`,
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+          color: `var(--sec-${block.key}-text, inherit)`,
+          ['--cv-color-primary' as any]: `var(--sec-${block.key}-title, var(--cv-color-primary, #0284c7))`,
+          ['--cv-color-secondary' as any]: `var(--sec-${block.key}-subtitle, var(--cv-color-secondary, #0369a1))`,
+          ['--cv-color-text' as any]: `var(--sec-${block.key}-text, var(--cv-color-text, #0f172a))`,
+          ['--cv-color-border' as any]: `var(--sec-${block.key}-border, var(--cv-color-border, #cbd5e1))`,
+          ['--cv-color-accent' as any]: `var(--sec-${block.key}-accent, var(--cv-color-accent, #f97316))`,
         }}
       >
         {headerBox}
@@ -503,8 +513,9 @@ export const UniversalSectionDispatcher: React.FC<UniversalSectionDispatcherProp
         color: `var(--sec-${block.key}-text, inherit)`,
         borderRadius: '6px',
         border: isFreeCanvas ? 'none' : `1px solid var(--sec-${block.key}-border, transparent)`,
-        ['--cv-color-primary' as any]: `var(--sec-${block.key}-title, var(--cv-color-primary, #0f172a))`,
-        ['--cv-color-text' as any]: `var(--sec-${block.key}-text, var(--cv-color-text, #334155))`,
+        ['--cv-color-primary' as any]: `var(--sec-${block.key}-title, var(--cv-color-primary, #0284c7))`,
+        ['--cv-color-secondary' as any]: `var(--sec-${block.key}-subtitle, var(--cv-color-secondary, #0369a1))`,
+        ['--cv-color-text' as any]: `var(--sec-${block.key}-text, var(--cv-color-text, #0f172a))`,
         ['--cv-color-border' as any]: `var(--sec-${block.key}-border, var(--cv-color-border, #cbd5e1))`,
         ['--cv-color-accent' as any]: `var(--sec-${block.key}-accent, var(--cv-color-accent, #f97316))`,
       }}

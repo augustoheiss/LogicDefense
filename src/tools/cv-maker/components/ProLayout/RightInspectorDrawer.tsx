@@ -5,6 +5,7 @@ import { PAGE_FORMATS } from '../../engine/PageFormatEngine'
 import { calculateAtsReport } from '../../engine/AtsEngine'
 import { BACKGROUND_CATALOG, BACKGROUND_CATEGORIES } from '../../engine/backgroundCatalog'
 import { compressImageFile } from '../../utils/imageCompressor'
+import { deriveHarmoniousSecondary } from '../../utils/colorUtils'
 import { UNIVERSAL_BLUEPRINTS, type DocumentBlueprint } from '../../templates/universalBlueprints'
 import { ARCHETYPE_DEFINITIONS } from '../../types/universalAST'
 import {
@@ -243,6 +244,24 @@ const COLOR_PRESETS = [
     surface: '#fff1f2',
     bg: '#ffffff',
     text: '#1c1917'
+  },
+  {
+    name: 'Crimson Executive',
+    primary: '#dc2626',
+    secondary: '#991b1b',
+    accent: '#f97316',
+    surface: '#fef2f2',
+    bg: '#ffffff',
+    text: '#1c1917'
+  },
+  {
+    name: 'Deep Indigo Modern',
+    primary: '#4f46e5',
+    secondary: '#3730a3',
+    accent: '#06b6d4',
+    surface: '#eef2ff',
+    bg: '#ffffff',
+    text: '#0f172a'
   }
 ]
 
@@ -880,7 +899,15 @@ export const RightInspectorDrawer: React.FC<RightInspectorDrawerProps> = ({
                         <input
                           type="color"
                           value={designConfig.colorPrimary || '#0284c7'}
-                          onChange={(e) => onChangeDesignConfig({ ...designConfig, colorPrimary: e.target.value })}
+                          onChange={(e) => {
+                            const newPrimary = e.target.value
+                            const derivedSecondary = deriveHarmoniousSecondary(newPrimary)
+                            onChangeDesignConfig({
+                              ...designConfig,
+                              colorPrimary: newPrimary,
+                              colorSecondary: derivedSecondary
+                            })
+                          }}
                           style={{ width: '28px', height: '24px', border: 'none', background: 'transparent', cursor: 'pointer', padding: 0 }}
                         />
                         <span style={{ fontSize: '0.72rem', color: '#e2e8f0', fontFamily: 'monospace' }}>{designConfig.colorPrimary || '#0284c7'}</span>
@@ -1191,6 +1218,22 @@ export const RightInspectorDrawer: React.FC<RightInspectorDrawerProps> = ({
                         />
                         <span style={{ fontSize: '0.72rem', color: '#e2e8f0', fontFamily: 'monospace' }}>
                           {currentSectionOverride.titleColor || 'Padrão'}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Cor do Subtítulo */}
+                    <div style={{ background: '#0f172a', padding: '0.5rem', borderRadius: '6px', border: '1px solid rgba(51, 65, 85, 0.3)' }}>
+                      <label style={{ fontSize: '0.68rem', color: '#94a3b8', display: 'block', marginBottom: '0.2rem' }}>Cor do Subtítulo:</label>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                        <input
+                          type="color"
+                          value={currentSectionOverride.subtitleColor || designConfig.colorSecondary || '#0369a1'}
+                          onChange={(e) => handleUpdateSectionOverride(effectiveSectionId, 'subtitleColor', e.target.value)}
+                          style={{ width: '28px', height: '24px', border: 'none', background: 'transparent', cursor: 'pointer', padding: 0 }}
+                        />
+                        <span style={{ fontSize: '0.72rem', color: '#e2e8f0', fontFamily: 'monospace' }}>
+                          {currentSectionOverride.subtitleColor || 'Padrão'}
                         </span>
                       </div>
                     </div>

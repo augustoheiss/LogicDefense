@@ -30,7 +30,7 @@ export const BadgeListRenderer: React.FC<BadgeListRendererProps> = ({ items }) =
                 style={{
                   fontSize: '0.8rem',
                   fontWeight: 700,
-                  color: 'var(--cv-color-primary, #1e293b)',
+                  color: 'var(--cv-color-primary, #0284c7)',
                   marginRight: '0.25rem',
                   minWidth: '100px'
                 }}

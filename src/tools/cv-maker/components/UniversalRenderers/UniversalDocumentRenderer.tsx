@@ -89,7 +89,7 @@ export const UniversalDocumentRenderer: React.FC<UniversalDocumentRendererProps>
               fontSize: '1.75rem',
               fontWeight: 900,
               letterSpacing: '-0.025em',
-              color: 'var(--sec-header-title, var(--cv-color-primary, #0f172a))',
+              color: 'var(--sec-header-title, var(--cv-color-primary, #0284c7))',
               margin: '0 0 0.4rem 0',
               lineHeight: 1.2
             }}
@@ -102,7 +102,7 @@ export const UniversalDocumentRenderer: React.FC<UniversalDocumentRendererProps>
               style={{
                 fontSize: '0.98rem',
                 fontWeight: 600,
-                color: 'var(--cv-color-secondary, #2563eb)',
+                color: 'var(--sec-header-subtitle, var(--cv-color-secondary, #0369a1))',
                 marginBottom: '0.5rem'
               }}
             >
@@ -246,7 +246,7 @@ export const UniversalDocumentRenderer: React.FC<UniversalDocumentRendererProps>
         borderRadius: '6px',
         backgroundColor: 'var(--sec-summary-bg, #f8fafc)',
         border: '1px solid var(--sec-summary-border, #e2e8f0)',
-        borderLeft: '4px solid var(--sec-summary-accent, var(--cv-color-primary, #0f172a))'
+        borderLeft: '4px solid var(--sec-summary-accent, var(--cv-color-primary, #0284c7))'
       }}
     >
       <div
@@ -255,7 +255,7 @@ export const UniversalDocumentRenderer: React.FC<UniversalDocumentRendererProps>
           fontWeight: 800,
           textTransform: 'uppercase',
           letterSpacing: '0.05em',
-          color: 'var(--sec-summary-title, var(--cv-color-primary, #0f172a))',
+          color: 'var(--sec-summary-title, var(--cv-color-primary, #0284c7))',
           marginBottom: '0.35rem'
         }}
       >
@@ -264,7 +264,7 @@ export const UniversalDocumentRenderer: React.FC<UniversalDocumentRendererProps>
       <p
         style={{
           fontSize: '0.86rem',
-          color: 'var(--sec-summary-text, var(--cv-color-text, #334155))',
+          color: 'var(--sec-summary-text, var(--cv-color-text, #0f172a))',
           lineHeight: 1.6,
           margin: 0
         }}

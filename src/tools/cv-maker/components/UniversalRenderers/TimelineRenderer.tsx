@@ -58,7 +58,7 @@ export const TimelineRenderer: React.FC<TimelineRendererProps> = ({ items }) => 
                 width: '12px',
                 height: '12px',
                 borderRadius: '50%',
-                background: 'var(--cv-color-primary, #2563eb)',
+                background: 'var(--cv-color-primary, #0284c7)',
                 border: '2px solid #ffffff',
                 boxShadow: '0 0 0 1px var(--cv-color-border, #cbd5e1)',
                 zIndex: 2
@@ -81,7 +81,7 @@ export const TimelineRenderer: React.FC<TimelineRendererProps> = ({ items }) => 
                 style={{
                   fontSize: '0.92rem',
                   fontWeight: 700,
-                  color: 'var(--cv-color-primary, #0f172a)',
+                  color: 'var(--cv-color-primary, #0284c7)',
                   margin: 0,
                   lineHeight: 1.3
                 }}
@@ -93,7 +93,7 @@ export const TimelineRenderer: React.FC<TimelineRendererProps> = ({ items }) => 
                   style={{
                     fontSize: '0.74rem',
                     fontWeight: 700,
-                    color: 'var(--cv-color-accent, #2563eb)',
+                    color: 'var(--cv-color-accent, #f97316)',
                     background: 'var(--cv-color-surface, #eff6ff)',
                     padding: '0.12rem 0.5rem',
                     borderRadius: '4px',
@@ -112,7 +112,7 @@ export const TimelineRenderer: React.FC<TimelineRendererProps> = ({ items }) => 
                 style={{
                   fontSize: '0.82rem',
                   fontWeight: 600,
-                  color: 'var(--cv-color-secondary, #475569)',
+                  color: 'var(--cv-color-secondary, #0369a1)',
                   marginBottom: '0.35rem'
                 }}
               >

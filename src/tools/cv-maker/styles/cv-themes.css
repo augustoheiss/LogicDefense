@@ -166,14 +166,14 @@
   border-bottom-color: var(--cv-color-border, var(--theme-default-border, #e2e8f0)) !important;
 }
 
-/* Títulos de Itens de Experiência e Projetos */
+/* Títulos de Itens de Experiência, Projetos, Educação e Seções Universais */
 .cv-root .cv-item-title,
 .cv-root .cv-item__title,
 .cv-root .item-title,
 .cv-root h3.cv-item-title,
 .cv-root .cv-project-title {
   font-family: var(--cv-font-heading, var(--theme-default-heading, 'Plus Jakarta Sans', sans-serif)) !important;
-  color: var(--cv-color-text, var(--theme-default-text, #0f172a)) !important;
+  color: var(--cv-color-primary, var(--theme-default-primary, #0284c7)) !important;
   font-size: calc(1.0 * var(--cv-rem, 13.067px) * var(--cv-font-scale, 1.0)) !important;
 }
 
@@ -441,23 +441,23 @@
 
 .cv-root .cv-section-work p,
 .cv-root .cv-section-work li,
-.cv-root .cv-section-work span,
 .cv-root .cv-section-work .cv-item-desc,
-.cv-root .cv-section-work .cv-item-sub,
-.cv-root .cv-section-work .cv-company-name,
 .cv-root [data-category="work"] p,
 .cv-root [data-category="work"] li,
-.cv-root [data-category="work"] span,
 .cv-root [data-category="work"] .cv-item-desc,
-.cv-root [data-category="work"] .cv-item-sub,
-.cv-root [data-category="work"] .cv-company-name,
 .cv-root .cv-work-list p,
 .cv-root .cv-work-list li,
-.cv-root .cv-work-list span,
-.cv-root .cv-work-list .cv-item-desc,
+.cv-root .cv-work-list .cv-item-desc {
+  color: var(--sec-work-text, var(--cv-color-text, #0f172a)) !important;
+}
+
+.cv-root .cv-section-work .cv-item-sub,
+.cv-root .cv-section-work .cv-company-name,
+.cv-root [data-category="work"] .cv-item-sub,
+.cv-root [data-category="work"] .cv-company-name,
 .cv-root .cv-work-list .cv-item-sub,
 .cv-root .cv-work-list .cv-company-name {
-  color: var(--sec-work-text, var(--cv-color-text, #0f172a)) !important;
+  color: var(--sec-work-subtitle, var(--cv-color-secondary, var(--theme-default-secondary, #0369a1))) !important;
 }
 
 .cv-root .cv-section-work .cv-atomic-item,
@@ -508,21 +508,21 @@
 }
 
 .cv-root .cv-section-education p,
-.cv-root .cv-section-education span,
 .cv-root .cv-section-education li,
+.cv-root [data-category="education"] p,
+.cv-root [data-category="education"] li,
+.cv-root .cv-education-list p,
+.cv-root .cv-education-list li {
+  color: var(--sec-education-text, var(--cv-color-text, #0f172a)) !important;
+}
+
 .cv-root .cv-section-education .cv-item-sub,
 .cv-root .cv-section-education .cv-item-institution,
-.cv-root [data-category="education"] p,
-.cv-root [data-category="education"] span,
-.cv-root [data-category="education"] li,
 .cv-root [data-category="education"] .cv-item-sub,
 .cv-root [data-category="education"] .cv-item-institution,
-.cv-root .cv-education-list p,
-.cv-root .cv-education-list span,
-.cv-root .cv-education-list li,
 .cv-root .cv-education-list .cv-item-sub,
 .cv-root .cv-education-list .cv-item-institution {
-  color: var(--sec-education-text, var(--cv-color-text, #0f172a)) !important;
+  color: var(--sec-education-subtitle, var(--cv-color-secondary, var(--theme-default-secondary, #0369a1))) !important;
 }
 
 .cv-root .cv-section-education .cv-education-card,
@@ -629,15 +629,12 @@
 
 .cv-root .cv-section-projects p,
 .cv-root .cv-section-projects li,
-.cv-root .cv-section-projects span,
 .cv-root .cv-section-projects .cv-item-desc,
 .cv-root [data-category="projects"] p,
 .cv-root [data-category="projects"] li,
-.cv-root [data-category="projects"] span,
 .cv-root [data-category="projects"] .cv-item-desc,
 .cv-root .cv-projects-list p,
 .cv-root .cv-projects-list li,
-.cv-root .cv-projects-list span,
 .cv-root .cv-projects-list .cv-item-desc {
   color: var(--sec-projects-text, var(--cv-color-text, #0f172a)) !important;
 }
@@ -689,15 +686,15 @@
 }
 
 .cv-root .cv-section-languages p,
-.cv-root .cv-section-languages span,
-.cv-root .cv-section-languages .cv-lang-fluency,
 .cv-root [data-category="languages"] p,
-.cv-root [data-category="languages"] span,
-.cv-root [data-category="languages"] .cv-lang-fluency,
-.cv-root .cv-languages-list p,
-.cv-root .cv-languages-list span,
-.cv-root .cv-languages-list .cv-lang-fluency {
+.cv-root .cv-languages-list p {
   color: var(--sec-languages-text, var(--cv-color-text, #0f172a)) !important;
+}
+
+.cv-root .cv-section-languages .cv-lang-fluency,
+.cv-root [data-category="languages"] .cv-lang-fluency,
+.cv-root .cv-languages-list .cv-lang-fluency {
+  color: var(--sec-languages-subtitle, var(--cv-color-secondary, var(--theme-default-secondary, #0369a1))) !important;
 }
 
 .cv-root .cv-section-languages .cv-language-card,
@@ -747,15 +744,15 @@
 }
 
 .cv-root .cv-section-certificates p,
-.cv-root .cv-section-certificates span,
-.cv-root .cv-section-certificates .cv-item-sub,
 .cv-root [data-category="certificates"] p,
-.cv-root [data-category="certificates"] span,
-.cv-root [data-category="certificates"] .cv-item-sub,
-.cv-root .cv-certificates-list p,
-.cv-root .cv-certificates-list span,
-.cv-root .cv-certificates-list .cv-item-sub {
+.cv-root .cv-certificates-list p {
   color: var(--sec-certificates-text, var(--cv-color-text, #0f172a)) !important;
+}
+
+.cv-root .cv-section-certificates .cv-item-sub,
+.cv-root [data-category="certificates"] .cv-item-sub,
+.cv-root .cv-certificates-list .cv-item-sub {
+  color: var(--sec-certificates-subtitle, var(--cv-color-secondary, var(--theme-default-secondary, #0369a1))) !important;
 }
 
 .cv-root .cv-section-certificates .cv-certificate-card,

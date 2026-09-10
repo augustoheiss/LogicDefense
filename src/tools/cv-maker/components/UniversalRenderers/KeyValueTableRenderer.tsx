@@ -82,7 +82,7 @@ export const KeyValueTableRenderer: React.FC<KeyValueTableRendererProps> = ({ it
                   style={{
                     padding: '0.45rem 0.75rem',
                     fontWeight: 700,
-                    color: 'var(--cv-color-primary, #1e293b)',
+                    color: 'var(--cv-color-primary, #0284c7)',
                     width: '40%',
                     textTransform: 'capitalize',
                     verticalAlign: 'top',
@@ -91,7 +91,7 @@ export const KeyValueTableRenderer: React.FC<KeyValueTableRendererProps> = ({ it
                 >
                   {row.key}
                   {row.hint && (
-                    <span style={{ display: 'block', fontSize: '0.68rem', fontWeight: 500, color: 'var(--cv-color-text-muted, #94a3b8)' }}>
+                    <span style={{ display: 'block', fontSize: '0.68rem', fontWeight: 600, color: 'var(--cv-color-secondary, #0369a1)' }}>
                       {row.hint}
                     </span>
                   )}
