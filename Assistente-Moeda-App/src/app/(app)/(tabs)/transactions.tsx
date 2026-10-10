@@ -47,6 +47,7 @@ import {
   SectorGuard,
   ErrorBoundary,
   ChoiceDialog,
+  ColumnMappingWorkbenchModal,
   SMBSectorWidget,
   RealEstateSectorWidget,
   VehiclesSectorWidget,
@@ -58,7 +59,8 @@ import { shareWhatsAppReport, shareCSV, sharePDFReport, buildWhatsAppReport, sha
 import { importCSVFlow, pickCSVFile, parseCSV } from '@/services/csvImportService';
 import { parseCSVText } from '@/utils/csvEngine';
 import { computeBaselineGoals } from '@/core/metricsEngine';
-import type { TableRow } from '@/core/types';
+import { inferTableSchema } from '@/core/typeInferenceEngine';
+import type { TableRow, DynamicTableSchema } from '@/core/types';
 
 export default function TransactionsScreen() {
   const router = useRouter();
@@ -70,6 +72,7 @@ export default function TransactionsScreen() {
   const [showFab, setShowFab] = useState(false);
   const [showBulkDelete, setShowBulkDelete] = useState(false);
   const [showCSVStreamModal, setShowCSVStreamModal] = useState(false);
+  const [showWorkbench, setShowWorkbench] = useState(false);
   const { width } = useWindowDimensions();
 
   // ── Preview & Import Choice States ────────────────────
@@ -181,7 +184,11 @@ export default function TransactionsScreen() {
       db.activeTable.name,
       db.activeTable.description,
       db.activeTable.goals,
-      db.activeTable.id
+      db.activeTable.id,
+      undefined,
+      undefined,
+      db.activeTable.schema,
+      db.activeTable.investorProfile
     );
     setPreviewText(csv);
     setPreviewMode('csv_export');
@@ -200,6 +207,53 @@ export default function TransactionsScreen() {
       db.availableMonths
     );
     setShowFab(false);
+  }, [db]);
+
+  // ── Dynamic Schema & Workbench Handlers ─────────────────
+  const currentOrInferredSchema = useMemo<DynamicTableSchema>(() => {
+    if (db.activeTable?.schema) {
+      return db.activeTable.schema;
+    }
+    const sampleRows = (db.activeTable?.rows || []).slice(0, 10).map((r) => ({
+      data: r.date,
+      valor: String(r.value),
+      descricao: r.description || '',
+      tipo: r.entryType || 'revenue',
+      categoria: r.category || 'Geral',
+      ...(r.ticker ? { ticker: r.ticker } : {}),
+      ...(r.quantity ? { quantidade: String(r.quantity) } : {}),
+      ...(r.unitPrice ? { preco_unitario: String(r.unitPrice) } : {}),
+      ...(r.customValues || {}),
+    }));
+    const headers = ['data', 'valor', 'descricao', 'tipo', 'categoria'];
+    if (db.activeTable?.rows?.some((r) => r.ticker)) headers.push('ticker');
+    if (db.activeTable?.rows?.some((r) => r.quantity)) headers.push('quantidade');
+    if (db.activeTable?.rows?.some((r) => r.unitPrice)) headers.push('preco_unitario');
+    return inferTableSchema(headers, sampleRows, db.activeTable?.id || 'default');
+  }, [db.activeTable?.schema, db.activeTable?.rows, db.activeTable?.id]);
+
+  const workbenchSampleData = useMemo(() => {
+    return (db.activeTable?.rows || []).slice(0, 5).map((r) => ({
+      data: r.date,
+      valor: String(r.value),
+      descricao: r.description || '',
+      tipo: r.entryType || 'revenue',
+      categoria: r.category || 'Geral',
+      ...(r.ticker ? { ticker: r.ticker } : {}),
+      ...(r.quantity ? { quantidade: String(r.quantity) } : {}),
+      ...(r.unitPrice ? { preco_unitario: String(r.unitPrice) } : {}),
+      ...(r.customValues || {}),
+    }));
+  }, [db.activeTable?.rows]);
+
+  const handleSaveWorkbenchSchema = useCallback(async (updatedSchema: DynamicTableSchema) => {
+    await db.updateTableSchema(updatedSchema);
+    setShowWorkbench(false);
+    if (Platform.OS === 'web') {
+      window.alert('Estrutura e tipos de colunas atualizados com sucesso e salvos no navegador!');
+    } else {
+      Alert.alert('Sucesso', 'Estrutura e tipos de colunas atualizados com sucesso!');
+    }
   }, [db]);
 
   // ── Import handlers ────────────────────────────────────
@@ -295,6 +349,8 @@ export default function TransactionsScreen() {
         description: dataToUse.metadata?.description,
         goals: dataToUse.metadata?.tableGoals,
         mode,
+        schema: dataToUse.metadata?.schema,
+        investorProfile: dataToUse.metadata?.investorProfile,
       });
 
       // Auto-activate detected sectors
@@ -557,6 +613,16 @@ export default function TransactionsScreen() {
               <Text style={styles.fabMenuLabel}>Importar CSV</Text>
             </Pressable>
             <Pressable
+              style={[styles.fabMenuItem, { backgroundColor: colors.background.elevated, borderColor: colors.accent.purpleBorder }]}
+              onPress={() => {
+                setShowFab(false);
+                setShowWorkbench(true);
+              }}
+            >
+              <Text style={styles.fabMenuIcon}>📐</Text>
+              <Text style={styles.fabMenuLabel}>Colunas & Tipos</Text>
+            </Pressable>
+            <Pressable
               style={[styles.fabMenuItem, { backgroundColor: colors.background.elevated, borderColor: colors.danger.border }]}
               onPress={() => {
                 setShowFab(false);
@@ -700,6 +766,17 @@ export default function TransactionsScreen() {
           setPendingImportResult(null);
         }}
       />
+
+      {/* Dynamic Column Mapping Workbench Modal */}
+      {db.activeTable && (
+        <ColumnMappingWorkbenchModal
+          visible={showWorkbench}
+          onClose={() => setShowWorkbench(false)}
+          schema={currentOrInferredSchema}
+          sampleData={workbenchSampleData}
+          onSaveSchema={handleSaveWorkbenchSchema}
+        />
+      )}
     </SafeAreaView>
     </ErrorBoundary>
   );

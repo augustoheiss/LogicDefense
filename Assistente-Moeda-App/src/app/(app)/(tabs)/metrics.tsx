@@ -23,7 +23,7 @@ import { formatCurrencySmart } from '@/core/formatCurrency';
 import { MonthPicker } from '@/components/ui/MonthPicker';
 import { computeMetrics, emptyMetrics } from '@/core/metricsEngine';
 import { getDailyGoalForDate } from '@/core/dateUtils';
-import { CategorySummary, AddRowModal } from '@/components/ui';
+import { CategorySummary, AddRowModal, InvestorPortfolioWidget } from '@/components/ui';
 import { SectorGuard } from '@/components/SectorGuard';
 import {
   PersonalFinanceSectorWidget,
@@ -786,6 +786,17 @@ export default function MetricsScreen() {
             </MetricGrid>
           </>
         )}
+
+        {/* ── Investor Portfolio & Smart Rebalancer ─────────── */}
+        <InvestorPortfolioWidget
+          rows={activeTable.rows}
+          activeProfile={activeTable.investorProfile}
+          annualCost={metrics.survivalAnnualCost > 0 ? metrics.survivalAnnualCost : (metrics.totalExpenses > 0 ? metrics.totalExpenses : 0)}
+          onUpdateProfile={(profile) => db.updateInvestorProfile(profile)}
+          onAddRows={async (newRows) => {
+            await db.addRows(newRows);
+          }}
+        />
 
         {/* ── Statistics ────────────────────────────────────── */}
         <SectionTitle title="📐 Estatísticas" />

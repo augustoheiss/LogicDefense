@@ -347,6 +347,69 @@ export function reduceDB(state: DB, action: Action): ReducerResult {
       };
     }
 
+    case 'UPDATE_TABLE_SCHEMA': {
+      const { tableId, schema } = action.payload;
+      const targetIndex = resolveTargetTableIndex(tables, tableId);
+      if (targetIndex === -1) return { nextDB: state };
+
+      const targetTable = tables[targetIndex];
+      const previousSchemaSnapshot = targetTable.schema;
+
+      const nextTables = tables.map((t, idx) =>
+        idx === targetIndex
+          ? { ...t, schema, updatedAt: now }
+          : t
+      );
+
+      return {
+        nextDB: { ...state, tables: nextTables },
+        inverseAction: {
+          type: 'UPDATE_TABLE_SCHEMA',
+          payload: {
+            tableId: targetTable.id,
+            schema: previousSchemaSnapshot || {
+              version: 3,
+              tableId: targetTable.id,
+              columns: [],
+              delimiter: ';',
+              hasHeaders: true,
+              updatedAt: now,
+            },
+          },
+        },
+      };
+    }
+
+    case 'UPDATE_INVESTOR_PROFILE': {
+      const { tableId, profile } = action.payload;
+      const targetIndex = resolveTargetTableIndex(tables, tableId);
+      if (targetIndex === -1) return { nextDB: state };
+
+      const targetTable = tables[targetIndex];
+      const previousProfileSnapshot = targetTable.investorProfile;
+
+      const nextTables = tables.map((t, idx) =>
+        idx === targetIndex
+          ? { ...t, investorProfile: profile, updatedAt: now }
+          : t
+      );
+
+      return {
+        nextDB: { ...state, tables: nextTables },
+        inverseAction: {
+          type: 'UPDATE_INVESTOR_PROFILE',
+          payload: {
+            tableId: targetTable.id,
+            profile: previousProfileSnapshot || {
+              profileType: 'safety',
+              emergencyFundMonthsGoal: 6,
+              fireTargetAnnualExpensesMultiplier: 25,
+            },
+          },
+        },
+      };
+    }
+
     default:
       return { nextDB: state };
   }

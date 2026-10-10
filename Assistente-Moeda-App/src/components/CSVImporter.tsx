@@ -63,6 +63,8 @@ export function CSVImporter({ onSuccess, onCancel }: CSVImporterProps) {
         description: parsed.metadata?.description,
         goals: parsed.metadata?.tableGoals,
         mode: importMode,
+        schema: parsed.metadata?.schema,
+        investorProfile: parsed.metadata?.investorProfile,
       });
 
       if (parsed.detectedSectors && parsed.detectedSectors.length > 0) {

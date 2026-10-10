@@ -1,5 +1,6 @@
-import type { TableRow, TableGoals } from '../core/types';
+import type { TableRow, TableGoals, DynamicTableSchema, InvestorProfileConfig } from '../core/types';
 import { detectSectorsFromRows } from './sectorTagDetector';
+import { parseDynamicCSV } from '../core/dynamicCsvParser';
 
 // Delimiter detection helper
 export function detectDelimiter(line: string): string {
@@ -145,6 +146,8 @@ export interface CSVParseOutput {
     description?: string;
     goals?: Record<string, number | string>;
     tableGoals?: TableGoals;
+    schema?: DynamicTableSchema;
+    investorProfile?: InvestorProfileConfig;
   };
 }
 
@@ -194,6 +197,16 @@ export function parseCSVText(csvText: string): CSVParseOutput {
   const dateAliases = ['date', 'data', 'data_movimento', 'created_at'];
   const amountAliases = ['amount', 'valor', 'value', 'valor_cents', 'amount_in_cents', 'preco'];
 
+  // Check if ## SCHEMA_COLUMNS ## marker exists (Backup v3 standard)
+  const schemaMarkerRegex = /##\s*SCHEMA_COLUMNS\s*##/i;
+  let schemaMarkerLineIdx = -1;
+  for (let i = 0; i < allLines.length; i++) {
+    if (schemaMarkerRegex.test(allLines[i])) {
+      schemaMarkerLineIdx = i;
+      break;
+    }
+  }
+
   // Check if ## ROWS ## marker exists
   const rowsMarkerRegex = /##\s*ROWS\s*##/i;
   let rowsMarkerLineIdx = -1;
@@ -207,7 +220,10 @@ export function parseCSVText(csvText: string): CSVParseOutput {
   let metadataLines: string[] = [];
   let transactionLines: string[] = [];
 
-  if (rowsMarkerLineIdx !== -1) {
+  if (schemaMarkerLineIdx !== -1) {
+    // In Backup v3, metadata lines precede the SCHEMA_COLUMNS block
+    metadataLines = allLines.slice(0, schemaMarkerLineIdx);
+  } else if (rowsMarkerLineIdx !== -1) {
     metadataLines = allLines.slice(0, rowsMarkerLineIdx);
     transactionLines = allLines.slice(rowsMarkerLineIdx + 1);
   } else {
@@ -242,6 +258,8 @@ export function parseCSVText(csvText: string): CSVParseOutput {
     description?: string;
     goals: Record<string, number | string>;
     tableGoals: TableGoals;
+    schema?: DynamicTableSchema;
+    investorProfile?: InvestorProfileConfig;
   } = {
     name: 'Minha Planilha',
     description: '',
@@ -396,6 +414,25 @@ export function parseCSVText(csvText: string): CSVParseOutput {
 
   const metadata = metaObj;
 
+  // If Backup v3 explicit schema marker is detected, delegate to dynamic CSV parser
+  if (schemaMarkerLineIdx !== -1) {
+    const dynamicResult = parseDynamicCSV(cleaned, metaObj.tableId || 'default');
+    metaObj.schema = dynamicResult.schema;
+    if (dynamicResult.investorProfile) {
+      metaObj.investorProfile = dynamicResult.investorProfile;
+    }
+    const rowSectors = detectSectorsFromRows(dynamicResult.rows);
+    const detectedSectors = Array.from(new Set(['personal_finance', ...rowSectors]));
+
+    return {
+      rows: dynamicResult.rows,
+      errors: dynamicResult.errors,
+      skippedCount: dynamicResult.skippedLines,
+      detectedSectors,
+      metadata: metaObj,
+    };
+  }
+  
   if (transactionLines.length === 0) {
     return {
       rows,

@@ -6,7 +6,7 @@
  * and safe AI agent proposals.
  */
 
-import type { CoinTable, TableRow, TableGoals } from './types';
+import type { CoinTable, TableRow, TableGoals, DynamicTableSchema, InvestorProfileConfig } from './types';
 
 export type Action =
   | {
@@ -91,5 +91,21 @@ export type Action =
         oldCategory: string;
         newCategory: string;
         entryType?: string;
+      };
+    }
+  | {
+      type: 'UPDATE_TABLE_SCHEMA';
+      payload: {
+        tableId?: string;
+        schema: DynamicTableSchema;
+        previousSchemaSnapshot?: DynamicTableSchema;
+      };
+    }
+  | {
+      type: 'UPDATE_INVESTOR_PROFILE';
+      payload: {
+        tableId?: string;
+        profile: InvestorProfileConfig;
+        previousProfileSnapshot?: InvestorProfileConfig;
       };
     };

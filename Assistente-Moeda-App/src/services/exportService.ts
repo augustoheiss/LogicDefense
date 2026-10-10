@@ -12,11 +12,12 @@ import { cacheDirectory, writeAsStringAsync, EncodingType } from 'expo-file-syst
 import * as Sharing from 'expo-sharing';
 import * as Print from 'expo-print';
 import { formatCurrencyFull, formatCurrencySmart } from '../core/formatCurrency';
-import type { TableRow, TableMetrics, TableGoals } from '../core/types';
+import type { TableRow, TableMetrics, TableGoals, DynamicTableSchema, InvestorProfileConfig } from '../core/types';
 import type { WeekDebtEntry } from '../core/computeWeeklyDebtTimeline';
 import { getMondayOf, toLocalKey, getWeeklyGoalForDate, resolveGoalForYear, fmtDate } from '../core/dateUtils';
 import { generateNewApiKey } from './apiKeyService';
 import { getStoredLicenseKey } from '../storage/authService';
+import { serializeDynamicCSV } from '../core/dynamicCsvSerializer';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -997,138 +998,24 @@ export function buildCSV(
   tableId?: string,
   apiKey?: string | null,
   lastEventSeq?: number,
+  schema?: DynamicTableSchema,
+  investorProfile?: InvestorProfileConfig
 ): string {
-  if (tableName || goals || tableId) {
-    const meta: string[] = ['## COIN ASSISTANT BACKUP v3 ##'];
-    if (tableId) {
-      meta.push(`table_id,${tableId}`);
-    }
-
-    // Strictly fetch live key for THIS tableId from localStorage
-    let effectiveApiKey = (tableId && typeof window !== 'undefined' && window.localStorage)
-      ? window.localStorage.getItem(`coin_api_key_${tableId}`)
-      : null;
-
-    if (!effectiveApiKey && tableId) {
-      effectiveApiKey = generateLocalApiKey(tableId);
-      if (typeof window !== 'undefined' && window.localStorage) {
-        window.localStorage.setItem(`coin_api_key_${tableId}`, effectiveApiKey);
-        window.localStorage.setItem('coin_active_api_key', effectiveApiKey);
-      }
-      ensureApiKeyForTable(tableId).catch(() => {});
-    }
-
-    if (!effectiveApiKey) {
-      if (typeof window !== 'undefined' && window.localStorage) {
-        effectiveApiKey = window.localStorage.getItem('coin_active_api_key') || apiKey || null;
-      }
-      if (!effectiveApiKey) {
-        effectiveApiKey = generateLocalApiKey('default');
-        if (typeof window !== 'undefined' && window.localStorage) {
-          window.localStorage.setItem('coin_active_api_key', effectiveApiKey);
-        }
-      }
-    }
-
-    meta.push(`api_key,${effectiveApiKey}`);
-
-    let effectiveSeq = lastEventSeq;
-    if ((effectiveSeq === undefined || effectiveSeq === null || effectiveSeq === 0) && typeof window !== 'undefined' && window.localStorage) {
-      const rawSeq = (tableId ? window.localStorage.getItem(`coin_last_seq_${tableId}`) : null) ||
-                     window.localStorage.getItem('coin_active_seq');
-      if (rawSeq) {
-        const parsed = parseInt(rawSeq, 10);
-        if (!isNaN(parsed)) effectiveSeq = parsed;
-      }
-    }
-    meta.push(`last_event_seq,${effectiveSeq ?? 0}`);
-    meta.push(`exported_at,${new Date().toISOString()}`);
-
-    if (tableName) {
-      meta.push(`name,${tableName}`);
-    }
-    if (description) {
-      meta.push(`description,${description}`);
-    }
-
-    // 1. Global goals
-    if (goals?.globalGoals) {
-      meta.push(`goal_global_daily,${goals.globalGoals.dailyGoal}`);
-      meta.push(`goal_global_weekly,${goals.globalGoals.weeklyGoal}`);
-      meta.push(`goal_global_annual,${goals.globalGoals.annualCost}`);
-    }
-
-    // 2. Yearly goals
-    if (goals?.yearlyGoals) {
-      Object.entries(goals.yearlyGoals).forEach(([year, g]) => {
-        meta.push(`goal_daily_${year},${g.dailyGoal}`);
-        meta.push(`goal_weekly_${year},${g.weeklyGoal}`);
-        meta.push(`goal_annual_${year},${g.annualCost}`);
-      });
-    }
-
-    // 3. Monthly goals
-    if (goals?.monthlyGoals) {
-      Object.entries(goals.monthlyGoals).forEach(([month, g]) => {
-        meta.push(`goal_monthly_daily_${month},${g.dailyGoal}`);
-        meta.push(`goal_monthly_weekly_${month},${g.weeklyGoal}`);
-        meta.push(`goal_monthly_annual_${month},${g.annualCost}`);
-      });
-    }
-
-    // 4. Weekly overrides (manual sprints)
-    if (goals?.weeklyGoals) {
-      Object.entries(goals.weeklyGoals).forEach(([key, val]) => {
-        if (typeof key === 'string' && key.includes('-W')) {
-          meta.push(`goal_weekly_${key},${val}`);
-        }
-      });
-    }
-
-    meta.push('## ROWS ##');
-    const header = 'id,date,value,description,entryType,monthlyValue,monthCount,period_start,period_end,category,tags,metadata_json';
-    const lines = rows.map((r) => {
-      const cols = [
-        r.id || '',
-        r.date,
-        r.value,
-        `"${(r.description || '').replace(/"/g, '""')}"`,
-        r.entryType || 'revenue',
-        r.monthlyValue !== undefined ? r.monthlyValue : '',
-        r.monthCount !== undefined ? r.monthCount : '',
-        r.periodStart || '',
-        r.periodEnd || '',
-        r.category && r.category.trim() ? `"${r.category.replace(/"/g, '""')}"` : '"Geral"',
-        r.tags ? `"${r.tags.replace(/"/g, '""')}"` : '""',
-        r.metadataJson && r.metadataJson.trim() ? `"${r.metadataJson.replace(/"/g, '""')}"` : '"{}"',
-      ];
-      return cols.join(',');
-    });
-
-    return [...meta, header, ...lines].join('\n');
+  let effectiveApiKey = apiKey;
+  if (!effectiveApiKey && tableId && typeof window !== 'undefined' && window.localStorage) {
+    effectiveApiKey = window.localStorage.getItem(`coin_api_key_${tableId}`) || window.localStorage.getItem('coin_active_api_key');
   }
-
-  // Fallback to standard semicolon-delimited CSV for plain rows export
-  const header = 'ID;Data;Tipo;Valor;Descrição;Período Início;Período Fim;Valor Mensal;Meses;Gerado Por;Categoria;Tags;Metadados';
-  const lines = rows.map((r) => {
-    const cols = [
-      r.id || '',
-      r.date,
-      r.entryType || 'revenue',
-      r.value.toString().replace('.', ','),
-      `"${(r.description || '').replace(/"/g, '""')}"`,
-      r.periodStart || '',
-      r.periodEnd || '',
-      r.monthlyValue?.toString().replace('.', ',') || '',
-      r.monthCount?.toString() || '',
-      r.generatedBy || '',
-      r.category ? `"${r.category.replace(/"/g, '""')}"` : '',
-      r.tags ? `"${r.tags.replace(/"/g, '""')}"` : '',
-      r.metadataJson ? `"${r.metadataJson.replace(/"/g, '""')}"` : '',
-    ];
-    return cols.join(';');
-  });
-  return [header, ...lines].join('\n');
+  return serializeDynamicCSV(
+    rows,
+    tableName,
+    description,
+    goals,
+    tableId,
+    effectiveApiKey,
+    lastEventSeq,
+    schema,
+    investorProfile
+  );
 }
 
 export async function shareCSVText(

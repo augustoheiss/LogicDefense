@@ -93,6 +93,11 @@ export interface TableRow {
   tags?: string;
   metadataJson?: string;
   createdAt?: string;
+  // ── Dynamic & Investor Extension Fields ──
+  ticker?: string;
+  quantity?: number;
+  unitPrice?: number;
+  customValues?: Record<string, string | number | boolean>;
 }
 
 export interface TableGoals {
@@ -131,6 +136,129 @@ export interface TableGoals {
   monthlyGoals?: Record<string, GoalProfile>;
 }
 
+// ── Dynamic CSV Schema Contracts ──────────────────────────────────────────
+
+export type ColumnDataType =
+  | 'date'
+  | 'money'
+  | 'text'
+  | 'number'
+  | 'category'
+  | 'entryType'
+  | 'ticker'
+  | 'quantity'
+  | 'unit_price'
+  | 'tag'
+  | 'boolean';
+
+export type ColumnSemanticRole =
+  | 'primary_date'
+  | 'primary_amount'
+  | 'primary_description'
+  | 'entry_type'
+  | 'category'
+  | 'tags'
+  | 'period_start'
+  | 'period_end'
+  | 'monthly_value'
+  | 'month_count'
+  | 'invest_ticker'
+  | 'invest_quantity'
+  | 'invest_unit_price'
+  | 'custom_attribute';
+
+export interface DynamicColumnDefinition {
+  id: string;
+  key?: string;
+  originalHeader: string;
+  rawHeader?: string;
+  label: string;
+  dataType: ColumnDataType;
+  role: ColumnSemanticRole;
+  semanticRole?: ColumnSemanticRole;
+  visible: boolean;
+  isCustom: boolean;
+  invertSign?: boolean;
+  originalIndex?: number;
+  transformRule?: {
+    invertSign?: boolean;
+    multiplier?: number;
+    dateFormat?: 'DMY' | 'MDY' | 'YMD' | 'ISO';
+    fallbackValue?: string | number;
+  };
+}
+
+export interface DynamicTableSchema {
+  version: 3;
+  tableId: string;
+  columns: DynamicColumnDefinition[];
+  delimiter: string;
+  hasHeaders: boolean;
+  importedAt?: string;
+  updatedAt: string;
+}
+
+// ── Investor Profile & Allocation Contracts ───────────────────────────────
+
+export type InvestorProfileType =
+  | 'safety'       // Segurança & Reserva de Emergência
+  | 'income'       // Renda Passiva & Proventos
+  | 'balanced'     // Crescimento Equilibrado (Core & Satellite)
+  | 'aggressive'   // Agressivo & Multi-Ativos Global
+  | 'smb_hybrid';  // Autônomo / Empreendedor
+
+export type AssetClass =
+  | 'cash_reserves'      // Liquidez / Tesouro Selic / CDB 100% CDI
+  | 'fixed_income_ipca'  // Renda Fixa Inflação (IPCA+)
+  | 'real_estate_funds'  // Fundos Imobiliários (FIIs)
+  | 'equities_brazil'    // Ações Brasileiras
+  | 'equities_global'    // Ativos Globais / ETFs Mundiais
+  | 'crypto'             // Criptoativos
+  | 'business_capital';  // Capital de Giro PME
+
+export interface AssetAllocationTarget {
+  assetClass: AssetClass;
+  targetPercentage: number;
+  toleranceBandPercent?: number;
+}
+
+export interface InvestorProfileConfig {
+  profileType: InvestorProfileType;
+  customAllocations?: AssetAllocationTarget[];
+  monthlyContributionGoal?: number;
+  emergencyFundMonthsGoal: number;
+  fireTargetAnnualExpensesMultiplier: number;
+}
+
+export interface AssetPosition {
+  assetClass: AssetClass;
+  currentValue: number;
+  currentPercentage: number;
+  targetPercentage: number;
+  deviationPercentage: number;
+  deltaBRL: number;
+}
+
+export interface RebalanceSuggestion {
+  assetClass: AssetClass;
+  suggestedAllocationBRL: number;
+  rationalExplanation: string;
+}
+
+export interface InvestorMetrics {
+  totalNetWorth: number;
+  liquidReserveBalance: number;
+  emergencyFundMonthsAvailable: number;
+  emergencyFundProgressPct: number;
+  passiveIncomeMonthlyAvg: number;
+  passiveIncomeCoverageRatio: number;
+  fireNumberTarget: number;
+  fireProgressPercentage: number;
+  positions: AssetPosition[];
+  rebalanceSuggestions: RebalanceSuggestion[];
+  portfolioHealthScore: number;
+}
+
 export interface CoinTable {
   id: string;
   name: string;
@@ -141,6 +269,8 @@ export interface CoinTable {
   goals: TableGoals;
   isDeleted?: boolean;
   activeSectors?: string[];
+  schema?: DynamicTableSchema;
+  investorProfile?: InvestorProfileConfig;
 }
 
 export type DB = {

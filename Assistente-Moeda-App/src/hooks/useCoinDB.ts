@@ -14,7 +14,7 @@ import React, { useState, useEffect, useCallback, useMemo, useRef, createContext
 import { Platform } from 'react-native';
 import { loadDB, saveDB, clearDB } from '../storage/asyncStorageAdapter';
 import { computeMetrics, emptyMetrics, computeBaselineGoals } from '../core/metricsEngine';
-import type { DB, CoinTable, TableRow, TableGoals, TableMetrics } from '../core/types';
+import type { DB, CoinTable, TableRow, TableGoals, TableMetrics, DynamicTableSchema, InvestorProfileConfig } from '../core/types';
 import { useAuthContext } from './useAuth';
 import { fullSync, pushToCloud, pullFromCloud } from '../storage/supabaseSync';
 import { supabase } from '@/lib/supabase';
@@ -53,6 +53,8 @@ export interface CoinDBState {
     name?: string;
     description?: string;
     goals?: TableGoals;
+    schema?: DynamicTableSchema;
+    investorProfile?: InvestorProfileConfig;
     mode?: 'replace' | 'merge';
   }) => Promise<{
     success: boolean;
@@ -79,9 +81,11 @@ export interface CoinDBState {
   deleteGeneratedRows: (prefix?: string) => number;
   effectuateGeneratedRows: (prefix?: string) => number;
 
-  // ── Goals ─────────────────────────────────────────────
+  // ── Goals & Schema ────────────────────────────────────
   updateGoals: (goals: Partial<TableGoals>) => void;
   updateActiveSectors: (sectors: string[]) => void;
+  updateTableSchema: (schema: DynamicTableSchema, tableId?: string) => Promise<void> | void;
+  updateInvestorProfile: (profile: InvestorProfileConfig, tableId?: string) => Promise<void> | void;
 
   // ── Month Filter ──────────────────────────────────────
   setSelectedMonth: (month: string) => void;
@@ -1013,6 +1017,30 @@ function useCoinDBInternal(): CoinDBState {
     persist(newTables);
   }, [getLatestTables, getLatestActiveTable, persist]);
 
+  const updateTableSchema = useCallback(async (schema: DynamicTableSchema, tableId?: string) => {
+    const targetId = tableId || getLatestActiveTable()?.id;
+    if (!targetId) return;
+    await dispatch({
+      type: 'UPDATE_TABLE_SCHEMA',
+      payload: {
+        tableId: targetId,
+        schema,
+      },
+    });
+  }, [dispatch, getLatestActiveTable]);
+
+  const updateInvestorProfile = useCallback(async (profile: InvestorProfileConfig, tableId?: string) => {
+    const targetId = tableId || getLatestActiveTable()?.id;
+    if (!targetId) return;
+    await dispatch({
+      type: 'UPDATE_INVESTOR_PROFILE',
+      payload: {
+        tableId: targetId,
+        profile,
+      },
+    });
+  }, [dispatch, getLatestActiveTable]);
+
   const changeActiveTableIndex = useCallback((index: number) => {
     setActiveTableIndex(index);
     setSelectedMonth('all');
@@ -1027,6 +1055,8 @@ function useCoinDBInternal(): CoinDBState {
     description?: string;
     goals?: TableGoals;
     mode?: 'replace' | 'merge';
+    schema?: DynamicTableSchema;
+    investorProfile?: InvestorProfileConfig;
   }) => {
     const currentTables = tablesRef.current.length > 0 ? tablesRef.current : tables;
     const activeTablesList = currentTables.filter((t: CoinTable) => !t.isDeleted);
@@ -1055,6 +1085,8 @@ function useCoinDBInternal(): CoinDBState {
         rows: [],
         goals: payload.goals || { dailyGoals: {}, weeklyGoals: {}, annualCosts: {} },
         activeSectors: ['personal_finance'],
+        schema: payload.schema,
+        investorProfile: payload.investorProfile,
       };
       baseTables = [...currentTables, newTable];
       targetTable = newTable;
@@ -1161,6 +1193,8 @@ function useCoinDBInternal(): CoinDBState {
           monthlyGoals: { ...(currentGoals.monthlyGoals || {}), ...(goalUpdates.monthlyGoals || {}) },
           globalGoals: goalUpdates.globalGoals || currentGoals.globalGoals,
         } : t.goals),
+        schema: payload.schema || t.schema,
+        investorProfile: payload.investorProfile || t.investorProfile,
         updatedAt: new Date().toISOString(),
       };
     });
@@ -1206,6 +1240,8 @@ function useCoinDBInternal(): CoinDBState {
     effectuateGeneratedRows,
     updateGoals,
     updateActiveSectors,
+    updateTableSchema,
+    updateInvestorProfile,
     setSelectedMonth,
     cutoffDate,
     setCutoffDate,

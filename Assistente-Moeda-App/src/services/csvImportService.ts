@@ -23,14 +23,14 @@
 const isWebPlatform = typeof window !== 'undefined' && typeof window.document !== 'undefined';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
-import type { TableRow, TableGoals } from '../core/types';
+import type { TableRow, TableGoals, DynamicTableSchema, InvestorProfileConfig } from '../core/types';
 import { parseCSVText } from '../utils/csvEngine';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
 export interface CSVImportResult {
   success: boolean;
-  rows: Omit<TableRow, 'id'>[];
+  rows: (TableRow | Omit<TableRow, 'id'>)[];
   totalParsed: number;
   skippedLines: number;
   errors: string[];
@@ -38,6 +38,8 @@ export interface CSVImportResult {
   backupName?: string;
   backupDescription?: string;
   backupGoals?: TableGoals;
+  schema?: DynamicTableSchema;
+  investorProfile?: InvestorProfileConfig;
 }
 
 // ── Known Column Names → TableRow Field Mapping ──────────────────────────────
@@ -130,6 +132,8 @@ export function parseCSV(raw: string): CSVImportResult {
     backupName: parsed.metadata?.name,
     backupDescription: parsed.metadata?.description,
     backupGoals: parsed.metadata?.tableGoals,
+    schema: parsed.metadata?.schema,
+    investorProfile: parsed.metadata?.investorProfile,
   };
 }
 

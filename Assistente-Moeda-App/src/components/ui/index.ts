@@ -39,5 +39,7 @@ export { UniversalHeaderSheetBar } from './UniversalHeaderSheetBar';
 export { ErrorBoundary } from './ErrorBoundary';
 export { ChoiceDialog } from './ChoiceDialog';
 export type { ChoiceOption } from './ChoiceDialog';
+export { ColumnMappingWorkbenchModal } from './ColumnMappingWorkbenchModal';
+export { InvestorPortfolioWidget } from './InvestorPortfolioWidget';
 
 
