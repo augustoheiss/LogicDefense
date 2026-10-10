@@ -21,6 +21,9 @@ import { supabase } from '@/lib/supabase';
 import { mergeRows } from '../utils/csvEngine';
 import { ensureApiKeyForTable, generateLocalApiKey } from '../services/exportService';
 import { validateApiKey, generateNewApiKey } from '../services/apiKeyService';
+import type { Action } from '../core/actions';
+import { reduceDB } from '../core/dbReducer';
+import { OpLog } from '../core/opLog';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -105,6 +108,14 @@ export interface CoinDBState {
   clearLocalState: () => Promise<void>;
   /** Deduct user tokens from Supabase user_settings */
   deductTokens: (amount: number) => Promise<void>;
+
+  // ── Global Command Dispatcher & Undo/Redo Engine ─────
+  dispatch: (action: Action, description?: string) => Promise<void>;
+  undo: () => Promise<boolean>;
+  redo: () => Promise<boolean>;
+  canUndo: boolean;
+  canRedo: boolean;
+  lastUndoDescription: string | null;
 }
 
 // ── React Context ────────────────────────────────────────────────────────────
@@ -282,6 +293,21 @@ function useCoinDBInternal(): CoinDBState {
     tablesRef.current = tables;
   }, [tables]);
 
+  const sessionAddedRowIdsRef = useRef<string[]>([]);
+
+  const getLatestTables = useCallback((): CoinTable[] => {
+    return tablesRef.current.length > 0 ? tablesRef.current : tables;
+  }, [tables]);
+
+  const getLatestActiveTable = useCallback((): CoinTable | null => {
+    const currentTables = getLatestTables();
+    const actTables = currentTables.filter((t) => !t.isDeleted);
+    if (actTables.length === 0) return null;
+    return (activeTableIndex >= 0 && activeTableIndex < actTables.length)
+      ? actTables[activeTableIndex]
+      : actTables[0] ?? null;
+  }, [getLatestTables, activeTableIndex]);
+
   // ── Persist to AsyncStorage and Push to Cloud ──────────
   const persist = useCallback(async (newTables: CoinTable[]) => {
     const mainTables = ensureActiveSectors(newTables);
@@ -318,6 +344,60 @@ function useCoinDBInternal(): CoinDBState {
       });
     }
   }, [auth.mode, auth.user, activeTableIndex]);
+
+  // ── Global Command Dispatcher & Undo/Redo Engine ─────
+  const opLogRef = useRef(new OpLog(50));
+  const [, setOpLogVersion] = useState(0);
+
+  const dispatch = useCallback(async (action: Action, description?: string) => {
+    const currentTables = getLatestTables();
+    const currentDB: DB = {
+      tables: currentTables,
+      aiCostCurrentMonth,
+      aiCostLastReset,
+    };
+
+    const { nextDB, inverseAction } = reduceDB(currentDB, action);
+    if (inverseAction) {
+      opLogRef.current.push(action, inverseAction, description);
+      setOpLogVersion((v) => v + 1);
+    }
+    await persist(nextDB.tables);
+  }, [getLatestTables, aiCostCurrentMonth, aiCostLastReset, persist]);
+
+  const undo = useCallback(async (): Promise<boolean> => {
+    const entry = opLogRef.current.popUndo();
+    if (!entry) return false;
+    setOpLogVersion((v) => v + 1);
+
+    const currentTables = getLatestTables();
+    const currentDB: DB = {
+      tables: currentTables,
+      aiCostCurrentMonth,
+      aiCostLastReset,
+    };
+
+    const { nextDB } = reduceDB(currentDB, entry.inverseAction);
+    await persist(nextDB.tables);
+    return true;
+  }, [getLatestTables, aiCostCurrentMonth, aiCostLastReset, persist]);
+
+  const redo = useCallback(async (): Promise<boolean> => {
+    const entry = opLogRef.current.popRedo();
+    if (!entry) return false;
+    setOpLogVersion((v) => v + 1);
+
+    const currentTables = getLatestTables();
+    const currentDB: DB = {
+      tables: currentTables,
+      aiCostCurrentMonth,
+      aiCostLastReset,
+    };
+
+    const { nextDB } = reduceDB(currentDB, entry.action);
+    await persist(nextDB.tables);
+    return true;
+  }, [getLatestTables, aiCostCurrentMonth, aiCostLastReset, persist]);
 
   const updateAICost = useCallback(async (newCost: number, newResetMonth: string) => {
     setAiCostCurrentMonth(newCost);
@@ -442,6 +522,7 @@ function useCoinDBInternal(): CoinDBState {
     goals?: TableGoals,
     rows?: Omit<TableRow, 'id'>[]
   ) => {
+    const currentTables = getLatestTables();
     // Auto-seed baseline goals from imported rows when no explicit goals are provided
     let effectiveGoals = goals ?? { dailyGoals: {}, weeklyGoals: {}, annualCosts: {} };
     const goalsAreEmpty = (
@@ -464,25 +545,27 @@ function useCoinDBInternal(): CoinDBState {
       description,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
-      rows: rows ? rows.map((r) => ({ ...r, id: generateId() })) : [],
+      rows: rows ? rows.map((r) => ({ ...r, id: generateId(), createdAt: (r as any).createdAt || new Date().toISOString() })) : [],
       goals: effectiveGoals,
       activeSectors: ['personal_finance'],
     };
     ensureApiKeyForTable(tableId).catch(() => {});
-    const newTables = [...tables, newTable];
+    const newTables = [...currentTables, newTable];
     persist(newTables);
     setActiveTableIndex(newTables.length - 1);
-  }, [tables, persist]);
+  }, [getLatestTables, persist]);
 
   const renameTable = useCallback((tableId: string, name: string) => {
-    const newTables = tables.map((t) =>
+    const currentTables = getLatestTables();
+    const newTables = currentTables.map((t) =>
       t.id === tableId ? { ...t, name, updatedAt: new Date().toISOString() } : t,
     );
     persist(newTables);
-  }, [tables, persist]);
+  }, [getLatestTables, persist]);
 
   const deleteTable = useCallback((tableId: string) => {
-    const newTables = tables.filter((t) => t.id !== tableId);
+    const currentTables = getLatestTables();
+    const newTables = currentTables.filter((t) => t.id !== tableId);
     persist(newTables);
     
     if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
@@ -494,13 +577,15 @@ function useCoinDBInternal(): CoinDBState {
     if (activeTableIndex >= newTables.length) {
       setActiveTableIndex(Math.max(0, newTables.length - 1));
     }
-  }, [tables, activeTableIndex, persist]);
+  }, [getLatestTables, activeTableIndex, persist]);
 
   // ── Row Operations ────────────────────────────────────
   const addRow = useCallback(async (row: Omit<TableRow, 'id'>, tableName?: string) => {
+    const currentTables = getLatestTables();
+    const currentActive = getLatestActiveTable();
     const targetTable = tableName 
-      ? tables.find(t => !t.isDeleted && t.name.toLowerCase().trim() === tableName.toLowerCase().trim())
-      : activeTable;
+      ? currentTables.find(t => !t.isDeleted && t.name.toLowerCase().trim() === tableName.toLowerCase().trim())
+      : currentActive;
 
     if (!targetTable) return;
 
@@ -508,8 +593,16 @@ function useCoinDBInternal(): CoinDBState {
       ? row.description.toUpperCase().trim() 
       : undefined;
 
-    const newRow: TableRow = { ...row, description: normalizedDescription, id: generateId() };
-    const newTables = tables.map((t) => {
+    const newId = generateId();
+    sessionAddedRowIdsRef.current.push(newId);
+
+    const newRow: TableRow = {
+      ...row,
+      description: normalizedDescription,
+      id: newId,
+      createdAt: (row as any).createdAt || new Date().toISOString(),
+    };
+    const newTables = currentTables.map((t) => {
       if (t.id !== targetTable.id) return t;
       return {
         ...t,
@@ -517,16 +610,26 @@ function useCoinDBInternal(): CoinDBState {
         updatedAt: new Date().toISOString(),
       };
     });
+
+    opLogRef.current.push(
+      { type: 'ADD_ROWS', payload: { tableId: targetTable.id, rows: [newRow] } },
+      { type: 'DELETE_ROWS', payload: { tableId: targetTable.id, rowIds: [newId] } },
+      'Adicionar 1 lançamento'
+    );
+    setOpLogVersion((v) => v + 1);
+
     await persist(newTables);
-  }, [tables, activeTable, persist]);
+  }, [getLatestTables, getLatestActiveTable, persist]);
 
   const addRows = useCallback(async (rows: Omit<TableRow, 'id'>[], tableName?: string) => {
     if (rows.length === 0) return;
+    const currentTables = getLatestTables();
+    const currentActive = getLatestActiveTable();
     let targetTable = tableName 
-      ? tables.find(t => !t.isDeleted && t.name.toLowerCase().trim() === tableName.toLowerCase().trim())
-      : activeTable;
+      ? currentTables.find(t => !t.isDeleted && t.name.toLowerCase().trim() === tableName.toLowerCase().trim())
+      : currentActive;
 
-    let baseTables = tables;
+    let baseTables = currentTables;
 
     if (!targetTable) {
       const newTable: CoinTable = {
@@ -539,16 +642,21 @@ function useCoinDBInternal(): CoinDBState {
         goals: { dailyGoals: {}, weeklyGoals: {}, annualCosts: {} },
         activeSectors: ['personal_finance'],
       };
-      baseTables = [...tables, newTable];
+      baseTables = [...currentTables, newTable];
       targetTable = newTable;
       setActiveTableIndex(baseTables.length - 1);
     }
 
-    const newRows: TableRow[] = rows.map((r) => ({
-      ...r,
-      description: r.description ? r.description.toUpperCase().trim() : undefined,
-      id: generateId()
-    }));
+    const newRows: TableRow[] = rows.map((r) => {
+      const id = generateId();
+      sessionAddedRowIdsRef.current.push(id);
+      return {
+        ...r,
+        description: r.description ? r.description.toUpperCase().trim() : undefined,
+        id,
+        createdAt: (r as any).createdAt || new Date().toISOString(),
+      };
+    });
     const newTables = baseTables.map((t) => {
       if (t.id !== targetTable!.id) return t;
       return {
@@ -557,17 +665,27 @@ function useCoinDBInternal(): CoinDBState {
         updatedAt: new Date().toISOString(),
       };
     });
+
+    opLogRef.current.push(
+      { type: 'ADD_ROWS', payload: { tableId: targetTable!.id, rows: newRows } },
+      { type: 'DELETE_ROWS', payload: { tableId: targetTable!.id, rowIds: newRows.map((r) => r.id) } },
+      `Adicionar ${newRows.length} lançamentos`
+    );
+    setOpLogVersion((v) => v + 1);
+
     await persist(newTables);
-  }, [tables, activeTable, persist]);
+  }, [getLatestTables, getLatestActiveTable, persist]);
 
   const updateRow = useCallback((rowId: string, updates: Partial<TableRow>) => {
-    if (!activeTable) return;
+    const currentTables = getLatestTables();
+    const currentActive = getLatestActiveTable();
+    if (!currentActive) return;
     const normalizedUpdates = { ...updates };
     if (normalizedUpdates.description) {
       normalizedUpdates.description = normalizedUpdates.description.toUpperCase().trim();
     }
-    const newTables = tables.map((t) => {
-      if (t.id !== activeTable.id) return t;
+    const newTables = currentTables.map((t) => {
+      if (t.id !== currentActive.id) return t;
       return {
         ...t,
         rows: t.rows.map((r) => (r.id === rowId ? { ...r, ...normalizedUpdates } : r)),
@@ -575,24 +693,41 @@ function useCoinDBInternal(): CoinDBState {
       };
     });
     persist(newTables);
-  }, [tables, activeTable, persist]);
+  }, [getLatestTables, getLatestActiveTable, persist]);
 
   const deleteRow = useCallback((rowId: string) => {
-    if (!activeTable) return;
-    const newTables = tables.map((t) => {
-      if (t.id !== activeTable.id) return t;
+    const currentTables = getLatestTables();
+    const currentActive = getLatestActiveTable();
+    if (!currentActive) return;
+
+    const rowToDelete = currentActive.rows.find((r) => r.id === rowId);
+
+    const newTables = currentTables.map((t) => {
+      if (t.id !== currentActive.id) return t;
       return {
         ...t,
         rows: t.rows.filter((r) => r.id !== rowId),
         updatedAt: new Date().toISOString(),
       };
     });
+
+    if (rowToDelete) {
+      opLogRef.current.push(
+        { type: 'DELETE_ROWS', payload: { tableId: currentActive.id, rowIds: [rowId] } },
+        { type: 'ADD_ROWS', payload: { tableId: currentActive.id, rows: [rowToDelete] } },
+        'Excluir 1 lançamento'
+      );
+      setOpLogVersion((v) => v + 1);
+    }
+
     persist(newTables);
-  }, [tables, activeTable, persist]);
+  }, [getLatestTables, getLatestActiveTable, persist]);
 
   const updateActiveTableRows = useCallback(async (newRows: (TableRow | Omit<TableRow, 'id'>)[]) => {
-    let targetTable = activeTable;
-    let baseTables = tables;
+    const currentTables = getLatestTables();
+    const currentActive = getLatestActiveTable();
+    let targetTable = currentActive;
+    let baseTables = currentTables;
 
     if (!targetTable) {
       const newTable: CoinTable = {
@@ -605,7 +740,7 @@ function useCoinDBInternal(): CoinDBState {
         goals: { dailyGoals: {}, weeklyGoals: {}, annualCosts: {} },
         activeSectors: ['personal_finance'],
       };
-      baseTables = [...tables, newTable];
+      baseTables = [...currentTables, newTable];
       targetTable = newTable;
       setActiveTableIndex(baseTables.length - 1);
     }
@@ -613,6 +748,7 @@ function useCoinDBInternal(): CoinDBState {
     const formattedRows: TableRow[] = newRows.map((r) => ({
       ...r,
       id: 'id' in r && r.id ? r.id : generateId(),
+      createdAt: (r as any).createdAt || new Date().toISOString(),
     }));
 
     const newTables = baseTables.map((t) => {
@@ -624,12 +760,14 @@ function useCoinDBInternal(): CoinDBState {
       };
     });
     await persist(newTables);
-  }, [tables, activeTable, persist]);
+  }, [getLatestTables, getLatestActiveTable, persist]);
 
   const updateActiveTableName = useCallback(async (newName: string) => {
-    if (!activeTable || !newName.trim()) return;
-    const newTables = tables.map((t) => {
-      if (t.id !== activeTable.id) return t;
+    const currentTables = getLatestTables();
+    const currentActive = getLatestActiveTable();
+    if (!currentActive || !newName.trim()) return;
+    const newTables = currentTables.map((t) => {
+      if (t.id !== currentActive.id) return t;
       return {
         ...t,
         name: newName.trim(),
@@ -637,15 +775,17 @@ function useCoinDBInternal(): CoinDBState {
       };
     });
     await persist(newTables);
-  }, [tables, activeTable, persist]);
+  }, [getLatestTables, getLatestActiveTable, persist]);
 
   const renameCategoryInBulk = useCallback(async (oldCategoryName: string, newCategoryName: string, entryType?: string) => {
-    if (!activeTable || !oldCategoryName.trim() || !newCategoryName.trim()) return;
+    const currentTables = getLatestTables();
+    const currentActive = getLatestActiveTable();
+    if (!currentActive || !oldCategoryName.trim() || !newCategoryName.trim()) return;
     const cleanOld = oldCategoryName.trim().toUpperCase();
     const cleanNew = newCategoryName.trim().toUpperCase();
 
-    const newTables = tables.map((t) => {
-      if (t.id !== activeTable.id) return t;
+    const newTables = currentTables.map((t) => {
+      if (t.id !== currentActive.id) return t;
       const updatedRows = t.rows.map((r) => {
         const matchesType = !entryType || r.entryType === entryType;
         const matchesCategory = 
@@ -670,14 +810,16 @@ function useCoinDBInternal(): CoinDBState {
     });
 
     await persist(newTables);
-  }, [tables, activeTable, persist]);
+  }, [getLatestTables, getLatestActiveTable, persist]);
 
   const reorderTables = useCallback(async (fromIndex: number, toIndex: number) => {
-    if (fromIndex < 0 || fromIndex >= tables.length || toIndex < 0 || toIndex >= tables.length) return;
+    const currentTables = getLatestTables();
+    if (fromIndex < 0 || fromIndex >= currentTables.length || toIndex < 0 || toIndex >= currentTables.length) return;
     if (fromIndex === toIndex) return;
 
-    const activeTableId = activeTable?.id;
-    const newTables = [...tables];
+    const currentActive = getLatestActiveTable();
+    const activeTableId = currentActive?.id;
+    const newTables = [...currentTables];
     const [moved] = newTables.splice(fromIndex, 1);
     newTables.splice(toIndex, 0, moved);
 
@@ -689,13 +831,46 @@ function useCoinDBInternal(): CoinDBState {
     }
 
     await persist(newTables);
-  }, [tables, activeTable, persist]);
+  }, [getLatestTables, getLatestActiveTable, persist]);
 
   const deleteLastRow = useCallback(async () => {
-    if (!activeTable || activeTable.rows.length === 0) return;
-    const newRows = activeTable.rows.slice(0, -1);
-    const newTables = tables.map((t) => {
-      if (t.id !== activeTable.id) return t;
+    if (opLogRef.current.canUndo()) {
+      const undone = await undo();
+      if (undone) return;
+    }
+
+    const currentTables = getLatestTables();
+    const currentActive = getLatestActiveTable();
+    if (!currentActive || currentActive.rows.length === 0) return;
+
+    let targetRowIdToDelete: string | null = null;
+
+    // 1. Prioridade: Desfazer pela pilha recente de adições da sessão
+    while (sessionAddedRowIdsRef.current.length > 0) {
+      const candidateId = sessionAddedRowIdsRef.current.pop();
+      if (candidateId && currentActive.rows.some((r) => r.id === candidateId)) {
+        targetRowIdToDelete = candidateId;
+        break;
+      }
+    }
+
+    // 2. Fallback: Se pilha estiver vazia, procurar linha com createdAt mais recente
+    if (!targetRowIdToDelete) {
+      const rowsWithCreatedAt = currentActive.rows.filter((r) => (r as any).createdAt);
+      if (rowsWithCreatedAt.length > 0) {
+        const sortedByCreation = [...rowsWithCreatedAt].sort((a, b) => 
+          String((b as any).createdAt || '').localeCompare(String((a as any).createdAt || ''))
+        );
+        targetRowIdToDelete = sortedByCreation[0].id;
+      } else {
+        // Fallback final: última linha da lista
+        targetRowIdToDelete = currentActive.rows[currentActive.rows.length - 1].id;
+      }
+    }
+
+    const newRows = currentActive.rows.filter((r) => r.id !== targetRowIdToDelete);
+    const newTables = currentTables.map((t) => {
+      if (t.id !== currentActive.id) return t;
       return {
         ...t,
         rows: newRows,
@@ -703,13 +878,15 @@ function useCoinDBInternal(): CoinDBState {
       };
     });
     await persist(newTables);
-  }, [tables, activeTable, persist]);
+  }, [getLatestTables, getLatestActiveTable, persist]);
 
   const deleteRowsByPrefix = useCallback((prefix: string): number => {
-    if (!activeTable) return 0;
+    const currentTables = getLatestTables();
+    const currentActive = getLatestActiveTable();
+    if (!currentActive) return 0;
     let deletedCount = 0;
-    const newTables = tables.map((t) => {
-      if (t.id !== activeTable.id) return t;
+    const newTables = currentTables.map((t) => {
+      if (t.id !== currentActive.id) return t;
       const originalLength = t.rows.length;
       const keptRows = t.rows.filter((r) => {
         if (r?.date && r.date.startsWith(prefix)) return false;
@@ -724,13 +901,15 @@ function useCoinDBInternal(): CoinDBState {
     });
     persist(newTables);
     return deletedCount;
-  }, [tables, activeTable, persist]);
+  }, [getLatestTables, getLatestActiveTable, persist]);
 
   const deleteGeneratedRows = useCallback((prefix?: string): number => {
-    if (!activeTable) return 0;
+    const currentTables = getLatestTables();
+    const currentActive = getLatestActiveTable();
+    if (!currentActive) return 0;
     let deletedCount = 0;
-    const newTables = tables.map((t) => {
-      if (t.id !== activeTable.id) return t;
+    const newTables = currentTables.map((t) => {
+      if (t.id !== currentActive.id) return t;
       const originalLength = t.rows.length;
       const keptRows = t.rows.filter((r) => {
         if (!r.generatedBy) return true;
@@ -746,13 +925,15 @@ function useCoinDBInternal(): CoinDBState {
     });
     persist(newTables);
     return deletedCount;
-  }, [tables, activeTable, persist]);
+  }, [getLatestTables, getLatestActiveTable, persist]);
 
   const effectuateGeneratedRows = useCallback((prefix?: string): number => {
-    if (!activeTable) return 0;
+    const currentTables = getLatestTables();
+    const currentActive = getLatestActiveTable();
+    if (!currentActive) return 0;
     let effectuatedCount = 0;
-    const newTables = tables.map((t) => {
-      if (t.id !== activeTable.id) return t;
+    const newTables = currentTables.map((t) => {
+      if (t.id !== currentActive.id) return t;
       const updatedRows = t.rows.map((r) => {
         if (!r.generatedBy) return r;
         if (prefix && (!r.date || !r.date.startsWith(prefix))) return r;
@@ -768,13 +949,15 @@ function useCoinDBInternal(): CoinDBState {
     });
     persist(newTables);
     return effectuatedCount;
-  }, [tables, activeTable, persist]);
+  }, [getLatestTables, getLatestActiveTable, persist]);
 
   // ── Goals ─────────────────────────────────────────────
   const updateGoals = useCallback((goalUpdates: Partial<TableGoals>) => {
-    if (!activeTable) return;
-    const newTables = tables.map((t) => {
-      if (t.id !== activeTable.id) return t;
+    const currentTables = getLatestTables();
+    const currentActive = getLatestActiveTable();
+    if (!currentActive) return;
+    const newTables = currentTables.map((t) => {
+      if (t.id !== currentActive.id) return t;
       const current = t.goals || { dailyGoals: {}, weeklyGoals: {}, annualCosts: {} };
       return {
         ...t,
@@ -790,7 +973,7 @@ function useCoinDBInternal(): CoinDBState {
       };
     });
     persist(newTables);
-  }, [tables, activeTable, persist]);
+  }, [getLatestTables, getLatestActiveTable, persist]);
 
   const deductTokens = useCallback(async (amount: number) => {
     if (auth.mode === 'authenticated' && auth.user) {
@@ -819,14 +1002,16 @@ function useCoinDBInternal(): CoinDBState {
   }, [auth.mode, auth.user]);
 
   const updateActiveSectors = useCallback((sectors: string[]) => {
-    if (!activeTable) return;
-    const newTables = tables.map((t) =>
-      t.id === activeTable.id
+    const currentTables = getLatestTables();
+    const currentActive = getLatestActiveTable();
+    if (!currentActive) return;
+    const newTables = currentTables.map((t) =>
+      t.id === currentActive.id
         ? { ...t, activeSectors: sectors, updatedAt: new Date().toISOString() }
         : t,
     );
     persist(newTables);
-  }, [tables, activeTable, persist]);
+  }, [getLatestTables, getLatestActiveTable, persist]);
 
   const changeActiveTableIndex = useCallback((index: number) => {
     setActiveTableIndex(index);
@@ -1033,6 +1218,12 @@ function useCoinDBInternal(): CoinDBState {
     migrateLocalToCloud,
     clearLocalState,
     deductTokens,
+    dispatch,
+    undo,
+    redo,
+    canUndo: opLogRef.current.canUndo(),
+    canRedo: opLogRef.current.canRedo(),
+    lastUndoDescription: opLogRef.current.getLastUndoDescription(),
   };
 }
 

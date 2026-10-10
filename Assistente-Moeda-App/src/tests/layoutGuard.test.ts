@@ -4,7 +4,7 @@ declare function expect(actual: any): {
   toBe(expected: any): void;
 };
 
-import { isSectorActive } from '../components/SectorGuard';
+import { isSectorActive } from '../core/sectorUtils';
 
 describe('Verificação de Visibilidade Estrita de Layouts', () => {
   it('Não deve renderizar widgets PFM na visão base da planilha sem ativação', () => {

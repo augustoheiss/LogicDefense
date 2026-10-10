@@ -49,51 +49,49 @@ const QUICK_PROMPTS = [
   '⏱️ Quantas semanas de crédito tenho?',
 ];
 
-export default function AIChatScreen() {
-  const router = useRouter();
+function ProRequiredView({
+  onBack,
+  onOpenSettings,
+  onShowPaywall,
+}: {
+  onBack: () => void;
+  onOpenSettings: () => void;
+  onShowPaywall: () => void;
+}) {
+  return (
+    <SafeAreaView style={styles.container}>
+      <View style={styles.header}>
+        <Pressable onPress={onBack} style={styles.backBtn}>
+          <Text style={styles.backText}>← Voltar</Text>
+        </Pressable>
+        <View style={styles.headerCenter}>
+          <Text style={styles.headerTitle}>🤖 Assistente IA</Text>
+        </View>
+        <View style={{ width: 60 }} />
+      </View>
+
+      <View style={styles.proRequiredContainer}>
+        <Text style={styles.proEmoji}>🔒</Text>
+        <Text style={styles.proTitle}>Chave de Licença PRO Necessária</Text>
+        <Text style={styles.proSubtitle}>
+          O Assistente de IA utiliza Inteligência Artificial avançada para analisar suas métricas e projeções. Ative sua Chave de Licença ou assine um plano para liberar o chat.
+        </Text>
+
+        <Pressable style={styles.proPrimaryBtn} onPress={onOpenSettings}>
+          <Text style={styles.proPrimaryBtnText}>🔑 Ativar Chave de Licença em Ajustes</Text>
+        </Pressable>
+
+        <Pressable style={styles.proSecondaryBtn} onPress={onShowPaywall}>
+          <Text style={styles.proSecondaryBtnText}>🛍️ Ver Planos de Assinatura</Text>
+        </Pressable>
+      </View>
+    </SafeAreaView>
+  );
+}
+
+function AIChatMain({ onBack }: { onBack: () => void }) {
   const db = useCoinDB();
-  const { isPro, subscriptionType, setShowPaywall } = useSubscription();
-
-  if (!isPro) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.header}>
-          <Pressable onPress={() => router.back()} style={styles.backBtn}>
-            <Text style={styles.backText}>← Voltar</Text>
-          </Pressable>
-          <View style={styles.headerCenter}>
-            <Text style={styles.headerTitle}>🤖 Assistente IA</Text>
-          </View>
-          <View style={{ width: 60 }} />
-        </View>
-
-        <View style={styles.proRequiredContainer}>
-          <Text style={styles.proEmoji}>🔒</Text>
-          <Text style={styles.proTitle}>Chave de Licença PRO Necessária</Text>
-          <Text style={styles.proSubtitle}>
-            O Assistente de IA utiliza Inteligência Artificial avançada para analisar suas métricas e projeções. Ative sua Chave de Licença ou assine um plano para liberar o chat.
-          </Text>
-
-          <Pressable
-            style={styles.proPrimaryBtn}
-            onPress={() => router.push('/(app)/(tabs)/settings')}
-          >
-            <Text style={styles.proPrimaryBtnText}>🔑 Ativar Chave de Licença em Ajustes</Text>
-          </Pressable>
-
-          <Pressable
-            style={styles.proSecondaryBtn}
-            onPress={() => {
-              router.back();
-              setTimeout(() => setShowPaywall(true), 150);
-            }}
-          >
-            <Text style={styles.proSecondaryBtnText}>🛍️ Ver Planos de Assinatura</Text>
-          </Pressable>
-        </View>
-      </SafeAreaView>
-    );
-  }
+  const { subscriptionType } = useSubscription();
 
   const [messages, setMessages] = useState<ChatMessage[]>([
     createMessage('assistant', 
@@ -277,7 +275,7 @@ export default function AIChatScreen() {
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       {/* Header */}
       <View style={styles.header}>
-        <Pressable onPress={() => router.back()} style={styles.backBtn}>
+        <Pressable onPress={onBack} style={styles.backBtn}>
           <Text style={styles.backText}>← Voltar</Text>
         </Pressable>
         <View style={styles.headerCenter}>
@@ -361,6 +359,26 @@ export default function AIChatScreen() {
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
+}
+
+export default function AIChatScreen() {
+  const router = useRouter();
+  const { isPro, setShowPaywall } = useSubscription();
+
+  if (!isPro) {
+    return (
+      <ProRequiredView
+        onBack={() => router.back()}
+        onOpenSettings={() => router.push('/(app)/(tabs)/settings')}
+        onShowPaywall={() => {
+          router.back();
+          setTimeout(() => setShowPaywall(true), 150);
+        }}
+      />
+    );
+  }
+
+  return <AIChatMain onBack={() => router.back()} />;
 }
 
 // ── Message Bubble ───────────────────────────────────────────────────────────

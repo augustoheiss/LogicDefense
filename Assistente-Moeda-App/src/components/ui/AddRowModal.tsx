@@ -25,6 +25,7 @@ import {
 import { colors } from '@/theme/colors';
 import { spacing, radius } from '@/theme/spacing';
 import type { TableRow } from '@/core/types';
+import { parseMoneyBR, parseBatchAmounts } from '@/core/parseMoneyBR';
 
 interface AddRowModalProps {
   visible: boolean;
@@ -116,12 +117,7 @@ export function AddRowModal({ visible, onClose, onAdd, editingRow, onDelete, onC
 
   // Dynamically parse values from batch input
   const parsedValues = useMemo(() => {
-    if (!batchValues) return [];
-    return batchValues
-      .split(',')
-      .map((s) => s.trim())
-      .map((s) => parseFloat(s.replace(',', '.')))
-      .filter((v) => !isNaN(v) && v > 0);
+    return parseBatchAmounts(batchValues);
   }, [batchValues]);
 
   const handleDescChange = (index: number, text: string) => {
@@ -135,18 +131,18 @@ export function AddRowModal({ visible, onClose, onAdd, editingRow, onDelete, onC
   // Auto-calculate total value when monthlyValue or monthCount changes (for expense only)
   const handleMonthlyValueChange = (val: string) => {
     setMonthlyValue(val);
-    const mVal = parseFloat(val.replace(',', '.'));
+    const mVal = parseMoneyBR(val);
     const mCount = parseInt(monthCount, 10);
-    if (!isNaN(mVal) && !isNaN(mCount)) {
+    if (!isNaN(mVal) && mVal > 0 && !isNaN(mCount) && mCount > 0) {
       setValue(String(Math.round(mVal * mCount * 100) / 100));
     }
   };
 
   const handleMonthCountChange = (val: string) => {
     setMonthCount(val);
-    const mVal = parseFloat(monthlyValue.replace(',', '.'));
+    const mVal = parseMoneyBR(monthlyValue);
     const mCount = parseInt(val, 10);
-    if (!isNaN(mVal) && !isNaN(mCount)) {
+    if (!isNaN(mVal) && mVal > 0 && !isNaN(mCount) && mCount > 0) {
       setValue(String(Math.round(mVal * mCount * 100) / 100));
     }
   };
@@ -259,7 +255,7 @@ export function AddRowModal({ visible, onClose, onAdd, editingRow, onDelete, onC
       onAdd(rows);
     } else {
       // Individual mode submission
-      const numValue = parseFloat(value.replace(',', '.'));
+      const numValue = parseMoneyBR(value);
       if (isNaN(numValue) || numValue <= 0) {
         setError('Insira um valor válido');
         return;
@@ -269,7 +265,7 @@ export function AddRowModal({ visible, onClose, onAdd, editingRow, onDelete, onC
       let finalMonthCount: number | undefined;
 
       if (entryType === 'expense') {
-        const mVal = parseFloat(monthlyValue.replace(',', '.'));
+        const mVal = parseMoneyBR(monthlyValue);
         const mCount = parseInt(monthCount, 10);
         if (!isNaN(mVal) && mVal > 0) {
           finalMonthlyValue = Math.round(mVal * 100) / 100;
@@ -484,12 +480,12 @@ export function AddRowModal({ visible, onClose, onAdd, editingRow, onDelete, onC
             ) : (
               /* Batch Values list */
               <View style={styles.inputGroup}>
-                <Text style={styles.label}>Valores (separados por vírgula)</Text>
+                <Text style={styles.label}>Valores em Lote (ponto e vírgula, linha ou vírgula)</Text>
                 <TextInput
                   style={[styles.input, styles.inputValue, styles.batchInput]}
                   value={batchValues}
                   onChangeText={setBatchValues}
-                  placeholder="Ex: 50, 120.50, 80"
+                  placeholder="Ex: 50,00; 120,50; 80,00 ou um por linha"
                   placeholderTextColor={colors.text.disabled}
                   multiline
                   keyboardType="numbers-and-punctuation"

@@ -71,11 +71,11 @@ const SLIDES: SlideData[] = [
     gradientColors: [colors.background.primary, '#1a0a2e', colors.background.primary],
   },
   {
-    id: 'cloud-sync',
-    icon: '☁️',
-    title: 'Sincronize Entre\nDispositivos',
+    id: 'local-sovereignty',
+    icon: '🛡️',
+    title: 'Soberania e\nPrivacidade Total',
     description:
-      'Crie uma conta para manter seus dados seguros na nuvem. Ou comece sem conta.',
+      'Seus dados ficam gravados com segurança no seu dispositivo. Faça backup em CSV a qualquer momento ou sincronize na nuvem.',
     gradientColors: [colors.background.primary, '#0a1628', colors.background.primary],
   },
 ];

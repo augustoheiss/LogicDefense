@@ -7,10 +7,7 @@ interface SectorGuardProps {
   children: React.ReactNode;
 }
 
-export function isSectorActive(sectorId: string, activeSectors: string[]): boolean {
-  if (!activeSectors || activeSectors.length === 0) return false;
-  return activeSectors.includes(sectorId);
-}
+export { isSectorActive } from '../core/sectorUtils';
 
 export function SectorGuard({
   sector,

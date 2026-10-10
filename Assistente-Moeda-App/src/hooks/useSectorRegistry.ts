@@ -60,7 +60,7 @@ export const ALL_SECTORS: Sector[] = [
 ];
 
 export function useSectorRegistry() {
-  const { activeTable } = useCoinDB();
+  const { activeTable, updateActiveSectors } = useCoinDB();
 
   const activeSectors = useMemo<string[]>(() => {
     if (!activeTable) return ['personal_finance'];
@@ -77,12 +77,11 @@ export function useSectorRegistry() {
   const setSectors = useCallback(
     (sectors: string[]) => {
       if (!activeTable) return;
-      const dbState = useCoinDB() as any;
-      if (dbState.updateActiveSectors) {
-        dbState.updateActiveSectors(sectors);
+      if (updateActiveSectors) {
+        updateActiveSectors(sectors);
       }
     },
-    [activeTable]
+    [activeTable, updateActiveSectors]
   );
 
   const toggleSector = useCallback(

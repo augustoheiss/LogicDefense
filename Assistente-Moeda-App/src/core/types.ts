@@ -92,6 +92,7 @@ export interface TableRow {
   category?: string;
   tags?: string;
   metadataJson?: string;
+  createdAt?: string;
 }
 
 export interface TableGoals {
@@ -235,6 +236,15 @@ export interface TableMetrics {
   waiverTotalWeeks: number;
   goalTotalWeeks: number;
   netBalanceWeeks: number;
+
+  // ─── Convenience & Domain Health Fields ────────
+  balance?: number;
+  totalDeposits?: number;
+  daysWorked?: number;
+  dailyAverage?: number;
+  globalDailyGoal?: number;
+  pendingGoals?: number;
+  projectedTotal?: number;
 }
 
 // ─── Projection Engine ────────────────────────────────────────────────────────

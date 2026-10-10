@@ -107,6 +107,23 @@ export function buildFinancialContext(
   return lines.join('\n');
 }
 
+// ── Privacy Sanitization ───────────────────────────────────────────────────
+
+export function sanitizeRowsForAI(rows: TableRow[], allowRaw = false): TableRow[] {
+  if (allowRaw) return rows;
+
+  // Aggregated & anonymized mode: strip specific personal notes/payees
+  return rows.map(r => ({
+    id: r.id,
+    date: r.date,
+    value: r.value,
+    entryType: r.entryType,
+    category: r.category || 'Geral',
+    description: r.category ? `[${r.category}]` : (r.entryType === 'revenue' ? 'Receita' : 'Despesa'),
+    tags: r.tags,
+  }));
+}
+
 // ── API Call ──────────────────────────────────────────────────────────────────
 
 import { getStoredLicenseKey } from '../storage/authService';
@@ -121,6 +138,7 @@ export async function sendChatMessage(
   tables?: any[],
   transactions?: any[],
   userSettings?: any,
+  allowRawData = false,
 ): Promise<ChatResponse> {
   try {
     const licenseKey = await getStoredLicenseKey();
@@ -132,11 +150,13 @@ export async function sendChatMessage(
       headers['X-License-Key'] = licenseKey;
     }
 
+    const sanitizedRows = sanitizeRowsForAI(rows, allowRawData);
+
     const response = await fetch(`${API_URL}/api/coin/ai-analyst`, {
       method: 'POST',
       headers,
       body: JSON.stringify({
-        rows,
+        rows: sanitizedRows,
         goals,
         userPrompt: message,
         asOfDate: asOfDate || null,
@@ -145,6 +165,7 @@ export async function sendChatMessage(
         tables: tables || [],
         transactions: transactions || [],
         userSettings: userSettings || null,
+        privacyMode: allowRawData ? 'full_rows' : 'aggregated',
       }),
     });
 

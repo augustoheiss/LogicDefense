@@ -37,5 +37,7 @@ export { SyncAuditPanel } from './SyncAuditPanel';
 export { APIManagementTester } from './APIManagementTester';
 export { UniversalHeaderSheetBar } from './UniversalHeaderSheetBar';
 export { ErrorBoundary } from './ErrorBoundary';
+export { ChoiceDialog } from './ChoiceDialog';
+export type { ChoiceOption } from './ChoiceDialog';
 
 
