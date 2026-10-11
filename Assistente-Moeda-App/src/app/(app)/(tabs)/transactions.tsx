@@ -266,11 +266,32 @@ export default function TransactionsScreen() {
   const triggerFileImport = useCallback(async () => {
     try {
       const content = await pickCSVFile();
-      if (!content) return;
+      if (!content || !content.trim()) return;
 
-      setPreviewText(content);
-      setPreviewMode('csv_import');
-      setPreviewVisible(true);
+      const result = parseCSVText(content);
+
+      if (result.rows.length === 0) {
+        const errMsg = result.errors.length > 0
+          ? result.errors.slice(0, 3).join('\n')
+          : 'Nenhuma entrada válida encontrada no arquivo CSV.';
+        Alert.alert('Importação falhou', errMsg);
+        return;
+      }
+
+      const hasUnresolved = result.rows.some((r) => r.entryType === 'unresolved');
+      if (result.isAmbiguous || hasUnresolved) {
+        const preparedRows: TableRow[] = result.rows.map((r, idx) => ({
+          ...r,
+          id: (r as TableRow).id || `import-${Date.now()}-${idx}`,
+        }));
+        setPendingImportResult({ ...result, rows: preparedRows });
+        setStagingRows(preparedRows);
+        setIsAmbiguousImport(Boolean(result.isAmbiguous));
+        setShowStagingModal(true);
+      } else {
+        setPendingImportResult(result);
+        setShowImportChoice(true);
+      }
     } catch (err: any) {
       Alert.alert('Erro ao selecionar arquivo', err.message || 'Erro desconhecido');
     }
@@ -281,14 +302,7 @@ export default function TransactionsScreen() {
     ensureTable();
 
     if (Platform.OS === 'web') {
-      const choice = window.confirm(
-        "Deseja escolher um arquivo de backup CSV (OK) ou colar um Bloco CSV de IA / Texto manualmente (Cancelar)?"
-      );
-      if (choice) {
-        triggerFileImport();
-      } else {
-        setShowCSVStreamModal(true);
-      }
+      triggerFileImport();
     } else {
       Alert.alert(
         'Importar Dados',
@@ -299,7 +313,7 @@ export default function TransactionsScreen() {
             onPress: triggerFileImport,
           },
           {
-            text: '📥 Importar Bloco CSV de IA',
+            text: '📥 Importar por Partes (IA)',
             onPress: () => {
               setShowCSVStreamModal(true);
             },
@@ -547,7 +561,7 @@ export default function TransactionsScreen() {
             <Text style={styles.emptyEmoji}>🪙</Text>
             <Text style={styles.emptyTitle}>Nenhuma entrada ainda</Text>
             <Text style={styles.emptyText}>
-              Toque em "+ Novo" para adicionar sua primeira receita ou despesa.
+              Adicione sua primeira entrada ou importe um arquivo CSV ou bloco de dados.
             </Text>
             <Pressable
               style={({ pressed }) => [
@@ -561,6 +575,32 @@ export default function TransactionsScreen() {
             >
               <Text style={styles.emptyButtonText}>+ Adicionar Entrada</Text>
             </Pressable>
+            <View style={styles.emptyActionsRow}>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.emptySecondaryButton,
+                  pressed && styles.pressed,
+                ]}
+                onPress={() => {
+                  ensureTable();
+                  triggerFileImport();
+                }}
+              >
+                <Text style={styles.emptySecondaryButtonText}>📁 Importar CSV</Text>
+              </Pressable>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.emptySecondaryButton,
+                  pressed && styles.pressed,
+                ]}
+                onPress={() => {
+                  ensureTable();
+                  setShowCSVStreamModal(true);
+                }}
+              >
+                <Text style={styles.emptySecondaryButtonText}>📥 Importar por Partes</Text>
+              </Pressable>
+            </View>
           </View>
         }
       />
@@ -635,10 +675,25 @@ export default function TransactionsScreen() {
             </Pressable>
             <Pressable
               style={[styles.fabMenuItem, { backgroundColor: colors.background.elevated, borderColor: colors.warning.border }]}
-              onPress={handleImportCSV}
+              onPress={() => {
+                setShowFab(false);
+                ensureTable();
+                triggerFileImport();
+              }}
+            >
+              <Text style={styles.fabMenuIcon}>📁</Text>
+              <Text style={styles.fabMenuLabel}>Importar Arquivo CSV</Text>
+            </Pressable>
+            <Pressable
+              style={[styles.fabMenuItem, { backgroundColor: colors.background.elevated, borderColor: colors.accent.purpleBorder }]}
+              onPress={() => {
+                setShowFab(false);
+                ensureTable();
+                setShowCSVStreamModal(true);
+              }}
             >
               <Text style={styles.fabMenuIcon}>📥</Text>
-              <Text style={styles.fabMenuLabel}>Importar CSV</Text>
+              <Text style={styles.fabMenuLabel}>Importar por Partes</Text>
             </Pressable>
             <Pressable
               style={[styles.fabMenuItem, { backgroundColor: colors.background.elevated, borderColor: colors.accent.purpleBorder }]}
@@ -1019,6 +1074,26 @@ const styles = StyleSheet.create({
   emptyButtonText: {
     color: '#fff',
     fontSize: 14,
+    fontWeight: '600',
+  },
+  emptyActionsRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginTop: spacing.sm,
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+  },
+  emptySecondaryButton: {
+    backgroundColor: colors.background.secondary,
+    borderWidth: 1,
+    borderColor: colors.border.default,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.md,
+  },
+  emptySecondaryButtonText: {
+    color: colors.text.secondary,
+    fontSize: 13,
     fontWeight: '600',
   },
 

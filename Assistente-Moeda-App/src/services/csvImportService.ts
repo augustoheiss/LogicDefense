@@ -20,7 +20,8 @@
  *   - Maps column headers to TableRow fields by name
  */
 
-const isWebPlatform = typeof window !== 'undefined' && typeof window.document !== 'undefined';
+import { Platform } from 'react-native';
+const isWebPlatform = Platform.OS === 'web' || (typeof window !== 'undefined' && typeof window.document !== 'undefined');
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import type { TableRow, TableGoals, DynamicTableSchema, InvestorProfileConfig } from '../core/types';
@@ -87,35 +88,100 @@ const VALID_ENTRY_TYPES = new Set([
 
 // ── File Picker ──────────────────────────────────────────────────────────────
 
-export async function pickCSVFile(): Promise<string | null> {
-  try {
-    const result = await DocumentPicker.getDocumentAsync({
-      type: ['text/csv', 'text/comma-separated-values', 'application/vnd.ms-excel', '*/*'],
-      copyToCacheDirectory: true,
-    });
+export function pickCSVFile(): Promise<string | null> {
+  // Web: native HTML5 file picker ensures direct browser gesture activation
+  if (typeof document !== 'undefined' && isWebPlatform) {
+    return new Promise((resolve) => {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = '.csv,text/csv,text/plain,application/vnd.ms-excel';
+      input.style.position = 'fixed';
+      input.style.top = '-10000px';
+      input.style.left = '-10000px';
+      input.style.opacity = '0';
 
-    if (result.canceled || !result.assets || result.assets.length === 0) {
+      let settled = false;
+
+      const cleanup = () => {
+        if (input.parentNode) {
+          input.parentNode.removeChild(input);
+        }
+      };
+
+      const finish = (result: string | null) => {
+        if (!settled) {
+          settled = true;
+          cleanup();
+          resolve(result);
+        }
+      };
+
+      input.onchange = async () => {
+        try {
+          if (!input.files || input.files.length === 0) {
+            finish(null);
+            return;
+          }
+          const file = input.files[0];
+          if (typeof file.text === 'function') {
+            const content = await file.text();
+            finish(content);
+          } else {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+              finish((e.target?.result as string) || null);
+            };
+            reader.onerror = () => finish(null);
+            reader.readAsText(file, 'UTF-8');
+          }
+        } catch (err) {
+          console.error('Erro ao ler arquivo CSV na web:', err);
+          finish(null);
+        }
+      };
+
+      input.oncancel = () => {
+        finish(null);
+      };
+
+      // Fallback: window focus listener in case file picker was closed without event
+      const onWindowFocus = () => {
+        window.removeEventListener('focus', onWindowFocus);
+        setTimeout(() => {
+          if (!settled && (!input.files || input.files.length === 0)) {
+            finish(null);
+          }
+        }, 800);
+      };
+      window.addEventListener('focus', onWindowFocus);
+
+      document.body.appendChild(input);
+      input.click();
+    });
+  }
+
+  // Native (iOS / Android) via DocumentPicker & FileSystem
+  return (async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ['text/csv', 'text/comma-separated-values', 'application/vnd.ms-excel', '*/*'],
+        copyToCacheDirectory: true,
+      });
+
+      if (result.canceled || !result.assets || result.assets.length === 0) {
+        return null;
+      }
+
+      const asset = result.assets[0];
+      const content = await FileSystem.readAsStringAsync(asset.uri, {
+        encoding: FileSystem.EncodingType.UTF8,
+      });
+      return content;
+    } catch (error: any) {
+      console.error('CSV pick error:', error);
       return null;
     }
-
-    const asset = result.assets[0];
-
-    if (isWebPlatform) {
-      // On web, read the file via fetch (the URI is a blob URL)
-      const response = await fetch(asset.uri);
-      const text = await response.text();
-      return text;
-    }
-
-    // On native, read via FileSystem
-    const content = await FileSystem.readAsStringAsync(asset.uri, {
-      encoding: FileSystem.EncodingType.UTF8,
-    });
-    return content;
-  } catch (error: any) {
-    console.error('CSV pick error:', error);
-    return null;
-  }
+  })();
 }
 
 // ── Parser ───────────────────────────────────────────────────────────────────
