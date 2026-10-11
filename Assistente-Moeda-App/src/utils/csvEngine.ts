@@ -126,8 +126,9 @@ export function normalizeEntryType(input: string): TableRow['entryType'] {
 
   if (s === 'receita') return 'revenue';
   if (s === 'despesa' || s === 'custo') return 'expense';
-  if (s === 'depósito' || s === 'deposito') return 'deposit';
+  if (s === 'depósito' || s === 'deposito' || s === 'aporte' || s === 'investimento') return 'deposit';
   if (s === 'abono' || s === 'justificativa') return 'waiver';
+  if (s === 'neutro' || s === 'unresolved' || s === 'pendente' || s === 'quarentena') return 'unresolved';
 
   // Return s unchanged (partner_in, partner_out, waiver, expense, revenue, deposit, custom string)
   return s as TableRow['entryType'];
@@ -138,6 +139,7 @@ export interface CSVParseOutput {
   errors: string[];
   skippedCount: number;
   detectedSectors: string[];
+  isAmbiguous?: boolean;
   metadata?: {
     tableId?: string;
     apiKey?: string;
@@ -164,7 +166,13 @@ function findHeaderIdx(headers: string[], aliases: string[]): number {
   return -1;
 }
 
-export function parseCSVText(csvText: string): CSVParseOutput {
+export function parseCSVText(
+  csvText: string,
+  options?: {
+    fallbackEntryType?: TableRow['entryType'];
+    forceEntryType?: TableRow['entryType'];
+  }
+): CSVParseOutput {
   const errors: string[] = [];
   let skippedCount = 0;
   const rows: (TableRow | Omit<TableRow, 'id'>)[] = [];
@@ -528,11 +536,16 @@ export function parseCSVText(csvText: string): CSVParseOutput {
         parsedVal = 0;
       }
 
-      let entryType: TableRow['entryType'] = 'revenue';
-      if (typeIdx !== -1 && cols[typeIdx]) {
-        entryType = normalizeEntryType(cols[typeIdx]);
-      } else if (categoryIdx !== -1 && cols[categoryIdx] && cols[categoryIdx].trim()) {
-        entryType = normalizeEntryType(cols[categoryIdx]);
+      let entryType: TableRow['entryType'] = options?.forceEntryType || options?.fallbackEntryType || 'revenue';
+      if (!options?.forceEntryType) {
+        if (typeIdx !== -1 && cols[typeIdx]) {
+          entryType = normalizeEntryType(cols[typeIdx]);
+        } else if (categoryIdx !== -1 && cols[categoryIdx] && cols[categoryIdx].trim()) {
+          const inferredFromCat = normalizeEntryType(cols[categoryIdx]);
+          if (inferredFromCat && ['revenue', 'expense', 'deposit', 'waiver', 'partner_in', 'partner_out', 'unresolved'].includes(inferredFromCat)) {
+            entryType = inferredFromCat;
+          }
+        }
       }
 
       let description = '';
@@ -619,11 +632,14 @@ export function parseCSVText(csvText: string): CSVParseOutput {
 
   console.log('[CSV Parser]: Total rows extracted from section ## ROWS ##:', rows.length);
 
+  const isAmbiguous = typeIdx === -1 && !options?.forceEntryType;
+
   return {
     rows,
     errors,
     skippedCount,
     detectedSectors,
+    isAmbiguous,
     metadata,
   };
 }

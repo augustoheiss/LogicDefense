@@ -53,6 +53,8 @@ import {
   VehiclesSectorWidget,
   LegalTaxesSectorWidget,
   PersonalFinanceSectorWidget,
+  CSVStagingReviewModal,
+  GranularExportModal,
 } from '@/components/ui';
 import { formatCurrencySmart } from '@/core/formatCurrency';
 import { shareWhatsAppReport, shareCSV, sharePDFReport, buildWhatsAppReport, shareCSVText, buildCSV } from '@/services/exportService';
@@ -73,6 +75,10 @@ export default function TransactionsScreen() {
   const [showBulkDelete, setShowBulkDelete] = useState(false);
   const [showCSVStreamModal, setShowCSVStreamModal] = useState(false);
   const [showWorkbench, setShowWorkbench] = useState(false);
+  const [showGranularExportModal, setShowGranularExportModal] = useState(false);
+  const [showStagingModal, setShowStagingModal] = useState(false);
+  const [stagingRows, setStagingRows] = useState<TableRow[]>([]);
+  const [isAmbiguousImport, setIsAmbiguousImport] = useState(false);
   const { width } = useWindowDimensions();
 
   // ── Preview & Import Choice States ────────────────────
@@ -331,8 +337,20 @@ export default function TransactionsScreen() {
           return;
         }
 
-        setPendingImportResult(result);
-        setShowImportChoice(true);
+        const hasUnresolved = result.rows.some((r) => r.entryType === 'unresolved');
+        if (result.isAmbiguous || hasUnresolved) {
+          const preparedRows: TableRow[] = result.rows.map((r, idx) => ({
+            ...r,
+            id: (r as TableRow).id || `import-${Date.now()}-${idx}`,
+          }));
+          setPendingImportResult({ ...result, rows: preparedRows });
+          setStagingRows(preparedRows);
+          setIsAmbiguousImport(Boolean(result.isAmbiguous));
+          setShowStagingModal(true);
+        } else {
+          setPendingImportResult(result);
+          setShowImportChoice(true);
+        }
       } catch (err: any) {
         Alert.alert('Erro na importação', err.message || 'Erro desconhecido');
       }
@@ -606,6 +624,16 @@ export default function TransactionsScreen() {
               <Text style={styles.fabMenuLabel}>Exportar CSV</Text>
             </Pressable>
             <Pressable
+              style={[styles.fabMenuItem, { backgroundColor: colors.background.elevated, borderColor: colors.accent.purpleBorder }]}
+              onPress={() => {
+                setShowFab(false);
+                setShowGranularExportModal(true);
+              }}
+            >
+              <Text style={styles.fabMenuIcon}>🧩</Text>
+              <Text style={styles.fabMenuLabel}>Exportar por Partes</Text>
+            </Pressable>
+            <Pressable
               style={[styles.fabMenuItem, { backgroundColor: colors.background.elevated, borderColor: colors.warning.border }]}
               onPress={handleImportCSV}
             >
@@ -777,6 +805,41 @@ export default function TransactionsScreen() {
           onSaveSchema={handleSaveWorkbenchSchema}
         />
       )}
+
+      {/* Granular / Sliced Export Modal */}
+      {db.activeTable && (
+        <GranularExportModal
+          visible={showGranularExportModal}
+          onClose={() => setShowGranularExportModal(false)}
+          rows={db.activeTable.rows}
+          tableName={db.activeTable.name}
+          selectedMonth={db.selectedMonth === 'all' ? undefined : db.selectedMonth}
+          goals={db.activeTable.goals}
+          tableId={db.activeTable.id}
+          schema={db.activeTable.schema}
+          investorProfile={db.activeTable.investorProfile}
+        />
+      )}
+
+      {/* CSV Staging & Bulk Classification Modal for Ambiguous Imports */}
+      <CSVStagingReviewModal
+        visible={showStagingModal}
+        onClose={() => {
+          setShowStagingModal(false);
+          setPendingImportResult(null);
+        }}
+        incomingRows={stagingRows}
+        isAmbiguous={isAmbiguousImport}
+        activeTableName={db.activeTable?.name}
+        onConfirmCommit={async (classifiedRows, mode) => {
+          setShowStagingModal(false);
+          await executeImportCommit(mode, {
+            ...pendingImportResult,
+            rows: classifiedRows,
+          });
+          setPendingImportResult(null);
+        }}
+      />
     </SafeAreaView>
     </ErrorBoundary>
   );

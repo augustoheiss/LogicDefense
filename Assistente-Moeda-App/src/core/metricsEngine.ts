@@ -25,10 +25,11 @@ import {
 
 export function computeMetrics(
   rows: TableRow[],
-  goals: TableGoals,
+  goals?: TableGoals,
   /** When set, the engine treats this date as "today" for all calculations. */
   asOfDate?: string,
 ): TableMetrics {
+  const safeGoals = goals || computeBaselineGoals(rows || []);
   if (!Array.isArray(rows) || rows.length === 0) return emptyMetrics();
 
   // Defensive sanitization: exclude any undefined/null or corrupted rows without valid date or number value
@@ -85,9 +86,9 @@ export function computeMetrics(
     }
   }
 
-  // FIREWALL: partner_in and partner_out are isolated from operational revenue.
+  // FIREWALL: partner_in, partner_out and unresolved are isolated from operational revenue.
   const revenueRows = validRows.filter(
-    (r) => r.entryType !== 'deposit' && r.entryType !== 'waiver' && r.entryType !== 'expense' && r.entryType !== 'partner_out' && r.entryType !== 'partner_in',
+    (r) => r.entryType !== 'deposit' && r.entryType !== 'waiver' && r.entryType !== 'expense' && r.entryType !== 'partner_out' && r.entryType !== 'partner_in' && r.entryType !== 'unresolved',
   );
 
   // ── Expense metrics ───────────────────────────────────────────────────────
@@ -190,7 +191,7 @@ export function computeMetrics(
 
   // ── Advanced Statistics ───────────────────────────────────────────────────
   const positiveRevenueValues = validRows
-    .filter((r) => r.entryType !== 'deposit' && r.entryType !== 'waiver' && r.entryType !== 'expense' && r.entryType !== 'partner_out' && r.entryType !== 'partner_in' && r.value > 0)
+    .filter((r) => r.entryType !== 'deposit' && r.entryType !== 'waiver' && r.entryType !== 'expense' && r.entryType !== 'partner_out' && r.entryType !== 'partner_in' && r.entryType !== 'unresolved' && r.value > 0)
     .map((r) => r.value);
 
   let statsFields: { maxTransaction: number; minTransaction: number; medianTransaction: number; modeTransaction: number; stdDeviation: number };
@@ -278,7 +279,7 @@ export function computeMetrics(
   for (const row of activeRows) {
     grossTotal += row.value;
 
-    const activeWeeklyGoal = getWeeklyGoalForDate(row.date, goals);
+    const activeWeeklyGoal = getWeeklyGoalForDate(row.date, safeGoals);
     if (activeWeeklyGoal > 0) {
       grossTotalWeeks += row.value / activeWeeklyGoal;
     }
@@ -379,7 +380,7 @@ export function computeMetrics(
 
   // ── Strict cumulative BRL balance ─────────────────────────────────────────
   const { balance: rawStrictBalance, elapsedWeeks: totalElapsedWeeks } =
-    calculateStrictGlobalBalance(revenueRows, goals, asOfDate ? today : undefined);
+    calculateStrictGlobalBalance(revenueRows, safeGoals, asOfDate ? today : undefined);
 
   // ── Waiver credits ─────────────────────────────────────────────────────────
   let totalWaiverCredits = 0;
@@ -389,7 +390,7 @@ export function computeMetrics(
 
   for (const row of waiverRows) {
     totalWaiverCredits += row.value;
-    const activeWeeklyGoal = getWeeklyGoalForDate(row.date, goals);
+    const activeWeeklyGoal = getWeeklyGoalForDate(row.date, safeGoals);
     if (activeWeeklyGoal > 0) {
       waiverTotalWeeks += row.value / activeWeeklyGoal;
     }
@@ -410,7 +411,7 @@ export function computeMetrics(
 
   // Time Bank balance is calculated strictly as: globalGoalBalance / currentWeeklyGoal
   const targetDateKey = asOfDate || toLocalKey(today);
-  const currentWeeklyGoal = getWeeklyGoalForDate(targetDateKey, goals);
+  const currentWeeklyGoal = getWeeklyGoalForDate(targetDateKey, safeGoals);
   const timeBankBalance = currentWeeklyGoal > 0
     ? Math.round((globalGoalBalance / currentWeeklyGoal) * 100) / 100
     : 0;

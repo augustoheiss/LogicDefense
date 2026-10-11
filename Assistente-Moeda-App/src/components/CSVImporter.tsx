@@ -13,6 +13,8 @@ import { colors } from '@/theme/colors';
 import { spacing, radius } from '@/theme/spacing';
 import { useCoinDB } from '../hooks/useCoinDB';
 import { parseCSVText } from '../utils/csvEngine';
+import type { TableRow } from '../core/types';
+import { CSVStagingReviewModal } from './ui/CSVStagingReviewModal';
 
 interface CSVImporterProps {
   onSuccess?: () => void;
@@ -25,59 +27,49 @@ export function CSVImporter({ onSuccess, onCancel }: CSVImporterProps) {
   const [errorLogs, setErrorLogs] = useState<string[]>([]);
   const [statusMsg, setStatusMsg] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
+  const [presetType, setPresetType] = useState<'auto' | 'expense' | 'revenue' | 'deposit' | 'unresolved'>('auto');
 
-  const handleImport = async (importMode: 'merge' | 'replace' = 'merge') => {
-    if (!csvText.trim()) {
-      setErrorLogs(['Por favor, cole um conteúdo CSV válido.']);
-      return;
-    }
+  // Staging Review State for ambiguous or partial agent imports
+  const [stagingData, setStagingData] = useState<{
+    rows: TableRow[];
+    metadata?: any;
+    detectedSectors?: string[];
+    isAmbiguous?: boolean;
+    mode: 'merge' | 'replace';
+  } | null>(null);
+  const [showStagingModal, setShowStagingModal] = useState(false);
 
+  const commitRows = async (
+    rowsToCommit: (TableRow | Omit<TableRow, 'id'>)[],
+    metadata?: any,
+    detectedSectors?: string[],
+    importMode: 'merge' | 'replace' = 'merge'
+  ) => {
     setIsProcessing(true);
-    setErrorLogs([]);
-    setStatusMsg('');
-
     try {
-      console.log('[CSV Import Step 1]: Raw text length', csvText.length, 'mode:', importMode);
-      const parsed = parseCSVText(csvText);
-      console.log('[CSV Import Step 2]: Parsed output', parsed);
-
-      if (parsed.errors.length > 0) {
-        setErrorLogs(parsed.errors);
-        setIsProcessing(false);
-        return;
-      }
-
-      if (parsed.rows.length === 0) {
-        setErrorLogs(['Nenhuma linha de transação foi encontrada no CSV.']);
-        setIsProcessing(false);
-        return;
-      }
-
-      // Commit rows, name, description, goals, tableId, apiKey, and lastEventSeq in ONE ATOMIC OPERATION
       const importRes = await importSpreadsheet({
-        rows: parsed.rows,
-        tableId: parsed.metadata?.tableId,
-        apiKey: parsed.metadata?.apiKey,
-        lastEventSeq: parsed.metadata?.lastEventSeq,
-        name: parsed.metadata?.name,
-        description: parsed.metadata?.description,
-        goals: parsed.metadata?.tableGoals,
+        rows: rowsToCommit,
+        tableId: metadata?.tableId,
+        apiKey: metadata?.apiKey,
+        lastEventSeq: metadata?.lastEventSeq,
+        name: metadata?.name,
+        description: metadata?.description,
+        goals: metadata?.tableGoals,
         mode: importMode,
-        schema: parsed.metadata?.schema,
-        investorProfile: parsed.metadata?.investorProfile,
+        schema: metadata?.schema,
+        investorProfile: metadata?.investorProfile,
       });
 
-      if (parsed.detectedSectors && parsed.detectedSectors.length > 0) {
+      if (detectedSectors && detectedSectors.length > 0) {
         try {
-          await updateActiveSectors(parsed.detectedSectors);
+          await updateActiveSectors(detectedSectors);
         } catch (secErr) {
           console.warn('[Import Warning]: Skipped sectors update', secErr);
         }
       }
 
-      // Trigger dynamic activeSectors toggles
       const currentActiveSectors = activeTable?.activeSectors || ['personal_finance'];
-      const sectorsToActivate = parsed.detectedSectors.filter(
+      const sectorsToActivate = (detectedSectors || []).filter(
         (sec) => !currentActiveSectors.includes(sec)
       );
 
@@ -88,17 +80,15 @@ export function CSVImporter({ onSuccess, onCancel }: CSVImporterProps) {
 
       setCsvText('');
 
-      // 1. Close modal FIRST so React commits state and re-renders main screen
       if (onSuccess) {
         onSuccess();
       }
 
-      // 2. Trigger completion alert AFTER modal closes and render cycle flushes
       setTimeout(() => {
-        const activeTableName = parsed.metadata?.name || activeTable?.name || 'Ativa';
+        const activeTableName = metadata?.name || activeTable?.name || 'Ativa';
         const successTitle = 'Importação Concluída! 🎉';
         const modeLabel = importMode === 'merge' ? 'acumuladas' : 'carregadas (substituição)';
-        let successMsg = `Sucesso! ${parsed.rows.length} transações foram ${modeLabel} na planilha "${activeTableName}".`;
+        let successMsg = `Sucesso! ${rowsToCommit.length} transações foram ${modeLabel} na planilha "${activeTableName}".`;
         if (importRes?.keyWasAutoRenewed) {
           successMsg += '\n\n🔑 Planilha restaurada com sucesso! Uma nova Chave API ativa foi gerada para este ambiente.';
         }
@@ -122,6 +112,60 @@ export function CSVImporter({ onSuccess, onCancel }: CSVImporterProps) {
     }
   };
 
+  const handleImport = async (importMode: 'merge' | 'replace' = 'merge') => {
+    if (!csvText.trim()) {
+      setErrorLogs(['Por favor, cole um conteúdo CSV válido.']);
+      return;
+    }
+
+    setIsProcessing(true);
+    setErrorLogs([]);
+    setStatusMsg('');
+
+    try {
+      const parseOptions = presetType !== 'auto' ? { forceEntryType: presetType } : undefined;
+      const parsed = parseCSVText(csvText, parseOptions);
+
+      if (parsed.errors.length > 0) {
+        setErrorLogs(parsed.errors);
+        setIsProcessing(false);
+        return;
+      }
+
+      if (parsed.rows.length === 0) {
+        setErrorLogs(['Nenhuma linha de transação foi encontrada no CSV.']);
+        setIsProcessing(false);
+        return;
+      }
+
+      // If ambiguous and auto mode is selected, open staging modal for user confirmation
+      if (parsed.isAmbiguous && presetType === 'auto') {
+        setStagingData({
+          rows: parsed.rows as TableRow[],
+          metadata: parsed.metadata,
+          detectedSectors: parsed.detectedSectors,
+          isAmbiguous: true,
+          mode: importMode,
+        });
+        setShowStagingModal(true);
+        setIsProcessing(false);
+        return;
+      }
+
+      await commitRows(parsed.rows, parsed.metadata, parsed.detectedSectors, importMode);
+    } catch (err: any) {
+      const errMsg = err.message || 'Falha ao processar o arquivo CSV';
+      setErrorLogs([`Erro geral de importação: ${errMsg}`]);
+      setIsProcessing(false);
+    }
+  };
+
+  const handleStagingConfirm = async (classifiedRows: TableRow[], mode: 'merge' | 'replace') => {
+    setShowStagingModal(false);
+    if (!stagingData) return;
+    await commitRows(classifiedRows, stagingData.metadata, stagingData.detectedSectors, mode);
+  };
+
   return (
     <View style={styles.container}>
       <Text style={styles.title}>📥 Importador de Planilha In-Place CSV</Text>
@@ -133,6 +177,39 @@ export function CSVImporter({ onSuccess, onCancel }: CSVImporterProps) {
           "{activeTable?.name || 'Sem Tabela Ativa'}"
         </Text>.
       </Text>
+
+      {/* Classification Presets */}
+      <View style={styles.presetsContainer}>
+        <Text style={styles.presetsLabel}>Classificação do Lote (Agente / IA):</Text>
+        <View style={styles.presetsRow}>
+          {[
+            { id: 'auto', label: '🔄 Auto / Revisar' },
+            { id: 'expense', label: '🔴 Tudo Despesa' },
+            { id: 'revenue', label: '🟢 Tudo Receita' },
+            { id: 'deposit', label: '🔵 Tudo Aporte' },
+            { id: 'unresolved', label: '🟡 Quarentena' },
+          ].map((opt) => (
+            <Pressable
+              key={opt.id}
+              style={[
+                styles.presetChip,
+                presetType === opt.id && styles.presetChipActive,
+              ]}
+              onPress={() => setPresetType(opt.id as any)}
+              disabled={isProcessing}
+            >
+              <Text
+                style={[
+                  styles.presetChipText,
+                  presetType === opt.id && styles.presetChipTextActive,
+                ]}
+              >
+                {opt.label}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+      </View>
 
       <TextInput
         style={styles.codeTextarea}
@@ -173,6 +250,18 @@ export function CSVImporter({ onSuccess, onCancel }: CSVImporterProps) {
           </Pressable>
         )}
       </View>
+
+      {/* Staging Review Modal */}
+      {stagingData && (
+        <CSVStagingReviewModal
+          visible={showStagingModal}
+          onClose={() => setShowStagingModal(false)}
+          incomingRows={stagingData.rows}
+          isAmbiguous={stagingData.isAmbiguous}
+          activeTableName={stagingData.metadata?.name || activeTable?.name || 'Ativa'}
+          onConfirmCommit={handleStagingConfirm}
+        />
+      )}
 
       {statusMsg !== '' && (
         <View style={styles.statusBanner}>
@@ -242,6 +331,41 @@ const styles = StyleSheet.create({
   disabledBtn: {
     backgroundColor: colors.background.tertiary,
     opacity: 0.6,
+  },
+  presetsContainer: {
+    gap: 6,
+    paddingVertical: 2,
+  },
+  presetsLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: colors.text.secondary,
+  },
+  presetsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  presetChip: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: radius.full || 9999,
+    backgroundColor: colors.background.tertiary,
+    borderWidth: 1,
+    borderColor: colors.border.default,
+  },
+  presetChipActive: {
+    backgroundColor: colors.accent.purple,
+    borderColor: colors.accent.purpleBorder,
+  },
+  presetChipText: {
+    fontSize: 10,
+    fontWeight: '500',
+    color: colors.text.secondary,
+  },
+  presetChipTextActive: {
+    color: '#fff',
+    fontWeight: '700',
   },
   actionBtnText: {
     fontSize: 11,

@@ -51,9 +51,10 @@ export interface TableRow {
    *                    adds to totalPartnerIn and globalGoalBalance.
    *   'partner_out' — partnership debit / charge. Isolated from totalExpenses;
    *                    adds to totalPartnerOut and subtracts from globalGoalBalance.
+   *   'unresolved'  — neutral quarantine state for imports without confirmed classification.
    * Omitted on legacy rows — treated as 'revenue' for full backward compatibility.
    */
-  entryType?: 'revenue' | 'deposit' | 'waiver' | 'expense' | 'partner_in' | 'partner_out' | string;
+  entryType?: 'revenue' | 'deposit' | 'waiver' | 'expense' | 'partner_in' | 'partner_out' | 'unresolved' | string;
   /**
    * For 'expense' entries only — the monthly cost amount (R$).
    * Used to reconstruct the total: value = monthlyValue × monthCount.
@@ -390,3 +391,38 @@ export interface ProjectionPoint {
 // ─── UI State ─────────────────────────────────────────────────────────────────
 
 export type ModalMode = 'create' | 'edit' | null;
+
+// ─── Granular Export & Agent-Native Pipeline Contracts ────────────────────────
+
+export type ExportScopeType =
+  | 'all'           // Toda a tabela ativa
+  | 'revenue'       // Apenas receitas operacionais
+  | 'expense'       // Apenas custos e despesas
+  | 'deposit'       // Apenas investimentos e aportes
+  | 'partner'       // Apenas movimentações de sócios/parcerias
+  | 'unresolved';   // Apenas pendências de conciliação / quarentena
+
+export type ExportFormatType =
+  | 'agent_compact' // Compacto (4-5 colunas essenciais, token-friendly para IAs)
+  | 'standard_csv'  // CSV tabular limpo
+  | 'backup_v3';    // Backup completo com metadados e metas
+
+export interface GranularExportOptions {
+  scope: ExportScopeType;
+  format: ExportFormatType;
+  selectedMonth?: string;     // "YYYY-MM" ou "all"
+  startDate?: string;         // "YYYY-MM-DD"
+  endDate?: string;           // "YYYY-MM-DD"
+  categoryFilter?: string;    // Filtro opcional por categoria
+  delimiter?: ';' | ',';      // Separador tabular desejado
+}
+
+export interface PartialImportPreview {
+  rows: TableRow[];
+  totalCount: number;
+  unresolvedCount: number;
+  detectedTypes: Set<string>;
+  isAmbiguous: boolean;
+  totalSum: number;
+  potentialDuplicateCount: number;
+}

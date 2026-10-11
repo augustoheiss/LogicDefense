@@ -27,7 +27,11 @@ export interface DynamicCSVParseResult {
 /**
  * Parses raw CSV text into a dynamic schema and normalized TableRow array.
  */
-export function parseDynamicCSV(csvText: string, tableId: string = 'default'): DynamicCSVParseResult {
+export function parseDynamicCSV(
+  csvText: string,
+  tableId: string = 'default',
+  options?: { fallbackEntryType?: TableRow['entryType']; forceEntryType?: TableRow['entryType'] }
+): DynamicCSVParseResult {
   const errors: string[] = [];
   let skippedLines = 0;
   const cleaned = csvText.startsWith('\uFEFF') ? csvText.slice(1) : csvText;
@@ -134,7 +138,7 @@ export function parseDynamicCSV(csvText: string, tableId: string = 'default'): D
     updatedAt: new Date().toISOString(),
   };
 
-  const rows = buildRowsFromDataLines(dataLines, delimiter, schema, errors);
+  const rows = buildRowsFromDataLines(dataLines, delimiter, schema, errors, rawHeaders, options);
 
   return {
     schema,
@@ -286,7 +290,8 @@ export function buildRowsFromDataLines(
   delimiter: string,
   schema: DynamicTableSchema,
   errors: string[] = [],
-  rawHeaders?: string[]
+  rawHeaders?: string[],
+  options?: { fallbackEntryType?: TableRow['entryType']; forceEntryType?: TableRow['entryType'] }
 ): TableRow[] {
   const rows: TableRow[] = [];
   const todayStr = new Date().toISOString().slice(0, 10);
@@ -313,7 +318,7 @@ export function buildRowsFromDataLines(
       let rowDate = todayStr;
       let rowValue = 0;
       let rowDescription = '';
-      let rowEntryType: TableRow['entryType'] = 'revenue';
+      let rowEntryType: TableRow['entryType'] = options?.forceEntryType || options?.fallbackEntryType || 'revenue';
       let rowCategory = 'Geral';
       let rowTags = '';
       let rowTicker: string | undefined = undefined;
@@ -418,7 +423,7 @@ export function buildRowsFromDataLines(
       });
 
       // Also capture named standard and investment fields if not part of schema
-      if (hasNamedHeaders) {
+      if (hasNamedHeaders && !options?.forceEntryType) {
         const typeIdx = headerMap['entrytype'] ?? headerMap['entry_type'] ?? headerMap['tipo'] ?? headerMap['type'];
         if (typeIdx !== undefined && cols[typeIdx]) {
           rowEntryType = normalizeEntryType(cols[typeIdx]);

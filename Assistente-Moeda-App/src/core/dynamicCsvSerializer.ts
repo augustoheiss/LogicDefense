@@ -7,7 +7,7 @@
  *   - Legacy Semicolon CSV: fallback when no schema or metadata is provided.
  */
 
-import type { TableRow, TableGoals, DynamicTableSchema, InvestorProfileConfig } from './types';
+import type { TableRow, TableGoals, DynamicTableSchema, InvestorProfileConfig, GranularExportOptions } from './types';
 
 export function serializeDynamicCSV(
   rows: TableRow[],
@@ -196,3 +196,113 @@ export function serializeDynamicCSV(
   });
   return [header, ...lines].join('\n');
 }
+
+/**
+ * Granular Sliced CSV Serializer — Export by parts (revenue only, expense only, etc.)
+ * Supports Agent-Ready Compact format (4-5 token-efficient columns) and standard CSV.
+ */
+export function serializeGranularCSV(
+  rows: TableRow[],
+  options: GranularExportOptions,
+  tableName?: string,
+  description?: string,
+  goals?: TableGoals,
+  tableId?: string,
+  apiKey?: string | null,
+  lastEventSeq?: number,
+  schema?: DynamicTableSchema,
+  investorProfile?: InvestorProfileConfig
+): string {
+  // 1. Filter rows by Scope
+  let filtered = [...rows];
+  if (options.scope === 'revenue') {
+    filtered = filtered.filter((r) => !r.entryType || r.entryType === 'revenue');
+  } else if (options.scope === 'expense') {
+    filtered = filtered.filter((r) => r.entryType === 'expense');
+  } else if (options.scope === 'deposit') {
+    filtered = filtered.filter((r) => r.entryType === 'deposit');
+  } else if (options.scope === 'partner') {
+    filtered = filtered.filter((r) => r.entryType === 'partner_in' || r.entryType === 'partner_out');
+  } else if (options.scope === 'unresolved') {
+    filtered = filtered.filter((r) => r.entryType === 'unresolved');
+  }
+
+  // 2. Filter by Date / Month
+  const targetMonth = options.selectedMonth || (options as any).month;
+  if (targetMonth && targetMonth !== 'all') {
+    filtered = filtered.filter((r) => r.date && r.date.startsWith(targetMonth));
+  }
+  if (options.startDate) {
+    filtered = filtered.filter((r) => r.date && r.date >= options.startDate!);
+  }
+  if (options.endDate) {
+    filtered = filtered.filter((r) => r.date && r.date <= options.endDate!);
+  }
+
+  // 3. Filter by Category
+  if (options.categoryFilter && options.categoryFilter.trim()) {
+    const cf = options.categoryFilter.trim().toLowerCase();
+    filtered = filtered.filter((r) => r.category && r.category.toLowerCase() === cf);
+  }
+
+  // 4. Format Selection
+  const delim = options.delimiter || (options.format === 'agent_compact' ? ',' : ';');
+
+  if (options.format === 'backup_v3') {
+    return serializeDynamicCSV(
+      filtered,
+      tableName,
+      description,
+      goals,
+      tableId,
+      apiKey,
+      lastEventSeq,
+      schema,
+      investorProfile
+    );
+  }
+
+  if (options.format === 'agent_compact') {
+    // Ultra-clean format with minimal token footprint for LLM prompts
+    const hasInvest = filtered.some((r) => r.ticker || r.quantity || r.unitPrice);
+    const headers = ['date', 'value', 'description', 'category', 'entryType'];
+    if (hasInvest) {
+      headers.push('ticker', 'quantity', 'unitPrice');
+    }
+    const lines = filtered.map((r) => {
+      const cols = [
+        r.date,
+        r.value.toFixed(2),
+        `"${(r.description || '').replace(/"/g, '""')}"`,
+        `"${(r.category || 'Geral').replace(/"/g, '""')}"`,
+        r.entryType || 'revenue',
+      ];
+      if (hasInvest) {
+        cols.push(
+          r.ticker ? `"${r.ticker.replace(/"/g, '""')}"` : '',
+          r.quantity !== undefined ? String(r.quantity) : '',
+          r.unitPrice !== undefined ? String(r.unitPrice) : ''
+        );
+      }
+      return cols.join(delim);
+    });
+    return [headers.join(delim), ...lines].join('\n');
+  }
+
+  // 'standard_csv': clean human-readable tabular CSV
+  const headers = ['Data', 'Valor', 'Descrição', 'Tipo', 'Categoria', 'Tags'];
+  const lines = filtered.map((r) => {
+    const valStr = delim === ';' ? r.value.toString().replace('.', ',') : r.value.toFixed(2);
+    const cols = [
+      r.date,
+      valStr,
+      `"${(r.description || '').replace(/"/g, '""')}"`,
+      r.entryType || 'revenue',
+      `"${(r.category || 'Geral').replace(/"/g, '""')}"`,
+      `"${(r.tags || '').replace(/"/g, '""')}"`,
+    ];
+    return cols.join(delim);
+  });
+  return [headers.join(delim), ...lines].join('\n');
+}
+

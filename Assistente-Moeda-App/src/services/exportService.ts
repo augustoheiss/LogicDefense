@@ -12,12 +12,12 @@ import { cacheDirectory, writeAsStringAsync, EncodingType } from 'expo-file-syst
 import * as Sharing from 'expo-sharing';
 import * as Print from 'expo-print';
 import { formatCurrencyFull, formatCurrencySmart } from '../core/formatCurrency';
-import type { TableRow, TableMetrics, TableGoals, DynamicTableSchema, InvestorProfileConfig } from '../core/types';
+import type { TableRow, TableMetrics, TableGoals, DynamicTableSchema, InvestorProfileConfig, GranularExportOptions } from '../core/types';
 import type { WeekDebtEntry } from '../core/computeWeeklyDebtTimeline';
 import { getMondayOf, toLocalKey, getWeeklyGoalForDate, resolveGoalForYear, fmtDate } from '../core/dateUtils';
 import { generateNewApiKey } from './apiKeyService';
 import { getStoredLicenseKey } from '../storage/authService';
-import { serializeDynamicCSV } from '../core/dynamicCsvSerializer';
+import { serializeDynamicCSV, serializeGranularCSV } from '../core/dynamicCsvSerializer';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -1066,6 +1066,51 @@ export async function shareCSV(
 ): Promise<void> {
   const csv = buildCSV(rows);
   return shareCSVText(csv, tableName);
+}
+
+export function buildGranularCSV(
+  rows: TableRow[],
+  options: GranularExportOptions,
+  tableName?: string,
+  description?: string,
+  goals?: TableGoals,
+  tableId?: string,
+  apiKey?: string | null,
+  lastEventSeq?: number,
+  schema?: DynamicTableSchema,
+  investorProfile?: InvestorProfileConfig
+): string {
+  let effectiveApiKey = apiKey;
+  if (!effectiveApiKey && tableId && typeof window !== 'undefined' && window.localStorage) {
+    effectiveApiKey = window.localStorage.getItem(`coin_api_key_${tableId}`) || window.localStorage.getItem('coin_active_api_key');
+  }
+  return serializeGranularCSV(
+    rows,
+    options,
+    tableName,
+    description,
+    goals,
+    tableId,
+    effectiveApiKey,
+    lastEventSeq,
+    schema,
+    investorProfile
+  );
+}
+
+export async function shareGranularCSV(
+  rows: TableRow[],
+  tableName: string,
+  options: GranularExportOptions,
+  goals?: TableGoals,
+  tableId?: string,
+  schema?: DynamicTableSchema,
+  investorProfile?: InvestorProfileConfig
+): Promise<void> {
+  const csv = buildGranularCSV(rows, options, tableName, undefined, goals, tableId, null, undefined, schema, investorProfile);
+  const scopeSuffix = options.scope !== 'all' ? `_${options.scope}` : '';
+  const filePrefix = `${tableName.replace(/\s+/g, '_')}${scopeSuffix}`;
+  return shareCSVText(csv, filePrefix);
 }
 
 // ── WhatsApp Weekly Dossier Builder ──────────────────────────────────────────
