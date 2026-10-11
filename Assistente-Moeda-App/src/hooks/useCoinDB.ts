@@ -73,8 +73,9 @@ export interface CoinDBState {
   addRows: (rows: Omit<TableRow, 'id'>[], tableName?: string) => Promise<void> | void;
   updateActiveTableRows: (rows: (TableRow | Omit<TableRow, 'id'>)[]) => Promise<void> | void;
   updateActiveTableName: (newName: string) => Promise<void> | void;
-  updateRow: (rowId: string, updates: Partial<TableRow>) => void;
   renameCategoryInBulk: (oldCategoryName: string, newCategoryName: string, entryType?: string) => Promise<void> | void;
+  deleteCategoryInBulk: (categoryName: string, entryType?: string) => Promise<number>;
+  updateRow: (rowId: string, updates: Partial<TableRow>) => void;
   deleteRow: (rowId: string) => void;
   deleteLastRow: () => Promise<void> | void;
   deleteRowsByPrefix: (prefix: string) => number;
@@ -816,6 +817,48 @@ function useCoinDBInternal(): CoinDBState {
     await persist(newTables);
   }, [getLatestTables, getLatestActiveTable, persist]);
 
+  const deleteCategoryInBulk = useCallback(async (categoryName: string, entryType?: string): Promise<number> => {
+    const currentTables = getLatestTables();
+    const currentActive = getLatestActiveTable();
+    if (!currentActive || !categoryName.trim()) return 0;
+    const cleanCategory = categoryName.trim().toUpperCase();
+
+    const deletedRows: TableRow[] = [];
+    const newTables = currentTables.map((t) => {
+      if (t.id !== currentActive.id) return t;
+      const remainingRows = t.rows.filter((r) => {
+        const matchesType = !entryType || r.entryType === entryType;
+        const matchesCategory =
+          (r.description && r.description.trim().toUpperCase() === cleanCategory) ||
+          (r.category && r.category.trim().toUpperCase() === cleanCategory);
+
+        if (matchesType && matchesCategory) {
+          deletedRows.push(r);
+          return false;
+        }
+        return true;
+      });
+
+      return {
+        ...t,
+        rows: remainingRows,
+        updatedAt: new Date().toISOString(),
+      };
+    });
+
+    if (deletedRows.length > 0) {
+      opLogRef.current.push(
+        { type: 'DELETE_ROWS', payload: { tableId: currentActive.id, rowIds: deletedRows.map((r) => r.id) } },
+        { type: 'ADD_ROWS', payload: { tableId: currentActive.id, rows: deletedRows } },
+        `Excluir ${deletedRows.length} lançamentos da categoria "${categoryName}"`
+      );
+      setOpLogVersion((v) => v + 1);
+    }
+
+    await persist(newTables);
+    return deletedRows.length;
+  }, [getLatestTables, getLatestActiveTable, persist]);
+
   const reorderTables = useCallback(async (fromIndex: number, toIndex: number) => {
     const currentTables = getLatestTables();
     if (fromIndex < 0 || fromIndex >= currentTables.length || toIndex < 0 || toIndex >= currentTables.length) return;
@@ -1231,6 +1274,7 @@ function useCoinDBInternal(): CoinDBState {
     updateActiveTableRows,
     updateActiveTableName,
     renameCategoryInBulk,
+    deleteCategoryInBulk,
     reorderTables,
     updateRow,
     deleteRow,

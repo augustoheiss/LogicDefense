@@ -869,6 +869,7 @@ export default function MetricsScreen() {
           onEditRow={handleEditRow}
           onDeleteRow={db.deleteRow}
           onRenameCategory={db.renameCategoryInBulk}
+          onDeleteCategory={db.deleteCategoryInBulk}
         />
 
         {/* ── Sector Actuarial & Simulation Widgets (Temporariamente Ocultados da UI) ── */}

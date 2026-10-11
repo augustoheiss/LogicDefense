@@ -75,6 +75,7 @@ interface CategorySummaryProps {
   onEditRow: (row: TableRow) => void;
   onDeleteRow: (rowId: string) => void;
   onRenameCategory?: (oldName: string, newName: string, entryType?: string) => void;
+  onDeleteCategory?: (categoryName: string, entryType?: string) => void;
 }
 
 const FILTER_OPTIONS: { value: FilterableType; label: string; icon: string; color: string }[] = [
@@ -210,7 +211,7 @@ function getRowProratedValue(row: TableRow, scope: CategoryScope, activeMonth: s
   }
 }
 
-export function CategorySummary({ allRows, selectedMonth, cutoffDate, onEditRow, onDeleteRow, onRenameCategory }: CategorySummaryProps) {
+export function CategorySummary({ allRows, selectedMonth, cutoffDate, onEditRow, onDeleteRow, onRenameCategory, onDeleteCategory }: CategorySummaryProps) {
   const [filterType, setFilterType] = useState<FilterableType>('expense');
   const [categoryScope, setCategoryScope] = useState<CategoryScope>('month');
   const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
@@ -228,6 +229,30 @@ export function CategorySummary({ allRows, selectedMonth, cutoffDate, onEditRow,
       onRenameCategory(renamingGroup.description, newCategoryName.trim(), filterType);
     }
     setRenamingGroup(null);
+  };
+
+  const handleBulkDeleteCategory = (group: CategoryGroup) => {
+    const action = () => {
+      if (onDeleteCategory) {
+        onDeleteCategory(group.description, filterType);
+      }
+    };
+
+    if (Platform.OS === 'web') {
+      const confirmed = window.confirm(
+        `Deseja realmente apagar TODOS os ${group.count} lançamentos da categoria "${group.description}"?\n\nEsta ação removerá essas entradas da planilha ativa.`
+      );
+      if (confirmed) action();
+    } else {
+      Alert.alert(
+        'Apagar Categoria em Massa',
+        `Deseja realmente apagar TODOS os ${group.count} lançamentos da categoria "${group.description}"?`,
+        [
+          { text: 'Cancelar', style: 'cancel' },
+          { text: 'Apagar Tudo', style: 'destructive', onPress: action },
+        ]
+      );
+    }
   };
 
   useEffect(() => {
@@ -494,14 +519,26 @@ export function CategorySummary({ allRows, selectedMonth, cutoffDate, onEditRow,
 
                 {isExpanded && (
                   <View style={styles.expandedContent}>
-                    {/* Bulk Rename Button */}
-                    {onRenameCategory && (
-                      <Pressable
-                        style={({ pressed }) => [styles.bulkRenameBtn, pressed && styles.pressed]}
-                        onPress={() => handleOpenRename(g)}
-                      >
-                        <Text style={styles.bulkRenameBtnText}>✏️ Renomear toda a categoria ({g.count} itens)</Text>
-                      </Pressable>
+                    {/* Bulk Action Buttons (Rename & Delete) */}
+                    {(onRenameCategory || onDeleteCategory) && (
+                      <View style={styles.bulkActionsRow}>
+                        {onRenameCategory && (
+                          <Pressable
+                            style={({ pressed }) => [styles.bulkRenameBtn, pressed && styles.pressed]}
+                            onPress={() => handleOpenRename(g)}
+                          >
+                            <Text style={styles.bulkRenameBtnText}>✏️ Renomear ({g.count} itens)</Text>
+                          </Pressable>
+                        )}
+                        {onDeleteCategory && (
+                          <Pressable
+                            style={({ pressed }) => [styles.bulkDeleteBtn, pressed && styles.pressed]}
+                            onPress={() => handleBulkDeleteCategory(g)}
+                          >
+                            <Text style={styles.bulkDeleteBtnText}>🗑️ Apagar Categoria ({g.count} itens)</Text>
+                          </Pressable>
+                        )}
+                      </View>
                     )}
 
                     {/* Stat grid */}
@@ -571,18 +608,29 @@ export function CategorySummary({ allRows, selectedMonth, cutoffDate, onEditRow,
                               </Pressable>
                               <Pressable
                                 onPress={() => {
-                                  Alert.alert(
-                                    'Excluir lançamento',
-                                    'Tem certeza que deseja excluir este lançamento original?',
-                                    [
-                                      { text: 'Cancelar', style: 'cancel' },
-                                      {
-                                        text: 'Excluir',
-                                        style: 'destructive',
-                                        onPress: () => onDeleteRow(row.id),
-                                      },
-                                    ]
-                                  );
+                                  const confirmDelete = () => {
+                                    onDeleteRow(row.id);
+                                  };
+
+                                  if (Platform.OS === 'web') {
+                                    const confirmed = window.confirm(`Deseja realmente excluir este lançamento de ${formatCurrencySmart(row.displayValue || row.value)}?`);
+                                    if (confirmed) {
+                                      confirmDelete();
+                                    }
+                                  } else {
+                                    Alert.alert(
+                                      'Excluir lançamento',
+                                      'Tem certeza que deseja excluir este lançamento original?',
+                                      [
+                                        { text: 'Cancelar', style: 'cancel' },
+                                        {
+                                          text: 'Excluir',
+                                          style: 'destructive',
+                                          onPress: confirmDelete,
+                                        },
+                                      ]
+                                    );
+                                  }
                                 }}
                                 style={({ pressed }) => [styles.actionBtn, pressed && styles.pressed]}
                               >
@@ -801,7 +849,15 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     backgroundColor: 'rgba(255, 255, 255, 0.01)',
   },
+  bulkActionsRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+    flexWrap: 'wrap',
+  },
   bulkRenameBtn: {
+    flex: 1,
+    minWidth: 150,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -811,12 +867,29 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.md,
-    marginBottom: spacing.md,
   },
   bulkRenameBtnText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '700',
     color: colors.accent.purple,
+  },
+  bulkDeleteBtn: {
+    flex: 1,
+    minWidth: 150,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(239, 68, 68, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.35)',
+    borderRadius: radius.md,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+  },
+  bulkDeleteBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.danger.main,
   },
   statGrid: {
     flexDirection: 'row',
