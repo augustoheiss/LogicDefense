@@ -105,3 +105,91 @@ export async function savePDFMap(
 ): Promise<void> {
   await AsyncStorage.setItem(`${PDF_MAP_PREFIX}${templateHash}`, JSON.stringify(pdfMap));
 }
+
+// ---------------------------------------------------------------------------
+// Engine-Specific Storage Adapters (Local-First)
+// ---------------------------------------------------------------------------
+
+const ROSTER_SWAPS_PREFIX = 'sekundo_roster_swaps_';
+const RUN_OF_SHOW_PREFIX = 'sekundo_ros_';
+const TOURNAMENT_PREFIX = 'sekundo_tournament_';
+const ICS_PREFIX = 'sekundo_ics_';
+const FILES_PREFIX = 'sekundo_files_';
+
+export async function loadRosterSwaps<T = unknown>(eventId: string): Promise<T[] | null> {
+  try {
+    const raw = await AsyncStorage.getItem(`${ROSTER_SWAPS_PREFIX}${eventId}`);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function saveRosterSwaps<T = unknown>(eventId: string, swaps: T[]): Promise<void> {
+  await AsyncStorage.setItem(`${ROSTER_SWAPS_PREFIX}${eventId}`, JSON.stringify(swaps));
+}
+
+export async function loadRunOfShow<T = unknown>(eventId: string): Promise<T | null> {
+  try {
+    const raw = await AsyncStorage.getItem(`${RUN_OF_SHOW_PREFIX}${eventId}`);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function saveRunOfShow<T = unknown>(eventId: string, data: T): Promise<void> {
+  await AsyncStorage.setItem(`${RUN_OF_SHOW_PREFIX}${eventId}`, JSON.stringify(data));
+}
+
+export async function loadTournamentState<T = unknown>(eventId: string): Promise<T | null> {
+  try {
+    const raw = await AsyncStorage.getItem(`${TOURNAMENT_PREFIX}${eventId}`);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function saveTournamentState<T = unknown>(eventId: string, state: T): Promise<void> {
+  await AsyncStorage.setItem(`${TOURNAMENT_PREFIX}${eventId}`, JSON.stringify(state));
+}
+
+export async function loadICSState<T = unknown>(eventId: string): Promise<T | null> {
+  try {
+    const raw = await AsyncStorage.getItem(`${ICS_PREFIX}${eventId}`);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function saveICSState<T = unknown>(eventId: string, state: T): Promise<void> {
+  await AsyncStorage.setItem(`${ICS_PREFIX}${eventId}`, JSON.stringify(state));
+}
+
+export interface WorkspaceFileMetadata {
+  id: string;
+  name: string;
+  type: 'csv' | 'pdf' | 'geojson' | 'md' | 'other';
+  sizeBytes: number;
+  attachedToPathKey?: string;
+  lastModified: string;
+  dataBase64?: string;
+}
+
+export async function loadProjectFiles(eventId: string): Promise<WorkspaceFileMetadata[]> {
+  try {
+    const raw = await AsyncStorage.getItem(`${FILES_PREFIX}${eventId}`);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+export async function saveProjectFiles(
+  eventId: string,
+  files: WorkspaceFileMetadata[]
+): Promise<void> {
+  await AsyncStorage.setItem(`${FILES_PREFIX}${eventId}`, JSON.stringify(files));
+}

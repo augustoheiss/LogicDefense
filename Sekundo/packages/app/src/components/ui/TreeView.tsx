@@ -8,25 +8,36 @@
 
 import React, { useState } from 'react';
 import { StyleSheet, Text, View, Pressable, Platform } from 'react-native';
-import type { SkeletonNode } from '@sekundo/core';
+import type { SkeletonNode, EngineId } from '@sekundo/core';
 
 interface TreeViewProps {
   nodes: SkeletonNode[];
+  engineId?: EngineId;
   onAddChild?: (parentKey: string) => void;
   onEditNode?: (node: SkeletonNode) => void;
   onDeleteNode?: (key: string) => void;
+  onToggleWork?: (nodeKey: string, newStatus: 0 | 1) => void;
 }
 
-export function TreeView({ nodes, onAddChild, onEditNode, onDeleteNode }: TreeViewProps) {
+export function TreeView({
+  nodes,
+  engineId,
+  onAddChild,
+  onEditNode,
+  onDeleteNode,
+  onToggleWork,
+}: TreeViewProps) {
   return (
     <View style={styles.treeContainer}>
       {nodes.map((node) => (
         <TreeNode
           key={node.key}
           node={node}
+          engineId={engineId}
           onAddChild={onAddChild}
           onEditNode={onEditNode}
           onDeleteNode={onDeleteNode}
+          onToggleWork={onToggleWork}
         />
       ))}
     </View>
@@ -35,14 +46,18 @@ export function TreeView({ nodes, onAddChild, onEditNode, onDeleteNode }: TreeVi
 
 function TreeNode({
   node,
+  engineId,
   onAddChild,
   onEditNode,
   onDeleteNode,
+  onToggleWork,
 }: {
   node: SkeletonNode;
+  engineId?: EngineId;
   onAddChild?: (parentKey: string) => void;
   onEditNode?: (node: SkeletonNode) => void;
   onDeleteNode?: (key: string) => void;
+  onToggleWork?: (nodeKey: string, newStatus: 0 | 1) => void;
 }) {
   const [expanded, setExpanded] = useState(true);
   const segments = node.key.split('-');
@@ -91,10 +106,43 @@ function TreeNode({
               </Text>
             </View>
           ) : null}
+
+          {/* Domain Badges according to Engine */}
+          {engineId === 'study_synthesis' && (node.meta?.synthesisText as string) ? (
+            <View style={styles.synthesisBadge}>
+              <Text style={styles.synthesisBadgeText}>📝 Síntese</Text>
+            </View>
+          ) : null}
+
+          {engineId === 'roster_assignments' && node.meta?.confirmed ? (
+            <View style={styles.confirmedBadge}>
+              <Text style={styles.confirmedBadgeText}>👍 Confirmado</Text>
+            </View>
+          ) : null}
         </View>
 
         {/* Action Buttons */}
         <View style={styles.controls}>
+          {/* 0/1 Quick-Toggle for Territory Engine */}
+          {engineId === 'territory_logistics' && onToggleWork ? (
+            <Pressable
+              onPress={() => onToggleWork(node.key, node.meta?.worked === 1 ? 0 : 1)}
+              style={[
+                styles.workToggleBtn,
+                node.meta?.worked === 1 ? styles.workToggleDone : styles.workTogglePending,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.workToggleText,
+                  node.meta?.worked === 1 ? styles.workToggleTextDone : styles.workToggleTextPending,
+                ]}
+              >
+                {node.meta?.worked === 1 ? '1 ✅' : '0 ⬜'}
+              </Text>
+            </Pressable>
+          ) : null}
+
           {onAddChild ? (
             <Pressable onPress={() => onAddChild(node.key)} style={styles.controlBtn}>
               <Text style={styles.controlBtnText}>+ Child</Text>
@@ -123,9 +171,11 @@ function TreeNode({
             <TreeNode
               key={child.key}
               node={child}
+              engineId={engineId}
               onAddChild={onAddChild}
               onEditNode={onEditNode}
               onDeleteNode={onDeleteNode}
+              onToggleWork={onToggleWork}
             />
           ))}
         </View>
@@ -242,6 +292,59 @@ const styles = StyleSheet.create({
   },
   deleteBtnText: {
     color: '#EF4444',
+  },
+  synthesisBadge: {
+    backgroundColor: 'rgba(59, 130, 246, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(59, 130, 246, 0.4)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    marginLeft: 8,
+  },
+  synthesisBadgeText: {
+    color: '#60A5FA',
+    fontSize: 10,
+    fontWeight: '600',
+  },
+  confirmedBadge: {
+    backgroundColor: 'rgba(16, 185, 129, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(16, 185, 129, 0.4)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    marginLeft: 8,
+  },
+  confirmedBadgeText: {
+    color: '#34D399',
+    fontSize: 10,
+    fontWeight: '600',
+  },
+  workToggleBtn: {
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    borderRadius: 6,
+    borderWidth: 1,
+    marginRight: 6,
+  },
+  workToggleDone: {
+    backgroundColor: 'rgba(16, 185, 129, 0.2)',
+    borderColor: '#10B981',
+  },
+  workTogglePending: {
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderColor: 'rgba(255, 255, 255, 0.15)',
+  },
+  workToggleText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  workToggleTextDone: {
+    color: '#34D399',
+  },
+  workToggleTextPending: {
+    color: '#8A94A6',
   },
   childrenContainer: {
     width: '100%',

@@ -22,7 +22,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSkeleton } from '../hooks/useSkeleton';
 import { useLocalEvent } from '../hooks/useLocalEvent';
 import { TreeView } from '../components/ui/TreeView';
-import { serializeCSV } from '@sekundo/core';
+import { serializeCSV, engineRegistry, pathKey } from '@sekundo/core';
 import type { NodeType, SkeletonNode } from '@sekundo/core';
 
 export default function SkeletonEditor() {
@@ -35,8 +35,13 @@ export default function SkeletonEditor() {
 
   const { flatRegistry, tree, loading, addNode, updateNode, deleteNode } = useSkeleton(eventId);
 
+  // Engine & Metrics
+  const engine = engineRegistry.get(event?.config?.engineId);
+  const metrics = engine.calculateMetrics(tree);
+
   // Modal States
   const [modalVisible, setModalVisible] = useState(false);
+  const [summaryModalVisible, setSummaryModalVisible] = useState(false);
   const [editingNode, setEditingNode] = useState<SkeletonNode | null>(null);
   const [parentKey, setParentKey] = useState<string | null>(null);
 
@@ -137,6 +142,19 @@ export default function SkeletonEditor() {
     }
   };
 
+  const handleToggleWork = async (nodeKey: string, newStatus: 0 | 1) => {
+    const target = flatRegistry.find((n) => pathKey.equals(n.key, nodeKey));
+    const currentMeta = (target?.meta || {}) as Record<string, unknown>;
+    await updateNode(nodeKey, {
+      value: newStatus === 1 ? 'Trabalhado' : '',
+      meta: {
+        ...currentMeta,
+        worked: newStatus,
+        lastWorkedAt: new Date().toISOString(),
+      },
+    });
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       {/* Header bar */}
@@ -150,6 +168,12 @@ export default function SkeletonEditor() {
         <View style={styles.actionRight}>
           <Pressable onPress={openAddRootModal} style={styles.primaryActionBtn}>
             <Text style={styles.primaryActionBtnText}>+ Add Root</Text>
+          </Pressable>
+          <Pressable
+            onPress={() => router.push(`/pdf-forms?id=${eventId}`)}
+            style={[styles.actionBtn, { borderColor: '#FFB800' }]}
+          >
+            <Text style={[styles.actionBtnText, { color: '#FFB800' }]}>📄 Formulários PDF</Text>
           </Pressable>
           <Pressable
             onPress={() => router.push(`/pdf-mapper?id=${eventId}`)}
@@ -175,6 +199,147 @@ export default function SkeletonEditor() {
         </View>
       </View>
 
+      {/* Engine Metrics & Universal Law Context Bar */}
+      <View style={styles.engineBar}>
+        <View style={styles.engineBarLeft}>
+          <View style={styles.engineBadge}>
+            <Text style={styles.engineBadgeText}>{engine.name}</Text>
+          </View>
+          {metrics.engineId === 'territory_logistics' && (
+            <Text style={styles.metricsSummary}>
+              Cobertura: {metrics.data.coveragePercent}% ({metrics.data.workedUnits}/{metrics.data.totalUnits} trabalhados) • {metrics.data.quadrasCount} quadras
+            </Text>
+          )}
+          {metrics.engineId === 'study_synthesis' && (
+            <Text style={styles.metricsSummary}>
+              Sínteses: {metrics.data.completionPercent}% ({metrics.data.submittedCount}/{metrics.data.totalTopics} concluídos)
+            </Text>
+          )}
+          {metrics.engineId === 'roster_assignments' && (
+            <Text style={styles.metricsSummary}>
+              Preenchimento: {metrics.data.fulfillmentPercent}% ({metrics.data.assignedSlots}/{metrics.data.totalSlots} designados • {metrics.data.confirmedSlots} confirmados)
+            </Text>
+          )}
+          {metrics.engineId === 'incident_command' && (
+            <Text style={styles.metricsSummary}>
+              ICS: {metrics.data.totalUnits} unidades • {metrics.data.totalPersonnel} efetivo • {metrics.data.spanOfControlBreaches > 0 ? `⚠️ ${metrics.data.spanOfControlBreaches} Sobrecargas de Graicunas` : '✅ Amplitude Saudável'}
+            </Text>
+          )}
+          {metrics.engineId === 'live_production_ros' && (
+            <Text style={styles.metricsSummary}>
+              Run-of-Show: Drift {metrics.data.cumulativeDriftSec > 0 ? `+${metrics.data.cumulativeDriftSec}s` : `${metrics.data.cumulativeDriftSec}s`} • {metrics.data.hardOutThreatened ? '⚠️ HARD_OUT Ameaçado!' : '✅ No Horário'}
+            </Text>
+          )}
+          {metrics.engineId === 'tournament_pairings' && (
+            <Text style={styles.metricsSummary}>
+              Torneio: Rodada {metrics.data.currentRound}/{metrics.data.totalRounds} • {metrics.data.completedMatches} partidas • {metrics.data.rematchesDetected > 0 ? `⚠️ ${metrics.data.rematchesDetected} Revanches` : '✅ Sem Revanches'}
+            </Text>
+          )}
+          {metrics.engineId === 'canvassing_logistics' && (
+            <Text style={styles.metricsSummary}>
+              Canvassing: {metrics.data.contactRatePercent}% contato • {metrics.data.contactedCount} atendidos / {metrics.data.totalDoors} portas
+            </Text>
+          )}
+        </View>
+
+        {metrics.engineId === 'territory_logistics' && (
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            <Pressable
+              onPress={() => router.push(`/territory-checklist?id=${eventId}`)}
+              style={styles.summaryBtn}
+            >
+              <Text style={styles.summaryBtnText}>📋 Prancheta de Campo</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => router.push(`/territory-map?id=${eventId}`)}
+              style={[
+                styles.summaryBtn,
+                { backgroundColor: 'rgba(59, 130, 246, 0.2)', borderColor: '#3B82F6' },
+              ]}
+            >
+              <Text style={[styles.summaryBtnText, { color: '#60A5FA' }]}>🗺️ Mapa Tático</Text>
+            </Pressable>
+          </View>
+        )}
+
+        {metrics.engineId === 'canvassing_logistics' && (
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            <Pressable
+              onPress={() => router.push(`/territory-checklist?id=${eventId}`)}
+              style={styles.summaryBtn}
+            >
+              <Text style={styles.summaryBtnText}>📋 Prancheta 8-Codes</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => router.push(`/territory-map?id=${eventId}`)}
+              style={[
+                styles.summaryBtn,
+                { backgroundColor: 'rgba(59, 130, 246, 0.2)', borderColor: '#3B82F6' },
+              ]}
+            >
+              <Text style={[styles.summaryBtnText, { color: '#60A5FA' }]}>🗺️ Rota eLOT</Text>
+            </Pressable>
+          </View>
+        )}
+
+        {metrics.engineId === 'study_synthesis' && (
+          <Pressable
+            onPress={() => setSummaryModalVisible(true)}
+            style={styles.summaryBtn}
+          >
+            <Text style={styles.summaryBtnText}>📖 Resumo Executivo</Text>
+          </Pressable>
+        )}
+
+        {metrics.engineId === 'roster_assignments' && (
+          <Pressable
+            onPress={() => router.push(`/roster-swap?id=${eventId}`)}
+            style={[
+              styles.summaryBtn,
+              { backgroundColor: 'rgba(16, 185, 129, 0.2)', borderColor: '#10B981' },
+            ]}
+          >
+            <Text style={[styles.summaryBtnText, { color: '#6EE7B7' }]}>🔄 Reservas & Trocas</Text>
+          </Pressable>
+        )}
+
+        {metrics.engineId === 'live_production_ros' && (
+          <Pressable
+            onPress={() => router.push(`/run-of-show?id=${eventId}`)}
+            style={[
+              styles.summaryBtn,
+              { backgroundColor: 'rgba(239, 68, 68, 0.2)', borderColor: '#EF4444' },
+            ]}
+          >
+            <Text style={[styles.summaryBtnText, { color: '#FCA5A5' }]}>⏱️ Mesa de Corte (ROS)</Text>
+          </Pressable>
+        )}
+
+        {metrics.engineId === 'tournament_pairings' && (
+          <Pressable
+            onPress={() => router.push(`/tournament-bracket?id=${eventId}`)}
+            style={[
+              styles.summaryBtn,
+              { backgroundColor: 'rgba(245, 158, 11, 0.2)', borderColor: '#F59E0B' },
+            ]}
+          >
+            <Text style={[styles.summaryBtnText, { color: '#FCD34D' }]}>🏆 Chaves & Suíço</Text>
+          </Pressable>
+        )}
+
+        {metrics.engineId === 'incident_command' && (
+          <Pressable
+            onPress={() => router.push(`/ics-command?id=${eventId}`)}
+            style={[
+              styles.summaryBtn,
+              { backgroundColor: 'rgba(59, 130, 246, 0.2)', borderColor: '#3B82F6' },
+            ]}
+          >
+            <Text style={[styles.summaryBtnText, { color: '#93C5FD' }]}>🛡️ Comando ICS</Text>
+          </Pressable>
+        )}
+      </View>
+
       {/* Skeletons recursive tree renderer */}
       <ScrollView style={styles.treeScroll}>
         <View style={styles.treeWrapper}>
@@ -188,9 +353,11 @@ export default function SkeletonEditor() {
           ) : (
             <TreeView
               nodes={tree}
+              engineId={event.config.engineId}
               onAddChild={openAddChildModal}
               onEditNode={openEditModal}
               onDeleteNode={deleteNode}
+              onToggleWork={handleToggleWork}
             />
           )}
         </View>
@@ -272,6 +439,40 @@ export default function SkeletonEditor() {
           </View>
         </View>
       </Modal>
+
+      {/* Executive Summary Modal for Study Synthesis Engine */}
+      <Modal
+        animationType="fade"
+        transparent
+        visible={summaryModalVisible}
+        onRequestClose={() => setSummaryModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalCard, styles.summaryModalCard]}>
+            <View style={styles.summaryModalHeader}>
+              <Text style={styles.modalTitle}>📖 Resumo Executivo Consolidado</Text>
+              <Pressable onPress={() => setSummaryModalVisible(false)} style={styles.closeBtn}>
+                <Text style={styles.closeBtnText}>✕</Text>
+              </Pressable>
+            </View>
+            <ScrollView style={styles.summaryScroll}>
+              <Text style={styles.summaryText}>
+                {metrics.engineId === 'study_synthesis'
+                  ? metrics.data.executiveSummary
+                  : 'Nenhum resumo disponível para este tipo de evento.'}
+              </Text>
+            </ScrollView>
+            <View style={styles.modalFooter}>
+              <Pressable
+                onPress={() => setSummaryModalVisible(false)}
+                style={styles.modalSaveBtn}
+              >
+                <Text style={styles.modalSaveBtnText}>Concluído</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -280,6 +481,85 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#12151C',
+  },
+  engineBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.02)',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.04)',
+  },
+  engineBarLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  engineBadge: {
+    backgroundColor: 'rgba(255, 184, 0, 0.12)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 184, 0, 0.3)',
+  },
+  engineBadgeText: {
+    color: '#FFB800',
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  metricsSummary: {
+    color: '#8A94A6',
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  summaryBtn: {
+    backgroundColor: 'rgba(59, 130, 246, 0.15)',
+    borderWidth: 1,
+    borderColor: '#3B82F6',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  summaryBtnText: {
+    color: '#60A5FA',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  summaryModalCard: {
+    maxWidth: 700,
+    maxHeight: '80%',
+  },
+  summaryModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  closeBtn: {
+    padding: 6,
+  },
+  closeBtnText: {
+    color: '#8A94A6',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  summaryScroll: {
+    maxHeight: 400,
+    backgroundColor: 'rgba(0, 0, 0, 0.2)',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 16,
+  },
+  summaryText: {
+    color: '#E2E8F0',
+    fontSize: 13,
+    lineHeight: 20,
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
   },
   loadingContainer: {
     flex: 1,

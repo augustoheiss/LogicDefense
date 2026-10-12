@@ -19,6 +19,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useLocalEvent } from '../hooks/useLocalEvent';
+import { engineRegistry } from '@sekundo/core';
 
 export default function Dashboard() {
   const router = useRouter();
@@ -88,31 +89,142 @@ export default function Dashboard() {
                 <Text style={styles.emptySub}>Click "Create New Event" to get started.</Text>
               </View>
             ) : (
-              events.map((event) => (
-                <View key={event.config.id} style={styles.eventCard}>
-                  <View style={styles.eventInfo}>
-                    <Text style={styles.eventName}>{event.config.name}</Text>
-                    <Text style={styles.eventFrequency}>
-                      Recurrence: {event.config.frequency.toUpperCase()} • Roots:{' '}
-                      {event.config.skeletonRoots.join(', ') || 'None'}
-                    </Text>
+              events.map((event) => {
+                const engine = engineRegistry.get(event.config.engineId);
+                return (
+                  <View key={event.config.id} style={styles.eventCard}>
+                    <View style={styles.eventInfo}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 4 }}>
+                        <Text style={styles.eventName}>{event.config.name}</Text>
+                        <View style={styles.engineBadge}>
+                          <Text style={styles.engineBadgeText}>{engine.name}</Text>
+                        </View>
+                      </View>
+                      <Text style={styles.eventFrequency}>
+                        Recurrence: {event.config.frequency.toUpperCase()} • Roots:{' '}
+                        {event.config.skeletonRoots.join(', ') || 'None'}
+                      </Text>
+                    </View>
+                    <View style={styles.cardActions}>
+                      {event.config.engineId === 'territory_logistics' && (
+                        <>
+                          <Pressable
+                            onPress={() => router.push(`/territory-checklist?id=${event.config.id}`)}
+                            style={[
+                              styles.openButton,
+                              {
+                                backgroundColor: 'rgba(16, 185, 129, 0.15)',
+                                borderWidth: 1,
+                                borderColor: '#10B981',
+                              },
+                            ]}
+                          >
+                            <Text style={[styles.openButtonText, { color: '#10B981' }]}>📋 Campo</Text>
+                          </Pressable>
+                          <Pressable
+                            onPress={() => router.push(`/territory-map?id=${event.config.id}`)}
+                            style={[
+                              styles.openButton,
+                              {
+                                backgroundColor: 'rgba(59, 130, 246, 0.15)',
+                                borderWidth: 1,
+                                borderColor: '#3B82F6',
+                              },
+                            ]}
+                          >
+                            <Text style={[styles.openButtonText, { color: '#60A5FA' }]}>🗺️ Mapa</Text>
+                          </Pressable>
+                        </>
+                      )}
+                      {event.config.engineId === 'roster_assignments' && (
+                        <Pressable
+                          onPress={() => router.push(`/roster-swap?id=${event.config.id}`)}
+                          style={[
+                            styles.openButton,
+                            {
+                              backgroundColor: 'rgba(16, 185, 129, 0.15)',
+                              borderWidth: 1,
+                              borderColor: '#10B981',
+                            },
+                          ]}
+                        >
+                          <Text style={[styles.openButtonText, { color: '#10B981' }]}>🔄 Trocas</Text>
+                        </Pressable>
+                      )}
+                      {event.config.engineId === 'live_production_ros' && (
+                        <Pressable
+                          onPress={() => router.push(`/run-of-show?id=${event.config.id}`)}
+                          style={[
+                            styles.openButton,
+                            {
+                              backgroundColor: 'rgba(239, 68, 68, 0.15)',
+                              borderWidth: 1,
+                              borderColor: '#EF4444',
+                            },
+                          ]}
+                        >
+                          <Text style={[styles.openButtonText, { color: '#FCA5A5' }]}>⏱️ Régie</Text>
+                        </Pressable>
+                      )}
+                      {event.config.engineId === 'tournament_pairings' && (
+                        <Pressable
+                          onPress={() => router.push(`/tournament-bracket?id=${event.config.id}`)}
+                          style={[
+                            styles.openButton,
+                            {
+                              backgroundColor: 'rgba(245, 158, 11, 0.15)',
+                              borderWidth: 1,
+                              borderColor: '#F59E0B',
+                            },
+                          ]}
+                        >
+                          <Text style={[styles.openButtonText, { color: '#FCD34D' }]}>🏆 Torneio</Text>
+                        </Pressable>
+                      )}
+                      {event.config.engineId === 'incident_command' && (
+                        <Pressable
+                          onPress={() => router.push(`/ics-command?id=${event.config.id}`)}
+                          style={[
+                            styles.openButton,
+                            {
+                              backgroundColor: 'rgba(59, 130, 246, 0.15)',
+                              borderWidth: 1,
+                              borderColor: '#3B82F6',
+                            },
+                          ]}
+                        >
+                          <Text style={[styles.openButtonText, { color: '#93C5FD' }]}>🛡️ ICS</Text>
+                        </Pressable>
+                      )}
+                      <Pressable
+                        onPress={() => router.push(`/pdf-forms?id=${event.config.id}`)}
+                        style={[
+                          styles.openButton,
+                          {
+                            backgroundColor: 'rgba(255, 184, 0, 0.12)',
+                            borderWidth: 1,
+                            borderColor: '#FFB800',
+                          },
+                        ]}
+                      >
+                        <Text style={[styles.openButtonText, { color: '#FFB800' }]}>📄 PDF</Text>
+                      </Pressable>
+                      <Pressable
+                        onPress={() => router.push(`/skeleton-editor?id=${event.config.id}`)}
+                        style={styles.openButton}
+                      >
+                        <Text style={styles.openButtonText}>Editar</Text>
+                      </Pressable>
+                      <Pressable
+                        onPress={() => deleteEventState(event.config.id)}
+                        style={styles.deleteButton}
+                      >
+                        <Text style={styles.deleteButtonText}>✕</Text>
+                      </Pressable>
+                    </View>
                   </View>
-                  <View style={styles.cardActions}>
-                    <Pressable
-                      onPress={() => router.push(`/skeleton-editor?id=${event.config.id}`)}
-                      style={styles.openButton}
-                    >
-                      <Text style={styles.openButtonText}>Edit</Text>
-                    </Pressable>
-                    <Pressable
-                      onPress={() => deleteEventState(event.config.id)}
-                      style={styles.deleteButton}
-                    >
-                      <Text style={styles.deleteButtonText}>✕</Text>
-                    </Pressable>
-                  </View>
-                </View>
-              ))
+                );
+              })
             )}
           </View>
         </View>
@@ -256,6 +368,21 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#FFFFFF',
+  },
+  engineBadge: {
+    backgroundColor: 'rgba(255, 184, 0, 0.12)',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 184, 0, 0.3)',
+  },
+  engineBadgeText: {
+    color: '#FFB800',
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
   },
   eventFrequency: {
     fontSize: 12,

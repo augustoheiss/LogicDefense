@@ -33,12 +33,24 @@ const SEPARATOR = '-';
  * parse("001-002-001") // → [1, 2, 1]
  * parse("3-1")         // → [3, 1]
  */
+/**
+ * Normalizes any valid path key format (accepting '.', '-', or '/') into the canonical hyphen format.
+ *
+ * @example
+ * normalizeKey("01.01.01") // → "01-01-01"
+ * normalizeKey("1/2/3")    // → "1-2-3"
+ */
+export function normalizeKey(key: string): PathKey {
+  if (!key || typeof key !== 'string') return '';
+  return key.trim().replace(/[./]/g, SEPARATOR);
+}
+
 export function parse(key: PathKey): ParsedKey {
   if (!key || typeof key !== 'string') {
     throw new Error(`Invalid path key: "${key}". Must be a non-empty string.`);
   }
 
-  const trimmed = key.trim();
+  const trimmed = normalizeKey(key);
   if (trimmed.length === 0) {
     throw new Error('Invalid path key: empty string after trimming.');
   }
@@ -127,6 +139,18 @@ export function parent(key: PathKey): PathKey | null {
     return null;
   }
   return serialize(parsed.slice(0, -1));
+}
+
+/**
+ * Get the root key of a path key (the first segment).
+ *
+ * @example
+ * root("01-02-03") // → "01"
+ * root("01")       // → "01"
+ */
+export function root(key: PathKey): PathKey {
+  const parsed = parse(key);
+  return serialize([parsed[0]]);
 }
 
 /**

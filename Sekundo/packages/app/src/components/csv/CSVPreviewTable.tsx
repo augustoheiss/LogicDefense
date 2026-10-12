@@ -12,29 +12,36 @@ import type { CSVDiffResult } from '@sekundo/core';
 
 interface CSVPreviewTableProps {
   diff: CSVDiffResult;
+  preservedHistoryCount?: number;
 }
 
-export function CSVPreviewTable({ diff }: CSVPreviewTableProps) {
+export function CSVPreviewTable({ diff, preservedHistoryCount }: CSVPreviewTableProps) {
   return (
     <View style={styles.container}>
       {/* Stats Summary Bar */}
       <View style={styles.statsBar}>
         <View style={[styles.statItem, styles.statAdd]}>
-          <Text style={styles.statVal}>{diff.added}</Text>
-          <Text style={styles.statLabel}>Added</Text>
+          <Text style={[styles.statVal, { color: '#10B981' }]}>{diff.added}</Text>
+          <Text style={styles.statLabel}>Adicionados</Text>
         </View>
         <View style={[styles.statItem, styles.statMod]}>
-          <Text style={styles.statVal}>{diff.modified}</Text>
-          <Text style={styles.statLabel}>Modified</Text>
+          <Text style={[styles.statVal, { color: '#F59E0B' }]}>{diff.modified}</Text>
+          <Text style={styles.statLabel}>Modificados</Text>
         </View>
         <View style={[styles.statItem, styles.statDel]}>
-          <Text style={styles.statVal}>{diff.deleted}</Text>
-          <Text style={styles.statLabel}>Deleted</Text>
+          <Text style={[styles.statVal, { color: '#EF4444' }]}>{diff.deleted}</Text>
+          <Text style={styles.statLabel}>Removidos</Text>
         </View>
         <View style={[styles.statItem, styles.statUnchanged]}>
-          <Text style={styles.statVal}>{diff.unchanged}</Text>
-          <Text style={styles.statLabel}>Unchanged</Text>
+          <Text style={[styles.statVal, { color: '#9CA3AF' }]}>{diff.unchanged}</Text>
+          <Text style={styles.statLabel}>Inalterados</Text>
         </View>
+        {preservedHistoryCount !== undefined && preservedHistoryCount > 0 ? (
+          <View style={[styles.statItem, styles.statPreserved]}>
+            <Text style={[styles.statVal, { color: '#34D399' }]}>🛡️ {preservedHistoryCount}</Text>
+            <Text style={styles.statLabel}>Histórico Mantido</Text>
+          </View>
+        ) : null}
       </View>
 
       {/* Diff Table List */}
@@ -157,6 +164,10 @@ const styles = StyleSheet.create({
     borderRightColor: 'rgba(255, 255, 255, 0.05)',
   },
   statUnchanged: {},
+  statPreserved: {
+    borderLeftWidth: 1,
+    borderLeftColor: 'rgba(52, 211, 153, 0.2)',
+  },
   tableScroll: {
     flex: 1,
   },

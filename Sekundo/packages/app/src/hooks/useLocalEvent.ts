@@ -6,7 +6,7 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import type { EventState, Frequency } from '@sekundo/core';
+import type { EventState, Frequency, EngineId } from '@sekundo/core';
 import { eventContainer, rollover } from '@sekundo/core';
 import * as storage from '../storage/localStorage';
 
@@ -33,8 +33,13 @@ export function useLocalEvent() {
     }
   }, []);
 
-  const addEvent = async (name: string, frequency: Frequency, skeletonRoots: string[] = []) => {
-    const config = eventContainer.createEvent(name, frequency, skeletonRoots);
+  const addEvent = async (
+    name: string,
+    frequency: Frequency,
+    skeletonRoots: string[] = [],
+    engineId?: EngineId
+  ) => {
+    const config = eventContainer.createEvent(name, frequency, skeletonRoots, engineId);
     const state = eventContainer.createEventState(config);
     await storage.saveEventState(config.id, state);
     

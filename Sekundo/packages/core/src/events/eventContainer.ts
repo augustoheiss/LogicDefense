@@ -6,6 +6,7 @@
  */
 
 import type { EventConfig, EventState, Frequency } from './types';
+import type { EngineId } from '../engines/types';
 
 // ---------------------------------------------------------------------------
 // Factory
@@ -17,12 +18,14 @@ import type { EventConfig, EventState, Frequency } from './types';
  * @param name - Human-readable event name.
  * @param frequency - Recurrence pattern.
  * @param skeletonRoots - Root path keys for contained skeletons.
+ * @param engineId - The active Universal Law for this event.
  * @returns A new EventConfig ready for storage.
  */
 export function createEvent(
   name: string,
   frequency: Frequency,
-  skeletonRoots: string[] = []
+  skeletonRoots: string[] = [],
+  engineId: EngineId = 'territory_logistics'
 ): EventConfig {
   const now = new Date().toISOString();
 
@@ -35,6 +38,7 @@ export function createEvent(
     autoRollover: frequency !== 'once',
     createdAt: now,
     updatedAt: now,
+    engineId,
   };
 }
 

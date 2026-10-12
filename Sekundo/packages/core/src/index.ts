@@ -28,6 +28,9 @@ export type {
   RolloverSnapshot,
 } from './events/types';
 
+// Engines (Universal Laws)
+export * from './engines';
+
 // CSV
 export type {
   CSVRow,
@@ -41,6 +44,12 @@ export type {
 export { parseCSV } from './csv/parser';
 export { serializeCSV } from './csv/serializer';
 export { validateCSV, buildDiff } from './csv/validator';
+export { upsertRegistry, rowToFlatEntry } from './csv/upsert';
+export type {
+  UpsertOptions,
+  UpsertResult,
+  UpsertDetailEntry,
+} from './csv/upsert';
 
 // PDF
 export type {
@@ -50,6 +59,31 @@ export type {
   TemplateCoordinateMap,
   PDFMapStorage,
 } from './pdf/types';
+
+export {
+  inspectPDFForm,
+  fillAcroForm,
+  fillS89Assignments4Up,
+} from './pdf/acroFormFiller';
+export type { S89Assignment, FormFillResult } from './pdf/acroFormFiller';
+
+// Roster Optimization & Bitmask Scheduling
+export * as bitmaskSchedule from './roster/bitmaskSchedule';
+export * from './roster/bitmaskSchedule';
+export * as swapLedger from './roster/swapLedger';
+export * from './roster/swapLedger';
+export type {
+  ShiftType,
+} from './roster/bitmaskSchedule';
+export type {
+  SkillLevel,
+  VolunteerProfile,
+  ShiftSlotDescriptor,
+  SwapState,
+  SwapTransaction,
+  RankedStandbyCandidate,
+  SwapDryRunResult,
+} from './roster/swapLedger';
 
 // Crypto
 export {
@@ -81,3 +115,18 @@ export type {
   SignalPayload,
   SignalingToken,
 } from './chat/types';
+
+// Geo Spatial
+export * as geoJsonAdapter from './geo/geoJsonAdapter';
+export type {
+  GeoJSONGeometry,
+  GeoJSONFeature,
+  GeoJSONFeatureCollection,
+} from './geo/geoJsonAdapter';
+
+// Subtree Delegation (CBAC)
+export * as tokenManager from './delegation/tokenManager';
+export type {
+  DelegationPermissions,
+  SSDTokenPayload,
+} from './delegation/tokenManager';

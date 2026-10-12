@@ -7,8 +7,8 @@
  */
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import type { FlatRegistry, NodeType, PathKey, SkeletonNode, FlatSkeletonEntry } from '@sekundo/core';
-import { skeletonTree, pathKey } from '@sekundo/core';
+import type { FlatRegistry, NodeType, PathKey, SkeletonNode, FlatSkeletonEntry, UpsertOptions, UpsertResult } from '@sekundo/core';
+import { skeletonTree, pathKey, upsertRegistry } from '@sekundo/core';
 import * as storage from '../storage/localStorage';
 
 export function useSkeleton(eventId: string) {
@@ -80,33 +80,13 @@ export function useSkeleton(eventId: string) {
     await saveSkeleton(newRegistry);
   };
 
-  const commitCSVImport = async (csvRows: any[]) => {
-    // Merges rows based on keys. Last import wins (completely overrides with sheet contents).
-    const newRegistry: FlatRegistry = [];
-
-    for (const row of csvRows) {
-      if (!pathKey.isValid(row._key)) continue;
-      const normalized = pathKey.normalize(row._key);
-      let parsedMeta: Record<string, unknown> = {};
-      if (row._meta_json) {
-        try {
-          parsedMeta = JSON.parse(row._meta_json);
-        } catch {
-          // ignore invalid JSON
-        }
-      }
-
-      newRegistry.push({
-        key: normalized,
-        type: row._type as NodeType,
-        label: row.label,
-        value: row.value || '',
-        email: row.email || '',
-        meta: parsedMeta,
-      });
-    }
-
-    await saveSkeleton(newRegistry);
+  const commitCSVImport = async (
+    csvRows: any[],
+    options?: UpsertOptions
+  ): Promise<UpsertResult> => {
+    const result = upsertRegistry(flatRegistry, csvRows, options);
+    await saveSkeleton(result.updatedRegistry);
+    return result;
   };
 
   useEffect(() => {

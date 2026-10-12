@@ -6,11 +6,11 @@
  */
 
 import React, { useState } from 'react';
-import { StyleSheet, Text, View, TextInput, Pressable, Platform } from 'react-native';
+import { StyleSheet, Text, View, TextInput, Pressable, ScrollView, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useLocalEvent } from '../hooks/useLocalEvent';
-import type { Frequency } from '@sekundo/core';
+import { engineRegistry, type Frequency, type EngineId } from '@sekundo/core';
 
 export default function CreateEvent() {
   const router = useRouter();
@@ -18,75 +18,119 @@ export default function CreateEvent() {
 
   const [name, setName] = useState('');
   const [frequency, setFrequency] = useState<Frequency>('weekly');
+  const [selectedEngine, setSelectedEngine] = useState<EngineId>('territory_logistics');
+
+  const availableEngines = engineRegistry.list();
 
   const handleCreate = async () => {
     if (!name.trim()) return;
-    await addEvent(name, frequency, ['01']); // Add '01' as default root path key
+    await addEvent(name, frequency, ['01'], selectedEngine); // Add '01' as default root path key
     router.replace('/');
   };
 
   const frequencies: { key: Frequency; label: string; desc: string }[] = [
-    { key: 'weekly', label: 'Weekly', desc: 'Schedules that repeat every 7 days' },
-    { key: 'monthly', label: 'Monthly', desc: 'Schedules that repeat on a monthly cycle' },
-    { key: 'annual', label: 'Annual', desc: 'Complex year-long schedules' },
-    { key: 'once', label: 'One-Time', desc: 'Single fixed-date event' },
+    { key: 'weekly', label: 'Semanal', desc: 'Ciclos que se repetem a cada 7 dias' },
+    { key: 'monthly', label: 'Mensal', desc: 'Ciclos mensais de acompanhamento e rollover' },
+    { key: 'annual', label: 'Anual', desc: 'Eventos ou campanhas de longa duração' },
+    { key: 'once', label: 'Único / Fixo', desc: 'Evento pontual em data determinada' },
   ];
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.wrapper}>
-        {/* Header */}
-        <View style={styles.header}>
-          <Pressable onPress={() => router.back()} style={styles.backButton}>
-            <Text style={styles.backButtonText}>← Back</Text>
-          </Pressable>
-          <Text style={styles.title}>New Event Container</Text>
-          <Text style={styles.subtitle}>Setup the temporal settings for your template</Text>
-        </View>
-
-        {/* Form */}
-        <View style={styles.form}>
-          <Text style={styles.label}>EVENT NAME</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="e.g. Weekly Congregation Meeting"
-            placeholderTextColor="#4F5E74"
-            value={name}
-            onChangeText={setName}
-            autoFocus
-          />
-
-          <Text style={[styles.label, { marginTop: 24 }]}>FREQUENCY STYLE</Text>
-          {frequencies.map((freq) => (
-            <Pressable
-              key={freq.key}
-              onPress={() => setFrequency(freq.key)}
-              style={[styles.freqCard, frequency === freq.key && styles.freqCardActive]}
-            >
-              <View style={styles.radioRow}>
-                <View style={[styles.radio, frequency === freq.key && styles.radioActive]} />
-                <View>
-                  <Text style={styles.freqLabel}>{freq.label}</Text>
-                  <Text style={styles.freqDesc}>{freq.desc}</Text>
-                </View>
-              </View>
+      <ScrollView contentContainerStyle={styles.scrollContent}>
+        <View style={styles.wrapper}>
+          {/* Header */}
+          <View style={styles.header}>
+            <Pressable onPress={() => router.back()} style={styles.backButton}>
+              <Text style={styles.backButtonText}>← Voltar ao Início</Text>
             </Pressable>
-          ))}
+            <Text style={styles.title}>Novo Evento ou Projeto</Text>
+            <Text style={styles.subtitle}>
+              Escolha a Lei Universal (Engine) e a cadência temporal do seu esqueleto.
+            </Text>
+          </View>
 
-          {/* Submit */}
-          <Pressable
-            onPress={handleCreate}
-            disabled={!name.trim()}
-            style={({ pressed }) => [
-              styles.submitButton,
-              !name.trim() && styles.submitDisabled,
-              pressed && styles.submitPressed,
-            ]}
-          >
-            <Text style={styles.submitText}>Initialize Event</Text>
-          </Pressable>
+          {/* Form */}
+          <View style={styles.form}>
+            <Text style={styles.label}>NOME DO EVENTO / PROJETO</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Ex: Territórios Ferraz de Vasconcelos ou Reunião Semanal"
+              placeholderTextColor="#4F5E74"
+              value={name}
+              onChangeText={setName}
+              autoFocus
+            />
+
+            {/* Universal Engine Selector */}
+            <Text style={[styles.label, { marginTop: 24 }]}>LEI UNIVERSAL (ENGINE ATIVA)</Text>
+            <Text style={styles.helperText}>
+              Define as regras, cálculos de métricas e visualizações deste evento.
+            </Text>
+            {availableEngines.map((engine) => (
+              <Pressable
+                key={engine.id}
+                onPress={() => setSelectedEngine(engine.id)}
+                style={[
+                  styles.cardOption,
+                  selectedEngine === engine.id && styles.cardOptionActive,
+                ]}
+              >
+                <View style={styles.radioRow}>
+                  <View
+                    style={[
+                      styles.radio,
+                      selectedEngine === engine.id && styles.radioActive,
+                    ]}
+                  />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.optionLabel}>{engine.name}</Text>
+                    <Text style={styles.optionDesc}>{engine.description}</Text>
+                  </View>
+                </View>
+              </Pressable>
+            ))}
+
+            <Text style={[styles.label, { marginTop: 24 }]}>CADÊNCIA TEMPORAL (FREQUÊNCIA)</Text>
+            {frequencies.map((freq) => (
+              <Pressable
+                key={freq.key}
+                onPress={() => setFrequency(freq.key)}
+                style={[
+                  styles.cardOption,
+                  frequency === freq.key && styles.cardOptionActive,
+                ]}
+              >
+                <View style={styles.radioRow}>
+                  <View
+                    style={[
+                      styles.radio,
+                      frequency === freq.key && styles.radioActive,
+                    ]}
+                  />
+                  <View>
+                    <Text style={styles.optionLabel}>{freq.label}</Text>
+                    <Text style={styles.optionDesc}>{freq.desc}</Text>
+                  </View>
+                </View>
+              </Pressable>
+            ))}
+
+            {/* Submit */}
+            <Pressable
+              onPress={handleCreate}
+              disabled={!name.trim()}
+              style={({ pressed }) => [
+                styles.submitButton,
+                !name.trim() && styles.submitDisabled,
+                pressed && styles.submitPressed,
+              ]}
+            >
+              <Text style={styles.submitText}>Criar Evento com Esta Engine</Text>
+            </Pressable>
+          </View>
         </View>
-      </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -95,13 +139,16 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#12151C',
+  },
+  scrollContent: {
+    flexGrow: 1,
     alignItems: 'center',
     justifyContent: 'center',
     padding: 24,
   },
   wrapper: {
     width: '100%',
-    maxWidth: 500,
+    maxWidth: 540,
     backgroundColor: 'rgba(255, 255, 255, 0.02)',
     borderRadius: 16,
     padding: 24,
@@ -130,6 +177,7 @@ const styles = StyleSheet.create({
     color: '#6F7E94',
     fontSize: 13,
     marginTop: 4,
+    lineHeight: 18,
   },
   form: {
     width: '100%',
@@ -139,7 +187,12 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
     letterSpacing: 1,
-    marginBottom: 8,
+    marginBottom: 6,
+  },
+  helperText: {
+    color: '#6F7E94',
+    fontSize: 12,
+    marginBottom: 10,
   },
   input: {
     backgroundColor: 'rgba(255, 255, 255, 0.03)',
@@ -148,23 +201,23 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255, 255, 255, 0.08)',
     color: '#FFFFFF',
     padding: 14,
-    fontSize: 16,
+    fontSize: 15,
   },
-  freqCard: {
+  cardOption: {
     backgroundColor: 'rgba(255, 255, 255, 0.02)',
-    borderRadius: 8,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.06)',
     padding: 14,
-    marginBottom: 12,
+    marginBottom: 10,
   },
-  freqCardActive: {
+  cardOptionActive: {
     borderColor: '#FFB800',
-    backgroundColor: 'rgba(255, 184, 0, 0.03)',
+    backgroundColor: 'rgba(255, 184, 0, 0.04)',
   },
   radioRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
   },
   radio: {
     width: 16,
@@ -173,20 +226,22 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: '#4F5E74',
     marginRight: 12,
+    marginTop: 2,
   },
   radioActive: {
     borderColor: '#FFB800',
     backgroundColor: '#FFB800',
   },
-  freqLabel: {
+  optionLabel: {
     color: '#FFFFFF',
     fontSize: 14,
     fontWeight: '600',
   },
-  freqDesc: {
-    color: '#6F7E94',
+  optionDesc: {
+    color: '#8A94A6',
     fontSize: 12,
-    marginTop: 2,
+    marginTop: 3,
+    lineHeight: 16,
   },
   submitButton: {
     backgroundColor: '#FFB800',
@@ -194,7 +249,8 @@ const styles = StyleSheet.create({
     padding: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 16,
+    marginTop: 20,
+    marginBottom: 20,
   },
   submitDisabled: {
     backgroundColor: 'rgba(255, 255, 255, 0.08)',

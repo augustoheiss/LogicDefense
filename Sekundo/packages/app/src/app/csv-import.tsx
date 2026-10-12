@@ -14,8 +14,8 @@ import { useSkeleton } from '../hooks/useSkeleton';
 import { useLocalEvent } from '../hooks/useLocalEvent';
 import CSVDropZone from '../components/csv/CSVDropZone.web';
 import { CSVPreviewTable } from '../components/csv/CSVPreviewTable';
-import { buildDiff, validateCSV } from '@sekundo/core';
-import type { CSVDiffResult, CSVRow } from '@sekundo/core';
+import { buildDiff, validateCSV, upsertRegistry } from '@sekundo/core';
+import type { CSVDiffResult, CSVRow, UpsertResult } from '@sekundo/core';
 
 export default function CSVImport() {
   const router = useRouter();
@@ -30,6 +30,8 @@ export default function CSVImport() {
   const [parsedRows, setParsedRows] = useState<CSVRow[] | null>(null);
   const [diff, setDiff] = useState<CSVDiffResult | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [preserveHistory, setPreserveHistory] = useState<boolean>(true);
+  const [preservedCount, setPreservedCount] = useState<number>(0);
 
   if (loading || !event) {
     return (
@@ -51,16 +53,33 @@ export default function CSVImport() {
       return;
     }
 
-    // 2. Compute diff
+    // 2. Compute upsert and diff
     const computedDiff = buildDiff(flatRegistry, rows);
+    const upsertRes = upsertRegistry(flatRegistry, rows, {
+      forceOverwriteState: !preserveHistory,
+    });
+    setPreservedCount(upsertRes.diff.preservedHistoryCount);
     setParsedRows(rows);
     setDiff(computedDiff);
     setErrorMessage(null);
   };
 
+  const togglePreserveHistory = () => {
+    const nextVal = !preserveHistory;
+    setPreserveHistory(nextVal);
+    if (parsedRows) {
+      const upsertRes = upsertRegistry(flatRegistry, parsedRows, {
+        forceOverwriteState: !nextVal,
+      });
+      setPreservedCount(upsertRes.diff.preservedHistoryCount);
+    }
+  };
+
   const handleCommit = async () => {
     if (!parsedRows) return;
-    await commitCSVImport(parsedRows);
+    await commitCSVImport(parsedRows, {
+      forceOverwriteState: !preserveHistory,
+    });
     router.replace(`/skeleton-editor?id=${eventId}`);
   };
 
@@ -68,6 +87,7 @@ export default function CSVImport() {
     setParsedRows(null);
     setDiff(null);
     setErrorMessage(null);
+    setPreservedCount(0);
   };
 
   return (
@@ -110,22 +130,63 @@ export default function CSVImport() {
         {/* Preview and Diff area */}
         {parsedRows && diff && !errorMessage ? (
           <View style={styles.previewArea}>
-            <Text style={styles.previewTitle}>Conflict Resolution Diff Preview</Text>
+            <Text style={styles.previewTitle}>Prévia de Mesclagem & Resolução</Text>
             <Text style={styles.previewSub}>
-              Review the differences below before confirming. Last import wins (will overwrite your current skeleton configuration).
+              Revise as alterações antes de confirmar. O Sekundo compara os códigos hierárquicos e atualiza seu evento.
             </Text>
 
+            {/* Smart History Preservation Toggle */}
+            <Pressable
+              onPress={togglePreserveHistory}
+              style={[
+                styles.preserveBanner,
+                preserveHistory ? styles.preserveBannerActive : styles.preserveBannerInactive,
+              ]}
+            >
+              <Text style={styles.preserveBannerIcon}>{preserveHistory ? '🛡️' : '⚠️'}</Text>
+              <View style={styles.preserveBannerInfo}>
+                <Text style={styles.preserveBannerTitle}>
+                  {preserveHistory
+                    ? 'Proteção Inteligente de Histórico Ativa (Recomendado)'
+                    : 'Atenção: Sobrescrever Histórico Totalmente'}
+                </Text>
+                <Text style={styles.preserveBannerDesc}>
+                  {preserveHistory
+                    ? `Mantém intactos registros de visitas anteriores, datas e anotações locais (${preservedCount} itens protegidos).`
+                    : 'Todas as marcações de trabalho locais serão limpas ou substituídas pelos dados brutos do arquivo.'}
+                </Text>
+              </View>
+              <View
+                style={[
+                  styles.preserveBadge,
+                  preserveHistory ? styles.preserveBadgeActive : styles.preserveBadgeInactive,
+                ]}
+              >
+                <Text style={styles.preserveBadgeText}>{preserveHistory ? 'ATIVO' : 'DESLIGADO'}</Text>
+              </View>
+            </Pressable>
+
             <View style={styles.previewWrapper}>
-              <CSVPreviewTable diff={diff} />
+              <CSVPreviewTable diff={diff} preservedHistoryCount={preservedCount} />
             </View>
 
             {/* Commit controls */}
             <View style={styles.controlsRow}>
               <Pressable onPress={handleReset} style={styles.cancelBtn}>
-                <Text style={styles.cancelBtnText}>Discard Changes</Text>
+                <Text style={styles.cancelBtnText}>Descartar</Text>
               </Pressable>
-              <Pressable onPress={handleCommit} style={styles.commitBtn}>
-                <Text style={styles.commitBtnText}>Apply & Overwrite</Text>
+              <Pressable
+                onPress={handleCommit}
+                style={[
+                  styles.commitBtn,
+                  preserveHistory ? styles.commitBtnPreserve : styles.commitBtnOverwrite,
+                ]}
+              >
+                <Text style={styles.commitBtnText}>
+                  {preserveHistory
+                    ? '✓ Mesclar (Protegendo Histórico)'
+                    : '⚠️ Sobrescrever Tudo'}
+                </Text>
               </Pressable>
             </View>
           </View>
@@ -270,15 +331,72 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   commitBtn: {
-    backgroundColor: '#FFB800',
     borderRadius: 8,
     paddingVertical: 12,
     paddingHorizontal: 24,
     justifyContent: 'center',
   },
+  commitBtnPreserve: {
+    backgroundColor: '#10B981',
+  },
+  commitBtnOverwrite: {
+    backgroundColor: '#F59E0B',
+  },
   commitBtnText: {
-    color: '#12151C',
+    color: '#062016',
     fontWeight: '700',
     fontSize: 14,
+  },
+  preserveBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 14,
+    borderRadius: 10,
+    borderWidth: 1,
+    marginBottom: 16,
+  },
+  preserveBannerActive: {
+    backgroundColor: 'rgba(16, 185, 129, 0.08)',
+    borderColor: 'rgba(16, 185, 129, 0.3)',
+  },
+  preserveBannerInactive: {
+    backgroundColor: 'rgba(245, 158, 11, 0.08)',
+    borderColor: 'rgba(245, 158, 11, 0.3)',
+  },
+  preserveBannerIcon: {
+    fontSize: 24,
+    marginRight: 12,
+  },
+  preserveBannerInfo: {
+    flex: 1,
+    paddingRight: 10,
+  },
+  preserveBannerTitle: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '700',
+    marginBottom: 2,
+  },
+  preserveBannerDesc: {
+    color: '#9CA3AF',
+    fontSize: 11,
+    lineHeight: 16,
+  },
+  preserveBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  preserveBadgeActive: {
+    backgroundColor: 'rgba(16, 185, 129, 0.25)',
+  },
+  preserveBadgeInactive: {
+    backgroundColor: 'rgba(245, 158, 11, 0.25)',
+  },
+  preserveBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.5,
   },
 });

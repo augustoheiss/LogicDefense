@@ -7,6 +7,7 @@
  */
 
 import type { PathKey } from '../skeleton/types';
+import type { EngineId } from '../engines/types';
 
 // ---------------------------------------------------------------------------
 // Frequency
@@ -54,6 +55,12 @@ export interface EventConfig {
 
   /** Last modification timestamp (ISO 8601). */
   updatedAt: string;
+
+  /**
+   * The active Universal Law/Engine governing this event.
+   * e.g., 'territory_logistics', 'roster_assignments', 'study_synthesis', 'generic_wbs'
+   */
+  engineId?: EngineId;
 }
 
 // ---------------------------------------------------------------------------
