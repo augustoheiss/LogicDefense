@@ -12,7 +12,7 @@
     "typecheck:core": "cd packages/core && npx tsc --noEmit",
     "dev": "cd packages/app && npx expo start",
     "dev:web": "cd packages/app && npx expo start --web",
-    "build:web": "cd packages/app && npx expo export -p web",
+    "build:web": "cd packages/app && npx expo export -p web --clear",
     "dev:backend": "cd packages/backend && python main.py",
     "install:backend": "cd packages/backend && pip install -r requirements.txt"
   },
