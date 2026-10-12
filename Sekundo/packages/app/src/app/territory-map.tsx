@@ -59,15 +59,37 @@ export default function TerritoryMapScreen() {
   const allPins = useMemo<PinItem[]>(() => {
     const list: PinItem[] = [];
 
-    flatRegistry.forEach((node, idx) => {
-      const meta = (node.meta || {}) as Record<string, any>;
-      // Check for coordinates or assign deterministic mock coordinates near standard cluster
-      let lat = typeof meta.lat === 'number' ? meta.lat : undefined;
-      let lng = typeof meta.lng === 'number' ? meta.lng : undefined;
+    // Collect all parent keys
+    const allParentKeys = new Set<string>();
+    for (const node of flatRegistry) {
+      const p = pathKey.parent(node.key);
+      if (p) allParentKeys.add(p);
+    }
 
-      // If no GPS coordinates in dataset yet, generate a realistic cluster around Ferraz/SP center
-      // so the map is immediately functional and interactive for testing
+    flatRegistry.forEach((node, idx) => {
+      // If node is a parent group with sub-items, skip pin (only plot leaf addresses)
+      const isParent = allParentKeys.has(node.key);
+      if (isParent) return;
+
+      const meta = (node.meta || {}) as Record<string, any>;
+      // Check for coordinates (numeric or string)
+      let lat = typeof meta.lat === 'number'
+        ? meta.lat
+        : (typeof meta.latitude === 'number'
+          ? meta.latitude
+          : (meta.lat ? parseFloat(String(meta.lat)) : (meta.latitude ? parseFloat(String(meta.latitude)) : undefined)));
+      let lng = typeof meta.lng === 'number'
+        ? meta.lng
+        : (typeof meta.longitude === 'number'
+          ? meta.longitude
+          : (meta.lng ? parseFloat(String(meta.lng)) : (meta.longitude ? parseFloat(String(meta.longitude)) : undefined)));
+
+      if (isNaN(lat as number)) lat = undefined;
+      if (isNaN(lng as number)) lng = undefined;
+
+      // Only assign mock coords to leaf items, not parent categories
       if (lat === undefined || lng === undefined) {
+        if (isParent) return; // Do not plot parent categories without coords
         const baseLat = -23.5415;
         const baseLng = -46.3685;
         const offsetLat = ((idx * 17) % 100 - 50) * 0.00015;

@@ -52,28 +52,56 @@ export default function TerritoryChecklistScreen() {
   const [activeNoteKey, setActiveNoteKey] = useState<string | null>(null);
   const [noteDraft, setNoteDraft] = useState<string>('');
 
-  // Extract territory items and group by parent quadra
-  const groups = useMemo<ChecklistGroup[]>(() => {
+  // Extract territory items and group by closest parent group
+  const { groups, overallStats } = useMemo(() => {
     const groupMap = new Map<string, { label: string; items: FlatSkeletonEntry[] }>();
 
-    // 1. First find header/quadra parents
+    // 1. Collect all parent keys of every node in flatRegistry
+    const allParentKeys = new Set<string>();
     for (const node of flatRegistry) {
-      const depth = pathKey.depth(node.key);
-      if (depth <= 2) {
+      const p = pathKey.parent(node.key);
+      if (p) allParentKeys.add(p);
+    }
+
+    // 2. Identify parent groups (nodes that have children or explicit headers)
+    for (const node of flatRegistry) {
+      if (allParentKeys.has(node.key) || node.type === 'header') {
         if (!groupMap.has(node.key)) {
           groupMap.set(node.key, { label: node.label, items: [] });
         }
       }
     }
 
-    // 2. Assign leaf/work items into groups
+    // Fallback if no parent nodes exist
+    if (groupMap.size === 0) {
+      for (const node of flatRegistry) {
+        const rootKey = pathKey.root(node.key);
+        if (!groupMap.has(rootKey)) {
+          groupMap.set(rootKey, { label: `Setor ${rootKey}`, items: [] });
+        }
+      }
+    }
+
+    // 3. Assign leaf work items into their closest ancestor group
     for (const node of flatRegistry) {
-      if (node.type === 'territory') {
-        const parentKey = pathKey.parent(node.key);
-        if (parentKey && groupMap.has(parentKey)) {
-          groupMap.get(parentKey)!.items.push(node);
-        } else {
-          // If no parent found, group under top-level
+      // Skip parent nodes (they act as container cards, not leaf checklist items)
+      if (allParentKeys.has(node.key)) {
+        continue;
+      }
+
+      if (node.type === 'territory' || node.type === 'slot') {
+        let parentKey = pathKey.parent(node.key);
+        let assigned = false;
+        while (parentKey) {
+          if (groupMap.has(parentKey)) {
+            groupMap.get(parentKey)!.items.push(node);
+            assigned = true;
+            break;
+          }
+          parentKey = pathKey.parent(parentKey);
+        }
+
+        if (!assigned) {
           const rootKey = pathKey.root(node.key);
           if (!groupMap.has(rootKey)) {
             groupMap.set(rootKey, { label: `Setor ${rootKey}`, items: [] });
@@ -96,10 +124,11 @@ export default function TerritoryChecklistScreen() {
 
         if (searchQuery.trim()) {
           const q = searchQuery.toLowerCase();
+          const matchGroup = (data.label || '').toLowerCase().includes(q) || groupKey.toLowerCase().includes(q);
           const matchLabel = item.label.toLowerCase().includes(q);
           const matchKey = item.key.toLowerCase().includes(q);
           const matchNote = String(meta.notes || '').toLowerCase().includes(q);
-          return matchLabel || matchKey || matchNote;
+          return matchGroup || matchLabel || matchKey || matchNote;
         }
 
         return true;
@@ -110,7 +139,7 @@ export default function TerritoryChecklistScreen() {
         const worked = filtered.filter((i) => Number((i.meta as any)?.worked) === 1).length;
         result.push({
           groupKey,
-          groupLabel: data.label || `Quadra ${groupKey}`,
+          groupLabel: data.label || `Território / Quadra ${groupKey}`,
           items: filtered,
           total,
           worked,
@@ -121,24 +150,28 @@ export default function TerritoryChecklistScreen() {
 
     // Sort groups hierarchically
     result.sort((a, b) => pathKey.compare(a.groupKey, b.groupKey));
-    return result;
-  }, [flatRegistry, searchQuery, filterMode]);
 
-  // Overall metrics
-  const overallStats = useMemo(() => {
-    let total = 0;
-    let worked = 0;
+    // Overall metrics for leaf items
+    let overallTotal = 0;
+    let overallWorked = 0;
     flatRegistry.forEach((n) => {
-      if (n.type === 'territory') {
-        total++;
+      if ((n.type === 'territory' || n.type === 'slot') && !allParentKeys.has(n.key)) {
+        overallTotal++;
         if (Number((n.meta as any)?.worked) === 1) {
-          worked++;
+          overallWorked++;
         }
       }
     });
-    const percent = total > 0 ? Math.round((worked / total) * 100) : 0;
-    return { total, worked, percent, pending: total - worked };
-  }, [flatRegistry]);
+    const percent = overallTotal > 0 ? Math.round((overallWorked / overallTotal) * 100) : 0;
+    const stats = {
+      total: overallTotal,
+      worked: overallWorked,
+      percent,
+      pending: overallTotal - overallWorked,
+    };
+
+    return { groups: result, overallStats: stats };
+  }, [flatRegistry, searchQuery, filterMode]);
 
   // Toggle single item work status
   const handleToggleItem = async (targetKey: string) => {
@@ -342,8 +375,11 @@ export default function TerritoryChecklistScreen() {
                         </Text>
                       </Pressable>
 
-                      {/* Middle: Key and Street Info */}
-                      <View style={styles.itemInfo}>
+                      {/* Middle: Key and Street Info (Tap to toggle) */}
+                      <Pressable
+                        onPress={() => handleToggleItem(item.key)}
+                        style={styles.itemInfo}
+                      >
                         <View style={styles.itemKeyRow}>
                           <Text style={styles.itemKeyText}>{item.key}</Text>
                           {meta.notes ? (
@@ -358,7 +394,7 @@ export default function TerritoryChecklistScreen() {
                             "{meta.notes}"
                           </Text>
                         ) : null}
-                      </View>
+                      </Pressable>
 
                       {/* Right: Quick Note Edit Button */}
                       <Pressable
