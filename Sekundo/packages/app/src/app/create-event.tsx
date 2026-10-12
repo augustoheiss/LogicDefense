@@ -1,8 +1,9 @@
 /**
  * Page: create-event
  *
- * Visual builder card to configure name, frequency and rules
+ * Visual builder card to configure name, frequency, and rules
  * for a new Local-First Event template container.
+ * Supports Multi-Engine selection and Auto-Detection via CSV!
  */
 
 import React, { useState } from 'react';
@@ -10,7 +11,7 @@ import { StyleSheet, Text, View, TextInput, Pressable, ScrollView, Platform } fr
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useLocalEvent } from '../hooks/useLocalEvent';
-import { engineRegistry, type Frequency, type EngineId } from '@sekundo/core';
+import { engineRegistry, detectEnginesFromCSV, type Frequency, type EngineId } from '@sekundo/core';
 
 export default function CreateEvent() {
   const router = useRouter();
@@ -18,14 +19,40 @@ export default function CreateEvent() {
 
   const [name, setName] = useState('');
   const [frequency, setFrequency] = useState<Frequency>('weekly');
-  const [selectedEngine, setSelectedEngine] = useState<EngineId>('territory_logistics');
+  const [selectedEngines, setSelectedEngines] = useState<EngineId[]>(['territory_logistics']);
+  const [autoDetectNotice, setAutoDetectNotice] = useState<string | null>(null);
 
   const availableEngines = engineRegistry.list();
 
+  const toggleEngine = (id: EngineId) => {
+    if (selectedEngines.includes(id)) {
+      if (selectedEngines.length > 1) {
+        setSelectedEngines(selectedEngines.filter((e) => e !== id));
+      }
+    } else {
+      setSelectedEngines([...selectedEngines, id]);
+    }
+  };
+
   const handleCreate = async () => {
     if (!name.trim()) return;
-    await addEvent(name, frequency, ['01'], selectedEngine); // Add '01' as default root path key
+    await addEvent(name, frequency, ['01'], selectedEngines);
     router.replace('/');
+  };
+
+  const handleCsvAutoDetect = (e: any) => {
+    const file = e.target?.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const text = event.target?.result as string;
+      const report = detectEnginesFromCSV(text);
+      if (report.suggestedEngines.length > 0) {
+        setSelectedEngines(report.suggestedEngines);
+        setAutoDetectNotice(report.summary);
+      }
+    };
+    reader.readAsText(file);
   };
 
   const frequencies: { key: Frequency; label: string; desc: string }[] = [
@@ -46,7 +73,7 @@ export default function CreateEvent() {
             </Pressable>
             <Text style={styles.title}>Novo Evento ou Projeto</Text>
             <Text style={styles.subtitle}>
-              Escolha a Lei Universal (Engine) e a cadência temporal do seu esqueleto.
+              Escolha uma ou mais Leis Universais (Engines) e a cadência temporal do seu esqueleto.
             </Text>
           </View>
 
@@ -62,34 +89,70 @@ export default function CreateEvent() {
               autoFocus
             />
 
-            {/* Universal Engine Selector */}
-            <Text style={[styles.label, { marginTop: 24 }]}>LEI UNIVERSAL (ENGINE ATIVA)</Text>
+            {/* Universal Engine Selector & Multi-Engine Choice */}
+            <View style={{ marginTop: 24, marginBottom: 8, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Text style={styles.label}>LEIS UNIVERSAIS ATIVAS (ENGINES)</Text>
+              <View style={styles.multiBadge}>
+                <Text style={styles.multiBadgeText}>Múltiplas Escolhas</Text>
+              </View>
+            </View>
             <Text style={styles.helperText}>
-              Define as regras, cálculos de métricas e visualizações deste evento.
+              Você pode selecionar mais de uma Engine para o mesmo evento (ex: Território + Escala).
             </Text>
-            {availableEngines.map((engine) => (
-              <Pressable
-                key={engine.id}
-                onPress={() => setSelectedEngine(engine.id)}
-                style={[
-                  styles.cardOption,
-                  selectedEngine === engine.id && styles.cardOptionActive,
-                ]}
-              >
-                <View style={styles.radioRow}>
-                  <View
-                    style={[
-                      styles.radio,
-                      selectedEngine === engine.id && styles.radioActive,
-                    ]}
+
+            {/* Auto Detect via CSV Button (Web) */}
+            {Platform.OS === 'web' && (
+              <View style={styles.autoDetectBox}>
+                <label style={styles.autoDetectLabel as any}>
+                  ✨ Auto-Detectar Engines a partir de um CSV
+                  <input
+                    type="file"
+                    accept=".csv"
+                    style={{ display: 'none' }}
+                    onChange={handleCsvAutoDetect}
                   />
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.optionLabel}>{engine.name}</Text>
-                    <Text style={styles.optionDesc}>{engine.description}</Text>
+                </label>
+                {autoDetectNotice && (
+                  <Text style={styles.autoDetectNotice}>{autoDetectNotice}</Text>
+                )}
+              </View>
+            )}
+
+            {availableEngines.map((engine) => {
+              const isChecked = selectedEngines.includes(engine.id);
+              return (
+                <Pressable
+                  key={engine.id}
+                  onPress={() => toggleEngine(engine.id)}
+                  style={[
+                    styles.cardOption,
+                    isChecked && styles.cardOptionActive,
+                  ]}
+                >
+                  <View style={styles.radioRow}>
+                    <View
+                      style={[
+                        styles.checkbox,
+                        isChecked && styles.checkboxActive,
+                      ]}
+                    >
+                      {isChecked && <Text style={styles.checkmarkText}>✓</Text>}
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                        <Text style={styles.optionLabel}>{engine.name}</Text>
+                        {isChecked && (
+                          <View style={styles.activePill}>
+                            <Text style={styles.activePillText}>Ativa</Text>
+                          </View>
+                        )}
+                      </View>
+                      <Text style={styles.optionDesc}>{engine.description}</Text>
+                    </View>
                   </View>
-                </View>
-              </Pressable>
-            ))}
+                </Pressable>
+              );
+            })}
 
             <Text style={[styles.label, { marginTop: 24 }]}>CADÊNCIA TEMPORAL (FREQUÊNCIA)</Text>
             {frequencies.map((freq) => (
@@ -126,7 +189,9 @@ export default function CreateEvent() {
                 pressed && styles.submitPressed,
               ]}
             >
-              <Text style={styles.submitText}>Criar Evento com Esta Engine</Text>
+              <Text style={styles.submitText}>
+                Criar Evento ({selectedEngines.length} {selectedEngines.length === 1 ? 'Engine Ativa' : 'Engines Ativas'})
+              </Text>
             </Pressable>
           </View>
         </View>
@@ -148,7 +213,7 @@ const styles = StyleSheet.create({
   },
   wrapper: {
     width: '100%',
-    maxWidth: 540,
+    maxWidth: 580,
     backgroundColor: 'rgba(255, 255, 255, 0.02)',
     borderRadius: 16,
     padding: 24,
@@ -189,10 +254,43 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
     marginBottom: 6,
   },
+  multiBadge: {
+    backgroundColor: 'rgba(59, 130, 246, 0.15)',
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderWidth: 1,
+    borderColor: 'rgba(59, 130, 246, 0.3)',
+  },
+  multiBadgeText: {
+    color: '#60A5FA',
+    fontSize: 10,
+    fontWeight: '600',
+  },
   helperText: {
     color: '#6F7E94',
     fontSize: 12,
     marginBottom: 10,
+  },
+  autoDetectBox: {
+    backgroundColor: 'rgba(59, 130, 246, 0.06)',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(59, 130, 246, 0.2)',
+    padding: 12,
+    marginBottom: 14,
+  },
+  autoDetectLabel: {
+    color: '#93C5FD',
+    fontSize: 13,
+    fontWeight: '600',
+    cursor: 'pointer' as any,
+  },
+  autoDetectNotice: {
+    color: '#10B981',
+    fontSize: 12,
+    marginTop: 6,
+    fontWeight: '500',
   },
   input: {
     backgroundColor: 'rgba(255, 255, 255, 0.03)',
@@ -218,6 +316,39 @@ const styles = StyleSheet.create({
   radioRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
+  },
+  checkbox: {
+    width: 20,
+    height: 20,
+    borderRadius: 5,
+    borderWidth: 2,
+    borderColor: '#4F5E74',
+    marginRight: 12,
+    marginTop: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'transparent',
+  },
+  checkboxActive: {
+    borderColor: '#FFB800',
+    backgroundColor: '#FFB800',
+  },
+  checkmarkText: {
+    color: '#12151C',
+    fontSize: 13,
+    fontWeight: '900',
+    lineHeight: 16,
+  },
+  activePill: {
+    backgroundColor: 'rgba(255, 184, 0, 0.15)',
+    borderRadius: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+  },
+  activePillText: {
+    color: '#FFB800',
+    fontSize: 10,
+    fontWeight: '700',
   },
   radio: {
     width: 16,

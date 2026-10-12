@@ -18,16 +18,20 @@ import type { EngineId } from '../engines/types';
  * @param name - Human-readable event name.
  * @param frequency - Recurrence pattern.
  * @param skeletonRoots - Root path keys for contained skeletons.
- * @param engineId - The active Universal Law for this event.
+ * @param engineIdOrEngines - The active Universal Law or array of Laws for this event.
  * @returns A new EventConfig ready for storage.
  */
 export function createEvent(
   name: string,
   frequency: Frequency,
   skeletonRoots: string[] = [],
-  engineId: EngineId = 'territory_logistics'
+  engineIdOrEngines: EngineId | EngineId[] = 'territory_logistics'
 ): EventConfig {
   const now = new Date().toISOString();
+  const engines = Array.isArray(engineIdOrEngines)
+    ? engineIdOrEngines
+    : [engineIdOrEngines];
+  const primaryEngine = engines[0] || 'territory_logistics';
 
   return {
     id: generateId(),
@@ -38,7 +42,8 @@ export function createEvent(
     autoRollover: frequency !== 'once',
     createdAt: now,
     updatedAt: now,
-    engineId,
+    engineId: primaryEngine,
+    activeEngines: engines,
   };
 }
 

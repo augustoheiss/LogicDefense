@@ -19,7 +19,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useLocalEvent } from '../hooks/useLocalEvent';
-import { engineRegistry } from '@sekundo/core';
+import { engineRegistry, getActiveEngines } from '@sekundo/core';
 
 export default function Dashboard() {
   const router = useRouter();
@@ -90,15 +90,20 @@ export default function Dashboard() {
               </View>
             ) : (
               events.map((event) => {
-                const engine = engineRegistry.get(event.config.engineId);
+                const activeEngines = getActiveEngines(event.config);
                 return (
                   <View key={event.config.id} style={styles.eventCard}>
                     <View style={styles.eventInfo}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 4 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6, marginBottom: 4 }}>
                         <Text style={styles.eventName}>{event.config.name}</Text>
-                        <View style={styles.engineBadge}>
-                          <Text style={styles.engineBadgeText}>{engine.name}</Text>
-                        </View>
+                        {activeEngines.map((engId) => {
+                          const eng = engineRegistry.get(engId);
+                          return (
+                            <View key={engId} style={styles.engineBadge}>
+                              <Text style={styles.engineBadgeText}>{eng.name}</Text>
+                            </View>
+                          );
+                        })}
                       </View>
                       <Text style={styles.eventFrequency}>
                         Recurrence: {event.config.frequency.toUpperCase()} • Roots:{' '}
@@ -106,7 +111,7 @@ export default function Dashboard() {
                       </Text>
                     </View>
                     <View style={styles.cardActions}>
-                      {event.config.engineId === 'territory_logistics' && (
+                      {activeEngines.includes('territory_logistics') && (
                         <>
                           <Pressable
                             onPress={() => router.push(`/territory-checklist?id=${event.config.id}`)}
@@ -136,7 +141,7 @@ export default function Dashboard() {
                           </Pressable>
                         </>
                       )}
-                      {event.config.engineId === 'roster_assignments' && (
+                      {activeEngines.includes('roster_assignments') && (
                         <Pressable
                           onPress={() => router.push(`/roster-swap?id=${event.config.id}`)}
                           style={[
@@ -151,7 +156,7 @@ export default function Dashboard() {
                           <Text style={[styles.openButtonText, { color: '#10B981' }]}>🔄 Trocas</Text>
                         </Pressable>
                       )}
-                      {event.config.engineId === 'live_production_ros' && (
+                      {activeEngines.includes('live_production_ros') && (
                         <Pressable
                           onPress={() => router.push(`/run-of-show?id=${event.config.id}`)}
                           style={[
@@ -166,7 +171,7 @@ export default function Dashboard() {
                           <Text style={[styles.openButtonText, { color: '#FCA5A5' }]}>⏱️ Régie</Text>
                         </Pressable>
                       )}
-                      {event.config.engineId === 'tournament_pairings' && (
+                      {activeEngines.includes('tournament_pairings') && (
                         <Pressable
                           onPress={() => router.push(`/tournament-bracket?id=${event.config.id}`)}
                           style={[
@@ -181,7 +186,7 @@ export default function Dashboard() {
                           <Text style={[styles.openButtonText, { color: '#FCD34D' }]}>🏆 Torneio</Text>
                         </Pressable>
                       )}
-                      {event.config.engineId === 'incident_command' && (
+                      {activeEngines.includes('incident_command') && (
                         <Pressable
                           onPress={() => router.push(`/ics-command?id=${event.config.id}`)}
                           style={[

@@ -61,6 +61,30 @@ export interface EventConfig {
    * e.g., 'territory_logistics', 'roster_assignments', 'study_synthesis', 'generic_wbs'
    */
   engineId?: EngineId;
+
+  /**
+   * Multi-Engine support: allows an event to activate multiple engines simultaneously
+   * (e.g. ['territory_logistics', 'roster_assignments'] for an event managing both field territories and volunteers).
+   */
+  activeEngines?: EngineId[];
+}
+
+/**
+ * Returns all active engines for an event configuration.
+ * Preserves backward compatibility if only single engineId is specified.
+ */
+export function getActiveEngines(
+  config?: Pick<EventConfig, 'engineId' | 'activeEngines'> | null
+): EngineId[] {
+  if (!config) return ['generic_wbs'];
+  if (config.activeEngines && config.activeEngines.length > 0) {
+    const unique = Array.from(new Set(config.activeEngines));
+    return unique.length > 0 ? unique : ['generic_wbs'];
+  }
+  if (config.engineId) {
+    return [config.engineId];
+  }
+  return ['generic_wbs'];
 }
 
 // ---------------------------------------------------------------------------

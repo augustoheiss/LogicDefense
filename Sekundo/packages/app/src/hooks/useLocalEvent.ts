@@ -37,9 +37,9 @@ export function useLocalEvent() {
     name: string,
     frequency: Frequency,
     skeletonRoots: string[] = [],
-    engineId?: EngineId
+    engineIdOrEngines?: EngineId | EngineId[]
   ) => {
-    const config = eventContainer.createEvent(name, frequency, skeletonRoots, engineId);
+    const config = eventContainer.createEvent(name, frequency, skeletonRoots, engineIdOrEngines);
     const state = eventContainer.createEventState(config);
     await storage.saveEventState(config.id, state);
     

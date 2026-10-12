@@ -27,6 +27,8 @@ export type {
   EventLifecycle,
   RolloverSnapshot,
 } from './events/types';
+export { getActiveEngines } from './events/types';
+export { createEvent, createEventState } from './events/eventContainer';
 
 // Engines (Universal Laws)
 export * from './engines';
@@ -50,6 +52,44 @@ export type {
   UpsertResult,
   UpsertDetailEntry,
 } from './csv/upsert';
+
+// Canonical Engine CSV Templates
+export {
+  ENGINE_TEMPLATES,
+  getEngineTemplate,
+  listEngineTemplates,
+  exportTemplateCSV,
+} from './csv/engineTemplates';
+export type { EngineCSVTemplate } from './csv/engineTemplates';
+
+// Engine Auto-Detection
+export { detectEnginesFromCSV } from './csv/engineDetection';
+export type {
+  DetectedEngineMatch,
+  EngineDetectionReport,
+} from './csv/engineDetection';
+
+// Granular CSV Export (By Parts / Slices)
+export {
+  filterGranularEntries,
+  exportGranularCSV,
+} from './csv/granularExport';
+export type {
+  GranularScope,
+  GranularExportOptions,
+} from './csv/granularExport';
+
+// Granular CSV Import (LEGO & Quarantine Staging)
+export {
+  parseCSVWithQuarantine,
+  importGranularCSV,
+} from './csv/granularImport';
+export type {
+  QuarantinedRow,
+  GranularImportMode,
+  GranularImportOptions,
+  GranularImportResult,
+} from './csv/granularImport';
 
 // PDF
 export type {

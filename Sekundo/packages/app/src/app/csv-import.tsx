@@ -1,37 +1,65 @@
 /**
  * Page: csv-import
  *
- * Imports CSV skeleton data.
- * Computes visual diffs showing additions, modifications, and deletions
- * before saving to localStorage.
+ * Imports CSV skeleton data with:
+ * - Engine CSV Template downloads & column guides for all 8 Universal Engines.
+ * - Automatic Engine Detection with one-click multi-engine activation.
+ * - Granular "LEGO" Ingestion by parts (additive merge or branch replacement).
+ * - Quarantine Staging for malformed rows so imports NEVER fail completely.
+ * - Operational history preservation & visual diffs.
  */
 
 import React, { useState } from 'react';
-import { StyleSheet, Text, View, Pressable, ActivityIndicator, ScrollView } from 'react-native';
+import { StyleSheet, Text, View, Pressable, ActivityIndicator, ScrollView, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSkeleton } from '../hooks/useSkeleton';
 import { useLocalEvent } from '../hooks/useLocalEvent';
 import CSVDropZone from '../components/csv/CSVDropZone.web';
 import { CSVPreviewTable } from '../components/csv/CSVPreviewTable';
-import { buildDiff, validateCSV, upsertRegistry } from '@sekundo/core';
-import type { CSVDiffResult, CSVRow, UpsertResult } from '@sekundo/core';
+import {
+  buildDiff,
+  upsertRegistry,
+  listEngineTemplates,
+  getEngineTemplate,
+  exportTemplateCSV,
+  detectEnginesFromCSV,
+  importGranularCSV,
+  getActiveEngines,
+  type CSVDiffResult,
+  type CSVRow,
+  type EngineId,
+  type EngineDetectionReport,
+  type QuarantinedRow,
+  type GranularImportMode,
+} from '@sekundo/core';
 
 export default function CSVImport() {
   const router = useRouter();
   const { id } = useLocalSearchParams();
   const eventId = typeof id === 'string' ? id : '';
 
-  const { events } = useLocalEvent();
+  const { events, updateEventState } = useLocalEvent();
   const event = events.find((e) => e.config.id === eventId);
 
   const { flatRegistry, commitCSVImport, loading } = useSkeleton(eventId);
 
   const [parsedRows, setParsedRows] = useState<CSVRow[] | null>(null);
+  const [quarantinedRows, setQuarantinedRows] = useState<QuarantinedRow[]>([]);
   const [diff, setDiff] = useState<CSVDiffResult | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [preserveHistory, setPreserveHistory] = useState<boolean>(true);
   const [preservedCount, setPreservedCount] = useState<number>(0);
+
+  // Modular LEGO & Engine state
+  const [importMode, setImportMode] = useState<GranularImportMode>('additive_merge');
+  const [detectionReport, setDetectionReport] = useState<EngineDetectionReport | null>(null);
+  const [activeTemplateEngine, setActiveTemplateEngine] = useState<EngineId>('territory_logistics');
+  const [showTemplateGuide, setShowTemplateGuide] = useState<boolean>(false);
+  const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
+
+  const allTemplates = listEngineTemplates();
+  const currentTemplate = getEngineTemplate(activeTemplateEngine);
 
   if (loading || !event) {
     return (
@@ -41,27 +69,62 @@ export default function CSVImport() {
     );
   }
 
-  const handleParsed = (rows: CSVRow[]) => {
-    // 1. Validate rows first
-    const validationResult = validateCSV(rows);
-    if (!validationResult.valid) {
-      // Build a detailed error summary
-      const detailedErrors = validationResult.errors
-        .map((e) => `Row ${e.row} (${e.key}): ${e.errors.join(', ')}`)
-        .join('\n');
-      setErrorMessage(`Validation Failed:\n${detailedErrors}`);
-      return;
-    }
+  const activeEngines = getActiveEngines(event.config);
 
-    // 2. Compute upsert and diff
-    const computedDiff = buildDiff(flatRegistry, rows);
-    const upsertRes = upsertRegistry(flatRegistry, rows, {
-      forceOverwriteState: !preserveHistory,
-    });
-    setPreservedCount(upsertRes.diff.preservedHistoryCount);
-    setParsedRows(rows);
-    setDiff(computedDiff);
-    setErrorMessage(null);
+  const handleParsed = (rows: CSVRow[], rawText?: string) => {
+    try {
+      const text = rawText || '';
+
+      // 1. Run Engine Auto-Detection
+      if (text.trim() !== '') {
+        const report = detectEnginesFromCSV(text);
+        setDetectionReport(report);
+      }
+
+      // 2. Granular Ingestion with Quarantine Staging ("LEGO que não quebra")
+      if (text.trim() !== '') {
+        const importRes = importGranularCSV(flatRegistry, text, {
+          mode: importMode,
+          forceOverwriteState: !preserveHistory,
+        });
+
+        setParsedRows(importRes.validRows);
+        setQuarantinedRows(importRes.quarantinedRows);
+        setPreservedCount(importRes.diff.preservedHistoryCount);
+
+        const computedDiff = buildDiff(flatRegistry, importRes.validRows);
+        setDiff(computedDiff);
+        setErrorMessage(null);
+      } else {
+        // Fallback for direct CSVRow array
+        const computedDiff = buildDiff(flatRegistry, rows);
+        const upsertRes = upsertRegistry(flatRegistry, rows, {
+          forceOverwriteState: !preserveHistory,
+        });
+        setPreservedCount(upsertRes.diff.preservedHistoryCount);
+        setParsedRows(rows);
+        setQuarantinedRows([]);
+        setDiff(computedDiff);
+        setErrorMessage(null);
+      }
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Erro inesperado na análise do CSV.');
+    }
+  };
+
+  const handleActivateDetectedEngine = async (engineId: EngineId) => {
+    if (!event) return;
+    const currentList = getActiveEngines(event.config);
+    const updatedEngines = Array.from(new Set([...currentList, engineId]));
+    const updatedState = {
+      ...event,
+      config: {
+        ...event.config,
+        engineId: updatedEngines[0],
+        activeEngines: updatedEngines,
+      },
+    };
+    await updateEventState(event.config.id, updatedState);
   };
 
   const togglePreserveHistory = () => {
@@ -85,113 +148,331 @@ export default function CSVImport() {
 
   const handleReset = () => {
     setParsedRows(null);
+    setQuarantinedRows([]);
     setDiff(null);
     setErrorMessage(null);
+    setDetectionReport(null);
     setPreservedCount(0);
+  };
+
+  const handleDownloadTemplate = (format: 'canonical' | 'clean_human') => {
+    if (Platform.OS === 'web') {
+      const content = exportTemplateCSV(activeTemplateEngine, format);
+      const filename = format === 'canonical'
+        ? `canonico_${currentTemplate.suggestedFilename}`
+        : `limpo_${currentTemplate.suggestedFilename}`;
+      const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.setAttribute('href', url);
+      link.setAttribute('download', filename);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } else {
+      alert('Download de template ativo via navegador web.');
+    }
+  };
+
+  const handleCopyTemplate = (format: 'canonical' | 'clean_human') => {
+    const content = exportTemplateCSV(activeTemplateEngine, format);
+    if (Platform.OS === 'web' && navigator.clipboard) {
+      navigator.clipboard.writeText(content);
+      setCopyFeedback(`Exemplo ${format === 'canonical' ? 'Canônico' : 'Limpo'} copiado!`);
+      setTimeout(() => setCopyFeedback(null), 3000);
+    }
   };
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.card}>
-        {/* Header */}
-        <View style={styles.header}>
-          <Pressable onPress={() => router.back()} style={styles.backBtn}>
-            <Text style={styles.backBtnText}>← Back</Text>
-          </Pressable>
-          <Text style={styles.title}>CSV Import & Preview</Text>
-          <Text style={styles.subtitle}>
-            Event: {event.config.name} ({event.config.frequency.toUpperCase()})
-          </Text>
-        </View>
-
-        {/* Error Message */}
-        {errorMessage ? (
-          <View style={styles.errorCard}>
-            <Text style={styles.errorTitle}>Validation Error</Text>
-            <ScrollView style={styles.errorScroll}>
-              <Text style={styles.errorText}>{errorMessage}</Text>
-            </ScrollView>
-            <Pressable onPress={handleReset} style={styles.errorDismissBtn}>
-              <Text style={styles.errorDismissText}>Try Again</Text>
+      <ScrollView contentContainerStyle={styles.scrollWrapper}>
+        <View style={styles.card}>
+          {/* Header */}
+          <View style={styles.header}>
+            <Pressable onPress={() => router.back()} style={styles.backBtn}>
+              <Text style={styles.backBtnText}>← Voltar</Text>
             </Pressable>
-          </View>
-        ) : null}
-
-        {/* Action Panel */}
-        {!parsedRows && !errorMessage ? (
-          <View style={styles.uploadArea}>
-            <CSVDropZone onParsed={handleParsed} onError={setErrorMessage} />
-            <Text style={styles.uploadSub}>
-              Ensure your CSV follows the standard schema requirements (`_key`, `_type`, `label`).
+            <Text style={styles.title}>Importação e Modelos de CSV</Text>
+            <Text style={styles.subtitle}>
+              Evento: {event.config.name} • Engines Ativas: {activeEngines.join(', ')}
             </Text>
           </View>
-        ) : null}
 
-        {/* Preview and Diff area */}
-        {parsedRows && diff && !errorMessage ? (
-          <View style={styles.previewArea}>
-            <Text style={styles.previewTitle}>Prévia de Mesclagem & Resolução</Text>
-            <Text style={styles.previewSub}>
-              Revise as alterações antes de confirmar. O Sekundo compara os códigos hierárquicos e atualiza seu evento.
-            </Text>
-
-            {/* Smart History Preservation Toggle */}
-            <Pressable
-              onPress={togglePreserveHistory}
-              style={[
-                styles.preserveBanner,
-                preserveHistory ? styles.preserveBannerActive : styles.preserveBannerInactive,
-              ]}
-            >
-              <Text style={styles.preserveBannerIcon}>{preserveHistory ? '🛡️' : '⚠️'}</Text>
-              <View style={styles.preserveBannerInfo}>
-                <Text style={styles.preserveBannerTitle}>
-                  {preserveHistory
-                    ? 'Proteção Inteligente de Histórico Ativa (Recomendado)'
-                    : 'Atenção: Sobrescrever Histórico Totalmente'}
+          {/* Section: Canonical Engine CSV Templates */}
+          {!parsedRows && (
+            <View style={styles.templateSection}>
+              <View style={styles.templateSectionHeader}>
+                <Text style={styles.templateSectionTitle}>
+                  📚 Modelos de CSV por Engine (Exemplos para Exportar e Importar)
                 </Text>
-                <Text style={styles.preserveBannerDesc}>
-                  {preserveHistory
-                    ? `Mantém intactos registros de visitas anteriores, datas e anotações locais (${preservedCount} itens protegidos).`
-                    : 'Todas as marcações de trabalho locais serão limpas ou substituídas pelos dados brutos do arquivo.'}
+                <Text style={styles.templateSectionSub}>
+                  Baixe os arquivos de exemplo para saber exatamente como construir o CSV para cada Engine.
                 </Text>
               </View>
-              <View
-                style={[
-                  styles.preserveBadge,
-                  preserveHistory ? styles.preserveBadgeActive : styles.preserveBadgeInactive,
-                ]}
-              >
-                <Text style={styles.preserveBadgeText}>{preserveHistory ? 'ATIVO' : 'DESLIGADO'}</Text>
-              </View>
-            </Pressable>
 
-            <View style={styles.previewWrapper}>
-              <CSVPreviewTable diff={diff} preservedHistoryCount={preservedCount} />
+              {/* Engine Tabs */}
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.engineTabs}>
+                {allTemplates.map((tpl) => {
+                  const isSelected = activeTemplateEngine === tpl.engineId;
+                  return (
+                    <Pressable
+                      key={tpl.engineId}
+                      onPress={() => setActiveTemplateEngine(tpl.engineId)}
+                      style={[styles.engineTab, isSelected && styles.engineTabActive]}
+                    >
+                      <Text style={[styles.engineTabText, isSelected && styles.engineTabTextActive]}>
+                        {tpl.name.split('&')[0].trim()}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+
+              {/* Template Card */}
+              <View style={styles.templateCard}>
+                <View style={styles.templateCardTop}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.templateCardTitle}>{currentTemplate.name}</Text>
+                    <Text style={styles.templateCardCategory}>{currentTemplate.category}</Text>
+                    <Text style={styles.templateCardDesc}>{currentTemplate.description}</Text>
+                  </View>
+                </View>
+
+                {/* Actions */}
+                <View style={styles.templateActionsRow}>
+                  <Pressable
+                    onPress={() => handleDownloadTemplate('canonical')}
+                    style={styles.templateBtnPrimary}
+                  >
+                    <Text style={styles.templateBtnPrimaryText}>📥 Baixar CSV Canônico (Completo)</Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => handleDownloadTemplate('clean_human')}
+                    style={styles.templateBtnSecondary}
+                  >
+                    <Text style={styles.templateBtnSecondaryText}>📥 Baixar CSV Limpo (Humano)</Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => handleCopyTemplate('canonical')}
+                    style={styles.templateBtnOutline}
+                  >
+                    <Text style={styles.templateBtnOutlineText}>📋 Copiar Exemplo</Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => setShowTemplateGuide(!showTemplateGuide)}
+                    style={styles.templateBtnGhost}
+                  >
+                    <Text style={styles.templateBtnGhostText}>
+                      {showTemplateGuide ? '▲ Ocultar Colunas' : 'ℹ️ Guia de Colunas'}
+                    </Text>
+                  </Pressable>
+                </View>
+
+                {copyFeedback && (
+                  <Text style={styles.copyNotice}>{copyFeedback}</Text>
+                )}
+
+                {/* Column Guide Accordion */}
+                {showTemplateGuide && (
+                  <View style={styles.columnGuideBox}>
+                    <Text style={styles.guideTitle}>Convenção de Códigos e Chaves:</Text>
+                    <Text style={styles.guideDesc}>{currentTemplate.keyConventions}</Text>
+
+                    <Text style={[styles.guideTitle, { marginTop: 12 }]}>Colunas Suportadas:</Text>
+                    {currentTemplate.columnGuides.map((col, idx) => (
+                      <View key={idx} style={styles.guideRow}>
+                        <Text style={styles.guideColName}>{col.column}</Text>
+                        <Text style={styles.guideColDesc}>{col.description}</Text>
+                        <Text style={styles.guideColEx}>Ex: {col.example}</Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
+              </View>
             </View>
+          )}
 
-            {/* Commit controls */}
-            <View style={styles.controlsRow}>
-              <Pressable onPress={handleReset} style={styles.cancelBtn}>
-                <Text style={styles.cancelBtnText}>Descartar</Text>
+          {/* Error Message */}
+          {errorMessage && (
+            <View style={styles.errorCard}>
+              <Text style={styles.errorTitle}>Erro na Validação</Text>
+              <ScrollView style={styles.errorScroll}>
+                <Text style={styles.errorText}>{errorMessage}</Text>
+              </ScrollView>
+              <Pressable onPress={handleReset} style={styles.errorDismissBtn}>
+                <Text style={styles.errorDismissText}>Tentar Novamente</Text>
               </Pressable>
+            </View>
+          )}
+
+          {/* Action Panel: DropZone & LEGO Mode */}
+          {!parsedRows && !errorMessage && (
+            <View style={styles.uploadArea}>
+              {/* Modular Import Mode Selector */}
+              <View style={styles.importModeRow}>
+                <Text style={styles.importModeTitle}>🧩 Modo LEGO de Importação por Partes:</Text>
+                <View style={styles.importModeButtons}>
+                  <Pressable
+                    onPress={() => setImportMode('additive_merge')}
+                    style={[
+                      styles.modeBtn,
+                      importMode === 'additive_merge' && styles.modeBtnActive,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.modeBtnText,
+                        importMode === 'additive_merge' && styles.modeBtnTextActive,
+                      ]}
+                    >
+                      Mesclar Aditivamente (Preserva outros ramos)
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => setImportMode('branch_replace')}
+                    style={[
+                      styles.modeBtn,
+                      importMode === 'branch_replace' && styles.modeBtnActive,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.modeBtnText,
+                        importMode === 'branch_replace' && styles.modeBtnTextActive,
+                      ]}
+                    >
+                      Substituir Apenas o Ramo Específico
+                    </Text>
+                  </Pressable>
+                </View>
+              </View>
+
+              <CSVDropZone onParsed={handleParsed} onError={setErrorMessage} />
+              <Text style={styles.uploadSub}>
+                Arraste qualquer CSV (canônico ou limpo). O Sekundo detecta a Engine automaticamente e isola linhas irregulares na Quarentena!
+              </Text>
+            </View>
+          )}
+
+          {/* Preview and Diff area */}
+          {parsedRows && diff && !errorMessage && (
+            <View style={styles.previewArea}>
+              {/* Auto-Detection Banner */}
+              {detectionReport && (
+                <View style={styles.detectionBanner}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.detectionTitle}>✨ Detecção Automática de Engine</Text>
+                    <Text style={styles.detectionSummary}>{detectionReport.summary}</Text>
+                    {detectionReport.matches.slice(0, 2).map((m) => (
+                      <Text key={m.engineId} style={styles.detectionReason}>
+                        • {m.name}: {m.confidence}% ({m.reasons[0] || 'Aderência estrutural'})
+                      </Text>
+                    ))}
+                  </View>
+                  {!activeEngines.includes(detectionReport.primaryEngine) && (
+                    <Pressable
+                      onPress={() => handleActivateDetectedEngine(detectionReport.primaryEngine)}
+                      style={styles.activateEngineBtn}
+                    >
+                      <Text style={styles.activateEngineBtnText}>
+                        ⚡ Ativar {detectionReport.primaryEngine}
+                      </Text>
+                    </Pressable>
+                  )}
+                </View>
+              )}
+
+              {/* Quarantine Staging Card (LEGO Fault Isolation) */}
+              {quarantinedRows.length > 0 && (
+                <View style={styles.quarantineCard}>
+                  <Text style={styles.quarantineTitle}>
+                    ⚠️ Quarentena Ativa: {quarantinedRows.length} linha(s) isolada(s)
+                  </Text>
+                  <Text style={styles.quarantineSub}>
+                    Linhas com formatação incompatível foram isoladas para que o restante do seu LEGO seja importado sem quebrar!
+                  </Text>
+                  <ScrollView style={styles.quarantineScroll}>
+                    {quarantinedRows.map((q, idx) => (
+                      <View key={idx} style={styles.quarantineItem}>
+                        <Text style={styles.quarantineLine}>Linha {q.rowNumber} {q.attemptedKey ? `(${q.attemptedKey})` : ''}:</Text>
+                        <Text style={styles.quarantineReason}>{q.reason}</Text>
+                      </View>
+                    ))}
+                  </ScrollView>
+                </View>
+              )}
+
+              <Text style={styles.previewTitle}>Prévia de Mesclagem & Resolução</Text>
+              <Text style={styles.previewSub}>
+                O Sekundo compara os códigos hierárquicos e atualiza seu evento de forma não-destrutiva.
+              </Text>
+
+              {/* Smart History Preservation Toggle */}
               <Pressable
-                onPress={handleCommit}
+                onPress={togglePreserveHistory}
                 style={[
-                  styles.commitBtn,
-                  preserveHistory ? styles.commitBtnPreserve : styles.commitBtnOverwrite,
+                  styles.historyToggleCard,
+                  preserveHistory && styles.historyToggleCardActive,
                 ]}
               >
-                <Text style={styles.commitBtnText}>
-                  {preserveHistory
-                    ? '✓ Mesclar (Protegendo Histórico)'
-                    : '⚠️ Sobrescrever Tudo'}
-                </Text>
+                <View style={styles.toggleRow}>
+                  <View
+                    style={[
+                      styles.toggleIndicator,
+                      preserveHistory && styles.toggleIndicatorActive,
+                    ]}
+                  />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.toggleTitle}>
+                      Preservar Histórico Operacional de Campo
+                    </Text>
+                    <Text style={styles.toggleDesc}>
+                      {preserveHistory
+                        ? `✅ ATIVADO: Preserva status trabalhado, datas de visita e anotações. (${preservedCount} nós preservados).`
+                        : '⚠️ DESATIVADO: Valores da planilha importada sobrescreverão todo o histórico.'}
+                    </Text>
+                  </View>
+                </View>
               </Pressable>
+
+              {/* Diff Summary Cards */}
+              <View style={styles.diffBadgesRow}>
+                <View style={[styles.diffBadge, styles.badgeAdd]}>
+                  <Text style={styles.badgeText}>+ {diff.added} Adições</Text>
+                </View>
+                <View style={[styles.diffBadge, styles.badgeMod]}>
+                  <Text style={styles.badgeText}>~ {diff.modified} Alterações</Text>
+                </View>
+                <View style={[styles.diffBadge, styles.badgeUnchanged]}>
+                  <Text style={styles.badgeText}>= {diff.unchanged} Inalterados</Text>
+                </View>
+                {diff.deleted > 0 && (
+                  <View style={[styles.diffBadge, styles.badgeDel]}>
+                    <Text style={styles.badgeText}>- {diff.deleted} Removidos</Text>
+                  </View>
+                )}
+              </View>
+
+              {/* Table Preview */}
+              <View style={styles.tableBox}>
+                <CSVPreviewTable diff={diff} />
+              </View>
+
+              {/* Actions Footer */}
+              <View style={styles.footerActions}>
+                <Pressable onPress={handleReset} style={styles.cancelBtn}>
+                  <Text style={styles.cancelBtnText}>Descartar e Voltar</Text>
+                </Pressable>
+                <Pressable onPress={handleCommit} style={styles.commitBtn}>
+                  <Text style={styles.commitBtnText}>
+                    Confirmar e Salvar no Sekundo ({parsedRows.length} itens)
+                  </Text>
+                </Pressable>
+              </View>
             </View>
-          </View>
-        ) : null}
-      </View>
+          )}
+        </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -200,9 +481,19 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#12151C',
-    alignItems: 'center',
-    justifyContent: 'center',
+  },
+  scrollWrapper: {
     padding: 24,
+    alignItems: 'center',
+  },
+  card: {
+    width: '100%',
+    maxWidth: 960,
+    backgroundColor: 'rgba(255, 255, 255, 0.02)',
+    borderRadius: 16,
+    padding: 24,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
   },
   loadingContainer: {
     flex: 1,
@@ -210,21 +501,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  card: {
-    width: '100%',
-    maxWidth: 900,
-    height: '100%',
-    maxHeight: 700,
-    backgroundColor: 'rgba(255, 255, 255, 0.02)',
-    borderRadius: 16,
-    padding: 24,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
-    display: 'flex',
-    flexDirection: 'column',
-  },
   header: {
-    marginBottom: 24,
+    marginBottom: 20,
   },
   backBtn: {
     marginBottom: 12,
@@ -237,166 +515,462 @@ const styles = StyleSheet.create({
   },
   title: {
     color: '#FFFFFF',
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: '700',
+    letterSpacing: -0.5,
   },
   subtitle: {
     color: '#6F7E94',
     fontSize: 13,
     marginTop: 4,
   },
-  uploadArea: {
-    flex: 1,
-    justifyContent: 'center',
-  },
-  uploadSub: {
-    color: '#4F5E74',
-    fontSize: 12,
-    textAlign: 'center',
-    marginTop: 16,
-    lineHeight: 18,
-  },
-  errorCard: {
-    flex: 1,
-    backgroundColor: 'rgba(239, 68, 68, 0.05)',
+  templateSection: {
+    marginBottom: 24,
+    backgroundColor: 'rgba(255, 255, 255, 0.02)',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: 'rgba(239, 68, 68, 0.2)',
-    padding: 20,
-    display: 'flex',
-    flexDirection: 'column',
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    padding: 16,
   },
-  errorTitle: {
-    color: '#EF4444',
-    fontSize: 16,
+  templateSectionHeader: {
+    marginBottom: 12,
+  },
+  templateSectionTitle: {
+    color: '#FFB800',
+    fontSize: 14,
     fontWeight: '700',
-    marginBottom: 10,
+    letterSpacing: -0.2,
   },
-  errorScroll: {
-    flex: 1,
+  templateSectionSub: {
+    color: '#8A94A6',
+    fontSize: 12,
+    marginTop: 2,
+  },
+  engineTabs: {
+    flexDirection: 'row',
+    marginBottom: 14,
+  },
+  engineTab: {
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    marginRight: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+  },
+  engineTabActive: {
+    backgroundColor: 'rgba(255, 184, 0, 0.15)',
+    borderColor: '#FFB800',
+  },
+  engineTabText: {
+    color: '#8A94A6',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  engineTabTextActive: {
+    color: '#FFB800',
+  },
+  templateCard: {
+    backgroundColor: 'rgba(0, 0, 0, 0.2)',
+    borderRadius: 8,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.04)',
+  },
+  templateCardTop: {
+    flexDirection: 'row',
+    marginBottom: 12,
+  },
+  templateCardTitle: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  templateCardCategory: {
+    color: '#60A5FA',
+    fontSize: 11,
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  templateCardDesc: {
+    color: '#9CA3AF',
+    fontSize: 12,
+    marginTop: 4,
+    lineHeight: 16,
+  },
+  templateActionsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  templateBtnPrimary: {
+    backgroundColor: '#FFB800',
+    borderRadius: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  templateBtnPrimaryText: {
+    color: '#12151C',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  templateBtnSecondary: {
+    backgroundColor: 'rgba(59, 130, 246, 0.2)',
+    borderRadius: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: '#3B82F6',
+  },
+  templateBtnSecondaryText: {
+    color: '#93C5FD',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  templateBtnOutline: {
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  templateBtnOutlineText: {
+    color: '#D1D5DB',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  templateBtnGhost: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  templateBtnGhostText: {
+    color: '#9CA3AF',
+    fontSize: 12,
+  },
+  copyNotice: {
+    color: '#10B981',
+    fontSize: 12,
+    marginTop: 8,
+    fontWeight: '600',
+  },
+  columnGuideBox: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  guideTitle: {
+    color: '#FFB800',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  guideDesc: {
+    color: '#8A94A6',
+    fontSize: 11,
+    marginTop: 2,
+  },
+  guideRow: {
+    marginTop: 6,
+    backgroundColor: 'rgba(255, 255, 255, 0.02)',
+    padding: 6,
+    borderRadius: 4,
+  },
+  guideColName: {
+    color: '#60A5FA',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  guideColDesc: {
+    color: '#D1D5DB',
+    fontSize: 11,
+    marginTop: 1,
+  },
+  guideColEx: {
+    color: '#9CA3AF',
+    fontSize: 10,
+    fontStyle: 'italic',
+    marginTop: 1,
+  },
+  uploadArea: {
+    marginTop: 8,
+  },
+  importModeRow: {
+    marginBottom: 14,
+    backgroundColor: 'rgba(255, 255, 255, 0.02)',
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+  },
+  importModeTitle: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
+    marginBottom: 8,
+  },
+  importModeButtons: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  modeBtn: {
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    borderRadius: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  modeBtnActive: {
+    borderColor: '#FFB800',
+    backgroundColor: 'rgba(255, 184, 0, 0.1)',
+  },
+  modeBtnText: {
+    color: '#8A94A6',
+    fontSize: 12,
+  },
+  modeBtnTextActive: {
+    color: '#FFB800',
+    fontWeight: '600',
+  },
+  uploadSub: {
+    color: '#6F7E94',
+    fontSize: 12,
+    textAlign: 'center',
+    marginTop: 12,
+    lineHeight: 16,
+  },
+  detectionBanner: {
+    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#3B82F6',
+    padding: 14,
+    marginBottom: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  detectionTitle: {
+    color: '#93C5FD',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  detectionSummary: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    marginTop: 2,
+  },
+  detectionReason: {
+    color: '#8A94A6',
+    fontSize: 11,
+    marginTop: 1,
+  },
+  activateEngineBtn: {
+    backgroundColor: '#3B82F6',
+    borderRadius: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  activateEngineBtnText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  quarantineCard: {
+    backgroundColor: 'rgba(239, 68, 68, 0.08)',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.3)',
+    padding: 14,
     marginBottom: 16,
   },
-  errorText: {
-    color: '#D1D5DB',
-    fontFamily: 'monospace',
-    fontSize: 12,
-    lineHeight: 18,
-  },
-  errorDismissBtn: {
-    backgroundColor: '#EF4444',
-    borderRadius: 8,
-    paddingVertical: 12,
-    alignItems: 'center',
-  },
-  errorDismissText: {
-    color: '#FFFFFF',
+  quarantineTitle: {
+    color: '#F87171',
+    fontSize: 13,
     fontWeight: '700',
-    fontSize: 14,
+  },
+  quarantineSub: {
+    color: '#D1D5DB',
+    fontSize: 11,
+    marginTop: 2,
+    marginBottom: 8,
+  },
+  quarantineScroll: {
+    maxHeight: 120,
+  },
+  quarantineItem: {
+    backgroundColor: 'rgba(0, 0, 0, 0.2)',
+    padding: 6,
+    borderRadius: 4,
+    marginBottom: 4,
+  },
+  quarantineLine: {
+    color: '#FCA5A5',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  quarantineReason: {
+    color: '#9CA3AF',
+    fontSize: 10,
+    marginTop: 1,
   },
   previewArea: {
-    flex: 1,
-    display: 'flex',
-    flexDirection: 'column',
+    marginTop: 8,
   },
   previewTitle: {
     color: '#FFFFFF',
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   previewSub: {
     color: '#8A94A6',
+    fontSize: 12,
+    marginTop: 2,
+    marginBottom: 14,
+  },
+  historyToggleCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.02)',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    padding: 12,
+    marginBottom: 14,
+  },
+  historyToggleCardActive: {
+    borderColor: 'rgba(16, 185, 129, 0.4)',
+    backgroundColor: 'rgba(16, 185, 129, 0.05)',
+  },
+  toggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  toggleIndicator: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    borderWidth: 2,
+    borderColor: '#4F5E74',
+    marginRight: 10,
+  },
+  toggleIndicatorActive: {
+    borderColor: '#10B981',
+    backgroundColor: '#10B981',
+  },
+  toggleTitle: {
+    color: '#FFFFFF',
     fontSize: 13,
-    marginTop: 4,
-    lineHeight: 18,
-    marginBottom: 16,
+    fontWeight: '600',
   },
-  previewWrapper: {
-    flex: 1,
-    marginBottom: 16,
+  toggleDesc: {
+    color: '#8A94A6',
+    fontSize: 11,
+    marginTop: 2,
   },
-  controlsRow: {
+  diffBadgesRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 14,
+  },
+  diffBadge: {
+    borderRadius: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  badgeAdd: {
+    backgroundColor: 'rgba(16, 185, 129, 0.15)',
+    borderWidth: 1,
+    borderColor: '#10B981',
+  },
+  badgeMod: {
+    backgroundColor: 'rgba(59, 130, 246, 0.15)',
+    borderWidth: 1,
+    borderColor: '#3B82F6',
+  },
+  badgeUnchanged: {
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+  },
+  badgeDel: {
+    backgroundColor: 'rgba(239, 68, 68, 0.15)',
+    borderWidth: 1,
+    borderColor: '#EF4444',
+  },
+  badgeText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  tableBox: {
+    marginBottom: 20,
+    borderRadius: 8,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+  },
+  footerActions: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
+    gap: 12,
   },
   cancelBtn: {
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
     borderRadius: 8,
+    paddingHorizontal: 16,
     paddingVertical: 12,
-    paddingHorizontal: 20,
-    marginRight: 12,
-    justifyContent: 'center',
   },
   cancelBtnText: {
-    color: '#A9B4C5',
-    fontSize: 14,
+    color: '#8A94A6',
+    fontSize: 13,
     fontWeight: '600',
   },
   commitBtn: {
+    backgroundColor: '#FFB800',
     borderRadius: 8,
+    paddingHorizontal: 20,
     paddingVertical: 12,
-    paddingHorizontal: 24,
-    justifyContent: 'center',
-  },
-  commitBtnPreserve: {
-    backgroundColor: '#10B981',
-  },
-  commitBtnOverwrite: {
-    backgroundColor: '#F59E0B',
   },
   commitBtnText: {
-    color: '#062016',
-    fontWeight: '700',
-    fontSize: 14,
-  },
-  preserveBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 14,
-    borderRadius: 10,
-    borderWidth: 1,
-    marginBottom: 16,
-  },
-  preserveBannerActive: {
-    backgroundColor: 'rgba(16, 185, 129, 0.08)',
-    borderColor: 'rgba(16, 185, 129, 0.3)',
-  },
-  preserveBannerInactive: {
-    backgroundColor: 'rgba(245, 158, 11, 0.08)',
-    borderColor: 'rgba(245, 158, 11, 0.3)',
-  },
-  preserveBannerIcon: {
-    fontSize: 24,
-    marginRight: 12,
-  },
-  preserveBannerInfo: {
-    flex: 1,
-    paddingRight: 10,
-  },
-  preserveBannerTitle: {
-    color: '#FFFFFF',
+    color: '#12151C',
     fontSize: 13,
     fontWeight: '700',
-    marginBottom: 2,
   },
-  preserveBannerDesc: {
-    color: '#9CA3AF',
-    fontSize: 11,
+  errorCard: {
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#EF4444',
+    padding: 16,
+    marginBottom: 16,
+  },
+  errorTitle: {
+    color: '#F87171',
+    fontSize: 14,
+    fontWeight: '700',
+    marginBottom: 6,
+  },
+  errorScroll: {
+    maxHeight: 120,
+  },
+  errorText: {
+    color: '#D1D5DB',
+    fontSize: 12,
+    fontFamily: 'monospace',
     lineHeight: 16,
   },
-  preserveBadge: {
+  errorDismissBtn: {
+    marginTop: 10,
+    alignSelf: 'flex-end',
+    backgroundColor: '#EF4444',
+    borderRadius: 4,
     paddingHorizontal: 10,
     paddingVertical: 4,
-    borderRadius: 12,
   },
-  preserveBadgeActive: {
-    backgroundColor: 'rgba(16, 185, 129, 0.25)',
-  },
-  preserveBadgeInactive: {
-    backgroundColor: 'rgba(245, 158, 11, 0.25)',
-  },
-  preserveBadgeText: {
+  errorDismissText: {
     color: '#FFFFFF',
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 0.5,
+    fontSize: 11,
+    fontWeight: '700',
   },
 });

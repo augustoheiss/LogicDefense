@@ -10,7 +10,7 @@ import { StyleSheet, Text, View, Platform } from 'react-native';
 import { parseCSV } from '@sekundo/core';
 
 interface CSVDropZoneProps {
-  onParsed: (rows: any[]) => void;
+  onParsed: (rows: any[], rawText?: string) => void;
   onError: (error: string) => void;
 }
 
@@ -54,9 +54,10 @@ export default function CSVDropZone({ onParsed, onError }: CSVDropZoneProps) {
       const text = event.target?.result as string;
       try {
         const parsed = parseCSV(text);
-        onParsed(parsed);
-      } catch (err: any) {
-        onError(err.message || 'Failed to parse CSV file.');
+        onParsed(parsed, text);
+      } catch {
+        // Pass raw text so fault-tolerant quarantine parser can salvage valid rows
+        onParsed([], text);
       }
     };
     reader.onerror = () => {

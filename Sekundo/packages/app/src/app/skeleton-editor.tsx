@@ -22,6 +22,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSkeleton } from '../hooks/useSkeleton';
 import { useLocalEvent } from '../hooks/useLocalEvent';
 import { TreeView } from '../components/ui/TreeView';
+import { GranularExportModal } from '../components/csv/GranularExportModal';
 import { serializeCSV, engineRegistry, pathKey } from '@sekundo/core';
 import type { NodeType, SkeletonNode } from '@sekundo/core';
 
@@ -42,6 +43,7 @@ export default function SkeletonEditor() {
   // Modal States
   const [modalVisible, setModalVisible] = useState(false);
   const [summaryModalVisible, setSummaryModalVisible] = useState(false);
+  const [exportModalVisible, setExportModalVisible] = useState(false);
   const [editingNode, setEditingNode] = useState<SkeletonNode | null>(null);
   const [parentKey, setParentKey] = useState<string | null>(null);
 
@@ -193,8 +195,11 @@ export default function SkeletonEditor() {
           >
             <Text style={styles.actionBtnText}>Import CSV</Text>
           </Pressable>
-          <Pressable onPress={handleExportCSV} style={styles.actionBtn}>
-            <Text style={styles.actionBtnText}>Export CSV</Text>
+          <Pressable
+            onPress={() => setExportModalVisible(true)}
+            style={[styles.actionBtn, { borderColor: '#10B981' }]}
+          >
+            <Text style={[styles.actionBtnText, { color: '#10B981' }]}>📤 Exportar CSV (LEGO)</Text>
           </Pressable>
         </View>
       </View>
@@ -473,6 +478,15 @@ export default function SkeletonEditor() {
           </View>
         </View>
       </Modal>
+
+      {/* Sliced / Granular Export Modal (LEGO) */}
+      <GranularExportModal
+        visible={exportModalVisible}
+        onClose={() => setExportModalVisible(false)}
+        flatRegistry={flatRegistry}
+        eventName={event?.config?.name || 'Sekundo'}
+        engineId={event?.config?.engineId}
+      />
     </SafeAreaView>
   );
 }
