@@ -14,13 +14,17 @@ import { Platform } from 'react-native';
 import * as SplashScreen from 'expo-splash-screen';
 import * as NavigationBar from 'expo-navigation-bar';
 
-// Prevent auto-hiding splash screen initially
-SplashScreen.preventAutoHideAsync();
+// Prevent auto-hiding splash screen initially on native
+if (Platform.OS !== 'web') {
+  SplashScreen.preventAutoHideAsync().catch(() => {});
+}
 
 export default function RootLayout() {
-  // Hide splash screen on mount
+  // Hide splash screen on mount on native
   useEffect(() => {
-    SplashScreen.hideAsync();
+    if (Platform.OS !== 'web') {
+      SplashScreen.hideAsync().catch(() => {});
+    }
   }, []);
 
   // Configure Android system navigation bar for fullscreen immersive feel

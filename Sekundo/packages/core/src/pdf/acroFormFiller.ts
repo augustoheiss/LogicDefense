@@ -5,8 +5,14 @@
  * and 4-Up graphical imposition for official PDF assignment templates (such as S-89).
  */
 
-import { PDFDocument, PDFTextField, PDFCheckBox, PDFDropdown, PDFRadioGroup } from 'pdf-lib';
+// Type-only import for compilation
+import type { PDFDocument as PDFDocumentType, PDFTextField as PDFTextFieldType, PDFCheckBox as PDFCheckBoxType, PDFDropdown as PDFDropdownType, PDFRadioGroup as PDFRadioGroupType } from 'pdf-lib';
 import type { PDFFormField } from './types';
+
+/** Helper to dynamically load pdf-lib on demand */
+async function getPdfLib() {
+  return await import('pdf-lib');
+}
 
 // ---------------------------------------------------------------------------
 // Assignment Slip Data Contract (S-89 Model)
@@ -46,6 +52,7 @@ export interface FormFillResult {
  * Inspects a PDF binary and extracts all interactive AcroForm fields.
  */
 export async function inspectPDFForm(pdfBytes: Uint8Array): Promise<PDFFormField[]> {
+  const { PDFDocument, PDFTextField, PDFCheckBox, PDFDropdown, PDFRadioGroup } = await getPdfLib();
   const pdfDoc = await PDFDocument.load(pdfBytes, { ignoreEncryption: true });
   const form = pdfDoc.getForm();
   const fields = form.getFields();
@@ -114,6 +121,7 @@ export async function fillAcroForm(
   values: Record<string, string | boolean | number>,
   options: { flatten?: boolean } = {}
 ): Promise<FormFillResult> {
+  const { PDFDocument, PDFTextField, PDFCheckBox, PDFDropdown } = await getPdfLib();
   const pdfDoc = await PDFDocument.load(templatePdfBytes, { ignoreEncryption: true });
   const form = pdfDoc.getForm();
   const fields = form.getFields();
@@ -193,6 +201,7 @@ export async function fillS89Assignments4Up(
   assignments: S89Assignment[],
   options: { flatten?: boolean } = {}
 ): Promise<FormFillResult> {
+  const { PDFDocument } = await getPdfLib();
   const pdfDoc = await PDFDocument.load(templatePdfBytes, { ignoreEncryption: true });
   const form = pdfDoc.getForm();
   const fields = form.getFields();
