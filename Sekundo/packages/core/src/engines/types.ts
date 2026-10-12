@@ -10,6 +10,9 @@
 
 import type { SkeletonNode, NodeType } from '../skeleton/types';
 
+import type { TransformerMetrics } from './transformerTypes';
+export * from './transformerTypes';
+
 // ---------------------------------------------------------------------------
 // Engine Identifiers
 // ---------------------------------------------------------------------------
@@ -22,7 +25,8 @@ export type EngineId =
   | 'incident_command'     // FEMA ICS/NIMS, Graicunas span of control
   | 'live_production_ros'  // Live Run-of-Show, second-accurate drift
   | 'tournament_pairings'  // Swiss & Elimination Blossom pairings
-  | 'canvassing_logistics';// Advanced 8-code field canvassing & eLOT routing
+  | 'canvassing_logistics' // Advanced 8-code field canvassing & eLOT routing
+  | 'transformer';         // Metamorphic engine: custom CSV columns & on-demand math laws
 
 // ---------------------------------------------------------------------------
 // 1. Territory Logistics Domain Types
@@ -231,7 +235,8 @@ export type EngineMetrics =
   | { engineId: 'incident_command'; data: ICSMetrics }
   | { engineId: 'live_production_ros'; data: RunOfShowMetrics }
   | { engineId: 'tournament_pairings'; data: TournamentMetrics }
-  | { engineId: 'canvassing_logistics'; data: CanvassingMetrics };
+  | { engineId: 'canvassing_logistics'; data: CanvassingMetrics }
+  | { engineId: 'transformer'; data: TransformerMetrics };
 
 // ---------------------------------------------------------------------------
 // Engine Contract Interface
@@ -260,7 +265,7 @@ export interface EventEngine {
   validateNode: (node: SkeletonNode) => { valid: boolean; errors: string[] };
 
   /** Calculates domain metrics and rollups across the skeleton tree */
-  calculateMetrics: (tree: SkeletonNode[]) => EngineMetrics;
+  calculateMetrics: (tree: SkeletonNode[], contextConfig?: unknown) => EngineMetrics;
 
   /** Supported export formats for this engine */
   supportedExports: ('csv' | 'xlsx' | 'pdf' | 'yaml' | 'geojson')[];

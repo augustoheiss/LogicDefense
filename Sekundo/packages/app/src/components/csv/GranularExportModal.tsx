@@ -26,6 +26,7 @@ import {
   type FlatRegistry,
   type EngineId,
   type GranularScope,
+  type TransformerConfig,
 } from '@sekundo/core';
 
 interface GranularExportModalProps {
@@ -34,6 +35,7 @@ interface GranularExportModalProps {
   flatRegistry: FlatRegistry;
   eventName: string;
   engineId?: EngineId;
+  transformerConfig?: TransformerConfig;
 }
 
 export function GranularExportModal({
@@ -42,6 +44,7 @@ export function GranularExportModal({
   flatRegistry,
   eventName,
   engineId = 'territory_logistics',
+  transformerConfig,
 }: GranularExportModalProps) {
   const [selectedBranch, setSelectedBranch] = useState<string>('all');
   const [scope, setScope] = useState<GranularScope>('all');
@@ -92,8 +95,9 @@ export function GranularExportModal({
       format,
       delimiter,
       engineId,
+      transformerConfig,
     });
-  }, [flatRegistry, selectedBranch, scope, format, delimiter, engineId]);
+  }, [flatRegistry, selectedBranch, scope, format, delimiter, engineId, transformerConfig]);
 
   const handleDownload = () => {
     if (Platform.OS === 'web') {

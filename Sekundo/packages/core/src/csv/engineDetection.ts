@@ -75,6 +75,7 @@ export function detectEnginesFromCSV(csvText: string): EngineDetectionReport {
     tournament_pairings: { confidence: 0, reasons: [] },
     canvassing_logistics: { confidence: 0, reasons: [] },
     generic_wbs: { confidence: 15, reasons: ['Compatível com qualquer hierarquia tabular'] },
+    transformer: { confidence: 0, reasons: [] },
   };
 
   // Helper check
@@ -209,6 +210,28 @@ export function detectEnginesFromCSV(csvText: string): EngineDetectionReport {
     scores.generic_wbs.reasons.push('Terminologia formal de pacotes de trabalho e fases de projeto');
   }
 
+  // 9. Transformer Engine Detection (Explicit keyword or multi-attribute composite)
+  if (hasHeader('transformer', 'metamorfico', 'custom', 'personalizado') || bodyContains('transformer', 'metamorfico')) {
+    scores.transformer.confidence += 70;
+    scores.transformer.reasons.push('Identificador explícito de formato metamórfico Transformer');
+  }
+
+  let activeDomainCount = 0;
+  if (scores.territory_logistics.confidence >= 25) activeDomainCount++;
+  if (scores.roster_assignments.confidence >= 25) activeDomainCount++;
+  if (scores.live_production_ros.confidence >= 25) activeDomainCount++;
+  if (scores.incident_command.confidence >= 25) activeDomainCount++;
+  if (scores.tournament_pairings.confidence >= 25) activeDomainCount++;
+  if (scores.study_synthesis.confidence >= 25) activeDomainCount++;
+  if (scores.canvassing_logistics.confidence >= 25) activeDomainCount++;
+
+  if (activeDomainCount >= 2) {
+    scores.transformer.confidence = Math.max(scores.transformer.confidence, 45 + activeDomainCount * 10);
+    scores.transformer.reasons.push(
+      `Esquema híbrido combinando ${activeDomainCount} domínios matemáticos simultâneos`
+    );
+  }
+
   // Normalize scores and sort
   const engineNames: Record<EngineId, string> = {
     territory_logistics: 'Logística de Territórios & Visitas',
@@ -219,6 +242,7 @@ export function detectEnginesFromCSV(csvText: string): EngineDetectionReport {
     live_production_ros: 'Produção ao Vivo & Run-of-Show',
     tournament_pairings: 'Emparelhamento de Torneios',
     canvassing_logistics: 'Canvassing & Campanhas de Campo',
+    transformer: 'Engine Transformer (Metamórfica & Universal)',
   };
 
   const matches: DetectedEngineMatch[] = (Object.keys(scores) as EngineId[])

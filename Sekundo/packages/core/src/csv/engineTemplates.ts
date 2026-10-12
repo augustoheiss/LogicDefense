@@ -318,6 +318,38 @@ export const ENGINE_TEMPLATES: Record<EngineId, EngineCSVTemplate> = {
     ],
     keyConventions: 'Nível 1 = Região da Campanha; Nível 2 = Logradouro/Trecho com sequência par/ímpar; Nível 3 = Porta numerada.',
   },
+  transformer: {
+    engineId: 'transformer',
+    name: 'Engine Transformer (Metamórfica & Universal)',
+    category: 'Universal & Metamórfico',
+    description: 'Motor flexível onde você escolhe exatamente as colunas a guardar no CSV e ativa a matemática de qualquer outra Engine sob demanda.',
+    suggestedFilename: 'modelo_transformer_sekundo.csv',
+    canonicalCsv: [
+      '_key,_type,label,value,email,_meta_json',
+      '01,root,Projeto Metamórfico Global,,,"{}"',
+      '01-01,branch,Módulo Operacional A,,,"{}"',
+      '01-01-01,leaf,Atividade Alpha,1,,"{""endereco"":""Av Paulista, 1000"",""trabalhado"":1,""responsavel"":""Carlos Silva"",""duracao_min"":45,""estimativa_horas"":4,""progresso_pct"":100,""observacoes"":""Concluído com sucesso""}"',
+      '01-01-02,leaf,Atividade Beta,0,,"{""endereco"":""Av Paulista, 1050"",""trabalhado"":0,""responsavel"":""Mariana Lima"",""duracao_min"":30,""estimativa_horas"":8,""progresso_pct"":25,""observacoes"":""Aguardando liberação""}"',
+    ].join('\n'),
+    cleanHumanCsv: [
+      'key,tipo,nome,responsavel,duracao_min,trabalhado,endereco,estimativa_horas,progresso_pct,observacoes',
+      '01,raiz,Projeto Metamórfico Global,,,,,,,',
+      '01-01,bloco,Módulo Operacional A,,,,,,,',
+      '01-01-01,item,Atividade Alpha,Carlos Silva,45,1,"Av Paulista, 1000",4,100,Concluído com sucesso',
+      '01-01-02,item,Atividade Beta,Mariana Lima,30,0,"Av Paulista, 1050",8,25,Aguardando liberação',
+    ].join('\n'),
+    columnGuides: [
+      { column: '_key / key', description: 'Código hierárquico estruturado (01, 01-01, 01-01-01)', example: '01-01-01' },
+      { column: 'responsavel', description: 'Nome do responsável (usado no detector de conflitos e balanceamento)', example: 'Carlos Silva' },
+      { column: 'duracao_min', description: 'Duração em minutos para cálculo de carga horária', example: '45' },
+      { column: 'trabalhado', description: '1 se finalizado, 0 se pendente (ativa rollup de cobertura)', example: '1' },
+      { column: 'endereco', description: 'Endereço físico para roteirização e coordenadas', example: 'Av Paulista, 1000' },
+      { column: 'estimativa_horas', description: 'Esforço estimado para cálculo de WBS ponderado', example: '8' },
+      { column: 'progresso_pct', description: 'Porcentagem de conclusão da tarefa (0 a 100)', example: '75' },
+      { column: 'observacoes', description: 'Anotações contextuais livres', example: 'Observação da equipe' },
+    ],
+    keyConventions: 'Esquema metamórfico dinâmico: adicione ou remova qualquer coluna; o Transformer preserva tudo e executa as Leis Matemáticas ativas.',
+  },
 };
 
 /**

@@ -11,9 +11,9 @@ import type { SkeletonNode } from '../skeleton/types';
 
 describe('Universal Engines Suite (Phase 2)', () => {
   describe('Engine Registry', () => {
-    it('should have all 8 engines registered', () => {
+    it('should have all 9 engines registered', () => {
       const engines = engineRegistry.list();
-      expect(engines).toHaveLength(8);
+      expect(engines).toHaveLength(9);
       const ids = engines.map((e) => e.id);
       expect(ids).toContain('territory_logistics');
       expect(ids).toContain('roster_assignments');
@@ -23,6 +23,7 @@ describe('Universal Engines Suite (Phase 2)', () => {
       expect(ids).toContain('live_production_ros');
       expect(ids).toContain('tournament_pairings');
       expect(ids).toContain('canvassing_logistics');
+      expect(ids).toContain('transformer');
     });
   });
 

@@ -16,6 +16,7 @@ import { incidentCommandEngine } from './incidentCommandEngine';
 import { runOfShowEngine } from './runOfShowEngine';
 import { tournamentEngine } from './tournamentEngine';
 import { canvassingEngine } from './canvassingEngine';
+import { transformerEngine } from './transformerEngine';
 
 const BUILTIN_ENGINES: Record<EngineId, EventEngine> = {
   territory_logistics: territoryEngine,
@@ -26,6 +27,7 @@ const BUILTIN_ENGINES: Record<EngineId, EventEngine> = {
   live_production_ros: runOfShowEngine,
   tournament_pairings: tournamentEngine,
   canvassing_logistics: canvassingEngine,
+  transformer: transformerEngine,
 };
 
 /**

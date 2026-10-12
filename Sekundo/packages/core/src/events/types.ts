@@ -7,7 +7,7 @@
  */
 
 import type { PathKey } from '../skeleton/types';
-import type { EngineId } from '../engines/types';
+import type { EngineId, TransformerConfig } from '../engines/types';
 
 // ---------------------------------------------------------------------------
 // Frequency
@@ -67,6 +67,12 @@ export interface EventConfig {
    * (e.g. ['territory_logistics', 'roster_assignments'] for an event managing both field territories and volunteers).
    */
   activeEngines?: EngineId[];
+
+  /**
+   * Custom Transformer Engine configuration:
+   * Dynamic schema columns + on-demand active mathematical laws.
+   */
+  transformerConfig?: TransformerConfig;
 }
 
 /**

@@ -23,6 +23,7 @@ import { useSkeleton } from '../hooks/useSkeleton';
 import { useLocalEvent } from '../hooks/useLocalEvent';
 import { TreeView } from '../components/ui/TreeView';
 import { GranularExportModal } from '../components/csv/GranularExportModal';
+import { TransformerStudioModal } from '../components/transformer/TransformerStudioModal';
 import { serializeCSV, engineRegistry, pathKey } from '@sekundo/core';
 import type { NodeType, SkeletonNode } from '@sekundo/core';
 
@@ -31,19 +32,20 @@ export default function SkeletonEditor() {
   const { id } = useLocalSearchParams();
   const eventId = typeof id === 'string' ? id : '';
 
-  const { events } = useLocalEvent();
+  const { events, updateEventState } = useLocalEvent();
   const event = events.find((e) => e.config.id === eventId);
 
   const { flatRegistry, tree, loading, addNode, updateNode, deleteNode } = useSkeleton(eventId);
 
   // Engine & Metrics
   const engine = engineRegistry.get(event?.config?.engineId);
-  const metrics = engine.calculateMetrics(tree);
+  const metrics = engine.calculateMetrics(tree, event?.config);
 
   // Modal States
   const [modalVisible, setModalVisible] = useState(false);
   const [summaryModalVisible, setSummaryModalVisible] = useState(false);
   const [exportModalVisible, setExportModalVisible] = useState(false);
+  const [transformerModalVisible, setTransformerModalVisible] = useState(false);
   const [editingNode, setEditingNode] = useState<SkeletonNode | null>(null);
   const [parentKey, setParentKey] = useState<string | null>(null);
 
@@ -201,6 +203,12 @@ export default function SkeletonEditor() {
           >
             <Text style={[styles.actionBtnText, { color: '#10B981' }]}>📤 Exportar CSV (LEGO)</Text>
           </Pressable>
+          <Pressable
+            onPress={() => setTransformerModalVisible(true)}
+            style={[styles.actionBtn, { borderColor: '#8B5CF6' }]}
+          >
+            <Text style={[styles.actionBtnText, { color: '#C4B5FD' }]}>🎛️ Transformer Studio</Text>
+          </Pressable>
         </View>
       </View>
 
@@ -243,6 +251,11 @@ export default function SkeletonEditor() {
           {metrics.engineId === 'canvassing_logistics' && (
             <Text style={styles.metricsSummary}>
               Canvassing: {metrics.data.contactRatePercent}% contato • {metrics.data.contactedCount} atendidos / {metrics.data.totalDoors} portas
+            </Text>
+          )}
+          {metrics.engineId === 'transformer' && (
+            <Text style={styles.metricsSummary}>
+              Transformer: {metrics.data.activeModules.length} leis ativas • {metrics.data.alerts.length > 0 ? `⚠️ ${metrics.data.alerts.length} alertas` : '✅ Sem alertas'}
             </Text>
           )}
         </View>
@@ -342,6 +355,43 @@ export default function SkeletonEditor() {
           >
             <Text style={[styles.summaryBtnText, { color: '#93C5FD' }]}>🛡️ Comando ICS</Text>
           </Pressable>
+        )}
+
+        {metrics.engineId === 'transformer' && (
+          <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+            {metrics.data.summaryBadges.map((b) => (
+              <View
+                key={b.id}
+                style={{
+                  paddingHorizontal: 8,
+                  paddingVertical: 4,
+                  borderRadius: 6,
+                  backgroundColor: b.color ? `${b.color}22` : 'rgba(139, 92, 246, 0.2)',
+                  borderWidth: 1,
+                  borderColor: b.color || '#8B5CF6',
+                }}
+              >
+                <Text
+                  style={{
+                    fontSize: 11,
+                    fontWeight: '700',
+                    color: b.color || '#C4B5FD',
+                  }}
+                >
+                  {b.label}: {b.value}
+                </Text>
+              </View>
+            ))}
+            <Pressable
+              onPress={() => setTransformerModalVisible(true)}
+              style={[
+                styles.summaryBtn,
+                { backgroundColor: 'rgba(139, 92, 246, 0.2)', borderColor: '#8B5CF6' },
+              ]}
+            >
+              <Text style={[styles.summaryBtnText, { color: '#C4B5FD' }]}>🎛️ Leis & Colunas</Text>
+            </Pressable>
+          </View>
         )}
       </View>
 
@@ -486,6 +536,16 @@ export default function SkeletonEditor() {
         flatRegistry={flatRegistry}
         eventName={event?.config?.name || 'Sekundo'}
         engineId={event?.config?.engineId}
+        transformerConfig={event?.config?.transformerConfig}
+      />
+
+      {/* Transformer Metamorphic Studio Modal */}
+      <TransformerStudioModal
+        visible={transformerModalVisible}
+        onClose={() => setTransformerModalVisible(false)}
+        event={event}
+        onUpdateEventState={updateEventState}
+        nodes={tree}
       />
     </SafeAreaView>
   );

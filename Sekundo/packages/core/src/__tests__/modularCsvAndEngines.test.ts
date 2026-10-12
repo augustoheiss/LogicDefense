@@ -29,11 +29,12 @@ describe('Canonical Engine CSV Templates', () => {
     'live_production_ros',
     'tournament_pairings',
     'canvassing_logistics',
+    'transformer',
   ];
 
-  it('provides all 8 engine templates', () => {
+  it('provides all 9 engine templates', () => {
     const list = listEngineTemplates();
-    expect(list).toHaveLength(8);
+    expect(list).toHaveLength(9);
     for (const engineId of allEngineIds) {
       const template = getEngineTemplate(engineId);
       expect(template).toBeDefined();

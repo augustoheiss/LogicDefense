@@ -11,4 +11,5 @@ export * from './incidentCommandEngine';
 export * from './runOfShowEngine';
 export * from './tournamentEngine';
 export * from './canvassingEngine';
+export * from './transformerEngine';
 export { engineRegistry } from './registry';

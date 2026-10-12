@@ -7,7 +7,7 @@
  */
 
 import type { FlatRegistry, FlatSkeletonEntry, SkeletonNode } from '../skeleton/types';
-import type { EngineId } from '../engines/types';
+import type { EngineId, TransformerConfig } from '../engines/types';
 import * as pathKey from '../skeleton/pathKey';
 import { flattenTree } from '../skeleton/skeletonTree';
 import { serializeCSV } from './serializer';
@@ -38,6 +38,9 @@ export interface GranularExportOptions {
 
   /** Engine ID to determine the best human-readable column layout */
   engineId?: EngineId;
+
+  /** Transformer configuration for dynamic custom column export */
+  transformerConfig?: TransformerConfig;
 
   /** CSV delimiter: ',' (default) or ';' */
   delimiter?: ',' | ';';
@@ -183,6 +186,40 @@ export function exportGranularCSV(
         escapeCsvCell(m.room || '', delim),
         escapeCsvCell(m.durationMinutes !== undefined ? m.durationMinutes : '', delim),
         escapeCsvCell(m.confirmed ? 'sim' : 'nao', delim),
+      ];
+      lines.push(row.join(delim));
+    }
+    return lines.join('\n') + '\n';
+  }
+
+  // Format: Transformer (Custom Dynamic Schema Selected by User)
+  if (engineId === 'transformer') {
+    const customFields =
+      options.transformerConfig?.customFields && options.transformerConfig.customFields.length > 0
+        ? options.transformerConfig.customFields
+        : ['responsavel', 'duracao_min', 'trabalhado', 'endereco', 'estimativa_horas', 'progresso_pct', 'observacoes'];
+
+    const headers = ['key', 'tipo', 'nome', ...customFields];
+    const lines = [headers.join(delim)];
+
+    for (const item of filtered) {
+      const m = (item.meta || {}) as Record<string, any>;
+      const row = [
+        escapeCsvCell(item.key, delim),
+        escapeCsvCell(item.type, delim),
+        escapeCsvCell(item.label, delim),
+        ...customFields.map((field) => {
+          let val = m[field];
+          if (val === undefined || val === null) {
+            if (field === 'trabalhado') val = m.worked !== undefined ? m.worked : item.value;
+            else if (field === 'endereco') val = m.address || '';
+            else if (field === 'responsavel') val = m.assignedTo || m.workerName || '';
+            else if (field === 'duracao_min') val = m.durationMinutes !== undefined ? m.durationMinutes : '';
+            else if (field === 'observacoes') val = m.notes || '';
+            else val = '';
+          }
+          return escapeCsvCell(val, delim);
+        }),
       ];
       lines.push(row.join(delim));
     }
