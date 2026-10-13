@@ -28,6 +28,7 @@ import { useSkeleton } from '../hooks/useSkeleton';
 import { useLocalEvent } from '../hooks/useLocalEvent';
 import { pathKey } from '@sekundo/core';
 import type { FlatSkeletonEntry } from '@sekundo/core';
+import { AddressEditModal } from '../components/territory/AddressEditModal';
 
 interface ChecklistGroup {
   groupKey: string;
@@ -51,6 +52,7 @@ export default function TerritoryChecklistScreen() {
   const [filterMode, setFilterMode] = useState<'all' | 'pending' | 'worked'>('all');
   const [activeNoteKey, setActiveNoteKey] = useState<string | null>(null);
   const [noteDraft, setNoteDraft] = useState<string>('');
+  const [editingAddressItem, setEditingAddressItem] = useState<FlatSkeletonEntry | null>(null);
 
   // Extract territory items and group by closest parent group
   const { groups, overallStats } = useMemo(() => {
@@ -354,6 +356,23 @@ export default function TerritoryChecklistScreen() {
                   const meta = (item.meta || {}) as Record<string, any>;
                   const isWorked = Number(meta.worked) === 1;
 
+                  const line = meta.line || '';
+                  const line2 = meta.line2 || meta.neighborhood || meta.bairro || '';
+                  const city = meta.city || meta.cidade || '';
+                  const postalcode = meta.postalcode || meta.cep || '';
+                  const propType = meta.property_type || meta.tipo_imovel || 'residencial';
+                  const isForeign = Boolean(meta.is_foreign || meta.foreign || meta.language || meta.estrangeiro);
+                  const foreignLang = meta.language || meta.idioma || '';
+                  const latNum = meta.lat != null ? Number(meta.lat) : (meta.latitude != null ? Number(meta.latitude) : undefined);
+                  const lngNum = meta.lng != null ? Number(meta.lng) : (meta.longitude != null ? Number(meta.longitude) : undefined);
+
+                  const propTypeLabels: Record<string, string> = {
+                    residencial: '🏠 Residência',
+                    comercial: '🏢 Comércio',
+                    predio: '🏙️ Prédio',
+                    outro: '📦 Outro',
+                  };
+
                   return (
                     <View
                       key={item.key}
@@ -375,20 +394,57 @@ export default function TerritoryChecklistScreen() {
                         </Text>
                       </Pressable>
 
-                      {/* Middle: Key and Street Info (Tap to toggle) */}
+                      {/* Middle: Full Address Breakdown */}
                       <Pressable
-                        onPress={() => handleToggleItem(item.key)}
+                        onPress={() => setEditingAddressItem(item)}
                         style={styles.itemInfo}
                       >
                         <View style={styles.itemKeyRow}>
                           <Text style={styles.itemKeyText}>{item.key}</Text>
+                          {meta.territory_number ? (
+                            <View style={styles.territoryNumberBadge}>
+                              <Text style={styles.territoryNumberText}>{meta.territory_number}</Text>
+                            </View>
+                          ) : null}
+                          <View style={styles.propTypeBadge}>
+                            <Text style={styles.propTypeText}>{propTypeLabels[propType] || '🏠 Residência'}</Text>
+                          </View>
+                          {isForeign ? (
+                            <View style={styles.foreignBadge}>
+                              <Text style={styles.foreignBadgeText}>
+                                🌐 {foreignLang ? foreignLang : 'Estrangeiro'}
+                              </Text>
+                            </View>
+                          ) : null}
                           {meta.notes ? (
                             <View style={styles.noteIndicatorBadge}>
-                              <Text style={styles.noteIndicatorText}>📝 Anotação</Text>
+                              <Text style={styles.noteIndicatorText}>📝 Nota</Text>
                             </View>
                           ) : null}
                         </View>
-                        <Text style={styles.itemLabel}>{item.label}</Text>
+
+                        {/* Main Address / Street Line */}
+                        <Text style={styles.itemLabel}>
+                          {line || item.label}
+                        </Text>
+
+                        {/* Subtitle: Neighborhood, City, CEP */}
+                        {(line2 || city || postalcode) ? (
+                          <Text style={styles.addressSubDetail}>
+                            {[line2, city, postalcode ? `CEP: ${postalcode}` : null]
+                              .filter(Boolean)
+                              .join(' • ')}
+                          </Text>
+                        ) : null}
+
+                        {/* Coordinates */}
+                        {latNum != null && lngNum != null && !isNaN(latNum) && !isNaN(lngNum) ? (
+                          <Text style={styles.coordsText}>
+                            🧭 {latNum.toFixed(5)}, {lngNum.toFixed(5)}
+                          </Text>
+                        ) : null}
+
+                        {/* Field Notes Snippet */}
                         {meta.notes ? (
                           <Text style={styles.itemNoteSnippet} numberOfLines={2}>
                             "{meta.notes}"
@@ -396,13 +452,24 @@ export default function TerritoryChecklistScreen() {
                         ) : null}
                       </Pressable>
 
-                      {/* Right: Quick Note Edit Button */}
-                      <Pressable
-                        onPress={() => openNoteEditor(item)}
-                        style={styles.addNoteBtn}
-                      >
-                        <Text style={styles.addNoteBtnIcon}>✏️</Text>
-                      </Pressable>
+                      {/* Right: Actions */}
+                      <View style={styles.actionButtonsCol}>
+                        <Pressable
+                          onPress={() => setEditingAddressItem(item)}
+                          style={styles.editAddressBtn}
+                          accessibilityLabel="Editar Endereço Completo"
+                        >
+                          <Text style={styles.editAddressBtnText}>✏️ Editar</Text>
+                        </Pressable>
+
+                        <Pressable
+                          onPress={() => openNoteEditor(item)}
+                          style={styles.addNoteBtn}
+                          accessibilityLabel="Anotação Rápida"
+                        >
+                          <Text style={styles.addNoteBtnIcon}>📝</Text>
+                        </Pressable>
+                      </View>
                     </View>
                   );
                 })}
@@ -411,6 +478,16 @@ export default function TerritoryChecklistScreen() {
           ))
         )}
       </ScrollView>
+
+      {/* Address Edit Full Modal */}
+      <AddressEditModal
+        visible={!!editingAddressItem}
+        item={editingAddressItem}
+        onClose={() => setEditingAddressItem(null)}
+        onSave={async (key, updates) => {
+          await updateNode(key, updates);
+        }}
+      />
 
       {/* Note Editor Modal */}
       <Modal
@@ -741,11 +818,72 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
     marginTop: 2,
   },
+  territoryNumberBadge: {
+    backgroundColor: 'rgba(139, 92, 246, 0.15)',
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 4,
+  },
+  territoryNumberText: {
+    color: '#A78BFA',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  propTypeBadge: {
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 4,
+  },
+  propTypeText: {
+    color: '#C3D0E5',
+    fontSize: 10,
+    fontWeight: '600',
+  },
+  foreignBadge: {
+    backgroundColor: 'rgba(59, 130, 246, 0.15)',
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 4,
+  },
+  foreignBadgeText: {
+    color: '#60A5FA',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  addressSubDetail: {
+    color: '#9CA3AF',
+    fontSize: 12,
+    marginTop: 2,
+  },
+  coordsText: {
+    color: '#6F7E94',
+    fontSize: 10,
+    fontFamily: 'monospace',
+    marginTop: 2,
+  },
+  actionButtonsCol: {
+    alignItems: 'flex-end',
+    gap: 6,
+  },
+  editAddressBtn: {
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 6,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+  },
+  editAddressBtnText: {
+    color: '#E2E8F0',
+    fontSize: 11,
+    fontWeight: '600',
+  },
   addNoteBtn: {
-    padding: 8,
+    padding: 6,
   },
   addNoteBtnIcon: {
-    fontSize: 16,
+    fontSize: 15,
   },
   modalOverlay: {
     flex: 1,

@@ -76,24 +76,24 @@ describe('AcroForm Inspector & Injector Engine', () => {
 
     const assignments: S89Assignment[] = [
       {
-        studentName: 'Irmão Lucas Santos',
+        studentName: 'Lucas Santos',
         date: '2026-10-14',
-        partTitle: 'Leitura da Bíblia',
+        partTitle: 'Apresentação Inicial',
       },
       {
-        studentName: 'Irmão Mateus Costa',
+        studentName: 'Mateus Costa',
         date: '2026-10-14',
-        partTitle: 'Primeira Conversa',
+        partTitle: 'Oficina Prática',
       },
       {
-        studentName: 'Irmã Ana Oliveira',
+        studentName: 'Ana Oliveira',
         date: '2026-10-14',
-        partTitle: 'Revisita',
+        partTitle: 'Painel Temático',
       },
       {
-        studentName: 'Irmão Gabriel Lima',
+        studentName: 'Gabriel Lima',
         date: '2026-10-14',
-        partTitle: 'Discurso de Estudante',
+        partTitle: 'Conclusão de Módulo',
       },
     ];
 
@@ -106,8 +106,8 @@ describe('AcroForm Inspector & Injector Engine', () => {
     // Verify quadrant 1 and 4 contents
     const loadedDoc = await PDFDocument.load(result.pdfBytes);
     const form = loadedDoc.getForm();
-    expect(form.getTextField('900_1_Text_SanSerif').getText()).toBe('Irmão Lucas Santos');
-    expect(form.getTextField('900_2_Text_SanSerif').getText()).toBe('Irmão Mateus Costa');
-    expect(form.getTextField('900_4_Text_SanSerif_Part').getText()).toBe('Discurso de Estudante');
+    expect(form.getTextField('900_1_Text_SanSerif').getText()).toBe('Lucas Santos');
+    expect(form.getTextField('900_2_Text_SanSerif').getText()).toBe('Mateus Costa');
+    expect(form.getTextField('900_4_Text_SanSerif_Part').getText()).toBe('Conclusão de Módulo');
   });
 });

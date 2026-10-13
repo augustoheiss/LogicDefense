@@ -19,13 +19,13 @@ async function getPdfLib() {
 // ---------------------------------------------------------------------------
 
 export interface S89Assignment {
-  /** Name of the student / designated brother/sister */
+  /** Name of the designated volunteer or speaker */
   studentName: string;
   /** Assistant / partner name (if applicable) */
   assistantName?: string;
   /** Date of the meeting / assignment */
   date: string;
-  /** Part number or description (e.g. "Leitura da Bíblia", "Primeira Conversa") */
+  /** Part number or description (e.g. "Painel Temático", "Apresentação Geral") */
   partTitle: string;
   /** Classroom / hall designation (e.g. "Salão Principal", "Sala B") */
   roomOrHall?: string;

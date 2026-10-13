@@ -56,7 +56,7 @@ export default function PDFFormsConsole() {
   const handleGenerateS89 = async () => {
     try {
       setLoading(true);
-      setStatusMessage('Gerando documento S-89 com imposição 4-Up...');
+      setStatusMessage('Gerando documento com imposição 4-Up...');
 
       // Dynamic synthetic template generation for demo/offline resilience
       const { PDFDocument } = await import('pdf-lib');
@@ -86,7 +86,7 @@ export default function PDFFormsConsole() {
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = url;
-        link.download = `S-89_Designacoes_${new Date().toISOString().slice(0, 10)}.pdf`;
+        link.download = `Fichas_Designacao_4Up_${new Date().toISOString().slice(0, 10)}.pdf`;
         link.click();
         URL.revokeObjectURL(url);
       }
@@ -124,9 +124,9 @@ export default function PDFFormsConsole() {
               onPress={() => setSelectedTemplate('s89')}
               style={[styles.templateCard, selectedTemplate === 's89' && styles.templateCardActive]}
             >
-              <Text style={styles.templateCardTitle}>S-89 (Designações de Reunião)</Text>
+              <Text style={styles.templateCardTitle}>Fichas de Designação 4-Up (Universal)</Text>
               <Text style={styles.templateCardDesc}>
-                Imposição 4-Up em folha A4 com corte em guilhotina (Estudante, Data, Sala, Parte).
+                Imposição 4-Up em folha A4 com corte em guilhotina (Designado, Data, Sala, Atividade).
               </Text>
             </Pressable>
 
@@ -134,9 +134,9 @@ export default function PDFFormsConsole() {
               onPress={() => setSelectedTemplate('s12')}
               style={[styles.templateCard, selectedTemplate === 's12' && styles.templateCardActive]}
             >
-              <Text style={styles.templateCardTitle}>S-12 / S-13 (Cartões de Território)</Text>
+              <Text style={styles.templateCardTitle}>Cartões de Território & Logística</Text>
               <Text style={styles.templateCardDesc}>
-                Ficha tática de saída de campo com lista de ruas, quadras e histórico de cobertura.
+                Ficha tática de saída com lista de endereços, quadras e histórico de cobertura.
               </Text>
             </Pressable>
           </View>
