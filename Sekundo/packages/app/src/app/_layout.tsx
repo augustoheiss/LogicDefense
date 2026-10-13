@@ -10,9 +10,10 @@
 import { useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { Stack } from 'expo-router';
-import { Platform } from 'react-native';
+import { Platform, View, StyleSheet } from 'react-native';
 import * as SplashScreen from 'expo-splash-screen';
 import * as NavigationBar from 'expo-navigation-bar';
+import { CosmicBackground } from '../components/ui/CosmicBackground';
 
 // Prevent auto-hiding splash screen initially on native
 if (Platform.OS !== 'web') {
@@ -39,16 +40,24 @@ export default function RootLayout() {
   }, []);
 
   return (
-    <>
+    <View style={styles.rootWrapper}>
       <StatusBar style="light" />
+      <CosmicBackground />
       <Stack
         screenOptions={{
           headerShown: false,
-          contentStyle: { backgroundColor: '#12151C' }, // Immersive dark background
+          contentStyle: { backgroundColor: 'transparent' }, // Allows CosmicBackground to shine through!
         }}
       >
         <Stack.Screen name="index" />
       </Stack>
-    </>
+    </View>
   );
 }
+
+const styles = StyleSheet.create({
+  rootWrapper: {
+    flex: 1,
+    backgroundColor: '#0C0E15',
+  },
+});

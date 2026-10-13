@@ -15,6 +15,7 @@ import {
   ActivityIndicator,
   Platform,
   useWindowDimensions,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -41,18 +42,35 @@ export default function Dashboard() {
       <ScrollView contentContainerStyle={styles.scrollContent}>
         {/* Header Section */}
         <View style={styles.header}>
-          <Text style={styles.logo}>Sekundo</Text>
-          <Text style={styles.tagline}>
-            Agnostic skeleton engine for temporal event automation.
-          </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
+            <Image
+              source={require('../../assets/images/app-icon.png')}
+              style={{
+                width: 56,
+                height: 56,
+                borderRadius: 14,
+                borderWidth: 1.5,
+                borderColor: '#FFB800',
+              }}
+            />
+            <View>
+              <Text style={styles.logo}>Sekundo</Text>
+              <Text style={styles.tagline}>
+                Agnostic skeleton engine for temporal event automation.
+              </Text>
+            </View>
+          </View>
         </View>
 
         {/* Manifesto Card */}
         <View style={styles.manifestoCard}>
-          <Text style={styles.manifestoTitle}>Background Melody</Text>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, flexWrap: 'wrap', gap: 6 }}>
+            <Text style={styles.manifestoTitle}>Background Melody & O Tempo Transcendental</Text>
+            <Text style={{ fontSize: 11, color: '#FFB800', fontWeight: '700' }}>Eclesiastes 3:11</Text>
+          </View>
           <Text style={styles.manifestoText}>
-            This structure is designed to run silently in the background, serving as a clean framework.
-            Write the melody that empowers your day, free from rigid discipline or administrative tracking.
+            “Pôs no coração do homem o anseio pela eternidade.” O tempo tornado matéria palpável e soberana nas suas mãos. 
+            Esta estrutura roda silenciosamente em segundo plano, servindo como uma moldura limpa para você compor a melodia que empodera seus dias.
           </Text>
         </View>
 
@@ -241,11 +259,11 @@ export default function Dashboard() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#12151C', // Immersive dark background
+    backgroundColor: 'transparent',
   },
   loadingContainer: {
     flex: 1,
-    backgroundColor: '#12151C',
+    backgroundColor: 'transparent',
     alignItems: 'center',
     justifyContent: 'center',
   },
