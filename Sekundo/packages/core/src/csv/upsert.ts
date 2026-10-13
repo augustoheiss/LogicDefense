@@ -78,6 +78,12 @@ export interface UpsertResult {
 const DEFAULT_PRESERVE_FIELDS = [
   'worked',
   'lastWorkedAt',
+  'assignedAt',
+  'assigned_date',
+  'data_designacao',
+  'completedAt',
+  'completed_date',
+  'data_conclusao',
   'workerName',
   'notes',
   'status',
@@ -121,6 +127,14 @@ export function rowToFlatEntry(row: CSVRow): FlatSkeletonEntry {
         }
       }
     }
+  }
+
+  // Normalize date aliases
+  if (meta.assigned_date || meta.data_designacao) {
+    meta.assignedAt = meta.assignedAt || meta.assigned_date || meta.data_designacao;
+  }
+  if (meta.completed_date || meta.data_conclusao) {
+    meta.completedAt = meta.completedAt || meta.completed_date || meta.data_conclusao;
   }
 
   const rawType = (row._type || '').trim().toLowerCase();

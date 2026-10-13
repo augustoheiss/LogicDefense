@@ -171,3 +171,184 @@ export const territoryEngine: EventEngine = {
   },
   supportedExports: ['csv', 'xlsx', 'geojson', 'pdf', 'yaml'],
 };
+
+/**
+ * Calculates calendar day difference between now and a reference date (YYYY-MM-DD or ISO).
+ * Returns positive integer for past dates (e.g. 15 days ago -> 15), 0 for today, negative for future.
+ */
+export function calculateDaysDifference(targetDate?: string, now: Date = new Date()): number | null {
+  if (!targetDate || typeof targetDate !== 'string' || !targetDate.trim()) return null;
+  const clean = targetDate.trim();
+  const d = new Date(clean.includes('T') ? clean : `${clean}T00:00:00`);
+  if (isNaN(d.getTime())) return null;
+
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const ref = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const diffMs = today.getTime() - ref.getTime();
+  return Math.floor(diffMs / (1000 * 60 * 60 * 24));
+}
+
+/**
+ * Computes territory recency statistics and ranking from flat registry or skeleton items.
+ */
+export function computeTerritoryRecencyList(
+  entries: { key: string; label: string; type?: string; value?: string; meta?: Record<string, any> }[],
+  sortMode: import('./types').TerritoryRecencySort = 'priority_oldest_first',
+  now: Date = new Date()
+): import('./types').TerritoryRecencyItem[] {
+  const territoryMap = new Map<
+    string,
+    {
+      label: string;
+      locality?: string;
+      totalUnits: number;
+      workedUnits: number;
+      assignedAt?: string;
+      completedAt?: string;
+      latestCompletedAt?: string;
+      earliestAssignedAt?: string;
+    }
+  >();
+
+  // Determine non-parent leaf items
+  const allKeys = new Set(entries.map((e) => e.key));
+  const parentKeys = new Set<string>();
+  entries.forEach((e) => {
+    const parts = e.key.split('-');
+    if (parts.length > 1) {
+      for (let i = 1; i < parts.length; i++) {
+        parentKeys.add(parts.slice(0, i).join('-'));
+      }
+    }
+  });
+
+  // 1. First pass: find territory group headers (depth 3 or meta.territory_number)
+  entries.forEach((e) => {
+    const meta = (e.meta || {}) as Record<string, any>;
+    const tNum =
+      meta.territory_number ||
+      meta.territoryNumber ||
+      (e.key.split('-').length === 3 ? e.label.split('—')[0].trim() : undefined);
+
+    if (tNum && !territoryMap.has(tNum)) {
+      territoryMap.set(tNum, {
+        label: e.label || `Território ${tNum}`,
+        locality: meta.locality,
+        totalUnits: 0,
+        workedUnits: 0,
+        assignedAt: meta.assignedAt || meta.assigned_date || meta.data_designacao,
+        completedAt: meta.completedAt || meta.completed_date || meta.data_conclusao,
+      });
+    }
+  });
+
+  // 2. Second pass: aggregate leaf addresses
+  entries.forEach((e) => {
+    if (parentKeys.has(e.key)) return; // skip intermediate containers
+    const meta = (e.meta || {}) as Record<string, any>;
+
+    // Infer territory number
+    let tNum = meta.territory_number || meta.territoryNumber;
+    if (!tNum) {
+      const parts = e.key.split('-');
+      if (parts.length >= 3) {
+        const potentialKey = parts.slice(0, 3).join('-');
+        const parentEntry = entries.find((x) => x.key === potentialKey);
+        tNum = parentEntry?.meta?.territory_number || parentEntry?.meta?.territoryNumber || `T${potentialKey}`;
+      } else {
+        tNum = 'Geral';
+      }
+    }
+
+    if (!territoryMap.has(tNum)) {
+      territoryMap.set(tNum, {
+        label: `Território ${tNum}`,
+        locality: meta.locality,
+        totalUnits: 0,
+        workedUnits: 0,
+      });
+    }
+
+    const t = territoryMap.get(tNum)!;
+    t.totalUnits++;
+
+    const isWorked = Number(meta.worked) === 1;
+    if (isWorked) {
+      t.workedUnits++;
+    }
+
+    const itemAssigned = meta.assignedAt || meta.assigned_date || meta.data_designacao;
+    if (itemAssigned) {
+      if (!t.earliestAssignedAt || itemAssigned < t.earliestAssignedAt) {
+        t.earliestAssignedAt = itemAssigned;
+      }
+    }
+
+    const itemCompleted = meta.completedAt || meta.completed_date || meta.data_conclusao || meta.lastWorkedAt;
+    if (itemCompleted) {
+      if (!t.latestCompletedAt || itemCompleted > t.latestCompletedAt) {
+        t.latestCompletedAt = itemCompleted;
+      }
+    }
+  });
+
+  const list: import('./types').TerritoryRecencyItem[] = [];
+
+  territoryMap.forEach((data, tNum) => {
+    const isCompleted = data.totalUnits > 0 && data.workedUnits === data.totalUnits;
+    const percent = data.totalUnits > 0 ? Math.round((data.workedUnits / data.totalUnits) * 100) : 0;
+    const effectiveAssignedAt = data.assignedAt || data.earliestAssignedAt;
+    const effectiveCompletedAt = data.completedAt || (isCompleted ? data.latestCompletedAt : undefined);
+
+    const daysSinceCompleted =
+      isCompleted && effectiveCompletedAt ? calculateDaysDifference(effectiveCompletedAt, now) : null;
+
+    list.push({
+      territoryNumber: tNum,
+      label: data.label,
+      locality: data.locality,
+      totalUnits: data.totalUnits,
+      workedUnits: data.workedUnits,
+      percent,
+      isCompleted,
+      assignedAt: effectiveAssignedAt,
+      completedAt: effectiveCompletedAt,
+      daysSinceCompleted,
+    });
+  });
+
+  // Sort based on sortMode
+  list.sort((a, b) => {
+    if (sortMode === 'hierarchical') {
+      return a.territoryNumber.localeCompare(b.territoryNumber, undefined, { numeric: true });
+    }
+
+    if (sortMode === 'recent_first') {
+      // Completed most recently comes first (lower daysSinceCompleted)
+      if (a.isCompleted && !b.isCompleted) return -1;
+      if (!a.isCompleted && b.isCompleted) return 1;
+      if (a.isCompleted && b.isCompleted) {
+        const dA = a.daysSinceCompleted ?? 999999;
+        const dB = b.daysSinceCompleted ?? 999999;
+        return dA - dB;
+      }
+      return b.percent - a.percent;
+    }
+
+    // Default: 'priority_oldest_first'
+    // 1. Incomplete / unworked first (urgency: lower percent comes first)
+    if (!a.isCompleted && b.isCompleted) return -1;
+    if (a.isCompleted && !b.isCompleted) return 1;
+    if (!a.isCompleted && !b.isCompleted) {
+      return a.percent - b.percent; // lowest coverage first
+    }
+
+    // 2. Both completed: completed longest ago comes first (higher daysSinceCompleted)
+    const dA = a.daysSinceCompleted ?? 0;
+    const dB = b.daysSinceCompleted ?? 0;
+    return dB - dA;
+  });
+
+  return list;
+}
+

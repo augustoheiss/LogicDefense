@@ -28,8 +28,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSkeleton } from '../hooks/useSkeleton';
 import { useLocalEvent } from '../hooks/useLocalEvent';
-import { pathKey } from '@sekundo/core';
-import type { FlatSkeletonEntry } from '@sekundo/core';
+import { pathKey, computeTerritoryRecencyList, calculateDaysDifference } from '@sekundo/core';
+import type { FlatSkeletonEntry, TerritoryRecencySort, TerritoryRecencyItem } from '@sekundo/core';
 import { AddressEditModal } from '../components/territory/AddressEditModal';
 
 interface PinItem {
@@ -53,6 +53,9 @@ interface PinItem {
   language?: string;
   color: string;
   shape: 'circle' | 'triangle' | 'square' | 'diamond';
+  assignedAt?: string;
+  completedAt?: string;
+  daysSinceCompleted?: number | null;
 }
 
 const TERRITORY_COLOR_PALETTE = [
@@ -101,6 +104,21 @@ export default function TerritoryMapScreen() {
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedPinKey, setSelectedPinKey] = useState<string | null>(null);
   const [editingAddressItem, setEditingAddressItem] = useState<FlatSkeletonEntry | null>(null);
+  const [showRecencyModal, setShowRecencyModal] = useState<boolean>(false);
+  const [recencySortMode, setRecencySortMode] = useState<TerritoryRecencySort>('priority_oldest_first');
+
+  // Compute territory recency list and lookup map
+  const recencyList = useMemo(() => {
+    return computeTerritoryRecencyList(flatRegistry, recencySortMode);
+  }, [flatRegistry, recencySortMode]);
+
+  const recencyMap = useMemo(() => {
+    const map: Record<string, TerritoryRecencyItem> = {};
+    for (const item of recencyList) {
+      map[item.territoryNumber] = item;
+    }
+    return map;
+  }, [recencyList]);
 
   // 1. Build distinct territory color map and city shape map
   const { territoryColorMap, cityShapeMap, territoryList, cityList } = useMemo(() => {
@@ -183,6 +201,10 @@ export default function TerritoryMapScreen() {
       const color = territoryColorMap[territoryNumber] || '#3B82F6';
       const shape = cityShapeMap[city] || 'circle';
 
+      const assignedAt = meta.assignedAt || meta.assigned_date || meta.data_designacao;
+      const completedAt = meta.completedAt || meta.completed_date || meta.data_conclusao;
+      const daysSinceCompleted = completedAt ? calculateDaysDifference(String(completedAt)) : null;
+
       list.push({
         key: node.key,
         label: node.label,
@@ -204,6 +226,9 @@ export default function TerritoryMapScreen() {
         language: meta.language || meta.idioma,
         color,
         shape,
+        assignedAt: assignedAt ? String(assignedAt) : undefined,
+        completedAt: completedAt ? String(completedAt) : undefined,
+        daysSinceCompleted,
       });
     });
 
@@ -261,14 +286,28 @@ export default function TerritoryMapScreen() {
     const meta = (target.meta || {}) as Record<string, any>;
     const currentWorked = Number(meta.worked) === 1 ? 1 : 0;
     const nextWorked = currentWorked === 1 ? 0 : 1;
+    const todayStr = new Date().toISOString().split('T')[0];
+
+    const nextMeta: Record<string, any> = {
+      ...meta,
+      worked: nextWorked,
+      lastWorkedAt: nextWorked === 1 ? new Date().toISOString() : undefined,
+    };
+
+    if (nextWorked === 1) {
+      if (!nextMeta.completedAt) nextMeta.completedAt = todayStr;
+      if (!nextMeta.completed_date) nextMeta.completed_date = todayStr;
+      if (!nextMeta.data_conclusao) nextMeta.data_conclusao = todayStr;
+    } else {
+      delete nextMeta.completedAt;
+      delete nextMeta.completed_date;
+      delete nextMeta.data_conclusao;
+      delete nextMeta.lastWorkedAt;
+    }
 
     await updateNode(targetKey, {
       value: nextWorked === 1 ? 'Trabalhado' : '',
-      meta: {
-        ...meta,
-        worked: nextWorked,
-        lastWorkedAt: nextWorked === 1 ? new Date().toISOString() : undefined,
-      },
+      meta: nextMeta,
     });
   };
 
@@ -471,6 +510,11 @@ export default function TerritoryMapScreen() {
           (pin.isForeign ? '<span class="popup-tag" style="background:rgba(59,130,246,0.2); color:#60A5FA;">🌐 ' + (pin.language || 'Estrangeiro') + '</span>' : '') +
           (pin.notes ? '<span class="popup-tag" style="background:rgba(255,184,0,0.15); color:#FFB800;">📝 Anotação</span>' : '') +
         '</div>' +
+        (pin.assignedAt || pin.completedAt ?
+          '<div style="font-size:11px; margin-bottom:8px; display:flex; flex-direction:column; gap:2px; background:rgba(255,255,255,0.04); padding:6px; border-radius:6px;">' +
+            (pin.assignedAt ? '<span style="color:#A78BFA;">📅 Desig: ' + pin.assignedAt + '</span>' : '') +
+            (pin.completedAt ? '<span style="color:#34D399; font-weight:700;">✓ Concl: ' + pin.completedAt + (pin.daysSinceCompleted !== null && pin.daysSinceCompleted !== undefined ? (pin.daysSinceCompleted === 0 ? ' (hoje)' : pin.daysSinceCompleted === 1 ? ' (ontem)' : ' (há ' + pin.daysSinceCompleted + 'd)') : '') + '</span>' : '') +
+          '</div>' : '') +
         '<div class="popup-btn-row">' +
           '<button class="popup-btn ' + (isWorked ? 'popup-btn-pending' : 'popup-btn-work') + '" id="btn-toggle">' +
             (isWorked ? 'Marcar Pendente' : '✓ Concluído') +
@@ -568,6 +612,15 @@ export default function TerritoryMapScreen() {
               const active = selectedTerritory === tNum;
               const color = territoryColorMap[tNum] || '#3B82F6';
               const count = allPins.filter((p) => p.territoryNumber === tNum).length;
+              const recencyInfo = recencyMap[tNum];
+              let recencyBadgeText = '';
+              if (recencyInfo && recencyInfo.totalUnits > 0) {
+                if (recencyInfo.isCompleted) {
+                  recencyBadgeText = recencyInfo.daysSinceCompleted === 0 ? ' • 0d' : ` • ${recencyInfo.daysSinceCompleted}d`;
+                } else {
+                  recencyBadgeText = ` • ${recencyInfo.percent}%`;
+                }
+              }
 
               return (
                 <Pressable
@@ -580,7 +633,7 @@ export default function TerritoryMapScreen() {
                 >
                   <View style={[styles.colorDot, { backgroundColor: color }]} />
                   <Text style={[styles.territoryChipText, active && { color }]}>
-                    {tNum} ({count})
+                    {tNum} ({count}{recencyBadgeText})
                   </Text>
                 </Pressable>
               );
@@ -612,13 +665,22 @@ export default function TerritoryMapScreen() {
             })}
           </View>
 
-          {/* Quick link to Checklist */}
-          <Pressable
-            onPress={() => router.push(`/territory-checklist?id=${eventId}`)}
-            style={styles.checklistBtn}
-          >
-            <Text style={styles.checklistBtnText}>📋 Abrir Checklist</Text>
-          </Pressable>
+          {/* Recency & Checklist Action Buttons */}
+          <View style={styles.headerActionBtns}>
+            <Pressable
+              onPress={() => setShowRecencyModal(true)}
+              style={styles.recencyBtn}
+            >
+              <Text style={styles.recencyBtnText}>📊 Recência dos Territórios</Text>
+            </Pressable>
+
+            <Pressable
+              onPress={() => router.push(`/territory-checklist?id=${eventId}`)}
+              style={styles.checklistBtn}
+            >
+              <Text style={styles.checklistBtnText}>📋 Abrir Checklist</Text>
+            </Pressable>
+          </View>
         </View>
 
         {/* Cartographic Legend */}
@@ -711,6 +773,27 @@ export default function TerritoryMapScreen() {
                 </Text>
               </View>
 
+              {/* Cronograma & Datas */}
+              <View style={styles.drawerSection}>
+                <Text style={styles.drawerSectionLabel}>CRONOGRAMA & DATAS DE COBERTURA</Text>
+                <Text style={styles.drawerDetailRow}>
+                  Designação: <Text style={styles.drawerDetailVal}>{selectedPin.assignedAt || 'Não definida'}</Text>
+                </Text>
+                <Text style={styles.drawerDetailRow}>
+                  Conclusão: <Text style={[styles.drawerDetailVal, selectedPin.completedAt ? { color: '#34D399', fontWeight: '700' } : {}]}>
+                    {selectedPin.completedAt
+                      ? `${selectedPin.completedAt} (${
+                          selectedPin.daysSinceCompleted === 0
+                            ? 'concluído hoje'
+                            : selectedPin.daysSinceCompleted === 1
+                            ? 'concluído ontem'
+                            : `há ${selectedPin.daysSinceCompleted} dias`
+                        })`
+                      : 'Pendente / Não concluído'}
+                  </Text>
+                </Text>
+              </View>
+
               {/* Field Notes */}
               {selectedPin.notes ? (
                 <View style={styles.drawerSection}>
@@ -767,6 +850,121 @@ export default function TerritoryMapScreen() {
           await updateNode(key, updates);
         }}
       />
+
+      {/* Territory Recency & Priority Modal */}
+      {showRecencyModal ? (
+        <View style={styles.modalOverlay}>
+          <View style={styles.recencyModalCard}>
+            <View style={styles.recencyModalHeader}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.recencyModalTitle}>📊 Recência e Cobertura dos Territórios</Text>
+                <Text style={styles.recencyModalSub}>
+                  Contagem de dias desde a conclusão para orientar novas designações de campo.
+                </Text>
+              </View>
+              <Pressable onPress={() => setShowRecencyModal(false)} style={styles.closeBtn}>
+                <Text style={styles.closeBtnText}>✕</Text>
+              </Pressable>
+            </View>
+
+            {/* Sort Toggle */}
+            <View style={styles.recencySortBar}>
+              <Text style={styles.recencySortLabel}>ORDENAÇÃO:</Text>
+              <Pressable
+                onPress={() => setRecencySortMode('priority_oldest_first')}
+                style={[
+                  styles.recencySortChip,
+                  recencySortMode === 'priority_oldest_first' && styles.recencySortChipActive,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.recencySortChipText,
+                    recencySortMode === 'priority_oldest_first' && styles.recencySortChipTextActive,
+                  ]}
+                >
+                  ⏳ Prioridade (Pendentes & Antigos)
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={() => setRecencySortMode('recent_first')}
+                style={[
+                  styles.recencySortChip,
+                  recencySortMode === 'recent_first' && styles.recencySortChipActive,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.recencySortChipText,
+                    recencySortMode === 'recent_first' && styles.recencySortChipTextActive,
+                  ]}
+                >
+                  ⚡ Mais Recentes Primeiro
+                </Text>
+              </Pressable>
+            </View>
+
+            {/* Recency List */}
+            <ScrollView style={styles.recencyScrollList} contentContainerStyle={{ gap: 10 }}>
+              {recencyList.filter((i) => i.totalUnits > 0).length === 0 ? (
+                <View style={styles.emptyRecencyCard}>
+                  <Text style={styles.emptyRecencyText}>Nenhum território registrado</Text>
+                </View>
+              ) : (
+                recencyList.filter((i) => i.totalUnits > 0).map((item) => {
+                  const color = territoryColorMap[item.territoryNumber] || '#3B82F6';
+                  return (
+                    <View key={item.territoryNumber} style={styles.recencyItemCard}>
+                      <View style={styles.recencyItemLeft}>
+                        <View style={[styles.recencyDot, { backgroundColor: color }]} />
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.recencyItemTitle}>Território {item.territoryNumber}</Text>
+                          <Text style={styles.recencyItemMeta}>
+                            {item.workedUnits}/{item.totalUnits} concluídos ({item.percent}%)
+                            {item.assignedAt ? ` • Desig: ${item.assignedAt}` : ''}
+                          </Text>
+                        </View>
+                      </View>
+
+                      <View style={styles.recencyItemRight}>
+                        {item.isCompleted ? (
+                          <View style={styles.recencyBadgeCompleted}>
+                            <Text style={styles.recencyBadgeCompletedText}>
+                              🏆 Concluído {item.daysSinceCompleted === 0 ? 'hoje' : item.daysSinceCompleted === 1 ? 'ontem (1d)' : `há ${item.daysSinceCompleted} dias`}
+                            </Text>
+                          </View>
+                        ) : item.percent > 0 ? (
+                          <View style={styles.recencyBadgeInProgress}>
+                            <Text style={styles.recencyBadgeInProgressText}>
+                              ⏳ Em andamento ({item.percent}%)
+                            </Text>
+                          </View>
+                        ) : (
+                          <View style={styles.recencyBadgePending}>
+                            <Text style={styles.recencyBadgePendingText}>
+                              ⬜ Não trabalhado
+                            </Text>
+                          </View>
+                        )}
+
+                        <Pressable
+                          onPress={() => {
+                            setSelectedTerritory(item.territoryNumber);
+                            setShowRecencyModal(false);
+                          }}
+                          style={styles.recencyFocusBtn}
+                        >
+                          <Text style={styles.recencyFocusBtnText}>🎯 Focar no Mapa</Text>
+                        </Pressable>
+                      </View>
+                    </View>
+                  );
+                })
+              )}
+            </ScrollView>
+          </View>
+        </View>
+      ) : null}
     </SafeAreaView>
   );
 }
@@ -1141,5 +1339,204 @@ const styles = StyleSheet.create({
     color: '#60A5FA',
     fontSize: 12,
     fontWeight: '600',
+  },
+  headerActionBtns: {
+    flexDirection: 'row',
+    gap: 8,
+    alignItems: 'center',
+  },
+  recencyBtn: {
+    backgroundColor: 'rgba(255, 184, 0, 0.15)',
+    paddingVertical: 5,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#FFB800',
+  },
+  recencyBtnText: {
+    color: '#FFB800',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  modalOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+    zIndex: 9999,
+  },
+  recencyModalCard: {
+    width: '100%',
+    maxWidth: 680,
+    maxHeight: '85%',
+    backgroundColor: '#161A24',
+    borderRadius: 14,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.12)',
+  },
+  recencyModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 14,
+  },
+  recencyModalTitle: {
+    color: '#FFFFFF',
+    fontSize: 17,
+    fontWeight: '700',
+  },
+  recencyModalSub: {
+    color: '#8A94A6',
+    fontSize: 12,
+    marginTop: 4,
+    lineHeight: 16,
+  },
+  closeBtn: {
+    padding: 6,
+  },
+  closeBtnText: {
+    color: '#8A94A6',
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  recencySortBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.06)',
+    marginBottom: 12,
+  },
+  recencySortLabel: {
+    color: '#6F7E94',
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  recencySortChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 6,
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  recencySortChipActive: {
+    backgroundColor: 'rgba(255, 184, 0, 0.15)',
+    borderColor: '#FFB800',
+  },
+  recencySortChipText: {
+    color: '#8A94A6',
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  recencySortChipTextActive: {
+    color: '#FFB800',
+    fontWeight: '700',
+  },
+  recencyScrollList: {
+    flex: 1,
+  },
+  emptyRecencyCard: {
+    padding: 30,
+    alignItems: 'center',
+  },
+  emptyRecencyText: {
+    color: '#8A94A6',
+    fontSize: 13,
+  },
+  recencyItemCard: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 12,
+    backgroundColor: '#1A1F2C',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    gap: 12,
+  },
+  recencyItemLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1,
+  },
+  recencyDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+  },
+  recencyItemTitle: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  recencyItemMeta: {
+    color: '#8A94A6',
+    fontSize: 11,
+    marginTop: 2,
+  },
+  recencyItemRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  recencyBadgeCompleted: {
+    backgroundColor: 'rgba(16, 185, 129, 0.15)',
+    borderWidth: 1,
+    borderColor: '#10B981',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  recencyBadgeCompletedText: {
+    color: '#34D399',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  recencyBadgeInProgress: {
+    backgroundColor: 'rgba(245, 158, 11, 0.15)',
+    borderWidth: 1,
+    borderColor: '#F59E0B',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  recencyBadgeInProgressText: {
+    color: '#FBBF24',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  recencyBadgePending: {
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  recencyBadgePendingText: {
+    color: '#9CA3AF',
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  recencyFocusBtn: {
+    backgroundColor: 'rgba(59, 130, 246, 0.15)',
+    borderWidth: 1,
+    borderColor: '#3B82F6',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 6,
+  },
+  recencyFocusBtnText: {
+    color: '#60A5FA',
+    fontSize: 11,
+    fontWeight: '700',
   },
 });

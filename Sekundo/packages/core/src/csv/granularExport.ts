@@ -151,19 +151,48 @@ export function exportGranularCSV(
   const engineId = options.engineId || 'territory_logistics';
 
   if (engineId === 'territory_logistics') {
-    const headers = ['key', 'tipo', 'nome', 'trabalhado', 'endereco', 'latitude', 'longitude', 'responsavel', 'observacoes'];
+    const headers = [
+      'key',
+      'tipo',
+      'nome',
+      'trabalhado',
+      'endereco',
+      'latitude',
+      'longitude',
+      'responsavel',
+      'data_designacao',
+      'data_conclusao',
+      'dias_concluido',
+      'observacoes',
+    ];
     const lines = [headers.join(delim)];
+    const today = new Date();
     for (const item of filtered) {
       const m = item.meta as Record<string, any>;
+      const assigned = m.assignedAt || m.assigned_date || m.data_designacao || '';
+      const completed = m.completedAt || m.completed_date || m.data_conclusao || '';
+      let daysDone: string | number = '';
+      if (completed) {
+        const d = new Date(completed.includes('T') ? completed : `${completed}T00:00:00`);
+        if (!isNaN(d.getTime())) {
+          const t0 = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+          const ref = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+          daysDone = Math.floor((t0.getTime() - ref.getTime()) / (1000 * 60 * 60 * 24));
+        }
+      }
+
       const row = [
         escapeCsvCell(item.key, delim),
         escapeCsvCell(item.type, delim),
         escapeCsvCell(item.label, delim),
         escapeCsvCell(m.worked !== undefined ? m.worked : item.value, delim),
-        escapeCsvCell(m.address || '', delim),
+        escapeCsvCell(m.address || m.line || '', delim),
         escapeCsvCell(m.lat !== undefined ? m.lat : '', delim),
         escapeCsvCell(m.lng !== undefined ? m.lng : '', delim),
         escapeCsvCell(m.workerName || '', delim),
+        escapeCsvCell(assigned, delim),
+        escapeCsvCell(completed, delim),
+        escapeCsvCell(daysDone, delim),
         escapeCsvCell(m.notes || '', delim),
       ];
       lines.push(row.join(delim));

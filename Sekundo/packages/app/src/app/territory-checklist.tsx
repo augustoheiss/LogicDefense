@@ -26,7 +26,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSkeleton } from '../hooks/useSkeleton';
 import { useLocalEvent } from '../hooks/useLocalEvent';
-import { pathKey } from '@sekundo/core';
+import { pathKey, calculateDaysDifference } from '@sekundo/core';
 import type { FlatSkeletonEntry } from '@sekundo/core';
 import { AddressEditModal } from '../components/territory/AddressEditModal';
 
@@ -37,6 +37,9 @@ interface ChecklistGroup {
   total: number;
   worked: number;
   isAllWorked: boolean;
+  assignedAt?: string;
+  completedAt?: string;
+  daysSinceCompleted: number | null;
 }
 
 export default function TerritoryChecklistScreen() {
@@ -50,6 +53,7 @@ export default function TerritoryChecklistScreen() {
 
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [filterMode, setFilterMode] = useState<'all' | 'pending' | 'worked'>('all');
+  const [sortOrder, setSortOrder] = useState<'hierarchical' | 'priority_oldest_first' | 'recent_first'>('hierarchical');
   const [activeNoteKey, setActiveNoteKey] = useState<string | null>(null);
   const [noteDraft, setNoteDraft] = useState<string>('');
   const [editingAddressItem, setEditingAddressItem] = useState<FlatSkeletonEntry | null>(null);
@@ -139,19 +143,73 @@ export default function TerritoryChecklistScreen() {
       if (filtered.length > 0) {
         const total = filtered.length;
         const worked = filtered.filter((i) => Number((i.meta as any)?.worked) === 1).length;
+        const isAllWorked = total > 0 && worked === total;
+
+        // Extract dates
+        let groupAssignedAt: string | undefined;
+        let latestCompletedAt: string | undefined;
+
+        for (const item of filtered) {
+          const m = (item.meta || {}) as Record<string, any>;
+          const itemAssigned = m.assignedAt || m.assigned_date || m.data_designacao;
+          if (itemAssigned) {
+            if (!groupAssignedAt || itemAssigned < groupAssignedAt) {
+              groupAssignedAt = itemAssigned;
+            }
+          }
+          const itemCompleted = m.completedAt || m.completed_date || m.data_conclusao;
+          if (itemCompleted) {
+            if (!latestCompletedAt || itemCompleted > latestCompletedAt) {
+              latestCompletedAt = itemCompleted;
+            }
+          }
+        }
+
+        const effectiveCompletedAt = isAllWorked ? latestCompletedAt : undefined;
+        const daysSinceCompleted =
+          isAllWorked && effectiveCompletedAt ? calculateDaysDifference(effectiveCompletedAt) : null;
+
         result.push({
           groupKey,
           groupLabel: data.label || `Território / Quadra ${groupKey}`,
           items: filtered,
           total,
           worked,
-          isAllWorked: total > 0 && worked === total,
+          isAllWorked,
+          assignedAt: groupAssignedAt,
+          completedAt: effectiveCompletedAt,
+          daysSinceCompleted,
         });
       }
     }
 
-    // Sort groups hierarchically
-    result.sort((a, b) => pathKey.compare(a.groupKey, b.groupKey));
+    // Sort groups based on user selection
+    if (sortOrder === 'recent_first') {
+      result.sort((a, b) => {
+        if (a.isAllWorked && !b.isAllWorked) return -1;
+        if (!a.isAllWorked && b.isAllWorked) return 1;
+        if (a.isAllWorked && b.isAllWorked) {
+          return (a.daysSinceCompleted ?? 999999) - (b.daysSinceCompleted ?? 999999);
+        }
+        return b.worked - a.worked;
+      });
+    } else if (sortOrder === 'priority_oldest_first') {
+      result.sort((a, b) => {
+        // Incomplete / unworked first
+        if (!a.isAllWorked && b.isAllWorked) return -1;
+        if (a.isAllWorked && !b.isAllWorked) return 1;
+        if (!a.isAllWorked && !b.isAllWorked) {
+          const pA = a.total > 0 ? a.worked / a.total : 0;
+          const pB = b.total > 0 ? b.worked / b.total : 0;
+          return pA - pB;
+        }
+        // Both completed: completed longest ago first
+        return (b.daysSinceCompleted ?? 0) - (a.daysSinceCompleted ?? 0);
+      });
+    } else {
+      // Default: hierarchical order
+      result.sort((a, b) => pathKey.compare(a.groupKey, b.groupKey));
+    }
 
     // Overall metrics for leaf items
     let overallTotal = 0;
@@ -182,12 +240,14 @@ export default function TerritoryChecklistScreen() {
     const meta = (target.meta || {}) as Record<string, any>;
     const currentWorked = Number(meta.worked) === 1 ? 1 : 0;
     const nextWorked = currentWorked === 1 ? 0 : 1;
+    const todayStr = new Date().toISOString().slice(0, 10);
 
     await updateNode(targetKey, {
-      value: nextWorked === 1 ? 'Trabalhado' : '',
+      value: nextWorked === 1 ? (meta.workerName || 'Trabalhado') : '',
       meta: {
         ...meta,
         worked: nextWorked,
+        completedAt: nextWorked === 1 ? (meta.completedAt || todayStr) : undefined,
         lastWorkedAt: nextWorked === 1 ? new Date().toISOString() : undefined,
       },
     });
@@ -196,14 +256,16 @@ export default function TerritoryChecklistScreen() {
   // Batch toggle all items in a quadra
   const handleToggleQuadra = async (group: ChecklistGroup) => {
     const targetStatus = group.isAllWorked ? 0 : 1;
+    const todayStr = new Date().toISOString().slice(0, 10);
 
     for (const item of group.items) {
       const meta = (item.meta || {}) as Record<string, any>;
       await updateNode(item.key, {
-        value: targetStatus === 1 ? 'Trabalhado' : '',
+        value: targetStatus === 1 ? (meta.workerName || 'Trabalhado') : '',
         meta: {
           ...meta,
           worked: targetStatus,
+          completedAt: targetStatus === 1 ? (meta.completedAt || todayStr) : undefined,
           lastWorkedAt: targetStatus === 1 ? new Date().toISOString() : undefined,
         },
       });
@@ -313,6 +375,37 @@ export default function TerritoryChecklistScreen() {
             </Text>
           </Pressable>
         </View>
+
+        {/* Recency Sort Selector */}
+        <View style={styles.sortRow}>
+          <Text style={styles.sortLabel}>ORDENAÇÃO:</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+            <Pressable
+              onPress={() => setSortOrder('hierarchical')}
+              style={[styles.sortChip, sortOrder === 'hierarchical' && styles.sortChipActive]}
+            >
+              <Text style={[styles.sortChipText, sortOrder === 'hierarchical' && styles.sortChipTextActive]}>
+                📌 Padrão (Código)
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={() => setSortOrder('priority_oldest_first')}
+              style={[styles.sortChip, sortOrder === 'priority_oldest_first' && styles.sortChipActive]}
+            >
+              <Text style={[styles.sortChipText, sortOrder === 'priority_oldest_first' && styles.sortChipTextActive]}>
+                ⏳ Prioridade (Pendentes & Antigos)
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={() => setSortOrder('recent_first')}
+              style={[styles.sortChip, sortOrder === 'recent_first' && styles.sortChipActive]}
+            >
+              <Text style={[styles.sortChipText, sortOrder === 'recent_first' && styles.sortChipTextActive]}>
+                ⚡ Mais Recentes (Menos dias)
+              </Text>
+            </Pressable>
+          </ScrollView>
+        </View>
       </View>
 
       {/* Checklist Groups */}
@@ -346,9 +439,30 @@ export default function TerritoryChecklistScreen() {
                 </Pressable>
               </View>
 
-              <Text style={styles.groupProgressText}>
-                {group.worked}/{group.total} casas concluídas
-              </Text>
+              {/* Group Recency & Progress Meta */}
+              <View style={styles.groupMetaBar}>
+                <Text style={styles.groupProgressText}>
+                  {group.worked}/{group.total} casas concluídas
+                </Text>
+                {group.isAllWorked ? (
+                  <View style={styles.groupCompletedBadge}>
+                    <Text style={styles.groupCompletedBadgeText}>
+                      🏆 Concluído {group.daysSinceCompleted === 0 ? 'hoje' : (group.daysSinceCompleted === 1 ? 'ontem (1d)' : `há ${group.daysSinceCompleted} dias`)} ({group.completedAt})
+                    </Text>
+                  </View>
+                ) : (
+                  <View style={styles.groupPendingBadge}>
+                    <Text style={styles.groupPendingBadgeText}>
+                      ⏳ Em andamento
+                    </Text>
+                  </View>
+                )}
+                {group.assignedAt ? (
+                  <Text style={styles.groupAssignedText}>
+                    📅 Designado: {group.assignedAt}
+                  </Text>
+                ) : null}
+              </View>
 
               {/* Items in Quadra */}
               <View style={styles.itemsList}>
@@ -443,6 +557,41 @@ export default function TerritoryChecklistScreen() {
                             🧭 {latNum.toFixed(5)}, {lngNum.toFixed(5)}
                           </Text>
                         ) : null}
+
+                        {/* Dates Row: Assigned & Completed */}
+                        {(() => {
+                          const itemAssigned = meta.assignedAt || meta.assigned_date || meta.data_designacao;
+                          const itemCompleted = meta.completedAt || meta.completed_date || meta.data_conclusao;
+                          const itemDays = itemCompleted ? calculateDaysDifference(String(itemCompleted)) : null;
+
+                          if (!itemAssigned && !itemCompleted) return null;
+
+                          return (
+                            <View style={styles.itemDatesRow}>
+                              {itemAssigned ? (
+                                <View style={styles.itemDateBadge}>
+                                  <Text style={styles.itemDateText}>
+                                    📅 Desig: {String(itemAssigned)}
+                                  </Text>
+                                </View>
+                              ) : null}
+                              {itemCompleted ? (
+                                <View style={styles.itemDateBadgeCompleted}>
+                                  <Text style={styles.itemDateTextCompleted}>
+                                    ✓ Concl: {String(itemCompleted)}
+                                    {itemDays !== null
+                                      ? itemDays === 0
+                                        ? ' (hoje)'
+                                        : itemDays === 1
+                                        ? ' (ontem)'
+                                        : ` (há ${itemDays}d)`
+                                      : ''}
+                                  </Text>
+                                </View>
+                              ) : null}
+                            </View>
+                          );
+                        })()}
 
                         {/* Field Notes Snippet */}
                         {meta.notes ? (
@@ -736,10 +885,110 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
   },
+  sortRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 4,
+  },
+  sortLabel: {
+    color: '#8A94A6',
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  sortChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 6,
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  sortChipActive: {
+    backgroundColor: 'rgba(255, 184, 0, 0.15)',
+    borderColor: '#FFB800',
+  },
+  sortChipText: {
+    color: '#8A94A6',
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  sortChipTextActive: {
+    color: '#FFB800',
+    fontWeight: '700',
+  },
   groupProgressText: {
     color: '#8A94A6',
     fontSize: 11,
+  },
+  groupMetaBar: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: 8,
     marginBottom: 12,
+  },
+  groupCompletedBadge: {
+    backgroundColor: 'rgba(16, 185, 129, 0.15)',
+    borderWidth: 1,
+    borderColor: '#10B981',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  groupCompletedBadgeText: {
+    color: '#34D399',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  groupPendingBadge: {
+    backgroundColor: 'rgba(245, 158, 11, 0.15)',
+    borderWidth: 1,
+    borderColor: '#F59E0B',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  groupPendingBadgeText: {
+    color: '#FBBF24',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  groupAssignedText: {
+    color: '#9CA3AF',
+    fontSize: 11,
+  },
+  itemDatesRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 4,
+  },
+  itemDateBadge: {
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  itemDateText: {
+    color: '#9CA3AF',
+    fontSize: 10,
+    fontWeight: '600',
+  },
+  itemDateBadgeCompleted: {
+    backgroundColor: 'rgba(16, 185, 129, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(16, 185, 129, 0.3)',
+    borderRadius: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  itemDateTextCompleted: {
+    color: '#34D399',
+    fontSize: 10,
+    fontWeight: '700',
   },
   itemsList: {
     gap: 8,

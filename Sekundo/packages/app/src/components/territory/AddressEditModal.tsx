@@ -58,6 +58,8 @@ export function AddressEditModal({ visible, item, onClose, onSave }: AddressEdit
   const [language, setLanguage] = useState('');
   const [lat, setLat] = useState('');
   const [lng, setLng] = useState('');
+  const [assignedAt, setAssignedAt] = useState('');
+  const [completedAt, setCompletedAt] = useState('');
   const [worked, setWorked] = useState(0);
   const [workerName, setWorkerName] = useState('');
   const [notes, setNotes] = useState('');
@@ -85,6 +87,9 @@ export function AddressEditModal({ visible, item, onClose, onSave }: AddressEdit
 
       setLat(meta.lat != null ? String(meta.lat) : (meta.latitude != null ? String(meta.latitude) : ''));
       setLng(meta.lng != null ? String(meta.lng) : (meta.longitude != null ? String(meta.longitude) : ''));
+
+      setAssignedAt(meta.assignedAt || meta.assigned_date || meta.data_designacao || '');
+      setCompletedAt(meta.completedAt || meta.completed_date || meta.data_conclusao || '');
 
       setWorked(Number(meta.worked) === 1 ? 1 : 0);
       setWorkerName(item.value || meta.workerName || '');
@@ -137,10 +142,12 @@ export function AddressEditModal({ visible, item, onClose, onSave }: AddressEdit
         language: isForeign ? language.trim() : undefined,
         lat: isNaN(parsedLat as number) ? undefined : parsedLat,
         lng: isNaN(parsedLng as number) ? undefined : parsedLng,
+        assignedAt: assignedAt.trim() || undefined,
+        completedAt: completedAt.trim() || undefined,
         worked,
         workerName: workerName.trim(),
         notes: notes.trim(),
-        lastWorkedAt: worked === 1 ? (rawMeta.lastWorkedAt || new Date().toISOString()) : undefined,
+        lastWorkedAt: worked === 1 ? (completedAt.trim() || rawMeta.lastWorkedAt || new Date().toISOString()) : undefined,
       };
 
       // Construct a clean descriptive label if not customized
@@ -355,14 +362,93 @@ export function AddressEditModal({ visible, item, onClose, onSave }: AddressEdit
               </View>
             </View>
 
-            {/* 4. Status de Campo & Notas */}
+            {/* 4. Cronograma & Datas de Cobertura */}
+            <View style={styles.section}>
+              <Text style={styles.sectionHeader}>📅 CRONOGRAMA & DATAS DE COBERTURA</Text>
+              <View style={styles.row2}>
+                <View style={styles.col}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                    <Text style={styles.inputLabel}>Data da Designação</Text>
+                    <Pressable
+                      onPress={() => setAssignedAt(new Date().toISOString().slice(0, 10))}
+                      style={styles.quickDateBtn}
+                    >
+                      <Text style={styles.quickDateBtnText}>Hoje</Text>
+                    </Pressable>
+                  </View>
+                  <TextInput
+                    style={styles.input}
+                    value={assignedAt}
+                    onChangeText={setAssignedAt}
+                    placeholder="AAAA-MM-DD"
+                    placeholderTextColor="#6F7E94"
+                  />
+                </View>
+
+                <View style={styles.col}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                    <Text style={styles.inputLabel}>Data da Conclusão</Text>
+                    <View style={{ flexDirection: 'row', gap: 6 }}>
+                      <Pressable
+                        onPress={() => {
+                          setCompletedAt(new Date().toISOString().slice(0, 10));
+                          setWorked(1);
+                        }}
+                        style={styles.quickDateBtn}
+                      >
+                        <Text style={styles.quickDateBtnText}>Hoje</Text>
+                      </Pressable>
+                      {completedAt ? (
+                        <Pressable onPress={() => setCompletedAt('')} style={styles.quickDateBtn}>
+                          <Text style={styles.quickDateBtnText}>Limpar</Text>
+                        </Pressable>
+                      ) : null}
+                    </View>
+                  </View>
+                  <TextInput
+                    style={styles.input}
+                    value={completedAt}
+                    onChangeText={setCompletedAt}
+                    placeholder="AAAA-MM-DD"
+                    placeholderTextColor="#6F7E94"
+                  />
+                </View>
+              </View>
+
+              {completedAt.trim() ? (
+                <View style={styles.recencyBadgeBox}>
+                  {(() => {
+                    const clean = completedAt.trim();
+                    const d = new Date(clean.includes('T') ? clean : `${clean}T00:00:00`);
+                    if (isNaN(d.getTime())) return null;
+                    const today = new Date();
+                    const t0 = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+                    const ref = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+                    const diff = Math.floor((t0.getTime() - ref.getTime()) / (1000 * 60 * 60 * 24));
+                    return (
+                      <Text style={styles.recencyBadgeText}>
+                        {diff === 0
+                          ? '✨ Concluído hoje'
+                          : diff === 1
+                          ? '✓ Concluído ontem (1 dia atrás)'
+                          : `✓ Concluído há ${diff} dias`}
+                      </Text>
+                    );
+                  })()}
+                </View>
+              ) : null}
+            </View>
+
+            {/* 5. Status de Campo & Notas */}
             <View style={styles.section}>
               <Text style={styles.sectionHeader}>📋 COBERTURA & OBSERVAÇÕES DE CAMPO</Text>
 
               <Text style={styles.inputLabel}>Status de Visita</Text>
               <View style={styles.chipRow}>
                 <Pressable
-                  onPress={() => setWorked(0)}
+                  onPress={() => {
+                    setWorked(0);
+                  }}
                   style={[styles.statusChip, worked === 0 && styles.statusPendingActive]}
                 >
                   <Text style={[styles.statusChipText, worked === 0 && styles.statusPendingTextActive]}>
@@ -370,7 +456,12 @@ export function AddressEditModal({ visible, item, onClose, onSave }: AddressEdit
                   </Text>
                 </Pressable>
                 <Pressable
-                  onPress={() => setWorked(1)}
+                  onPress={() => {
+                    setWorked(1);
+                    if (!completedAt) {
+                      setCompletedAt(new Date().toISOString().slice(0, 10));
+                    }
+                  }}
                   style={[styles.statusChip, worked === 1 && styles.statusWorkedActive]}
                 >
                   <Text style={[styles.statusChipText, worked === 1 && styles.statusWorkedTextActive]}>
@@ -652,5 +743,30 @@ const styles = StyleSheet.create({
     color: '#12151C',
     fontWeight: '700',
     fontSize: 13,
+  },
+  quickDateBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    backgroundColor: 'rgba(59, 130, 246, 0.15)',
+    borderRadius: 4,
+  },
+  quickDateBtnText: {
+    color: '#60A5FA',
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  recencyBadgeBox: {
+    marginTop: 8,
+    padding: 8,
+    borderRadius: 6,
+    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(16, 185, 129, 0.25)',
+    alignItems: 'center',
+  },
+  recencyBadgeText: {
+    color: '#34D399',
+    fontSize: 12,
+    fontWeight: '600',
   },
 });

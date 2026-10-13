@@ -35,13 +35,38 @@ export type EngineId =
 export interface TerritoryNodeMeta {
   worked?: 0 | 1;               // 0 = pending, 1 = completed
   lastWorkedAt?: string;        // ISO 8601 timestamp
+  assignedAt?: string;          // ISO 8601 or YYYY-MM-DD assignment date
+  completedAt?: string;         // ISO 8601 or YYYY-MM-DD completion date
   workerName?: string;          // Name of member who worked this node
   address?: string;             // Street and number or place descriptor
+  line?: string;                // Street and number
+  line2?: string;               // Neighborhood / Complement
+  city?: string;                // City
+  state?: string;               // State / UF
+  postalcode?: string;          // Postal code / CEP
+  propertyType?: string;        // 'residencial' | 'comercial' | 'predio' | 'outro'
+  isForeign?: boolean;          // Foreign resident flag
+  language?: string;            // Spoken language
   lat?: number;                 // Latitude
   lng?: number;                 // Longitude
   boundaryPolygon?: [number, number][]; // Geo coordinates for block/polygon
   notes?: string;               // Local tactical notes
   tags?: string[];              // e.g. ["foreign_language", "commercial", "hard_access"]
+}
+
+export type TerritoryRecencySort = 'priority_oldest_first' | 'recent_first' | 'hierarchical';
+
+export interface TerritoryRecencyItem {
+  territoryNumber: string;
+  label: string;
+  locality?: string;
+  totalUnits: number;
+  workedUnits: number;
+  percent: number;
+  isCompleted: boolean;
+  assignedAt?: string;
+  completedAt?: string;
+  daysSinceCompleted: number | null; // null if not fully completed
 }
 
 export interface TerritoryMetrics {
