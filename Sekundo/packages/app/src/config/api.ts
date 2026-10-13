@@ -30,6 +30,14 @@ import { Platform } from 'react-native';
  * ⚠️ This NEVER falls back to any Assistente-Moeda URL.
  */
 function resolveApiUrl(): string {
+  // If running in browser on localhost / 127.0.0.1, prioritize local origin
+  if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location?.origin) {
+    const hostname = window.location.hostname;
+    if (hostname === 'localhost' || hostname === '127.0.0.1') {
+      return window.location.origin;
+    }
+  }
+
   // Check for explicit env var (set in Expo config)
   const envUrl = process.env.EXPO_PUBLIC_SEKUNDO_API_URL;
   if (envUrl) {
@@ -44,6 +52,11 @@ function resolveApiUrl(): string {
     }
     // iOS simulator and web both use localhost
     return 'http://localhost:8001';
+  }
+
+  // Production fallback for web
+  if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location?.origin) {
+    return window.location.origin;
   }
 
   // Production — must be set via EXPO_PUBLIC_SEKUNDO_API_URL

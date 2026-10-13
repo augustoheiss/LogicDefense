@@ -149,6 +149,7 @@ async def get_answer(room_id: str):
 
 
 @router.post("/room/{room_id}/candidate/{role}")
+@router.post("/room/{room_id}/candidates/{role}")
 async def post_candidate(room_id: str, role: str, candidate: ICECandidate):
     """Post an ICE candidate (role = 'offer' or 'answer')."""
     _cleanup_expired()

@@ -4,6 +4,7 @@
  * Ephemeral WebRTC P2P sync and chat engine.
  * Handles the complete signaling handshake via FastAPI, P2P lifecycle states,
  * binary/text archive fragmentation streaming, and volatile message states.
+ * Also includes seamless BroadcastChannel local loopback for instant multi-tab sync.
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -23,13 +24,15 @@ export function usePeerChat({ eventId, role, onHistorySync, onStateUpdate }: Use
   const [connectionState, setConnectionState] = useState<PeerConnectionState>('disconnected');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [roomId, setRoomId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  // Refs to hold WebRTC objects
+  // Refs to hold WebRTC objects & channels
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
   const dataChannelRef = useRef<RTCDataChannel | null>(null);
+  const broadcastChannelRef = useRef<any>(null);
   const candidatePollIntervalRef = useRef<any>(null);
   const answerPollIntervalRef = useRef<any>(null);
-  
+
   // Archive streaming reassembly storage
   const incomingChunksRef = useRef<{ [index: number]: string }>({});
 
@@ -37,6 +40,14 @@ export function usePeerChat({ eventId, role, onHistorySync, onStateUpdate }: Use
     setMessages([]);
     setConnectionState('disconnected');
     incomingChunksRef.current = {};
+    if (broadcastChannelRef.current) {
+      try {
+        broadcastChannelRef.current.close();
+      } catch (e) {
+        // ignore
+      }
+      broadcastChannelRef.current = null;
+    }
   }, []);
 
   const closeConnection = useCallback(() => {
@@ -45,12 +56,20 @@ export function usePeerChat({ eventId, role, onHistorySync, onStateUpdate }: Use
     if (answerPollIntervalRef.current) clearInterval(answerPollIntervalRef.current);
 
     if (dataChannelRef.current) {
-      dataChannelRef.current.close();
+      try {
+        dataChannelRef.current.close();
+      } catch (e) {
+        // ignore
+      }
       dataChannelRef.current = null;
     }
 
     if (peerConnectionRef.current) {
-      peerConnectionRef.current.close();
+      try {
+        peerConnectionRef.current.close();
+      } catch (e) {
+        // ignore
+      }
       peerConnectionRef.current = null;
     }
 
@@ -64,48 +83,29 @@ export function usePeerChat({ eventId, role, onHistorySync, onStateUpdate }: Use
     };
   }, [closeConnection]);
 
-  // Initialize RTCPeerConnection with STUN configurations
-  const initPeerConnection = useCallback(() => {
-    if (typeof RTCPeerConnection === 'undefined') {
-      console.warn('[Sekundo P2P] WebRTC is not supported on this platform.');
-      return null;
-    }
-
-    const pc = new RTCPeerConnection({
-      iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
-    });
-
-    pc.oniceconnectionstatechange = () => {
-      console.log('[Sekundo P2P] ICE state changed:', pc.iceConnectionState);
-      if (pc.iceConnectionState === 'connected') {
-        setConnectionState('connected');
-      } else if (pc.iceConnectionState === 'disconnected' || pc.iceConnectionState === 'failed') {
-        setConnectionState('disconnected');
-        closeConnection();
-      }
-    };
-
-    peerConnectionRef.current = pc;
-    return pc;
-  }, [closeConnection]);
-
-  // Handle incoming data channel messages
-  const handleDataChannelMessage = useCallback(
-    (event: MessageEvent) => {
+  // Unified incoming message dispatcher (handles WebRTC and BroadcastChannel payloads)
+  const handleIncomingPayload = useCallback(
+    (payload: any) => {
       try {
-        const payload = JSON.parse(event.data);
+        if (!payload || typeof payload !== 'object') return;
 
         if (payload.type === 'chat') {
           const newMsg: ChatMessage = {
-            id: Math.random().toString(),
+            id: payload.id || Math.random().toString(),
             senderId: payload.senderId,
             senderName: payload.senderName,
             text: payload.text,
-            timestamp: payload.timestamp,
+            timestamp: payload.timestamp || Date.now(),
           };
-          setMessages((prev) => [...prev, newMsg]);
+          setMessages((prev) => {
+            // Avoid duplicates
+            if (prev.some((m) => m.id === newMsg.id || (m.timestamp === newMsg.timestamp && m.text === newMsg.text && m.senderName === newMsg.senderName))) {
+              return prev;
+            }
+            return [...prev, newMsg];
+          });
         } else if (payload.type === 'state-update') {
-          if (onStateUpdate) {
+          if (onStateUpdate && payload.skeleton) {
             onStateUpdate(payload.skeleton);
           }
         } else if (payload.type === 'archive-chunk') {
@@ -114,7 +114,6 @@ export function usePeerChat({ eventId, role, onHistorySync, onStateUpdate }: Use
 
           // Check if all chunks received
           if (Object.keys(incomingChunksRef.current).length === total) {
-            // Reassemble
             let reassembledString = '';
             for (let i = 0; i < total; i++) {
               reassembledString += incomingChunksRef.current[i];
@@ -132,10 +131,56 @@ export function usePeerChat({ eventId, role, onHistorySync, onStateUpdate }: Use
           }
         }
       } catch (err) {
+        console.error('[Sekundo P2P] Payload processing error:', err);
+      }
+    },
+    [onHistorySync, onStateUpdate]
+  );
+
+  // Initialize RTCPeerConnection with STUN configurations
+  const initPeerConnection = useCallback(() => {
+    if (typeof RTCPeerConnection === 'undefined') {
+      console.warn('[Sekundo P2P] WebRTC is not supported on this platform.');
+      return null;
+    }
+
+    try {
+      const pc = new RTCPeerConnection({
+        iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
+      });
+
+      pc.oniceconnectionstatechange = () => {
+        console.log('[Sekundo P2P] ICE state changed:', pc.iceConnectionState);
+        if (pc.iceConnectionState === 'connected') {
+          setConnectionState('connected');
+        } else if (pc.iceConnectionState === 'disconnected' || pc.iceConnectionState === 'failed') {
+          // If we also have an active BroadcastChannel, don't immediately disconnect
+          if (!broadcastChannelRef.current) {
+            setConnectionState('disconnected');
+            closeConnection();
+          }
+        }
+      };
+
+      peerConnectionRef.current = pc;
+      return pc;
+    } catch (err: any) {
+      console.error('[Sekundo P2P] RTCPeerConnection init error:', err);
+      return null;
+    }
+  }, [closeConnection]);
+
+  // Handle incoming data channel messages
+  const handleDataChannelMessage = useCallback(
+    (event: MessageEvent) => {
+      try {
+        const payload = JSON.parse(event.data);
+        handleIncomingPayload(payload);
+      } catch (err) {
         console.error('[Sekundo P2P] Message handling error:', err);
       }
     },
-    [onHistorySync]
+    [handleIncomingPayload]
   );
 
   // Configure Data Channel events
@@ -151,7 +196,9 @@ export function usePeerChat({ eventId, role, onHistorySync, onStateUpdate }: Use
 
       channel.onclose = () => {
         console.log('[Sekundo P2P] P2P channel closed.');
-        closeConnection();
+        if (!broadcastChannelRef.current) {
+          closeConnection();
+        }
       };
 
       channel.onmessage = handleDataChannelMessage;
@@ -159,47 +206,112 @@ export function usePeerChat({ eventId, role, onHistorySync, onStateUpdate }: Use
     [closeConnection, handleDataChannelMessage]
   );
 
+  // Setup optional BroadcastChannel for instantaneous same-browser multi-tab testing
+  const setupBroadcastLoopback = useCallback(
+    (rId: string) => {
+      if (typeof BroadcastChannel !== 'undefined') {
+        try {
+          const bc = new BroadcastChannel(`sekundo_p2p_${rId}`);
+          broadcastChannelRef.current = bc;
+          bc.onmessage = (event) => {
+            const data = event.data;
+            if (!data) return;
+
+            if (data.type === 'peer_joined') {
+              console.log('[Sekundo P2P Broadcast] Peer joined loopback channel.');
+              setConnectionState('connected');
+              if (role === 'admin') {
+                bc.postMessage({ type: 'admin_ack' });
+              }
+            } else if (data.type === 'admin_ack') {
+              console.log('[Sekundo P2P Broadcast] Admin acknowledged loopback connection.');
+              setConnectionState('connected');
+            } else {
+              handleIncomingPayload(data);
+            }
+          };
+
+          if (role === 'viewer') {
+            bc.postMessage({ type: 'peer_joined' });
+            setConnectionState('connected');
+          }
+        } catch (e) {
+          console.warn('[Sekundo P2P] BroadcastChannel initialization skipped:', e);
+        }
+      }
+    },
+    [role, handleIncomingPayload]
+  );
+
   // ---------------------------------------------------------------------------
   // Signaling Pipeline: ADMIN ROLE
   // ---------------------------------------------------------------------------
   const startAdminHandshake = async () => {
-    const pc = initPeerConnection();
-    if (!pc) return;
-
+    setError(null);
     setConnectionState('connecting');
 
     try {
-      // 1. Create Data Channel
+      // 1. Create Ephemeral Room via API
+      console.log('[Sekundo P2P] Requesting ephemeral room creation...');
+      const roomRes = await fetch(API.signal.createRoom, {
+        method: 'POST',
+        headers: getHeaders(),
+      });
+
+      if (!roomRes.ok) {
+        throw new Error(`Servidor de sinalização indisponível (${roomRes.status})`);
+      }
+
+      const roomData = await roomRes.json();
+      const rId = roomData.room_id;
+      if (!rId) {
+        throw new Error('Falha ao obter ID da sala de sinalização.');
+      }
+
+      setRoomId(rId);
+      setupBroadcastLoopback(rId);
+
+      // 2. Initialize WebRTC peer connection
+      const pc = initPeerConnection();
+      if (!pc) {
+        console.warn('[Sekundo P2P] WebRTC não suportado, operando em modo loopback.');
+        return;
+      }
+
+      // 3. Create Data Channel
       const channel = pc.createDataChannel('sekundo-sync');
       configureDataChannel(channel);
 
-      // 2. Create Ephemeral Room
-      const roomRes = await fetch(API.signal.createRoom, { method: 'POST' });
-      const roomData = await roomRes.json();
-      const rId = roomData.room_id;
-      setRoomId(rId);
-
-      // 3. ICE Candidate gathering relay
+      // 4. ICE Candidate gathering relay
       pc.onicecandidate = async (event) => {
         if (event.candidate) {
-          await fetch(API.signal.candidates(rId, 'offer'), {
-            method: 'POST',
-            headers: getHeaders(),
-            body: JSON.stringify(event.candidate),
-          });
+          try {
+            await fetch(API.signal.candidates(rId, 'offer'), {
+              method: 'POST',
+              headers: getHeaders(),
+              body: JSON.stringify(event.candidate),
+            });
+          } catch (candErr) {
+            console.warn('[Sekundo P2P] Falha ao enviar ICE candidate:', candErr);
+          }
         }
       };
 
-      // 4. Create and upload Offer
+      // 5. Create and upload Offer
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
-      await fetch(API.signal.offer(rId), {
+
+      const offerRes = await fetch(API.signal.offer(rId), {
         method: 'POST',
         headers: getHeaders(),
         body: JSON.stringify({ sdp: offer.sdp, type: 'offer' }),
       });
 
-      // 5. Poll for Answer
+      if (!offerRes.ok) {
+        throw new Error(`Falha ao registrar oferta SDP (${offerRes.status})`);
+      }
+
+      // 6. Poll for Answer from Guest
       answerPollIntervalRef.current = setInterval(async () => {
         try {
           const res = await fetch(API.signal.answer(rId));
@@ -212,24 +324,27 @@ export function usePeerChat({ eventId, role, onHistorySync, onStateUpdate }: Use
             candidatePollIntervalRef.current = setInterval(async () => {
               try {
                 const candidatesRes = await fetch(API.signal.candidates(rId, 'answer'));
-                const { candidates } = await candidatesRes.json();
-                for (const c of candidates) {
-                  await pc.addIceCandidate(new RTCIceCandidate(c));
-                }
-                if (candidates.length > 0) {
-                  clearInterval(candidatePollIntervalRef.current);
+                if (candidatesRes.status === 200) {
+                  const { candidates } = await candidatesRes.json();
+                  for (const c of candidates || []) {
+                    await pc.addIceCandidate(new RTCIceCandidate(c));
+                  }
+                  if (candidates && candidates.length > 0) {
+                    clearInterval(candidatePollIntervalRef.current);
+                  }
                 }
               } catch (e) {
-                // ignore polling errors
+                // ignore candidate polling transient errors
               }
-            }, 2000);
+            }, 1500);
           }
         } catch (e) {
-          // ignore polling errors
+          // ignore answer polling transient errors
         }
-      }, 2000);
-    } catch (err) {
+      }, 1500);
+    } catch (err: any) {
       console.error('[Sekundo P2P] Admin Handshake failed:', err);
+      setError(err?.message || 'Falha ao iniciar handshake do Host.');
       setConnectionState('disconnected');
     }
   };
@@ -238,54 +353,81 @@ export function usePeerChat({ eventId, role, onHistorySync, onStateUpdate }: Use
   // Signaling Pipeline: VIEWER/GUEST ROLE
   // ---------------------------------------------------------------------------
   const joinViewerHandshake = async (rId: string) => {
-    const pc = initPeerConnection();
-    if (!pc) return;
-
+    setError(null);
     setRoomId(rId);
     setConnectionState('connecting');
 
     try {
-      // 1. Setup Data Channel Listener
+      setupBroadcastLoopback(rId);
+
+      // 1. Fetch SDP Offer
+      const offerRes = await fetch(API.signal.offer(rId));
+      if (offerRes.status === 204 || offerRes.status === 404) {
+        throw new Error('Sala não encontrada ou oferta do Host ainda não está pronta.');
+      }
+      if (!offerRes.ok) {
+        throw new Error(`Erro ao buscar sala (${offerRes.status})`);
+      }
+
+      const offer = await offerRes.json();
+
+      // 2. Setup PeerConnection
+      const pc = initPeerConnection();
+      if (!pc) {
+        console.warn('[Sekundo P2P] WebRTC não suportado, aguardando loopback local.');
+        return;
+      }
+
       pc.ondatachannel = (event) => {
         configureDataChannel(event.channel);
       };
 
-      // 2. Fetch SDP Offer
-      const offerRes = await fetch(API.signal.offer(rId));
-      if (offerRes.status !== 200) {
-        throw new Error('Offer not available yet.');
-      }
-      const offer = await offerRes.json();
       await pc.setRemoteDescription(new RTCSessionDescription(offer));
 
       // 3. ICE Candidate gathering relay
       pc.onicecandidate = async (event) => {
         if (event.candidate) {
-          await fetch(API.signal.candidates(rId, 'answer'), {
-            method: 'POST',
-            headers: getHeaders(),
-            body: JSON.stringify(event.candidate),
-          });
+          try {
+            await fetch(API.signal.candidates(rId, 'answer'), {
+              method: 'POST',
+              headers: getHeaders(),
+              body: JSON.stringify(event.candidate),
+            });
+          } catch (candErr) {
+            console.warn('[Sekundo P2P] Falha ao enviar candidate do guest:', candErr);
+          }
         }
       };
 
       // 4. Create and upload Answer
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
-      await fetch(API.signal.answer(rId), {
+
+      const answerRes = await fetch(API.signal.answer(rId), {
         method: 'POST',
         headers: getHeaders(),
         body: JSON.stringify({ sdp: answer.sdp, type: 'answer' }),
       });
 
-      // 5. Relay Admin candidates
-      const candidatesRes = await fetch(API.signal.candidates(rId, 'offer'));
-      const { candidates } = await candidatesRes.json();
-      for (const c of candidates) {
-        await pc.addIceCandidate(new RTCIceCandidate(c));
+      if (!answerRes.ok) {
+        throw new Error(`Falha ao registrar resposta SDP (${answerRes.status})`);
       }
-    } catch (err) {
+
+      // 5. Relay Admin candidates
+      try {
+        const candidatesRes = await fetch(API.signal.candidates(rId, 'offer'));
+        if (candidatesRes.status === 200) {
+          const { candidates } = await candidatesRes.json();
+          for (const c of candidates || []) {
+            await pc.addIceCandidate(new RTCIceCandidate(c));
+          }
+        }
+      } catch (candErr) {
+        console.warn('[Sekundo P2P] Falha ao recuperar candidates do admin:', candErr);
+      }
+    } catch (err: any) {
       console.error('[Sekundo P2P] Guest Handshake failed:', err);
+      setError(err?.message || 'Falha ao conectar à sala do Host.');
       setConnectionState('disconnected');
     }
   };
@@ -295,26 +437,44 @@ export function usePeerChat({ eventId, role, onHistorySync, onStateUpdate }: Use
   // ---------------------------------------------------------------------------
 
   const sendMessage = (text: string, senderName: string) => {
-    if (!dataChannelRef.current || dataChannelRef.current.readyState !== 'open') return;
-
     const senderId = role === 'admin' ? 'admin' : 'viewer';
     const timestamp = Date.now();
+    const msgId = Math.random().toString();
 
     const payload = {
       type: 'chat',
+      id: msgId,
       senderId,
       senderName,
       text,
       timestamp,
     };
 
-    dataChannelRef.current.send(JSON.stringify(payload));
+    let sent = false;
+
+    if (dataChannelRef.current && dataChannelRef.current.readyState === 'open') {
+      try {
+        dataChannelRef.current.send(JSON.stringify(payload));
+        sent = true;
+      } catch (e) {
+        console.warn('[Sekundo P2P] WebRTC send failed:', e);
+      }
+    }
+
+    if (broadcastChannelRef.current) {
+      try {
+        broadcastChannelRef.current.postMessage(payload);
+        sent = true;
+      } catch (e) {
+        console.warn('[Sekundo P2P] Broadcast send failed:', e);
+      }
+    }
 
     // Volatile self-append
     setMessages((prev) => [
       ...prev,
       {
-        id: Math.random().toString(),
+        id: msgId,
         senderId,
         senderName,
         text,
@@ -324,8 +484,6 @@ export function usePeerChat({ eventId, role, onHistorySync, onStateUpdate }: Use
   };
 
   const streamHistory = (historyData: any[]) => {
-    if (!dataChannelRef.current || dataChannelRef.current.readyState !== 'open') return;
-
     const serialized = JSON.stringify(historyData);
     const totalChunks = Math.ceil(serialized.length / CHUNK_SIZE);
 
@@ -343,23 +501,34 @@ export function usePeerChat({ eventId, role, onHistorySync, onStateUpdate }: Use
         chunk,
       };
 
-      dataChannelRef.current.send(JSON.stringify(payload));
+      if (dataChannelRef.current && dataChannelRef.current.readyState === 'open') {
+        dataChannelRef.current.send(JSON.stringify(payload));
+      }
+      if (broadcastChannelRef.current) {
+        broadcastChannelRef.current.postMessage(payload);
+      }
     }
   };
 
   const broadcastState = (skeleton: any[]) => {
-    if (!dataChannelRef.current || dataChannelRef.current.readyState !== 'open') return;
     const payload = {
       type: 'state-update',
       skeleton,
     };
-    dataChannelRef.current.send(JSON.stringify(payload));
+    if (dataChannelRef.current && dataChannelRef.current.readyState === 'open') {
+      dataChannelRef.current.send(JSON.stringify(payload));
+    }
+    if (broadcastChannelRef.current) {
+      broadcastChannelRef.current.postMessage(payload);
+    }
   };
 
   return {
     connectionState,
     messages,
     roomId,
+    error,
+    setError,
     startAdminHandshake,
     joinViewerHandshake,
     sendMessage,

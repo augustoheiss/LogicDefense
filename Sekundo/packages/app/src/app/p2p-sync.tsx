@@ -7,7 +7,7 @@
  */
 
 import React, { useState } from 'react';
-import { StyleSheet, Text, View, ScrollView, Pressable, TextInput, ActivityIndicator, Platform } from 'react-native';
+import { StyleSheet, Text, View, Pressable, TextInput, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { usePeerChat } from '../hooks/usePeerChat';
@@ -26,7 +26,7 @@ export default function P2PSyncPage() {
   const event = events.find((e) => e.config.id === eventId);
   const { flatRegistry } = useSkeleton(eventId);
 
-  const [currentUser, setCurrentUser] = useState(isWebAdmin ? 'Admin' : 'Guest');
+  const [currentUser, setCurrentUser] = useState(isWebAdmin ? 'Admin' : 'Convidado');
   const [joinRoomId, setJoinRoomId] = useState('');
   const [copied, setCopied] = useState(false);
 
@@ -36,7 +36,6 @@ export default function P2PSyncPage() {
     // Auto-Merge incoming archive history
     const mergedArchive = [...event.archive];
     for (const incomingSnapshot of historyData) {
-      // Overwrite if same date, or append new historical snapshots
       const existingIdx = mergedArchive.findIndex((item) => item.date === incomingSnapshot.date);
       if (existingIdx !== -1) {
         mergedArchive[existingIdx].values = {
@@ -50,13 +49,15 @@ export default function P2PSyncPage() {
 
     const updatedState = { ...event, archive: mergedArchive };
     await updateEventState(eventId, updatedState);
-    alert('Decentralized merge complete! Incoming archive history synced successfully.');
+    alert('Sincronização descentralizada concluída! Histórico mesclado com sucesso.');
   };
 
   const {
     connectionState,
     messages,
     roomId,
+    error,
+    setError,
     startAdminHandshake,
     joinViewerHandshake,
     sendMessage,
@@ -104,23 +105,39 @@ export default function P2PSyncPage() {
             }}
             style={styles.backBtn}
           >
-            <Text style={styles.backBtnText}>← Editor</Text>
+            <Text style={styles.backBtnText}>← Voltar ao Editor</Text>
           </Pressable>
           <Text style={styles.title}>Decentralized P2P Sync</Text>
           <Text style={styles.subtitle}>
-            Event: {event.config.name} • Role: {isWebAdmin ? 'HOST (Admin)' : 'GUEST (Viewer)'}
+            Evento: {event.config.name} • Perfil: {isWebAdmin ? 'HOST (Admin)' : 'GUEST (Convidado)'}
           </Text>
         </View>
+
+        {/* Error Notification Banner */}
+        {error ? (
+          <View style={styles.errorBanner}>
+            <Text style={styles.errorBannerText}>⚠️ {error}</Text>
+            <Pressable
+              onPress={() => {
+                setError(null);
+                closeConnection();
+              }}
+              style={styles.errorDismissBtn}
+            >
+              <Text style={styles.errorDismissText}>Fechar</Text>
+            </Pressable>
+          </View>
+        ) : null}
 
         {/* Connection Setup Dashboard */}
         {connectionState === 'disconnected' ? (
           <View style={styles.setupDeck}>
-            <Text style={styles.sectionLabel}>ESTABLISH DECENTRALIZED HANDSHAKE</Text>
+            <Text style={styles.sectionLabel}>ESTABELECER CONEXÃO P2P DESCENTRALIZADA</Text>
             {isWebAdmin ? (
               <View style={styles.setupCard}>
                 <Text style={styles.cardHelp}>
-                  Hosting generates a temporary signaling channel room. Share the 8-digit Room ID
-                  with your guest to open the direct P2P data bridge.
+                  Iniciar como Host cria uma sala efêmera de sinalização. Compartilhe o código de 8 dígitos
+                  com seu convidado para abrir o túnel P2P direto no navegador.
                 </Text>
                 <Pressable onPress={handleStartHost} style={styles.primaryBtn}>
                   <Text style={styles.primaryBtnText}>Start Hosting Room</Text>
@@ -129,13 +146,13 @@ export default function P2PSyncPage() {
             ) : (
               <View style={styles.setupCard}>
                 <Text style={styles.cardHelp}>
-                  Enter the 8-digit room key shared by the Event Admin to join the signaling bridge.
+                  Insira o código de 8 dígitos da sala fornecido pelo Host para conectar a ponte de sinalização.
                 </Text>
                 <TextInput
                   style={styles.input}
                   value={joinRoomId}
                   onChangeText={setJoinRoomId}
-                  placeholder="Enter Room ID (e.g. e4a5c6d7)"
+                  placeholder="Código da Sala (ex: e4a5c6d7)"
                   placeholderTextColor="#4F5E74"
                   maxLength={8}
                 />
@@ -144,7 +161,7 @@ export default function P2PSyncPage() {
                   onPress={handleJoin}
                   style={[styles.primaryBtn, !joinRoomId.trim() && styles.btnDisabled]}
                 >
-                  <Text style={styles.primaryBtnText}>Join Peer Room</Text>
+                  <Text style={styles.primaryBtnText}>Entrar na Sala Peer</Text>
                 </Pressable>
               </View>
             )}
@@ -155,19 +172,27 @@ export default function P2PSyncPage() {
         {connectionState === 'connecting' ? (
           <View style={styles.connectingDeck}>
             <ActivityIndicator size="large" color="#8B5CF6" style={{ marginBottom: 16 }} />
-            <Text style={styles.connectingTitle}>Exchanging SDP Signaling Handshake</Text>
+            <Text style={styles.connectingTitle}>Estabelecendo Handshake WebRTC P2P</Text>
             {roomId ? (
               <View style={styles.roomIdCard}>
-                <Text style={styles.roomIdLabel}>Room ID Address:</Text>
+                <Text style={styles.roomIdLabel}>Código da Sala (Room ID):</Text>
                 <View style={styles.roomIdRow}>
                   <Text style={styles.roomIdVal}>{roomId}</Text>
                   <Pressable onPress={handleCopyLink} style={styles.copyBtn}>
-                    <Text style={styles.copyBtnText}>{copied ? '✓' : 'Copy'}</Text>
+                    <Text style={styles.copyBtnText}>{copied ? '✓ Copiado' : 'Copiar'}</Text>
                   </Pressable>
                 </View>
               </View>
             ) : null}
-            <Text style={styles.connectingSub}>Waiting for remote peer node connection...</Text>
+            <Text style={styles.connectingSub}>Aguardando conexão do peer remoto...</Text>
+            <Pressable
+              onPress={() => {
+                closeConnection();
+              }}
+              style={styles.cancelBtn}
+            >
+              <Text style={styles.cancelBtnText}>Cancelar Conexão</Text>
+            </Pressable>
           </View>
         ) : null}
 
@@ -178,7 +203,7 @@ export default function P2PSyncPage() {
             <View style={styles.controlBar}>
               <View style={styles.statusBadge}>
                 <View style={styles.statusDot} />
-                <Text style={styles.statusText}>P2P BRIDGE ACTIVE</Text>
+                <Text style={styles.statusText}>PONTE P2P CONECTADA</Text>
               </View>
 
               {isWebAdmin ? (
@@ -186,10 +211,10 @@ export default function P2PSyncPage() {
                   onPress={() => streamHistory(event.archive)}
                   style={styles.syncHistoryBtn}
                 >
-                  <Text style={styles.syncHistoryBtnText}>Stream Archive History</Text>
+                  <Text style={styles.syncHistoryBtnText}>Transmitir Histórico</Text>
                 </Pressable>
               ) : (
-                <Text style={styles.viewerSyncText}>Waiting for host archive stream...</Text>
+                <Text style={styles.viewerSyncText}>Aguardando transmissão do host...</Text>
               )}
             </View>
 
@@ -236,7 +261,7 @@ const styles = StyleSheet.create({
     flexDirection: 'column',
   },
   header: {
-    marginBottom: 20,
+    marginBottom: 16,
   },
   backBtn: {
     marginBottom: 12,
@@ -257,6 +282,34 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     marginTop: 4,
+  },
+  errorBanner: {
+    backgroundColor: 'rgba(239, 68, 68, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.4)',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  errorBannerText: {
+    color: '#FCA5A5',
+    fontSize: 13,
+    flex: 1,
+    marginRight: 8,
+  },
+  errorDismissBtn: {
+    backgroundColor: 'rgba(239, 68, 68, 0.3)',
+    borderRadius: 4,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+  },
+  errorDismissText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '600',
   },
   setupDeck: {
     flex: 1,
@@ -327,7 +380,7 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255, 255, 255, 0.06)',
     padding: 12,
     width: '100%',
-    maxWidth: 240,
+    maxWidth: 260,
     marginBottom: 16,
     alignItems: 'center',
   },
@@ -364,6 +417,18 @@ const styles = StyleSheet.create({
   connectingSub: {
     color: '#6F7E94',
     fontSize: 12,
+    marginBottom: 16,
+  },
+  cancelBtn: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 6,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+  },
+  cancelBtnText: {
+    color: '#8A94A6',
+    fontSize: 12,
+    fontWeight: '500',
   },
   connectedWorkspace: {
     flex: 1,
