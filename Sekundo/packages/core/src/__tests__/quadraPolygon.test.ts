@@ -6,6 +6,7 @@ import {
   parseAddressLine,
   extractQuadrasFromRegistry,
   formatQuadraPerimeterDescription,
+  computeMergedTerritoryPolygon,
 } from '../geo/quadraPolygonEngine';
 import type { FlatSkeletonEntry } from '../skeleton/types';
 
@@ -128,5 +129,98 @@ describe('Quadra & Perimeter Streets GIS Engine', () => {
     expect(azaleias?.totalUnits).toBe(2);
     expect(azaleias?.workedUnits).toBe(1);
     expect(azaleias?.coveragePercent).toBe(50);
+  });
+
+  it('respects customColor and polygonExpansion overrides', () => {
+    const customRegistry: FlatSkeletonEntry[] = [
+      {
+        key: '02-01-02',
+        type: 'header',
+        label: 'Quadra Personalizada',
+        value: '',
+        meta: {
+          territory_number: 'T02.01.02',
+          customColor: '#8B5CF6',
+          polygonExpansion: 1.05,
+        },
+      },
+      {
+        key: '02-01-02-01',
+        type: 'territory',
+        label: 'Rua das Flores, 100',
+        value: '',
+        meta: {
+          line: 'Rua das Flores, 100',
+          territory_number: 'T02.01.02',
+          lat: -25.41,
+          lng: -49.15,
+          worked: 0,
+        },
+      },
+      {
+        key: '02-01-02-02',
+        type: 'territory',
+        label: 'Rua das Flores, 102',
+        value: '',
+        meta: {
+          line: 'Rua das Flores, 102',
+          territory_number: 'T02.01.02',
+          lat: -25.42,
+          lng: -49.16,
+          worked: 0,
+        },
+      },
+    ];
+
+    const quadras = extractQuadrasFromRegistry(customRegistry);
+    expect(quadras.length).toBe(1);
+    expect(quadras[0].statusColor).toBe('#8B5CF6'); // Custom color wins over #EF4444
+    expect(quadras[0].polygonExpansion).toBe(1.05);
+  });
+
+  it('merges multiple quadras into a single territory polygon', () => {
+    const mockQuadras = [
+      {
+        key: 'Q1',
+        quadraNumber: '1',
+        label: 'Q1',
+        territoryNumber: 'T01',
+        perimeterStreets: ['Rua 1'],
+        boundaryPolygon: [
+          [-25.41, -49.15],
+          [-25.41, -49.14],
+          [-25.42, -49.14],
+        ] as [number, number][],
+        centroid: [-25.415, -49.145] as [number, number],
+        totalUnits: 1,
+        workedUnits: 0,
+        coveragePercent: 0,
+        isCompleted: false,
+        statusColor: '#EF4444',
+        streets: [],
+      },
+      {
+        key: 'Q2',
+        quadraNumber: '2',
+        label: 'Q2',
+        territoryNumber: 'T01',
+        perimeterStreets: ['Rua 2'],
+        boundaryPolygon: [
+          [-25.43, -49.15],
+          [-25.43, -49.16],
+          [-25.42, -49.16],
+        ] as [number, number][],
+        centroid: [-25.425, -49.155] as [number, number],
+        totalUnits: 1,
+        workedUnits: 0,
+        coveragePercent: 0,
+        isCompleted: false,
+        statusColor: '#EF4444',
+        streets: [],
+      },
+    ];
+
+    const merged = computeMergedTerritoryPolygon(mockQuadras);
+    expect(merged.length).toBeGreaterThanOrEqual(3);
   });
 });

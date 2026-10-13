@@ -47,7 +47,35 @@ export interface QuadraSummary {
   coveragePercent: number;
   isCompleted: boolean;
   statusColor: string;                 // Hex color for Leaflet polygon
+  customColor?: string;                // User custom override color if specified
+  polygonExpansion?: number;           // User custom buffer expansion factor (e.g. 1.0, 1.2, 1.5)
+  mergedWithQuadras?: string[];        // If merged with other quadras into a territory group
   streets: StreetAddressGroup[];
+}
+
+/**
+ * Merges multiple quadras into a single combined territory polygon.
+ * Collects all boundary points from the selected quadras and calculates the bounding convex hull.
+ */
+export function computeMergedTerritoryPolygon(
+  quadras: QuadraSummary[],
+  expansionFactor = 1.0004
+): [number, number][] {
+  const allPoints: [number, number][] = [];
+  for (const q of quadras) {
+    if (q.boundaryPolygon && q.boundaryPolygon.length > 0) {
+      allPoints.push(...q.boundaryPolygon);
+    } else if (q.centroid && (q.centroid[0] !== 0 || q.centroid[1] !== 0)) {
+      allPoints.push(q.centroid);
+    }
+  }
+
+  if (allPoints.length < 3) {
+    return allPoints;
+  }
+
+  const hull = computeConvexHull(allPoints);
+  return expandPolygon(hull, expansionFactor);
 }
 
 /**
@@ -193,6 +221,9 @@ export function extractQuadrasFromRegistry(flatRegistry: FlatSkeletonEntry[]): Q
     city?: string;
     explicitPolygon?: [number, number][];
     explicitPerimeterStreets?: string[];
+    customColor?: string;
+    polygonExpansion?: number;
+    mergedWithQuadras?: string[];
     units: QuadraAddressUnit[];
     points: [number, number][];
   }
@@ -224,7 +255,13 @@ export function extractQuadrasFromRegistry(flatRegistry: FlatSkeletonEntry[]): Q
 
       const pStreets: string[] | undefined = Array.isArray(meta.perimeter_streets)
         ? meta.perimeter_streets
-        : undefined;
+        : (Array.isArray(meta.perimeterStreets) ? meta.perimeterStreets : undefined);
+
+      const customColor = meta.customColor || meta.custom_color || meta.cor_personalizada;
+      const polygonExpansion = typeof meta.polygonExpansion === 'number'
+        ? meta.polygonExpansion
+        : (typeof meta.polygon_expansion === 'number' ? meta.polygon_expansion : undefined);
+      const mergedWithQuadras = Array.isArray(meta.merged_quadras) ? meta.merged_quadras : undefined;
 
       quadraMap.set(entry.key, {
         key: entry.key,
@@ -235,6 +272,9 @@ export function extractQuadrasFromRegistry(flatRegistry: FlatSkeletonEntry[]): Q
         city: meta.city || meta.cidade,
         explicitPolygon: poly,
         explicitPerimeterStreets: pStreets,
+        customColor: customColor ? String(customColor) : undefined,
+        polygonExpansion,
+        mergedWithQuadras,
         units: [],
         points: [],
       });
@@ -315,7 +355,8 @@ export function extractQuadrasFromRegistry(flatRegistry: FlatSkeletonEntry[]): Q
     const workedUnits = acc.units.filter((u) => u.worked === 1).length;
     const coveragePercent = totalUnits > 0 ? Math.round((workedUnits / totalUnits) * 1000) / 10 : 0;
     const isCompleted = totalUnits > 0 && workedUnits === totalUnits;
-    const statusColor = calculateQuadraColor(coveragePercent, totalUnits);
+    const statusColor = acc.customColor || calculateQuadraColor(coveragePercent, totalUnits);
+    const expansionFactor = acc.polygonExpansion || 1.0003;
 
     // Group units by street
     const streetMap = new Map<string, QuadraAddressUnit[]>();
@@ -347,9 +388,9 @@ export function extractQuadrasFromRegistry(flatRegistry: FlatSkeletonEntry[]): Q
       boundaryPolygon = acc.explicitPolygon;
     } else if (acc.points.length >= 3) {
       const hull = computeConvexHull(acc.points);
-      boundaryPolygon = expandPolygon(hull, 1.0003);
+      boundaryPolygon = expandPolygon(hull, expansionFactor);
     } else if (acc.points.length > 0) {
-      boundaryPolygon = expandPolygon(acc.points, 1.0003);
+      boundaryPolygon = expandPolygon(acc.points, expansionFactor);
     }
 
     // Centroid calculation
@@ -387,6 +428,9 @@ export function extractQuadrasFromRegistry(flatRegistry: FlatSkeletonEntry[]): Q
       coveragePercent,
       isCompleted,
       statusColor,
+      customColor: acc.customColor,
+      polygonExpansion: acc.polygonExpansion,
+      mergedWithQuadras: acc.mergedWithQuadras,
       streets,
     });
   }

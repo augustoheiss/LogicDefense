@@ -104,6 +104,7 @@ export function useSkeleton(eventId: string) {
     updateNode,
     deleteNode,
     commitCSVImport,
+    saveSkeleton,
     reload: loadSkeleton,
   };
 }

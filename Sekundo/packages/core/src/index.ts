@@ -187,6 +187,7 @@ export {
   parseAddressLine,
   extractQuadrasFromRegistry,
   formatQuadraPerimeterDescription,
+  computeMergedTerritoryPolygon,
 } from './geo/quadraPolygonEngine';
 export type {
   QuadraAddressUnit,
