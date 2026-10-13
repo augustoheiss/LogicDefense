@@ -24,8 +24,9 @@ import { useLocalEvent } from '../hooks/useLocalEvent';
 import { TreeView } from '../components/ui/TreeView';
 import { GranularExportModal } from '../components/csv/GranularExportModal';
 import { TransformerStudioModal } from '../components/transformer/TransformerStudioModal';
+import { AddressEditModal } from '../components/territory/AddressEditModal';
 import { serializeCSV, engineRegistry, pathKey } from '@sekundo/core';
-import type { NodeType, SkeletonNode } from '@sekundo/core';
+import type { NodeType, SkeletonNode, FlatSkeletonEntry } from '@sekundo/core';
 
 export default function SkeletonEditor() {
   const router = useRouter();
@@ -47,6 +48,7 @@ export default function SkeletonEditor() {
   const [exportModalVisible, setExportModalVisible] = useState(false);
   const [transformerModalVisible, setTransformerModalVisible] = useState(false);
   const [editingNode, setEditingNode] = useState<SkeletonNode | null>(null);
+  const [editingAddressItem, setEditingAddressItem] = useState<FlatSkeletonEntry | null>(null);
   const [parentKey, setParentKey] = useState<string | null>(null);
 
   // Form Fields
@@ -87,6 +89,32 @@ export default function SkeletonEditor() {
   };
 
   const openEditModal = (node: SkeletonNode) => {
+    const rawMeta = (node.meta || {}) as Record<string, any>;
+    const isAddressNode =
+      node.type === 'territory' ||
+      !!rawMeta.territory_number ||
+      !!rawMeta.territory ||
+      !!rawMeta.logradouro ||
+      !!rawMeta.address ||
+      !!rawMeta.bairro ||
+      !!rawMeta.cep ||
+      !!rawMeta.cidade ||
+      !!rawMeta.city ||
+      !!rawMeta.lat ||
+      (event?.config.engineId === 'territory_logistics' && (!node.children || node.children.length === 0));
+
+    if (isAddressNode) {
+      setEditingAddressItem({
+        key: node.key,
+        type: node.type,
+        label: node.label,
+        value: node.value,
+        email: node.email,
+        meta: rawMeta,
+      });
+      return;
+    }
+
     setEditingNode(node);
     setParentKey(null);
     setNodeKey(node.key);
@@ -464,7 +492,7 @@ export default function SkeletonEditor() {
               style={styles.input}
               value={nodeValue}
               onChangeText={setNodeValue}
-              placeholder="e.g. Irmão Silva"
+              placeholder="e.g. Carlos Silva"
               placeholderTextColor="#4F5E74"
             />
 
@@ -477,6 +505,35 @@ export default function SkeletonEditor() {
               placeholderTextColor="#4F5E74"
               keyboardType="email-address"
             />
+
+            {(event?.config.engineId === 'territory_logistics' || nodeType === 'territory') && editingNode ? (
+              <Pressable
+                onPress={() => {
+                  setModalVisible(false);
+                  setEditingAddressItem({
+                    key: editingNode.key,
+                    type: nodeType,
+                    label: nodeLabel,
+                    value: nodeValue,
+                    email: nodeEmail,
+                    meta: (editingNode.meta || {}) as Record<string, any>,
+                  });
+                }}
+                style={{
+                  marginVertical: 10,
+                  padding: 10,
+                  borderRadius: 8,
+                  backgroundColor: 'rgba(255, 184, 0, 0.1)',
+                  borderWidth: 1,
+                  borderColor: '#FFB800',
+                  alignItems: 'center',
+                }}
+              >
+                <Text style={{ color: '#FFB800', fontWeight: '700', fontSize: 13 }}>
+                  ✏️ Abrir Editor Completo de Endereço & Mapa
+                </Text>
+              </Pressable>
+            ) : null}
 
             {/* Modal Controls */}
             <View style={styles.modalFooter}>
@@ -546,6 +603,16 @@ export default function SkeletonEditor() {
         event={event}
         onUpdateEventState={updateEventState}
         nodes={tree}
+      />
+
+      {/* Address Edit Full Modal */}
+      <AddressEditModal
+        visible={!!editingAddressItem}
+        item={editingAddressItem}
+        onClose={() => setEditingAddressItem(null)}
+        onSave={async (key, updates) => {
+          await updateNode(key, updates);
+        }}
       />
     </SafeAreaView>
   );

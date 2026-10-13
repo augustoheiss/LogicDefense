@@ -365,8 +365,8 @@ export function AddressEditModal({ visible, item, onClose, onSave }: AddressEdit
             {/* 4. Cronograma & Datas de Cobertura */}
             <View style={styles.section}>
               <Text style={styles.sectionHeader}>📅 CRONOGRAMA & DATAS DE COBERTURA</Text>
-              <View style={styles.row2}>
-                <View style={styles.col}>
+              <View style={[styles.row, { gap: 12, alignItems: 'flex-start' }]}>
+                <View style={[styles.col, { flex: 1 }]}>
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
                     <Text style={styles.inputLabel}>Data da Designação</Text>
                     <Pressable
@@ -385,7 +385,7 @@ export function AddressEditModal({ visible, item, onClose, onSave }: AddressEdit
                   />
                 </View>
 
-                <View style={styles.col}>
+                <View style={[styles.col, { flex: 1 }]}>
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
                     <Text style={styles.inputLabel}>Data da Conclusão</Text>
                     <View style={{ flexDirection: 'row', gap: 6 }}>

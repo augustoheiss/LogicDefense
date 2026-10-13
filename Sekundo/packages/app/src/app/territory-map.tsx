@@ -127,7 +127,7 @@ export default function TerritoryMapScreen() {
 
     flatRegistry.forEach((node) => {
       const meta = (node.meta || {}) as Record<string, any>;
-      const tNum = meta.territory_number || meta.territory || pathKey.parts(node.key).slice(0, 3).join('-') || 'T01';
+      const tNum = meta.territory_number || meta.territory || node.key.split('-').slice(0, 3).join('-') || 'T01';
       territories.add(tNum);
 
       const cityName = meta.city || meta.cidade || 'Cidade Principal';
@@ -196,7 +196,7 @@ export default function TerritoryMapScreen() {
       }
 
       const worked = Number(meta.worked) === 1 ? 1 : 0;
-      const territoryNumber = meta.territory_number || meta.territory || pathKey.parts(node.key).slice(0, 3).join('-') || 'T01';
+      const territoryNumber = meta.territory_number || meta.territory || node.key.split('-').slice(0, 3).join('-') || 'T01';
       const city = meta.city || meta.cidade || 'Cidade Principal';
       const color = territoryColorMap[territoryNumber] || '#3B82F6';
       const shape = cityShapeMap[city] || 'circle';

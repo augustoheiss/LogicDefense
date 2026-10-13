@@ -21,6 +21,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { decodeToken, extractTokenFromURL, encrypt, decrypt } from '@sekundo/core';
 import type { HorizonPayload, FlatSkeletonEntry, NodeType } from '@sekundo/core';
 import { TreeView } from '../components/ui/TreeView';
+import { AddressEditModal } from '../components/territory/AddressEditModal';
 import { skeletonTree } from '@sekundo/core';
 import { usePeerChat } from '../hooks/usePeerChat';
 import { API, getHeaders } from '../config/api';
@@ -46,6 +47,7 @@ export default function TokenViewer() {
   // Node editing modal states
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [editingNode, setEditingNode] = useState<FlatSkeletonEntry | null>(null);
+  const [editingAddressItem, setEditingAddressItem] = useState<FlatSkeletonEntry | null>(null);
   const [nodeKey, setNodeKey] = useState('');
   const [nodeLabel, setNodeLabel] = useState('');
   const [nodeType, setNodeType] = useState<NodeType>('slot');
@@ -190,6 +192,24 @@ export default function TokenViewer() {
   };
 
   const openEditModal = (node: FlatSkeletonEntry) => {
+    const rawMeta = (node.meta || {}) as Record<string, any>;
+    const isAddressNode =
+      node.type === 'territory' ||
+      !!rawMeta.territory_number ||
+      !!rawMeta.territory ||
+      !!rawMeta.logradouro ||
+      !!rawMeta.address ||
+      !!rawMeta.bairro ||
+      !!rawMeta.cep ||
+      !!rawMeta.cidade ||
+      !!rawMeta.city ||
+      !!rawMeta.lat;
+
+    if (isAddressNode) {
+      setEditingAddressItem(node);
+      return;
+    }
+
     setParentNodeKey(null);
     setEditingNode(node);
     setNodeKey(node.key);
@@ -452,6 +472,29 @@ export default function TokenViewer() {
           </View>
         </View>
       </Modal>
+
+      {/* Address Edit Full Modal */}
+      <AddressEditModal
+        visible={!!editingAddressItem}
+        item={editingAddressItem}
+        onClose={() => setEditingAddressItem(null)}
+        onSave={async (key, updates) => {
+          if (!payload) return;
+          const newSkeleton = payload.skeleton.map((item) =>
+            item.key === key
+              ? {
+                  ...item,
+                  label: updates.label,
+                  value: updates.value ?? item.value,
+                  meta: { ...item.meta, ...updates.meta },
+                }
+              : item
+          );
+          setPayload({ ...payload, skeleton: newSkeleton });
+          broadcastState(newSkeleton);
+          triggerAutoSave(newSkeleton);
+        }}
+      />
     </SafeAreaView>
   );
 }
