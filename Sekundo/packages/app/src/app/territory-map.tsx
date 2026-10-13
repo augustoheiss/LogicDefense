@@ -28,8 +28,19 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSkeleton } from '../hooks/useSkeleton';
 import { useLocalEvent } from '../hooks/useLocalEvent';
-import { pathKey, computeTerritoryRecencyList, calculateDaysDifference } from '@sekundo/core';
-import type { FlatSkeletonEntry, TerritoryRecencySort, TerritoryRecencyItem } from '@sekundo/core';
+import {
+  pathKey,
+  computeTerritoryRecencyList,
+  calculateDaysDifference,
+  extractQuadrasFromRegistry,
+  formatQuadraPerimeterDescription,
+} from '@sekundo/core';
+import type {
+  FlatSkeletonEntry,
+  TerritoryRecencySort,
+  TerritoryRecencyItem,
+  QuadraSummary,
+} from '@sekundo/core';
 import { AddressEditModal } from '../components/territory/AddressEditModal';
 
 interface PinItem {
@@ -106,6 +117,8 @@ export default function TerritoryMapScreen() {
   const [editingAddressItem, setEditingAddressItem] = useState<FlatSkeletonEntry | null>(null);
   const [showRecencyModal, setShowRecencyModal] = useState<boolean>(false);
   const [recencySortMode, setRecencySortMode] = useState<TerritoryRecencySort>('priority_oldest_first');
+  const [mapViewMode, setMapViewMode] = useState<'quadras' | 'pins'>('quadras');
+  const [selectedQuadraKey, setSelectedQuadraKey] = useState<string | null>(null);
 
   // Compute territory recency list and lookup map
   const recencyList = useMemo(() => {
@@ -119,6 +132,36 @@ export default function TerritoryMapScreen() {
     }
     return map;
   }, [recencyList]);
+
+  // Extract all Quadras from flat registry
+  const allQuadras = useMemo<QuadraSummary[]>(() => {
+    return extractQuadrasFromRegistry(flatRegistry);
+  }, [flatRegistry]);
+
+  // Filtered Quadras
+  const displayedQuadras = useMemo(() => {
+    return allQuadras.filter((q) => {
+      if (selectedTerritory !== 'all' && q.territoryNumber !== selectedTerritory) {
+        return false;
+      }
+      if (filterMode === 'pending' && q.isCompleted) return false;
+      if (filterMode === 'worked' && !q.isCompleted) return false;
+      if (searchQuery.trim()) {
+        const query = searchQuery.toLowerCase();
+        const matchLabel = q.label.toLowerCase().includes(query);
+        const matchT = q.territoryNumber.toLowerCase().includes(query);
+        const matchStreet = q.perimeterStreets.some((s) => s.toLowerCase().includes(query));
+        return matchLabel || matchT || matchStreet;
+      }
+      return true;
+    });
+  }, [allQuadras, selectedTerritory, filterMode, searchQuery]);
+
+  // Selected Quadra item
+  const selectedQuadra = useMemo(() => {
+    if (!selectedQuadraKey) return null;
+    return allQuadras.find((q) => q.key === selectedQuadraKey) || null;
+  }, [allQuadras, selectedQuadraKey]);
 
   // 1. Build distinct territory color map and city shape map
   const { territoryColorMap, cityShapeMap, territoryList, cityList } = useMemo(() => {
@@ -311,6 +354,36 @@ export default function TerritoryMapScreen() {
     });
   };
 
+  // Bulk toggle an entire Quadra (all address numbers)
+  const handleBulkToggleQuadra = async (quadra: QuadraSummary, markWorked: boolean) => {
+    const todayStr = new Date().toISOString().split('T')[0];
+    const allUnits = quadra.streets.flatMap((s) => s.units);
+    for (const unit of allUnits) {
+      const target = flatRegistry.find((n) => pathKey.equals(n.key, unit.key));
+      if (!target) continue;
+      const meta = (target.meta || {}) as Record<string, any>;
+      const nextMeta: Record<string, any> = {
+        ...meta,
+        worked: markWorked ? 1 : 0,
+        lastWorkedAt: markWorked ? new Date().toISOString() : undefined,
+      };
+      if (markWorked) {
+        if (!nextMeta.completedAt) nextMeta.completedAt = todayStr;
+        if (!nextMeta.completed_date) nextMeta.completed_date = todayStr;
+        if (!nextMeta.data_conclusao) nextMeta.data_conclusao = todayStr;
+      } else {
+        delete nextMeta.completedAt;
+        delete nextMeta.completed_date;
+        delete nextMeta.data_conclusao;
+        delete nextMeta.lastWorkedAt;
+      }
+      await updateNode(unit.key, {
+        value: markWorked ? 'Trabalhado' : '',
+        meta: nextMeta,
+      });
+    }
+  };
+
   // Open external navigation app
   const handleOpenGPS = (pin: PinItem) => {
     const url = `https://www.google.com/maps/search/?api=1&query=${pin.lat},${pin.lng}`;
@@ -321,9 +394,12 @@ export default function TerritoryMapScreen() {
   useEffect(() => {
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
       const handleMessage = (e: MessageEvent) => {
-        if (!e.data) return;
         if (e.data.type === 'SELECT_PIN') {
           setSelectedPinKey(e.data.key);
+          setSelectedQuadraKey(null);
+        } else if (e.data.type === 'SELECT_QUADRA') {
+          setSelectedQuadraKey(e.data.key);
+          setSelectedPinKey(null);
         } else if (e.data.type === 'TOGGLE_WORK') {
           handleToggleWork(e.data.key);
         } else if (e.data.type === 'EDIT_PIN') {
@@ -339,9 +415,16 @@ export default function TerritoryMapScreen() {
 
   // Build Leaflet HTML payload with dynamic colors, shapes, and responsive controls
   const leafletHTML = useMemo(() => {
+    const isQuadrasMode = mapViewMode === 'quadras';
     const pinsData = JSON.stringify(displayedPins);
-    const centerLat = displayedPins.length > 0 ? displayedPins[0].lat : -23.5488;
-    const centerLng = displayedPins.length > 0 ? displayedPins[0].lng : -46.3898;
+    const quadrasData = JSON.stringify(displayedQuadras);
+    let centerLat = displayedPins.length > 0 ? displayedPins[0].lat : -23.5488;
+    let centerLng = displayedPins.length > 0 ? displayedPins[0].lng : -46.3898;
+
+    if (isQuadrasMode && displayedQuadras.length > 0) {
+      centerLat = displayedQuadras[0].centroid[0];
+      centerLng = displayedQuadras[0].centroid[1];
+    }
 
     return `<!DOCTYPE html>
 <html>
@@ -447,7 +530,9 @@ export default function TerritoryMapScreen() {
 <body>
   <div id="map"></div>
   <script>
+    const isQuadrasMode = ${isQuadrasMode};
     const pins = ${pinsData};
+    const quadras = ${quadrasData};
     const map = L.map('map', {
       zoomControl: true,
       attributionControl: false
@@ -459,92 +544,132 @@ export default function TerritoryMapScreen() {
 
     const markersGroup = L.featureGroup();
 
-    pins.forEach(pin => {
-      const isWorked = pin.worked === 1;
-      const color = pin.color;
-      const labelBadge = isWorked ? '✓' : '•';
+    if (isQuadrasMode) {
+      // -------------------------------------------------------------
+      // MODO QUADRAS PINTADAS (Quarteirões Vetoriais com Ruas Delimitadoras)
+      // -------------------------------------------------------------
+      quadras.forEach(q => {
+        if (!q.boundaryPolygon || q.boundaryPolygon.length < 3) return;
 
-      let shapeStyle = '';
-      if (pin.shape === 'circle') {
-        shapeStyle = 'width:26px; height:26px; border-radius:50%;';
-      } else if (pin.shape === 'triangle') {
-        shapeStyle = 'width:28px; height:26px; clip-path: polygon(50% 0%, 0% 100%, 100% 100%);';
-      } else if (pin.shape === 'square') {
-        shapeStyle = 'width:24px; height:24px; border-radius:4px;';
-      } else if (pin.shape === 'diamond') {
-        shapeStyle = 'width:26px; height:26px; clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);';
-      }
+        const poly = L.polygon(q.boundaryPolygon, {
+          color: q.statusColor,
+          weight: 3,
+          opacity: 0.95,
+          fillColor: q.statusColor,
+          fillOpacity: 0.40,
+        });
 
-      const opacity = isWorked ? '1' : '0.85';
-      const border = isWorked ? '2px solid #FFFFFF' : '2px dashed #FFFFFF';
+        poly.on('click', (e) => {
+          L.DomEvent.stopPropagation(e);
+          window.parent.postMessage({ type: 'SELECT_QUADRA', key: q.key }, '*');
+        });
 
-      const iconHtml = '<div style="background:' + color + '; ' + shapeStyle + ' border:' + border + '; opacity:' + opacity + '; display:flex; align-items:center; justify-content:center; color:#FFFFFF; font-weight:bold; font-size:12px; box-shadow:0 4px 8px rgba(0,0,0,0.5); cursor:pointer;">' +
-        '<span style="margin-top:' + (pin.shape === 'triangle' ? '6px' : '0') + '">' + labelBadge + '</span>' +
-      '</div>';
+        const tooltipContent = 
+          '<div style="font-family:-apple-system, sans-serif; padding:4px;">' +
+            '<div style="font-weight:800; font-size:13px; color:' + q.statusColor + ';">🏢 ' + q.label + '</div>' +
+            '<div style="font-size:11px; color:#E5E7EB; margin-top:2px;">' +
+              '<b>' + q.workedUnits + '/' + q.totalUnits + '</b> concluídos (' + q.coveragePercent + '%)' +
+            '</div>' +
+            (q.perimeterStreets && q.perimeterStreets.length > 0 ?
+              '<div style="font-size:10px; color:#9CA3AF; margin-top:3px; max-width:220px;">' +
+                '🛣️ ' + q.perimeterStreets.slice(0, 3).join(', ') +
+              '</div>' : '') +
+          '</div>';
 
-      const icon = L.divIcon({
-        className: 'custom-pin',
-        html: iconHtml,
-        iconSize: [28, 28],
-        iconAnchor: [14, 14]
+        poly.bindTooltip(tooltipContent, { sticky: true });
+        markersGroup.addLayer(poly);
       });
+    } else {
+      // -------------------------------------------------------------
+      // MODO ALFINETES INDIVIDUAIS (GPS)
+      // -------------------------------------------------------------
+      pins.forEach(pin => {
+        const isWorked = pin.worked === 1;
+        const color = pin.color;
+        const labelBadge = isWorked ? '✓' : '•';
 
-      const marker = L.marker([pin.lat, pin.lng], { icon: icon });
+        let shapeStyle = '';
+        if (pin.shape === 'circle') {
+          shapeStyle = 'width:26px; height:26px; border-radius:50%;';
+        } else if (pin.shape === 'triangle') {
+          shapeStyle = 'width:28px; height:26px; clip-path: polygon(50% 0%, 0% 100%, 100% 100%);';
+        } else if (pin.shape === 'square') {
+          shapeStyle = 'width:24px; height:24px; border-radius:4px;';
+        } else if (pin.shape === 'diamond') {
+          shapeStyle = 'width:26px; height:26px; clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);';
+        }
 
-      marker.on('click', () => {
-        window.parent.postMessage({ type: 'SELECT_PIN', key: pin.key }, '*');
-      });
+        const opacity = isWorked ? '1' : '0.85';
+        const border = isWorked ? '2px solid #FFFFFF' : '2px dashed #FFFFFF';
 
-      // Rich popup content
-      const popupCard = document.createElement('div');
-      popupCard.className = 'popup-card';
-      popupCard.innerHTML = 
-        '<div class="popup-top-row">' +
-          '<span class="popup-badge" style="background:' + color + '22; color:' + color + '; border:1px solid ' + color + ';">' + pin.territoryNumber + '</span>' +
-          '<span style="font-size:11px; color:#9CA3AF;">' + pin.city + '</span>' +
-        '</div>' +
-        '<div class="popup-title">' + (pin.line || pin.label) + '</div>' +
-        (pin.line2 ? '<div class="popup-sub">' + pin.line2 + (pin.postalcode ? ' • CEP ' + pin.postalcode : '') + '</div>' : '') +
-        '<div class="popup-extra">' +
-          '<span class="popup-tag">' + (pin.propertyType === 'comercial' ? '🏢 Comércio' : (pin.propertyType === 'predio' ? '🏙️ Prédio' : '🏠 Residência')) + '</span>' +
-          (pin.isForeign ? '<span class="popup-tag" style="background:rgba(59,130,246,0.2); color:#60A5FA;">🌐 ' + (pin.language || 'Estrangeiro') + '</span>' : '') +
-          (pin.notes ? '<span class="popup-tag" style="background:rgba(255,184,0,0.15); color:#FFB800;">📝 Anotação</span>' : '') +
-        '</div>' +
-        (pin.assignedAt || pin.completedAt ?
-          '<div style="font-size:11px; margin-bottom:8px; display:flex; flex-direction:column; gap:2px; background:rgba(255,255,255,0.04); padding:6px; border-radius:6px;">' +
-            (pin.assignedAt ? '<span style="color:#A78BFA;">📅 Desig: ' + pin.assignedAt + '</span>' : '') +
-            (pin.completedAt ? '<span style="color:#34D399; font-weight:700;">✓ Concl: ' + pin.completedAt + (pin.daysSinceCompleted !== null && pin.daysSinceCompleted !== undefined ? (pin.daysSinceCompleted === 0 ? ' (hoje)' : pin.daysSinceCompleted === 1 ? ' (ontem)' : ' (há ' + pin.daysSinceCompleted + 'd)') : '') + '</span>' : '') +
-          '</div>' : '') +
-        '<div class="popup-btn-row">' +
-          '<button class="popup-btn ' + (isWorked ? 'popup-btn-pending' : 'popup-btn-work') + '" id="btn-toggle">' +
-            (isWorked ? 'Marcar Pendente' : '✓ Concluído') +
-          '</button>' +
-          '<button class="popup-btn popup-btn-edit" id="btn-edit">✏️ Editar</button>' +
+        const iconHtml = '<div style="background:' + color + '; ' + shapeStyle + ' border:' + border + '; opacity:' + opacity + '; display:flex; align-items:center; justify-content:center; color:#FFFFFF; font-weight:bold; font-size:12px; box-shadow:0 4px 8px rgba(0,0,0,0.5); cursor:pointer;">' +
+          '<span style="margin-top:' + (pin.shape === 'triangle' ? '6px' : '0') + '">' + labelBadge + '</span>' +
         '</div>';
 
-      popupCard.querySelector('#btn-toggle').addEventListener('click', (e) => {
-        e.stopPropagation();
-        window.parent.postMessage({ type: 'TOGGLE_WORK', key: pin.key }, '*');
-      });
+        const icon = L.divIcon({
+          className: 'custom-pin',
+          html: iconHtml,
+          iconSize: [28, 28],
+          iconAnchor: [14, 14]
+        });
 
-      popupCard.querySelector('#btn-edit').addEventListener('click', (e) => {
-        e.stopPropagation();
-        window.parent.postMessage({ type: 'EDIT_PIN', key: pin.key }, '*');
-      });
+        const marker = L.marker([pin.lat, pin.lng], { icon: icon });
 
-      marker.bindPopup(popupCard);
-      markersGroup.addLayer(marker);
-    });
+        marker.on('click', () => {
+          window.parent.postMessage({ type: 'SELECT_PIN', key: pin.key }, '*');
+        });
+
+        // Rich popup content
+        const popupCard = document.createElement('div');
+        popupCard.className = 'popup-card';
+        popupCard.innerHTML = 
+          '<div class="popup-top-row">' +
+            '<span class="popup-badge" style="background:' + color + '22; color:' + color + '; border:1px solid ' + color + ';">' + pin.territoryNumber + '</span>' +
+            '<span style="font-size:11px; color:#9CA3AF;">' + pin.city + '</span>' +
+          '</div>' +
+          '<div class="popup-title">' + (pin.line || pin.label) + '</div>' +
+          (pin.line2 ? '<div class="popup-sub">' + pin.line2 + (pin.postalcode ? ' • CEP ' + pin.postalcode : '') + '</div>' : '') +
+          '<div class="popup-extra">' +
+            '<span class="popup-tag">' + (pin.propertyType === 'comercial' ? '🏢 Comércio' : (pin.propertyType === 'predio' ? '🏙️ Prédio' : '🏠 Residência')) + '</span>' +
+            (pin.isForeign ? '<span class="popup-tag" style="background:rgba(59,130,246,0.2); color:#60A5FA;">🌐 ' + (pin.language || 'Estrangeiro') + '</span>' : '') +
+            (pin.notes ? '<span class="popup-tag" style="background:rgba(255,184,0,0.15); color:#FFB800;">📝 Anotação</span>' : '') +
+          '</div>' +
+          (pin.assignedAt || pin.completedAt ?
+            '<div style="font-size:11px; margin-bottom:8px; display:flex; flex-direction:column; gap:2px; background:rgba(255,255,255,0.04); padding:6px; border-radius:6px;">' +
+              (pin.assignedAt ? '<span style="color:#A78BFA;">📅 Desig: ' + pin.assignedAt + '</span>' : '') +
+              (pin.completedAt ? '<span style="color:#34D399; font-weight:700;">✓ Concl: ' + pin.completedAt + (pin.daysSinceCompleted !== null && pin.daysSinceCompleted !== undefined ? (pin.daysSinceCompleted === 0 ? ' (hoje)' : pin.daysSinceCompleted === 1 ? ' (ontem)' : ' (há ' + pin.daysSinceCompleted + 'd)') : '') + '</span>' : '') +
+            '</div>' : '') +
+          '<div class="popup-btn-row">' +
+            '<button class="popup-btn ' + (isWorked ? 'popup-btn-pending' : 'popup-btn-work') + '" id="btn-toggle">' +
+              (isWorked ? 'Marcar Pendente' : '✓ Concluído') +
+            '</button>' +
+            '<button class="popup-btn popup-btn-edit" id="btn-edit">✏️ Editar</button>' +
+          '</div>';
+
+        popupCard.querySelector('#btn-toggle').addEventListener('click', (e) => {
+          e.stopPropagation();
+          window.parent.postMessage({ type: 'TOGGLE_WORK', key: pin.key }, '*');
+        });
+
+        popupCard.querySelector('#btn-edit').addEventListener('click', (e) => {
+          e.stopPropagation();
+          window.parent.postMessage({ type: 'EDIT_PIN', key: pin.key }, '*');
+        });
+
+        marker.bindPopup(popupCard);
+        markersGroup.addLayer(marker);
+      });
+    }
 
     markersGroup.addTo(map);
 
-    if (pins.length > 0) {
+    if (markersGroup.getLayers().length > 0) {
       map.fitBounds(markersGroup.getBounds().pad(0.1));
     }
   </script>
 </body>
 </html>`;
-  }, [displayedPins]);
+  }, [displayedPins, displayedQuadras, mapViewMode]);
 
   if (loading || !event) {
     return (
@@ -566,7 +691,50 @@ export default function TerritoryMapScreen() {
           >
             <Text style={styles.backBtnText}>← Voltar ao Editor</Text>
           </Pressable>
-          <Text style={styles.title}>🗺️ Mapa Tático de Territórios</Text>
+          <View style={styles.titleRow}>
+            <Text style={styles.title}>🗺️ Mapa Tático de Territórios</Text>
+            {/* View Mode Toggle: Quadras Pintadas vs Alfinetes */}
+            <View style={styles.viewModeToggle}>
+              <Pressable
+                onPress={() => {
+                  setMapViewMode('quadras');
+                  setSelectedPinKey(null);
+                }}
+                style={[
+                  styles.viewModeBtn,
+                  mapViewMode === 'quadras' && styles.viewModeBtnActive,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.viewModeBtnText,
+                    mapViewMode === 'quadras' && styles.viewModeBtnTextActive,
+                  ]}
+                >
+                  🔷 Modo Quadras Pintadas ({allQuadras.length})
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={() => {
+                  setMapViewMode('pins');
+                  setSelectedQuadraKey(null);
+                }}
+                style={[
+                  styles.viewModeBtn,
+                  mapViewMode === 'pins' && styles.viewModeBtnActive,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.viewModeBtnText,
+                    mapViewMode === 'pins' && styles.viewModeBtnTextActive,
+                  ]}
+                >
+                  📍 Modo Alfinetes ({allPins.length})
+                </Text>
+              </Pressable>
+            </View>
+          </View>
           <Text style={styles.subtitle}>{event.config.name} • 100% Soberano & OpenStreetMap</Text>
         </View>
 
@@ -721,8 +889,140 @@ export default function TerritoryMapScreen() {
           )}
         </View>
 
-        {/* Side Details Drawer (Visible when a Pin is selected) */}
-        {selectedPin ? (
+        {/* Side Details Drawer (Visible when a Quadra or Pin is selected) */}
+        {selectedQuadra ? (
+          <View style={styles.sideDrawer}>
+            <View style={styles.drawerHeader}>
+              <View style={{ flex: 1 }}>
+                <View style={styles.drawerBadgeRow}>
+                  <View
+                    style={[
+                      styles.drawerTerritoryBadge,
+                      { backgroundColor: `${selectedQuadra.statusColor}20`, borderColor: selectedQuadra.statusColor },
+                    ]}
+                  >
+                    <Text style={[styles.drawerTerritoryText, { color: selectedQuadra.statusColor }]}>
+                      {selectedQuadra.territoryNumber}
+                    </Text>
+                  </View>
+                  <View
+                    style={[
+                      styles.quadraStatusPill,
+                      {
+                        backgroundColor: `${selectedQuadra.statusColor}18`,
+                        borderColor: selectedQuadra.statusColor,
+                      },
+                    ]}
+                  >
+                    <Text style={[styles.quadraStatusPillText, { color: selectedQuadra.statusColor }]}>
+                      {selectedQuadra.isCompleted
+                        ? '✓ Concluída (100%)'
+                        : selectedQuadra.coveragePercent > 0
+                        ? `⏳ Em Andamento (${selectedQuadra.coveragePercent}%)`
+                        : '⬜ Não Iniciada (0%)'}
+                    </Text>
+                  </View>
+                </View>
+                <Text style={styles.drawerTitle}>{selectedQuadra.label}</Text>
+                <Text style={styles.quadraUnitCountSub}>
+                  {selectedQuadra.workedUnits} de {selectedQuadra.totalUnits} números concluídos
+                </Text>
+              </View>
+              <Pressable onPress={() => setSelectedQuadraKey(null)} style={styles.drawerCloseBtn}>
+                <Text style={styles.drawerCloseText}>✕</Text>
+              </Pressable>
+            </View>
+
+            <ScrollView style={styles.drawerContent} contentContainerStyle={{ gap: 14 }}>
+              {/* Perimeter Enclosing Streets Banner */}
+              <View style={styles.perimeterCard}>
+                <Text style={styles.perimeterTitle}>🛣️ RUAS DELIMITADORAS DO PERÍMETRO</Text>
+                <Text style={styles.perimeterDesc}>
+                  {formatQuadraPerimeterDescription(selectedQuadra.perimeterStreets)}
+                </Text>
+                <View style={styles.perimeterPillsRow}>
+                  {selectedQuadra.perimeterStreets.map((street, idx) => (
+                    <View key={idx} style={styles.perimeterStreetPill}>
+                      <Text style={styles.perimeterStreetText}>{street}</Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+
+              {/* Bulk Toggle Button */}
+              <Pressable
+                onPress={() => {
+                  const allWorked = selectedQuadra.isCompleted;
+                  handleBulkToggleQuadra(selectedQuadra, !allWorked);
+                }}
+                style={[
+                  styles.bulkQuadraBtn,
+                  selectedQuadra.isCompleted ? styles.bulkQuadraBtnReopen : styles.bulkQuadraBtnComplete,
+                ]}
+              >
+                <Text style={styles.bulkQuadraBtnText}>
+                  {selectedQuadra.isCompleted
+                    ? '↺ Reabrir Quadra (Marcar Todas Pendentes)'
+                    : '✓ Concluir Toda a Quadra (Marcar Todas as Casas)'}
+                </Text>
+              </Pressable>
+
+              {/* Street-by-street list and individual address units */}
+              <View style={styles.streetsSection}>
+                <Text style={styles.drawerSectionLabel}>NÚMEROS & ENDEREÇOS DA QUADRA</Text>
+                <Text style={styles.privacyNote}>
+                  🔒 Modo Soberano: Coordenadas GPS ocultadas para foco tático na marcação.
+                </Text>
+
+                {selectedQuadra.streets.map((group, sIdx) => {
+                  return (
+                    <View key={sIdx} style={styles.streetGroupCard}>
+                      <View style={styles.streetGroupHeader}>
+                        <Text style={styles.streetGroupName}>📍 {group.streetName}</Text>
+                        <Text style={styles.streetGroupBadge}>
+                          {group.workedUnits}/{group.totalUnits}
+                        </Text>
+                      </View>
+
+                      <View style={styles.unitsGrid}>
+                        {group.units.map((unit) => {
+                          const isDone = unit.worked === 1;
+                          return (
+                            <Pressable
+                              key={unit.key}
+                              onPress={() => handleToggleWork(unit.key)}
+                              style={[
+                                styles.unitCard,
+                                isDone ? styles.unitCardWorked : styles.unitCardPending,
+                              ]}
+                            >
+                              <View style={styles.unitTopRow}>
+                                <Text style={[styles.unitNumber, isDone && styles.unitNumberWorked]}>
+                                  Nº {unit.numberOrComplement || 'S/N'}
+                                </Text>
+                                <Text style={isDone ? styles.unitCheckWorked : styles.unitCheckPending}>
+                                  {isDone ? '✓' : '⬜'}
+                                </Text>
+                              </View>
+                              {unit.propertyType ? (
+                                <Text style={styles.unitPropertyType} numberOfLines={1}>
+                                  {unit.propertyType === 'comercial' ? '🏢 Comércio' : unit.propertyType === 'predio' ? '🏙️ Prédio' : '🏠 Casa'}
+                                </Text>
+                              ) : null}
+                              <Text style={[styles.unitActionLabel, isDone && styles.unitActionLabelWorked]}>
+                                {isDone ? 'Concluído' : 'Pendente'}
+                              </Text>
+                            </Pressable>
+                          );
+                        })}
+                      </View>
+                    </View>
+                  );
+                })}
+              </View>
+            </ScrollView>
+          </View>
+        ) : selectedPin ? (
           <View style={styles.sideDrawer}>
             <View style={styles.drawerHeader}>
               <View style={{ flex: 1 }}>
@@ -1538,5 +1838,208 @@ const styles = StyleSheet.create({
     color: '#60A5FA',
     fontSize: 11,
     fontWeight: '700',
+  },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  viewModeToggle: {
+    flexDirection: 'row',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 8,
+    padding: 3,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    gap: 4,
+  },
+  viewModeBtn: {
+    paddingVertical: 5,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+  },
+  viewModeBtnActive: {
+    backgroundColor: '#3B82F6',
+  },
+  viewModeBtnText: {
+    color: '#8A94A6',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  viewModeBtnTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  quadraStatusPill: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    borderWidth: 1,
+  },
+  quadraStatusPillText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  quadraUnitCountSub: {
+    color: '#9CA3AF',
+    fontSize: 12,
+    marginTop: 2,
+    fontWeight: '500',
+  },
+  perimeterCard: {
+    backgroundColor: 'rgba(59, 130, 246, 0.08)',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(59, 130, 246, 0.25)',
+    padding: 12,
+  },
+  perimeterTitle: {
+    color: '#60A5FA',
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.8,
+    marginBottom: 4,
+  },
+  perimeterDesc: {
+    color: '#E2E8F0',
+    fontSize: 13,
+    fontWeight: '600',
+    lineHeight: 18,
+    marginBottom: 8,
+  },
+  perimeterPillsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  perimeterStreetPill: {
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  perimeterStreetText: {
+    color: '#CBD5E1',
+    fontSize: 11,
+    fontWeight: '500',
+  },
+  bulkQuadraBtn: {
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bulkQuadraBtnComplete: {
+    backgroundColor: '#10B981',
+  },
+  bulkQuadraBtnReopen: {
+    backgroundColor: 'rgba(239, 68, 68, 0.15)',
+    borderWidth: 1,
+    borderColor: '#EF4444',
+  },
+  bulkQuadraBtnText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 0.3,
+  },
+  streetsSection: {
+    gap: 12,
+  },
+  privacyNote: {
+    color: '#6B7280',
+    fontSize: 11,
+    fontStyle: 'italic',
+    marginBottom: 4,
+  },
+  streetGroupCard: {
+    backgroundColor: '#161A24',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    padding: 12,
+    gap: 10,
+  },
+  streetGroupHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.04)',
+    paddingBottom: 6,
+  },
+  streetGroupName: {
+    color: '#F3F4F6',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  streetGroupBadge: {
+    color: '#9CA3AF',
+    fontSize: 11,
+    fontWeight: '600',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  unitsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  unitCard: {
+    width: '48%',
+    borderRadius: 8,
+    padding: 10,
+    borderWidth: 1,
+    gap: 4,
+  },
+  unitCardWorked: {
+    backgroundColor: 'rgba(16, 185, 129, 0.08)',
+    borderColor: 'rgba(16, 185, 129, 0.35)',
+  },
+  unitCardPending: {
+    backgroundColor: 'rgba(255, 255, 255, 0.02)',
+    borderColor: 'rgba(255, 255, 255, 0.07)',
+  },
+  unitTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  unitNumber: {
+    color: '#D1D5DB',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  unitNumberWorked: {
+    color: '#34D399',
+  },
+  unitCheckWorked: {
+    color: '#10B981',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  unitCheckPending: {
+    color: '#6B7280',
+    fontSize: 12,
+  },
+  unitPropertyType: {
+    color: '#8A94A6',
+    fontSize: 10,
+  },
+  unitActionLabel: {
+    color: '#6B7280',
+    fontSize: 10,
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  unitActionLabelWorked: {
+    color: '#10B981',
   },
 });

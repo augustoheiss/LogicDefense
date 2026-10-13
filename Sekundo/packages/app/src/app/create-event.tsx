@@ -11,7 +11,7 @@ import { StyleSheet, Text, View, TextInput, Pressable, ScrollView, Platform } fr
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useLocalEvent } from '../hooks/useLocalEvent';
-import { engineRegistry, detectEnginesFromCSV, parseCSV, type Frequency, type EngineId } from '@sekundo/core';
+import { engineRegistry, detectEnginesFromCSV, parseCSV, upsertRegistry, type Frequency, type EngineId } from '@sekundo/core';
 import * as storage from '../storage/localStorage';
 
 export default function CreateEvent() {
@@ -59,7 +59,8 @@ export default function CreateEvent() {
     if (uploadedCsvText) {
       try {
         const parsed = parseCSV(uploadedCsvText);
-        await storage.saveSkeleton(state.config.id, parsed);
+        const upsertRes = upsertRegistry([], parsed, { forceOverwriteState: true });
+        await storage.saveSkeleton(state.config.id, upsertRes.updatedRegistry);
 
         const hasCoords = parsed.some((r: any) => {
           try {

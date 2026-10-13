@@ -193,7 +193,7 @@ export default function CSVImport() {
     } else {
       // Create NEW Event on the fly!
       const finalName = newEventName.trim() || 'Novo Evento Importado';
-      const engines = detectionReport?.suggestedEngines && detectionReport.suggestedEngines.length > 0
+      const engines: EngineId[] = detectionReport?.suggestedEngines && detectionReport.suggestedEngines.length > 0
         ? detectionReport.suggestedEngines
         : ['territory_logistics'];
 

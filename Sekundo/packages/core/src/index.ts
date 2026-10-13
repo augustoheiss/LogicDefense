@@ -107,6 +107,21 @@ export {
 } from './pdf/acroFormFiller';
 export type { S89Assignment, FormFillResult } from './pdf/acroFormFiller';
 
+export * as templateMatcher from './pdf/templateMatcher';
+export {
+  computeTemplateFingerprint,
+  normalizeFieldName,
+  levenshteinDistance,
+  stringSimilarity,
+  classifyFieldSemantics,
+  semanticKeyToAttribute,
+  autoRecognizePDFFields,
+} from './pdf/templateMatcher';
+export type {
+  FieldMappingCandidate,
+  TemplateRecognitionResult,
+} from './pdf/templateMatcher';
+
 // Roster Optimization & Bitmask Scheduling
 export * as bitmaskSchedule from './roster/bitmaskSchedule';
 export * from './roster/bitmaskSchedule';
@@ -164,9 +179,39 @@ export type {
   GeoJSONFeatureCollection,
 } from './geo/geoJsonAdapter';
 
+export * as quadraPolygonEngine from './geo/quadraPolygonEngine';
+export {
+  calculateQuadraColor,
+  computeConvexHull,
+  expandPolygon,
+  parseAddressLine,
+  extractQuadrasFromRegistry,
+  formatQuadraPerimeterDescription,
+} from './geo/quadraPolygonEngine';
+export type {
+  QuadraAddressUnit,
+  StreetAddressGroup,
+  QuadraSummary,
+} from './geo/quadraPolygonEngine';
+
 // Subtree Delegation (CBAC)
 export * as tokenManager from './delegation/tokenManager';
 export type {
   DelegationPermissions,
   SSDTokenPayload,
 } from './delegation/tokenManager';
+
+// Sovereign Local-First Operation Ledger & P2P Sync
+export * as operationLedger from './sync/operationLedger';
+export {
+  createLedgerOperation,
+  applyOperationToRegistry,
+  reconcileLedgers,
+  exportLedgerDelta,
+  createP2PSyncMessage,
+} from './sync/operationLedger';
+export type {
+  LedgerOperation,
+  ReconcileResult,
+  P2PSyncMessage,
+} from './sync/operationLedger';

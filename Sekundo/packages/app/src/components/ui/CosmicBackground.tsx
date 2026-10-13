@@ -125,11 +125,11 @@ const styles = StyleSheet.create({
     zIndex: -1,
   },
   voidBase: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: '#0C0E15',
   },
   wallpaperImage: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     width: '100%',
     height: '100%',
   },
@@ -153,7 +153,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#F59E0B', // Radiant solar gold glow
   },
   centerContrastWash: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(12, 14, 21, 0.45)', // Ensures foreground UI (checklists, cards, tables) stays ultra-readable
   },
 });
