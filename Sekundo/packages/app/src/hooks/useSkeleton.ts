@@ -16,7 +16,10 @@ export function useSkeleton(eventId: string) {
   const [loading, setLoading] = useState<boolean>(true);
 
   const loadSkeleton = useCallback(async () => {
-    if (!eventId) return;
+    if (!eventId) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
       const data = await storage.loadSkeleton(eventId);

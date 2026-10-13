@@ -10,13 +10,14 @@
  */
 
 import React, { useState } from 'react';
-import { StyleSheet, Text, View, Pressable, ActivityIndicator, ScrollView, Platform } from 'react-native';
+import { StyleSheet, Text, View, Pressable, ActivityIndicator, ScrollView, Platform, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSkeleton } from '../hooks/useSkeleton';
 import { useLocalEvent } from '../hooks/useLocalEvent';
 import CSVDropZone from '../components/csv/CSVDropZone.web';
 import { CSVPreviewTable } from '../components/csv/CSVPreviewTable';
+import * as storage from '../storage/localStorage';
 import {
   buildDiff,
   upsertRegistry,
@@ -39,10 +40,15 @@ export default function CSVImport() {
   const { id } = useLocalSearchParams();
   const eventId = typeof id === 'string' ? id : '';
 
-  const { events, updateEventState } = useLocalEvent();
-  const event = events.find((e) => e.config.id === eventId);
+  const { events, updateEventState, addEvent, loading: eventsLoading } = useLocalEvent();
+  const [targetEventId, setTargetEventId] = useState<string>(eventId);
+  const [newEventName, setNewEventName] = useState<string>('');
 
-  const { flatRegistry, commitCSVImport, loading } = useSkeleton(eventId);
+  const currentEvent = eventId
+    ? events.find((e) => e.config.id === eventId)
+    : events.find((e) => e.config.id === targetEventId);
+
+  const { flatRegistry, commitCSVImport, loading: skeletonLoading } = useSkeleton(currentEvent?.config.id || '');
 
   const [parsedRows, setParsedRows] = useState<CSVRow[] | null>(null);
   const [quarantinedRows, setQuarantinedRows] = useState<QuarantinedRow[]>([]);
@@ -61,7 +67,8 @@ export default function CSVImport() {
   const allTemplates = listEngineTemplates();
   const currentTemplate = getEngineTemplate(activeTemplateEngine);
 
-  if (loading || !event) {
+  // Only show full loading if events are being loaded from storage, or if a specific eventId is loading its skeleton
+  if (eventsLoading || (eventId && skeletonLoading)) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#FFB800" />
@@ -69,7 +76,9 @@ export default function CSVImport() {
     );
   }
 
-  const activeEngines = getActiveEngines(event.config);
+  const activeEngines = currentEvent
+    ? getActiveEngines(currentEvent.config)
+    : detectionReport?.suggestedEngines || ['territory_logistics'];
 
   const handleParsed = (rows: CSVRow[], rawText?: string) => {
     try {
@@ -81,9 +90,11 @@ export default function CSVImport() {
         setDetectionReport(report);
       }
 
+      const activeRegistry = currentEvent ? flatRegistry : [];
+
       // 2. Granular Ingestion with Quarantine Staging ("LEGO que não quebra")
       if (text.trim() !== '') {
-        const importRes = importGranularCSV(flatRegistry, text, {
+        const importRes = importGranularCSV(activeRegistry, text, {
           mode: importMode,
           forceOverwriteState: !preserveHistory,
         });
@@ -92,13 +103,23 @@ export default function CSVImport() {
         setQuarantinedRows(importRes.quarantinedRows);
         setPreservedCount(importRes.diff.preservedHistoryCount);
 
-        const computedDiff = buildDiff(flatRegistry, importRes.validRows);
+        const computedDiff = buildDiff(activeRegistry, importRes.validRows);
         setDiff(computedDiff);
         setErrorMessage(null);
+
+        // Auto-suggest new event name if empty
+        if (!newEventName) {
+          const rootRow = importRes.validRows.find((r: any) => r._type === 'root' || r._type === 'header');
+          if (rootRow && rootRow.label) {
+            setNewEventName(rootRow.label);
+          } else {
+            setNewEventName('Novo Evento Importado');
+          }
+        }
       } else {
         // Fallback for direct CSVRow array
-        const computedDiff = buildDiff(flatRegistry, rows);
-        const upsertRes = upsertRegistry(flatRegistry, rows, {
+        const computedDiff = buildDiff(activeRegistry, rows);
+        const upsertRes = upsertRegistry(activeRegistry, rows, {
           forceOverwriteState: !preserveHistory,
         });
         setPreservedCount(upsertRes.diff.preservedHistoryCount);
@@ -113,25 +134,26 @@ export default function CSVImport() {
   };
 
   const handleActivateDetectedEngine = async (engineId: EngineId) => {
-    if (!event) return;
-    const currentList = getActiveEngines(event.config);
+    if (!currentEvent) return;
+    const currentList = getActiveEngines(currentEvent.config);
     const updatedEngines = Array.from(new Set([...currentList, engineId]));
     const updatedState = {
-      ...event,
+      ...currentEvent,
       config: {
-        ...event.config,
+        ...currentEvent.config,
         engineId: updatedEngines[0],
         activeEngines: updatedEngines,
       },
     };
-    await updateEventState(event.config.id, updatedState);
+    await updateEventState(currentEvent.config.id, updatedState);
   };
 
   const togglePreserveHistory = () => {
     const nextVal = !preserveHistory;
     setPreserveHistory(nextVal);
+    const activeRegistry = currentEvent ? flatRegistry : [];
     if (parsedRows) {
-      const upsertRes = upsertRegistry(flatRegistry, parsedRows, {
+      const upsertRes = upsertRegistry(activeRegistry, parsedRows, {
         forceOverwriteState: !nextVal,
       });
       setPreservedCount(upsertRes.diff.preservedHistoryCount);
@@ -140,10 +162,62 @@ export default function CSVImport() {
 
   const handleCommit = async () => {
     if (!parsedRows) return;
-    await commitCSVImport(parsedRows, {
-      forceOverwriteState: !preserveHistory,
-    });
-    router.replace(`/skeleton-editor?id=${eventId}`);
+
+    if (currentEvent) {
+      if (currentEvent.config.id === eventId) {
+        await commitCSVImport(parsedRows, {
+          forceOverwriteState: !preserveHistory,
+        });
+      } else {
+        const currentSkeleton = (await storage.loadSkeleton(currentEvent.config.id)) || [];
+        const upsertRes = upsertRegistry(currentSkeleton, parsedRows, {
+          forceOverwriteState: !preserveHistory,
+        });
+        await storage.saveSkeleton(currentEvent.config.id, upsertRes.updatedRegistry);
+      }
+
+      const hasCoords = parsedRows.some((r: any) => {
+        try {
+          const meta = r._meta_json ? JSON.parse(r._meta_json) : {};
+          return (meta.lat && meta.lng) || (r.lat && r.lng);
+        } catch {
+          return false;
+        }
+      });
+
+      if (hasCoords) {
+        router.replace(`/territory-map?id=${currentEvent.config.id}`);
+      } else {
+        router.replace(`/skeleton-editor?id=${currentEvent.config.id}`);
+      }
+    } else {
+      // Create NEW Event on the fly!
+      const finalName = newEventName.trim() || 'Novo Evento Importado';
+      const engines = detectionReport?.suggestedEngines && detectionReport.suggestedEngines.length > 0
+        ? detectionReport.suggestedEngines
+        : ['territory_logistics'];
+
+      const newState = await addEvent(finalName, 'weekly', ['01'], engines);
+      const upsertRes = upsertRegistry([], parsedRows, {
+        forceOverwriteState: true,
+      });
+      await storage.saveSkeleton(newState.config.id, upsertRes.updatedRegistry);
+
+      const hasCoords = parsedRows.some((r: any) => {
+        try {
+          const meta = r._meta_json ? JSON.parse(r._meta_json) : {};
+          return (meta.lat && meta.lng) || (r.lat && r.lng);
+        } catch {
+          return false;
+        }
+      });
+
+      if (hasCoords) {
+        router.replace(`/territory-map?id=${newState.config.id}`);
+      } else {
+        router.replace(`/skeleton-editor?id=${newState.config.id}`);
+      }
+    }
   };
 
   const handleReset = () => {
@@ -192,9 +266,13 @@ export default function CSVImport() {
             <Pressable onPress={() => router.back()} style={styles.backBtn}>
               <Text style={styles.backBtnText}>← Voltar</Text>
             </Pressable>
-            <Text style={styles.title}>Importação e Modelos de CSV</Text>
+            <Text style={styles.title}>
+              {currentEvent ? 'Importação e Modelos de CSV' : 'Central Global de Modelos & Importação de CSV'}
+            </Text>
             <Text style={styles.subtitle}>
-              Evento: {event.config.name} • Engines Ativas: {activeEngines.join(', ')}
+              {currentEvent
+                ? `Evento: ${currentEvent.config.name} • Engines Ativas: ${activeEngines.join(', ')}`
+                : 'Baixe modelos canônicos de todas as 9 Engines ou importe qualquer planilha para criar um evento automaticamente.'}
             </Text>
           </View>
 
@@ -458,6 +536,67 @@ export default function CSVImport() {
                 <CSVPreviewTable diff={diff} />
               </View>
 
+              {/* Destination Selector for Standalone Mode */}
+              {!eventId && (
+                <View style={styles.destinationBox}>
+                  <Text style={styles.destinationTitle}>🎯 Onde salvar estes dados?</Text>
+                  <Text style={styles.destinationSub}>
+                    Você está na Central Global de CSV. Escolha se deseja criar um novo evento ou atualizar um existente:
+                  </Text>
+
+                  {/* Option to create new event */}
+                  <View style={{ marginTop: 12 }}>
+                    <Text style={styles.destinationLabel}>Nome do Novo Evento:</Text>
+                    <TextInput
+                      style={styles.destinationInput}
+                      value={newEventName}
+                      onChangeText={(val) => {
+                        setNewEventName(val);
+                        setTargetEventId('');
+                      }}
+                      placeholder="Ex: Territórios Pinhais - Grupo Espanhol"
+                      placeholderTextColor="#4F5E74"
+                    />
+                  </View>
+
+                  {events.length > 0 && (
+                    <View style={{ marginTop: 14 }}>
+                      <Text style={styles.destinationSub}>Ou selecione um evento existente para mesclar:</Text>
+                      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.eventChipRow}>
+                        <Pressable
+                          onPress={() => setTargetEventId('')}
+                          style={[
+                            styles.eventChip,
+                            !targetEventId && styles.eventChipActive,
+                          ]}
+                        >
+                          <Text style={[styles.eventChipText, !targetEventId && styles.eventChipTextActive]}>
+                            ✨ Criar Novo Evento
+                          </Text>
+                        </Pressable>
+                        {events.map((ev) => {
+                          const isEvSelected = targetEventId === ev.config.id;
+                          return (
+                            <Pressable
+                              key={ev.config.id}
+                              onPress={() => setTargetEventId(ev.config.id)}
+                              style={[
+                                styles.eventChip,
+                                isEvSelected && styles.eventChipActive,
+                              ]}
+                            >
+                              <Text style={[styles.eventChipText, isEvSelected && styles.eventChipTextActive]}>
+                                {ev.config.name}
+                              </Text>
+                            </Pressable>
+                          );
+                        })}
+                      </ScrollView>
+                    </View>
+                  )}
+                </View>
+              )}
+
               {/* Actions Footer */}
               <View style={styles.footerActions}>
                 <Pressable onPress={handleReset} style={styles.cancelBtn}>
@@ -465,7 +604,9 @@ export default function CSVImport() {
                 </Pressable>
                 <Pressable onPress={handleCommit} style={styles.commitBtn}>
                   <Text style={styles.commitBtnText}>
-                    Confirmar e Salvar no Sekundo ({parsedRows.length} itens)
+                    {currentEvent
+                      ? `Confirmar e Salvar no Evento (${parsedRows.length} itens)`
+                      : `✨ Criar Novo Evento & Salvar Dados (${parsedRows.length} itens)`}
                   </Text>
                 </Pressable>
               </View>
@@ -971,6 +1112,67 @@ const styles = StyleSheet.create({
   errorDismissText: {
     color: '#FFFFFF',
     fontSize: 11,
+    fontWeight: '700',
+  },
+  destinationBox: {
+    backgroundColor: 'rgba(59, 130, 246, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(59, 130, 246, 0.25)',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 20,
+  },
+  destinationTitle: {
+    color: '#60A5FA',
+    fontSize: 15,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  destinationSub: {
+    color: '#94A3B8',
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  destinationLabel: {
+    color: '#E2E8F0',
+    fontSize: 12,
+    fontWeight: '600',
+    marginBottom: 6,
+  },
+  destinationInput: {
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.12)',
+    borderRadius: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    color: '#FFFFFF',
+    fontSize: 14,
+  },
+  eventChipRow: {
+    flexDirection: 'row',
+    marginTop: 6,
+  },
+  eventChip: {
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    marginRight: 8,
+  },
+  eventChipActive: {
+    backgroundColor: 'rgba(255, 184, 0, 0.15)',
+    borderColor: '#FFB800',
+  },
+  eventChipText: {
+    color: '#94A3B8',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  eventChipTextActive: {
+    color: '#FFB800',
     fontWeight: '700',
   },
 });

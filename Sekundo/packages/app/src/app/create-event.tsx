@@ -11,7 +11,8 @@ import { StyleSheet, Text, View, TextInput, Pressable, ScrollView, Platform } fr
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useLocalEvent } from '../hooks/useLocalEvent';
-import { engineRegistry, detectEnginesFromCSV, type Frequency, type EngineId } from '@sekundo/core';
+import { engineRegistry, detectEnginesFromCSV, parseCSV, type Frequency, type EngineId } from '@sekundo/core';
+import * as storage from '../storage/localStorage';
 
 export default function CreateEvent() {
   const router = useRouter();
@@ -21,6 +22,9 @@ export default function CreateEvent() {
   const [frequency, setFrequency] = useState<Frequency>('weekly');
   const [selectedEngines, setSelectedEngines] = useState<EngineId[]>(['territory_logistics']);
   const [autoDetectNotice, setAutoDetectNotice] = useState<string | null>(null);
+  const [uploadedCsvText, setUploadedCsvText] = useState<string | null>(null);
+  const [uploadedFileName, setUploadedFileName] = useState<string | null>(null);
+  const [validationError, setValidationError] = useState<string | null>(null);
 
   const availableEngines = engineRegistry.list();
 
@@ -35,9 +39,47 @@ export default function CreateEvent() {
   };
 
   const handleCreate = async () => {
-    if (!name.trim()) return;
-    await addEvent(name, frequency, ['01'], selectedEngines);
-    router.replace('/');
+    const trimmed = name.trim();
+    let finalName = trimmed;
+
+    if (!finalName) {
+      if (uploadedFileName) {
+        finalName = uploadedFileName.replace(/\.[^/.]+$/, '').replace(/[_-]/g, ' ');
+        finalName = finalName.charAt(0).toUpperCase() + finalName.slice(1);
+      } else {
+        setValidationError('⚠️ Por favor, informe um nome para o evento no campo acima para continuar.');
+        return;
+      }
+    }
+
+    setValidationError(null);
+    const state = await addEvent(finalName, frequency, ['01'], selectedEngines);
+
+    // If CSV was provided during creation, commit it immediately!
+    if (uploadedCsvText) {
+      try {
+        const parsed = parseCSV(uploadedCsvText);
+        await storage.saveSkeleton(state.config.id, parsed);
+
+        const hasCoords = parsed.some((r: any) => {
+          try {
+            const meta = r._meta_json ? JSON.parse(r._meta_json) : {};
+            return (meta.lat && meta.lng) || (r.lat && r.lng);
+          } catch {
+            return false;
+          }
+        });
+
+        if (hasCoords) {
+          router.replace(`/territory-map?id=${state.config.id}`);
+          return;
+        }
+      } catch (err) {
+        console.warn('[Sekundo] Erro ao salvar CSV na criação:', err);
+      }
+    }
+
+    router.replace(`/skeleton-editor?id=${state.config.id}`);
   };
 
   const handleCsvAutoDetect = (e: any) => {
@@ -46,11 +88,31 @@ export default function CreateEvent() {
     const reader = new FileReader();
     reader.onload = (event) => {
       const text = event.target?.result as string;
+      setUploadedCsvText(text);
+      setUploadedFileName(file.name);
       const report = detectEnginesFromCSV(text);
       if (report.suggestedEngines.length > 0) {
         setSelectedEngines(report.suggestedEngines);
-        setAutoDetectNotice(report.summary);
       }
+
+      // Auto-suggest event name from file name or first root row
+      if (!name.trim()) {
+        try {
+          const parsed = parseCSV(text);
+          const rootItem = parsed.find((r: any) => r._type === 'root' || r._type === 'header');
+          if (rootItem && rootItem.label) {
+            setName(rootItem.label);
+          } else {
+            const cleanFileName = file.name.replace(/\.[^/.]+$/, '').replace(/[_-]/g, ' ');
+            setName(cleanFileName.charAt(0).toUpperCase() + cleanFileName.slice(1));
+          }
+        } catch {
+          const cleanFileName = file.name.replace(/\.[^/.]+$/, '').replace(/[_-]/g, ' ');
+          setName(cleanFileName.charAt(0).toUpperCase() + cleanFileName.slice(1));
+        }
+      }
+      setAutoDetectNotice(`✅ Arquivo "${file.name}" carregado! ${report.summary}`);
+      setValidationError(null);
     };
     reader.readAsText(file);
   };
@@ -179,18 +241,35 @@ export default function CreateEvent() {
               </Pressable>
             ))}
 
+            {/* Validation notice if any */}
+            {validationError && (
+              <View style={styles.errorBox}>
+                <Text style={styles.errorBoxText}>{validationError}</Text>
+              </View>
+            )}
+
             {/* Submit */}
             <Pressable
               onPress={handleCreate}
-              disabled={!name.trim()}
               style={({ pressed }) => [
                 styles.submitButton,
-                !name.trim() && styles.submitDisabled,
                 pressed && styles.submitPressed,
               ]}
             >
               <Text style={styles.submitText}>
-                Criar Evento ({selectedEngines.length} {selectedEngines.length === 1 ? 'Engine Ativa' : 'Engines Ativas'})
+                {uploadedCsvText
+                  ? `✨ Criar Evento & Ingerir CSV (${uploadedFileName || 'Planilha'})`
+                  : `Criar Evento (${selectedEngines.length} ${selectedEngines.length === 1 ? 'Engine Ativa' : 'Engines Ativas'})`}
+              </Text>
+            </Pressable>
+
+            {/* Direct CSV Import Link */}
+            <Pressable
+              onPress={() => router.push('/csv-import')}
+              style={styles.directImportLink}
+            >
+              <Text style={styles.directImportLinkText}>
+                📂 Ou importe diretamente pela Central de Modelos CSV →
               </Text>
             </Pressable>
           </View>
@@ -393,5 +472,33 @@ const styles = StyleSheet.create({
     color: '#12151C',
     fontWeight: '700',
     fontSize: 16,
+  },
+  errorBox: {
+    backgroundColor: 'rgba(239, 68, 68, 0.12)',
+    borderWidth: 1,
+    borderColor: '#EF4444',
+    borderRadius: 8,
+    padding: 12,
+    marginTop: 16,
+    marginBottom: 4,
+  },
+  errorBoxText: {
+    color: '#F87171',
+    fontSize: 13,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  directImportLink: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    marginTop: -8,
+    marginBottom: 10,
+  },
+  directImportLinkText: {
+    color: '#FFB800',
+    fontSize: 13,
+    fontWeight: '600',
+    textDecorationLine: 'underline',
   },
 });
