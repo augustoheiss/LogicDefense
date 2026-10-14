@@ -10,6 +10,7 @@
  */
 
 import { buildAIScenarioContext } from '../core/aiContextBuilder';
+import { buildLocalAnalysisContext } from '../core/localAiAnalystSynthesizer';
 import { formatCurrencyFull } from '../core/formatCurrency';
 import type { TableRow, TableGoals, TableMetrics } from '../core/types';
 import { supabase } from '../lib/supabase';
@@ -42,7 +43,19 @@ export function buildFinancialContext(
   goals: TableGoals,
   metrics: TableMetrics,
   tableName: string,
+  anonymizeDescriptions = false,
 ): string {
+  try {
+    const synthesis = buildLocalAnalysisContext(rows, goals, tableName, {
+      anonymizeDescriptions,
+    });
+    if (synthesis && synthesis.markdown) {
+      return synthesis.markdown;
+    }
+  } catch {
+    // Fallback to compact summary if local synthesis encounters an unexpected edge case
+  }
+
   const lines: string[] = [];
   lines.push(`📋 Tabela: ${tableName}`);
   lines.push(`📊 ${rows.length} entradas registradas`);

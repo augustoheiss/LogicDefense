@@ -45,8 +45,13 @@ import { SectorSettingsPanel } from '@/components/ui/SectorSettingsPanel';
 import { SyncAuditPanel, APIManagementTester, ExampleCSVGalleryModal } from '@/components/ui';
 import { formatCurrencySmart } from '@/core/formatCurrency';
 import { validateMobileLicenseKey, getStoredLicenseKey } from '@/storage/authService';
-import { ensureApiKeyForTable, generateLocalApiKey, buildCSV, shareCSVText, shareJSONBackup } from '@/services/exportService';
+import { ensureApiKeyForTable, generateLocalApiKey, buildCSV, shareCSVText, shareJSONBackup, shareSynthesisDocument } from '@/services/exportService';
 import { validateApiKey, generateNewApiKey, formatTimeRemaining, revokeApiKey } from '@/services/apiKeyService';
+import {
+  generateManualAiAnalystSynthesis,
+  type ManualSynthesisFormat,
+  type ManualSynthesisProfile,
+} from '@/core/localAiAnalystSynthesizer';
 import type { TableGoals, CoinTable } from '@/core/types';
 
 const API_URL = process.env.EXPO_PUBLIC_AI_BACKEND_URL || process.env.EXPO_PUBLIC_API_URL || 'https://ocorrencias-pdf-writer.onrender.com';
@@ -1411,6 +1416,64 @@ const SpreadsheetApiSection = React.memo(function SpreadsheetApiSection({
   const [selectedPromptTab, setSelectedPromptTab] = useState<number>(0);
   const [copiedPromptIndex, setCopiedPromptIndex] = useState<number | null>(null);
 
+  // ── Manual AI-Analyst Synthesis (No-API Offline Delivery) States ──
+  const [showManualSynthPanel, setShowManualSynthPanel] = useState<boolean>(false);
+  const [manualSynthFormat, setManualSynthFormat] = useState<ManualSynthesisFormat>('ai_analyst_full_md');
+  const [manualSynthProfile, setManualSynthProfile] = useState<ManualSynthesisProfile>('native');
+  const [manualAnonymize, setManualAnonymize] = useState<boolean>(false);
+  const [manualCustomPrompt, setManualCustomPrompt] = useState<string>('');
+  const [copiedManualSynth, setCopiedManualSynth] = useState<boolean>(false);
+  const [isManualPreviewExpanded, setIsManualPreviewExpanded] = useState<boolean>(false);
+
+  const manualSynthesisResult = useMemo(() => {
+    const rows = activeTable?.rows || [];
+    const goals: TableGoals = activeTable?.goals || { dailyGoals: {}, weeklyGoals: {}, annualCosts: {} };
+    const tName = activeTable?.name || 'Planilha Principal';
+    return generateManualAiAnalystSynthesis(rows, goals, tName, {
+      format: manualSynthFormat,
+      profile: manualSynthProfile,
+      anonymizeDescriptions: manualAnonymize,
+      userCustomPrompt: manualCustomPrompt,
+      investorProfile: activeTable?.investorProfile,
+      activeSectors: activeTable?.activeSectors,
+      sectorParams: activeTable?.sectorParams,
+    });
+  }, [
+    activeTable?.rows,
+    activeTable?.goals,
+    activeTable?.name,
+    activeTable?.investorProfile,
+    activeTable?.activeSectors,
+    activeTable?.sectorParams,
+    manualSynthFormat,
+    manualSynthProfile,
+    manualAnonymize,
+    manualCustomPrompt,
+  ]);
+
+  const manualSynthPreview = useMemo(() => {
+    const full = manualSynthesisResult.content;
+    if (full.length <= 15_000) return full;
+    return (
+      full.slice(0, 15_000) +
+      `\n\n... [Pré-visualização truncada em 15.000 caracteres. Ao Copiar ou Baixar, você receberá 100% dos ${full.length.toLocaleString('pt-BR')} caracteres!]`
+    );
+  }, [manualSynthesisResult.content]);
+
+  const handleCopyManualSynthesis = async () => {
+    await Clipboard.setStringAsync(manualSynthesisResult.content);
+    setCopiedManualSynth(true);
+    setTimeout(() => setCopiedManualSynth(false), 3000);
+  };
+
+  const handleDownloadManualSynthesis = async () => {
+    await shareSynthesisDocument(
+      manualSynthesisResult.content,
+      activeTable?.name || 'Planilha_Principal',
+      manualSynthesisResult.metadata.extension,
+    );
+  };
+
   const handleCopySchema = async () => {
     const schemaUrl = `${API_URL}/api/v1/public/openapi.json`;
     await Clipboard.setStringAsync(schemaUrl);
@@ -2261,6 +2324,248 @@ BOAS PRÁTICAS DE AMBIENTE:
           </HapticButton>
         </View>
       )}
+
+      {/* ── Síntese Manual AI-Analyst (Sem API — Entrega Direta .MD / .XML / .JSON) ── */}
+      <View
+        style={{
+          marginTop: spacing.md,
+          backgroundColor: colors.background.secondary,
+          borderRadius: radius.md,
+          borderWidth: 1,
+          borderColor: colors.accent.purple,
+          padding: spacing.md,
+          gap: spacing.xs,
+        }}
+      >
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontSize: 13, fontWeight: '700', color: colors.text.primary }}>
+              🧠 Síntese Manual AI-Analyst (Sem API)
+            </Text>
+            <Text style={{ fontSize: 11, color: colors.text.secondary, marginTop: 2 }}>
+              Gere o dossiê completo da rota obrigatória <Text style={{ color: colors.accent.purple, fontWeight: '700' }}>ai-analyst</Text> em <Text style={{ fontWeight: '700' }}>.md</Text>, <Text style={{ fontWeight: '700' }}>.xml</Text> ou <Text style={{ fontWeight: '700' }}>.json</Text> para entregar manualmente à sua IA favorita sem precisar configurar API.
+            </Text>
+          </View>
+          <View
+            style={{
+              backgroundColor: colors.accent.purple + '22',
+              borderColor: colors.accent.purple,
+              borderWidth: 1,
+              borderRadius: radius.sm,
+              paddingHorizontal: 8,
+              paddingVertical: 4,
+            }}
+          >
+            <Text style={{ fontSize: 10, fontWeight: '700', color: colors.accent.purple }}>
+              {(manualSynthesisResult.metadata.byteSize / 1024).toFixed(1)} KB • ~{manualSynthesisResult.metadata.estimatedTokens.toLocaleString('pt-BR')} tok
+            </Text>
+          </View>
+        </View>
+
+        {/* Botões Rápidos 1-Clique (Copiar .MD / Baixar Arquivo / Configurar Opções) */}
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs, marginTop: spacing.xs }}>
+          <HapticButton
+            onPress={handleCopyManualSynthesis}
+            style={{
+              flex: 1,
+              minWidth: 150,
+              backgroundColor: copiedManualSynth ? colors.success.main : colors.accent.purple,
+              paddingVertical: spacing.xs + 4,
+              paddingHorizontal: spacing.sm,
+              borderRadius: radius.sm,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <Text style={{ color: '#ffffff', fontWeight: '700', fontSize: 11 }}>
+              {copiedManualSynth
+                ? `✓ Síntese .${manualSynthesisResult.metadata.extension.toUpperCase()} Copiada!`
+                : `📋 Copiar Síntese AI-Analyst (.${manualSynthesisResult.metadata.extension.toUpperCase()})`}
+            </Text>
+          </HapticButton>
+
+          <HapticButton
+            onPress={handleDownloadManualSynthesis}
+            style={{
+              flex: 1,
+              minWidth: 140,
+              backgroundColor: colors.background.tertiary,
+              borderWidth: 1,
+              borderColor: colors.accent.purple,
+              paddingVertical: spacing.xs + 4,
+              paddingHorizontal: spacing.sm,
+              borderRadius: radius.sm,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <Text style={{ color: colors.accent.purple, fontWeight: '700', fontSize: 11 }}>
+              📥 Baixar Arquivo .{manualSynthesisResult.metadata.extension.toUpperCase()}
+            </Text>
+          </HapticButton>
+
+          <Pressable
+            onPress={() => setShowManualSynthPanel(!showManualSynthPanel)}
+            style={{
+              backgroundColor: colors.background.tertiary,
+              borderWidth: 1,
+              borderColor: colors.border.default,
+              paddingVertical: spacing.xs + 4,
+              paddingHorizontal: spacing.sm,
+              borderRadius: radius.sm,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <Text style={{ color: colors.text.secondary, fontWeight: '600', fontSize: 11 }}>
+              {showManualSynthPanel ? '🔼 Ocultar Opções' : '⚙️ Formato / Ler .MD'}
+            </Text>
+          </Pressable>
+        </View>
+
+        {showManualSynthPanel && (
+          <View style={{ marginTop: spacing.xs, gap: spacing.xs, borderTopWidth: 1, borderTopColor: colors.border.default, paddingTop: spacing.xs }}>
+            {/* Seletor de Formato (.md, .xml, .json) */}
+            <Text style={{ fontSize: 10, fontWeight: '700', color: colors.text.secondary, textTransform: 'uppercase' }}>
+              1. Escolha o Formato da Síntese:
+            </Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+              {[
+                { id: 'ai_analyst_full_md', label: '📄 Dossiê AI-Analyst (.md)' },
+                { id: 'ai_analyst_xml', label: '🧬 XML Claude/Reasoning (.xml)' },
+                { id: 'analysis_context_md', label: '📊 Contexto Puro (.md)' },
+                { id: 'api_routes_bundle_json', label: '📦 Rotas da API (.json)' },
+              ].map((fmt) => {
+                const active = manualSynthFormat === fmt.id;
+                return (
+                  <Pressable
+                    key={fmt.id}
+                    onPress={() => setManualSynthFormat(fmt.id as ManualSynthesisFormat)}
+                    style={{
+                      paddingVertical: 6,
+                      paddingHorizontal: 10,
+                      borderRadius: radius.sm,
+                      backgroundColor: active ? colors.accent.purple : colors.background.tertiary,
+                      borderWidth: 1,
+                      borderColor: active ? colors.accent.purple : colors.border.default,
+                    }}
+                  >
+                    <Text style={{ fontSize: 11, fontWeight: active ? '700' : '500', color: active ? '#fff' : colors.text.primary }}>
+                      {fmt.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+
+            {/* Seletor de Perfil Especialista & Privacidade */}
+            <Text style={{ fontSize: 10, fontWeight: '700', color: colors.text.secondary, textTransform: 'uppercase', marginTop: 4 }}>
+              2. Perfil do Agente & Privacidade (LGPD):
+            </Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+              {[
+                { id: 'native', label: '🌟 Agent Native (8 Skills)' },
+                { id: 'cfo', label: '🏛️ CFO & FP&A' },
+                { id: 'operational', label: '⚡ Operacional' },
+                { id: 'goals', label: '🎯 Metas & Tempo' },
+                { id: 'dev', label: '🛠️ Agente Dev' },
+              ].map((prof) => {
+                const active = manualSynthProfile === prof.id;
+                return (
+                  <Pressable
+                    key={prof.id}
+                    onPress={() => setManualSynthProfile(prof.id as ManualSynthesisProfile)}
+                    style={{
+                      paddingVertical: 5,
+                      paddingHorizontal: 8,
+                      borderRadius: radius.sm,
+                      backgroundColor: active ? colors.accent.purple + '33' : colors.background.tertiary,
+                      borderWidth: 1,
+                      borderColor: active ? colors.accent.purple : colors.border.default,
+                    }}
+                  >
+                    <Text style={{ fontSize: 10, fontWeight: active ? '700' : '500', color: active ? colors.accent.purple : colors.text.secondary }}>
+                      {prof.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+
+              <Pressable
+                onPress={() => setManualAnonymize(!manualAnonymize)}
+                style={{
+                  paddingVertical: 5,
+                  paddingHorizontal: 8,
+                  borderRadius: radius.sm,
+                  backgroundColor: manualAnonymize ? colors.success.main + '22' : colors.background.tertiary,
+                  borderWidth: 1,
+                  borderColor: manualAnonymize ? colors.success.main : colors.border.default,
+                }}
+              >
+                <Text style={{ fontSize: 10, fontWeight: '700', color: manualAnonymize ? colors.success.main : colors.text.secondary }}>
+                  {manualAnonymize ? '🛡️ Anonimizado (LGPD Ativo)' : '🔓 Dados Originais'}
+                </Text>
+              </Pressable>
+            </View>
+
+            {/* Objetivo / Pergunta Opcional */}
+            <TextInput
+              value={manualCustomPrompt}
+              onChangeText={setManualCustomPrompt}
+              placeholder="Opcional: Digite sua dúvida ou objetivo atual para ir gravado no final do documento..."
+              placeholderTextColor={colors.text.tertiary}
+              style={{
+                backgroundColor: colors.background.tertiary,
+                borderWidth: 1,
+                borderColor: colors.border.default,
+                borderRadius: radius.sm,
+                paddingHorizontal: spacing.sm,
+                paddingVertical: 6,
+                fontSize: 11,
+                color: colors.text.primary,
+                marginTop: 2,
+              }}
+            />
+
+            {/* Leitor / Pré-visualização do Documento */}
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 2 }}>
+              <Text style={{ fontSize: 10, fontWeight: '700', color: colors.text.tertiary }}>
+                📖 Leitor da Síntese Compilada ({manualSynthesisResult.metadata.rowCount} lançamentos • Tier {manualSynthesisResult.metadata.ledgerTier}):
+              </Text>
+              <Pressable onPress={() => setIsManualPreviewExpanded(!isManualPreviewExpanded)}>
+                <Text style={{ fontSize: 10, fontWeight: '600', color: colors.accent.purple }}>
+                  {isManualPreviewExpanded ? '🔼 Recolher' : '🔽 Expandir Altura'}
+                </Text>
+              </Pressable>
+            </View>
+
+            <View
+              style={{
+                backgroundColor: '#0a0d12',
+                borderRadius: radius.sm,
+                borderWidth: 1,
+                borderColor: colors.border.default,
+                height: isManualPreviewExpanded ? 360 : 150,
+                padding: spacing.xs,
+              }}
+            >
+              <ScrollView nestedScrollEnabled showsVerticalScrollIndicator>
+                <Text
+                  selectable
+                  style={{
+                    fontSize: 10,
+                    color: '#a5d6ff',
+                    fontFamily: Platform.select({ ios: 'Menlo', android: 'monospace', default: 'monospace' }),
+                    lineHeight: 14,
+                  }}
+                >
+                  {manualSynthPreview}
+                </Text>
+              </ScrollView>
+            </View>
+          </View>
+        )}
+      </View>
 
       {/* ── Central Unificada: Hub de Conexão, Console de Testes & Agentes IA ───────────────────────── */}
       <HapticButton 

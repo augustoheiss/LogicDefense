@@ -959,8 +959,8 @@ export default function TransactionsScreen() {
                 setShowGranularExportModal(true);
               }}
             >
-              <Text style={styles.fabMenuIcon}>🧩</Text>
-              <Text style={styles.fabMenuLabel}>Exportar por Partes</Text>
+              <Text style={styles.fabMenuIcon}>🧠</Text>
+              <Text style={styles.fabMenuLabel}>Síntese IA (.MD) / Partes</Text>
             </Pressable>
             <Pressable
               style={[styles.fabMenuItem, { backgroundColor: colors.background.elevated, borderColor: colors.warning.border }]}

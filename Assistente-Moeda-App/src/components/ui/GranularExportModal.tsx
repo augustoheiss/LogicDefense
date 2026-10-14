@@ -1,11 +1,14 @@
 /**
- * Granular Export Modal — Assistente Moeda
+ * Granular Export & Manual AI-Analyst Synthesis Modal — Assistente Moeda
  *
- * Sliced export interface allowing users to export transactions by parts:
- *   - Scope: All, Revenue only, Expense only, Deposit only, Partner only, Unresolved only
- *   - Format: Agent-Compact (token-friendly for LLM prompts), Standard CSV, or Backup v3
- *   - Time span: All history vs. active selected month
- * Includes instant clipboard copy and file share/download.
+ * Dual-mode export & synthesis center:
+ *   1. 🧠 Síntese Manual AI-Analyst (Sem API):
+ *      Generates the full pre-computed DRE, 8 Financial Skills, Advanced Statistics,
+ *      Accrual Category Anatomy, Time Bank, and 4-Tier Cascade Ledger in .md, .xml, or .json
+ *      for direct copy/paste or file upload into any external AI (ChatGPT, Claude, Gemini, DeepSeek).
+ *   2. 🧩 Exportar CSV por Partes:
+ *      Sliced CSV export by scope (All, Revenue, Expense, Deposit, Partner, Unresolved)
+ *      and format (Agent-Compact, Standard CSV, Backup v3).
  */
 
 import React, { useState, useMemo } from 'react';
@@ -16,6 +19,7 @@ import {
   StyleSheet,
   Pressable,
   ScrollView,
+  TextInput,
   useWindowDimensions,
   Platform,
   Alert,
@@ -23,8 +27,35 @@ import {
 import * as Clipboard from 'expo-clipboard';
 import { colors } from '@/theme/colors';
 import { spacing, radius } from '@/theme/spacing';
-import type { TableRow, TableGoals, DynamicTableSchema, InvestorProfileConfig, ExportScopeType, ExportFormatType, SectorGroupId, WorkspaceDashboardConfig, SectorParamsConfig } from '@/core/types';
-import { buildGranularCSV, shareGranularCSV } from '@/services/exportService';
+import type {
+  TableRow,
+  TableGoals,
+  DynamicTableSchema,
+  InvestorProfileConfig,
+  ExportScopeType,
+  ExportFormatType,
+  SectorGroupId,
+  WorkspaceDashboardConfig,
+  SectorParamsConfig,
+} from '@/core/types';
+import {
+  generateManualAiAnalystSynthesis,
+  type ManualSynthesisFormat,
+  type ManualSynthesisProfile,
+} from '@/core/localAiAnalystSynthesizer';
+import {
+  buildGranularCSV,
+  shareGranularCSV,
+  shareSynthesisDocument,
+} from '@/services/exportService';
+
+const PREVIEW_CHAR_CAP = 15_000;
+
+const DEFAULT_GOALS: TableGoals = {
+  dailyGoals: {},
+  weeklyGoals: {},
+  annualCosts: {},
+};
 
 interface GranularExportModalProps {
   visible: boolean;
@@ -39,6 +70,7 @@ interface GranularExportModalProps {
   activeSectors?: SectorGroupId[];
   dashboardConfig?: WorkspaceDashboardConfig;
   sectorParams?: SectorParamsConfig;
+  initialMode?: 'ai_analyst' | 'csv';
 }
 
 export function GranularExportModal({
@@ -54,23 +86,75 @@ export function GranularExportModal({
   activeSectors,
   dashboardConfig,
   sectorParams,
+  initialMode = 'ai_analyst',
 }: GranularExportModalProps) {
   const { width } = useWindowDimensions();
   const isWide = width >= 650;
 
+  // Top-level mode tab
+  const [activeMode, setActiveMode] = useState<'ai_analyst' | 'csv'>(initialMode);
+
+  // AI-Analyst Manual Synthesis states
+  const [synthFormat, setSynthFormat] = useState<ManualSynthesisFormat>('ai_analyst_full_md');
+  const [synthProfile, setSynthProfile] = useState<ManualSynthesisProfile>('native');
+  const [anonymizeDescriptions, setAnonymizeDescriptions] = useState<boolean>(false);
+  const [userCustomPrompt, setUserCustomPrompt] = useState<string>('');
+
+  // Granular CSV states
   const [scope, setScope] = useState<ExportScopeType>('all');
   const [format, setFormat] = useState<ExportFormatType>('agent_compact');
   const [useMonthFilter, setUseMonthFilter] = useState<boolean>(false);
   const [copiedStatus, setCopiedStatus] = useState<string>('');
 
+  // Generate Manual AI-Analyst Synthesis dynamically
+  const synthesisResult = useMemo(() => {
+    if (activeMode !== 'ai_analyst') return null;
+    return generateManualAiAnalystSynthesis(
+      rows,
+      goals || DEFAULT_GOALS,
+      tableName,
+      {
+        format: synthFormat,
+        profile: synthProfile,
+        anonymizeDescriptions,
+        selectedMonth:
+          useMonthFilter && selectedMonth && selectedMonth !== 'all'
+            ? selectedMonth
+            : undefined,
+        userCustomPrompt,
+        investorProfile,
+        activeSectors,
+        sectorParams,
+      },
+    );
+  }, [
+    activeMode,
+    rows,
+    goals,
+    tableName,
+    synthFormat,
+    synthProfile,
+    anonymizeDescriptions,
+    useMonthFilter,
+    selectedMonth,
+    userCustomPrompt,
+    investorProfile,
+    activeSectors,
+    sectorParams,
+  ]);
+
   // Generate CSV text dynamically based on current options
   const generatedCSV = useMemo(() => {
+    if (activeMode !== 'csv') return '';
     return buildGranularCSV(
       rows,
       {
         scope,
         format,
-        selectedMonth: useMonthFilter && selectedMonth && selectedMonth !== 'all' ? selectedMonth : undefined,
+        selectedMonth:
+          useMonthFilter && selectedMonth && selectedMonth !== 'all'
+            ? selectedMonth
+            : undefined,
       },
       tableName,
       undefined,
@@ -82,36 +166,74 @@ export function GranularExportModal({
       investorProfile,
       activeSectors,
       dashboardConfig,
-      sectorParams
+      sectorParams,
     );
-  }, [rows, scope, format, useMonthFilter, selectedMonth, tableName, goals, tableId, schema, investorProfile, activeSectors, dashboardConfig, sectorParams]);
+  }, [
+    activeMode,
+    rows,
+    scope,
+    format,
+    useMonthFilter,
+    selectedMonth,
+    tableName,
+    goals,
+    tableId,
+    schema,
+    investorProfile,
+    activeSectors,
+    dashboardConfig,
+    sectorParams,
+  ]);
 
   // Count items matching the current scope and month
   const matchingCount = useMemo(() => {
     let list = [...rows];
-    if (scope === 'revenue') {
-      list = list.filter((r) => !r.entryType || r.entryType === 'revenue');
-    } else if (scope === 'expense') {
-      list = list.filter((r) => r.entryType === 'expense');
-    } else if (scope === 'deposit') {
-      list = list.filter((r) => r.entryType === 'deposit');
-    } else if (scope === 'partner') {
-      list = list.filter((r) => r.entryType === 'partner_in' || r.entryType === 'partner_out');
-    } else if (scope === 'unresolved') {
-      list = list.filter((r) => r.entryType === 'unresolved');
+    if (activeMode === 'csv') {
+      if (scope === 'revenue') {
+        list = list.filter((r) => !r.entryType || r.entryType === 'revenue');
+      } else if (scope === 'expense') {
+        list = list.filter((r) => r.entryType === 'expense');
+      } else if (scope === 'deposit') {
+        list = list.filter((r) => r.entryType === 'deposit');
+      } else if (scope === 'partner') {
+        list = list.filter(
+          (r) => r.entryType === 'partner_in' || r.entryType === 'partner_out',
+        );
+      } else if (scope === 'unresolved') {
+        list = list.filter((r) => r.entryType === 'unresolved');
+      }
     }
 
     if (useMonthFilter && selectedMonth && selectedMonth !== 'all') {
       list = list.filter((r) => r.date && r.date.startsWith(selectedMonth));
     }
     return list.length;
-  }, [rows, scope, useMonthFilter, selectedMonth]);
+  }, [activeMode, rows, scope, useMonthFilter, selectedMonth]);
+
+  const activeText =
+    activeMode === 'ai_analyst' ? synthesisResult?.content || '' : generatedCSV;
+
+  const previewText = useMemo(() => {
+    if (activeText.length <= PREVIEW_CHAR_CAP) return activeText;
+    return (
+      activeText.slice(0, PREVIEW_CHAR_CAP) +
+      `\n\n... [Pré-visualização truncada em ${PREVIEW_CHAR_CAP.toLocaleString(
+        'pt-BR',
+      )} caracteres para fluidez da tela. O botão Copiar ou Baixar entregará 100% dos ${activeText.length.toLocaleString(
+        'pt-BR',
+      )} caracteres completos!]`
+    );
+  }, [activeText]);
 
   const handleCopy = async () => {
     try {
-      await Clipboard.setStringAsync(generatedCSV);
-      setCopiedStatus('Copiado para a área de transferência! ✅');
-      setTimeout(() => setCopiedStatus(''), 3000);
+      await Clipboard.setStringAsync(activeText);
+      const label =
+        activeMode === 'ai_analyst'
+          ? `Síntese .${synthesisResult?.metadata.extension || 'md'} copiada! Cole direto na sua IA ✅`
+          : 'Copiado para a área de transferência! ✅';
+      setCopiedStatus(label);
+      setTimeout(() => setCopiedStatus(''), 3200);
     } catch {
       Alert.alert('Erro', 'Não foi possível copiar o texto.');
     }
@@ -119,13 +241,25 @@ export function GranularExportModal({
 
   const handleShareFile = async () => {
     try {
+      if (activeMode === 'ai_analyst' && synthesisResult) {
+        await shareSynthesisDocument(
+          synthesisResult.content,
+          tableName,
+          synthesisResult.metadata.extension,
+        );
+        return;
+      }
+
       await shareGranularCSV(
         rows,
         tableName,
         {
           scope,
           format,
-          selectedMonth: useMonthFilter && selectedMonth && selectedMonth !== 'all' ? selectedMonth : undefined,
+          selectedMonth:
+            useMonthFilter && selectedMonth && selectedMonth !== 'all'
+              ? selectedMonth
+              : undefined,
         },
         goals,
         tableId,
@@ -133,13 +267,23 @@ export function GranularExportModal({
         investorProfile,
         activeSectors,
         dashboardConfig,
-        sectorParams
+        sectorParams,
       );
       onClose();
     } catch (err: any) {
-      Alert.alert('Erro ao exportar', err.message || 'Falha ao gerar arquivo CSV.');
+      Alert.alert(
+        'Erro ao exportar',
+        err.message || 'Falha ao gerar arquivo para exportação.',
+      );
     }
   };
+
+  const kbSize = synthesisResult
+    ? (synthesisResult.metadata.byteSize / 1024).toFixed(1)
+    : (activeText.length / 1024).toFixed(1);
+  const estTokens = synthesisResult
+    ? synthesisResult.metadata.estimatedTokens.toLocaleString('pt-BR')
+    : Math.ceil(activeText.length / 4).toLocaleString('pt-BR');
 
   return (
     <Modal
@@ -152,142 +296,378 @@ export function GranularExportModal({
         <View style={[styles.modalContainer, isWide && styles.modalContainerWide]}>
           {/* Header */}
           <View style={styles.header}>
-            <View>
-              <Text style={styles.title}>📤 Exportação Granular por Partes</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.title}>
+                {activeMode === 'ai_analyst'
+                  ? '🧠 Síntese Manual AI-Analyst (Entrega Direta p/ IA)'
+                  : '📤 Exportação Granular CSV por Partes'}
+              </Text>
               <Text style={styles.subtitle}>
-                Planilha: <Text style={{ color: colors.accent.purple, fontWeight: '700' }}>{tableName}</Text>
+                Planilha:{' '}
+                <Text style={{ color: colors.accent.purple, fontWeight: '700' }}>
+                  {tableName}
+                </Text>
               </Text>
             </View>
             <View style={styles.metaBadge}>
-              <Text style={styles.metaBadgeText}>{matchingCount} itens filtrados</Text>
+              <Text style={styles.metaBadgeText}>
+                {activeMode === 'ai_analyst'
+                  ? `${kbSize} KB • ~${estTokens} tok • Tier ${synthesisResult?.metadata.ledgerTier || 1}`
+                  : `${matchingCount} itens filtrados`}
+              </Text>
             </View>
           </View>
 
-          {/* Scope Selector */}
-          <View style={styles.sectionBlock}>
-            <Text style={styles.sectionTitle}>1. O que você deseja exportar? (Escopo)</Text>
-            <View style={styles.chipsRow}>
-              {[
-                { id: 'all', label: 'Tudo', icon: '🌐' },
-                { id: 'revenue', label: 'Somente Receitas', icon: '🟢' },
-                { id: 'expense', label: 'Somente Custos', icon: '🔴' },
-                { id: 'deposit', label: 'Somente Aportes', icon: '🔵' },
-                { id: 'partner', label: 'Parcerias', icon: '🤝' },
-                { id: 'unresolved', label: 'Neutros/Pendentes', icon: '🟡' },
-              ].map((opt) => (
-                <Pressable
-                  key={opt.id}
-                  style={[styles.chip, scope === opt.id && styles.chipActive]}
-                  onPress={() => setScope(opt.id as ExportScopeType)}
-                >
-                  <Text style={styles.chipText}>
-                    {opt.icon} {opt.label}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-          </View>
-
-          {/* Format Selector */}
-          <View style={styles.sectionBlock}>
-            <Text style={styles.sectionTitle}>2. Formato de Destino</Text>
-            <View style={styles.formatRow}>
-              <Pressable
-                style={[styles.formatCard, format === 'agent_compact' && styles.formatCardActive]}
-                onPress={() => setFormat('agent_compact')}
-              >
-                <Text style={styles.formatIcon}>🤖</Text>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.formatTitle}>Compacto para Agente IA</Text>
-                  <Text style={styles.formatDesc}>
-                    4-5 colunas essenciais. Economiza 70% de tokens ao colar no ChatGPT ou Claude.
-                  </Text>
-                </View>
-              </Pressable>
-
-              <Pressable
-                style={[styles.formatCard, format === 'standard_csv' && styles.formatCardActive]}
-                onPress={() => setFormat('standard_csv')}
-              >
-                <Text style={styles.formatIcon}>📊</Text>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.formatTitle}>CSV Tabular Padrão</Text>
-                  <Text style={styles.formatDesc}>
-                    Estrutura amigável para abrir no Excel, Numbers ou Google Planilhas.
-                  </Text>
-                </View>
-              </Pressable>
-
-              <Pressable
-                style={[styles.formatCard, format === 'backup_v3' && styles.formatCardActive]}
-                onPress={() => setFormat('backup_v3')}
-              >
-                <Text style={styles.formatIcon}>💾</Text>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.formatTitle}>Backup Completo v3</Text>
-                  <Text style={styles.formatDesc}>
-                    Contém metas hierárquicas, colunas personalizadas e perfis de investidor.
-                  </Text>
-                </View>
-              </Pressable>
-            </View>
-          </View>
-
-          {/* Time Span Toggle */}
-          {selectedMonth && selectedMonth !== 'all' && (
-            <View style={styles.sectionBlock}>
-              <Text style={styles.sectionTitle}>3. Intervalo de Tempo</Text>
-              <View style={styles.chipsRow}>
-                <Pressable
-                  style={[styles.chip, !useMonthFilter && styles.chipActive]}
-                  onPress={() => setUseMonthFilter(false)}
-                >
-                  <Text style={styles.chipText}>📅 Todo o Histórico</Text>
-                </Pressable>
-                <Pressable
-                  style={[styles.chip, useMonthFilter && styles.chipActive]}
-                  onPress={() => setUseMonthFilter(true)}
-                >
-                  <Text style={styles.chipText}>🗓️ Apenas o Mês ({selectedMonth})</Text>
-                </Pressable>
-              </View>
-            </View>
-          )}
-
-          {/* Code Textarea Preview */}
-          <View style={styles.previewContainer}>
-            <View style={styles.previewHeader}>
-              <Text style={styles.previewTitle}>Pré-visualização do Bloco de Texto CSV:</Text>
-              {copiedStatus !== '' && (
-                <Text style={styles.copiedBadge}>{copiedStatus}</Text>
-              )}
-            </View>
-            <ScrollView style={styles.codeBox} nestedScrollEnabled>
-              <Text style={styles.codeText}>{generatedCSV}</Text>
-            </ScrollView>
-          </View>
-
-          {/* Footer Actions */}
-          <View style={styles.footerRow}>
+          {/* Top-Level Mode Switcher */}
+          <View style={styles.modeTabsRow}>
             <Pressable
-              style={[styles.btn, styles.btnCancel]}
-              onPress={onClose}
+              style={[
+                styles.modeTab,
+                activeMode === 'ai_analyst' && styles.modeTabActive,
+              ]}
+              onPress={() => setActiveMode('ai_analyst')}
             >
-              <Text style={styles.btnCancelText}>Fechar</Text>
+              <Text
+                style={[
+                  styles.modeTabText,
+                  activeMode === 'ai_analyst' && styles.modeTabTextActive,
+                ]}
+              >
+                🧠 Síntese AI-Analyst (.md / .xml / .json)
+              </Text>
             </Pressable>
 
             <Pressable
-              style={[styles.btn, styles.btnCopy]}
-              onPress={handleCopy}
+              style={[styles.modeTab, activeMode === 'csv' && styles.modeTabActive]}
+              onPress={() => setActiveMode('csv')}
             >
-              <Text style={styles.btnCopyText}>📋 Copiar Texto CSV</Text>
+              <Text
+                style={[
+                  styles.modeTabText,
+                  activeMode === 'csv' && styles.modeTabTextActive,
+                ]}
+              >
+                🧩 Exportar CSV por Partes
+              </Text>
+            </Pressable>
+          </View>
+
+          <ScrollView
+            style={{ maxHeight: 440 }}
+            contentContainerStyle={{ gap: spacing.sm }}
+            nestedScrollEnabled
+            showsVerticalScrollIndicator
+          >
+            {activeMode === 'ai_analyst' ? (
+              <>
+                {/* 1. Formato da Síntese */}
+                <View style={styles.sectionBlock}>
+                  <Text style={styles.sectionTitle}>
+                    1. Formato da Síntese (Entrega Manual sem API)
+                  </Text>
+                  <View style={styles.formatRow}>
+                    {[
+                      {
+                        id: 'ai_analyst_full_md',
+                        icon: '📄',
+                        title: 'Dossiê AI-Analyst Completo (.md) — Recomendado',
+                        desc: 'Rota obrigatória ai-analyst + 8 Skills + DRE + Estatísticas + Categorias por Competência + Razão + Protocolo de Retorno. Cole ou anexe direto no ChatGPT, Claude ou Gemini.',
+                      },
+                      {
+                        id: 'ai_analyst_xml',
+                        icon: '🧬',
+                        title: 'XML Semântico Estruturado (.xml)',
+                        desc: 'Tags XML (<dre_synthesis>, <statistical_distribution>, <accrual_categories>) otimizadas para modelos de raciocínio profundo (Claude 3.7/4, o1/o3, DeepSeek-R1).',
+                      },
+                      {
+                        id: 'analysis_context_md',
+                        icon: '📊',
+                        title: 'Contexto Analítico Puro (.md — Rota /analysis-context)',
+                        desc: 'Apenas a radiografia contábil e estatística em Markdown, sem o System Prompt. Ideal para anexar em Claude Projects, Custom GPTs ou NotebookLM.',
+                      },
+                      {
+                        id: 'api_routes_bundle_json',
+                        icon: '📦',
+                        title: 'Bundle Espelho das Rotas da API (.json)',
+                        desc: 'Espelho offline completo contendo /agent-prompt, /ai-analyst, /summary e /transactions em um único arquivo JSON estruturado.',
+                      },
+                    ].map((opt) => (
+                      <Pressable
+                        key={opt.id}
+                        style={[
+                          styles.formatCard,
+                          synthFormat === opt.id && styles.formatCardActive,
+                        ]}
+                        onPress={() =>
+                          setSynthFormat(opt.id as ManualSynthesisFormat)
+                        }
+                      >
+                        <Text style={styles.formatIcon}>{opt.icon}</Text>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.formatTitle}>{opt.title}</Text>
+                          <Text style={styles.formatDesc}>{opt.desc}</Text>
+                        </View>
+                      </Pressable>
+                    ))}
+                  </View>
+                </View>
+
+                {/* 2. Perfil Especialista do Agente */}
+                {synthFormat !== 'analysis_context_md' && (
+                  <View style={styles.sectionBlock}>
+                    <Text style={styles.sectionTitle}>
+                      2. Perfil Especialista do Agente (System Prompt Embarcado)
+                    </Text>
+                    <View style={styles.chipsRow}>
+                      {[
+                        { id: 'native', label: '🌟 Agent Native (8 Skills)' },
+                        { id: 'cfo', label: '🏛️ CFO & FP&A (Aula Executiva)' },
+                        { id: 'operational', label: '⚡ Operacional & God Mode' },
+                        { id: 'goals', label: '🎯 Metas & Banco de Tempo' },
+                        { id: 'dev', label: '🛠️ Agente Dev & Auditoria' },
+                      ].map((prof) => (
+                        <Pressable
+                          key={prof.id}
+                          style={[
+                            styles.chip,
+                            synthProfile === prof.id && styles.chipActive,
+                          ]}
+                          onPress={() =>
+                            setSynthProfile(prof.id as ManualSynthesisProfile)
+                          }
+                        >
+                          <Text style={styles.chipText}>{prof.label}</Text>
+                        </Pressable>
+                      ))}
+                    </View>
+                  </View>
+                )}
+
+                {/* 3. Privacidade & Intervalo de Tempo */}
+                <View style={styles.sectionBlock}>
+                  <Text style={styles.sectionTitle}>
+                    3. Privacidade (LGPD) & Escopo Temporal
+                  </Text>
+                  <View style={styles.chipsRow}>
+                    <Pressable
+                      style={[
+                        styles.chip,
+                        !anonymizeDescriptions && styles.chipActive,
+                      ]}
+                      onPress={() => setAnonymizeDescriptions(false)}
+                    >
+                      <Text style={styles.chipText}>🔓 Descrições Originais</Text>
+                    </Pressable>
+                    <Pressable
+                      style={[
+                        styles.chip,
+                        anonymizeDescriptions && styles.chipActive,
+                      ]}
+                      onPress={() => setAnonymizeDescriptions(true)}
+                    >
+                      <Text style={styles.chipText}>
+                        🛡️ Anonimizar Descrições (LGPD / Modo Rua)
+                      </Text>
+                    </Pressable>
+
+                    {selectedMonth && selectedMonth !== 'all' && (
+                      <>
+                        <Pressable
+                          style={[
+                            styles.chip,
+                            !useMonthFilter && styles.chipActive,
+                          ]}
+                          onPress={() => setUseMonthFilter(false)}
+                        >
+                          <Text style={styles.chipText}>📅 Todo o Histórico</Text>
+                        </Pressable>
+                        <Pressable
+                          style={[
+                            styles.chip,
+                            useMonthFilter && styles.chipActive,
+                          ]}
+                          onPress={() => setUseMonthFilter(true)}
+                        >
+                          <Text style={styles.chipText}>
+                            🗓️ Apenas {selectedMonth}
+                          </Text>
+                        </Pressable>
+                      </>
+                    )}
+                  </View>
+                </View>
+
+                {/* 4. Comando / Dúvida Opcional para a IA */}
+                <View style={styles.sectionBlock}>
+                  <Text style={styles.sectionTitle}>
+                    4. Sua Dúvida ou Objetivo Atual (Opcional — será incluído no final do arquivo)
+                  </Text>
+                  <TextInput
+                    style={styles.promptInput}
+                    placeholder="Ex: Analise meus gastos deste mês, calcule meu ponto de equilíbrio e me diga onde cortar 15%..."
+                    placeholderTextColor={colors.text.tertiary}
+                    value={userCustomPrompt}
+                    onChangeText={setUserCustomPrompt}
+                    multiline
+                  />
+                </View>
+              </>
+            ) : (
+              <>
+                {/* CSV Scope Selector */}
+                <View style={styles.sectionBlock}>
+                  <Text style={styles.sectionTitle}>
+                    1. O que você deseja exportar? (Escopo)
+                  </Text>
+                  <View style={styles.chipsRow}>
+                    {[
+                      { id: 'all', label: 'Tudo', icon: '🌐' },
+                      { id: 'revenue', label: 'Somente Receitas', icon: '🟢' },
+                      { id: 'expense', label: 'Somente Custos', icon: '🔴' },
+                      { id: 'deposit', label: 'Somente Aportes', icon: '🔵' },
+                      { id: 'partner', label: 'Parcerias', icon: '🤝' },
+                      { id: 'unresolved', label: 'Neutros/Pendentes', icon: '🟡' },
+                    ].map((opt) => (
+                      <Pressable
+                        key={opt.id}
+                        style={[styles.chip, scope === opt.id && styles.chipActive]}
+                        onPress={() => setScope(opt.id as ExportScopeType)}
+                      >
+                        <Text style={styles.chipText}>
+                          {opt.icon} {opt.label}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                </View>
+
+                {/* CSV Format Selector */}
+                <View style={styles.sectionBlock}>
+                  <Text style={styles.sectionTitle}>2. Formato de Destino</Text>
+                  <View style={styles.formatRow}>
+                    <Pressable
+                      style={[
+                        styles.formatCard,
+                        format === 'agent_compact' && styles.formatCardActive,
+                      ]}
+                      onPress={() => setFormat('agent_compact')}
+                    >
+                      <Text style={styles.formatIcon}>🤖</Text>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.formatTitle}>
+                          Compacto para Agente IA
+                        </Text>
+                        <Text style={styles.formatDesc}>
+                          4-5 colunas essenciais. Economiza 70% de tokens ao colar no
+                          ChatGPT ou Claude.
+                        </Text>
+                      </View>
+                    </Pressable>
+
+                    <Pressable
+                      style={[
+                        styles.formatCard,
+                        format === 'standard_csv' && styles.formatCardActive,
+                      ]}
+                      onPress={() => setFormat('standard_csv')}
+                    >
+                      <Text style={styles.formatIcon}>📊</Text>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.formatTitle}>CSV Tabular Padrão</Text>
+                        <Text style={styles.formatDesc}>
+                          Estrutura amigável para abrir no Excel, Numbers ou Google
+                          Planilhas.
+                        </Text>
+                      </View>
+                    </Pressable>
+
+                    <Pressable
+                      style={[
+                        styles.formatCard,
+                        format === 'backup_v3' && styles.formatCardActive,
+                      ]}
+                      onPress={() => setFormat('backup_v3')}
+                    >
+                      <Text style={styles.formatIcon}>💾</Text>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.formatTitle}>Backup Completo v3</Text>
+                        <Text style={styles.formatDesc}>
+                          Contém metas hierárquicas, colunas personalizadas e perfis de
+                          investidor.
+                        </Text>
+                      </View>
+                    </Pressable>
+                  </View>
+                </View>
+
+                {/* Time Span Toggle */}
+                {selectedMonth && selectedMonth !== 'all' && (
+                  <View style={styles.sectionBlock}>
+                    <Text style={styles.sectionTitle}>3. Intervalo de Tempo</Text>
+                    <View style={styles.chipsRow}>
+                      <Pressable
+                        style={[styles.chip, !useMonthFilter && styles.chipActive]}
+                        onPress={() => setUseMonthFilter(false)}
+                      >
+                        <Text style={styles.chipText}>📅 Todo o Histórico</Text>
+                      </Pressable>
+                      <Pressable
+                        style={[styles.chip, useMonthFilter && styles.chipActive]}
+                        onPress={() => setUseMonthFilter(true)}
+                      >
+                        <Text style={styles.chipText}>
+                          🗓️ Apenas o Mês ({selectedMonth})
+                        </Text>
+                      </Pressable>
+                    </View>
+                  </View>
+                )}
+              </>
+            )}
+
+            {/* Code Textarea Preview */}
+            <View style={styles.previewContainer}>
+              <View style={styles.previewHeader}>
+                <Text style={styles.previewTitle}>
+                  {activeMode === 'ai_analyst'
+                    ? `Pré-visualização da Síntese (.${synthesisResult?.metadata.extension || 'md'}):`
+                    : 'Pré-visualização do Bloco de Texto CSV:'}
+                </Text>
+                {copiedStatus !== '' && (
+                  <Text style={styles.copiedBadge}>{copiedStatus}</Text>
+                )}
+              </View>
+              <ScrollView style={styles.codeBox} nestedScrollEnabled>
+                <Text selectable style={styles.codeText}>
+                  {previewText}
+                </Text>
+              </ScrollView>
+            </View>
+          </ScrollView>
+
+          {/* Footer Actions */}
+          <View style={styles.footerRow}>
+            <Pressable style={[styles.btn, styles.btnCancel]} onPress={onClose}>
+              <Text style={styles.btnCancelText}>Fechar</Text>
+            </Pressable>
+
+            <Pressable style={[styles.btn, styles.btnCopy]} onPress={handleCopy}>
+              <Text style={styles.btnCopyText}>
+                {activeMode === 'ai_analyst'
+                  ? `📋 Copiar Síntese (.${synthesisResult?.metadata.extension || 'md'})`
+                  : '📋 Copiar Texto CSV'}
+              </Text>
             </Pressable>
 
             <Pressable
               style={[styles.btn, styles.btnShare]}
               onPress={handleShareFile}
             >
-              <Text style={styles.btnShareText}>📥 Baixar / Compartilhar</Text>
+              <Text style={styles.btnShareText}>
+                {activeMode === 'ai_analyst'
+                  ? `📥 Baixar .${(synthesisResult?.metadata.extension || 'md').toUpperCase()}`
+                  : '📥 Baixar / Compartilhar'}
+              </Text>
             </Pressable>
           </View>
         </View>
@@ -310,13 +690,13 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: radius.lg,
     width: '100%',
-    maxWidth: 580,
-    maxHeight: '92%',
+    maxWidth: 600,
+    maxHeight: '94%',
     padding: spacing.lg,
-    gap: spacing.md,
+    gap: spacing.sm,
   },
   modalContainerWide: {
-    maxWidth: 720,
+    maxWidth: 760,
   },
   header: {
     flexDirection: 'row',
@@ -325,9 +705,10 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.border.default,
     paddingBottom: spacing.sm,
+    gap: spacing.sm,
   },
   title: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '700',
     color: colors.text.primary,
   },
@@ -345,9 +726,38 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   metaBadgeText: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '700',
     color: colors.accent.purple,
+  },
+  modeTabsRow: {
+    flexDirection: 'row',
+    gap: 6,
+    backgroundColor: colors.background.secondary,
+    padding: 4,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border.default,
+  },
+  modeTab: {
+    flex: 1,
+    paddingVertical: 7,
+    paddingHorizontal: 8,
+    borderRadius: radius.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modeTabActive: {
+    backgroundColor: colors.accent.purple,
+  },
+  modeTabText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: colors.text.secondary,
+  },
+  modeTabTextActive: {
+    color: '#ffffff',
+    fontWeight: '700',
   },
   sectionBlock: {
     gap: 6,
@@ -413,6 +823,18 @@ const styles = StyleSheet.create({
     lineHeight: 14,
     marginTop: 1,
   },
+  promptInput: {
+    backgroundColor: colors.background.secondary,
+    borderColor: colors.border.default,
+    borderWidth: 1,
+    borderRadius: radius.sm,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 8,
+    fontSize: 11,
+    color: colors.text.primary,
+    minHeight: 46,
+    textAlignVertical: 'top',
+  },
   previewContainer: {
     gap: 4,
   },
@@ -432,7 +854,7 @@ const styles = StyleSheet.create({
     color: colors.success.main,
   },
   codeBox: {
-    maxHeight: 110,
+    maxHeight: 130,
     backgroundColor: '#0a0d12',
     borderColor: colors.border.default,
     borderWidth: 1,
@@ -458,7 +880,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   btnCancel: {
-    flex: 0.5,
+    flex: 0.45,
     backgroundColor: colors.background.tertiary,
   },
   btnCancelText: {
@@ -484,3 +906,4 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
   },
 });
+

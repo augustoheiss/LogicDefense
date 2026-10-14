@@ -1678,3 +1678,66 @@ export async function shareTabularPDFReport(
   }
 }
 
+// ── Manual AI-Analyst Synthesis Document Export (.md / .xml / .json) ─────────
+
+export async function shareSynthesisDocument(
+  content: string,
+  baseFileName: string,
+  extension: 'md' | 'xml' | 'json',
+): Promise<void> {
+  const safeBase = (baseFileName || 'Planilha')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9_-]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+  const dateSuffix = new Date().toISOString().slice(0, 10);
+  const fullFileName = `${safeBase || 'Assistente_Moeda'}_ai_analyst_${dateSuffix}.${extension}`;
+
+  const mimeMap: Record<'md' | 'xml' | 'json', string> = {
+    md: 'text/markdown;charset=utf-8',
+    xml: 'application/xml;charset=utf-8',
+    json: 'application/json;charset=utf-8',
+  };
+  const utiMap: Record<'md' | 'xml' | 'json', string> = {
+    md: 'net.daringfireball.markdown',
+    xml: 'public.xml',
+    json: 'public.json',
+  };
+
+  if (Platform.OS === 'web') {
+    try {
+      const blob = new Blob([content], { type: mimeMap[extension] });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fullFileName;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      Alert.alert('Erro', `Não foi possível baixar o arquivo .${extension}.`);
+    }
+    return;
+  }
+
+  try {
+    const filePath = `${cacheDirectory}${fullFileName}`;
+    await writeAsStringAsync(filePath, content, { encoding: EncodingType.UTF8 });
+    const canShare = await Sharing.isAvailableAsync();
+    if (canShare) {
+      await Sharing.shareAsync(filePath, {
+        mimeType: mimeMap[extension].split(';')[0],
+        dialogTitle: `Síntese AI-Analyst (.${extension.toUpperCase()}) — ${baseFileName}`,
+        UTI: utiMap[extension],
+      });
+    } else {
+      await Share.share({
+        message: content,
+        title: fullFileName,
+      });
+    }
+  } catch (error: any) {
+    Alert.alert('Erro na exportação', error.message || `Não foi possível compartilhar o arquivo .${extension}.`);
+  }
+}
+
+
