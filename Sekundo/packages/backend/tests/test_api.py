@@ -73,24 +73,12 @@ def test_signaling_room_lifecycle():
     assert len(candidates) == 1
     assert candidates[0]["candidate"] == cand_payload["candidate"]
 
-def test_room_state_cache():
-    # 1. Create room
+def test_zero_egress_no_state_cache():
+    # Verify that server-side state cache endpoints are removed (Zero-Egress Sovereignty)
     response = client.post("/signal/room")
     assert response.status_code == 200
     room_id = response.json()["room_id"]
 
-    # 2. Get state before post (should return 204)
     response = client.get(f"/signal/room/{room_id}/state")
-    assert response.status_code == 204
-
-    # 3. Post state payload
-    state_payload = {"state": "compressed_encrypted_state_payload"}
-    response = client.post(f"/signal/room/{room_id}/state", json=state_payload)
-    assert response.status_code == 200
-    assert response.json()["status"] == "state_stored"
-
-    # 4. Get state payload
-    response = client.get(f"/signal/room/{room_id}/state")
-    assert response.status_code == 200
-    assert response.json()["state"] == state_payload["state"]
+    assert response.status_code == 404
 
