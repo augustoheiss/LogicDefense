@@ -159,11 +159,18 @@ function countTotalVoxels(voxels: VoxelGrid): number {
 function generateBossEquation(
   wave: number,
   difficulty: number,
-): { equation: string; correctColIdx: 0|1|2; columnAnswers: [number,number,number] } {
-  const { display, answer } = generateEquation(wave, difficulty);
+): {
+  equation: string;
+  correctColIdx: 0 | 1 | 2;
+  columnAnswers: [number, number, number];
+  lensTitle: string;
+  shortHint: string;
+  fullTip: string;
+} {
+  const { display, answer, lensTitle, shortHint, fullTip } = generateEquation(wave, difficulty, true);
   const decoys = new Set<number>();
   const spread = Math.max(3, Math.round(answer * 0.2));
-  const offsets = [-1, 1, -2, 2, -3, 3, spread, -spread, spread + 1, -spread - 1];
+  const offsets = [-2, 2, -3, 3, -5, 5, spread, -spread, -1, 1];
   for (const off of offsets) {
     const c = answer + off;
     if (c > 0 && c !== answer) { decoys.add(c); if (decoys.size >= 2) break; }
@@ -179,7 +186,7 @@ function generateBossEquation(
   for (let col = 0; col < 3; col++) {
     columnAnswers[col] = col === correctColIdx ? answer : decoyArr[di++];
   }
-  return { equation: display, correctColIdx, columnAnswers };
+  return { equation: display, correctColIdx, columnAnswers, lensTitle, shortHint, fullTip };
 }
 
 // ─── Public API ───────────────────────────────────────────────────────────
@@ -199,7 +206,7 @@ export function createBoss(
   const voxelH = BOSS_H / design.rows;
   const colVoxelCount = countColVoxels(voxels, design.rows, design.cols, voxelsPerLogicalCol);
   const startingVoxelCount = countTotalVoxels(voxels);
-  const { equation, correctColIdx, columnAnswers } = generateBossEquation(wave, difficulty);
+  const { equation, correctColIdx, columnAnswers, lensTitle, shortHint, fullTip } = generateBossEquation(wave, difficulty);
 
   return {
     id: nextId,
@@ -225,6 +232,10 @@ export function createBoss(
     voxelsPerLogicalCol,
     coreBlock: design.coreBlock,
     startingVoxelCount,
+    lensTitle,
+    shortHint,
+    fullTip,
+    hintRevealed: false,
   };
 }
 
@@ -322,6 +333,9 @@ export function hitBossVoxel(
   updatePhase(boss);
 
   const isCorrectCol = logicalCol === boss.correctColIdx;
+  if (!isCorrectCol && !isOverdrive) {
+    boss.hintRevealed = true;
+  }
   return (isOverdrive || isCorrectCol) ? 'hit_correct' : 'hit_wrong';
 }
 

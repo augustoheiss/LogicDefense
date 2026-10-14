@@ -261,29 +261,95 @@ export function LogicInvadersLanding() {
             <FeatureCard
               accentClass="li-feature-card--cyan"
               icon={<IconRocket />}
-              title="Ação Ininterrupta"
-              desc="Zero provas-surpresa. O jogo nunca pausa. Os problemas matemáticos existem dentro do loop de gameplay — resolvê-los É a ação."
+              title="Ação Ininterrupta + Luz Guia"
+              desc="Zero provas-surpresa. O jogo nunca pausa: se uma conta parecer difícil, a Luz Guia acende abaixo do alien mostrando como desmontar o número de cabeça."
             />
             <FeatureCard
               accentClass="li-feature-card--magenta"
               icon={<IconRefresh />}
-              title="Matar-Math + Modo Laser"
-              desc="Clique na bolha certa para destruir o alien instantaneamente. Como recompensa, você recebe 5 segundos de Modo Laser — um raio que perfura tudo. Risco e recompensa em tempo real."
+              title="Raio de Plasma (Teclas 1, 2, 3 ou Clique)"
+              desc="Clique na bolha certa ou aperte 1, 2, 3 para disparar o Raio de Plasma instantâneo. Como recompensa, você ganha 5 segundos de Modo Laser e destrói tudo pela frente."
             />
             <FeatureCard
               accentClass="li-feature-card--green"
               icon={<IconBrain />}
-              title="Matemática Reflexiva"
-              desc="Repetição por urgência genuína. Os alunos internalizam as tabuadas por instinto de sobrevivência, não por memorização mecânica."
+              title="As 6 Lentes da Matemática Básica"
+              desc="Em vez de exigir decoreba mecânica, cada onda ensina uma maneira diferente de enxergar números como blocos desmontáveis."
             />
+          </div>
+
+          <div className="li-section-header" style={{ marginTop: '48px', marginBottom: '24px' }}>
+            <div className="li-section-eyebrow li-eyebrow--cyan">FLEXIBILIDADE NUMÉRICA</div>
+            <h3 className="li-section-title" style={{ fontSize: 'clamp(1.4rem, 3vw, 2rem)' }}>
+              6 Maneiras Diferentes de Entender a Matemática Básica
+            </h3>
+            <p className="li-section-sub">
+              Quando você enxerga que todo número pode ser remodelado como massinha, nenhuma continha assusta:
+            </p>
+          </div>
+
+          <div className="li-lenses-grid" style={{ marginBottom: '40px' }}>
+            <div className="li-lens-card">
+              <span className="li-lens-badge">Lente 1 · Adição</span>
+              <div className="li-lens-example">8 + 7 = ?</div>
+              <div className="li-lens-trick">💡 8 + 2 + 5 = 10 + 5 = 15</div>
+              <p className="li-lens-desc">
+                <strong>Massinha de Modelar (Ponte do 10):</strong> Empreste 2 do 7 para transformar o 8 em 10. Somar com 10 é instantâneo!
+              </p>
+            </div>
+
+            <div className="li-lens-card">
+              <span className="li-lens-badge">Lente 2 · Subtração</span>
+              <div className="li-lens-example">52 − 48 = ?</div>
+              <div className="li-lens-trick">💡 Do 48 até 50 (+2) e até 52 (+2) = 4</div>
+              <p className="li-lens-desc">
+                <strong>O Hack Japonês (Distância):</strong> Esqueça o "empresta 1". Basta contar quantos passos faltam do 48 para chegar ao 52.
+              </p>
+            </div>
+
+            <div className="li-lens-card">
+              <span className="li-lens-badge">Lente 3 · Multiplicação</span>
+              <div className="li-lens-example">4 × 7 = ?</div>
+              <div className="li-lens-trick">💡 Dobro de 7 é 14 → Dobro de 14 é 28</div>
+              <p className="li-lens-desc">
+                <strong>Dobro e Metade:</strong> Não decorou a tabuada? Multiplicar por 4 é só dobrar duas vezes. Multiplicar por 5 é metade de ×10!
+              </p>
+            </div>
+
+            <div className="li-lens-card">
+              <span className="li-lens-badge">Lente 4 · Divisão</span>
+              <div className="li-lens-example">36 ÷ 4 = ?</div>
+              <div className="li-lens-trick">💡 Metade de 36 é 18 → Metade de 18 é 9</div>
+              <p className="li-lens-desc">
+                <strong>Corta no Meio:</strong> Dividir por 4 é apenas achar a metade da metade. Dividir vira uma brincadeira visual simples.
+              </p>
+            </div>
+
+            <div className="li-lens-card">
+              <span className="li-lens-badge">Lente 5 · Pensamento Reverso</span>
+              <div className="li-lens-example">7 + [ ? ] = 15</div>
+              <div className="li-lens-trick">💡 7 + 3 chega no 10, mais 5 chega no 15 → 8</div>
+              <p className="li-lens-desc">
+                <strong>A Peça Faltando:</strong> Prepara o cérebro para a álgebra sem usar letras assustadoras — apenas completando o quebra-cabeça.
+              </p>
+            </div>
+
+            <div className="li-lens-card">
+              <span className="li-lens-badge">Lente 6 · Visão Raio-X</span>
+              <div className="li-lens-example">ALVO: 16</div>
+              <div className="li-lens-trick">💡 Bolhas: [ 10 + 6 ] · [ 10 + 4 ] · [ 20 − 2 ]</div>
+              <p className="li-lens-desc">
+                <strong>O Mesmo Número com Outra Roupa:</strong> O alien traz o resultado e as bolhas trazem as continhas equivalentes.
+              </p>
+            </div>
           </div>
 
           <div className="li-tech-badges">
             <div className="li-tech-badge">🎮 Web · Sem instalação</div>
-            <div className="li-tech-badge">📊 Dificuldade por ondas</div>
-            <div className="li-tech-badge">🧮 Adição · Subtração · Multiplicação · Divisão</div>
-            <div className="li-tech-badge">📱 Controles mobile-friendly</div>
-            <div className="li-tech-badge">⚡ Sistema de Combate Híbrido</div>
+            <div className="li-tech-badge">🌱 Modo Descoberta + Modo Arcade</div>
+            <div className="li-tech-badge">💡 Luz Guia Anti-Ansiedade</div>
+            <div className="li-tech-badge">⌨️ Atalhos [1] [2] [3] + Mouse/Touch</div>
+            <div className="li-tech-badge">🔊 Áudio Procedural Pentatônico</div>
           </div>
         </div>
       </section>

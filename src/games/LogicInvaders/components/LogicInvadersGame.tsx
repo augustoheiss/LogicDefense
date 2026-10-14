@@ -1,11 +1,15 @@
 // ============================================================
-// LOGIC INVADERS — Game Component  (v3 — Endless Roguelike)
-// Leaderboard + "Finalizar Jogo" button + enemy projectile hint
+// LOGIC INVADERS — Game Component  (v5 — 6 Lentes da Matemática Básica)
+// ─ Modo Descoberta vs. Modo Arcade
+// ─ Cápsula de Sabedoria em tempo real (truques de cálculo mental)
+// ─ Grimório da Sessão no overlay de Salvar Pontuação
+// ─ Controle de áudio Web Audio API (🔊/🔇) e atalhos [1] [2] [3]
 // ============================================================
 import { useRef, useState, useCallback, useMemo, useEffect } from 'react';
 import { useGameEngine, CANVAS_W, CANVAS_H } from '../hooks/useGameEngine';
 import { formatScore } from '../utils/formatScore';
-import type { LeaderboardEntry } from '../types';
+import { soundEngine } from '../utils/soundEngine';
+import type { LeaderboardEntry, GameMode, MathInsightEvent } from '../types';
 
 const LEADERBOARD_KEY = 'logic_invaders_leaderboard';
 
@@ -14,7 +18,27 @@ function loadLeaderboard(): LeaderboardEntry[] {
   try {
     const raw = localStorage.getItem(LEADERBOARD_KEY);
     if (!raw) return [];
-    return JSON.parse(raw) as LeaderboardEntry[];
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter(
+        (item): item is LeaderboardEntry =>
+          typeof item === 'object' &&
+          item !== null &&
+          typeof (item as LeaderboardEntry).name === 'string' &&
+          typeof (item as LeaderboardEntry).score === 'number' &&
+          Number.isFinite((item as LeaderboardEntry).score) &&
+          typeof (item as LeaderboardEntry).wave === 'number' &&
+          Number.isFinite((item as LeaderboardEntry).wave) &&
+          typeof (item as LeaderboardEntry).date === 'string'
+      )
+      .slice(0, 10)
+      .map((item) => ({
+        name: item.name.slice(0, 24),
+        score: item.score,
+        wave: item.wave,
+        date: item.date,
+      }));
   } catch {
     return [];
   }
@@ -57,42 +81,39 @@ function LeaderboardTable({ entries }: { entries: LeaderboardEntry[] }) {
     );
   }
   return (
-      <div className="li-lb-table">
-        <div className="li-lb-header">
-          <span>#</span>
-          <span>Nome</span>
-          <span>Pontos</span>
-          <span>Onda</span>
-          <span>Data</span>
-        </div>
-        {entries.map((e, i) => (
-          <div
-            key={i}
-            className={`li-lb-row ${i === 0 ? 'li-lb-row--gold' : i === 1 ? 'li-lb-row--silver' : i === 2 ? 'li-lb-row--bronze' : ''}`}
-          >
-            <span className="li-lb-rank">
-              {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `#${i + 1}`}
-            </span>
-            <span className="li-lb-name">{e.name}</span>
-            <span className="li-lb-score">{formatScore(e.score)}</span>
-            <span className="li-lb-wave">Onda {e.wave}</span>
-            <span className="li-lb-date">{new Date(e.date).toLocaleDateString('pt-BR')}</span>
-          </div>
-        ))}
+    <div className="li-lb-table">
+      <div className="li-lb-header">
+        <span>#</span>
+        <span>Nome</span>
+        <span>Pontos</span>
+        <span>Onda</span>
+        <span>Data</span>
       </div>
+      {entries.map((e, i) => (
+        <div
+          key={i}
+          className={`li-lb-row ${i === 0 ? 'li-lb-row--gold' : i === 1 ? 'li-lb-row--silver' : i === 2 ? 'li-lb-row--bronze' : ''}`}
+        >
+          <span className="li-lb-rank">
+            {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `#${i + 1}`}
+          </span>
+          <span className="li-lb-name">{e.name}</span>
+          <span className="li-lb-score">{formatScore(e.score)}</span>
+          <span className="li-lb-wave">Onda {e.wave}</span>
+          <span className="li-lb-date">{new Date(e.date).toLocaleDateString('pt-BR')}</span>
+        </div>
+      ))}
+    </div>
   );
 }
 
 // ── Fullscreen helper ─────────────────────────────────────────
-// Must live outside the component so it's never recreated (stable reference).
-// Called synchronously inside a user-gesture handler — browsers require
-// requestFullscreen() to be invoked directly from a click/touch event.
 function requestFullScreen(el: HTMLElement): void {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const e = el as any;
   if (e.requestFullscreen)            { e.requestFullscreen().catch(() => {}); }
-  else if (e.webkitRequestFullscreen) { e.webkitRequestFullscreen(); } // Safari / iOS
-  else if (e.msRequestFullscreen)     { e.msRequestFullscreen();     } // IE11
+  else if (e.webkitRequestFullscreen) { e.webkitRequestFullscreen(); }
+  else if (e.msRequestFullscreen)     { e.msRequestFullscreen();     }
 }
 
 // ── Main component ────────────────────────────────────────────
@@ -105,15 +126,24 @@ export function LogicInvadersGame() {
   const [wave, setWave] = useState(1);
   const [laserActive, setLaserActive] = useState(false);
   const [laserRatio, setLaserRatio] = useState(0);
+  const [gameMode, setGameMode] = useState<GameMode>('discovery');
+  const [streak, setStreak] = useState(0);
+  const [bestStreak, setBestStreak] = useState(0);
+  const [insight, setInsight] = useState<MathInsightEvent | null>(null);
+  const [isMuted, setIsMuted] = useState<boolean>(() => soundEngine.isMuted());
 
-  // Leaderboard state
+  // Leaderboard & Session Summary state
   const [showSaveOverlay, setShowSaveOverlay] = useState(false);
   const [showLeaderboard, setShowLeaderboard] = useState(false);
   const [playerName, setPlayerName] = useState('');
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>(loadLeaderboard);
   const [savedEntry, setSavedEntry] = useState<LeaderboardEntry | null>(null);
+  const [sessionSummary, setSessionSummary] = useState<{
+    mathKillsTotal: number;
+    bestStreak: number;
+    masteredTips: string[];
+  }>({ mathKillsTotal: 0, bestStreak: 0, masteredTips: [] });
 
-  // Keep latest score/wave in refs so save overlay can access them
   const scoreRef = useRef(0);
   const waveRef = useRef(1);
   useEffect(() => { scoreRef.current = score; }, [score]);
@@ -128,14 +158,25 @@ export function LogicInvadersGame() {
     setStatus(s);
   }, []);
 
+  const handleStreakChange = useCallback((currentStreak: number, maxStreak: number) => {
+    setStreak(currentStreak);
+    setBestStreak(maxStreak);
+  }, []);
+
+  const handleInsightChange = useCallback((newInsight: MathInsightEvent | null) => {
+    setInsight(newInsight);
+  }, []);
+
   const engineOptions = useMemo(() => ({
     onScoreChange: setScore,
     onStatusChange: handleStatusChange,
     onWaveChange: setWave,
     onLaserChange: handleLaserChange,
-  }), [handleLaserChange, handleStatusChange]);
+    onStreakChange: handleStreakChange,
+    onInsightChange: handleInsightChange,
+  }), [handleLaserChange, handleStatusChange, handleStreakChange, handleInsightChange]);
 
-  const { startGame, pauseGame, resumeGame } = useGameEngine(canvasRef, engineOptions);
+  const { startGame, pauseGame, resumeGame, getSessionSummary } = useGameEngine(canvasRef, engineOptions);
 
   const isIdle = status === 'idle';
   const isPlaying = status === 'playing';
@@ -146,12 +187,18 @@ export function LogicInvadersGame() {
   }, [isPlaying]);
 
   // ── Handlers ──────────────────────────────────────────────
+  const handleToggleMute = useCallback(() => {
+    const nextMuted = soundEngine.toggleMuted();
+    setIsMuted(nextMuted);
+  }, []);
+
   const handleEndGame = useCallback(() => {
     pauseGame();
+    setSessionSummary(getSessionSummary());
     setPlayerName('');
     setSavedEntry(null);
     setShowSaveOverlay(true);
-  }, [pauseGame]);
+  }, [pauseGame, getSessionSummary]);
 
   const handleSaveScore = useCallback(() => {
     const name = playerName.trim() || 'Anônimo';
@@ -175,17 +222,15 @@ export function LogicInvadersGame() {
 
   const handleCloseLeaderboard = useCallback(() => {
     setShowLeaderboard(false);
-    // Reset to idle so player can start fresh
     setStatus('idle');
   }, []);
 
   const handleNewGame = useCallback(() => {
     setShowLeaderboard(false);
     setShowSaveOverlay(false);
-    startGame();
-  }, [startGame]);
+    startGame(gameMode);
+  }, [startGame, gameMode]);
 
-  // Show leaderboard from idle (read-only)
   const handleViewLeaderboard = useCallback(() => {
     setLeaderboard(loadLeaderboard());
     setSavedEntry(null);
@@ -206,20 +251,68 @@ export function LogicInvadersGame() {
             <span className="li-hud-label">ONDA</span>
             <span className="li-hud-value li-hud-value--magenta">{wave}</span>
           </div>
+          <div className="li-hud-stat">
+            <span className="li-hud-label">SEQUÊNCIA</span>
+            <span className="li-hud-value li-hud-value--gold">
+              {streak > 0 ? `🔥 ${streak}` : '0'}
+            </span>
+          </div>
+
           <div className="li-hud-controls-hint">
             {laserActive
               ? '⚡ LASER ATIVO — destruindo tudo automaticamente!'
-              : 'A/D · MOVER | ESPAÇO/SEGURE · ATIRAR | Clique nas BOLHAS para Matar-Math'}
+              : 'A/D · Mover | [1][2][3] ou Clique · Matar-Math | Espaço · Atirar'}
           </div>
-          {isPlaying && (
+
+          <div className="li-hud-actions">
             <button
-              className="li-end-btn"
-              onClick={handleEndGame}
-              id="li-end-game-btn"
-              title="Finalizar e salvar pontuação"
+              type="button"
+              className="li-mute-btn"
+              onClick={handleToggleMute}
+              title={isMuted ? 'Ativar som' : 'Silenciar som'}
+              aria-label={isMuted ? 'Ativar som' : 'Silenciar som'}
             >
-              📋 Finalizar & Salvar
+              {isMuted ? '🔇' : '🔊'}
             </button>
+            {isPlaying && (
+              <button
+                className="li-end-btn"
+                onClick={handleEndGame}
+                id="li-end-game-btn"
+                title="Finalizar e salvar pontuação"
+              >
+                📋 Finalizar & Salvar
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Cápsula de Sabedoria (Live Mental Math Insight Banner) ── */}
+      {!isIdle && !showSaveOverlay && !showLeaderboard && (
+        <div
+          className={`li-wisdom-capsule ${
+            insight
+              ? insight.isCorrect
+                ? 'li-wisdom-capsule--correct'
+                : 'li-wisdom-capsule--hint'
+              : ''
+          }`}
+        >
+          {insight ? (
+            <>
+              <span className="li-wisdom-badge">
+                {insight.isCorrect ? '✨ EUREKA' : '💡 LUZ GUIA'} · {insight.lensTitle}
+              </span>
+              <span className="li-wisdom-text">
+                <strong>{insight.equation}</strong> → {insight.fullTip}
+              </span>
+            </>
+          ) : (
+            <span className="li-wisdom-text">
+              💡 <strong>Dica:</strong> Use a <em>Luz Guia</em> embaixo de cada conta ou aperte{' '}
+              <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> para disparar o Raio de Plasma na bolha certa!
+            </span>
           )}
         </div>
       )}
@@ -235,77 +328,101 @@ export function LogicInvadersGame() {
           aria-label="Logic Invaders — canvas do jogo"
           style={{
             cursor: isPlaying ? 'crosshair' : 'default',
-            touchAction: 'none',      // ← stops browser swipe-scroll intercepting pointer events
-            userSelect: 'none',       // ← prevents text-selection drag on mobile
-            WebkitUserSelect: 'none', // ← Safari
+            touchAction: 'none',
+            userSelect: 'none',
+            WebkitUserSelect: 'none',
           }}
         />
-      </div>{/* /.li-canvas-container — overlays are siblings below, NOT inside */}
+      </div>
 
-      {/* ══ EXTERNAL PLAY BUTTON ══
-          position:absolute inside .li-wrapper (position:relative) so it is
-          NEVER clipped by .li-game-wrapper overflow:hidden, which only clips
-          content in the normal document flow beyond its natural height.
-          z-index:200 floats it above the idle overlay (z-index:100) so it is
-          always tappable. Disappears instantly when startGame() fires. */}
+      {/* ══ EXTERNAL PLAY BUTTON ══ */}
       {isIdle && !showLeaderboard && !showSaveOverlay && (
         <button
           id="li-external-play-btn"
           className="li-external-play-btn"
           onClick={() => {
             if (wrapperRef.current) requestFullScreen(wrapperRef.current);
-            startGame();
+            startGame(gameMode);
           }}
           style={{ touchAction: 'auto', pointerEvents: 'auto' }}
         >
-          ▶ Jogar em Tela Cheia
+          ▶ Jogar em Tela Cheia ({gameMode === 'discovery' ? 'Modo Descoberta' : 'Modo Arcade'})
         </button>
       )}
 
-      {/* ══ IDLE OVERLAY ══
-          Anchored to .li-wrapper (position:relative) so overflow:hidden on
-          the canvas container cannot clip this content. z-index:100 floats
-          above HUD, canvas, and LaserBar. touch-action:auto on buttons lets
-          iOS Safari route taps correctly. */}
+      {/* ══ IDLE OVERLAY ══ */}
       {isIdle && !showLeaderboard && (
         <div className="li-overlay">
           <div className="li-overlay-box">
-            <div className="li-overlay-eyebrow">HEISS-LAB PROTOTYPE</div>
+            <div className="li-overlay-eyebrow">HEISS-LAB · 6 LENTES DA MATEMÁTICA BÁSICA</div>
             <h2 className="li-overlay-title">
               <span className="li-glow-cyan">Logic</span>{' '}
               <span className="li-glow-magenta">Invaders</span>
             </h2>
             <p className="li-overlay-sub">
-              Aliens descem com equações matemáticas. Você tem <strong>2 armas</strong>:
+              Descubra atalhos visuais para resolver continhas de cabeça. Escolha seu ritmo:
             </p>
+
+            {/* ── Mode Selector ── */}
+            <div className="li-mode-selector" role="radiogroup" aria-label="Modo de jogo">
+              <button
+                type="button"
+                className={`li-mode-btn ${gameMode === 'discovery' ? 'li-mode-btn--active' : ''}`}
+                onClick={() => setGameMode('discovery')}
+                style={{ touchAction: 'auto', pointerEvents: 'auto' }}
+              >
+                <span className="li-mode-title">🌱 Modo Descoberta</span>
+                <span className="li-mode-desc">Luz Guia sempre acesa · Ritmo tranquilo</span>
+              </button>
+              <button
+                type="button"
+                className={`li-mode-btn ${gameMode === 'arcade' ? 'li-mode-btn--active' : ''}`}
+                onClick={() => setGameMode('arcade')}
+                style={{ touchAction: 'auto', pointerEvents: 'auto' }}
+              >
+                <span className="li-mode-title">⚡ Modo Arcade</span>
+                <span className="li-mode-desc">Velocidade total · Dica se hesitar</span>
+              </button>
+            </div>
+
             <div className="li-overlay-mechanic-list">
               <div className="li-overlay-mechanic">
-                <span className="li-m-icon">🔫</span>
-                <span><strong>Bala normal</strong> (Espaço/Segure) — causa 1 de dano. 10 tiros para destruir.</span>
-              </div>
-              <div className="li-overlay-mechanic">
                 <span className="li-m-icon">🧮</span>
-                <span><strong>Matar-Math</strong> (Clique na bolha certa) — mata instantâneo + LASER por 5s!</span>
+                <span>
+                  <strong>Raio de Plasma (Matar-Math)</strong> — Clique na bolha certa ou aperte{' '}
+                  <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> para destruir o alien na hora + ganhar{' '}
+                  <strong>LASER por 5s!</strong>
+                </span>
               </div>
               <div className="li-overlay-mechanic">
-                <span className="li-m-icon">🎲</span>
-                <span><strong>Projéteis inimigos</strong> — aliens atiram modificadores (×2…÷8) que alteram sua pontuação!</span>
+                <span className="li-m-icon">💡</span>
+                <span>
+                  <strong>6 Lentes Mentais</strong> — Veja como desmontar somas, subtrações, dobros e metades sem decorar tabuada.
+                </span>
+              </div>
+              <div className="li-overlay-mechanic">
+                <span className="li-m-icon">🔫</span>
+                <span>
+                  <strong>Bala Normal</strong> (<kbd>Espaço</kbd> / segure) — Causa 1 de dano no corpo do alien e destrói blocos dos Bosses.
+                </span>
               </div>
             </div>
+
             <div className="li-overlay-keys">
               <span><kbd>A</kbd><kbd>D</kbd> Mover</span>
-              <span><kbd>Espaço</kbd> Atirar (segure)</span>
-              <span>📱 Segure e deslize</span>
-              <span>🖱️ Clique nas bolhas</span>
+              <span><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> Bolhas</span>
+              <span><kbd>Espaço</kbd> Atirar</span>
+              <span>🖱️/📱 Toque nas bolhas</span>
             </div>
+
             <div className="li-overlay-action-row">
               <button
                 id="li-start-btn"
                 className="li-start-btn"
                 onClick={() => {
-                if (wrapperRef.current) requestFullScreen(wrapperRef.current);
-                startGame();
-              }}
+                  if (wrapperRef.current) requestFullScreen(wrapperRef.current);
+                  startGame(gameMode);
+                }}
                 style={{ touchAction: 'auto', pointerEvents: 'auto' }}
               >
                 ⛶ INICIAR (TELA CHEIA)
@@ -328,12 +445,12 @@ export function LogicInvadersGame() {
       {/* ── Mobile hint ── */}
       {isPlaying && (
         <p className="li-mobile-hint" style={{ textAlign: 'center', marginTop: 8 }}>
-          📱 Segure o campo para atirar · Deslize para mover · Clique nas bolhas para Matar-Math · ⚠️ Desvie dos projéteis!
+          📱 Toque nas bolhas (ou aperte 1, 2, 3) para Matar-Math · Segure e deslize para mover e atirar!
         </p>
       )}
 
       {/* ══════════════════════════════════════════════
-          SAVE SCORE OVERLAY
+          SAVE SCORE OVERLAY + GRIMÓRIO DA SESSÃO
       ══════════════════════════════════════════════ */}
       {showSaveOverlay && (
         <div className="li-overlay">
@@ -352,7 +469,34 @@ export function LogicInvadersGame() {
                 <span className="li-save-stat-label">ONDA</span>
                 <span className="li-save-stat-value" style={{ color: '#ff00ff' }}>{wave}</span>
               </div>
+              <div className="li-save-stat">
+                <span className="li-save-stat-label">MATAR-MATH</span>
+                <span className="li-save-stat-value" style={{ color: '#00ff88' }}>
+                  {sessionSummary.mathKillsTotal}
+                </span>
+              </div>
+              <div className="li-save-stat">
+                <span className="li-save-stat-label">SEQUÊNCIA MÁX</span>
+                <span className="li-save-stat-value" style={{ color: '#ffdd44' }}>
+                  🔥{sessionSummary.bestStreak || bestStreak}
+                </span>
+              </div>
             </div>
+
+            {sessionSummary.masteredTips.length > 0 && (
+              <div className="li-grimoire-box">
+                <div className="li-grimoire-title">
+                  🧠 Truques Mentais Dominados na Sessão ({sessionSummary.masteredTips.length})
+                </div>
+                <ul className="li-grimoire-list">
+                  {sessionSummary.masteredTips.slice(-4).map((tip, idx) => (
+                    <li key={idx} className="li-grimoire-item">
+                      {tip}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
 
             <label className="li-save-label" htmlFor="li-player-name-input">
               Seu nome no placar:

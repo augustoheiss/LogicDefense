@@ -1,19 +1,28 @@
 // ============================================================
-// LOGIC INVADERS — GAME ENGINE HOOK  (v4 — Boss Mode + Overdrive)
+// LOGIC INVADERS — GAME ENGINE HOOK  (v5 — 6 Lentes da Matemática Básica)
 // ─ No Game Over from invaders reaching bottom → Difficulty Surge
-// ─ Enemy projectiles with score multiplier modifiers (×2…÷8)
-// ─ Laser auto-fires, all bubbles neutral cyan
-// ─ Screen-shake, starfield, HP bars
-// ─ Boss Mode: VoxelBoss + column-gated collision + Overdrive
+// ─ 6 Lenses of Basic Math + "💡 Luz Guia" scaffolding
+// ─ Unified controls: Click/Tap bubbles OR press [1] [2] [3] for Plasma Lock
+// ─ Procedural Web Audio API sound effects (zero external assets)
+// ─ Boss Mode: VoxelBoss + column-gated collision + Overdrive (no visual spoiler)
 // ============================================================
 import { useRef, useEffect, useCallback } from 'react';
-import type { GameState, Invader, AnswerBubble, ScoreModifier, VoxelBossState } from '../types';
+import type {
+  GameState,
+  GameMode,
+  Invader,
+  AnswerBubble,
+  ScoreModifier,
+  VoxelBossState,
+  MathInsightEvent,
+} from '../types';
 import { generateEquation, generateAnswerBubbles } from '../utils/mathEngine';
 import { formatScore } from '../utils/formatScore';
 import {
   createBoss, hitBossVoxel, isBossDefeated,
   getBossColumnBounds, LOGICAL_COLS, BOSS_NAMES,
 } from '../utils/VoxelBoss';
+import { soundEngine } from '../utils/soundEngine';
 
 // ─── Constants ───────────────────────────────────────────────
 const CANVAS_W = 700;
@@ -27,10 +36,10 @@ const BULLET_COOLDOWN_MS = 200;
 const INVADER_W = 100;
 const INVADER_H = 58;
 const INVADER_MAX_HP = 10;
-const BASE_INVADER_SPEED = 0.45;
+const BASE_INVADER_SPEED = 0.42;
 const MAX_INVADERS = 5;
-const INITIAL_SPAWN_INTERVAL_MS = 2400;
-const MIN_SPAWN_INTERVAL_MS = 800;
+const INITIAL_SPAWN_INTERVAL_MS = 2500;
+const MIN_SPAWN_INTERVAL_MS = 850;
 const SPAWN_DECREASE_PER_SURGE = 200;      // reduce spawn interval on each surge
 const RECOVERY_PER_KILL     = 0.12;        // difficulty drop per Math Kill
 const RECOVERY_SPAWN_RESTORE = 120;        // ms restored to spawn interval per kill
@@ -38,38 +47,38 @@ const RECOVERY_FLASH_FRAMES = 22;          // frames for cyan recovery flash
 const SPEED_LERP_RATE        = 0.04;       // per-frame lerp toward target speed (smooth)
 // ── Natural Wave Progression ────────────────────────────────────
 const WAVE_ADVANCE_KILLS = 12;             // destroy this many invaders → natural wave up
-const WAVE_ADVANCE_MS    = 28_000;        // OR survive this many ms → natural wave up
+const WAVE_ADVANCE_MS    = 28_000;         // OR survive this many ms → natural wave up
 const NATURAL_WAVE_DIFFICULTY_STEP = 0.15; // lighter than surge (+0.25)
-const NATURAL_WAVE_SPAWN_RESTORE   = 80;  // partial spawn interval restore on natural advance
-const WAVE_MILESTONE_FLASH_FRAMES  = 30;  // frames for the teal milestone flash
-const WRONG_BUBBLE_MULTIPLIER = 1.35;
+const NATURAL_WAVE_SPAWN_RESTORE   = 80;   // partial spawn interval restore on natural advance
+const WAVE_MILESTONE_FLASH_FRAMES  = 30;   // frames for the teal milestone flash
+const WRONG_BUBBLE_MULTIPLIER_ARCADE = 1.35;
+const WRONG_BUBBLE_MULTIPLIER_DISCOVERY = 1.16;
 const LASER_MODE_MS = 5000;
 const LASER_DAMAGE_PER_FRAME = 100;
-const BUBBLE_ORBIT_R = 80;   // distance from invader centre → bubbles orbit further apart
-const BUBBLE_HIT_R   = 40;   // visual + collision radius (2× original 20px)
+const BUBBLE_HIT_R   = 40;   // visual + collision radius (80px diameter)
 const SHAKE_FRAMES = 22;
 const ENEMY_PROJECTILE_SPEED = 3.5;
-const ENEMY_SHOOT_COOLDOWN_MS = 4000;      // each invader shoots every ~4s
+const ENEMY_SHOOT_COOLDOWN_MS = 4200;      // each invader shoots every ~4.2s
 const PLAYER_HIT_FLASH_FRAMES = 20;
-const PLAYER_HITBOX_R = 16;               // radius for projectile collision
-const SURGE_FLASH_FRAMES = 28;            // frames for red surge flash overlay
+const PLAYER_HITBOX_R = 16;                // radius for projectile collision
+const SURGE_FLASH_FRAMES = 28;             // frames for red surge flash overlay
 
 // ── Boss Mode constants ──────────────────────────────────────────
-const BOSS_SPAWN_EVERY_N_WAVES    = 5;     // boss gauntlet on wave 5, 10, 15…
-const BOSS_GAUNTLET_COUNT         = 4;     // sequential bosses per gauntlet wave
-const BOSS_ENTRY_SPEED            = 1.2;  // px/frame during slide-in
-const BOSS_ENTRY_Y_TARGET         = 30;   // final top-of-boss canvas Y
-const BOSS_VOXEL_SCORE            = 25;   // score per voxel destroyed
+const BOSS_SPAWN_EVERY_N_WAVES     = 5;    // boss gauntlet on wave 5, 10, 15…
+const BOSS_GAUNTLET_COUNT          = 4;    // sequential bosses per gauntlet wave
+const BOSS_ENTRY_SPEED             = 1.2;  // px/frame during slide-in
+const BOSS_ENTRY_Y_TARGET          = 38;   // final top-of-boss canvas Y
+const BOSS_VOXEL_SCORE             = 25;   // score per voxel destroyed
 const BOSS_INTER_SPAWN_COOLDOWN_MS = 2000; // ms between sequential boss spawns
-const BOSS_DEFEAT_BONUS = 2000;           // lump-sum when boss dies
+const BOSS_DEFEAT_BONUS            = 2000; // lump-sum when boss dies
 // ── Overdrive constants ─────────────────────────────────────────
-const OVERDRIVE_DURATION_MS      = 5_000;
-const OVERDRIVE_SHOOT_INTERVAL_MS = 80;   // ~12.5 shots/sec  
+const OVERDRIVE_DURATION_MS       = 5_000;
+const OVERDRIVE_SHOOT_INTERVAL_MS = 80;    // ~12.5 shots/sec
 const OVERDRIVE_SPEED_MULT        = 1.6;
 // 5-way spread in degrees (converts to radians inside fireBulletOverdrive)
 const OVERDRIVE_SPREAD_ANGLES = [-25, -12, 0, 12, 25] as const;
 
-// Score modifier pool: 7 buffs + 7 debuffs + 2 debuffs = 16 total
+// Score modifier pool: 7 buffs + 7 debuffs
 const MODIFIER_POOL: ScoreModifier[] = [
   { type: 'buff',   factor: 2, label: '×2' },
   { type: 'buff',   factor: 3, label: '×3' },
@@ -90,16 +99,22 @@ const MODIFIER_POOL: ScoreModifier[] = [
 const INVADER_COLORS = ['#00d4ff', '#ff00ff', '#00ff88', '#ffaa00', '#ff4488', '#aa88ff'];
 
 // ─── Initial State ────────────────────────────────────────────
-function makeInitialState(): GameState {
+function makeInitialState(mode: GameMode = 'discovery'): GameState {
   return {
     status: 'idle',
+    mode,
     score: 0,
     wave: 1,
     difficultyMultiplier: 1,
+    mathStreak: 0,
+    bestStreak: 0,
+    mathKillsTotal: 0,
+    masteredTips: [],
     invaders: [],
     bullets: [],
     enemyProjectiles: [],
     particles: [],
+    plasmaBeams: [],
     player: {
       x: CANVAS_W / 2 - PLAYER_W / 2,
       y: PLAYER_Y,
@@ -122,8 +137,9 @@ function makeInitialState(): GameState {
     spawnIntervalMs: INITIAL_SPAWN_INTERVAL_MS,
     killCount: 0,
     lastWaveAdvanceTs: 0,       // will be set when game starts
-    bossSpawnCooldownTs: 0,    // 0 = no cooldown active
-    bossesRemainingInWave: 0,  // 0 = no active gauntlet
+    bossSpawnCooldownTs: 0,     // 0 = no cooldown active
+    bossesRemainingInWave: 0,   // 0 = no active gauntlet
+    lastBossWaveTriggered: 0,   // tracks last wave that spawned a boss gauntlet
   };
 }
 
@@ -229,7 +245,8 @@ function triggerNaturalWave(state: GameState, now: number): void {
 // ─── Difficulty Surge (invader escaped) ──────────────────────
 function triggerDifficultySurge(state: GameState): void {
   state.difficultyMultiplier = parseFloat((state.difficultyMultiplier + 0.25).toFixed(2));
-  state.wave = Math.min(12, state.wave + 1);
+  // Fixed Bug #3: Uncapped wave progression on surge (was capped at 12)
+  state.wave += 1;
   state.spawnIntervalMs = Math.max(
     MIN_SPAWN_INTERVAL_MS,
     state.spawnIntervalMs - SPAWN_DECREASE_PER_SURGE
@@ -277,7 +294,6 @@ function triggerDifficultyRecovery(state: GameState): void {
   // Only trigger the visual flash when there is a real reduction
   if (state.difficultyMultiplier < prev) {
     state.player.recoveryFlashTimer = RECOVERY_FLASH_FRAMES;
-    // Floating positive feedback text
     const isStabilised = state.difficultyMultiplier <= 1.0;
     state.particles.push({
       id: state.nextId++,
@@ -302,7 +318,6 @@ function triggerDifficultyRecovery(state: GameState): void {
 // ─── Enemy projectile spawner ────────────────────────────────
 function spawnEnemyProjectile(state: GameState, inv: Invader): void {
   const mod = MODIFIER_POOL[Math.floor(Math.random() * MODIFIER_POOL.length)];
-  // Random trajectory: straight, slight left, slight right
   const angle = (Math.PI / 2) + (Math.random() - 0.5) * (Math.PI / 4);
   state.enemyProjectiles.push({
     id: state.nextId++,
@@ -318,36 +333,48 @@ function spawnEnemyProjectile(state: GameState, inv: Invader): void {
 function spawnInvader(state: GameState): void {
   if (state.invaders.length >= MAX_INVADERS) return;
 
-  // Pass difficultyMultiplier so math gets harder with each surge
-  const { display, answer } = generateEquation(state.wave, state.difficultyMultiplier);
+  const eq = generateEquation(state.wave, state.difficultyMultiplier, false);
   const color = INVADER_COLORS[Math.floor(Math.random() * INVADER_COLORS.length)];
-  // Speed scales with wave & difficulty but is hard-capped so late-game stays humanly playable.
-  // Math difficulty (generateEquation) grows uncapped — only physical speed is limited here.
-  const speedBonus = Math.min(1.2, (state.wave - 1) * 0.02 + (state.difficultyMultiplier - 1) * 0.06);
-  const baseSpeed = BASE_INVADER_SPEED + speedBonus;
-  const answers = generateAnswerBubbles(answer);
+  // Gentle speed in Discovery mode so players have time to read the mental math lens
+  const modeFactor = state.mode === 'discovery' ? 0.78 : 1.0;
+  const speedBonus = Math.min(1.1, (state.wave - 1) * 0.018 + (state.difficultyMultiplier - 1) * 0.05);
+  const baseSpeed = (BASE_INVADER_SPEED + speedBonus) * modeFactor;
+  const answers = generateAnswerBubbles(eq.answer, eq.customBubbles);
 
   const existingXs = state.invaders.map((inv) => inv.x);
   let x: number;
   let attempts = 0;
   do {
-    x = 20 + Math.random() * (CANVAS_W - INVADER_W - 40);
+    x = 75 + Math.random() * (CANVAS_W - INVADER_W - 150);
     attempts++;
-  } while (existingXs.some((ex) => Math.abs(ex - x) < INVADER_W + 20) && attempts < 20);
+  } while (existingXs.some((ex) => Math.abs(ex - x) < INVADER_W + 30) && attempts < 20);
 
   state.invaders.push({
     id: state.nextId++,
-    x, y: -INVADER_H - 10,
-    width: INVADER_W, height: INVADER_H,
-    equation: display, answer,
-    hp: INVADER_MAX_HP, maxHp: INVADER_MAX_HP,
-    speed: baseSpeed, baseSpeed,
+    x,
+    y: -INVADER_H - 10,
+    width: INVADER_W,
+    height: INVADER_H,
+    equation: eq.display,
+    answer: eq.answer,
+    lensType: eq.lensType,
+    lensTitle: eq.lensTitle,
+    shortHint: eq.shortHint,
+    fullTip: eq.fullTip,
+    spawnTimeMs: performance.now(),
+    hintRevealed: state.mode === 'discovery',
+    hp: INVADER_MAX_HP,
+    maxHp: INVADER_MAX_HP,
+    speed: baseSpeed,
+    baseSpeed,
     speedMultiplier: 1,
-    flashRed: 0, flashGreen: 0,
-    hit: false, color,
+    flashRed: 0,
+    flashGreen: 0,
+    hit: false,
+    color,
     wobble: Math.random() * Math.PI * 2,
     answers,
-    lastShotTime: performance.now() + Math.random() * 2000, // stagger initial shots
+    lastShotTime: performance.now() + Math.random() * 2000,
   });
 }
 
@@ -362,12 +389,13 @@ function destroyInvader(
   const cx = inv.x + inv.width / 2;
   const cy = inv.y + inv.height / 2;
 
-  const bonus = isMathKill ? 300 : laserKill ? 150 : 100;
+  const streakBonus = isMathKill ? Math.min(500, state.mathStreak * 25) : 0;
+  const bonus = (isMathKill ? 300 : laserKill ? 150 : 100) + streakBonus;
   const count = isMathKill ? 36 : laserKill ? 24 : 18;
   spawnExplosion(state, cx, cy, inv.color, count, `+${bonus}`);
   state.score += bonus + Math.floor(state.wave * 10);
   state.invaders.splice(ii, 1);
-  state.killCount++;  // ── natural progression counter
+  state.killCount++;
 
   if (isMathKill) {
     state.player.laserModeTimer = LASER_MODE_MS;
@@ -381,26 +409,34 @@ function destroyInvader(
         life: 1, color: '#ffffff', size: 8,
       });
     }
-    // ── Dynamic Difficulty Recovery: correct answer rewards the player ──
     triggerDifficultyRecovery(state);
   }
-
-  // Wave is exclusively owned by the surge system.
 }
 
-// ─── Bubble position helper ───────────────────────────────────
+// ─── Bubble position helper (Fixed Bug #1: Never Clipped Off-Screen) ──────────
 function bubblePos(inv: Invader, bubble: AnswerBubble): { bx: number; by: number } {
   const cx = inv.x + inv.width / 2;
-  const cy = inv.y + inv.height * 0.65;
-  return {
-    bx: cx + Math.cos(bubble.angle) * BUBBLE_ORBIT_R,
-    by: cy + Math.sin(bubble.angle) * BUBBLE_ORBIT_R,
-  };
+  const slot =
+    bubble.slotIndex ??
+    (Math.abs(bubble.angle - Math.PI) < 0.2
+      ? 0
+      : Math.abs(bubble.angle - Math.PI * 1.5) < 0.2
+      ? 1
+      : 2);
+
+  // Ordered Left (0) → Center-Top (1) → Right (2) so keys [1], [2], [3] map naturally
+  const rawBx = slot === 0 ? cx - 78 : slot === 1 ? cx : cx + 78;
+  const rawBy = slot === 1 ? inv.y - 26 : inv.y + 24;
+
+  // Clamp inside canvas bounds so the top bubble is 100% visible & clickable from frame 1
+  const bx = Math.max(BUBBLE_HIT_R + 6, Math.min(CANVAS_W - BUBBLE_HIT_R - 6, rawBx));
+  const by = Math.max(BUBBLE_HIT_R + 8, rawBy);
+
+  return { bx, by };
 }
 
 // ─── Boss helper functions ────────────────────────────────────
 
-/** Small voxel-sized explosion when a single boss voxel is destroyed */
 function spawnBossVoxelExplosion(state: GameState, vx: number, vy: number, color: string): void {
   for (let i = 0; i < 6; i++) {
     const angle = (Math.PI * 2 * i) / 6 + Math.random() * 0.4;
@@ -413,7 +449,6 @@ function spawnBossVoxelExplosion(state: GameState, vx: number, vy: number, color
   }
 }
 
-/** Dramatic multi-burst explosion when the whole boss is defeated */
 function spawnBossDestroyedExplosion(state: GameState, cx: number, cy: number): void {
   const colors = ['#ff4400', '#ffaa00', '#ffdd00', '#ff00ff', '#00ffff', '#ffffff'];
   for (let ring = 0; ring < 5; ring++) {
@@ -431,7 +466,6 @@ function spawnBossDestroyedExplosion(state: GameState, cx: number, cy: number): 
       });
     }
   }
-  // Giant score text
   state.particles.push({
     id: state.nextId++, x: cx, y: cy - 30,
     vx: 0, vy: -2.5, life: 1,
@@ -444,21 +478,20 @@ function spawnBossDestroyedExplosion(state: GameState, cx: number, cy: number): 
   });
 }
 
-/** Activate Overdrive on the player ship */
 function triggerOverdrive(state: GameState): void {
   state.player.isOverdrive = true;
   state.player.overdriveTtl = OVERDRIVE_DURATION_MS;
   state.player.lastOverdriveShot = 0;
   state.player.shakeTimer = SHAKE_FRAMES;
-  // Flash + notification particle
   state.player.recoveryFlashTimer = 25;
+  soundEngine.playOverdriveStart();
+
   state.particles.push({
     id: state.nextId++,
     x: CANVAS_W / 2, y: CANVAS_H / 2,
     vx: 0, vy: -1.8, life: 1,
     color: '#ffdd00', size: 24, text: '⚡ OVERDRIVE!',
   });
-  // Starburst around player
   const px = state.player.x + PLAYER_W / 2;
   const py = state.player.y;
   for (let i = 0; i < 20; i++) {
@@ -471,9 +504,8 @@ function triggerOverdrive(state: GameState): void {
   }
 }
 
-/** Entry spark effect when boss first appears (called each frame during slide-in) */
 function spawnBossEntryParticles(state: GameState, bossX: number, bossY: number, bossW: number): void {
-  if (Math.random() > 0.4) return; // only some frames
+  if (Math.random() > 0.4) return;
   const x = bossX + Math.random() * bossW;
   const y = bossY + Math.random() * 20;
   const colors = ['#ff4400', '#ff8800', '#ffdd00', '#ff00ff'];
@@ -487,28 +519,21 @@ function spawnBossEntryParticles(state: GameState, bossX: number, bossY: number,
 }
 
 // ─── Canvas Renderer ─────────────────────────────────────────────────────────
-// Three-layer parallax starfield
 interface StarPoint { x: number; y: number; r: number; speed: number; opacity: number; layer: 0|1|2; twinkle: number; twinkleDir: number }
 let starfield: StarPoint[] = [];
 function ensureStarfield(): void {
   if (starfield.length > 0) return;
-  // Layer 0: distant tiny dots
   for (let i = 0; i < 80; i++) {
     starfield.push({ x: Math.random()*CANVAS_W, y: Math.random()*CANVAS_H, r: 0.4+Math.random()*0.5, speed: 0.08+Math.random()*0.12, opacity: 0.25+Math.random()*0.35, layer: 0, twinkle: Math.random(), twinkleDir: Math.random()>0.5?1:-1 });
   }
-  // Layer 1: mid stars
   for (let i = 0; i < 45; i++) {
     starfield.push({ x: Math.random()*CANVAS_W, y: Math.random()*CANVAS_H, r: 0.8+Math.random()*1.0, speed: 0.22+Math.random()*0.28, opacity: 0.4+Math.random()*0.4, layer: 1, twinkle: Math.random(), twinkleDir: Math.random()>0.5?1:-1 });
   }
-  // Layer 2: bright foreground sparkle stars
   for (let i = 0; i < 18; i++) {
     starfield.push({ x: Math.random()*CANVAS_W, y: Math.random()*CANVAS_H, r: 1.5+Math.random()*2.0, speed: 0.5+Math.random()*0.7, opacity: 0.7+Math.random()*0.3, layer: 2, twinkle: Math.random(), twinkleDir: Math.random()>0.5?1:-1 });
   }
 }
 
-// ── Pixel-art voxel invader templates (11 cols × 8 rows, symmetric) ──────────
-// Each row is defined Left→Centre (6 cols), then mirrored right.
-// 0 = empty, 1 = body block
 const INVADER_PATTERNS: number[][][] = [
   // Type 0 — Classic Crab
   [
@@ -545,7 +570,6 @@ const INVADER_PATTERNS: number[][][] = [
   ],
 ];
 
-/** Draw one pixel/voxel block with full neon glow */
 function drawBlock(
   ctx: CanvasRenderingContext2D,
   bx: number, by: number,
@@ -557,14 +581,12 @@ function drawBlock(
   ctx.shadowBlur = glowIntensity;
   ctx.fillStyle = color;
   ctx.fillRect(bx + 1, by + 1, bw - 2, bh - 2);
-  // Highlight top-left corner for pseudo-3D voxel feel
   ctx.shadowBlur = 0;
   ctx.fillStyle = 'rgba(255,255,255,0.35)';
   ctx.fillRect(bx + 1, by + 1, bw - 2, 2);
   ctx.fillRect(bx + 1, by + 1, 2, bh - 2);
 }
 
-/** Render a full voxel invader at position with animation frame */
 function drawVoxelInvader(
   ctx: CanvasRenderingContext2D,
   inv: Invader,
@@ -576,24 +598,20 @@ function drawVoxelInvader(
 ): void {
   const type = inv.id % 3;
   const pattern = INVADER_PATTERNS[type];
-  const rows = pattern.length;            // 8
-  const cols = 11;                         // mirrored: 6 half → 11 full
-  const halfCols = pattern[0].length;     // 6
+  const rows = pattern.length;
+  const cols = 11;
+  const halfCols = pattern[0].length;
 
   const cellW = inv.width / cols;
   const cellH = inv.height / rows;
 
-  // Determine glow color
   const glowColor = flashingRed ? '#ff2244' : flashingGreen ? '#00ff88' : mainColor;
   const glowIntensity = flashingRed ? 24 : flashingGreen ? 22 : 12;
-
-  // Leg animation: alternate last row offset every ~30 frames
   const legShift = animFrame % 2 === 0 ? 0 : 1;
 
   ctx.save();
   ctx.shadowColor = glowColor;
   ctx.shadowBlur = glowIntensity + 8;
-  // Outer body glow rect (translucent)
   ctx.fillStyle = `${glowColor}18`;
   ctx.fillRect(inv.x + wobbleX - 4, inv.y - 2, inv.width + 8, inv.height + 4);
   ctx.shadowBlur = 0;
@@ -603,11 +621,8 @@ function drawVoxelInvader(
       const pixel = pattern[row][halfCol];
       if (!pixel) continue;
 
-      // Animate leg rows (last 2 rows)
       const isLeg = row >= rows - 2;
       const rowOffset = isLeg ? legShift * cellH * 0.3 : 0;
-
-      // Mirror: left half
       const mirrorCol = cols - 1 - halfCol;
 
       const bxLeft  = inv.x + wobbleX + halfCol * cellW;
@@ -615,14 +630,10 @@ function drawVoxelInvader(
       const by = inv.y + row * cellH + rowOffset;
 
       drawBlock(ctx, bxLeft,  by, cellW, cellH, glowColor, glowIntensity);
-      // Only draw right mirror if it's a different column
       if (halfCol < cols - halfCol) {
         drawBlock(ctx, bxRight, by, cellW, cellH, glowColor, glowIntensity);
       }
     }
-    // Draw centre column (halfCols - 1 maps to col index halfCols-1 in full grid)
-    // Actually centre col is handled by halfCol = 0 if using mirror approach
-    // Middle col (col 5) uses halfCol index 5:
     const centrePixel = pattern[row][halfCols - 1];
     if (centrePixel) {
       const bxCentre = inv.x + wobbleX + (halfCols - 1) * cellW;
@@ -633,7 +644,6 @@ function drawVoxelInvader(
   ctx.restore();
 }
 
-/** Sparkle cross effect for bright foreground stars */
 function drawSparkle(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, alpha: number, color: string): void {
   ctx.save();
   ctx.globalAlpha = alpha;
@@ -650,11 +660,9 @@ function drawSparkle(ctx: CanvasRenderingContext2D, x: number, y: number, r: num
   ctx.restore();
 }
 
-// Engine exhaust particle pool (separate from game particles for performance)
 interface ExhaustParticle { x: number; y: number; vx: number; vy: number; life: number; color: string; size: number }
 const exhaustPool: ExhaustParticle[] = [];
 function updateExhaust(px: number, py: number, pw: number, ph: number, laserActive: boolean): void {
-  // Spawn new exhaust
   const count = laserActive ? 5 : 2;
   for (let i = 0; i < count; i++) {
     const side = Math.random() > 0.5 ? 0.3 : 0.7;
@@ -671,7 +679,6 @@ function updateExhaust(px: number, py: number, pw: number, ph: number, laserActi
       size: laserActive ? 4+Math.random()*5 : 2+Math.random()*4,
     });
   }
-  // Cap pool
   if (exhaustPool.length > 120) exhaustPool.splice(0, exhaustPool.length - 120);
 }
 function drawExhaust(ctx: CanvasRenderingContext2D): void {
@@ -688,15 +695,14 @@ function drawExhaust(ctx: CanvasRenderingContext2D): void {
   }
 }
 
-// ─── Boss renderer ────────────────────────────────────────────
-
-
-/** Full VoxelBoss renderer — Two-pass: geometry first, text last (correct z-order) */
+// ─── Boss renderer (Fixed Bug #2: No Visual Spoiler Before Answering) ─────────
 function drawVoxelBoss(
   ctx: CanvasRenderingContext2D,
   boss: VoxelBossState,
   _animFrame: number,
   tick: number,
+  isOverdrive: boolean,
+  mode: GameMode,
 ): void {
   const { x: bx, y: by, voxels, palette: bossPalette } = boss;
   const bRows     = boss.rows;
@@ -705,23 +711,18 @@ function drawVoxelBoss(
   const bVoxelH   = boss.voxelH;
   const bVoxPerLC = boss.voxelsPerLogicalCol;
 
-  // Phase-based palette comes from the boss design itself
   const palette = bossPalette;
-
-  // Strobe speed: phase 3 = very fast strobe
   const strobeSpeed = boss.phase === 3 ? 3 : boss.phase === 2 ? 8 : 16;
   const strobing = Math.floor(tick / strobeSpeed) % 2 === 0;
 
-  // Subtle shimmer on correct column
-  const shimmerAlpha = boss.phase === 3
+  // Only shimmer the correct column AFTER the player has unlocked Overdrive!
+  const shimmerAlpha = (!isOverdrive || boss.phase === 3)
     ? 0
-    : 0.04 + 0.03 * Math.sin(tick * 0.08);
+    : 0.06 + 0.04 * Math.sin(tick * 0.08);
 
-  // Core block pulse (warning beacon for players)
   const corePulse = 0.6 + 0.4 * Math.sin(tick * 0.18);
 
   // ════ PASS 1 — Geometry ════════════════════════════════
-
   for (let r = 0; r < bRows; r++) {
     for (let vc = 0; vc < bCols; vc++) {
       if (!voxels[r][vc]) continue;
@@ -733,20 +734,17 @@ function drawVoxelBoss(
       const isCorrectCol = logicalCol === boss.correctColIdx;
       const isCore = r === boss.coreBlock.row && vc === boss.coreBlock.col;
 
-      // Alternating-row flicker in phase 2+
       const flickerAlpha = (boss.phase >= 2 && !strobing && r % 2 === 0) ? 0.5 : 1.0;
 
       ctx.save();
       ctx.globalAlpha = flickerAlpha;
 
       if (isCore) {
-        // ── Core block: pulsing danger glow (red/white) ─────────────
         const coreColor = tick % 20 < 10 ? '#ff0000' : '#ffffff';
         ctx.shadowColor = coreColor;
         ctx.shadowBlur  = 20 * corePulse;
         ctx.fillStyle   = coreColor;
         ctx.fillRect(vxPx + 1, vyPx + 1, bVoxelW - 2, bVoxelH - 2);
-        // Outer danger ring
         ctx.shadowBlur  = 0;
         ctx.strokeStyle = '#ff0000';
         ctx.lineWidth   = 1.5;
@@ -757,12 +755,10 @@ function drawVoxelBoss(
         ctx.shadowBlur = boss.phase === 3 ? 18 : 10;
         ctx.fillStyle = colColor;
         ctx.fillRect(vxPx + 1, vyPx + 1, bVoxelW - 2, bVoxelH - 2);
-        // Pseudo-3D highlight edge
         ctx.shadowBlur = 0;
         ctx.fillStyle = 'rgba(255,255,255,0.3)';
         ctx.fillRect(vxPx + 1, vyPx + 1, bVoxelW - 2, 2);
         ctx.fillRect(vxPx + 1, vyPx + 1, 2, bVoxelH - 2);
-        // Correct-column shimmer
         if (isCorrectCol && shimmerAlpha > 0) {
           ctx.globalAlpha = shimmerAlpha;
           ctx.fillStyle = '#ffdd00';
@@ -815,101 +811,104 @@ function drawVoxelBoss(
   // ════════════════════════════════════════════════════════
   // PASS 2 — Text: answer labels + equation pill (always on top)
   // ════════════════════════════════════════════════════════
-
-  // ── Answer pills — centred inside each logical column, 1/3 down from boss top ──
-  // Positioning: labelY sits at boss.y + boss.height * 0.38
-  // so the pill floats clearly inside the voxel grid with room above and below.
   const answerLabelY = by + boss.height * 0.38;
 
   for (let lc = 0; lc < LOGICAL_COLS; lc++) {
     const { x: colX, w: colW } = getBossColumnBounds(boss, lc as 0|1|2);
     const labelX = colX + colW / 2;
     const answer = boss.columnAnswers[lc];
-    const isCorrect = lc === boss.correctColIdx;
+    const highlightCorrect = lc === boss.correctColIdx && isOverdrive;
 
-    const pillW = colW - 16;  // nearly full column width
-    const pillH = 50;
+    const pillW = colW - 16;
+    const pillH = 54;
     const pillR = 10;
     const pillX = labelX - pillW / 2;
     const pillY = answerLabelY - pillH / 2;
 
     ctx.save();
-    // Dark opaque pill background — fully covers voxels beneath text
     ctx.shadowBlur = 0;
-    ctx.fillStyle = isCorrect ? 'rgba(40, 18, 0, 0.92)' : 'rgba(5, 5, 20, 0.88)';
+    // Fixed Bug #2: All 3 columns look identical until Overdrive is triggered
+    ctx.fillStyle = highlightCorrect ? 'rgba(40, 24, 0, 0.94)' : 'rgba(5, 5, 20, 0.90)';
     ctx.beginPath();
     ctx.roundRect(pillX, pillY, pillW, pillH, pillR);
     ctx.fill();
 
-    // Coloured border (correct col = thicker, same colour as that column)
-    ctx.strokeStyle = palette[lc % 3];
-    ctx.lineWidth = isCorrect ? 2.5 : 1.5;
+    ctx.strokeStyle = highlightCorrect ? '#ffdd00' : palette[lc % 3];
+    ctx.lineWidth = highlightCorrect ? 2.5 : 2.0;
     ctx.globalAlpha = 0.9;
     ctx.stroke();
     ctx.globalAlpha = 1;
 
-    // Answer number — large and readable
+    // Answer number
     ctx.shadowColor = palette[lc % 3]; ctx.shadowBlur = 14;
     ctx.fillStyle = '#ffffff';
     ctx.font = `bold 26px 'Courier New', monospace`;
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText(String(answer), labelX, answerLabelY - 5);
+    ctx.fillText(String(answer), labelX, answerLabelY - 6);
 
-    // Small column indicator (A / B / C) below the number
+    // Column shortcut indicator ([1] A / [2] B / [3] C)
     ctx.shadowBlur = 0;
     ctx.fillStyle = palette[lc % 3];
     ctx.font = `bold 11px 'Courier New', monospace`;
-    ctx.fillText(['A', 'B', 'C'][lc], labelX, answerLabelY + 16);
+    ctx.fillText(`[${lc + 1}] COLUNA ${['A', 'B', 'C'][lc]}`, labelX, answerLabelY + 16);
 
     ctx.restore();
   }
 
   // ── Equation pill — pinned at top of canvas, always visible ──
   {
-    const EQ_FONT_SIZE = 36;
+    const showHint = boss.hintRevealed || mode === 'discovery';
+    const EQ_FONT_SIZE = 32;
     const eqFont = `bold ${EQ_FONT_SIZE}px 'Courier New', monospace`;
     const eqX = CANVAS_W / 2;
-    // Pill top = 4px from canvas edge; centre of text sits below
-    const eqTextY = 36;
 
     ctx.save();
     ctx.font = eqFont;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     const tw = ctx.measureText(boss.equation).width;
-    const padX = 22, padY = 10;
-    const pillW = tw + padX * 2; // no ring offset needed — equation is fixed
-    const pillH = EQ_FONT_SIZE + padY * 2;
+    ctx.font = `bold 12px 'Courier New', monospace`;
+    const hw = showHint ? ctx.measureText(`💡 ${boss.shortHint}`).width : 0;
+
+    const padX = 24;
+    const pillW = Math.max(tw, hw, 220) + padX * 2;
+    const pillH = showHint ? 74 : 54;
     const pillX = eqX - pillW / 2;
     const pillY = 4;
 
-    // Background
     ctx.shadowColor = '#ff8800'; ctx.shadowBlur = 22;
     ctx.fillStyle = 'rgba(0, 0, 0, 0.94)';
     ctx.beginPath(); ctx.roundRect(pillX, pillY, pillW, pillH, 12); ctx.fill();
 
-    // Border
     ctx.strokeStyle = '#ff6600'; ctx.lineWidth = 2; ctx.globalAlpha = 0.85;
     ctx.stroke(); ctx.globalAlpha = 1;
 
-    // "👾 BOSS NAME" eyebrow label
-    ctx.shadowBlur = 0; ctx.fillStyle = '#ff4400';
-    ctx.font = `bold 9px 'Courier New', monospace`;
-    ctx.fillText(`👾  ${boss.bossName}`, pillX + pillW / 2, pillY + 7);
+    // "👾 BOSS NAME · LENS" eyebrow label
+    ctx.shadowBlur = 0; ctx.fillStyle = '#ffaa44';
+    ctx.font = `bold 10px 'Courier New', monospace`;
+    ctx.fillText(`👾 ${boss.bossName} · ${boss.lensTitle}`, eqX, pillY + 11);
 
-    // Equation text — thick stroke then coloured fill (cuts through any bg glow)
+    // Equation text
+    const eqTextY = pillY + 34;
     ctx.font = eqFont;
     ctx.lineWidth = 6; ctx.strokeStyle = 'rgba(0,0,0,0.95)'; ctx.lineJoin = 'round';
-    ctx.strokeText(boss.equation, eqX - 10, eqTextY);
+    ctx.strokeText(boss.equation, eqX, eqTextY);
     ctx.shadowColor = '#ffaa00'; ctx.shadowBlur = 12;
     ctx.fillStyle = '#ffffff';
-    ctx.fillText(boss.equation, eqX - 10, eqTextY);
+    ctx.fillText(boss.equation, eqX, eqTextY);
+
+    if (showHint) {
+      ctx.shadowBlur = 6; ctx.shadowColor = '#ffdd00';
+      ctx.fillStyle = '#ffdd44';
+      ctx.font = `bold 12px 'Courier New', monospace`;
+      ctx.fillText(`💡 ${boss.shortHint}`, eqX, pillY + 60);
+    }
 
     ctx.restore();
   }
 }
 
-// Shared animation frame counter (updated each render call)
+// Shared animation frame counter
 let _animFrame = 0;
 let _animTick = 0;
 
@@ -955,16 +954,14 @@ function renderFrame(ctx: CanvasRenderingContext2D, state: GameState, ts: number
     state.player.surgeFlashTimer--;
   }
 
-  // ── Recovery flash overlay (calm cyan — positive reinforcement) ──
+  // Recovery flash overlay
   if (state.player.recoveryFlashTimer > 0) {
     const ratio = state.player.recoveryFlashTimer / RECOVERY_FLASH_FRAMES;
-    // Centre glow (opposite of surge: bright centre, dark edges)
     const rg = ctx.createRadialGradient(CANVAS_W/2, CANVAS_H/2, 0, CANVAS_W/2, CANVAS_H/2, CANVAS_H*0.85);
     rg.addColorStop(0,   `rgba(0,255,200,${ratio * 0.22})`);
     rg.addColorStop(0.5, `rgba(0,212,255,${ratio * 0.12})`);
     rg.addColorStop(1,   'rgba(0,180,255,0)');
     ctx.fillStyle = rg; ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
-    // Hard edge ring for "scan pulse" feel — does NOT need to decrement; game loop owns the counter
   }
 
   // Laser ambient edge glow
@@ -981,12 +978,10 @@ function renderFrame(ctx: CanvasRenderingContext2D, state: GameState, ts: number
   for (const star of starfield) {
     star.y += star.speed * speedMult;
     if (star.y > CANVAS_H + 4) { star.y = -4; star.x = Math.random() * CANVAS_W; }
-    // Twinkle
     star.twinkle += 0.025 * star.twinkleDir;
     if (star.twinkle > 1 || star.twinkle < 0) star.twinkleDir *= -1;
     const alpha = star.opacity * (0.7 + star.twinkle * 0.3);
     if (star.layer === 2) {
-      // Sparkle cross
       const col = laserActive ? '#aaffff' : '#ffffff';
       drawSparkle(ctx, star.x, star.y, star.r, alpha, col);
     } else {
@@ -1014,7 +1009,6 @@ function renderFrame(ctx: CanvasRenderingContext2D, state: GameState, ts: number
   const shipColor = playerHit ? '#ff6600' : laserActive ? '#00ffff' : '#00d4ff';
   const shipGlow  = playerHit ? '#ff4400' : laserActive ? '#00ffff' : '#00aaff';
 
-  // Engine exhaust particles
   updateExhaust(px, py, pw, ph, laserActive);
   drawExhaust(ctx);
 
@@ -1022,10 +1016,9 @@ function renderFrame(ctx: CanvasRenderingContext2D, state: GameState, ts: number
   ctx.shadowColor = shipGlow;
   ctx.shadowBlur = laserActive ? 36 : playerHit ? 44 : 20;
 
-  // Central fin / fuselage
   ctx.fillStyle = shipColor;
   ctx.beginPath();
-  ctx.moveTo(cx, py);                       // nose tip
+  ctx.moveTo(cx, py);
   ctx.lineTo(cx + pw*0.18, py + ph*0.55);
   ctx.lineTo(cx + pw*0.10, py + ph*0.60);
   ctx.lineTo(cx + pw*0.10, py + ph*0.80);
@@ -1034,7 +1027,6 @@ function renderFrame(ctx: CanvasRenderingContext2D, state: GameState, ts: number
   ctx.lineTo(cx - pw*0.18, py + ph*0.55);
   ctx.closePath(); ctx.fill();
 
-  // Left wing
   ctx.fillStyle = `${shipColor}cc`;
   ctx.beginPath();
   ctx.moveTo(cx - pw*0.18, py + ph*0.55);
@@ -1042,14 +1034,12 @@ function renderFrame(ctx: CanvasRenderingContext2D, state: GameState, ts: number
   ctx.lineTo(cx - pw*0.10,  py + ph*0.80);
   ctx.closePath(); ctx.fill();
 
-  // Right wing
   ctx.beginPath();
   ctx.moveTo(cx + pw*0.18, py + ph*0.55);
   ctx.lineTo(px + pw,      py + ph);
   ctx.lineTo(cx + pw*0.10, py + ph*0.80);
   ctx.closePath(); ctx.fill();
 
-  // Cockpit window
   ctx.shadowBlur = 0;
   const cockpitGrad = ctx.createRadialGradient(cx, py + ph*0.22, 1, cx, py + ph*0.28, 9);
   cockpitGrad.addColorStop(0, '#ffffff');
@@ -1058,7 +1048,6 @@ function renderFrame(ctx: CanvasRenderingContext2D, state: GameState, ts: number
   ctx.fillStyle = cockpitGrad;
   ctx.beginPath(); ctx.ellipse(cx, py + ph*0.28, 8, 10, 0, 0, Math.PI*2); ctx.fill();
 
-  // Hull outline
   ctx.strokeStyle = laserActive ? '#ffffff' : '#aaeeff';
   ctx.lineWidth = 1.2;
   ctx.beginPath();
@@ -1078,7 +1067,6 @@ function renderFrame(ctx: CanvasRenderingContext2D, state: GameState, ts: number
     const lr = state.player.laserModeTimer / LASER_MODE_MS;
     ctx.save();
     ctx.shadowColor = '#00ffff'; ctx.shadowBlur = 50;
-    // Outer diffuse glow
     const outer = ctx.createLinearGradient(beamX - beamW*3, 0, beamX + beamW*3, 0);
     outer.addColorStop(0, 'rgba(0,212,255,0)');
     outer.addColorStop(0.4, `rgba(0,212,255,${lr*0.25})`);
@@ -1086,7 +1074,6 @@ function renderFrame(ctx: CanvasRenderingContext2D, state: GameState, ts: number
     outer.addColorStop(0.6, `rgba(0,212,255,${lr*0.25})`);
     outer.addColorStop(1, 'rgba(0,212,255,0)');
     ctx.fillStyle = outer; ctx.fillRect(beamX - beamW*3, 0, beamW*6, py);
-    // Core bright beam
     const core = ctx.createLinearGradient(beamX - beamW*0.6, 0, beamX + beamW*0.6, 0);
     core.addColorStop(0, 'rgba(0,200,255,0)');
     core.addColorStop(0.2, `rgba(100,255,255,${lr*0.9})`);
@@ -1094,11 +1081,41 @@ function renderFrame(ctx: CanvasRenderingContext2D, state: GameState, ts: number
     core.addColorStop(0.8, `rgba(100,255,255,${lr*0.9})`);
     core.addColorStop(1, 'rgba(0,200,255,0)');
     ctx.fillStyle = core; ctx.fillRect(beamX - beamW*0.6, 0, beamW*1.2, py);
-    // Scan line streak
     const scanY = (ts * 0.5) % py;
     ctx.globalAlpha = 0.25 * lr; ctx.fillStyle = '#ffffff';
     ctx.fillRect(beamX - 2, py - scanY, 4, 20); ctx.globalAlpha = 1;
     ctx.restore();
+  }
+
+  // ── Plasma Lock-On Beams (when clicking a bubble or pressing 1, 2, 3) ─────
+  for (let i = state.plasmaBeams.length - 1; i >= 0; i--) {
+    const pb = state.plasmaBeams[i];
+    ctx.save();
+    ctx.globalAlpha = pb.life;
+    ctx.shadowColor = pb.color;
+    ctx.shadowBlur = 24;
+    ctx.strokeStyle = pb.color;
+    ctx.lineWidth = 6 * pb.life;
+    ctx.beginPath();
+    ctx.moveTo(pb.fromX, pb.fromY);
+    ctx.lineTo(pb.toX, pb.toY);
+    ctx.stroke();
+
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 2 * pb.life;
+    ctx.beginPath();
+    ctx.moveTo(pb.fromX, pb.fromY);
+    ctx.lineTo(pb.toX, pb.toY);
+    ctx.stroke();
+
+    // Target lock ring
+    ctx.beginPath();
+    ctx.arc(pb.toX, pb.toY, BUBBLE_HIT_R * (1.2 - pb.life * 0.2), 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+
+    pb.life -= 0.08;
+    if (pb.life <= 0) state.plasmaBeams.splice(i, 1);
   }
 
   // ── Normal bullets ────────────────────────────────────────
@@ -1106,10 +1123,8 @@ function renderFrame(ctx: CanvasRenderingContext2D, state: GameState, ts: number
     for (const b of state.bullets) {
       ctx.save();
       ctx.shadowColor = '#ff00ff'; ctx.shadowBlur = 22;
-      // Trail
       ctx.fillStyle = 'rgba(255,0,255,0.18)';
       ctx.fillRect(b.x - 2, b.y + 6, 4, 24);
-      // Head
       ctx.fillStyle = '#ff44ff';
       ctx.beginPath(); ctx.arc(b.x, b.y, 4.5, 0, Math.PI*2); ctx.fill();
       ctx.fillStyle = '#ffffff';
@@ -1125,22 +1140,29 @@ function renderFrame(ctx: CanvasRenderingContext2D, state: GameState, ts: number
     const epColor = isBuff ? '#00ff88' : '#ff3333';
     const epInner = isBuff ? '#aaffcc' : '#ffaaaa';
     ctx.shadowColor = epColor; ctx.shadowBlur = 24;
-    // Orb
     const orbG = ctx.createRadialGradient(ep.x, ep.y, 0, ep.x, ep.y, 12);
     orbG.addColorStop(0, epInner);
     orbG.addColorStop(0.5, epColor);
     orbG.addColorStop(1, `${epColor}00`);
     ctx.fillStyle = orbG;
     ctx.beginPath(); ctx.arc(ep.x, ep.y, 12, 0, Math.PI*2); ctx.fill();
-    // Ring
     ctx.strokeStyle = epColor; ctx.lineWidth = 1.5;
     ctx.beginPath(); ctx.arc(ep.x, ep.y, 14, 0, Math.PI*2); ctx.stroke();
-    // Label
     ctx.shadowBlur = 4; ctx.fillStyle = '#ffffff';
     ctx.font = `bold 9px 'Courier New', monospace`;
     ctx.textAlign = 'center'; ctx.textBaseline = 'top';
     ctx.fillText(ep.modifier.label, ep.x, ep.y + 15);
     ctx.restore();
+  }
+
+  // Find closest invader to the bottom so we highlight [1] [2] [3] on its bubbles
+  let closestInvId = -1;
+  let maxInvY = -Infinity;
+  for (const inv of state.invaders) {
+    if (inv.y > maxInvY) {
+      maxInvY = inv.y;
+      closestInvId = inv.id;
+    }
   }
 
   // ── Voxel Invaders ────────────────────────────────────────
@@ -1150,6 +1172,7 @@ function renderFrame(ctx: CanvasRenderingContext2D, state: GameState, ts: number
     const flashingRed   = inv.flashRed > 0;
     const flashingGreen = inv.flashGreen > 0;
     const mainColor = flashingRed ? '#ff2244' : flashingGreen ? '#00ff88' : inv.color;
+    const isClosest = inv.id === closestInvId;
 
     // ── 1. Voxel Invader body ──────────────────────────────
     drawVoxelInvader(ctx, inv, wobbleX, _animFrame, mainColor, flashingRed, flashingGreen);
@@ -1163,12 +1186,12 @@ function renderFrame(ctx: CanvasRenderingContext2D, state: GameState, ts: number
     ctx.fillStyle = hpColor; ctx.shadowColor = hpColor; ctx.shadowBlur = 6;
     ctx.fillRect(bX, bY, bW * hpR, bH); ctx.shadowBlur = 0;
 
-    // ── 3. Equation pill (below feet — large, instantly readable) ─
+    // ── 3. Equation pill + "💡 Luz Guia" scaffolding ───────
+    const showHint = inv.hintRevealed || state.mode === 'discovery' || inv.y > 105;
     {
-      const EQ_FONT_SIZE = 36;
+      const EQ_FONT_SIZE = 32;
       const eqFont = `bold ${EQ_FONT_SIZE}px 'Courier New', monospace`;
       const eqX = inv.x + inv.width / 2 + wobbleX;
-      // HP bar bottom edge = inv.y + inv.height + 6 → place pill centre 28px below that
       const eqY = inv.y + inv.height + 28 + EQ_FONT_SIZE / 2;
 
       ctx.save();
@@ -1176,87 +1199,124 @@ function renderFrame(ctx: CanvasRenderingContext2D, state: GameState, ts: number
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
 
-      // Measure at the ACTUAL render font so the pill always fits perfectly
-      const metrics = ctx.measureText(inv.equation);
-      const tw = metrics.width;
-      const th = EQ_FONT_SIZE * 1.15;   // approximate cap-height + descenders
-      const padX = 16, padY = 8;
-      const pillX = eqX - tw / 2 - padX;
-      const pillY = eqY - th / 2 - padY;
-      const pillW = tw + padX * 2;
-      const pillH = th + padY * 2;
-      const pillR = 10;
+      const tw = ctx.measureText(inv.equation).width;
+      ctx.font = `bold 11px 'Courier New', monospace`;
+      const hw = showHint ? ctx.measureText(`💡 ${inv.shortHint}`).width : 0;
+      const lw = ctx.measureText(inv.lensTitle).width;
 
-      // Dark translucent pill background
+      const padX = 16;
+      const pillW = Math.max(tw, hw, lw) + padX * 2;
+      const pillH = showHint ? 74 : 52;
+      const pillX = Math.max(6, Math.min(CANVAS_W - pillW - 6, eqX - pillW / 2));
+      const pillY = eqY - 26;
+      const pillCenter = pillX + pillW / 2;
+
       ctx.shadowBlur = 0;
-      ctx.fillStyle = 'rgba(0,0,0,0.88)';
+      ctx.fillStyle = 'rgba(4, 6, 22, 0.90)';
       ctx.beginPath();
-      ctx.roundRect(pillX, pillY, pillW, pillH, pillR);
+      ctx.roundRect(pillX, pillY, pillW, pillH, 10);
       ctx.fill();
 
-      // Coloured border matching invader glow (thicker for the bigger pill)
-      ctx.strokeStyle = flashingRed ? '#ff2244' : mainColor;
-      ctx.lineWidth = 2;
-      ctx.globalAlpha = 0.6;
+      ctx.strokeStyle = flashingRed ? '#ff2244' : isClosest ? '#00ffcc' : mainColor;
+      ctx.lineWidth = isClosest ? 2.2 : 1.6;
+      ctx.globalAlpha = 0.75;
       ctx.stroke();
       ctx.globalAlpha = 1;
 
-      // Thick black stroke so text cuts through any neon glow
-      ctx.lineWidth = 6;
+      // Lens title badge at top of pill
+      ctx.fillStyle = '#00d4ff';
+      ctx.font = `bold 9px 'Courier New', monospace`;
+      ctx.fillText(inv.lensTitle, pillCenter, pillY + 9);
+
+      // Equation text
+      ctx.font = eqFont;
+      ctx.lineWidth = 5;
       ctx.strokeStyle = 'rgba(0,0,0,0.95)';
       ctx.lineJoin = 'round';
-      ctx.strokeText(inv.equation, eqX, eqY);
+      ctx.strokeText(inv.equation, pillCenter, pillY + 31);
 
-      // Bright white fill on top with subtle glow
       ctx.shadowColor = flashingRed ? '#ff8888' : '#aaffff';
       ctx.shadowBlur = 10;
       ctx.fillStyle = '#ffffff';
-      ctx.fillText(inv.equation, eqX, eqY);
+      ctx.fillText(inv.equation, pillCenter, pillY + 31);
+
+      // "💡 Luz Guia" mental math breakdown
+      if (showHint) {
+        ctx.shadowBlur = 6;
+        ctx.shadowColor = '#ffdd00';
+        ctx.fillStyle = '#ffdd44';
+        ctx.font = `bold 11px 'Courier New', monospace`;
+        ctx.fillText(`💡 ${inv.shortHint}`, pillCenter, pillY + 58);
+      }
 
       ctx.restore();
     }
 
-    // Speed badge (below the new large equation pill)
+    // Speed badge (below the equation pill)
     if (inv.speedMultiplier > 1) {
       ctx.save();
       ctx.shadowColor = '#ff8844'; ctx.shadowBlur = 8;
       ctx.fillStyle = '#ff8844'; ctx.font = `bold 11px 'Courier New',monospace`;
       ctx.textAlign = 'center'; ctx.textBaseline = 'top';
-      // Pill is now ~72px tall total → badge goes below that
-      ctx.fillText(`⚡×${inv.speedMultiplier.toFixed(1)}`, inv.x + inv.width/2 + wobbleX, inv.y + inv.height + 28 + 36 + 24);
+      const offsetBelow = showHint ? 108 : 84;
+      ctx.fillText(`⚡×${inv.speedMultiplier.toFixed(1)}`, inv.x + inv.width/2 + wobbleX, inv.y + inv.height + offsetBelow);
       ctx.restore();
     }
 
-
     // ── 4. Answer bubbles (topmost — always drawn last) ─────
-    const BNC = '#00d4ff';
+    const BNC = isClosest ? '#00ffcc' : '#00d4ff';
     const invCx = inv.x + inv.width/2 + wobbleX;
 
-    for (const bubble of inv.answers) {
+    for (let bi = 0; bi < inv.answers.length; bi++) {
+      const bubble = inv.answers[bi];
       const { bx, by } = bubblePos(inv, bubble);
+      const slotNum = (bubble.slotIndex ?? bi) + 1;
+      const textLabel = bubble.label ?? String(bubble.value);
 
       ctx.save();
-      ctx.shadowColor = BNC; ctx.shadowBlur = 26;
+      ctx.shadowColor = BNC; ctx.shadowBlur = isClosest ? 28 : 20;
       // Holographic gradient fill
       const hlGrad = ctx.createRadialGradient(bx, by-6, 4, bx, by, BUBBLE_HIT_R);
-      hlGrad.addColorStop(0, 'rgba(0,212,255,0.28)');
-      hlGrad.addColorStop(1, 'rgba(0,80,140,0.15)');
+      hlGrad.addColorStop(0, isClosest ? 'rgba(0,255,204,0.32)' : 'rgba(0,212,255,0.26)');
+      hlGrad.addColorStop(1, 'rgba(0,60,120,0.20)');
       ctx.fillStyle = hlGrad;
       ctx.beginPath(); ctx.arc(bx, by, BUBBLE_HIT_R, 0, Math.PI*2); ctx.fill();
+
       // Outer ring
-      ctx.strokeStyle = BNC; ctx.lineWidth = 2.5;
+      ctx.strokeStyle = BNC; ctx.lineWidth = isClosest ? 2.8 : 2.2;
       ctx.beginPath(); ctx.arc(bx, by, BUBBLE_HIT_R, 0, Math.PI*2); ctx.stroke();
+
       // Inner scan-line ring
-      ctx.globalAlpha = 0.4;
-      ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1.2;
-      ctx.beginPath(); ctx.arc(bx, by, BUBBLE_HIT_R - 8, 0, Math.PI*2); ctx.stroke();
+      ctx.globalAlpha = 0.38;
+      ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1.1;
+      ctx.beginPath(); ctx.arc(bx, by, BUBBLE_HIT_R - 7, 0, Math.PI*2); ctx.stroke();
       ctx.globalAlpha = 1;
-      // Answer number — 2× font size for easy reading and tapping
+
+      // Key shortcut badge [1] [2] [3] on closest invader
+      if (isClosest) {
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = 'rgba(0, 20, 35, 0.9)';
+        ctx.beginPath();
+        ctx.roundRect(bx - 12, by - BUBBLE_HIT_R - 7, 24, 15, 4);
+        ctx.fill();
+        ctx.strokeStyle = '#00ffcc';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        ctx.fillStyle = '#00ffcc';
+        ctx.font = `bold 10px 'Courier New', monospace`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(`[${slotNum}]`, bx, by - BUBBLE_HIT_R + 1);
+      }
+
+      // Answer number or expression (e.g. "10 + 6" for Lens 6)
       ctx.shadowBlur = 12; ctx.shadowColor = BNC;
-      ctx.fillStyle = '#e0f8ff';
-      ctx.font = `bold 26px 'Courier New', monospace`;
+      ctx.fillStyle = '#e8fbff';
+      const fontSize = textLabel.length > 3 ? 18 : 25;
+      ctx.font = `bold ${fontSize}px 'Courier New', monospace`;
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillText(String(bubble.value), bx, by);
+      ctx.fillText(textLabel, bx, by + 2);
+
       // Dashed connector to invader centre
       ctx.shadowBlur = 0;
       ctx.strokeStyle = 'rgba(0,212,255,0.25)'; ctx.lineWidth = 0.8;
@@ -1272,7 +1332,7 @@ function renderFrame(ctx: CanvasRenderingContext2D, state: GameState, ts: number
 
   // ── Voxel Boss ────────────────────────────────────────────
   if (state.boss) {
-    drawVoxelBoss(ctx, state.boss, _animFrame, _animTick);
+    drawVoxelBoss(ctx, state.boss, _animFrame, _animTick, state.player.isOverdrive, state.mode);
   }
 
   // ── Overdrive bullet render (gold spread trails) ──────────
@@ -1280,10 +1340,8 @@ function renderFrame(ctx: CanvasRenderingContext2D, state: GameState, ts: number
     for (const b of state.bullets) {
       ctx.save();
       ctx.shadowColor = '#ffdd00'; ctx.shadowBlur = 28;
-      // Longer trail for spread feel
       ctx.fillStyle = 'rgba(255,180,0,0.22)';
       ctx.fillRect(b.x - 2, b.y + 8, 4, 30);
-      // Core orb
       ctx.fillStyle = '#ffdd00';
       ctx.beginPath(); ctx.arc(b.x, b.y, 5, 0, Math.PI*2); ctx.fill();
       ctx.fillStyle = '#ffffff';
@@ -1313,7 +1371,7 @@ function renderFrame(ctx: CanvasRenderingContext2D, state: GameState, ts: number
   // ── Particles ────────────────────────────────────────────
   for (let i = state.particles.length - 1; i >= 0; i--) {
     const p = state.particles[i];
-    ctx.save(); ctx.globalAlpha = Math.pow(p.life, 0.7); // more opaque longer
+    ctx.save(); ctx.globalAlpha = Math.pow(p.life, 0.7);
     if (p.text) {
       ctx.font = `bold ${p.size}px 'Courier New', monospace`;
       ctx.fillStyle = p.color; ctx.textAlign = 'center';
@@ -1321,17 +1379,15 @@ function renderFrame(ctx: CanvasRenderingContext2D, state: GameState, ts: number
       ctx.fillText(p.text, p.x, p.y);
     } else {
       ctx.shadowColor = p.color; ctx.shadowBlur = p.size * 1.8;
-      // Draw as glowing square block for "voxel explosion" feel
       const s = p.size * p.life;
       ctx.fillStyle = p.color;
       ctx.fillRect(p.x - s/2, p.y - s/2, s, s);
-      // Bright center
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(p.x - s*0.2, p.y - s*0.2, s*0.4, s*0.4);
     }
     ctx.restore();
     p.x += p.vx; p.y += p.vy;
-    p.vx *= 0.97; p.vy *= 0.97; // slight drag
+    p.vx *= 0.97; p.vy *= 0.97;
     p.life -= 0.018;
     if (p.life <= 0) state.particles.splice(i, 1);
   }
@@ -1340,10 +1396,8 @@ function renderFrame(ctx: CanvasRenderingContext2D, state: GameState, ts: number
   if (laserActive) {
     const lr = state.player.laserModeTimer / LASER_MODE_MS;
     ctx.save();
-    // Track
     ctx.fillStyle = 'rgba(0,0,0,0.7)';
     ctx.beginPath(); ctx.roundRect(8, 6, CANVAS_W - 16, 14, 7); ctx.fill();
-    // Fill
     const barGrad = ctx.createLinearGradient(8, 0, 8 + (CANVAS_W-16)*lr, 0);
     barGrad.addColorStop(0, '#00ffff'); barGrad.addColorStop(0.6, '#00aaff'); barGrad.addColorStop(1, '#ff00ff');
     ctx.fillStyle = barGrad; ctx.shadowColor = '#00ffff'; ctx.shadowBlur = 14;
@@ -1356,11 +1410,8 @@ function renderFrame(ctx: CanvasRenderingContext2D, state: GameState, ts: number
   }
 
   void ts;
-  ctx.restore(); // end shake
+  ctx.restore();
 }
-
-
-
 
 // ─── The Hook ─────────────────────────────────────────────────
 export interface UseGameEngineOptions {
@@ -1368,6 +1419,8 @@ export interface UseGameEngineOptions {
   onStatusChange: (status: string) => void;
   onWaveChange: (wave: number) => void;
   onLaserChange: (active: boolean, ratio: number) => void;
+  onStreakChange?: (streak: number, bestStreak: number) => void;
+  onInsightChange?: (insight: MathInsightEvent | null) => void;
 }
 
 export function useGameEngine(
@@ -1380,40 +1433,217 @@ export function useGameEngine(
   const lastReportedScore = useRef(-1);
   const lastReportedWave = useRef(1);
   const lastLaserActive = useRef(false);
-  // ── Mobile/touch input state ─────────────────────────────────
-  // targetX: canvas-space X the player ship should smoothly track
-  // isFiring: true while any pointer is held (finger or mouse)
   const touchInputRef = useRef({ targetX: -1, isFiring: false });
-  // Legacy compat — kept so existing pHeld check in game loop still compiles
   const pointerHeldRef = useRef<() => boolean>(() => touchInputRef.current.isFiring);
+
+  // ── Shared Bubble & Boss Column Resolution (Click/Tap + Keys 1/2/3) ───────
+  const resolveBubbleHit = useCallback(
+    (state: GameState, ii: number, bubble: AnswerBubble) => {
+      const inv = state.invaders[ii];
+      if (!inv) return;
+      const { bx, by } = bubblePos(inv, bubble);
+      const shipX = state.player.x + PLAYER_W / 2;
+      const shipY = state.player.y;
+
+      state.plasmaBeams.push({
+        id: state.nextId++,
+        fromX: shipX,
+        fromY: shipY,
+        toX: bx,
+        toY: by,
+        color: bubble.isCorrect ? '#00ffcc' : '#ff4466',
+        life: 1.0,
+      });
+
+      if (bubble.isCorrect) {
+        state.mathStreak += 1;
+        state.mathKillsTotal += 1;
+        state.bestStreak = Math.max(state.bestStreak, state.mathStreak);
+        if (!state.masteredTips.includes(inv.fullTip)) {
+          state.masteredTips.push(inv.fullTip);
+        }
+
+        soundEngine.playPlasmaLock();
+        soundEngine.playMathEureka(state.mathStreak);
+
+        options.onStreakChange?.(state.mathStreak, state.bestStreak);
+        options.onInsightChange?.({
+          equation: inv.equation,
+          shortHint: inv.shortHint,
+          fullTip: inv.fullTip,
+          lensTitle: inv.lensTitle,
+          streak: state.mathStreak,
+          isCorrect: true,
+        });
+
+        // Floating pedagogical breakdown particle
+        state.particles.push({
+          id: state.nextId++,
+          x: bx,
+          y: Math.max(24, by - 26),
+          vx: 0,
+          vy: -1.3,
+          life: 1.25,
+          color: '#00ffcc',
+          size: 13,
+          text: `✨ ${inv.shortHint}`,
+        });
+
+        destroyInvader(state, ii, true, false);
+      } else {
+        state.mathStreak = 0;
+        inv.hintRevealed = true;
+        soundEngine.playElasticAbsorb();
+
+        options.onStreakChange?.(0, state.bestStreak);
+        options.onInsightChange?.({
+          equation: inv.equation,
+          shortHint: inv.shortHint,
+          fullTip: inv.fullTip,
+          lensTitle: inv.lensTitle,
+          streak: 0,
+          isCorrect: false,
+        });
+
+        spawnWrongEffect(state, inv.x + inv.width / 2, inv.y + inv.height / 2);
+        inv.flashRed = 22;
+        const mult =
+          state.mode === 'discovery'
+            ? WRONG_BUBBLE_MULTIPLIER_DISCOVERY
+            : WRONG_BUBBLE_MULTIPLIER_ARCADE;
+        inv.speedMultiplier = parseFloat((inv.speedMultiplier * mult).toFixed(2));
+        inv.speed = inv.baseSpeed * inv.speedMultiplier;
+        state.score = Math.max(0, state.score - 20);
+      }
+    },
+    [options]
+  );
+
+  const resolveBossColumnStrike = useCallback(
+    (state: GameState, colIdx: 0 | 1 | 2) => {
+      const boss = state.boss;
+      if (!boss || boss.entryProgress < 1) return;
+      const { x: colX, w: colW } = getBossColumnBounds(boss, colIdx);
+      const targetX = colX + colW / 2;
+      const targetY = boss.y + boss.height * 0.38;
+      const shipX = state.player.x + PLAYER_W / 2;
+      const shipY = state.player.y;
+      const isCorrect = colIdx === boss.correctColIdx;
+
+      state.plasmaBeams.push({
+        id: state.nextId++,
+        fromX: shipX,
+        fromY: shipY,
+        toX: targetX,
+        toY: targetY,
+        color: isCorrect ? '#ffdd00' : '#ff4466',
+        life: 1.0,
+      });
+
+      if (isCorrect) {
+        state.mathStreak += 1;
+        state.mathKillsTotal += 1;
+        state.bestStreak = Math.max(state.bestStreak, state.mathStreak);
+        if (!state.masteredTips.includes(boss.fullTip)) {
+          state.masteredTips.push(boss.fullTip);
+        }
+        soundEngine.playPlasmaLock();
+        soundEngine.playMathEureka(state.mathStreak);
+
+        options.onStreakChange?.(state.mathStreak, state.bestStreak);
+        options.onInsightChange?.({
+          equation: boss.equation,
+          shortHint: boss.shortHint,
+          fullTip: boss.fullTip,
+          lensTitle: boss.lensTitle,
+          streak: state.mathStreak,
+          isCorrect: true,
+        });
+
+        if (!state.player.isOverdrive) {
+          triggerOverdrive(state);
+        }
+        // Damage several voxels in the chosen column as immediate reward
+        for (let r = boss.rows - 1; r >= Math.max(0, boss.rows - 3); r--) {
+          const vc = colIdx * boss.voxelsPerLogicalCol + Math.floor(boss.voxelsPerLogicalCol / 2);
+          hitBossVoxel(boss, boss.x + vc * boss.voxelW + 2, boss.y + r * boss.voxelH + 2, true, true);
+        }
+      } else {
+        state.mathStreak = 0;
+        boss.hintRevealed = true;
+        soundEngine.playElasticAbsorb();
+
+        options.onStreakChange?.(0, state.bestStreak);
+        options.onInsightChange?.({
+          equation: boss.equation,
+          shortHint: boss.shortHint,
+          fullTip: boss.fullTip,
+          lensTitle: boss.lensTitle,
+          streak: 0,
+          isCorrect: false,
+        });
+      }
+    },
+    [options]
+  );
 
   // ── Canvas Initialization (HiDPI & Mobile Cap) ─────────────
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    
-    // Detect mobile and cap internal resolution instead of DPR scaling to avoid GPU lag
+
     const isMobile = window.matchMedia('(max-width: 768px)').matches || /Mobi|Android/i.test(navigator.userAgent);
     const dpr = isMobile ? 1 : Math.min(window.devicePixelRatio || 1, 2);
-    
-    // Set actual internal buffer size
+
     canvas.width = CANVAS_W * dpr;
     canvas.height = CANVAS_H * dpr;
-    
-    // Scale context so game logic runs in logical CANVAS_W / CANVAS_H coordinates
+
     const ctx = canvas.getContext('2d');
     if (ctx) {
       ctx.scale(dpr, dpr);
-      ctx.imageSmoothingEnabled = false; // ensure crisp lines
+      ctx.imageSmoothingEnabled = false;
     }
   }, [canvasRef]);
 
-  // ── Keyboard input ────────────────────────────────────────
+  // ── Keyboard input (including [1], [2], [3] Plasma Lock shortcuts) ─────────
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
       const state = stateRef.current;
       state.keys.add(e.code);
-      if (e.code === 'Space' && state.status === 'playing') e.preventDefault();
+      if (state.status !== 'playing') return;
+
+      if (e.code === 'Space') {
+        e.preventDefault();
+      }
+
+      // Precision Math Strike via keys 1, 2, 3 (or Numpad 1, 2, 3)
+      if (!e.repeat) {
+        let slotIdx: 0 | 1 | 2 | null = null;
+        if (e.code === 'Digit1' || e.code === 'Numpad1') slotIdx = 0;
+        else if (e.code === 'Digit2' || e.code === 'Numpad2') slotIdx = 1;
+        else if (e.code === 'Digit3' || e.code === 'Numpad3') slotIdx = 2;
+
+        if (slotIdx !== null) {
+          e.preventDefault();
+          if (state.boss && state.boss.entryProgress >= 1) {
+            resolveBossColumnStrike(state, slotIdx);
+          } else if (state.invaders.length > 0) {
+            // Pick closest invader (largest y)
+            let closestIdx = 0;
+            for (let i = 1; i < state.invaders.length; i++) {
+              if (state.invaders[i].y > state.invaders[closestIdx].y) {
+                closestIdx = i;
+              }
+            }
+            const inv = state.invaders[closestIdx];
+            const bubble =
+              inv.answers.find((b) => b.slotIndex === slotIdx) ?? inv.answers[slotIdx];
+            if (bubble) {
+              resolveBubbleHit(state, closestIdx, bubble);
+            }
+          }
+        }
+      }
     }
     function onKeyUp(e: KeyboardEvent) {
       stateRef.current.keys.delete(e.code);
@@ -1424,9 +1654,9 @@ export function useGameEngine(
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
     };
-  }, []);
+  }, [resolveBubbleHit, resolveBossColumnStrike]);
 
-  // ── Unified pointer input ─────────────────────────────────
+  // ── Unified pointer input (Fixed Bug #6: Direct CANVAS_W / CANVAS_H mapping) ─
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -1434,39 +1664,36 @@ export function useGameEngine(
 
     function toCanvasPoint(clientX: number, clientY: number): { cx: number; cy: number } {
       const rect = canvas!.getBoundingClientRect();
-      // The internal canvas buffer may be scaled by DPR (set at init time, capped at 2).
-      // canvas.width / dpr gives the logical resolution the game loop draws in.
-      // rect.width/height is the actual CSS display size (after CSS letterboxing).
-      // Dividing (clientXY - rect.origin) by rect.size and multiplying by logical
-      // resolution maps any screen coordinate — including letterboxed fullscreen — to
-      // the exact same coordinate system the game uses.
-      const isMobile = window.matchMedia('(max-width: 768px)').matches || /Mobi|Android/i.test(navigator.userAgent);
-      const dpr = isMobile ? 1 : Math.min(window.devicePixelRatio || 1, 2);
-      const logicalW = canvas!.width  / dpr;
-      const logicalH = canvas!.height / dpr;
       return {
-        cx: (clientX - rect.left)  * (logicalW / rect.width),
-        cy: (clientY - rect.top)   * (logicalH / rect.height),
+        cx: (clientX - rect.left) * (CANVAS_W / rect.width),
+        cy: (clientY - rect.top) * (CANVAS_H / rect.height),
       };
     }
 
     function tryBubbleHit(cx: number, cy: number): boolean {
       const state = stateRef.current;
       if (state.status !== 'playing') return false;
+
+      // Allow clicking/tapping Boss column answer pills directly
+      if (state.boss && state.boss.entryProgress >= 1) {
+        const boss = state.boss;
+        if (cy >= boss.y && cy <= boss.y + boss.height) {
+          for (let lc = 0; lc < LOGICAL_COLS; lc++) {
+            const { x: colX, w: colW } = getBossColumnBounds(boss, lc as 0 | 1 | 2);
+            if (cx >= colX && cx <= colX + colW) {
+              resolveBossColumnStrike(state, lc as 0 | 1 | 2);
+              return true;
+            }
+          }
+        }
+      }
+
       for (let ii = state.invaders.length - 1; ii >= 0; ii--) {
         const inv = state.invaders[ii];
         for (const bubble of inv.answers) {
           const { bx, by } = bubblePos(inv, bubble);
-          if (Math.hypot(cx - bx, cy - by) <= BUBBLE_HIT_R + 6) {
-            if (bubble.isCorrect) {
-              destroyInvader(state, ii, true, false);
-            } else {
-              spawnWrongEffect(state, inv.x + inv.width / 2, inv.y + inv.height / 2);
-              inv.flashRed = 22;
-              inv.speedMultiplier = parseFloat((inv.speedMultiplier * WRONG_BUBBLE_MULTIPLIER).toFixed(2));
-              inv.speed = inv.baseSpeed * inv.speedMultiplier;
-              state.score = Math.max(0, state.score - 20);
-            }
+          if (Math.hypot(cx - bx, cy - by) <= BUBBLE_HIT_R + 8) {
+            resolveBubbleHit(state, ii, bubble);
             return true;
           }
         }
@@ -1479,18 +1706,15 @@ export function useGameEngine(
       if (state.status !== 'playing') return;
       canvas!.setPointerCapture(e.pointerId);
       const { cx, cy } = toCanvasPoint(e.clientX, e.clientY);
-      // Try bubble hit first — if it hits, do NOT start firing/moving
       if (tryBubbleHit(cx, cy)) return;
-      // Set the tracking target (do NOT teleport — lerp handles movement)
       touchInputRef.current.targetX = cx - PLAYER_W / 2;
       touchInputRef.current.isFiring = true;
-      pointerHeld = true;   // keep legacy flag in sync
+      pointerHeld = true;
     }
     function onPointerMove(e: PointerEvent) {
       const state = stateRef.current;
       if (!pointerHeld || state.status !== 'playing') return;
       const { cx } = toCanvasPoint(e.clientX, e.clientY);
-      // Only update the TARGET — the game loop lerps the player toward it
       touchInputRef.current.targetX = cx - PLAYER_W / 2;
     }
     function onPointerUp(_e: PointerEvent) {
@@ -1511,27 +1735,26 @@ export function useGameEngine(
       canvas.removeEventListener('pointerup',     onPointerUp);
       canvas.removeEventListener('pointercancel', onPointerUp);
     };
-  }, [canvasRef]);
+  }, [canvasRef, resolveBubbleHit, resolveBossColumnStrike]);
 
   // ── Fire bullet ───────────────────────────────────────────
-  // isEmpowered = true when laser mode is active (player solved math correctly)
   function fireBullet(state: GameState): void {
     const now = performance.now();
     if (now - state.lastBulletTime < BULLET_COOLDOWN_MS) return;
     state.lastBulletTime = now;
     const empowered = state.player.laserModeTimer > 0;
+    soundEngine.playLaserShot(empowered);
     state.bullets.push({
       id: state.nextId++,
       x: state.player.x + state.player.width / 2,
       y: state.player.y,
       speed: BULLET_SPEED,
       isLaser: false,
-      isEmpowered: empowered,  // math-validated bullet
+      isEmpowered: empowered,
     } as any);
   }
 
   // ── Fire Overdrive spread burst ──────────────────────────
-  // Overdrive bullets are always empowered (earned by solving the boss equation)
   function fireBulletOverdrive(state: GameState): void {
     const now = performance.now();
     if (now - state.player.lastOverdriveShot < OVERDRIVE_SHOOT_INTERVAL_MS) return;
@@ -1545,7 +1768,7 @@ export function useGameEngine(
         x: px, y: py,
         speed: BULLET_SPEED * OVERDRIVE_SPEED_MULT,
         isLaser: false,
-        isEmpowered: true,  // Overdrive bullets always penetrate core
+        isEmpowered: true,
         _vx: Math.cos(rad) * BULLET_SPEED * OVERDRIVE_SPEED_MULT,
         _vy: Math.sin(rad) * BULLET_SPEED * OVERDRIVE_SPEED_MULT,
       } as any);
@@ -1567,20 +1790,18 @@ export function useGameEngine(
 
     if (state.status === 'playing') {
       // ── Player movement ──────────────────────────────────────
-      // Keyboard: instant directional movement
       if (state.keys.has('ArrowLeft') || state.keys.has('KeyA'))
         state.player.x = Math.max(0, state.player.x - PLAYER_SPEED * dt);
       if (state.keys.has('ArrowRight') || state.keys.has('KeyD'))
         state.player.x = Math.min(CANVAS_W - PLAYER_W, state.player.x + PLAYER_SPEED * dt);
 
-      // Touch/pointer: smooth lerp toward finger position
       const touchIn = touchInputRef.current;
       if (touchIn.isFiring && touchIn.targetX >= 0) {
         const clampedTarget = Math.max(0, Math.min(CANVAS_W - PLAYER_W, touchIn.targetX));
         state.player.x += (clampedTarget - state.player.x) * Math.min(1, 0.18 * dt);
       }
 
-      // ── Overdrive auto-fire (takes priority over laser and normal fire) ──────
+      // ── Overdrive auto-fire ──────────────────────────────────
       if (state.player.isOverdrive) {
         fireBulletOverdrive(state);
       // ── Laser auto-damage ────────────────────────────────────
@@ -1595,7 +1816,6 @@ export function useGameEngine(
           }
         }
       } else {
-        // Continuous fire: space, OR touch held
         const spaceHeld = state.keys.has('Space');
         const touchFiring = touchIn.isFiring;
         if (spaceHeld || touchFiring) fireBullet(state);
@@ -1606,7 +1826,6 @@ export function useGameEngine(
         state.player.laserModeTimer = Math.max(0, state.player.laserModeTimer - dtMs);
       if (state.player.shakeTimer > 0) state.player.shakeTimer--;
       if (state.player.hitFlash > 0) state.player.hitFlash--;
-      // ── Overdrive timer ──────────────────────────────────────────────────────
       if (state.player.isOverdrive) {
         state.player.overdriveTtl = Math.max(0, state.player.overdriveTtl - dtMs);
         if (state.player.overdriveTtl <= 0) {
@@ -1630,10 +1849,8 @@ export function useGameEngine(
       }
 
       // ════════════════════════════════════════════════════════════
-      // BOSS GAUNTLET SPAWN LOGIC
+      // BOSS GAUNTLET SPAWN LOGIC (Fixed Bug #3: Reliable wave trigger)
       // ════════════════════════════════════════════════════════════
-      // Helper: spawn one boss and reset Overdrive
-      // bossIndex cycles 0→1→2→3 based on how many are remaining
       function spawnNextBoss(): void {
         const bossIndex = BOSS_GAUNTLET_COUNT - state.bossesRemainingInWave;
         state.invaders = [];
@@ -1641,12 +1858,15 @@ export function useGameEngine(
         state.boss = createBoss(
           state.wave, state.difficultyMultiplier, CANVAS_W, state.nextId++, bossIndex
         );
-        // Overdrive is NOT carried between individual bosses
+        if (state.mode === 'discovery') {
+          state.boss.hintRevealed = true;
+        }
         state.player.isOverdrive       = false;
         state.player.overdriveTtl      = 0;
         state.player.lastOverdriveShot = 0;
         state.lastInvaderSpawn         = ts + 999_999;
-        // Boss name announcement particle
+        soundEngine.playBossIntro();
+
         const bossName = BOSS_NAMES[bossIndex % BOSS_NAMES.length];
         const bossColor = state.boss.palette[1];
         const bossNum   = bossIndex + 1;
@@ -1658,10 +1878,11 @@ export function useGameEngine(
         });
       }
 
-      // ── Initial gauntlet trigger (wave 5 / 10 / 15…) ─────────────────────
       if (!state.boss && state.bossesRemainingInWave === 0
           && state.wave > 1 && state.wave % BOSS_SPAWN_EVERY_N_WAVES === 0
-          && state.killCount === 0 && ts >= state.bossSpawnCooldownTs) {
+          && state.lastBossWaveTriggered < state.wave
+          && ts >= state.bossSpawnCooldownTs) {
+        state.lastBossWaveTriggered = state.wave;
         state.bossesRemainingInWave = BOSS_GAUNTLET_COUNT;
         state.particles.push({
           id: state.nextId++,
@@ -1672,12 +1893,11 @@ export function useGameEngine(
         spawnNextBoss();
       }
 
-      // ── Sequential re-spawn (cooldown elapsed, gauntlet still running) ────
       if (!state.boss && state.bossesRemainingInWave > 0 && ts >= state.bossSpawnCooldownTs) {
         spawnNextBoss();
       }
 
-      // ── Boss update (entry slide-in + reshuffle + defeat/escape) ─────────────
+      // ── Boss update ──────────────────────────────────────────────────────────
       if (state.boss) {
         const boss = state.boss;
         if (boss.y < BOSS_ENTRY_Y_TARGET) {
@@ -1686,16 +1906,15 @@ export function useGameEngine(
           spawnBossEntryParticles(state, boss.x, boss.y, boss.width);
         }
         if (isBossDefeated(boss)) {
+          soundEngine.playBossDefeat();
           spawnBossDestroyedExplosion(state, boss.x + boss.width / 2, boss.y + boss.height / 2);
           state.score += BOSS_DEFEAT_BONUS + Math.floor(state.wave * 50);
           state.player.shakeTimer = 40;
-          // ── Overdrive reset + 2s cooldown (lets explosion particles play out) ──
           state.player.isOverdrive       = false;
           state.player.overdriveTtl      = 0;
           state.player.lastOverdriveShot = 0;
           state.bossSpawnCooldownTs      = ts + BOSS_INTER_SPAWN_COOLDOWN_MS;
           state.boss = undefined;
-          // ── Gauntlet counter ──────────────────────────────────────────────────
           state.bossesRemainingInWave = Math.max(0, state.bossesRemainingInWave - 1);
           if (state.bossesRemainingInWave === 0) {
             state.particles.push({
@@ -1725,7 +1944,6 @@ export function useGameEngine(
           if (state.bossesRemainingInWave === 0) {
             state.lastInvaderSpawn = ts;
           }
-          // else: sequential re-spawn handled by spawn block after cooldown
         }
 
       } else {
@@ -1735,56 +1953,50 @@ export function useGameEngine(
         }
       }
 
-      // ── Tick recovery flash timer ────────────────────────────────────────────
       if (state.player.recoveryFlashTimer > 0) state.player.recoveryFlashTimer--;
 
       // ───────────────────────────────────────────────────────
-      // ── NATURAL WAVE PROGRESSION (time + kills) ───────────────
-      // Triggers even if the player is hitting every equation perfectly.
-      // Stacks ON TOP of Penalty Surges when enemies escape.
+      // ── NATURAL WAVE PROGRESSION (Fixed Bug #4: Pause during Boss) ──
       // ───────────────────────────────────────────────────────
       const nowMs = performance.now();
-      const enoughKills = state.killCount >= WAVE_ADVANCE_KILLS;
-      // Guard: don't advance on the very first frame (lastWaveAdvanceTs === 0)
-      const enoughTime  = state.lastWaveAdvanceTs > 0
-        && (nowMs - state.lastWaveAdvanceTs) >= WAVE_ADVANCE_MS;
+      if (state.boss || state.bossesRemainingInWave > 0) {
+        state.lastWaveAdvanceTs = nowMs;
+      } else {
+        const enoughKills = state.killCount >= WAVE_ADVANCE_KILLS;
+        const enoughTime  = state.lastWaveAdvanceTs > 0
+          && (nowMs - state.lastWaveAdvanceTs) >= WAVE_ADVANCE_MS;
 
-      if (enoughKills || enoughTime) {
-        triggerNaturalWave(state, nowMs);
-        // Report updated wave to React
-        if (state.wave !== lastReportedWave.current) {
-          lastReportedWave.current = state.wave;
-          options.onWaveChange(state.wave);
+        if (enoughKills || enoughTime) {
+          triggerNaturalWave(state, nowMs);
+          if (state.wave !== lastReportedWave.current) {
+            lastReportedWave.current = state.wave;
+            options.onWaveChange(state.wave);
+          }
         }
       }
 
-
-      // Move invaders + enemy shooting + ENDLESS: bottom crossing = Difficulty Surge
-      const now = performance.now();
+      // Move invaders + enemy shooting
       for (let ii = state.invaders.length - 1; ii >= 0; ii--) {
         const inv = state.invaders[ii];
-
-        // ── Smooth speed lerp toward live difficulty target ──────
-        // difficultyMultiplier bonus nerfed (0.55 → 0.15) and absolute speed capped at 3.2 px/frame
-        // so the game stays physically playable even at very high wave numbers.
         const targetSpeed = Math.min(
           3.2,
           inv.baseSpeed
-            * inv.speedMultiplier                             // wrong-answer penalty multiplier
-            * (1 + (state.difficultyMultiplier - 1) * 0.15)  // lighter live-bonus (nerfed)
+            * inv.speedMultiplier
+            * (1 + (state.difficultyMultiplier - 1) * 0.15)
         );
-        // Lerp current speed toward target for buttery-smooth deceleration/acceleration
         inv.speed += (targetSpeed - inv.speed) * Math.min(1, SPEED_LERP_RATE * dt);
-
         inv.y += inv.speed * dt;
 
-        // Enemy shooting
-        if (now - inv.lastShotTime > ENEMY_SHOOT_COOLDOWN_MS) {
-          spawnEnemyProjectile(state, inv);
-          inv.lastShotTime = now;
+        // Auto-reveal "💡 Luz Guia" if invader passes 35% of canvas height
+        if (inv.y > 105 && !inv.hintRevealed) {
+          inv.hintRevealed = true;
         }
 
-        // ── ENDLESS MODE: invader escaped → Difficulty Surge (no Game Over) ──
+        if (nowMs - inv.lastShotTime > ENEMY_SHOOT_COOLDOWN_MS) {
+          spawnEnemyProjectile(state, inv);
+          inv.lastShotTime = nowMs;
+        }
+
         if (inv.y + inv.height >= CANVAS_H - 10) {
           state.invaders.splice(ii, 1);
           triggerDifficultySurge(state);
@@ -1795,10 +2007,9 @@ export function useGameEngine(
         }
       }
 
-      // Move bullets + column-gated boss collision / normal invader collision
+      // Move bullets + boss collision / normal invader collision
       for (let i = state.bullets.length - 1; i >= 0; i--) {
         const b = state.bullets[i] as any;
-        // Support diagonal overdrive bullets (_vx/_vy overrides vertical-only speed)
         if (b._vx !== undefined) {
           b.x += b._vx * dt;
           b.y += b._vy * dt;
@@ -1813,8 +2024,6 @@ export function useGameEngine(
 
         // ── Boss collision ─────────────────────────────────────────────────
         if (state.boss && !consumed) {
-
-          // ── ENTRY INVULNERABILITY GUARD ────────────────────────────────
           if (state.boss.entryProgress < 1) {
             const bossInRange = b.y >= state.boss.y - 4 && b.y <= state.boss.y + state.boss.height
                              && b.x >= state.boss.x && b.x <= state.boss.x + state.boss.width;
@@ -1828,7 +2037,7 @@ export function useGameEngine(
               consumed = true;
             }
           } else {
-            // ── Full collision ─────────────────────────────────────────
+            const wasHintRevealed = state.boss.hintRevealed;
             const isEmpowered: boolean = (b as any).isEmpowered === true;
             const result = hitBossVoxel(
               state.boss, b.x, b.y,
@@ -1836,10 +2045,8 @@ export function useGameEngine(
             );
 
             if (result === 'insta_kill') {
-              // ── Assassination! Core block destroyed by empowered bullet ──
               state.score += BOSS_VOXEL_SCORE * 10;
               spawnBossVoxelExplosion(state, b.x, b.y, '#ffffff');
-              // Boss will be detected as defeated on the next isBossDefeated check
               state.bullets.splice(i, 1);
               consumed = true;
               state.particles.push({
@@ -1849,8 +2056,6 @@ export function useGameEngine(
               });
 
             } else if (result === 'deflected_core') {
-              // ── Core armored — standard bullet deflected ───────────────
-              // Show a shield-spark effect, consume the bullet
               for (let sp = 0; sp < 8; sp++) {
                 const ang = (Math.PI * 2 * sp) / 8;
                 state.particles.push({
@@ -1870,17 +2075,45 @@ export function useGameEngine(
             } else if (result === 'hit_correct') {
               state.score += BOSS_VOXEL_SCORE;
               spawnBossVoxelExplosion(state, b.x, b.y, '#ffdd00');
-              if (!state.player.isOverdrive) triggerOverdrive(state);
+              if (!state.player.isOverdrive) {
+                state.mathStreak += 1;
+                state.mathKillsTotal += 1;
+                state.bestStreak = Math.max(state.bestStreak, state.mathStreak);
+                if (!state.masteredTips.includes(state.boss.fullTip)) {
+                  state.masteredTips.push(state.boss.fullTip);
+                }
+                soundEngine.playMathEureka(state.mathStreak);
+                options.onStreakChange?.(state.mathStreak, state.bestStreak);
+                options.onInsightChange?.({
+                  equation: state.boss.equation,
+                  shortHint: state.boss.shortHint,
+                  fullTip: state.boss.fullTip,
+                  lensTitle: state.boss.lensTitle,
+                  streak: state.mathStreak,
+                  isCorrect: true,
+                });
+                triggerOverdrive(state);
+              }
               state.bullets.splice(i, 1);
               consumed = true;
 
             } else if (result === 'hit_wrong') {
               state.score += Math.floor(BOSS_VOXEL_SCORE / 2);
               spawnBossVoxelExplosion(state, b.x, b.y, '#ff8800');
+              if (!wasHintRevealed && state.boss.hintRevealed) {
+                soundEngine.playElasticAbsorb();
+                options.onInsightChange?.({
+                  equation: state.boss.equation,
+                  shortHint: state.boss.shortHint,
+                  fullTip: state.boss.fullTip,
+                  lensTitle: state.boss.lensTitle,
+                  streak: state.mathStreak,
+                  isCorrect: false,
+                });
+              }
               state.bullets.splice(i, 1);
               consumed = true;
             }
-            // 'miss' → bullet keeps flying
           }
         }
 
@@ -1910,25 +2143,22 @@ export function useGameEngine(
         ep.x += ep.vx * dt;
         ep.y += ep.vy * dt;
 
-        // Out of bounds
         if (ep.y > CANVAS_H + 20 || ep.x < -20 || ep.x > CANVAS_W + 20) {
           state.enemyProjectiles.splice(i, 1);
           continue;
         }
 
-        // Player collision
         if (Math.hypot(ep.x - pcx, ep.y - pcy) <= PLAYER_HITBOX_R) {
           const mod = ep.modifier;
           const before = state.score;
           if (mod.type === 'buff') {
             state.score = state.score * mod.factor;
           } else {
-            // Allow floating-point division — score can shrink to fractions (idle-game style)
             state.score = state.score / mod.factor;
           }
+          soundEngine.playModifierHit(mod.type === 'buff');
           const delta = state.score - before;
           spawnModifierHitEffect(state, pcx, pcy, mod);
-          // Floating delta label — use formatScore so it never overflows the canvas
           state.particles.push({
             id: state.nextId++,
             x: pcx, y: pcy - 50,
@@ -1958,13 +2188,13 @@ export function useGameEngine(
   }, [canvasRef, options]);
 
   // ── Public API ────────────────────────────────────────────
-  const startGame = useCallback(() => {
+  const startGame = useCallback((mode: GameMode = 'discovery') => {
     starfield = [];
-    const fresh = makeInitialState();
+    const fresh = makeInitialState(mode);
     fresh.status = 'playing';
     const now = performance.now();
     fresh.lastInvaderSpawn = now - INITIAL_SPAWN_INTERVAL_MS + 900;
-    fresh.lastWaveAdvanceTs = now;   // seed the natural wave timer
+    fresh.lastWaveAdvanceTs = now;
     stateRef.current = fresh;
     lastReportedScore.current = -1;
     lastReportedWave.current = 1;
@@ -1973,9 +2203,10 @@ export function useGameEngine(
     options.onScoreChange(0);
     options.onWaveChange(1);
     options.onLaserChange(false, 0);
+    options.onStreakChange?.(0, 0);
+    options.onInsightChange?.(null);
   }, [options]);
 
-  /** Pause the loop for save overlay */
   const pauseGame = useCallback(() => {
     const state = stateRef.current;
     if (state.status === 'playing') {
@@ -1984,7 +2215,6 @@ export function useGameEngine(
     }
   }, [options]);
 
-  /** Resume from paused state */
   const resumeGame = useCallback(() => {
     const state = stateRef.current;
     if (state.status === 'paused') {
@@ -1993,13 +2223,21 @@ export function useGameEngine(
     }
   }, [options]);
 
-  // RAF start/stop
+  const getSessionSummary = useCallback(() => {
+    const state = stateRef.current;
+    return {
+      mathKillsTotal: state.mathKillsTotal,
+      bestStreak: state.bestStreak,
+      masteredTips: [...state.masteredTips],
+    };
+  }, []);
+
   useEffect(() => {
     rafRef.current = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(rafRef.current);
   }, [loop]);
 
-  return { startGame, pauseGame, resumeGame };
+  return { startGame, pauseGame, resumeGame, getSessionSummary };
 }
 
 export { CANVAS_W, CANVAS_H };

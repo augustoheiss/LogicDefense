@@ -1,5 +1,5 @@
 // ============================================================
-// LOGIC INVADERS — CORE TYPES  (v4 — Boss Mode + Overdrive)
+// LOGIC INVADERS — CORE TYPES  (v5 — 6 Lenses of Basic Math + Boss Mode + Overdrive)
 // ============================================================
 
 export interface Vector2 {
@@ -7,12 +7,49 @@ export interface Vector2 {
   y: number;
 }
 
+/** The 6 intuitive ways of understanding basic math */
+export type LensType =
+  | 'massinha_soma'      // Compensation / rounding to 10s in addition (19 + 7 -> 20 + 6)
+  | 'hack_japones'       // Constant difference subtraction without borrowing (32 - 19 -> 33 - 20)
+  | 'dobro_metade_mult'  // Visual multiplication: Trick of 5, Trick of 9, Double-Halve, 5+1 blocks
+  | 'corta_no_meio_div'  // Halving chain division & inverse multiplication mirror (36 ÷ 4 -> 18 ÷ 2)
+  | 'peca_faltando'      // Bridge through 10 / missing addend (13 + [?] = 20)
+  | 'alvo_multiplo';     // Flexible number sense: Target number on alien, basic expressions on bubbles
+
+export type GameMode = 'discovery' | 'arcade';
+
+/** Pedagogical insight event sent to the HUD Capsule & Session Grimoire */
+export interface MathInsightEvent {
+  equation: string;
+  lensType?: LensType;
+  lensTitle: string;
+  shortHint: string;
+  fullTip: string;
+  isCorrect: boolean;
+  streak: number;
+  timestamp?: number;
+}
+
+/** Visual tactical beam fired from ship to a bubble on click or keys 1/2/3 */
+export interface PlasmaBeamEffect {
+  id: number;
+  fromX: number;
+  fromY: number;
+  toX: number;
+  toY: number;
+  color: string;
+  life: number; // 0..1
+}
+
 /** One floating answer bubble attached to an Invader */
 export interface AnswerBubble {
-  value: number;      // the number shown in the bubble
-  isCorrect: boolean; // whether this is the right answer
+  value: number;       // numeric identifier / answer
+  label?: string;      // optional string shown in bubble (e.g. "10 + 6" in alvo_multiplo lens)
+  isCorrect: boolean;  // whether this is the right answer
   /** Relative angle offset (radians) from invader centre for orbit layout */
   angle: number;
+  /** 0 = Left [1], 1 = Center [2], 2 = Right [3] */
+  slotIndex?: 0 | 1 | 2;
 }
 
 export interface Invader {
@@ -21,7 +58,7 @@ export interface Invader {
   y: number;
   width: number;
   height: number;
-  equation: string;           // e.g. "7 × 8"
+  equation: string;           // e.g. "19 + 7" or "🎯 ALVO: 16"
   answer: number;             // correct answer (ground truth)
   hp: number;                 // current HP  (max = 10)
   maxHp: number;              // always 10
@@ -33,8 +70,15 @@ export interface Invader {
   hit: boolean;
   color: string;
   wobble: number;
-  answers: AnswerBubble[];    // 3 floating answer choices
+  answers: AnswerBubble[];    // 3 floating answer choices ([1] Left, [2] Center, [3] Right)
   lastShotTime: number;       // ms timestamp of last projectile fired
+  // ── Pedagogical Lens Metadata ──
+  lensType: LensType;
+  lensTitle: string;
+  shortHint: string;          // 1-line "Luz Guia" shown under equation pill
+  fullTip: string;            // Full friendly explanation for HUD & Grimoire
+  spawnTimeMs: number;        // performance.now() when spawned
+  hintRevealed: boolean;      // true once hesitation scaffolding or wrong hit reveals the hint
 }
 
 export interface Bullet {
@@ -43,6 +87,7 @@ export interface Bullet {
   y: number;
   speed: number;
   isLaser: boolean;           // true while laser mode is active
+  isEmpowered?: boolean;
 }
 
 /** Enemy projectile — carries a score modifier */
@@ -138,6 +183,11 @@ export interface VoxelBossState {
    * Defeat triggers when alive count falls to ≤ 15% of this value.
    */
   startingVoxelCount: number;
+  // ── Pedagogical metadata for Boss Equation ──
+  lensTitle: string;
+  shortHint: string;
+  fullTip: string;
+  hintRevealed: boolean;
 }
 
 /** One entry stored in localStorage leaderboard */
@@ -150,13 +200,19 @@ export interface LeaderboardEntry {
 
 export interface GameState {
   status: GameStatus;
+  mode: GameMode;
   score: number;
   wave: number;
-  difficultyMultiplier: number; // increases on each "Difficulty Surge"
+  difficultyMultiplier: number; // increases gently, capped for basic math
+  mathStreak: number;
+  bestStreak: number;
+  mathKillsTotal: number;
+  masteredTips: string[];
   invaders: Invader[];
   bullets: Bullet[];
   enemyProjectiles: EnemyProjectile[];
   particles: Particle[];
+  plasmaBeams: PlasmaBeamEffect[];
   player: {
     x: number;
     y: number;
@@ -179,13 +235,12 @@ export interface GameState {
   lastBulletTime: number;
   lastInvaderSpawn: number;
   spawnIntervalMs: number;    // dynamic — decreases on Difficulty Surge
-  killCount: number;          // total kills this session (for natural wave advancement)
+  killCount: number;          // kills in current wave (for natural wave advancement)
   lastWaveAdvanceTs: number;  // performance.now() timestamp of last natural wave advance
-  /** performance.now() timestamp after which the next boss is allowed to spawn.
-   *  Set to now+500ms on boss defeat/escape to create a mandatory cooldown gap. */
+  /** performance.now() timestamp after which the next boss is allowed to spawn. */
   bossSpawnCooldownTs: number;
-  /** How many bosses are still queued in the current boss-wave gauntlet.
-   *  Set to BOSS_GAUNTLET_COUNT (4) on wave trigger, decremented on each boss exit.
-   *  0 = no active gauntlet → normal invader waves. */
+  /** How many bosses are still queued in the current boss-wave gauntlet. */
   bossesRemainingInWave: number;
+  /** Tracks the last wave number that triggered a boss gauntlet so it is never skipped */
+  lastBossWaveTriggered: number;
 }
