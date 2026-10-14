@@ -129,7 +129,7 @@ describe('Local AI-Analyst Synthesizer — Core Parity & Formats', () => {
     expect(expCats[1].rawLaunchCount).toBe(2);
   });
 
-  it('generates Format 1: ai_analyst_full_md (.md) with 8 Skills, DRE, and Round-Trip protocol', () => {
+  it('generates Format 1: ai_analyst_full_md (.md) with 8 Skills, DRE, WhatsApp Report, and zero fictitious examples', () => {
     const res = generateManualAiAnalystSynthesis(SAMPLE_ROWS, SAMPLE_GOALS, 'Minha Empresa', {
       format: 'ai_analyst_full_md',
       profile: 'cfo',
@@ -139,10 +139,13 @@ describe('Local AI-Analyst Synthesizer — Core Parity & Formats', () => {
 
     expect(res.metadata.extension).toBe('md');
     expect(res.metadata.profile).toBe('cfo');
-    expect(res.content.includes('PROTOCOLO DE INGESTÃO MANUAL ATIVO')).toBe(true);
-    expect(res.content.includes('PROTOCOLO DE RETORNO MANUAL (ROUND-TRIP SEM API)')).toBe(true);
+    expect(res.content.includes('ESPELHO COMPLETO DAS ROTAS DA API PÚBLICA')).toBe(true);
+    expect(res.content.includes('RELATÓRIO EXECUTIVO WHATSAPP (EXTRAÍDO DA PLANILHA ATUAL)')).toBe(true);
+    expect(res.content.includes('FUNCTION CALLING / GOD MODE & RETORNO PARA A PLANILHA')).toBe(true);
     expect(res.content.includes('Onde devo reduzir custos neste trimestre?')).toBe(true);
     expect(res.content.includes('Projeto Cliente Alpha')).toBe(true);
+    expect(res.content.includes('Despesa Exemplo')).toBe(false);
+    expect(res.content.includes('Receita Exemplo')).toBe(false);
   });
 
   it('generates Format 2: ai_analyst_xml (.xml) with semantic XML tags for Claude/Reasoning models', () => {
@@ -157,6 +160,7 @@ describe('Local AI-Analyst Synthesizer — Core Parity & Formats', () => {
     expect(res.content.includes('<dre_synthesis currency="BRL">')).toBe(true);
     expect(res.content.includes('<statistical_distribution currency="BRL">')).toBe(true);
     expect(res.content.includes('<accrual_categories>')).toBe(true);
+    expect(res.content.includes('<whatsapp_executive_report>')).toBe(true);
   });
 
   it('generates Format 3: analysis_context_md (.md) without system prompt header', () => {
@@ -167,10 +171,10 @@ describe('Local AI-Analyst Synthesizer — Core Parity & Formats', () => {
 
     expect(res.metadata.extension).toBe('md');
     expect(res.content.includes('# 📊 SÍNTESE EXECUTIVA AI-ANALYST')).toBe(true);
-    expect(res.content.includes('PROTOCOLO DE INGESTÃO MANUAL ATIVO')).toBe(false);
+    expect(res.content.includes('ESPELHO COMPLETO DAS ROTAS DA API PÚBLICA')).toBe(false);
   });
 
-  it('generates Format 4: api_routes_bundle_json (.json) mirroring all public API routes', () => {
+  it('generates Format 4: api_routes_bundle_json (.json) mirroring all public API routes + WhatsApp + CSV export', () => {
     const res = generateManualAiAnalystSynthesis(SAMPLE_ROWS, SAMPLE_GOALS, 'Minha Empresa', {
       format: 'api_routes_bundle_json',
       asOfDate: '2026-03-15',
@@ -180,8 +184,11 @@ describe('Local AI-Analyst Synthesizer — Core Parity & Formats', () => {
     const parsed = JSON.parse(res.content);
     expect(parsed.routes['/api/v1/public/agent-prompt'].status).toBe('ok');
     expect(parsed.routes['/api/v1/public/ai-analyst'].mandatoryRoute).toBe(true);
+    expect(parsed.routes['/api/v1/public/whatsapp-report'].status).toBe('ok');
     expect(parsed.routes['/api/v1/public/summary'].dre.grossTotal).toBe(3300);
     expect(parsed.routes['/api/v1/public/transactions'].count).toBe(SAMPLE_ROWS.length);
+    expect(parsed.routes['/api/v1/public/spreadsheet/export'].format).toBe('csv');
+    expect(parsed.routes['/api/v1/public/spreadsheet/export'].csvContent.includes('Projeto Cliente Alpha')).toBe(true);
   });
 
   it('enforces LGPD / Modo Rua anonymization without altering DRE totals', () => {

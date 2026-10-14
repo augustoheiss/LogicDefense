@@ -50,6 +50,7 @@ import {
   LegalTaxesSectorWidget,
   SectorGuard,
   ExampleCSVGalleryModal,
+  GranularExportModal,
 } from '@/components/ui';
 import { useWebKeyboardShortcuts } from '@/hooks/useWebKeyboardShortcuts';
 import type { TableRow, DashboardWidgetId, WorkspacePresetType } from '@/core/types';
@@ -65,6 +66,7 @@ export default function HojeScreen() {
   const [showTableSwitcher, setShowTableSwitcher] = useState(false);
   const [showAppBuilder, setShowAppBuilder] = useState(false);
   const [showExamplesModal, setShowExamplesModal] = useState(false);
+  const [showLiveSynthesisModal, setShowLiveSynthesisModal] = useState(false);
 
   useWebKeyboardShortcuts({
     onQuickAdd: () => setShowAddModal(true),
@@ -462,11 +464,11 @@ export default function HojeScreen() {
 
             <View style={styles.topHeaderActions}>
               <Pressable
-                style={[styles.builderHeaderButton, { borderColor: 'rgba(99, 102, 241, 0.5)', backgroundColor: 'rgba(99, 102, 241, 0.14)' }]}
-                onPress={() => setShowExamplesModal(true)}
+                style={[styles.builderHeaderButton, { borderColor: 'rgba(16, 185, 129, 0.55)', backgroundColor: 'rgba(16, 185, 129, 0.14)' }]}
+                onPress={() => setShowLiveSynthesisModal(true)}
               >
-                <Text style={styles.builderButtonEmoji}>📚</Text>
-                <Text style={[styles.builderButtonText, { color: '#A5B4FC' }]}>Exemplos CSV & IA</Text>
+                <Text style={styles.builderButtonEmoji}>🧠</Text>
+                <Text style={[styles.builderButtonText, { color: '#6EE7B7', fontWeight: '700' }]}>Síntese da Planilha p/ IA</Text>
               </Pressable>
 
               <Pressable
@@ -619,6 +621,26 @@ export default function HojeScreen() {
           visible={showExamplesModal}
           onClose={() => setShowExamplesModal(false)}
           onImportExample={db.importSpreadsheet}
+          onOpenLiveSynthesis={() => {
+            setShowExamplesModal(false);
+            setShowLiveSynthesisModal(true);
+          }}
+        />
+
+        <GranularExportModal
+          visible={showLiveSynthesisModal}
+          onClose={() => setShowLiveSynthesisModal(false)}
+          rows={db.activeTable?.rows || []}
+          tableName={db.activeTable?.name || 'Minha Planilha'}
+          selectedMonth={db.selectedMonth === 'all' ? undefined : db.selectedMonth}
+          goals={db.activeTable?.goals}
+          tableId={db.activeTable?.id}
+          schema={db.activeTable?.schema}
+          investorProfile={db.activeTable?.investorProfile}
+          activeSectors={activeSectors}
+          dashboardConfig={db.activeTable?.dashboardConfig}
+          sectorParams={db.activeTable?.sectorParams}
+          initialMode="ai_analyst"
         />
       </View>
     </ErrorBoundary>

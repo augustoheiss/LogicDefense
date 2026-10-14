@@ -760,12 +760,22 @@ export default function TransactionsScreen() {
             <Pressable
               style={({ pressed }) => [
                 styles.undoButton,
+                { borderColor: 'rgba(16, 185, 129, 0.55)', backgroundColor: 'rgba(16, 185, 129, 0.14)' },
+                pressed && styles.pressed,
+              ]}
+              onPress={() => setShowGranularExportModal(true)}
+            >
+              <Text style={[styles.undoButtonText, { color: '#6EE7B7', fontWeight: '700' }]}>🧠 Síntese p/ IA</Text>
+            </Pressable>
+            <Pressable
+              style={({ pressed }) => [
+                styles.undoButton,
                 { borderColor: 'rgba(99, 102, 241, 0.45)', backgroundColor: 'rgba(99, 102, 241, 0.14)' },
                 pressed && styles.pressed,
               ]}
               onPress={() => setShowExamplesModal(true)}
             >
-              <Text style={[styles.undoButtonText, { color: '#A5B4FC' }]}>📚 Exemplos CSV</Text>
+              <Text style={[styles.undoButtonText, { color: '#A5B4FC' }]}>📚 Modelos CSV</Text>
             </Pressable>
             <Pressable
               style={({ pressed }) => [
@@ -1128,6 +1138,10 @@ export default function TransactionsScreen() {
         onOpenCustomImporter={(csv) => {
           setPrefillImporterCsv(csv);
           setShowCSVStreamModal(true);
+        }}
+        onOpenLiveSynthesis={() => {
+          setShowExamplesModal(false);
+          setShowGranularExportModal(true);
         }}
       />
 

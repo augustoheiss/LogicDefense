@@ -299,13 +299,13 @@ export function GranularExportModal({
             <View style={{ flex: 1 }}>
               <Text style={styles.title}>
                 {activeMode === 'ai_analyst'
-                  ? '🧠 Síntese Manual AI-Analyst (Entrega Direta p/ IA)'
-                  : '📤 Exportação Granular CSV por Partes'}
+                  ? '🧠 Extrator de Rotas API & Síntese IA (Planilha Atual)'
+                  : '📤 Exportação Granular CSV da Planilha Atual'}
               </Text>
               <Text style={styles.subtitle}>
-                Planilha:{' '}
+                Planilha Ativa no Navegador:{' '}
                 <Text style={{ color: colors.accent.purple, fontWeight: '700' }}>
-                  {tableName}
+                  {tableName} ({rows.length} lançamentos)
                 </Text>
               </Text>
             </View>
@@ -316,6 +316,23 @@ export function GranularExportModal({
                   : `${matchingCount} itens filtrados`}
               </Text>
             </View>
+          </View>
+
+          {/* Live Active Spreadsheet Guarantee Banner */}
+          <View
+            style={{
+              backgroundColor: 'rgba(16, 185, 129, 0.12)',
+              borderColor: 'rgba(16, 185, 129, 0.4)',
+              borderWidth: 1,
+              borderRadius: radius.sm,
+              paddingHorizontal: spacing.sm,
+              paddingVertical: 6,
+            }}
+          >
+            <Text style={{ fontSize: 11, color: '#6ee7b7', lineHeight: 15 }}>
+              📡 <Text style={{ fontWeight: '800' }}>Extração em Tempo Real da Planilha Atual ({tableName}):</Text>{' '}
+              Este painel lê os <Text style={{ fontWeight: '800' }}>{rows.length} lançamentos</Text> que estão abertos agora no seu navegador (não é modelo fictício). Ele compila localmente todas as rotas da chave API (<Text style={{ fontWeight: '700' }}>/agent-prompt</Text>, <Text style={{ fontWeight: '700' }}>/ai-analyst</Text>, <Text style={{ fontWeight: '700' }}>/analysis-context</Text>, <Text style={{ fontWeight: '700' }}>/summary</Text>, <Text style={{ fontWeight: '700' }}>/transactions</Text> + <Text style={{ fontWeight: '700' }}>Relatório WhatsApp</Text>) em texto pronto para copiar ou baixar.
+            </Text>
           </View>
 
           {/* Top-Level Mode Switcher */}
@@ -333,7 +350,7 @@ export function GranularExportModal({
                   activeMode === 'ai_analyst' && styles.modeTabTextActive,
                 ]}
               >
-                🧠 Síntese AI-Analyst (.md / .xml / .json)
+                🧠 Rotas API & AI-Analyst (.md / .xml / .json)
               </Text>
             </Pressable>
 
@@ -347,13 +364,13 @@ export function GranularExportModal({
                   activeMode === 'csv' && styles.modeTabTextActive,
                 ]}
               >
-                🧩 Exportar CSV por Partes
+                🧩 Exportar CSV da Planilha Atual
               </Text>
             </Pressable>
           </View>
 
           <ScrollView
-            style={{ maxHeight: 440 }}
+            style={{ maxHeight: 460 }}
             contentContainerStyle={{ gap: spacing.sm }}
             nestedScrollEnabled
             showsVerticalScrollIndicator
@@ -363,33 +380,33 @@ export function GranularExportModal({
                 {/* 1. Formato da Síntese */}
                 <View style={styles.sectionBlock}>
                   <Text style={styles.sectionTitle}>
-                    1. Formato da Síntese (Entrega Manual sem API)
+                    1. Escolha o Formato de Extração das Rotas da API (Planilha Atual)
                   </Text>
                   <View style={styles.formatRow}>
                     {[
                       {
                         id: 'ai_analyst_full_md',
                         icon: '📄',
-                        title: 'Dossiê AI-Analyst Completo (.md) — Recomendado',
-                        desc: 'Rota obrigatória ai-analyst + 8 Skills + DRE + Estatísticas + Categorias por Competência + Razão + Protocolo de Retorno. Cole ou anexe direto no ChatGPT, Claude ou Gemini.',
+                        title: 'Dossiê Completo AI-Analyst + WhatsApp + Rotas API (.md) — Recomendado',
+                        desc: 'Imita a chave API completa da sua planilha atual: /agent-prompt (8 Skills) + /ai-analyst (DRE, Mediana, Moda, DP, Categorias por Competência, Banco de Tempo) + Relatório WhatsApp + /transactions.',
                       },
                       {
                         id: 'ai_analyst_xml',
                         icon: '🧬',
-                        title: 'XML Semântico Estruturado (.xml)',
-                        desc: 'Tags XML (<dre_synthesis>, <statistical_distribution>, <accrual_categories>) otimizadas para modelos de raciocínio profundo (Claude 3.7/4, o1/o3, DeepSeek-R1).',
+                        title: 'XML Semântico Estruturado da Planilha Atual (.xml)',
+                        desc: 'Tags XML (<dre_synthesis>, <statistical_distribution>, <accrual_categories>, <whatsapp_executive_report>) otimizadas para Claude, o1/o3 e DeepSeek-R1.',
                       },
                       {
                         id: 'analysis_context_md',
                         icon: '📊',
-                        title: 'Contexto Analítico Puro (.md — Rota /analysis-context)',
-                        desc: 'Apenas a radiografia contábil e estatística em Markdown, sem o System Prompt. Ideal para anexar em Claude Projects, Custom GPTs ou NotebookLM.',
+                        title: 'Contexto Analítico + Relatório WhatsApp (.md — Rota /analysis-context)',
+                        desc: 'Apenas os dados contábeis, estatísticos e relatório WhatsApp da sua planilha atual em Markdown puro (sem System Prompt).',
                       },
                       {
                         id: 'api_routes_bundle_json',
                         icon: '📦',
-                        title: 'Bundle Espelho das Rotas da API (.json)',
-                        desc: 'Espelho offline completo contendo /agent-prompt, /ai-analyst, /summary e /transactions em um único arquivo JSON estruturado.',
+                        title: 'Todas as Rotas da Chave API em JSON (.json)',
+                        desc: 'Extrai /api/v1/public/agent-prompt, /ai-analyst, /analysis-context, /whatsapp-report, /summary, /transactions e /spreadsheet/export da sua planilha atual.',
                       },
                     ].map((opt) => (
                       <Pressable
@@ -456,7 +473,7 @@ export function GranularExportModal({
                       ]}
                       onPress={() => setAnonymizeDescriptions(false)}
                     >
-                      <Text style={styles.chipText}>🔓 Descrições Originais</Text>
+                      <Text style={styles.chipText}>🔓 Descrições Reais da Planilha</Text>
                     </Pressable>
                     <Pressable
                       style={[
@@ -517,7 +534,7 @@ export function GranularExportModal({
                 {/* CSV Scope Selector */}
                 <View style={styles.sectionBlock}>
                   <Text style={styles.sectionTitle}>
-                    1. O que você deseja exportar? (Escopo)
+                    1. O que você deseja exportar da planilha "{tableName}"? (Escopo)
                   </Text>
                   <View style={styles.chipsRow}>
                     {[
@@ -558,8 +575,7 @@ export function GranularExportModal({
                           Compacto para Agente IA
                         </Text>
                         <Text style={styles.formatDesc}>
-                          4-5 colunas essenciais. Economiza 70% de tokens ao colar no
-                          ChatGPT ou Claude.
+                          4-5 colunas essenciais da sua planilha atual. Economiza 70% de tokens.
                         </Text>
                       </View>
                     </Pressable>
@@ -593,7 +609,7 @@ export function GranularExportModal({
                         <Text style={styles.formatTitle}>Backup Completo v3</Text>
                         <Text style={styles.formatDesc}>
                           Contém metas hierárquicas, colunas personalizadas e perfis de
-                          investidor.
+                          investidor da planilha atual.
                         </Text>
                       </View>
                     </Pressable>
@@ -625,23 +641,25 @@ export function GranularExportModal({
               </>
             )}
 
-            {/* Code Textarea Preview */}
+            {/* WhatsApp-style Multiline Text Preview of the Active Spreadsheet */}
             <View style={styles.previewContainer}>
               <View style={styles.previewHeader}>
                 <Text style={styles.previewTitle}>
                   {activeMode === 'ai_analyst'
-                    ? `Pré-visualização da Síntese (.${synthesisResult?.metadata.extension || 'md'}):`
-                    : 'Pré-visualização do Bloco de Texto CSV:'}
+                    ? `📝 Texto Extraído da Planilha "${tableName}" (.${synthesisResult?.metadata.extension || 'md'} — Igual à Exportação WhatsApp):`
+                    : `📝 Texto CSV Extraído da Planilha "${tableName}":`}
                 </Text>
                 {copiedStatus !== '' && (
                   <Text style={styles.copiedBadge}>{copiedStatus}</Text>
                 )}
               </View>
-              <ScrollView style={styles.codeBox} nestedScrollEnabled>
-                <Text selectable style={styles.codeText}>
-                  {previewText}
-                </Text>
-              </ScrollView>
+              <TextInput
+                style={[styles.codeBox, styles.codeText, { height: 180, textAlignVertical: 'top' }]}
+                multiline
+                value={previewText}
+                editable={false}
+                selectTextOnFocus
+              />
             </View>
           </ScrollView>
 
@@ -654,7 +672,7 @@ export function GranularExportModal({
             <Pressable style={[styles.btn, styles.btnCopy]} onPress={handleCopy}>
               <Text style={styles.btnCopyText}>
                 {activeMode === 'ai_analyst'
-                  ? `📋 Copiar Síntese (.${synthesisResult?.metadata.extension || 'md'})`
+                  ? `📋 Copiar Texto da Planilha (.${synthesisResult?.metadata.extension || 'md'})`
                   : '📋 Copiar Texto CSV'}
               </Text>
             </Pressable>

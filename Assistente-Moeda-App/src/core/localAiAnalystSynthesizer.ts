@@ -75,6 +75,13 @@ export interface CategoryAccrualSummary {
   avgPerGlobalMonth: number;
   sharePercentage: number;
   sampleDescriptions: string[];
+  meanLaunchValue: number;
+  maxLaunchValue: number;
+  minLaunchValue: number;
+  medianLaunchValue: number;
+  stdDevLaunchValue: number;
+  accrualDailyRate: number;
+  accrualWeeklyRate: number;
 }
 
 export interface SynthesisMetadata {
@@ -240,11 +247,15 @@ export function buildAccrualCategorySummaries(
 
   if (filtered.length === 0) return [];
 
+  let minD: string | null = null;
+  let maxD: string | null = null;
+
   const catMap = new Map<
     string,
     {
       totalValue: number;
       launchCount: number;
+      rawValues: number[];
       monthsSet: Set<string>;
       descriptions: Set<string>;
     }
@@ -254,14 +265,21 @@ export function buildAccrualCategorySummaries(
 
   for (const row of filtered) {
     const cat = normalizeCategoryName(row, anonymize);
-    const absRow = { ...row, value: Math.abs(row.value) };
+    const absVal = Math.abs(row.value);
+    const absRow = { ...row, value: absVal };
     const contribs = rowContributions(absRow);
+
+    const startD = row.periodStart || row.date;
+    const endD = row.periodEnd || row.date;
+    if (startD && (!minD || startD < minD)) minD = startD;
+    if (endD && (!maxD || endD > maxD)) maxD = endD;
 
     let bucket = catMap.get(cat);
     if (!bucket) {
       bucket = {
         totalValue: 0,
         launchCount: 0,
+        rawValues: [],
         monthsSet: new Set<string>(),
         descriptions: new Set<string>(),
       };
@@ -269,6 +287,7 @@ export function buildAccrualCategorySummaries(
     }
 
     bucket.launchCount += 1;
+    bucket.rawValues.push(absVal);
     if (!anonymize && row.description && bucket.descriptions.size < 4) {
       bucket.descriptions.add(row.description.trim());
     }
@@ -283,11 +302,39 @@ export function buildAccrualCategorySummaries(
     }
   }
 
+  let activeDaysSpan = 1;
+  if (minD && maxD) {
+    const d1 = new Date(minD + 'T12:00:00');
+    const d2 = new Date(maxD + 'T12:00:00');
+    const diffDays = Math.floor((d2.getTime() - d1.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+    if (!isNaN(diffDays) && diffDays >= 1) activeDaysSpan = diffDays;
+  }
+
   const effectiveGlobalMonths = Math.max(1, globalMonthsCount);
   const summaries: CategoryAccrualSummary[] = [];
 
   for (const [category, data] of catMap.entries()) {
     const activeMonthsCount = Math.max(1, data.monthsSet.size);
+    const sortedVals = [...data.rawValues].sort((a, b) => a - b);
+    const count = sortedVals.length;
+    const meanVal = count > 0 ? data.totalValue / count : 0;
+    const maxVal = count > 0 ? sortedVals[count - 1] : 0;
+    const minVal = count > 0 ? sortedVals[0] : 0;
+    const mid = Math.floor(count / 2);
+    const medianVal =
+      count === 0
+        ? 0
+        : count % 2 === 1
+        ? sortedVals[mid]
+        : (sortedVals[mid - 1] + sortedVals[mid]) / 2;
+    const variance =
+      count > 1
+        ? sortedVals.reduce((acc, v) => acc + Math.pow(v - meanVal, 2), 0) / (count - 1)
+        : 0;
+    const stdDevVal = Math.sqrt(variance);
+    const dailyRate = data.totalValue / activeDaysSpan;
+    const weeklyRate = dailyRate * 7;
+
     summaries.push({
       category,
       entryType: entryTypeTarget,
@@ -298,10 +345,181 @@ export function buildAccrualCategorySummaries(
       avgPerGlobalMonth: data.totalValue / effectiveGlobalMonths,
       sharePercentage: grandTotal > 0 ? (data.totalValue / grandTotal) * 100 : 0,
       sampleDescriptions: Array.from(data.descriptions),
+      meanLaunchValue: meanVal,
+      maxLaunchValue: maxVal,
+      minLaunchValue: minVal,
+      medianLaunchValue: medianVal,
+      stdDevLaunchValue: stdDevVal,
+      accrualDailyRate: dailyRate,
+      accrualWeeklyRate: weeklyRate,
     });
   }
 
   return summaries.sort((a, b) => b.totalAccruedValue - a.totalAccruedValue);
+}
+
+// ── Live WhatsApp Executive Report Builder (100% Parity with exportService.ts) ──
+
+export function buildLocalWhatsAppReportText(
+  tableName: string,
+  metrics: TableMetrics,
+  goals: TableGoals,
+  reportMonth: string,
+  rows: TableRow[] = [],
+): string {
+  const realRows = rows.filter((r) => r.generatedBy === undefined);
+  const partnerInRows = realRows.filter((r) => r.entryType === 'partner_in');
+  const partnerOutRows = realRows.filter((r) => r.entryType === 'partner_out');
+
+  const usedInIds = new Set<string>();
+  const usedOutIds = new Set<string>();
+  const canceledPartnerships: Array<{
+    inRow: TableRow;
+    outRow: TableRow;
+    value: number;
+  }> = [];
+
+  for (const inRow of partnerInRows) {
+    const matchOut = partnerOutRows.find(
+      (outRow) =>
+        !usedOutIds.has(outRow.id) &&
+        Math.abs(Math.abs(outRow.value) - Math.abs(inRow.value)) < 0.01,
+    );
+    if (matchOut) {
+      usedInIds.add(inRow.id);
+      usedOutIds.add(matchOut.id);
+      canceledPartnerships.push({
+        inRow,
+        outRow: matchOut,
+        value: Math.abs(inRow.value),
+      });
+    }
+  }
+
+  const recentPartnerOut = [...partnerOutRows]
+    .sort((a, b) => (b.date || '').localeCompare(a.date || ''))
+    .slice(0, 8);
+
+  const lines: string[] = [];
+  lines.push(`📊 *Relatório Financeiro — ${tableName}*`);
+  lines.push(`📅 Referência: *${reportMonth}*`);
+  lines.push('');
+
+  const monthData = metrics.byMonth[reportMonth];
+  const [rYear, rMonth] = reportMonth.split('-').map(Number);
+  const effGoals = getEffectiveGoals({ year: rYear, month: rMonth }, goals);
+  const dailyGoalForMonth = effGoals.dailyGoal || resolveGoalForYear(goals.dailyGoals, rYear);
+  const weeklyGoalForMonth = effGoals.weeklyGoal || resolveGoalForYear(goals.weeklyGoals, rYear);
+
+  if (monthData) {
+    const monthExp = monthData.expense ?? 0;
+    const monthNet = monthData.grossMonthly - monthExp;
+    lines.push(`🔹 *Resumo de Resultados do Mês (${reportMonth})*`);
+    lines.push(`  • Receita Bruta: *${fmtBRL(monthData.grossMonthly)}*`);
+    if (monthExp > 0) {
+      lines.push(`  • Custos Rateados no Mês: *-${fmtBRL(monthExp)}*`);
+      lines.push(`  • Saldo Líquido do Mês: *${fmtBRL(monthNet)}*`);
+    }
+    lines.push(
+      `  • Média Diária: ${fmtBRL(monthData.dailyAvg)}${
+        dailyGoalForMonth > 0 ? ` (Meta: ${fmtBRL(dailyGoalForMonth)})` : ''
+      }`,
+    );
+    lines.push(
+      `  • Média Semanal: ${fmtBRL(monthData.weeklyAvg)}${
+        weeklyGoalForMonth > 0 ? ` (Meta: ${fmtBRL(weeklyGoalForMonth)})` : ''
+      }`,
+    );
+    lines.push('');
+
+    // Weekly breakdown inside reportMonth
+    const monthRevenueRows = realRows
+      .filter(
+        (r) =>
+          (r.entryType === 'revenue' || !r.entryType) &&
+          r.value > 0 &&
+          r.date.startsWith(reportMonth),
+      )
+      .sort((a, b) => a.date.localeCompare(b.date));
+
+    if (monthRevenueRows.length > 0) {
+      lines.push(`📅 *Extrato de Entradas por Semana (${reportMonth})*`);
+      const weekMap = new Map<string, TableRow[]>();
+      for (const r of monthRevenueRows) {
+        const monKey = toLocalKey(getMondayOf(new Date(r.date + 'T12:00:00')));
+        const list = weekMap.get(monKey) || [];
+        list.push(r);
+        weekMap.set(monKey, list);
+      }
+      let wIdx = 1;
+      for (const [monKey, wRows] of weekMap.entries()) {
+        const sunKey = toLocalKey(getSundayOf(new Date(monKey + 'T12:00:00')));
+        const wTotal = wRows.reduce((acc, x) => acc + x.value, 0);
+        const wGoal = getWeeklyGoalForDate(sunKey, goals);
+        const wDiff = wTotal - wGoal;
+        const statusStr =
+          wGoal > 0
+            ? wDiff >= 0
+              ? `🟢 Meta Batida (+${fmtBRL(wDiff)})`
+              : `🔴 Faltam ${fmtBRL(Math.abs(wDiff))}`
+            : '';
+        lines.push(
+          `  *Semana ${wIdx} (${monKey} a ${sunKey}):* *${fmtBRL(wTotal)}* ${statusStr}`,
+        );
+        for (const item of wRows) {
+          lines.push(
+            `    ▫️ ${item.date}: ${fmtBRL(item.value)}${
+              item.description ? ` (${item.description})` : ''
+            }`,
+          );
+        }
+        wIdx += 1;
+      }
+      lines.push('');
+    }
+  }
+
+  lines.push(`🌐 *Visão Global & Metas de Sobrevivência (Planilha Completa)*`);
+  lines.push(`  • Total Bruto Acumulado: *${fmtBRL(metrics.grossTotal)}*`);
+  lines.push(`  • Total de Despesas Operacionais: *-${fmtBRL(metrics.totalExpenses)}*`);
+  lines.push(`  • Saldo Operacional Líquido: *${fmtBRL(metrics.netBalance)}*`);
+  lines.push(`  • Média Diária Global: ${fmtBRL(metrics.globalDailyAvg)}`);
+  lines.push(`  • Média Semanal Global: ${fmtBRL(metrics.globalWeeklyAvg)}`);
+  lines.push(`  • Média Mensal Global: ${fmtBRL(metrics.globalMonthlyAvg)}`);
+  if (metrics.totalExpenses > 0) {
+    lines.push(
+      `  • Sobrevivência (Break-Even): Diária ${fmtBRL(metrics.survivalDaily)} | Semanal ${fmtBRL(
+        metrics.survivalWeekly,
+      )} | Mensal ${fmtBRL(metrics.survivalMonthly)}`,
+    );
+  }
+
+  if (metrics.totalPartnerIn > 0 || metrics.totalPartnerOut > 0) {
+    lines.push('');
+    lines.push(`🤝 *Balanço de Parcerias & Repasses (Isolado da Operação)*`);
+    lines.push(`  • Entradas de Parceria: ${fmtBRL(metrics.totalPartnerIn)}`);
+    lines.push(`  • Saídas de Parceria: -${fmtBRL(metrics.totalPartnerOut)}`);
+    lines.push(`  • Caixa Líquido c/ Parceria: *${fmtBRL(metrics.netWithPartner)}*`);
+    if (canceledPartnerships.length > 0) {
+      lines.push(
+        `  • Conciliações Mútuas Anuladas (Wash): ${canceledPartnerships.length} par(es) (${fmtBRL(
+          canceledPartnerships.reduce((s, p) => s + p.value, 0),
+        )})`,
+      );
+    }
+    if (recentPartnerOut.length > 0) {
+      lines.push(`  • Últimos Repasses Efetuados:`);
+      for (const po of recentPartnerOut.slice(0, 5)) {
+        lines.push(
+          `    ▫️ ${po.date}: -${fmtBRL(Math.abs(po.value))}${
+            po.description ? ` — ${po.description}` : ''
+          }`,
+        );
+      }
+    }
+  }
+
+  return lines.join('\n');
 }
 
 // ── System Persona Prompt Builder (Manual / Offline Adapted) ────────────────
@@ -314,15 +532,15 @@ export function buildManualPersonaPrompt(
     (s, i) => `   ${i + 1}. **${s.name}**: ${s.discipline} — *${s.focus}*`,
   ).join('\n');
 
-  const commonHeader = `Você é o **Assistente Moeda Native Agent** — Agente Financeiro Autônomo e Consultor Executivo operando em **Modo de Ingestão Direta (Síntese Manual Completa)** para a planilha **"${tableName}"**.
+  const commonHeader = `Você é o **Assistente Moeda Native Agent** — Agente Financeiro Autônomo e Consultor Executivo operando com a **Extração Completa das Rotas da API da Planilha Atual Renderizada no Navegador: "${tableName}"**.
 Você opera com a fusão das 8 disciplinas financeiras de elite do Assistente Moeda:
 ${skillsLines}
 
-⚡ **PROTOCOLO DE INGESTÃO MANUAL ATIVO (ETAPA 1 + ETAPA 2 CONSOLIDADAS NESTE DOCUMENTO)**:
-1. **ETAPA 1 (Ingestão de Prompt & Skills)**: Concluída neste cabeçalho.
-2. **ETAPA 2 (Síntese Obrigatória \`AI-Analyst\` Embarcada)**:
-   - Em vez de realizar chamadas HTTP externas para a API, **você já está recebendo abaixo o Dossiê Executivo Completo da rota \`ai-analyst\` e \`analysis-context\` pré-compilado localmente pelo motor determinístico do aplicativo**.
-   - **NÃO tente fazer requisições HTTP externas**. Todos os cálculos de DRE, Regime de Competência (\`periodStart\`→\`periodEnd\`), Estatísticas Avançadas (Mediana, Moda, Desvio Padrão), Isolamento de Parcerias, Banco de Tempo e Razão Analítico já estão auditados e prontos para sua análise imediata.`;
+⚡ **ESPELHO COMPLETO DAS ROTAS DA API PÚBLICA (EXTRAÍDO DA PLANILHA ATUAL DO CLIENTE)**:
+1. **ETAPA 1 (\`GET /api/v1/public/agent-prompt\`)**: Concluída neste cabeçalho com as 8 Skills Financeiras e o Protocolo de Aula Executiva.
+2. **ETAPA 2 (\`POST /api/v1/public/ai-analyst\` + \`GET /api/v1/public/analysis-context\`)**:
+   - Você está recebendo abaixo a **Síntese Real e Integral da Planilha Atual ("${tableName}")** compilada diretamente da memória do navegador do usuário, incluindo o **Relatório Executivo (Padrão WhatsApp)**, **DRE por Competência**, **Estatísticas Avançadas (Mediana, Moda, Desvio Padrão)**, **Anatomia de Categorias**, **Banco de Tempo** e **Razão de Transações (\`/api/v1/public/transactions\`)**.
+   - **NÃO tente fazer requisições HTTP externas**. Todos os cálculos abaixo pertencem à planilha ativa que o usuário está visualizando agora.`;
 
   const methodologyBlock = `🎓 **FILOSOFIA DE AULA EXECUTIVA & RIGOR METODOLÓGICO (INEGOCIÁVEL)**:
 - **ZERO DUMP DE DADOS**: Nunca responda com tabelas cruas ou números soltos sem explicar a **causa raiz**, o **impacto futuro no caixa** e a **recomendação prática acionável**.
@@ -388,35 +606,56 @@ ${methodologyBlock}`;
 
 // ── Manual Round-Trip Footer (Return to App without API) ────────────────────
 
-export function buildManualRoundTripInstructions(): string {
+export function buildManualRoundTripInstructions(realRows: TableRow[] = []): string {
+  const sampleRow = realRows[realRows.length - 1];
+  const sampleDate = sampleRow?.date || 'YYYY-MM-DD';
+  const sampleDesc = sampleRow?.description?.replace(/;/g, ',') || 'Descrição clara do item';
+  const sampleVal = sampleRow
+    ? sampleRow.entryType === 'expense'
+      ? -Math.abs(sampleRow.value)
+      : Math.abs(sampleRow.value)
+    : -150.0;
+  const sampleType = sampleRow?.entryType || 'expense';
+  const sampleCat = sampleRow?.category || 'OPERACIONAL';
+
   return `---
-## 🔄 PROTOCOLO DE RETORNO MANUAL (ROUND-TRIP SEM API)
+## ⚡ FUNCTION CALLING / GOD MODE & RETORNO PARA A PLANILHA (\`batch-sync\` / CSV)
 
-Caso o usuário peça para você **adicionar, lançar, projetar ou categorizar novas transações** para devolver ao aplicativo **Assistente Moeda**, você pode entregar a resposta em qualquer um dos **2 formatos oficiais abaixo** (o usuário pode colar diretamente no app):
+Se o usuário pedir explicitamente para **adicionar, registrar ou sincronizar novas transações** na planilha, responda com o bloco JSON oficial da rota \`POST /api/v1/public/transactions/batch-sync\` ou com o bloco CSV de colagem direta:
 
-### Opção A — Bloco CSV para "📋 Colar Texto CSV" no App (Recomendado para Importação Manual Rápida)
-Basta fornecer um bloco \`\`\`csv com cabeçalho \`Data;Valor;Descrição;Tipo;Categoria;Início;Fim\`:
-\`\`\`csv
-Data;Valor;Descrição;Tipo;Categoria;Início;Fim
-2026-10-15;-150.00;Despesa Exemplo;expense;OPERACIONAL;;
-2026-10-16;1200.00;Receita Exemplo;revenue;SERVIÇOS;;
-2026-10-17;-1200.00;Seguro Anual Rateado;expense;VEÍCULO;2026-10-17;2027-10-16
+### 1. Formato JSON Function Calling (Padrão API Assistente Moeda)
+Para transação única:
+\`\`\`json
+{
+  "action": "add_transaction",
+  "parameters": {
+    "description": "${sampleDesc}",
+    "value": ${sampleVal.toFixed(2)},
+    "date": "${sampleDate}",
+    "period_start": "${sampleDate}",
+    "period_end": "${sampleDate}"
+  }
+}
 \`\`\`
 
-### Opção B — Bloco JSON Function Calling / God Mode (Compatível com Console de API & Batch-Sync)
-Se o usuário pedir explicitamente o formato JSON da API:
+Para lote de transações / extratos / faturas:
 \`\`\`json
 {
   "action": "bulk_add_transactions",
   "parameters": {
     "transactions": [
-      { "description": "Despesa Exemplo", "value": -150.00, "date": "2026-10-15", "category": "OPERACIONAL" },
-      { "description": "Receita Exemplo", "value": 1200.00, "date": "2026-10-16", "category": "SERVIÇOS" }
+      { "description": "${sampleDesc}", "value": ${sampleVal.toFixed(2)}, "date": "${sampleDate}", "category": "${sampleCat}" }
     ]
   }
 }
 \`\`\`
-> **Regras Estritas de Sinalização**: Despesas = números **NEGATIVOS** (ex: \`-150.00\`); Receitas e Aportes = números **POSITIVOS** (ex: \`1200.00\`). Para lançamentos periódicos (seguros, anuidades, contratos), preencha \`period_start\`/\`Início\` e \`period_end\`/\`Fim\` em uma única transação.`;
+
+### 2. Formato CSV para Colagem Direta ("📋 Colar Texto CSV" na Aba Planilha)
+\`\`\`csv
+Data;Valor;Descrição;Tipo;Categoria;Início;Fim
+${sampleDate};${sampleVal.toFixed(2)};${sampleDesc};${sampleType};${sampleCat};${sampleRow?.periodStart || ''};${sampleRow?.periodEnd || ''}
+\`\`\`
+> **Regras estritas**: Despesas = números **NEGATIVOS** (ex: \`-120.00\`); Receitas = números **POSITIVOS** (ex: \`2500.00\`). Vigências periódicas em transação única com \`period_start\` e \`period_end\`. Omitir IDs manuais.`;
 }
 
 // ── Core Analytical Context Builder (100% Parity with context_builder.py) ───
@@ -428,6 +667,7 @@ export function buildLocalAnalysisContext(
   options?: Partial<ManualSynthesisOptions>,
 ): {
   markdown: string;
+  whatsappReport: string;
   metrics: TableMetrics;
   effectiveRows: TableRow[];
   ledgerTier: 1 | 2 | 3 | 4;
@@ -714,13 +954,19 @@ export function buildLocalAnalysisContext(
           ? ` | Ex: *${cat.sampleDescriptions.slice(0, 3).join(', ')}*`
           : '';
       lines.push(
-        `- **${cat.category}**: Total Rateado: **${fmtBRL(cat.totalAccruedValue)}** (**${fmtPct(
-          cat.sharePercentage,
-        )}** do total) | Frequência: **${cat.rawLaunchCount}x** em ${
-          cat.activeMonthsCount
-        } mês(es) | Média quando ativo: ${fmtBRL(
+        `- **${cat.category}** (${cat.rawLaunchCount}x): Total Rateado: **${fmtBRL(
+          cat.totalAccruedValue,
+        )}** (**${fmtPct(cat.sharePercentage)}**) | Média/Lanç: ${fmtBRL(
+          cat.meanLaunchValue,
+        )} | Mediana: ${fmtBRL(cat.medianLaunchValue)} | DP: ${fmtBRL(
+          cat.stdDevLaunchValue,
+        )} | Max: ${fmtBRL(cat.maxLaunchValue)} | Min: ${fmtBRL(
+          cat.minLaunchValue,
+        )} | Diária (Competência): ${fmtBRL(cat.accrualDailyRate)} | Semanal: ${fmtBRL(
+          cat.accrualWeeklyRate,
+        )} | Média em meses ativos (${cat.activeMonthsCount}m): ${fmtBRL(
           cat.avgPerActiveMonth,
-        )}/mês | Média diluída global: ${fmtBRL(cat.avgPerGlobalMonth)}/mês${descSample}`,
+        )}/mês${descSample}`,
       );
     }
 
@@ -745,11 +991,15 @@ export function buildLocalAnalysisContext(
     lines.push(`### 7.3 Composição de Fontes de Receita Operacional`);
     for (const cat of revenueCategories.slice(0, 12)) {
       lines.push(
-        `- **${cat.category}**: **${fmtBRL(cat.totalAccruedValue)}** (**${fmtPct(
-          cat.sharePercentage,
-        )}**) | Frequência: **${cat.rawLaunchCount}x** | Média em meses ativos: ${fmtBRL(
-          cat.avgPerActiveMonth,
-        )}/mês`,
+        `- **${cat.category}** (${cat.rawLaunchCount}x): **${fmtBRL(
+          cat.totalAccruedValue,
+        )}** (**${fmtPct(cat.sharePercentage)}**) | Média/Lanç: ${fmtBRL(
+          cat.meanLaunchValue,
+        )} | Mediana: ${fmtBRL(cat.medianLaunchValue)} | DP: ${fmtBRL(
+          cat.stdDevLaunchValue,
+        )} | Diária (Competência): ${fmtBRL(cat.accrualDailyRate)} | Semanal: ${fmtBRL(
+          cat.accrualWeeklyRate,
+        )} | Média em meses ativos: ${fmtBRL(cat.avgPerActiveMonth)}/mês`,
       );
     }
   }
@@ -894,9 +1144,23 @@ export function buildLocalAnalysisContext(
     lines.push('');
   }
 
-  // ── 12. RAZÃO ANALÍTICO DE LANÇAMENTOS (4-TIER CASCADE COMPRESSION) ──
+  // ── 11.5 RELATÓRIO EXECUTIVO WHATSAPP DA PLANILHA ATUAL ──
+  const whatsappReport = buildLocalWhatsAppReportText(
+    tableName,
+    metrics,
+    goals,
+    refYearMonth,
+    effectiveRows,
+  );
+  lines.push(`## 📱 12. RELATÓRIO EXECUTIVO WHATSAPP (EXTRAÍDO DA PLANILHA ATUAL)`);
+  lines.push('```text');
+  lines.push(whatsappReport);
+  lines.push('```');
+  lines.push('');
+
+  // ── 13. RAZÃO ANALÍTICO DE LANÇAMENTOS (4-TIER CASCADE COMPRESSION) ──
   lines.push(
-    `## 🧾 12. RAZÃO ANALÍTICO DE LANÇAMENTOS (TIER ${ledgerTier} — ${totalRowCount} REGISTROS)`,
+    `## 🧾 13. RAZÃO ANALÍTICO DE LANÇAMENTOS (\`/api/v1/public/transactions\` — TIER ${ledgerTier} — ${totalRowCount} REGISTROS)`,
   );
 
   if (totalRowCount === 0) {
@@ -946,7 +1210,7 @@ export function buildLocalAnalysisContext(
       monthlyAgg.set(ym, cur);
     }
 
-    lines.push(`### 12.1 Matriz Histórica Mensal (Fluxo de Caixa)`);
+    lines.push(`### 13.1 Matriz Histórica Mensal (Fluxo de Caixa)`);
     lines.push(`| Mês (YYYY-MM) | Qtd | Receita Caixa | Despesa Lançada | Aportes | Saldo Caixa |`);
     lines.push(`| :--- | ---: | ---: | ---: | ---: | ---: |`);
     for (const [ym, data] of Array.from(monthlyAgg.entries()).sort((a, b) =>
@@ -965,7 +1229,7 @@ export function buildLocalAnalysisContext(
       .sort((a, b) => Math.abs(b.value) - Math.abs(a.value))
       .slice(0, 15);
     if (topExpenses.length > 0) {
-      lines.push(`### 12.2 Top ${topExpenses.length} Maiores Despesas Estruturais do Histórico`);
+      lines.push(`### 13.2 Top ${topExpenses.length} Maiores Despesas Estruturais do Histórico`);
       for (const r of topExpenses) {
         const period =
           r.periodStart && r.periodEnd ? ` (Vigência: ${r.periodStart} a ${r.periodEnd})` : '';
@@ -979,7 +1243,7 @@ export function buildLocalAnalysisContext(
     }
 
     // Recent granular tail
-    lines.push(`### 12.3 Lançamentos Mais Recentes (${recentSlice.length} itens detalhados)`);
+    lines.push(`### 13.3 Lançamentos Mais Recentes (${recentSlice.length} itens detalhados)`);
     lines.push(`| Data | Tipo | Valor | Categoria | Descrição | Vigência |`);
     lines.push(`| :--- | :--- | ---: | :--- | :--- | :--- |`);
     for (const r of recentSlice) {
@@ -999,6 +1263,7 @@ export function buildLocalAnalysisContext(
 
   return {
     markdown: lines.join('\n'),
+    whatsappReport,
     metrics,
     effectiveRows,
     ledgerTier,
@@ -1016,7 +1281,7 @@ function buildXmlSynthesisDocument(
 ): string {
   const profile = options.profile || 'native';
   const personaPrompt = buildManualPersonaPrompt(profile, tableName);
-  const roundTrip = buildManualRoundTripInstructions();
+  const roundTrip = buildManualRoundTripInstructions(analysis.effectiveRows);
   const m = analysis.metrics;
   const asOfDate = options.asOfDate || new Date().toISOString().slice(0, 10);
 
@@ -1037,6 +1302,10 @@ function buildXmlSynthesisDocument(
           c.rawLaunchCount
         }" active_months="${c.activeMonthsCount}" avg_active_month_brl="${c.avgPerActiveMonth.toFixed(
           2,
+        )}" median_brl="${c.medianLaunchValue.toFixed(2)}" std_dev_brl="${c.stdDevLaunchValue.toFixed(
+          2,
+        )}" daily_accrual_brl="${c.accrualDailyRate.toFixed(2)}" weekly_accrual_brl="${c.accrualWeeklyRate.toFixed(
+          2,
         )}" />`,
     )
     .join('\n');
@@ -1049,7 +1318,9 @@ function buildXmlSynthesisDocument(
           2,
         )}" share_pct="${c.sharePercentage.toFixed(1)}" frequency_count="${
           c.rawLaunchCount
-        }" active_months="${c.activeMonthsCount}" />`,
+        }" active_months="${c.activeMonthsCount}" median_brl="${c.medianLaunchValue.toFixed(
+          2,
+        )}" std_dev_brl="${c.stdDevLaunchValue.toFixed(2)}" />`,
     )
     .join('\n');
 
@@ -1108,6 +1379,12 @@ ${expCatsXml}
 ${revCatsXml}
   </accrual_categories>
 
+  <whatsapp_executive_report>
+<![CDATA[
+${escapeCdata(analysis.whatsappReport)}
+]]>
+  </whatsapp_executive_report>
+
   <analytical_context_markdown>
 <![CDATA[
 ${escapeCdata(analysis.markdown)}
@@ -1134,6 +1411,16 @@ function buildApiRoutesBundleJson(
   const asOfDate = options.asOfDate || new Date().toISOString().slice(0, 10);
   const m = analysis.metrics;
 
+  const csvLines = [
+    'Data;Valor;Descrição;Tipo;Categoria;Início;Fim',
+    ...analysis.effectiveRows.map((r) => {
+      const signed = r.entryType === 'expense' || r.entryType === 'partner_out' ? -Math.abs(r.value) : r.value;
+      const desc = (r.description || '').replace(/;/g, ',').replace(/\r?\n/g, ' ');
+      const cat = normalizeCategoryName(r, Boolean(options.anonymizeDescriptions));
+      return `${r.date};${signed.toFixed(2)};${desc};${r.entryType || 'revenue'};${cat};${r.periodStart || ''};${r.periodEnd || ''}`;
+    }),
+  ];
+
   const bundle = {
     _meta: {
       generator: 'Assistente Moeda — Local AI-Analyst Synthesizer v3.1',
@@ -1144,7 +1431,7 @@ function buildApiRoutesBundleJson(
       anonymized: Boolean(options.anonymizeDescriptions),
       selectedMonth: options.selectedMonth || 'all',
       instructionForAI:
-        'Este arquivo JSON contém o espelho exato de todas as rotas da API pública do Assistente Moeda (/agent-prompt, /ai-analyst, /analysis-context, /summary e /transactions) pré-computadas localmente. Analise diretamente a chave routes["/api/v1/public/ai-analyst"] sem realizar chamadas HTTP externas.',
+        'Este arquivo JSON contém o espelho exato de todas as rotas da API pública do Assistente Moeda (/agent-prompt, /ai-analyst, /analysis-context, /summary, /transactions, /spreadsheet/export e /whatsapp-report) extraídas diretamente da planilha atual do usuário no navegador.',
     },
     routes: {
       '/api/v1/public/agent-prompt': {
@@ -1160,11 +1447,16 @@ function buildApiRoutesBundleJson(
           options.userCustomPrompt?.trim() ||
           'Realize o diagnóstico executivo completo da minha planilha atual usando as 8 skills financeiras.',
         executiveContextMarkdown: analysis.markdown,
-        roundTripProtocolMarkdown: buildManualRoundTripInstructions(),
+        whatsappExecutiveReport: analysis.whatsappReport,
+        roundTripProtocolMarkdown: buildManualRoundTripInstructions(analysis.effectiveRows),
       },
       '/api/v1/public/analysis-context': {
         status: 'ok',
         markdown: analysis.markdown,
+      },
+      '/api/v1/public/whatsapp-report': {
+        status: 'ok',
+        text: analysis.whatsappReport,
       },
       '/api/v1/public/summary': {
         status: 'ok',
@@ -1232,6 +1524,11 @@ function buildApiRoutesBundleJson(
           generated_by: r.generatedBy || null,
         })),
       },
+      '/api/v1/public/spreadsheet/export': {
+        status: 'ok',
+        format: 'csv',
+        csvContent: csvLines.join('\n'),
+      },
     },
   };
 
@@ -1256,7 +1553,7 @@ export function generateManualAiAnalystSynthesis(
   if (format === 'ai_analyst_full_md') {
     extension = 'md';
     const personaHeader = buildManualPersonaPrompt(profile, tableName);
-    const roundTripFooter = buildManualRoundTripInstructions();
+    const roundTripFooter = buildManualRoundTripInstructions(analysis.effectiveRows);
     const customPromptSection = options.userCustomPrompt?.trim()
       ? `\n\n---\n## 💬 COMANDO / OBJETIVO ATUAL DO USUÁRIO\n\n> ${options.userCustomPrompt.trim()}\n\n*(Responda diretamente ao comando acima utilizando toda a Síntese Executiva \`AI-Analyst\` fornecida neste documento.)*`
       : `\n\n---\n## 💬 COMANDO INICIAL SUGERIDO AO AGENTE\n\n> Realize o diagnóstico executivo completo da minha planilha **"${tableName}"** em formato de Aula Executiva, cobrindo: (1) DRE & Ponto de Equilíbrio de Sobrevivência, (2) Estatísticas Avançadas (Mediana vs. Média e Volatilidade), (3) Anatomia de Despesas (Frequência vs. Volume Monetário), (4) Banco de Tempo & Metas, e (5) Plano de Ação com 3 a 5 recomendações práticas.`;

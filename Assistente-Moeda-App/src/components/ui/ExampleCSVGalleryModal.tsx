@@ -46,6 +46,7 @@ export interface ExampleCSVGalleryModalProps {
     sectorParams?: SectorSimulationParams;
   }) => Promise<any>;
   onOpenCustomImporter?: (prefillCsv?: string) => void;
+  onOpenLiveSynthesis?: () => void;
 }
 
 type ViewTab = 'guide' | 'backup_v3' | 'simple_csv' | 'ai_prompt';
@@ -56,6 +57,7 @@ export function ExampleCSVGalleryModal({
   initialProfileId,
   onImportExample,
   onOpenCustomImporter,
+  onOpenLiveSynthesis,
 }: ExampleCSVGalleryModalProps) {
   const [selectedId, setSelectedId] = useState<string>(
     initialProfileId || EXAMPLE_CSV_PROFILES[0].id
@@ -192,10 +194,10 @@ export function ExampleCSVGalleryModal({
           <View style={styles.header}>
             <View style={{ flex: 1 }}>
               <Text style={styles.headerTitle}>
-                📚 Planilhas CSV de Exemplo & Modelos p/ IA
+                📚 Galeria de Modelos CSV por Perfil (8 Exemplos Fictícios)
               </Text>
               <Text style={styles.headerSubtitle}>
-                Teste direto no app, exporte novamente ou copie o modelo para montar seu CSV pessoal com sua própria IA.
+                Carregue um perfil de exemplo para testar o app ou baixe modelos CSV em branco/fictícios.
               </Text>
             </View>
             <TouchableOpacity
@@ -207,14 +209,31 @@ export function ExampleCSVGalleryModal({
             </TouchableOpacity>
           </View>
 
-          {/* Privacy Guarantee Banner */}
+          {/* Privacy Guarantee Banner + Direct Switch to Active Spreadsheet Synthesis */}
           <View style={styles.privacyBanner}>
             <Text style={styles.privacyBannerText}>
-              🔒 <Text style={{ fontWeight: '800', color: '#6EE7B7' }}>100% Dados Fictícios & Soberania de Dados:</Text>{' '}
-              Nenhum dado real ou sensível existe nestes exemplos. Use o botão{' '}
-              <Text style={{ fontWeight: '700', color: '#FDE68A' }}>🤖 Copiar Prompt + Modelo p/ IA</Text>{' '}
-              para gerar seu próprio CSV usando ChatGPT, Claude, Gemini, DeepSeek ou IA local com seus dados reais.
+              🔒 <Text style={{ fontWeight: '800', color: '#A5B4FC' }}>Galeria de Modelos Fictícios:</Text>{' '}
+              Estes 8 modelos contêm apenas dados fictícios de demonstração por profissão.
             </Text>
+            {onOpenLiveSynthesis && (
+              <TouchableOpacity
+                style={{
+                  marginTop: 8,
+                  backgroundColor: 'rgba(16, 185, 129, 0.2)',
+                  borderColor: 'rgba(16, 185, 129, 0.6)',
+                  borderWidth: 1,
+                  borderRadius: 8,
+                  paddingVertical: 8,
+                  paddingHorizontal: 12,
+                  alignItems: 'center',
+                }}
+                onPress={onOpenLiveSynthesis}
+              >
+                <Text style={{ color: '#6EE7B7', fontWeight: '800', fontSize: 12 }}>
+                  🧠 Quer extrair as Rotas da API e a Síntese da SUA Planilha Atual? Clique Aqui →
+                </Text>
+              </TouchableOpacity>
+            )}
           </View>
 
           {/* Profile Selector Strip */}
