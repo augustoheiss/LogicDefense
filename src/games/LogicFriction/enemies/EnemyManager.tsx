@@ -59,17 +59,12 @@ export function EnemyManager() {
   const [enemies, setEnemies] = useState<SpawnedEnemy[]>([])
   const spawnTimerRef = useRef(0)
   const bossSpawnTimerRef = useRef(0)
-  const prevTowerCountRef = useRef(0)
-
   const phase = useGameStore(s => s.phase)
   const towers = useGameStore(s => s.towers)
 
-  // ── Rebuild pathfinding grid when towers change ──
+  // ── Rebuild pathfinding grid whenever towers change (add, sell, relocate, or load save) ──
   useEffect(() => {
-    if (towers.length !== prevTowerCountRef.current) {
-      rebuildObstacles(towers)
-      prevTowerCountRef.current = towers.length
-    }
+    rebuildObstacles(towers)
   }, [towers])
 
   // ── Clear enemies on game reset ──

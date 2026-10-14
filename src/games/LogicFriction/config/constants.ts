@@ -169,8 +169,20 @@ export const MATH_ZONE_POSITIONS: Record<MathZoneDir, [number, number, number]> 
   W: [-MATH_ZONE_OFFSET, 0, 0],
 }
 
-// ── Divine Buff ─────────────────────────────────────────────────────────────────
-export const BUFF_COOLDOWN_MULT  = 0.5       // Cooldown multiplier (halved = double attack speed)
+// ── Divine Buff & Math Rewards ──────────────────────────────────────────────────
+export const BUFF_COOLDOWN_MULT      = 0.5       // Cooldown multiplier (halved = double attack speed)
+export const BUFF_DAMAGE_MULT        = 2.0       // +100% damage for Player and Towers during Divine Buff
+export const BUFF_TOWER_AOE_RADIUS   = 3.5       // Single-target towers gain AoE splash radius when buffed
+export const BUFF_TOWER_AOE_MULT     = 0.5       // Splash damage multiplier (50% of main hit)
+export const MATH_SPEED_BONUS_MAX    = 50        // Max bonus gold for fast math resolution
+export const MATH_STREAK_GOLD_BONUS  = 15        // Extra gold per consecutive correct answer
+export const CORE_LIGHTNING_TARGETS  = 5         // Enemies struck by Archimedes Thunder on correct answer
+export const CORE_LIGHTNING_BASE_DMG = 65        // Base lightning damage per coreLevel
+
+// ── Player Manual Ability (Spacebar Logic Pulse) ────────────────────────────────
+export const PLAYER_PULSE_COOLDOWN   = 4.0       // Seconds between manual Spacebar shockwaves
+export const PLAYER_PULSE_RANGE      = 6.5       // Shockwave radius around player
+export const PLAYER_PULSE_DAMAGE     = 55        // Base damage of manual shockwave
 
 // ── Collision Groups (bitmasks for Rapier) ──────────────────────────────────────
 // Not used for filtering yet, but defined for Sprint 3+ tower projectiles
@@ -180,4 +192,5 @@ export const GROUP_CORE         = 0b0000_0100
 export const GROUP_TOWER_PROJ   = 0b0000_1000
 export const GROUP_ANSWER_PAD   = 0b0001_0000
 export const GROUP_CONSTRUCTION = 0b0010_0000
+
 

@@ -7,6 +7,8 @@
 export interface EnemyEntry {
   x: number
   z: number
+  hp: number
+  maxHp: number
   isBoss: boolean
   speedMultiplier: number   // 1.0 = normal, 0.5 = slowed
   slowExpiry: number        // performance.now() timestamp when slow wears off
@@ -16,3 +18,4 @@ export interface EnemyEntry {
 
 /** Global registry — each Enemy registers/unregisters itself on mount/unmount */
 export const enemyRegistry = new Map<string, EnemyEntry>()
+

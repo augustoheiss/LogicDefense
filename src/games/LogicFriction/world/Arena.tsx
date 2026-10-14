@@ -76,6 +76,10 @@ export function Arena() {
 function CyberGrid() {
   const gridRef = useRef<THREE.Group>(null)
   const materialsRef = useRef<THREE.LineBasicMaterial[]>([])
+  const rippleMeshRef = useRef<THREE.Mesh>(null)
+  const rippleMatRef = useRef<THREE.MeshBasicMaterial>(null)
+  const rippleTimeRef = useRef(-1)
+  const lastRewardIdRef = useRef<number | null>(null)
 
   useEffect(() => {
     if (!gridRef.current) return
@@ -96,7 +100,7 @@ function CyberGrid() {
         const angle = (i / 80) * Math.PI * 2
         pts.push(new THREE.Vector3(Math.cos(angle) * r, 0.02, Math.sin(angle) * r))
       }
-      const geo = new THREE.BufferGeometry().setFromPoints(pts)
+      const geo = new THREE.BufferGeometry().setFromPoints(pointsFrom(pts))
       group.add(new THREE.Line(geo, ringMat))
     }
 
@@ -114,7 +118,7 @@ function CyberGrid() {
         const angle = (i / 80) * Math.PI * 2
         pts.push(new THREE.Vector3(Math.cos(angle) * r, 0.025, Math.sin(angle) * r))
       }
-      const geo = new THREE.BufferGeometry().setFromPoints(pts)
+      const geo = new THREE.BufferGeometry().setFromPoints(pointsFrom(pts))
       group.add(new THREE.Line(geo, accentMat))
     }
 
@@ -150,16 +154,78 @@ function CyberGrid() {
     }
   }, [])
 
-  // Single sin() call per frame — trivial cost
-  useFrame(({ clock }) => {
-    const pulse = 0.85 + 0.15 * Math.sin(clock.getElapsedTime() * 0.8)
+  // Single sin() call per frame + golden motherboard ripple on math solve
+  useFrame(({ clock }, delta) => {
+    const state = useGameStore.getState()
+    const isBuffed = state.isBuffActive
+    const reward = state.lastMathReward
+
+    if (reward && reward.id !== lastRewardIdRef.current) {
+      lastRewardIdRef.current = reward.id
+      if (reward.wasCorrect) {
+        rippleTimeRef.current = 0
+      }
+    }
+
+    const pulse = 0.85 + 0.15 * Math.sin(clock.getElapsedTime() * (isBuffed ? 2.4 : 0.8))
     const mats = materialsRef.current
-    if (mats[0]) mats[0].opacity = 0.12 * pulse
-    if (mats[1]) mats[1].opacity = 0.25 * pulse
-    if (mats[2]) mats[2].opacity = 0.07 * pulse
+    if (mats[0]) {
+      mats[0].color.setHex(isBuffed ? 0x00ff88 : 0x00ffcc)
+      mats[0].opacity = (isBuffed ? 0.18 : 0.12) * pulse
+    }
+    if (mats[1]) {
+      mats[1].color.setHex(isBuffed ? 0xffd700 : 0x00d4ff)
+      mats[1].opacity = (isBuffed ? 0.38 : 0.25) * pulse
+    }
+    if (mats[2]) {
+      mats[2].opacity = (isBuffed ? 0.12 : 0.07) * pulse
+    }
+
+    // Animate golden ripple wave across arena
+    if (rippleMeshRef.current && rippleMatRef.current) {
+      if (rippleTimeRef.current >= 0) {
+        rippleTimeRef.current += delta
+        const progress = rippleTimeRef.current / 1.35
+        if (progress >= 1) {
+          rippleTimeRef.current = -1
+          rippleMeshRef.current.visible = false
+        } else {
+          rippleMeshRef.current.visible = true
+          const scale = 1 + progress * ARENA_RADIUS
+          rippleMeshRef.current.scale.set(scale, scale, 1)
+          rippleMatRef.current.opacity = Math.max(0, (1 - progress) * 0.55)
+        }
+      } else {
+        rippleMeshRef.current.visible = false
+      }
+    }
   })
 
-  return <group ref={gridRef} position={[0, SLAB_THICKNESS / 2, 0]} />
+  return (
+    <group position={[0, SLAB_THICKNESS / 2, 0]}>
+      <group ref={gridRef} />
+      <mesh
+        ref={rippleMeshRef}
+        position={[0, 0.04, 0]}
+        rotation={[-Math.PI / 2, 0, 0]}
+        visible={false}
+      >
+        <ringGeometry args={[0.88, 1.0, 64]} />
+        <meshBasicMaterial
+          ref={rippleMatRef}
+          color="#ffd700"
+          transparent
+          opacity={0}
+          side={THREE.DoubleSide}
+          depthWrite={false}
+        />
+      </mesh>
+    </group>
+  )
+}
+
+function pointsFrom(pts: THREE.Vector3[]) {
+  return pts
 }
 
 // ── Edge Glow Ring ──────────────────────────────────────────────────────────────

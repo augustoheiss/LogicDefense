@@ -9,9 +9,10 @@
 //   SHOCKWAVE — Expanding cyan ring, AoE pulse (Slow Tower)
 //   RAILGUN   — Instant red line, 0.2s fade (Sniper Tower)
 // ============================================================
-import { useState, useCallback, useEffect, useRef } from 'react'
+import { useState, useCallback, useEffect, useRef, useMemo } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
+import { soundEngine } from '../audio/soundEngine'
 
 // ── Event Types ─────────────────────────────────────────────────────────────────
 
@@ -32,6 +33,7 @@ type ProjectileListener = (event: ProjectileEvent) => void
 const listeners: Set<ProjectileListener> = new Set()
 
 export function emitProjectile(event: ProjectileEvent): void {
+  soundEngine.playTowerFire(event.type)
   listeners.forEach(fn => fn(event))
 }
 
@@ -55,7 +57,7 @@ interface ActiveProjectile {
   toX: number; toY: number; toZ: number
   range: number
   color: string
-  age: number
+  spawnTime: number
   maxAge: number
 }
 
@@ -65,6 +67,8 @@ let nextProjId = 0
 
 export function ProjectileManager() {
   const [projectiles, setProjectiles] = useState<ActiveProjectile[]>([])
+  const projectilesRef = useRef<ActiveProjectile[]>([])
+  projectilesRef.current = projectiles
 
   // Listen for projectile events from towers
   useProjectileListener(useCallback((event: ProjectileEvent) => {
@@ -84,25 +88,19 @@ export function ProjectileManager() {
       toZ: event.toZ,
       range: event.range ?? 0,
       color: event.color,
-      age: 0,
+      spawnTime: performance.now(),
       maxAge,
     }])
   }, []))
 
-  // Age and cull projectiles
-  useFrame((_, delta) => {
-    setProjectiles(prev => {
-      let changed = false
-      const updated = prev.map(p => {
-        const newAge = p.age + delta
-        if (newAge !== p.age) changed = true
-        return { ...p, age: newAge }
-      }).filter(p => {
-        if (p.age >= p.maxAge) { changed = true; return false }
-        return true
-      })
-      return changed ? updated : prev
-    })
+  // Only call setProjectiles when at least one projectile has expired (zero 60Hz React churn)
+  useFrame(() => {
+    if (projectilesRef.current.length === 0) return
+    const now = performance.now()
+    const hasExpired = projectilesRef.current.some(p => (now - p.spawnTime) / 1000 >= p.maxAge)
+    if (hasExpired) {
+      setProjectiles(prev => prev.filter(p => (now - p.spawnTime) / 1000 < p.maxAge))
+    }
   })
 
   return (
@@ -123,38 +121,35 @@ export function ProjectileManager() {
 // ── BOLT: Cyan plasma cylinder traveling from tower to target ────────────────
 
 function BoltProjectile({ proj }: { proj: ActiveProjectile }) {
-  const meshRef = useRef<THREE.Mesh>(null)
-  const progress = Math.min(1, proj.age / proj.maxAge)
+  const groupRef = useRef<THREE.Group>(null)
+  const coreMatRef = useRef<THREE.MeshBasicMaterial>(null)
+  const trailMatRef = useRef<THREE.MeshBasicMaterial>(null)
 
-  const x = proj.fromX + (proj.toX - proj.fromX) * progress
-  const y = proj.fromY + (proj.toY - proj.fromY) * progress
-  const z = proj.fromZ + (proj.toZ - proj.fromZ) * progress
+  const rotY = Math.atan2(proj.toX - proj.fromX, proj.toZ - proj.fromZ)
 
-  // Aim the cylinder along the travel direction
-  const dx = proj.toX - proj.fromX
-  const dz = proj.toZ - proj.fromZ
+  useFrame(() => {
+    if (!groupRef.current) return
+    const age = (performance.now() - proj.spawnTime) / 1000
+    const progress = Math.min(1, Math.max(0, age / proj.maxAge))
+
+    groupRef.current.position.set(
+      proj.fromX + (proj.toX - proj.fromX) * progress,
+      proj.fromY + (proj.toY - proj.fromY) * progress,
+      proj.fromZ + (proj.toZ - proj.fromZ) * progress,
+    )
+    if (coreMatRef.current) coreMatRef.current.opacity = 1 - progress * 0.5
+    if (trailMatRef.current) trailMatRef.current.opacity = 0.3 * (1 - progress)
+  })
 
   return (
-    <group position={[x, y, z]}>
-      <mesh
-        ref={meshRef}
-        rotation={[0, Math.atan2(dx, dz), 0]}
-      >
+    <group ref={groupRef} position={[proj.fromX, proj.fromY, proj.fromZ]}>
+      <mesh rotation={[0, rotY, 0]}>
         <cylinderGeometry args={[0.08, 0.08, 0.4, 4]} />
-        <meshBasicMaterial
-          color={proj.color}
-          transparent
-          opacity={1 - progress * 0.5}
-        />
+        <meshBasicMaterial ref={coreMatRef} color={proj.color} transparent opacity={1} />
       </mesh>
-      {/* Glow trail */}
-      <mesh rotation={[0, Math.atan2(dx, dz), 0]}>
+      <mesh rotation={[0, rotY, 0]}>
         <cylinderGeometry args={[0.15, 0.0, 0.6, 4]} />
-        <meshBasicMaterial
-          color={proj.color}
-          transparent
-          opacity={0.3 * (1 - progress)}
-        />
+        <meshBasicMaterial ref={trailMatRef} color={proj.color} transparent opacity={0.3} />
       </mesh>
     </group>
   )
@@ -163,49 +158,63 @@ function BoltProjectile({ proj }: { proj: ActiveProjectile }) {
 // ── MORTAR: Orange sphere + parabolic arc + impact ring ─────────────────────
 
 function MortarProjectile({ proj }: { proj: ActiveProjectile }) {
-  const progress = Math.min(1, proj.age / proj.maxAge)
+  const sphereRef = useRef<THREE.Mesh>(null)
+  const ringRef = useRef<THREE.Mesh>(null)
+  const ringMatRef = useRef<THREE.MeshBasicMaterial>(null)
 
   const dx = proj.toX - proj.fromX
   const dz = proj.toZ - proj.fromZ
   const dist = Math.sqrt(dx * dx + dz * dz)
   const arcHeight = Math.max(3, dist * 0.3)
 
-  // Parabolic arc: y = fromY + 4*h*t*(1-t)
-  const x = proj.fromX + dx * progress
-  const z = proj.fromZ + dz * progress
-  const y = proj.fromY + 4 * arcHeight * progress * (1 - progress)
+  useFrame(() => {
+    const age = (performance.now() - proj.spawnTime) / 1000
+    const progress = Math.min(1, Math.max(0, age / proj.maxAge))
+    const hasImpacted = progress > 0.85
 
-  const hasImpacted = progress > 0.85
-  const impactProgress = hasImpacted ? (progress - 0.85) / 0.15 : 0
+    if (sphereRef.current) {
+      sphereRef.current.visible = !hasImpacted
+      if (!hasImpacted) {
+        sphereRef.current.position.set(
+          proj.fromX + dx * progress,
+          proj.fromY + 4 * arcHeight * progress * (1 - progress),
+          proj.fromZ + dz * progress,
+        )
+      }
+    }
+
+    if (ringRef.current && ringMatRef.current) {
+      ringRef.current.visible = hasImpacted
+      if (hasImpacted) {
+        const impactProgress = (progress - 0.85) / 0.15
+        const scale = Math.max(0.1, impactProgress * 3.0)
+        ringRef.current.scale.set(scale, scale, 1)
+        ringMatRef.current.opacity = 0.6 * (1 - impactProgress)
+      }
+    }
+  })
 
   return (
     <group>
-      {/* Flying sphere */}
-      {!hasImpacted && (
-        <mesh position={[x, y, z]}>
-          <sphereGeometry args={[0.25, 6, 6]} />
-          <meshBasicMaterial color={proj.color} />
-        </mesh>
-      )}
-      {/* Impact ring */}
-      {hasImpacted && (
-        <mesh
-          position={[proj.toX, 0.2, proj.toZ]}
-          rotation={[-Math.PI / 2, 0, 0]}
-        >
-          <ringGeometry args={[
-            impactProgress * 2.5,
-            impactProgress * 3.0,
-            16
-          ]} />
-          <meshBasicMaterial
-            color={proj.color}
-            transparent
-            opacity={0.6 * (1 - impactProgress)}
-            side={THREE.DoubleSide}
-          />
-        </mesh>
-      )}
+      <mesh ref={sphereRef} position={[proj.fromX, proj.fromY, proj.fromZ]}>
+        <sphereGeometry args={[0.25, 6, 6]} />
+        <meshBasicMaterial color={proj.color} />
+      </mesh>
+      <mesh
+        ref={ringRef}
+        position={[proj.toX, 0.2, proj.toZ]}
+        rotation={[-Math.PI / 2, 0, 0]}
+        visible={false}
+      >
+        <ringGeometry args={[0.8, 1.0, 16]} />
+        <meshBasicMaterial
+          ref={ringMatRef}
+          color={proj.color}
+          transparent
+          opacity={0.6}
+          side={THREE.DoubleSide}
+        />
+      </mesh>
     </group>
   )
 }
@@ -213,21 +222,30 @@ function MortarProjectile({ proj }: { proj: ActiveProjectile }) {
 // ── SHOCKWAVE: Expanding cyan ring (AoE pulse) ─────────────────────────────
 
 function ShockwaveProjectile({ proj }: { proj: ActiveProjectile }) {
-  const progress = Math.min(1, proj.age / proj.maxAge)
+  const meshRef = useRef<THREE.Mesh>(null)
+  const matRef = useRef<THREE.MeshBasicMaterial>(null)
 
-  const currentRadius = progress * proj.range
-  const innerRadius = Math.max(0, currentRadius - 0.5)
+  useFrame(() => {
+    if (!meshRef.current || !matRef.current) return
+    const age = (performance.now() - proj.spawnTime) / 1000
+    const progress = Math.min(1, Math.max(0, age / proj.maxAge))
+    const scale = Math.max(0.1, progress * proj.range)
+    meshRef.current.scale.set(scale, scale, 1)
+    matRef.current.opacity = 0.4 * (1 - progress)
+  })
 
   return (
     <mesh
+      ref={meshRef}
       position={[proj.fromX, 0.3, proj.fromZ]}
       rotation={[-Math.PI / 2, 0, 0]}
     >
-      <ringGeometry args={[innerRadius, currentRadius, 32]} />
+      <ringGeometry args={[0.85, 1.0, 32]} />
       <meshBasicMaterial
+        ref={matRef}
         color={proj.color}
         transparent
-        opacity={0.4 * (1 - progress)}
+        opacity={0.4}
         side={THREE.DoubleSide}
       />
     </mesh>
@@ -237,50 +255,43 @@ function ShockwaveProjectile({ proj }: { proj: ActiveProjectile }) {
 // ── RAILGUN: Instant red beam connecting tower to target ────────────────────
 
 function RailgunProjectile({ proj }: { proj: ActiveProjectile }) {
-  const progress = Math.min(1, proj.age / proj.maxAge)
+  const coreMatRef = useRef<THREE.MeshBasicMaterial>(null)
+  const glowMatRef = useRef<THREE.MeshBasicMaterial>(null)
 
-  const dx = proj.toX - proj.fromX
-  const dy = proj.toY - proj.fromY
-  const dz = proj.toZ - proj.fromZ
-  const dist = Math.sqrt(dx * dx + dy * dy + dz * dz)
+  const { midX, midY, midZ, dist, euler } = useMemo(() => {
+    const dx = proj.toX - proj.fromX
+    const dy = proj.toY - proj.fromY
+    const dz = proj.toZ - proj.fromZ
+    const d = Math.max(0.1, Math.sqrt(dx * dx + dy * dy + dz * dz))
+    const dir = new THREE.Vector3(dx, dy, dz).normalize()
+    const quat = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir)
+    return {
+      midX: (proj.fromX + proj.toX) / 2,
+      midY: (proj.fromY + proj.toY) / 2,
+      midZ: (proj.fromZ + proj.toZ) / 2,
+      dist: d,
+      euler: new THREE.Euler().setFromQuaternion(quat),
+    }
+  }, [proj.fromX, proj.fromY, proj.fromZ, proj.toX, proj.toY, proj.toZ])
 
-  const midX = (proj.fromX + proj.toX) / 2
-  const midY = (proj.fromY + proj.toY) / 2
-  const midZ = (proj.fromZ + proj.toZ) / 2
-
-  // Compute rotation to align cylinder with beam direction
-  const dir = new THREE.Vector3(dx, dy, dz).normalize()
-  const up = new THREE.Vector3(0, 1, 0)
-  const quat = new THREE.Quaternion()
-  quat.setFromUnitVectors(up, dir)
-  const euler = new THREE.Euler().setFromQuaternion(quat)
+  useFrame(() => {
+    const age = (performance.now() - proj.spawnTime) / 1000
+    const progress = Math.min(1, Math.max(0, age / proj.maxAge))
+    if (coreMatRef.current) coreMatRef.current.opacity = 0.9 * (1 - progress)
+    if (glowMatRef.current) glowMatRef.current.opacity = 0.2 * (1 - progress)
+  })
 
   return (
     <group>
-      {/* Main beam */}
-      <mesh
-        position={[midX, midY, midZ]}
-        rotation={euler}
-      >
+      <mesh position={[midX, midY, midZ]} rotation={euler}>
         <cylinderGeometry args={[0.12, 0.12, dist, 4]} />
-        <meshBasicMaterial
-          color={proj.color}
-          transparent
-          opacity={0.9 * (1 - progress)}
-        />
+        <meshBasicMaterial ref={coreMatRef} color={proj.color} transparent opacity={0.9} />
       </mesh>
-      {/* Outer glow */}
-      <mesh
-        position={[midX, midY, midZ]}
-        rotation={euler}
-      >
+      <mesh position={[midX, midY, midZ]} rotation={euler}>
         <cylinderGeometry args={[0.25, 0.25, dist, 4]} />
-        <meshBasicMaterial
-          color={proj.color}
-          transparent
-          opacity={0.2 * (1 - progress)}
-        />
+        <meshBasicMaterial ref={glowMatRef} color={proj.color} transparent opacity={0.2} />
       </mesh>
     </group>
   )
 }
+

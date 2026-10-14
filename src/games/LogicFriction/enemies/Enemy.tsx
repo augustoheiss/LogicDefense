@@ -99,12 +99,18 @@ export function Enemy({
     enemyRegistry.set(id, {
       x: position[0],
       z: position[2],
+      hp: hpRef.current,
+      maxHp: hp,
       isBoss,
       speedMultiplier: 1.0,
       slowExpiry: 0,
       takeDamage: (amount: number) => {
         if (!aliveRef.current) return
         hpRef.current -= amount
+        const entry = enemyRegistry.get(id)
+        if (entry) {
+          entry.hp = Math.max(0, hpRef.current)
+        }
         if (hpRef.current <= 0) {
           aliveRef.current = false
           if (isBoss && onBossDeath) {

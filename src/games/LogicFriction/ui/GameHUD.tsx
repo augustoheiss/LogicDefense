@@ -5,7 +5,8 @@
 import { useEffect, useState } from 'react'
 import { useGameStore } from '../state/useGameStore'
 import type { ActionMode } from '../state/useGameStore'
-import { TOWER_BLUEPRINTS, TOWER_BLUEPRINT_KEYS } from '../config/constants'
+import { TOWER_BLUEPRINTS, TOWER_BLUEPRINT_KEYS, MATH_ZONE_POSITIONS } from '../config/constants'
+import type { MathZoneDir } from '../config/constants'
 import { getLeaderboard, saveToLeaderboard } from '../state/leaderboard'
 import type { LeaderboardEntry, GameStateSnapshot } from '../state/leaderboard'
 import { LandingPage } from './LandingPage'
@@ -96,7 +97,7 @@ function BuffBadge() {
           fontFamily: "'Courier New', monospace",
           letterSpacing: '0.05em',
         }}>
-          ATIVO
+          ATIVO (2X DANO + AOE)
         </div>
       </div>
     </div>
@@ -156,6 +157,169 @@ function HPBar({ current, max, color, label }: {
   )
 }
 
+// ── Math Compass & Quick-Navigate Bar ───────────────────────────────────────────
+const DIRECTION_LABELS: Record<MathZoneDir, { name: string; arrow: string }> = {
+  N: { name: 'NORTE', arrow: '⬆️' },
+  S: { name: 'SUL',   arrow: '⬇️' },
+  E: { name: 'LESTE', arrow: '➡️' },
+  W: { name: 'OESTE', arrow: '⬅️' },
+}
+
+function MathCompassBar() {
+  const phase = useGameStore(s => s.phase)
+  const currentProblem = useGameStore(s => s.currentProblem)
+  const mathAnswered = useGameStore(s => s.mathAnswered)
+  const mathZonePosition = useGameStore(s => s.mathZonePosition)
+  const setMoveTarget = useGameStore(s => s.setMoveTarget)
+  const setActionMode = useGameStore(s => s.setActionMode)
+
+  if (phase !== 'PLAYING' || !currentProblem || mathAnswered) return null
+
+  const dirInfo = DIRECTION_LABELS[mathZonePosition]
+  const zonePos = MATH_ZONE_POSITIONS[mathZonePosition]
+
+  return (
+    <div style={{
+      display: 'flex',
+      alignItems: 'center',
+      gap: 10,
+      background: 'rgba(4,8,24,0.92)',
+      border: '1px solid rgba(0,212,255,0.45)',
+      borderRadius: 10,
+      padding: '6px 14px',
+      pointerEvents: 'auto',
+      boxShadow: '0 0 20px rgba(0,212,255,0.2)',
+      fontFamily: "'Courier New', monospace",
+    }}>
+      <span style={{
+        fontSize: 12,
+        color: '#ffd700',
+        fontWeight: 800,
+        letterSpacing: '0.06em',
+      }}>
+        🧭 {dirInfo.arrow} {dirInfo.name}
+      </span>
+      <span style={{
+        fontSize: 15,
+        color: '#00d4ff',
+        fontWeight: 900,
+        background: 'rgba(0,212,255,0.12)',
+        padding: '2px 8px',
+        borderRadius: 6,
+      }}>
+        {currentProblem.expression}
+      </span>
+      <button
+        onClick={() => {
+          setActionMode('MOVE')
+          setMoveTarget({ type: 'point', x: zonePos[0], z: zonePos[2] })
+        }}
+        style={{
+          background: 'linear-gradient(135deg, rgba(255,215,0,0.25), rgba(0,212,255,0.25))',
+          border: '1px solid #ffd700',
+          borderRadius: 7,
+          padding: '4px 10px',
+          color: '#ffd700',
+          fontSize: 11,
+          fontWeight: 800,
+          fontFamily: "'Courier New', monospace",
+          cursor: 'pointer',
+          textTransform: 'uppercase',
+        }}
+      >
+        ⚡ Ir para Equação
+      </button>
+    </div>
+  )
+}
+
+// ── Pedagogical Insight Toast (Bottom-Left) ─────────────────────────────────────
+function PedagogicalInsightToast() {
+  const lastMathReward = useGameStore(s => s.lastMathReward)
+  const dismissMathReward = useGameStore(s => s.dismissMathReward)
+
+  useEffect(() => {
+    if (!lastMathReward) return
+    const timer = setTimeout(() => {
+      dismissMathReward()
+    }, 7500)
+    return () => clearTimeout(timer)
+  }, [lastMathReward?.id, dismissMathReward])
+
+  if (!lastMathReward) return null
+
+  const isCorrect = lastMathReward.wasCorrect
+  const accent = isCorrect ? '#00ff88' : '#ffaa00'
+
+  return (
+    <div style={{
+      position: 'absolute',
+      bottom: 18,
+      left: 16,
+      maxWidth: 420,
+      width: 'calc(100vw - 32px)',
+      background: 'rgba(4,8,20,0.94)',
+      border: `2px solid ${accent}`,
+      borderRadius: 12,
+      padding: '12px 16px',
+      zIndex: 150,
+      pointerEvents: 'auto',
+      fontFamily: "'Courier New', monospace",
+      boxShadow: `0 8px 32px rgba(0,0,0,0.7), 0 0 20px ${accent}33`,
+      backdropFilter: 'blur(10px)',
+    }}>
+      <div style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 6,
+      }}>
+        <div style={{
+          fontSize: 12,
+          fontWeight: 900,
+          color: accent,
+          textTransform: 'uppercase',
+          letterSpacing: '0.08em',
+        }}>
+          {isCorrect
+            ? `✓ ATALHO MENTAL (+$${lastMathReward.goldBonus} OURO · STREAK x${lastMathReward.streak})`
+            : '⚠️ ARMADILHA COGNITIVA (+15% REPARO CORE)'}
+        </div>
+        <button
+          onClick={dismissMathReward}
+          style={{
+            background: 'transparent',
+            border: 'none',
+            color: '#94a3b8',
+            fontSize: 14,
+            fontWeight: 900,
+            cursor: 'pointer',
+            padding: '0 4px',
+          }}
+        >
+          ✕
+        </button>
+      </div>
+      <div style={{
+        fontSize: 14,
+        fontWeight: 800,
+        color: '#ffffff',
+        marginBottom: 4,
+      }}>
+        {lastMathReward.question}
+      </div>
+      <div style={{
+        fontSize: 12,
+        color: '#cbd5e1',
+        lineHeight: 1.55,
+        whiteSpace: 'pre-wrap',
+      }}>
+        {lastMathReward.explanation}
+      </div>
+    </div>
+  )
+}
+
 // ── Tower Selector Bar ──────────────────────────────────────────────────────────
 function TowerSelector() {
   const selectedBlueprint = useGameStore(s => s.selectedBlueprint)
@@ -177,7 +341,7 @@ function TowerSelector() {
       backdropFilter: 'blur(8px)',
     }}>
       {/* Blueprint buttons */}
-      {TOWER_BLUEPRINT_KEYS.map(key => {
+      {TOWER_BLUEPRINT_KEYS.map((key, idx) => {
         const bp = TOWER_BLUEPRINTS[key]
         const isSelected = selectedBlueprint === key && !isUpgradeMode
         const canAfford = gold >= bp.cost
@@ -212,7 +376,7 @@ function TowerSelector() {
                 fontFamily: "'Courier New', monospace",
                 textTransform: 'uppercase',
                 letterSpacing: '0.05em',
-              }}>{bp.label}</div>
+              }}>[{idx + 1}] {bp.label}</div>
               <div style={{
                 fontSize: 16,
                 color: canAfford ? '#ffd700' : '#ff4444',
@@ -258,7 +422,7 @@ function TowerSelector() {
             fontFamily: "'Courier New', monospace",
             textTransform: 'uppercase',
             letterSpacing: '0.05em',
-          }}>UPGRADE</div>
+          }}>[U] UPGRADE</div>
           <div style={{
             fontSize: 16,
             color: '#64748b',
@@ -286,6 +450,36 @@ export function GameHUD({ onStart, onRestart }: GameHUDProps) {
   const actionMode = useGameStore(s => s.actionMode)
   const isPaused = useGameStore(s => s.isPaused)
   const setPaused = useGameStore(s => s.setPaused)
+  const mathStreak = useGameStore(s => s.mathStreak)
+  const isMuted = useGameStore(s => s.isMuted)
+  const toggleMute = useGameStore(s => s.toggleMute)
+
+  // ── Keyboard Shortcuts (1-4: Towers, B: Build/Move toggle, U: Upgrade mode) ──
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      const store = useGameStore.getState()
+      if (store.phase !== 'PLAYING' && store.phase !== 'WAVE_CLEAR') return
+      if (store.isPaused) return
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
+
+      if (e.code === 'Digit1' || e.code === 'Digit2' || e.code === 'Digit3' || e.code === 'Digit4') {
+        const idx = Number(e.code.replace('Digit', '')) - 1
+        const bpKey = TOWER_BLUEPRINT_KEYS[idx]
+        if (bpKey) {
+          store.setSelectedBlueprint(bpKey)
+          store.setActionMode('BUILD')
+          if (store.isUpgradeMode) store.toggleUpgradeMode()
+        }
+      } else if (e.code === 'KeyB') {
+        store.setActionMode(store.actionMode === 'BUILD' ? 'MOVE' : 'BUILD')
+      } else if (e.code === 'KeyU') {
+        store.toggleUpgradeMode()
+        if (store.actionMode !== 'BUILD') store.setActionMode('BUILD')
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [])
 
   if (phase === 'MENU') {
     return <LandingPage onStart={onStart} />
@@ -310,14 +504,33 @@ export function GameHUD({ onStart, onRestart }: GameHUDProps) {
       {/* ── Settings Menu (top-right) ── */}
       <SettingsMenu />
 
-      {/* Pause button (top-right, below settings) */}
+      {/* Pause & Mute buttons (top-right, below settings) */}
       <div style={{
         position: 'absolute',
         top: 56,
         right: 12,
         zIndex: 200,
         pointerEvents: 'auto',
+        display: 'flex',
+        gap: 6,
       }}>
+        <button
+          onClick={toggleMute}
+          title={isMuted ? 'Ativar Som' : 'Silenciar'}
+          style={{
+            background: 'rgba(0,0,0,0.8)',
+            border: '1px solid rgba(255,255,255,0.15)',
+            borderRadius: 10,
+            padding: '8px 12px',
+            color: isMuted ? '#ff4444' : '#00ff88',
+            fontSize: 16,
+            fontWeight: 800,
+            cursor: 'pointer',
+            fontFamily: "'Courier New', monospace",
+          }}
+        >
+          {isMuted ? '🔇' : '🔊'}
+        </button>
         <button
           onClick={() => setPaused(true)}
           style={{
@@ -362,10 +575,13 @@ export function GameHUD({ onStart, onRestart }: GameHUDProps) {
         <StatBadge label="Wave" value={waveNumber} color="#a855f7" icon="🌊" />
         <StatBadge label="Gold" value={gold} color="#ffd700" icon="💰" />
         <StatBadge label="Enemies" value={enemiesAlive} color="#ff4444" icon="👾" />
+        {mathStreak > 0 && (
+          <StatBadge label="Streak" value={`x${mathStreak}`} color="#00ff88" icon="🔥" />
+        )}
         <BuffBadge />
       </div>
 
-      {/* Action Mode Toggle + Tower Selection Bar */}
+      {/* Action Mode Toggle + Math Compass + Tower Selection Bar */}
       <div style={{
         position: 'absolute',
         top: 70,
@@ -379,8 +595,12 @@ export function GameHUD({ onStart, onRestart }: GameHUDProps) {
         pointerEvents: 'none',
       }}>
         <ActionModeToggle />
+        <MathCompassBar />
         {actionMode === 'BUILD' && <TowerSelector />}
       </div>
+
+      {/* Pedagogical Insight Toast (Bottom-Left) */}
+      <PedagogicalInsightToast />
 
       {/* Wave Clear — auto-advance countdown banner */}
       {phase === 'WAVE_CLEAR' && <WaveCountdownBanner waveNumber={waveNumber} />}
@@ -922,13 +1142,13 @@ function ControlsHint() {
   return (
     <div style={{
       position: 'absolute',
-      bottom: 12,
-      right: 12,
-      background: 'rgba(0,0,0,0.7)',
-      border: '1px solid rgba(255,255,255,0.1)',
+      bottom: 80,
+      right: 16,
+      background: 'rgba(0,0,0,0.75)',
+      border: '1px solid rgba(255,255,255,0.12)',
       borderRadius: 8,
       padding: '8px 14px',
-      color: '#475569',
+      color: '#64748b',
       fontFamily: "'Courier New', monospace",
       fontSize: 11,
       zIndex: 10,
@@ -936,7 +1156,10 @@ function ControlsHint() {
       lineHeight: 1.6,
     }}>
       <strong style={{ color: '#00ff88' }}>WASD</strong> mover ·{' '}
-      <strong style={{ color: '#ffffff' }}>ESPAÇO</strong> atacar
+      <strong style={{ color: '#00d4ff' }}>ESPAÇO</strong> pulso lógico ·{' '}
+      <strong style={{ color: '#ff8800' }}>B</strong> modo ·{' '}
+      <strong style={{ color: '#ffd700' }}>1-4</strong> torres ·{' '}
+      <strong style={{ color: '#00ff88' }}>U</strong> upgrade
     </div>
   )
 }

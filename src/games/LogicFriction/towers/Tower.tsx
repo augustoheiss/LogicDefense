@@ -29,6 +29,11 @@ import {
   TOWER_SIZE,
   TOWER_HEIGHT,
   BUFF_COOLDOWN_MULT,
+  BUFF_DAMAGE_MULT,
+  BUFF_TOWER_AOE_RADIUS,
+  BUFF_TOWER_AOE_MULT,
+  CORE_COLLIDER_SIZE,
+  ARENA_RADIUS,
   MATH_ZONE_POSITIONS,
   MATH_ZONE_SENSOR_RADIUS,
   TOWER_SELL_REFUND,
@@ -66,6 +71,7 @@ export function Tower({ id, position, type = 'RAPID', level = 1, targetPriority 
   const beamRef = useRef<THREE.Mesh>(null)
   const baseRef = useRef<THREE.Mesh>(null)
   const pillarRef = useRef<THREE.Mesh>(null)
+  const overdriveRingRef = useRef<THREE.Mesh>(null)
   const cooldownRef = useRef(0)
   const beamVisualRef = useRef(0)
   const [sellConfirm, setSellConfirm] = useState(false)
@@ -107,6 +113,7 @@ export function Tower({ id, position, type = 'RAPID', level = 1, targetPriority 
 
   useFrame((state, delta) => {
     const store = useGameStore.getState()
+    const buffed = store.isBuffActive
 
     // ── Ghost solidification check ──
     if (!isSolid) {
@@ -123,11 +130,17 @@ export function Tower({ id, position, type = 'RAPID', level = 1, targetPriority 
       }
     }
 
-    // ── Crystal animation (always runs — it's just rotation + sin) ──
+    // ── Crystal & Overdrive ring animation ──
     if (crystalRef.current) {
-      crystalRef.current.rotation.y += delta * 1.2
+      crystalRef.current.rotation.y += delta * (buffed ? 4.2 : 1.2)
       crystalRef.current.position.y =
-        CRYSTAL_Y_BASE + Math.sin(state.clock.elapsedTime * CRYSTAL_HOVER_SPEED) * CRYSTAL_HOVER_AMP
+        CRYSTAL_Y_BASE + Math.sin(state.clock.elapsedTime * (buffed ? CRYSTAL_HOVER_SPEED * 2 : CRYSTAL_HOVER_SPEED)) * CRYSTAL_HOVER_AMP
+    }
+    if (overdriveRingRef.current) {
+      overdriveRingRef.current.visible = buffed
+      if (buffed) {
+        overdriveRingRef.current.rotation.z += delta * 2.5
+      }
     }
 
     // Free Fire Directive: towers shoot during PLAYING *and* WAVE_CLEAR
@@ -135,9 +148,8 @@ export function Tower({ id, position, type = 'RAPID', level = 1, targetPriority 
     if (store.phase !== 'PLAYING' && store.phase !== 'WAVE_CLEAR') return
     if (store.isPaused) return
 
-    const buffed = store.isBuffActive
     const effectiveCooldown = buffed ? baseCooldown * BUFF_COOLDOWN_MULT : baseCooldown
-    const effectiveDamage = baseDamage
+    const effectiveDamage = buffed ? baseDamage * BUFF_DAMAGE_MULT : baseDamage
 
     cooldownRef.current = Math.max(0, cooldownRef.current - delta)
 
@@ -178,7 +190,7 @@ export function Tower({ id, position, type = 'RAPID', level = 1, targetPriority 
             toY: 0.3,
             toZ: tz,
             range: baseRange,
-            color: bp.color,
+            color: buffed ? '#ffd700' : bp.color,
           })
         }
       } else {
@@ -200,16 +212,9 @@ export function Tower({ id, position, type = 'RAPID', level = 1, targetPriority 
               targetId = enemyId
             }
           } else {
-            // STRONGEST: enemy with highest current HP
-            // We use speedMultiplier as a proxy — all enemies start at 1.0
-            // Actually we can't read HP from registry, so use dist-to-core
-            // as tiebreaker. This targets enemies closest to core as "strongest"
-            // threat. TRUE strongest would need HP in registry.
-            // For now: target the enemy with the largest dist from spawn
-            // (furthest into the arena = most threatening)
+            // STRONGEST: enemy with highest real HP in EnemyRegistry (bosses prioritized, core proximity tiebreaker)
             const distToCoreSq = entry.x * entry.x + entry.z * entry.z
-            // Invert: smaller dist = more dangerous = higher priority
-            const score = 1 / (distToCoreSq + 0.01)
+            const score = entry.hp + (entry.isBoss ? 100000 : 0) + 1 / (distToCoreSq + 1)
             if (score > bestScore) {
               bestScore = score
               targetId = enemyId
@@ -221,13 +226,30 @@ export function Tower({ id, position, type = 'RAPID', level = 1, targetPriority 
         if (targetId) {
           const target = enemyRegistry.get(targetId)
           if (target) {
+            const targetX = target.x
+            const targetZ = target.z
             target.takeDamage(effectiveDamage)
+
+            // Divine Buff Overdrive: all single-target towers also deal AoE splash damage around the primary target!
+            if (buffed) {
+              const splashRadiusSq = BUFF_TOWER_AOE_RADIUS * BUFF_TOWER_AOE_RADIUS
+              const splashDamage = effectiveDamage * BUFF_TOWER_AOE_MULT
+              enemyRegistry.forEach((other, otherId) => {
+                if (otherId === targetId) return
+                const sdx = other.x - targetX
+                const sdz = other.z - targetZ
+                if (sdx * sdx + sdz * sdz <= splashRadiusSq) {
+                  other.takeDamage(splashDamage)
+                }
+              })
+            }
+
             cooldownRef.current = effectiveCooldown
             beamVisualRef.current = 0.15
 
             // Point crystal toward target
             if (crystalRef.current) {
-              const angle = Math.atan2(target.x - tx, target.z - tz)
+              const angle = Math.atan2(targetX - tx, targetZ - tz)
               crystalRef.current.rotation.y = angle
             }
 
@@ -237,20 +259,20 @@ export function Tower({ id, position, type = 'RAPID', level = 1, targetPriority 
               fromX: tx,
               fromY: CRYSTAL_Y_BASE + safePos[1],
               fromZ: tz,
-              toX: target.x,
+              toX: targetX,
               toY: 1.5, // Enemy height
-              toZ: target.z,
-              color: bp.color,
+              toZ: targetZ,
+              color: buffed ? '#ffd700' : bp.color,
             })
 
             // Legacy beam positioning (kept for immediate visual feedback)
             if (beamRef.current) {
-              const dx = target.x - tx
-              const dz = target.z - tz
+              const dx = targetX - tx
+              const dz = targetZ - tz
               const dist = Math.sqrt(dx * dx + dz * dz)
               beamRef.current.position.set(dx / 2, TOWER_HEIGHT - 0.5, dz / 2)
               beamRef.current.scale.set(0.15, 0.15, dist)
-              beamRef.current.lookAt(target.x - tx, TOWER_HEIGHT - 0.5, target.z - tz)
+              beamRef.current.lookAt(targetX - tx, TOWER_HEIGHT - 0.5, targetZ - tz)
             }
           }
         }
@@ -466,6 +488,23 @@ export function Tower({ id, position, type = 'RAPID', level = 1, targetPriority 
         </mesh>
       ))}
 
+      {/* Divine Buff Overdrive base rune ring */}
+      <mesh
+        ref={overdriveRingRef}
+        position={[0, 0.08, 0]}
+        rotation={[-Math.PI / 2, 0, 0]}
+        visible={false}
+      >
+        <ringGeometry args={[TOWER_SIZE * 1.65, TOWER_SIZE * 2.05, 6]} />
+        <meshBasicMaterial
+          color="#ffd700"
+          transparent
+          opacity={0.7}
+          side={THREE.DoubleSide}
+          depthWrite={false}
+        />
+      </mesh>
+
       {/* Range ring — only when selected */}
       {isSelected && (
         <mesh position={[0, 0.05, 0]} rotation={[-Math.PI / 2, 0, 0]}>
@@ -528,16 +567,25 @@ export function Tower({ id, position, type = 'RAPID', level = 1, targetPriority 
                   return
                 }
                 if (gold < relocateCost) return
-                setRelocateMode(true)
-                // The actual relocate happens when the player places a new construction site
-                // For now, trigger a simple relocate to the player's current position
                 const store = useGameStore.getState()
-                // Use player position as new tower location
                 const playerObj = scene.getObjectByName('player')
                 if (playerObj) {
                   const wp = new THREE.Vector3()
                   playerObj.getWorldPosition(wp)
-                  const success = store.relocateTower(id, wp.x, wp.z)
+                  // Snap to 2-unit grid so it aligns cleanly with A* pathfinding cells
+                  const snappedX = Math.round(wp.x / 2) * 2
+                  const snappedZ = Math.round(wp.z / 2) * 2
+                  const distFromCenter = Math.hypot(snappedX, snappedZ)
+                  if (distFromCenter < CORE_COLLIDER_SIZE + 1.5 || distFromCenter > ARENA_RADIUS - 3) {
+                    return
+                  }
+                  const overlapsOtherTower = store.towers.some(
+                    t => t.id !== id && Math.hypot(t.x - snappedX, t.z - snappedZ) < 2.2
+                  )
+                  if (overlapsOtherTower) return
+
+                  setIsSolid(false) // Enter Ghost Mode until player walks away from new spot
+                  const success = store.relocateTower(id, snappedX, snappedZ)
                   if (success) {
                     setRelocateMode(false)
                   }

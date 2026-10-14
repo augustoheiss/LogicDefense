@@ -26,11 +26,16 @@ import {
   TOWER_SELL_REFUND,
   TOWER_RELOCATE_COST,
   TOWER_RELOCATE_MIN,
+  MATH_SPEED_BONUS_MAX,
+  MATH_STREAK_GOLD_BONUS,
+  CORE_LIGHTNING_TARGETS,
+  CORE_LIGHTNING_BASE_DMG,
 } from '../config/constants'
 import type { MathZoneDir } from '../config/constants'
 import { generateFrictionProblem, type FrictionProblem } from '../math/mathBridge'
 import { enemyRegistry } from '../enemies/EnemyRegistry'
 import { rebuildObstacles, resetGrid } from '../enemies/pathfindingGrid'
+import { soundEngine } from '../audio/soundEngine'
 
 // ── Types ───────────────────────────────────────────────────────────────────────
 export type GamePhase = 'MENU' | 'PLAYING' | 'WAVE_CLEAR' | 'GAME_OVER'
@@ -48,6 +53,21 @@ export interface ExplanationEntry {
   question: string
   explanation: string
   wasCorrect: boolean
+}
+
+/** Event payload emitted on math answer submission for 3D VFX & HUD Insight Toast */
+export interface MathRewardEvent {
+  id: number
+  timestamp: number
+  wave: number
+  wasCorrect: boolean
+  goldBonus: number
+  streak: number
+  question: string
+  explanation: string
+  zoneDir: MathZoneDir
+  padPos: [number, number, number]
+  lightningTargets: Array<{ x: number; z: number }>
 }
 
 export interface SiteData {
@@ -114,10 +134,14 @@ export interface GameStore {
   constructionSites: SiteData[]
   towers: TowerData[]
 
-  // ── Math & Buff ──
+  // ── Math & Buff & Streak ──
   currentProblem: FrictionProblem | null
   isBuffActive: boolean
   mathAnswered: boolean
+  mathStreak: number
+  bestMathStreak: number
+  problemSpawnTime: number
+  lastMathReward: MathRewardEvent | null
 
   // ── Answer Log ──
   explanationLog: ExplanationEntry[]
@@ -137,6 +161,7 @@ export interface GameStore {
   isMenuOpen: boolean
   isCameraFree: boolean
   isPaused: boolean
+  isMuted: boolean
 
   // ── Actions ──
   startGame: () => void
@@ -170,7 +195,8 @@ export interface GameStore {
   sellTower: (id: string) => void
 
   // Math
-  submitAnswer: (isCorrect: boolean) => void
+  submitAnswer: (isCorrect: boolean, padWorldPos?: [number, number, number]) => void
+  dismissMathReward: () => void
   setInsideMathZone: (inside: boolean) => void
 
   // MOBA Movement
@@ -185,6 +211,7 @@ export interface GameStore {
   toggleCameraFree: () => void
   togglePause: () => void
   setPaused: (v: boolean) => void
+  toggleMute: () => void
 
   // Reset
   loadGameState: (snapshot: GameStateSnapshot) => void
@@ -243,6 +270,10 @@ const initialState = {
   currentProblem: null as FrictionProblem | null,
   isBuffActive: false,
   mathAnswered: false,
+  mathStreak: 0,
+  bestMathStreak: 0,
+  problemSpawnTime: 0,
+  lastMathReward: null as MathRewardEvent | null,
   explanationLog: [] as ExplanationEntry[],
   mathZonePosition: 'N' as MathZoneDir,
   insideMathZone: false,
@@ -252,6 +283,7 @@ const initialState = {
   isMenuOpen: false,
   isCameraFree: false,
   isPaused: false,
+  isMuted: false,
 }
 
 // ── Store (persisted) ───────────────────────────────────────────────────────────
@@ -268,6 +300,7 @@ export const useGameStore = create<GameStore>()(
     const problem = generateFrictionProblem(1)
     set({
       ...initialState,
+      isMuted: get().isMuted,
       isAtLandingPage: false,
       phase: 'PLAYING',
       waveNumber: 1,
@@ -283,6 +316,10 @@ export const useGameStore = create<GameStore>()(
       mathZonePosition: dir,
       insideMathZone: false,
       explanationLog: [],
+      mathStreak: 0,
+      bestMathStreak: 0,
+      problemSpawnTime: performance.now(),
+      lastMathReward: null,
     })
   },
 
@@ -294,6 +331,7 @@ export const useGameStore = create<GameStore>()(
     const newDir = randomDirection(get().mathZonePosition)
 
     if (isBoss) {
+      soundEngine.playBossWaveAlert()
       // Boss wave: spawn ONLY bosses, no normal enemies
       const bossCount = BOSS_BASE_COUNT + ((wave / 10) - 1) * BOSS_COUNT_INCREMENT
       set({
@@ -312,6 +350,7 @@ export const useGameStore = create<GameStore>()(
         insideMathZone: false,
         isUpgradeMode: false,
         selectedEntity: null,
+        problemSpawnTime: performance.now(),
       })
     } else {
       // Normal wave: standard scaling
@@ -332,6 +371,7 @@ export const useGameStore = create<GameStore>()(
         insideMathZone: false,
         isUpgradeMode: false,
         selectedEntity: null,
+        problemSpawnTime: performance.now(),
       })
     }
   },
@@ -350,6 +390,7 @@ export const useGameStore = create<GameStore>()(
     const newDir = randomDirection(state.mathZonePosition)
 
     if (isBoss) {
+      soundEngine.playBossWaveAlert()
       // Boss wave: ADD bosses to existing queue
       const bossCount = BOSS_BASE_COUNT + ((wave / 10) - 1) * BOSS_COUNT_INCREMENT
       set({
@@ -363,6 +404,7 @@ export const useGameStore = create<GameStore>()(
         isBuffActive: false,
         mathAnswered: false,
         insideMathZone: false,
+        problemSpawnTime: performance.now(),
       })
     } else {
       // Normal wave: ADD enemies to existing queue
@@ -378,6 +420,7 @@ export const useGameStore = create<GameStore>()(
         isBuffActive: false,
         mathAnswered: false,
         insideMathZone: false,
+        problemSpawnTime: performance.now(),
       })
     }
   },
@@ -390,6 +433,7 @@ export const useGameStore = create<GameStore>()(
 
   // ── Core damage ──
   takeCoreDamage: (amount) => {
+    soundEngine.playCoreDamage()
     const newHp = Math.max(0, get().coreHp - amount)
     set({ coreHp: newHp })
     if (newHp <= 0) {
@@ -403,6 +447,7 @@ export const useGameStore = create<GameStore>()(
     const state = get()
     const cost = state.coreLevel * CORE_UPGRADE_BASE_COST
     if (state.gold < cost) return
+    soundEngine.playUpgrade()
     set({
       gold: state.gold - cost,
       coreLevel: state.coreLevel + 1,
@@ -517,6 +562,7 @@ export const useGameStore = create<GameStore>()(
     if (!bp) return
     if (state.gold < bp.cost) return
 
+    soundEngine.playPlaceSite()
     const site: SiteData = { id: genId('site'), x, z, type: state.selectedBlueprint }
     set({ constructionSites: [...state.constructionSites, site] })
   },
@@ -550,6 +596,7 @@ export const useGameStore = create<GameStore>()(
       targetPriority: 'FIRST',
     }
     const updatedTowers = [...state.towers, tower]
+    soundEngine.playFundTower()
     set({
       gold: state.gold - bp.cost,
       constructionSites: state.constructionSites.filter(s => s.id !== siteId),
@@ -575,6 +622,7 @@ export const useGameStore = create<GameStore>()(
     const cost = bp.cost * tower.level
     if (state.gold < cost) return
 
+    soundEngine.playUpgrade()
     set({
       gold: state.gold - cost,
       towers: state.towers.map(t =>
@@ -608,6 +656,7 @@ export const useGameStore = create<GameStore>()(
     const updatedTowers = state.towers.map(t =>
       t.id === id ? { ...t, x: newX, z: newZ } : t
     )
+    soundEngine.playPlaceSite()
     set({
       gold: state.gold - cost,
       towers: updatedTowers,
@@ -637,32 +686,97 @@ export const useGameStore = create<GameStore>()(
   },
 
   // ── Math — Submit Answer ──
-  submitAnswer: (isCorrect) => {
+  submitAnswer: (isCorrect, padWorldPos = [0, 0, 0]) => {
     if (get().mathAnswered) return
     set({ mathAnswered: true })
 
-    // Push to answer log
     const state = get()
-    if (state.currentProblem) {
+    const problem = state.currentProblem
+
+    if (problem) {
       const entry: ExplanationEntry = {
         wave: state.waveNumber,
-        question: state.currentProblem.expression,
-        explanation: state.currentProblem.explanation,
+        question: problem.expression,
+        explanation: problem.explanation,
         wasCorrect: isCorrect,
       }
       set({ explanationLog: [...state.explanationLog, entry] })
     }
 
     if (isCorrect) {
+      const newStreak = state.mathStreak + 1
+      const newBestStreak = Math.max(state.bestMathStreak, newStreak)
+      const elapsedSec = Math.max(0.5, (performance.now() - state.problemSpawnTime) / 1000)
+      // Speed bonus: up to $50 if solved within 3s, tapering down over 20s
+      const speedBonus = Math.round(Math.max(10, MATH_SPEED_BONUS_MAX - Math.max(0, elapsedSec - 3) * 2.5))
+      const streakBonus = newStreak * MATH_STREAK_GOLD_BONUS
+      const totalGoldBonus = speedBonus + streakBonus
+
+      // Archimedes Thunder: chain-lightning from Central Core to up to 5 closest enemies
+      const lightningTargets: { x: number; z: number }[] = []
+      const enemiesWithDist: { entry: typeof enemyRegistry extends Map<string, infer V> ? V : never; distSq: number }[] = []
+      enemyRegistry.forEach((entry) => {
+        enemiesWithDist.push({ entry, distSq: entry.x * entry.x + entry.z * entry.z })
+      })
+      enemiesWithDist.sort((a, b) => a.distSq - b.distSq)
+      const thunderDamage = CORE_LIGHTNING_BASE_DMG * state.coreLevel
+      for (let i = 0; i < Math.min(CORE_LIGHTNING_TARGETS, enemiesWithDist.length); i++) {
+        const target = enemiesWithDist[i].entry
+        lightningTargets.push({ x: target.x, z: target.z })
+        target.takeDamage(thunderDamage)
+      }
+
+      soundEngine.playMathSuccess(newStreak)
+      const now = Date.now()
+
       set(s => ({
         coreHp: s.maxCoreHp,
         playerHp: s.maxPlayerHp,
         isPlayerDead: false,
         isBuffActive: true,
+        gold: s.gold + totalGoldBonus,
+        mathStreak: newStreak,
+        bestMathStreak: newBestStreak,
+        lastMathReward: {
+          id: now,
+          timestamp: now,
+          wave: s.waveNumber,
+          wasCorrect: true,
+          goldBonus: totalGoldBonus,
+          streak: newStreak,
+          question: problem?.expression ?? '',
+          explanation: problem?.explanation ?? '',
+          zoneDir: s.mathZonePosition,
+          padPos: padWorldPos,
+          lightningTargets,
+        },
       }))
       clearRespawnTimer()
+    } else {
+      soundEngine.playMathError()
+      const now = Date.now()
+      // Tactical learning consolation: +15% Core HP repair + show cognitive trap explanation
+      set(s => ({
+        mathStreak: 0,
+        coreHp: Math.min(s.maxCoreHp, Math.round(s.coreHp + s.maxCoreHp * 0.15)),
+        lastMathReward: {
+          id: now,
+          timestamp: now,
+          wave: s.waveNumber,
+          wasCorrect: false,
+          goldBonus: 0,
+          streak: 0,
+          question: problem?.expression ?? '',
+          explanation: problem?.explanation ?? '',
+          zoneDir: s.mathZonePosition,
+          padPos: padWorldPos,
+          lightningTargets: [],
+        },
+      }))
     }
   },
+
+  dismissMathReward: () => set({ lastMathReward: null }),
 
   // ── Transparency Sensor ──
   setInsideMathZone: (inside) => set({ insideMathZone: inside }),
@@ -677,6 +791,11 @@ export const useGameStore = create<GameStore>()(
   toggleCameraFree: () => set(s => ({ isCameraFree: !s.isCameraFree })),
   togglePause: () => set(s => ({ isPaused: !s.isPaused })),
   setPaused: (v) => set({ isPaused: v }),
+  toggleMute: () => set(s => {
+    const next = !s.isMuted
+    soundEngine.setMuted(next)
+    return { isMuted: next }
+  }),
 
   // ── Load from save slot ──
   loadGameState: (snapshot) => {
@@ -684,8 +803,11 @@ export const useGameStore = create<GameStore>()(
     clearAutoWaveTimer()
     const dir = randomDirection()
     const problem = generateFrictionProblem(snapshot.waveNumber)
+    rebuildObstacles(snapshot.towers)
     set({
       ...initialState,
+      isMuted: get().isMuted,
+      isAtLandingPage: false,
       phase: 'PLAYING',
       waveNumber: snapshot.waveNumber,
       gold: snapshot.gold,
@@ -703,6 +825,8 @@ export const useGameStore = create<GameStore>()(
       mathZonePosition: dir,
       isPaused: false,
       explanationLog: [],
+      problemSpawnTime: performance.now(),
+      lastMathReward: null,
     })
   },
 
@@ -711,7 +835,7 @@ export const useGameStore = create<GameStore>()(
     clearRespawnTimer()
     clearAutoWaveTimer()
     resetGrid()
-    set(initialState)
+    set({ ...initialState, isMuted: get().isMuted })
   },
 }),
     {

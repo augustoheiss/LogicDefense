@@ -22,6 +22,7 @@ import { useGameStore } from '../state/useGameStore'
 import { playerPositionRef, fireAttack } from './playerEvents'
 import { enemyRegistry } from '../enemies/EnemyRegistry'
 import { findPath } from './pathfinding'
+import { soundEngine } from '../audio/soundEngine'
 import {
   PLAYER_RADIUS,
   PLAYER_SPEED,
@@ -30,6 +31,10 @@ import {
   PLAYER_ATTACK_COOLDOWN,
   CAMERA_LERP,
   BUFF_COOLDOWN_MULT,
+  BUFF_DAMAGE_MULT,
+  PLAYER_PULSE_COOLDOWN,
+  PLAYER_PULSE_RANGE,
+  PLAYER_PULSE_DAMAGE,
   ARENA_RADIUS,
 } from '../config/constants'
 
@@ -50,6 +55,9 @@ export function PlayerController() {
   const rigidBodyRef = useRef<RapierRigidBody>(null)
   const meshRef = useRef<THREE.Mesh>(null)
   const attackRingRef = useRef<THREE.Mesh>(null)
+  const pulseRingRef = useRef<THREE.Mesh>(null)
+  const merkabaRing1Ref = useRef<THREE.Mesh>(null)
+  const merkabaRing2Ref = useRef<THREE.Mesh>(null)
   const { camera, controls } = useThree()
 
   // Selected range subscriptions
@@ -61,6 +69,8 @@ export function PlayerController() {
 
   const attackCooldownRef = useRef(0)
   const attackVisualRef = useRef(0)
+  const pulseCooldownRef = useRef(0)
+  const pulseVisualRef = useRef(0)
   const pathCacheRef = useRef<PathCache | null>(null)
   const lastEntityPosRef = useRef<{ x: number; z: number } | null>(null)
   const frameCountRef = useRef(0)
@@ -143,7 +153,7 @@ export function PlayerController() {
 
     // ── Buff-scaled combat stats ──
     const effectiveCooldown = buffed ? PLAYER_ATTACK_COOLDOWN * BUFF_COOLDOWN_MULT : PLAYER_ATTACK_COOLDOWN
-    const effectiveDamage = PLAYER_ATTACK_DAMAGE
+    const effectiveDamage = buffed ? PLAYER_ATTACK_DAMAGE * BUFF_DAMAGE_MULT : PLAYER_ATTACK_DAMAGE
     const effectiveRange = buffed ? PLAYER_ATTACK_RANGE * 1.5 : PLAYER_ATTACK_RANGE
 
     // ── Detect WASD input ──
@@ -320,8 +330,33 @@ export function PlayerController() {
       if (attackTarget) {
         attackCooldownRef.current = effectiveCooldown
         attackVisualRef.current = 0.2
+        soundEngine.playPlayerAttack(buffed)
         fireAttack(pos.x, pos.z, effectiveDamage, effectiveRange)
       }
+    }
+
+    // ── Manual Spacebar AoE Ability: Pulso Lógico ──
+    pulseCooldownRef.current = Math.max(0, pulseCooldownRef.current - delta)
+    if (
+      (state.phase === 'PLAYING' || state.phase === 'WAVE_CLEAR') &&
+      keys['Space'] &&
+      pulseCooldownRef.current <= 0 &&
+      !state.isPlayerDead
+    ) {
+      const effectivePulseCooldown = buffed
+        ? PLAYER_PULSE_COOLDOWN * BUFF_COOLDOWN_MULT
+        : PLAYER_PULSE_COOLDOWN
+      const effectivePulseDamage = buffed
+        ? PLAYER_PULSE_DAMAGE * BUFF_DAMAGE_MULT
+        : PLAYER_PULSE_DAMAGE
+      const effectivePulseRange = buffed
+        ? PLAYER_PULSE_RANGE * 1.35
+        : PLAYER_PULSE_RANGE
+
+      pulseCooldownRef.current = effectivePulseCooldown
+      pulseVisualRef.current = 0.45
+      soundEngine.playPlayerPulse()
+      fireAttack(pos.x, pos.z, effectivePulseDamage, effectivePulseRange)
     }
 
     // ── Attack visual fade ──
@@ -339,6 +374,30 @@ export function PlayerController() {
         mat.color.set('#ffd700')
       } else {
         mat.color.set('#ffffff')
+      }
+    }
+
+    // ── Spacebar Pulse visual fade ──
+    pulseVisualRef.current = Math.max(0, pulseVisualRef.current - delta)
+    if (pulseRingRef.current) {
+      const mat = pulseRingRef.current.material as THREE.MeshBasicMaterial
+      const pProgress = 1 - pulseVisualRef.current / 0.45
+      mat.opacity = Math.max(0, (1 - pProgress) * 0.75)
+      const pScale = 0.5 + pProgress * (buffed ? PLAYER_PULSE_RANGE * 1.35 : PLAYER_PULSE_RANGE)
+      pulseRingRef.current.scale.setScalar(Math.max(0.5, pScale))
+      pulseRingRef.current.visible = pulseVisualRef.current > 0.01
+      mat.color.set(buffed ? '#ffd700' : '#00d4ff')
+    }
+
+    // ── Gyroscopic Merkaba Aura (mobile GPU-safe meshBasicMaterial rings) ──
+    if (merkabaRing1Ref.current && merkabaRing2Ref.current) {
+      merkabaRing1Ref.current.visible = buffed
+      merkabaRing2Ref.current.visible = buffed
+      if (buffed) {
+        merkabaRing1Ref.current.rotation.x += delta * 2.8
+        merkabaRing1Ref.current.rotation.y += delta * 1.9
+        merkabaRing2Ref.current.rotation.y -= delta * 3.1
+        merkabaRing2Ref.current.rotation.z += delta * 2.3
       }
     }
 
@@ -524,6 +583,16 @@ export function PlayerController() {
           <meshBasicMaterial color={isBuffActive ? '#ffd700' : '#00ffcc'} />
         </mesh>
 
+        {/* Gyroscopic Merkaba Aura (visible when Divine Buff is active — mobile GPU safe) */}
+        <mesh ref={merkabaRing1Ref} visible={false} frustumCulled={false}>
+          <torusGeometry args={[0.92, 0.045, 8, 28]} />
+          <meshBasicMaterial color="#ffd700" transparent opacity={0.85} depthWrite={false} />
+        </mesh>
+        <mesh ref={merkabaRing2Ref} visible={false} frustumCulled={false}>
+          <torusGeometry args={[1.12, 0.035, 8, 28]} />
+          <meshBasicMaterial color="#00ff88" transparent opacity={0.7} depthWrite={false} />
+        </mesh>
+
         {/* Attack range ring (visible on attack) */}
         <mesh
           ref={attackRingRef}
@@ -534,6 +603,24 @@ export function PlayerController() {
         >
           <ringGeometry args={[PLAYER_ATTACK_RANGE * 0.8, PLAYER_ATTACK_RANGE, 32]} />
           <meshBasicMaterial color="#ffffff" transparent opacity={0} side={THREE.DoubleSide} />
+        </mesh>
+
+        {/* Spacebar Manual Pulse Shockwave Ring */}
+        <mesh
+          ref={pulseRingRef}
+          position={[0, -0.32, 0]}
+          rotation={[-Math.PI / 2, 0, 0]}
+          frustumCulled={false}
+          visible={false}
+        >
+          <ringGeometry args={[0.82, 1.0, 40]} />
+          <meshBasicMaterial
+            color="#00d4ff"
+            transparent
+            opacity={0}
+            side={THREE.DoubleSide}
+            depthWrite={false}
+          />
         </mesh>
 
         {/* Selected range ring (visible when player is selected) */}
