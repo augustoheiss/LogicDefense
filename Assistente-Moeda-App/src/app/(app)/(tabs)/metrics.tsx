@@ -872,10 +872,9 @@ export default function MetricsScreen() {
           onDeleteCategory={db.deleteCategoryInBulk}
         />
 
-        {/* ── Sector Actuarial & Simulation Widgets (Temporariamente Ocultados da UI) ── */}
-        {/*
+        {/* ── Sector Actuarial & Simulation Widgets (Ativados Conforme Módulos da Planilha) ── */}
         <SectorGuard sector="personal_finance">
-          <SectionTitle title="👤 Simuladores de Finanças Pessoais (PFM)" />
+          <SectionTitle title="👤 Simuladores de Finanças Pessoais (PFM & FIRE)" />
           <PersonalFinanceSectorWidget />
         </SectorGuard>
 
@@ -898,7 +897,6 @@ export default function MetricsScreen() {
           <SectionTitle title="⚖️ Otimizadores Jurídicos & Tributários" />
           <LegalTaxesSectorWidget />
         </SectorGuard>
-        */}
 
         <View style={styles.bottomPad} />
       </ScrollView>

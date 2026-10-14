@@ -1,3 +1,4 @@
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Pressable, TextInput, Platform } from 'react-native';
 import { useCoinDB } from '@/hooks/useCoinDB';
 import { colors } from '@/theme/colors';
@@ -5,6 +6,18 @@ import { spacing, radius } from '@/theme/spacing';
 
 export function TimeMachineBar() {
   const db = useCoinDB();
+  const [expanded, setExpanded] = useState(false);
+
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof window === 'undefined') return;
+    const handler = () => setExpanded((prev) => !prev);
+    window.addEventListener('coin_toggle_time_machine', handler);
+    return () => window.removeEventListener('coin_toggle_time_machine', handler);
+  }, []);
+
+  if (!expanded && db.cutoffDate === '') {
+    return null;
+  }
 
   return (
     <View style={styles.container}>
@@ -43,17 +56,28 @@ export function TimeMachineBar() {
             )}
           </View>
         </View>
-        {db.cutoffDate !== '' && (
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          {db.cutoffDate !== '' && (
+            <Pressable
+              style={({ pressed }) => [
+                styles.timeMachineReset,
+                pressed && styles.pressed,
+              ]}
+              onPress={() => db.setCutoffDate('')}
+            >
+              <Text style={styles.timeMachineResetText}>✕ Reset</Text>
+            </Pressable>
+          )}
           <Pressable
             style={({ pressed }) => [
               styles.timeMachineReset,
               pressed && styles.pressed,
             ]}
-            onPress={() => db.setCutoffDate('')}
+            onPress={() => setExpanded(false)}
           >
-            <Text style={styles.timeMachineResetText}>✕ Reset</Text>
+            <Text style={[styles.timeMachineResetText, { color: colors.text.tertiary }]}>▲ Ocultar</Text>
           </Pressable>
-        )}
+        </View>
       </View>
 
       {db.cutoffDate !== '' && (

@@ -91,6 +91,19 @@ export class OpLog {
     this.redoStack = [];
   }
 
+  public serialize(): { undoStack: OpLogEntry[]; redoStack: OpLogEntry[] } {
+    return {
+      undoStack: [...this.undoStack],
+      redoStack: [...this.redoStack],
+    };
+  }
+
+  public hydrate(data: { undoStack?: OpLogEntry[]; redoStack?: OpLogEntry[] } | null): void {
+    if (!data) return;
+    this.undoStack = Array.isArray(data.undoStack) ? data.undoStack.slice(-this.maxEntries) : [];
+    this.redoStack = Array.isArray(data.redoStack) ? data.redoStack.slice(-this.maxEntries) : [];
+  }
+
   private describeAction(action: Action): string {
     switch (action.type) {
       case 'ADD_ROWS': {
@@ -119,6 +132,14 @@ export class OpLog {
         return 'Atualizar setores da planilha';
       case 'RENAME_CATEGORY':
         return `Renomear categoria para "${action.payload.newCategory}"`;
+      case 'UPDATE_TABLE_SCHEMA':
+        return 'Atualizar colunas da planilha';
+      case 'UPDATE_INVESTOR_PROFILE':
+        return 'Atualizar perfil de investidor';
+      case 'UPDATE_DASHBOARD_CONFIG':
+        return 'Personalizar blocos do aplicativo';
+      case 'UPDATE_SECTOR_PARAMS':
+        return 'Atualizar parâmetros setoriais';
       default:
         return 'Operação financeira';
     }

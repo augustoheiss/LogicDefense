@@ -12,9 +12,30 @@
 
 import React, { useState, useEffect, useCallback, useMemo, useRef, createContext, useContext } from 'react';
 import { Platform } from 'react-native';
-import { loadDB, saveDB, clearDB } from '../storage/asyncStorageAdapter';
+import {
+  loadDB,
+  saveDB,
+  clearDB,
+  getPrivacyModeSync,
+  setPrivacyModeSync,
+} from '../storage/asyncStorageAdapter';
+import {
+  loadOpLogFromIndexedDB,
+  saveOpLogToIndexedDB,
+} from '../storage/indexedDBAdapter';
 import { computeMetrics, emptyMetrics, computeBaselineGoals } from '../core/metricsEngine';
-import type { DB, CoinTable, TableRow, TableGoals, TableMetrics, DynamicTableSchema, InvestorProfileConfig } from '../core/types';
+import { setPrivacyModeActive } from '../core/formatCurrency';
+import type {
+  DB,
+  CoinTable,
+  TableRow,
+  TableGoals,
+  TableMetrics,
+  DynamicTableSchema,
+  InvestorProfileConfig,
+  DashboardConfig,
+  SectorSimulationParams,
+} from '../core/types';
 import { useAuthContext } from './useAuth';
 import { fullSync, pushToCloud, pullFromCloud } from '../storage/supabaseSync';
 import { supabase } from '@/lib/supabase';
@@ -28,7 +49,7 @@ import { OpLog } from '../core/opLog';
 // ── Types ────────────────────────────────────────────────────────────────────
 
 export interface CoinDBState {
-  /** Whether the DB is still loading from AsyncStorage */
+  /** Whether the DB is still loading from AsyncStorage / IndexedDB */
   isLoading: boolean;
   /** All coin tables */
   tables: CoinTable[];
@@ -42,6 +63,10 @@ export interface CoinDBState {
   metrics: TableMetrics;
   /** Currently selected month filter (YYYY-MM or 'all') */
   selectedMonth: string;
+  /** Street/Privacy mode (blurs/masks sensitive currency values on screen) */
+  isPrivacyMode: boolean;
+  togglePrivacyMode: () => void;
+  setPrivacyMode: (enabled: boolean) => void;
 
   // ── Table Operations ──────────────────────────────────
   setActiveTableIndex: (index: number) => void;
@@ -55,6 +80,9 @@ export interface CoinDBState {
     goals?: TableGoals;
     schema?: DynamicTableSchema;
     investorProfile?: InvestorProfileConfig;
+    activeSectors?: string[];
+    dashboardConfig?: DashboardConfig;
+    sectorParams?: SectorSimulationParams;
     mode?: 'replace' | 'merge';
   }) => Promise<{
     success: boolean;
@@ -82,11 +110,13 @@ export interface CoinDBState {
   deleteGeneratedRows: (prefix?: string) => number;
   effectuateGeneratedRows: (prefix?: string) => number;
 
-  // ── Goals & Schema ────────────────────────────────────
+  // ── Goals, Schema & Modular App Builder ───────────────
   updateGoals: (goals: Partial<TableGoals>) => void;
   updateActiveSectors: (sectors: string[]) => void;
   updateTableSchema: (schema: DynamicTableSchema, tableId?: string) => Promise<void> | void;
   updateInvestorProfile: (profile: InvestorProfileConfig, tableId?: string) => Promise<void> | void;
+  updateDashboardConfig: (config: DashboardConfig, tableId?: string) => Promise<void> | void;
+  updateSectorParams: (params: SectorSimulationParams, tableId?: string) => Promise<void> | void;
 
   // ── Month Filter ──────────────────────────────────────
   setSelectedMonth: (month: string) => void;
@@ -152,13 +182,25 @@ function useCoinDBInternal(): CoinDBState {
   const [cutoffDate, setCutoffDate] = useState<string>('');
   const [aiCostCurrentMonth, setAiCostCurrentMonth] = useState<number>(0);
   const [aiCostLastReset, setAiCostLastReset] = useState<string>('');
+  const [isPrivacyMode, setIsPrivacyModeState] = useState<boolean>(() => {
+    const initial = getPrivacyModeSync();
+    setPrivacyModeActive(initial);
+    return initial;
+  });
 
   const auth = useAuthContext();
 
-  // ── Load from AsyncStorage on mount ────────────────────
+  // ── Load from IndexedDB / AsyncStorage on mount ────────
   useEffect(() => {
     async function init() {
-      const db = await loadDB();
+      const [db, storedOpLog] = await Promise.all([
+        loadDB(),
+        loadOpLogFromIndexedDB(),
+      ]);
+      if (storedOpLog) {
+        opLogRef.current.hydrate(storedOpLog);
+        setOpLogVersion((v) => v + 1);
+      }
       if (db) {
         if (db.tables.length > 0) {
           // Auto-purge any historical tombstoned/zombie tables
@@ -167,11 +209,34 @@ function useCoinDBInternal(): CoinDBState {
         }
         setAiCostCurrentMonth(db.aiCostCurrentMonth ?? 0);
         setAiCostLastReset(db.aiCostLastReset ?? '');
+        if (db.isPrivacyMode !== undefined) {
+          setIsPrivacyModeState(db.isPrivacyMode);
+          setPrivacyModeSync(db.isPrivacyMode);
+          setPrivacyModeActive(db.isPrivacyMode);
+        }
       }
       setIsLoading(false);
     }
     init();
   }, []);
+
+  const setPrivacyMode = useCallback((enabled: boolean) => {
+    setIsPrivacyModeState(enabled);
+    setPrivacyModeSync(enabled);
+    setPrivacyModeActive(enabled);
+    loadDB().then((currentDB) => {
+      saveDB({
+        tables: currentDB?.tables || tablesRef.current,
+        aiCostCurrentMonth: currentDB?.aiCostCurrentMonth ?? aiCostCurrentMonth,
+        aiCostLastReset: currentDB?.aiCostLastReset ?? aiCostLastReset,
+        isPrivacyMode: enabled,
+      }).catch(() => {});
+    }).catch(() => {});
+  }, [aiCostCurrentMonth, aiCostLastReset]);
+
+  const togglePrivacyMode = useCallback(() => {
+    setPrivacyMode(!isPrivacyMode);
+  }, [isPrivacyMode, setPrivacyMode]);
 
   // ── Hydrate from Cloud on Login (Pull remote data) ───
   const hydrateFromCloud = useCallback(async (userId: string, isSilent = false) => {
@@ -267,6 +332,8 @@ function useCoinDBInternal(): CoinDBState {
   // ── Clear local database cache ─────────────────────────
   const clearLocalState = useCallback(async () => {
     await clearDB();
+    opLogRef.current.clear();
+    setOpLogVersion((v) => v + 1);
     setTables([]);
     setActiveTableIndex(0);
     setAiCostCurrentMonth(0);
@@ -313,7 +380,7 @@ function useCoinDBInternal(): CoinDBState {
       : actTables[0] ?? null;
   }, [getLatestTables, activeTableIndex]);
 
-  // ── Persist to AsyncStorage and Push to Cloud ──────────
+  // ── Persist to IndexedDB / AsyncStorage and Push to Cloud ──
   const persist = useCallback(async (newTables: CoinTable[]) => {
     const mainTables = ensureActiveSectors(newTables);
     tablesRef.current = mainTables;
@@ -323,7 +390,11 @@ function useCoinDBInternal(): CoinDBState {
       tables: mainTables,
       aiCostCurrentMonth: currentDB?.aiCostCurrentMonth ?? 0,
       aiCostLastReset: currentDB?.aiCostLastReset ?? '',
+      isPrivacyMode: currentDB?.isPrivacyMode ?? isPrivacyMode,
     });
+    const serializedLog = opLogRef.current.serialize();
+    saveOpLogToIndexedDB(serializedLog.undoStack, serializedLog.redoStack).catch(() => {});
+
     if (auth.mode === 'authenticated' && auth.user) {
       // Non-blocking bidirectional background fullSync to pull/merge remote data and push merged state
       fullSync().then(async (res) => {
@@ -348,7 +419,7 @@ function useCoinDBInternal(): CoinDBState {
         console.error('Cloud background sync failed:', err);
       });
     }
-  }, [auth.mode, auth.user, activeTableIndex]);
+  }, [auth.mode, auth.user, activeTableIndex, isPrivacyMode]);
 
   // ── Global Command Dispatcher & Undo/Redo Engine ─────
   const opLogRef = useRef(new OpLog(50));
@@ -689,11 +760,26 @@ function useCoinDBInternal(): CoinDBState {
     if (normalizedUpdates.description) {
       normalizedUpdates.description = normalizedUpdates.description.toUpperCase().trim();
     }
+
+    const originalRow = currentActive.rows.find((r) => r.id === rowId);
+    if (originalRow) {
+      const previousSnapshot: Partial<TableRow> = {};
+      for (const k of Object.keys(normalizedUpdates) as (keyof TableRow)[]) {
+        previousSnapshot[k] = originalRow[k] as any;
+      }
+      opLogRef.current.push(
+        { type: 'UPDATE_ROW', payload: { tableId: currentActive.id, rowId, updates: normalizedUpdates } },
+        { type: 'UPDATE_ROW', payload: { tableId: currentActive.id, rowId, updates: previousSnapshot } },
+        'Editar lançamento'
+      );
+      setOpLogVersion((v) => v + 1);
+    }
+
     const newTables = currentTables.map((t) => {
       if (t.id !== currentActive.id) return t;
       return {
         ...t,
-        rows: t.rows.map((r) => (r.id === rowId ? { ...r, ...normalizedUpdates } : r)),
+        rows: t.rows.map((r) => (r.id === rowId ? { ...r, ...normalizedUpdates } : r)).sort(safeDateSort),
         updatedAt: new Date().toISOString(),
       };
     });
@@ -925,18 +1011,22 @@ function useCoinDBInternal(): CoinDBState {
       };
     });
     await persist(newTables);
-  }, [getLatestTables, getLatestActiveTable, persist]);
+  }, [getLatestTables, getLatestActiveTable, persist, undo]);
 
   const deleteRowsByPrefix = useCallback((prefix: string): number => {
     const currentTables = getLatestTables();
     const currentActive = getLatestActiveTable();
     if (!currentActive) return 0;
     let deletedCount = 0;
+    const deletedRows: TableRow[] = [];
     const newTables = currentTables.map((t) => {
       if (t.id !== currentActive.id) return t;
       const originalLength = t.rows.length;
       const keptRows = t.rows.filter((r) => {
-        if (r?.date && r.date.startsWith(prefix)) return false;
+        if (r?.date && r.date.startsWith(prefix)) {
+          deletedRows.push(r);
+          return false;
+        }
         return true;
       });
       deletedCount = originalLength - keptRows.length;
@@ -946,6 +1036,14 @@ function useCoinDBInternal(): CoinDBState {
         updatedAt: new Date().toISOString(),
       };
     });
+    if (deletedRows.length > 0) {
+      opLogRef.current.push(
+        { type: 'DELETE_ROWS', payload: { tableId: currentActive.id, rowIds: deletedRows.map((r) => r.id) } },
+        { type: 'ADD_ROWS', payload: { tableId: currentActive.id, rows: deletedRows } },
+        `Excluir ${deletedRows.length} lançamentos de ${prefix}`
+      );
+      setOpLogVersion((v) => v + 1);
+    }
     persist(newTables);
     return deletedCount;
   }, [getLatestTables, getLatestActiveTable, persist]);
@@ -955,12 +1053,14 @@ function useCoinDBInternal(): CoinDBState {
     const currentActive = getLatestActiveTable();
     if (!currentActive) return 0;
     let deletedCount = 0;
+    const deletedRows: TableRow[] = [];
     const newTables = currentTables.map((t) => {
       if (t.id !== currentActive.id) return t;
       const originalLength = t.rows.length;
       const keptRows = t.rows.filter((r) => {
         if (!r.generatedBy) return true;
         if (prefix && (!r.date || !r.date.startsWith(prefix))) return true;
+        deletedRows.push(r);
         return false;
       });
       deletedCount = originalLength - keptRows.length;
@@ -970,6 +1070,14 @@ function useCoinDBInternal(): CoinDBState {
         updatedAt: new Date().toISOString(),
       };
     });
+    if (deletedRows.length > 0) {
+      opLogRef.current.push(
+        { type: 'DELETE_ROWS', payload: { tableId: currentActive.id, rowIds: deletedRows.map((r) => r.id) } },
+        { type: 'ADD_ROWS', payload: { tableId: currentActive.id, rows: deletedRows } },
+        `Limpar ${deletedRows.length} projeções`
+      );
+      setOpLogVersion((v) => v + 1);
+    }
     persist(newTables);
     return deletedCount;
   }, [getLatestTables, getLatestActiveTable, persist]);
@@ -1084,6 +1192,30 @@ function useCoinDBInternal(): CoinDBState {
     });
   }, [dispatch, getLatestActiveTable]);
 
+  const updateDashboardConfig = useCallback(async (dashboardConfig: DashboardConfig, tableId?: string) => {
+    const targetId = tableId || getLatestActiveTable()?.id;
+    if (!targetId) return;
+    await dispatch({
+      type: 'UPDATE_DASHBOARD_CONFIG',
+      payload: {
+        tableId: targetId,
+        dashboardConfig,
+      },
+    });
+  }, [dispatch, getLatestActiveTable]);
+
+  const updateSectorParams = useCallback(async (sectorParams: SectorSimulationParams, tableId?: string) => {
+    const targetId = tableId || getLatestActiveTable()?.id;
+    if (!targetId) return;
+    await dispatch({
+      type: 'UPDATE_SECTOR_PARAMS',
+      payload: {
+        tableId: targetId,
+        sectorParams,
+      },
+    });
+  }, [dispatch, getLatestActiveTable]);
+
   const changeActiveTableIndex = useCallback((index: number) => {
     setActiveTableIndex(index);
     setSelectedMonth('all');
@@ -1100,6 +1232,9 @@ function useCoinDBInternal(): CoinDBState {
     mode?: 'replace' | 'merge';
     schema?: DynamicTableSchema;
     investorProfile?: InvestorProfileConfig;
+    activeSectors?: string[];
+    dashboardConfig?: DashboardConfig;
+    sectorParams?: SectorSimulationParams;
   }) => {
     const currentTables = tablesRef.current.length > 0 ? tablesRef.current : tables;
     const activeTablesList = currentTables.filter((t: CoinTable) => !t.isDeleted);
@@ -1127,9 +1262,11 @@ function useCoinDBInternal(): CoinDBState {
         updatedAt: new Date().toISOString(),
         rows: [],
         goals: payload.goals || { dailyGoals: {}, weeklyGoals: {}, annualCosts: {} },
-        activeSectors: ['personal_finance'],
+        activeSectors: payload.activeSectors || ['personal_finance'],
         schema: payload.schema,
         investorProfile: payload.investorProfile,
+        dashboardConfig: payload.dashboardConfig,
+        sectorParams: payload.sectorParams,
       };
       baseTables = [...currentTables, newTable];
       targetTable = newTable;
@@ -1150,7 +1287,6 @@ function useCoinDBInternal(): CoinDBState {
 
     if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
       if (activeApiKey) {
-        // Valida a chave vinda do CSV contra o servidor backend
         const valCheck = await validateApiKey(activeApiKey);
         if (!valCheck.valid) {
           console.warn(`[CSV Import] Chave API no CSV (${activeApiKey.slice(0, 15)}...) está ${valCheck.expired ? 'EXPIRADA' : 'INVÁLIDA'}. Gerando nova chave API para a planilha ${effectiveTableId}...`);
@@ -1161,7 +1297,6 @@ function useCoinDBInternal(): CoinDBState {
           }
         }
       } else {
-        // Caso o CSV não tenha api_key, verifica chave salva no localStorage ou gera nova se expirada/ausente
         const existingKey = window.localStorage.getItem(`coin_api_key_${effectiveTableId}`);
         if (existingKey) {
           const valCheck = await validateApiKey(existingKey);
@@ -1236,8 +1371,11 @@ function useCoinDBInternal(): CoinDBState {
           monthlyGoals: { ...(currentGoals.monthlyGoals || {}), ...(goalUpdates.monthlyGoals || {}) },
           globalGoals: goalUpdates.globalGoals || currentGoals.globalGoals,
         } : t.goals),
+        activeSectors: payload.activeSectors || t.activeSectors,
         schema: payload.schema || t.schema,
         investorProfile: payload.investorProfile || t.investorProfile,
+        dashboardConfig: payload.dashboardConfig || t.dashboardConfig,
+        sectorParams: payload.sectorParams || t.sectorParams,
         updatedAt: new Date().toISOString(),
       };
     });
@@ -1264,6 +1402,9 @@ function useCoinDBInternal(): CoinDBState {
     metrics,
     activeTableIndex,
     selectedMonth,
+    isPrivacyMode,
+    togglePrivacyMode,
+    setPrivacyMode,
     setActiveTableIndex: changeActiveTableIndex,
     importSpreadsheet,
     addTable,
@@ -1286,6 +1427,8 @@ function useCoinDBInternal(): CoinDBState {
     updateActiveSectors,
     updateTableSchema,
     updateInvestorProfile,
+    updateDashboardConfig,
+    updateSectorParams,
     setSelectedMonth,
     cutoffDate,
     setCutoffDate,

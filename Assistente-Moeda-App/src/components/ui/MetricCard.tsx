@@ -72,10 +72,19 @@ export function MetricGrid({ children }: { children: React.ReactNode }) {
   const { width } = useWindowDimensions();
   const columns = width >= 1024 ? 4 : width >= 600 ? 3 : 2;
   const gap = spacing.sm;
+  const minPercent = columns === 4 ? '22%' : columns === 3 ? '30%' : '45%';
 
   return (
     <View style={[styles.grid, { gap }]}>
-      {children}
+      {Array.isArray(children)
+        ? children.map((child, idx) =>
+            child ? (
+              <View key={idx} style={{ flex: 1, minWidth: minPercent }}>
+                {child}
+              </View>
+            ) : null
+          )
+        : children}
     </View>
   );
 }

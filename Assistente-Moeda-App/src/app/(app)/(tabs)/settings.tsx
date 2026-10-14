@@ -45,7 +45,7 @@ import { SectorSettingsPanel } from '@/components/ui/SectorSettingsPanel';
 import { SyncAuditPanel, APIManagementTester } from '@/components/ui';
 import { formatCurrencySmart } from '@/core/formatCurrency';
 import { validateMobileLicenseKey, getStoredLicenseKey } from '@/storage/authService';
-import { ensureApiKeyForTable, generateLocalApiKey, buildCSV, shareCSVText } from '@/services/exportService';
+import { ensureApiKeyForTable, generateLocalApiKey, buildCSV, shareCSVText, shareJSONBackup } from '@/services/exportService';
 import { validateApiKey, generateNewApiKey, formatTimeRemaining, revokeApiKey } from '@/services/apiKeyService';
 import type { TableGoals, CoinTable } from '@/core/types';
 
@@ -105,11 +105,26 @@ export default function SettingsScreen() {
         db.activeTable.name,
         db.activeTable.description,
         db.activeTable.goals,
-        db.activeTable.id
+        db.activeTable.id,
+        null,
+        undefined,
+        db.activeTable.schema,
+        db.activeTable.investorProfile,
+        db.activeTable.activeSectors,
+        db.activeTable.dashboardConfig,
+        db.activeTable.sectorParams
       );
       await shareCSVText(csv, db.activeTable.name);
     } catch (e: any) {
       Alert.alert('Erro', e?.message || 'Falha ao gerar o arquivo de backup.');
+    }
+  };
+
+  const handleDownloadJSONBackup = async () => {
+    try {
+      await shareJSONBackup(db.tables);
+    } catch (e: any) {
+      Alert.alert('Erro', e?.message || 'Falha ao gerar o backup JSON soberano.');
     }
   };
 
@@ -654,17 +669,32 @@ export default function SettingsScreen() {
             </Text>
 
             {db.activeTable && (
-              <Pressable
-                style={({ pressed }) => [
-                  styles.backupDownloadBtn,
-                  pressed && styles.pressed,
-                ]}
-                onPress={handleDownloadBackup}
-              >
-                <Text style={styles.backupDownloadBtnText}>
-                  📥 Baixar Backup de "{db.activeTable.name}" ({db.activeTable.rows.length} itens)
-                </Text>
-              </Pressable>
+              <View style={{ gap: spacing.xs }}>
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.backupDownloadBtn,
+                    pressed && styles.pressed,
+                  ]}
+                  onPress={handleDownloadBackup}
+                >
+                  <Text style={styles.backupDownloadBtnText}>
+                    📥 Baixar Backup .CSV de "{db.activeTable.name}" ({db.activeTable.rows.length} itens)
+                  </Text>
+                </Pressable>
+
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.backupDownloadBtn,
+                    { backgroundColor: 'rgba(168, 85, 247, 0.14)', borderColor: colors.accent.purple, borderWidth: 1 },
+                    pressed && styles.pressed,
+                  ]}
+                  onPress={handleDownloadJSONBackup}
+                >
+                  <Text style={[styles.backupDownloadBtnText, { color: colors.accent.purple }]}>
+                    🏛️ Baixar Backup Soberano .JSON (Todas as {db.tables.length} Planilhas + OpLog)
+                  </Text>
+                </Pressable>
+              </View>
             )}
 
             <Text style={styles.backupFooterText}>

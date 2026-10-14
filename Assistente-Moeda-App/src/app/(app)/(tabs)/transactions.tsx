@@ -14,7 +14,7 @@
  * Connected to useCoinDB for live data.
  */
 
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -55,6 +55,7 @@ import {
   PersonalFinanceSectorWidget,
   CSVStagingReviewModal,
   GranularExportModal,
+  SpreadsheetDataGrid,
 } from '@/components/ui';
 import { formatCurrencySmart } from '@/core/formatCurrency';
 import { shareWhatsAppReport, shareCSV, sharePDFReport, buildWhatsAppReport, shareCSVText, buildCSV } from '@/services/exportService';
@@ -62,6 +63,8 @@ import { importCSVFlow, pickCSVFile, parseCSV } from '@/services/csvImportServic
 import { parseCSVText } from '@/utils/csvEngine';
 import { computeBaselineGoals } from '@/core/metricsEngine';
 import { inferTableSchema } from '@/core/typeInferenceEngine';
+import { getUIViewModeSync, setUIViewModeSync } from '@/storage/asyncStorageAdapter';
+import { useWebKeyboardShortcuts } from '@/hooks/useWebKeyboardShortcuts';
 import type { TableRow, DynamicTableSchema } from '@/core/types';
 
 export default function TransactionsScreen() {
@@ -80,6 +83,27 @@ export default function TransactionsScreen() {
   const [stagingRows, setStagingRows] = useState<TableRow[]>([]);
   const [isAmbiguousImport, setIsAmbiguousImport] = useState(false);
   const { width } = useWindowDimensions();
+  const isDesktop = width >= 1024;
+
+  // ── Search & View Mode States ──────────────────────────
+  const [searchQuery, setSearchQuery] = useState('');
+  const searchInputRef = useRef<TextInput>(null);
+  const [viewMode, setViewMode] = useState<'cards' | 'grid'>(() =>
+    getUIViewModeSync(width >= 1024 ? 'grid' : 'cards')
+  );
+  const [hasUserChosenViewMode, setHasUserChosenViewMode] = useState(false);
+
+  useEffect(() => {
+    if (!hasUserChosenViewMode) {
+      setViewMode(getUIViewModeSync(isDesktop ? 'grid' : 'cards'));
+    }
+  }, [isDesktop, hasUserChosenViewMode]);
+
+  const handleSelectViewMode = useCallback((mode: 'cards' | 'grid') => {
+    setHasUserChosenViewMode(true);
+    setViewMode(mode);
+    setUIViewModeSync(mode);
+  }, []);
 
   // ── Preview & Import Choice States ────────────────────
   const [previewVisible, setPreviewVisible] = useState(false);
@@ -88,7 +112,7 @@ export default function TransactionsScreen() {
   const [pendingImportResult, setPendingImportResult] = useState<any | null>(null);
   const [showImportChoice, setShowImportChoice] = useState(false);
 
-  // ── Month summary ──────────────────────────────────────
+  // ── Month summary (with prorated monthlyValue support) ──
   const monthSummary = useMemo(() => {
     if (db.selectedMonth === 'all' || !db.metrics.byMonth[db.selectedMonth]) {
       return {
@@ -99,13 +123,53 @@ export default function TransactionsScreen() {
       };
     }
     const m = db.metrics.byMonth[db.selectedMonth];
+    // Compute prorated monthly expenses when rows have monthlyValue + monthCount > 1
+    const monthRows = (db.activeTable?.rows || []).filter(
+      (r) => r && typeof r.date === 'string' && r.date.startsWith(db.selectedMonth)
+    );
+    let proratedExpenses = 0;
+    for (const r of monthRows) {
+      if (r.entryType === 'expense') {
+        const val =
+          r.monthlyValue && r.monthCount && r.monthCount > 1
+            ? Math.abs(r.monthlyValue)
+            : Math.abs(r.value || 0);
+        proratedExpenses += val;
+      }
+    }
+    const expensesToUse = monthRows.length > 0 ? Math.round(proratedExpenses * 100) / 100 : (m.expense ?? 0);
     return {
       gross: m.grossMonthly,
-      expenses: m.expense ?? 0,
-      net: m.grossMonthly - (m.expense ?? 0),
+      expenses: expensesToUse,
+      net: Math.round((m.grossMonthly - expensesToUse) * 100) / 100,
       label: formatMonthLabel(db.selectedMonth),
     };
-  }, [db.selectedMonth, db.metrics]);
+  }, [db.selectedMonth, db.metrics, db.activeTable?.rows]);
+
+  // ── Running Balance Map (chronological cumulative balance) ──
+  const runningBalanceMap = useMemo<Record<string, number>>(() => {
+    const allRows = [...(db.activeTable?.rows || [])].filter(
+      (r): r is TableRow => !!r && typeof r === 'object' && !!r.id
+    );
+    allRows.sort((a, b) => {
+      const dCmp = (a.date || '').localeCompare(b.date || '');
+      if (dCmp !== 0) return dCmp;
+      return (a.createdAt || '').localeCompare(b.createdAt || '');
+    });
+
+    const map: Record<string, number> = {};
+    let acc = 0;
+    for (const r of allRows) {
+      const mag = Math.abs(r.value || 0);
+      if (r.entryType === 'revenue' || r.entryType === 'partner_in') {
+        acc += mag;
+      } else if (r.entryType === 'expense' || r.entryType === 'partner_out') {
+        acc -= mag;
+      }
+      map[r.id] = Math.round(acc * 100) / 100;
+    }
+    return map;
+  }, [db.activeTable?.rows]);
 
   // ── Table management ───────────────────────────────────
   const ensureTable = useCallback(() => {
@@ -114,10 +178,29 @@ export default function TransactionsScreen() {
     }
   }, [db]);
 
+  useWebKeyboardShortcuts({
+    onQuickAdd: () => {
+      ensureTable();
+      setEditingRow(null);
+      setShowAddModal(true);
+    },
+    onFocusSearch: () => {
+      searchInputRef.current?.focus();
+    },
+  });
+
   const handleAddRow = useCallback((row: Omit<TableRow, 'id'>) => {
     ensureTable();
     db.addRow(row);
   }, [ensureTable, db]);
+
+  const handleUpdateRow = useCallback((rowId: string, updates: Partial<TableRow>) => {
+    db.updateRow(rowId, updates);
+  }, [db]);
+
+  const handleResolveQuarantine = useCallback((rowId: string, resolvedType: TableRow['entryType']) => {
+    db.updateRow(rowId, { entryType: resolvedType });
+  }, [db]);
 
   const handleDeleteRow = useCallback((rowId: string) => {
     db.deleteRow(rowId);
@@ -194,7 +277,10 @@ export default function TransactionsScreen() {
       undefined,
       undefined,
       db.activeTable.schema,
-      db.activeTable.investorProfile
+      db.activeTable.investorProfile,
+      db.activeTable.activeSectors,
+      db.activeTable.dashboardConfig,
+      db.activeTable.sectorParams
     );
     setPreviewText(csv);
     setPreviewMode('csv_export');
@@ -235,6 +321,15 @@ export default function TransactionsScreen() {
     if (db.activeTable?.rows?.some((r) => r.ticker)) headers.push('ticker');
     if (db.activeTable?.rows?.some((r) => r.quantity)) headers.push('quantidade');
     if (db.activeTable?.rows?.some((r) => r.unitPrice)) headers.push('preco_unitario');
+    const customKeySet = new Set<string>();
+    for (const r of (db.activeTable?.rows || []).slice(0, 25)) {
+      if (r.customValues) {
+        for (const k of Object.keys(r.customValues)) {
+          if (!headers.includes(k)) customKeySet.add(k);
+        }
+      }
+    }
+    headers.push(...Array.from(customKeySet));
     return inferTableSchema(headers, sampleRows, db.activeTable?.id || 'default');
   }, [db.activeTable?.schema, db.activeTable?.rows, db.activeTable?.id]);
 
@@ -254,6 +349,45 @@ export default function TransactionsScreen() {
 
   const handleSaveWorkbenchSchema = useCallback(async (updatedSchema: DynamicTableSchema) => {
     await db.updateTableSchema(updatedSchema);
+
+    // Re-evaluate existing rows if a custom column was newly mapped to a semantic role
+    const rows = db.activeTable?.rows || [];
+    const roleCols = updatedSchema.columns.filter((c) => c.role && c.role !== 'custom');
+    if (roleCols.length > 0 && rows.length > 0) {
+      for (const row of rows) {
+        if (!row.customValues) continue;
+        const patch: Partial<TableRow> = {};
+        let changed = false;
+        for (const col of roleCols) {
+          const rawVal = row.customValues[col.id];
+          if (rawVal === undefined || rawVal === null || rawVal === '') continue;
+          const strVal = String(rawVal).trim();
+          if (col.role === 'category' && (!row.category || row.category === 'Geral')) {
+            patch.category = strVal;
+            changed = true;
+          } else if (col.role === 'description' && !row.description) {
+            patch.description = strVal;
+            changed = true;
+          } else if (col.role === 'entryType' && row.entryType === 'unresolved') {
+            const lower = strVal.toLowerCase();
+            if (lower.includes('desp') || lower.includes('gast') || lower.includes('cust') || lower === 'expense') {
+              patch.entryType = 'expense';
+              changed = true;
+            } else if (lower.includes('rec') || lower.includes('rend') || lower === 'revenue') {
+              patch.entryType = 'revenue';
+              changed = true;
+            } else if (lower.includes('dep') || lower.includes('aport') || lower === 'deposit') {
+              patch.entryType = 'deposit';
+              changed = true;
+            }
+          }
+        }
+        if (changed) {
+          db.updateRow(row.id, patch);
+        }
+      }
+    }
+
     setShowWorkbench(false);
     if (Platform.OS === 'web') {
       window.alert('Estrutura e tipos de colunas atualizados com sucesso e salvos no navegador!');
@@ -383,6 +517,9 @@ export default function TransactionsScreen() {
         mode,
         schema: dataToUse.metadata?.schema,
         investorProfile: dataToUse.metadata?.investorProfile,
+        activeSectors: dataToUse.metadata?.activeSectors,
+        dashboardConfig: dataToUse.metadata?.dashboardConfig,
+        sectorParams: dataToUse.metadata?.sectorParams,
       });
 
       // Auto-activate detected sectors
@@ -423,6 +560,32 @@ export default function TransactionsScreen() {
     }
   }, [db]);
 
+  const safeFilteredRows = useMemo(() => {
+    if (!Array.isArray(db.filteredRows)) return [];
+    const base = db.filteredRows.filter((r): r is TableRow => !!r && typeof r === 'object' && !!r.id);
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return base;
+    return base.filter((r) => {
+      if ((r.description || '').toLowerCase().includes(q)) return true;
+      if ((r.category || '').toLowerCase().includes(q)) return true;
+      if ((r.tags || '').toLowerCase().includes(q)) return true;
+      if ((r.ticker || '').toLowerCase().includes(q)) return true;
+      if ((r.date || '').toLowerCase().includes(q)) return true;
+      if (String(r.value).includes(q)) return true;
+      if (r.customValues) {
+        for (const v of Object.values(r.customValues)) {
+          if (String(v ?? '').toLowerCase().includes(q)) return true;
+        }
+      }
+      return false;
+    });
+  }, [db.filteredRows, searchQuery]);
+
+  const quarantineCount = useMemo(
+    () => safeFilteredRows.filter((r) => r.entryType === 'unresolved').length,
+    [safeFilteredRows]
+  );
+
   const renderHeader = useCallback(() => {
     return (
       <View>
@@ -438,7 +601,14 @@ export default function TransactionsScreen() {
         {/* Core & Personal Finance Widgets */}
         {db.filteredRows.length > 0 && (
           <View style={[styles.summaryCard, { marginHorizontal: spacing.lg, marginTop: spacing.md }]}>
-            <Text style={styles.summaryLabel}>{monthSummary.label}</Text>
+            <View style={styles.summaryHeaderRow}>
+              <Text style={styles.summaryLabel}>{monthSummary.label}</Text>
+              {quarantineCount > 0 && (
+                <Text style={styles.quarantineBadgeText}>
+                  ⚠️ {quarantineCount} {quarantineCount === 1 ? 'item em quarentena' : 'itens em quarentena'}
+                </Text>
+              )}
+            </View>
             <View style={styles.summaryRow}>
               <SectorGuard sector="core_revenue">
                 <View style={styles.summaryItem}>
@@ -481,6 +651,60 @@ export default function TransactionsScreen() {
             onSelect={db.setSelectedMonth}
           />
         )}
+
+        {/* Search & View Mode Toolbar */}
+        <View style={styles.toolbarRow}>
+          <View style={styles.searchBox}>
+            <Text style={styles.searchIcon}>🔍</Text>
+            <TextInput
+              ref={searchInputRef}
+              style={styles.searchInput}
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              placeholder="Buscar descrição, categoria, valor, tag, ativo... (/)"
+              placeholderTextColor={colors.text.disabled}
+            />
+            {searchQuery.length > 0 && (
+              <Pressable onPress={() => setSearchQuery('')} style={styles.clearSearchBtn}>
+                <Text style={styles.clearSearchText}>✕</Text>
+              </Pressable>
+            )}
+          </View>
+
+          <View style={styles.viewModeToggle}>
+            <Pressable
+              style={[styles.viewModeBtn, viewMode === 'cards' && styles.viewModeBtnActive]}
+              onPress={() => handleSelectViewMode('cards')}
+            >
+              <Text style={[styles.viewModeText, viewMode === 'cards' && styles.viewModeTextActive]}>
+                📋 Cartões
+              </Text>
+            </Pressable>
+            <Pressable
+              style={[styles.viewModeBtn, viewMode === 'grid' && styles.viewModeBtnActive]}
+              onPress={() => handleSelectViewMode('grid')}
+            >
+              <Text style={[styles.viewModeText, viewMode === 'grid' && styles.viewModeTextActive]}>
+                ⊞ Planilha
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+
+        {/* Dense Spreadsheet DataGrid when in Grid Mode */}
+        {viewMode === 'grid' && safeFilteredRows.length > 0 && (
+          <SpreadsheetDataGrid
+            rows={safeFilteredRows}
+            runningBalanceMap={runningBalanceMap}
+            schema={currentOrInferredSchema}
+            onAddRow={handleAddRow}
+            onUpdateRow={handleUpdateRow}
+            onDeleteRow={handleDeleteRow}
+            onDuplicateRow={handleDuplicate}
+            onEditModalRow={handleEditRow}
+            onOpenWorkbench={() => setShowWorkbench(true)}
+          />
+        )}
       </View>
     );
   }, [
@@ -489,13 +713,23 @@ export default function TransactionsScreen() {
     db.availableMonths,
     db.selectedMonth,
     db.setSelectedMonth,
+    db.addRows,
+    db.deleteGeneratedRows,
+    db.effectuateGeneratedRows,
     monthSummary,
+    quarantineCount,
+    searchQuery,
+    viewMode,
+    handleSelectViewMode,
+    safeFilteredRows,
+    runningBalanceMap,
+    currentOrInferredSchema,
+    handleAddRow,
+    handleUpdateRow,
+    handleDeleteRow,
+    handleDuplicate,
+    handleEditRow,
   ]);
-
-  const safeFilteredRows = useMemo(() => {
-    if (!Array.isArray(db.filteredRows)) return [];
-    return db.filteredRows.filter((r): r is TableRow => !!r && typeof r === 'object' && !!r.id);
-  }, [db.filteredRows]);
 
   return (
     <ErrorBoundary fallbackTitle="Falha na Visualização da Planilha" componentName="SpreadsheetScreen">
@@ -508,6 +742,7 @@ export default function TransactionsScreen() {
             </Text>
             <Text style={styles.headerSubtitle}>
               {safeFilteredRows.length} {safeFilteredRows.length === 1 ? 'entrada' : 'entradas'}
+              {searchQuery ? ` (filtrado por "${searchQuery}")` : ''}
             </Text>
           </View>
           <View style={styles.headerActions}>
@@ -515,10 +750,10 @@ export default function TransactionsScreen() {
               style={({ pressed }) => [
                 styles.undoButton,
                 pressed && styles.pressed,
-                (!db.activeTable || db.activeTable.rows.length === 0) && styles.disabledButton,
+                !db.canUndo && styles.disabledButton,
               ]}
-              onPress={handleDeleteLastRow}
-              disabled={!db.activeTable || db.activeTable.rows.length === 0}
+              onPress={() => db.undo()}
+              disabled={!db.canUndo}
             >
               <Text style={styles.undoButtonText}>↩ Desfazer</Text>
             </Pressable>
@@ -540,70 +775,80 @@ export default function TransactionsScreen() {
 
         {/* Row List */}
         <FlatList
-          data={safeFilteredRows}
+          data={viewMode === 'grid' ? [] : safeFilteredRows}
           keyExtractor={(item, index) => item?.id || `row_${index}`}
-        ListHeaderComponent={renderHeader}
-        renderItem={({ item }) => (
-          <SwipeableRowCard
-            row={item}
-            onEdit={handleEditRow}
-            onDelete={handleDeleteRow}
-            onDuplicate={handleDuplicate}
-          />
-        )}
-        contentContainerStyle={[
-          styles.listContent,
-          db.filteredRows.length === 0 && styles.emptyList,
-        ]}
-        ItemSeparatorComponent={() => <View style={styles.separator} />}
-        ListEmptyComponent={
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyEmoji}>🪙</Text>
-            <Text style={styles.emptyTitle}>Nenhuma entrada ainda</Text>
-            <Text style={styles.emptyText}>
-              Adicione sua primeira entrada ou importe um arquivo CSV ou bloco de dados.
-            </Text>
-            <Pressable
-              style={({ pressed }) => [
-                styles.emptyButton,
-                pressed && styles.pressed,
-              ]}
-              onPress={() => {
-                ensureTable();
-                setShowAddModal(true);
-              }}
-            >
-              <Text style={styles.emptyButtonText}>+ Adicionar Entrada</Text>
-            </Pressable>
-            <View style={styles.emptyActionsRow}>
-              <Pressable
-                style={({ pressed }) => [
-                  styles.emptySecondaryButton,
-                  pressed && styles.pressed,
-                ]}
-                onPress={() => {
-                  ensureTable();
-                  triggerFileImport();
-                }}
-              >
-                <Text style={styles.emptySecondaryButtonText}>📁 Importar CSV</Text>
-              </Pressable>
-              <Pressable
-                style={({ pressed }) => [
-                  styles.emptySecondaryButton,
-                  pressed && styles.pressed,
-                ]}
-                onPress={() => {
-                  ensureTable();
-                  setShowCSVStreamModal(true);
-                }}
-              >
-                <Text style={styles.emptySecondaryButtonText}>📥 Importar por Partes</Text>
-              </Pressable>
-            </View>
-          </View>
-        }
-      />
+          ListHeaderComponent={renderHeader}
+          renderItem={({ item }) => (
+            <SwipeableRowCard
+              row={item}
+              runningBalance={runningBalanceMap[item.id]}
+              onEdit={handleEditRow}
+              onDelete={handleDeleteRow}
+              onDuplicate={handleDuplicate}
+              onResolveQuarantine={handleResolveQuarantine}
+            />
+          )}
+          contentContainerStyle={[
+            styles.listContent,
+            isDesktop && styles.listContentDesktop,
+            safeFilteredRows.length === 0 && styles.emptyList,
+          ]}
+          ItemSeparatorComponent={() => <View style={styles.separator} />}
+          ListEmptyComponent={
+            viewMode === 'grid' && safeFilteredRows.length > 0 ? null : (
+              <View style={styles.emptyState}>
+                <Text style={styles.emptyEmoji}>🪙</Text>
+                <Text style={styles.emptyTitle}>
+                  {searchQuery ? 'Nenhum resultado para a busca' : 'Nenhuma entrada ainda'}
+                </Text>
+                <Text style={styles.emptyText}>
+                  {searchQuery
+                    ? 'Tente outro termo ou limpe o filtro de busca acima.'
+                    : 'Adicione sua primeira entrada ou importe um arquivo CSV ou bloco de dados.'}
+                </Text>
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.emptyButton,
+                    pressed && styles.pressed,
+                  ]}
+                  onPress={() => {
+                    ensureTable();
+                    setEditingRow(null);
+                    setShowAddModal(true);
+                  }}
+                >
+                  <Text style={styles.emptyButtonText}>+ Adicionar Entrada</Text>
+                </Pressable>
+                <View style={styles.emptyActionsRow}>
+                  <Pressable
+                    style={({ pressed }) => [
+                      styles.emptySecondaryButton,
+                      pressed && styles.pressed,
+                    ]}
+                    onPress={() => {
+                      ensureTable();
+                      triggerFileImport();
+                    }}
+                  >
+                    <Text style={styles.emptySecondaryButtonText}>📁 Importar CSV</Text>
+                  </Pressable>
+                  <Pressable
+                    style={({ pressed }) => [
+                      styles.emptySecondaryButton,
+                      pressed && styles.pressed,
+                    ]}
+                    onPress={() => {
+                      ensureTable();
+                      setShowCSVStreamModal(true);
+                    }}
+                  >
+                    <Text style={styles.emptySecondaryButtonText}>📥 Importar por Partes</Text>
+                  </Pressable>
+                </View>
+              </View>
+            )
+          }
+        />
 
       {/* FAB — Floating Action Button */}
       <View style={styles.fabContainer}>
@@ -717,16 +962,31 @@ export default function TransactionsScreen() {
             </Pressable>
           </View>
         )}
-        <Pressable
-          style={({ pressed }) => [
-            styles.fab,
-            pressed && styles.fabPressed,
-            showFab && styles.fabActive,
-          ]}
-          onPress={() => setShowFab(!showFab)}
-        >
-          <Text style={styles.fabIcon}>{showFab ? '✕' : '⚡'}</Text>
-        </Pressable>
+        <View style={styles.fabButtonsRow}>
+          <Pressable
+            style={({ pressed }) => [
+              styles.quickAddFab,
+              pressed && styles.fabPressed,
+            ]}
+            onPress={() => {
+              ensureTable();
+              setEditingRow(null);
+              setShowAddModal(true);
+            }}
+          >
+            <Text style={styles.quickAddFabText}>＋ Registrar</Text>
+          </Pressable>
+          <Pressable
+            style={({ pressed }) => [
+              styles.fab,
+              pressed && styles.fabPressed,
+              showFab && styles.fabActive,
+            ]}
+            onPress={() => setShowFab(!showFab)}
+          >
+            <Text style={styles.fabIcon}>{showFab ? '✕' : '⚡'}</Text>
+          </Pressable>
+        </View>
       </View>
 
       {/* Add / Edit Row Modal */}
@@ -748,22 +1008,20 @@ export default function TransactionsScreen() {
           }
           setEditingRow(null);
         }}
+        onUpdate={(rowId, updates) => {
+          db.updateRow(rowId, updates);
+          setEditingRow(null);
+        }}
+        schema={currentOrInferredSchema}
         editingRow={editingRow}
         onDelete={(rowId) => {
           db.deleteRow(rowId);
         }}
         onClone={(row) => {
+          const { id, ...rest } = row;
           const cloned: Omit<TableRow, 'id'> = {
-            date: row.date,
-            value: row.value,
+            ...rest,
             description: row.description ? `${row.description} (CÓPIA)` : undefined,
-            entryType: row.entryType,
-            monthlyValue: row.monthlyValue,
-            monthCount: row.monthCount,
-            periodStart: row.periodStart,
-            periodEnd: row.periodEnd,
-            generatedBy: row.generatedBy,
-            clonedFrom: row.clonedFrom,
           };
           db.addRows([cloned]);
         }}
@@ -873,6 +1131,9 @@ export default function TransactionsScreen() {
           tableId={db.activeTable.id}
           schema={db.activeTable.schema}
           investorProfile={db.activeTable.investorProfile}
+          activeSectors={db.activeTable.activeSectors}
+          dashboardConfig={db.activeTable.dashboardConfig}
+          sectorParams={db.activeTable.sectorParams}
         />
       )}
 
@@ -1221,5 +1482,107 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#22d3ee',
     fontWeight: '500',
+  },
+  summaryHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+  },
+  quarantineBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#F59E0B',
+  },
+  toolbarRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    marginTop: spacing.md,
+  },
+  searchBox: {
+    flex: 1,
+    minWidth: 220,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.background.secondary,
+    borderWidth: 1,
+    borderColor: colors.border.default,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 6,
+    gap: spacing.xs,
+  },
+  searchIcon: {
+    fontSize: 14,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 13,
+    color: colors.text.primary,
+    paddingVertical: 2,
+  },
+  clearSearchBtn: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  clearSearchText: {
+    fontSize: 13,
+    color: colors.text.tertiary,
+    fontWeight: '700',
+  },
+  viewModeToggle: {
+    flexDirection: 'row',
+    backgroundColor: colors.background.secondary,
+    borderWidth: 1,
+    borderColor: colors.border.default,
+    borderRadius: radius.md,
+    padding: 2,
+    gap: 2,
+  },
+  viewModeBtn: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: 6,
+    borderRadius: radius.sm,
+  },
+  viewModeBtnActive: {
+    backgroundColor: colors.accent.purple,
+  },
+  viewModeText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.text.secondary,
+  },
+  viewModeTextActive: {
+    color: '#fff',
+    fontWeight: '700',
+  },
+  listContentDesktop: {
+    maxWidth: 1440,
+  },
+  fabButtonsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  quickAddFab: {
+    height: 52,
+    paddingHorizontal: spacing.lg,
+    borderRadius: 26,
+    backgroundColor: colors.accent.purple,
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 8,
+    shadowColor: colors.accent.purple,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
+  },
+  quickAddFabText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#fff',
   },
 });

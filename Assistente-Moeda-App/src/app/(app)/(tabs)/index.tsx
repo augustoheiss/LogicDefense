@@ -13,11 +13,13 @@ import {
   ScrollView,
   Pressable,
   Platform,
+  useWindowDimensions,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { colors } from '@/theme/colors';
 import { spacing, radius } from '@/theme/spacing';
 import { useCoinDB } from '@/hooks/useCoinDB';
+import { useSectorRegistry } from '@/hooks/useSectorRegistry';
 import {
   HealthScoreRing,
   PillarsOverview,
@@ -30,18 +32,42 @@ import { computeHealthScore } from '@/core/healthEngine';
 import { computeFinancialInsights } from '@/core/insightsEngine';
 import { formatCurrencySmart } from '@/core/formatCurrency';
 import {
+  WORKSPACE_PRESETS,
+  WIDGET_CATALOG,
+  resolveEffectiveDashboardConfig,
+  getRecommendedPresetForHealth,
+} from '@/core/workspacePresets';
+import {
   AddRowModal,
   TableSwitcherModal,
   ErrorBoundary,
+  AppBuilderModal,
+  InvestorPortfolioWidget,
+  PersonalFinanceSectorWidget,
+  SMBSectorWidget,
+  RealEstateSectorWidget,
+  VehiclesSectorWidget,
+  LegalTaxesSectorWidget,
+  SectorGuard,
 } from '@/components/ui';
-import type { TableRow } from '@/core/types';
+import { useWebKeyboardShortcuts } from '@/hooks/useWebKeyboardShortcuts';
+import type { TableRow, DashboardWidgetId, WorkspacePresetType } from '@/core/types';
 
 export default function HojeScreen() {
   const router = useRouter();
   const db = useCoinDB();
+  const { activeSectors } = useSectorRegistry();
+  const { width } = useWindowDimensions();
+  const isDesktop = width >= 1024;
 
   const [showAddModal, setShowAddModal] = useState(false);
   const [showTableSwitcher, setShowTableSwitcher] = useState(false);
+  const [showAppBuilder, setShowAppBuilder] = useState(false);
+
+  useWebKeyboardShortcuts({
+    onQuickAdd: () => setShowAddModal(true),
+    onOpenBuilder: () => setShowAppBuilder(true),
+  });
 
   // ── Greeting based on current time ──────────────────────
   const greeting = useMemo(() => {
@@ -56,6 +82,34 @@ export default function HojeScreen() {
     return computeHealthScore(db.metrics);
   }, [db.metrics]);
 
+  // ── Effective Composable Dashboard Config ──────────────
+  const effectiveConfig = useMemo(
+    () => resolveEffectiveDashboardConfig(db.activeTable?.dashboardConfig),
+    [db.activeTable?.dashboardConfig]
+  );
+
+  const recommendedPreset = useMemo(
+    () => getRecommendedPresetForHealth(healthReport.level, healthReport.score),
+    [healthReport.level, healthReport.score]
+  );
+
+  const activePresetMeta = WORKSPACE_PRESETS[effectiveConfig.preset] || WORKSPACE_PRESETS.freelancer;
+
+  const handleQuickApplyPreset = useCallback(
+    (presetId: WorkspacePresetType) => {
+      const def = WORKSPACE_PRESETS[presetId];
+      if (!def) return;
+      db.updateDashboardConfig({
+        preset: def.id,
+        widgetOrder: [...def.widgetOrder],
+        hiddenWidgets: [...def.hiddenWidgets],
+        preferredViewMode: effectiveConfig.preferredViewMode,
+      });
+      db.updateActiveSectors([...def.activeSectors]);
+    },
+    [db, effectiveConfig.preferredViewMode]
+  );
+
   // ── Dynamic Insights ───────────────────────────────────
   const activeRows = useMemo(() => {
     return db.activeTable?.rows || [];
@@ -64,6 +118,24 @@ export default function HojeScreen() {
   const insights = useMemo(() => {
     return computeFinancialInsights(activeRows, db.metrics);
   }, [activeRows, db.metrics]);
+
+  // ── Accurate Monthly Baseline for What-If Simulator ────
+  const monthlySimulatorBaseline = useMemo(() => {
+    const activeMonthsCount = Math.max(1, Object.keys(db.metrics.byMonth || {}).length);
+    const monthlyExpense =
+      db.metrics.survivalMonthly > 0
+        ? db.metrics.survivalMonthly
+        : db.metrics.totalExpenses > 0
+        ? Math.round(db.metrics.totalExpenses / activeMonthsCount)
+        : 3000;
+    const monthlyRevenue =
+      db.metrics.globalMonthlyAvg > 0
+        ? Math.round(db.metrics.globalMonthlyAvg)
+        : db.metrics.grossTotal > 0
+        ? Math.round(db.metrics.grossTotal / activeMonthsCount)
+        : 4500;
+    return { monthlyExpense, monthlyRevenue };
+  }, [db.metrics]);
 
   // ── Recent transactions (Last 4) ───────────────────────
   const recentRows = useMemo(() => {
@@ -90,9 +162,7 @@ export default function HojeScreen() {
       db.addTable('Minha Planilha', 'Primeira tabela financeira');
     }
     if (Array.isArray(rowOrRows)) {
-      for (const r of rowOrRows) {
-        db.addRow(r);
-      }
+      db.addRows(rowOrRows);
     } else {
       db.addRow(rowOrRows);
     }
@@ -101,7 +171,7 @@ export default function HojeScreen() {
   const formatRelativeDate = (dateStr?: string) => {
     if (!dateStr) return '';
     try {
-      const [year, month, day] = dateStr.split('-');
+      const [, month, day] = dateStr.split('-');
       return `${day}/${month}`;
     } catch {
       return dateStr;
@@ -116,73 +186,36 @@ export default function HojeScreen() {
         return colors.info.main;
       case 'waiver':
         return colors.warning.main;
+      case 'unresolved':
+        return '#F59E0B';
       case 'expense':
       default:
         return colors.danger.main;
     }
   };
 
-  return (
-    <ErrorBoundary fallbackTitle="Erro ao carregar Painel Hoje" componentName="HojeScreen">
-      <View style={styles.container}>
-        <ScrollView
-          style={styles.scroll}
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
-        >
-          {/* ── Top Header: Greeting + Table Selector ── */}
-          <View style={styles.topHeader}>
-            <View>
-              <Text style={styles.greetingText}>{greeting} 👋</Text>
-              <Pressable
-                style={styles.tableSelectorButton}
-                onPress={() => setShowTableSwitcher(true)}
-              >
-                <Text style={styles.activeTableName} numberOfLines={1}>
-                  {db.activeTable?.name || 'Selecione uma Planilha'}
-                </Text>
-                <Text style={styles.tableDropdownIcon}>▾</Text>
-              </Pressable>
-            </View>
-
-            <Pressable
-              style={styles.chatHeaderButton}
-              onPress={() => router.push('/chat')}
-            >
-              <Text style={styles.chatButtonEmoji}>✨</Text>
-              <Text style={styles.chatButtonText}>IA Assistente</Text>
-            </Pressable>
-          </View>
-
-          {/* ── Undo Bar (When Available) ── */}
-          {db.canUndo && (
-            <View style={styles.undoBar}>
-              <Text style={styles.undoText} numberOfLines={1}>
-                {db.lastUndoDescription ? `Última ação: ${db.lastUndoDescription}` : 'Ação registrada no histórico'}
-              </Text>
-              <Pressable
-                style={styles.undoButton}
-                onPress={() => db.undo()}
-              >
-                <Text style={styles.undoButtonText}>↩ Desfazer</Text>
-              </Pressable>
-            </View>
-          )}
-
-          {/* ── Main Score Card ── */}
+  // ── Modular Widget Renderer ────────────────────────────
+  const renderWidgetById = (widgetId: DashboardWidgetId) => {
+    switch (widgetId) {
+      case 'health_score':
+        return (
           <HealthScoreRing
             score={healthReport.score}
             level={healthReport.level}
             headline={healthReport.headline}
           />
+        );
 
-          {/* ── Next Best Action ── */}
+      case 'next_action':
+        return (
           <NextActionCard
             action={healthReport.nextBestAction}
             onActionPress={handleNextActionPress}
           />
+        );
 
-          {/* ── Month Financial Summary ── */}
+      case 'month_summary':
+        return (
           <View style={styles.summarySection}>
             <View style={styles.summaryCard}>
               <Text style={styles.summaryLabel}>Entradas</Text>
@@ -199,7 +232,7 @@ export default function HojeScreen() {
             </View>
 
             <View style={styles.summaryCard}>
-              <Text style={styles.summaryLabel}>Saldo</Text>
+              <Text style={styles.summaryLabel}>Saldo Líquido</Text>
               <Text
                 style={[
                   styles.summaryValue,
@@ -215,23 +248,73 @@ export default function HojeScreen() {
               </Text>
             </View>
           </View>
+        );
 
-          {/* ── Pillars Breakdown ── */}
-          <PillarsOverview pillars={healthReport.pillars} />
+      case 'pillars':
+        return <PillarsOverview pillars={healthReport.pillars} />;
 
-          {/* ── Dynamic Insights ── */}
-          <InsightsCard insights={insights} />
+      case 'insights':
+        return <InsightsCard insights={insights} />;
 
-          {/* ── What-If Simulator (Sandbox) ── */}
+      case 'what_if':
+        return (
           <WhatIfSimulator
-            currentMonthlyExpense={db.metrics.totalExpenses > 0 ? db.metrics.totalExpenses : 3000}
-            currentMonthlyRevenue={db.metrics.grossTotal > 0 ? db.metrics.grossTotal : 4500}
+            currentMonthlyExpense={monthlySimulatorBaseline.monthlyExpense}
+            currentMonthlyRevenue={monthlySimulatorBaseline.monthlyRevenue}
           />
+        );
 
-          {/* ── Financial Education Lessons ── */}
-          <LessonsViewer />
+      case 'investor_summary':
+        return (
+          <InvestorPortfolioWidget
+            rows={activeRows}
+            activeProfile={db.activeTable?.investorProfile}
+            annualCost={
+              db.metrics.survivalAnnualCost > 0
+                ? db.metrics.survivalAnnualCost
+                : db.metrics.totalExpenses > 0
+                ? db.metrics.totalExpenses
+                : 0
+            }
+            onUpdateProfile={(profile) => db.updateInvestorProfile(profile)}
+            onAddRows={async (newRows) => {
+              await db.addRows(newRows);
+            }}
+          />
+        );
 
-          {/* ── Quick Actions ── */}
+      case 'sector_simulators':
+        return (
+          <View style={styles.sectorSimulatorsBlock}>
+            <View style={styles.recentHeaderRow}>
+              <Text style={styles.sectionTitle}>🧮 Motores Setoriais & Atuariais Ativos</Text>
+              <Pressable onPress={() => setShowAppBuilder(true)}>
+                <Text style={styles.seeAllText}>Configurar Setores ›</Text>
+              </Pressable>
+            </View>
+            <SectorGuard sector="personal_finance">
+              <PersonalFinanceSectorWidget />
+            </SectorGuard>
+            <SectorGuard sector="smb_accounting">
+              <SMBSectorWidget />
+            </SectorGuard>
+            <SectorGuard sector="real_estate">
+              <RealEstateSectorWidget />
+            </SectorGuard>
+            <SectorGuard sector="vehicles">
+              <VehiclesSectorWidget />
+            </SectorGuard>
+            <SectorGuard sector="legal_taxes">
+              <LegalTaxesSectorWidget />
+            </SectorGuard>
+          </View>
+        );
+
+      case 'lessons':
+        return <LessonsViewer />;
+
+      case 'quick_actions':
+        return (
           <View style={styles.quickActionsSection}>
             <Text style={styles.sectionTitle}>Ações Rápidas</Text>
             <View style={styles.quickActionsGrid}>
@@ -261,15 +344,17 @@ export default function HojeScreen() {
 
               <Pressable
                 style={styles.quickActionButton}
-                onPress={() => router.push('/(app)/(tabs)/settings' as any)}
+                onPress={() => setShowAppBuilder(true)}
               >
-                <Text style={styles.quickActionIcon}>⚙️</Text>
-                <Text style={styles.quickActionText}>Metas & Ajustes</Text>
+                <Text style={styles.quickActionIcon}>🧩</Text>
+                <Text style={styles.quickActionText}>Monte Seu App</Text>
               </Pressable>
             </View>
           </View>
+        );
 
-          {/* ── Recent Activity ── */}
+      case 'recent_activity':
+        return (
           <View style={styles.recentSection}>
             <View style={styles.recentHeaderRow}>
               <Text style={styles.sectionTitle}>Últimos Lançamentos</Text>
@@ -292,9 +377,9 @@ export default function HojeScreen() {
               </View>
             ) : (
               <View style={styles.recentList}>
-                {recentRows.map(row => {
-                  const isPositive = row.entryType === 'revenue';
-                  const sign = isPositive ? '+' : '-';
+                {recentRows.map((row) => {
+                  const isPositive = row.entryType === 'revenue' || row.entryType === 'partner_in';
+                  const sign = isPositive ? '+' : row.entryType === 'expense' || row.entryType === 'partner_out' ? '-' : '';
                   const valColor = getEntryTypeColor(row.entryType);
 
                   return (
@@ -310,13 +395,14 @@ export default function HojeScreen() {
                           {row.category ? (
                             <Text style={styles.recentItemCategory} numberOfLines={1}>
                               {row.category}
+                              {row.ticker ? ` • 📈 ${row.ticker}` : ''}
                             </Text>
                           ) : null}
                         </View>
                       </View>
 
                       <Text style={[styles.recentItemValue, { color: valColor }]}>
-                        {sign} {formatCurrencySmart(row.value)}
+                        {sign} {formatCurrencySmart(Math.abs(row.value))}
                       </Text>
                     </View>
                   );
@@ -324,16 +410,159 @@ export default function HojeScreen() {
               </View>
             )}
           </View>
+        );
 
-          {/* Extra bottom padding for tab bar */}
-          <View style={{ height: 40 }} />
+      default:
+        return null;
+    }
+  };
+
+  const visibleWidgets = useMemo(
+    () =>
+      effectiveConfig.widgetOrder.filter(
+        (wId) => !effectiveConfig.hiddenWidgets.includes(wId)
+      ),
+    [effectiveConfig]
+  );
+
+  return (
+    <ErrorBoundary fallbackTitle="Erro ao carregar Painel Hoje" componentName="HojeScreen">
+      <View style={styles.container}>
+        <ScrollView
+          style={styles.scroll}
+          contentContainerStyle={[styles.scrollContent, isDesktop && styles.scrollContentDesktop]}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* ── Top Header: Greeting + Table Selector + App Builder + AI ── */}
+          <View style={styles.topHeader}>
+            <View>
+              <Text style={styles.greetingText}>
+                {greeting} 👋 • {activePresetMeta.icon} Modo {activePresetMeta.name}
+              </Text>
+              <Pressable
+                style={styles.tableSelectorButton}
+                onPress={() => setShowTableSwitcher(true)}
+              >
+                <Text style={styles.activeTableName} numberOfLines={1}>
+                  {db.activeTable?.name || 'Selecione uma Planilha'}
+                </Text>
+                <Text style={styles.tableDropdownIcon}>▾</Text>
+              </Pressable>
+            </View>
+
+            <View style={styles.topHeaderActions}>
+              <Pressable
+                style={styles.builderHeaderButton}
+                onPress={() => setShowAppBuilder(true)}
+              >
+                <Text style={styles.builderButtonEmoji}>🧩</Text>
+                <Text style={styles.builderButtonText}>Monte Seu App</Text>
+              </Pressable>
+
+              <Pressable
+                style={styles.chatHeaderButton}
+                onPress={() => router.push('/chat')}
+              >
+                <Text style={styles.chatButtonEmoji}>✨</Text>
+                <Text style={styles.chatButtonText}>IA Assistente</Text>
+              </Pressable>
+            </View>
+          </View>
+
+          {/* ── Journey / Preset Quick Strip ── */}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.presetStrip}
+          >
+            {(['survival', 'freelancer', 'investor', 'smb'] as WorkspacePresetType[]).map((pid) => {
+              const p = WORKSPACE_PRESETS[pid];
+              const isSelected = effectiveConfig.preset === p.id;
+              const isRec = recommendedPreset.id === p.id;
+              return (
+                <Pressable
+                  key={p.id}
+                  style={[styles.presetChip, isSelected && styles.presetChipActive]}
+                  onPress={() => handleQuickApplyPreset(p.id)}
+                >
+                  <Text style={styles.presetChipIcon}>{p.icon}</Text>
+                  <Text style={[styles.presetChipText, isSelected && styles.presetChipTextActive]}>
+                    {p.name}
+                  </Text>
+                  {isRec && !isSelected && (
+                    <View style={styles.presetRecDot}>
+                      <Text style={styles.presetRecDotText}>Sugerido</Text>
+                    </View>
+                  )}
+                </Pressable>
+              );
+            })}
+            <Pressable
+              style={[styles.presetChip, effectiveConfig.preset === 'custom' && styles.presetChipActive]}
+              onPress={() => setShowAppBuilder(true)}
+            >
+              <Text style={styles.presetChipIcon}>⚙️</Text>
+              <Text style={styles.presetChipText}>Personalizar Blocos</Text>
+            </Pressable>
+          </ScrollView>
+
+          {/* ── Undo Bar (When Available) ── */}
+          {db.canUndo && (
+            <View style={styles.undoBar}>
+              <Text style={styles.undoText} numberOfLines={1}>
+                {db.lastUndoDescription ? `Última ação: ${db.lastUndoDescription}` : 'Ação registrada no histórico'}
+              </Text>
+              <Pressable
+                style={styles.undoButton}
+                onPress={() => db.undo()}
+              >
+                <Text style={styles.undoButtonText}>↩ Desfazer</Text>
+              </Pressable>
+            </View>
+          )}
+
+          {/* ── Dynamic Bento Grid (Desktop 2-col / Mobile 1-col) ── */}
+          <View style={[styles.widgetsContainer, isDesktop && styles.widgetsBentoGrid]}>
+            {visibleWidgets.map((wId) => {
+              const catalogMeta = WIDGET_CATALOG.find((c) => c.id === wId);
+              const isFullSpan = catalogMeta?.defaultSpan === 2;
+              return (
+                <View
+                  key={wId}
+                  style={[
+                    styles.widgetItemWrap,
+                    isDesktop && (isFullSpan ? styles.bentoFullSpan : styles.bentoHalfSpan),
+                  ]}
+                >
+                  {renderWidgetById(wId)}
+                </View>
+              );
+            })}
+          </View>
+
+          {/* Extra bottom padding for tab bar and FAB */}
+          <View style={{ height: 80 }} />
         </ScrollView>
+
+        {/* ── Thumb-Zone Quick Register FAB (Mobile & Street Ergonomics) ── */}
+        <View style={styles.homeFabContainer}>
+          <Pressable
+            style={({ pressed }) => [
+              styles.homeQuickAddFab,
+              pressed && { opacity: 0.85 },
+            ]}
+            onPress={() => setShowAddModal(true)}
+          >
+            <Text style={styles.homeQuickAddFabText}>＋ Registrar Gasto / Receita</Text>
+          </Pressable>
+        </View>
 
         {/* ── Modals ── */}
         <AddRowModal
           visible={showAddModal}
           onClose={() => setShowAddModal(false)}
           onAdd={handleAddRow}
+          schema={db.activeTable?.schema}
         />
 
         <TableSwitcherModal
@@ -346,6 +575,19 @@ export default function HojeScreen() {
           onRename={db.renameTable}
           onDelete={db.deleteTable}
           onReorder={db.reorderTables}
+        />
+
+        <AppBuilderModal
+          visible={showAppBuilder}
+          onClose={() => setShowAppBuilder(false)}
+          dashboardConfig={db.activeTable?.dashboardConfig}
+          activeSectors={activeSectors}
+          healthScore={healthReport.score}
+          healthLevel={healthReport.level}
+          isPrivacyMode={db.isPrivacyMode}
+          onUpdateDashboardConfig={db.updateDashboardConfig}
+          onUpdateActiveSectors={db.updateActiveSectors}
+          onTogglePrivacyMode={db.togglePrivacyMode}
         />
       </View>
     </ErrorBoundary>
@@ -363,24 +605,37 @@ const styles = StyleSheet.create({
   scrollContent: {
     padding: spacing.md,
   },
+  scrollContentDesktop: {
+    maxWidth: 1380,
+    width: '100%',
+    alignSelf: 'center',
+    padding: spacing.xl,
+  },
   topHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: spacing.md,
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
     marginTop: Platform.OS === 'android' ? spacing.sm : 0,
   },
+  topHeaderActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
   greetingText: {
-    fontSize: 13,
+    fontSize: 12,
     color: colors.text.tertiary,
-    fontWeight: '500',
+    fontWeight: '600',
     marginBottom: 2,
   },
   tableSelectorButton: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    maxWidth: 220,
+    maxWidth: 280,
   },
   activeTableName: {
     fontSize: 20,
@@ -392,6 +647,25 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: colors.accent.purple,
     fontWeight: '800',
+  },
+  builderHeaderButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: colors.background.secondary,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.full,
+    borderWidth: 1,
+    borderColor: colors.border.strong,
+  },
+  builderButtonEmoji: {
+    fontSize: 14,
+  },
+  builderButtonText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.text.primary,
   },
   chatHeaderButton: {
     flexDirection: 'row',
@@ -411,6 +685,73 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     color: colors.accent.purple,
+  },
+  presetStrip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingBottom: spacing.md,
+  },
+  presetChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: colors.background.secondary,
+    borderWidth: 1,
+    borderColor: colors.border.default,
+    borderRadius: radius.full,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 6,
+  },
+  presetChipActive: {
+    backgroundColor: colors.accent.purpleLight,
+    borderColor: colors.accent.purple,
+  },
+  presetChipIcon: {
+    fontSize: 13,
+  },
+  presetChipText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.text.secondary,
+  },
+  presetChipTextActive: {
+    color: colors.accent.purple,
+    fontWeight: '700',
+  },
+  presetRecDot: {
+    backgroundColor: 'rgba(16, 185, 129, 0.2)',
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: radius.full,
+  },
+  presetRecDotText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: colors.success.main,
+  },
+  widgetsContainer: {
+    gap: spacing.md,
+  },
+  widgetsBentoGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'stretch',
+    gap: spacing.md,
+  },
+  widgetItemWrap: {
+    width: '100%',
+  },
+  bentoHalfSpan: {
+    width: '48.8%',
+    flexGrow: 1,
+  },
+  bentoFullSpan: {
+    width: '100%',
+  },
+  sectorSimulatorsBlock: {
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
   },
   undoBar: {
     flexDirection: 'row',
@@ -444,7 +785,7 @@ const styles = StyleSheet.create({
   summarySection: {
     flexDirection: 'row',
     gap: spacing.sm,
-    marginBottom: spacing.md,
+    marginBottom: spacing.xs,
   },
   summaryCard: {
     flex: 1,
@@ -473,7 +814,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.2,
   },
   quickActionsSection: {
-    marginBottom: spacing.md,
+    marginBottom: spacing.xs,
   },
   quickActionsGrid: {
     flexDirection: 'row',
@@ -501,7 +842,7 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
   },
   recentSection: {
-    marginBottom: spacing.md,
+    marginBottom: spacing.xs,
   },
   recentHeaderRow: {
     flexDirection: 'row',
@@ -585,5 +926,27 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     letterSpacing: -0.2,
+  },
+  homeFabContainer: {
+    position: 'absolute',
+    right: spacing.lg,
+    bottom: spacing.lg,
+    zIndex: 999,
+  },
+  homeQuickAddFab: {
+    backgroundColor: colors.accent.purple,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: 12,
+    borderRadius: radius.full,
+    elevation: 8,
+    shadowColor: colors.accent.purple,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
+  },
+  homeQuickAddFabText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '700',
   },
 });

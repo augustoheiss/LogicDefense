@@ -14,17 +14,34 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { DB } from '../core/types';
+import {
+  isIndexedDBAvailable,
+  loadDBFromIndexedDB,
+  saveDBToIndexedDB,
+  clearIndexedDB,
+} from './indexedDBAdapter';
 
 const STORAGE_KEY = 'coin_assistant_db';
 const BACKUP_KEY = 'coin_assistant_db.bak';
 const QUARANTINE_KEY = 'coin_assistant_db.quarantine';
+const PRIVACY_MODE_KEY = 'coin_privacy_mode';
+const UI_VIEW_MODE_KEY = 'coin_ui_view_mode';
 
 /**
- * Load the full DB from AsyncStorage.
+ * Load the full DB from IndexedDB (on Web) or AsyncStorage (Native / Node test fallback).
  * If primary file is corrupted, attempts to recover from rolling backup (.bak)
  * and quarantines the damaged payload.
  */
 export async function loadDB(): Promise<DB | null> {
+  if (isIndexedDBAvailable()) {
+    try {
+      const idbData = await loadDBFromIndexedDB();
+      if (idbData) return idbData;
+    } catch (idbErr) {
+      console.warn('[Storage] IndexedDB load failed, falling back to AsyncStorage:', idbErr);
+    }
+  }
+
   let raw: string | null = null;
   try {
     raw = await AsyncStorage.getItem(STORAGE_KEY);
@@ -32,7 +49,6 @@ export async function loadDB(): Promise<DB | null> {
     return JSON.parse(raw) as DB;
   } catch (err) {
     console.error('CRITICAL: Corrupted DB in AsyncStorage!', err);
-    // 1. Quarentena preventiva do payload quebrado
     if (raw) {
       try {
         await AsyncStorage.setItem(
@@ -48,13 +64,11 @@ export async function loadDB(): Promise<DB | null> {
       }
     }
 
-    // 2. Tentar recuperar do rolling backup (.bak)
     try {
       const backupRaw = await AsyncStorage.getItem(BACKUP_KEY);
       if (backupRaw) {
         const restored = JSON.parse(backupRaw) as DB;
         console.warn('SUCCESS: Recovered database from rolling backup (.bak)!');
-        // Restaura a chave principal com os dados do backup
         await AsyncStorage.setItem(STORAGE_KEY, backupRaw);
         return restored;
       }
@@ -66,13 +80,21 @@ export async function loadDB(): Promise<DB | null> {
 }
 
 /**
- * Save the full DB to AsyncStorage.
- * Keeps a rolling snapshot in BACKUP_KEY before writing the new state.
+ * Save the full DB to IndexedDB (Web) and AsyncStorage (Native / fallback).
+ * Protects against QuotaExceededError on Web localStorage.
  */
 export async function saveDB(db: DB): Promise<void> {
+  if (isIndexedDBAvailable()) {
+    try {
+      await saveDBToIndexedDB(db);
+      return;
+    } catch (idbErr) {
+      console.warn('[Storage] IndexedDB save failed, falling back to AsyncStorage:', idbErr);
+    }
+  }
+
   const serialized = JSON.stringify(db);
   try {
-    // 1. Rotaciona o backup se houver dados válidos prévios
     const current = await AsyncStorage.getItem(STORAGE_KEY);
     if (current && current.length > 10) {
       await AsyncStorage.setItem(BACKUP_KEY, current);
@@ -81,23 +103,39 @@ export async function saveDB(db: DB): Promise<void> {
     console.warn('Could not rotate rolling backup:', bakErr);
   }
 
-  // 2. Grava o novo estado
-  await AsyncStorage.setItem(STORAGE_KEY, serialized);
+  try {
+    await AsyncStorage.setItem(STORAGE_KEY, serialized);
+  } catch (writeErr) {
+    console.error('Failed to write DB to AsyncStorage:', writeErr);
+  }
 }
 
 /**
- * Clear all CoinAssistant data from AsyncStorage.
- * Used during account deletion or full reset.
+ * Clear all CoinAssistant data from IndexedDB and AsyncStorage.
  */
 export async function clearDB(): Promise<void> {
+  if (isIndexedDBAvailable()) {
+    try {
+      await clearIndexedDB();
+    } catch (e) {
+      console.warn('Failed to clear IndexedDB:', e);
+    }
+  }
   await AsyncStorage.multiRemove([STORAGE_KEY, BACKUP_KEY, QUARANTINE_KEY]);
 }
 
 /**
  * Get the raw JSON size of the stored DB (for sync diagnostics).
- * Returns 0 if no data exists.
  */
 export async function getDBSizeBytes(): Promise<number> {
+  if (isIndexedDBAvailable()) {
+    try {
+      const db = await loadDBFromIndexedDB();
+      return db ? JSON.stringify(db).length : 0;
+    } catch {
+      // fallback
+    }
+  }
   const raw = await AsyncStorage.getItem(STORAGE_KEY);
   return raw ? raw.length : 0;
 }
@@ -108,4 +146,42 @@ export async function getDBSizeBytes(): Promise<number> {
 export async function hasQuarantinedData(): Promise<boolean> {
   const q = await AsyncStorage.getItem(QUARANTINE_KEY);
   return !!q;
+}
+
+// ── Fast L1 Synchronous Preference Helpers (Privacy Mode & View Mode) ────────
+
+export function getPrivacyModeSync(): boolean {
+  if (typeof window !== 'undefined' && window.localStorage) {
+    return window.localStorage.getItem(PRIVACY_MODE_KEY) === 'true';
+  }
+  return false;
+}
+
+export function setPrivacyModeSync(enabled: boolean): void {
+  if (typeof window !== 'undefined' && window.localStorage) {
+    try {
+      window.localStorage.setItem(PRIVACY_MODE_KEY, enabled ? 'true' : 'false');
+    } catch {
+      // ignore
+    }
+  }
+}
+
+export function getUIViewModeSync(fallback: 'cards' | 'grid' = 'cards'): 'cards' | 'grid' {
+  if (typeof window !== 'undefined' && window.localStorage) {
+    const mode = window.localStorage.getItem(UI_VIEW_MODE_KEY);
+    if (mode === 'cards' || mode === 'grid') return mode;
+    if (mode === 'spreadsheet') return 'grid';
+  }
+  return fallback;
+}
+
+export function setUIViewModeSync(mode: 'cards' | 'grid' | 'spreadsheet'): void {
+  if (typeof window !== 'undefined' && window.localStorage) {
+    try {
+      window.localStorage.setItem(UI_VIEW_MODE_KEY, mode);
+    } catch {
+      // ignore
+    }
+  }
 }

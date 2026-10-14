@@ -150,6 +150,9 @@ export interface CSVParseOutput {
     tableGoals?: TableGoals;
     schema?: DynamicTableSchema;
     investorProfile?: InvestorProfileConfig;
+    activeSectors?: string[];
+    dashboardConfig?: import('../core/types').DashboardConfig;
+    sectorParams?: import('../core/types').SectorSimulationParams;
   };
 }
 
@@ -205,35 +208,36 @@ export function parseCSVText(
   const dateAliases = ['date', 'data', 'data_movimento', 'created_at'];
   const amountAliases = ['amount', 'valor', 'value', 'valor_cents', 'amount_in_cents', 'preco'];
 
-  // Check if ## SCHEMA_COLUMNS ## marker exists (Backup v3 standard)
+  // Check if ## SCHEMA_COLUMNS ##, ## INVESTOR_PROFILE ##, and ## ROWS ## markers exist
   const schemaMarkerRegex = /##\s*SCHEMA_COLUMNS\s*##/i;
+  const investorMarkerRegex = /##\s*INVESTOR_PROFILE\s*##/i;
+  const rowsMarkerRegex = /##\s*ROWS\s*##/i;
   let schemaMarkerLineIdx = -1;
+  let investorMarkerLineIdx = -1;
+  let rowsMarkerLineIdx = -1;
+
   for (let i = 0; i < allLines.length; i++) {
     if (schemaMarkerRegex.test(allLines[i])) {
       schemaMarkerLineIdx = i;
-      break;
-    }
-  }
-
-  // Check if ## ROWS ## marker exists
-  const rowsMarkerRegex = /##\s*ROWS\s*##/i;
-  let rowsMarkerLineIdx = -1;
-  for (let i = 0; i < allLines.length; i++) {
-    if (rowsMarkerRegex.test(allLines[i])) {
+    } else if (investorMarkerRegex.test(allLines[i])) {
+      investorMarkerLineIdx = i;
+    } else if (rowsMarkerRegex.test(allLines[i])) {
       rowsMarkerLineIdx = i;
-      break;
     }
   }
 
   let metadataLines: string[] = [];
   let transactionLines: string[] = [];
 
-  if (schemaMarkerLineIdx !== -1) {
-    // In Backup v3, metadata lines precede the SCHEMA_COLUMNS block
-    metadataLines = allLines.slice(0, schemaMarkerLineIdx);
-  } else if (rowsMarkerLineIdx !== -1) {
-    metadataLines = allLines.slice(0, rowsMarkerLineIdx);
-    transactionLines = allLines.slice(rowsMarkerLineIdx + 1);
+  const earliestBlockIdx = [schemaMarkerLineIdx, investorMarkerLineIdx, rowsMarkerLineIdx]
+    .filter((idx) => idx !== -1)
+    .reduce((min, idx) => Math.min(min, idx), Infinity);
+
+  if (earliestBlockIdx !== Infinity) {
+    metadataLines = allLines.slice(0, earliestBlockIdx);
+    if (rowsMarkerLineIdx !== -1) {
+      transactionLines = allLines.slice(rowsMarkerLineIdx + 1);
+    }
   } else {
     // Dynamic Header Search: scan lines to find the actual transaction header row containing date and amount columns
     let transactionHeaderIdx = -1;
@@ -268,6 +272,9 @@ export function parseCSVText(
     tableGoals: TableGoals;
     schema?: DynamicTableSchema;
     investorProfile?: InvestorProfileConfig;
+    activeSectors?: string[];
+    dashboardConfig?: import('../core/types').DashboardConfig;
+    sectorParams?: import('../core/types').SectorSimulationParams;
   } = {
     name: 'Minha Planilha',
     description: '',
@@ -280,6 +287,43 @@ export function parseCSVText(
       globalGoals: { dailyGoal: 0, weeklyGoal: 0, annualCost: 0 },
     },
   };
+
+  // Parse ## INVESTOR_PROFILE ## block even when ## SCHEMA_COLUMNS ## is not present
+  if (investorMarkerLineIdx !== -1 && (rowsMarkerLineIdx === -1 || investorMarkerLineIdx < rowsMarkerLineIdx)) {
+    const invEndIdx = rowsMarkerLineIdx !== -1 ? rowsMarkerLineIdx : allLines.length;
+    const invLines = allLines.slice(investorMarkerLineIdx + 1, invEndIdx);
+    let pType: import('../core/types').InvestorProfileType = 'safety';
+    let emGoal = 6;
+    let fireMult = 25;
+    let moGoal: number | undefined = undefined;
+    let custAlloc: any = undefined;
+
+    invLines.forEach((line) => {
+      if (line.startsWith('##')) return;
+      const parts = splitCSVLine(line, detectDelimiter(line));
+      if (parts.length >= 2) {
+        const k = parts[0].toLowerCase();
+        const v = parts[1];
+        if (k === 'profile_type') pType = v as import('../core/types').InvestorProfileType;
+        if (k === 'emergency_fund_goal_months') emGoal = parseInt(v, 10) || 6;
+        if (k === 'fire_annual_multiplier') fireMult = parseInt(v, 10) || 25;
+        if (k === 'monthly_contribution_goal') moGoal = parseFloat(v) || undefined;
+        if (k === 'custom_allocations') {
+          try {
+            custAlloc = JSON.parse(decodeURIComponent(v));
+          } catch {}
+        }
+      }
+    });
+
+    metaObj.investorProfile = {
+      profileType: pType,
+      emergencyFundMonthsGoal: emGoal,
+      fireTargetAnnualExpensesMultiplier: fireMult,
+      monthlyContributionGoal: moGoal,
+      customAllocations: custAlloc,
+    };
+  }
 
   const currentYear = new Date().getFullYear();
 
@@ -306,6 +350,23 @@ export function parseCSVText(
         metaObj.name = valStr;
       } else if (keyLower === 'description' || keyLower === 'descricao') {
         metaObj.description = valStr;
+      } else if (keyLower === 'active_sectors') {
+        try {
+          const parsed = JSON.parse(decodeURIComponent(valStr));
+          if (Array.isArray(parsed)) metaObj.activeSectors = parsed;
+        } catch {}
+      } else if (keyLower === 'dashboard_config') {
+        try {
+          const parsed = JSON.parse(decodeURIComponent(valStr));
+          if (parsed && typeof parsed === 'object') metaObj.dashboardConfig = parsed;
+        } catch {}
+      } else if (keyLower === 'sector_params') {
+        try {
+          const parsed = JSON.parse(decodeURIComponent(valStr));
+          if (parsed && typeof parsed === 'object') metaObj.sectorParams = parsed;
+        } catch {}
+      } else if (keyLower === 'exported_at') {
+        // Ignore timestamp metadata key from polluting goals
       } else {
         const finalVal = !isNaN(numVal) ? numVal : valStr;
         metaObj.goals[rawKey] = finalVal;
@@ -430,7 +491,11 @@ export function parseCSVText(
       metaObj.investorProfile = dynamicResult.investorProfile;
     }
     const rowSectors = detectSectorsFromRows(dynamicResult.rows);
-    const detectedSectors = Array.from(new Set(['personal_finance', ...rowSectors]));
+    const detectedSectors = Array.from(new Set([
+      'personal_finance',
+      ...(metaObj.activeSectors || []),
+      ...rowSectors,
+    ]));
 
     return {
       rows: dynamicResult.rows,
@@ -455,15 +520,20 @@ export function parseCSVText(
   const headers = splitCSVLine(transactionLines[0], delimiter).map((h) => cleanCell(h).toLowerCase());
 
   const idAliases = ['id', 'uuid', 'transaction_id', 'id_transacao', 'external_id'];
-  const descriptionAliases = ['description', 'descricao', 'historico', 'memo', 'title'];
+  const descriptionAliases = ['description', 'descricao', 'descrição', 'historico', 'memo', 'title'];
   const categoryAliases = ['category', 'categoria'];
   const tagsAliases = ['tags', 'sector_tags', 'etiquetas'];
   const metadataAliases = ['metadata_json', 'metadatajson', 'metadata', 'metadados'];
   const typeAliases = ['entrytype', 'entry_type', 'tipo', 'type'];
-  const monthlyValueAliases = ['monthlyvalue', 'valor_mensal', 'monthly_value'];
-  const monthCountAliases = ['monthcount', 'qtd_meses', 'month_count', 'months'];
-  const periodStartAliases = ['period_start', 'periodstart', 'inicio_periodo', 'period_inicio'];
-  const periodEndAliases = ['period_end', 'periodend', 'fim_periodo', 'period_fim'];
+  const monthlyValueAliases = ['monthlyvalue', 'valor_mensal', 'monthly_value', 'valor mensal'];
+  const monthCountAliases = ['monthcount', 'qtd_meses', 'month_count', 'months', 'meses'];
+  const periodStartAliases = ['period_start', 'periodstart', 'inicio_periodo', 'period_inicio', 'período início'];
+  const periodEndAliases = ['period_end', 'periodend', 'fim_periodo', 'period_fim', 'período fim'];
+  const tickerAliases = ['ticker', 'ativo', 'codigo_ativo'];
+  const quantityAliases = ['quantity', 'quantidade', 'qtd'];
+  const unitPriceAliases = ['unitprice', 'unit_price', 'preco_unitario', 'preço unitário'];
+  const generatedByAliases = ['generatedby', 'generated_by', 'gerado_por', 'gerado por'];
+  const clonedFromAliases = ['clonedfrom', 'cloned_from', 'clonado_de', 'clonado de'];
 
   const idIdx = findHeaderIdx(headers, idAliases);
   const dateIdx = findHeaderIdx(headers, dateAliases);
@@ -477,6 +547,11 @@ export function parseCSVText(
   const monthCountIdx = findHeaderIdx(headers, monthCountAliases);
   const periodStartIdx = findHeaderIdx(headers, periodStartAliases);
   const periodEndIdx = findHeaderIdx(headers, periodEndAliases);
+  const tickerIdx = findHeaderIdx(headers, tickerAliases);
+  const quantityIdx = findHeaderIdx(headers, quantityAliases);
+  const unitPriceIdx = findHeaderIdx(headers, unitPriceAliases);
+  const generatedByIdx = findHeaderIdx(headers, generatedByAliases);
+  const clonedFromIdx = findHeaderIdx(headers, clonedFromAliases);
 
   if (dateIdx === -1 || amountIdx === -1) {
     return {
@@ -565,6 +640,7 @@ export function parseCSVText(
         : '';
 
       let metadataJson = '{}';
+      const customValues: Record<string, string | number | boolean> = {};
       if (metadataIdx !== -1 && cols[metadataIdx] !== undefined && cols[metadataIdx] !== null) {
         const rawMeta = cleanCell(cols[metadataIdx]);
         if (rawMeta.length > 0) {
@@ -572,6 +648,11 @@ export function parseCSVText(
             const parsedObj = JSON.parse(rawMeta);
             if (typeof parsedObj === 'object' && parsedObj !== null) {
               metadataJson = JSON.stringify(parsedObj);
+              Object.entries(parsedObj).forEach(([k, v]) => {
+                if (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') {
+                  customValues[k] = v;
+                }
+              });
             } else {
               metadataJson = '{}';
             }
@@ -606,6 +687,37 @@ export function parseCSVText(
         if (parsedPe) periodEnd = parsedPe;
       }
 
+      // Investment and lineage fields
+      let ticker: string | undefined = undefined;
+      if (tickerIdx !== -1 && cols[tickerIdx]) {
+        const t = cleanCell(cols[tickerIdx]).toUpperCase();
+        if (t) ticker = t;
+      }
+
+      let quantity: number | undefined = undefined;
+      if (quantityIdx !== -1 && cols[quantityIdx]) {
+        const q = parseFloat(cleanCell(cols[quantityIdx]));
+        if (!isNaN(q)) quantity = q;
+      }
+
+      let unitPrice: number | undefined = undefined;
+      if (unitPriceIdx !== -1 && cols[unitPriceIdx]) {
+        const p = parseValue(cols[unitPriceIdx]);
+        if (p !== null && !isNaN(p)) unitPrice = p;
+      }
+
+      let generatedBy: string | undefined = undefined;
+      if (generatedByIdx !== -1 && cols[generatedByIdx]) {
+        const g = cleanCell(cols[generatedByIdx]);
+        if (g) generatedBy = g;
+      }
+
+      let clonedFrom: string | undefined = undefined;
+      if (clonedFromIdx !== -1 && cols[clonedFromIdx]) {
+        const c = cleanCell(cols[clonedFromIdx]);
+        if (c) clonedFrom = c;
+      }
+
       rows.push({
         ...(rowId ? { id: rowId } : {}),
         date: normalizedDate,
@@ -619,7 +731,13 @@ export function parseCSVText(
         monthCount,
         periodStart,
         periodEnd,
-      });
+        ...(ticker ? { ticker } : {}),
+        ...(quantity !== undefined ? { quantity } : {}),
+        ...(unitPrice !== undefined ? { unitPrice } : {}),
+        ...(generatedBy ? { generatedBy } : {}),
+        ...(clonedFrom ? { clonedFrom } : {}),
+        ...(Object.keys(customValues).length > 0 ? { customValues } : {}),
+      } as TableRow | Omit<TableRow, 'id'>);
     } catch (err: any) {
       errors.push(`Linha ${lineNum}: ${err.message}`);
       skippedCount++;
@@ -628,7 +746,12 @@ export function parseCSVText(
 
   // Detect sectors from parsed rows
   const rowSectors = detectSectorsFromRows(rows);
-  const detectedSectors = Array.from(new Set(['personal_finance', ...headerSectors, ...rowSectors]));
+  const detectedSectors = Array.from(new Set([
+    'personal_finance',
+    ...(metaObj.activeSectors || []),
+    ...headerSectors,
+    ...rowSectors,
+  ]));
 
   console.log('[CSV Parser]: Total rows extracted from section ## ROWS ##:', rows.length);
 

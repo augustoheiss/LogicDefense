@@ -20,11 +20,37 @@ const SUFFIXES: [number, string][] = [
   [1_000,         'k'],
 ];
 
+let _privacyModeMemory = false;
+
+export function setPrivacyModeActive(active: boolean): void {
+  _privacyModeMemory = active;
+  if (typeof window !== 'undefined' && window.localStorage) {
+    try {
+      window.localStorage.setItem('coin_ui_privacy_mode', active ? 'true' : 'false');
+    } catch {}
+  }
+}
+
+export function isPrivacyModeActive(): boolean {
+  if (_privacyModeMemory) return true;
+  if (typeof window !== 'undefined' && window.localStorage) {
+    try {
+      return window.localStorage.getItem('coin_ui_privacy_mode') === 'true';
+    } catch {}
+  }
+  return false;
+}
+
+export const PRIVACY_MASK = 'R$ •••••';
+
 /**
  * Abbreviated currency for compact UI cards.
  * Use this in MetricCard values, quick stats, etc.
  */
-export function formatCurrencyShort(value: number | undefined | null): string {
+export function formatCurrencyShort(value: number | undefined | null, forceReveal: boolean = false): string {
+  if (!forceReveal && isPrivacyModeActive()) {
+    return PRIVACY_MASK;
+  }
   if (value === undefined || value === null || typeof value !== 'number' || isNaN(value) || !isFinite(value)) {
     return 'R$ 0,00';
   }
@@ -61,7 +87,10 @@ export function formatCurrencyShort(value: number | undefined | null): string {
  * Full precision BRL formatting (the legacy `fmt` function).
  * Use in tooltips, CSV export, detailed views, and WhatsApp reports.
  */
-export function formatCurrencyFull(value: number | undefined | null): string {
+export function formatCurrencyFull(value: number | undefined | null, forceReveal: boolean = false): string {
+  if (!forceReveal && isPrivacyModeActive()) {
+    return PRIVACY_MASK;
+  }
   if (value === undefined || value === null || typeof value !== 'number' || isNaN(value) || !isFinite(value)) {
     return 'R$ 0,00';
   }
@@ -72,12 +101,15 @@ export function formatCurrencyFull(value: number | undefined | null): string {
  * Signed balance formatting: +R$ 1,2k or -R$ 800,00
  * Always shows explicit sign for positive values.
  */
-export function formatBalanceShort(value: number | undefined | null): string {
+export function formatBalanceShort(value: number | undefined | null, forceReveal: boolean = false): string {
+  if (!forceReveal && isPrivacyModeActive()) {
+    return PRIVACY_MASK;
+  }
   if (value === undefined || value === null || typeof value !== 'number' || isNaN(value) || !isFinite(value)) {
     return 'R$ 0,00';
   }
   const prefix = value >= 0 ? '+' : '';
-  return `${prefix}${formatCurrencyShort(value)}`;
+  return `${prefix}${formatCurrencyShort(value, forceReveal)}`;
 }
 
 /**

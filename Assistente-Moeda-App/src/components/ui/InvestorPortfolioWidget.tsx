@@ -39,6 +39,7 @@ interface InvestorPortfolioWidgetProps {
   rows: TableRow[];
   activeProfile?: InvestorProfileConfig;
   annualCost?: number;
+  monthlyExpenses?: number;
   onUpdateProfile: (profile: InvestorProfileConfig) => void;
   onAddRows?: (newRows: Omit<TableRow, 'id'>[]) => Promise<void>;
 }
@@ -89,6 +90,7 @@ export function InvestorPortfolioWidget({
   rows,
   activeProfile,
   annualCost = 0,
+  monthlyExpenses,
   onUpdateProfile,
   onAddRows,
 }: InvestorPortfolioWidgetProps) {
@@ -96,10 +98,16 @@ export function InvestorPortfolioWidget({
   const [contributionInput, setContributionInput] = useState('1000');
   const [isCommitting, setIsCommitting] = useState(false);
 
+  const effectiveMonthlyExpenses = useMemo(() => {
+    if (monthlyExpenses !== undefined && monthlyExpenses > 0) return monthlyExpenses;
+    if (annualCost > 0) return Math.round((annualCost / 12) * 100) / 100;
+    return 0;
+  }, [monthlyExpenses, annualCost]);
+
   // Compute metrics dynamically
   const metrics = useMemo(() => {
-    return computeInvestorMetrics(rows, currentProfile, annualCost);
-  }, [rows, currentProfile, annualCost]);
+    return computeInvestorMetrics(rows, currentProfile, effectiveMonthlyExpenses);
+  }, [rows, currentProfile, effectiveMonthlyExpenses]);
 
   // Compute live smart rebalance based on input
   const parsedCash = parseFloat(contributionInput.replace(',', '.')) || 0;

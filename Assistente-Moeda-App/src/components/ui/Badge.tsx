@@ -33,6 +33,8 @@ const badgeConfig: Record<string, { bg: string; text: string }> = {
   expense:     { bg: colors.danger.light,   text: colors.danger.main },
   partner_in:  { bg: 'rgba(6, 182, 212, 0.15)',  text: '#06b6d4' },
   partner_out: { bg: 'rgba(249, 115, 22, 0.15)', text: '#f97316' },
+  unresolved:  { bg: 'rgba(245, 158, 11, 0.18)', text: '#F59E0B' },
+  quarentena:  { bg: 'rgba(245, 158, 11, 0.18)', text: '#F59E0B' },
   info:        { bg: colors.info.light,     text: colors.info.main },
   success:     { bg: colors.success.light,  text: colors.success.main },
   warning:     { bg: colors.warning.light,  text: colors.warning.main },

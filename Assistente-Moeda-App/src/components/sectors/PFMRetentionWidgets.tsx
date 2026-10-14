@@ -19,15 +19,40 @@ import {
 } from '../../utils/pfmRetentionMath';
 import { parsePfmCSV, PfmTransaction } from '../../utils/pfmRetentionParser';
 
+import { useCoinDB } from '@/hooks/useCoinDB';
+
 const SAMPLE_PFM_CSV = `data_movimento,descricao_comerciante,valor_cents,categoria,meta_associada,status_consolidacao
 2026-07-15,Supermercado Pao de Acucar,12050,Alimentação,Fundo de Emergência,Consolidado
 2026-07-16,Posto Ipiranga Combustivel,25000,Transporte,,Pendente`;
 
 export function PFMRetentionWidgets() {
+  const db = useCoinDB();
+  const m = db.metrics;
+  const savedPfm = (db.activeTable?.sectorParams?.pfm || {}) as Record<string, any>;
+
+  const defaultInitBal = savedPfm.initBalance ?? (m.netBalance > 0 ? Math.round(m.netBalance) : 10000);
+  const defaultWeeklyInc = savedPfm.weeklyInc ?? (m.globalWeeklyAvg > 0 ? Math.round(m.globalWeeklyAvg) : 2500);
+  const defaultWeeklyExp = savedPfm.weeklyExp ?? (m.survivalWeekly > 0 ? Math.round(m.survivalWeekly) : 1800);
+  const defaultPortfolio =
+    savedPfm.portfolio ??
+    ((m.investmentBalance || m.totalInvested) > 0 ? Math.round(m.investmentBalance || m.totalInvested) : 500000);
+  const defaultDrawdown =
+    savedPfm.drawdown ??
+    (m.survivalAnnualCost > 0 ? Math.round(m.survivalAnnualCost) : 36000);
+  const defaultSankeyInc =
+    savedPfm.sankeyIncome ??
+    (m.globalMonthlyAvg > 0 ? Math.round(m.globalMonthlyAvg) : 10000);
+  const defaultSankeyFixed =
+    savedPfm.sankeyFixed ??
+    (m.survivalMonthly > 0 ? Math.round(m.survivalMonthly * 0.7) : 5000);
+  const defaultSankeyDisc =
+    savedPfm.sankeyDisc ??
+    (m.survivalMonthly > 0 ? Math.round(m.survivalMonthly * 0.3) : 2500);
+
   // ── 13-Week Cash Flow State ──
-  const [initBalance, setInitBalance] = useState('10000');
-  const [weeklyInc, setWeeklyInc] = useState('2500');
-  const [weeklyExp, setWeeklyExp] = useState('1800');
+  const [initBalance, setInitBalance] = useState(String(defaultInitBal));
+  const [weeklyInc, setWeeklyInc] = useState(String(defaultWeeklyInc));
+  const [weeklyExp, setWeeklyExp] = useState(String(defaultWeeklyExp));
   
   // Custom event: extra expense in week 5
   const [eventWeek, setEventWeek] = useState('5');
@@ -38,16 +63,16 @@ export function PFMRetentionWidgets() {
   ]);
 
   // ── Monte Carlo FIRE State ──
-  const [portfolio, setPortfolio] = useState('500000');
-  const [drawdown, setDrawdown] = useState('36000');
-  const [meanReturn, setMeanReturn] = useState('6'); // 6%
-  const [volatility, setVolatility] = useState('12'); // 12%
-  const [projYears, setProjYears] = useState('30');
+  const [portfolio, setPortfolio] = useState(String(defaultPortfolio));
+  const [drawdown, setDrawdown] = useState(String(defaultDrawdown));
+  const [meanReturn, setMeanReturn] = useState(String(savedPfm.meanReturn ?? '6')); // 6%
+  const [volatility, setVolatility] = useState(String(savedPfm.volatility ?? '12')); // 12%
+  const [projYears, setProjYears] = useState(String(savedPfm.projYears ?? '30'));
 
   // ── Sankey Flow State ──
-  const [sankeyIncome, setSankeyIncome] = useState('10000');
-  const [sankeyFixed, setSankeyFixed] = useState('5000');
-  const [sankeyDisc, setSankeyDisc] = useState('2500');
+  const [sankeyIncome, setSankeyIncome] = useState(String(defaultSankeyInc));
+  const [sankeyFixed, setSankeyFixed] = useState(String(defaultSankeyFixed));
+  const [sankeyDisc, setSankeyDisc] = useState(String(defaultSankeyDisc));
 
   // ── Onboarding & Deduplication State ──
   const [completedStepIds, setCompletedStepIds] = useState<string[]>([]);

@@ -6,7 +6,15 @@
  * and safe AI agent proposals.
  */
 
-import type { CoinTable, TableRow, TableGoals, DynamicTableSchema, InvestorProfileConfig } from './types';
+import type {
+  CoinTable,
+  TableRow,
+  TableGoals,
+  DynamicTableSchema,
+  InvestorProfileConfig,
+  DashboardConfig,
+  SectorSimulationParams,
+} from './types';
 
 export type Action =
   | {
@@ -107,5 +115,21 @@ export type Action =
         tableId?: string;
         profile: InvestorProfileConfig;
         previousProfileSnapshot?: InvestorProfileConfig;
+      };
+    }
+  | {
+      type: 'UPDATE_DASHBOARD_CONFIG';
+      payload: {
+        tableId?: string;
+        dashboardConfig: DashboardConfig;
+        previousConfigSnapshot?: DashboardConfig;
+      };
+    }
+  | {
+      type: 'UPDATE_SECTOR_PARAMS';
+      payload: {
+        tableId?: string;
+        sectorParams: SectorSimulationParams;
+        previousParamsSnapshot?: SectorSimulationParams;
       };
     };

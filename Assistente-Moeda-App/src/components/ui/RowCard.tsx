@@ -18,6 +18,7 @@ interface RowCardProps {
   runningBalance?: number;
   onPress?: () => void;
   onDelete?: () => void;
+  onResolveQuarantine?: (rowId: string, resolvedType: TableRow['entryType']) => void;
 }
 
 const entryTypeLabels: Record<string, string> = {
@@ -27,6 +28,7 @@ const entryTypeLabels: Record<string, string> = {
   expense: 'Despesa',
   partner_in: 'Sócio ↓',
   partner_out: 'Sócio ↑',
+  unresolved: '⚠️ Quarentena',
   receita: 'Receita',
   despesa: 'Despesa',
   custo: 'Despesa',
@@ -44,6 +46,7 @@ const entryTypeColors: Record<string, string> = {
   expense: colors.entryType.expense,
   partner_in: colors.entryType.partner_in,
   partner_out: colors.entryType.partner_out,
+  unresolved: '#F59E0B',
   receita: colors.entryType.revenue,
   despesa: colors.entryType.expense,
   custo: colors.entryType.expense,
@@ -54,9 +57,10 @@ const entryTypeColors: Record<string, string> = {
   abono: colors.entryType.waiver,
 };
 
-function normalizeEntryType(type?: string): 'revenue' | 'expense' | 'deposit' | 'waiver' | 'partner_in' | 'partner_out' {
+function normalizeEntryType(type?: string): 'revenue' | 'expense' | 'deposit' | 'waiver' | 'partner_in' | 'partner_out' | 'unresolved' {
   if (!type) return 'revenue';
   const t = String(type).toLowerCase().trim();
+  if (t === 'unresolved' || t === 'quarentena') return 'unresolved';
   if (t === 'receita' || t === 'renda' || t === 'revenue') return 'revenue';
   if (t === 'despesa' || t === 'gasto' || t === 'gastos' || t === 'custo' || t === 'custos' || t === 'expense') return 'expense';
   if (t === 'deposito' || t === 'deposit') return 'deposit';
@@ -81,7 +85,7 @@ function formatDateBR(dateStr?: string | null): string {
   return dateStr;
 }
 
-export function RowCard({ row, runningBalance, onPress, onDelete }: RowCardProps) {
+export function RowCard({ row, runningBalance, onPress, onDelete, onResolveQuarantine }: RowCardProps) {
   const { isSectorActive } = useSectorRegistry();
 
   if (!row) return null;
@@ -110,12 +114,17 @@ export function RowCard({ row, runningBalance, onPress, onDelete }: RowCardProps
     }
   }
 
+  const customEntries = row.customValues
+    ? Object.entries(row.customValues).filter(([, v]) => v !== undefined && v !== null && v !== '')
+    : [];
+
   return (
     <Pressable
       style={({ pressed }) => [
         styles.card,
         pressed && styles.pressed,
         isGenerated && styles.generated,
+        entryType === 'unresolved' && styles.quarantineCard,
       ]}
       onPress={onPress}
       onLongPress={onDelete}
@@ -133,9 +142,24 @@ export function RowCard({ row, runningBalance, onPress, onDelete }: RowCardProps
             </Text>
 
             {/* Costs Detail */}
-            {showCosts && row.entryType === 'expense' && row.monthlyValue && row.monthCount && (
+            {showCosts && entryType === 'expense' && row.monthlyValue && row.monthCount && (
               <Text style={styles.expenseDetail}>
                 Mensal: {formatCurrencySmart(row.monthlyValue)} × {row.monthCount}m
+              </Text>
+            )}
+
+            {/* Investment Ticker Detail */}
+            {row.ticker && (
+              <Text style={styles.metaPill}>
+                📈 {row.ticker}
+                {row.quantity != null ? ` (${row.quantity}${row.unitPrice != null ? ` × ${formatCurrencySmart(row.unitPrice)}` : ''})` : ''}
+              </Text>
+            )}
+
+            {/* Dynamic Custom Columns Detail */}
+            {customEntries.length > 0 && (
+              <Text style={styles.customFieldsPill} numberOfLines={1}>
+                {customEntries.map(([k, v]) => `${k}: ${v}`).join(' • ')}
               </Text>
             )}
 
@@ -157,7 +181,7 @@ export function RowCard({ row, runningBalance, onPress, onDelete }: RowCardProps
           <View style={styles.rightCol}>
             <Text style={[styles.value, { color: valueColor }]}>
               {entryType === 'expense' ? '-' : ''}
-              {formatCurrencySmart(row.value)}
+              {formatCurrencySmart(Math.abs(row.value))}
             </Text>
             {showCashflow && runningBalance !== undefined && (
               <Text style={styles.runningBalanceText}>
@@ -169,13 +193,13 @@ export function RowCard({ row, runningBalance, onPress, onDelete }: RowCardProps
 
         {/* Bottom Row */}
         <View style={styles.bottomRow}>
-          {(showRevenue || showCosts || isSectorActive('personal_finance')) && (
+          {(showRevenue || showCosts || entryType === 'unresolved' || isSectorActive('personal_finance')) && (
             <Badge
               label={entryTypeLabels[rawType] ?? entryTypeLabels[entryType] ?? rawType}
               variant={entryType}
             />
           )}
-          {row.category && (showRevenue || showCosts || isSectorActive('personal_finance')) && (
+          {row.category && (showRevenue || showCosts || entryType === 'unresolved' || isSectorActive('personal_finance')) && (
             <Text style={styles.categoryTag}>• {row.category}</Text>
           )}
           {row.tags && (
@@ -192,6 +216,33 @@ export function RowCard({ row, runningBalance, onPress, onDelete }: RowCardProps
             </Text>
           )}
         </View>
+
+        {/* Inline Quarantine Resolution Bar */}
+        {entryType === 'unresolved' && onResolveQuarantine && (
+          <View style={styles.quarantineBar}>
+            <Text style={styles.quarantineHint}>Classificar em 1 toque:</Text>
+            <View style={styles.quarantineBtns}>
+              <Pressable
+                style={[styles.quarantineBtn, styles.quarantineBtnRev]}
+                onPress={() => onResolveQuarantine(row.id, 'revenue')}
+              >
+                <Text style={styles.quarantineBtnRevText}>+ Receita</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.quarantineBtn, styles.quarantineBtnExp]}
+                onPress={() => onResolveQuarantine(row.id, 'expense')}
+              >
+                <Text style={styles.quarantineBtnExpText}>- Gasto</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.quarantineBtn, styles.quarantineBtnDep]}
+                onPress={() => onResolveQuarantine(row.id, 'deposit')}
+              >
+                <Text style={styles.quarantineBtnDepText}>🏦 Aporte</Text>
+              </Pressable>
+            </View>
+          </View>
+        )}
       </View>
     </Pressable>
   );
@@ -205,6 +256,10 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     flexDirection: 'row',
     overflow: 'hidden',
+  },
+  quarantineCard: {
+    borderColor: 'rgba(245, 158, 11, 0.45)',
+    backgroundColor: 'rgba(245, 158, 11, 0.04)',
   },
   pressed: {
     opacity: 0.8,
@@ -256,6 +311,11 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginTop: 2,
   },
+  customFieldsPill: {
+    fontSize: 10,
+    color: colors.text.secondary,
+    marginTop: 2,
+  },
   runningBalanceText: {
     fontSize: 11,
     color: colors.text.secondary,
@@ -289,5 +349,58 @@ const styles = StyleSheet.create({
   generatedLabel: {
     fontSize: 10,
     color: colors.text.disabled,
+  },
+  quarantineBar: {
+    marginTop: spacing.xs,
+    paddingTop: spacing.xs,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(245, 158, 11, 0.25)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+  },
+  quarantineHint: {
+    fontSize: 11,
+    color: '#F59E0B',
+    fontWeight: '600',
+  },
+  quarantineBtns: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+  quarantineBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: radius.sm,
+    borderWidth: 1,
+  },
+  quarantineBtnRev: {
+    backgroundColor: 'rgba(16, 185, 129, 0.15)',
+    borderColor: 'rgba(16, 185, 129, 0.4)',
+  },
+  quarantineBtnRevText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: colors.success.main,
+  },
+  quarantineBtnExp: {
+    backgroundColor: 'rgba(239, 68, 68, 0.15)',
+    borderColor: 'rgba(239, 68, 68, 0.4)',
+  },
+  quarantineBtnExpText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: colors.danger.main,
+  },
+  quarantineBtnDep: {
+    backgroundColor: 'rgba(59, 130, 246, 0.15)',
+    borderColor: 'rgba(59, 130, 246, 0.4)',
+  },
+  quarantineBtnDepText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: colors.info.main,
   },
 });

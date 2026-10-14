@@ -539,12 +539,16 @@ def compute_metrics(
     for row in waiver_rows:
         active_weekly_goal = get_weekly_goal_for_date(row.date, goals)
         if active_weekly_goal > 0:
-            waiver_total_weeks += row.value / active_weekly_goal
+            waiver_weeks_equiv = row.value / active_weekly_goal
+            waiver_total_weeks += waiver_weeks_equiv
+            total_waived_days += waiver_weeks_equiv * 7.0
+        elif row.period_start and row.period_end:
+            total_waived_days += max(1, _calendar_day_span(row.period_start, row.period_end))
 
     # FIREWALL Goal Balance: add partner_in credit since it no longer flows through rawStrictBalance
     global_goal_balance = round((raw_strict_balance + total_waiver_credits + total_partner_in - total_partner_out) * 100) / 100
     waived_weeks = round((total_waived_days / 7) * 100) / 100
-    billable_weeks = round((total_elapsed_weeks - waived_weeks) * 100) / 100
+    billable_weeks = round(max(0.0, total_elapsed_weeks - waived_weeks) * 100) / 100
 
     # ── Time Bank balance (weeks) ────────────────────────────────────────
     # Uses the historically-accumulated net_balance_weeks instead of a naive

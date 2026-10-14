@@ -7,7 +7,15 @@
  *   - Legacy Semicolon CSV: fallback when no schema or metadata is provided.
  */
 
-import type { TableRow, TableGoals, DynamicTableSchema, InvestorProfileConfig, GranularExportOptions } from './types';
+import type {
+  TableRow,
+  TableGoals,
+  DynamicTableSchema,
+  InvestorProfileConfig,
+  GranularExportOptions,
+  DashboardConfig,
+  SectorSimulationParams,
+} from './types';
 
 export function serializeDynamicCSV(
   rows: TableRow[],
@@ -18,9 +26,12 @@ export function serializeDynamicCSV(
   apiKey?: string | null,
   lastEventSeq?: number,
   schema?: DynamicTableSchema,
-  investorProfile?: InvestorProfileConfig
+  investorProfile?: InvestorProfileConfig,
+  activeSectors?: string[],
+  dashboardConfig?: DashboardConfig,
+  sectorParams?: SectorSimulationParams
 ): string {
-  if (tableName || goals || tableId || schema || investorProfile) {
+  if (tableName || goals || tableId || schema || investorProfile || activeSectors || dashboardConfig || sectorParams) {
     const meta: string[] = ['## COIN ASSISTANT BACKUP v3 ##'];
     if (tableId) {
       meta.push(`table_id,${tableId}`);
@@ -54,20 +65,55 @@ export function serializeDynamicCSV(
     if (description) {
       meta.push(`description,${description}`);
     }
+    if (activeSectors && activeSectors.length > 0) {
+      meta.push(`active_sectors,${encodeURIComponent(JSON.stringify(activeSectors))}`);
+    }
+    if (dashboardConfig) {
+      meta.push(`dashboard_config,${encodeURIComponent(JSON.stringify(dashboardConfig))}`);
+    }
+    if (sectorParams && Object.keys(sectorParams).length > 0) {
+      meta.push(`sector_params,${encodeURIComponent(JSON.stringify(sectorParams))}`);
+    }
 
-    // 1. Global goals
+    // 1. Global goals (with fallback to legacy 'global' keys)
     if (goals?.globalGoals) {
       meta.push(`goal_global_daily,${goals.globalGoals.dailyGoal}`);
       meta.push(`goal_global_weekly,${goals.globalGoals.weeklyGoal}`);
       meta.push(`goal_global_annual,${goals.globalGoals.annualCost}`);
+    } else if (goals) {
+      const gDaily = (goals.dailyGoals as any)?.['global'];
+      const gWeekly = (goals.weeklyGoals as any)?.['global'];
+      const gAnnual = (goals.annualCosts as any)?.['global'];
+      if (gDaily !== undefined) meta.push(`goal_global_daily,${gDaily}`);
+      if (gWeekly !== undefined) meta.push(`goal_global_weekly,${gWeekly}`);
+      if (gAnnual !== undefined) meta.push(`goal_global_annual,${gAnnual}`);
     }
 
-    // 2. Yearly goals
+    // 2. Yearly goals (combine explicit yearlyGoals + legacy year-keyed maps)
+    const serializedYears = new Set<string>();
     if (goals?.yearlyGoals) {
       Object.entries(goals.yearlyGoals).forEach(([year, g]) => {
+        serializedYears.add(String(year));
         meta.push(`goal_daily_${year},${g.dailyGoal}`);
         meta.push(`goal_weekly_${year},${g.weeklyGoal}`);
         meta.push(`goal_annual_${year},${g.annualCost}`);
+      });
+    }
+    if (goals) {
+      const legacyYears = new Set<string>();
+      Object.keys(goals.dailyGoals || {}).forEach((k) => { if (/^\d{4}$/.test(k)) legacyYears.add(k); });
+      Object.keys(goals.weeklyGoals || {}).forEach((k) => { if (/^\d{4}$/.test(k)) legacyYears.add(k); });
+      Object.keys(goals.annualCosts || {}).forEach((k) => { if (/^\d{4}$/.test(k)) legacyYears.add(k); });
+      legacyYears.forEach((year) => {
+        if (!serializedYears.has(year)) {
+          const yNum = Number(year);
+          const dVal = goals.dailyGoals?.[yNum] ?? (goals.dailyGoals as any)?.[year] ?? 0;
+          const wVal = goals.weeklyGoals?.[yNum] ?? (goals.weeklyGoals as any)?.[year] ?? 0;
+          const aVal = goals.annualCosts?.[yNum] ?? (goals.annualCosts as any)?.[year] ?? 0;
+          meta.push(`goal_daily_${year},${dVal}`);
+          meta.push(`goal_weekly_${year},${wVal}`);
+          meta.push(`goal_annual_${year},${aVal}`);
+        }
       });
     }
 
@@ -122,21 +168,46 @@ export function serializeDynamicCSV(
     meta.push('## ROWS ##');
 
     const customCols = (schema?.columns || []).filter((c) => {
+      if (c.isCustom === false) return false;
+      const role = (c.role || c.semanticRole || '').toLowerCase();
+      if (role && role !== 'custom_attribute' && role !== 'custom') return false;
       const k = (c.key || c.id || '').toLowerCase();
-      return !['id', 'date', 'value', 'description', 'entrytype', 'monthlyvalue', 'monthcount', 'period_start', 'period_end', 'category', 'tags', 'metadata_json', 'ticker', 'quantity', 'unitprice'].includes(k);
+      return ![
+        'id', 'date', 'data', 'value', 'valor', 'description', 'descricao', 'descrição',
+        'entrytype', 'entry_type', 'tipo', 'monthlyvalue', 'monthcount',
+        'period_start', 'period_end', 'category', 'categoria', 'tags', 'metadata_json',
+        'ticker', 'quantity', 'quantidade', 'unitprice', 'unit_price', 'preco_unitario', 'preço_unitário',
+        'generatedby', 'clonedfrom',
+      ].includes(k);
     });
 
-    const hasInvestCols = rows.some((r) => r.ticker || r.quantity || r.unitPrice);
-    
+    const hasInvestCols = rows.some((r) => r.ticker || r.quantity !== undefined || r.unitPrice !== undefined);
+    const hasGeneratedCols = rows.some((r) => r.generatedBy || r.clonedFrom);
+
     let header = 'id,date,value,description,entryType,monthlyValue,monthCount,period_start,period_end,category,tags,metadata_json';
     if (hasInvestCols) {
       header += ',ticker,quantity,unitPrice';
+    }
+    if (hasGeneratedCols) {
+      header += ',generatedBy,clonedFrom';
     }
     if (customCols.length > 0) {
       header += ',' + customCols.map((c) => c.key || c.id).join(',');
     }
 
     const lines = rows.map((r) => {
+      let mergedMetaStr = r.metadataJson && r.metadataJson.trim() ? r.metadataJson.trim() : '{}';
+      if (r.customValues && Object.keys(r.customValues).length > 0) {
+        try {
+          const parsedMeta = JSON.parse(mergedMetaStr);
+          if (typeof parsedMeta === 'object' && parsedMeta !== null) {
+            mergedMetaStr = JSON.stringify({ ...parsedMeta, ...r.customValues });
+          }
+        } catch {
+          mergedMetaStr = JSON.stringify(r.customValues);
+        }
+      }
+
       const cols = [
         r.id || '',
         r.date,
@@ -149,7 +220,7 @@ export function serializeDynamicCSV(
         r.periodEnd || '',
         r.category && r.category.trim() ? `"${r.category.replace(/"/g, '""')}"` : '"Geral"',
         r.tags ? `"${r.tags.replace(/"/g, '""')}"` : '""',
-        r.metadataJson && r.metadataJson.trim() ? `"${r.metadataJson.replace(/"/g, '""')}"` : '"{}"',
+        `"${mergedMetaStr.replace(/"/g, '""')}"`,
       ];
 
       if (hasInvestCols) {
@@ -157,6 +228,13 @@ export function serializeDynamicCSV(
           r.ticker ? `"${r.ticker.replace(/"/g, '""')}"` : '',
           r.quantity !== undefined ? String(r.quantity) : '',
           r.unitPrice !== undefined ? String(r.unitPrice) : ''
+        );
+      }
+
+      if (hasGeneratedCols) {
+        cols.push(
+          r.generatedBy ? `"${r.generatedBy.replace(/"/g, '""')}"` : '',
+          r.clonedFrom ? `"${r.clonedFrom.replace(/"/g, '""')}"` : ''
         );
       }
 
@@ -211,7 +289,10 @@ export function serializeGranularCSV(
   apiKey?: string | null,
   lastEventSeq?: number,
   schema?: DynamicTableSchema,
-  investorProfile?: InvestorProfileConfig
+  investorProfile?: InvestorProfileConfig,
+  activeSectors?: string[],
+  dashboardConfig?: DashboardConfig,
+  sectorParams?: SectorSimulationParams
 ): string {
   // 1. Filter rows by Scope
   let filtered = [...rows];
@@ -258,7 +339,10 @@ export function serializeGranularCSV(
       apiKey,
       lastEventSeq,
       schema,
-      investorProfile
+      investorProfile,
+      activeSectors,
+      dashboardConfig,
+      sectorParams
     );
   }
 

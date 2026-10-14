@@ -43,5 +43,7 @@ export { ColumnMappingWorkbenchModal } from './ColumnMappingWorkbenchModal';
 export { InvestorPortfolioWidget } from './InvestorPortfolioWidget';
 export { CSVStagingReviewModal } from './CSVStagingReviewModal';
 export { GranularExportModal } from './GranularExportModal';
+export { SpreadsheetDataGrid } from './SpreadsheetDataGrid';
+export { AppBuilderModal } from './AppBuilderModal';
 
 

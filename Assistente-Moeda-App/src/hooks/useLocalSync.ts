@@ -234,8 +234,15 @@ export function useLocalSync() {
             category: r.category,
             tags: r.tags,
             external_id: r.id,
+            metadata_json: r.metadataJson || '{}',
             period_start: r.periodStart,
             period_end: r.periodEnd,
+            monthly_value: r.monthlyValue,
+            month_count: r.monthCount,
+            ticker: r.ticker,
+            quantity: r.quantity,
+            unit_price: r.unitPrice,
+            custom_values: r.customValues,
           }))
         })
       });

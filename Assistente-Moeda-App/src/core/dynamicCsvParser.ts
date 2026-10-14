@@ -328,17 +328,50 @@ export function buildRowsFromDataLines(
       let rowPeriodEnd: string | undefined = undefined;
       let rowMonthlyValue: number | undefined = undefined;
       let rowMonthCount: number | undefined = undefined;
+      let rowGeneratedBy: string | undefined = undefined;
+      let rowClonedFrom: string | undefined = undefined;
       const customValues: Record<string, string | number | boolean> = {};
 
+      const roleHeaderAliases: Record<string, string[]> = {
+        primary_date: ['date', 'data', 'data_movimento', 'created_at'],
+        primary_amount: ['value', 'valor', 'amount', 'preco', 'valor_cents', 'amount_in_cents'],
+        primary_description: ['description', 'descricao', 'descrição', 'historico', 'histórico', 'memo', 'title'],
+        entry_type: ['entrytype', 'entry_type', 'tipo', 'type'],
+        category: ['category', 'categoria'],
+        category_tag: ['category', 'categoria'],
+        tags: ['tags', 'etiquetas', 'sector_tags'],
+        invest_ticker: ['ticker', 'ativo', 'codigo_ativo'],
+        invest_quantity: ['quantity', 'quantidade', 'qtd'],
+        invest_unit_price: ['unitprice', 'unit_price', 'preco_unitario', 'preço_unitário'],
+        period_start: ['period_start', 'periodstart', 'inicio_periodo', 'período_início'],
+        period_end: ['period_end', 'periodend', 'fim_periodo', 'período_fim'],
+        monthly_value: ['monthlyvalue', 'monthly_value', 'valor_mensal'],
+        month_count: ['monthcount', 'month_count', 'qtd_meses', 'meses'],
+      };
+
+      const isBackupV3RowHeader = hasNamedHeaders && headerMap['id'] === 0 && headerMap['date'] === 1 && headerMap['value'] === 2;
+
       schema.columns.forEach((colDef, colIdx) => {
-        let rawVal = cols[colIdx];
+        let rawVal: string | undefined = !hasNamedHeaders ? cols[colIdx] : undefined;
         if (hasNamedHeaders) {
-          const colKey = colDef.id.toLowerCase();
+          const colKey = (colDef.id || colDef.key || '').toLowerCase();
           const origKey = (colDef.originalHeader || '').toLowerCase();
           const labelKey = (colDef.label || '').toLowerCase();
-          const targetIdx = headerMap[colKey] ?? headerMap[origKey] ?? headerMap[labelKey];
+          let targetIdx = headerMap[colKey] ?? headerMap[origKey] ?? headerMap[labelKey];
+
+          if ((targetIdx === undefined || !cols[targetIdx]) && colDef.role && roleHeaderAliases[colDef.role]) {
+            for (const alias of roleHeaderAliases[colDef.role]) {
+              if (headerMap[alias] !== undefined && cols[headerMap[alias]]) {
+                targetIdx = headerMap[alias];
+                break;
+              }
+            }
+          }
+
           if (targetIdx !== undefined && cols[targetIdx] !== undefined) {
             rawVal = cols[targetIdx];
+          } else if (!isBackupV3RowHeader && cols[colIdx] !== undefined) {
+            rawVal = cols[colIdx];
           }
         }
 
@@ -353,7 +386,7 @@ export function buildRowsFromDataLines(
           case 'primary_amount': {
             let num = parseValue(rawVal);
             if (num !== null && !isNaN(num)) {
-              if (colDef.transformRule?.invertSign) {
+              if (colDef.transformRule?.invertSign || colDef.invertSign) {
                 num = -num;
               }
               if (colDef.transformRule?.multiplier) {
@@ -371,7 +404,8 @@ export function buildRowsFromDataLines(
             rowEntryType = normalizeEntryType(rawVal);
             break;
           }
-          case 'category': {
+          case 'category':
+          case 'category_tag': {
             rowCategory = cleanCell(rawVal) || 'Geral';
             break;
           }
@@ -416,17 +450,23 @@ export function buildRowsFromDataLines(
           }
           case 'custom_attribute':
           default: {
-            customValues[colDef.id] = rawVal;
+            const cid = colDef.id || colDef.key || `col_${colIdx}`;
+            if (rawVal !== '') {
+              customValues[cid] = rawVal;
+            }
             break;
           }
         }
       });
 
-      // Also capture named standard and investment fields if not part of schema
-      if (hasNamedHeaders && !options?.forceEntryType) {
-        const typeIdx = headerMap['entrytype'] ?? headerMap['entry_type'] ?? headerMap['tipo'] ?? headerMap['type'];
-        if (typeIdx !== undefined && cols[typeIdx]) {
-          rowEntryType = normalizeEntryType(cols[typeIdx]);
+      // Also capture named standard, investment, and lineage fields if present in headers
+      let parsedMetadataObj: Record<string, any> = {};
+      if (hasNamedHeaders) {
+        if (!options?.forceEntryType) {
+          const typeIdx = headerMap['entrytype'] ?? headerMap['entry_type'] ?? headerMap['tipo'] ?? headerMap['type'];
+          if (typeIdx !== undefined && cols[typeIdx]) {
+            rowEntryType = normalizeEntryType(cols[typeIdx]);
+          }
         }
         const catIdx = headerMap['category'] ?? headerMap['categoria'];
         if (catIdx !== undefined && cols[catIdx]) {
@@ -463,12 +503,40 @@ export function buildRowsFromDataLines(
           const pe = parseAndNormalizeDate(cols[headerMap['period_end']]);
           if (pe) rowPeriodEnd = pe;
         }
+        const genIdx = headerMap['generatedby'] ?? headerMap['generated_by'] ?? headerMap['gerado_por'] ?? headerMap['gerado por'];
+        if (genIdx !== undefined && cols[genIdx]) {
+          rowGeneratedBy = cleanCell(cols[genIdx]) || undefined;
+        }
+        const cloneIdx = headerMap['clonedfrom'] ?? headerMap['cloned_from'] ?? headerMap['clonado_de'];
+        if (cloneIdx !== undefined && cols[cloneIdx]) {
+          rowClonedFrom = cleanCell(cols[cloneIdx]) || undefined;
+        }
+        const metaIdx = headerMap['metadata_json'] ?? headerMap['metadatajson'] ?? headerMap['metadata'] ?? headerMap['metadados'];
+        if (metaIdx !== undefined && cols[metaIdx]) {
+          const rawMeta = cleanCell(cols[metaIdx]);
+          if (rawMeta && rawMeta !== '{}') {
+            try {
+              const parsed = JSON.parse(rawMeta);
+              if (typeof parsed === 'object' && parsed !== null) {
+                parsedMetadataObj = parsed;
+                Object.entries(parsed).forEach(([k, v]) => {
+                  if (customValues[k] === undefined && (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean')) {
+                    customValues[k] = v;
+                  }
+                });
+              }
+            } catch {}
+          }
+        }
       }
 
       // If value is negative and entryType was still default 'revenue', calibrate to 'expense'
       if (rowValue < 0 && rowEntryType === 'revenue') {
         rowEntryType = 'expense';
       }
+
+      const finalMetaObj = { ...parsedMetadataObj, ...customValues };
+      const finalMetadataJson = Object.keys(finalMetaObj).length > 0 ? JSON.stringify(finalMetaObj) : '{}';
 
       const row: TableRow = {
         id: rowId,
@@ -478,7 +546,7 @@ export function buildRowsFromDataLines(
         entryType: rowEntryType,
         category: rowCategory,
         tags: rowTags,
-        metadataJson: Object.keys(customValues).length > 0 ? JSON.stringify(customValues) : '{}',
+        metadataJson: finalMetadataJson,
         createdAt: new Date().toISOString(),
         ...(rowTicker ? { ticker: rowTicker } : {}),
         ...(rowQuantity !== undefined ? { quantity: rowQuantity } : {}),
@@ -487,6 +555,8 @@ export function buildRowsFromDataLines(
         ...(rowPeriodEnd ? { periodEnd: rowPeriodEnd } : {}),
         ...(rowMonthlyValue !== undefined ? { monthlyValue: rowMonthlyValue } : {}),
         ...(rowMonthCount !== undefined ? { monthCount: rowMonthCount } : {}),
+        ...(rowGeneratedBy ? { generatedBy: rowGeneratedBy as TableRow['generatedBy'] } : {}),
+        ...(rowClonedFrom ? { clonedFrom: rowClonedFrom } : {}),
         ...(Object.keys(customValues).length > 0 ? { customValues } : {}),
       };
 

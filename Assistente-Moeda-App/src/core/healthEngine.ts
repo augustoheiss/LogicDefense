@@ -48,10 +48,22 @@ export function computeHealthScore(
 
   const grossRevenue = metrics.grossTotal || 0;
   const totalExpenses = metrics.totalExpenses || 0;
-  const totalDeposits = metrics.totalDeposits || 0;
+  const totalDeposits =
+    metrics.totalDeposits ??
+    metrics.investmentBalance ??
+    metrics.totalInvested ??
+    metrics.globalTotalDeposited ??
+    0;
   const netBalance = grossRevenue - totalExpenses;
-  const daysWorked = metrics.daysWorked || 0;
-  const dailyAverage = metrics.dailyAverage || 0;
+  const daysWorked =
+    metrics.daysWorked ??
+    (metrics.byMonth
+      ? Object.values(metrics.byMonth).reduce(
+          (acc, m) => acc + Object.keys(m.dailyPayments || {}).length,
+          0
+        )
+      : 0);
+  const dailyAverage = metrics.dailyAverage ?? metrics.globalDailyAvg ?? 0;
 
   // ── PILAR 1: Fluxo de Caixa & Sobrevivência (Peso 30%) ───
   let cashflowScore = 50;
@@ -98,7 +110,12 @@ export function computeHealthScore(
 
   // ── PILAR 2: Reserva de Emergência (Peso 25%) ──────────
   // Considera depósitos/investimentos em relação ao custo mensal estimado
-  const monthlyCostEstimate = totalExpenses > 0 ? totalExpenses : 2000;
+  const monthlyCostEstimate =
+    metrics.survivalMonthly && metrics.survivalMonthly > 0
+      ? metrics.survivalMonthly
+      : totalExpenses > 0
+      ? totalExpenses
+      : 2000;
   const reserveMonthsAvailable = totalDeposits / monthlyCostEstimate;
 
   let reserveScore = 30;

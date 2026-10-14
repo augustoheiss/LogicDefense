@@ -24,45 +24,83 @@ import {
 } from 'react-native';
 import { colors } from '@/theme/colors';
 import { spacing, radius } from '@/theme/spacing';
-import type { TableRow } from '@/core/types';
+import type { TableRow, DynamicTableSchema } from '@/core/types';
 import { parseMoneyBR, parseBatchAmounts } from '@/core/parseMoneyBR';
 
 interface AddRowModalProps {
   visible: boolean;
   onClose: () => void;
   onAdd: (rowOrRows: Omit<TableRow, 'id'> | Omit<TableRow, 'id'>[]) => void;
+  onUpdate?: (rowId: string, updates: Partial<TableRow>) => void;
   editingRow?: TableRow | null;
   onDelete?: (rowId: string) => void;
   onClone?: (row: TableRow) => void;
+  schema?: DynamicTableSchema;
 }
 
 type EntryType = 'revenue' | 'deposit' | 'waiver' | 'expense' | 'partner_in' | 'partner_out';
 
 const entryTypes: { value: EntryType; label: string; icon: string }[] = [
-  { value: 'revenue',     label: 'Receita',    icon: '💰' },
   { value: 'expense',     label: 'Despesa',    icon: '💸' },
+  { value: 'revenue',     label: 'Receita',    icon: '💰' },
   { value: 'deposit',     label: 'Depósito',   icon: '🏦' },
   { value: 'waiver',      label: 'Abono',      icon: '🎁' },
   { value: 'partner_in',  label: 'Sócio ↓',    icon: '🤝' },
   { value: 'partner_out', label: 'Sócio ↑',    icon: '📤' },
 ];
 
-function getTodayISO(): string {
+const QUICK_CATEGORIES: { label: string; icon: string; defaultType?: EntryType }[] = [
+  { label: 'Alimentação', icon: '🍔', defaultType: 'expense' },
+  { label: 'Transporte',  icon: '🚗', defaultType: 'expense' },
+  { label: 'Mercado',     icon: '🛒', defaultType: 'expense' },
+  { label: 'Moradia',     icon: '🏠', defaultType: 'expense' },
+  { label: 'Saúde',       icon: '💊', defaultType: 'expense' },
+  { label: 'Lazer',       icon: '🎬', defaultType: 'expense' },
+  { label: 'Trabalho',    icon: '💼', defaultType: 'revenue' },
+  { label: 'Investimento',icon: '📈', defaultType: 'deposit' },
+  { label: 'Geral',       icon: '📌' },
+];
+
+function getOffsetISO(daysOffset = 0): string {
   const d = new Date();
+  d.setDate(d.getDate() + daysOffset);
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, '0');
   const day = String(d.getDate()).padStart(2, '0');
   return `${y}-${m}-${day}`;
 }
 
-export function AddRowModal({ visible, onClose, onAdd, editingRow, onDelete, onClone }: AddRowModalProps) {
+function getTodayISO(): string {
+  return getOffsetISO(0);
+}
+
+const STANDARD_COLUMN_IDS = new Set([
+  'id', 'date', 'data', 'value', 'valor', 'description', 'descricao',
+  'entryType', 'entry_type', 'tipo', 'category', 'categoria', 'tags',
+  'periodStart', 'period_start', 'periodEnd', 'period_end',
+  'monthlyValue', 'monthly_value', 'monthCount', 'month_count',
+  'ticker', 'quantity', 'unitPrice', 'unit_price',
+]);
+
+export function AddRowModal({
+  visible,
+  onClose,
+  onAdd,
+  onUpdate,
+  editingRow,
+  onDelete,
+  onClone,
+  schema,
+}: AddRowModalProps) {
   const { width } = useWindowDimensions();
   const isWide = width >= 600;
 
   const [date, setDate] = useState(getTodayISO());
   const [value, setValue] = useState('');
   const [description, setDescription] = useState('');
-  const [entryType, setEntryType] = useState<EntryType>('revenue');
+  const [category, setCategory] = useState('Geral');
+  const [tags, setTags] = useState('');
+  const [entryType, setEntryType] = useState<EntryType>('expense');
   const [error, setError] = useState<string | null>(null);
 
   // Period States
@@ -74,19 +112,44 @@ export function AddRowModal({ visible, onClose, onAdd, editingRow, onDelete, onC
   const [monthlyValue, setMonthlyValue] = useState('');
   const [monthCount, setMonthCount] = useState('');
 
+  // Investment-specific States (deposit)
+  const [ticker, setTicker] = useState('');
+  const [quantity, setQuantity] = useState('');
+  const [unitPrice, setUnitPrice] = useState('');
+
+  // Dynamic Custom Columns States
+  const [customValues, setCustomValues] = useState<Record<string, string>>({});
+
   // Batch Mode States
   const [isBatch, setIsBatch] = useState(false);
   const [batchValues, setBatchValues] = useState('');
   const [isSingleDescription, setIsSingleDescription] = useState(true);
   const [individualDescriptions, setIndividualDescriptions] = useState<string[]>([]);
 
+  // Extract custom columns from schema
+  const customColumns = useMemo(() => {
+    if (!schema?.columns) return [];
+    return schema.columns.filter(
+      (col) =>
+        col.visible !== false &&
+        (col.role === 'custom' || !col.role) &&
+        !STANDARD_COLUMN_IDS.has(col.id)
+    );
+  }, [schema]);
+
   // Pre-fill when editing
   useEffect(() => {
     if (editingRow) {
       setDate(editingRow.date);
-      setValue(String(editingRow.value));
+      setValue(String(Math.abs(editingRow.value)));
       setDescription(editingRow.description || '');
-      setEntryType((editingRow.entryType || 'revenue') as EntryType);
+      setCategory(editingRow.category || 'Geral');
+      setTags(editingRow.tags || '');
+      const normalizedEditType =
+        editingRow.entryType && editingRow.entryType !== 'unresolved'
+          ? (editingRow.entryType as EntryType)
+          : 'expense';
+      setEntryType(normalizedEditType);
 
       const hasPeriod = !!(editingRow.periodStart && editingRow.periodEnd);
       setIsPeriod(hasPeriod);
@@ -95,18 +158,38 @@ export function AddRowModal({ visible, onClose, onAdd, editingRow, onDelete, onC
 
       setMonthlyValue(editingRow.monthlyValue != null ? String(editingRow.monthlyValue) : '');
       setMonthCount(editingRow.monthCount != null ? String(editingRow.monthCount) : '');
-      
+
+      setTicker(editingRow.ticker || '');
+      setQuantity(editingRow.quantity != null ? String(editingRow.quantity) : '');
+      setUnitPrice(editingRow.unitPrice != null ? String(editingRow.unitPrice) : '');
+
+      const initialCustom: Record<string, string> = {};
+      if (editingRow.customValues) {
+        for (const [k, v] of Object.entries(editingRow.customValues)) {
+          if (v !== undefined && v !== null) {
+            initialCustom[k] = String(v);
+          }
+        }
+      }
+      setCustomValues(initialCustom);
+
       setIsBatch(false);
     } else {
       setDate(getTodayISO());
       setValue('');
       setDescription('');
-      setEntryType('revenue');
+      setCategory('Geral');
+      setTags('');
+      setEntryType('expense');
       setIsPeriod(false);
       setPeriodStart(getTodayISO());
       setPeriodEnd(getTodayISO());
       setMonthlyValue('');
       setMonthCount('');
+      setTicker('');
+      setQuantity('');
+      setUnitPrice('');
+      setCustomValues({});
       setIsBatch(false);
       setBatchValues('');
       setIsSingleDescription(true);
@@ -144,6 +227,32 @@ export function AddRowModal({ visible, onClose, onAdd, editingRow, onDelete, onC
     const mCount = parseInt(val, 10);
     if (!isNaN(mVal) && mVal > 0 && !isNaN(mCount) && mCount > 0) {
       setValue(String(Math.round(mVal * mCount * 100) / 100));
+    }
+  };
+
+  // Auto-calculate total deposit value when quantity or unitPrice changes
+  const handleQuantityChange = (val: string) => {
+    setQuantity(val);
+    const q = parseMoneyBR(val);
+    const p = parseMoneyBR(unitPrice);
+    if (!isNaN(q) && q > 0 && !isNaN(p) && p > 0) {
+      setValue(String(Math.round(q * p * 100) / 100));
+    }
+  };
+
+  const handleUnitPriceChange = (val: string) => {
+    setUnitPrice(val);
+    const q = parseMoneyBR(quantity);
+    const p = parseMoneyBR(val);
+    if (!isNaN(q) && q > 0 && !isNaN(p) && p > 0) {
+      setValue(String(Math.round(q * p * 100) / 100));
+    }
+  };
+
+  const handleQuickCategorySelect = (cat: { label: string; defaultType?: EntryType }) => {
+    setCategory(cat.label);
+    if (!description.trim()) {
+      setDescription(cat.label);
     }
   };
 
@@ -190,6 +299,27 @@ export function AddRowModal({ visible, onClose, onAdd, editingRow, onDelete, onC
     }
   };
 
+  const buildCustomValuesMap = (): Record<string, string | number | boolean> | undefined => {
+    const cleaned: Record<string, string | number | boolean> = {
+      ...(editingRow?.customValues || {}),
+    };
+    for (const [k, rawVal] of Object.entries(customValues)) {
+      const trimmed = rawVal.trim();
+      if (!trimmed) {
+        delete cleaned[k];
+        continue;
+      }
+      const colDef = customColumns.find((c) => c.id === k);
+      if (colDef?.type === 'number' || colDef?.type === 'currency' || colDef?.type === 'percentage') {
+        const parsed = parseMoneyBR(trimmed);
+        cleaned[k] = !isNaN(parsed) ? parsed : trimmed;
+      } else {
+        cleaned[k] = trimmed;
+      }
+    }
+    return Object.keys(cleaned).length > 0 ? cleaned : undefined;
+  };
+
   const handleSubmit = () => {
     setError(null);
 
@@ -215,6 +345,22 @@ export function AddRowModal({ visible, onClose, onAdd, editingRow, onDelete, onC
         setError('Data inválida (AAAA-MM-DD)');
         return;
       }
+    }
+
+    const finalCustomValues = buildCustomValuesMap();
+    const finalCategory = category.trim() || 'Geral';
+    const finalTags = tags.trim() || undefined;
+
+    let finalTicker: string | undefined;
+    let finalQuantity: number | undefined;
+    let finalUnitPrice: number | undefined;
+
+    if (entryType === 'deposit') {
+      if (ticker.trim()) finalTicker = ticker.trim().toUpperCase();
+      const q = parseMoneyBR(quantity);
+      if (!isNaN(q) && q > 0) finalQuantity = q;
+      const p = parseMoneyBR(unitPrice);
+      if (!isNaN(p) && p > 0) finalUnitPrice = p;
     }
 
     if (isBatch && !isEditMode) {
@@ -243,12 +389,18 @@ export function AddRowModal({ visible, onClose, onAdd, editingRow, onDelete, onC
         return {
           date: finalDate,
           value: Math.round(val * 100) / 100,
-          description: desc || undefined,
+          description: desc || finalCategory,
+          category: finalCategory,
+          tags: finalTags,
           entryType,
           periodStart: finalPeriodStart,
           periodEnd: finalPeriodEnd,
           monthlyValue: finalMonthlyValue,
           monthCount: finalMonthCount,
+          ticker: finalTicker,
+          quantity: finalQuantity,
+          unitPrice: finalUnitPrice,
+          customValues: finalCustomValues,
         };
       });
 
@@ -275,28 +427,46 @@ export function AddRowModal({ visible, onClose, onAdd, editingRow, onDelete, onC
         }
       }
 
-      onAdd({
+      const payload: Omit<TableRow, 'id'> = {
         date: finalDate,
         value: Math.round(numValue * 100) / 100,
-        description: description.trim() || undefined,
+        description: description.trim() || finalCategory,
+        category: finalCategory,
+        tags: finalTags,
         entryType,
         periodStart: finalPeriodStart,
         periodEnd: finalPeriodEnd,
         monthlyValue: finalMonthlyValue,
         monthCount: finalMonthCount,
-      });
+        ticker: finalTicker,
+        quantity: finalQuantity,
+        unitPrice: finalUnitPrice,
+        customValues: finalCustomValues,
+      };
+
+      if (isEditMode && editingRow && onUpdate) {
+        onUpdate(editingRow.id, payload);
+      } else {
+        onAdd(payload);
+      }
     }
 
     // Reset form
     setValue('');
     setDescription('');
-    setEntryType('revenue');
+    setCategory('Geral');
+    setTags('');
+    setEntryType('expense');
     setDate(getTodayISO());
     setIsPeriod(false);
     setPeriodStart(getTodayISO());
     setPeriodEnd(getTodayISO());
     setMonthlyValue('');
     setMonthCount('');
+    setTicker('');
+    setQuantity('');
+    setUnitPrice('');
+    setCustomValues({});
     setIsBatch(false);
     setBatchValues('');
     setIsSingleDescription(true);
@@ -304,6 +474,10 @@ export function AddRowModal({ visible, onClose, onAdd, editingRow, onDelete, onC
     setError(null);
     onClose();
   };
+
+  const todayISO = getTodayISO();
+  const yesterdayISO = getOffsetISO(-1);
+  const twoDaysAgoISO = getOffsetISO(-2);
 
   return (
     <Modal
@@ -325,28 +499,25 @@ export function AddRowModal({ visible, onClose, onAdd, editingRow, onDelete, onC
             {/* Handle bar (mobile) */}
             {!isWide && <View style={styles.handle} />}
 
-            <Text style={styles.title}>{isEditMode ? '✏️ Editar Entrada' : 'Nova Entrada'}</Text>
-
-            {/* Mode Selector */}
-            {!isEditMode && (
-              <View style={styles.inputGroup}>
-                <Text style={styles.label}>Modo de Entrada</Text>
-                <View style={styles.toggleRow}>
+            <View style={styles.headerTitleRow}>
+              <Text style={styles.title}>{isEditMode ? '✏️ Editar Entrada' : '⚡ Registro Rápido'}</Text>
+              {!isEditMode && (
+                <View style={styles.compactModeToggle}>
                   <Pressable
-                    style={[styles.toggleBtn, !isBatch && styles.toggleBtnActive]}
+                    style={[styles.compactToggleBtn, !isBatch && styles.compactToggleBtnActive]}
                     onPress={() => setIsBatch(false)}
                   >
-                    <Text style={[styles.toggleBtnText, !isBatch && styles.toggleBtnTextActive]}>Individual</Text>
+                    <Text style={[styles.compactToggleText, !isBatch && styles.compactToggleTextActive]}>Único</Text>
                   </Pressable>
                   <Pressable
-                    style={[styles.toggleBtn, isBatch && styles.toggleBtnActive]}
+                    style={[styles.compactToggleBtn, isBatch && styles.compactToggleBtnActive]}
                     onPress={() => setIsBatch(true)}
                   >
-                    <Text style={[styles.toggleBtnText, isBatch && styles.toggleBtnTextActive]}>Em Lote</Text>
+                    <Text style={[styles.compactToggleText, isBatch && styles.compactToggleTextActive]}>Lote</Text>
                   </Pressable>
                 </View>
-              </View>
-            )}
+              )}
+            </View>
 
             {/* Entry type selector */}
             <View style={styles.typeGrid}>
@@ -372,101 +543,13 @@ export function AddRowModal({ visible, onClose, onAdd, editingRow, onDelete, onC
               ))}
             </View>
 
-            {/* Date Range Type Switcher */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Tipo de Lançamento</Text>
-              <View style={styles.toggleRow}>
-                <Pressable
-                  style={[styles.toggleBtn, !isPeriod && styles.toggleBtnActive]}
-                  onPress={() => setIsPeriod(false)}
-                >
-                  <Text style={[styles.toggleBtnText, !isPeriod && styles.toggleBtnTextActive]}>Data Única</Text>
-                </Pressable>
-                <Pressable
-                  style={[styles.toggleBtn, isPeriod && styles.toggleBtnActive]}
-                  onPress={() => setIsPeriod(true)}
-                >
-                  <Text style={[styles.toggleBtnText, isPeriod && styles.toggleBtnTextActive]}>Período</Text>
-                </Pressable>
-              </View>
-            </View>
-
-            {/* Conditional Date Pickers */}
-            {!isPeriod ? (
-              <View style={styles.inputGroup}>
-                <Text style={styles.label}>Data</Text>
-                <TextInput
-                  style={styles.input}
-                  value={date}
-                  onChangeText={setDate}
-                  placeholder="AAAA-MM-DD"
-                  placeholderTextColor={colors.text.disabled}
-                  keyboardType="numbers-and-punctuation"
-                />
-              </View>
-            ) : (
-              <View style={styles.rowInputs}>
-                <View style={[styles.inputGroup, { flex: 1 }]}>
-                  <Text style={styles.label}>Data Inicial</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={periodStart}
-                    onChangeText={setPeriodStart}
-                    placeholder="AAAA-MM-DD"
-                    placeholderTextColor={colors.text.disabled}
-                    keyboardType="numbers-and-punctuation"
-                  />
-                </View>
-                <View style={[styles.inputGroup, { flex: 1 }]}>
-                  <Text style={styles.label}>Data Final</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={periodEnd}
-                    onChangeText={setPeriodEnd}
-                    placeholder="AAAA-MM-DD"
-                    placeholderTextColor={colors.text.disabled}
-                    keyboardType="numbers-and-punctuation"
-                  />
-                </View>
-              </View>
-            )}
-
-            {/* Conditional Expense Sub-inputs (only for single or if months apply to batch) */}
-            {entryType === 'expense' && (
-              <View style={styles.rowInputs}>
-                {!isBatch && (
-                  <View style={[styles.inputGroup, { flex: 1 }]}>
-                    <Text style={styles.label}>Valor Mensal (R$)</Text>
-                    <TextInput
-                      style={styles.input}
-                      value={monthlyValue}
-                      onChangeText={handleMonthlyValueChange}
-                      placeholder="0,00"
-                      placeholderTextColor={colors.text.disabled}
-                      keyboardType="decimal-pad"
-                    />
-                  </View>
-                )}
-                <View style={[styles.inputGroup, { flex: 1 }]}>
-                  <Text style={styles.label}>Nº de Meses</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={monthCount}
-                    onChangeText={setMonthCount}
-                    placeholder="1"
-                    placeholderTextColor={colors.text.disabled}
-                    keyboardType="number-pad"
-                  />
-                </View>
-              </View>
-            )}
-
-            {/* Values input based on Mode */}
+            {/* Values input FIRST for 3-second fast street capture */}
             {!isBatch ? (
-              /* Total Value */
               <View style={styles.inputGroup}>
                 <Text style={styles.label}>
-                  {entryType === 'expense' && monthlyValue && monthCount ? 'Valor Total (Autocalculado)' : 'Valor (R$)'}
+                  {entryType === 'expense' && monthlyValue && monthCount
+                    ? 'Valor Total (Autocalculado)'
+                    : 'Valor (R$)'}
                 </Text>
                 <TextInput
                   style={[styles.input, styles.inputValue]}
@@ -475,10 +558,10 @@ export function AddRowModal({ visible, onClose, onAdd, editingRow, onDelete, onC
                   placeholder="0,00"
                   placeholderTextColor={colors.text.disabled}
                   keyboardType="decimal-pad"
+                  autoFocus={!isEditMode}
                 />
               </View>
             ) : (
-              /* Batch Values list */
               <View style={styles.inputGroup}>
                 <Text style={styles.label}>Valores em Lote (ponto e vírgula, linha ou vírgula)</Text>
                 <TextInput
@@ -493,10 +576,69 @@ export function AddRowModal({ visible, onClose, onAdd, editingRow, onDelete, onC
               </View>
             )}
 
+            {/* 1-Tap Quick Category Chips */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Categoria Rápida (1 toque)</Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.quickChipsRow}
+              >
+                {QUICK_CATEGORIES.map((cat) => {
+                  const isSelected = category.toLowerCase() === cat.label.toLowerCase();
+                  return (
+                    <Pressable
+                      key={cat.label}
+                      style={[styles.quickChip, isSelected && styles.quickChipActive]}
+                      onPress={() => handleQuickCategorySelect(cat)}
+                    >
+                      <Text style={styles.quickChipText}>
+                        {cat.icon} {cat.label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+            </View>
+
+            {/* Description Input(s) */}
+            {(!isBatch || isSingleDescription) ? (
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Descrição (opcional)</Text>
+                <TextInput
+                  style={styles.input}
+                  value={description}
+                  onChangeText={setDescription}
+                  placeholder="Ex: Uber, Aluguel, Freelance..."
+                  placeholderTextColor={colors.text.disabled}
+                />
+              </View>
+            ) : (
+              parsedValues.length > 0 && (
+                <View style={styles.individualList}>
+                  <Text style={styles.subLabel}>Descrições Individuais</Text>
+                  {parsedValues.map((val, idx) => (
+                    <View key={idx} style={styles.individualRow}>
+                      <View style={styles.individualValueTag}>
+                        <Text style={styles.individualValueText}>R$ {val.toFixed(2)}</Text>
+                      </View>
+                      <TextInput
+                        style={[styles.input, styles.individualInput]}
+                        value={individualDescriptions[idx] || ''}
+                        onChangeText={(text) => handleDescChange(idx, text)}
+                        placeholder={`Descrição para R$ ${val.toFixed(2)}`}
+                        placeholderTextColor={colors.text.disabled}
+                      />
+                    </View>
+                  ))}
+                </View>
+              )
+            )}
+
             {/* Description Mode Selector (Batch only) */}
             {isBatch && !isEditMode && (
               <View style={styles.inputGroup}>
-                <Text style={styles.label}>Descrição das Entradas</Text>
+                <Text style={styles.label}>Modo de Descrição em Lote</Text>
                 <View style={styles.toggleRow}>
                   <Pressable
                     style={[styles.toggleBtn, isSingleDescription && styles.toggleBtnActive]}
@@ -518,39 +660,194 @@ export function AddRowModal({ visible, onClose, onAdd, editingRow, onDelete, onC
               </View>
             )}
 
-            {/* Description Input(s) */}
-            {(!isBatch || isSingleDescription) ? (
-              <View style={styles.inputGroup}>
-                <Text style={styles.label}>Descrição (opcional)</Text>
+            {/* Date Section with 1-Tap Date Chips */}
+            <View style={styles.inputGroup}>
+              <View style={styles.dateHeaderRow}>
+                <Text style={styles.label}>Data</Text>
+                <View style={styles.quickDateRow}>
+                  <Pressable
+                    style={[styles.dateChip, !isPeriod && date === todayISO && styles.dateChipActive]}
+                    onPress={() => { setIsPeriod(false); setDate(todayISO); }}
+                  >
+                    <Text style={[styles.dateChipText, !isPeriod && date === todayISO && styles.dateChipTextActive]}>Hoje</Text>
+                  </Pressable>
+                  <Pressable
+                    style={[styles.dateChip, !isPeriod && date === yesterdayISO && styles.dateChipActive]}
+                    onPress={() => { setIsPeriod(false); setDate(yesterdayISO); }}
+                  >
+                    <Text style={[styles.dateChipText, !isPeriod && date === yesterdayISO && styles.dateChipTextActive]}>Ontem</Text>
+                  </Pressable>
+                  <Pressable
+                    style={[styles.dateChip, !isPeriod && date === twoDaysAgoISO && styles.dateChipActive]}
+                    onPress={() => { setIsPeriod(false); setDate(twoDaysAgoISO); }}
+                  >
+                    <Text style={[styles.dateChipText, !isPeriod && date === twoDaysAgoISO && styles.dateChipTextActive]}>-2d</Text>
+                  </Pressable>
+                  <Pressable
+                    style={[styles.dateChip, isPeriod && styles.dateChipActive]}
+                    onPress={() => setIsPeriod(!isPeriod)}
+                  >
+                    <Text style={[styles.dateChipText, isPeriod && styles.dateChipTextActive]}>Período</Text>
+                  </Pressable>
+                </View>
+              </View>
+
+              {!isPeriod ? (
                 <TextInput
                   style={styles.input}
-                  value={description}
-                  onChangeText={setDescription}
-                  placeholder="Ex: Uber, Aluguel, Freelance..."
+                  value={date}
+                  onChangeText={setDate}
+                  placeholder="AAAA-MM-DD"
+                  placeholderTextColor={colors.text.disabled}
+                  keyboardType="numbers-and-punctuation"
+                />
+              ) : (
+                <View style={styles.rowInputs}>
+                  <View style={[styles.inputGroup, { flex: 1 }]}>
+                    <Text style={styles.label}>Data Inicial</Text>
+                    <TextInput
+                      style={styles.input}
+                      value={periodStart}
+                      onChangeText={setPeriodStart}
+                      placeholder="AAAA-MM-DD"
+                      placeholderTextColor={colors.text.disabled}
+                      keyboardType="numbers-and-punctuation"
+                    />
+                  </View>
+                  <View style={[styles.inputGroup, { flex: 1 }]}>
+                    <Text style={styles.label}>Data Final</Text>
+                    <TextInput
+                      style={styles.input}
+                      value={periodEnd}
+                      onChangeText={setPeriodEnd}
+                      placeholder="AAAA-MM-DD"
+                      placeholderTextColor={colors.text.disabled}
+                      keyboardType="numbers-and-punctuation"
+                    />
+                  </View>
+                </View>
+              )}
+            </View>
+
+            {/* Conditional Expense Sub-inputs */}
+            {entryType === 'expense' && (
+              <View style={styles.rowInputs}>
+                {!isBatch && (
+                  <View style={[styles.inputGroup, { flex: 1 }]}>
+                    <Text style={styles.label}>Valor Mensal (R$)</Text>
+                    <TextInput
+                      style={styles.input}
+                      value={monthlyValue}
+                      onChangeText={handleMonthlyValueChange}
+                      placeholder="Opcional (parcelado)"
+                      placeholderTextColor={colors.text.disabled}
+                      keyboardType="decimal-pad"
+                    />
+                  </View>
+                )}
+                <View style={[styles.inputGroup, { flex: 1 }]}>
+                  <Text style={styles.label}>Nº de Meses</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={monthCount}
+                    onChangeText={handleMonthCountChange}
+                    placeholder="1"
+                    placeholderTextColor={colors.text.disabled}
+                    keyboardType="number-pad"
+                  />
+                </View>
+              </View>
+            )}
+
+            {/* Conditional Investment Sub-inputs (for Deposit) */}
+            {entryType === 'deposit' && (
+              <View style={styles.rowInputs}>
+                <View style={[styles.inputGroup, { flex: 1.2 }]}>
+                  <Text style={styles.label}>Ticker / Ativo</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={ticker}
+                    onChangeText={setTicker}
+                    placeholder="Ex: PETR4, SELIC"
+                    placeholderTextColor={colors.text.disabled}
+                    autoCapitalize="characters"
+                  />
+                </View>
+                <View style={[styles.inputGroup, { flex: 0.9 }]}>
+                  <Text style={styles.label}>Qtd</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={quantity}
+                    onChangeText={handleQuantityChange}
+                    placeholder="10"
+                    placeholderTextColor={colors.text.disabled}
+                    keyboardType="decimal-pad"
+                  />
+                </View>
+                <View style={[styles.inputGroup, { flex: 1.1 }]}>
+                  <Text style={styles.label}>Preço Unit.</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={unitPrice}
+                    onChangeText={handleUnitPriceChange}
+                    placeholder="35,50"
+                    placeholderTextColor={colors.text.disabled}
+                    keyboardType="decimal-pad"
+                  />
+                </View>
+              </View>
+            )}
+
+            {/* Category & Tags Row */}
+            <View style={styles.rowInputs}>
+              <View style={[styles.inputGroup, { flex: 1 }]}>
+                <Text style={styles.label}>Categoria</Text>
+                <TextInput
+                  style={styles.input}
+                  value={category}
+                  onChangeText={setCategory}
+                  placeholder="Geral"
                   placeholderTextColor={colors.text.disabled}
                 />
               </View>
-            ) : (
-              /* Individual Descriptions fields */
-              parsedValues.length > 0 && (
-                <View style={styles.individualList}>
-                  <Text style={styles.subLabel}>Descrições Individuais</Text>
-                  {parsedValues.map((val, idx) => (
-                    <View key={idx} style={styles.individualRow}>
-                      <View style={styles.individualValueTag}>
-                        <Text style={styles.individualValueText}>R$ {val.toFixed(2)}</Text>
-                      </View>
+              <View style={[styles.inputGroup, { flex: 1 }]}>
+                <Text style={styles.label}>Tags (opcional)</Text>
+                <TextInput
+                  style={styles.input}
+                  value={tags}
+                  onChangeText={setTags}
+                  placeholder="fixo, trabalho"
+                  placeholderTextColor={colors.text.disabled}
+                />
+              </View>
+            </View>
+
+            {/* Dynamic Custom Columns from Schema */}
+            {customColumns.length > 0 && (
+              <View style={styles.customColumnsSection}>
+                <Text style={styles.subLabel}>Colunas Personalizadas da Planilha</Text>
+                <View style={styles.customColumnsGrid}>
+                  {customColumns.map((col) => (
+                    <View key={col.id} style={[styles.inputGroup, styles.customColInputWrap]}>
+                      <Text style={styles.label}>{col.label}</Text>
                       <TextInput
-                        style={[styles.input, styles.individualInput]}
-                        value={individualDescriptions[idx] || ''}
-                        onChangeText={(text) => handleDescChange(idx, text)}
-                        placeholder={`Descrição para R$ ${val.toFixed(2)}`}
+                        style={styles.input}
+                        value={customValues[col.id] || ''}
+                        onChangeText={(txt) =>
+                          setCustomValues((prev) => ({ ...prev, [col.id]: txt }))
+                        }
+                        placeholder={col.label}
                         placeholderTextColor={colors.text.disabled}
+                        keyboardType={
+                          col.type === 'number' || col.type === 'currency' || col.type === 'percentage'
+                            ? 'decimal-pad'
+                            : 'default'
+                        }
                       />
                     </View>
                   ))}
                 </View>
-              )
+              </View>
             )}
 
             {/* Error */}
@@ -880,5 +1177,105 @@ const styles = StyleSheet.create({
     color: colors.danger.main,
     fontSize: 15,
     fontWeight: '600',
+  },
+  headerTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.md,
+  },
+  compactModeToggle: {
+    flexDirection: 'row',
+    backgroundColor: colors.background.tertiary,
+    borderRadius: radius.sm,
+    borderWidth: 1,
+    borderColor: colors.border.default,
+    padding: 2,
+    gap: 2,
+  },
+  compactToggleBtn: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+    borderRadius: radius.xs,
+  },
+  compactToggleBtnActive: {
+    backgroundColor: colors.accent.purple,
+  },
+  compactToggleText: {
+    fontSize: 11,
+    color: colors.text.secondary,
+    fontWeight: '600',
+  },
+  compactToggleTextActive: {
+    color: '#fff',
+  },
+  quickChipsRow: {
+    flexDirection: 'row',
+    gap: spacing.xs,
+    paddingVertical: 2,
+  },
+  quickChip: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 6,
+    borderRadius: radius.full,
+    backgroundColor: colors.background.tertiary,
+    borderWidth: 1,
+    borderColor: colors.border.default,
+  },
+  quickChipActive: {
+    backgroundColor: colors.accent.purpleLight,
+    borderColor: colors.accent.purpleBorder,
+  },
+  quickChipText: {
+    fontSize: 12,
+    color: colors.text.primary,
+    fontWeight: '600',
+  },
+  dateHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+  },
+  quickDateRow: {
+    flexDirection: 'row',
+    gap: 4,
+  },
+  dateChip: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: radius.sm,
+    backgroundColor: colors.background.tertiary,
+    borderWidth: 1,
+    borderColor: colors.border.default,
+  },
+  dateChipActive: {
+    backgroundColor: colors.accent.purpleLight,
+    borderColor: colors.accent.purpleBorder,
+  },
+  dateChipText: {
+    fontSize: 11,
+    color: colors.text.secondary,
+    fontWeight: '600',
+  },
+  dateChipTextActive: {
+    color: colors.accent.purple,
+    fontWeight: '700',
+  },
+  customColumnsSection: {
+    gap: spacing.sm,
+    paddingTop: spacing.xs,
+    borderTopWidth: 1,
+    borderTopColor: colors.border.default,
+  },
+  customColumnsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.md,
+  },
+  customColInputWrap: {
+    minWidth: 140,
+    flex: 1,
   },
 });

@@ -29,16 +29,20 @@ import type { TableRow } from '@/core/types';
 
 interface SwipeableRowCardProps {
   row: TableRow;
+  runningBalance?: number;
   onEdit: (row: TableRow) => void;
   onDelete: (rowId: string) => void;
   onDuplicate: (row: TableRow) => void;
+  onResolveQuarantine?: (rowId: string, resolvedType: TableRow['entryType']) => void;
 }
 
 export function SwipeableRowCard({
   row,
+  runningBalance,
   onEdit,
   onDelete,
   onDuplicate,
+  onResolveQuarantine,
 }: SwipeableRowCardProps) {
   if (!row) return null;
 
@@ -46,9 +50,11 @@ export function SwipeableRowCard({
     return (
       <WebRowCard
         row={row}
+        runningBalance={runningBalance}
         onEdit={onEdit}
         onDelete={onDelete}
         onDuplicate={onDuplicate}
+        onResolveQuarantine={onResolveQuarantine}
       />
     );
   }
@@ -56,9 +62,11 @@ export function SwipeableRowCard({
   return (
     <NativeSwipeRow
       row={row}
+      runningBalance={runningBalance}
       onEdit={onEdit}
       onDelete={onDelete}
       onDuplicate={onDuplicate}
+      onResolveQuarantine={onResolveQuarantine}
     />
   );
 }
@@ -92,16 +100,20 @@ function confirmDelete(rowId: string, onDelete: (id: string) => void) {
 
 function WebRowCard({
   row,
+  runningBalance,
   onEdit,
   onDelete,
   onDuplicate,
+  onResolveQuarantine,
 }: SwipeableRowCardProps) {
   return (
     <View style={styles.webWrapper}>
       <RowCard
         row={row}
+        runningBalance={runningBalance}
         onPress={() => onEdit(row)}
         onDelete={() => confirmDelete(row.id, onDelete)}
+        onResolveQuarantine={onResolveQuarantine}
       />
       {/* Hover action buttons (web only) */}
       <View style={styles.webActions}>
@@ -132,9 +144,11 @@ function WebRowCard({
 
 function NativeSwipeRow({
   row,
+  runningBalance,
   onEdit,
   onDelete,
   onDuplicate,
+  onResolveQuarantine,
 }: SwipeableRowCardProps) {
   const translateX = useRef(new Animated.Value(0)).current;
   const startX = useRef(0);
@@ -228,6 +242,8 @@ function NativeSwipeRow({
       >
         <RowCard
           row={row}
+          runningBalance={runningBalance}
+          onResolveQuarantine={onResolveQuarantine}
           onPress={() => {
             if (isOpen.current) {
               closeRow();

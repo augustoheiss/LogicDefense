@@ -27,6 +27,7 @@ export interface ChartBuilderConfig {
   visualType: VisualType;
   showGoals: boolean;
   cumulativeBalance: boolean;
+  includePartnerFlows?: boolean;
 }
 
 export interface ChartDataPoint {
@@ -174,6 +175,15 @@ export function aggregateChartData(
     rowLookupMap.set(key, list);
   };
 
+  const isRevenueRow = (r: TableRow) =>
+    !r.entryType ||
+    r.entryType === 'revenue' ||
+    (config.includePartnerFlows && r.entryType === 'partner_in');
+
+  const isExpenseRow = (r: TableRow) =>
+    r.entryType === 'expense' ||
+    (config.includePartnerFlows && r.entryType === 'partner_out');
+
   // 4. Determine points based on scopeType
   const points: ChartDataPoint[] = [];
 
@@ -210,9 +220,9 @@ export function aggregateChartData(
 
       for (const r of rowsForDay) {
         ids.push(r.id);
-        const val = Number(r.value) || 0;
-        if (r.entryType === 'revenue' || r.entryType === 'partner_in') rev += val;
-        else if (r.entryType === 'expense' || r.entryType === 'partner_out') exp += val;
+        const val = Math.abs(Number(r.value) || 0);
+        if (isRevenueRow(r)) rev += val;
+        else if (isExpenseRow(r)) exp += val;
         else if (r.entryType === 'deposit') dep += val;
         else if (r.entryType === 'waiver') wai += val;
       }
@@ -259,9 +269,9 @@ export function aggregateChartData(
 
       for (const r of rowsForMonth) {
         ids.push(r.id);
-        const val = Number(r.value) || 0;
-        if (r.entryType === 'revenue' || r.entryType === 'partner_in') rev += val;
-        else if (r.entryType === 'expense' || r.entryType === 'partner_out') exp += val;
+        const val = Math.abs(Number(r.value) || 0);
+        if (isRevenueRow(r)) rev += val;
+        else if (isExpenseRow(r)) exp += val;
         else if (r.entryType === 'deposit') dep += val;
         else if (r.entryType === 'waiver') wai += val;
       }
@@ -306,9 +316,9 @@ export function aggregateChartData(
 
       for (const r of rowsForYear) {
         ids.push(r.id);
-        const val = Number(r.value) || 0;
-        if (r.entryType === 'revenue' || r.entryType === 'partner_in') rev += val;
-        else if (r.entryType === 'expense' || r.entryType === 'partner_out') exp += val;
+        const val = Math.abs(Number(r.value) || 0);
+        if (isRevenueRow(r)) rev += val;
+        else if (isExpenseRow(r)) exp += val;
         else if (r.entryType === 'deposit') dep += val;
         else if (r.entryType === 'waiver') wai += val;
       }
@@ -351,9 +361,9 @@ export function aggregateChartData(
 
       for (const r of rowsForDate) {
         ids.push(r.id);
-        const val = Number(r.value) || 0;
-        if (r.entryType === 'revenue' || r.entryType === 'partner_in') rev += val;
-        else if (r.entryType === 'expense' || r.entryType === 'partner_out') exp += val;
+        const val = Math.abs(Number(r.value) || 0);
+        if (isRevenueRow(r)) rev += val;
+        else if (isExpenseRow(r)) exp += val;
         else if (r.entryType === 'deposit') dep += val;
         else if (r.entryType === 'waiver') wai += val;
       }
@@ -402,9 +412,9 @@ export function aggregateChartData(
 
       for (const r of rowsForDate) {
         ids.push(r.id);
-        const val = Number(r.value) || 0;
-        if (r.entryType === 'revenue' || r.entryType === 'partner_in') rev += val;
-        else if (r.entryType === 'expense' || r.entryType === 'partner_out') exp += val;
+        const val = Math.abs(Number(r.value) || 0);
+        if (isRevenueRow(r)) rev += val;
+        else if (isExpenseRow(r)) exp += val;
         else if (r.entryType === 'deposit') dep += val;
         else if (r.entryType === 'waiver') wai += val;
       }

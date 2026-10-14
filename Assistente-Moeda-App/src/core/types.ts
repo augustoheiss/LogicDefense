@@ -158,6 +158,7 @@ export type ColumnSemanticRole =
   | 'primary_description'
   | 'entry_type'
   | 'category'
+  | 'category_tag'
   | 'tags'
   | 'period_start'
   | 'period_end'
@@ -166,18 +167,27 @@ export type ColumnSemanticRole =
   | 'invest_ticker'
   | 'invest_quantity'
   | 'invest_unit_price'
-  | 'custom_attribute';
+  | 'custom_attribute'
+  | 'custom'
+  | 'date'
+  | 'value'
+  | 'description'
+  | 'entryType';
 
 export interface DynamicColumnDefinition {
   id: string;
   key?: string;
+  name?: string;
   originalHeader: string;
   rawHeader?: string;
   label: string;
   dataType: ColumnDataType;
+  type?: ColumnDataType | string;
   role: ColumnSemanticRole;
   semanticRole?: ColumnSemanticRole;
   visible: boolean;
+  required?: boolean;
+  order?: number;
   isCustom: boolean;
   invertSign?: boolean;
   originalIndex?: number;
@@ -260,6 +270,97 @@ export interface InvestorMetrics {
   portfolioHealthScore: number;
 }
 
+// ── Modular App Builder & Workspace Presets ("Monte Seu Aplicativo") ───────
+
+export type HealthLevel =
+  | 'critical'
+  | 'attention'
+  | 'building'
+  | 'stable'
+  | 'thriving'
+  | 'crítico'
+  | 'atenção'
+  | 'estável'
+  | 'ótimo'
+  | 'excelente';
+
+export type WorkspacePresetType =
+  | 'survival'      // Sobrevivência & Controle de Caixa
+  | 'freelancer'    // Autônomo & Renda Variável
+  | 'investor'      // Investidor & Patrimônio (FIRE)
+  | 'smb'           // PME, Sócios & Negócios
+  | 'custom';       // Montagem livre pelo usuário
+
+export type DashboardWidgetId =
+  | 'health_score'
+  | 'next_action'
+  | 'month_summary'
+  | 'pillars'
+  | 'insights'
+  | 'what_if'
+  | 'investor_summary'
+  | 'sector_simulators'
+  | 'lessons'
+  | 'quick_actions'
+  | 'recent_activity'
+  | 'hero_balance'
+  | 'survival_thermometer'
+  | 'quick_insights'
+  | 'what_if_simulator'
+  | 'quarantine_inbox'
+  | 'recent_transactions'
+  | 'sector_highlights';
+
+export interface DashboardConfig {
+  preset: WorkspacePresetType;
+  visibleWidgets?: DashboardWidgetId[];
+  hiddenWidgets: DashboardWidgetId[];
+  widgetOrder: DashboardWidgetId[];
+  preferredViewMode?: 'auto' | 'cards' | 'spreadsheet';
+  compactStreetMode?: boolean;
+  defaultTransactionView?: 'cards' | 'spreadsheet';
+}
+
+export type WorkspaceDashboardConfig = DashboardConfig;
+export type SectorGroupId = string;
+
+export interface SectorSimulationParams {
+  // Frotas & Veículos (PLAN_01)
+  vehicleValueBRL?: number;
+  monthlyKm?: number;
+  fuelPricePerLiter?: number;
+  kmPerLiter?: number;
+  // Imobiliário (PLAN_03)
+  propertyValueBRL?: number;
+  monthlyRentBRL?: number;
+  financedBalanceBRL?: number;
+  annualInterestRatePct?: number;
+  remainingMonths?: number;
+  // PME & Capital de Giro (PLAN_04)
+  pmrDays?: number;
+  pmeDays?: number;
+  pmpDays?: number;
+  // Jurídico & Tributário (PLAN_05 / PLAN_06 / PLAN_08)
+  monthlyPayrollBRL?: number;
+  dependentsCount?: number;
+  // Renda & Carreira (PLAN_09)
+  hoursWorkedPerWeek?: number;
+  commuteHoursPerWeek?: number;
+  // Crédito & Dívidas (PFM)
+  creditRateMonthlyPct?: number;
+  extraAmortizationMonthly?: number;
+  discountRateMonthlyPct?: number;
+  updatedAt?: string;
+  pfm?: {
+    emergencyMonthsTarget?: number;
+    creditCardRateMonthly?: number;
+    extraAmortizationBRL?: number;
+    discountRateMonthly?: number;
+  };
+}
+
+export type SectorParamsConfig = SectorSimulationParams;
+
 export interface CoinTable {
   id: string;
   name: string;
@@ -272,12 +373,16 @@ export interface CoinTable {
   activeSectors?: string[];
   schema?: DynamicTableSchema;
   investorProfile?: InvestorProfileConfig;
+  dashboardConfig?: DashboardConfig;
+  sectorParams?: SectorSimulationParams;
 }
 
 export type DB = {
   tables: CoinTable[];
   aiCostCurrentMonth?: number;
   aiCostLastReset?: string;
+  isPrivacyMode?: boolean;
+  workspacePreset?: WorkspacePresetType;
 };
 
 // ─── Computed Metrics (never persisted, always derived) ───────────────────────

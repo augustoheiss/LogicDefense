@@ -22,6 +22,12 @@ export function UniversalHeaderSheetBar() {
   const rowCount = activeTable?.rows?.length ?? 0;
   const tableName = activeTable?.name || 'Minha Planilha';
 
+  const triggerTimeMachineToggle = () => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('coin_toggle_time_machine'));
+    }
+  };
+
   return (
     <View style={styles.outerContainer}>
       <View style={[styles.innerContainer, isDesktop && styles.desktopContainer]}>
@@ -41,7 +47,7 @@ export function UniversalHeaderSheetBar() {
               {tableName}
             </Text>
             <View style={styles.countBadge}>
-              <Text style={styles.countBadgeText}>{rowCount} {rowCount === 1 ? 'item' : 'itens'}</Text>
+              <Text style={styles.countBadgeText}>{rowCount}</Text>
             </View>
           </View>
           
@@ -50,14 +56,80 @@ export function UniversalHeaderSheetBar() {
           </View>
         </Pressable>
 
-        {/* Total Tables Indicator on Desktop */}
-        {isDesktop && (
-          <View style={styles.desktopInfo}>
-            <Text style={styles.desktopInfoText}>
-              {db.activeTables.length} {db.activeTables.length === 1 ? 'planilha' : 'planilhas'} • Use setas ↑ ↓ no menu
-            </Text>
-          </View>
-        )}
+        {/* Right Controls: Undo/Redo, Time Machine Indicator, Privacy/Street Mode Toggle */}
+        <View style={styles.rightControls}>
+          {(db.canUndo || db.canRedo) && (
+            <View style={styles.undoRedoGroup}>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.iconActionBtn,
+                  !db.canUndo && styles.iconActionBtnDisabled,
+                  pressed && db.canUndo && styles.iconActionBtnPressed,
+                ]}
+                disabled={!db.canUndo}
+                onPress={() => db.undo()}
+                accessibilityRole="button"
+                accessibilityLabel={db.lastUndoDescription ? `Desfazer: ${db.lastUndoDescription}` : 'Desfazer'}
+              >
+                <Text style={[styles.iconActionText, !db.canUndo && styles.iconActionTextDisabled]}>↩</Text>
+              </Pressable>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.iconActionBtn,
+                  !db.canRedo && styles.iconActionBtnDisabled,
+                  pressed && db.canRedo && styles.iconActionBtnPressed,
+                ]}
+                disabled={!db.canRedo}
+                onPress={() => db.redo()}
+                accessibilityRole="button"
+                accessibilityLabel="Refazer"
+              >
+                <Text style={[styles.iconActionText, !db.canRedo && styles.iconActionTextDisabled]}>↪</Text>
+              </Pressable>
+            </View>
+          )}
+
+          {Platform.OS === 'web' && (
+            <Pressable
+              style={({ pressed }) => [
+                styles.actionPill,
+                db.cutoffDate !== '' && styles.actionPillTimeActive,
+                pressed && styles.iconActionBtnPressed,
+              ]}
+              onPress={triggerTimeMachineToggle}
+              accessibilityRole="button"
+              accessibilityLabel="Alternar Máquina do Tempo"
+            >
+              <Text style={styles.actionPillEmoji}>🕰️</Text>
+              {db.cutoffDate !== '' ? (
+                <Text style={styles.actionPillTimeText}>
+                  {db.cutoffDate.slice(8, 10)}/{db.cutoffDate.slice(5, 7)}
+                </Text>
+              ) : isDesktop ? (
+                <Text style={styles.actionPillText}>Data</Text>
+              ) : null}
+            </Pressable>
+          )}
+
+          {/* Street / Privacy Mode Toggle (👁️ / 🙈) */}
+          <Pressable
+            style={({ pressed }) => [
+              styles.actionPill,
+              db.isPrivacyMode && styles.actionPillPrivacyActive,
+              pressed && styles.iconActionBtnPressed,
+            ]}
+            onPress={() => db.togglePrivacyMode()}
+            accessibilityRole="button"
+            accessibilityLabel={db.isPrivacyMode ? 'Desativar Modo Rua (Mostrar valores)' : 'Ativar Modo Rua (Ocultar valores)'}
+          >
+            <Text style={styles.actionPillEmoji}>{db.isPrivacyMode ? '🙈' : '👁️'}</Text>
+            {isDesktop && (
+              <Text style={[styles.actionPillText, db.isPrivacyMode && styles.actionPillPrivacyText]}>
+                {db.isPrivacyMode ? 'Modo Rua ON' : 'Modo Rua'}
+              </Text>
+            )}
+          </Pressable>
+        </View>
       </View>
 
       {/* Modal with Reorder and Keyboard Navigation */}
@@ -93,9 +165,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     width: '100%',
+    gap: spacing.xs,
   },
   desktopContainer: {
-    maxWidth: 1120,
+    maxWidth: 1280,
     alignSelf: 'center',
   },
   sheetPill: {
@@ -108,8 +181,9 @@ const styles = StyleSheet.create({
     borderRadius: radius.full,
     paddingVertical: 6,
     paddingHorizontal: spacing.md,
-    gap: spacing.sm,
-    maxWidth: 360,
+    gap: spacing.xs,
+    maxWidth: 260,
+    flexShrink: 1,
   },
   sheetPillPressed: {
     backgroundColor: 'rgba(167, 139, 250, 0.18)',
@@ -118,7 +192,7 @@ const styles = StyleSheet.create({
   pillLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
+    gap: 6,
     flexShrink: 1,
   },
   activeDot: {
@@ -153,12 +227,74 @@ const styles = StyleSheet.create({
     color: colors.accent.purple,
     fontWeight: 'bold',
   },
-  desktopInfo: {
-    paddingRight: spacing.xs,
+  rightControls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
-  desktopInfoText: {
-    fontSize: 12,
-    color: colors.text.tertiary,
-    fontWeight: '500',
+  undoRedoGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    borderRadius: radius.full,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    overflow: 'hidden',
+  },
+  iconActionBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  iconActionBtnDisabled: {
+    opacity: 0.3,
+  },
+  iconActionBtnPressed: {
+    backgroundColor: 'rgba(167, 139, 250, 0.18)',
+  },
+  iconActionText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.text.primary,
+  },
+  iconActionTextDisabled: {
+    color: colors.text.disabled,
+  },
+  actionPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    borderRadius: radius.full,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  actionPillPrivacyActive: {
+    backgroundColor: 'rgba(245, 158, 11, 0.16)',
+    borderColor: 'rgba(245, 158, 11, 0.5)',
+  },
+  actionPillTimeActive: {
+    backgroundColor: 'rgba(6, 182, 212, 0.16)',
+    borderColor: 'rgba(6, 182, 212, 0.45)',
+  },
+  actionPillEmoji: {
+    fontSize: 13,
+  },
+  actionPillText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: colors.text.secondary,
+  },
+  actionPillPrivacyText: {
+    color: '#FBBF24',
+    fontWeight: '700',
+  },
+  actionPillTimeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#22D3EE',
   },
 });

@@ -23,7 +23,7 @@ import {
 import * as Clipboard from 'expo-clipboard';
 import { colors } from '@/theme/colors';
 import { spacing, radius } from '@/theme/spacing';
-import type { TableRow, TableGoals, DynamicTableSchema, InvestorProfileConfig, ExportScopeType, ExportFormatType } from '@/core/types';
+import type { TableRow, TableGoals, DynamicTableSchema, InvestorProfileConfig, ExportScopeType, ExportFormatType, SectorGroupId, WorkspaceDashboardConfig, SectorParamsConfig } from '@/core/types';
 import { buildGranularCSV, shareGranularCSV } from '@/services/exportService';
 
 interface GranularExportModalProps {
@@ -36,6 +36,9 @@ interface GranularExportModalProps {
   tableId?: string;
   schema?: DynamicTableSchema;
   investorProfile?: InvestorProfileConfig;
+  activeSectors?: SectorGroupId[];
+  dashboardConfig?: WorkspaceDashboardConfig;
+  sectorParams?: SectorParamsConfig;
 }
 
 export function GranularExportModal({
@@ -48,6 +51,9 @@ export function GranularExportModal({
   tableId,
   schema,
   investorProfile,
+  activeSectors,
+  dashboardConfig,
+  sectorParams,
 }: GranularExportModalProps) {
   const { width } = useWindowDimensions();
   const isWide = width >= 650;
@@ -73,9 +79,12 @@ export function GranularExportModal({
       null,
       undefined,
       schema,
-      investorProfile
+      investorProfile,
+      activeSectors,
+      dashboardConfig,
+      sectorParams
     );
-  }, [rows, scope, format, useMonthFilter, selectedMonth, tableName, goals, tableId, schema, investorProfile]);
+  }, [rows, scope, format, useMonthFilter, selectedMonth, tableName, goals, tableId, schema, investorProfile, activeSectors, dashboardConfig, sectorParams]);
 
   // Count items matching the current scope and month
   const matchingCount = useMemo(() => {
@@ -121,7 +130,10 @@ export function GranularExportModal({
         goals,
         tableId,
         schema,
-        investorProfile
+        investorProfile,
+        activeSectors,
+        dashboardConfig,
+        sectorParams
       );
       onClose();
     } catch (err: any) {

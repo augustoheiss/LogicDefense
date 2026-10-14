@@ -21,15 +21,109 @@ import { TaxOptimizationWidgets } from '../sectors/TaxOptimizationWidgets';
 import { FinancialPrivacyWidgets } from '../sectors/FinancialPrivacyWidgets';
 import { PFMRetentionWidgets } from '../sectors/PFMRetentionWidgets';
 
+import { useCoinDB } from '@/hooks/useCoinDB';
+
+function LiveSectorBridgeBanner({ sectorKey, title }: { sectorKey: string; title: string }) {
+  const db = useCoinDB();
+  const m = db.metrics;
+  const rowsCount = db.activeTable?.rows?.length || 0;
+  const lastSync = (db.activeTable?.sectorParams as any)?.[`${sectorKey}_syncedAt`];
+
+  const handlePersistSnapshot = () => {
+    db.updateSectorParams({
+      [`${sectorKey}_syncedAt`]: new Date().toISOString(),
+      [`${sectorKey}_baseline`]: {
+        monthlyRevenue: Math.round(m.globalMonthlyAvg * 100) / 100,
+        monthlyExpense: Math.round(m.survivalMonthly * 100) / 100,
+        netBalance: Math.round(m.netBalance * 100) / 100,
+        portfolio: Math.round((m.investmentBalance || m.totalInvested) * 100) / 100,
+      },
+    });
+  };
+
+  return (
+    <View style={bridgeStyles.banner}>
+      <View style={{ flex: 1, gap: 2 }}>
+        <Text style={bridgeStyles.badge}>🔗 CONECTADO À PLANILHA ATIVA ({rowsCount} lançamentos)</Text>
+        <Text style={bridgeStyles.title}>{title}</Text>
+        <Text style={bridgeStyles.metricsLine}>
+          Renda Mensal: {formatCurrencySmart(m.globalMonthlyAvg)} • Custo Mensal: {formatCurrencySmart(m.survivalMonthly)} • Saldo: {formatCurrencySmart(m.netBalance)}
+        </Text>
+        {lastSync && (
+          <Text style={bridgeStyles.syncSub}>
+            ✓ Parâmetros salvos no IndexedDB & CSV ({String(lastSync).slice(0, 10)})
+          </Text>
+        )}
+      </View>
+      <Pressable style={bridgeStyles.saveBtn} onPress={handlePersistSnapshot}>
+        <Text style={bridgeStyles.saveBtnText}>💾 Salvar Base no CSV</Text>
+      </Pressable>
+    </View>
+  );
+}
+
+const bridgeStyles = StyleSheet.create({
+  banner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    backgroundColor: 'rgba(139, 92, 246, 0.1)',
+    borderWidth: 1,
+    borderColor: colors.accent.purpleBorder,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    marginBottom: spacing.sm,
+  },
+  badge: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: colors.accent.purple,
+    letterSpacing: 0.5,
+  },
+  title: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.text.primary,
+  },
+  metricsLine: {
+    fontSize: 11,
+    color: colors.text.secondary,
+  },
+  syncSub: {
+    fontSize: 10,
+    color: colors.success.main,
+    fontWeight: '600',
+  },
+  saveBtn: {
+    backgroundColor: colors.accent.purple,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 6,
+    borderRadius: radius.sm,
+  },
+  saveBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#fff',
+  },
+});
+
 // ── 1. SMB & Accounting Widget ───────────────────────────────────────────────
 export function SMBSectorWidget() {
-  return <SMBAccountingWidgets />;
+  return (
+    <View style={{ gap: spacing.sm }}>
+      <LiveSectorBridgeBanner sectorKey="smb" title="Motor Contábil PME (DRP, Welford, CFaR & SPED)" />
+      <SMBAccountingWidgets />
+    </View>
+  );
 }
 
 // ── 2. Real Estate Widget ────────────────────────────────────────────────────
 export function RealEstateSectorWidget() {
   return (
     <View style={{ gap: spacing.md }}>
+      <LiveSectorBridgeBanner sectorKey="realEstate" title="Motor Imobiliário & PropTech (SAC/PRICE, Cap Rate & FIIs)" />
       <RealEstateWidgets />
       <SovereignPropTechWidgets />
     </View>
@@ -40,6 +134,7 @@ export function RealEstateSectorWidget() {
 export function VehiclesSectorWidget() {
   return (
     <View style={{ gap: spacing.md }}>
+      <LiveSectorBridgeBanner sectorKey="vehicles" title="Motor de Frotas & Mobilidade (TCO, Depreciação & Custo/Km)" />
       <VehicleFleetWidgets />
       <VehicleCopywritingWidgets />
     </View>
@@ -50,6 +145,7 @@ export function VehiclesSectorWidget() {
 export function LegalTaxesSectorWidget() {
   return (
     <View style={{ gap: spacing.md }}>
+      <LiveSectorBridgeBanner sectorKey="legalTaxes" title="Motor Tributário, Jurídico & Privacidade (Fator R, PGBL & Auditoria)" />
       <LegalAuditWidgets />
       <TaxOptimizationWidgets />
       <FinancialPrivacyWidgets />
@@ -59,7 +155,12 @@ export function LegalTaxesSectorWidget() {
 
 // ── 5. Personal Finance Widget ────────────────────────────────────────────────
 export function PersonalFinanceSectorWidget() {
-  return <PFMRetentionWidgets />;
+  return (
+    <View style={{ gap: spacing.sm }}>
+      <LiveSectorBridgeBanner sectorKey="pfm" title="Motor de Finanças Pessoais (Fluxo 13 Semanas, Monte Carlo FIRE & Sankey)" />
+      <PFMRetentionWidgets />
+    </View>
+  );
 }
 
 const styles = StyleSheet.create({

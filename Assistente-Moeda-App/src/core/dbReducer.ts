@@ -410,6 +410,61 @@ export function reduceDB(state: DB, action: Action): ReducerResult {
       };
     }
 
+    case 'UPDATE_DASHBOARD_CONFIG': {
+      const { tableId, dashboardConfig } = action.payload;
+      const targetIndex = resolveTargetTableIndex(tables, tableId);
+      if (targetIndex === -1) return { nextDB: state };
+
+      const targetTable = tables[targetIndex];
+      const previousConfigSnapshot = targetTable.dashboardConfig;
+
+      const nextTables = tables.map((t, idx) =>
+        idx === targetIndex
+          ? { ...t, dashboardConfig, updatedAt: now }
+          : t
+      );
+
+      return {
+        nextDB: { ...state, tables: nextTables },
+        inverseAction: previousConfigSnapshot
+          ? {
+              type: 'UPDATE_DASHBOARD_CONFIG',
+              payload: {
+                tableId: targetTable.id,
+                dashboardConfig: previousConfigSnapshot,
+              },
+            }
+          : undefined,
+      };
+    }
+
+    case 'UPDATE_SECTOR_PARAMS': {
+      const { tableId, sectorParams } = action.payload;
+      const targetIndex = resolveTargetTableIndex(tables, tableId);
+      if (targetIndex === -1) return { nextDB: state };
+
+      const targetTable = tables[targetIndex];
+      const previousParamsSnapshot = targetTable.sectorParams || {};
+      const mergedParams = { ...previousParamsSnapshot, ...sectorParams };
+
+      const nextTables = tables.map((t, idx) =>
+        idx === targetIndex
+          ? { ...t, sectorParams: mergedParams, updatedAt: now }
+          : t
+      );
+
+      return {
+        nextDB: { ...state, tables: nextTables },
+        inverseAction: {
+          type: 'UPDATE_SECTOR_PARAMS',
+          payload: {
+            tableId: targetTable.id,
+            sectorParams: previousParamsSnapshot,
+          },
+        },
+      };
+    }
+
     default:
       return { nextDB: state };
   }

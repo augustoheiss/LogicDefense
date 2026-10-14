@@ -19,6 +19,7 @@
 import type { TableRow, TableGoals, TableMetrics, MonthMetrics, YearMetrics } from './types';
 import {
   calculateStrictGlobalBalance,
+  getDailyGoalForDate,
   getWeeklyGoalForDate,
   toLocalKey,
 } from './dateUtils';
@@ -68,7 +69,9 @@ export function computeMetrics(
 
   // ── Prorated monthly calculations for deposits and expenses ─────────────────
   const depositRows = validRows.filter((r) => r.entryType === 'deposit' && r.value > 0);
-  const expenseRows = validRows.filter((r) => r.entryType === 'expense');
+  const expenseRows = validRows
+    .filter((r) => r.entryType === 'expense')
+    .map((r) => (r.value < 0 ? { ...r, value: Math.abs(r.value) } : r));
 
   const depositByMonth: Record<string, number> = {};
   for (const row of depositRows) {
@@ -228,12 +231,56 @@ export function computeMetrics(
     statsFields = { maxTransaction, minTransaction, medianTransaction, modeTransaction, stdDeviation };
   }
 
+  const distinctActiveDays = new Set<string>();
+  for (const r of validRows) {
+    if (r.entryType !== 'unresolved' && r.value !== 0) {
+      distinctActiveDays.add(r.date);
+    }
+  }
+  const daysWorked = distinctActiveDays.size;
+
   if (revenueRows.length === 0) {
-    return { ...emptyMetrics(), totalExpenses, annualExpenses, ...survivalFields, ...investFields, ...statsFields };
+    const netBalanceZeroRev = round2(0 - totalExpenses);
+    return {
+      ...emptyMetrics(),
+      totalExpenses,
+      annualExpenses,
+      netBalance: netBalanceZeroRev,
+      balance: netBalanceZeroRev,
+      totalDeposits: totalInvested,
+      daysWorked,
+      ...survivalFields,
+      ...investFields,
+      ...statsFields,
+      totalPartnerIn,
+      totalPartnerOut,
+      grossWithPartner: totalPartnerIn,
+      expensesWithPartner: round2(totalExpenses + totalPartnerOut),
+      netWithPartner: round2(totalPartnerIn - (totalExpenses + totalPartnerOut)),
+    };
   }
 
   const activeRows = revenueRows.filter((r) => r.value > 0);
-  if (activeRows.length === 0) return { ...emptyMetrics(), totalExpenses, annualExpenses, ...survivalFields, ...investFields, ...statsFields };
+  if (activeRows.length === 0) {
+    const netBalanceZeroRev = round2(0 - totalExpenses);
+    return {
+      ...emptyMetrics(),
+      totalExpenses,
+      annualExpenses,
+      netBalance: netBalanceZeroRev,
+      balance: netBalanceZeroRev,
+      totalDeposits: totalInvested,
+      daysWorked,
+      ...survivalFields,
+      ...investFields,
+      ...statsFields,
+      totalPartnerIn,
+      totalPartnerOut,
+      grossWithPartner: totalPartnerIn,
+      expensesWithPartner: round2(totalExpenses + totalPartnerOut),
+      netWithPartner: round2(totalPartnerIn - (totalExpenses + totalPartnerOut)),
+    };
+  }
 
   // ── Global date span ────────────────────────────────────────────────────
   const allEffectiveDates = revenueRows.flatMap((r) => {
@@ -386,13 +433,27 @@ export function computeMetrics(
   let totalWaiverCredits = 0;
   let totalWaivedDays = 0;
   let waiverTotalWeeks = 0;
-  const waiverRows = validRows.filter((r) => r.entryType === 'waiver' && r.value > 0);
+  const waiverRows = validRows.filter((r) => r.entryType === 'waiver');
 
   for (const row of waiverRows) {
-    totalWaiverCredits += row.value;
     const activeWeeklyGoal = getWeeklyGoalForDate(row.date, safeGoals);
-    if (activeWeeklyGoal > 0) {
-      waiverTotalWeeks += row.value / activeWeeklyGoal;
+    if (row.value > 0) {
+      totalWaiverCredits += row.value;
+      if (activeWeeklyGoal > 0) {
+        const wWeeks = row.value / activeWeeklyGoal;
+        waiverTotalWeeks += wWeeks;
+        totalWaivedDays += wWeeks * 7;
+      }
+    } else {
+      const spanDays = (row.periodStart && row.periodEnd)
+        ? Math.max(1, calendarDaySpan(row.periodStart, row.periodEnd))
+        : 1;
+      const wWeeks = spanDays / 7;
+      waiverTotalWeeks += wWeeks;
+      totalWaivedDays += spanDays;
+      if (activeWeeklyGoal > 0) {
+        totalWaiverCredits += wWeeks * activeWeeklyGoal;
+      }
     }
   }
 
@@ -412,6 +473,7 @@ export function computeMetrics(
   // Time Bank balance is calculated strictly as: globalGoalBalance / currentWeeklyGoal
   const targetDateKey = asOfDate || toLocalKey(today);
   const currentWeeklyGoal = getWeeklyGoalForDate(targetDateKey, safeGoals);
+  const currentDailyGoal = round2(getDailyGoalForDate(targetDateKey, safeGoals));
   const timeBankBalance = currentWeeklyGoal > 0
     ? Math.round((globalGoalBalance / currentWeeklyGoal) * 100) / 100
     : 0;
@@ -451,6 +513,11 @@ export function computeMetrics(
     waiverTotalWeeks,
     goalTotalWeeks,
     netBalanceWeeks,
+    balance: netBalance,
+    totalDeposits: totalInvested,
+    daysWorked,
+    dailyAverage: globalDailyAvg,
+    globalDailyGoal: currentDailyGoal,
   };
 }
 
@@ -559,6 +626,11 @@ export function emptyMetrics(): TableMetrics {
     waiverTotalWeeks: 0,
     goalTotalWeeks: 0,
     netBalanceWeeks: 0,
+    balance: 0,
+    totalDeposits: 0,
+    daysWorked: 0,
+    dailyAverage: 0,
+    globalDailyGoal: 0,
   };
 }
 

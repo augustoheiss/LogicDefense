@@ -59,12 +59,29 @@ export const ALL_SECTORS: Sector[] = [
   },
 ];
 
+export const DEFAULT_ACTIVE_SECTORS: string[] = [
+  'core_cashflow',
+  'core_revenue',
+  'core_costs',
+  'core_goals',
+  'core_predictions',
+  'personal_finance',
+];
+
 export function useSectorRegistry() {
   const { activeTable, updateActiveSectors } = useCoinDB();
 
   const activeSectors = useMemo<string[]>(() => {
-    if (!activeTable) return ['personal_finance'];
-    return activeTable.activeSectors || ['personal_finance'];
+    if (!activeTable || !activeTable.activeSectors || activeTable.activeSectors.length === 0) {
+      return DEFAULT_ACTIVE_SECTORS;
+    }
+    if (
+      activeTable.activeSectors.length === 1 &&
+      activeTable.activeSectors[0] === 'personal_finance'
+    ) {
+      return DEFAULT_ACTIVE_SECTORS;
+    }
+    return activeTable.activeSectors;
   }, [activeTable]);
 
   const isSectorActive = useCallback(

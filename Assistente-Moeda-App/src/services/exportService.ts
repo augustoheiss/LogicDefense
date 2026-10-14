@@ -12,9 +12,19 @@ import { cacheDirectory, writeAsStringAsync, EncodingType } from 'expo-file-syst
 import * as Sharing from 'expo-sharing';
 import * as Print from 'expo-print';
 import { formatCurrencyFull, formatCurrencySmart } from '../core/formatCurrency';
-import type { TableRow, TableMetrics, TableGoals, DynamicTableSchema, InvestorProfileConfig, GranularExportOptions } from '../core/types';
+import type {
+  TableRow,
+  TableMetrics,
+  TableGoals,
+  DynamicTableSchema,
+  InvestorProfileConfig,
+  GranularExportOptions,
+  DashboardConfig,
+  SectorSimulationParams,
+  CoinTable,
+} from '../core/types';
 import type { WeekDebtEntry } from '../core/computeWeeklyDebtTimeline';
-import { getMondayOf, toLocalKey, getWeeklyGoalForDate, resolveGoalForYear, fmtDate } from '../core/dateUtils';
+import { getMondayOf, toLocalKey, getWeeklyGoalForDate, resolveGoalForYear, getEffectiveGoals, fmtDate } from '../core/dateUtils';
 import { generateNewApiKey } from './apiKeyService';
 import { getStoredLicenseKey } from '../storage/authService';
 import { serializeDynamicCSV, serializeGranularCSV } from '../core/dynamicCsvSerializer';
@@ -70,6 +80,8 @@ function prorateExpensesForMonth(
 
   for (const r of rows) {
     if (r.entryType !== 'expense') continue;
+    const expVal = Math.abs(r.value);
+    if (expVal <= 0) continue;
 
     const expStart = r.periodStart || r.date;
     const expEnd   = r.periodEnd   || r.date;
@@ -81,7 +93,7 @@ function prorateExpensesForMonth(
 
     const totalLifespanDays = daysBetween(expStart, expEnd);
     const activeDaysInMonth = daysBetween(overlapStart, overlapEnd);
-    const dailyRate = r.value / totalLifespanDays;
+    const dailyRate = expVal / totalLifespanDays;
 
     results.push({ row: r, monthlyContribution: dailyRate * activeDaysInMonth });
   }
@@ -98,8 +110,10 @@ function computeGlobalSurvivalGoals(
   let total = 0;
 
   for (const r of rows) {
-    if (r.entryType !== 'expense' || r.value <= 0) continue;
-    total += r.value;
+    if (r.entryType !== 'expense') continue;
+    const expVal = Math.abs(r.value);
+    if (expVal <= 0) continue;
+    total += expVal;
     const start = r.periodStart || r.date;
     const end   = r.periodEnd   || r.date;
     if (!earliest || start < earliest) earliest = start;
@@ -136,8 +150,9 @@ export function buildWhatsAppReport(
   const [selY, selM] = selectedMonth.split('-').map(Number);
   const reportYear = selY;
 
-  const reportDailyGoal = resolveGoalForYear(goals.dailyGoals, reportYear);
-  const reportWeeklyGoal = resolveGoalForYear(goals.weeklyGoals, reportYear);
+  const effGoals = getEffectiveGoals({ year: selY, month: selM }, goals);
+  const reportDailyGoal = effGoals.dailyGoal || resolveGoalForYear(goals.dailyGoals, reportYear);
+  const reportWeeklyGoal = effGoals.weeklyGoal || resolveGoalForYear(goals.weeklyGoals, reportYear);
 
   // Revenue rows
   const allRevenueRows = rows
@@ -148,6 +163,7 @@ export function buildWhatsAppReport(
         r.entryType !== 'expense' &&
         r.entryType !== 'partner_in' &&
         r.entryType !== 'partner_out' &&
+        r.entryType !== 'unresolved' &&
         r.value > 0,
     )
     .sort((a, b) => a.date.localeCompare(b.date));
@@ -196,7 +212,7 @@ export function buildWhatsAppReport(
   const proratedExpenses = prorateExpensesForMonth(rows, selectedMonth);
   const survivalGoals = computeGlobalSurvivalGoals(rows, selectedMonth);
 
-  const staticYearCost = resolveGoalForYear(goals.annualCosts, reportYear);
+  const staticYearCost = effGoals.annualCost || resolveGoalForYear(goals.annualCosts, reportYear);
   const yearRevenue = metrics.byYear[String(reportYear)]?.grossAnnual ?? 0;
   const annualPct = staticYearCost > 0
     ? ((yearRevenue / staticYearCost) * 100).toFixed(1)
@@ -464,8 +480,9 @@ export function buildReportHTML(
   const monthMetrics = metrics.byMonth[selectedMonth];
   const mDays = daysInMonth(selY, selM);
 
-  const reportDailyGoal = resolveGoalForYear(goals.dailyGoals, reportYear);
-  const reportWeeklyGoal = resolveGoalForYear(goals.weeklyGoals, reportYear);
+  const effGoals = getEffectiveGoals({ year: selY, month: selM }, goals);
+  const reportDailyGoal = effGoals.dailyGoal || resolveGoalForYear(goals.dailyGoals, reportYear);
+  const reportWeeklyGoal = effGoals.weeklyGoal || resolveGoalForYear(goals.weeklyGoals, reportYear);
 
   // Group rows for this month
   const monthRows = rows
@@ -640,6 +657,7 @@ export function buildReportHTML(
     .badge-waiver { background: #fef3c7; color: #92400e; }
     .badge-partner_in { background: #ecfeff; color: #0891b2; }
     .badge-partner_out { background: #ffedd5; color: #ea580c; }
+    .badge-unresolved { background: #fef3c7; color: #b45309; border: 1px solid #f59e0b; }
 
     .practical-guide {
       page-break-before: always;
@@ -820,17 +838,38 @@ export function buildReportHTML(
         ` : monthRows.map((r) => {
           const type = r.entryType || 'revenue';
           const isNeg = type === 'expense' || type === 'partner_out';
+          const typeLabel =
+            type === 'revenue' ? 'Receita' :
+            type === 'expense' ? 'Despesa' :
+            type === 'deposit' ? 'Depósito' :
+            type === 'waiver' ? 'Abono' :
+            type === 'partner_in' ? 'Sócio ↓' :
+            type === 'partner_out' ? 'Sócio ↑' :
+            type === 'unresolved' ? '⚠️ Quarentena' : type;
+
+          const customMetaHtml = r.customValues && Object.keys(r.customValues).length > 0
+            ? `<br><small style="color: #64748b; font-size: 9px;">${Object.entries(r.customValues).map(([k, v]) => `${k}: ${v}`).join(' · ')}</small>`
+            : '';
+          const investHtml = r.ticker
+            ? `<br><small style="color: #2563eb; font-size: 9px;">Ativo: ${r.ticker}${r.quantity ? ` (${r.quantity} un × ${fmtBRL(r.unitPrice || 0)})` : ''}</small>`
+            : '';
+          const catHtml = r.category && r.category !== 'Geral'
+            ? ` <small style="color: #64748b; font-size: 9px;">[${r.category}]</small>`
+            : '';
+
           return `
             <tr>
               <td class="monospace">${fmtDay(r.date)}</td>
-              <td><span class="badge badge-${type}">${type === 'revenue' ? 'Receita' : type === 'expense' ? 'Despesa' : type === 'deposit' ? 'Depósito' : type === 'waiver' ? 'Abono' : type === 'partner_in' ? 'Sócio ↓' : 'Sócio ↑'}</span></td>
+              <td><span class="badge badge-${type}">${typeLabel}</span></td>
               <td>
-                ${r.description || 'Sem descrição'}
+                ${r.description || 'Sem descrição'}${catHtml}
                 ${r.periodStart && r.periodEnd ? `<br><small style="color: #64748b; font-size: 9px;">Período: ${fmtDay(r.periodStart)} → ${fmtDay(r.periodEnd)}</small>` : ''}
                 ${r.monthlyValue && r.monthCount ? `<br><small style="color: #64748b; font-size: 9px;">Fator Mensal: ${fmtBRL(r.monthlyValue)} × ${r.monthCount} meses</small>` : ''}
+                ${investHtml}
+                ${customMetaHtml}
               </td>
-              <td class="align-right monospace ${isNeg ? 'text-danger' : 'text-success'}">
-                ${isNeg ? '-' : ''}${formatCurrencySmart(r.value)}
+              <td class="align-right monospace ${isNeg ? 'text-danger' : type === 'unresolved' ? 'text-warning' : 'text-success'}">
+                ${isNeg ? '-' : ''}${formatCurrencySmart(Math.abs(r.value), true)}
               </td>
             </tr>
           `;
@@ -999,7 +1038,10 @@ export function buildCSV(
   apiKey?: string | null,
   lastEventSeq?: number,
   schema?: DynamicTableSchema,
-  investorProfile?: InvestorProfileConfig
+  investorProfile?: InvestorProfileConfig,
+  activeSectors?: string[],
+  dashboardConfig?: DashboardConfig,
+  sectorParams?: SectorSimulationParams
 ): string {
   let effectiveApiKey = apiKey;
   if (!effectiveApiKey && tableId && typeof window !== 'undefined' && window.localStorage) {
@@ -1014,7 +1056,10 @@ export function buildCSV(
     effectiveApiKey,
     lastEventSeq,
     schema,
-    investorProfile
+    investorProfile,
+    activeSectors,
+    dashboardConfig,
+    sectorParams
   );
 }
 
@@ -1063,8 +1108,31 @@ export async function shareCSVText(
 export async function shareCSV(
   rows: TableRow[],
   tableName: string,
+  description?: string,
+  goals?: TableGoals,
+  tableId?: string,
+  apiKey?: string | null,
+  lastEventSeq?: number,
+  schema?: DynamicTableSchema,
+  investorProfile?: InvestorProfileConfig,
+  activeSectors?: string[],
+  dashboardConfig?: DashboardConfig,
+  sectorParams?: SectorSimulationParams
 ): Promise<void> {
-  const csv = buildCSV(rows);
+  const csv = buildCSV(
+    rows,
+    tableName,
+    description,
+    goals,
+    tableId,
+    apiKey,
+    lastEventSeq,
+    schema,
+    investorProfile,
+    activeSectors,
+    dashboardConfig,
+    sectorParams
+  );
   return shareCSVText(csv, tableName);
 }
 
@@ -1078,7 +1146,10 @@ export function buildGranularCSV(
   apiKey?: string | null,
   lastEventSeq?: number,
   schema?: DynamicTableSchema,
-  investorProfile?: InvestorProfileConfig
+  investorProfile?: InvestorProfileConfig,
+  activeSectors?: string[],
+  dashboardConfig?: DashboardConfig,
+  sectorParams?: SectorSimulationParams
 ): string {
   let effectiveApiKey = apiKey;
   if (!effectiveApiKey && tableId && typeof window !== 'undefined' && window.localStorage) {
@@ -1094,7 +1165,10 @@ export function buildGranularCSV(
     effectiveApiKey,
     lastEventSeq,
     schema,
-    investorProfile
+    investorProfile,
+    activeSectors,
+    dashboardConfig,
+    sectorParams
   );
 }
 
@@ -1105,12 +1179,84 @@ export async function shareGranularCSV(
   goals?: TableGoals,
   tableId?: string,
   schema?: DynamicTableSchema,
-  investorProfile?: InvestorProfileConfig
+  investorProfile?: InvestorProfileConfig,
+  activeSectors?: string[],
+  dashboardConfig?: DashboardConfig,
+  sectorParams?: SectorSimulationParams
 ): Promise<void> {
-  const csv = buildGranularCSV(rows, options, tableName, undefined, goals, tableId, null, undefined, schema, investorProfile);
+  const csv = buildGranularCSV(
+    rows,
+    options,
+    tableName,
+    undefined,
+    goals,
+    tableId,
+    null,
+    undefined,
+    schema,
+    investorProfile,
+    activeSectors,
+    dashboardConfig,
+    sectorParams
+  );
   const scopeSuffix = options.scope !== 'all' ? `_${options.scope}` : '';
   const filePrefix = `${tableName.replace(/\s+/g, '_')}${scopeSuffix}`;
   return shareCSVText(csv, filePrefix);
+}
+
+export function buildJSONBackup(tableOrTables: CoinTable | CoinTable[]): string {
+  const isArray = Array.isArray(tableOrTables);
+  return JSON.stringify(
+    {
+      version: '3.1',
+      exportedAt: new Date().toISOString(),
+      ...(isArray ? { tables: tableOrTables } : { table: tableOrTables }),
+    },
+    null,
+    2
+  );
+}
+
+export async function shareJSONBackup(
+  tableOrTables: CoinTable | CoinTable[],
+  fileLabel?: string
+): Promise<void> {
+  const jsonStr = buildJSONBackup(tableOrTables);
+  const defaultName = Array.isArray(tableOrTables)
+    ? fileLabel || tableOrTables[0]?.name || 'Assistente_Moeda'
+    : fileLabel || tableOrTables.name || 'Planilha';
+  const safeName = defaultName.replace(/\s+/g, '_');
+
+  if (Platform.OS === 'web') {
+    try {
+      const blob = new Blob([jsonStr], { type: 'application/json;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${safeName}_sovereign_backup.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      Alert.alert('Erro', 'Não foi possível exportar o Backup JSON.');
+    }
+    return;
+  }
+
+  try {
+    const fileName = `${safeName}_sovereign_backup.json`;
+    const filePath = `${cacheDirectory}${fileName}`;
+    await writeAsStringAsync(filePath, jsonStr, { encoding: EncodingType.UTF8 });
+    const canShare = await Sharing.isAvailableAsync();
+    if (canShare) {
+      await Sharing.shareAsync(filePath, {
+        mimeType: 'application/json',
+        dialogTitle: `Backup Soberano JSON — ${defaultName}`,
+        UTI: 'public.json',
+      });
+    }
+  } catch (error: any) {
+    Alert.alert('Erro na exportação', error.message || 'Não foi possível exportar o Backup JSON.');
+  }
 }
 
 // ── WhatsApp Weekly Dossier Builder ──────────────────────────────────────────
@@ -1128,7 +1274,8 @@ export function buildWhatsAppDossie(
       r.entryType !== 'waiver' &&
       r.entryType !== 'expense' &&
       r.entryType !== 'partner_in' &&
-      r.entryType !== 'partner_out',
+      r.entryType !== 'partner_out' &&
+      r.entryType !== 'unresolved',
   );
 
   const msPerDay = 86_400_000;

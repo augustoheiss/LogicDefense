@@ -187,11 +187,19 @@ class AppendTransactionItem(BaseModel):
     date: str = Field(..., description="Data em formato YYYY-MM-DD")
     value: float = Field(..., description="Valor monetário da transação")
     description: str = Field(..., description="Descrição da transação")
-    entry_type: Optional[str] = Field("expense", description="Tipo: expense, revenue, partner_in, partner_out, waiver", alias="entryType")
+    entry_type: Optional[str] = Field("expense", description="Tipo: expense, revenue, partner_in, partner_out, waiver, deposit, unresolved", alias="entryType")
     category: Optional[str] = Field("Geral", description="Categoria")
     tags: Optional[str] = Field("", description="Tags da transação")
     external_id: Optional[str] = Field(None, description="ID externo para idempotência (ex: n8n_invoice_9841)", alias="externalId")
     metadata_json: Optional[str] = Field("{}", description="String JSON de metadados", alias="metadataJson")
+    period_start: Optional[str] = Field(None, description="Início do período YYYY-MM-DD", alias="periodStart")
+    period_end: Optional[str] = Field(None, description="Fim do período YYYY-MM-DD", alias="periodEnd")
+    monthly_value: Optional[float] = Field(None, description="Valor mensal de recorrência", alias="monthlyValue")
+    month_count: Optional[int] = Field(None, description="Quantidade de meses", alias="monthCount")
+    ticker: Optional[str] = Field(None, description="Ticker do ativo de investimento")
+    quantity: Optional[float] = Field(None, description="Quantidade de cotas/ações")
+    unit_price: Optional[float] = Field(None, description="Preço unitário do ativo", alias="unitPrice")
+    custom_values: Optional[Dict[str, Any]] = Field(None, description="Colunas dinâmicas customizadas", alias="customValues")
 
     model_config = {"populate_by_name": True}
 
@@ -394,10 +402,15 @@ async def append_to_spreadsheet(
                 "category": item.category or "Geral",
                 "tags": item.tags or "",
                 "externalId": item.external_id,
+                "metadataJson": getattr(item, "metadata_json", "{}") or "{}",
                 "periodStart": getattr(item, "period_start", None),
                 "periodEnd": getattr(item, "period_end", None),
                 "monthlyValue": getattr(item, "monthly_value", None),
-                "monthCount": getattr(item, "month_count", None)
+                "monthCount": getattr(item, "month_count", None),
+                "ticker": getattr(item, "ticker", None),
+                "quantity": getattr(item, "quantity", None),
+                "unitPrice": getattr(item, "unit_price", None),
+                "customValues": getattr(item, "custom_values", None),
             }
             for idx, item in enumerate(items_to_process)
         ]
