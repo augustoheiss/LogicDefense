@@ -28,6 +28,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSkeleton } from '../hooks/useSkeleton';
 import { useLocalEvent } from '../hooks/useLocalEvent';
+import { storage } from '../storage/localStorage';
+import {
+  registerSovereignServiceWorker,
+  cacheBoundingBoxTiles,
+  getCachedTileCount,
+} from '../storage/offlineTiles';
 import {
   pathKey,
   computeTerritoryRecencyList,
@@ -35,6 +41,11 @@ import {
   extractQuadrasFromRegistry,
   formatQuadraPerimeterDescription,
   computeMergedTerritoryPolygon,
+  buildWorkedMeta,
+  resolveTerritoryNumber,
+  parseLatLng,
+  validateBoundary,
+  roundRing,
 } from '@sekundo/core';
 import type {
   FlatSkeletonEntry,
@@ -50,13 +61,17 @@ import {
 } from '../components/territory/PinStyleModal';
 import type { PinShape } from '../components/territory/PinStyleModal';
 import { DeltaSyncModal } from '../components/territory/DeltaSyncModal';
+import { TerritoryLeafletMap } from '../components/map/TerritoryLeafletMap';
+import type { LatLngTuple, MapEditSession, MapPin } from '../components/map/mapTypes';
+
+const BUFFER_OPTIONS_METERS = [-5, 0, 3, 6, 10, 20, 40];
 
 interface PinItem {
   key: string;
   label: string;
   worked: number;
-  lat: number;
-  lng: number;
+  lat: number | null;
+  lng: number | null;
   notes?: string;
   lastWorkedAt?: string;
   workerName?: string;
@@ -101,15 +116,16 @@ const SHAPE_ICONS: Record<PinShape, string> = {
 
 export default function TerritoryMapScreen() {
   const router = useRouter();
-  const { id } = useLocalSearchParams();
+  const { id, territory } = useLocalSearchParams();
   const eventId = typeof id === 'string' ? id : '';
+  const initialTerritory = typeof territory === 'string' && territory ? territory : 'all';
 
   const { events } = useLocalEvent();
   const event = events.find((e) => e.config.id === eventId);
-  const { flatRegistry, updateNode, saveSkeleton, loading } = useSkeleton(eventId);
+  const { flatRegistry, updateNode, updateNodes, upsertNode, saveSkeleton, loading } = useSkeleton(eventId);
 
   const [filterMode, setFilterMode] = useState<'all' | 'pending' | 'worked'>('all');
-  const [selectedTerritory, setSelectedTerritory] = useState<string>('all');
+  const [selectedTerritory, setSelectedTerritory] = useState<string>(initialTerritory);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedPinKey, setSelectedPinKey] = useState<string | null>(null);
   const [editingAddressItem, setEditingAddressItem] = useState<FlatSkeletonEntry | null>(null);
@@ -124,6 +140,48 @@ export default function TerritoryMapScreen() {
   const [showDeltaSyncModal, setShowDeltaSyncModal] = useState<boolean>(false);
   const [mergeTerritoryMode, setMergeTerritoryMode] = useState<boolean>(false);
   const [newStreetInput, setNewStreetInput] = useState<string>('');
+
+  // Load persisted territory outline toggle
+  // Viewport is only re-framed when this counter changes (first load frames automatically).
+  const [fitRequest, setFitRequest] = useState<number>(0);
+  const requestFit = () => setFitRequest((n) => n + 1);
+  const [showStreetLabels, setShowStreetLabels] = useState<boolean>(false);
+  const [offlineTileCount, setOfflineTileCount] = useState<number>(0);
+  const [offlineCachingStatus, setOfflineCachingStatus] = useState<string | null>(null);
+
+  useEffect(() => {
+    registerSovereignServiceWorker();
+    getCachedTileCount().then(setOfflineTileCount).catch(() => undefined);
+    if (!eventId) return;
+    storage.getItem(`sekundo:map-outline:${eventId}`).then((val) => {
+      if (val === '1') setMergeTerritoryMode(true);
+    });
+    storage.getItem(`sekundo:map-streets:${eventId}`).then((val) => {
+      if (val === '1') setShowStreetLabels(true);
+    });
+  }, [eventId]);
+
+  const handleToggleMergeTerritoryMode = () => {
+    const next = !mergeTerritoryMode;
+    setMergeTerritoryMode(next);
+    if (eventId) {
+      storage.setItem(`sekundo:map-outline:${eventId}`, next ? '1' : '0').catch(() => undefined);
+    }
+  };
+
+  const handleToggleStreetLabels = () => {
+    const next = !showStreetLabels;
+    setShowStreetLabels(next);
+    if (eventId) {
+      storage.setItem(`sekundo:map-streets:${eventId}`, next ? '1' : '0').catch(() => undefined);
+    }
+  };
+
+  // Vertex editor session (one quadra at a time), live draft ring, and Undo stack.
+  const [editSession, setEditSession] = useState<MapEditSession | null>(null);
+  const [draftRing, setDraftRing] = useState<LatLngTuple[]>([]);
+  const [ringHistory, setRingHistory] = useState<LatLngTuple[][]>([]);
+  const [showUnlocated, setShowUnlocated] = useState<boolean>(false);
 
   // Compute territory recency list and lookup map
   const recencyList = useMemo(() => {
@@ -173,10 +231,17 @@ export default function TerritoryMapScreen() {
     const territories = new Set<string>();
     const cities = new Set<string>();
 
+    // Leaves only: containers would otherwise create phantom territory chips.
+    const parentKeys = new Set<string>();
+    for (const node of flatRegistry) {
+      const p = pathKey.parent(node.key);
+      if (p) parentKeys.add(p);
+    }
+
     flatRegistry.forEach((node) => {
+      if (parentKeys.has(node.key) || node.type === 'header') return;
       const meta = (node.meta || {}) as Record<string, any>;
-      const tNum = meta.territory_number || meta.territory || node.key.split('-').slice(0, 3).join('-') || 'T01';
-      territories.add(tNum);
+      territories.add(resolveTerritoryNumber(node));
 
       const cityName = meta.city || meta.cidade || 'Cidade Principal';
       cities.add(cityName);
@@ -225,37 +290,18 @@ export default function TerritoryMapScreen() {
       if (p) allParentKeys.add(p);
     }
 
-    flatRegistry.forEach((node, idx) => {
+    flatRegistry.forEach((node) => {
       // Skip parent containers (only plot leaf addresses)
       if (allParentKeys.has(node.key) || node.type === 'header') return;
 
       const meta = (node.meta || {}) as Record<string, any>;
-      let lat = typeof meta.lat === 'number'
-        ? meta.lat
-        : (typeof meta.latitude === 'number'
-          ? meta.latitude
-          : (meta.lat ? parseFloat(String(meta.lat)) : (meta.latitude ? parseFloat(String(meta.latitude)) : undefined)));
-      let lng = typeof meta.lng === 'number'
-        ? meta.lng
-        : (typeof meta.longitude === 'number'
-          ? meta.longitude
-          : (meta.lng ? parseFloat(String(meta.lng)) : (meta.longitude ? parseFloat(String(meta.longitude)) : undefined)));
-
-      if (isNaN(lat as number)) lat = undefined;
-      if (isNaN(lng as number)) lng = undefined;
-
-      // Deterministic fallback mock coordinate based on index if empty
-      if (lat === undefined || lng === undefined) {
-        const baseLat = -23.5488;
-        const baseLng = -46.3898;
-        const offsetLat = ((idx * 17) % 100 - 50) * 0.00015;
-        const offsetLng = ((idx * 23) % 100 - 50) * 0.00015;
-        lat = baseLat + offsetLat;
-        lng = baseLng + offsetLng;
-      }
+      // Never invent a position: units without coordinates are listed separately.
+      const coords = parseLatLng(meta);
+      const lat = coords ? coords.lat : null;
+      const lng = coords ? coords.lng : null;
 
       const worked = Number(meta.worked) === 1 ? 1 : 0;
-      const territoryNumber = meta.territory_number || meta.territory || node.key.split('-').slice(0, 3).join('-') || 'T01';
+      const territoryNumber = resolveTerritoryNumber(node);
       const city = meta.city || meta.cidade || 'Cidade Principal';
       const customColor = (meta.pinColor || meta.pin_color) as string | undefined;
       const customShape = (meta.pinShape || meta.pin_shape) as PinShape | undefined;
@@ -296,7 +342,7 @@ export default function TerritoryMapScreen() {
     return list;
   }, [flatRegistry, territoryColorMap, cityShapeMap]);
 
-  // Merged territory polygons for consolidated quadras
+  // Territory outline ("Mostrar contorno do território"): hull of the quadras + 10 m margin.
   const mergedTerritoryPolygons = useMemo(() => {
     if (!mergeTerritoryMode) return [];
     const tMap: Record<string, QuadraSummary[]> = {};
@@ -306,7 +352,7 @@ export default function TerritoryMapScreen() {
     });
 
     return Object.entries(tMap).map(([tNum, qList]) => {
-      const mergedPoly = computeMergedTerritoryPolygon(qList, 1.0006);
+      const mergedPoly = computeMergedTerritoryPolygon(qList, 10);
       const color = territoryColorMap[tNum] || '#3B82F6';
       return {
         territoryNumber: tNum,
@@ -357,6 +403,17 @@ export default function TerritoryMapScreen() {
     return { total, worked, pending, percent };
   }, [displayedPins]);
 
+  // Only located units go to the map; the rest are listed so nothing silently disappears.
+  const { mapPins, unlocatedPins } = useMemo(() => {
+    const located: MapPin[] = [];
+    const missing: PinItem[] = [];
+    for (const p of displayedPins) {
+      if (p.lat === null || p.lng === null) missing.push(p);
+      else located.push({ ...p, lat: p.lat, lng: p.lng });
+    }
+    return { mapPins: located, unlocatedPins: missing };
+  }, [displayedPins]);
+
   // Selected Pin Item
   const selectedPin = useMemo(() => {
     if (!selectedPinKey) return null;
@@ -368,97 +425,47 @@ export default function TerritoryMapScreen() {
     const target = flatRegistry.find((n) => pathKey.equals(n.key, targetKey));
     if (!target) return;
     const meta = (target.meta || {}) as Record<string, any>;
-    const currentWorked = Number(meta.worked) === 1 ? 1 : 0;
-    const nextWorked = currentWorked === 1 ? 0 : 1;
-    const todayStr = new Date().toISOString().split('T')[0];
-
-    const nextMeta: Record<string, any> = {
-      ...meta,
-      worked: nextWorked,
-      lastWorkedAt: nextWorked === 1 ? new Date().toISOString() : undefined,
-    };
-
-    if (nextWorked === 1) {
-      if (!nextMeta.completedAt) nextMeta.completedAt = todayStr;
-      if (!nextMeta.completed_date) nextMeta.completed_date = todayStr;
-      if (!nextMeta.data_conclusao) nextMeta.data_conclusao = todayStr;
-    } else {
-      delete nextMeta.completedAt;
-      delete nextMeta.completed_date;
-      delete nextMeta.data_conclusao;
-      delete nextMeta.lastWorkedAt;
-    }
+    const nextWorked = Number(meta.worked) === 1 ? 0 : 1;
 
     await updateNode(targetKey, {
       value: nextWorked === 1 ? 'Trabalhado' : '',
-      meta: nextMeta,
+      meta: buildWorkedMeta(meta, nextWorked),
     });
   };
 
-  // Bulk toggle an entire Quadra (all address numbers)
+  // Bulk toggle an entire Quadra (all address numbers) — one atomic write.
   const handleBulkToggleQuadra = async (quadra: QuadraSummary, markWorked: boolean) => {
-    const todayStr = new Date().toISOString().split('T')[0];
-    const allUnits = quadra.streets.flatMap((s) => s.units);
-    for (const unit of allUnits) {
-      const target = flatRegistry.find((n) => pathKey.equals(n.key, unit.key));
-      if (!target) continue;
-      const meta = (target.meta || {}) as Record<string, any>;
-      const nextMeta: Record<string, any> = {
-        ...meta,
-        worked: markWorked ? 1 : 0,
-        lastWorkedAt: markWorked ? new Date().toISOString() : undefined,
-      };
-      if (markWorked) {
-        if (!nextMeta.completedAt) nextMeta.completedAt = todayStr;
-        if (!nextMeta.completed_date) nextMeta.completed_date = todayStr;
-        if (!nextMeta.data_conclusao) nextMeta.data_conclusao = todayStr;
-      } else {
-        delete nextMeta.completedAt;
-        delete nextMeta.completed_date;
-        delete nextMeta.data_conclusao;
-        delete nextMeta.lastWorkedAt;
-      }
-      await updateNode(unit.key, {
-        value: markWorked ? 'Trabalhado' : '',
-        meta: nextMeta,
-      });
-    }
+    const now = new Date();
+    const status: 0 | 1 = markWorked ? 1 : 0;
+    const patches = quadra.streets
+      .flatMap((s) => s.units)
+      .map((unit) => flatRegistry.find((n) => pathKey.equals(n.key, unit.key)))
+      .filter((n): n is FlatSkeletonEntry => Boolean(n))
+      .map((n) => ({
+        key: n.key,
+        updates: { value: markWorked ? 'Trabalhado' : '', meta: buildWorkedMeta(n.meta, status, now) },
+      }));
+    await updateNodes(patches);
   };
 
-  // Open external navigation app
+  // Open external navigation without a vendor lock-in: `geo:` on Android, OpenStreetMap elsewhere.
   const handleOpenGPS = (pin: PinItem) => {
-    const url = `https://www.google.com/maps/search/?api=1&query=${pin.lat},${pin.lng}`;
-    Linking.openURL(url);
-  };
-
-  // Listen to messages from Leaflet iframe
-  useEffect(() => {
-    if (Platform.OS === 'web' && typeof window !== 'undefined') {
-      const handleMessage = (e: MessageEvent) => {
-        if (e.data.type === 'SELECT_PIN') {
-          setSelectedPinKey(e.data.key);
-          setSelectedQuadraKey(null);
-        } else if (e.data.type === 'SELECT_QUADRA') {
-          setSelectedQuadraKey(e.data.key);
-          setSelectedPinKey(null);
-        } else if (e.data.type === 'TOGGLE_WORK') {
-          handleToggleWork(e.data.key);
-        } else if (e.data.type === 'EDIT_PIN') {
-          const target = flatRegistry.find((n) => pathKey.equals(n.key, e.data.key));
-          if (target) setEditingAddressItem(target);
-        } else if (e.data.type === 'CUSTOMIZE_PIN') {
-          const found = allPins.find((p) => p.key === e.data.key);
-          if (found) {
-            setPinStyleTarget(found);
-            setShowPinStyleModal(true);
-          }
-        }
-      };
-
-      window.addEventListener('message', handleMessage);
-      return () => window.removeEventListener('message', handleMessage);
+    const isAndroid =
+      Platform.OS === 'android' ||
+      (Platform.OS === 'web' && typeof navigator !== 'undefined' && /android/i.test(navigator.userAgent));
+    const address = [pin.line || pin.label, pin.city].filter(Boolean).join(', ');
+    if (pin.lat !== null && pin.lng !== null) {
+      const url = isAndroid
+        ? `geo:${pin.lat},${pin.lng}?q=${pin.lat},${pin.lng}`
+        : `https://www.openstreetmap.org/?mlat=${pin.lat}&mlon=${pin.lng}#map=18/${pin.lat}/${pin.lng}`;
+      Linking.openURL(url);
+    } else {
+      const url = isAndroid
+        ? `geo:0,0?q=${encodeURIComponent(address)}`
+        : `https://www.openstreetmap.org/search?query=${encodeURIComponent(address)}`;
+      Linking.openURL(url);
     }
-  }, [flatRegistry, allPins]);
+  };
 
   // Apply Pin Style (individual or bulk)
   const handleApplyPinStyle = async (params: {
@@ -477,8 +484,7 @@ export default function TerritoryMapScreen() {
       if (params.scope === 'single' && params.targetPinKey && pathKey.equals(node.key, params.targetPinKey)) {
         matches = true;
       } else if (params.scope === 'territory' && params.targetTerritory) {
-        const tNum = meta.territory_number || meta.territory || node.key.split('-').slice(0, 3).join('-');
-        if (tNum === params.targetTerritory) matches = true;
+        if (resolveTerritoryNumber(node) === params.targetTerritory) matches = true;
       } else if (params.scope === 'neighborhood' && params.targetNeighborhood) {
         const neigh = meta.line2 || meta.neighborhood || meta.bairro;
         if (neigh === params.targetNeighborhood) matches = true;
@@ -503,355 +509,279 @@ export default function TerritoryMapScreen() {
     await saveSkeleton(updated);
   };
 
-  // Quadra Manual Customization Handlers
-  const handleUpdateQuadraColor = async (quadraKey: string, colorHex: string | null) => {
-    const target = flatRegistry.find((n) => pathKey.equals(n.key, quadraKey));
-    if (!target) return;
-    const meta = { ...(target.meta || {}) };
-    if (colorHex) {
-      meta.customColor = colorHex;
-    } else {
-      delete meta.customColor;
-      delete meta.custom_color;
-    }
-    await updateNode(quadraKey, { meta });
+  // Helper: upserts the quadra header node in flatRegistry so even auto-grouped quadras
+  // can save custom colors, buffer meters, manual vertex boundaries, and perimeter streets.
+  const upsertQuadraMeta = async (
+    quadraKey: string,
+    patchFn: (prevMeta: Record<string, any>) => Record<string, any>
+  ) => {
+    const existing = flatRegistry.find((n) => pathKey.equals(n.key, quadraKey));
+    const qInfo = allQuadras.find((q) => pathKey.equals(q.key, quadraKey));
+    const baseMeta: Record<string, any> = {
+      ...(existing?.meta || {}),
+      ...(qInfo?.territoryNumber ? { territory_number: qInfo.territoryNumber } : {}),
+      metaUpdatedAt: new Date().toISOString(),
+    };
+    const nextMeta = patchFn(baseMeta);
+    await upsertNode(quadraKey, 'header', existing?.label || qInfo?.label || `Quadra ${quadraKey}`, {
+      meta: nextMeta,
+    });
   };
 
-  const handleUpdateQuadraExpansion = async (quadraKey: string, factor: number) => {
-    const target = flatRegistry.find((n) => pathKey.equals(n.key, quadraKey));
-    if (!target) return;
-    const meta = { ...(target.meta || {}), polygonExpansion: factor };
-    await updateNode(quadraKey, { meta });
+  // Quadra Manual Customization Handlers
+  const handleUpdateQuadraColor = async (quadraKey: string, colorHex: string | null) => {
+    await upsertQuadraMeta(quadraKey, (meta) => {
+      if (colorHex) {
+        meta.customColor = colorHex;
+      } else {
+        delete meta.customColor;
+        delete meta.custom_color;
+      }
+      return meta;
+    });
+  };
+
+  // Margin around the quadra polygon, in meters (replaces the old scale-factor chips).
+  const handleUpdateQuadraBuffer = async (quadraKey: string, meters: number) => {
+    await upsertQuadraMeta(quadraKey, (meta) => {
+      meta.bufferMeters = meters;
+      delete meta.polygonExpansion;
+      delete meta.polygon_expansion;
+      return meta;
+    });
+  };
+
+  // ---- Vertex editor -------------------------------------------------------
+  const quadraUnitPoints = (q: QuadraSummary) =>
+    q.streets
+      .flatMap((s) => s.units)
+      .filter((u) => u.lat !== undefined && u.lng !== undefined)
+      .map((u) => ({ key: u.key, lat: u.lat as number, lng: u.lng as number }));
+
+  const handleStartBoundaryEdit = (q: QuadraSummary, fromScratch = false) => {
+    const initial = fromScratch ? [] : q.boundaryPolygon;
+    setDraftRing(initial);
+    setRingHistory([]);
+    setEditSession({
+      quadraKey: q.key,
+      color: q.statusColor,
+      initial,
+      units: quadraUnitPoints(q).map((u) => [u.lat, u.lng] as LatLngTuple),
+      revision: 0,
+    });
+  };
+
+  const handleCancelBoundaryEdit = () => {
+    setEditSession(null);
+    setDraftRing([]);
+    setRingHistory([]);
+  };
+
+  const handlePolygonDraftChange = (nextRing: LatLngTuple[]) => {
+    setDraftRing((prev) => {
+      if (prev.length > 0 && JSON.stringify(prev) !== JSON.stringify(nextRing)) {
+        setRingHistory((h) => [...h.slice(-29), prev]);
+      }
+      return nextRing;
+    });
+  };
+
+  const handleUndoBoundaryEdit = () => {
+    if (ringHistory.length === 0 || !editSession) return;
+    const prevRing = ringHistory[ringHistory.length - 1];
+    setRingHistory((h) => h.slice(0, -1));
+    setDraftRing(prevRing);
+    setEditSession({
+      ...editSession,
+      initial: prevRing,
+      revision: (editSession.revision || 0) + 1,
+    });
+  };
+
+  const draftValidation = useMemo(() => {
+    if (!editSession) return null;
+    const q = allQuadras.find((x) => x.key === editSession.quadraKey);
+    return validateBoundary(draftRing, q ? quadraUnitPoints(q) : []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editSession, draftRing, allQuadras]);
+
+  const activeEditSession = useMemo<MapEditSession | null>(() => {
+    if (!editSession) return null;
+    const q = allQuadras.find((x) => x.key === editSession.quadraKey);
+    const pts = q ? quadraUnitPoints(q) : [];
+    const outsideSet = new Set(draftValidation?.unitsOutside || []);
+    const unitsOutside = pts
+      .filter((u) => outsideSet.has(u.key))
+      .map((u) => [u.lat, u.lng] as LatLngTuple);
+    return {
+      ...editSession,
+      unitsOutside,
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editSession, draftValidation, allQuadras]);
+
+  const handleSaveBoundaryEdit = async () => {
+    if (!editSession || !draftValidation?.ok) return;
+    const qKey = editSession.quadraKey;
+    const savedRing = roundRing(draftRing);
+    await upsertQuadraMeta(qKey, (meta) => {
+      meta.boundaryPolygon = savedRing;
+      meta.boundarySource = 'manual';
+      meta.bufferMeters = 0;
+      delete meta.polygonExpansion;
+      delete meta.polygon_expansion;
+      return meta;
+    });
+    handleCancelBoundaryEdit();
+  };
+
+  // "Voltar ao automático": drop the manual ring so the hull is recomputed from the units.
+  const handleResetBoundaryToAuto = async (quadraKey: string) => {
+    await upsertQuadraMeta(quadraKey, (meta) => {
+      delete meta.boundaryPolygon;
+      delete meta.boundarySource;
+      delete meta.bufferMeters;
+      return meta;
+    });
+  };
+
+  // Pre-cache OSM tiles for the visible quadras/pins into sovereign CacheStorage
+  const handleCacheOfflineTiles = async () => {
+    const pts: [number, number][] = [];
+    for (const q of displayedQuadras) {
+      for (const p of q.boundaryPolygon) pts.push(p);
+    }
+    for (const pin of displayedPins) {
+      if (pin.lat !== null && pin.lng !== null) pts.push([pin.lat, pin.lng]);
+    }
+    if (pts.length === 0) return;
+    setOfflineCachingStatus('⏳ Baixando...');
+    const res = await cacheBoundingBoxTiles(pts, (done, total) => {
+      setOfflineCachingStatus(`⏳ ${done}/${total}`);
+    });
+    const totalCached = await getCachedTileCount();
+    setOfflineTileCount(totalCached);
+    setOfflineCachingStatus(`✓ ${res.cached} tiles`);
+    setTimeout(() => setOfflineCachingStatus(null), 3000);
+  };
+
+  // Export Quadra boundary as RFC 7946 GeoJSON Polygon ([lng, lat])
+  const handleExportQuadraGeoJSON = (q: QuadraSummary) => {
+    if (Platform.OS !== 'web' || typeof document === 'undefined' || q.boundaryPolygon.length < 3) return;
+    const coords = q.boundaryPolygon.map(([lat, lng]) => [lng, lat]);
+    if (coords.length > 0) coords.push(coords[0]); // close ring per GeoJSON spec
+    const geojson = {
+      type: 'Feature',
+      properties: {
+        key: q.key,
+        label: q.label,
+        territoryNumber: q.territoryNumber,
+        perimeterStreets: q.perimeterStreets,
+        boundarySource: q.boundarySource,
+      },
+      geometry: {
+        type: 'Polygon',
+        coordinates: [coords],
+      },
+    };
+    const blob = new Blob([JSON.stringify(geojson, null, 2)], { type: 'application/geo+json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `quadra-${q.key.replace(/[^a-zA-Z0-9_-]/g, '_')}.geojson`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  // Import Quadra boundary from a .geojson file (hardened: max 2MB, max 2000 vertices, valid coords & non-self-intersecting)
+  const handleImportQuadraGeoJSON = (quadraKey: string) => {
+    if (Platform.OS !== 'web' || typeof document === 'undefined') return;
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.geojson,.json,application/geo+json,application/json';
+    input.onchange = async (e: any) => {
+      const file = e.target?.files?.[0];
+      if (!file || file.size > 2 * 1024 * 1024) return;
+      try {
+        const text = await file.text();
+        const parsed = JSON.parse(text);
+        const geom =
+          parsed.type === 'FeatureCollection'
+            ? parsed.features?.[0]?.geometry
+            : parsed.type === 'Feature'
+            ? parsed.geometry
+            : parsed;
+        const rawRing = geom?.type === 'Polygon' ? geom.coordinates?.[0] : geom?.type === 'MultiPolygon' ? geom.coordinates?.[0]?.[0] : null;
+        if (!Array.isArray(rawRing) || rawRing.length < 3 || rawRing.length > 2000) return;
+        const latLngRing: [number, number][] = rawRing
+          .map((pt: any) => (Array.isArray(pt) && pt.length >= 2 ? ([Number(pt[1]), Number(pt[0])] as [number, number]) : null))
+          .filter((pt): pt is [number, number] =>
+            Boolean(
+              pt &&
+                Number.isFinite(pt[0]) &&
+                Number.isFinite(pt[1]) &&
+                pt[0] >= -90 &&
+                pt[0] <= 90 &&
+                pt[1] >= -180 &&
+                pt[1] <= 180
+            )
+          );
+        // Strip duplicate closing vertex if present
+        if (
+          latLngRing.length > 3 &&
+          Math.abs(latLngRing[0][0] - latLngRing[latLngRing.length - 1][0]) < 1e-7 &&
+          Math.abs(latLngRing[0][1] - latLngRing[latLngRing.length - 1][1]) < 1e-7
+        ) {
+          latLngRing.pop();
+        }
+        const check = validateBoundary(latLngRing, []);
+        if (check.ok) {
+          await upsertQuadraMeta(quadraKey, (meta) => {
+            meta.boundaryPolygon = roundRing(latLngRing);
+            meta.boundarySource = 'imported';
+            meta.bufferMeters = 0;
+            return meta;
+          });
+        }
+      } catch {
+        // Ignore malformed GeoJSON
+      }
+    };
+    input.click();
   };
 
   const handleAddPerimeterStreet = async (quadraKey: string, newStreet: string) => {
     if (!newStreet.trim()) return;
-    const target = flatRegistry.find((n) => pathKey.equals(n.key, quadraKey));
-    if (!target) return;
     const currentStreets = selectedQuadra?.perimeterStreets || [];
     const nextStreets = Array.from(new Set([...currentStreets, newStreet.trim()]));
-    const meta = { ...(target.meta || {}), perimeter_streets: nextStreets };
-    await updateNode(quadraKey, { meta });
+    await upsertQuadraMeta(quadraKey, (meta) => {
+      meta.perimeter_streets = nextStreets;
+      return meta;
+    });
   };
 
   const handleRemovePerimeterStreet = async (quadraKey: string, streetToRemove: string) => {
-    const target = flatRegistry.find((n) => pathKey.equals(n.key, quadraKey));
-    if (!target) return;
     const currentStreets = selectedQuadra?.perimeterStreets || [];
     const nextStreets = currentStreets.filter((s) => s !== streetToRemove);
-    const meta = { ...(target.meta || {}), perimeter_streets: nextStreets };
-    await updateNode(quadraKey, { meta });
+    await upsertQuadraMeta(quadraKey, (meta) => {
+      meta.perimeter_streets = nextStreets;
+      return meta;
+    });
+  };
+
+  const handleResetPerimeterStreets = async (quadraKey: string) => {
+    await upsertQuadraMeta(quadraKey, (meta) => {
+      delete meta.perimeter_streets;
+      delete meta.perimeterStreets;
+      return meta;
+    });
   };
 
   const handleDeltaSyncApplied = async (updatedRegistry: FlatSkeletonEntry[]) => {
     await saveSkeleton(updatedRegistry);
   };
-
-  // Build Leaflet HTML payload with dynamic colors, shapes, and responsive controls
-  const leafletHTML = useMemo(() => {
-    const isQuadrasMode = mapViewMode === 'quadras';
-    const pinsData = JSON.stringify(displayedPins);
-    const quadrasData = JSON.stringify(displayedQuadras);
-    const mergedData = JSON.stringify(mergedTerritoryPolygons);
-    let centerLat = displayedPins.length > 0 ? displayedPins[0].lat : -23.5488;
-    let centerLng = displayedPins.length > 0 ? displayedPins[0].lng : -46.3898;
-
-    if (isQuadrasMode && displayedQuadras.length > 0) {
-      centerLat = displayedQuadras[0].centroid[0];
-      centerLng = displayedQuadras[0].centroid[1];
-    }
-
-    return `<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <style>
-    html, body, #map {
-      height: 100%;
-      width: 100%;
-      margin: 0;
-      padding: 0;
-      background: #12151C;
-    }
-    .leaflet-popup-content-wrapper {
-      background: #181C28;
-      color: #FFFFFF;
-      border-radius: 12px;
-      border: 1px solid rgba(255,255,255,0.12);
-      box-shadow: 0 12px 30px rgba(0,0,0,0.6);
-      padding: 4px;
-    }
-    .leaflet-popup-tip {
-      background: #181C28;
-    }
-    .popup-card {
-      padding: 10px;
-      min-width: 230px;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    }
-    .popup-top-row {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 6px;
-    }
-    .popup-badge {
-      display: inline-block;
-      font-size: 10px;
-      font-weight: 800;
-      padding: 2px 6px;
-      border-radius: 4px;
-      text-transform: uppercase;
-      font-family: monospace;
-    }
-    .popup-title {
-      font-weight: 700;
-      font-size: 14px;
-      color: #FFFFFF;
-      margin-bottom: 4px;
-      line-height: 18px;
-    }
-    .popup-sub {
-      font-size: 11px;
-      color: #9CA3AF;
-      margin-bottom: 8px;
-    }
-    .popup-extra {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 4px;
-      margin-bottom: 10px;
-    }
-    .popup-tag {
-      font-size: 10px;
-      padding: 2px 6px;
-      border-radius: 4px;
-      background: rgba(255,255,255,0.06);
-      color: #D1D5DB;
-    }
-    .popup-btn-row {
-      display: flex;
-      gap: 5px;
-      margin-top: 8px;
-    }
-    .popup-btn {
-      flex: 1;
-      border: none;
-      padding: 7px 8px;
-      font-size: 11px;
-      font-weight: 700;
-      border-radius: 6px;
-      cursor: pointer;
-      text-align: center;
-    }
-    .popup-btn-work {
-      background: #10B981;
-      color: #062016;
-    }
-    .popup-btn-pending {
-      background: #EF4444;
-      color: #FFFFFF;
-    }
-    .popup-btn-style {
-      background: rgba(255, 184, 0, 0.15);
-      border: 1px solid #FFB800;
-      color: #FFB800;
-      flex: 0.8;
-    }
-    .popup-btn-edit {
-      background: rgba(255,255,255,0.1);
-      color: #FFFFFF;
-      flex: 0.6;
-    }
-  </style>
-</head>
-<body>
-  <div id="map"></div>
-  <script>
-    const isQuadrasMode = ${isQuadrasMode};
-    const pins = ${pinsData};
-    const quadras = ${quadrasData};
-    const mergedTerritories = ${mergedData};
-    const mergeTerritoryMode = ${mergeTerritoryMode};
-    const map = L.map('map', {
-      zoomControl: true,
-      attributionControl: false
-    }).setView([${centerLat}, ${centerLng}], 16);
-
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 19
-    }).addTo(map);
-
-    const markersGroup = L.featureGroup();
-
-    if (isQuadrasMode) {
-      // -------------------------------------------------------------
-      // MODO QUADRAS PINTADAS (Quarteirões Vetoriais com Ruas Delimitadoras)
-      // -------------------------------------------------------------
-      // 1. Render consolidated territory grand-polygon if merge mode is active
-      if (mergeTerritoryMode && mergedTerritories && mergedTerritories.length > 0) {
-        mergedTerritories.forEach(mt => {
-          if (!mt.polygon || mt.polygon.length < 3) return;
-          const tPoly = L.polygon(mt.polygon, {
-            color: mt.color,
-            weight: 4,
-            dashArray: '8, 8',
-            opacity: 0.95,
-            fillColor: mt.color,
-            fillOpacity: 0.22,
-          });
-          tPoly.bindTooltip(
-            '<div style="font-family:sans-serif; padding:4px;">' +
-              '<b style="color:' + mt.color + ';">🏛️ Território ' + mt.territoryNumber + ' (Consolidado)</b>' +
-              '<div>' + mt.quadrasCount + ' quadras agrupadas</div>' +
-              '<div>' + mt.workedUnits + '/' + mt.totalUnits + ' concluídos</div>' +
-            '</div>',
-            { sticky: true }
-          );
-          markersGroup.addLayer(tPoly);
-        });
-      }
-
-      // 2. Render individual quadras
-      quadras.forEach(q => {
-        if (!q.boundaryPolygon || q.boundaryPolygon.length < 3) return;
-
-        const poly = L.polygon(q.boundaryPolygon, {
-          color: q.statusColor,
-          weight: 3,
-          opacity: 0.95,
-          fillColor: q.statusColor,
-          fillOpacity: 0.40,
-        });
-
-        poly.on('click', (e) => {
-          L.DomEvent.stopPropagation(e);
-          window.parent.postMessage({ type: 'SELECT_QUADRA', key: q.key }, '*');
-        });
-
-        const tooltipContent = 
-          '<div style="font-family:-apple-system, sans-serif; padding:4px;">' +
-            '<div style="font-weight:800; font-size:13px; color:' + q.statusColor + ';">🏢 ' + q.label + '</div>' +
-            '<div style="font-size:11px; color:#E5E7EB; margin-top:2px;">' +
-              '<b>' + q.workedUnits + '/' + q.totalUnits + '</b> concluídos (' + q.coveragePercent + '%)' +
-            '</div>' +
-            (q.perimeterStreets && q.perimeterStreets.length > 0 ?
-              '<div style="font-size:10px; color:#9CA3AF; margin-top:3px; max-width:220px;">' +
-                '🛣️ ' + q.perimeterStreets.slice(0, 3).join(', ') +
-              '</div>' : '') +
-          '</div>';
-
-        poly.bindTooltip(tooltipContent, { sticky: true });
-        markersGroup.addLayer(poly);
-      });
-    } else {
-      // -------------------------------------------------------------
-      // MODO ALFINETES INDIVIDUAIS (GPS) - 7 Formatos Geométricos & Cores Livres
-      // -------------------------------------------------------------
-      pins.forEach(pin => {
-        const isWorked = pin.worked === 1;
-        const color = pin.color;
-        const labelBadge = isWorked ? '✓' : '•';
-
-        let shapeStyle = '';
-        if (pin.shape === 'circle') {
-          shapeStyle = 'width:26px; height:26px; border-radius:50%;';
-        } else if (pin.shape === 'triangle') {
-          shapeStyle = 'width:28px; height:26px; clip-path: polygon(50% 0%, 0% 100%, 100% 100%);';
-        } else if (pin.shape === 'square') {
-          shapeStyle = 'width:24px; height:24px; border-radius:4px;';
-        } else if (pin.shape === 'diamond') {
-          shapeStyle = 'width:26px; height:26px; clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);';
-        } else if (pin.shape === 'hexagon') {
-          shapeStyle = 'width:28px; height:26px; clip-path: polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%);';
-        } else if (pin.shape === 'star') {
-          shapeStyle = 'width:28px; height:28px; clip-path: polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%);';
-        } else if (pin.shape === 'pin') {
-          shapeStyle = 'width:26px; height:30px; border-radius:50% 50% 50% 0; transform: rotate(-45deg); margin-top:-6px;';
-        }
-
-        const opacity = isWorked ? '1' : '0.85';
-        const border = isWorked ? '2px solid #FFFFFF' : '2px dashed #FFFFFF';
-        const innerTransform = pin.shape === 'pin' ? 'transform: rotate(45deg);' : '';
-        const innerMargin = pin.shape === 'triangle' ? 'margin-top:6px;' : (pin.shape === 'pin' ? 'margin-top:-2px;' : 'margin-top:0;');
-
-        const iconHtml = '<div style="background:' + color + '; ' + shapeStyle + ' border:' + border + '; opacity:' + opacity + '; display:flex; align-items:center; justify-content:center; color:#FFFFFF; font-weight:bold; font-size:12px; box-shadow:0 4px 8px rgba(0,0,0,0.5); cursor:pointer;">' +
-          '<span style="' + innerTransform + ' ' + innerMargin + '">' + labelBadge + '</span>' +
-        '</div>';
-
-        const icon = L.divIcon({
-          className: 'custom-pin',
-          html: iconHtml,
-          iconSize: [28, 28],
-          iconAnchor: [14, 14]
-        });
-
-        const marker = L.marker([pin.lat, pin.lng], { icon: icon });
-
-        marker.on('click', () => {
-          window.parent.postMessage({ type: 'SELECT_PIN', key: pin.key }, '*');
-        });
-
-        // Rich popup content
-        const popupCard = document.createElement('div');
-        popupCard.className = 'popup-card';
-        popupCard.innerHTML = 
-          '<div class="popup-top-row">' +
-            '<span class="popup-badge" style="background:' + color + '22; color:' + color + '; border:1px solid ' + color + ';">' + pin.territoryNumber + '</span>' +
-            '<span style="font-size:11px; color:#9CA3AF;">' + pin.city + '</span>' +
-          '</div>' +
-          '<div class="popup-title">' + (pin.line || pin.label) + '</div>' +
-          (pin.line2 ? '<div class="popup-sub">' + pin.line2 + (pin.postalcode ? ' • CEP ' + pin.postalcode : '') + '</div>' : '') +
-          '<div class="popup-extra">' +
-            '<span class="popup-tag">' + (pin.propertyType === 'comercial' ? '🏢 Comércio' : (pin.propertyType === 'predio' ? '🏙️ Prédio' : '🏠 Residência')) + '</span>' +
-            (pin.isForeign ? '<span class="popup-tag" style="background:rgba(59,130,246,0.2); color:#60A5FA;">🌐 ' + (pin.language || 'Estrangeiro') + '</span>' : '') +
-            (pin.notes ? '<span class="popup-tag" style="background:rgba(255,184,0,0.15); color:#FFB800;">📝 Anotação</span>' : '') +
-          '</div>' +
-          (pin.assignedAt || pin.completedAt ?
-            '<div style="font-size:11px; margin-bottom:8px; display:flex; flex-direction:column; gap:2px; background:rgba(255,255,255,0.04); padding:6px; border-radius:6px;">' +
-              (pin.assignedAt ? '<span style="color:#A78BFA;">📅 Desig: ' + pin.assignedAt + '</span>' : '') +
-              (pin.completedAt ? '<span style="color:#34D399; font-weight:700;">✓ Concl: ' + pin.completedAt + (pin.daysSinceCompleted !== null && pin.daysSinceCompleted !== undefined ? (pin.daysSinceCompleted === 0 ? ' (hoje)' : pin.daysSinceCompleted === 1 ? ' (ontem)' : ' (há ' + pin.daysSinceCompleted + 'd)') : '') + '</span>' : '') +
-            '</div>' : '') +
-          '<div class="popup-btn-row">' +
-            '<button class="popup-btn ' + (isWorked ? 'popup-btn-pending' : 'popup-btn-work') + '" id="btn-toggle">' +
-              (isWorked ? 'Marcar Pendente' : '✓ Concluído') +
-            '</button>' +
-            '<button class="popup-btn popup-btn-style" id="btn-style">🎨 Ícone</button>' +
-            '<button class="popup-btn popup-btn-edit" id="btn-edit">✏️ Editar</button>' +
-          '</div>';
-
-        popupCard.querySelector('#btn-toggle').addEventListener('click', (e) => {
-          e.stopPropagation();
-          window.parent.postMessage({ type: 'TOGGLE_WORK', key: pin.key }, '*');
-        });
-
-        popupCard.querySelector('#btn-style').addEventListener('click', (e) => {
-          e.stopPropagation();
-          window.parent.postMessage({ type: 'CUSTOMIZE_PIN', key: pin.key }, '*');
-        });
-
-        popupCard.querySelector('#btn-edit').addEventListener('click', (e) => {
-          e.stopPropagation();
-          window.parent.postMessage({ type: 'EDIT_PIN', key: pin.key }, '*');
-        });
-
-        marker.bindPopup(popupCard);
-        markersGroup.addLayer(marker);
-      });
-    }
-
-    markersGroup.addTo(map);
-
-    if (markersGroup.getLayers().length > 0) {
-      map.fitBounds(markersGroup.getBounds().pad(0.1));
-    }
-  </script>
-</body>
-</html>`;
-  }, [displayedPins, displayedQuadras, mergedTerritoryPolygons, mapViewMode, mergeTerritoryMode]);
 
   if (loading || !event) {
     return (
@@ -881,6 +811,7 @@ export default function TerritoryMapScreen() {
                 onPress={() => {
                   setMapViewMode('quadras');
                   setSelectedPinKey(null);
+                  requestFit();
                 }}
                 style={[
                   styles.viewModeBtn,
@@ -900,6 +831,7 @@ export default function TerritoryMapScreen() {
                 onPress={() => {
                   setMapViewMode('pins');
                   setSelectedQuadraKey(null);
+                  requestFit();
                 }}
                 style={[
                   styles.viewModeBtn,
@@ -951,7 +883,10 @@ export default function TerritoryMapScreen() {
           <Text style={styles.filterRowLabel}>TERRITÓRIO:</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipsScroll}>
             <Pressable
-              onPress={() => setSelectedTerritory('all')}
+              onPress={() => {
+                setSelectedTerritory('all');
+                requestFit();
+              }}
               style={[styles.territoryChip, selectedTerritory === 'all' && styles.territoryChipActive]}
             >
               <Text style={[styles.territoryChipText, selectedTerritory === 'all' && styles.territoryChipTextActive]}>
@@ -975,7 +910,10 @@ export default function TerritoryMapScreen() {
               return (
                 <Pressable
                   key={tNum}
-                  onPress={() => setSelectedTerritory(tNum)}
+                  onPress={() => {
+                    setSelectedTerritory(tNum);
+                    requestFit();
+                  }}
                   style={[
                     styles.territoryChip,
                     active && { backgroundColor: `${color}25`, borderColor: color },
@@ -1042,7 +980,26 @@ export default function TerritoryMapScreen() {
             </Pressable>
 
             <Pressable
-              onPress={() => router.push(`/territory-checklist?id=${eventId}`)}
+              onPress={() =>
+                router.push(
+                  `/publisher?id=${eventId}${
+                    selectedTerritory !== 'all' ? `&territory=${encodeURIComponent(selectedTerritory)}` : ''
+                  }`
+                )
+              }
+              style={styles.checklistBtn}
+            >
+              <Text style={styles.checklistBtnText}>📱 Modo Publicador</Text>
+            </Pressable>
+
+            <Pressable
+              onPress={() =>
+                router.push(
+                  `/territory-checklist?id=${eventId}${
+                    selectedTerritory !== 'all' ? `&territory=${encodeURIComponent(selectedTerritory)}` : ''
+                  }`
+                )
+              }
               style={styles.checklistBtn}
             >
               <Text style={styles.checklistBtnText}>📋 Checklist</Text>
@@ -1067,25 +1024,101 @@ export default function TerritoryMapScreen() {
 
       {/* Main Workspace (Map + Drawer) */}
       <View style={styles.workspace}>
-        {/* Leaflet Map Iframe */}
+        {/* Persistent Leaflet map (no iframe): zoom survives every edit */}
         <View style={styles.mapContainer}>
-          {Platform.OS === 'web' ? (
-            <iframe
-              srcDoc={leafletHTML}
-              style={{
-                width: '100%',
-                height: '100%',
-                border: 'none',
-              }}
-              title="Leaflet Tactical Map"
-            />
-          ) : (
-            <View style={styles.mobilePlaceholder}>
-              <Text style={styles.mobilePlaceholderText}>
-                Visualização de mapas disponível no navegador Web.
+          <TerritoryLeafletMap
+            mode={mapViewMode}
+            pins={mapPins}
+            quadras={displayedQuadras}
+            outlines={mergedTerritoryPolygons}
+            showStreetLabels={showStreetLabels}
+            selectedKey={selectedQuadraKey}
+            fitRequest={fitRequest}
+            onSelectPin={(key) => {
+              setSelectedPinKey(key);
+              setSelectedQuadraKey(null);
+            }}
+            onSelectQuadra={(key) => {
+              if (editSession) return;
+              setSelectedQuadraKey(key);
+              setSelectedPinKey(null);
+            }}
+            onToggleWork={(key) => handleToggleWork(key)}
+            onEditPin={(key) => {
+              const target = flatRegistry.find((n) => pathKey.equals(n.key, key));
+              if (target) setEditingAddressItem(target);
+            }}
+            onCustomizePin={(key) => {
+              const found = allPins.find((p) => p.key === key);
+              if (found) {
+                setPinStyleTarget(found);
+                setShowPinStyleModal(true);
+              }
+            }}
+            editSession={activeEditSession}
+            onPolygonDraft={handlePolygonDraftChange}
+          />
+
+          {/* Map overlay controls */}
+          <View style={styles.mapOverlay} pointerEvents="box-none">
+            <Pressable onPress={requestFit} style={styles.mapOverlayBtn} accessibilityLabel="Enquadrar">
+              <Text style={styles.mapOverlayBtnText}>⌖ Enquadrar</Text>
+            </Pressable>
+            {mapViewMode === 'quadras' ? (
+              <Pressable
+                onPress={handleToggleStreetLabels}
+                style={[styles.mapOverlayBtn, showStreetLabels && styles.mapOverlayBtnActive]}
+              >
+                <Text style={styles.mapOverlayBtnText}>🛣️ Nomes das ruas</Text>
+              </Pressable>
+            ) : null}
+            <Pressable
+              onPress={handleCacheOfflineTiles}
+              style={[styles.mapOverlayBtn, offlineTileCount > 0 && styles.mapOverlayBtnActive]}
+            >
+              <Text style={styles.mapOverlayBtnText}>
+                {offlineCachingStatus
+                  ? offlineCachingStatus
+                  : offlineTileCount > 0
+                  ? `📦 Offline (${offlineTileCount})`
+                  : '📥 Mapa Offline'}
               </Text>
+            </Pressable>
+            {mapViewMode === 'pins' && unlocatedPins.length > 0 ? (
+              <Pressable
+                onPress={() => setShowUnlocated(!showUnlocated)}
+                style={[styles.mapOverlayBtn, styles.mapOverlayBtnWarn]}
+              >
+                <Text style={styles.mapOverlayBtnText}>
+                  📍 {unlocatedPins.length} sem coordenada
+                </Text>
+              </Pressable>
+            ) : null}
+          </View>
+
+          {mapViewMode === 'pins' && showUnlocated && unlocatedPins.length > 0 ? (
+            <View style={styles.unlocatedPanel}>
+              <Text style={styles.unlocatedTitle}>Endereços sem coordenada (não aparecem no mapa)</Text>
+              <ScrollView style={{ maxHeight: 220 }} contentContainerStyle={{ gap: 6 }}>
+                {unlocatedPins.map((p) => (
+                  <Pressable
+                    key={p.key}
+                    onPress={() => {
+                      const target = flatRegistry.find((n) => pathKey.equals(n.key, p.key));
+                      if (target) setEditingAddressItem(target);
+                    }}
+                    style={styles.unlocatedRow}
+                  >
+                    <Text style={styles.unlocatedRowText} numberOfLines={1}>
+                      {p.worked === 1 ? '✓ ' : ''}
+                      {p.line || p.label}
+                    </Text>
+                    <Text style={styles.unlocatedRowHint}>✏️ adicionar</Text>
+                  </Pressable>
+                ))}
+              </ScrollView>
             </View>
-          )}
+          ) : null}
         </View>
 
         {/* Side Details Drawer (Visible when a Quadra or Pin is selected) */}
@@ -1127,7 +1160,13 @@ export default function TerritoryMapScreen() {
                   {selectedQuadra.workedUnits} de {selectedQuadra.totalUnits} números concluídos
                 </Text>
               </View>
-              <Pressable onPress={() => setSelectedQuadraKey(null)} style={styles.drawerCloseBtn}>
+              <Pressable
+                onPress={() => {
+                  setSelectedQuadraKey(null);
+                  handleCancelBoundaryEdit();
+                }}
+                style={styles.drawerCloseBtn}
+              >
                 <Text style={styles.drawerCloseText}>✕</Text>
               </Pressable>
             </View>
@@ -1135,7 +1174,17 @@ export default function TerritoryMapScreen() {
             <ScrollView style={styles.drawerContent} contentContainerStyle={{ gap: 14 }}>
               {/* Perimeter Enclosing Streets Banner */}
               <View style={styles.perimeterCard}>
-                <Text style={styles.perimeterTitle}>🛣️ RUAS DELIMITADORAS DO PERÍMETRO</Text>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Text style={styles.perimeterTitle}>🛣️ RUAS DELIMITADORAS DO PERÍMETRO</Text>
+                  <Pressable
+                    onPress={() => handleResetPerimeterStreets(selectedQuadra.key)}
+                    style={{ paddingVertical: 2, paddingHorizontal: 6 }}
+                  >
+                    <Text style={{ color: '#60A5FA', fontSize: 10, fontWeight: '700' }}>
+                      ↺ Recalcular auto
+                    </Text>
+                  </Pressable>
+                </View>
                 <Text style={styles.perimeterDesc}>
                   {formatQuadraPerimeterDescription(selectedQuadra.perimeterStreets)}
                 </Text>
@@ -1207,38 +1256,109 @@ export default function TerritoryMapScreen() {
                   })}
                 </ScrollView>
 
-                {/* Buffer / Expansion Selector */}
-                <Text style={[styles.customSubLabel, { marginTop: 10 }]}>Tamanho do Polígono (Buffer):</Text>
+                {/* Buffer selector, in meters */}
+                <Text style={[styles.customSubLabel, { marginTop: 10 }]}>
+                  Margem do polígono ({selectedQuadra.boundarySource === 'manual' ? 'contorno manual' : selectedQuadra.boundarySource === 'imported' ? 'contorno importado' : 'contorno automático'}):
+                </Text>
                 <View style={styles.expansionRow}>
-                  {[
-                    { factor: 1.0001, label: '0.9x Justo' },
-                    { factor: 1.0003, label: '1.0x Padrão' },
-                    { factor: 1.0006, label: '1.2x (+20%)' },
-                    { factor: 1.0010, label: '1.5x (+50%)' },
-                    { factor: 1.0020, label: '2.0x Dobro' },
-                  ].map((item) => {
-                    const curFactor = selectedQuadra.polygonExpansion || 1.0003;
-                    const isCur = Math.abs(curFactor - item.factor) < 0.00015;
+                  {BUFFER_OPTIONS_METERS.map((m) => {
+                    const isCur = selectedQuadra.bufferMeters === m;
                     return (
                       <Pressable
-                        key={item.label}
-                        onPress={() => handleUpdateQuadraExpansion(selectedQuadra.key, item.factor)}
+                        key={m}
+                        onPress={() => handleUpdateQuadraBuffer(selectedQuadra.key, m)}
                         style={[
                           styles.expansionChip,
                           isCur && styles.expansionChipActive,
                         ]}
                       >
                         <Text style={[styles.expansionChipText, isCur && styles.expansionChipTextActive]}>
-                          {item.label}
+                          {m === 0 ? 'Justo (0 m)' : m > 0 ? `+${m} m` : `${m} m`}
+                          {m === 6 && selectedQuadra.boundarySource === 'auto' ? ' · padrão' : ''}
                         </Text>
                       </Pressable>
                     );
                   })}
                 </View>
 
-                {/* Merge Territory Toggle */}
+                {/* Vertex editor */}
+                <Text style={[styles.customSubLabel, { marginTop: 12 }]}>Contorno da quadra:</Text>
+                {editSession && editSession.quadraKey === selectedQuadra.key ? (
+                  <View style={styles.editPanel}>
+                    <Text style={styles.editHint}>
+                      {editSession.initial.length >= 3
+                        ? 'Arraste os vértices. Toque no ponto do meio de uma borda para criar um vértice; toque longo (600ms) ou clique direito num vértice para removê-lo.'
+                        : 'Toque no mapa para desenhar os vértices. Dois toques no último ponto fecham o contorno.'}
+                    </Text>
+                    <Text style={styles.editHint}>Vértices: {draftRing.length}</Text>
+                    {draftValidation?.errors.map((err) => (
+                      <Text key={err} style={styles.editError}>⛔ {err}</Text>
+                    ))}
+                    {draftValidation && draftValidation.ok && draftValidation.unitsOutside.length > 0 ? (
+                      <Text style={styles.editWarn}>
+                        ⚠️ {draftValidation.unitsOutside.length} endereço(s) ficaram fora do contorno (destacados em vermelho no mapa).
+                      </Text>
+                    ) : null}
+                    <View style={styles.editBtnRow}>
+                      {ringHistory.length > 0 ? (
+                        <Pressable onPress={handleUndoBoundaryEdit} style={[styles.editBtn, styles.editBtnGhost]}>
+                          <Text style={styles.editBtnText}>↺ Desfazer</Text>
+                        </Pressable>
+                      ) : null}
+                      <Pressable onPress={handleCancelBoundaryEdit} style={[styles.editBtn, styles.editBtnGhost]}>
+                        <Text style={styles.editBtnText}>Cancelar</Text>
+                      </Pressable>
+                      <Pressable
+                        onPress={handleSaveBoundaryEdit}
+                        disabled={!draftValidation?.ok}
+                        style={[styles.editBtn, styles.editBtnPrimary, !draftValidation?.ok && { opacity: 0.4 }]}
+                      >
+                        <Text style={[styles.editBtnText, { color: '#062016' }]}>Salvar contorno</Text>
+                      </Pressable>
+                    </View>
+                  </View>
+                ) : (
+                  <View style={styles.editBtnRow}>
+                    <Pressable
+                      onPress={() => handleStartBoundaryEdit(selectedQuadra, selectedQuadra.boundaryPolygon.length < 3)}
+                      style={[styles.editBtn, styles.editBtnPrimary]}
+                    >
+                      <Text style={[styles.editBtnText, { color: '#062016' }]}>✏️ Editar vértices</Text>
+                    </Pressable>
+                    <Pressable
+                      onPress={() => handleStartBoundaryEdit(selectedQuadra, true)}
+                      style={[styles.editBtn, styles.editBtnGhost]}
+                    >
+                      <Text style={styles.editBtnText}>Desenhar do zero</Text>
+                    </Pressable>
+                    {selectedQuadra.boundarySource === 'manual' || selectedQuadra.boundarySource === 'imported' ? (
+                      <Pressable
+                        onPress={() => handleResetBoundaryToAuto(selectedQuadra.key)}
+                        style={[styles.editBtn, styles.editBtnGhost]}
+                      >
+                        <Text style={styles.editBtnText}>↺ Voltar ao automático</Text>
+                      </Pressable>
+                    ) : null}
+                    <Pressable
+                      onPress={() => handleImportQuadraGeoJSON(selectedQuadra.key)}
+                      style={[styles.editBtn, styles.editBtnGhost]}
+                    >
+                      <Text style={styles.editBtnText}>📥 GeoJSON</Text>
+                    </Pressable>
+                    {selectedQuadra.boundaryPolygon.length >= 3 ? (
+                      <Pressable
+                        onPress={() => handleExportQuadraGeoJSON(selectedQuadra)}
+                        style={[styles.editBtn, styles.editBtnGhost]}
+                      >
+                        <Text style={styles.editBtnText}>📤 GeoJSON</Text>
+                      </Pressable>
+                    ) : null}
+                  </View>
+                )}
+
+                {/* Territory outline toggle */}
                 <Pressable
-                  onPress={() => setMergeTerritoryMode(!mergeTerritoryMode)}
+                  onPress={handleToggleMergeTerritoryMode}
                   style={[
                     styles.mergeTerritoryBtn,
                     mergeTerritoryMode && styles.mergeTerritoryBtnActive,
@@ -1246,8 +1366,8 @@ export default function TerritoryMapScreen() {
                 >
                   <Text style={styles.mergeTerritoryBtnText}>
                     {mergeTerritoryMode
-                      ? '✓ Modo Território Consolidado Ativo'
-                      : `🔗 Englobar Quadras de ${selectedQuadra.territoryNumber} em Super-Polígono`}
+                      ? '✓ Contorno dos territórios visível'
+                      : '◌ Mostrar contorno do território'}
                   </Text>
                 </Pressable>
               </View>
@@ -1372,7 +1492,9 @@ export default function TerritoryMapScreen() {
               <View style={styles.drawerSection}>
                 <Text style={styles.drawerSectionLabel}>COORDENADAS GPS</Text>
                 <Text style={styles.coordsVal}>
-                  Lat: {selectedPin.lat.toFixed(6)}, Lng: {selectedPin.lng.toFixed(6)}
+                  {selectedPin.lat !== null && selectedPin.lng !== null
+                    ? `Lat: ${selectedPin.lat.toFixed(6)}, Lng: ${selectedPin.lng.toFixed(6)}`
+                    : 'Sem coordenada — edite o endereço para adicionar latitude/longitude.'}
                 </Text>
               </View>
 
@@ -1447,7 +1569,7 @@ export default function TerritoryMapScreen() {
                   onPress={() => handleOpenGPS(selectedPin)}
                   style={styles.gpsNavBtn}
                 >
-                  <Text style={styles.gpsNavBtnText}>🧭 Abrir no Google Maps / GPS</Text>
+                  <Text style={styles.gpsNavBtnText}>🧭 Abrir no app de navegação</Text>
                 </Pressable>
               </View>
             </ScrollView>
@@ -1541,6 +1663,22 @@ export default function TerritoryMapScreen() {
                       </View>
 
                       <View style={styles.recencyItemRight}>
+                        {item.isOverdue ? (
+                          <View
+                            style={{
+                              backgroundColor: 'rgba(239, 68, 68, 0.16)',
+                              borderColor: 'rgba(239, 68, 68, 0.45)',
+                              borderWidth: 1,
+                              borderRadius: 6,
+                              paddingHorizontal: 8,
+                              paddingVertical: 4,
+                            }}
+                          >
+                            <Text style={{ color: '#F87171', fontSize: 11, fontWeight: '700' }}>
+                              ⚠️ Vencido há {item.daysSinceAssigned}d (&gt;4m)
+                            </Text>
+                          </View>
+                        ) : null}
                         {item.isCompleted ? (
                           <View style={styles.recencyBadgeCompleted}>
                             <Text style={styles.recencyBadgeCompletedText}>
@@ -2561,6 +2699,120 @@ const styles = StyleSheet.create({
   mergeTerritoryBtnText: {
     color: '#FFFFFF',
     fontSize: 11,
+    fontWeight: '700',
+  },
+  mapOverlay: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    gap: 6,
+    alignItems: 'flex-end',
+    zIndex: 1000,
+  },
+  mapOverlayBtn: {
+    backgroundColor: 'rgba(18, 21, 28, 0.88)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.18)',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  mapOverlayBtnActive: {
+    borderColor: '#FFB800',
+    backgroundColor: 'rgba(255, 184, 0, 0.22)',
+  },
+  mapOverlayBtnWarn: {
+    borderColor: '#F59E0B',
+  },
+  mapOverlayBtnText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  unlocatedPanel: {
+    position: 'absolute',
+    left: 10,
+    right: 10,
+    bottom: 10,
+    backgroundColor: 'rgba(18, 21, 28, 0.95)',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 158, 11, 0.5)',
+    padding: 12,
+    zIndex: 1000,
+  },
+  unlocatedTitle: {
+    color: '#FBBF24',
+    fontSize: 12,
+    fontWeight: '700',
+    marginBottom: 8,
+  },
+  unlocatedRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+  },
+  unlocatedRowText: {
+    color: '#E5E7EB',
+    fontSize: 12,
+    flex: 1,
+  },
+  unlocatedRowHint: {
+    color: '#60A5FA',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  editPanel: {
+    gap: 6,
+    backgroundColor: 'rgba(16, 185, 129, 0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(16, 185, 129, 0.35)',
+    borderRadius: 8,
+    padding: 10,
+  },
+  editHint: {
+    color: '#A7B0C0',
+    fontSize: 11,
+    lineHeight: 16,
+  },
+  editError: {
+    color: '#F87171',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  editWarn: {
+    color: '#FBBF24',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  editBtnRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 4,
+  },
+  editBtn: {
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    borderWidth: 1,
+  },
+  editBtnPrimary: {
+    backgroundColor: '#10B981',
+    borderColor: '#10B981',
+  },
+  editBtnGhost: {
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    borderColor: 'rgba(255, 255, 255, 0.15)',
+  },
+  editBtnText: {
+    color: '#FFFFFF',
+    fontSize: 12,
     fontWeight: '700',
   },
 });

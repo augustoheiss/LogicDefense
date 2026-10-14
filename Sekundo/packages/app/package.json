@@ -6,7 +6,9 @@
   "dependencies": {
     "@expo/ui": "~56.0.18",
     "@expo/vector-icons": "^15.0.2",
+    "@geoman-io/leaflet-geoman-free": "^2.20.2",
     "@react-native-async-storage/async-storage": "2.2.0",
+    "@sekundo/core": "*",
     "expo": "~56.0.12",
     "expo-clipboard": "~56.0.4",
     "expo-constants": "~56.0.18",
@@ -29,6 +31,7 @@
     "expo-system-ui": "~56.0.5",
     "expo-updates": "~56.0.21",
     "expo-web-browser": "~56.0.5",
+    "leaflet": "^1.9.4",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-native": "0.85.3",
@@ -38,10 +41,10 @@
     "react-native-safe-area-context": "~5.7.0",
     "react-native-screens": "4.25.2",
     "react-native-svg": "15.15.4",
-    "react-native-web": "~0.21.0",
-    "@sekundo/core": "*"
+    "react-native-web": "~0.21.0"
   },
   "devDependencies": {
+    "@types/leaflet": "^1.9.22",
     "@types/react": "~19.2.2",
     "babel-plugin-module-resolver": "^5.0.3",
     "typescript": "~6.0.3"

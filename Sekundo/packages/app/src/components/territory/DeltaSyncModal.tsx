@@ -1,19 +1,15 @@
 /**
  * Component: DeltaSyncModal
  *
- * Sovereign Mode 1 Delta Synchronization Hub.
- * Solves the core question:
- * "Eu preciso ficar com o computador ligado se eu quiser sincronizar a planilha com alguém?"
- *
- * In Mode 1:
- * - NO server is needed.
- * - Computer does NOT need to stay on.
- * - Peer A exports the delta token or JSON after work.
- * - Peer B imports the delta token at any time.
- * - reconcileLedgers merges operations attribute-by-attribute using Last-Write-Wins.
+ * Sovereign Mode 1 Delta Synchronization Hub (v2).
+ * - 100% Local-First, zero server dependency.
+ * - Uses persistent unique deviceId + HLC + true mutation timestamps.
+ * - Propagates worked=1, worked=0 (unmarks), notes, and manual quadra polygons/buffers.
+ * - Supports optional AES-256-GCM passphrase encryption (`SEKUNDO_ENC_DELTA_v2:`) and `.sekundo` file export/import.
+ * - Supports LGPD note exclusion toggle and reconciliation preview.
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   StyleSheet,
   Text,
@@ -23,9 +19,24 @@ import {
   TextInput,
   ScrollView,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
-import type { FlatSkeletonEntry, LedgerOperation } from '@sekundo/core';
-import { reconcileLedgers, createLedgerOperation } from '@sekundo/core';
+import type { FlatSkeletonEntry, LedgerOperation, ReconcilePreview } from '@sekundo/core';
+import {
+  reconcileLedgers,
+  previewReconcileLedgers,
+  synthesizeOpsFromRegistry,
+  encodeDeltaEnvelope,
+  decodeDeltaEnvelope,
+  isEncryptedDeltaEnvelope,
+  compareLedgerOperations,
+  pathKey,
+} from '@sekundo/core';
+import {
+  getOrCreateDeviceId,
+  loadEventLedger,
+  saveEventLedger,
+} from '../../storage/ledgerStore';
 
 export interface DeltaSyncModalProps {
   visible: boolean;
@@ -44,59 +55,100 @@ export function DeltaSyncModal({
 }: DeltaSyncModalProps) {
   const [tab, setTab] = useState<'export' | 'import'>('export');
   const [copied, setCopied] = useState(false);
+  const [deviceId, setDeviceId] = useState<string>('dev_local');
+  const [localLedger, setLocalLedger] = useState<LedgerOperation[]>([]);
+  const [exportPassphrase, setExportPassphrase] = useState('');
+  const [excludeNotes, setExcludeNotes] = useState(false);
+  const [exportPayload, setExportPayload] = useState('');
+  const [opsExportCount, setOpsExportCount] = useState(0);
+
   const [importInput, setImportInput] = useState('');
+  const [importPassphrase, setImportPassphrase] = useState('');
+  const [preview, setPreview] = useState<ReconcilePreview | null>(null);
   const [processing, setProcessing] = useState(false);
   const [resultMessage, setResultMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  if (!visible) return null;
-
-  // Generate delta export payload from flatRegistry
-  const generateExportPayload = () => {
-    // Generate ledger operations from current registry entries that have worked=1 or custom styles
-    const ops: LedgerOperation[] = [];
-    const now = new Date().toISOString();
-    const deviceId = `sovereign_dev_${eventId.slice(0, 6)}`;
-
-    flatRegistry.forEach((node) => {
-      const meta = (node.meta || {}) as Record<string, any>;
-      if (meta.worked === 1) {
-        ops.push(
-          createLedgerOperation(eventId, node.key, 'worked', 1, deviceId, {
-            authorName: node.value || meta.workerName || 'Voluntário',
-            timestamp: meta.lastWorkedAt || meta.completedAt || now,
-          })
-        );
+  useEffect(() => {
+    if (!visible) return;
+    let active = true;
+    (async () => {
+      const id = await getOrCreateDeviceId();
+      const ledger = await loadEventLedger(eventId);
+      if (active) {
+        setDeviceId(id);
+        setLocalLedger(ledger);
       }
-      if (meta.pinShape) {
-        ops.push(createLedgerOperation(eventId, node.key, 'meta.pinShape', meta.pinShape, deviceId));
-      }
-      if (meta.pinColor) {
-        ops.push(createLedgerOperation(eventId, node.key, 'meta.pinColor', meta.pinColor, deviceId));
-      }
-      if (meta.customColor) {
-        ops.push(createLedgerOperation(eventId, node.key, 'meta.customColor', meta.customColor, deviceId));
-      }
-      if (meta.polygonExpansion) {
-        ops.push(createLedgerOperation(eventId, node.key, 'meta.polygonExpansion', meta.polygonExpansion, deviceId));
-      }
-      if (meta.perimeter_streets) {
-        ops.push(createLedgerOperation(eventId, node.key, 'meta.perimeter_streets', meta.perimeter_streets, deviceId));
-      }
-    });
-
-    const envelope = {
-      protocol: 'SEKUNDO_DELTA_v1',
-      eventId,
-      exportedAt: now,
-      operationsCount: ops.length,
-      operations: ops,
+    })();
+    return () => {
+      active = false;
     };
+  }, [visible, eventId, flatRegistry]);
 
-    return JSON.stringify(envelope, null, 2);
-  };
+  // Build merged operations (persisted ledger + synthesized state preserving real mutation timestamps)
+  useEffect(() => {
+    if (!visible) return;
+    let active = true;
+    (async () => {
+      const synthOps = synthesizeOpsFromRegistry(eventId, flatRegistry, deviceId, {
+        excludeNotes,
+      });
+      const byField = new Map<string, LedgerOperation>();
+      for (const op of [...synthOps, ...localLedger]) {
+        if (excludeNotes && (op.field === 'notes' || op.field === 'meta.notes')) continue;
+        const key = `${pathKey.normalize(op.nodeKey)}::${op.field}`;
+        const existing = byField.get(key);
+        if (!existing || compareLedgerOperations(existing, op) <= 0) {
+          byField.set(key, op);
+        }
+      }
+      const mergedOps = Array.from(byField.values());
+      const encoded = await encodeDeltaEnvelope(eventId, mergedOps, {
+        authorId: deviceId,
+        passphrase: exportPassphrase.trim() || undefined,
+      });
+      if (active) {
+        setOpsExportCount(mergedOps.length);
+        setExportPayload(encoded);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [visible, eventId, flatRegistry, deviceId, localLedger, exportPassphrase, excludeNotes]);
 
-  const exportPayload = generateExportPayload();
+  // Live preview when importInput or importPassphrase changes
+  useEffect(() => {
+    if (!visible || tab !== 'import' || !importInput.trim()) {
+      setPreview(null);
+      return;
+    }
+    let active = true;
+    (async () => {
+      try {
+        const decoded = await decodeDeltaEnvelope(
+          importInput,
+          importPassphrase.trim() || undefined
+        );
+        const synthLocal = synthesizeOpsFromRegistry(eventId, flatRegistry, deviceId);
+        const combinedLocal = [...synthLocal, ...localLedger];
+        const prev = previewReconcileLedgers(combinedLocal, decoded.operations, flatRegistry);
+        if (active) {
+          setPreview(prev);
+          setErrorMessage(null);
+        }
+      } catch (err: any) {
+        if (active) {
+          setPreview(null);
+        }
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [visible, tab, importInput, importPassphrase, eventId, flatRegistry, deviceId, localLedger]);
+
+  if (!visible) return null;
 
   const handleCopy = () => {
     if (typeof navigator !== 'undefined' && navigator.clipboard) {
@@ -106,9 +158,37 @@ export function DeltaSyncModal({
     }
   };
 
+  const handleDownloadFile = () => {
+    if (Platform.OS !== 'web' || typeof document === 'undefined') return;
+    const blob = new Blob([exportPayload], { type: 'application/json;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const stamp = new Date().toISOString().slice(0, 10);
+    a.download = `sekundo-delta-${eventId}-${stamp}.sekundo`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleUploadFile = () => {
+    if (Platform.OS !== 'web' || typeof document === 'undefined') return;
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.sekundo,.json,.txt';
+    input.onchange = async (e: any) => {
+      const file = e?.target?.files?.[0];
+      if (!file) return;
+      const text = await file.text();
+      setImportInput(text);
+    };
+    input.click();
+  };
+
   const handleImport = async () => {
     if (!importInput.trim()) {
-      setErrorMessage('Por favor, cole o código ou JSON do log de mudanças recebido.');
+      setErrorMessage('Por favor, cole o código ou carregue um arquivo .sekundo recebido.');
       return;
     }
 
@@ -117,37 +197,38 @@ export function DeltaSyncModal({
     setResultMessage(null);
 
     try {
-      let parsed: any;
-      try {
-        parsed = JSON.parse(importInput.trim());
-      } catch {
-        throw new Error('Formato inválido. Certifique-se de colar o JSON completo gerado pelo Sekundo.');
-      }
+      const decoded = await decodeDeltaEnvelope(
+        importInput,
+        importPassphrase.trim() || undefined
+      );
 
-      let incomingOps: LedgerOperation[] = [];
-      if (Array.isArray(parsed)) {
-        incomingOps = parsed;
-      } else if (parsed && Array.isArray(parsed.operations)) {
-        incomingOps = parsed.operations;
-      } else {
-        throw new Error('Nenhuma lista de operações encontrada no pacote fornecido.');
-      }
+      const synthLocal = synthesizeOpsFromRegistry(eventId, flatRegistry, deviceId);
+      const combinedLocal = [...synthLocal, ...localLedger];
 
-      // Reconcile ledgers attribute by attribute (Last-Write-Wins)
-      const reconcileResult = reconcileLedgers([], incomingOps, flatRegistry);
+      // Reconcile ledgers attribute by attribute (Last-Write-Wins with HLC + true edit timestamps)
+      const reconcileResult = reconcileLedgers(
+        combinedLocal,
+        decoded.operations,
+        flatRegistry
+      );
 
+      await saveEventLedger(eventId, reconcileResult.consolidatedLedger);
+      setLocalLedger(reconcileResult.consolidatedLedger);
       await onSyncApplied(reconcileResult.updatedRegistry);
 
       setResultMessage(
-        `✓ Sucesso! ${reconcileResult.appliedOpsCount} operações aplicadas. ${reconcileResult.conflictsResolvedCount} conciliações automáticas efetuadas. Sua planilha foi atualizada sem sobrescrever suas edições!`
+        `✓ Sucesso! ${reconcileResult.appliedOpsCount} operações recebidas (${reconcileResult.effectiveChangedKeys.length} nós atualizados, ${reconcileResult.conflictsResolvedCount} conciliações automáticas).`
       );
       setImportInput('');
+      setPreview(null);
     } catch (err: any) {
       setErrorMessage(err.message || 'Erro ao processar e conciliar o log de mudanças.');
     } finally {
       setProcessing(false);
     }
   };
+
+  const needsImportPass = isEncryptedDeltaEnvelope(importInput);
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
@@ -156,9 +237,9 @@ export function DeltaSyncModal({
           {/* Header */}
           <View style={styles.header}>
             <View style={{ flex: 1 }}>
-              <Text style={styles.title}>🔄 Sincronização Assíncrona (Modo 1)</Text>
+              <Text style={styles.title}>🔄 Sincronização Assíncrona (Modo 1 • HLC v2)</Text>
               <Text style={styles.subtitle}>
-                Você NÃO precisa deixar o computador ligado! Troque apenas o log de mudanças.
+                100% Local-First • Dispositivo: {deviceId} • {opsExportCount} operações rastreadas
               </Text>
             </View>
             <Pressable onPress={onClose} style={styles.closeBtn}>
@@ -170,10 +251,9 @@ export function DeltaSyncModal({
           <View style={styles.callout}>
             <Text style={styles.calloutTitle}>💡 COMO FUNCIONA O MODO 1 (100% SOBERANO):</Text>
             <Text style={styles.calloutText}>
-              1. Você compartilha a planilha (link ou arquivo). Pode desligar seu computador imediatamente.{'\n'}
-              2. O colega trabalha em campo no aparelho dele (marca casas, quadras, personaliza pins).{'\n'}
-              3. Ele exporta o <Text style={{ color: '#FFB800', fontWeight: '700' }}>Log de Mudanças (Delta)</Text> e envia para você no WhatsApp.{'\n'}
-              4. Você abre o Sekundo, cola aqui e o sistema mescla tudo automaticamente sem apagar o que você fez!
+              1. Cada marcação, desmarcação (0/1), nota ou desenho de quadra guarda o carimbo exato (HLC) da edição.{'\n'}
+              2. Você pode exportar como texto ou arquivo <Text style={{ color: '#FFB800', fontWeight: '700' }}>.sekundo</Text> (com criptografia AES-256-GCM opcional).{'\n'}
+              3. Ao importar, o Sekundo concilia atributo por atributo sem sobrescrever edições mais recentes!
             </Text>
           </View>
 
@@ -208,8 +288,31 @@ export function DeltaSyncModal({
           <ScrollView style={styles.content} contentContainerStyle={{ gap: 14 }}>
             {tab === 'export' ? (
               <View style={styles.tabContent}>
+                {/* Privacy & Encryption Controls */}
+                <View style={styles.optionsRow}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.smallLabel}>🔒 Senha de Criptografia (Opcional — AES-256-GCM):</Text>
+                    <TextInput
+                      style={styles.passInput}
+                      placeholder="Em branco = JSON aberto | Com senha = Token criptografado"
+                      placeholderTextColor="#6F7E94"
+                      secureTextEntry
+                      value={exportPassphrase}
+                      onChangeText={setExportPassphrase}
+                    />
+                  </View>
+                  <Pressable
+                    onPress={() => setExcludeNotes((v) => !v)}
+                    style={[styles.lgpdToggle, excludeNotes && styles.lgpdToggleActive]}
+                  >
+                    <Text style={styles.lgpdToggleText}>
+                      {excludeNotes ? '🛡️ LGPD: Sem Notas' : '📝 Incluindo Notas'}
+                    </Text>
+                  </Pressable>
+                </View>
+
                 <Text style={styles.infoLabel}>
-                  Copie o pacote abaixo e envie para quem precisa receber as suas atualizações:
+                  Pacote Delta ({opsExportCount} operações prontas para envio):
                 </Text>
                 <TextInput
                   style={styles.payloadBox}
@@ -217,25 +320,65 @@ export function DeltaSyncModal({
                   editable={false}
                   value={exportPayload}
                 />
-                <Pressable onPress={handleCopy} style={styles.copyBtn}>
-                  <Text style={styles.copyBtnText}>
-                    {copied ? '✓ Copiado para a Área de Transferência!' : '📋 Copiar Código Delta (Enviar por WhatsApp / E-mail)'}
-                  </Text>
-                </Pressable>
+                <View style={styles.actionsRow}>
+                  <Pressable onPress={handleCopy} style={[styles.copyBtn, { flex: 1 }]}>
+                    <Text style={styles.copyBtnText}>
+                      {copied ? '✓ Copiado!' : '📋 Copiar Código Delta'}
+                    </Text>
+                  </Pressable>
+                  {Platform.OS === 'web' && (
+                    <Pressable onPress={handleDownloadFile} style={styles.fileBtn}>
+                      <Text style={styles.fileBtnText}>💾 Baixar .sekundo</Text>
+                    </Pressable>
+                  )}
+                </View>
               </View>
             ) : (
               <View style={styles.tabContent}>
-                <Text style={styles.infoLabel}>
-                  Cole aqui o código ou JSON do Log de Mudanças que seu colega enviou:
-                </Text>
+                <View style={styles.importHeaderRow}>
+                  <Text style={styles.infoLabel}>
+                    Cole o código/JSON ou carregue o arquivo .sekundo enviado pelo colega:
+                  </Text>
+                  {Platform.OS === 'web' && (
+                    <Pressable onPress={handleUploadFile} style={styles.uploadSmallBtn}>
+                      <Text style={styles.uploadSmallBtnText}>📂 Carregar Arquivo .sekundo</Text>
+                    </Pressable>
+                  )}
+                </View>
+
                 <TextInput
                   style={styles.inputBox}
                   multiline
-                  placeholder="Cole o JSON do log de mudanças aqui..."
+                  placeholder="Cole o JSON ou token SEKUNDO_ENC_DELTA_v2:... aqui"
                   placeholderTextColor="#6F7E94"
                   value={importInput}
                   onChangeText={setImportInput}
                 />
+
+                {needsImportPass && (
+                  <View>
+                    <Text style={styles.smallLabel}>🔑 Este pacote está criptografado. Digite a senha:</Text>
+                    <TextInput
+                      style={styles.passInput}
+                      placeholder="Senha do pacote Delta..."
+                      placeholderTextColor="#6F7E94"
+                      secureTextEntry
+                      value={importPassphrase}
+                      onChangeText={setImportPassphrase}
+                    />
+                  </View>
+                )}
+
+                {preview && (
+                  <View style={styles.previewBox}>
+                    <Text style={styles.previewTitle}>🔍 Prévia da Conciliação:</Text>
+                    <Text style={styles.previewText}>
+                      • Operações no pacote: {preview.incomingOpsCount}{'\n'}
+                      • Nós que mudarão efetivamente na sua planilha: {preview.effectiveChangedKeys.length}{'\n'}
+                      • Conflitos resolvidos por HLC / carimbo real: {preview.conflictsCount}
+                    </Text>
+                  </View>
+                )}
 
                 {errorMessage ? (
                   <View style={styles.errorBox}>
@@ -283,8 +426,8 @@ const styles = StyleSheet.create({
   },
   card: {
     width: '100%',
-    maxWidth: 620,
-    maxHeight: '90%',
+    maxWidth: 650,
+    maxHeight: '92%',
     backgroundColor: '#161A24',
     borderRadius: 16,
     borderWidth: 1,
@@ -304,12 +447,12 @@ const styles = StyleSheet.create({
   },
   title: {
     color: '#FFFFFF',
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: '800',
   },
   subtitle: {
     color: '#10B981',
-    fontSize: 12,
+    fontSize: 11,
     marginTop: 3,
     fontWeight: '600',
   },
@@ -377,6 +520,45 @@ const styles = StyleSheet.create({
   tabContent: {
     gap: 10,
   },
+  optionsRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 10,
+    flexWrap: 'wrap',
+  },
+  smallLabel: {
+    color: '#94A3B8',
+    fontSize: 11,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  passInput: {
+    backgroundColor: '#0F1219',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.12)',
+    color: '#FFFFFF',
+    fontSize: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  lgpdToggle: {
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.12)',
+  },
+  lgpdToggleActive: {
+    backgroundColor: 'rgba(16, 185, 129, 0.16)',
+    borderColor: '#10B981',
+  },
+  lgpdToggleText: {
+    color: '#E2E8F0',
+    fontSize: 11,
+    fontWeight: '700',
+  },
   infoLabel: {
     color: '#A0AEC0',
     fontSize: 12,
@@ -390,7 +572,7 @@ const styles = StyleSheet.create({
     fontFamily: 'monospace',
     fontSize: 11,
     padding: 12,
-    height: 180,
+    height: 150,
     textAlignVertical: 'top',
   },
   inputBox: {
@@ -402,8 +584,12 @@ const styles = StyleSheet.create({
     fontFamily: 'monospace',
     fontSize: 12,
     padding: 12,
-    height: 180,
+    height: 140,
     textAlignVertical: 'top',
+  },
+  actionsRow: {
+    flexDirection: 'row',
+    gap: 10,
   },
   copyBtn: {
     backgroundColor: '#FFB800',
@@ -415,6 +601,59 @@ const styles = StyleSheet.create({
     color: '#062016',
     fontSize: 13,
     fontWeight: '800',
+  },
+  fileBtn: {
+    backgroundColor: 'rgba(59, 130, 246, 0.18)',
+    borderWidth: 1,
+    borderColor: '#3B82F6',
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  fileBtnText: {
+    color: '#93C5FD',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  importHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  uploadSmallBtn: {
+    backgroundColor: 'rgba(59, 130, 246, 0.15)',
+    borderWidth: 1,
+    borderColor: '#3B82F6',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  uploadSmallBtnText: {
+    color: '#93C5FD',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  previewBox: {
+    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(59, 130, 246, 0.35)',
+    borderRadius: 8,
+    padding: 10,
+  },
+  previewTitle: {
+    color: '#93C5FD',
+    fontSize: 11,
+    fontWeight: '800',
+    marginBottom: 3,
+  },
+  previewText: {
+    color: '#CBD5E1',
+    fontSize: 11,
+    lineHeight: 16,
   },
   importBtn: {
     backgroundColor: '#10B981',

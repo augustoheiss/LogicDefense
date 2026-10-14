@@ -15,8 +15,11 @@
 // Constants
 // ---------------------------------------------------------------------------
 
-/** PBKDF2 iteration count for key derivation. */
-const PBKDF2_ITERATIONS = 100_000;
+/** PBKDF2 iteration count for v2 key derivation (OWASP 2023 recommendation for SHA-256). */
+export const PBKDF2_ITERATIONS_V2 = 600_000;
+
+/** Legacy v1 PBKDF2 iteration count kept for backward compatibility. */
+export const PBKDF2_ITERATIONS_V1 = 100_000;
 
 /** AES key length in bits. */
 const AES_KEY_LENGTH = 256;
@@ -107,11 +110,13 @@ export function fromBase64URL(base64url: string): Uint8Array {
  *
  * @param passphrase - User-provided passphrase string.
  * @param salt - Random salt (must be stored alongside the ciphertext).
+ * @param iterations - PBKDF2 iteration count (defaults to v2 = 600k).
  * @returns A CryptoKey ready for AES-GCM operations.
  */
 async function deriveKey(
   passphrase: string,
-  salt: Uint8Array
+  salt: Uint8Array,
+  iterations: number = PBKDF2_ITERATIONS_V2
 ): Promise<CryptoKey> {
   const subtle = getCrypto();
   const encoder = new TextEncoder();
@@ -130,7 +135,7 @@ async function deriveKey(
     {
       name: 'PBKDF2',
       salt: salt as any,
-      iterations: PBKDF2_ITERATIONS,
+      iterations,
       hash: 'SHA-256',
     },
     keyMaterial,
@@ -148,15 +153,11 @@ async function deriveKey(
 // ---------------------------------------------------------------------------
 
 /**
- * Encrypt a plaintext string using AES-256-GCM.
+ * Encrypt a plaintext string using AES-256-GCM (PBKDF2 600k v2).
  *
  * @param plaintext - The string to encrypt.
  * @param passphrase - The passphrase used to derive the encryption key.
- * @returns Encoded payload string in format: "<salt_b64>.<iv_b64>.<ciphertext_b64>"
- *
- * @example
- * const encrypted = await encrypt('{"event": "data"}', 'my-secret-phrase');
- * // → "aBcDeFgH.iJkLmNoP.qRsTuVwXyZ..."
+ * @returns Encoded payload string in format: "v2.<salt_b64>.<iv_b64>.<ciphertext_b64>"
  */
 export async function encrypt(
   plaintext: string,
@@ -169,8 +170,8 @@ export async function encrypt(
   const salt = getRandomBytes(SALT_LENGTH);
   const iv = getRandomBytes(IV_LENGTH);
 
-  // Derive key from passphrase
-  const key = await deriveKey(passphrase, salt);
+  // Derive key from passphrase using v2 (600k iterations)
+  const key = await deriveKey(passphrase, salt, PBKDF2_ITERATIONS_V2);
 
   // Encrypt
   const cipherBuffer = await subtle.encrypt(
@@ -184,21 +185,18 @@ export async function encrypt(
   const ivB64 = toBase64(iv);
   const cipherB64 = toBase64(new Uint8Array(cipherBuffer));
 
-  // Return dot-separated payload
-  return `${saltB64}.${ivB64}.${cipherB64}`;
+  // Return versioned dot-separated payload
+  return `v2.${saltB64}.${ivB64}.${cipherB64}`;
 }
 
 /**
  * Decrypt an encrypted payload string using AES-256-GCM.
+ * Supports both "v2.<salt>.<iv>.<cipher>" (600k iterations) and legacy "<salt>.<iv>.<cipher>" (100k iterations).
  *
- * @param payload - Encrypted payload in format: "<salt_b64>.<iv_b64>.<ciphertext_b64>"
+ * @param payload - Encrypted payload string.
  * @param passphrase - The passphrase used during encryption.
  * @returns The original plaintext string.
  * @throws {Error} If the passphrase is wrong or the payload is corrupted.
- *
- * @example
- * const decrypted = await decrypt(encryptedPayload, 'my-secret-phrase');
- * // → '{"event": "data"}'
  */
 export async function decrypt(
   payload: string,
@@ -207,25 +205,31 @@ export async function decrypt(
   const subtle = getCrypto();
   const decoder = new TextDecoder();
 
-  // Parse the dot-separated payload
   const parts = payload.split('.');
-  if (parts.length !== 3) {
+  let saltB64: string;
+  let ivB64: string;
+  let cipherB64: string;
+  let iterations: number;
+
+  if (parts.length === 4 && parts[0] === 'v2') {
+    [, saltB64, ivB64, cipherB64] = parts;
+    iterations = PBKDF2_ITERATIONS_V2;
+  } else if (parts.length === 3) {
+    [saltB64, ivB64, cipherB64] = parts;
+    iterations = PBKDF2_ITERATIONS_V1;
+  } else {
     throw new Error(
-      'Invalid encrypted payload format. Expected "salt.iv.ciphertext".'
+      'Invalid encrypted payload format. Expected "v2.salt.iv.ciphertext" or "salt.iv.ciphertext".'
     );
   }
-
-  const [saltB64, ivB64, cipherB64] = parts;
 
   const salt = fromBase64(saltB64);
   const iv = fromBase64(ivB64);
   const ciphertext = fromBase64(cipherB64);
 
-  // Derive the same key from passphrase + salt
-  const key = await deriveKey(passphrase, salt);
+  const key = await deriveKey(passphrase, salt, iterations);
 
   try {
-    // Decrypt
     const plainBuffer = await subtle.decrypt(
       { name: 'AES-GCM', iv: iv as any },
       key,

@@ -99,10 +99,11 @@ describe('encrypt / decrypt', () => {
     await expect(decrypt('not.a.valid-payload', passphrase)).rejects.toThrow();
   });
 
-  it('encrypted payload has salt.iv.ciphertext format', async () => {
+  it('encrypted payload has v2.salt.iv.ciphertext format', async () => {
     const encrypted = await encrypt('test', passphrase);
     const parts = encrypted.split('.');
-    expect(parts).toHaveLength(3);
+    expect(parts).toHaveLength(4);
+    expect(parts[0]).toBe('v2');
   });
 });
 

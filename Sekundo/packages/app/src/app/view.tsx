@@ -24,7 +24,7 @@ import { TreeView } from '../components/ui/TreeView';
 import { AddressEditModal } from '../components/territory/AddressEditModal';
 import { skeletonTree } from '@sekundo/core';
 import { usePeerChat } from '../hooks/usePeerChat';
-import { API, getHeaders } from '../config/api';
+import { storage } from '../storage/localStorage';
 
 export default function TokenViewer() {
   const router = useRouter();
@@ -74,7 +74,7 @@ export default function TokenViewer() {
     onStateUpdate: (incomingSkeleton) => {
       if (payload) {
         setPayload((prev) => (prev ? { ...prev, skeleton: incomingSkeleton } : null));
-        console.log('[Sekundo P2P] Received live skeleton update.');
+        console.log('[Sekundo P2P] Received live skeleton update via WebRTC DataChannel.');
       }
     },
   });
@@ -98,21 +98,16 @@ export default function TokenViewer() {
     try {
       let activePayload = await decodeToken(token, cleanPass);
 
-      // Try fetching latest state from Render RAM cache first
-      if (roomParam) {
-        try {
-          const stateRes = await fetch(API.signal.state(roomParam));
-          if (stateRes.status === 200) {
-            const resData = await stateRes.json();
-            if (resData.state) {
-              const decryptedStr = await decrypt(resData.state, cleanPass);
-              activePayload = JSON.parse(decryptedStr);
-              console.log('[Sekundo] Loaded latest state from Render volatile state.');
-            }
-          }
-        } catch (e) {
-          console.warn('[Sekundo] Fallback to direct token payload:', e);
+      // Check local device encrypted cache for this session (100% offline/local)
+      const localKey = `sekundo:viewer-cache:${roomParam || activePayload.eventName}`;
+      try {
+        const cachedCipher = await storage.getItem(localKey);
+        if (cachedCipher) {
+          const decryptedStr = await decrypt(cachedCipher, cleanPass);
+          activePayload = JSON.parse(decryptedStr);
         }
+      } catch {
+        // Fallback to direct token payload if passphrase/cache differs
       }
 
       setPayload(activePayload);
@@ -142,23 +137,18 @@ export default function TokenViewer() {
     }
   };
 
-  // Auto-Save modifications to Render RAM cache
+  // Persist modifications encrypted locally on the user's device only (zero server storage)
   const triggerAutoSave = async (updatedSkeleton: FlatSkeletonEntry[]) => {
-    if (!roomParam || !payload) return;
+    if (!payload || !passphrase.trim()) return;
 
     try {
       const updatedPayload: HorizonPayload = { ...payload, skeleton: updatedSkeleton };
       const rawPayload = JSON.stringify(updatedPayload);
-      const encryptedData = await encrypt(rawPayload, passphrase);
-
-      await fetch(API.signal.state(roomParam), {
-        method: 'POST',
-        headers: getHeaders(),
-        body: JSON.stringify({ state: encryptedData }),
-      });
-      console.log('[Sekundo] State auto-saved to Render cache.');
+      const encryptedData = await encrypt(rawPayload, passphrase.trim());
+      const localKey = `sekundo:viewer-cache:${roomParam || payload.eventName}`;
+      await storage.setItem(localKey, encryptedData);
     } catch (err) {
-      console.error('[Sekundo] Auto-save failed:', err);
+      console.error('[Sekundo] Local encrypted cache save failed:', err);
     }
   };
 

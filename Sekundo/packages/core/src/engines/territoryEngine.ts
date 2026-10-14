@@ -210,14 +210,14 @@ export function computeTerritoryRecencyList(
     }
   >();
 
-  // Determine non-parent leaf items
-  const allKeys = new Set(entries.map((e) => e.key));
+  // Determine non-parent leaf items (supporting both '-' and '.' path separators)
   const parentKeys = new Set<string>();
   entries.forEach((e) => {
-    const parts = e.key.split('-');
+    const sep = e.key.includes('.') ? '.' : '-';
+    const parts = e.key.split(sep);
     if (parts.length > 1) {
       for (let i = 1; i < parts.length; i++) {
-        parentKeys.add(parts.slice(0, i).join('-'));
+        parentKeys.add(parts.slice(0, i).join(sep));
       }
     }
   });
@@ -225,13 +225,14 @@ export function computeTerritoryRecencyList(
   // 1. First pass: find territory group headers (depth 3 or meta.territory_number)
   entries.forEach((e) => {
     const meta = (e.meta || {}) as Record<string, any>;
+    const parts = e.key.split(/[-.]/);
     const tNum =
       meta.territory_number ||
       meta.territoryNumber ||
-      (e.key.split('-').length === 3 ? e.label.split('—')[0].trim() : undefined);
+      (parts.length === 3 ? e.label.split('—')[0].trim() : undefined);
 
-    if (tNum && !territoryMap.has(tNum)) {
-      territoryMap.set(tNum, {
+    if (tNum && !territoryMap.has(String(tNum))) {
+      territoryMap.set(String(tNum), {
         label: e.label || `Território ${tNum}`,
         locality: meta.locality,
         totalUnits: 0,
@@ -244,17 +245,19 @@ export function computeTerritoryRecencyList(
 
   // 2. Second pass: aggregate leaf addresses
   entries.forEach((e) => {
-    if (parentKeys.has(e.key)) return; // skip intermediate containers
+    if (parentKeys.has(e.key) || e.type === 'header' || e.type === 'branch') return; // skip intermediate containers
     const meta = (e.meta || {}) as Record<string, any>;
 
     // Infer territory number
-    let tNum = meta.territory_number || meta.territoryNumber;
+    let tNum = meta.territory_number ? String(meta.territory_number) : meta.territoryNumber ? String(meta.territoryNumber) : undefined;
     if (!tNum) {
-      const parts = e.key.split('-');
+      const sep = e.key.includes('.') ? '.' : '-';
+      const parts = e.key.split(sep);
       if (parts.length >= 3) {
-        const potentialKey = parts.slice(0, 3).join('-');
+        const potentialKey = parts.slice(0, 3).join(sep);
         const parentEntry = entries.find((x) => x.key === potentialKey);
-        tNum = parentEntry?.meta?.territory_number || parentEntry?.meta?.territoryNumber || `T${potentialKey}`;
+        const pMeta = parentEntry?.meta as Record<string, any> | undefined;
+        tNum = pMeta?.territory_number ? String(pMeta.territory_number) : pMeta?.territoryNumber ? String(pMeta.territoryNumber) : `T${potentialKey}`;
       } else {
         tNum = 'Geral';
       }
@@ -302,6 +305,8 @@ export function computeTerritoryRecencyList(
 
     const daysSinceCompleted =
       isCompleted && effectiveCompletedAt ? calculateDaysDifference(effectiveCompletedAt, now) : null;
+    const daysSinceAssigned = effectiveAssignedAt ? calculateDaysDifference(effectiveAssignedAt, now) : null;
+    const isOverdue = !isCompleted && daysSinceAssigned !== null && daysSinceAssigned >= 120;
 
     list.push({
       territoryNumber: tNum,
@@ -314,6 +319,8 @@ export function computeTerritoryRecencyList(
       assignedAt: effectiveAssignedAt,
       completedAt: effectiveCompletedAt,
       daysSinceCompleted,
+      daysSinceAssigned,
+      isOverdue,
     });
   });
 

@@ -13,12 +13,121 @@ const SKELETON_PREFIX = 'sekundo_skeleton_';
 const PDF_MAP_PREFIX = 'sekundo_pdf_map_';
 const EVENTS_LIST_KEY = 'sekundo_events_list';
 
+const IDB_NAME = 'sekundo_sovereign_db';
+const IDB_STORE = 'kv_store';
+
+let lastQuotaWarning: string | null = null;
+export function getStorageQuotaWarning(): string | null {
+  return lastQuotaWarning;
+}
+
+function isWebIndexedDBAvailable(): boolean {
+  return typeof window !== 'undefined' && typeof window.indexedDB !== 'undefined';
+}
+
+function openSovereignIDB(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    if (!isWebIndexedDBAvailable()) {
+      reject(new Error('IndexedDB unavailable'));
+      return;
+    }
+    const req = window.indexedDB.open(IDB_NAME, 1);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains(IDB_STORE)) {
+        db.createObjectStore(IDB_STORE);
+      }
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error || new Error('IndexedDB open error'));
+  });
+}
+
+async function idbGet(key: string): Promise<string | null> {
+  if (!isWebIndexedDBAvailable()) return null;
+  try {
+    const db = await openSovereignIDB();
+    return await new Promise<string | null>((resolve, reject) => {
+      const tx = db.transaction(IDB_STORE, 'readonly');
+      const store = tx.objectStore(IDB_STORE);
+      const req = store.get(key);
+      req.onsuccess = () => resolve(typeof req.result === 'string' ? req.result : null);
+      req.onerror = () => reject(req.error);
+    });
+  } catch {
+    return null;
+  }
+}
+
+async function idbSet(key: string, value: string): Promise<void> {
+  if (!isWebIndexedDBAvailable()) return;
+  try {
+    const db = await openSovereignIDB();
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(IDB_STORE, 'readwrite');
+      const store = tx.objectStore(IDB_STORE);
+      const req = store.put(value, key);
+      req.onsuccess = () => resolve();
+      req.onerror = () => reject(req.error);
+    });
+  } catch {
+    // Non-fatal fallback
+  }
+}
+
+async function idbRemove(key: string): Promise<void> {
+  if (!isWebIndexedDBAvailable()) return;
+  try {
+    const db = await openSovereignIDB();
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(IDB_STORE, 'readwrite');
+      const store = tx.objectStore(IDB_STORE);
+      const req = store.delete(key);
+      req.onsuccess = () => resolve();
+      req.onerror = () => reject(req.error);
+    });
+  } catch {
+    // Non-fatal
+  }
+}
+
+export const storage = {
+  async getItem(key: string): Promise<string | null> {
+    try {
+      const val = await AsyncStorage.getItem(key);
+      if (val !== null) return val;
+    } catch {
+      // Fallback to IndexedDB
+    }
+    return await idbGet(key);
+  },
+  async setItem(key: string, value: string): Promise<void> {
+    await idbSet(key, value);
+    try {
+      await AsyncStorage.setItem(key, value);
+      lastQuotaWarning = null;
+    } catch (err: any) {
+      lastQuotaWarning =
+        'Limite do localStorage (5MB) atingido; dados salvos com segurança no IndexedDB local do navegador.';
+      console.warn('[Sekundo Storage]', lastQuotaWarning, err);
+    }
+  },
+  async removeItem(key: string): Promise<void> {
+    await idbRemove(key);
+    try {
+      await AsyncStorage.removeItem(key);
+    } catch {
+      // Ignore
+    }
+  },
+};
+
 /**
  * Get all saved event IDs.
  */
 export async function getEventIds(): Promise<string[]> {
   try {
-    const raw = await AsyncStorage.getItem(EVENTS_LIST_KEY);
+    const raw = await storage.getItem(EVENTS_LIST_KEY);
     return raw ? JSON.parse(raw) : [];
   } catch {
     return [];
@@ -29,7 +138,7 @@ export async function getEventIds(): Promise<string[]> {
  * Save the master list of event IDs.
  */
 export async function saveEventIds(ids: string[]): Promise<void> {
-  await AsyncStorage.setItem(EVENTS_LIST_KEY, JSON.stringify(ids));
+  await storage.setItem(EVENTS_LIST_KEY, JSON.stringify(ids));
 }
 
 /**
@@ -37,7 +146,7 @@ export async function saveEventIds(ids: string[]): Promise<void> {
  */
 export async function loadEventState(eventId: string): Promise<EventState | null> {
   try {
-    const raw = await AsyncStorage.getItem(`${EVENTS_PREFIX}${eventId}`);
+    const raw = await storage.getItem(`${EVENTS_PREFIX}${eventId}`);
     return raw ? JSON.parse(raw) : null;
   } catch {
     return null;
@@ -48,7 +157,7 @@ export async function loadEventState(eventId: string): Promise<EventState | null
  * Save/Update an event container state.
  */
 export async function saveEventState(eventId: string, state: EventState): Promise<void> {
-  await AsyncStorage.setItem(`${EVENTS_PREFIX}${eventId}`, JSON.stringify(state));
+  await storage.setItem(`${EVENTS_PREFIX}${eventId}`, JSON.stringify(state));
   const ids = await getEventIds();
   if (!ids.includes(eventId)) {
     await saveEventIds([...ids, eventId]);
@@ -59,8 +168,8 @@ export async function saveEventState(eventId: string, state: EventState): Promis
  * Delete an event and all associated skeleton mappings.
  */
 export async function deleteEvent(eventId: string): Promise<void> {
-  await AsyncStorage.removeItem(`${EVENTS_PREFIX}${eventId}`);
-  await AsyncStorage.removeItem(`${SKELETON_PREFIX}${eventId}`);
+  await storage.removeItem(`${EVENTS_PREFIX}${eventId}`);
+  await storage.removeItem(`${SKELETON_PREFIX}${eventId}`);
   const ids = await getEventIds();
   await saveEventIds(ids.filter((id) => id !== eventId));
 }
@@ -70,8 +179,13 @@ export async function deleteEvent(eventId: string): Promise<void> {
  */
 export async function loadSkeleton(eventId: string): Promise<FlatRegistry | null> {
   try {
-    const raw = await AsyncStorage.getItem(`${SKELETON_PREFIX}${eventId}`);
-    return raw ? JSON.parse(raw) : null;
+    // Check AsyncStorage first so external dev seeds in localStorage are picked up immediately
+    const rawAsync = await AsyncStorage.getItem(`${SKELETON_PREFIX}${eventId}`).catch(() => null);
+    if (rawAsync) {
+      return JSON.parse(rawAsync);
+    }
+    const rawIdb = await idbGet(`${SKELETON_PREFIX}${eventId}`);
+    return rawIdb ? JSON.parse(rawIdb) : null;
   } catch {
     return null;
   }
@@ -81,7 +195,7 @@ export async function loadSkeleton(eventId: string): Promise<FlatRegistry | null
  * Save/Update the flat skeleton registry for an event.
  */
 export async function saveSkeleton(eventId: string, skeleton: FlatRegistry): Promise<void> {
-  await AsyncStorage.setItem(`${SKELETON_PREFIX}${eventId}`, JSON.stringify(skeleton));
+  await storage.setItem(`${SKELETON_PREFIX}${eventId}`, JSON.stringify(skeleton));
 }
 
 /**

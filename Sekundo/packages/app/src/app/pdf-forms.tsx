@@ -28,6 +28,8 @@ import {
   fillAcroForm,
   inspectPDFForm,
   autoRecognizePDFFields,
+  generateTerritoryS13AndCardsPDF,
+  computeTerritoryRecencyList,
   type S89Assignment,
   type PDFFormField,
   type FieldMappingCandidate,
@@ -63,6 +65,38 @@ export default function PDFFormsConsole() {
       roomOrHall: (entry.meta?.room as string) || (entry.meta?.sala as string) || 'Salão Principal',
       remarks: (entry.meta?.remarks as string) || undefined,
     }));
+
+  const territoryRecencySummary = computeTerritoryRecencyList(flatRegistry, 'hierarchical');
+
+  const handleGenerateS13AndCards = async () => {
+    try {
+      setLoading(true);
+      setStatusMessage('Gerando Registro S-13 e Cartões Táticos de Quadra S-12 (100% local)...');
+      const res = await generateTerritoryS13AndCardsPDF(flatRegistry, {
+        eventName: `Territórios (${eventId || 'Sekundo'})`,
+        includeQuadraCards: true,
+      });
+
+      if (Platform.OS === 'web') {
+        const blob = new Blob([res.pdfBytes as unknown as BlobPart], { type: 'application/pdf' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `Registro_S13_e_Cartoes_S12_${new Date().toISOString().slice(0, 10)}.pdf`;
+        link.click();
+        URL.revokeObjectURL(url);
+      }
+
+      setStatusMessage(
+        `✅ PDF S-13 + S-12 gerado com sucesso! ${res.territoryCount} territórios, ${res.quadraCount} quadras (${res.workedUnits}/${res.totalUnits} unidades concluídas).`
+      );
+    } catch (err: any) {
+      console.error(err);
+      setStatusMessage(`❌ Erro ao gerar PDF S-13/S-12: ${err.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Handle uploading / picking a custom PDF file for auto-recognition
   const handlePickCustomPDF = async () => {
@@ -267,9 +301,9 @@ export default function PDFFormsConsole() {
               onPress={() => setSelectedTemplate('s12')}
               style={[styles.templateCard, selectedTemplate === 's12' && styles.templateCardActive]}
             >
-              <Text style={styles.templateCardTitle}>Cartões de Território & Logística</Text>
+              <Text style={styles.templateCardTitle}>Registro S-13 & Cartões de Território S-12</Text>
               <Text style={styles.templateCardDesc}>
-                Ficha tática de saída com lista de endereços, quadras e histórico de cobertura.
+                Tabela oficial de designação/conclusão de territórios (S-13) + fichas táticas de quadras (S-12).
               </Text>
             </Pressable>
 
@@ -350,6 +384,42 @@ export default function PDFFormsConsole() {
                 </Pressable>
               </View>
             ) : null}
+          </View>
+        ) : selectedTemplate === 's12' ? (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>RESUMO DE TERRITÓRIOS PARA REGISTRO S-13 & CARTÕES S-12</Text>
+            {territoryRecencySummary.length === 0 ? (
+              <View style={styles.emptyBox}>
+                <Text style={styles.emptyText}>Nenhum território encontrado na árvore ativa.</Text>
+              </View>
+            ) : (
+              territoryRecencySummary.map((t, idx) => (
+                <View key={idx} style={styles.assignmentPreviewRow}>
+                  <View style={styles.badgeQuadrant}>
+                    <Text style={styles.badgeQuadrantText}>{t.territoryNumber}</Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.assigneeName}>
+                      {t.label} — {t.workedUnits}/{t.totalUnits} ({t.percent}%)
+                    </Text>
+                    <Text style={styles.assigneeMeta}>
+                      Designado: {t.assignedAt || '—'} • Concluído: {t.completedAt || 'Em andamento'}
+                    </Text>
+                  </View>
+                </View>
+              ))
+            )}
+            <View style={styles.actionContainer}>
+              {loading ? (
+                <ActivityIndicator size="large" color="#FFB800" />
+              ) : (
+                <Pressable onPress={handleGenerateS13AndCards} style={styles.generateButton}>
+                  <Text style={styles.generateButtonText}>
+                    ⚡ Gerar e Baixar PDF S-13 + Cartões de Quadra S-12 (100% Local)
+                  </Text>
+                </Pressable>
+              )}
+            </View>
           </View>
         ) : (
           /* Preview of Extracted Data for S-89 */

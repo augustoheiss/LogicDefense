@@ -145,8 +145,16 @@ export function usePeerChat({ eventId, role, onHistorySync, onStateUpdate }: Use
     }
 
     try {
+      const rawStun = process.env.EXPO_PUBLIC_SEKUNDO_STUN_URLS;
+      const iceServers = rawStun
+        ? rawStun
+            .split(',')
+            .map((u) => u.trim())
+            .filter(Boolean)
+            .map((urls) => ({ urls }))
+        : [];
       const pc = new RTCPeerConnection({
-        iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
+        iceServers,
       });
 
       pc.oniceconnectionstatechange = () => {

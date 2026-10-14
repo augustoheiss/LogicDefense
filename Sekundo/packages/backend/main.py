@@ -23,7 +23,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from routers import pdf_router, signaling_router, health_router
+from routers import signaling_router, health_router
 
 
 # ---------------------------------------------------------------------------
@@ -44,8 +44,8 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="Sekundo API",
-    description="Stateless microservice for PDF processing, email dispatch, and WebRTC signaling.",
-    version="0.1.0",
+    description="Stateless microservice for ephemeral WebRTC signaling (zero data storage).",
+    version="0.2.0",
     lifespan=lifespan,
 )
 
@@ -67,7 +67,6 @@ app.add_middleware(
 # ---------------------------------------------------------------------------
 
 app.include_router(health_router.router, tags=["Health"])
-app.include_router(pdf_router.router, prefix="/pdf", tags=["PDF"])
 app.include_router(signaling_router.router, prefix="/signal", tags=["WebRTC Signaling"])
 
 

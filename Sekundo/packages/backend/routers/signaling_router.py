@@ -34,8 +34,8 @@ router = APIRouter()
 ROOM_TTL = 300
 
 # In-memory rooms: { room_id: { offer, answer, candidates, created_at } }
+# Strictly ephemeral SDP/ICE handshake broker — ZERO application state or user data stored.
 _rooms: dict[str, dict] = {}
-ROOM_STATES: dict[str, str] = {}
 
 
 def _cleanup_expired():
@@ -44,8 +44,6 @@ def _cleanup_expired():
     expired = [rid for rid, room in _rooms.items() if now - room["created_at"] > ROOM_TTL]
     for rid in expired:
         del _rooms[rid]
-        if rid in ROOM_STATES:
-            del ROOM_STATES[rid]
 
 
 # ---------------------------------------------------------------------------
@@ -66,11 +64,6 @@ class ICECandidate(BaseModel):
     candidate: str
     sdpMLineIndex: Optional[int] = None
     sdpMid: Optional[str] = None
-
-
-class RoomStatePayload(BaseModel):
-    state: str
-
 
 
 # ---------------------------------------------------------------------------
@@ -177,27 +170,4 @@ async def get_candidates(room_id: str, role: str):
 
     return {"candidates": _rooms[room_id].get(f"candidates_{role}", [])}
 
-
-@router.post("/room/{room_id}/state")
-@router.post("/rooms/{room_id}/state")
-async def post_room_state(room_id: str, payload: RoomStatePayload):
-    """Store the latest encrypted state in volatile RAM cache."""
-    _cleanup_expired()
-    if room_id not in _rooms:
-        raise HTTPException(status_code=404, detail="Room not found or expired.")
-    ROOM_STATES[room_id] = payload.state
-    return {"status": "state_stored"}
-
-
-@router.get("/room/{room_id}/state")
-@router.get("/rooms/{room_id}/state")
-async def get_room_state(room_id: str):
-    """Retrieve the latest encrypted state from volatile RAM cache."""
-    _cleanup_expired()
-    if room_id not in _rooms:
-        raise HTTPException(status_code=404, detail="Room not found or expired.")
-    state = ROOM_STATES.get(room_id)
-    if not state:
-        raise HTTPException(status_code=204, detail="No state yet.")
-    return {"state": state}
 

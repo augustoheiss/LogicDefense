@@ -16,6 +16,8 @@ export type {
   FlatSkeletonEntry,
   FlatRegistry,
 } from './skeleton/types';
+export { applyNodeUpdates, buildWorkedMeta, createSerialQueue } from './skeleton/registryOps';
+export type { NodePatch } from './skeleton/registryOps';
 
 // Events
 export * as eventContainer from './events/eventContainer';
@@ -107,6 +109,9 @@ export {
 } from './pdf/acroFormFiller';
 export type { S89Assignment, FormFillResult } from './pdf/acroFormFiller';
 
+export { generateTerritoryS13AndCardsPDF } from './pdf/s13Generator';
+export type { TerritoryPDFResult } from './pdf/s13Generator';
+
 export * as templateMatcher from './pdf/templateMatcher';
 export {
   computeTemplateFingerprint,
@@ -150,6 +155,8 @@ export {
   decryptFromURL,
   toBase64URL,
   fromBase64URL,
+  PBKDF2_ITERATIONS_V1,
+  PBKDF2_ITERATIONS_V2,
 } from './crypto/symmetric';
 
 export {
@@ -188,12 +195,22 @@ export {
   extractQuadrasFromRegistry,
   formatQuadraPerimeterDescription,
   computeMergedTerritoryPolygon,
+  DEFAULT_AUTO_BUFFER_METERS,
 } from './geo/quadraPolygonEngine';
 export type {
   QuadraAddressUnit,
   StreetAddressGroup,
   QuadraSummary,
+  BoundarySource,
 } from './geo/quadraPolygonEngine';
+export {
+  resolveTerritoryNumber,
+  parseLatLng,
+  bufferPolygonMeters,
+  polygonAreaM2,
+} from './geo/geoUtils';
+export { pointInPolygon, isSelfIntersecting, roundRing, validateBoundary } from './geo/polygonOps';
+export type { BoundaryValidation } from './geo/polygonOps';
 
 // Subtree Delegation (CBAC)
 export * as tokenManager from './delegation/tokenManager';
@@ -202,17 +219,42 @@ export type {
   SSDTokenPayload,
 } from './delegation/tokenManager';
 
-// Sovereign Local-First Operation Ledger & P2P Sync
+// Sovereign Local-First Operation Ledger, HLC & Encrypted Delta Envelope
+export * as hlc from './sync/hlc';
+export {
+  createHLC,
+  tickHLC,
+  receiveHLC,
+  packHLC,
+  unpackHLC,
+  compareHLC,
+} from './sync/hlc';
+export type { HLC } from './sync/hlc';
+
 export * as operationLedger from './sync/operationLedger';
 export {
   createLedgerOperation,
+  compareLedgerOperations,
   applyOperationToRegistry,
   reconcileLedgers,
+  previewReconcileLedgers,
+  synthesizeOpsFromRegistry,
   exportLedgerDelta,
   createP2PSyncMessage,
 } from './sync/operationLedger';
 export type {
   LedgerOperation,
   ReconcileResult,
+  ReconcilePreview,
   P2PSyncMessage,
 } from './sync/operationLedger';
+
+export * as deltaEnvelope from './sync/envelope';
+export {
+  encodeDeltaEnvelope,
+  decodeDeltaEnvelope,
+  isEncryptedDeltaEnvelope,
+  ENCRYPTED_DELTA_PREFIX,
+} from './sync/envelope';
+export type { DeltaEnvelopeV2 } from './sync/envelope';
+

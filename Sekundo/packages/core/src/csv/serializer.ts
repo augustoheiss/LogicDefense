@@ -40,11 +40,25 @@ export function serializeCSV(rows: CSVRow[]): string {
 
   const headers = Array.from(allHeadersSet);
 
+  const isSafeNegativeNumber = (s: string): boolean => /^-\d+(\.\d+)?$/.test(s.trim());
+
+  const sanitizeFormulaPrefix = (s: string): string => {
+    if (!s) return s;
+    const first = s[0];
+    if (first === '=' || first === '+' || first === '@' || first === '\t' || first === '\r') {
+      return `'${s}`;
+    }
+    if (first === '-' && !isSafeNegativeNumber(s)) {
+      return `'${s}`;
+    }
+    return s;
+  };
+
   const escapeCell = (value: string | undefined): string => {
     if (value === undefined || value === null) {
       return '';
     }
-    const str = String(value);
+    const str = sanitizeFormulaPrefix(String(value));
     // If cell contains comma, double quote, carriage return, or newline, it must be escaped
     if (str.includes(',') || str.includes('"') || str.includes('\n') || str.includes('\r')) {
       return `"${str.replace(/"/g, '""')}"`;

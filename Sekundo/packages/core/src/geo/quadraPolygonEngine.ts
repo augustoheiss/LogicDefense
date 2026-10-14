@@ -9,6 +9,12 @@
  */
 
 import type { FlatSkeletonEntry } from '../skeleton/types';
+import { resolveTerritoryNumber, parseLatLng, bufferPolygonMeters } from './geoUtils';
+
+/** Default outward margin (meters) applied to automatic hulls so pins sit inside the block. */
+export const DEFAULT_AUTO_BUFFER_METERS = 6;
+
+export type BoundarySource = 'auto' | 'manual' | 'imported';
 
 export interface QuadraAddressUnit {
   key: string;
@@ -48,7 +54,9 @@ export interface QuadraSummary {
   isCompleted: boolean;
   statusColor: string;                 // Hex color for Leaflet polygon
   customColor?: string;                // User custom override color if specified
-  polygonExpansion?: number;           // User custom buffer expansion factor (e.g. 1.0, 1.2, 1.5)
+  polygonExpansion?: number;           // Legacy scale factor (kept for compatibility, no longer drives geometry)
+  bufferMeters: number;                // Effective outward (+) / inward (-) margin in meters
+  boundarySource: BoundarySource;      // Where the boundary polygon came from
   mergedWithQuadras?: string[];        // If merged with other quadras into a territory group
   streets: StreetAddressGroup[];
 }
@@ -58,8 +66,8 @@ export interface QuadraSummary {
  * Collects all boundary points from the selected quadras and calculates the bounding convex hull.
  */
 export function computeMergedTerritoryPolygon(
-  quadras: QuadraSummary[],
-  expansionFactor = 1.0004
+  quadras: Pick<QuadraSummary, 'boundaryPolygon' | 'centroid'>[],
+  bufferMeters = 10
 ): [number, number][] {
   const allPoints: [number, number][] = [];
   for (const q of quadras) {
@@ -75,7 +83,7 @@ export function computeMergedTerritoryPolygon(
   }
 
   const hull = computeConvexHull(allPoints);
-  return expandPolygon(hull, expansionFactor);
+  return bufferPolygonMeters(hull, bufferMeters);
 }
 
 /**
@@ -223,6 +231,8 @@ export function extractQuadrasFromRegistry(flatRegistry: FlatSkeletonEntry[]): Q
     explicitPerimeterStreets?: string[];
     customColor?: string;
     polygonExpansion?: number;
+    bufferMeters?: number;
+    boundarySource?: BoundarySource;
     mergedWithQuadras?: string[];
     units: QuadraAddressUnit[];
     points: [number, number][];
@@ -230,23 +240,22 @@ export function extractQuadrasFromRegistry(flatRegistry: FlatSkeletonEntry[]): Q
 
   const quadraMap = new Map<string, QuadraAcc>();
 
-  // Pass 1: Identify explicit Quadra nodes (depth 3 or nodes with meta.is_quadra / boundaryPolygon)
+  // Pass 1: Identify explicit Quadra nodes (depth 3 headers, or nodes carrying quadra metadata/customizations)
   flatRegistry.forEach((entry) => {
     const meta = (entry.meta || {}) as Record<string, any>;
     const isQuadraNode =
       meta.is_quadra === true ||
       meta.quadra_number !== undefined ||
       meta.boundaryPolygon !== undefined ||
+      (parentKeys.has(entry.key) &&
+        (meta.customColor !== undefined ||
+          meta.bufferMeters !== undefined ||
+          meta.perimeter_streets !== undefined)) ||
       entry.type === 'header' && entry.key.split('-').length === 3;
 
     if (isQuadraNode) {
       const qNum = String(meta.quadra_number || meta.quadra || entry.key);
-      const tNum = String(
-        meta.territory_number ||
-        meta.territory ||
-        entry.key.split('-').slice(0, 2).join('-') ||
-        'T01'
-      );
+      const tNum = resolveTerritoryNumber(entry, true);
 
       let poly: [number, number][] | undefined = undefined;
       if (Array.isArray(meta.boundaryPolygon) && meta.boundaryPolygon.length > 0) {
@@ -261,6 +270,9 @@ export function extractQuadrasFromRegistry(flatRegistry: FlatSkeletonEntry[]): Q
       const polygonExpansion = typeof meta.polygonExpansion === 'number'
         ? meta.polygonExpansion
         : (typeof meta.polygon_expansion === 'number' ? meta.polygon_expansion : undefined);
+      const bufferMeters = typeof meta.bufferMeters === 'number' ? meta.bufferMeters : undefined;
+      const boundarySource: BoundarySource | undefined =
+        meta.boundarySource === 'manual' || meta.boundarySource === 'imported' ? meta.boundarySource : undefined;
       const mergedWithQuadras = Array.isArray(meta.merged_quadras) ? meta.merged_quadras : undefined;
 
       quadraMap.set(entry.key, {
@@ -274,6 +286,8 @@ export function extractQuadrasFromRegistry(flatRegistry: FlatSkeletonEntry[]): Q
         explicitPerimeterStreets: pStreets,
         customColor: customColor ? String(customColor) : undefined,
         polygonExpansion,
+        bufferMeters,
+        boundarySource,
         mergedWithQuadras,
         units: [],
         points: [],
@@ -289,8 +303,9 @@ export function extractQuadrasFromRegistry(flatRegistry: FlatSkeletonEntry[]): Q
     const rawLine = meta.line || entry.label || '';
     const { street, number } = parseAddressLine(rawLine);
 
-    const lat = typeof meta.lat === 'number' ? meta.lat : undefined;
-    const lng = typeof meta.lng === 'number' ? meta.lng : undefined;
+    const coords = parseLatLng(meta);
+    const lat = coords?.lat;
+    const lng = coords?.lng;
 
     const unit: QuadraAddressUnit = {
       key: entry.key,
@@ -323,7 +338,7 @@ export function extractQuadrasFromRegistry(flatRegistry: FlatSkeletonEntry[]): Q
     if (!targetQuadraKey) {
       const fallbackKey = parts.slice(0, Math.min(3, parts.length - 1)).join('-');
       if (!quadraMap.has(fallbackKey)) {
-        const tNum = meta.territory_number || meta.territory || parts.slice(0, 2).join('-') || 'T01';
+        const tNum = resolveTerritoryNumber(entry);
         quadraMap.set(fallbackKey, {
           key: fallbackKey,
           quadraNumber: fallbackKey,
@@ -356,7 +371,6 @@ export function extractQuadrasFromRegistry(flatRegistry: FlatSkeletonEntry[]): Q
     const coveragePercent = totalUnits > 0 ? Math.round((workedUnits / totalUnits) * 1000) / 10 : 0;
     const isCompleted = totalUnits > 0 && workedUnits === totalUnits;
     const statusColor = acc.customColor || calculateQuadraColor(coveragePercent, totalUnits);
-    const expansionFactor = acc.polygonExpansion || 1.0003;
 
     // Group units by street
     const streetMap = new Map<string, QuadraAddressUnit[]>();
@@ -382,15 +396,21 @@ export function extractQuadrasFromRegistry(flatRegistry: FlatSkeletonEntry[]): Q
     // Determine perimeter streets (either explicitly defined or extracted unique streets)
     const perimeterStreets = acc.explicitPerimeterStreets || Array.from(streetMap.keys());
 
-    // Determine polygon boundary
+    // Determine polygon boundary (explicit polygons are only buffered when the user asked for it)
     let boundaryPolygon: [number, number][] = [];
+    let boundarySource: BoundarySource = 'auto';
+    let bufferMeters = acc.bufferMeters ?? DEFAULT_AUTO_BUFFER_METERS;
     if (acc.explicitPolygon && acc.explicitPolygon.length >= 3) {
-      boundaryPolygon = acc.explicitPolygon;
+      boundarySource = acc.boundarySource || 'imported';
+      bufferMeters = acc.bufferMeters ?? 0;
+      boundaryPolygon = bufferMeters !== 0
+        ? bufferPolygonMeters(acc.explicitPolygon, bufferMeters)
+        : acc.explicitPolygon;
     } else if (acc.points.length >= 3) {
       const hull = computeConvexHull(acc.points);
-      boundaryPolygon = expandPolygon(hull, expansionFactor);
+      boundaryPolygon = bufferPolygonMeters(hull, bufferMeters);
     } else if (acc.points.length > 0) {
-      boundaryPolygon = expandPolygon(acc.points, expansionFactor);
+      boundaryPolygon = bufferPolygonMeters(acc.points, bufferMeters);
     }
 
     // Centroid calculation
@@ -430,6 +450,8 @@ export function extractQuadrasFromRegistry(flatRegistry: FlatSkeletonEntry[]): Q
       statusColor,
       customColor: acc.customColor,
       polygonExpansion: acc.polygonExpansion,
+      bufferMeters,
+      boundarySource,
       mergedWithQuadras: acc.mergedWithQuadras,
       streets,
     });

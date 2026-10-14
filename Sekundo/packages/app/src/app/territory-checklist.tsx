@@ -11,7 +11,7 @@
  * - Search bar with instant filter
  */
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   StyleSheet,
   Text,
@@ -26,9 +26,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSkeleton } from '../hooks/useSkeleton';
 import { useLocalEvent } from '../hooks/useLocalEvent';
-import { pathKey, calculateDaysDifference } from '@sekundo/core';
+import { pathKey, calculateDaysDifference, buildWorkedMeta, resolveTerritoryNumber } from '@sekundo/core';
 import type { FlatSkeletonEntry } from '@sekundo/core';
 import { AddressEditModal } from '../components/territory/AddressEditModal';
+import { TerritoryAccordionHeader } from '../components/territory/TerritoryAccordionHeader';
 
 interface ChecklistGroup {
   groupKey: string;
@@ -44,12 +45,17 @@ interface ChecklistGroup {
 
 export default function TerritoryChecklistScreen() {
   const router = useRouter();
-  const { id } = useLocalSearchParams();
+  const { id, territory } = useLocalSearchParams();
   const eventId = typeof id === 'string' ? id : '';
+  const focusTerritory = typeof territory === 'string' ? territory : '';
 
   const { events } = useLocalEvent();
   const event = events.find((e) => e.config.id === eventId);
-  const { flatRegistry, updateNode, loading } = useSkeleton(eventId);
+  const { flatRegistry, updateNode, updateNodes, loading } = useSkeleton(eventId);
+
+  // Accordion state: everything collapsed by default. Keys: `T:<territory>` / `G:<groupKey>`.
+  const [expandedKeys, setExpandedKeys] = useState<Set<string>>(() => new Set());
+  const focusAppliedRef = useRef(false);
 
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [filterMode, setFilterMode] = useState<'all' | 'pending' | 'worked'>('all');
@@ -231,45 +237,129 @@ export default function TerritoryChecklistScreen() {
     };
 
     return { groups: result, overallStats: stats };
-  }, [flatRegistry, searchQuery, filterMode]);
+  }, [flatRegistry, searchQuery, filterMode, sortOrder]);
+
+  // Nest groups by territory, preserving the selected group order.
+  const territorySections = useMemo(() => {
+    const sections: {
+      territory: string;
+      groups: ChecklistGroup[];
+      total: number;
+      worked: number;
+      daysSinceCompleted: number | null;
+    }[] = [];
+    const index = new Map<string, number>();
+    for (const group of groups) {
+      const t = group.items.length > 0 ? resolveTerritoryNumber(group.items[0]) : group.groupKey;
+      if (!index.has(t)) {
+        index.set(t, sections.length);
+        sections.push({ territory: t, groups: [], total: 0, worked: 0, daysSinceCompleted: null });
+      }
+      const s = sections[index.get(t)!];
+      s.groups.push(group);
+      s.total += group.total;
+      s.worked += group.worked;
+      if (typeof group.daysSinceCompleted === 'number') {
+        s.daysSinceCompleted =
+          s.daysSinceCompleted === null
+            ? group.daysSinceCompleted
+            : Math.min(s.daysSinceCompleted, group.daysSinceCompleted);
+      }
+    }
+    return sections;
+  }, [groups]);
+
+  // Deep link `?territory=` (e.g. from the map) pre-expands that territory once.
+  useEffect(() => {
+    if (focusAppliedRef.current || !focusTerritory || territorySections.length === 0) return;
+    const section = territorySections.find((s) => s.territory === focusTerritory);
+    if (!section) return;
+    focusAppliedRef.current = true;
+    setExpandedKeys((prev) => {
+      const next = new Set(prev);
+      next.add(`T:${section.territory}`);
+      if (section.groups.length === 1) next.add(`G:${section.groups[0].groupKey}`);
+      return next;
+    });
+  }, [focusTerritory, territorySections]);
+
+  // An active search shows every match without touching the saved accordion state.
+  const searchActive = searchQuery.trim().length > 0;
+  const isExpanded = (k: string) => searchActive || expandedKeys.has(k);
+  const toggleExpanded = (k: string) =>
+    setExpandedKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(k)) next.delete(k);
+      else next.add(k);
+      return next;
+    });
+  const expandAll = () => {
+    const next = new Set<string>();
+    for (const s of territorySections) {
+      next.add(`T:${s.territory}`);
+      for (const g of s.groups) next.add(`G:${g.groupKey}`);
+    }
+    setExpandedKeys(next);
+  };
+  const collapseAll = () => setExpandedKeys(new Set());
 
   // Toggle single item work status
   const handleToggleItem = async (targetKey: string) => {
     const target = flatRegistry.find((n) => pathKey.equals(n.key, targetKey));
     if (!target) return;
     const meta = (target.meta || {}) as Record<string, any>;
-    const currentWorked = Number(meta.worked) === 1 ? 1 : 0;
-    const nextWorked = currentWorked === 1 ? 0 : 1;
-    const todayStr = new Date().toISOString().slice(0, 10);
+    const nextWorked = Number(meta.worked) === 1 ? 0 : 1;
 
     await updateNode(targetKey, {
       value: nextWorked === 1 ? (meta.workerName || 'Trabalhado') : '',
-      meta: {
-        ...meta,
-        worked: nextWorked,
-        completedAt: nextWorked === 1 ? (meta.completedAt || todayStr) : undefined,
-        lastWorkedAt: nextWorked === 1 ? new Date().toISOString() : undefined,
-      },
+      meta: buildWorkedMeta(meta, nextWorked),
     });
   };
 
-  // Batch toggle all items in a quadra
+  // Batch toggle all items in a quadra — one atomic write, no lost updates.
   const handleToggleQuadra = async (group: ChecklistGroup) => {
-    const targetStatus = group.isAllWorked ? 0 : 1;
-    const todayStr = new Date().toISOString().slice(0, 10);
+    const targetStatus: 0 | 1 = group.isAllWorked ? 0 : 1;
+    const now = new Date();
 
-    for (const item of group.items) {
-      const meta = (item.meta || {}) as Record<string, any>;
-      await updateNode(item.key, {
-        value: targetStatus === 1 ? (meta.workerName || 'Trabalhado') : '',
-        meta: {
-          ...meta,
-          worked: targetStatus,
-          completedAt: targetStatus === 1 ? (meta.completedAt || todayStr) : undefined,
-          lastWorkedAt: targetStatus === 1 ? new Date().toISOString() : undefined,
-        },
-      });
-    }
+    await updateNodes(
+      group.items.map((item) => {
+        const meta = (item.meta || {}) as Record<string, any>;
+        return {
+          key: item.key,
+          updates: {
+            value: targetStatus === 1 ? (meta.workerName || 'Trabalhado') : '',
+            meta: buildWorkedMeta(meta, targetStatus, now),
+          },
+        };
+      })
+    );
+  };
+
+  // Batch toggle all items in an entire territory section — one atomic write.
+  const handleToggleTerritory = async (section: {
+    territory: string;
+    groups: ChecklistGroup[];
+    total: number;
+    worked: number;
+  }) => {
+    const allItems = section.groups.flatMap((g) => g.items);
+    if (allItems.length === 0) return;
+    const isAllDone = section.total > 0 && section.worked === section.total;
+    const targetStatus: 0 | 1 = isAllDone ? 0 : 1;
+    const now = new Date();
+
+    await updateNodes(
+      allItems.map((item) => {
+        const meta = (item.meta || {}) as Record<string, any>;
+        return {
+          key: item.key,
+          updates: {
+            value: targetStatus === 1 ? (meta.workerName || 'Trabalhado') : '',
+            meta: buildWorkedMeta(meta, targetStatus, now),
+          },
+        };
+      })
+    );
   };
 
   // Note editor handlers
@@ -313,12 +403,28 @@ export default function TerritoryChecklistScreen() {
           >
             <Text style={styles.backBtnText}>← Voltar</Text>
           </Pressable>
-          <Pressable
-            onPress={() => router.push(`/territory-map?id=${eventId}`)}
-            style={styles.mapLinkBtn}
-          >
-            <Text style={styles.mapLinkBtnText}>🗺️ Ver no Mapa</Text>
-          </Pressable>
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            <Pressable
+              onPress={() =>
+                router.push(
+                  `/publisher?id=${eventId}${focusTerritory ? `&territory=${encodeURIComponent(focusTerritory)}` : ''}`
+                )
+              }
+              style={styles.mapLinkBtn}
+            >
+              <Text style={styles.mapLinkBtnText}>📱 Modo Publicador</Text>
+            </Pressable>
+            <Pressable
+              onPress={() =>
+                router.push(
+                  `/territory-map?id=${eventId}${focusTerritory ? `&territory=${encodeURIComponent(focusTerritory)}` : ''}`
+                )
+              }
+              style={styles.mapLinkBtn}
+            >
+              <Text style={styles.mapLinkBtnText}>🗺️ Ver no Mapa</Text>
+            </Pressable>
+          </View>
         </View>
 
         <Text style={styles.title}>📋 Prancheta de Campo</Text>
@@ -410,6 +516,22 @@ export default function TerritoryChecklistScreen() {
 
       {/* Checklist Groups */}
       <ScrollView style={styles.scrollList} contentContainerStyle={styles.scrollContent}>
+        {groups.length > 0 ? (
+          <View style={styles.accordionToolbar}>
+            <Text style={styles.accordionToolbarText}>
+              {territorySections.length} {territorySections.length === 1 ? 'território' : 'territórios'} • {groups.length} grupos
+              {searchActive ? ' • busca ativa' : ''}
+            </Text>
+            <View style={styles.accordionToolbarActions}>
+              <Pressable onPress={expandAll} style={styles.accordionToolbarBtn}>
+                <Text style={styles.accordionToolbarBtnText}>▾ Expandir tudo</Text>
+              </Pressable>
+              <Pressable onPress={collapseAll} style={styles.accordionToolbarBtn}>
+                <Text style={styles.accordionToolbarBtnText}>▸ Recolher tudo</Text>
+              </Pressable>
+            </View>
+          </View>
+        ) : null}
         {groups.length === 0 ? (
           <View style={styles.emptyCard}>
             <Text style={styles.emptyTitle}>Nenhum endereço encontrado</Text>
@@ -418,14 +540,43 @@ export default function TerritoryChecklistScreen() {
             </Text>
           </View>
         ) : (
-          groups.map((group) => (
-            <View key={group.groupKey} style={styles.groupCard}>
+          territorySections.map((section) => {
+            // A territory with a single group is not double-nested.
+            const single = section.groups.length === 1;
+            const sectionOpen = single || isExpanded(`T:${section.territory}`);
+            return (
+          <View key={`T:${section.territory}`} style={single ? undefined : styles.territorySection}>
+            {!single ? (
+              <TerritoryAccordionHeader
+                territory={section.territory}
+                groupCount={section.groups.length}
+                worked={section.worked}
+                total={section.total}
+                expanded={sectionOpen}
+                daysSinceCompleted={section.daysSinceCompleted}
+                onToggle={() => toggleExpanded(`T:${section.territory}`)}
+                onBatchToggle={() => handleToggleTerritory(section)}
+                onOpenPublisher={() =>
+                  router.push(`/publisher?id=${eventId}&territory=${encodeURIComponent(section.territory)}`)
+                }
+              />
+            ) : null}
+          {sectionOpen && section.groups.map((group) => {
+            const groupOpen = isExpanded(`G:${group.groupKey}`);
+            return (
+            <View key={group.groupKey} style={[styles.groupCard, !single && styles.groupCardNested]}>
               {/* Group Header */}
               <View style={styles.groupHeader}>
-                <View style={styles.groupHeaderLeft}>
+                <Pressable
+                  onPress={() => toggleExpanded(`G:${group.groupKey}`)}
+                  style={styles.groupHeaderLeft}
+                  accessibilityRole="button"
+                  accessibilityState={{ expanded: groupOpen }}
+                >
+                  <Text style={styles.groupChevron}>{groupOpen ? '▾' : '▸'}</Text>
                   <Text style={styles.groupKeyBadge}>{group.groupKey}</Text>
-                  <Text style={styles.groupTitle}>{group.groupLabel}</Text>
-                </View>
+                  <Text style={styles.groupTitle} numberOfLines={groupOpen ? undefined : 1}>{group.groupLabel}</Text>
+                </Pressable>
                 <Pressable
                   onPress={() => handleToggleQuadra(group)}
                   style={[
@@ -464,7 +615,8 @@ export default function TerritoryChecklistScreen() {
                 ) : null}
               </View>
 
-              {/* Items in Quadra */}
+              {/* Items in Quadra (not rendered while collapsed) */}
+              {groupOpen ? (
               <View style={styles.itemsList}>
                 {group.items.map((item) => {
                   const meta = (item.meta || {}) as Record<string, any>;
@@ -623,8 +775,13 @@ export default function TerritoryChecklistScreen() {
                   );
                 })}
               </View>
+              ) : null}
             </View>
-          ))
+            );
+          })}
+          </View>
+            );
+          })
         )}
       </ScrollView>
 
@@ -836,6 +993,48 @@ const styles = StyleSheet.create({
     padding: 16,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  groupCardNested: {
+    marginLeft: 12,
+    padding: 12,
+  },
+  groupChevron: {
+    color: '#8A94A6',
+    fontSize: 16,
+    width: 14,
+    textAlign: 'center',
+  },
+  territorySection: {
+    gap: 10,
+  },
+  accordionToolbar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  accordionToolbarText: {
+    color: '#8A94A6',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  accordionToolbarActions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  accordionToolbarBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.12)',
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+  },
+  accordionToolbarBtnText: {
+    color: '#D1D5DB',
+    fontSize: 12,
+    fontWeight: '700',
   },
   groupHeader: {
     flexDirection: 'row',

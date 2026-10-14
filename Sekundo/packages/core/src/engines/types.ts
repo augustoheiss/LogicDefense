@@ -67,6 +67,8 @@ export interface TerritoryRecencyItem {
   assignedAt?: string;
   completedAt?: string;
   daysSinceCompleted: number | null; // null if not fully completed
+  daysSinceAssigned?: number | null; // days since assignedAt
+  isOverdue?: boolean; // true if incomplete and assigned >= 120 days ago (4-month S-13 cycle)
 }
 
 export interface TerritoryMetrics {

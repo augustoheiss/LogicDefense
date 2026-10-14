@@ -76,14 +76,7 @@ export const SEKUNDO_API_URL = resolveApiUrl();
 export const API = {
   health: `${SEKUNDO_API_URL}/health`,
 
-  // PDF Processing
-  pdf: {
-    extractFields: `${SEKUNDO_API_URL}/pdf/extract-fields`,
-    detectAnchors: `${SEKUNDO_API_URL}/pdf/detect-anchors`,
-    fill: `${SEKUNDO_API_URL}/pdf/fill`,
-  },
-
-  // WebRTC Signaling
+  // WebRTC Signaling (ephemeral SDP/ICE handshake only — zero state storage, zero PDF uploads)
   signal: {
     createRoom: `${SEKUNDO_API_URL}/signal/room`,
     room: (id: string) => `${SEKUNDO_API_URL}/signal/room/${id}`,
@@ -91,7 +84,6 @@ export const API = {
     answer: (id: string) => `${SEKUNDO_API_URL}/signal/room/${id}/answer`,
     candidates: (id: string, role: 'offer' | 'answer') =>
       `${SEKUNDO_API_URL}/signal/room/${id}/candidates/${role}`,
-    state: (id: string) => `${SEKUNDO_API_URL}/signal/room/${id}/state`,
   },
 } as const;
 
