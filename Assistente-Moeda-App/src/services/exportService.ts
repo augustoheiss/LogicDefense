@@ -25,7 +25,7 @@ import type {
 } from '../core/types';
 import type { WeekDebtEntry } from '../core/computeWeeklyDebtTimeline';
 import { getMondayOf, toLocalKey, getWeeklyGoalForDate, resolveGoalForYear, getEffectiveGoals, fmtDate } from '../core/dateUtils';
-import { generateNewApiKey } from './apiKeyService';
+import { generateNewApiKey, getApiStorageItem, setApiStorageItem } from './apiKeyService';
 import { getStoredLicenseKey } from '../storage/authService';
 import { serializeDynamicCSV, serializeGranularCSV } from '../core/dynamicCsvSerializer';
 
@@ -984,18 +984,14 @@ export function generateLocalApiKey(tableId?: string): string {
 }
 
 export async function ensureApiKeyForTable(tableId: string): Promise<string> {
-  if (typeof window === 'undefined' || !window.localStorage) {
-    return generateLocalApiKey(tableId);
-  }
-
   // Se a chave foi revogada explicitamente pelo usuário, não auto-provisiona
-  const isRevoked = window.localStorage.getItem(`coin_api_revoked_${tableId}`) === 'true';
+  const isRevoked = (await getApiStorageItem(`coin_api_revoked_${tableId}`)) === 'true';
   if (isRevoked) {
     return '';
   }
 
-  const existingKey = window.localStorage.getItem(`coin_api_key_${tableId}`);
-  const existingExp = window.localStorage.getItem(`coin_expires_at_${tableId}`);
+  const existingKey = await getApiStorageItem(`coin_api_key_${tableId}`);
+  const existingExp = await getApiStorageItem(`coin_expires_at_${tableId}`);
 
   // Se a chave já existe e tem validade registrada no futuro, reutiliza
   if (existingKey && existingKey.startsWith('am_sheet_live_') && existingExp) {
@@ -1010,10 +1006,10 @@ export async function ensureApiKeyForTable(tableId: string): Promise<string> {
     const storedLicenseKey = await getStoredLicenseKey();
     const newRes = await generateNewApiKey(tableId, storedLicenseKey || undefined, 1);
     if (newRes && newRes.apiKey) {
-      window.localStorage.setItem(`coin_api_key_${tableId}`, newRes.apiKey);
-      window.localStorage.setItem('coin_active_api_key', newRes.apiKey);
+      await setApiStorageItem(`coin_api_key_${tableId}`, newRes.apiKey);
+      await setApiStorageItem('coin_active_api_key', newRes.apiKey);
       if (newRes.expiresAt) {
-        window.localStorage.setItem(`coin_expires_at_${tableId}`, newRes.expiresAt);
+        await setApiStorageItem(`coin_expires_at_${tableId}`, newRes.expiresAt);
       }
       return newRes.apiKey;
     }
@@ -1023,9 +1019,9 @@ export async function ensureApiKeyForTable(tableId: string): Promise<string> {
 
   const fallbackKey = existingKey && existingKey.startsWith('am_sheet_live_') ? existingKey : generateLocalApiKey(tableId);
   const fallbackExp = new Date(Date.now() + 86_400_000).toISOString();
-  window.localStorage.setItem(`coin_api_key_${tableId}`, fallbackKey);
-  window.localStorage.setItem('coin_active_api_key', fallbackKey);
-  window.localStorage.setItem(`coin_expires_at_${tableId}`, fallbackExp);
+  await setApiStorageItem(`coin_api_key_${tableId}`, fallbackKey);
+  await setApiStorageItem('coin_active_api_key', fallbackKey);
+  await setApiStorageItem(`coin_expires_at_${tableId}`, fallbackExp);
   return fallbackKey;
 }
 
@@ -1724,8 +1720,12 @@ export async function shareSynthesisDocument(
     await writeAsStringAsync(filePath, content, { encoding: EncodingType.UTF8 });
     const canShare = await Sharing.isAvailableAsync();
     if (canShare) {
+      const shareMime =
+        Platform.OS === 'android' && extension === 'md'
+          ? 'text/plain'
+          : mimeMap[extension].split(';')[0];
       await Sharing.shareAsync(filePath, {
-        mimeType: mimeMap[extension].split(';')[0],
+        mimeType: shareMime,
         dialogTitle: `Síntese AI-Analyst (.${extension.toUpperCase()}) — ${baseFileName}`,
         UTI: utiMap[extension],
       });

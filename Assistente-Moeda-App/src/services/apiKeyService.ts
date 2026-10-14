@@ -5,11 +5,47 @@
  * and automatic key generation/renewal via backend endpoints.
  */
 
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
 const API_URL = (
   process.env.EXPO_PUBLIC_AI_BACKEND_URL ||
   process.env.EXPO_PUBLIC_API_URL ||
-  'http://127.0.0.1:8000'
+  'https://ocorrencias-pdf-writer.onrender.com'
 ).replace(/\/+$/, '');
+
+export async function getApiStorageItem(key: string): Promise<string | null> {
+  if (typeof window !== 'undefined' && window.localStorage) {
+    const val = window.localStorage.getItem(key);
+    if (val !== null) return val;
+  }
+  try {
+    return await AsyncStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+export async function setApiStorageItem(key: string, value: string): Promise<void> {
+  if (typeof window !== 'undefined' && window.localStorage) {
+    try {
+      window.localStorage.setItem(key, value);
+    } catch {}
+  }
+  try {
+    await AsyncStorage.setItem(key, value);
+  } catch {}
+}
+
+export async function removeApiStorageItem(key: string): Promise<void> {
+  if (typeof window !== 'undefined' && window.localStorage) {
+    try {
+      window.localStorage.removeItem(key);
+    } catch {}
+  }
+  try {
+    await AsyncStorage.removeItem(key);
+  } catch {}
+}
 
 export interface KeyValidationResult {
   valid: boolean;
@@ -101,9 +137,7 @@ export async function generateNewApiKey(
     const data = await res.json();
     const rawKey = data.api_key || data.apiKey;
     if (rawKey) {
-      if (typeof window !== 'undefined' && window.localStorage) {
-        window.localStorage.removeItem(`coin_api_revoked_${tableId}`);
-      }
+      await removeApiStorageItem(`coin_api_revoked_${tableId}`);
       return {
         apiKey: rawKey,
         keyHint: data.key_hint || data.keyHint || `...${rawKey.slice(-4)}`,
@@ -142,15 +176,13 @@ export async function revokeApiKey(
       }),
     });
 
-    // Clear from localStorage (Web) and mark as revoked
-    if (typeof window !== 'undefined' && window.localStorage) {
-      window.localStorage.setItem(`coin_api_revoked_${tableId}`, 'true');
-      window.localStorage.removeItem(`coin_api_key_${tableId}`);
-      window.localStorage.removeItem(`coin_expires_at_${tableId}`);
-      const activeKey = window.localStorage.getItem('coin_active_api_key');
-      if (activeKey === apiKey) {
-        window.localStorage.removeItem('coin_active_api_key');
-      }
+    // Clear from localStorage (Web) & AsyncStorage (Mobile) and mark as revoked
+    await setApiStorageItem(`coin_api_revoked_${tableId}`, 'true');
+    await removeApiStorageItem(`coin_api_key_${tableId}`);
+    await removeApiStorageItem(`coin_expires_at_${tableId}`);
+    const activeKey = await getApiStorageItem('coin_active_api_key');
+    if (activeKey === apiKey) {
+      await removeApiStorageItem('coin_active_api_key');
     }
 
     if (!res.ok) {
@@ -168,12 +200,9 @@ export async function revokeApiKey(
     };
   } catch (err: any) {
     console.error('[apiKeyService] Erro ao revogar chave de API:', err);
-    // Still clear local storage even on network error to protect user locally
-    if (typeof window !== 'undefined' && window.localStorage) {
-      window.localStorage.setItem(`coin_api_revoked_${tableId}`, 'true');
-      window.localStorage.removeItem(`coin_api_key_${tableId}`);
-      window.localStorage.removeItem(`coin_expires_at_${tableId}`);
-    }
+    await setApiStorageItem(`coin_api_revoked_${tableId}`, 'true');
+    await removeApiStorageItem(`coin_api_key_${tableId}`);
+    await removeApiStorageItem(`coin_expires_at_${tableId}`);
     return {
       success: true,
       message: 'Chave desativada localmente.',

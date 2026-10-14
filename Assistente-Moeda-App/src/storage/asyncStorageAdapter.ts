@@ -27,12 +27,32 @@ const QUARANTINE_KEY = 'coin_assistant_db.quarantine';
 const PRIVACY_MODE_KEY = 'coin_privacy_mode';
 const UI_VIEW_MODE_KEY = 'coin_ui_view_mode';
 
+let _nativePrivacyMode = false;
+let _nativeViewMode: 'cards' | 'grid' | null = null;
+
 /**
  * Load the full DB from IndexedDB (on Web) or AsyncStorage (Native / Node test fallback).
  * If primary file is corrupted, attempts to recover from rolling backup (.bak)
  * and quarantines the damaged payload.
  */
 export async function loadDB(): Promise<DB | null> {
+  // Hydrate native synchronous preference cache on mobile
+  if (typeof window === 'undefined' || !window.localStorage) {
+    try {
+      const [privRaw, viewRaw] = await AsyncStorage.multiGet([PRIVACY_MODE_KEY, UI_VIEW_MODE_KEY]);
+      if (privRaw && privRaw[1] !== null) {
+        _nativePrivacyMode = privRaw[1] === 'true';
+      }
+      if (viewRaw && viewRaw[1] !== null) {
+        const mode = viewRaw[1];
+        if (mode === 'cards' || mode === 'grid') _nativeViewMode = mode;
+        else if (mode === 'spreadsheet') _nativeViewMode = 'grid';
+      }
+    } catch {
+      // ignore
+    }
+  }
+
   if (isIndexedDBAvailable()) {
     try {
       const idbData = await loadDBFromIndexedDB();
@@ -154,17 +174,20 @@ export function getPrivacyModeSync(): boolean {
   if (typeof window !== 'undefined' && window.localStorage) {
     return window.localStorage.getItem(PRIVACY_MODE_KEY) === 'true';
   }
-  return false;
+  return _nativePrivacyMode;
 }
 
 export function setPrivacyModeSync(enabled: boolean): void {
+  _nativePrivacyMode = enabled;
   if (typeof window !== 'undefined' && window.localStorage) {
     try {
       window.localStorage.setItem(PRIVACY_MODE_KEY, enabled ? 'true' : 'false');
     } catch {
       // ignore
     }
+    return;
   }
+  AsyncStorage.setItem(PRIVACY_MODE_KEY, enabled ? 'true' : 'false').catch(() => {});
 }
 
 export function getUIViewModeSync(fallback: 'cards' | 'grid' = 'cards'): 'cards' | 'grid' {
@@ -173,15 +196,20 @@ export function getUIViewModeSync(fallback: 'cards' | 'grid' = 'cards'): 'cards'
     if (mode === 'cards' || mode === 'grid') return mode;
     if (mode === 'spreadsheet') return 'grid';
   }
+  if (_nativeViewMode) return _nativeViewMode;
   return fallback;
 }
 
 export function setUIViewModeSync(mode: 'cards' | 'grid' | 'spreadsheet'): void {
+  _nativeViewMode = mode === 'spreadsheet' ? 'grid' : mode;
   if (typeof window !== 'undefined' && window.localStorage) {
     try {
       window.localStorage.setItem(UI_VIEW_MODE_KEY, mode);
     } catch {
       // ignore
     }
+    return;
   }
+  AsyncStorage.setItem(UI_VIEW_MODE_KEY, mode).catch(() => {});
 }
+

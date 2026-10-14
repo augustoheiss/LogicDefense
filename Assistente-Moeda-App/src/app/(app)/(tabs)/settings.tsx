@@ -46,7 +46,7 @@ import { SyncAuditPanel, APIManagementTester, ExampleCSVGalleryModal } from '@/c
 import { formatCurrencySmart } from '@/core/formatCurrency';
 import { validateMobileLicenseKey, getStoredLicenseKey } from '@/storage/authService';
 import { ensureApiKeyForTable, generateLocalApiKey, buildCSV, shareCSVText, shareJSONBackup, shareSynthesisDocument } from '@/services/exportService';
-import { validateApiKey, generateNewApiKey, formatTimeRemaining, revokeApiKey } from '@/services/apiKeyService';
+import { validateApiKey, generateNewApiKey, formatTimeRemaining, revokeApiKey, getApiStorageItem, setApiStorageItem, removeApiStorageItem } from '@/services/apiKeyService';
 import {
   generateManualAiAnalystSynthesis,
   type ManualSynthesisFormat,
@@ -1718,15 +1718,9 @@ BOAS PRÁTICAS DE AMBIENTE:
   const fetchActiveKey = useCallback(async () => {
     setLoading(true);
     try {
-      let isRevoked = false;
-      let localKey: string | null = null;
-      let localExp: string | null = null;
-
-      if (typeof window !== 'undefined' && window.localStorage) {
-        isRevoked = window.localStorage.getItem(`coin_api_revoked_${tableId}`) === 'true';
-        localKey = window.localStorage.getItem(`coin_api_key_${tableId}`);
-        localExp = window.localStorage.getItem(`coin_expires_at_${tableId}`);
-      }
+      const isRevoked = (await getApiStorageItem(`coin_api_revoked_${tableId}`)) === 'true';
+      let localKey = await getApiStorageItem(`coin_api_key_${tableId}`);
+      let localExp = await getApiStorageItem(`coin_expires_at_${tableId}`);
 
       if (isRevoked) {
         setApiKey(null);
@@ -1741,9 +1735,7 @@ BOAS PRÁTICAS DE AMBIENTE:
       if (!localKey || !localKey.startsWith('am_sheet_live_')) {
         const key = await ensureApiKeyForTable(tableId);
         localKey = key;
-        if (typeof window !== 'undefined' && window.localStorage) {
-          localExp = window.localStorage.getItem(`coin_expires_at_${tableId}`);
-        }
+        localExp = await getApiStorageItem(`coin_expires_at_${tableId}`);
       }
 
       if (localKey && localKey.startsWith('am_sheet_live_')) {
@@ -1755,12 +1747,10 @@ BOAS PRÁTICAS DE AMBIENTE:
         validateApiKey(localKey).then(async (valRes) => {
           if (valRes.valid && valRes.expiresAt) {
             setExpiresAt(valRes.expiresAt);
-            if (typeof window !== 'undefined' && window.localStorage) {
-              window.localStorage.setItem(`coin_expires_at_${tableId}`, valRes.expiresAt);
-            }
+            await setApiStorageItem(`coin_expires_at_${tableId}`, valRes.expiresAt);
           } else {
             // Se foi revogada explicitamente, não auto-provisiona
-            const stillRevoked = typeof window !== 'undefined' && window.localStorage?.getItem(`coin_api_revoked_${tableId}`) === 'true';
+            const stillRevoked = (await getApiStorageItem(`coin_api_revoked_${tableId}`)) === 'true';
             if (stillRevoked) return;
 
             // Chave expirada, revogada ou ainda não registrada no backend Turso -> Gera nova de 1 dia!
@@ -1770,12 +1760,10 @@ BOAS PRÁTICAS DE AMBIENTE:
               setApiKey(newRes.apiKey);
               setKeyHint(newRes.keyHint);
               setExpiresAt(newRes.expiresAt || null);
-              if (typeof window !== 'undefined' && window.localStorage) {
-                window.localStorage.setItem(`coin_api_key_${tableId}`, newRes.apiKey);
-                window.localStorage.setItem('coin_active_api_key', newRes.apiKey);
-                if (newRes.expiresAt) {
-                  window.localStorage.setItem(`coin_expires_at_${tableId}`, newRes.expiresAt);
-                }
+              await setApiStorageItem(`coin_api_key_${tableId}`, newRes.apiKey);
+              await setApiStorageItem('coin_active_api_key', newRes.apiKey);
+              if (newRes.expiresAt) {
+                await setApiStorageItem(`coin_expires_at_${tableId}`, newRes.expiresAt);
               }
             }
           }
@@ -1796,7 +1784,7 @@ BOAS PRÁTICAS DE AMBIENTE:
   useEffect(() => {
     fetchActiveKey();
 
-    if (typeof window !== 'undefined') {
+    if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
       const handleSync = () => fetchActiveKey();
       window.addEventListener('coin_sync_requested', handleSync);
       window.addEventListener('storage', handleSync);
@@ -1819,23 +1807,22 @@ BOAS PRÁTICAS DE AMBIENTE:
       setTimeRemaining(remaining);
 
       if (remaining.expired && apiKey) {
-        const isRevoked = typeof window !== 'undefined' && window.localStorage?.getItem(`coin_api_revoked_${tableId}`) === 'true';
-        if (isRevoked) return;
+        getApiStorageItem(`coin_api_revoked_${tableId}`).then((revVal) => {
+          if (revVal === 'true') return;
 
-        getStoredLicenseKey().then((licKey) => {
-          generateNewApiKey(tableId, licKey || undefined, 1).then((res) => {
-            if (res) {
-              setApiKey(res.apiKey);
-              setKeyHint(res.keyHint);
-              setExpiresAt(res.expiresAt || null);
-              if (typeof window !== 'undefined' && window.localStorage) {
-                window.localStorage.setItem(`coin_api_key_${tableId}`, res.apiKey);
-                window.localStorage.setItem('coin_active_api_key', res.apiKey);
+          getStoredLicenseKey().then((licKey) => {
+            generateNewApiKey(tableId, licKey || undefined, 1).then(async (res) => {
+              if (res) {
+                setApiKey(res.apiKey);
+                setKeyHint(res.keyHint);
+                setExpiresAt(res.expiresAt || null);
+                await setApiStorageItem(`coin_api_key_${tableId}`, res.apiKey);
+                await setApiStorageItem('coin_active_api_key', res.apiKey);
                 if (res.expiresAt) {
-                  window.localStorage.setItem(`coin_expires_at_${tableId}`, res.expiresAt);
+                  await setApiStorageItem(`coin_expires_at_${tableId}`, res.expiresAt);
                 }
               }
-            }
+            });
           });
         });
       }
@@ -1940,13 +1927,11 @@ BOAS PRÁTICAS DE AMBIENTE:
       setExpiresAt(newExp || null);
       setCopied(false);
 
-      if (typeof window !== 'undefined' && window.localStorage) {
-        window.localStorage.removeItem(`coin_api_revoked_${tableId}`);
-        window.localStorage.setItem(`coin_api_key_${tableId}`, newKey);
-        window.localStorage.setItem('coin_active_api_key', newKey);
-        if (newExp) {
-          window.localStorage.setItem(`coin_expires_at_${tableId}`, newExp);
-        }
+      await removeApiStorageItem(`coin_api_revoked_${tableId}`);
+      await setApiStorageItem(`coin_api_key_${tableId}`, newKey);
+      await setApiStorageItem('coin_active_api_key', newKey);
+      if (newExp) {
+        await setApiStorageItem(`coin_expires_at_${tableId}`, newExp);
       }
 
       if (newKey && activeTable?.rows && activeTable.rows.length > 0) {
@@ -1992,9 +1977,7 @@ BOAS PRÁTICAS DE AMBIENTE:
       setExpiresAt(null);
       setTimeRemaining(null);
       
-      if (typeof window !== 'undefined' && window.localStorage) {
-        window.localStorage.setItem(`coin_api_revoked_${tableId}`, 'true');
-      }
+      await setApiStorageItem(`coin_api_revoked_${tableId}`, 'true');
 
       if (Platform.OS === 'web') {
         window.alert(res.message || "Chave de API desativada e revogada com sucesso.");

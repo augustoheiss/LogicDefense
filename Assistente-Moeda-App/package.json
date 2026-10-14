@@ -31,7 +31,6 @@
     "expo-system-ui": "~56.0.5",
     "expo-updates": "~56.0.21",
     "expo-web-browser": "~56.0.5",
-    "playwright": "^1.61.1",
     "punycode": "^2.3.1",
     "react": "19.2.3",
     "react-dom": "19.2.3",
@@ -52,6 +51,7 @@
     "@types/node": "^26.1.1",
     "@types/react": "~19.2.2",
     "babel-plugin-module-resolver": "^5.0.3",
+    "playwright": "^1.61.1",
     "typescript": "~6.0.3"
   },
   "scripts": {
