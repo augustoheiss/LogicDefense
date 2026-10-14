@@ -95,6 +95,22 @@ export default function Dashboard() {
               <Text style={styles.actionButtonText}>Import CSV Template</Text>
               <Text style={styles.actionButtonSub}>Excel or Google Sheets source format</Text>
             </Pressable>
+
+            <Pressable
+              onPress={() => router.push('/schedule-hub' as any)}
+              style={({ pressed }) => [
+                styles.actionButton,
+                { borderColor: '#10B981', backgroundColor: 'rgba(16, 185, 129, 0.08)' },
+                pressed && styles.buttonPressed,
+              ]}
+            >
+              <Text style={[styles.actionButtonText, { color: '#34D399' }]}>
+                📅 Programação & WhatsApp (Hub)
+              </Text>
+              <Text style={styles.actionButtonSub}>
+                Compromissos, Grupos 1–3, Exportador WhatsApp e S-13-S
+              </Text>
+            </Pressable>
           </View>
 
           {/* Active Events Column */}
@@ -160,19 +176,36 @@ export default function Dashboard() {
                         </>
                       )}
                       {activeEngines.includes('roster_assignments') && (
-                        <Pressable
-                          onPress={() => router.push(`/roster-swap?id=${event.config.id}`)}
-                          style={[
-                            styles.openButton,
-                            {
-                              backgroundColor: 'rgba(16, 185, 129, 0.15)',
-                              borderWidth: 1,
-                              borderColor: '#10B981',
-                            },
-                          ]}
-                        >
-                          <Text style={[styles.openButtonText, { color: '#10B981' }]}>🔄 Trocas</Text>
-                        </Pressable>
+                        <>
+                          <Pressable
+                            onPress={() => router.push(`/schedule-hub?id=${event.config.id}` as any)}
+                            style={[
+                              styles.openButton,
+                              {
+                                backgroundColor: 'rgba(255, 184, 0, 0.16)',
+                                borderWidth: 1,
+                                borderColor: '#FFB800',
+                              },
+                            ]}
+                          >
+                            <Text style={[styles.openButtonText, { color: '#FFB800' }]}>
+                              📲 Programação
+                            </Text>
+                          </Pressable>
+                          <Pressable
+                            onPress={() => router.push(`/roster-swap?id=${event.config.id}`)}
+                            style={[
+                              styles.openButton,
+                              {
+                                backgroundColor: 'rgba(16, 185, 129, 0.15)',
+                                borderWidth: 1,
+                                borderColor: '#10B981',
+                              },
+                            ]}
+                          >
+                            <Text style={[styles.openButtonText, { color: '#10B981' }]}>🔄 Trocas</Text>
+                          </Pressable>
+                        </>
                       )}
                       {activeEngines.includes('live_production_ros') && (
                         <Pressable

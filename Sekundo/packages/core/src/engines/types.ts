@@ -32,6 +32,13 @@ export type EngineId =
 // 1. Territory Logistics Domain Types
 // ---------------------------------------------------------------------------
 
+export interface TerritoryAssignmentCycle {
+  assignedTo: string;           // Name of volunteer / person assigned in this cycle
+  assignedAt: string;           // Date assigned (DD/MM/YYYY or YYYY-MM-DD)
+  completedAt?: string;         // Date completed (DD/MM/YYYY or YYYY-MM-DD, empty if in progress)
+  serviceYear?: number;         // Service year bucket (e.g. 2027, 2026)
+}
+
 export interface TerritoryNodeMeta {
   worked?: 0 | 1;               // 0 = pending, 1 = completed
   lastWorkedAt?: string;        // ISO 8601 timestamp
@@ -52,6 +59,12 @@ export interface TerritoryNodeMeta {
   boundaryPolygon?: [number, number][]; // Geo coordinates for block/polygon
   notes?: string;               // Local tactical notes
   tags?: string[];              // e.g. ["foreign_language", "commercial", "hard_access"]
+  territoryNumber?: string;     // Canonical territory identifier (e.g. "T01.01.01")
+  territory_number?: string;    // Snake-case alias for territory identifier
+  locality?: string;            // Neighborhood / sector name (e.g. "Setor Central", "Setor Norte")
+  lastCompletedBeforeYear?: string; // "Última data concluída*" before starting the sheet
+  serviceYear?: number;         // Primary service year
+  assignmentHistory?: TerritoryAssignmentCycle[]; // Multi-cycle assignment ledger (S-13-S 4-column model)
 }
 
 export type TerritoryRecencySort = 'priority_oldest_first' | 'recent_first' | 'hierarchical';
@@ -84,6 +97,8 @@ export interface TerritoryMetrics {
 // 2. Roster Assignments Domain Types
 // ---------------------------------------------------------------------------
 
+export type ReadinessState = 'pending' | 'preparing' | 'ready';
+
 export interface RosterNodeMeta {
   assignedTo?: string;          // Name of primary person assigned
   assistantTo?: string;         // Assistant / reader / partner
@@ -92,6 +107,21 @@ export interface RosterNodeMeta {
   confirmed?: boolean;          // Whether the assignee confirmed attendance
   substitute?: string;          // Standby replacement if unavailable
   materialReference?: string;   // Speech title, song number, article reference
+  readinessState?: ReadinessState; // 3-step commitment readiness ('pending' -> 'preparing' -> 'ready')
+  groupTag?: string;            // Operational team/group of primary assignee (e.g. "Grupo 1")
+  assistantGroupTag?: string;   // Operational team/group of assistant (e.g. "Grupo 2")
+  capabilityTags?: string[];    // Generic qualification/role tags of primary assignee
+  accentColor?: string;         // Data-driven section banner hex color (e.g. "#3D5B65", "#9A7420", "#80241E")
+  partNumber?: number;          // Sequential part number within session
+  sessionDate?: string;         // ISO date YYYY-MM-DD or localized date label
+  sessionTheme?: string;        // Session theme / reference (e.g. "MÓDULO 40, 41")
+  unitName?: string;            // Organization / unit header (e.g. "Unidade Operacional Central")
+  chairPerson?: string;         // Session chairperson / moderator
+  openingCue?: string;          // Opening song / cue
+  openingPrayer?: string;       // Opening prayer / invocation assignee
+  middleCue?: string;           // Intermission / transition song or cue
+  closingCue?: string;          // Closing song / cue
+  closingPrayer?: string;       // Closing prayer / benediction assignee
 }
 
 export interface RosterMetrics {

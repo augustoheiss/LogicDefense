@@ -30,6 +30,8 @@ import {
   autoRecognizePDFFields,
   generateTerritoryS13AndCardsPDF,
   computeTerritoryRecencyList,
+  buildTerritoriosS13HistoricalRegistry,
+  PROGRAMACAO_UNIT_NAME,
   type S89Assignment,
   type PDFFormField,
   type FieldMappingCandidate,
@@ -45,6 +47,7 @@ export default function PDFFormsConsole() {
   const [loading, setLoading] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [selectedTemplate, setSelectedTemplate] = useState<'s89' | 's12' | 'custom'>('s89');
+  const [s13ServiceYear, setS13ServiceYear] = useState<'all' | '2027' | '2026'>('all');
 
   // Custom PDF Auto-Recognition State
   const [customPdfBytes, setCustomPdfBytes] = useState<Uint8Array | null>(null);
@@ -66,14 +69,22 @@ export default function PDFFormsConsole() {
       remarks: (entry.meta?.remarks as string) || undefined,
     }));
 
-  const territoryRecencySummary = computeTerritoryRecencyList(flatRegistry, 'hierarchical');
+  const effectiveTerritoryRegistry =
+    flatRegistry.some((e) => e.type === 'territory')
+      ? flatRegistry
+      : buildTerritoriosS13HistoricalRegistry();
+
+  const territoryRecencySummary = computeTerritoryRecencyList(effectiveTerritoryRegistry, 'hierarchical');
 
   const handleGenerateS13AndCards = async () => {
     try {
       setLoading(true);
-      setStatusMessage('Gerando Registro S-13 e Cartões Táticos de Quadra S-12 (100% local)...');
-      const res = await generateTerritoryS13AndCardsPDF(flatRegistry, {
-        eventName: `Territórios (${eventId || 'Sekundo'})`,
+      setStatusMessage(
+        `Gerando Registro S-13-S (4 Colunas Multi-Ciclo — Ano ${s13ServiceYear}) e Cartões S-12 (100% local)...`
+      );
+      const res = await generateTerritoryS13AndCardsPDF(effectiveTerritoryRegistry, {
+        eventName: eventId ? `Territórios (${eventId})` : PROGRAMACAO_UNIT_NAME,
+        serviceYear: s13ServiceYear,
         includeQuadraCards: true,
       });
 
@@ -82,13 +93,13 @@ export default function PDFFormsConsole() {
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = url;
-        link.download = `Registro_S13_e_Cartoes_S12_${new Date().toISOString().slice(0, 10)}.pdf`;
+        link.download = `Registro_S13S_${s13ServiceYear}_e_Cartoes_S12_${new Date().toISOString().slice(0, 10)}.pdf`;
         link.click();
         URL.revokeObjectURL(url);
       }
 
       setStatusMessage(
-        `✅ PDF S-13 + S-12 gerado com sucesso! ${res.territoryCount} territórios, ${res.quadraCount} quadras (${res.workedUnits}/${res.totalUnits} unidades concluídas).`
+        `✅ PDF S-13-S (4 Colunas) + S-12 gerado com sucesso! ${res.territoryCount} territórios, ${res.quadraCount} quadras (${res.workedUnits}/${res.totalUnits} unidades concluídas).`
       );
     } catch (err: any) {
       console.error(err);
@@ -387,7 +398,35 @@ export default function PDFFormsConsole() {
           </View>
         ) : selectedTemplate === 's12' ? (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>RESUMO DE TERRITÓRIOS PARA REGISTRO S-13 & CARTÕES S-12</Text>
+            <Text style={styles.sectionTitle}>
+              RESUMO DE TERRITÓRIOS PARA REGISTRO S-13-S (4 COLUNAS MULTI-CICLO) & CARTÕES S-12
+            </Text>
+            <View style={{ flexDirection: 'row', gap: 8, marginBottom: 14, flexWrap: 'wrap' }}>
+              {(['all', '2027', '2026'] as const).map((yr) => (
+                <Pressable
+                  key={yr}
+                  onPress={() => setS13ServiceYear(yr)}
+                  style={{
+                    paddingVertical: 8,
+                    paddingHorizontal: 14,
+                    borderRadius: 8,
+                    borderWidth: 1,
+                    borderColor: s13ServiceYear === yr ? '#FFB800' : '#263042',
+                    backgroundColor: s13ServiceYear === yr ? 'rgba(255, 184, 0, 0.16)' : '#121824',
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontSize: 12,
+                      fontWeight: '800',
+                      color: s13ServiceYear === yr ? '#FFB800' : '#94A3B8',
+                    }}
+                  >
+                    {yr === 'all' ? '📑 Anos 2027 + 2026' : `📅 Ano de Serviço ${yr}`}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
             {territoryRecencySummary.length === 0 ? (
               <View style={styles.emptyBox}>
                 <Text style={styles.emptyText}>Nenhum território encontrado na árvore ativa.</Text>

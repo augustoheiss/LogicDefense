@@ -109,7 +109,7 @@ export {
 } from './pdf/acroFormFiller';
 export type { S89Assignment, FormFillResult } from './pdf/acroFormFiller';
 
-export { generateTerritoryS13AndCardsPDF } from './pdf/s13Generator';
+export { generateTerritoryS13AndCardsPDF, chunkCyclesBy4 } from './pdf/s13Generator';
 export type { TerritoryPDFResult } from './pdf/s13Generator';
 
 export * as templateMatcher from './pdf/templateMatcher';
@@ -257,4 +257,55 @@ export {
   ENCRYPTED_DELTA_PREFIX,
 } from './sync/envelope';
 export type { DeltaEnvelopeV2 } from './sync/envelope';
+
+// Participant Directory & Fuzzy Person Resolution
+export {
+  normalizePersonKey,
+  findParticipantProfile,
+  enrichRegistryWithDirectory,
+  listOperationalGroups,
+} from './roster/participantDirectory';
+export type { ParticipantProfile } from './roster/participantDirectory';
+
+// Agnostic Schedule Ingestion, WhatsApp Export & Commitment Agonist Helpers
+export {
+  parseLocalizedDateToISO,
+  splitPairedAssignees,
+  parseProgramScheduleText,
+} from './schedule/scheduleParser';
+export type { ScheduleParseOptions } from './schedule/scheduleParser';
+
+export {
+  extractStructuredSessions,
+  formatWeeklyScheduleWhatsApp,
+  formatGroupFilterWhatsApp,
+  formatIndividualCommitmentWhatsApp,
+  formatLivePocketScheduleWhatsApp,
+  formatTerritoryAssignmentWhatsApp,
+  formatPartnerSyncWhatsAppMessage,
+  buildWhatsAppUrl,
+  generateCommitmentICS,
+} from './schedule/whatsappFormatter';
+export type {
+  WhatsAppExportMode,
+  StructuredSessionSection,
+  StructuredProgramSession,
+} from './schedule/whatsappFormatter';
+
+export {
+  PROGRAMACAO_UNIT_NAME,
+  PROGRAMACAO_PARTICIPANT_DIRECTORY,
+  RAW_PROGRAMACAO_2026_10_AND_11_TEXT,
+  S13_TERRITORIOS_SEED_RECORDS,
+  buildProgramacaoReuniaoRegistry,
+  buildS13RegistryFromRecords,
+  buildTerritoriosS13HistoricalRegistry,
+  parseSekundoScheduleBundle,
+} from './schedule/programacaoReuniaoSeed';
+export type {
+  S13TerritorySeedRecord,
+  SekundoScheduleBundle,
+} from './schedule/programacaoReuniaoSeed';
+
+
 
