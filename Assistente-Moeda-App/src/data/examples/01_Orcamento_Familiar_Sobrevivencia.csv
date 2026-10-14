@@ -1,0 +1,47 @@
+## COIN ASSISTANT BACKUP v3 ##
+table_id,example_survival_family_01
+api_key,am_sheet_example_fictitious
+last_event_seq,0
+name,Exemplo 01 - Orçamento Familiar & Reserva (Fictício)
+description,Modelo fictício de controle doméstico para organizar contas fixas, reduzir gastos variáveis e construir reserva de emergência.
+active_sectors,%5B%22core_cashflow%22%2C%22core_revenue%22%2C%22core_costs%22%2C%22core_goals%22%2C%22personal_finance%22%5D
+dashboard_config,%7B%22preset%22%3A%22survival%22%2C%22widgetOrder%22%3A%5B%22month_summary%22%2C%22next_action%22%2C%22health_score%22%2C%22what_if%22%2C%22recent_activity%22%2C%22pillars%22%2C%22insights%22%2C%22lessons%22%2C%22quick_actions%22%2C%22investor_summary%22%2C%22sector_simulators%22%5D%2C%22hiddenWidgets%22%3A%5B%22investor_summary%22%2C%22sector_simulators%22%5D%7D
+goal_global_daily,180
+goal_global_weekly,1260
+goal_global_annual,43200
+goal_daily_2026,180
+goal_weekly_2026,1260
+goal_annual_2026,43200
+## INVESTOR_PROFILE ##
+profile_type,safety
+emergency_fund_goal_months,6
+fire_annual_multiplier,25
+monthly_contribution_goal,500
+## ROWS ##
+id,date,value,description,entryType,monthlyValue,monthCount,period_start,period_end,category,tags,metadata_json,ticker,quantity,unitPrice
+ex01-01,2026-08-05,4200.00,"SALARIO MENSAL EMPRESA EXEMPLO ALPHA (FICTICIO)",revenue,,,,,"Salário","renda_fixa,clt","{}",,,
+ex01-02,2026-08-06,1450.00,"ALUGUEL RESIDENCIAL APTO VILA VERDE (FICTICIO)",expense,,,,,"Moradia","custo_fixo,aluguel","{}",,,
+ex01-03,2026-08-07,320.00,"CONDOMINIO E AGUA RESIDENCIAL (FICTICIO)",expense,,,,,"Moradia","custo_fixo","{}",,,
+ex01-04,2026-08-08,890.50,"COMPRA DO MES ATACADISTA BOMPRECO (FICTICIO)",expense,,,,,"Alimentação","mercado,essencial","{}",,,
+ex01-05,2026-08-10,185.40,"CONTA DE ENERGIA ELETRICA (FICTICIO)",expense,,,,,"Utilidades","luz,custo_fixo","{}",,,
+ex01-06,2026-08-12,119.90,"INTERNET FIBRA RESIDENCIAL (FICTICIO)",expense,,,,,"Utilidades","internet,custo_fixo","{}",,,
+ex01-07,2026-08-15,650.00,"RENDA EXTRA ENCOMENDAS FIM DE SEMANA (FICTICIO)",revenue,,,,,"Renda Extra","extra,familiar","{}",,,
+ex01-08,2026-08-18,240.00,"FARMACIA E MEDICAMENTOS USO CONTINUO (FICTICIO)",expense,,,,,"Saúde","farmacia,essencial","{}",,,
+ex01-09,2026-08-22,210.00,"DELIVERY E LANCHES APLICATIVO (FICTICIO)",expense,,,,,"Lazer & Variáveis","delivery,variavel","{}",,,
+ex01-10,2026-08-25,500.00,"APORTE CAIXINHA RESERVA DE EMERGENCIA 100% CDI",deposit,,,,,"Reserva de Emergência","reserva,liquidez,sankey","{""assetClass"":""cash_reserves""}",SELIC,1,500.00
+ex01-11,2026-09-05,4200.00,"SALARIO MENSAL EMPRESA EXEMPLO ALPHA (FICTICIO)",revenue,,,,,"Salário","renda_fixa,clt","{}",,,
+ex01-12,2026-09-06,1450.00,"ALUGUEL RESIDENCIAL APTO VILA VERDE (FICTICIO)",expense,,,,,"Moradia","custo_fixo,aluguel","{}",,,
+ex01-13,2026-09-07,320.00,"CONDOMINIO E AGUA RESIDENCIAL (FICTICIO)",expense,,,,,"Moradia","custo_fixo","{}",,,
+ex01-14,2026-09-09,845.20,"COMPRA DO MES ATACADISTA BOMPRECO (FICTICIO)",expense,,,,,"Alimentação","mercado,essencial","{}",,,
+ex01-15,2026-09-10,172.80,"CONTA DE ENERGIA ELETRICA (FICTICIO)",expense,,,,,"Utilidades","luz,custo_fixo","{}",,,
+ex01-16,2026-09-12,119.90,"INTERNET FIBRA RESIDENCIAL (FICTICIO)",expense,,,,,"Utilidades","internet,custo_fixo","{}",,,
+ex01-17,2026-09-16,780.00,"RENDA EXTRA FREELA DESIGN GRAFICO (FICTICIO)",revenue,,,,,"Renda Extra","extra,familiar","{}",,,
+ex01-18,2026-09-20,165.00,"TRANSPORTE PUBLICO E RECARGA BILHETE (FICTICIO)",expense,,,,,"Transporte","mobilidade","{}",,,
+ex01-19,2026-09-25,600.00,"APORTE CAIXINHA RESERVA DE EMERGENCIA 100% CDI",deposit,,,,,"Reserva de Emergência","reserva,liquidez,sankey","{""assetClass"":""cash_reserves""}",SELIC,1,600.00
+ex01-20,2026-10-05,4200.00,"SALARIO MENSAL EMPRESA EXEMPLO ALPHA (FICTICIO)",revenue,,,,,"Salário","renda_fixa,clt","{}",,,
+ex01-21,2026-10-06,1450.00,"ALUGUEL RESIDENCIAL APTO VILA VERDE (FICTICIO)",expense,,,,,"Moradia","custo_fixo,aluguel","{}",,,
+ex01-22,2026-10-07,320.00,"CONDOMINIO E AGUA RESIDENCIAL (FICTICIO)",expense,,,,,"Moradia","custo_fixo","{}",,,
+ex01-23,2026-10-08,810.00,"COMPRA DO MES ATACADISTA BOMPRECO (FICTICIO)",expense,,,,,"Alimentação","mercado,essencial","{}",,,
+ex01-24,2026-10-10,540.00,"MATERIAL ESCOLAR ANUAL RATEADO (12 MESES)",expense,45.00,12,2026-01-01,2026-12-31,"Educação","escola,anual","{}",,,
+ex01-25,2026-10-12,720.00,"RENDA EXTRA ENCOMENDAS OUTUBRO (FICTICIO)",revenue,,,,,"Renda Extra","extra,familiar","{}",,,
+ex01-26,2026-10-14,700.00,"APORTE TESOURO SELIC RESERVA FAMILIAR",deposit,,,,,"Reserva de Emergência","reserva,liquidez,monte_carlo","{""assetClass"":""cash_reserves""}",SELIC,1,700.00

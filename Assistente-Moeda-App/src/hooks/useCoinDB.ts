@@ -83,7 +83,7 @@ export interface CoinDBState {
     activeSectors?: string[];
     dashboardConfig?: DashboardConfig;
     sectorParams?: SectorSimulationParams;
-    mode?: 'replace' | 'merge';
+    mode?: 'replace' | 'merge' | 'new';
   }) => Promise<{
     success: boolean;
     tableId: string;
@@ -1229,7 +1229,7 @@ function useCoinDBInternal(): CoinDBState {
     name?: string;
     description?: string;
     goals?: TableGoals;
-    mode?: 'replace' | 'merge';
+    mode?: 'replace' | 'merge' | 'new';
     schema?: DynamicTableSchema;
     investorProfile?: InvestorProfileConfig;
     activeSectors?: string[];
@@ -1238,26 +1238,20 @@ function useCoinDBInternal(): CoinDBState {
   }) => {
     const currentTables = tablesRef.current.length > 0 ? tablesRef.current : tables;
     const activeTablesList = currentTables.filter((t: CoinTable) => !t.isDeleted);
+    const mode = payload.mode || 'replace';
 
-    // 1. Preservar table_id: Se tableId for fornecido pelo CSV v3, procurar planilha existente com essa ID
     let targetTable: CoinTable | undefined;
-    if (payload.tableId) {
-      targetTable = currentTables.find((t: CoinTable) => !t.isDeleted && t.id === payload.tableId);
-    }
-
-    if (!targetTable) {
-      targetTable = (activeTableIndex >= 0 && activeTableIndex < activeTablesList.length)
-        ? activeTablesList[activeTableIndex]
-        : activeTablesList[0];
-    }
-
     let baseTables = currentTables;
 
-    if (!targetTable) {
+    if (mode === 'new') {
+      const existingSameId = payload.tableId
+        ? currentTables.some((t: CoinTable) => !t.isDeleted && t.id === payload.tableId)
+        : false;
+      const freshTableId = payload.tableId && !existingSameId ? payload.tableId : generateId();
       const newTable: CoinTable = {
-        id: payload.tableId || generateId(),
-        name: payload.name || 'Minha Planilha',
-        description: payload.description || 'Planilha principal',
+        id: freshTableId,
+        name: payload.name?.trim() || 'Nova Planilha Importada',
+        description: payload.description || 'Planilha importada via CSV',
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
         rows: [],
@@ -1270,15 +1264,47 @@ function useCoinDBInternal(): CoinDBState {
       };
       baseTables = [...currentTables, newTable];
       targetTable = newTable;
-    } else if (payload.tableId && targetTable.id !== payload.tableId && payload.mode === 'replace') {
-      // Preserva a ID v3 na planilha de destino em modo replace
-      targetTable = {
-        ...targetTable,
-        id: payload.tableId,
-      };
+    } else {
+      // 1. Preservar table_id: Se tableId for fornecido pelo CSV v3, procurar planilha existente com essa ID
+      if (payload.tableId) {
+        targetTable = currentTables.find((t: CoinTable) => !t.isDeleted && t.id === payload.tableId);
+      }
+
+      if (!targetTable) {
+        targetTable = (activeTableIndex >= 0 && activeTableIndex < activeTablesList.length)
+          ? activeTablesList[activeTableIndex]
+          : activeTablesList[0];
+      }
+
+      if (!targetTable) {
+        const newTable: CoinTable = {
+          id: payload.tableId || generateId(),
+          name: payload.name || 'Minha Planilha',
+          description: payload.description || 'Planilha principal',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          rows: [],
+          goals: payload.goals || { dailyGoals: {}, weeklyGoals: {}, annualCosts: {} },
+          activeSectors: payload.activeSectors || ['personal_finance'],
+          schema: payload.schema,
+          investorProfile: payload.investorProfile,
+          dashboardConfig: payload.dashboardConfig,
+          sectorParams: payload.sectorParams,
+        };
+        baseTables = [...currentTables, newTable];
+        targetTable = newTable;
+      } else if (payload.tableId && targetTable.id !== payload.tableId && mode === 'replace') {
+        // Preserva a ID v3 na planilha de destino em modo replace (se não colidir com outra existente)
+        const idAlreadyUsed = currentTables.some((t: CoinTable) => !t.isDeleted && t.id === payload.tableId && t.id !== targetTable!.id);
+        if (!idAlreadyUsed) {
+          targetTable = {
+            ...targetTable,
+            id: payload.tableId,
+          };
+        }
+      }
     }
 
-    const mode = payload.mode || 'replace';
     const effectiveTableId = targetTable.id;
 
     // 2. Tratar Chave API com Validação & Auto-Renovação no Import
@@ -1286,7 +1312,7 @@ function useCoinDBInternal(): CoinDBState {
     let keyWasAutoRenewed = false;
 
     if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
-      if (activeApiKey) {
+      if (activeApiKey && activeApiKey !== 'am_sheet_example_fictitious') {
         const valCheck = await validateApiKey(activeApiKey);
         if (!valCheck.valid) {
           console.warn(`[CSV Import] Chave API no CSV (${activeApiKey.slice(0, 15)}...) está ${valCheck.expired ? 'EXPIRADA' : 'INVÁLIDA'}. Gerando nova chave API para a planilha ${effectiveTableId}...`);
@@ -1334,11 +1360,12 @@ function useCoinDBInternal(): CoinDBState {
 
     const formattedRows: TableRow[] = payload.rows.map((r) => ({
       ...r,
-      id: 'id' in r && r.id ? r.id : generateId(),
+      id: mode === 'new' ? generateId() : ('id' in r && r.id ? r.id : generateId()),
+      createdAt: (r as any).createdAt || new Date().toISOString(),
     }));
 
     const updatedTables = baseTables.map((t: CoinTable) => {
-      if (t.id !== targetTable!.id) return t;
+      if (t.id !== targetTable!.id && t.id !== effectiveTableId) return t;
       const currentGoals: TableGoals = t.goals || { dailyGoals: {}, weeklyGoals: {}, annualCosts: {} };
       const goalUpdates: TableGoals = payload.goals || { dailyGoals: {}, weeklyGoals: {}, annualCosts: {} };
 
@@ -1380,6 +1407,12 @@ function useCoinDBInternal(): CoinDBState {
       };
     });
 
+    const updatedActiveList = updatedTables.filter((t: CoinTable) => !t.isDeleted);
+    const targetActiveIdx = updatedActiveList.findIndex((t: CoinTable) => t.id === effectiveTableId);
+    if (targetActiveIdx !== -1) {
+      setActiveTableIndex(targetActiveIdx);
+    }
+
     setSelectedMonth('all');
     await persist(updatedTables);
 
@@ -1387,9 +1420,11 @@ function useCoinDBInternal(): CoinDBState {
       success: true,
       tableId: effectiveTableId,
       keyWasAutoRenewed,
-      message: keyWasAutoRenewed
-        ? 'Planilha restaurada com sucesso! Uma nova Chave API ativa foi gerada para este ambiente.'
-        : 'Planilha restaurada com sucesso!',
+      message: mode === 'new'
+        ? 'Nova planilha criada e carregada com sucesso!'
+        : keyWasAutoRenewed
+          ? 'Planilha restaurada com sucesso! Uma nova Chave API ativa foi gerada para este ambiente.'
+          : 'Planilha restaurada com sucesso!',
       apiKey: activeApiKey,
     };
   }, [tables, activeTableIndex, persist]);

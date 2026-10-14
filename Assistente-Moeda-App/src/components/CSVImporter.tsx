@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,25 +9,41 @@ import {
   Platform,
   Alert,
 } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
 import { colors } from '@/theme/colors';
 import { spacing, radius } from '@/theme/spacing';
 import { useCoinDB } from '../hooks/useCoinDB';
 import { parseCSVText } from '../utils/csvEngine';
 import type { TableRow } from '../core/types';
 import { CSVStagingReviewModal } from './ui/CSVStagingReviewModal';
+import { EXAMPLE_CSV_PROFILES, ExampleCSVProfile } from '../data/exampleCsvProfiles';
 
 interface CSVImporterProps {
   onSuccess?: () => void;
   onCancel?: () => void;
+  initialCsvText?: string;
+  onOpenExamplesGallery?: () => void;
 }
 
-export function CSVImporter({ onSuccess, onCancel }: CSVImporterProps) {
+export function CSVImporter({
+  onSuccess,
+  onCancel,
+  initialCsvText,
+  onOpenExamplesGallery,
+}: CSVImporterProps) {
   const { importSpreadsheet, activeTable, updateActiveSectors } = useCoinDB() as any;
-  const [csvText, setCsvText] = useState('');
+  const [csvText, setCsvText] = useState(initialCsvText || '');
+  const [selectedExampleId, setSelectedExampleId] = useState<string | null>(null);
   const [errorLogs, setErrorLogs] = useState<string[]>([]);
   const [statusMsg, setStatusMsg] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [presetType, setPresetType] = useState<'auto' | 'expense' | 'revenue' | 'deposit' | 'unresolved'>('auto');
+
+  useEffect(() => {
+    if (initialCsvText) {
+      setCsvText(initialCsvText);
+    }
+  }, [initialCsvText]);
 
   // Staging Review State for ambiguous or partial agent imports
   const [stagingData, setStagingData] = useState<{
@@ -35,47 +51,77 @@ export function CSVImporter({ onSuccess, onCancel }: CSVImporterProps) {
     metadata?: any;
     detectedSectors?: string[];
     isAmbiguous?: boolean;
-    mode: 'merge' | 'replace';
+    mode: 'merge' | 'replace' | 'new';
   } | null>(null);
   const [showStagingModal, setShowStagingModal] = useState(false);
+
+  const handleLoadExampleIntoEditor = (profile: ExampleCSVProfile) => {
+    setSelectedExampleId(profile.id);
+    setCsvText(profile.fullBackupV3Csv);
+    setErrorLogs([]);
+    setStatusMsg(
+      `${profile.emoji} Modelo "${profile.shortTitle}" (100% fictício) carregado no editor! Você pode editá-lo ou clicar em "🆕 Nova Planilha" abaixo.`
+    );
+  };
+
+  const handleCopyPromptForSelected = async () => {
+    const profile =
+      EXAMPLE_CSV_PROFILES.find((p) => p.id === selectedExampleId) ||
+      EXAMPLE_CSV_PROFILES[7]; // Default to 08 Universal AI Template
+    try {
+      await Clipboard.setStringAsync(profile.aiBuilderPrompt);
+      setStatusMsg(
+        `🤖 Prompt + Modelo (${profile.shortTitle}) copiado! Cole na sua IA com seus dados reais.`
+      );
+    } catch {
+      if (Platform.OS === 'web' && typeof navigator !== 'undefined' && navigator.clipboard) {
+        await navigator.clipboard.writeText(profile.aiBuilderPrompt);
+        setStatusMsg(
+          `🤖 Prompt + Modelo (${profile.shortTitle}) copiado! Cole na sua IA com seus dados reais.`
+        );
+      }
+    }
+  };
 
   const commitRows = async (
     rowsToCommit: (TableRow | Omit<TableRow, 'id'>)[],
     metadata?: any,
     detectedSectors?: string[],
-    importMode: 'merge' | 'replace' = 'merge'
+    importMode: 'merge' | 'replace' | 'new' = 'merge'
   ) => {
     setIsProcessing(true);
     try {
+      const mergedSectors = Array.from(
+        new Set([
+          ...(metadata?.activeSectors || []),
+          ...(detectedSectors || []),
+        ])
+      );
+
       const importRes = await importSpreadsheet({
         rows: rowsToCommit,
-        tableId: metadata?.tableId,
+        tableId: importMode === 'new' ? undefined : metadata?.tableId,
         apiKey: metadata?.apiKey,
         lastEventSeq: metadata?.lastEventSeq,
         name: metadata?.name,
         description: metadata?.description,
-        goals: metadata?.tableGoals,
+        goals: metadata?.goals || metadata?.tableGoals,
         mode: importMode,
         schema: metadata?.schema,
         investorProfile: metadata?.investorProfile,
+        activeSectors: mergedSectors.length > 0 ? mergedSectors : undefined,
+        dashboardConfig: metadata?.dashboardConfig,
+        sectorParams: metadata?.sectorParams,
       });
 
-      if (detectedSectors && detectedSectors.length > 0) {
+      if (importMode !== 'new' && mergedSectors.length > 0) {
+        const currentActiveSectors = activeTable?.activeSectors || ['personal_finance'];
+        const nextSectors = Array.from(new Set([...currentActiveSectors, ...mergedSectors]));
         try {
-          await updateActiveSectors(detectedSectors);
+          await updateActiveSectors(nextSectors);
         } catch (secErr) {
           console.warn('[Import Warning]: Skipped sectors update', secErr);
         }
-      }
-
-      const currentActiveSectors = activeTable?.activeSectors || ['personal_finance'];
-      const sectorsToActivate = (detectedSectors || []).filter(
-        (sec) => !currentActiveSectors.includes(sec)
-      );
-
-      if (sectorsToActivate.length > 0) {
-        const nextSectors = Array.from(new Set([...currentActiveSectors, ...sectorsToActivate]));
-        await updateActiveSectors(nextSectors);
       }
 
       setCsvText('');
@@ -87,8 +133,13 @@ export function CSVImporter({ onSuccess, onCancel }: CSVImporterProps) {
       setTimeout(() => {
         const activeTableName = metadata?.name || activeTable?.name || 'Ativa';
         const successTitle = 'Importação Concluída! 🎉';
-        const modeLabel = importMode === 'merge' ? 'acumuladas' : 'carregadas (substituição)';
-        let successMsg = `Sucesso! ${rowsToCommit.length} transações foram ${modeLabel} na planilha "${activeTableName}".`;
+        const modeLabel =
+          importMode === 'new'
+            ? 'carregadas em uma NOVA planilha'
+            : importMode === 'merge'
+            ? 'acumuladas'
+            : 'carregadas (substituição)';
+        let successMsg = `Sucesso! ${rowsToCommit.length} transações foram ${modeLabel} ("${activeTableName}").`;
         if (importRes?.keyWasAutoRenewed) {
           successMsg += '\n\n🔑 Planilha restaurada com sucesso! Uma nova Chave API ativa foi gerada para este ambiente.';
         }
@@ -112,9 +163,9 @@ export function CSVImporter({ onSuccess, onCancel }: CSVImporterProps) {
     }
   };
 
-  const handleImport = async (importMode: 'merge' | 'replace' = 'merge') => {
+  const handleImport = async (importMode: 'merge' | 'replace' | 'new' = 'merge') => {
     if (!csvText.trim()) {
-      setErrorLogs(['Por favor, cole um conteúdo CSV válido.']);
+      setErrorLogs(['Por favor, cole um conteúdo CSV válido ou selecione um dos exemplos abaixo.']);
       return;
     }
 
@@ -163,20 +214,72 @@ export function CSVImporter({ onSuccess, onCancel }: CSVImporterProps) {
   const handleStagingConfirm = async (classifiedRows: TableRow[], mode: 'merge' | 'replace') => {
     setShowStagingModal(false);
     if (!stagingData) return;
-    await commitRows(classifiedRows, stagingData.metadata, stagingData.detectedSectors, mode);
+    const finalMode = stagingData.mode === 'new' ? 'new' : mode;
+    await commitRows(classifiedRows, stagingData.metadata, stagingData.detectedSectors, finalMode);
   };
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>📥 Importador de Planilha In-Place CSV</Text>
+      <View style={styles.headerRow}>
+        <Text style={styles.title}>📥 Importador de Planilha CSV & Exemplos</Text>
+        {onOpenExamplesGallery && (
+          <Pressable
+            style={styles.galleryShortcutBtn}
+            onPress={onOpenExamplesGallery}
+          >
+            <Text style={styles.galleryShortcutBtnText}>📚 Galeria de Modelos</Text>
+          </Pressable>
+        )}
+      </View>
+
       <Text style={styles.description}>
-        Cole os registros CSV abaixo. Escolha se deseja{' '}
-        <Text style={{ fontWeight: '700', color: colors.accent.purple }}>Acumular (Mesclar)</Text> com as entradas existentes ou{' '}
-        <Text style={{ fontWeight: '700', color: colors.info.main }}>Substituir</Text> a planilha ativa{' '}
-        <Text style={{ fontWeight: '700', color: colors.accent.purple }}>
-          "{activeTable?.name || 'Sem Tabela Ativa'}"
-        </Text>.
+        Cole seu CSV abaixo ou carregue um <Text style={{ fontWeight: '700', color: '#6EE7B7' }}>Modelo 100% Fictício</Text> por perfil para testar direto na planilha, exportar novamente ou usar como gabarito na sua IA.
       </Text>
+
+      {/* Quick Example Templates Strip */}
+      <View style={styles.examplesBox}>
+        <View style={styles.examplesHeaderRow}>
+          <Text style={styles.examplesLabel}>
+            📚 Exemplos Fictícios por Perfil (Clique para carregar no editor):
+          </Text>
+          <Pressable onPress={handleCopyPromptForSelected} style={styles.copyAiPromptChip}>
+            <Text style={styles.copyAiPromptChipText}>🤖 Copiar Prompt p/ IA</Text>
+          </Pressable>
+        </View>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.examplesScroll}
+        >
+          {EXAMPLE_CSV_PROFILES.map((prof) => {
+            const isSel = selectedExampleId === prof.id;
+            return (
+              <Pressable
+                key={prof.id}
+                style={[
+                  styles.exampleChip,
+                  isSel && {
+                    borderColor: prof.accentColor,
+                    backgroundColor: `${prof.accentColor}26`,
+                  },
+                ]}
+                onPress={() => handleLoadExampleIntoEditor(prof)}
+                disabled={isProcessing}
+              >
+                <Text style={styles.exampleChipEmoji}>{prof.emoji}</Text>
+                <Text
+                  style={[
+                    styles.exampleChipText,
+                    isSel && { color: '#FFFFFF', fontWeight: '800' },
+                  ]}
+                >
+                  {prof.code}. {prof.shortTitle}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+      </View>
 
       {/* Classification Presets */}
       <View style={styles.presetsContainer}>
@@ -223,12 +326,21 @@ export function CSVImporter({ onSuccess, onCancel }: CSVImporterProps) {
 
       <View style={styles.actionRow}>
         <Pressable
+          style={[styles.actionBtn, { backgroundColor: '#10B981' }, isProcessing && styles.disabledBtn]}
+          onPress={() => handleImport('new')}
+          disabled={isProcessing}
+        >
+          <Text style={styles.actionBtnText}>
+            {isProcessing ? 'Processando...' : '🆕 Nova Planilha'}
+          </Text>
+        </Pressable>
+        <Pressable
           style={[styles.actionBtn, isProcessing && styles.disabledBtn]}
           onPress={() => handleImport('merge')}
           disabled={isProcessing}
         >
           <Text style={styles.actionBtnText}>
-            {isProcessing ? 'Processando...' : '➕ Acumular Entradas'}
+            {isProcessing ? 'Processando...' : '➕ Acumular'}
           </Text>
         </Pressable>
         <Pressable
@@ -237,12 +349,12 @@ export function CSVImporter({ onSuccess, onCancel }: CSVImporterProps) {
           disabled={isProcessing}
         >
           <Text style={styles.actionBtnText}>
-            {isProcessing ? 'Processando...' : '🔄 Substituir Planilha'}
+            {isProcessing ? 'Processando...' : '🔄 Substituir'}
           </Text>
         </Pressable>
         {onCancel && (
           <Pressable
-            style={[styles.actionBtn, { backgroundColor: colors.background.tertiary, flex: 0.7 }]}
+            style={[styles.actionBtn, { backgroundColor: colors.background.tertiary, flex: 0.65 }]}
             onPress={onCancel}
             disabled={isProcessing}
           >
@@ -294,15 +406,91 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     gap: spacing.md,
   },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
   title: {
     fontSize: 14,
     fontWeight: '700',
     color: colors.text.primary,
+    flex: 1,
+  },
+  galleryShortcutBtn: {
+    backgroundColor: 'rgba(99, 102, 241, 0.16)',
+    borderColor: 'rgba(99, 102, 241, 0.45)',
+    borderWidth: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: radius.full || 999,
+  },
+  galleryShortcutBtnText: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: '#A5B4FC',
   },
   description: {
     fontSize: 11,
     color: colors.text.secondary,
     lineHeight: 15,
+  },
+  examplesBox: {
+    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+    borderWidth: 1,
+    borderColor: colors.border.default,
+    borderRadius: radius.sm,
+    padding: 8,
+    gap: 6,
+  },
+  examplesHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  examplesLabel: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: colors.text.secondary,
+  },
+  copyAiPromptChip: {
+    backgroundColor: '#312E81',
+    borderColor: '#6366F1',
+    borderWidth: 1,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  copyAiPromptChipText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#E0E7FF',
+  },
+  examplesScroll: {
+    gap: 6,
+    paddingVertical: 2,
+  },
+  exampleChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    borderRadius: 8,
+    backgroundColor: colors.background.tertiary,
+    borderWidth: 1,
+    borderColor: colors.border.default,
+  },
+  exampleChipEmoji: {
+    fontSize: 13,
+  },
+  exampleChipText: {
+    fontSize: 10.5,
+    fontWeight: '600',
+    color: colors.text.secondary,
   },
   codeTextarea: {
     backgroundColor: '#0d1117',
@@ -318,12 +506,15 @@ const styles = StyleSheet.create({
   },
   actionRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: spacing.sm,
   },
   actionBtn: {
     flex: 1,
+    minWidth: 95,
     backgroundColor: colors.accent.purple,
     paddingVertical: spacing.sm,
+    paddingHorizontal: 6,
     borderRadius: radius.sm,
     alignItems: 'center',
     justifyContent: 'center',
@@ -369,7 +560,7 @@ const styles = StyleSheet.create({
   },
   actionBtnText: {
     fontSize: 11,
-    fontWeight: '600',
+    fontWeight: '700',
     color: colors.text.primary,
   },
   statusBanner: {

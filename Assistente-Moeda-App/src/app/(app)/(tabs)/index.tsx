@@ -49,6 +49,7 @@ import {
   VehiclesSectorWidget,
   LegalTaxesSectorWidget,
   SectorGuard,
+  ExampleCSVGalleryModal,
 } from '@/components/ui';
 import { useWebKeyboardShortcuts } from '@/hooks/useWebKeyboardShortcuts';
 import type { TableRow, DashboardWidgetId, WorkspacePresetType } from '@/core/types';
@@ -63,6 +64,7 @@ export default function HojeScreen() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [showTableSwitcher, setShowTableSwitcher] = useState(false);
   const [showAppBuilder, setShowAppBuilder] = useState(false);
+  const [showExamplesModal, setShowExamplesModal] = useState(false);
 
   useWebKeyboardShortcuts({
     onQuickAdd: () => setShowAddModal(true),
@@ -335,11 +337,11 @@ export default function HojeScreen() {
               </Pressable>
 
               <Pressable
-                style={styles.quickActionButton}
-                onPress={() => router.push('/(app)/(tabs)/charts' as any)}
+                style={[styles.quickActionButton, { borderColor: 'rgba(99, 102, 241, 0.45)', backgroundColor: 'rgba(99, 102, 241, 0.12)' }]}
+                onPress={() => setShowExamplesModal(true)}
               >
-                <Text style={styles.quickActionIcon}>📈</Text>
-                <Text style={styles.quickActionText}>Ver Gráficos</Text>
+                <Text style={styles.quickActionIcon}>📚</Text>
+                <Text style={[styles.quickActionText, { color: '#A5B4FC' }]}>Exemplos & Modelos IA</Text>
               </Pressable>
 
               <Pressable
@@ -368,12 +370,20 @@ export default function HojeScreen() {
                 <Text style={styles.emptyRecentText}>
                   Nenhuma transação registrada nesta planilha ainda.
                 </Text>
-                <Pressable
-                  style={styles.emptyAddButton}
-                  onPress={() => setShowAddModal(true)}
-                >
-                  <Text style={styles.emptyAddButtonText}>+ Criar Primeiro Lançamento</Text>
-                </Pressable>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, justifyContent: 'center' }}>
+                  <Pressable
+                    style={styles.emptyAddButton}
+                    onPress={() => setShowAddModal(true)}
+                  >
+                    <Text style={styles.emptyAddButtonText}>+ Criar Primeiro Lançamento</Text>
+                  </Pressable>
+                  <Pressable
+                    style={[styles.emptyAddButton, { backgroundColor: '#312E81', borderWidth: 1, borderColor: '#6366F1' }]}
+                    onPress={() => setShowExamplesModal(true)}
+                  >
+                    <Text style={[styles.emptyAddButtonText, { color: '#E0E7FF' }]}>📚 Testar Planilha de Exemplo / IA</Text>
+                  </Pressable>
+                </View>
               </View>
             ) : (
               <View style={styles.recentList}>
@@ -452,6 +462,14 @@ export default function HojeScreen() {
 
             <View style={styles.topHeaderActions}>
               <Pressable
+                style={[styles.builderHeaderButton, { borderColor: 'rgba(99, 102, 241, 0.5)', backgroundColor: 'rgba(99, 102, 241, 0.14)' }]}
+                onPress={() => setShowExamplesModal(true)}
+              >
+                <Text style={styles.builderButtonEmoji}>📚</Text>
+                <Text style={[styles.builderButtonText, { color: '#A5B4FC' }]}>Exemplos CSV & IA</Text>
+              </Pressable>
+
+              <Pressable
                 style={styles.builderHeaderButton}
                 onPress={() => setShowAppBuilder(true)}
               >
@@ -497,6 +515,13 @@ export default function HojeScreen() {
                 </Pressable>
               );
             })}
+            <Pressable
+              style={[styles.presetChip, { borderColor: 'rgba(99, 102, 241, 0.45)', backgroundColor: 'rgba(99, 102, 241, 0.12)' }]}
+              onPress={() => setShowExamplesModal(true)}
+            >
+              <Text style={styles.presetChipIcon}>📚</Text>
+              <Text style={[styles.presetChipText, { color: '#A5B4FC', fontWeight: '700' }]}>Modelos CSV por Perfil</Text>
+            </Pressable>
             <Pressable
               style={[styles.presetChip, effectiveConfig.preset === 'custom' && styles.presetChipActive]}
               onPress={() => setShowAppBuilder(true)}
@@ -588,6 +613,12 @@ export default function HojeScreen() {
           onUpdateDashboardConfig={db.updateDashboardConfig}
           onUpdateActiveSectors={db.updateActiveSectors}
           onTogglePrivacyMode={db.togglePrivacyMode}
+        />
+
+        <ExampleCSVGalleryModal
+          visible={showExamplesModal}
+          onClose={() => setShowExamplesModal(false)}
+          onImportExample={db.importSpreadsheet}
         />
       </View>
     </ErrorBoundary>

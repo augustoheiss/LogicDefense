@@ -22,6 +22,11 @@ import { colors } from '@/theme/colors';
 import { spacing, radius } from '@/theme/spacing';
 import { Card } from './Card';
 import type { CoinTable } from '@/core/types';
+import { EXAMPLE_CSV_PROFILES, ExampleCSVProfile } from '../../data/exampleCsvProfiles';
+import { parseCSVText } from '../../utils/csvEngine';
+import { detectSectorsFromRows } from '../../utils/sectorTagDetector';
+import { useCoinDB } from '../../hooks/useCoinDB';
+import { ExampleCSVGalleryModal } from './ExampleCSVGalleryModal';
 
 interface TableSwitcherModalProps {
   visible: boolean;
@@ -48,11 +53,37 @@ export function TableSwitcherModal({
 }: TableSwitcherModalProps) {
   const { width } = useWindowDimensions();
   const isWide = width >= 600;
+  const db = useCoinDB();
 
   const [newTableName, setNewTableName] = useState('');
   const [editingTableId, setEditingTableId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
   const [focusedIndex, setFocusedIndex] = useState<number>(activeTableIndex);
+  const [showExamplesGallery, setShowExamplesGallery] = useState(false);
+
+  const handleCreateFromExample = async (profile: ExampleCSVProfile) => {
+    const parsed = parseCSVText(profile.fullBackupV3Csv);
+    const detected = detectSectorsFromRows(parsed.rows);
+    const mergedSectors = Array.from(
+      new Set([
+        ...(parsed.metadata?.activeSectors || profile.activeSectors || []),
+        ...detected,
+      ])
+    );
+    await db.importSpreadsheet({
+      rows: parsed.rows,
+      name: parsed.metadata?.name || `${profile.emoji} ${profile.title}`,
+      description: parsed.metadata?.description || profile.subtitle,
+      goals: parsed.metadata?.tableGoals,
+      mode: 'new',
+      schema: parsed.metadata?.schema,
+      investorProfile: parsed.metadata?.investorProfile,
+      activeSectors: mergedSectors,
+      dashboardConfig: parsed.metadata?.dashboardConfig,
+      sectorParams: parsed.metadata?.sectorParams,
+    });
+    onClose();
+  };
 
   React.useEffect(() => {
     if (visible) {
@@ -257,7 +288,7 @@ export function TableSwitcherModal({
 
             {/* Create New Table Form */}
             <View style={styles.addSection}>
-              <Text style={styles.sectionLabel}>Criar Nova Planilha</Text>
+              <Text style={styles.sectionLabel}>Criar Nova Planilha em Branco</Text>
               <View style={styles.addInputRow}>
                 <TextInput
                   style={styles.addInput}
@@ -279,7 +310,66 @@ export function TableSwitcherModal({
                 </Pressable>
               </View>
             </View>
+
+            {/* Create New Table from Fictitious Example Profile */}
+            <View style={styles.addSection}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Text style={styles.sectionLabel}>📚 Ou Abrir Planilha de Exemplo (Fictícia)</Text>
+                <Pressable onPress={() => setShowExamplesGallery(true)}>
+                  <Text style={{ color: '#A5B4FC', fontSize: 11.5, fontWeight: '700' }}>
+                    Ver Modelos & Prompts IA ›
+                  </Text>
+                </Pressable>
+              </View>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={{ gap: 8, paddingVertical: 4 }}
+              >
+                {EXAMPLE_CSV_PROFILES.map((prof) => (
+                  <Pressable
+                    key={prof.id}
+                    style={({ pressed }) => [
+                      {
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 6,
+                        paddingHorizontal: 10,
+                        paddingVertical: 8,
+                        borderRadius: radius.md,
+                        backgroundColor: colors.background.tertiary,
+                        borderWidth: 1,
+                        borderColor: `${prof.accentColor}66`,
+                      },
+                      pressed && styles.pressed,
+                    ]}
+                    onPress={() => handleCreateFromExample(prof)}
+                  >
+                    <Text style={{ fontSize: 16 }}>{prof.emoji}</Text>
+                    <View>
+                      <Text style={{ color: colors.text.primary, fontSize: 11.5, fontWeight: '700' }}>
+                        {prof.shortTitle}
+                      </Text>
+                      <Text style={{ color: colors.text.tertiary, fontSize: 9.5 }}>
+                        + Nova aba de teste
+                      </Text>
+                    </View>
+                  </Pressable>
+                ))}
+              </ScrollView>
+            </View>
           </ScrollView>
+
+          <ExampleCSVGalleryModal
+            visible={showExamplesGallery}
+            onClose={() => setShowExamplesGallery(false)}
+            onImportExample={async (payload) => {
+              const res = await db.importSpreadsheet(payload);
+              setShowExamplesGallery(false);
+              onClose();
+              return res;
+            }}
+          />
         </View>
       </View>
     </Modal>

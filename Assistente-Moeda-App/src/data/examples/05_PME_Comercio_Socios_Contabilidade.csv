@@ -1,0 +1,43 @@
+## COIN ASSISTANT BACKUP v3 ##
+table_id,example_smb_business_05
+api_key,am_sheet_example_fictitious
+last_event_seq,0
+name,Exemplo 05 - PME, Comércio & Sócios (Fictício)
+description,Modelo empresarial fictício com faturamento B2B, folha CLT, pró-labore (Fator R), capital de giro (NCG/CFaR), impostos e conta-corrente de sócios.
+active_sectors,%5B%22core_cashflow%22%2C%22core_revenue%22%2C%22core_costs%22%2C%22core_goals%22%2C%22core_predictions%22%2C%22smb_accounting%22%2C%22legal_taxes%22%2C%22vehicles%22%2C%22real_estate%22%2C%22personal_finance%22%5D
+dashboard_config,%7B%22preset%22%3A%22smb%22%2C%22widgetOrder%22%3A%5B%22month_summary%22%2C%22sector_simulators%22%2C%22health_score%22%2C%22insights%22%2C%22pillars%22%2C%22recent_activity%22%2C%22next_action%22%2C%22investor_summary%22%2C%22what_if%22%2C%22quick_actions%22%2C%22lessons%22%5D%2C%22hiddenWidgets%22%3A%5B%22lessons%22%5D%7D
+goal_global_daily,1500
+goal_global_weekly,10500
+goal_global_annual,312000
+goal_daily_2026,1500
+goal_weekly_2026,10500
+goal_annual_2026,312000
+## INVESTOR_PROFILE ##
+profile_type,smb_hybrid
+emergency_fund_goal_months,12
+fire_annual_multiplier,25
+monthly_contribution_goal,4000
+## ROWS ##
+id,date,value,description,entryType,monthlyValue,monthCount,period_start,period_end,category,tags,metadata_json,ticker,quantity,unitPrice
+ex05-01,2026-08-05,48500.00,"FATURAMENTO CONTRATOS B2B ESTUDIO HORIZONTE (FICTICIO)",revenue,,,,,"Receita de Vendas","ncg,welford,rolling_margin","{""massa_salarial_12"":168000,""receita_bruta_12"":560000}",,,
+ex05-02,2026-08-06,8200.00,"FOLHA DE PAGAMENTO EQUIPE CLT E ENCARGOS (FICTICIO)",expense,,,,,"Massa Salarial","fap_rat,payroll_tax,fator_r","{}",,,
+ex05-03,2026-08-07,6000.00,"PRO-LABORE SOCIOS ADMINISTRADORES (OTIMIZACAO FATOR R)",expense,,,,,"Retiradas","fator_r,irpf_2026,simples_nacional","{}",,,
+ex05-04,2026-08-10,3800.00,"ALUGUEL COMERCIAL E CONDOMINIO SEDE (FICTICIO)",expense,,,,,"Infraestrutura","custo_fixo,aluguel","{}",,,
+ex05-05,2026-08-15,9400.00,"FORNECEDORES E INSUMOS DE PRODUCAO (FICTICIO)",expense,,,,,"Fornecedores","ncg,cmv","{}",,,
+ex05-06,2026-08-20,3150.00,"GUIA DAS SIMPLES NACIONAL ANEXO III (FICTICIO)",expense,,,,,"Impostos","simples_nacional,fator_r","{}",,,
+ex05-07,2026-08-22,2500.00,"APORTE TEMPORARIO SOCIO A PARA COMPRA DE EQUIPAMENTO",partner_in,,,,,"Sócios","partner,aporte_socio","{}",,,
+ex05-08,2026-08-28,5000.00,"RESERVA CAPITAL DE GIRO PME CDB LIQUIDEZ DIARIA",deposit,,,,,"Capital de Giro","ncg,cfar,business_capital","{""assetClass"":""business_capital""}",CDI,1,5000.00
+ex05-09,2026-09-05,52400.00,"FATURAMENTO VENDAS E SERVICOS SETEMBRO (FICTICIO)",revenue,,,,,"Receita de Vendas","ncg,welford,rolling_margin","{""massa_salarial_12"":170000,""receita_bruta_12"":575000}",,,
+ex05-10,2026-09-06,8200.00,"FOLHA DE PAGAMENTO EQUIPE CLT E ENCARGOS (FICTICIO)",expense,,,,,"Massa Salarial","fap_rat,payroll_tax,fator_r","{}",,,
+ex05-11,2026-09-07,6000.00,"PRO-LABORE SOCIOS ADMINISTRADORES (OTIMIZACAO FATOR R)",expense,,,,,"Retiradas","fator_r,irpf_2026,simples_nacional","{}",,,
+ex05-12,2026-09-10,3800.00,"ALUGUEL COMERCIAL E CONDOMINIO SEDE (FICTICIO)",expense,,,,,"Infraestrutura","custo_fixo,aluguel","{}",,,
+ex05-13,2026-09-16,10200.00,"FORNECEDORES E REPOSICAO DE ESTOQUE (FICTICIO)",expense,,,,,"Fornecedores","ncg,cmv","{}",,,
+ex05-14,2026-09-20,3400.00,"GUIA DAS SIMPLES NACIONAL ANEXO III (FICTICIO)",expense,,,,,"Impostos","simples_nacional,fator_r","{}",,,
+ex05-15,2026-09-25,2500.00,"REEMBOLSO AO SOCIO A REFERENTE ADIANTAMENTO AGOSTO",partner_out,,,,,"Sócios","partner,reembolso_socio","{}",,,
+ex05-16,2026-09-28,6000.00,"APORTE RESERVA DE CONTINGENCIA EMPRESARIAL",deposit,,,,,"Capital de Giro","ncg,cfar,business_capital","{""assetClass"":""business_capital""}",CDI,1,6000.00
+ex05-17,2026-10-05,55800.00,"FATURAMENTO VENDAS E CONTRATOS OUTUBRO (FICTICIO)",revenue,,,,,"Receita de Vendas","ncg,welford,rolling_margin","{""massa_salarial_12"":172000,""receita_bruta_12"":590000}",,,
+ex05-18,2026-10-06,8200.00,"FOLHA DE PAGAMENTO EQUIPE CLT E ENCARGOS (FICTICIO)",expense,,,,,"Massa Salarial","fap_rat,payroll_tax,fator_r","{}",,,
+ex05-19,2026-10-07,6000.00,"PRO-LABORE SOCIOS ADMINISTRADORES (OTIMIZACAO FATOR R)",expense,,,,,"Retiradas","fator_r,irpf_2026,simples_nacional","{}",,,
+ex05-20,2026-10-10,3800.00,"ALUGUEL COMERCIAL E CONDOMINIO SEDE (FICTICIO)",expense,,,,,"Infraestrutura","custo_fixo,aluguel","{}",,,
+ex05-21,2026-10-12,9800.00,"FORNECEDORES E LOGISTICA DE ENTREGA (FICTICIO)",expense,,,,,"Fornecedores","ncg,cmv","{}",,,
+ex05-22,2026-10-14,4500.00,"APORTE TESOURO SELIC CAIXA CORPORATIVO PME",deposit,,,,,"Reserva Corporativa","reserva,selic","{""assetClass"":""cash_reserves""}",SELIC,1,4500.00

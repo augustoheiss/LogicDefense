@@ -13,12 +13,16 @@ interface CSVTextImporterModalProps {
   visible: boolean;
   onClose: () => void;
   onSuccess: (summary: string) => void;
+  initialCsvText?: string;
+  onOpenExamplesGallery?: () => void;
 }
 
 export function CSVTextImporterModal({
   visible,
   onClose,
   onSuccess,
+  initialCsvText,
+  onOpenExamplesGallery,
 }: CSVTextImporterModalProps) {
   const { width } = useWindowDimensions();
   const isWide = width >= 600;
@@ -33,6 +37,8 @@ export function CSVTextImporterModal({
       <View style={styles.overlay}>
         <View style={[styles.modalContainer, isWide && styles.modalContainerWide]}>
           <CSVImporter
+            initialCsvText={initialCsvText}
+            onOpenExamplesGallery={onOpenExamplesGallery}
             onSuccess={() => {
               onSuccess('Importação in-place concluída com sucesso!');
             }}
@@ -62,6 +68,6 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   modalContainerWide: {
-    maxWidth: 650,
+    maxWidth: 680,
   },
 });

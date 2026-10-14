@@ -1,0 +1,27 @@
+## COIN ASSISTANT BACKUP v3 ##
+table_id,example_ai_universal_template_08
+api_key,am_sheet_example_fictitious
+last_event_seq,0
+name,Exemplo 08 - Modelo Universal para Montar com Sua IA (Fictício)
+description,Template autodocumentado com 1 exemplo de cada tipo de lançamento suportado pelo Assistente Moeda para servir de gabarito para sua IA pessoal.
+active_sectors,%5B%22core_cashflow%22%2C%22core_revenue%22%2C%22core_costs%22%2C%22core_goals%22%2C%22core_predictions%22%2C%22personal_finance%22%5D
+goal_global_daily,250
+goal_global_weekly,1750
+goal_global_annual,45000
+## INVESTOR_PROFILE ##
+profile_type,balanced
+emergency_fund_goal_months,6
+fire_annual_multiplier,25
+monthly_contribution_goal,1000
+## ROWS ##
+id,date,value,description,entryType,monthlyValue,monthCount,period_start,period_end,category,tags,metadata_json,ticker,quantity,unitPrice
+tpl-01,2026-10-01,3500.00,"EXEMPLO RECEITA PONTUAL (SALARIO OU VENDA FICTICIA)",revenue,,,,,"Receitas","exemplo,receita","{}",,,
+tpl-02,2026-10-02,1200.00,"EXEMPLO DESPESA FIXA MENSAL (ALUGUEL FICTICIO)",expense,,,,,"Moradia","exemplo,custo_fixo","{}",,,
+tpl-03,2026-10-03,240.50,"EXEMPLO DESPESA VARIAVEL (SUPERMERCADO FICTICIO)",expense,,,,,"Alimentação","exemplo,variavel","{}",,,
+tpl-04,2026-10-04,1800.00,"EXEMPLO DESPESA ANUAL RATEADA (SEGURO 12 MESES)",expense,150.00,12,2026-01-01,2026-12-31,"Seguros","exemplo,anual","{}",,,
+tpl-05,2026-10-05,1000.00,"EXEMPLO APORTE EM RESERVA DE EMERGENCIA (SELIC)",deposit,,,,,"Investimentos","exemplo,reserva","{""assetClass"":""cash_reserves""}",SELIC,1,1000.00
+tpl-06,2026-10-06,820.00,"EXEMPLO COMPRA DE ATIVO COM TICKER (5 COTAS FII)",deposit,,,,,"Investimentos","exemplo,fii","{""assetClass"":""real_estate_funds""}",HGLG11,5,164.00
+tpl-07,2026-10-07,250.00,"EXEMPLO ABONO DE META / FOLGA JUSTIFICADA (WAIVER)",waiver,,,,,"Banco de Tempo","exemplo,abono","{}",,,
+tpl-08,2026-10-08,500.00,"EXEMPLO ENTRADA DE PARCERIA / REEMBOLSO DE SOCIO",partner_in,,,,,"Parcerias","exemplo,socio","{}",,,
+tpl-09,2026-10-09,500.00,"EXEMPLO SAIDA DE PARCERIA / REPASSE A SOCIO",partner_out,,,,,"Parcerias","exemplo,socio","{}",,,
+tpl-10,2026-10-10,89.90,"EXEMPLO ITEM EM QUARENTENA PARA REVISAR DEPOIS",unresolved,,,,,"Pendentes","exemplo,revisar","{}",,,

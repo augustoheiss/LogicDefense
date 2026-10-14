@@ -56,6 +56,7 @@ import {
   CSVStagingReviewModal,
   GranularExportModal,
   SpreadsheetDataGrid,
+  ExampleCSVGalleryModal,
 } from '@/components/ui';
 import { formatCurrencySmart } from '@/core/formatCurrency';
 import { shareWhatsAppReport, shareCSV, sharePDFReport, buildWhatsAppReport, shareCSVText, buildCSV } from '@/services/exportService';
@@ -77,6 +78,8 @@ export default function TransactionsScreen() {
   const [showFab, setShowFab] = useState(false);
   const [showBulkDelete, setShowBulkDelete] = useState(false);
   const [showCSVStreamModal, setShowCSVStreamModal] = useState(false);
+  const [showExamplesModal, setShowExamplesModal] = useState(false);
+  const [prefillImporterCsv, setPrefillImporterCsv] = useState<string | undefined>(undefined);
   const [showWorkbench, setShowWorkbench] = useState(false);
   const [showGranularExportModal, setShowGranularExportModal] = useState(false);
   const [showStagingModal, setShowStagingModal] = useState(false);
@@ -505,39 +508,47 @@ export default function TransactionsScreen() {
     }
   }, [previewMode, db]);
 
-  const executeImportCommit = useCallback(async (mode: 'merge' | 'replace', dataOverride?: any) => {
+  const executeImportCommit = useCallback(async (mode: 'merge' | 'replace' | 'new', dataOverride?: any) => {
     const dataToUse = dataOverride || pendingImportResult;
     if (!dataToUse) return;
     try {
+      const mergedSectors = Array.from(
+        new Set([
+          ...(dataToUse.metadata?.activeSectors || []),
+          ...(dataToUse.detectedSectors || []),
+        ])
+      );
+
       await db.importSpreadsheet({
         rows: dataToUse.rows,
+        tableId: mode === 'new' ? undefined : dataToUse.metadata?.tableId,
         name: dataToUse.metadata?.name,
         description: dataToUse.metadata?.description,
-        goals: dataToUse.metadata?.tableGoals,
+        goals: dataToUse.metadata?.goals || dataToUse.metadata?.tableGoals,
         mode,
         schema: dataToUse.metadata?.schema,
         investorProfile: dataToUse.metadata?.investorProfile,
-        activeSectors: dataToUse.metadata?.activeSectors,
+        activeSectors: mergedSectors.length > 0 ? mergedSectors : undefined,
         dashboardConfig: dataToUse.metadata?.dashboardConfig,
         sectorParams: dataToUse.metadata?.sectorParams,
       });
 
-      // Auto-activate detected sectors
-      const currentActiveSectors = db.activeTable?.activeSectors || ['personal_finance'];
-      const sectorsToActivate = (dataToUse.detectedSectors || []).filter(
-        (sec: string) => !currentActiveSectors.includes(sec)
-      );
-
-      if (sectorsToActivate.length > 0) {
-        const nextSectors = Array.from(new Set([...currentActiveSectors, ...sectorsToActivate]));
+      if (mode !== 'new' && mergedSectors.length > 0) {
+        const currentActiveSectors = db.activeTable?.activeSectors || ['personal_finance'];
+        const nextSectors = Array.from(new Set([...currentActiveSectors, ...mergedSectors]));
         await db.updateActiveSectors(nextSectors);
       }
 
       setTimeout(() => {
         const activeTableName = dataToUse.metadata?.name || db.activeTable?.name || 'Ativa';
         const successTitle = 'Importação Concluída! 🎉';
-        const modeLabel = mode === 'merge' ? 'acumuladas' : 'carregadas (substituição)';
-        const successMsg = `Sucesso! ${dataToUse.rows.length} transações foram ${modeLabel} na planilha "${activeTableName}".`;
+        const modeLabel =
+          mode === 'new'
+            ? 'carregadas em uma NOVA planilha'
+            : mode === 'merge'
+            ? 'acumuladas'
+            : 'carregadas (substituição)';
+        const successMsg = `Sucesso! ${dataToUse.rows.length} transações foram ${modeLabel} ("${activeTableName}").`;
 
         if (Platform.OS === 'web') {
           window.alert(`${successTitle}\n\n${successMsg}`);
@@ -749,6 +760,16 @@ export default function TransactionsScreen() {
             <Pressable
               style={({ pressed }) => [
                 styles.undoButton,
+                { borderColor: 'rgba(99, 102, 241, 0.45)', backgroundColor: 'rgba(99, 102, 241, 0.14)' },
+                pressed && styles.pressed,
+              ]}
+              onPress={() => setShowExamplesModal(true)}
+            >
+              <Text style={[styles.undoButtonText, { color: '#A5B4FC' }]}>📚 Exemplos CSV</Text>
+            </Pressable>
+            <Pressable
+              style={({ pressed }) => [
+                styles.undoButton,
                 pressed && styles.pressed,
                 !db.canUndo && styles.disabledButton,
               ]}
@@ -804,7 +825,7 @@ export default function TransactionsScreen() {
                 <Text style={styles.emptyText}>
                   {searchQuery
                     ? 'Tente outro termo ou limpe o filtro de busca acima.'
-                    : 'Adicione sua primeira entrada ou importe um arquivo CSV ou bloco de dados.'}
+                    : 'Adicione sua primeira entrada, carregue uma Planilha de Exemplo 100% fictícia para testar ou use nossos modelos prontos para montar seu CSV com sua própria IA.'}
                 </Text>
                 <Pressable
                   style={({ pressed }) => [
@@ -820,6 +841,18 @@ export default function TransactionsScreen() {
                   <Text style={styles.emptyButtonText}>+ Adicionar Entrada</Text>
                 </Pressable>
                 <View style={styles.emptyActionsRow}>
+                  <Pressable
+                    style={({ pressed }) => [
+                      styles.emptySecondaryButton,
+                      { borderColor: 'rgba(99, 102, 241, 0.5)', backgroundColor: 'rgba(99, 102, 241, 0.14)' },
+                      pressed && styles.pressed,
+                    ]}
+                    onPress={() => setShowExamplesModal(true)}
+                  >
+                    <Text style={[styles.emptySecondaryButtonText, { color: '#A5B4FC', fontWeight: '700' }]}>
+                      📚 Exemplos & Modelos IA
+                    </Text>
+                  </Pressable>
                   <Pressable
                     style={({ pressed }) => [
                       styles.emptySecondaryButton,
@@ -839,6 +872,7 @@ export default function TransactionsScreen() {
                     ]}
                     onPress={() => {
                       ensureTable();
+                      setPrefillImporterCsv(undefined);
                       setShowCSVStreamModal(true);
                     }}
                   >
@@ -854,6 +888,16 @@ export default function TransactionsScreen() {
       <View style={styles.fabContainer}>
         {showFab && (
           <View style={styles.fabMenu}>
+            <Pressable
+              style={[styles.fabMenuItem, { backgroundColor: colors.background.elevated, borderColor: '#6366F1' }]}
+              onPress={() => {
+                setShowFab(false);
+                setShowExamplesModal(true);
+              }}
+            >
+              <Text style={styles.fabMenuIcon}>📚</Text>
+              <Text style={styles.fabMenuLabel}>Exemplos & Modelos IA</Text>
+            </Pressable>
             <Pressable
               style={[styles.fabMenuItem, { backgroundColor: colors.background.elevated, borderColor: colors.accent.purpleBorder }]}
               onPress={() => {
@@ -934,6 +978,7 @@ export default function TransactionsScreen() {
               onPress={() => {
                 setShowFab(false);
                 ensureTable();
+                setPrefillImporterCsv(undefined);
                 setShowCSVStreamModal(true);
               }}
             >
@@ -1055,14 +1100,34 @@ export default function TransactionsScreen() {
       {/* CSV Text Stream Importer Modal */}
       <CSVTextImporterModal
         visible={showCSVStreamModal}
-        onClose={() => setShowCSVStreamModal(false)}
+        initialCsvText={prefillImporterCsv}
+        onOpenExamplesGallery={() => {
+          setShowCSVStreamModal(false);
+          setShowExamplesModal(true);
+        }}
+        onClose={() => {
+          setShowCSVStreamModal(false);
+          setPrefillImporterCsv(undefined);
+        }}
         onSuccess={(summary) => {
           setShowCSVStreamModal(false);
+          setPrefillImporterCsv(undefined);
           if (Platform.OS === 'web') {
             window.alert(summary);
           } else {
             Alert.alert('Importação Bem-Sucedida', summary);
           }
+        }}
+      />
+
+      {/* Example CSV Gallery & AI Builder Templates Modal */}
+      <ExampleCSVGalleryModal
+        visible={showExamplesModal}
+        onClose={() => setShowExamplesModal(false)}
+        onImportExample={db.importSpreadsheet}
+        onOpenCustomImporter={(csv) => {
+          setPrefillImporterCsv(csv);
+          setShowCSVStreamModal(true);
         }}
       />
 
@@ -1072,19 +1137,25 @@ export default function TransactionsScreen() {
         title="Modo de Importação"
         message={
           pendingImportResult
-            ? `O arquivo contém ${pendingImportResult.rows.length} transações. Como deseja aplicar na planilha "${db.activeTable?.name || 'Ativa'}"?`
+            ? `O arquivo contém ${pendingImportResult.rows.length} transações. Como deseja aplicar os dados?`
             : ''
         }
         options={[
           {
+            key: 'new',
+            label: '🆕 Abrir em Nova Planilha',
+            description: 'Cria uma nova planilha separada sem alterar a planilha atual',
+            variant: 'primary',
+          },
+          {
             key: 'merge',
-            label: '➕ Acumular Entradas',
+            label: '➕ Acumular na Planilha Atual',
             description: 'Mantém as entradas existentes e adiciona/atualiza as novas',
             variant: 'primary',
           },
           {
             key: 'replace',
-            label: '🔄 Substituir Planilha',
+            label: '🔄 Substituir Planilha Atual',
             description: 'Substitui os lançamentos atuais por estes novos do arquivo',
             variant: 'danger',
           },
@@ -1097,7 +1168,7 @@ export default function TransactionsScreen() {
         ]}
         onSelect={async (key) => {
           setShowImportChoice(false);
-          if (key === 'merge' || key === 'replace') {
+          if (key === 'new' || key === 'merge' || key === 'replace') {
             await executeImportCommit(key);
           }
           setPendingImportResult(null);

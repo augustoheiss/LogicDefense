@@ -42,7 +42,7 @@ import { shadows } from '@/theme/shadows';
 import { Card } from '@/components/ui/Card';
 import { TokenProgressBar } from '@/components/ui/TokenProgressBar';
 import { SectorSettingsPanel } from '@/components/ui/SectorSettingsPanel';
-import { SyncAuditPanel, APIManagementTester } from '@/components/ui';
+import { SyncAuditPanel, APIManagementTester, ExampleCSVGalleryModal } from '@/components/ui';
 import { formatCurrencySmart } from '@/core/formatCurrency';
 import { validateMobileLicenseKey, getStoredLicenseKey } from '@/storage/authService';
 import { ensureApiKeyForTable, generateLocalApiKey, buildCSV, shareCSVText, shareJSONBackup } from '@/services/exportService';
@@ -75,6 +75,7 @@ export default function SettingsScreen() {
 
   const [showStoreModal, setShowStoreModal] = useState(false);
   const [showDebugger, setShowDebugger] = useState(false);
+  const [showExamplesModal, setShowExamplesModal] = useState(false);
 
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
   const [currentPassword, setCurrentPassword] = useState('');
@@ -697,10 +698,29 @@ export default function SettingsScreen() {
               </View>
             )}
 
+            <Pressable
+              style={({ pressed }) => [
+                styles.backupDownloadBtn,
+                { backgroundColor: 'rgba(99, 102, 241, 0.16)', borderColor: '#6366F1', borderWidth: 1 },
+                pressed && styles.pressed,
+              ]}
+              onPress={() => setShowExamplesModal(true)}
+            >
+              <Text style={[styles.backupDownloadBtnText, { color: '#A5B4FC' }]}>
+                📚 Planilhas CSV de Exemplo & Modelos Prontos p/ Sua IA (8 Perfis Fictícios)
+              </Text>
+            </Pressable>
+
             <Text style={styles.backupFooterText}>
-              ℹ️ Você pode importar este arquivo .csv a qualquer momento na tela inicial para restaurar sua planilha intacta.
+              ℹ️ Você pode importar este arquivo .csv a qualquer momento na tela inicial para restaurar sua planilha intacta, ou usar nossos modelos 100% fictícios para montar seu próprio CSV com sua IA.
             </Text>
           </Card>
+
+          <ExampleCSVGalleryModal
+            visible={showExamplesModal}
+            onClose={() => setShowExamplesModal(false)}
+            onImportExample={db.importSpreadsheet}
+          />
         </Section>
 
         {/* ── AI Engine Section (Fuel Gauge) ───────────────── */}

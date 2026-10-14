@@ -45,5 +45,4 @@ export { CSVStagingReviewModal } from './CSVStagingReviewModal';
 export { GranularExportModal } from './GranularExportModal';
 export { SpreadsheetDataGrid } from './SpreadsheetDataGrid';
 export { AppBuilderModal } from './AppBuilderModal';
-
-
+export { ExampleCSVGalleryModal } from './ExampleCSVGalleryModal';
