@@ -39,7 +39,13 @@ export const UniversalSectionDispatcher: React.FC<UniversalSectionDispatcherProp
 
   const pointerKey = block.pointer.semanticPath || `/[section='${block.key}']`
   const rawDims = structureConfig?.sectionDimensions?.[block.key] || structureConfig?.sectionDimensions?.[pointerKey]
+  const isHiddenByList = (structureConfig?.hiddenSections || []).includes(block.key)
+  const effectiveHidden = rawDims?.hidden !== undefined ? rawDims.hidden : isHiddenByList
   const dims: SectionBoxDimensions | undefined = rawDims
+    ? { ...rawDims, hidden: effectiveHidden }
+    : effectiveHidden
+    ? { hidden: true }
+    : undefined
 
   const handleSelectArchetype = (arch: LayoutArchetype) => {
     setIsMenuOpen(false)
@@ -527,6 +533,7 @@ export const UniversalSectionDispatcher: React.FC<UniversalSectionDispatcherProp
   )
 
   if (!isFreeCanvas) {
+    if (dims?.hidden) return null
     const widthPercent = dims?.widthPercent
     const hasCustomWidth = typeof widthPercent === 'number' && widthPercent > 0 && widthPercent < 100
     const hasCustomScale = typeof dims?.fontSizeScale === 'number' && dims.fontSizeScale !== 1
@@ -572,12 +579,20 @@ export const UniversalSectionDispatcher: React.FC<UniversalSectionDispatcherProp
       onToggleHide={() => {
         if (!structureConfig || !onUpdateStructureConfig) return
         const cur = structureConfig.sectionDimensions?.[block.key] || {}
+        const nextHidden = !effectiveHidden
+        const nextHiddenSet = new Set(structureConfig.hiddenSections || [])
+        if (nextHidden) {
+          nextHiddenSet.add(block.key)
+        } else {
+          nextHiddenSet.delete(block.key)
+        }
         onUpdateStructureConfig({
           ...structureConfig,
+          hiddenSections: Array.from(nextHiddenSet),
           sectionDimensions: {
             ...structureConfig.sectionDimensions,
-            [block.key]: { ...cur, hidden: !cur.hidden },
-            [pointerKey]: { ...cur, hidden: !cur.hidden }
+            [block.key]: { ...cur, hidden: nextHidden },
+            [pointerKey]: { ...cur, hidden: nextHidden }
           }
         })
       }}

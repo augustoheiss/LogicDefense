@@ -49,7 +49,8 @@ export const CanvasContainerFrame: React.FC<CanvasContainerFrameProps> = ({
   const {
     snapEnabled,
     setActiveSnapLines,
-    selectElement
+    selectElement,
+    selectedElementId
   } = useCanvasStore()
 
   const frameRef = useRef<HTMLDivElement | null>(null)
@@ -126,16 +127,17 @@ export const CanvasContainerFrame: React.FC<CanvasContainerFrameProps> = ({
     return { x, y, w, h }
   }
 
-  // Arraste da Zona / Sidebar inteira
+  // Arraste da Zona / Sidebar inteira (permite inclusive estacionar fora da visão do currículo: -45% a 115%)
   const handleStartDragZone = (e: React.MouseEvent) => {
-    if (!isInteractive) return
+    if (!isInteractive || e.button !== 0) return
     e.stopPropagation()
     e.preventDefault()
     onSelect()
 
-    const pageEl = pageContainerRef.current
-    if (!pageEl) return
-    const rect = pageEl.getBoundingClientRect()
+    const pageEl =
+      pageContainerRef.current ||
+      (frameRef.current?.closest('.cv-card') as HTMLDivElement | null)
+    const rect = pageEl?.getBoundingClientRect() || { width: 794, height: 1122 }
     const startX = e.clientX
     const startY = e.clientY
     const origX = zone.x
@@ -145,8 +147,8 @@ export const CanvasContainerFrame: React.FC<CanvasContainerFrameProps> = ({
       const dxPct = ((ev.clientX - startX) / rect.width) * 100
       const dyPct = ((ev.clientY - startY) / rect.height) * 100
 
-      const clampedX = Math.max(0, Math.min(100 - zone.width, origX + dxPct))
-      const clampedY = Math.max(0, Math.min(100 - zone.height, origY + dyPct))
+      const clampedX = Math.max(-45, Math.min(115, origX + dxPct))
+      const clampedY = Math.max(-35, Math.min(115, origY + dyPct))
 
       const snapped = applyMagneticSnap(clampedX, clampedY, zone.width, zone.height)
 
@@ -367,6 +369,10 @@ export const CanvasContainerFrame: React.FC<CanvasContainerFrameProps> = ({
       ? '2,3'
       : undefined
 
+  const hasSelectedChild = Boolean(
+    selectedElementId && elements.some((el) => el.id === selectedElementId)
+  )
+
   return (
     <div
       ref={frameRef}
@@ -379,84 +385,101 @@ export const CanvasContainerFrame: React.FC<CanvasContainerFrameProps> = ({
         top: `${zone.y}%`,
         width: `${zone.width}%`,
         height: `${zone.height}%`,
-        zIndex: isSelected ? Math.max(25, zone.zIndex ?? 2) : zone.zIndex ?? 1,
-        pointerEvents: isInteractive || elements.length > 0 ? 'auto' : 'none',
+        pointerEvents: 'none',
         boxSizing: 'border-box',
         display: 'flex',
-        flexDirection: 'column',
-        borderRadius:
-          zone.shape === 'rounded_arch'
-            ? '999px 999px 12px 12px'
-            : !polygonPointsAttr
-            ? `${zone.borderRadius || 0}px`
-            : undefined,
-        backgroundColor: !polygonPointsAttr ? bgColor : 'transparent',
-        backgroundImage:
-          !polygonPointsAttr && zone.backgroundImage
-            ? `url(${zone.backgroundImage})`
-            : undefined,
-        backgroundSize: 'cover',
-        backgroundPosition: 'center',
-        border:
-          !polygonPointsAttr && borderStyle !== 'none' && borderWidth > 0
-            ? `${borderWidth}px ${borderStyle} ${borderColor}`
-            : isInteractive && isSelected && !polygonPointsAttr
-            ? '1.5px dashed #38bdf8'
-            : 'none'
-      }}
-      onClick={(e) => {
-        if (!isInteractive) return
-        e.stopPropagation()
-        onSelect()
+        flexDirection: 'column'
       }}
     >
-      {/* CAMADA 1: Geometria Vetorial SVG Pura (SkPath nativo para Polígonos e Chanfrados) */}
-      {polygonPointsAttr && (
-        <svg
-          className="cv-zone-vector-svg"
-          viewBox="0 0 100 100"
-          preserveAspectRatio="none"
-          style={{
-            position: 'absolute',
-            inset: 0,
-            width: '100%',
-            height: '100%',
-            zIndex: 0,
-            pointerEvents: 'none',
-            overflow: 'visible'
-          }}
-        >
-          <polygon
-            points={polygonPointsAttr}
-            fill={bgColor}
-            fillOpacity={fillOpacity}
-            stroke={
-              borderStyle !== 'none' && borderWidth > 0
-                ? borderColor
-                : isInteractive && isSelected
-                ? '#38bdf8'
-                : 'none'
-            }
-            strokeWidth={
-              borderStyle !== 'none' && borderWidth > 0
-                ? borderWidth
-                : isInteractive && isSelected
-                ? 1.5
-                : 0
-            }
-            strokeDasharray={
-              strokeDasharray || (isInteractive && isSelected && borderWidth === 0 ? '4,3' : undefined)
-            }
-            vectorEffect="non-scaling-stroke"
-          />
-        </svg>
-      )}
+      {/* CAMADA 1: Superfície de Fundo da Zona/Sidebar (zIndex baixo para NUNCA bloquear blocos do currículo sobrepostos) */}
+      <div
+        className="cv-container-frame-bg"
+        onMouseDown={handleStartDragZone}
+        onClick={(e) => {
+          if (!isInteractive) return
+          e.stopPropagation()
+          onSelect()
+        }}
+        title={isInteractive ? `Clique para selecionar ou arraste para mover "${zone.label}"` : undefined}
+        style={{
+          position: 'absolute',
+          inset: 0,
+          zIndex: zone.zIndex ?? 1,
+          pointerEvents: isInteractive ? 'auto' : 'none',
+          cursor: isInteractive ? (isSelected ? 'grab' : 'pointer') : 'default',
+          boxSizing: 'border-box',
+          borderRadius:
+            zone.shape === 'rounded_arch'
+              ? '999px 999px 12px 12px'
+              : !polygonPointsAttr
+              ? `${zone.borderRadius || 0}px`
+              : undefined,
+          backgroundColor: !polygonPointsAttr ? bgColor : 'transparent',
+          backgroundImage:
+            !polygonPointsAttr && zone.backgroundImage
+              ? `url(${zone.backgroundImage})`
+              : undefined,
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+          opacity: !polygonPointsAttr ? fillOpacity : 1,
+          border:
+            !polygonPointsAttr && borderStyle !== 'none' && borderWidth > 0
+              ? `${borderWidth}px ${borderStyle} ${borderColor}`
+              : isInteractive && isSelected && !polygonPointsAttr
+              ? '1.5px dashed #38bdf8'
+              : 'none',
+          boxShadow: isInteractive && isSelected ? '0 0 0 2px #38bdf8' : undefined
+        }}
+      >
+        {/* Geometria Vetorial SVG Pura (SkPath nativo para Polígonos e Chanfrados) */}
+        {polygonPointsAttr && (
+          <svg
+            className="cv-zone-vector-svg"
+            viewBox="0 0 100 100"
+            preserveAspectRatio="none"
+            style={{
+              position: 'absolute',
+              inset: 0,
+              width: '100%',
+              height: '100%',
+              zIndex: 0,
+              pointerEvents: 'none',
+              overflow: 'visible'
+            }}
+          >
+            <polygon
+              points={polygonPointsAttr}
+              fill={bgColor}
+              fillOpacity={fillOpacity}
+              stroke={
+                borderStyle !== 'none' && borderWidth > 0
+                  ? borderColor
+                  : isInteractive && isSelected
+                  ? '#38bdf8'
+                  : 'none'
+              }
+              strokeWidth={
+                borderStyle !== 'none' && borderWidth > 0
+                  ? borderWidth
+                  : isInteractive && isSelected
+                  ? 1.5
+                  : 0
+              }
+              strokeDasharray={
+                strokeDasharray || (isInteractive && isSelected && borderWidth === 0 ? '4,3' : undefined)
+              }
+              vectorEffect="non-scaling-stroke"
+            />
+          </svg>
+        )}
+      </div>
 
-      {/* CAMADA 2: Barra de Engenharia da Sidebar/Container (AutoCAD + Docx + Paint) — Oculta no PDF */}
-      {isInteractive && isSelected && (
+      {/* CAMADA 2: Barra de Engenharia da Sidebar/Container — Oculta automaticamente ao editar um título/frase para NUNCA sobrepor! */}
+      {isInteractive && isSelected && !selectedElementId && (
         <div
           className="cv-container-frame-toolbar cv-no-print"
           data-cv-interactive="true"
+          style={{ pointerEvents: 'auto', zIndex: 98 }}
           onClick={(e) => e.stopPropagation()}
           onMouseDown={(e) => e.stopPropagation()}
         >
@@ -465,7 +488,7 @@ export const CanvasContainerFrame: React.FC<CanvasContainerFrameProps> = ({
             <span
               className="cv-frame-drag-grip"
               onMouseDown={handleStartDragZone}
-              title="Arraste para mover a Sidebar / Zona pela folha"
+              title="Arraste para mover a Sidebar / Zona pela folha (inclusive para fora da visão do currículo)"
             >
               ✥ {zone.label}
             </span>
@@ -626,15 +649,15 @@ export const CanvasContainerFrame: React.FC<CanvasContainerFrameProps> = ({
         className="cv-container-frame-body"
         style={{
           position: 'relative',
-          zIndex: 2,
+          zIndex: hasSelectedChild ? 95 : 12,
+          pointerEvents: 'none',
           padding: `${zone.paddingPx ?? 16}px`,
           display: 'flex',
           flexDirection: 'column',
           gap: `${zone.contentGapPx ?? 4}px`,
           width: '100%',
           height: '100%',
-          boxSizing: 'border-box',
-          opacity: !polygonPointsAttr ? fillOpacity : 1
+          boxSizing: 'border-box'
         }}
       >
         {elements.map((el) => (
@@ -647,6 +670,7 @@ export const CanvasContainerFrame: React.FC<CanvasContainerFrameProps> = ({
             onDelete={() => handleDeleteElement(el.id)}
             onMoveElement={(dir) => handleMoveElement(el.id, dir)}
             onDuplicateElement={() => handleDuplicateElement(el.id)}
+            onStartDragElement={handleStartDragZone}
           />
         ))}
 
@@ -655,6 +679,7 @@ export const CanvasContainerFrame: React.FC<CanvasContainerFrameProps> = ({
           <div
             className="cv-container-empty-hint cv-no-print"
             data-cv-interactive="true"
+            style={{ pointerEvents: 'auto' }}
             onClick={(e) => e.stopPropagation()}
           >
             <p>
@@ -676,6 +701,7 @@ export const CanvasContainerFrame: React.FC<CanvasContainerFrameProps> = ({
           <div
             className="cv-zone-resize-handle handle-e cv-no-print"
             data-cv-interactive="true"
+            style={{ pointerEvents: 'auto', zIndex: 99 }}
             onMouseDown={(e) => handleStartResizeZone(e, 'e')}
             title="Arraste para ajustar a largura da Sidebar (Direita)"
           />
@@ -683,6 +709,7 @@ export const CanvasContainerFrame: React.FC<CanvasContainerFrameProps> = ({
           <div
             className="cv-zone-resize-handle handle-w cv-no-print"
             data-cv-interactive="true"
+            style={{ pointerEvents: 'auto', zIndex: 99 }}
             onMouseDown={(e) => handleStartResizeZone(e, 'w')}
             title="Arraste para ajustar a borda esquerda"
           />
@@ -690,6 +717,7 @@ export const CanvasContainerFrame: React.FC<CanvasContainerFrameProps> = ({
           <div
             className="cv-zone-resize-handle handle-s cv-no-print"
             data-cv-interactive="true"
+            style={{ pointerEvents: 'auto', zIndex: 99 }}
             onMouseDown={(e) => handleStartResizeZone(e, 's')}
             title="Arraste para ajustar a altura"
           />
@@ -697,6 +725,7 @@ export const CanvasContainerFrame: React.FC<CanvasContainerFrameProps> = ({
           <div
             className="cv-zone-resize-handle handle-se cv-no-print"
             data-cv-interactive="true"
+            style={{ pointerEvents: 'auto', zIndex: 99 }}
             onMouseDown={(e) => handleStartResizeZone(e, 'se')}
             title="Arraste para redimensionar largura e altura simultaneamente"
           />
@@ -711,7 +740,9 @@ export const CanvasContainerFrame: React.FC<CanvasContainerFrameProps> = ({
                 data-cv-interactive="true"
                 style={{
                   left: `${pt.x}%`,
-                  top: `${pt.y}%`
+                  top: `${pt.y}%`,
+                  pointerEvents: 'auto',
+                  zIndex: 99
                 }}
                 onMouseDown={(e) => handleStartVertexDrag(e, idx)}
                 onDoubleClick={(e) => {

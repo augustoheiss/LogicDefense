@@ -11,6 +11,7 @@ interface InlineRichSpanEditorProps {
   onDelete: () => void
   onMoveElement?: (direction: 'up' | 'down') => void
   onDuplicateElement?: () => void
+  onStartDragElement?: (e: React.MouseEvent) => void
 }
 
 const CONTRAST_FONTS = ['Cinzel', 'Fira Code', 'Merriweather', 'Plus Jakarta Sans', 'Lora']
@@ -24,7 +25,8 @@ export const InlineRichSpanEditor: React.FC<InlineRichSpanEditorProps> = ({
   onChange,
   onDelete,
   onMoveElement,
-  onDuplicateElement
+  onDuplicateElement,
+  onStartDragElement
 }) => {
   const {
     selectedElementId,
@@ -162,6 +164,8 @@ export const InlineRichSpanEditor: React.FC<InlineRichSpanEditorProps> = ({
         className={`cv-studio-element-wrapper ${isElementSelected ? 'selected' : ''}`}
         style={{
           position: 'relative',
+          zIndex: isElementSelected ? 105 : 2,
+          pointerEvents: 'auto',
           marginTop: `${element.marginTopPx ?? 6}px`,
           marginBottom: `${element.marginBottomPx ?? 6}px`,
           padding: isInteractive ? '4px 0' : 0,
@@ -186,6 +190,7 @@ export const InlineRichSpanEditor: React.FC<InlineRichSpanEditorProps> = ({
             onDuplicateElement={onDuplicateElement}
             onDeleteElement={onDelete}
             onClose={() => selectElement(null, null)}
+            onStartDragElement={onStartDragElement}
           />
         )}
         <hr
@@ -209,6 +214,8 @@ export const InlineRichSpanEditor: React.FC<InlineRichSpanEditorProps> = ({
       }`}
       style={{
         position: 'relative',
+        zIndex: isElementSelected ? 105 : 2,
+        pointerEvents: 'auto',
         marginTop: `${element.marginTopPx ?? 3}px`,
         marginBottom: `${element.marginBottomPx ?? 4}px`,
         padding: element.paddingPx ? `${element.paddingPx}px` : undefined,
@@ -241,6 +248,7 @@ export const InlineRichSpanEditor: React.FC<InlineRichSpanEditorProps> = ({
           onDuplicateElement={onDuplicateElement}
           onDeleteElement={onDelete}
           onClose={() => selectElement(null, null)}
+          onStartDragElement={onStartDragElement}
         />
       )}
 

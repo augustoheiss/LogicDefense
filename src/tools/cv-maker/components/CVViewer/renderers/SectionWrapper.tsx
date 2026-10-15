@@ -54,13 +54,32 @@ export const SectionWrapper: React.FC<SectionWrapperProps> = ({
   const baseCategory = getSectionBaseCategory(sectionId, category)
   const rawDims = structureConfig?.sectionDimensions?.[sectionId]
   const parentDims = baseCategory && baseCategory !== sectionId ? structureConfig?.sectionDimensions?.[baseCategory] : undefined
+  const hiddenSet = new Set(structureConfig?.hiddenSections || [])
+  const isBasicsGroup = baseCategory === 'header' || baseCategory === 'contacts' || baseCategory === 'summary'
+
+  const isHiddenByDims =
+    rawDims?.hidden !== undefined
+      ? rawDims.hidden
+      : parentDims?.hidden !== undefined
+      ? parentDims.hidden
+      : isBasicsGroup
+      ? structureConfig?.sectionDimensions?.['basics']?.hidden
+      : undefined
+
+  const isHiddenByList =
+    hiddenSet.has(sectionId) ||
+    hiddenSet.has(baseCategory) ||
+    (isBasicsGroup && hiddenSet.has('basics'))
+
+  const effectiveHidden = isHiddenByDims !== undefined ? isHiddenByDims : isHiddenByList
+
   const effectiveDims: SectionBoxDimensions = {
     ...parentDims,
     ...rawDims,
     fontFamily: rawDims?.fontFamily || parentDims?.fontFamily,
     fontSizeScale: rawDims?.fontSizeScale ?? parentDims?.fontSizeScale,
     variant: rawDims?.variant || parentDims?.variant,
-    hidden: rawDims?.hidden ?? parentDims?.hidden
+    hidden: effectiveHidden
   }
 
   if (effectiveDims.hidden && !isFreeCanvas) {
@@ -134,11 +153,22 @@ export const SectionWrapper: React.FC<SectionWrapperProps> = ({
       onToggleHide={() => {
         if (!structureConfig || !onUpdateStructureConfig) return
         const cur = structureConfig.sectionDimensions?.[sectionId] || {}
+        const nextHidden = !effectiveHidden
+        const nextHiddenSet = new Set(structureConfig.hiddenSections || [])
+        if (nextHidden) {
+          if (sectionId === baseCategory) nextHiddenSet.add(baseCategory)
+          if (sectionId === 'header') nextHiddenSet.add('basics')
+        } else {
+          nextHiddenSet.delete(sectionId)
+          nextHiddenSet.delete(baseCategory)
+          if (isBasicsGroup) nextHiddenSet.delete('basics')
+        }
         onUpdateStructureConfig({
           ...structureConfig,
+          hiddenSections: Array.from(nextHiddenSet),
           sectionDimensions: {
             ...structureConfig.sectionDimensions,
-            [sectionId]: { ...cur, hidden: !cur.hidden }
+            [sectionId]: { ...cur, hidden: nextHidden }
           }
         })
       }}

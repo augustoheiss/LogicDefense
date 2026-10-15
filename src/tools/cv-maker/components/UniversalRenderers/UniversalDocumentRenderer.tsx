@@ -5,6 +5,7 @@ import { CanvasDecorations } from '../CVViewer/renderers/CanvasDecorations'
 import { UniversalSectionDispatcher } from './UniversalSectionDispatcher'
 import { StructuralBoxWrapper } from '../CanvasBuilder/StructuralBoxWrapper'
 import { BlockPhoto } from '../blocks/BlockPhoto'
+import { useCanvasStore } from '../../store/useCanvasStore'
 
 interface UniversalDocumentRendererProps {
   data: CVData
@@ -34,10 +35,19 @@ export const UniversalDocumentRenderer: React.FC<UniversalDocumentRendererProps>
   const ast = data.meta?.universalAST
   const blocks = ast?.blocks || []
   const { basics } = data
+  const hiddenList = structureConfig?.hiddenSections || []
 
-  const headerDims = structureConfig?.sectionDimensions?.['header'] || structureConfig?.sectionDimensions?.['basics']
-  const summaryDims = structureConfig?.sectionDimensions?.['summary'] || structureConfig?.sectionDimensions?.['resumo']
-  const photoDims = structureConfig?.sectionDimensions?.['photo']
+  const rawHeaderDims = structureConfig?.sectionDimensions?.['header'] || structureConfig?.sectionDimensions?.['basics']
+  const isHeaderHidden = rawHeaderDims?.hidden !== undefined ? rawHeaderDims.hidden : (hiddenList.includes('header') || hiddenList.includes('basics'))
+  const headerDims: SectionBoxDimensions | undefined = rawHeaderDims ? { ...rawHeaderDims, hidden: isHeaderHidden } : (isHeaderHidden ? { hidden: true } : undefined)
+
+  const rawSummaryDims = structureConfig?.sectionDimensions?.['summary'] || structureConfig?.sectionDimensions?.['resumo']
+  const isSummaryHidden = rawSummaryDims?.hidden !== undefined ? rawSummaryDims.hidden : (hiddenList.includes('summary') || hiddenList.includes('resumo'))
+  const summaryDims: SectionBoxDimensions | undefined = rawSummaryDims ? { ...rawSummaryDims, hidden: isSummaryHidden } : (isSummaryHidden ? { hidden: true } : undefined)
+
+  const rawPhotoDims = structureConfig?.sectionDimensions?.['photo']
+  const isPhotoHidden = rawPhotoDims?.hidden !== undefined ? rawPhotoDims.hidden : hiddenList.includes('photo')
+  const photoDims: SectionBoxDimensions | undefined = rawPhotoDims ? { ...rawPhotoDims, hidden: isPhotoHidden } : (isPhotoHidden ? { hidden: true } : undefined)
 
   const summaryBlock = blocks.find(b => b.key === 'summary' || b.key === 'resumo')
   const summaryText = basics.summary || (typeof summaryBlock?.raw === 'string' ? summaryBlock.raw : '')
@@ -545,6 +555,7 @@ export const UniversalDocumentRenderer: React.FC<UniversalDocumentRendererProps>
     >
       <div
         className="cv-card cv-universal-document-card"
+        onClick={() => useCanvasStore.getState().resetCanvasState()}
         style={{
           position: 'relative',
           padding: '2.2rem 2.4rem',
@@ -558,7 +569,7 @@ export const UniversalDocumentRenderer: React.FC<UniversalDocumentRendererProps>
           onUpdateStructureConfig={onUpdateStructureConfig}
           isFreeCanvas={isFreeCanvas}
         />
-        <div style={{ position: 'relative', zIndex: 2 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
           {renderAllSections()}
         </div>
       </div>

@@ -82,16 +82,64 @@ export const CanvasElementsPalette: React.FC<CanvasElementsPaletteProps> = ({
   const [activeDrawingMode, setActiveDrawingMode] = useState<'rect' | 'polygon' | null>(null)
   const [searchFilter, setSearchFilter] = useState<string>('')
 
+  const effectiveHiddenSectionsSet = React.useMemo(() => {
+    const set = new Set<string>(structureConfig.hiddenSections || [])
+    const dims = structureConfig.sectionDimensions || {}
+    Object.entries(dims).forEach(([k, d]) => {
+      if (d?.hidden === true) {
+        set.add(k)
+        if (k === 'header') set.add('basics')
+      } else if (d?.hidden === false) {
+        set.delete(k)
+        if (k === 'header') set.delete('basics')
+      }
+    })
+    return set
+  }, [structureConfig.hiddenSections, structureConfig.sectionDimensions])
+
   const handleToggleSectionVisibility = (secKey: string) => {
-    const currentHidden = new Set(structureConfig.hiddenSections || [])
-    if (currentHidden.has(secKey)) {
-      currentHidden.delete(secKey)
-    } else {
-      currentHidden.add(secKey)
+    const dims = structureConfig.sectionDimensions || {}
+    const isCurrentlyHidden =
+      effectiveHiddenSectionsSet.has(secKey) ||
+      Boolean(dims[secKey]?.hidden) ||
+      (secKey === 'basics' && Boolean(dims['header']?.hidden))
+
+    const nextHidden = !isCurrentlyHidden
+    const nextHiddenSet = new Set(structureConfig.hiddenSections || [])
+    const nextDims: Record<string, SectionBoxDimensions> = { ...dims }
+
+    const applyKeyState = (k: string) => {
+      if (nextHidden) {
+        nextHiddenSet.add(k)
+      } else {
+        nextHiddenSet.delete(k)
+      }
+      nextDims[k] = { ...(nextDims[k] || {}), hidden: nextHidden }
     }
+
+    applyKeyState(secKey)
+    if (secKey === 'basics') {
+      applyKeyState('header')
+      applyKeyState('contacts')
+      applyKeyState('summary')
+    } else if (secKey === 'header') {
+      applyKeyState('basics')
+    }
+
+    // Sincroniza também sub-blocos atômicos daquela seção (ex: work_title, work_0...)
+    Object.keys(nextDims).forEach((existingKey) => {
+      if (existingKey.startsWith(`${secKey}_`)) {
+        nextDims[existingKey] = {
+          ...nextDims[existingKey],
+          hidden: nextHidden
+        }
+      }
+    })
+
     onUpdateStructureConfig({
       ...structureConfig,
-      hiddenSections: Array.from(currentHidden)
+      hiddenSections: Array.from(nextHiddenSet),
+      sectionDimensions: nextDims
     })
   }
 
@@ -157,8 +205,7 @@ export const CanvasElementsPalette: React.FC<CanvasElementsPaletteProps> = ({
   }
 
   const handleToggleHide = (key: string) => {
-    const cur = dimensions[key] || {}
-    handleUpdateSectionDimensions(key, { hidden: !cur.hidden })
+    handleToggleSectionVisibility(key)
   }
 
   const handleSelectVariant = (key: string, variant: string) => {
@@ -642,7 +689,7 @@ export const CanvasElementsPalette: React.FC<CanvasElementsPaletteProps> = ({
         <UniversalLayerTree
           ast={data.meta?.universalAST}
           onUpdateArchetypeOverride={onUpdateArchetypeOverride || (() => {})}
-          hiddenSections={new Set(structureConfig.hiddenSections || [])}
+          hiddenSections={effectiveHiddenSectionsSet}
           onToggleSectionVisibility={handleToggleSectionVisibility}
           onReorderSectionKey={onReorderSectionKey}
           onReorderSequenceItem={onReorderSequenceItem}

@@ -25,6 +25,7 @@ export const CanvasDecorations: React.FC<CanvasDecorationsProps> = ({
   containerRef
 }) => {
   const selectedZoneId = useCanvasStore((s) => s.selectedZoneId)
+  const selectedElementId = useCanvasStore((s) => s.selectedElementId)
   const selectZone = useCanvasStore((s) => s.selectZone)
   const selectElement = useCanvasStore((s) => s.selectElement)
   const drawingMode = useCanvasStore((s) => s.activeDrawingMode)
@@ -83,6 +84,7 @@ export const CanvasDecorations: React.FC<CanvasDecorationsProps> = ({
         isFreeCanvasActive: true,
         freeStudioElements: [...currentFree, newEl]
       })
+      setDrawingMode(null)
       selectElement(newEl.id, newEl.spans[0]?.id || null)
     }
 
@@ -169,7 +171,7 @@ export const CanvasDecorations: React.FC<CanvasDecorationsProps> = ({
     selectElement(copy.id, copy.spans[0]?.id || null)
   }
 
-  // Arraste livre para elementos soltos diretamente na página
+  // Arraste livre para elementos soltos diretamente na página (permite estacionar fora da visão do currículo: -45% a 115%)
   const handleStartDragFreeElement = (e: React.MouseEvent, el: CanvasStudioElement) => {
     if (!isFreeCanvas || !structureConfig || !onUpdateStructureConfig) return
     e.stopPropagation()
@@ -186,8 +188,8 @@ export const CanvasDecorations: React.FC<CanvasDecorationsProps> = ({
     const onMove = (ev: MouseEvent) => {
       const dxPct = ((ev.clientX - startX) / rect.width) * 100
       const dyPct = ((ev.clientY - startY) / rect.height) * 100
-      const nextX = Math.max(0, Math.min(95, Number((origX + dxPct).toFixed(1))))
-      const nextY = Math.max(0, Math.min(96, Number((origY + dyPct).toFixed(1))))
+      const nextX = Math.max(-45, Math.min(115, Number((origX + dxPct).toFixed(1))))
+      const nextY = Math.max(-35, Math.min(115, Number((origY + dyPct).toFixed(1))))
       handleUpdateFreeElement(el.id, { ...el, x: nextX, y: nextY })
     }
 
@@ -405,8 +407,7 @@ export const CanvasDecorations: React.FC<CanvasDecorationsProps> = ({
       style={{
         position: 'absolute',
         inset: 0,
-        pointerEvents: 'none',
-        zIndex: 3
+        pointerEvents: 'none'
       }}
     >
       {/* 1. Réguas Milimétricas Euclidianas (0-210mm x 0-297mm), Grade e Linhas Laser OSNAP (AutoCAD) */}
@@ -433,39 +434,43 @@ export const CanvasDecorations: React.FC<CanvasDecorationsProps> = ({
       {/* 3. Elementos Livres Soltos na Folha (Títulos, Frases Lado a Lado, Callouts CAD) */}
       {freeElements.length > 0 && (
         <div className="cv-free-studio-elements-layer">
-          {freeElements.map((el) => (
-            <div
-              key={el.id}
-              className="cv-free-studio-element-box"
-              style={{
-                position: 'absolute',
-                left: `${el.x ?? 35}%`,
-                top: `${el.y ?? 12}%`,
-                width: `${el.width ?? 55}%`,
-                zIndex: el.zIndex ?? 15,
-                pointerEvents: 'auto'
-              }}
-            >
-              {isFreeCanvas && (
-                <div
-                  className="cv-free-element-drag-pill cv-no-print"
-                  data-cv-interactive="true"
-                  onMouseDown={(e) => handleStartDragFreeElement(e, el)}
-                  title="Arraste para posicionar este título/frase em qualquer ponto da folha"
-                >
-                  ✥ Mover ({((el.x ?? 35) * 2.1).toFixed(0)}mm, {((el.y ?? 12) * 2.97).toFixed(0)}mm)
-                </div>
-              )}
-              <InlineRichSpanEditor
-                element={el}
-                isInteractive={isFreeCanvas}
-                darkContext={false}
-                onChange={(updated) => handleUpdateFreeElement(el.id, updated)}
-                onDelete={() => handleDeleteFreeElement(el.id)}
-                onDuplicateElement={() => handleDuplicateFreeElement(el.id)}
-              />
-            </div>
-          ))}
+          {freeElements.map((el) => {
+            const isThisElSelected = selectedElementId === el.id
+            return (
+              <div
+                key={el.id}
+                className="cv-free-studio-element-box"
+                style={{
+                  position: 'absolute',
+                  left: `${el.x ?? 35}%`,
+                  top: `${el.y ?? 12}%`,
+                  width: `${el.width ?? 55}%`,
+                  zIndex: isThisElSelected ? 105 : el.zIndex ?? 15,
+                  pointerEvents: 'auto'
+                }}
+              >
+                {isFreeCanvas && !isThisElSelected && (
+                  <div
+                    className="cv-free-element-drag-pill cv-no-print"
+                    data-cv-interactive="true"
+                    onMouseDown={(e) => handleStartDragFreeElement(e, el)}
+                    title="Arraste para posicionar este título/frase em qualquer ponto da folha (ou fora dela)"
+                  >
+                    ✥ Mover ({((el.x ?? 35) * 2.1).toFixed(0)}mm, {((el.y ?? 12) * 2.97).toFixed(0)}mm)
+                  </div>
+                )}
+                <InlineRichSpanEditor
+                  element={el}
+                  isInteractive={isFreeCanvas}
+                  darkContext={false}
+                  onChange={(updated) => handleUpdateFreeElement(el.id, updated)}
+                  onDelete={() => handleDeleteFreeElement(el.id)}
+                  onDuplicateElement={() => handleDuplicateFreeElement(el.id)}
+                  onStartDragElement={(e) => handleStartDragFreeElement(e, el)}
+                />
+              </div>
+            )
+          })}
         </div>
       )}
 

@@ -1,6 +1,7 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react'
 import type { SectionBoxDimensions } from '../../types/cv'
 import { AVAILABLE_BOX_FONTS } from '../../types/cv'
+import { useCanvasStore } from '../../store/useCanvasStore'
 
 interface StructuralBoxWrapperProps {
   sectionId: string
@@ -47,18 +48,21 @@ export const StructuralBoxWrapper: React.FC<StructuralBoxWrapperProps> = ({
   const [resizeType, setResizeType] = useState<string | null>(null)
   const [activePopover, setActivePopover] = useState<'position' | 'font' | null>(null)
 
-  // Gerenciamento de foco / seleção ativa global para trazer bloco sobreposto imediatamente para a frente
+  // Gerenciamento de foco / seleção ativa global (exclusão mútua estrita para nunca sobrepor barras)
   useEffect(() => {
     const handleBoxSelected = (e: any) => {
-      if (e.detail?.id) {
-        setIsSelected(e.detail.id === sectionId)
+      const targetId = e.detail?.id ?? null
+      const nextSelected = Boolean(targetId && targetId === sectionId)
+      setIsSelected(nextSelected)
+      if (!nextSelected) {
+        setActivePopover(null)
       }
     }
     window.addEventListener('cv-select-box' as any, handleBoxSelected)
     return () => window.removeEventListener('cv-select-box' as any, handleBoxSelected)
   }, [sectionId])
 
-  // Desseleciona e fecha popover ao clicar fora deste box na folha
+  // Desseleciona e fecha popover ao clicar fora deste box na folha (usando fase de captura para não ser bloqueado por stopPropagation)
   useEffect(() => {
     if (!isSelected && !activePopover) return
     const handleClickOutside = (e: MouseEvent) => {
@@ -67,8 +71,8 @@ export const StructuralBoxWrapper: React.FC<StructuralBoxWrapperProps> = ({
         setActivePopover(null)
       }
     }
-    document.addEventListener('pointerdown', handleClickOutside)
-    return () => document.removeEventListener('pointerdown', handleClickOutside)
+    document.addEventListener('pointerdown', handleClickOutside, true)
+    return () => document.removeEventListener('pointerdown', handleClickOutside, true)
   }, [isSelected, activePopover])
 
   // Medição contínua de overflow para evitar estouro da folha A4
@@ -97,11 +101,11 @@ export const StructuralBoxWrapper: React.FC<StructuralBoxWrapperProps> = ({
     return () => observer.disconnect()
   }, [isFreeCanvasActive, dimensions?.minHeightPx, dimensions?.maxHeightPx, dimensions?.widthPercent])
 
-  // Selecionar box ao clicar nele
+  // Selecionar box ao clicar nele (fecha imediatamente qualquer outra barra de zona, frase ou desenho)
   const handleSelectThisBox = (e: React.MouseEvent) => {
     e.stopPropagation()
     setIsSelected(true)
-    window.dispatchEvent(new CustomEvent('cv-select-box', { detail: { id: sectionId } }))
+    useCanvasStore.getState().selectBox(sectionId)
   }
 
   // Manipulação contínua de redimensionamento nas 4 bordas e 4 cantos com área ampla de toque/mouse
@@ -112,9 +116,9 @@ export const StructuralBoxWrapper: React.FC<StructuralBoxWrapperProps> = ({
     e.preventDefault()
     e.stopPropagation()
 
-    // Ao começar a redimensionar, seleciona imediatamente o box
+    // Ao começar a redimensionar, seleciona imediatamente o box e limpa outros modos
     setIsSelected(true)
-    window.dispatchEvent(new CustomEvent('cv-select-box', { detail: { id: sectionId } }))
+    useCanvasStore.getState().selectBox(sectionId)
 
     const targetEl = e.currentTarget
     targetEl.setPointerCapture(e.pointerId)
@@ -213,7 +217,7 @@ export const StructuralBoxWrapper: React.FC<StructuralBoxWrapperProps> = ({
     e.stopPropagation()
 
     setIsSelected(true)
-    window.dispatchEvent(new CustomEvent('cv-select-box', { detail: { id: sectionId } }))
+    useCanvasStore.getState().selectBox(sectionId)
 
     const targetEl = e.currentTarget
     targetEl.setPointerCapture(e.pointerId)
@@ -288,7 +292,7 @@ export const StructuralBoxWrapper: React.FC<StructuralBoxWrapperProps> = ({
   // Ajuste rápido de margem vertical (Y)
   const handleAdjustMarginY = (delta: number) => {
     const current = dimensions?.marginTopPx || 0
-    const next = Math.max(-500, Math.min(1000, current + delta))
+    const next = Math.max(-1200, Math.min(1800, current + delta))
     onUpdateDimensions?.({
       ...dimensions,
       marginTopPx: next
@@ -298,7 +302,7 @@ export const StructuralBoxWrapper: React.FC<StructuralBoxWrapperProps> = ({
   // Ajuste fino de margem / recuo horizontal (X)
   const handleAdjustMarginX = (delta: number) => {
     const current = dimensions?.marginLeftPx || 0
-    const next = Math.max(-500, Math.min(1000, current + delta))
+    const next = Math.max(-1200, Math.min(1800, current + delta))
     onUpdateDimensions?.({
       ...dimensions,
       marginLeftPx: next,

@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useState, useCallback } from 'react'
 import type { ZoomMode } from '../../types/cv'
 import { useCanvasStore } from '../../store/useCanvasStore'
 import {
@@ -45,6 +45,55 @@ export const CanvasControlDock: React.FC<CanvasControlDockProps> = ({
     setStylePainterFormat
   } = useCanvasStore()
 
+  // Posição livre arrastável e modo recolhido (para tirar a barra da frente do currículo)
+  const [dockOffset, setDockOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 })
+  const [isDraggingDock, setIsDraggingDock] = useState<boolean>(false)
+  const [isCollapsed, setIsCollapsed] = useState<boolean>(false)
+
+  const handleStartDragDock = useCallback(
+    (e: React.PointerEvent<HTMLButtonElement>) => {
+      if (e.button !== 0) return
+      e.preventDefault()
+      e.stopPropagation()
+
+      const target = e.currentTarget
+      try {
+        target.setPointerCapture(e.pointerId)
+      } catch {
+        // Ignora
+      }
+
+      setIsDraggingDock(true)
+      const startX = e.clientX
+      const startY = e.clientY
+      const origX = dockOffset.x
+      const origY = dockOffset.y
+
+      const onMove = (ev: PointerEvent) => {
+        ev.preventDefault()
+        setDockOffset({
+          x: origX + (ev.clientX - startX),
+          y: origY + (ev.clientY - startY)
+        })
+      }
+
+      const onUp = (ev: PointerEvent) => {
+        try {
+          target.releasePointerCapture(ev.pointerId)
+        } catch {
+          // Ignora
+        }
+        setIsDraggingDock(false)
+        window.removeEventListener('pointermove', onMove)
+        window.removeEventListener('pointerup', onUp)
+      }
+
+      window.addEventListener('pointermove', onMove)
+      window.addEventListener('pointerup', onUp)
+    },
+    [dockOffset.x, dockOffset.y]
+  )
+
   const handleZoomIn = () => {
     const next = Math.min(1.6, (currentScale || 1.0) + 0.1)
     onZoomModeChange(Number(next.toFixed(2)))
@@ -66,10 +115,45 @@ export const CanvasControlDock: React.FC<CanvasControlDockProps> = ({
     if (!isFreeCanvasActive && onToggleFreeCanvas) {
       onToggleFreeCanvas()
     }
+    setDrawingMode(null)
     window.dispatchEvent(
       new CustomEvent('cv-studio-add-free-element', {
         detail: { type: 'rich_row' }
       })
+    )
+  }
+
+  if (isCollapsed) {
+    return (
+      <div
+        className="cv-pro-floating-dock cv-no-print"
+        role="toolbar"
+        aria-label="Controles do Estúdio PDF Recolhidos"
+        style={{
+          transform: `translate(calc(-50% + ${dockOffset.x}px), ${dockOffset.y}px)`,
+          padding: '0.28rem 0.55rem',
+          gap: '0.35rem'
+        }}
+      >
+        <button
+          type="button"
+          className="cv-pro-dock-btn"
+          onPointerDown={handleStartDragDock}
+          onDoubleClick={() => setDockOffset({ x: 0, y: 0 })}
+          style={{ cursor: isDraggingDock ? 'grabbing' : 'grab', color: 'var(--cv-pro-sky)' }}
+          title="Segure e arraste para mover esta barra para qualquer lugar da tela (Duplo clique centraliza)"
+        >
+          <span>✥</span>
+        </button>
+        <button
+          type="button"
+          className="cv-pro-dock-btn is-active"
+          onClick={() => setIsCollapsed(false)}
+          title="Expandir barra de ferramentas do Estúdio PDF"
+        >
+          <span>🛠️ Abrir Barra ({Math.round((currentScale || 1.0) * 100)}%)</span>
+        </button>
+      </div>
     )
   }
 
@@ -78,7 +162,28 @@ export const CanvasControlDock: React.FC<CanvasControlDockProps> = ({
       className="cv-pro-floating-dock cv-no-print"
       role="toolbar"
       aria-label="Controles do Estúdio PDF (AutoCAD + Docx + Paint)"
+      style={{
+        transform: `translate(calc(-50% + ${dockOffset.x}px), ${dockOffset.y}px)`
+      }}
     >
+      {/* Grip de Arraste Livre para tirar a barra da visão do currículo */}
+      <button
+        type="button"
+        className="cv-pro-dock-btn"
+        onPointerDown={handleStartDragDock}
+        onDoubleClick={() => setDockOffset({ x: 0, y: 0 })}
+        style={{
+          cursor: isDraggingDock ? 'grabbing' : 'grab',
+          color: 'var(--cv-pro-sky)',
+          padding: '0.25rem 0.45rem',
+          background: 'rgba(56, 189, 248, 0.12)',
+          border: '1px solid rgba(56, 189, 248, 0.3)'
+        }}
+        title="Segure e arraste para mover esta barra e tirá-la da visão do currículo (Duplo clique centraliza)"
+      >
+        <span>✥ Mover</span>
+      </button>
+
       {/* Alternar Modo Canvas Livre */}
       {onToggleFreeCanvas && (
         <button
@@ -268,6 +373,16 @@ export const CanvasControlDock: React.FC<CanvasControlDockProps> = ({
           </button>
         </>
       )}
+
+      <div className="cv-pro-dock-divider" />
+      <button
+        type="button"
+        className="cv-pro-dock-btn"
+        onClick={() => setIsCollapsed(true)}
+        title="Minimizar / recolher barra flutuante para liberar a visão do currículo"
+      >
+        <span>➖</span>
+      </button>
     </div>
   )
 }

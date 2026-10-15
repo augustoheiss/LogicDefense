@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useState, useCallback } from 'react'
 import {
   AVAILABLE_BOX_FONTS,
   type CanvasStudioElement,
@@ -18,6 +18,7 @@ interface FloatingRichFormatBarProps {
   onDuplicateElement?: () => void
   onDeleteElement: () => void
   onClose?: () => void
+  onStartDragElement?: (e: React.MouseEvent) => void
 }
 
 const QUICK_TEXT_COLORS = [
@@ -55,9 +56,39 @@ export const FloatingRichFormatBar: React.FC<FloatingRichFormatBarProps> = ({
   onMoveElement,
   onDuplicateElement,
   onDeleteElement,
-  onClose
+  onClose,
+  onStartDragElement
 }) => {
   const { stylePainterFormat, setStylePainterFormat } = useCanvasStore()
+  const [barOffset, setBarOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 })
+
+  const handleStartDragBar = useCallback(
+    (e: React.MouseEvent) => {
+      if (e.button !== 0) return
+      e.preventDefault()
+      e.stopPropagation()
+      const startX = e.clientX
+      const startY = e.clientY
+      const origX = barOffset.x
+      const origY = barOffset.y
+
+      const onMove = (ev: MouseEvent) => {
+        setBarOffset({
+          x: origX + (ev.clientX - startX),
+          y: origY + (ev.clientY - startY)
+        })
+      }
+
+      const onUp = () => {
+        window.removeEventListener('mousemove', onMove)
+        window.removeEventListener('mouseup', onUp)
+      }
+
+      window.addEventListener('mousemove', onMove)
+      window.addEventListener('mouseup', onUp)
+    },
+    [barOffset.x, barOffset.y]
+  )
 
   // Caso seja um divisor puro sem spans
   if (element.type === 'divider') {
@@ -65,11 +96,35 @@ export const FloatingRichFormatBar: React.FC<FloatingRichFormatBarProps> = ({
       <div
         className="cv-floating-rich-bar cv-no-print"
         data-cv-interactive="true"
+        style={{
+          transform:
+            barOffset.x !== 0 || barOffset.y !== 0
+              ? `translate(${barOffset.x}px, ${barOffset.y}px)`
+              : undefined
+        }}
         onClick={(e) => e.stopPropagation()}
         onMouseDown={(e) => e.stopPropagation()}
       >
         <div className="cv-rich-bar-row">
-          <span className="cv-rich-bar-badge">➖ Divisor Técnico</span>
+          {onStartDragElement && (
+            <button
+              type="button"
+              className="cv-rich-bar-btn active"
+              style={{ cursor: 'grab' }}
+              onMouseDown={onStartDragElement}
+              title="Arraste para mover esta linha/divisor pela folha"
+            >
+              ✥ Mover
+            </button>
+          )}
+          <span
+            className="cv-rich-bar-badge"
+            style={{ cursor: 'grab' }}
+            onMouseDown={handleStartDragBar}
+            title="Arraste para mover este menu flutuante"
+          >
+            ➖ Divisor Técnico
+          </span>
           <select
             className="cv-rich-bar-select"
             value={element.dividerStyle || 'solid'}
@@ -184,11 +239,40 @@ export const FloatingRichFormatBar: React.FC<FloatingRichFormatBarProps> = ({
     <div
       className="cv-floating-rich-bar cv-no-print"
       data-cv-interactive="true"
+      style={{
+        transform:
+          barOffset.x !== 0 || barOffset.y !== 0
+            ? `translate(${barOffset.x}px, ${barOffset.y}px)`
+            : undefined
+      }}
       onClick={(e) => e.stopPropagation()}
       onMouseDown={(e) => e.stopPropagation()}
     >
-      {/* LINHA 1: Fonte, Tamanho, Peso, Estilo, Alinhamento e "+ Frase ao Lado" */}
+      {/* LINHA 1: Arrastar Caixa/Menu, Fonte, Tamanho, Peso, Estilo, Alinhamento e "+ Frase ao Lado" */}
       <div className="cv-rich-bar-row">
+        {onStartDragElement && (
+          <button
+            type="button"
+            className="cv-rich-bar-btn active"
+            style={{ cursor: 'grab', fontWeight: 800 }}
+            onMouseDown={onStartDragElement}
+            title="Segure e arraste para mover este Título/Frase para qualquer posição da folha (ou para fora dela)"
+          >
+            ✥ Mover Caixa
+          </button>
+        )}
+
+        <button
+          type="button"
+          className="cv-rich-bar-btn"
+          style={{ cursor: 'grab', color: '#38bdf8' }}
+          onMouseDown={handleStartDragBar}
+          onDoubleClick={() => setBarOffset({ x: 0, y: 0 })}
+          title="Segure e arraste para tirar este menu de formatação da frente do texto (Duplo clique reseta)"
+        >
+          ⠿ Menu
+        </button>
+
         <select
           className="cv-rich-bar-select"
           value={span.fontFamily || ''}
