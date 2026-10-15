@@ -99,3 +99,60 @@ export function distToSegment(
   const dx = x - xx, dy = y - yy
   return Math.sqrt(dx * dx + dy * dy)
 }
+
+export function isPointOnRotatedPath(x: number, y: number, clearance = 28): boolean {
+  const currentPaths = getRotatedPaths()
+  for (const path of currentPaths) {
+    for (let i = 0; i < path.length - 1; i++) {
+      if (distToSegment(x, y, path[i].x, path[i].y, path[i + 1].x, path[i + 1].y) < clearance) {
+        return true
+      }
+    }
+  }
+  return false
+}
+
+/**
+ * Repositions any tower that ended up colliding with the newly rotated path
+ * to the nearest valid radial coordinate, preventing unfair overlaps after map rotation.
+ */
+export function relocateCollidingTowers<T extends { x: number; y: number }>(
+  towers: T[],
+  canvasWidth = 800,
+  canvasHeight = 600,
+): number {
+  let relocatedCount = 0
+  const margin = 24
+
+  for (const tower of towers) {
+    if (!isPointOnRotatedPath(tower.x, tower.y, 28)) continue
+
+    let found = false
+    for (let radius = 18; radius <= 220 && !found; radius += 12) {
+      for (let step = 0; step < 16; step++) {
+        const angle = (step * Math.PI * 2) / 16
+        const nx = Math.round(tower.x + Math.cos(angle) * radius)
+        const ny = Math.round(tower.y + Math.sin(angle) * radius)
+
+        if (nx < margin || nx > canvasWidth - margin || ny < margin || ny > canvasHeight - margin) {
+          continue
+        }
+        if (isPointOnRotatedPath(nx, ny, 30)) continue
+
+        const overlapsOther = towers.some(
+          other => other !== tower && Math.hypot(other.x - nx, other.y - ny) < 35,
+        )
+        if (!overlapsOther) {
+          tower.x = nx
+          tower.y = ny
+          relocatedCount++
+          found = true
+          break
+        }
+      }
+    }
+  }
+
+  return relocatedCount
+}
+

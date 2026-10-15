@@ -1,5 +1,25 @@
 export type BuffType = 'amor' | 'odio' | 'cadeira'
 export type DifficultyMode = 'normal' | 'hardcore' | 'godmode'
+export type MathOp = '+' | '-' | 'x' | '÷'
+export type EnemyArchetype = 'standard' | 'runner' | 'tank' | 'splitter' | 'boss'
+
+export type MathLensId =
+  | 'ataque_direto'
+  | 'lei_menor_esforco'
+  | 'hack_japones'
+  | 'diferenca_quadrados'
+  | 'truque_relogio_5'
+  | 'base_universo_248'
+  | 'infinito_9'
+  | 'corta_no_meio'
+  | 'numero_fenix_7'
+  | 'decomposicao_tatica'
+
+export interface StructuredTipStep {
+  badge: string
+  title: string
+  content: string
+}
 
 export type GameState = 'START' | 'SPIN' | 'MATH' | 'BUILD' | 'COMBAT' | 'CINEMATIC'
 
@@ -11,8 +31,33 @@ export interface Point {
 export interface MathProblem {
   n1: number
   n2: number
-  op: '+' | '-' | 'x' | '÷'
+  op: MathOp
   answer: number
+  // ── Genesis 2.0 Pedagogical Metadata (optional for backward compat) ──
+  lensId?: MathLensId
+  lensTitle?: string
+  shortHint?: string
+  trapExplanations?: Record<number, string>
+  structuredSteps?: StructuredTipStep[]
+}
+
+export interface ActiveBuffModifiers {
+  buff: BuffType
+  mathTimeSeconds: number
+  wrongPenaltyMultiplier: number
+  correctBaseMultiplier: number
+  fastAnswerBonusMultiplier: number
+  towerDamageMultiplier: number
+  towerRangeMultiplier: number
+  upgradeCostDiscount: number
+  heroMagnetMultiplier: number
+  heroCoinBonusMultiplier: number
+  bankInterestRate: number
+  harmonyLinkSpeedBoost: number
+  centerSlowRadius: number
+  centerSlowFactor: number
+  showPreHint: boolean
+  optionCount: 3 | 4
 }
 
 export interface GameStats {
@@ -25,7 +70,7 @@ export interface GameStats {
 
 export interface TowerType {
   name: string
-  symbol: string
+  symbol: MathOp
   shape: 'triangle' | 'circle' | 'square' | 'hexagon'
   cost: number
   range: number
@@ -80,6 +125,7 @@ export interface EnemyInstance {
   frozen: number
   active: boolean
   isGolden: boolean
+  archetype?: EnemyArchetype
   update(): void
   draw(ctx: CanvasRenderingContext2D): void
 }
@@ -99,4 +145,5 @@ export interface ParticleInstance {
   update(): void
   draw(ctx: CanvasRenderingContext2D): void
 }
+
 

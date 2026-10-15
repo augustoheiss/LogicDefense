@@ -1,4 +1,5 @@
-import type { TowerType } from '../types/game'
+import type { ActiveBuffModifiers, TowerType } from '../types/game'
+import { TOWER_CORE_LOOT_RADIUS } from './constants'
 import { Particle } from './Particle'
 import { Enemy } from './Enemy'
 import { Bullet } from './Bullet'
@@ -29,20 +30,25 @@ export class Tower {
     this.level = 1
     this.upgradeCost = type.cost
     this.totalCost = type.cost
-    this.range     = type.range
-    // Enforce: lootRange is ALWAYS > attackRange (5% buffer, rounded UP to avoid sub-range)
-    this.lootRange = Math.ceil(type.range * 1.05)
+    this.range = type.range
+    // Core pickup radius: towers collect coins near their base, leaving outer coins for Heroes (+bonus gold)
+    this.lootRange = TOWER_CORE_LOOT_RADIUS
     this.currentRate = type.rate
   }
 
-  upgrade(onUpgrade?: (particles: Particle[]) => void): void {
+  getEffectiveUpgradeCost(discount: number = 0): number {
+    return Math.max(10, Math.floor(this.upgradeCost * (1 - discount)))
+  }
+
+  upgrade(onUpgrade?: (particles: Particle[]) => void, costPaid?: number): void {
+    const actualPaid = costPaid ?? this.upgradeCost
     this.level++
-    this.totalCost += this.upgradeCost
+    this.totalCost += actualPaid
     this.upgradeCost = this.type.cost * Math.pow(2, this.level - 1)
     // Compound ×1.2 range growth (Vampire Survivors feel)
     this.range = Math.floor(this.range * 1.2)
-    // MANDATORY: loot zone must always be > attackRange (Math.ceil prevents sub-range)
-    this.lootRange = Math.max(this.lootRange, Math.ceil(this.range * 1.05))
+    // Core pickup radius grows modestly per level
+    this.lootRange = Math.min(95, Math.floor(TOWER_CORE_LOOT_RADIUS * (1 + 0.08 * (this.level - 1))))
     // VIP speed boost: ÷ gets ×2 attack speed; all others get ×1.5
     if (this.type.symbol === '÷') {
       this.currentRate = Math.max(1, Math.floor(this.currentRate / 2))
@@ -56,9 +62,15 @@ export class Tower {
     }
   }
 
-  getDamage(): number {
+  getDamage(damageMultiplier: number = 1, isResonant: boolean = false): number {
     // ALL towers (including ÷) gain +20% damage per level
-    return this.type.damage * (1 + 0.2 * (this.level - 1))
+    const base = this.type.damage * (1 + 0.2 * (this.level - 1))
+    const resonantBoost = isResonant ? (this.type.symbol === '+' ? 1.35 : 1.25) : 1
+    return base * damageMultiplier * resonantBoost
+  }
+
+  getEffectiveRange(rangeMultiplier: number = 1, isResonant: boolean = false): number {
+    return Math.floor(this.range * rangeMultiplier * (isResonant ? 1.12 : 1))
   }
 
   update(
@@ -66,17 +78,27 @@ export class Tower {
     onShoot: (bullet: Bullet) => void,
     onSound: (type: string) => void,
     wave: number,
+    buffMods?: ActiveBuffModifiers,
+    isResonant: boolean = false,
+    isHarmonyLinked: boolean = false,
   ): void {
-    if (this.cooldown > 0) { this.cooldown--; return }
+    if (this.cooldown > 0) {
+      const tickStep = isHarmonyLinked && buffMods ? 1 + buffMods.harmonyLinkSpeedBoost : 1
+      this.cooldown = Math.max(0, this.cooldown - tickStep)
+      return
+    }
+    const effectiveRange = this.getEffectiveRange(buffMods?.towerRangeMultiplier ?? 1, isResonant)
     let target: Enemy | null = null
     let minDst = Infinity
     enemies.forEach(e => {
       const dst = Math.sqrt((e.x - this.x) ** 2 + (e.y - this.y) ** 2)
-      if (dst < this.range && dst < minDst) { minDst = dst; target = e }
+      if (dst < effectiveRange && dst < minDst) { minDst = dst; target = e }
     })
     if (target) {
-      onShoot(new Bullet(this.x, this.y, target, this.type, this.getDamage(), wave))
-      this.cooldown = this.currentRate
+      const dmg = this.getDamage(buffMods?.towerDamageMultiplier ?? 1, isResonant)
+      const odioActive = buffMods?.buff === 'odio'
+      onShoot(new Bullet(this.x, this.y, target, this.type, dmg, wave, isResonant, odioActive))
+      this.cooldown = isResonant ? Math.max(1, Math.floor(this.currentRate * 0.82)) : this.currentRate
       onSound(this.type.symbol === '÷' ? 'sniper' : 'shoot')
     }
   }
@@ -88,13 +110,18 @@ export class Tower {
     isSelected: boolean,
     isMoving: boolean,
     canPlaceAt: (x: number, y: number, ignore: Tower) => boolean,
+    buffMods?: ActiveBuffModifiers,
+    isResonant: boolean = false,
+    isHarmonyLinked: boolean = false,
   ): void {
     ctx.save()
+
+    const effectiveRange = this.getEffectiveRange(buffMods?.towerRangeMultiplier ?? 1, isResonant)
 
     if (isMoving) {
       this.x = mouseX; this.y = mouseY
       ctx.globalAlpha = 0.5
-      // Loot zone (gold, dashed) — slightly larger than attack range
+      // Core loot zone (gold, dashed)
       ctx.beginPath()
       ctx.arc(this.x, this.y, this.lootRange, 0, Math.PI * 2)
       ctx.setLineDash([5, 5])
@@ -104,19 +131,19 @@ export class Tower {
       ctx.setLineDash([])
       // Attack zone (red/green tinted fill)
       ctx.beginPath()
-      ctx.arc(this.x, this.y, this.range, 0, Math.PI * 2)
+      ctx.arc(this.x, this.y, effectiveRange, 0, Math.PI * 2)
       ctx.fillStyle = canPlaceAt(this.x, this.y, this)
         ? 'rgba(0, 255, 0, 0.2)'
         : 'rgba(255, 0, 0, 0.2)'
       ctx.fill()
     } else if (isSelected) {
-      // Draw attack ring FIRST (solid white — inner)
+      // Draw attack ring (solid white — outer)
       ctx.beginPath()
-      ctx.arc(this.x, this.y, this.range, 0, Math.PI * 2)
-      ctx.strokeStyle = '#fff'
-      ctx.lineWidth = 1
+      ctx.arc(this.x, this.y, effectiveRange, 0, Math.PI * 2)
+      ctx.strokeStyle = isResonant ? this.type.color : '#fff'
+      ctx.lineWidth = isResonant ? 2 : 1
       ctx.stroke()
-      // Draw loot ring ON TOP (gold dashed — always outside attack ring)
+      // Draw core loot ring (gold dashed — inner base pickup zone)
       ctx.beginPath()
       ctx.arc(this.x, this.y, this.lootRange, 0, Math.PI * 2)
       ctx.setLineDash([5, 5])
@@ -124,6 +151,32 @@ export class Tower {
       ctx.lineWidth = 1.5
       ctx.stroke()
       ctx.setLineDash([])
+    }
+
+    // Operational Resonance pulsing harmonic ring
+    if (isResonant && !isMoving) {
+      const pulse = 22 + 3 * Math.sin(Date.now() / 160)
+      ctx.save()
+      ctx.shadowBlur = 16
+      ctx.shadowColor = this.type.color
+      ctx.strokeStyle = this.type.color
+      ctx.lineWidth = 1.8
+      ctx.setLineDash([4, 4])
+      ctx.beginPath()
+      ctx.arc(this.x, this.y, pulse, 0, Math.PI * 2)
+      ctx.stroke()
+      ctx.restore()
+    }
+
+    // Harmony Link pink aura (when Hero is nearby under ❤️ Amor)
+    if (isHarmonyLinked && !isMoving) {
+      ctx.save()
+      ctx.strokeStyle = 'rgba(244, 114, 182, 0.65)'
+      ctx.lineWidth = 1.5
+      ctx.beginPath()
+      ctx.arc(this.x, this.y, 26, 0, Math.PI * 2)
+      ctx.stroke()
+      ctx.restore()
     }
 
     if (this.level > 1 && !isMoving) {
@@ -134,7 +187,8 @@ export class Tower {
       ctx.stroke()
     }
 
-    ctx.shadowBlur = 10; ctx.shadowColor = this.type.color
+    ctx.shadowBlur = isResonant ? 18 : 10
+    ctx.shadowColor = this.type.color
     ctx.fillStyle = 'rgba(20,20,20,0.9)'
     ctx.strokeStyle = this.type.color; ctx.lineWidth = 3
 
@@ -170,3 +224,4 @@ export class Tower {
     ctx.restore()
   }
 }
+

@@ -25,6 +25,7 @@ export class Coin {
   private groundedMs: number
   private targetX: number
   private targetY: number
+  private collectorType: 'tower' | 'hero'
 
   readonly value: number
   active: boolean
@@ -39,6 +40,7 @@ export class Coin {
     this.groundedMs = GROUNDED_LIFESPAN_MS
     this.targetX    = x
     this.targetY    = y
+    this.collectorType = 'tower'
     this.value      = value
     this.active     = true
   }
@@ -55,19 +57,20 @@ export class Coin {
    * Transitions to 'attracting' state; coin will fly at MAGNETIC_SPEED px/frame.
    * No-op if already locked or inactive.
    */
-  lockOn(tx: number, ty: number): void {
+  lockOn(tx: number, ty: number, collectorType: 'tower' | 'hero' = 'tower'): void {
     if (!this.active || this.state === 'attracting') return
-    this.state   = 'attracting'
-    this.targetX = tx
-    this.targetY = ty
-    this.vx      = 0
-    this.vy      = 0
+    this.state         = 'attracting'
+    this.targetX       = tx
+    this.targetY       = ty
+    this.collectorType = collectorType
+    this.vx            = 0
+    this.vy            = 0
   }
 
   // ─── Per-frame update ─────────────────────────────────────────────────────────
 
   update(
-    onCollect: (value: number) => void,
+    onCollect: (value: number, collectorType: 'tower' | 'hero', x: number, y: number) => void,
     dtMs: number,
   ): void {
     if (!this.active) return
@@ -79,7 +82,7 @@ export class Coin {
       const dist = Math.hypot(dx, dy)
 
       if (dist < COLLECT_RADIUS) {
-        onCollect(this.value)
+        onCollect(this.value, this.collectorType, this.x, this.y)
         this.active = false
         return
       }

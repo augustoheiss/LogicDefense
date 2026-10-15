@@ -1,4 +1,5 @@
 import type { GameEngineState } from '../../hooks/useGameEngine'
+import { BUFF_DISPLAY, RESONANCE_DISPLAY } from '../../engine/constants'
 
 interface ScoreUIProps {
   uiState: GameEngineState
@@ -11,13 +12,27 @@ function toOrdinal(n: number): string {
 }
 
 export function ScoreUI({ uiState }: ScoreUIProps) {
-  const { gold, lives, wave, goldMultiplier, totalCorrect, totalWrong, stats } = uiState
+  const {
+    gold,
+    lives,
+    wave,
+    goldMultiplier,
+    totalCorrect,
+    totalWrong,
+    stats,
+    currentBuff,
+    streak,
+    activeResonance,
+  } = uiState
+
+  const buffMeta = BUFF_DISPLAY[currentBuff]
+  const resonanceMeta = activeResonance ? RESONANCE_DISPLAY[activeResonance] : null
 
   return (
     <div id="ui-layer" style={{
       position: 'absolute', top: 10, left: 10,
-      pointerEvents: 'none', display: 'flex', flexWrap: 'wrap', gap: 10,
-      transition: 'opacity 0.3s', zIndex: 20,
+      pointerEvents: 'none', display: 'flex', flexWrap: 'wrap', gap: 8,
+      transition: 'opacity 0.3s', zIndex: 20, maxWidth: 620,
     }}>
       {/* Gold */}
       <div className="stat-box" style={{ pointerEvents: 'auto' }}>
@@ -25,7 +40,7 @@ export function ScoreUI({ uiState }: ScoreUIProps) {
         <span className="tooltip-text">
           Me falaram que você é o cara da grana então...<br /><br />
           <span className="tt-highlight">Total Acumulado:</span> ${stats.totalGold}<br /><br />
-          Acerto: +150% / Erro: +50%
+          Dica RTS: Coletar moedas com <strong>Herói</strong> rende <strong>+15% a +25% de Ouro Bônus</strong>!
         </span>
       </div>
 
@@ -35,6 +50,11 @@ export function ScoreUI({ uiState }: ScoreUIProps) {
         <span className="tooltip-text">
           Você é um mergulhador de Onda mesmo!<br /><br />
           <span className="tt-highlight" id="tt-wave-ordinal">{toOrdinal(wave)}</span>
+          {wave > 0 && wave % 10 === 0 && (
+            <>
+              <br /><span style={{ color: '#fbbf24' }}>⚠ Onda de Chefe: O Juiz Interno!</span>
+            </>
+          )}
         </span>
       </div>
 
@@ -49,7 +69,69 @@ export function ScoreUI({ uiState }: ScoreUIProps) {
       </div>
 
       {/* Multiplier */}
-      <div className="stat-box">⚖️ {goldMultiplier.toFixed(1)}x</div>
+      <div className="stat-box" style={{ pointerEvents: 'auto' }}>
+        ⚖️ {goldMultiplier.toFixed(2)}x
+        <span className="tooltip-text">
+          <span className="tt-highlight">Multiplicador de Recompensa</span><br />
+          Acumula +0.1x a cada acerto consecutivo (até 2.2x)!
+        </span>
+      </div>
+
+      {/* Active Buff Pill */}
+      <div
+        className="stat-box"
+        style={{
+          pointerEvents: 'auto',
+          borderColor: buffMeta.borderColor,
+          color: buffMeta.color,
+        }}
+      >
+        {buffMeta.label}
+        <span className="tooltip-text">
+          <span className="tt-highlight">{buffMeta.label}</span> — {buffMeta.subtitle}<br /><br />
+          {buffMeta.perks.map((p, idx) => (
+            <span key={idx} style={{ display: 'block', marginBottom: 4 }}>
+              ▸ {p}
+            </span>
+          ))}
+        </span>
+      </div>
+
+      {/* Streak */}
+      {streak > 0 && (
+        <div
+          className="stat-box"
+          style={{
+            pointerEvents: 'auto',
+            borderColor: '#fde047',
+            color: '#fde047',
+          }}
+        >
+          🔥 {streak}
+          <span className="tooltip-text">
+            <span className="tt-highlight">Sequência de Acertos: {streak}</span><br />
+            Mantém a Ressonância Operacional ativa e eleva o multiplicador de ouro!
+          </span>
+        </div>
+      )}
+
+      {/* Operational Resonance */}
+      {resonanceMeta && (
+        <div
+          className="stat-box"
+          style={{
+            pointerEvents: 'auto',
+            borderColor: resonanceMeta.color,
+            color: resonanceMeta.color,
+          }}
+        >
+          ⚡ [{activeResonance}]
+          <span className="tooltip-text">
+            <span className="tt-highlight">{resonanceMeta.label}</span><br />
+            {resonanceMeta.bonusText}
+          </span>
+        </div>
+      )}
 
       {/* Correct score */}
       <div className="stat-box score-box" style={{ pointerEvents: 'auto' }}>
@@ -71,3 +153,4 @@ export function ScoreUI({ uiState }: ScoreUIProps) {
     </div>
   )
 }
+

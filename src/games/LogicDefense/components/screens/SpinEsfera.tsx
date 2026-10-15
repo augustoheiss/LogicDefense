@@ -1,5 +1,6 @@
 import { useRef, useEffect, useState } from 'react'
 import type { BuffType } from '../../types/game'
+import { BUFF_DISPLAY } from '../../engine/constants'
 
 interface SpinEsferaProps {
   onComplete: (buff: BuffType) => void
@@ -13,8 +14,8 @@ const BUFF_CONFIG: Record<BuffType, { emoji: string; label: string; subtitle: st
     emoji: '❤️',
     label: 'AMOR',
     subtitle: '"O fogo tá sempre aceso"',
-    color: '#00ff00',
-    glow: '0 0 40px #00ff00, 0 0 80px rgba(0,255,0,0.4)',
+    color: '#00ff88',
+    glow: '0 0 40px #00ff88, 0 0 80px rgba(0,255,136,0.4)',
   },
   odio: {
     emoji: '🔥',
@@ -36,11 +37,9 @@ const BUFF_CONFIG: Record<BuffType, { emoji: string; label: string; subtitle: st
 // The winner lands at a fixed slot at the end.
 function buildReel(winner: BuffType): BuffType[] {
   const reel: BuffType[] = []
-  // 4 full cycles before slowing down
   for (let i = 0; i < 4; i++) {
     reel.push('cadeira', 'amor', 'odio')
   }
-  // End on winner
   reel.push(winner)
   return reel
 }
@@ -58,8 +57,8 @@ export function SpinEsfera({ onComplete, isStressMode = false }: SpinEsferaProps
   const winner = winnerRef.current
   const reel = reelRef.current
   const config = BUFF_CONFIG[winner]
+  const displayMeta = BUFF_DISPLAY[winner]
 
-  // Final translateY to land winner in the center of the viewport
   const finalY = -(reel.length - 1) * ITEM_HEIGHT
 
   useEffect(() => {
@@ -67,20 +66,17 @@ export function SpinEsfera({ onComplete, isStressMode = false }: SpinEsferaProps
       onComplete(winner)
       return
     }
-    // Short delay then start spin
     const startDelay = setTimeout(() => {
       setSpinning(true)
       setTranslateY(finalY)
 
-      // After spin animation (~3s) reveal result
       spinTimeoutRef.current = setTimeout(() => {
         setRevealed(true)
-        // After 1.2s showing result, call onComplete
         spinTimeoutRef.current = setTimeout(() => {
           onComplete(winner)
-        }, 1200)
-      }, 3200)
-    }, 300)
+        }, 2300)
+      }, 3000)
+    }, 250)
 
     return () => {
       clearTimeout(startDelay)
@@ -94,26 +90,26 @@ export function SpinEsfera({ onComplete, isStressMode = false }: SpinEsferaProps
         position: 'absolute', top: 0, left: 0, width: '100%', height: '100%',
         background: 'rgba(0,0,0,0.92)', zIndex: 300,
         display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+        padding: 20,
       }}
     >
       {/* Title */}
       <h2 style={{
-        color: '#00d4ff', fontSize: 22, letterSpacing: 4, marginBottom: 8,
+        color: '#00d4ff', fontSize: 22, letterSpacing: 4, marginBottom: 6,
         fontFamily: "'Courier New', monospace", textShadow: '0 0 15px #00d4ff',
         textTransform: 'uppercase',
       }}>
         SPIN ESFERA
       </h2>
       <p style={{
-        color: '#aaa', fontSize: 13, marginBottom: 30,
+        color: '#aaa', fontSize: 13, marginBottom: 22,
         fontFamily: "'Courier New', monospace",
       }}>
-        O destino está sendo calculado...
+        O destino tático está sendo calculado...
       </p>
 
       {/* Roulette container */}
       <div style={{ position: 'relative' }}>
-        {/* Viewport window */}
         <div style={{
           width: 260,
           height: ITEM_HEIGHT,
@@ -125,12 +121,11 @@ export function SpinEsfera({ onComplete, isStressMode = false }: SpinEsferaProps
           position: 'relative',
           background: 'rgba(0,0,0,0.8)',
         }}>
-          {/* Reel strip */}
           <div
             style={{
               transform: `translateY(${translateY}px)`,
               transition: spinning
-                ? `transform 3s cubic-bezier(0.15, 1, 0.4, 1)`
+                ? `transform 2.9s cubic-bezier(0.15, 1, 0.4, 1)`
                 : 'none',
             }}
           >
@@ -161,7 +156,6 @@ export function SpinEsfera({ onComplete, isStressMode = false }: SpinEsferaProps
             })}
           </div>
 
-          {/* Center highlight lines */}
           <div style={{
             position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
             pointerEvents: 'none',
@@ -171,7 +165,6 @@ export function SpinEsfera({ onComplete, isStressMode = false }: SpinEsferaProps
           }} />
         </div>
 
-        {/* Side arrows */}
         <div style={{
           position: 'absolute', left: -20, top: '50%', transform: 'translateY(-50%)',
           color: revealed ? config.color : '#555', fontSize: 20, transition: 'color 0.3s',
@@ -182,23 +175,71 @@ export function SpinEsfera({ onComplete, isStressMode = false }: SpinEsferaProps
         }}>◀</div>
       </div>
 
-      {/* Result label */}
+      {/* Result label + Mechanical Perks */}
       {revealed && (
         <div style={{
-          marginTop: 30,
+          marginTop: 22,
           textAlign: 'center',
-          animation: 'spinReveal 0.4s ease-out',
+          animation: 'spinReveal 0.35s ease-out',
+          maxWidth: 440,
         }}>
           <div style={{
-            color: config.color, fontSize: 28, fontWeight: 'bold',
+            color: config.color, fontSize: 24, fontWeight: 'bold',
             fontFamily: "'Courier New', monospace", letterSpacing: 3,
             textShadow: config.glow,
           }}>
             {config.emoji} {config.label} ATIVADO!
           </div>
-          <div style={{ color: '#aaa', fontSize: 13, marginTop: 6, fontStyle: 'italic' }}>
+          <div style={{ color: '#aaa', fontSize: 12, marginTop: 4, fontStyle: 'italic' }}>
             {config.subtitle}
           </div>
+
+          {/* Real Mechanical Perks */}
+          <div style={{
+            marginTop: 12,
+            background: 'rgba(255,255,255,0.04)',
+            border: `1px solid ${config.color}55`,
+            borderRadius: 8,
+            padding: '10px 14px',
+            textAlign: 'left',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 5,
+          }}>
+            {displayMeta.perks.map((perk, idx) => (
+              <div key={idx} style={{
+                fontSize: 11,
+                color: '#e2e8f0',
+                fontFamily: "'Courier New', monospace",
+                lineHeight: 1.35,
+              }}>
+                <span style={{ color: config.color, fontWeight: 'bold' }}>▸ </span>
+                {perk}
+              </div>
+            ))}
+          </div>
+
+          <button
+            onClick={() => {
+              if (spinTimeoutRef.current) clearTimeout(spinTimeoutRef.current)
+              onComplete(winner)
+            }}
+            style={{
+              marginTop: 14,
+              background: `${config.color}22`,
+              border: `1px solid ${config.color}`,
+              color: config.color,
+              fontFamily: "'Courier New', monospace",
+              fontSize: 12,
+              fontWeight: 'bold',
+              padding: '7px 18px',
+              borderRadius: 6,
+              cursor: 'pointer',
+              letterSpacing: 1.5,
+            }}
+          >
+            ⚡ CONTINUAR AGORA
+          </button>
         </div>
       )}
 
@@ -220,3 +261,4 @@ export function SpinEsfera({ onComplete, isStressMode = false }: SpinEsferaProps
     </div>
   )
 }
+

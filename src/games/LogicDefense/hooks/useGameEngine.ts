@@ -1,5 +1,13 @@
 import { useRef, useState, useCallback, useEffect } from 'react'
-import type { GameState, BuffType, MathProblem, GameStats, DifficultyMode } from '../types/game'
+import type {
+  GameState,
+  BuffType,
+  MathProblem,
+  GameStats,
+  DifficultyMode,
+  MathOp,
+  EnemyArchetype,
+} from '../types/game'
 import { Enemy } from '../engine/Enemy'
 import { Tower } from '../engine/Tower'
 import { Bullet } from '../engine/Bullet'
@@ -7,18 +15,29 @@ import { Particle } from '../engine/Particle'
 import { Hero } from '../engine/Hero'
 import { Coin } from '../engine/Coin'
 import { TOWER_TYPES, BUFF_PHRASES, TOTAL_TIME, CANVAS_WIDTH, CANVAS_HEIGHT } from '../engine/constants'
+import { getBuffModifiers, resolveBuffedMathOutcome } from '../engine/buffSystem'
 import {
   generateMapPaths,
   getRotatedPaths,
   advanceRotation,
   resetMap,
   distToSegment,
+  relocateCollidingTowers,
 } from '../engine/mapGenerator'
 import { generateMathProblem, buildQuestionText, generateOptions, generateTip } from '../engine/mathEngine'
 import { saveRound } from './useHighScore'
 
 // Re-export for consumers
 export { generateTip }
+
+export interface FloatingText {
+  x: number
+  y: number
+  text: string
+  color: string
+  life: number
+  maxLife: number
+}
 
 export interface GameEngineState {
   gameState: GameState
@@ -43,10 +62,18 @@ export interface GameEngineState {
   currentProblem: MathProblem | null
   tipHtml: string
   timeLeft: number
+  maxTime: number
   phraseMessage: string
+  lastSelectedAnswer: number | null
+  lastAnswerWasCorrect: boolean
+  // Genesis 2.0: Streak, Resonance & Combat AoE timer
+  streak: number
+  activeResonance: MathOp | null
+  aoeBuffArmed: boolean
+  aoeBuffRemainingMs: number
   // Modal
   showSaveModal: boolean
-  // ── NEW: Hero / Difficulty system ──────────────────────────
+  // Hero / Difficulty system
   difficultyMode: DifficultyMode
   heroCount: number
   selectedHero: Hero | null
@@ -74,12 +101,13 @@ export function useGameEngine(
   initAudio: () => void,
 ) {
   // ── Mutable game object refs (no re-renders) ──────────────────────────
-  const towersRef    = useRef<Tower[]>([])
-  const enemiesRef   = useRef<Enemy[]>([])
-  const bulletsRef   = useRef<Bullet[]>([])
-  const particlesRef = useRef<Particle[]>([])
-  const heroesRef    = useRef<Hero[]>([])
-  const coinsRef     = useRef<Coin[]>([])
+  const towersRef        = useRef<Tower[]>([])
+  const enemiesRef       = useRef<Enemy[]>([])
+  const bulletsRef       = useRef<Bullet[]>([])
+  const particlesRef     = useRef<Particle[]>([])
+  const heroesRef        = useRef<Hero[]>([])
+  const coinsRef         = useRef<Coin[]>([])
+  const floatingTextsRef = useRef<FloatingText[]>([])
   const cinematicParticlesRef = useRef<Array<{ x: number; y: number; angle: number; dist: number; speed: number; char: string }>>([])
 
   // Mouse/touch
@@ -98,18 +126,23 @@ export function useGameEngine(
   const lastAnswerCorrectRef     = useRef(true)
 
   // Math timer
-  const mathTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  const timeLeftRef  = useRef(TOTAL_TIME)
+  const mathTimerRef   = useRef<ReturnType<typeof setInterval> | null>(null)
+  const timeLeftRef    = useRef(TOTAL_TIME)
+  const mathOptionsRef = useRef<number[]>([])
 
   // AI mode refs
-  const aiModeRef    = useRef(false)
+  const aiModeRef     = useRef(false)
   const stressModeRef = useRef(false)
 
-  // AoE Nuke buff (activated on correct math answer)
-  const aoeBuffActiveRef = useRef(false)
-  const aoeBuffTimerRef  = useRef<ReturnType<typeof setTimeout> | null>(null)
-  /** Duration of the AoE nuke buff in milliseconds */
-  const AOE_BUFF_DURATION_MS = 15_000
+  // AoE Nuke buff (armed in BUILD on correct answer, ticks down only in COMBAT)
+  const aoeBuffArmedRef       = useRef(false)
+  const aoeBuffActiveRef      = useRef(false)
+  const aoeBuffRemainingMsRef = useRef(0)
+  const AOE_BUFF_DURATION_MS  = 15_000
+
+  // Genesis 2.0: Streak & Operational Resonance refs
+  const streakRef          = useRef(0)
+  const activeResonanceRef = useRef<MathOp | null>(null)
 
   // Drag state
   const isDraggingGhostRef = useRef(false)
@@ -119,6 +152,7 @@ export function useGameEngine(
   const totalEnemiesToSpawnRef = useRef(0)
   const enemiesSpawnedRef      = useRef(0)
   const spawnFrameCounterRef   = useRef(0)
+  const bossSpawnedThisWaveRef = useRef(false)
 
   // Phrase queue
   const phraseQueueRef = useRef<string[]>([])
@@ -153,7 +187,14 @@ export function useGameEngine(
     currentProblem: null,
     tipHtml: '',
     timeLeft: TOTAL_TIME,
+    maxTime: TOTAL_TIME,
     phraseMessage: '',
+    lastSelectedAnswer: null,
+    lastAnswerWasCorrect: true,
+    streak: 0,
+    activeResonance: null,
+    aoeBuffArmed: false,
+    aoeBuffRemainingMs: 0,
     showSaveModal: false,
     difficultyMode: 'normal',
     heroCount: 0,
@@ -161,19 +202,19 @@ export function useGameEngine(
   })
 
   // Refs that mirror state for use inside closures/RAF
-  const gameStateRef           = useRef<GameState>('START')
-  const goldRef                = useRef(150)
-  const livesRef               = useRef(20)
-  const waveRef                = useRef(0)
-  const goldMultiplierRef      = useRef(1.0)
-  const totalCorrectRef        = useRef(0)
-  const totalWrongRef          = useRef(0)
-  const statsRef               = useRef<GameStats>({ ...initialStats })
-  const selectedTowerIdxRef    = useRef(-1)
+  const gameStateRef             = useRef<GameState>('START')
+  const goldRef                  = useRef(150)
+  const livesRef                 = useRef(20)
+  const waveRef                  = useRef(0)
+  const goldMultiplierRef        = useRef(1.0)
+  const totalCorrectRef          = useRef(0)
+  const totalWrongRef            = useRef(0)
+  const statsRef                 = useRef<GameStats>({ ...initialStats })
+  const selectedTowerIdxRef      = useRef(-1)
   const selectedExistingTowerRef = useRef<Tower | null>(null)
-  const gameSpeedRef           = useRef(1)
-  const currentProblemRef      = useRef<MathProblem | null>(null)
-  const currentBuffRef         = useRef<BuffType>('cadeira')
+  const gameSpeedRef             = useRef(1)
+  const currentProblemRef        = useRef<MathProblem | null>(null)
+  const currentBuffRef           = useRef<BuffType>('cadeira')
 
   // Feedback message setter (passed from component via ref)
   const feedbackRef = useRef<((msg: string, color: string) => void) | null>(null)
@@ -208,12 +249,13 @@ export function useGameEngine(
     if (mathTimerRef.current) { clearInterval(mathTimerRef.current); mathTimerRef.current = null }
 
     generateMapPaths()
-    towersRef.current            = []
-    enemiesRef.current           = []
-    bulletsRef.current           = []
-    particlesRef.current         = []
-    heroesRef.current            = []
-    coinsRef.current             = []
+    towersRef.current             = []
+    enemiesRef.current            = []
+    bulletsRef.current            = []
+    particlesRef.current          = []
+    heroesRef.current             = []
+    coinsRef.current              = []
+    floatingTextsRef.current      = []
     cinematicParticlesRef.current = []
 
     // Reset difficulty
@@ -224,25 +266,28 @@ export function useGameEngine(
     waveOffsetRef.current      = 0
     heroCountRef.current       = 0
 
-    goldRef.current          = 150
-    livesRef.current         = 20
-    waveRef.current          = 0
+    goldRef.current           = 150
+    livesRef.current          = 20
+    waveRef.current           = 0
     goldMultiplierRef.current = 1.0
-    totalCorrectRef.current  = 0
-    totalWrongRef.current    = 0
-    statsRef.current         = { ...initialStats }
-    gameStateRef.current     = 'START'
-    isGameOverRef.current    = false
-    isPausedRef.current      = false
-    waitingForMathRef.current         = false
-    isWaveTransitioningRef.current    = false
-    spinConsumedRef.current           = false
-    lastRotatedWaveRef.current        = 0
+    totalCorrectRef.current   = 0
+    totalWrongRef.current     = 0
+    streakRef.current         = 0
+    activeResonanceRef.current = null
+    statsRef.current          = { ...initialStats, errors: { '+': 0, '-': 0, 'x': 0, '÷': 0 } }
+    gameStateRef.current      = 'START'
+    isGameOverRef.current     = false
+    isPausedRef.current       = false
+    waitingForMathRef.current      = false
+    isWaveTransitioningRef.current = false
+    spinConsumedRef.current        = false
+    lastRotatedWaveRef.current     = 0
     resetMap()
 
     // Reset AoE buff
-    aoeBuffActiveRef.current = false
-    if (aoeBuffTimerRef.current) { clearTimeout(aoeBuffTimerRef.current); aoeBuffTimerRef.current = null }
+    aoeBuffArmedRef.current       = false
+    aoeBuffActiveRef.current      = false
+    aoeBuffRemainingMsRef.current = 0
 
     syncUiState({
       gameState: 'START',
@@ -252,7 +297,13 @@ export function useGameEngine(
       goldMultiplier: 1.0,
       totalCorrect: 0,
       totalWrong: 0,
-      stats: { ...initialStats },
+      streak: 0,
+      activeResonance: null,
+      aoeBuffArmed: false,
+      aoeBuffRemainingMs: 0,
+      lastSelectedAnswer: null,
+      lastAnswerWasCorrect: true,
+      stats: { ...initialStats, errors: { '+': 0, '-': 0, 'x': 0, '÷': 0 } },
       selectedTowerIdx: -1,
       selectedExistingTower: null,
       showSaveModal: false,
@@ -263,10 +314,6 @@ export function useGameEngine(
   }, [])
 
   // ── Difficulty / Hero selection ────────────────────────────────────────
-  /**
-   * Called from HeroSelectionOverlay.
-   * Configures spawn multiplier + wave offset, spawns heroes, then starts SPIN.
-   */
   const applyDifficulty = useCallback((count: 1 | 2 | 3) => {
     let mode: DifficultyMode = 'normal'
     let offset = 0
@@ -280,15 +327,15 @@ export function useGameEngine(
     spawnMultiplierRef.current = multiplier
     heroCountRef.current       = count
 
-    // Spawn heroes at symmetrical starting positions
-    heroesRef.current = getHeroStartPositions(count).map(p => new Hero(p.x, p.y))
+    // Spawn heroes at symmetrical starting positions with distinct callsigns & hotkeys [1]-[3]
+    heroesRef.current = getHeroStartPositions(count).map((p, idx) => new Hero(p.x, p.y, idx))
 
     syncUiState({ difficultyMode: mode, heroCount: count, selectedHero: null })
 
     try { initAudio() } catch { /* audio failure is non-fatal */ }
     gameStateRef.current = 'SPIN'
     syncUiState({ gameState: 'SPIN' })
-    spinConsumedRef.current = false  // arm for the upcoming spin
+    spinConsumedRef.current = false
   }, [initAudio])
 
   // ── Buff / Phrase system ───────────────────────────────────────────────
@@ -300,7 +347,7 @@ export function useGameEngine(
     const modal = document.getElementById('math-modal')
     if (modal) {
       const colors: Record<BuffType, string> = {
-        amor: '#00ff00', odio: '#ff0000', cadeira: '#00d4ff',
+        amor: '#00ff88', odio: '#ff3300', cadeira: '#00d4ff',
       }
       modal.style.borderColor = colors[buff]
       modal.style.boxShadow = `0 0 50px ${colors[buff]}40`
@@ -310,8 +357,11 @@ export function useGameEngine(
   }
 
   function getNextPhrase(): string {
-    if (phraseQueueRef.current.length === 0) return 'A Matemática é implacável.'
-    return phraseQueueRef.current.pop()!
+    if (phraseQueueRef.current.length === 0) {
+      const refilled = [...BUFF_PHRASES[currentBuffRef.current]].sort(() => Math.random() - 0.5)
+      phraseQueueRef.current = refilled
+    }
+    return phraseQueueRef.current.pop() ?? 'A Matemática é implacável.'
   }
 
   // ── SPIN trigger ───────────────────────────────────────────────────────
@@ -358,46 +408,55 @@ export function useGameEngine(
     gameStateRef.current = 'MATH'
     waveRef.current++
     isWaveTransitioningRef.current = false
-    syncUiState({ gameState: 'MATH', wave: waveRef.current })
 
-    // ← pass waveOffset for difficulty scaling
+    const buffMods = getBuffModifiers(currentBuffRef.current)
+    const maxTime = buffMods.mathTimeSeconds
+
     const problem = generateMathProblem(waveRef.current, waveOffsetRef.current)
     currentProblemRef.current = problem
     const questionText = buildQuestionText(problem)
-    const options = generateOptions(problem.answer)
+    const options = generateOptions(problem.answer, problem, buffMods.optionCount)
+    mathOptionsRef.current = options
     const phrase = getNextPhrase()
 
-    timeLeftRef.current = TOTAL_TIME
+    timeLeftRef.current = maxTime
 
     if (mathTimerRef.current) clearInterval(mathTimerRef.current)
     mathTimerRef.current = setInterval(() => {
       if (isPausedRef.current) return
-      timeLeftRef.current -= 0.1
+      timeLeftRef.current = Math.max(0, timeLeftRef.current - 0.1)
 
       syncUiState({ timeLeft: timeLeftRef.current })
 
       if (stressModeRef.current) {
         clearInterval(mathTimerRef.current!)
-        resolveMath(true, false)
+        resolveMath(true, false, problem.answer)
         return
       }
       if (timeLeftRef.current <= 0) {
         clearInterval(mathTimerRef.current!)
-        resolveMath(false, true)
+        resolveMath(false, true, null)
       }
     }, 100)
 
     syncUiState({
+      gameState: 'MATH',
+      wave: waveRef.current,
       mathQuestion: questionText,
       mathOptions: options,
       currentProblem: problem,
       phraseMessage: phrase,
-      timeLeft: TOTAL_TIME,
+      timeLeft: maxTime,
+      maxTime,
+      lastSelectedAnswer: null,
     })
   }
 
-  const resolveMath = useCallback((isCorrect: boolean, isTimeout: boolean) => {
-    if (mathTimerRef.current) clearInterval(mathTimerRef.current)
+  const resolveMath = useCallback((isCorrect: boolean, isTimeout: boolean, selectedAnswer?: number | null) => {
+    if (mathTimerRef.current) {
+      clearInterval(mathTimerRef.current)
+      mathTimerRef.current = null
+    }
 
     const problem = currentProblemRef.current
     statsRef.current.totalMath++
@@ -411,40 +470,51 @@ export function useGameEngine(
       }
     }
 
-    let earned = 0
-    let newMultiplier = goldMultiplierRef.current
+    const nextStreak = isCorrect && !isTimeout ? streakRef.current + 1 : 0
+    const buffMods = getBuffModifiers(currentBuffRef.current)
+    const elapsedSeconds = Math.max(0, buffMods.mathTimeSeconds - timeLeftRef.current)
 
-    if (isTimeout) {
-      newMultiplier = 0.5
-      earned = Math.floor(3 * 0.5 * 10)
-      playSound('wrong')
-      showFeedback('TEMPO ESGOTADO! (0.5x)', '#ff0000')
-    } else if (isCorrect) {
-      newMultiplier = 1.5
-      earned = Math.floor(3 * 1.5 * 10)
+    const outcome = resolveBuffedMathOutcome({
+      buff: currentBuffRef.current,
+      isCorrect,
+      isTimeout,
+      elapsedSeconds,
+      currentGold: goldRef.current,
+      newStreak: nextStreak,
+      problemOp: problem?.op ?? '+',
+    })
+
+    if (isCorrect && !isTimeout) {
       playSound('correct')
-      showFeedback('LÓGICA CORRETA! (1.5x)', '#00ff00')
     } else {
-      newMultiplier = 0.5
-      earned = Math.floor(3 * 0.5 * 10)
       playSound('wrong')
-      showFeedback('FALHA! (0.5x)', '#888888')
     }
+    showFeedback(outcome.feedbackText, outcome.feedbackColor)
 
-    goldMultiplierRef.current = newMultiplier
-    // Math bonus gold goes directly to bank (not a coin — it's a phase reward, not loot)
-    goldRef.current += earned
-    statsRef.current.totalGold += earned
+    const totalEarnedGold = outcome.earnedGold + outcome.interestGold
+    goldMultiplierRef.current = outcome.newMultiplier
+    goldRef.current += totalEarnedGold
+    statsRef.current.totalGold += totalEarnedGold
+    streakRef.current = nextStreak
+    activeResonanceRef.current = outcome.activeResonance
     lastAnswerCorrectRef.current = isCorrect && !isTimeout
 
-    // ── Activate AoE Nuke buff on correct answer ─────────────────────────
+    // Apply life regeneration from ❤️ Amor streak combo
+    if (outcome.livesHealed > 0) {
+      livesRef.current += outcome.livesHealed
+      statsRef.current.livesGained += outcome.livesHealed
+      playSound('heal')
+    }
+
+    // ── Arm AoE Nuke buff on correct answer (timer starts when COMBAT begins!) ──
     if (isCorrect && !isTimeout) {
-      aoeBuffActiveRef.current = true
-      if (aoeBuffTimerRef.current) clearTimeout(aoeBuffTimerRef.current)
-      aoeBuffTimerRef.current = setTimeout(() => {
-        aoeBuffActiveRef.current = false
-        aoeBuffTimerRef.current = null
-      }, AOE_BUFF_DURATION_MS)
+      aoeBuffArmedRef.current       = true
+      aoeBuffActiveRef.current      = false
+      aoeBuffRemainingMsRef.current = AOE_BUFF_DURATION_MS
+    } else {
+      aoeBuffArmedRef.current       = false
+      aoeBuffActiveRef.current      = false
+      aoeBuffRemainingMsRef.current = 0
     }
 
     const tipHtml = problem ? generateTip(problem) : ''
@@ -453,9 +523,16 @@ export function useGameEngine(
     syncUiState({
       gameState: 'BUILD',
       gold: goldRef.current,
-      goldMultiplier: newMultiplier,
+      lives: livesRef.current,
+      goldMultiplier: outcome.newMultiplier,
       totalCorrect: totalCorrectRef.current,
       totalWrong: totalWrongRef.current,
+      streak: nextStreak,
+      activeResonance: outcome.activeResonance,
+      aoeBuffArmed: aoeBuffArmedRef.current,
+      aoeBuffRemainingMs: aoeBuffRemainingMsRef.current,
+      lastSelectedAnswer: selectedAnswer ?? null,
+      lastAnswerWasCorrect: isCorrect && !isTimeout,
       stats: { ...statsRef.current },
       tipHtml,
     })
@@ -477,10 +554,19 @@ export function useGameEngine(
     isDraggingGhostRef.current = false
     movingTowerRef.current = null
 
+    // Activate armed AoE Nuke right as combat starts!
+    if (aoeBuffArmedRef.current) {
+      aoeBuffArmedRef.current       = false
+      aoeBuffActiveRef.current      = true
+      aoeBuffRemainingMsRef.current = AOE_BUFF_DURATION_MS
+    }
+
     syncUiState({
       gameState: 'COMBAT',
       selectedTowerIdx: -1,
       selectedExistingTower: null,
+      aoeBuffArmed: false,
+      aoeBuffRemainingMs: aoeBuffRemainingMsRef.current,
     })
 
     if (aiModeRef.current) runAILogic()
@@ -489,14 +575,14 @@ export function useGameEngine(
 
   function spawnEnemies() {
     const wave = waveRef.current
-    // base count — spawn RATE is multiplied via spawnMultiplierRef (enemies per frame)
     if (wave % 10 === 0) {
-      totalEnemiesToSpawnRef.current = (10 + (wave - 1)) * 5
+      totalEnemiesToSpawnRef.current = (10 + (wave - 1)) * 4
     } else {
       totalEnemiesToSpawnRef.current = 10 + wave
     }
-    enemiesSpawnedRef.current    = 0
-    spawnFrameCounterRef.current = 0
+    enemiesSpawnedRef.current      = 0
+    spawnFrameCounterRef.current   = 0
+    bossSpawnedThisWaveRef.current = false
   }
 
   // ── Cinematic Rotation ─────────────────────────────────────────────────
@@ -535,6 +621,11 @@ export function useGameEngine(
         t.y = Math.max(MARGIN, Math.min(CANVAS_HEIGHT - MARGIN, ny))
       })
 
+      const relocated = relocateCollidingTowers(towersRef.current, CANVAS_WIDTH, CANVAS_HEIGHT)
+      if (relocated > 0) {
+        showFeedback(`${relocated} TORRE(S) REALOCADA(S) DO CAMINHO!`, '#00d4ff')
+      }
+
       cinematicParticlesRef.current = []
       triggerSpin()
     }, 1500)
@@ -554,6 +645,8 @@ export function useGameEngine(
       t.x = Math.max(MARGIN, Math.min(CANVAS_WIDTH - MARGIN, nx))
       t.y = Math.max(MARGIN, Math.min(CANVAS_HEIGHT - MARGIN, ny))
     })
+
+    relocateCollidingTowers(towersRef.current, CANVAS_WIDTH, CANVAS_HEIGHT)
 
     const BUFF_LIST: BuffType[] = ['amor', 'odio', 'cadeira']
     const winner = BUFF_LIST[Math.floor(Math.random() * BUFF_LIST.length)]
@@ -691,11 +784,13 @@ export function useGameEngine(
   const upgradeSelectedTower = useCallback(() => {
     const t = selectedExistingTowerRef.current
     if (!t) return
-    if (goldRef.current < t.upgradeCost) {
+    const discount = getBuffModifiers(currentBuffRef.current).upgradeCostDiscount
+    const cost = t.getEffectiveUpgradeCost(discount)
+    if (goldRef.current < cost) {
       showFeedback('FALTA OURO!', 'red'); return
     }
-    goldRef.current -= t.upgradeCost
-    t.upgrade(pts => { particlesRef.current.push(...pts) })
+    goldRef.current -= cost
+    t.upgrade(pts => { particlesRef.current.push(...pts) }, cost)
     playSound('upgrade')
     cancelSelection()
     syncUiState({ gold: goldRef.current })
@@ -725,16 +820,29 @@ export function useGameEngine(
   const upgradeSelectedHero = useCallback(() => {
     const hero = selectedHeroRef.current
     if (!hero) return
-    if (goldRef.current < hero.upgradeCost) {
+    const discount = getBuffModifiers(currentBuffRef.current).upgradeCostDiscount
+    const cost = hero.getEffectiveUpgradeCost(discount)
+    if (goldRef.current < cost) {
       showFeedback('FALTA OURO!', 'red'); return
     }
-    goldRef.current -= hero.upgradeCost
-    hero.upgrade(pts => { particlesRef.current.push(...pts) })
+    goldRef.current -= cost
+    hero.upgrade(pts => { particlesRef.current.push(...pts) }, cost)
     playSound('upgrade')
-    showFeedback('HERÓI EVOLUÍDO!', '#00d4ff')
-    // Force an object reference update so the panel re-renders
+    showFeedback(`${hero.callsign.toUpperCase()} EVOLUÍDO!`, hero.accentColor)
     syncUiState({ gold: goldRef.current, selectedHero: hero })
   }, [playSound])
+
+  /** Select a hero by index (0, 1, 2) via keyboard [1]-[3] or HUD. */
+  const selectHeroByIndex = useCallback((idx: number) => {
+    const target = heroesRef.current[idx]
+    if (!target) return
+    heroesRef.current.forEach(h => { h.selected = h === target })
+    selectedHeroRef.current = target
+    selectedExistingTowerRef.current = null
+    selectedTowerIdxRef.current = -1
+    isDraggingGhostRef.current = false
+    syncUiState({ selectedHero: target, selectedExistingTower: null, selectedTowerIdx: -1 })
+  }, [])
 
   /** Deselect any currently selected hero. */
   const cancelHeroSelection = useCallback(() => {
@@ -761,10 +869,9 @@ export function useGameEngine(
     if (stressModeRef.current) {
       if (!aiModeRef.current) { aiModeRef.current = true }
       gameSpeedRef.current = 6
-      if (gameStateRef.current === 'MATH') resolveMath(true, false)
+      if (gameStateRef.current === 'MATH') resolveMath(true, false, currentProblemRef.current?.answer ?? null)
       if (gameStateRef.current === 'BUILD') startWaveCombat()
       if (gameStateRef.current === 'START') {
-        // Auto-apply normal difficulty and start
         applyDifficulty(1)
       }
       syncUiState({ stressMode: true, aiMode: true, gameSpeed: 6 })
@@ -815,25 +922,14 @@ export function useGameEngine(
     physicalXRef.current = clientX
     physicalYRef.current = clientY
 
-    const scaleW = window.innerWidth / 820
-    const scaleH = window.innerHeight / 620
-    const scale  = Math.min(scaleW, scaleH, 1)
+    const scaleX = rect.width / CANVAS_WIDTH
+    const scaleY = rect.height / CANVAS_HEIGHT
 
-    mouseXRef.current = (clientX - rect.left) / scale
+    mouseXRef.current = (clientX - rect.left) / (scaleX || 1)
     const touchOffset = (e as TouchEvent).touches ? 40 : 0
-    mouseYRef.current = (clientY - rect.top) / scale - touchOffset
+    mouseYRef.current = (clientY - rect.top) / (scaleY || 1) - touchOffset
   }, [canvasRef])
 
-  /**
-   * handlePress — fires on mousedown / touchstart.
-   *
-   * Priority order:
-   *  1. Ghost drag (tower placement in progress)
-   *  2. Hero click → select hero
-   *  3. Tower click → show upgrade panel
-   *  4. Empty space + hero selected → RTS MOVE command (mobile tap-to-move)
-   *  5. Empty space → cancel all selections
-   */
   const handlePress = useCallback(() => {
     const state = gameStateRef.current
     if (state !== 'BUILD' && state !== 'COMBAT') return
@@ -844,16 +940,15 @@ export function useGameEngine(
 
     const mx = mouseXRef.current, my = mouseYRef.current
 
-    // ── 2. Hero click (radius 22px) ──────────────────────────────────────
+    // ── 2. Hero click (radius 24px) ──────────────────────────────────────
     let clickedHero: Hero | null = null
     for (const hero of heroesRef.current) {
-      if (Math.hypot(hero.x - mx, hero.y - my) < 22) { clickedHero = hero; break }
+      if (Math.hypot(hero.x - mx, hero.y - my) < 24) { clickedHero = hero; break }
     }
     if (clickedHero) {
       heroesRef.current.forEach(h => h.selected = false)
       clickedHero.selected = true
       selectedHeroRef.current = clickedHero
-      // Deselect any tower
       selectedExistingTowerRef.current = null
       syncUiState({ selectedHero: clickedHero, selectedExistingTower: null })
       return
@@ -865,7 +960,6 @@ export function useGameEngine(
       if (Math.hypot(t.x - mx, t.y - my) < 30) { clickedTower = t; break }
     }
     if (clickedTower) {
-      // Deselect heroes, select tower
       heroesRef.current.forEach(h => h.selected = false)
       selectedHeroRef.current = null
       selectedExistingTowerRef.current = clickedTower
@@ -876,7 +970,6 @@ export function useGameEngine(
     // ── 4. Empty ground + hero selected → MOVE COMMAND ───────────────────
     if (selectedHeroRef.current) {
       selectedHeroRef.current.moveTo(mx, my)
-      // Hero stays selected (issue multiple commands without re-clicking)
       return
     }
 
@@ -935,6 +1028,38 @@ export function useGameEngine(
     }
   }, [playSound, cancelSelection])
 
+  // ── Enemy Archetype Selection & Death Handler ──────────────────────────
+  function pickEnemyArchetype(wave: number): EnemyArchetype {
+    if (wave <= 2) return 'standard'
+    const roll = Math.random()
+    if (wave >= 6 && roll < 0.16) return 'splitter'
+    if (wave >= 4 && roll < 0.34) return 'tank'
+    if (roll < 0.56) return 'runner'
+    return 'standard'
+  }
+
+  function handleEnemyDeath(enemy: Enemy, earned: number) {
+    coinsRef.current.push(new Coin(enemy.x, enemy.y, earned))
+
+    // If Splitter ("Falácia") dies, split into 2 fast mini-runners along its remaining path
+    if (enemy.archetype === 'splitter' && !enemy.isSplitChild) {
+      const baseHp = 30 + waveRef.current * 3
+      for (let i = 0; i < 2; i++) {
+        const offset = i === 0 ? -9 : 9
+        enemiesRef.current.push(
+          new Enemy(baseHp, lastAnswerCorrectRef.current, waveRef.current, {
+            archetype: 'runner',
+            isSplitChild: true,
+            customPath: enemy.myPath,
+            startPathIndex: enemy.pathIndex,
+            startX: enemy.x + offset,
+            startY: enemy.y + offset,
+          }),
+        )
+      }
+    }
+  }
+
   // ── Update ─────────────────────────────────────────────────────────────
   function update() {
     const state = gameStateRef.current
@@ -944,15 +1069,48 @@ export function useGameEngine(
       return
     }
 
+    const buffMods = getBuffModifiers(currentBuffRef.current)
+
     if (state === 'COMBAT') {
-      // ── Spawn enemies (multiplied rate: N per frame) ──────────────────
+      // ── Deterministic AoE Nuke countdown (only ticks during COMBAT) ────
+      if (aoeBuffActiveRef.current) {
+        const prevSec = Math.ceil(aoeBuffRemainingMsRef.current / 1000)
+        aoeBuffRemainingMsRef.current = Math.max(0, aoeBuffRemainingMsRef.current - 16.67)
+        const nextSec = Math.ceil(aoeBuffRemainingMsRef.current / 1000)
+        if (aoeBuffRemainingMsRef.current <= 0) {
+          aoeBuffActiveRef.current = false
+          syncUiState({ aoeBuffRemainingMs: 0 })
+        } else if (nextSec !== prevSec) {
+          syncUiState({ aoeBuffRemainingMs: aoeBuffRemainingMsRef.current })
+        }
+      }
+
+      // ── Spawn enemies (with Boss on wave % 10 === 0 and tactical archetypes) ──
       if (enemiesSpawnedRef.current < totalEnemiesToSpawnRef.current) {
+        const baseHp  = 30
+        const hpBonus = waveRef.current * (baseHp * 0.1)
+
+        // Flagship Boss ("O Juiz Interno") leads every 10th wave
+        if (waveRef.current % 10 === 0 && !bossSpawnedThisWaveRef.current) {
+          bossSpawnedThisWaveRef.current = true
+          enemiesRef.current.push(
+            new Enemy(baseHp + hpBonus, lastAnswerCorrectRef.current, waveRef.current, {
+              archetype: 'boss',
+            }),
+          )
+          enemiesSpawnedRef.current++
+          showFeedback('⚠ CHEFE: O JUIZ INTERNO DESPERTOU! ⚠', '#fbbf24')
+        }
+
         const mult = spawnMultiplierRef.current
         const toSpawn = Math.min(mult, totalEnemiesToSpawnRef.current - enemiesSpawnedRef.current)
         for (let s = 0; s < toSpawn; s++) {
-          const baseHp  = 30
-          const hpBonus = waveRef.current * (baseHp * 0.1)
-          enemiesRef.current.push(new Enemy(baseHp + hpBonus, lastAnswerCorrectRef.current, waveRef.current))
+          const archetype = pickEnemyArchetype(waveRef.current)
+          enemiesRef.current.push(
+            new Enemy(baseHp + hpBonus, lastAnswerCorrectRef.current, waveRef.current, {
+              archetype,
+            }),
+          )
           enemiesSpawnedRef.current++
         }
       }
@@ -984,27 +1142,47 @@ export function useGameEngine(
 
     // ── Enemies ──────────────────────────────────────────────────────────
     enemiesRef.current.forEach(e => {
-      e.update(() => {
-        livesRef.current--
-        statsRef.current.livesLost++
-        syncUiState({ lives: livesRef.current, stats: { ...statsRef.current } })
+      e.update(
+        () => {
+          const lifeLoss = e.archetype === 'boss' ? 3 : 1
+          livesRef.current = Math.max(0, livesRef.current - lifeLoss)
+          statsRef.current.livesLost += lifeLoss
+          syncUiState({ lives: livesRef.current, stats: { ...statsRef.current } })
 
-        if (livesRef.current <= 0 && !isGameOverRef.current) {
-          isGameOverRef.current = true
-          if (mathTimerRef.current) clearInterval(mathTimerRef.current)
-          triggerSaveModal()
-        }
-      })
+          if (livesRef.current <= 0 && !isGameOverRef.current) {
+            isGameOverRef.current = true
+            if (mathTimerRef.current) clearInterval(mathTimerRef.current)
+            triggerSaveModal()
+          }
+        },
+        buffMods.centerSlowRadius,
+        buffMods.centerSlowFactor,
+      )
+
+      // Check if Burn DOT killed this enemy during its update tick
+      if (e.hp <= 0 && e.active) {
+        e.active = false
+        const earned = Math.max(1, Math.floor(3 * goldMultiplierRef.current))
+        handleEnemyDeath(e, earned)
+      }
     })
     enemiesRef.current = enemiesRef.current.filter(e => e.active)
 
-    // ── Towers ───────────────────────────────────────────────────────────
+    // ── Towers (with Buff Modifiers, Resonance & Harmony Link) ───────────
+    const resonanceOp = activeResonanceRef.current
     towersRef.current.forEach(t => {
+      const isResonant = resonanceOp !== null && t.type.symbol === resonanceOp
+      const isHarmonyLinked =
+        buffMods.harmonyLinkSpeedBoost > 0 &&
+        heroesRef.current.some(h => Math.hypot(h.x - t.x, h.y - t.y) <= 135)
       t.update(
         enemiesRef.current,
         bullet => { bulletsRef.current.push(bullet) },
         playSound,
         waveRef.current,
+        buffMods,
+        isResonant,
+        isHarmonyLinked,
       )
     })
 
@@ -1015,18 +1193,18 @@ export function useGameEngine(
         bullet => { bulletsRef.current.push(bullet) },
         playSound,
         waveRef.current,
+        buffMods,
       )
     })
 
-    // ── Bullets → spawn Coins instead of direct gold ──────────────────
+    // ── Bullets → spawn Coins instead of direct gold ─────────────────────
     const newParticles: Particle[] = []
     const isAoeActive = aoeBuffActiveRef.current
     bulletsRef.current.forEach(b => {
       b.update(
         enemiesRef.current,
         (enemy, earned) => {
-          // Physical coin spawns at enemy death position — must be looted by hero
-          coinsRef.current.push(new Coin(enemy.x, enemy.y, earned))
+          handleEnemyDeath(enemy, earned)
         },
         goldMultiplierRef.current,
         newParticles,
@@ -1037,29 +1215,28 @@ export function useGameEngine(
     particlesRef.current.push(...newParticles)
     bulletsRef.current = bulletsRef.current.filter(b => b.active)
 
-    // ── Coins: 3-pass loot system ─────────────────────────────────────────
+    // ── Coins: 3-pass loot system (Core Tower vs Hero Bonus Magnet) ───────
 
-    // PASS 1 — Universal Tower Loot Scan (every frame, decoupled from attacks)
-    // Towers use their centre (x, y) which is the same coordinate used for
-    // drawing and distance checks inside update().  No width/height offset needed.
+    // PASS 1 — Tower Core Pickup (55px radius around tower base)
     for (const coin of coinsRef.current) {
       if (!coin.active || !coin.isCollectable) continue
       for (const tower of towersRef.current) {
         const dist = Math.hypot(tower.x - coin.x, tower.y - coin.y)
         if (dist <= tower.lootRange) {
-          coin.lockOn(tower.x, tower.y)
-          break   // coin is claimed — stop checking other towers
+          coin.lockOn(tower.x, tower.y, 'tower')
+          break
         }
       }
     }
 
-    // PASS 2 — Hero Magnet Scan (for coins not yet claimed by a tower)
+    // PASS 2 — Hero Magnet Scan (wider pull zone + grants Hero Collection Bonus!)
     for (const coin of coinsRef.current) {
       if (!coin.active || !coin.isCollectable) continue
       for (const hero of heroesRef.current) {
         const dist = Math.hypot(hero.x - coin.x, hero.y - coin.y)
-        if (dist <= hero.magnetRadius) {
-          coin.lockOn(hero.x, hero.y)
+        const effectiveMagnet = hero.getEffectiveMagnetRadius(buffMods.heroMagnetMultiplier)
+        if (dist <= effectiveMagnet) {
+          coin.lockOn(hero.x, hero.y, 'hero')
           break
         }
       }
@@ -1068,10 +1245,25 @@ export function useGameEngine(
     // PASS 3 — Physics + flight + grounded countdown
     let goldChanged = false
     coinsRef.current.forEach(coin => {
-      coin.update(value => {
-        goldRef.current           += value
-        statsRef.current.totalGold += value
+      coin.update((value, collectorType, cx, cy) => {
+        const finalValue =
+          collectorType === 'hero'
+            ? Math.max(value + 1, Math.ceil(value * buffMods.heroCoinBonusMultiplier))
+            : value
+        goldRef.current           += finalValue
+        statsRef.current.totalGold += finalValue
         goldChanged = true
+
+        if (collectorType === 'hero' && floatingTextsRef.current.length < 25) {
+          floatingTextsRef.current.push({
+            x: cx,
+            y: cy - 8,
+            text: `+$${finalValue} ★`,
+            color: '#fde047',
+            life: 32,
+            maxLife: 32,
+          })
+        }
       }, 16.67)
     })
     coinsRef.current = coinsRef.current.filter(c => c.active)
@@ -1079,6 +1271,12 @@ export function useGameEngine(
 
     particlesRef.current.forEach(p => p.update())
     particlesRef.current = particlesRef.current.filter(p => p.life > 0)
+
+    floatingTextsRef.current.forEach(ft => {
+      ft.y -= 0.7
+      ft.life--
+    })
+    floatingTextsRef.current = floatingTextsRef.current.filter(ft => ft.life > 0)
   }
 
   // ── Draw ───────────────────────────────────────────────────────────────
@@ -1095,35 +1293,108 @@ export function useGameEngine(
     }
 
     const mx = mouseXRef.current, my = mouseYRef.current
-    const movingTower  = movingTowerRef.current
+    const movingTower   = movingTowerRef.current
     const selectedTower = selectedExistingTowerRef.current
+    const buffMods      = getBuffModifiers(currentBuffRef.current)
+    const resonanceOp   = activeResonanceRef.current
 
-    // Draw order: towers → enemies → heroes → bullets → particles → coins
+    // ── Draw "A Cadeira" Gravitational Throne field at map center (400, 300) ──
+    if (
+      buffMods.centerSlowRadius > 0 &&
+      gameStateRef.current !== 'START' &&
+      gameStateRef.current !== 'SPIN'
+    ) {
+      ctx.save()
+      const pulse = 0.14 + 0.05 * Math.sin(Date.now() / 350)
+      ctx.beginPath()
+      ctx.arc(400, 300, buffMods.centerSlowRadius, 0, Math.PI * 2)
+      ctx.fillStyle = `rgba(0, 212, 255, ${pulse * 0.35})`
+      ctx.fill()
+      ctx.setLineDash([6, 6])
+      ctx.strokeStyle = `rgba(0, 212, 255, ${pulse + 0.12})`
+      ctx.lineWidth = 1.5
+      ctx.stroke()
+      ctx.restore()
+    }
+
+    // ── Draw Harmony Link tethers between Heroes and nearby Towers (❤️ Amor) ──
+    if (buffMods.harmonyLinkSpeedBoost > 0) {
+      ctx.save()
+      ctx.strokeStyle = 'rgba(244, 114, 182, 0.35)'
+      ctx.lineWidth = 1.5
+      ctx.setLineDash([4, 4])
+      for (const t of towersRef.current) {
+        for (const h of heroesRef.current) {
+          if (Math.hypot(h.x - t.x, h.y - t.y) <= 135) {
+            ctx.beginPath()
+            ctx.moveTo(h.x, h.y)
+            ctx.lineTo(t.x, t.y)
+            ctx.stroke()
+          }
+        }
+      }
+      ctx.restore()
+    }
+
+    // Draw order: towers → enemies → heroes → bullets → particles → coins → floatingTexts
     towersRef.current.forEach(t => {
-      t.draw(ctx, mx, my, t === selectedTower, t === movingTower, checkCollision)
+      const isResonant = resonanceOp !== null && t.type.symbol === resonanceOp
+      const isHarmonyLinked =
+        buffMods.harmonyLinkSpeedBoost > 0 &&
+        heroesRef.current.some(h => Math.hypot(h.x - t.x, h.y - t.y) <= 135)
+      t.draw(
+        ctx,
+        mx,
+        my,
+        t === selectedTower,
+        t === movingTower,
+        checkCollision,
+        buffMods,
+        isResonant,
+        isHarmonyLinked,
+      )
     })
     enemiesRef.current.forEach(e => e.draw(ctx))
-    heroesRef.current.forEach(h => h.draw(ctx))
+    heroesRef.current.forEach(h => h.draw(ctx, buffMods))
     const isAoeDraw = aoeBuffActiveRef.current
     bulletsRef.current.forEach(b => b.draw(ctx, isAoeDraw))
     particlesRef.current.forEach(p => p.draw(ctx))
     coinsRef.current.forEach(c => c.draw(ctx))
 
-    // ── AoE Nuke buff screen-edge indicator ─────────────────────────────
-    if (isAoeDraw) {
+    // Draw floating Hero bonus gold indicators
+    floatingTextsRef.current.forEach(ft => {
+      ctx.save()
+      ctx.globalAlpha = Math.max(0, ft.life / ft.maxLife)
+      ctx.font = 'bold 11px Courier New'
+      ctx.fillStyle = ft.color
+      ctx.textAlign = 'center'
+      ctx.shadowBlur = 6
+      ctx.shadowColor = '#000'
+      ctx.fillText(ft.text, ft.x, ft.y)
+      ctx.restore()
+    })
+
+    // ── AoE Nuke buff screen-edge indicator (Armed vs Active countdown) ──
+    if (isAoeDraw || aoeBuffArmedRef.current) {
       ctx.save()
       const pulse = 0.15 + 0.1 * Math.sin(Date.now() / 200)
-      ctx.strokeStyle = `rgba(255, 68, 0, ${pulse})`
+      ctx.strokeStyle = isAoeDraw
+        ? `rgba(255, 68, 0, ${pulse})`
+        : `rgba(250, 204, 21, ${pulse})`
       ctx.lineWidth = 6
       ctx.shadowBlur = 30
-      ctx.shadowColor = '#ff4400'
+      ctx.shadowColor = isAoeDraw ? '#ff4400' : '#facc15'
       ctx.strokeRect(3, 3, CANVAS_WIDTH - 6, CANVAS_HEIGHT - 6)
-      // Top-center buff label
-      ctx.fillStyle = '#ff6600'
-      ctx.font = 'bold 14px Courier New'
+
+      ctx.fillStyle = isAoeDraw ? '#ff6600' : '#fde047'
+      ctx.font = 'bold 13px Courier New'
       ctx.textAlign = 'center'
       ctx.textBaseline = 'top'
-      ctx.fillText('☢ AoE NUKE ATIVO ☢', CANVAS_WIDTH / 2, 8)
+      const secs = Math.ceil(aoeBuffRemainingMsRef.current / 1000)
+      const label = isAoeDraw
+        ? `☢ AoE NUKE ATIVO (${secs}s) ☢`
+        : '☢ AoE NUKE ARMADO (INICIA NO COMBATE) ☢'
+      ctx.fillText(label, CANVAS_WIDTH / 2, 8)
       ctx.restore()
     }
 
@@ -1131,8 +1402,9 @@ export function useGameEngine(
       const type = TOWER_TYPES[selectedTowerIdxRef.current]
       const canBuild = checkCollision(mx, my)
       const color = canBuild ? 'rgba(0, 255, 0, 0.5)' : 'rgba(255, 0, 0, 0.5)'
+      const previewRange = Math.floor(type.range * buffMods.towerRangeMultiplier)
       ctx.beginPath()
-      ctx.arc(mx, my, type.range, 0, Math.PI * 2)
+      ctx.arc(mx, my, previewRange, 0, Math.PI * 2)
       ctx.fillStyle = 'rgba(255, 255, 255, 0.05)'; ctx.fill()
       ctx.lineWidth = 1; ctx.strokeStyle = color; ctx.stroke()
       ctx.fillStyle = canBuild ? type.color : '#550000'
@@ -1197,6 +1469,45 @@ export function useGameEngine(
     })
     ctx.restore()
   }
+
+  // ── Keyboard Shortcuts (MATH [1]-[4], Heroes [1]-[3], Space for Wave) ──
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      // Ignore if typing in an input (e.g. SaveScoreModal)
+      const tag = (e.target as HTMLElement | null)?.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA') return
+
+      const state = gameStateRef.current
+
+      if (state === 'MATH') {
+        const idx = ['1', '2', '3', '4'].indexOf(e.key)
+        if (idx !== -1 && mathOptionsRef.current[idx] !== undefined && currentProblemRef.current) {
+          e.preventDefault()
+          const chosen = mathOptionsRef.current[idx]
+          resolveMath(chosen === currentProblemRef.current.answer, false, chosen)
+        }
+        return
+      }
+
+      if (state === 'BUILD' || state === 'COMBAT') {
+        if (e.key === '1' || e.key === '2' || e.key === '3') {
+          const heroIdx = Number(e.key) - 1
+          if (heroesRef.current[heroIdx]) {
+            e.preventDefault()
+            selectHeroByIndex(heroIdx)
+          }
+        } else if (e.key === ' ' && state === 'BUILD') {
+          e.preventDefault()
+          startWaveCombat()
+        } else if (e.key === 'Escape') {
+          cancelSelection()
+        }
+      }
+    }
+
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [resolveMath, selectHeroByIndex, startWaveCombat, cancelSelection])
 
   // ── RAF Game Loop ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -1281,9 +1592,10 @@ export function useGameEngine(
     upgradeSelectedTower,
     moveSelectedTower,
     sellSelectedTower,
-    // Hero management (NEW)
+    // Hero management
     applyDifficulty,
     upgradeSelectedHero,
+    selectHeroByIndex,
     cancelHeroSelection,
     handleRightClick,
     // System
@@ -1299,3 +1611,4 @@ export function useGameEngine(
     isPausedRef,
   }
 }
+

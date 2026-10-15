@@ -1,8 +1,11 @@
-import { useRef, useCallback, useEffect } from 'react'
+import { useRef, useCallback, useEffect, useState } from 'react'
 import { GameCanvas } from './GameCanvas'
 import { MuseumTexts } from './MuseumTexts'
 import { OfflineScreen } from './OfflineScreen'
 import { SpinEsfera } from './screens/SpinEsfera'
+import { Leaderboard } from './ui/Leaderboard'
+import { ManifestoModal } from './screens/ManifestoModal'
+import { ViasesModal } from './screens/ViasesModal'
 import { ScoreUI } from './ui/ScoreUI'
 import { SystemMenu } from './ui/SystemMenu'
 import { BuildMenu } from './ui/BuildMenu'
@@ -13,6 +16,7 @@ import { FeedbackMsg, type FeedbackHandle } from './ui/FeedbackMsg'
 import { SaveRoundModal } from './ui/SaveRoundModal'
 import { useGameEngine } from '../hooks/useGameEngine'
 import { useAudio } from '../hooks/useAudio'
+import { getBuffModifiers } from '../engine/buffSystem'
 import type { BuffType } from '../types/game'
 import type { Hero } from '../engine/Hero'
 
@@ -21,7 +25,7 @@ interface GamePageProps {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Hero Selection Overlay (replaces StartScreen entirely)
+// Hero Selection Overlay (with restored Genesis Heritage: Placar, Viéses, Manifesto)
 // ─────────────────────────────────────────────────────────────────────────────
 interface DifficultyCardProps {
   count: 1 | 2 | 3
@@ -46,7 +50,7 @@ function DifficultyCard({ count, title, tag, tagColor, spawnLabel, mathLabel, de
         background: 'rgba(255,255,255,0.04)',
         border: `1.5px solid ${tagColor}55`,
         borderRadius: 14,
-        padding: '28px 20px',
+        padding: '22px 18px',
         cursor: 'pointer',
         color: '#fff',
         textAlign: 'left',
@@ -68,7 +72,7 @@ function DifficultyCard({ count, title, tag, tagColor, spawnLabel, mathLabel, de
         el.style.background = 'rgba(255,255,255,0.04)'
       }}
     >
-      <div style={{ fontSize: 36, marginBottom: 12 }}>{icon}</div>
+      <div style={{ fontSize: 32, marginBottom: 10 }}>{icon}</div>
       <div style={{
         display: 'inline-block',
         fontSize: 10,
@@ -80,13 +84,13 @@ function DifficultyCard({ count, title, tag, tagColor, spawnLabel, mathLabel, de
         border: `1px solid ${tagColor}66`,
         borderRadius: 100,
         padding: '3px 10px',
-        marginBottom: 10,
+        marginBottom: 8,
         textShadow: `0 0 12px ${tagColor}88`,
       }}>
         {tag}
       </div>
       <div style={{
-        fontSize: 18,
+        fontSize: 17,
         fontWeight: 700,
         fontFamily: 'Courier New, monospace',
         color: '#ffffff',
@@ -95,10 +99,10 @@ function DifficultyCard({ count, title, tag, tagColor, spawnLabel, mathLabel, de
       }}>
         {title}
       </div>
-      <div style={{ fontSize: 12, color: '#8a9abc', marginBottom: 14, lineHeight: 1.6 }}>
+      <div style={{ fontSize: 11.5, color: '#8a9abc', marginBottom: 12, lineHeight: 1.5 }}>
         {desc}
       </div>
-      <div style={{ borderTop: '1px solid rgba(255,255,255,0.07)', paddingTop: 12, display: 'flex', flexDirection: 'column', gap: 4 }}>
+      <div style={{ borderTop: '1px solid rgba(255,255,255,0.07)', paddingTop: 10, display: 'flex', flexDirection: 'column', gap: 4 }}>
         <div style={{ fontSize: 11, color: '#6a7a9a', fontFamily: 'Courier New, monospace' }}>
           <span style={{ color: tagColor, fontWeight: 700 }}>SPAWN</span> {spawnLabel}
         </div>
@@ -111,19 +115,23 @@ function DifficultyCard({ count, title, tag, tagColor, spawnLabel, mathLabel, de
 }
 
 function HeroSelectionOverlay({ onSelect }: { onSelect: (count: 1 | 2 | 3) => void }) {
+  const [showLeaderboard, setShowLeaderboard] = useState(false)
+  const [showManifesto, setShowManifesto] = useState(false)
+  const [showViases, setShowViases] = useState(false)
+
   return (
     <div
       style={{
         position: 'absolute',
         inset: 0,
         zIndex: 100,
-        background: 'rgba(5, 5, 16, 0.93)',
+        background: 'rgba(5, 5, 16, 0.94)',
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'center',
         backdropFilter: 'blur(6px)',
-        padding: 24,
+        padding: 20,
       }}
     >
       <div style={{
@@ -132,35 +140,35 @@ function HeroSelectionOverlay({ onSelect }: { onSelect: (count: 1 | 2 | 3) => vo
         letterSpacing: '0.3em',
         textTransform: 'uppercase',
         color: '#00d4ff',
-        marginBottom: 16,
+        marginBottom: 10,
         textShadow: '0 0 16px rgba(0,212,255,0.5)',
       }}>
-        ⚔ Logic Defense — Action RTS
+        ⚔ Logic Defense — Genesis 2.0 Action RTS
       </div>
       <h1 style={{
         fontFamily: 'Courier New, monospace',
-        fontSize: 'clamp(20px, 4vw, 30px)',
+        fontSize: 'clamp(20px, 4vw, 28px)',
         fontWeight: 700,
         color: '#ffffff',
         textAlign: 'center',
-        margin: '0 0 10px',
+        margin: '0 0 8px',
         textShadow: '0 0 30px rgba(0,212,255,0.4)',
       }}>
         Escolha Sua Esquadra
       </h1>
       <p style={{
         color: '#8a9abc',
-        fontSize: 14,
+        fontSize: 13,
         textAlign: 'center',
-        marginBottom: 40,
-        maxWidth: 480,
-        lineHeight: 1.6,
+        marginBottom: 24,
+        maxWidth: 510,
+        lineHeight: 1.5,
       }}>
-        Heróis coletam moedas dos inimigos. Sem herói → sem ouro.
+        Coletar moedas com <strong>Heróis</strong> concede <strong>+15% a +25% de Ouro Bônus</strong>!
         <br />
-        Mais heróis = mais risco = mais glória.
+        Mais heróis = maior desafio mental = mais glória.
       </p>
-      <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', justifyContent: 'center', maxWidth: 720 }}>
+      <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', justifyContent: 'center', maxWidth: 720 }}>
         <DifficultyCard
           count={1}
           icon="⚔️"
@@ -168,8 +176,8 @@ function HeroSelectionOverlay({ onSelect }: { onSelect: (count: 1 | 2 | 3) => vo
           tag="Normal"
           tagColor="#39ff14"
           spawnLabel="Taxa padrão"
-          mathLabel="Onda atual"
-          desc="Aprenda o sistema. Um único herói para coletar, mover e evoluir."
+          mathLabel="Progressão clássica"
+          desc="Aprenda as Lentes de Cálculo Mental. Um Sentinela para coletar, mover e evoluir."
           onSelect={onSelect}
         />
         <DifficultyCard
@@ -179,8 +187,8 @@ function HeroSelectionOverlay({ onSelect }: { onSelect: (count: 1 | 2 | 3) => vo
           tag="Hardcore"
           tagColor="#ffd700"
           spawnLabel="×3 inimigos/frame"
-          mathLabel="+300 de dificuldade"
-          desc="Inimigos chegam como uma tempestade. Coordene os dois heróis ou pereça."
+          mathLabel="Aritmética Tática"
+          desc="Tempestade geométrica. Coordene dois heróis pelas teclas [1] e [2] e domine os atalhos."
           onSelect={onSelect}
         />
         <DifficultyCard
@@ -190,14 +198,97 @@ function HeroSelectionOverlay({ onSelect }: { onSelect: (count: 1 | 2 | 3) => vo
           tag="God Mode"
           tagColor="#ff3355"
           spawnLabel="×9 inimigos/frame"
-          mathLabel="+1000 de dificuldade"
-          desc="O caos absoluto. Matemática de nível expert. Glória máxima aguarda os insanos."
+          mathLabel="Mestre Mental"
+          desc="O caos absoluto. Controle os três heróis [1] [2] [3] em tempo real e prove sua maestria."
           onSelect={onSelect}
         />
       </div>
-      <p style={{ color: '#3a4a6a', fontSize: 11, marginTop: 32, fontFamily: 'Courier New, monospace' }}>
-        Clique com o botão direito ou toque no chão para mover um Herói selecionado.
-      </p>
+
+      {/* Restored Genesis Heritage Bar: Leaderboard, Viéses, Manifesto */}
+      <div style={{
+        display: 'flex',
+        gap: 10,
+        marginTop: 22,
+        flexWrap: 'wrap',
+        justifyContent: 'center',
+      }}>
+        <button
+          type="button"
+          onClick={() => setShowLeaderboard(prev => !prev)}
+          style={{
+            background: showLeaderboard ? 'rgba(0, 212, 255, 0.18)' : 'rgba(255,255,255,0.05)',
+            border: '1px solid rgba(0, 212, 255, 0.45)',
+            color: '#00d4ff',
+            padding: '6px 14px',
+            borderRadius: 99,
+            fontSize: 11,
+            fontFamily: 'Courier New, monospace',
+            cursor: 'pointer',
+            fontWeight: 700,
+          }}
+        >
+          🏆 Placar Local
+        </button>
+        <button
+          type="button"
+          onClick={() => setShowViases(true)}
+          style={{
+            background: 'rgba(255,255,255,0.05)',
+            border: '1px solid rgba(255, 136, 0, 0.45)',
+            color: '#ffaa44',
+            padding: '6px 14px',
+            borderRadius: 99,
+            fontSize: 11,
+            fontFamily: 'Courier New, monospace',
+            cursor: 'pointer',
+            fontWeight: 700,
+          }}
+        >
+          🔬 Os Viéses
+        </button>
+        <button
+          type="button"
+          onClick={() => setShowManifesto(true)}
+          style={{
+            background: 'rgba(255,255,255,0.05)',
+            border: '1px solid rgba(0, 255, 136, 0.45)',
+            color: '#00ff88',
+            padding: '6px 14px',
+            borderRadius: 99,
+            fontSize: 11,
+            fontFamily: 'Courier New, monospace',
+            cursor: 'pointer',
+            fontWeight: 700,
+          }}
+        >
+          📜 O Manifesto
+        </button>
+      </div>
+
+      {showLeaderboard && (
+        <div style={{
+          marginTop: 12,
+          background: 'rgba(0,0,0,0.85)',
+          border: '1px solid rgba(0,212,255,0.35)',
+          borderRadius: 10,
+          padding: '8px 16px',
+          maxHeight: 150,
+          overflowY: 'auto',
+          width: '100%',
+          maxWidth: 460,
+        }}>
+          <Leaderboard />
+        </div>
+      )}
+
+      {!showLeaderboard && (
+        <p style={{ color: '#475569', fontSize: 11, marginTop: 18, fontFamily: 'Courier New, monospace', textAlign: 'center' }}>
+          Dica RTS: Botão direito move o Herói • Teclas [1]-[3] selecionam Heróis • [Espaço] inicia a Onda
+        </p>
+      )}
+
+      {showManifesto && <ManifestoModal onClose={() => setShowManifesto(false)} />}
+      {showViases && <ViasesModal onClose={() => setShowViases(false)} />}
     </div>
   )
 }
@@ -208,14 +299,19 @@ function HeroSelectionOverlay({ onSelect }: { onSelect: (count: 1 | 2 | 3) => vo
 interface HeroPanelProps {
   hero: Hero
   gold: number
+  currentBuff: BuffType
   onUpgrade: () => void
   onClose: () => void
 }
 
-function HeroPanel({ hero, gold, onUpgrade, onClose }: HeroPanelProps) {
-  const canUpgrade = gold >= hero.upgradeCost
-  const dmg = Math.round(25 * (1 + 0.2 * (hero.level - 1)))
+function HeroPanel({ hero, gold, currentBuff, onUpgrade, onClose }: HeroPanelProps) {
+  const buffMods = getBuffModifiers(currentBuff)
+  const effectiveCost = hero.getEffectiveUpgradeCost(buffMods.upgradeCostDiscount)
+  const canUpgrade = gold >= effectiveCost
+  const dmg = Math.round(hero.getDamage(buffMods.towerDamageMultiplier))
   const atk = hero.currentRate
+  const effectiveMagnet = hero.getEffectiveMagnetRadius(buffMods.heroMagnetMultiplier)
+  const bonusPct = Math.round((buffMods.heroCoinBonusMultiplier - 1) * 100)
 
   return (
     <div
@@ -225,19 +321,19 @@ function HeroPanel({ hero, gold, onUpgrade, onClose }: HeroPanelProps) {
         bottom: 70,
         left: 10,
         zIndex: 60,
-        background: 'rgba(0, 18, 38, 0.92)',
-        border: '1.5px solid rgba(0, 212, 255, 0.5)',
+        background: 'rgba(0, 18, 38, 0.94)',
+        border: `1.5px solid ${hero.accentColor}88`,
         borderRadius: 10,
         padding: '14px 18px',
-        minWidth: 190,
-        boxShadow: '0 0 24px rgba(0, 212, 255, 0.2)',
+        minWidth: 205,
+        boxShadow: `0 0 24px ${hero.accentColor}33`,
         backdropFilter: 'blur(4px)',
       }}
     >
       {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-        <span style={{ fontFamily: 'Courier New, monospace', fontSize: 12, fontWeight: 700, color: '#00d4ff', letterSpacing: '0.12em' }}>
-          ★ HERÓI LV.{hero.level}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+        <span style={{ fontFamily: 'Courier New, monospace', fontSize: 12, fontWeight: 700, color: hero.accentColor, letterSpacing: '0.08em' }}>
+          ★ {hero.callsign.toUpperCase()} [{hero.hotkey}] • LV.{hero.level}
         </span>
         <button
           onClick={onClose}
@@ -248,12 +344,12 @@ function HeroPanel({ hero, gold, onUpgrade, onClose }: HeroPanelProps) {
       </div>
 
       {/* Stats */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 14 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 12 }}>
         {[
-          { label: 'DMG', value: `${dmg}` },
-          { label: 'ATK', value: `${atk} cd` },
-          { label: 'RNG', value: `${Math.round(hero.range)}` },
-          { label: 'MAG', value: `${hero.magnetRadius}px` },
+          { label: 'DANO', value: `${dmg}` },
+          { label: 'CADÊNCIA', value: `${atk} cd` },
+          { label: 'ALCANCE', value: `${Math.round(hero.range * buffMods.towerRangeMultiplier)}px` },
+          { label: 'ÍMÃ (BÔNUS)', value: `${effectiveMagnet}px (+${bonusPct}% 💰)` },
         ].map(({ label, value }) => (
           <div key={label} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11 }}>
             <span style={{ color: '#6a7a9a', fontFamily: 'Courier New, monospace' }}>{label}</span>
@@ -270,10 +366,10 @@ function HeroPanel({ hero, gold, onUpgrade, onClose }: HeroPanelProps) {
         style={{
           width: '100%',
           padding: '9px 0',
-          background: canUpgrade ? 'rgba(0, 212, 255, 0.12)' : 'rgba(255,255,255,0.04)',
-          border: `1px solid ${canUpgrade ? 'rgba(0,212,255,0.6)' : 'rgba(255,255,255,0.1)'}`,
+          background: canUpgrade ? `${hero.accentColor}22` : 'rgba(255,255,255,0.04)',
+          border: `1px solid ${canUpgrade ? hero.accentColor : 'rgba(255,255,255,0.1)'}`,
           borderRadius: 6,
-          color: canUpgrade ? '#00d4ff' : '#4a5a7a',
+          color: canUpgrade ? hero.accentColor : '#4a5a7a',
           fontFamily: 'Courier New, monospace',
           fontSize: 12,
           fontWeight: 700,
@@ -282,7 +378,7 @@ function HeroPanel({ hero, gold, onUpgrade, onClose }: HeroPanelProps) {
           letterSpacing: '0.08em',
         }}
       >
-        EVOLUIR • ${hero.upgradeCost}
+        EVOLUIR • ${effectiveCost} {buffMods.upgradeCostDiscount > 0 ? '(-15%)' : ''}
       </button>
     </div>
   )
@@ -344,16 +440,18 @@ export function GamePage({ onReset }: GamePageProps = {}) {
     }
   }, [feedbackRef])
 
-  // Adaptive audio
-  const { gameState } = uiState
+  // Adaptive audio (including Boss BGM on every 10th wave!)
+  const { gameState, wave } = uiState
   useEffect(() => {
     if (gameState === 'SPIN' || gameState === 'CINEMATIC') {
       setAudioMode('spin')
       if (gameState === 'SPIN') playSound('spin')
+    } else if (gameState === 'COMBAT' && wave > 0 && wave % 10 === 0) {
+      setAudioMode('boss')
     } else {
       setAudioMode('normal')
     }
-  }, [gameState, setAudioMode, playSound])
+  }, [gameState, wave, setAudioMode, playSound])
 
   // Pause/resume BGM on network drop
   useEffect(() => {
@@ -422,7 +520,6 @@ export function GamePage({ onReset }: GamePageProps = {}) {
       <div
         id="game-container"
         className={gameState === 'CINEMATIC' ? 'cinematic-mode' : ''}
-        // Desktop right-click → hero move command
         onContextMenu={(e) => {
           e.preventDefault()
           handleRightClick(e.nativeEvent as MouseEvent)
@@ -489,11 +586,12 @@ export function GamePage({ onReset }: GamePageProps = {}) {
           />
         )}
 
-        {/* Hero upgrade panel (NEW) */}
+        {/* Hero upgrade panel */}
         {selectedHero && !selectedExistingTower && (
           <HeroPanel
             hero={selectedHero}
             gold={uiState.gold}
+            currentBuff={uiState.currentBuff}
             onUpgrade={upgradeSelectedHero}
             onClose={cancelHeroSelection}
           />
@@ -502,7 +600,7 @@ export function GamePage({ onReset }: GamePageProps = {}) {
         {/* Math question modal */}
         <MathModal
           uiState={uiState}
-          onAnswer={(isCorrect) => resolveMath(isCorrect, false)}
+          onAnswer={(isCorrect, selectedOpt) => resolveMath(isCorrect, false, selectedOpt)}
         />
 
         {/* Math tip box */}
@@ -514,6 +612,7 @@ export function GamePage({ onReset }: GamePageProps = {}) {
             id="next-wave-btn"
             onClick={() => { initAudio(); startWaveCombat() }}
             style={{ display: 'flex' }}
+            title="Iniciar Combate [Espaço]"
           >
             🚀
           </button>
@@ -551,7 +650,6 @@ export function GamePage({ onReset }: GamePageProps = {}) {
 
         {/* ── Screens ── */}
 
-        {/* Hero selection replaces the old StartScreen */}
         {gameState === 'START' && (
           <HeroSelectionOverlay onSelect={applyDifficulty} />
         )}
@@ -566,3 +664,4 @@ export function GamePage({ onReset }: GamePageProps = {}) {
     </div>
   )
 }
+
