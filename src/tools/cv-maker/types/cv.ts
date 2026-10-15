@@ -1,5 +1,7 @@
 export * from './universalAST'
+export * from './canvasStudio'
 import type { UniversalDocumentAST, LayoutArchetype } from './universalAST'
+import type { CanvasStudioElement, CadCanvasSettings } from './canvasStudio'
 
 export type TextVariant = 'official_master' | 'professional' | 'architect' | 'historian' | 'didactic' | 'alien'
 export type ThemeVariant = 'executive' | 'creative' | 'minimalist' | 'white' | 'terminal'
@@ -533,13 +535,13 @@ export const AVAILABLE_BOX_FONTS: BoxFontOption[] = [
 export interface CustomCanvasZone {
   id: string
   label: string
-  shape: 'rect' | 'polygon'
+  shape: 'rect' | 'polygon' | 'chamfered' | 'rounded_arch'
   // Coordenadas percentuais relativas à folha A4 (0 a 100%)
   x: number
   y: number
   width: number
   height: number
-  // Para polígonos: vértices em percentual da folha A4
+  // Para polígonos: vértices em percentual da folha A4 (ou relativos 0-100%)
   points?: Array<{ x: number; y: number }>
   // Estilização visual da zona
   backgroundColor?: string
@@ -549,6 +551,12 @@ export interface CustomCanvasZone {
   borderWidth?: number
   borderStyle?: 'solid' | 'dashed' | 'dotted' | 'none'
   borderRadius?: number
+  // Camada e espaçamento interno do Container Frame (Figma / Docx / AutoCAD)
+  zIndex?: number
+  paddingPx?: number
+  contentGapPx?: number
+  // Elementos ricos (títulos, subtítulos, frases lado a lado com fontes/cores independentes) dentro da sidebar/zona!
+  elements?: CanvasStudioElement[]
 }
 
 /**
@@ -561,6 +569,8 @@ export interface LayoutStructureConfig {
   sectionOrder?: string[]     // Ordem sequencial explícita das seções no layout ativo
   sectionZone?: Record<string, 'left' | 'right'> // Coluna/zona atribuída à seção em layouts de múltiplas colunas
   customZones?: CustomCanvasZone[] // Zonas, sidebars e boxes agrupadas desenhadas livremente
+  freeStudioElements?: CanvasStudioElement[] // Títulos, frases lado a lado e callouts CAD soltos diretamente na folha
+  cadSettings?: CadCanvasSettings // Réguas milimétricas, grade técnica e snap magnético (AutoCAD)
   // Configurações de Múltiplas Páginas Físicas (Eixo 4)
   pageBreaks?: string[]       // IDs de seções após as quais deve ocorrer uma quebra de página
   showPageNumbers?: boolean   // Exibe rodapé com "Página X de Y" (padrão true quando > 1 página)

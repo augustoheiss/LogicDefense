@@ -1,6 +1,7 @@
 import React from 'react'
 import type { CVData, LayoutArchetype, LayoutStructureConfig, SectionBoxDimensions } from '../../types/cv'
 import { CVPageCard } from '../CVViewer/renderers/CVPageCard'
+import { CanvasDecorations } from '../CVViewer/renderers/CanvasDecorations'
 import { UniversalSectionDispatcher } from './UniversalSectionDispatcher'
 import { StructuralBoxWrapper } from '../CanvasBuilder/StructuralBoxWrapper'
 import { BlockPhoto } from '../blocks/BlockPhoto'
@@ -545,13 +546,21 @@ export const UniversalDocumentRenderer: React.FC<UniversalDocumentRendererProps>
       <div
         className="cv-card cv-universal-document-card"
         style={{
+          position: 'relative',
           padding: '2.2rem 2.4rem',
           minHeight: '100%',
           display: 'block',
           boxSizing: 'border-box'
         }}
       >
-        {renderAllSections()}
+        <CanvasDecorations
+          structureConfig={structureConfig}
+          onUpdateStructureConfig={onUpdateStructureConfig}
+          isFreeCanvas={isFreeCanvas}
+        />
+        <div style={{ position: 'relative', zIndex: 2 }}>
+          {renderAllSections()}
+        </div>
       </div>
     </CVPageCard>
   )

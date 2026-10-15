@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react'
 import {
   AVAILABLE_BOX_FONTS,
+  createStudioElement,
   type CVData,
   type CustomCanvasZone,
   type LayoutStructureConfig,
-  type SectionBoxDimensions
+  type SectionBoxDimensions,
+  type StudioElementType
 } from '../../types/cv'
 import { UniversalLayerTree } from './UniversalLayerTree'
 import type { LayoutArchetype } from '../../types/universalAST'
@@ -229,9 +231,25 @@ export const CanvasElementsPalette: React.FC<CanvasElementsPaletteProps> = ({
     if (selectedZoneId === zoneId) setSelectedZoneId(null)
   }
 
-  const handleAddQuickZone = (type: 'sidebar_left' | 'sidebar_right' | 'banner_top' | 'box_bottom') => {
+  const handleAddQuickZone = (
+    type:
+      | 'sidebar_left'
+      | 'sidebar_right'
+      | 'sidebar_angled'
+      | 'banner_top'
+      | 'box_bottom'
+      | 'sekundo_card'
+  ) => {
     let newZone: CustomCanvasZone
     const existing = structureConfig.customZones || []
+
+    const starterSidebarElements = [
+      createStudioElement('heading', { darkBackground: true, accentColor: '#38bdf8' }),
+      createStudioElement('subtitle', { darkBackground: true, accentColor: '#38bdf8' }),
+      createStudioElement('divider', { darkBackground: true, accentColor: '#38bdf8' }),
+      createStudioElement('rich_row', { darkBackground: true, accentColor: '#facc15' }),
+      createStudioElement('key_value_pair', { darkBackground: true, accentColor: '#38bdf8' })
+    ]
 
     if (type === 'sidebar_left') {
       newZone = {
@@ -243,7 +261,14 @@ export const CanvasElementsPalette: React.FC<CanvasElementsPaletteProps> = ({
         width: 32,
         height: 100,
         backgroundColor: '#0f172a',
-        backgroundOpacity: 0.96
+        borderColor: '#0284c7',
+        borderWidth: 1,
+        borderStyle: 'solid',
+        backgroundOpacity: 0.96,
+        paddingPx: 18,
+        contentGapPx: 6,
+        zIndex: 2,
+        elements: starterSidebarElements
       }
     } else if (type === 'sidebar_right') {
       newZone = {
@@ -255,32 +280,107 @@ export const CanvasElementsPalette: React.FC<CanvasElementsPaletteProps> = ({
         width: 32,
         height: 100,
         backgroundColor: '#0f172a',
-        backgroundOpacity: 0.96
+        borderColor: '#0284c7',
+        borderWidth: 1,
+        borderStyle: 'solid',
+        backgroundOpacity: 0.96,
+        paddingPx: 18,
+        contentGapPx: 6,
+        zIndex: 2,
+        elements: starterSidebarElements
+      }
+    } else if (type === 'sidebar_angled') {
+      newZone = {
+        id: `zone_sidebar_poly_${Date.now()}`,
+        label: 'Sidebar Diagonal CAD',
+        shape: 'polygon',
+        x: 0,
+        y: 0,
+        width: 34,
+        height: 100,
+        points: [
+          { x: 0, y: 0 },
+          { x: 100, y: 0 },
+          { x: 82, y: 100 },
+          { x: 0, y: 100 }
+        ],
+        backgroundColor: '#0f172a',
+        borderColor: '#38bdf8',
+        borderWidth: 1.5,
+        borderStyle: 'solid',
+        backgroundOpacity: 0.96,
+        paddingPx: 18,
+        contentGapPx: 6,
+        zIndex: 2,
+        elements: starterSidebarElements
       }
     } else if (type === 'banner_top') {
       newZone = {
         id: `zone_banner_t_${Date.now()}`,
-        label: 'Banner Superior (16%)',
+        label: 'Banner Superior (18%)',
         shape: 'rect',
         x: 0,
         y: 0,
         width: 100,
-        height: 16,
-        backgroundColor: '#1e293b',
-        backgroundOpacity: 0.95
+        height: 18,
+        backgroundColor: '#0f172a',
+        borderColor: '#38bdf8',
+        borderWidth: 1,
+        borderStyle: 'solid',
+        backgroundOpacity: 0.96,
+        paddingPx: 18,
+        contentGapPx: 4,
+        zIndex: 2,
+        elements: [
+          createStudioElement('heading', { darkBackground: true, accentColor: '#38bdf8' }),
+          createStudioElement('rich_row', { darkBackground: true, accentColor: '#38bdf8' })
+        ]
+      }
+    } else if (type === 'sekundo_card') {
+      newZone = {
+        id: `zone_sekundo_${Date.now()}`,
+        label: 'Bloco Técnico / Sekundo',
+        shape: 'chamfered',
+        x: 34,
+        y: 68,
+        width: 62,
+        height: 24,
+        backgroundColor: '#0f172a',
+        borderColor: '#f97316',
+        borderWidth: 1.5,
+        borderStyle: 'solid',
+        backgroundOpacity: 0.96,
+        paddingPx: 14,
+        contentGapPx: 5,
+        zIndex: 4,
+        elements: [
+          createStudioElement('cad_callout', { darkBackground: true, accentColor: '#f97316' }),
+          createStudioElement('rich_row', { darkBackground: true, accentColor: '#38bdf8' }),
+          createStudioElement('key_value_pair', { darkBackground: true, accentColor: '#facc15' })
+        ]
       }
     } else {
       newZone = {
         id: `zone_box_b_${Date.now()}`,
-        label: 'Box de Destaque',
+        label: 'Box de Destaque Rico',
         shape: 'rect',
-        x: 4,
-        y: 65,
-        width: 92,
-        height: 28,
+        x: 35,
+        y: 70,
+        width: 61,
+        height: 24,
         backgroundColor: '#1e293b',
-        backgroundOpacity: 0.85,
-        borderRadius: 8
+        borderColor: '#38bdf8',
+        borderWidth: 1,
+        borderStyle: 'solid',
+        backgroundOpacity: 0.94,
+        borderRadius: 8,
+        paddingPx: 14,
+        contentGapPx: 5,
+        zIndex: 3,
+        elements: [
+          createStudioElement('heading', { darkBackground: true, accentColor: '#38bdf8' }),
+          createStudioElement('rich_row', { darkBackground: true, accentColor: '#facc15' })
+        ]
       }
     }
 
@@ -291,6 +391,24 @@ export const CanvasElementsPalette: React.FC<CanvasElementsPaletteProps> = ({
     })
     setSelectedZoneId(newZone.id)
     window.dispatchEvent(new CustomEvent('cv-canvas-select-zone', { detail: { zoneId: newZone.id } }))
+  }
+
+  const handleAddElementToZone = (zoneId: string, elType: StudioElementType) => {
+    const zones = structureConfig.customZones || []
+    const target = zones.find((z) => z.id === zoneId)
+    if (!target) return
+    const newEl = createStudioElement(elType, {
+      darkBackground: true,
+      accentColor: target.borderColor || '#38bdf8'
+    })
+    const updatedZones = zones.map((z) =>
+      z.id === zoneId ? { ...z, elements: [...(z.elements || []), newEl] } : z
+    )
+    onUpdateStructureConfig({
+      ...structureConfig,
+      isFreeCanvasActive: true,
+      customZones: updatedZones
+    })
   }
 
   // Filtragem de busca por texto
@@ -915,80 +1033,168 @@ export const CanvasElementsPalette: React.FC<CanvasElementsPaletteProps> = ({
                 </button>
               </div>
 
-              {/* Atalhos Rápidos de Layout */}
+              {/* Atalhos Rápidos de Sidebars e Containers Vivos (AutoCAD + Docx + Paint) */}
               <div>
                 <span style={{ fontSize: '0.66rem', color: 'var(--cv-pro-text-muted)', fontWeight: 700, textTransform: 'uppercase', display: 'block', margin: '0.35rem 0 0.25rem 0' }}>
-                  Atalhos Rápidos:
+                  Containers com Títulos & Frases Editáveis:
                 </span>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.3rem' }}>
                   <button
                     type="button"
                     className="cv-pro-shape-chip"
                     onClick={() => handleAddQuickZone('sidebar_left')}
+                    title="Cria uma Sidebar Esquerda já com Título, Subtítulo e Frases Lado a Lado editáveis"
                   >
-                    Sidebar Esq (32%)
+                    ▭ Sidebar Esq (32%)
                   </button>
                   <button
                     type="button"
                     className="cv-pro-shape-chip"
                     onClick={() => handleAddQuickZone('sidebar_right')}
+                    title="Cria uma Sidebar Direita já com Título, Subtítulo e Frases Lado a Lado editáveis"
                   >
-                    Sidebar Dir (32%)
+                    ▭ Sidebar Dir (32%)
+                  </button>
+                  <button
+                    type="button"
+                    className="cv-pro-shape-chip"
+                    onClick={() => handleAddQuickZone('sidebar_angled')}
+                    title="Cria uma Sidebar Poligonal Angulada (vértices editáveis estilo AutoCAD)"
+                  >
+                    ⬠ Sidebar Diagonal CAD
                   </button>
                   <button
                     type="button"
                     className="cv-pro-shape-chip"
                     onClick={() => handleAddQuickZone('banner_top')}
+                    title="Cria um Banner Superior com Título e Frases Lado a Lado"
                   >
-                    Banner Topo (16%)
+                    ▬ Banner Topo (18%)
                   </button>
                   <button
                     type="button"
                     className="cv-pro-shape-chip"
                     onClick={() => handleAddQuickZone('box_bottom')}
+                    title="Cria um Box de Destaque com Títulos e Frases Multi-Fonte"
                   >
-                    Box Destaque
+                    ▣ Box Destaque Rico
+                  </button>
+                  <button
+                    type="button"
+                    className="cv-pro-shape-chip"
+                    onClick={() => handleAddQuickZone('sekundo_card')}
+                    title="Cria um Bloco Chanfrado Técnico (ideal para Eventos/Territórios Sekundo)"
+                  >
+                    ⬡ Bloco CAD / Sekundo
                   </button>
                 </div>
+
+                <button
+                  type="button"
+                  className="cv-pro-btn"
+                  style={{ width: '100%', marginTop: '0.35rem', fontSize: '0.7rem', justifyContent: 'center' }}
+                  onClick={() => {
+                    window.dispatchEvent(
+                      new CustomEvent('cv-studio-add-free-element', {
+                        detail: { type: 'rich_row' }
+                      })
+                    )
+                  }}
+                  title="Adiciona uma linha solta na folha com duas frases lado a lado de fontes e cores diferentes"
+                >
+                  🔤 + Título / Frases Lado a Lado Soltas na Folha
+                </button>
               </div>
 
-              {/* Zonas Criadas */}
+              {/* Zonas Criadas + Inspetor de Conteúdo Interno */}
               {(structureConfig.customZones || []).length > 0 && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', marginTop: '0.25rem' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', marginTop: '0.35rem' }}>
                   {structureConfig.customZones!.map(zone => {
                     const isSelected = selectedZoneId === zone.id
                     return (
-                      <div
-                        key={zone.id}
-                        className={`cv-pro-layer-row ${isSelected ? 'cv-pro-btn--active' : ''}`}
-                        onClick={() => handleSelectZone(zone.id)}
-                        style={{ cursor: 'pointer' }}
-                      >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flex: 1, minWidth: 0 }}>
-                          <span
-                            style={{
-                              width: '10px',
-                              height: '10px',
-                              borderRadius: '2px',
-                              backgroundColor: zone.backgroundColor || '#1e293b',
-                              border: '1px solid var(--cv-pro-border)',
-                              flexShrink: 0
-                            }}
-                          />
-                          <span className="cv-pro-layer-row__primary">{zone.label}</span>
-                        </div>
-                        <button
-                          type="button"
-                          className="cv-pro-btn"
-                          style={{ padding: '0.15rem 0.35rem', color: '#f87171' }}
-                          onClick={e => {
-                            e.stopPropagation()
-                            handleDeleteZone(zone.id)
-                          }}
-                          title="Excluir zona"
+                      <div key={zone.id} style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                        <div
+                          className={`cv-pro-layer-row ${isSelected ? 'cv-pro-btn--active' : ''}`}
+                          onClick={() => handleSelectZone(zone.id)}
+                          style={{ cursor: 'pointer' }}
                         >
-                          <TrashIcon size={12} />
-                        </button>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flex: 1, minWidth: 0 }}>
+                            <span
+                              style={{
+                                width: '10px',
+                                height: '10px',
+                                borderRadius: '2px',
+                                backgroundColor: zone.backgroundColor || '#1e293b',
+                                border: '1px solid var(--cv-pro-border)',
+                                flexShrink: 0
+                              }}
+                            />
+                            <span className="cv-pro-layer-row__primary">{zone.label}</span>
+                            <span style={{ fontSize: '0.62rem', color: 'var(--cv-pro-sky)' }}>
+                              ({(zone.elements || []).length} itens)
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            className="cv-pro-btn"
+                            style={{ padding: '0.15rem 0.35rem', color: '#f87171' }}
+                            onClick={e => {
+                              e.stopPropagation()
+                              handleDeleteZone(zone.id)
+                            }}
+                            title="Excluir zona"
+                          >
+                            <TrashIcon size={12} />
+                          </button>
+                        </div>
+
+                        {isSelected && (
+                          <div
+                            style={{
+                              padding: '0.45rem',
+                              background: 'rgba(15, 23, 42, 0.75)',
+                              border: '1px solid rgba(56, 189, 248, 0.35)',
+                              borderRadius: '6px',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              gap: '0.35rem'
+                            }}
+                          >
+                            <span style={{ fontSize: '0.65rem', color: '#38bdf8', fontWeight: 700 }}>
+                              Inserir dentro de "{zone.label}":
+                            </span>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.25rem' }}>
+                              <button
+                                type="button"
+                                className="cv-pro-shape-chip"
+                                onClick={() => handleAddElementToZone(zone.id, 'heading')}
+                              >
+                                + Título
+                              </button>
+                              <button
+                                type="button"
+                                className="cv-pro-shape-chip"
+                                onClick={() => handleAddElementToZone(zone.id, 'subtitle')}
+                              >
+                                + Subtítulo
+                              </button>
+                              <button
+                                type="button"
+                                className="cv-pro-shape-chip"
+                                onClick={() => handleAddElementToZone(zone.id, 'rich_row')}
+                              >
+                                + Frases Lado a Lado
+                              </button>
+                              <button
+                                type="button"
+                                className="cv-pro-shape-chip"
+                                onClick={() => handleAddElementToZone(zone.id, 'key_value_pair')}
+                              >
+                                + Rótulo : Valor
+                              </button>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     )
                   })}

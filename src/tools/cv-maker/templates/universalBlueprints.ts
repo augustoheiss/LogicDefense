@@ -247,6 +247,66 @@ clausulas_gerais_prosa: |
   CLÁUSULA TERCEIRA - DA PROPRIEDADE INTELECTUAL: Todos os códigos-fonte, pipelines e configurações personalizadas desenvolvidas especificamente no âmbito deste contrato serão de propriedade exclusiva da CONTRATANTE após a liquidação integral das obrigações.
 `
 
+export const SEKUNDO_EVENTOS_TERRITORIOS_BLUEPRINT_YAML = `document_title: "Sekundo • Programação de Eventos & Designação de Territórios"
+meta:
+  isUniversalDocument: true
+basics:
+  name: "Quadro Operacional de Eventos & Territórios"
+  label: "Sekundo Engine • Escala Semanal, Designações de Campo e Setores"
+  email: "coordenacao@sekundo.app"
+  phone: "Setor Central • Folha Técnica A4"
+  url: "https://sekundo.app/territorios"
+  summary: "Programação oficial integrada com cronograma de atividades, designação de dirigentes, cobertura de territórios por quadras e instruções operacionais de campo."
+
+programacao_eventos:
+  - evento: "Reunião de Coordenação & Abertura de Campo"
+    startDate: "2026-10-18 08:30"
+    endDate: "2026-10-18 09:15"
+    resumo: "Alinhamento das equipes no Ponto de Encontro Norte, distribuição de mapas físicos/QR e revisão das metas do fim de semana."
+  - evento: "Cobertura Intensiva: Territórios 04, 05 e 08"
+    startDate: "2026-10-18 09:20"
+    endDate: "2026-10-18 12:00"
+    resumo: "Atuação sincronizada nas quadras residenciais e comerciais do Setor Jardins com registro em tempo real no Sekundo."
+  - evento: "Sessão Especial Vespertina & Visitas Agendadas"
+    startDate: "2026-10-18 15:30"
+    endDate: "2026-10-18 18:00"
+    resumo: "Atendimento aos pontos pendentes mapeados durante a semana e fechamento do relatório de cobertura territorial."
+
+organizacao_territorios:
+  - territorio: "Território #04 — Jardim Europa (Quadras A a F)"
+    responsavel: "Coord. Marcos Vinícius • Equipe Alfa"
+    status: "Em Andamento (78% Coberto)"
+    descricao: "142 unidades mapeadas. Priorizar quadras D e E (edifícios com portaria liberada aos sábados pela manhã)."
+  - territorio: "Território #05 — Centro Cívico & Eixo Comercial"
+    responsavel: "Coord. Helena Souza • Equipe Beta"
+    status: "Designado (Início 18/10)"
+    descricao: "86 estabelecimentos comerciais e galerias. Horário recomendado: 09h00 às 11h30."
+  - territorio: "Território #08 — Parque das Águas (Setor Sul)"
+    responsavel: "Coord. Rafael Almeida • Equipe Gama"
+    status: "Concluído / Revisão"
+    descricao: "118 residências unifamiliares. Apenas 6 imóveis pendentes de segunda visita na Rua das Araucárias."
+
+indicadores_cobertura:
+  territorios_ativos_no_ciclo: "12 Territórios"
+  cobertura_acumulada_mes: "88.4% concluído"
+  equipes_escaladas: "6 Equipes (42 Voluntários)"
+  tempo_medio_por_territorio: "11 dias corridos"
+  ponto_de_encontro_central: "Praça da Liberdade, Nº 120 (Setor A)"
+  proxima_atualizacao_cartografica: "01/11/2026"
+
+setores_e_tags_operacionais:
+  - "Setor 01 • Norte"
+  - "Setor 04 • Jardim Europa"
+  - "Setor 05 • Comercial"
+  - "Setor 08 • Sul"
+  - "Mapa Vetorial CAD"
+  - "Exportação Sekundo PDF"
+
+instrucoes_de_campo: |
+  1. Ao concluir cada quadra do cartão de território, marque os números não atendidos para retorno da equipe vespertina.
+  2. Utilize o Estúdio Livre (botão "+ Sidebar/Box" ou "Polígono CAD") para desenhar destaques laterais, cotas de quadras ou avisos urgentes com fontes e cores diferenciadas antes de exportar o PDF final.
+`
+
 export const UNIVERSAL_BLUEPRINTS: DocumentBlueprint[] = [
   {
     id: 'canonical_cv',
@@ -256,6 +316,15 @@ export const UNIVERSAL_BLUEPRINTS: DocumentBlueprint[] = [
     badge: 'Currículo Padrão',
     description: 'Formato clássico JSON Resume v2.0 com histórico profissional, formação, projetos e carta de apresentação.',
     yamlContent: DEFAULT_JOHN_DOE_YAML
+  },
+  {
+    id: 'sekundo_schedule_territory',
+    title: 'Sekundo • Programação de Eventos & Territórios',
+    category: 'technical',
+    icon: '🗺️',
+    badge: 'Sekundo PDF Engine',
+    description: 'Quadro de programação de eventos, designação de territórios por quadras, indicadores de cobertura e instruções de campo.',
+    yamlContent: SEKUNDO_EVENTOS_TERRITORIOS_BLUEPRINT_YAML
   },
   {
     id: 'tech_proposal',
@@ -294,4 +363,5 @@ export const UNIVERSAL_BLUEPRINTS: DocumentBlueprint[] = [
     yamlContent: CONTRATO_PRESTACAO_SERVICOS_BLUEPRINT_YAML
   }
 ]
+
 
