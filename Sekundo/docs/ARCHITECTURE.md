@@ -247,20 +247,37 @@ On app open:
 
 ---
 
-## 8. Backend Architecture (Stateless Microservice)
+## 8. Document Engine (`@sekundo/core/doc` — 100% Client-Side YAML ⇄ PDF)
 
-### 8.1 Overview
+Sekundo's document subsystem operates **100% client-side** (zero server egress, offline-first) through a deterministic **Display List** architecture inspired by Typst, PostScript, and Skia:
+
+```
+YAML (Data: *.data.yaml / FlatRegistry) ─┐
+                                         ├─► Layout Solver (@sekundo/core/doc) ─► DISPLAY LIST (mm) ─┬─► PDF Painter (pdf-lib)
+YAML (Model: *.sdoc.yaml)               ─┘   • logicless Mustache bindings                           └─► SVG Painter (react-native-svg)
+                                             • repeat / 4-up / grid imposition
+                                             • deterministic line breaking
+```
+
+- **Single Coordinate System:** All `.sdoc.yaml` primitives and `CoordinateMapping` pins use **millimeters (`mm`) with origin at top-left (`y` downward)**. Conversion to PostScript points (`pt`, origin bottom-left) occurs exclusively inside `toPdfPt()` in the PDF painter.
+- **Security Boundaries:** Templates are untrusted data. Bindings use a custom logicless parser (never `eval`/`new Function`), whitelisted filters (`date`, `upper`, `lower`, `default`, `truncate`), strict caps (`≤ 500` pages, `≤ 20,000` primitives), and YAML `maxAliasCount: 100`.
+- **PDF Ingestion:** User-uploaded PDFs are fingerprinted via Web Crypto `SHA-256`, stored as binary `ArrayBuffer` in IndexedDB `blob_store` (v2), and decomposed into `.sdoc.yaml` via Stage 0 (vector underlay via `embedPage`), Stage 1 (AcroForm fields with true multi-page resolution), Stage 2 (text items), Stage 3 (vector paths), and Stage 4 (collinear table/grid detection).
+
+---
+
+## 9. Backend Architecture (Stateless Microservice)
+
+### 9.1 Overview
 
 The Sekundo backend is a **stateless FastAPI microservice** with zero database
-connections. It provides three capabilities that cannot run purely client-side:
+connections. It provides capabilities that require an external network rendezvous:
 
 | Capability | Why Server-Side? |
 |---|---|
-| **PDF Processing** | PyMuPDF (C-based) is far more reliable than client-side JS PDF parsing for AcroForm extraction and text anchor detection. |
 | **WebRTC Signaling** | P2P connections require an initial rendezvous point for SDP exchange. The server holds ephemeral rooms (5-min TTL, in-memory only). |
 | **Email Dispatch** | API keys for Resend/SendGrid cannot be exposed in client-side code. |
 
-### 8.2 Directory Structure
+### 9.2 Directory Structure
 
 ```
 Sekundo/packages/backend/
@@ -270,9 +287,6 @@ Sekundo/packages/backend/
 └── routers/
     ├── __init__.py
     ├── health_router.py        # GET /health (liveness probe)
-    ├── pdf_router.py           # POST /pdf/extract-fields
-    │                           # POST /pdf/detect-anchors
-    │                           # POST /pdf/fill
     └── signaling_router.py     # POST /signal/room (create)
                                 # GET/POST /signal/room/:id/offer
                                 # GET/POST /signal/room/:id/answer

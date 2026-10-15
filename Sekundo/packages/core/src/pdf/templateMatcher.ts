@@ -116,11 +116,11 @@ const SEMANTIC_DICTIONARY: Record<string, string[]> = {
 };
 
 /**
- * Computes a quick 32-character hexadecimal hash of the first 8KB of PDF bytes.
- * Fast, synchronous, zero-dependency fingerprinting for client-side caching.
+ * Computes a fast synchronous FNV-derived fingerprint of the first 8KB + file length.
+ * Kept for synchronous compatibility; use `computeTemplateFingerprintSha256` when async is available.
  */
 export function computeTemplateFingerprint(pdfBytes: Uint8Array): string {
-  // Sample up to first 8192 bytes
+  // Sample up to first 8192 bytes (FNV-1a dual-lane)
   const len = Math.min(pdfBytes.length, 8192);
   let hash1 = 0x811c9dc5;
   let hash2 = 0x55555555;
@@ -135,6 +135,25 @@ export function computeTemplateFingerprint(pdfBytes: Uint8Array): string {
   const h1 = (hash1 >>> 0).toString(16).padStart(8, '0');
   const h2 = (hash2 >>> 0).toString(16).padStart(8, '0');
   return `tpl_${h1}${h2}_${pdfBytes.length}`;
+}
+
+/**
+ * Computes a cryptographic SHA-256 hex digest of the entire PDF binary (`sha256:<64-hex>`).
+ * Uses Web Crypto API (`crypto.subtle.digest`) available in modern browsers, Node 18+, and Vitest.
+ */
+export async function computeTemplateFingerprintSha256(pdfBytes: Uint8Array): Promise<string> {
+  if (typeof globalThis.crypto !== 'undefined' && globalThis.crypto.subtle) {
+    const buffer = pdfBytes.buffer.slice(
+      pdfBytes.byteOffset,
+      pdfBytes.byteOffset + pdfBytes.byteLength
+    ) as ArrayBuffer;
+    const digest = await globalThis.crypto.subtle.digest('SHA-256', buffer);
+    const hex = Array.from(new Uint8Array(digest))
+      .map((b) => b.toString(16).padStart(2, '0'))
+      .join('');
+    return `sha256:${hex}`;
+  }
+  return computeTemplateFingerprint(pdfBytes);
 }
 
 /**

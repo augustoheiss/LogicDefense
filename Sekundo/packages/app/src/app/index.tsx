@@ -111,6 +111,40 @@ export default function Dashboard() {
                 Compromissos, Grupos 1–3, Exportador WhatsApp e S-13-S
               </Text>
             </Pressable>
+
+            <Pressable
+              testID="quick-action-studio"
+              onPress={() => router.push('/studio' as any)}
+              style={({ pressed }) => [
+                styles.actionButton,
+                { borderColor: '#3B82F6', backgroundColor: 'rgba(59, 130, 246, 0.10)' },
+                pressed && styles.buttonPressed,
+              ]}
+            >
+              <Text style={[styles.actionButtonText, { color: '#60A5FA' }]}>
+                🖋️ Estúdio Documental YAML ⇄ PDF
+              </Text>
+              <Text style={styles.actionButtonSub}>
+                Canvas em mm, S-89 4-Up, S-13-S Multi-Ciclo e Ingestão de PDF
+              </Text>
+            </Pressable>
+
+            <Pressable
+              testID="quick-action-hoje"
+              onPress={() => router.push('/hoje' as any)}
+              style={({ pressed }) => [
+                styles.actionButton,
+                { borderColor: '#F59E0B', backgroundColor: 'rgba(245, 158, 11, 0.10)' },
+                pressed && styles.buttonPressed,
+              ]}
+            >
+              <Text style={[styles.actionButtonText, { color: '#FBBF24' }]}>
+                ☀️ Cockpit Hoje & Compositor
+              </Text>
+              <Text style={styles.actionButtonSub}>
+                Compromissos do dia, Rituais governados e sekundo.app.yaml
+              </Text>
+            </Pressable>
           </View>
 
           {/* Active Events Column */}
@@ -264,6 +298,19 @@ export default function Dashboard() {
                         ]}
                       >
                         <Text style={[styles.openButtonText, { color: '#FFB800' }]}>📄 PDF</Text>
+                      </Pressable>
+                      <Pressable
+                        onPress={() => router.push(`/studio?id=${event.config.id}` as any)}
+                        style={[
+                          styles.openButton,
+                          {
+                            backgroundColor: 'rgba(59, 130, 246, 0.15)',
+                            borderWidth: 1,
+                            borderColor: '#3B82F6',
+                          },
+                        ]}
+                      >
+                        <Text style={[styles.openButtonText, { color: '#60A5FA' }]}>🖋️ Estúdio</Text>
                       </Pressable>
                       <Pressable
                         onPress={() => router.push(`/skeleton-editor?id=${event.config.id}`)}

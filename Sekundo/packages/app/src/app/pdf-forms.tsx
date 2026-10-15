@@ -26,8 +26,11 @@ import { useSkeleton } from '../hooks/useSkeleton';
 import {
   fillS89Assignments4Up,
   fillAcroForm,
+  fillAcroFormMailMerge,
+  stampCoordinateMapOnPDF,
   inspectPDFForm,
   autoRecognizePDFFields,
+  computeTemplateFingerprintSha256,
   generateTerritoryS13AndCardsPDF,
   computeTerritoryRecencyList,
   buildTerritoriosS13HistoricalRegistry,
@@ -37,6 +40,8 @@ import {
   type FieldMappingCandidate,
   type TemplateRecognitionResult,
 } from '@sekundo/core';
+import { deliverFile } from '../utils/deliverFile';
+import { loadPDFMap } from '../storage/localStorage';
 
 export default function PDFFormsConsole() {
   const router = useRouter();
@@ -48,6 +53,7 @@ export default function PDFFormsConsole() {
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [selectedTemplate, setSelectedTemplate] = useState<'s89' | 's12' | 'custom'>('s89');
   const [s13ServiceYear, setS13ServiceYear] = useState<'all' | '2027' | '2026'>('all');
+  const [mailMergeAllRecords, setMailMergeAllRecords] = useState<boolean>(false);
 
   // Custom PDF Auto-Recognition State
   const [customPdfBytes, setCustomPdfBytes] = useState<Uint8Array | null>(null);
@@ -88,15 +94,8 @@ export default function PDFFormsConsole() {
         includeQuadraCards: true,
       });
 
-      if (Platform.OS === 'web') {
-        const blob = new Blob([res.pdfBytes as unknown as BlobPart], { type: 'application/pdf' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `Registro_S13S_${s13ServiceYear}_e_Cartoes_S12_${new Date().toISOString().slice(0, 10)}.pdf`;
-        link.click();
-        URL.revokeObjectURL(url);
-      }
+      const filename = `Registro_S13S_${s13ServiceYear}_e_Cartoes_S12_${new Date().toISOString().slice(0, 10)}.pdf`;
+      await deliverFile(res.pdfBytes, filename, 'application/pdf');
 
       setStatusMessage(
         `✅ PDF S-13-S (4 Colunas) + S-12 gerado com sucesso! ${res.territoryCount} territórios, ${res.quadraCount} quadras (${res.workedUnits}/${res.totalUnits} unidades concluídas).`
@@ -129,7 +128,9 @@ export default function PDFFormsConsole() {
           const fields = await inspectPDFForm(bytes);
           setInspectedFields(fields);
 
+          const sha256Hash = await computeTemplateFingerprintSha256(bytes);
           const recognition = autoRecognizePDFFields(fields, bytes, flatRegistry);
+          recognition.templateHash = sha256Hash;
           setRecognitionResult(recognition);
           setFieldMappings(recognition.mappings);
 
@@ -168,7 +169,9 @@ export default function PDFFormsConsole() {
         setCustomPdfBytes(bytes);
         const fields = await inspectPDFForm(bytes);
         setInspectedFields(fields);
+        const sha256Hash = await computeTemplateFingerprintSha256(bytes);
         const recognition = autoRecognizePDFFields(fields, bytes, flatRegistry);
+        recognition.templateHash = sha256Hash;
         setRecognitionResult(recognition);
         setFieldMappings(recognition.mappings);
         setStatusMessage(`✅ Reconhecimento concluído: ${recognition.autoMatchedCount} de ${fields.length} campos identificados!`);
@@ -180,9 +183,9 @@ export default function PDFFormsConsole() {
     }
   };
 
-  // Compile and fill custom PDF
+  // Compile and fill custom PDF (supports AcroForm Mail-Merge AND Coordinate Map Stamping!)
   const handleGenerateCustomPDF = async () => {
-    if (!customPdfBytes || fieldMappings.length === 0) {
+    if (!customPdfBytes) {
       Alert.alert('Atenção', 'Carregue um arquivo PDF primeiro.');
       return;
     }
@@ -190,41 +193,63 @@ export default function PDFFormsConsole() {
       setLoading(true);
       setStatusMessage('Injetando dados do evento no PDF...');
 
-      const sampleEntry = flatRegistry.find((e) => e.value && e.value.trim().length > 0) || flatRegistry[0];
+      const sha256Hash = await computeTemplateFingerprintSha256(customPdfBytes);
+      const savedCoordMap = await loadPDFMap(sha256Hash);
 
-      const valuesToInject: Record<string, string | boolean | number> = {};
-      for (const m of fieldMappings) {
-        if (!m.matchedAttribute || m.matchedAttribute === 'ignore') continue;
-        let val: string | undefined = undefined;
-        if (m.matchedAttribute === 'value') {
-          val = sampleEntry?.value || '';
-        } else if (m.matchedAttribute === 'label') {
-          val = sampleEntry?.label || '';
-        } else if (m.matchedAttribute.startsWith('meta.')) {
-          const k = m.matchedAttribute.slice(5);
-          val = String(sampleEntry?.meta?.[k] ?? '');
-        } else if (m.suggestedValue) {
-          val = m.suggestedValue;
-        }
-        if (val !== undefined) {
-          valuesToInject[m.pdfFieldName] = val;
-        }
+      const nonEmptyEntries = flatRegistry.filter((e) => e.value && e.value.trim().length > 0);
+      const targetEntries = mailMergeAllRecords
+        ? (nonEmptyEntries.length > 0 ? nonEmptyEntries : flatRegistry.slice(0, 1))
+        : [nonEmptyEntries[0] || flatRegistry[0]].filter(Boolean);
+
+      let outputPdfBytes: Uint8Array;
+      let filledCount = 0;
+
+      if (fieldMappings.length > 0) {
+        const records = targetEntries.map((sampleEntry) => {
+          const valuesToInject: Record<string, string | boolean | number> = {};
+          for (const m of fieldMappings) {
+            if (!m.matchedAttribute || m.matchedAttribute === 'ignore') continue;
+            let val: string | undefined = undefined;
+            if (m.matchedAttribute === 'value') {
+              val = sampleEntry?.value || '';
+            } else if (m.matchedAttribute === 'label') {
+              val = sampleEntry?.label || '';
+            } else if (m.matchedAttribute.startsWith('meta.')) {
+              const k = m.matchedAttribute.slice(5);
+              val = String(sampleEntry?.meta?.[k] ?? '');
+            } else if (m.suggestedValue) {
+              val = m.suggestedValue;
+            }
+            if (val !== undefined) {
+              valuesToInject[m.pdfFieldName] = val;
+            }
+          }
+          return valuesToInject;
+        });
+
+        const result = mailMergeAllRecords
+          ? await fillAcroFormMailMerge(customPdfBytes, records)
+          : await fillAcroForm(customPdfBytes, records[0] || {}, { flatten: true });
+        outputPdfBytes = result.pdfBytes;
+        filledCount = result.filledFieldCount;
+      } else if (savedCoordMap) {
+        const stamped = await stampCoordinateMapOnPDF(customPdfBytes, savedCoordMap, flatRegistry);
+        outputPdfBytes = stamped.pdfBytes;
+        filledCount = stamped.stampedCount;
+      } else {
+        outputPdfBytes = customPdfBytes;
       }
 
-      const result = await fillAcroForm(customPdfBytes, valuesToInject, { flatten: true });
+      const cleanName = uploadedFileName ? uploadedFileName.replace(/\.pdf$/i, '') : 'Formulario';
+      await deliverFile(
+        outputPdfBytes,
+        `${cleanName}_Preenchido_${new Date().toISOString().slice(0, 10)}.pdf`,
+        'application/pdf'
+      );
 
-      if (Platform.OS === 'web') {
-        const blob = new Blob([result.pdfBytes as unknown as BlobPart], { type: 'application/pdf' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        const cleanName = uploadedFileName ? uploadedFileName.replace(/\.pdf$/i, '') : 'Formulario';
-        link.download = `${cleanName}_Preenchido_${new Date().toISOString().slice(0, 10)}.pdf`;
-        link.click();
-        URL.revokeObjectURL(url);
-      }
-
-      setStatusMessage(`🎉 PDF compilado com sucesso! ${result.filledFieldCount} campos preenchidos diretamente.`);
+      setStatusMessage(
+        `🎉 PDF compilado com sucesso! ${filledCount} campos preenchidos (${targetEntries.length} registro(s)).`
+      );
     } catch (err: any) {
       console.error(err);
       setStatusMessage(`❌ Erro ao preencher PDF: ${err.message}`);
@@ -259,15 +284,11 @@ export default function PDFFormsConsole() {
       const templateBytes = await doc.save();
       const filledResult = await fillS89Assignments4Up(templateBytes, extractedAssignments, { flatten: true });
 
-      if (Platform.OS === 'web') {
-        const blob = new Blob([filledResult.pdfBytes as unknown as BlobPart], { type: 'application/pdf' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `Fichas_Designacao_4Up_${new Date().toISOString().slice(0, 10)}.pdf`;
-        link.click();
-        URL.revokeObjectURL(url);
-      }
+      await deliverFile(
+        filledResult.pdfBytes,
+        `Fichas_Designacao_4Up_${new Date().toISOString().slice(0, 10)}.pdf`,
+        'application/pdf'
+      );
 
       setStatusMessage(`✅ Sucesso! Preenchidos ${filledResult.filledFieldCount} campos nos 4 quadrantes.`);
     } catch (err: any) {
@@ -282,15 +303,32 @@ export default function PDFFormsConsole() {
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
         {/* Navigation */}
-        <Pressable onPress={() => router.back()} style={styles.backButton}>
-          <Text style={styles.backButtonText}>← Voltar ao Esqueleto</Text>
-        </Pressable>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
+          <Pressable onPress={() => router.back()} style={styles.backButton}>
+            <Text style={styles.backButtonText}>← Voltar ao Esqueleto</Text>
+          </Pressable>
+          <Pressable
+            onPress={() => router.push(`/studio?id=${eventId}` as any)}
+            style={{
+              backgroundColor: 'rgba(139, 92, 246, 0.18)',
+              borderWidth: 1,
+              borderColor: '#8B5CF6',
+              paddingVertical: 8,
+              paddingHorizontal: 14,
+              borderRadius: 8,
+            }}
+          >
+            <Text style={{ color: '#C4B5FD', fontSize: 13, fontWeight: '700' }}>
+              🖋️ Abrir Estúdio Documental YAML ⇄ PDF
+            </Text>
+          </Pressable>
+        </View>
 
         {/* Header */}
         <View style={styles.header}>
           <Text style={styles.title}>Central de Formulários Oficiais PDF</Text>
           <Text style={styles.subtitle}>
-            Preenchimento automático e imposição gráfica 4-Up via leitura nativa de AcroForms. 100% Offline & Soberano.
+            Preenchimento automático, Mala Direta e imposição gráfica 4-Up via leitura nativa de AcroForms. 100% Offline & Soberano.
           </Text>
         </View>
 
@@ -385,6 +423,42 @@ export default function PDFFormsConsole() {
                       </View>
                     </View>
                   ))}
+                </View>
+
+                {/* Mail-Merge Mode Toggle (Resolves A5) */}
+                <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
+                  <Pressable
+                    onPress={() => setMailMergeAllRecords(false)}
+                    style={{
+                      flex: 1,
+                      padding: 10,
+                      borderRadius: 8,
+                      borderWidth: 1,
+                      borderColor: !mailMergeAllRecords ? '#FFB800' : '#242F45',
+                      backgroundColor: !mailMergeAllRecords ? 'rgba(255, 184, 0, 0.14)' : '#121722',
+                      alignItems: 'center',
+                    }}
+                  >
+                    <Text style={{ color: !mailMergeAllRecords ? '#FFB800' : '#94A3B8', fontSize: 12, fontWeight: '700' }}>
+                      📄 1º Registro (Amostra)
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => setMailMergeAllRecords(true)}
+                    style={{
+                      flex: 1,
+                      padding: 10,
+                      borderRadius: 8,
+                      borderWidth: 1,
+                      borderColor: mailMergeAllRecords ? '#10B981' : '#242F45',
+                      backgroundColor: mailMergeAllRecords ? 'rgba(16, 185, 129, 0.14)' : '#121722',
+                      alignItems: 'center',
+                    }}
+                  >
+                    <Text style={{ color: mailMergeAllRecords ? '#34D399' : '#94A3B8', fontSize: 12, fontWeight: '700' }}>
+                      📑 Mala Direta (Todos os Registros)
+                    </Text>
+                  </Pressable>
                 </View>
 
                 {/* 1-Click Fill Action */}

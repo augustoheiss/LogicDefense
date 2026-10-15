@@ -22,12 +22,14 @@ import {
 import {
   exportGranularCSV,
   filterGranularEntries,
+  registryToYaml,
   pathKey,
   type FlatRegistry,
   type EngineId,
   type GranularScope,
   type TransformerConfig,
 } from '@sekundo/core';
+import { deliverFile } from '../../utils/deliverFile';
 
 interface GranularExportModalProps {
   visible: boolean;
@@ -48,9 +50,11 @@ export function GranularExportModal({
 }: GranularExportModalProps) {
   const [selectedBranch, setSelectedBranch] = useState<string>('all');
   const [scope, setScope] = useState<GranularScope>('all');
-  const [format, setFormat] = useState<'canonical' | 'clean_human'>('clean_human');
+  const [format, setFormat] = useState<'canonical' | 'clean_human' | 'yaml_tree' | 'yaml_flat'>('clean_human');
   const [delimiter, setDelimiter] = useState<',' | ';'>(';');
   const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
+
+  const isYamlMode = format === 'yaml_tree' || format === 'yaml_flat';
 
   // Extract distinct branch and root candidates for subtree filtering
   const branchOptions = useMemo(() => {
@@ -87,39 +91,39 @@ export function GranularExportModal({
     });
   }, [flatRegistry, selectedBranch, scope]);
 
-  // Generate sliced CSV preview
-  const generatedCSV = useMemo(() => {
+  // Generate sliced CSV or YAML preview
+  const generatedOutput = useMemo(() => {
+    const branchPrefix = selectedBranch === 'all' ? undefined : selectedBranch;
+    if (format === 'yaml_tree' || format === 'yaml_flat') {
+      return registryToYaml(flatRegistry, {
+        branchPrefix,
+        scope,
+        yamlFormat: format === 'yaml_tree' ? 'tree' : 'flat',
+        eventName,
+      });
+    }
     return exportGranularCSV(flatRegistry, {
-      branchPrefix: selectedBranch === 'all' ? undefined : selectedBranch,
+      branchPrefix,
       scope,
       format,
       delimiter,
       engineId,
       transformerConfig,
     });
-  }, [flatRegistry, selectedBranch, scope, format, delimiter, engineId, transformerConfig]);
+  }, [flatRegistry, selectedBranch, scope, format, delimiter, engineId, transformerConfig, eventName]);
 
-  const handleDownload = () => {
-    if (Platform.OS === 'web') {
-      const branchSuffix = selectedBranch === 'all' ? 'completo' : `parte_${selectedBranch}`;
-      const filename = `${eventName.replace(/\s+/g, '_')}_${branchSuffix}_${format}.csv`;
-      const blob = new Blob([generatedCSV], { type: 'text/csv;charset=utf-8;' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.setAttribute('href', url);
-      link.setAttribute('download', filename);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    } else {
-      alert('Download ativo via navegador web.');
-    }
+  const handleDownload = async () => {
+    const branchSuffix = selectedBranch === 'all' ? 'completo' : `parte_${selectedBranch}`;
+    const ext = isYamlMode ? 'data.yaml' : 'csv';
+    const mime = isYamlMode ? 'text/yaml;charset=utf-8;' : 'text/csv;charset=utf-8;';
+    const filename = `${eventName.replace(/\s+/g, '_')}_${branchSuffix}_${format}.${ext}`;
+    await deliverFile(generatedOutput, filename, mime);
   };
 
   const handleCopy = () => {
     if (Platform.OS === 'web' && navigator.clipboard) {
-      navigator.clipboard.writeText(generatedCSV);
-      setCopyFeedback('CSV da parte copiado com sucesso!');
+      navigator.clipboard.writeText(generatedOutput);
+      setCopyFeedback(`${isYamlMode ? 'YAML' : 'CSV'} da parte copiado com sucesso!`);
       setTimeout(() => setCopyFeedback(null), 3000);
     }
   };
@@ -192,14 +196,14 @@ export function GranularExportModal({
             {/* 3. Format & Delimiter */}
             <View style={styles.formatDelimRow}>
               <View style={{ flex: 1 }}>
-                <Text style={styles.sectionLabel}>3. FORMATO DO CSV:</Text>
+                <Text style={styles.sectionLabel}>3. FORMATO DE SAÍDA (CSV OU YAML):</Text>
                 <View style={styles.radioGroup}>
                   <Pressable
                     onPress={() => setFormat('clean_human')}
                     style={[styles.radioItem, format === 'clean_human' && styles.radioItemActive]}
                   >
                     <Text style={[styles.radioText, format === 'clean_human' && styles.radioTextActive]}>
-                      ✨ Limpo / Humano (Sem JSON)
+                      ✨ CSV Limpo / Humano (Sem JSON)
                     </Text>
                   </Pressable>
                   <Pressable
@@ -207,47 +211,65 @@ export function GranularExportModal({
                     style={[styles.radioItem, format === 'canonical' && styles.radioItemActive]}
                   >
                     <Text style={[styles.radioText, format === 'canonical' && styles.radioTextActive]}>
-                      📦 Canônico (Com _meta_json)
+                      📦 CSV Canônico (Com _meta_json)
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => setFormat('yaml_tree')}
+                    style={[styles.radioItem, format === 'yaml_tree' && styles.radioItemActive]}
+                  >
+                    <Text style={[styles.radioText, format === 'yaml_tree' && styles.radioTextActive]}>
+                      🌲 YAML em Árvore (data.yaml — Recomendado)
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => setFormat('yaml_flat')}
+                    style={[styles.radioItem, format === 'yaml_flat' && styles.radioItemActive]}
+                  >
+                    <Text style={[styles.radioText, format === 'yaml_flat' && styles.radioTextActive]}>
+                      📄 YAML Plano (data.yaml — Espelho CSV)
                     </Text>
                   </Pressable>
                 </View>
               </View>
 
-              <View style={{ width: 140 }}>
-                <Text style={styles.sectionLabel}>DELIMITADOR:</Text>
-                <View style={styles.radioGroup}>
-                  <Pressable
-                    onPress={() => setDelimiter(';')}
-                    style={[styles.radioItem, delimiter === ';' && styles.radioItemActive]}
-                  >
-                    <Text style={[styles.radioText, delimiter === ';' && styles.radioTextActive]}>
-                      Ponto e vírgula (;)
-                    </Text>
-                  </Pressable>
-                  <Pressable
-                    onPress={() => setDelimiter(',')}
-                    style={[styles.radioItem, delimiter === ',' && styles.radioItemActive]}
-                  >
-                    <Text style={[styles.radioText, delimiter === ',' && styles.radioTextActive]}>
-                      Vírgula (,)
-                    </Text>
-                  </Pressable>
+              {!isYamlMode && (
+                <View style={{ width: 140 }}>
+                  <Text style={styles.sectionLabel}>DELIMITADOR:</Text>
+                  <View style={styles.radioGroup}>
+                    <Pressable
+                      onPress={() => setDelimiter(';')}
+                      style={[styles.radioItem, delimiter === ';' && styles.radioItemActive]}
+                    >
+                      <Text style={[styles.radioText, delimiter === ';' && styles.radioTextActive]}>
+                        Ponto e vírgula (;)
+                      </Text>
+                    </Pressable>
+                    <Pressable
+                      onPress={() => setDelimiter(',')}
+                      style={[styles.radioItem, delimiter === ',' && styles.radioItemActive]}
+                    >
+                      <Text style={[styles.radioText, delimiter === ',' && styles.radioTextActive]}>
+                        Vírgula (,)
+                      </Text>
+                    </Pressable>
+                  </View>
                 </View>
-              </View>
+              )}
             </View>
 
             {/* Sliced Preview Box */}
             <View style={styles.previewBox}>
               <View style={styles.previewBoxHeader}>
                 <Text style={styles.previewCount}>
-                  Contém {matchingEntries.length} nós nesta parte
+                  Contém {matchingEntries.length} nós nesta parte ({isYamlMode ? 'YAML' : 'CSV'})
                 </Text>
                 {copyFeedback && <Text style={styles.copyFeedbackText}>{copyFeedback}</Text>}
               </View>
               <ScrollView horizontal style={styles.previewScrollX}>
                 <Text style={styles.previewCode}>
-                  {generatedCSV.split('\n').slice(0, 10).join('\n')}
-                  {generatedCSV.split('\n').length > 10 ? '\n... (mais linhas na exportação)' : ''}
+                  {generatedOutput.split('\n').slice(0, 12).join('\n')}
+                  {generatedOutput.split('\n').length > 12 ? '\n... (mais linhas na exportação)' : ''}
                 </Text>
               </ScrollView>
             </View>
@@ -256,11 +278,11 @@ export function GranularExportModal({
           {/* Footer Actions */}
           <View style={styles.footer}>
             <Pressable onPress={handleCopy} style={styles.btnOutline}>
-              <Text style={styles.btnOutlineText}>📋 Copiar CSV</Text>
+              <Text style={styles.btnOutlineText}>📋 Copiar {isYamlMode ? 'YAML' : 'CSV'}</Text>
             </Pressable>
             <Pressable onPress={handleDownload} style={styles.btnPrimary}>
               <Text style={styles.btnPrimaryText}>
-                📥 Baixar CSV ({matchingEntries.length} linhas)
+                📥 Baixar {isYamlMode ? 'YAML' : 'CSV'} ({matchingEntries.length} nós)
               </Text>
             </Pressable>
           </View>

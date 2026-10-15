@@ -75,17 +75,35 @@ export function filterGranularEntries(
   // 2. Scope filter
   if (options?.scope && options.scope !== 'all') {
     switch (options.scope) {
-      case 'leaves_only':
-        filtered = filtered.filter((item) => {
-          // If no other entry is a descendant of this key, it's a leaf
-          return !entries.some((other) => pathKey.isDescendant(other.key, item.key));
-        });
+      case 'leaves_only': {
+        // O(n) ancestor set construction: walk parent chain for every entry
+        const ancestorSet = new Set<string>();
+        for (const entry of entries) {
+          let curr = pathKey.parent(entry.key);
+          while (curr !== null) {
+            const norm = pathKey.normalize(curr);
+            if (ancestorSet.has(norm)) break;
+            ancestorSet.add(norm);
+            curr = pathKey.parent(curr);
+          }
+        }
+        filtered = filtered.filter((item) => !ancestorSet.has(pathKey.normalize(item.key)));
         break;
-      case 'branches_only':
-        filtered = filtered.filter((item) => {
-          return entries.some((other) => pathKey.isDescendant(other.key, item.key));
-        });
+      }
+      case 'branches_only': {
+        const ancestorSet = new Set<string>();
+        for (const entry of entries) {
+          let curr = pathKey.parent(entry.key);
+          while (curr !== null) {
+            const norm = pathKey.normalize(curr);
+            if (ancestorSet.has(norm)) break;
+            ancestorSet.add(norm);
+            curr = pathKey.parent(curr);
+          }
+        }
+        filtered = filtered.filter((item) => ancestorSet.has(pathKey.normalize(item.key)));
         break;
+      }
       case 'worked_only':
         filtered = filtered.filter((item) => {
           const worked = (item.meta as any)?.worked;

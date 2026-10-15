@@ -268,10 +268,34 @@ export function upsertRegistry(
       // Meta merge
       const mergedMeta: Record<string, unknown> = { ...cur.meta, ...inc.meta };
 
+      const incomingHasOfficialLedger =
+        Array.isArray(inc.meta.assignmentHistory) ||
+        (inc.meta.workerName !== undefined && cur.meta.workerName === undefined) ||
+        (cur.meta.worked === 0 && inc.meta.worked === 1);
+
       if (!opts.forceOverwriteState) {
-        // Restore protected operational fields from current node
+        // Restore protected operational fields from current node unless incoming brings a new official S-13-S ledger
         for (const field of opts.preserveMetaFields) {
           if (cur.meta[field] !== undefined) {
+            if (incomingHasOfficialLedger && field !== 'notes') {
+              if (inc.meta[field] !== undefined) {
+                mergedMeta[field] = inc.meta[field];
+                if (cur.meta[field] !== inc.meta[field]) {
+                  changes.push(`Upgraded state for "${field}" from incoming official record`);
+                }
+              } else if (
+                inc.meta.worked === 0 &&
+                (field === 'completedAt' || field === 'completed_date' || field === 'data_conclusao')
+              ) {
+                delete mergedMeta[field];
+                changes.push(`Cleared "${field}" for currently open assignment cycle`);
+              }
+              continue;
+            }
+            if (field === 'worked' && cur.meta.worked === 0 && inc.meta.worked === undefined) {
+              mergedMeta[field] = 0;
+              continue;
+            }
             mergedMeta[field] = cur.meta[field];
             if (cur.meta[field] !== inc.meta[field]) {
               preservedHistory = true;

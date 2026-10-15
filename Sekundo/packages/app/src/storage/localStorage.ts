@@ -15,6 +15,7 @@ const EVENTS_LIST_KEY = 'sekundo_events_list';
 
 const IDB_NAME = 'sekundo_sovereign_db';
 const IDB_STORE = 'kv_store';
+const IDB_BLOB_STORE = 'blob_store';
 
 let lastQuotaWarning: string | null = null;
 export function getStorageQuotaWarning(): string | null {
@@ -31,11 +32,14 @@ function openSovereignIDB(): Promise<IDBDatabase> {
       reject(new Error('IndexedDB unavailable'));
       return;
     }
-    const req = window.indexedDB.open(IDB_NAME, 1);
+    const req = window.indexedDB.open(IDB_NAME, 2);
     req.onupgradeneeded = () => {
       const db = req.result;
       if (!db.objectStoreNames.contains(IDB_STORE)) {
         db.createObjectStore(IDB_STORE);
+      }
+      if (!db.objectStoreNames.contains(IDB_BLOB_STORE)) {
+        db.createObjectStore(IDB_BLOB_STORE);
       }
     };
     req.onsuccess = () => resolve(req.result);
@@ -307,3 +311,80 @@ export async function saveProjectFiles(
 ): Promise<void> {
   await AsyncStorage.setItem(`${FILES_PREFIX}${eventId}`, JSON.stringify(files));
 }
+
+// ---------------------------------------------------------------------------
+// Binary Blob Store (IDB v2 `blob_store` ArrayBuffer + Native FileSystem)
+// ---------------------------------------------------------------------------
+
+const memoryBlobCache = new Map<string, Uint8Array>();
+
+export async function saveBlob(hashKey: string, bytes: Uint8Array): Promise<void> {
+  memoryBlobCache.set(hashKey, bytes);
+  if (!isWebIndexedDBAvailable()) return;
+  try {
+    const db = await openSovereignIDB();
+    const buffer = bytes.buffer.slice(
+      bytes.byteOffset,
+      bytes.byteOffset + bytes.byteLength
+    ) as ArrayBuffer;
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(IDB_BLOB_STORE, 'readwrite');
+      const store = tx.objectStore(IDB_BLOB_STORE);
+      const req = store.put(buffer, hashKey);
+      req.onsuccess = () => resolve();
+      req.onerror = () => reject(req.error);
+    });
+  } catch {
+    // Non-fatal fallback: kept in memoryBlobCache
+  }
+}
+
+export async function loadBlob(hashKey: string): Promise<Uint8Array | null> {
+  if (memoryBlobCache.has(hashKey)) {
+    return memoryBlobCache.get(hashKey)!;
+  }
+  if (!isWebIndexedDBAvailable()) return null;
+  try {
+    const db = await openSovereignIDB();
+    return await new Promise<Uint8Array | null>((resolve, reject) => {
+      const tx = db.transaction(IDB_BLOB_STORE, 'readonly');
+      const store = tx.objectStore(IDB_BLOB_STORE);
+      const req = store.get(hashKey);
+      req.onsuccess = () => {
+        if (req.result instanceof ArrayBuffer) {
+          const arr = new Uint8Array(req.result);
+          memoryBlobCache.set(hashKey, arr);
+          resolve(arr);
+        } else if (req.result instanceof Uint8Array) {
+          memoryBlobCache.set(hashKey, req.result);
+          resolve(req.result);
+        } else {
+          resolve(null);
+        }
+      };
+      req.onerror = () => reject(req.error);
+    });
+  } catch {
+    return null;
+  }
+}
+
+const SDOC_TEMPLATE_PREFIX = 'sekundo_sdoc_tpl_';
+const APP_MANIFEST_KEY = 'sekundo_app_manifest_yaml';
+
+export async function saveSdocTemplate(templateId: string, yamlText: string): Promise<void> {
+  await storage.setItem(`${SDOC_TEMPLATE_PREFIX}${templateId}`, yamlText);
+}
+
+export async function loadSdocTemplate(templateId: string): Promise<string | null> {
+  return await storage.getItem(`${SDOC_TEMPLATE_PREFIX}${templateId}`);
+}
+
+export async function saveAppManifestYaml(yamlText: string): Promise<void> {
+  await storage.setItem(APP_MANIFEST_KEY, yamlText);
+}
+
+export async function loadAppManifestYaml(): Promise<string | null> {
+  return await storage.getItem(APP_MANIFEST_KEY);
+}
+

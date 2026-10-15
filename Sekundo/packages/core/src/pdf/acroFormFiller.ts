@@ -7,7 +7,8 @@
 
 // Type-only import for compilation
 import type { PDFDocument as PDFDocumentType, PDFTextField as PDFTextFieldType, PDFCheckBox as PDFCheckBoxType, PDFDropdown as PDFDropdownType, PDFRadioGroup as PDFRadioGroupType } from 'pdf-lib';
-import type { PDFFormField } from './types';
+import type { PDFFormField, TemplateCoordinateMap } from './types';
+import type { FlatSkeletonEntry } from '../skeleton/types';
 
 /** Helper to dynamically load pdf-lib on demand */
 async function getPdfLib() {
@@ -49,11 +50,13 @@ export interface FormFillResult {
 // ---------------------------------------------------------------------------
 
 /**
- * Inspects a PDF binary and extracts all interactive AcroForm fields.
+ * Inspects a PDF binary and extracts all interactive AcroForm fields,
+ * resolving the actual 1-indexed page number of each widget.
  */
 export async function inspectPDFForm(pdfBytes: Uint8Array): Promise<PDFFormField[]> {
   const { PDFDocument, PDFTextField, PDFCheckBox, PDFDropdown, PDFRadioGroup } = await getPdfLib();
   const pdfDoc = await PDFDocument.load(pdfBytes, { ignoreEncryption: true });
+  const pages = pdfDoc.getPages();
   const form = pdfDoc.getForm();
   const fields = form.getFields();
 
@@ -73,7 +76,7 @@ export async function inspectPDFForm(pdfBytes: Uint8Array): Promise<PDFFormField
       type = 'radio';
     }
 
-    // Attempt to locate widgets for bounding box & page (defaults to 1 if not located)
+    // Locate widget bounding box & actual page index (1-indexed)
     let pageNum = 1;
     let x = 0;
     let y = 0;
@@ -83,11 +86,29 @@ export async function inspectPDFForm(pdfBytes: Uint8Array): Promise<PDFFormField
     try {
       const widgets = field.acroField.getWidgets();
       if (widgets.length > 0) {
-        const rect = widgets[0].getRectangle();
+        const widget = widgets[0];
+        const rect = widget.getRectangle();
         x = rect.x;
         y = rect.y;
         width = rect.width;
         height = rect.height;
+
+        const pageRef = widget.P();
+        if (pageRef) {
+          const foundIdx = pages.findIndex((p) => p.ref === pageRef);
+          if (foundIdx >= 0) {
+            pageNum = foundIdx + 1;
+          }
+        } else {
+          // Fallback: scan page Annots arrays if widget /P reference is omitted
+          for (let i = 0; i < pages.length; i++) {
+            const annots = pages[i].node.Annots();
+            if (annots && annots.asArray().some((a) => a === widget.dict)) {
+              pageNum = i + 1;
+              break;
+            }
+          }
+        }
       }
     } catch {
       // Fallback if widget rectangles are absent in corrupted headers
@@ -283,3 +304,120 @@ export async function fillS89Assignments4Up(
 
   return fillAcroForm(templatePdfBytes, valuesToInject, options);
 }
+
+// ---------------------------------------------------------------------------
+// Coordinate Map Stamping & Mail-Merge (Resolves A1, A2, A5)
+// ---------------------------------------------------------------------------
+
+function toWinAnsiSafeLocal(text: string): string {
+  return (text || '')
+    .replace(/[\u{1F000}-\u{1FFFF}]/gu, '')
+    .replace(/[✓✔]/g, '[OK]')
+    .replace(/[⬜□]/g, '[ ]')
+    .replace(/[•·]/g, '-')
+    .replace(/[—–]/g, '-')
+    .replace(/[^\x20-\x7E\xA0-\xFF]/g, '')
+    .trim();
+}
+
+/**
+ * Stamps values from a `FlatSkeletonEntry[]` onto a PDF using a `TemplateCoordinateMap`.
+ * Coordinates in the map are in `mm` from top-left (or `pt` if `unit === 'pt'`).
+ * Converts top-left `(xMm, yMm)` to bottom-left PDF points `(xPt, pageHeightPt - yPt - fontSizePt)`.
+ */
+export async function stampCoordinateMapOnPDF(
+  templatePdfBytes: Uint8Array,
+  coordMap: TemplateCoordinateMap,
+  entries: FlatSkeletonEntry[]
+): Promise<{ pdfBytes: Uint8Array; stampedCount: number }> {
+  const { PDFDocument, StandardFonts, rgb } = await getPdfLib();
+  const pdfDoc = await PDFDocument.load(templatePdfBytes, { ignoreEncryption: true });
+  const fontRegular = await pdfDoc.embedFont(StandardFonts.Helvetica);
+  const pages = pdfDoc.getPages();
+
+  const entryByKey = new Map<string, FlatSkeletonEntry>();
+  for (const e of entries) {
+    entryByKey.set(e.key, e);
+  }
+
+  let stampedCount = 0;
+
+  for (const [key, mapping] of Object.entries(coordMap)) {
+    const entry = entryByKey.get(key);
+    if (!entry) continue;
+
+    const rawText =
+      mapping.printMode === 'keyAndValue'
+        ? `${entry.label || mapping.label}: ${entry.value}`
+        : entry.value || '';
+    const safeText = toWinAnsiSafeLocal(rawText);
+    if (!safeText) continue;
+
+    const pageIdx = Math.max(0, Math.min(pages.length - 1, (mapping.page || 1) - 1));
+    const page = pages[pageIdx];
+    if (!page) continue;
+
+    const { height: pageHeightPt } = page.getSize();
+    const fontSize = mapping.fontSize || 10;
+    const isPt = mapping.unit === 'pt';
+    const xPt = isPt ? mapping.x : (mapping.x * 72) / 25.4;
+    const yFromTopPt = isPt ? mapping.y : (mapping.y * 72) / 25.4;
+    const yPt = Math.max(4, pageHeightPt - yFromTopPt - fontSize * 0.8);
+
+    page.drawText(safeText, {
+      x: xPt,
+      y: yPt,
+      size: fontSize,
+      font: fontRegular,
+      color: rgb(0.05, 0.05, 0.08),
+    });
+    stampedCount++;
+  }
+
+  const pdfBytes = await pdfDoc.save();
+  return { pdfBytes, stampedCount };
+}
+
+/**
+ * Generates a multi-page Mail-Merge PDF where each record in `records` gets its own
+ * filled copy of `templatePdfBytes`.
+ */
+export async function fillAcroFormMailMerge(
+  templatePdfBytes: Uint8Array,
+  records: Record<string, string | boolean | number>[]
+): Promise<FormFillResult> {
+  if (records.length === 0) {
+    return fillAcroForm(templatePdfBytes, {}, { flatten: true });
+  }
+  if (records.length === 1) {
+    return fillAcroForm(templatePdfBytes, records[0], { flatten: true });
+  }
+
+  const { PDFDocument } = await getPdfLib();
+  const mergedPdf = await PDFDocument.create();
+  let totalFilled = 0;
+  const matchedSet = new Set<string>();
+  const unmatchedSet = new Set<string>();
+
+  for (const rec of records) {
+    const single = await fillAcroForm(templatePdfBytes, rec, { flatten: true });
+    totalFilled += single.filledFieldCount;
+    single.matchedFields.forEach((m) => matchedSet.add(m));
+    single.unmatchedFields.forEach((u) => unmatchedSet.add(u));
+
+    const singleDoc = await PDFDocument.load(single.pdfBytes);
+    const copiedPages = await mergedPdf.copyPages(singleDoc, singleDoc.getPageIndices());
+    for (const p of copiedPages) {
+      mergedPdf.addPage(p);
+    }
+  }
+
+  const pdfBytes = await mergedPdf.save();
+  return {
+    pdfBytes,
+    filledFieldCount: totalFilled,
+    matchedFields: Array.from(matchedSet),
+    unmatchedFields: Array.from(unmatchedSet),
+  };
+}
+

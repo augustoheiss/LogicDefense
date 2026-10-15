@@ -8,12 +8,18 @@
  * Zero telemetry, zero external analytics.
  */
 
-const SHELL_CACHE = 'sekundo-shell-v1';
+const SHELL_CACHE = 'sekundo-shell-v2';
 const TILE_CACHE = 'sekundo-osm-tiles-v1';
+
+const PRECACHE_URLS = [
+  '/',
+  '/pdfjs/pdf.min.mjs',
+  '/pdfjs/pdf.worker.min.mjs',
+];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(SHELL_CACHE).then((cache) => cache.addAll(['/']).catch(() => {}))
+    caches.open(SHELL_CACHE).then((cache) => cache.addAll(PRECACHE_URLS).catch(() => {}))
   );
   self.skipWaiting();
 });

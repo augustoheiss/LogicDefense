@@ -15,32 +15,26 @@ import { useSkeleton } from '../hooks/useSkeleton';
 import { useLocalEvent } from '../hooks/useLocalEvent';
 import { FieldAutoComplete } from '../components/ui/FieldAutoComplete';
 import { savePDFMap, loadPDFMap } from '../storage/localStorage';
-import type { FlatSkeletonEntry, TemplateCoordinateMap } from '@sekundo/core';
+import { loadPdfJsLocalFirst } from '../pdf/pdfjsLoader';
+import { deliverFile } from '../utils/deliverFile';
+import {
+  computeTemplateFingerprintSha256,
+  stampCoordinateMapOnPDF,
+  ptToMm,
+  mmToPt,
+  type FlatSkeletonEntry,
+  type TemplateCoordinateMap,
+} from '@sekundo/core';
 
-// Dynamically load PDF.js from cdnjs inside the browser to avoid bundle bloat
-const loadPdfJs = async (): Promise<any> => {
-  if (typeof window === 'undefined') return null;
-  if ((window as any).pdfjsLib) return (window as any).pdfjsLib;
-
-  return new Promise((resolve, reject) => {
-    const script = document.createElement('script');
-    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js';
-    script.onload = () => {
-      const pdfjsLib = (window as any).pdfjsLib;
-      pdfjsLib.GlobalWorkerOptions.workerSrc =
-        'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
-      resolve(pdfjsLib);
-    };
-    script.onerror = (e) => reject(e);
-    document.head.appendChild(script);
-  });
-};
+const VIEWPORT_SCALE = 1.5;
 
 interface PinnedCoord {
   key: string;
   label: string;
-  x: number;
-  y: number;
+  /** X in millimeters from left edge */
+  xMm: number;
+  /** Y in millimeters from top edge */
+  yMm: number;
   page: number;
 }
 
@@ -55,41 +49,41 @@ export default function PDFMapperWeb() {
 
   // States
   const [pdfFile, setPdfFile] = useState<File | null>(null);
+  const [pdfBytes, setPdfBytes] = useState<Uint8Array | null>(null);
+  const [templateHash, setTemplateHash] = useState<string>('');
   const [pdfDoc, setPdfDoc] = useState<any>(null);
   const [pageNum, setPageNum] = useState(1);
   const [totalPages, setTotalPages] = useState(0);
   const [pdfJsLoaded, setPdfJsLoaded] = useState(false);
   const [rendering, setRendering] = useState(false);
 
-  // Mapping coordinate state
+  // Mapping coordinate state (stored in canonical mm from top-left)
   const [coords, setCoords] = useState<PinnedCoord[]>([]);
   const [selectedEntry, setSelectedEntry] = useState<FlatSkeletonEntry | null>(null);
-  const [tempClick, setTempClick] = useState<{ x: number; y: number } | null>(null);
+  const [tempClick, setTempClick] = useState<{ xMm: number; yMm: number; pxX: number; pxY: number } | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
 
   // Refs
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  // Load PDF.js dependency on mount
+  // Load PDF.js dependency on mount (local-first with CDN fallback)
   useEffect(() => {
-    loadPdfJs()
+    loadPdfJsLocalFirst()
       .then(() => setPdfJsLoaded(true))
       .catch((e) => console.error('[Sekundo] Failed to load PDF.js:', e));
   }, []);
 
-  // Fetch saved coordinate map for this template when document loads
+  // Fetch saved coordinate map for this template by SHA-256 hash
   useEffect(() => {
-    if (pdfFile) {
-      // Simulate file hash prefix for localStorage mapping key
-      const fileKey = `hash_${pdfFile.name}_${pdfFile.size}`;
-      loadPDFMap(fileKey).then((savedMap) => {
+    if (templateHash) {
+      loadPDFMap(templateHash).then((savedMap) => {
         if (savedMap) {
           const list: PinnedCoord[] = Object.entries(savedMap).map(([key, item]) => ({
             key,
             label: item.label,
-            x: item.x,
-            y: item.y,
+            xMm: item.unit === 'pt' ? Number(ptToMm(item.x).toFixed(2)) : item.x,
+            yMm: item.unit === 'pt' ? Number(ptToMm(item.y).toFixed(2)) : item.y,
             page: item.page,
           }));
           setCoords(list);
@@ -98,7 +92,7 @@ export default function PDFMapperWeb() {
         }
       });
     }
-  }, [pdfFile]);
+  }, [templateHash]);
 
   // Render current PDF page onto the HTML5 Canvas
   const renderPage = async (pageIndex: number, doc: any) => {
@@ -110,8 +104,7 @@ export default function PDFMapperWeb() {
       const canvas = canvasRef.current;
       const context = canvas.getContext('2d');
 
-      // Use 1.5x scale for clean visibility
-      const viewport = page.getViewport({ scale: 1.5 });
+      const viewport = page.getViewport({ scale: VIEWPORT_SCALE });
       canvas.width = viewport.width;
       canvas.height = viewport.height;
 
@@ -141,21 +134,22 @@ export default function PDFMapperWeb() {
     if (file) {
       setPdfFile(file);
       setPageNum(1);
-      
-      const fileReader = new FileReader();
-      fileReader.onload = async (event) => {
-        const typedarray = new Uint8Array(event.target?.result as ArrayBuffer);
-        const pdfjsLib = (window as any).pdfjsLib;
-        try {
-          const doc = await pdfjsLib.getDocument({ data: typedarray }).promise;
-          setPdfDoc(doc);
-          setTotalPages(doc.numPages);
-          renderPage(1, doc);
-        } catch (err) {
-          alert('Cannot load PDF document.');
-        }
-      };
-      fileReader.readAsArrayBuffer(file);
+
+      const buffer = await file.arrayBuffer();
+      const typedarray = new Uint8Array(buffer);
+      setPdfBytes(typedarray);
+      const sha = await computeTemplateFingerprintSha256(typedarray);
+      setTemplateHash(sha);
+
+      const pdfjsLib = await loadPdfJsLocalFirst();
+      try {
+        const doc = await pdfjsLib.getDocument({ data: typedarray.slice(0) }).promise;
+        setPdfDoc(doc);
+        setTotalPages(doc.numPages);
+        renderPage(1, doc);
+      } catch {
+        alert('Cannot load PDF document.');
+      }
     }
   };
 
@@ -163,12 +157,14 @@ export default function PDFMapperWeb() {
     if (!canvasRef.current || rendering) return;
     const canvas = canvasRef.current;
     const rect = canvas.getBoundingClientRect();
-    
-    // Coordinates relative to canvas viewport
-    const clickX = e.clientX - rect.left;
-    const clickY = e.clientY - rect.top;
 
-    setTempClick({ x: clickX, y: clickY });
+    // Canvas pixel coordinates -> unscaled PDF points -> physical millimeters (top-left origin)
+    const clickPxX = e.clientX - rect.left;
+    const clickPxY = e.clientY - rect.top;
+    const xMm = Number(ptToMm(clickPxX / VIEWPORT_SCALE).toFixed(2));
+    const yMm = Number(ptToMm(clickPxY / VIEWPORT_SCALE).toFixed(2));
+
+    setTempClick({ xMm, yMm, pxX: Math.round(clickPxX), pxY: Math.round(clickPxY) });
     setSelectedEntry(null);
     setSearchQuery('');
   };
@@ -176,14 +172,13 @@ export default function PDFMapperWeb() {
   const handleSavePin = () => {
     if (!tempClick || !selectedEntry) return;
 
-    // Check if key already mapped on this template
     const filtered = coords.filter((c) => c.key !== selectedEntry.key);
 
     const newPin: PinnedCoord = {
       key: selectedEntry.key,
       label: selectedEntry.label,
-      x: Math.round(tempClick.x),
-      y: Math.round(tempClick.y),
+      xMm: tempClick.xMm,
+      yMm: tempClick.yMm,
       page: pageNum,
     };
 
@@ -192,25 +187,38 @@ export default function PDFMapperWeb() {
     setSelectedEntry(null);
   };
 
-  const handleSaveMap = async () => {
-    if (!pdfFile) return;
-    const fileKey = `hash_${pdfFile.name}_${pdfFile.size}`;
-
-    // Convert PinnedCoord list back to TemplateCoordinateMap schema
+  const buildMapSchema = (): TemplateCoordinateMap => {
     const mapSchema: TemplateCoordinateMap = {};
     for (const c of coords) {
       mapSchema[c.key] = {
-        x: c.x,
-        y: c.y,
+        x: c.xMm,
+        y: c.yMm,
+        unit: 'mm',
         page: c.page,
         printMode: 'valueOnly',
         label: c.label,
         fontSize: 10,
       };
     }
+    return mapSchema;
+  };
 
-    await savePDFMap(fileKey, mapSchema);
-    alert('Coordinate Map saved successfully to local storage!');
+  const handleSaveMap = async () => {
+    if (!pdfFile || !templateHash) return;
+    const mapSchema = buildMapSchema();
+    await savePDFMap(templateHash, mapSchema);
+    alert(`Mapa de coordenadas salvo em mm (${templateHash.slice(0, 18)}…)!`);
+  };
+
+  const handleExportStampedPDF = async () => {
+    if (!pdfBytes || coords.length === 0) return;
+    const mapSchema = buildMapSchema();
+    if (templateHash) {
+      await savePDFMap(templateHash, mapSchema);
+    }
+    const { pdfBytes: outBytes } = await stampCoordinateMapOnPDF(pdfBytes, mapSchema, flatRegistry);
+    const cleanName = pdfFile ? pdfFile.name.replace(/\.pdf$/i, '') : 'Template';
+    await deliverFile(outBytes, `${cleanName}_Carimbado.pdf`, 'application/pdf');
   };
 
   const deletePin = (keyToDelete: string) => {
@@ -236,12 +244,18 @@ export default function PDFMapperWeb() {
           >
             <Text style={styles.backBtnText}>← Editor</Text>
           </Pressable>
-          <Text style={styles.eventTitle}>PDF Coordinate Mapper</Text>
+          <Text style={styles.eventTitle}>PDF Coordinate Mapper (mm)</Text>
           {pdfFile ? (
             <Text style={styles.fileName}>({pdfFile.name})</Text>
           ) : null}
         </View>
         <View style={styles.actionRight}>
+          <Pressable
+            onPress={() => router.push(`/studio?id=${eventId}` as any)}
+            style={[styles.actionBtn, { marginRight: 8, borderColor: '#8B5CF6', borderWidth: 1 }]}
+          >
+            <Text style={[styles.actionBtnText, { color: '#C4B5FD' }]}>🖋️ Estúdio YAML</Text>
+          </Pressable>
           <Pressable
             onPress={() => fileInputRef.current?.click()}
             style={styles.actionBtn}
@@ -253,7 +267,18 @@ export default function PDFMapperWeb() {
             onPress={handleSaveMap}
             style={[styles.primaryActionBtn, (!pdfFile || coords.length === 0) && styles.btnDisabled]}
           >
-            <Text style={styles.primaryActionBtnText}>Save Map</Text>
+            <Text style={styles.primaryActionBtnText}>Salvar Mapa (mm)</Text>
+          </Pressable>
+          <Pressable
+            disabled={!pdfBytes || coords.length === 0}
+            onPress={handleExportStampedPDF}
+            style={[
+              styles.primaryActionBtn,
+              { backgroundColor: '#10B981' },
+              (!pdfBytes || coords.length === 0) && styles.btnDisabled,
+            ]}
+          >
+            <Text style={styles.primaryActionBtnText}>⚡ Baixar PDF Carimbado</Text>
           </Pressable>
         </View>
       </View>
@@ -289,76 +314,80 @@ export default function PDFMapperWeb() {
                   }}
                 />
 
-                {/* Render coordinate dots overlay */}
+                {/* Render coordinate dots overlay (converted from mm to canvas px) */}
                 {coords
                   .filter((c) => c.page === pageNum)
-                  .map((c) => (
-                    <div
-                      key={c.key}
-                      style={{
-                        position: 'absolute',
-                        left: `${c.x}px`,
-                        top: `${c.y}px`,
-                        transform: 'translate(-50%, -50%)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        zIndex: 10,
-                      }}
-                    >
+                  .map((c) => {
+                    const pxLeft = Math.round(mmToPt(c.xMm) * VIEWPORT_SCALE);
+                    const pxTop = Math.round(mmToPt(c.yMm) * VIEWPORT_SCALE);
+                    return (
                       <div
+                        key={c.key}
                         style={{
-                          width: '12px',
-                          height: '12px',
-                          borderRadius: '50%',
-                          backgroundColor: '#8B5CF6',
-                          border: '2px solid #FFFFFF',
-                          boxShadow: '0 0 8px rgba(139, 92, 246, 0.8)',
-                        }}
-                      />
-                      <div
-                        style={{
-                          backgroundColor: '#1E232F',
-                          border: '1px solid rgba(255, 255, 255, 0.1)',
-                          borderRadius: '4px',
-                          padding: '4px 6px',
-                          marginLeft: '8px',
-                          whiteSpace: 'nowrap',
-                          pointerEvents: 'auto',
+                          position: 'absolute',
+                          left: `${pxLeft}px`,
+                          top: `${pxTop}px`,
+                          transform: 'translate(-50%, -50%)',
                           display: 'flex',
                           alignItems: 'center',
+                          zIndex: 10,
                         }}
                       >
-                        <span style={{ color: '#FFFFFF', fontSize: '10px', fontWeight: 'bold' }}>
-                          {c.label} ({c.key})
-                        </span>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            deletePin(c.key);
-                          }}
+                        <div
                           style={{
-                            border: 'none',
-                            background: 'none',
-                            color: '#EF4444',
-                            marginLeft: '6px',
-                            cursor: 'pointer',
-                            fontWeight: 'bold',
-                            fontSize: '11px',
+                            width: '12px',
+                            height: '12px',
+                            borderRadius: '50%',
+                            backgroundColor: '#8B5CF6',
+                            border: '2px solid #FFFFFF',
+                            boxShadow: '0 0 8px rgba(139, 92, 246, 0.8)',
+                          }}
+                        />
+                        <div
+                          style={{
+                            backgroundColor: '#1E232F',
+                            border: '1px solid rgba(255, 255, 255, 0.1)',
+                            borderRadius: '4px',
+                            padding: '4px 6px',
+                            marginLeft: '8px',
+                            whiteSpace: 'nowrap',
+                            pointerEvents: 'auto',
+                            display: 'flex',
+                            alignItems: 'center',
                           }}
                         >
-                          ✕
-                        </button>
+                          <span style={{ color: '#FFFFFF', fontSize: '10px', fontWeight: 'bold' }}>
+                            {c.label} ({c.xMm}×{c.yMm}mm)
+                          </span>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              deletePin(c.key);
+                            }}
+                            style={{
+                              border: 'none',
+                              background: 'none',
+                              color: '#EF4444',
+                              marginLeft: '6px',
+                              cursor: 'pointer',
+                              fontWeight: 'bold',
+                              fontSize: '11px',
+                            }}
+                          >
+                            ✕
+                          </button>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
 
                 {/* Render temporary click pin */}
                 {tempClick ? (
                   <div
                     style={{
                       position: 'absolute',
-                      left: `${tempClick.x}px`,
-                      top: `${tempClick.y}px`,
+                      left: `${tempClick.pxX}px`,
+                      top: `${tempClick.pxY}px`,
                       transform: 'translate(-50%, -50%)',
                       width: '12px',
                       height: '12px',
@@ -401,7 +430,7 @@ export default function PDFMapperWeb() {
           {tempClick ? (
             <View style={styles.sidebarForm}>
               <Text style={styles.sidebarHelp}>
-                Click coordinates: X: {tempClick.x}, Y: {tempClick.y} (Page {pageNum})
+                Coordenadas (mm, topo-esquerdo): X: {tempClick.xMm} mm, Y: {tempClick.yMm} mm (Pág. {pageNum})
               </Text>
               
               <Text style={styles.sidebarLabel}>BIND TO SKELETON FIELD</Text>

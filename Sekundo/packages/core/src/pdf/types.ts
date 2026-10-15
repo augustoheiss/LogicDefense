@@ -45,11 +45,14 @@ export interface PDFFormField {
  * This is what enables the "click-to-place" and "auto-detect" workflows.
  */
 export interface CoordinateMapping {
-  /** X position in PDF points from left edge. */
+  /** X position from left edge (in mm by default, or PDF points if unit === 'pt'). */
   x: number;
 
-  /** Y position in PDF points from top edge. */
+  /** Y position from top edge (in mm by default, or PDF points if unit === 'pt'). */
   y: number;
+
+  /** Coordinate unit: 'mm' (canonical, top-left origin) or 'pt' (legacy). Defaults to 'mm'. */
+  unit?: 'mm' | 'pt';
 
   /** Page number (1-indexed). */
   page: number;
@@ -60,21 +63,21 @@ export interface CoordinateMapping {
   /** Cached label for auto-complete suggestions. */
   label: string;
 
-  /** Font size override (optional). */
+  /** Font size override (optional, in pt). */
   fontSize?: number;
 
-  /** Max width for text wrapping (optional, in PDF points). */
+  /** Max width for text wrapping (optional, in mm or pt matching unit). */
   maxWidth?: number;
 }
 
 /**
  * A complete coordinate map for a specific PDF template.
- * Keyed by a hash of the PDF file (first 8 chars of SHA-256).
+ * Keyed by a SHA-256 or FNV fingerprint of the PDF binary.
  */
 export type TemplateCoordinateMap = Record<PathKey, CoordinateMapping>;
 
 /**
  * All saved PDF template mappings in localStorage.
- * Key format: "template_<sha256_first8>"
+ * Key format: "sha256:<hex>" or "tpl_<fnv16>_<len>"
  */
 export type PDFMapStorage = Record<string, TemplateCoordinateMap>;

@@ -106,6 +106,8 @@ export {
   inspectPDFForm,
   fillAcroForm,
   fillS89Assignments4Up,
+  stampCoordinateMapOnPDF,
+  fillAcroFormMailMerge,
 } from './pdf/acroFormFiller';
 export type { S89Assignment, FormFillResult } from './pdf/acroFormFiller';
 
@@ -115,6 +117,7 @@ export type { TerritoryPDFResult } from './pdf/s13Generator';
 export * as templateMatcher from './pdf/templateMatcher';
 export {
   computeTemplateFingerprint,
+  computeTemplateFingerprintSha256,
   normalizeFieldName,
   levenshteinDistance,
   stringSimilarity,
@@ -306,6 +309,145 @@ export type {
   S13TerritorySeedRecord,
   SekundoScheduleBundle,
 } from './schedule/programacaoReuniaoSeed';
+
+// Data YAML (Phase F1: Lossless Tree & Flat YAML <-> FlatRegistry)
+export {
+  buildYamlTreeFromRegistry,
+  registryToYaml,
+  yamlToRegistry,
+} from './yaml/dataYaml';
+export type {
+  DataYamlExportOptions,
+  YamlTreeNode,
+} from './yaml/dataYaml';
+
+// Document Engine SDOC (Phase F2: YAML <-> DisplayList <-> PDF)
+export type {
+  Mm,
+  PageFormatId,
+  PageOrientation,
+  SdocPageConfig,
+  InlineTextSpan,
+  SdocPrimitive,
+  SdocLayer,
+  SdocRepeatGrid,
+  SdocRepeatConfig,
+  SdocUnderlayConfig,
+  SdocField,
+  SdocDocument,
+  ResolvedOp,
+  DisplayPage,
+  DisplayList,
+  WriterInput,
+  OutputWriter,
+} from './doc/types';
+
+export {
+  PT_PER_MM,
+  PX_PER_MM,
+  mmToPt,
+  ptToMm,
+  mmToPx,
+  pxToMm,
+  toPdf,
+  fromPdf,
+  PAGE_FORMATS,
+  resolvePageDimensions,
+} from './doc/units';
+export type { PageFormatDimensions } from './doc/units';
+
+export {
+  resolveSafePath,
+  renderTemplateString,
+} from './doc/template';
+
+export {
+  buildS13PageContexts,
+  evaluateRegistrySelector,
+} from './doc/selector';
+export type {
+  S13VisualRowContext,
+  S13PageContext,
+} from './doc/selector';
+
+export {
+  parseSdocYaml,
+  stringifySdocYaml,
+  SdocCstMutator,
+  ProvenanceBus,
+  sdocProvenanceBus,
+  autoGenerateSdocFromRegistry,
+} from './doc/schema';
+export type {
+  SdocValidationIssue,
+  SdocParseResult,
+  SdocTransactionOrigin,
+  SdocTransaction,
+} from './doc/schema';
+
+export {
+  MAX_SDOC_PAGES,
+  MAX_SDOC_PRIMITIVES,
+  SdocLimitError,
+  measureTextWidthMm,
+  breakTextIntoLines,
+  solveLayout,
+} from './doc/layoutSolver';
+
+export {
+  toWinAnsiSafe,
+  parseHexColorToRgb,
+  renderDisplayListToPdf,
+} from './doc/painters/pdfPainter';
+export type { PdfPainterOptions } from './doc/painters/pdfPainter';
+
+export {
+  S89_4UP_SDOC_YAML,
+  S13S_MULTICYCLE_SDOC_YAML,
+  BUILTIN_SDOC_TEMPLATES,
+  compileSdocToPdf,
+} from './doc/templates/builtinTemplates';
+
+// PDF Ingestion Stages (Phase F4: Pure Functions)
+export {
+  extractAcroFormStage,
+  extractTextStage,
+  extractVectorStage,
+  detectGridStage,
+  synthesizeIngestedSdoc,
+} from './doc/ingest/stages';
+export type {
+  RawPdfTextItem,
+  RawPdfVectorOp,
+  IngestReport,
+} from './doc/ingest/stages';
+
+// Unified Output Writers & App Composer (Phase F5)
+export {
+  renderWhatsAppTemplate,
+  pdfOutputWriter,
+  whatsappOutputWriter,
+  csvOutputWriter,
+  yamlOutputWriter,
+  OUTPUT_WRITERS,
+  writeUnifiedOutput,
+} from './outputs/registry';
+
+export {
+  DEFAULT_SEKUNDO_APP_YAML,
+  parseAppManifestYaml,
+  stringifyAppManifestYaml,
+  computeHojeCockpitSummary,
+} from './composer/appManifest';
+export type {
+  ComposerOutputSpec,
+  ComposerPrancheta,
+  ComposerRitual,
+  HojeWidgetId,
+  SekundoAppManifest,
+  HojeCockpitSummary,
+} from './composer/appManifest';
+
 
 
 
