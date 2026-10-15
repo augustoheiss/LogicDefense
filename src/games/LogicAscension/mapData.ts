@@ -3,7 +3,7 @@ import { Tile, PathId } from './types';
 // ── Grid dimensions ────────────────────────────────────────────────────────────
 export const GRID_ROWS = 15;
 export const GRID_COLS = 25;
-export const NUM_ROOMS = 5;
+export const NUM_ROOMS = 3;
 
 // ── Fixed layout positions (never change, regardless of ProcGen) ───────────────
 /**
@@ -11,7 +11,7 @@ export const NUM_ROOMS = 5;
  *
  *  Row  0 : full WALL border
  *  Rows 1-5 : BUFF ZONE   (top half)     ← buff rooms carved here
- *  Row  3 : buff SPINE  (horizontal corridor connecting all 5 buff rooms)
+ *  Row  3 : buff SPINE  (horizontal corridor connecting all 3 buff rooms)
  *  Row  6 : col-3 bridge (EMPTY)  → MC_B at (5,3)
  *  Row  7 : main corridor  P(7,1)  B×2(7,2)  jct(7,3)
  *  Row  8 : col-3 bridge (EMPTY)  → MC_S at (9,3)
@@ -20,7 +20,7 @@ export const NUM_ROOMS = 5;
  *  Row 14 : full WALL border
  *  Cols 0, 24 : left/right WALL borders
  *  Cols 1-3   : start zone
- *  Cols 4-23  : 5 chunks × 4 cols each  (rooms + spine sections)
+ *  Cols 4-21  : 3 chunks × 6 cols each  (rooms + spine sections)
  *
  *  MC tiles are fixed:
  *    MC_B at (5,3)  – connects via (4,3),(3,3) [FOG] to buff spine
@@ -46,10 +46,10 @@ const BUFF_ROW_MAX    = 5;
 const SAC_ROW_MIN     = 9;
 const SAC_ROW_MAX     = 13;
 const CHUNK_START_COL = 4;   // chunks start here
-const CHUNK_COLS      = 4;   // cols per chunk → 5 chunks × 4 = cols 4-23
+const CHUNK_COLS      = 6;   // cols per chunk → 3 chunks × 6 = cols 4-21
 
-/** Mild buff multipliers for rooms 1-4 (room 0 uses MC punishment/reward). */
-const ROOM_BUFF_POOL = [0.5, 0.75, 1.0, 1.25, 1.5] as const;
+/** Mild buff multipliers for rooms 1+ (room 0 uses MC punishment/reward). */
+const ROOM_BUFF_POOL = [0.5, 0.75, 1.25, 1.5, 2.0] as const;
 
 // ── ProcGen data types ─────────────────────────────────────────────────────────
 export interface RoomData {

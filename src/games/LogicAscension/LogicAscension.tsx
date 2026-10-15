@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef, CSSProperties, memo } from 'react';
-import { Tile, TileType, Direction, PlayerPos, PathId } from './types';
+import { Tile, TileType, Direction, PlayerPos, PathId, FloatingText } from './types';
 import {
   generateRandomMap,
   GeneratedMap,
@@ -11,10 +11,19 @@ import {
   GRID_COLS,
   NUM_ROOMS,
 } from './mapData';
-import { runOracle, generateDynamicQuestion, Question, OracleResult, calculateTheoreticalMax } from './mathEngine';
+import {
+  runOracle,
+  generateDynamicQuestion,
+  Question,
+  OracleResult,
+  SolutionMethod,
+  calculateTheoreticalMax,
+} from './mathEngine';
 import { CombatArena, ChoiceOption } from './CombatArena';
+import { MainMenu } from './MainMenu';
 import { formatPower } from './utils';
 import { saveHighScore } from './leaderboard';
+import { soundEngine } from './soundEngine';
 
 // ── Utilities ──────────────────────────────────────────────────────────────────
 function setTile(grid: Tile[][], row: number, col: number, tile: Tile): Tile[][] {
@@ -31,7 +40,6 @@ function shuffleArray<T>(arr: T[]): T[] {
   }
   return a;
 }
-
 
 const DIR_DELTA: Record<Direction, [number, number]> = {
   UP:    [-1, 0],
@@ -52,18 +60,27 @@ interface CombatState {
   powerSnapshot:      number;
   isBoss:             boolean;
   isDesperationMode:  boolean;
-  /** True when playerPower < enemyLevel / 2 — instant crush, no question. */
   isImpossibleMode:   boolean;
 }
 
-// ── Buff-modification animations (injected once) ──────────────────────────────
+// ── Knowledge Box state ────────────────────────────────────────────────────────
+interface KnowledgeEntry {
+  expression?:  string;
+  lensTitle?:   string;
+  hint?:        string;
+  text:         string;
+  methods?:     SolutionMethod[];
+  realLifeTip?: string;
+  isCorrect:    boolean;
+}
+
 // ── Fullscreen helper ──────────────────────────────────────────────────────────
 function requestFullScreen(el: HTMLElement): void {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const e = el as any;
   if (e.requestFullscreen)            { e.requestFullscreen().catch(() => {}); }
-  else if (e.webkitRequestFullscreen) { e.webkitRequestFullscreen(); } // Safari / iOS
-  else if (e.msRequestFullscreen)     { e.msRequestFullscreen();     } // IE11
+  else if (e.webkitRequestFullscreen) { e.webkitRequestFullscreen(); }
+  else if (e.msRequestFullscreen)     { e.msRequestFullscreen();     }
 }
 
 const GAME_STYLES = `
@@ -77,24 +94,30 @@ const GAME_STYLES = `
   50%  { transform: scale(1.5);  color: #00ff88; }
   100% { transform: scale(1);    color: #ffd700; }
 }
+@keyframes float-up-pop {
+  0%   { opacity: 0; transform: translate(-50%, 10px) scale(0.75); }
+  20%  { opacity: 1; transform: translate(-50%, -6px) scale(1.08); }
+  80%  { opacity: 1; transform: translate(-50%, -28px) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -44px) scale(0.92); }
+}
 
 /* 1. Main Wrapper */
 .la-main-layout {
   display: flex;
   flex-wrap: wrap;
-  gap: 2rem;
+  gap: 1.5rem;
   width: 100%;
   justify-content: center;
   align-items: flex-start;
   background: #07070f;
   box-sizing: border-box;
-  padding: 2rem;
+  padding: 1.5rem;
   position: relative;
 }
 
 /* 2. Game Area Wrapper */
-.la-game-wrapper {
-  flex: 1 1 400px;
+.la-game-wrapper-inner {
+  flex: 1 1 420px;
   min-width: 0;
   display: flex;
   flex-direction: column;
@@ -105,7 +128,7 @@ const GAME_STYLES = `
 /* 3. Game Grid */
 .la-viewport {
   width: 100%;
-  max-width: 85vh;
+  max-width: 82vh;
   max-height: 70vh;
   aspect-ratio: 1 / 1;
   position: relative;
@@ -115,9 +138,7 @@ const GAME_STYLES = `
   box-shadow: 0 0 40px rgba(0,0,0,0.8);
 }
 
-/* 3a. Camera anchor — sits exactly at the viewport's center point via CSS.
-   width/height are 0 so it has no layout footprint; overflow:visible lets
-   the grid container spill out in all directions. */
+/* 3a. Camera anchor */
 .la-camera-anchor {
   position: absolute;
   top: 50%;
@@ -127,9 +148,7 @@ const GAME_STYLES = `
   overflow: visible;
 }
 
-/* 3b. Grid container — absolutely positioned children share one coordinate
-   system. The camera transform shifts this div so the player tile lands
-   exactly on the anchor origin (= the viewport's visual center). */
+/* 3b. Grid container */
 .la-grid-container {
   position: absolute;
   top: 0;
@@ -139,7 +158,7 @@ const GAME_STYLES = `
 
 /* 4. Sidebar */
 .la-sidebar {
-  flex: 0 0 320px;
+  flex: 0 0 340px;
   max-width: 100%;
   max-height: 85vh;
   overflow-y: auto;
@@ -150,21 +169,13 @@ const GAME_STYLES = `
   gap: 6px;
 }
 
-/* 5. Quit button */
-.la-quit-btn {
-  position: absolute;
-  top: 1.5rem;
-  right: 1.5rem;
-  z-index: 100;
-}
-
 /* Mobile */
-@media (max-width: 800px) {
+@media (max-width: 820px) {
   .la-main-layout {
-    padding: 1rem;
+    padding: 0.85rem;
     gap: 1rem;
   }
-  .la-game-wrapper {
+  .la-game-wrapper-inner {
     flex: 1 1 100%;
   }
   .la-sidebar {
@@ -173,18 +184,8 @@ const GAME_STYLES = `
   }
 }
 
-/* Fullscreen — allow wrapping so tablet/mobile can stack sidebar below the map */
-.la-main-layout:fullscreen {
-  flex-wrap: wrap;
-  align-items: flex-start;
-  height: 100vh;
-  width: 100vw;
-  padding: 1.5rem;
-  gap: 1.5rem;
-  overflow-y: auto;
-  overflow-x: hidden;
-  background-color: #070810;
-}
+/* Fullscreen */
+.la-main-layout:fullscreen,
 .la-main-layout:-webkit-full-screen {
   flex-wrap: wrap;
   align-items: flex-start;
@@ -197,38 +198,30 @@ const GAME_STYLES = `
   background-color: #070810;
 }
 
-/* Mobile fullscreen: tighter padding */
-@media (max-width: 800px) {
-  .la-main-layout:fullscreen,
-  .la-main-layout:-webkit-full-screen {
-    padding: 1rem;
-    gap: 1rem;
-    align-items: center;
-  }
-}
-
-/* Sidebar in fullscreen — uncap height, fill available width on narrow screens */
 .la-main-layout:fullscreen .la-sidebar,
 .la-main-layout:-webkit-full-screen .la-sidebar {
   max-height: none;
   overflow-y: auto;
 }
 
-/* Viewport in fullscreen — square but constrained to breathing-room dims */
 .la-main-layout:fullscreen .la-viewport,
 .la-main-layout:-webkit-full-screen .la-viewport {
   max-width: 100%;
-  max-height: 85vh;
+  max-height: 82vh;
 }
 `;
 
 // ── Log item type ──────────────────────────────────────────────────────────────
 interface LogItem {
-  id:         number;
-  text:       string;
-  type:       'combat' | 'oracle' | 'info';
+  id:          number;
+  text:        string;
+  type:        'combat' | 'oracle' | 'info';
   explanation?: string;
   hint?:        string;
+  lensTitle?:   string;
+  expression?:  string;
+  methods?:     SolutionMethod[];
+  realLifeTip?: string;
   isCorrect?:   boolean;
 }
 
@@ -236,48 +229,38 @@ let _logId = 0;
 function mkLog(
   text: string,
   type: LogItem['type'] = 'info',
-  extra?: Partial<Pick<LogItem, 'explanation' | 'hint' | 'isCorrect'>>,
+  extra?: Partial<Omit<LogItem, 'id' | 'text' | 'type'>>,
 ): LogItem {
   return { id: ++_logId, text, type, ...extra };
 }
 
 // ── Visual constants ───────────────────────────────────────────────────────────
-const CELL = 80;   // large tiles — viewport camera handles clipping
+const CELL = 80;
 const GAP  = 2;
 
-
-// ── Pure camera helper — module-level, no viewport measurement needed ──
-// .la-camera-anchor is already CSS-centered at 50%/50% of the viewport.
-// This function only needs to pull the grid back so the player tile sits
-// exactly under the anchor's origin point.
 function getCamTransform(row: number, col: number): string {
   const tx = -(col * (CELL + GAP) + CELL / 2);
   const ty = -(row * (CELL + GAP) + CELL / 2);
   return `translate(${tx}px, ${ty}px)`;
 }
 
-/** Virtual joystick repeat rate — milliseconds between steps while the finger is held. */
 const JOYSTICK_REPEAT_MS = 180;
 
-// ── Biome background helper ────────────────────────────────────────────────────
 function getBackgroundImage(stage: number): string {
   const index = ((stage - 1) % 9) + 1;
   return `/images/background-0${index}.jpg`;
 }
 
 const COLOR: Record<TileType | 'PLAYER', { bg: string; border: string; shadow?: string }> = {
-  // Walls are fully transparent — the biome artwork shows through
   EMPTY:        { bg: 'rgba(255,255,255,0.05)', border: 'rgba(255,255,255,0.10)' },
-  WALL:         { bg: 'transparent',        border: 'transparent' },
-  // Entity tiles keep their identity colours but with a dark glass base
-  MONSTER:      { bg: 'rgba(60,0,0,0.72)',  border: '#ff4444', shadow: 'inset 0 0 10px rgba(255,68,68,0.45)' },
-  TRICKY_BUFF:  { bg: 'rgba(50,38,0,0.75)', border: '#ffd700', shadow: 'inset 0 0 10px rgba(255,215,0,0.40)' },
-  MAJOR_CHOICE: { bg: 'rgba(0,24,40,0.80)', border: '#00d4ff', shadow: 'inset 0 0 16px rgba(0,212,255,0.35), 0 0 10px rgba(0,212,255,0.4)' },
-  // Fog is intentionally opaque — unknown territory should feel impenetrable
-  FOG:          { bg: 'rgba(4,4,14,0.93)',  border: 'rgba(18,18,42,0.55)' },
-  BOSS:         { bg: 'rgba(26,0,40,0.85)', border: '#cc44ff', shadow: 'inset 0 0 18px rgba(200,68,255,0.55), 0 0 22px rgba(200,68,255,0.5)' },
-  PORTAL:       { bg: 'rgba(13,0,30,0.85)', border: '#a855f7', shadow: 'inset 0 0 16px rgba(168,85,247,0.5), 0 0 18px rgba(168,85,247,0.6)' },
-  PLAYER:       { bg: 'rgba(0,26,0,0.80)',  border: '#00ff00', shadow: 'inset 0 0 16px rgba(0,255,0,0.45), 0 0 14px rgba(0,255,0,0.6)' },
+  WALL:         { bg: 'transparent',            border: 'transparent' },
+  MONSTER:      { bg: 'rgba(60,0,0,0.72)',      border: '#ff4444', shadow: 'inset 0 0 10px rgba(255,68,68,0.45)' },
+  TRICKY_BUFF:  { bg: 'rgba(50,38,0,0.75)',     border: '#ffd700', shadow: 'inset 0 0 10px rgba(255,215,0,0.40)' },
+  MAJOR_CHOICE: { bg: 'rgba(0,24,40,0.80)',     border: '#00d4ff', shadow: 'inset 0 0 16px rgba(0,212,255,0.35), 0 0 10px rgba(0,212,255,0.4)' },
+  FOG:          { bg: 'rgba(4,4,14,0.93)',      border: 'rgba(18,18,42,0.55)' },
+  BOSS:         { bg: 'rgba(26,0,40,0.85)',     border: '#cc44ff', shadow: 'inset 0 0 18px rgba(200,68,255,0.55), 0 0 22px rgba(200,68,255,0.5)' },
+  PORTAL:       { bg: 'rgba(13,0,30,0.85)',     border: '#a855f7', shadow: 'inset 0 0 16px rgba(168,85,247,0.5), 0 0 18px rgba(168,85,247,0.6)' },
+  PLAYER:       { bg: 'rgba(0,26,0,0.80)',      border: '#00ff00', shadow: 'inset 0 0 16px rgba(0,255,0,0.45), 0 0 14px rgba(0,255,0,0.6)' },
 };
 
 function cellStyle(tile: Tile): CSSProperties {
@@ -302,7 +285,7 @@ function cellStyle(tile: Tile): CSSProperties {
   };
 }
 
-// ── Tile content (memoised — only re-renders when tile data changes, not on player move) ──
+// ── Tile content ───────────────────────────────────────────────────────────────
 const CellContent = memo(function CellContent({ tile }: { tile: Tile }) {
   const icon: CSSProperties = {
     fontSize: 28, lineHeight: 1,
@@ -313,14 +296,11 @@ const CellContent = memo(function CellContent({ tile }: { tile: Tile }) {
     lineHeight: 1.2, textAlign: 'center', padding: '0 3px',
     textShadow: '0 1px 4px #000, 0 -1px 4px #000, 1px 0 4px #000, -1px 0 4px #000',
   };
-  // Pill background for numeric labels to guarantee readability on any biome art
   const pill: CSSProperties = {
     background: 'rgba(0,0,0,0.78)',
     borderRadius: 4,
     padding: '1px 5px',
   };
-
-
 
   switch (tile.type) {
     case 'MONSTER':
@@ -399,7 +379,7 @@ function LogItemRow({
   isFirst: boolean;
   onCombatClick?: (item: LogItem) => void;
 }) {
-  const clickable = item.type === 'combat' && !!item.explanation && !!onCombatClick;
+  const clickable = item.type === 'combat' && (!!item.explanation || !!item.methods) && !!onCombatClick;
   const accent    = item.type === 'combat'
     ? (item.isCorrect ? '#00cc55' : '#ff4444')
     : item.type === 'oracle' ? '#00d4ff' : '#1e293b';
@@ -415,44 +395,42 @@ function LogItemRow({
       onClick={clickable ? () => onCombatClick!(item) : undefined}
       onKeyDown={clickable ? e => { if (e.key === 'Enter') onCombatClick!(item); } : undefined}
       style={{
-        padding:    '8px 10px',
+        padding:    '7px 10px',
         borderLeft: `3px solid ${isFirst ? '#00d4ff' : accent}`,
         color:      textColor,
-        fontSize:   13,
+        fontSize:   12,
         fontFamily: "'Courier New', monospace",
-        lineHeight: 1.65,
+        lineHeight: 1.55,
         cursor:     clickable ? 'pointer' : 'default',
         transition: 'background 0.15s',
         display:    'flex', alignItems: 'center', gap: 6,
       }}
-      onMouseEnter={e => { if (clickable) e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; }}
+      onMouseEnter={e => { if (clickable) e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; }}
       onMouseLeave={e => { if (clickable) e.currentTarget.style.background = 'transparent'; }}
     >
       <span style={{ flexGrow: 1 }}>{item.text}</span>
-      {clickable && <span style={{ fontSize: 9, color: '#475569', flexShrink: 0 }}>📖</span>}
+      {clickable && <span style={{ fontSize: 10, color: '#38bdf8', flexShrink: 0 }}>📖 Ver 3 jeitos</span>}
     </div>
   );
 }
-
 
 function StatBadge({ label, value, color = '#00ff00' }: { label: string; value: string | number; color?: string }) {
   return (
     <div style={{
       background: 'rgba(0,0,0,0.6)', border: `1px solid ${color}44`,
-      borderRadius: 6, padding: '6px 12px',
+      borderRadius: 6, padding: '6px 10px', flex: 1,
       display: 'flex', flexDirection: 'column', gap: 2,
     }}>
-      <span style={{ fontSize: 9, color: `${color}88`, fontFamily: "'Courier New', monospace", textTransform: 'uppercase', letterSpacing: 1 }}>
+      <span style={{ fontSize: 9, color: `${color}99`, fontFamily: "'Courier New', monospace", textTransform: 'uppercase', letterSpacing: 1 }}>
         {label}
       </span>
-      <span style={{ fontSize: 20, color, fontFamily: "'Courier New', monospace", fontWeight: 700 }}>
+      <span style={{ fontSize: 18, color, fontFamily: "'Courier New', monospace", fontWeight: 800 }}>
         {value}
       </span>
     </div>
   );
 }
 
-// ── Oracle sidebar panel ───────────────────────────────────────────────────────
 function OraclePanel({ result, pathId, roomIdx }: { result: OracleResult; pathId: PathId; roomIdx: number }) {
   const accent = pathId === 'buff' ? '#00d4ff' : '#ff4444';
   return (
@@ -460,28 +438,28 @@ function OraclePanel({ result, pathId, roomIdx }: { result: OracleResult; pathId
       background: `${accent}08`,
       border: `1px solid ${accent}33`,
       borderRadius: 8,
-      padding: '14px 16px',
-      fontSize: 14,
+      padding: '12px 14px',
+      fontSize: 13,
       fontFamily: "'Courier New', monospace",
-      lineHeight: 2,
+      lineHeight: 1.75,
     }}>
-      <p style={{ margin: '0 0 8px', color: accent, fontSize: 12, textTransform: 'uppercase', letterSpacing: 2 }}>
-        ─ Oracle: {pathId === 'buff' ? '⚡ Buff' : '💀 Sac'} · Sala {roomIdx + 1}/{NUM_ROOMS} ─
+      <p style={{ margin: '0 0 6px', color: accent, fontSize: 11, textTransform: 'uppercase', letterSpacing: 1.5, fontWeight: 700 }}>
+        🔮 Oráculo: {pathId === 'buff' ? '⚡ Caminho Buff' : '💀 Sacrifício'} · Sala {roomIdx + 1}/{NUM_ROOMS}
       </p>
-      <div style={{ color: '#64748b', fontSize: 12 }}>Ordem ótima:</div>
-      <div style={{ color: '#e2e8f0', fontWeight: 700, fontSize: 16 }}>
+      <div style={{ color: '#94a3b8', fontSize: 11 }}>Ordem Estratégica Recomendada:</div>
+      <div style={{ color: '#e2e8f0', fontWeight: 800, fontSize: 14, marginTop: 2 }}>
         {result.optimalOrder.join(' → ')}
       </div>
-      <div style={{ color: '#64748b', marginTop: 6, fontSize: 13 }}>{result.rationale}</div>
-      <div style={{ marginTop: 10, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+      <div style={{ color: '#94a3b8', marginTop: 4, fontSize: 12 }}>{result.rationale}</div>
+      <div style={{ marginTop: 8, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
         {result.monsterLevels.map((lvl, i) => (
           <span key={i} style={{
             background: 'rgba(255,68,68,0.1)',
             border: '1px solid #ff444444',
             borderRadius: 6,
-            padding: '4px 10px',
+            padding: '2px 8px',
             color: '#ff8888',
-            fontSize: 14,
+            fontSize: 12,
             fontWeight: 700,
           }}>
             M{i + 1}={formatPower(lvl)}
@@ -491,9 +469,9 @@ function OraclePanel({ result, pathId, roomIdx }: { result: OracleResult; pathId
           background: 'rgba(255,215,0,0.1)',
           border: '1px solid #ffd70044',
           borderRadius: 6,
-          padding: '4px 10px',
+          padding: '2px 8px',
           color: '#ffd700',
-          fontSize: 14,
+          fontSize: 12,
           fontWeight: 700,
         }}>
           {result.revealedBuffLabel}
@@ -503,29 +481,28 @@ function OraclePanel({ result, pathId, roomIdx }: { result: OracleResult; pathId
   );
 }
 
-// ── Room status pill ───────────────────────────────────────────────────────────
 function RoomPill({ label, complete, active, roomProgress }: {
   label: string; complete: boolean; active: boolean; roomProgress: number;
 }) {
-  const color = complete ? '#00ff00' : active ? '#ffd700' : '#334155';
+  const color = complete ? '#00ff66' : active ? '#ffd700' : '#475569';
   return (
     <div style={{
       display: 'flex', alignItems: 'center', gap: 10,
-      padding: '10px 14px',
+      padding: '8px 12px',
       background: `${color}12`,
       border: `1px solid ${color}55`,
       borderRadius: 8,
-      fontSize: 15,
+      fontSize: 13,
       fontFamily: "'Courier New', monospace",
     }}>
-      <span style={{ color, fontSize: 20 }}>{complete ? '✓' : active ? '…' : '○'}</span>
-      <span style={{ color: complete ? '#00ff00' : active ? '#ffd700' : '#334155', fontWeight: 600 }}>
+      <span style={{ color, fontSize: 16 }}>{complete ? '✓' : active ? '⚡' : '○'}</span>
+      <span style={{ color: complete ? '#00ff66' : active ? '#ffd700' : '#64748b', fontWeight: 700 }}>
         {label}
       </span>
       {active && !complete && (
-        <span style={{ color: '#ffd700', fontSize: 13, marginLeft: 'auto' }}>{roomProgress}/{NUM_ROOMS}</span>
+        <span style={{ color: '#ffd700', fontSize: 12, marginLeft: 'auto' }}>Sala {roomProgress}/{NUM_ROOMS}</span>
       )}
-      {complete && <span style={{ color: '#00ff00', fontSize: 13, marginLeft: 'auto' }}>COMPLETA</span>}
+      {complete && <span style={{ color: '#00ff66', fontSize: 11, marginLeft: 'auto', fontWeight: 700 }}>CONCLUÍDO</span>}
     </div>
   );
 }
@@ -552,14 +529,15 @@ function AccordionHeader({
         alignItems:     'center',
         justifyContent: 'space-between',
         padding:        '9px 11px',
-        background:     open ? 'rgba(0,212,255,0.09)' : 'rgba(8,10,20,0.55)',
-        border:         `1px solid ${open ? '#00d4ff33' : '#1e293b'}`,
+        background:     open ? 'rgba(0,212,255,0.10)' : 'rgba(8,10,20,0.65)',
+        border:         `1px solid ${open ? '#00d4ff44' : '#1e293b'}`,
         borderRadius:   open ? '8px 8px 0 0' : 8,
-        color:          open ? '#00d4ff' : '#475569',
-        fontSize:       9,
+        color:          open ? '#00d4ff' : '#94a3b8',
+        fontSize:       10,
+        fontWeight:     700,
         fontFamily:     "'Courier New', monospace",
         textTransform:  'uppercase',
-        letterSpacing:  2,
+        letterSpacing:  1.5,
         cursor:         'pointer',
         transition:     'all 0.18s ease',
         outline:        'none',
@@ -567,69 +545,71 @@ function AccordionHeader({
     >
       <span>{label}</span>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-        {badge && <span style={{ fontSize: 9, color: '#ffd70099' }}>{badge}</span>}
-        <span style={{ fontSize: 9, opacity: 0.6 }}>{open ? '▲' : '▼'}</span>
+        {badge && <span style={{ fontSize: 10, color: '#ffd700' }}>{badge}</span>}
+        <span style={{ fontSize: 9, opacity: 0.7 }}>{open ? '▲' : '▼'}</span>
       </div>
     </button>
   );
 }
 
-
 // ── Main component ─────────────────────────────────────────────────────────────
 export function LogicAscension({ onGoToMenu }: { onGoToMenu?: () => void } = {}) {
-  // ── ProcGen map: generate once on mount, regenerate on reset ────────────────
   const [mapData, setMapData] = useState<GeneratedMap>(generateRandomMap);
   const [grid,    setGrid]    = useState<Tile[][]>(() => mapData.grid);
 
   // ── Core game state ──────────────────────────────────────────────────────────
-  const [playerPos,      setPlayerPos]      = useState<PlayerPos>(PLAYER_START);
-  const [playerPower,    setPlayerPower]    = useState(10);
-  const [combat,         setCombat]         = useState<CombatState | null>(null);
-  const [completedRooms, setCompletedRooms] = useState<Set<PathId>>(new Set());
-  const [gamePhase,      setGamePhase]      = useState<GamePhase>('playing');
-  const [gameState,      setGameState]      = useState<'MENU' | 'PLAYING'>('MENU');
-  const [bossSpawned,    setBossSpawned]    = useState(false);
-  const [gameOverReason, setGameOverReason] = useState('');
-  /** Sprint 9: stage persists across maps — increments on "Avançar", resets on "Reiniciar". */
-  const [currentStage,   setCurrentStage]   = useState(1);
-  /** Sprint 10.5: explanation from the last resolved combat, persists on the map screen. */
-  const [lastExplanation, setLastExplanation] = useState<{ text: string; isCorrect: boolean } | null>(null);
-  /** Sprint 10.6: which accordion panel is open in the sidebar. */
-  const [activePanel, setActivePanel] = useState<AccordionId | null>('knowledge');
-  /** Sprint 12: player names for leaderboard save on Victory / Game Over. */
-  const [victoryName,  setVictoryName]  = useState('');
-  const [gameOverName, setGameOverName] = useState('');
+  const [playerPos,       setPlayerPos]       = useState<PlayerPos>(PLAYER_START);
+  const [playerPower,     setPlayerPower]     = useState(10);
+  const [combat,          setCombat]          = useState<CombatState | null>(null);
+  const [completedRooms,  setCompletedRooms]  = useState<Set<PathId>>(new Set());
+  const [gamePhase,       setGamePhase]       = useState<GamePhase>('playing');
+  const [gameState,       setGameState]       = useState<'MENU' | 'PLAYING'>('MENU');
+  const [bossSpawned,     setBossSpawned]     = useState(false);
+  const [gameOverReason,  setGameOverReason]  = useState('');
+  const [currentStage,    setCurrentStage]    = useState(1);
+  const [lastExplanation, setLastExplanation] = useState<KnowledgeEntry | null>(null);
+  const [activePanel,     setActivePanel]     = useState<AccordionId | null>('knowledge');
+  const [victoryName,     setVictoryName]     = useState('');
+  const [gameOverName,    setGameOverName]    = useState('');
 
+  // ── Dopamine, Audio & Streak state ───────────────────────────────────────────
+  const [streak,         setStreak]         = useState(0);
+  const [bestStreak,     setBestStreak]     = useState(0);
+  const [masteredLenses, setMasteredLenses] = useState<string[]>([]);
+  const [floatingTexts,  setFloatingTexts]  = useState<FloatingText[]>([]);
+  const [isMuted,        setIsMuted]        = useState<boolean>(() => soundEngine.isMuted());
 
   // ── ProcGen room tracking ────────────────────────────────────────────────────
-  // activeRoomIdx[pathId] = current room being played (undefined = not started)
-  // oracleChain[pathId]   = oracle results per room, accumulated progressively
   const [activeRoomIdx, setActiveRoomIdx] = useState<Partial<Record<PathId, number>>>({});
   const [oracleChain,   setOracleChain]   = useState<Partial<Record<PathId, OracleResult[]>>>({});
 
   const [log, setLog] = useState<LogItem[]>(() => [
-    mkLog('👾 Logic Ascension · Progressão Infinita', 'info'),
-    mkLog('🗺️  Explore o corredor e entre nas Salas.', 'info'),
-    mkLog('⌨️  WASD ou setas para mover.', 'info'),
+    mkLog('👾 Logic Ascension · Matemática Básica Viva', 'info'),
+    mkLog('🗺️  Pegue o Buff ×2 no corredor e escolha seu caminho.', 'info'),
+    mkLog('⌨️  WASD/Setas para mover · [1]-[4] para responder rápido.', 'info'),
   ]);
 
-  // ── Stable refs (avoid stale closures in callbacks / effects) ────────────────
+  // ── Stable refs ──────────────────────────────────────────────────────────────
   const gridRef           = useRef(grid);
   const posRef            = useRef(playerPos);
   const powerRef          = useRef(playerPower);
   const combatRef         = useRef(combat);
   const stageRef          = useRef(currentStage);
-  stageRef.current        = currentStage;
+  const streakRef         = useRef(streak);
   const completedRoomsRef = useRef(completedRooms);
   const gamePhaseRef      = useRef(gamePhase);
   const bossSpawnedRef    = useRef(bossSpawned);
   const mapDataRef        = useRef(mapData);
   const activeRoomIdxRef  = useRef(activeRoomIdx);
   const oracleChainRef    = useRef(oracleChain);
+  const timersRef         = useRef<Array<ReturnType<typeof setTimeout>>>([]);
+
   gridRef.current           = grid;
   posRef.current            = playerPos;
   powerRef.current          = playerPower;
   combatRef.current         = combat;
+  stageRef.current          = currentStage;
+  streakRef.current         = streak;
   completedRoomsRef.current = completedRooms;
   gamePhaseRef.current      = gamePhase;
   bossSpawnedRef.current    = bossSpawned;
@@ -637,25 +617,53 @@ export function LogicAscension({ onGoToMenu }: { onGoToMenu?: () => void } = {})
   activeRoomIdxRef.current  = activeRoomIdx;
   oracleChainRef.current    = oracleChain;
 
-  // ── Virtual joystick refs ───────────────────────────────────────────────
-  // These hold the active continuous-movement interval and current direction.
-  // Using refs (not state) so they never cause React re-renders.
   const moveIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const currentDirRef   = useRef<Direction | null>(null);
+  const floatIdRef      = useRef(0);
 
+  const registerTimeout = useCallback((fn: () => void, ms: number) => {
+    const id = setTimeout(fn, ms);
+    timersRef.current.push(id);
+    return id;
+  }, []);
+
+  const clearAllTimers = useCallback(() => {
+    timersRef.current.forEach(clearTimeout);
+    timersRef.current = [];
+  }, []);
+
+  useEffect(() => () => clearAllTimers(), [clearAllTimers]);
+
+  const spawnFloatingText = useCallback((row: number, col: number, text: string, color: string, subtext?: string) => {
+    const id = ++floatIdRef.current;
+    setFloatingTexts(prev => [...prev, { id, row, col, text, subtext, color }]);
+    registerTimeout(() => {
+      setFloatingTexts(prev => prev.filter(f => f.id !== id));
+    }, 1350);
+  }, [registerTimeout]);
 
   const addEntries = useCallback((entries: LogItem[]) => {
     setLog(prev => [...entries, ...prev].slice(0, 40));
   }, []);
 
-  // ── Reveal room k (rooms 1–4): run chained Oracle, then uncover FOG ──────────
-  // Called by the room-completion effect when a room is cleared.
+  // ── Reveal room k (rooms 1+): Adaptive Oracle (Anti-Softlock) ────────────────
   const revealNextRoom = useCallback((pathId: PathId, roomIdx: number) => {
     const room  = mapDataRef.current.rooms[pathId][roomIdx];
     const chain = oracleChainRef.current[pathId] ?? [];
-    // Hardcore Oracle chain: Room k uses Room (k-1)'s projected power as input
-    const inputPower = chain[roomIdx - 1]?.projectedPowerAfterRoom ?? powerRef.current;
+    const projPrev = chain[roomIdx - 1]?.projectedPowerAfterRoom ?? powerRef.current;
+
+    // Hybrid Adaptive Oracle: anchors primarily to the player's real power so a single
+    // mistake or sub-optimal buff order in Room 1 never creates an impossible softlock in Room 3!
+    const inputPower = Math.max(
+      4,
+      Math.min(
+        Math.round(powerRef.current * 1.35),
+        Math.round(powerRef.current * 0.72 + projPrev * 0.28),
+      ),
+    );
     const oracle = runOracle(inputPower, pathId, room.buffMultiplier);
+
+    soundEngine.playRoomReveal();
 
     setOracleChain(prev => ({
       ...prev,
@@ -664,18 +672,14 @@ export function LogicAscension({ onGoToMenu }: { onGoToMenu?: () => void } = {})
 
     setGrid(g => {
       let ng = g;
-      // 1. Access tiles (chunk spine section) → EMPTY
       for (const { row, col } of room.accessTiles)
         ng = setTile(ng, row, col, { type: 'EMPTY' });
-      // 2. All floor tiles → EMPTY (entity overwrites follow)
       for (const ft of room.floorTiles)
         ng = setTile(ng, ft.row, ft.col, { type: 'EMPTY' });
-      // 3. Monsters
       for (let i = 0; i < 3; i++) {
         const p = room.monsterPositions[i];
         ng = setTile(ng, p.row, p.col, { type: 'MONSTER', level: oracle.monsterLevels[i] });
       }
-      // 4. TrickyBuff with visual cue (reward = buff improved or neutral; punish = nerfed)
       const isReward = oracle.revealedBuffMultiplier >= oracle.baseBuffMultiplier;
       ng = setTile(ng, room.buffPosition.row, room.buffPosition.col, {
         type:            'TRICKY_BUFF',
@@ -691,32 +695,28 @@ export function LogicAscension({ onGoToMenu }: { onGoToMenu?: () => void } = {})
       ...oracle.logLines.map(l => mkLog(l, 'oracle')),
     ]);
 
-    // Clear buff animation flag after keyframe completes
     const { row: br, col: bc } = room.buffPosition;
-    setTimeout(() => {
+    registerTimeout(() => {
       setGrid(g => {
         const bt = g[br]?.[bc];
         if (bt?.type !== 'TRICKY_BUFF' || !bt.animationType) return g;
         return setTile(g, br, bc, { ...bt, animationType: undefined });
       });
     }, 1400);
-  }, [addEntries]);
+  }, [addEntries, registerTimeout]);
 
   // ── Sequential room-completion detector ──────────────────────────────────────
-  // Fires on every grid change. Checks if the CURRENT active room (per path) has
-  // all 4 entity tiles cleared. On clear → reveal next room OR mark path done.
   useEffect(() => {
     const paths: PathId[] = ['buff', 'sacrifice'];
     for (const pathId of paths) {
       if (completedRoomsRef.current.has(pathId)) continue;
       const activeIdx = activeRoomIdxRef.current[pathId];
-      if (activeIdx === undefined) continue;    // MC not yet activated
+      if (activeIdx === undefined) continue;
 
       const room     = mapDataRef.current.rooms[pathId][activeIdx];
       const entities = [...room.monsterPositions, room.buffPosition];
       if (!entities.every(({ row, col }) => grid[row][col].type === 'EMPTY')) continue;
 
-      // Active room cleared!
       addEntries([
         mkLog(`🏆 Sala ${activeIdx + 1}/${NUM_ROOMS} concluída! (${pathId === 'buff' ? '⚡ Buff' : '💀 Sac'})`, 'info'),
       ]);
@@ -727,26 +727,28 @@ export function LogicAscension({ onGoToMenu }: { onGoToMenu?: () => void } = {})
       } else {
         setCompletedRooms(prev => new Set([...prev, pathId]));
         addEntries([
-          mkLog(`🏆🏆 ${pathId === 'buff' ? '⚡ Buff' : '💀 Sac'} — Todas ${NUM_ROOMS} Salas Concluídas!`, 'info'),
+          mkLog(`🏆🏆 ${pathId === 'buff' ? '⚡ Buff' : '💀 Sac'} — Todas as ${NUM_ROOMS} Salas Concluídas!`, 'info'),
         ]);
       }
     }
   }, [grid, addEntries, revealNextRoom]);
 
-  // ── Boss spawn detector ──────────────────────────────────────────────────────
-  // Fires when BOTH paths are fully cleared.
-  // Boss level = 90% of the highest Room-5 projected power across both paths.
+  // ── Boss spawn detector (Fair Adaptive Climax) ───────────────────────────────
   useEffect(() => {
     if (completedRooms.size < 2 || bossSpawnedRef.current) return;
     const buffProj = oracleChainRef.current.buff?.[NUM_ROOMS - 1]?.projectedPowerAfterRoom;
     const sacProj  = oracleChainRef.current.sacrifice?.[NUM_ROOMS - 1]?.projectedPowerAfterRoom;
-    const base     = Math.max(buffProj ?? 0, sacProj ?? 0) || calculateTheoreticalMax();
-    const bossLvl  = Math.round(base * 0.9);
+    const rawBase  = Math.max(buffProj ?? 0, sacProj ?? 0) || calculateTheoreticalMax();
+    // Calibrate Boss to be an exciting challenge (~85%-115% of player's actual power)
+    const bossLvl  = Math.max(
+      10,
+      Math.min(Math.round(powerRef.current * 1.15), Math.round(rawBase * 0.85)),
+    );
     setBossSpawned(true);
+    soundEngine.playBossSpawn();
     setGrid(g => setTile(g, BOSS_SPAWN.row, BOSS_SPAWN.col, { type: 'BOSS', level: bossLvl }));
     addEntries([
-      mkLog(`💥 BOSS FINAL surgiu no corredor! Lv.${bossLvl}`, 'info'),
-      mkLog(`📐 Oracle proj. máx (${NUM_ROOMS} salas): ${base} → Boss = 90% = ${bossLvl}`, 'oracle'),
+      mkLog(`💥 BOSS FINAL surgiu no corredor central (7,3)! Lv.${formatPower(bossLvl)}`, 'info'),
       mkLog(`⚠️  Derrote o Boss para abrir o PORTAL!`, 'info'),
     ]);
   }, [completedRooms, addEntries]);
@@ -775,6 +777,7 @@ export function LogicAscension({ onGoToMenu }: { onGoToMenu?: () => void } = {})
 
     // ── PORTAL → victory ─────────────────────────────────────────────────
     if (target.type === 'PORTAL') {
+      soundEngine.playVictoryFanfare();
       setPlayerPos({ row: nr, col: nc });
       setGamePhase('victory');
       return;
@@ -783,9 +786,18 @@ export function LogicAscension({ onGoToMenu }: { onGoToMenu?: () => void } = {})
     // ── TRICKY BUFF ──────────────────────────────────────────────────────
     if (target.type === 'TRICKY_BUFF') {
       const mult = target.multiplier ?? 1;
-      newPower   = Math.round(power * mult);
-      entries.push(mkLog(`⚡ TrickyBuff! ${power} ${target.multiplierLabel} = ${newPower} poder`, 'info'));
+      newPower   = Math.max(1, Math.round(power * mult));
+      soundEngine.playBuff(mult >= 1);
+      spawnFloatingText(
+        nr, nc,
+        `${target.multiplierLabel} (${formatPower(newPower)})`,
+        mult >= 1 ? '#ffd700' : '#ff6666',
+        mult >= 1 ? '⚡ BÔNUS!' : '⚠️ MALDIÇÃO',
+      );
+      entries.push(mkLog(`⚡ TrickyBuff! ${formatPower(power)} ${target.multiplierLabel} = ${formatPower(newPower)} poder`, 'info'));
       newGrid = setTile(newGrid, nr, nc, { type: 'EMPTY' });
+    } else if (target.type === 'EMPTY') {
+      soundEngine.playStep();
     }
 
     // ── MAJOR CHOICE (first visit only) ──────────────────────────────────
@@ -793,28 +805,30 @@ export function LogicAscension({ onGoToMenu }: { onGoToMenu?: () => void } = {})
       const pathId = target.pathId!;
       const mcMult = target.multiplier ?? 1;
 
-      // Task 1: Apply MC multiplier IMMEDIATELY
-      newPower = Math.round(newPower * mcMult);
+      newPower = Math.max(2, Math.round(newPower * mcMult));
+      soundEngine.playBuff(mcMult >= 1);
+      soundEngine.playRoomReveal();
+      spawnFloatingText(
+        nr, nc,
+        `${target.multiplierLabel ?? ''} → ${formatPower(newPower)}`,
+        pathId === 'buff' ? '#00d4ff' : '#ff6666',
+        pathId === 'buff' ? '⚡ THE BUFF' : '💀 SACRIFÍCIO',
+      );
       entries.push(
-        mkLog(`${pathId === 'buff' ? '⚡' : '💀'} Escolha! ${power} ${target.multiplierLabel ?? ''} → ${newPower} poder`, 'info')
+        mkLog(`${pathId === 'buff' ? '⚡' : '💀'} Escolha! ${formatPower(power)} ${target.multiplierLabel ?? ''} → ${formatPower(newPower)} poder`, 'info')
       );
 
-      // Oracle for Room 0 (no overrideBuffMult → Sprint-7 MC punishment/reward)
       const oracle0 = runOracle(newPower, pathId);
       const room0   = mapDataRef.current.rooms[pathId][0];
 
-      // Reveal access tiles (MC connector + chunk-0 spine) → EMPTY
       for (const { row: ar, col: ac } of room0.accessTiles)
         newGrid = setTile(newGrid, ar, ac, { type: 'EMPTY' });
-      // Floor tiles → EMPTY first, then entities override
       for (const ft of room0.floorTiles)
         newGrid = setTile(newGrid, ft.row, ft.col, { type: 'EMPTY' });
-      // Monsters
       for (let i = 0; i < 3; i++) {
         const p = room0.monsterPositions[i];
         newGrid = setTile(newGrid, p.row, p.col, { type: 'MONSTER', level: oracle0.monsterLevels[i] });
       }
-      // TrickyBuff with MC punishment/reward animation
       const wasPunished = oracle0.revealedBuffMultiplier < oracle0.baseBuffMultiplier;
       newGrid = setTile(newGrid, room0.buffPosition.row, room0.buffPosition.col, {
         type:            'TRICKY_BUFF',
@@ -831,7 +845,7 @@ export function LogicAscension({ onGoToMenu }: { onGoToMenu?: () => void } = {})
       entries.push(...oracle0.logLines.map(l => mkLog(l, 'oracle')));
 
       const { row: br, col: bc } = room0.buffPosition;
-      setTimeout(() => {
+      registerTimeout(() => {
         setGrid(g => {
           const bt = g[br]?.[bc];
           if (bt?.type !== 'TRICKY_BUFF' || !bt.animationType) return g;
@@ -876,10 +890,9 @@ export function LogicAscension({ onGoToMenu }: { onGoToMenu?: () => void } = {})
     setPlayerPower(newPower);
     setGrid(newGrid);
     if (entries.length) addEntries(entries);
-  }, [addEntries]);
+  }, [addEntries, registerTimeout, spawnFloatingText]);
 
   // ── Virtual Joystick Handlers ────────────────────────────────────────────────
-  // Stop any in-flight movement interval.
   const stopContinuousMove = useCallback(() => {
     if (moveIntervalRef.current !== null) {
       clearInterval(moveIntervalRef.current);
@@ -888,37 +901,60 @@ export function LogicAscension({ onGoToMenu }: { onGoToMenu?: () => void } = {})
     currentDirRef.current = null;
   }, []);
 
-  // Start (or restart after direction change) the continuous move loop.
-  // Fires immediately for frame-0 feedback, then every JOYSTICK_REPEAT_MS.
   const startContinuousMove = useCallback((dir: Direction) => {
     stopContinuousMove();
     currentDirRef.current = dir;
-    move(dir);                           // instant first step
+    move(dir);
     moveIntervalRef.current = setInterval(() => {
       if (currentDirRef.current) move(currentDirRef.current);
     }, JOYSTICK_REPEAT_MS);
   }, [move, stopContinuousMove]);
 
   // ── Combat result handler ─────────────────────────────────────────────────────
-  // `survivedPower` is the authoritative player power AFTER any Second Wind
-  // penalty was applied inside the CombatArena. We use it as our base.
-  const handleCombatResult = useCallback((correct: boolean, survivedPower: number) => {
+  const handleCombatResult = useCallback((correct: boolean, survivedPower: number, speedBonusPct: number = 0) => {
     const c = combatRef.current;
     if (!c) return;
     setCombat(null);
 
-    const resolveKill = (newPower: number, logLine: string) => {
+    const streakBonusPct = Math.min(50, streakRef.current * 10);
+    const totalBonusMult = 1 + (streakBonusPct + speedBonusPct) / 100;
+
+    let nextStreak = 0;
+    if (correct) {
+      nextStreak = streakRef.current + 1;
+      setStreak(nextStreak);
+      setBestStreak(prev => Math.max(prev, nextStreak));
+      if (c.question.lensTitle) {
+        const tipEntry = `${c.question.lensTitle}: ${c.question.expression} = ${c.question.answerLabels?.[c.question.correctAnswer] ?? c.question.correctAnswer}`;
+        setMasteredLenses(prev => prev.includes(tipEntry) ? prev : [...prev, tipEntry]);
+      }
+    } else {
+      setStreak(0);
+    }
+
+    const resolveKill = (newPower: number, gained: number, logLine: string) => {
       setGrid(g => setTile(g, c.targetPos.row, c.targetPos.col, { type: 'EMPTY' }));
       setPlayerPos(c.targetPos);
       setPlayerPower(newPower);
+      spawnFloatingText(
+        c.targetPos.row,
+        c.targetPos.col,
+        gained >= 0 ? `+${formatPower(gained)} PODER!` : `${formatPower(gained)} PODER`,
+        gained >= 0 ? '#00ff66' : '#ff4444',
+        nextStreak >= 2 ? `🔥 Sequência ×${nextStreak}!` : undefined,
+      );
       addEntries([mkLog(logLine, 'combat', {
         explanation: c.question.explanation,
         hint:        c.question.hint,
+        lensTitle:   c.question.lensTitle,
+        expression:  c.question.expression,
+        methods:     c.question.methods,
+        realLifeTip: c.question.realLifeTip,
         isCorrect:   correct,
       })]);
     };
 
-    const spawnPortal = (newPower: number, logPrefix: string) => {
+    const spawnPortal = (newPower: number, gained: number, logPrefix: string) => {
       setGrid(g => {
         let ng = setTile(g, c.targetPos.row, c.targetPos.col, { type: 'EMPTY' });
         ng     = setTile(ng, PORTAL_SPAWN.row, PORTAL_SPAWN.col, { type: 'PORTAL' });
@@ -926,106 +962,123 @@ export function LogicAscension({ onGoToMenu }: { onGoToMenu?: () => void } = {})
       });
       setPlayerPos(c.targetPos);
       setPlayerPower(newPower);
+      spawnFloatingText(
+        c.targetPos.row,
+        c.targetPos.col,
+        `+${formatPower(gained)} BOSS!`,
+        '#a855f7',
+        '🌀 PORTAL ABERTO!',
+      );
       addEntries([
-        mkLog(`${logPrefix} Boss derrotado! +${formatPower(c.monsterLevel)} poder. Total: ${formatPower(newPower)}`, 'combat', {
+        mkLog(`${logPrefix} Boss derrotado! +${formatPower(gained)} poder. Total: ${formatPower(newPower)}`, 'combat', {
           explanation: c.question.explanation,
           hint:        c.question.hint,
+          lensTitle:   c.question.lensTitle,
+          expression:  c.question.expression,
+          methods:     c.question.methods,
+          realLifeTip: c.question.realLifeTip,
           isCorrect:   correct,
         }),
-        mkLog('🌀 PORTAL aberto! Retorne para vencer!', 'info'),
+        mkLog('🌀 PORTAL aberto em (7,1)! Entre nele para vencer!', 'info'),
       ]);
     };
 
-    // ── Critical-hit Second Wind narration ────────────────────────────────────
     const tookCriticalHit = survivedPower < c.powerSnapshot;
     if (tookCriticalHit) {
       addEntries([
         mkLog(
-          `⚡ Você sobreviveu a um golpe crítico de -50% de poder! ` +
-          `(${formatPower(c.powerSnapshot)} → ${formatPower(survivedPower)})`,
+          `🛡️ Segundo Fôlego ativado (-50% poder: ${formatPower(c.powerSnapshot)} → ${formatPower(survivedPower)})`,
           'info',
         ),
       ]);
     }
 
-    if (c.isImpossibleMode) {
-      setGamePhase('gameover');
-      setGameOverReason(
-        `⚠️ DIFERENÇA DE PODER ABSURDA! O monstro (Lv.${formatPower(c.monsterLevel)}) te esmagou! ` +
-        `Poder: ${formatPower(c.powerSnapshot)} (mín. necessário: ${formatPower(Math.ceil(c.monsterLevel / 2))})`
-      );
-      return;
-    }
-
-    // Persist hint + explanation for the Knowledge Box (always include both)
+    // Persist rich entry for the Knowledge Box
     const kbText = [
-      c.question.hint        ? `💡 ${c.question.hint}` : '',
+      c.question.hint ? `💡 ${c.question.hint}` : '',
       c.question.explanation ?? '',
     ].filter(Boolean).join('\n\n');
-    setLastExplanation({ text: kbText, isCorrect: correct });
 
-    if (c.isDesperationMode) {
+    setLastExplanation({
+      expression:  c.question.expression,
+      lensTitle:   c.question.lensTitle,
+      hint:        c.question.hint,
+      text:        kbText,
+      methods:     c.question.methods,
+      realLifeTip: c.question.realLifeTip,
+      isCorrect:   correct,
+    });
+
+    const highRisk = c.isDesperationMode || c.isImpossibleMode;
+
+    if (highRisk) {
       if (correct) {
-        const absorbed = Math.round(c.monsterLevel * 0.5);
+        const absorbed = Math.max(1, Math.round(c.monsterLevel * 0.5 * totalBonusMult));
         const newPower = survivedPower + absorbed;
-        if (c.isBoss) spawnPortal(newPower, '🔥 Milagre Desesperado!');
-        else resolveKill(newPower, `🔥 Milagre! +${formatPower(absorbed)} poder (50% desespero). Total: ${formatPower(newPower)}`);
+        if (c.isBoss) spawnPortal(newPower, absorbed, '🔥 Superação Heroica!');
+        else resolveKill(newPower, absorbed, `🔥 Superação! +${formatPower(absorbed)} poder. Total: ${formatPower(newPower)}`);
       } else {
         setGamePhase('gameover');
         setGameOverReason(
-          c.isBoss
-            ? `Falhou no Ataque Desesperado contra o Boss! Resposta: ${c.question.correctAnswer}. ${c.question.explanation}`
-            : `Falhou no Ataque Desesperado! Resposta: ${c.question.correctAnswer}. ${c.question.explanation}`
+          `Falhou no Desafio de Superação (${c.question.expression} = ${c.question.answerLabels?.[c.question.correctAnswer] ?? c.question.correctAnswer}).\n${c.question.explanation}`
         );
       }
       return;
     }
 
     if (c.isBoss) {
-      if (correct) spawnPortal(survivedPower + c.monsterLevel, '🏆');
-      else {
+      if (correct) {
+        const gained = Math.round(c.monsterLevel * totalBonusMult);
+        spawnPortal(survivedPower + gained, gained, '🏆');
+      } else {
         setGamePhase('gameover');
         setGameOverReason(
-          `Falhou contra o Boss Final! Resposta: ${c.question.correctAnswer}. ${c.question.explanation}`
+          `Falhou contra o Boss Final (${c.question.expression} = ${c.question.answerLabels?.[c.question.correctAnswer] ?? c.question.correctAnswer}).\n${c.question.explanation}`
         );
       }
       return;
     }
 
-    const delta    = correct ? c.monsterLevel : -Math.round(c.monsterLevel * 0.5);
+    const delta    = correct ? Math.round(c.monsterLevel * totalBonusMult) : -Math.round(c.monsterLevel * 0.5);
     const newPower = survivedPower + delta;
     if (newPower <= 0) {
       setGamePhase('gameover');
       setGameOverReason(
-        `Poder chegou a ${formatPower(newPower)}. Resposta: ${c.question.correctAnswer}. ${c.question.explanation}`
+        `Seu poder chegou a zero (${c.question.expression} = ${c.question.answerLabels?.[c.question.correctAnswer] ?? c.question.correctAnswer}).\n${c.question.explanation}`
       );
       return;
     }
     resolveKill(
       newPower,
+      delta,
       correct
-        ? `✅ Correto! +${formatPower(delta)} poder. Total: ${formatPower(newPower)}`
-        : `❌ Errado! ${formatPower(delta)} poder (dano). Total: ${formatPower(newPower)}`
+        ? `✅ ${c.question.expression} → +${formatPower(delta)} poder (🔥×${nextStreak}). Total: ${formatPower(newPower)}`
+        : `❌ ${c.question.expression} → ${formatPower(delta)} poder. Total: ${formatPower(newPower)}`
     );
-  }, [addEntries]);
+  }, [addEntries, spawnFloatingText]);
 
   // ── Log-item click: show explanation in Knowledge Box ────────────────────────
   const handleLogClick = useCallback((item: LogItem) => {
     const body = [
-      item.hint        ? `💡 ${item.hint}` : '',
+      item.hint ? `💡 ${item.hint}` : '',
       item.explanation ?? '',
     ].filter(Boolean).join('\n\n');
-    setLastExplanation({ text: body, isCorrect: item.isCorrect ?? false });
+    setLastExplanation({
+      expression:  item.expression,
+      lensTitle:   item.lensTitle,
+      hint:        item.hint,
+      text:        body,
+      methods:     item.methods,
+      realLifeTip: item.realLifeTip,
+      isCorrect:   item.isCorrect ?? false,
+    });
     setActivePanel('knowledge');
   }, []);
 
-  // ── Keyboard listener — zero-latency, zero throttle ──
-  // Optimistic DOM write: camera layer is translated BEFORE React setState
-  // so the visual snaps within the same frame (16ms). React state updates
-  // (setPlayerPos, setGrid, etc. inside move()) follow asynchronously for
-  // logic/Oracle correctness, but the player already sees the result.
+  // ── Keyboard listener — zero-latency movement ────────────────────────────────
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (combatRef.current || gamePhaseRef.current !== 'playing') return;
       let dir: Direction | null = null;
       switch (e.key) {
         case 'ArrowUp':    case 'w': case 'W': dir = 'UP';    break;
@@ -1036,15 +1089,8 @@ export function LogicAscension({ onGoToMenu }: { onGoToMenu?: () => void } = {})
       if (!dir) return;
       e.preventDefault();
 
-      // ── Optimistic DOM write (frame-0 visual, no React render needed) ────
       try {
-        if (
-          camLayerRef.current &&
-          posRef.current &&
-          gridRef.current &&
-          !combatRef.current &&
-          gamePhaseRef.current === 'playing'
-        ) {
+        if (camLayerRef.current && posRef.current && gridRef.current) {
           const { row, col } = posRef.current;
           const [dr, dc] = DIR_DELTA[dir];
           const nr = row + dr;
@@ -1062,18 +1108,17 @@ export function LogicAscension({ onGoToMenu }: { onGoToMenu?: () => void } = {})
         console.error('[optimistic-cam] DOM write failed:', err);
       }
 
-      // ── Logical state update (React reconciles after frame paint) ────────
       move(dir);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [move]);   // getCamTransform is module-level — stable reference, not a dep
+  }, [move]);
 
-  // ── Unmount cleanup — clear virtual joystick interval if component unmounts mid-hold ──
   useEffect(() => () => stopContinuousMove(), [stopContinuousMove]);
 
   // ── Reset to Stage 1 (full hard restart) ─────────────────────────────────────
   const resetGame = useCallback(() => {
+    clearAllTimers();
     const newMap = generateRandomMap();
     setCurrentStage(1);
     setMapData(newMap);
@@ -1088,22 +1133,35 @@ export function LogicAscension({ onGoToMenu }: { onGoToMenu?: () => void } = {})
     setBossSpawned(false);
     setGameOverReason('');
     setLastExplanation(null);
+    setStreak(0);
+    setBestStreak(0);
+    setMasteredLenses([]);
+    setFloatingTexts([]);
     setLog([
       mkLog('🔄 Reiniciado do zero.', 'info'),
       mkLog('👾 Logic Ascension — Nível 1', 'info'),
-      mkLog('🗺️  Explore o corredor e entre nas Salas.', 'info'),
+      mkLog('🗺️  Pegue o Buff ×2 e escolha um caminho.', 'info'),
     ]);
-  }, []);
+  }, [clearAllTimers]);
 
-  // ── Advance to next stage (carry-over power) ──────────────────────────────────
-  // Keeps playerPower intact; generates a fresh map; resets only level state.
+  // ── Return to MainMenu safely (fixes stuck Victory/GameOver modal bug!) ──────
+  const returnToMenu = useCallback(() => {
+    if (document.fullscreenElement && document.exitFullscreen) {
+      document.exitFullscreen().catch(() => {});
+    }
+    resetGame();
+    setGameState('MENU');
+    onGoToMenu?.();
+  }, [resetGame, onGoToMenu]);
+
+  // ── Advance to next stage (carry-over power & streak) ────────────────────────
   const advanceLevel = useCallback(() => {
+    clearAllTimers();
     const newMap = generateRandomMap();
     setCurrentStage(s => s + 1);
     setMapData(newMap);
     setGrid(newMap.grid);
     setPlayerPos(PLAYER_START);
-    // playerPower is intentionally NOT reset here
     setCombat(null);
     setCompletedRooms(new Set());
     setActiveRoomIdx({});
@@ -1111,11 +1169,17 @@ export function LogicAscension({ onGoToMenu }: { onGoToMenu?: () => void } = {})
     setGamePhase('playing');
     setBossSpawned(false);
     setGameOverReason('');
-    setLastExplanation(null);
+    setFloatingTexts([]);
+    soundEngine.playRoomReveal();
     setLog([
-      mkLog(`🆕 Avançando para o próximo nível! Poder herdado: ${powerRef.current}`, 'info'),
-      mkLog('🗺️  Novo mapa — explore e entre nas Salas.', 'info'),
+      mkLog(`🆕 Nível ${stageRef.current + 1}! Poder herdado: ${formatPower(powerRef.current)}`, 'info'),
+      mkLog('🗺️  Novo mapa gerado — consulte o Oráculo nas salas!', 'info'),
     ]);
+  }, [clearAllTimers]);
+
+  const handleToggleMute = useCallback(() => {
+    const next = soundEngine.toggleMuted();
+    setIsMuted(next);
   }, []);
 
   // ── Derived state ─────────────────────────────────────────────────────────────
@@ -1123,7 +1187,7 @@ export function LogicAscension({ onGoToMenu }: { onGoToMenu?: () => void } = {})
 
   const roomStatus = paths.map(pathId => {
     const { row, col } = MAJOR_CHOICE_POS[pathId];
-    const mc       = grid[row][col];
+    const mc        = grid[row][col];
     const activeIdx = activeRoomIdx[pathId];
     return {
       pathId,
@@ -1133,7 +1197,6 @@ export function LogicAscension({ onGoToMenu }: { onGoToMenu?: () => void } = {})
     };
   });
 
-  // Latest oracle per path (last room that was activated)
   const currentOracles: Partial<Record<PathId, { result: OracleResult; roomIdx: number }>> = {};
   for (const pathId of paths) {
     const chain = oracleChain[pathId];
@@ -1142,624 +1205,695 @@ export function LogicAscension({ onGoToMenu }: { onGoToMenu?: () => void } = {})
     }
   }
 
-  // Boss tile level for sidebar display
-  const bossTile = grid[BOSS_SPAWN.row]?.[BOSS_SPAWN.col];
+  const bossTile  = grid[BOSS_SPAWN.row]?.[BOSS_SPAWN.col];
   const bossLevel = bossTile?.type === 'BOSS' ? bossTile.level : undefined;
 
-  // Camera grid layer ref — mutated directly in keydown for zero-latency visual feedback
   const camLayerRef = useRef<HTMLDivElement>(null);
-  // Outermost game wrapper — target for requestFullscreen()
   const wrapperRef  = useRef<HTMLDivElement>(null);
-
-  // Camera transform — local coords only; .la-camera-anchor provides the 50%/50% viewport center.
   const camTransform = getCamTransform(playerPos?.row ?? 0, playerPos?.col ?? 0);
-
-
 
   return (
     <div className="la-main-layout" ref={wrapperRef} style={{
-      fontFamily:    "'Courier New', monospace",
-      color:         '#e2e8f0',
-      // ── Mobile lag killers ──
-      touchAction:   gameState === 'PLAYING' ? 'none' : 'auto',
-      userSelect:    'none',
+      fontFamily:  "'Courier New', monospace",
+      color:       '#e2e8f0',
+      touchAction: gameState === 'PLAYING' ? 'none' : 'auto',
+      userSelect:  'none',
     }}>
-
       <style>{GAME_STYLES}</style>
 
       {gameState === 'MENU' ? (
-        <div style={{ textAlign: 'center', pointerEvents: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', width: '100%', flex: 1 }}>
-          <div style={{ fontSize: 48, fontWeight: 'bold', color: '#00d4ff', marginBottom: 10, textShadow: '0 0 10px #00d4ff' }}>Logic Ascension</div>
-          <div style={{ fontSize: 16, color: '#94a3b8', marginBottom: 40 }}>Roguelike Math Engine</div>
-          <button
-            onClick={() => {
-              if (wrapperRef.current) requestFullScreen(wrapperRef.current);
-              setGameState('PLAYING');
-            }}
-            style={{
-              background: 'rgba(0,212,255,0.15)', border: '2px solid #00d4ff', color: '#00d4ff',
-              padding: '16px 40px', borderRadius: 8, cursor: 'pointer',
-              fontFamily: "'Courier New', monospace", fontSize: 24, fontWeight: 'bold', transition: 'all 0.2s',
-              boxShadow: '0 0 15px rgba(0,212,255,0.3)', textTransform: 'uppercase', pointerEvents: 'auto'
-            }}
-            onMouseEnter={e => { e.currentTarget.style.background = 'rgba(0,212,255,0.3)'; e.currentTarget.style.transform = 'scale(1.05)'; }}
-            onMouseLeave={e => { e.currentTarget.style.background = 'rgba(0,212,255,0.15)'; e.currentTarget.style.transform = 'scale(1)'; }}
-          >
-            START GAME / JOGAR
-          </button>
-        </div>
+        <MainMenu
+          onPlay={(fullscreen = true) => {
+            if (fullscreen && wrapperRef.current) requestFullScreen(wrapperRef.current);
+            soundEngine.playRoomReveal();
+            setGameState('PLAYING');
+          }}
+        />
       ) : (
         <>
-          {/* Sair / Quit Button */}
-          <button
-            className="la-quit-btn"
-            onClick={() => {
-              if (document.exitFullscreen) document.exitFullscreen().catch(() => {});
-              // @ts-ignore
-              else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
-              setGameState('MENU');
-              resetGame();
-            }}
-            style={{
-              background: 'rgba(255,68,68,0.15)', border: '1px solid #ff4444', color: '#ff4444',
-              padding: '8px 16px', borderRadius: 6, cursor: 'pointer',
-              fontFamily: "'Courier New', monospace", fontSize: 12, fontWeight: 'bold', pointerEvents: 'auto'
-            }}
-          >Sair / Quit</button>
-        {/* ── Grid viewport ── */}
-        <div className="la-game-wrapper">
-          {/* ── Header inside the game area ── */}
-          <div style={{ textAlign: 'center', marginBottom: 12 }}>
-            <p style={{ margin: 0, fontSize: 11, color: '#00d4ff', letterSpacing: 3, textTransform: 'uppercase' }}>
-              Logic Ascension · Sprint 9
-            </p>
-            <h1 style={{ margin: '4px 0 0', fontSize: 'clamp(18px, 3.5vw, 28px)', fontWeight: 700, color: '#f1f5f9', letterSpacing: 1 }}>
-              A Ascensão Lógica
-              <span style={{ marginLeft: 14, fontSize: 'clamp(14px, 2vw, 20px)', color: '#ffd700', fontWeight: 900, letterSpacing: 2, textShadow: '0 0 12px rgba(255,215,0,0.5)' }}>
-                — Nível {currentStage}
-              </span>
-            </h1>
-          </div>
+          {/* ── Grid viewport ── */}
+          <div className="la-game-wrapper-inner">
+            {/* Header inside the game area */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', marginBottom: 10, flexWrap: 'wrap', gap: 8 }}>
+              <div>
+                <p style={{ margin: 0, fontSize: 10, color: '#00d4ff', letterSpacing: 2.5, textTransform: 'uppercase' }}>
+                  Logic Ascension · Matemática Básica Viva
+                </p>
+                <h2 style={{ margin: '2px 0 0', fontSize: 'clamp(18px, 3vw, 24px)', fontWeight: 800, color: '#f1f5f9' }}>
+                  Masmorra Lógica
+                  <span style={{ marginLeft: 10, fontSize: 'clamp(14px, 2vw, 18px)', color: '#ffd700', fontWeight: 900 }}>
+                    — Nível {currentStage}
+                  </span>
+                </h2>
+              </div>
 
-        <div className="la-viewport">
-
-          {/* Fixed clipping window — overflow:hidden hides everything outside */}
-          {/* Pointer events implement an invisible virtual joystick:
-              • PointerDown  → instant first step + start repeat interval
-              • PointerMove  → update direction mid-hold (drag-to-steer)
-              • PointerUp / Cancel / Leave → stop interval */}
-          <div
-            onPointerDown={(e) => {
-              if ((e.target as HTMLElement).closest('button,canvas')) return;
-              if (combatRef.current || gamePhaseRef.current !== 'playing') return;
-              const rect = e.currentTarget.getBoundingClientRect();
-              const dx = e.clientX - (rect.left + rect.width  / 2);
-              const dy = e.clientY - (rect.top  + rect.height / 2);
-              const dir: Direction = Math.abs(dx) > Math.abs(dy)
-                ? (dx > 0 ? 'RIGHT' : 'LEFT')
-                : (dy > 0 ? 'DOWN'  : 'UP');
-              startContinuousMove(dir);
-            }}
-            onPointerMove={(e) => {
-              // Only steer if the user is actively holding (interval is running)
-              if (moveIntervalRef.current === null) return;
-              if (combatRef.current || gamePhaseRef.current !== 'playing') return;
-              const rect = e.currentTarget.getBoundingClientRect();
-              const dx = e.clientX - (rect.left + rect.width  / 2);
-              const dy = e.clientY - (rect.top  + rect.height / 2);
-              const newDir: Direction = Math.abs(dx) > Math.abs(dy)
-                ? (dx > 0 ? 'RIGHT' : 'LEFT')
-                : (dy > 0 ? 'DOWN'  : 'UP');
-              // Only update ref — interval picks up new dir on its next tick.
-              // No interval restart = no stutter on direction change.
-              currentDirRef.current = newDir;
-            }}
-            onPointerUp={stopContinuousMove}
-            onPointerCancel={stopContinuousMove}
-            onPointerLeave={stopContinuousMove}
-            style={{
-            position:           'absolute',
-            inset:              0,
-            backgroundImage:    `linear-gradient(rgba(10,10,20,0.85), rgba(10,10,20,0.85)), url('${getBackgroundImage(currentStage)}')`,
-            backgroundSize:     'cover',
-            backgroundPosition: 'center',
-          }}>
-
-            {/* CSS anchor — natively centered at viewport 50%/50%. No JS measurement needed. */}
-            <div className="la-camera-anchor">
-
-              {/* Grid container — camera transform shifts it so the player tile
-                  lands exactly on the anchor origin. Player rendered inside as
-                  a regular absolute-positioned child, sharing local coords. */}
-              <div
-                ref={camLayerRef}
-                className="la-grid-container"
-                style={{ transform: camTransform }}
-              >
-                {/* Map tiles */}
-                {grid.map((row, ri) =>
-                  row.map((tile, ci) => (
-                    <div
-                      key={`${ri}-${ci}`}
-                      style={{
-                        ...cellStyle(tile),
-                        position: 'absolute',
-                        left:     ci * (CELL + GAP),
-                        top:      ri * (CELL + GAP),
-                      }}
-                    >
-                      <CellContent tile={tile} />
-                    </div>
-                  ))
-                )}
-
-                {/* Player — same coordinate system as tiles, pixel-perfect alignment */}
-                <div
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <button
+                  onClick={handleToggleMute}
+                  title={isMuted ? 'Ativar som' : 'Silenciar som'}
                   style={{
-                    position:       'absolute',
-                    left:           (playerPos?.col ?? 0) * (CELL + GAP),
-                    top:            (playerPos?.row ?? 0) * (CELL + GAP),
-                    width:          CELL,
-                    height:         CELL,
-                    zIndex:         2,
-                    display:        'flex',
-                    alignItems:     'center',
-                    justifyContent: 'center',
-                    pointerEvents:  'none',
-                    borderRadius:   6,
-                    border:         '2px solid #00ff00',
-                    background:     'rgba(0,26,0,0.80)',
-                    boxShadow:      'inset 0 0 16px rgba(0,255,0,0.45), 0 0 14px rgba(0,255,0,0.6)',
+                    background: 'rgba(0,212,255,0.08)', border: '1px solid #1e3a5a', color: '#e2e8f0',
+                    padding: '6px 12px', borderRadius: 6, cursor: 'pointer', fontSize: 14,
                   }}
                 >
-                  <span style={{ fontSize: 36, filter: 'drop-shadow(0 2px 6px rgba(0,0,0,0.95))' }}>👾</span>
+                  {isMuted ? '🔇' : '🔊'}
+                </button>
+                <button
+                  onClick={returnToMenu}
+                  style={{
+                    background: 'rgba(255,68,68,0.12)', border: '1px solid #ff444488', color: '#ff6666',
+                    padding: '7px 14px', borderRadius: 6, cursor: 'pointer',
+                    fontFamily: "'Courier New', monospace", fontSize: 11, fontWeight: 'bold',
+                  }}
+                >
+                  🚪 Menu / Placar
+                </button>
+              </div>
+            </div>
+
+            <div className="la-viewport">
+              <div
+                onPointerDown={(e) => {
+                  if ((e.target as HTMLElement).closest('button,canvas')) return;
+                  if (combatRef.current || gamePhaseRef.current !== 'playing') return;
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  const dx = e.clientX - (rect.left + rect.width  / 2);
+                  const dy = e.clientY - (rect.top  + rect.height / 2);
+                  const dir: Direction = Math.abs(dx) > Math.abs(dy)
+                    ? (dx > 0 ? 'RIGHT' : 'LEFT')
+                    : (dy > 0 ? 'DOWN'  : 'UP');
+                  startContinuousMove(dir);
+                }}
+                onPointerMove={(e) => {
+                  if (moveIntervalRef.current === null) return;
+                  if (combatRef.current || gamePhaseRef.current !== 'playing') return;
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  const dx = e.clientX - (rect.left + rect.width  / 2);
+                  const dy = e.clientY - (rect.top  + rect.height / 2);
+                  const newDir: Direction = Math.abs(dx) > Math.abs(dy)
+                    ? (dx > 0 ? 'RIGHT' : 'LEFT')
+                    : (dy > 0 ? 'DOWN'  : 'UP');
+                  currentDirRef.current = newDir;
+                }}
+                onPointerUp={stopContinuousMove}
+                onPointerCancel={stopContinuousMove}
+                onPointerLeave={stopContinuousMove}
+                style={{
+                  position:           'absolute',
+                  inset:              0,
+                  backgroundImage:    `linear-gradient(rgba(10,10,20,0.85), rgba(10,10,20,0.85)), url('${getBackgroundImage(currentStage)}')`,
+                  backgroundSize:     'cover',
+                  backgroundPosition: 'center',
+                }}
+              >
+                <div className="la-camera-anchor">
+                  <div
+                    ref={camLayerRef}
+                    className="la-grid-container"
+                    style={{ transform: camTransform }}
+                  >
+                    {/* Map tiles */}
+                    {grid.map((row, ri) =>
+                      row.map((tile, ci) => (
+                        <div
+                          key={`${ri}-${ci}`}
+                          style={{
+                            ...cellStyle(tile),
+                            position: 'absolute',
+                            left:     ci * (CELL + GAP),
+                            top:      ri * (CELL + GAP),
+                          }}
+                        >
+                          <CellContent tile={tile} />
+                        </div>
+                      ))
+                    )}
+
+                    {/* Player */}
+                    <div
+                      style={{
+                        position:       'absolute',
+                        left:           (playerPos?.col ?? 0) * (CELL + GAP),
+                        top:            (playerPos?.row ?? 0) * (CELL + GAP),
+                        width:          CELL,
+                        height:         CELL,
+                        zIndex:         2,
+                        display:        'flex',
+                        flexDirection:  'column',
+                        alignItems:     'center',
+                        justifyContent: 'center',
+                        pointerEvents:  'none',
+                        borderRadius:   6,
+                        border:         '2px solid #00ff66',
+                        background:     'rgba(0,26,0,0.82)',
+                        boxShadow:      'inset 0 0 16px rgba(0,255,0,0.45), 0 0 14px rgba(0,255,0,0.6)',
+                      }}
+                    >
+                      <span style={{ fontSize: 30, lineHeight: 1, filter: 'drop-shadow(0 2px 6px rgba(0,0,0,0.95))' }}>👾</span>
+                      <span style={{
+                        fontSize: 11, fontWeight: 900, color: '#00ff66',
+                        background: 'rgba(0,0,0,0.8)', borderRadius: 4, padding: '0 4px', marginTop: 2,
+                      }}>
+                        {formatPower(playerPower)}
+                      </span>
+                    </div>
+
+                    {/* Floating Dopamine Popups */}
+                    {floatingTexts.map(ft => (
+                      <div
+                        key={ft.id}
+                        style={{
+                          position:      'absolute',
+                          left:          ft.col * (CELL + GAP) + CELL / 2,
+                          top:           ft.row * (CELL + GAP),
+                          zIndex:        10,
+                          pointerEvents: 'none',
+                          textAlign:     'center',
+                          whiteSpace:    'nowrap',
+                          animation:     'float-up-pop 1.35s cubic-bezier(0.22, 1, 0.36, 1) forwards',
+                        }}
+                      >
+                        {ft.subtext && (
+                          <div style={{
+                            fontSize: 10, fontWeight: 900, color: '#ffd700',
+                            textShadow: '0 2px 6px #000', letterSpacing: 1,
+                          }}>
+                            {ft.subtext}
+                          </div>
+                        )}
+                        <div style={{
+                          fontSize: 16, fontWeight: 900, color: ft.color,
+                          background: 'rgba(4,8,18,0.9)', border: `1px solid ${ft.color}`,
+                          borderRadius: 6, padding: '2px 8px',
+                          boxShadow: `0 0 14px ${ft.color}66`,
+                        }}>
+                          {ft.text}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
 
+                {/* Vignette overlay */}
+                <div style={{
+                  position:      'absolute',
+                  inset:         0,
+                  zIndex:        1,
+                  pointerEvents: 'none',
+                  background:    'radial-gradient(ellipse at center, transparent 35%, rgba(0,0,0,0.60) 100%)',
+                  borderRadius:  6,
+                }} />
               </div>
             </div>
 
-            {/* Vignette overlay — darkens edges so entities/text stay legible on bright biome art */}
-            <div style={{
-              position:       'absolute',
-              inset:          0,
-              zIndex:         1,
-              pointerEvents:  'none',
-              background:     'radial-gradient(ellipse at center, transparent 35%, rgba(0,0,0,0.60) 100%)',
-              borderRadius:   6,
-            }} />
-          </div>
-
-          {/* ── Controls ── */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 10, width: '100%' }}>
-            <button
-              onClick={() => { if (wrapperRef.current) requestFullScreen(wrapperRef.current); }}
-              style={{
-                background: 'transparent', border: '1px solid #00d4ff', color: '#00d4ff',
-                padding: '8px 14px', borderRadius: 6, cursor: 'pointer',
-                fontFamily: "'Courier New', monospace", fontSize: 11, transition: 'background 0.2s',
-                touchAction: 'auto', pointerEvents: 'auto',
-              }}
-              onMouseEnter={e => (e.currentTarget.style.background = 'rgba(0,212,255,0.15)')}
-              onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-            >
-              ⛶ Tela Cheia
-            </button>
-            <button onClick={resetGame}
-              style={{ background: 'transparent', border: '1px solid #ff4444', color: '#ff4444', padding: '8px 14px', borderRadius: 6, cursor: 'pointer', fontFamily: "'Courier New', monospace", fontSize: 11, transition: 'background 0.2s' }}
-              onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,68,68,0.15)')}
-              onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-            >
-              ↺ Novo Mapa
-            </button>
-          </div>
-        </div>{/* /.la-viewport */}
-        </div>{/* /.la-game-wrapper */}
-
-        {/* ── Sidebar (accordion) ── */}
-        <div className="la-sidebar">
-
-          {/* Status — always visible ───────────────────────────────────────────── */}
-          <div style={{
-            padding: '10px 12px',
-            background: 'rgba(0,0,0,0.55)',
-            border: '1px solid #1e293b',
-            borderRadius: 8,
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-              <span style={{ fontSize: 9, color: '#475569', textTransform: 'uppercase', letterSpacing: 2, fontFamily: "'Courier New', monospace" }}>
-                — Status · Nível {currentStage} —
+            {/* Bottom Controls */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 10, width: '100%' }}>
+              <button
+                onClick={() => { if (wrapperRef.current) requestFullScreen(wrapperRef.current); }}
+                style={{
+                  background: 'transparent', border: '1px solid #00d4ff', color: '#00d4ff',
+                  padding: '7px 14px', borderRadius: 6, cursor: 'pointer',
+                  fontFamily: "'Courier New', monospace", fontSize: 11,
+                }}
+              >
+                ⛶ Tela Cheia
+              </button>
+              <span style={{ fontSize: 10, color: '#64748b' }}>
+                ⌨️ WASD/Setas · [1]-[4] Responder
               </span>
+              <button
+                onClick={resetGame}
+                style={{
+                  background: 'transparent', border: '1px solid #ff4444', color: '#ff4444',
+                  padding: '7px 14px', borderRadius: 6, cursor: 'pointer',
+                  fontFamily: "'Courier New', monospace", fontSize: 11,
+                }}
+              >
+                ↺ Novo Mapa
+              </button>
             </div>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <StatBadge label="Poder" value={formatPower(playerPower)} color="#00ff00" />
-              <StatBadge label="Posição" value={`${playerPos.row},${playerPos.col}`} color="#00d4ff" />
-            </div>
-            {bossSpawned && (
-              <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, fontFamily: "'Courier New', monospace" }}>
-                <span>{gamePhase === 'victory' ? '🏆' : '👹'}</span>
-                <span style={{ color: gamePhase === 'victory' ? '#a855f7' : '#cc44ff', fontWeight: 700 }}>
-                  {gamePhase === 'victory' ? 'Boss Derrotado!' : `Boss Lv.${bossLevel != null ? formatPower(bossLevel) : '—'} — Ativo!`}
+          </div>
+
+          {/* ── Sidebar (accordion) ── */}
+          <div className="la-sidebar">
+            {/* Status — always visible */}
+            <div style={{
+              padding: '10px 12px',
+              background: 'rgba(0,0,0,0.6)',
+              border: '1px solid #1e293b',
+              borderRadius: 8,
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <span style={{ fontSize: 10, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 1.5, fontWeight: 700 }}>
+                  ⚡ Status · Nível {currentStage}
                 </span>
-              </div>
-            )}
-          </div>
-
-          {/* Rooms accordion ──────────────────────────────────────────────────── */}
-          <div style={{ borderRadius: 8, overflow: 'hidden' }}>
-            <AccordionHeader
-              id="rooms"
-              label={`Salas (${NUM_ROOMS}/caminho)`}
-              badge={`${completedRooms.size}/2 ✓`}
-              activePanel={activePanel}
-              setActivePanel={setActivePanel}
-            />
-            {activePanel === 'rooms' && (
-              <div style={{ background: 'rgba(0,212,255,0.03)', border: '1px solid #00d4ff22', borderTop: 'none', borderRadius: '0 0 8px 8px', padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 6 }}>
-                {roomStatus.map(s => (
-                  <RoomPill
-                    key={s.pathId}
-                    label={s.pathId === 'buff' ? '⚡ The Buff' : '💀 Sacrifício'}
-                    active={s.active}
-                    complete={s.complete}
-                    roomProgress={s.roomProgress}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Oracle accordion ─────────────────────────────────────────────────── */}
-          <div style={{ borderRadius: 8, overflow: 'hidden' }}>
-            <AccordionHeader
-              id="oracle"
-              label="Oracle"
-              badge={Object.keys(currentOracles).length ? `${Object.keys(currentOracles).length} ativo` : undefined}
-              activePanel={activePanel}
-              setActivePanel={setActivePanel}
-            />
-            {activePanel === 'oracle' && (
-              <div style={{ background: 'rgba(0,212,255,0.02)', border: '1px solid #00d4ff22', borderTop: 'none', borderRadius: '0 0 8px 8px', padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {Object.keys(currentOracles).length === 0 ? (
-                  <p style={{ margin: 0, fontSize: 12, color: '#475569', fontFamily: "'Courier New', monospace", lineHeight: 1.7 }}>
-                    Entre em uma sala para ativar o Oracle e revelar a ordem ótima.
-                  </p>
-                ) : (
-                  paths.map(pathId => {
-                    const entry = currentOracles[pathId];
-                    if (!entry) return null;
-                    return <OraclePanel key={pathId} result={entry.result} pathId={pathId} roomIdx={entry.roomIdx} />;
-                  })
+                {streak >= 2 && (
+                  <span style={{ fontSize: 10, color: '#ffd700', fontWeight: 800 }}>
+                    +{Math.min(50, streak * 10)}% Bônus Streak!
+                  </span>
                 )}
               </div>
-            )}
-          </div>
-
-          {/* Log accordion ────────────────────────────────────────────────────── */}
-          <div style={{ borderRadius: 8, overflow: 'hidden' }}>
-            <AccordionHeader
-              id="log"
-              label="Log de Eventos"
-              badge={`${log.filter(l => l.type === 'combat').length} combates`}
-              activePanel={activePanel}
-              setActivePanel={setActivePanel}
-            />
-            {activePanel === 'log' && (
-              <div style={{
-                background: '#0a0c14',
-                border: '1px solid #1e293b', borderTop: 'none',
-                borderRadius: '0 0 8px 8px',
-                maxHeight: 340, overflowY: 'auto',
-                display: 'flex', flexDirection: 'column', gap: 1,
-                padding: '4px 0',
-              }}>
-                {log.map((item, i) => (
-                  <LogItemRow key={item.id} item={item} isFirst={i === 0} onCombatClick={handleLogClick} />
-                ))}
+              <div style={{ display: 'flex', gap: 6 }}>
+                <StatBadge label="Poder" value={formatPower(playerPower)} color="#00ff66" />
+                <StatBadge label="Sequência" value={streak > 0 ? `🔥 ×${streak}` : '0'} color="#ffd700" />
+                <StatBadge label="Salas" value={`${completedRooms.size}/2`} color="#00d4ff" />
               </div>
-            )}
-          </div>
-
-          {/* Knowledge accordion ──────────────────────────────────────────────── */}
-          <div style={{ borderRadius: 8, overflow: 'hidden' }}>
-            <AccordionHeader
-              id="knowledge"
-              label={`Caixa de Conhecimento${lastExplanation ? (lastExplanation.isCorrect ? '  ✅' : '  ❌') : ''}`}
-              activePanel={activePanel}
-              setActivePanel={setActivePanel}
-            />
-            {activePanel === 'knowledge' && (
-              <div style={{
-                background:   lastExplanation
-                  ? (lastExplanation.isCorrect ? 'rgba(0,55,0,0.22)' : 'rgba(55,12,0,0.26)')
-                  : 'rgba(8,10,22,0.6)',
-                border:       `1px solid ${lastExplanation ? (lastExplanation.isCorrect ? '#00cc5544' : '#ff664444') : '#1e293b'}`,
-                borderTop:    'none',
-                borderRadius: '0 0 8px 8px',
-                padding:      '18px 20px',
-                minHeight:    160,
-                transition:   'background 0.4s ease, border-color 0.4s ease',
-              }}>
-                <p style={{
-                  margin:     0,
-                  fontSize:   16,
-                  fontFamily: "'Courier New', monospace",
-                  color:      lastExplanation ? '#cbd5e1' : '#334155',
-                  lineHeight: 2,
-                  whiteSpace: 'pre-wrap',
-                  transition: 'color 0.3s ease',
-                }}>
-                  {lastExplanation
-                    ? lastExplanation.text
-                    : 'A explicação da última questão de matemática aparecerá aqui após cada combate.\n\nClique em um combate do Log para rever a solução.'}
-                </p>
-              </div>
-            )}
-          </div>
-
-          {/* Legend accordion ─────────────────────────────────────────────────── */}
-          <div style={{ borderRadius: 8, overflow: 'hidden' }}>
-            <AccordionHeader
-              id="legend"
-              label="Legenda do Mapa"
-              activePanel={activePanel}
-              setActivePanel={setActivePanel}
-            />
-            {activePanel === 'legend' && (
-              <div style={{
-                background: 'rgba(8,10,22,0.5)',
-                border: '1px solid #1e293b', borderTop: 'none',
-                borderRadius: '0 0 8px 8px',
-                padding: '14px 18px',
-                display: 'flex', flexDirection: 'column', gap: 12,
-              }}>
-                {([
-                  ['👾', 'Jogador'],
-                  ['🔀', 'Escolha (garfo)'],
-                  ['⚡', 'TrickyBuff'],
-                  ['💀', 'Monstro'],
-                  ['░░', 'Névoa'],
-                  ['👹', 'Boss Final'],
-                  ['🌀', 'Portal → Vitória'],
-                ] as [string, string][]).map(([ic, d]) => (
-                  <span key={d} style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: 15, color: '#64748b', fontFamily: "'Courier New', monospace" }}>
-                    <span style={{ fontSize: 22, minWidth: 28 }}>{ic}</span>
-                    <span>{d}</span>
+              {bossSpawned && (
+                <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 6, fontSize: 11 }}>
+                  <span>{gamePhase === 'victory' ? '🏆' : '👹'}</span>
+                  <span style={{ color: gamePhase === 'victory' ? '#a855f7' : '#cc44ff', fontWeight: 800 }}>
+                    {gamePhase === 'victory' ? 'Boss Derrotado!' : `Boss Lv.${bossLevel != null ? formatPower(bossLevel) : '—'} no corredor (7,3)!`}
                   </span>
-                ))}
-              </div>
-            )}
-          </div>
-
-        </div>
-      {/* Mobile tap-to-move hint — replaces D-pad instruction */}
-      <p style={{ margin: 0, fontSize: 10, color: '#334155', letterSpacing: 1 }}>
-        ⌨  WASD / Setas · 📱 Toque no mapa para mover · Limpe as {NUM_ROOMS} Salas · Derrote o Boss · Portal
-      </p>
-
-      {/* ── Combat overlay ── */}
-      {combat && (
-        <CombatArena
-          playerPower={combat.powerSnapshot}
-          monsterLevel={combat.monsterLevel}
-          question={combat.question}
-          choices={combat.choices}
-          onResult={handleCombatResult}
-          isBoss={combat.isBoss}
-          isDesperationMode={combat.isDesperationMode}
-          isImpossibleMode={combat.isImpossibleMode}
-        />
-      )}
-
-      {/* ── Victory modal ── */}
-      {gamePhase === 'victory' && (
-        <div style={{
-          position: 'fixed', inset: 0, zIndex: 2000,
-          background: 'rgba(2,2,10,0.93)', backdropFilter: 'blur(4px)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24,
-        }}>
-          <div style={{
-            maxWidth: 480, width: '100%',
-            background: 'linear-gradient(160deg, #0a0020 0%, #050015 100%)',
-            border: '2px solid #a855f7',
-            borderRadius: 16, padding: '36px 32px',
-            boxShadow: '0 0 80px rgba(168,85,247,0.4), 0 0 30px rgba(168,85,247,0.2)',
-            textAlign: 'center', fontFamily: "'Courier New', monospace",
-          }}>
-            <div style={{ fontSize: 52, marginBottom: 10 }}>🏆</div>
-            <p style={{ margin: '0 0 4px', fontSize: 10, color: '#a855f7', letterSpacing: 4, textTransform: 'uppercase' }}>
-              Parabéns, Lógico!
-            </p>
-            <h2 style={{ margin: '0 0 18px', fontSize: 32, fontWeight: 900, color: '#f1f5f9', letterSpacing: 2 }}>
-              VITÓRIA!
-            </h2>
-            <div style={{
-              background: 'rgba(168,85,247,0.08)', border: '1px solid #a855f744',
-              borderRadius: 10, padding: '12px 20px', marginBottom: 20,
-            }}>
-              <p style={{ margin: '0 0 4px', fontSize: 10, color: '#64748b', textTransform: 'uppercase', letterSpacing: 2 }}>
-                Nível {currentStage} · Poder Final
-              </p>
-              <span style={{ fontSize: 38, fontWeight: 900, color: '#a855f7' }}>{formatPower(playerPower)}</span>
-              <p style={{ margin: '6px 0 0', fontSize: 10, color: '#475569' }}>
-                Salas: {completedRooms.size} × {NUM_ROOMS} · Boss derrotado ✓
-              </p>
+                </div>
+              )}
             </div>
 
-            {/* Name input for leaderboard */}
-            <div style={{ marginBottom: 20, textAlign: 'left' }}>
-              <label style={{ fontSize: 10, color: '#64748b', letterSpacing: '0.15em', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>
-                Nome para o placar (opcional):
-              </label>
-              <input
-                type="text"
-                maxLength={12}
-                placeholder="Ex: JOGADOR"
-                value={victoryName}
-                onChange={e => setVictoryName(e.target.value.toUpperCase())}
-                style={{
-                  width: '100%', boxSizing: 'border-box',
-                  background: 'rgba(168,85,247,0.07)', border: '1px solid #a855f755',
-                  color: '#e2e8f0', padding: '10px 14px', borderRadius: 6,
-                  fontFamily: "'Courier New', monospace", fontSize: 16, letterSpacing: '0.12em',
-                  outline: 'none',
-                }}
+            {/* Knowledge Box (3 Ways to Solve) */}
+            <div style={{ borderRadius: 8, overflow: 'hidden' }}>
+              <AccordionHeader
+                id="knowledge"
+                label={`3 Maneiras de Resolver${lastExplanation ? (lastExplanation.isCorrect ? ' ✅' : ' 💡') : ''}`}
+                badge={lastExplanation?.lensTitle}
+                activePanel={activePanel}
+                setActivePanel={setActivePanel}
               />
+              {activePanel === 'knowledge' && (
+                <div style={{
+                  background:   lastExplanation
+                    ? (lastExplanation.isCorrect ? 'rgba(0,45,18,0.28)' : 'rgba(45,15,5,0.32)')
+                    : 'rgba(8,10,22,0.6)',
+                  border:       `1px solid ${lastExplanation ? (lastExplanation.isCorrect ? '#00cc5544' : '#ff664444') : '#1e293b'}`,
+                  borderTop:    'none',
+                  borderRadius: '0 0 8px 8px',
+                  padding:      '12px 14px',
+                }}>
+                  {lastExplanation ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      {lastExplanation.expression && (
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <span style={{ fontSize: 16, fontWeight: 900, color: '#f1f5f9' }}>
+                            {lastExplanation.expression}
+                          </span>
+                          {lastExplanation.lensTitle && (
+                            <span style={{ fontSize: 10, color: '#00d4ff', fontWeight: 700 }}>
+                              {lastExplanation.lensTitle}
+                            </span>
+                          )}
+                        </div>
+                      )}
+                      {lastExplanation.methods && lastExplanation.methods.length > 0 ? (
+                        lastExplanation.methods.map((m, idx) => (
+                          <div
+                            key={idx}
+                            style={{
+                              background: 'rgba(15,23,42,0.75)',
+                              borderLeft: `3px solid ${idx === 0 ? '#ffd700' : idx === 1 ? '#00d4ff' : '#a855f7'}`,
+                              borderRadius: '0 6px 6px 0',
+                              padding: '6px 10px',
+                              fontSize: 12,
+                              lineHeight: 1.5,
+                              color: '#e2e8f0',
+                            }}
+                          >
+                            <div style={{ fontWeight: 800, color: idx === 0 ? '#ffd700' : idx === 1 ? '#38bdf8' : '#c084fc', fontSize: 11 }}>
+                              {m.badge}
+                            </div>
+                            <div>{m.summary}</div>
+                          </div>
+                        ))
+                      ) : (
+                        <p style={{ margin: 0, fontSize: 12, color: '#cbd5e1', whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>
+                          {lastExplanation.text}
+                        </p>
+                      )}
+                      {lastExplanation.realLifeTip && (
+                        <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>
+                          🌍 <em>{lastExplanation.realLifeTip}</em>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <p style={{ margin: 0, fontSize: 12, color: '#64748b', lineHeight: 1.7 }}>
+                      Após cada combate, veja aqui <strong>3 maneiras diferentes</strong> de resolver a continha de cabeça (Massinha da Soma, Hack Japonês, Dobra e Metade, etc.)!
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
 
-            {/* Primary: carry-over power to next level */}
-            <button onClick={advanceLevel} style={{
-              display: 'block', width: '100%',
-              background: 'rgba(255,215,0,0.15)', border: '2px solid #ffd700',
-              color: '#ffd700', padding: '13px 32px', borderRadius: 8, marginBottom: 8,
-              cursor: 'pointer', fontFamily: "'Courier New', monospace",
-              fontSize: 14, fontWeight: 900, letterSpacing: 1, transition: 'background 0.2s',
-            }}
-              onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,215,0,0.28)')}
-              onMouseLeave={e => (e.currentTarget.style.background = 'rgba(255,215,0,0.15)')}
-            >
-              ⚔️ Avançar para o Nível {currentStage + 1}
-            </button>
+            {/* Oracle accordion */}
+            <div style={{ borderRadius: 8, overflow: 'hidden' }}>
+              <AccordionHeader
+                id="oracle"
+                label="Oráculo da Sala"
+                badge={Object.keys(currentOracles).length ? `${Object.keys(currentOracles).length} ativo` : undefined}
+                activePanel={activePanel}
+                setActivePanel={setActivePanel}
+              />
+              {activePanel === 'oracle' && (
+                <div style={{ background: 'rgba(0,212,255,0.03)', border: '1px solid #00d4ff22', borderTop: 'none', borderRadius: '0 0 8px 8px', padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {Object.keys(currentOracles).length === 0 ? (
+                    <p style={{ margin: 0, fontSize: 12, color: '#64748b', lineHeight: 1.6 }}>
+                      Pise em <strong>⚡ The Buff</strong> ou <strong>💀 Sacrifício</strong> para ativar o Oráculo e descobrir se deve pegar o Buff antes ou depois dos monstros!
+                    </p>
+                  ) : (
+                    paths.map(pathId => {
+                      const entry = currentOracles[pathId];
+                      if (!entry) return null;
+                      return <OraclePanel key={pathId} result={entry.result} pathId={pathId} roomIdx={entry.roomIdx} />;
+                    })
+                  )}
+                </div>
+              )}
+            </div>
 
-            {/* Save score and go to menu */}
-            <button onClick={() => {
-              saveHighScore({
-                name:  victoryName.trim() || 'AAA',
-                power: playerPower,
-                stage: currentStage,
-                date:  new Date().toLocaleDateString('pt-BR'),
-              });
-              onGoToMenu?.();
-            }} style={{
-              display: 'block', width: '100%',
-              background: 'rgba(0,212,255,0.10)', border: '1px solid #00d4ff88',
-              color: '#00d4ff', padding: '11px 32px', borderRadius: 8, marginBottom: 8,
-              cursor: 'pointer', fontFamily: "'Courier New', monospace",
-              fontSize: 12, fontWeight: 700, letterSpacing: 1, transition: 'background 0.2s',
-            }}
-              onMouseEnter={e => (e.currentTarget.style.background = 'rgba(0,212,255,0.22)')}
-              onMouseLeave={e => (e.currentTarget.style.background = 'rgba(0,212,255,0.10)')}
-            >
-              💾 Salvar e Voltar ao Menu
-            </button>
+            {/* Rooms accordion */}
+            <div style={{ borderRadius: 8, overflow: 'hidden' }}>
+              <AccordionHeader
+                id="rooms"
+                label={`Progresso (${NUM_ROOMS} Salas/Caminho)`}
+                badge={`${completedRooms.size}/2 ✓`}
+                activePanel={activePanel}
+                setActivePanel={setActivePanel}
+              />
+              {activePanel === 'rooms' && (
+                <div style={{ background: 'rgba(0,212,255,0.03)', border: '1px solid #00d4ff22', borderTop: 'none', borderRadius: '0 0 8px 8px', padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {roomStatus.map(s => (
+                    <RoomPill
+                      key={s.pathId}
+                      label={s.pathId === 'buff' ? '⚡ The Buff' : '💀 Sacrifício'}
+                      active={s.active}
+                      complete={s.complete}
+                      roomProgress={s.roomProgress}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
 
-            {/* Quit without saving */}
-            <button onClick={() => onGoToMenu?.()} style={{
-              display: 'block', width: '100%',
-              background: 'transparent', border: '1px solid #1e293b',
-              color: '#334155', padding: '9px 32px', borderRadius: 8,
-              cursor: 'pointer', fontFamily: "'Courier New', monospace",
-              fontSize: 11, letterSpacing: 1, transition: 'color 0.2s',
-            }}
-              onMouseEnter={e => (e.currentTarget.style.color = '#64748b')}
-              onMouseLeave={e => (e.currentTarget.style.color = '#334155')}
-            >
-              🚪 Desistir (sem salvar)
-            </button>
+            {/* Log accordion */}
+            <div style={{ borderRadius: 8, overflow: 'hidden' }}>
+              <AccordionHeader
+                id="log"
+                label="Histórico de Combates"
+                badge={`${log.filter(l => l.type === 'combat').length} contas`}
+                activePanel={activePanel}
+                setActivePanel={setActivePanel}
+              />
+              {activePanel === 'log' && (
+                <div style={{
+                  background: '#0a0c14',
+                  border: '1px solid #1e293b', borderTop: 'none',
+                  borderRadius: '0 0 8px 8px',
+                  maxHeight: 280, overflowY: 'auto',
+                  display: 'flex', flexDirection: 'column', gap: 1,
+                  padding: '4px 0',
+                }}>
+                  {log.map((item, i) => (
+                    <LogItemRow key={item.id} item={item} isFirst={i === 0} onCombatClick={handleLogClick} />
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Legend accordion */}
+            <div style={{ borderRadius: 8, overflow: 'hidden' }}>
+              <AccordionHeader
+                id="legend"
+                label="Legenda do Mapa"
+                activePanel={activePanel}
+                setActivePanel={setActivePanel}
+              />
+              {activePanel === 'legend' && (
+                <div style={{
+                  background: 'rgba(8,10,22,0.5)',
+                  border: '1px solid #1e293b', borderTop: 'none',
+                  borderRadius: '0 0 8px 8px',
+                  padding: '12px 14px',
+                  display: 'flex', flexDirection: 'column', gap: 8,
+                }}>
+                  {([
+                    ['👾', 'Jogador (com poder atual)'],
+                    ['🔀', 'Escolha de Caminho (⚡ Buff ou 💀 Sacrifício)'],
+                    ['⚡', 'Multiplicador da Sala (use na hora certa!)'],
+                    ['💀', 'Monstro (absorva seu poder resolvendo a conta)'],
+                    ['👹', 'Boss Final (surge quando limpar os 2 caminhos)'],
+                    ['🌀', 'Portal da Vitória (abre após vencer o Boss)'],
+                  ] as [string, string][]).map(([ic, d]) => (
+                    <span key={d} style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 12, color: '#94a3b8' }}>
+                      <span style={{ fontSize: 18, minWidth: 24 }}>{ic}</span>
+                      <span>{d}</span>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
-        </div>
-      )}
 
-      {/* ── Game Over modal ── */}
-      {gamePhase === 'gameover' && (
-        <div style={{
-          position: 'fixed', inset: 0, zIndex: 2000,
-          background: 'rgba(2,2,10,0.93)', backdropFilter: 'blur(4px)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24,
-        }}>
-          <div style={{
-            maxWidth: 480, width: '100%',
-            background: 'linear-gradient(160deg, #1a0000 0%, #0a0000 100%)',
-            border: '2px solid #ff2222',
-            borderRadius: 16, padding: '36px 32px',
-            boxShadow: '0 0 80px rgba(255,34,34,0.4), 0 0 30px rgba(255,34,34,0.2)',
-            textAlign: 'center', fontFamily: "'Courier New', monospace",
-          }}>
-            <div style={{ fontSize: 52, marginBottom: 10 }}>💀</div>
-            <p style={{ margin: '0 0 4px', fontSize: 10, color: '#ff4444', letterSpacing: 4, textTransform: 'uppercase' }}>
-              Derrota
-            </p>
-            <h2 style={{ margin: '0 0 16px', fontSize: 32, fontWeight: 900, color: '#f1f5f9', letterSpacing: 2 }}>
-              GAME OVER
-            </h2>
+          {/* ── Combat overlay ── */}
+          {combat && (
+            <CombatArena
+              playerPower={combat.powerSnapshot}
+              monsterLevel={combat.monsterLevel}
+              question={combat.question}
+              choices={combat.choices}
+              onResult={handleCombatResult}
+              isBoss={combat.isBoss}
+              isDesperationMode={combat.isDesperationMode}
+              isImpossibleMode={combat.isImpossibleMode}
+              streak={streak}
+            />
+          )}
+
+          {/* ── Victory modal ── */}
+          {gamePhase === 'victory' && (
             <div style={{
-              background: 'rgba(255,34,34,0.06)', border: '1px solid #ff222244',
-              borderRadius: 10, padding: '12px 20px', marginBottom: 16,
+              position: 'fixed', inset: 0, zIndex: 2000,
+              background: 'rgba(2,2,10,0.93)', backdropFilter: 'blur(4px)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
             }}>
-              <p style={{ margin: '0 0 4px', fontSize: 10, color: '#64748b', textTransform: 'uppercase', letterSpacing: 2 }}>
-                Poder · Nível {currentStage}
-              </p>
-              <span style={{ fontSize: 38, fontWeight: 900, color: '#ff4444' }}>{formatPower(playerPower)}</span>
-            </div>
-            {gameOverReason && (
-              <p style={{
-                margin: '0 0 16px', fontSize: 11, color: '#94a3b8', lineHeight: 1.7,
-                background: 'rgba(255,68,68,0.05)', border: '1px solid #ff44441a',
-                borderRadius: 8, padding: '10px 14px',
+              <div style={{
+                maxWidth: 500, width: '100%',
+                background: 'linear-gradient(160deg, #0a0020 0%, #050015 100%)',
+                border: '2px solid #a855f7',
+                borderRadius: 16, padding: '28px 28px',
+                boxShadow: '0 0 80px rgba(168,85,247,0.4), 0 0 30px rgba(168,85,247,0.2)',
+                textAlign: 'center', fontFamily: "'Courier New', monospace",
+                maxHeight: '92vh', overflowY: 'auto',
               }}>
-                {gameOverReason}
-              </p>
-            )}
+                <div style={{ fontSize: 48, marginBottom: 6 }}>🏆</div>
+                <p style={{ margin: '0 0 4px', fontSize: 10, color: '#a855f7', letterSpacing: 4, textTransform: 'uppercase' }}>
+                  Masmorra Dominada!
+                </p>
+                <h2 style={{ margin: '0 0 14px', fontSize: 28, fontWeight: 900, color: '#f1f5f9', letterSpacing: 2 }}>
+                  VITÓRIA NO NÍVEL {currentStage}!
+                </h2>
+                <div style={{
+                  background: 'rgba(168,85,247,0.08)', border: '1px solid #a855f744',
+                  borderRadius: 10, padding: '12px 18px', marginBottom: 16,
+                  display: 'flex', justifyContent: 'space-around', alignItems: 'center',
+                }}>
+                  <div>
+                    <p style={{ margin: '0 0 2px', fontSize: 9, color: '#94a3b8', textTransform: 'uppercase' }}>Poder Acumulado</p>
+                    <span style={{ fontSize: 32, fontWeight: 900, color: '#a855f7' }}>{formatPower(playerPower)}</span>
+                  </div>
+                  <div>
+                    <p style={{ margin: '0 0 2px', fontSize: 9, color: '#94a3b8', textTransform: 'uppercase' }}>Maior Sequência</p>
+                    <span style={{ fontSize: 26, fontWeight: 900, color: '#ffd700' }}>🔥 ×{bestStreak}</span>
+                  </div>
+                </div>
 
-            {/* Name input for leaderboard */}
-            <div style={{ marginBottom: 18, textAlign: 'left' }}>
-              <label style={{ fontSize: 10, color: '#64748b', letterSpacing: '0.15em', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>
-                Nome para o placar (opcional):
-              </label>
-              <input
-                type="text"
-                maxLength={12}
-                placeholder="Ex: JOGADOR"
-                value={gameOverName}
-                onChange={e => setGameOverName(e.target.value.toUpperCase())}
-                style={{
-                  width: '100%', boxSizing: 'border-box',
-                  background: 'rgba(255,34,34,0.06)', border: '1px solid #ff222244',
-                  color: '#e2e8f0', padding: '10px 14px', borderRadius: 6,
-                  fontFamily: "'Courier New', monospace", fontSize: 16, letterSpacing: '0.12em',
-                  outline: 'none',
-                }}
-              />
+                {masteredLenses.length > 0 && (
+                  <div style={{
+                    textAlign: 'left', background: 'rgba(0,212,255,0.05)', border: '1px solid rgba(0,212,255,0.2)',
+                    borderRadius: 8, padding: '10px 14px', marginBottom: 16,
+                  }}>
+                    <div style={{ fontSize: 10, color: '#00d4ff', fontWeight: 800, textTransform: 'uppercase', marginBottom: 6 }}>
+                      🧠 Lentes Mentais Dominadas ({masteredLenses.length})
+                    </div>
+                    {masteredLenses.slice(-4).map((l, idx) => (
+                      <div key={idx} style={{ fontSize: 11, color: '#cbd5e1', lineHeight: 1.5 }}>
+                        ✓ {l}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div style={{ marginBottom: 16, textAlign: 'left' }}>
+                  <label style={{ fontSize: 10, color: '#94a3b8', letterSpacing: '0.12em', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>
+                    Seu nome para o Top 10 Placar:
+                  </label>
+                  <input
+                    type="text"
+                    maxLength={12}
+                    placeholder="Ex: AUGUSTO"
+                    value={victoryName}
+                    onChange={e => setVictoryName(e.target.value.toUpperCase())}
+                    style={{
+                      width: '100%', boxSizing: 'border-box',
+                      background: 'rgba(168,85,247,0.07)', border: '1px solid #a855f755',
+                      color: '#e2e8f0', padding: '10px 14px', borderRadius: 6,
+                      fontFamily: "'Courier New', monospace", fontSize: 16, letterSpacing: '0.12em',
+                      outline: 'none',
+                    }}
+                  />
+                </div>
+
+                <button
+                  onClick={advanceLevel}
+                  style={{
+                    display: 'block', width: '100%',
+                    background: 'rgba(255,215,0,0.16)', border: '2px solid #ffd700',
+                    color: '#ffd700', padding: '13px 24px', borderRadius: 8, marginBottom: 8,
+                    cursor: 'pointer', fontFamily: "'Courier New', monospace",
+                    fontSize: 14, fontWeight: 900, letterSpacing: 1,
+                  }}
+                >
+                  ⚔️ Avançar para o Nível {currentStage + 1} (Manter Poder)
+                </button>
+
+                <button
+                  onClick={() => {
+                    saveHighScore({
+                      name:  victoryName.trim() || 'LÓGICO',
+                      power: playerPower,
+                      stage: currentStage,
+                      date:  new Date().toLocaleDateString('pt-BR'),
+                    });
+                    returnToMenu();
+                  }}
+                  style={{
+                    display: 'block', width: '100%',
+                    background: 'rgba(0,212,255,0.12)', border: '1px solid #00d4ff88',
+                    color: '#00d4ff', padding: '11px 24px', borderRadius: 8, marginBottom: 8,
+                    cursor: 'pointer', fontFamily: "'Courier New', monospace",
+                    fontSize: 12, fontWeight: 700, letterSpacing: 1,
+                  }}
+                >
+                  💾 Salvar no Placar e Ver Top 10
+                </button>
+
+                <button
+                  onClick={returnToMenu}
+                  style={{
+                    display: 'block', width: '100%',
+                    background: 'transparent', border: '1px solid #1e293b',
+                    color: '#64748b', padding: '9px 24px', borderRadius: 8,
+                    cursor: 'pointer', fontFamily: "'Courier New', monospace",
+                    fontSize: 11, letterSpacing: 1,
+                  }}
+                >
+                  🚪 Voltar ao Menu (sem salvar)
+                </button>
+              </div>
             </div>
+          )}
 
-            {/* Save and go to menu */}
-            <button onClick={() => {
-              saveHighScore({
-                name:  gameOverName.trim() || 'AAA',
-                power: playerPower,
-                stage: currentStage,
-                date:  new Date().toLocaleDateString('pt-BR'),
-              });
-              onGoToMenu?.();
-            }} style={{
-              display: 'block', width: '100%',
-              background: 'rgba(0,212,255,0.08)', border: '1px solid #00d4ff66',
-              color: '#00d4ff', padding: '11px 32px', borderRadius: 8, marginBottom: 8,
-              cursor: 'pointer', fontFamily: "'Courier New', monospace",
-              fontSize: 12, fontWeight: 700, letterSpacing: 1, transition: 'background 0.2s',
-            }}
-              onMouseEnter={e => (e.currentTarget.style.background = 'rgba(0,212,255,0.20)')}
-              onMouseLeave={e => (e.currentTarget.style.background = 'rgba(0,212,255,0.08)')}
-            >
-              💾 Salvar e Voltar ao Menu
-            </button>
+          {/* ── Game Over modal ── */}
+          {gamePhase === 'gameover' && (
+            <div style={{
+              position: 'fixed', inset: 0, zIndex: 2000,
+              background: 'rgba(2,2,10,0.93)', backdropFilter: 'blur(4px)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
+            }}>
+              <div style={{
+                maxWidth: 500, width: '100%',
+                background: 'linear-gradient(160deg, #1a0000 0%, #0a0000 100%)',
+                border: '2px solid #ff2222',
+                borderRadius: 16, padding: '28px 28px',
+                boxShadow: '0 0 80px rgba(255,34,34,0.4), 0 0 30px rgba(255,34,34,0.2)',
+                textAlign: 'center', fontFamily: "'Courier New', monospace",
+                maxHeight: '92vh', overflowY: 'auto',
+              }}>
+                <div style={{ fontSize: 46, marginBottom: 6 }}>💀</div>
+                <p style={{ margin: '0 0 4px', fontSize: 10, color: '#ff6666', letterSpacing: 3, textTransform: 'uppercase' }}>
+                  Fim da Jornada — Mas o Aprendizado Fica!
+                </p>
+                <h2 style={{ margin: '0 0 14px', fontSize: 28, fontWeight: 900, color: '#f1f5f9', letterSpacing: 2 }}>
+                  FIM DE JOGO
+                </h2>
+                <div style={{
+                  background: 'rgba(255,34,34,0.06)', border: '1px solid #ff222244',
+                  borderRadius: 10, padding: '10px 18px', marginBottom: 14,
+                  display: 'flex', justifyContent: 'space-around', alignItems: 'center',
+                }}>
+                  <div>
+                    <p style={{ margin: '0 0 2px', fontSize: 9, color: '#94a3b8', textTransform: 'uppercase' }}>Poder · Nível {currentStage}</p>
+                    <span style={{ fontSize: 30, fontWeight: 900, color: '#ff4444' }}>{formatPower(playerPower)}</span>
+                  </div>
+                  <div>
+                    <p style={{ margin: '0 0 2px', fontSize: 9, color: '#94a3b8', textTransform: 'uppercase' }}>Maior Sequência</p>
+                    <span style={{ fontSize: 24, fontWeight: 900, color: '#ffd700' }}>🔥 ×{bestStreak}</span>
+                  </div>
+                </div>
 
-            {/* Try again (no save) */}
-            <button onClick={resetGame} style={{
-              display: 'block', width: '100%',
-              background: 'rgba(255,68,68,0.10)', border: '2px solid #ff4444',
-              color: '#ff4444', padding: '11px 32px', borderRadius: 8,
-              cursor: 'pointer', fontFamily: "'Courier New', monospace",
-              fontSize: 13, fontWeight: 700, letterSpacing: 1, transition: 'background 0.2s',
-            }}
-              onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,68,68,0.25)')}
-              onMouseLeave={e => (e.currentTarget.style.background = 'rgba(255,68,68,0.10)')}
-            >
-              ↺ Tentar Novamente (sem salvar)
-            </button>
-          </div>
-        </div>
-      )}
-      </>
+                {gameOverReason && (
+                  <div style={{
+                    margin: '0 0 14px', fontSize: 11, color: '#cbd5e1', lineHeight: 1.6,
+                    background: 'rgba(255,68,68,0.06)', border: '1px solid #ff444433',
+                    borderRadius: 8, padding: '10px 12px', textAlign: 'left', whiteSpace: 'pre-wrap',
+                  }}>
+                    {gameOverReason}
+                  </div>
+                )}
+
+                <div style={{ marginBottom: 14, textAlign: 'left' }}>
+                  <label style={{ fontSize: 10, color: '#94a3b8', letterSpacing: '0.12em', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>
+                    Seu nome para o Top 10 Placar:
+                  </label>
+                  <input
+                    type="text"
+                    maxLength={12}
+                    placeholder="Ex: AUGUSTO"
+                    value={gameOverName}
+                    onChange={e => setGameOverName(e.target.value.toUpperCase())}
+                    style={{
+                      width: '100%', boxSizing: 'border-box',
+                      background: 'rgba(255,34,34,0.06)', border: '1px solid #ff222244',
+                      color: '#e2e8f0', padding: '10px 14px', borderRadius: 6,
+                      fontFamily: "'Courier New', monospace", fontSize: 16, letterSpacing: '0.12em',
+                      outline: 'none',
+                    }}
+                  />
+                </div>
+
+                <button
+                  onClick={() => {
+                    saveHighScore({
+                      name:  gameOverName.trim() || 'LÓGICO',
+                      power: playerPower,
+                      stage: currentStage,
+                      date:  new Date().toLocaleDateString('pt-BR'),
+                    });
+                    returnToMenu();
+                  }}
+                  style={{
+                    display: 'block', width: '100%',
+                    background: 'rgba(0,212,255,0.12)', border: '1px solid #00d4ff88',
+                    color: '#00d4ff', padding: '11px 24px', borderRadius: 8, marginBottom: 8,
+                    cursor: 'pointer', fontFamily: "'Courier New', monospace",
+                    fontSize: 12, fontWeight: 700, letterSpacing: 1,
+                  }}
+                >
+                  💾 Salvar no Placar e Ver Top 10
+                </button>
+
+                <button
+                  onClick={resetGame}
+                  style={{
+                    display: 'block', width: '100%',
+                    background: 'rgba(255,68,68,0.12)', border: '2px solid #ff4444',
+                    color: '#ff4444', padding: '11px 24px', borderRadius: 8,
+                    cursor: 'pointer', fontFamily: "'Courier New', monospace",
+                    fontSize: 13, fontWeight: 700, letterSpacing: 1,
+                  }}
+                >
+                  ↺ Tentar Novamente (Novo Mapa)
+                </button>
+              </div>
+            </div>
+          )}
+        </>
       )}
     </div>
   );

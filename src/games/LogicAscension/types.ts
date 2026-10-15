@@ -45,3 +45,14 @@ export interface PlayerPos {
   row: number;
   col: number;
 }
+
+/** Floating dopamine popup rendered directly over a dungeon grid tile. */
+export interface FloatingText {
+  id: number;
+  row: number;
+  col: number;
+  text: string;
+  subtext?: string;
+  color: string;
+}
+
