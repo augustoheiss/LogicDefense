@@ -166,7 +166,7 @@ export default function RosterSwapConsole() {
     if (!workerA || !workerB) {
       setDryRunReport({
         isValid: false,
-        violations: ['Voluntário Solicitante ou Substituto não encontrado na base de dados.'],
+        violations: ['Participante Solicitante ou Substituto não encontrado na base de dados.'],
       });
       return;
     }
@@ -420,19 +420,19 @@ export default function RosterSwapConsole() {
               Simulação de conformidade preventiva: verifica descanso, colisão de turno e habilidade.
             </Text>
 
-            <Text style={styles.inputLabel}>NOME DO SOLICITANTE (VOLUNTÁRIO A):</Text>
+            <Text style={styles.inputLabel}>NOME DO SOLICITANTE (PARTICIPANTE A):</Text>
             <TextInput
               style={styles.textInput}
-              placeholder="Ex: Carlos Oliveira"
+              placeholder="Ex: Participante 01"
               placeholderTextColor="#64748B"
               value={workerAName}
               onChangeText={setWorkerAName}
             />
 
-            <Text style={[styles.inputLabel, { marginTop: 12 }]}>NOME DO SUBSTITUTO (VOLUNTÁRIO B):</Text>
+            <Text style={[styles.inputLabel, { marginTop: 12 }]}>NOME DO SUBSTITUTO (PARTICIPANTE B):</Text>
             <TextInput
               style={styles.textInput}
-              placeholder="Ex: Mateus Santos"
+              placeholder="Ex: Participante 02"
               placeholderTextColor="#64748B"
               value={workerBName}
               onChangeText={setWorkerBName}

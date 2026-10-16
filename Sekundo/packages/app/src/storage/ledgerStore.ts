@@ -142,7 +142,7 @@ export async function recordPatchesInLedger(
       newOps.push(
         createLedgerOperation(eventId, normKey, 'worked', workedVal, deviceId, {
           prevValue: prevMeta.worked,
-          authorName: String(patch.updates.value ?? prevNode?.value ?? nextMeta.workerName ?? 'Voluntário'),
+          authorName: String(patch.updates.value ?? prevNode?.value ?? nextMeta.workerName ?? 'Operador'),
           timestamp: mutTs,
           sequence: seq++,
           hlc: hlcStr,

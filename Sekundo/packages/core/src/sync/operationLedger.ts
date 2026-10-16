@@ -288,7 +288,7 @@ export function synthesizeOpsFromRegistry(
     if (worked === 1 || workedTs) {
       ops.push(
         createLedgerOperation(eventId, node.key, 'worked', worked, authorId, {
-          authorName: node.value || meta.workerName || 'Voluntário',
+          authorName: node.value || meta.workerName || 'Operador',
           timestamp: workedTs || '1970-01-01T00:00:00.000Z',
           sequence: seq++,
         })

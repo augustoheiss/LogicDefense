@@ -132,7 +132,7 @@ BLOCO 1 — FUNDAMENTOS E ANÁLISE
 3. Leitura Técnica de Referência (4 mins.) Participante 10
 BLOCO 2 — PRÁTICA E COMUNICAÇÃO
 4. Simulação de Atendimento Inicial (3 mins.) Participante 13 / Participante 05
-5. Prática de Acompanhamento em Campo (4 mins.) Participante 08 / Participante 02
+5. Prática de Acompanhamento Operacional (4 mins.) Participante 08 / Participante 02
 6. Apresentação de Caso Prático (5 mins.) Participante 16
 BLOCO 3 — APLICAÇÃO E SÍNTESE
 Intervalo Técnico 01: Transição de Painel
@@ -148,7 +148,7 @@ BLOCO 1 — FUNDAMENTOS E ANÁLISE
 3. Leitura Técnica de Referência (4 mins.) Participante 09
 BLOCO 2 — PRÁTICA E COMUNICAÇÃO
 4. Simulação de Atendimento Inicial (3 mins.) Participante 04 / Participante 14
-5. Prática de Acompanhamento em Campo (4 mins.) Participante 11 / Participante 06
+5. Prática de Acompanhamento Operacional (4 mins.) Participante 11 / Participante 06
 6. Dinâmica de Resolução de Cenários (5 mins.) Participante 15 / Participante 08
 BLOCO 3 — APLICAÇÃO E SÍNTESE
 Intervalo Técnico 02: Transição de Painel
@@ -164,7 +164,7 @@ BLOCO 1 — FUNDAMENTOS E ANÁLISE
 3. Leitura Técnica de Referência (4 mins.) Participante 16
 BLOCO 2 — PRÁTICA E COMUNICAÇÃO
 4. Simulação de Atendimento Inicial (3 mins.) Participante 02 / Participante 04
-5. Prática de Acompanhamento em Campo (4 mins.) Participante 14 / Participante 15
+5. Prática de Acompanhamento Operacional (4 mins.) Participante 14 / Participante 15
 6. Apresentação de Caso Prático (5 mins.) Participante 05
 BLOCO 3 — APLICAÇÃO E SÍNTESE
 Intervalo Técnico 03: Transição de Painel
@@ -180,7 +180,7 @@ BLOCO 1 — FUNDAMENTOS E ANÁLISE
 3. Leitura Técnica de Referência (4 mins.) Participante 05
 BLOCO 2 — PRÁTICA E COMUNICAÇÃO
 4. Simulação de Atendimento Inicial (3 mins.) Participante 06 / Participante 11
-5. Prática de Acompanhamento em Campo (4 mins.) Participante 09 / Participante 10
+5. Prática de Acompanhamento Operacional (4 mins.) Participante 09 / Participante 10
 6. Dinâmica de Resolução de Cenários (5 mins.) Participante 08 / Participante 04
 BLOCO 3 — APLICAÇÃO E SÍNTESE
 Intervalo Técnico 04: Transição de Painel
@@ -191,12 +191,12 @@ Vinheta 08: Encerramento de Sessão | Síntese Final Participante 12
 6 de novembro de 2026 | MÓDULO 48, 49 Presidente Participante 12
 Vinheta 09: Abertura de Sessão | Credenciamento Participante 01
 BLOCO 1 — FUNDAMENTOS E ANÁLISE
-1. Comunicação Clara em Equipes de Campo (10 mins.) Participante 01
+1. Comunicação Clara em Equipes Operacionais (10 mins.) Participante 01
 2. Análise de Indicadores e Metas (10 mins.) Participante 07
 3. Leitura Técnica de Referência (4 mins.) Participante 13
 BLOCO 2 — PRÁTICA E COMUNICAÇÃO
 4. Simulação de Atendimento Inicial (3 mins.) Participante 15 / Participante 02
-5. Prática de Acompanhamento em Campo (4 mins.) Participante 04 / Participante 08
+5. Prática de Acompanhamento Operacional (4 mins.) Participante 04 / Participante 08
 6. Dinâmica de Resolução de Cenários (5 mins.) Participante 14 / Participante 06
 BLOCO 3 — APLICAÇÃO E SÍNTESE
 Intervalo Técnico 05: Transição de Painel
@@ -227,7 +227,7 @@ BLOCO 1 — FUNDAMENTOS E ANÁLISE
 3. Leitura Técnica de Referência (4 mins.) Participante 16
 BLOCO 2 — PRÁTICA E COMUNICAÇÃO
 4. Simulação de Atendimento Inicial (4 mins.) Participante 08 / Participante 06
-5. Prática de Acompanhamento em Campo (4 mins.) Participante 05 / Participante 13
+5. Prática de Acompanhamento Operacional (4 mins.) Participante 05 / Participante 13
 6. Apresentação de Caso Prático (5 mins.) Participante 10
 BLOCO 3 — APLICAÇÃO E SÍNTESE
 Intervalo Técnico 07: Transição de Painel
@@ -243,7 +243,7 @@ BLOCO 1 — FUNDAMENTOS E ANÁLISE
 3. Leitura Técnica de Referência (4 mins.) Participante 09
 BLOCO 2 — PRÁTICA E COMUNICAÇÃO
 4. Simulação de Atendimento Inicial (3 mins.) Participante 04 / Participante 11
-5. Prática de Acompanhamento em Campo (4 mins.) Participante 06 / Participante 02
+5. Prática de Acompanhamento Operacional (4 mins.) Participante 06 / Participante 02
 6. Dinâmica de Resolução de Cenários (5 mins.) Participante 14 / Participante 15
 BLOCO 3 — APLICAÇÃO E SÍNTESE
 Intervalo Técnico 08: Transição de Painel
@@ -259,7 +259,7 @@ BLOCO 1 — FUNDAMENTOS E ANÁLISE
 3. Leitura Técnica de Referência (4 mins.) Participante 05
 BLOCO 2 — PRÁTICA E COMUNICAÇÃO
 4. Simulação de Atendimento Inicial (3 mins.) Participante 02 / Participante 08
-5. Prática de Acompanhamento em Campo (4 mins.) Participante 15 / Participante 04
+5. Prática de Acompanhamento Operacional (4 mins.) Participante 15 / Participante 04
 6. Apresentação de Caso Prático (5 mins.) Participante 09
 BLOCO 3 — APLICAÇÃO E SÍNTESE
 Intervalo Técnico 09: Transição de Painel

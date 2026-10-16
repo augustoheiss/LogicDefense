@@ -106,16 +106,16 @@ certificates:
     issuer: "Red Hat"
 
 references:
-  - name: "Roberto Menezes"
+  - name: "Referência Técnica 01"
     position: "VP de Engenharia"
     company: "Enterprise Tech Solutions"
     phone: "+55 (11) 97100-1122"
-    email: "roberto.menezes@techsolutions.com"
-  - name: "Carla Esteves"
+    email: "referencia01@techsolutions.com"
+  - name: "Referência Técnica 02"
     position: "Head de Produto & Inovação"
     company: "Fintech Horizon"
     phone: "+55 (11) 98200-3344"
-    email: "carla.esteves@fintechhorizon.com"
+    email: "referencia02@fintechhorizon.com"
 
 interests:
   - name: "Fotografia & Design"
@@ -126,17 +126,17 @@ interests:
     keywords: ["Open Source", "Governança de IA"]
   - name: "Viagens & Culturas"
     icon: "plane"
-    keywords: ["Mundo Ágil", "Intercâmbio Técnico"]
+    keywords: ["Mundo Ágil", "Intercambiamento Técnico"]
 
 coverLetter:
   recipient:
-    name: "Dr. Roberto William"
-    title: "Diretor de Engenharia & Contratação"
+    name: "Comitê Executivo de Engenharia"
+    title: "Diretoria de Engenharia & Contratação"
     company: "Tech Global Innovations Inc."
     address: "Av. Faria Lima, 3500 - São Paulo, SP"
   date: "31 de Agosto de 2026"
   subject: "Candidatura: Posição de Staff Software Architect & Lead de IA"
-  salutation: "Prezado Dr. Roberto William e comitê de seleção,"
+  salutation: "Prezado Comitê Executivo de Engenharia,"
   paragraphs:
     - "Acompanho com grande admiração a liderança da Tech Global Innovations no desenvolvimento de sistemas autônomos de alta confiabilidade. Com mais de 8 anos de experiência sólida em arquitetura de microsserviços distribuídos, engenharia de inteligência artificial e liderança de squads técnicas multidisciplinares, vejo uma sinergia ímpar entre os meus resultados e os desafios estratégicos da sua organização."
     - "Na minha atuação recente como Staff Architect na Enterprise Tech Solutions, fui o responsável direto por desenhar a migração de nossa infraestrutura central para microsserviços event-driven, sustentando mais de 2 milhões de transações diárias com redução de 45% na latência p99. Adicionalmente, estruturei nossos primeiros pipelines corporativos de IA generativa, integrando guardrails de segurança e otimização de cache que cortaram os custos de inferência em 60%."

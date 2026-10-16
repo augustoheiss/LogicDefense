@@ -127,7 +127,7 @@ export function detectEnginesFromCSV(csvText: string): EngineDetectionReport {
   }
   if (bodyContains('discurso', 'orador', 'leitor', 'auditorio', 'presidente')) {
     scores.roster_assignments.confidence += 25;
-    scores.roster_assignments.reasons.push('Termos de reuniões e escalas de voluntários detectados');
+    scores.roster_assignments.reasons.push('Termos de sessões e escalas de participantes detectados');
   }
 
   // 3. Study & Synthesis

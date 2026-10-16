@@ -131,7 +131,7 @@ export function buildS13PageContexts(
       } else {
         const fallbackWorker =
           workerByTerritory.get(item.territoryNumber) ||
-          (item.workedUnits > 0 ? 'Grupo de Campo' : '');
+          (item.workedUnits > 0 ? 'Equipe Operacional' : '');
         cycles = fallbackWorker
           ? [
               {

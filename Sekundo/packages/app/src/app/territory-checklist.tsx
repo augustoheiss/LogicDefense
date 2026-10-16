@@ -805,19 +805,19 @@ export default function TerritoryChecklistScreen() {
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>📝 Anotação de Campo</Text>
+              <Text style={styles.modalTitle}>📝 Observação Operacional</Text>
               <Pressable onPress={() => setActiveNoteKey(null)}>
                 <Text style={styles.modalCloseText}>✕</Text>
               </Pressable>
             </View>
             <Text style={styles.modalSub}>
-              Registre observações sobre o morador, melhor horário para revisita ou alertas:
+              Registre observações sobre o local/ponto, melhor janela de atendimento ou alertas:
             </Text>
             <TextInput
               style={styles.modalInput}
               value={noteDraft}
               onChangeText={setNoteDraft}
-              placeholder="Ex: Não bater campainha, chamar no portão. Morador idoso..."
+              placeholder="Ex: Acesso pela portaria lateral, atendimento apenas em horário comercial..."
               placeholderTextColor="#6F7E94"
               multiline
               autoFocus

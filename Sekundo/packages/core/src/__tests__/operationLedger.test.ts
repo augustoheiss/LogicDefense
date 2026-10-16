@@ -39,14 +39,14 @@ describe('Sovereign Local-First Operation Ledger & Sync Engine', () => {
       'worked',
       1,
       'device-author-a',
-      { authorName: 'Nelson' }
+      { authorName: 'Participante 01' }
     );
 
     expect(op.eventId).toBe('event-1');
     expect(op.nodeKey).toBe('02-01-01-01');
     expect(op.field).toBe('worked');
     expect(op.newValue).toBe(1);
-    expect(op.authorName).toBe('Nelson');
+    expect(op.authorName).toBe('Participante 01');
     expect(op.opId).toMatch(/^op_\d+_/);
   });
 
@@ -57,12 +57,12 @@ describe('Sovereign Local-First Operation Ledger & Sync Engine', () => {
       'worked',
       1,
       'device-a',
-      { authorName: 'Nelson' }
+      { authorName: 'Participante 01' }
     );
 
     const updated = applyOperationToRegistry(baseRegistry, op);
     expect(updated[0].meta?.worked).toBe(1);
-    expect(updated[0].meta?.workerName).toBe('Nelson');
+    expect(updated[0].meta?.workerName).toBe('Participante 01');
     expect(updated[1].meta?.worked).toBe(0); // Unchanged
   });
 
@@ -74,7 +74,7 @@ describe('Sovereign Local-First Operation Ledger & Sync Engine', () => {
       'worked',
       1,
       'device-a',
-      { authorName: 'Nelson', timestamp: '2026-10-13T10:00:00Z' }
+      { authorName: 'Participante 01', timestamp: '2026-10-13T10:00:00Z' }
     );
     const localLedger = [opA];
 
@@ -83,9 +83,9 @@ describe('Sovereign Local-First Operation Ledger & Sync Engine', () => {
       'event-1',
       '02-01-01-02',
       'notes',
-      'Morador pediu para voltar à tarde',
+      'Reagendado para o turno da tarde',
       'device-b',
-      { authorName: 'Mateus', timestamp: '2026-10-13T10:05:00Z' }
+      { authorName: 'Participante 02', timestamp: '2026-10-13T10:05:00Z' }
     );
     const incomingLedger = [opB];
 
@@ -99,7 +99,7 @@ describe('Sovereign Local-First Operation Ledger & Sync Engine', () => {
     const house2 = result.updatedRegistry.find((e) => e.key === '02-01-01-02');
 
     expect(house1?.meta?.worked).toBe(1);
-    expect(house2?.meta?.notes).toBe('Morador pediu para voltar à tarde');
+    expect(house2?.meta?.notes).toBe('Reagendado para o turno da tarde');
   });
 
   it('resolves conflicting edits on the same attribute by latest timestamp', () => {

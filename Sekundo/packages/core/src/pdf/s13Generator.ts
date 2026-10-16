@@ -158,7 +158,7 @@ export async function generateTerritoryS13AndCardsPDF(
       } else {
         const fallbackWorker =
           workerByTerritory.get(item.territoryNumber) ||
-          (item.workedUnits > 0 ? 'Grupo de Campo' : '');
+          (item.workedUnits > 0 ? 'Equipe Operacional' : '');
         const fallbackCycles: TerritoryAssignmentCycle[] = fallbackWorker
           ? [
               {

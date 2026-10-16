@@ -65,7 +65,7 @@ export const TRANSFORMER_MATH_MODULES: TransformerMathModuleMeta[] = [
     id: 'roster_workload',
     name: 'Balanceamento de Carga de Trabalho',
     category: 'workforce',
-    description: 'Mede a distribuição de tarefas por voluntário/membro e calcula desvio padrão.',
+    description: 'Mede a distribuição de tarefas por participante/integrante e calcula desvio padrão.',
     icon: 'scale-balance',
     formulaDescription: 'Variância de carga de trabalho entre participantes',
     requiredFields: ['responsavel', 'duracao_min'],

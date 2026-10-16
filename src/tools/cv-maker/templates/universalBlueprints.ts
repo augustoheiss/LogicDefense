@@ -135,17 +135,17 @@ meta:
   isUniversalDocument: true
 basics:
   name: "Prontuário de Evolução Clínica #HC-98421"
-  label: "Hospital Israelita Albert Einstein • Cardiologia & Metabologia"
-  email: "dr.ricardo.moraes@einstein.br"
-  phone: "+55 (11) 2151-1233"
-  url: "https://portal.einstein.br/paciente/98421"
+  label: "Centro Médico Integrado Demo • Cardiologia & Metabologia"
+  email: "cardiologia@clinica-exemplo.org"
+  phone: "+55 (11) 2100-0000"
+  url: "https://clinica-exemplo.org/prontuario/98421"
   summary: "Paciente masculino, 48 anos, em acompanhamento multidisciplinar no ambulatório de cardiologia. Evolução altamente favorável pós-ajuste terapêutico com normalização pressórica e remissão laboratorial de glicemia alterada."
 
 dados_paciente:
-  nome_paciente: "Carlos Eduardo Silveira"
+  nome_paciente: "Paciente Demo 01"
   idade_nascimento: "48 anos (14/05/1978)"
   registro_hospitalar: "HC-98421-SP"
-  convenio_plano: "Bradesco Saúde Top Nacional"
+  convenio_plano: "Plano Corporativo Nacional"
   pressao_arterial: "125 x 80 mmHg"
   frequencia_cardiaca: "66 bpm (Ritmo Sinusal)"
   indice_massa_corporal: "24.6 kg/m² (Eutrófico)"
@@ -247,64 +247,64 @@ clausulas_gerais_prosa: |
   CLÁUSULA TERCEIRA - DA PROPRIEDADE INTELECTUAL: Todos os códigos-fonte, pipelines e configurações personalizadas desenvolvidas especificamente no âmbito deste contrato serão de propriedade exclusiva da CONTRATANTE após a liquidação integral das obrigações.
 `
 
-export const SEKUNDO_EVENTOS_TERRITORIOS_BLUEPRINT_YAML = `document_title: "Sekundo • Programação de Eventos & Designação de Territórios"
+export const SEKUNDO_EVENTOS_TERRITORIOS_BLUEPRINT_YAML = `document_title: "Sekundo • Painel Operacional de Projetos, Escalas & Logística"
 meta:
   isUniversalDocument: true
 basics:
-  name: "Quadro Operacional de Eventos & Territórios"
-  label: "Sekundo Engine • Escala Semanal, Designações de Campo e Setores"
-  email: "coordenacao@sekundo.app"
-  phone: "Setor Central • Folha Técnica A4"
-  url: "https://sekundo.app/territorios"
-  summary: "Programação oficial integrada com cronograma de atividades, designação de dirigentes, cobertura de territórios por quadras e instruções operacionais de campo."
+  name: "Quadro Operacional de Escalas & Zonas Logísticas"
+  label: "Sekundo Engine • Gestão de Turnos, Alocação de Equipes e Indicadores"
+  email: "operacoes@sekundo.app"
+  phone: "Unidade Central • Folha Técnica A4"
+  url: "https://sekundo.app/operacoes"
+  summary: "Planejamento operacional integrado com cronograma de atividades, alocação de coordenadores, cobertura de setores logísticos e diretrizes técnicas de execução."
 
 programacao_eventos:
-  - evento: "Reunião de Coordenação & Abertura de Campo"
+  - evento: "Briefing de Alinhamento & Abertura de Turno"
     startDate: "2026-10-18 08:30"
     endDate: "2026-10-18 09:15"
-    resumo: "Alinhamento das equipes no Ponto de Encontro Norte, distribuição de mapas físicos/QR e revisão das metas do fim de semana."
-  - evento: "Cobertura Intensiva: Territórios 04, 05 e 08"
+    resumo: "Alinhamento das equipes na Base Operacional Norte, distribuição de plantas técnicas/QR e revisão das metas do ciclo."
+  - evento: "Operação Sincronizada: Setores Logísticos 04, 05 e 08"
     startDate: "2026-10-18 09:20"
     endDate: "2026-10-18 12:00"
-    resumo: "Atuação sincronizada nas quadras residenciais e comerciais do Setor Jardins com registro em tempo real no Sekundo."
-  - evento: "Sessão Especial Vespertina & Visitas Agendadas"
+    resumo: "Atuação sincronizada nos blocos corporativos e industriais do Setor Central com registro em tempo real no Sekundo."
+  - evento: "Consolidação Vespertina & Auditoria de Pendências"
     startDate: "2026-10-18 15:30"
     endDate: "2026-10-18 18:00"
-    resumo: "Atendimento aos pontos pendentes mapeados durante a semana e fechamento do relatório de cobertura territorial."
+    resumo: "Atendimento aos pontos técnicos pendentes mapeados durante a semana e fechamento do relatório de cobertura."
 
-organizacao_territorios:
-  - territorio: "Território #04 — Jardim Europa (Quadras A a F)"
-    responsavel: "Coord. Marcos Vinícius • Equipe Alfa"
-    status: "Em Andamento (78% Coberto)"
-    descricao: "142 unidades mapeadas. Priorizar quadras D e E (edifícios com portaria liberada aos sábados pela manhã)."
-  - territorio: "Território #05 — Centro Cívico & Eixo Comercial"
-    responsavel: "Coord. Helena Souza • Equipe Beta"
-    status: "Designado (Início 18/10)"
-    descricao: "86 estabelecimentos comerciais e galerias. Horário recomendado: 09h00 às 11h30."
-  - territorio: "Território #08 — Parque das Águas (Setor Sul)"
-    responsavel: "Coord. Rafael Almeida • Equipe Gama"
+alocacao_setores:
+  - setor: "Setor #04 — Polo Norte (Blocos A a F)"
+    responsavel: "Participante 01 • Equipe Alfa"
+    status: "Em Andamento (78% Concluído)"
+    descricao: "142 unidades operacionais mapeadas. Priorizar blocos D e E (acesso técnico liberado no primeiro turno)."
+  - setor: "Setor #05 — Eixo Comercial & Serviços"
+    responsavel: "Participante 02 • Equipe Beta"
+    status: "Alocado (Início 18/10)"
+    descricao: "86 estabelecimentos comerciais e centros técnicos. Janela recomendada: 09h00 às 11h30."
+  - setor: "Setor #08 — Distrito Logístico Sul"
+    responsavel: "Participante 03 • Equipe Gama"
     status: "Concluído / Revisão"
-    descricao: "118 residências unifamiliares. Apenas 6 imóveis pendentes de segunda visita na Rua das Araucárias."
+    descricao: "118 pontos verificados. Apenas 6 unidades pendentes de reinspeção técnica na Avenida Principal."
 
-indicadores_cobertura:
-  territorios_ativos_no_ciclo: "12 Territórios"
+indicadores_operacionais:
+  setores_ativos_no_ciclo: "12 Setores Operacionais"
   cobertura_acumulada_mes: "88.4% concluído"
-  equipes_escaladas: "6 Equipes (42 Voluntários)"
-  tempo_medio_por_territorio: "11 dias corridos"
-  ponto_de_encontro_central: "Praça da Liberdade, Nº 120 (Setor A)"
+  equipes_alocadas: "6 Equipes (42 Operadores)"
+  tempo_medio_por_setor: "11 dias corridos"
+  base_operacional_central: "Centro Empresarial Norte, Nº 120 (Bloco A)"
   proxima_atualizacao_cartografica: "01/11/2026"
 
 setores_e_tags_operacionais:
   - "Setor 01 • Norte"
-  - "Setor 04 • Jardim Europa"
+  - "Setor 04 • Polo Norte"
   - "Setor 05 • Comercial"
   - "Setor 08 • Sul"
   - "Mapa Vetorial CAD"
   - "Exportação Sekundo PDF"
 
-instrucoes_de_campo: |
-  1. Ao concluir cada quadra do cartão de território, marque os números não atendidos para retorno da equipe vespertina.
-  2. Utilize o Estúdio Livre (botão "+ Sidebar/Box" ou "Polígono CAD") para desenhar destaques laterais, cotas de quadras ou avisos urgentes com fontes e cores diferenciadas antes de exportar o PDF final.
+diretrizes_operacionais: |
+  1. Ao concluir cada bloco do painel de setores, registre os pontos pendentes para atendimento da equipe do turno seguinte.
+  2. Utilize o Estúdio Livre (botão "+ Sidebar/Box" ou "Polígono CAD") para desenhar destaques laterais, cotas de quadras ou avisos técnicos com fontes e cores diferenciadas antes de exportar o PDF final.
 `
 
 export const UNIVERSAL_BLUEPRINTS: DocumentBlueprint[] = [
@@ -319,11 +319,11 @@ export const UNIVERSAL_BLUEPRINTS: DocumentBlueprint[] = [
   },
   {
     id: 'sekundo_schedule_territory',
-    title: 'Sekundo • Programação de Eventos & Territórios',
+    title: 'Sekundo • Painel de Projetos, Escalas & Logística',
     category: 'technical',
     icon: '🗺️',
     badge: 'Sekundo PDF Engine',
-    description: 'Quadro de programação de eventos, designação de territórios por quadras, indicadores de cobertura e instruções de campo.',
+    description: 'Quadro operacional de escalas, alocação de setores logísticos, indicadores de cobertura e diretrizes técnicas.',
     yamlContent: SEKUNDO_EVENTOS_TERRITORIOS_BLUEPRINT_YAML
   },
   {

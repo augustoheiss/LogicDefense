@@ -199,7 +199,7 @@ function computeRosterConflicts(nodes: SkeletonNode[]): {
       id: 'roster_conflicts',
       label: 'Conflitos Pessoal',
       value: conflictsCount === 0 ? 'Zero' : `${conflictsCount} Conflito(s)`,
-      sublabel: `${assigneeSlots.size} voluntários`,
+      sublabel: `${assigneeSlots.size} participantes`,
       color: conflictsCount === 0 ? '#10B981' : '#EF4444',
     },
   ];

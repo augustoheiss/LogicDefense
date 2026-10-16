@@ -291,8 +291,8 @@ export function AddressEditModal({ visible, item, onClose, onSave }: AddressEdit
               <View style={styles.foreignSection}>
                 <View style={styles.foreignToggleRow}>
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.inputLabel}>Morador Estrangeiro / Idioma Diferente?</Text>
-                    <Text style={styles.helperText}>Destaque moradias que requerem publicação ou orador em outro idioma.</Text>
+                    <Text style={styles.inputLabel}>Atendimento em Outro Idioma / Requisito Especial?</Text>
+                    <Text style={styles.helperText}>Destaque unidades que requerem atendimento técnico ou comunicação em outro idioma.</Text>
                   </View>
                   <Pressable
                     onPress={() => setIsForeign(!isForeign)}
@@ -306,12 +306,12 @@ export function AddressEditModal({ visible, item, onClose, onSave }: AddressEdit
 
                 {isForeign ? (
                   <View style={{ marginTop: 12 }}>
-                    <Text style={styles.inputLabel}>Idioma / Nacionalidade do Morador</Text>
+                    <Text style={styles.inputLabel}>Idioma / Especificação de Atendimento</Text>
                     <TextInput
                       style={styles.input}
                       value={language}
                       onChangeText={setLanguage}
-                      placeholder="Ex: Espanhol, Inglês, Crioulo Haitiano, Chinês..."
+                      placeholder="Ex: Espanhol, Inglês, Francês, Libras..."
                       placeholderTextColor="#6F7E94"
                     />
                   </View>
