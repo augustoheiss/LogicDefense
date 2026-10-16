@@ -8,7 +8,7 @@ import type { FlatRegistry } from '../skeleton/types';
 
 describe('CSV Parser', () => {
   it('parses standard compliant CSV', () => {
-    const csv = '_key,_type,label,value,email,_meta_json\n01,header,Programação Semanal,,,\n01-01,slot,Coordenação,Alex Nogueira,alex@exemplo.org,"{""sala"": ""Principal""}"\n';
+    const csv = '_key,_type,label,value,email,_meta_json\n01,header,Programação Semanal,,,\n01-01,slot,Coordenação,Participante 01,alex@exemplo.org,"{""sala"": ""Principal""}"\n';
     const parsed = parseCSV(csv);
     expect(parsed).toHaveLength(2);
     expect(parsed[0]).toEqual({
@@ -23,7 +23,7 @@ describe('CSV Parser', () => {
       _key: '01-01',
       _type: 'slot',
       label: 'Coordenação',
-      value: 'Alex Nogueira',
+      value: 'Participante 01',
       email: 'alex@exemplo.org',
       _meta_json: '{"sala": "Principal"}',
     });
@@ -38,7 +38,7 @@ describe('CSV Parser', () => {
   });
 
   it('throws error when _key is missing', () => {
-    const csv = `_type,label,value\nslot,Coordenação,Alex Nogueira\n`;
+    const csv = `_type,label,value\nslot,Coordenação,Participante 01\n`;
     expect(() => parseCSV(csv)).toThrow('CSV is missing required header: "_key"');
   });
 });
@@ -58,7 +58,7 @@ describe('CSV Serializer', () => {
         _key: '01-01',
         _type: 'slot',
         label: 'Coordenação',
-        value: 'Alex Nogueira',
+        value: 'Participante 01',
         email: 'alex@exemplo.org',
         _meta_json: '{"sala": "Principal"}',
       },
@@ -105,16 +105,16 @@ describe('CSV Validator & Diff', () => {
   it('computes differences between current and incoming CSV rows', () => {
     const current: FlatRegistry = [
       { key: '01', type: 'header', label: 'Programação Semanal', value: '', email: '', meta: {} },
-      { key: '01-01', type: 'slot', label: 'Coordenação', value: 'Alex Nogueira', email: '', meta: {} },
+      { key: '01-01', type: 'slot', label: 'Coordenação', value: 'Participante 01', email: '', meta: {} },
     ];
 
     const incoming = [
       // Unchanged
       { _key: '01', _type: 'header', label: 'Programação Semanal', value: '', email: '', _meta_json: '' },
       // Modified value
-      { _key: '01-01', _type: 'slot', label: 'Coordenação', value: 'Bianca Moreira', email: '', _meta_json: '' },
+      { _key: '01-01', _type: 'slot', label: 'Coordenação', value: 'Participante 02', email: '', _meta_json: '' },
       // Added
-      { _key: '01-02', _type: 'slot', label: 'Relatoria', value: 'Caio Cavalcanti', email: '', _meta_json: '' },
+      { _key: '01-02', _type: 'slot', label: 'Relatoria', value: 'Participante 03', email: '', _meta_json: '' },
     ];
 
     const diff = buildDiff(current, incoming);
@@ -125,8 +125,8 @@ describe('CSV Validator & Diff', () => {
 
     const modifiedEntry = diff.entries.find(e => e.key === '01-01');
     expect(modifiedEntry?.action).toBe('modify');
-    expect(modifiedEntry?.currentValue).toBe('Alex Nogueira');
-    expect(modifiedEntry?.incomingValue).toBe('Bianca Moreira');
+    expect(modifiedEntry?.currentValue).toBe('Participante 01');
+    expect(modifiedEntry?.incomingValue).toBe('Participante 02');
 
     const addedEntry = diff.entries.find(e => e.key === '01-02');
     expect(addedEntry?.action).toBe('add');

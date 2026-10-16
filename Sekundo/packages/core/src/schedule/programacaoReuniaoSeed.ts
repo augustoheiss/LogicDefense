@@ -23,37 +23,37 @@ export const PROGRAMACAO_PARTICIPANT_DIRECTORY: ParticipantProfile[] = [
   // --- GRUPO 1 (6 integrantes sintéticos) ---
   {
     id: 'p-01',
-    name: 'Alex Nogueira',
+    name: 'Participante 01',
     groupTag: 'Grupo 1',
     capabilityTags: ['Coordenação', 'Apresentador', 'Supervisor'],
   },
   {
     id: 'p-02',
-    name: 'Bianca Moreira',
+    name: 'Participante 02',
     groupTag: 'Grupo 1',
     capabilityTags: ['Titular', 'Parceiro'],
   },
   {
     id: 'p-03',
-    name: 'Caio Cavalcanti',
+    name: 'Participante 03',
     groupTag: 'Grupo 1',
     capabilityTags: ['Coordenação', 'Apresentador', 'Relator', 'Titular'],
   },
   {
     id: 'p-04',
-    name: 'Daniela Peixoto',
+    name: 'Participante 04',
     groupTag: 'Grupo 1',
     capabilityTags: ['Titular', 'Parceiro'],
   },
   {
     id: 'p-05',
-    name: 'Enzo Magalhães',
+    name: 'Participante 05',
     groupTag: 'Grupo 1',
     capabilityTags: ['Apresentador', 'Relator', 'Titular', 'Parceiro'],
   },
   {
     id: 'p-06',
-    name: 'Flávia Monteiro',
+    name: 'Participante 06',
     groupTag: 'Grupo 1',
     capabilityTags: ['Titular', 'Parceiro'],
   },
@@ -61,31 +61,31 @@ export const PROGRAMACAO_PARTICIPANT_DIRECTORY: ParticipantProfile[] = [
   // --- GRUPO 2 (5 integrantes sintéticos) ---
   {
     id: 'p-07',
-    name: 'Guilherme Araújo',
+    name: 'Participante 07',
     groupTag: 'Grupo 2',
     capabilityTags: ['Coordenação', 'Apresentador', 'Supervisor'],
   },
   {
     id: 'p-08',
-    name: 'Helena Assunção',
+    name: 'Participante 08',
     groupTag: 'Grupo 2',
     capabilityTags: ['Titular', 'Parceiro', 'Supervisor'],
   },
   {
     id: 'p-09',
-    name: 'Igor Nascimento',
+    name: 'Participante 09',
     groupTag: 'Grupo 2',
     capabilityTags: ['Apresentador', 'Relator', 'Titular', 'Parceiro'],
   },
   {
     id: 'p-10',
-    name: 'Jéssica Tavares',
+    name: 'Participante 10',
     groupTag: 'Grupo 2',
     capabilityTags: ['Apresentador', 'Relator', 'Titular', 'Parceiro'],
   },
   {
     id: 'p-11',
-    name: 'Leonardo Batista',
+    name: 'Participante 11',
     groupTag: 'Grupo 2',
     capabilityTags: ['Titular', 'Parceiro'],
   },
@@ -93,179 +93,179 @@ export const PROGRAMACAO_PARTICIPANT_DIRECTORY: ParticipantProfile[] = [
   // --- GRUPO 3 (5 integrantes sintéticos) ---
   {
     id: 'p-12',
-    name: 'Mônica Azevedo',
+    name: 'Participante 12',
     groupTag: 'Grupo 3',
     capabilityTags: ['Coordenação', 'Apresentador', 'Supervisor'],
   },
   {
     id: 'p-13',
-    name: 'Natália Campos',
+    name: 'Participante 13',
     groupTag: 'Grupo 3',
     capabilityTags: ['Apresentador', 'Relator', 'Titular', 'Parceiro'],
   },
   {
     id: 'p-14',
-    name: 'Otávio Siqueira',
+    name: 'Participante 14',
     groupTag: 'Grupo 3',
     capabilityTags: ['Titular', 'Parceiro'],
   },
   {
     id: 'p-15',
-    name: 'Rafael Medeiros',
+    name: 'Participante 15',
     groupTag: 'Grupo 3',
     capabilityTags: ['Titular', 'Parceiro'],
   },
   {
     id: 'p-16',
-    name: 'Sabrina Pacheco',
+    name: 'Participante 16',
     groupTag: 'Grupo 3',
     capabilityTags: ['Apresentador', 'Relator', 'Titular'],
   },
 ];
 
 export const RAW_PROGRAMACAO_2026_10_AND_11_TEXT = `
-9 de outubro de 2026 | MÓDULO 40, 41 Presidente Mônica Azevedo
-Vinheta 01: Abertura de Sessão | Credenciamento Caio Cavalcanti
+9 de outubro de 2026 | MÓDULO 40, 41 Presidente Participante 12
+Vinheta 01: Abertura de Sessão | Credenciamento Participante 03
 BLOCO 1 — FUNDAMENTOS E ANÁLISE
-1. Diretrizes e Fundamentos do Ciclo (10 mins.) Alex Nogueira
-2. Análise de Indicadores e Metas (10 mins.) Guilherme Araújo
-3. Leitura Técnica de Referência (4 mins.) Jéssica Tavares
+1. Diretrizes e Fundamentos do Ciclo (10 mins.) Participante 01
+2. Análise de Indicadores e Metas (10 mins.) Participante 07
+3. Leitura Técnica de Referência (4 mins.) Participante 10
 BLOCO 2 — PRÁTICA E COMUNICAÇÃO
-4. Simulação de Atendimento Inicial (3 mins.) Natália Campos / Enzo Magalhães
-5. Prática de Acompanhamento em Campo (4 mins.) Helena Assunção / Bianca Moreira
-6. Apresentação de Caso Prático (5 mins.) Sabrina Pacheco
+4. Simulação de Atendimento Inicial (3 mins.) Participante 13 / Participante 05
+5. Prática de Acompanhamento em Campo (4 mins.) Participante 08 / Participante 02
+6. Apresentação de Caso Prático (5 mins.) Participante 16
 BLOCO 3 — APLICAÇÃO E SÍNTESE
 Intervalo Técnico 01: Transição de Painel
-7. Análise Operacional da Unidade (15 mins.) Caio Cavalcanti
-8. Revisão de Procedimentos em Equipe (30 mins.) Mônica Azevedo / Igor Nascimento
-Vinheta 02: Encerramento de Sessão | Síntese Final Guilherme Araújo
+7. Análise Operacional da Unidade (15 mins.) Participante 03
+8. Revisão de Procedimentos em Equipe (30 mins.) Participante 12 / Participante 09
+Vinheta 02: Encerramento de Sessão | Síntese Final Participante 07
 
-16 de outubro de 2026 | MÓDULO 42, 43 Presidente Alex Nogueira
-Vinheta 03: Abertura de Sessão | Credenciamento Enzo Magalhães
+16 de outubro de 2026 | MÓDULO 42, 43 Presidente Participante 01
+Vinheta 03: Abertura de Sessão | Credenciamento Participante 05
 BLOCO 1 — FUNDAMENTOS E ANÁLISE
-1. Planejamento Estratégico e Escopo (10 mins.) Mônica Azevedo
-2. Análise de Indicadores e Metas (10 mins.) Caio Cavalcanti
-3. Leitura Técnica de Referência (4 mins.) Igor Nascimento
+1. Planejamento Estratégico e Escopo (10 mins.) Participante 12
+2. Análise de Indicadores e Metas (10 mins.) Participante 03
+3. Leitura Técnica de Referência (4 mins.) Participante 09
 BLOCO 2 — PRÁTICA E COMUNICAÇÃO
-4. Simulação de Atendimento Inicial (3 mins.) Daniela Peixoto / Otávio Siqueira
-5. Prática de Acompanhamento em Campo (4 mins.) Leonardo Batista / Flávia Monteiro
-6. Dinâmica de Resolução de Cenários (5 mins.) Rafael Medeiros / Helena Assunção
+4. Simulação de Atendimento Inicial (3 mins.) Participante 04 / Participante 14
+5. Prática de Acompanhamento em Campo (4 mins.) Participante 11 / Participante 06
+6. Dinâmica de Resolução de Cenários (5 mins.) Participante 15 / Participante 08
 BLOCO 3 — APLICAÇÃO E SÍNTESE
 Intervalo Técnico 02: Transição de Painel
-7. Alinhamento de Metas Trimestrais (15 mins.) Guilherme Araújo
-8. Revisão de Procedimentos em Equipe (30 mins.) Alex Nogueira / Jéssica Tavares
-Vinheta 04: Encerramento de Sessão | Síntese Final Sabrina Pacheco
+7. Alinhamento de Metas Trimestrais (15 mins.) Participante 07
+8. Revisão de Procedimentos em Equipe (30 mins.) Participante 01 / Participante 10
+Vinheta 04: Encerramento de Sessão | Síntese Final Participante 16
 
-23 de outubro de 2026 | MÓDULO 44, 45 Presidente Guilherme Araújo
-Vinheta 05: Abertura de Sessão | Credenciamento Natália Campos
+23 de outubro de 2026 | MÓDULO 44, 45 Presidente Participante 07
+Vinheta 05: Abertura de Sessão | Credenciamento Participante 13
 BLOCO 1 — FUNDAMENTOS E ANÁLISE
-1. Gestão de Qualidade e Conformidade (10 mins.) Caio Cavalcanti
-2. Análise de Indicadores e Metas (10 mins.) Alex Nogueira
-3. Leitura Técnica de Referência (4 mins.) Sabrina Pacheco
+1. Gestão de Qualidade e Conformidade (10 mins.) Participante 03
+2. Análise de Indicadores e Metas (10 mins.) Participante 01
+3. Leitura Técnica de Referência (4 mins.) Participante 16
 BLOCO 2 — PRÁTICA E COMUNICAÇÃO
-4. Simulação de Atendimento Inicial (3 mins.) Bianca Moreira / Daniela Peixoto
-5. Prática de Acompanhamento em Campo (4 mins.) Otávio Siqueira / Rafael Medeiros
-6. Apresentação de Caso Prático (5 mins.) Enzo Magalhães
+4. Simulação de Atendimento Inicial (3 mins.) Participante 02 / Participante 04
+5. Prática de Acompanhamento em Campo (4 mins.) Participante 14 / Participante 15
+6. Apresentação de Caso Prático (5 mins.) Participante 05
 BLOCO 3 — APLICAÇÃO E SÍNTESE
 Intervalo Técnico 03: Transição de Painel
-7. Relatório de Cobertura Territorial (15 mins.) Mônica Azevedo
-8. Revisão de Procedimentos em Equipe (30 mins.) Guilherme Araújo / Natália Campos
-Vinheta 06: Encerramento de Sessão | Síntese Final Igor Nascimento
+7. Relatório de Cobertura Territorial (15 mins.) Participante 12
+8. Revisão de Procedimentos em Equipe (30 mins.) Participante 07 / Participante 13
+Vinheta 06: Encerramento de Sessão | Síntese Final Participante 09
 
-30 de outubro de 2026 | MÓDULO 46, 47 Presidente Caio Cavalcanti
-Vinheta 07: Abertura de Sessão | Credenciamento Jéssica Tavares
+30 de outubro de 2026 | MÓDULO 46, 47 Presidente Participante 03
+Vinheta 07: Abertura de Sessão | Credenciamento Participante 10
 BLOCO 1 — FUNDAMENTOS E ANÁLISE
-1. Protocolos de Segurança Operacional (10 mins.) Guilherme Araújo
-2. Análise de Indicadores e Metas (10 mins.) Mônica Azevedo
-3. Leitura Técnica de Referência (4 mins.) Enzo Magalhães
+1. Protocolos de Segurança Operacional (10 mins.) Participante 07
+2. Análise de Indicadores e Metas (10 mins.) Participante 12
+3. Leitura Técnica de Referência (4 mins.) Participante 05
 BLOCO 2 — PRÁTICA E COMUNICAÇÃO
-4. Simulação de Atendimento Inicial (3 mins.) Flávia Monteiro / Leonardo Batista
-5. Prática de Acompanhamento em Campo (4 mins.) Igor Nascimento / Jéssica Tavares
-6. Dinâmica de Resolução de Cenários (5 mins.) Helena Assunção / Daniela Peixoto
+4. Simulação de Atendimento Inicial (3 mins.) Participante 06 / Participante 11
+5. Prática de Acompanhamento em Campo (4 mins.) Participante 09 / Participante 10
+6. Dinâmica de Resolução de Cenários (5 mins.) Participante 08 / Participante 04
 BLOCO 3 — APLICAÇÃO E SÍNTESE
 Intervalo Técnico 04: Transição de Painel
-7. Demandas Locais da Unidade (15 mins.) Alex Nogueira
-8. Revisão de Procedimentos em Equipe (30 mins.) Caio Cavalcanti / Sabrina Pacheco
-Vinheta 08: Encerramento de Sessão | Síntese Final Mônica Azevedo
+7. Demandas Locais da Unidade (15 mins.) Participante 01
+8. Revisão de Procedimentos em Equipe (30 mins.) Participante 03 / Participante 16
+Vinheta 08: Encerramento de Sessão | Síntese Final Participante 12
 
-6 de novembro de 2026 | MÓDULO 48, 49 Presidente Mônica Azevedo
-Vinheta 09: Abertura de Sessão | Credenciamento Alex Nogueira
+6 de novembro de 2026 | MÓDULO 48, 49 Presidente Participante 12
+Vinheta 09: Abertura de Sessão | Credenciamento Participante 01
 BLOCO 1 — FUNDAMENTOS E ANÁLISE
-1. Comunicação Clara em Equipes de Campo (10 mins.) Alex Nogueira
-2. Análise de Indicadores e Metas (10 mins.) Guilherme Araújo
-3. Leitura Técnica de Referência (4 mins.) Natália Campos
+1. Comunicação Clara em Equipes de Campo (10 mins.) Participante 01
+2. Análise de Indicadores e Metas (10 mins.) Participante 07
+3. Leitura Técnica de Referência (4 mins.) Participante 13
 BLOCO 2 — PRÁTICA E COMUNICAÇÃO
-4. Simulação de Atendimento Inicial (3 mins.) Rafael Medeiros / Bianca Moreira
-5. Prática de Acompanhamento em Campo (4 mins.) Daniela Peixoto / Helena Assunção
-6. Dinâmica de Resolução de Cenários (5 mins.) Otávio Siqueira / Flávia Monteiro
+4. Simulação de Atendimento Inicial (3 mins.) Participante 15 / Participante 02
+5. Prática de Acompanhamento em Campo (4 mins.) Participante 04 / Participante 08
+6. Dinâmica de Resolução de Cenários (5 mins.) Participante 14 / Participante 06
 BLOCO 3 — APLICAÇÃO E SÍNTESE
 Intervalo Técnico 05: Transição de Painel
-7. Avaliação de Desempenho Semanal (15 mins.) Caio Cavalcanti
-8. Revisão de Procedimentos em Equipe (30 mins.) Mônica Azevedo / Enzo Magalhães
-Vinheta 10: Encerramento de Sessão | Síntese Final Caio Cavalcanti
+7. Avaliação de Desempenho Semanal (15 mins.) Participante 03
+8. Revisão de Procedimentos em Equipe (30 mins.) Participante 12 / Participante 05
+Vinheta 10: Encerramento de Sessão | Síntese Final Participante 03
 
-13 de novembro de 2026 | MÓDULO 50, 51 Presidente Alex Nogueira
-Vinheta 11: Abertura de Sessão | Credenciamento Sabrina Pacheco
+13 de novembro de 2026 | MÓDULO 50, 51 Presidente Participante 01
+Vinheta 11: Abertura de Sessão | Credenciamento Participante 16
 BLOCO 1 — FUNDAMENTOS E ANÁLISE
-1. Resiliência e Continuidade de Serviço (10 mins.) Mônica Azevedo
-2. Análise de Indicadores e Metas (10 mins.) Caio Cavalcanti
-3. Leitura Técnica de Referência (4 mins.) Jéssica Tavares
+1. Resiliência e Continuidade de Serviço (10 mins.) Participante 12
+2. Análise de Indicadores e Metas (10 mins.) Participante 03
+3. Leitura Técnica de Referência (4 mins.) Participante 10
 BLOCO 2 — PRÁTICA E COMUNICAÇÃO
-4. Simulação de Atendimento Inicial (3 mins.) Leonardo Batista / Rafael Medeiros
-5. Dinâmica de Resolução de Cenários (5 mins.) Bianca Moreira / Otávio Siqueira
+4. Simulação de Atendimento Inicial (3 mins.) Participante 11 / Participante 15
+5. Dinâmica de Resolução de Cenários (5 mins.) Participante 02 / Participante 14
 BLOCO 3 — APLICAÇÃO E SÍNTESE
 Intervalo Técnico 06: Transição de Painel
-6. Painel de Boas Práticas Operacionais (15 mins.) Guilherme Araújo
-7. Revisão de Procedimentos em Equipe (30 mins.) Alex Nogueira / Igor Nascimento
-Vinheta 12: Encerramento de Sessão | Síntese Final Enzo Magalhães
+6. Painel de Boas Práticas Operacionais (15 mins.) Participante 07
+7. Revisão de Procedimentos em Equipe (30 mins.) Participante 01 / Participante 09
+Vinheta 12: Encerramento de Sessão | Síntese Final Participante 05
 
-20 de novembro de 2026 | MÓDULO 52 Presidente Guilherme Araújo
-Vinheta 13: Abertura de Sessão | Credenciamento Igor Nascimento
+20 de novembro de 2026 | MÓDULO 52 Presidente Participante 07
+Vinheta 13: Abertura de Sessão | Credenciamento Participante 09
 BLOCO 1 — FUNDAMENTOS E ANÁLISE
-1. Liderança Colaborativa e Mentoria (10 mins.) Caio Cavalcanti
-2. Análise de Indicadores e Metas (10 mins.) Alex Nogueira
-3. Leitura Técnica de Referência (4 mins.) Sabrina Pacheco
+1. Liderança Colaborativa e Mentoria (10 mins.) Participante 03
+2. Análise de Indicadores e Metas (10 mins.) Participante 01
+3. Leitura Técnica de Referência (4 mins.) Participante 16
 BLOCO 2 — PRÁTICA E COMUNICAÇÃO
-4. Simulação de Atendimento Inicial (4 mins.) Helena Assunção / Flávia Monteiro
-5. Prática de Acompanhamento em Campo (4 mins.) Enzo Magalhães / Natália Campos
-6. Apresentação de Caso Prático (5 mins.) Jéssica Tavares
+4. Simulação de Atendimento Inicial (4 mins.) Participante 08 / Participante 06
+5. Prática de Acompanhamento em Campo (4 mins.) Participante 05 / Participante 13
+6. Apresentação de Caso Prático (5 mins.) Participante 10
 BLOCO 3 — APLICAÇÃO E SÍNTESE
 Intervalo Técnico 07: Transição de Painel
-7. Logística de Recursos e Materiais (15 mins.) Mônica Azevedo
-8. Revisão de Procedimentos em Equipe (30 mins.) Guilherme Araújo / Caio Cavalcanti
-Vinheta 14: Encerramento de Sessão | Síntese Final Natália Campos
+7. Logística de Recursos e Materiais (15 mins.) Participante 12
+8. Revisão de Procedimentos em Equipe (30 mins.) Participante 07 / Participante 03
+Vinheta 14: Encerramento de Sessão | Síntese Final Participante 13
 
-27 de novembro de 2026 | MÓDULO 53, 54 Presidente Caio Cavalcanti
-Vinheta 15: Abertura de Sessão | Credenciamento Mônica Azevedo
+27 de novembro de 2026 | MÓDULO 53, 54 Presidente Participante 03
+Vinheta 15: Abertura de Sessão | Credenciamento Participante 12
 BLOCO 1 — FUNDAMENTOS E ANÁLISE
-1. Documentação e Registro Preciso (10 mins.) Guilherme Araújo
-2. Análise de Indicadores e Metas (10 mins.) Mônica Azevedo
-3. Leitura Técnica de Referência (4 mins.) Igor Nascimento
+1. Documentação e Registro Preciso (10 mins.) Participante 07
+2. Análise de Indicadores e Metas (10 mins.) Participante 12
+3. Leitura Técnica de Referência (4 mins.) Participante 09
 BLOCO 2 — PRÁTICA E COMUNICAÇÃO
-4. Simulação de Atendimento Inicial (3 mins.) Daniela Peixoto / Leonardo Batista
-5. Prática de Acompanhamento em Campo (4 mins.) Flávia Monteiro / Bianca Moreira
-6. Dinâmica de Resolução de Cenários (5 mins.) Otávio Siqueira / Rafael Medeiros
+4. Simulação de Atendimento Inicial (3 mins.) Participante 04 / Participante 11
+5. Prática de Acompanhamento em Campo (4 mins.) Participante 06 / Participante 02
+6. Dinâmica de Resolução de Cenários (5 mins.) Participante 14 / Participante 15
 BLOCO 3 — APLICAÇÃO E SÍNTESE
 Intervalo Técnico 08: Transição de Painel
-7. Síntese de Resultados Mensais (15 mins.) Alex Nogueira
-8. Revisão de Procedimentos em Equipe (30 mins.) Caio Cavalcanti / Jéssica Tavares
-Vinheta 16: Encerramento de Sessão | Síntese Final Guilherme Araújo
+7. Síntese de Resultados Mensais (15 mins.) Participante 01
+8. Revisão de Procedimentos em Equipe (30 mins.) Participante 03 / Participante 10
+Vinheta 16: Encerramento de Sessão | Síntese Final Participante 07
 
-4 de dezembro de 2026 | MÓDULO 55, 56 Presidente Mônica Azevedo
-Vinheta 17: Abertura de Sessão | Credenciamento Jéssica Tavares
+4 de dezembro de 2026 | MÓDULO 55, 56 Presidente Participante 12
+Vinheta 17: Abertura de Sessão | Credenciamento Participante 10
 BLOCO 1 — FUNDAMENTOS E ANÁLISE
-1. Planejamento de Encerramento Anual (10 mins.) Alex Nogueira
-2. Análise de Indicadores e Metas (10 mins.) Guilherme Araújo
-3. Leitura Técnica de Referência (4 mins.) Enzo Magalhães
+1. Planejamento de Encerramento Anual (10 mins.) Participante 01
+2. Análise de Indicadores e Metas (10 mins.) Participante 07
+3. Leitura Técnica de Referência (4 mins.) Participante 05
 BLOCO 2 — PRÁTICA E COMUNICAÇÃO
-4. Simulação de Atendimento Inicial (3 mins.) Bianca Moreira / Helena Assunção
-5. Prática de Acompanhamento em Campo (4 mins.) Rafael Medeiros / Daniela Peixoto
-6. Apresentação de Caso Prático (5 mins.) Igor Nascimento
+4. Simulação de Atendimento Inicial (3 mins.) Participante 02 / Participante 08
+5. Prática de Acompanhamento em Campo (4 mins.) Participante 15 / Participante 04
+6. Apresentação de Caso Prático (5 mins.) Participante 09
 BLOCO 3 — APLICAÇÃO E SÍNTESE
 Intervalo Técnico 09: Transição de Painel
-7. Retrospectiva e Metas para o Próximo Ciclo (15 mins.) Caio Cavalcanti
-8. Revisão de Procedimentos em Equipe (30 mins.) Mônica Azevedo / Sabrina Pacheco
-Vinheta 18: Encerramento de Sessão | Síntese Final Alex Nogueira
+7. Retrospectiva e Metas para o Próximo Ciclo (15 mins.) Participante 03
+8. Revisão de Procedimentos em Equipe (30 mins.) Participante 12 / Participante 16
+Vinheta 18: Encerramento de Sessão | Síntese Final Participante 01
 `.trim();
 
 /**
@@ -285,19 +285,19 @@ export const S13_TERRITORIOS_SEED_RECORDS: S13TerritorySeedRecord[] = [
     locality: 'Setor Norte — Quadra 01',
     lastCompletedDate: '25/08/2026',
     cycles2027: [
-      { assignedTo: 'Helena Assunção', assignedAt: '01/09/2026', completedAt: '27/09/2026', serviceYear: 2027 },
-      { assignedTo: 'Jéssica Tavares', assignedAt: '28/09/2026', serviceYear: 2027 },
+      { assignedTo: 'Participante 08', assignedAt: '01/09/2026', completedAt: '27/09/2026', serviceYear: 2027 },
+      { assignedTo: 'Participante 10', assignedAt: '28/09/2026', serviceYear: 2027 },
     ],
     cycles2026: [
-      { assignedTo: 'Alex Nogueira', assignedAt: '01/09/2025', completedAt: '05/09/2025', serviceYear: 2026 },
-      { assignedTo: 'Bianca Moreira', assignedAt: '28/09/2025', completedAt: '14/10/2025', serviceYear: 2026 },
-      { assignedTo: 'Caio Cavalcanti', assignedAt: '14/10/2025', completedAt: '14/11/2025', serviceYear: 2026 },
-      { assignedTo: 'Daniela Peixoto', assignedAt: '21/11/2025', completedAt: '20/12/2025', serviceYear: 2026 },
-      { assignedTo: 'Enzo Magalhães', assignedAt: '06/01/2026', completedAt: '23/01/2026', serviceYear: 2026 },
-      { assignedTo: 'Guilherme Araújo', assignedAt: '06/02/2026', completedAt: '02/03/2026', serviceYear: 2026 },
-      { assignedTo: 'Helena Assunção', assignedAt: '03/03/2026', completedAt: '25/04/2026', serviceYear: 2026 },
-      { assignedTo: 'Igor Nascimento', assignedAt: '26/04/2026', completedAt: '20/06/2026', serviceYear: 2026 },
-      { assignedTo: 'Mônica Azevedo', assignedAt: '04/07/2026', completedAt: '25/08/2026', serviceYear: 2026 },
+      { assignedTo: 'Participante 01', assignedAt: '01/09/2025', completedAt: '05/09/2025', serviceYear: 2026 },
+      { assignedTo: 'Participante 02', assignedAt: '28/09/2025', completedAt: '14/10/2025', serviceYear: 2026 },
+      { assignedTo: 'Participante 03', assignedAt: '14/10/2025', completedAt: '14/11/2025', serviceYear: 2026 },
+      { assignedTo: 'Participante 04', assignedAt: '21/11/2025', completedAt: '20/12/2025', serviceYear: 2026 },
+      { assignedTo: 'Participante 05', assignedAt: '06/01/2026', completedAt: '23/01/2026', serviceYear: 2026 },
+      { assignedTo: 'Participante 07', assignedAt: '06/02/2026', completedAt: '02/03/2026', serviceYear: 2026 },
+      { assignedTo: 'Participante 08', assignedAt: '03/03/2026', completedAt: '25/04/2026', serviceYear: 2026 },
+      { assignedTo: 'Participante 09', assignedAt: '26/04/2026', completedAt: '20/06/2026', serviceYear: 2026 },
+      { assignedTo: 'Participante 12', assignedAt: '04/07/2026', completedAt: '25/08/2026', serviceYear: 2026 },
     ],
   },
   {
@@ -305,17 +305,17 @@ export const S13_TERRITORIOS_SEED_RECORDS: S13TerritorySeedRecord[] = [
     locality: 'Setor Norte — Quadra 02',
     lastCompletedDate: '30/08/2026',
     cycles2027: [
-      { assignedTo: 'Flávia Monteiro', assignedAt: '14/09/2026', serviceYear: 2027 },
+      { assignedTo: 'Participante 06', assignedAt: '14/09/2026', serviceYear: 2027 },
     ],
     cycles2026: [
-      { assignedTo: 'Bianca Moreira', assignedAt: '01/09/2025', completedAt: '09/09/2025', serviceYear: 2026 },
-      { assignedTo: 'Caio Cavalcanti', assignedAt: '28/09/2025', completedAt: '27/10/2025', serviceYear: 2026 },
-      { assignedTo: 'Daniela Peixoto', assignedAt: '27/10/2025', completedAt: '22/11/2025', serviceYear: 2026 },
-      { assignedTo: 'Enzo Magalhães', assignedAt: '25/11/2025', completedAt: '05/01/2026', serviceYear: 2026 },
-      { assignedTo: 'Flávia Monteiro', assignedAt: '06/01/2026', completedAt: '01/02/2026', serviceYear: 2026 },
-      { assignedTo: 'Guilherme Araújo', assignedAt: '08/02/2026', completedAt: '03/03/2026', serviceYear: 2026 },
-      { assignedTo: 'Helena Assunção', assignedAt: '08/03/2026', completedAt: '31/05/2026', serviceYear: 2026 },
-      { assignedTo: 'Leonardo Batista', assignedAt: '15/06/2026', completedAt: '30/08/2026', serviceYear: 2026 },
+      { assignedTo: 'Participante 02', assignedAt: '01/09/2025', completedAt: '09/09/2025', serviceYear: 2026 },
+      { assignedTo: 'Participante 03', assignedAt: '28/09/2025', completedAt: '27/10/2025', serviceYear: 2026 },
+      { assignedTo: 'Participante 04', assignedAt: '27/10/2025', completedAt: '22/11/2025', serviceYear: 2026 },
+      { assignedTo: 'Participante 05', assignedAt: '25/11/2025', completedAt: '05/01/2026', serviceYear: 2026 },
+      { assignedTo: 'Participante 06', assignedAt: '06/01/2026', completedAt: '01/02/2026', serviceYear: 2026 },
+      { assignedTo: 'Participante 07', assignedAt: '08/02/2026', completedAt: '03/03/2026', serviceYear: 2026 },
+      { assignedTo: 'Participante 08', assignedAt: '08/03/2026', completedAt: '31/05/2026', serviceYear: 2026 },
+      { assignedTo: 'Participante 11', assignedAt: '15/06/2026', completedAt: '30/08/2026', serviceYear: 2026 },
     ],
   },
   {
@@ -323,14 +323,14 @@ export const S13_TERRITORIOS_SEED_RECORDS: S13TerritorySeedRecord[] = [
     locality: 'Setor Norte — Quadra 03',
     lastCompletedDate: '04/08/2026',
     cycles2027: [
-      { assignedTo: 'Helena Assunção', assignedAt: '05/08/2026', completedAt: '02/10/2026', serviceYear: 2027 },
-      { assignedTo: 'Enzo Magalhães', assignedAt: '02/10/2026', serviceYear: 2027 },
+      { assignedTo: 'Participante 08', assignedAt: '05/08/2026', completedAt: '02/10/2026', serviceYear: 2027 },
+      { assignedTo: 'Participante 05', assignedAt: '02/10/2026', serviceYear: 2027 },
     ],
     cycles2026: [
-      { assignedTo: 'Caio Cavalcanti', assignedAt: '01/09/2025', completedAt: '22/11/2025', serviceYear: 2026 },
-      { assignedTo: 'Enzo Magalhães', assignedAt: '25/11/2025', completedAt: '13/02/2026', serviceYear: 2026 },
-      { assignedTo: 'Guilherme Araújo', assignedAt: '13/02/2026', completedAt: '11/05/2026', serviceYear: 2026 },
-      { assignedTo: 'Igor Nascimento', assignedAt: '13/05/2026', completedAt: '04/08/2026', serviceYear: 2026 },
+      { assignedTo: 'Participante 03', assignedAt: '01/09/2025', completedAt: '22/11/2025', serviceYear: 2026 },
+      { assignedTo: 'Participante 05', assignedAt: '25/11/2025', completedAt: '13/02/2026', serviceYear: 2026 },
+      { assignedTo: 'Participante 07', assignedAt: '13/02/2026', completedAt: '11/05/2026', serviceYear: 2026 },
+      { assignedTo: 'Participante 09', assignedAt: '13/05/2026', completedAt: '04/08/2026', serviceYear: 2026 },
     ],
   },
   {
@@ -338,14 +338,14 @@ export const S13_TERRITORIOS_SEED_RECORDS: S13TerritorySeedRecord[] = [
     locality: 'Setor Norte — Quadra 04',
     lastCompletedDate: '09/08/2026',
     cycles2027: [
-      { assignedTo: 'Daniela Peixoto', assignedAt: '18/08/2026', completedAt: '15/09/2026', serviceYear: 2027 },
-      { assignedTo: 'Sabrina Pacheco', assignedAt: '15/09/2026', serviceYear: 2027 },
+      { assignedTo: 'Participante 04', assignedAt: '18/08/2026', completedAt: '15/09/2026', serviceYear: 2027 },
+      { assignedTo: 'Participante 16', assignedAt: '15/09/2026', serviceYear: 2027 },
     ],
     cycles2026: [
-      { assignedTo: 'Alex Nogueira', assignedAt: '01/09/2025', completedAt: '26/11/2025', serviceYear: 2026 },
-      { assignedTo: 'Caio Cavalcanti', assignedAt: '29/11/2025', completedAt: '13/02/2026', serviceYear: 2026 },
-      { assignedTo: 'Leonardo Batista', assignedAt: '13/02/2026', completedAt: '14/05/2026', serviceYear: 2026 },
-      { assignedTo: 'Mônica Azevedo', assignedAt: '14/05/2026', completedAt: '09/08/2026', serviceYear: 2026 },
+      { assignedTo: 'Participante 01', assignedAt: '01/09/2025', completedAt: '26/11/2025', serviceYear: 2026 },
+      { assignedTo: 'Participante 03', assignedAt: '29/11/2025', completedAt: '13/02/2026', serviceYear: 2026 },
+      { assignedTo: 'Participante 11', assignedAt: '13/02/2026', completedAt: '14/05/2026', serviceYear: 2026 },
+      { assignedTo: 'Participante 12', assignedAt: '14/05/2026', completedAt: '09/08/2026', serviceYear: 2026 },
     ],
   },
   {
@@ -353,14 +353,14 @@ export const S13_TERRITORIOS_SEED_RECORDS: S13TerritorySeedRecord[] = [
     locality: 'Setor Leste — Quadra 01',
     lastCompletedDate: '19/08/2026',
     cycles2027: [
-      { assignedTo: 'Flávia Monteiro', assignedAt: '25/08/2026', completedAt: '26/09/2026', serviceYear: 2027 },
-      { assignedTo: 'Bianca Moreira', assignedAt: '28/09/2026', serviceYear: 2027 },
+      { assignedTo: 'Participante 06', assignedAt: '25/08/2026', completedAt: '26/09/2026', serviceYear: 2027 },
+      { assignedTo: 'Participante 02', assignedAt: '28/09/2026', serviceYear: 2027 },
     ],
     cycles2026: [
-      { assignedTo: 'Natália Campos', assignedAt: '02/09/2025', completedAt: '07/12/2025', serviceYear: 2026 },
-      { assignedTo: 'Rafael Medeiros', assignedAt: '07/12/2025', completedAt: '17/02/2026', serviceYear: 2026 },
-      { assignedTo: 'Alex Nogueira', assignedAt: '21/02/2026', completedAt: '21/05/2026', serviceYear: 2026 },
-      { assignedTo: 'Caio Cavalcanti', assignedAt: '24/05/2026', completedAt: '19/08/2026', serviceYear: 2026 },
+      { assignedTo: 'Participante 13', assignedAt: '02/09/2025', completedAt: '07/12/2025', serviceYear: 2026 },
+      { assignedTo: 'Participante 15', assignedAt: '07/12/2025', completedAt: '17/02/2026', serviceYear: 2026 },
+      { assignedTo: 'Participante 01', assignedAt: '21/02/2026', completedAt: '21/05/2026', serviceYear: 2026 },
+      { assignedTo: 'Participante 03', assignedAt: '24/05/2026', completedAt: '19/08/2026', serviceYear: 2026 },
     ],
   },
   {
@@ -368,13 +368,13 @@ export const S13_TERRITORIOS_SEED_RECORDS: S13TerritorySeedRecord[] = [
     locality: 'Setor Leste — Quadra 02',
     lastCompletedDate: '29/08/2026',
     cycles2027: [
-      { assignedTo: 'Daniela Peixoto', assignedAt: '14/09/2026', serviceYear: 2027 },
+      { assignedTo: 'Participante 04', assignedAt: '14/09/2026', serviceYear: 2027 },
     ],
     cycles2026: [
-      { assignedTo: 'Enzo Magalhães', assignedAt: '15/09/2025', completedAt: '15/12/2025', serviceYear: 2026 },
-      { assignedTo: 'Guilherme Araújo', assignedAt: '19/12/2025', completedAt: '21/02/2026', serviceYear: 2026 },
-      { assignedTo: 'Igor Nascimento', assignedAt: '21/02/2026', completedAt: '26/05/2026', serviceYear: 2026 },
-      { assignedTo: 'Jéssica Tavares', assignedAt: '31/05/2026', completedAt: '29/08/2026', serviceYear: 2026 },
+      { assignedTo: 'Participante 05', assignedAt: '15/09/2025', completedAt: '15/12/2025', serviceYear: 2026 },
+      { assignedTo: 'Participante 07', assignedAt: '19/12/2025', completedAt: '21/02/2026', serviceYear: 2026 },
+      { assignedTo: 'Participante 09', assignedAt: '21/02/2026', completedAt: '26/05/2026', serviceYear: 2026 },
+      { assignedTo: 'Participante 10', assignedAt: '31/05/2026', completedAt: '29/08/2026', serviceYear: 2026 },
     ],
   },
   {
@@ -382,14 +382,14 @@ export const S13_TERRITORIOS_SEED_RECORDS: S13TerritorySeedRecord[] = [
     locality: 'Setor Leste — Quadra 03',
     lastCompletedDate: '06/07/2026',
     cycles2027: [
-      { assignedTo: 'Helena Assunção', assignedAt: '14/07/2026', completedAt: '19/09/2026', serviceYear: 2027 },
-      { assignedTo: 'Mônica Azevedo', assignedAt: '28/09/2026', serviceYear: 2027 },
+      { assignedTo: 'Participante 08', assignedAt: '14/07/2026', completedAt: '19/09/2026', serviceYear: 2027 },
+      { assignedTo: 'Participante 12', assignedAt: '28/09/2026', serviceYear: 2027 },
     ],
     cycles2026: [
-      { assignedTo: 'Leonardo Batista', assignedAt: '01/09/2025', completedAt: '31/10/2025', serviceYear: 2026 },
-      { assignedTo: 'Natália Campos', assignedAt: '31/10/2025', completedAt: '01/02/2026', serviceYear: 2026 },
-      { assignedTo: 'Rafael Medeiros', assignedAt: '01/02/2026', completedAt: '14/03/2026', serviceYear: 2026 },
-      { assignedTo: 'Sabrina Pacheco', assignedAt: '21/03/2026', completedAt: '06/07/2026', serviceYear: 2026 },
+      { assignedTo: 'Participante 11', assignedAt: '01/09/2025', completedAt: '31/10/2025', serviceYear: 2026 },
+      { assignedTo: 'Participante 13', assignedAt: '31/10/2025', completedAt: '01/02/2026', serviceYear: 2026 },
+      { assignedTo: 'Participante 15', assignedAt: '01/02/2026', completedAt: '14/03/2026', serviceYear: 2026 },
+      { assignedTo: 'Participante 16', assignedAt: '21/03/2026', completedAt: '06/07/2026', serviceYear: 2026 },
     ],
   },
   {
@@ -397,14 +397,14 @@ export const S13_TERRITORIOS_SEED_RECORDS: S13TerritorySeedRecord[] = [
     locality: 'Setor Leste — Quadra 04',
     lastCompletedDate: '17/07/2026',
     cycles2027: [
-      { assignedTo: 'Daniela Peixoto', assignedAt: '20/07/2026', completedAt: '04/09/2026', serviceYear: 2027 },
-      { assignedTo: 'Caio Cavalcanti', assignedAt: '07/09/2026', serviceYear: 2027 },
+      { assignedTo: 'Participante 04', assignedAt: '20/07/2026', completedAt: '04/09/2026', serviceYear: 2027 },
+      { assignedTo: 'Participante 03', assignedAt: '07/09/2026', serviceYear: 2027 },
     ],
     cycles2026: [
-      { assignedTo: 'Alex Nogueira', assignedAt: '01/09/2025', completedAt: '03/11/2025', serviceYear: 2026 },
-      { assignedTo: 'Caio Cavalcanti', assignedAt: '04/11/2025', completedAt: '02/02/2026', serviceYear: 2026 },
-      { assignedTo: 'Flávia Monteiro', assignedAt: '06/02/2026', completedAt: '29/03/2026', serviceYear: 2026 },
-      { assignedTo: 'Guilherme Araújo', assignedAt: '02/04/2026', completedAt: '17/07/2026', serviceYear: 2026 },
+      { assignedTo: 'Participante 01', assignedAt: '01/09/2025', completedAt: '03/11/2025', serviceYear: 2026 },
+      { assignedTo: 'Participante 03', assignedAt: '04/11/2025', completedAt: '02/02/2026', serviceYear: 2026 },
+      { assignedTo: 'Participante 06', assignedAt: '06/02/2026', completedAt: '29/03/2026', serviceYear: 2026 },
+      { assignedTo: 'Participante 07', assignedAt: '02/04/2026', completedAt: '17/07/2026', serviceYear: 2026 },
     ],
   },
   {
@@ -412,15 +412,15 @@ export const S13_TERRITORIOS_SEED_RECORDS: S13TerritorySeedRecord[] = [
     locality: 'Setor Sul — Quadra 01',
     lastCompletedDate: '25/07/2026',
     cycles2027: [
-      { assignedTo: 'Alex Nogueira', assignedAt: '27/07/2026', completedAt: '10/09/2026', serviceYear: 2027 },
-      { assignedTo: 'Flávia Monteiro', assignedAt: '15/09/2026', completedAt: '21/09/2026', serviceYear: 2027 },
-      { assignedTo: 'Alex Nogueira', assignedAt: '01/10/2026', serviceYear: 2027 },
+      { assignedTo: 'Participante 01', assignedAt: '27/07/2026', completedAt: '10/09/2026', serviceYear: 2027 },
+      { assignedTo: 'Participante 06', assignedAt: '15/09/2026', completedAt: '21/09/2026', serviceYear: 2027 },
+      { assignedTo: 'Participante 01', assignedAt: '01/10/2026', serviceYear: 2027 },
     ],
     cycles2026: [
-      { assignedTo: 'Helena Assunção', assignedAt: '01/09/2025', completedAt: '04/11/2025', serviceYear: 2026 },
-      { assignedTo: 'Jéssica Tavares', assignedAt: '11/11/2025', completedAt: '05/02/2026', serviceYear: 2026 },
-      { assignedTo: 'Mônica Azevedo', assignedAt: '06/02/2026', completedAt: '04/04/2026', serviceYear: 2026 },
-      { assignedTo: 'Natália Campos', assignedAt: '07/04/2026', completedAt: '25/07/2026', serviceYear: 2026 },
+      { assignedTo: 'Participante 08', assignedAt: '01/09/2025', completedAt: '04/11/2025', serviceYear: 2026 },
+      { assignedTo: 'Participante 10', assignedAt: '11/11/2025', completedAt: '05/02/2026', serviceYear: 2026 },
+      { assignedTo: 'Participante 12', assignedAt: '06/02/2026', completedAt: '04/04/2026', serviceYear: 2026 },
+      { assignedTo: 'Participante 13', assignedAt: '07/04/2026', completedAt: '25/07/2026', serviceYear: 2026 },
     ],
   },
   {
@@ -428,14 +428,14 @@ export const S13_TERRITORIOS_SEED_RECORDS: S13TerritorySeedRecord[] = [
     locality: 'Setor Sul — Quadra 02',
     lastCompletedDate: '01/08/2026',
     cycles2027: [
-      { assignedTo: 'Otávio Siqueira', assignedAt: '02/08/2026', completedAt: '19/09/2026', serviceYear: 2027 },
-      { assignedTo: 'Igor Nascimento', assignedAt: '28/09/2026', serviceYear: 2027 },
+      { assignedTo: 'Participante 14', assignedAt: '02/08/2026', completedAt: '19/09/2026', serviceYear: 2027 },
+      { assignedTo: 'Participante 09', assignedAt: '28/09/2026', serviceYear: 2027 },
     ],
     cycles2026: [
-      { assignedTo: 'Rafael Medeiros', assignedAt: '01/09/2025', completedAt: '10/11/2025', serviceYear: 2026 },
-      { assignedTo: 'Alex Nogueira', assignedAt: '14/11/2025', completedAt: '07/02/2026', serviceYear: 2026 },
-      { assignedTo: 'Caio Cavalcanti', assignedAt: '08/02/2026', completedAt: '14/04/2026', serviceYear: 2026 },
-      { assignedTo: 'Daniela Peixoto', assignedAt: '14/04/2026', completedAt: '01/08/2026', serviceYear: 2026 },
+      { assignedTo: 'Participante 15', assignedAt: '01/09/2025', completedAt: '10/11/2025', serviceYear: 2026 },
+      { assignedTo: 'Participante 01', assignedAt: '14/11/2025', completedAt: '07/02/2026', serviceYear: 2026 },
+      { assignedTo: 'Participante 03', assignedAt: '08/02/2026', completedAt: '14/04/2026', serviceYear: 2026 },
+      { assignedTo: 'Participante 04', assignedAt: '14/04/2026', completedAt: '01/08/2026', serviceYear: 2026 },
     ],
   },
   {
@@ -443,14 +443,14 @@ export const S13_TERRITORIOS_SEED_RECORDS: S13TerritorySeedRecord[] = [
     locality: 'Setor Sul — Quadra 03',
     lastCompletedDate: '09/08/2026',
     cycles2027: [
-      { assignedTo: 'Natália Campos', assignedAt: '18/08/2026', completedAt: '03/10/2026', serviceYear: 2027 },
-      { assignedTo: 'Helena Assunção', assignedAt: '04/10/2026', serviceYear: 2027 },
+      { assignedTo: 'Participante 13', assignedAt: '18/08/2026', completedAt: '03/10/2026', serviceYear: 2027 },
+      { assignedTo: 'Participante 08', assignedAt: '04/10/2026', serviceYear: 2027 },
     ],
     cycles2026: [
-      { assignedTo: 'Enzo Magalhães', assignedAt: '01/09/2025', completedAt: '11/11/2025', serviceYear: 2026 },
-      { assignedTo: 'Guilherme Araújo', assignedAt: '18/11/2025', completedAt: '13/02/2026', serviceYear: 2026 },
-      { assignedTo: 'Jéssica Tavares', assignedAt: '13/02/2026', completedAt: '21/04/2026', serviceYear: 2026 },
-      { assignedTo: 'Leonardo Batista', assignedAt: '25/04/2026', completedAt: '09/08/2026', serviceYear: 2026 },
+      { assignedTo: 'Participante 05', assignedAt: '01/09/2025', completedAt: '11/11/2025', serviceYear: 2026 },
+      { assignedTo: 'Participante 07', assignedAt: '18/11/2025', completedAt: '13/02/2026', serviceYear: 2026 },
+      { assignedTo: 'Participante 10', assignedAt: '13/02/2026', completedAt: '21/04/2026', serviceYear: 2026 },
+      { assignedTo: 'Participante 11', assignedAt: '25/04/2026', completedAt: '09/08/2026', serviceYear: 2026 },
     ],
   },
   {
@@ -458,13 +458,13 @@ export const S13_TERRITORIOS_SEED_RECORDS: S13TerritorySeedRecord[] = [
     locality: 'Setor Sul — Quadra 04',
     lastCompletedDate: '17/08/2026',
     cycles2027: [
-      { assignedTo: 'Leonardo Batista', assignedAt: '22/08/2026', serviceYear: 2027 },
+      { assignedTo: 'Participante 11', assignedAt: '22/08/2026', serviceYear: 2027 },
     ],
     cycles2026: [
-      { assignedTo: 'Mônica Azevedo', assignedAt: '01/09/2025', completedAt: '18/11/2025', serviceYear: 2026 },
-      { assignedTo: 'Otávio Siqueira', assignedAt: '18/11/2025', completedAt: '13/02/2026', serviceYear: 2026 },
-      { assignedTo: 'Sabrina Pacheco', assignedAt: '13/02/2026', completedAt: '25/04/2026', serviceYear: 2026 },
-      { assignedTo: 'Alex Nogueira', assignedAt: '03/05/2026', completedAt: '17/08/2026', serviceYear: 2026 },
+      { assignedTo: 'Participante 12', assignedAt: '01/09/2025', completedAt: '18/11/2025', serviceYear: 2026 },
+      { assignedTo: 'Participante 14', assignedAt: '18/11/2025', completedAt: '13/02/2026', serviceYear: 2026 },
+      { assignedTo: 'Participante 16', assignedAt: '13/02/2026', completedAt: '25/04/2026', serviceYear: 2026 },
+      { assignedTo: 'Participante 01', assignedAt: '03/05/2026', completedAt: '17/08/2026', serviceYear: 2026 },
     ],
   },
   {
@@ -472,13 +472,13 @@ export const S13_TERRITORIOS_SEED_RECORDS: S13TerritorySeedRecord[] = [
     locality: 'Setor Oeste — Quadra 01',
     lastCompletedDate: '25/08/2026',
     cycles2027: [
-      { assignedTo: 'Guilherme Araújo', assignedAt: '06/09/2026', serviceYear: 2027 },
+      { assignedTo: 'Participante 07', assignedAt: '06/09/2026', serviceYear: 2027 },
     ],
     cycles2026: [
-      { assignedTo: 'Bianca Moreira', assignedAt: '01/09/2025', completedAt: '18/11/2025', serviceYear: 2026 },
-      { assignedTo: 'Daniela Peixoto', assignedAt: '25/11/2025', completedAt: '15/02/2026', serviceYear: 2026 },
-      { assignedTo: 'Flávia Monteiro', assignedAt: '16/02/2026', completedAt: '04/05/2026', serviceYear: 2026 },
-      { assignedTo: 'Helena Assunção', assignedAt: '09/05/2026', completedAt: '25/08/2026', serviceYear: 2026 },
+      { assignedTo: 'Participante 02', assignedAt: '01/09/2025', completedAt: '18/11/2025', serviceYear: 2026 },
+      { assignedTo: 'Participante 04', assignedAt: '25/11/2025', completedAt: '15/02/2026', serviceYear: 2026 },
+      { assignedTo: 'Participante 06', assignedAt: '16/02/2026', completedAt: '04/05/2026', serviceYear: 2026 },
+      { assignedTo: 'Participante 08', assignedAt: '09/05/2026', completedAt: '25/08/2026', serviceYear: 2026 },
     ],
   },
   {
@@ -486,13 +486,13 @@ export const S13_TERRITORIOS_SEED_RECORDS: S13TerritorySeedRecord[] = [
     locality: 'Setor Oeste — Quadra 02',
     lastCompletedDate: '30/08/2026',
     cycles2027: [
-      { assignedTo: 'Otávio Siqueira', assignedAt: '21/09/2026', serviceYear: 2027 },
+      { assignedTo: 'Participante 14', assignedAt: '21/09/2026', serviceYear: 2027 },
     ],
     cycles2026: [
-      { assignedTo: 'Igor Nascimento', assignedAt: '02/09/2025', completedAt: '18/11/2025', serviceYear: 2026 },
-      { assignedTo: 'Leonardo Batista', assignedAt: '28/11/2025', completedAt: '20/02/2026', serviceYear: 2026 },
-      { assignedTo: 'Natália Campos', assignedAt: '21/02/2026', completedAt: '23/05/2026', serviceYear: 2026 },
-      { assignedTo: 'Rafael Medeiros', assignedAt: '23/05/2026', completedAt: '30/08/2026', serviceYear: 2026 },
+      { assignedTo: 'Participante 09', assignedAt: '02/09/2025', completedAt: '18/11/2025', serviceYear: 2026 },
+      { assignedTo: 'Participante 11', assignedAt: '28/11/2025', completedAt: '20/02/2026', serviceYear: 2026 },
+      { assignedTo: 'Participante 13', assignedAt: '21/02/2026', completedAt: '23/05/2026', serviceYear: 2026 },
+      { assignedTo: 'Participante 15', assignedAt: '23/05/2026', completedAt: '30/08/2026', serviceYear: 2026 },
     ],
   },
   {
@@ -500,14 +500,14 @@ export const S13_TERRITORIOS_SEED_RECORDS: S13TerritorySeedRecord[] = [
     locality: 'Setor Oeste — Quadra 03',
     lastCompletedDate: '30/08/2026',
     cycles2027: [
-      { assignedTo: 'Bianca Moreira', assignedAt: '14/09/2026', completedAt: '28/09/2026', serviceYear: 2027 },
-      { assignedTo: 'Rafael Medeiros', assignedAt: '01/10/2026', serviceYear: 2027 },
+      { assignedTo: 'Participante 02', assignedAt: '14/09/2026', completedAt: '28/09/2026', serviceYear: 2027 },
+      { assignedTo: 'Participante 15', assignedAt: '01/10/2026', serviceYear: 2027 },
     ],
     cycles2026: [
-      { assignedTo: 'Sabrina Pacheco', assignedAt: '02/09/2025', completedAt: '22/11/2025', serviceYear: 2026 },
-      { assignedTo: 'Caio Cavalcanti', assignedAt: '29/11/2025', completedAt: '20/02/2026', serviceYear: 2026 },
-      { assignedTo: 'Enzo Magalhães', assignedAt: '21/02/2026', completedAt: '01/06/2026', serviceYear: 2026 },
-      { assignedTo: 'Flávia Monteiro', assignedAt: '02/06/2026', completedAt: '30/08/2026', serviceYear: 2026 },
+      { assignedTo: 'Participante 16', assignedAt: '02/09/2025', completedAt: '22/11/2025', serviceYear: 2026 },
+      { assignedTo: 'Participante 03', assignedAt: '29/11/2025', completedAt: '20/02/2026', serviceYear: 2026 },
+      { assignedTo: 'Participante 05', assignedAt: '21/02/2026', completedAt: '01/06/2026', serviceYear: 2026 },
+      { assignedTo: 'Participante 06', assignedAt: '02/06/2026', completedAt: '30/08/2026', serviceYear: 2026 },
     ],
   },
   {
@@ -515,13 +515,13 @@ export const S13_TERRITORIOS_SEED_RECORDS: S13TerritorySeedRecord[] = [
     locality: 'Setor Oeste — Quadra 04',
     lastCompletedDate: '30/08/2026',
     cycles2027: [
-      { assignedTo: 'Daniela Peixoto', assignedAt: '21/09/2026', serviceYear: 2027 },
+      { assignedTo: 'Participante 04', assignedAt: '21/09/2026', serviceYear: 2027 },
     ],
     cycles2026: [
-      { assignedTo: 'Guilherme Araújo', assignedAt: '05/09/2025', completedAt: '22/11/2025', serviceYear: 2026 },
-      { assignedTo: 'Igor Nascimento', assignedAt: '02/12/2025', completedAt: '20/02/2026', serviceYear: 2026 },
-      { assignedTo: 'Leonardo Batista', assignedAt: '21/02/2026', completedAt: '01/06/2026', serviceYear: 2026 },
-      { assignedTo: 'Mônica Azevedo', assignedAt: '15/06/2026', completedAt: '30/08/2026', serviceYear: 2026 },
+      { assignedTo: 'Participante 07', assignedAt: '05/09/2025', completedAt: '22/11/2025', serviceYear: 2026 },
+      { assignedTo: 'Participante 09', assignedAt: '02/12/2025', completedAt: '20/02/2026', serviceYear: 2026 },
+      { assignedTo: 'Participante 11', assignedAt: '21/02/2026', completedAt: '01/06/2026', serviceYear: 2026 },
+      { assignedTo: 'Participante 12', assignedAt: '15/06/2026', completedAt: '30/08/2026', serviceYear: 2026 },
     ],
   },
 ];

@@ -100,7 +100,7 @@ describe('Sekundo Universal Engines', () => {
         tree,
         '01-01-01-01',
         1,
-        'Alex Nogueira'
+        'Participante 01'
       );
 
       const metrics = calculateTerritoryMetrics(updatedTree);
@@ -111,7 +111,7 @@ describe('Sekundo Universal Engines', () => {
       // Verify individual leaf has worker name and status 1
       const leaf1 = updatedTree[0].children[0].children[0].children[0].children[0];
       expect(leaf1.meta.worked).toBe(1);
-      expect(leaf1.meta.workerName).toBe('Alex Nogueira');
+      expect(leaf1.meta.workerName).toBe('Participante 01');
     });
 
     it('calculates subtree coverage for a specific block', () => {
@@ -158,7 +158,7 @@ describe('Sekundo Universal Engines', () => {
             key: '01-01',
             type: 'slot',
             label: 'Coordenação',
-            value: 'Bianca Moreira',
+            value: 'Participante 02',
             email: 'bianca@exemplo.org',
             meta: { confirmed: true, durationMinutes: 5 },
             children: [],
@@ -167,7 +167,7 @@ describe('Sekundo Universal Engines', () => {
             key: '01-02',
             type: 'slot',
             label: 'Exposição Principal',
-            value: 'Caio Cavalcanti',
+            value: 'Participante 03',
             email: 'caio@exemplo.org',
             meta: { confirmed: false, durationMinutes: 30 },
             children: [],

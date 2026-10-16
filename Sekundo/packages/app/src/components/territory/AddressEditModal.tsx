@@ -475,7 +475,7 @@ export function AddressEditModal({ visible, item, onClose, onSave }: AddressEdit
                 style={styles.input}
                 value={workerName}
                 onChangeText={setWorkerName}
-                placeholder="Ex: Alex Nogueira"
+                placeholder="Ex: Participante 01"
                 placeholderTextColor="#6F7E94"
               />
 

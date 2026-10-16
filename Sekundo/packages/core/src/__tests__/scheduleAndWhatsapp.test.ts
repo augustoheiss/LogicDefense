@@ -26,13 +26,13 @@ import {
 } from '../index';
 
 describe('Participant Directory & Diacritic-Insensitive Resolution', () => {
-  it('resolves diacritic variations such as Assunção vs Assuncao', () => {
-    expect(normalizePersonKey('Helena Assunção')).toBe(
-      normalizePersonKey('Helena Assuncao'),
+  it('resolves diacritic variations such as Operação vs Operacao', () => {
+    expect(normalizePersonKey('Participante Operação')).toBe(
+      normalizePersonKey('Participante Operacao'),
     );
 
     const profile = findParticipantProfile(
-      'Helena Assuncao',
+      'Participante 08',
       PROGRAMACAO_PARTICIPANT_DIRECTORY,
     );
     expect(profile).toBeDefined();
@@ -52,10 +52,10 @@ describe('Agnostic Schedule Parser & 9-Week Seed Ingestion', () => {
     expect(parseLocalizedDateToISO('9 de outubro de 2026')).toBe('2026-10-09');
     expect(parseLocalizedDateToISO('4 de dezembro de 2026')).toBe('2026-12-04');
 
-    const pair = splitPairedAssignees('Natália Campos / Enzo Magalhães');
+    const pair = splitPairedAssignees('Participante 13 / Participante 05');
     expect(pair).toEqual({
-      assignedTo: 'Natália Campos',
-      assistantTo: 'Enzo Magalhães',
+      assignedTo: 'Participante 13',
+      assistantTo: 'Participante 05',
     });
   });
 
@@ -69,7 +69,7 @@ describe('Agnostic Schedule Parser & 9-Week Seed Ingestion', () => {
 
     // Check first week (09/10/2026)
     const week1 = sessions[0];
-    expect(week1.chairPerson).toBe('Mônica Azevedo');
+    expect(week1.chairPerson).toBe('Participante 12');
     expect(week1.sections.length).toBe(3);
     expect(week1.sections.map((s) => s.accentColor)).toEqual([
       '#3D5B65',
@@ -77,12 +77,12 @@ describe('Agnostic Schedule Parser & 9-Week Seed Ingestion', () => {
       '#80241E',
     ]);
 
-    // Check paired slot with group enrichment (Part 4: Natália Campos / Enzo Magalhães)
+    // Check paired slot with group enrichment (Part 4: Participante 13 / Participante 05)
     const slot4 = week1.sections[1].slots.find((s) => (s.meta as any)?.partNumber === 4);
     expect(slot4).toBeDefined();
     const slot4Meta = slot4!.meta as Record<string, any>;
-    expect(slot4Meta.assignedTo).toBe('Natália Campos');
-    expect(slot4Meta.assistantTo).toBe('Enzo Magalhães');
+    expect(slot4Meta.assignedTo).toBe('Participante 13');
+    expect(slot4Meta.assistantTo).toBe('Participante 05');
     expect(slot4Meta.groupTag).toBe('Grupo 3');
     expect(slot4Meta.assistantGroupTag).toBe('Grupo 1');
 
@@ -136,12 +136,12 @@ describe('WhatsApp Export Engine & Commitment Agonist Formatters', () => {
 
     expect(msg).toContain('*PROGRAMAÇÃO DA SEMANA');
     expect(msg).toContain('9 DE OUTUBRO DE 2026');
-    expect(msg).toContain('*Presidente:* Mônica Azevedo');
+    expect(msg).toContain('*Presidente:* Participante 12');
     expect(msg).toContain('*BLOCO 1 — FUNDAMENTOS E ANÁLISE*');
     expect(msg).toContain('*BLOCO 2 — PRÁTICA E COMUNICAÇÃO*');
     expect(msg).toContain('*BLOCO 3 — APLICAÇÃO E SÍNTESE*');
-    expect(msg).toContain('Natália Campos');
-    expect(msg).toContain('Enzo Magalhães');
+    expect(msg).toContain('Participante 13');
+    expect(msg).toContain('Participante 05');
   });
 
   it('formats Mode 2: Group Filter Summary (Grupo 1, 2, 3) with active territories', () => {
@@ -153,9 +153,9 @@ describe('WhatsApp Export Engine & Commitment Agonist Formatters', () => {
     );
 
     expect(msgGrupo1).toContain('*DESTAQUES DO GRUPO 1');
-    expect(msgGrupo1).toContain('Caio Cavalcanti');
-    expect(msgGrupo1).toContain('Alex Nogueira');
-    expect(msgGrupo1).toContain('Enzo Magalhães');
+    expect(msgGrupo1).toContain('Participante 03');
+    expect(msgGrupo1).toContain('Participante 01');
+    expect(msgGrupo1).toContain('Participante 05');
     expect(msgGrupo1).toContain('*Territórios em Campo (Grupo 1):*');
     expect(msgGrupo1).toContain('T01.01.02');
   });
@@ -164,16 +164,16 @@ describe('WhatsApp Export Engine & Commitment Agonist Formatters', () => {
     const slot4 = week1.sections[1].slots.find((s) => (s.meta as any)?.partNumber === 4)!;
     const card = formatIndividualCommitmentWhatsApp(slot4, week1, 'primary');
 
-    expect(card).toContain('Olá, *Natália Campos*!');
-    expect(card).toContain('*Parceiro(a):* Enzo Magalhães');
+    expect(card).toContain('Olá, *Participante 13*!');
+    expect(card).toContain('*Parceiro(a):* Participante 05');
     expect(card).toContain('4. Simulação de Atendimento Inicial');
 
     const partnerMsg = formatPartnerSyncWhatsAppMessage(
       slot4,
       '9 de outubro de 2026',
-      'Natália Campos',
+      'Participante 13',
     );
-    expect(partnerMsg).toContain('Olá, *Enzo Magalhães*!');
+    expect(partnerMsg).toContain('Olá, *Participante 05*!');
     expect(partnerMsg).toContain('*4. Simulação de Atendimento Inicial*');
   });
 
@@ -187,7 +187,7 @@ describe('WhatsApp Export Engine & Commitment Agonist Formatters', () => {
   it('formats Mode 5: Territory Assignment Card & generates RFC 5545 .ics calendar', () => {
     const terrMsg = formatTerritoryAssignmentWhatsApp(territoryRegistry[1]); // T01.01.02
     expect(terrMsg).toContain('*DESIGNAÇÃO DE TERRITÓRIO — T01.01.02*');
-    expect(terrMsg).toContain('Flávia Monteiro');
+    expect(terrMsg).toContain('Participante 06');
 
     const slot1 = week1.sections[0].slots[0];
     const ics = generateCommitmentICS(slot1, week1);

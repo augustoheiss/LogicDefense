@@ -41,7 +41,7 @@ describe('Phase F2 — Multi-Cycle Territory & 4-Up Declarative SDOC Parity Test
     expect(allRenderedText).toContain('CONTROLE OPERACIONAL DE SETORES E CICLOS');
     expect(allRenderedText).toContain('2026');
     expect(allRenderedText).toContain('T01.01.01');
-    expect(allRenderedText).toContain('REG-TERR-4C');
+    expect(allRenderedText).toContain('SEKUNDO ENGINE');
   });
 
   it('compiles S89_4UP_SDOC_YAML with 12 assignments into 3 pages (4-up per page)', async () => {

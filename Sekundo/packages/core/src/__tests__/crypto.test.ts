@@ -76,7 +76,7 @@ describe('encrypt / decrypt', () => {
   });
 
   it('roundtrips unicode content', async () => {
-    const text = 'Alex Nogueira — Coordenação da Sessão 🌞';
+    const text = 'Participante 01 — Coordenação da Sessão 🌞';
     const encrypted = await encrypt(text, passphrase);
     const decrypted = await decrypt(encrypted, passphrase);
     expect(decrypted).toBe(text);
@@ -150,11 +150,11 @@ describe('encryptForURL / decryptFromURL', () => {
     const data = {
       eventName: 'Programação Semanal',
       skeletons: [
-        { key: '01-01', label: 'Coordenação', value: 'Alex Nogueira' },
-        { key: '01-02', label: 'Relatoria', value: 'Bianca Moreira' },
+        { key: '01-01', label: 'Coordenação', value: 'Participante 01' },
+        { key: '01-02', label: 'Relatoria', value: 'Participante 02' },
       ],
       territories: [
-        { key: '03-01', label: 'Quadra Norte', value: 'Caio Cavalcanti' },
+        { key: '03-01', label: 'Quadra Norte', value: 'Participante 03' },
       ],
     };
 

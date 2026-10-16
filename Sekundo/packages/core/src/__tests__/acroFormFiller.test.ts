@@ -56,7 +56,7 @@ describe('AcroForm Inspector & Injector Engine', () => {
   it('should fill native AcroForm fields deterministically', async () => {
     const pdfBytes = await createSyntheticPDFWithFields();
     const result = await fillAcroForm(pdfBytes, {
-      Student_Name: 'Alex Nogueira',
+      Student_Name: 'Participante 01',
       Is_Active: true,
     });
 
@@ -67,7 +67,7 @@ describe('AcroForm Inspector & Injector Engine', () => {
     // Verify injected values by re-inspecting with pdf-lib
     const loadedDoc = await PDFDocument.load(result.pdfBytes);
     const form = loadedDoc.getForm();
-    expect(form.getTextField('Student_Name').getText()).toBe('Alex Nogueira');
+    expect(form.getTextField('Student_Name').getText()).toBe('Participante 01');
     expect(form.getCheckBox('Is_Active').isChecked()).toBe(true);
   });
 
@@ -76,22 +76,22 @@ describe('AcroForm Inspector & Injector Engine', () => {
 
     const assignments: S89Assignment[] = [
       {
-        studentName: 'Alex Nogueira',
+        studentName: 'Participante 01',
         date: '2026-10-14',
         partTitle: 'Apresentação Inicial',
       },
       {
-        studentName: 'Bianca Moreira',
+        studentName: 'Participante 02',
         date: '2026-10-14',
         partTitle: 'Oficina Prática',
       },
       {
-        studentName: 'Caio Cavalcanti',
+        studentName: 'Participante 03',
         date: '2026-10-14',
         partTitle: 'Painel Temático',
       },
       {
-        studentName: 'Daniela Peixoto',
+        studentName: 'Participante 04',
         date: '2026-10-14',
         partTitle: 'Conclusão de Módulo',
       },
@@ -106,8 +106,8 @@ describe('AcroForm Inspector & Injector Engine', () => {
     // Verify quadrant 1 and 4 contents
     const loadedDoc = await PDFDocument.load(result.pdfBytes);
     const form = loadedDoc.getForm();
-    expect(form.getTextField('900_1_Text_SanSerif').getText()).toBe('Alex Nogueira');
-    expect(form.getTextField('900_2_Text_SanSerif').getText()).toBe('Bianca Moreira');
+    expect(form.getTextField('900_1_Text_SanSerif').getText()).toBe('Participante 01');
+    expect(form.getTextField('900_2_Text_SanSerif').getText()).toBe('Participante 02');
     expect(form.getTextField('900_4_Text_SanSerif_Part').getText()).toBe('Conclusão de Módulo');
   });
 });

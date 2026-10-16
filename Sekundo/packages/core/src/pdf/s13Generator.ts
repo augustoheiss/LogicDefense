@@ -1,12 +1,11 @@
 /**
- * Sekundo — Client-Side Territory Assignment Record (S-13-S Multi-Cycle 4-Column) & Territory Card (S-12) PDF Generator
+ * Sekundo — Client-Side Executive Sector Coverage & Quadra Cards PDF Generator
  *
  * 100% local, zero server egress: builds printable A4 PDF documents directly in the browser/device
- * using `pdf-lib` following the official S-13-S 4-column multi-cycle grid ("Designado para" x 4 per row,
- * split into Assignee Name on top and "Data da designação | Data da conclusão" on bottom, with automatic
- * multi-row continuation when a territory exceeds 4 assignments in a Service Year).
+ * using `pdf-lib` with Sekundo's original executive layout (dark-slate header banner, flat zebra rows,
+ * and automatic continuation rows when a sector exceeds 4 cycles in an operational year).
  *
- * Skills: agency-pdf-engine-architect, agency-web-gis-developer
+ * Skills: agency-pdf-engine-architect, agency-clean-room-data-hygiene-engineer
  */
 
 import type { FlatSkeletonEntry } from '../skeleton/types';
@@ -211,44 +210,50 @@ export async function generateTerritoryS13AndCardsPDF(
       const page = pdfDoc.addPage([595.28, 841.89]); // A4
       const tableX = 34;
       const tableW = 527;
-      const colTerrW = 58;
-      const colLastW = 61;
-      const colCycleW = (tableW - colTerrW - colLastW) / 4; // 102pt each
+      const colTerrW = 90;
+      const colLastW = 62;
+      const colCycleW = (tableW - colTerrW - colLastW) / 4;
 
-      // Title
-      page.drawText('CONTROLE OPERACIONAL DE SETORES E CICLOS', {
-        x: 125,
-        y: 800,
-        size: 14,
-        font: fontBold,
-        color: rgb(0.05, 0.05, 0.05),
-      });
-
-      // Operational Cycle / Year Header
-      page.drawText('Ciclo / Ano Operacional:', {
+      // Sekundo Executive Top Banner (#0F172A)
+      page.drawRectangle({
         x: tableX,
         y: 774,
-        size: 10,
-        font: fontBold,
-        color: rgb(0.05, 0.05, 0.05),
-      });
-      page.drawText(toWinAnsiSafe(currentYear), {
-        x: tableX + 128,
-        y: 774,
-        size: 10,
-        font: fontRegular,
-        color: rgb(0.05, 0.05, 0.05),
+        width: tableW,
+        height: 40,
+        color: rgb(0.06, 0.09, 0.16),
       });
       page.drawLine({
-        start: { x: tableX + 122, y: 772 },
-        end: { x: tableX + 175, y: 772 },
-        thickness: 0.8,
-        color: rgb(0.1, 0.1, 0.1),
+        start: { x: tableX, y: 774 },
+        end: { x: tableX + tableW, y: 774 },
+        thickness: 2,
+        color: rgb(0.23, 0.51, 0.96),
       });
 
-      // Table Header Geometry
-      const headerTopY = 764;
-      const headerH = 32;
+      page.drawText('CONTROLE OPERACIONAL DE SETORES E CICLOS', {
+        x: tableX + 12,
+        y: 796,
+        size: 11.5,
+        font: fontBold,
+        color: rgb(0.97, 0.98, 0.99),
+      });
+      page.drawText('SEKUNDO ENGINE — PAINEL AGNOSTICO DE COBERTURA', {
+        x: tableX + 12,
+        y: 782,
+        size: 7.5,
+        font: fontRegular,
+        color: rgb(0.58, 0.64, 0.72),
+      });
+      page.drawText(`CICLO ${toWinAnsiSafe(currentYear)}`, {
+        x: tableX + tableW - 82,
+        y: 790,
+        size: 10,
+        font: fontBold,
+        color: rgb(0.22, 0.74, 0.97),
+      });
+
+      // Column Header Bar (#1E293B)
+      const headerTopY = 766;
+      const headerH = 24;
       const headerBottomY = headerTopY - headerH;
 
       page.drawRectangle({
@@ -256,247 +261,149 @@ export async function generateTerritoryS13AndCardsPDF(
         y: headerBottomY,
         width: tableW,
         height: headerH,
-        color: rgb(0.82, 0.82, 0.82),
-        borderColor: rgb(0.05, 0.05, 0.05),
-        borderWidth: 1.5,
+        color: rgb(0.12, 0.16, 0.23),
       });
 
-      // Column 1 Header: Setor ID
-      page.drawText('Setor ID', {
-        x: tableX + 11,
-        y: headerBottomY + 13,
-        size: 8,
-        font: fontBold,
-        color: rgb(0.05, 0.05, 0.05),
-      });
-
-      // Column 2 Header: Ultimo ciclo*
-      page.drawText('Ultimo', {
-        x: tableX + colTerrW + 14,
-        y: headerBottomY + 17,
-        size: 7,
-        font: fontBold,
-        color: rgb(0.05, 0.05, 0.05),
-      });
-      page.drawText('ciclo*', {
-        x: tableX + colTerrW + 16,
+      page.drawText('SETOR / LOCAL', {
+        x: tableX + 6,
         y: headerBottomY + 8,
         size: 7,
         font: fontBold,
-        color: rgb(0.05, 0.05, 0.05),
+        color: rgb(0.97, 0.98, 0.99),
+      });
+      page.drawText('ULT. CICLO', {
+        x: tableX + colTerrW + 6,
+        y: headerBottomY + 8,
+        size: 7,
+        font: fontBold,
+        color: rgb(0.97, 0.98, 0.99),
       });
 
-      // Vertical dividers for Col 1 and Col 2
-      page.drawLine({
-        start: { x: tableX + colTerrW, y: headerTopY },
-        end: { x: tableX + colTerrW, y: headerBottomY },
-        thickness: 1.2,
-        color: rgb(0.05, 0.05, 0.05),
-      });
-      page.drawLine({
-        start: { x: tableX + colTerrW + colLastW, y: headerTopY },
-        end: { x: tableX + colTerrW + colLastW, y: headerBottomY },
-        thickness: 1.5,
-        color: rgb(0.05, 0.05, 0.05),
-      });
-
-      // 4 Cycle Columns Headers ("Responsavel" + "Data inicio | Data fim")
       for (let c = 0; c < 4; c++) {
         const cx = tableX + colTerrW + colLastW + c * colCycleW;
-        if (c > 0) {
-          page.drawLine({
-            start: { x: cx, y: headerTopY },
-            end: { x: cx, y: headerBottomY },
-            thickness: 1,
-            color: rgb(0.05, 0.05, 0.05),
-          });
-        }
-        // Horizontal split inside cycle header
-        const midHeaderY = headerBottomY + 18;
-        page.drawLine({
-          start: { x: cx, y: midHeaderY },
-          end: { x: cx + colCycleW, y: midHeaderY },
-          thickness: 0.7,
-          color: rgb(0.15, 0.15, 0.15),
-        });
-        // Vertical split in bottom half of cycle header
-        page.drawLine({
-          start: { x: cx + colCycleW / 2, y: midHeaderY },
-          end: { x: cx + colCycleW / 2, y: headerBottomY },
-          thickness: 0.7,
-          color: rgb(0.15, 0.15, 0.15),
-        });
-
-        page.drawText('Responsavel', {
-          x: cx + 26,
-          y: midHeaderY + 4,
-          size: 7.5,
+        page.drawText(`CICLO 0${c + 1} (OPERADOR / DATAS)`, {
+          x: cx + 6,
+          y: headerBottomY + 8,
+          size: 6.5,
           font: fontBold,
-          color: rgb(0.05, 0.05, 0.05),
+          color: rgb(0.89, 0.91, 0.94),
         });
-
-        page.drawText('Data', { x: cx + 14, y: headerBottomY + 10, size: 6, font: fontBold });
-        page.drawText('inicio', { x: cx + 14, y: headerBottomY + 3, size: 6, font: fontBold });
-
-        page.drawText('Data', { x: cx + colCycleW / 2 + 14, y: headerBottomY + 10, size: 6, font: fontBold });
-        page.drawText('conclusao', { x: cx + colCycleW / 2 + 8, y: headerBottomY + 3, size: 6, font: fontBold });
       }
 
-      // Render 20 fixed grid rows per page (4-column multi-cycle sheet look)
+      // Render 20 clean flat zebra rows per page (no split sub-cells)
       const rowH = 33;
       let cursorY = headerBottomY;
 
       for (let r = 0; r < rowsPerPage; r++) {
         const rowBottomY = cursorY - rowH;
-        const rowMidY = rowBottomY + rowH / 2;
         const rowData = pageRows[r];
+        const fillRgb = r % 2 === 0 ? rgb(0.97, 0.98, 0.99) : rgb(1, 1, 1);
 
-        // Row outer box
         page.drawRectangle({
           x: tableX,
           y: rowBottomY,
           width: tableW,
           height: rowH,
-          borderColor: rgb(0.1, 0.1, 0.1),
-          borderWidth: 0.8,
+          color: fillRgb,
+          borderColor: rgb(0.8, 0.84, 0.88),
+          borderWidth: 0.5,
         });
 
-        // Vertical lines for Col 1 & Col 2
         page.drawLine({
           start: { x: tableX + colTerrW, y: cursorY },
           end: { x: tableX + colTerrW, y: rowBottomY },
-          thickness: 0.8,
-          color: rgb(0.15, 0.15, 0.15),
+          thickness: 0.5,
+          color: rgb(0.8, 0.84, 0.88),
         });
         page.drawLine({
           start: { x: tableX + colTerrW + colLastW, y: cursorY },
           end: { x: tableX + colTerrW + colLastW, y: rowBottomY },
-          thickness: 1.5,
-          color: rgb(0.05, 0.05, 0.05),
+          thickness: 0.5,
+          color: rgb(0.8, 0.84, 0.88),
         });
 
         if (rowData) {
           totalRenderedRows++;
-          const safeCode = toWinAnsiSafe(rowData.territoryNumber).slice(0, 12);
-          const safeLoc = toWinAnsiSafe(rowData.locality).slice(0, 13);
+          const safeCode = toWinAnsiSafe(rowData.territoryNumber).slice(0, 14);
+          const safeLoc = toWinAnsiSafe(rowData.locality).slice(0, 18);
           const safeLast = toWinAnsiSafe(rowData.lastCompletedDate).slice(0, 12);
 
           page.drawText(safeCode, {
-            x: tableX + 5,
+            x: tableX + 6,
             y: rowBottomY + 19,
-            size: 8,
+            size: 7.5,
             font: fontBold,
-            color: rgb(0.08, 0.08, 0.12),
+            color: rgb(0.06, 0.09, 0.16),
           });
           if (safeLoc) {
             page.drawText(safeLoc, {
-              x: tableX + 5,
+              x: tableX + 6,
               y: rowBottomY + 8,
-              size: 7.2,
+              size: 6.5,
               font: fontRegular,
-              color: rgb(0.2, 0.2, 0.25),
+              color: rgb(0.28, 0.33, 0.41),
             });
           }
           if (safeLast) {
             page.drawText(safeLast, {
-              x: tableX + colTerrW + 8,
+              x: tableX + colTerrW + 6,
               y: rowBottomY + 13,
-              size: 7,
+              size: 6.8,
               font: fontRegular,
-              color: rgb(0.15, 0.15, 0.2),
+              color: rgb(0.2, 0.25, 0.33),
             });
           }
         }
 
-        // Draw 4 cycle columns inside this row
         for (let c = 0; c < 4; c++) {
           const cx = tableX + colTerrW + colLastW + c * colCycleW;
           if (c > 0) {
             page.drawLine({
               start: { x: cx, y: cursorY },
               end: { x: cx, y: rowBottomY },
-              thickness: 0.8,
-              color: rgb(0.15, 0.15, 0.15),
+              thickness: 0.4,
+              color: rgb(0.88, 0.91, 0.94),
             });
           }
-          // Horizontal split between Assignee Name (top) and Dates (bottom)
-          page.drawLine({
-            start: { x: cx, y: rowMidY },
-            end: { x: cx + colCycleW, y: rowMidY },
-            thickness: 0.5,
-            color: rgb(0.65, 0.65, 0.65),
-          });
-          // Vertical split between Data da designacao and Data da conclusao
-          page.drawLine({
-            start: { x: cx + colCycleW / 2, y: rowMidY },
-            end: { x: cx + colCycleW / 2, y: rowBottomY },
-            thickness: 0.5,
-            color: rgb(0.35, 0.35, 0.35),
-          });
 
           const cycle = rowData?.fourCycles[c];
           if (cycle) {
-            const safeAssignee = toWinAnsiSafe(cycle.assignedTo).slice(0, 26);
+            const safeAssignee = toWinAnsiSafe(cycle.assignedTo).slice(0, 22);
             const safeStart = toWinAnsiSafe(cycle.assignedAt).slice(0, 10);
             const safeEnd = toWinAnsiSafe(cycle.completedAt || '').slice(0, 10);
+            const dateRange = safeEnd ? `${safeStart} -> ${safeEnd}` : safeStart;
 
             page.drawText(safeAssignee, {
-              x: cx + 4,
-              y: rowMidY + 5,
-              size: 6.5,
-              font: fontRegular,
-              color: rgb(0.1, 0.1, 0.15),
+              x: cx + 5,
+              y: rowBottomY + 19,
+              size: 6.8,
+              font: fontBold,
+              color: rgb(0.06, 0.09, 0.16),
             });
-            page.drawText(safeStart, {
-              x: cx + 6,
-              y: rowBottomY + 4,
-              size: 6.5,
+            page.drawText(dateRange, {
+              x: cx + 5,
+              y: rowBottomY + 8,
+              size: 6,
               font: fontRegular,
-              color: rgb(0.15, 0.15, 0.2),
+              color: rgb(0.39, 0.45, 0.55),
             });
-            if (safeEnd) {
-              page.drawText(safeEnd, {
-                x: cx + colCycleW / 2 + 6,
-                y: rowBottomY + 4,
-                size: 6.5,
-                font: fontRegular,
-                color: rgb(0.15, 0.15, 0.2),
-              });
-            }
           }
         }
 
         cursorY = rowBottomY;
       }
 
-      // Outer thick frame around the entire 4-column grid
-      page.drawRectangle({
-        x: tableX,
-        y: cursorY,
-        width: tableW,
-        height: headerTopY - cursorY,
-        borderColor: rgb(0.02, 0.02, 0.02),
-        borderWidth: 2,
-      });
-
-      // Footnote
+      // Clean Sekundo Footer
       page.drawText(
-        '*Coluna de referencia do ultimo ciclo operacional concluido para cada setor.',
+        'SEKUNDO ENGINE — Relatorio gerado localmente (100% agnostico e offline).',
         {
           x: tableX,
           y: cursorY - 14,
           size: 7.5,
           font: fontRegular,
-          color: rgb(0.1, 0.1, 0.1),
+          color: rgb(0.39, 0.45, 0.55),
         }
       );
-      page.drawText('REG-TERR-4C', {
-        x: tableX,
-        y: cursorY - 30,
-        size: 8.5,
-        font: fontRegular,
-        color: rgb(0.1, 0.1, 0.1),
-      });
     }
   }
 

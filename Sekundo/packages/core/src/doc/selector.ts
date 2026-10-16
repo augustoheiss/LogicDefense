@@ -6,7 +6,7 @@
  * - `"slots"` or `"slots(where: value != '')"`: slot entries (optionally non-empty)
  * - `"territories"`: territory root entries
  * - `"children(of: '01-01')"`: descendants of a specific `PathKey`
- * - `"s13_pages(year: '2027')"` / `"s13_pages"`: pre-grouped 20-row S-13-S multi-cycle pages
+ * - `"sector_pages(year: '2027')"` / `"sector_pages"`: pre-grouped 20-row multi-cycle sector pages
  */
 
 import type { FlatRegistry, FlatSkeletonEntry } from '../skeleton/types';
@@ -212,8 +212,8 @@ export function evaluateRegistrySelector(
 ): Record<string, unknown>[] {
   const expr = (selectorExpr || 'all').trim();
 
-  // S-13-S multi-cycle page selector: `s13_pages` or `s13_pages(year: '2027')`
-  if (expr.startsWith('s13_pages')) {
+  // Multi-cycle sector page selector: `sector_pages` or `sector_pages(year: '2027')`
+  if (expr.startsWith('sector_pages') || expr.startsWith('s13_pages')) {
     const yearMatch = expr.match(/year\s*:\s*['"]?([^'")\s]+)['"]?/i);
     const year = options?.serviceYear || (yearMatch ? yearMatch[1] : '2027');
     return buildS13PageContexts(registry, year);

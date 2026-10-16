@@ -22,7 +22,7 @@ describe('Phase F0 & F1 — Data YAML (Tree & Flat Roundtrip) + O(n) Granular Fi
       key: '01-01',
       type: 'slot',
       label: 'Destaques e Análise (Acentuação: áéíóú ç ãõ)',
-      value: 'Alex Nogueira',
+      value: 'Participante 01',
       email: 'alex@example.org',
       meta: { durationMinutes: 10, room: 'Auditório Principal' },
     },
@@ -30,9 +30,9 @@ describe('Phase F0 & F1 — Data YAML (Tree & Flat Roundtrip) + O(n) Granular Fi
       key: '001-02',
       type: 'slot',
       label: 'Leitura Técnica Estruturada',
-      value: 'Caio Cavalcanti',
+      value: 'Participante 03',
       email: '',
-      meta: { assistantTo: 'Enzo Magalhães', nested: { floor: 2, tags: ['sala_b', 'equipe'] } },
+      meta: { assistantTo: 'Participante 05', nested: { floor: 2, tags: ['sala_b', 'equipe'] } },
     },
   ];
 

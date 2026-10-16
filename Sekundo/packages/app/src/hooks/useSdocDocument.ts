@@ -51,11 +51,34 @@ export function useSdocDocument({
     if (initializedRef.current) return;
     initializedRef.current = true;
     loadSdocTemplate(templateStorageId).then((saved) => {
-      if (saved && saved.trim().length > 0) setYamlTextState(saved);
-      else if (initialPreset === 'auto' && registry.length > 0) {
-        setYamlTextState(autoGenerateSdocFromRegistry(registry, eventName));
-      } else if (initialPreset === 'territorios-multiciclo' || initialPreset === 's13-s') {
+      const isLegacyImitatedTemplate =
+        saved &&
+        (saved.includes('REGISTRO DE DESIGNACAO') ||
+          saved.includes('Registro de Designação') ||
+          saved.includes('grade_s13') ||
+          saved.includes('s13_pages') ||
+          saved.includes('Terr. n.o') ||
+          saved.includes('Ao iniciar uma nova folha') ||
+          saved.includes('REG-TERR-4C') ||
+          saved.includes('territorios-multiciclo.sdoc.yaml') ||
+          saved.includes('fichas-4up.sdoc.yaml'));
+
+      if (saved && saved.trim().length > 0 && !isLegacyImitatedTemplate) {
+        setYamlTextState(saved);
+      } else if (initialPreset === 'auto' && registry.length > 0) {
+        const next = autoGenerateSdocFromRegistry(registry, eventName);
+        setYamlTextState(next);
+        saveSdocTemplate(templateStorageId, next).catch(() => {});
+      } else if (
+        initialPreset === 'territorios-multiciclo' ||
+        initialPreset === 's13-s' ||
+        (isLegacyImitatedTemplate && saved?.includes('s13'))
+      ) {
         setYamlTextState(S13S_MULTICYCLE_SDOC_YAML);
+        saveSdocTemplate(templateStorageId, S13S_MULTICYCLE_SDOC_YAML).catch(() => {});
+      } else if (isLegacyImitatedTemplate) {
+        setYamlTextState(S89_4UP_SDOC_YAML);
+        saveSdocTemplate(templateStorageId, S89_4UP_SDOC_YAML).catch(() => {});
       }
     });
     loadFormYaml(templateStorageId).then((savedForm) => {

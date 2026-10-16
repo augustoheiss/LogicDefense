@@ -292,7 +292,7 @@ export function autoRecognizePDFFields(
       let previewVal: string | undefined = undefined;
 
       if (sample) {
-        if (matchedAttr === 'value') previewVal = sample.value || 'Ex: Alex Nogueira';
+        if (matchedAttr === 'value') previewVal = sample.value || 'Ex: Participante 01';
         else if (matchedAttr === 'label') previewVal = sample.label || 'Ex: Apresentação Técnica';
         else if (matchedAttr === 'meta.date') previewVal = (sample.meta?.date as string) || new Date().toLocaleDateString('pt-BR');
         else if (matchedAttr === 'meta.room') previewVal = (sample.meta?.room as string) || 'Auditório Principal';

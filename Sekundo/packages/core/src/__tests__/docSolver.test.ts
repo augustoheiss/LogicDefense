@@ -114,7 +114,7 @@ layers:
           key: '01-01',
           type: 'slot',
           label: 'Expositor',
-          value: 'Alex Nogueira 🎯',
+          value: 'Participante 01 🎯',
           email: '',
           meta: {},
         },
@@ -178,7 +178,7 @@ layers:
         key: '01-01',
         type: 'slot' as const,
         label: 'Palestra Principal',
-        value: 'Caio Cavalcanti',
+        value: 'Participante 03',
         email: 'caio@example.org',
         meta: { date: '2026-10-18', room: 'Auditório Principal', assistantTo: 'Daniela' },
       },
@@ -195,10 +195,10 @@ layers:
     const yml = (await writeUnifiedOutput('yaml', { registry, eventName: 'Sessão Plenária' })) as string;
     const pdf = (await writeUnifiedOutput('pdf', { registry, eventName: 'Sessão Plenária' })) as Uint8Array;
 
-    expect(wa).toContain('Caio Cavalcanti');
+    expect(wa).toContain('Participante 03');
     expect(wa).toContain('18/10/2026');
-    expect(csv).toContain('Caio Cavalcanti');
-    expect(yml).toContain('Caio Cavalcanti');
+    expect(csv).toContain('Participante 03');
+    expect(yml).toContain('Participante 03');
     expect(pdf.byteLength).toBeGreaterThan(500);
 
     const manifest = parseAppManifestYaml(DEFAULT_SEKUNDO_APP_YAML);

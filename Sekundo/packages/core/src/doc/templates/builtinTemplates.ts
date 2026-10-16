@@ -1,10 +1,9 @@
 /**
  * Sekundo Document Engine — Built-in Canonical `.sdoc.yaml` Templates (`builtinTemplates.ts`)
  *
- * Implements Phase F2 proof-of-fire:
- * 1. `fichas-4up.sdoc.yaml` — 4-Up Assignment Slips on A4
- * 2. `territorios-multiciclo.sdoc.yaml` — 4-Column Multi-Cycle Territory Assignment Record
- *    expressed 100% as declarative `.sdoc.yaml` data!
+ * 100% Clean-Room & Domain-Agnostic Sekundo Layouts:
+ * 1. `fichas-4up.sdoc.yaml` — Cartões de Tarefa Operacional 4-Up em Folha A4
+ * 2. `territorios-multiciclo.sdoc.yaml` — Painel Executivo de Setores e Ciclos (Layout Original Sekundo)
  */
 
 import type { FlatRegistry } from '../../skeleton/types';
@@ -13,9 +12,11 @@ import { solveLayout } from '../layoutSolver';
 import { renderDisplayListToPdf, type PdfPainterOptions } from '../painters/pdfPainter';
 import type { DisplayList } from '../types';
 
-export const S89_4UP_SDOC_YAML = `# fichas-4up.sdoc.yaml — Fichas de Designação 4-Up em Folha A4
+export const S89_4UP_SDOC_YAML = `# cartoes-4up.sdoc.yaml — Cartões de Tarefa Operacional 4-Up (Layout Original Sekundo)
+# DICA: Os dados ({{value}}, {{label}}) vêm da árvore ativa (Esqueleto / Escala),
+# ou você pode editar diretamente qualquer texto fixo abaixo entre aspas.
 sdoc: 1
-name: Fichas de Designação 4-Up (A4)
+name: Cartões de Tarefa Operacional 4-Up (A4)
 page:
   format: a4
   orientation: portrait
@@ -35,104 +36,117 @@ repeat:
     cellW: 190
     cellH: 66
 layers:
-  - id: moldura
-    name: Moldura & Guias de Corte
+  - id: estrutura_cartao
+    name: Estrutura do Cartão Sekundo
     locked: true
     items:
-      - id: slip_frame
+      - id: card_bg
         type: rect
         x: 0
         y: 0
         w: 190
         h: 66
         fill: "#FFFFFF"
-        stroke: "#333333"
-        stroke_width: 0.5
-      - id: header_line
+        stroke: "#CBD5E1"
+        stroke_width: 0.4
+      - id: card_header_band
+        type: rect
+        x: 0
+        y: 0
+        w: 190
+        h: 11
+        fill: "#0F172A"
+        stroke: "#0F172A"
+        stroke_width: 0.2
+      - id: card_accent_line
         type: line
         x1: 0
-        y1: 12
+        y1: 11
         x2: 190
-        y2: 12
-        stroke: "#999999"
-        stroke_width: 0.35
-        dash: [2, 1]
-  - id: campos
-    name: Campos da Designação
+        y2: 11
+        stroke: "#3B82F6"
+        stroke_width: 0.6
+  - id: dados_cartao
+    name: Dados da Tarefa Operacional
     items:
-      - id: slip_title
+      - id: card_title
         type: text
-        x: 4
+        x: 5
         y: 3
         w: 120
-        text: "FICHA DE ATIVIDADE OPERACIONAL"
-        size: 9.5
+        text: "CARTAO DE TAREFA OPERACIONAL — SEKUNDO"
+        size: 9
         weight: bold
-        color: "#111111"
-      - id: slip_date
+        color: "#F8FAFC"
+      - id: card_date
         type: text
         x: 130
         y: 3
-        w: 56
+        w: 55
         text: "{{meta.date | date:'dd/MM/yyyy' | default:'—'}}"
-        size: 9.5
+        size: 9
         weight: bold
         align: right
-        color: "#111111"
-      - id: slip_student
+        color: "#38BDF8"
+      - id: card_participant
         type: text
-        x: 4
+        x: 5
         y: 16
         w: 180
-        text: "Participante: {{value}}"
+        text: "Responsavel: {{value}}"
         size: 11
         weight: bold
         color: "#0F172A"
-      - id: slip_assistant
+      - id: card_partner
         type: text
-        x: 4
+        x: 5
         y: 26
         w: 180
-        text: "Parceiro: {{meta.assistantTo | default:'—'}}"
+        text: "Apoio / Parceiro: {{meta.assistantTo | default:'—'}}"
         size: 9.5
         color: "#334155"
-      - id: slip_part
+      - id: card_task
         type: text
-        x: 4
+        x: 5
         y: 36
         w: 180
         text: "Atividade: {{label}}"
         size: 9.5
         max_lines: 2
         color: "#1E293B"
-      - id: slip_room
+      - id: card_location
         type: text
-        x: 4
+        x: 5
         y: 52
         w: 180
-        text: "Ambiente: {{meta.room | default:'Auditório Principal'}}"
+        text: "Ambiente / Canal: {{meta.room | default:'Sala Principal'}}"
         size: 8.5
-        color: "#475569"
+        color: "#64748B"
 `;
 
 /**
- * Generates the declarative `territorios-multiciclo.sdoc.yaml` template where all 20 rows
- * and 4 cycle columns per row are described in YAML millimeters (`mm`).
+ * Generates the 100% original Sekundo Executive Sector Dashboard `.sdoc.yaml` template
+ * (`painel-setores.sdoc.yaml`). Uses a modern dark-slate header banner, flat zebra rows,
+ * and zero visual or structural imitation of external organizational forms.
  */
 function buildS13MulticycleYaml(): string {
-  const tableX = 12; // 34pt ≈ 12mm
-  const tableW = 186; // 527pt ≈ 186mm
-  const colTerrW = 20.5;
-  const colLastW = 21.5;
-  const colCycleW = (tableW - colTerrW - colLastW) / 4; // 36mm each
-  const headerTopY = 26.8;
-  const headerH = 11.3;
-  const rowH = 11.64;
+  const tableX = 12;
+  const tableW = 186;
+  const colTerrW = 32;
+  const colLastW = 22;
+  const colCycleW = (tableW - colTerrW - colLastW) / 4; // 33mm each
+  const headerTopY = 27;
+  const headerH = 8.5;
+  const rowH = 11.5;
 
   const lines: string[] = [
-    '# territorios-multiciclo.sdoc.yaml — Controle Operacional de Setores (4 Colunas Multi-Ciclo)',
+    '# painel-setores.sdoc.yaml — Painel Executivo de Setores e Ciclos (Layout Original Sekundo)',
+    '# COMO EDITAR OS NOMES:',
+    '# 1) Os valores {{rows.N.c0_assignedTo}} buscam automaticamente os participantes (Participante 01..16)',
+    '#    da árvore ativa do evento (ou você pode substituir qualquer "{{...}}" abaixo por um nome fixo).',
+    '# 2) Para testar com seu próprio PDF, clique em "Subir PDF (Fundo)" ou "Subir PDF (Rebuild)" na barra superior.',
     'sdoc: 1',
-    'name: "Controle Operacional de Setores (Multi-Ciclo)"',
+    'name: "Painel Executivo de Setores e Ciclos (Sekundo)"',
     'page:',
     '  format: a4',
     '  orientation: portrait',
@@ -141,94 +155,77 @@ function buildS13MulticycleYaml(): string {
     '  body:',
     '    family: Helvetica',
     'repeat:',
-    '  over: "s13_pages"',
+    '  over: "sector_pages"',
     '  per_page: 1',
     'layers:',
-    '  - id: grade_s13',
-    '    name: Grade de Registro Multi-Ciclo',
+    '  - id: estrutura_painel',
+    '    name: Estrutura Visual Sekundo',
     '    locked: true',
     '    items:',
-    `      - { id: hdr_bg, type: rect, x: ${tableX}, y: ${headerTopY}, w: ${tableW}, h: ${headerH}, fill: "#D1D1D1", stroke: "#0D0D0D", stroke_width: 0.5 }`,
-    `      - { id: outer_frame, type: rect, x: ${tableX}, y: ${headerTopY}, w: ${tableW}, h: ${Number((headerH + 20 * rowH).toFixed(2))}, stroke: "#050505", stroke_width: 0.7 }`,
-    `      - { id: v_col1, type: line, x1: ${Number((tableX + colTerrW).toFixed(2))}, y1: ${headerTopY}, x2: ${Number((tableX + colTerrW).toFixed(2))}, y2: ${Number((headerTopY + headerH + 20 * rowH).toFixed(2))}, stroke: "#1A1A1A", stroke_width: 0.35 }`,
-    `      - { id: v_col2, type: line, x1: ${Number((tableX + colTerrW + colLastW).toFixed(2))}, y1: ${headerTopY}, x2: ${Number((tableX + colTerrW + colLastW).toFixed(2))}, y2: ${Number((headerTopY + headerH + 20 * rowH).toFixed(2))}, stroke: "#0D0D0D", stroke_width: 0.5 }`,
+    `      - { id: top_banner, type: rect, x: ${tableX}, y: 10, w: ${tableW}, h: 14, fill: "#0F172A", stroke: "#0F172A", stroke_width: 0.2 }`,
+    `      - { id: top_accent, type: line, x1: ${tableX}, y1: 24, x2: ${tableX + tableW}, y2: 24, stroke: "#3B82F6", stroke_width: 0.8 }`,
+    `      - { id: col_hdr_bg, type: rect, x: ${tableX}, y: ${headerTopY}, w: ${tableW}, h: ${headerH}, fill: "#1E293B", stroke: "#1E293B", stroke_width: 0.2 }`,
   ];
-
-  for (let c = 0; c < 4; c++) {
-    const cx = Number((tableX + colTerrW + colLastW + c * colCycleW).toFixed(2));
-    const midX = Number((cx + colCycleW / 2).toFixed(2));
-    if (c > 0) {
-      lines.push(
-        `      - { id: v_cyc_${c}, type: line, x1: ${cx}, y1: ${headerTopY}, x2: ${cx}, y2: ${Number((headerTopY + headerH + 20 * rowH).toFixed(2))}, stroke: "#262626", stroke_width: 0.3 }`
-      );
-    }
-    lines.push(
-      `      - { id: hdr_split_h_${c}, type: line, x1: ${cx}, y1: ${Number((headerTopY + 5).toFixed(2))}, x2: ${Number((cx + colCycleW).toFixed(2))}, y2: ${Number((headerTopY + 5).toFixed(2))}, stroke: "#262626", stroke_width: 0.25 }`,
-      `      - { id: hdr_split_v_${c}, type: line, x1: ${midX}, y1: ${Number((headerTopY + 5).toFixed(2))}, x2: ${midX}, y2: ${Number((headerTopY + headerH).toFixed(2))}, stroke: "#262626", stroke_width: 0.25 }`
-    );
-  }
 
   for (let r = 0; r < 20; r++) {
     const ry = Number((headerTopY + headerH + r * rowH).toFixed(2));
-    const midY = Number((ry + rowH / 2).toFixed(2));
+    const fillHex = r % 2 === 0 ? '#F8FAFC' : '#FFFFFF';
     lines.push(
-      `      - { id: row_box_${r}, type: rect, x: ${tableX}, y: ${ry}, w: ${tableW}, h: ${rowH}, stroke: "#262626", stroke_width: 0.28 }`,
-      `      - { id: row_mid_${r}, type: line, x1: ${Number((tableX + colTerrW + colLastW).toFixed(2))}, y1: ${midY}, x2: ${Number((tableX + tableW).toFixed(2))}, y2: ${midY}, stroke: "#A6A6A6", stroke_width: 0.18 }`
+      `      - { id: row_bg_${r}, type: rect, x: ${tableX}, y: ${ry}, w: ${tableW}, h: ${rowH}, fill: "${fillHex}", stroke: "#CBD5E1", stroke_width: 0.2 }`
     );
-    for (let c = 0; c < 4; c++) {
-      const midX = Number((tableX + colTerrW + colLastW + c * colCycleW + colCycleW / 2).toFixed(2));
-      lines.push(
-        `      - { id: row_${r}_v_${c}, type: line, x1: ${midX}, y1: ${midY}, x2: ${midX}, y2: ${Number((ry + rowH).toFixed(2))}, stroke: "#595959", stroke_width: 0.18 }`
-      );
-    }
   }
 
-  // Layer 2: Titles, Headers, and 20-Row Bindings
+  // Subtle vertical column dividers
   lines.push(
-    '  - id: textos_s13',
-    '    name: Cabeçalho e Dados dos 20 Setores',
+    `      - { id: div_col1, type: line, x1: ${Number((tableX + colTerrW).toFixed(2))}, y1: ${headerTopY}, x2: ${Number((tableX + colTerrW).toFixed(2))}, y2: ${Number((headerTopY + headerH + 20 * rowH).toFixed(2))}, stroke: "#CBD5E1", stroke_width: 0.2 }`,
+    `      - { id: div_col2, type: line, x1: ${Number((tableX + colTerrW + colLastW).toFixed(2))}, y1: ${headerTopY}, x2: ${Number((tableX + colTerrW + colLastW).toFixed(2))}, y2: ${Number((headerTopY + headerH + 20 * rowH).toFixed(2))}, stroke: "#CBD5E1", stroke_width: 0.2 }`
+  );
+
+  for (let c = 1; c < 4; c++) {
+    const cx = Number((tableX + colTerrW + colLastW + c * colCycleW).toFixed(2));
+    lines.push(
+      `      - { id: div_cyc_${c}, type: line, x1: ${cx}, y1: ${headerTopY}, x2: ${cx}, y2: ${Number((headerTopY + headerH + 20 * rowH).toFixed(2))}, stroke: "#E2E8F0", stroke_width: 0.2 }`
+    );
+  }
+
+  // Layer 2: Titles, Column Labels, and 20-Row Bindings
+  lines.push(
+    '  - id: dados_painel',
+    '    name: Dados de Cobertura dos Setores',
     '    items:',
-    '      - { id: title_s13, type: text, x: 40, y: 12, w: 140, text: "CONTROLE OPERACIONAL DE SETORES E CICLOS", size: 13, weight: bold }',
-    `      - { id: lbl_year, type: text, x: ${tableX}, y: 21, w: 52, text: "Ciclo / Ano Operacional:", size: 10, weight: bold }`,
-    `      - { id: val_year, type: text, x: ${tableX + 46}, y: 21, w: 30, text: "{{serviceYear}}", size: 10 }`,
-    `      - { id: hdr_terr, type: text, x: ${tableX + 2}, y: ${Number((headerTopY + 3.5).toFixed(2))}, w: 18, text: "Setor ID", size: 8, weight: bold }`,
-    `      - { id: hdr_last1, type: text, x: ${Number((tableX + colTerrW + 2).toFixed(2))}, y: ${Number((headerTopY + 2).toFixed(2))}, w: 19, text: "Ultimo", size: 7, weight: bold }`,
-    `      - { id: hdr_last2, type: text, x: ${Number((tableX + colTerrW + 2).toFixed(2))}, y: ${Number((headerTopY + 5.5).toFixed(2))}, w: 19, text: "ciclo*", size: 7, weight: bold }`
+    `      - { id: banner_title, type: text, x: ${tableX + 4}, y: 12.2, w: 130, text: "CONTROLE OPERACIONAL DE SETORES E CICLOS", size: 11, weight: bold, color: "#F8FAFC" }`,
+    `      - { id: banner_sub, type: text, x: ${tableX + 4}, y: 18, w: 120, text: "SEKUNDO ENGINE — PAINEL AGNOSTICO DE COBERTURA", size: 7.5, color: "#94A3B8" }`,
+    `      - { id: banner_year, type: text, x: ${tableX + tableW - 48}, y: 14, w: 44, text: "CICLO {{serviceYear}}", size: 9.5, weight: bold, align: right, color: "#38BDF8" }`,
+    `      - { id: hdr_sector, type: text, x: ${tableX + 2}, y: ${Number((headerTopY + 2.5).toFixed(2))}, w: ${colTerrW - 3}, text: "SETOR / LOCAL", size: 7, weight: bold, color: "#F8FAFC" }`,
+    `      - { id: hdr_last, type: text, x: ${Number((tableX + colTerrW + 2).toFixed(2))}, y: ${Number((headerTopY + 2.5).toFixed(2))}, w: ${colLastW - 3}, text: "ULT. CICLO", size: 7, weight: bold, color: "#F8FAFC" }`
   );
 
   for (let c = 0; c < 4; c++) {
     const cx = Number((tableX + colTerrW + colLastW + c * colCycleW).toFixed(2));
-    const midX = Number((cx + colCycleW / 2).toFixed(2));
     lines.push(
-      `      - { id: hdr_des_${c}, type: text, x: ${Number((cx + 5).toFixed(2))}, y: ${Number((headerTopY + 1).toFixed(2))}, w: 28, text: "Responsavel", size: 7.5, weight: bold }`,
-      `      - { id: hdr_dt1_${c}, type: text, x: ${Number((cx + 2).toFixed(2))}, y: ${Number((headerTopY + 5.8).toFixed(2))}, w: 16, text: "Data inicio", size: 5.8, weight: bold }`,
-      `      - { id: hdr_dt2_${c}, type: text, x: ${Number((midX + 2).toFixed(2))}, y: ${Number((headerTopY + 5.8).toFixed(2))}, w: 16, text: "Data conclusao", size: 5.8, weight: bold }`
+      `      - { id: hdr_cyc_${c}, type: text, x: ${Number((cx + 2).toFixed(2))}, y: ${Number((headerTopY + 2.5).toFixed(2))}, w: ${colCycleW - 3}, text: "CICLO 0${c + 1} (OPERADOR / DATAS)", size: 6.5, weight: bold, color: "#E2E8F0" }`
     );
   }
 
   for (let r = 0; r < 20; r++) {
     const ry = Number((headerTopY + headerH + r * rowH).toFixed(2));
-    const midY = Number((ry + rowH / 2).toFixed(2));
     lines.push(
-      `      - { id: r_${r}_code, type: text, x: ${tableX + 1.5}, y: ${Number((ry + 1.2).toFixed(2))}, w: 18, text: "{{rows.${r}.territoryNumber | truncate:12}}", size: 8, weight: bold }`,
-      `      - { id: r_${r}_loc, type: text, x: ${tableX + 1.5}, y: ${Number((ry + 5.6).toFixed(2))}, w: 18, text: "{{rows.${r}.locality | truncate:13}}", size: 7 }`,
-      `      - { id: r_${r}_last, type: text, x: ${Number((tableX + colTerrW + 2).toFixed(2))}, y: ${Number((ry + 3.5).toFixed(2))}, w: 19, text: "{{rows.${r}.lastCompletedDate | truncate:12}}", size: 7 }`
+      `      - { id: r_${r}_code, type: text, x: ${tableX + 2}, y: ${Number((ry + 1.5).toFixed(2))}, w: ${colTerrW - 3}, text: "{{rows.${r}.territoryNumber | truncate:14}}", size: 7.5, weight: bold, color: "#0F172A" }`,
+      `      - { id: r_${r}_loc, type: text, x: ${tableX + 2}, y: ${Number((ry + 5.8).toFixed(2))}, w: ${colTerrW - 3}, text: "{{rows.${r}.locality | truncate:18}}", size: 6.5, color: "#475569" }`,
+      `      - { id: r_${r}_last, type: text, x: ${Number((tableX + colTerrW + 2).toFixed(2))}, y: ${Number((ry + 3.5).toFixed(2))}, w: ${colLastW - 3}, text: "{{rows.${r}.lastCompletedDate | truncate:12}}", size: 6.8, color: "#334155" }`
     );
     for (let c = 0; c < 4; c++) {
       const cx = Number((tableX + colTerrW + colLastW + c * colCycleW).toFixed(2));
-      const midX = Number((cx + colCycleW / 2).toFixed(2));
       lines.push(
-        `      - { id: r_${r}_c${c}_who, type: text, x: ${Number((cx + 1.2).toFixed(2))}, y: ${Number((ry + 1.2).toFixed(2))}, w: 34, text: "{{rows.${r}.c${c}_assignedTo | truncate:26}}", size: 6.5 }`,
-        `      - { id: r_${r}_c${c}_in, type: text, x: ${Number((cx + 1.5).toFixed(2))}, y: ${Number((midY + 1.2).toFixed(2))}, w: 16, text: "{{rows.${r}.c${c}_assignedAt | truncate:10}}", size: 6.5 }`,
-        `      - { id: r_${r}_c${c}_out, type: text, x: ${Number((midX + 1.5).toFixed(2))}, y: ${Number((midY + 1.2).toFixed(2))}, w: 16, text: "{{rows.${r}.c${c}_completedAt | truncate:10}}", size: 6.5 }`
+        `      - { id: r_${r}_c${c}_who, type: text, x: ${Number((cx + 1.5).toFixed(2))}, y: ${Number((ry + 1.5).toFixed(2))}, w: ${colCycleW - 3}, text: "{{rows.${r}.c${c}_assignedTo | truncate:22}}", size: 6.8, weight: bold, color: "#0F172A" }`,
+        `      - { id: r_${r}_c${c}_dates, type: text, x: ${Number((cx + 1.5).toFixed(2))}, y: ${Number((ry + 6.0).toFixed(2))}, w: ${colCycleW - 3}, text: "{{rows.${r}.c${c}_assignedAt | truncate:10}} -> {{rows.${r}.c${c}_completedAt | truncate:10}}", size: 6, color: "#64748B" }`
       );
     }
   }
 
-  const footerY = Number((headerTopY + headerH + 20 * rowH + 3).toFixed(2));
+  const footerY = Number((headerTopY + headerH + 20 * rowH + 3.5).toFixed(2));
   lines.push(
-    `      - { id: footnote_s13, type: text, x: ${tableX}, y: ${footerY}, w: 185, text: "*Coluna de referencia do ultimo ciclo operacional concluido para cada setor.", size: 7.5 }`,
-    `      - { id: code_s13, type: text, x: ${tableX}, y: ${Number((footerY + 5).toFixed(2))}, w: 40, text: "REG-TERR-4C", size: 8.5, weight: bold }`,
+    `      - { id: footer_note, type: text, x: ${tableX}, y: ${footerY}, w: 185, text: "SEKUNDO ENGINE — Relatorio gerado localmente (100% agnostico e offline).", size: 7.5, color: "#64748B" }`,
     ''
   );
 
@@ -242,12 +239,12 @@ export const TERRITORIOS_MULTICYCLE_SDOC_YAML = S13S_MULTICYCLE_SDOC_YAML;
 export const BUILTIN_SDOC_TEMPLATES: Record<string, { id: string; name: string; yaml: string }> = {
   'fichas-4up': {
     id: 'fichas-4up',
-    name: 'Fichas de Designação 4-Up (A4)',
+    name: 'Cartões de Tarefa Operacional 4-Up (A4)',
     yaml: S89_4UP_SDOC_YAML,
   },
   'territorios-multiciclo': {
     id: 'territorios-multiciclo',
-    name: 'Registro de Territórios (4 Colunas Multi-Ciclo)',
+    name: 'Painel Executivo de Setores (Multi-Ciclo)',
     yaml: S13S_MULTICYCLE_SDOC_YAML,
   },
 };

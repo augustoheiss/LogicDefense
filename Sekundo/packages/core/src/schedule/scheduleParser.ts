@@ -60,7 +60,7 @@ export function parseLocalizedDateToISO(dateLabel: string): string | undefined {
 }
 
 /**
- * Splits a raw assignee string ("Alex Nogueira / Bianca Moreira")
+ * Splits a raw assignee string ("Participante 01 / Participante 02")
  * into primary (`assignedTo`) and optional partner (`assistantTo`).
  */
 export function splitPairedAssignees(rawAssignee: string): {

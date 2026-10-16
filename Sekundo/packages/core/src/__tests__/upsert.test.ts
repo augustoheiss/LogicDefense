@@ -25,7 +25,7 @@ describe('State-Preserving Upsert Engine', () => {
       key: '01-01-01',
       type: 'territory',
       label: 'Rua das Flores, 100',
-      value: 'Alex Nogueira',
+      value: 'Participante 01',
       email: '',
       meta: {
         worked: 1,

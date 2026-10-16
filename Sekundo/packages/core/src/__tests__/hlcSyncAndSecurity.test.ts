@@ -189,7 +189,7 @@ describe('Client-Side Territory Registry & Tactical Cards PDF Generator', () => 
         key: '1',
         label: 'Território 01 - Centro',
         type: 'branch',
-        meta: { territory_number: '1', assignee: 'Alex Nogueira' },
+        meta: { territory_number: '1', assignee: 'Participante 01' },
       },
       {
         key: '1.1',

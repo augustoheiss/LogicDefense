@@ -146,11 +146,23 @@ export default function ScheduleHubConsole() {
   // Load persisted user preferences & locally imported schedule bundle from localStorage
   useEffect(() => {
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
-      const MIGRATION_KEY = 'sekundo_privacy_migration_v2';
+      const MIGRATION_KEY = 'sekundo_privacy_migration_v3';
       if (window.localStorage.getItem(MIGRATION_KEY) !== '1') {
         window.localStorage.removeItem(MY_PARTICIPANT_STORAGE_KEY);
         window.localStorage.removeItem(LOCAL_BUNDLE_STORAGE_KEY);
         window.localStorage.removeItem('sekundo_app_manifest_v1');
+        for (let i = window.localStorage.length - 1; i >= 0; i--) {
+          const k = window.localStorage.key(i);
+          if (
+            k &&
+            (k.startsWith('sekundo_sdoc_tpl_') ||
+              k.startsWith('sekundo_form_yaml_') ||
+              k.startsWith('sekundo_skeleton_') ||
+              k.startsWith('sekundo_event_'))
+          ) {
+            window.localStorage.removeItem(k);
+          }
+        }
         window.localStorage.setItem(MIGRATION_KEY, '1');
       }
 
@@ -1833,7 +1845,7 @@ export default function ScheduleHubConsole() {
             <TextInput
               value={participantSearch}
               onChangeText={setParticipantSearch}
-              placeholder="Buscar por nome ou grupo (ex: Grupo 1, Alex, Assunção)..."
+              placeholder="Buscar por participante ou grupo (ex: Grupo 1, Participante 01)..."
               placeholderTextColor="#64748B"
               style={styles.searchInput}
             />
@@ -1894,7 +1906,7 @@ export default function ScheduleHubConsole() {
               onChangeText={setCustomScheduleText}
               multiline
               numberOfLines={10}
-              placeholder="Exemplo:\n9 de outubro de 2026 | MÓDULO 01 Presidente Mônica Azevedo\nBLOCO 1 — FUNDAMENTOS E ANÁLISE\n1. Abertura Temática e Diretrizes (10 mins.) Caio Cavalcanti..."
+              placeholder="Exemplo:\n9 de outubro de 2026 | MÓDULO 01 Presidente Participante 12\nBLOCO 1 — FUNDAMENTOS E ANÁLISE\n1. Abertura Temática e Diretrizes (10 mins.) Participante 03..."
               placeholderTextColor="#64748B"
               style={[styles.searchInput, { minHeight: 200, textAlignVertical: 'top' }]}
             />
