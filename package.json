@@ -19,6 +19,7 @@
     "js-yaml": "^4.1.1",
     "jszip": "^3.10.1",
     "katex": "^0.16.38",
+    "pdf-lib": "^1.17.1",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-markdown": "^10.1.0",

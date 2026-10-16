@@ -97,7 +97,7 @@ def create_overlay(
     Gera um PDF de overlay transparente com o texto posicionado.
 
     Args:
-        fields: Dicionário campo→valor (ex: {'nome_aluno': 'João Silva', ...}).
+        fields: Dicionário campo→valor (ex: {'nome_aluno': 'Participante A', ...}).
         template_map: Mapa de coordenadas do template.
         config: Configuração global.
 
@@ -147,12 +147,21 @@ def create_overlay(
                 c.drawString(x, y_rl - font_size, "X")
 
         elif field_type == "textarea":
-            # Quebra o texto em linhas e carimba linha por linha
-            lines = _wrap_text(value, max_width, default_font, font_size)
-            lines = lines[:max_lines]  # Limita ao máximo de linhas
+            # Auto-fit: reduz gradualmente a fonte (até 6.5pt) para caber todas as linhas sem truncamento
+            cur_size = float(font_size)
+            cur_spacing = float(line_spacing)
+            box_height = max_lines * line_spacing
+            lines = _wrap_text(str(value), max_width, default_font, cur_size)
 
-            for i, line in enumerate(lines):
-                y_line = y_rl - font_size - (i * line_spacing)
+            while len(lines) * cur_spacing > box_height and cur_size > 6.5:
+                cur_size = round(cur_size - 0.5, 2)
+                cur_spacing = round(cur_size * 1.25, 2)
+                lines = _wrap_text(str(value), max_width, default_font, cur_size)
+
+            c.setFont(default_font, cur_size)
+            max_fit_lines = max(max_lines, int(box_height / max(cur_spacing, 1)))
+            for i, line in enumerate(lines[:max_fit_lines]):
+                y_line = y_rl - cur_size - (i * cur_spacing)
                 c.drawString(x, y_line, line)
 
         else:  # text (campo simples, uma linha)

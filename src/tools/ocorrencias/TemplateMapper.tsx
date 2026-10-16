@@ -1,479 +1,819 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { Document, Page, pdfjs } from 'react-pdf';
 import 'react-pdf/dist/Page/AnnotationLayer.css';
 import 'react-pdf/dist/Page/TextLayer.css';
 import './TemplateMapper.css';
+import {
+  DEFAULT_OCORRENCIA_FIELD_SPECS,
+  TemplateVaultService,
+  docSpecToLegacyMap,
+  legacyMapToDocSpec,
+  ptToMm,
+  roundMm,
+  type DisplayList,
+  type FieldBackgroundMode,
+  type Mm,
+  type OcorrenciaDocSpec,
+  type OcorrenciaFieldSpec,
+  type OcorrenciaFieldType,
+} from './engine';
+import { OcorrenciasSvgOverlay } from './OcorrenciasSvgOverlay';
 
 // ── Configure react-pdf worker for Vite ──
 pdfjs.GlobalWorkerOptions.workerSrc = new URL(
   'pdfjs-dist/build/pdf.worker.min.mjs',
-  import.meta.url,
+  import.meta.url
 ).toString();
 
-export interface MappedField {
-  id: string;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  page: number;
-}
-
-interface TemplateMapperProps {
+export interface TemplateMapperProps {
   file: File;
-  onMapComplete: (dynamicMap: any, mappedFieldIds: string[]) => void;
-  onMapProgress: (mappedFieldIds: string[]) => void;
-  onCancel: () => void;
+  docSpec: OcorrenciaDocSpec;
+  displayList: DisplayList;
+  values?: Record<string, string | boolean | undefined>;
+  selectedFieldId: string;
+  vaultStatus?: 'matched' | 'saved' | 'new';
+  onSelectField: (fieldId: string) => void;
+  onUpdateDocSpec: (updater: (prev: OcorrenciaDocSpec) => OcorrenciaDocSpec) => void;
+  onPdfDocumentLoaded?: (pdfjsDoc: any) => void;
+  onAutoDiscoverRequest?: () => void;
+  onResetToDefaults?: () => void;
 }
 
-const DEFAULT_FIELDS = [
-  { id: 'nome_aluno', label: 'Nome do Aluno', type: 'text' },
-  { id: 'turma', label: 'Turma', type: 'text' },
-  { id: 'data', label: 'Data', type: 'text' },
-  { id: 'descricao_ocorrencia', label: 'Descrição da Ocorrência', type: 'textarea' },
-  { id: 'responsavel_registro', label: 'Responsável (Assinatura)', type: 'text' },
-];
-
-// Backend expected coordinate schema
-interface PyMuPDFCoords {
-  x: number;
-  y: number;
-  max_width: number;
-  height: number;
-  max_lines?: number;
-  font_size: number;
-  type: string;
-  label: string;
-  page: number;
-}
-
-export function TemplateMapper({ file, onMapComplete, onMapProgress, onCancel }: TemplateMapperProps) {
-  const [availableFields, setAvailableFields] = useState(DEFAULT_FIELDS);
-  const [numPages, setNumPages] = useState<number | null>(null);
+export function TemplateMapper({
+  file,
+  docSpec,
+  displayList,
+  values = {},
+  selectedFieldId,
+  vaultStatus = 'new',
+  onSelectField,
+  onUpdateDocSpec,
+  onPdfDocumentLoaded,
+  onAutoDiscoverRequest,
+  onResetToDefaults,
+}: TemplateMapperProps) {
   const [pageNumber, setPageNumber] = useState<number>(1);
-  const [activeFieldId, setActiveFieldId] = useState<string>(DEFAULT_FIELDS[0].id);
-  const [mappedFields, setMappedFields] = useState<Record<string, MappedField>>({});
-  const [scale, setScale] = useState<number>(1.5);
-  const [newFieldName, setNewFieldName] = useState("");
-  
-  // PDF metadata
-  const [pdfIntrinsicSize, setPdfIntrinsicSize] = useState({ width: 595.28, height: 841.89 }); // default A4
-  
-  // Actual rendered canvas dimensions (updated after every render)
-  const [canvasDims, setCanvasDims] = useState({ width: 0, height: 0 });
-  
-  // Drawing state
+  const [scale, setScale] = useState<number>(1.05);
+  const [showFieldFrames, setShowFieldFrames] = useState<boolean>(true);
+  const [drawModeActive, setDrawModeActive] = useState<boolean>(false);
+  const [previewAnnexActive, setPreviewAnnexActive] = useState<boolean>(false);
+
+  // New custom field creation state
+  const [newFieldName, setNewFieldName] = useState('');
+  const [newFieldType, setNewFieldType] = useState<OcorrenciaFieldType>('text');
+
   const wrapperRef = useRef<HTMLDivElement>(null);
-  const [isDrawing, setIsDrawing] = useState(false);
-  const [startPos, setStartPos] = useState({ x: 0, y: 0 });
-  const [currentPos, setCurrentPos] = useState({ x: 0, y: 0 });
+  const containerRef = useRef<HTMLDivElement>(null);
 
-  function onDocumentLoadSuccess({ numPages }: { numPages: number }) {
-    setNumPages(numPages);
-  }
+  const hasContinuationAnnex = Boolean(
+    displayList.continuationSections && displayList.continuationSections.length > 0
+  );
 
-  function onPageLoadSuccess(page: any) {
-    // page.originalWidth / originalHeight are in PDF points (1/72 inch)
-    if (page.originalWidth && page.originalHeight) {
-      setPdfIntrinsicSize({ width: page.originalWidth, height: page.originalHeight });
-    }
-  }
+  const selectedField =
+    docSpec.fields.find((f) => f.id === selectedFieldId) || docSpec.fields[0];
 
-  // Measure the actual canvas CSS dimensions after react-pdf finishes rendering.
-  // This is the single source of truth — immune to DPR, scale, or CSS interference.
-  const onPageRenderSuccess = useCallback(() => {
-    if (!wrapperRef.current) return;
-    const canvas = wrapperRef.current.querySelector('canvas');
-    if (canvas) {
-      setCanvasDims({ width: canvas.clientWidth, height: canvas.clientHeight });
-    }
+  const currentPageGeom = docSpec.pages[pageNumber - 1] ||
+    docSpec.pages[0] || { widthMm: 210, heightMm: 297 };
+
+  const fieldsOnCurrentPage = docSpec.fields.filter(
+    (f) => (f.page || 1) === pageNumber
+  );
+
+  const currentDisplayPage = displayList.pages.find(
+    (p) => p.pageNumber === pageNumber
+  );
+
+  const handleFitToContainerWidth = useCallback(() => {
+    const cont = containerRef.current;
+    if (!cont) return;
+    const availPx = Math.max(220, cont.clientWidth - 36);
+    const nextScale = Math.max(0.4, Math.min(2.0, +(availPx / 595.28).toFixed(2)));
+    setScale(nextScale);
   }, []);
 
-  // ── Drawing Handlers (Pointer Events API with capture) ──
-  // Coordinates are measured relative to the canvas bounding rect so they
-  // stay correct regardless of scroll position, scale, or DPR.
-  const getPointerPos = (e: React.PointerEvent) => {
-    if (!wrapperRef.current) return { x: 0, y: 0 };
-    const canvas = wrapperRef.current.querySelector('canvas');
-    const rect = canvas
-      ? canvas.getBoundingClientRect()
-      : wrapperRef.current.getBoundingClientRect();
-    return {
-      x: e.clientX - rect.left,
-      y: e.clientY - rect.top
-    };
-  };
-
-  const handlePointerDown = (e: React.PointerEvent) => {
-    if (!activeFieldId) return;
-    e.preventDefault();
-    // Lock all pointer events to this element until release
-    e.currentTarget.setPointerCapture(e.pointerId);
-    const pos = getPointerPos(e);
-    setStartPos(pos);
-    setCurrentPos(pos);
-    setIsDrawing(true);
-  };
-
-  const handlePointerMove = (e: React.PointerEvent) => {
-    if (!isDrawing) return;
-    setCurrentPos(getPointerPos(e));
-  };
-
-  const handlePointerUp = (e: React.PointerEvent) => {
-    if (!isDrawing || !activeFieldId) return;
-    e.currentTarget.releasePointerCapture(e.pointerId);
-    setIsDrawing(false);
-    
-    // Calculate final box
-    const x = Math.min(startPos.x, currentPos.x);
-    const y = Math.min(startPos.y, currentPos.y);
-    const width = Math.abs(currentPos.x - startPos.x);
-    const height = Math.abs(currentPos.y - startPos.y);
-
-    // Ignore tiny accidental clicks
-    if (width > 10 && height > 10) {
-      setMappedFields(prev => {
-        const next = {
-          ...prev,
-          [activeFieldId]: { id: activeFieldId, x, y, width, height, page: pageNumber - 1 }
-        };
-        onMapProgress(Object.keys(next));
-        return next;
-      });
-
-      // Auto-advance to next unmapped field
-      const currentIndex = availableFields.findIndex(f => f.id === activeFieldId);
-      for (let i = 1; i < availableFields.length; i++) {
-        const nextIdx = (currentIndex + i) % availableFields.length;
-        const nextId = availableFields[nextIdx].id;
-        if (!mappedFields[nextId] && nextId !== activeFieldId) {
-          setActiveFieldId(nextId);
-          break;
-        }
+  useEffect(() => {
+    const syncResponsiveScale = () => {
+      const cont = containerRef.current;
+      if (!cont) return;
+      if (window.innerWidth <= 680 || cont.clientWidth < 600) {
+        const availPx = Math.max(220, cont.clientWidth - 36);
+        const fitScale = Math.max(0.4, Math.min(1.05, +(availPx / 595.28).toFixed(2)));
+        setScale(fitScale);
+      } else {
+        setScale((prev) => (prev < 0.85 ? 1.05 : prev));
       }
+    };
+    syncResponsiveScale();
+    window.addEventListener('resize', syncResponsiveScale);
+    return () => window.removeEventListener('resize', syncResponsiveScale);
+  }, []);
+
+  function handleDocumentLoadSuccess(pdfProxy: any) {
+    onPdfDocumentLoaded?.(pdfProxy);
+  }
+
+  function handlePageLoadSuccess(page: any) {
+    if (page?.originalWidth && page?.originalHeight) {
+      const wMm = roundMm(ptToMm(page.originalWidth));
+      const hMm = roundMm(ptToMm(page.originalHeight));
+      onUpdateDocSpec((prev) => {
+        const existing = prev.pages[pageNumber - 1];
+        if (
+          existing &&
+          Math.abs(existing.widthMm - wMm) < 0.2 &&
+          Math.abs(existing.heightMm - hMm) < 0.2
+        ) {
+          return prev;
+        }
+        const nextPages = [...prev.pages];
+        nextPages[pageNumber - 1] = { widthMm: wMm, heightMm: hMm };
+        return { ...prev, pages: nextPages };
+      });
     }
+  }
+
+  const handleUpdateFieldRect = useCallback(
+    (fieldId: string, newRect: [Mm, Mm, Mm, Mm], targetPage: number) => {
+      onUpdateDocSpec((prev) => ({
+        ...prev,
+        fields: prev.fields.map((f) =>
+          f.id === fieldId
+            ? { ...f, rect: newRect, page: targetPage, source: 'manual' }
+            : f
+        ),
+      }));
+    },
+    [onUpdateDocSpec]
+  );
+
+  const handleUpdateSelectedFieldProp = <K extends keyof OcorrenciaFieldSpec>(
+    key: K,
+    value: OcorrenciaFieldSpec[K]
+  ) => {
+    if (!selectedField) return;
+    onUpdateDocSpec((prev) => ({
+      ...prev,
+      fields: prev.fields.map((f) =>
+        f.id === selectedField.id ? { ...f, [key]: value } : f
+      ),
+    }));
   };
 
-  const handleAddField = () => {
-    if (!newFieldName.trim()) return;
-    
-    // Strict key normalization
-    const slugify = (text: string) => 
-      text.toLowerCase()
-          .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
-          .replace(/[^a-z0-9]+/g, '_')
-          .replace(/(^_|_$)/g, '');
-          
-    const id = slugify(newFieldName);
-      
-    if (availableFields.some(f => f.id === id)) {
-      alert("Este campo já existe.");
+  const handleSetAllBackgroundMode = (mode: FieldBackgroundMode) => {
+    onUpdateDocSpec((prev) => ({
+      ...prev,
+      fields: prev.fields.map((f) => ({ ...f, backgroundMode: mode })),
+    }));
+  };
+
+  const handleAddCustomField = () => {
+    const trimmed = newFieldName.trim();
+    if (!trimmed) return;
+
+    const id = trimmed
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9]+/g, '_')
+      .replace(/(^_|_$)/g, '');
+
+    if (!id) return;
+    if (docSpec.fields.some((f) => f.id === id)) {
+      onSelectField(id);
+      setNewFieldName('');
       return;
     }
-    
-    const newField = { id, label: newFieldName.trim(), type: 'text' };
-    setAvailableFields(prev => [...prev, newField]);
-    setActiveFieldId(id);
-    setNewFieldName("");
-  };
 
-  // ── Map Generation ──
-  const handleConfirm = () => {
-    if (!wrapperRef.current) return;
-    
-    // The strict rendered dimensions of the physical PDF canvas in CSS pixels
-    const canvasEl = wrapperRef.current.querySelector('canvas');
-    const renderedWidth = canvasEl ? canvasEl.clientWidth : wrapperRef.current.clientWidth;
-    const renderedHeight = canvasEl ? canvasEl.clientHeight : wrapperRef.current.clientHeight;
+    const defaultRect: [Mm, Mm, Mm, Mm] =
+      newFieldType === 'checkbox'
+        ? [25, 190, 5.5, 5.5]
+        : newFieldType === 'textarea'
+        ? [22, 130, 160, 35]
+        : newFieldType === 'signature'
+        ? [122, 242.5, 52, 12]
+        : [40, 70, 65, 7.5];
 
-    // Scaling factors: PDF Points / CSS Pixels
-    const scaleX = pdfIntrinsicSize.width / renderedWidth;
-    const scaleY = pdfIntrinsicSize.height / renderedHeight;
-
-    const dynamicMap: any = {
-      _comment: "Dynamic map generated by React TemplateMapper",
-      page_width: pdfIntrinsicSize.width,
-      page_height: pdfIntrinsicSize.height,
-      coordinate_system: "pymupdf_top_left",
-      fields: {}
+    const newSpec: OcorrenciaFieldSpec = {
+      id,
+      label: trimmed,
+      type: newFieldType,
+      page: pageNumber,
+      rect: defaultRect,
+      fontSizePt: newFieldType === 'checkbox' ? 11 : 10,
+      minFontSizePt: 6.5,
+      weight: newFieldType === 'checkbox' ? 'bold' : 'normal',
+      align: newFieldType === 'checkbox' ? 'center' : 'left',
+      color: newFieldType === 'signature' ? '#0F296B' : '#0F172A',
+      backgroundMode: 'transparent',
+      source: 'manual',
     };
 
-    const mappedIds = Object.keys(mappedFields);
-
-    mappedIds.forEach(id => {
-      const fieldDef = availableFields.find(f => f.id === id);
-      if (!fieldDef) return;
-
-      const box = mappedFields[id];
-      const pdfX = box.x * scaleX;
-      const pdfY = box.y * scaleY;
-      const pdfWidth = box.width * scaleX;
-      const pdfHeight = box.height * scaleY;
-
-      const mappedField: PyMuPDFCoords = {
-        x: Math.round(pdfX),
-        y: Math.round(pdfY),
-        max_width: Math.round(pdfWidth),
-        height: Math.round(pdfHeight),
-        font_size: fieldDef.type === 'textarea' ? 11 : 12, // default sizes matching config
-        type: fieldDef.type,
-        label: fieldDef.label,
-        page: box.page || 0
-      };
-
-      if (fieldDef.type === 'textarea') {
-        // Assume roughly 18pt line spacing to calculate physical max lines
-        mappedField.max_lines = Math.max(1, Math.floor(pdfHeight / 18));
-      }
-
-      dynamicMap.fields[id] = mappedField;
-    });
-
-    onMapComplete(dynamicMap, mappedIds);
+    onUpdateDocSpec((prev) => ({
+      ...prev,
+      fields: [...prev.fields, newSpec],
+    }));
+    onSelectField(id);
+    setNewFieldName('');
   };
 
-  // ── Map IO (Export / Import) ──
+  const handleDeleteSelectedField = () => {
+    if (!selectedField) return;
+    const isCanonical = DEFAULT_OCORRENCIA_FIELD_SPECS.some(
+      (f) => f.id === selectedField.id
+    );
+    if (isCanonical) {
+      // Reset canonical field back to its default position instead of deleting it
+      const def = DEFAULT_OCORRENCIA_FIELD_SPECS.find(
+        (f) => f.id === selectedField.id
+      );
+      if (def) {
+        handleUpdateFieldRect(def.id, [...def.rect] as [Mm, Mm, Mm, Mm], def.page);
+      }
+      return;
+    }
+    onUpdateDocSpec((prev) => {
+      const remaining = prev.fields.filter((f) => f.id !== selectedField.id);
+      return { ...prev, fields: remaining };
+    });
+    if (docSpec.fields.length > 1) {
+      onSelectField(docSpec.fields[0].id);
+    }
+  };
+
+  // ── Export / Import Map JSON (supports both Legacy PyMuPDF & v2 DocSpec) ──
   const handleExportMap = () => {
-    // Generate map first just like handleConfirm
-    if (!wrapperRef.current) return;
-    
-    const canvasEl = wrapperRef.current.querySelector('canvas');
-    const renderedWidth = canvasEl ? canvasEl.clientWidth : wrapperRef.current.clientWidth;
-    const renderedHeight = canvasEl ? canvasEl.clientHeight : wrapperRef.current.clientHeight;
-    
-    const scaleX = pdfIntrinsicSize.width / renderedWidth;
-    const scaleY = pdfIntrinsicSize.height / renderedHeight;
-    
-    const dynamicMap: any = {
-      _comment: "Exported Template Map",
-      page_width: pdfIntrinsicSize.width,
-      page_height: pdfIntrinsicSize.height,
-      coordinate_system: "pymupdf_top_left",
-      fields: {}
+    const legacyCompatible = {
+      ...docSpecToLegacyMap(docSpec),
+      docSpecV2: docSpec,
     };
-
-    Object.keys(mappedFields).forEach(id => {
-      const fieldDef = availableFields.find(f => f.id === id);
-      if (!fieldDef) return;
-      const box = mappedFields[id];
-      const mappedField: PyMuPDFCoords = {
-        x: Math.round(box.x * scaleX),
-        y: Math.round(box.y * scaleY),
-        max_width: Math.round(box.width * scaleX),
-        height: Math.round(box.height * scaleY),
-        font_size: fieldDef.type === 'textarea' ? 11 : 12,
-        type: fieldDef.type,
-        label: fieldDef.label,
-        page: box.page || 0
-      };
-      if (fieldDef.type === 'textarea') {
-        mappedField.max_lines = Math.max(1, Math.floor((box.height * scaleY) / 18));
-      }
-      dynamicMap.fields[id] = mappedField;
+    const blob = new Blob([JSON.stringify(legacyCompatible, null, 2)], {
+      type: 'application/json',
     });
-
-    const blob = new Blob([JSON.stringify(dynamicMap, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'meu_mapa_ocorrencia.json';
+    a.download = `mapa_${file.name.replace(/\.pdf$/i, '')}.json`;
     a.click();
     URL.revokeObjectURL(url);
   };
 
   const handleImportMap = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    
+    const importedFile = e.target.files?.[0];
+    if (!importedFile) return;
+
     const reader = new FileReader();
     reader.onload = (event) => {
       try {
-        const json = JSON.parse(event.target?.result as string);
-        if (json.fields) {
-          const mappedIds = Object.keys(json.fields);
-          
-          // Reconstruct available fields so custom imported fields appear
-          const importedFields = mappedIds.map(id => {
-            const fieldMap = json.fields[id];
-            return {
-              id,
-              label: fieldMap.label || id,
-              type: fieldMap.type || 'text'
-            };
-          });
-          
-          // Merge with DEFAULT_FIELDS to ensure standard fields are always there
-          const mergedFields = [...DEFAULT_FIELDS];
-          importedFields.forEach(imp => {
-            if (!mergedFields.some(f => f.id === imp.id)) {
-              mergedFields.push(imp);
-            }
-          });
-          
-          setAvailableFields(mergedFields);
-          onMapProgress(mappedIds);
-          onMapComplete(json, mappedIds);
-        }
-      } catch (err) {
-        alert("Erro ao ler o arquivo de mapa JSON.");
+        const parsed = JSON.parse(event.target?.result as string);
+        const nextSpec = parsed?.docSpecV2
+          ? legacyMapToDocSpec(parsed.docSpecV2, docSpec.sha256, file.name)
+          : legacyMapToDocSpec(parsed, docSpec.sha256, file.name);
+        onUpdateDocSpec(() => nextSpec);
+        TemplateVaultService.save(nextSpec);
+      } catch {
+        alert('Não foi possível ler o arquivo JSON de mapeamento.');
       }
     };
-    reader.readAsText(file);
+    reader.readAsText(importedFile);
+    e.target.value = '';
   };
 
-  // Rendering the current drawing box
-  const drawBoxStyle = isDrawing ? {
-    left: Math.min(startPos.x, currentPos.x),
-    top: Math.min(startPos.y, currentPos.y),
-    width: Math.abs(currentPos.x - startPos.x),
-    height: Math.abs(currentPos.y - startPos.y)
-  } : {};
+  const selectedMetrics = selectedField
+    ? displayList.fieldMetrics[selectedField.id]
+    : undefined;
 
-  const mappedCount = Object.keys(mappedFields).length;
-  // We only require the DEFAULT_FIELDS to be mapped. Custom fields are optional but mapped if drawn.
-  const isFullyMapped = DEFAULT_FIELDS.every(f => mappedFields[f.id]);
+  const firstPageSigOp = displayList.pages[0]?.ops.find(
+    (o) => o.kind === 'signature'
+  );
 
   return (
-    <div className="flex flex-col w-full h-full gap-4">
-      {/* ── Control Toolbar ── */}
-      <div className="flex flex-wrap items-center justify-between gap-4 p-4 bg-gray-900 border border-gray-700 rounded-md w-full">
-        <div className="flex items-center gap-3">
-          <select 
-            className="px-3 py-2 bg-gray-800 text-gray-100 border border-gray-600 rounded-md outline-none text-sm"
-            value={activeFieldId}
-            onChange={(e) => setActiveFieldId(e.target.value)}
+    <div className="oc-mapper-studio">
+      {/* ── Top Bar: Template Status, Zoom, Page & Actions ── */}
+      <div className="oc-mapper-toolbar">
+        <div className="oc-mapper-toolbar__group">
+          <span
+            className={`oc-vault-badge oc-vault-badge--${vaultStatus}`}
+            title={`SHA-256: ${docSpec.sha256 || 'calculando...'}`}
           >
-            {availableFields.map(f => (
-              <option key={f.id} value={f.id}>
-                {mappedFields[f.id] ? '✓ ' : ''}{f.label}
-              </option>
-            ))}
-          </select>
-          
-          <div className="flex items-center gap-2">
-            <input 
-              type="text" 
-              placeholder="Novo campo..." 
-              className="px-3 py-1 bg-gray-800 text-gray-100 border border-gray-600 rounded-md text-sm outline-none"
-              value={newFieldName}
-              onChange={e => setNewFieldName(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && handleAddField()}
-            />
-            <button 
-              className="px-2 py-1 bg-gray-700 hover:bg-gray-600 text-gray-200 text-sm rounded-md transition-colors"
-              onClick={handleAddField}
+            {vaultStatus === 'matched'
+              ? '⚡ Template Reconhecido (SHA-256)'
+              : '💾 Mapa Salvo Automaticamente'}
+          </span>
+
+          {onAutoDiscoverRequest && (
+            <button
+              type="button"
+              className="oc-toolbar-btn oc-toolbar-btn--accent"
+              onClick={onAutoDiscoverRequest}
+              title="Executar detecção automática de campos (AcroForm + Âncoras de Texto)"
             >
-              Add
+              🔍 Auto-Detectar
+            </button>
+          )}
+
+          <button
+            type="button"
+            className={`oc-toolbar-btn ${
+              showFieldFrames ? 'oc-toolbar-btn--active' : ''
+            }`}
+            onClick={() => setShowFieldFrames((v) => !v)}
+            title="Alternar entre visualizar as caixas mapeadas ou ver o PDF limpo exatamente como será impresso"
+          >
+            {showFieldFrames ? '👁️ Molduras ON' : '📄 Visão Impressão'}
+          </button>
+
+          <button
+            type="button"
+            className={`oc-toolbar-btn ${
+              drawModeActive ? 'oc-toolbar-btn--draw' : ''
+            }`}
+            onClick={() => setDrawModeActive((v) => !v)}
+            title="Quando ativo, clique e arraste em qualquer área vazia do PDF para desenhar uma nova caixa para o campo selecionado"
+          >
+            {drawModeActive ? '✏️ Desenhar Caixa: ON' : '✋ Mover / Redimensionar'}
+          </button>
+
+          {hasContinuationAnnex && (
+            <button
+              type="button"
+              data-testid="toggle-annex-preview-btn"
+              className={`oc-toolbar-btn ${
+                previewAnnexActive ? 'oc-toolbar-btn--active' : 'oc-toolbar-btn--accent'
+              }`}
+              onClick={() => setPreviewAnnexActive((v) => !v)}
+              title="Alternar pré-visualização entre a Ficha Principal (Pág. 1) e a Folha Complementar Anexa (Pág. 2)"
+            >
+              {previewAnnexActive
+                ? '📄 Voltar p/ Pág. 1'
+                : '📑 Ver Folha Anexa (Pág. 2)'}
+            </button>
+          )}
+        </div>
+
+        <div className="oc-mapper-toolbar__group">
+          {/* Zoom Controls (Zoom-Invariant Mm Engine!) */}
+          <div className="oc-zoom-pill">
+            <button
+              type="button"
+              onClick={() => setScale((s) => Math.max(0.45, +(s - 0.15).toFixed(2)))}
+              title="Diminuir Zoom"
+            >
+              −
+            </button>
+            <span>{Math.round(scale * 100)}%</span>
+            <button
+              type="button"
+              onClick={() => setScale((s) => Math.min(2.5, +(s + 0.15).toFixed(2)))}
+              title="Aumentar Zoom"
+            >
+              +
+            </button>
+            <button
+              type="button"
+              onClick={handleFitToContainerWidth}
+              title="Ajustar largura da página ao tamanho da tela"
+              style={{ fontSize: 11, padding: '2px 6px' }}
+            >
+              ↔
             </button>
           </div>
-          
-          <span className="text-sm text-gray-400">
-            Selecione o campo e desenhe a caixa no PDF.
-          </span>
-        </div>
-        
-        <div className="flex items-center gap-3 flex-wrap">
-          <div className="flex items-center gap-2 bg-gray-800 p-1 rounded-md border border-gray-700">
-            <button className="px-3 py-1 hover:bg-gray-700 text-gray-200 rounded transition-colors" onClick={() => setScale(s => Math.max(0.5, s - 0.25))}>-</button>
-            <span className="text-sm w-12 text-center text-gray-200 font-mono">{Math.round(scale * 100)}%</span>
-            <button className="px-3 py-1 hover:bg-gray-700 text-gray-200 rounded transition-colors" onClick={() => setScale(s => Math.min(3.0, s + 0.25))}>+</button>
-          </div>
 
-          <div className="flex items-center gap-2 bg-gray-800 p-1 rounded-md border border-gray-700">
-            <button 
-              className="px-3 py-1 hover:bg-gray-700 text-gray-200 rounded transition-colors disabled:opacity-50" 
-              onClick={() => setPageNumber(p => Math.max(1, p - 1))} 
-              disabled={pageNumber <= 1}
-            >&lt;</button>
-            <span className="text-sm font-medium text-gray-200 text-center w-20">
-              Pág. {pageNumber} / {numPages || '?'}
-            </span>
-            <button 
-              className="px-3 py-1 hover:bg-gray-700 text-gray-200 rounded transition-colors disabled:opacity-50" 
-              onClick={() => setPageNumber(p => Math.min(numPages || p, p + 1))} 
-              disabled={pageNumber >= (numPages || 1)}
-            >&gt;</button>
-          </div>
+          {/* Pagination (includes dynamic Continuation Sheet pages) */}
+          {(docSpec.pageCount > 1 || hasContinuationAnnex) && (
+            <div className="oc-zoom-pill" data-testid="studio-pagination-pill">
+              <button
+                type="button"
+                onClick={() => {
+                  if (previewAnnexActive) {
+                    setPreviewAnnexActive(false);
+                  } else {
+                    setPageNumber((p) => Math.max(1, p - 1));
+                  }
+                }}
+                disabled={!previewAnnexActive && pageNumber <= 1}
+              >
+                ‹
+              </button>
+              <span>
+                Pág {previewAnnexActive ? docSpec.pageCount + 1 : pageNumber}/
+                {docSpec.pageCount + (hasContinuationAnnex ? 1 : 0)}
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  if (pageNumber < docSpec.pageCount) {
+                    setPageNumber((p) => p + 1);
+                  } else if (hasContinuationAnnex) {
+                    setPreviewAnnexActive(true);
+                  }
+                }}
+                disabled={
+                  previewAnnexActive ||
+                  (pageNumber >= docSpec.pageCount && !hasContinuationAnnex)
+                }
+              >
+                ›
+              </button>
+            </div>
+          )}
 
-          <label className="px-4 py-2 text-sm font-medium border border-gray-600 hover:bg-gray-800 text-gray-200 rounded-md transition-colors cursor-pointer">
-            Importar JSON
-            <input type="file" accept=".json" style={{ display: 'none' }} onChange={handleImportMap} />
+          <label className="oc-toolbar-btn" style={{ cursor: 'pointer' }}>
+            📂 Importar JSON
+            <input
+              type="file"
+              accept=".json"
+              style={{ display: 'none' }}
+              onChange={handleImportMap}
+            />
           </label>
-          <button 
-            className="px-4 py-2 text-sm font-medium border border-gray-600 hover:bg-gray-800 text-gray-200 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed" 
-            onClick={handleExportMap} 
-            disabled={mappedCount === 0}
+
+          <button
+            type="button"
+            className="oc-toolbar-btn"
+            onClick={handleExportMap}
           >
-            Exportar
+            ⬇ Exportar JSON
           </button>
-          <button 
-            className="px-4 py-2 text-sm font-medium border border-gray-600 hover:bg-gray-800 text-gray-200 rounded-md transition-colors" 
-            onClick={onCancel}
-          >
-            Voltar
-          </button>
-          <button 
-            className="px-4 py-2 text-sm font-bold bg-blue-600 hover:bg-blue-500 text-white rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed" 
-            onClick={handleConfirm}
-            disabled={!isFullyMapped}
-          >
-            Confirmar ({mappedCount}/{availableFields.length})
-          </button>
+
+          {onResetToDefaults && (
+            <button
+              type="button"
+              className="oc-toolbar-btn"
+              onClick={onResetToDefaults}
+              title="Restaurar coordenadas padrão"
+            >
+              ↺ Padrão
+            </button>
+          )}
         </div>
       </div>
 
-      {/* ── PDF Canvas ── */}
-      <div className="pdf-canvas-container">
-        <div 
-          className="pdf-draw-wrapper" 
-          ref={wrapperRef}
-          data-can-draw={!!activeFieldId}
+      {/* ── Second Bar: Selected Field Precision Inspector (Mm + Font + Background Mode) ── */}
+      {selectedField && (
+        <div className="oc-field-inspector">
+          <div className="oc-field-inspector__left">
+            <label className="oc-inspector-label">Campo Ativo:</label>
+            <select
+              className="oc-inspector-select"
+              value={selectedField.id}
+              onChange={(e) => {
+                const nextId = e.target.value;
+                onSelectField(nextId);
+                setPreviewAnnexActive(false);
+                const found = docSpec.fields.find((f) => f.id === nextId);
+                if (found && found.page && found.page !== pageNumber) {
+                  setPageNumber(found.page);
+                }
+              }}
+            >
+              {docSpec.fields.map((f) => (
+                <option key={f.id} value={f.id}>
+                  {f.label} ({f.type}) — [{f.rect[0]}×{f.rect[1]}mm]
+                </option>
+              ))}
+            </select>
+
+            <span className="oc-inspector-coords" title="Coordenadas Físicas em Milímetros (X, Y, Largura, Altura)">
+              📐 {selectedField.rect[0]}mm, {selectedField.rect[1]}mm ·{' '}
+              {selectedField.rect[2]}×{selectedField.rect[3]}mm
+            </span>
+
+            {selectedMetrics && (
+              <span
+                className={`oc-inspector-metric ${
+                  selectedMetrics.overflowed
+                    ? 'oc-inspector-metric--error'
+                    : selectedMetrics.continuedOnAnnex || selectedMetrics.autoFitted
+                    ? 'oc-inspector-metric--warn'
+                    : ''
+                }`}
+                style={
+                  selectedMetrics.continuedOnAnnex ? { cursor: 'pointer' } : undefined
+                }
+                onClick={() => {
+                  if (selectedMetrics.continuedOnAnnex) {
+                    setPreviewAnnexActive((v) => !v);
+                  }
+                }}
+              >
+                {selectedMetrics.overflowed
+                  ? `⚠ Overflow (${selectedMetrics.fontSizePt}pt)`
+                  : selectedMetrics.continuedOnAnnex
+                  ? `📄 +Folha Anexa Pág. 2 (+${selectedMetrics.continuationLineCount || 0}L)`
+                  : selectedMetrics.autoFitted
+                  ? `✨ Auto-Fit ${selectedMetrics.fontSizePt}pt (${selectedMetrics.lineCount}L)`
+                  : `${selectedMetrics.fontSizePt}pt · ${selectedMetrics.lineCount}L`}
+              </span>
+            )}
+          </div>
+
+          <div className="oc-field-inspector__right">
+            {/* Font Size Control */}
+            <label className="oc-inspector-mini">
+              Fonte:
+              <input
+                type="number"
+                min={6}
+                max={20}
+                step={0.5}
+                value={selectedField.fontSizePt || 10}
+                onChange={(e) =>
+                  handleUpdateSelectedFieldProp(
+                    'fontSizePt',
+                    Math.max(6, Math.min(20, Number(e.target.value) || 10))
+                  )
+                }
+              />
+              pt
+            </label>
+
+            {/* Background Mode Toggle (Fixes Bug #4: Destructive Whiteout!) */}
+            <button
+              type="button"
+              className={`oc-toolbar-btn ${
+                selectedField.backgroundMode === 'whiteout'
+                  ? 'oc-toolbar-btn--active'
+                  : ''
+              }`}
+              onClick={() =>
+                handleUpdateSelectedFieldProp(
+                  'backgroundMode',
+                  selectedField.backgroundMode === 'whiteout'
+                    ? 'transparent'
+                    : 'whiteout'
+                )
+              }
+              title="Fundo Transparente preserva as linhas originais do PDF; Tarja Branca cobre o fundo (útil para PDFs escaneados)"
+            >
+              {selectedField.backgroundMode === 'whiteout'
+                ? '⬜ Fundo: Tarja Branca'
+                : '🔲 Fundo: Transparente'}
+            </button>
+
+            <button
+              type="button"
+              className="oc-toolbar-btn"
+              onClick={() =>
+                handleSetAllBackgroundMode(
+                  selectedField.backgroundMode === 'whiteout'
+                    ? 'transparent'
+                    : 'whiteout'
+                )
+              }
+              title="Alternar modo de fundo em todos os campos de uma vez"
+            >
+              Aplicar a Todos
+            </button>
+
+            <button
+              type="button"
+              className="oc-toolbar-btn"
+              onClick={handleDeleteSelectedField}
+              title="Restaurar posição padrão deste campo (ou excluir se for campo personalizado)"
+            >
+              ↺ Resetar Caixa
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Custom Field Creator Bar ── */}
+      <div className="oc-custom-field-bar">
+        <span className="oc-inspector-label">Adicionar Campo Extra:</span>
+        <input
+          type="text"
+          placeholder="Ex: Matrícula, Período, Professor..."
+          className="oc-custom-field-input"
+          value={newFieldName}
+          onChange={(e) => setNewFieldName(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && handleAddCustomField()}
+        />
+        <select
+          className="oc-inspector-select"
+          value={newFieldType}
+          onChange={(e) => setNewFieldType(e.target.value as OcorrenciaFieldType)}
         >
-          <Document 
-            file={file}
-            onLoadSuccess={onDocumentLoadSuccess}
-            loading={<div style={{ padding: '2rem' }}>Carregando PDF...</div>}
+          <option value="text">Texto Curto (1 Linha)</option>
+          <option value="textarea">Parágrafo (Multi-linha + Auto-Fit)</option>
+          <option value="checkbox">Caixa de Marcação [X]</option>
+          <option value="signature">✍️ Assinatura / Rubrica Vetorial</option>
+          <option value="date">Data</option>
+        </select>
+        <button
+          type="button"
+          className="oc-toolbar-btn oc-toolbar-btn--accent"
+          onClick={handleAddCustomField}
+        >
+          + Criar Campo
+        </button>
+        <span className="oc-custom-field-hint">
+          Arraste qualquer caixa no PDF para mover ou puxe o canto inferior direito para redimensionar.
+        </span>
+      </div>
+
+      {/* ── Interactive PDF Canvas + Millimeter SVG Overlay (or Continuation Annex DOM Preview) ── */}
+      <div className="pdf-canvas-container" ref={containerRef}>
+        {previewAnnexActive && hasContinuationAnnex && (
+          <div
+            className="pdf-draw-wrapper"
+            data-testid="dom-annex-preview-sheet"
+            style={{
+              width: Math.round(595.28 * scale),
+              height: Math.round(841.89 * scale),
+              background: '#ffffff',
+            }}
           >
-            <Page 
-              pageNumber={pageNumber} 
+            <svg
+              className="oc-svg-overlay"
+              viewBox={`0 0 ${currentPageGeom.widthMm} ${currentPageGeom.heightMm}`}
+              preserveAspectRatio="none"
+            >
+              <rect
+                x={0}
+                y={0}
+                width={currentPageGeom.widthMm}
+                height={currentPageGeom.heightMm}
+                fill="#ffffff"
+              />
+              {/* Header Banner Box */}
+              <rect
+                x={19.4}
+                y={15}
+                width={currentPageGeom.widthMm - 38.8}
+                height={23}
+                fill="#F8FAFC"
+                stroke="#94A3B8"
+                strokeWidth={0.35}
+              />
+              <text
+                x={23}
+                y={21.5}
+                fontSize={3.88}
+                fontWeight={700}
+                fill="#0F172A"
+                fontFamily="Helvetica, Arial, sans-serif"
+              >
+                ANEXO DE CONTINUACAO #1 - REGISTRO DE OCORRENCIA ESCOLAR
+              </text>
+              <text
+                x={23}
+                y={27.5}
+                fontSize={3.17}
+                fill="#1E293B"
+                fontFamily="Helvetica, Arial, sans-serif"
+              >
+                {`Estudante: ${String(values.nome_aluno || 'Nao informado')}   |   Turma: ${String(
+                  values.turma || '-'
+                )}   |   Data: ${String(values.data || '-')}`}
+              </text>
+              <text
+                x={23}
+                y={33.2}
+                fontSize={2.82}
+                fill="#475569"
+                fontFamily="Helvetica, Arial, sans-serif"
+              >
+                {`Vinculo Probatorio SHA-256: ${(docSpec.sha256 || 'local-session').slice(
+                  0,
+                  20
+                )}   |   Folha Complementar Integrante do Prontuario`}
+              </text>
+
+              {/* Body Frame */}
+              <rect
+                x={19.4}
+                y={42}
+                width={currentPageGeom.widthMm - 38.8}
+                height={210}
+                fill="none"
+                stroke="#CBD5E1"
+                strokeWidth={0.35}
+              />
+
+              {/* Continuation Sections Content */}
+              {(() => {
+                let cursorY = 49;
+                const nodes: React.ReactNode[] = [];
+                for (const sec of displayList.continuationSections || []) {
+                  nodes.push(
+                    <text
+                      key={`title-${sec.fieldId}`}
+                      x={23}
+                      y={cursorY}
+                      fontSize={3.5}
+                      fontWeight={700}
+                      fill="#0F172A"
+                      fontFamily="Helvetica, Arial, sans-serif"
+                    >
+                      {`Continuacao - ${sec.fieldLabel}:`}
+                    </text>
+                  );
+                  cursorY += 5.5;
+                  sec.lines.slice(0, 42).forEach((ln, idx) => {
+                    nodes.push(
+                      <text
+                        key={`ln-${sec.fieldId}-${idx}`}
+                        x={23}
+                        y={cursorY}
+                        fontSize={3.1}
+                        fill="#0F172A"
+                        fontFamily="Helvetica, Arial, sans-serif"
+                      >
+                        {ln}
+                      </text>
+                    );
+                    cursorY += 4.3;
+                  });
+                  cursorY += 4.5;
+                }
+                return nodes;
+              })()}
+
+              {/* Footer Signature Line + Coordinator Vector Rubric */}
+              <text
+                x={19.4}
+                y={265}
+                fontSize={3.5}
+                fill="#0F172A"
+                fontFamily="Helvetica, Arial, sans-serif"
+              >
+                {`Responsavel pelo Registro:  ${String(values.responsavel_registro || '')}`}
+              </text>
+              <line
+                x1={64}
+                y1={266.2}
+                x2={184}
+                y2={266.2}
+                stroke="#334155"
+                strokeWidth={0.3}
+              />
+              {firstPageSigOp && firstPageSigOp.kind === 'signature' && (
+                <path
+                  className="oc-svg-signature-path"
+                  d={firstPageSigOp.strokes
+                    .map((s) =>
+                      s
+                        .map(
+                          ([sx, sy], idx) =>
+                            `${idx === 0 ? 'M' : 'L'} ${sx} ${(
+                              sy +
+                              (255.2 - firstPageSigOp.y)
+                            ).toFixed(2)}`
+                        )
+                        .join(' ')
+                    )
+                    .join(' ')}
+                  fill="none"
+                  stroke={firstPageSigOp.colorHex || '#0F296B'}
+                  strokeWidth={firstPageSigOp.strokeWidthMm || 0.42}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              )}
+            </svg>
+          </div>
+        )}
+
+        <div
+          className="pdf-draw-wrapper"
+          ref={wrapperRef}
+          style={{
+            display:
+              previewAnnexActive && hasContinuationAnnex ? 'none' : 'inline-block',
+          }}
+        >
+          <Document
+            file={file}
+            onLoadSuccess={handleDocumentLoadSuccess}
+            loading={
+              <div style={{ padding: '3rem', color: '#94a3b8' }}>
+                Renderizando documento PDF vetorial...
+              </div>
+            }
+          >
+            <Page
+              pageNumber={pageNumber}
               scale={scale}
-              renderTextLayer={false} 
+              renderTextLayer={false}
               renderAnnotationLayer={false}
-              onLoadSuccess={onPageLoadSuccess}
-              onRenderSuccess={onPageRenderSuccess}
+              onLoadSuccess={handlePageLoadSuccess}
             />
           </Document>
 
-          <div 
-            className="drawing-overlay"
-            style={canvasDims.width > 0 ? { width: canvasDims.width, height: canvasDims.height } : undefined}
-            onPointerDown={handlePointerDown}
-            onPointerMove={handlePointerMove}
-            onPointerUp={handlePointerUp}
-            onPointerCancel={handlePointerUp}
-          >
-            {/* Draw existing boxes */}
-            {Object.values(mappedFields)
-              .filter(box => (box.page || 0) === pageNumber - 1)
-              .map(box => {
-              const label = availableFields.find(f => f.id === box.id)?.label || box.id;
-              return (
-                <div 
-                  key={box.id} 
-                  className="mapped-box"
-                  style={{ left: box.x, top: box.y, width: box.width, height: box.height }}
-                >
-                  <span className="mapped-box__label">{label}</span>
-                </div>
-              );
-            })}
-
-            {/* Draw active box */}
-            {isDrawing && (
-              <div className="drawing-box" style={drawBoxStyle} />
-            )}
-          </div>
+          {/* 1:1 Physical Millimeter SVG Overlay (Live Text + Interactive Boxes) */}
+          <OcorrenciasSvgOverlay
+            pageNumber={pageNumber}
+            widthMm={currentPageGeom.widthMm}
+            heightMm={currentPageGeom.heightMm}
+            fieldsOnPage={fieldsOnCurrentPage}
+            displayPage={currentDisplayPage}
+            fieldMetrics={displayList.fieldMetrics}
+            selectedFieldId={selectedField?.id || ''}
+            showFieldFrames={showFieldFrames}
+            drawModeActive={drawModeActive}
+            onSelectField={onSelectField}
+            onUpdateFieldRect={handleUpdateFieldRect}
+          />
         </div>
       </div>
     </div>

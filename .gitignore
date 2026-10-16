@@ -5,6 +5,8 @@ dist
 .env.production
 backend/.env
 backend/__pycache__/
+**/__pycache__/
+src/tools/ocorrencias/output/
 backend/.venv/
 *.pyc
 venv/

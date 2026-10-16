@@ -209,20 +209,20 @@ def run_test_mode(config: dict):
     print("[TESTE] Dados ficticios, sem IA\n")
 
     test_data = {
-        "nome_aluno": "Maria Oliveira Santos",
-        "turma": "8o B",
-        "data": "25/04/2026",
-        "telefone": "(11) 98765-4321",
+        "nome_aluno": "Participante A (Matricula 0001)",
+        "turma": "Turma A-01",
+        "data": "15/01/2026",
+        "telefone": "(00) 00000-0001",
         "descricao_ocorrencia_informal": (
-            "A Maria ficou usando o celular durante a aula inteira e quando "
-            "a professora pediu pra guardar ela respondeu de forma grosseira "
-            "e saiu da sala batendo a porta."
+            "O participante utilizou dispositivo eletronico durante a sessao letiva "
+            "apos orientacao para acondiciona-lo, interrompendo a atividade "
+            "proposta em sala."
         ),
         "checkbox_orientacao_aluno": True,
         "checkbox_convocar_responsavel": True,
         "compromissos_firmados_informal": (
-            "A aluna se comprometeu a nao usar mais o celular durante as aulas "
-            "e pedir desculpas para a professora. A mae vai acompanhar mais de perto."
+            "O participante comprometeu-se a manter o dispositivo guardado durante as aulas "
+            "e retomar o cronograma regular de atividades com acompanhamento familiar."
         ),
     }
 

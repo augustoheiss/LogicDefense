@@ -1,100 +1,330 @@
-/* Styles for interactive drawing elements and specific PDF overrides */
+/* ================================================================
+   TEMPLATE MAPPER & MILLIMETER SVG OVERLAY — Studio Styles
+   ================================================================ */
 
-/* Outer scroll container for the PDF canvas */
-.pdf-canvas-container {
-  width: 100%;
-  max-height: 800px;
-  overflow: auto;
-  border: 1px solid var(--border, #374151);
-  border-radius: 0.375rem;
+.oc-mapper-studio {
   display: flex;
-  justify-content: flex-start;
-  background: #1f2937;
-  padding: 1rem;
-  position: relative;
-  touch-action: auto; /* ALWAYS allow native scrolling on the container */
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  background: rgba(15, 23, 42, 0.72);
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 12px;
+  padding: 12px;
 }
 
-/* Mobile scroll safe zone — lateral gutters so users can swipe past the PDF */
+.oc-mapper-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  background: rgba(15, 23, 42, 0.9);
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 8px;
+}
+
+.oc-mapper-toolbar__group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.oc-vault-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 5px 10px;
+  border-radius: 999px;
+  letter-spacing: 0.2px;
+}
+
+.oc-vault-badge--matched {
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.35);
+}
+
+.oc-vault-badge--saved,
+.oc-vault-badge--new {
+  background: rgba(56, 189, 248, 0.12);
+  color: #38bdf8;
+  border: 1px solid rgba(56, 189, 248, 0.28);
+}
+
+.oc-toolbar-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #e2e8f0;
+  background: rgba(30, 41, 59, 0.85);
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.oc-toolbar-btn:hover {
+  background: rgba(51, 65, 85, 0.95);
+  border-color: rgba(148, 163, 184, 0.4);
+}
+
+.oc-toolbar-btn--accent {
+  background: rgba(14, 165, 233, 0.18);
+  color: #38bdf8;
+  border-color: rgba(56, 189, 248, 0.4);
+}
+
+.oc-toolbar-btn--accent:hover {
+  background: rgba(14, 165, 233, 0.28);
+}
+
+.oc-toolbar-btn--active {
+  background: rgba(99, 102, 241, 0.22);
+  color: #a5b4fc;
+  border-color: rgba(99, 102, 241, 0.5);
+}
+
+.oc-toolbar-btn--draw {
+  background: rgba(16, 185, 129, 0.22);
+  color: #34d399;
+  border-color: rgba(16, 185, 129, 0.5);
+}
+
+.oc-zoom-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(15, 23, 42, 0.95);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 6px;
+  padding: 2px 4px;
+  font-size: 12px;
+  color: #e2e8f0;
+}
+
+.oc-zoom-pill button {
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  font-size: 14px;
+  font-weight: 700;
+  padding: 2px 7px;
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.oc-zoom-pill button:hover:not(:disabled) {
+  background: rgba(51, 65, 85, 0.8);
+  color: #fff;
+}
+
+.oc-zoom-pill span {
+  min-width: 44px;
+  text-align: center;
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+}
+
+/* ── Field Inspector Bar ── */
+.oc-field-inspector {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  background: rgba(30, 41, 59, 0.65);
+  border: 1px solid rgba(99, 102, 241, 0.25);
+  border-radius: 8px;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.oc-field-inspector__left,
+.oc-field-inspector__right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.oc-inspector-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: #94a3b8;
+}
+
+.oc-inspector-select {
+  background: #0f172a;
+  color: #f8fafc;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 6px;
+  padding: 5px 8px;
+  font-size: 12px;
+  outline: none;
+  max-width: 100%;
+  min-width: 0;
+  text-overflow: ellipsis;
+}
+
+.oc-inspector-coords {
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  color: #94a3b8;
+  background: rgba(15, 23, 42, 0.7);
+  padding: 4px 8px;
+  border-radius: 5px;
+}
+
+.oc-inspector-metric {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: rgba(16, 185, 129, 0.14);
+  color: #34d399;
+  max-width: 100%;
+  white-space: normal;
+}
+
+.oc-inspector-metric--warn {
+  background: rgba(245, 158, 11, 0.18);
+  color: #fbbf24;
+}
+
+.oc-inspector-metric--error {
+  background: rgba(239, 68, 68, 0.2);
+  color: #f87171;
+}
+
+.oc-inspector-mini {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: #cbd5e1;
+}
+
+.oc-inspector-mini input {
+  width: 48px;
+  background: #0f172a;
+  color: #fff;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  border-radius: 4px;
+  padding: 3px 5px;
+  font-size: 12px;
+  text-align: center;
+}
+
+/* ── Custom Field Creator Bar ── */
+.oc-custom-field-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  background: rgba(15, 23, 42, 0.55);
+  border-radius: 8px;
+  border: 1px dashed rgba(148, 163, 184, 0.18);
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.oc-custom-field-input {
+  background: #0f172a;
+  color: #f8fafc;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 6px;
+  padding: 5px 10px;
+  font-size: 12px;
+  min-width: 0;
+  flex: 1 1 150px;
+  max-width: 100%;
+  outline: none;
+}
+
+.oc-custom-field-hint {
+  font-size: 11px;
+  color: #64748b;
+  margin-left: auto;
+}
+
+/* ── Outer scroll container for the PDF canvas (Sprint R2: Zero negative left clip) ── */
+.pdf-canvas-container {
+  width: 100%;
+  max-width: 100%;
+  max-height: 780px;
+  overflow: auto;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 8px;
+  display: block;
+  text-align: center;
+  background: #0b1120;
+  padding: 16px;
+  position: relative;
+  touch-action: auto;
+  box-sizing: border-box;
+}
+
 @media (max-width: 768px) {
   .pdf-canvas-container {
-    padding: 0.75rem 1.75rem; /* Wider horizontal gutters for thumb scrolling */
-    max-height: none;          /* Let mobile users see the full page */
-    background: #111827;       /* Darker gutter so user can see the scroll-safe edges */
+    padding: 10px;
+    max-height: none;
   }
 }
 
-/* The wrapper that sizes exactly to the rendered PDF page */
+/* The wrapper that sizes 1:1 to the rendered PDF page */
 .pdf-draw-wrapper {
   position: relative;
+  display: inline-block;
+  vertical-align: top;
+  text-align: left;
   margin: 0 auto;
   width: max-content;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  height: max-content;
+  line-height: 0;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+  border-radius: 2px;
+  overflow: hidden;
 }
 
-.pdf-draw-wrapper[data-can-draw="true"] {
-  cursor: crosshair;
-}
-
-/* The actual PDF rendered by react-pdf */
 .react-pdf__Page {
-  pointer-events: none; /* Let drawing overlay handle events */
-}
-
-.react-pdf__Page__canvas {
-  display: block; /* Remove inline spacing artifacts */
-}
-
-/* The interactive overlay where boxes are drawn.
-   Width/height are set inline by React (measured from the actual canvas)
-   so the overlay is always 1:1 with the rendered PDF, at any scale/DPR. */
-.drawing-overlay {
-  position: absolute;
-  top: 0;
-  left: 0;
-  z-index: 10;
-  touch-action: auto; /* Default: allow scrolling */
-}
-
-/* Only block native touch when a field is selected for drawing */
-.pdf-draw-wrapper[data-can-draw="true"] .drawing-overlay {
-  touch-action: none;
-  cursor: crosshair;
-}
-
-/* Individual mapped boxes */
-.mapped-box {
-  position: absolute;
-  border: 2px solid var(--primary);
-  background: rgba(var(--primary-rgb), 0.15);
-  display: flex;
-  align-items: flex-start;
-  justify-content: flex-start;
-  padding: 4px;
-  pointer-events: none; /* So we can draw over them if needed, or we might want to let users click to delete */
-}
-
-.mapped-box__label {
-  background: var(--primary);
-  color: white;
-  font-size: 0.75rem;
-  font-weight: bold;
-  padding: 2px 6px;
-  border-radius: 4px;
-  white-space: nowrap;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-}
-
-/* The active box being drawn */
-.drawing-box {
-  position: absolute;
-  border: 2px dashed var(--accent);
-  background: rgba(var(--accent-rgb), 0.2);
   pointer-events: none;
 }
 
-/* Map Import/Export Area */
-.map-io {
-  display: flex;
-  gap: 1rem;
+.react-pdf__Page__canvas {
+  display: block;
+}
+
+/* ── Millimeter SVG Overlay ── */
+.oc-svg-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 10;
+  user-select: none;
+  touch-action: none;
+}
+
+.oc-svg-overlay--crosshair {
+  cursor: crosshair;
+}
+
+.oc-svg-field-group:hover rect:first-of-type {
+  stroke-width: 0.65;
 }
