@@ -4,7 +4,9 @@ import { PresenceBadges } from '../sync/PresenceBadges';
 
 export interface StudioTopToolbarProps {
   onBack: () => void;
-  onSelectPreset: (preset: 's89-4up' | 's13-s' | 'auto') => void;
+  onSelectPreset: (
+    preset: 'fichas-4up' | 'territorios-multiciclo' | 's89-4up' | 's13-s' | 'auto'
+  ) => void;
   onPickPdf: (mode: 'overlay' | 'rebuild') => void;
   onWebFileSelected: (bytes: Uint8Array, fileName: string, mode: 'overlay' | 'rebuild') => void;
   onDemoIngest: (mode: 'overlay' | 'rebuild') => void;
@@ -98,17 +100,17 @@ export function StudioTopToolbar({
         <TouchableOpacity
           testID="preset-s89-btn"
           style={styles.presetBtn}
-          onPress={() => onSelectPreset('s89-4up')}
+          onPress={() => onSelectPreset('fichas-4up')}
         >
-          <Text style={styles.presetBtnText}>📇 S-89 (4-Up A4)</Text>
+          <Text style={styles.presetBtnText}>📇 Fichas 4-Up (A4)</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
           testID="preset-s13-btn"
           style={styles.presetBtn}
-          onPress={() => onSelectPreset('s13-s')}
+          onPress={() => onSelectPreset('territorios-multiciclo')}
         >
-          <Text style={styles.presetBtnText}>🗺️ S-13-S (Multi-Ciclo)</Text>
+          <Text style={styles.presetBtnText}>🗺️ Territórios (Multi-Ciclo)</Text>
         </TouchableOpacity>
 
         <TouchableOpacity

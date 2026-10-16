@@ -8,7 +8,7 @@ describe('State-Preserving Upsert Engine', () => {
     {
       key: '01',
       type: 'header',
-      label: 'Território Ferraz de Vasconcelos',
+      label: 'Território Setor Central',
       value: '',
       email: '',
       meta: {},
@@ -25,12 +25,12 @@ describe('State-Preserving Upsert Engine', () => {
       key: '01-01-01',
       type: 'territory',
       label: 'Rua das Flores, 100',
-      value: 'Irmão Carlos',
+      value: 'Alex Nogueira',
       email: '',
       meta: {
         worked: 1,
         lastWorkedAt: '2026-10-10T14:30:00Z',
-        notes: 'Morador atencioso, aceitou folheto',
+        notes: 'Unidade visitada, entrega confirmada',
         lat: -23.541,
         lng: -46.368,
       },
@@ -50,7 +50,7 @@ describe('State-Preserving Upsert Engine', () => {
       {
         _key: '01',
         _type: 'header',
-        label: 'Território Ferraz - Setor Central', // Updated label
+        label: 'Território Setor Central - Bloco A', // Updated label
       },
       {
         _key: '01-01',
@@ -89,7 +89,7 @@ describe('State-Preserving Upsert Engine', () => {
     expect(updatedHouse1?.label).toBe('Rua das Flores, 100 (Casa Alta)');
     expect(updatedHouse1?.meta.worked).toBe(1); // PRESERVED!
     expect(updatedHouse1?.meta.lastWorkedAt).toBe('2026-10-10T14:30:00Z'); // PRESERVED!
-    expect(updatedHouse1?.meta.notes).toBe('Morador atencioso, aceitou folheto'); // PRESERVED!
+    expect(updatedHouse1?.meta.notes).toBe('Unidade visitada, entrega confirmada'); // PRESERVED!
     // But coordinates were updated
     expect(updatedHouse1?.meta.lat).toBe(-23.5412);
     expect(updatedHouse1?.meta.lng).toBe(-46.3681);

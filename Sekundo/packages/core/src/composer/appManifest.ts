@@ -54,21 +54,21 @@ export const DEFAULT_SEKUNDO_APP_YAML = `# sekundo.app.yaml — O Aplicativo Mon
 app: Unidade Operacional Demo — Sekundo
 pranchetas:
   - id: reuniao
-    nome: Programação da Reunião & Designações
+    nome: Programação da Sessão & Designações
     engine: transformer
     leis: [roster_conflicts, run_of_show_timing]
     lentes: [meu_compromisso, por_grupo, cronometro]
     saidas:
       - { kind: whatsapp, template: quadro_semanal }
-      - { kind: pdf,      template: s89-4up.sdoc.yaml }
+      - { kind: pdf,      template: fichas-4up.sdoc.yaml }
       - { kind: csv,      format: clean_human }
       - { kind: yaml,     format: tree }
   - id: territorios
-    nome: Logística de Territórios S-13-S & S-12
+    nome: Logística de Territórios & Cobertura de Campo
     engine: territory_logistics
     lentes: [mapa, checklist, recencia]
     saidas:
-      - { kind: pdf,      template: s13s-multiciclo.sdoc.yaml }
+      - { kind: pdf,      template: territorios-multiciclo.sdoc.yaml }
       - { kind: whatsapp, template: territorios }
       - { kind: yaml,     format: tree }
 hoje:
@@ -78,8 +78,8 @@ hoje:
     - documentos_a_imprimir
     - territorios_vencendo
 rituais:
-  - { quando: "domingo 18:00", fazer: "whatsapp:quadro_semanal", confirmar: true }
-  - { quando: "rollover",      fazer: "pdf:s13s-multiciclo",     confirmar: true }
+  - { quando: "domingo 18:00", fazer: "whatsapp:quadro_semanal",       confirmar: true }
+  - { quando: "rollover",      fazer: "pdf:territorios-multiciclo",    confirmar: true }
 `;
 
 export function parseAppManifestYaml(yamlText: string): SekundoAppManifest {
@@ -188,12 +188,12 @@ export function computeHojeCockpitSummary(
     assignee: s.value,
     assistant: (s.meta?.assistantTo as string) || undefined,
     date: (s.meta?.date as string) || 'Esta Semana',
-    room: (s.meta?.room as string) || 'Salão Principal',
+    room: (s.meta?.room as string) || 'Auditório Principal',
   }));
 
   const mensagensAEnviar = filledSlots.slice(0, 6).map((s) => ({
     recipient: s.value,
-    summary: `Lembrete: ${s.label} (${(s.meta?.room as string) || 'Salão Principal'})`,
+    summary: `Lembrete: ${s.label} (${(s.meta?.room as string) || 'Auditório Principal'})`,
     channel: 'whatsapp' as const,
   }));
 

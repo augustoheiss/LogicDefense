@@ -74,7 +74,7 @@ export function TerritoryAccordionHeader({
             onPress={onOpenPublisher}
             style={styles.pubBtn}
             accessibilityRole="button"
-            accessibilityLabel={`Modo Publicador para ${territory}`}
+            accessibilityLabel={`Modo Operador de Campo para ${territory}`}
           >
             <Text style={styles.pubBtnText}>📱 Campo</Text>
           </Pressable>

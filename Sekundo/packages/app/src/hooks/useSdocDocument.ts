@@ -19,14 +19,14 @@ export interface UseSdocDocumentOptions {
   eventId?: string;
   eventName?: string;
   registry?: FlatRegistry;
-  initialPreset?: 's89-4up' | 's13-s' | 'auto';
+  initialPreset?: 'fichas-4up' | 'territorios-multiciclo' | 's89-4up' | 's13-s' | 'auto';
 }
 
 export function useSdocDocument({
   eventId = 'global',
   eventName = 'Sekundo',
   registry = [],
-  initialPreset = 's89-4up',
+  initialPreset = 'fichas-4up',
 }: UseSdocDocumentOptions) {
   const templateStorageId = `studio_${eventId}`;
   const [yamlText, setYamlTextState] = useState<string>(S89_4UP_SDOC_YAML);
@@ -54,7 +54,7 @@ export function useSdocDocument({
       if (saved && saved.trim().length > 0) setYamlTextState(saved);
       else if (initialPreset === 'auto' && registry.length > 0) {
         setYamlTextState(autoGenerateSdocFromRegistry(registry, eventName));
-      } else if (initialPreset === 's13-s') {
+      } else if (initialPreset === 'territorios-multiciclo' || initialPreset === 's13-s') {
         setYamlTextState(S13S_MULTICYCLE_SDOC_YAML);
       }
     });
@@ -247,17 +247,17 @@ export function useSdocDocument({
   );
 
   const loadBuiltinPreset = useCallback(
-    (preset: 's89-4up' | 's13-s' | 'auto') => {
+    (preset: 'fichas-4up' | 'territorios-multiciclo' | 's89-4up' | 's13-s' | 'auto') => {
       setCurrentPageIndex(0);
       setSelectedId(null);
       setHlcOps([]);
       setFormValues({});
-      if (preset === 's89-4up') {
+      if (preset === 'fichas-4up' || preset === 's89-4up') {
         commitYamlChange(S89_4UP_SDOC_YAML, 'editor');
-        setStatusMessage('Template S-89 (4 por folha A4) carregado.');
-      } else if (preset === 's13-s') {
+        setStatusMessage('Template Fichas 4-Up (4 por folha A4) carregado.');
+      } else if (preset === 'territorios-multiciclo' || preset === 's13-s') {
         commitYamlChange(S13S_MULTICYCLE_SDOC_YAML, 'editor');
-        setStatusMessage('Template S-13-S (Registro de Territórios Multi-Ciclo) carregado.');
+        setStatusMessage('Template Registro de Territórios Multi-Ciclo carregado.');
       } else if (preset === 'auto') {
         commitYamlChange(autoGenerateSdocFromRegistry(registry, eventName), 'editor');
         setStatusMessage('Auto-Template gerado a partir do evento.');

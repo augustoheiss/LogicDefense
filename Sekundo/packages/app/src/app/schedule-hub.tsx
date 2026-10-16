@@ -5,10 +5,10 @@
  *
  * Features:
  * - Reads & persists multi-week schedules, participant operational groups, and
- *   multi-cycle S-13-S territory records using 100% domain-agnostic Sekundo data structures.
+ *   multi-cycle territory records using 100% domain-agnostic Sekundo data structures.
  * - Zero hardcoded sensitive/personal data in source control: loads local `.json` / `.txt`
  *   bundles from the user's device folder and persists them in local device storage.
- * - Multi-Mode WhatsApp Export Studio (Weekly Board, Group 1/2/3 Digest, Individual S-89 Card,
+ * - Multi-Mode WhatsApp Export Studio (Weekly Board, Group 1/2/3 Digest, Individual Card,
  *   Live Pocket Timeline, and Territory Assignment Card).
  * - Street-Ready UX:
  *   - ☀️ Modo Sol (WCAG AAA high-contrast daylight theme)
@@ -18,7 +18,7 @@
  *   - 🤝 "Combinar com Meu Par" 1-tap WhatsApp dyad sync
  *   - ⏱️ Pocket Rehearsal Timer with 30s amber warning
  *   - 📅 RFC 5545 .ics Calendar Alert download (T-48h & T-2h)
- *   - 🖨️ Official S-13-S 4-Column Multi-Cycle PDF generator (2027 / 2026 / All)
+ *   - 🖨️ 4-Column Multi-Cycle Territory PDF generator (2027 / 2026 / All)
  */
 
 import React, { useState, useMemo, useEffect } from 'react';
@@ -59,6 +59,7 @@ import {
   buildWhatsAppUrl,
   generateCommitmentICS,
   generateTerritoryS13AndCardsPDF,
+  sanitizeLegacySensitiveText,
   type FlatSkeletonEntry,
   type ParticipantProfile,
   type StructuredProgramSession,
@@ -132,7 +133,7 @@ export default function ScheduleHubConsole() {
   const [showImportModal, setShowImportModal] = useState(false);
   const [customScheduleText, setCustomScheduleText] = useState('');
 
-  // S-13-S PDF Service Year State
+  // Multi-Cycle PDF Year State
   const [s13ServiceYear, setS13ServiceYear] = useState<'all' | '2027' | '2026'>('all');
   const [generatingPdf, setGeneratingPdf] = useState(false);
   const [statusBanner, setStatusBanner] = useState<string | null>(null);
@@ -145,15 +146,23 @@ export default function ScheduleHubConsole() {
   // Load persisted user preferences & locally imported schedule bundle from localStorage
   useEffect(() => {
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      const MIGRATION_KEY = 'sekundo_privacy_migration_v2';
+      if (window.localStorage.getItem(MIGRATION_KEY) !== '1') {
+        window.localStorage.removeItem(MY_PARTICIPANT_STORAGE_KEY);
+        window.localStorage.removeItem(LOCAL_BUNDLE_STORAGE_KEY);
+        window.localStorage.removeItem('sekundo_app_manifest_v1');
+        window.localStorage.setItem(MIGRATION_KEY, '1');
+      }
+
       const savedName = window.localStorage.getItem(MY_PARTICIPANT_STORAGE_KEY);
-      if (savedName) setMyParticipantName(savedName);
+      if (savedName) setMyParticipantName(sanitizeLegacySensitiveText(savedName).text);
       const savedSun = window.localStorage.getItem(SUNLIGHT_MODE_STORAGE_KEY);
       if (savedSun === '1') setSunlightMode(true);
 
       const savedBundleJson = window.localStorage.getItem(LOCAL_BUNDLE_STORAGE_KEY);
       if (savedBundleJson) {
         try {
-          const loaded = parseSekundoScheduleBundle(savedBundleJson);
+          const loaded = parseSekundoScheduleBundle(sanitizeLegacySensitiveText(savedBundleJson).text);
           setActiveUnitName(loaded.unitName);
           setActiveDirectory(loaded.participants);
           setLocalScheduleRegistry(loaded.scheduleRegistry);
@@ -282,12 +291,12 @@ export default function ScheduleHubConsole() {
     }
   };
 
-  // Persist the active schedule & S-13-S Territories as official Sekundo Events in localStorage
+  // Persist the active schedule & Multi-Cycle Territories as official Sekundo Events in localStorage
   const handleSaveSeedToAppEvents = async () => {
     try {
-      setStatusBanner('Salvando programação e territórios S-13-S nos Eventos Ativos do Sekundo...');
+      setStatusBanner('Salvando programação e territórios nos Eventos Ativos do Sekundo...');
       const scheduleEventName = `${activeUnitName} — Programação Semanal`;
-      const territoryEventName = `${activeUnitName} — Territórios S-13-S (2027-2026)`;
+      const territoryEventName = `${activeUnitName} — Registro de Territórios (2027-2026)`;
 
       let schedEvent = events.find((e) => e.config.name === scheduleEventName);
       if (!schedEvent) {
@@ -307,7 +316,7 @@ export default function ScheduleHubConsole() {
       await storage.saveSkeleton(terrEvent.config.id, territoryRegistry);
 
       setStatusBanner(
-        '✅ Programação e Registro de Territórios S-13-S salvos nos Eventos Ativos do Sekundo!'
+        '✅ Programação e Registro de Territórios salvos nos Eventos Ativos do Sekundo!'
       );
       router.replace(`/schedule-hub?id=${schedEvent.config.id}` as any);
     } catch (e: any) {
@@ -352,11 +361,11 @@ export default function ScheduleHubConsole() {
     }
   };
 
-  // Generate S-13-S 4-Column Multi-Cycle PDF
+  // Generate 4-Column Multi-Cycle Territory PDF
   const handleDownloadS13PDF = async () => {
     try {
       setGeneratingPdf(true);
-      setStatusBanner(`Gerando PDF Oficial S-13-S (4 Colunas Multi-Ciclo — Ano ${s13ServiceYear})...`);
+      setStatusBanner(`Gerando PDF de Registro de Territórios (4 Colunas Multi-Ciclo — Ciclo ${s13ServiceYear})...`);
       const res = await generateTerritoryS13AndCardsPDF(territoryRegistry, {
         eventName: activeUnitName,
         serviceYear: s13ServiceYear,
@@ -368,15 +377,15 @@ export default function ScheduleHubConsole() {
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `S-13-S_Territorios_${s13ServiceYear}_${new Date().toISOString().slice(0, 10)}.pdf`;
+        a.download = `Registro_Territorios_${s13ServiceYear}_${new Date().toISOString().slice(0, 10)}.pdf`;
         a.click();
         URL.revokeObjectURL(url);
       }
       setStatusBanner(
-        `✅ PDF S-13-S gerado no padrão de 4 colunas (${res.territoryCount} territórios)!`
+        `✅ PDF de Territórios gerado no padrão de 4 colunas (${res.territoryCount} territórios)!`
       );
     } catch (e: any) {
-      setStatusBanner(`❌ Erro ao gerar PDF S-13-S: ${e.message}`);
+      setStatusBanner(`❌ Erro ao gerar PDF de Territórios: ${e.message}`);
     } finally {
       setGeneratingPdf(false);
     }
@@ -403,7 +412,7 @@ export default function ScheduleHubConsole() {
           slot: {
             key: sess.key,
             type: 'header',
-            label: 'Presidente da Reunião',
+            label: 'Presidente da Sessão',
             value: sess.chairPerson || '',
             email: '',
             meta: { assignedTo: sess.chairPerson, sessionDate: sess.sessionDate },
@@ -416,14 +425,14 @@ export default function ScheduleHubConsole() {
           sessionIndex: sIdx,
           sessionDateLabel: dateShort,
           slot: {
-            key: `${sess.key}-pray1`,
+            key: `${sess.key}-open1`,
             type: 'slot',
-            label: 'Oração Inicial',
+            label: 'Abertura / Credenciamento',
             value: sess.openingPrayer || '',
             email: '',
             meta: { assignedTo: sess.openingPrayer, durationMinutes: 2 },
           },
-          roleLabel: 'Oração Inicial',
+          roleLabel: 'Abertura / Credenciamento',
         });
       }
       if (normalizePersonKey(sess.closingPrayer) === normMe) {
@@ -431,14 +440,14 @@ export default function ScheduleHubConsole() {
           sessionIndex: sIdx,
           sessionDateLabel: dateShort,
           slot: {
-            key: `${sess.key}-pray2`,
+            key: `${sess.key}-close2`,
             type: 'slot',
-            label: 'Oração Final',
+            label: 'Encerramento / Síntese Final',
             value: sess.closingPrayer || '',
             email: '',
             meta: { assignedTo: sess.closingPrayer, durationMinutes: 2 },
           },
-          roleLabel: 'Oração Final',
+          roleLabel: 'Encerramento / Síntese Final',
         });
       }
 
@@ -672,7 +681,7 @@ export default function ScheduleHubConsole() {
               Programação, Compromissos & Territórios
             </Text>
             <Text style={[styles.heroSubtitle, { color: theme.textSecondary }]}>
-              {sessions.length} semanas carregadas • {activeDirectory.length} participantes ({operationalGroups.join(', ')}) • {territoryRegistry.length} territórios S-13-S
+              {sessions.length} semanas carregadas • {activeDirectory.length} participantes ({operationalGroups.join(', ')}) • {territoryRegistry.length} territórios multi-ciclo
             </Text>
           </View>
 
@@ -892,7 +901,7 @@ export default function ScheduleHubConsole() {
           )}
         </View>
 
-        {/* Main Section Switcher: Schedule vs S-13-S Territories */}
+        {/* Main Section Switcher: Schedule vs Multi-Cycle Territories */}
         <View style={styles.tabBar}>
           <Pressable
             onPress={() => setActiveTab('schedule')}
@@ -930,7 +939,7 @@ export default function ScheduleHubConsole() {
                 { color: activeTab === 'territories' ? '#10B981' : theme.textMuted },
               ]}
             >
-              🗺️ Designações de Territórios S-13-S ({territoryRegistry.length})
+              🗺️ Designações de Territórios ({territoryRegistry.length})
             </Text>
           </Pressable>
         </View>
@@ -1024,7 +1033,7 @@ export default function ScheduleHubConsole() {
                     )}
                     {currentSession.openingPrayer && (
                       <View style={styles.metaChip}>
-                        <Text style={styles.metaChipLabel}>🙏 Oração Inicial:</Text>
+                        <Text style={styles.metaChipLabel}>🔹 Abertura / Credenciamento:</Text>
                         <Text style={styles.metaChipValue}>{currentSession.openingPrayer}</Text>
                       </View>
                     )}
@@ -1259,7 +1268,7 @@ export default function ScheduleHubConsole() {
                               </Pressable>
                             )}
 
-                            {/* 3. Digital S-89 Individual WhatsApp Card */}
+                            {/* 3. Digital Individual WhatsApp Card */}
                             <Pressable
                               onPress={() => {
                                 setWaTargetSlot(slot);
@@ -1282,7 +1291,7 @@ export default function ScheduleHubConsole() {
                                   color: theme.textPrimary,
                                 }}
                               >
-                                📲 Cartão S-89
+                                📲 Ficha Individual
                               </Text>
                             </Pressable>
 
@@ -1338,7 +1347,7 @@ export default function ScheduleHubConsole() {
               );
             })}
 
-            {/* Session Closing Song & Prayer Footer */}
+            {/* Session Closing Footer */}
             {(currentSession.closingCue || currentSession.closingPrayer) && (
               <View
                 style={[
@@ -1353,7 +1362,7 @@ export default function ScheduleHubConsole() {
                 )}
                 {currentSession.closingPrayer && (
                   <Text style={{ fontSize: 13, fontWeight: '700', color: theme.textPrimary }}>
-                    🙏 Oração Final: {currentSession.closingPrayer}
+                    🔹 Encerramento / Síntese Final: {currentSession.closingPrayer}
                   </Text>
                 )}
               </View>
@@ -1362,7 +1371,7 @@ export default function ScheduleHubConsole() {
         )}
 
         {/* ================================================================= */}
-        {/* TAB 2: S-13-S MULTI-CYCLE TERRITORY DESIGNATIONS (2027-2026)      */}
+        {/* TAB 2: MULTI-CYCLE TERRITORY DESIGNATIONS (2027-2026)             */}
         {/* ================================================================= */}
         {activeTab === 'territories' && (
           <View>
@@ -1374,11 +1383,11 @@ export default function ScheduleHubConsole() {
             >
               <View style={{ flex: 1 }}>
                 <Text style={[styles.sessionDateTitle, { color: theme.textPrimary }]}>
-                  Registro de Designação de Território (Modelo Oficial S-13-S)
+                  Registro de Designação de Território (4 Colunas Multi-Ciclo)
                 </Text>
                 <Text style={{ fontSize: 13, color: theme.textSecondary, marginTop: 4 }}>
-                  Layout fiel de 4 colunas por linha ("Designado para" + Data da designação | Data da conclusão)
-                  com quebra automática para múltiplos ciclos nos Anos de Serviço 2027 e 2026.
+                  Layout tabular de 4 colunas por linha ("Designado para" + Data da designação | Data da conclusão)
+                  com quebra automática para múltiplos ciclos operacionais 2027 e 2026.
                 </Text>
 
                 <View style={{ flexDirection: 'row', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
@@ -1400,7 +1409,7 @@ export default function ScheduleHubConsole() {
                           color: s13ServiceYear === yr ? '#090D16' : theme.textSecondary,
                         }}
                       >
-                        {yr === 'all' ? '📑 Anos 2027 + 2026 (Completo)' : `📅 Ano de Serviço ${yr}`}
+                        {yr === 'all' ? '📑 Ciclos 2027 + 2026 (Completo)' : `📅 Ciclo Operacional ${yr}`}
                       </Text>
                     </Pressable>
                   ))}
@@ -1417,10 +1426,10 @@ export default function ScheduleHubConsole() {
                 ) : (
                   <>
                     <Text style={{ fontSize: 14, fontWeight: '900', color: '#090D16' }}>
-                      🖨️ Baixar PDF S-13-S
+                      🖨️ Baixar PDF Multi-Ciclo
                     </Text>
                     <Text style={{ fontSize: 11, fontWeight: '700', color: '#064E3B' }}>
-                      4 Colunas Multi-Ciclo
+                      4 Colunas Tabulares
                     </Text>
                   </>
                 )}
@@ -1521,7 +1530,7 @@ export default function ScheduleHubConsole() {
                         </View>
                       </View>
 
-                      {/* 4-Column S-13-S Cycle Preview Strip */}
+                      {/* 4-Column Cycle Preview Strip */}
                       <View style={styles.cyclesGrid}>
                         {filteredCycles.map((cyc, cIdx) => {
                           const grp = findParticipantProfile(
@@ -1611,7 +1620,7 @@ export default function ScheduleHubConsole() {
                 [
                   { id: 'full_week', label: '📋 Quadro Semanal' },
                   { id: 'group_filter', label: '👥 Por Grupo (1/2/3)' },
-                  { id: 'individual_card', label: '🎯 Cartão S-89 Individual' },
+                  { id: 'individual_card', label: '🎯 Ficha Individual' },
                   { id: 'live_pocket', label: '⏱️ Ao Vivo (19:30)' },
                   { id: 'territory_assignment', label: '🗺️ Território' },
                 ] as const
@@ -1824,7 +1833,7 @@ export default function ScheduleHubConsole() {
             <TextInput
               value={participantSearch}
               onChangeText={setParticipantSearch}
-              placeholder="Buscar por nome ou grupo (ex: Grupo 1, Silva, Conceição)..."
+              placeholder="Buscar por nome ou grupo (ex: Grupo 1, Alex, Assunção)..."
               placeholderTextColor="#64748B"
               style={styles.searchInput}
             />
@@ -1885,7 +1894,7 @@ export default function ScheduleHubConsole() {
               onChangeText={setCustomScheduleText}
               multiline
               numberOfLines={10}
-              placeholder="Exemplo:\n9 de outubro de 2026 | MÓDULO 01 Presidente Tiago A. Rocha Neto\nBLOCO 1 — FUNDAMENTOS E ANÁLISE\n1. Discurso Inicial (10 mins.) Roberto Gomes Almeida..."
+              placeholder="Exemplo:\n9 de outubro de 2026 | MÓDULO 01 Presidente Mônica Azevedo\nBLOCO 1 — FUNDAMENTOS E ANÁLISE\n1. Abertura Temática e Diretrizes (10 mins.) Caio Cavalcanti..."
               placeholderTextColor="#64748B"
               style={[styles.searchInput, { minHeight: 200, textAlignVertical: 'top' }]}
             />

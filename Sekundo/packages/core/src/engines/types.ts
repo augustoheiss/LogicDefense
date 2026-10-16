@@ -63,8 +63,8 @@ export interface TerritoryNodeMeta {
   territory_number?: string;    // Snake-case alias for territory identifier
   locality?: string;            // Neighborhood / sector name (e.g. "Setor Central", "Setor Norte")
   lastCompletedBeforeYear?: string; // "Última data concluída*" before starting the sheet
-  serviceYear?: number;         // Primary service year
-  assignmentHistory?: TerritoryAssignmentCycle[]; // Multi-cycle assignment ledger (S-13-S 4-column model)
+  serviceYear?: number;         // Primary operational year
+  assignmentHistory?: TerritoryAssignmentCycle[]; // Multi-cycle assignment ledger (4-column model)
 }
 
 export type TerritoryRecencySort = 'priority_oldest_first' | 'recent_first' | 'hierarchical';
@@ -81,7 +81,7 @@ export interface TerritoryRecencyItem {
   completedAt?: string;
   daysSinceCompleted: number | null; // null if not fully completed
   daysSinceAssigned?: number | null; // days since assignedAt
-  isOverdue?: boolean; // true if incomplete and assigned >= 120 days ago (4-month S-13 cycle)
+  isOverdue?: boolean; // true if incomplete and assigned >= 120 days ago (4-month operational cycle)
 }
 
 export interface TerritoryMetrics {
@@ -106,7 +106,7 @@ export interface RosterNodeMeta {
   durationMinutes?: number;     // Allocated minutes
   confirmed?: boolean;          // Whether the assignee confirmed attendance
   substitute?: string;          // Standby replacement if unavailable
-  materialReference?: string;   // Speech title, song number, article reference
+  materialReference?: string;   // Topic title, reference code, document reference
   readinessState?: ReadinessState; // 3-step commitment readiness ('pending' -> 'preparing' -> 'ready')
   groupTag?: string;            // Operational team/group of primary assignee (e.g. "Grupo 1")
   assistantGroupTag?: string;   // Operational team/group of assistant (e.g. "Grupo 2")
@@ -117,11 +117,13 @@ export interface RosterNodeMeta {
   sessionTheme?: string;        // Session theme / reference (e.g. "MÓDULO 40, 41")
   unitName?: string;            // Organization / unit header (e.g. "Unidade Operacional Central")
   chairPerson?: string;         // Session chairperson / moderator
-  openingCue?: string;          // Opening song / cue
-  openingPrayer?: string;       // Opening prayer / invocation assignee
-  middleCue?: string;           // Intermission / transition song or cue
-  closingCue?: string;          // Closing song / cue
-  closingPrayer?: string;       // Closing prayer / benediction assignee
+  openingCue?: string;          // Opening cue / theme
+  openingAssignee?: string;     // Opening / accreditation assignee
+  openingPrayer?: string;       // Legacy alias for openingAssignee
+  middleCue?: string;           // Intermission / transition cue
+  closingCue?: string;          // Closing cue / theme
+  closingAssignee?: string;     // Closing / synthesis assignee
+  closingPrayer?: string;       // Legacy alias for closingAssignee
 }
 
 export interface RosterMetrics {

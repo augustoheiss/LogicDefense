@@ -26,13 +26,13 @@ import {
 } from '../index';
 
 describe('Participant Directory & Diacritic-Insensitive Resolution', () => {
-  it('resolves diacritic variations such as Conçeição vs Conceição', () => {
-    expect(normalizePersonKey('Fernando d. S. Conçeição')).toBe(
-      normalizePersonKey('Fernando d. S. Conceição'),
+  it('resolves diacritic variations such as Assunção vs Assuncao', () => {
+    expect(normalizePersonKey('Helena Assunção')).toBe(
+      normalizePersonKey('Helena Assuncao'),
     );
 
     const profile = findParticipantProfile(
-      'Fernando d. S. Conceição',
+      'Helena Assuncao',
       PROGRAMACAO_PARTICIPANT_DIRECTORY,
     );
     expect(profile).toBeDefined();
@@ -52,10 +52,10 @@ describe('Agnostic Schedule Parser & 9-Week Seed Ingestion', () => {
     expect(parseLocalizedDateToISO('9 de outubro de 2026')).toBe('2026-10-09');
     expect(parseLocalizedDateToISO('4 de dezembro de 2026')).toBe('2026-12-04');
 
-    const pair = splitPairedAssignees('Paulo Henrick F. Castro / Josué G. Oliveira');
+    const pair = splitPairedAssignees('Natália Campos / Enzo Magalhães');
     expect(pair).toEqual({
-      assignedTo: 'Paulo Henrick F. Castro',
-      assistantTo: 'Josué G. Oliveira',
+      assignedTo: 'Natália Campos',
+      assistantTo: 'Enzo Magalhães',
     });
   });
 
@@ -69,7 +69,7 @@ describe('Agnostic Schedule Parser & 9-Week Seed Ingestion', () => {
 
     // Check first week (09/10/2026)
     const week1 = sessions[0];
-    expect(week1.chairPerson).toBe('Tiago A. Rocha Neto');
+    expect(week1.chairPerson).toBe('Mônica Azevedo');
     expect(week1.sections.length).toBe(3);
     expect(week1.sections.map((s) => s.accentColor)).toEqual([
       '#3D5B65',
@@ -77,12 +77,12 @@ describe('Agnostic Schedule Parser & 9-Week Seed Ingestion', () => {
       '#80241E',
     ]);
 
-    // Check paired slot with group enrichment (Part 4: Paulo Henrick F. Castro / Josué G. Oliveira)
+    // Check paired slot with group enrichment (Part 4: Natália Campos / Enzo Magalhães)
     const slot4 = week1.sections[1].slots.find((s) => (s.meta as any)?.partNumber === 4);
     expect(slot4).toBeDefined();
     const slot4Meta = slot4!.meta as Record<string, any>;
-    expect(slot4Meta.assignedTo).toBe('Paulo Henrick F. Castro');
-    expect(slot4Meta.assistantTo).toBe('Josué G. Oliveira');
+    expect(slot4Meta.assignedTo).toBe('Natália Campos');
+    expect(slot4Meta.assistantTo).toBe('Enzo Magalhães');
     expect(slot4Meta.groupTag).toBe('Grupo 3');
     expect(slot4Meta.assistantGroupTag).toBe('Grupo 1');
 
@@ -136,12 +136,12 @@ describe('WhatsApp Export Engine & Commitment Agonist Formatters', () => {
 
     expect(msg).toContain('*PROGRAMAÇÃO DA SEMANA');
     expect(msg).toContain('9 DE OUTUBRO DE 2026');
-    expect(msg).toContain('*Presidente:* Tiago A. Rocha Neto');
+    expect(msg).toContain('*Presidente:* Mônica Azevedo');
     expect(msg).toContain('*BLOCO 1 — FUNDAMENTOS E ANÁLISE*');
     expect(msg).toContain('*BLOCO 2 — PRÁTICA E COMUNICAÇÃO*');
     expect(msg).toContain('*BLOCO 3 — APLICAÇÃO E SÍNTESE*');
-    expect(msg).toContain('Paulo Henrick F. Castro');
-    expect(msg).toContain('Josué G. Oliveira');
+    expect(msg).toContain('Natália Campos');
+    expect(msg).toContain('Enzo Magalhães');
   });
 
   it('formats Mode 2: Group Filter Summary (Grupo 1, 2, 3) with active territories', () => {
@@ -153,9 +153,9 @@ describe('WhatsApp Export Engine & Commitment Agonist Formatters', () => {
     );
 
     expect(msgGrupo1).toContain('*DESTAQUES DO GRUPO 1');
-    expect(msgGrupo1).toContain('Roberto Gomes Almeida');
-    expect(msgGrupo1).toContain('Carlos Eduardo F. Silva');
-    expect(msgGrupo1).toContain('Josué G. Oliveira');
+    expect(msgGrupo1).toContain('Caio Cavalcanti');
+    expect(msgGrupo1).toContain('Alex Nogueira');
+    expect(msgGrupo1).toContain('Enzo Magalhães');
     expect(msgGrupo1).toContain('*Territórios em Campo (Grupo 1):*');
     expect(msgGrupo1).toContain('T01.01.02');
   });
@@ -164,17 +164,17 @@ describe('WhatsApp Export Engine & Commitment Agonist Formatters', () => {
     const slot4 = week1.sections[1].slots.find((s) => (s.meta as any)?.partNumber === 4)!;
     const card = formatIndividualCommitmentWhatsApp(slot4, week1, 'primary');
 
-    expect(card).toContain('Olá, *Paulo Henrick F. Castro*!');
-    expect(card).toContain('*Parceiro(a):* Josué G. Oliveira');
-    expect(card).toContain('4. Inicie conversas');
+    expect(card).toContain('Olá, *Natália Campos*!');
+    expect(card).toContain('*Parceiro(a):* Enzo Magalhães');
+    expect(card).toContain('4. Simulação de Atendimento Inicial');
 
     const partnerMsg = formatPartnerSyncWhatsAppMessage(
       slot4,
       '9 de outubro de 2026',
-      'Paulo Henrick F. Castro',
+      'Natália Campos',
     );
-    expect(partnerMsg).toContain('Olá, *Josué G. Oliveira*!');
-    expect(partnerMsg).toContain('*4. Inicie conversas*');
+    expect(partnerMsg).toContain('Olá, *Enzo Magalhães*!');
+    expect(partnerMsg).toContain('*4. Simulação de Atendimento Inicial*');
   });
 
   it('formats Mode 4: Live Pocket Timeline with calculated clock times', () => {
@@ -187,7 +187,7 @@ describe('WhatsApp Export Engine & Commitment Agonist Formatters', () => {
   it('formats Mode 5: Territory Assignment Card & generates RFC 5545 .ics calendar', () => {
     const terrMsg = formatTerritoryAssignmentWhatsApp(territoryRegistry[1]); // T01.01.02
     expect(terrMsg).toContain('*DESIGNAÇÃO DE TERRITÓRIO — T01.01.02*');
-    expect(terrMsg).toContain('Eliane R. Martins');
+    expect(terrMsg).toContain('Flávia Monteiro');
 
     const slot1 = week1.sections[0].slots[0];
     const ics = generateCommitmentICS(slot1, week1);
@@ -198,7 +198,7 @@ describe('WhatsApp Export Engine & Commitment Agonist Formatters', () => {
   });
 });
 
-describe('S-13-S 4-Column Multi-Cycle Territory Record PDF Engine', () => {
+describe('4-Column Multi-Cycle Territory Record PDF Engine', () => {
   it('chunks assignment cycles into 4-column rows accurately', () => {
     const history = Array.from({ length: 9 }, (_, idx) => ({
       assignedTo: `Person ${idx + 1}`,
@@ -214,7 +214,7 @@ describe('S-13-S 4-Column Multi-Cycle Territory Record PDF Engine', () => {
     expect(rows[2].length).toBe(1);
   });
 
-  it('generates valid S-13-S PDF bytes for Service Years 2027, 2026, and all', async () => {
+  it('generates valid Multi-Cycle Territory PDF bytes for Cycles 2027, 2026, and all', async () => {
     const registry = buildTerritoriosS13HistoricalRegistry();
     const tree = skeletonTree.buildTree(registry);
     const summary = territoryEngine.calculateMetrics(tree);

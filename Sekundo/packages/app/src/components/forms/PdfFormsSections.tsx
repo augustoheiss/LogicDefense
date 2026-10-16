@@ -168,7 +168,7 @@ export function TerritoryS13Section({
   return (
     <View style={styles.section}>
       <Text style={styles.sectionTitle}>
-        RESUMO DE TERRITÓRIOS PARA REGISTRO S-13-S (4 COLUNAS MULTI-CICLO) & CARTÕES S-12
+        RESUMO DE TERRITÓRIOS PARA REGISTRO MULTI-CICLO (4 COLUNAS) & CARTÕES DE QUADRA
       </Text>
       <View style={{ flexDirection: 'row', gap: 8, marginBottom: 14, flexWrap: 'wrap' }}>
         {(['all', '2027', '2026'] as const).map((yr) => (
@@ -187,7 +187,7 @@ export function TerritoryS13Section({
                 color: s13ServiceYear === yr ? '#FFB800' : '#94A3B8',
               }}
             >
-              {yr === 'all' ? '📑 Anos 2027 + 2026' : `📅 Ano de Serviço ${yr}`}
+              {yr === 'all' ? '📑 Ciclos 2027 + 2026' : `📅 Ciclo Operacional ${yr}`}
             </Text>
           </Pressable>
         ))}
@@ -219,7 +219,7 @@ export function TerritoryS13Section({
         ) : (
           <Pressable onPress={onGenerateS13AndCards} style={styles.generateButton}>
             <Text style={styles.generateButtonText}>
-              ⚡ Gerar e Baixar PDF S-13 + Cartões de Quadra S-12 (100% Local)
+              ⚡ Gerar e Baixar PDF Registro Multi-Ciclo + Cartões de Quadra (100% Local)
             </Text>
           </Pressable>
         )}

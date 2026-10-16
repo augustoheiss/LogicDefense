@@ -9,7 +9,7 @@ import {
   buildS13PageContexts,
 } from '../index';
 
-describe('Phase F2 — S-13-S & S-89 Declarative SDOC Parity Tests', () => {
+describe('Phase F2 — Multi-Cycle Territory & 4-Up Declarative SDOC Parity Tests', () => {
   it('chunks territory T01.01.01 with 9 cycles (in 2026) into 3 visual rows in both legacy and SDOC engines', async () => {
     const registry = buildTerritoriosS13HistoricalRegistry();
     const pages2026 = buildS13PageContexts(registry, '2026');
@@ -41,7 +41,7 @@ describe('Phase F2 — S-13-S & S-89 Declarative SDOC Parity Tests', () => {
     expect(allRenderedText).toContain('REGISTRO DE DESIGNACAO DE TERRITORIO');
     expect(allRenderedText).toContain('2026');
     expect(allRenderedText).toContain('T01.01.01');
-    expect(allRenderedText).toContain('S-13-S');
+    expect(allRenderedText).toContain('REG-TERR-4C');
   });
 
   it('compiles S89_4UP_SDOC_YAML with 12 assignments into 3 pages (4-up per page)', async () => {

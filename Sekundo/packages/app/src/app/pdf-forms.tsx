@@ -73,7 +73,7 @@ export default function PDFFormsConsole() {
         new Date().toLocaleDateString('pt-BR'),
       partTitle: entry.label || `Designação ${idx + 1}`,
       roomOrHall:
-        (entry.meta?.room as string) || (entry.meta?.sala as string) || 'Salão Principal',
+        (entry.meta?.room as string) || (entry.meta?.sala as string) || 'Auditório Principal',
       remarks: (entry.meta?.remarks as string) || undefined,
     }));
 
@@ -90,7 +90,7 @@ export default function PDFFormsConsole() {
     try {
       setLoading(true);
       setStatusMessage(
-        `Gerando Registro S-13-S (4 Colunas Multi-Ciclo — Ano ${s13ServiceYear}) e Cartões S-12 (100% local)...`
+        `Gerando Registro Multi-Ciclo (4 Colunas — Ciclo ${s13ServiceYear}) e Cartões de Quadra (100% local)...`
       );
       const res = await generateTerritoryS13AndCardsPDF(effectiveTerritoryRegistry, {
         eventName: eventId ? `Territórios (${eventId})` : PROGRAMACAO_UNIT_NAME,
@@ -98,13 +98,13 @@ export default function PDFFormsConsole() {
         includeQuadraCards: true,
       });
 
-      const filename = `Registro_S13S_${s13ServiceYear}_e_Cartoes_S12_${new Date().toISOString().slice(0, 10)}.pdf`;
+      const filename = `Registro_Territorios_${s13ServiceYear}_e_Cartoes_${new Date().toISOString().slice(0, 10)}.pdf`;
       await deliverFile(res.pdfBytes, filename, 'application/pdf');
       setStatusMessage(
-        `✅ PDF S-13-S (4 Colunas) + S-12 gerado com sucesso! ${res.territoryCount} territórios, ${res.quadraCount} quadras (${res.workedUnits}/${res.totalUnits} unidades concluídas).`
+        `✅ PDF Registro (4 Colunas) + Cartões gerado com sucesso! ${res.territoryCount} territórios, ${res.quadraCount} quadras (${res.workedUnits}/${res.totalUnits} unidades concluídas).`
       );
     } catch (err: any) {
-      setStatusMessage(`❌ Erro ao gerar PDF S-13/S-12: ${err.message}`);
+      setStatusMessage(`❌ Erro ao gerar PDF de Territórios: ${err.message}`);
     } finally {
       setLoading(false);
     }
@@ -305,8 +305,8 @@ export default function PDFFormsConsole() {
                 ],
                 [
                   's12',
-                  'Registro S-13 & Cartões de Território S-12',
-                  'Tabela oficial de designação/conclusão de territórios (S-13) + fichas táticas de quadras (S-12).',
+                  'Registro Multi-Ciclo & Cartões de Território',
+                  'Tabela de designação/conclusão de territórios (4 Colunas) + fichas táticas de quadras.',
                 ],
                 [
                   'custom',

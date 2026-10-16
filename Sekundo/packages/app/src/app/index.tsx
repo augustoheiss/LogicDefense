@@ -65,12 +65,11 @@ export default function Dashboard() {
         {/* Manifesto Card */}
         <View style={styles.manifestoCard}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, flexWrap: 'wrap', gap: 6 }}>
-            <Text style={styles.manifestoTitle}>Background Melody & O Tempo Transcendental</Text>
-            <Text style={{ fontSize: 11, color: '#FFB800', fontWeight: '700' }}>Eclesiastes 3:11</Text>
+            <Text style={styles.manifestoTitle}>Background Melody & Arquitetura Soberana do Tempo</Text>
+            <Text style={{ fontSize: 11, color: '#FFB800', fontWeight: '700' }}>Soberania Local-First</Text>
           </View>
           <Text style={styles.manifestoText}>
-            “Pôs no coração do homem o anseio pela eternidade.” O tempo tornado matéria palpável e soberana nas suas mãos. 
-            Esta estrutura roda silenciosamente em segundo plano, servindo como uma moldura limpa para você compor a melodia que empodera seus dias.
+            O tempo tornado matéria palpável e soberana nas suas mãos. Esta estrutura roda silenciosamente em segundo plano, servindo como uma moldura limpa e determinística para você compor a melodia que empodera seus dias.
           </Text>
         </View>
 
@@ -108,7 +107,7 @@ export default function Dashboard() {
                 📅 Programação & WhatsApp (Hub)
               </Text>
               <Text style={styles.actionButtonSub}>
-                Compromissos, Grupos 1–3, Exportador WhatsApp e S-13-S
+                Compromissos, Grupos 1–3, Exportador WhatsApp e Registro de Territórios
               </Text>
             </Pressable>
 
@@ -125,7 +124,7 @@ export default function Dashboard() {
                 🖋️ Estúdio Documental YAML ⇄ PDF
               </Text>
               <Text style={styles.actionButtonSub}>
-                Canvas em mm, S-89 4-Up, S-13-S Multi-Ciclo e Ingestão de PDF
+                Canvas em mm, Fichas 4-Up, Territórios Multi-Ciclo e Ingestão de PDF
               </Text>
             </Pressable>
 

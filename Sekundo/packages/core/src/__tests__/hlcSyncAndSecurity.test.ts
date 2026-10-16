@@ -182,14 +182,14 @@ describe('CSV Formula Injection Neutralization', () => {
   });
 });
 
-describe('Client-Side S-13 & Tactical Cards PDF Generator', () => {
+describe('Client-Side Territory Registry & Tactical Cards PDF Generator', () => {
   it('generates a valid multi-page PDF document from territory registry', async () => {
     const registry: FlatSkeletonEntry[] = [
       {
         key: '1',
         label: 'Território 01 - Centro',
         type: 'branch',
-        meta: { territory_number: '1', assignee: 'João Silva' },
+        meta: { territory_number: '1', assignee: 'Alex Nogueira' },
       },
       {
         key: '1.1',
@@ -212,7 +212,7 @@ describe('Client-Side S-13 & Tactical Cards PDF Generator', () => {
     ];
 
     const res = await generateTerritoryS13AndCardsPDF(registry, {
-      eventName: 'Congregação Central',
+      eventName: 'Unidade Operacional Central',
     });
     expect(res.pdfBytes.byteLength).toBeGreaterThan(500);
     expect(res.territoryCount).toBe(1);

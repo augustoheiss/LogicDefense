@@ -1,7 +1,7 @@
 /**
  * Page: publisher
  *
- * Modo Publicador (Single-Territory Field Volunteer View).
+ * Modo Operador de Campo (Single-Territory Field Volunteer View).
  * Ultra-simplified, high-contrast, one-handed interface for working a single territory
  * in the field without administrative clutter:
  * - Instant 1-tap toggle per house number or per Quadra
@@ -364,7 +364,7 @@ export default function PublisherModeScreen() {
                 <Text style={styles.assigneeBadgeText}>
                   {assignmentInfo.workerName
                     ? `👤 ${assignmentInfo.workerName}${assignmentInfo.assignedAt ? ` (${assignmentInfo.assignedAt})` : ''}${assignmentInfo.isOverdue ? ` ⚠️ ${assignmentInfo.daysAssigned}d` : ''}`
-                    : '👤 + Designar publicador'}
+                    : '👤 + Designar operador'}
                 </Text>
               </Pressable>
             </View>
@@ -378,7 +378,7 @@ export default function PublisherModeScreen() {
               <TextInput
                 value={assigneeDraft}
                 onChangeText={setAssigneeDraft}
-                placeholder="Nome do publicador responsável..."
+                placeholder="Nome do operador responsável..."
                 placeholderTextColor="#64748B"
                 style={[styles.assigneeInput, daylightMode && styles.assigneeInputDaylight]}
               />

@@ -68,8 +68,10 @@ export default function HojeCockpitScreen() {
     template?: string
   ) => {
     try {
-      const isS13 = template?.toLowerCase().includes('s13');
-      const targetReg = isS13
+      const isTerritorios =
+        template?.toLowerCase().includes('territorio') ||
+        template?.toLowerCase().includes('s13');
+      const targetReg = isTerritorios
         ? buildTerritoriosS13HistoricalRegistry()
         : buildProgramacaoReuniaoRegistry();
 

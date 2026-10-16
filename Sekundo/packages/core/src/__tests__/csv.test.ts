@@ -8,13 +8,13 @@ import type { FlatRegistry } from '../skeleton/types';
 
 describe('CSV Parser', () => {
   it('parses standard compliant CSV', () => {
-    const csv = '_key,_type,label,value,email,_meta_json\n01,header,Reunião Semanal,,,\n01-01,slot,Presidente,Irmão Silva,silva@email.com,"{""sala"": ""Principal""}"\n';
+    const csv = '_key,_type,label,value,email,_meta_json\n01,header,Programação Semanal,,,\n01-01,slot,Coordenação,Alex Nogueira,alex@exemplo.org,"{""sala"": ""Principal""}"\n';
     const parsed = parseCSV(csv);
     expect(parsed).toHaveLength(2);
     expect(parsed[0]).toEqual({
       _key: '01',
       _type: 'header',
-      label: 'Reunião Semanal',
+      label: 'Programação Semanal',
       value: '',
       email: '',
       _meta_json: '',
@@ -22,23 +22,23 @@ describe('CSV Parser', () => {
     expect(parsed[1]).toEqual({
       _key: '01-01',
       _type: 'slot',
-      label: 'Presidente',
-      value: 'Irmão Silva',
-      email: 'silva@email.com',
+      label: 'Coordenação',
+      value: 'Alex Nogueira',
+      email: 'alex@exemplo.org',
       _meta_json: '{"sala": "Principal"}',
     });
   });
 
   it('handles quotes and commas in fields', () => {
-    const csv = `_key,_type,label,value,email,_meta_json\n01-01,slot,"Coordenador, Reunião","""Silva""",,\n`;
+    const csv = `_key,_type,label,value,email,_meta_json\n01-01,slot,"Coordenador, Sessão","""Nogueira""",,\n`;
     const parsed = parseCSV(csv);
     expect(parsed).toHaveLength(1);
-    expect(parsed[0].label).toBe('Coordenador, Reunião');
-    expect(parsed[0].value).toBe('"Silva"');
+    expect(parsed[0].label).toBe('Coordenador, Sessão');
+    expect(parsed[0].value).toBe('"Nogueira"');
   });
 
   it('throws error when _key is missing', () => {
-    const csv = `_type,label,value\nslot,Presidente,Irmão Silva\n`;
+    const csv = `_type,label,value\nslot,Coordenação,Alex Nogueira\n`;
     expect(() => parseCSV(csv)).toThrow('CSV is missing required header: "_key"');
   });
 });
@@ -49,7 +49,7 @@ describe('CSV Serializer', () => {
       {
         _key: '01',
         _type: 'header',
-        label: 'Reunião Semanal',
+        label: 'Programação Semanal',
         value: '',
         email: '',
         _meta_json: '',
@@ -57,9 +57,9 @@ describe('CSV Serializer', () => {
       {
         _key: '01-01',
         _type: 'slot',
-        label: 'Presidente',
-        value: 'Irmão Silva',
-        email: 'silva@email.com',
+        label: 'Coordenação',
+        value: 'Alex Nogueira',
+        email: 'alex@exemplo.org',
         _meta_json: '{"sala": "Principal"}',
       },
     ];
@@ -67,7 +67,7 @@ describe('CSV Serializer', () => {
     const parsed = parseCSV(csv);
     expect(parsed).toHaveLength(2);
     expect(parsed[0]._key).toBe('01');
-    expect(parsed[1].label).toBe('Presidente');
+    expect(parsed[1].label).toBe('Coordenação');
   });
 
   it('escapes cells with special characters during serialization', () => {
@@ -75,15 +75,15 @@ describe('CSV Serializer', () => {
       {
         _key: '01-01',
         _type: 'slot',
-        label: 'Coordenador, Reunião',
-        value: '"Silva"',
+        label: 'Coordenador, Sessão',
+        value: '"Nogueira"',
         email: '',
         _meta_json: '',
       },
     ];
     const csv = serializeCSV(rows);
-    expect(csv).toContain('"Coordenador, Reunião"');
-    expect(csv).toContain('"""Silva"""');
+    expect(csv).toContain('"Coordenador, Sessão"');
+    expect(csv).toContain('"""Nogueira"""');
   });
 });
 
@@ -104,17 +104,17 @@ describe('CSV Validator & Diff', () => {
 
   it('computes differences between current and incoming CSV rows', () => {
     const current: FlatRegistry = [
-      { key: '01', type: 'header', label: 'Reunião Semanal', value: '', email: '', meta: {} },
-      { key: '01-01', type: 'slot', label: 'Presidente', value: 'Irmão Silva', email: '', meta: {} },
+      { key: '01', type: 'header', label: 'Programação Semanal', value: '', email: '', meta: {} },
+      { key: '01-01', type: 'slot', label: 'Coordenação', value: 'Alex Nogueira', email: '', meta: {} },
     ];
 
     const incoming = [
       // Unchanged
-      { _key: '01', _type: 'header', label: 'Reunião Semanal', value: '', email: '', _meta_json: '' },
+      { _key: '01', _type: 'header', label: 'Programação Semanal', value: '', email: '', _meta_json: '' },
       // Modified value
-      { _key: '01-01', _type: 'slot', label: 'Presidente', value: 'Irmão Santos', email: '', _meta_json: '' },
+      { _key: '01-01', _type: 'slot', label: 'Coordenação', value: 'Bianca Moreira', email: '', _meta_json: '' },
       // Added
-      { _key: '01-02', _type: 'slot', label: 'Leitor', value: 'Irmão Costa', email: '', _meta_json: '' },
+      { _key: '01-02', _type: 'slot', label: 'Relatoria', value: 'Caio Cavalcanti', email: '', _meta_json: '' },
     ];
 
     const diff = buildDiff(current, incoming);
@@ -125,11 +125,11 @@ describe('CSV Validator & Diff', () => {
 
     const modifiedEntry = diff.entries.find(e => e.key === '01-01');
     expect(modifiedEntry?.action).toBe('modify');
-    expect(modifiedEntry?.currentValue).toBe('Irmão Silva');
-    expect(modifiedEntry?.incomingValue).toBe('Irmão Santos');
+    expect(modifiedEntry?.currentValue).toBe('Alex Nogueira');
+    expect(modifiedEntry?.incomingValue).toBe('Bianca Moreira');
 
     const addedEntry = diff.entries.find(e => e.key === '01-02');
     expect(addedEntry?.action).toBe('add');
-    expect(addedEntry?.incomingLabel).toBe('Leitor');
+    expect(addedEntry?.incomingLabel).toBe('Relatoria');
   });
 });

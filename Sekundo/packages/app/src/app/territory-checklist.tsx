@@ -412,7 +412,7 @@ export default function TerritoryChecklistScreen() {
               }
               style={styles.mapLinkBtn}
             >
-              <Text style={styles.mapLinkBtnText}>📱 Modo Publicador</Text>
+              <Text style={styles.mapLinkBtnText}>📱 Modo Operador de Campo</Text>
             </Pressable>
             <Pressable
               onPress={() =>

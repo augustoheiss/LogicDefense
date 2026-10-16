@@ -2,7 +2,7 @@
  * Sekundo — Native AcroForm Inspector & Injector Engine
  *
  * Implements deterministic form field inspection, data injection,
- * and 4-Up graphical imposition for official PDF assignment templates (such as S-89).
+ * and 4-Up graphical imposition for PDF assignment templates.
  */
 
 // Type-only import for compilation
@@ -16,7 +16,7 @@ async function getPdfLib() {
 }
 
 // ---------------------------------------------------------------------------
-// Assignment Slip Data Contract (S-89 Model)
+// Assignment Slip Data Contract (4-Up Model)
 // ---------------------------------------------------------------------------
 
 export interface S89Assignment {
@@ -28,7 +28,7 @@ export interface S89Assignment {
   date: string;
   /** Part number or description (e.g. "Painel Temático", "Apresentação Geral") */
   partTitle: string;
-  /** Classroom / hall designation (e.g. "Salão Principal", "Sala B") */
+  /** Classroom / hall designation (e.g. "Auditório Principal", "Sala B") */
   roomOrHall?: string;
   /** Additional remarks or study point */
   remarks?: string;
@@ -506,13 +506,13 @@ export async function fillAcroForm(
 }
 
 // ---------------------------------------------------------------------------
-// 4-Up Imposition Engine (S-89 Model)
+// 4-Up Imposition Engine
 // ---------------------------------------------------------------------------
 
 /**
- * Fills up to 4 S-89 assignment slips per page, automatically mapping
+ * Fills up to 4 assignment slips per page, automatically mapping
  * fields across quadrants 1 to 4 using recognized conventions:
- * - Official field codes (e.g. `900_1_Text_SanSerif` to `900_4_Text_SanSerif`)
+ * - Quadrant field codes (e.g. `900_1_Text_SanSerif` to `900_4_Text_SanSerif`)
  * - Quadrant prefixes (e.g. `q1_student`, `q2_student`, `q3_student`, `q4_student`)
  * - Suffix indices (e.g. `student_1`, `student_2`, etc.)
  */

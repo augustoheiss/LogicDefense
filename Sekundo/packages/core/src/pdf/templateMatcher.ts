@@ -40,11 +40,11 @@ const SEMANTIC_DICTIONARY: Record<string, string[]> = {
     'estudante',
     'orador',
     'speaker',
-    'publicador',
+    'operador',
     'voluntario',
     'assignee',
     'designado',
-    'irmao',
+    'participante',
     'morador',
     'name',
     'assigned_to',
@@ -87,7 +87,7 @@ const SEMANTIC_DICTIONARY: Record<string, string[]> = {
   room_or_hall: [
     'sala',
     'room',
-    'salao',
+    'espaco',
     'hall',
     'auditorio',
     'classe',
@@ -292,12 +292,12 @@ export function autoRecognizePDFFields(
       let previewVal: string | undefined = undefined;
 
       if (sample) {
-        if (matchedAttr === 'value') previewVal = sample.value || 'Ex: Irmão Silva';
-        else if (matchedAttr === 'label') previewVal = sample.label || 'Ex: Leitura da Bíblia';
+        if (matchedAttr === 'value') previewVal = sample.value || 'Ex: Alex Nogueira';
+        else if (matchedAttr === 'label') previewVal = sample.label || 'Ex: Apresentação Técnica';
         else if (matchedAttr === 'meta.date') previewVal = (sample.meta?.date as string) || new Date().toLocaleDateString('pt-BR');
-        else if (matchedAttr === 'meta.room') previewVal = (sample.meta?.room as string) || 'Salão Principal';
-        else if (matchedAttr === 'meta.assistantTo') previewVal = (sample.meta?.assistantTo as string) || 'Ex: Ajudante';
-        else if (matchedAttr === 'meta.territory_number') previewVal = (sample.meta?.territory_number as string) || 'T02.01';
+        else if (matchedAttr === 'meta.room') previewVal = (sample.meta?.room as string) || 'Auditório Principal';
+        else if (matchedAttr === 'meta.assistantTo') previewVal = (sample.meta?.assistantTo as string) || 'Ex: Parceiro';
+        else if (matchedAttr === 'meta.territory_number') previewVal = (sample.meta?.territory_number as string) || 'T01.01';
       }
 
       mappings.push({

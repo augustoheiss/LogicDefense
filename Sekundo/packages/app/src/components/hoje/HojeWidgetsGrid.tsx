@@ -6,7 +6,7 @@ export interface HojeWidgetsGridProps {
   summary: HojeCockpitSummary;
   showWidget: (id: string) => boolean;
   onRunOutput: (kind: 'pdf' | 'whatsapp' | 'csv' | 'yaml', template?: string) => void;
-  onOpenStudioPreset: (preset: 's89-4up' | 's13-s') => void;
+  onOpenStudioPreset: (preset: 'fichas-4up' | 'territorios-multiciclo' | 's89-4up' | 's13-s') => void;
 }
 
 export function HojeWidgetsGrid({
@@ -87,7 +87,9 @@ export function HojeWidgetsGrid({
                     style={styles.actionPill}
                     onPress={() =>
                       onOpenStudioPreset(
-                        d.template.includes('s13') ? 's13-s' : 's89-4up'
+                        d.template.includes('territorio') || d.template.includes('s13')
+                          ? 'territorios-multiciclo'
+                          : 'fichas-4up'
                       )
                     }
                   >
@@ -117,9 +119,9 @@ export function HojeWidgetsGrid({
               </View>
               <TouchableOpacity
                 style={styles.actionPill}
-                onPress={() => onOpenStudioPreset('s13-s')}
+                onPress={() => onOpenStudioPreset('territorios-multiciclo')}
               >
-                <Text style={styles.actionPillText}>S-13-S</Text>
+                <Text style={styles.actionPillText}>Registro Multi-Ciclo</Text>
               </TouchableOpacity>
             </View>
           ))}

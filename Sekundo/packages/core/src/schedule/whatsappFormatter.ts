@@ -132,7 +132,7 @@ export function formatWeeklyScheduleWhatsApp(session: StructuredProgramSession):
 
   if (session.chairPerson) lines.push(`👤 *Presidente:* ${session.chairPerson}`);
   if (session.openingCue) lines.push(`🎵 *${session.openingCue}*`);
-  if (session.openingPrayer) lines.push(`🙏 *Oração Inicial:* ${session.openingPrayer}`);
+  if (session.openingPrayer) lines.push(`🎙️ *Abertura / Credenciamento:* ${session.openingPrayer}`);
 
   session.sections.forEach((sec, idx) => {
     lines.push('');
@@ -158,7 +158,7 @@ export function formatWeeklyScheduleWhatsApp(session: StructuredProgramSession):
   if (session.closingCue || session.closingPrayer) {
     lines.push('');
     if (session.closingCue) lines.push(`🎵 *${session.closingCue}*`);
-    if (session.closingPrayer) lines.push(`🙏 *Oração Final:* ${session.closingPrayer}`);
+    if (session.closingPrayer) lines.push(`🎙️ *Encerramento / Síntese:* ${session.closingPrayer}`);
   }
 
   lines.push('━━━━━━━━━━━━━━━━━━━━━━━━');
@@ -183,7 +183,7 @@ export function formatGroupFilterWhatsApp(
   const dateTitle = headerParts[0] || session.label;
 
   lines.push(`👥 *DESTAQUES DO ${groupTag.toUpperCase()} — ${dateTitle.toUpperCase()}*`);
-  if (session.sessionTheme) lines.push(`📖 *Leitura:* ${session.sessionTheme}`);
+  if (session.sessionTheme) lines.push(`📖 *Módulo:* ${session.sessionTheme}`);
   lines.push('━━━━━━━━━━━━━━━━━━━━━━━━');
 
   const isInGroup = (personName?: string, explicitGroup?: string): boolean => {
@@ -198,11 +198,11 @@ export function formatGroupFilterWhatsApp(
   // Check session-level roles
   if (isInGroup(session.chairPerson)) {
     matchCount++;
-    lines.push(`🎙️ *Presidente da Reunião:* ${session.chairPerson}`);
+    lines.push(`🎙️ *Presidente da Sessão:* ${session.chairPerson}`);
   }
   if (isInGroup(session.openingPrayer)) {
     matchCount++;
-    lines.push(`🙏 *Oração Inicial:* ${session.openingPrayer}`);
+    lines.push(`🎙️ *Abertura / Credenciamento:* ${session.openingPrayer}`);
   }
 
   for (const sec of session.sections) {
@@ -231,7 +231,7 @@ export function formatGroupFilterWhatsApp(
 
   if (isInGroup(session.closingPrayer)) {
     matchCount++;
-    lines.push(`🙏 *Oração Final:* ${session.closingPrayer}`);
+    lines.push(`🎙️ *Encerramento / Síntese:* ${session.closingPrayer}`);
   }
 
   if (matchCount === 0) {
@@ -275,7 +275,7 @@ export function formatGroupFilterWhatsApp(
 }
 
 /**
- * Mode 3: Formats a personalized 1-tap commitment card (Digital S-89 equivalent)
+ * Mode 3: Formats a personalized 1-tap commitment card
  * for an individual participant.
  */
 export function formatIndividualCommitmentWhatsApp(
@@ -291,9 +291,9 @@ export function formatIndividualCommitmentWhatsApp(
   const dateStr =
     session?.label.split('|')[0]?.trim() ||
     meta.sessionDate ||
-    'Próxima Reunião';
+    'Próxima Sessão';
   const dur = meta.durationMinutes ? `${meta.durationMinutes} mins.` : 'Conforme programação';
-  const room = meta.room || 'Salão Principal';
+  const room = meta.room || 'Auditório Principal';
 
   const lines = [
     '🎯 *LEMBRETE DE COMPROMISSO — SEKUNDO*',
@@ -369,8 +369,8 @@ export function formatLivePocketScheduleWhatsApp(
     '━━━━━━━━━━━━━━━━━━━━━━━━',
   ];
 
-  // Opening song + prayer + opening comments (~6 min)
-  lines.push(`\`${fmtTime(cursorMinutes)}\` 🎵 ${session.openingCue || 'Abertura'} + 🙏 ${session.openingPrayer || '-'}`);
+  // Opening cue + opening comments (~6 min)
+  lines.push(`\`${fmtTime(cursorMinutes)}\` 🎵 ${session.openingCue || 'Abertura'} + 🎙️ ${session.openingPrayer || '-'}`);
   cursorMinutes += 6;
 
   session.sections.forEach((sec, idx) => {
@@ -388,7 +388,7 @@ export function formatLivePocketScheduleWhatsApp(
     }
   });
 
-  lines.push(`\`${fmtTime(cursorMinutes)}\` 🎵 ${session.closingCue || 'Encerramento'} + 🙏 ${session.closingPrayer || '-'}`);
+  lines.push(`\`${fmtTime(cursorMinutes)}\` 🎵 ${session.closingCue || 'Encerramento'} + 🎙️ ${session.closingPrayer || '-'}`);
   lines.push('━━━━━━━━━━━━━━━━━━━━━━━━');
 
   return lines.join('\n');
@@ -420,7 +420,7 @@ export function formatTerritoryAssignmentWhatsApp(territoryEntry: FlatSkeletonEn
     `📊 *Status atual:* ${status}`,
     meta.lastCompletedBeforeYear ? `🕒 *Última conclusão prévia:* ${meta.lastCompletedBeforeYear}` : '',
     '━━━━━━━━━━━━━━━━━━━━━━━━',
-    '📱 _Abra o Modo Publicador no Sekundo para marcar as quadras com 1 toque!_',
+    '📱 _Abra o Modo Operador de Campo no Sekundo para marcar as quadras com 1 toque!_',
   ]
     .filter(Boolean)
     .join('\n');

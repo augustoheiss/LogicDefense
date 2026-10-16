@@ -198,7 +198,7 @@ export function AddressEditModal({ visible, item, onClose, onSave }: AddressEdit
                 style={styles.input}
                 value={label}
                 onChangeText={setLabel}
-                placeholder="Ex: R. Valter Souza Costa, 174 (Jardim Primavera)"
+                placeholder="Ex: Av. Central, 100 (Setor Norte)"
                 placeholderTextColor="#6F7E94"
               />
 
@@ -209,7 +209,7 @@ export function AddressEditModal({ visible, item, onClose, onSave }: AddressEdit
                     style={styles.input}
                     value={line}
                     onChangeText={setLine}
-                    placeholder="Ex: R. Valter Souza Costa, 174"
+                    placeholder="Ex: Av. Central, 100"
                     placeholderTextColor="#6F7E94"
                   />
                 </View>
@@ -219,7 +219,7 @@ export function AddressEditModal({ visible, item, onClose, onSave }: AddressEdit
                     style={styles.input}
                     value={line2}
                     onChangeText={setLine2}
-                    placeholder="Ex: Jardim Primavera"
+                    placeholder="Ex: Setor Norte"
                     placeholderTextColor="#6F7E94"
                   />
                 </View>
@@ -232,7 +232,7 @@ export function AddressEditModal({ visible, item, onClose, onSave }: AddressEdit
                     style={styles.input}
                     value={city}
                     onChangeText={setCity}
-                    placeholder="Ex: Ferraz de Vasconcelos"
+                    placeholder="Ex: Cidade Metropolitana"
                     placeholderTextColor="#6F7E94"
                   />
                 </View>
@@ -253,7 +253,7 @@ export function AddressEditModal({ visible, item, onClose, onSave }: AddressEdit
                     style={styles.input}
                     value={postalcode}
                     onChangeText={setPostalcode}
-                    placeholder="08535-310"
+                    placeholder="01000-000"
                     placeholderTextColor="#6F7E94"
                   />
                 </View>
@@ -470,12 +470,12 @@ export function AddressEditModal({ visible, item, onClose, onSave }: AddressEdit
                 </Pressable>
               </View>
 
-              <Text style={[styles.inputLabel, { marginTop: 12 }]}>Voluntário Responsável</Text>
+              <Text style={[styles.inputLabel, { marginTop: 12 }]}>Operador Responsável</Text>
               <TextInput
                 style={styles.input}
                 value={workerName}
                 onChangeText={setWorkerName}
-                placeholder="Ex: Carlos Silva"
+                placeholder="Ex: Alex Nogueira"
                 placeholderTextColor="#6F7E94"
               />
 
@@ -484,7 +484,7 @@ export function AddressEditModal({ visible, item, onClose, onSave }: AddressEdit
                 style={[styles.input, styles.textArea]}
                 value={notes}
                 onChangeText={setNotes}
-                placeholder="Ex: Não bater campainha, chamar no portão. Morador tem cão de guarda. Pediu revisita após às 18h..."
+                placeholder="Ex: Não bater campainha, chamar no portão. Local possui cão de guarda. Solicitou retorno após às 18h..."
                 placeholderTextColor="#6F7E94"
                 multiline
                 numberOfLines={3}

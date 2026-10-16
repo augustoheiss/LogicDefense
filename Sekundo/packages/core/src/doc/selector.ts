@@ -50,12 +50,12 @@ function entryToContext(entry: FlatSkeletonEntry, index: number): Record<string,
     value: entry.value,
     email: entry.email,
     meta,
-    // Convenient top-level aliases for S-89 and common templates
+    // Convenient top-level aliases for 4-Up and common templates
     studentName: entry.value,
     assistantName: (meta.assistantTo as string) || (meta.ajudante as string) || '',
     date: (meta.date as string) || (meta.data as string) || '',
     partTitle: entry.label,
-    room: (meta.room as string) || (meta.sala as string) || 'Salão Principal',
+    room: (meta.room as string) || (meta.sala as string) || 'Auditório Principal',
     remarks: (meta.remarks as string) || (meta.notes as string) || '',
   };
 }

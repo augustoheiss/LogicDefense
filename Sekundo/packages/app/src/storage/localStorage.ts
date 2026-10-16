@@ -7,7 +7,12 @@
 
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import type { EventState, FlatRegistry, TemplateCoordinateMap } from '@sekundo/core';
+import {
+  sanitizeLegacySensitiveText,
+  type EventState,
+  type FlatRegistry,
+  type TemplateCoordinateMap,
+} from '@sekundo/core';
 
 const EVENTS_PREFIX = 'sekundo_event_';
 const SKELETON_PREFIX = 'sekundo_skeleton_';
@@ -100,11 +105,26 @@ export const storage = {
   async getItem(key: string): Promise<string | null> {
     try {
       const val = await AsyncStorage.getItem(key);
-      if (val !== null) return val;
+      if (val !== null) {
+        const { text, changed } = sanitizeLegacySensitiveText(val);
+        if (changed) {
+          AsyncStorage.setItem(key, text).catch(() => undefined);
+          idbSet(key, text).catch(() => undefined);
+        }
+        return text;
+      }
     } catch {
       // Fallback to IndexedDB
     }
-    return await idbGet(key);
+    const idbVal = await idbGet(key);
+    if (idbVal !== null) {
+      const { text, changed } = sanitizeLegacySensitiveText(idbVal);
+      if (changed) {
+        idbSet(key, text).catch(() => undefined);
+      }
+      return text;
+    }
+    return null;
   },
   async setItem(key: string, value: string): Promise<void> {
     await idbSet(key, value);
@@ -184,13 +204,8 @@ export async function deleteEvent(eventId: string): Promise<void> {
  */
 export async function loadSkeleton(eventId: string): Promise<FlatRegistry | null> {
   try {
-    // Check AsyncStorage first so external dev seeds in localStorage are picked up immediately
-    const rawAsync = await AsyncStorage.getItem(`${SKELETON_PREFIX}${eventId}`).catch(() => null);
-    if (rawAsync) {
-      return JSON.parse(rawAsync);
-    }
-    const rawIdb = await idbGet(`${SKELETON_PREFIX}${eventId}`);
-    return rawIdb ? JSON.parse(rawIdb) : null;
+    const raw = await storage.getItem(`${SKELETON_PREFIX}${eventId}`);
+    return raw ? JSON.parse(raw) : null;
   } catch {
     return null;
   }

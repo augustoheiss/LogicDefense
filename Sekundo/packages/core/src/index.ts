@@ -325,6 +325,7 @@ export {
   PROGRAMACAO_PARTICIPANT_DIRECTORY,
   RAW_PROGRAMACAO_2026_10_AND_11_TEXT,
   S13_TERRITORIOS_SEED_RECORDS,
+  sanitizeLegacySensitiveText,
   buildProgramacaoReuniaoRegistry,
   buildS13RegistryFromRecords,
   buildTerritoriosS13HistoricalRegistry,
@@ -454,6 +455,8 @@ export type { PdfPainterOptions } from './doc/painters/pdfPainter';
 export {
   S89_4UP_SDOC_YAML,
   S13S_MULTICYCLE_SDOC_YAML,
+  FICHAS_4UP_SDOC_YAML,
+  TERRITORIOS_MULTICYCLE_SDOC_YAML,
   BUILTIN_SDOC_TEMPLATES,
   compileSdocToPdf,
 } from './doc/templates/builtinTemplates';

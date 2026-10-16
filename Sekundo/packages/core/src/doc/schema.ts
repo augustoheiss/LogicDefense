@@ -553,7 +553,7 @@ export function autoGenerateSdocFromRegistry(
     '        x: 4',
     '        y: 36',
     '        w: 83',
-    '        text: "{{meta.date | date:\'dd/MM/yyyy\' | default:\'Hoje\'}} • {{meta.room | default:\'Salão Principal\'}}"',
+    "        text: \"{{meta.date | date:'dd/MM/yyyy' | default:'Hoje'}} • {{meta.room | default:'Auditório Principal'}}\"",
     '        size: 8',
     '        color: "#334155"',
     '',

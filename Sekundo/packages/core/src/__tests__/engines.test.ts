@@ -23,7 +23,7 @@ describe('Sekundo Universal Engines', () => {
       {
         key: '01',
         type: 'header',
-        label: 'Ferraz de Vasconcelos',
+        label: 'Cidade Metropolitana',
         value: '',
         email: '',
         meta: {},
@@ -100,7 +100,7 @@ describe('Sekundo Universal Engines', () => {
         tree,
         '01-01-01-01',
         1,
-        'Augusto Heiss'
+        'Alex Nogueira'
       );
 
       const metrics = calculateTerritoryMetrics(updatedTree);
@@ -111,7 +111,7 @@ describe('Sekundo Universal Engines', () => {
       // Verify individual leaf has worker name and status 1
       const leaf1 = updatedTree[0].children[0].children[0].children[0].children[0];
       expect(leaf1.meta.worked).toBe(1);
-      expect(leaf1.meta.workerName).toBe('Augusto Heiss');
+      expect(leaf1.meta.workerName).toBe('Alex Nogueira');
     });
 
     it('calculates subtree coverage for a specific block', () => {
@@ -149,7 +149,7 @@ describe('Sekundo Universal Engines', () => {
       {
         key: '01',
         type: 'header',
-        label: 'Reunião do Meio de Semana',
+        label: 'Programação Operacional Semanal',
         value: '',
         email: '',
         meta: {},
@@ -157,25 +157,25 @@ describe('Sekundo Universal Engines', () => {
           {
             key: '01-01',
             type: 'slot',
-            label: 'Presidente',
-            value: 'Irmão Silva',
-            email: 'silva@email.com',
+            label: 'Coordenação',
+            value: 'Bianca Moreira',
+            email: 'bianca@exemplo.org',
             meta: { confirmed: true, durationMinutes: 5 },
             children: [],
           },
           {
             key: '01-02',
             type: 'slot',
-            label: 'Discurso Principal',
-            value: 'Irmão Costa',
-            email: 'costa@email.com',
+            label: 'Exposição Principal',
+            value: 'Caio Cavalcanti',
+            email: 'caio@exemplo.org',
             meta: { confirmed: false, durationMinutes: 30 },
             children: [],
           },
           {
             key: '01-03',
             type: 'slot',
-            label: 'Leitor',
+            label: 'Relatoria',
             value: '', // Unassigned!
             email: '',
             meta: {},

@@ -145,7 +145,7 @@ export default function CreateEvent() {
             <Text style={styles.label}>NOME DO EVENTO / PROJETO</Text>
             <TextInput
               style={styles.input}
-              placeholder="Ex: Territórios Ferraz de Vasconcelos ou Reunião Semanal"
+              placeholder="Ex: Logística de Territórios ou Programação Semanal"
               placeholderTextColor="#4F5E74"
               value={name}
               onChangeText={setName}

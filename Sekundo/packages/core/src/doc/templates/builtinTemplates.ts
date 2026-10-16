@@ -2,8 +2,8 @@
  * Sekundo Document Engine — Built-in Canonical `.sdoc.yaml` Templates (`builtinTemplates.ts`)
  *
  * Implements Phase F2 proof-of-fire:
- * 1. `s89-4up.sdoc.yaml` — 4-Up Assignment Slips on A4
- * 2. `s13s-multiciclo.sdoc.yaml` — Official S-13-S 4-Column Multi-Cycle Territory Assignment Record
+ * 1. `fichas-4up.sdoc.yaml` — 4-Up Assignment Slips on A4
+ * 2. `territorios-multiciclo.sdoc.yaml` — 4-Column Multi-Cycle Territory Assignment Record
  *    expressed 100% as declarative `.sdoc.yaml` data!
  */
 
@@ -13,9 +13,9 @@ import { solveLayout } from '../layoutSolver';
 import { renderDisplayListToPdf, type PdfPainterOptions } from '../painters/pdfPainter';
 import type { DisplayList } from '../types';
 
-export const S89_4UP_SDOC_YAML = `# s89-4up.sdoc.yaml — Fichas de Designação 4-Up em Folha A4
+export const S89_4UP_SDOC_YAML = `# fichas-4up.sdoc.yaml — Fichas de Designação 4-Up em Folha A4
 sdoc: 1
-name: Fichas de Designação 4-Up (S-89)
+name: Fichas de Designação 4-Up (A4)
 page:
   format: a4
   orientation: portrait
@@ -65,7 +65,7 @@ layers:
         x: 4
         y: 3
         w: 120
-        text: "DESIGNAÇÃO DA REUNIÃO"
+        text: "DESIGNAÇÃO DA PROGRAMAÇÃO"
         size: 9.5
         weight: bold
         color: "#111111"
@@ -110,13 +110,13 @@ layers:
         x: 4
         y: 52
         w: 180
-        text: "Local: {{meta.room | default:'Salão Principal'}}"
+        text: "Local: {{meta.room | default:'Auditório Principal'}}"
         size: 8.5
         color: "#475569"
 `;
 
 /**
- * Generates the declarative `s13s-multiciclo.sdoc.yaml` template where all 20 rows
+ * Generates the declarative `territorios-multiciclo.sdoc.yaml` template where all 20 rows
  * and 4 cycle columns per row are described in YAML millimeters (`mm`).
  */
 function buildS13MulticycleYaml(): string {
@@ -130,9 +130,9 @@ function buildS13MulticycleYaml(): string {
   const rowH = 11.64;
 
   const lines: string[] = [
-    '# s13s-multiciclo.sdoc.yaml — Registro de Designação de Território (S-13-S 4 Colunas)',
+    '# territorios-multiciclo.sdoc.yaml — Registro de Designação de Território (4 Colunas Multi-Ciclo)',
     'sdoc: 1',
-    'name: "Registro de Designação de Território (S-13-S)"',
+    'name: "Registro de Designação de Território (Multi-Ciclo)"',
     'page:',
     '  format: a4',
     '  orientation: portrait',
@@ -145,7 +145,7 @@ function buildS13MulticycleYaml(): string {
     '  per_page: 1',
     'layers:',
     '  - id: grade_s13',
-    '    name: Grade Oficial S-13-S',
+    '    name: Grade de Registro Multi-Ciclo',
     '    locked: true',
     '    items:',
     `      - { id: hdr_bg, type: rect, x: ${tableX}, y: ${headerTopY}, w: ${tableW}, h: ${headerH}, fill: "#D1D1D1", stroke: "#0D0D0D", stroke_width: 0.5 }`,
@@ -189,8 +189,8 @@ function buildS13MulticycleYaml(): string {
     '    name: Cabeçalho e Dados dos 20 Territórios',
     '    items:',
     '      - { id: title_s13, type: text, x: 48, y: 12, w: 125, text: "REGISTRO DE DESIGNACAO DE TERRITORIO", size: 14, weight: bold }',
-    `      - { id: lbl_year, type: text, x: ${tableX}, y: 21, w: 40, text: "Ano de servico:", size: 10, weight: bold }`,
-    `      - { id: val_year, type: text, x: ${tableX + 31}, y: 21, w: 30, text: "{{serviceYear}}", size: 10 }`,
+    `      - { id: lbl_year, type: text, x: ${tableX}, y: 21, w: 52, text: "Ciclo / Ano Operacional:", size: 10, weight: bold }`,
+    `      - { id: val_year, type: text, x: ${tableX + 46}, y: 21, w: 30, text: "{{serviceYear}}", size: 10 }`,
     `      - { id: hdr_terr, type: text, x: ${tableX + 2}, y: ${Number((headerTopY + 3.5).toFixed(2))}, w: 18, text: "Terr. n.o", size: 8, weight: bold }`,
     `      - { id: hdr_last1, type: text, x: ${Number((tableX + colTerrW + 2).toFixed(2))}, y: ${Number((headerTopY + 2).toFixed(2))}, w: 19, text: "Ultima data", size: 7, weight: bold }`,
     `      - { id: hdr_last2, type: text, x: ${Number((tableX + colTerrW + 2).toFixed(2))}, y: ${Number((headerTopY + 5.5).toFixed(2))}, w: 19, text: "concluida*", size: 7, weight: bold }`
@@ -228,7 +228,7 @@ function buildS13MulticycleYaml(): string {
   const footerY = Number((headerTopY + headerH + 20 * rowH + 3).toFixed(2));
   lines.push(
     `      - { id: footnote_s13, type: text, x: ${tableX}, y: ${footerY}, w: 185, text: "*Ao iniciar uma nova folha, use esta coluna para registrar a data em que cada territorio foi concluido pela ultima vez.", size: 7.5 }`,
-    `      - { id: code_s13, type: text, x: ${tableX}, y: ${Number((footerY + 5).toFixed(2))}, w: 30, text: "S-13-S", size: 8.5, weight: bold }`,
+    `      - { id: code_s13, type: text, x: ${tableX}, y: ${Number((footerY + 5).toFixed(2))}, w: 40, text: "REG-TERR-4C", size: 8.5, weight: bold }`,
     ''
   );
 
@@ -236,16 +236,18 @@ function buildS13MulticycleYaml(): string {
 }
 
 export const S13S_MULTICYCLE_SDOC_YAML = buildS13MulticycleYaml();
+export const FICHAS_4UP_SDOC_YAML = S89_4UP_SDOC_YAML;
+export const TERRITORIOS_MULTICYCLE_SDOC_YAML = S13S_MULTICYCLE_SDOC_YAML;
 
 export const BUILTIN_SDOC_TEMPLATES: Record<string, { id: string; name: string; yaml: string }> = {
-  's89-4up': {
-    id: 's89-4up',
-    name: 'Fichas de Designação 4-Up (S-89)',
+  'fichas-4up': {
+    id: 'fichas-4up',
+    name: 'Fichas de Designação 4-Up (A4)',
     yaml: S89_4UP_SDOC_YAML,
   },
-  's13s-multiciclo': {
-    id: 's13s-multiciclo',
-    name: 'Registro S-13-S (4 Colunas Multi-Ciclo)',
+  'territorios-multiciclo': {
+    id: 'territorios-multiciclo',
+    name: 'Registro de Territórios (4 Colunas Multi-Ciclo)',
     yaml: S13S_MULTICYCLE_SDOC_YAML,
   },
 };

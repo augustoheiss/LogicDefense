@@ -13,7 +13,7 @@ describe('Phase F0 & F1 — Data YAML (Tree & Flat Roundtrip) + O(n) Granular Fi
     {
       key: '01',
       type: 'header',
-      label: 'Reunião de Meio de Semana — São Paulo',
+      label: 'Programação Operacional — São Paulo',
       value: '',
       email: '',
       meta: { unit: 'Unidade Operacional Demo', week: '2026-10-15' },
@@ -21,18 +21,18 @@ describe('Phase F0 & F1 — Data YAML (Tree & Flat Roundtrip) + O(n) Granular Fi
     {
       key: '01-01',
       type: 'slot',
-      label: 'Joias Espirituais (Acentuação: áéíóú ç ãõ)',
-      value: 'Carlos Eduardo',
-      email: 'carlos@example.org',
-      meta: { durationMinutes: 10, room: 'Salão Principal' },
+      label: 'Destaques e Análise (Acentuação: áéíóú ç ãõ)',
+      value: 'Alex Nogueira',
+      email: 'alex@example.org',
+      meta: { durationMinutes: 10, room: 'Auditório Principal' },
     },
     {
       key: '001-02',
       type: 'slot',
-      label: 'Leitura da Bíblia',
-      value: 'Marcos Vinícius',
+      label: 'Leitura Técnica Estruturada',
+      value: 'Caio Cavalcanti',
       email: '',
-      meta: { assistantTo: 'Pedro Henrique', nested: { floor: 2, tags: ['sala_b', 'jovem'] } },
+      meta: { assistantTo: 'Enzo Magalhães', nested: { floor: 2, tags: ['sala_b', 'equipe'] } },
     },
   ];
 
@@ -54,7 +54,7 @@ describe('Phase F0 & F1 — Data YAML (Tree & Flat Roundtrip) + O(n) Granular Fi
     expect(restored).toEqual(sampleRegistry);
   });
 
-  it('roundtrips real production seeds (Programação da Reunião & Histórico S-13-S)', () => {
+  it('roundtrips production seeds (Programação Semanal & Histórico de Territórios)', () => {
     const progRegistry = buildProgramacaoReuniaoRegistry();
     const progYaml = registryToYaml(progRegistry, { yamlFormat: 'tree' });
     const progRestored = yamlToRegistry(progYaml);

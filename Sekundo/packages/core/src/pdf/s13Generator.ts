@@ -224,8 +224,8 @@ export async function generateTerritoryS13AndCardsPDF(
         color: rgb(0.05, 0.05, 0.05),
       });
 
-      // Service Year Header
-      page.drawText('Ano de servico:', {
+      // Operational Cycle / Year Header
+      page.drawText('Ciclo / Ano Operacional:', {
         x: tableX,
         y: 774,
         size: 10,
@@ -233,15 +233,15 @@ export async function generateTerritoryS13AndCardsPDF(
         color: rgb(0.05, 0.05, 0.05),
       });
       page.drawText(toWinAnsiSafe(currentYear), {
-        x: tableX + 88,
+        x: tableX + 128,
         y: 774,
         size: 10,
         font: fontRegular,
         color: rgb(0.05, 0.05, 0.05),
       });
       page.drawLine({
-        start: { x: tableX + 78, y: 772 },
-        end: { x: tableX + 135, y: 772 },
+        start: { x: tableX + 122, y: 772 },
+        end: { x: tableX + 175, y: 772 },
         thickness: 0.8,
         color: rgb(0.1, 0.1, 0.1),
       });
@@ -342,7 +342,7 @@ export async function generateTerritoryS13AndCardsPDF(
         page.drawText('conclusao', { x: cx + colCycleW / 2 + 8, y: headerBottomY + 3, size: 6, font: fontBold });
       }
 
-      // Render 20 fixed grid rows per page (authentic S-13-S sheet look)
+      // Render 20 fixed grid rows per page (4-column multi-cycle sheet look)
       const rowH = 33;
       let cursorY = headerBottomY;
 
@@ -469,7 +469,7 @@ export async function generateTerritoryS13AndCardsPDF(
         cursorY = rowBottomY;
       }
 
-      // Outer thick frame around the entire S-13-S grid
+      // Outer thick frame around the entire 4-column grid
       page.drawRectangle({
         x: tableX,
         y: cursorY,
@@ -479,7 +479,7 @@ export async function generateTerritoryS13AndCardsPDF(
         borderWidth: 2,
       });
 
-      // Official Footnote
+      // Footnote
       page.drawText(
         '*Ao iniciar uma nova folha, use esta coluna para registrar a data em que cada territorio foi concluido pela ultima vez.',
         {
@@ -490,7 +490,7 @@ export async function generateTerritoryS13AndCardsPDF(
           color: rgb(0.1, 0.1, 0.1),
         }
       );
-      page.drawText('S-13-S', {
+      page.drawText('REG-TERR-4C', {
         x: tableX,
         y: cursorY - 30,
         size: 8.5,
@@ -500,12 +500,12 @@ export async function generateTerritoryS13AndCardsPDF(
     }
   }
 
-  // Optional Section: Printable Quadra Cards (S-12 Tactical Cards)
+  // Optional Section: Printable Quadra Cards (Tactical Cards)
   if (options.includeQuadraCards !== false && quadras.length > 0) {
     let page = pdfDoc.addPage([595.28, 841.89]);
     let y = 795;
 
-    page.drawText('CARTOES TATICOS DE QUADRAS & RUAS DELIMITADORAS (S-12)', {
+    page.drawText('CARTOES TATICOS DE QUADRAS & RUAS DELIMITADORAS', {
       x: 40,
       y,
       size: 12,

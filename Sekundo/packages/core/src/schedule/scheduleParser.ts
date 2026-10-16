@@ -6,8 +6,8 @@
  * AST without embedding religious or domain-specific assumptions.
  *
  * Recognizes universal structural patterns:
- * 1. Session Date + Theme headers (e.g., "9 de outubro de 2026 | JEREMÍAS 40, 41")
- * 2. Session-level cues & roles (Chairperson/Presidente, Opening/Closing cues & prayers)
+ * 1. Session Date + Theme headers (e.g., "9 de outubro de 2026 | MÓDULO 40, 41")
+ * 2. Session-level cues & roles (Chairperson/Presidente, Opening/Closing cues & roles)
  * 3. Thematic section banners (uppercase headers) mapped to data-driven accent colors
  * 4. Numbered timed slots ("1. Title (10 mins.)") with single or paired ("A / B") assignees
  *
@@ -60,7 +60,7 @@ export function parseLocalizedDateToISO(dateLabel: string): string | undefined {
 }
 
 /**
- * Splits a raw assignee string ("Carlos Eduardo Silva / Mariana Costa")
+ * Splits a raw assignee string ("Alex Nogueira / Bianca Moreira")
  * into primary (`assignedTo`) and optional partner (`assistantTo`).
  */
 export function splitPairedAssignees(rawAssignee: string): {
@@ -179,21 +179,23 @@ export function parseProgramScheduleText(
       continue;
     }
 
-    // Check Opening/Closing Cue + Prayer line
-    if (/^C[aâ]ntico\s+\d+/i.test(line)) {
-      const prayerSplit = line.match(/^(C[aâ]ntico\s+\d+[^O]*?)\s+Ora[cç][aã]o\s+(.+)$/i);
-      if (prayerSplit) {
-        const songText = prayerSplit[1].trim();
-        const prayerPerson = prayerSplit[2].trim();
+    // Check Opening/Closing Cue + Role line (supports agnostic "Vinheta" / "Intervalo Técnico")
+    if (/^(?:Vinheta|Intervalo\s+T[eé]cnico|Tema\s+Musical)\s+\d+/i.test(line)) {
+      const pipeSplit = line.match(
+        /^((?:Vinheta|Intervalo\s+T[eé]cnico|Tema\s+Musical)\s+\d+[^|]*?)\|\s*(?:Credenciamento|S[ií]ntese\s+Final|Abertura|Encerramento)\s*[:|-]?\s*(.+)$/i
+      );
+      if (pipeSplit) {
+        const cueText = pipeSplit[1].trim();
+        const rolePerson = pipeSplit[2].trim();
         if (sectionIndex === 0) {
-          sessionMeta.openingCue = songText;
-          sessionMeta.openingPrayer = prayerPerson;
+          sessionMeta.openingCue = cueText;
+          sessionMeta.openingPrayer = rolePerson;
         } else {
-          sessionMeta.closingCue = songText;
-          sessionMeta.closingPrayer = prayerPerson;
+          sessionMeta.closingCue = cueText;
+          sessionMeta.closingPrayer = rolePerson;
         }
       } else {
-        // Middle song (inside section 3)
+        // Middle transition cue (inside section 3)
         sessionMeta.middleCue = line.trim();
       }
       continue;
@@ -251,7 +253,12 @@ export function parseProgramScheduleText(
       const durationMinutes = parseInt(partMatch[3], 10);
       let rawAssignee = partMatch[4].trim();
 
-      if (!rawAssignee && i + 1 < lines.length && !/^\d+\./.test(lines[i + 1]) && !/^C[aâ]ntico/i.test(lines[i + 1])) {
+      if (
+        !rawAssignee &&
+        i + 1 < lines.length &&
+        !/^\d+\./.test(lines[i + 1]) &&
+        !/^(?:Vinheta|Intervalo)/i.test(lines[i + 1])
+      ) {
         rawAssignee = lines[i + 1].trim();
         i++;
       }
@@ -271,7 +278,7 @@ export function parseProgramScheduleText(
           assistantTo,
           durationMinutes,
           plannedDurationSec: durationMinutes * 60,
-          room: 'Salão Principal',
+          room: 'Auditório Principal',
           confirmed: false,
           readinessState: 'pending',
           sessionDate: sessionMeta.sessionDate,

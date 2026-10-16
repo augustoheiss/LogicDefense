@@ -36,7 +36,7 @@ export default function StudioScreen() {
   const [mobileTab, setMobileTab] = useState<'fill' | 'yaml' | 'canvas' | 'inspector'>('canvas');
   const [rightSidebarTab, setRightSidebarTab] = useState<'fill' | 'inspector'>('fill');
   const [dataSourceMode, setDataSourceMode] = useState<'reuniao' | 'territorios' | 'avulso'>(
-    params.preset === 's13-s' ? 'territorios' : 'reuniao'
+    params.preset === 'territorios-multiciclo' || params.preset === 's13-s' ? 'territorios' : 'reuniao'
   );
   const { flatRegistry } = useSkeleton(eventId);
 
@@ -50,9 +50,12 @@ export default function StudioScreen() {
 
   const doc = useSdocDocument({
     eventId,
-    eventName: dataSourceMode === 'territorios' ? 'Territórios S-13-S' : 'Programação Semanal',
+    eventName: dataSourceMode === 'territorios' ? 'Registro de Territórios Multi-Ciclo' : 'Programação Semanal',
     registry: effectiveRegistry,
-    initialPreset: params.preset === 's13-s' ? 's13-s' : 's89-4up',
+    initialPreset:
+      params.preset === 'territorios-multiciclo' || params.preset === 's13-s'
+        ? 'territorios-multiciclo'
+        : 'fichas-4up',
   });
 
   const pages = doc.displayList?.pages || [];
@@ -91,12 +94,14 @@ export default function StudioScreen() {
 
   const handleDemoIngestPdf = async (mode: 'overlay' | 'rebuild') => {
     const { pdfBytes } = await compileSdocToPdf(S89_4UP_SDOC_YAML, effectiveRegistry.slice(0, 4));
-    await doc.ingestPdfBytes(pdfBytes, mode, 'S-89-Demo-Importado.pdf');
+    await doc.ingestPdfBytes(pdfBytes, mode, 'Formulario-Demo-Importado.pdf');
   };
 
-  const handleSelectPreset = (preset: 's89-4up' | 's13-s' | 'auto') => {
-    if (preset === 's89-4up') setDataSourceMode('reuniao');
-    if (preset === 's13-s') setDataSourceMode('territorios');
+  const handleSelectPreset = (
+    preset: 'fichas-4up' | 'territorios-multiciclo' | 's89-4up' | 's13-s' | 'auto'
+  ) => {
+    if (preset === 'fichas-4up' || preset === 's89-4up') setDataSourceMode('reuniao');
+    if (preset === 'territorios-multiciclo' || preset === 's13-s') setDataSourceMode('territorios');
     doc.loadBuiltinPreset(preset);
   };
 

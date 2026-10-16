@@ -989,7 +989,7 @@ export default function TerritoryMapScreen() {
               }
               style={styles.checklistBtn}
             >
-              <Text style={styles.checklistBtnText}>📱 Modo Publicador</Text>
+              <Text style={styles.checklistBtnText}>📱 Modo Operador de Campo</Text>
             </Pressable>
 
             <Pressable

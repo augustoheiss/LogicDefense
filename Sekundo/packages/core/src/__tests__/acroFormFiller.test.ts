@@ -26,7 +26,7 @@ async function createSyntheticS89Template(): Promise<Uint8Array> {
   const page = pdfDoc.addPage([595.28, 841.89]); // A4
   const form = pdfDoc.getForm();
 
-  // Create 4 quadrants with S-89 canonical codes
+  // Create 4 quadrants with 4-Up canonical field codes
   for (let q = 1; q <= 4; q++) {
     const studentField = form.createTextField(`900_${q}_Text_SanSerif`);
     studentField.addToPage(page, { x: 50, y: 800 - q * 180, width: 200, height: 20 });
@@ -56,7 +56,7 @@ describe('AcroForm Inspector & Injector Engine', () => {
   it('should fill native AcroForm fields deterministically', async () => {
     const pdfBytes = await createSyntheticPDFWithFields();
     const result = await fillAcroForm(pdfBytes, {
-      Student_Name: 'João Silva',
+      Student_Name: 'Alex Nogueira',
       Is_Active: true,
     });
 
@@ -67,31 +67,31 @@ describe('AcroForm Inspector & Injector Engine', () => {
     // Verify injected values by re-inspecting with pdf-lib
     const loadedDoc = await PDFDocument.load(result.pdfBytes);
     const form = loadedDoc.getForm();
-    expect(form.getTextField('Student_Name').getText()).toBe('João Silva');
+    expect(form.getTextField('Student_Name').getText()).toBe('Alex Nogueira');
     expect(form.getCheckBox('Is_Active').isChecked()).toBe(true);
   });
 
-  it('should inject 4-Up S-89 assignment slips across 4 quadrants', async () => {
+  it('should inject 4-Up assignment slips across 4 quadrants', async () => {
     const s89Template = await createSyntheticS89Template();
 
     const assignments: S89Assignment[] = [
       {
-        studentName: 'Lucas Santos',
+        studentName: 'Alex Nogueira',
         date: '2026-10-14',
         partTitle: 'Apresentação Inicial',
       },
       {
-        studentName: 'Mateus Costa',
+        studentName: 'Bianca Moreira',
         date: '2026-10-14',
         partTitle: 'Oficina Prática',
       },
       {
-        studentName: 'Ana Oliveira',
+        studentName: 'Caio Cavalcanti',
         date: '2026-10-14',
         partTitle: 'Painel Temático',
       },
       {
-        studentName: 'Gabriel Lima',
+        studentName: 'Daniela Peixoto',
         date: '2026-10-14',
         partTitle: 'Conclusão de Módulo',
       },
@@ -106,8 +106,8 @@ describe('AcroForm Inspector & Injector Engine', () => {
     // Verify quadrant 1 and 4 contents
     const loadedDoc = await PDFDocument.load(result.pdfBytes);
     const form = loadedDoc.getForm();
-    expect(form.getTextField('900_1_Text_SanSerif').getText()).toBe('Lucas Santos');
-    expect(form.getTextField('900_2_Text_SanSerif').getText()).toBe('Mateus Costa');
+    expect(form.getTextField('900_1_Text_SanSerif').getText()).toBe('Alex Nogueira');
+    expect(form.getTextField('900_2_Text_SanSerif').getText()).toBe('Bianca Moreira');
     expect(form.getTextField('900_4_Text_SanSerif_Part').getText()).toBe('Conclusão de Módulo');
   });
 });

@@ -76,7 +76,7 @@ describe('encrypt / decrypt', () => {
   });
 
   it('roundtrips unicode content', async () => {
-    const text = 'Irmão Silva — Presidente da Reunião 🌞';
+    const text = 'Alex Nogueira — Coordenação da Sessão 🌞';
     const encrypted = await encrypt(text, passphrase);
     const decrypted = await decrypt(encrypted, passphrase);
     expect(decrypted).toBe(text);
@@ -148,13 +148,13 @@ describe('encryptForURL / decryptFromURL', () => {
 
   it('roundtrips a complex object', async () => {
     const data = {
-      eventName: 'Reunião Semanal',
+      eventName: 'Programação Semanal',
       skeletons: [
-        { key: '01-01', label: 'Presidente', value: 'Irmão Silva' },
-        { key: '01-02', label: 'Leitor', value: 'Irmão Santos' },
+        { key: '01-01', label: 'Coordenação', value: 'Alex Nogueira' },
+        { key: '01-02', label: 'Relatoria', value: 'Bianca Moreira' },
       ],
       territories: [
-        { key: '03-01', label: 'Quadra Norte', value: 'Irmão Oliveira' },
+        { key: '03-01', label: 'Quadra Norte', value: 'Caio Cavalcanti' },
       ],
     };
 
@@ -179,7 +179,7 @@ describe('buildHorizonPayload', () => {
     const state: EventState = {
       config: {
         id: 'test-id',
-        name: 'Reunião Semanal',
+        name: 'Programação Semanal',
         frequency: 'weekly',
         startDate: '2026-01-01',
         skeletonRoots: ['01', '02'],
@@ -200,7 +200,7 @@ describe('buildHorizonPayload', () => {
       {
         key: '01-01',
         type: 'slot',
-        label: 'Presidente',
+        label: 'Coordenação',
         value: 'Person D',
         email: '',
         meta: {},
@@ -209,7 +209,7 @@ describe('buildHorizonPayload', () => {
 
     const payload = buildHorizonPayload(state, skeleton);
 
-    expect(payload.eventName).toBe('Reunião Semanal');
+    expect(payload.eventName).toBe('Programação Semanal');
     expect(payload.eventFrequency).toBe('weekly');
     expect(payload.skeleton).toEqual(skeleton);
     // Should include only last 2 snapshots (HORIZON_WEEKS = 2)

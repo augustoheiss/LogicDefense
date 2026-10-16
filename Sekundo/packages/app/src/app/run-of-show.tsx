@@ -117,7 +117,7 @@ export default function RunOfShowConsole() {
           {
             id: 'cue-01',
             pathKey: '01.01',
-            title: 'Abertura & Cântico Inicial',
+            title: 'Abertura & Vinheta Inicial',
             plannedSec: 300,
             status: 'STANDBY',
             timingConstraint: 'HARD_START',

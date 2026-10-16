@@ -274,7 +274,7 @@ export function upsertRegistry(
         (cur.meta.worked === 0 && inc.meta.worked === 1);
 
       if (!opts.forceOverwriteState) {
-        // Restore protected operational fields from current node unless incoming brings a new official S-13-S ledger
+        // Restore protected operational fields from current node unless incoming brings a new official multi-cycle ledger
         for (const field of opts.preserveMetaFields) {
           if (cur.meta[field] !== undefined) {
             if (incomingHasOfficialLedger && field !== 'notes') {

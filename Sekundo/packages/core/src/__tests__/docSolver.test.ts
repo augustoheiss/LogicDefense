@@ -113,8 +113,8 @@ layers:
         {
           key: '01-01',
           type: 'slot',
-          label: 'Orador',
-          value: 'Irmão Silva 🎯',
+          label: 'Expositor',
+          value: 'Alex Nogueira 🎯',
           email: '',
           meta: {},
         },
@@ -177,28 +177,28 @@ layers:
       {
         key: '01-01',
         type: 'slot' as const,
-        label: 'Discurso Público',
-        value: 'Roberto Almeida',
-        email: 'roberto@example.org',
-        meta: { date: '2026-10-18', room: 'Salão Principal', assistantTo: 'Lucas' },
+        label: 'Palestra Principal',
+        value: 'Caio Cavalcanti',
+        email: 'caio@example.org',
+        meta: { date: '2026-10-18', room: 'Auditório Principal', assistantTo: 'Daniela' },
       },
     ];
 
     const wa = (await writeUnifiedOutput('whatsapp', {
       registry,
-      eventName: 'Reunião Fim de Semana',
+      eventName: 'Sessão Plenária',
       options: {
         customTemplate: '📅 *{{eventName}}*\n{{#each slots}}• {{label}}: {{value}} ({{date | date:"dd/MM/yyyy"}}){{/each}}',
       },
     })) as string;
-    const csv = (await writeUnifiedOutput('csv', { registry, eventName: 'Reunião Fim de Semana' })) as string;
-    const yml = (await writeUnifiedOutput('yaml', { registry, eventName: 'Reunião Fim de Semana' })) as string;
-    const pdf = (await writeUnifiedOutput('pdf', { registry, eventName: 'Reunião Fim de Semana' })) as Uint8Array;
+    const csv = (await writeUnifiedOutput('csv', { registry, eventName: 'Sessão Plenária' })) as string;
+    const yml = (await writeUnifiedOutput('yaml', { registry, eventName: 'Sessão Plenária' })) as string;
+    const pdf = (await writeUnifiedOutput('pdf', { registry, eventName: 'Sessão Plenária' })) as Uint8Array;
 
-    expect(wa).toContain('Roberto Almeida');
+    expect(wa).toContain('Caio Cavalcanti');
     expect(wa).toContain('18/10/2026');
-    expect(csv).toContain('Roberto Almeida');
-    expect(yml).toContain('Roberto Almeida');
+    expect(csv).toContain('Caio Cavalcanti');
+    expect(yml).toContain('Caio Cavalcanti');
     expect(pdf.byteLength).toBeGreaterThan(500);
 
     const manifest = parseAppManifestYaml(DEFAULT_SEKUNDO_APP_YAML);

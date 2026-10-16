@@ -23,7 +23,7 @@ export interface ParticipantProfile {
 
 /**
  * Normalizes a person's name into a canonical ASCII comparison key.
- * Automatically resolves diacritic variations such as "Conçeição" vs "Conceição"
+ * Automatically resolves diacritic variations such as "Assunção" vs "Assuncao"
  * and "Mariño" vs "Marino".
  */
 export function normalizePersonKey(rawName?: string): string {
@@ -62,7 +62,7 @@ export function findParticipantProfile(
   const exact = directory.find((p) => normalizePersonKey(p.name) === normQuery);
   if (exact) return exact;
 
-  // 2. Significant token subset match (e.g. "Carlos Silva" -> "Carlos Eduardo F. Silva")
+  // 2. Significant token subset match (e.g. "Alex Nogueira" -> "Alex Nogueira")
   const queryTokens = extractSignificantTokens(normQuery);
   if (queryTokens.length >= 2) {
     const tokenMatch = directory.find((p) => {
