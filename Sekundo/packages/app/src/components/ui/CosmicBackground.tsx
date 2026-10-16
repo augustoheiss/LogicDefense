@@ -105,12 +105,12 @@ export function CosmicBackground() {
       <View
         style={[
           styles.centerContrastWash,
-          ...(Platform.OS === 'web'
+          Platform.OS === 'web'
             ? ({
                 backgroundImage:
                   'radial-gradient(ellipse at center, rgba(7, 9, 14, 0.25) 0%, rgba(7, 9, 14, 0.70) 100%)',
               } as any)
-            : {}),
+            : null,
         ]}
       />
     </View>

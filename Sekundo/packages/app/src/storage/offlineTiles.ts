@@ -14,7 +14,10 @@ const MAX_TILES_PER_BATCH = 60;
 export function registerSovereignServiceWorker(): void {
   if (Platform.OS !== 'web' || typeof window === 'undefined') return;
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('/sw.js').catch(() => {});
+    const swUrl = window.location.pathname.startsWith('/laboratorio/sekundo')
+      ? '/laboratorio/sekundo/sw.js'
+      : '/sw.js';
+    navigator.serviceWorker.register(swUrl).catch(() => {});
   }
 }
 

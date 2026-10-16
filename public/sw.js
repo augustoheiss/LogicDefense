@@ -4,7 +4,7 @@
  * Garante disponibilidade 100% offline para renderização tipográfica sem Font Metric Shift.
  */
 
-const CACHE_NAME = 'cv-maker-offline-v2'
+const CACHE_NAME = 'cv-maker-offline-v3'
 
 const STATIC_ASSETS = [
   '/',
@@ -102,14 +102,27 @@ self.addEventListener('fetch', (event) => {
         caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone))
       }
       return response
-    }).catch(() => {
-      return caches.match(event.request).then((cached) => {
-        if (cached) return cached
-        if (event.request.destination === 'document') {
-          return caches.match('/index.html')
+    }).catch(async () => {
+      const cached = await caches.match(event.request)
+      if (cached) return cached
+      if (event.request.destination === 'document') {
+        if (url.pathname.startsWith('/laboratorio/sekundo')) {
+          return (
+            (await caches.match('/laboratorio/sekundo/index.html')) ||
+            (await caches.match('/laboratorio/sekundo')) ||
+            Response.error()
+          )
         }
-        return Response.error()
-      })
+        if (url.pathname.startsWith('/laboratorio/assistente-moeda')) {
+          return (
+            (await caches.match('/laboratorio/assistente-moeda/index.html')) ||
+            (await caches.match('/laboratorio/assistente-moeda')) ||
+            Response.error()
+          )
+        }
+        return caches.match('/index.html')
+      }
+      return Response.error()
     })
   )
 })

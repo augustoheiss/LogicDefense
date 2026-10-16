@@ -16,20 +16,29 @@ export async function loadPdfJsLocalFirst(): Promise<any> {
     return cachedPdfJs;
   }
 
-  // Strategy 1: Load local ESM bundle from `/pdfjs/pdf.min.mjs`
-  try {
-    const localUrl = `${window.location.origin}/pdfjs/pdf.min.mjs`;
-    // Dynamic import of local static asset bypassing Metro static analysis
-    const dynamicImport = new Function('url', 'return import(url)');
-    const mod = await dynamicImport(localUrl);
-    if (mod && mod.getDocument) {
-      mod.GlobalWorkerOptions.workerSrc = `${window.location.origin}/pdfjs/pdf.worker.min.mjs`;
-      (window as any).pdfjsLib = mod;
-      cachedPdfJs = mod;
-      return mod;
+  // Strategy 1: Load local ESM bundle from `/pdfjs/pdf.min.mjs` (or `/laboratorio/sekundo/pdfjs/pdf.min.mjs`)
+  const basePath = window.location.pathname.startsWith('/laboratorio/sekundo')
+    ? '/laboratorio/sekundo'
+    : '';
+  const candidateUrls = [
+    `${window.location.origin}${basePath}/pdfjs/pdf.min.mjs`,
+    ...(basePath ? [`${window.location.origin}/pdfjs/pdf.min.mjs`] : []),
+  ];
+  for (const localUrl of candidateUrls) {
+    try {
+      // Dynamic import of local static asset bypassing Metro static analysis
+      const dynamicImport = new Function('url', 'return import(url)');
+      const mod = await dynamicImport(localUrl);
+      if (mod && mod.getDocument) {
+        const workerPrefix = localUrl.replace(/\/pdf\.min\.mjs$/, '');
+        mod.GlobalWorkerOptions.workerSrc = `${workerPrefix}/pdf.worker.min.mjs`;
+        (window as any).pdfjsLib = mod;
+        cachedPdfJs = mod;
+        return mod;
+      }
+    } catch {
+      // Try next candidate or fallback to CDN script
     }
-  } catch {
-    // Fallback to CDN script if local ESM import fails
   }
 
   // Strategy 2: Fallback to CDN script

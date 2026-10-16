@@ -8,13 +8,15 @@
  * Zero telemetry, zero external analytics.
  */
 
-const SHELL_CACHE = 'sekundo-shell-v2';
+const SHELL_CACHE = 'sekundo-shell-v3';
 const TILE_CACHE = 'sekundo-osm-tiles-v1';
 
+const BASE_PATH = self.location.pathname.replace(/\/sw\.js$/, '') || '';
+
 const PRECACHE_URLS = [
-  '/',
-  '/pdfjs/pdf.min.mjs',
-  '/pdfjs/pdf.worker.min.mjs',
+  `${BASE_PATH}/`,
+  `${BASE_PATH}/pdfjs/pdf.min.mjs`,
+  `${BASE_PATH}/pdfjs/pdf.worker.min.mjs`,
 ];
 
 self.addEventListener('install', (event) => {
@@ -25,7 +27,18 @@ self.addEventListener('install', (event) => {
 });
 
 self.addEventListener('activate', (event) => {
-  event.waitUntil(self.clients.claim());
+  event.waitUntil(
+    caches
+      .keys()
+      .then((keys) =>
+        Promise.all(
+          keys
+            .filter((k) => k.startsWith('sekundo-shell-') && k !== SHELL_CACHE)
+            .map((k) => caches.delete(k))
+        )
+      )
+      .then(() => self.clients.claim())
+  );
 });
 
 self.addEventListener('fetch', (event) => {
@@ -67,7 +80,7 @@ self.addEventListener('fetch', (event) => {
         })
         .catch(async () => {
           const cached = await caches.match(req);
-          return cached || caches.match('/');
+          return cached || (await caches.match(`${BASE_PATH}/`)) || caches.match('/');
         })
     );
   }
