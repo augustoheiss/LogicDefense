@@ -20,6 +20,7 @@ import {
 } from '@sekundo/core';
 import { loadAppManifestYaml, saveAppManifestYaml } from '../storage/localStorage';
 import { deliverFile } from '../utils/deliverFile';
+import { HojeWidgetsGrid } from '../components/hoje/HojeWidgetsGrid';
 
 export default function HojeCockpitScreen() {
   const router = useRouter();
@@ -92,7 +93,7 @@ export default function HojeCockpitScreen() {
           : kind === 'yaml'
           ? 'text/yaml;charset=utf-8'
           : 'text/plain;charset=utf-8';
-      const fileName = `${(template || manifest.app).replace(/[^a-zA-Z0-9-_]/g, '_')}.${ext}`;
+      const fileName = `${(template || manifest.app).trim()}.${ext}`;
       await deliverFile(out, fileName, mime);
       setStatusMsg(`Saída gerada com sucesso: ${fileName}`);
     } catch (err: any) {
@@ -120,7 +121,6 @@ export default function HojeCockpitScreen() {
 
   return (
     <SafeAreaView style={styles.root}>
-      {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
           <TouchableOpacity
@@ -139,13 +139,22 @@ export default function HojeCockpitScreen() {
             </Text>
           </View>
         </View>
-        <TouchableOpacity
-          testID="hoje-open-studio-btn"
-          style={styles.studioBtn}
-          onPress={() => router.push('/studio' as any)}
-        >
-          <Text style={styles.studioBtnText}>🖋️ Abrir Estúdio YAML ⇄ PDF</Text>
-        </TouchableOpacity>
+        <View style={styles.headerActions}>
+          <TouchableOpacity
+            testID="hoje-quick-any-pdf-btn"
+            style={styles.anyPdfBtn}
+            onPress={() => router.push('/pdf-forms' as any)}
+          >
+            <Text style={styles.studioBtnText}>📄 Preencher PDF Avulso</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            testID="hoje-open-studio-btn"
+            style={styles.studioBtn}
+            onPress={() => router.push('/studio' as any)}
+          >
+            <Text style={styles.studioBtnText}>🖋️ Abrir Estúdio YAML ⇄ PDF</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {(statusMsg || parseErr) && (
@@ -155,121 +164,14 @@ export default function HojeCockpitScreen() {
       )}
 
       <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
-        {/* 4 Cockpit Widgets Grid */}
-        <View style={styles.widgetsGrid}>
-          {showWidget('compromissos_do_dia') && (
-            <View style={styles.card} testID="widget-compromissos">
-              <Text style={styles.cardTitle}>
-                📅 Compromissos do Dia ({summary.compromissosDoDia.length})
-              </Text>
-              {summary.compromissosDoDia.slice(0, 5).map((c) => (
-                <View key={c.key} style={styles.itemRow}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.itemPrimary}>
-                      {c.assignee}{c.assistant ? ` + ${c.assistant}` : ''}
-                    </Text>
-                    <Text style={styles.itemSecondary}>
-                      [{c.key}] {c.partTitle} • {c.room}
-                    </Text>
-                  </View>
-                  <Text style={styles.itemBadge}>{c.date}</Text>
-                </View>
-              ))}
-            </View>
-          )}
-
-          {showWidget('mensagens_a_enviar') && (
-            <View style={styles.card} testID="widget-mensagens">
-              <Text style={styles.cardTitle}>
-                💬 Mensagens a Enviar ({summary.mensagensAEnviar.length})
-              </Text>
-              {summary.mensagensAEnviar.slice(0, 4).map((m, idx) => (
-                <View key={`${m.recipient}-${idx}`} style={styles.itemRow}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.itemPrimary}>{m.recipient}</Text>
-                    <Text style={styles.itemSecondary}>{m.summary}</Text>
-                  </View>
-                  <TouchableOpacity
-                    style={styles.actionPill}
-                    onPress={() => handleRunOutput('whatsapp', 'meu_compromisso')}
-                  >
-                    <Text style={styles.actionPillText}>Gerar Zap</Text>
-                  </TouchableOpacity>
-                </View>
-              ))}
-            </View>
-          )}
-
-          {showWidget('documentos_a_imprimir') && (
-            <View style={styles.card} testID="widget-documentos">
-              <Text style={styles.cardTitle}>
-                🖨️ Documentos & Saídas Unificadas ({summary.documentosAImprimir.length})
-              </Text>
-              {summary.documentosAImprimir.map((d, idx) => (
-                <View key={`${d.pranchetaId}-${idx}`} style={styles.itemRow}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.itemPrimary}>
-                      [{d.kind.toUpperCase()}] {d.template}
-                    </Text>
-                    <Text style={styles.itemSecondary}>{d.pranchetaNome}</Text>
-                  </View>
-                  <View style={{ flexDirection: 'row', gap: 6 }}>
-                    <TouchableOpacity
-                      testID={`hoje-run-${d.kind}-${idx}`}
-                      style={styles.actionPillPrimary}
-                      onPress={() => handleRunOutput(d.kind, d.template)}
-                    >
-                      <Text style={styles.actionPillText}>Baixar</Text>
-                    </TouchableOpacity>
-                    {d.kind === 'pdf' && (
-                      <TouchableOpacity
-                        style={styles.actionPill}
-                        onPress={() =>
-                          router.push({
-                            pathname: '/studio',
-                            params: {
-                              preset: d.template.includes('s13') ? 's13-s' : 's89-4up',
-                            },
-                          } as any)
-                        }
-                      >
-                        <Text style={styles.actionPillText}>Estúdio</Text>
-                      </TouchableOpacity>
-                    )}
-                  </View>
-                </View>
-              ))}
-            </View>
-          )}
-
-          {showWidget('territorios_vencendo') && (
-            <View style={styles.card} testID="widget-territorios">
-              <Text style={styles.cardTitle}>
-                🗺️ Territórios em Atenção / Recência ({summary.territoriosVencendo.length})
-              </Text>
-              {summary.territoriosVencendo.slice(0, 5).map((t) => (
-                <View key={t.territoryNumber} style={styles.itemRow}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.itemPrimary}>
-                      {t.territoryNumber} — {t.label}
-                    </Text>
-                    <Text style={styles.itemSecondary}>
-                      {t.daysSinceCompleted} dias desde última conclusão ({t.percent}% concluído)
-                    </Text>
-                  </View>
-                  <TouchableOpacity
-                    style={styles.actionPill}
-                    onPress={() =>
-                      router.push({ pathname: '/studio', params: { preset: 's13-s' } } as any)
-                    }
-                  >
-                    <Text style={styles.actionPillText}>S-13-S</Text>
-                  </TouchableOpacity>
-                </View>
-              ))}
-            </View>
-          )}
-        </View>
+        <HojeWidgetsGrid
+          summary={summary}
+          showWidget={showWidget}
+          onRunOutput={handleRunOutput}
+          onOpenStudioPreset={(preset) =>
+            router.push({ pathname: '/studio', params: { preset } } as any)
+          }
+        />
 
         {/* Rituais com Governança Humana (confirmar: true) */}
         <View style={styles.sectionCard} testID="hoje-rituais-section">
@@ -351,6 +253,7 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  headerActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   backBtn: {
     backgroundColor: '#1E293B',
     paddingHorizontal: 10,
@@ -360,6 +263,12 @@ const styles = StyleSheet.create({
   backBtnText: { color: '#94A3B8', fontSize: 12, fontWeight: '600' },
   title: { color: '#F8FAFC', fontSize: 18, fontWeight: '800' },
   subtitle: { color: '#94A3B8', fontSize: 11 },
+  anyPdfBtn: {
+    backgroundColor: '#0F766E',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
   studioBtn: {
     backgroundColor: '#2563EB',
     paddingHorizontal: 14,
@@ -375,56 +284,7 @@ const styles = StyleSheet.create({
   bannerText: { color: '#DBEAFE', fontSize: 12, fontWeight: '600' },
   scroll: { flex: 1 },
   scrollContent: { padding: 16, gap: 16 },
-  widgetsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 14,
-  },
-  card: {
-    flex: 1,
-    minWidth: 300,
-    backgroundColor: '#0F172A',
-    borderRadius: 10,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: '#1E293B',
-  },
   cardTitle: { color: '#F8FAFC', fontSize: 14, fontWeight: '700', marginBottom: 10 },
-  itemRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 7,
-    borderBottomWidth: 1,
-    borderBottomColor: '#1E293B',
-    gap: 8,
-  },
-  itemPrimary: { color: '#E2E8F0', fontSize: 12, fontWeight: '600' },
-  itemSecondary: { color: '#94A3B8', fontSize: 11 },
-  itemBadge: {
-    color: '#38BDF8',
-    fontSize: 10,
-    fontWeight: '700',
-    backgroundColor: '#0C4A6E',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-  },
-  actionPill: {
-    backgroundColor: '#1E293B',
-    borderWidth: 1,
-    borderColor: '#334155',
-    paddingHorizontal: 9,
-    paddingVertical: 4,
-    borderRadius: 5,
-  },
-  actionPillPrimary: {
-    backgroundColor: '#0F766E',
-    paddingHorizontal: 9,
-    paddingVertical: 4,
-    borderRadius: 5,
-  },
-  actionPillText: { color: '#F8FAFC', fontSize: 11, fontWeight: '600' },
   sectionCard: {
     backgroundColor: '#0F172A',
     borderRadius: 10,
@@ -471,7 +331,7 @@ const styles = StyleSheet.create({
     color: '#E2E8F0',
     fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
     fontSize: 12,
-    minHeight: 240,
+    minHeight: 220,
     padding: 12,
     borderRadius: 8,
     borderWidth: 1,

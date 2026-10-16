@@ -1,39 +1,67 @@
 /**
- * Unified Cross-Platform File Delivery Utility — Sekundo
+ * Unified Cross-Platform File Delivery Utility — Sekundo (Phase R0)
  *
- * Resolves A6: Ensures generated PDFs, YAMLs, and CSVs are delivered both on
- * Web (via Blob download) and Native iOS/Android (via expo-file-system + expo-sharing).
+ * Resolves N1, U3, U4:
+ * - Uses modern `expo-file-system` v56 (`File`, `Paths`) instead of legacy `writeAsStringAsync`.
+ * - Preserves UTF-8 accents in filenames (`Designação.pdf`), stripping only OS-invalid characters.
+ * - Supports Web Share API Level 2 (`navigator.canShare({ files })`) for mobile/PWA alongside `<a download>`.
+ * - Zero `Buffer` and zero `as any` casts.
  */
 
 import { Platform } from 'react-native';
 
-function uint8ArrayToBase64(bytes: Uint8Array): string {
-  let binary = '';
-  const chunkSize = 0x8000;
-  for (let i = 0; i < bytes.length; i += chunkSize) {
-    const chunk = bytes.subarray(i, i + chunkSize);
-    binary += String.fromCharCode.apply(null, Array.from(chunk));
-  }
-  if (typeof btoa === 'function') {
-    return btoa(binary);
-  }
-  return Buffer.from(bytes).toString('base64');
+export interface DeliverFileOptions {
+  preferWebShare?: boolean;
+}
+
+export function sanitizeDeliveryFilename(filename: string): string {
+  const trimmed = (filename || 'documento').trim();
+  const cleaned = trimmed
+    .replace(/[/\\:*?"<>|\x00-\x1F]+/g, '_')
+    .replace(/\s+/g, '_');
+  return cleaned.length > 0 ? cleaned : 'documento';
 }
 
 export async function deliverFile(
   content: Uint8Array | string,
   filename: string,
-  mimeType: string = 'application/octet-stream'
+  mimeType: string = 'application/octet-stream',
+  options?: DeliverFileOptions
 ): Promise<{ delivered: boolean; uri?: string }> {
-  const safeFilename = filename.replace(/[^a-zA-Z0-9._-]/g, '_');
+  const safeFilename = sanitizeDeliveryFilename(filename);
 
   if (Platform.OS === 'web') {
     if (typeof document === 'undefined') {
       return { delivered: false };
     }
     const blobPart: BlobPart =
-      typeof content === 'string' ? content : (content as unknown as BlobPart);
+      typeof content === 'string'
+        ? content
+        : new Uint8Array(content.buffer, content.byteOffset, content.byteLength);
     const blob = new Blob([blobPart], { type: mimeType });
+
+    // Web Share API Level 2 (PWA standalone on iOS / Mobile Web)
+    if (
+      options?.preferWebShare &&
+      typeof navigator !== 'undefined' &&
+      typeof navigator.share === 'function' &&
+      typeof navigator.canShare === 'function' &&
+      typeof File !== 'undefined'
+    ) {
+      try {
+        const shareFile = new File([blob], safeFilename, { type: mimeType });
+        if (navigator.canShare({ files: [shareFile] })) {
+          await navigator.share({
+            title: safeFilename,
+            files: [shareFile],
+          });
+          return { delivered: true };
+        }
+      } catch {
+        // Fallback to anchor download if user cancels or share fails
+      }
+    }
+
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
@@ -45,35 +73,20 @@ export async function deliverFile(
     return { delivered: true, uri: url };
   }
 
-  // Native iOS / Android via expo-file-system + expo-sharing
-  const FileSystem = (await import('expo-file-system')) as any;
+  // Native iOS / Android via modern expo-file-system v56 (`File`, `Paths`) + expo-sharing
+  const { File: ExpoFile, Paths } = await import('expo-file-system');
   const Sharing = await import('expo-sharing');
 
-  const baseDir =
-    FileSystem.cacheDirectory ||
-    FileSystem.documentDirectory ||
-    FileSystem.Paths?.cache?.uri ||
-    '';
-  const fileUri = `${baseDir}${safeFilename}`;
-
-  if (typeof content === 'string') {
-    await FileSystem.writeAsStringAsync(fileUri, content, {
-      encoding: FileSystem.EncodingType?.UTF8 ?? 'utf8',
-    });
-  } else {
-    const base64 = uint8ArrayToBase64(content);
-    await FileSystem.writeAsStringAsync(fileUri, base64, {
-      encoding: FileSystem.EncodingType?.Base64 ?? 'base64',
-    });
-  }
+  const file = new ExpoFile(Paths.cache, safeFilename);
+  file.write(content);
 
   const canShare = await Sharing.isAvailableAsync();
   if (canShare) {
-    await Sharing.shareAsync(fileUri, {
+    await Sharing.shareAsync(file.uri, {
       mimeType,
       dialogTitle: `Compartilhar ${safeFilename}`,
     });
   }
 
-  return { delivered: true, uri: fileUri };
+  return { delivered: true, uri: file.uri };
 }

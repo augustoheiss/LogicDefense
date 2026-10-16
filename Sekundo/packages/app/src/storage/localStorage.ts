@@ -5,6 +5,7 @@
  * Handles EventStates, Flat Skeleton Registries, and PDF Coordinate Mappings.
  */
 
+import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { EventState, FlatRegistry, TemplateCoordinateMap } from '@sekundo/core';
 
@@ -320,6 +321,11 @@ const memoryBlobCache = new Map<string, Uint8Array>();
 
 export async function saveBlob(hashKey: string, bytes: Uint8Array): Promise<void> {
   memoryBlobCache.set(hashKey, bytes);
+  if (Platform.OS !== 'web') {
+    const { saveNativeBlob } = await import('./blobStore.native');
+    await saveNativeBlob(hashKey, bytes);
+    return;
+  }
   if (!isWebIndexedDBAvailable()) return;
   try {
     const db = await openSovereignIDB();
@@ -342,6 +348,14 @@ export async function saveBlob(hashKey: string, bytes: Uint8Array): Promise<void
 export async function loadBlob(hashKey: string): Promise<Uint8Array | null> {
   if (memoryBlobCache.has(hashKey)) {
     return memoryBlobCache.get(hashKey)!;
+  }
+  if (Platform.OS !== 'web') {
+    const { loadNativeBlob } = await import('./blobStore.native');
+    const nativeBytes = await loadNativeBlob(hashKey);
+    if (nativeBytes) {
+      memoryBlobCache.set(hashKey, nativeBytes);
+    }
+    return nativeBytes;
   }
   if (!isWebIndexedDBAvailable()) return null;
   try {
@@ -370,6 +384,7 @@ export async function loadBlob(hashKey: string): Promise<Uint8Array | null> {
 }
 
 const SDOC_TEMPLATE_PREFIX = 'sekundo_sdoc_tpl_';
+const FORM_YAML_PREFIX = 'sekundo_form_yaml_';
 const APP_MANIFEST_KEY = 'sekundo_app_manifest_yaml';
 
 export async function saveSdocTemplate(templateId: string, yamlText: string): Promise<void> {
@@ -380,6 +395,14 @@ export async function loadSdocTemplate(templateId: string): Promise<string | nul
   return await storage.getItem(`${SDOC_TEMPLATE_PREFIX}${templateId}`);
 }
 
+export async function saveFormYaml(templateId: string, yamlText: string): Promise<void> {
+  await storage.setItem(`${FORM_YAML_PREFIX}${templateId}`, yamlText);
+}
+
+export async function loadFormYaml(templateId: string): Promise<string | null> {
+  return await storage.getItem(`${FORM_YAML_PREFIX}${templateId}`);
+}
+
 export async function saveAppManifestYaml(yamlText: string): Promise<void> {
   await storage.setItem(APP_MANIFEST_KEY, yamlText);
 }
@@ -387,4 +410,5 @@ export async function saveAppManifestYaml(yamlText: string): Promise<void> {
 export async function loadAppManifestYaml(): Promise<string | null> {
   return await storage.getItem(APP_MANIFEST_KEY);
 }
+
 

@@ -1,6 +1,14 @@
 import React, { useState, useRef, useCallback } from 'react';
 import { View, StyleSheet, Platform } from 'react-native';
-import Svg, { Rect, Line, Path, Text as SvgText, G, Circle } from 'react-native-svg';
+import Svg, {
+  Rect,
+  Line,
+  Path,
+  Text as SvgText,
+  G,
+  Circle,
+  Image as SvgImage,
+} from 'react-native-svg';
 import {
   DisplayPage,
   ResolvedOp,
@@ -20,6 +28,7 @@ export interface SvgPainterProps {
   snapMm?: number;
   showGrid?: boolean;
   zoom?: number;
+  underlayDataUrl?: string | null;
 }
 
 interface DragState {
@@ -42,6 +51,13 @@ export function extractBasePrimitiveId(opId: string): string {
     .replace(/_(cell|txt)_\d+_\d+$/, '');
 }
 
+function getPointerCoords(e: any): { x: number; y: number } {
+  const ne = e?.nativeEvent ?? e;
+  const x = ne?.clientX ?? ne?.pageX ?? ne?.locationX ?? 0;
+  const y = ne?.clientY ?? ne?.pageY ?? ne?.locationY ?? 0;
+  return { x, y };
+}
+
 export function SvgPainter({
   page,
   primitives = [],
@@ -51,6 +67,7 @@ export function SvgPainter({
   snapMm = 1,
   showGrid = true,
   zoom = 1,
+  underlayDataUrl = null,
 }: SvgPainterProps) {
   const widthPx = mmToPx(page.widthMm, zoom);
   const heightPx = mmToPx(page.heightMm, zoom);
@@ -76,14 +93,13 @@ export function SvgPainter({
       const prim = findPrimitive(sourceId);
       if (!prim) return;
 
-      const clientX = e?.nativeEvent?.clientX ?? e?.clientX ?? 0;
-      const clientY = e?.nativeEvent?.clientY ?? e?.clientY ?? 0;
+      const { x, y } = getPointerCoords(e);
       dragRef.current = {
         id: sourceId,
         mode,
         vertexIdx,
-        startClientX: clientX,
-        startClientY: clientY,
+        startClientX: x,
+        startClientY: y,
         initialPrim: JSON.parse(JSON.stringify(prim)),
       };
       setDragPreview({ dxMm: 0, dyMm: 0 });
@@ -95,10 +111,9 @@ export function SvgPainter({
     (e: any) => {
       const drag = dragRef.current;
       if (!drag) return;
-      const clientX = e?.nativeEvent?.clientX ?? e?.clientX ?? 0;
-      const clientY = e?.nativeEvent?.clientY ?? e?.clientY ?? 0;
-      const dxMm = pxToMm(clientX - drag.startClientX, zoom);
-      const dyMm = pxToMm(clientY - drag.startClientY, zoom);
+      const { x, y } = getPointerCoords(e);
+      const dxMm = pxToMm(x - drag.startClientX, zoom);
+      const dyMm = pxToMm(y - drag.startClientY, zoom);
       setDragPreview({ dxMm, dyMm });
     },
     [zoom]
@@ -167,6 +182,16 @@ export function SvgPainter({
     }
   }, [dragPreview, onUpdatePrimitive, snapMm]);
 
+  // Platform-clean pointer binding: avoids React DOM warning for `onPress` on `<g>` (U1)
+  const bindDrag = (
+    sourceId: string,
+    mode: DragState['mode'] = 'move',
+    vertexIdx?: number
+  ): Record<string, any> =>
+    Platform.OS === 'web'
+      ? { onMouseDown: (e: any) => startPointerDrag(e, sourceId, mode, vertexIdx) }
+      : { onPressIn: (e: any) => startPointerDrag(e, sourceId, mode, vertexIdx) };
+
   const renderOp = (op: ResolvedOp, idx: number) => {
     const sourceId = extractBasePrimitiveId(op.id);
     const isSelected = selectedId === sourceId;
@@ -177,13 +202,7 @@ export function SvgPainter({
     if (op.kind === 'rect') {
       const strokeW = op.strokeWidthMm ?? 0.25;
       return (
-        <G
-          key={`${op.id}-${idx}`}
-          onPress={(e: any) => startPointerDrag(e, sourceId, 'move')}
-          {...(Platform.OS === 'web'
-            ? { onMouseDown: (e: any) => startPointerDrag(e, sourceId, 'move') }
-            : {})}
-        >
+        <G key={`${op.id}-${idx}`} {...bindDrag(sourceId, 'move')}>
           <Rect
             x={op.x + dx}
             y={op.y + dy}
@@ -202,10 +221,7 @@ export function SvgPainter({
               width={3}
               height={3}
               fill="#2563EB"
-              onPress={(e: any) => startPointerDrag(e, sourceId, 'resize-br')}
-              {...(Platform.OS === 'web'
-                ? { onMouseDown: (e: any) => startPointerDrag(e, sourceId, 'resize-br') }
-                : {})}
+              {...bindDrag(sourceId, 'resize-br')}
             />
           )}
         </G>
@@ -215,13 +231,7 @@ export function SvgPainter({
     if (op.kind === 'line') {
       const strokeW = op.strokeWidthMm ?? 0.35;
       return (
-        <G
-          key={`${op.id}-${idx}`}
-          onPress={(e: any) => startPointerDrag(e, sourceId, 'move')}
-          {...(Platform.OS === 'web'
-            ? { onMouseDown: (e: any) => startPointerDrag(e, sourceId, 'move') }
-            : {})}
-        >
+        <G key={`${op.id}-${idx}`} {...bindDrag(sourceId, 'move')}>
           <Line
             x1={op.x1 + dx}
             y1={op.y1 + dy}
@@ -238,18 +248,14 @@ export function SvgPainter({
                 cy={op.y1 + dy}
                 r={1.6}
                 fill="#2563EB"
-                {...(Platform.OS === 'web'
-                  ? { onMouseDown: (e: any) => startPointerDrag(e, sourceId, 'line-p1') }
-                  : {})}
+                {...bindDrag(sourceId, 'line-p1')}
               />
               <Circle
                 cx={op.x2 + dx}
                 cy={op.y2 + dy}
                 r={1.6}
                 fill="#2563EB"
-                {...(Platform.OS === 'web'
-                  ? { onMouseDown: (e: any) => startPointerDrag(e, sourceId, 'line-p2') }
-                  : {})}
+                {...bindDrag(sourceId, 'line-p2')}
               />
             </>
           )}
@@ -264,13 +270,7 @@ export function SvgPainter({
           .join(' ') + (op.closed ? ' Z' : '');
       const strokeW = op.strokeWidthMm ?? 0.35;
       return (
-        <G
-          key={`${op.id}-${idx}`}
-          onPress={(e: any) => startPointerDrag(e, sourceId, 'move')}
-          {...(Platform.OS === 'web'
-            ? { onMouseDown: (e: any) => startPointerDrag(e, sourceId, 'move') }
-            : {})}
-        >
+        <G key={`${op.id}-${idx}`} {...bindDrag(sourceId, 'move')}>
           <Path
             d={d}
             fill={op.fill || 'none'}
@@ -285,12 +285,7 @@ export function SvgPainter({
                 cy={py + dy}
                 r={1.5}
                 fill="#2563EB"
-                {...(Platform.OS === 'web'
-                  ? {
-                      onMouseDown: (e: any) =>
-                        startPointerDrag(e, sourceId, 'path-vertex', vIdx),
-                    }
-                  : {})}
+                {...bindDrag(sourceId, 'path-vertex', vIdx)}
               />
             ))}
         </G>
@@ -310,13 +305,7 @@ export function SvgPainter({
           : op.x + dx;
 
       return (
-        <G
-          key={`${op.id}-${idx}`}
-          onPress={(e: any) => startPointerDrag(e, sourceId, 'move')}
-          {...(Platform.OS === 'web'
-            ? { onMouseDown: (e: any) => startPointerDrag(e, sourceId, 'move') }
-            : {})}
-        >
+        <G key={`${op.id}-${idx}`} {...bindDrag(sourceId, 'move')}>
           {isSelected && (
             <Rect
               x={op.x + dx - 0.5}
@@ -354,6 +343,9 @@ export function SvgPainter({
     <View
       testID="studio-svg-canvas"
       style={[styles.canvasSheet, { width: widthPx, height: heightPx }]}
+      onStartShouldSetResponder={() => true}
+      onResponderMove={handlePointerMove}
+      onResponderRelease={handlePointerUp}
       {...(Platform.OS === 'web'
         ? {
             onMouseMove: handlePointerMove,
@@ -366,7 +358,6 @@ export function SvgPainter({
         width={widthPx}
         height={heightPx}
         viewBox={`0 0 ${page.widthMm} ${page.heightMm}`}
-        onPress={() => onSelect(null)}
       >
         <Rect
           x={0}
@@ -374,7 +365,20 @@ export function SvgPainter({
           width={page.widthMm}
           height={page.heightMm}
           fill={page.background || '#FFFFFF'}
+          {...(Platform.OS === 'web'
+            ? { onMouseDown: () => onSelect(null) }
+            : { onPressIn: () => onSelect(null) })}
         />
+        {underlayDataUrl && (
+          <SvgImage
+            href={underlayDataUrl}
+            x={0}
+            y={0}
+            width={page.widthMm}
+            height={page.heightMm}
+            preserveAspectRatio="none"
+          />
+        )}
         {showGrid && <MmGridSvgLayer widthMm={page.widthMm} heightMm={page.heightMm} />}
         {page.ops.map((op, i) => renderOp(op, i))}
       </Svg>

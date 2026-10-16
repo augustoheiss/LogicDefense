@@ -39,6 +39,7 @@ export type SdocPrimitive =
   | {
       type: 'text';
       id: string;
+      page?: number;
       x: Mm;
       y: Mm;
       w: Mm;
@@ -55,6 +56,7 @@ export type SdocPrimitive =
   | {
       type: 'rect';
       id: string;
+      page?: number;
       x: Mm;
       y: Mm;
       w: Mm;
@@ -67,6 +69,7 @@ export type SdocPrimitive =
   | {
       type: 'line';
       id: string;
+      page?: number;
       x1: Mm;
       y1: Mm;
       x2: Mm;
@@ -78,6 +81,7 @@ export type SdocPrimitive =
   | {
       type: 'path';
       id: string;
+      page?: number;
       points: [Mm, Mm][];
       closed?: boolean;
       fill?: string;
@@ -87,6 +91,7 @@ export type SdocPrimitive =
   | {
       type: 'image';
       id: string;
+      page?: number;
       x: Mm;
       y: Mm;
       w: Mm;
@@ -96,6 +101,7 @@ export type SdocPrimitive =
   | {
       type: 'table';
       id: string;
+      page?: number;
       x: Mm;
       y: Mm;
       cols: Mm[];
@@ -137,6 +143,9 @@ export interface SdocUnderlayConfig {
   source: string; // e.g. "sha256:9f2c..."
   pages?: number[];
   mode?: 'overlay' | 'rebuild';
+  isXfa?: boolean;
+  hasSignature?: boolean;
+  isEncrypted?: boolean;
 }
 
 export interface SdocField {
@@ -144,17 +153,30 @@ export interface SdocField {
   from?: 'acroform' | 'click' | 'text' | 'grid';
   name?: string;
   page?: number;
+  pages?: number[];
   rect: [Mm, Mm, Mm, Mm]; // [x, y, w, h] in mm from top-left
   bind: string;
   size?: number;
   weight?: 'normal' | 'bold';
   align?: 'left' | 'center' | 'right';
+  fieldType?: 'text' | 'checkbox' | 'dropdown' | 'radio' | 'optionlist' | 'signature';
+  options?: string[];
+  maxLength?: number;
+  defaultValue?: string;
+  pageRotation?: number;
+}
+
+export interface SdocPageGeometry {
+  widthMm: Mm;
+  heightMm: Mm;
+  rotate?: number;
 }
 
 export interface SdocDocument {
   sdoc: number;
   name: string;
   page: SdocPageConfig;
+  pages?: SdocPageGeometry[];
   fonts?: Record<string, { family: string }>;
   repeat?: SdocRepeatConfig;
   underlay?: SdocUnderlayConfig;

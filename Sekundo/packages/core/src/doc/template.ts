@@ -61,25 +61,83 @@ export function resolveSafePath(context: Record<string, unknown>, rawPath: strin
   return current;
 }
 
+const PT_BR_MONTHS_LONG = [
+  'janeiro',
+  'fevereiro',
+  'março',
+  'abril',
+  'maio',
+  'junho',
+  'julho',
+  'agosto',
+  'setembro',
+  'outubro',
+  'novembro',
+  'dezembro',
+];
+
+const PT_BR_MONTHS_SHORT = [
+  'jan',
+  'fev',
+  'mar',
+  'abr',
+  'mai',
+  'jun',
+  'jul',
+  'ago',
+  'set',
+  'out',
+  'nov',
+  'dez',
+];
+
 function formatDateFilter(val: unknown, pattern: string): string {
   const str = String(val ?? '').trim();
   if (!str) return '';
 
-  // Already in dd/MM/yyyy or dd/MM/yy
-  if (/^\d{2}\/\d{2}\/\d{2,4}$/.test(str)) {
-    return str;
-  }
+  let yyyy = '';
+  let mm = '';
+  let dd = '';
 
   // ISO yyyy-MM-dd
   const isoMatch = str.match(/^(\d{4})-(\d{2})-(\d{2})/);
   if (isoMatch) {
-    const [, yyyy, mm, dd] = isoMatch;
-    if (pattern === 'dd/MM/yy') return `${dd}/${mm}/${yyyy.slice(2)}`;
-    if (pattern === 'yyyy-MM-dd') return `${yyyy}-${mm}-${dd}`;
-    return `${dd}/${mm}/${yyyy}`;
+    [, yyyy, mm, dd] = isoMatch;
+  } else {
+    // BR dd/MM/yyyy or dd/MM/yy
+    const brMatch = str.match(/^(\d{2})\/(\d{2})\/(\d{2,4})$/);
+    if (brMatch) {
+      dd = brMatch[1];
+      mm = brMatch[2];
+      yyyy = brMatch[3].length === 2 ? `20${brMatch[3]}` : brMatch[3];
+    }
   }
 
-  return str;
+  if (!yyyy || !mm || !dd) {
+    return str;
+  }
+
+  const monthIdx = Math.max(0, Math.min(11, parseInt(mm, 10) - 1));
+  const cleanPattern = (pattern || 'dd/MM/yyyy').replace(/\\?'([^']*?)\\?'/g, '$1');
+
+  return cleanPattern.replace(/yyyy|yy|MMMM|MMM|MM|dd/g, (token) => {
+    switch (token) {
+      case 'yyyy':
+        return yyyy;
+      case 'yy':
+        return yyyy.slice(-2);
+      case 'MMMM':
+        return PT_BR_MONTHS_LONG[monthIdx] || mm;
+      case 'MMM':
+        return PT_BR_MONTHS_SHORT[monthIdx] || mm;
+      case 'MM':
+        return mm;
+      case 'dd':
+        return dd;
+      default:
+        return token;
+    }
+  });
 }
 
 function applyWhitelistedFilter(value: unknown, filterExpr: string): unknown {
@@ -125,6 +183,11 @@ function evaluateMustacheToken(rawTokenContent: string, context: Record<string, 
   const parts = rawTokenContent.split('|').map((p) => p.trim());
   const pathExpr = parts[0] || '';
 
+  // Literal prefix `=Texto Fixo` inside Mustache token
+  if (pathExpr.startsWith('=')) {
+    return pathExpr.slice(1);
+  }
+
   // Security check: if someone writes `constructor.constructor('...')()` render literally as inert text
   if (
     pathExpr.includes('(') ||
@@ -152,12 +215,14 @@ function evaluateMustacheToken(rawTokenContent: string, context: Record<string, 
 
 /**
  * Renders a template string containing `{{...}}` placeholders using a safe logicless evaluator.
+ * Also supports `=Texto Fixo` literal syntax for direct field bindings.
  */
 export function renderTemplateString(
   template: string,
   context: Record<string, unknown>
 ): string {
   if (!template || typeof template !== 'string') return '';
+  if (template.startsWith('=')) return template.slice(1);
   if (!template.includes('{{')) return template;
 
   return template.replace(/\{\{([^{}]+)\}\}/g, (_match, inner: string) => {

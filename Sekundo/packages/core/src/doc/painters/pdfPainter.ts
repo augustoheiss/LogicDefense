@@ -10,24 +10,29 @@
 
 import type { DisplayList, ResolvedOp } from '../types';
 import { mmToPt, toPdf } from '../units';
+import { sanitizeForWinAnsiWithWarnings } from '../../pdf/unicodeFont';
 
 async function getPdfLib() {
   return await import('pdf-lib');
 }
 
+export class UnderlayError extends Error {
+  public readonly code: 'UNDERLAY_MISSING' | 'UNDERLAY_CORRUPT';
+  public readonly blobKey: string;
+  constructor(code: 'UNDERLAY_MISSING' | 'UNDERLAY_CORRUPT', blobKey: string, message: string) {
+    super(message);
+    this.name = 'UnderlayError';
+    this.code = code;
+    this.blobKey = blobKey;
+  }
+}
+
 /**
  * Strips or transliterates characters outside WinAnsi (Latin-1) so StandardFonts.Helvetica
- * never throws on emojis or special symbols while keeping PT/ES/EN accents intact.
+ * never throws on emojis, curly quotes, or Cyrillic while keeping PT/ES/EN accents intact.
  */
 export function toWinAnsiSafe(text: string): string {
-  return (text || '')
-    .replace(/[\u{1F000}-\u{1FFFF}]/gu, '')
-    .replace(/[✓✔]/g, '[OK]')
-    .replace(/[⬜□]/g, '[ ]')
-    .replace(/[•·]/g, '-')
-    .replace(/[—–]/g, '-')
-    .replace(/[^\x20-\x7E\xA0-\xFF]/g, '')
-    .trim();
+  return sanitizeForWinAnsiWithWarnings(text || '').text.trim();
 }
 
 export function parseHexColorToRgb(hex?: string): { r: number; g: number; b: number } | null {
@@ -55,6 +60,11 @@ export interface PdfPainterOptions {
   blobs?: Record<string, Uint8Array>;
   /** Stamp `1/N` page numbers in the bottom right corner */
   stampPageNumbers?: boolean;
+  /** Optional cryptographic provenance hashes embedded into PDF metadata (R4) */
+  provenance?: {
+    templateHash?: string;
+    dataHash?: string;
+  };
 }
 
 export async function renderDisplayListToPdf(
@@ -66,10 +76,25 @@ export async function renderDisplayListToPdf(
   const fontRegular = await pdfDoc.embedFont(StandardFonts.Helvetica);
   const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
+  pdfDoc.setCreator('Sekundo Document Studio');
+  pdfDoc.setProducer('Sekundo Deterministic PDF Painter');
+  if (options.provenance?.templateHash || options.provenance?.dataHash) {
+    const subjParts: string[] = [];
+    if (options.provenance.templateHash) subjParts.push(`tpl=${options.provenance.templateHash}`);
+    if (options.provenance.dataHash) subjParts.push(`data=${options.provenance.dataHash}`);
+    pdfDoc.setSubject(`Sekundo Provenance (${subjParts.join(', ')})`);
+    pdfDoc.setKeywords(subjParts);
+  }
+
   const toRgb = (hex?: string, fallback = { r: 0.08, g: 0.08, b: 0.1 }) => {
     const parsed = parseHexColorToRgb(hex) || fallback;
     return rgb(parsed.r, parsed.g, parsed.b);
   };
+
+  // C8: Cache loaded source PDFDocuments and embedded Form XObjects per (blob, pageIndex)
+  // so 20-page mail-merge / repeat documents embed the underlay ONCE instead of 20 times.
+  const srcDocCache = new Map<string, any>();
+  const embeddedPageCache = new Map<string, any>();
 
   for (const dPage of displayList.pages) {
     const pageW = mmToPt(dPage.widthMm);
@@ -91,14 +116,61 @@ export async function renderDisplayListToPdf(
     }
 
     // Stage 0: Embed original PDF page as vector underlay if present and mode === 'overlay'
-    if (dPage.underlay && dPage.underlay.mode !== 'rebuild' && options.blobs?.[dPage.underlay.blob]) {
-      try {
-        const srcBytes = options.blobs[dPage.underlay.blob];
-        const srcDoc = await PDFDocument.load(srcBytes, { ignoreEncryption: true });
+    if (dPage.underlay && dPage.underlay.mode !== 'rebuild') {
+      const blobKey = dPage.underlay.blob;
+      if (options.blobs !== undefined) {
+        const srcBytes = options.blobs[blobKey];
+        if (!srcBytes) {
+          throw new UnderlayError(
+            'UNDERLAY_MISSING',
+            blobKey,
+            `Binário de fundo "${blobKey}" não encontrado em options.blobs.`
+          );
+        }
+
+        let srcDoc = srcDocCache.get(blobKey);
+        if (!srcDoc) {
+          try {
+            srcDoc = await PDFDocument.load(srcBytes, { ignoreEncryption: true });
+            // C6: Flatten a copy of the source document's AcroForm if no fields are being drawn by ops,
+            // or flatten widget borders so static appearances are preserved in the XObject.
+            const hasFieldOps = dPage.ops.some((o) => o.layerId === 'fields');
+            if (!hasFieldOps) {
+              try {
+                srcDoc.getForm().flatten();
+              } catch {
+                // Ignore if source PDF has no AcroForm or non-standard widgets
+              }
+            }
+            srcDocCache.set(blobKey, srcDoc);
+          } catch (err) {
+            throw new UnderlayError(
+              'UNDERLAY_CORRUPT',
+              blobKey,
+              `PDF de fundo "${blobKey}" corrompido ou inválido: ${(err as Error)?.message || String(err)}`
+            );
+          }
+        }
+
         const srcPages = srcDoc.getPages();
         const targetIdx = Math.max(0, Math.min(srcPages.length - 1, (dPage.underlay.page || 1) - 1));
-        if (srcPages[targetIdx]) {
-          const [embedded] = await pdfDoc.embedPages([srcPages[targetIdx]]);
+        const cacheKey = `${blobKey}:${targetIdx}`;
+        let embedded = embeddedPageCache.get(cacheKey);
+        if (!embedded && srcPages[targetIdx]) {
+          try {
+            const [emb] = await pdfDoc.embedPages([srcPages[targetIdx]]);
+            embedded = emb;
+            embeddedPageCache.set(cacheKey, embedded);
+          } catch (err) {
+            throw new UnderlayError(
+              'UNDERLAY_CORRUPT',
+              blobKey,
+              `Falha ao embutir página ${targetIdx + 1} do fundo "${blobKey}": ${(err as Error)?.message || String(err)}`
+            );
+          }
+        }
+
+        if (embedded) {
           page.drawPage(embedded, {
             x: 0,
             y: 0,
@@ -106,8 +178,6 @@ export async function renderDisplayListToPdf(
             height: pageH,
           });
         }
-      } catch {
-        // Non-fatal if underlay blob is corrupted
       }
     }
 
@@ -131,7 +201,7 @@ export async function renderDisplayListToPdf(
     });
   }
 
-  return await pdfDoc.save();
+  return await pdfDoc.save({ useObjectStreams: true });
 }
 
 function paintOperation(

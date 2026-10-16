@@ -24,16 +24,40 @@ export interface PDFFormField {
   fieldName: string;
 
   /** Field type. */
-  fieldType: 'text' | 'checkbox' | 'radio' | 'dropdown';
+  fieldType: 'text' | 'checkbox' | 'radio' | 'dropdown' | 'optionlist' | 'signature';
 
   /** Page number (1-indexed). */
   page: number;
 
-  /** Bounding box coordinates. */
+  /** All 1-indexed pages where widgets of this field appear (H12). */
+  pages?: number[];
+
+  /** Bounding box coordinates (in PDF points, origin bottom-left). */
   x: number;
   y: number;
   width: number;
   height: number;
+
+  /** Pre-existing / default value in the PDF form (C6). */
+  defaultValue?: string;
+
+  /** Options for radio / dropdown / option-list fields (H1 / H5). */
+  options?: string[];
+
+  /** Max character length constraint for text fields (H2). */
+  maxLength?: number;
+
+  /** True if the PDF contains an XFA stream (H4). */
+  isXfa?: boolean;
+
+  /** True if the PDF contains a digital signature field or SigFlags (U8). */
+  hasSignature?: boolean;
+
+  /** True if the PDF was loaded with encryption dictionary present (U7). */
+  isEncrypted?: boolean;
+
+  /** Rotation angle of the page in degrees (0, 90, 180, 270) (H8). */
+  pageRotation?: number;
 }
 
 // ---------------------------------------------------------------------------

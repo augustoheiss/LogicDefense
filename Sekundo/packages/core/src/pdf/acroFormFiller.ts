@@ -6,9 +6,9 @@
  */
 
 // Type-only import for compilation
-import type { PDFDocument as PDFDocumentType, PDFTextField as PDFTextFieldType, PDFCheckBox as PDFCheckBoxType, PDFDropdown as PDFDropdownType, PDFRadioGroup as PDFRadioGroupType } from 'pdf-lib';
 import type { PDFFormField, TemplateCoordinateMap } from './types';
 import type { FlatSkeletonEntry } from '../skeleton/types';
+import { sanitizeForWinAnsiWithWarnings } from './unicodeFont';
 
 /** Helper to dynamically load pdf-lib on demand */
 async function getPdfLib() {
@@ -43,6 +43,77 @@ export interface FormFillResult {
   matchedFields: string[];
   /** Names of fields that could not be matched */
   unmatchedFields: string[];
+  /** Non-fatal warnings generated during filling (e.g., maxLength truncation, emoji/Cyrillic sanitization) */
+  warnings?: string[];
+}
+
+/**
+ * Parses boolean-like values for AcroForm checkboxes.
+ * Handles `"false"`, `"0"`, `"no"`, `"nao"`, `"não"`, `"off"`, `""` as `false` (resolves H1).
+ */
+export function parseAcroBoolean(val: unknown): boolean {
+  if (typeof val === 'boolean') return val;
+  if (typeof val === 'number') return val !== 0;
+  if (typeof val === 'string') {
+    const norm = val.trim().toLowerCase();
+    if (['false', '0', 'no', 'nao', 'não', 'off', 'unchecked', 'n', ''].includes(norm)) {
+      return false;
+    }
+    if (['true', '1', 'yes', 'sim', 'on', 'checked', 's', 'x', '✓', '✔'].includes(norm)) {
+      return true;
+    }
+    return Boolean(norm);
+  }
+  return Boolean(val);
+}
+
+/**
+ * Inspects a PDF binary for `/XFA`, `/Sig` (digital signatures), and `/Encrypt` BEFORE
+ * `pdfDoc.getForm()` is called (since `pdf-lib`'s `getForm()` strips `/XFA` on access — H4).
+ */
+export async function inspectPDFSecurityAndXfa(pdfBytes: Uint8Array): Promise<{
+  isXfa: boolean;
+  hasSignature: boolean;
+  isEncrypted: boolean;
+}> {
+  const { PDFDocument, PDFName, PDFDict, PDFArray } = await getPdfLib();
+  const pdfDoc = await PDFDocument.load(pdfBytes, { ignoreEncryption: true });
+  const isEncrypted = Boolean(pdfDoc.isEncrypted);
+  let isXfa = false;
+  let hasSignature = false;
+
+  try {
+    const rawForm = (pdfDoc as any).formCache?.access?.();
+    if (rawForm && typeof rawForm.hasXFA === 'function' && rawForm.hasXFA()) {
+      isXfa = true;
+    }
+    const acroDict = rawForm?.acroForm?.dict || pdfDoc.catalog.lookup(PDFName.of('AcroForm'));
+    if (acroDict) {
+      if (typeof acroDict.has === 'function' && acroDict.has(PDFName.of('XFA'))) {
+        isXfa = true;
+      }
+      const sigFlags = typeof acroDict.get === 'function' ? acroDict.get(PDFName.of('SigFlags')) : undefined;
+      if (sigFlags && String(sigFlags) !== '0') {
+        hasSignature = true;
+      }
+      const fieldsArr = typeof acroDict.lookup === 'function' ? acroDict.lookup(PDFName.of('Fields')) : undefined;
+      if (fieldsArr instanceof PDFArray) {
+        for (let i = 0; i < fieldsArr.size(); i++) {
+          const fDict = fieldsArr.lookup(i);
+          if (fDict instanceof PDFDict) {
+            const ft = fDict.get(PDFName.of('FT'));
+            if (ft && ft.toString() === '/Sig') {
+              hasSignature = true;
+            }
+          }
+        }
+      }
+    }
+  } catch {
+    // Ignore malformed catalog dictionaries
+  }
+
+  return { isXfa, hasSignature, isEncrypted };
 }
 
 // ---------------------------------------------------------------------------
@@ -51,11 +122,59 @@ export interface FormFillResult {
 
 /**
  * Inspects a PDF binary and extracts all interactive AcroForm fields,
- * resolving the actual 1-indexed page number of each widget.
+ * resolving the actual 1-indexed page number of each widget, options, maxLength,
+ * default values, page rotation, and XFA/Signature/Encryption flags.
  */
 export async function inspectPDFForm(pdfBytes: Uint8Array): Promise<PDFFormField[]> {
-  const { PDFDocument, PDFTextField, PDFCheckBox, PDFDropdown, PDFRadioGroup } = await getPdfLib();
+  const {
+    PDFDocument,
+    PDFTextField,
+    PDFCheckBox,
+    PDFDropdown,
+    PDFRadioGroup,
+    PDFOptionList,
+    PDFName,
+    PDFDict,
+    PDFArray,
+  } = await getPdfLib();
+
   const pdfDoc = await PDFDocument.load(pdfBytes, { ignoreEncryption: true });
+  const isEncrypted = Boolean(pdfDoc.isEncrypted);
+
+  // IMPORTANT (H4 & U8): Check /XFA and /Sig on raw formCache BEFORE pdfDoc.getForm() deletes /XFA
+  let isXfa = false;
+  let hasSignature = false;
+  try {
+    const rawForm = (pdfDoc as any).formCache?.access?.();
+    if (rawForm && typeof rawForm.hasXFA === 'function' && rawForm.hasXFA()) {
+      isXfa = true;
+    }
+    const acroDict = rawForm?.acroForm?.dict || pdfDoc.catalog.lookup(PDFName.of('AcroForm'));
+    if (acroDict) {
+      if (typeof acroDict.has === 'function' && acroDict.has(PDFName.of('XFA'))) {
+        isXfa = true;
+      }
+      const sigFlags = typeof acroDict.get === 'function' ? acroDict.get(PDFName.of('SigFlags')) : undefined;
+      if (sigFlags && String(sigFlags) !== '0') {
+        hasSignature = true;
+      }
+      const fieldsArr = typeof acroDict.lookup === 'function' ? acroDict.lookup(PDFName.of('Fields')) : undefined;
+      if (fieldsArr instanceof PDFArray) {
+        for (let i = 0; i < fieldsArr.size(); i++) {
+          const fDict = fieldsArr.lookup(i);
+          if (fDict instanceof PDFDict) {
+            const ft = fDict.get(PDFName.of('FT'));
+            if (ft && ft.toString() === '/Sig') {
+              hasSignature = true;
+            }
+          }
+        }
+      }
+    }
+  } catch {
+    // Non-fatal
+  }
+
   const pages = pdfDoc.getPages();
   const form = pdfDoc.getForm();
   const fields = form.getFields();
@@ -65,34 +184,80 @@ export async function inspectPDFForm(pdfBytes: Uint8Array): Promise<PDFFormField
   for (const field of fields) {
     const name = field.getName();
     let type: PDFFormField['fieldType'] = 'text';
+    let defaultValue: string | undefined;
+    let options: string[] | undefined;
+    let maxLength: number | undefined;
 
     if (field instanceof PDFTextField) {
       type = 'text';
+      try {
+        const txt = field.getText();
+        if (txt !== undefined && txt !== '') defaultValue = txt;
+        maxLength = field.getMaxLength();
+      } catch {
+        // Ignore read error on malformed text field
+      }
     } else if (field instanceof PDFCheckBox) {
       type = 'checkbox';
+      try {
+        if (field.isChecked()) defaultValue = 'true';
+      } catch {
+        // Ignore
+      }
     } else if (field instanceof PDFDropdown) {
       type = 'dropdown';
+      try {
+        options = field.getOptions();
+        const sel = field.getSelected();
+        if (sel && sel.length > 0) defaultValue = sel[0];
+      } catch {
+        // Ignore
+      }
     } else if (field instanceof PDFRadioGroup) {
       type = 'radio';
+      try {
+        options = field.getOptions();
+        const sel = field.getSelected();
+        if (sel) defaultValue = sel;
+      } catch {
+        // Ignore
+      }
+    } else if (field instanceof PDFOptionList) {
+      type = 'optionlist';
+      try {
+        options = field.getOptions();
+        const sel = field.getSelected();
+        if (sel && sel.length > 0) defaultValue = sel[0];
+      } catch {
+        // Ignore
+      }
+    } else {
+      try {
+        const ft = field.acroField.dict.get(PDFName.of('FT'));
+        if (ft && ft.toString() === '/Sig') {
+          type = 'signature';
+          hasSignature = true;
+        }
+      } catch {
+        // Ignore
+      }
     }
 
-    // Locate widget bounding box & actual page index (1-indexed)
-    let pageNum = 1;
-    let x = 0;
-    let y = 0;
-    let width = 0;
-    let height = 0;
+    // Resolve all widget placements across pages (H12)
+    const widgetPlacements: {
+      pageNum: number;
+      x: number;
+      y: number;
+      width: number;
+      height: number;
+      pageRotation: number;
+    }[] = [];
 
     try {
       const widgets = field.acroField.getWidgets();
-      if (widgets.length > 0) {
-        const widget = widgets[0];
+      for (const widget of widgets) {
         const rect = widget.getRectangle();
-        x = rect.x;
-        y = rect.y;
-        width = rect.width;
-        height = rect.height;
-
+        let pageNum = 1;
         const pageRef = widget.P();
         if (pageRef) {
           const foundIdx = pages.findIndex((p) => p.ref === pageRef);
@@ -100,7 +265,6 @@ export async function inspectPDFForm(pdfBytes: Uint8Array): Promise<PDFFormField
             pageNum = foundIdx + 1;
           }
         } else {
-          // Fallback: scan page Annots arrays if widget /P reference is omitted
           for (let i = 0; i < pages.length; i++) {
             const annots = pages[i].node.Annots();
             if (annots && annots.asArray().some((a) => a === widget.dict)) {
@@ -109,20 +273,59 @@ export async function inspectPDFForm(pdfBytes: Uint8Array): Promise<PDFFormField
             }
           }
         }
+        const targetPage = pages[pageNum - 1] || pages[0];
+        const pageRotation = targetPage ? targetPage.getRotation().angle || 0 : 0;
+
+        widgetPlacements.push({
+          pageNum,
+          x: rect.x,
+          y: rect.y,
+          width: rect.width,
+          height: rect.height,
+          pageRotation,
+        });
       }
     } catch {
       // Fallback if widget rectangles are absent in corrupted headers
     }
 
-    detected.push({
-      fieldId: name,
-      fieldName: name,
-      fieldType: type,
-      page: pageNum,
-      x,
-      y,
-      width,
-      height,
+    if (widgetPlacements.length === 0) {
+      const firstPageRot = pages[0] ? pages[0].getRotation().angle || 0 : 0;
+      widgetPlacements.push({
+        pageNum: 1,
+        x: 0,
+        y: 0,
+        width: 0,
+        height: 0,
+        pageRotation: firstPageRot,
+      });
+    }
+
+    const distinctPages = Array.from(new Set(widgetPlacements.map((w) => w.pageNum)));
+    const placementsToEmit =
+      type === 'radio'
+        ? [widgetPlacements[0]]
+        : widgetPlacements;
+
+    placementsToEmit.forEach((wp, wIdx) => {
+      detected.push({
+        fieldId: placementsToEmit.length > 1 ? `${name}_w${wIdx + 1}` : name,
+        fieldName: name,
+        fieldType: type,
+        page: wp.pageNum,
+        pages: distinctPages,
+        x: wp.x,
+        y: wp.y,
+        width: wp.width,
+        height: wp.height,
+        defaultValue,
+        options,
+        maxLength,
+        isXfa,
+        hasSignature,
+        isEncrypted,
+        pageRotation: wp.pageRotation,
+      });
     });
   }
 
@@ -135,27 +338,35 @@ export async function inspectPDFForm(pdfBytes: Uint8Array): Promise<PDFFormField
 
 /**
  * Injects key-value pairs directly into native AcroForm fields.
- * Supports text, booleans (checkboxes), and dropdowns.
+ * Supports text, booleans (checkboxes), dropdowns, radio groups, and option lists.
+ * Sanitizes non-WinAnsi characters (emoji/Cyrillic) and enforces `maxLength` with warnings.
  */
 export async function fillAcroForm(
   templatePdfBytes: Uint8Array,
   values: Record<string, string | boolean | number>,
   options: { flatten?: boolean } = {}
 ): Promise<FormFillResult> {
-  const { PDFDocument, PDFTextField, PDFCheckBox, PDFDropdown } = await getPdfLib();
+  const {
+    PDFDocument,
+    PDFTextField,
+    PDFCheckBox,
+    PDFDropdown,
+    PDFRadioGroup,
+    PDFOptionList,
+  } = await getPdfLib();
   const pdfDoc = await PDFDocument.load(templatePdfBytes, { ignoreEncryption: true });
   const form = pdfDoc.getForm();
   const fields = form.getFields();
 
   const matchedFields: string[] = [];
   const unmatchedFields: string[] = [];
+  const warnings: string[] = [];
   let filledFieldCount = 0;
 
   for (const field of fields) {
     const name = field.getName();
     let matched = false;
 
-    // Direct match or normalized lowercase match
     const lookupKey = Object.keys(values).find(
       (k) => k === name || k.toLowerCase() === name.toLowerCase()
     );
@@ -165,22 +376,41 @@ export async function fillAcroForm(
 
       try {
         if (field instanceof PDFTextField) {
-          field.setText(String(val ?? ''));
+          let strVal = String(val ?? '');
+          const maxLen = field.getMaxLength();
+          if (maxLen !== undefined && maxLen > 0 && strVal.length > maxLen) {
+            warnings.push(
+              `Campo "${name}" truncado de ${strVal.length} para ${maxLen} caracteres (limite maxLength do PDF).`
+            );
+            strVal = strVal.slice(0, maxLen);
+          }
+          const sanitized = sanitizeForWinAnsiWithWarnings(strVal, name);
+          if (sanitized.warnings.length > 0) {
+            warnings.push(...sanitized.warnings);
+          }
+          field.setText(sanitized.text);
           matched = true;
         } else if (field instanceof PDFCheckBox) {
-          if (Boolean(val)) {
+          if (parseAcroBoolean(val)) {
             field.check();
           } else {
             field.uncheck();
           }
           matched = true;
         } else if (field instanceof PDFDropdown) {
-          field.select(String(val));
+          const sanitized = sanitizeForWinAnsiWithWarnings(String(val ?? ''), name);
+          if (sanitized.warnings.length > 0) warnings.push(...sanitized.warnings);
+          field.select(sanitized.text);
+          matched = true;
+        } else if (field instanceof PDFRadioGroup) {
+          field.select(String(val ?? ''));
+          matched = true;
+        } else if (field instanceof PDFOptionList) {
+          field.select(String(val ?? ''));
           matched = true;
         }
       } catch (err) {
-        // Fallback on formatting/encoding edge case
-        console.warn(`[Sekundo AcroForm] Failed to fill field "${name}":`, err);
+        warnings.push(`Falha ao preencher campo "${name}": ${(err as Error)?.message || String(err)}`);
       }
     }
 
@@ -203,6 +433,7 @@ export async function fillAcroForm(
     filledFieldCount,
     matchedFields,
     unmatchedFields,
+    warnings,
   };
 }
 
@@ -229,12 +460,10 @@ export async function fillS89Assignments4Up(
 
   const valuesToInject: Record<string, string | boolean> = {};
 
-  // For each quadrant (0 to 3)
   for (let q = 0; q < Math.min(assignments.length, 4); q++) {
-    const qIndex = q + 1; // 1-indexed (1, 2, 3, 4)
+    const qIndex = q + 1;
     const data = assignments[q];
 
-    // Canonical S-89 AcroForm field aliases
     const aliases = {
       student: [
         `900_${qIndex}_Text_SanSerif`,
@@ -276,7 +505,6 @@ export async function fillS89Assignments4Up(
       ],
     };
 
-    // Find actual matching field names in the template for each alias
     const findField = (aliasList: string[]): string | undefined => {
       return fields.find((f) =>
         aliasList.some((alias) => f.getName().toLowerCase() === alias.toLowerCase())
@@ -306,18 +534,11 @@ export async function fillS89Assignments4Up(
 }
 
 // ---------------------------------------------------------------------------
-// Coordinate Map Stamping & Mail-Merge (Resolves A1, A2, A5)
+// Coordinate Map Stamping & Mail-Merge (Resolves A1, A2, A5, H11)
 // ---------------------------------------------------------------------------
 
 function toWinAnsiSafeLocal(text: string): string {
-  return (text || '')
-    .replace(/[\u{1F000}-\u{1FFFF}]/gu, '')
-    .replace(/[✓✔]/g, '[OK]')
-    .replace(/[⬜□]/g, '[ ]')
-    .replace(/[•·]/g, '-')
-    .replace(/[—–]/g, '-')
-    .replace(/[^\x20-\x7E\xA0-\xFF]/g, '')
-    .trim();
+  return sanitizeForWinAnsiWithWarnings(text || '').text.trim();
 }
 
 /**
@@ -381,6 +602,10 @@ export async function stampCoordinateMapOnPDF(
 /**
  * Generates a multi-page Mail-Merge PDF where each record in `records` gets its own
  * filled copy of `templatePdfBytes`.
+ *
+ * Optimization (H11): Embeds the template pages ONCE as shared PDF Form XObjects
+ * (`mergedPdf.embedPages`) and draws each record's values on lightweight pages,
+ * preventing `N × templateSize` resource duplication.
  */
 export async function fillAcroFormMailMerge(
   templatePdfBytes: Uint8Array,
@@ -389,35 +614,102 @@ export async function fillAcroFormMailMerge(
   if (records.length === 0) {
     return fillAcroForm(templatePdfBytes, {}, { flatten: true });
   }
-  if (records.length === 1) {
-    return fillAcroForm(templatePdfBytes, records[0], { flatten: true });
-  }
 
-  const { PDFDocument } = await getPdfLib();
+  const { PDFDocument, StandardFonts, rgb } = await getPdfLib();
+  const inspectedFields = await inspectPDFForm(templatePdfBytes);
+
+  // Prepare clean base template with empty flattened fields so default values stay intact if not overridden
+  const baseDoc = await PDFDocument.load(templatePdfBytes, { ignoreEncryption: true });
+  const basePages = baseDoc.getPages();
+  const pageDims = basePages.map((p) => p.getSize());
+
   const mergedPdf = await PDFDocument.create();
+  const embeddedBasePages = await mergedPdf.embedPages(basePages);
+  const fontRegular = await mergedPdf.embedFont(StandardFonts.Helvetica);
+
   let totalFilled = 0;
   const matchedSet = new Set<string>();
   const unmatchedSet = new Set<string>();
+  const allWarnings: string[] = [];
 
   for (const rec of records) {
-    const single = await fillAcroForm(templatePdfBytes, rec, { flatten: true });
-    totalFilled += single.filledFieldCount;
-    single.matchedFields.forEach((m) => matchedSet.add(m));
-    single.unmatchedFields.forEach((u) => unmatchedSet.add(u));
+    const matchedInRec = new Set<string>();
 
-    const singleDoc = await PDFDocument.load(single.pdfBytes);
-    const copiedPages = await mergedPdf.copyPages(singleDoc, singleDoc.getPageIndices());
-    for (const p of copiedPages) {
-      mergedPdf.addPage(p);
+    for (let pIdx = 0; pIdx < embeddedBasePages.length; pIdx++) {
+      const { width, height } = pageDims[pIdx];
+      const page = mergedPdf.addPage([width, height]);
+      page.drawPage(embeddedBasePages[pIdx], {
+        x: 0,
+        y: 0,
+        width,
+        height,
+      });
+
+      const pageFields = inspectedFields.filter((f) => (f.page || 1) === pIdx + 1);
+      for (const f of pageFields) {
+        const lookupKey = Object.keys(rec).find(
+          (k) => k === f.fieldName || k.toLowerCase() === f.fieldName.toLowerCase()
+        );
+        if (lookupKey !== undefined) {
+          const rawVal = rec[lookupKey];
+          let textToDraw = '';
+          if (f.fieldType === 'checkbox') {
+            textToDraw = parseAcroBoolean(rawVal) ? 'X' : '';
+          } else {
+            let strVal = String(rawVal ?? '');
+            if (f.maxLength && f.maxLength > 0 && strVal.length > f.maxLength) {
+              strVal = strVal.slice(0, f.maxLength);
+            }
+            const san = sanitizeForWinAnsiWithWarnings(strVal, f.fieldName);
+            if (san.warnings.length > 0) allWarnings.push(...san.warnings);
+            textToDraw = san.text;
+          }
+
+          if (textToDraw) {
+            const fontSize = Math.min(11, Math.max(7, (f.height || 14) * 0.65));
+            page.drawText(textToDraw, {
+              x: f.x + 2,
+              y: f.y + Math.max(2, ((f.height || 14) - fontSize) / 2),
+              size: fontSize,
+              font: fontRegular,
+              color: rgb(0.05, 0.05, 0.08),
+            });
+          }
+          matchedInRec.add(f.fieldName);
+        } else if (f.defaultValue) {
+          const san = sanitizeForWinAnsiWithWarnings(f.defaultValue, f.fieldName);
+          if (san.text) {
+            const fontSize = Math.min(11, Math.max(7, (f.height || 14) * 0.65));
+            page.drawText(san.text, {
+              x: f.x + 2,
+              y: f.y + Math.max(2, ((f.height || 14) - fontSize) / 2),
+              size: fontSize,
+              font: fontRegular,
+              color: rgb(0.05, 0.05, 0.08),
+            });
+          }
+        }
+      }
+    }
+
+    for (const f of inspectedFields) {
+      if (matchedInRec.has(f.fieldName)) {
+        matchedSet.add(f.fieldName);
+        totalFilled++;
+      } else {
+        unmatchedSet.add(f.fieldName);
+      }
     }
   }
 
-  const pdfBytes = await mergedPdf.save();
+  const pdfBytes = await mergedPdf.save({ useObjectStreams: true });
   return {
     pdfBytes,
     filledFieldCount: totalFilled,
     matchedFields: Array.from(matchedSet),
     unmatchedFields: Array.from(unmatchedSet),
+    warnings: allWarnings,
   };
 }
+
 

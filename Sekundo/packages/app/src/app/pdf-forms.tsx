@@ -157,15 +157,9 @@ export default function PDFFormsConsole() {
         setUploadedFileName(asset.name);
         setLoading(true);
         setStatusMessage(`Lendo arquivo ${asset.name}...`);
-        const FileSystem = await import('expo-file-system');
-        const base64 = await FileSystem.readAsStringAsync(asset.uri, {
-          encoding: FileSystem.EncodingType.Base64,
-        });
-        const binaryStr = atob(base64);
-        const bytes = new Uint8Array(binaryStr.length);
-        for (let i = 0; i < binaryStr.length; i++) {
-          bytes[i] = binaryStr.charCodeAt(i);
-        }
+        const { File: ExpoFile } = await import('expo-file-system');
+        const rawBytes = await new ExpoFile(asset.uri).bytes();
+        const bytes = new Uint8Array(rawBytes.buffer, rawBytes.byteOffset, rawBytes.byteLength);
         setCustomPdfBytes(bytes);
         const fields = await inspectPDFForm(bytes);
         setInspectedFields(fields);

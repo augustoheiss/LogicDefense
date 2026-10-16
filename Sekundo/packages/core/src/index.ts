@@ -104,12 +104,21 @@ export type {
 
 export {
   inspectPDFForm,
+  inspectPDFSecurityAndXfa,
+  parseAcroBoolean,
   fillAcroForm,
   fillS89Assignments4Up,
   stampCoordinateMapOnPDF,
   fillAcroFormMailMerge,
 } from './pdf/acroFormFiller';
 export type { S89Assignment, FormFillResult } from './pdf/acroFormFiller';
+
+export {
+  normalizeWinAnsiTypography,
+  needsUnicode,
+  sanitizeForWinAnsiWithWarnings,
+} from './pdf/unicodeFont';
+export type { WinAnsiSanitizeResult } from './pdf/unicodeFont';
 
 export { generateTerritoryS13AndCardsPDF, chunkCyclesBy4 } from './pdf/s13Generator';
 export type { TerritoryPDFResult } from './pdf/s13Generator';
@@ -261,6 +270,22 @@ export {
 } from './sync/envelope';
 export type { DeltaEnvelopeV2 } from './sync/envelope';
 
+export {
+  DOC_DELTA_PREFIX,
+  createSetFieldValueOp,
+  createPatchSdocOp,
+  reconcileDocFieldOps,
+  applyPatchSdocOps,
+  encodeDocSyncEnvelope,
+  decodeDocSyncEnvelope,
+} from './sync/docOps';
+export type {
+  DocFieldOperation,
+  DocSdocOperation,
+  DocSyncOperation,
+  DocFieldConflict,
+} from './sync/docOps';
+
 // Participant Directory & Fuzzy Person Resolution
 export {
   normalizePersonKey,
@@ -327,6 +352,7 @@ export type {
   PageFormatId,
   PageOrientation,
   SdocPageConfig,
+  SdocPageGeometry,
   InlineTextSpan,
   SdocPrimitive,
   SdocLayer,
@@ -352,6 +378,7 @@ export {
   toPdf,
   fromPdf,
   PAGE_FORMATS,
+  detectPageFormatFromMm,
   resolvePageDimensions,
 } from './doc/units';
 export type { PageFormatDimensions } from './doc/units';
@@ -360,6 +387,28 @@ export {
   resolveSafePath,
   renderTemplateString,
 } from './doc/template';
+
+export {
+  parseFormRecordYaml,
+  stringifyFormRecordYaml,
+  formRecordToContexts,
+  extractInitialFormRecord,
+} from './doc/formRecord';
+export type {
+  FormFieldValue,
+  FormRecordEntry,
+  FormRecordDocument,
+} from './doc/formRecord';
+
+export {
+  runDocumentPreflight,
+} from './doc/preflight';
+export type {
+  PreflightSeverity,
+  PreflightIssueCode,
+  PreflightIssue,
+  PreflightReport,
+} from './doc/preflight';
 
 export {
   buildS13PageContexts,
@@ -395,6 +444,7 @@ export {
 } from './doc/layoutSolver';
 
 export {
+  UnderlayError,
   toWinAnsiSafe,
   parseHexColorToRgb,
   renderDisplayListToPdf,

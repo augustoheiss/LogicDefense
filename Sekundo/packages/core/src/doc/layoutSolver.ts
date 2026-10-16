@@ -36,7 +36,7 @@ export class SdocLimitError extends Error {
 }
 
 /**
- * Deterministic Helvetica glyph width table (in thousandths of 1 em / fontSizePt).
+ * Deterministic Helvetica Regular glyph width table (in thousandths of 1 em / fontSizePt).
  * Matches Adobe Standard Helvetica AFM metrics used by `pdf-lib` (`StandardFonts.Helvetica`).
  */
 const HELVETICA_CHAR_WIDTHS: Record<string, number> = {
@@ -54,8 +54,36 @@ const HELVETICA_CHAR_WIDTHS: Record<string, number> = {
 };
 
 /**
- * Measures the physical width in millimeters (`mm`) of a string at `fontSizePt` in Helvetica.
- * Bold adds a 6% metric factor matching `Helvetica-Bold` average glyph expansion.
+ * Deterministic Helvetica-Bold glyph width table (in thousandths of 1 em / fontSizePt).
+ * Matches Adobe Standard Helvetica-Bold AFM metrics used by `pdf-lib` (`StandardFonts.HelveticaBold`).
+ */
+const HELVETICA_BOLD_CHAR_WIDTHS: Record<string, number> = {
+  ' ': 278, '!': 333, '"': 474, '#': 556, '$': 556, '%': 889, '&': 722, "'": 238,
+  '(': 333, ')': 333, '*': 389, '+': 584, ',': 278, '-': 333, '.': 278, '/': 278,
+  '0': 556, '1': 556, '2': 556, '3': 556, '4': 556, '5': 556, '6': 556, '7': 556,
+  '8': 556, '9': 556, ':': 333, ';': 333, '<': 584, '=': 584, '>': 584, '?': 611,
+  '@': 975, A: 722, B: 722, C: 722, D: 722, E: 667, F: 611, G: 778, H: 722, I: 278,
+  J: 556, K: 722, L: 611, M: 833, N: 722, O: 778, P: 667, Q: 778, R: 722, S: 667,
+  T: 611, U: 722, V: 667, W: 944, X: 667, Y: 667, Z: 611, '[': 333, '\\': 278, ']': 333,
+  '^': 584, _: 556, '`': 333, a: 556, b: 611, c: 556, d: 611, e: 556, f: 333, g: 611,
+  h: 611, i: 278, j: 278, k: 556, l: 278, m: 889, n: 611, o: 611, p: 611, q: 611,
+  r: 389, s: 556, t: 333, u: 611, v: 556, w: 778, x: 556, y: 556, z: 500, '{': 389,
+  '|': 280, '}': 389, '~': 584,
+};
+
+function lookupHelveticaCharWidth(ch: string, weight: 'normal' | 'bold'): number {
+  const table = weight === 'bold' ? HELVETICA_BOLD_CHAR_WIDTHS : HELVETICA_CHAR_WIDTHS;
+  const direct = table[ch];
+  if (direct !== undefined) return direct;
+  // In Adobe Helvetica & Helvetica-Bold AFM, accented Latin-1 characters (Á, É, Í, Ó, Ú, Ç, Ã, ç, ã, etc.)
+  // have the exact same glyph width as their NFD base character.
+  const base = ch.normalize('NFD')[0];
+  if (base && table[base] !== undefined) return table[base];
+  return weight === 'bold' ? 584 : 556;
+}
+
+/**
+ * Measures the physical width in millimeters (`mm`) of a string at `fontSizePt` in Helvetica / Helvetica-Bold.
  */
 export function measureTextWidthMm(
   text: string,
@@ -63,13 +91,11 @@ export function measureTextWidthMm(
   weight: 'normal' | 'bold' = 'normal'
 ): Mm {
   if (!text) return 0;
-  const boldFactor = weight === 'bold' ? 1.06 : 1.0;
   let totalEmThousandths = 0;
   for (let i = 0; i < text.length; i++) {
-    const ch = text[i];
-    totalEmThousandths += HELVETICA_CHAR_WIDTHS[ch] ?? 556;
+    totalEmThousandths += lookupHelveticaCharWidth(text[i], weight);
   }
-  const widthPt = (totalEmThousandths / 1000) * fontSizePt * boldFactor;
+  const widthPt = (totalEmThousandths / 1000) * fontSizePt;
   return widthPt / PT_PER_MM;
 }
 
@@ -154,7 +180,8 @@ function resolvePrimitiveToOps(
   context: Record<string, unknown>,
   offsetX: Mm,
   offsetY: Mm,
-  idSuffix: string
+  idSuffix: string,
+  warnings?: string[]
 ): ResolvedOp[] {
   const opId = idSuffix ? `${prim.id}_${idSuffix}` : prim.id;
 
@@ -303,7 +330,14 @@ function resolvePrimitiveToOps(
       ? resolvedSpans.map((s) => s.text).join(' ')
       : renderTemplateString(prim.text, context);
 
-  const lines = breakTextIntoLines(rawText, prim.w, sizePt, weight, prim.maxLines);
+  const allLines = breakTextIntoLines(rawText, prim.w, sizePt, weight);
+  let lines = allLines;
+  if (prim.maxLines !== undefined && prim.maxLines > 0 && allLines.length > prim.maxLines) {
+    lines = allLines.slice(0, prim.maxLines);
+    warnings?.push(
+      `Texto "${prim.id}" truncado de "${rawText}" para "${lines.join(' ')}" (maxLines=${prim.maxLines}).`
+    );
+  }
   const lineHeightMm = prim.lineHeight ?? Number(((sizePt * 1.25) / PT_PER_MM).toFixed(3));
   const computedH = prim.h ?? Number((lines.length * lineHeightMm).toFixed(3));
 
@@ -333,7 +367,11 @@ function resolvePrimitiveToOps(
 export function solveLayout(
   doc: SdocDocument,
   registry: FlatRegistry = [],
-  options?: { serviceYear?: string; customContexts?: Record<string, unknown>[] }
+  options?: {
+    serviceYear?: string;
+    customContexts?: Record<string, unknown>[];
+    formValues?: Record<string, unknown>;
+  }
 ): DisplayList {
   const t0 = Date.now();
   const warnings: string[] = [];
@@ -352,26 +390,31 @@ export function solveLayout(
     page.ops.push(op);
   };
 
-  const createBlankPage = (pageIndex: number): DisplayPage => {
+  const createBlankPage = (pageIndex: number, explicitUnderlayPage?: number): DisplayPage => {
     if (pages.length >= MAX_SDOC_PAGES) {
       throw new SdocLimitError(
         'LIMIT_PAGES',
         `Limite de segurança excedido: mais de ${MAX_SDOC_PAGES} páginas geradas.`
       );
     }
+    const targetUnderlayPageNum =
+      explicitUnderlayPage ??
+      (doc.underlay?.pages?.[pageIndex % (doc.underlay.pages.length || 1)] || 1);
+
     const underlayPage =
       doc.underlay && doc.underlay.source
         ? {
             blob: doc.underlay.source,
-            page: doc.underlay.pages?.[pageIndex % (doc.underlay.pages.length || 1)] || 1,
+            page: targetUnderlayPageNum,
             mode: doc.underlay.mode || 'overlay',
           }
         : undefined;
 
+    const perPageGeom = doc.pages?.[targetUnderlayPageNum - 1];
     const p: DisplayPage = {
       index: pageIndex,
-      widthMm: pageDims.widthMm,
-      heightMm: pageDims.heightMm,
+      widthMm: perPageGeom?.widthMm ?? pageDims.widthMm,
+      heightMm: perPageGeom?.heightMm ?? pageDims.heightMm,
       background: doc.page.background,
       underlay: underlayPage,
       ops: [],
@@ -387,30 +430,107 @@ export function solveLayout(
     offsetY: Mm,
     idSuffix: string
   ) => {
+    const targetUnderlayPage = page.underlay?.page || page.index + 1;
+    const isMultiPageTemplate =
+      (doc.underlay?.pages && doc.underlay.pages.length > 1) ||
+      (doc.pages && doc.pages.length > 1);
+
     for (const layer of doc.layers) {
       if (layer.visible === false) continue;
       for (const item of layer.items) {
-        const resolved = resolvePrimitiveToOps(item, layer.id, context, offsetX, offsetY, idSuffix);
+        // C3: Filter page-scoped primitives so page 1's text is not duplicated on pages 2..N
+        if (item.page !== undefined && (isMultiPageTemplate || item.page > 1) && item.page !== targetUnderlayPage) {
+          continue;
+        }
+        const resolved = resolvePrimitiveToOps(
+          item,
+          layer.id,
+          context,
+          offsetX,
+          offsetY,
+          idSuffix,
+          warnings
+        );
         for (const op of resolved) {
           pushOpChecked(page, op);
         }
       }
     }
 
-    // Also render any extracted `fields[]` mapped to this page
+    // Render any extracted `fields[]` mapped to this page
     if (doc.fields && doc.fields.length > 0) {
+      const inputMap =
+        context.input && typeof context.input === 'object'
+          ? (context.input as Record<string, unknown>)
+          : undefined;
+
       for (const field of doc.fields) {
         const fieldPage = field.page || 1;
-        const targetUnderlayPage = page.underlay?.page || page.index + 1;
-        if (doc.underlay && doc.underlay.pages && doc.underlay.pages.length > 1 && fieldPage !== targetUnderlayPage) {
+        const fieldPages = field.pages && field.pages.length > 0 ? field.pages : [fieldPage];
+        if (
+          doc.underlay &&
+          doc.underlay.pages &&
+          doc.underlay.pages.length > 1 &&
+          !fieldPages.includes(targetUnderlayPage) &&
+          fieldPage !== targetUnderlayPage
+        ) {
           continue;
         }
         const [fx, fy, fw, fh] = field.rect;
-        const tpl = field.bind.includes('{{') ? field.bind : `{{${field.bind}}}`;
-        const textVal = renderTemplateString(tpl, context);
+
+        // C9 & C6: Resolve from form input map first, then template bind, then PDF defaultValue
+        let textVal = '';
+        const fieldKey = field.name || field.id;
+        const directInputVal =
+          (fieldKey && inputMap && inputMap[fieldKey] !== undefined ? inputMap[fieldKey] : undefined) ??
+          (fieldKey && context[fieldKey] !== undefined ? context[fieldKey] : undefined) ??
+          (fieldKey && options?.formValues && options.formValues[fieldKey] !== undefined
+            ? options.formValues[fieldKey]
+            : undefined);
+
+        if (directInputVal !== undefined && directInputVal !== null && String(directInputVal) !== '') {
+          if (field.fieldType === 'checkbox') {
+            const norm = String(directInputVal).trim().toLowerCase();
+            textVal = ['true', '1', 'yes', 'sim', 'on', 'checked', 'x', '✓', '✔'].includes(norm)
+              ? 'X'
+              : '';
+          } else {
+            textVal = String(directInputVal);
+          }
+        } else {
+          const tpl =
+            field.bind.startsWith('=') || field.bind.includes('{{')
+              ? field.bind
+              : `{{${field.bind}}}`;
+          textVal = renderTemplateString(tpl, context);
+        }
+
+        if (textVal === '' && field.defaultValue !== undefined) {
+          if (field.fieldType === 'checkbox') {
+            textVal = field.defaultValue === 'true' ? 'X' : '';
+          } else {
+            textVal = field.defaultValue;
+          }
+        }
+
+        if (field.maxLength && field.maxLength > 0 && textVal.length > field.maxLength) {
+          const truncated = textVal.slice(0, field.maxLength);
+          warnings.push(
+            `Campo "${fieldKey}" truncado de "${textVal}" para "${truncated}" (maxLength=${field.maxLength}).`
+          );
+          textVal = truncated;
+        }
+
         const fSize = field.size ?? 10;
         const fWeight = field.weight ?? 'normal';
-        const lines = breakTextIntoLines(textVal, fw, fSize, fWeight, 1);
+        const allLines = breakTextIntoLines(textVal, fw, fSize, fWeight);
+        const lines = allLines.slice(0, 1);
+        if (allLines.length > 1) {
+          warnings.push(
+            `Campo "${fieldKey}" truncado de "${textVal}" para "${lines[0]}" (largura ${fw}mm insuficiente).`
+          );
+        }
+
         pushOpChecked(page, {
           kind: 'text',
           id: idSuffix ? `${field.id}_${idSuffix}` : field.id,
@@ -435,24 +555,25 @@ export function solveLayout(
       options?.customContexts ||
       evaluateRegistrySelector(doc.repeat.over, registry, { serviceYear: options?.serviceYear });
 
-    const contexts =
-      rawContexts.length > 0
-        ? rawContexts
-        : [
-            {
-              index: 1,
-              key: '01-01',
-              label: 'Exemplo de Designação',
-              value: 'Voluntário Exemplo',
-              meta: { date: '2026-10-15', room: 'Salão Principal', assistantTo: 'Ajudante Exemplo' },
-            },
-          ];
+    // C7: Never inject fake "Voluntário Exemplo" into exports when registry is empty
+    let contexts: Record<string, unknown>[];
+    if (rawContexts.length > 0) {
+      contexts = rawContexts;
+    } else {
+      warnings.push(
+        `Nenhum registro encontrado para o seletor "${doc.repeat.over}". Documento gerado em branco.`
+      );
+      contexts = [{}];
+    }
 
     const grid = doc.repeat.grid;
     const perPage = Math.max(1, doc.repeat.per_page || (grid ? grid.cols * grid.rows : 1));
+    const underlayPages =
+      doc.underlay?.pages && doc.underlay.pages.length > 0 ? doc.underlay.pages : [1];
 
     // Pre-check page count limit before looping
-    const expectedPages = Math.ceil(contexts.length / perPage);
+    const pagesPerBatch = perPage === 1 ? underlayPages.length : 1;
+    const expectedPages = Math.ceil(contexts.length / perPage) * pagesPerBatch;
     if (expectedPages > MAX_SDOC_PAGES) {
       throw new SdocLimitError(
         'LIMIT_PAGES',
@@ -461,57 +582,93 @@ export function solveLayout(
     }
 
     for (let i = 0; i < contexts.length; i += perPage) {
-      const pageIdx = Math.floor(i / perPage);
-      const page = createBlankPage(pageIdx);
+      const batchIdx = Math.floor(i / perPage);
       const slice = contexts.slice(i, i + perPage);
 
-      for (let slotIdx = 0; slotIdx < slice.length; slotIdx++) {
-        const ctx = {
-          ...slice[slotIdx],
-          pageNumber: pageIdx + 1,
-          slotIndex: slotIdx + 1,
-        };
-
-        let offsetX = 0;
-        let offsetY = 0;
-
-        if (grid && perPage > 1) {
-          const cols = Math.max(1, grid.cols);
-          const rows = Math.max(1, grid.rows);
-          const col = slotIdx % cols;
-          const row = Math.floor(slotIdx / cols);
-          const gapX = grid.gapX ?? grid.gap ?? 4;
-          const gapY = grid.gapY ?? grid.gap ?? 4;
-          const startX = grid.startX ?? 0;
-          const startY = grid.startY ?? 0;
-          const cellW = grid.cellW ?? (pageDims.widthMm - startX * 2 - gapX * (cols - 1)) / cols;
-          const cellH = grid.cellH ?? (pageDims.heightMm - startY * 2 - gapY * (rows - 1)) / rows;
-
-          offsetX = startX + col * (cellW + gapX);
-          offsetY = startY + row * (cellH + gapY);
+      // C4: When perPage === 1 and underlay has multiple pages (e.g. [1, 2]),
+      // emit ALL underlay pages for each record so no page is skipped.
+      if (perPage === 1 && underlayPages.length > 1) {
+        const recordCtx = slice[0] || {};
+        for (let uIdx = 0; uIdx < underlayPages.length; uIdx++) {
+          const uPageNum = underlayPages[uIdx];
+          const outPageIdx = pages.length;
+          const page = createBlankPage(outPageIdx, uPageNum);
+          const ctx = {
+            ...recordCtx,
+            ...(options?.formValues ? { input: options.formValues } : {}),
+            pageNumber: outPageIdx + 1,
+            slotIndex: 1,
+          };
+          emitLayersIntoPage(page, ctx, 0, 0, `r${batchIdx + 1}_p${uPageNum}`);
         }
+      } else {
+        const outPageIdx = pages.length;
+        const page = createBlankPage(outPageIdx);
 
-        const suffix = perPage > 1 || contexts.length > 1 ? `p${pageIdx + 1}_s${slotIdx + 1}` : '';
-        emitLayersIntoPage(page, ctx, offsetX, offsetY, suffix);
+        for (let slotIdx = 0; slotIdx < slice.length; slotIdx++) {
+          const ctx = {
+            ...slice[slotIdx],
+            ...(options?.formValues ? { input: options.formValues } : {}),
+            pageNumber: outPageIdx + 1,
+            slotIndex: slotIdx + 1,
+          };
+
+          let offsetX = 0;
+          let offsetY = 0;
+
+          if (grid && perPage > 1) {
+            const cols = Math.max(1, grid.cols);
+            const rows = Math.max(1, grid.rows);
+            const col = slotIdx % cols;
+            const row = Math.floor(slotIdx / cols);
+            const gapX = grid.gapX ?? grid.gap ?? 4;
+            const gapY = grid.gapY ?? grid.gap ?? 4;
+            const startX = grid.startX ?? 0;
+            const startY = grid.startY ?? 0;
+            const cellW = grid.cellW ?? (pageDims.widthMm - startX * 2 - gapX * (cols - 1)) / cols;
+            const cellH = grid.cellH ?? (pageDims.heightMm - startY * 2 - gapY * (rows - 1)) / rows;
+
+            offsetX = startX + col * (cellW + gapX);
+            offsetY = startY + row * (cellH + gapY);
+          }
+
+          const suffix =
+            perPage > 1 || contexts.length > 1 ? `p${outPageIdx + 1}_s${slotIdx + 1}` : '';
+          emitLayersIntoPage(page, ctx, offsetX, offsetY, suffix);
+        }
       }
     }
   } else {
     // Non-repeating single/multi-page document
+    const customCtx = options?.customContexts?.[0];
     const firstEntry = registry.find((e) => e.value && e.value.trim() !== '') || registry[0];
-    const baseCtx: Record<string, unknown> = firstEntry
-      ? {
-          key: firstEntry.key,
-          label: firstEntry.label,
-          value: firstEntry.value,
-          email: firstEntry.email,
-          meta: firstEntry.meta,
-        }
-      : {};
+    const baseCtx: Record<string, unknown> = customCtx
+      ? { ...customCtx }
+      : firstEntry
+        ? {
+            key: firstEntry.key,
+            label: firstEntry.label,
+            value: firstEntry.value,
+            email: firstEntry.email,
+            meta: firstEntry.meta,
+            ...(options?.formValues ? { input: options.formValues } : {}),
+          }
+        : options?.formValues
+          ? { input: options.formValues, ...options.formValues }
+          : {};
 
-    const underlayPages = doc.underlay?.pages && doc.underlay.pages.length > 0 ? doc.underlay.pages : [1];
+    const underlayPages =
+      doc.underlay?.pages && doc.underlay.pages.length > 0 ? doc.underlay.pages : [1];
     for (let pIdx = 0; pIdx < underlayPages.length; pIdx++) {
-      const page = createBlankPage(pIdx);
-      emitLayersIntoPage(page, { ...baseCtx, pageNumber: pIdx + 1 }, 0, 0, underlayPages.length > 1 ? `p${pIdx + 1}` : '');
+      const uPageNum = underlayPages[pIdx];
+      const page = createBlankPage(pIdx, uPageNum);
+      emitLayersIntoPage(
+        page,
+        { ...baseCtx, pageNumber: pIdx + 1 },
+        0,
+        0,
+        underlayPages.length > 1 ? `p${pIdx + 1}` : ''
+      );
     }
   }
 

@@ -27,11 +27,13 @@ export interface SdocParseResult {
 function normalizePrimitive(raw: Record<string, any>, fallbackId: string): SdocPrimitive {
   const type = String(raw.type || 'text').toLowerCase();
   const id = String(raw.id || fallbackId);
+  const page = raw.page !== undefined ? Number(raw.page) : undefined;
 
   if (type === 'rect') {
     return {
       type: 'rect',
       id,
+      ...(page !== undefined ? { page } : {}),
       x: Number(raw.x ?? 0),
       y: Number(raw.y ?? 0),
       w: Number(raw.w ?? raw.width ?? 20),
@@ -47,6 +49,7 @@ function normalizePrimitive(raw: Record<string, any>, fallbackId: string): SdocP
     return {
       type: 'line',
       id,
+      ...(page !== undefined ? { page } : {}),
       x1: Number(raw.x1 ?? raw.x ?? 0),
       y1: Number(raw.y1 ?? raw.y ?? 0),
       x2: Number(raw.x2 ?? 20),
@@ -70,6 +73,7 @@ function normalizePrimitive(raw: Record<string, any>, fallbackId: string): SdocP
     return {
       type: 'path',
       id,
+      ...(page !== undefined ? { page } : {}),
       points: pts,
       closed: Boolean(raw.closed),
       fill: raw.fill ? String(raw.fill) : undefined,
@@ -82,6 +86,7 @@ function normalizePrimitive(raw: Record<string, any>, fallbackId: string): SdocP
     return {
       type: 'table',
       id,
+      ...(page !== undefined ? { page } : {}),
       x: Number(raw.x ?? 10),
       y: Number(raw.y ?? 10),
       cols: Array.isArray(raw.cols) ? raw.cols.map(Number) : [40, 40, 40],
@@ -98,6 +103,7 @@ function normalizePrimitive(raw: Record<string, any>, fallbackId: string): SdocP
     return {
       type: 'image',
       id,
+      ...(page !== undefined ? { page } : {}),
       x: Number(raw.x ?? 0),
       y: Number(raw.y ?? 0),
       w: Number(raw.w ?? 30),
@@ -110,6 +116,7 @@ function normalizePrimitive(raw: Record<string, any>, fallbackId: string): SdocP
   return {
     type: 'text',
     id,
+    ...(page !== undefined ? { page } : {}),
     x: Number(raw.x ?? 0),
     y: Number(raw.y ?? 0),
     w: Number(raw.w ?? raw.width ?? 100),
@@ -200,6 +207,15 @@ export function parseSdocYaml(yamlText: string): SdocParseResult {
       marginMm: raw.page?.marginMm !== undefined ? Number(raw.page.marginMm) : undefined,
       background: raw.page?.background ? String(raw.page.background) : undefined,
     },
+    ...(Array.isArray(raw.pages)
+      ? {
+          pages: raw.pages.map((pg: any) => ({
+            widthMm: Number(pg?.widthMm || raw.page?.widthMm || 210),
+            heightMm: Number(pg?.heightMm || raw.page?.heightMm || 297),
+            ...(pg?.rotate !== undefined ? { rotate: Number(pg.rotate) } : {}),
+          })),
+        }
+      : {}),
     fonts: raw.fonts && typeof raw.fonts === 'object' ? raw.fonts : { body: { family: 'Helvetica' } },
     repeat:
       raw.repeat && typeof raw.repeat === 'object'
@@ -228,6 +244,9 @@ export function parseSdocYaml(yamlText: string): SdocParseResult {
             source: String(raw.underlay.source || ''),
             pages: Array.isArray(raw.underlay.pages) ? raw.underlay.pages.map(Number) : [1],
             mode: raw.underlay.mode === 'rebuild' ? 'rebuild' : 'overlay',
+            ...(raw.underlay.isXfa ? { isXfa: true } : {}),
+            ...(raw.underlay.hasSignature ? { hasSignature: true } : {}),
+            ...(raw.underlay.isEncrypted ? { isEncrypted: true } : {}),
           }
         : undefined,
     fields: Array.isArray(raw.fields)
@@ -236,6 +255,7 @@ export function parseSdocYaml(yamlText: string): SdocParseResult {
           from: f.from || 'acroform',
           name: f.name ? String(f.name) : undefined,
           page: f.page !== undefined ? Number(f.page) : 1,
+          ...(Array.isArray(f.pages) ? { pages: f.pages.map(Number) } : {}),
           rect: Array.isArray(f.rect) && f.rect.length >= 4
             ? [Number(f.rect[0]), Number(f.rect[1]), Number(f.rect[2]), Number(f.rect[3])]
             : [10, 10, 60, 6],
@@ -243,6 +263,11 @@ export function parseSdocYaml(yamlText: string): SdocParseResult {
           size: f.size !== undefined ? Number(f.size) : 10,
           weight: f.weight === 'bold' ? 'bold' : 'normal',
           align: f.align === 'center' || f.align === 'right' ? f.align : 'left',
+          ...(f.fieldType ? { fieldType: f.fieldType } : {}),
+          ...(Array.isArray(f.options) ? { options: f.options.map(String) } : {}),
+          ...(f.maxLength !== undefined ? { maxLength: Number(f.maxLength) } : {}),
+          ...(f.defaultValue !== undefined ? { defaultValue: String(f.defaultValue) } : {}),
+          ...(f.pageRotation !== undefined ? { pageRotation: Number(f.pageRotation) } : {}),
         }))
       : undefined,
     layers,

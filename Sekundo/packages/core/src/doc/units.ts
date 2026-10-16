@@ -152,6 +152,27 @@ export const PAGE_FORMATS: Record<Exclude<PageFormatId, 'custom'>, PageFormatDim
   },
 };
 
+export function detectPageFormatFromMm(
+  widthMm: Mm,
+  heightMm: Mm
+): { format: PageFormatId; orientation: PageOrientation } {
+  const minD = Math.min(widthMm, heightMm);
+  const maxD = Math.max(widthMm, heightMm);
+  const orientation: PageOrientation = widthMm > heightMm ? 'landscape' : 'portrait';
+
+  for (const [id, def] of Object.entries(PAGE_FORMATS) as [
+    Exclude<PageFormatId, 'custom'>,
+    PageFormatDimensions,
+  ][]) {
+    const defMin = Math.min(def.widthMm, def.heightMm);
+    const defMax = Math.max(def.widthMm, def.heightMm);
+    if (Math.abs(minD - defMin) <= 1.2 && Math.abs(maxD - defMax) <= 1.2) {
+      return { format: id, orientation };
+    }
+  }
+  return { format: 'custom', orientation };
+}
+
 export function resolvePageDimensions(config?: Partial<SdocPageConfig>): {
   widthMm: Mm;
   heightMm: Mm;
@@ -160,13 +181,29 @@ export function resolvePageDimensions(config?: Partial<SdocPageConfig>): {
   orientation: PageOrientation;
   format: PageFormatId;
 } {
-  const format: PageFormatId = config?.format || 'a4';
-  const orientation: PageOrientation = config?.orientation || 'portrait';
+  const hasExplicitDims =
+    typeof config?.widthMm === 'number' &&
+    config.widthMm > 0 &&
+    typeof config?.heightMm === 'number' &&
+    config.heightMm > 0;
+
+  const detected = hasExplicitDims
+    ? detectPageFormatFromMm(config!.widthMm!, config!.heightMm!)
+    : undefined;
+
+  const format: PageFormatId = config?.format || detected?.format || 'a4';
+  const orientation: PageOrientation =
+    config?.orientation ||
+    detected?.orientation ||
+    (hasExplicitDims && config!.widthMm! > config!.heightMm! ? 'landscape' : 'portrait');
 
   let baseW = 210;
   let baseH = 297;
 
-  if (format === 'custom') {
+  if (hasExplicitDims) {
+    baseW = Math.max(10, Math.min(5000, config!.widthMm!));
+    baseH = Math.max(10, Math.min(5000, config!.heightMm!));
+  } else if (format === 'custom') {
     baseW = Math.max(30, Math.min(2000, config?.widthMm || 210));
     baseH = Math.max(30, Math.min(2000, config?.heightMm || 297));
   } else {
