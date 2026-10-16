@@ -65,7 +65,7 @@ layers:
         x: 4
         y: 3
         w: 120
-        text: "DESIGNAÇÃO DA PROGRAMAÇÃO"
+        text: "FICHA DE ATIVIDADE OPERACIONAL"
         size: 9.5
         weight: bold
         color: "#111111"
@@ -84,7 +84,7 @@ layers:
         x: 4
         y: 16
         w: 180
-        text: "Nome: {{value}}"
+        text: "Participante: {{value}}"
         size: 11
         weight: bold
         color: "#0F172A"
@@ -93,7 +93,7 @@ layers:
         x: 4
         y: 26
         w: 180
-        text: "Ajudante: {{meta.assistantTo | default:'—'}}"
+        text: "Parceiro: {{meta.assistantTo | default:'—'}}"
         size: 9.5
         color: "#334155"
       - id: slip_part
@@ -101,7 +101,7 @@ layers:
         x: 4
         y: 36
         w: 180
-        text: "Parte: {{label}}"
+        text: "Atividade: {{label}}"
         size: 9.5
         max_lines: 2
         color: "#1E293B"
@@ -110,7 +110,7 @@ layers:
         x: 4
         y: 52
         w: 180
-        text: "Local: {{meta.room | default:'Auditório Principal'}}"
+        text: "Ambiente: {{meta.room | default:'Auditório Principal'}}"
         size: 8.5
         color: "#475569"
 `;
@@ -130,9 +130,9 @@ function buildS13MulticycleYaml(): string {
   const rowH = 11.64;
 
   const lines: string[] = [
-    '# territorios-multiciclo.sdoc.yaml — Registro de Designação de Território (4 Colunas Multi-Ciclo)',
+    '# territorios-multiciclo.sdoc.yaml — Controle Operacional de Setores (4 Colunas Multi-Ciclo)',
     'sdoc: 1',
-    'name: "Registro de Designação de Território (Multi-Ciclo)"',
+    'name: "Controle Operacional de Setores (Multi-Ciclo)"',
     'page:',
     '  format: a4',
     '  orientation: portrait',
@@ -186,23 +186,23 @@ function buildS13MulticycleYaml(): string {
   // Layer 2: Titles, Headers, and 20-Row Bindings
   lines.push(
     '  - id: textos_s13',
-    '    name: Cabeçalho e Dados dos 20 Territórios',
+    '    name: Cabeçalho e Dados dos 20 Setores',
     '    items:',
-    '      - { id: title_s13, type: text, x: 48, y: 12, w: 125, text: "REGISTRO DE DESIGNACAO DE TERRITORIO", size: 14, weight: bold }',
+    '      - { id: title_s13, type: text, x: 40, y: 12, w: 140, text: "CONTROLE OPERACIONAL DE SETORES E CICLOS", size: 13, weight: bold }',
     `      - { id: lbl_year, type: text, x: ${tableX}, y: 21, w: 52, text: "Ciclo / Ano Operacional:", size: 10, weight: bold }`,
     `      - { id: val_year, type: text, x: ${tableX + 46}, y: 21, w: 30, text: "{{serviceYear}}", size: 10 }`,
-    `      - { id: hdr_terr, type: text, x: ${tableX + 2}, y: ${Number((headerTopY + 3.5).toFixed(2))}, w: 18, text: "Terr. n.o", size: 8, weight: bold }`,
-    `      - { id: hdr_last1, type: text, x: ${Number((tableX + colTerrW + 2).toFixed(2))}, y: ${Number((headerTopY + 2).toFixed(2))}, w: 19, text: "Ultima data", size: 7, weight: bold }`,
-    `      - { id: hdr_last2, type: text, x: ${Number((tableX + colTerrW + 2).toFixed(2))}, y: ${Number((headerTopY + 5.5).toFixed(2))}, w: 19, text: "concluida*", size: 7, weight: bold }`
+    `      - { id: hdr_terr, type: text, x: ${tableX + 2}, y: ${Number((headerTopY + 3.5).toFixed(2))}, w: 18, text: "Setor ID", size: 8, weight: bold }`,
+    `      - { id: hdr_last1, type: text, x: ${Number((tableX + colTerrW + 2).toFixed(2))}, y: ${Number((headerTopY + 2).toFixed(2))}, w: 19, text: "Ultimo", size: 7, weight: bold }`,
+    `      - { id: hdr_last2, type: text, x: ${Number((tableX + colTerrW + 2).toFixed(2))}, y: ${Number((headerTopY + 5.5).toFixed(2))}, w: 19, text: "ciclo*", size: 7, weight: bold }`
   );
 
   for (let c = 0; c < 4; c++) {
     const cx = Number((tableX + colTerrW + colLastW + c * colCycleW).toFixed(2));
     const midX = Number((cx + colCycleW / 2).toFixed(2));
     lines.push(
-      `      - { id: hdr_des_${c}, type: text, x: ${Number((cx + 5).toFixed(2))}, y: ${Number((headerTopY + 1).toFixed(2))}, w: 28, text: "Designado para", size: 7.5, weight: bold }`,
-      `      - { id: hdr_dt1_${c}, type: text, x: ${Number((cx + 2).toFixed(2))}, y: ${Number((headerTopY + 5.8).toFixed(2))}, w: 16, text: "Data da designacao", size: 5.8, weight: bold }`,
-      `      - { id: hdr_dt2_${c}, type: text, x: ${Number((midX + 2).toFixed(2))}, y: ${Number((headerTopY + 5.8).toFixed(2))}, w: 16, text: "Data da conclusao", size: 5.8, weight: bold }`
+      `      - { id: hdr_des_${c}, type: text, x: ${Number((cx + 5).toFixed(2))}, y: ${Number((headerTopY + 1).toFixed(2))}, w: 28, text: "Responsavel", size: 7.5, weight: bold }`,
+      `      - { id: hdr_dt1_${c}, type: text, x: ${Number((cx + 2).toFixed(2))}, y: ${Number((headerTopY + 5.8).toFixed(2))}, w: 16, text: "Data inicio", size: 5.8, weight: bold }`,
+      `      - { id: hdr_dt2_${c}, type: text, x: ${Number((midX + 2).toFixed(2))}, y: ${Number((headerTopY + 5.8).toFixed(2))}, w: 16, text: "Data conclusao", size: 5.8, weight: bold }`
     );
   }
 
@@ -227,7 +227,7 @@ function buildS13MulticycleYaml(): string {
 
   const footerY = Number((headerTopY + headerH + 20 * rowH + 3).toFixed(2));
   lines.push(
-    `      - { id: footnote_s13, type: text, x: ${tableX}, y: ${footerY}, w: 185, text: "*Ao iniciar uma nova folha, use esta coluna para registrar a data em que cada territorio foi concluido pela ultima vez.", size: 7.5 }`,
+    `      - { id: footnote_s13, type: text, x: ${tableX}, y: ${footerY}, w: 185, text: "*Coluna de referencia do ultimo ciclo operacional concluido para cada setor.", size: 7.5 }`,
     `      - { id: code_s13, type: text, x: ${tableX}, y: ${Number((footerY + 5).toFixed(2))}, w: 40, text: "REG-TERR-4C", size: 8.5, weight: bold }`,
     ''
   );

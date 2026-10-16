@@ -38,7 +38,7 @@ describe('Phase F2 — Multi-Cycle Territory & 4-Up Declarative SDOC Parity Test
       .flatMap((op) => (op as any).lines)
       .join(' ');
 
-    expect(allRenderedText).toContain('REGISTRO DE DESIGNACAO DE TERRITORIO');
+    expect(allRenderedText).toContain('CONTROLE OPERACIONAL DE SETORES E CICLOS');
     expect(allRenderedText).toContain('2026');
     expect(allRenderedText).toContain('T01.01.01');
     expect(allRenderedText).toContain('REG-TERR-4C');

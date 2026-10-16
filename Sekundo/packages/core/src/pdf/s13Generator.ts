@@ -216,8 +216,8 @@ export async function generateTerritoryS13AndCardsPDF(
       const colCycleW = (tableW - colTerrW - colLastW) / 4; // 102pt each
 
       // Title
-      page.drawText('REGISTRO DE DESIGNACAO DE TERRITORIO', {
-        x: 138,
+      page.drawText('CONTROLE OPERACIONAL DE SETORES E CICLOS', {
+        x: 125,
         y: 800,
         size: 14,
         font: fontBold,
@@ -261,8 +261,8 @@ export async function generateTerritoryS13AndCardsPDF(
         borderWidth: 1.5,
       });
 
-      // Column 1 Header: Terr. n.o
-      page.drawText('Terr. n.o', {
+      // Column 1 Header: Setor ID
+      page.drawText('Setor ID', {
         x: tableX + 11,
         y: headerBottomY + 13,
         size: 8,
@@ -270,16 +270,16 @@ export async function generateTerritoryS13AndCardsPDF(
         color: rgb(0.05, 0.05, 0.05),
       });
 
-      // Column 2 Header: Ultima data concluida*
-      page.drawText('Ultima data', {
-        x: tableX + colTerrW + 9,
+      // Column 2 Header: Ultimo ciclo*
+      page.drawText('Ultimo', {
+        x: tableX + colTerrW + 14,
         y: headerBottomY + 17,
         size: 7,
         font: fontBold,
         color: rgb(0.05, 0.05, 0.05),
       });
-      page.drawText('concluida*', {
-        x: tableX + colTerrW + 11,
+      page.drawText('ciclo*', {
+        x: tableX + colTerrW + 16,
         y: headerBottomY + 8,
         size: 7,
         font: fontBold,
@@ -300,7 +300,7 @@ export async function generateTerritoryS13AndCardsPDF(
         color: rgb(0.05, 0.05, 0.05),
       });
 
-      // 4 Cycle Columns Headers ("Designado para" + "Data da designacao | Data da conclusao")
+      // 4 Cycle Columns Headers ("Responsavel" + "Data inicio | Data fim")
       for (let c = 0; c < 4; c++) {
         const cx = tableX + colTerrW + colLastW + c * colCycleW;
         if (c > 0) {
@@ -327,18 +327,18 @@ export async function generateTerritoryS13AndCardsPDF(
           color: rgb(0.15, 0.15, 0.15),
         });
 
-        page.drawText('Designado para', {
-          x: cx + 22,
+        page.drawText('Responsavel', {
+          x: cx + 26,
           y: midHeaderY + 4,
           size: 7.5,
           font: fontBold,
           color: rgb(0.05, 0.05, 0.05),
         });
 
-        page.drawText('Data da', { x: cx + 11, y: headerBottomY + 10, size: 6, font: fontBold });
-        page.drawText('designacao', { x: cx + 6, y: headerBottomY + 3, size: 6, font: fontBold });
+        page.drawText('Data', { x: cx + 14, y: headerBottomY + 10, size: 6, font: fontBold });
+        page.drawText('inicio', { x: cx + 14, y: headerBottomY + 3, size: 6, font: fontBold });
 
-        page.drawText('Data da', { x: cx + colCycleW / 2 + 11, y: headerBottomY + 10, size: 6, font: fontBold });
+        page.drawText('Data', { x: cx + colCycleW / 2 + 14, y: headerBottomY + 10, size: 6, font: fontBold });
         page.drawText('conclusao', { x: cx + colCycleW / 2 + 8, y: headerBottomY + 3, size: 6, font: fontBold });
       }
 
@@ -481,7 +481,7 @@ export async function generateTerritoryS13AndCardsPDF(
 
       // Footnote
       page.drawText(
-        '*Ao iniciar uma nova folha, use esta coluna para registrar a data em que cada territorio foi concluido pela ultima vez.',
+        '*Coluna de referencia do ultimo ciclo operacional concluido para cada setor.',
         {
           x: tableX,
           y: cursorY - 14,

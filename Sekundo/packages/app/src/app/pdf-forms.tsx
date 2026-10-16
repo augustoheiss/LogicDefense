@@ -49,7 +49,7 @@ export default function PDFFormsConsole() {
 
   const [loading, setLoading] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
-  const [selectedTemplate, setSelectedTemplate] = useState<'s89' | 's12' | 'custom'>('s89');
+  const [selectedTemplate, setSelectedTemplate] = useState<'s89' | 's12' | 'custom'>('custom');
   const [s13ServiceYear, setS13ServiceYear] = useState<'all' | '2027' | '2026'>('all');
   const [mailMergeAllRecords, setMailMergeAllRecords] = useState<boolean>(false);
 
