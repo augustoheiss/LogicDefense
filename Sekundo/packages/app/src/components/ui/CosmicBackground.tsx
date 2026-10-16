@@ -71,32 +71,29 @@ export function CosmicBackground() {
     return () => window.removeEventListener('scroll', handleScroll, { capture: true } as any);
   }, []);
 
-  // Compute smooth orbital parallax parameters
-  const hueShift = (scrollY * 0.05) % 360; // Subtle color shift on scroll
-  const parallaxOffsetY = -((scrollY * 0.12) % 60); // Depth parallax
-  const orbitalRotation = (scrollY * 0.02) % 360;
+  // Smooth, subtle celestial parallax (very distant starfield: low movement factor)
+  const parallaxOffsetY = -((scrollY * 0.04) % 35);
 
   return (
     <View style={styles.fixedContainer} pointerEvents="none">
-      {/* 1. Base dark cosmic void */}
+      {/* 1. Base dark obsidian cosmic void */}
       <View style={styles.voidBase} />
 
-      {/* 2. Main Primordial Cosmos Artwork with dynamic web filters and parallax */}
+      {/* 2. Main Neutral Deep Space Starfield (Subtle, crisp, zero bright planets/suns) */}
       <Image
         source={cosmicWallpaper}
         style={[
           styles.wallpaperImage,
           {
-            opacity: 0.28,
+            opacity: 0.22,
             transform: [
               { translateY: parallaxOffsetY },
               { scale: 1.02 },
             ],
             ...(Platform.OS === 'web'
               ? ({
-                  filter: `hue-rotate(${hueShift}deg) brightness(1.05) contrast(1.1)`,
-                  transition: 'filter 0.4s ease-out, transform 0.1s ease-out',
-                  willChange: 'transform, filter',
+                  willChange: 'transform',
+                  transition: 'transform 0.1s ease-out',
                 } as any)
               : {}),
           },
@@ -104,12 +101,18 @@ export function CosmicBackground() {
         resizeMode="cover"
       />
 
-      {/* 3. Subtle ambient cosmic glow orbs (Left Earth aura / Right Solar aura) */}
-      <View style={[styles.glowOrb, styles.leftEarthGlow]} />
-      <View style={[styles.glowOrb, styles.rightSolarGlow]} />
-
-      {/* 4. Center Vignette & Reading Contrast Protector */}
-      <View style={styles.centerContrastWash} />
+      {/* 3. Center Vignette & Reading Contrast Protector (Ensures 100% card & text legibility) */}
+      <View
+        style={[
+          styles.centerContrastWash,
+          ...(Platform.OS === 'web'
+            ? ({
+                backgroundImage:
+                  'radial-gradient(ellipse at center, rgba(7, 9, 14, 0.25) 0%, rgba(7, 9, 14, 0.70) 100%)',
+              } as any)
+            : {}),
+        ]}
+      />
     </View>
   );
 }
@@ -126,34 +129,16 @@ const styles = StyleSheet.create({
   },
   voidBase: {
     ...StyleSheet.absoluteFill,
-    backgroundColor: '#0C0E15',
+    backgroundColor: '#07090E',
   },
   wallpaperImage: {
     ...StyleSheet.absoluteFill,
     width: '100%',
     height: '100%',
   },
-  glowOrb: {
-    position: 'absolute',
-    borderRadius: 9999,
-    opacity: 0.15,
-  },
-  leftEarthGlow: {
-    top: '20%',
-    left: '-10%',
-    width: 480,
-    height: 480,
-    backgroundColor: '#38BDF8', // Cyan/azure earth atmosphere glow
-  },
-  rightSolarGlow: {
-    top: '15%',
-    right: '-10%',
-    width: 520,
-    height: 520,
-    backgroundColor: '#F59E0B', // Radiant solar gold glow
-  },
   centerContrastWash: {
     ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(12, 14, 21, 0.45)', // Ensures foreground UI (checklists, cards, tables) stays ultra-readable
+    backgroundColor: 'rgba(7, 9, 14, 0.35)', // Fallback for native and dark mode baseline
   },
 });
+
