@@ -28,7 +28,7 @@ export function normalizeWinAnsiTypography(text: string): string {
   return text
     .replace(/[\u201C\u201D\u201E\u201F\u00AB\u00BB]/g, '"')
     .replace(/[\u2018\u2019\u201A\u201B]/g, "'")
-    .replace(/[\u2013\u2014\u2015\u2212]/g, '-')
+    .replace(/[\u2015\u2212]/g, '-')
     .replace(/\u2026/g, '...')
     .replace(/[\u2022\u00B7]/g, '-')
     .replace(/[✓✔☑]/g, '[X]')
@@ -47,6 +47,7 @@ export function needsUnicode(text: string): boolean {
     if (code === 0x09 || code === 0x0a || code === 0x0d) continue;
     if (code >= 0x20 && code <= 0x7e) continue;
     if (code >= 0xa0 && code <= 0xff) continue;
+    if (code === 0x2013 || code === 0x2014) continue;
     return true;
   }
   return false;
@@ -116,7 +117,9 @@ export function sanitizeForWinAnsiWithWarnings(
       code === 0x0a ||
       code === 0x0d ||
       (code >= 0x20 && code <= 0x7e) ||
-      (code >= 0xa0 && code <= 0xff)
+      (code >= 0xa0 && code <= 0xff) ||
+      code === 0x2013 ||
+      code === 0x2014
     ) {
       cleaned += working[i];
     } else {

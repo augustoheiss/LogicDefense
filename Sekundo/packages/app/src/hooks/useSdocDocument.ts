@@ -1,39 +1,14 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import {
-  FlatRegistry,
-  SdocDocument,
-  SdocPrimitive,
-  DisplayList,
-  PreflightReport,
-  DocFieldOperation,
-  FormFieldValue,
-  parseSdocYaml,
-  SdocCstMutator,
-  solveLayout,
-  renderDisplayListToPdf,
-  fillAcroForm,
-  runDocumentPreflight,
-  extractInitialFormRecord,
-  stringifyFormRecordYaml,
-  parseFormRecordYaml,
-  createSetFieldValueOp,
-  reconcileDocFieldOps,
-  createHLC,
-  tickHLC,
-  packHLC,
-  sdocProvenanceBus,
-  SdocTransactionOrigin,
-  S89_4UP_SDOC_YAML,
-  S13S_MULTICYCLE_SDOC_YAML,
-  autoGenerateSdocFromRegistry,
-  writeUnifiedOutput,
+  FlatRegistry, SdocDocument, SdocPrimitive, PreflightReport, DocFieldOperation, FormFieldValue,
+  parseSdocYaml, SdocCstMutator, solveLayout, renderDisplayListToPdf, fillAcroForm,
+  runDocumentPreflight, extractInitialFormRecord, stringifyFormRecordYaml, parseFormRecordYaml,
+  createSetFieldValueOp, reconcileDocFieldOps, createHLC, tickHLC,
+  computeTemplateFingerprintSha256, sdocProvenanceBus, SdocTransactionOrigin,
+  S89_4UP_SDOC_YAML, S13S_MULTICYCLE_SDOC_YAML, autoGenerateSdocFromRegistry, writeUnifiedOutput,
 } from '@sekundo/core';
 import {
-  saveSdocTemplate,
-  loadSdocTemplate,
-  loadBlob,
-  saveFormYaml,
-  loadFormYaml,
+  saveSdocTemplate, loadSdocTemplate, loadBlob, saveFormYaml, loadFormYaml,
 } from '../storage/localStorage';
 import { deliverFile } from '../utils/deliverFile';
 import { streamPdfToSdocIngestion } from '../pdf/ingestPipeline';
@@ -72,28 +47,24 @@ export function useSdocDocument({
   const hlcClockRef = useRef(createHLC('node-studio'));
   const initializedRef = useRef(false);
 
-  // Load persisted template & form record on mount
   useEffect(() => {
     if (initializedRef.current) return;
     initializedRef.current = true;
     loadSdocTemplate(templateStorageId).then((saved) => {
-      if (saved && saved.trim().length > 0) {
-        setYamlTextState(saved);
-      } else if (initialPreset === 'auto' && registry.length > 0) {
+      if (saved && saved.trim().length > 0) setYamlTextState(saved);
+      else if (initialPreset === 'auto' && registry.length > 0) {
         setYamlTextState(autoGenerateSdocFromRegistry(registry, eventName));
       } else if (initialPreset === 's13-s') {
         setYamlTextState(S13S_MULTICYCLE_SDOC_YAML);
       }
     });
     loadFormYaml(templateStorageId).then((savedForm) => {
-      if (savedForm) {
-        try {
-          const parsed = parseFormRecordYaml(savedForm);
-          const firstVals = parsed.records[0]?.values;
-          if (firstVals) setFormValues(firstVals);
-        } catch {
-          // ignore malformed saved form
-        }
+      if (!savedForm) return;
+      try {
+        const firstVals = parseFormRecordYaml(savedForm).records[0]?.values;
+        if (firstVals) setFormValues(firstVals);
+      } catch {
+        // ignore malformed saved form
       }
     });
   }, [templateStorageId, initialPreset, registry, eventName]);
@@ -139,10 +110,7 @@ export function useSdocDocument({
     });
   }, [templateStorageId]);
 
-  const { sdoc, parseError } = useMemo<{
-    sdoc: SdocDocument | null;
-    parseError: string | null;
-  }>(() => {
+  const { sdoc, parseError } = useMemo(() => {
     const res = parseSdocYaml(yamlText);
     if (!res.doc) {
       return {
@@ -153,7 +121,6 @@ export function useSdocDocument({
     return { sdoc: res.doc, parseError: null };
   }, [yamlText]);
 
-  // Seed default values from sdoc.fields when new fields appear (C6)
   useEffect(() => {
     if (!sdoc?.fields || sdoc.fields.length === 0) return;
     setFormValues((prev) => {
@@ -170,7 +137,6 @@ export function useSdocDocument({
     });
   }, [sdoc?.fields]);
 
-  // Load underlay blob if referenced by sdoc.underlay.source
   useEffect(() => {
     const ref = sdoc?.underlay?.source;
     if (!ref) {
@@ -183,30 +149,19 @@ export function useSdocDocument({
     });
   }, [sdoc?.underlay?.source]);
 
-  // Rasterize active page of underlay PDF for SvgPainter background preview (C11)
   useEffect(() => {
-    if (!underlayBytes || !sdoc?.underlay?.source) {
-      setUnderlayDataUrl(null);
-      return;
-    }
-    const pageNum = currentPageIndex + 1;
+    if (!underlayBytes || !sdoc?.underlay?.source) return setUnderlayDataUrl(null);
     let cancelled = false;
-    rasterizeUnderlayPage(underlayBytes, pageNum, sdoc.underlay.source).then((url) => {
+    rasterizeUnderlayPage(underlayBytes, currentPageIndex + 1, sdoc.underlay.source).then((url) => {
       if (!cancelled) setUnderlayDataUrl(url);
     });
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [underlayBytes, currentPageIndex, sdoc?.underlay?.source]);
 
-  const { displayList, layoutError } = useMemo<{
-    displayList: DisplayList | null;
-    layoutError: string | null;
-  }>(() => {
+  const { displayList, layoutError } = useMemo(() => {
     if (!sdoc) return { displayList: null, layoutError: null };
     try {
-      const dl = solveLayout(sdoc, registry, { formValues });
-      return { displayList: dl, layoutError: null };
+      return { displayList: solveLayout(sdoc, registry, { formValues }), layoutError: null };
     } catch (err: any) {
       return { displayList: null, layoutError: err?.message ?? 'Erro de layout' };
     }
@@ -214,30 +169,19 @@ export function useSdocDocument({
 
   const preflight = useMemo<PreflightReport | null>(() => {
     if (!sdoc) return null;
-    const blobs: Record<string, Uint8Array> = {};
-    if (sdoc.underlay?.source && underlayBytes) {
-      blobs[sdoc.underlay.source] = underlayBytes;
-    }
-    return runDocumentPreflight({
-      doc: sdoc,
-      displayList: displayList ?? undefined,
-      values: formValues,
-      blobs,
-    });
+    const blobs = sdoc.underlay?.source && underlayBytes ? { [sdoc.underlay.source]: underlayBytes } : {};
+    return runDocumentPreflight({ doc: sdoc, displayList: displayList ?? undefined, values: formValues, blobs });
   }, [sdoc, underlayBytes, formValues, displayList]);
 
   const updateFormField = useCallback(
     (fieldKey: string, value: string | boolean) => {
       hlcClockRef.current = tickHLC(hlcClockRef.current, 'node-studio');
-      const op = createSetFieldValueOp('rec_1', fieldKey, value, hlcClockRef.current);
-      setHlcOps((prev) => [...prev, op]);
+      setHlcOps((prev) => [...prev, createSetFieldValueOp('rec_1', fieldKey, value, hlcClockRef.current)]);
       setFormValues((prev) => {
         const next = { ...prev, [fieldKey]: value };
         if (sdoc) {
           const yamlRec = stringifyFormRecordYaml({
-            form: 1,
-            template: sdoc.underlay?.source || sdoc.name,
-            records: [{ id: 'rec_1', values: next }],
+            form: 1, template: sdoc.underlay?.source || sdoc.name, records: [{ id: 'rec_1', values: next }],
           });
           saveFormYaml(templateStorageId, yamlRec).catch(() => {});
         }
@@ -247,23 +191,16 @@ export function useSdocDocument({
     [sdoc, templateStorageId]
   );
 
-  const exportHlcDelta = useCallback((): string => {
-    return buildShareableDocDelta(
-      sdoc?.underlay?.source || sdoc?.name || eventId,
-      hlcOps
-    );
-  }, [sdoc?.name, sdoc?.underlay?.source, eventId, hlcOps]);
+  const exportHlcDelta = useCallback(
+    (): string => buildShareableDocDelta(sdoc?.underlay?.source || sdoc?.name || eventId, hlcOps),
+    [sdoc?.name, sdoc?.underlay?.source, eventId, hlcOps]
+  );
 
   const importHlcDelta = useCallback((envelopeStr: string) => {
     try {
       const env = parseReceivedDocDelta(envelopeStr);
-      if (!env) {
-        setStatusMessage('⚠️ Envelope Delta HLC inválido.');
-        return;
-      }
-      const fieldOps = env.ops.filter(
-        (o): o is DocFieldOperation => o.kind === 'setFieldValue'
-      );
+      if (!env) return setStatusMessage('⚠️ Envelope Delta HLC inválido.');
+      const fieldOps = env.ops.filter((o): o is DocFieldOperation => o.kind === 'setFieldValue');
       setHlcOps((prev) => {
         const combined = [...prev, ...fieldOps];
         setFormValues((curr) => {
@@ -285,9 +222,7 @@ export function useSdocDocument({
     (id: string, patch: Record<string, unknown>) => {
       try {
         const nextYaml = SdocCstMutator.updatePrimitiveInPlace(yamlText, id, patch);
-        if (nextYaml !== yamlText) {
-          commitYamlChange(nextYaml, 'canvas');
-        }
+        if (nextYaml !== yamlText) commitYamlChange(nextYaml, 'canvas');
       } catch (err: any) {
         setStatusMessage(`Erro ao atualizar elemento: ${err?.message ?? err}`);
       }
@@ -315,6 +250,8 @@ export function useSdocDocument({
     (preset: 's89-4up' | 's13-s' | 'auto') => {
       setCurrentPageIndex(0);
       setSelectedId(null);
+      setHlcOps([]);
+      setFormValues({});
       if (preset === 's89-4up') {
         commitYamlChange(S89_4UP_SDOC_YAML, 'editor');
         setStatusMessage('Template S-89 (4 por folha A4) carregado.');
@@ -322,8 +259,7 @@ export function useSdocDocument({
         commitYamlChange(S13S_MULTICYCLE_SDOC_YAML, 'editor');
         setStatusMessage('Template S-13-S (Registro de Territórios Multi-Ciclo) carregado.');
       } else if (preset === 'auto') {
-        const generated = autoGenerateSdocFromRegistry(registry, eventName);
-        commitYamlChange(generated, 'editor');
+        commitYamlChange(autoGenerateSdocFromRegistry(registry, eventName), 'editor');
         setStatusMessage('Auto-Template gerado a partir do evento.');
       }
     },
@@ -336,22 +272,15 @@ export function useSdocDocument({
         setIngestionStage('Iniciando ingestão PDF...');
         setUnderlayBytes(pdfBytes);
         setCurrentPageIndex(0);
-
+        setSelectedId(null);
+        setHlcOps([]);
         let finalDoc: SdocDocument | null = null;
-        for await (const progress of streamPdfToSdocIngestion(
-          pdfBytes,
-          fileName,
-          mode,
-          registry
-        )) {
+        for await (const progress of streamPdfToSdocIngestion(pdfBytes, fileName, mode, registry)) {
           setIngestionStage(progress.stageLabel);
           commitYamlChange(progress.yaml, 'ingest');
           finalDoc = progress.doc;
         }
-        if (finalDoc) {
-          const initialRec = extractInitialFormRecord(finalDoc);
-          setFormValues(initialRec.records[0]?.values || {});
-        }
+        if (finalDoc) setFormValues(extractInitialFormRecord(finalDoc).records[0]?.values || {});
         setIngestionStage(null);
         setStatusMessage(
           mode === 'overlay'
@@ -366,40 +295,44 @@ export function useSdocDocument({
     [registry, commitYamlChange]
   );
 
-  const exportEditableAcroFormPdf = useCallback(async () => {
-    try {
-      const slug = (sdoc?.name || eventName || 'sekundo-doc').trim();
-      if (underlayBytes) {
-        const strMap: Record<string, string> = {};
-        for (const [k, v] of Object.entries(formValues)) {
-          strMap[k] = typeof v === 'boolean' ? (v ? 'true' : 'false') : String(v);
+  const exportEditableAcroFormPdf = useCallback(
+    async (stripSignatures = false) => {
+      try {
+        const slug = (sdoc?.name || eventName || 'sekundo-doc').trim();
+        if (underlayBytes) {
+          const strMap: Record<string, string> = {};
+          for (const [k, v] of Object.entries(formValues)) {
+            strMap[k] = typeof v === 'boolean' ? (v ? 'true' : 'false') : String(v);
+          }
+          const editableRes = await fillAcroForm(underlayBytes, strMap, {
+            flatten: false,
+            stripSignatures,
+          });
+          const suffix = stripSignatures ? '-copia-sem-assinatura.pdf' : '-editavel.pdf';
+          await deliverFile(editableRes.pdfBytes, `${slug}${suffix}`, 'application/pdf');
+          setStatusMessage(`PDF exportado: ${slug}${suffix}`);
+          return;
         }
-        const editableRes = await fillAcroForm(underlayBytes, strMap, { flatten: false });
-        await deliverFile(editableRes.pdfBytes, `${slug}-editavel.pdf`, 'application/pdf');
-        setStatusMessage(`PDF editável (AcroForm aberto) exportado: ${slug}-editavel.pdf`);
-        return;
+        if (displayList) {
+          const pdfBytes = await renderDisplayListToPdf(displayList);
+          await deliverFile(pdfBytes, `${slug}.pdf`, 'application/pdf');
+          setStatusMessage(`PDF exportado: ${slug}.pdf`);
+        }
+      } catch (err: any) {
+        setStatusMessage(`Erro ao exportar PDF editável: ${err?.message ?? err}`);
       }
-      if (displayList) {
-        const pdfBytes = await renderDisplayListToPdf(displayList);
-        await deliverFile(pdfBytes, `${slug}.pdf`, 'application/pdf');
-        setStatusMessage(`PDF exportado: ${slug}.pdf`);
-      }
-    } catch (err: any) {
-      setStatusMessage(`Erro ao exportar PDF editável: ${err?.message ?? err}`);
-    }
-  }, [sdoc?.name, eventName, underlayBytes, formValues, displayList]);
+    },
+    [sdoc?.name, eventName, underlayBytes, formValues, displayList]
+  );
 
   const exportDocument = useCallback(
     async (kind: 'pdf' | 'whatsapp' | 'csv' | 'yaml' | 'sdoc' | 'form-yaml') => {
       try {
         const slug = (sdoc?.name || eventName || 'sekundo-doc').trim();
-
         if (kind === 'sdoc') {
           await deliverFile(yamlText, `${slug}.sdoc.yaml`, 'text/yaml;charset=utf-8');
-          setStatusMessage(`Template salvo: ${slug}.sdoc.yaml`);
-          return;
+          return setStatusMessage(`Template salvo: ${slug}.sdoc.yaml`);
         }
-
         if (kind === 'form-yaml') {
           const formYaml = stringifyFormRecordYaml({
             form: 1,
@@ -407,35 +340,26 @@ export function useSdocDocument({
             records: [{ id: 'rec_1', values: formValues }],
           });
           await deliverFile(formYaml, `${slug}.form.yaml`, 'text/yaml;charset=utf-8');
-          setStatusMessage(`Respostas salvas: ${slug}.form.yaml`);
-          return;
+          return setStatusMessage(`Respostas salvas: ${slug}.form.yaml`);
         }
-
         const blobs: Record<string, Uint8Array> = {};
-        if (sdoc?.underlay?.source && underlayBytes) {
-          blobs[sdoc.underlay.source] = underlayBytes;
-        }
-
+        if (sdoc?.underlay?.source && underlayBytes) blobs[sdoc.underlay.source] = underlayBytes;
         if (kind === 'pdf' && displayList) {
+          const dataBytes = new TextEncoder().encode(JSON.stringify(formValues));
+          const dataHash = await computeTemplateFingerprintSha256(dataBytes);
           const pdfBytes = await renderDisplayListToPdf(displayList, {
             blobs,
-            provenance: {
-              templateHash: sdoc?.underlay?.source,
-              dataHash: packHLC(hlcClockRef.current),
-            },
+            provenance: { templateHash: sdoc?.underlay?.source, dataHash },
           });
           await deliverFile(pdfBytes, `${slug}.pdf`, 'application/pdf');
-          setStatusMessage(`Exportado com sucesso (Final Achatado): ${slug}.pdf`);
-          return;
+          return setStatusMessage(`Exportado com sucesso (Final Achatado): ${slug}.pdf`);
         }
-
         const output = await writeUnifiedOutput(kind, {
           registry,
           eventName: sdoc?.name || eventName,
           sdocYaml: yamlText,
           options: { blobs },
         });
-
         const extMap = {
           pdf: { ext: 'pdf', mime: 'application/pdf' },
           whatsapp: { ext: 'whatsapp.txt', mime: 'text/plain;charset=utf-8' },
@@ -449,56 +373,19 @@ export function useSdocDocument({
         setStatusMessage(`Erro na exportação (${kind}): ${err?.message ?? err}`);
       }
     },
-    [
-      registry,
-      yamlText,
-      underlayBytes,
-      displayList,
-      formValues,
-      sdoc?.name,
-      sdoc?.underlay?.source,
-      eventName,
-    ]
+    [registry, yamlText, underlayBytes, displayList, formValues, sdoc?.name, sdoc?.underlay?.source, eventName]
   );
 
   return {
-    yamlText,
-    setYamlText: (val: string) => commitYamlChange(val, 'editor'),
-    sdoc,
-    parseError,
-    displayList,
-    layoutError,
-    preflight,
-    underlayDataUrl,
-    formValues,
-    updateFormField,
-    hlcOps,
-    exportHlcDelta,
-    importHlcDelta,
-    currentPageIndex,
-    setCurrentPageIndex,
-    selectedId,
-    setSelectedId,
-    snapMm,
-    setSnapMm,
-    showGrid,
-    setShowGrid,
-    showRulers,
-    setShowRulers,
-    zoom,
-    setZoom,
-    undo,
-    redo,
-    canUndo: undoStack.length > 0,
-    canRedo: redoStack.length > 0,
-    updatePrimitive,
-    addPrimitive,
-    loadBuiltinPreset,
-    ingestPdfBytes,
-    exportDocument,
-    exportEditableAcroFormPdf,
-    ingestionStage,
-    statusMessage,
-    setStatusMessage,
+    yamlText, setYamlText: (val: string) => commitYamlChange(val, 'editor'),
+    sdoc, parseError, displayList, layoutError, preflight, underlayDataUrl,
+    formValues, updateFormField, hlcOps, exportHlcDelta, importHlcDelta,
+    currentPageIndex, setCurrentPageIndex, selectedId, setSelectedId,
+    snapMm, setSnapMm, showGrid, setShowGrid, showRulers, setShowRulers, zoom, setZoom,
+    undo, redo, canUndo: undoStack.length > 0, canRedo: redoStack.length > 0,
+    updatePrimitive, addPrimitive, loadBuiltinPreset, ingestPdfBytes, exportDocument,
+    exportEditableAcroFormPdf: () => exportEditableAcroFormPdf(false),
+    exportUnsignedCopy: () => exportEditableAcroFormPdf(true),
+    ingestionStage, statusMessage, setStatusMessage,
   };
 }

@@ -143,9 +143,7 @@ export function StudioInspectorPanel({
           value={String(p[key] ?? 0)}
           onChangeText={(txt) => {
             const parsed = parseFloat(txt);
-            if (!Number.isNaN(parsed)) {
-              onUpdatePrimitive(prim.id, { [key]: parsed });
-            }
+            if (!Number.isNaN(parsed)) onUpdatePrimitive(prim.id, { [key]: parsed });
           }}
         />
       </View>
@@ -261,41 +259,24 @@ export function StudioInspectorPanel({
     <View style={styles.container}>
       <Text style={styles.sectionTitle}>➕ Adicionar Primitiva Vetorial</Text>
       <View style={styles.addRow}>
-        <TouchableOpacity
-          testID="add-prim-text"
-          style={styles.addBtn}
-          onPress={() => handleQuickAdd('text')}
-        >
-          <Text style={styles.addBtnText}>+ Texto</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          testID="add-prim-rect"
-          style={styles.addBtn}
-          onPress={() => handleQuickAdd('rect')}
-        >
-          <Text style={styles.addBtnText}>+ Retângulo</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          testID="add-prim-line"
-          style={styles.addBtn}
-          onPress={() => handleQuickAdd('line')}
-        >
-          <Text style={styles.addBtnText}>+ Reta</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          testID="add-prim-path"
-          style={styles.addBtn}
-          onPress={() => handleQuickAdd('path')}
-        >
-          <Text style={styles.addBtnText}>+ Polilinha</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          testID="add-prim-table"
-          style={styles.addBtn}
-          onPress={() => handleQuickAdd('table')}
-        >
-          <Text style={styles.addBtnText}>+ Tabela</Text>
-        </TouchableOpacity>
+        {(
+          [
+            ['text', '+ Texto'],
+            ['rect', '+ Retângulo'],
+            ['line', '+ Reta'],
+            ['path', '+ Polilinha'],
+            ['table', '+ Tabela'],
+          ] as const
+        ).map(([kind, label]) => (
+          <TouchableOpacity
+            key={kind}
+            testID={`add-prim-${kind}`}
+            style={styles.addBtn}
+            onPress={() => handleQuickAdd(kind)}
+          >
+            <Text style={styles.addBtnText}>{label}</Text>
+          </TouchableOpacity>
+        ))}
       </View>
 
       {selectedPrim ? (
@@ -303,7 +284,7 @@ export function StudioInspectorPanel({
       ) : (
         <View style={styles.emptyInspector}>
           <Text style={styles.emptyInspectorText}>
-            Clique em qualquer elemento no Canvas ou na árvore abaixo para inspecionar e editar em mm.
+            Clique em qualquer elemento no Canvas ou na árvore abaixo para editar em mm.
           </Text>
         </View>
       )}
@@ -339,95 +320,25 @@ export function StudioInspectorPanel({
 
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 10, backgroundColor: '#0F172A' },
-  sectionTitle: {
-    color: '#94A3B8',
-    fontSize: 11,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    marginBottom: 6,
-    marginTop: 6,
-  },
+  sectionTitle: { color: '#94A3B8', fontSize: 11, fontWeight: '700', textTransform: 'uppercase', marginVertical: 6 },
   addRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 10 },
-  addBtn: {
-    backgroundColor: '#1E293B',
-    borderWidth: 1,
-    borderColor: '#334155',
-    paddingHorizontal: 8,
-    paddingVertical: 5,
-    borderRadius: 6,
-  },
+  addBtn: { backgroundColor: '#1E293B', borderWidth: 1, borderColor: '#334155', paddingHorizontal: 8, paddingVertical: 5, borderRadius: 6 },
   addBtnText: { color: '#E2E8F0', fontSize: 11, fontWeight: '600' },
-  inspectorCard: {
-    backgroundColor: '#1E293B',
-    borderRadius: 8,
-    padding: 10,
-    borderWidth: 1,
-    borderColor: '#3B82F6',
-    marginBottom: 10,
-  },
-  inspectorHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
+  inspectorCard: { backgroundColor: '#1E293B', borderRadius: 8, padding: 10, borderWidth: 1, borderColor: '#3B82F6', marginBottom: 10 },
+  inspectorHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
   inspectorTitle: { color: '#60A5FA', fontSize: 12, fontWeight: '700' },
   propRow: { flexDirection: 'row', gap: 6, marginBottom: 6 },
   propCol: { flex: 1 },
   propLabel: { color: '#94A3B8', fontSize: 10, marginBottom: 2 },
-  propInput: {
-    backgroundColor: '#0F172A',
-    color: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: '#334155',
-    borderRadius: 4,
-    paddingHorizontal: 6,
-    paddingVertical: 4,
-    fontSize: 11,
-  },
-  propInputFull: {
-    backgroundColor: '#0F172A',
-    color: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: '#334155',
-    borderRadius: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 5,
-    fontSize: 11,
-    marginBottom: 6,
-  },
-  propToggleBtn: {
-    backgroundColor: '#0F172A',
-    borderWidth: 1,
-    borderColor: '#334155',
-    borderRadius: 4,
-    paddingVertical: 5,
-    alignItems: 'center',
-  },
+  propInput: { backgroundColor: '#0F172A', color: '#F8FAFC', borderWidth: 1, borderColor: '#334155', borderRadius: 4, paddingHorizontal: 6, paddingVertical: 4, fontSize: 11 },
+  propInputFull: { backgroundColor: '#0F172A', color: '#F8FAFC', borderWidth: 1, borderColor: '#334155', borderRadius: 4, paddingHorizontal: 8, paddingVertical: 5, fontSize: 11, marginBottom: 6 },
+  propToggleBtn: { backgroundColor: '#0F172A', borderWidth: 1, borderColor: '#334155', borderRadius: 4, paddingVertical: 5, alignItems: 'center' },
   propToggleText: { color: '#E2E8F0', fontSize: 11, fontWeight: '600' },
-  emptyInspector: {
-    backgroundColor: '#1E293B',
-    borderRadius: 6,
-    padding: 10,
-    marginBottom: 10,
-  },
+  emptyInspector: { backgroundColor: '#1E293B', borderRadius: 6, padding: 10, marginBottom: 10 },
   emptyInspectorText: { color: '#64748B', fontSize: 11 },
   layerList: { flex: 1 },
-  layerItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 6,
-    paddingHorizontal: 8,
-    borderRadius: 5,
-    marginBottom: 3,
-    backgroundColor: '#1E293B',
-  },
-  layerItemSelected: {
-    backgroundColor: '#1E3A8A',
-    borderWidth: 1,
-    borderColor: '#60A5FA',
-  },
+  layerItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 6, paddingHorizontal: 8, borderRadius: 5, marginBottom: 3, backgroundColor: '#1E293B' },
+  layerItemSelected: { backgroundColor: '#1E3A8A', borderWidth: 1, borderColor: '#60A5FA' },
   layerItemTitle: { color: '#CBD5E1', fontSize: 11, fontFamily: 'monospace' },
   layerItemTitleSelected: { color: '#FFFFFF', fontWeight: '700' },
   layerCoord: { color: '#64748B', fontSize: 10, fontFamily: 'monospace' },

@@ -80,9 +80,13 @@ export function extractAcroFormStage(
       // Clockwise 90 deg: bottom-left (xPt, yPt) maps to visual landscape (yPt from left, xPt from top)
       xMm = Number(ptToMm(field.y).toFixed(2));
       yMm = Number(ptToMm(field.x).toFixed(2));
+      wMm = rawHMm;
+      hMm = rawWMm;
     } else if (rot === 270) {
-      xMm = Number(Math.max(0, pageHeightMm - ptToMm(field.y) - rawWMm).toFixed(2));
-      yMm = Number(Math.max(0, pageWidthMm - ptToMm(field.x) - rawHMm).toFixed(2));
+      xMm = Number(Math.max(0, pageHeightMm - ptToMm(field.y) - rawHMm).toFixed(2));
+      yMm = Number(Math.max(0, pageWidthMm - ptToMm(field.x) - rawWMm).toFixed(2));
+      wMm = rawHMm;
+      hMm = rawWMm;
     } else {
       const conv = fromPdf(field.x, field.y, pageHeightMm, rawHMm);
       xMm = conv.xMm;
@@ -102,7 +106,6 @@ export function extractAcroFormStage(
       from: 'acroform',
       name: field.fieldName,
       page: field.page || 1,
-      ...(field.pages && field.pages.length > 1 ? { pages: field.pages } : {}),
       rect: [
         Number(Math.max(0, xMm).toFixed(2)),
         Number(Math.max(0, yMm).toFixed(2)),

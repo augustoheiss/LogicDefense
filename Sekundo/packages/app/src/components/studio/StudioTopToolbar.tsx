@@ -79,7 +79,6 @@ export function StudioTopToolbar({
 
   return (
     <View style={styles.topBar}>
-      {/* Hidden HTML5 File Input on Web for 1-tap upload & Playwright E2E setInputFiles */}
       {Platform.OS === 'web' &&
         React.createElement('input', {
           id: 'pdf-input',
@@ -91,14 +90,10 @@ export function StudioTopToolbar({
         })}
 
       <View style={styles.topRow}>
-        <TouchableOpacity
-          testID="studio-back-btn"
-          style={styles.backBtn}
-          onPress={onBack}
-        >
+        <TouchableOpacity testID="studio-back-btn" style={styles.backBtn} onPress={onBack}>
           <Text style={styles.backBtnText}>← Painel</Text>
         </TouchableOpacity>
-        <Text style={styles.title}>🖋️ Estúdio Documental YAML ⇄ PDF</Text>
+        <Text style={styles.title}>🖋️ Estúdio YAML ⇄ PDF</Text>
 
         <TouchableOpacity
           testID="preset-s89-btn"
@@ -175,11 +170,7 @@ export function StudioTopToolbar({
             <Text style={styles.smallBtnText}>↪ Refazer</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity
-            testID="studio-snap-btn"
-            style={styles.smallBtn}
-            onPress={onCycleSnap}
-          >
+          <TouchableOpacity testID="studio-snap-btn" style={styles.smallBtn} onPress={onCycleSnap}>
             <Text style={styles.smallBtnText}>
               🧲 Snap: {snapMm > 0 ? `${snapMm}mm` : 'Livre'}
             </Text>
@@ -206,7 +197,7 @@ export function StudioTopToolbar({
             style={styles.exportPrimaryBtn}
             onPress={() => onExport('pdf')}
           >
-            <Text style={styles.exportPrimaryText}>📄 Baixar PDF (Achatado)</Text>
+            <Text style={styles.exportPrimaryText}>📄 Baixar PDF</Text>
           </TouchableOpacity>
           <TouchableOpacity
             testID="export-editable-pdf-btn"
@@ -220,21 +211,21 @@ export function StudioTopToolbar({
             style={styles.exportSecondaryBtn}
             onPress={() => onExport('sdoc')}
           >
-            <Text style={styles.exportSecondaryText}>📜 .sdoc.yaml</Text>
+            <Text style={styles.exportSecondaryText}>📜 .sdoc</Text>
           </TouchableOpacity>
           <TouchableOpacity
             testID="export-yaml-btn"
             style={styles.exportSecondaryBtn}
             onPress={() => onExport('yaml')}
           >
-            <Text style={styles.exportSecondaryText}>🌲 .data.yaml</Text>
+            <Text style={styles.exportSecondaryText}>🌲 .data</Text>
           </TouchableOpacity>
           <TouchableOpacity
             testID="export-whatsapp-btn"
             style={styles.exportSecondaryBtn}
             onPress={() => onExport('whatsapp')}
           >
-            <Text style={styles.exportSecondaryText}>💬 WhatsApp</Text>
+            <Text style={styles.exportSecondaryText}>💬 Zap</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -260,83 +251,96 @@ export function StudioTopToolbar({
 
 const styles = StyleSheet.create({
   topBar: {
+    width: '100%',
+    maxWidth: '100%',
+    overflow: 'hidden',
     backgroundColor: '#0F172A',
     borderBottomWidth: 1,
     borderBottomColor: '#1E293B',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
   },
   topRow: {
+    width: '100%',
+    maxWidth: '100%',
     flexDirection: 'row',
     flexWrap: 'wrap',
     alignItems: 'center',
-    gap: 7,
-    marginBottom: 6,
+    gap: 5,
+    marginBottom: 5,
   },
   backBtn: {
     backgroundColor: '#1E293B',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 5,
   },
-  backBtnText: { color: '#94A3B8', fontSize: 12, fontWeight: '600' },
-  title: { color: '#F8FAFC', fontSize: 14.5, fontWeight: '800', marginRight: 4 },
+  backBtnText: { color: '#94A3B8', fontSize: 11, fontWeight: '600' },
+  title: { color: '#F8FAFC', fontSize: 13, fontWeight: '800', marginRight: 2 },
   presetBtn: {
     backgroundColor: '#1E293B',
     borderWidth: 1,
     borderColor: '#334155',
-    paddingHorizontal: 9,
-    paddingVertical: 5,
-    borderRadius: 6,
+    paddingHorizontal: 7,
+    paddingVertical: 4,
+    borderRadius: 5,
   },
   ingestBtn: { borderColor: '#3B82F6', backgroundColor: '#172554' },
   demoBtn: { borderColor: '#6366F1', backgroundColor: '#1E1B4B' },
-  presetBtnText: { color: '#E2E8F0', fontSize: 11, fontWeight: '600' },
+  presetBtnText: { color: '#E2E8F0', fontSize: 10.5, fontWeight: '600' },
   subToolbar: {
+    width: '100%',
+    maxWidth: '100%',
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
     alignItems: 'center',
-    gap: 8,
+    gap: 5,
   },
-  toolGroup: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6 },
+  toolGroup: {
+    maxWidth: '100%',
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: 4,
+  },
   smallBtn: {
     backgroundColor: '#1E293B',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 3,
     borderRadius: 5,
     borderWidth: 1,
     borderColor: '#334155',
   },
   smallBtnActive: { borderColor: '#3B82F6', backgroundColor: '#1E3A8A' },
   btnDisabled: { opacity: 0.4 },
-  smallBtnText: { color: '#CBD5E1', fontSize: 11, fontWeight: '600' },
+  smallBtnText: { color: '#CBD5E1', fontSize: 10.5, fontWeight: '600' },
   exportPrimaryBtn: {
     backgroundColor: '#2563EB',
-    paddingHorizontal: 11,
-    paddingVertical: 5,
-    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 5,
   },
-  exportPrimaryText: { color: '#FFFFFF', fontSize: 11, fontWeight: '700' },
+  exportPrimaryText: { color: '#FFFFFF', fontSize: 10.5, fontWeight: '700' },
   exportEditableBtn: {
     backgroundColor: '#1D4ED8',
-    paddingHorizontal: 9,
-    paddingVertical: 5,
-    borderRadius: 6,
+    paddingHorizontal: 7,
+    paddingVertical: 4,
+    borderRadius: 5,
     borderWidth: 1,
     borderColor: '#60A5FA',
   },
   exportSecondaryBtn: {
     backgroundColor: '#0F766E',
-    paddingHorizontal: 9,
-    paddingVertical: 5,
-    borderRadius: 6,
+    paddingHorizontal: 7,
+    paddingVertical: 4,
+    borderRadius: 5,
   },
-  exportSecondaryText: { color: '#F0FDFA', fontSize: 11, fontWeight: '600' },
+  exportSecondaryText: { color: '#F0FDFA', fontSize: 10.5, fontWeight: '600' },
   statusBanner: {
-    marginTop: 6,
+    marginTop: 5,
     backgroundColor: '#1E293B',
-    paddingHorizontal: 10,
+    paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 5,
   },
@@ -345,6 +349,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#DC2626',
   },
-  statusBannerText: { color: '#93C5FD', fontSize: 11 },
+  statusBannerText: { color: '#93C5FD', fontSize: 10.5 },
   statusBannerTextError: { color: '#FCA5A5', fontWeight: '700' },
 });

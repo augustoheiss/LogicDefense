@@ -50,7 +50,7 @@ const HELVETICA_CHAR_WIDTHS: Record<string, number> = {
   '^': 469, _: 556, '`': 333, a: 556, b: 556, c: 500, d: 556, e: 556, f: 278, g: 556,
   h: 556, i: 222, j: 222, k: 500, l: 222, m: 833, n: 556, o: 556, p: 556, q: 556,
   r: 333, s: 500, t: 278, u: 556, v: 500, w: 722, x: 500, y: 500, z: 500, '{': 334,
-  '|': 260, '}': 334, '~': 584,
+  '|': 260, '}': 334, '~': 584, '–': 556, '—': 1000,
 };
 
 /**
@@ -68,7 +68,7 @@ const HELVETICA_BOLD_CHAR_WIDTHS: Record<string, number> = {
   '^': 584, _: 556, '`': 333, a: 556, b: 611, c: 556, d: 611, e: 556, f: 333, g: 611,
   h: 611, i: 278, j: 278, k: 556, l: 278, m: 889, n: 611, o: 611, p: 611, q: 611,
   r: 389, s: 556, t: 333, u: 611, v: 556, w: 778, x: 556, y: 556, z: 500, '{': 389,
-  '|': 280, '}': 389, '~': 584,
+  '|': 280, '}': 389, '~': 584, '–': 556, '—': 1000,
 };
 
 function lookupHelveticaCharWidth(ch: string, weight: 'normal' | 'bold'): number {
@@ -465,12 +465,11 @@ export function solveLayout(
           : undefined;
 
       for (const field of doc.fields) {
+        if (field.fieldType === 'signature') continue;
         const fieldPage = field.page || 1;
         const fieldPages = field.pages && field.pages.length > 0 ? field.pages : [fieldPage];
         if (
-          doc.underlay &&
-          doc.underlay.pages &&
-          doc.underlay.pages.length > 1 &&
+          isMultiPageTemplate &&
           !fieldPages.includes(targetUnderlayPage) &&
           fieldPage !== targetUnderlayPage
         ) {
@@ -581,6 +580,29 @@ export function solveLayout(
       );
     }
 
+    const mergeRecordWithFallback = (
+      recordCtx: Record<string, unknown>,
+      pageNum: number,
+      slotNum: number
+    ): Record<string, unknown> => {
+      const recInput =
+        recordCtx && typeof recordCtx.input === 'object' && recordCtx.input !== null
+          ? (recordCtx.input as Record<string, unknown>)
+          : {};
+      const mergedInput = options?.formValues
+        ? { ...options.formValues, ...recInput }
+        : Object.keys(recInput).length > 0
+          ? recInput
+          : undefined;
+      return {
+        ...(options?.formValues || {}),
+        ...recordCtx,
+        ...(mergedInput ? { input: mergedInput } : {}),
+        pageNumber: pageNum,
+        slotIndex: slotNum,
+      };
+    };
+
     for (let i = 0; i < contexts.length; i += perPage) {
       const batchIdx = Math.floor(i / perPage);
       const slice = contexts.slice(i, i + perPage);
@@ -593,12 +615,7 @@ export function solveLayout(
           const uPageNum = underlayPages[uIdx];
           const outPageIdx = pages.length;
           const page = createBlankPage(outPageIdx, uPageNum);
-          const ctx = {
-            ...recordCtx,
-            ...(options?.formValues ? { input: options.formValues } : {}),
-            pageNumber: outPageIdx + 1,
-            slotIndex: 1,
-          };
+          const ctx = mergeRecordWithFallback(recordCtx, outPageIdx + 1, 1);
           emitLayersIntoPage(page, ctx, 0, 0, `r${batchIdx + 1}_p${uPageNum}`);
         }
       } else {
@@ -606,12 +623,7 @@ export function solveLayout(
         const page = createBlankPage(outPageIdx);
 
         for (let slotIdx = 0; slotIdx < slice.length; slotIdx++) {
-          const ctx = {
-            ...slice[slotIdx],
-            ...(options?.formValues ? { input: options.formValues } : {}),
-            pageNumber: outPageIdx + 1,
-            slotIndex: slotIdx + 1,
-          };
+          const ctx = mergeRecordWithFallback(slice[slotIdx], outPageIdx + 1, slotIdx + 1);
 
           let offsetX = 0;
           let offsetY = 0;

@@ -16,6 +16,7 @@ export interface QuickFillFormProps {
   preflight: PreflightReport | null;
   onExportFlattenedPdf: (forceFlattenSigned?: boolean) => void;
   onExportEditablePdf: () => void;
+  onExportUnsignedCopy?: () => void;
   onExportFormYaml: () => void;
   onSelectFieldOnCanvas?: (fieldId: string, page?: number) => void;
 }
@@ -34,11 +35,29 @@ export function QuickFillForm({
   preflight,
   onExportFlattenedPdf,
   onExportEditablePdf,
+  onExportUnsignedCopy,
   onExportFormYaml,
   onSelectFieldOnCanvas,
 }: QuickFillFormProps) {
   const [confirmSignatureFlatten, setConfirmSignatureFlatten] = useState(false);
-  const fields = sdoc?.fields || [];
+
+  // N-6 & H12: Hide signature fields (/FT /Sig) and deduplicate multi-widget fields by key
+  const fields = React.useMemo(() => {
+    const raw = (sdoc?.fields || []).filter((f) => f.fieldType !== 'signature');
+    const byKey = new Map<string, SdocField & { allPages: number[] }>();
+    for (const f of raw) {
+      const k = getFieldKey(f);
+      const existing = byKey.get(k);
+      const pg = f.page || 1;
+      if (existing) {
+        if (!existing.allPages.includes(pg)) existing.allPages.push(pg);
+      } else {
+        byKey.set(k, { ...f, allPages: [pg] });
+      }
+    }
+    return Array.from(byKey.values());
+  }, [sdoc?.fields]);
+
   const hasSignature = Boolean(sdoc?.underlay?.hasSignature || preflight?.blocksSilentFlatten);
 
   const actionableIssues = (preflight?.issues || []).filter((i) => i.severity !== 'info');
@@ -87,29 +106,33 @@ export function QuickFillForm({
         </View>
       )}
 
-      {/* Signature Guard Confirmation (U8 / §8.4) */}
+      {/* Signature Guard Confirmation (R5.3 / Decision 1) */}
       {hasSignature && confirmSignatureFlatten && (
         <View style={styles.sigGuardBox} testID="quickfill-sig-guard">
           <Text style={styles.sigGuardText}>
-            🔏 Este PDF possui assinatura digital (/Sig). Achatar o documento invalidará a assinatura criptográfica.
+            🔏 Este PDF possui assinatura digital criptográfica (/Sig). Editar ou regravar o PDF invalidará a assinatura original.
           </Text>
           <View style={styles.sigGuardActions}>
             <TouchableOpacity
-              testID="quickfill-sig-use-editable-btn"
+              testID="quickfill-sig-cancel-btn"
               style={styles.sigSafeBtn}
-              onPress={() => {
-                setConfirmSignatureFlatten(false);
-                onExportEditablePdf();
-              }}
+              onPress={() => setConfirmSignatureFlatten(false)}
             >
-              <Text style={styles.sigBtnText}>✅ Manter Editável (Recomendado)</Text>
+              <Text style={styles.sigBtnText}>✖ Cancelar</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              testID="quickfill-sig-force-flatten-btn"
+              testID="quickfill-sig-use-editable-btn"
               style={styles.sigForceBtn}
-              onPress={handlePrimaryExport}
+              onPress={() => {
+                setConfirmSignatureFlatten(false);
+                if (onExportUnsignedCopy) {
+                  onExportUnsignedCopy();
+                } else {
+                  onExportFlattenedPdf(true);
+                }
+              }}
             >
-              <Text style={styles.sigBtnText}>⚠️ Achatar Mesmo Assim</Text>
+              <Text style={styles.sigBtnText}>📄 Exportar Cópia sem Assinatura</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -135,6 +158,12 @@ export function QuickFillForm({
               ['true', '1', 'sim', 'yes', 'x', 'on'].includes(strVal.toLowerCase());
             const isOverMax =
               typeof field.maxLength === 'number' && strVal.length > field.maxLength;
+            const pageLabel =
+              field.allPages.length > 1
+                ? `Págs. ${field.allPages.join(', ')}`
+                : field.page && field.page > 1
+                  ? `Pág. ${field.page}`
+                  : null;
 
             return (
               <View key={field.id} style={styles.fieldCard}>
@@ -144,9 +173,7 @@ export function QuickFillForm({
                 >
                   <Text style={styles.fieldLabel}>{key}</Text>
                   <View style={styles.badgesRow}>
-                    {field.page && field.page > 1 && (
-                      <Text style={styles.pageBadge}>Pág. {field.page}</Text>
-                    )}
+                    {pageLabel && <Text style={styles.pageBadge}>{pageLabel}</Text>}
                     {typeof field.maxLength === 'number' && (
                       <Text
                         style={[
@@ -237,146 +264,46 @@ export function QuickFillForm({
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0F172A' },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#1E293B',
-  },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#1E293B' },
   headerTitle: { color: '#F8FAFC', fontSize: 12, fontWeight: '700' },
-  yamlChip: {
-    backgroundColor: '#1E293B',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 5,
-    borderWidth: 1,
-    borderColor: '#334155',
-  },
+  yamlChip: { backgroundColor: '#1E293B', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 5, borderWidth: 1, borderColor: '#334155' },
   yamlChipText: { color: '#38BDF8', fontSize: 10, fontWeight: '700' },
-  preflightBox: {
-    backgroundColor: '#1E1B4B',
-    borderBottomWidth: 1,
-    borderBottomColor: '#312E81',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    gap: 3,
-  },
+  preflightBox: { backgroundColor: '#1E1B4B', borderBottomWidth: 1, borderBottomColor: '#312E81', paddingHorizontal: 12, paddingVertical: 8, gap: 3 },
   preflightTitle: { color: '#E0E7FF', fontSize: 11, fontWeight: '700', marginBottom: 2 },
   preflightItem: { fontSize: 10.5 },
   preflightError: { color: '#FCA5A5' },
   preflightWarn: { color: '#FDE68A' },
-  sigGuardBox: {
-    backgroundColor: '#451A03',
-    borderBottomWidth: 1,
-    borderBottomColor: '#92400E',
-    padding: 10,
-    gap: 8,
-  },
+  sigGuardBox: { backgroundColor: '#451A03', borderBottomWidth: 1, borderBottomColor: '#92400E', padding: 10, gap: 8 },
   sigGuardText: { color: '#FEF3C7', fontSize: 11, fontWeight: '600' },
   sigGuardActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  sigSafeBtn: {
-    backgroundColor: '#059669',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 5,
-  },
-  sigForceBtn: {
-    backgroundColor: '#B45309',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 5,
-  },
+  sigSafeBtn: { backgroundColor: '#334155', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 5 },
+  sigForceBtn: { backgroundColor: '#B45309', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 5 },
   sigBtnText: { color: '#FFFFFF', fontSize: 10.5, fontWeight: '700' },
   scroll: { flex: 1 },
   scrollContent: { padding: 10, gap: 10 },
   emptyBox: { padding: 20, alignItems: 'center', gap: 6 },
   emptyText: { color: '#94A3B8', fontSize: 12, fontWeight: '600', textAlign: 'center' },
   emptySubtext: { color: '#64748B', fontSize: 11, textAlign: 'center' },
-  fieldCard: {
-    backgroundColor: '#1E293B',
-    borderRadius: 7,
-    padding: 9,
-    borderWidth: 1,
-    borderColor: '#334155',
-    gap: 6,
-  },
-  fieldHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
+  fieldCard: { backgroundColor: '#1E293B', borderRadius: 7, padding: 9, borderWidth: 1, borderColor: '#334155', gap: 6 },
+  fieldHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   fieldLabel: { color: '#E2E8F0', fontSize: 11.5, fontWeight: '700' },
   badgesRow: { flexDirection: 'row', gap: 6, alignItems: 'center' },
-  pageBadge: {
-    color: '#93C5FD',
-    backgroundColor: '#172554',
-    fontSize: 9.5,
-    fontWeight: '700',
-    paddingHorizontal: 5,
-    paddingVertical: 1,
-    borderRadius: 4,
-  },
+  pageBadge: { color: '#93C5FD', backgroundColor: '#172554', fontSize: 9.5, fontWeight: '700', paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 },
   lengthBadge: { color: '#94A3B8', fontSize: 10, fontFamily: 'monospace' },
   lengthBadgeExceeded: { color: '#F87171', fontWeight: '700' },
-  textInput: {
-    backgroundColor: '#0F172A',
-    color: '#F8FAFC',
-    fontSize: 12,
-    paddingHorizontal: 9,
-    paddingVertical: 6,
-    borderRadius: 5,
-    borderWidth: 1,
-    borderColor: '#334155',
-  },
+  textInput: { backgroundColor: '#0F172A', color: '#F8FAFC', fontSize: 12, paddingHorizontal: 9, paddingVertical: 6, borderRadius: 5, borderWidth: 1, borderColor: '#334155' },
   textInputError: { borderColor: '#EF4444' },
-  checkboxBtn: {
-    backgroundColor: '#0F172A',
-    paddingVertical: 7,
-    paddingHorizontal: 10,
-    borderRadius: 5,
-    borderWidth: 1,
-    borderColor: '#334155',
-  },
+  checkboxBtn: { backgroundColor: '#0F172A', paddingVertical: 7, paddingHorizontal: 10, borderRadius: 5, borderWidth: 1, borderColor: '#334155' },
   checkboxBtnChecked: { backgroundColor: '#064E3B', borderColor: '#10B981' },
   checkboxText: { color: '#F8FAFC', fontSize: 11.5, fontWeight: '600' },
   optionsWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  optionPill: {
-    backgroundColor: '#0F172A',
-    paddingHorizontal: 9,
-    paddingVertical: 5,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#334155',
-  },
+  optionPill: { backgroundColor: '#0F172A', paddingHorizontal: 9, paddingVertical: 5, borderRadius: 14, borderWidth: 1, borderColor: '#334155' },
   optionPillActive: { backgroundColor: '#1D4ED8', borderColor: '#60A5FA' },
   optionPillText: { color: '#CBD5E1', fontSize: 11 },
   optionPillTextActive: { color: '#FFFFFF', fontWeight: '700' },
-  footer: {
-    padding: 10,
-    borderTopWidth: 1,
-    borderTopColor: '#1E293B',
-    gap: 6,
-    backgroundColor: '#090D16',
-  },
-  primaryExportBtn: {
-    backgroundColor: '#2563EB',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 6,
-    alignItems: 'center',
-  },
+  footer: { padding: 10, borderTopWidth: 1, borderTopColor: '#1E293B', gap: 6, backgroundColor: '#090D16' },
+  primaryExportBtn: { backgroundColor: '#2563EB', paddingVertical: 8, paddingHorizontal: 12, borderRadius: 6, alignItems: 'center' },
   primaryExportText: { color: '#FFFFFF', fontSize: 11.5, fontWeight: '700' },
-  secondaryExportBtn: {
-    backgroundColor: '#1E293B',
-    paddingVertical: 7,
-    paddingHorizontal: 12,
-    borderRadius: 6,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#334155',
-  },
+  secondaryExportBtn: { backgroundColor: '#1E293B', paddingVertical: 7, paddingHorizontal: 12, borderRadius: 6, alignItems: 'center', borderWidth: 1, borderColor: '#334155' },
   secondaryExportText: { color: '#CBD5E1', fontSize: 11, fontWeight: '600' },
 });

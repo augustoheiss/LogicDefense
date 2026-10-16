@@ -71,7 +71,7 @@ export async function renderDisplayListToPdf(
   displayList: DisplayList,
   options: PdfPainterOptions = {}
 ): Promise<Uint8Array> {
-  const { PDFDocument, StandardFonts, rgb } = await getPdfLib();
+  const { PDFDocument, StandardFonts, rgb, degrees } = await getPdfLib();
   const pdfDoc = await PDFDocument.create();
   const fontRegular = await pdfDoc.embedFont(StandardFonts.Helvetica);
   const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
@@ -94,7 +94,7 @@ export async function renderDisplayListToPdf(
   // C8: Cache loaded source PDFDocuments and embedded Form XObjects per (blob, pageIndex)
   // so 20-page mail-merge / repeat documents embed the underlay ONCE instead of 20 times.
   const srcDocCache = new Map<string, any>();
-  const embeddedPageCache = new Map<string, any>();
+  const embeddedPageCache = new Map<string, { emb: any; rot: number; embW: number; embH: number }>();
 
   for (const dPage of displayList.pages) {
     const pageW = mmToPt(dPage.widthMm);
@@ -118,60 +118,100 @@ export async function renderDisplayListToPdf(
     // Stage 0: Embed original PDF page as vector underlay if present and mode === 'overlay'
     if (dPage.underlay && dPage.underlay.mode !== 'rebuild') {
       const blobKey = dPage.underlay.blob;
-      if (options.blobs !== undefined) {
-        const srcBytes = options.blobs[blobKey];
-        if (!srcBytes) {
-          throw new UnderlayError(
-            'UNDERLAY_MISSING',
-            blobKey,
-            `Binário de fundo "${blobKey}" não encontrado em options.blobs.`
-          );
-        }
+      const srcBytes = options.blobs?.[blobKey];
+      if (!srcBytes) {
+        throw new UnderlayError(
+          'UNDERLAY_MISSING',
+          blobKey,
+          `Binário de fundo "${blobKey}" não encontrado em options.blobs.`
+        );
+      }
 
-        let srcDoc = srcDocCache.get(blobKey);
-        if (!srcDoc) {
+      let srcDoc = srcDocCache.get(blobKey);
+      if (!srcDoc) {
+        try {
+          srcDoc = await PDFDocument.load(srcBytes, { ignoreEncryption: true });
+          // C6: Clear text/check values if field ops will draw them, then flatten widget borders/backgrounds
+          // so static widget appearances (borders/fills) are preserved in the embedded XObject.
+          const hasFieldOps = dPage.ops.some((o) => o.layerId === 'fields');
           try {
-            srcDoc = await PDFDocument.load(srcBytes, { ignoreEncryption: true });
-            // C6: Flatten a copy of the source document's AcroForm if no fields are being drawn by ops,
-            // or flatten widget borders so static appearances are preserved in the XObject.
-            const hasFieldOps = dPage.ops.some((o) => o.layerId === 'fields');
-            if (!hasFieldOps) {
-              try {
-                srcDoc.getForm().flatten();
-              } catch {
-                // Ignore if source PDF has no AcroForm or non-standard widgets
+            const form = srcDoc.getForm();
+            if (hasFieldOps) {
+              for (const f of form.getFields()) {
+                try {
+                  if (typeof (f as any).setText === 'function') {
+                    (f as any).setText('');
+                  } else if (typeof (f as any).uncheck === 'function') {
+                    (f as any).uncheck();
+                  }
+                } catch {
+                  // Ignore read-only or non-standard field clear errors
+                }
               }
             }
-            srcDocCache.set(blobKey, srcDoc);
-          } catch (err) {
-            throw new UnderlayError(
-              'UNDERLAY_CORRUPT',
-              blobKey,
-              `PDF de fundo "${blobKey}" corrompido ou inválido: ${(err as Error)?.message || String(err)}`
-            );
+            form.flatten();
+          } catch {
+            // Ignore if source PDF has no AcroForm or non-standard widgets
           }
+          srcDocCache.set(blobKey, srcDoc);
+        } catch (err) {
+          throw new UnderlayError(
+            'UNDERLAY_CORRUPT',
+            blobKey,
+            `PDF de fundo "${blobKey}" corrompido ou inválido: ${(err as Error)?.message || String(err)}`
+          );
         }
+      }
 
-        const srcPages = srcDoc.getPages();
-        const targetIdx = Math.max(0, Math.min(srcPages.length - 1, (dPage.underlay.page || 1) - 1));
-        const cacheKey = `${blobKey}:${targetIdx}`;
-        let embedded = embeddedPageCache.get(cacheKey);
-        if (!embedded && srcPages[targetIdx]) {
-          try {
-            const [emb] = await pdfDoc.embedPages([srcPages[targetIdx]]);
-            embedded = emb;
-            embeddedPageCache.set(cacheKey, embedded);
-          } catch (err) {
-            throw new UnderlayError(
-              'UNDERLAY_CORRUPT',
-              blobKey,
-              `Falha ao embutir página ${targetIdx + 1} do fundo "${blobKey}": ${(err as Error)?.message || String(err)}`
-            );
-          }
+      const srcPages = srcDoc.getPages();
+      const targetIdx = Math.max(0, Math.min(srcPages.length - 1, (dPage.underlay.page || 1) - 1));
+      const cacheKey = `${blobKey}:${targetIdx}`;
+      let cachedEmb = embeddedPageCache.get(cacheKey);
+      if (!cachedEmb && srcPages[targetIdx]) {
+        try {
+          const srcPage = srcPages[targetIdx];
+          const rot = ((srcPage.getRotation().angle || 0) % 360 + 360) % 360;
+          const { width: embW, height: embH } = srcPage.getSize();
+          const [emb] = await pdfDoc.embedPages([srcPage]);
+          cachedEmb = { emb, rot, embW, embH };
+          embeddedPageCache.set(cacheKey, cachedEmb);
+        } catch (err) {
+          throw new UnderlayError(
+            'UNDERLAY_CORRUPT',
+            blobKey,
+            `Falha ao embutir página ${targetIdx + 1} do fundo "${blobKey}": ${(err as Error)?.message || String(err)}`
+          );
         }
+      }
 
-        if (embedded) {
-          page.drawPage(embedded, {
+      if (cachedEmb) {
+        const { emb, rot, embW, embH } = cachedEmb;
+        if (rot === 90) {
+          page.drawPage(emb, {
+            x: 0,
+            y: pageH,
+            width: embW,
+            height: embH,
+            rotate: degrees(-90),
+          });
+        } else if (rot === 180) {
+          page.drawPage(emb, {
+            x: pageW,
+            y: pageH,
+            width: embW,
+            height: embH,
+            rotate: degrees(180),
+          });
+        } else if (rot === 270) {
+          page.drawPage(emb, {
+            x: pageW,
+            y: 0,
+            width: embW,
+            height: embH,
+            rotate: degrees(90),
+          });
+        } else {
+          page.drawPage(emb, {
             x: 0,
             y: 0,
             width: pageW,
@@ -281,8 +321,12 @@ function paintOperation(
     const sizePt = op.sizePt || 10;
     const color = toRgb(op.color);
 
-    // Baseline offset from top of text box: ~0.82 * fontSizePt
-    const baselineOffsetMm = (sizePt * 0.82) / (72 / 25.4);
+    // N-8: Vertically center single-line field text within [op.y, op.y + op.h]; otherwise top-aligned (~0.82 * fontSizePt)
+    const capHeightMm = (sizePt * 0.72) / (72 / 25.4);
+    const baselineOffsetMm =
+      op.layerId === 'fields' && op.lines.length === 1 && op.h > capHeightMm
+        ? (op.h + capHeightMm) / 2
+        : (sizePt * 0.82) / (72 / 25.4);
 
     for (let i = 0; i < op.lines.length; i++) {
       const safeLine = toWinAnsiSafe(op.lines[i]);

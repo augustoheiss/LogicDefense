@@ -115,6 +115,12 @@ async function makeForm(opts: {
   }
   if (opts.sig) {
     form.acroForm.dict.set(PDFName.of('SigFlags'), doc.context.obj(3));
+    const sigDict = doc.context.obj({
+      FT: 'Sig',
+      T: PDFString.of('Assinatura_Digital'),
+      V: { Type: 'Sig', Filter: 'Adobe.PPKLite', ByteRange: [0, 100, 200, 300] },
+    });
+    form.acroForm.addField(doc.context.register(sigDict));
   }
   return doc.save({ updateFieldAppearances: !opts.xfa });
 }

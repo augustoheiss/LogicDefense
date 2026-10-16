@@ -67,9 +67,23 @@ export function parseAcroBoolean(val: unknown): boolean {
   return Boolean(val);
 }
 
+function hasAppliedSignatureInDict(fDict: any, PDFName: any, PDFDict: any): boolean {
+  if (!(fDict instanceof PDFDict)) return false;
+  const ft = typeof fDict.get === 'function' ? fDict.get(PDFName.of('FT')) : undefined;
+  if (!ft || ft.toString() !== '/Sig') return false;
+  const vObj = typeof fDict.lookup === 'function' ? fDict.lookup(PDFName.of('V')) : fDict.get?.(PDFName.of('V'));
+  if (!(vObj instanceof PDFDict)) return false;
+  const byteRange = typeof vObj.get === 'function' ? vObj.get(PDFName.of('ByteRange')) : undefined;
+  return byteRange !== undefined;
+}
+
 /**
  * Inspects a PDF binary for `/XFA`, `/Sig` (digital signatures), and `/Encrypt` BEFORE
  * `pdfDoc.getForm()` is called (since `pdf-lib`'s `getForm()` strips `/XFA` on access — H4).
+ *
+ * Per R5.3 / U8: `hasSignature` is true ONLY if a `/FT /Sig` field has a `/V` dictionary
+ * containing `/ByteRange` (a real cryptographic signature applied). Empty `/FT /Sig` fields
+ * or `/SigFlags` alone on unsigned documents do not trigger `hasSignature`.
  */
 export async function inspectPDFSecurityAndXfa(pdfBytes: Uint8Array): Promise<{
   isXfa: boolean;
@@ -92,19 +106,12 @@ export async function inspectPDFSecurityAndXfa(pdfBytes: Uint8Array): Promise<{
       if (typeof acroDict.has === 'function' && acroDict.has(PDFName.of('XFA'))) {
         isXfa = true;
       }
-      const sigFlags = typeof acroDict.get === 'function' ? acroDict.get(PDFName.of('SigFlags')) : undefined;
-      if (sigFlags && String(sigFlags) !== '0') {
-        hasSignature = true;
-      }
       const fieldsArr = typeof acroDict.lookup === 'function' ? acroDict.lookup(PDFName.of('Fields')) : undefined;
       if (fieldsArr instanceof PDFArray) {
         for (let i = 0; i < fieldsArr.size(); i++) {
           const fDict = fieldsArr.lookup(i);
-          if (fDict instanceof PDFDict) {
-            const ft = fDict.get(PDFName.of('FT'));
-            if (ft && ft.toString() === '/Sig') {
-              hasSignature = true;
-            }
+          if (hasAppliedSignatureInDict(fDict, PDFName, PDFDict)) {
+            hasSignature = true;
           }
         }
       }
@@ -154,19 +161,12 @@ export async function inspectPDFForm(pdfBytes: Uint8Array): Promise<PDFFormField
       if (typeof acroDict.has === 'function' && acroDict.has(PDFName.of('XFA'))) {
         isXfa = true;
       }
-      const sigFlags = typeof acroDict.get === 'function' ? acroDict.get(PDFName.of('SigFlags')) : undefined;
-      if (sigFlags && String(sigFlags) !== '0') {
-        hasSignature = true;
-      }
       const fieldsArr = typeof acroDict.lookup === 'function' ? acroDict.lookup(PDFName.of('Fields')) : undefined;
       if (fieldsArr instanceof PDFArray) {
         for (let i = 0; i < fieldsArr.size(); i++) {
           const fDict = fieldsArr.lookup(i);
-          if (fDict instanceof PDFDict) {
-            const ft = fDict.get(PDFName.of('FT'));
-            if (ft && ft.toString() === '/Sig') {
-              hasSignature = true;
-            }
+          if (hasAppliedSignatureInDict(fDict, PDFName, PDFDict)) {
+            hasSignature = true;
           }
         }
       }
@@ -236,7 +236,9 @@ export async function inspectPDFForm(pdfBytes: Uint8Array): Promise<PDFFormField
         const ft = field.acroField.dict.get(PDFName.of('FT'));
         if (ft && ft.toString() === '/Sig') {
           type = 'signature';
-          hasSignature = true;
+          if (hasAppliedSignatureInDict(field.acroField.dict, PDFName, PDFDict)) {
+            hasSignature = true;
+          }
         }
       } catch {
         // Ignore
@@ -336,6 +338,38 @@ export async function inspectPDFForm(pdfBytes: Uint8Array): Promise<PDFFormField
 // Deterministic Form Injection
 // ---------------------------------------------------------------------------
 
+function toIncrementalPdfUpdate(originalBytes: Uint8Array, fullSaveBytes: Uint8Array): Uint8Array {
+  const delta = originalBytes.length + 1;
+  const text = new TextDecoder('latin1').decode(fullSaveBytes);
+  const xrefIdx = text.lastIndexOf('\nxref\n');
+  if (xrefIdx < 0) return fullSaveBytes;
+
+  const body = fullSaveBytes.subarray(0, xrefIdx + 1);
+  const tail = text.slice(xrefIdx + 1);
+
+  const shiftedTail = tail
+    .replace(/^(\d{10}) (\d{5}) n $/gm, (_m, offStr, genStr) => {
+      const newOff = parseInt(offStr, 10) + delta;
+      return `${String(newOff).padStart(10, '0')} ${genStr} n `;
+    })
+    .replace(/startxref\n(\d+)/, (_m, startStr) => {
+      const newStart = parseInt(startStr, 10) + delta;
+      return `startxref\n${newStart}`;
+    });
+
+  const tailBytes = new Uint8Array(shiftedTail.length);
+  for (let i = 0; i < shiftedTail.length; i++) {
+    tailBytes[i] = shiftedTail.charCodeAt(i) & 0xff;
+  }
+
+  const out = new Uint8Array(originalBytes.length + 1 + body.length + tailBytes.length);
+  out.set(originalBytes, 0);
+  out[originalBytes.length] = 0x0a;
+  out.set(body, originalBytes.length + 1);
+  out.set(tailBytes, originalBytes.length + 1 + body.length);
+  return out;
+}
+
 /**
  * Injects key-value pairs directly into native AcroForm fields.
  * Supports text, booleans (checkboxes), dropdowns, radio groups, and option lists.
@@ -344,7 +378,7 @@ export async function inspectPDFForm(pdfBytes: Uint8Array): Promise<PDFFormField
 export async function fillAcroForm(
   templatePdfBytes: Uint8Array,
   values: Record<string, string | boolean | number>,
-  options: { flatten?: boolean } = {}
+  options: { flatten?: boolean; stripSignatures?: boolean } = {}
 ): Promise<FormFillResult> {
   const {
     PDFDocument,
@@ -353,10 +387,33 @@ export async function fillAcroForm(
     PDFDropdown,
     PDFRadioGroup,
     PDFOptionList,
+    PDFName,
+    PDFDict,
+    PDFArray,
   } = await getPdfLib();
   const pdfDoc = await PDFDocument.load(templatePdfBytes, { ignoreEncryption: true });
   const form = pdfDoc.getForm();
   const fields = form.getFields();
+
+  if (options.stripSignatures) {
+    try {
+      form.acroForm.dict.delete(PDFName.of('SigFlags'));
+      const fieldsArr = form.acroForm.dict.lookup(PDFName.of('Fields'));
+      if (fieldsArr instanceof PDFArray) {
+        for (let i = 0; i < fieldsArr.size(); i++) {
+          const fDict = fieldsArr.lookup(i);
+          if (fDict instanceof PDFDict) {
+            const ft = fDict.get(PDFName.of('FT'));
+            if (ft && ft.toString() === '/Sig') {
+              fDict.delete(PDFName.of('V'));
+            }
+          }
+        }
+      }
+    } catch {
+      // Non-fatal
+    }
+  }
 
   const matchedFields: string[] = [];
   const unmatchedFields: string[] = [];
@@ -424,9 +481,20 @@ export async function fillAcroForm(
 
   if (options.flatten) {
     form.flatten();
+    const outputBytes = await pdfDoc.save();
+    return {
+      pdfBytes: outputBytes,
+      filledFieldCount,
+      matchedFields,
+      unmatchedFields,
+      warnings,
+    };
   }
 
-  const outputBytes = await pdfDoc.save();
+  const savedBytes = await pdfDoc.save({ useObjectStreams: false });
+  const outputBytes = options.stripSignatures
+    ? savedBytes
+    : toIncrementalPdfUpdate(templatePdfBytes, savedBytes);
 
   return {
     pdfBytes: outputBytes,

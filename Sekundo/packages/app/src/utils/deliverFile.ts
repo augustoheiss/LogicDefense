@@ -35,9 +35,7 @@ export async function deliverFile(
       return { delivered: false };
     }
     const blobPart: BlobPart =
-      typeof content === 'string'
-        ? content
-        : new Uint8Array(content.buffer, content.byteOffset, content.byteLength);
+      typeof content === 'string' ? content : new Uint8Array(content);
     const blob = new Blob([blobPart], { type: mimeType });
 
     // Web Share API Level 2 (PWA standalone on iOS / Mobile Web)
