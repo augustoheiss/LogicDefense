@@ -72,28 +72,42 @@ def fmt_date(d: date) -> str:
     return f"{d.day:02d}/{d.month:02d}"
 
 
-def resolve_goal_for_year(goals: dict[int, float], year: int) -> float:
+def resolve_goal_for_year(goals: dict, year: int) -> float:
     """
     Resolves the goal amount for a specific year from a per-year dict.
 
     Fallback priority (mirrors dateUtils.ts resolveGoalForYear):
-      1. Exact year match
-      2. Closest year BEFORE `year`
-      3. Closest year AFTER `year`
-      4. 0 — only if the record is completely empty
+      1. Exact year match (int or str key)
+      2. Closest integer year BEFORE `year`
+      3. Closest integer year AFTER `year`
+      4. 0 — only if the record has no valid integer year keys
     """
-    if year in goals:
-        return goals[year]
+    if not goals:
+        return 0.0
 
-    years = sorted(goals.keys())
+    if year in goals:
+        return float(goals[year])
+    if str(year) in goals:
+        return float(goals[str(year)])
+
+    numeric_map: dict[int, float] = {}
+    for k, v in goals.items():
+        if isinstance(k, int) and 1900 <= k <= 2999:
+            numeric_map[k] = float(v)
+        elif isinstance(k, str) and k.isdigit():
+            yr_num = int(k)
+            if 1900 <= yr_num <= 2999:
+                numeric_map[yr_num] = float(v)
+
+    years = sorted(numeric_map.keys())
     if not years:
         return 0.0
 
     earlier = [y for y in years if y < year]
     if earlier:
-        return goals[earlier[-1]]
+        return numeric_map[earlier[-1]]
 
-    return goals[years[0]]  # earliest later year
+    return numeric_map[years[0]]  # earliest later year
 
 
 def get_effective_goals(
@@ -121,6 +135,8 @@ def get_effective_goals(
         year = scope["year"]
         if goals.yearly_goals and year in goals.yearly_goals:
             return goals.yearly_goals[year]
+        if goals.yearly_goals and str(year) in goals.yearly_goals:
+            return goals.yearly_goals[str(year)]  # type: ignore[index]
 
     # Global override
     if goals.global_goals is not None:
@@ -140,10 +156,16 @@ def get_effective_goals(
 def get_daily_goal_for_date(date_str: str, goals: TableGoals) -> float:
     """
     Resolves the effective daily goal for a specific date using the hierarchy:
-      Monthly ("YYYY-MM") → Yearly (number) → Global → Legacy flat records.
+      Weekly ("YYYY-Www") → Monthly ("YYYY-MM") → Yearly (number) → Global → Legacy flat records.
 
     Mirrors: getDailyGoalForDate() in dateUtils.ts
     """
+    week_key = get_iso_week_key(date_str)
+    if goals.weekly_goals and week_key in goals.weekly_goals:
+        wk_val = float(goals.weekly_goals[week_key])  # type: ignore[index]
+        if wk_val > 0:
+            return round((wk_val / 7.0) * 100) / 100
+
     year = int(date_str[:4])
     month = int(date_str[5:7])
     return get_effective_goals({"year": year, "month": month}, goals).daily_goal
@@ -152,10 +174,16 @@ def get_daily_goal_for_date(date_str: str, goals: TableGoals) -> float:
 def get_weekly_goal_for_date(date_str: str, goals: TableGoals) -> float:
     """
     Resolves the effective weekly goal for a specific date using the hierarchy:
-      Monthly ("YYYY-MM") → Yearly (number) → Global → Legacy flat records.
+      Weekly ("YYYY-Www") → Monthly ("YYYY-MM") → Yearly (number) → Global → Legacy flat records.
 
     Mirrors: getWeeklyGoalForDate() in dateUtils.ts
     """
+    week_key = get_iso_week_key(date_str)
+    if goals.weekly_goals and week_key in goals.weekly_goals:
+        wk_val = float(goals.weekly_goals[week_key])  # type: ignore[index]
+        if wk_val > 0:
+            return wk_val
+
     year = int(date_str[:4])
     month = int(date_str[5:7])
     return get_effective_goals({"year": year, "month": month}, goals).weekly_goal
@@ -175,6 +203,30 @@ def get_iso_week_key(date_str: str) -> str:
 def iso_year_month(d: date) -> str:
     """'YYYY-MM' key from a date object."""
     return f"{d.year:04d}-{d.month:02d}"
+
+
+def get_effective_period_span_days(active_months: set[str] | list[str]) -> int:
+    """
+    Computes the effective calendar day span across a set/list of active 'YYYY-MM' months.
+    Each active month contributes its full calendar days (_days_in_month(YYYY, MM) = 28..31),
+    eliminating distortions from intra-month point entries or intermediate empty months.
+    Mirrors: getEffectivePeriodSpanDays() in dateUtils.ts (Lock 1).
+    """
+    total = 0
+    seen: set[str] = set()
+    for ym in active_months:
+        if not ym or len(ym) < 7 or ym in seen:
+            continue
+        seen.add(ym)
+        try:
+            y = int(ym[:4])
+            m = int(ym[5:7])
+            if y > 0 and 1 <= m <= 12:
+                total += _days_in_month(y, m)
+        except ValueError:
+            continue
+    return max(1, total)
+
 
 
 # ── Week Grouping ────────────────────────────────────────────────────────────

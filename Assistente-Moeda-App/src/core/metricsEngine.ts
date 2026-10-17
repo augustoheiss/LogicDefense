@@ -19,10 +19,16 @@
 import type { TableRow, TableGoals, TableMetrics, MonthMetrics, YearMetrics } from './types';
 import {
   calculateStrictGlobalBalance,
+  computeActiveMonthsSpan,
+  daysInMonth,
   getDailyGoalForDate,
+  getEffectivePeriodSpanDays,
   getWeeklyGoalForDate,
+  rowContributions,
   toLocalKey,
 } from './dateUtils';
+
+export { rowContributions };
 
 export function computeMetrics(
   rows: TableRow[],
@@ -96,17 +102,8 @@ export function computeMetrics(
 
   // ── Expense metrics ───────────────────────────────────────────────────────
   let totalExpenses = 0;
-  let expEarliest = '';
-  let expLatest   = '';
-
   for (const row of expenseRows) {
     totalExpenses += row.value;
-    const expStart = (row.periodStart && typeof row.periodStart === 'string' && row.periodStart.length >= 7) ? row.periodStart : row.date;
-    const expEnd   = (row.periodEnd && typeof row.periodEnd === 'string' && row.periodEnd.length >= 7) ? row.periodEnd : row.date;
-    if (row.value > 0) {
-      if (!expEarliest || expStart < expEarliest) expEarliest = expStart;
-      if (!expLatest   || expEnd   > expLatest)   expLatest   = expEnd;
-    }
   }
 
   // ── Partnership ledger ────────────────────────────────────────────────────
@@ -118,14 +115,17 @@ export function computeMetrics(
   totalExpenses = round2(totalExpenses);
   const annualExpenses = totalExpenses;
 
-  // ── Survival / Break-Even Goals ──────────────────────────────────────────
-  const globalExpenseDaySpan = (expEarliest && expLatest)
-    ? Math.max(1, calendarDaySpan(expEarliest, expLatest))
+  // ── Survival / Break-Even Goals (Full Monthly Competence Envelope — Lock 1) ─
+  const activeExpenseMonths = Object.keys(monthlyExpenses).filter((ym) => (monthlyExpenses[ym] ?? 0) > 0);
+  const expenseSpan = getEffectivePeriodSpanDays(activeExpenseMonths);
+  const survivalDaily = expenseSpan.effectiveSpanDays > 0
+    ? round2(totalExpenses / expenseSpan.effectiveSpanDays)
     : 0;
-  const survivalDaily = globalExpenseDaySpan > 0 ? round2(totalExpenses / globalExpenseDaySpan) : 0;
-  const survivalWeekly      = round2(survivalDaily * 7);
-  const survivalMonthly     = round2(survivalDaily * 30.44);
-  const survivalAnnualCost  = round2(survivalDaily * 365.25);
+  const survivalWeekly = round2(survivalDaily * 7);
+  const survivalMonthly = expenseSpan.activeMonthsCount > 0
+    ? round2(totalExpenses / expenseSpan.activeMonthsCount)
+    : 0;
+  const survivalAnnualCost = round2(survivalMonthly * 12);
 
   const survivalFields = { survivalDaily, survivalWeekly, survivalMonthly, survivalAnnualCost };
 
@@ -282,23 +282,9 @@ export function computeMetrics(
     };
   }
 
-  // ── Global date span ────────────────────────────────────────────────────
-  const allEffectiveDates = revenueRows.flatMap((r) => {
-    const dates = [r.date];
-    if (r.periodStart) dates.push(r.periodStart);
-    if (r.periodEnd)   dates.push(r.periodEnd);
-    return dates;
-  }).sort();
-  const globalSpanDays = Math.max(
-    1,
-    calendarDaySpan(allEffectiveDates[0], allEffectiveDates[allEffectiveDates.length - 1]),
-  );
-
   const today = asOfDate
     ? new Date(asOfDate + 'T12:00:00')
     : new Date();
-  const todayYM = isoYearMonth(today);
-  const todayDayOfMonth = today.getDate();
 
   // ── Accumulators ─────────────────────────────────────────────────────────
   let grossTotal = 0;
@@ -356,53 +342,45 @@ export function computeMetrics(
     }
   }
 
-  // ── Global averages ───────────────────────────────────────────────────────
-  let totalDailyRate = 0;
-  for (const row of activeRows) {
-    if (row.periodStart && row.periodEnd) {
-      const txDays = Math.max(1, calendarDaySpan(row.periodStart, row.periodEnd));
-      totalDailyRate += (row.value / txDays);
-    } else {
-      totalDailyRate += (row.value / globalSpanDays);
-    }
-  }
-  const globalDailyAvg   = round2(totalDailyRate);
-  const globalWeeklyAvg  = round2(globalDailyAvg * 7);
-  const globalMonthlyAvg = round2(globalDailyAvg * 30.44);
-  const globalAnnualAvg  = round2(globalDailyAvg * 365.25);
+  // ── Global averages (Full Monthly Competence Envelope — Lock 1) ──────────
+  const activeRevenueMonths = Object.keys(byMonthAcc).filter((ym) => (byMonthAcc[ym]?.gross ?? 0) > 0);
+  const revenueSpan = getEffectivePeriodSpanDays(activeRevenueMonths);
+  const globalDailyAvg = revenueSpan.effectiveSpanDays > 0
+    ? round2(grossTotal / revenueSpan.effectiveSpanDays)
+    : 0;
+  const globalWeeklyAvg = round2(globalDailyAvg * 7);
+  const globalMonthlyAvg = revenueSpan.activeMonthsCount > 0
+    ? round2(grossTotal / revenueSpan.activeMonthsCount)
+    : 0;
+  const globalAnnualAvg = round2(globalMonthlyAvg * 12);
 
-  // ── Per-year metrics ──────────────────────────────────────────────────────
+  // ── Per-year metrics (Reconciled with Active Competence Months — Lock 1) ─
   const byYear: Record<string, YearMetrics> = {};
   for (const [yr, acc] of Object.entries(byYearAcc)) {
-    const sortedDates = [...new Set(acc.dates)].sort();
-    const span = Math.max(1, calendarDaySpan(sortedDates[0], sortedDates[sortedDates.length - 1]));
-    const dailyAvg = round2(acc.gross / span);
+    const yearSpan = getEffectivePeriodSpanDays(acc.months);
+    const dailyAvg = yearSpan.effectiveSpanDays > 0
+      ? round2(acc.gross / yearSpan.effectiveSpanDays)
+      : 0;
     const yearNum  = parseInt(yr, 10);
     byYear[yr] = {
       grossAnnual:  round2(acc.gross),
       yearExpenses: computeYearExpenses(expenseRows, yearNum),
       dailyAvg,
-      weeklyAvg:  round2(acc.gross / Math.max(1, acc.weeks.size)),
+      weeklyAvg:  round2(dailyAvg * 7),
       monthlyAvg: round2(acc.gross / Math.max(1, acc.months.size)),
     };
   }
 
-  // ── Per-month metrics ─────────────────────────────────────────────────────
+  // ── Per-month metrics (Full Calendar Month Competence — Lock 1) ──────────
   const byMonth: Record<string, MonthMetrics> = {};
   for (const [ym, acc] of Object.entries(byMonthAcc)) {
     const [ymYearStr, ymMonthStr] = ym.split('-');
     const ymYear  = parseInt(ymYearStr, 10);
     const ymMonth = parseInt(ymMonthStr, 10);
 
-    const denominator = ym === todayYM
-      ? Math.max(1, todayDayOfMonth)
-      : Math.max(1, daysInMonth(ymYear, ymMonth));
-
+    const denominator = Math.max(1, daysInMonth(ymYear, ymMonth));
     const dailyAvg = round2(acc.gross / denominator);
-
-    const weeklyAvg = ym === todayYM
-      ? round2(acc.gross / Math.max(1, Math.ceil(todayDayOfMonth / 7)))
-      : round2(dailyAvg * 7);
+    const weeklyAvg = round2(dailyAvg * 7);
 
     const sortedWeeks = Array.from(acc.weeks).sort();
     const lastWeek = sortedWeeks[sortedWeeks.length - 1] ?? '';
@@ -534,10 +512,6 @@ function calendarDaySpan(dateA: string, dateB: string): number {
   return Math.round(Math.abs(b - a) / msPerDay) + 1;
 }
 
-function daysInMonth(year: number, month: number): number {
-  return new Date(year, month, 0).getDate();
-}
-
 function isoYearMonth(date: Date): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
 }
@@ -638,8 +612,8 @@ export function emptyMetrics(): TableMetrics {
  * Compute baseline goals from historical transaction data.
  *
  * Used when importing CSV data that has no explicit goal metadata.
- * Calculates global daily average from revenue rows, then derives
- * weekly and annual targets. Populates both legacy flat records
+ * Calculates global daily average from revenue rows over the active competence months,
+ * then derives weekly and annual targets. Populates both legacy flat records
  * (keyed by year) and the new hierarchical globalGoals.
  *
  * Returns a complete TableGoals object ready to persist.
@@ -657,19 +631,16 @@ export function computeBaselineGoals(rows: Omit<TableRow, 'id'>[]): TableGoals {
     return { dailyGoals: {}, weeklyGoals: {}, annualCosts: {} };
   }
 
-  // Find the calendar day span from earliest to latest revenue date
-  const dates = revenueRows.map((r) => r.periodStart || r.date).concat(
-    revenueRows.map((r) => r.periodEnd || r.date),
-  ).sort();
-  const earliest = dates[0];
-  const latest = dates[dates.length - 1];
-  const daySpan = Math.max(1, calendarDaySpan(earliest, latest));
+  const spanInfo = computeActiveMonthsSpan(revenueRows);
+  const daySpan = Math.max(1, spanInfo.effectiveSpanDays);
+  const effectiveMonths = Math.max(1, spanInfo.activeMonthsCount);
 
   // Calculate gross revenue total
   const grossRevenue = revenueRows.reduce((sum, r) => sum + r.value, 0);
   const dailyAvg = round2(grossRevenue / daySpan);
   const weeklyGoal = round2(dailyAvg * 7);
-  const annualCost = round2(dailyAvg * 365.25);
+  const monthlyAvg = round2(grossRevenue / effectiveMonths);
+  const annualCost = round2(monthlyAvg * 12);
 
   // Determine which years the data spans
   const yearSet = new Set<number>();
@@ -724,33 +695,3 @@ function getConsecutiveMonths(startYM: string, endYM: string): string[] {
   return result;
 }
 
-// ── Period distribution helper ──────────────────────────────────────────────
-
-/**
- * Returns a list of daily contribution objects for a row.
- *
- * Period rows: Distributes row.value / periodDays to each calendar day.
- * Single-day rows: Returns a single entry with full row.value at row.date.
- */
-export function rowContributions(row: TableRow): Array<{ date: string; value: number }> {
-  if (!row) return [];
-  const val = typeof row.value === 'number' && !isNaN(row.value) ? row.value : 0;
-  const d = typeof row.date === 'string' ? row.date : new Date().toISOString().slice(0, 10);
-
-  if (row.periodStart && row.periodEnd && row.periodStart !== row.periodEnd) {
-    const msPerDay = 86_400_000;
-    const startMs  = new Date(row.periodStart + 'T12:00:00').getTime();
-    const endMs    = new Date(row.periodEnd   + 'T12:00:00').getTime();
-    if (isNaN(startMs) || isNaN(endMs) || endMs < startMs) return [{ date: d, value: val }];
-
-    const periodDays = Math.max(1, Math.round((endMs - startMs) / msPerDay) + 1);
-    const dailyValue = val / periodDays;
-    const contributions: Array<{ date: string; value: number }> = [];
-
-    for (let ms = startMs; ms <= endMs; ms += msPerDay) {
-      contributions.push({ date: new Date(ms).toISOString().slice(0, 10), value: dailyValue });
-    }
-    return contributions;
-  }
-  return [{ date: d, value: val }];
-}

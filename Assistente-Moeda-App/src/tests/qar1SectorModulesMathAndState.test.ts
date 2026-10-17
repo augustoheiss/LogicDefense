@@ -118,13 +118,13 @@ describe('QAR1 8-Module AutoCAD Sectorial Math & Boundary Suite (QAR1-SEC-MOD-01
     ];
 
     const m = computeMetrics(rows, sampleGoals, '2026-01-31');
-    // 6200 em 31 dias corridos -> survivalDaily = 200.00
+    // 6200 em 1 mês ativo de competência (31 dias) -> survivalDaily = 200.00, survivalMonthly = 6200.00, survivalAnnualCost = 74400.00
     expect(m.totalExpenses).toBe(6200);
     expect(m.totalPartnerOut).toBe(5000);
     expect(m.survivalDaily).toBe(200);
     expect(m.survivalWeekly).toBe(1400);
-    expect(m.survivalMonthly).toBe(6088);
-    expect(m.survivalAnnualCost).toBe(73050);
+    expect(m.survivalMonthly).toBe(6200);
+    expect(m.survivalAnnualCost).toBe(74400);
   });
 
   it('QAR1-SEC-MOD-04 (👤 PFM): runMonteCarloFIRE deve manter finitude matemática, ordem de percentis (p10 <= p50 <= p90) e hash determinístico', () => {

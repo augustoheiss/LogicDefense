@@ -17,7 +17,7 @@ import { MetricCard, MetricGrid } from '@/components/ui/MetricCard';
 import { Card } from '@/components/ui/Card';
 import { formatCurrencySmart } from '@/core/formatCurrency';
 import { MonthPicker } from '@/components/ui/MonthPicker';
-import { getDailyGoalForDate } from '@/core/dateUtils';
+import { getDailyGoalForDate, computeActiveMonthsSpan, daysInMonth } from '@/core/dateUtils';
 import { CategorySummary, AddRowModal, InvestorPortfolioWidget } from '@/components/ui';
 import { SectorSettingsPanel } from '@/components/ui/SectorSettingsPanel';
 import {
@@ -30,17 +30,11 @@ import {
 import type { TableRow } from '@/core/types';
 import { PieChart } from 'react-native-gifted-charts';
 
-function daysBetween(a: string, b: string): number {
-  const msA = new Date(a + 'T12:00:00').getTime();
-  const msB = new Date(b + 'T12:00:00').getTime();
-  return Math.max(1, Math.round(Math.abs(msB - msA) / 86_400_000) + 1);
-}
-
 function calculateStats(rows: TableRow[], fallbackDays: number) {
   if (rows.length === 0) {
     return { sum: 0, count: 0, mean: 0, median: 0, mode: 0, stdDev: 0, max: 0, min: 0, dailyAvg: 0, weeklyAvg: 0 };
   }
-  const values = rows.map((r) => r.value);
+  const values = rows.map((r) => Math.abs(r.value));
   const sum = values.reduce((a, b) => a + b, 0);
   const count = values.length;
   const mean = sum / count;
@@ -65,18 +59,8 @@ function calculateStats(rows: TableRow[], fallbackDays: number) {
   const max = Math.max(...values);
   const min = Math.min(...values);
 
-  let totalDailyRate = 0;
-  for (const row of rows) {
-    const hasPeriod = !!(row.periodStart && row.periodEnd);
-    if (hasPeriod) {
-      const txDays = daysBetween(row.periodStart!, row.periodEnd!);
-      totalDailyRate += row.value / txDays;
-    } else {
-      totalDailyRate += row.value / fallbackDays;
-    }
-  }
-  const dailyAvg = totalDailyRate;
-  const weeklyAvg = totalDailyRate * 7;
+  const dailyAvg = sum / Math.max(1, fallbackDays);
+  const weeklyAvg = dailyAvg * 7;
 
   return { sum, count, mean, median, mode, stdDev, max, min, dailyAvg, weeklyAvg };
 }
@@ -363,15 +347,10 @@ export default function MetricsScreen() {
   const fallbackDays = useMemo(() => {
     if (selectedMonth === 'all') {
       if (!activeTable || activeTable.rows.length === 0) return 1;
-      const dates = activeTable.rows.map((r) => r.date).filter(Boolean).sort();
-      const oldest = dates[0] || new Date().toISOString().slice(0, 10);
-      const start = new Date(oldest);
-      const end = new Date();
-      const diff = Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
-      return Math.max(1, diff);
+      return Math.max(1, computeActiveMonthsSpan(activeTable.rows).effectiveSpanDays);
     } else {
       const [y, m] = selectedMonth.split('-').map(Number);
-      return new Date(y, m, 0).getDate();
+      return Math.max(1, daysInMonth(y, m));
     }
   }, [selectedMonth, activeTable]);
 

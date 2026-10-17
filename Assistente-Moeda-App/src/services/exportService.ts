@@ -24,7 +24,16 @@ import type {
   CoinTable,
 } from '../core/types';
 import type { WeekDebtEntry } from '../core/computeWeeklyDebtTimeline';
-import { getMondayOf, toLocalKey, getWeeklyGoalForDate, resolveGoalForYear, getEffectiveGoals, fmtDate } from '../core/dateUtils';
+import {
+  getMondayOf,
+  toLocalKey,
+  getWeeklyGoalForDate,
+  resolveGoalForYear,
+  getEffectiveGoals,
+  fmtDate,
+  buildMonthCompetenceWeekGroups,
+  computeActiveMonthsSpan,
+} from '../core/dateUtils';
 import { generateNewApiKey, getApiStorageItem, setApiStorageItem } from './apiKeyService';
 import { getStoredLicenseKey } from '../storage/authService';
 import { serializeDynamicCSV, serializeGranularCSV } from '../core/dynamicCsvSerializer';
@@ -104,36 +113,34 @@ function prorateExpensesForMonth(
 
 function computeGlobalSurvivalGoals(
   rows: TableRow[],
-  selectedMonth: string,
+  _selectedMonth: string,
+  metrics?: TableMetrics,
 ): { dailySurvival: number; weeklySurvival: number; monthlySurvival: number } | null {
-  let earliest = '';
-  let latest = '';
-  let total = 0;
-
-  for (const r of rows) {
-    if (r.entryType !== 'expense') continue;
-    const expVal = Math.abs(r.value);
-    if (expVal <= 0) continue;
-    total += expVal;
-    const start = r.periodStart || r.date;
-    const end   = r.periodEnd   || r.date;
-    if (!earliest || start < earliest) earliest = start;
-    if (!latest   || end   > latest)   latest   = end;
+  if (metrics && metrics.totalExpenses > 0 && metrics.survivalDaily > 0) {
+    return {
+      dailySurvival: metrics.survivalDaily,
+      weeklySurvival: metrics.survivalWeekly,
+      monthlySurvival: metrics.survivalMonthly,
+    };
   }
 
-  if (total <= 0 || !earliest) return null;
+  const expenseRows = rows.filter((r) => r.entryType === 'expense' && Math.abs(r.value) > 0);
+  if (expenseRows.length === 0) return null;
 
-  const globalDays = daysBetween(earliest, latest);
-  const dailySurvival = globalDays > 0 ? total / globalDays : 0;
+  const total = expenseRows.reduce((s, r) => s + Math.abs(r.value), 0);
+  if (total <= 0) return null;
+
+  const spanInfo = computeActiveMonthsSpan(rows);
+  const globalDays = Math.max(1, spanInfo.effectiveSpanDays);
+  const effectiveMonths = Math.max(1, spanInfo.activeMonthsCount);
+
+  const dailySurvival = Math.round((total / globalDays) * 100) / 100;
   if (dailySurvival <= 0) return null;
-
-  const [y, m] = selectedMonth.split('-').map(Number);
-  const mDays = daysInMonth(y, m);
 
   return {
     dailySurvival,
-    weeklySurvival: dailySurvival * 7,
-    monthlySurvival: dailySurvival * mDays,
+    weeklySurvival: Math.round(dailySurvival * 7 * 100) / 100,
+    monthlySurvival: Math.round((total / effectiveMonths) * 100) / 100,
   };
 }
 
@@ -155,63 +162,11 @@ export function buildWhatsAppReport(
   const reportDailyGoal = effGoals.dailyGoal || resolveGoalForYear(goals.dailyGoals, reportYear);
   const reportWeeklyGoal = effGoals.weeklyGoal || resolveGoalForYear(goals.weeklyGoals, reportYear);
 
-  // Revenue rows
-  const allRevenueRows = rows
-    .filter(
-      (r) =>
-        r.entryType !== 'deposit' &&
-        r.entryType !== 'waiver' &&
-        r.entryType !== 'expense' &&
-        r.entryType !== 'partner_in' &&
-        r.entryType !== 'partner_out' &&
-        r.entryType !== 'unresolved' &&
-        r.value > 0,
-    )
-    .sort((a, b) => a.date.localeCompare(b.date));
-
-  // Sequence of weeks
-  const totalDays = daysInMonth(selY, selM);
-  const sundays: Date[] = [];
-  for (let d = 1; d <= totalDays; d++) {
-    const date = new Date(selY, selM - 1, d);
-    if (date.getDay() === 0) {
-      sundays.push(date);
-    }
-  }
-
-  const weekGroups = sundays.map((sunday) => {
-    const monday = getMondayOf(sunday);
-    const mondayKey = toLocalKey(monday);
-
-    const entries = allRevenueRows.filter((r) => {
-      const [ry, rmo, rd] = r.date.split('-').map(Number);
-      const rDate = new Date(ry, rmo - 1, rd);
-      const rMonday = getMondayOf(rDate);
-      return toLocalKey(rMonday) === mondayKey;
-    }).sort((a, b) => a.date.localeCompare(b.date));
-
-    const weeklyTotal = entries.reduce((sum, r) => sum + r.value, 0);
-    const sundayKey = toLocalKey(sunday);
-    const weekGoal = getWeeklyGoalForDate(sundayKey, goals);
-
-    const msPerDay = 86_400_000;
-    const yearStart = new Date(monday.getFullYear(), 0, 1);
-    const yearStartMonday = getMondayOf(yearStart);
-    const weekNumber = Math.floor((monday.getTime() - yearStartMonday.getTime()) / (7 * msPerDay)) + 1;
-
-    return {
-      weekStartDate: monday,
-      weekEndDate: sunday,
-      dailyEntries: entries,
-      weeklyTotal,
-      differenceFromGoal: weeklyTotal - weekGoal,
-      weeklyGoal: weekGoal,
-      weekNumber,
-    };
-  });
+  // Unified competence-clipped weekly groups (Lock 2)
+  const weekGroups = buildMonthCompetenceWeekGroups(rows, goals, selectedMonth);
 
   const proratedExpenses = prorateExpensesForMonth(rows, selectedMonth);
-  const survivalGoals = computeGlobalSurvivalGoals(rows, selectedMonth);
+  const survivalGoals = computeGlobalSurvivalGoals(rows, selectedMonth, metrics);
 
   const staticYearCost = effGoals.annualCost || resolveGoalForYear(goals.annualCosts, reportYear);
   const yearRevenue = metrics.byYear[String(reportYear)]?.grossAnnual ?? 0;

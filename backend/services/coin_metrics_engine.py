@@ -39,6 +39,7 @@ from services.coin_date_utils import (
     calculate_strict_global_balance,
     get_weekly_goal_for_date,
     resolve_goal_for_year,
+    get_effective_period_span_days,
 )
 
 
@@ -153,8 +154,8 @@ def compute_metrics(
     total_waiver_credits: float = 0.0,
 ) -> TableMetrics:
     """
-    Pure math engine — calendar-elapsed-time averaging.
-    Mirrors: computeMetrics() in useMetricsEngine.ts
+    Pure math engine — full monthly competence envelope averaging (Lock 1).
+    Mirrors: computeMetrics() in metricsEngine.ts
 
     Args:
         rows:         All table rows (revenue, deposit, waiver, expense).
@@ -221,38 +222,19 @@ def compute_metrics(
         )
     ]
 
-    total_expenses = 0.0
+    total_expenses = sum(row.value for row in expense_rows if row.value > 0)
 
-    # Survival goal accumulators: track the global expense date span
-    exp_earliest = ""
-    exp_latest = ""
-
-    for row in expense_rows:
-        total_expenses += row.value
-
-        # Widen global expense span for survival goals
-        exp_start = row.period_start or row.date
-        exp_end = row.period_end or row.date
-        if row.value > 0:
-            if not exp_earliest or exp_start < exp_earliest:
-                exp_earliest = exp_start
-            if not exp_latest or exp_end > exp_latest:
-                exp_latest = exp_end
-
-    # Note: total_expenses rounding deferred until after partner_out accumulation
-    # annualExpenses = totalExpenses at global level;
-    # per-year breakdown lives in by_year[yr].year_expenses
-
-    # ── Survival / Break-Even Goals (always computed) ─────────────────────
+    # ── Survival / Break-Even Goals (Lock 1 — Full Monthly Competence Envelope) ──
     global_expense_day_span = (
-        max(1, _calendar_day_span(exp_earliest, exp_latest))
-        if exp_earliest and exp_latest
+        get_effective_period_span_days(all_months)
+        if total_expenses > 0
         else 0
     )
+    effective_expense_months = max(1, len(all_months))
     survival_daily = _round2(total_expenses / global_expense_day_span) if global_expense_day_span > 0 else 0.0
     survival_weekly = _round2(survival_daily * 7)
-    survival_monthly = _round2(survival_daily * 30.44)
-    survival_annual_cost = _round2(survival_daily * 365.25)
+    survival_monthly = _round2(total_expenses / effective_expense_months) if total_expenses > 0 else 0.0
+    survival_annual_cost = _round2(survival_monthly * 12)
 
     survival_fields = {
         "survivalDaily": survival_daily,
@@ -433,24 +415,12 @@ def compute_metrics(
             }
         )
 
-    # ── Global date span — uses periodStart/periodEnd when present ───────
-    all_effective_dates: list[str] = []
-    for r in revenue_rows:
-        all_effective_dates.append(r.date)
-        if r.period_start:
-            all_effective_dates.append(r.period_start)
-        if r.period_end:
-            all_effective_dates.append(r.period_end)
-    all_effective_dates.sort()
-    global_span_days = max(1, _calendar_day_span(
-        all_effective_dates[0],
-        all_effective_dates[-1],
-    ))
+    # ── Global date span — full monthly competence envelope (Lock 1) ──────
+    global_span_days = get_effective_period_span_days(all_months)
+    effective_global_months = max(1, len(all_months))
 
-    # ── Today — for current-month partial-month denominator ──────────────
+    # ── Today reference ──────────────────────────────────────────────────
     today = _parse_date(as_of_date) if as_of_date else date.today()
-    today_ym = iso_year_month(today)
-    today_day_of_month = today.day
 
     # ── Accumulators ─────────────────────────────────────────────────────
     gross_total = 0.0
@@ -506,55 +476,35 @@ def compute_metrics(
             # byWeek
             by_week_acc[iso_week] = by_week_acc.get(iso_week, 0.0) + contrib["value"]
 
-    # ── Global averages ──────────────────────────────────────────────────
-    total_daily_rate = 0.0
-    for r in active_rows:
-        if r.period_start and r.period_end:
-            tx_days = max(1, _calendar_day_span(r.period_start, r.period_end))
-            total_daily_rate += (r.value / tx_days)
-        else:
-            total_daily_rate += (r.value / global_span_days) if global_span_days > 0 else 0.0
-    global_daily_avg = _round2(total_daily_rate)
+    # ── Global averages (Lock 1 — Full Monthly Competence Envelope) ──────
+    global_daily_avg = _round2(gross_total / global_span_days) if global_span_days > 0 else 0.0
     global_weekly_avg = _round2(global_daily_avg * 7)
-    global_monthly_avg = _round2(global_daily_avg * 30.44)
-    global_annual_avg = _round2(global_daily_avg * 365.25)
+    global_monthly_avg = _round2(gross_total / effective_global_months)
+    global_annual_avg = _round2(global_monthly_avg * 12)
 
-    # ── Per-year metrics ─────────────────────────────────────────────────
+    # ── Per-year metrics (Lock 1) ────────────────────────────────────────
     by_year: dict[str, YearMetrics] = {}
     for yr, acc in by_year_acc.items():
-        sorted_dates = sorted(set(acc["dates"]))
-        span = max(1, _calendar_day_span(sorted_dates[0], sorted_dates[-1]))
+        span = get_effective_period_span_days(acc["months"])
         daily_avg = _round2(acc["gross"] / span)
         year_num = int(yr)
         by_year[yr] = YearMetrics(
             grossAnnual=_round2(acc["gross"]),
             yearExpenses=_compute_year_expenses(expense_rows, year_num),
             dailyAvg=daily_avg,
-            weeklyAvg=_round2(acc["gross"] / max(1, len(acc["weeks"]))),
+            weeklyAvg=_round2(daily_avg * 7),
             monthlyAvg=_round2(acc["gross"] / max(1, len(acc["months"]))),
         )
 
-    # ── Per-month metrics ────────────────────────────────────────────────
+    # ── Per-month metrics (Lock 1 — Full Monthly Competence Denominator) ──
     by_month: dict[str, MonthMetrics] = {}
     for ym, acc in by_month_acc.items():
         ym_year = int(ym[:4])
         ym_month = int(ym[5:7])
 
-        # Denominator: current month → days elapsed; past month → full length
-        if ym == today_ym:
-            denominator = max(1, today_day_of_month)
-        else:
-            denominator = max(1, _days_in_month(ym_year, ym_month))
-
+        denominator = max(1, _days_in_month(ym_year, ym_month))
         daily_avg = _round2(acc["gross"] / denominator)
-
-        # Weekly average — two strategies (mirrors TS)
-        if ym == today_ym:
-            weekly_avg = _round2(
-                acc["gross"] / max(1, -(-today_day_of_month // 7))  # ceiling division
-            )
-        else:
-            weekly_avg = _round2(daily_avg * 7)
+        weekly_avg = _round2(daily_avg * 7)
 
         # Last ISO week that touched this month
         sorted_weeks = sorted(acc["weeks"])
@@ -616,11 +566,6 @@ def compute_metrics(
     waived_weeks = round((total_waived_days / 7) * 100) / 100
     billable_weeks = round(max(0.0, total_elapsed_weeks - waived_weeks) * 100) / 100
 
-    # ── Time Bank balance (weeks) ────────────────────────────────────────
-    # Uses the historically-accumulated net_balance_weeks instead of a naive
-    # flat division (global_goal_balance / effective_weekly_goal).
-    # Assigned below after the week equivalents are finalized.
-
     # ── Net balance ──────────────────────────────────────────────────────────────
     net_balance = _round2(gross_total - total_expenses)
 
@@ -630,11 +575,10 @@ def compute_metrics(
     goal_total_weeks   = float(total_elapsed_weeks)  # 1 calendar week = 1 goal-week
     net_balance_weeks  = _round2(gross_total_weeks + waiver_total_weeks - goal_total_weeks)
 
-    # time_bank_balance: uses the liquid formula (globalGoalBalance / currentWeeklyGoal)
-    # to match the corrected UI in GoalsPanel.tsx and MetricsPanel.tsx.
-    # This accounts for partner netting, unlike the legacy netBalanceWeeks.
-    current_year = today.year
-    effective_weekly_goal = resolve_goal_for_year(goals.weekly_goals, current_year)
+    # time_bank_balance: uses the full hierarchical weekly goal (get_weekly_goal_for_date)
+    # matching TS metricsEngine.ts (Lock 4).
+    target_date_key = as_of_date or _to_local_key(today)
+    effective_weekly_goal = get_weekly_goal_for_date(target_date_key, goals)
     time_bank_balance = round(global_goal_balance / effective_weekly_goal, 2) if effective_weekly_goal > 0 else 0.0
 
     # ── Combined metrics (operational + partnership) ──────────────────────────

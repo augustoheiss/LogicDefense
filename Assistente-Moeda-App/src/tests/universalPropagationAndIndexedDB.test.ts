@@ -149,7 +149,7 @@ describe('Phase 2: Mathematical & Domain Engines (Waivers, Negative Expenses, He
     expect(metrics.balance).toBe(4550);
     expect(metrics.totalDeposits).toBe(1000);
     expect(metrics.daysWorked).toBe(3); // 3 active non-unresolved days
-    expect(metrics.dailyAverage).toBe(5000);
+    expect(metrics.dailyAverage).toBe(166.67); // 5000 / 30 days in April competence (Lock 1)
     expect(metrics.globalDailyGoal).toBe(200);
 
     const health = computeHealthScore(metrics);

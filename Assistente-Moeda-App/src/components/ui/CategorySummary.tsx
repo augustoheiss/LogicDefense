@@ -16,6 +16,7 @@ import { View, Text, StyleSheet, ScrollView, Pressable, Alert, Platform, Modal, 
 import { colors } from '@/theme/colors';
 import { spacing, radius } from '@/theme/spacing';
 import { formatCurrencyFull, formatCurrencyShort, formatCurrencySmart } from '@/core/formatCurrency';
+import { computeActiveMonthsSpan, daysInMonth } from '@/core/dateUtils';
 import type { TableRow } from '@/core/types';
 
 type FilterableType = 'revenue' | 'expense' | 'deposit' | 'waiver' | 'partner_in' | 'partner_out';
@@ -300,46 +301,26 @@ export function CategorySummary({ allRows, selectedMonth, cutoffDate, onEditRow,
     return activeMonth.slice(0, 4);
   }, [activeMonth]);
 
-  // Global time span (for fallback daily averages)
+  // Global time span based on active competence months (Lock 1)
   const globalDaySpan = useMemo(() => {
-    const dates = baseRows.map((r) => r.date).filter(Boolean).sort();
-    if (dates.length < 2) return 1;
-    return daysBetween(dates[0], dates[dates.length - 1]);
+    return computeActiveMonthsSpan(baseRows).effectiveSpanDays;
   }, [baseRows]);
 
-  // Total days in the active scope for daily averages calculation
+  // Total days in the active scope for daily averages calculation (Lock 1)
   const daysInScope = useMemo(() => {
     if (categoryScope === 'global') {
-      return globalDaySpan;
+      return Math.max(1, globalDaySpan);
     }
     if (categoryScope === 'year') {
-      const y = parseInt(activeYear, 10);
-      const isLeap = (y % 4 === 0 && y % 100 !== 0) || (y % 400 === 0);
-      return isLeap ? 366 : 365;
+      const yearSpan = computeActiveMonthsSpan(baseRows, activeYear).effectiveSpanDays;
+      return Math.max(1, yearSpan);
     }
     // month scope
     const [y, m] = activeMonth.split('-').map(Number);
-    return new Date(y, m, 0).getDate();
-  }, [categoryScope, globalDaySpan, activeMonth, activeYear]);
+    return Math.max(1, daysInMonth(y, m));
+  }, [categoryScope, globalDaySpan, baseRows, activeMonth, activeYear]);
 
-  const fallbackDays = useMemo(() => {
-    if (categoryScope === 'global') {
-      if (!allRows || allRows.length === 0) return 1;
-      const dates = allRows.map((r) => r.date).filter(Boolean).sort();
-      const oldest = dates[0] || new Date().toISOString().slice(0, 10);
-      const start = new Date(oldest);
-      const end = new Date();
-      const diff = Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
-      return Math.max(1, diff);
-    } else if (categoryScope === 'year') {
-      const y = parseInt(activeYear, 10) || new Date().getFullYear();
-      const isLeap = (y % 4 === 0 && y % 100 !== 0) || (y % 400 === 0);
-      return isLeap ? 366 : 365;
-    } else { // 'month'
-      const [y, m] = activeMonth.split('-').map(Number);
-      return new Date(y, m, 0).getDate();
-    }
-  }, [categoryScope, allRows, activeMonth, activeYear]);
+  const fallbackDays = daysInScope;
 
   // Count how many entries exist per type under the active scope (for chips badge counts)
   const typeCounts = useMemo(() => {
@@ -382,20 +363,9 @@ export function CategorySummary({ allRows, selectedMonth, cutoffDate, onEditRow,
         const median = computeMedian(values);
         const mode = computeMode(values);
         const stdDev = computeStdDev(values, mean);
-        
-        let totalDailyRate = 0;
-        for (const item of items) {
-          const row = item.row;
-          const hasPeriod = !!(row.periodStart && row.periodEnd);
-          if (hasPeriod) {
-            const txDays = daysBetween(row.periodStart!, row.periodEnd!);
-            totalDailyRate += (row.value / txDays);
-          } else {
-            totalDailyRate += (row.value / fallbackDays);
-          }
-        }
-        const dailyAvg = totalDailyRate;
-        const weeklyAvg = totalDailyRate * 7;
+
+        const dailyAvg = total / Math.max(1, fallbackDays);
+        const weeklyAvg = dailyAvg * 7;
         const pct = grandTotal > 0 ? (total / grandTotal) * 100 : 0;
 
         // Map the rows to include display prorated value and keep reference to original row
@@ -423,7 +393,7 @@ export function CategorySummary({ allRows, selectedMonth, cutoffDate, onEditRow,
       })
       .filter((g) => g.total > 0)
       .sort((a, b) => b.total - a.total);
-  }, [baseRows, filterType, categoryScope, activeMonth, activeYear, daysInScope]);
+  }, [baseRows, filterType, categoryScope, activeMonth, activeYear, fallbackDays]);
 
   const totalSum = useMemo(() => groups.reduce((s, g) => s + g.total, 0), [groups]);
 

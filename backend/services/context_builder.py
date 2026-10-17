@@ -15,6 +15,7 @@ from services.coin_date_utils import (
     get_weekly_goal_for_date,
     fmt_date,
     _calendar_day_span,
+    get_effective_period_span_days,
 )
 
 log = logging.getLogger(__name__)
@@ -215,13 +216,34 @@ def build_transaction_ledger(
     return "\n".join(p for p in parts if p)
 
 def _global_day_span(rows: list) -> int:
-    """Inclusive day count between earliest and latest row dates."""
-    dates = sorted(r.date for r in rows if r.date)
-    if len(dates) < 2:
+    """
+    Effective calendar day span across active 'YYYY-MM' months (Lock 1).
+    Each active month contributes its full calendar days (28..31).
+    """
+    if not rows:
         return 1
-    d0 = datetime.strptime(dates[0], "%Y-%m-%d")
-    d1 = datetime.strptime(dates[-1], "%Y-%m-%d")
-    return max(1, (d1 - d0).days + 1)
+    active_months: set[str] = set()
+    for r in rows:
+        start = getattr(r, "period_start", None) or getattr(r, "periodStart", None) or getattr(r, "date", "")
+        end = getattr(r, "period_end", None) or getattr(r, "periodEnd", None) or getattr(r, "date", "")
+        if not start or len(start) < 7:
+            continue
+        start_ym = start[:7]
+        end_ym = end[:7] if end and len(end) >= 7 else start_ym
+        try:
+            sy, sm = map(int, start_ym.split("-"))
+            ey, em = map(int, end_ym.split("-"))
+            cy, cm = sy, sm
+            while cy < ey or (cy == ey and cm <= em):
+                active_months.add(f"{cy:04d}-{cm:02d}")
+                cm += 1
+                if cm > 12:
+                    cm = 1
+                    cy += 1
+        except ValueError:
+            active_months.add(start_ym)
+    return get_effective_period_span_days(active_months)
+
 
 def build_category_summaries(rows: list, globalDaySpan: int = 1) -> str:
     """
@@ -229,10 +251,12 @@ def build_category_summaries(rows: list, globalDaySpan: int = 1) -> str:
     category-level statistics for the AI context.
 
     For each category: count, total, mean, max, min, median, stddev,
-    daily_avg (global span), weekly_avg, and percentage of type total.
+    daily_avg (global competence span), weekly_avg, and percentage of type total.
     """
     if not rows:
         return ""
+
+    effective_span = max(1, globalDaySpan if globalDaySpan > 1 else _global_day_span(rows))
 
     # Group by entry type first, then by description
     type_buckets: dict[str, dict[str, list]] = defaultdict(lambda: defaultdict(list))
@@ -269,19 +293,8 @@ def build_category_summaries(rows: list, globalDaySpan: int = 1) -> str:
             cat_median = stat_median(values) if values else 0
             variance = sum((v - mean) ** 2 for v in values) / count if count > 0 else 0
             cat_stddev = math.sqrt(variance)
-            total_daily_rate = 0.0
-            for r in cat_rows:
-                period_start = getattr(r, "period_start", None) or getattr(r, "periodStart", None)
-                period_end = getattr(r, "period_end", None) or getattr(r, "periodEnd", None)
-                val = abs(getattr(r, "value", 0.0))
-                if period_start and period_end:
-                    tx_days = max(1, _calendar_day_span(period_start, period_end))
-                    total_daily_rate += (val / tx_days)
-                else:
-                    total_daily_rate += (val / globalDaySpan) if globalDaySpan > 0 else 0
-
-            daily_avg = total_daily_rate
-            weekly_avg = total_daily_rate * 7
+            daily_avg = total / effective_span
+            weekly_avg = daily_avg * 7
             pct = (total / type_total * 100) if type_total > 0 else 0
 
             # Check if any transaction in this category has period boundaries
