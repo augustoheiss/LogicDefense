@@ -1,0 +1,36 @@
+## COIN ASSISTANT BACKUP v3 ##
+table_id,example_liberal_tax_07
+api_key,am_sheet_example_fictitious
+last_event_seq,0
+name,Exemplo 07 - Profissional Liberal, Médico & Advogado (Fator R)
+description,Modelo fictício para clínicas, médicos, advogados e consultores PJ focados em eficiência tributária (Fator R 28%, Livro-Caixa e PGBL/IRPF).
+active_sectors,%5B%22core_cashflow%22%2C%22core_revenue%22%2C%22core_costs%22%2C%22core_goals%22%2C%22personal_finance%22%2C%22legal_taxes%22%2C%22smb_accounting%22%5D
+dashboard_config,%7B%22preset%22%3A%22smb%22%2C%22widgetOrder%22%3A%5B%22sector_simulators%22%2C%22health_score%22%2C%22month_summary%22%2C%22investor_summary%22%2C%22pillars%22%2C%22insights%22%2C%22recent_activity%22%2C%22what_if%22%2C%22next_action%22%2C%22quick_actions%22%2C%22lessons%22%5D%2C%22hiddenWidgets%22%3A%5B%22lessons%22%5D%7D
+goal_global_daily,800
+goal_global_weekly,5600
+goal_global_annual,120000
+goal_daily_2026,800
+goal_weekly_2026,5600
+goal_annual_2026,120000
+## INVESTOR_PROFILE ##
+profile_type,balanced
+emergency_fund_goal_months,6
+fire_annual_multiplier,25
+monthly_contribution_goal,4000
+## ROWS ##
+id,date,value,description,entryType,monthlyValue,monthCount,period_start,period_end,category,tags,metadata_json,ticker,quantity,unitPrice
+ex07-01,2026-08-05,24000.00,"HONORARIOS E CONSULTAS CLINICA / ESCRITORIO EXEMPLO (FICTICIO)",revenue,,,,,"Honorários Profissionais","fator_r,simples_nacional,irpf_2026","{""massa_salarial_12"":84000,""receita_bruta_12"":288000}",,,
+ex07-02,2026-08-07,7000.00,"PRO-LABORE E FOLHA SECRETARIA (META FATOR R >= 28%)",expense,,,,,"Pró-Labore & Folha","fator_r,irpf_2026,simples_nacional","{""massa_salarial_12"":84000,""receita_bruta_12"":288000}",,,
+ex07-03,2026-08-10,2600.00,"ALUGUEL SALA CLINICA E CONDOMINIO DEDUTIVEL (FICTICIO)",expense,,,,,"Livro-Caixa Dedutível","custo_fixo,livro_caixa","{}",,,
+ex07-04,2026-08-15,1080.00,"ANUIDADE CONSELHO DE CLASSE E SEGURO RC PROFISSIONAL (12M)",expense,90.00,12,2026-01-01,2026-12-31,"Conselho & Seguros","anuidade,dedutivel","{}",,,
+ex07-05,2026-08-20,1440.00,"IMPOSTO SIMPLES NACIONAL ANEXO III REDUZIDO (FICTICIO)",expense,,,,,"Impostos","simples_nacional,fator_r","{}",,,
+ex07-06,2026-08-25,3500.00,"APORTE PREVIDENCIA PGBL (BENEFICIO DEDUCAO 12% IRPF)",deposit,,,,,"Previdência & Investimentos","irpf_2026,pgbl,fixed_income_ipca","{""assetClass"":""fixed_income_ipca""}",IPCA2035,1,3500.00
+ex07-07,2026-09-05,25500.00,"HONORARIOS E PROCEDIMENTOS SETEMBRO (FICTICIO)",revenue,,,,,"Honorários Profissionais","fator_r,simples_nacional,irpf_2026","{""massa_salarial_12"":85500,""receita_bruta_12"":295000}",,,
+ex07-08,2026-09-07,7200.00,"PRO-LABORE E FOLHA SECRETARIA SETEMBRO (FATOR R >= 28%)",expense,,,,,"Pró-Labore & Folha","fator_r,irpf_2026,simples_nacional","{}",,,
+ex07-09,2026-09-10,2600.00,"ALUGUEL SALA CLINICA E CONDOMINIO DEDUTIVEL (FICTICIO)",expense,,,,,"Livro-Caixa Dedutível","custo_fixo,livro_caixa","{}",,,
+ex07-10,2026-09-20,1530.00,"IMPOSTO SIMPLES NACIONAL ANEXO III SETEMBRO (FICTICIO)",expense,,,,,"Impostos","simples_nacional,fator_r","{}",,,
+ex07-11,2026-09-25,4000.00,"APORTE RESERVA LIQUIDEZ E FUNDO IMOBILIARIO",deposit,,,,,"Investimentos","fii,reserva","{""assetClass"":""real_estate_funds""}",HGLG11,25,160.00
+ex07-12,2026-10-05,26200.00,"HONORARIOS E CONSULTAS OUTUBRO (FICTICIO)",revenue,,,,,"Honorários Profissionais","fator_r,simples_nacional,irpf_2026","{""massa_salarial_12"":87000,""receita_bruta_12"":302000}",,,
+ex07-13,2026-10-07,7400.00,"PRO-LABORE E FOLHA SECRETARIA OUTUBRO (FATOR R >= 28%)",expense,,,,,"Pró-Labore & Folha","fator_r,irpf_2026,simples_nacional","{}",,,
+ex07-14,2026-10-10,2600.00,"ALUGUEL SALA CLINICA E CONDOMINIO DEDUTIVEL (FICTICIO)",expense,,,,,"Livro-Caixa Dedutível","custo_fixo,livro_caixa","{}",,,
+ex07-15,2026-10-14,4200.00,"APORTE TESOURO SELIC RESERVA TRIBUTARIA E PATRIMONIO",deposit,,,,,"Investimentos","reserva,selic","{""assetClass"":""cash_reserves""}",SELIC,1,4200.00

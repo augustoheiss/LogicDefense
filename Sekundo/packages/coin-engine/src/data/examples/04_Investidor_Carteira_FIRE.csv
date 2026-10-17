@@ -1,0 +1,37 @@
+## COIN ASSISTANT BACKUP v3 ##
+table_id,example_investor_fire_04
+api_key,am_sheet_example_fictitious
+last_event_seq,0
+name,Exemplo 04 - Investidor & Carteira FIRE (Fictício)
+description,Modelo fictício de acumulação patrimonial, proventos mensais (FIIs e Ações), alocação global e independência financeira (Regra dos 4%).
+active_sectors,%5B%22core_cashflow%22%2C%22core_revenue%22%2C%22core_costs%22%2C%22core_goals%22%2C%22core_predictions%22%2C%22personal_finance%22%2C%22real_estate%22%2C%22legal_taxes%22%5D
+dashboard_config,%7B%22preset%22%3A%22investor%22%2C%22widgetOrder%22%3A%5B%22investor_summary%22%2C%22health_score%22%2C%22month_summary%22%2C%22sector_simulators%22%2C%22pillars%22%2C%22insights%22%2C%22what_if%22%2C%22next_action%22%2C%22recent_activity%22%2C%22quick_actions%22%2C%22lessons%22%5D%2C%22hiddenWidgets%22%3A%5B%22lessons%22%2C%22quick_actions%22%5D%7D
+goal_global_daily,450
+goal_global_weekly,3150
+goal_global_annual,66000
+goal_daily_2026,450
+goal_weekly_2026,3150
+goal_annual_2026,66000
+## INVESTOR_PROFILE ##
+profile_type,balanced
+emergency_fund_goal_months,6
+fire_annual_multiplier,25
+monthly_contribution_goal,3500
+## ROWS ##
+id,date,value,description,entryType,monthlyValue,monthCount,period_start,period_end,category,tags,metadata_json,ticker,quantity,unitPrice
+ex04-01,2026-08-05,11500.00,"REMUNERACAO EXECUTIVA EMPRESA FICTICIA TECH",revenue,,,,,"Salário & Carreira","renda_principal","{}",,,
+ex04-02,2026-08-08,5200.00,"CUSTO DE VIDA MENSAL CONSOLIDADO (MORADIA E CONTAS)",expense,,,,,"Custo de Vida","custo_fixo,sankey","{}",,,
+ex04-03,2026-08-10,18000.00,"SALDO RESERVA DE EMERGENCIA TESOURO SELIC",deposit,,,,,"Investimentos","reserva,selic,monte_carlo","{""assetClass"":""cash_reserves""}",SELIC,12,1500.00
+ex04-04,2026-08-12,24000.00,"POSICAO TESOURO IPCA+ 2035 PROTECAO INFLACAO",deposit,,,,,"Investimentos","ipca,renda_fixa,monte_carlo","{""assetClass"":""fixed_income_ipca""}",IPCA2035,10,2400.00
+ex04-05,2026-08-14,16400.00,"CARTEIRA FII LOGISTICA HGLG11",deposit,,,,,"Investimentos","fii,renda_passiva,cap_rate","{""assetClass"":""real_estate_funds""}",HGLG11,100,164.00
+ex04-06,2026-08-15,485.00,"DIVIDENDOS E RENDIMENTOS ISENTOS FIIs AGOSTO",revenue,,,,,"Proventos","dividendos,renda_passiva","{}",HGLG11,100,4.85
+ex04-07,2026-08-18,15200.00,"CARTEIRA ACOES BRASIL WEGE3 E ITUB4",deposit,,,,,"Investimentos","acoes,b3,dividendos","{""assetClass"":""equities_brazil""}",WEGE3,400,38.00
+ex04-08,2026-08-22,10500.00,"ETF S&P 500 EXTERIOR IVVB11",deposit,,,,,"Investimentos","global,dolar,fbar","{""assetClass"":""equities_global""}",IVVB11,35,300.00
+ex04-09,2026-09-05,11500.00,"REMUNERACAO EXECUTIVA EMPRESA FICTICIA TECH",revenue,,,,,"Salário & Carreira","renda_principal","{}",,,
+ex04-10,2026-09-08,5350.00,"CUSTO DE VIDA MENSAL CONSOLIDADO SETEMBRO",expense,,,,,"Custo de Vida","custo_fixo,sankey","{}",,,
+ex04-11,2026-09-15,540.00,"PROVENTOS FIIs E JCP ACOES SETEMBRO",revenue,,,,,"Proventos","dividendos,renda_passiva","{}",MXRF11,500,1.08
+ex04-12,2026-09-20,3500.00,"APORTE MENSAL FII KNCR11 RENDA IMOBILIARIA",deposit,,,,,"Investimentos","fii,aporte","{""assetClass"":""real_estate_funds""}",KNCR11,35,100.00
+ex04-13,2026-10-05,11500.00,"REMUNERACAO EXECUTIVA EMPRESA FICTICIA TECH",revenue,,,,,"Salário & Carreira","renda_principal","{}",,,
+ex04-14,2026-10-08,5100.00,"CUSTO DE VIDA MENSAL CONSOLIDADO OUTUBRO",expense,,,,,"Custo de Vida","custo_fixo,sankey","{}",,,
+ex04-15,2026-10-12,610.00,"RENDIMENTOS DE FIIs E DIVIDENDOS OUTUBRO",revenue,,,,,"Proventos","dividendos,renda_passiva","{}",TAEE11,200,3.05
+ex04-16,2026-10-14,3800.00,"APORTE MENSAL ETF GLOBAL WRLD11",deposit,,,,,"Investimentos","global,etf,monte_carlo","{""assetClass"":""equities_global""}",WRLD11,38,100.00

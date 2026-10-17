@@ -1,0 +1,11 @@
+{
+  "name": "@sekundo/coin-engine",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Assistente Moeda — Sovereign Local-First Financial, Sectoral & Patrimonial Engine for Sekundo.",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "test": "node ./scripts/runTests.mjs"
+  }
+}

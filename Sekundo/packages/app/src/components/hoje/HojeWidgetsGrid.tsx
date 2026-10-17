@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { useRouter } from 'expo-router';
 import type { HojeCockpitSummary } from '@sekundo/core';
 
 export interface HojeWidgetsGridProps {
@@ -15,6 +16,7 @@ export function HojeWidgetsGrid({
   onRunOutput,
   onOpenStudioPreset,
 }: HojeWidgetsGridProps) {
+  const router = useRouter();
   return (
     <View style={styles.widgetsGrid}>
       {showWidget('compromissos_do_dia') && (
@@ -127,6 +129,25 @@ export function HojeWidgetsGrid({
           ))}
         </View>
       )}
+
+      <View style={styles.card} testID="widget-coin-engine">
+        <Text style={styles.cardTitle}>🪙 Engine Financeira (Assistente Moeda)</Text>
+        <View style={styles.itemRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.itemPrimary}>Planilhas, 8 Setores CAD, Turso & API Pública</Text>
+            <Text style={styles.itemSecondary}>
+              Fluxo de Caixa, Receita, Custos 50/30/20, FIRE, PME, Imóveis SAC, Frotas e Fiscal
+            </Text>
+          </View>
+          <TouchableOpacity
+            testID="hoje-open-coin-engine"
+            style={styles.actionPillPrimary}
+            onPress={() => router.push('/coin' as any)}
+          >
+            <Text style={styles.actionPillText}>Abrir 🪙</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
     </View>
   );
 }

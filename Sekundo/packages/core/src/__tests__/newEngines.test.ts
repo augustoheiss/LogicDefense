@@ -6,14 +6,24 @@ import {
 import { runOfShowEngine } from '../engines/runOfShowEngine';
 import { tournamentEngine } from '../engines/tournamentEngine';
 import { canvassingEngine } from '../engines/canvassingEngine';
+import {
+  financialLedgerEngine,
+  coinRowsToFlatSkeletonEntries,
+} from '../engines/financialLedgerEngine';
 import { engineRegistry } from '../engines/registry';
+import { buildTree } from '../skeleton/skeletonTree';
+import {
+  exportOmniCsvBundle,
+  importOmniCsvBundle,
+  deriveActiveEnginesFromOmniBundle,
+} from '../csv/omniCsvBundle';
 import type { SkeletonNode } from '../skeleton/types';
 
 describe('Universal Engines Suite (Phase 2)', () => {
   describe('Engine Registry', () => {
-    it('should have all 9 engines registered', () => {
+    it('should have all 10 engines registered', () => {
       const engines = engineRegistry.list();
-      expect(engines).toHaveLength(9);
+      expect(engines).toHaveLength(10);
       const ids = engines.map((e) => e.id);
       expect(ids).toContain('territory_logistics');
       expect(ids).toContain('roster_assignments');
@@ -24,6 +34,7 @@ describe('Universal Engines Suite (Phase 2)', () => {
       expect(ids).toContain('tournament_pairings');
       expect(ids).toContain('canvassing_logistics');
       expect(ids).toContain('transformer');
+      expect(ids).toContain('financial_ledger');
     });
   });
 
@@ -221,6 +232,80 @@ describe('Universal Engines Suite (Phase 2)', () => {
         expect(metrics.data.languageCount).toBe(1);
         expect(metrics.data.contactRatePercent).toBe(33); // 2 / 6 = 33%
       }
+    });
+  });
+
+  describe('Financial Ledger Engine (Assistente Moeda Integration)', () => {
+    it('calculates revenue, expense, deposit, net balance, and survival metrics accurately', () => {
+      const flat = coinRowsToFlatSkeletonEntries(
+        [
+          {
+            id: 'tx-1',
+            date: '2026-10-05',
+            category: 'Receitas',
+            description: 'Salário Mensal',
+            value: 10000,
+            entryType: 'revenue',
+          },
+          {
+            id: 'tx-2',
+            date: '2026-10-10',
+            category: 'Moradia',
+            description: 'Aluguel + Condomínio',
+            value: 3000,
+            entryType: 'expense',
+          },
+          {
+            id: 'tx-3',
+            date: '2026-10-15',
+            category: 'Investimentos',
+            description: 'Tesouro Selic',
+            value: 2000,
+            entryType: 'deposit',
+          },
+        ],
+        '09',
+        'Orçamento Outubro 2026'
+      );
+
+      const tree = buildTree(flat);
+      const metrics = financialLedgerEngine.calculateMetrics(tree);
+
+      expect(metrics.engineId).toBe('financial_ledger');
+      if (metrics.engineId === 'financial_ledger') {
+        expect(metrics.data.transactionCount).toBe(3);
+        expect(metrics.data.grossTotal).toBe(10000);
+        expect(metrics.data.totalExpenses).toBe(3000);
+        expect(metrics.data.totalInvested).toBe(2000);
+        expect(metrics.data.netBalance).toBe(7000);
+      }
+    });
+
+    it('round-trips coin_ledger_row in Omni-CSV with CWE-1236 formula neutralization', () => {
+      const csv = exportOmniCsvBundle({
+        coinLedgerRows: [
+          {
+            id: 'row-1',
+            date: '2026-10-17',
+            category: 'Alimentação',
+            description: '=SUM(A1:A10) Almoço',
+            amount: 85.5,
+            entryType: 'expense',
+            paymentMethod: 'PIX',
+            status: 'paid',
+            recurrence: 'unico',
+            tableId: 'financas-2026',
+          },
+        ],
+      });
+
+      expect(csv).toContain("'=SUM(A1:A10) Almoço");
+      const imported = importOmniCsvBundle(csv);
+      expect(imported.coinLedgerRows).toBeDefined();
+      expect(imported.coinLedgerRows).toHaveLength(1);
+      expect(imported.coinLedgerRows![0].amount).toBe(85.5);
+      expect(imported.coinLedgerRows![0].entryType).toBe('expense');
+      expect(deriveActiveEnginesFromOmniBundle(imported)).toContain('financial_ledger');
     });
   });
 });

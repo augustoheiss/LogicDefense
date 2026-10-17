@@ -565,6 +565,7 @@ export type {
 // Unified Master CSV ("CSV Geral" / Omni-Bundle CSV)
 export {
   OMNI_CSV_HEADERS,
+  neutralizeCsvFormula,
   parseRawOmniCsvTable,
   parseParticipantPrivilegesFromCsvRow,
   exportOmniCsvBundle,
@@ -582,5 +583,6 @@ export type {
   OmniEventBundleItem,
   OmniStudioDocItem,
   OmniHojeRitualItem,
+  OmniCoinLedgerRowItem,
   SekundoOmniStateBundle,
 } from './csv/omniCsvBundle';

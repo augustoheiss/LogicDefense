@@ -12,6 +12,7 @@ export interface MultiEngineSwitcherBarProps {
     | 'studio'
     | 'skeleton-editor'
     | 'hoje'
+    | 'coin'
     | 'csv-import'
     | 'create-event';
   activeEngines?: string[];
@@ -41,6 +42,7 @@ interface EngineIconButtonSpec {
  * - 🖋️ Engine Documental YAML ⇄ PDF
  * - 🌳 Editor Multi-Engine
  * - ☀️ Cockpit Hoje
+ * - 🪙 Engine Financeira (Assistente Moeda)
  */
 export function MultiEngineSwitcherBar({
   eventId,
@@ -122,6 +124,14 @@ export function MultiEngineSwitcherBar({
       routeKey: 'hoje',
       accentColor: '#FBBF24',
       onPress: () => router.push('/hoje' as any),
+    },
+    {
+      id: 'nav-coin',
+      icon: '🪙',
+      title: 'Engine Financeira (Assistente Moeda)',
+      routeKey: 'coin',
+      accentColor: '#10B981',
+      onPress: () => router.push('/coin' as any),
     },
   ];
 

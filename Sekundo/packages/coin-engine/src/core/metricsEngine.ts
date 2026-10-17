@@ -1,0 +1,697 @@
+/**
+ * Metrics Engine — Assistente Moeda (React Native)
+ *
+ * Pure mathematical/business logic for computing all financial metrics.
+ * ZERO React dependencies — no useMemo, useState, or hooks.
+ *
+ * Migrated from web CoinAssistant's useMetricsEngine.ts with import paths
+ * updated to use local ./types and ./dateUtils modules.
+ *
+ * Key invariants:
+ *  - grossTotal is always the sum of rows with value > 0 only.
+ *  - ALL averages are based on calendar days / elapsed time, never "active day count".
+ *  - globalWeeklyAvg  = globalDailyAvg × 7
+ *  - globalMonthlyAvg = globalDailyAvg × 30.44
+ *  - globalAnnualAvg  = globalDailyAvg × 365.25
+ *  - timeBankBalance = grossTotalWeeks + waiverTotalWeeks − goalTotalWeeks
+ */
+
+import type { TableRow, TableGoals, TableMetrics, MonthMetrics, YearMetrics } from './types';
+import {
+  calculateStrictGlobalBalance,
+  computeActiveMonthsSpan,
+  daysInMonth,
+  getDailyGoalForDate,
+  getEffectivePeriodSpanDays,
+  getWeeklyGoalForDate,
+  rowContributions,
+  toLocalKey,
+} from './dateUtils';
+
+export { rowContributions };
+
+export function computeMetrics(
+  rows: TableRow[],
+  goals?: TableGoals,
+  /** When set, the engine treats this date as "today" for all calculations. */
+  asOfDate?: string,
+): TableMetrics {
+  const safeGoals = goals || computeBaselineGoals(rows || []);
+  if (!Array.isArray(rows) || rows.length === 0) return emptyMetrics();
+
+  // Defensive sanitization: exclude any undefined/null or corrupted rows without valid date or number value
+  const validRows = rows.filter((r): r is TableRow => (
+    !!r &&
+    typeof r === 'object' &&
+    typeof r.date === 'string' &&
+    r.date.length >= 4 &&
+    typeof r.value === 'number' &&
+    !isNaN(r.value)
+  ));
+  if (validRows.length === 0) return emptyMetrics();
+
+  // Find all YYYY-MM months in the entire rows dataset (including ranges) to populate byMonthAcc
+  const allMonths = new Set<string>();
+  for (const r of validRows) {
+    const start = (r.periodStart && typeof r.periodStart === 'string' && r.periodStart.length >= 7) ? r.periodStart : r.date;
+    const end = (r.periodEnd && typeof r.periodEnd === 'string' && r.periodEnd.length >= 7) ? r.periodEnd : r.date;
+    const startYM = start.slice(0, 7);
+    const endYM = end.slice(0, 7);
+    
+    const [startY, startM] = startYM.split('-').map(Number);
+    const [endY, endM] = endYM.split('-').map(Number);
+    
+    let currY = startY;
+    let currM = startM;
+    while (currY < endY || (currY === endY && currM <= endM)) {
+      allMonths.add(`${currY}-${String(currM).padStart(2, '0')}`);
+      currM++;
+      if (currM > 12) {
+        currM = 1;
+        currY++;
+      }
+    }
+  }
+
+  // ── Prorated monthly calculations for deposits and expenses ─────────────────
+  const depositRows = validRows.filter((r) => r.entryType === 'deposit' && r.value > 0);
+  const expenseRows = validRows
+    .filter((r) => r.entryType === 'expense')
+    .map((r) => (r.value < 0 ? { ...r, value: Math.abs(r.value) } : r));
+
+  const depositByMonth: Record<string, number> = {};
+  for (const row of depositRows) {
+    for (const contrib of rowContributions(row)) {
+      const ym = contrib.date.slice(0, 7);
+      depositByMonth[ym] = (depositByMonth[ym] ?? 0) + contrib.value;
+    }
+  }
+
+  const monthlyExpenses: Record<string, number> = {};
+  for (const row of expenseRows) {
+    for (const contrib of rowContributions(row)) {
+      const ym = contrib.date.slice(0, 7);
+      monthlyExpenses[ym] = (monthlyExpenses[ym] ?? 0) + contrib.value;
+    }
+  }
+
+  // FIREWALL: partner_in, partner_out and unresolved are isolated from operational revenue.
+  const revenueRows = validRows.filter(
+    (r) => r.entryType !== 'deposit' && r.entryType !== 'waiver' && r.entryType !== 'expense' && r.entryType !== 'partner_out' && r.entryType !== 'partner_in' && r.entryType !== 'unresolved',
+  );
+
+  // ── Expense metrics ───────────────────────────────────────────────────────
+  let totalExpenses = 0;
+  for (const row of expenseRows) {
+    totalExpenses += row.value;
+  }
+
+  // ── Partnership ledger ────────────────────────────────────────────────────
+  const partnerInRows = validRows.filter((r) => r.entryType === 'partner_in');
+  const partnerOutRows = validRows.filter((r) => r.entryType === 'partner_out');
+  const totalPartnerIn = round2(partnerInRows.reduce((s, r) => s + Math.abs(r.value), 0));
+  const totalPartnerOut = round2(partnerOutRows.reduce((s, r) => s + Math.abs(r.value), 0));
+
+  totalExpenses = round2(totalExpenses);
+  const annualExpenses = totalExpenses;
+
+  // ── Survival / Break-Even Goals (Full Monthly Competence Envelope — Lock 1) ─
+  const activeExpenseMonths = Object.keys(monthlyExpenses).filter((ym) => (monthlyExpenses[ym] ?? 0) > 0);
+  const expenseSpan = getEffectivePeriodSpanDays(activeExpenseMonths);
+  const survivalDaily = expenseSpan.effectiveSpanDays > 0
+    ? round2(totalExpenses / expenseSpan.effectiveSpanDays)
+    : 0;
+  const survivalWeekly = round2(survivalDaily * 7);
+  const survivalMonthly = expenseSpan.activeMonthsCount > 0
+    ? round2(totalExpenses / expenseSpan.activeMonthsCount)
+    : 0;
+  const survivalAnnualCost = round2(survivalMonthly * 12);
+
+  const survivalFields = { survivalDaily, survivalWeekly, survivalMonthly, survivalAnnualCost };
+
+  // ── Investment / Deposit compound interest (0.8%/month CDI reference) ──────
+  const MONTHLY_RATE = 0.008;
+  const allYMs = Array.from(allMonths).sort();
+  let earliestInvestMonth = '';
+  for (const ym of allYMs) {
+    if ((depositByMonth[ym] ?? 0) > 0) {
+      earliestInvestMonth = ym;
+      break;
+    }
+  }
+
+  let portfolioTimeline: Array<{
+    month: string;
+    monthlyDeposit: number;
+    currentMonthYield: number;
+    accumulatedPrincipal: number;
+    accumulatedYield: number;
+    totalBalance: number;
+  }> = [];
+
+  let globalTotalDeposited = 0;
+  let globalTotalYield = 0;
+  let globalBalance = 0;
+
+  if (earliestInvestMonth) {
+    const latestMonth = allYMs[allYMs.length - 1] || earliestInvestMonth;
+    const consecutiveMonths = getConsecutiveMonths(earliestInvestMonth, latestMonth);
+
+    let accumulatedPrincipal = 0;
+    let accumulatedYield = 0;
+
+    for (const ym of consecutiveMonths) {
+      const monthlyDeposit = depositByMonth[ym] ?? 0;
+      const currentMonthYield = round2((accumulatedPrincipal + accumulatedYield) * MONTHLY_RATE);
+      accumulatedYield = round2(accumulatedYield + currentMonthYield);
+      accumulatedPrincipal = round2(accumulatedPrincipal + monthlyDeposit);
+      const totalBalance = round2(accumulatedPrincipal + accumulatedYield);
+
+      portfolioTimeline.push({
+        month: ym,
+        monthlyDeposit: round2(monthlyDeposit),
+        currentMonthYield,
+        accumulatedPrincipal,
+        accumulatedYield,
+        totalBalance,
+      });
+    }
+
+    globalTotalDeposited = accumulatedPrincipal;
+    globalTotalYield = accumulatedYield;
+    globalBalance = accumulatedPrincipal + accumulatedYield;
+  }
+
+  const depositCount = depositRows.length;
+  const totalInvested = globalTotalDeposited;
+  const totalInterestEarned = globalTotalYield;
+  const investmentBalance = globalBalance;
+
+  const investFields = {
+    depositCount, totalInvested, totalInterestEarned, investmentBalance,
+    globalTotalDeposited, globalTotalYield, globalBalance, portfolioTimeline,
+  };
+
+  // ── Advanced Statistics ───────────────────────────────────────────────────
+  const positiveRevenueValues = validRows
+    .filter((r) => r.entryType !== 'deposit' && r.entryType !== 'waiver' && r.entryType !== 'expense' && r.entryType !== 'partner_out' && r.entryType !== 'partner_in' && r.entryType !== 'unresolved' && r.value > 0)
+    .map((r) => r.value);
+
+  let statsFields: { maxTransaction: number; minTransaction: number; medianTransaction: number; modeTransaction: number; stdDeviation: number };
+
+  if (positiveRevenueValues.length === 0) {
+    statsFields = { maxTransaction: 0, minTransaction: 0, medianTransaction: 0, modeTransaction: 0, stdDeviation: 0 };
+  } else {
+    const sorted = [...positiveRevenueValues].sort((a, b) => a - b);
+    const n = sorted.length;
+    const maxTransaction = round2(sorted[n - 1]);
+    const minTransaction = round2(sorted[0]);
+    const medianTransaction = n % 2 === 1
+      ? round2(sorted[Math.floor(n / 2)])
+      : round2((sorted[n / 2 - 1] + sorted[n / 2]) / 2);
+
+    const freqMap = new Map<number, number>();
+    for (const v of positiveRevenueValues) {
+      freqMap.set(v, (freqMap.get(v) ?? 0) + 1);
+    }
+    let modeTransaction = 0;
+    let maxFreq = 1;
+    for (const [val, freq] of freqMap) {
+      if (freq > maxFreq) {
+        maxFreq = freq;
+        modeTransaction = val;
+      }
+    }
+    modeTransaction = round2(modeTransaction);
+
+    const mean = positiveRevenueValues.reduce((s, v) => s + v, 0) / n;
+    const variance = positiveRevenueValues.reduce((s, v) => s + (v - mean) ** 2, 0) / n;
+    const stdDeviation = round2(Math.sqrt(variance));
+
+    statsFields = { maxTransaction, minTransaction, medianTransaction, modeTransaction, stdDeviation };
+  }
+
+  const distinctActiveDays = new Set<string>();
+  for (const r of validRows) {
+    if (r.entryType !== 'unresolved' && r.value !== 0) {
+      distinctActiveDays.add(r.date);
+    }
+  }
+  const daysWorked = distinctActiveDays.size;
+
+  if (revenueRows.length === 0) {
+    const netBalanceZeroRev = round2(0 - totalExpenses);
+    return {
+      ...emptyMetrics(),
+      totalExpenses,
+      annualExpenses,
+      netBalance: netBalanceZeroRev,
+      balance: netBalanceZeroRev,
+      totalDeposits: totalInvested,
+      daysWorked,
+      ...survivalFields,
+      ...investFields,
+      ...statsFields,
+      totalPartnerIn,
+      totalPartnerOut,
+      grossWithPartner: totalPartnerIn,
+      expensesWithPartner: round2(totalExpenses + totalPartnerOut),
+      netWithPartner: round2(totalPartnerIn - (totalExpenses + totalPartnerOut)),
+    };
+  }
+
+  const activeRows = revenueRows.filter((r) => r.value > 0);
+  if (activeRows.length === 0) {
+    const netBalanceZeroRev = round2(0 - totalExpenses);
+    return {
+      ...emptyMetrics(),
+      totalExpenses,
+      annualExpenses,
+      netBalance: netBalanceZeroRev,
+      balance: netBalanceZeroRev,
+      totalDeposits: totalInvested,
+      daysWorked,
+      ...survivalFields,
+      ...investFields,
+      ...statsFields,
+      totalPartnerIn,
+      totalPartnerOut,
+      grossWithPartner: totalPartnerIn,
+      expensesWithPartner: round2(totalExpenses + totalPartnerOut),
+      netWithPartner: round2(totalPartnerIn - (totalExpenses + totalPartnerOut)),
+    };
+  }
+
+  const today = asOfDate
+    ? new Date(asOfDate + 'T12:00:00')
+    : new Date();
+
+  // ── Accumulators ─────────────────────────────────────────────────────────
+  let grossTotal = 0;
+  let grossTotalWeeks = 0;
+
+  const byYearAcc: Record<string, {
+    gross: number;
+    dates: string[];
+    months: Set<string>;
+    weeks: Set<string>;
+  }> = {};
+
+  const byMonthAcc: Record<string, {
+    gross: number;
+    payments: Record<string, number>;
+    weeks: Set<string>;
+  }> = {};
+
+  for (const ym of allMonths) {
+    byMonthAcc[ym] = { gross: 0, payments: {}, weeks: new Set() };
+  }
+
+  const byWeekAcc: Record<string, number> = {};
+
+  for (const row of activeRows) {
+    grossTotal += row.value;
+
+    const activeWeeklyGoal = getWeeklyGoalForDate(row.date, safeGoals);
+    if (activeWeeklyGoal > 0) {
+      grossTotalWeeks += row.value / activeWeeklyGoal;
+    }
+
+    for (const contrib of rowContributions(row)) {
+      const cYearStr  = contrib.date.slice(0, 4);
+      const yearMonth = contrib.date.slice(0, 7);
+      const isoWeek   = getISOWeekKey(contrib.date);
+
+      if (!byYearAcc[cYearStr]) {
+        byYearAcc[cYearStr] = { gross: 0, dates: [], months: new Set(), weeks: new Set() };
+      }
+      byYearAcc[cYearStr].gross += contrib.value;
+      byYearAcc[cYearStr].dates.push(contrib.date);
+      byYearAcc[cYearStr].months.add(yearMonth);
+      byYearAcc[cYearStr].weeks.add(isoWeek);
+
+      if (!byMonthAcc[yearMonth]) {
+        byMonthAcc[yearMonth] = { gross: 0, payments: {}, weeks: new Set() };
+      }
+      byMonthAcc[yearMonth].gross += contrib.value;
+      byMonthAcc[yearMonth].payments[contrib.date] =
+        (byMonthAcc[yearMonth].payments[contrib.date] ?? 0) + contrib.value;
+      byMonthAcc[yearMonth].weeks.add(isoWeek);
+
+      byWeekAcc[isoWeek] = (byWeekAcc[isoWeek] ?? 0) + contrib.value;
+    }
+  }
+
+  // ── Global averages (Full Monthly Competence Envelope — Lock 1) ──────────
+  const activeRevenueMonths = Object.keys(byMonthAcc).filter((ym) => (byMonthAcc[ym]?.gross ?? 0) > 0);
+  const revenueSpan = getEffectivePeriodSpanDays(activeRevenueMonths);
+  const globalDailyAvg = revenueSpan.effectiveSpanDays > 0
+    ? round2(grossTotal / revenueSpan.effectiveSpanDays)
+    : 0;
+  const globalWeeklyAvg = round2(globalDailyAvg * 7);
+  const globalMonthlyAvg = revenueSpan.activeMonthsCount > 0
+    ? round2(grossTotal / revenueSpan.activeMonthsCount)
+    : 0;
+  const globalAnnualAvg = round2(globalMonthlyAvg * 12);
+
+  // ── Per-year metrics (Reconciled with Active Competence Months — Lock 1) ─
+  const byYear: Record<string, YearMetrics> = {};
+  for (const [yr, acc] of Object.entries(byYearAcc)) {
+    const yearSpan = getEffectivePeriodSpanDays(acc.months);
+    const dailyAvg = yearSpan.effectiveSpanDays > 0
+      ? round2(acc.gross / yearSpan.effectiveSpanDays)
+      : 0;
+    const yearNum  = parseInt(yr, 10);
+    byYear[yr] = {
+      grossAnnual:  round2(acc.gross),
+      yearExpenses: computeYearExpenses(expenseRows, yearNum),
+      dailyAvg,
+      weeklyAvg:  round2(dailyAvg * 7),
+      monthlyAvg: round2(acc.gross / Math.max(1, acc.months.size)),
+    };
+  }
+
+  // ── Per-month metrics (Full Calendar Month Competence — Lock 1) ──────────
+  const byMonth: Record<string, MonthMetrics> = {};
+  for (const [ym, acc] of Object.entries(byMonthAcc)) {
+    const [ymYearStr, ymMonthStr] = ym.split('-');
+    const ymYear  = parseInt(ymYearStr, 10);
+    const ymMonth = parseInt(ymMonthStr, 10);
+
+    const denominator = Math.max(1, daysInMonth(ymYear, ymMonth));
+    const dailyAvg = round2(acc.gross / denominator);
+    const weeklyAvg = round2(dailyAvg * 7);
+
+    const sortedWeeks = Array.from(acc.weeks).sort();
+    const lastWeek = sortedWeeks[sortedWeeks.length - 1] ?? '';
+    const lastWeekGross = lastWeek ? round2(byWeekAcc[lastWeek] ?? 0) : 0;
+
+    byMonth[ym] = {
+      grossMonthly: round2(acc.gross),
+      dailyAvg,
+      weeklyAvg,
+      lastWeekGross,
+      dailyPayments: acc.payments,
+      investment: round2(depositByMonth[ym] ?? 0),
+      expense: round2(monthlyExpenses[ym] ?? 0),
+    };
+  }
+
+  // ── Week totals ───────────────────────────────────────────────────────────
+  const byWeek: Record<string, number> = {};
+  for (const [wk, v] of Object.entries(byWeekAcc)) {
+    byWeek[wk] = round2(v);
+  }
+
+  // ── Strict cumulative BRL balance ─────────────────────────────────────────
+  const { balance: rawStrictBalance, elapsedWeeks: totalElapsedWeeks } =
+    calculateStrictGlobalBalance(revenueRows, safeGoals, asOfDate ? today : undefined);
+
+  // ── Waiver credits ─────────────────────────────────────────────────────────
+  let totalWaiverCredits = 0;
+  let totalWaivedDays = 0;
+  let waiverTotalWeeks = 0;
+  const waiverRows = validRows.filter((r) => r.entryType === 'waiver');
+
+  for (const row of waiverRows) {
+    const activeWeeklyGoal = getWeeklyGoalForDate(row.date, safeGoals);
+    if (row.value > 0) {
+      totalWaiverCredits += row.value;
+      if (activeWeeklyGoal > 0) {
+        const wWeeks = row.value / activeWeeklyGoal;
+        waiverTotalWeeks += wWeeks;
+        totalWaivedDays += wWeeks * 7;
+      }
+    } else {
+      const spanDays = (row.periodStart && row.periodEnd)
+        ? Math.max(1, calendarDaySpan(row.periodStart, row.periodEnd))
+        : 1;
+      const wWeeks = spanDays / 7;
+      waiverTotalWeeks += wWeeks;
+      totalWaivedDays += spanDays;
+      if (activeWeeklyGoal > 0) {
+        totalWaiverCredits += wWeeks * activeWeeklyGoal;
+      }
+    }
+  }
+
+  const globalGoalBalance = Math.round((rawStrictBalance + totalWaiverCredits + totalPartnerIn - totalPartnerOut) * 100) / 100;
+  const waivedWeeks = Math.round((totalWaivedDays / 7) * 100) / 100;
+  const billableWeeks = Math.round((totalElapsedWeeks - waivedWeeks) * 100) / 100;
+
+  // ── Net balance ───────────────────────────────────────────────────────────
+  const netBalance = round2(grossTotal - totalExpenses);
+
+  // ── Historically-Accumulated Week Equivalents ──────────────────────────────
+  grossTotalWeeks  = round2(grossTotalWeeks);
+  waiverTotalWeeks = round2(waiverTotalWeeks);
+  const goalTotalWeeks   = totalElapsedWeeks;
+  const netBalanceWeeks  = round2(grossTotalWeeks + waiverTotalWeeks - goalTotalWeeks);
+
+  // Time Bank balance is calculated strictly as: globalGoalBalance / currentWeeklyGoal
+  const targetDateKey = asOfDate || toLocalKey(today);
+  const currentWeeklyGoal = getWeeklyGoalForDate(targetDateKey, safeGoals);
+  const currentDailyGoal = round2(getDailyGoalForDate(targetDateKey, safeGoals));
+  const timeBankBalance = currentWeeklyGoal > 0
+    ? Math.round((globalGoalBalance / currentWeeklyGoal) * 100) / 100
+    : 0;
+
+  // ── Combined metrics (operational + partnership) ──────────────────────────
+  const grossWithPartner = round2(grossTotal + totalPartnerIn);
+  const expensesWithPartner = round2(totalExpenses + totalPartnerOut);
+  const netWithPartner = round2(grossWithPartner - expensesWithPartner);
+
+  return {
+    grossTotal: round2(grossTotal),
+    globalDailyAvg,
+    globalWeeklyAvg,
+    globalMonthlyAvg,
+    globalAnnualAvg,
+    globalGoalBalance,
+    totalElapsedWeeks,
+    waivedWeeks,
+    billableWeeks,
+    totalWaiverCredit: Math.round(totalWaiverCredits * 100) / 100,
+    timeBankBalance,
+    byYear,
+    byMonth,
+    byWeek,
+    totalExpenses,
+    annualExpenses,
+    netBalance,
+    ...survivalFields,
+    ...investFields,
+    ...statsFields,
+    totalPartnerIn,
+    totalPartnerOut,
+    grossWithPartner,
+    expensesWithPartner,
+    netWithPartner,
+    grossTotalWeeks,
+    waiverTotalWeeks,
+    goalTotalWeeks,
+    netBalanceWeeks,
+    balance: netBalance,
+    totalDeposits: totalInvested,
+    daysWorked,
+    dailyAverage: globalDailyAvg,
+    globalDailyGoal: currentDailyGoal,
+  };
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function round2(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
+function calendarDaySpan(dateA: string, dateB: string): number {
+  const msPerDay = 86_400_000;
+  const a = new Date(dateA + 'T12:00:00').getTime();
+  const b = new Date(dateB + 'T12:00:00').getTime();
+  return Math.round(Math.abs(b - a) / msPerDay) + 1;
+}
+
+function isoYearMonth(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function getISOWeekKey(dateStr: string): string {
+  const d = new Date(
+    Date.UTC(
+      parseInt(dateStr.slice(0, 4), 10),
+      parseInt(dateStr.slice(5, 7), 10) - 1,
+      parseInt(dateStr.slice(8, 10), 10),
+    ),
+  );
+  d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  const weekNum = Math.ceil(((d.getTime() - yearStart.getTime()) / 86_400_000 + 1) / 7);
+  return `${d.getUTCFullYear()}-W${String(weekNum).padStart(2, '0')}`;
+}
+
+function computeYearExpenses(expenseRows: TableRow[], year: number): number {
+  const yearStart = `${year}-01-01`;
+  const yearEnd   = `${year}-12-31`;
+  let total = 0;
+
+  for (const row of expenseRows) {
+    if (row.value <= 0) continue;
+    const start = row.periodStart || row.date;
+    const end   = row.periodEnd   || row.date;
+
+    if (start > yearEnd || end < yearStart) continue;
+
+    if (start === end) {
+      total += row.value;
+    } else {
+      const totalDays   = Math.max(1, calendarDaySpan(start, end));
+      const overlapStart = start < yearStart ? yearStart : start;
+      const overlapEnd   = end   > yearEnd   ? yearEnd   : end;
+      const overlapDays  = Math.max(1, calendarDaySpan(overlapStart, overlapEnd));
+      total += (row.value / totalDays) * overlapDays;
+    }
+  }
+  return round2(total);
+}
+
+export function emptyMetrics(): TableMetrics {
+  return {
+    grossTotal: 0,
+    globalDailyAvg: 0,
+    globalWeeklyAvg: 0,
+    globalMonthlyAvg: 0,
+    globalAnnualAvg: 0,
+    globalGoalBalance: 0,
+    totalElapsedWeeks: 0,
+    waivedWeeks: 0,
+    billableWeeks: 0,
+    totalWaiverCredit: 0,
+    timeBankBalance: 0,
+    byYear: {},
+    byMonth: {},
+    byWeek: {},
+    totalExpenses: 0,
+    annualExpenses: 0,
+    netBalance: 0,
+    survivalDaily: 0,
+    survivalWeekly: 0,
+    survivalMonthly: 0,
+    survivalAnnualCost: 0,
+    depositCount: 0,
+    totalInvested: 0,
+    totalInterestEarned: 0,
+    investmentBalance: 0,
+    globalTotalDeposited: 0,
+    globalTotalYield: 0,
+    globalBalance: 0,
+    portfolioTimeline: [],
+    maxTransaction: 0,
+    minTransaction: 0,
+    medianTransaction: 0,
+    modeTransaction: 0,
+    stdDeviation: 0,
+    totalPartnerIn: 0,
+    totalPartnerOut: 0,
+    grossWithPartner: 0,
+    expensesWithPartner: 0,
+    netWithPartner: 0,
+    grossTotalWeeks: 0,
+    waiverTotalWeeks: 0,
+    goalTotalWeeks: 0,
+    netBalanceWeeks: 0,
+    balance: 0,
+    totalDeposits: 0,
+    daysWorked: 0,
+    dailyAverage: 0,
+    globalDailyGoal: 0,
+  };
+}
+
+/**
+ * Compute baseline goals from historical transaction data.
+ *
+ * Used when importing CSV data that has no explicit goal metadata.
+ * Calculates global daily average from revenue rows over the active competence months,
+ * then derives weekly and annual targets. Populates both legacy flat records
+ * (keyed by year) and the new hierarchical globalGoals.
+ *
+ * Returns a complete TableGoals object ready to persist.
+ */
+export function computeBaselineGoals(rows: Omit<TableRow, 'id'>[]): TableGoals {
+  if (!Array.isArray(rows) || rows.length === 0) {
+    return { dailyGoals: {}, weeklyGoals: {}, annualCosts: {} };
+  }
+  // Filter for revenue-only rows (entryType undefined or 'revenue') with positive value
+  const revenueRows = rows.filter(
+    (r) => r && typeof r === 'object' && (!r.entryType || r.entryType === 'revenue') && typeof r.value === 'number' && r.value > 0 && typeof r.date === 'string' && r.date.length >= 4,
+  );
+
+  if (revenueRows.length === 0) {
+    return { dailyGoals: {}, weeklyGoals: {}, annualCosts: {} };
+  }
+
+  const spanInfo = computeActiveMonthsSpan(revenueRows as TableRow[]);
+  const daySpan = Math.max(1, spanInfo.effectiveSpanDays);
+  const effectiveMonths = Math.max(1, spanInfo.activeMonthsCount);
+
+  // Calculate gross revenue total
+  const grossRevenue = revenueRows.reduce((sum, r) => sum + r.value, 0);
+  const dailyAvg = round2(grossRevenue / daySpan);
+  const weeklyGoal = round2(dailyAvg * 7);
+  const monthlyAvg = round2(grossRevenue / effectiveMonths);
+  const annualCost = round2(monthlyAvg * 12);
+
+  // Determine which years the data spans
+  const yearSet = new Set<number>();
+  for (const r of revenueRows) {
+    yearSet.add(parseInt((r.periodStart || r.date).slice(0, 4), 10));
+    if (r.periodEnd) {
+      yearSet.add(parseInt(r.periodEnd.slice(0, 4), 10));
+    }
+  }
+  const years = Array.from(yearSet).sort();
+
+  // Build legacy flat records keyed by year
+  const dailyGoals: Record<number, number> = {};
+  const weeklyGoals: Record<number, number> = {};
+  const annualCosts: Record<number, number> = {};
+  for (const yr of years) {
+    dailyGoals[yr] = dailyAvg;
+    weeklyGoals[yr] = weeklyGoal;
+    annualCosts[yr] = annualCost;
+  }
+
+  // Build hierarchical globalGoals profile
+  const globalGoals = {
+    dailyGoal: dailyAvg,
+    weeklyGoal,
+    annualCost,
+  };
+
+  return {
+    dailyGoals,
+    weeklyGoals,
+    annualCosts,
+    globalGoals,
+  };
+}
+
+function getConsecutiveMonths(startYM: string, endYM: string): string[] {
+  const [startY, startM] = startYM.split('-').map(Number);
+  const [endY, endM] = endYM.split('-').map(Number);
+  const result: string[] = [];
+  let currY = startY;
+  let currM = startM;
+
+  while (currY < endY || (currY === endY && currM <= endM)) {
+    result.push(`${currY}-${String(currM).padStart(2, '0')}`);
+    currM++;
+    if (currM > 12) {
+      currM = 1;
+      currY++;
+    }
+  }
+  return result;
+}
+

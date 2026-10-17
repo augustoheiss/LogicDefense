@@ -1,0 +1,44 @@
+## COIN ASSISTANT BACKUP v3 ##
+table_id,example_driver_fleet_03
+api_key,am_sheet_example_fictitious
+last_event_seq,0
+name,Exemplo 03 - Motorista de App & Frota TCO (Fictício)
+description,Modelo fictício para motoristas de aplicativo, entregadores e gestores de frota com controle de CPK, combustível, manutenção Weibull e seguro anual rateado.
+active_sectors,%5B%22core_cashflow%22%2C%22core_revenue%22%2C%22core_costs%22%2C%22core_goals%22%2C%22core_predictions%22%2C%22personal_finance%22%2C%22vehicles%22%5D
+dashboard_config,%7B%22preset%22%3A%22freelancer%22%2C%22widgetOrder%22%3A%5B%22health_score%22%2C%22month_summary%22%2C%22sector_simulators%22%2C%22next_action%22%2C%22pillars%22%2C%22insights%22%2C%22recent_activity%22%2C%22what_if%22%2C%22quick_actions%22%2C%22investor_summary%22%2C%22lessons%22%5D%2C%22hiddenWidgets%22%3A%5B%22lessons%22%5D%7D
+goal_global_daily,260
+goal_global_weekly,1820
+goal_global_annual,42000
+goal_daily_2026,260
+goal_weekly_2026,1820
+goal_annual_2026,42000
+## INVESTOR_PROFILE ##
+profile_type,safety
+emergency_fund_goal_months,6
+fire_annual_multiplier,25
+monthly_contribution_goal,600
+## ROWS ##
+id,date,value,description,entryType,monthlyValue,monthCount,period_start,period_end,category,tags,metadata_json,ticker,quantity,unitPrice
+ex03-01,2026-08-03,1980.00,"GANHOS SEMANA 01 UBER E 99 POP (FICTICIO)",revenue,,,,,"Ganhos de Aplicativo","deadhead,tipo_viagem,cpk","{""milhas_km"":1120,""idveiculo"":""CAR01""}",,,
+ex03-02,2026-08-04,540.00,"ABASTECIMENTO ETANOL/GASOLINA SEMANA 01 (FICTICIO)",expense,,,,,"Combustível","cpk,fuel,tco_vehicle","{""idveiculo"":""CAR01"",""litros"":95}",,,
+ex03-03,2026-08-10,2120.00,"GANHOS SEMANA 02 UBER E PARTICULARES (FICTICIO)",revenue,,,,,"Ganhos de Aplicativo","deadhead,tipo_viagem,cpk","{""milhas_km"":1180,""idveiculo"":""CAR01""}",,,
+ex03-04,2026-08-11,560.00,"ABASTECIMENTO POSTO ESTRELA SEMANA 02 (FICTICIO)",expense,,,,,"Combustível","cpk,fuel,tco_vehicle","{""idveiculo"":""CAR01"",""litros"":98}",,,
+ex03-05,2026-08-15,2640.00,"SEGURO AUTO ANUAL PROTECAO TOTAL (12 MESES)",expense,220.00,12,2026-01-01,2026-12-31,"Documentação & Seguro","cpk,ubi,tco_vehicle","{""idveiculo"":""CAR01"",""perfil_msrp"":75000}",,,
+ex03-06,2026-08-17,1890.00,"GANHOS SEMANA 03 APLICATIVOS (FICTICIO)",revenue,,,,,"Ganhos de Aplicativo","deadhead,tipo_viagem","{""milhas_km"":1050,""idveiculo"":""CAR01""}",,,
+ex03-07,2026-08-18,510.00,"ABASTECIMENTO SEMANA 03 (FICTICIO)",expense,,,,,"Combustível","cpk,fuel,tco_vehicle","{""idveiculo"":""CAR01""}",,,
+ex03-08,2026-08-22,420.00,"TROCA DE OLEO FILTROS E ALINHAMENTO PREVENTIVO",expense,,,,,"Manutenção Frota","cpk,weibull,tco_vehicle","{""idveiculo"":""CAR01"",""odometer"":45000}",,,
+ex03-09,2026-08-24,2050.00,"GANHOS SEMANA 04 APLICATIVOS (FICTICIO)",revenue,,,,,"Ganhos de Aplicativo","deadhead,tipo_viagem","{""milhas_km"":1150,""idveiculo"":""CAR01""}",,,
+ex03-10,2026-08-25,530.00,"ABASTECIMENTO SEMANA 04 (FICTICIO)",expense,,,,,"Combustível","cpk,fuel,tco_vehicle","{""idveiculo"":""CAR01""}",,,
+ex03-11,2026-08-28,600.00,"APORTE FUNDO TROCA DE VEICULO E RESERVA CDI",deposit,,,,,"Reserva Frota","reserva,selic","{""assetClass"":""cash_reserves""}",SELIC,1,600.00
+ex03-12,2026-09-07,2010.00,"GANHOS SEMANA 01 SETEMBRO APPS (FICTICIO)",revenue,,,,,"Ganhos de Aplicativo","deadhead,tipo_viagem","{""milhas_km"":1140,""idveiculo"":""CAR01""}",,,
+ex03-13,2026-09-08,545.00,"ABASTECIMENTO SEMANA 01 SETEMBRO (FICTICIO)",expense,,,,,"Combustível","cpk,fuel,tco_vehicle","{""idveiculo"":""CAR01""}",,,
+ex03-14,2026-09-14,1950.00,"GANHOS SEMANA 02 SETEMBRO APPS (FICTICIO)",revenue,,,,,"Ganhos de Aplicativo","deadhead,tipo_viagem","{""milhas_km"":1090,""idveiculo"":""CAR01""}",,,
+ex03-15,2026-09-15,525.00,"ABASTECIMENTO SEMANA 02 SETEMBRO (FICTICIO)",expense,,,,,"Combustível","cpk,fuel,tco_vehicle","{""idveiculo"":""CAR01""}",,,
+ex03-16,2026-09-18,260.00,"ABONO DIA DE OFICINA E REVISAO PROGRAMADA",waiver,,,,,"Banco de Tempo","abono,manutencao","{}",,,
+ex03-17,2026-09-21,2180.00,"GANHOS SEMANA 03 SETEMBRO APPS E VIAGENS (FICTICIO)",revenue,,,,,"Ganhos de Aplicativo","deadhead,tipo_viagem","{""milhas_km"":1210,""idveiculo"":""CAR01""}",,,
+ex03-18,2026-09-22,570.00,"ABASTECIMENTO SEMANA 03 SETEMBRO (FICTICIO)",expense,,,,,"Combustível","cpk,fuel,tco_vehicle","{""idveiculo"":""CAR01""}",,,
+ex03-19,2026-09-28,650.00,"APORTE FUNDO DEPRECIACAO VEICULO TESOURO SELIC",deposit,,,,,"Reserva Frota","reserva,selic","{""assetClass"":""cash_reserves""}",SELIC,1,650.00
+ex03-20,2026-10-05,2090.00,"GANHOS SEMANA 01 OUTUBRO APPS (FICTICIO)",revenue,,,,,"Ganhos de Aplicativo","deadhead,tipo_viagem","{""milhas_km"":1160,""idveiculo"":""CAR01""}",,,
+ex03-21,2026-10-06,550.00,"ABASTECIMENTO SEMANA 01 OUTUBRO (FICTICIO)",expense,,,,,"Combustível","cpk,fuel,tco_vehicle","{""idveiculo"":""CAR01""}",,,
+ex03-22,2026-10-12,2240.00,"GANHOS SEMANA 02 OUTUBRO APPS E EVENTOS (FICTICIO)",revenue,,,,,"Ganhos de Aplicativo","deadhead,tipo_viagem","{""milhas_km"":1240,""idveiculo"":""CAR01""}",,,
+ex03-23,2026-10-13,580.00,"ABASTECIMENTO SEMANA 02 OUTUBRO (FICTICIO)",expense,,,,,"Combustível","cpk,fuel,tco_vehicle","{""idveiculo"":""CAR01""}",,,

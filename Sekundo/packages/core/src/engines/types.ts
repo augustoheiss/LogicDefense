@@ -26,6 +26,7 @@ export type EngineId =
   | 'live_production_ros'  // Live Run-of-Show, second-accurate drift
   | 'tournament_pairings'  // Swiss & Elimination Blossom pairings
   | 'canvassing_logistics' // Advanced 8-code field canvassing & eLOT routing
+  | 'financial_ledger'     // Assistente Moeda: Sovereign Financial, Sectoral & Patrimonial Engine
   | 'transformer';         // Metamorphic engine: custom CSV columns & on-demand math laws
 
 // ---------------------------------------------------------------------------
@@ -283,6 +284,51 @@ export interface CanvassingMetrics {
 }
 
 // ---------------------------------------------------------------------------
+// 8. Assistente Moeda (Financial Ledger & Sectoral Engine) Domain Types
+// ---------------------------------------------------------------------------
+
+export type FinancialEntryType =
+  | 'revenue'
+  | 'expense'
+  | 'deposit'
+  | 'waiver'
+  | 'partner_in'
+  | 'partner_out'
+  | 'unresolved';
+
+export interface FinancialLedgerNodeMeta {
+  date?: string;              // YYYY-MM-DD
+  amountBRL?: number;         // Monetary value in BRL
+  entryType?: FinancialEntryType;
+  category?: string;
+  tags?: string;
+  periodStart?: string;
+  periodEnd?: string;
+  monthlyValue?: number;
+  monthCount?: number;
+  ticker?: string;
+  quantity?: number;
+  unitPrice?: number;
+  tableId?: string;
+  tableName?: string;
+}
+
+export interface FinancialLedgerMetrics {
+  transactionCount: number;
+  grossTotal: number;
+  totalExpenses: number;
+  totalInvested: number;
+  totalWaiverCredit: number;
+  totalPartnerIn: number;
+  totalPartnerOut: number;
+  netBalance: number;
+  survivalDaily: number;
+  survivalWeekly: number;
+  survivalMonthly: number;
+  unresolvedCount: number;
+}
+
+// ---------------------------------------------------------------------------
 // Generic Union Metrics
 // ---------------------------------------------------------------------------
 
@@ -295,6 +341,7 @@ export type EngineMetrics =
   | { engineId: 'live_production_ros'; data: RunOfShowMetrics }
   | { engineId: 'tournament_pairings'; data: TournamentMetrics }
   | { engineId: 'canvassing_logistics'; data: CanvassingMetrics }
+  | { engineId: 'financial_ledger'; data: FinancialLedgerMetrics }
   | { engineId: 'transformer'; data: TransformerMetrics };
 
 // ---------------------------------------------------------------------------

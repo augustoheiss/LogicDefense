@@ -1,23 +1,34 @@
 {
   "expo": {
-    "name": "Sekundo",
-    "slug": "sekundo",
-    "version": "0.1.0",
+    "name": "Sekundo - Finanças e Rotinas",
+    "slug": "assistente-moeda",
+    "version": "2.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/app-icon.png",
-    "scheme": "sekundo",
+    "scheme": [
+      "sekundo",
+      "assistentemoeda"
+    ],
     "userInterfaceStyle": "dark",
     "ios": {
-      "bundleIdentifier": "com.logicdefense.sekundo",
+      "bundleIdentifier": "com.logicdefense.assistentemoeda",
+      "buildNumber": "3",
       "supportsTablet": true,
       "icon": "./assets/images/app-icon.png"
     },
     "android": {
-      "package": "com.heisslab.sekundo",
+      "package": "com.heisslab.assistentemoeda",
+      "versionCode": 3,
       "adaptiveIcon": {
         "backgroundColor": "#12151C",
         "foregroundImage": "./assets/images/app-icon.png"
       },
+      "blockedPermissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.SYSTEM_ALERT_WINDOW"
+      ],
       "predictiveBackGestureEnabled": true
     },
     "web": {
@@ -39,16 +50,35 @@
           }
         }
       ],
-      "expo-sharing"
+      "expo-sharing",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "extraDependencies": [
+              "com.android.billingclient:billing:8.0.0"
+            ]
+          }
+        }
+      ]
     ],
     "experiments": {
-      "typedRoutes": true,
+      "typedRoutes": false,
       "reactCompiler": false,
       "baseUrl": "/laboratorio/sekundo"
     },
     "extra": {
-      "router": {}
+      "router": {},
+      "eas": {
+        "projectId": "444742d2-f4df-4a57-a412-98ede4bd6e1d"
+      }
     },
-    "owner": "augustoheiss"
+    "owner": "augustoheiss",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/444742d2-f4df-4a57-a412-98ede4bd6e1d"
+    }
   }
 }

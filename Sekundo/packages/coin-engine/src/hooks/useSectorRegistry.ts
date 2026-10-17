@@ -1,0 +1,128 @@
+import { useCallback, useMemo } from 'react';
+import { useCoinDB } from './useCoinDB';
+
+export interface Sector {
+  id: string;
+  label: string;
+  description: string;
+  icon: string;
+}
+
+export const ALL_SECTORS: Sector[] = [
+  {
+    id: 'core_cashflow',
+    label: 'Fluxo de Caixa',
+    description: 'Saldo acumulado linha a linha e previsão de liquidez.',
+    icon: '📊',
+  },
+  {
+    id: 'core_revenue',
+    label: 'Receitas & Faturamento',
+    description: 'Categorização de faturamento, origens de renda e recorrência.',
+    icon: '📈',
+  },
+  {
+    id: 'core_costs',
+    label: 'Custos & Despesas',
+    description: 'Classificação de custos fixos/variáveis, centros de custo e drenos.',
+    icon: '📉',
+  },
+  {
+    id: 'personal_finance',
+    label: 'Finanças Pessoais',
+    description: 'Controle de receitas, despesas pessoais, investimentos e projeções de longo prazo.',
+    icon: '👤',
+  },
+  {
+    id: 'smb_accounting',
+    label: 'Contabilidade PME',
+    description: 'Gestão de capital de giro, fluxo de caixa em risco (CFaR), margem operacional e estoque.',
+    icon: '🏢',
+  },
+  {
+    id: 'real_estate',
+    label: 'Imobiliário',
+    description: 'Simulações de financiamentos (Price/SAC), rendimentos reais deflacionados e depreciação física.',
+    icon: '🏠',
+  },
+  {
+    id: 'vehicles',
+    label: 'Frotas & Veículos',
+    description: 'Gestão de TCO (Custo Total de Propriedade), custo por quilômetro (CPK) e manutenção preventiva.',
+    icon: '🚗',
+  },
+  {
+    id: 'legal_taxes',
+    label: 'Jurídico & Tributário',
+    description: 'Simulações do Fator R, Lucro Presumido, IRPF 2026, IRPFM e correção de débitos trabalhistas/cíveis.',
+    icon: '⚖️',
+  },
+];
+
+export const DEFAULT_ACTIVE_SECTORS: string[] = [
+  'core_cashflow',
+  'core_revenue',
+  'core_costs',
+  'personal_finance',
+];
+
+const VALID_SECTOR_IDS = new Set(ALL_SECTORS.map((s) => s.id));
+
+function sanitizeSectorIds(ids: string[]): string[] {
+  const uniqueValid = Array.from(new Set(ids.filter((id) => VALID_SECTOR_IDS.has(id))));
+  return uniqueValid.length > 0 ? uniqueValid : DEFAULT_ACTIVE_SECTORS;
+}
+
+export function useSectorRegistry() {
+  const { activeTable, updateActiveSectors } = useCoinDB();
+
+  const activeSectors = useMemo<string[]>(() => {
+    if (!activeTable || !activeTable.activeSectors || activeTable.activeSectors.length === 0) {
+      return DEFAULT_ACTIVE_SECTORS;
+    }
+    if (
+      activeTable.activeSectors.length === 1 &&
+      activeTable.activeSectors[0] === 'personal_finance'
+    ) {
+      return DEFAULT_ACTIVE_SECTORS;
+    }
+    return sanitizeSectorIds(activeTable.activeSectors);
+  }, [activeTable]);
+
+  const isSectorActive = useCallback(
+    (sectorId: string) => {
+      return activeSectors.includes(sectorId);
+    },
+    [activeSectors]
+  );
+
+  const setSectors = useCallback(
+    (sectors: string[]) => {
+      if (!activeTable) return;
+      if (updateActiveSectors) {
+        updateActiveSectors(sanitizeSectorIds(sectors));
+      }
+    },
+    [activeTable, updateActiveSectors]
+  );
+
+  const toggleSector = useCallback(
+    (sectorId: string) => {
+      if (!VALID_SECTOR_IDS.has(sectorId)) return;
+      if (activeSectors.includes(sectorId)) {
+        setSectors(activeSectors.filter((id) => id !== sectorId));
+      } else {
+        setSectors([...activeSectors, sectorId]);
+      }
+    },
+    [activeSectors, setSectors]
+  );
+
+  return {
+    allSectors: ALL_SECTORS,
+    activeSectors,
+    isSectorActive,
+    toggleSector,
+    setSectors,
+  };
+}

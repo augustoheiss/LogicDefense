@@ -1,0 +1,333 @@
+/**
+ * API Key Service — Assistente Moeda
+ *
+ * Handles client-side API key validation, TTL expiration checks,
+ * and automatic key generation/renewal via backend endpoints.
+ */
+
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+const API_URL = (
+  process.env.EXPO_PUBLIC_AI_BACKEND_URL ||
+  process.env.EXPO_PUBLIC_API_URL ||
+  'https://ocorrencias-pdf-writer.onrender.com'
+).replace(/\/+$/, '');
+
+export async function getApiStorageItem(key: string): Promise<string | null> {
+  if (typeof window !== 'undefined' && window.localStorage) {
+    const val = window.localStorage.getItem(key);
+    if (val !== null) return val;
+  }
+  try {
+    return await AsyncStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+export async function setApiStorageItem(key: string, value: string): Promise<void> {
+  if (typeof window !== 'undefined' && window.localStorage) {
+    try {
+      window.localStorage.setItem(key, value);
+    } catch {}
+  }
+  try {
+    await AsyncStorage.setItem(key, value);
+  } catch {}
+}
+
+export async function removeApiStorageItem(key: string): Promise<void> {
+  if (typeof window !== 'undefined' && window.localStorage) {
+    try {
+      window.localStorage.removeItem(key);
+    } catch {}
+  }
+  try {
+    await AsyncStorage.removeItem(key);
+  } catch {}
+}
+
+export async function isTableApiKeyRevoked(tableId: string): Promise<boolean> {
+  if (!tableId) return false;
+  return (await getApiStorageItem(`coin_api_revoked_${tableId}`)) === 'true';
+}
+
+export interface CoinSyncEventDetail {
+  tableId?: string;
+  apiKey?: string;
+  lastEventSeq?: number;
+  __fromBus?: boolean;
+}
+
+type SyncListener = (detail: CoinSyncEventDetail) => void;
+const syncListeners = new Set<SyncListener>();
+
+export function emitCoinSyncRequested(detail: CoinSyncEventDetail): void {
+  for (const listener of syncListeners) {
+    try {
+      listener(detail);
+    } catch {}
+  }
+  if (
+    typeof window !== 'undefined' &&
+    typeof window.dispatchEvent === 'function' &&
+    typeof CustomEvent === 'function'
+  ) {
+    try {
+      window.dispatchEvent(
+        new CustomEvent('coin_sync_requested', {
+          detail: { ...detail, __fromBus: true },
+        })
+      );
+    } catch {}
+  }
+}
+
+export function subscribeCoinSyncRequested(listener: SyncListener): () => void {
+  syncListeners.add(listener);
+  const domHandler = (e: any) => {
+    if (e?.detail?.__fromBus) return;
+    listener(e?.detail || {});
+  };
+  if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+    window.addEventListener('coin_sync_requested', domHandler);
+  }
+  return () => {
+    syncListeners.delete(listener);
+    if (typeof window !== 'undefined' && typeof window.removeEventListener === 'function') {
+      window.removeEventListener('coin_sync_requested', domHandler);
+    }
+  };
+}
+
+export interface KeyValidationResult {
+  valid: boolean;
+  expired?: boolean;
+  tableId?: string;
+  expiresAt?: string;
+  error?: string;
+}
+
+export interface GeneratedKeyResult {
+  apiKey: string;
+  keyHint: string;
+  tableId: string;
+  expiresAt?: string;
+  ttlDays?: number;
+}
+
+/**
+ * Validates an API Key against backend.
+ * Returns { valid: true, expiresAt } if active and unexpired,
+ * or { valid: false, expired: true } if TTL has expired.
+ */
+export async function validateApiKey(apiKey: string): Promise<KeyValidationResult> {
+  const cleanKey = (apiKey || '').trim();
+  if (!cleanKey || !cleanKey.startsWith('am_sheet_live_')) {
+    return { valid: false, expired: false, error: 'Formato de chave inválido.' };
+  }
+
+  try {
+    const res = await fetch(`${API_URL}/api/v1/api-keys/validate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ apiKey: cleanKey }),
+    });
+
+    const data = await res.json().catch(() => ({}));
+    if (res.status === 200 && data.valid) {
+      return {
+        valid: true,
+        expired: false,
+        tableId: data.tableId,
+        expiresAt: data.expiresAt || data.expires_at,
+      };
+    }
+
+    const detailStr = (data.detail || data.error || '').toString();
+    if (res.status === 401 && (detailStr.includes('API Key Expired') || detailStr.includes('expirada'))) {
+      return { valid: false, expired: true, error: 'API Key Expired' };
+    }
+
+    return { valid: false, expired: false, error: detailStr || 'Chave de API inválida ou revogada.' };
+  } catch (err: any) {
+    console.warn('[apiKeyService] Erro ao validar chave de API no servidor:', err);
+    return { valid: false, expired: false, error: 'Erro de conexão com o servidor.' };
+  }
+}
+
+/**
+ * Generates a new API Key for a given tableId via POST /api/v1/api-keys/generate
+ * Accepts custom ttlDays (1, 7, 30 — default: 1 day / 24h) and optional permissions ('read:write' | 'read-only').
+ * Supports calling with either (tableId, licenseKey, ttlDays, permissions) or (tableId, permissions, ttlDays).
+ */
+export async function generateNewApiKey(
+  tableId: string,
+  licenseKeyOrPermissions?: string,
+  ttlDays: number = 1,
+  permissions?: 'read:write' | 'read-only'
+): Promise<GeneratedKeyResult | null> {
+  try {
+    const isPermArg =
+      licenseKeyOrPermissions === 'read:write' || licenseKeyOrPermissions === 'read-only';
+    const resolvedLicenseKey = isPermArg ? undefined : licenseKeyOrPermissions;
+    const resolvedPermissions: 'read:write' | 'read-only' = isPermArg
+      ? licenseKeyOrPermissions
+      : permissions || 'read:write';
+
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (resolvedLicenseKey) {
+      headers['X-License-Key'] = resolvedLicenseKey;
+    }
+
+    const res = await fetch(`${API_URL}/api/v1/api-keys/generate`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        table_id: tableId,
+        license_key: resolvedLicenseKey || undefined,
+        permissions: resolvedPermissions,
+        ttl_days: ttlDays,
+      }),
+    });
+
+    if (!res.ok) {
+      console.error('[apiKeyService] Erro HTTP ao gerar chave:', res.status);
+      return null;
+    }
+
+    const data = await res.json();
+    const rawKey = data.api_key || data.apiKey;
+    if (rawKey) {
+      await removeApiStorageItem(`coin_api_revoked_${tableId}`);
+      await setApiStorageItem(`coin_api_key_${tableId}`, rawKey);
+      await setApiStorageItem('coin_active_api_key', rawKey);
+      return {
+        apiKey: rawKey,
+        keyHint: data.key_hint || data.keyHint || `...${rawKey.slice(-4)}`,
+        tableId: data.table_id || data.tableId || tableId,
+        expiresAt: data.expires_at || data.expiresAt,
+        ttlDays: data.ttl_days || data.ttlDays || ttlDays,
+      };
+    }
+    return null;
+  } catch (err: any) {
+    console.error('[apiKeyService] Falha ao comunicar com endpoint de geração de chave:', err);
+    return null;
+  }
+}
+
+/**
+ * Revokes and deactivates the API Key for a tableId (Kill Switch).
+ * Calls backend POST /api/v1/api-keys/revoke and clears local caches in web & mobile storage.
+ */
+export async function revokeApiKey(
+  tableId: string,
+  apiKey?: string
+): Promise<{ success: boolean; message: string }> {
+  try {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (apiKey) {
+      headers['X-Spreadsheet-Key'] = apiKey;
+    }
+
+    const res = await fetch(`${API_URL}/api/v1/api-keys/revoke`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        table_id: tableId,
+        api_key: apiKey || undefined,
+      }),
+    });
+
+    // Clear from localStorage (Web) & AsyncStorage (Mobile) and mark as revoked
+    await setApiStorageItem(`coin_api_revoked_${tableId}`, 'true');
+    await removeApiStorageItem(`coin_api_key_${tableId}`);
+    await removeApiStorageItem(`coin_expires_at_${tableId}`);
+    const activeKey = await getApiStorageItem('coin_active_api_key');
+    if (activeKey === apiKey) {
+      await removeApiStorageItem('coin_active_api_key');
+    }
+
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      return {
+        success: false,
+        message: errData.detail || 'Erro ao comunicar revogação com o servidor.',
+      };
+    }
+
+    const data = await res.json();
+    return {
+      success: true,
+      message: data.message || 'Chave desativada com sucesso.',
+    };
+  } catch (err: any) {
+    console.error('[apiKeyService] Erro ao revogar chave de API:', err);
+    await setApiStorageItem(`coin_api_revoked_${tableId}`, 'true');
+    await removeApiStorageItem(`coin_api_key_${tableId}`);
+    await removeApiStorageItem(`coin_expires_at_${tableId}`);
+    return {
+      success: true,
+      message: 'Chave desativada localmente.',
+    };
+  }
+}
+
+/**
+ * Helper to compute human-readable countdown to expiration.
+ */
+export function formatTimeRemaining(expiresAtStr?: string | null): {
+  formatted: string;
+  expired: boolean;
+  urgent: boolean;
+} {
+  if (!expiresAtStr) {
+    return { formatted: 'Sem data de expiração', expired: false, urgent: false };
+  }
+
+  try {
+    const expDate = new Date(expiresAtStr);
+    const now = new Date();
+    const diffMs = expDate.getTime() - now.getTime();
+
+    if (diffMs <= 0) {
+      return { formatted: 'Expirada (0h 00m)', expired: true, urgent: true };
+    }
+
+    const totalSeconds = Math.floor(diffMs / 1000);
+    const totalMinutes = Math.floor(totalSeconds / 60);
+    const totalHours = Math.floor(totalMinutes / 60);
+    const days = Math.floor(totalHours / 24);
+
+    const minutes = totalMinutes % 60;
+    const hours = totalHours % 24;
+
+    const isUrgent = diffMs < 3600_000; // Less than 1 hour
+
+    if (days > 0) {
+      return {
+        formatted: `Expira em ${days}d ${hours}h ${minutes}min`,
+        expired: false,
+        urgent: isUrgent,
+      };
+    }
+
+    if (totalHours > 0) {
+      return {
+        formatted: `Expira em ${hours}h ${minutes}min`,
+        expired: false,
+        urgent: isUrgent,
+      };
+    }
+
+    const seconds = totalSeconds % 60;
+    return {
+      formatted: `Expira em ${minutes}min ${seconds}s`,
+      expired: false,
+      urgent: true,
+    };
+  } catch {
+    return { formatted: 'Data inválida', expired: false, urgent: false };
+  }
+}

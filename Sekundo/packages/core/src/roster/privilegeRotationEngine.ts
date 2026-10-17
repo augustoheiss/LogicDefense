@@ -553,7 +553,7 @@ export function resolveCapabilityKeyOrCustom(rawToken: string): {
     'hasownproperty',
   ]);
   if (!sanitizedKey || forbiddenProtoKeys.has(sanitizedKey.toLowerCase())) {
-    return null;
+    return { key: '', enabled: false, isCustom: true, label: '' };
   }
 
   return {

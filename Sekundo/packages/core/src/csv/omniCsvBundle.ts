@@ -47,7 +47,8 @@ export type OmniRecordKind =
   | 'hub_territory_cycle'
   | 'participant_privilege'
   | 'studio_document'
-  | 'cockpit_hoje';
+  | 'cockpit_hoje'
+  | 'coin_ledger_row';
 
 export const OMNI_CSV_HEADERS = [
   '_record_kind',
@@ -92,6 +93,19 @@ export interface OmniHojeRitualItem {
   notes?: string;
 }
 
+export interface OmniCoinLedgerRowItem {
+  id: string;
+  date: string;
+  category: string;
+  description: string;
+  amount: number;
+  entryType: 'income' | 'expense' | 'investment';
+  paymentMethod?: string;
+  status?: 'paid' | 'pending' | 'scheduled';
+  recurrence?: string;
+  tableId?: string;
+}
+
 export interface SekundoOmniStateBundle {
   unitName: string;
   participants: ParticipantProfile[];
@@ -101,6 +115,18 @@ export interface SekundoOmniStateBundle {
   studioDocuments: OmniStudioDocItem[];
   hojeManifestYaml: string;
   hojeRituals: OmniHojeRitualItem[];
+  coinLedgerRows?: OmniCoinLedgerRowItem[];
+}
+
+/**
+ * Neutralizes spreadsheet formula injection (CWE-1236) on untrusted text cells.
+ */
+export function neutralizeCsvFormula(raw: string): string {
+  if (!raw) return '';
+  if (/^[=@]/.test(raw) || /^[+-][A-Za-z_]/.test(raw)) {
+    return `'${raw}`;
+  }
+  return raw;
 }
 
 /**
@@ -385,7 +411,7 @@ export function exportOmniCsvBundle(input?: Partial<SekundoOmniStateBundle>): st
     });
   }
 
-  // 6. Events across all 9 Universal Engines (`event_node`)
+  // 6. Events across all 10 Universal Engines (`event_node`)
   for (const ev of events) {
     for (const node of ev.registry) {
       const meta = (node.meta || {}) as Record<string, any>;
@@ -408,6 +434,28 @@ export function exportOmniCsvBundle(input?: Partial<SekundoOmniStateBundle>): st
         _meta_json: JSON.stringify(meta),
       });
     }
+  }
+
+  // 7. Coin Ledger rows (`coin_ledger_row` — Engine Financeira / Assistente Moeda)
+  for (const row of input?.coinLedgerRows || []) {
+    pushRow({
+      _record_kind: 'coin_ledger_row',
+      _container_id: row.tableId || 'coin-default',
+      _key: row.id,
+      _type: 'leaf',
+      _engines: 'financial_ledger',
+      group_or_tier: neutralizeCsvFormula(row.category || 'Outros'),
+      date_or_cycle: row.date || '',
+      time_or_duration: row.recurrence || 'unico',
+      title_or_name: neutralizeCsvFormula(row.description || ''),
+      primary_assignee: String(row.amount ?? 0),
+      secondary_assignee: row.entryType || 'expense',
+      status_or_readiness: row.status || 'paid',
+      capabilities_or_tags: row.paymentMethod || 'PIX',
+      contact_or_location: 'Engine Financeira',
+      notes_or_payload: String(row.amount ?? 0),
+      _meta_json: JSON.stringify(row),
+    });
   }
 
   return lines.join('\n');
@@ -491,6 +539,7 @@ export function importOmniCsvBundle(csvText: string): SekundoOmniStateBundle {
   const studioDocuments: OmniStudioDocItem[] = [];
   let hojeManifestYaml = DEFAULT_SEKUNDO_APP_YAML;
   const hojeRituals: OmniHojeRitualItem[] = [];
+  const coinLedgerRows: OmniCoinLedgerRowItem[] = [];
 
   const isOmniSchema = headers.includes('_record_kind');
 
@@ -506,6 +555,7 @@ export function importOmniCsvBundle(csvText: string): SekundoOmniStateBundle {
       studioDocuments: [],
       hojeManifestYaml,
       hojeRituals: [],
+      coinLedgerRows: [],
     };
   }
 
@@ -647,6 +697,27 @@ export function importOmniCsvBundle(csvText: string): SekundoOmniStateBundle {
           notes: row.notes_or_payload || '',
         });
       }
+    } else if (kind === 'coin_ledger_row') {
+      const parsedAmount = parseFloat(primary || row.notes_or_payload || String(meta.amount ?? 0));
+      const rawEntryType = (secondary || meta.entryType || 'expense').toLowerCase();
+      const entryType: 'income' | 'expense' | 'investment' =
+        rawEntryType === 'income' || rawEntryType === 'investment' ? rawEntryType : 'expense';
+      const rawStatus = (row.status_or_readiness || meta.status || 'paid').toLowerCase();
+      const status: 'paid' | 'pending' | 'scheduled' =
+        rawStatus === 'pending' || rawStatus === 'scheduled' ? rawStatus : 'paid';
+
+      coinLedgerRows.push({
+        id: key || meta.id || `coin-${coinLedgerRows.length + 1}`,
+        date: row.date_or_cycle || meta.date || '',
+        category: row.group_or_tier || meta.category || 'Outros',
+        description: title || meta.description || '',
+        amount: Number.isFinite(parsedAmount) ? parsedAmount : 0,
+        entryType,
+        paymentMethod: row.capabilities_or_tags || meta.paymentMethod || 'PIX',
+        status,
+        recurrence: row.time_or_duration || meta.recurrence || 'unico',
+        tableId: containerId || meta.tableId || 'coin-default',
+      });
     } else if (kind === 'event_node') {
       const [rawId, rawName] = containerId.includes('::')
         ? containerId.split('::')
@@ -711,6 +782,7 @@ export function importOmniCsvBundle(csvText: string): SekundoOmniStateBundle {
     studioDocuments,
     hojeManifestYaml,
     hojeRituals,
+    coinLedgerRows,
   };
 }
 
@@ -860,6 +932,9 @@ export function deriveActiveEnginesFromOmniBundle(
   }
   if ((bundle.hojeRituals?.length || 0) > 0) {
     engines.add('action_tracker');
+  }
+  if ((bundle.coinLedgerRows?.length || 0) > 0) {
+    engines.add('financial_ledger');
   }
   if (engines.size === 0) {
     engines.add('roster_assignments');

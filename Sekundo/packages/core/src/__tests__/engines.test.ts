@@ -281,9 +281,9 @@ describe('Sekundo Universal Engines', () => {
   // 4. Engine Registry
   // -------------------------------------------------------------------------
   describe('EngineRegistry', () => {
-    it('provides all 9 core engines', () => {
+    it('provides all 10 core engines', () => {
       const engines = engineRegistry.list();
-      expect(engines.length).toBe(9);
+      expect(engines.length).toBe(10);
 
       const ids = engines.map((e) => e.id);
       expect(ids).toContain('territory_logistics');
@@ -295,6 +295,7 @@ describe('Sekundo Universal Engines', () => {
       expect(ids).toContain('tournament_pairings');
       expect(ids).toContain('canvassing_logistics');
       expect(ids).toContain('transformer');
+      expect(ids).toContain('financial_ledger');
     });
 
     it('retrieves specific engines and falls back safely', () => {

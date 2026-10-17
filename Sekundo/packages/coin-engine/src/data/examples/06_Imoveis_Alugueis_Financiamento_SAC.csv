@@ -1,0 +1,36 @@
+## COIN ASSISTANT BACKUP v3 ##
+table_id,example_real_estate_06
+api_key,am_sheet_example_fictitious
+last_event_seq,0
+name,Exemplo 06 - Imóveis, Aluguéis & Financiamento SAC (Fictício)
+description,Modelo fictício voltado para gestão de imóveis de renda, locação por temporada, amortização SAC vs PRICE e Cap Rate imobiliário.
+active_sectors,%5B%22core_cashflow%22%2C%22core_revenue%22%2C%22core_costs%22%2C%22core_goals%22%2C%22personal_finance%22%2C%22real_estate%22%2C%22legal_taxes%22%5D
+dashboard_config,%7B%22preset%22%3A%22investor%22%2C%22widgetOrder%22%3A%5B%22sector_simulators%22%2C%22month_summary%22%2C%22investor_summary%22%2C%22health_score%22%2C%22pillars%22%2C%22insights%22%2C%22recent_activity%22%2C%22what_if%22%2C%22next_action%22%2C%22quick_actions%22%2C%22lessons%22%5D%2C%22hiddenWidgets%22%3A%5B%22lessons%22%5D%7D
+goal_global_daily,320
+goal_global_weekly,2240
+goal_global_annual,39000
+goal_daily_2026,320
+goal_weekly_2026,2240
+goal_annual_2026,39000
+## INVESTOR_PROFILE ##
+profile_type,income
+emergency_fund_goal_months,6
+fire_annual_multiplier,25
+monthly_contribution_goal,2500
+## ROWS ##
+id,date,value,description,entryType,monthlyValue,monthCount,period_start,period_end,category,tags,metadata_json,ticker,quantity,unitPrice
+ex06-01,2026-08-05,3200.00,"RECEITA ALUGUEL APTO JARDINS UNIDADE 102 (FICTICIO)",revenue,,,,,"Aluguéis","rental_income,cap_rate","{""property_value"":520000,""monthly_rent"":3200}",,,
+ex06-02,2026-08-08,2450.00,"RECEITA LOCACAO SALA COMERCIAL CENTRO (FICTICIO)",revenue,,,,,"Aluguéis","rental_income,cap_rate","{""property_value"":380000,""monthly_rent"":2450}",,,
+ex06-03,2026-08-10,2890.00,"PARCELA FINANCIAMENTO IMOBILIARIO SISTEMA SAC (24/180)",expense,,,,,"Financiamento Imobiliário","sistema_sac,tabela_price,ross_heidecke","{""property_value"":520000,""installment_no"":24}",,,
+ex06-04,2026-08-15,1800.00,"IPTU E SEGURO RESIDENCIAL ANUAL RATEADO (12 MESES)",expense,150.00,12,2026-01-01,2026-12-31,"Imóveis","iptu,cap_rate","{}",,,
+ex06-05,2026-08-20,2200.00,"APORTE FUNDO IMOBILIARIO KNRI11 RENDA MENSAL",deposit,,,,,"Investimentos","fii,cap_rate,renda_passiva","{""assetClass"":""real_estate_funds""}",KNRI11,15,146.67
+ex06-06,2026-09-05,3200.00,"RECEITA ALUGUEL APTO JARDINS UNIDADE 102 (FICTICIO)",revenue,,,,,"Aluguéis","rental_income,cap_rate","{""property_value"":520000,""monthly_rent"":3200}",,,
+ex06-07,2026-09-08,2450.00,"RECEITA LOCACAO SALA COMERCIAL CENTRO (FICTICIO)",revenue,,,,,"Aluguéis","rental_income,cap_rate","{""property_value"":380000,""monthly_rent"":2450}",,,
+ex06-08,2026-09-10,2875.00,"PARCELA FINANCIAMENTO IMOBILIARIO SISTEMA SAC (25/180)",expense,,,,,"Financiamento Imobiliário","sistema_sac,tabela_price,ross_heidecke","{""property_value"":520000,""installment_no"":25}",,,
+ex06-09,2026-09-14,1950.00,"LOCACAO TEMPORADA STUDIO PRAIA (FICTICIO)",revenue,,,,,"Temporada","rental_income,cap_rate","{}",,,
+ex06-10,2026-09-18,480.00,"MANUTENCAO HIDRAULICA E PINTURA PREVENTIVA IMOVEL",expense,,,,,"Manutenção Imóvel","ross_heidecke,cap_rate","{}",,,
+ex06-11,2026-09-25,2500.00,"AMORTIZACAO EXTRAORDINARIA FINANCIAMENTO SAC + APORTE FII",deposit,,,,,"Investimentos","sistema_sac,fii","{""assetClass"":""real_estate_funds""}",HGLG11,15,166.67
+ex06-12,2026-10-05,3200.00,"RECEITA ALUGUEL APTO JARDINS UNIDADE 102 (FICTICIO)",revenue,,,,,"Aluguéis","rental_income,cap_rate","{""property_value"":520000,""monthly_rent"":3200}",,,
+ex06-13,2026-10-08,2450.00,"RECEITA LOCACAO SALA COMERCIAL CENTRO (FICTICIO)",revenue,,,,,"Aluguéis","rental_income,cap_rate","{""property_value"":380000,""monthly_rent"":2450}",,,
+ex06-14,2026-10-10,2860.00,"PARCELA FINANCIAMENTO IMOBILIARIO SISTEMA SAC (26/180)",expense,,,,,"Financiamento Imobiliário","sistema_sac,tabela_price,ross_heidecke","{""property_value"":520000,""installment_no"":26}",,,
+ex06-15,2026-10-14,2600.00,"APORTE RESERVA DE VACANCIA E MANUTENCAO SELIC",deposit,,,,,"Reserva Imobiliária","reserva,selic","{""assetClass"":""cash_reserves""}",SELIC,1,2600.00

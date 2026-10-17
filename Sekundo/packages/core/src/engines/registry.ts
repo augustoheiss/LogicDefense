@@ -16,6 +16,7 @@ import { incidentCommandEngine } from './incidentCommandEngine';
 import { runOfShowEngine } from './runOfShowEngine';
 import { tournamentEngine } from './tournamentEngine';
 import { canvassingEngine } from './canvassingEngine';
+import { financialLedgerEngine } from './financialLedgerEngine';
 import { transformerEngine } from './transformerEngine';
 
 const BUILTIN_ENGINES: Record<EngineId, EventEngine> = {
@@ -27,6 +28,7 @@ const BUILTIN_ENGINES: Record<EngineId, EventEngine> = {
   live_production_ros: runOfShowEngine,
   tournament_pairings: tournamentEngine,
   canvassing_logistics: canvassingEngine,
+  financial_ledger: financialLedgerEngine,
   transformer: transformerEngine,
 };
 

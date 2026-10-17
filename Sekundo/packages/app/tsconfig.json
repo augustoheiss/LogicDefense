@@ -8,6 +8,12 @@
       ],
       "@/assets/*": [
         "./assets/*"
+      ],
+      "@coin/*": [
+        "../coin-engine/src/*"
+      ],
+      "@sekundo/coin-engine": [
+        "../coin-engine/src/index.ts"
       ]
     }
   },

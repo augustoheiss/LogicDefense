@@ -74,6 +74,7 @@ export function detectEnginesFromCSV(csvText: string): EngineDetectionReport {
     live_production_ros: { confidence: 0, reasons: [] },
     tournament_pairings: { confidence: 0, reasons: [] },
     canvassing_logistics: { confidence: 0, reasons: [] },
+    financial_ledger: { confidence: 0, reasons: [] },
     generic_wbs: { confidence: 15, reasons: ['Compatível com qualquer hierarquia tabular'] },
     transformer: { confidence: 0, reasons: [] },
   };
@@ -204,13 +205,34 @@ export function detectEnginesFromCSV(csvText: string): EngineDetectionReport {
     }
   }
 
-  // 8. Generic WBS
+  // 8. Financial Ledger (Assistente Moeda)
+  if (
+    hasHeader(
+      'entrytype',
+      'entry_type',
+      'tipo_lancamento',
+      'metodo_pagamento',
+      'amountbrl',
+      'valor_brl',
+      'ticker',
+      'monthlyvalue'
+    )
+  ) {
+    scores.financial_ledger.confidence += 55;
+    scores.financial_ledger.reasons.push('Colunas financeiras e patrimoniais do Assistente Moeda detectadas');
+  }
+  if (bodyContains('revenue', 'expense', 'income', 'deposit', 'partner_in', 'partner_out', 'waiver', 'coin_ledger_row', 'pix')) {
+    scores.financial_ledger.confidence += 35;
+    scores.financial_ledger.reasons.push('Tipos de lançamento financeiro (revenue/expense/deposit/waiver) detectados');
+  }
+
+  // 9. Generic WBS
   if (hasHeader('wbs', 'fase', 'entregavel', 'tarefa', 'projeto', 'milestone')) {
     scores.generic_wbs.confidence += 50;
     scores.generic_wbs.reasons.push('Terminologia formal de pacotes de trabalho e fases de projeto');
   }
 
-  // 9. Transformer Engine Detection (Explicit keyword or multi-attribute composite)
+  // 10. Transformer Engine Detection (Explicit keyword or multi-attribute composite)
   if (hasHeader('transformer', 'metamorfico', 'custom', 'personalizado') || bodyContains('transformer', 'metamorfico')) {
     scores.transformer.confidence += 70;
     scores.transformer.reasons.push('Identificador explícito de formato metamórfico Transformer');
@@ -224,6 +246,7 @@ export function detectEnginesFromCSV(csvText: string): EngineDetectionReport {
   if (scores.tournament_pairings.confidence >= 25) activeDomainCount++;
   if (scores.study_synthesis.confidence >= 25) activeDomainCount++;
   if (scores.canvassing_logistics.confidence >= 25) activeDomainCount++;
+  if (scores.financial_ledger.confidence >= 25) activeDomainCount++;
 
   if (activeDomainCount >= 2) {
     scores.transformer.confidence = Math.max(scores.transformer.confidence, 45 + activeDomainCount * 10);
@@ -242,6 +265,7 @@ export function detectEnginesFromCSV(csvText: string): EngineDetectionReport {
     live_production_ros: 'Produção ao Vivo & Run-of-Show',
     tournament_pairings: 'Emparelhamento de Torneios',
     canvassing_logistics: 'Canvassing & Campanhas de Campo',
+    financial_ledger: 'Assistente Moeda (Finanças & Setores)',
     transformer: 'Engine Transformer (Metamórfica & Universal)',
   };
 

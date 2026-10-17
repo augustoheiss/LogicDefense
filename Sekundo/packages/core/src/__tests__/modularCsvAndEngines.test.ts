@@ -30,11 +30,12 @@ describe('Canonical Engine CSV Templates', () => {
     'tournament_pairings',
     'canvassing_logistics',
     'transformer',
+    'financial_ledger',
   ];
 
-  it('provides all 9 engine templates', () => {
+  it('provides all 10 engine templates', () => {
     const list = listEngineTemplates();
-    expect(list).toHaveLength(9);
+    expect(list).toHaveLength(10);
     for (const engineId of allEngineIds) {
       const template = getEngineTemplate(engineId);
       expect(template).toBeDefined();
@@ -45,7 +46,7 @@ describe('Canonical Engine CSV Templates', () => {
     }
   });
 
-  it('all 8 canonical templates parse cleanly via parseCSV', () => {
+  it('all 10 canonical templates parse cleanly via parseCSV', () => {
     for (const engineId of allEngineIds) {
       const canonical = exportTemplateCSV(engineId, 'canonical');
       const rows = parseCSV(canonical);
@@ -119,6 +120,15 @@ describe('Universal Engine Auto-Detection', () => {
 01-01-03,Porta 3,DNC,3,Mariana`;
     const report = detectEnginesFromCSV(sample);
     expect(report.primaryEngine).toBe('canvassing_logistics');
+  });
+
+  it('detects financial_ledger from financial headers and PIX/currency values', () => {
+    const sample = `key,tipo,descricao,valor,tipo_lancamento,categoria,data,metodo_pagamento,status
+01-01-01,leaf,Salário Mensal,8500.00,income,Receitas,2026-10-05,PIX,paid
+01-02-01,leaf,Supermercado,1420.50,expense,Despesas Fixas,2026-10-10,Cartão Crédito,paid`;
+    const report = detectEnginesFromCSV(sample);
+    expect(report.primaryEngine).toBe('financial_ledger');
+    expect(report.matches[0].confidence).toBeGreaterThan(50);
   });
 
   it('detects composite multi-engine needs when CSV has both territory and roster features', () => {

@@ -5,10 +5,12 @@
   "description": "Agnostic skeleton engine for temporal event automation. Local-first, serverless, infinite.",
   "workspaces": [
     "packages/core",
+    "packages/coin-engine",
     "packages/app"
   ],
   "scripts": {
     "test:core": "cd packages/core && npx vitest run",
+    "test:coin": "node packages/coin-engine/scripts/runTests.mjs",
     "typecheck:core": "cd packages/core && npx tsc --noEmit",
     "dev": "cd packages/app && npx expo start",
     "dev:web": "cd packages/app && npx expo start --web",

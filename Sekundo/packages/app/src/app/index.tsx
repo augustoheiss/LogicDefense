@@ -134,6 +134,17 @@ export default function Dashboard() {
 
         <View style={styles.topRibbonActions}>
           <Pressable
+            testID="home-open-coin-engine-btn"
+            accessibilityRole="button"
+            accessibilityLabel="Assistente Moeda (Engine Financeira)"
+            {...webTitle('Abrir Assistente Moeda — Engine Financeira & Setorial')}
+            onPress={() => router.push('/coin' as any)}
+            style={[styles.iconRibbonBtn, styles.ribbonBtnEmerald]}
+          >
+            <Text style={styles.iconRibbonGlyph}>🪙</Text>
+          </Pressable>
+
+          <Pressable
             testID="home-open-privileges-btn"
             accessibilityRole="button"
             accessibilityLabel={`Privilégios (${participants.length})`}
@@ -216,7 +227,7 @@ export default function Dashboard() {
         <View style={[styles.column, isLargeScreen && styles.leftColumn]}>
           <View style={styles.dockHeader}>
             <Text style={styles.sectionTitle}>⚡ Módulos</Text>
-            <Text style={styles.dockMeta}>6</Text>
+            <Text style={styles.dockMeta}>7</Text>
           </View>
 
           <View style={styles.commandGrid}>
@@ -374,6 +385,33 @@ export default function Dashboard() {
               <Text style={styles.actionBigIcon}>🛡️</Text>
               <Text style={[styles.actionShortLabel, { color: '#C4B5FD' }]} numberOfLines={1}>
                 Privilégios
+              </Text>
+            </Pressable>
+
+            <Pressable
+              testID="quick-action-coin-engine"
+              accessibilityRole="button"
+              accessibilityLabel="Engine Financeira Assistente Moeda"
+              {...webTitle('Assistente Moeda — Engine Financeira, Setores, Turso & API')}
+              onPress={() => {
+                setSelectedToolInfo({
+                  code: 'COIN',
+                  title: '🪙 Assistente Moeda (Finanças)',
+                  desc: 'Planilhas, 8 Setores CAD, FIRE, Frotas, Imóveis SAC, Turso e API Pública.',
+                  route: '/coin',
+                  badge: 'ENGINE 🪙',
+                });
+                router.push('/coin' as any);
+              }}
+              style={({ pressed }) => [
+                styles.actionButton,
+                { borderColor: '#10B981', backgroundColor: 'rgba(16, 185, 129, 0.12)' },
+                pressed && styles.buttonPressed,
+              ]}
+            >
+              <Text style={styles.actionBigIcon}>🪙</Text>
+              <Text style={[styles.actionShortLabel, { color: '#34D399' }]} numberOfLines={1}>
+                Finanças
               </Text>
             </Pressable>
           </View>

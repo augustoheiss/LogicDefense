@@ -1,28 +1,73 @@
 # Dependencies
 node_modules/
+**/node_modules/
 
-# Build output
+# Build output & Expo
 dist/
+web-build/
+.expo/
 packages/app/dist/
 packages/app/.expo/
 packages/app/android/
 packages/app/ios/
+packages/coin-engine/dist/
+expo-env.d.ts
 
-# Environment
+# Native Signing Keys & Certificates (NEVER COMMIT)
+.kotlin/
+*.orig.*
+*.jks
+*.p8
+*.p12
+*.key
+*.pem
+*.mobileprovision
+
+# Environment & Secrets (NEVER COMMIT)
 .env
 .env.local
-.env.example
-# IDE
+.env.*
+.env*.local
+packages/**/.env
+packages/**/.env.*
+!.env.example
+!packages/**/.env.example
+
+# Local storage / database files
+*.db
+*.sqlite
+*.tsbuildinfo
+
+# Local QA scripts & artifacts
+backend/test_stripe_webhook.py
+test_web_subscription.js
+print_keys.js
+scripts/test_public_api.js
+scripts/push_july_data.py
+api_workspace/
+.api_workspace/
+playwright-report/
+test-results/
+**/test-results/
+
+# Docs & Master-Plan (Clean-Room Quarantine)
+docs/
+docs/*
+**/docs/
+**/docs/**
+master-plan/
+**/master-plan/
+
+# IDE & OS
 .vscode/
 .idea/
-
-# OS
 .DS_Store
 Thumbs.db
 
-# Logs
+# Logs & Coverage
 *.log
 npm-debug.log*
-
-# Coverage
+yarn-debug.*
+yarn-error.*
 coverage/
+
