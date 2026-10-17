@@ -98,7 +98,8 @@ class TursoHTTPCursor:
             first_res = results[0]
             if first_res.get("type") == "error":
                 err_msg = first_res.get("error", {}).get("message", "Unknown Turso error")
-                logger.error(f"Turso SQL error: {err_msg}")
+                if "duplicate column name" not in err_msg.lower():
+                    logger.error(f"Turso SQL error: {err_msg}")
                 raise RuntimeError(f"Turso SQL error: {err_msg}")
 
             exec_res = first_res.get("response", {}).get("result", {})

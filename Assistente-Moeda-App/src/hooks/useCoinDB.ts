@@ -386,14 +386,15 @@ function useCoinDBInternal(): CoinDBState {
   }, [getLatestTables, activeTableIndex]);
 
   // ── Persist to IndexedDB / AsyncStorage and Push to Cloud ──
-  const persist = useCallback(async (newTables: CoinTable[]) => {
+  const persist = useCallback(async (newTables: CoinTable[], explicitActiveIndex?: number) => {
     const mainTables = ensureActiveSectors(newTables);
     tablesRef.current = mainTables;
     setTables(mainTables);
+    const effectiveActiveIdx = explicitActiveIndex !== undefined ? explicitActiveIndex : activeTableIndex;
     const currentDB = await loadDB();
     await saveDB({
       tables: mainTables,
-      activeTableIndex,
+      activeTableIndex: effectiveActiveIdx,
       aiCostCurrentMonth: currentDB?.aiCostCurrentMonth ?? 0,
       aiCostLastReset: currentDB?.aiCostLastReset ?? '',
       isPrivacyMode: currentDB?.isPrivacyMode ?? isPrivacyMode,
@@ -635,8 +636,9 @@ function useCoinDBInternal(): CoinDBState {
     };
     ensureApiKeyForTable(tableId).catch(() => {});
     const newTables = [...currentTables, newTable];
-    persist(newTables);
-    setActiveTableIndex(newTables.length - 1);
+    const newActiveIdx = Math.max(0, newTables.filter((t) => !t.isDeleted).length - 1);
+    setActiveTableIndex(newActiveIdx);
+    persist(newTables, newActiveIdx);
   }, [getLatestTables, persist]);
 
   const renameTable = useCallback((tableId: string, name: string) => {
@@ -650,17 +652,19 @@ function useCoinDBInternal(): CoinDBState {
   const deleteTable = useCallback((tableId: string) => {
     const currentTables = getLatestTables();
     const newTables = currentTables.filter((t) => t.id !== tableId);
-    persist(newTables);
-    
+    const activeCount = newTables.filter((t) => !t.isDeleted).length;
+    const nextIdx = activeTableIndex >= activeCount ? Math.max(0, activeCount - 1) : activeTableIndex;
+
     if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
       window.localStorage.removeItem(`coin_api_key_${tableId}`);
       window.localStorage.removeItem(`coin_last_seq_${tableId}`);
       window.localStorage.removeItem(`coin_expires_at_${tableId}`);
     }
 
-    if (activeTableIndex >= newTables.length) {
-      setActiveTableIndex(Math.max(0, newTables.length - 1));
+    if (nextIdx !== activeTableIndex) {
+      setActiveTableIndex(nextIdx);
     }
+    persist(newTables, nextIdx);
   }, [getLatestTables, activeTableIndex, persist]);
 
   // ── Row Operations ────────────────────────────────────
@@ -1434,7 +1438,7 @@ function useCoinDBInternal(): CoinDBState {
     }
 
     setSelectedMonth('all');
-    await persist(updatedTables);
+    await persist(updatedTables, targetActiveIdx !== -1 ? targetActiveIdx : undefined);
 
     return {
       success: true,

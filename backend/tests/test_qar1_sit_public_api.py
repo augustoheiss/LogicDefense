@@ -575,6 +575,129 @@ def test_sit12_context_builder_negative_expenses_and_unresolved_firewall():
     assert "99.999" not in weekly_ctx
 
 
+def test_sit13_system_prompt_waiver_credits_and_ledger_v6_parity():
+    """SIT-V6-01, SIT-V6-02, SIT-V6-03: Verify get_system_prompt table list contract, real waiver credits in context, and UNRESOLVED/negative-expense handling in build_transaction_ledger."""
+    from models.coin_models import AIAnalystPayload
+    from services.context_builder import (
+        build_financial_context,
+        build_transaction_ledger,
+        get_system_prompt,
+    )
+
+    # 1. SIT-V6-01: get_system_prompt must format table names properly and never iterate character-by-character
+    sys_prompt_list = get_system_prompt(["Planilha Principal"])
+    assert "PLANILHAS DISPONÍVEIS: 'Planilha Principal'." in sys_prompt_list
+    sys_prompt_str = get_system_prompt("Planilha Principal")
+    assert "PLANILHAS DISPONÍVEIS: 'Planilha Principal'." in sys_prompt_str
+    assert "'P', 'l', 'a'" not in sys_prompt_str
+
+    # 2. SIT-V6-02 & SIT-V6-03: Period waiver credit + negative expense + UNRESOLVED quarantine row
+    goals = TableGoals(dailyGoals={2026: 200.0}, weeklyGoals={2026: 1400.0}, annualCosts={2026: 24000.0})
+    rows = [
+        TableRow(id="r1", date="2026-10-01", value=2800.0, entryType=EntryType.REVENUE, description="Consultoria Outubro"),
+        TableRow(id="e1", date="2026-10-02", value=-450.0, entryType=EntryType.EXPENSE, description="Servidor Dedicado"),
+        TableRow(
+            id="w1",
+            date="2026-10-08",
+            value=0.0,
+            entryType=EntryType.WAIVER,
+            periodStart="2026-10-08",
+            periodEnd="2026-10-14",
+            description="Dispensa Medica 7 Dias",
+        ),
+        TableRow(id="u1", date="2026-10-05", value=88888.0, entryType=EntryType.UNRESOLVED, description="Linha Quarentena"),
+    ]
+    metrics = compute_metrics(rows, goals, as_of_date="2026-10-14")
+    assert metrics.total_waiver_credit == 1400.0
+
+    # Even if AIAnalystPayload is initialized with totalWaiverCredits=0.0, context must display metrics.total_waiver_credit (R$ 1,400.00)
+    ai_payload = AIAnalystPayload(
+        message="Resumo executivo",
+        rows=rows,
+        goals=goals,
+        tableName="Planilha Principal",
+        totalWaiverCredits=0.0,
+        asOfDate="2026-10-14",
+    )
+    full_ctx = build_financial_context(ai_payload, metrics)
+    assert "Crédito de dispensas:               R$ 1,400.00" in full_ctx
+    assert "Linha Quarentena" not in full_ctx
+    assert "88,888" not in full_ctx
+
+    ledger_t1 = build_transaction_ledger(rows, "2026-10")
+    assert "Linha Quarentena" not in ledger_t1
+    assert "DESPESA  | R$     450.00" in ledger_t1
+
+
+def test_sit14_pull_before_push_and_anti_echo_browser_sync():
+    """SIT-V6-05: Full bidirectional sync cycle: external append -> /sync/pending drain -> /transactions/batch-sync with X-Origin-Browser: true must not re-enqueue into pending_sync_queue."""
+    gen_res = client.post(
+        "/api/v1/api-keys/generate",
+        json={"table_id": "tbl_sit14_pull_push", "permissions": "read:write", "ttl_days": 1},
+    )
+    assert gen_res.status_code == 200
+    api_key = gen_res.json()["apiKey"]
+    headers = {"X-Spreadsheet-Key": api_key}
+
+    # Step 1: External agent appends 1 row while browser is offline
+    ext_res = client.post(
+        "/api/v1/public/spreadsheet/append",
+        headers=headers,
+        json={
+            "mode": "merge",
+            "transactions": [
+                {
+                    "date": "2026-10-12",
+                    "value": 3200.0,
+                    "description": "Receita Agente Externo",
+                    "entryType": "revenue",
+                    "externalId": "ext_sync_1",
+                }
+            ],
+        },
+    )
+    assert ext_res.status_code == 200
+
+    # Step 2 (PULL): Browser drains /api/v1/public/sync/pending
+    pull_res = client.get("/api/v1/public/sync/pending", headers=headers)
+    assert pull_res.status_code == 200
+    pull_data = pull_res.json()
+    assert pull_data["count"] == 1
+    assert pull_data["pending_events"][0]["rows"][0]["id"] == "ext_sync_1"
+
+    # Step 3 (PUSH): Browser merges with local row and pushes via /transactions/batch-sync with X-Origin-Browser: true
+    push_res = client.post(
+        "/api/v1/public/transactions/batch-sync",
+        headers={**headers, "X-Origin-Browser": "true"},
+        json={
+            "mode": "replace",
+            "transactions": [
+                {
+                    "date": "2026-10-11",
+                    "value": 1500.0,
+                    "description": "Receita Local Browser",
+                    "entryType": "revenue",
+                    "externalId": "local_browser_1",
+                },
+                {
+                    "date": "2026-10-12",
+                    "value": 3200.0,
+                    "description": "Receita Agente Externo",
+                    "entryType": "revenue",
+                    "externalId": "ext_sync_1",
+                },
+            ],
+        },
+    )
+    assert push_res.status_code == 200
+    assert push_res.json()["totalCount"] == 2
+
+    # Step 4: Verify pending_sync_queue remains empty (zero infinite echo loop!)
+    pull_after = client.get("/api/v1/public/sync/pending", headers=headers)
+    assert pull_after.status_code == 200
+    assert pull_after.json()["count"] == 0
+
+
 if __name__ == "__main__":
     suite = [
         test_sit01_agent_prompt_profiles_and_openapi,
@@ -589,8 +712,10 @@ if __name__ == "__main__":
         test_sit10_zero_value_period_waivers_parity,
         test_sit11_zero_revenue_expense_only_and_empty_active_rows_parity,
         test_sit12_context_builder_negative_expenses_and_unresolved_firewall,
+        test_sit13_system_prompt_waiver_credits_and_ledger_v6_parity,
+        test_sit14_pull_before_push_and_anti_echo_browser_sync,
     ]
-    print("\n=== QAR1 & SIT BACKEND FASTAPI TESTCLIENT SUITE (v5) ===")
+    print("\n=== QAR1 & SIT BACKEND FASTAPI TESTCLIENT SUITE (v6) ===")
     for fn in suite:
         fn()
         print(f"  [OK] {fn.__name__} PASSED")

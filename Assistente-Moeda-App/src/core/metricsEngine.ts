@@ -112,8 +112,8 @@ export function computeMetrics(
   // ── Partnership ledger ────────────────────────────────────────────────────
   const partnerInRows = validRows.filter((r) => r.entryType === 'partner_in');
   const partnerOutRows = validRows.filter((r) => r.entryType === 'partner_out');
-  const totalPartnerIn = round2(partnerInRows.reduce((s, r) => s + r.value, 0));
-  const totalPartnerOut = round2(partnerOutRows.reduce((s, r) => s + r.value, 0));
+  const totalPartnerIn = round2(partnerInRows.reduce((s, r) => s + Math.abs(r.value), 0));
+  const totalPartnerOut = round2(partnerOutRows.reduce((s, r) => s + Math.abs(r.value), 0));
 
   totalExpenses = round2(totalExpenses);
   const annualExpenses = totalExpenses;

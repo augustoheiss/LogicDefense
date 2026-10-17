@@ -363,7 +363,7 @@ describe('QAR1 Storage Quota, Rolling Backup & Quarantine Chaos Suite (QAR1-STOR
       expect(loaded?.tables[1].rows[0].description).toBe('Operação Sintética Beta');
 
       await saveOpLogToIndexedDB(
-        [{ action: { type: 'ADD_ROW' } as any, inverseAction: { type: 'DELETE_ROW' } as any, timestamp: '2026-10-17T00:00:00.000Z' }],
+        [{ id: 'op_1', description: 'Add 1 row', action: { type: 'ADD_ROW' } as any, inverseAction: { type: 'DELETE_ROW' } as any, timestamp: '2026-10-17T00:00:00.000Z' }],
         []
       );
       const opLog = await loadOpLogFromIndexedDB();

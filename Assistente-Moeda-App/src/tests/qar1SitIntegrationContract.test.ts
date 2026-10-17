@@ -25,6 +25,7 @@ import { OPENAPI_SPEC_V1, PUBLIC_API_HEADER_NAME } from '../config/publicApiConf
 import type { PublicAgentPromptResponse } from '../config/publicApiConfig';
 import { generateManualAiAnalystSynthesis } from '../core/localAiAnalystSynthesizer';
 import { neutralizeCsvFormula } from '../utils/securitySanitizer';
+import { mergeRows } from '../utils/csvEngine';
 import type { TableRow, TableGoals } from '../core/types';
 
 type AgentPromptProfile = 'native' | 'cfo' | 'operational' | 'goals' | 'dev';
@@ -306,7 +307,12 @@ function createStatefulBackendHarness() {
       });
     }
 
-    if (urlObj.pathname.endsWith('/api/v1/public/spreadsheet/append') && method === 'POST') {
+    if (
+      (urlObj.pathname.endsWith('/api/v1/public/spreadsheet/append') ||
+        urlObj.pathname.endsWith('/api/v1/public/transactions/batch-sync') ||
+        urlObj.pathname.endsWith('/api/v1/public/transactions')) &&
+      method === 'POST'
+    ) {
       const body = JSON.parse(init.body);
       const mode = (body.mode || 'merge').toLowerCase();
       let incoming: any[] = body.transactions ? [...body.transactions] : [];
@@ -348,26 +354,31 @@ function createStatefulBackendHarness() {
 
       tableStorage.set(tableId, merged);
 
-      // Push to offline sync queue with monotonic IDs matching processedNormItems
-      const q = pendingSyncQueue.get(tableId) || [];
-      q.push({
-        type: 'PUBLIC_API_SYNC',
-        mode,
-        tableId,
-        insertedCount,
-        totalCount: merged.length,
-        rows: processedNormItems.map((it) => ({
-          id: it.externalId,
-          date: it.date,
-          value: it.value,
-          description: it.description,
-          entryType: it.entryType,
-          category: it.category || 'Geral',
-          tags: it.tags || [],
-          externalId: it.externalId,
-        })),
-      });
-      pendingSyncQueue.set(tableId, q);
+      const isFromBrowser =
+        String(headers['X-Origin-Browser'] || headers['x-origin-browser'] || '').toLowerCase() === 'true';
+
+      if (!isFromBrowser) {
+        // Push to offline sync queue with monotonic IDs matching processedNormItems
+        const q = pendingSyncQueue.get(tableId) || [];
+        q.push({
+          type: 'PUBLIC_API_SYNC',
+          mode,
+          tableId,
+          insertedCount,
+          totalCount: merged.length,
+          rows: processedNormItems.map((it) => ({
+            id: it.externalId,
+            date: it.date,
+            value: it.value,
+            description: it.description,
+            entryType: it.entryType,
+            category: it.category || 'Geral',
+            tags: it.tags || [],
+            externalId: it.externalId,
+          })),
+        });
+        pendingSyncQueue.set(tableId, q);
+      }
 
       const csvLines = [
         '## COIN_BACKUP_V2 ##',
@@ -1068,6 +1079,101 @@ describe('QAR1 System Integration Testing (SIT) Suite (SIT-01 to SIT-15)', () =>
       expect(revRes.success).toBe(true);
       expect(harness.tableStorage.has('tbl_sit15_killqueue')).toBe(false);
       expect(harness.pendingSyncQueue.has('tbl_sit15_killqueue')).toBe(false);
+    } finally {
+      globalThis.fetch = origFetch;
+    }
+  });
+
+  it('SIT-16 (SIT-V6-05): Invariante Pull-Before-Push (/sync/pending -> mergeRows -> /transactions/batch-sync com X-Origin-Browser: true) não deve gerar eco infinito', async () => {
+    const harness = createStatefulBackendHarness();
+    const apiKey = 'am_sheet_live_test_key_sit16_pull_push';
+    harness.registerKey({
+      apiKey,
+      tableId: 'tbl_sit16_sync',
+      permissions: 'read:write',
+      isActive: true,
+      isExpired: false,
+      ttlDays: 7,
+    });
+
+    const origFetch = globalThis.fetch;
+    globalThis.fetch = harness.fetchMock as any;
+
+    try {
+      // 1. Agente externo injeta transação enquanto browser estava offline
+      await appendToSpreadsheet(
+        {
+          mode: 'merge',
+          transactions: [
+            {
+              date: '2026-10-12',
+              value: 2500,
+              description: 'Receita Injetada via Agente Externo',
+              entryType: 'revenue',
+              externalId: 'ext_agent_row_1',
+            },
+          ],
+        },
+        apiKey,
+        'http://localhost:8000'
+      );
+      expect(harness.pendingSyncQueue.get('tbl_sit16_sync')?.length).toBe(1);
+
+      // 2. Fase 1 (PULL): Browser drena /api/v1/public/sync/pending ANTES de fazer push
+      const pullRes = await fetch('http://localhost:8000/api/v1/public/sync/pending', {
+        method: 'GET',
+        headers: { [PUBLIC_API_HEADER_NAME]: apiKey },
+      });
+      const pullData = await pullRes.json();
+      expect(pullData.count).toBe(1);
+      expect(harness.pendingSyncQueue.get('tbl_sit16_sync')?.length ?? 0).toBe(0);
+
+      // 3. Browser mescla suas linhas locais com as linhas drenadas da fila
+      const localBrowserRows: TableRow[] = [
+        {
+          id: 'local_browser_row_1',
+          date: '2026-10-11',
+          value: 1800,
+          description: 'Receita Local do Browser',
+          entryType: 'revenue',
+        },
+      ];
+      let mergedRows = [...localBrowserRows];
+      for (const ev of pullData.pending_events) {
+        mergedRows = mergeRows(mergedRows, ev.rows);
+      }
+      expect(mergedRows.length).toBe(2);
+
+      // 4. Fase 2 (PUSH): Browser envia estado consolidado com X-Origin-Browser: true
+      const pushRes = await fetch('http://localhost:8000/api/v1/public/transactions/batch-sync', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          [PUBLIC_API_HEADER_NAME]: apiKey,
+          'X-Origin-Browser': 'true',
+        },
+        body: JSON.stringify({
+          mode: 'replace',
+          transactions: mergedRows.map((r) => ({
+            date: r.date,
+            value: r.value,
+            description: r.description || '',
+            entryType: (r.entryType as any) || 'revenue',
+            externalId: r.id,
+          })),
+        }),
+      });
+      expect(pushRes.status).toBe(200);
+      const pushData = await pushRes.json();
+      expect(pushData.totalCount).toBe(2);
+
+      // Verifica que a fila pending_sync_queue NÃO sofreu re-enfileiramento (zero loop de eco)
+      const secondPullRes = await fetch('http://localhost:8000/api/v1/public/sync/pending', {
+        method: 'GET',
+        headers: { [PUBLIC_API_HEADER_NAME]: apiKey },
+      });
+      const secondPullData = await secondPullRes.json();
+      expect(secondPullData.count).toBe(0);
     } finally {
       globalThis.fetch = origFetch;
     }

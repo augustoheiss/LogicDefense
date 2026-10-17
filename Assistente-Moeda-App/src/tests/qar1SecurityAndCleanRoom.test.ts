@@ -17,6 +17,7 @@ import {
   sanitizeTablesForAI,
   sanitizeTransactionsForAI,
   enforceCleanRoomStorageOnBoot,
+  isCleanRoomAllowedApiKey,
   CLEAN_ROOM_MIGRATION_VERSION,
 } from '../utils/securitySanitizer';
 import {
@@ -25,6 +26,7 @@ import {
   buildJSONBackup,
   buildReportHTML,
   buildTabularAuditHTML,
+  buildWhatsAppReport,
   generateLocalApiKey,
 } from '../services/exportService';
 import { sendChatMessage, buildFinancialContext } from '../services/aiChatService';
@@ -398,6 +400,75 @@ describe('QAR1 Security & Clean-Room Hygiene Suite (SEC-01 to SEC-12)', () => {
     const bundleCsv: string = parsedBundle.routes['/api/v1/public/spreadsheet/export'].csvContent;
     expect(bundleCsv).toContain("'=HYPERLINK");
     expect(bundleCsv).toContain("'@SUM(1+1)");
+  });
+
+  it('SEC-13 (QAR1-V6-01): enforceCleanRoomStorageOnBoot e isCleanRoomAllowedApiKey devem preservar chaves legítimas geradas por generateSecureLocalApiKey e pelo backend', () => {
+    const localGenKey = generateSecureLocalApiKey('tbl_1729170000');
+    const backendHexKey = 'am_sheet_live_' + '9f8e7d6c5b4a3f2e1d0c9b8a7f6e5d4c'.repeat(2);
+
+    expect(isCleanRoomAllowedApiKey(localGenKey)).toBe(true);
+    expect(isCleanRoomAllowedApiKey(backendHexKey)).toBe(true);
+    expect(isCleanRoomAllowedApiKey('am_sheet_live_local')).toBe(true);
+    expect(isCleanRoomAllowedApiKey('legacy_unverified_token_value')).toBe(false);
+    expect(isCleanRoomAllowedApiKey('am_sheet_live_short')).toBe(false);
+
+    const store = new Map<string, string>();
+    store.set('coin_active_api_key', backendHexKey);
+    store.set('coin_api_key_tbl_1729170000', localGenKey);
+    store.set('coin_api_key_tbl_legacy', 'contaminated_legacy_seed_key');
+
+    const mockStorage = {
+      get length() {
+        return store.size;
+      },
+      key(idx: number) {
+        return Array.from(store.keys())[idx] ?? null;
+      },
+      getItem(k: string) {
+        return store.has(k) ? store.get(k)! : null;
+      },
+      setItem(k: string, v: string) {
+        store.set(k, v);
+      },
+      removeItem(k: string) {
+        store.delete(k);
+      },
+    };
+
+    const res = enforceCleanRoomStorageOnBoot(mockStorage);
+    expect(res.migrated).toBe(true);
+    expect(res.purgedKeys).toEqual(['coin_api_key_tbl_legacy']);
+    expect(store.get('coin_active_api_key')).toBe(backendHexKey);
+    expect(store.get('coin_api_key_tbl_1729170000')).toBe(localGenKey);
+  });
+
+  it('SEC-14 (QAR1-V6-03): buildWhatsAppReport nunca deve emitir duplo negativo (--R$), deve contar dispensas por período (value=0) e compensar partner_out negativo', () => {
+    const rows: TableRow[] = [
+      { id: 'r1', date: '2026-07-02', value: 3000, description: 'Consultoria', entryType: 'revenue' },
+      { id: 'e1', date: '2026-07-05', value: -450, description: 'Servidor Cloud Negativo', entryType: 'expense' },
+      {
+        id: 'w1',
+        date: '2026-07-08',
+        value: 0,
+        periodStart: '2026-07-08',
+        periodEnd: '2026-07-14',
+        description: 'Licenca Medica 7 Dias',
+        entryType: 'waiver',
+      },
+      { id: 'pin1', date: '2026-07-10', value: 600, description: 'Socio Entrada', entryType: 'partner_in' },
+      { id: 'pout1', date: '2026-07-12', value: -600, description: 'Socio Saida Sincronizada', entryType: 'partner_out' },
+      { id: 'pout2', date: '2026-07-15', value: -250, description: 'Repasse Pendente Socio', entryType: 'partner_out' },
+    ];
+    const metrics = calculateMetrics(rows, sampleGoals, '2026-07-31');
+    const report = buildWhatsAppReport('Planilha Auditada V6', metrics, sampleGoals, '2026-07', rows);
+
+    // Zero duplo negativo (--R$)
+    expect(report).not.toContain('--R$');
+    expect(report).toContain('Servidor Cloud Negativo');
+    // Dispensa por período com value=0 deve ser contabilizada como (1 ocorrência)
+    expect(report).toContain('(1 ocorrência)');
+    // Partner out negativo não-compensado deve ser exibido sem sinal negativo duplicado
+    expect(report).toContain('Repasse Pendente Socio');
   });
 });
 

@@ -144,12 +144,14 @@ export function sanitizeTransactionsForAI(
 
 export const CLEAN_ROOM_MIGRATION_VERSION = 'app:clean_room_migration_v2';
 
-function isCleanRoomAllowedApiKey(val: string): boolean {
-  return (
-    val.startsWith('am_sheet_live_local') ||
-    val.startsWith('am_sheet_live_e2e_') ||
-    val.startsWith('am_sheet_live_test_')
-  );
+export function isCleanRoomAllowedApiKey(val: string | null | undefined): boolean {
+  if (!val) return false;
+  const trimmed = val.trim();
+  if (trimmed === 'am_sheet_live_local') return true;
+  if (trimmed.startsWith('am_sheet_live_e2e_') || trimmed.startsWith('am_sheet_live_test_')) {
+    return trimmed.length >= 24;
+  }
+  return /^am_sheet_live_[a-zA-Z0-9_-]{32,96}$/.test(trimmed);
 }
 
 /**

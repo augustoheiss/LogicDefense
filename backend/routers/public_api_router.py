@@ -873,7 +873,7 @@ async def generate_analysis_context_in_memory(
         rows=rows,
         goals=goals,
         tableName="Planilha Principal",
-        totalWaiverCredits=0.0,
+        totalWaiverCredits=metrics.total_waiver_credit,
         asOfDate=ref_date
     )
 
@@ -966,12 +966,17 @@ async def public_ai_analyst(
         rows=rows,
         goals=goals,
         tableName="Planilha Principal",
-        totalWaiverCredits=0.0,
+        totalWaiverCredits=metrics.total_waiver_credit,
         asOfDate=ref_date
     )
 
     context_md = build_financial_context(ai_payload, metrics)
-    system_prompt = get_system_prompt(context_md)
+    system_prompt = get_system_prompt([ai_payload.table_name])
+    user_message = (
+        f"{context_md}\n\n"
+        f"── PERGUNTA DO USUÁRIO ──\n"
+        f"{payload.user_prompt}"
+    )
 
     try:
         gen_kwargs = {
@@ -984,7 +989,7 @@ async def public_ai_analyst(
         response = await asyncio.to_thread(
             client.models.generate_content,
             model=MODEL,
-            contents=payload.user_prompt,
+            contents=user_message,
             config=types.GenerateContentConfig(**gen_kwargs)
         )
         return PublicAIAnalystResponse(content=response.text, modelUsed=MODEL)

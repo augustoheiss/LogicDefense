@@ -69,6 +69,10 @@ def build_transaction_ledger(
       Tier 3 (1001–5000):    Current month (capped at 100) + quarterly + Top 10.
       Tier 4 (5000+):        Minimal + yearly summaries + Top 10 + hint.
     """
+    rows = [
+        r for r in rows
+        if (r.entry_type or EntryType.REVENUE) != EntryType.UNRESOLVED
+    ]
     total = len(rows)
     if total == 0:
         return ""
@@ -82,10 +86,10 @@ def build_transaction_ledger(
         period_end = getattr(r, "period_end", None) or getattr(r, "periodEnd", None)
         if period_start and period_end:
             period_info = f" (Vigência: {period_start} a {period_end})"
-        return f"  {r.date} | {label:8s} | R$ {r.value:>10,.2f}{desc}{period_info}"
+        return f"  {r.date} | {label:8s} | R$ {abs(r.value):>10,.2f}{desc}{period_info}"
 
     def _top_n(n: int = 10) -> str:
-        by_value = sorted(rows, key=lambda r: r.value, reverse=True)[:n]
+        by_value = sorted(rows, key=lambda r: abs(r.value), reverse=True)[:n]
         lines = [_fmt_row(r) for r in by_value]
         return f"\n── Top {n} Maiores Transações ──\n" + "\n".join(lines) if lines else ""
 
@@ -104,9 +108,9 @@ def build_transaction_ledger(
             rev = [r for r in group if (r.entry_type or EntryType.REVENUE) == EntryType.REVENUE]
             exp = [r for r in group if r.entry_type == EntryType.EXPENSE]
             dep = [r for r in group if r.entry_type == EntryType.DEPOSIT]
-            rev_total = sum(r.value for r in rev)
-            exp_total = sum(r.value for r in exp)
-            dep_total = sum(r.value for r in dep)
+            rev_total = sum(abs(r.value) for r in rev)
+            exp_total = sum(abs(r.value) for r in exp)
+            dep_total = sum(abs(r.value) for r in dep)
             parts = []
             if rev:
                 parts.append(f"{len(rev)} receitas (R$ {rev_total:,.2f})")
@@ -116,15 +120,15 @@ def build_transaction_ledger(
                 parts.append(f"{len(dep)} aportes (R$ {dep_total:,.2f})")
             neu = [r for r in group if r.entry_type == EntryType.PARTNER_IN]
             if neu:
-                parts.append(f"{len(neu)} créd.parceria (R$ {sum(r.value for r in neu):,.2f})")
+                parts.append(f"{len(neu)} créd.parceria (R$ {sum(abs(r.value) for r in neu):,.2f})")
             deb = [r for r in group if r.entry_type == EntryType.PARTNER_OUT]
             if deb:
-                parts.append(f"{len(deb)} déb.parceria (R$ {sum(r.value for r in deb):,.2f})")
+                parts.append(f"{len(deb)} déb.parceria (R$ {sum(abs(r.value) for r in deb):,.2f})")
             lines.append(f"  {ym}: {', '.join(parts)}")
         return "\n── Resumo por Mês ──\n" + "\n".join(lines)
 
     def _quarterly_summaries() -> str:
-        """Group rows by YYYY-Qn and produce count + total."""
+        """Group rows by YYYY-Qn and produce count + net operational summary."""
         buckets: dict[str, list] = defaultdict(list)
         for r in rows:
             y = r.date[:4]
@@ -135,8 +139,12 @@ def build_transaction_ledger(
         lines = []
         for qk in sorted(buckets.keys()):
             group = buckets[qk]
-            total = sum(r.value for r in group)
-            lines.append(f"  {qk}: {len(group)} transações, total R$ {total:,.2f}")
+            rev_total = sum(abs(r.value) for r in group if (r.entry_type or EntryType.REVENUE) == EntryType.REVENUE)
+            exp_total = sum(abs(r.value) for r in group if r.entry_type == EntryType.EXPENSE)
+            net_total = rev_total - exp_total
+            lines.append(
+                f"  {qk}: {len(group)} transações (Receitas: R$ {rev_total:,.2f} | Despesas: R$ {exp_total:,.2f} | Saldo: R$ {net_total:,.2f})"
+            )
         return "\n── Resumo por Trimestre ──\n" + "\n".join(lines) if lines else ""
 
     def _yearly_summaries() -> str:
@@ -146,8 +154,12 @@ def build_transaction_ledger(
         lines = []
         for yk in sorted(buckets.keys()):
             group = buckets[yk]
-            total = sum(r.value for r in group)
-            lines.append(f"  {yk}: {len(group)} transações, total R$ {total:,.2f}")
+            rev_total = sum(abs(r.value) for r in group if (r.entry_type or EntryType.REVENUE) == EntryType.REVENUE)
+            exp_total = sum(abs(r.value) for r in group if r.entry_type == EntryType.EXPENSE)
+            net_total = rev_total - exp_total
+            lines.append(
+                f"  {yk}: {len(group)} transações (Receitas: R$ {rev_total:,.2f} | Despesas: R$ {exp_total:,.2f} | Saldo: R$ {net_total:,.2f})"
+            )
         return "\n── Resumo por Ano ──\n" + "\n".join(lines) if lines else ""
 
     def _current_month_ledger(cap: int = 0) -> str:
@@ -638,7 +650,7 @@ def build_financial_context(
 
 ── Balanço de Metas (Estrito — conta semanas vazias como débito) ──
   Status: {balance_status}
-  Crédito de dispensas:               R$ {payload.total_waiver_credits:,.2f}
+  Crédito de dispensas:               R$ {(metrics.total_waiver_credit if metrics.total_waiver_credit > 0 else payload.total_waiver_credits):,.2f}
   Saldo de Reposição (Semanas):       {time_bank_status}
 {current_month_block}
 ── Por Ano ──
@@ -683,8 +695,10 @@ def build_financial_context(
     )
 
 
-def get_system_prompt(available_tables: list[str]) -> str:
+def get_system_prompt(available_tables: list[str] | str) -> str:
     today_str = date.today().strftime("%Y-%m-%d")
+    if isinstance(available_tables, str):
+        available_tables = [available_tables] if available_tables.strip() else []
     tables_list_str = ", ".join(f"'{t}'" for t in available_tables) if available_tables else "Nenhuma planilha disponível"
 
     return f"""Você é o **Assistente Moeda** — CFO Estratégico, Especialista em FP&A e Consultor Financeiro Pessoal Inteligente.

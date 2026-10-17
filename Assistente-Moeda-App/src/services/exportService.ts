@@ -296,11 +296,12 @@ export function buildWhatsAppReport(
     lines.push('');
     for (const pe of proratedExpenses) {
       const desc = pe.row.description ?? 'Sem descrição';
-      const isProrated = Math.round(pe.monthlyContribution * 100) < Math.round(pe.row.value * 100);
+      const rawAbsVal = Math.abs(pe.row.value);
+      const isProrated = Math.round(pe.monthlyContribution * 100) < Math.round(rawAbsVal * 100);
       const suffix = isProrated
         ? ` _(rateado: ${fmtBRL(pe.monthlyContribution)} este mês)_`
         : '';
-      lines.push(`• ${desc}: *-${fmtBRL(pe.row.value)}*${suffix}`);
+      lines.push(`• ${desc}: *-${fmtBRL(rawAbsVal)}*${suffix}`);
     }
     const monthExpenseTotal = proratedExpenses.reduce((sum, pe) => sum + pe.monthlyContribution, 0);
     const mDays = daysInMonth(selY, selM);
@@ -353,7 +354,7 @@ export function buildWhatsAppReport(
 
   const fmtW = (w: number) => `${w.toFixed(1)} sem`;
 
-  const waiversCount = rows.filter((r) => r.entryType === 'waiver' && r.value > 0).length;
+  const waiversCount = rows.filter((r) => r.entryType === 'waiver').length;
   const waivedWeeks = metrics.waivedWeeks;
 
   const effectiveWeeksBalance = reportWeeklyGoal > 0 ? metrics.globalGoalBalance / reportWeeklyGoal : 0;
@@ -363,8 +364,8 @@ export function buildWhatsAppReport(
     : `• 🚨 Saldo de Reposição: *-${absWeeks} semanas* _(Volume de serviço pendente para recuperar o teto da meta)_`;
 
   // Netting
-  const partnerInRows = rows.filter((r) => r.entryType === 'partner_in' && r.value > 0);
-  const partnerOutRows = rows.filter((r) => r.entryType === 'partner_out' && r.value > 0);
+  const partnerInRows = rows.filter((r) => r.entryType === 'partner_in' && Math.abs(r.value) > 0);
+  const partnerOutRows = rows.filter((r) => r.entryType === 'partner_out' && Math.abs(r.value) > 0);
 
   const matchedInIds = new Set<string>();
   const matchedOutIds = new Set<string>();
@@ -374,7 +375,7 @@ export function buildWhatsAppReport(
     const match = partnerOutRows.find(
       (outRow) =>
         !matchedOutIds.has(outRow.id) &&
-        Math.round(outRow.value * 100) === Math.round(inRow.value * 100)
+        Math.round(Math.abs(outRow.value) * 100) === Math.round(Math.abs(inRow.value) * 100)
     );
     if (match) {
       matchedInIds.add(inRow.id);
@@ -409,7 +410,7 @@ export function buildWhatsAppReport(
       lines.push(`🔎 *Déficit Real de Parceria (A pagar):*`);
       for (const row of recentPartnerOut) {
         const desc = row.description ? ` — ${row.description}` : '';
-        lines.push(`  • ${fmtDay(row.date)}: *${fmtBRL(row.value)}*${desc}`);
+        lines.push(`  • ${fmtDay(row.date)}: *${fmtBRL(Math.abs(row.value))}*${desc}`);
       }
     }
   } else {
