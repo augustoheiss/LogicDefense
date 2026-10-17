@@ -181,13 +181,23 @@ def get_table_id_for_read(table_id: str = Depends(APIKeyValidator("read"))) -> s
 def get_table_id_for_write(table_id: str = Depends(APIKeyValidator("write"))) -> str:
     return table_id
 
-# ── Models ───────────────────────────────────────────────────────────────────
+# ── Models & Security Helpers ────────────────────────────────────────────────
+
+def neutralize_csv_formula(val: str) -> str:
+    """Neutralizes CSV formula injection vectors (=, +, -, @, \\t, \\r) matching src/utils/securitySanitizer.ts."""
+    if not val:
+        return ""
+    trimmed = val.lstrip()
+    if trimmed and trimmed[0] in ("=", "+", "-", "@", "\t", "\r"):
+        return f"'{val}"
+    return val
+
 
 class AppendTransactionItem(BaseModel):
     date: str = Field(..., description="Data em formato YYYY-MM-DD")
     value: float = Field(..., description="Valor monetário da transação")
     description: str = Field(..., description="Descrição da transação")
-    entry_type: Optional[str] = Field("expense", description="Tipo: expense, revenue, partner_in, partner_out, waiver, deposit, unresolved", alias="entryType")
+    entry_type: Optional[str] = Field(None, description="Tipo: expense, revenue, partner_in, partner_out, waiver, deposit, unresolved", alias="entryType")
     category: Optional[str] = Field("Geral", description="Categoria")
     tags: Optional[str] = Field("", description="Tags da transação")
     external_id: Optional[str] = Field(None, description="ID externo para idempotência (ex: n8n_invoice_9841)", alias="externalId")
@@ -275,7 +285,7 @@ async def append_to_spreadsheet(
 
                     items_to_process.append(AppendTransactionItem(
                         date=dt,
-                        value=abs(val),
+                        value=val,
                         description=desc,
                         entryType=entry_type,
                         category=cat,
@@ -292,8 +302,53 @@ async def append_to_spreadsheet(
         )
 
     mode = (payload.mode or "merge").lower()
-    
-    # Processar transações em memória
+
+    # Stateful merge vs replace in TABLE_IN_MEMORY_STORAGE
+    merged_items: List[AppendTransactionItem] = []
+    ext_id_to_index: Dict[str, int] = {}
+
+    if mode == "merge":
+        existing_items: List[AppendTransactionItem] = list(
+            TABLE_IN_MEMORY_STORAGE.get(table_id, {}).get("items", [])
+        )
+        for idx, existing in enumerate(existing_items):
+            ext_id = existing.external_id or f"tx_api_{idx+1:04d}"
+            resolved_et = existing.entry_type or ("expense" if existing.value < 0 else "revenue")
+            norm_existing = existing.model_copy(update={
+                "external_id": ext_id,
+                "entry_type": resolved_et,
+            })
+            ext_id_to_index[ext_id] = len(merged_items)
+            merged_items.append(norm_existing)
+
+    inserted_count = 0
+    updated_count = 0
+    auto_seq = len(merged_items)
+
+    for item in items_to_process:
+        auto_seq += 1
+        tx_id = item.external_id or f"tx_api_{auto_seq:04d}"
+        entry_type = item.entry_type or ("expense" if item.value < 0 else "revenue")
+        norm_item = item.model_copy(update={
+            "external_id": tx_id,
+            "entry_type": entry_type,
+            "category": item.category or "Geral",
+            "tags": item.tags or "",
+            "description": item.description or "Transação API",
+        })
+
+        if tx_id in ext_id_to_index:
+            merged_items[ext_id_to_index[tx_id]] = norm_item
+            if mode == "merge":
+                updated_count += 1
+        else:
+            ext_id_to_index[tx_id] = len(merged_items)
+            merged_items.append(norm_item)
+            inserted_count += 1
+
+    total_count = len(merged_items)
+
+    # Processar transações em memória para exportação CSV v2 com blindagem contra CSV Formula Injection
     csv_lines = [
         "## COIN_BACKUP_V2 ##",
         "table_name,Planilha Principal",
@@ -302,23 +357,15 @@ async def append_to_spreadsheet(
         "id,date,value,description,entryType,category,tags,external_id"
     ]
 
-    processed_ids = set()
-    inserted_count = 0
-
-    for idx, item in enumerate(items_to_process):
-        tx_id = item.external_id or f"tx_api_{idx+1:04d}"
-        if tx_id in processed_ids and mode == "merge":
-            continue
-        processed_ids.add(tx_id)
-
+    for idx, item in enumerate(merged_items):
+        tx_id = neutralize_csv_formula(item.external_id or f"tx_api_{idx+1:04d}")
         entry_type = item.entry_type or ("expense" if item.value < 0 else "revenue")
-        cat = item.category or "Geral"
-        tag = item.tags or ""
-        desc = (item.description or "Transação API").replace(",", " ")
-        ext_id = item.external_id or tx_id
+        cat = neutralize_csv_formula((item.category or "Geral").replace(",", " "))
+        tag = neutralize_csv_formula((item.tags or "").replace(",", " "))
+        desc = neutralize_csv_formula((item.description or "Transação API").replace(",", " "))
+        ext_id = neutralize_csv_formula(item.external_id or tx_id)
 
         csv_lines.append(f"{tx_id},{item.date},{abs(item.value):.2f},{desc},{entry_type},{cat},{tag},{ext_id}")
-        inserted_count += 1
 
     csv_output = "\n".join(csv_lines)
 
@@ -373,7 +420,7 @@ async def append_to_spreadsheet(
 
     # ── Update In-Memory Storage for GET routes & Analysis ───────────────
     TABLE_IN_MEMORY_STORAGE[table_id] = {
-        "items": items_to_process,
+        "items": merged_items,
         "csv_content": csv_output,
         "goals": goals_obj if parsed_goals_dict else TABLE_IN_MEMORY_STORAGE.get(table_id, {}).get("goals", TableGoals()),
         "updated_at": datetime.datetime.now().isoformat()
@@ -428,14 +475,17 @@ async def append_to_spreadsheet(
         elif key_h:
             enqueue_pending_sync(key_h, table_id, seq_number, json.dumps(sync_event))
 
-    msg = f"Sucesso! {inserted_count} transações processadas em memória RAM (seq #{seq_number}, Modo: {mode})."
+    msg = (
+        f"Sucesso! {inserted_count} inseridas, {updated_count} atualizadas "
+        f"(total: {total_count}) em memória RAM (seq #{seq_number}, Modo: {mode})."
+    )
 
     return AppendSpreadsheetResponse(
         success=True,
         mode=mode,
         insertedCount=inserted_count,
-        updatedCount=0,
-        totalCount=inserted_count,
+        updatedCount=updated_count,
+        totalCount=total_count,
         message=msg,
         csvContent=csv_output
     )
@@ -445,15 +495,22 @@ async def get_summary_endpoint(
     table_id: str = Depends(get_table_id_for_read)
 ):
     """
-    Retorna os totais consolidados da planilha (Receitas, Despesas, Saldo Líquido, Contagem).
+    Retorna os totais consolidados da planilha (Receitas, Despesas, Saldo Líquido, Contagem),
+    isolando estritamente aportes/retiradas de sócios (partner_in / partner_out), abonos (waiver) e não-resolvidos.
     """
     stored = TABLE_IN_MEMORY_STORAGE.get(table_id, {})
     items: List[AppendTransactionItem] = stored.get("items", [])
-    
-    total_income = sum(abs(it.value) for it in items if it.entry_type == "revenue" or (not it.entry_type and it.value > 0))
-    total_expense = sum(abs(it.value) for it in items if it.entry_type == "expense" or (not it.entry_type and it.value < 0))
-    total_deposits = sum(abs(it.value) for it in items if it.entry_type == "deposit")
-    net_balance = total_income - total_expense
+
+    def _resolve_et(it: AppendTransactionItem) -> str:
+        return it.entry_type or ("expense" if it.value < 0 else "revenue")
+
+    total_income = round(sum(abs(it.value) for it in items if _resolve_et(it) == "revenue"), 2)
+    total_expense = round(sum(abs(it.value) for it in items if _resolve_et(it) == "expense"), 2)
+    total_deposits = round(sum(abs(it.value) for it in items if _resolve_et(it) == "deposit"), 2)
+    total_partner_in = round(sum(abs(it.value) for it in items if _resolve_et(it) == "partner_in"), 2)
+    total_partner_out = round(sum(abs(it.value) for it in items if _resolve_et(it) == "partner_out"), 2)
+    total_waivers = round(sum(abs(it.value) for it in items if _resolve_et(it) == "waiver"), 2)
+    net_balance = round(total_income - total_expense, 2)
     
     return {
         "status": "success",
@@ -461,6 +518,9 @@ async def get_summary_endpoint(
         "total_income": total_income,
         "total_expense": total_expense,
         "total_deposits": total_deposits,
+        "total_partner_in": total_partner_in,
+        "total_partner_out": total_partner_out,
+        "total_waivers": total_waivers,
         "net_balance": net_balance,
         "row_count": len(items),
         "updated_at": stored.get("updated_at")
@@ -484,7 +544,8 @@ async def get_transactions_endpoint(
             continue
         if end_date and it.date > end_date:
             continue
-        val = abs(it.value) if (it.entry_type == "revenue" or it.value > 0) else -abs(it.value)
+        et = it.entry_type or ("expense" if it.value < 0 else "revenue")
+        val = -abs(it.value) if et in ("expense", "partner_out") else abs(it.value)
         filtered.append({
             "id": it.external_id or "tx",
             "date": it.date,
@@ -492,7 +553,7 @@ async def get_transactions_endpoint(
             "description": it.description,
             "category": it.category,
             "tags": it.tags,
-            "entry_type": it.entry_type or ("expense" if val < 0 else "revenue")
+            "entry_type": et
         })
         
     return {
@@ -768,15 +829,18 @@ async def generate_analysis_context_in_memory(
     rows: List[TableRow] = []
     for idx, it in enumerate(items_to_process):
         tx_id = it.external_id or f"tx_{idx+1}"
-        entry_tp = EntryType(it.entry_type) if it.entry_type in [e.value for e in EntryType] else EntryType.EXPENSE
+        raw_et = it.entry_type or ("expense" if it.value < 0 else "revenue")
+        entry_tp = EntryType(raw_et) if raw_et in [e.value for e in EntryType] else EntryType.EXPENSE
         rows.append(TableRow(
             id=tx_id,
             date=it.date,
             value=abs(it.value),
             description=it.description or "Transação API",
             entry_type=entry_tp,
-            category=it.category or "Geral",
-            tags=it.tags or ""
+            period_start=getattr(it, "period_start", None),
+            period_end=getattr(it, "period_end", None),
+            monthly_value=getattr(it, "monthly_value", None),
+            month_count=getattr(it, "month_count", None),
         ))
 
     stored_data = TABLE_IN_MEMORY_STORAGE.get(table_id, {})
@@ -849,15 +913,18 @@ async def public_ai_analyst(
     rows: List[TableRow] = []
     for idx, it in enumerate(stored_items):
         tx_id = it.external_id or f"tx_{idx+1}"
-        entry_tp = EntryType(it.entry_type) if it.entry_type in [e.value for e in EntryType] else EntryType.EXPENSE
+        raw_et = it.entry_type or ("expense" if it.value < 0 else "revenue")
+        entry_tp = EntryType(raw_et) if raw_et in [e.value for e in EntryType] else EntryType.EXPENSE
         rows.append(TableRow(
             id=tx_id,
             date=it.date,
             value=abs(it.value),
             description=it.description or "Transação API",
             entry_type=entry_tp,
-            category=it.category or "Geral",
-            tags=it.tags or ""
+            period_start=getattr(it, "period_start", None),
+            period_end=getattr(it, "period_end", None),
+            monthly_value=getattr(it, "monthly_value", None),
+            month_count=getattr(it, "month_count", None),
         ))
 
     ref_date = payload.as_of_date or datetime.date.today().isoformat()

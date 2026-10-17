@@ -113,7 +113,9 @@ async function runE2E() {
       });
     });
 
+    const pageErrors = [];
     page.on('pageerror', (err) => {
+      pageErrors.push(err.message);
       console.error('[Browser PageError]:', err.message);
     });
     page.on('console', (msg) => {
@@ -121,6 +123,21 @@ async function runE2E() {
         console.log(`[Browser ${msg.type()}]:`, msg.text());
       }
     });
+
+    async function assertViewportZeroScroll(label) {
+      const scrollAudit = await page.evaluate(() => ({
+        docScrollHeight: document.documentElement.scrollHeight,
+        docClientHeight: document.documentElement.clientHeight,
+      }));
+      console.log(
+        `✓ Auditoria DOM Zero-Scroll [${label}]: scrollHeight=${scrollAudit.docScrollHeight}px, clientHeight=${scrollAudit.docClientHeight}px`
+      );
+      if (scrollAudit.docScrollHeight > scrollAudit.docClientHeight + 20) {
+        throw new Error(
+          `Violação de Ergonomia Zero-Scroll em [${label}]: scrollHeight (${scrollAudit.docScrollHeight}) excedeu clientHeight (${scrollAudit.docClientHeight})!`
+        );
+      }
+    }
 
     console.log('1. Abrindo aplicativo em modo Local-First e aguardando AutoCAD Financeiro v2 (cad-workspace-shell)...');
     await page.goto(`${baseUrl}/`, { waitUntil: 'networkidle', timeout: 30000 });
@@ -139,20 +156,7 @@ async function runE2E() {
       throw new Error('Falha de DOM: Elementos essenciais do AutoCAD Financeiro não estão visíveis.');
     }
 
-    // Measure window vertical scroll to prove Zero-Scroll Progressive Canvas ergonomics
-    const scrollAudit = await page.evaluate(() => ({
-      docScrollHeight: document.documentElement.scrollHeight,
-      docClientHeight: document.documentElement.clientHeight,
-      bodyTextLength: document.body.innerText.length,
-    }));
-    console.log(
-      `✓ Auditoria DOM Zero-Scroll: scrollHeight=${scrollAudit.docScrollHeight}px, clientHeight=${scrollAudit.docClientHeight}px`
-    );
-    if (scrollAudit.docScrollHeight > scrollAudit.docClientHeight + 20) {
-      throw new Error(
-        `Violação de Ergonomia Zero-Scroll: scrollHeight (${scrollAudit.docScrollHeight}) excedeu clientHeight (${scrollAudit.docClientHeight})!`
-      );
-    }
+    await assertViewportZeroScroll('Step 1: CAD Hub Idle');
 
     // Screenshot 01: AutoCAD Financeiro Hub (Zero-Scroll Idle Stage)
     await page.screenshot({ path: path.join(screenshotDir, '01_cad_hub_zero_scroll.png') });
@@ -174,12 +178,14 @@ async function runE2E() {
     console.log('2b. Testando roteamento inteligente de "Próxima Ação Sugerida" (cad-next-action-node)...');
     await page.locator('[data-testid="cad-next-action-node"]').click();
     await page.locator('[data-testid="cad-mounted-tool-investor_fire"]').waitFor({ state: 'visible', timeout: 10000 });
+    await assertViewportZeroScroll('Step 2b: Mounted Tool investor_fire');
     await page.locator('[data-testid="cad-close-active-tool"]').click();
 
     // Test Pinned Node / Tool 1: Simular Corte (What-If Simulator on demand) + Split-Stage Dual Slot
     console.log('3. Testando acoplamento sob demanda: "Simular Corte" (what_if) + Split-Stage Dual Slot...');
     await page.locator('[data-testid="cad-pinned-node-what_if"]').click();
     await page.locator('[data-testid="cad-mounted-tool-what_if"]').waitFor({ state: 'visible', timeout: 10000 });
+    await assertViewportZeroScroll('Step 3a: Mounted Tool what_if');
     await page.screenshot({ path: path.join(screenshotDir, '02_cad_tool_what_if.png') });
     console.log('✓ Screenshot 02 capturada: 02_cad_tool_what_if.png (Simulador What-If acoplado)');
 
@@ -189,6 +195,7 @@ async function runE2E() {
     await page.locator('[data-testid="cad-split-select-goals_timebank"]').click();
     await page.locator('[data-testid="cad-secondary-slot-goals_timebank"]').waitFor({ state: 'visible', timeout: 10000 });
     await page.waitForTimeout(250);
+    await assertViewportZeroScroll('Step 3b: Split-Stage Dual Slot (what_if + goals_timebank)');
     await page.screenshot({ path: path.join(screenshotDir, '07_cad_split_stage.png') });
     console.log('✓ Screenshot 07 capturada: 07_cad_split_stage.png (Split-Stage Dual Slot com 2 ferramentas acopladas)');
 
@@ -203,6 +210,7 @@ async function runE2E() {
     console.log('5. Testando acoplamento "Lançar" e importação de Planilha Modelo CSV...');
     await page.locator('[data-testid="cad-ribbon-entry"]').click();
     await page.locator('[data-testid="cad-mounted-tool-quick_entry"]').waitFor({ state: 'visible', timeout: 10000 });
+    await assertViewportZeroScroll('Step 5a: Mounted Tool quick_entry');
 
     const exampleBtn = page.getByText('Testar Planilha de Exemplo / IA').first();
     if (await exampleBtn.isVisible()) {
@@ -221,6 +229,7 @@ async function runE2E() {
     // Return to CAD Hub to capture Populated CAD Stage (with unified single Top HUD!)
     await page.locator('[data-testid="cad-ribbon-hub"]').click();
     await page.waitForTimeout(400);
+    await assertViewportZeroScroll('Step 5b: Populated CAD Hub');
     await page.screenshot({ path: path.join(screenshotDir, '03_planilha_populated.png') });
     console.log('✓ Screenshot 03b capturada: 03_planilha_populated.png (Palco CAD Populado com Top HUD Unificado)');
 
@@ -230,6 +239,7 @@ async function runE2E() {
     await page.locator('[data-testid="cad-mounted-tool-health_pillars"]').waitFor({ state: 'visible', timeout: 10000 });
     await page.locator('[data-testid="cad-health-subtab-pillars"]').click();
     await page.locator('[data-testid="cad-health-subtab-insights"]').click();
+    await assertViewportZeroScroll('Step 5c: Mounted Tool health_pillars');
     await page.locator('[data-testid="cad-ribbon-hub"]').click();
 
     // Test toggling between CAD Mode and Classic List Mode
@@ -252,6 +262,7 @@ async function runE2E() {
     await metricsStationBar.waitFor({ state: 'visible', timeout: 10000 });
     const metricsGuideHud = page.locator('[data-testid="metrics-autocad-guide"]');
     await metricsGuideHud.waitFor({ state: 'visible', timeout: 10000 });
+    await assertViewportZeroScroll('Step 7a: Aba Métricas Cockpit');
     await page.screenshot({ path: path.join(screenshotDir, '04_metricas_tab.png') });
     console.log('✓ Screenshot 04 capturada: 04_metricas_tab.png (Cockpit AutoCAD de Métricas com Guia Interativo)');
 
@@ -261,8 +272,33 @@ async function runE2E() {
     await page.locator('[data-testid="cad-sector-workbench-pfm"]').waitFor({ state: 'visible', timeout: 10000 });
     await page.locator('[data-testid="cad-subtool-pfm-rule_503020"]').click();
     await page.waitForTimeout(250);
+    await assertViewportZeroScroll('Step 7b: Aba Métricas Sector Workbench PFM');
     await page.screenshot({ path: path.join(screenshotDir, '09_metricas_sector_autocad.png') });
     console.log('✓ Screenshot 09 capturada: 09_metricas_sector_autocad.png (Módulo Setorial Interativo no Centro da Tela)');
+
+    // Enable all 8 Sector Modules via modules_config station and run 24-Click Rapid Sector Switching Stress Test
+    console.log('7c. Ativando todos os 8 módulos no Seletor AutoCAD (⚙️) e executando Stress Test de 24 cliques rápidos...');
+    await page.locator('[data-testid="metrics-station-modules_config"]').click();
+    await page.locator('[data-testid="cad-sector-matrix"]').waitFor({ state: 'visible', timeout: 10000 });
+    for (const optSector of ['smb_accounting', 'real_estate', 'vehicles', 'legal_taxes']) {
+      await page.locator(`[data-testid="cad-sector-node-${optSector}"]`).click();
+      await page.locator(`[data-testid="cad-sector-toggle-${optSector}"]`).click();
+    }
+    const sectorStations = [
+      'metrics-station-sector_pfm',
+      'metrics-station-sector_smb',
+      'metrics-station-sector_real_estate',
+      'metrics-station-sector_vehicles',
+      'metrics-station-sector_legal_taxes',
+      'metrics-station-bi_overview',
+    ];
+    for (let i = 0; i < 24; i++) {
+      const stationId = sectorStations[i % sectorStations.length];
+      await page.locator(`[data-testid="${stationId}"]`).click();
+    }
+    await page.waitForTimeout(200);
+    await assertViewportZeroScroll('Step 7c: Post-24-Click Rapid Sector Stress');
+    console.log('✓ Stress Test de 24 cliques rápidos nos 8 módulos concluído sem race conditions ou overflow.');
 
     // Navigate to Gráficos tab and verify zero vertical text crush & above-the-fold chart canvas
     console.log('8. Navegando para aba Gráficos e validando ergonomia de tela única...');
@@ -273,6 +309,7 @@ async function runE2E() {
     }
     const chartCanvas = page.locator('[data-testid="interactive-chart-canvas"]');
     await chartCanvas.waitFor({ state: 'visible', timeout: 10000 });
+    await assertViewportZeroScroll('Step 8: Aba Gráficos');
     const filtersBtnBox = await page.locator('[data-testid="chart-toggle-filters-btn"]').boundingBox();
     const chartBox = await chartCanvas.boundingBox();
     console.log(
@@ -300,6 +337,7 @@ async function runE2E() {
     await page.locator('[data-testid="cad-sector-matrix"]').waitFor({ state: 'visible', timeout: 10000 });
     await page.locator('[data-testid="cad-sector-node-smb_accounting"]').click();
     await page.waitForTimeout(300);
+    await assertViewportZeroScroll('Step 9: Aba Ajustes Sector Matrix');
     await page.screenshot({ path: path.join(screenshotDir, '08_ajustes_workbench.png') });
     console.log('✓ Screenshot 08 capturada: 08_ajustes_workbench.png (Matriz AutoCAD de Módulos em Ajustes)');
 
@@ -310,9 +348,12 @@ async function runE2E() {
     if (nonSyntheticKeyRegex.test(storageDump)) {
       throw new Error('Vazamento detectado no localStorage: chave não-sintética encontrada!');
     }
-    console.log('✓ Auditoria Clean-Room localStorage: 0 chaves de produção ou PII vazadas.');
+    if (pageErrors.length > 0) {
+      throw new Error(`Foram detectados ${pageErrors.length} erros de runtime (pageerror): ${pageErrors.join('; ')}`);
+    }
+    console.log('✓ Auditoria Clean-Room localStorage & Runtime: 0 chaves vazadas, 0 pageerrors.');
 
-    console.log('\n\x1b[32m✅ Suíte Playwright E2E + DOM Audit v2 concluída com 100% de sucesso!\x1b[0m');
+    console.log('\n\x1b[32m✅ Suíte Playwright E2E + DOM Audit v2.5 concluída com 100% de sucesso!\x1b[0m');
   } finally {
     await browser.close();
     server.close();

@@ -28,7 +28,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class EntryType(StrEnum):
-    """Matches frontend: 'revenue' | 'deposit' | 'waiver' | 'expense' | 'partner_in' | 'partner_out'."""
+    """Matches frontend: 'revenue' | 'deposit' | 'waiver' | 'expense' | 'partner_in' | 'partner_out' | 'unresolved'."""
 
     REVENUE = "revenue"
     DEPOSIT = "deposit"
@@ -36,6 +36,7 @@ class EntryType(StrEnum):
     EXPENSE = "expense"
     PARTNER_IN = "partner_in"
     PARTNER_OUT = "partner_out"
+    UNRESOLVED = "unresolved"
 
 
 # ── Goal Hierarchy ───────────────────────────────────────────────────────────
@@ -87,12 +88,12 @@ class TableRow(BaseModel):
         pattern=r"^\d{4}-\d{2}-\d{2}$",
         description="Entry date in YYYY-MM-DD format",
     )
-    value: float = Field(..., ge=0, description="Monetary value (R$) — meaning depends on entryType")
+    value: float = Field(..., description="Monetary value (R$) — meaning depends on entryType")
     description: Optional[str] = Field(default=None)
     entry_type: EntryType = Field(
         default=EntryType.REVENUE,
         alias="entryType",
-        description="revenue | deposit | waiver | expense",
+        description="revenue | deposit | waiver | expense | partner_in | partner_out | unresolved",
     )
     monthly_value: Optional[float] = Field(
         default=None,

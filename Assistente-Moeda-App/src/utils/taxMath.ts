@@ -18,7 +18,7 @@ export function calculateFatorR(
     fatorR = massaSalarial12 / receitaBruta12;
   }
 
-  const anexo = fatorR >= 0.28 ? 'III' : 'V';
+  const anexo = fatorR >= 0.28 - 1e-9 ? 'III' : 'V';
   
   // Nominal rate and deduction brackets
   let nominalRate = 0;
@@ -74,7 +74,7 @@ export function calculateFatorR(
   if (effectiveRate < 0.155 && anexo === 'V') effectiveRate = 0.155;
 
   const targetMassa = receitaBruta12 * 0.28;
-  const proLaboreAdjustment = Math.max(0, targetMassa - massaSalarial12);
+  const proLaboreAdjustment = Math.max(0, Math.round((targetMassa - massaSalarial12) * 100) / 100);
 
   const description = anexo === 'III'
     ? `✅ Anexo III: Fator R de ${(fatorR * 100).toFixed(1)}% atinge o limite legal de 28%, garantindo alíquota efetiva reduzida de ${(effectiveRate * 100).toFixed(2)}%.`

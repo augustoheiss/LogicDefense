@@ -64,7 +64,8 @@ def _compute_year_expenses(expense_rows: list, year: int) -> float:
     total = 0.0
 
     for row in expense_rows:
-        if row.value <= 0:
+        val = abs(row.value)
+        if val <= 0:
             continue
         start = row.period_start or row.date
         end = row.period_end or row.date
@@ -75,14 +76,14 @@ def _compute_year_expenses(expense_rows: list, year: int) -> float:
 
         if start == end:
             # Point-in-time expense — full value
-            total += row.value
+            total += val
         else:
             # Multi-period: prorate by overlap days
             total_days = max(1, _calendar_day_span(start, end))
             overlap_start = max(start, year_start)
             overlap_end = min(end, year_end)
             overlap_days = max(1, _calendar_day_span(overlap_start, overlap_end))
-            total += (row.value / total_days) * overlap_days
+            total += (val / total_days) * overlap_days
 
     return _round2(total)
 
@@ -188,7 +189,11 @@ def compute_metrics(
 
     # ── Prorated monthly calculations for deposits and expenses ─────────────────
     deposit_rows = [r for r in rows if r.entry_type == EntryType.DEPOSIT and r.value > 0]
-    expense_rows = [r for r in rows if r.entry_type == EntryType.EXPENSE]
+    expense_rows = [
+        r.model_copy(update={"value": abs(r.value)}) if r.value < 0 else r
+        for r in rows
+        if r.entry_type == EntryType.EXPENSE
+    ]
 
     deposit_by_month: dict[str, float] = {}
     for row in deposit_rows:
@@ -202,11 +207,18 @@ def compute_metrics(
             ym = contrib["date"][:7]
             monthly_expenses[ym] = monthly_expenses.get(ym, 0.0) + contrib["value"]
 
-    # Filter out deposits, waivers, expenses, AND partner entries for revenue calculations
-    # FIREWALL: partner_in and partner_out are isolated from operational revenue.
+    # Filter out deposits, waivers, expenses, partner entries, AND unresolved for revenue calculations
+    # FIREWALL: partner_in, partner_out, and unresolved are isolated from operational revenue.
     revenue_rows = [
         r for r in rows
-        if r.entry_type not in (EntryType.DEPOSIT, EntryType.WAIVER, EntryType.EXPENSE, EntryType.PARTNER_OUT, EntryType.PARTNER_IN)
+        if r.entry_type not in (
+            EntryType.DEPOSIT,
+            EntryType.WAIVER,
+            EntryType.EXPENSE,
+            EntryType.PARTNER_OUT,
+            EntryType.PARTNER_IN,
+            EntryType.UNRESOLVED,
+        )
     ]
 
     total_expenses = 0.0
@@ -252,8 +264,8 @@ def compute_metrics(
     # ── Partnership ledger — separate tracking for Time Bank + breakdown ─────
     partner_in_rows = [r for r in rows if r.entry_type == EntryType.PARTNER_IN]
     partner_out_rows = [r for r in rows if r.entry_type == EntryType.PARTNER_OUT]
-    total_partner_in = _round2(sum(r.value for r in partner_in_rows))
-    total_partner_out = _round2(sum(r.value for r in partner_out_rows))
+    total_partner_in = _round2(sum(abs(r.value) for r in partner_in_rows))
+    total_partner_out = _round2(sum(abs(r.value) for r in partner_out_rows))
 
     # FIREWALL: partner_out does NOT add to total_expenses.
     # Survival goals are based purely on operational expenses.
@@ -304,8 +316,6 @@ def compute_metrics(
         global_total_yield = accumulated_yield
         global_balance = accumulated_principal + accumulated_yield
 
-    print(f"DEBUG PORTFOLIO: Deposited={global_total_deposited}, Yield={global_total_yield}, Balance={global_balance}")
-
     deposit_count = len(deposit_rows)
     total_invested = global_total_deposited
     total_interest_earned = global_total_yield
@@ -323,9 +333,19 @@ def compute_metrics(
     }
 
     # ── Advanced Statistics (revenue rows only, value > 0) ─────────────────
-    positive_rev_values = [r.value for r in rows
-                           if r.entry_type not in (EntryType.DEPOSIT, EntryType.WAIVER, EntryType.EXPENSE, EntryType.PARTNER_OUT, EntryType.PARTNER_IN)
-                           and r.value > 0]
+    positive_rev_values = [
+        r.value
+        for r in rows
+        if r.entry_type not in (
+            EntryType.DEPOSIT,
+            EntryType.WAIVER,
+            EntryType.EXPENSE,
+            EntryType.PARTNER_OUT,
+            EntryType.PARTNER_IN,
+            EntryType.UNRESOLVED,
+        )
+        and r.value > 0
+    ]
 
     if not positive_rev_values:
         stats_fields = {
