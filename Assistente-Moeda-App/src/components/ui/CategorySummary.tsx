@@ -16,7 +16,12 @@ import { View, Text, StyleSheet, ScrollView, Pressable, Alert, Platform, Modal, 
 import { colors } from '@/theme/colors';
 import { spacing, radius } from '@/theme/spacing';
 import { formatCurrencyFull, formatCurrencyShort, formatCurrencySmart } from '@/core/formatCurrency';
-import { computeActiveMonthsSpan, daysInMonth } from '@/core/dateUtils';
+import {
+  computeActiveMonthsSpan,
+  daysInMonth,
+  parseSelectedMonthsSpec,
+  getEffectivePeriodSpanDays,
+} from '@/core/dateUtils';
 import type { TableRow } from '@/core/types';
 
 type FilterableType = 'revenue' | 'expense' | 'deposit' | 'waiver' | 'partner_in' | 'partner_out';
@@ -184,20 +189,32 @@ function getDaysActiveInYear(start: string, end: string, yearStr: string): numbe
   return daysBetween(overlapStart, overlapEnd);
 }
 
-function getRowProratedValue(row: TableRow, scope: CategoryScope, activeMonth: string, activeYear: string): number {
+function getRowProratedValue(
+  row: TableRow,
+  scope: CategoryScope,
+  activeMonthsList: string[],
+  activeYearsList: string[],
+): number {
   const hasPeriod = !!(row.periodStart && row.periodEnd);
-  
+
   if (hasPeriod) {
     const lifespan = daysBetween(row.periodStart!, row.periodEnd!);
     const dailyRate = row.value / lifespan;
-    
+
     if (scope === 'global') {
       return row.value;
     } else if (scope === 'year') {
-      const daysActive = getDaysActiveInYear(row.periodStart!, row.periodEnd!, activeYear);
+      let daysActive = 0;
+      for (const yr of activeYearsList) {
+        daysActive += getDaysActiveInYear(row.periodStart!, row.periodEnd!, yr);
+      }
       return dailyRate * daysActive;
-    } else { // scope === 'month'
-      const daysActive = getDaysActiveInMonth(row.periodStart!, row.periodEnd!, activeMonth);
+    } else {
+      // scope === 'month' (1 or N selected months)
+      let daysActive = 0;
+      for (const ym of activeMonthsList) {
+        daysActive += getDaysActiveInMonth(row.periodStart!, row.periodEnd!, ym);
+      }
       return dailyRate * daysActive;
     }
   } else {
@@ -205,9 +222,10 @@ function getRowProratedValue(row: TableRow, scope: CategoryScope, activeMonth: s
     if (scope === 'global') {
       return row.value;
     } else if (scope === 'year') {
-      return row.date.startsWith(activeYear) ? row.value : 0;
-    } else { // scope === 'month'
-      return row.date.startsWith(activeMonth) ? row.value : 0;
+      return activeYearsList.some((yr) => row.date.startsWith(yr)) ? row.value : 0;
+    } else {
+      // scope === 'month' (1 or N selected months)
+      return activeMonthsList.some((ym) => row.date.startsWith(ym)) ? row.value : 0;
     }
   }
 }
@@ -257,7 +275,7 @@ export function CategorySummary({ allRows, selectedMonth, cutoffDate, onEditRow,
   };
 
   useEffect(() => {
-    if (selectedMonth === 'all') {
+    if (!selectedMonth || selectedMonth === 'all') {
       setCategoryScope('global');
     } else {
       setCategoryScope('month');
@@ -286,20 +304,17 @@ export function CategorySummary({ allRows, selectedMonth, cutoffDate, onEditRow,
     return allRows;
   }, [allRows, cutoffDate]);
 
-  // Determine active scope dates
-  const activeMonth = useMemo(() => {
-    if (selectedMonth && selectedMonth !== 'all') {
-      return selectedMonth;
-    }
-    if (cutoffDate) {
-      return cutoffDate.slice(0, 7);
-    }
-    return new Date().toISOString().slice(0, 7);
+  // Determine active scope months & years (supports 1 month, N months, or full years)
+  const activeMonthsList = useMemo(() => {
+    const parsed = parseSelectedMonthsSpec(selectedMonth);
+    if (parsed.length > 0) return parsed;
+    if (cutoffDate) return [cutoffDate.slice(0, 7)];
+    return [new Date().toISOString().slice(0, 7)];
   }, [selectedMonth, cutoffDate]);
 
-  const activeYear = useMemo(() => {
-    return activeMonth.slice(0, 4);
-  }, [activeMonth]);
+  const activeYearsList = useMemo(() => {
+    return Array.from(new Set(activeMonthsList.map((ym) => ym.slice(0, 4))));
+  }, [activeMonthsList]);
 
   // Global time span based on active competence months (Lock 1)
   const globalDaySpan = useMemo(() => {
@@ -312,13 +327,15 @@ export function CategorySummary({ allRows, selectedMonth, cutoffDate, onEditRow,
       return Math.max(1, globalDaySpan);
     }
     if (categoryScope === 'year') {
-      const yearSpan = computeActiveMonthsSpan(baseRows, activeYear).effectiveSpanDays;
-      return Math.max(1, yearSpan);
+      let yearSpanDays = 0;
+      for (const yr of activeYearsList) {
+        yearSpanDays += computeActiveMonthsSpan(baseRows, yr).effectiveSpanDays;
+      }
+      return Math.max(1, yearSpanDays);
     }
-    // month scope
-    const [y, m] = activeMonth.split('-').map(Number);
-    return Math.max(1, daysInMonth(y, m));
-  }, [categoryScope, globalDaySpan, baseRows, activeMonth, activeYear]);
+    // month scope (1 or N selected months)
+    return Math.max(1, getEffectivePeriodSpanDays(activeMonthsList).effectiveSpanDays);
+  }, [categoryScope, globalDaySpan, baseRows, activeMonthsList, activeYearsList]);
 
   const fallbackDays = daysInScope;
 
@@ -328,12 +345,12 @@ export function CategorySummary({ allRows, selectedMonth, cutoffDate, onEditRow,
     for (const opt of FILTER_OPTIONS) {
       counts[opt.value] = baseRows.filter((r) => {
         if ((r.entryType || 'revenue') !== opt.value) return false;
-        const val = getRowProratedValue(r, categoryScope, activeMonth, activeYear);
+        const val = getRowProratedValue(r, categoryScope, activeMonthsList, activeYearsList);
         return val > 0;
       }).length;
     }
     return counts;
-  }, [baseRows, categoryScope, activeMonth, activeYear]);
+  }, [baseRows, categoryScope, activeMonthsList, activeYearsList]);
 
   // Category groups for the selected type under the selected scope
   const groups = useMemo<CategoryGroup[]>(() => {
@@ -342,7 +359,7 @@ export function CategorySummary({ allRows, selectedMonth, cutoffDate, onEditRow,
 
     const map = new Map<string, { row: TableRow; value: number }[]>();
     for (const row of typeRows) {
-      const proratedValue = getRowProratedValue(row, categoryScope, activeMonth, activeYear);
+      const proratedValue = getRowProratedValue(row, categoryScope, activeMonthsList, activeYearsList);
       if (proratedValue <= 0) continue;
 
       const key = (row.description || 'SEM DESCRIÇÃO').toUpperCase().trim();
@@ -393,7 +410,7 @@ export function CategorySummary({ allRows, selectedMonth, cutoffDate, onEditRow,
       })
       .filter((g) => g.total > 0)
       .sort((a, b) => b.total - a.total);
-  }, [baseRows, filterType, categoryScope, activeMonth, activeYear, fallbackDays]);
+  }, [baseRows, filterType, categoryScope, activeMonthsList, activeYearsList, fallbackDays]);
 
   const totalSum = useMemo(() => groups.reduce((s, g) => s + g.total, 0), [groups]);
 

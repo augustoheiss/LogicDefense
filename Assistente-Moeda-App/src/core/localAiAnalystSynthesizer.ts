@@ -23,6 +23,10 @@ import {
   resolveGoalForYear,
   computeActiveMonthsSpan,
   buildMonthCompetenceWeekGroups,
+  parseSelectedMonthsSpec,
+  formatSelectedMonthsLabel,
+  filterAndClipRowsByMonths,
+  daysInMonth,
 } from './dateUtils';
 import { buildAIScenarioContext } from './aiContextBuilder';
 import { neutralizeCsvFormula } from '../utils/securitySanitizer';
@@ -495,13 +499,44 @@ export function buildLocalWhatsAppReportText(
     .sort((a, b) => (b.date || '').localeCompare(a.date || ''))
     .slice(0, 8);
 
+  const parsedReportMonths = parseSelectedMonthsSpec(reportMonth);
+  const isMultiMonthReport = parsedReportMonths.length > 1;
+  const primaryReportMonth = parsedReportMonths[0] || reportMonth.split(',')[0] || new Date().toISOString().slice(0, 7);
+  const reportLabel = isMultiMonthReport ? formatSelectedMonthsLabel(parsedReportMonths) : primaryReportMonth;
+
   const lines: string[] = [];
   lines.push(`📊 *Relatório Financeiro — ${tableName}*`);
-  lines.push(`📅 Referência: *${reportMonth}*`);
+  lines.push(`📅 Referência: *${reportLabel}*`);
   lines.push('');
 
-  const monthData = metrics.byMonth[reportMonth];
-  const [rYear, rMonth] = reportMonth.split('-').map(Number);
+  const monthData = isMultiMonthReport
+    ? (() => {
+        let sumGross = 0;
+        let sumExp = 0;
+        let totalDays = 0;
+        let lastWk = 0;
+        for (const ym of parsedReportMonths) {
+          const [y, m] = ym.split('-').map(Number);
+          if (y && m) totalDays += daysInMonth(y, m);
+          const mm = metrics.byMonth[ym];
+          if (mm) {
+            sumGross += mm.grossMonthly;
+            sumExp += mm.expense ?? 0;
+            if (lastWk === 0 && mm.lastWeekGross > 0) lastWk = mm.lastWeekGross;
+          }
+        }
+        const safeDays = Math.max(1, totalDays);
+        const dAvg = Math.round((sumGross / safeDays) * 100) / 100;
+        return {
+          grossMonthly: Math.round(sumGross * 100) / 100,
+          expense: Math.round(sumExp * 100) / 100,
+          dailyAvg: dAvg,
+          weeklyAvg: Math.round(dAvg * 7 * 100) / 100,
+          lastWeekGross: lastWk,
+        };
+      })()
+    : metrics.byMonth[primaryReportMonth];
+  const [rYear, rMonth] = primaryReportMonth.split('-').map(Number);
   const effGoals = getEffectiveGoals({ year: rYear, month: rMonth }, goals);
   const dailyGoalForMonth = effGoals.dailyGoal || resolveGoalForYear(goals.dailyGoals, rYear);
   const weeklyGoalForMonth = effGoals.weeklyGoal || resolveGoalForYear(goals.weeklyGoals, rYear);
@@ -509,11 +544,11 @@ export function buildLocalWhatsAppReportText(
   if (monthData) {
     const monthExp = monthData.expense ?? 0;
     const monthNet = monthData.grossMonthly - monthExp;
-    lines.push(`🔹 *Resumo de Resultados do Mês (${reportMonth})*`);
+    lines.push(`🔹 *Resumo de Resultados do ${isMultiMonthReport ? 'Período' : 'Mês'} (${reportLabel})*`);
     lines.push(`  • Receita Bruta: *${fmtBRL(monthData.grossMonthly)}*`);
     if (monthExp > 0) {
-      lines.push(`  • Custos Rateados no Mês: *-${fmtBRL(monthExp)}*`);
-      lines.push(`  • Saldo Líquido do Mês: *${fmtBRL(monthNet)}*`);
+      lines.push(`  • Custos Rateados no ${isMultiMonthReport ? 'Período' : 'Mês'}: *-${fmtBRL(monthExp)}*`);
+      lines.push(`  • Saldo Líquido do ${isMultiMonthReport ? 'Período' : 'Mês'}: *${fmtBRL(monthNet)}*`);
     }
     lines.push(
       `  • Média Diária: ${fmtBRL(monthData.dailyAvg)}${
@@ -528,11 +563,14 @@ export function buildLocalWhatsAppReportText(
     lines.push('');
 
     // Unified competence-clipped weekly breakdown inside reportMonth (Lock 2)
-    const weekGroups = buildMonthCompetenceWeekGroups(realRows, goals, reportMonth);
+    const chronoMonths = isMultiMonthReport ? [...parsedReportMonths].sort() : [primaryReportMonth];
+    const weekGroups = chronoMonths.flatMap((ym) =>
+      buildMonthCompetenceWeekGroups(realRows, goals, ym),
+    );
     const activeWeekGroups = weekGroups.filter((w) => w.dailyEntries.length > 0 || w.weeklyTotal > 0);
 
     if (activeWeekGroups.length > 0) {
-      lines.push(`📅 *Extrato de Entradas por Semana (${reportMonth})*`);
+      lines.push(`📅 *Extrato de Entradas por Semana (${reportLabel})*`);
       for (const week of activeWeekGroups) {
         const monKey = toLocalKey(week.weekStartDate);
         const sunKey = toLocalKey(week.weekEndDate);
@@ -763,24 +801,18 @@ export function buildLocalAnalysisContext(
     options?.selectedMonth && options.selectedMonth !== 'all'
       ? options.selectedMonth
       : undefined;
+  const parsedSelectedMonths = parseSelectedMonthsSpec(selectedMonth);
   const asOfDate = options?.asOfDate || new Date().toISOString().slice(0, 10);
 
   // Sanitize full history first so global metrics (timeBankBalance, globalGoalBalance, byYear) are never truncated by selectedMonth
   const allSanitizedRows = sanitizeRowsForManualSynthesis(rows, anonymize);
   const metrics = computeMetrics(allSanitizedRows, goals, asOfDate);
 
-  // Filter by selectedMonth if requested for scoped ledger/category views (including multi-day rows that overlap the selected month)
-  const effectiveRows = selectedMonth
-    ? allSanitizedRows.filter((r) => {
-        if (r.date && r.date.startsWith(selectedMonth)) return true;
-        if (r.periodStart && r.periodEnd) {
-          const mStart = `${selectedMonth}-01`;
-          const mEnd = `${selectedMonth}-31`;
-          return r.periodStart <= mEnd && r.periodEnd >= mStart;
-        }
-        return false;
-      })
-    : allSanitizedRows;
+  // Filter and competence-clip by selectedMonth(s) if requested for scoped ledger/category views
+  const effectiveRows =
+    parsedSelectedMonths.length > 0
+      ? filterAndClipRowsByMonths(allSanitizedRows, parsedSelectedMonths)
+      : allSanitizedRows;
 
   // Sort real rows chronologically
   const sortedRows = [...effectiveRows].sort((a, b) => (a.date || '').localeCompare(b.date || ''));
@@ -808,10 +840,13 @@ export function buildLocalAnalysisContext(
 
   const minDate = sortedRows[0]?.date || asOfDate;
   const maxDate = sortedRows[sortedRows.length - 1]?.date || asOfDate;
-  const activeMonthsCount = Math.max(1, Object.keys(metrics.byMonth).length);
+  const activeMonthsCount =
+    parsedSelectedMonths.length > 0
+      ? parsedSelectedMonths.length
+      : Math.max(1, Object.keys(metrics.byMonth).length);
 
   // Current / Reference Year & Month Goals
-  const refYearMonth = selectedMonth || asOfDate.slice(0, 7);
+  const refYearMonth = parsedSelectedMonths[0] || asOfDate.slice(0, 7);
   const [refYear, refMonth] = refYearMonth.split('-').map(Number);
   const effGoals = getEffectiveGoals({ year: refYear, month: refMonth }, goals);
   const activeDailyGoal = effGoals.dailyGoal || resolveGoalForYear(goals.dailyGoals, refYear);
@@ -850,7 +885,11 @@ export function buildLocalAnalysisContext(
   lines.push(`- **Data de Referência da Auditoria**: \`${asOfDate}\``);
   lines.push(
     `- **Escopo Temporal**: ${
-      selectedMonth ? `Mês Filtrado (\`${selectedMonth}\`)` : `Histórico Completo (\`${minDate}\` até \`${maxDate}\`)`
+      parsedSelectedMonths.length > 1
+        ? `Meses Filtrados (${formatSelectedMonthsLabel(parsedSelectedMonths)})`
+        : parsedSelectedMonths.length === 1
+        ? `Mês Filtrado (\`${parsedSelectedMonths[0]}\`)`
+        : `Histórico Completo (\`${minDate}\` até \`${maxDate}\`)`
     }`,
   );
   lines.push(
@@ -1242,7 +1281,7 @@ export function buildLocalAnalysisContext(
     effectiveTableName,
     metrics,
     goals,
-    refYearMonth,
+    selectedMonth || refYearMonth,
     allSanitizedRows,
   );
   lines.push(`## 📱 12. RELATÓRIO EXECUTIVO WHATSAPP (EXTRAÍDO DA PLANILHA ATUAL)`);

@@ -33,6 +33,8 @@ import {
   fmtDate,
   buildMonthCompetenceWeekGroups,
   computeActiveMonthsSpan,
+  parseSelectedMonthsSpec,
+  formatSelectedMonthsLabel,
 } from '../core/dateUtils';
 import { generateNewApiKey, getApiStorageItem, setApiStorageItem } from './apiKeyService';
 import { getStoredLicenseKey } from '../storage/authService';
@@ -82,33 +84,44 @@ function prorateExpensesForMonth(
   rows: TableRow[],
   selectedMonth: string,
 ): Array<{ row: TableRow; monthlyContribution: number }> {
-  const [selY, selM] = selectedMonth.split('-').map(Number);
-  const mStart = `${selectedMonth}-01`;
-  const mEnd   = `${selectedMonth}-${String(daysInMonth(selY, selM)).padStart(2, '0')}`;
+  const parsedMonths = parseSelectedMonthsSpec(selectedMonth);
+  const targetMonths = parsedMonths.length > 0 ? parsedMonths : [selectedMonth.split(',')[0]];
+  const contribByRowId = new Map<string, { row: TableRow; monthlyContribution: number }>();
 
-  const results: Array<{ row: TableRow; monthlyContribution: number }> = [];
+  for (const ym of targetMonths) {
+    const [selY, selM] = ym.split('-').map(Number);
+    if (!selY || !selM) continue;
+    const mStart = `${ym}-01`;
+    const mEnd   = `${ym}-${String(daysInMonth(selY, selM)).padStart(2, '0')}`;
 
-  for (const r of rows) {
-    if (r.entryType !== 'expense') continue;
-    const expVal = Math.abs(r.value);
-    if (expVal <= 0) continue;
+    for (const r of rows) {
+      if (r.entryType !== 'expense') continue;
+      const expVal = Math.abs(r.value);
+      if (expVal <= 0) continue;
 
-    const expStart = r.periodStart || r.date;
-    const expEnd   = r.periodEnd   || r.date;
+      const expStart = r.periodStart || r.date;
+      const expEnd   = r.periodEnd   || r.date;
 
-    if (expStart > mEnd || expEnd < mStart) continue;
+      if (expStart > mEnd || expEnd < mStart) continue;
 
-    const overlapStart = expStart < mStart ? mStart : expStart;
-    const overlapEnd   = expEnd   > mEnd   ? mEnd   : expEnd;
+      const overlapStart = expStart < mStart ? mStart : expStart;
+      const overlapEnd   = expEnd   > mEnd   ? mEnd   : expEnd;
 
-    const totalLifespanDays = daysBetween(expStart, expEnd);
-    const activeDaysInMonth = daysBetween(overlapStart, overlapEnd);
-    const dailyRate = expVal / totalLifespanDays;
+      const totalLifespanDays = daysBetween(expStart, expEnd);
+      const activeDaysInMonth = daysBetween(overlapStart, overlapEnd);
+      const dailyRate = expVal / totalLifespanDays;
+      const contrib = dailyRate * activeDaysInMonth;
 
-    results.push({ row: r, monthlyContribution: dailyRate * activeDaysInMonth });
+      const existing = contribByRowId.get(r.id);
+      if (existing) {
+        existing.monthlyContribution += contrib;
+      } else {
+        contribByRowId.set(r.id, { row: r, monthlyContribution: contrib });
+      }
+    }
   }
 
-  return results;
+  return Array.from(contribByRowId.values());
 }
 
 function computeGlobalSurvivalGoals(
@@ -153,17 +166,53 @@ export function buildWhatsAppReport(
   selectedMonth: string,
   rows: TableRow[],
 ): string {
-  const monthName = formatMonthName(selectedMonth);
-  const monthMetrics = metrics.byMonth[selectedMonth];
-  const [selY, selM] = selectedMonth.split('-').map(Number);
+  const parsedMonths = parseSelectedMonthsSpec(selectedMonth);
+  const isMultiMonth = parsedMonths.length > 1;
+  const primaryMonth = parsedMonths[0] || selectedMonth.split(',')[0] || new Date().toISOString().slice(0, 7);
+  const monthName = isMultiMonth
+    ? formatSelectedMonthsLabel(parsedMonths)
+    : formatMonthName(primaryMonth);
+
+  const monthMetrics = isMultiMonth
+    ? (() => {
+        let sumGross = 0;
+        let sumExpense = 0;
+        let totalDays = 0;
+        let lastWk = 0;
+        for (const ym of parsedMonths) {
+          const [y, m] = ym.split('-').map(Number);
+          if (y && m) totalDays += daysInMonth(y, m);
+          const mm = metrics.byMonth[ym];
+          if (mm) {
+            sumGross += mm.grossMonthly;
+            sumExpense += mm.expense ?? 0;
+            if (lastWk === 0 && mm.lastWeekGross > 0) lastWk = mm.lastWeekGross;
+          }
+        }
+        const safeDays = Math.max(1, totalDays);
+        const dAvg = Math.round((sumGross / safeDays) * 100) / 100;
+        return {
+          grossMonthly: Math.round(sumGross * 100) / 100,
+          expense: Math.round(sumExpense * 100) / 100,
+          dailyAvg: dAvg,
+          weeklyAvg: Math.round(dAvg * 7 * 100) / 100,
+          lastWeekGross: lastWk,
+        };
+      })()
+    : metrics.byMonth[primaryMonth];
+
+  const [selY, selM] = primaryMonth.split('-').map(Number);
   const reportYear = selY;
 
   const effGoals = getEffectiveGoals({ year: selY, month: selM }, goals);
   const reportDailyGoal = effGoals.dailyGoal || resolveGoalForYear(goals.dailyGoals, reportYear);
   const reportWeeklyGoal = effGoals.weeklyGoal || resolveGoalForYear(goals.weeklyGoals, reportYear);
 
-  // Unified competence-clipped weekly groups (Lock 2)
-  const weekGroups = buildMonthCompetenceWeekGroups(rows, goals, selectedMonth);
+  // Unified competence-clipped weekly groups (Lock 2 — supports 1 or N selected months)
+  const chronologicalMonths = isMultiMonth ? [...parsedMonths].sort() : [primaryMonth];
+  const weekGroups = chronologicalMonths.flatMap((ym) =>
+    buildMonthCompetenceWeekGroups(rows, goals, ym),
+  );
 
   const proratedExpenses = prorateExpensesForMonth(rows, selectedMonth);
   const survivalGoals = computeGlobalSurvivalGoals(rows, selectedMonth, metrics);
@@ -179,7 +228,7 @@ export function buildWhatsAppReport(
   // Header
   lines.push(
     `📆 *Relatório Financeiro*`,
-    `_Ref: ${monthName} de ${reportYear}_`,
+    isMultiMonth ? `_Ref: ${monthName}_` : `_Ref: ${monthName} de ${reportYear}_`,
     '',
   );
 
@@ -195,8 +244,8 @@ export function buildWhatsAppReport(
       : ` ${goalPct}% atingida`;
 
     lines.push(
-      `📊 *Resumo de Resultados do Mês*`,
-      `• Receitas do Mês: *${fmtBRL(monthMetrics.grossMonthly)}*`,
+      isMultiMonth ? `📊 *Resumo de Resultados do Período (${monthName})*` : `📊 *Resumo de Resultados do Mês*`,
+      `• ${isMultiMonth ? 'Receitas do Período' : 'Receitas do Mês'}: *${fmtBRL(monthMetrics.grossMonthly)}*`,
       `• Média Diária: ${fmtBRL(monthMetrics.dailyAvg)}`,
       `• Média Semanal: ${fmtBRL(monthMetrics.weeklyAvg)}`,
       `• Meta Diária ${reportYear} (${fmtBRL(reportDailyGoal)}):${goalNote}`,

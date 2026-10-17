@@ -348,15 +348,255 @@ export function getEffectivePeriodSpanDays(activeMonths: Iterable<string>): Effe
 }
 
 /**
+ * Parses a month selection specification (`'all'`, `'2026-06'`, `'2026-06,2026-07'`, or `string[]`)
+ * into a deduplicated, descending-sorted array of valid `'YYYY-MM'` strings.
+ * An empty returned array `[]` represents `'all'` (unfiltered).
+ */
+export function parseSelectedMonthsSpec(spec?: string | Iterable<string> | null): string[] {
+  if (!spec || spec === 'all') return [];
+  const rawItems: string[] =
+    typeof spec === 'string'
+      ? spec.split(/[,;\s]+/).map((s) => s.trim()).filter(Boolean)
+      : Array.from(spec);
+
+  const unique = new Set<string>();
+  for (const item of rawItems) {
+    if (typeof item === 'string' && /^\d{4}-\d{2}$/.test(item)) {
+      unique.add(item);
+    }
+  }
+  return Array.from(unique).sort((a, b) => b.localeCompare(a));
+}
+
+/**
+ * Serializes an iterable of `'YYYY-MM'` strings into the canonical `selectedMonth` string contract:
+ * - `0` months -> `'all'`
+ * - `1` month  -> `'YYYY-MM'`
+ * - `N` months -> `'YYYY-MM,YYYY-MM,...'` (sorted descending)
+ */
+export function serializeSelectedMonthsSpec(selectedMonths?: Iterable<string> | string | null): string {
+  const parsed = parseSelectedMonthsSpec(selectedMonths);
+  if (parsed.length === 0) return 'all';
+  return parsed.join(',');
+}
+
+/**
+ * Idempotent Set Toggle for a single month (`YYYY-MM`):
+ * - 1st click on unselected month `ym` -> adds `ym` to selection.
+ * - 2nd click on already-selected month `ym` -> removes `ym` from selection.
+ * - Clicking `'all'` or removing the last remaining month -> returns `[]` (reverts to `'all'`).
+ */
+export function toggleMonthSelection(
+  currentSelected: string | Iterable<string> | null | undefined,
+  targetYm: string,
+): string[] {
+  if (!targetYm || targetYm === 'all') return [];
+  if (!/^\d{4}-\d{2}$/.test(targetYm)) return parseSelectedMonthsSpec(currentSelected);
+
+  const set = new Set<string>(parseSelectedMonthsSpec(currentSelected));
+  if (set.has(targetYm)) {
+    set.delete(targetYm);
+  } else {
+    set.add(targetYm);
+  }
+  return Array.from(set).sort((a, b) => b.localeCompare(a));
+}
+
+/**
+ * Macro-Toggle for an entire year (`YYYY`, e.g. `'2026'` or `'2025'`):
+ * - Collects all available months of `targetYear` from `availableMonths` (or all 12 calendar months if none provided).
+ * - If ALL months of `targetYear` are currently selected -> removes them (deselects that year).
+ * - Otherwise -> adds all months of `targetYear` to the current selection (enabling 12m, 24m, 36m+ selection in 1 click per year).
+ */
+export function toggleYearSelection(
+  currentSelected: string | Iterable<string> | null | undefined,
+  targetYear: string,
+  availableMonths?: Iterable<string>,
+): string[] {
+  if (!targetYear || !/^\d{4}$/.test(targetYear)) return parseSelectedMonthsSpec(currentSelected);
+
+  const availForYear = availableMonths
+    ? parseSelectedMonthsSpec(availableMonths).filter((ym) => ym.startsWith(`${targetYear}-`))
+    : [];
+
+  const yearMonths =
+    availForYear.length > 0
+      ? availForYear
+      : Array.from({ length: 12 }, (_, idx) => `${targetYear}-${String(idx + 1).padStart(2, '0')}`);
+
+  const set = new Set<string>(parseSelectedMonthsSpec(currentSelected));
+  const allSelected = yearMonths.every((ym) => set.has(ym));
+
+  if (allSelected) {
+    for (const ym of yearMonths) {
+      set.delete(ym);
+    }
+  } else {
+    for (const ym of yearMonths) {
+      set.add(ym);
+    }
+  }
+  return Array.from(set).sort((a, b) => b.localeCompare(a));
+}
+
+/**
+ * Formats a concise, human-readable label for single-month, multi-month, or multi-year selections.
+ */
+export function formatSelectedMonthsLabel(
+  selectedSpec?: string | Iterable<string> | null,
+  availableMonths?: Iterable<string>,
+  fullSingleMonth = false,
+): string {
+  const months = parseSelectedMonthsSpec(selectedSpec);
+  if (months.length === 0) return 'Todos';
+
+  const shortNames = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+  const fullNames = [
+    'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+    'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro',
+  ];
+
+  const fmtShort = (ym: string) => {
+    const [y, m] = ym.split('-');
+    const idx = parseInt(m, 10) - 1;
+    if (idx < 0 || idx >= 12 || isNaN(idx)) return ym;
+    return `${shortNames[idx]} ${y.slice(2)}`;
+  };
+
+  const fmtFull = (ym: string) => {
+    const [y, m] = ym.split('-');
+    const idx = parseInt(m, 10) - 1;
+    if (idx < 0 || idx >= 12 || isNaN(idx)) return ym;
+    return `${fullNames[idx]} ${y}`;
+  };
+
+  if (months.length === 1) {
+    return fullSingleMonth ? fmtFull(months[0]) : fmtShort(months[0]);
+  }
+
+  // Check if selection matches complete years
+  const availAll = availableMonths ? parseSelectedMonthsSpec(availableMonths) : [];
+  const selectedYears = Array.from(new Set(months.map((ym) => ym.slice(0, 4)))).sort();
+  const isFullYearsSelection = selectedYears.every((yr) => {
+    const pickedInYr = months.filter((ym) => ym.startsWith(`${yr}-`)).length;
+    const availInYr = availAll.filter((ym) => ym.startsWith(`${yr}-`)).length;
+    return pickedInYr === 12 || (availInYr >= 2 && pickedInYr === availInYr);
+  });
+
+  if (isFullYearsSelection && months.length >= 2) {
+    if (selectedYears.length === 1) {
+      return `Ano ${selectedYears[0]} (${months.length}m)`;
+    }
+    return `Anos ${selectedYears.join('+')} (${months.length}m)`;
+  }
+
+  if (months.length <= 3) {
+    return [...months].sort().map(fmtShort).join(', ');
+  }
+
+  return `${months.length} meses (${selectedYears.join(', ')})`;
+}
+
+/**
+ * Filters point rows and clips multi-day/multi-month period rows (`periodStart`..`periodEnd`)
+ * strictly to the selected competence months (`selectedSpec`), preserving 100% of Precision Lock 1:
+ *   Sum of `grossMonthly` across `selectedMonths` === `computeMetrics(clippedRows).grossTotal`.
+ */
+export function filterAndClipRowsByMonths(
+  rows: TableRow[],
+  selectedSpec?: string | Iterable<string> | null,
+): TableRow[] {
+  const months = parseSelectedMonthsSpec(selectedSpec);
+  if (months.length === 0) return rows;
+
+  const monthSet = new Set<string>(months);
+  const result: TableRow[] = [];
+  const msPerDay = 86_400_000;
+
+  for (const row of rows) {
+    if (!row || typeof row !== 'object') continue;
+
+    const hasPeriod =
+      typeof row.periodStart === 'string' &&
+      typeof row.periodEnd === 'string' &&
+      row.periodStart.length >= 10 &&
+      row.periodEnd.length >= 10 &&
+      row.periodStart !== row.periodEnd;
+
+    if (!hasPeriod) {
+      if (typeof row.date === 'string' && monthSet.has(row.date.slice(0, 7))) {
+        result.push(row);
+      }
+      continue;
+    }
+
+    const startYm = row.periodStart!.slice(0, 7);
+    const endYm = row.periodEnd!.slice(0, 7);
+    if (startYm === endYm) {
+      if (monthSet.has(startYm)) {
+        result.push(row);
+      }
+      continue;
+    }
+
+    const contribs = rowContributions(row);
+    const matching = contribs.filter((c) => c.date && monthSet.has(c.date.slice(0, 7)));
+    if (matching.length === 0) continue;
+    if (matching.length === contribs.length) {
+      result.push(row);
+      continue;
+    }
+
+    // Group matching daily contributions into contiguous date segments so no deselected gap month is crossed
+    const segments: Array<Array<{ date: string; value: number }>> = [];
+    for (const c of matching) {
+      if (segments.length === 0) {
+        segments.push([c]);
+      } else {
+        const currentSeg = segments[segments.length - 1];
+        const prevDate = currentSeg[currentSeg.length - 1].date;
+        const prevMs = new Date(prevDate + 'T12:00:00').getTime();
+        const curMs = new Date(c.date + 'T12:00:00').getTime();
+        if (Math.round((curMs - prevMs) / msPerDay) === 1) {
+          currentSeg.push(c);
+        } else {
+          segments.push([c]);
+        }
+      }
+    }
+
+    segments.forEach((seg, idx) => {
+      const segSum = Math.round(seg.reduce((s, c) => s + c.value, 0) * 100) / 100;
+      const segStart = seg[0].date;
+      const segEnd = seg[seg.length - 1].date;
+      const rowDateInSeg = row.date >= segStart && row.date <= segEnd ? row.date : segStart;
+      result.push({
+        ...row,
+        id: idx === 0 ? row.id : `${row.id}__seg${idx}`,
+        date: rowDateInSeg,
+        periodStart: segStart,
+        periodEnd: segEnd,
+        value: segSum,
+      });
+    });
+  }
+
+  return result;
+}
+
+/**
  * Extracts active competence months from a list of rows (using `rowContributions`)
- * with optional year (`YYYY`) or month (`YYYY-MM`) filtering, and returns the
- * Full Monthly Competence Envelope (`EffectivePeriodSpan`).
+ * with optional year (`YYYY`) or month/multi-month (`YYYY-MM` or `'YYYY-MM,YYYY-MM'`) filtering,
+ * and returns the Full Monthly Competence Envelope (`EffectivePeriodSpan`).
  */
 export function computeActiveMonthsSpan(
   rows: TableRow[],
   filterYear?: string,
-  filterMonth?: string,
+  filterMonth?: string | Iterable<string>,
 ): EffectivePeriodSpan {
+  const filterMonthsList = filterMonth ? parseSelectedMonthsSpec(filterMonth) : [];
+  const filterMonthSet = filterMonthsList.length > 0 ? new Set<string>(filterMonthsList) : null;
+
   const activeMonths = new Set<string>();
   for (const r of rows) {
     if (!r || typeof r.value !== 'number' || isNaN(r.value) || Math.abs(r.value) <= 0) continue;
@@ -364,13 +604,15 @@ export function computeActiveMonthsSpan(
     for (const contrib of rowContributions(normalizedRow)) {
       if (!contrib.date || contrib.date.length < 7) continue;
       const ym = contrib.date.slice(0, 7);
-      if (filterMonth && ym !== filterMonth) continue;
+      if (filterMonthSet && !filterMonthSet.has(ym)) continue;
       if (filterYear && !ym.startsWith(filterYear)) continue;
       activeMonths.add(ym);
     }
   }
-  if (activeMonths.size === 0 && filterMonth && /^\d{4}-\d{2}$/.test(filterMonth)) {
-    activeMonths.add(filterMonth);
+  if (activeMonths.size === 0 && filterMonthSet) {
+    for (const ym of filterMonthSet) {
+      activeMonths.add(ym);
+    }
   }
   return getEffectivePeriodSpanDays(activeMonths);
 }

@@ -24,6 +24,15 @@ import {
   saveOpLogToIndexedDB,
 } from '../storage/indexedDBAdapter';
 import { computeMetrics, emptyMetrics, computeBaselineGoals } from '../core/metricsEngine';
+import {
+  parseSelectedMonthsSpec,
+  serializeSelectedMonthsSpec,
+  toggleMonthSelection,
+  toggleYearSelection,
+  filterAndClipRowsByMonths,
+  rowContributions,
+  daysInMonth,
+} from '../core/dateUtils';
 import { setPrivacyModeActive } from '../core/formatCurrency';
 import type {
   DB,
@@ -66,10 +75,12 @@ export interface CoinDBState {
   activeTableIndex: number;
   /** Currently active table (convenience accessor) */
   activeTable: CoinTable | null;
-  /** Computed metrics for the active table */
+  /** Computed metrics for the active table (scoped to selectedMonth/selectedMonths when filtered) */
   metrics: TableMetrics;
-  /** Currently selected month filter (YYYY-MM or 'all') */
+  /** Currently selected month filter ('all', 'YYYY-MM', or comma-separated 'YYYY-MM,YYYY-MM') */
   selectedMonth: string;
+  /** Currently selected months array (empty [] means 'all') */
+  selectedMonths: string[];
   /** Street/Privacy mode (blurs/masks sensitive currency values on screen) */
   isPrivacyMode: boolean;
   togglePrivacyMode: () => void;
@@ -125,8 +136,11 @@ export interface CoinDBState {
   updateDashboardConfig: (config: DashboardConfig, tableId?: string) => Promise<void> | void;
   updateSectorParams: (params: SectorSimulationParams, tableId?: string) => Promise<void> | void;
 
-  // ── Month Filter ──────────────────────────────────────
+  // ── Month / Multi-Month Filter ────────────────────────
   setSelectedMonth: (month: string) => void;
+  setSelectedMonths: (months: string[] | string) => void;
+  toggleSelectedMonth: (month: string) => void;
+  toggleSelectedYear: (year: string) => void;
 
   // ── Time Machine / Cutoff ─────────────────────────────
   cutoffDate: string;
@@ -185,7 +199,7 @@ function useCoinDBInternal(): CoinDBState {
   const [isLoading, setIsLoading] = useState(true);
   const [tables, setTables] = useState<CoinTable[]>([]);
   const [activeTableIndex, setActiveTableIndex] = useState(0);
-  const [selectedMonth, setSelectedMonth] = useState<string>('all');
+  const [selectedMonths, setSelectedMonthsState] = useState<string[]>([]);
   const [cutoffDate, setCutoffDate] = useState<string>('');
   const [aiCostCurrentMonth, setAiCostCurrentMonth] = useState<number>(0);
   const [aiCostLastReset, setAiCostLastReset] = useState<string>('');
@@ -582,16 +596,7 @@ function useCoinDBInternal(): CoinDBState {
     };
   }, [activeTable?.id]);
 
-  // ── Metrics (computed from active table) ───────────────
-  const metrics = useMemo(() => {
-    if (!activeTable || !Array.isArray(activeTable.rows)) return emptyMetrics();
-    const rowsToUse = cutoffDate
-      ? activeTable.rows.filter((r) => r && typeof r.date === 'string' && r.date <= cutoffDate)
-      : (activeTable.rows || []);
-    return computeMetrics(rowsToUse, activeTable.goals, cutoffDate || undefined);
-  }, [activeTable, cutoffDate]);
-
-  // ── Available months ───────────────────────────────────
+  // ── Available months (including multi-month period contributions) ──────
   const availableMonths = useMemo(() => {
     if (!activeTable || !Array.isArray(activeTable.rows)) return [];
     const months = new Set<string>();
@@ -599,23 +604,73 @@ function useCoinDBInternal(): CoinDBState {
       ? activeTable.rows.filter((r) => r && typeof r.date === 'string' && r.date <= cutoffDate)
       : activeTable.rows;
     for (const row of rowsToUse) {
-      if (row && typeof row.date === 'string' && row.date.length >= 7) {
+      if (!row || typeof row !== 'object') continue;
+      if (typeof row.date === 'string' && row.date.length >= 7) {
         months.add(row.date.slice(0, 7));
+      }
+      if (row.periodStart && row.periodEnd && row.periodStart !== row.periodEnd) {
+        for (const contrib of rowContributions(row)) {
+          if (contrib.date && contrib.date.length >= 7 && (!cutoffDate || contrib.date <= cutoffDate)) {
+            months.add(contrib.date.slice(0, 7));
+          }
+        }
       }
     }
     return Array.from(months).sort().reverse();
   }, [activeTable, cutoffDate]);
 
-  // ── Filtered rows ─────────────────────────────────────
+  // ── Canonical selectedMonth spec & Multi-Month Toggle Handlers ─────────
+  const selectedMonth = useMemo(() => {
+    return serializeSelectedMonthsSpec(selectedMonths);
+  }, [selectedMonths]);
+
+  const setSelectedMonth = useCallback((monthSpec: string) => {
+    setSelectedMonthsState(parseSelectedMonthsSpec(monthSpec));
+  }, []);
+
+  const setSelectedMonths = useCallback((monthsSpec: string[] | string) => {
+    setSelectedMonthsState(parseSelectedMonthsSpec(monthsSpec));
+  }, []);
+
+  const toggleSelectedMonth = useCallback((targetYm: string) => {
+    setSelectedMonthsState((prev) => toggleMonthSelection(prev, targetYm));
+  }, []);
+
+  const toggleSelectedYear = useCallback(
+    (targetYear: string) => {
+      setSelectedMonthsState((prev) => toggleYearSelection(prev, targetYear, availableMonths));
+    },
+    [availableMonths],
+  );
+
+  // ── Filtered rows (clipped to selectedMonths & cutoffDate) ─────────────
   const filteredRows = useMemo(() => {
     if (!activeTable || !Array.isArray(activeTable.rows)) return [];
     let rowsToUse = activeTable.rows.filter((r): r is TableRow => !!r && typeof r === 'object');
     if (cutoffDate) {
       rowsToUse = rowsToUse.filter((r) => typeof r.date === 'string' && r.date <= cutoffDate);
     }
-    if (selectedMonth === 'all') return rowsToUse;
-    return rowsToUse.filter((r) => typeof r.date === 'string' && r.date.startsWith(selectedMonth));
-  }, [activeTable, selectedMonth, cutoffDate]);
+    if (selectedMonths.length === 0) return rowsToUse;
+    return filterAndClipRowsByMonths(rowsToUse, selectedMonths);
+  }, [activeTable, selectedMonths, cutoffDate]);
+
+  // ── Metrics (computed over filteredRows so all stations reflect selected months/years) ──
+  const metrics = useMemo(() => {
+    if (!activeTable || !Array.isArray(activeTable.rows)) return emptyMetrics();
+    let effectiveAsOfDate: string | undefined = cutoffDate || undefined;
+    if (selectedMonths.length > 0) {
+      const maxYm = selectedMonths[0]; // sorted descending
+      const [maxY, maxM] = maxYm.split('-').map(Number);
+      const maxMonthEnd = `${maxYm}-${String(daysInMonth(maxY, maxM)).padStart(2, '0')}`;
+      const todayStr = new Date().toISOString().slice(0, 10);
+      if (effectiveAsOfDate) {
+        effectiveAsOfDate = effectiveAsOfDate < maxMonthEnd ? effectiveAsOfDate : maxMonthEnd;
+      } else if (maxMonthEnd < todayStr) {
+        effectiveAsOfDate = maxMonthEnd;
+      }
+    }
+    return computeMetrics(filteredRows, activeTable.goals, effectiveAsOfDate);
+  }, [activeTable, filteredRows, cutoffDate, selectedMonths]);
 
   // ── Table Operations ──────────────────────────────────
   const addTable = useCallback((
@@ -1483,6 +1538,7 @@ function useCoinDBInternal(): CoinDBState {
     metrics,
     activeTableIndex,
     selectedMonth,
+    selectedMonths,
     isPrivacyMode,
     togglePrivacyMode,
     setPrivacyMode,
@@ -1511,6 +1567,9 @@ function useCoinDBInternal(): CoinDBState {
     updateDashboardConfig,
     updateSectorParams,
     setSelectedMonth,
+    setSelectedMonths,
+    toggleSelectedMonth,
+    toggleSelectedYear,
     cutoffDate,
     setCutoffDate,
     filteredRows,

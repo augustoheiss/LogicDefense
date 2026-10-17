@@ -631,7 +631,7 @@ export function computeBaselineGoals(rows: Omit<TableRow, 'id'>[]): TableGoals {
     return { dailyGoals: {}, weeklyGoals: {}, annualCosts: {} };
   }
 
-  const spanInfo = computeActiveMonthsSpan(revenueRows);
+  const spanInfo = computeActiveMonthsSpan(revenueRows as TableRow[]);
   const daySpan = Math.max(1, spanInfo.effectiveSpanDays);
   const effectiveMonths = Math.max(1, spanInfo.activeMonthsCount);
 

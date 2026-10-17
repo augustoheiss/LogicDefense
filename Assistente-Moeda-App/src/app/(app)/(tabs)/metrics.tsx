@@ -17,7 +17,14 @@ import { MetricCard, MetricGrid } from '@/components/ui/MetricCard';
 import { Card } from '@/components/ui/Card';
 import { formatCurrencySmart } from '@/core/formatCurrency';
 import { MonthPicker } from '@/components/ui/MonthPicker';
-import { getDailyGoalForDate, computeActiveMonthsSpan, daysInMonth } from '@/core/dateUtils';
+import {
+  getDailyGoalForDate,
+  computeActiveMonthsSpan,
+  daysInMonth,
+  parseSelectedMonthsSpec,
+  getEffectivePeriodSpanDays,
+  formatSelectedMonthsLabel,
+} from '@/core/dateUtils';
 import { CategorySummary, AddRowModal, InvestorPortfolioWidget } from '@/components/ui';
 import { SectorSettingsPanel } from '@/components/ui/SectorSettingsPanel';
 import {
@@ -344,32 +351,60 @@ export default function MetricsScreen() {
     );
   }, [macroFilteredRows, selectedCategory]);
 
+  const selectedMonthsList = useMemo(
+    () => parseSelectedMonthsSpec(selectedMonth),
+    [selectedMonth],
+  );
+
   const fallbackDays = useMemo(() => {
-    if (selectedMonth === 'all') {
+    if (selectedMonthsList.length === 0) {
       if (!activeTable || activeTable.rows.length === 0) return 1;
       return Math.max(1, computeActiveMonthsSpan(activeTable.rows).effectiveSpanDays);
     } else {
-      const [y, m] = selectedMonth.split('-').map(Number);
-      return Math.max(1, daysInMonth(y, m));
+      return Math.max(1, getEffectivePeriodSpanDays(selectedMonthsList).effectiveSpanDays);
     }
-  }, [selectedMonth, activeTable]);
+  }, [selectedMonthsList, activeTable]);
 
   const categoryStats = useMemo(() => {
     if (categoryRows.length === 0) return null;
     return calculateStats(categoryRows, fallbackDays);
   }, [categoryRows, fallbackDays]);
 
-  const selectedMonthMetrics = selectedMonth !== 'all' ? metrics.byMonth[selectedMonth] || null : null;
-  const selectedYearStr = selectedMonth !== 'all' ? selectedMonth.slice(0, 4) : '';
-  const yearMetrics = selectedYearStr ? metrics.byYear[selectedYearStr] || null : null;
+  const monthDays = useMemo(() => {
+    if (selectedMonthsList.length === 0) return 0;
+    return getEffectivePeriodSpanDays(selectedMonthsList).effectiveSpanDays;
+  }, [selectedMonthsList]);
+
+  const selectedMonthMetrics = useMemo(() => {
+    if (selectedMonthsList.length === 0) return null;
+    let grossMonthly = 0;
+    let expense = 0;
+    let investment = 0;
+    for (const ym of selectedMonthsList) {
+      const mData = metrics.byMonth[ym];
+      if (mData) {
+        grossMonthly += mData.grossMonthly ?? 0;
+        expense += mData.expense ?? 0;
+        investment += mData.investment ?? 0;
+      }
+    }
+    const dailyAvg = monthDays > 0 ? grossMonthly / monthDays : 0;
+    const weeklyAvg = dailyAvg * 7;
+    return {
+      grossMonthly: Math.round(grossMonthly * 100) / 100,
+      expense: Math.round(expense * 100) / 100,
+      investment: Math.round(investment * 100) / 100,
+      dailyAvg: Math.round(dailyAvg * 100) / 100,
+      weeklyAvg: Math.round(weeklyAvg * 100) / 100,
+    };
+  }, [selectedMonthsList, metrics.byMonth, monthDays]);
+
+  const selectedScopeLabel = useMemo(
+    () => formatSelectedMonthsLabel(selectedMonthsList, availableMonths, true),
+    [selectedMonthsList, availableMonths],
+  );
 
   const monthlyExpenseTotal = selectedMonthMetrics?.expense ?? 0;
-  const monthDays = useMemo(() => {
-    if (!selectedMonth || selectedMonth === 'all') return 0;
-    const [y, m] = selectedMonth.split('-').map(Number);
-    return new Date(y, m, 0).getDate();
-  }, [selectedMonth]);
-
   const expenseDailyAvg = monthDays > 0 ? monthlyExpenseTotal / monthDays : 0;
   const expenseWeeklyAvg = expenseDailyAvg * 7;
 
@@ -407,7 +442,10 @@ export default function MetricsScreen() {
         <MonthPicker
           months={availableMonths}
           selected={selectedMonth}
+          selectedMonths={db.selectedMonths}
           onSelect={setSelectedMonth}
+          onToggleMonth={db.toggleSelectedMonth}
+          onToggleYear={db.toggleSelectedYear}
         />
       )}
 
@@ -723,23 +761,23 @@ export default function MetricsScreen() {
 
               {activeSubLens?.id === 'scoped' && (
                 <MetricGrid>
-                  {selectedMonth !== 'all' && selectedMonthMetrics ? (
+                  {selectedMonthsList.length > 0 && selectedMonthMetrics ? (
                     <>
                       <MetricCard
                         icon="💵"
-                        label={`Receita (${formatMonthLabel(selectedMonth)})`}
+                        label={`Receita (${selectedScopeLabel})`}
                         value={formatCurrencySmart(selectedMonthMetrics.grossMonthly)}
                         accentColor={colors.success.main}
                       />
                       <MetricCard
                         icon="📅"
-                        label="Diária do Mês"
+                        label={selectedMonthsList.length > 1 ? 'Diária do Período' : 'Diária do Mês'}
                         value={`${formatCurrencySmart(selectedMonthMetrics.dailyAvg)}/dia`}
                         accentColor={colors.info.main}
                       />
                       <MetricCard
                         icon="📆"
-                        label="Semanal do Mês"
+                        label={selectedMonthsList.length > 1 ? 'Semanal do Período' : 'Semanal do Mês'}
                         value={`${formatCurrencySmart(selectedMonthMetrics.weeklyAvg)}/sem`}
                         accentColor={colors.info.main}
                       />
@@ -749,7 +787,7 @@ export default function MetricsScreen() {
                       icon="🗓️"
                       label="Filtro Mensal"
                       value="Todos os Meses"
-                      subtitle="Selecione um mês acima para recorte mensal"
+                      subtitle="Selecione meses ou anos acima para recorte"
                       accentColor={colors.info.main}
                     />
                   )}
@@ -786,20 +824,20 @@ export default function MetricsScreen() {
                 <MetricGrid>
                   <MetricCard
                     icon="💸"
-                    label="Gasto no Mês Selecionado"
+                    label={selectedMonthsList.length > 1 ? 'Gasto nos Meses Selecionados' : 'Gasto no Mês Selecionado'}
                     value={monthlyExpenseTotal > 0 ? `-${formatCurrencySmart(monthlyExpenseTotal)}` : 'R$ 0,00'}
                     accentColor={colors.danger.main}
-                    subtitle={selectedMonth === 'all' ? 'Selecione um mês acima' : formatMonthLabel(selectedMonth)}
+                    subtitle={selectedMonthsList.length === 0 ? 'Selecione meses ou anos acima' : selectedScopeLabel}
                   />
                   <MetricCard
                     icon="📅"
-                    label="Gasto Diário no Mês"
+                    label={selectedMonthsList.length > 1 ? 'Gasto Diário no Período' : 'Gasto Diário no Mês'}
                     value={`-${formatCurrencySmart(expenseDailyAvg)}`}
                     accentColor={colors.danger.main}
                   />
                   <MetricCard
                     icon="📆"
-                    label="Gasto Semanal no Mês"
+                    label={selectedMonthsList.length > 1 ? 'Gasto Semanal no Período' : 'Gasto Semanal no Mês'}
                     value={`-${formatCurrencySmart(expenseWeeklyAvg)}`}
                     accentColor={colors.danger.main}
                   />

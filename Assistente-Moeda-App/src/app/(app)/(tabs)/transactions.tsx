@@ -63,6 +63,7 @@ import { shareWhatsAppReport, shareCSV, sharePDFReport, buildWhatsAppReport, sha
 import { importCSVFlow, pickCSVFile, parseCSV } from '@/services/csvImportService';
 import { parseCSVText } from '@/utils/csvEngine';
 import { computeBaselineGoals } from '@/core/metricsEngine';
+import { parseSelectedMonthsSpec, formatSelectedMonthsLabel } from '@/core/dateUtils';
 import { inferTableSchema } from '@/core/typeInferenceEngine';
 import { getUIViewModeSync, setUIViewModeSync } from '@/storage/asyncStorageAdapter';
 import { useWebKeyboardShortcuts } from '@/hooks/useWebKeyboardShortcuts';
@@ -115,9 +116,13 @@ export default function TransactionsScreen() {
   const [pendingImportResult, setPendingImportResult] = useState<any | null>(null);
   const [showImportChoice, setShowImportChoice] = useState(false);
 
-  // ── Month summary (with prorated monthlyValue support) ──
+  // ── Month summary (supports 'all', 1 month, or N selected months/years) ──
   const monthSummary = useMemo(() => {
-    if (db.selectedMonth === 'all' || !db.metrics.byMonth[db.selectedMonth]) {
+    const activeSel = db.selectedMonths && db.selectedMonths.length > 0
+      ? db.selectedMonths
+      : parseSelectedMonthsSpec(db.selectedMonth);
+
+    if (activeSel.length === 0) {
       return {
         gross: db.metrics.grossTotal,
         expenses: db.metrics.totalExpenses,
@@ -125,29 +130,52 @@ export default function TransactionsScreen() {
         label: 'Total Geral',
       };
     }
-    const m = db.metrics.byMonth[db.selectedMonth];
+
+    if (activeSel.length > 1) {
+      return {
+        gross: db.metrics.grossTotal,
+        expenses: db.metrics.totalExpenses,
+        net: db.metrics.netBalance,
+        label: formatSelectedMonthsLabel(activeSel, db.availableMonths),
+      };
+    }
+
+    const singleYm = activeSel[0];
+    const m = db.metrics.byMonth[singleYm];
+    if (!m) {
+      return {
+        gross: db.metrics.grossTotal,
+        expenses: db.metrics.totalExpenses,
+        net: db.metrics.netBalance,
+        label: formatMonthLabel(singleYm),
+      };
+    }
     // Compute prorated monthly expenses when rows have monthlyValue + monthCount > 1
     const monthRows = (db.activeTable?.rows || []).filter(
-      (r) => r && typeof r.date === 'string' && r.date.startsWith(db.selectedMonth)
+      (r) => r && typeof r.date === 'string' && r.date.startsWith(singleYm) && !r.periodStart && !r.periodEnd
     );
     let proratedExpenses = 0;
+    let hasCustomMonthlyVal = false;
     for (const r of monthRows) {
       if (r.entryType === 'expense') {
-        const val =
-          r.monthlyValue && r.monthCount && r.monthCount > 1
-            ? Math.abs(r.monthlyValue)
-            : Math.abs(r.value || 0);
-        proratedExpenses += val;
+        if (r.monthlyValue && r.monthCount && r.monthCount > 1) {
+          hasCustomMonthlyVal = true;
+          proratedExpenses += Math.abs(r.monthlyValue);
+        } else {
+          proratedExpenses += Math.abs(r.value || 0);
+        }
       }
     }
-    const expensesToUse = monthRows.length > 0 ? Math.round(proratedExpenses * 100) / 100 : (m.expense ?? 0);
+    const expensesToUse = hasCustomMonthlyVal
+      ? Math.round(proratedExpenses * 100) / 100
+      : (m.expense ?? db.metrics.totalExpenses);
     return {
       gross: m.grossMonthly,
       expenses: expensesToUse,
       net: Math.round((m.grossMonthly - expensesToUse) * 100) / 100,
-      label: formatMonthLabel(db.selectedMonth),
+      label: formatMonthLabel(singleYm),
     };
-  }, [db.selectedMonth, db.metrics, db.activeTable?.rows]);
+  }, [db.selectedMonth, db.selectedMonths, db.availableMonths, db.metrics, db.activeTable?.rows]);
 
   // ── Running Balance Map (chronological cumulative balance) ──
   const runningBalanceMap = useMemo<Record<string, number>>(() => {
@@ -659,7 +687,10 @@ export default function TransactionsScreen() {
           <MonthPicker
             months={db.availableMonths}
             selected={db.selectedMonth}
+            selectedMonths={db.selectedMonths}
             onSelect={db.setSelectedMonth}
+            onToggleMonth={db.toggleSelectedMonth}
+            onToggleYear={db.toggleSelectedYear}
           />
         )}
 

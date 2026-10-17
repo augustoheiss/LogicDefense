@@ -16,6 +16,12 @@ import {
   computeActiveMonthsSpan,
   getEffectivePeriodSpanDays,
   buildMonthCompetenceWeekGroups,
+  parseSelectedMonthsSpec,
+  serializeSelectedMonthsSpec,
+  toggleMonthSelection,
+  toggleYearSelection,
+  formatSelectedMonthsLabel,
+  filterAndClipRowsByMonths,
 } from '../core/dateUtils';
 import { buildWhatsAppReport } from '../services/exportService';
 import {
@@ -325,4 +331,140 @@ describe('Mid-Year Onboarding & Cross-Channel Mathematical Parity (4 Precision L
       expect(res.content.includes('R$ 1.200,00')).toBe(true); // Total expenses
     }
   });
+
+  it('Multi-Month Filter (1x Select / 2x Deselect & Auto-Revert to Todos): idempotent toggle state machine', () => {
+    let sel: string[] = []; // [] === 'all' (Todos)
+    expect(serializeSelectedMonthsSpec(sel)).toBe('all');
+
+    // 1st click on 2026-06 -> selects 2026-06
+    sel = toggleMonthSelection(sel, '2026-06');
+    expect(sel).toEqual(['2026-06']);
+    expect(serializeSelectedMonthsSpec(sel)).toBe('2026-06');
+
+    // 1st click on 2026-08 -> adds 2026-08 (sorted descending)
+    sel = toggleMonthSelection(sel, '2026-08');
+    expect(sel).toEqual(['2026-08', '2026-06']);
+    expect(serializeSelectedMonthsSpec(sel)).toBe('2026-08,2026-06');
+
+    // 2nd click on 2026-06 -> deselects 2026-06, leaving only 2026-08
+    sel = toggleMonthSelection(sel, '2026-06');
+    expect(sel).toEqual(['2026-08']);
+    expect(serializeSelectedMonthsSpec(sel)).toBe('2026-08');
+
+    // 2nd click on the last remaining selected month (2026-08) -> reverts to [] ('all' / Todos)
+    sel = toggleMonthSelection(sel, '2026-08');
+    expect(sel).toEqual([]);
+    expect(serializeSelectedMonthsSpec(sel)).toBe('all');
+  });
+
+  it('Multi-Year Macro-Toggle (1 Year = 12m, 2 Years = 24m / 730 days) & Fine-Tuning Individual Months', () => {
+    const months2025 = Array.from({ length: 12 }, (_, i) => `2025-${String(i + 1).padStart(2, '0')}`);
+    const months2026 = Array.from({ length: 12 }, (_, i) => `2026-${String(i + 1).padStart(2, '0')}`);
+    const all36Months = [
+      ...Array.from({ length: 12 }, (_, i) => `2024-${String(i + 1).padStart(2, '0')}`),
+      ...months2025,
+      ...months2026,
+    ];
+
+    let sel: string[] = [];
+
+    // 1st click on Year 2026 -> selects all 12 months of 2026
+    sel = toggleYearSelection(sel, '2026', all36Months);
+    expect(sel.length).toBe(12);
+    expect(formatSelectedMonthsLabel(sel, all36Months)).toBe('Ano 2026 (12m)');
+
+    // 1st click on Year 2025 -> adds all 12 months of 2025 (total 24 months across 2 years!)
+    sel = toggleYearSelection(sel, '2025', all36Months);
+    expect(sel.length).toBe(24);
+    expect(formatSelectedMonthsLabel(sel, all36Months)).toBe('Anos 2025+2026 (24m)');
+    const span24 = getEffectivePeriodSpanDays(sel);
+    expect(span24.activeMonthsCount).toBe(24);
+    expect(span24.effectiveSpanDays).toBe(730); // 365 (2025) + 365 (2026) = 730 days
+
+    // Clicking a single month (2026-02) inside the 24-month selection deselects just that month -> 23 months
+    sel = toggleMonthSelection(sel, '2026-02');
+    expect(sel.length).toBe(23);
+
+    // Clicking Year 2026 again re-completes all 12 months of 2026 -> back to 24 months
+    sel = toggleYearSelection(sel, '2026', all36Months);
+    expect(sel.length).toBe(24);
+
+    // Clicking Year 2026 a second time when all 12 months of 2026 are active deselects 2026 -> leaves 12 months of 2025
+    sel = toggleYearSelection(sel, '2026', all36Months);
+    expect(sel.length).toBe(12);
+    expect(formatSelectedMonthsLabel(sel, all36Months)).toBe('Ano 2025 (12m)');
+  });
+
+  it('Multi-Month Competence Clipping: filterAndClipRowsByMonths clips period entries across gap months and recalculates exact metrics', () => {
+    const multiMonthRows: TableRow[] = [
+      {
+        id: 'rev_may',
+        date: '2026-05-10',
+        value: 3100,
+        entryType: 'revenue',
+        category: 'VENDAS',
+        description: 'Receita Maio',
+      },
+      {
+        id: 'rev_jun',
+        date: '2026-06-10',
+        value: 3000,
+        entryType: 'revenue',
+        category: 'VENDAS',
+        description: 'Receita Junho',
+      },
+      {
+        id: 'rev_jul',
+        date: '2026-07-10',
+        value: 6200,
+        entryType: 'revenue',
+        category: 'VENDAS',
+        description: 'Receita Julho',
+      },
+      {
+        // Multi-month expense spanning May 01 to July 31 (92 days total @ R$ 100/day = R$ 9.200)
+        id: 'exp_q2_q3',
+        date: '2026-05-01',
+        periodStart: '2026-05-01',
+        periodEnd: '2026-07-31',
+        value: 9200,
+        entryType: 'expense',
+        category: 'INFRAESTRUTURA',
+        description: 'Contrato Trimestral',
+      },
+    ];
+
+    // User selects ONLY May (31d) and July (31d), skipping June (30d)!
+    const selectedSpec = ['2026-07', '2026-05'];
+    const clippedRows = filterAndClipRowsByMonths(multiMonthRows, selectedSpec);
+
+    // June punctual row must be excluded; May + July punctual rows included;
+    // Period expense must be split into 2 contiguous segments (May: 3100, July: 3100), excluding June's 3000!
+    const mScoped = computeMetrics(clippedRows, BASE_GOALS, '2026-07-31');
+    expect(mScoped.grossTotal).toBe(9300); // 3100 (May) + 6200 (July)
+    expect(mScoped.totalExpenses).toBe(6200); // 3100 (May) + 3100 (July)
+    expect(mScoped.netBalance).toBe(3100);
+    expect(Object.keys(mScoped.byMonth).sort()).toEqual(['2026-05', '2026-07']);
+
+    // 62 active days (31 May + 31 July):
+    // Daily avg = 9300 / 62 = 150/day; Monthly avg = 9300 / 2 = 4650/month
+    expect(mScoped.globalDailyAvg).toBe(150);
+    expect(mScoped.globalWeeklyAvg).toBe(1050);
+    expect(mScoped.globalMonthlyAvg).toBe(4650);
+    expect(mScoped.survivalDaily).toBe(100);
+    expect(mScoped.survivalMonthly).toBe(3100);
+
+    // Multi-month WhatsApp Report should aggregate May + July cleanly
+    const waMulti = buildWhatsAppReport(
+      'Planilha Multi-Meses',
+      mScoped,
+      BASE_GOALS,
+      serializeSelectedMonthsSpec(selectedSpec),
+      clippedRows,
+    );
+    expect(waMulti.includes('Receita Maio')).toBe(true);
+    expect(waMulti.includes('Receita Julho')).toBe(true);
+    expect(waMulti.includes('Receita Junho')).toBe(false);
+  });
 });
+
