@@ -666,6 +666,11 @@ export default function SkeletonEditor() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    width: '100%',
+    maxWidth: '100%',
+    height: Platform.OS === 'web' ? ('100dvh' as any) : '100%',
+    maxHeight: Platform.OS === 'web' ? ('100dvh' as any) : '100%',
+    overflow: 'hidden',
     backgroundColor: '#12151C',
   },
   engineBar: {

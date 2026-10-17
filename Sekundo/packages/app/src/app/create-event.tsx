@@ -1,34 +1,73 @@
 /**
  * Page: create-event
  *
- * Visual builder card to configure name, frequency, and rules
- * for a new Local-First Event template container.
- * Supports Multi-Engine selection and Auto-Detection via CSV!
+ * Sekundo — AutoCAD-Style Event & Engine Station (`100dvh`, Zero Vertical Roll-Down).
+ *
+ * Features:
+ * - Compact CAD Button Grid for all 9 Universal Engines (clicking any button toggles it
+ *   and displays its description + per-Engine sample `.csv` download in the Inspector).
+ * - Direct Download & Import of the **CSV GERAL de todo o App (`sekundo_omni_geral.csv`)**
+ *   covering all 9 Engines + 📅 Programação & WhatsApp + 🖋️ Estúdio Documental YAML ⇄ PDF
+ *   + ☀️ Cockpit Hoje + 🛡️ Matriz de Privilégios.
+ * - Automated Fair-Rotation Assignment (`⚡ Auto-Preencher com Privilégios & Rotatividade`)
+ *   when creating a schedule/roster event (zero same-day collisions, FIFO rotation).
  */
 
 import React, { useState } from 'react';
-import { StyleSheet, Text, View, TextInput, Pressable, ScrollView, Platform } from 'react-native';
+import {
+  StyleSheet,
+  Text,
+  View,
+  TextInput,
+  Pressable,
+  Platform,
+  useWindowDimensions,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useLocalEvent } from '../hooks/useLocalEvent';
-import { engineRegistry, detectEnginesFromCSV, parseCSV, upsertRegistry, type Frequency, type EngineId } from '@sekundo/core';
 import * as storage from '../storage/localStorage';
+import {
+  engineRegistry,
+  detectEnginesFromCSV,
+  parseCSV,
+  upsertRegistry,
+  exportTemplateCSV,
+  getEngineTemplate,
+  generateOmniMasterSampleCsv,
+  importOmniCsvBundle,
+  buildProgramacaoReuniaoRegistry,
+  DEFAULT_PRIVILEGE_MATRIX_PARTICIPANTS,
+  autoAssignScheduleRegistry,
+  type Frequency,
+  type EngineId,
+} from '@sekundo/core';
 
 export default function CreateEvent() {
   const router = useRouter();
+  const { width } = useWindowDimensions();
+  const isDesktop = width >= 860;
   const { addEvent } = useLocalEvent();
 
   const [name, setName] = useState('');
   const [frequency, setFrequency] = useState<Frequency>('weekly');
-  const [selectedEngines, setSelectedEngines] = useState<EngineId[]>(['territory_logistics']);
+  const [selectedEngines, setSelectedEngines] = useState<EngineId[]>(['roster_assignments']);
+  const [inspectedEngineId, setInspectedEngineId] = useState<EngineId>('roster_assignments');
+  const [autoFillWithPrivileges, setAutoFillWithPrivileges] = useState<boolean>(true);
+  const [strictSameCategoryPairing, setStrictSameCategoryPairing] = useState<boolean>(true);
+
   const [autoDetectNotice, setAutoDetectNotice] = useState<string | null>(null);
   const [uploadedCsvText, setUploadedCsvText] = useState<string | null>(null);
   const [uploadedFileName, setUploadedFileName] = useState<string | null>(null);
   const [validationError, setValidationError] = useState<string | null>(null);
 
   const availableEngines = engineRegistry.list();
+  const inspectedEngine =
+    availableEngines.find((e) => e.id === inspectedEngineId) || availableEngines[0];
+  const inspectedTemplate = getEngineTemplate(inspectedEngineId);
 
-  const toggleEngine = (id: EngineId) => {
+  const handleEngineClick = (id: EngineId) => {
+    setInspectedEngineId(id);
     if (selectedEngines.includes(id)) {
       if (selectedEngines.length > 1) {
         setSelectedEngines(selectedEngines.filter((e) => e !== id));
@@ -38,468 +77,597 @@ export default function CreateEvent() {
     }
   };
 
-  const handleCreate = async () => {
-    const trimmed = name.trim();
-    let finalName = trimmed;
+  // Download specific Engine sample CSV
+  const handleDownloadEngineSampleCsv = (engineId: EngineId) => {
+    if (Platform.OS === 'web' && typeof document !== 'undefined') {
+      const tpl = getEngineTemplate(engineId);
+      const csv = exportTemplateCSV(engineId, 'canonical');
+      const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = tpl.suggestedFilename || `exemplo_${engineId}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+      setAutoDetectNotice(`📥 Exemplo CSV da Engine "${tpl.name}" baixado!`);
+    }
+  };
 
+  // Download Unified Master CSV ("CSV GERAL de todo o App")
+  const handleDownloadOmniMasterCsv = () => {
+    if (Platform.OS === 'web' && typeof document !== 'undefined') {
+      const csv = generateOmniMasterSampleCsv();
+      const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'sekundo_omni_geral.csv';
+      a.click();
+      URL.revokeObjectURL(url);
+      setAutoDetectNotice(
+        '🌐 CSV GERAL do App Sekundo baixado (inclui 9 Engines + Programação/WhatsApp + Estúdio YAML/PDF + Hoje + Matriz de Privilégios)!'
+      );
+    }
+  };
+
+  const handlePickCsvFile = () => {
+    if (Platform.OS === 'web' && typeof document !== 'undefined') {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = '.csv';
+      input.onchange = async (e: any) => {
+        const file = e.target?.files?.[0];
+        if (!file) return;
+        const text = await file.text();
+        setUploadedCsvText(text);
+        setUploadedFileName(file.name);
+
+        if (text.trim().startsWith('_record_kind,')) {
+          const bundle = importOmniCsvBundle(text);
+          if (!name.trim()) setName(`${bundle.unitName} — Pacote Omni CSV`);
+          setAutoDetectNotice(
+            `🌐 CSV GERAL "${file.name}" reconhecido (${bundle.participants.length} participantes, ${bundle.scheduleRegistry.length} itens de programação, ${bundle.territoryRegistry.length} territórios, ${bundle.events.length} eventos)!`
+          );
+          setValidationError(null);
+          return;
+        }
+
+        const report = detectEnginesFromCSV(text);
+        if (report.suggestedEngines.length > 0) {
+          setSelectedEngines(report.suggestedEngines);
+          setInspectedEngineId(report.suggestedEngines[0]);
+        }
+        if (!name.trim()) {
+          const cleanName = file.name.replace(/\.[^/.]+$/, '').replace(/[_-]/g, ' ');
+          setName(cleanName.charAt(0).toUpperCase() + cleanName.slice(1));
+        }
+        setAutoDetectNotice(`✅ CSV "${file.name}" carregado! ${report.summary}`);
+        setValidationError(null);
+      };
+      input.click();
+    }
+  };
+
+  const handleCreate = async () => {
+    let finalName = name.trim();
     if (!finalName) {
       if (uploadedFileName) {
         finalName = uploadedFileName.replace(/\.[^/.]+$/, '').replace(/[_-]/g, ' ');
-        finalName = finalName.charAt(0).toUpperCase() + finalName.slice(1);
       } else {
-        setValidationError('⚠️ Por favor, informe um nome para o evento no campo acima para continuar.');
-        return;
+        finalName = `Evento ${inspectedEngine?.name.split('&')[0]?.trim() || 'Sekundo'}`;
       }
     }
 
     setValidationError(null);
+
+    // 1. Check if uploaded CSV is an Omni-CSV Bundle
+    if (uploadedCsvText && uploadedCsvText.trim().startsWith('_record_kind,')) {
+      const bundle = importOmniCsvBundle(uploadedCsvText);
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        window.localStorage.setItem('sekundo:loaded_schedule_bundle_v1', uploadedCsvText);
+        window.localStorage.setItem(
+          'sekundo:privilege_directory_v1',
+          JSON.stringify(bundle.participants)
+        );
+      }
+      const state = await addEvent(finalName, frequency, ['01', '02', '03'], selectedEngines);
+      await storage.saveSkeleton(state.config.id, bundle.scheduleRegistry);
+      router.replace(`/schedule-hub?id=${state.config.id}` as any);
+      return;
+    }
+
     const state = await addEvent(finalName, frequency, ['01'], selectedEngines);
 
-    // If CSV was provided during creation, commit it immediately!
+    // 2. If single-engine CSV was uploaded, commit it
     if (uploadedCsvText) {
       try {
         const parsed = parseCSV(uploadedCsvText);
         const upsertRes = upsertRegistry([], parsed, { forceOverwriteState: true });
         await storage.saveSkeleton(state.config.id, upsertRes.updatedRegistry);
-
-        const hasCoords = parsed.some((r: any) => {
-          try {
-            const meta = r._meta_json ? JSON.parse(r._meta_json) : {};
-            return (meta.lat && meta.lng) || (r.lat && r.lng);
-          } catch {
-            return false;
-          }
-        });
-
-        if (hasCoords) {
-          router.replace(`/territory-map?id=${state.config.id}`);
-          return;
-        }
+        router.replace(`/skeleton-editor?id=${state.config.id}`);
+        return;
       } catch (err) {
-        console.warn('[Sekundo] Erro ao salvar CSV na criação:', err);
+        console.warn('[Sekundo] Erro ao salvar CSV:', err);
       }
+    }
+
+    // 3. If Auto-Fill with Privilege Matrix & Fair Rotation is enabled, generate auto-assigned schedule!
+    if (autoFillWithPrivileges) {
+      let directory = DEFAULT_PRIVILEGE_MATRIX_PARTICIPANTS;
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        const savedDir = window.localStorage.getItem('sekundo:privilege_directory_v1');
+        if (savedDir) {
+          try {
+            const parsed = JSON.parse(savedDir);
+            if (Array.isArray(parsed) && parsed.length > 0) directory = parsed;
+          } catch {
+            // use default
+          }
+        }
+      }
+      const baseSchedule = buildProgramacaoReuniaoRegistry(undefined, directory);
+      const { updatedRegistry, updatedParticipants } = autoAssignScheduleRegistry(
+        baseSchedule,
+        directory,
+        { strictSameCategoryPairing }
+      );
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        window.localStorage.setItem(
+          'sekundo:privilege_directory_v1',
+          JSON.stringify(updatedParticipants)
+        );
+      }
+      await storage.saveSkeleton(state.config.id, updatedRegistry);
+      router.replace(`/schedule-hub?id=${state.config.id}` as any);
+      return;
     }
 
     router.replace(`/skeleton-editor?id=${state.config.id}`);
   };
 
-  const handleCsvAutoDetect = (e: any) => {
-    const file = e.target?.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const text = event.target?.result as string;
-      setUploadedCsvText(text);
-      setUploadedFileName(file.name);
-      const report = detectEnginesFromCSV(text);
-      if (report.suggestedEngines.length > 0) {
-        setSelectedEngines(report.suggestedEngines);
-      }
-
-      // Auto-suggest event name from file name or first root row
-      if (!name.trim()) {
-        try {
-          const parsed = parseCSV(text);
-          const rootItem = parsed.find((r: any) => r._type === 'root' || r._type === 'header');
-          if (rootItem && rootItem.label) {
-            setName(rootItem.label);
-          } else {
-            const cleanFileName = file.name.replace(/\.[^/.]+$/, '').replace(/[_-]/g, ' ');
-            setName(cleanFileName.charAt(0).toUpperCase() + cleanFileName.slice(1));
-          }
-        } catch {
-          const cleanFileName = file.name.replace(/\.[^/.]+$/, '').replace(/[_-]/g, ' ');
-          setName(cleanFileName.charAt(0).toUpperCase() + cleanFileName.slice(1));
-        }
-      }
-      setAutoDetectNotice(`✅ Arquivo "${file.name}" carregado! ${report.summary}`);
-      setValidationError(null);
-    };
-    reader.readAsText(file);
-  };
-
-  const frequencies: { key: Frequency; label: string; desc: string }[] = [
-    { key: 'weekly', label: 'Semanal', desc: 'Ciclos que se repetem a cada 7 dias' },
-    { key: 'monthly', label: 'Mensal', desc: 'Ciclos mensais de acompanhamento e rollover' },
-    { key: 'annual', label: 'Anual', desc: 'Eventos ou campanhas de longa duração' },
-    { key: 'once', label: 'Único / Fixo', desc: 'Evento pontual em data determinada' },
+  const frequencies: { key: Frequency; label: string }[] = [
+    { key: 'weekly', label: '🔄 Semanal' },
+    { key: 'monthly', label: '📅 Mensal' },
+    { key: 'annual', label: '🗓️ Anual' },
+    { key: 'once', label: '📌 Único' },
   ];
 
   return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        <View style={styles.wrapper}>
-          {/* Header */}
-          <View style={styles.header}>
-            <Pressable onPress={() => router.back()} style={styles.backButton}>
-              <Text style={styles.backButtonText}>← Voltar ao Início</Text>
-            </Pressable>
-            <Text style={styles.title}>Novo Evento ou Projeto</Text>
-            <Text style={styles.subtitle}>
-              Escolha uma ou mais Leis Universais (Engines) e a cadência temporal do seu esqueleto.
+    <SafeAreaView style={styles.cadViewport}>
+      {/* Top AutoCAD Command Ribbon */}
+      <View style={styles.topRibbon}>
+        <View style={styles.brandRow}>
+          <Pressable onPress={() => router.push('/')} style={styles.cadBtn}>
+            <Text style={[styles.cadBtnText, { color: '#FFB800' }]}>← Painel</Text>
+          </Pressable>
+          <Text style={styles.ribbonTitle}>📐 ESTAÇÃO CAD — NOVO EVENTO, ENGINES & CSV GERAL</Text>
+        </View>
+
+        <View style={styles.topActions}>
+          <Pressable
+            onPress={handleDownloadOmniMasterCsv}
+            style={[styles.cadBtn, styles.cadBtnPurple]}
+          >
+            <Text style={styles.cadBtnText}>🌐 Baixar CSV GERAL do App</Text>
+          </Pressable>
+
+          <Pressable onPress={handlePickCsvFile} style={[styles.cadBtn, styles.cadBtnBlue]}>
+            <Text style={styles.cadBtnText}>📥 Importar .CSV (Geral ou Engine)</Text>
+          </Pressable>
+
+          <Pressable
+            onPress={() => router.push('/csv-import')}
+            style={styles.cadBtn}
+          >
+            <Text style={styles.cadBtnText}>📚 Central de Modelos CSV</Text>
+          </Pressable>
+        </View>
+      </View>
+
+      {/* Sub-Ribbon: Event Name Input + Frequency Pills + Auto-Fill Privilege Toggle + Create CTA */}
+      <View style={styles.configRibbon}>
+        <TextInput
+          style={styles.nameInput}
+          placeholder="Nome do Evento (ex: Programação Técnica Out/Nov)..."
+          placeholderTextColor="#64748B"
+          value={name}
+          onChangeText={setName}
+        />
+
+        <View style={styles.freqGroup}>
+          {frequencies.map((f) => {
+            const active = frequency === f.key;
+            return (
+              <Pressable
+                key={f.key}
+                onPress={() => setFrequency(f.key)}
+                style={[styles.freqPill, active && styles.freqPillActive]}
+              >
+                <Text style={[styles.freqPillText, active && { color: '#090D16' }]}>
+                  {f.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+
+        <Pressable
+          onPress={() => setAutoFillWithPrivileges((prev) => !prev)}
+          style={[
+            styles.cadBtn,
+            autoFillWithPrivileges ? styles.cadBtnEmerald : styles.cadBtnMuted,
+          ]}
+        >
+          <Text style={styles.cadBtnText}>
+            {autoFillWithPrivileges
+              ? '⚡ Auto-Designar c/ Privilégios: ATIVO'
+              : '⚡ Auto-Designar: INATIVO'}
+          </Text>
+        </Pressable>
+
+        {autoFillWithPrivileges && (
+          <Pressable
+            onPress={() => setStrictSameCategoryPairing((prev) => !prev)}
+            style={styles.cadBtn}
+          >
+            <Text style={styles.cadBtnText}>
+              {strictSameCategoryPairing ? '🔗 Duplas: Mesma Grade' : '🔗 Duplas: Misto'}
             </Text>
-          </View>
+          </Pressable>
+        )}
 
-          {/* Form */}
-          <View style={styles.form}>
-            <Text style={styles.label}>NOME DO EVENTO / PROJETO</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Ex: Logística de Territórios ou Programação Semanal"
-              placeholderTextColor="#4F5E74"
-              value={name}
-              onChangeText={setName}
-              autoFocus
-            />
+        <Pressable onPress={handleCreate} style={[styles.cadBtn, styles.cadBtnGold]}>
+          <Text style={[styles.cadBtnText, { color: '#090D16', fontWeight: '900' }]}>
+            🚀 CRIAR EVENTO ({selectedEngines.length} Engine{selectedEngines.length > 1 ? 's' : ''})
+          </Text>
+        </Pressable>
+      </View>
 
-            {/* Universal Engine Selector & Multi-Engine Choice */}
-            <View style={{ marginTop: 24, marginBottom: 8, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Text style={styles.label}>LEIS UNIVERSAIS ATIVAS (ENGINES)</Text>
-              <View style={styles.multiBadge}>
-                <Text style={styles.multiBadgeText}>Múltiplas Escolhas</Text>
-              </View>
-            </View>
-            <Text style={styles.helperText}>
-              Você pode selecionar mais de uma Engine para o mesmo evento (ex: Território + Escala).
-            </Text>
+      {(autoDetectNotice || validationError) && (
+        <View style={styles.noticeStrip}>
+          <Text style={styles.noticeText}>{validationError || autoDetectNotice}</Text>
+        </View>
+      )}
 
-            {/* Auto Detect via CSV Button (Web) */}
-            {Platform.OS === 'web' && (
-              <View style={styles.autoDetectBox}>
-                <label style={styles.autoDetectLabel as any}>
-                  ✨ Auto-Detectar Engines a partir de um CSV
-                  <input
-                    type="file"
-                    accept=".csv"
-                    style={{ display: 'none' }}
-                    onChange={handleCsvAutoDetect}
-                  />
-                </label>
-                {autoDetectNotice && (
-                  <Text style={styles.autoDetectNotice}>{autoDetectNotice}</Text>
-                )}
-              </View>
-            )}
-
-            {availableEngines.map((engine) => {
-              const isChecked = selectedEngines.includes(engine.id);
+      {/* Main Split Workspace (Zero Vertical Roll-Down!) */}
+      <View
+        style={[
+          styles.workspaceSplit,
+          { flexDirection: isDesktop ? 'row' : 'column' },
+        ]}
+      >
+        {/* Left: Compact Grid of Engine Buttons */}
+        <View style={[styles.matrixPanel, { flex: isDesktop ? 1.25 : undefined }]}>
+          <Text style={styles.panelHeaderLabel}>
+            🎛️ SELECIONE AS ENGINES ATIVAS (Clique no botão para ativar e ver o CSV de exemplo):
+          </Text>
+          <View style={styles.enginesGrid}>
+            {availableEngines.map((eng, idx) => {
+              const isChecked = selectedEngines.includes(eng.id);
+              const isInspected = inspectedEngineId === eng.id;
               return (
                 <Pressable
-                  key={engine.id}
-                  onPress={() => toggleEngine(engine.id)}
+                  key={eng.id}
+                  onPress={() => handleEngineClick(eng.id)}
                   style={[
-                    styles.cardOption,
-                    isChecked && styles.cardOptionActive,
+                    styles.engineButton,
+                    isChecked && styles.engineButtonActive,
+                    isInspected && { borderColor: '#38BDF8', borderWidth: 1.5 },
                   ]}
                 >
-                  <View style={styles.radioRow}>
-                    <View
-                      style={[
-                        styles.checkbox,
-                        isChecked && styles.checkboxActive,
-                      ]}
-                    >
-                      {isChecked && <Text style={styles.checkmarkText}>✓</Text>}
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                        <Text style={styles.optionLabel}>{engine.name}</Text>
-                        {isChecked && (
-                          <View style={styles.activePill}>
-                            <Text style={styles.activePillText}>Ativa</Text>
-                          </View>
-                        )}
-                      </View>
-                      <Text style={styles.optionDesc}>{engine.description}</Text>
-                    </View>
+                  <View style={styles.engineBtnHeader}>
+                    <Text style={styles.engineBtnCode}>
+                      [E0{idx + 1}] {isChecked ? '☑ ATIVA' : '☐'}
+                    </Text>
                   </View>
+                  <Text style={styles.engineBtnTitle} numberOfLines={1}>
+                    {eng.name}
+                  </Text>
                 </Pressable>
               );
             })}
-
-            <Text style={[styles.label, { marginTop: 24 }]}>CADÊNCIA TEMPORAL (FREQUÊNCIA)</Text>
-            {frequencies.map((freq) => (
-              <Pressable
-                key={freq.key}
-                onPress={() => setFrequency(freq.key)}
-                style={[
-                  styles.cardOption,
-                  frequency === freq.key && styles.cardOptionActive,
-                ]}
-              >
-                <View style={styles.radioRow}>
-                  <View
-                    style={[
-                      styles.radio,
-                      frequency === freq.key && styles.radioActive,
-                    ]}
-                  />
-                  <View>
-                    <Text style={styles.optionLabel}>{freq.label}</Text>
-                    <Text style={styles.optionDesc}>{freq.desc}</Text>
-                  </View>
-                </View>
-              </Pressable>
-            ))}
-
-            {/* Validation notice if any */}
-            {validationError && (
-              <View style={styles.errorBox}>
-                <Text style={styles.errorBoxText}>{validationError}</Text>
-              </View>
-            )}
-
-            {/* Submit */}
-            <Pressable
-              onPress={handleCreate}
-              style={({ pressed }) => [
-                styles.submitButton,
-                pressed && styles.submitPressed,
-              ]}
-            >
-              <Text style={styles.submitText}>
-                {uploadedCsvText
-                  ? `✨ Criar Evento & Ingerir CSV (${uploadedFileName || 'Planilha'})`
-                  : `Criar Evento (${selectedEngines.length} ${selectedEngines.length === 1 ? 'Engine Ativa' : 'Engines Ativas'})`}
-              </Text>
-            </Pressable>
-
-            {/* Direct CSV Import Link */}
-            <Pressable
-              onPress={() => router.push('/csv-import')}
-              style={styles.directImportLink}
-            >
-              <Text style={styles.directImportLinkText}>
-                📂 Ou importe diretamente pela Central de Modelos CSV →
-              </Text>
-            </Pressable>
           </View>
         </View>
-      </ScrollView>
+
+        {/* Right: On-Demand Engine & CSV Inspector */}
+        <View style={[styles.inspectorPanel, { flex: isDesktop ? 1 : undefined }]}>
+          <View style={styles.inspectorHeader}>
+            <Text style={styles.inspectorHeaderTitle}>
+              🔍 INSPETOR DA ENGINE: {inspectedEngine?.name}
+            </Text>
+          </View>
+
+          <Text style={styles.inspectorDesc}>{inspectedEngine?.description}</Text>
+
+          <View style={styles.inspectorCsvBox}>
+            <Text style={styles.inspectorCsvTitle}>
+              📄 Modelo CSV Específico desta Engine ({inspectedTemplate?.suggestedFilename}):
+            </Text>
+            <Text style={styles.inspectorCsvMeta}>
+              {inspectedTemplate?.keyConventions}
+            </Text>
+
+            <View style={styles.inspectorBtnRow}>
+              <Pressable
+                onPress={() => handleDownloadEngineSampleCsv(inspectedEngineId)}
+                style={[styles.cadBtn, styles.cadBtnBlue]}
+              >
+                <Text style={styles.cadBtnText}>
+                  📥 Baixar .CSV de Exemplo desta Engine
+                </Text>
+              </Pressable>
+
+              <Pressable
+                onPress={handleDownloadOmniMasterCsv}
+                style={[styles.cadBtn, styles.cadBtnPurple]}
+              >
+                <Text style={styles.cadBtnText}>
+                  🌐 Baixar .CSV GERAL de Todo o App
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+
+          <View style={styles.privilegeInfoBox}>
+            <Text style={styles.privilegeInfoTitle}>
+              🛡️ Auto-Preenchimento com Privilégios & Rotatividade Justa
+            </Text>
+            <Text style={styles.privilegeInfoDesc}>
+              Com o botão &quot;⚡ Auto-Designar c/ Privilégios&quot; ativo, o Sekundo preenche
+              automaticamente cada parte do novo evento respeitando as 26 colunas de privilégio,
+              sem repetir a mesma pessoa no mesmo dia e revezando por antiguidade (FIFO).
+            </Text>
+          </View>
+        </View>
+      </View>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  cadViewport: {
     flex: 1,
-    backgroundColor: '#12151C',
+    height: Platform.OS === 'web' ? ('100dvh' as any) : '100%',
+    maxHeight: Platform.OS === 'web' ? ('100dvh' as any) : '100%',
+    backgroundColor: '#060A12',
+    overflow: 'hidden',
   },
-  scrollContent: {
-    flexGrow: 1,
+  topRibbon: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    justifyContent: 'center',
-    padding: 24,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    backgroundColor: '#0F172A',
+    borderBottomWidth: 1,
+    borderBottomColor: '#1E293B',
+    gap: 8,
   },
-  wrapper: {
-    width: '100%',
-    maxWidth: 580,
-    backgroundColor: 'rgba(255, 255, 255, 0.02)',
-    borderRadius: 16,
-    padding: 24,
+  brandRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  ribbonTitle: {
+    color: '#F8FAFC',
+    fontSize: 12,
+    fontWeight: '900',
+    letterSpacing: 0.4,
+  },
+  topActions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  cadBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 6,
+    backgroundColor: '#1E293B',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderColor: '#334155',
   },
-  header: {
-    marginBottom: 24,
+  cadBtnBlue: {
+    backgroundColor: '#1D4ED8',
+    borderColor: '#60A5FA',
   },
-  backButton: {
-    marginBottom: 16,
-    alignSelf: 'flex-start',
+  cadBtnPurple: {
+    backgroundColor: '#6D28D9',
+    borderColor: '#A78BFA',
   },
-  backButtonText: {
-    color: '#8A94A6',
-    fontSize: 14,
-    fontWeight: '500',
+  cadBtnEmerald: {
+    backgroundColor: '#059669',
+    borderColor: '#34D399',
   },
-  title: {
-    color: '#FFFFFF',
-    fontSize: 24,
-    fontWeight: '700',
-    letterSpacing: -0.5,
+  cadBtnMuted: {
+    backgroundColor: '#1E293B',
+    borderColor: '#475569',
   },
-  subtitle: {
-    color: '#6F7E94',
-    fontSize: 13,
-    marginTop: 4,
-    lineHeight: 18,
+  cadBtnGold: {
+    backgroundColor: '#FFB800',
+    borderColor: '#FDE68A',
   },
-  form: {
-    width: '100%',
+  cadBtnText: {
+    color: '#F8FAFC',
+    fontSize: 11,
+    fontWeight: '800',
   },
-  label: {
-    color: '#8A94A6',
+  configRibbon: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: '#0B1120',
+    borderBottomWidth: 1,
+    borderBottomColor: '#1E293B',
+  },
+  nameInput: {
+    flex: 1,
+    minWidth: 210,
+    backgroundColor: '#060A12',
+    borderWidth: 1,
+    borderColor: '#334155',
+    borderRadius: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    color: '#F8FAFC',
+    fontSize: 12,
+  },
+  freqGroup: {
+    flexDirection: 'row',
+    gap: 4,
+  },
+  freqPill: {
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 5,
+    backgroundColor: '#1E293B',
+    borderWidth: 1,
+    borderColor: '#334155',
+  },
+  freqPillActive: {
+    backgroundColor: '#38BDF8',
+    borderColor: '#BAE6FD',
+  },
+  freqPillText: {
+    color: '#E2E8F0',
+    fontSize: 10.5,
+    fontWeight: '800',
+  },
+  noticeStrip: {
+    backgroundColor: '#064E3B',
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderBottomWidth: 1,
+    borderBottomColor: '#10B981',
+  },
+  noticeText: {
+    color: '#A7F3D0',
     fontSize: 11,
     fontWeight: '700',
-    letterSpacing: 1,
-    marginBottom: 6,
   },
-  multiBadge: {
-    backgroundColor: 'rgba(59, 130, 246, 0.15)',
-    borderRadius: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderWidth: 1,
-    borderColor: 'rgba(59, 130, 246, 0.3)',
+  workspaceSplit: {
+    flex: 1,
+    padding: 10,
+    gap: 10,
+    overflow: 'hidden',
   },
-  multiBadgeText: {
-    color: '#60A5FA',
-    fontSize: 10,
-    fontWeight: '600',
-  },
-  helperText: {
-    color: '#6F7E94',
-    fontSize: 12,
-    marginBottom: 10,
-  },
-  autoDetectBox: {
-    backgroundColor: 'rgba(59, 130, 246, 0.06)',
+  matrixPanel: {
+    backgroundColor: '#0F172A',
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: 'rgba(59, 130, 246, 0.2)',
-    padding: 12,
-    marginBottom: 14,
+    borderColor: '#1E293B',
+    padding: 10,
+    overflow: 'hidden',
   },
-  autoDetectLabel: {
-    color: '#93C5FD',
-    fontSize: 13,
-    fontWeight: '600',
-    cursor: 'pointer' as any,
+  panelHeaderLabel: {
+    color: '#94A3B8',
+    fontSize: 10.5,
+    fontWeight: '800',
+    marginBottom: 8,
   },
-  autoDetectNotice: {
-    color: '#10B981',
-    fontSize: 12,
-    marginTop: 6,
-    fontWeight: '500',
-  },
-  input: {
-    backgroundColor: 'rgba(255, 255, 255, 0.03)',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
-    color: '#FFFFFF',
-    padding: 14,
-    fontSize: 15,
-  },
-  cardOption: {
-    backgroundColor: 'rgba(255, 255, 255, 0.02)',
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
-    padding: 14,
-    marginBottom: 10,
-  },
-  cardOptionActive: {
-    borderColor: '#FFB800',
-    backgroundColor: 'rgba(255, 184, 0, 0.04)',
-  },
-  radioRow: {
+  enginesGrid: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    flexWrap: 'wrap',
+    gap: 7,
   },
-  checkbox: {
-    width: 20,
-    height: 20,
-    borderRadius: 5,
-    borderWidth: 2,
-    borderColor: '#4F5E74',
-    marginRight: 12,
-    marginTop: 2,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'transparent',
-  },
-  checkboxActive: {
-    borderColor: '#FFB800',
-    backgroundColor: '#FFB800',
-  },
-  checkmarkText: {
-    color: '#12151C',
-    fontSize: 13,
-    fontWeight: '900',
-    lineHeight: 16,
-  },
-  activePill: {
-    backgroundColor: 'rgba(255, 184, 0, 0.15)',
-    borderRadius: 4,
-    paddingHorizontal: 6,
-    paddingVertical: 1,
-  },
-  activePillText: {
-    color: '#FFB800',
-    fontSize: 10,
-    fontWeight: '700',
-  },
-  radio: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    borderWidth: 2,
-    borderColor: '#4F5E74',
-    marginRight: 12,
-    marginTop: 2,
-  },
-  radioActive: {
-    borderColor: '#FFB800',
-    backgroundColor: '#FFB800',
-  },
-  optionLabel: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  optionDesc: {
-    color: '#8A94A6',
-    fontSize: 12,
-    marginTop: 3,
-    lineHeight: 16,
-  },
-  submitButton: {
-    backgroundColor: '#FFB800',
-    borderRadius: 8,
-    padding: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 20,
-    marginBottom: 20,
-  },
-  submitDisabled: {
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-  },
-  submitPressed: {
-    opacity: 0.9,
-  },
-  submitText: {
-    color: '#12151C',
-    fontWeight: '700',
-    fontSize: 16,
-  },
-  errorBox: {
-    backgroundColor: 'rgba(239, 68, 68, 0.12)',
+  engineButton: {
+    width: '48.5%',
+    minWidth: 150,
+    backgroundColor: '#0B1120',
+    borderRadius: 6,
     borderWidth: 1,
-    borderColor: '#EF4444',
+    borderColor: '#1E293B',
+    padding: 8,
+  },
+  engineButtonActive: {
+    backgroundColor: '#172554',
+    borderColor: '#3B82F6',
+  },
+  engineBtnHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  engineBtnCode: {
+    color: '#38BDF8',
+    fontSize: 10,
+    fontWeight: '900',
+  },
+  engineBtnTitle: {
+    color: '#F8FAFC',
+    fontSize: 11.5,
+    fontWeight: '800',
+    marginTop: 2,
+  },
+  inspectorPanel: {
+    backgroundColor: '#0F172A',
     borderRadius: 8,
-    padding: 12,
-    marginTop: 16,
-    marginBottom: 4,
+    borderWidth: 1,
+    borderColor: '#1E293B',
+    padding: 10,
+    gap: 8,
+    overflow: 'hidden',
   },
-  errorBoxText: {
-    color: '#F87171',
-    fontSize: 13,
-    fontWeight: '600',
-    textAlign: 'center',
+  inspectorHeader: {
+    backgroundColor: '#1E293B',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 5,
+    borderLeftWidth: 3,
+    borderLeftColor: '#FFB800',
   },
-  directImportLink: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 10,
-    marginTop: -8,
-    marginBottom: 10,
+  inspectorHeaderTitle: {
+    color: '#F8FAFC',
+    fontSize: 11.5,
+    fontWeight: '900',
   },
-  directImportLinkText: {
-    color: '#FFB800',
-    fontSize: 13,
-    fontWeight: '600',
-    textDecorationLine: 'underline',
+  inspectorDesc: {
+    color: '#CBD5E1',
+    fontSize: 11.5,
+    lineHeight: 16,
+  },
+  inspectorCsvBox: {
+    backgroundColor: '#0B1120',
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#1E293B',
+    padding: 9,
+    gap: 6,
+  },
+  inspectorCsvTitle: {
+    color: '#38BDF8',
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  inspectorCsvMeta: {
+    color: '#94A3B8',
+    fontSize: 10.5,
+  },
+  inspectorBtnRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 4,
+  },
+  privilegeInfoBox: {
+    backgroundColor: '#064E3B',
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#10B981',
+    padding: 9,
+    gap: 4,
+  },
+  privilegeInfoTitle: {
+    color: '#A7F3D0',
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  privilegeInfoDesc: {
+    color: '#D1FAE5',
+    fontSize: 10.5,
+    lineHeight: 15,
   },
 });

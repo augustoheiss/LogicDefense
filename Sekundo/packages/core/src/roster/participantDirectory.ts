@@ -12,6 +12,21 @@
 import type { FlatSkeletonEntry } from '../skeleton/types';
 import { stringSimilarity } from '../pdf/templateMatcher';
 
+export type ParticipantCategory = 'perfil_a' | 'perfil_b';
+
+export type ParticipantRoleTier =
+  | 'coordenador_senior'
+  | 'assistente_tecnico'
+  | 'operador_base';
+
+export type ParticipantStatusFlag =
+  | 'integral_regular'
+  | 'integral_continuo'
+  | 'capacitador'
+  | 'em_qualificacao'
+  | 'externo_convidado'
+  | 'recem_designado';
+
 export interface ParticipantProfile {
   id: string;
   name: string;
@@ -19,6 +34,15 @@ export interface ParticipantProfile {
   capabilityTags: string[];   // Generic capability/qualification tags
   phone?: string;
   email?: string;
+  // Clean-Room Privilege Matrix & Fair-Rotation extensions
+  profileCategory?: ParticipantCategory;
+  roleTier?: ParticipantRoleTier;
+  statusFlags?: ParticipantStatusFlag[];
+  capabilities?: Record<string, boolean>;
+  lastAssignedIsoDate?: string;
+  assignmentCount?: number;
+  lastPartnerId?: string;
+  active?: boolean;
 }
 
 /**

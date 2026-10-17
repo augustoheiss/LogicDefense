@@ -8,6 +8,10 @@ import {
   PROGRAMACAO_PARTICIPANT_DIRECTORY,
   buildProgramacaoReuniaoRegistry,
 } from '../schedule/programacaoReuniaoSeed';
+import {
+  DEFAULT_PRIVILEGE_MATRIX_PARTICIPANTS,
+  CAPABILITY_COLUMNS,
+} from '../roster/privilegeRotationEngine';
 
 function collectSourceFiles(dir: string, out: string[] = []): string[] {
   if (!fs.existsSync(dir)) return out;
@@ -51,6 +55,15 @@ describe('Clean-Room Hygiene Gate & Sanitizer Paradox Shield (Bloco 1)', () => {
       expect(p.name).toMatch(/^Participante \d{2}$/);
       expect(p.groupTag).toMatch(/^Grupo \d+$/);
     }
+
+    expect(DEFAULT_PRIVILEGE_MATRIX_PARTICIPANTS.length).toBe(24);
+    for (const p of DEFAULT_PRIVILEGE_MATRIX_PARTICIPANTS) {
+      expect(p.name).toMatch(/^Participante \d{2}$/);
+      expect(p.groupTag).toMatch(/^Grupo [123]$/);
+      expect(['perfil_a', 'perfil_b']).toContain(p.profileCategory);
+      expect(['coordenador_senior', 'assistente_tecnico', 'operador_base']).toContain(p.roleTier);
+    }
+    expect(CAPABILITY_COLUMNS.length).toBe(26);
 
     const scheduleEntries = buildProgramacaoReuniaoRegistry();
     expect(scheduleEntries.length).toBeGreaterThan(20);

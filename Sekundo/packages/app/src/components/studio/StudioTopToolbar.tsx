@@ -216,6 +216,13 @@ export function StudioTopToolbar({
             <Text style={styles.exportSecondaryText}>📜 .sdoc</Text>
           </TouchableOpacity>
           <TouchableOpacity
+            testID="export-csv-btn"
+            style={styles.exportSecondaryBtn}
+            onPress={() => onExport('csv')}
+          >
+            <Text style={styles.exportSecondaryText}>📊 .csv</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
             testID="export-yaml-btn"
             style={styles.exportSecondaryBtn}
             onPress={() => onExport('yaml')}

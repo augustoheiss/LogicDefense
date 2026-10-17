@@ -1,24 +1,20 @@
 /**
  * Page: schedule-hub
  *
- * Agnostic Schedule & Commitment Agonist Console ("Agonista de Boas Motivações").
+ * Sekundo — AutoCAD-Style Schedule, Privilege Matrix, WhatsApp & Territory Console.
  *
- * Features:
- * - Reads & persists multi-week schedules, participant operational groups, and
- *   multi-cycle territory records using 100% domain-agnostic Sekundo data structures.
- * - Zero hardcoded sensitive/personal data in source control: loads local `.json` / `.txt`
- *   bundles from the user's device folder and persists them in local device storage.
- * - Multi-Mode WhatsApp Export Studio (Weekly Board, Group 1/2/3 Digest, Individual Card,
- *   Live Pocket Timeline, and Territory Assignment Card).
- * - Street-Ready UX:
- *   - ☀️ Modo Sol (WCAG AAA high-contrast daylight theme)
- *   - 🎯 "Meu Compromisso" 1-tap personal lens across all weeks & territories
- *   - 👥 Instant Group Filter (Grupo 1, Grupo 2, Grupo 3)
- *   - ✨ 3-State Readiness Thermometer (Recebido -> Preparando -> Pronto!)
- *   - 🤝 "Combinar com Meu Par" 1-tap WhatsApp dyad sync
- *   - ⏱️ Pocket Rehearsal Timer with 30s amber warning
- *   - 📅 RFC 5545 .ics Calendar Alert download (T-48h & T-2h)
- *   - 🖨️ 4-Column Multi-Cycle Territory PDF generator (2027 / 2026 / All)
+ * Implements:
+ * - Zero Vertical Roll-Down on Screen (`100dvh`, `overflow: hidden`):
+ *   All designations of the week (and all 16 territories) are displayed as compact
+ *   AutoCAD technical buttons on screen; clicking any button opens its full details
+ *   and actions in the Technical Inspector Panel.
+ * - Full Vertical Sheet Exclusively on PDF Print (`🖨️ Folha PDF Completa` & `🖨️ PDF Territórios`).
+ * - Bidirectional CSV Import & Export (`.csv`, `.json`, `.txt`):
+ *   Import/export specific Schedule Hub CSVs or the Unified Master CSV (`CSV Geral`)
+ *   so edits and auto-assignments made in the app can be downloaded immediately as
+ *   an updated `.csv` backup without manual spreadsheet editing.
+ * - Clean-Room 26-Column Privilege Matrix & Fair-Rotation Auto-Assignment Engine
+ *   (`🛡️ Privilégios (26)` + `⚡ Auto-Designar`).
  */
 
 import React, { useState, useMemo, useEffect } from 'react';
@@ -33,15 +29,18 @@ import {
   Platform,
   ActivityIndicator,
   Linking,
+  useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSkeleton } from '../hooks/useSkeleton';
 import { useLocalEvent } from '../hooks/useLocalEvent';
 import * as storage from '../storage/localStorage';
+import { PrivilegeMatrixModal } from '../components/PrivilegeMatrixModal';
 import {
   PROGRAMACAO_UNIT_NAME,
-  PROGRAMACAO_PARTICIPANT_DIRECTORY,
+  DEFAULT_PRIVILEGE_MATRIX_PARTICIPANTS,
+  CAPABILITY_COLUMNS,
   buildProgramacaoReuniaoRegistry,
   buildTerritoriosS13HistoricalRegistry,
   parseSekundoScheduleBundle,
@@ -59,7 +58,15 @@ import {
   buildWhatsAppUrl,
   generateCommitmentICS,
   generateTerritoryS13AndCardsPDF,
+  compileSdocToPdf,
   sanitizeLegacySensitiveText,
+  exportScheduleHubToCsv,
+  importScheduleHubFromCsv,
+  exportOmniCsvBundle,
+  importOmniCsvBundle,
+  autoAssignScheduleRegistry,
+  inferSlotRequiredCapability,
+  ensureParticipantPrivilegeMatrix,
   type FlatSkeletonEntry,
   type ParticipantProfile,
   type StructuredProgramSession,
@@ -70,9 +77,76 @@ import {
 const MY_PARTICIPANT_STORAGE_KEY = 'sekundo:my_participant_name';
 const SUNLIGHT_MODE_STORAGE_KEY = 'sekundo:sunlight_mode';
 const LOCAL_BUNDLE_STORAGE_KEY = 'sekundo:loaded_schedule_bundle_v1';
+const PRIVILEGE_DIRECTORY_STORAGE_KEY = 'sekundo:privilege_directory_v1';
+
+/**
+ * Generates an A4 `.sdoc.yaml` specification for the full vertical event sheet
+ * (where roll-down of the complete event happens on the printed PDF page).
+ */
+function buildFullEventSheetSdocYaml(
+  session: StructuredProgramSession,
+  unitName: string
+): string {
+  const lines: string[] = [
+    'sdoc: 1',
+    `name: "Folha Completa do Evento — ${session.label.replace(/"/g, '')}"`,
+    'page:',
+    '  format: a4',
+    '  orientation: portrait',
+    '  unit: mm',
+    'fonts:',
+    '  body:',
+    '    family: Helvetica',
+    'layers:',
+    '  - id: folha_evento',
+    '    name: Folha Completa de Designacoes',
+    '    items:',
+    '      - { id: hdr_bg, type: rect, x: 10, y: 10, w: 190, h: 18, fill: "#0F172A", stroke: "#0F172A", stroke_width: 0.3 }',
+    `      - { id: hdr_title, type: text, x: 14, y: 14, w: 180, text: "${unitName.replace(/"/g, '')} — FOLHA COMPLETA DO EVENTO", size: 11, weight: bold, color: "#F8FAFC" }`,
+    `      - { id: hdr_sub, type: text, x: 14, y: 21, w: 180, text: "${session.label.replace(/"/g, '')} | Presidente: ${session.chairPerson || '—'} | Abertura: ${session.openingPrayer || '—'}", size: 8.5, color: "#38BDF8" }`,
+  ];
+
+  let y = 33;
+  let itemCounter = 1;
+
+  for (const sec of session.sections) {
+    const bandColor = sec.accentColor || '#1E293B';
+    lines.push(
+      `      - { id: sec_bg_${itemCounter}, type: rect, x: 10, y: ${y}, w: 190, h: 7, fill: "${bandColor}", stroke: "${bandColor}", stroke_width: 0.2 }`,
+      `      - { id: sec_txt_${itemCounter}, type: text, x: 13, y: ${y + 1.8}, w: 184, text: "${sec.label.replace(/"/g, '')}", size: 8.5, weight: bold, color: "#FFFFFF" }`
+    );
+    y += 9;
+    itemCounter++;
+
+    for (const slot of sec.slots) {
+      const meta = (slot.meta || {}) as Record<string, any>;
+      const primary = meta.assignedTo || slot.value || 'A designar';
+      const assistant = meta.assistantTo ? ` / Par: ${meta.assistantTo}` : '';
+      const dur = meta.durationMinutes || 5;
+      const grp = meta.groupTag ? ` [${meta.groupTag}]` : '';
+
+      lines.push(
+        `      - { id: slot_bg_${itemCounter}, type: rect, x: 10, y: ${y}, w: 190, h: 11, fill: "#F8FAFC", stroke: "#CBD5E1", stroke_width: 0.25 }`,
+        `      - { id: slot_lbl_${itemCounter}, type: text, x: 13, y: ${y + 2}, w: 115, text: "${slot.label.replace(/"/g, '')} (${dur} min)", size: 8.5, weight: bold, color: "#0F172A" }`,
+        `      - { id: slot_who_${itemCounter}, type: text, x: 13, y: ${y + 6.3}, w: 180, text: "Designado: ${primary.replace(/"/g, '')}${assistant.replace(/"/g, '')}${grp}", size: 8, color: "#334155" }`
+      );
+      y += 12.5;
+      itemCounter++;
+    }
+    y += 2;
+  }
+
+  lines.push(
+    `      - { id: ftr_txt, type: text, x: 10, y: ${Math.min(282, y + 4)}, w: 190, text: "Encerramento: ${session.closingPrayer || '—'} • Gerado via Sekundo CAD Engine (Folha A4 Completa)", size: 8, color: "#475569" }`
+  );
+
+  return lines.join('\n');
+}
 
 export default function ScheduleHubConsole() {
   const router = useRouter();
+  const { width } = useWindowDimensions();
+  const isDesktop = width >= 900;
   const { id } = useLocalSearchParams<{ id?: string }>();
   const eventId = id || '';
 
@@ -80,17 +154,16 @@ export default function ScheduleHubConsole() {
   const { events, addEvent } = useLocalEvent();
 
   const [activeUnitName, setActiveUnitName] = useState<string>(PROGRAMACAO_UNIT_NAME);
-  const [activeDirectory, setActiveDirectory] = useState<ParticipantProfile[]>(
-    PROGRAMACAO_PARTICIPANT_DIRECTORY
+  const [activeDirectory, setActiveDirectory] = useState<ParticipantProfile[]>(() =>
+    DEFAULT_PRIVILEGE_MATRIX_PARTICIPANTS.map((p, idx) => ensureParticipantPrivilegeMatrix(p, idx))
   );
   const [localScheduleRegistry, setLocalScheduleRegistry] = useState<FlatSkeletonEntry[]>(() =>
-    buildProgramacaoReuniaoRegistry()
+    buildProgramacaoReuniaoRegistry(undefined, DEFAULT_PRIVILEGE_MATRIX_PARTICIPANTS)
   );
   const [territoryRegistry, setTerritoryRegistry] = useState<FlatSkeletonEntry[]>(() =>
     buildTerritoriosS13HistoricalRegistry()
   );
 
-  // Use event's flatRegistry if it contains schedule sessions; otherwise use local schedule state
   const activeScheduleRegistry = useMemo(() => {
     const extracted = extractStructuredSessions(flatRegistry);
     if (extracted.length > 0) return flatRegistry;
@@ -106,15 +179,22 @@ export default function ScheduleHubConsole() {
   const currentSession: StructuredProgramSession | undefined =
     sessions[selectedSessionIdx] || sessions[0];
 
-  // Street-ready UX filters & preferences
+  // AutoCAD Selected Slot / Selected Territory in the Fixed Viewport Inspector
+  const [selectedSlotKey, setSelectedSlotKey] = useState<string>('');
+  const [selectedTerritoryIdx, setSelectedTerritoryIdx] = useState<number>(0);
+  const [showReassignList, setShowReassignList] = useState<'primary' | 'assistant' | null>(null);
+
+  // UX Filters & Modals
   const [sunlightMode, setSunlightMode] = useState(false);
   const [selectedGroup, setSelectedGroup] = useState<string>('ALL');
   const [myParticipantName, setMyParticipantName] = useState<string>('');
   const [showParticipantPicker, setShowParticipantPicker] = useState(false);
   const [participantSearch, setParticipantSearch] = useState('');
   const [activeTab, setActiveTab] = useState<'schedule' | 'territories'>('schedule');
+  const [showPrivilegeMatrixModal, setShowPrivilegeMatrixModal] = useState(false);
+  const [lastAutoAssignSummaryText, setLastAutoAssignSummaryText] = useState<string | null>(null);
 
-  // Rehearsal Pocket Timer State
+  // Rehearsal Timer State
   const [rehearsalSlot, setRehearsalSlot] = useState<FlatSkeletonEntry | null>(null);
   const [rehearsalRemainingSec, setRehearsalRemainingSec] = useState<number>(0);
   const [rehearsalRunning, setRehearsalRunning] = useState<boolean>(false);
@@ -129,11 +209,11 @@ export default function ScheduleHubConsole() {
   const [waTargetTerritoryIdx, setWaTargetTerritoryIdx] = useState<number>(0);
   const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
 
-  // Custom Text Import Modal State
+  // Custom Text/CSV Paste Modal
   const [showImportModal, setShowImportModal] = useState(false);
   const [customScheduleText, setCustomScheduleText] = useState('');
 
-  // Multi-Cycle PDF Year State
+  // PDF Generation State
   const [s13ServiceYear, setS13ServiceYear] = useState<'all' | '2027' | '2026'>('all');
   const [generatingPdf, setGeneratingPdf] = useState(false);
   const [statusBanner, setStatusBanner] = useState<string | null>(null);
@@ -143,84 +223,146 @@ export default function ScheduleHubConsole() {
     [activeDirectory]
   );
 
-  // Load persisted user preferences & locally imported schedule bundle from localStorage
+  // Flatten all slots in currentSession for the AutoCAD Button Matrix
+  const currentSessionSlotsFlat = useMemo(() => {
+    if (!currentSession) return [];
+    const list: Array<{
+      slot: FlatSkeletonEntry;
+      sectionLabel: string;
+      sectionColor: string;
+      sectionIdx: number;
+      slotIdxInSection: number;
+      buttonNumber: string;
+    }> = [];
+    let globalCounter = 1;
+    currentSession.sections.forEach((sec, sIdx) => {
+      sec.slots.forEach((sl, slIdx) => {
+        list.push({
+          slot: sl,
+          sectionLabel: sec.label,
+          sectionColor: sec.accentColor || '#3D5B65',
+          sectionIdx: sIdx,
+          slotIdxInSection: slIdx,
+          buttonNumber: String(globalCounter).padStart(2, '0'),
+        });
+        globalCounter++;
+      });
+    });
+    return list;
+  }, [currentSession]);
+
+  // Keep selectedSlotKey pointing to a valid slot in the current session
+  const activeInspectedSlotInfo = useMemo(() => {
+    if (currentSessionSlotsFlat.length === 0) return undefined;
+    const found = currentSessionSlotsFlat.find((item) => item.slot.key === selectedSlotKey);
+    return found || currentSessionSlotsFlat[0];
+  }, [currentSessionSlotsFlat, selectedSlotKey]);
+
+  // Restore persisted state from localStorage
   useEffect(() => {
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
-      const MIGRATION_KEY = 'sekundo_privacy_migration_v3';
-      if (window.localStorage.getItem(MIGRATION_KEY) !== '1') {
-        window.localStorage.removeItem(MY_PARTICIPANT_STORAGE_KEY);
-        window.localStorage.removeItem(LOCAL_BUNDLE_STORAGE_KEY);
-        window.localStorage.removeItem('sekundo_app_manifest_v1');
-        for (let i = window.localStorage.length - 1; i >= 0; i--) {
-          const k = window.localStorage.key(i);
-          if (
-            k &&
-            (k.startsWith('sekundo_sdoc_tpl_') ||
-              k.startsWith('sekundo_form_yaml_') ||
-              k.startsWith('sekundo_skeleton_') ||
-              k.startsWith('sekundo_event_'))
-          ) {
-            window.localStorage.removeItem(k);
-          }
-        }
-        window.localStorage.setItem(MIGRATION_KEY, '1');
-      }
-
       const savedName = window.localStorage.getItem(MY_PARTICIPANT_STORAGE_KEY);
       if (savedName) setMyParticipantName(sanitizeLegacySensitiveText(savedName).text);
       const savedSun = window.localStorage.getItem(SUNLIGHT_MODE_STORAGE_KEY);
       if (savedSun === '1') setSunlightMode(true);
 
-      const savedBundleJson = window.localStorage.getItem(LOCAL_BUNDLE_STORAGE_KEY);
-      if (savedBundleJson) {
+      const savedPrivDir = window.localStorage.getItem(PRIVILEGE_DIRECTORY_STORAGE_KEY);
+      if (savedPrivDir) {
         try {
-          const loaded = parseSekundoScheduleBundle(sanitizeLegacySensitiveText(savedBundleJson).text);
-          setActiveUnitName(loaded.unitName);
-          setActiveDirectory(loaded.participants);
-          setLocalScheduleRegistry(loaded.scheduleRegistry);
-          setTerritoryRegistry(loaded.territoryRegistry);
+          const parsedDir = JSON.parse(savedPrivDir) as ParticipantProfile[];
+          if (Array.isArray(parsedDir) && parsedDir.length > 0) {
+            setActiveDirectory(
+              parsedDir.map((p, idx) => ensureParticipantPrivilegeMatrix(p, idx))
+            );
+          }
+        } catch {
+          // ignore
+        }
+      }
+
+      const savedBundle = window.localStorage.getItem(LOCAL_BUNDLE_STORAGE_KEY);
+      if (savedBundle) {
+        try {
+          const trimmed = savedBundle.trim();
+          if (trimmed.startsWith('_record_kind,') || trimmed.startsWith('_key,')) {
+            const csvLoaded = importScheduleHubFromCsv(trimmed);
+            setActiveUnitName(csvLoaded.unitName);
+            setActiveDirectory(csvLoaded.participants);
+            setLocalScheduleRegistry(csvLoaded.scheduleRegistry);
+            setTerritoryRegistry(csvLoaded.territoryRegistry);
+          } else {
+            const loaded = parseSekundoScheduleBundle(
+              sanitizeLegacySensitiveText(savedBundle).text
+            );
+            setActiveUnitName(loaded.unitName);
+            setActiveDirectory(
+              loaded.participants.map((p, idx) => ensureParticipantPrivilegeMatrix(p, idx))
+            );
+            setLocalScheduleRegistry(loaded.scheduleRegistry);
+            setTerritoryRegistry(loaded.territoryRegistry);
+          }
         } catch (err) {
-          console.warn('[Sekundo] Failed to restore local schedule bundle:', err);
+          console.warn('[Sekundo] Failed to restore schedule bundle:', err);
         }
       }
     }
   }, []);
 
-  const handleSelectMyParticipant = (name: string) => {
-    setMyParticipantName(name);
+  const handleUpdateParticipants = (updated: ParticipantProfile[]) => {
+    setActiveDirectory(updated);
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
-      if (name) {
-        window.localStorage.setItem(MY_PARTICIPANT_STORAGE_KEY, name);
-      } else {
-        window.localStorage.removeItem(MY_PARTICIPANT_STORAGE_KEY);
+      window.localStorage.setItem(PRIVILEGE_DIRECTORY_STORAGE_KEY, JSON.stringify(updated));
+    }
+  };
+
+  // Auto-Assign Designations using the 26-Column Privilege Matrix & FIFO Rotation
+  const handleRunAutoAssign = async (
+    scope: 'current_week' | 'all_weeks',
+    strictSameCategoryPairing: boolean = true
+  ) => {
+    const targetKeys =
+      scope === 'current_week' && currentSession ? [currentSession.key] : undefined;
+    const { updatedRegistry, updatedParticipants, summary } = autoAssignScheduleRegistry(
+      activeScheduleRegistry,
+      activeDirectory,
+      {
+        strictSameCategoryPairing,
+        preferredGroupTag: selectedGroup,
+        targetSessionKeys: targetKeys,
       }
+    );
+
+    setLocalScheduleRegistry(updatedRegistry);
+    handleUpdateParticipants(updatedParticipants);
+    if (eventId && flatRegistry.length > 0) {
+      await saveSkeleton(updatedRegistry);
     }
-    setShowParticipantPicker(false);
+
+    const msg = `⚡ Auto-Designação concluída (${
+      scope === 'current_week' ? 'Semana Atual' : `${summary.sessionsAssigned} Semanas`
+    }): ${summary.slotsAssigned} funções alocadas • ${summary.sameDayCollisions} colisões no mesmo dia • ${
+      summary.privilegeViolations
+    } violações de privilégio!`;
+    setLastAutoAssignSummaryText(msg);
+    setStatusBanner(msg);
   };
 
-  const toggleSunlightMode = () => {
-    const next = !sunlightMode;
-    setSunlightMode(next);
-    if (Platform.OS === 'web' && typeof window !== 'undefined') {
-      window.localStorage.setItem(SUNLIGHT_MODE_STORAGE_KEY, next ? '1' : '0');
-    }
-  };
-
-  // Load a local .json or .txt file from the user's folder (e.g. sekundo-programacao-2026-2027.json)
+  // Pick a local .csv, .json, or .txt file!
   const handlePickLocalScheduleFile = () => {
     if (Platform.OS === 'web' && typeof document !== 'undefined') {
       const input = document.createElement('input');
       input.type = 'file';
-      input.accept = '.json,.txt';
+      input.accept = '.csv,.json,.txt';
       input.onchange = async (e: any) => {
         const file = e.target.files?.[0];
         if (!file) return;
         try {
           const text = await file.text();
-          if (file.name.toLowerCase().endsWith('.json')) {
-            const loaded = parseSekundoScheduleBundle(text);
+          const lower = file.name.toLowerCase();
+          if (lower.endsWith('.csv') || text.trim().startsWith('_record_kind,')) {
+            const loaded = importScheduleHubFromCsv(text);
             setActiveUnitName(loaded.unitName);
-            setActiveDirectory(loaded.participants);
+            handleUpdateParticipants(loaded.participants);
             setLocalScheduleRegistry(loaded.scheduleRegistry);
             setTerritoryRegistry(loaded.territoryRegistry);
             if (typeof window !== 'undefined') {
@@ -231,8 +373,26 @@ export default function ScheduleHubConsole() {
             }
             setSelectedSessionIdx(0);
             setStatusBanner(
-              `✅ Arquivo "${file.name}" carregado e salvo localmente (${loaded.participants.length} participantes, ${extractStructuredSessions(loaded.scheduleRegistry).length} semanas, ${loaded.territoryRegistry.length} territórios)!`
+              `✅ CSV "${file.name}" importado (${loaded.participants.length} usuários c/ privilégios, ${
+                extractStructuredSessions(loaded.scheduleRegistry).length
+              } semanas, ${loaded.territoryRegistry.length} territórios)!`
             );
+          } else if (lower.endsWith('.json')) {
+            const loaded = parseSekundoScheduleBundle(text);
+            setActiveUnitName(loaded.unitName);
+            handleUpdateParticipants(
+              loaded.participants.map((p, idx) => ensureParticipantPrivilegeMatrix(p, idx))
+            );
+            setLocalScheduleRegistry(loaded.scheduleRegistry);
+            setTerritoryRegistry(loaded.territoryRegistry);
+            if (typeof window !== 'undefined') {
+              window.localStorage.setItem(LOCAL_BUNDLE_STORAGE_KEY, text);
+            }
+            if (eventId) {
+              await saveSkeleton(loaded.scheduleRegistry);
+            }
+            setSelectedSessionIdx(0);
+            setStatusBanner(`✅ JSON "${file.name}" importado com sucesso!`);
           } else {
             const parsed = parseProgramScheduleText(text, {
               unitName: activeUnitName,
@@ -243,17 +403,104 @@ export default function ScheduleHubConsole() {
               await saveSkeleton(parsed);
             }
             setSelectedSessionIdx(0);
-            setStatusBanner(`✅ Programação de texto "${file.name}" carregada (${parsed.length} nós)!`);
+            setStatusBanner(`✅ Texto "${file.name}" importado (${parsed.length} nós)!`);
           }
         } catch (err: any) {
-          setStatusBanner(`❌ Erro ao ler arquivo: ${err.message}`);
+          setStatusBanner(`❌ Erro ao importar arquivo: ${err.message}`);
         }
       };
       input.click();
     }
   };
 
-  // Rehearsal timer countdown effect
+  // Export updated Schedule Hub CSV (or Full Omni-CSV Geral)
+  const handleExportCsvBackup = (mode: 'hub_csv' | 'omni_csv') => {
+    const csvContent =
+      mode === 'hub_csv'
+        ? exportScheduleHubToCsv({
+            unitName: activeUnitName,
+            participants: activeDirectory,
+            scheduleRegistry: activeScheduleRegistry,
+            territoryRegistry,
+          })
+        : exportOmniCsvBundle({
+            unitName: activeUnitName,
+            participants: activeDirectory,
+            scheduleRegistry: activeScheduleRegistry,
+            territoryRegistry,
+          });
+
+    const filename =
+      mode === 'hub_csv'
+        ? `sekundo_programacao_whatsapp_${new Date().toISOString().slice(0, 10)}.csv`
+        : `sekundo_omni_geral_${new Date().toISOString().slice(0, 10)}.csv`;
+
+    if (Platform.OS === 'web' && typeof document !== 'undefined') {
+      const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+    setStatusBanner(
+      `📤 Arquivo "${filename}" exportado! Você pode re-importar este mesmo CSV a qualquer momento.`
+    );
+  };
+
+  // Print Full Event Sheet to PDF (The only place where full vertical roll-down happens!)
+  const handlePrintFullEventPdf = async () => {
+    if (!currentSession) return;
+    try {
+      setGeneratingPdf(true);
+      const sdocYaml = buildFullEventSheetSdocYaml(currentSession, activeUnitName);
+      const { pdfBytes } = await compileSdocToPdf(sdocYaml, activeScheduleRegistry);
+      if (Platform.OS === 'web' && typeof document !== 'undefined') {
+        const blob = new Blob([pdfBytes as unknown as BlobPart], { type: 'application/pdf' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `Folha_Evento_Completa_${currentSession.key}.pdf`;
+        a.click();
+        URL.revokeObjectURL(url);
+      }
+      setStatusBanner(
+        `🖨️ Folha PDF Completa gerada para "${currentSession.label}" (listagem integral na folha A4)!`
+      );
+    } catch (e: any) {
+      setStatusBanner(`❌ Erro ao gerar PDF do evento: ${e.message}`);
+    } finally {
+      setGeneratingPdf(false);
+    }
+  };
+
+  const handleDownloadS13PDF = async () => {
+    try {
+      setGeneratingPdf(true);
+      const res = await generateTerritoryS13AndCardsPDF(territoryRegistry, {
+        eventName: activeUnitName,
+        serviceYear: s13ServiceYear,
+        includeQuadraCards: false,
+      });
+      if (Platform.OS === 'web' && typeof document !== 'undefined') {
+        const blob = new Blob([res.pdfBytes as unknown as BlobPart], { type: 'application/pdf' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `Registro_Territorios_${s13ServiceYear}.pdf`;
+        a.click();
+        URL.revokeObjectURL(url);
+      }
+      setStatusBanner(`🖨️ PDF Multi-Ciclo de Territórios gerado (${res.territoryCount} setores)!`);
+    } catch (e: any) {
+      setStatusBanner(`❌ Erro ao gerar PDF de Territórios: ${e.message}`);
+    } finally {
+      setGeneratingPdf(false);
+    }
+  };
+
+  // Rehearsal timer effect
   useEffect(() => {
     if (!rehearsalRunning || !rehearsalSlot) return;
     const interval = setInterval(() => {
@@ -278,7 +525,6 @@ export default function ScheduleHubConsole() {
     return `${isNegative ? '-' : ''}${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
   };
 
-  // Cycle 3-state Readiness Thermometer: pending -> preparing -> ready
   const handleCycleReadiness = async (slot: FlatSkeletonEntry) => {
     const meta = (slot.meta || {}) as Record<string, any>;
     const current: ReadinessState = (meta.readinessState as ReadinessState) || 'pending';
@@ -303,13 +549,39 @@ export default function ScheduleHubConsole() {
     }
   };
 
-  // Persist the active schedule & Multi-Cycle Territories as official Sekundo Events in localStorage
+  const handleManualReassignSlot = async (
+    slot: FlatSkeletonEntry,
+    role: 'primary' | 'assistant',
+    person: ParticipantProfile
+  ) => {
+    const meta = { ...((slot.meta || {}) as Record<string, any>) };
+    if (role === 'primary') {
+      meta.assignedTo = person.name;
+      meta.groupTag = person.groupTag;
+    } else {
+      meta.assistantTo = person.name;
+      meta.assistantGroupTag = person.groupTag;
+    }
+    const newValue = meta.assistantTo
+      ? `${meta.assignedTo || slot.value} / ${meta.assistantTo}`
+      : meta.assignedTo || person.name;
+
+    if (eventId && flatRegistry.length > 0) {
+      await updateNode(slot.key, { value: newValue, meta });
+    } else {
+      setLocalScheduleRegistry((prev) =>
+        prev.map((entry) =>
+          entry.key === slot.key ? { ...entry, value: newValue, meta } : entry
+        )
+      );
+    }
+    setShowReassignList(null);
+    setStatusBanner(`✅ Designação "${slot.label}" atualizada para ${person.name}!`);
+  };
+
   const handleSaveSeedToAppEvents = async () => {
     try {
-      setStatusBanner('Salvando programação e territórios nos Eventos Ativos do Sekundo...');
       const scheduleEventName = `${activeUnitName} — Programação Semanal`;
-      const territoryEventName = `${activeUnitName} — Registro de Territórios (2027-2026)`;
-
       let schedEvent = events.find((e) => e.config.name === scheduleEventName);
       if (!schedEvent) {
         schedEvent = await addEvent(scheduleEventName, 'weekly', ['01', '02', '03'], [
@@ -318,47 +590,40 @@ export default function ScheduleHubConsole() {
         ]);
       }
       await storage.saveSkeleton(schedEvent.config.id, activeScheduleRegistry);
-
-      let terrEvent = events.find((e) => e.config.name === territoryEventName);
-      if (!terrEvent) {
-        terrEvent = await addEvent(territoryEventName, 'monthly', ['01', '02', '03'], [
-          'territory_logistics',
-        ]);
-      }
-      await storage.saveSkeleton(terrEvent.config.id, territoryRegistry);
-
-      setStatusBanner(
-        '✅ Programação e Registro de Territórios salvos nos Eventos Ativos do Sekundo!'
-      );
-      router.replace(`/schedule-hub?id=${schedEvent.config.id}` as any);
+      setStatusBanner('✅ Programação e Territórios salvos no App Sekundo!');
     } catch (e: any) {
-      setStatusBanner(`❌ Erro ao salvar no app: ${e.message}`);
+      setStatusBanner(`❌ Erro ao salvar: ${e.message}`);
     }
   };
 
-  // Handle importing custom pasted schedule text
   const handleImportCustomText = async () => {
-    if (!customScheduleText.trim()) return;
-    const parsed = parseProgramScheduleText(customScheduleText, {
+    const trimmed = customScheduleText.trim();
+    if (!trimmed) return;
+    if (trimmed.startsWith('_record_kind,') || trimmed.startsWith('_key,')) {
+      const loaded = importScheduleHubFromCsv(trimmed);
+      setActiveUnitName(loaded.unitName);
+      handleUpdateParticipants(loaded.participants);
+      setLocalScheduleRegistry(loaded.scheduleRegistry);
+      setTerritoryRegistry(loaded.territoryRegistry);
+      setShowImportModal(false);
+      setCustomScheduleText('');
+      setStatusBanner('✅ CSV colado e importado com sucesso!');
+      return;
+    }
+    const parsed = parseProgramScheduleText(trimmed, {
       unitName: activeUnitName,
       directory: activeDirectory,
     });
     if (parsed.length === 0) {
-      setStatusBanner('⚠️ Nenhuma sessão reconhecida no texto colado. Verifique o formato.');
+      setStatusBanner('⚠️ Nenhuma sessão reconhecida no texto colado.');
       return;
     }
-    if (eventId) {
-      await saveSkeleton(parsed);
-    } else {
-      setLocalScheduleRegistry(parsed);
-    }
-    setSelectedSessionIdx(0);
+    setLocalScheduleRegistry(parsed);
     setShowImportModal(false);
     setCustomScheduleText('');
-    setStatusBanner(`✅ Programação importada com sucesso (${parsed.length} nós estruturais)!`);
+    setStatusBanner(`✅ Programação importada (${parsed.length} nós)!`);
   };
 
-  // Download .ics calendar file for a slot
   const handleDownloadICS = (slot: FlatSkeletonEntry) => {
     const icsContent = generateCommitmentICS(slot, currentSession);
     if (Platform.OS === 'web' && typeof document !== 'undefined') {
@@ -369,130 +634,9 @@ export default function ScheduleHubConsole() {
       a.download = `Compromisso_Sekundo_${slot.key}.ics`;
       a.click();
       URL.revokeObjectURL(url);
-      setStatusBanner(`📅 Lembrete de calendário (.ics) gerado para "${slot.label}"!`);
     }
   };
 
-  // Generate 4-Column Multi-Cycle Territory PDF
-  const handleDownloadS13PDF = async () => {
-    try {
-      setGeneratingPdf(true);
-      setStatusBanner(`Gerando PDF de Registro de Territórios (4 Colunas Multi-Ciclo — Ciclo ${s13ServiceYear})...`);
-      const res = await generateTerritoryS13AndCardsPDF(territoryRegistry, {
-        eventName: activeUnitName,
-        serviceYear: s13ServiceYear,
-        includeQuadraCards: false,
-      });
-
-      if (Platform.OS === 'web' && typeof document !== 'undefined') {
-        const blob = new Blob([res.pdfBytes as unknown as BlobPart], { type: 'application/pdf' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `Registro_Territorios_${s13ServiceYear}_${new Date().toISOString().slice(0, 10)}.pdf`;
-        a.click();
-        URL.revokeObjectURL(url);
-      }
-      setStatusBanner(
-        `✅ PDF de Territórios gerado no padrão de 4 colunas (${res.territoryCount} territórios)!`
-      );
-    } catch (e: any) {
-      setStatusBanner(`❌ Erro ao gerar PDF de Territórios: ${e.message}`);
-    } finally {
-      setGeneratingPdf(false);
-    }
-  };
-
-  // Compute all commitments for `myParticipantName` across all sessions
-  const myCommitmentsSummary = useMemo(() => {
-    if (!myParticipantName) return { slots: [], territories: [] };
-    const normMe = normalizePersonKey(myParticipantName);
-
-    const matchedSlots: Array<{
-      sessionIndex: number;
-      sessionDateLabel: string;
-      slot: FlatSkeletonEntry;
-      roleLabel: string;
-    }> = [];
-
-    sessions.forEach((sess, sIdx) => {
-      const dateShort = sess.label.split('|')[0]?.trim() || sess.label;
-      if (normalizePersonKey(sess.chairPerson) === normMe) {
-        matchedSlots.push({
-          sessionIndex: sIdx,
-          sessionDateLabel: dateShort,
-          slot: {
-            key: sess.key,
-            type: 'header',
-            label: 'Presidente da Sessão',
-            value: sess.chairPerson || '',
-            email: '',
-            meta: { assignedTo: sess.chairPerson, sessionDate: sess.sessionDate },
-          },
-          roleLabel: 'Presidente',
-        });
-      }
-      if (normalizePersonKey(sess.openingPrayer) === normMe) {
-        matchedSlots.push({
-          sessionIndex: sIdx,
-          sessionDateLabel: dateShort,
-          slot: {
-            key: `${sess.key}-open1`,
-            type: 'slot',
-            label: 'Abertura / Credenciamento',
-            value: sess.openingPrayer || '',
-            email: '',
-            meta: { assignedTo: sess.openingPrayer, durationMinutes: 2 },
-          },
-          roleLabel: 'Abertura / Credenciamento',
-        });
-      }
-      if (normalizePersonKey(sess.closingPrayer) === normMe) {
-        matchedSlots.push({
-          sessionIndex: sIdx,
-          sessionDateLabel: dateShort,
-          slot: {
-            key: `${sess.key}-close2`,
-            type: 'slot',
-            label: 'Encerramento / Síntese Final',
-            value: sess.closingPrayer || '',
-            email: '',
-            meta: { assignedTo: sess.closingPrayer, durationMinutes: 2 },
-          },
-          roleLabel: 'Encerramento / Síntese Final',
-        });
-      }
-
-      for (const sec of sess.sections) {
-        for (const slot of sec.slots) {
-          const meta = (slot.meta || {}) as Record<string, any>;
-          const isPrimary = normalizePersonKey(meta.assignedTo || slot.value) === normMe;
-          const isAssistant = normalizePersonKey(meta.assistantTo) === normMe;
-          if (isPrimary || isAssistant) {
-            matchedSlots.push({
-              sessionIndex: sIdx,
-              sessionDateLabel: dateShort,
-              slot,
-              roleLabel: isPrimary ? 'Titular' : `Ajudante (Com: ${meta.assignedTo})`,
-            });
-          }
-        }
-      }
-    });
-
-    const matchedTerritories = territoryRegistry.filter((t) => {
-      const tMeta = (t.meta || {}) as Record<string, any>;
-      const history = (tMeta.assignmentHistory || []) as Array<{
-        assignedTo: string;
-        completedAt?: string;
-      }>;
-      return history.some((c) => normalizePersonKey(c.assignedTo) === normMe && !c.completedAt);
-    });
-
-    return { slots: matchedSlots, territories: matchedTerritories };
-  }, [myParticipantName, sessions, territoryRegistry]);
-
-  // Check if a slot matches current filters (Group filter)
   const slotMatchesGroupFilter = (slot: FlatSkeletonEntry): boolean => {
     if (selectedGroup === 'ALL') return true;
     const meta = (slot.meta || {}) as Record<string, any>;
@@ -515,7 +659,6 @@ export default function ScheduleHubConsole() {
     );
   };
 
-  // Compute active WhatsApp message preview in WhatsApp Studio
   const whatsappPreviewText = useMemo(() => {
     if (!currentSession) return '';
     switch (waMode) {
@@ -530,8 +673,10 @@ export default function ScheduleHubConsole() {
         );
       case 'individual_card': {
         const fallbackSlot =
-          waTargetSlot || currentSession.sections[1]?.slots[0] || currentSession.sections[0]?.slots[0];
-        if (!fallbackSlot) return 'Selecione uma parte para gerar o cartão.';
+          waTargetSlot ||
+          activeInspectedSlotInfo?.slot ||
+          currentSession.sections[0]?.slots[0];
+        if (!fallbackSlot) return 'Selecione uma designação.';
         return formatIndividualCommitmentWhatsApp(fallbackSlot, currentSession, waTargetRole);
       }
       case 'live_pocket':
@@ -552,14 +697,15 @@ export default function ScheduleHubConsole() {
     waTargetTerritoryIdx,
     activeDirectory,
     territoryRegistry,
+    activeInspectedSlotInfo,
   ]);
 
   const handleCopyWhatsAppMessage = async () => {
     if (!whatsappPreviewText) return;
     if (Platform.OS === 'web' && typeof navigator !== 'undefined' && navigator.clipboard) {
       await navigator.clipboard.writeText(whatsappPreviewText);
-      setCopyFeedback('✅ Copiado para a área de transferência!');
-      setTimeout(() => setCopyFeedback(null), 2500);
+      setCopyFeedback('✅ Copiado!');
+      setTimeout(() => setCopyFeedback(null), 2000);
     }
   };
 
@@ -572,1068 +718,859 @@ export default function ScheduleHubConsole() {
     }
   };
 
-  // Dynamic Theme Palette (Dark Console vs Outdoor Sunlight Mode WCAG AAA)
   const theme = sunlightMode
     ? {
-        bg: '#FFFFFF',
-        cardBg: '#F8FAFC',
-        cardBorder: '#CBD5E1',
+        bg: '#F8FAFC',
+        panelBg: '#FFFFFF',
+        border: '#CBD5E1',
         textPrimary: '#0F172A',
         textSecondary: '#334155',
-        textMuted: '#475569',
-        accent: '#B45309',
-        pillBg: '#E2E8F0',
+        textMuted: '#64748B',
+        accent: '#D97706',
+        btnBg: '#E2E8F0',
       }
     : {
-        bg: '#090D16',
-        cardBg: '#131B2E',
-        cardBorder: '#1E293B',
+        bg: '#060A12',
+        panelBg: '#0F172A',
+        border: '#1E293B',
         textPrimary: '#F8FAFC',
         textSecondary: '#CBD5E1',
-        textMuted: '#94A3B8',
+        textMuted: '#64748B',
         accent: '#FFB800',
-        pillBg: '#1E293B',
+        btnBg: '#1E293B',
       };
 
-  const filteredParticipants = useMemo(() => {
-    const q = normalizePersonKey(participantSearch);
-    if (!q) return activeDirectory;
-    return activeDirectory.filter(
-      (p) =>
-        normalizePersonKey(p.name).includes(q) || normalizePersonKey(p.groupTag).includes(q)
+  // Eligible candidates for the currently inspected slot
+  const inspectedRequirement = useMemo(() => {
+    if (!activeInspectedSlotInfo) return null;
+    return inferSlotRequiredCapability(
+      activeInspectedSlotInfo.slot.label,
+      activeInspectedSlotInfo.sectionIdx,
+      activeInspectedSlotInfo.slotIdxInSection
     );
-  }, [participantSearch, activeDirectory]);
+  }, [activeInspectedSlotInfo]);
+
+  const eligibleCandidatesForInspector = useMemo(() => {
+    if (!inspectedRequirement || !showReassignList) return [];
+    const capKey =
+      showReassignList === 'primary'
+        ? inspectedRequirement.primaryCapability
+        : inspectedRequirement.partnerCapability;
+    return activeDirectory.filter((p) => p.capabilities?.[capKey]);
+  }, [activeDirectory, inspectedRequirement, showReassignList]);
+
+  const inspectedTerritory = territoryRegistry[selectedTerritoryIdx] || territoryRegistry[0];
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.bg }]}>
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        {/* Top Navigation & Street-Ready Action Bar */}
-        <View style={styles.topBar}>
-          <Pressable onPress={() => router.push('/')} style={styles.backButton}>
-            <Text style={[styles.backText, { color: theme.accent }]}>← Painel Sekundo</Text>
+    <SafeAreaView style={[styles.cadViewport, { backgroundColor: theme.bg }]}>
+      {/* ================================================================= */}
+      {/* RIBBON 1: AUTOCAD TOP COMMAND DOCK (Import/Export CSV, Privileges) */}
+      {/* ================================================================= */}
+      <View
+        style={[
+          styles.cadTopRibbon,
+          { backgroundColor: theme.panelBg, borderBottomColor: theme.border },
+        ]}
+      >
+        <View style={styles.brandCluster}>
+          <Pressable onPress={() => router.push('/')} style={styles.cadCommandBtn}>
+            <Text style={[styles.cadCommandBtnText, { color: theme.accent }]}>← Painel</Text>
           </Pressable>
-
-          <View style={styles.topRightActions}>
-            <Pressable
-              onPress={toggleSunlightMode}
-              style={[
-                styles.topPillButton,
-                {
-                  backgroundColor: sunlightMode ? '#FEF3C7' : '#1E293B',
-                  borderColor: '#F59E0B',
-                },
-              ]}
-            >
-              <Text
-                style={{
-                  fontSize: 12,
-                  fontWeight: '700',
-                  color: sunlightMode ? '#92400E' : '#FCD34D',
-                }}
-              >
-                {sunlightMode ? '🌙 Modo Escuro' : '☀️ Modo Sol (Rua)'}
-              </Text>
-            </Pressable>
-
-            <Pressable
-              onPress={handlePickLocalScheduleFile}
-              style={[
-                styles.topPillButton,
-                { backgroundColor: 'rgba(59, 130, 246, 0.16)', borderColor: '#3B82F6' },
-              ]}
-            >
-              <Text style={{ fontSize: 12, fontWeight: '800', color: '#60A5FA' }}>
-                📂 Abrir Arquivo da Pasta (.json/.txt)
-              </Text>
-            </Pressable>
-
-            <Pressable
-              onPress={() => setShowImportModal(true)}
-              style={[
-                styles.topPillButton,
-                { backgroundColor: theme.pillBg, borderColor: theme.cardBorder },
-              ]}
-            >
-              <Text style={{ fontSize: 12, fontWeight: '700', color: theme.textPrimary }}>
-                📥 Colar Texto
-              </Text>
-            </Pressable>
-
-            <Pressable
-              onPress={handleSaveSeedToAppEvents}
-              style={[
-                styles.topPillButton,
-                { backgroundColor: 'rgba(16, 185, 129, 0.15)', borderColor: '#10B981' },
-              ]}
-            >
-              <Text style={{ fontSize: 12, fontWeight: '800', color: '#10B981' }}>
-                💾 Salvar no App
-              </Text>
-            </Pressable>
-          </View>
+          <Text style={[styles.cadRibbonTitle, { color: theme.textPrimary }]} numberOfLines={1}>
+            📐 CAD PROGRAMAÇÃO & WHATSAPP
+          </Text>
         </View>
 
-        {/* Header Title & WhatsApp Studio CTA */}
-        <View
-          style={[
-            styles.heroCard,
-            { backgroundColor: theme.cardBg, borderColor: theme.cardBorder },
-          ]}
-        >
-          <View style={{ flex: 1, minWidth: 220 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-              <Text style={[styles.heroBadge, { borderColor: theme.accent, color: theme.accent }]}>
-                MOTOR AGNÓSTICO SEKUNDO
-              </Text>
-              <Text style={{ fontSize: 12, color: theme.textMuted, fontWeight: '600' }}>
-                {activeUnitName}
-              </Text>
-            </View>
-            <Text style={[styles.heroTitle, { color: theme.textPrimary }]}>
-              Programação, Compromissos & Territórios
+        <View style={styles.cadRibbonTools}>
+          <Pressable
+            onPress={handlePickLocalScheduleFile}
+            style={[styles.cadCommandBtn, styles.cadBtnBlue]}
+          >
+            <Text style={styles.cadCommandBtnText}>📥 Importar (.csv/.json/.txt)</Text>
+          </Pressable>
+
+          <Pressable
+            onPress={() => handleExportCsvBackup('hub_csv')}
+            style={[styles.cadCommandBtn, styles.cadBtnEmerald]}
+          >
+            <Text style={styles.cadCommandBtnText}>📤 Exportar CSV</Text>
+          </Pressable>
+
+          <Pressable
+            onPress={() => handleExportCsvBackup('omni_csv')}
+            style={[styles.cadCommandBtn, styles.cadBtnPurple]}
+          >
+            <Text style={styles.cadCommandBtnText}>🌐 Baixar CSV Geral</Text>
+          </Pressable>
+
+          <Pressable
+            onPress={() => setShowPrivilegeMatrixModal(true)}
+            style={[styles.cadCommandBtn, styles.cadBtnAmber]}
+          >
+            <Text style={[styles.cadCommandBtnText, { color: '#090D16' }]}>
+              🛡️ Privilégios ({activeDirectory.length})
             </Text>
-            <Text style={[styles.heroSubtitle, { color: theme.textSecondary }]}>
-              {sessions.length} semanas carregadas • {activeDirectory.length} participantes ({operationalGroups.join(', ')}) • {territoryRegistry.length} territórios multi-ciclo
-            </Text>
-          </View>
+          </Pressable>
+
+          <Pressable
+            onPress={() => handleRunAutoAssign('current_week', true)}
+            style={[styles.cadCommandBtn, styles.cadBtnCyan]}
+          >
+            <Text style={styles.cadCommandBtnText}>⚡ Auto-Designar</Text>
+          </Pressable>
 
           <Pressable
             onPress={() => {
               setWaMode('full_week');
               setShowWhatsAppModal(true);
             }}
-            style={styles.whatsappMainCTA}
+            style={[styles.cadCommandBtn, styles.cadBtnEmerald]}
           >
-            <Text style={styles.whatsappMainCTAText}>📲 Exportar p/ WhatsApp</Text>
-            <Text style={styles.whatsappMainCTASub}>5 formatos prontos</Text>
+            <Text style={styles.cadCommandBtnText}>📲 WhatsApp (5)</Text>
+          </Pressable>
+
+          <Pressable
+            onPress={
+              activeTab === 'schedule' ? handlePrintFullEventPdf : handleDownloadS13PDF
+            }
+            disabled={generatingPdf}
+            style={[styles.cadCommandBtn, styles.cadBtnRose]}
+          >
+            <Text style={styles.cadCommandBtnText}>
+              {generatingPdf ? '⏳ PDF...' : '🖨️ Folha PDF Completa'}
+            </Text>
+          </Pressable>
+
+          <Pressable onPress={() => setShowImportModal(true)} style={styles.cadCommandBtn}>
+            <Text style={styles.cadCommandBtnText}>📋 Colar</Text>
+          </Pressable>
+
+          <Pressable onPress={handleSaveSeedToAppEvents} style={styles.cadCommandBtn}>
+            <Text style={styles.cadCommandBtnText}>💾 Salvar</Text>
+          </Pressable>
+
+          <Pressable
+            onPress={() => setSunlightMode((s) => !s)}
+            style={styles.cadCommandBtn}
+          >
+            <Text style={styles.cadCommandBtnText}>{sunlightMode ? '🌙' : '☀️'}</Text>
           </Pressable>
         </View>
+      </View>
 
-        {statusBanner && (
-          <View style={styles.statusBanner}>
-            <Text style={styles.statusBannerText}>{statusBanner}</Text>
-            <Pressable onPress={() => setStatusBanner(null)}>
-              <Text style={{ color: '#94A3B8', fontWeight: '700' }}>✕</Text>
-            </Pressable>
-          </View>
-        )}
-
-        {/* Active Rehearsal Pocket Timer Banner */}
-        {rehearsalSlot && (
-          <View
-            style={[
-              styles.rehearsalBar,
-              rehearsalRemainingSec < 0
-                ? { borderColor: '#EF4444', backgroundColor: 'rgba(239, 68, 68, 0.16)' }
-                : rehearsalRemainingSec <= 30
-                ? { borderColor: '#F59E0B', backgroundColor: 'rgba(245, 158, 11, 0.16)' }
-                : { borderColor: '#10B981', backgroundColor: 'rgba(16, 185, 129, 0.14)' },
-            ]}
-          >
-            <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 11, fontWeight: '800', color: '#10B981' }}>
-                🎙️ CRONÔMETRO DE ENSAIO DE BOLSO
-              </Text>
-              <Text style={{ fontSize: 14, fontWeight: '700', color: theme.textPrimary }}>
-                {rehearsalSlot.label}
-              </Text>
-            </View>
-            <Text
-              style={[
-                styles.rehearsalClock,
-                {
-                  color:
-                    rehearsalRemainingSec < 0
-                      ? '#EF4444'
-                      : rehearsalRemainingSec <= 30
-                      ? '#F59E0B'
-                      : '#10B981',
-                },
-              ]}
-            >
-              {formatTimerMMSS(rehearsalRemainingSec)}
-            </Text>
-            <View style={{ flexDirection: 'row', gap: 8 }}>
-              <Pressable
-                onPress={() => setRehearsalRunning(!rehearsalRunning)}
-                style={styles.rehearsalControlBtn}
-              >
-                <Text style={styles.rehearsalControlText}>
-                  {rehearsalRunning ? '⏸ Pausar' : '▶ Retomar'}
-                </Text>
-              </Pressable>
-              <Pressable
-                onPress={() => {
-                  setRehearsalRunning(false);
-                  setRehearsalSlot(null);
-                }}
-                style={[styles.rehearsalControlBtn, { backgroundColor: '#334155' }]}
-              >
-                <Text style={styles.rehearsalControlText}>✕</Text>
-              </Pressable>
-            </View>
-          </View>
-        )}
-
-        {/* Street Filter Bar: "🎯 Meu Compromisso" + Group Filter Pills + View Switcher */}
-        <View
-          style={[
-            styles.filterCard,
-            { backgroundColor: theme.cardBg, borderColor: theme.cardBorder },
-          ]}
-        >
-          <View style={styles.filterRow}>
-            {/* Personal Commitment Agonist Selector */}
-            <Pressable
-              onPress={() => setShowParticipantPicker(true)}
-              style={[
-                styles.myCommitmentButton,
-                myParticipantName
-                  ? { backgroundColor: 'rgba(255, 184, 0, 0.18)', borderColor: '#FFB800' }
-                  : { backgroundColor: theme.pillBg, borderColor: theme.cardBorder },
-              ]}
-            >
-              <Text
-                style={{
-                  fontSize: 13,
-                  fontWeight: '800',
-                  color: myParticipantName ? theme.accent : theme.textPrimary,
-                }}
-              >
-                🎯 {myParticipantName ? `Meu Compromisso: ${myParticipantName}` : 'Meu Compromisso (Escolher Nome)'}
-              </Text>
-            </Pressable>
-
-            {myParticipantName !== '' && (
-              <Pressable
-                onPress={() => handleSelectMyParticipant('')}
-                style={[styles.clearFilterBtn, { borderColor: theme.cardBorder }]}
-              >
-                <Text style={{ fontSize: 12, color: theme.textMuted, fontWeight: '700' }}>
-                  Limpar
-                </Text>
-              </Pressable>
-            )}
-
-            {/* Group Filter Pills */}
-            <View style={styles.groupPillsContainer}>
-              {['ALL', ...operationalGroups].map((grp) => {
-                const active = selectedGroup === grp;
-                return (
-                  <Pressable
-                    key={grp}
-                    onPress={() => setSelectedGroup(grp)}
-                    style={[
-                      styles.groupPill,
-                      active
-                        ? { backgroundColor: '#3B82F6', borderColor: '#60A5FA' }
-                        : { backgroundColor: theme.pillBg, borderColor: theme.cardBorder },
-                    ]}
-                  >
-                    <Text
-                      style={{
-                        fontSize: 12,
-                        fontWeight: '700',
-                        color: active ? '#FFFFFF' : theme.textSecondary,
-                      }}
-                    >
-                      {grp === 'ALL' ? '👥 Todos os Grupos' : `👥 ${grp}`}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-
-              {selectedGroup !== 'ALL' && (
-                <Pressable
-                  onPress={() => {
-                    setWaTargetGroup(selectedGroup);
-                    setWaMode('group_filter');
-                    setShowWhatsAppModal(true);
-                  }}
-                  style={styles.groupWhatsAppQuickBtn}
-                >
-                  <Text style={{ fontSize: 12, fontWeight: '800', color: '#10B981' }}>
-                    📲 WhatsApp do {selectedGroup}
-                  </Text>
-                </Pressable>
-              )}
-            </View>
-          </View>
-
-          {/* Personal Commitment Summary Banner when "Meu Compromisso" is active */}
-          {myParticipantName !== '' && (
-            <View style={styles.mySummaryBox}>
-              <Text style={styles.mySummaryTitle}>
-                ✨ Painel Pessoal de {myParticipantName} ({myCommitmentsSummary.slots.length} partes nas {sessions.length} semanas •{' '}
-                {myCommitmentsSummary.territories.length} território(s) em mãos)
-              </Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 8 }}>
-                <View style={{ flexDirection: 'row', gap: 8 }}>
-                  {myCommitmentsSummary.slots.map((item, idx) => (
-                    <Pressable
-                      key={`${item.slot.key}-${idx}`}
-                      onPress={() => {
-                        setActiveTab('schedule');
-                        setSelectedSessionIdx(item.sessionIndex);
-                      }}
-                      style={styles.mySummaryChip}
-                    >
-                      <Text style={{ fontSize: 11, fontWeight: '800', color: '#FCD34D' }}>
-                        📅 {item.sessionDateLabel}
-                      </Text>
-                      <Text style={{ fontSize: 12, fontWeight: '700', color: '#FFFFFF' }}>
-                        {item.slot.label}
-                      </Text>
-                      <Text style={{ fontSize: 11, color: '#CBD5E1' }}>{item.roleLabel}</Text>
-                    </Pressable>
-                  ))}
-                  {myCommitmentsSummary.territories.map((t) => {
-                    const tMeta = (t.meta || {}) as Record<string, any>;
-                    return (
-                      <Pressable
-                        key={t.key}
-                        onPress={() => setActiveTab('territories')}
-                        style={[styles.mySummaryChip, { borderColor: '#10B981' }]}
-                      >
-                        <Text style={{ fontSize: 11, fontWeight: '800', color: '#34D399' }}>
-                          🗺️ Território em Campo
-                        </Text>
-                        <Text style={{ fontSize: 12, fontWeight: '700', color: '#FFFFFF' }}>
-                          {tMeta.territoryNumber || t.key} — {tMeta.locality}
-                        </Text>
-                        <Text style={{ fontSize: 11, color: '#CBD5E1' }}>
-                          Desde {tMeta.assignedAt || '-'}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-              </ScrollView>
-            </View>
-          )}
-        </View>
-
-        {/* Main Section Switcher: Schedule vs Multi-Cycle Territories */}
-        <View style={styles.tabBar}>
+      {/* ================================================================= */}
+      {/* RIBBON 2: COMPACT WEEK SELECTOR + GROUP FILTER + TAB SWITCHER     */}
+      {/* ================================================================= */}
+      <View
+        style={[
+          styles.cadSubRibbon,
+          { backgroundColor: theme.bg, borderBottomColor: theme.border },
+        ]}
+      >
+        {/* Tab Switcher: Schedule vs Territories */}
+        <View style={styles.compactRow}>
           <Pressable
             onPress={() => setActiveTab('schedule')}
             style={[
-              styles.tabButton,
+              styles.subTabBtn,
               activeTab === 'schedule' && {
-                borderBottomColor: theme.accent,
-                borderBottomWidth: 3,
+                backgroundColor: theme.accent,
+                borderColor: theme.accent,
               },
             ]}
           >
             <Text
               style={[
-                styles.tabButtonText,
-                { color: activeTab === 'schedule' ? theme.accent : theme.textMuted },
+                styles.subTabBtnText,
+                { color: activeTab === 'schedule' ? '#090D16' : theme.textPrimary },
               ]}
             >
-              📅 Programação Semanal ({sessions.length} Semanas)
+              📅 Designações ({sessions.length} Sem.)
             </Text>
           </Pressable>
 
           <Pressable
             onPress={() => setActiveTab('territories')}
             style={[
-              styles.tabButton,
+              styles.subTabBtn,
               activeTab === 'territories' && {
-                borderBottomColor: '#10B981',
-                borderBottomWidth: 3,
+                backgroundColor: '#10B981',
+                borderColor: '#34D399',
               },
             ]}
           >
             <Text
               style={[
-                styles.tabButtonText,
-                { color: activeTab === 'territories' ? '#10B981' : theme.textMuted },
+                styles.subTabBtnText,
+                { color: activeTab === 'territories' ? '#090D16' : theme.textPrimary },
               ]}
             >
-              🗺️ Designações de Territórios ({territoryRegistry.length})
+              🗺️ Territórios ({territoryRegistry.length})
+            </Text>
+          </Pressable>
+
+          {/* Group Filter Chips */}
+          {['ALL', ...operationalGroups].map((grp) => {
+            const active = selectedGroup === grp;
+            return (
+              <Pressable
+                key={grp}
+                onPress={() => setSelectedGroup(grp)}
+                style={[
+                  styles.microChip,
+                  active && { backgroundColor: '#2563EB', borderColor: '#93C5FD' },
+                ]}
+              >
+                <Text style={styles.microChipText}>
+                  {grp === 'ALL' ? '👥 Todos' : grp.replace('Grupo ', 'G')}
+                </Text>
+              </Pressable>
+            );
+          })}
+
+          <Pressable
+            onPress={() => setShowParticipantPicker(true)}
+            style={[
+              styles.microChip,
+              myParticipantName !== '' && {
+                backgroundColor: '#B45309',
+                borderColor: '#FBBF24',
+              },
+            ]}
+          >
+            <Text style={styles.microChipText}>
+              🎯 {myParticipantName || 'Meu Nome'}
             </Text>
           </Pressable>
         </View>
 
-        {/* ================================================================= */}
-        {/* TAB 1: WEEKLY SCHEDULE BOARD                                      */}
-        {/* ================================================================= */}
-        {activeTab === 'schedule' && currentSession && (
-          <View>
-            {/* Horizontal Week Selector Bar */}
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              style={styles.weekSelectorScroll}
-            >
-              <View style={styles.weekSelectorRow}>
-                {sessions.map((sess, idx) => {
-                  const isSelected = idx === selectedSessionIdx;
-                  const shortDate = sess.label.split('|')[0]?.trim() || sess.label;
-                  const hasMyPart =
-                    myParticipantName !== '' &&
-                    myCommitmentsSummary.slots.some((s) => s.sessionIndex === idx);
+        {/* Week Selector Buttons (Compact 1-Click Pills) */}
+        {activeTab === 'schedule' && (
+          <View style={styles.compactRow}>
+            {sessions.map((sess, idx) => {
+              const active = idx === selectedSessionIdx;
+              const shortDate =
+                sess.label
+                  .split('|')[0]
+                  ?.replace(/de outubro de 2026/i, 'Out')
+                  .replace(/de novembro de 2026/i, 'Nov')
+                  .replace(/de dezembro de 2026/i, 'Dez')
+                  .trim() || `Sem ${idx + 1}`;
+              return (
+                <Pressable
+                  key={sess.key}
+                  onPress={() => {
+                    setSelectedSessionIdx(idx);
+                    setSelectedSlotKey('');
+                  }}
+                  style={[
+                    styles.weekMicroBtn,
+                    active && { backgroundColor: '#38BDF8', borderColor: '#BAE6FD' },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.weekMicroBtnText,
+                      active && { color: '#090D16', fontWeight: '900' },
+                    ]}
+                  >
+                    {shortDate}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        )}
+      </View>
+
+      {/* Optional Status Toast Strip */}
+      {statusBanner && (
+        <View style={styles.compactStatusBanner}>
+          <Text style={styles.compactStatusText} numberOfLines={1}>
+            {statusBanner}
+          </Text>
+          <Pressable onPress={() => setStatusBanner(null)}>
+            <Text style={{ color: '#94A3B8', fontSize: 11, fontWeight: '800' }}>✕</Text>
+          </Pressable>
+        </View>
+      )}
+
+      {/* ================================================================= */}
+      {/* MAIN AUTOCAD WORKSPACE (ZERO VERTICAL ROLL-DOWN ON SCREEN!)       */}
+      {/* ================================================================= */}
+      {activeTab === 'schedule' && currentSession ? (
+        <View
+          style={[
+            styles.cadWorkspaceSplit,
+            { flexDirection: isDesktop ? 'row' : 'column' },
+          ]}
+        >
+          {/* LEFT / TOP PANEL: COMPACT BUTTON MATRIX OF ALL DESIGNATIONS */}
+          <View
+            style={[
+              styles.cadMatrixPanel,
+              {
+                backgroundColor: theme.panelBg,
+                borderColor: theme.border,
+                flex: isDesktop ? 1.15 : undefined,
+              },
+            ]}
+          >
+            {/* Session Coordination Strip (Chair, Opening, Closing) */}
+            <View style={styles.sessionCoordStrip}>
+              <Text style={[styles.sessionCoordTitle, { color: theme.textPrimary }]} numberOfLines={1}>
+                📅 {currentSession.label}
+              </Text>
+              <View style={styles.coordPillsRow}>
+                <View style={styles.coordBadge}>
+                  <Text style={styles.coordBadgeText}>
+                    👑 Pres.: {currentSession.chairPerson || '—'}
+                  </Text>
+                </View>
+                <View style={styles.coordBadge}>
+                  <Text style={styles.coordBadgeText}>
+                    🔹 Abert.: {currentSession.openingPrayer || '—'}
+                  </Text>
+                </View>
+                <View style={styles.coordBadge}>
+                  <Text style={styles.coordBadgeText}>
+                    🔸 Encerr.: {currentSession.closingPrayer || '—'}
+                  </Text>
+                </View>
+              </View>
+            </View>
+
+            <Text style={styles.matrixHintText}>
+              🎛️ MATRIZ AUTOCAD DE DESIGNAÇÕES (Clique em um botão para inspecionar e editar sem rolar a página):
+            </Text>
+
+            {/* All Designation Buttons in a Compact Grid */}
+            <View style={styles.slotButtonsGrid}>
+              {currentSessionSlotsFlat
+                .filter((item) => slotMatchesGroupFilter(item.slot))
+                .map((item) => {
+                  const isSelected = activeInspectedSlotInfo?.slot.key === item.slot.key;
+                  const meta = (item.slot.meta || {}) as Record<string, any>;
+                  const primary = meta.assignedTo || item.slot.value || '—';
+                  const assistant = meta.assistantTo;
+                  const readiness: ReadinessState =
+                    (meta.readinessState as ReadinessState) ||
+                    (meta.confirmed ? 'ready' : 'pending');
+                  const mine = isSlotMine(item.slot);
+                  const shortLabel = item.slot.label
+                    .replace(/^\d+\.\s*/, '')
+                    .slice(0, 22);
 
                   return (
                     <Pressable
-                      key={sess.key}
-                      onPress={() => setSelectedSessionIdx(idx)}
+                      key={item.slot.key}
+                      onPress={() => {
+                        setSelectedSlotKey(item.slot.key);
+                        setShowReassignList(null);
+                      }}
                       style={[
-                        styles.weekPill,
-                        isSelected
-                          ? { backgroundColor: theme.accent, borderColor: theme.accent }
-                          : { backgroundColor: theme.cardBg, borderColor: theme.cardBorder },
-                        hasMyPart && !isSelected && { borderColor: '#FFB800', borderWidth: 2 },
+                        styles.cadSlotButton,
+                        {
+                          borderLeftColor: item.sectionColor,
+                          backgroundColor: isSelected ? '#1E3A8A' : '#0B1120',
+                          borderColor: isSelected
+                            ? '#60A5FA'
+                            : mine
+                            ? '#FFB800'
+                            : '#1E293B',
+                        },
                       ]}
                     >
-                      <Text
-                        style={{
-                          fontSize: 12,
-                          fontWeight: '800',
-                          color: isSelected ? '#090D16' : theme.textPrimary,
-                        }}
-                      >
-                        {shortDate}
+                      <View style={styles.cadSlotBtnHeader}>
+                        <Text style={styles.cadSlotBtnNumber}>[{item.buttonNumber}]</Text>
+                        <Text style={styles.cadSlotBtnDuration}>
+                          {meta.durationMinutes || 5}m{' '}
+                          {readiness === 'ready'
+                            ? '✅'
+                            : readiness === 'preparing'
+                            ? '📖'
+                            : ''}
+                        </Text>
+                      </View>
+                      <Text style={styles.cadSlotBtnTitle} numberOfLines={1}>
+                        {shortLabel}
                       </Text>
-                      <Text
-                        style={{
-                          fontSize: 10,
-                          fontWeight: '600',
-                          color: isSelected ? '#1E293B' : theme.textMuted,
-                        }}
-                      >
-                        {sess.sessionTheme}
+                      <Text style={styles.cadSlotBtnAssignee} numberOfLines={1}>
+                        👤 {primary}
+                        {assistant ? ` + ${assistant}` : ''}
                       </Text>
                     </Pressable>
                   );
                 })}
-              </View>
-            </ScrollView>
-
-            {/* Session Header Banner */}
-            <View
-              style={[
-                styles.sessionHeaderCard,
-                { backgroundColor: theme.cardBg, borderColor: theme.cardBorder },
-              ]}
-            >
-              <View
-                style={{
-                  flexDirection: 'row',
-                  justifyContent: 'space-between',
-                  alignItems: 'flex-start',
-                  flexWrap: 'wrap',
-                  gap: 12,
-                }}
-              >
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.sessionDateTitle, { color: theme.textPrimary }]}>
-                    {currentSession.label}
-                  </Text>
-                  <View style={styles.sessionMetaChips}>
-                    {currentSession.chairPerson && (
-                      <View style={styles.metaChip}>
-                        <Text style={styles.metaChipLabel}>👤 Presidente:</Text>
-                        <Text style={styles.metaChipValue}>{currentSession.chairPerson}</Text>
-                      </View>
-                    )}
-                    {currentSession.openingCue && (
-                      <View style={styles.metaChip}>
-                        <Text style={styles.metaChipValue}>🎵 {currentSession.openingCue}</Text>
-                      </View>
-                    )}
-                    {currentSession.openingPrayer && (
-                      <View style={styles.metaChip}>
-                        <Text style={styles.metaChipLabel}>🔹 Abertura / Credenciamento:</Text>
-                        <Text style={styles.metaChipValue}>{currentSession.openingPrayer}</Text>
-                      </View>
-                    )}
-                  </View>
-                </View>
-
-                <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
-                  <Pressable
-                    onPress={() => {
-                      setWaMode('live_pocket');
-                      setShowWhatsAppModal(true);
-                    }}
-                    style={[
-                      styles.secondaryActionBtn,
-                      { borderColor: '#3B82F6', backgroundColor: 'rgba(59, 130, 246, 0.14)' },
-                    ]}
-                  >
-                    <Text style={{ fontSize: 12, fontWeight: '700', color: '#60A5FA' }}>
-                      ⏱️ Cronograma 19:30
-                    </Text>
-                  </Pressable>
-
-                  <Pressable
-                    onPress={() => {
-                      setWaMode('full_week');
-                      setShowWhatsAppModal(true);
-                    }}
-                    style={[
-                      styles.secondaryActionBtn,
-                      { borderColor: '#10B981', backgroundColor: 'rgba(16, 185, 129, 0.14)' },
-                    ]}
-                  >
-                    <Text style={{ fontSize: 12, fontWeight: '700', color: '#10B981' }}>
-                      📲 Compartilhar Semana
-                    </Text>
-                  </Pressable>
-                </View>
-              </View>
             </View>
-
-            {/* Thematic Sections (Data-Driven Accent Colors: #3D5B65, #9A7420, #80241E) */}
-            {currentSession.sections.map((sec, secIdx) => {
-              const visibleSlots = sec.slots.filter(slotMatchesGroupFilter);
-              if (visibleSlots.length === 0 && selectedGroup !== 'ALL') return null;
-
-              const sectionColor = sec.accentColor || '#3D5B65';
-
-              return (
-                <View
-                  key={sec.key}
-                  style={[
-                    styles.sectionBlock,
-                    { backgroundColor: theme.cardBg, borderColor: theme.cardBorder },
-                  ]}
-                >
-                  {/* Colored Section Header Banner */}
-                  <View style={[styles.sectionBanner, { backgroundColor: sectionColor }]}>
-                    <Text style={styles.sectionBannerTitle}>{sec.label}</Text>
-                    <Text style={styles.sectionBannerCount}>
-                      {visibleSlots.length} {visibleSlots.length === 1 ? 'parte' : 'partes'}
-                    </Text>
-                  </View>
-
-                  {/* Middle transition cue inside Section 3 if present */}
-                  {secIdx === 2 && currentSession.middleCue && (
-                    <View style={styles.cueStrip}>
-                      <Text style={{ fontSize: 13, fontWeight: '700', color: theme.accent }}>
-                        🎵 {currentSession.middleCue}
-                      </Text>
-                    </View>
-                  )}
-
-                  {/* Section Slots */}
-                  <View style={styles.slotsList}>
-                    {visibleSlots.map((slot) => {
-                      const meta = (slot.meta || {}) as Record<string, any>;
-                      const primary = meta.assignedTo || slot.value || 'A designar';
-                      const assistant = meta.assistantTo as string | undefined;
-                      const durMin = meta.durationMinutes || 5;
-                      const readiness: ReadinessState =
-                        (meta.readinessState as ReadinessState) ||
-                        (meta.confirmed ? 'ready' : 'pending');
-                      const primaryGroup =
-                        meta.groupTag ||
-                        findParticipantProfile(primary, activeDirectory)?.groupTag;
-                      const assistantGroup =
-                        meta.assistantGroupTag ||
-                        findParticipantProfile(assistant, activeDirectory)?.groupTag;
-                      const mine = isSlotMine(slot);
-
-                      const readinessConfig = {
-                        pending: {
-                          label: '📩 Recebido (Toque p/ Preparar)',
-                          bg: 'rgba(148, 163, 184, 0.15)',
-                          border: '#64748B',
-                          text: theme.textSecondary,
-                        },
-                        preparing: {
-                          label: '📖 Preparando (Toque p/ Pronto)',
-                          bg: 'rgba(245, 158, 11, 0.18)',
-                          border: '#F59E0B',
-                          text: '#FBBF24',
-                        },
-                        ready: {
-                          label: '✨ Pronto p/ Cumprir!',
-                          bg: 'rgba(16, 185, 129, 0.2)',
-                          border: '#10B981',
-                          text: '#34D399',
-                        },
-                      }[readiness];
-
-                      return (
-                        <View
-                          key={slot.key}
-                          style={[
-                            styles.slotCard,
-                            {
-                              borderLeftColor: sectionColor,
-                              backgroundColor: sunlightMode ? '#FFFFFF' : '#0F172A',
-                              borderColor: mine ? '#FFB800' : theme.cardBorder,
-                              borderWidth: mine ? 2 : 1,
-                            },
-                          ]}
-                        >
-                          {/* Top row: Part Title + Duration Pill */}
-                          <View style={styles.slotHeaderRow}>
-                            <View style={{ flex: 1 }}>
-                              <Text style={[styles.slotTitle, { color: theme.textPrimary }]}>
-                                {slot.label}
-                              </Text>
-                            </View>
-                            <View
-                              style={[
-                                styles.durationBadge,
-                                { backgroundColor: `${sectionColor}33`, borderColor: sectionColor },
-                              ]}
-                            >
-                              <Text
-                                style={{
-                                  fontSize: 12,
-                                  fontWeight: '800',
-                                  color: sunlightMode ? sectionColor : '#F8FAFC',
-                                }}
-                              >
-                                ⏱️ {durMin} min
-                              </Text>
-                            </View>
-                          </View>
-
-                          {/* Assignees Row (Primary + Optional Partner/Assistant + Group Badges) */}
-                          <View style={styles.assigneesContainer}>
-                            <View style={styles.personChip}>
-                              <Text style={[styles.personRoleLabel, { color: theme.textMuted }]}>
-                                {assistant ? 'Titular:' : 'Designado:'}
-                              </Text>
-                              <Text style={[styles.personName, { color: theme.textPrimary }]}>
-                                👤 {primary}
-                              </Text>
-                              {primaryGroup && (
-                                <View style={styles.groupTagBadge}>
-                                  <Text style={styles.groupTagText}>{primaryGroup}</Text>
-                                </View>
-                              )}
-                            </View>
-
-                            {assistant && (
-                              <View style={styles.personChip}>
-                                <Text style={[styles.personRoleLabel, { color: theme.textMuted }]}>
-                                  Ajudante / Leitor:
-                                </Text>
-                                <Text style={[styles.personName, { color: theme.textPrimary }]}>
-                                  🤝 {assistant}
-                                </Text>
-                                {assistantGroup && (
-                                  <View style={styles.groupTagBadge}>
-                                    <Text style={styles.groupTagText}>{assistantGroup}</Text>
-                                  </View>
-                                )}
-                              </View>
-                            )}
-                          </View>
-
-                          {/* Street-Ready Commitment Action Bar */}
-                          <View style={styles.slotActionsRow}>
-                            {/* 1. 3-State Readiness Thermometer */}
-                            <Pressable
-                              onPress={() => handleCycleReadiness(slot)}
-                              style={[
-                                styles.slotActionBtn,
-                                {
-                                  backgroundColor: readinessConfig.bg,
-                                  borderColor: readinessConfig.border,
-                                },
-                              ]}
-                            >
-                              <Text
-                                style={{
-                                  fontSize: 12,
-                                  fontWeight: '800',
-                                  color: readinessConfig.text,
-                                }}
-                              >
-                                {readinessConfig.label}
-                              </Text>
-                            </Pressable>
-
-                            {/* 2. "Combinar com Meu Par" 1-Tap Dyad Sync */}
-                            {assistant && (
-                              <Pressable
-                                onPress={() => {
-                                  const dateLabel =
-                                    currentSession.label.split('|')[0]?.trim() ||
-                                    currentSession.label;
-                                  const msg = formatPartnerSyncWhatsAppMessage(
-                                    slot,
-                                    dateLabel,
-                                    myParticipantName || primary
-                                  );
-                                  handleOpenWhatsAppExternal(msg);
-                                }}
-                                style={[
-                                  styles.slotActionBtn,
-                                  {
-                                    backgroundColor: 'rgba(16, 185, 129, 0.15)',
-                                    borderColor: '#10B981',
-                                  },
-                                ]}
-                              >
-                                <Text style={{ fontSize: 12, fontWeight: '800', color: '#10B981' }}>
-                                  🤝 Combinar c/ Par
-                                </Text>
-                              </Pressable>
-                            )}
-
-                            {/* 3. Digital Individual WhatsApp Card */}
-                            <Pressable
-                              onPress={() => {
-                                setWaTargetSlot(slot);
-                                setWaTargetRole('primary');
-                                setWaMode('individual_card');
-                                setShowWhatsAppModal(true);
-                              }}
-                              style={[
-                                styles.slotActionBtn,
-                                {
-                                  backgroundColor: theme.pillBg,
-                                  borderColor: theme.cardBorder,
-                                },
-                              ]}
-                            >
-                              <Text
-                                style={{
-                                  fontSize: 12,
-                                  fontWeight: '700',
-                                  color: theme.textPrimary,
-                                }}
-                              >
-                                📲 Ficha Individual
-                              </Text>
-                            </Pressable>
-
-                            {/* 4. Pocket Rehearsal Timer */}
-                            <Pressable
-                              onPress={() => startRehearsal(slot)}
-                              style={[
-                                styles.slotActionBtn,
-                                {
-                                  backgroundColor: theme.pillBg,
-                                  borderColor: theme.cardBorder,
-                                },
-                              ]}
-                            >
-                              <Text
-                                style={{
-                                  fontSize: 12,
-                                  fontWeight: '700',
-                                  color: theme.textPrimary,
-                                }}
-                              >
-                                ⏱️ Ensaiar ({durMin}m)
-                              </Text>
-                            </Pressable>
-
-                            {/* 5. Calendar .ics Reminder */}
-                            <Pressable
-                              onPress={() => handleDownloadICS(slot)}
-                              style={[
-                                styles.slotActionBtn,
-                                {
-                                  backgroundColor: theme.pillBg,
-                                  borderColor: theme.cardBorder,
-                                },
-                              ]}
-                            >
-                              <Text
-                                style={{
-                                  fontSize: 12,
-                                  fontWeight: '700',
-                                  color: theme.textSecondary,
-                                }}
-                              >
-                                📅 .ics
-                              </Text>
-                            </Pressable>
-                          </View>
-                        </View>
-                      );
-                    })}
-                  </View>
-                </View>
-              );
-            })}
-
-            {/* Session Closing Footer */}
-            {(currentSession.closingCue || currentSession.closingPrayer) && (
-              <View
-                style={[
-                  styles.sessionFooterCard,
-                  { backgroundColor: theme.cardBg, borderColor: theme.cardBorder },
-                ]}
-              >
-                {currentSession.closingCue && (
-                  <Text style={{ fontSize: 13, fontWeight: '700', color: theme.accent }}>
-                    🎵 {currentSession.closingCue}
-                  </Text>
-                )}
-                {currentSession.closingPrayer && (
-                  <Text style={{ fontSize: 13, fontWeight: '700', color: theme.textPrimary }}>
-                    🔹 Encerramento / Síntese Final: {currentSession.closingPrayer}
-                  </Text>
-                )}
-              </View>
-            )}
           </View>
-        )}
 
-        {/* ================================================================= */}
-        {/* TAB 2: MULTI-CYCLE TERRITORY DESIGNATIONS (2027-2026)             */}
-        {/* ================================================================= */}
-        {activeTab === 'territories' && (
-          <View>
-            <View
-              style={[
-                styles.s13HeaderCard,
-                { backgroundColor: theme.cardBg, borderColor: theme.cardBorder },
-              ]}
-            >
-              <View style={{ flex: 1 }}>
-                <Text style={[styles.sessionDateTitle, { color: theme.textPrimary }]}>
-                  Registro de Designação de Território (4 Colunas Multi-Ciclo)
-                </Text>
-                <Text style={{ fontSize: 13, color: theme.textSecondary, marginTop: 4 }}>
-                  Layout tabular de 4 colunas por linha ("Designado para" + Data da designação | Data da conclusão)
-                  com quebra automática para múltiplos ciclos operacionais 2027 e 2026.
-                </Text>
+          {/* RIGHT / BOTTOM PANEL: ON-DEMAND TECHNICAL INSPECTOR FOR SELECTED SLOT */}
+          <View
+            style={[
+              styles.cadInspectorPanel,
+              {
+                backgroundColor: theme.panelBg,
+                borderColor: theme.border,
+                flex: isDesktop ? 1 : undefined,
+              },
+            ]}
+          >
+            {activeInspectedSlotInfo ? (
+              (() => {
+                const { slot, sectionLabel, sectionColor, buttonNumber } =
+                  activeInspectedSlotInfo;
+                const meta = (slot.meta || {}) as Record<string, any>;
+                const primary = meta.assignedTo || slot.value || 'A designar';
+                const assistant = meta.assistantTo as string | undefined;
+                const durMin = meta.durationMinutes || 5;
+                const readiness: ReadinessState =
+                  (meta.readinessState as ReadinessState) ||
+                  (meta.confirmed ? 'ready' : 'pending');
+                const primaryGroup =
+                  meta.groupTag ||
+                  findParticipantProfile(primary, activeDirectory)?.groupTag ||
+                  'Grupo 1';
+                const assistantGroup =
+                  meta.assistantGroupTag ||
+                  findParticipantProfile(assistant, activeDirectory)?.groupTag;
+                const capMeta = CAPABILITY_COLUMNS.find(
+                  (c) => c.key === inspectedRequirement?.primaryCapability
+                );
 
-                <View style={{ flexDirection: 'row', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
-                  {(['all', '2027', '2026'] as const).map((yr) => (
-                    <Pressable
-                      key={yr}
-                      onPress={() => setS13ServiceYear(yr)}
-                      style={[
-                        styles.groupPill,
-                        s13ServiceYear === yr
-                          ? { backgroundColor: '#10B981', borderColor: '#34D399' }
-                          : { backgroundColor: theme.pillBg, borderColor: theme.cardBorder },
-                      ]}
-                    >
-                      <Text
-                        style={{
-                          fontSize: 12,
-                          fontWeight: '800',
-                          color: s13ServiceYear === yr ? '#090D16' : theme.textSecondary,
-                        }}
-                      >
-                        {yr === 'all' ? '📑 Ciclos 2027 + 2026 (Completo)' : `📅 Ciclo Operacional ${yr}`}
-                      </Text>
-                    </Pressable>
-                  ))}
-                </View>
-              </View>
-
-              <Pressable
-                onPress={handleDownloadS13PDF}
-                disabled={generatingPdf}
-                style={styles.s13DownloadBtn}
-              >
-                {generatingPdf ? (
-                  <ActivityIndicator size="small" color="#090D16" />
-                ) : (
-                  <>
-                    <Text style={{ fontSize: 14, fontWeight: '900', color: '#090D16' }}>
-                      🖨️ Baixar PDF Multi-Ciclo
-                    </Text>
-                    <Text style={{ fontSize: 11, fontWeight: '700', color: '#064E3B' }}>
-                      4 Colunas Tabulares
-                    </Text>
-                  </>
-                )}
-              </Pressable>
-            </View>
-
-            {/* Territory Multi-Cycle Grid Cards */}
-            <View style={styles.territoryGrid}>
-              {territoryRegistry
-                .filter((t) => {
-                  if (selectedGroup === 'ALL') return true;
-                  const tMeta = (t.meta || {}) as Record<string, any>;
-                  const history = (tMeta.assignmentHistory || []) as Array<{
-                    assignedTo: string;
-                  }>;
-                  return history.some(
-                    (c) =>
-                      findParticipantProfile(c.assignedTo, activeDirectory)?.groupTag ===
-                      selectedGroup
-                  );
-                })
-                .map((t, idx) => {
-                  const tMeta = (t.meta || {}) as Record<string, any>;
-                  const code = tMeta.territoryNumber || t.key;
-                  const locality = tMeta.locality || t.label;
-                  const history = (tMeta.assignmentHistory || []) as Array<{
-                    assignedTo: string;
-                    assignedAt: string;
-                    completedAt?: string;
-                    serviceYear?: number;
-                  }>;
-                  const filteredCycles =
-                    s13ServiceYear === 'all'
-                      ? history
-                      : history.filter((c) => String(c.serviceYear) === s13ServiceYear);
-
-                  const latest = history[history.length - 1];
-                  const isOpen = Boolean(latest && !latest.completedAt);
-
-                  return (
+                return (
+                  <View style={styles.inspectorContent}>
                     <View
-                      key={t.key}
                       style={[
-                        styles.territoryCard,
-                        {
-                          backgroundColor: theme.cardBg,
-                          borderColor: isOpen ? '#10B981' : theme.cardBorder,
-                        },
+                        styles.inspectorBanner,
+                        { backgroundColor: sectionColor },
                       ]}
                     >
-                      <View style={styles.territoryHeaderRow}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                          <View style={styles.territoryCodeBadge}>
-                            <Text style={styles.territoryCodeText}>{code}</Text>
-                          </View>
-                          <View>
-                            <Text style={[styles.territoryLocality, { color: theme.textPrimary }]}>
-                              {locality}
-                            </Text>
-                            <Text style={{ fontSize: 11, color: theme.textMuted }}>
-                              Última conclusão prévia: {tMeta.lastCompletedBeforeYear || '-'}
-                            </Text>
-                          </View>
-                        </View>
+                      <Text style={styles.inspectorBannerText} numberOfLines={1}>
+                        🔍 INSPETOR TÉCNICO [{buttonNumber}] — {sectionLabel}
+                      </Text>
+                      <Text style={styles.inspectorBannerTime}>⏱️ {durMin} min</Text>
+                    </View>
 
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                          <View
-                            style={[
-                              styles.statusPill,
-                              isOpen
-                                ? { backgroundColor: 'rgba(16, 185, 129, 0.18)', borderColor: '#10B981' }
-                                : { backgroundColor: 'rgba(148, 163, 184, 0.15)', borderColor: '#64748B' },
-                            ]}
-                          >
-                            <Text
-                              style={{
-                                fontSize: 11,
-                                fontWeight: '800',
-                                color: isOpen ? '#34D399' : theme.textSecondary,
-                              }}
-                            >
-                              {isOpen ? `🟢 Em campo: ${latest?.assignedTo}` : '✅ Concluído'}
-                            </Text>
-                          </View>
+                    <Text style={[styles.inspectorSlotTitle, { color: theme.textPrimary }]}>
+                      {slot.label}
+                    </Text>
 
+                    {capMeta && (
+                      <View style={styles.capabilityTagRow}>
+                        <Text style={styles.capabilityTagText}>
+                          🛡️ Privilégio Requerido: {capMeta.fullLabel}
+                        </Text>
+                      </View>
+                    )}
+
+                    {/* Assignees Boxes with 1-Click Reassignment */}
+                    <View style={styles.inspectorAssigneesRow}>
+                      <View style={styles.inspectorPersonBox}>
+                        <Text style={styles.inspectorRoleLabel}>
+                          {inspectedRequirement?.requiresPartner
+                            ? 'TITULAR DESIGNADO'
+                            : 'RESPONSÁVEL DESIGNADO'}
+                        </Text>
+                        <Text style={styles.inspectorPersonName}>👤 {primary}</Text>
+                        <View style={styles.inspectorPersonFooter}>
+                          <Text style={styles.inspectorGroupBadge}>{primaryGroup}</Text>
                           <Pressable
-                            onPress={() => {
-                              setWaTargetTerritoryIdx(idx);
-                              setWaMode('territory_assignment');
-                              setShowWhatsAppModal(true);
-                            }}
-                            style={styles.territoryWaBtn}
+                            onPress={() =>
+                              setShowReassignList((prev) =>
+                                prev === 'primary' ? null : 'primary'
+                              )
+                            }
+                            style={styles.miniSwapBtn}
                           >
-                            <Text style={{ fontSize: 12, fontWeight: '800', color: '#10B981' }}>
-                              📲 WhatsApp
-                            </Text>
+                            <Text style={styles.miniSwapBtnText}>🔄 Trocar</Text>
                           </Pressable>
                         </View>
                       </View>
 
-                      {/* 4-Column Cycle Preview Strip */}
-                      <View style={styles.cyclesGrid}>
-                        {filteredCycles.map((cyc, cIdx) => {
-                          const grp = findParticipantProfile(
-                            cyc.assignedTo,
-                            activeDirectory
-                          )?.groupTag;
-                          return (
-                            <View
-                              key={`${t.key}-c-${cIdx}`}
-                              style={[
-                                styles.cycleCell,
-                                {
-                                  backgroundColor: sunlightMode ? '#FFFFFF' : '#090D16',
-                                  borderColor: !cyc.completedAt ? '#10B981' : theme.cardBorder,
-                                },
-                              ]}
-                            >
-                              <View
-                                style={{
-                                  flexDirection: 'row',
-                                  justifyContent: 'space-between',
-                                  marginBottom: 2,
-                                }}
-                              >
-                                <Text style={{ fontSize: 10, fontWeight: '800', color: theme.accent }}>
-                                  Ano {cyc.serviceYear || 2026}
-                                </Text>
-                                {grp && (
-                                  <Text style={{ fontSize: 10, color: '#60A5FA', fontWeight: '700' }}>
-                                    {grp}
-                                  </Text>
-                                )}
-                              </View>
-                              <Text
-                                numberOfLines={1}
-                                style={{ fontSize: 12, fontWeight: '700', color: theme.textPrimary }}
-                              >
-                                {cyc.assignedTo}
+                      {(assistant || inspectedRequirement?.requiresPartner) && (
+                        <View style={styles.inspectorPersonBox}>
+                          <Text style={styles.inspectorRoleLabel}>
+                            AJUDANTE / LEITOR
+                          </Text>
+                          <Text style={styles.inspectorPersonName}>
+                            🤝 {assistant || 'A designar'}
+                          </Text>
+                          <View style={styles.inspectorPersonFooter}>
+                            {assistantGroup && (
+                              <Text style={styles.inspectorGroupBadge}>
+                                {assistantGroup}
                               </Text>
-                              <View style={styles.cycleDatesRow}>
-                                <Text style={{ fontSize: 11, color: theme.textSecondary }}>
-                                  Início: {cyc.assignedAt}
-                                </Text>
-                                <Text
-                                  style={{
-                                    fontSize: 11,
-                                    fontWeight: '700',
-                                    color: cyc.completedAt ? theme.textMuted : '#10B981',
-                                  }}
-                                >
-                                  {cyc.completedAt ? `Fim: ${cyc.completedAt}` : 'Em aberto'}
-                                </Text>
-                              </View>
-                            </View>
-                          );
-                        })}
-                      </View>
+                            )}
+                            <Pressable
+                              onPress={() =>
+                                setShowReassignList((prev) =>
+                                  prev === 'assistant' ? null : 'assistant'
+                                )
+                              }
+                              style={styles.miniSwapBtn}
+                            >
+                              <Text style={styles.miniSwapBtnText}>🔄 Trocar Par</Text>
+                            </Pressable>
+                          </View>
+                        </View>
+                      )}
                     </View>
-                  );
-                })}
+
+                    {/* Compact Privilege-Filtered Reassignment Strip */}
+                    {showReassignList && (
+                      <View style={styles.reassignPickerStrip}>
+                        <Text style={styles.reassignStripTitle}>
+                          Habilitados na Matriz para esta função ({eligibleCandidatesForInspector.length}):
+                        </Text>
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                          <View style={{ flexDirection: 'row', gap: 6 }}>
+                            {eligibleCandidatesForInspector.map((cand) => (
+                              <Pressable
+                                key={cand.id}
+                                onPress={() =>
+                                  handleManualReassignSlot(slot, showReassignList, cand)
+                                }
+                                style={styles.candidateChip}
+                              >
+                                <Text style={styles.candidateChipName}>{cand.name}</Text>
+                                <Text style={styles.candidateChipMeta}>
+                                  {cand.groupTag} • {cand.assignmentCount ?? 0}x
+                                </Text>
+                              </Pressable>
+                            ))}
+                          </View>
+                        </ScrollView>
+                      </View>
+                    )}
+
+                    {/* Direct Action Buttons in Inspector */}
+                    <View style={styles.inspectorActionsGrid}>
+                      <Pressable
+                        onPress={() => handleCycleReadiness(slot)}
+                        style={[
+                          styles.inspectorActionBtn,
+                          readiness === 'ready'
+                            ? styles.cadBtnEmerald
+                            : readiness === 'preparing'
+                            ? styles.cadBtnAmber
+                            : styles.cadBtnBlue,
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.inspectorActionBtnText,
+                            readiness === 'preparing' && { color: '#090D16' },
+                          ]}
+                        >
+                          {readiness === 'ready'
+                            ? '✨ Status: Pronto!'
+                            : readiness === 'preparing'
+                            ? '📖 Status: Preparando'
+                            : '📩 Status: Recebido'}
+                        </Text>
+                      </Pressable>
+
+                      <Pressable
+                        onPress={() => {
+                          setWaTargetSlot(slot);
+                          setWaTargetRole('primary');
+                          setWaMode('individual_card');
+                          setShowWhatsAppModal(true);
+                        }}
+                        style={styles.inspectorActionBtn}
+                      >
+                        <Text style={styles.inspectorActionBtnText}>📲 Ficha WhatsApp</Text>
+                      </Pressable>
+
+                      {assistant && (
+                        <Pressable
+                          onPress={() => {
+                            const dateLabel =
+                              currentSession.label.split('|')[0]?.trim() ||
+                              currentSession.label;
+                            const msg = formatPartnerSyncWhatsAppMessage(
+                              slot,
+                              dateLabel,
+                              myParticipantName || primary
+                            );
+                            handleOpenWhatsAppExternal(msg);
+                          }}
+                          style={[styles.inspectorActionBtn, styles.cadBtnEmerald]}
+                        >
+                          <Text style={styles.inspectorActionBtnText}>🤝 Combinar c/ Par</Text>
+                        </Pressable>
+                      )}
+
+                      <Pressable
+                        onPress={() => startRehearsal(slot)}
+                        style={styles.inspectorActionBtn}
+                      >
+                        <Text style={styles.inspectorActionBtnText}>
+                          ⏱️ Ensaiar ({durMin}m)
+                        </Text>
+                      </Pressable>
+
+                      <Pressable
+                        onPress={() => handleDownloadICS(slot)}
+                        style={styles.inspectorActionBtn}
+                      >
+                        <Text style={styles.inspectorActionBtnText}>📅 Alerta .ics</Text>
+                      </Pressable>
+
+                      <Pressable
+                        onPress={handlePrintFullEventPdf}
+                        style={[styles.inspectorActionBtn, styles.cadBtnRose]}
+                      >
+                        <Text style={styles.inspectorActionBtnText}>
+                          🖨️ Imprimir Evento (PDF)
+                        </Text>
+                      </Pressable>
+                    </View>
+
+                    {/* Active Rehearsal Timer inside Inspector if running */}
+                    {rehearsalSlot && (
+                      <View style={styles.inlineRehearsalBox}>
+                        <Text style={styles.inlineRehearsalLabel}>
+                          🎙️ Ensaio: {formatTimerMMSS(rehearsalRemainingSec)}
+                        </Text>
+                        <Pressable
+                          onPress={() => setRehearsalRunning((r) => !r)}
+                          style={styles.miniSwapBtn}
+                        >
+                          <Text style={styles.miniSwapBtnText}>
+                            {rehearsalRunning ? '⏸ Pausar' : '▶ Retomar'}
+                          </Text>
+                        </Pressable>
+                        <Pressable
+                          onPress={() => {
+                            setRehearsalRunning(false);
+                            setRehearsalSlot(null);
+                          }}
+                          style={styles.miniSwapBtn}
+                        >
+                          <Text style={styles.miniSwapBtnText}>✕</Text>
+                        </Pressable>
+                      </View>
+                    )}
+                  </View>
+                );
+              })()
+            ) : (
+              <Text style={{ color: theme.textMuted, padding: 12 }}>
+                Selecione um botão de designação na matriz ao lado.
+              </Text>
+            )}
+          </View>
+        </View>
+      ) : (
+        /* ================================================================= */
+        /* TAB 2: AUTOCAD TERRITORY MATRIX + TERRITORY INSPECTOR             */
+        /* ================================================================= */
+        <View
+          style={[
+            styles.cadWorkspaceSplit,
+            { flexDirection: isDesktop ? 'row' : 'column' },
+          ]}
+        >
+          <View
+            style={[
+              styles.cadMatrixPanel,
+              {
+                backgroundColor: theme.panelBg,
+                borderColor: theme.border,
+                flex: isDesktop ? 1.1 : undefined,
+              },
+            ]}
+          >
+            <View style={styles.sessionCoordStrip}>
+              <Text style={[styles.sessionCoordTitle, { color: theme.textPrimary }]}>
+                🗺️ MATRIZ AUTOCAD DE TERRITÓRIOS (16 SETORES MULTI-CICLO)
+              </Text>
+              <View style={styles.coordPillsRow}>
+                {(['all', '2027', '2026'] as const).map((yr) => (
+                  <Pressable
+                    key={yr}
+                    onPress={() => setS13ServiceYear(yr)}
+                    style={[
+                      styles.microChip,
+                      s13ServiceYear === yr && {
+                        backgroundColor: '#10B981',
+                        borderColor: '#34D399',
+                      },
+                    ]}
+                  >
+                    <Text style={styles.microChipText}>
+                      {yr === 'all' ? 'Ciclos 2026+2027' : `Ciclo ${yr}`}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+            </View>
+
+            <View style={styles.slotButtonsGrid}>
+              {territoryRegistry.map((t, idx) => {
+                const tMeta = (t.meta || {}) as Record<string, any>;
+                const code = tMeta.territoryNumber || t.key;
+                const history = (tMeta.assignmentHistory || []) as Array<{
+                  assignedTo: string;
+                  completedAt?: string;
+                }>;
+                const latest = history[history.length - 1];
+                const isOpen = Boolean(latest && !latest.completedAt);
+                const isSelected = idx === selectedTerritoryIdx;
+
+                return (
+                  <Pressable
+                    key={t.key}
+                    onPress={() => setSelectedTerritoryIdx(idx)}
+                    style={[
+                      styles.cadSlotButton,
+                      {
+                        borderLeftColor: isOpen ? '#10B981' : '#3B82F6',
+                        backgroundColor: isSelected ? '#064E3B' : '#0B1120',
+                        borderColor: isSelected ? '#34D399' : '#1E293B',
+                      },
+                    ]}
+                  >
+                    <View style={styles.cadSlotBtnHeader}>
+                      <Text style={styles.cadSlotBtnNumber}>[{code}]</Text>
+                      <Text style={styles.cadSlotBtnDuration}>
+                        {isOpen ? '🟢 Campo' : '✅ Concl.'}
+                      </Text>
+                    </View>
+                    <Text style={styles.cadSlotBtnTitle} numberOfLines={1}>
+                      {tMeta.locality || t.label}
+                    </Text>
+                    <Text style={styles.cadSlotBtnAssignee} numberOfLines={1}>
+                      👤 {latest?.assignedTo || 'Livre'}
+                    </Text>
+                  </Pressable>
+                );
+              })}
             </View>
           </View>
-        )}
-      </ScrollView>
+
+          {/* Territory Inspector Panel */}
+          <View
+            style={[
+              styles.cadInspectorPanel,
+              {
+                backgroundColor: theme.panelBg,
+                borderColor: theme.border,
+                flex: isDesktop ? 1 : undefined,
+              },
+            ]}
+          >
+            {inspectedTerritory &&
+              (() => {
+                const tMeta = (inspectedTerritory.meta || {}) as Record<string, any>;
+                const code = tMeta.territoryNumber || inspectedTerritory.key;
+                const history = (tMeta.assignmentHistory || []) as Array<{
+                  assignedTo: string;
+                  assignedAt: string;
+                  completedAt?: string;
+                  serviceYear?: number;
+                }>;
+                return (
+                  <View style={styles.inspectorContent}>
+                    <View
+                      style={[
+                        styles.inspectorBanner,
+                        { backgroundColor: '#065F46' },
+                      ]}
+                    >
+                      <Text style={styles.inspectorBannerText}>
+                        🔍 INSPETOR TERRITORIAL [{code}]
+                      </Text>
+                      <Text style={styles.inspectorBannerTime}>
+                        {history.length} ciclos
+                      </Text>
+                    </View>
+
+                    <Text style={[styles.inspectorSlotTitle, { color: theme.textPrimary }]}>
+                      {tMeta.locality || inspectedTerritory.label}
+                    </Text>
+
+                    <View style={styles.cyclesCompactGrid}>
+                      {history.map((cyc, cIdx) => (
+                        <View key={cIdx} style={styles.cycleCompactCard}>
+                          <Text style={styles.cycleCompactYear}>
+                            Ciclo {cyc.serviceYear || 2026}
+                          </Text>
+                          <Text style={styles.cycleCompactWho} numberOfLines={1}>
+                            👤 {cyc.assignedTo}
+                          </Text>
+                          <Text style={styles.cycleCompactDates}>
+                            {cyc.assignedAt} → {cyc.completedAt || 'Em campo'}
+                          </Text>
+                        </View>
+                      ))}
+                    </View>
+
+                    <View style={styles.inspectorActionsGrid}>
+                      <Pressable
+                        onPress={() => {
+                          setWaTargetTerritoryIdx(selectedTerritoryIdx);
+                          setWaMode('territory_assignment');
+                          setShowWhatsAppModal(true);
+                        }}
+                        style={[styles.inspectorActionBtn, styles.cadBtnEmerald]}
+                      >
+                        <Text style={styles.inspectorActionBtnText}>
+                          📲 Enviar Cartão WhatsApp
+                        </Text>
+                      </Pressable>
+
+                      <Pressable
+                        onPress={handleDownloadS13PDF}
+                        style={[styles.inspectorActionBtn, styles.cadBtnRose]}
+                      >
+                        <Text style={styles.inspectorActionBtnText}>
+                          🖨️ Folha PDF 4 Colunas
+                        </Text>
+                      </Pressable>
+                    </View>
+                  </View>
+                );
+              })()}
+          </View>
+        </View>
+      )}
 
       {/* ================================================================= */}
-      {/* MODAL 1: WHATSAPP EXPORT STUDIO (5 MODES)                         */}
+      {/* MODAL: CLEAN-ROOM PRIVILEGE MATRIX & FAIR ROTATION                */}
+      {/* ================================================================= */}
+      <PrivilegeMatrixModal
+        visible={showPrivilegeMatrixModal}
+        onClose={() => setShowPrivilegeMatrixModal(false)}
+        participants={activeDirectory}
+        onChangeParticipants={handleUpdateParticipants}
+        onAutoAssignCurrentWeek={(strict) => handleRunAutoAssign('current_week', strict)}
+        onAutoAssignAllWeeks={(strict) => handleRunAutoAssign('all_weeks', strict)}
+        lastAutoAssignSummaryText={lastAutoAssignSummaryText}
+      />
+
+      {/* ================================================================= */}
+      {/* MODAL: WHATSAPP EXPORT STUDIO                                     */}
       {/* ================================================================= */}
       <Modal visible={showWhatsAppModal} transparent animationType="fade">
         <View style={styles.modalBackdrop}>
-          <View style={[styles.modalCard, { backgroundColor: '#0F172A', borderColor: '#1E293B' }]}>
+          <View style={styles.modalCard}>
             <View style={styles.modalHeader}>
-              <View>
-                <Text style={styles.modalTitle}>📲 Estúdio de Exportação para WhatsApp</Text>
-                <Text style={styles.modalSubtitle}>
-                  Mensagens estruturadas prontas para grupos ou envio individual com 1 toque
-                </Text>
-              </View>
-              <Pressable onPress={() => setShowWhatsAppModal(false)} style={styles.closeModalBtn}>
+              <Text style={styles.modalTitle}>📲 Exportador WhatsApp (5 Modos)</Text>
+              <Pressable onPress={() => setShowWhatsAppModal(false)}>
                 <Text style={{ color: '#94A3B8', fontSize: 16, fontWeight: '800' }}>✕</Text>
               </Pressable>
             </View>
 
-            {/* 5 Mode Selector Tabs */}
-            <View style={styles.waModeTabs}>
+            <View style={styles.compactRow}>
               {(
                 [
-                  { id: 'full_week', label: '📋 Quadro Semanal' },
-                  { id: 'group_filter', label: '👥 Por Grupo (1/2/3)' },
-                  { id: 'individual_card', label: '🎯 Ficha Individual' },
-                  { id: 'live_pocket', label: '⏱️ Ao Vivo (19:30)' },
+                  { id: 'full_week', label: '📋 Semana' },
+                  { id: 'group_filter', label: '👥 Grupo' },
+                  { id: 'individual_card', label: '🎯 Individual' },
+                  { id: 'live_pocket', label: '⏱️ 19:30' },
                   { id: 'territory_assignment', label: '🗺️ Território' },
                 ] as const
               ).map((tab) => (
@@ -1641,180 +1578,40 @@ export default function ScheduleHubConsole() {
                   key={tab.id}
                   onPress={() => setWaMode(tab.id)}
                   style={[
-                    styles.waModeTab,
-                    waMode === tab.id && { backgroundColor: '#10B981', borderColor: '#34D399' },
+                    styles.microChip,
+                    waMode === tab.id && {
+                      backgroundColor: '#10B981',
+                      borderColor: '#34D399',
+                    },
                   ]}
                 >
-                  <Text
-                    style={{
-                      fontSize: 12,
-                      fontWeight: '800',
-                      color: waMode === tab.id ? '#090D16' : '#CBD5E1',
-                    }}
-                  >
-                    {tab.label}
-                  </Text>
+                  <Text style={styles.microChipText}>{tab.label}</Text>
                 </Pressable>
               ))}
             </View>
 
-            {/* Context Controls per Mode */}
-            {waMode === 'group_filter' && (
-              <View style={styles.waContextSubBar}>
-                <Text style={{ fontSize: 12, color: '#94A3B8', fontWeight: '700' }}>
-                  Escolher Grupo:
-                </Text>
-                {operationalGroups.map((g) => (
-                  <Pressable
-                    key={g}
-                    onPress={() => setWaTargetGroup(g)}
-                    style={[
-                      styles.smallContextPill,
-                      waTargetGroup === g && { backgroundColor: '#3B82F6', borderColor: '#60A5FA' },
-                    ]}
-                  >
-                    <Text style={{ fontSize: 12, fontWeight: '700', color: '#FFFFFF' }}>{g}</Text>
-                  </Pressable>
-                ))}
-              </View>
-            )}
-
-            {waMode === 'individual_card' && currentSession && (
-              <View style={styles.waContextSubBar}>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                  <View style={{ flexDirection: 'row', gap: 6 }}>
-                    {currentSession.sections.flatMap((s) => s.slots).map((sl) => (
-                      <Pressable
-                        key={sl.key}
-                        onPress={() => setWaTargetSlot(sl)}
-                        style={[
-                          styles.smallContextPill,
-                          waTargetSlot?.key === sl.key && {
-                            backgroundColor: '#FFB800',
-                            borderColor: '#FDE047',
-                          },
-                        ]}
-                      >
-                        <Text
-                          style={{
-                            fontSize: 11,
-                            fontWeight: '700',
-                            color: waTargetSlot?.key === sl.key ? '#090D16' : '#E2E8F0',
-                          }}
-                        >
-                          {sl.label.slice(0, 24)}...
-                        </Text>
-                      </Pressable>
-                    ))}
-                  </View>
-                </ScrollView>
-
-                <View style={{ flexDirection: 'row', gap: 8, marginTop: 6 }}>
-                  <Pressable
-                    onPress={() => setWaTargetRole('primary')}
-                    style={[
-                      styles.smallContextPill,
-                      waTargetRole === 'primary' && { backgroundColor: '#3B82F6' },
-                    ]}
-                  >
-                    <Text style={{ fontSize: 11, fontWeight: '700', color: '#FFF' }}>
-                      👤 Enviar ao Titular
-                    </Text>
-                  </Pressable>
-                  <Pressable
-                    onPress={() => setWaTargetRole('assistant')}
-                    style={[
-                      styles.smallContextPill,
-                      waTargetRole === 'assistant' && { backgroundColor: '#3B82F6' },
-                    ]}
-                  >
-                    <Text style={{ fontSize: 11, fontWeight: '700', color: '#FFF' }}>
-                      🤝 Enviar ao Ajudante
-                    </Text>
-                  </Pressable>
-                </View>
-              </View>
-            )}
-
-            {waMode === 'live_pocket' && (
-              <View style={styles.waContextSubBar}>
-                <Text style={{ fontSize: 12, color: '#94A3B8', fontWeight: '700' }}>
-                  Horário de Início:
-                </Text>
-                {['19:00', '19:30', '20:00'].map((tm) => (
-                  <Pressable
-                    key={tm}
-                    onPress={() => setWaStartTime(tm)}
-                    style={[
-                      styles.smallContextPill,
-                      waStartTime === tm && { backgroundColor: '#3B82F6' },
-                    ]}
-                  >
-                    <Text style={{ fontSize: 12, fontWeight: '700', color: '#FFF' }}>{tm}</Text>
-                  </Pressable>
-                ))}
-              </View>
-            )}
-
-            {waMode === 'territory_assignment' && (
-              <View style={styles.waContextSubBar}>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                  <View style={{ flexDirection: 'row', gap: 6 }}>
-                    {territoryRegistry.map((tr, tIdx) => {
-                      const code = (tr.meta as any)?.territoryNumber || tr.key;
-                      return (
-                        <Pressable
-                          key={tr.key}
-                          onPress={() => setWaTargetTerritoryIdx(tIdx)}
-                          style={[
-                            styles.smallContextPill,
-                            waTargetTerritoryIdx === tIdx && { backgroundColor: '#10B981' },
-                          ]}
-                        >
-                          <Text
-                            style={{
-                              fontSize: 11,
-                              fontWeight: '800',
-                              color: waTargetTerritoryIdx === tIdx ? '#090D16' : '#FFF',
-                            }}
-                          >
-                            {code}
-                          </Text>
-                        </Pressable>
-                      );
-                    })}
-                  </View>
-                </ScrollView>
-              </View>
-            )}
-
-            {/* WhatsApp Bubble Preview */}
             <ScrollView style={styles.waPreviewScroll}>
-              <View style={styles.waBubble}>
-                <Text style={styles.waBubbleText}>{whatsappPreviewText}</Text>
-              </View>
+              <Text style={styles.waBubbleText}>{whatsappPreviewText}</Text>
             </ScrollView>
 
             {copyFeedback && (
-              <Text style={{ color: '#34D399', fontWeight: '800', fontSize: 13, marginBottom: 8 }}>
+              <Text style={{ color: '#34D399', fontSize: 12, fontWeight: '800' }}>
                 {copyFeedback}
               </Text>
             )}
 
-            <View style={styles.modalActionsRow}>
-              <Pressable onPress={handleCopyWhatsAppMessage} style={styles.waCopyBtn}>
-                <Text style={{ fontSize: 14, fontWeight: '800', color: '#F8FAFC' }}>
-                  📋 Copiar Mensagem Formatada
-                </Text>
+            <View style={styles.compactRow}>
+              <Pressable
+                onPress={handleCopyWhatsAppMessage}
+                style={[styles.cadCommandBtn, styles.cadBtnBlue]}
+              >
+                <Text style={styles.cadCommandBtnText}>📋 Copiar Texto</Text>
               </Pressable>
-
               <Pressable
                 onPress={() => handleOpenWhatsAppExternal(whatsappPreviewText)}
-                style={styles.waSendBtn}
+                style={[styles.cadCommandBtn, styles.cadBtnEmerald]}
               >
-                <Text style={{ fontSize: 14, fontWeight: '900', color: '#052E16' }}>
-                  📲 Abrir no WhatsApp
-                </Text>
+                <Text style={styles.cadCommandBtnText}>📲 Abrir WhatsApp</Text>
               </Pressable>
             </View>
           </View>
@@ -1822,61 +1619,59 @@ export default function ScheduleHubConsole() {
       </Modal>
 
       {/* ================================================================= */}
-      {/* MODAL 2: "MEU COMPROMISSO" PARTICIPANT PICKER                     */}
+      {/* MODAL: PARTICIPANT PICKER ("MEU COMPROMISSO")                     */}
       {/* ================================================================= */}
       <Modal visible={showParticipantPicker} transparent animationType="fade">
         <View style={styles.modalBackdrop}>
-          <View style={[styles.modalCard, { backgroundColor: '#0F172A', borderColor: '#1E293B' }]}>
+          <View style={styles.modalCard}>
             <View style={styles.modalHeader}>
-              <View>
-                <Text style={styles.modalTitle}>🎯 Selecionar Meu Nome</Text>
-                <Text style={styles.modalSubtitle}>
-                  Filtra instantaneamente suas designações e territórios nas semanas carregadas
-                </Text>
-              </View>
-              <Pressable
-                onPress={() => setShowParticipantPicker(false)}
-                style={styles.closeModalBtn}
-              >
+              <Text style={styles.modalTitle}>🎯 Filtrar Meu Compromisso</Text>
+              <Pressable onPress={() => setShowParticipantPicker(false)}>
                 <Text style={{ color: '#94A3B8', fontSize: 16, fontWeight: '800' }}>✕</Text>
               </Pressable>
             </View>
-
             <TextInput
               value={participantSearch}
               onChangeText={setParticipantSearch}
-              placeholder="Buscar por participante ou grupo (ex: Grupo 1, Participante 01)..."
+              placeholder="Buscar nome ou grupo..."
               placeholderTextColor="#64748B"
               style={styles.searchInput}
             />
-
-            <ScrollView style={{ maxHeight: 360 }}>
-              <View style={{ gap: 6 }}>
-                {filteredParticipants.map((p) => (
-                  <Pressable
-                    key={p.id}
-                    onPress={() => handleSelectMyParticipant(p.name)}
-                    style={[
-                      styles.participantRow,
-                      myParticipantName === p.name && {
-                        borderColor: '#FFB800',
-                        backgroundColor: 'rgba(255, 184, 0, 0.14)',
-                      },
-                    ]}
-                  >
-                    <View>
-                      <Text style={{ fontSize: 14, fontWeight: '700', color: '#F8FAFC' }}>
-                        {p.name}
+            <ScrollView style={{ maxHeight: 300 }}>
+              <View style={styles.compactRow}>
+                <Pressable
+                  onPress={() => {
+                    setMyParticipantName('');
+                    setShowParticipantPicker(false);
+                  }}
+                  style={styles.microChip}
+                >
+                  <Text style={styles.microChipText}>Limpar Filtro</Text>
+                </Pressable>
+                {activeDirectory
+                  .filter((p) =>
+                    normalizePersonKey(p.name).includes(normalizePersonKey(participantSearch))
+                  )
+                  .map((p) => (
+                    <Pressable
+                      key={p.id}
+                      onPress={() => {
+                        setMyParticipantName(p.name);
+                        setShowParticipantPicker(false);
+                      }}
+                      style={[
+                        styles.microChip,
+                        myParticipantName === p.name && {
+                          backgroundColor: '#D97706',
+                          borderColor: '#FDE68A',
+                        },
+                      ]}
+                    >
+                      <Text style={styles.microChipText}>
+                        {p.name} ({p.groupTag})
                       </Text>
-                      <Text style={{ fontSize: 11, color: '#94A3B8' }}>
-                        {p.capabilityTags.join(' • ')}
-                      </Text>
-                    </View>
-                    <View style={styles.groupTagBadge}>
-                      <Text style={styles.groupTagText}>{p.groupTag}</Text>
-                    </View>
-                  </Pressable>
-                ))}
+                    </Pressable>
+                  ))}
               </View>
             </ScrollView>
           </View>
@@ -1884,44 +1679,32 @@ export default function ScheduleHubConsole() {
       </Modal>
 
       {/* ================================================================= */}
-      {/* MODAL 3: PASTE / IMPORT SCHEDULE TEXT                             */}
+      {/* MODAL: PASTE CSV OR SCHEDULE TEXT                                 */}
       {/* ================================================================= */}
       <Modal visible={showImportModal} transparent animationType="fade">
         <View style={styles.modalBackdrop}>
-          <View style={[styles.modalCard, { backgroundColor: '#0F172A', borderColor: '#1E293B' }]}>
+          <View style={styles.modalCard}>
             <View style={styles.modalHeader}>
-              <View>
-                <Text style={styles.modalTitle}>📥 Colar Programação (Texto de PDF)</Text>
-                <Text style={styles.modalSubtitle}>
-                  Cole o texto copiado de qualquer PDF de programação para compilar na estrutura agnóstica do Sekundo
-                </Text>
-              </View>
-              <Pressable onPress={() => setShowImportModal(false)} style={styles.closeModalBtn}>
+              <Text style={styles.modalTitle}>📥 Colar CSV ou Texto de Programação</Text>
+              <Pressable onPress={() => setShowImportModal(false)}>
                 <Text style={{ color: '#94A3B8', fontSize: 16, fontWeight: '800' }}>✕</Text>
               </Pressable>
             </View>
-
             <TextInput
               value={customScheduleText}
               onChangeText={setCustomScheduleText}
               multiline
-              numberOfLines={10}
-              placeholder="Exemplo:\n9 de outubro de 2026 | MÓDULO 01 Presidente Participante 12\nBLOCO 1 — FUNDAMENTOS E ANÁLISE\n1. Abertura Temática e Diretrizes (10 mins.) Participante 03..."
+              numberOfLines={8}
+              placeholder="Cole aqui o conteúdo de um arquivo .csv ou o texto da programação..."
               placeholderTextColor="#64748B"
-              style={[styles.searchInput, { minHeight: 200, textAlignVertical: 'top' }]}
+              style={[styles.searchInput, { minHeight: 160, textAlignVertical: 'top' }]}
             />
-
-            <View style={styles.modalActionsRow}>
+            <View style={styles.compactRow}>
               <Pressable
-                onPress={() => setShowImportModal(false)}
-                style={[styles.waCopyBtn, { backgroundColor: '#334155' }]}
+                onPress={handleImportCustomText}
+                style={[styles.cadCommandBtn, styles.cadBtnEmerald]}
               >
-                <Text style={{ fontSize: 13, fontWeight: '700', color: '#E2E8F0' }}>Cancelar</Text>
-              </Pressable>
-              <Pressable onPress={handleImportCustomText} style={styles.waSendBtn}>
-                <Text style={{ fontSize: 13, fontWeight: '900', color: '#052E16' }}>
-                  ⚡ Compilar e Carregar Programação
-                </Text>
+                <Text style={styles.cadCommandBtnText}>⚡ Compilar e Importar</Text>
               </Pressable>
             </View>
           </View>
@@ -1932,589 +1715,465 @@ export default function ScheduleHubConsole() {
 }
 
 const styles = StyleSheet.create({
-  container: {
+  cadViewport: {
+    flex: 1,
+    height: Platform.OS === 'web' ? ('100dvh' as any) : '100%',
+    maxHeight: Platform.OS === 'web' ? ('100dvh' as any) : '100%',
+    overflow: 'hidden',
+  },
+  cadTopRibbon: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderBottomWidth: 1,
+    gap: 6,
+  },
+  brandCluster: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  cadRibbonTitle: {
+    fontSize: 12,
+    fontWeight: '900',
+    letterSpacing: 0.4,
+  },
+  cadRibbonTools: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: 5,
+  },
+  cadCommandBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 5,
+    backgroundColor: '#1E293B',
+    borderWidth: 1,
+    borderColor: '#334155',
+  },
+  cadBtnBlue: {
+    backgroundColor: '#1D4ED8',
+    borderColor: '#60A5FA',
+  },
+  cadBtnEmerald: {
+    backgroundColor: '#059669',
+    borderColor: '#34D399',
+  },
+  cadBtnPurple: {
+    backgroundColor: '#6D28D9',
+    borderColor: '#A78BFA',
+  },
+  cadBtnAmber: {
+    backgroundColor: '#F59E0B',
+    borderColor: '#FDE68A',
+  },
+  cadBtnCyan: {
+    backgroundColor: '#0284C7',
+    borderColor: '#38BDF8',
+  },
+  cadBtnRose: {
+    backgroundColor: '#BE123C',
+    borderColor: '#FB7185',
+  },
+  cadCommandBtnText: {
+    color: '#F8FAFC',
+    fontSize: 10.5,
+    fontWeight: '800',
+  },
+  cadSubRibbon: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderBottomWidth: 1,
+    gap: 5,
+  },
+  compactRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: 5,
+  },
+  subTabBtn: {
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: 5,
+    backgroundColor: '#1E293B',
+    borderWidth: 1,
+    borderColor: '#334155',
+  },
+  subTabBtnText: {
+    fontSize: 10.5,
+    fontWeight: '800',
+  },
+  microChip: {
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 5,
+    backgroundColor: '#1E293B',
+    borderWidth: 1,
+    borderColor: '#334155',
+  },
+  microChipText: {
+    color: '#E2E8F0',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  weekMicroBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 5,
+    backgroundColor: '#0F172A',
+    borderWidth: 1,
+    borderColor: '#1E293B',
+  },
+  weekMicroBtnText: {
+    color: '#CBD5E1',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  compactStatusBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#064E3B',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderBottomWidth: 1,
+    borderBottomColor: '#10B981',
+  },
+  compactStatusText: {
+    color: '#A7F3D0',
+    fontSize: 11,
+    fontWeight: '700',
     flex: 1,
   },
-  scrollContent: {
-    padding: 16,
-    maxWidth: 1180,
-    width: '100%',
-    alignSelf: 'center',
-    paddingBottom: 64,
-  },
-  topBar: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: 10,
-    marginBottom: 14,
-  },
-  backButton: {
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-  },
-  backText: {
-    fontSize: 14,
-    fontWeight: '800',
-  },
-  topRightActions: {
-    flexDirection: 'row',
+  cadWorkspaceSplit: {
+    flex: 1,
+    padding: 8,
     gap: 8,
-    flexWrap: 'wrap',
+    overflow: 'hidden',
   },
-  topPillButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 10,
-    borderWidth: 1,
-  },
-  heroCard: {
-    padding: 18,
-    borderRadius: 16,
-    borderWidth: 1,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: 16,
-    marginBottom: 14,
-  },
-  heroBadge: {
-    fontSize: 10,
-    fontWeight: '800',
-    borderWidth: 1,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 6,
-    letterSpacing: 0.6,
-  },
-  heroTitle: {
-    fontSize: 22,
-    fontWeight: '900',
-    marginTop: 6,
-  },
-  heroSubtitle: {
-    fontSize: 13,
-    marginTop: 4,
-  },
-  whatsappMainCTA: {
-    backgroundColor: '#10B981',
-    paddingVertical: 12,
-    paddingHorizontal: 18,
-    borderRadius: 12,
-    alignItems: 'center',
-  },
-  whatsappMainCTAText: {
-    color: '#052E16',
-    fontSize: 14,
-    fontWeight: '900',
-  },
-  whatsappMainCTASub: {
-    color: '#064E3B',
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  statusBanner: {
-    backgroundColor: '#1E293B',
-    borderColor: '#3B82F6',
-    borderWidth: 1,
-    borderRadius: 10,
-    padding: 12,
-    marginBottom: 14,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  statusBannerText: {
-    color: '#E2E8F0',
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  rehearsalBar: {
-    padding: 14,
-    borderRadius: 12,
-    borderWidth: 1.5,
-    marginBottom: 14,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-    flexWrap: 'wrap',
-  },
-  rehearsalClock: {
-    fontSize: 28,
-    fontWeight: '900',
-    fontVariant: ['tabular-nums'],
-  },
-  rehearsalControlBtn: {
-    backgroundColor: '#1E293B',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-  },
-  rehearsalControlText: {
-    color: '#F8FAFC',
-    fontSize: 12,
-    fontWeight: '800',
-  },
-  filterCard: {
-    padding: 14,
-    borderRadius: 14,
-    borderWidth: 1,
-    marginBottom: 14,
-  },
-  filterRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    flexWrap: 'wrap',
-    gap: 10,
-  },
-  myCommitmentButton: {
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    borderRadius: 10,
-    borderWidth: 1.5,
-    flexShrink: 1,
-    maxWidth: '100%',
-  },
-  clearFilterBtn: {
-    paddingVertical: 8,
-    paddingHorizontal: 10,
+  cadMatrixPanel: {
     borderRadius: 8,
     borderWidth: 1,
+    padding: 8,
+    overflow: 'hidden',
   },
-  groupPillsContainer: {
+  sessionCoordStrip: {
     flexDirection: 'row',
-    gap: 8,
     flexWrap: 'wrap',
     alignItems: 'center',
-  },
-  groupPill: {
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 10,
-    borderWidth: 1,
-  },
-  groupWhatsAppQuickBtn: {
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#10B981',
-    backgroundColor: 'rgba(16, 185, 129, 0.14)',
-  },
-  mySummaryBox: {
-    marginTop: 12,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 184, 0, 0.3)',
-  },
-  mySummaryTitle: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: '#FFB800',
-  },
-  mySummaryChip: {
-    backgroundColor: '#0F172A',
-    borderColor: '#FFB800',
-    borderWidth: 1,
-    borderRadius: 10,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    minWidth: 180,
-  },
-  tabBar: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    gap: 6,
+    paddingBottom: 6,
+    marginBottom: 6,
     borderBottomWidth: 1,
     borderBottomColor: '#1E293B',
-    marginBottom: 14,
-    gap: 12,
   },
-  tabButton: {
-    paddingVertical: 10,
-    paddingHorizontal: 6,
-    flexShrink: 1,
-  },
-  tabButtonText: {
-    fontSize: 13,
-    fontWeight: '800',
-  },
-  weekSelectorScroll: {
-    marginBottom: 14,
-  },
-  weekSelectorRow: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  weekPill: {
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    borderRadius: 12,
-    borderWidth: 1,
-    minWidth: 145,
-  },
-  sessionHeaderCard: {
-    padding: 16,
-    borderRadius: 14,
-    borderWidth: 1,
-    marginBottom: 14,
-  },
-  sessionDateTitle: {
-    fontSize: 18,
+  sessionCoordTitle: {
+    fontSize: 12,
     fontWeight: '900',
   },
-  sessionMetaChips: {
+  coordPillsRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 10,
-    marginTop: 10,
+    gap: 5,
   },
-  metaChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: 'rgba(30, 41, 59, 0.6)',
-    paddingVertical: 5,
-    paddingHorizontal: 10,
-    borderRadius: 8,
-  },
-  metaChipLabel: {
-    fontSize: 12,
-    color: '#94A3B8',
-    fontWeight: '700',
-  },
-  metaChipValue: {
-    fontSize: 12,
-    color: '#F8FAFC',
-    fontWeight: '800',
-  },
-  secondaryActionBtn: {
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 10,
-    borderWidth: 1,
-  },
-  sectionBlock: {
-    borderRadius: 14,
-    borderWidth: 1,
-    overflow: 'hidden',
-    marginBottom: 16,
-  },
-  sectionBanner: {
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  sectionBannerTitle: {
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '900',
-    letterSpacing: 0.5,
-  },
-  sectionBannerCount: {
-    color: 'rgba(255,255,255,0.85)',
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  cueStrip: {
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(148, 163, 184, 0.15)',
-  },
-  slotsList: {
-    padding: 12,
-    gap: 10,
-  },
-  slotCard: {
-    borderRadius: 12,
-    borderLeftWidth: 5,
-    padding: 14,
-  },
-  slotHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    gap: 10,
-  },
-  slotTitle: {
-    fontSize: 15,
-    fontWeight: '800',
-  },
-  durationBadge: {
-    paddingVertical: 4,
-    paddingHorizontal: 9,
-    borderRadius: 8,
-    borderWidth: 1,
-  },
-  assigneesContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 14,
-    marginTop: 10,
-  },
-  personChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    flexWrap: 'wrap',
-  },
-  personRoleLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  personName: {
-    fontSize: 14,
-    fontWeight: '800',
-  },
-  groupTagBadge: {
-    backgroundColor: 'rgba(59, 130, 246, 0.18)',
-    borderColor: '#3B82F6',
-    borderWidth: 1,
+  coordBadge: {
+    backgroundColor: '#1E293B',
     paddingHorizontal: 7,
     paddingVertical: 2,
-    borderRadius: 6,
+    borderRadius: 4,
   },
-  groupTagText: {
-    color: '#93C5FD',
+  coordBadgeText: {
+    color: '#E2E8F0',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  matrixHintText: {
+    color: '#94A3B8',
+    fontSize: 10,
+    fontWeight: '700',
+    marginBottom: 6,
+  },
+  slotButtonsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  cadSlotButton: {
+    width: '48.5%',
+    minWidth: 145,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderLeftWidth: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+  },
+  cadSlotBtnHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  cadSlotBtnNumber: {
+    color: '#38BDF8',
+    fontSize: 10,
+    fontWeight: '900',
+  },
+  cadSlotBtnDuration: {
+    color: '#94A3B8',
+    fontSize: 9.5,
+    fontWeight: '700',
+  },
+  cadSlotBtnTitle: {
+    color: '#F8FAFC',
+    fontSize: 11,
+    fontWeight: '800',
+    marginTop: 1,
+  },
+  cadSlotBtnAssignee: {
+    color: '#CBD5E1',
+    fontSize: 10,
+    fontWeight: '600',
+    marginTop: 1,
+  },
+  cadInspectorPanel: {
+    borderRadius: 8,
+    borderWidth: 1,
+    padding: 8,
+    overflow: 'hidden',
+  },
+  inspectorContent: {
+    flex: 1,
+    gap: 7,
+  },
+  inspectorBanner: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 5,
+  },
+  inspectorBannerText: {
+    color: '#FFFFFF',
+    fontSize: 10.5,
+    fontWeight: '900',
+    flex: 1,
+  },
+  inspectorBannerTime: {
+    color: '#F8FAFC',
+    fontSize: 10.5,
+    fontWeight: '800',
+  },
+  inspectorSlotTitle: {
+    fontSize: 13.5,
+    fontWeight: '900',
+  },
+  capabilityTagRow: {
+    backgroundColor: '#1E293B',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 5,
+    borderLeftWidth: 3,
+    borderLeftColor: '#38BDF8',
+  },
+  capabilityTagText: {
+    color: '#BAE6FD',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  inspectorAssigneesRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  inspectorPersonBox: {
+    flex: 1,
+    minWidth: 140,
+    backgroundColor: '#0B1120',
+    borderWidth: 1,
+    borderColor: '#1E293B',
+    borderRadius: 6,
+    padding: 7,
+    gap: 3,
+  },
+  inspectorRoleLabel: {
+    color: '#64748B',
+    fontSize: 9,
+    fontWeight: '800',
+  },
+  inspectorPersonName: {
+    color: '#F8FAFC',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  inspectorPersonFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 2,
+  },
+  inspectorGroupBadge: {
+    color: '#38BDF8',
     fontSize: 10,
     fontWeight: '800',
   },
-  slotActionsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginTop: 12,
-    paddingTop: 10,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(148, 163, 184, 0.12)',
-  },
-  slotActionBtn: {
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 9,
-    borderWidth: 1,
-    minHeight: 38,
-    justifyContent: 'center',
-  },
-  sessionFooterCard: {
-    padding: 14,
-    borderRadius: 12,
-    borderWidth: 1,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: 10,
-  },
-  s13HeaderCard: {
-    padding: 16,
-    borderRadius: 14,
-    borderWidth: 1,
-    marginBottom: 14,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: 14,
-  },
-  s13DownloadBtn: {
-    backgroundColor: '#FFB800',
-    paddingVertical: 12,
-    paddingHorizontal: 18,
-    borderRadius: 12,
-    alignItems: 'center',
-  },
-  territoryGrid: {
-    gap: 12,
-  },
-  territoryCard: {
-    padding: 14,
-    borderRadius: 14,
-    borderWidth: 1,
-  },
-  territoryHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: 10,
-    marginBottom: 10,
-  },
-  territoryCodeBadge: {
+  miniSwapBtn: {
     backgroundColor: '#1E293B',
-    borderColor: '#FFB800',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 4,
     borderWidth: 1,
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderRadius: 8,
+    borderColor: '#334155',
   },
-  territoryCodeText: {
-    color: '#FFB800',
-    fontSize: 13,
-    fontWeight: '900',
+  miniSwapBtnText: {
+    color: '#E2E8F0',
+    fontSize: 9.5,
+    fontWeight: '700',
   },
-  territoryLocality: {
-    fontSize: 15,
+  reassignPickerStrip: {
+    backgroundColor: '#111827',
+    padding: 6,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#3B82F6',
+    gap: 4,
+  },
+  reassignStripTitle: {
+    color: '#93C5FD',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  candidateChip: {
+    backgroundColor: '#1E293B',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 5,
+    borderWidth: 1,
+    borderColor: '#334155',
+  },
+  candidateChipName: {
+    color: '#F8FAFC',
+    fontSize: 10.5,
     fontWeight: '800',
   },
-  statusPill: {
-    paddingVertical: 5,
-    paddingHorizontal: 10,
-    borderRadius: 8,
-    borderWidth: 1,
+  candidateChipMeta: {
+    color: '#94A3B8',
+    fontSize: 9,
   },
-  territoryWaBtn: {
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#10B981',
-    backgroundColor: 'rgba(16, 185, 129, 0.12)',
-  },
-  cyclesGrid: {
+  inspectorActionsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
+    gap: 6,
+    marginTop: 2,
   },
-  cycleCell: {
-    width: 215,
-    padding: 10,
-    borderRadius: 10,
+  inspectorActionBtn: {
+    paddingHorizontal: 9,
+    paddingVertical: 6,
+    borderRadius: 5,
+    backgroundColor: '#1E293B',
     borderWidth: 1,
+    borderColor: '#334155',
   },
-  cycleDatesRow: {
+  inspectorActionBtnText: {
+    color: '#F8FAFC',
+    fontSize: 10.5,
+    fontWeight: '800',
+  },
+  inlineRehearsalBox: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 4,
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#064E3B',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 5,
+  },
+  inlineRehearsalLabel: {
+    color: '#A7F3D0',
+    fontSize: 11,
+    fontWeight: '900',
+    flex: 1,
+  },
+  cyclesCompactGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  cycleCompactCard: {
+    width: '48%',
+    backgroundColor: '#0B1120',
+    borderWidth: 1,
+    borderColor: '#1E293B',
+    borderRadius: 5,
+    padding: 6,
+  },
+  cycleCompactYear: {
+    color: '#FFB800',
+    fontSize: 9.5,
+    fontWeight: '800',
+  },
+  cycleCompactWho: {
+    color: '#F8FAFC',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  cycleCompactDates: {
+    color: '#94A3B8',
+    fontSize: 9.5,
   },
   modalBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+    backgroundColor: 'rgba(2, 6, 23, 0.85)',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 16,
+    padding: 12,
   },
   modalCard: {
     width: '100%',
-    maxWidth: 720,
-    borderRadius: 16,
+    maxWidth: 640,
+    backgroundColor: '#0F172A',
+    borderRadius: 10,
     borderWidth: 1,
-    padding: 18,
+    borderColor: '#1E293B',
+    padding: 12,
+    gap: 8,
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 14,
+    alignItems: 'center',
   },
   modalTitle: {
     color: '#F8FAFC',
-    fontSize: 18,
+    fontSize: 14,
     fontWeight: '900',
   },
-  modalSubtitle: {
-    color: '#94A3B8',
-    fontSize: 12,
-    marginTop: 2,
-  },
-  closeModalBtn: {
-    padding: 6,
-  },
-  waModeTabs: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-    marginBottom: 12,
-  },
-  waModeTab: {
-    paddingVertical: 8,
-    paddingHorizontal: 11,
-    borderRadius: 9,
-    borderWidth: 1,
-    borderColor: '#334155',
-    backgroundColor: '#1E293B',
-  },
-  waContextSubBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 12,
-    padding: 10,
-    backgroundColor: '#090D16',
-    borderRadius: 10,
-  },
-  smallContextPill: {
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#334155',
-    backgroundColor: '#1E293B',
-  },
   waPreviewScroll: {
-    maxHeight: 310,
-    backgroundColor: '#0B141A',
-    borderRadius: 12,
-    padding: 14,
-    marginBottom: 14,
+    maxHeight: 240,
+    backgroundColor: '#090D16',
+    borderRadius: 6,
+    padding: 8,
     borderWidth: 1,
     borderColor: '#1E293B',
   },
-  waBubble: {
-    backgroundColor: '#005C4B',
-    borderRadius: 12,
-    padding: 14,
-  },
   waBubbleText: {
-    color: '#F8FAFC',
-    fontSize: 13,
-    lineHeight: 20,
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-  },
-  modalActionsRow: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    gap: 10,
-    flexWrap: 'wrap',
-  },
-  waCopyBtn: {
-    backgroundColor: '#1E293B',
-    borderColor: '#475569',
-    borderWidth: 1,
-    paddingVertical: 11,
-    paddingHorizontal: 16,
-    borderRadius: 10,
-  },
-  waSendBtn: {
-    backgroundColor: '#10B981',
-    paddingVertical: 11,
-    paddingHorizontal: 18,
-    borderRadius: 10,
+    color: '#E2E8F0',
+    fontSize: 11.5,
+    fontFamily: Platform.OS === 'web' ? 'monospace' : undefined,
   },
   searchInput: {
     backgroundColor: '#090D16',
+    borderWidth: 1,
     borderColor: '#334155',
-    borderWidth: 1,
-    borderRadius: 10,
-    padding: 12,
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
     color: '#F8FAFC',
-    fontSize: 14,
-    marginBottom: 12,
-  },
-  participantRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 12,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#1E293B',
-    backgroundColor: '#090D16',
+    fontSize: 12,
   },
 });

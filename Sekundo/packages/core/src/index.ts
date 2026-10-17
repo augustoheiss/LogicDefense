@@ -527,3 +527,52 @@ export type {
   ResolvedPinSymbology,
 } from './territory/mapSymbologyEngine';
 
+// Clean-Room Privilege Matrix & Fair-Rotation Auto-Assignment Engine
+export {
+  CAPABILITY_COLUMNS,
+  ALL_CAPABILITY_KEYS,
+  ROLE_TIER_LABELS,
+  PROFILE_CATEGORY_LABELS,
+  STATUS_FLAG_LABELS,
+  DEFAULT_PRIVILEGE_MATRIX_PARTICIPANTS,
+  createEmptyCapabilitiesMap,
+  buildPresetCapabilities,
+  deriveSummaryTagsFromCapabilities,
+  ensureParticipantPrivilegeMatrix,
+  filterParticipantsByMatrixCriteria,
+  inferSlotRequiredCapability,
+  autoAssignScheduleRegistry,
+} from './roster/privilegeRotationEngine';
+export type {
+  CapabilityDomainId,
+  CapabilityKey,
+  CapabilityColumnMeta,
+  PrivilegeMatrixFilterCriteria,
+  InferredSlotRequirement,
+  AutoAssignOptions,
+  AutoAssignSummary,
+} from './roster/privilegeRotationEngine';
+export type {
+  ParticipantCategory,
+  ParticipantRoleTier,
+  ParticipantStatusFlag,
+} from './roster/participantDirectory';
+
+// Unified Master CSV ("CSV Geral" / Omni-Bundle CSV)
+export {
+  OMNI_CSV_HEADERS,
+  parseRawOmniCsvTable,
+  exportOmniCsvBundle,
+  importOmniCsvBundle,
+  exportScheduleHubToCsv,
+  importScheduleHubFromCsv,
+  generateOmniMasterSampleCsv,
+} from './csv/omniCsvBundle';
+export type {
+  OmniRecordKind,
+  OmniCsvHeader,
+  OmniEventBundleItem,
+  OmniStudioDocItem,
+  OmniHojeRitualItem,
+  SekundoOmniStateBundle,
+} from './csv/omniCsvBundle';

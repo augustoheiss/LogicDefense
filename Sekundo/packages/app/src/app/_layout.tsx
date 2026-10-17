@@ -94,6 +94,11 @@ export default function RootLayout() {
 const styles = StyleSheet.create({
   rootWrapper: {
     flex: 1,
+    width: '100%',
+    maxWidth: '100%',
+    height: Platform.OS === 'web' ? ('100dvh' as any) : '100%',
+    maxHeight: Platform.OS === 'web' ? ('100dvh' as any) : '100%',
+    overflow: 'hidden',
     backgroundColor: '#0C0E15',
   },
   errorContainer: {
