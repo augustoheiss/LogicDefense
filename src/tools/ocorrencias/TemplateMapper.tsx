@@ -764,7 +764,7 @@ export function TemplateMapper({
                     )
                     .join(' ')}
                   fill="none"
-                  stroke={firstPageSigOp.colorHex || '#0F296B'}
+                  stroke={firstPageSigOp.color || '#0F296B'}
                   strokeWidth={firstPageSigOp.strokeWidthMm || 0.42}
                   strokeLinecap="round"
                   strokeLinejoin="round"

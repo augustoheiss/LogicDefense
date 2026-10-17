@@ -537,6 +537,7 @@ function paintResolvedOperation(
  * in browser memory (`Uint8Array`) using `pdf-lib`, with zero external files or metadata.
  */
 export async function generateCleanRoomSampleTemplatePdfBytes(): Promise<Uint8Array> {
+  const { PDFDocument, StandardFonts, rgb } = await getPdfLib();
   const pdfDoc = await PDFDocument.create();
   pdfDoc.setTitle('Formulario Sintetico Padrao A4 - Clean-Room');
   pdfDoc.setCreator('LogicDefense Clean-Room PDF Engine');
