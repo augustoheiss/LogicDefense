@@ -42,10 +42,15 @@ backend/test_*.py
 .agents/
 .cursor/
 
-# Master Plan (todas as pastas em qualquer nivel do projeto)
+# Master Plan & Docs (todas as pastas em qualquer nivel do projeto — nunca enviar ao GitHub)
 master-plan/
 **/master-plan/
 master-plan
+**/testes/
+docs/
+docs/*
+**/docs/
+**/docs/**
 client_secret.json
 scripts/youtube_auto_uploader.py
 scripts/youtube_batch_uploader.py

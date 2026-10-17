@@ -37,6 +37,11 @@ import {
   publicAiAnalyst,
   APIExecutionResult,
 } from '@/services/publicApiService';
+import {
+  getApiStorageItem,
+  subscribeCoinSyncRequested,
+} from '@/services/apiKeyService';
+import { ensureApiKeyForTable } from '@/services/exportService';
 
 type ActiveTab = 'context' | 'export' | 'append' | 'spec';
 
@@ -54,26 +59,45 @@ export function APIManagementTester() {
   const [activeTab, setActiveTab] = useState<ActiveTab>('append');
 
   React.useEffect(() => {
-    const syncActiveApiKey = (e?: any) => {
-      if (typeof window !== 'undefined' && window.localStorage) {
-        const detailKey = e?.detail?.apiKey;
-        const activeKey = detailKey || window.localStorage.getItem('coin_active_api_key');
-        if (activeKey && activeKey.startsWith('am_sheet_live_')) {
-          setApiKey(activeKey);
-        }
+    let cancelled = false;
+
+    const hydrateActiveApiKey = async (explicitKey?: string) => {
+      if (explicitKey && explicitKey.startsWith('am_sheet_live_')) {
+        if (!cancelled) setApiKey(explicitKey);
+        return;
+      }
+      const storedActive = await getApiStorageItem('coin_active_api_key');
+      if (storedActive && storedActive.startsWith('am_sheet_live_')) {
+        if (!cancelled) setApiKey(storedActive);
+        return;
+      }
+      const provisioned = await ensureApiKeyForTable('default_tester');
+      if (!cancelled && provisioned && provisioned.startsWith('am_sheet_live_')) {
+        setApiKey(provisioned);
       }
     };
 
-    syncActiveApiKey();
+    hydrateActiveApiKey();
 
-    if (typeof window !== 'undefined') {
-      window.addEventListener('coin_sync_requested', syncActiveApiKey);
-      window.addEventListener('storage', syncActiveApiKey);
-      return () => {
-        window.removeEventListener('coin_sync_requested', syncActiveApiKey);
-        window.removeEventListener('storage', syncActiveApiKey);
-      };
+    const unsubscribe = subscribeCoinSyncRequested((detail) => {
+      hydrateActiveApiKey(detail?.apiKey);
+    });
+
+    const onStorage = () => {
+      hydrateActiveApiKey();
+    };
+
+    if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+      window.addEventListener('storage', onStorage);
     }
+
+    return () => {
+      cancelled = true;
+      unsubscribe();
+      if (typeof window !== 'undefined' && typeof window.removeEventListener === 'function') {
+        window.removeEventListener('storage', onStorage);
+      }
+    };
   }, []);
 
   // Loading state

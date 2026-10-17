@@ -57,9 +57,12 @@ function RootNavigator() {
     const inAuthGroup = segments[0] === '(auth)';
     const inAppGroup = segments[0] === '(app)';
     const currentPath = segments.join('/');
-    const isExplicitAuthPage = currentPath.includes('login') || currentPath.includes('register');
+    const isExplicitAuthPage =
+      currentPath.includes('login') ||
+      currentPath.includes('register') ||
+      currentPath.includes('welcome');
 
-    if (auth.user && inAuthGroup && !isExplicitAuthPage) {
+    if (auth.user && auth.mode === 'authenticated' && inAuthGroup && !isExplicitAuthPage) {
       // Authenticated user lingering in auth flow → send to main app
       router.replace('/(app)/(tabs)');
     } else if (!auth.user && inAppGroup && auth.mode !== 'guest') {

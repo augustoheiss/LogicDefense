@@ -14,6 +14,11 @@ import { Platform } from 'react-native';
 const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL || 'https://build-time-placeholder.supabase.co';
 const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || 'build-time-placeholder-key';
 
+export const isSupabaseConfigured = Boolean(
+  process.env.EXPO_PUBLIC_SUPABASE_URL &&
+    !process.env.EXPO_PUBLIC_SUPABASE_URL.includes('build-time-placeholder')
+);
+
 /**
  * Platform-safe storage adapter.
  *
@@ -59,8 +64,8 @@ function getStorage() {
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: {
     storage: getStorage(),
-    autoRefreshToken: true,
-    persistSession: true,
+    autoRefreshToken: isSupabaseConfigured,
+    persistSession: isSupabaseConfigured,
     detectSessionInUrl: false, // Disable for React Native (no URL bar)
   },
 });

@@ -40,8 +40,15 @@ import { useAuthContext } from './useAuth';
 import { fullSync, pushToCloud, pullFromCloud } from '../storage/supabaseSync';
 import { supabase } from '@/lib/supabase';
 import { mergeRows } from '../utils/csvEngine';
-import { ensureApiKeyForTable, generateLocalApiKey } from '../services/exportService';
-import { validateApiKey, generateNewApiKey } from '../services/apiKeyService';
+import { ensureApiKeyForTable } from '../services/exportService';
+import {
+  validateApiKey,
+  generateNewApiKey,
+  getApiStorageItem,
+  setApiStorageItem,
+  removeApiStorageItem,
+  emitCoinSyncRequested,
+} from '../services/apiKeyService';
 import type { Action } from '../core/actions';
 import { reduceDB } from '../core/dbReducer';
 import { OpLog } from '../core/opLog';
@@ -528,41 +535,51 @@ function useCoinDBInternal(): CoinDBState {
 
   // ── Reactive API Key Isolation & Self-Healing per Table ─
   useEffect(() => {
-    if (activeTables.length > 0 && Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+    if (activeTables.length === 0) return;
+    let cancelled = false;
+    (async () => {
       const seenKeys = new Set<string>();
       for (const t of activeTables) {
+        if (cancelled) return;
         const tid = t.id;
-        let key = window.localStorage.getItem(`coin_api_key_${tid}`);
-        if (!key || !key.startsWith('am_sheet_live_') || seenKeys.has(key)) {
-          const newKey = generateLocalApiKey(tid);
-          window.localStorage.setItem(`coin_api_key_${tid}`, newKey);
-          ensureApiKeyForTable(tid).catch(() => {});
-          key = newKey;
+        const isRevoked = (await getApiStorageItem(`coin_api_revoked_${tid}`)) === 'true';
+        if (isRevoked) {
+          continue;
         }
-        seenKeys.add(key);
+        let key = await getApiStorageItem(`coin_api_key_${tid}`);
+        if (!key || !key.startsWith('am_sheet_live_') || seenKeys.has(key)) {
+          key = await ensureApiKeyForTable(tid);
+        }
+        if (key) {
+          seenKeys.add(key);
+        }
       }
-    }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [activeTables]);
 
   useEffect(() => {
     const activeTableId = activeTable?.id;
-    if (!activeTableId || Platform.OS !== 'web' || typeof window === 'undefined' || !window.localStorage) return;
+    if (!activeTableId) return;
+    let cancelled = false;
+    (async () => {
+      const isRevoked = (await getApiStorageItem(`coin_api_revoked_${activeTableId}`)) === 'true';
+      if (isRevoked || cancelled) return;
 
-    let tableKey = window.localStorage.getItem(`coin_api_key_${activeTableId}`);
-    if (tableKey && tableKey.startsWith('am_sheet_live_')) {
-      window.localStorage.setItem('coin_active_api_key', tableKey);
-      window.dispatchEvent(new CustomEvent('coin_sync_requested', {
-        detail: { tableId: activeTableId, apiKey: tableKey }
-      }));
-    } else {
-      ensureApiKeyForTable(activeTableId).then((newKey) => {
-        window.localStorage.setItem(`coin_api_key_${activeTableId}`, newKey);
-        window.localStorage.setItem('coin_active_api_key', newKey);
-        window.dispatchEvent(new CustomEvent('coin_sync_requested', {
-          detail: { tableId: activeTableId, apiKey: newKey }
-        }));
-      });
-    }
+      let tableKey = await getApiStorageItem(`coin_api_key_${activeTableId}`);
+      if (!tableKey || !tableKey.startsWith('am_sheet_live_')) {
+        tableKey = await ensureApiKeyForTable(activeTableId);
+      }
+      if (!cancelled && tableKey && tableKey.startsWith('am_sheet_live_')) {
+        await setApiStorageItem('coin_active_api_key', tableKey);
+        emitCoinSyncRequested({ tableId: activeTableId, apiKey: tableKey });
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [activeTable?.id]);
 
   // ── Metrics (computed from active table) ───────────────
@@ -655,11 +672,10 @@ function useCoinDBInternal(): CoinDBState {
     const activeCount = newTables.filter((t) => !t.isDeleted).length;
     const nextIdx = activeTableIndex >= activeCount ? Math.max(0, activeCount - 1) : activeTableIndex;
 
-    if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
-      window.localStorage.removeItem(`coin_api_key_${tableId}`);
-      window.localStorage.removeItem(`coin_last_seq_${tableId}`);
-      window.localStorage.removeItem(`coin_expires_at_${tableId}`);
-    }
+    removeApiStorageItem(`coin_api_key_${tableId}`).catch(() => {});
+    removeApiStorageItem(`coin_last_seq_${tableId}`).catch(() => {});
+    removeApiStorageItem(`coin_expires_at_${tableId}`).catch(() => {});
+    removeApiStorageItem(`coin_api_revoked_${tableId}`).catch(() => {});
 
     if (nextIdx !== activeTableIndex) {
       setActiveTableIndex(nextIdx);
@@ -1328,58 +1344,64 @@ function useCoinDBInternal(): CoinDBState {
 
     const effectiveTableId = targetTable.id;
 
-    // 2. Tratar Chave API com Validação & Auto-Renovação no Import
+    // 2. Tratar Chave API com Validação & Auto-Renovação no Import (Web + Mobile Isomórfico)
     let activeApiKey = payload.apiKey || '';
     let keyWasAutoRenewed = false;
     const isRedactedPlaceholder =
       activeApiKey === 'am_sheet_example_fictitious' ||
       activeApiKey === 'am_sheet_live_local';
+    const isRevoked = (await getApiStorageItem(`coin_api_revoked_${effectiveTableId}`)) === 'true';
 
-    if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
-      if (activeApiKey && !isRedactedPlaceholder) {
-        const valCheck = await validateApiKey(activeApiKey);
+    if (activeApiKey && !isRedactedPlaceholder) {
+      await removeApiStorageItem(`coin_api_revoked_${effectiveTableId}`);
+      const valCheck = await validateApiKey(activeApiKey);
+      if (!valCheck.valid) {
+        console.warn(`[CSV Import] Chave API no CSV (${activeApiKey.slice(0, 15)}...) está ${valCheck.expired ? 'EXPIRADA' : 'INVÁLIDA'}. Gerando nova chave API para a planilha ${effectiveTableId}...`);
+        const genRes = await generateNewApiKey(effectiveTableId);
+        if (genRes && genRes.apiKey) {
+          activeApiKey = genRes.apiKey;
+          keyWasAutoRenewed = true;
+        }
+      }
+    } else if (!isRevoked) {
+      const existingKey = await getApiStorageItem(`coin_api_key_${effectiveTableId}`);
+      if (existingKey) {
+        const valCheck = await validateApiKey(existingKey);
         if (!valCheck.valid) {
-          console.warn(`[CSV Import] Chave API no CSV (${activeApiKey.slice(0, 15)}...) está ${valCheck.expired ? 'EXPIRADA' : 'INVÁLIDA'}. Gerando nova chave API para a planilha ${effectiveTableId}...`);
           const genRes = await generateNewApiKey(effectiveTableId);
           if (genRes && genRes.apiKey) {
             activeApiKey = genRes.apiKey;
             keyWasAutoRenewed = true;
-          }
-        }
-      } else {
-        const existingKey = window.localStorage.getItem(`coin_api_key_${effectiveTableId}`);
-        if (existingKey) {
-          const valCheck = await validateApiKey(existingKey);
-          if (!valCheck.valid) {
-            const genRes = await generateNewApiKey(effectiveTableId);
-            if (genRes && genRes.apiKey) {
-              activeApiKey = genRes.apiKey;
-              keyWasAutoRenewed = true;
-            }
           } else {
             activeApiKey = existingKey;
           }
         } else {
-          const genRes = await generateNewApiKey(effectiveTableId);
-          if (genRes && genRes.apiKey) {
-            activeApiKey = genRes.apiKey;
-            keyWasAutoRenewed = true;
-          }
+          activeApiKey = existingKey;
+        }
+      } else {
+        const ensured = await ensureApiKeyForTable(effectiveTableId);
+        if (ensured) {
+          activeApiKey = ensured;
+          keyWasAutoRenewed = true;
         }
       }
+    }
 
-      if (activeApiKey) {
-        window.localStorage.setItem(`coin_api_key_${effectiveTableId}`, activeApiKey);
-        window.localStorage.setItem('coin_active_api_key', activeApiKey);
-      }
-      if (payload.lastEventSeq !== undefined) {
-        window.localStorage.setItem(`coin_last_seq_${effectiveTableId}`, String(payload.lastEventSeq));
-      }
+    if (activeApiKey && !isRedactedPlaceholder) {
+      await setApiStorageItem(`coin_api_key_${effectiveTableId}`, activeApiKey);
+      await setApiStorageItem('coin_active_api_key', activeApiKey);
+    }
+    if (payload.lastEventSeq !== undefined) {
+      await setApiStorageItem(`coin_last_seq_${effectiveTableId}`, String(payload.lastEventSeq));
+    }
 
-      // 3. Disparar evento de Sincronia Local com a chave ativa validada
-      window.dispatchEvent(new CustomEvent('coin_sync_requested', {
-        detail: { tableId: effectiveTableId, apiKey: activeApiKey, lastEventSeq: payload.lastEventSeq }
-      }));
+    // 3. Disparar evento de Sincronia Local com a chave ativa validada (Web & Mobile)
+    if (activeApiKey && !isRedactedPlaceholder) {
+      emitCoinSyncRequested({
+        tableId: effectiveTableId,
+        apiKey: activeApiKey,
+        lastEventSeq: payload.lastEventSeq,
+      });
     }
 
     const formattedRows: TableRow[] = payload.rows.map((r) => ({

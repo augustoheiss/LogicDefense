@@ -43,6 +43,7 @@ export interface SubscriptionContextState {
 const SubscriptionContext = createContext<SubscriptionContextState | null>(null);
 
 const GOOGLE_API_KEY = process.env.EXPO_PUBLIC_REVENUECAT_GOOGLE_KEY || '';
+const APPLE_API_KEY = process.env.EXPO_PUBLIC_REVENUECAT_APPLE_KEY || '';
 
 export function SubscriptionProvider({ children }: { children: React.ReactNode }) {
   const [isPro, setIsPro] = useState(false);
@@ -250,9 +251,18 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
         setIsLoading(false);
         return;
       }
+      const apiKey = Platform.OS === 'ios' ? APPLE_API_KEY : GOOGLE_API_KEY;
+      if (!apiKey) {
+        if (typeof __DEV__ !== 'undefined' && __DEV__) {
+          console.info('[RevenueCat] API key not set — running in Local-First License mode.');
+        }
+        setIsLoading(false);
+        return;
+      }
       try {
-        Purchases.setLogLevel(Purchases.LOG_LEVEL.DEBUG);
-        Purchases.configure({ apiKey: GOOGLE_API_KEY });
+        const isDev = typeof __DEV__ !== 'undefined' && __DEV__;
+        Purchases.setLogLevel(isDev ? Purchases.LOG_LEVEL.DEBUG : Purchases.LOG_LEVEL.WARN);
+        Purchases.configure({ apiKey });
 
         // Register Listener
         const listener = (info: any) => {

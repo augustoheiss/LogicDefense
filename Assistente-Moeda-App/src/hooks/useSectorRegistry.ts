@@ -63,10 +63,15 @@ export const DEFAULT_ACTIVE_SECTORS: string[] = [
   'core_cashflow',
   'core_revenue',
   'core_costs',
-  'core_goals',
-  'core_predictions',
   'personal_finance',
 ];
+
+const VALID_SECTOR_IDS = new Set(ALL_SECTORS.map((s) => s.id));
+
+function sanitizeSectorIds(ids: string[]): string[] {
+  const uniqueValid = Array.from(new Set(ids.filter((id) => VALID_SECTOR_IDS.has(id))));
+  return uniqueValid.length > 0 ? uniqueValid : DEFAULT_ACTIVE_SECTORS;
+}
 
 export function useSectorRegistry() {
   const { activeTable, updateActiveSectors } = useCoinDB();
@@ -81,7 +86,7 @@ export function useSectorRegistry() {
     ) {
       return DEFAULT_ACTIVE_SECTORS;
     }
-    return activeTable.activeSectors;
+    return sanitizeSectorIds(activeTable.activeSectors);
   }, [activeTable]);
 
   const isSectorActive = useCallback(
@@ -95,7 +100,7 @@ export function useSectorRegistry() {
     (sectors: string[]) => {
       if (!activeTable) return;
       if (updateActiveSectors) {
-        updateActiveSectors(sectors);
+        updateActiveSectors(sanitizeSectorIds(sectors));
       }
     },
     [activeTable, updateActiveSectors]
@@ -103,6 +108,7 @@ export function useSectorRegistry() {
 
   const toggleSector = useCallback(
     (sectorId: string) => {
+      if (!VALID_SECTOR_IDS.has(sectorId)) return;
       if (activeSectors.includes(sectorId)) {
         setSectors(activeSectors.filter((id) => id !== sectorId));
       } else {

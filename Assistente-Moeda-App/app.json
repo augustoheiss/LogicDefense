@@ -9,15 +9,23 @@
     "userInterfaceStyle": "dark",
     "ios": {
       "bundleIdentifier": "com.logicdefense.assistentemoeda",
+      "buildNumber": "2",
       "supportsTablet": true,
       "icon": "./assets/images/app-icon.png"
     },
     "android": {
       "package": "com.heisslab.assistentemoeda",
+      "versionCode": 2,
       "adaptiveIcon": {
         "backgroundColor": "#12151C",
         "foregroundImage": "./assets/images/app-icon.png"
       },
+      "blockedPermissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.SYSTEM_ALERT_WINDOW"
+      ],
       "predictiveBackGestureEnabled": true
     },
     "web": {

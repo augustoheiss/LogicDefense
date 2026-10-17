@@ -20,7 +20,16 @@ import {
   appendToSpreadsheet,
   publicAiAnalyst,
 } from '../services/publicApiService';
-import { validateApiKey, generateNewApiKey, revokeApiKey } from '../services/apiKeyService';
+import {
+  validateApiKey,
+  generateNewApiKey,
+  revokeApiKey,
+  getApiStorageItem,
+  setApiStorageItem,
+  removeApiStorageItem,
+  emitCoinSyncRequested,
+  subscribeCoinSyncRequested,
+} from '../services/apiKeyService';
 import { OPENAPI_SPEC_V1, PUBLIC_API_HEADER_NAME } from '../config/publicApiConfig';
 import type { PublicAgentPromptResponse } from '../config/publicApiConfig';
 import { generateManualAiAnalystSynthesis } from '../core/localAiAnalystSynthesizer';
@@ -1176,6 +1185,41 @@ describe('QAR1 System Integration Testing (SIT) Suite (SIT-01 to SIT-15)', () =>
       expect(secondPullData.count).toBe(0);
     } finally {
       globalThis.fetch = origFetch;
+    }
+  });
+
+  it('SIT-17 (SIT-V7-01): Barramento isomórfico (emitCoinSyncRequested / subscribeCoinSyncRequested + AsyncStorage) deve operar com paridade 100% entre Mobile (Android/iOS) e Web sem recursão', async () => {
+    const receivedPayloads: Array<Record<string, any> | undefined> = [];
+    const unsubscribe = subscribeCoinSyncRequested((detail) => {
+      receivedPayloads.push(detail);
+    });
+
+    try {
+      const mobileKey = 'am_sheet_live_test_mobile_android_ios_parity_9988776655443322';
+      await setApiStorageItem('coin_api_key_tbl_mobile_sit17', mobileKey);
+      await setApiStorageItem('coin_active_api_key', mobileKey);
+      await setApiStorageItem('coin_sync_last_seq_number', '42');
+
+      expect(await getApiStorageItem('coin_api_key_tbl_mobile_sit17')).toBe(mobileKey);
+      expect(await getApiStorageItem('coin_active_api_key')).toBe(mobileKey);
+      expect(await getApiStorageItem('coin_sync_last_seq_number')).toBe('42');
+
+      // Dispara evento de sincronização via barramento isomórfico (funciona sem window.addEventListener no Android/iOS)
+      emitCoinSyncRequested({
+        tableId: 'tbl_mobile_sit17',
+        apiKey: mobileKey,
+        reason: 'importSpreadsheet_mobile',
+      });
+
+      // Deve disparar exatamente 1 vez (deduplicação __fromBus evita duplo disparo no Web)
+      expect(receivedPayloads.length).toBe(1);
+      expect(receivedPayloads[0]?.tableId).toBe('tbl_mobile_sit17');
+      expect(receivedPayloads[0]?.apiKey).toBe(mobileKey);
+
+      await removeApiStorageItem('coin_api_key_tbl_mobile_sit17');
+      expect(await getApiStorageItem('coin_api_key_tbl_mobile_sit17')).toBeNull();
+    } finally {
+      unsubscribe();
     }
   });
 });

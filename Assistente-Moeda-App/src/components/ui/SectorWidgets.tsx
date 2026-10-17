@@ -273,19 +273,19 @@ export function PersonalFinanceSectorWidget() {
           </View>
           <View style={cadStyles.kpiRow}>
             <CompactKpi
-              label="Essenciais (Meta ≤50%)"
+              label="Essenciais (≤50%)"
               value={`${ruleRes.fixPct.toFixed(0)}%`}
               sub={formatCurrencySmart(parseFloat(fixedExp) || 0)}
               color={ruleRes.fixPct <= 55 ? colors.success.main : colors.danger.main}
             />
             <CompactKpi
-              label="Variáveis (Meta ≤30%)"
+              label="Variáveis (≤30%)"
               value={`${ruleRes.varPct.toFixed(0)}%`}
               sub={formatCurrencySmart(parseFloat(varExp) || 0)}
               color={ruleRes.varPct <= 32 ? colors.info.main : colors.warning.main}
             />
             <CompactKpi
-              label="Aporte Livre (Meta ≥20%)"
+              label="Aportes (≥20%)"
               value={`${ruleRes.invPct.toFixed(0)}%`}
               sub={`${formatCurrencySmart(ruleRes.invValue)}/mês`}
               color={ruleRes.invPct >= 20 ? colors.success.main : colors.warning.main}
@@ -1182,7 +1182,7 @@ const cadStyles = StyleSheet.create({
   },
   fieldBox: {
     flex: 1,
-    minWidth: 110,
+    minWidth: 100,
     backgroundColor: colors.background.primary,
     borderWidth: 1,
     borderColor: colors.border.default,
@@ -1211,11 +1211,11 @@ const cadStyles = StyleSheet.create({
   },
   kpiCard: {
     flex: 1,
-    minWidth: 120,
+    minWidth: 96,
     backgroundColor: colors.background.primary,
     borderWidth: 1,
     borderRadius: radius.md,
-    paddingHorizontal: 10,
+    paddingHorizontal: 8,
     paddingVertical: 8,
     gap: 2,
   },

@@ -10,6 +10,29 @@ import React, { Component, ErrorInfo, ReactNode } from 'react';
 import { View, Text, StyleSheet, Pressable, ScrollView, Platform } from 'react-native';
 import { colors } from '@/theme/colors';
 import { spacing, radius } from '@/theme/spacing';
+import { loadDB, saveDB } from '@/storage/asyncStorageAdapter';
+
+function sanitizeRestoredDBPayload(parsed: any): any {
+  if (!parsed || typeof parsed !== 'object') return parsed;
+  if (Array.isArray(parsed.tables)) {
+    parsed.tables = parsed.tables
+      .filter((t: any) => t && typeof t === 'object')
+      .map((t: any) => {
+        if (!Array.isArray(t.rows)) return { ...t, rows: [] };
+        t.rows = t.rows
+          .filter((r: any) => r && typeof r === 'object')
+          .map((r: any) => ({
+            ...r,
+            date: r.date && typeof r.date === 'string' ? r.date : new Date().toISOString().slice(0, 10),
+            value: typeof r.value === 'number' && !isNaN(r.value) ? r.value : 0,
+            description: r.description || 'Lançamento Recuperado',
+            id: r.id || `rec_${Math.random().toString(36).slice(2, 9)}`,
+          }));
+        return t;
+      });
+  }
+  return parsed;
+}
 
 interface Props {
   children: ReactNode;
@@ -53,35 +76,32 @@ export class ErrorBoundary extends Component<Props, State> {
     }
   };
 
-  private handleSanitizeAndRepair = () => {
-    if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
-      try {
+  private handleSanitizeAndRepair = async () => {
+    try {
+      const existing = await loadDB();
+      if (existing) {
+        const sanitized = sanitizeRestoredDBPayload(existing);
+        await saveDB(sanitized);
+      }
+
+      if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
         const raw = window.localStorage.getItem('coin_assistant_db');
         if (raw) {
           const parsed = JSON.parse(raw);
-          if (parsed && Array.isArray(parsed.tables)) {
-            // Remove corrupt rows, sanitize dates and values
-            parsed.tables = parsed.tables.map((t: any) => {
-              if (!t || !Array.isArray(t.rows)) return t;
-              t.rows = t.rows.filter((r: any) => r && typeof r === 'object').map((r: any) => ({
-                ...r,
-                date: r.date && typeof r.date === 'string' ? r.date : new Date().toISOString().slice(0, 10),
-                value: typeof r.value === 'number' && !isNaN(r.value) ? r.value : 0,
-                description: r.description || 'Lançamento Recuperado',
-                id: r.id || `rec_${Math.random().toString(36).slice(2, 9)}`,
-              }));
-              return t;
-            });
-            window.localStorage.setItem('coin_assistant_db', JSON.stringify(parsed));
-          }
+          const sanitized = sanitizeRestoredDBPayload(parsed);
+          window.localStorage.setItem('coin_assistant_db', JSON.stringify(sanitized));
         }
         window.alert('✓ Banco de dados local sanitizado com sucesso! Recarregando...');
         window.location.reload();
-      } catch (e) {
-        window.alert('Falha ao sanitizar: ' + String(e));
+      } else {
+        this.handleReset();
       }
-    } else {
-      this.handleReset();
+    } catch (e) {
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        window.alert('Falha ao sanitizar: ' + String(e));
+      } else {
+        this.handleReset();
+      }
     }
   };
 

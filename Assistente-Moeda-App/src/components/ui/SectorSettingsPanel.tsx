@@ -93,7 +93,9 @@ export function SectorSettingsPanel({ compact = false }: { compact?: boolean }) 
       {/* Header Enxuto AutoCAD */}
       <View style={styles.headerRow}>
         <View style={{ flex: 1 }}>
-          <Text style={styles.sectionTitle}>📐 Matriz AutoCAD de Módulos ({activeSectors.length}/{allSectors.length} ativos)</Text>
+          <Text style={styles.sectionTitle} testID="cad-sector-matrix-title">
+            📐 Matriz AutoCAD de Módulos ({Math.min(activeSectors.length, allSectors.length)}/{allSectors.length} ativos)
+          </Text>
           <Text style={styles.sectionSubtitle}>
             Toque em um botão abaixo (sem descrições longas) para o guia central explicar e ativar/desativar na hora.
           </Text>

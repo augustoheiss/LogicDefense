@@ -9,7 +9,7 @@
  */
 
 import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
-import { supabase } from '@/lib/supabase';
+import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import {
   View,
   Text,
@@ -282,6 +282,13 @@ export default function SettingsScreen() {
     }
     if (newPassword !== confirmPassword) {
       setPasswordError("As senhas não coincidem.");
+      return;
+    }
+
+    if (!isSupabaseConfigured) {
+      setPasswordError(
+        "Autenticação em nuvem não configurada neste modo Local-First. Use sua Chave de Licença PRO/Trial."
+      );
       return;
     }
 

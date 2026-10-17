@@ -64,5 +64,28 @@
     "test": "node ./scripts/runTests.mjs",
     "build:web": "npx expo export -p web --clear"
   },
+  "expo": {
+    "install": {
+      "exclude": [
+        "@expo/ui",
+        "expo",
+        "expo-build-properties",
+        "expo-constants",
+        "expo-file-system",
+        "expo-image",
+        "expo-linking",
+        "expo-router",
+        "expo-sharing",
+        "expo-splash-screen",
+        "expo-symbols",
+        "expo-updates",
+        "expo-web-browser",
+        "react-native-reanimated",
+        "react-native-screens",
+        "react-native-worklets",
+        "typescript"
+      ]
+    }
+  },
   "private": true
 }

@@ -47,6 +47,59 @@ export async function removeApiStorageItem(key: string): Promise<void> {
   } catch {}
 }
 
+export async function isTableApiKeyRevoked(tableId: string): Promise<boolean> {
+  if (!tableId) return false;
+  return (await getApiStorageItem(`coin_api_revoked_${tableId}`)) === 'true';
+}
+
+export interface CoinSyncEventDetail {
+  tableId?: string;
+  apiKey?: string;
+  lastEventSeq?: number;
+  __fromBus?: boolean;
+}
+
+type SyncListener = (detail: CoinSyncEventDetail) => void;
+const syncListeners = new Set<SyncListener>();
+
+export function emitCoinSyncRequested(detail: CoinSyncEventDetail): void {
+  for (const listener of syncListeners) {
+    try {
+      listener(detail);
+    } catch {}
+  }
+  if (
+    typeof window !== 'undefined' &&
+    typeof window.dispatchEvent === 'function' &&
+    typeof CustomEvent === 'function'
+  ) {
+    try {
+      window.dispatchEvent(
+        new CustomEvent('coin_sync_requested', {
+          detail: { ...detail, __fromBus: true },
+        })
+      );
+    } catch {}
+  }
+}
+
+export function subscribeCoinSyncRequested(listener: SyncListener): () => void {
+  syncListeners.add(listener);
+  const domHandler = (e: any) => {
+    if (e?.detail?.__fromBus) return;
+    listener(e?.detail || {});
+  };
+  if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+    window.addEventListener('coin_sync_requested', domHandler);
+  }
+  return () => {
+    syncListeners.delete(listener);
+    if (typeof window !== 'undefined' && typeof window.removeEventListener === 'function') {
+      window.removeEventListener('coin_sync_requested', domHandler);
+    }
+  };
+}
+
 export interface KeyValidationResult {
   valid: boolean;
   expired?: boolean;
@@ -147,6 +200,8 @@ export async function generateNewApiKey(
     const rawKey = data.api_key || data.apiKey;
     if (rawKey) {
       await removeApiStorageItem(`coin_api_revoked_${tableId}`);
+      await setApiStorageItem(`coin_api_key_${tableId}`, rawKey);
+      await setApiStorageItem('coin_active_api_key', rawKey);
       return {
         apiKey: rawKey,
         keyHint: data.key_hint || data.keyHint || `...${rawKey.slice(-4)}`,

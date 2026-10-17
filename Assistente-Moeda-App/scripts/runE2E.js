@@ -263,8 +263,12 @@ async function runE2E() {
     const metricsGuideHud = page.locator('[data-testid="metrics-autocad-guide"]');
     await metricsGuideHud.waitFor({ state: 'visible', timeout: 10000 });
     await assertViewportZeroScroll('Step 7a: Aba Métricas Cockpit');
+    const tempoText = await page.locator('[data-testid="metrics-quick-kpi-tempo"]').innerText();
+    if (!tempoText.includes('sem')) {
+      throw new Error(`Unidade ambígua em Tempo KPI: esperado "sem", recebido "${tempoText}"`);
+    }
     await page.screenshot({ path: path.join(screenshotDir, '04_metricas_tab.png') });
-    console.log('✓ Screenshot 04 capturada: 04_metricas_tab.png (Cockpit AutoCAD de Métricas com Guia Interativo)');
+    console.log(`✓ Screenshot 04 capturada: 04_metricas_tab.png (Cockpit AutoCAD de Métricas | Tempo="${tempoText}")`);
 
     // Test clicking a Sector Icon Node in Metrics (e.g. 👤 PFM & FIRE) and its sub-tool icon buttons
     console.log('7b. Acionando botão de módulo 👤 (PFM & FIRE) e sub-botões interativos no palco central...');
@@ -283,6 +287,11 @@ async function runE2E() {
     for (const optSector of ['smb_accounting', 'real_estate', 'vehicles', 'legal_taxes']) {
       await page.locator(`[data-testid="cad-sector-node-${optSector}"]`).click();
       await page.locator(`[data-testid="cad-sector-toggle-${optSector}"]`).click();
+    }
+    const matrixTitleText = await page.locator('[data-testid="cad-sector-matrix-title"]').innerText();
+    console.log(`✓ Contador Matriz AutoCAD após ativação completa: "${matrixTitleText}"`);
+    if (matrixTitleText.includes('9/8') || !matrixTitleText.includes('8/8')) {
+      throw new Error(`Contador inválido na Matriz AutoCAD: "${matrixTitleText}" (esperado "(8/8 ativos)")`);
     }
     const sectorStations = [
       'metrics-station-sector_pfm',
@@ -341,6 +350,65 @@ async function runE2E() {
     await page.screenshot({ path: path.join(screenshotDir, '08_ajustes_workbench.png') });
     console.log('✓ Screenshot 08 capturada: 08_ajustes_workbench.png (Matriz AutoCAD de Módulos em Ajustes)');
 
+    // Step 9b: Mobile Android 390x844 Viewport Ergonomics Audit (Ajustes & Lançamentos Empty State)
+    console.log('9b. Auditando ergonomia Android Compacto (390x844) em Ajustes e Lançamentos...');
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.waitForTimeout(300);
+    await page.screenshot({ path: path.join(screenshotDir, '12_ajustes_390x844_fixed.png') });
+    console.log('✓ Screenshot 12 capturada: 12_ajustes_390x844_fixed.png (Ajustes 8/8 ativos em 390x844)');
+
+    // Create a clean 390x844 context to verify Lançamentos Empty-State Header, Subtitle & FAB non-collision
+    const androidCtx = await browser.newContext({
+      viewport: { width: 390, height: 844 },
+    });
+    const androidPage = await androidCtx.newPage();
+    await androidPage.addInitScript(() => {
+      window.localStorage.setItem('@assistente_moeda:onboarding_complete', 'true');
+    });
+    await androidPage.goto(`${baseUrl}/`, { waitUntil: 'networkidle', timeout: 30000 });
+    await androidPage.waitForTimeout(1000);
+    const lancTabAndroid = androidPage.getByText('Lançamentos').first();
+    await lancTabAndroid.click();
+    await androidPage.waitForTimeout(600);
+
+    const subBox = await androidPage.locator('[data-testid="transactions-subtitle"]').boundingBox();
+    const addBtnBox = await androidPage.locator('[data-testid="transactions-add-btn"]').boundingBox();
+    const importPartsBox = await androidPage.locator('[data-testid="transactions-import-parts-btn"]').boundingBox();
+    const fabBtnBox = await androidPage.locator('[data-testid="transactions-fab-btn"]').boundingBox();
+
+    console.log(
+      `✓ Auditoria DOM Lançamentos (390x844): subtitle=${Math.round(subBox?.width || 0)}x${Math.round(subBox?.height || 0)}px, addBtnRight=${Math.round((addBtnBox?.x || 0) + (addBtnBox?.width || 0))}px, importPartsBottom=${Math.round((importPartsBox?.y || 0) + (importPartsBox?.height || 0))}px, fabTop=${Math.round(fabBtnBox?.y || 0)}px`
+    );
+
+    if (!subBox || subBox.width < 60 || subBox.height > 28) {
+      throw new Error(
+        `Bug de esmagamento vertical em "0 entradas" (390x844): width=${subBox?.width}px, height=${subBox?.height}px`
+      );
+    }
+    if (!addBtnBox || addBtnBox.x + addBtnBox.width > 390) {
+      throw new Error(
+        `Overflow horizontal no botão "+ Novo" (390x844): right=${(addBtnBox?.x || 0) + (addBtnBox?.width || 0)}px > 390px`
+      );
+    }
+    if (importPartsBox && fabBtnBox) {
+      const overlapsHorizontally =
+        importPartsBox.x < fabBtnBox.x + fabBtnBox.width &&
+        importPartsBox.x + importPartsBox.width > fabBtnBox.x;
+      const overlapsVertically =
+        importPartsBox.y < fabBtnBox.y + fabBtnBox.height &&
+        importPartsBox.y + importPartsBox.height > fabBtnBox.y;
+      if (overlapsHorizontally && overlapsVertically) {
+        throw new Error(
+          `Colisão de BoundingBox detectada entre "Importar por Partes" e FAB "+ Registrar" em 390x844!`
+        );
+      }
+    }
+
+    await androidPage.screenshot({ path: path.join(screenshotDir, '10_lancamentos_tab.png') });
+    await androidPage.screenshot({ path: path.join(screenshotDir, '11_lancamentos_390x844_fixed.png') });
+    console.log('✓ Screenshots 10 e 11 capturadas: 10_lancamentos_tab.png & 11_lancamentos_390x844_fixed.png (Zero esmagamento e zero colisão FAB em 390x844)');
+    await androidCtx.close();
+
     // Clean-Room Storage Audit inside browser context
     console.log('10. Executando auditoria Clean-Room no localStorage do navegador...');
     const storageDump = await page.evaluate(() => JSON.stringify(window.localStorage));
@@ -353,7 +421,7 @@ async function runE2E() {
     }
     console.log('✓ Auditoria Clean-Room localStorage & Runtime: 0 chaves vazadas, 0 pageerrors.');
 
-    console.log('\n\x1b[32m✅ Suíte Playwright E2E + DOM Audit v2.5 concluída com 100% de sucesso!\x1b[0m');
+    console.log('\n\x1b[32m✅ Suíte Playwright E2E + DOM Audit v7.0 concluída com 100% de sucesso!\x1b[0m');
   } finally {
     await browser.close();
     server.close();

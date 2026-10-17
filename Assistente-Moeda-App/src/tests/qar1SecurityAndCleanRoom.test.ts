@@ -28,7 +28,15 @@ import {
   buildTabularAuditHTML,
   buildWhatsAppReport,
   generateLocalApiKey,
+  ensureApiKeyForTable,
 } from '../services/exportService';
+import {
+  revokeApiKey,
+  generateNewApiKey,
+  isTableApiKeyRevoked,
+  getApiStorageItem,
+  setApiStorageItem,
+} from '../services/apiKeyService';
 import { sendChatMessage, buildFinancialContext } from '../services/aiChatService';
 import {
   sanitizeRowsForManualSynthesis,
@@ -469,6 +477,69 @@ describe('QAR1 Security & Clean-Room Hygiene Suite (SEC-01 to SEC-12)', () => {
     expect(report).toContain('(1 ocorrência)');
     // Partner out negativo não-compensado deve ser exibido sem sinal negativo duplicado
     expect(report).toContain('Repasse Pendente Socio');
+  });
+
+  it('SEC-15 (QAR1-V7-03): revokeApiKey deve gravar tombstone coin_api_revoked_{id} e impedir ressurreição zumbi de chave até renovação explícita', async () => {
+    const origFetch = globalThis.fetch;
+    globalThis.fetch = (async (url: string) => {
+      if (String(url).includes('/revoke')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            success: true,
+            already_inactive: false,
+            message: 'Chave revogada com sucesso.',
+            table_id: 'tbl_sec15_zombie',
+          }),
+        };
+      }
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          api_key: 'am_sheet_live_test_sec15_renewed_0000111122223333444455556666',
+          key_hint: '...6666',
+          table_id: 'tbl_sec15_zombie',
+          ttl_days: 7,
+        }),
+      };
+    }) as any;
+
+    try {
+      const initialKey = generateLocalApiKey('tbl_sec15_zombie');
+      await setApiStorageItem('coin_api_key_tbl_sec15_zombie', initialKey);
+      await setApiStorageItem('coin_active_api_key', initialKey);
+
+      expect(await isTableApiKeyRevoked('tbl_sec15_zombie')).toBe(false);
+
+      // 1. Aciona Kill-Switch (revokeApiKey)
+      const revokeRes = await revokeApiKey('tbl_sec15_zombie', initialKey);
+      expect(revokeRes.success).toBe(true);
+
+      // 2. Verifica remoção das chaves e gravação do tombstone anti-zumbi
+      expect(await getApiStorageItem('coin_api_key_tbl_sec15_zombie')).toBeNull();
+      expect(await getApiStorageItem('coin_active_api_key')).toBeNull();
+      expect(await isTableApiKeyRevoked('tbl_sec15_zombie')).toBe(true);
+
+      // 3. Simula edição de linha na planilha (guarda do useEffect em useCoinDB)
+      const isRevokedDuringRowEdit = await isTableApiKeyRevoked('tbl_sec15_zombie');
+      if (!isRevokedDuringRowEdit) {
+        await ensureApiKeyForTable('tbl_sec15_zombie');
+      }
+      // Chave NÃO pode ressuscitar automaticamente após edição de linha!
+      expect(await getApiStorageItem('coin_api_key_tbl_sec15_zombie')).toBeNull();
+
+      // 4. Renovação explícita pelo usuário limpa o tombstone e gera nova chave
+      const renewed = await generateNewApiKey('tbl_sec15_zombie', 'read:write', 7);
+      expect(renewed).not.toBeNull();
+      expect(await isTableApiKeyRevoked('tbl_sec15_zombie')).toBe(false);
+      expect(await getApiStorageItem('coin_api_key_tbl_sec15_zombie')).toBe(
+        'am_sheet_live_test_sec15_renewed_0000111122223333444455556666'
+      );
+    } finally {
+      globalThis.fetch = origFetch;
+    }
   });
 });
 

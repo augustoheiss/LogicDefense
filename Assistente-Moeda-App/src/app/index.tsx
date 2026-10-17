@@ -11,17 +11,42 @@
  * on the welcome screen, which explicitly navigates them there.
  */
 
+import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { Redirect } from 'expo-router';
 import { useAuthContext } from '@/hooks/useAuth';
+import { useOnboarding } from '@/hooks/useOnboarding';
+import { colors } from '@/theme/colors';
 
 export default function RootIndex() {
   const auth = useAuthContext();
+  const { hasSeenOnboarding, isLoading } = useOnboarding();
+
+  if (isLoading) {
+    return (
+      <View style={styles.loading}>
+        <ActivityIndicator size="large" color={colors.accent.purple} />
+      </View>
+    );
+  }
+
+  if (!hasSeenOnboarding) {
+    return <Redirect href="/(auth)/welcome" />;
+  }
 
   if (auth.user) {
-    // Authenticated user → straight to the main app
+    // Authenticated or local-first user who completed onboarding → straight to the main app
     return <Redirect href="/(app)/(tabs)" />;
   }
 
   // Not authenticated → FTUE welcome gate
   return <Redirect href="/(auth)/welcome" />;
 }
+
+const styles = StyleSheet.create({
+  loading: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: colors.background.primary,
+  },
+});

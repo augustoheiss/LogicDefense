@@ -54,8 +54,9 @@ export default function WelcomeScreen() {
     setShowWelcome(true);
   };
 
-  const handleGuestMode = () => {
+  const handleGuestMode = async () => {
     impact(ImpactFeedbackStyle.Light);
+    await completeOnboarding();
     auth.enterGuestMode();
     router.replace('/(app)/(tabs)');
   };

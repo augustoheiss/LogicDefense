@@ -746,17 +746,17 @@ export default function TransactionsScreen() {
     <ErrorBoundary fallbackTitle="Falha na Visualização da Planilha" componentName="SpreadsheetScreen">
       <SafeAreaView style={styles.container} edges={[]}>
         {/* Header */}
-        <View style={styles.header}>
+        <View style={styles.header} testID="transactions-header">
           <View style={styles.headerTitleContainer}>
             <Text style={styles.headerTitle} numberOfLines={1}>
               📋 {db.activeTable?.name || 'Planilha'}
             </Text>
-            <Text style={styles.headerSubtitle}>
+            <Text style={styles.headerSubtitle} testID="transactions-subtitle" numberOfLines={1}>
               {safeFilteredRows.length} {safeFilteredRows.length === 1 ? 'entrada' : 'entradas'}
               {searchQuery ? ` (filtrado por "${searchQuery}")` : ''}
             </Text>
           </View>
-          <View style={styles.headerActions}>
+          <View style={styles.headerActions} testID="transactions-header-actions">
             <Pressable
               style={({ pressed }) => [
                 styles.undoButton,
@@ -789,6 +789,7 @@ export default function TransactionsScreen() {
               <Text style={styles.undoButtonText}>↩ Desfazer</Text>
             </Pressable>
             <Pressable
+              testID="transactions-add-btn"
               style={({ pressed }) => [
                 styles.addButton,
                 pressed && styles.pressed,
@@ -876,6 +877,7 @@ export default function TransactionsScreen() {
                     <Text style={styles.emptySecondaryButtonText}>📁 Importar CSV</Text>
                   </Pressable>
                   <Pressable
+                    testID="transactions-import-parts-btn"
                     style={({ pressed }) => [
                       styles.emptySecondaryButton,
                       pressed && styles.pressed,
@@ -1019,6 +1021,7 @@ export default function TransactionsScreen() {
         )}
         <View style={styles.fabButtonsRow}>
           <Pressable
+            testID="transactions-fab-btn"
             style={({ pressed }) => [
               styles.quickAddFab,
               pressed && styles.fabPressed,
@@ -1267,20 +1270,23 @@ const styles = StyleSheet.create({
   },
   header: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    gap: spacing.xs,
     borderBottomWidth: 1,
     borderBottomColor: colors.border.default,
   },
   headerTitle: {
-    fontSize: 20,
+    fontSize: 16,
     fontWeight: '700',
     color: colors.text.primary,
   },
   headerTitleContainer: {
-    flex: 1,
+    minWidth: 120,
+    flexShrink: 0,
   },
   dropdownArrow: {
     fontSize: 12,
@@ -1293,31 +1299,32 @@ const styles = StyleSheet.create({
   },
   addButton: {
     backgroundColor: colors.accent.purple,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 6,
     borderRadius: radius.sm,
   },
   addButtonText: {
     color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 12,
+    fontWeight: '700',
   },
   headerActions: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
-    gap: spacing.xs,
+    gap: 6,
   },
   undoButton: {
     backgroundColor: colors.background.tertiary,
     borderWidth: 1,
     borderColor: colors.border.default,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.sm,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
     borderRadius: radius.sm,
   },
   undoButtonText: {
     color: colors.text.secondary,
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '600',
   },
   disabledButton: {
@@ -1330,13 +1337,13 @@ const styles = StyleSheet.create({
   // Summary Card
   summaryCard: {
     marginHorizontal: spacing.lg,
-    marginTop: spacing.md,
+    marginTop: spacing.sm,
     backgroundColor: colors.background.secondary,
     borderWidth: 1,
     borderColor: colors.border.default,
     borderRadius: radius.md,
-    padding: spacing.md,
-    gap: spacing.sm,
+    padding: spacing.sm,
+    gap: spacing.xs,
     maxWidth: 1080,
     width: '100%',
     alignSelf: 'center',
@@ -1374,7 +1381,7 @@ const styles = StyleSheet.create({
 
   // List
   listContent: {
-    padding: spacing.lg,
+    padding: spacing.md,
     paddingBottom: 100, // Extra space for FAB
     maxWidth: 1080,
     width: '100%',
@@ -1390,32 +1397,33 @@ const styles = StyleSheet.create({
   // Empty state
   emptyState: {
     flex: 1,
-    justifyContent: 'center',
+    justifyContent: 'flex-start',
     alignItems: 'center',
-    gap: spacing.md,
-    paddingVertical: spacing.xxxl,
+    gap: spacing.xs,
+    paddingTop: spacing.md,
+    paddingBottom: 88,
   },
   emptyEmoji: {
-    fontSize: 48,
+    fontSize: 36,
   },
   emptyTitle: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '600',
     color: colors.text.primary,
   },
   emptyText: {
-    fontSize: 14,
+    fontSize: 13,
     color: colors.text.secondary,
     textAlign: 'center',
-    lineHeight: 20,
-    maxWidth: 280,
+    lineHeight: 18,
+    maxWidth: 300,
   },
   emptyButton: {
     backgroundColor: colors.accent.purple,
-    paddingHorizontal: spacing.xxl,
-    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.sm,
     borderRadius: radius.md,
-    marginTop: spacing.sm,
+    marginTop: 4,
   },
   emptyButtonText: {
     color: '#fff',
@@ -1424,22 +1432,23 @@ const styles = StyleSheet.create({
   },
   emptyActionsRow: {
     flexDirection: 'row',
-    gap: spacing.sm,
-    marginTop: spacing.sm,
+    gap: spacing.xs,
+    marginTop: 4,
     flexWrap: 'wrap',
     justifyContent: 'center',
+    paddingHorizontal: spacing.sm,
   },
   emptySecondaryButton: {
     backgroundColor: colors.background.secondary,
     borderWidth: 1,
     borderColor: colors.border.default,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 6,
     borderRadius: radius.md,
   },
   emptySecondaryButtonText: {
     color: colors.text.secondary,
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '600',
   },
 

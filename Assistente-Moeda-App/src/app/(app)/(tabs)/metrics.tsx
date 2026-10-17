@@ -529,13 +529,14 @@ export default function MetricsScreen() {
           <View style={[styles.quickKpiChip, { borderColor: 'rgba(245, 158, 11, 0.35)' }]}>
             <Text style={styles.quickKpiLabel}>Tempo</Text>
             <Text
+              testID="metrics-quick-kpi-tempo"
               style={[
                 styles.quickKpiValue,
                 { color: m.timeBankBalance >= 0 ? colors.success.main : colors.warning.main },
               ]}
               numberOfLines={1}
             >
-              {m.timeBankBalance > 0 ? '+' : ''}{m.timeBankBalance.toFixed(1)}s
+              {m.timeBankBalance > 0 ? '+' : ''}{m.timeBankBalance.toFixed(1)} sem
             </Text>
           </View>
         </View>

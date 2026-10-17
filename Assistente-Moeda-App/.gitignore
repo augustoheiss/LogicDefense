@@ -68,3 +68,11 @@ welcome_after_skip.png
 welcome_screen.png
 /*.png
 ts_errors*.txt
+
+# Pastas docs e master-plan (em qualquer nível — nunca enviar ao GitHub)
+docs/
+docs/*
+**/docs/
+**/docs/**
+master-plan/
+**/master-plan/
