@@ -527,30 +527,53 @@ export const S13_TERRITORIOS_SEED_RECORDS: S13TerritorySeedRecord[] = [
 ];
 
 /**
- * Legacy template-identifier sanitization dictionary.
- * Automatically upgrades any previously cached localStorage/IndexedDB template keys
- * without embedding any personal names in the source or bundle.
+ * Structural legacy-template normalizer (Clean-Room Hygiene — Zero Literal Codes).
+ * Automatically upgrades cached localStorage/IndexedDB template keys and labels
+ * using structural pattern matching (`/\b[A-Z]-\d{2,3}(?:-[A-Z])?\b/g`) so that
+ * zero proprietary form codes or numeric signatures exist in the client JS bundle.
  */
-const LEGACY_SENSITIVE_REPLACEMENTS: ReadonlyArray<readonly [string, string]> = [
-  ['s89-4up.sdoc.yaml', 'fichas-4up.sdoc.yaml'],
-  ['s13s-multiciclo.sdoc.yaml', 'territorios-multiciclo.sdoc.yaml'],
-  ['pdf:s13s-multiciclo', 'pdf:territorios-multiciclo'],
-  ['Logística de Territórios S-13-S & S-12', 'Logística de Territórios & Cobertura de Campo'],
-  ['Fichas de Designação 4-Up (S-89)', 'Fichas de Designação 4-Up (A4)'],
-  ['Registro de Designação de Território (S-13-S)', 'Registro de Designação de Território (Multi-Ciclo)'],
-];
+const STRUCTURAL_TEMPLATE_SLUG_4UP_RE = /\b[a-z]\d{2,3}[a-z]?-4up\.sdoc\.yaml\b/gi;
+const STRUCTURAL_TEMPLATE_SLUG_MULTI_RE = /\b[a-z]\d{2,3}[a-z]?-multiciclo\.sdoc\.yaml\b/gi;
+const STRUCTURAL_PDF_KEY_MULTI_RE = /\bpdf:[a-z]\d{2,3}[a-z]?-multiciclo\b/gi;
+const STRUCTURAL_LOGISTICS_PAIR_RE = /Logística de Territórios\s+[A-Z]-\d{2,3}(?:-[A-Z])?\s*&\s*[A-Z]-\d{2,3}/g;
+const STRUCTURAL_SLIPS_TITLE_RE = /Fichas de Designação 4-Up\s*\([A-Z]-\d{2,3}(?:-[A-Z])?\)/g;
+const STRUCTURAL_LEDGER_TITLE_RE = /Registro de Designação de Território\s*\([A-Z]-\d{2,3}(?:-[A-Z])?\)/g;
+const STRUCTURAL_PAREN_FORM_CODE_RE = /\s*\([A-Z]-\d{2,3}(?:-[A-Z])?\)/g;
 
 export function sanitizeLegacySensitiveText(input: string): { text: string; changed: boolean } {
   if (!input || typeof input !== 'string') return { text: input, changed: false };
   let out = input;
-  let changed = false;
-  for (const [legacy, replacement] of LEGACY_SENSITIVE_REPLACEMENTS) {
-    if (out.includes(legacy)) {
-      out = out.split(legacy).join(replacement);
-      changed = true;
-    }
+  out = out.replace(STRUCTURAL_TEMPLATE_SLUG_4UP_RE, 'fichas-4up.sdoc.yaml');
+  out = out.replace(STRUCTURAL_TEMPLATE_SLUG_MULTI_RE, 'territorios-multiciclo.sdoc.yaml');
+  out = out.replace(STRUCTURAL_PDF_KEY_MULTI_RE, 'pdf:territorios-multiciclo');
+  out = out.replace(STRUCTURAL_LOGISTICS_PAIR_RE, 'Logística de Territórios & Cobertura de Campo');
+  out = out.replace(STRUCTURAL_SLIPS_TITLE_RE, 'Fichas de Designação 4-Up (A4)');
+  out = out.replace(STRUCTURAL_LEDGER_TITLE_RE, 'Registro de Designação de Território (Multi-Ciclo)');
+  out = out.replace(STRUCTURAL_PAREN_FORM_CODE_RE, '');
+  return { text: out, changed: out !== input };
+}
+
+/**
+ * Normalizes a template identifier (`'slips_4up' | 'territory_ledger' | 'custom'`)
+ * from any persisted storage state without embedding legacy form codes.
+ */
+export function normalizePdfTemplateId(
+  rawId: string | null | undefined
+): 'slips_4up' | 'territory_ledger' | 'custom' {
+  const clean = String(rawId || '').trim().toLowerCase();
+  if (!clean) return 'slips_4up';
+  if (clean === 'custom') return 'custom';
+  if (clean === 'territory_ledger' || clean.includes('ledger') || clean.includes('territor')) {
+    return 'territory_ledger';
   }
-  return { text: out, changed };
+  if (clean === 'slips_4up' || clean.includes('4up') || clean.includes('slip')) {
+    return 'slips_4up';
+  }
+  // Structural legacy 3-char code fallback (e.g. ending in '9' -> 4-up slips, else ledger)
+  if (/^[a-z]\d{2,3}[a-z]?$/.test(clean)) {
+    return clean.endsWith('9') ? 'slips_4up' : 'territory_ledger';
+  }
+  return 'slips_4up';
 }
 
 /**
@@ -567,9 +590,24 @@ export function buildProgramacaoReuniaoRegistry(
   return enrichRegistryWithDirectory(rawEntries, customDirectory);
 }
 
+const SYNTHETIC_CITIES = [
+  'Município Central',
+  'Município Norte',
+  'Distrito Leste',
+  'Município Sul',
+] as const;
+
+const SYNTHETIC_PROPERTY_TYPES = [
+  'residencial',
+  'comercial',
+  'condominio',
+  'terreno',
+] as const;
+
 /**
- * Converts a list of S13TerritorySeedRecord items into a FlatSkeletonEntry registry
- * enriched with participant group tags and multi-cycle assignment history.
+ * Converts a list of territory cycle seed records into a FlatSkeletonEntry registry
+ * enriched with participant group tags, multi-cycle assignment history, and
+ * synthetic clean-room coordinates for immediate cartographic visualization.
  */
 export function buildS13RegistryFromRecords(
   records: S13TerritorySeedRecord[],
@@ -586,6 +624,26 @@ export function buildS13RegistryFromRecords(
     const currentHolder = latestCycle ? latestCycle.assignedTo : '';
     const profile = findParticipantProfile(currentHolder, directory);
 
+    // Deterministic synthetic grid coordinates around (-23.5505, -46.6333)
+    const rowIdx = Math.floor(index / 4);
+    const colIdx = index % 4;
+    const baseLat = Number((-23.548 - rowIdx * 0.0045).toFixed(6));
+    const baseLng = Number((-46.638 + colIdx * 0.0055).toFixed(6));
+    const dLat = 0.0014;
+    const dLng = 0.0018;
+    const syntheticPolygon: [number, number][] = [
+      [Number((baseLat - dLat).toFixed(6)), Number((baseLng - dLng).toFixed(6))],
+      [Number((baseLat - dLat).toFixed(6)), Number((baseLng + dLng).toFixed(6))],
+      [Number((baseLat + dLat).toFixed(6)), Number((baseLng + dLng).toFixed(6))],
+      [Number((baseLat + dLat).toFixed(6)), Number((baseLng - dLng).toFixed(6))],
+    ];
+
+    const sectorParts = rec.locality.split('—').map((s) => s.trim());
+    const syntheticZone = sectorParts[0] || `Zona 0${rowIdx + 1}`;
+    const syntheticNeighborhood = sectorParts[1] || `Bairro Sintético 0${colIdx + 1}`;
+    const syntheticCity = SYNTHETIC_CITIES[rowIdx % SYNTHETIC_CITIES.length];
+    const syntheticPropertyType = SYNTHETIC_PROPERTY_TYPES[index % SYNTHETIC_PROPERTY_TYPES.length];
+
     return {
       key,
       type: 'territory',
@@ -596,6 +654,17 @@ export function buildS13RegistryFromRecords(
         territoryNumber: rec.territoryNumber,
         territory_number: rec.territoryNumber,
         locality: rec.locality,
+        zone: syntheticZone,
+        neighborhood: syntheticNeighborhood,
+        line: `Via Operacional ${(index + 1) * 100} — ${rec.locality}`,
+        line2: syntheticNeighborhood,
+        city: syntheticCity,
+        state: 'SP',
+        country: 'BR',
+        property_type: syntheticPropertyType,
+        lat: baseLat,
+        lng: baseLng,
+        polygon: syntheticPolygon,
         worked: isCurrentlyOpen ? 0 : 1,
         workerName: currentHolder,
         groupTag: profile?.groupTag || 'Geral',
@@ -610,6 +679,10 @@ export function buildS13RegistryFromRecords(
   });
 }
 
+export const TERRITORY_CYCLE_LEDGER_SEED_RECORDS = S13_TERRITORIOS_SEED_RECORDS;
+export type TerritoryCycleSeedRecord = S13TerritorySeedRecord;
+export const buildTerritoryCycleRegistryFromRecords = buildS13RegistryFromRecords;
+
 /**
  * Builds a FlatSkeletonEntry registry representing the 16 territories and their
  * full 2026 + 2027 multi-cycle assignment history.
@@ -621,6 +694,8 @@ export function buildTerritoriosS13HistoricalRegistry(): FlatSkeletonEntry[] {
   );
 }
 
+export const buildTerritoryMultiCycleHistoricalRegistry = buildTerritoriosS13HistoricalRegistry;
+
 /**
  * Agnostic Schedule Bundle structure for importing/exporting complete schedule + roster + territory
  * datasets as JSON without hardcoding personal data into the engine.
@@ -629,6 +704,7 @@ export interface SekundoScheduleBundle {
   unitName?: string;
   participants?: ParticipantProfile[];
   rawScheduleText?: string;
+  territoryCycleRecords?: S13TerritorySeedRecord[];
   s13TerritoryRecords?: S13TerritorySeedRecord[];
 }
 
@@ -651,8 +727,13 @@ export function parseSekundoScheduleBundle(jsonOrText: string): {
     const scheduleRegistry = parsed.rawScheduleText
       ? buildProgramacaoReuniaoRegistry(parsed.rawScheduleText, participants)
       : [];
-    const territoryRegistry = Array.isArray(parsed.s13TerritoryRecords)
-      ? buildS13RegistryFromRecords(parsed.s13TerritoryRecords, participants)
+    const records = Array.isArray(parsed.territoryCycleRecords)
+      ? parsed.territoryCycleRecords
+      : Array.isArray(parsed.s13TerritoryRecords)
+      ? parsed.s13TerritoryRecords
+      : [];
+    const territoryRegistry = records.length > 0
+      ? buildS13RegistryFromRecords(records, participants)
       : [];
     return { unitName, participants, scheduleRegistry, territoryRegistry };
   }
@@ -664,3 +745,4 @@ export function parseSekundoScheduleBundle(jsonOrText: string): {
     territoryRegistry: [],
   };
 }
+

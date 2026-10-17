@@ -47,7 +47,7 @@ interface NormalizedS13RowGroup {
 }
 
 /**
- * Splits an array of assignment cycles into chunks of 4 (since each S-13-S row holds 4 cycles).
+ * Splits an array of assignment cycles into chunks of 4 (since each multi-cycle row holds 4 cycles).
  */
 export function chunkCyclesBy4(
   cycles: TerritoryAssignmentCycle[]
@@ -63,8 +63,8 @@ export function chunkCyclesBy4(
 }
 
 /**
- * Generates a complete A4 Territory Assignment Record (S-13-S 4-Column Multi-Cycle Table)
- * + optional Territory Quadra Cards (S-12 style) 100% on the client using `pdf-lib`.
+ * Generates a complete A4 Territory Assignment Record (4-Column Multi-Cycle Table)
+ * + optional Territory Quadra Cards 100% on the client using `pdf-lib`.
  */
 export async function generateTerritoryS13AndCardsPDF(
   flatRegistry: FlatSkeletonEntry[],
@@ -133,7 +133,7 @@ export async function generateTerritoryS13AndCardsPDF(
 
   let totalRenderedRows = 0;
 
-  // Render S-13-S pages per Service Year
+  // Render Multi-Cycle pages per Service Year
   for (const currentYear of yearsToRender) {
     const rowGroups: NormalizedS13RowGroup[] = [];
 

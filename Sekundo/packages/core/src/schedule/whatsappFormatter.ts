@@ -9,7 +9,7 @@
  * Supports 5 specialized WhatsApp modes:
  * 1. `full_week`            — Complete weekly board organized by thematic blocks
  * 2. `group_filter`         — Filtered digest for a specific operational group (e.g. "Grupo 1")
- * 3. `individual_card`      — Personal 1-tap commitment card (Digital S-89)
+ * 3. `individual_card`      — Personal 1-tap commitment card (Digital Assignment Slip)
  * 4. `live_pocket`          — Compact "Tonight / Live" rundown with calculated clock times
  * 5. `territory_assignment` — Tactical territory assignment card with publisher link
  *

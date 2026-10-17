@@ -106,7 +106,7 @@ export default function RosterSwapConsole() {
     return [
       {
         id: 'vol-01',
-        name: 'Carlos Oliveira',
+        name: 'Participante 01',
         skillLevel: 'LEADER',
         scheduleMask: 0n,
         availabilityMask: ~0n,
@@ -115,7 +115,7 @@ export default function RosterSwapConsole() {
       },
       {
         id: 'vol-02',
-        name: 'Mateus Santos',
+        name: 'Participante 02',
         skillLevel: 'ADVANCED',
         scheduleMask: 0n,
         availabilityMask: ~0n,
@@ -124,7 +124,7 @@ export default function RosterSwapConsole() {
       },
       {
         id: 'vol-03',
-        name: 'Lucas Ferreira',
+        name: 'Participante 03',
         skillLevel: 'INTERMEDIATE',
         scheduleMask: 0n,
         availabilityMask: ~0n,
@@ -133,7 +133,7 @@ export default function RosterSwapConsole() {
       },
       {
         id: 'vol-04',
-        name: 'Daniel Silva',
+        name: 'Participante 04',
         skillLevel: 'BASIC',
         scheduleMask: 0n,
         availabilityMask: ~0n,
@@ -210,7 +210,7 @@ export default function RosterSwapConsole() {
           <Pressable onPress={() => router.back()} style={styles.backBtn}>
             <Text style={styles.backBtnText}>← Voltar</Text>
           </Pressable>
-          <View>
+          <View style={{ flexShrink: 1 }}>
             <Text style={styles.headerTitle}>Banco de Reservas & Trocas</Text>
             <Text style={styles.headerSubtitle}>
               {currentEvent ? currentEvent.config.name : 'Sekundo Workforce Optimization'}
@@ -491,10 +491,12 @@ const styles = StyleSheet.create({
   },
   header: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 14,
+    gap: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#1E2430',
     backgroundColor: '#161A23',
@@ -502,7 +504,8 @@ const styles = StyleSheet.create({
   headerLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 10,
+    flexShrink: 1,
   },
   backBtn: {
     paddingHorizontal: 10,

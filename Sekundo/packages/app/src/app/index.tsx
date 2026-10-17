@@ -53,7 +53,7 @@ export default function Dashboard() {
                 borderColor: '#FFB800',
               }}
             />
-            <View>
+            <View style={{ flex: 1, flexShrink: 1 }}>
               <Text style={styles.logo}>Sekundo</Text>
               <Text style={styles.tagline}>
                 Agnostic skeleton engine for temporal event automation.

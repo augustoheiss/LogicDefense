@@ -53,8 +53,8 @@ export default function ICSCommandConsole() {
         key: '01',
         type: 'header',
         label: 'Comandante do Incidente (Incident Commander)',
-        value: 'Cel. Roberto Valente',
-        email: 'valente@comando.defesa.org',
+        value: 'Operador Comando 01',
+        email: 'comando01@operacoes.local',
         meta: {
           icsRole: 'INCIDENT_COMMANDER',
           allocatedPersonnel: 1,
@@ -66,8 +66,8 @@ export default function ICSCommandConsole() {
             key: '01.01',
             type: 'slot',
             label: 'Oficial de Segurança (Safety Officer)',
-            value: 'Cap. Mariana Dias',
-            email: 'seguranca@defesa.org',
+            value: 'Oficial Segurança 02',
+            email: 'seguranca02@operacoes.local',
             meta: {
               icsRole: 'SAFETY_OFFICER',
               allocatedPersonnel: 3,
@@ -79,8 +79,8 @@ export default function ICSCommandConsole() {
             key: '01.02',
             type: 'slot',
             label: 'Oficial de Informações Públicas (PIO)',
-            value: 'Luciana Prates',
-            email: 'imprensa@defesa.org',
+            value: 'Oficial Comunicação 03',
+            email: 'comunicacao03@operacoes.local',
             meta: {
               icsRole: 'PUBLIC_INFO_OFFICER',
               allocatedPersonnel: 4,
@@ -92,8 +92,8 @@ export default function ICSCommandConsole() {
             key: '01.03',
             type: 'header',
             label: 'Seção de Operações (Operations Section)',
-            value: 'Maj. Fernando Torres',
-            email: 'operacoes@defesa.org',
+            value: 'Coord. Operações 04',
+            email: 'operacoes04@operacoes.local',
             meta: {
               icsRole: 'OPERATIONS',
               allocatedPersonnel: 32,
@@ -104,8 +104,8 @@ export default function ICSCommandConsole() {
                 key: '01.03.01',
                 type: 'slot',
                 label: 'Divisão Alfa (Resgate e Triagem)',
-                value: 'Ten. Paulo Silveira',
-                email: 'alfa@defesa.org',
+                value: 'Líder Divisão Alfa 05',
+                email: 'alfa05@operacoes.local',
                 meta: {
                   icsRole: 'DIVISION',
                   allocatedPersonnel: 12,
@@ -117,8 +117,8 @@ export default function ICSCommandConsole() {
                 key: '01.03.02',
                 type: 'slot',
                 label: 'Divisão Bravo (Contenção Perimetral)',
-                value: 'Ten. André Costa',
-                email: 'bravo@defesa.org',
+                value: 'Líder Divisão Bravo 06',
+                email: 'bravo06@operacoes.local',
                 meta: {
                   icsRole: 'DIVISION',
                   allocatedPersonnel: 10,
@@ -130,8 +130,8 @@ export default function ICSCommandConsole() {
                 key: '01.03.03',
                 type: 'slot',
                 label: 'Equipe de Intervenção Rápida (Strike Team)',
-                value: 'Sgt. Marcos Ramos',
-                email: 'strike@defesa.org',
+                value: 'Líder Equipe Tática 07',
+                email: 'tatica07@operacoes.local',
                 meta: {
                   icsRole: 'STRIKE_TEAM',
                   allocatedPersonnel: 10,
@@ -145,8 +145,8 @@ export default function ICSCommandConsole() {
             key: '01.04',
             type: 'header',
             label: 'Seção de Planejamento (Planning Section)',
-            value: 'Dra. Camila Nogueira',
-            email: 'planejamento@defesa.org',
+            value: 'Coord. Planejamento 08',
+            email: 'planejamento08@operacoes.local',
             meta: {
               icsRole: 'PLANNING',
               allocatedPersonnel: 8,
@@ -158,8 +158,8 @@ export default function ICSCommandConsole() {
             key: '01.05',
             type: 'header',
             label: 'Seção de Logística (Logistics Section)',
-            value: 'Eng. Ricardo Barros',
-            email: 'logistica@defesa.org',
+            value: 'Coord. Logística 09',
+            email: 'logistica09@operacoes.local',
             meta: {
               icsRole: 'LOGISTICS',
               allocatedPersonnel: 18,
@@ -311,7 +311,7 @@ export default function ICSCommandConsole() {
           <Pressable onPress={() => router.back()} style={styles.backBtn}>
             <Text style={styles.backBtnText}>← Voltar</Text>
           </Pressable>
-          <View>
+          <View style={{ flexShrink: 1 }}>
             <Text style={styles.headerTitle}>Posto de Comando de Incidentes (ICS / NIMS)</Text>
             <Text style={styles.headerSubtitle}>
               {currentEvent ? currentEvent.config.name : 'Sekundo Emergency Management'}
@@ -377,10 +377,12 @@ const styles = StyleSheet.create({
   },
   header: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 14,
+    gap: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#1E293B',
     backgroundColor: '#0F172A',
@@ -388,7 +390,8 @@ const styles = StyleSheet.create({
   headerLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 10,
+    flexShrink: 1,
   },
   backBtn: {
     paddingHorizontal: 10,
@@ -403,7 +406,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     color: '#F8FAFC',
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: '800',
   },
   headerSubtitle: {
@@ -417,7 +420,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
     borderColor: '#334155',
-    alignItems: 'flex-end',
+    alignItems: 'flex-start',
   },
   periodLabel: {
     color: '#64748B',
@@ -431,13 +434,14 @@ const styles = StyleSheet.create({
   },
   telemetryBar: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
     paddingVertical: 10,
     backgroundColor: '#1E293B',
     borderBottomWidth: 1,
     borderBottomColor: '#334155',
-    gap: 24,
+    gap: 16,
   },
   telemetryItem: {
     flexDirection: 'column',

@@ -25,6 +25,7 @@ import { TreeView } from '../components/ui/TreeView';
 import { GranularExportModal } from '../components/csv/GranularExportModal';
 import { TransformerStudioModal } from '../components/transformer/TransformerStudioModal';
 import { AddressEditModal } from '../components/territory/AddressEditModal';
+import { CadToolDock, type CadToolDefinition } from '../components/ui/CadToolDock';
 import { serializeCSV, engineRegistry, pathKey } from '@sekundo/core';
 import type { NodeType, SkeletonNode, FlatSkeletonEntry } from '@sekundo/core';
 
@@ -187,58 +188,102 @@ export default function SkeletonEditor() {
     });
   };
 
+  const skeletonCadTools: CadToolDefinition[] = [
+    {
+      id: 'add-root',
+      icon: '➕',
+      label: 'Adicionar Nó Raiz (+ Add Root)',
+      shortcut: 'N',
+      accentColor: '#FFB800',
+      description: 'Cria um novo nó de primeiro nível na árvore hierárquica deste evento.',
+      confirmLabel: '➕ Criar Nó Raiz',
+      onConfirm: openAddRootModal,
+    },
+    {
+      id: 'pdf-forms',
+      icon: '📄',
+      label: 'Central de Formulários PDF (4-Up & Multi-Ciclo)',
+      shortcut: 'P',
+      accentColor: '#FFB800',
+      description:
+        'Abre o console de impressão 1-Click para Fichas 4-Up, Registro Multi-Ciclo de Territórios (4 Colunas) ou preenchimento automático de AcroForms.',
+      confirmLabel: '📄 Abrir Central de Formulários PDF',
+      onConfirm: () => router.push(`/pdf-forms?id=${eventId}`),
+    },
+    {
+      id: 'pdf-mapper',
+      icon: '📐',
+      label: 'Mapeador Visual de Coordenadas PDF',
+      shortcut: 'M',
+      accentColor: '#38BDF8',
+      description:
+        'Permite posicionar visualmente campos da árvore sobre qualquer arquivo PDF estático para carimbo determinístico.',
+      confirmLabel: '📐 Abrir Mapeador PDF',
+      onConfirm: () => router.push(`/pdf-mapper?id=${eventId}`),
+    },
+    {
+      id: 'p2p-sync',
+      icon: '🔗',
+      label: 'Sincronização P2P & Chat Soberano',
+      shortcut: 'S',
+      accentColor: '#38BDF8',
+      description:
+        'Gera tokens criptografados de delegação por subárvore (CBAC) e sincroniza alterações ponto a ponto.',
+      confirmLabel: '🔗 Abrir Sync & Chat',
+      onConfirm: () => router.push(`/p2p-sync?id=${eventId}&role=admin`),
+    },
+    {
+      id: 'csv-import',
+      icon: '📥',
+      label: 'Importar Planilha CSV / Excel',
+      shortcut: 'I',
+      accentColor: '#10B981',
+      description:
+        'Importa linhas estruturadas de arquivos CSV ou planilhas diretamente para a árvore hierárquica.',
+      confirmLabel: '📥 Abrir Importador CSV',
+      onConfirm: () => router.push(`/csv-import?id=${eventId}`),
+    },
+    {
+      id: 'csv-export',
+      icon: '📤',
+      label: 'Exportar CSV Modular (LEGO)',
+      shortcut: 'E',
+      accentColor: '#10B981',
+      description:
+        'Exporta subárvores, colunas selecionadas ou toda a estrutura em formato CSV compatível com Excel.',
+      confirmLabel: '📤 Abrir Exportador CSV',
+      onConfirm: () => setExportModalVisible(true),
+    },
+    {
+      id: 'transformer',
+      icon: '🎛️',
+      label: 'Transformer Studio (Leis & Colunas)',
+      shortcut: 'T',
+      accentColor: '#8B5CF6',
+      description:
+        'Ativa ou combina módulos de leis universais (Logística de Territórios, Escalas, ICS, Run-of-Show, Torneios) sobre este esqueleto.',
+      confirmLabel: '🎛️ Abrir Transformer Studio',
+      onConfirm: () => setTransformerModalVisible(true),
+    },
+  ];
+
   return (
     <SafeAreaView style={styles.container}>
-      {/* Header bar */}
-      <View style={styles.actionBar}>
-        <View style={styles.actionLeft}>
-          <Pressable onPress={() => router.replace('/')} style={styles.backBtn}>
-            <Text style={styles.backBtnText}>← Dashboard</Text>
-          </Pressable>
-          <Text style={styles.eventTitle}>{event.config.name}</Text>
-        </View>
-        <View style={styles.actionRight}>
-          <Pressable onPress={openAddRootModal} style={styles.primaryActionBtn}>
-            <Text style={styles.primaryActionBtnText}>+ Add Root</Text>
-          </Pressable>
-          <Pressable
-            onPress={() => router.push(`/pdf-forms?id=${eventId}`)}
-            style={[styles.actionBtn, { borderColor: '#FFB800' }]}
-          >
-            <Text style={[styles.actionBtnText, { color: '#FFB800' }]}>📄 Formulários PDF</Text>
-          </Pressable>
-          <Pressable
-            onPress={() => router.push(`/pdf-mapper?id=${eventId}`)}
-            style={styles.actionBtn}
-          >
-            <Text style={styles.actionBtnText}>PDF Map</Text>
-          </Pressable>
-          <Pressable
-            onPress={() => router.push(`/p2p-sync?id=${eventId}&role=admin`)}
-            style={styles.actionBtn}
-          >
-            <Text style={styles.actionBtnText}>Sync & Chat</Text>
-          </Pressable>
-          <Pressable
-            onPress={() => router.push(`/csv-import?id=${eventId}`)}
-            style={styles.actionBtn}
-          >
-            <Text style={styles.actionBtnText}>Import CSV</Text>
-          </Pressable>
-          <Pressable
-            onPress={() => setExportModalVisible(true)}
-            style={[styles.actionBtn, { borderColor: '#10B981' }]}
-          >
-            <Text style={[styles.actionBtnText, { color: '#10B981' }]}>📤 Exportar CSV (LEGO)</Text>
-          </Pressable>
-          <Pressable
-            onPress={() => setTransformerModalVisible(true)}
-            style={[styles.actionBtn, { borderColor: '#8B5CF6' }]}
-          >
-            <Text style={[styles.actionBtnText, { color: '#C4B5FD' }]}>🎛️ Transformer Studio</Text>
-          </Pressable>
-        </View>
-      </View>
+      {/* Compact CAD Tool Dock */}
+      <CadToolDock
+        testID="skeleton-cad-dock"
+        tools={skeletonCadTools}
+        leftSlot={
+          <View style={styles.actionLeft}>
+            <Pressable onPress={() => router.replace('/')} style={styles.backBtn}>
+              <Text style={styles.backBtnText}>← Painel</Text>
+            </Pressable>
+            <Text style={styles.eventTitle} numberOfLines={1}>
+              {event.config.name}
+            </Text>
+          </View>
+        }
+      />
 
       {/* Engine Metrics & Universal Law Context Bar */}
       <View style={styles.engineBar}>
@@ -492,7 +537,7 @@ export default function SkeletonEditor() {
               style={styles.input}
               value={nodeValue}
               onChangeText={setNodeValue}
-              placeholder="e.g. Carlos Silva"
+              placeholder="Ex: Participante 01"
               placeholderTextColor="#4F5E74"
             />
 
@@ -501,7 +546,7 @@ export default function SkeletonEditor() {
               style={styles.input}
               value={nodeEmail}
               onChangeText={setNodeEmail}
-              placeholder="e.g. silva@email.com"
+              placeholder="Ex: operador01@exemplo.org"
               placeholderTextColor="#4F5E74"
               keyboardType="email-address"
             />
@@ -627,7 +672,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
+    flexWrap: 'wrap',
+    gap: 10,
+    paddingHorizontal: 14,
     paddingVertical: 10,
     backgroundColor: 'rgba(255, 255, 255, 0.02)',
     borderBottomWidth: 1,
@@ -637,7 +684,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     flexWrap: 'wrap',
-    gap: 10,
+    gap: 8,
+    flex: 1,
+    minWidth: 200,
   },
   engineBadge: {
     backgroundColor: 'rgba(255, 184, 0, 0.12)',
@@ -657,12 +706,13 @@ const styles = StyleSheet.create({
     color: '#8A94A6',
     fontSize: 12,
     fontWeight: '500',
+    flexShrink: 1,
   },
   summaryBtn: {
     backgroundColor: 'rgba(59, 130, 246, 0.15)',
     borderWidth: 1,
     borderColor: '#3B82F6',
-    paddingHorizontal: 12,
+    paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 6,
   },
@@ -712,37 +762,45 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: 16,
+    padding: 12,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(255, 255, 255, 0.05)',
   },
   actionLeft: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 8,
+    flexShrink: 1,
   },
   backBtn: {
-    marginRight: 16,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 6,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
   },
   backBtnText: {
     color: '#8A94A6',
-    fontSize: 14,
-    fontWeight: '500',
+    fontSize: 12,
+    fontWeight: '600',
   },
   eventTitle: {
     color: '#FFFFFF',
-    fontSize: 18,
-    fontWeight: '700',
+    fontSize: 15,
+    fontWeight: '800',
+    flexShrink: 1,
+    maxWidth: 210,
   },
   actionRight: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 6,
   },
   primaryActionBtn: {
     backgroundColor: '#FFB800',
     borderRadius: 8,
     paddingVertical: 8,
     paddingHorizontal: 12,
-    marginRight: 8,
   },
   primaryActionBtnText: {
     color: '#12151C',
@@ -754,7 +812,6 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     paddingVertical: 8,
     paddingHorizontal: 12,
-    marginLeft: 8,
   },
   actionBtnText: {
     color: '#A9B4C5',
@@ -765,7 +822,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   treeWrapper: {
-    padding: 24,
+    padding: 14,
     maxWidth: 1000,
     alignSelf: 'center',
     width: '100%',

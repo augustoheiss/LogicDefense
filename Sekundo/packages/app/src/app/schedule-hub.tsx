@@ -680,7 +680,7 @@ export default function ScheduleHubConsole() {
             { backgroundColor: theme.cardBg, borderColor: theme.cardBorder },
           ]}
         >
-          <View style={{ flex: 1 }}>
+          <View style={{ flex: 1, minWidth: 220 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
               <Text style={[styles.heroBadge, { borderColor: theme.accent, color: theme.accent }]}>
                 MOTOR AGNÓSTICO SEKUNDO
@@ -2075,6 +2075,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     borderRadius: 10,
     borderWidth: 1.5,
+    flexShrink: 1,
+    maxWidth: '100%',
   },
   clearFilterBtn: {
     paddingVertical: 8,
@@ -2124,17 +2126,19 @@ const styles = StyleSheet.create({
   },
   tabBar: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     borderBottomWidth: 1,
     borderBottomColor: '#1E293B',
     marginBottom: 14,
-    gap: 16,
+    gap: 12,
   },
   tabButton: {
     paddingVertical: 10,
     paddingHorizontal: 6,
+    flexShrink: 1,
   },
   tabButtonText: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '800',
   },
   weekSelectorScroll: {

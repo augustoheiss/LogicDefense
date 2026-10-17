@@ -22,14 +22,15 @@ const OSM_TILE_URL = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
 const OSM_ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>';
 
 const SHAPE_CSS: Record<string, Partial<CSSStyleDeclaration>> = {
-  circle: { width: '26px', height: '26px', borderRadius: '50%' },
-  triangle: { width: '28px', height: '26px', clipPath: 'polygon(50% 0%, 0% 100%, 100% 100%)' },
-  square: { width: '24px', height: '24px', borderRadius: '4px' },
-  diamond: { width: '26px', height: '26px', clipPath: 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)' },
-  hexagon: { width: '28px', height: '26px', clipPath: 'polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%)' },
+  circle: { width: '24px', height: '24px', borderRadius: '50%' },
+  triangle: { width: '26px', height: '24px', clipPath: 'polygon(50% 0%, 0% 100%, 100% 100%)' },
+  square: { width: '22px', height: '22px', borderRadius: '4px' },
+  diamond: { width: '24px', height: '24px', clipPath: 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)' },
+  pentagon: { width: '26px', height: '25px', clipPath: 'polygon(50% 0%, 100% 38%, 82% 100%, 18% 100%, 0% 38%)' },
+  hexagon: { width: '26px', height: '24px', clipPath: 'polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%)' },
   star: {
-    width: '28px',
-    height: '28px',
+    width: '26px',
+    height: '26px',
     clipPath: 'polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%)',
   },
   pin: { width: '26px', height: '30px', borderRadius: '50% 50% 50% 0', transform: 'rotate(-45deg)', marginTop: '-6px' },
@@ -422,7 +423,9 @@ export function TerritoryLeafletMap(props: TerritoryLeafletMapProps) {
 
 function buildPinMarker(L: LeafletNS, pin: MapPin, propsRef: React.MutableRefObject<TerritoryLeafletMapProps>) {
   const isWorked = pin.worked === 1;
-  const shape = SHAPE_CSS[pin.shape] ? pin.shape : 'circle';
+  const isSelected = propsRef.current.selectedKey === pin.key;
+  const baseShape = SHAPE_CSS[pin.shape] ? pin.shape : 'circle';
+  const shape = isSelected && baseShape === 'circle' ? 'pin' : baseShape;
 
   const inner = el('span', {
     text: isWorked ? '✓' : '•',
@@ -434,15 +437,21 @@ function buildPinMarker(L: LeafletNS, pin: MapPin, propsRef: React.MutableRefObj
       style: {
         ...SHAPE_CSS[shape],
         background: pin.color,
-        border: isWorked ? '2px solid #FFFFFF' : '2px dashed #FFFFFF',
-        opacity: isWorked ? '1' : '0.85',
+        border: isSelected
+          ? '2.5px solid #FFB800'
+          : isWorked
+          ? '2px solid #FFFFFF'
+          : '2px dashed #FFFFFF',
+        opacity: isSelected || isWorked ? '1' : '0.88',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
         color: '#FFFFFF',
         fontWeight: 'bold',
         fontSize: '12px',
-        boxShadow: '0 4px 8px rgba(0,0,0,0.5)',
+        boxShadow: isSelected
+          ? '0 0 0 3px rgba(255,184,0,0.55), 0 6px 14px rgba(0,0,0,0.7)'
+          : '0 4px 8px rgba(0,0,0,0.5)',
         cursor: 'pointer',
       },
     },
@@ -450,6 +459,7 @@ function buildPinMarker(L: LeafletNS, pin: MapPin, propsRef: React.MutableRefObj
   );
 
   const marker = L.marker([pin.lat, pin.lng], {
+    zIndexOffset: isSelected ? 1000 : 0,
     icon: L.divIcon({ className: 'custom-pin', html: badge, iconSize: [28, 28], iconAnchor: [14, 14] }),
   });
   marker.on('click', () => propsRef.current.onSelectPin(pin.key));

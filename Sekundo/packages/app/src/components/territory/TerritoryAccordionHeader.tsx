@@ -99,6 +99,7 @@ export function TerritoryAccordionHeader({
 const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 10,
@@ -116,6 +117,7 @@ const styles = StyleSheet.create({
   },
   mainClickArea: {
     flex: 1,
+    minWidth: 160,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,

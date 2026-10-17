@@ -73,6 +73,15 @@ export function QuickFillForm({
     onExportFlattenedPdf(true);
   };
 
+  const handleEditableExport = () => {
+    if (hasSignature && !confirmSignatureFlatten) {
+      setConfirmSignatureFlatten(true);
+      return;
+    }
+    setConfirmSignatureFlatten(false);
+    onExportEditablePdf();
+  };
+
   return (
     <View style={styles.container} testID="quickfill-form-panel">
       <View style={styles.header}>
@@ -251,7 +260,7 @@ export function QuickFillForm({
         <TouchableOpacity
           testID="quickfill-export-editable-btn"
           style={styles.secondaryExportBtn}
-          onPress={onExportEditablePdf}
+          onPress={handleEditableExport}
         >
           <Text style={styles.secondaryExportText}>
             📝 Exportar como Formulário Editável (AcroForm)

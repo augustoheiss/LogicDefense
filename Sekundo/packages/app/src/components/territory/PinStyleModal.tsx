@@ -24,7 +24,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 
-export type PinShape = 'circle' | 'triangle' | 'square' | 'hexagon' | 'diamond' | 'star' | 'pin';
+export type PinShape = 'circle' | 'triangle' | 'square' | 'pentagon' | 'hexagon' | 'diamond' | 'star' | 'pin';
 
 export interface PinStyleOption {
   id: PinShape;
@@ -36,6 +36,7 @@ export const PIN_SHAPES: PinStyleOption[] = [
   { id: 'circle', label: 'Círculo', icon: '●' },
   { id: 'triangle', label: 'Triângulo', icon: '▲' },
   { id: 'square', label: 'Quadrado', icon: '■' },
+  { id: 'pentagon', label: 'Pentágono', icon: '⬠' },
   { id: 'hexagon', label: 'Hexágono', icon: '⬢' },
   { id: 'diamond', label: 'Losango', icon: '◆' },
   { id: 'star', label: 'Estrela', icon: '★' },

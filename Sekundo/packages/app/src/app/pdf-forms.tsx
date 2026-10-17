@@ -28,6 +28,7 @@ import {
   generateTerritoryS13AndCardsPDF,
   computeTerritoryRecencyList,
   buildTerritoriosS13HistoricalRegistry,
+  normalizePdfTemplateId,
   PROGRAMACAO_UNIT_NAME,
   type S89Assignment,
   type FieldMappingCandidate,
@@ -43,13 +44,15 @@ import {
 
 export default function PDFFormsConsole() {
   const router = useRouter();
-  const { id } = useLocalSearchParams<{ id?: string }>();
+  const { id, template } = useLocalSearchParams<{ id?: string; template?: string }>();
   const eventId = id || '';
   const { flatRegistry } = useSkeleton(eventId);
 
   const [loading, setLoading] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
-  const [selectedTemplate, setSelectedTemplate] = useState<'s89' | 's12' | 'custom'>('custom');
+  const [selectedTemplate, setSelectedTemplate] = useState<'slips_4up' | 'territory_ledger' | 'custom'>(
+    () => (template ? normalizePdfTemplateId(template) : 'custom')
+  );
   const [s13ServiceYear, setS13ServiceYear] = useState<'all' | '2027' | '2026'>('all');
   const [mailMergeAllRecords, setMailMergeAllRecords] = useState<boolean>(false);
 
@@ -299,13 +302,13 @@ export default function PDFFormsConsole() {
             {(
               [
                 [
-                  's89',
-                  'Fichas de Designação 4-Up (Universal)',
+                  'slips_4up',
+                  'Fichas de Designação 4-Up (4 por Página)',
                   'Imposição 4-Up em folha A4 com corte em guilhotina (Designado, Data, Sala, Atividade).',
                 ],
                 [
-                  's12',
-                  'Registro Multi-Ciclo & Cartões de Território',
+                  'territory_ledger',
+                  'Registro Histórico Multi-Ciclo de Territórios (4 Colunas)',
                   'Tabela de designação/conclusão de territórios (4 Colunas) + fichas táticas de quadras.',
                 ],
                 [
@@ -337,7 +340,7 @@ export default function PDFFormsConsole() {
             onPickCustomPDF={handlePickCustomPDF}
             onGenerateCustomPDF={handleGenerateCustomPDF}
           />
-        ) : selectedTemplate === 's12' ? (
+        ) : selectedTemplate === 'territory_ledger' ? (
           <TerritoryS13Section
             s13ServiceYear={s13ServiceYear}
             onSetS13ServiceYear={setS13ServiceYear}

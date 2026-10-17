@@ -325,14 +325,19 @@ export {
   PROGRAMACAO_PARTICIPANT_DIRECTORY,
   RAW_PROGRAMACAO_2026_10_AND_11_TEXT,
   S13_TERRITORIOS_SEED_RECORDS,
+  TERRITORY_CYCLE_LEDGER_SEED_RECORDS,
   sanitizeLegacySensitiveText,
+  normalizePdfTemplateId,
   buildProgramacaoReuniaoRegistry,
   buildS13RegistryFromRecords,
+  buildTerritoryCycleRegistryFromRecords,
   buildTerritoriosS13HistoricalRegistry,
+  buildTerritoryMultiCycleHistoricalRegistry,
   parseSekundoScheduleBundle,
 } from './schedule/programacaoReuniaoSeed';
 export type {
   S13TerritorySeedRecord,
+  TerritoryCycleSeedRecord,
   SekundoScheduleBundle,
 } from './schedule/programacaoReuniaoSeed';
 
@@ -501,6 +506,24 @@ export type {
   HojeCockpitSummary,
 } from './composer/appManifest';
 
-
-
+// Dynamic Map Symbology Engine
+export {
+  DEFAULT_MAP_SYMBOLOGY_CONFIG,
+  SYMBOLOGY_DIMENSION_OPTIONS,
+  SYMBOLOGY_PALETTE,
+  SYMBOLOGY_SHAPES,
+  SYMBOLOGY_SHAPE_META,
+  hashCategoryKey,
+  extractSymbologyCategory,
+  resolvePinSymbology,
+  buildSymbologyLegend,
+} from './territory/mapSymbologyEngine';
+export type {
+  SymbologyDimension,
+  SymbologyShape,
+  SymbologyVisualChannel,
+  MapSymbologyConfig,
+  SymbologyLegendItem,
+  ResolvedPinSymbology,
+} from './territory/mapSymbologyEngine';
 

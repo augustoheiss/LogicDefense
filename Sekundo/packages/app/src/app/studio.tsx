@@ -36,7 +36,7 @@ export default function StudioScreen() {
   const [mobileTab, setMobileTab] = useState<'fill' | 'yaml' | 'canvas' | 'inspector'>('canvas');
   const [rightSidebarTab, setRightSidebarTab] = useState<'fill' | 'inspector'>('fill');
   const [dataSourceMode, setDataSourceMode] = useState<'reuniao' | 'territorios' | 'avulso'>(
-    params.preset === 'territorios-multiciclo' || params.preset === 's13-s' ? 'territorios' : 'reuniao'
+    params.preset === 'territorios-multiciclo' ? 'territorios' : 'reuniao'
   );
   const { flatRegistry } = useSkeleton(eventId);
 
@@ -53,7 +53,7 @@ export default function StudioScreen() {
     eventName: dataSourceMode === 'territorios' ? 'Registro de Territórios Multi-Ciclo' : 'Programação Semanal',
     registry: effectiveRegistry,
     initialPreset:
-      params.preset === 'territorios-multiciclo' || params.preset === 's13-s'
+      params.preset === 'territorios-multiciclo'
         ? 'territorios-multiciclo'
         : 'fichas-4up',
   });
@@ -98,10 +98,10 @@ export default function StudioScreen() {
   };
 
   const handleSelectPreset = (
-    preset: 'fichas-4up' | 'territorios-multiciclo' | 's89-4up' | 's13-s' | 'auto'
+    preset: 'fichas-4up' | 'territorios-multiciclo' | 'auto' | string
   ) => {
-    if (preset === 'fichas-4up' || preset === 's89-4up') setDataSourceMode('reuniao');
-    if (preset === 'territorios-multiciclo' || preset === 's13-s') setDataSourceMode('territorios');
+    if (preset === 'fichas-4up' || preset.endsWith('-4up')) setDataSourceMode('reuniao');
+    else if (preset !== 'auto') setDataSourceMode('territorios');
     doc.loadBuiltinPreset(preset);
   };
 
@@ -293,7 +293,9 @@ export default function StudioScreen() {
                         snapMm={doc.snapMm}
                         showGrid={doc.showGrid}
                         zoom={doc.zoom}
-                        underlayDataUrl={doc.underlayDataUrl}
+                        underlayDataUrl={
+                          doc.sdoc?.underlay?.mode === 'rebuild' ? null : doc.underlayDataUrl
+                        }
                       />
                     </View>
                   </View>

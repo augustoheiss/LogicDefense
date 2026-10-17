@@ -26,7 +26,13 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSkeleton } from '../hooks/useSkeleton';
 import { useLocalEvent } from '../hooks/useLocalEvent';
-import { pathKey, calculateDaysDifference, buildWorkedMeta, resolveTerritoryNumber } from '@sekundo/core';
+import {
+  pathKey,
+  calculateDaysDifference,
+  buildWorkedMeta,
+  resolveTerritoryNumber,
+  buildTerritoriosS13HistoricalRegistry,
+} from '@sekundo/core';
 import type { FlatSkeletonEntry } from '@sekundo/core';
 import { AddressEditModal } from '../components/territory/AddressEditModal';
 import { TerritoryAccordionHeader } from '../components/territory/TerritoryAccordionHeader';
@@ -46,12 +52,23 @@ interface ChecklistGroup {
 export default function TerritoryChecklistScreen() {
   const router = useRouter();
   const { id, territory } = useLocalSearchParams();
-  const eventId = typeof id === 'string' ? id : '';
+  const rawEventId = typeof id === 'string' ? id : '';
   const focusTerritory = typeof territory === 'string' ? territory : '';
 
   const { events } = useLocalEvent();
-  const event = events.find((e) => e.config.id === eventId);
-  const { flatRegistry, updateNode, updateNodes, loading } = useSkeleton(eventId);
+  const event = useMemo(() => {
+    if (rawEventId) {
+      return events.find((e) => e.config.id === rawEventId) || events[0];
+    }
+    return events[0];
+  }, [events, rawEventId]);
+  const eventId = event?.config.id || rawEventId;
+  const { flatRegistry: rawFlatRegistry, updateNode, updateNodes, loading } = useSkeleton(eventId);
+  const fallbackRegistry = useMemo(() => buildTerritoriosS13HistoricalRegistry(), []);
+  const flatRegistry = useMemo(
+    () => (rawFlatRegistry && rawFlatRegistry.length > 0 ? rawFlatRegistry : fallbackRegistry),
+    [rawFlatRegistry, fallbackRegistry]
+  );
 
   // Accordion state: everything collapsed by default. Keys: `T:<territory>` / `G:<groupKey>`.
   const [expandedKeys, setExpandedKeys] = useState<Set<string>>(() => new Set());
@@ -384,7 +401,7 @@ export default function TerritoryChecklistScreen() {
     setActiveNoteKey(null);
   };
 
-  if (loading || !event) {
+  if (loading && flatRegistry.length === 0) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#FFB800" />
@@ -398,12 +415,12 @@ export default function TerritoryChecklistScreen() {
       <View style={styles.header}>
         <View style={styles.headerTopRow}>
           <Pressable
-            onPress={() => router.replace(`/skeleton-editor?id=${eventId}`)}
+            onPress={() => router.replace(eventId ? `/skeleton-editor?id=${eventId}` : '/')}
             style={styles.backBtn}
           >
             <Text style={styles.backBtnText}>← Voltar</Text>
           </Pressable>
-          <View style={{ flexDirection: 'row', gap: 8 }}>
+          <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
             <Pressable
               onPress={() =>
                 router.push(
@@ -428,7 +445,7 @@ export default function TerritoryChecklistScreen() {
         </View>
 
         <Text style={styles.title}>📋 Prancheta de Campo</Text>
-        <Text style={styles.subtitle}>{event.config.name}</Text>
+        <Text style={styles.subtitle}>{event?.config.name ?? 'Malha Territorial Sintética'}</Text>
 
         {/* Progress Bar */}
         <View style={styles.progressBarWrapper}>
@@ -862,6 +879,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 8,
     marginBottom: 8,
   },
   backBtn: {
@@ -940,6 +959,7 @@ const styles = StyleSheet.create({
   },
   filterTabs: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 8,
   },
   tabBtn: {
@@ -1040,6 +1060,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 8,
     marginBottom: 4,
   },
   groupHeaderLeft: {
@@ -1047,6 +1069,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
     flex: 1,
+    minWidth: 180,
   },
   groupKeyBadge: {
     backgroundColor: 'rgba(255, 184, 0, 0.15)',
@@ -1234,6 +1257,7 @@ const styles = StyleSheet.create({
   },
   itemKeyRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
     gap: 6,
     marginBottom: 2,

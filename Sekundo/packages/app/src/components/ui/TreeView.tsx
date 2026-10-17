@@ -60,15 +60,15 @@ function TreeNode({
   onToggleWork?: (nodeKey: string, newStatus: 0 | 1) => void;
 }) {
   const [expanded, setExpanded] = useState(true);
-  const segments = node.key.split('-');
+  const segments = node.key.split(/[.-]/);
   const depth = segments.length;
-  const indentation = (depth - 1) * 20; // 20px padding per nesting level
+  const indentation = Math.min((depth - 1) * 14, 48); // Cap indentation so deep mobile trees stay readable
   const hasChildren = node.children.length > 0;
 
   return (
     <View style={styles.nodeWrapper}>
       {/* Node Card Row */}
-      <View style={[styles.nodeRow, { paddingLeft: indentation + 12 }]}>
+      <View style={[styles.nodeRow, { paddingLeft: indentation + 10 }]}>
         <View style={styles.nodeContent}>
           {/* Fold Toggle Indicator */}
           {hasChildren ? (
@@ -195,6 +195,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: 8,
     backgroundColor: 'rgba(255, 255, 255, 0.02)',
     borderRadius: 8,
     paddingVertical: 10,
@@ -207,24 +209,24 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
-    marginRight: 12,
+    minWidth: 180,
+    flexWrap: 'wrap',
+    gap: 6,
   },
   expandToggle: {
     padding: 6,
-    marginRight: 4,
   },
   expandToggleText: {
     color: '#8A94A6',
     fontSize: 10,
   },
   expandSpacer: {
-    width: 22,
+    width: 18,
   },
   typeBadge: {
     paddingHorizontal: 6,
     paddingVertical: 3,
     borderRadius: 4,
-    marginRight: 10,
   },
   typeBadgeText: {
     fontSize: 8,
@@ -245,6 +247,7 @@ const styles = StyleSheet.create({
   },
   textContainer: {
     flex: 1,
+    minWidth: 120,
     justifyContent: 'center',
   },
   nodeLabel: {
@@ -263,7 +266,6 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     paddingHorizontal: 8,
     paddingVertical: 4,
-    marginLeft: 12,
     maxWidth: 150,
   },
   valueText: {
@@ -274,13 +276,14 @@ const styles = StyleSheet.create({
   controls: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 6,
   },
   controlBtn: {
     backgroundColor: 'rgba(255, 255, 255, 0.06)',
     borderRadius: 6,
     paddingVertical: 5,
     paddingHorizontal: 8,
-    marginLeft: 6,
   },
   controlBtnText: {
     color: '#A9B4C5',

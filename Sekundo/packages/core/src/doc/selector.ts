@@ -61,7 +61,7 @@ function entryToContext(entry: FlatSkeletonEntry, index: number): Record<string,
 }
 
 /**
- * Builds the 20-row page contexts for S-13-S multi-cycle tables from a `FlatRegistry`,
+ * Builds the 20-row page contexts for 4-column multi-cycle territory tables from a `FlatRegistry`,
  * matching the exact domain rules of `s13Generator.ts`.
  */
 export function buildS13PageContexts(

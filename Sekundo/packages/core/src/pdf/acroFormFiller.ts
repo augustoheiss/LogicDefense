@@ -395,17 +395,21 @@ export async function fillAcroForm(
   const form = pdfDoc.getForm();
   const fields = form.getFields();
 
+  const sigInfo = await inspectPDFSecurityAndXfa(templatePdfBytes);
+
   if (options.stripSignatures) {
     try {
       form.acroForm.dict.delete(PDFName.of('SigFlags'));
+      pdfDoc.catalog.delete(PDFName.of('Perms'));
       const fieldsArr = form.acroForm.dict.lookup(PDFName.of('Fields'));
       if (fieldsArr instanceof PDFArray) {
-        for (let i = 0; i < fieldsArr.size(); i++) {
+        for (let i = fieldsArr.size() - 1; i >= 0; i--) {
           const fDict = fieldsArr.lookup(i);
           if (fDict instanceof PDFDict) {
             const ft = fDict.get(PDFName.of('FT'));
             if (ft && ft.toString() === '/Sig') {
               fDict.delete(PDFName.of('V'));
+              fieldsArr.remove(i);
             }
           }
         }
@@ -491,10 +495,21 @@ export async function fillAcroForm(
     };
   }
 
+  // R2-05: Only emit incremental update wrapper when the source document actually has an applied cryptographic signature
+  // and stripSignatures was not requested; otherwise save a clean standard single-header PDF.
+  if (options.stripSignatures || !sigInfo.hasSignature) {
+    const cleanBytes = await pdfDoc.save();
+    return {
+      pdfBytes: cleanBytes,
+      filledFieldCount,
+      matchedFields,
+      unmatchedFields,
+      warnings,
+    };
+  }
+
   const savedBytes = await pdfDoc.save({ useObjectStreams: false });
-  const outputBytes = options.stripSignatures
-    ? savedBytes
-    : toIncrementalPdfUpdate(templatePdfBytes, savedBytes);
+  const outputBytes = toIncrementalPdfUpdate(templatePdfBytes, savedBytes);
 
   return {
     pdfBytes: outputBytes,
@@ -683,13 +698,16 @@ export async function fillAcroFormMailMerge(
     return fillAcroForm(templatePdfBytes, {}, { flatten: true });
   }
 
-  const { PDFDocument, StandardFonts, rgb } = await getPdfLib();
+  const { PDFDocument, StandardFonts, rgb, degrees } = await getPdfLib();
   const inspectedFields = await inspectPDFForm(templatePdfBytes);
 
   // Prepare clean base template with empty flattened fields so default values stay intact if not overridden
   const baseDoc = await PDFDocument.load(templatePdfBytes, { ignoreEncryption: true });
   const basePages = baseDoc.getPages();
-  const pageDims = basePages.map((p) => p.getSize());
+  const pageDims = basePages.map((p) => ({
+    ...p.getSize(),
+    rotation: (((p.getRotation()?.angle || 0) % 360) + 360) % 360,
+  }));
 
   const mergedPdf = await PDFDocument.create();
   const embeddedBasePages = await mergedPdf.embedPages(basePages);
@@ -704,8 +722,11 @@ export async function fillAcroFormMailMerge(
     const matchedInRec = new Set<string>();
 
     for (let pIdx = 0; pIdx < embeddedBasePages.length; pIdx++) {
-      const { width, height } = pageDims[pIdx];
+      const { width, height, rotation } = pageDims[pIdx];
       const page = mergedPdf.addPage([width, height]);
+      if (rotation) {
+        page.setRotation(degrees(rotation));
+      }
       page.drawPage(embeddedBasePages[pIdx], {
         x: 0,
         y: 0,

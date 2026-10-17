@@ -329,7 +329,7 @@ export async function* streamPdfToSdocIngestion(
   let fields: SdocField[] = [];
   try {
     const rawFields = await inspectPDFForm(pdfBytes);
-    fields = extractAcroFormStage(rawFields, pageHeightMm, sampleRegistry, pageWidthMm);
+    fields = extractAcroFormStage(rawFields, pageHeightMm, sampleRegistry, pageWidthMm, pagesGeometry);
   } catch {
     fields = [];
   }
@@ -400,7 +400,7 @@ export async function* streamPdfToSdocIngestion(
     // Non-fatal if pdf.js text/vector extraction is unavailable
   }
 
-  const textPrimitives = extractTextStage(rawTextItems, pageHeightMm);
+  const textPrimitives = extractTextStage(rawTextItems, pageHeightMm, pagesGeometry);
   if (mode === 'rebuild' && textPrimitives.length > 0) {
     const stage2 = synthesizeIngestedSdoc({
       name: cleanName,
@@ -427,7 +427,7 @@ export async function* streamPdfToSdocIngestion(
     };
   }
 
-  const vectorPrimitives = extractVectorStage(rawVectorOps, pageHeightMm);
+  const vectorPrimitives = extractVectorStage(rawVectorOps, pageHeightMm, pagesGeometry);
   const finalResult = synthesizeIngestedSdoc({
     name: cleanName,
     sha256,

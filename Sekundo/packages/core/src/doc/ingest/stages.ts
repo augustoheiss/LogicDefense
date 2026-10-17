@@ -58,37 +58,56 @@ export interface IngestReport {
 /**
  * Stage 1: Converts `inspectPDFForm` fields (in PDF points, origin bottom-left)
  * into `SdocField[]` (in mm, origin top-left) with semantic binding inference,
- * rotation normalization (H8), and preservation of field metadata (C6, C9, H5, H12).
+ * rotation normalization (H8, R2-02), per-page geometry (R2-01), and preservation of field metadata (C6, C9, H5, H12).
  */
 export function extractAcroFormStage(
   pdfFields: PDFFormField[],
   pageHeightMm: Mm = 297,
   _sampleEntries: FlatSkeletonEntry[] = [],
-  pageWidthMm: Mm = 210
+  pageWidthMm: Mm = 210,
+  pagesGeometry?: SdocPageGeometry[]
 ): SdocField[] {
   return pdfFields.map((field, idx) => {
+    const pageNum = Math.max(1, field.page || 1);
+    const pageGeom = pagesGeometry?.[pageNum - 1];
+    const effRot =
+      (((field.pageRotation ?? pageGeom?.rotate ?? 0) % 360) + 360) % 360;
+
+    // Resolve unrotated PDF page dimensions in mm for coordinate conversion
+    const geomW = pageGeom?.widthMm ?? pageWidthMm;
+    const geomH = pageGeom?.heightMm ?? pageHeightMm;
+    const unrotatedW =
+      pageGeom && (effRot === 90 || effRot === 270) ? geomH : geomW;
+    const unrotatedH =
+      pageGeom && (effRot === 90 || effRot === 270) ? geomW : geomH;
+
     const rawWMm = Number(Math.max(3, ptToMm(field.width || 60)).toFixed(2));
     const rawHMm = Number(Math.max(3, ptToMm(field.height || 14)).toFixed(2));
-    const rot = ((field.pageRotation || 0) % 360 + 360) % 360;
 
     let xMm: Mm;
     let yMm: Mm;
     let wMm = rawWMm;
     let hMm = rawHMm;
 
-    if (rot === 90) {
+    if (effRot === 90) {
       // Clockwise 90 deg: bottom-left (xPt, yPt) maps to visual landscape (yPt from left, xPt from top)
       xMm = Number(ptToMm(field.y).toFixed(2));
       yMm = Number(ptToMm(field.x).toFixed(2));
       wMm = rawHMm;
       hMm = rawWMm;
-    } else if (rot === 270) {
-      xMm = Number(Math.max(0, pageHeightMm - ptToMm(field.y) - rawHMm).toFixed(2));
-      yMm = Number(Math.max(0, pageWidthMm - ptToMm(field.x) - rawWMm).toFixed(2));
+    } else if (effRot === 180) {
+      // R2-02: 180 deg rotation: origin is top-right in visual space
+      xMm = Number(Math.max(0, unrotatedW - ptToMm(field.x) - rawWMm).toFixed(2));
+      yMm = Number(Math.max(0, ptToMm(field.y)).toFixed(2));
+      wMm = rawWMm;
+      hMm = rawHMm;
+    } else if (effRot === 270) {
+      xMm = Number(Math.max(0, unrotatedH - ptToMm(field.y) - rawHMm).toFixed(2));
+      yMm = Number(Math.max(0, unrotatedW - ptToMm(field.x) - rawWMm).toFixed(2));
       wMm = rawHMm;
       hMm = rawWMm;
     } else {
-      const conv = fromPdf(field.x, field.y, pageHeightMm, rawHMm);
+      const conv = fromPdf(field.x, field.y, unrotatedH, rawHMm);
       xMm = conv.xMm;
       yMm = conv.yMm;
     }
@@ -105,7 +124,7 @@ export function extractAcroFormStage(
       id: `f_${idx + 1}_${field.fieldName.replace(/[^a-zA-Z0-9]/g, '_').slice(0, 18)}`,
       from: 'acroform',
       name: field.fieldName,
-      page: field.page || 1,
+      page: pageNum,
       rect: [
         Number(Math.max(0, xMm).toFixed(2)),
         Number(Math.max(0, yMm).toFixed(2)),
@@ -120,7 +139,7 @@ export function extractAcroFormStage(
       ...(field.options && field.options.length > 0 ? { options: field.options } : {}),
       ...(field.maxLength !== undefined ? { maxLength: field.maxLength } : {}),
       ...(field.defaultValue !== undefined ? { defaultValue: field.defaultValue } : {}),
-      ...(field.pageRotation ? { pageRotation: field.pageRotation } : {}),
+      ...(effRot ? { pageRotation: effRot } : {}),
     };
   });
 }
@@ -131,19 +150,22 @@ export function extractAcroFormStage(
  */
 export function extractTextStage(
   rawItems: RawPdfTextItem[],
-  pageHeightMm: Mm = 297
+  pageHeightMm: Mm = 297,
+  pagesGeometry?: SdocPageGeometry[]
 ): SdocPrimitive[] {
   const nonEmpty = rawItems.filter((it) => it && typeof it.str === 'string' && it.str.trim() !== '');
   if (nonEmpty.length === 0) return [];
 
   const mapped = nonEmpty.map((it) => {
+    const pageNum = Math.max(1, it.page || 1);
+    const effPageH = pagesGeometry?.[pageNum - 1]?.heightMm ?? pageHeightMm;
     const hPt = it.heightPt > 0 ? it.heightPt : 10;
     const hMm = ptToMm(hPt);
     const wMm = Math.max(2, ptToMm(it.widthPt > 0 ? it.widthPt : it.str.length * hPt * 0.52));
-    const { xMm, yMm } = fromPdf(it.xPt, it.yPt, pageHeightMm, hMm);
+    const { xMm, yMm } = fromPdf(it.xPt, it.yPt, effPageH, hMm);
     const isBold = Boolean(it.fontName && /bold|black|heavy/i.test(it.fontName));
     return {
-      page: it.page || 1,
+      page: pageNum,
       text: it.str,
       xMm: Number(Math.max(0, xMm).toFixed(2)),
       yMm: Number(Math.max(0, yMm).toFixed(2)),
@@ -201,7 +223,8 @@ export function extractTextStage(
  */
 export function extractVectorStage(
   rawOps: RawPdfVectorOp[],
-  pageHeightMm: Mm = 297
+  pageHeightMm: Mm = 297,
+  pagesGeometry?: SdocPageGeometry[]
 ): SdocPrimitive[] {
   const rects: SdocPrimitive[] = [];
   const rawLines: {
@@ -215,13 +238,14 @@ export function extractVectorStage(
   }[] = [];
 
   for (const op of rawOps) {
-    const pageNum = op.page || 1;
+    const pageNum = Math.max(1, op.page || 1);
+    const effPageH = pagesGeometry?.[pageNum - 1]?.heightMm ?? pageHeightMm;
     if (op.type === 'rect') {
       const wMm = Number(ptToMm(Math.abs(op.wPt || 0)).toFixed(2));
       const hMm = Number(ptToMm(Math.abs(op.hPt || 0)).toFixed(2));
       if (wMm < 0.5 && hMm < 0.5) continue;
 
-      const { xMm, yMm } = fromPdf(op.xPt, op.yPt, pageHeightMm, hMm);
+      const { xMm, yMm } = fromPdf(op.xPt, op.yPt, effPageH, hMm);
 
       // Thin filled rectangles in PDFs are often drawn as horizontal/vertical rules
       if (hMm <= 0.8 && wMm >= 4) {
@@ -262,8 +286,8 @@ export function extractVectorStage(
         strokeWidth: Number(ptToMm(op.lineWidthPt || 1).toFixed(2)),
       });
     } else if (op.type === 'line') {
-      const p1 = fromPdf(op.xPt, op.yPt, pageHeightMm, 0);
-      const p2 = fromPdf(op.x2Pt ?? op.xPt, op.y2Pt ?? op.yPt, pageHeightMm, 0);
+      const p1 = fromPdf(op.xPt, op.yPt, effPageH, 0);
+      const p2 = fromPdf(op.x2Pt ?? op.xPt, op.y2Pt ?? op.yPt, effPageH, 0);
       rawLines.push({
         page: pageNum,
         x1: Number(p1.xMm.toFixed(2)),
