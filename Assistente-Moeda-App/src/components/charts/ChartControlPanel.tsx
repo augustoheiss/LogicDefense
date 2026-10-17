@@ -161,12 +161,18 @@ export function ChartControlPanel({
     });
   };
 
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+
   return (
-    <View style={styles.container}>
-      {/* ── Row 1: Time Scope Pills ── */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>🎯 Granularidade de Tempo</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pillsRow}>
+    <View style={styles.container} testID="chart-control-panel">
+      {/* ── Row 1: Compact Time Scope + Inline Stepper + Filter Drawer Toggle ── */}
+      <View style={styles.topToolbarRow}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.pillsRow}
+          style={{ flex: 1 }}
+        >
           {SCOPE_OPTIONS.map((opt) => (
             <Pressable
               key={opt.key}
@@ -188,87 +194,126 @@ export function ChartControlPanel({
             </Pressable>
           ))}
         </ScrollView>
-      </View>
 
-      {/* ── Row 2: Contextual Temporal Controls ── */}
-      <View style={styles.temporalControlCard}>
         {config.scopeType === 'day' && (
-          <View style={styles.temporalRow}>
-            <Text style={styles.temporalHint}>Mês Selecionado:</Text>
-            <View style={styles.stepper}>
-              <Pressable style={styles.stepperBtn} onPress={() => shiftMonth(-1)}>
-                <Text style={styles.stepperBtnText}>◀</Text>
-              </Pressable>
-              <Text style={styles.stepperValue}>{formatMonthLabel(config.selectedMonth)}</Text>
-              <Pressable style={styles.stepperBtn} onPress={() => shiftMonth(1)}>
-                <Text style={styles.stepperBtnText}>▶</Text>
-              </Pressable>
-            </View>
+          <View style={styles.stepper}>
+            <Pressable style={styles.stepperBtn} onPress={() => shiftMonth(-1)}>
+              <Text style={styles.stepperBtnText}>◀</Text>
+            </Pressable>
+            <Text style={styles.stepperValue}>{config.selectedMonth}</Text>
+            <Pressable style={styles.stepperBtn} onPress={() => shiftMonth(1)}>
+              <Text style={styles.stepperBtnText}>▶</Text>
+            </Pressable>
           </View>
         )}
 
         {config.scopeType === 'month' && (
-          <View style={styles.temporalRow}>
-            <Text style={styles.temporalHint}>Ano Selecionado:</Text>
-            <View style={styles.stepper}>
-              <Pressable style={styles.stepperBtn} onPress={() => shiftYear(-1)}>
-                <Text style={styles.stepperBtnText}>◀</Text>
-              </Pressable>
-              <Text style={styles.stepperValue}>{config.selectedYear}</Text>
-              <Pressable style={styles.stepperBtn} onPress={() => shiftYear(1)}>
-                <Text style={styles.stepperBtnText}>▶</Text>
-              </Pressable>
-            </View>
+          <View style={styles.stepper}>
+            <Pressable style={styles.stepperBtn} onPress={() => shiftYear(-1)}>
+              <Text style={styles.stepperBtnText}>◀</Text>
+            </Pressable>
+            <Text style={styles.stepperValue}>{config.selectedYear}</Text>
+            <Pressable style={styles.stepperBtn} onPress={() => shiftYear(1)}>
+              <Text style={styles.stepperBtnText}>▶</Text>
+            </Pressable>
           </View>
         )}
 
-        {config.scopeType === 'year' && (
-          <View style={styles.temporalRow}>
-            <Text style={styles.temporalHint}>Comparativo de Anos:</Text>
-            <Text style={styles.temporalInfoText}>
-              Exibindo histórico de todos os {availableYears.length} anos disponíveis na planilha ({availableYears.join(', ')}).
+        <Pressable
+          style={[styles.filterDrawerBtn, showAdvancedFilters && styles. pillActive]}
+          onPress={() => setShowAdvancedFilters((prev) => !prev)}
+          testID="chart-toggle-filters-btn"
+        >
+          <Text style={styles.filterDrawerBtnText}>
+            🎛️ {showAdvancedFilters ? 'Ocultar' : 'Filtros'}
+          </Text>
+        </Pressable>
+      </View>
+
+      {/* ── Row 2: Single-Line Visual Type + Series Strip (Never Crushes Vertically) ── */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.compactSeriesRow}
+      >
+        {VISUAL_OPTIONS.map((v) => (
+          <Pressable
+            key={v.key}
+            style={[
+              styles.visualPill,
+              config.visualType === v.key && styles.visualPillActive,
+            ]}
+            onPress={() => setVisualType(v.key)}
+          >
+            <Text style={styles.visualPillIcon}>{v.icon}</Text>
+            <Text
+              style={[
+                styles.visualPillLabel,
+                config.visualType === v.key && styles.visualPillLabelActive,
+              ]}
+            >
+              {v.label}
             </Text>
-          </View>
-        )}
+          </Pressable>
+        ))}
 
-        {config.scopeType === 'multi_date' && (
-          <View style={{ gap: spacing.sm }}>
-            <Text style={styles.temporalHint}>Datas Específicas Selecionadas:</Text>
-            <View style={styles.dateInputRow}>
-              <TextInput
-                style={styles.dateInput}
-                placeholder="AAAA-MM-DD ou DD/MM/AAAA"
-                placeholderTextColor={colors.text.disabled}
-                value={newDateInput}
-                onChangeText={setNewDateInput}
-                onSubmitEditing={addMultiDate}
-              />
-              <Pressable style={styles.addDateBtn} onPress={addMultiDate}>
-                <Text style={styles.addDateBtnText}>+ Adicionar</Text>
-              </Pressable>
-            </View>
+        <View style={styles.inlineDivider} />
 
-            {config.multiDates.length > 0 ? (
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tagChipsRow}>
-                {config.multiDates.map((d) => (
-                  <Pressable key={d} style={styles.tagChip} onPress={() => removeMultiDate(d)}>
-                    <Text style={styles.tagChipText}>{d}</Text>
-                    <Text style={styles.tagChipRemove}>✕</Text>
-                  </Pressable>
-                ))}
-              </ScrollView>
-            ) : (
-              <Text style={styles.temporalEmptyHint}>
-                Nenhuma data adicionada. Digite uma data acima para focar em dias específicos.
+        {METRIC_OPTIONS.map((m) => {
+          const active = config.activeMetrics.includes(m.key);
+          return (
+            <Pressable
+              key={m.key}
+              testID={`metric-toggle-${m.key}`}
+              style={[
+                styles.metricChip,
+                active && { borderColor: m.color, backgroundColor: `${m.color}20` },
+              ]}
+              onPress={() => toggleMetric(m.key)}
+            >
+              <Text style={[styles.metricDot, { color: m.color }]}>●</Text>
+              <Text style={[styles.metricChipText, active && { color: '#fff', fontWeight: '700' }]}>
+                {m.label}
               </Text>
-            )}
-          </View>
-        )}
+            </Pressable>
+          );
+        })}
+      </ScrollView>
 
-        {config.scopeType === 'custom_range' && (
+      {/* ── Contextual Multi-Date or Custom Range Inputs (When Selected) ── */}
+      {config.scopeType === 'multi_date' && (
+        <View style={styles.temporalControlCard}>
+          <View style={styles.dateInputRow}>
+            <TextInput
+              style={styles.dateInput}
+              placeholder="AAAA-MM-DD ou DD/MM/AAAA"
+              placeholderTextColor={colors.text.disabled}
+              value={newDateInput}
+              onChangeText={setNewDateInput}
+              onSubmitEditing={addMultiDate}
+            />
+            <Pressable style={styles.addDateBtn} onPress={addMultiDate}>
+              <Text style={styles.addDateBtnText}>+ Data</Text>
+            </Pressable>
+          </View>
+          {config.multiDates.length > 0 && (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tagChipsRow}>
+              {config.multiDates.map((d) => (
+                <Pressable key={d} style={styles.tagChip} onPress={() => removeMultiDate(d)}>
+                  <Text style={styles.tagChipText}>{d}</Text>
+                  <Text style={styles.tagChipRemove}>✕</Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+          )}
+        </View>
+      )}
+
+      {config.scopeType === 'custom_range' && (
+        <View style={styles.temporalControlCard}>
           <View style={styles.rangeRow}>
             <View style={styles.rangeCol}>
-              <Text style={styles.rangeLabel}>De (Início):</Text>
+              <Text style={styles.rangeLabel}>De:</Text>
               <TextInput
                 style={styles.rangeInput}
                 value={config.customRange.start}
@@ -280,7 +325,7 @@ export function ChartControlPanel({
               />
             </View>
             <View style={styles.rangeCol}>
-              <Text style={styles.rangeLabel}>Até (Fim):</Text>
+              <Text style={styles.rangeLabel}>Até:</Text>
               <TextInput
                 style={styles.rangeInput}
                 value={config.customRange.end}
@@ -292,64 +337,14 @@ export function ChartControlPanel({
               />
             </View>
           </View>
-        )}
-      </View>
-
-      {/* ── Row 3: Metrics & Visual Mode ── */}
-      <View style={styles.metricsAndVisualRow}>
-        {/* Metric Toggles */}
-        <View style={{ flex: 1 }}>
-          <Text style={styles.sectionTitle}>📈 Séries & Métricas</Text>
-          <View style={styles.metricTogglesWrap}>
-            {METRIC_OPTIONS.map((m) => {
-              const active = config.activeMetrics.includes(m.key);
-              return (
-                <Pressable
-                  key={m.key}
-                  style={[
-                    styles.metricChip,
-                    active && { borderColor: m.color, backgroundColor: `${m.color}20` },
-                  ]}
-                  onPress={() => toggleMetric(m.key)}
-                >
-                  <Text style={[styles.metricDot, { color: m.color }]}>●</Text>
-                  <Text style={[styles.metricChipText, active && { color: '#fff', fontWeight: '700' }]}>
-                    {m.label}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
         </View>
+      )}
 
-        {/* Visual Type Selector */}
-        <View style={{ minWidth: 180 }}>
-          <Text style={styles.sectionTitle}>🎨 Tipo de Gráfico</Text>
-          <View style={styles.visualPillsRow}>
-            {VISUAL_OPTIONS.map((v) => (
-              <Pressable
-                key={v.key}
-                style={[
-                  styles.visualPill,
-                  config.visualType === v.key && styles.visualPillActive,
-                ]}
-                onPress={() => setVisualType(v.key)}
-              >
-                <Text style={styles.visualPillIcon}>{v.icon}</Text>
-                <Text style={[styles.visualPillLabel, config.visualType === v.key && styles.visualPillLabelActive]}>
-                  {v.label}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
-        </View>
-      </View>
-
-      {/* ── Row 4: Category Filter Chips ── */}
-      {availableCategories.length > 0 && (
+      {/* ── Collapsible Category & Series Inspector (On-Demand CAD Drawer) ── */}
+      {showAdvancedFilters && availableCategories.length > 0 && (
         <View style={styles.section}>
           <View style={styles.categoryHeader}>
-            <Text style={styles.sectionTitle}>🏷️ Filtro por Categoria</Text>
+            <Text style={styles.sectionTitle}>🏷️ Filtro por Categoria ({availableCategories.length})</Text>
             {config.selectedCategories.length > 0 && (
               <Pressable onPress={selectAllCategories}>
                 <Text style={styles.resetCatText}>Mostrar Todas</Text>
@@ -396,14 +391,45 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border.default,
     borderRadius: radius.lg,
-    padding: spacing.md,
-    gap: spacing.md,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 8,
+    gap: 6,
+  },
+  topToolbarRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  compactSeriesRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 2,
+  },
+  inlineDivider: {
+    width: 1,
+    height: 18,
+    backgroundColor: colors.border.default,
+    marginHorizontal: 2,
+  },
+  filterDrawerBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: radius.sm,
+    backgroundColor: colors.background.tertiary,
+    borderWidth: 1,
+    borderColor: colors.border.default,
+  },
+  filterDrawerBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.accent.purple,
   },
   section: {
-    gap: spacing.xs,
+    gap: 4,
   },
   sectionTitle: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '700',
     color: colors.text.tertiary,
     textTransform: 'uppercase',
@@ -411,16 +437,16 @@ const styles = StyleSheet.create({
   },
   pillsRow: {
     flexDirection: 'row',
-    gap: spacing.xs,
+    gap: 6,
     paddingVertical: 2,
   },
   pill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm - 2,
-    borderRadius: radius.md,
+    gap: 4,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    borderRadius: radius.sm,
     backgroundColor: colors.background.tertiary,
     borderWidth: 1,
     borderColor: colors.border.default,
@@ -430,10 +456,10 @@ const styles = StyleSheet.create({
     borderColor: colors.accent.purple,
   },
   pillIcon: {
-    fontSize: 13,
+    fontSize: 12,
   },
   pillLabel: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '600',
     color: colors.text.secondary,
   },
@@ -441,64 +467,37 @@ const styles = StyleSheet.create({
     color: colors.accent.purple,
     fontWeight: '700',
   },
-
-  // Temporal Card
   temporalControlCard: {
     backgroundColor: colors.background.tertiary,
     borderRadius: radius.md,
-    padding: spacing.sm,
+    padding: 6,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.05)',
-  },
-  temporalRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-  },
-  temporalHint: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: colors.text.secondary,
-  },
-  temporalInfoText: {
-    fontSize: 12,
-    color: colors.text.tertiary,
-    flex: 1,
-  },
-  temporalEmptyHint: {
-    fontSize: 11,
-    color: colors.text.disabled,
-    fontStyle: 'italic',
   },
   stepper: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.background.secondary,
+    backgroundColor: colors.background.tertiary,
     borderRadius: radius.sm,
     borderWidth: 1,
     borderColor: colors.border.default,
     overflow: 'hidden',
   },
   stepperBtn: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
   },
   stepperBtnText: {
     color: colors.accent.purple,
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '700',
   },
   stepperValue: {
-    paddingHorizontal: spacing.md,
-    fontSize: 13,
-    fontWeight: '700',
+    paddingHorizontal: 6,
+    fontSize: 11,
+    fontWeight: '800',
     color: colors.text.primary,
   },
-
-  // Multi date input
   dateInputRow: {
     flexDirection: 'row',
     gap: spacing.xs,
@@ -510,24 +509,25 @@ const styles = StyleSheet.create({
     borderColor: colors.border.default,
     borderRadius: radius.sm,
     paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    fontSize: 12,
+    paddingVertical: 4,
+    fontSize: 11,
     color: colors.text.primary,
   },
   addDateBtn: {
     backgroundColor: colors.accent.purple,
-    paddingHorizontal: spacing.md,
+    paddingHorizontal: spacing.sm,
     justifyContent: 'center',
     borderRadius: radius.sm,
   },
   addDateBtnText: {
     color: '#fff',
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '600',
   },
   tagChipsRow: {
     flexDirection: 'row',
     gap: spacing.xs,
+    marginTop: 4,
   },
   tagChip: {
     flexDirection: 'row',
@@ -550,18 +550,16 @@ const styles = StyleSheet.create({
     color: colors.danger.main,
     fontWeight: 'bold',
   },
-
-  // Range inputs
   rangeRow: {
     flexDirection: 'row',
-    gap: spacing.md,
+    gap: spacing.sm,
   },
   rangeCol: {
     flex: 1,
     gap: 2,
   },
   rangeLabel: {
-    fontSize: 11,
+    fontSize: 10,
     color: colors.text.tertiary,
     fontWeight: '600',
   },
@@ -571,28 +569,15 @@ const styles = StyleSheet.create({
     borderColor: colors.border.default,
     borderRadius: radius.sm,
     paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    fontSize: 12,
+    paddingVertical: 4,
+    fontSize: 11,
     color: colors.text.primary,
-  },
-
-  // Metrics & Visual row
-  metricsAndVisualRow: {
-    flexDirection: 'row',
-    gap: spacing.md,
-    flexWrap: 'wrap',
-  },
-  metricTogglesWrap: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.xs,
-    marginTop: 4,
   },
   metricChip: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    paddingHorizontal: spacing.sm,
+    paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: radius.sm,
     backgroundColor: colors.background.tertiary,
@@ -600,25 +585,18 @@ const styles = StyleSheet.create({
     borderColor: colors.border.default,
   },
   metricDot: {
-    fontSize: 10,
+    fontSize: 9,
   },
   metricChipText: {
     fontSize: 11,
     color: colors.text.secondary,
     fontWeight: '500',
   },
-
-  visualPillsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.xs,
-    marginTop: 4,
-  },
   visualPill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    paddingHorizontal: spacing.sm,
+    paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: radius.sm,
     backgroundColor: colors.background.tertiary,
@@ -641,8 +619,6 @@ const styles = StyleSheet.create({
     color: colors.accent.purple,
     fontWeight: '700',
   },
-
-  // Category filter chips
   categoryHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -680,3 +656,4 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 });
+

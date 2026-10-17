@@ -68,12 +68,14 @@ export default function ChartsScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={[]}>
-      {/* Header */}
+      {/* Compact CAD Header + Segmented Lens Bar */}
       <View style={styles.header}>
-        <Text style={styles.title}>📈 Gráficos & Visual Analytics</Text>
-        <Text style={styles.subtitle}>
-          {activeTable?.name ?? 'Visualizações financeiras dinâmicas'}
-        </Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Text style={styles.title}>📈 Bancada de Gráficos</Text>
+          <Text style={styles.subtitle} numberOfLines={1}>
+            {activeTable?.name ?? 'Visual Analytics'}
+          </Text>
+        </View>
       </View>
 
       {/* Segmented Control Navigation */}
@@ -91,6 +93,7 @@ export default function ChartsScreen() {
                 activeView === tab.key && styles.segmentActive,
               ]}
               onPress={() => setActiveView(tab.key)}
+              testID={`charts-lens-${tab.key}`}
             >
               <Text style={styles.segmentIcon}>{tab.icon}</Text>
               <Text
@@ -157,8 +160,6 @@ export default function ChartsScreen() {
               metrics={metrics}
             />
           )}
-
-          <View style={styles.bottomPad} />
         </ScrollView>
       )}
     </SafeAreaView>
@@ -171,20 +172,19 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background.primary,
   },
   header: {
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 8,
     borderBottomWidth: 1,
     borderBottomColor: colors.border.default,
   },
   title: {
-    fontSize: 20,
-    fontWeight: '700',
+    fontSize: 16,
+    fontWeight: '800',
     color: colors.text.primary,
   },
   subtitle: {
-    fontSize: 12,
+    fontSize: 11,
     color: colors.text.tertiary,
-    marginTop: 2,
   },
 
   // Segmented Control
@@ -195,16 +195,16 @@ const styles = StyleSheet.create({
   },
   segmentContainer: {
     flexDirection: 'row',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-    gap: spacing.xs,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 6,
+    gap: 6,
   },
   segment: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm - 2,
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
     borderRadius: radius.full,
     backgroundColor: colors.background.tertiary,
     borderWidth: 1,
@@ -215,11 +215,11 @@ const styles = StyleSheet.create({
     borderColor: colors.accent.purple,
   },
   segmentIcon: {
-    fontSize: 14,
+    fontSize: 12,
   },
   segmentLabel: {
-    fontSize: 13,
-    fontWeight: '500',
+    fontSize: 12,
+    fontWeight: '600',
     color: colors.text.tertiary,
   },
   segmentLabelActive: {
@@ -230,8 +230,8 @@ const styles = StyleSheet.create({
   // Content
   scroll: { flex: 1 },
   scrollContent: {
-    padding: spacing.lg,
-    gap: spacing.lg,
+    padding: spacing.sm,
+    gap: spacing.sm,
   },
 
   // Empty State
@@ -254,8 +254,5 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 20,
   },
-
-  bottomPad: {
-    height: spacing.huge,
-  },
 });
+

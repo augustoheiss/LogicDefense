@@ -46,5 +46,5 @@ O parser lê dinamicamente tags do cabeçalho e etiquetas da coluna `tags` ou `m
 ---
 
 ## ✅ Conclusão e Status
-- **Arquivo de Testes**: [csvEngine.test.ts](file:///c:/Users/Usuario/Desktop/AHeiss_GoogleDrive/02-Programacao/projetos-IA/LogicDefense/Assistente-Moeda-App/src/tests/csvEngine.test.ts)
+- **Arquivo de Testes**: [csvEngine.test.ts](./src/tests/csvEngine.test.ts)
 - **Compilação**: `npx tsc --noEmit` executado com **0 erros**.

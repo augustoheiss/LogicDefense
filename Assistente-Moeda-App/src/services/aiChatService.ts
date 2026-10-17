@@ -43,7 +43,7 @@ export function buildFinancialContext(
   goals: TableGoals,
   metrics: TableMetrics,
   tableName: string,
-  anonymizeDescriptions = false,
+  anonymizeDescriptions = true,
 ): string {
   try {
     const synthesis = buildLocalAnalysisContext(rows, goals, tableName, {

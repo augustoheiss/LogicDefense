@@ -215,7 +215,7 @@ describe('QAR1 System Integration Testing (SIT) Suite (SIT-01 to SIT-05)', () =>
           ok: true,
           status: 200,
           json: async () => ({
-            api_key: 'am_sheet_live_generated_sit05_key_123456',
+            api_key: 'am_sheet_live_test_generated_sit05_key_123456',
             key_hint: '...3456',
             table_id: 'tbl_sit05',
             ttl_days: 7,
@@ -230,17 +230,18 @@ describe('QAR1 System Integration Testing (SIT) Suite (SIT-01 to SIT-05)', () =>
     }) as any;
 
     try {
-      const valRes = await validateApiKey('am_sheet_live_generated_sit05_key_123456');
+      const valRes = await validateApiKey('am_sheet_live_test_generated_sit05_key_123456');
       expect(valRes.valid).toBe(true);
       expect(valRes.tableId).toBe('tbl_sit05');
 
       const genRes = await generateNewApiKey('tbl_sit05', undefined, 7);
-      expect(genRes?.apiKey).toBe('am_sheet_live_generated_sit05_key_123456');
+      expect(genRes?.apiKey).toBe('am_sheet_live_test_generated_sit05_key_123456');
 
-      const revRes = await revokeApiKey('tbl_sit05', 'am_sheet_live_generated_sit05_key_123456');
+      const revRes = await revokeApiKey('tbl_sit05', 'am_sheet_live_test_generated_sit05_key_123456');
       expect(revRes.success).toBe(true);
     } finally {
       globalThis.fetch = origFetch;
     }
   });
 });
+

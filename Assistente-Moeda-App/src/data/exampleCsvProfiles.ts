@@ -1,5 +1,6 @@
 import type { WorkspacePresetType, InvestorProfileType } from '../core/types';
-import type { SectorId } from '../core/sectors/sectorRegistry';
+
+export type SectorId = string;
 
 export interface ExampleCSVProfile {
   id: string;

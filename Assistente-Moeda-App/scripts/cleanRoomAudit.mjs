@@ -1,11 +1,12 @@
 /**
- * Clean-Room Data Hygiene & Secret Leak Scanner — Assistente Moeda (QAR1 Gate)
+ * Clean-Room Data Hygiene & Secret Leak Scanner — Assistente Moeda (QAR1 Gate v2)
  *
- * Scans the repository for:
- *   1. Hardcoded live spreadsheet keys (`am_sheet_live_<hex>`)
+ * Scans the entire repository (including docs/ and master-plan/, with zero file exemptions) for:
+ *   1. Hardcoded live spreadsheet keys (`am_sheet_live_*` excluding synthetic `_local`, `_test_`, `_e2e_`, `<REDACTED>`)
  *   2. Hardcoded OpenAI / Anthropic / Stripe / Supabase service_role secrets
- *   3. Known personal banking PII patterns from developer local debugging
- *   4. `.gitignore` protection for sensitive local scripts and workspace configs
+ *   3. Developer workstation absolute paths (`C:/Users/<user>/Desktop/...`)
+ *   4. Personal webmail addresses (`@gmail.com`, `@hotmail.com`, `@outlook.com`) in code/tests/docs
+ *   5. `.gitignore` protection for sensitive local scripts and workspace configs
  */
 
 import fs from 'node:fs';
@@ -26,23 +27,13 @@ const IGNORED_DIRS = new Set([
   'ios',
   'playwright-report',
   'test-results',
-  'master-plan',
-]);
-
-const ALLOWED_TEST_FILES = new Set([
-  'cleanRoomAudit.mjs',
-  'qar1SecurityAndCleanRoom.test.ts',
-  'qar1ExportImportRoundtrip.test.ts',
-  'qar1SitIntegrationContract.test.ts',
-  'qar1FullDomAuditAndScreenshots.spec.ts',
-  'csvRoundtrip.test.ts',
 ]);
 
 const LEAK_RULES = [
   {
     id: 'LIVE_SPREADSHEET_KEY',
-    description: 'Hardcoded live spreadsheet key (am_sheet_live_*)',
-    regex: /am_sheet_live_[a-f0-9]{24,}/gi,
+    description: 'Non-synthetic live spreadsheet key (am_sheet_live_*)',
+    regex: new RegExp('am_sheet_live_' + '(?!local\\b|test_|e2e_|<REDACTED>|REDACTED)[a-zA-Z0-9_]{8,}', 'gi'),
   },
   {
     id: 'OPENAI_OR_STRIPE_SECRET',
@@ -50,9 +41,14 @@ const LEAK_RULES = [
     regex: /\b(sk_live_[a-zA-Z0-9]{16,}|sk-proj-[a-zA-Z0-9_-]{20,})\b/g,
   },
   {
-    id: 'PERSONAL_BANKING_PII',
-    description: 'Known personal banking/receipt PII marker',
-    regex: /\b(AH-BB\.jpg|AH-ITAU\.pdf|AH-ITAU-02\.pdf|PIX Luiz \(2400\)|Plano de Assistencia Funeral Fe)\b/gi,
+    id: 'WORKSTATION_USER_PATH',
+    description: 'Hardcoded developer workstation path',
+    regex: new RegExp('[cC]:[\\/\\\\]Users[\\/\\\\][A-Za-z0-9_.-]+[\\/\\\\]' + '(?:Desktop|Documents|Downloads)', 'g'),
+  },
+  {
+    id: 'PERSONAL_WEBMAIL_PII',
+    description: 'Personal webmail address in repository (use @example.com for synthetic tests)',
+    regex: new RegExp('\\b[a-zA-Z0-9._%+-]+@' + '(?:gmail|hotmail|outlook|yahoo)\\.com\\b', 'gi'),
   },
 ];
 
@@ -71,14 +67,11 @@ function walkFiles(dir, acc = []) {
 }
 
 function runAudit() {
-  console.log('\x1b[1m\x1b[36m=== CLEAN-ROOM DATA HYGIENE & SECRET LEAK GATE (QAR1) ===\x1b[0m\n');
+  console.log('\x1b[1m\x1b[36m=== CLEAN-ROOM DATA HYGIENE & SECRET LEAK GATE v2 (ZERO-EXEMPTION QAR1) ===\x1b[0m\n');
   const files = walkFiles(rootDir);
   const findings = [];
 
   for (const filePath of files) {
-    const baseName = path.basename(filePath);
-    if (ALLOWED_TEST_FILES.has(baseName)) continue;
-
     const relPath = path.relative(rootDir, filePath);
     const content = fs.readFileSync(filePath, 'utf8');
 
@@ -89,7 +82,7 @@ function runAudit() {
           file: relPath,
           ruleId: rule.id,
           description: rule.description,
-          sample: matches[0].slice(0, 28) + '...',
+          sample: matches[0].slice(0, 32) + '...',
         });
       }
     }
@@ -110,7 +103,18 @@ function runAudit() {
     }
   }
 
-  console.log(`Scanned ${files.length} source/config files across ${rootDir}.`);
+  // Verify api_workspace directory does not exist in repo
+  const apiWorkspaceDir = path.join(rootDir, 'api_workspace');
+  if (fs.existsSync(apiWorkspaceDir)) {
+    findings.push({
+      file: 'api_workspace',
+      ruleId: 'SENSITIVE_WORKSPACE_PRESENT',
+      description: 'Sensitive api_workspace directory still exists in repository',
+      sample: 'api_workspace/',
+    });
+  }
+
+  console.log(`Scanned ${files.length} source/config/doc files across ${rootDir} (0 exempted files).`);
 
   if (findings.length > 0) {
     console.error(`\n\x1b[31m✖ Clean-Room Gate FAILED with ${findings.length} finding(s):\x1b[0m`);
@@ -120,7 +124,8 @@ function runAudit() {
     process.exit(1);
   }
 
-  console.log('\x1b[32m✔ Clean-Room Gate PASSED: Zero hardcoded live keys or personal banking PII found!\x1b[0m\n');
+  console.log('\x1b[32m✔ Clean-Room Gate PASSED: Zero hardcoded live keys, workstation paths, or personal PII found!\x1b[0m\n');
 }
 
 runAudit();
+

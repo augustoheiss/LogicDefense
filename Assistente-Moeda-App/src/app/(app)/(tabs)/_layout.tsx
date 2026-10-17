@@ -63,11 +63,15 @@ export default function TabsLayout() {
     return pathname.includes(`/${name}`);
   };
 
+  const isCadModeOnHome =
+    isRouteActive('index') &&
+    db.activeTable?.dashboardConfig?.preferredViewMode !== 'cards';
+
   return (
     <ErrorBoundary fallbackTitle="Erro na Navegação de Abas" componentName="TabsLayout">
       <SafeAreaView style={styles.container} edges={['top']}>
         <TimeMachineBar />
-        <UniversalHeaderSheetBar />
+        {!isCadModeOnHome && <UniversalHeaderSheetBar />}
         <View style={styles.mainBody}>
           {/* Desktop Left Navigation Rail (>= 1024px) */}
           {isDesktop && (

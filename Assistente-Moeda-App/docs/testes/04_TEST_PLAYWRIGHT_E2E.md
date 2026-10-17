@@ -10,7 +10,7 @@ A suíte E2E automatiza os seguintes passos:
 
 1. **Inicialização do Browser Chromium**:
    - Conexão e carregamento da URL base local (`http://localhost:8081`).
-   - Leitura das credenciais de teste vinculadas a `augustoheiss02@gmail.com` do ambiente (`./backend/.env`).
+   - Leitura das credenciais de teste vinculadas a `qa.synthetic@example.com` do ambiente (`./backend/.env`).
 2. **Importação do Dataset Denso de 10 Anos**:
    - Abertura do modal de reconciliação CSV em tela.
    - Ingestão do conteúdo do `Master_10Year_Dataset.csv` (797 registros).
@@ -37,6 +37,6 @@ As capturas de tela da execução automatizada foram salvas em `docs/testes/scre
 ---
 
 ## ✅ Conclusão e Status
-- **Configuração**: [playwright.config.ts](file:///c:/Users/Usuario/Desktop/AHeiss_GoogleDrive/02-Programacao/projetos-IA/LogicDefense/Assistente-Moeda-App/playwright.config.ts)
-- **Suíte E2E**: [csvUploadAndUI.spec.ts](file:///c:/Users/Usuario/Desktop/AHeiss_GoogleDrive/02-Programacao/projetos-IA/LogicDefense/Assistente-Moeda-App/e2e/csvUploadAndUI.spec.ts)
+- **Configuração**: [playwright.config.ts](./playwright.config.ts)
+- **Suíte E2E**: [csvUploadAndUI.spec.ts](./e2e/csvUploadAndUI.spec.ts)
 - **Compilação**: `npx tsc --noEmit` executado com **0 erros**.

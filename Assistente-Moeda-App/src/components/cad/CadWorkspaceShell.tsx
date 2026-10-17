@@ -162,9 +162,12 @@ export interface CadWorkspaceShellProps {
   healthLevelLabel: string;
   nextActionTitle?: string;
   nextActionDesc?: string;
+  nextActionType?: string;
   dashboardConfig?: DashboardConfig;
   canUndo: boolean;
   lastUndoDescription?: string | null;
+  isPrivacyMode?: boolean;
+  onTogglePrivacyMode?: () => void;
   formatCurrency: (val: number) => string;
   onUndo: () => void;
   onOpenAddModal: () => void;
@@ -177,6 +180,7 @@ export interface CadWorkspaceShellProps {
   onNavigateMetrics: () => void;
   onNavigateSettings: () => void;
   onNavigateChat: () => void;
+  onNextActionPress?: (actionType?: string) => void;
   onUpdateDashboardConfig: (config: DashboardConfig) => void;
   renderToolContent: (toolId: CadToolNodeId) => React.ReactNode;
   onSwitchToClassicList: () => void;
@@ -190,21 +194,18 @@ export function CadWorkspaceShell({
   healthLevelLabel,
   nextActionTitle,
   nextActionDesc,
+  nextActionType,
   dashboardConfig,
   canUndo,
   lastUndoDescription,
+  isPrivacyMode,
+  onTogglePrivacyMode,
   formatCurrency,
   onUndo,
   onOpenAddModal,
   onOpenTableSwitcher,
-  onOpenAppBuilder,
-  onOpenExamplesModal,
-  onOpenLiveSynthesisModal,
-  onNavigateTransactions,
-  onNavigateCharts,
-  onNavigateMetrics,
-  onNavigateSettings,
   onNavigateChat,
+  onNextActionPress,
   onUpdateDashboardConfig,
   renderToolContent,
   onSwitchToClassicList,
@@ -215,13 +216,16 @@ export function CadWorkspaceShell({
   const [activeTool, setActiveTool] = useState<CadToolNodeId | null>(
     dashboardConfig?.activeCadTool ?? null
   );
+  const [secondaryTool, setSecondaryTool] = useState<CadToolNodeId | null>(null);
+  const [showSplitPicker, setShowSplitPicker] = useState(false);
+  const [isCustomizingStage, setIsCustomizingStage] = useState(false);
   const [openRibbonCategory, setOpenRibbonCategory] = useState<RibbonCategory | null>(null);
 
   const pinnedNodes: CadToolNodeId[] = useMemo(() => {
     if (dashboardConfig?.pinnedCadNodes && dashboardConfig.pinnedCadNodes.length > 0) {
       return dashboardConfig.pinnedCadNodes;
     }
-    return ['quick_entry', 'what_if', 'goals_timebank'];
+    return ['quick_entry', 'what_if', 'goals_timebank', 'health_pillars'];
   }, [dashboardConfig?.pinnedCadNodes]);
 
   const activeToolDef = useMemo(
@@ -229,9 +233,19 @@ export function CadWorkspaceShell({
     [activeTool]
   );
 
+  const secondaryToolDef = useMemo(
+    () => CAD_TOOL_CATALOG.find((t) => t.id === secondaryTool) || null,
+    [secondaryTool]
+  );
+
   const handleSelectTool = (toolId: CadToolNodeId | null) => {
     setActiveTool(toolId);
+    if (toolId === null) {
+      setSecondaryTool(null);
+      setShowSplitPicker(false);
+    }
     setOpenRibbonCategory(null);
+    setIsCustomizingStage(false);
     if (dashboardConfig) {
       onUpdateDashboardConfig({
         ...dashboardConfig,
@@ -248,12 +262,37 @@ export function CadWorkspaceShell({
     if (dashboardConfig) {
       onUpdateDashboardConfig({
         ...dashboardConfig,
-        pinnedCadNodes: nextPinned,
+        pinnedCadNodes: nextPinned.length > 0 ? nextPinned : ['quick_entry'],
       });
     }
   };
 
+  const handleNextActionClick = () => {
+    if (nextActionType === 'add_row') {
+      handleSelectTool('quick_entry');
+      return;
+    }
+    if (nextActionType === 'cut_expense') {
+      handleSelectTool('what_if');
+      return;
+    }
+    if (nextActionType === 'build_reserve') {
+      handleSelectTool('investor_fire');
+      return;
+    }
+    if (nextActionType === 'adjust_goals') {
+      handleSelectTool('goals_timebank');
+      return;
+    }
+    if (onNextActionPress) {
+      onNextActionPress(nextActionType);
+      return;
+    }
+    handleSelectTool('health_pillars');
+  };
+
   const handleRibbonPress = (cat: RibbonCategory) => {
+    setIsCustomizingStage(false);
     if (cat === 'hub') {
       handleSelectTool(null);
       setOpenRibbonCategory(null);
@@ -281,7 +320,7 @@ export function CadWorkspaceShell({
       style={[styles.viewportShell, Platform.OS === 'web' && ({ height: '100%', maxHeight: height } as any)]}
       testID="cad-workspace-shell"
     >
-      {/* ── 1. TOP CAD HUD BAR (Compact, Zero-Noise) ── */}
+      {/* ── 1. UNIFIED TOP CAD HUD BAR (Zero Duplicate Header) ── */}
       <View style={styles.topHud} testID="cad-top-hud">
         <View style={styles.topHudLeft}>
           <View style={styles.cadModeBadge}>
@@ -292,24 +331,37 @@ export function CadWorkspaceShell({
             onPress={onOpenTableSwitcher}
             testID="cad-project-selector"
           >
-            <Text style={styles.projectSelectorLabel}>PROJETO</Text>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+              <View style={styles.activeGreenDot} />
               <Text style={styles.projectSelectorName} numberOfLines={1}>
                 {tableName || 'Planilha Principal'}
               </Text>
+              <View style={styles.rowCountPill}>
+                <Text style={styles.rowCountPillText}>{rows.length}</Text>
+              </View>
               <Text style={styles.projectDropdownArrow}>▾</Text>
             </View>
           </Pressable>
         </View>
 
         <View style={styles.topHudRight}>
+          {onTogglePrivacyMode && (
+            <Pressable
+              style={styles.hudIconBtn}
+              onPress={onTogglePrivacyMode}
+              testID="cad-privacy-btn"
+            >
+              <Text style={{ fontSize: 12 }}>{isPrivacyMode ? '🙈' : '👁️'}</Text>
+            </Pressable>
+          )}
+
           <Pressable
             style={styles.hudScorePill}
             onPress={() => handleSelectTool('health_pillars')}
             testID="cad-health-pill"
           >
             <Text style={styles.hudScoreEmoji}>🩺</Text>
-            <Text style={styles.hudScoreText}>{healthScore} pts</Text>
+            <Text style={styles.hudScoreText}>{healthScore}</Text>
           </Pressable>
 
           <Pressable
@@ -342,7 +394,7 @@ export function CadWorkspaceShell({
         </View>
       )}
 
-      {/* ── 2. CENTRAL BLUEPRINT CANVAS (1 Active Piece at a Time) ── */}
+      {/* ── 2. CENTRAL BLUEPRINT CANVAS (Zero-Scroll Constructive Workbench) ── */}
       <View style={styles.canvasStage} testID="cad-stage-canvas">
         {activeTool === null ? (
           /* ── STATE A: CLEAN BLUEPRINT HUB (Zero Infinite Scroll) ── */
@@ -411,11 +463,11 @@ export function CadWorkspaceShell({
               </View>
             </View>
 
-            {/* Next Best Action Micro-Node (1-Line Contextual Prompt) */}
+            {/* Next Best Action Micro-Node (Smart Contextual Action Router) */}
             {nextActionTitle && (
               <Pressable
                 style={styles.nextActionNode}
-                onPress={() => handleSelectTool('health_pillars')}
+                onPress={handleNextActionClick}
                 testID="cad-next-action-node"
               >
                 <Text style={styles.nextActionNodeIcon}>🎯</Text>
@@ -429,29 +481,35 @@ export function CadWorkspaceShell({
                     </Text>
                   ) : null}
                 </View>
-                <Text style={styles.nextActionArrow}>Abrir ›</Text>
+                <Text style={styles.nextActionArrow}>Executar ›</Text>
               </Pressable>
             )}
 
-            {/* Pinned Blueprint Modules ("Suas Peças Acopladas") */}
+            {/* Pinned Blueprint Modules ("2x2 Bento Grid + Stage Composer") */}
             <View style={styles.pinnedSection}>
               <View style={styles.pinnedHeaderRow}>
                 <Text style={styles.pinnedSectionTitle}>
-                  🧩 PEÇAS DO SEU WORKSPACE (CLIQUE PARA MONTAR NO PALCO)
+                  🧩 SUAS PEÇAS FIXADAS (TOQUE PARA ACOPLAR NO PALCO)
                 </Text>
-                <Pressable onPress={() => setOpenRibbonCategory('simulate')}>
-                  <Text style={styles.pinnedAddLink}>+ Mais Ferramentas</Text>
+                <Pressable
+                  style={styles.customizeStagePill}
+                  onPress={() => setIsCustomizingStage((prev) => !prev)}
+                  testID="cad-customize-stage-btn"
+                >
+                  <Text style={styles.pinnedAddLink}>
+                    {isCustomizingStage ? '✕ Fechar Montador' : '⚙️ Montar Ambiente'}
+                  </Text>
                 </Pressable>
               </View>
 
               <View style={styles.pinnedGrid}>
-                {pinnedNodes.map((nodeId) => {
+                {pinnedNodes.slice(0, 4).map((nodeId) => {
                   const def = CAD_TOOL_CATALOG.find((t) => t.id === nodeId);
                   if (!def) return null;
                   return (
                     <Pressable
                       key={def.id}
-                      style={[styles.pinnedNodeCard, { borderColor: def.accentColor + '55' }]}
+                      style={[styles.pinnedNodeCard, { borderColor: def.accentColor + '66' }]}
                       onPress={() => handleSelectTool(def.id)}
                       testID={`cad-pinned-node-${def.id}`}
                     >
@@ -461,7 +519,7 @@ export function CadWorkspaceShell({
                           {def.shortLabel}
                         </Text>
                         <Text style={styles.pinnedNodeHint} numberOfLines={1}>
-                          Toque para abrir
+                          Acoplar no palco ›
                         </Text>
                       </View>
                     </Pressable>
@@ -471,7 +529,7 @@ export function CadWorkspaceShell({
             </View>
           </View>
         ) : (
-          /* ── STATE B: SINGLE MOUNTED TOOL IN STAGE (Focused Inspection) ── */
+          /* ── STATE B: SINGLE OR SPLIT-STAGE MOUNTED WORKBENCH ── */
           <View style={styles.mountedStageContainer} testID={`cad-mounted-tool-${activeTool}`}>
             <View style={styles.mountedHeaderBar}>
               <Pressable
@@ -484,9 +542,22 @@ export function CadWorkspaceShell({
 
               <View style={styles.mountedTitleWrap}>
                 <Text style={styles.mountedToolTitle} numberOfLines={1}>
-                  {activeToolDef?.icon} {activeToolDef?.label}
+                  {activeToolDef?.icon} {activeToolDef?.shortLabel || activeToolDef?.label}
                 </Text>
               </View>
+
+              <Pressable
+                style={[
+                  styles.pinToolBtn,
+                  secondaryTool !== null && styles.pinToolBtnActive,
+                ]}
+                onPress={() => setShowSplitPicker((prev) => !prev)}
+                testID="cad-split-stage-btn"
+              >
+                <Text style={styles.pinToolBtnText}>
+                  {secondaryTool ? '➕ 2ª Peça Ativa' : '➕ Dividir Palco'}
+                </Text>
+              </Pressable>
 
               <Pressable
                 style={[
@@ -502,7 +573,47 @@ export function CadWorkspaceShell({
               </Pressable>
             </View>
 
-            {/* Contained Stage Viewport for the Single Active Tool */}
+            {/* Optional Split-Stage Selector Bar */}
+            {showSplitPicker && (
+              <View style={styles.splitPickerBar} testID="cad-split-picker-bar">
+                <Text style={styles.splitPickerLabel}>
+                  ACOPLAR 2ª PEÇA EM PARALELO:
+                </Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
+                  {secondaryTool && (
+                    <Pressable
+                      style={[styles.splitChip, { borderColor: colors.danger.main }]}
+                      onPress={() => {
+                        setSecondaryTool(null);
+                        setShowSplitPicker(false);
+                      }}
+                    >
+                      <Text style={[styles.splitChipText, { color: colors.danger.main }]}>✕ Fechar 2ª Peça</Text>
+                    </Pressable>
+                  )}
+                  {CAD_TOOL_CATALOG.filter((t) => t.id !== activeTool).map((t) => (
+                    <Pressable
+                      key={t.id}
+                      style={[
+                        styles.splitChip,
+                        secondaryTool === t.id && { borderColor: t.accentColor, backgroundColor: 'rgba(168,85,247,0.18)' },
+                      ]}
+                      onPress={() => {
+                        setSecondaryTool(t.id);
+                        setShowSplitPicker(false);
+                      }}
+                      testID={`cad-split-select-${t.id}`}
+                    >
+                      <Text style={styles.splitChipText}>
+                        {t.icon} {t.shortLabel}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </ScrollView>
+              </View>
+            )}
+
+            {/* Contained Stage Viewport for 1 or 2 Docked Tools */}
             <ScrollView
               style={styles.mountedToolScroll}
               contentContainerStyle={[
@@ -512,10 +623,83 @@ export function CadWorkspaceShell({
               showsVerticalScrollIndicator={false}
             >
               {renderToolContent(activeTool)}
+
+              {secondaryTool && (
+                <View style={styles.secondarySlotBox} testID={`cad-secondary-slot-${secondaryTool}`}>
+                  <View style={styles.secondarySlotHeader}>
+                    <Text style={styles.secondarySlotTitle}>
+                      {secondaryToolDef?.icon} 2ª PEÇA ACOPLADA: {secondaryToolDef?.label}
+                    </Text>
+                    <Pressable onPress={() => setSecondaryTool(null)}>
+                      <Text style={styles.secondarySlotClose}>✕ Desacoplar</Text>
+                    </Pressable>
+                  </View>
+                  {renderToolContent(secondaryTool)}
+                </View>
+              )}
             </ScrollView>
           </View>
         )}
       </View>
+
+      {/* ── 2B. IN-PLACE STAGE COMPOSER OVERLAY ("Monte Seu Próprio Ambiente") ── */}
+      {isCustomizingStage && (
+        <View style={styles.floatingPaletteOverlay} testID="cad-stage-composer-modal">
+          <View style={styles.floatingPaletteHeader}>
+            <View>
+              <Text style={styles.floatingPaletteTitle}>
+                🧩 Construtor do Seu Ambiente CAD ({pinnedNodes.length} fixadas)
+              </Text>
+              <Text style={{ fontSize: 10, color: colors.text.tertiary }}>
+                Toque em 📌 para fixar/desafixar no Palco ou no nome para abrir agora
+              </Text>
+            </View>
+            <Pressable onPress={() => setIsCustomizingStage(false)}>
+              <Text style={styles.floatingPaletteClose}>✕</Text>
+            </Pressable>
+          </View>
+          <ScrollView style={{ maxHeight: 310 }} showsVerticalScrollIndicator={false}>
+            <View style={styles.floatingPaletteGrid}>
+              {CAD_TOOL_CATALOG.map((tool) => {
+                const isPinned = pinnedNodes.includes(tool.id);
+                return (
+                  <View
+                    key={tool.id}
+                    style={[
+                      styles.paletteItemBtn,
+                      isPinned && { borderColor: tool.accentColor, backgroundColor: 'rgba(168,85,247,0.10)' },
+                    ]}
+                  >
+                    <Pressable
+                      style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}
+                      onPress={() => handleSelectTool(tool.id)}
+                      testID={`cad-composer-open-${tool.id}`}
+                    >
+                      <Text style={styles.paletteItemIcon}>{tool.icon}</Text>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.paletteItemLabel}>{tool.shortLabel}</Text>
+                        <Text style={styles.paletteItemDesc} numberOfLines={1}>
+                          {tool.subtitle}
+                        </Text>
+                      </View>
+                    </Pressable>
+                    <Pressable
+                      style={[
+                        styles.pinToolBtn,
+                        isPinned && styles.pinToolBtnActive,
+                      ]}
+                      onPress={() => handleTogglePinTool(tool.id)}
+                      testID={`cad-composer-pin-${tool.id}`}
+                    >
+                      <Text style={styles.pinToolBtnText}>{isPinned ? '📌 Fixa' : '＋ Fixar'}</Text>
+                    </Pressable>
+                  </View>
+                );
+              })}
+            </View>
+          </ScrollView>
+        </View>
+      )}
 
       {/* ── 3. POPUP RADIAL/FLOATING PALETTE WHEN A RIBBON CATEGORY IS CLICKED ── */}
       {subToolsForCategory.length > 0 && (
@@ -641,8 +825,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: spacing.md,
-    paddingVertical: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 9,
+    gap: 6,
     backgroundColor: colors.background.secondary,
     borderBottomWidth: 1,
     borderBottomColor: colors.border.default,
@@ -650,26 +835,38 @@ const styles = StyleSheet.create({
   topHudLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
+    gap: 6,
     flex: 1,
   },
   cadModeBadge: {
     backgroundColor: 'rgba(168, 85, 247, 0.18)',
     borderWidth: 1,
     borderColor: colors.accent.purple,
-    paddingHorizontal: 8,
+    paddingHorizontal: 6,
     paddingVertical: 4,
     borderRadius: radius.sm,
   },
   cadModeBadgeText: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '800',
     color: colors.accent.purple,
-    letterSpacing: 0.5,
+    letterSpacing: 0.4,
   },
   projectSelector: {
     flex: 1,
-    maxWidth: 220,
+    maxWidth: 250,
+    backgroundColor: colors.background.primary,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    borderRadius: radius.full,
+    borderWidth: 1,
+    borderColor: colors.border.default,
+  },
+  activeGreenDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: colors.success.main,
   },
   projectSelectorLabel: {
     fontSize: 9,
@@ -678,33 +875,53 @@ const styles = StyleSheet.create({
     letterSpacing: 0.8,
   },
   projectSelectorName: {
-    fontSize: 15,
+    fontSize: 12,
     fontWeight: '800',
     color: colors.text.primary,
+    flexShrink: 1,
+  },
+  rowCountPill: {
+    backgroundColor: 'rgba(168, 85, 247, 0.2)',
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: radius.full,
+  },
+  rowCountPillText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: colors.accent.purple,
   },
   projectDropdownArrow: {
-    fontSize: 12,
+    fontSize: 10,
     color: colors.accent.purple,
     fontWeight: '800',
   },
   topHudRight: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 4,
+  },
+  hudIconBtn: {
+    backgroundColor: colors.background.primary,
+    borderWidth: 1,
+    borderColor: colors.border.default,
+    paddingHorizontal: 6,
+    paddingVertical: 5,
+    borderRadius: radius.full,
   },
   hudScorePill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 3,
     backgroundColor: 'rgba(16, 185, 129, 0.14)',
     borderWidth: 1,
     borderColor: 'rgba(16, 185, 129, 0.4)',
-    paddingHorizontal: 8,
+    paddingHorizontal: 7,
     paddingVertical: 5,
     borderRadius: radius.full,
   },
   hudScoreEmoji: {
-    fontSize: 12,
+    fontSize: 11,
   },
   hudScoreText: {
     fontSize: 11,
@@ -715,7 +932,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.accent.purpleLight,
     borderWidth: 1,
     borderColor: colors.accent.purpleBorder,
-    paddingHorizontal: 10,
+    paddingHorizontal: 8,
     paddingVertical: 5,
     borderRadius: radius.full,
   },
@@ -728,7 +945,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background.primary,
     borderWidth: 1,
     borderColor: colors.border.strong,
-    paddingHorizontal: 8,
+    paddingHorizontal: 7,
     paddingVertical: 5,
     borderRadius: radius.full,
   },
@@ -767,7 +984,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
+    paddingVertical: spacing.xs,
   },
   hubContainer: {
     width: '100%',
@@ -781,7 +998,7 @@ const styles = StyleSheet.create({
   coreNodeCard: {
     backgroundColor: colors.background.secondary,
     borderRadius: radius.xl,
-    padding: spacing.lg,
+    padding: spacing.md,
     borderWidth: 1,
     borderColor: colors.accent.purpleBorder,
   },
@@ -789,7 +1006,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: spacing.xs,
+    marginBottom: 4,
   },
   coreNodeCoordTag: {
     backgroundColor: 'rgba(99, 102, 241, 0.15)',
@@ -809,24 +1026,24 @@ const styles = StyleSheet.create({
     color: colors.text.tertiary,
   },
   coreBalanceLabel: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '700',
     color: colors.text.tertiary,
     letterSpacing: 0.6,
-    marginTop: 4,
+    marginTop: 2,
   },
   coreBalanceValue: {
-    fontSize: 30,
+    fontSize: 28,
     fontWeight: '900',
     letterSpacing: -0.5,
-    marginVertical: 4,
+    marginVertical: 2,
   },
   coreTelemetryRow: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.background.primary,
     borderRadius: radius.md,
-    paddingVertical: 8,
+    paddingVertical: 7,
     paddingHorizontal: spacing.sm,
     marginTop: spacing.xs,
     borderWidth: 1,
@@ -854,12 +1071,12 @@ const styles = StyleSheet.create({
   coreActionsRow: {
     flexDirection: 'row',
     gap: spacing.sm,
-    marginTop: spacing.md,
+    marginTop: spacing.sm,
   },
   primaryConstructBtn: {
     flex: 1.3,
     backgroundColor: colors.accent.purple,
-    paddingVertical: 11,
+    paddingVertical: 10,
     borderRadius: radius.md,
     alignItems: 'center',
     justifyContent: 'center',
@@ -874,7 +1091,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background.primary,
     borderWidth: 1,
     borderColor: colors.border.strong,
-    paddingVertical: 11,
+    paddingVertical: 10,
     borderRadius: radius.md,
     alignItems: 'center',
     justifyContent: 'center',
@@ -891,7 +1108,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background.secondary,
     borderRadius: radius.lg,
     paddingHorizontal: spacing.md,
-    paddingVertical: 10,
+    paddingVertical: 9,
     borderWidth: 1,
     borderColor: colors.border.default,
   },
@@ -925,28 +1142,37 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '800',
     color: colors.text.tertiary,
-    letterSpacing: 0.6,
+    letterSpacing: 0.5,
+  },
+  customizeStagePill: {
+    backgroundColor: 'rgba(168, 85, 247, 0.14)',
+    borderWidth: 1,
+    borderColor: colors.accent.purpleBorder,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: radius.full,
   },
   pinnedAddLink: {
-    fontSize: 11,
-    fontWeight: '700',
+    fontSize: 10,
+    fontWeight: '800',
     color: colors.accent.purple,
   },
   pinnedGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: spacing.xs,
+    gap: 8,
   },
   pinnedNodeCard: {
-    flex: 1,
-    minWidth: '30%',
+    width: '48.5%',
+    minWidth: '46%',
+    flexGrow: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
     backgroundColor: colors.background.secondary,
     borderRadius: radius.md,
     paddingHorizontal: 10,
-    paddingVertical: 10,
+    paddingVertical: 9,
     borderWidth: 1,
   },
   pinnedNodeIcon: {
@@ -954,11 +1180,11 @@ const styles = StyleSheet.create({
   },
   pinnedNodeLabel: {
     fontSize: 12,
-    fontWeight: '700',
+    fontWeight: '800',
     color: colors.text.primary,
   },
   pinnedNodeHint: {
-    fontSize: 9,
+    fontSize: 10,
     color: colors.text.tertiary,
   },
   mountedStageContainer: {
@@ -978,7 +1204,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background.primary,
     borderBottomWidth: 1,
     borderBottomColor: colors.border.default,
-    gap: spacing.sm,
+    gap: 6,
   },
   backToHubBtn: {
     paddingHorizontal: 10,
@@ -1002,7 +1228,7 @@ const styles = StyleSheet.create({
     color: colors.text.primary,
   },
   pinToolBtn: {
-    paddingHorizontal: 10,
+    paddingHorizontal: 8,
     paddingVertical: 5,
     borderRadius: radius.full,
     borderWidth: 1,
@@ -1013,9 +1239,62 @@ const styles = StyleSheet.create({
     backgroundColor: colors.accent.purpleLight,
   },
   pinToolBtnText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: colors.text.primary,
+  },
+  splitPickerBar: {
+    backgroundColor: colors.background.primary,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border.default,
+    gap: 6,
+  },
+  splitPickerLabel: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: colors.accent.purple,
+    letterSpacing: 0.6,
+  },
+  splitChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: radius.full,
+    backgroundColor: colors.background.secondary,
+    borderWidth: 1,
+    borderColor: colors.border.default,
+  },
+  splitChipText: {
     fontSize: 11,
     fontWeight: '700',
     color: colors.text.primary,
+  },
+  secondarySlotBox: {
+    marginTop: spacing.md,
+    paddingTop: spacing.md,
+    borderTopWidth: 2,
+    borderTopColor: colors.accent.purpleBorder,
+    gap: spacing.sm,
+  },
+  secondarySlotHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: 'rgba(168, 85, 247, 0.12)',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: radius.md,
+  },
+  secondarySlotTitle: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: colors.accent.purple,
+  },
+  secondarySlotClose: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.danger.main,
   },
   mountedToolScroll: {
     flex: 1,

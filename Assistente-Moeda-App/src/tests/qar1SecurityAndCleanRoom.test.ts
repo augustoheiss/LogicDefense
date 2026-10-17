@@ -16,6 +16,8 @@ import {
   generateSecureLocalApiKey,
   sanitizeTablesForAI,
   sanitizeTransactionsForAI,
+  enforceCleanRoomStorageOnBoot,
+  CLEAN_ROOM_MIGRATION_VERSION,
 } from '../utils/securitySanitizer';
 import {
   buildCSV,
@@ -24,7 +26,7 @@ import {
   buildTabularAuditHTML,
   generateLocalApiKey,
 } from '../services/exportService';
-import { sendChatMessage } from '../services/aiChatService';
+import { sendChatMessage, buildFinancialContext } from '../services/aiChatService';
 import { computeMetrics as calculateMetrics } from '../core/metricsEngine';
 import type { TableRow, TableGoals } from '../core/types';
 
@@ -32,7 +34,7 @@ declare const describe: (name: string, fn: () => void) => void;
 declare const it: (name: string, fn: () => void | Promise<void>) => void;
 declare const expect: (actual: any) => any;
 
-describe('QAR1 Security & Clean-Room Hygiene Suite (SEC-01 to SEC-07)', () => {
+describe('QAR1 Security & Clean-Room Hygiene Suite (SEC-01 to SEC-09)', () => {
   const sampleGoals: TableGoals = {
     dailyGoals: { 2026: 150 },
     weeklyGoals: { 2026: 1050 },
@@ -40,7 +42,7 @@ describe('QAR1 Security & Clean-Room Hygiene Suite (SEC-01 to SEC-07)', () => {
   };
 
   it('SEC-03: buildCSV e buildGranularCSV NÃO devem vazar chaves am_sheet_live_* do localStorage por padrão', () => {
-    const secretLiveKey = 'am_sheet_live_9999888877776666555544443333222211110000aaaabbbb';
+    const secretLiveKey = 'am_sheet_live_test_9999888877776666555544443333222211110000';
     if (typeof window !== 'undefined' && window.localStorage) {
       window.localStorage.setItem('coin_api_key_tbl_sec', secretLiveKey);
       window.localStorage.setItem('coin_active_api_key', secretLiveKey);
@@ -212,4 +214,59 @@ describe('QAR1 Security & Clean-Room Hygiene Suite (SEC-01 to SEC-07)', () => {
     expect(k1.length).toBe('am_sheet_live_'.length + 48);
     expect(k1).not.toBe(k2);
   });
+
+  it('SEC-08: buildFinancialContext deve anonimizar descrições por padrão (Privacy-by-Default)', () => {
+    const rows: TableRow[] = [
+      {
+        id: 'priv_1',
+        date: '2026-07-10',
+        value: 4500,
+        description: 'Transferencia Confidencial Clinica Particular',
+        category: 'Saúde',
+        entryType: 'expense',
+      },
+    ];
+    const metrics = calculateMetrics(rows, sampleGoals);
+    const defaultCtx = buildFinancialContext(rows, sampleGoals, metrics, 'Planilha Teste');
+    expect(defaultCtx).not.toContain('Transferencia Confidencial Clinica Particular');
+
+    const rawCtx = buildFinancialContext(rows, sampleGoals, metrics, 'Planilha Teste', false);
+    expect(rawCtx).toContain('Transferencia Confidencial Clinica Particular');
+  });
+
+  it('SEC-09: enforceCleanRoomStorageOnBoot deve expurgar chaves legadas não verificadas uma única vez', () => {
+    const store = new Map<string, string>();
+    store.set('coin_active_api_key', 'legacy_unverified_token_value');
+    store.set('coin_api_key_tbl_1', 'am_sheet_live_local');
+    store.set('coin_api_key_tbl_2', 'legacy_contaminated_token');
+
+    const mockStorage = {
+      get length() {
+        return store.size;
+      },
+      key(idx: number) {
+        return Array.from(store.keys())[idx] ?? null;
+      },
+      getItem(k: string) {
+        return store.has(k) ? store.get(k)! : null;
+      },
+      setItem(k: string, v: string) {
+        store.set(k, v);
+      },
+      removeItem(k: string) {
+        store.delete(k);
+      },
+    };
+
+    const res1 = enforceCleanRoomStorageOnBoot(mockStorage);
+    expect(res1.migrated).toBe(true);
+    expect(res1.purgedKeys.length).toBe(2);
+    expect(store.get('coin_api_key_tbl_1')).toBe('am_sheet_live_local');
+    expect(store.has('coin_active_api_key')).toBe(false);
+    expect(store.get(CLEAN_ROOM_MIGRATION_VERSION)).toBe('done');
+
+    const res2 = enforceCleanRoomStorageOnBoot(mockStorage);
+    expect(res2.migrated).toBe(false);
+  });
 });
+

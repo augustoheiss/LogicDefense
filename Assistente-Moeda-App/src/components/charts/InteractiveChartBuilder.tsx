@@ -238,7 +238,7 @@ export function InteractiveChartBuilder({
       />
 
       {/* ── Main Chart Canvas Container ── */}
-      <View style={styles.chartCard}>
+      <View style={styles.chartCard} testID="interactive-chart-canvas">
         <View style={styles.chartHeader}>
           <Text style={styles.chartTitle}>
             {config.visualType === 'donut'

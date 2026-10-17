@@ -33,7 +33,7 @@ Os testes automatizados em `src/tests/masterDataset.test.ts` mediram o tempo de 
 ---
 
 ## ✅ Conclusão e Status
-- **Gerador**: [generateDataset.js](file:///c:/Users/Usuario/Desktop/AHeiss_GoogleDrive/02-Programacao/projetos-IA/LogicDefense/Assistente-Moeda-App/scripts/generateDataset.js)
-- **Arquivo Dataset**: [Master_10Year_Dataset.csv](file:///c:/Users/Usuario/Desktop/AHeiss_GoogleDrive/02-Programacao/projetos-IA/LogicDefense/Assistente-Moeda-App/src/data/Master_10Year_Dataset.csv)
-- **Suíte de Testes**: [masterDataset.test.ts](file:///c:/Users/Usuario/Desktop/AHeiss_GoogleDrive/02-Programacao/projetos-IA/LogicDefense/Assistente-Moeda-App/src/tests/masterDataset.test.ts)
+- **Gerador**: [generateDataset.js](./scripts/generateDataset.js)
+- **Arquivo Dataset**: [Master_10Year_Dataset.csv](./src/data/Master_10Year_Dataset.csv)
+- **Suíte de Testes**: [masterDataset.test.ts](./src/tests/masterDataset.test.ts)
 - **Compilação**: `npx tsc --noEmit` executado com **0 erros**.

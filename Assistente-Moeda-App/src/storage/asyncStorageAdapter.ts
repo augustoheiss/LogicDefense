@@ -14,6 +14,7 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { DB } from '../core/types';
+import { enforceCleanRoomStorageOnBoot } from '../utils/securitySanitizer';
 import {
   isIndexedDBAvailable,
   loadDBFromIndexedDB,
@@ -36,6 +37,7 @@ let _nativeViewMode: 'cards' | 'grid' | null = null;
  * and quarantines the damaged payload.
  */
 export async function loadDB(): Promise<DB | null> {
+  enforceCleanRoomStorageOnBoot();
   // Hydrate native synchronous preference cache on mobile
   if (typeof window === 'undefined' || !window.localStorage) {
     try {

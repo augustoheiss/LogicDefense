@@ -245,18 +245,18 @@ export function InteractiveChartBuilder({
 
   return (
     <View style={styles.container}>
-      {/* ── KPI Metrics Bar ── */}
+      {/* ── Compact 1-Row KPI Strip ── */}
       <View style={styles.kpiBar}>
         <View style={[styles.kpiCard, { borderColor: '#10b981' }]}>
-          <Text style={styles.kpiLabel}>Total Receitas</Text>
-          <Text style={[styles.kpiValue, { color: '#10b981' }]}>
+          <Text style={styles.kpiLabel}>Receitas</Text>
+          <Text style={[styles.kpiValue, { color: '#10b981' }]} numberOfLines={1}>
             {fmtBRL(aggResult.totalRevenue)}
           </Text>
         </View>
 
         <View style={[styles.kpiCard, { borderColor: '#ef4444' }]}>
-          <Text style={styles.kpiLabel}>Total Custos</Text>
-          <Text style={[styles.kpiValue, { color: '#ef4444' }]}>
+          <Text style={styles.kpiLabel}>Custos</Text>
+          <Text style={[styles.kpiValue, { color: '#ef4444' }]} numberOfLines={1}>
             {fmtBRL(aggResult.totalExpense)}
           </Text>
         </View>
@@ -273,28 +273,11 @@ export function InteractiveChartBuilder({
               styles.kpiValue,
               { color: aggResult.netBalance >= 0 ? '#c084fc' : '#f87171' },
             ]}
+            numberOfLines={1}
           >
             {fmtBRL(aggResult.netBalance)}
           </Text>
         </View>
-
-        {aggResult.totalDeposit > 0 && (
-          <View style={[styles.kpiCard, { borderColor: '#3b82f6' }]}>
-            <Text style={styles.kpiLabel}>Aportes</Text>
-            <Text style={[styles.kpiValue, { color: '#3b82f6' }]}>
-              {fmtBRL(aggResult.totalDeposit)}
-            </Text>
-          </View>
-        )}
-
-        {aggResult.topCategory && (
-          <View style={[styles.kpiCard, { borderColor: '#f59e0b' }]}>
-            <Text style={styles.kpiLabel}>Maior Categoria</Text>
-            <Text style={[styles.kpiValue, { color: '#fbbf24', fontSize: 14 }]} numberOfLines={1}>
-              {aggResult.topCategory.name} ({aggResult.topCategory.pct}%)
-            </Text>
-          </View>
-        )}
       </View>
 
       {/* ── Dynamic Chart Control Panel ── */}
@@ -306,8 +289,8 @@ export function InteractiveChartBuilder({
         availableCategories={aggResult.availableCategories}
       />
 
-      {/* ── Main Chart Canvas Container ── */}
-      <View style={styles.chartCard}>
+      {/* ── Main Chart Canvas Container (Above the Fold!) ── */}
+      <View style={styles.chartCard} testID="interactive-chart-canvas">
         <View style={styles.chartHeader}>
           <Text style={styles.chartTitle}>
             {config.visualType === 'donut'
@@ -323,7 +306,7 @@ export function InteractiveChartBuilder({
               : '⏱️ Intervalo Personalizado'}
           </Text>
           <Text style={styles.chartSubtitle}>
-            {aggResult.points.length} pontos plotados • Clique em qualquer elemento para abrir o Raio-X
+            {aggResult.points.length} pontos • Toque em uma barra/fatia para abrir o Raio-X
           </Text>
         </View>
 
@@ -336,8 +319,8 @@ export function InteractiveChartBuilder({
             </Text>
           </View>
         ) : (
-          <div style={{ width: '100%', height: 420, minHeight: 420, position: 'relative' }}>
-            <ResponsiveContainer width="100%" height={420}>
+          <div style={{ width: '100%', height: 240, minHeight: 240, position: 'relative' }}>
+            <ResponsiveContainer width="100%" height={240}>
               {config.visualType === 'donut' ? (
                 <PieChart>
                   <Tooltip content={<CustomPieTooltip />} />
@@ -711,33 +694,33 @@ export function InteractiveChartBuilder({
 
 const styles = StyleSheet.create({
   container: {
-    gap: spacing.lg,
+    gap: spacing.sm,
   },
 
   // KPI Bar
   kpiBar: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
+    gap: 6,
   },
   kpiCard: {
     flex: 1,
-    minWidth: 150,
+    minWidth: '30%',
     backgroundColor: colors.background.secondary,
     borderWidth: 1,
     borderRadius: radius.md,
-    padding: spacing.md,
-    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    gap: 2,
   },
   kpiLabel: {
-    fontSize: 11,
+    fontSize: 9,
     color: colors.text.tertiary,
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    fontWeight: '600',
+    letterSpacing: 0.4,
+    fontWeight: '700',
   },
   kpiValue: {
-    fontSize: 18,
+    fontSize: 13,
     fontWeight: '800',
     fontFamily: 'monospace',
   },
@@ -748,21 +731,21 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border.default,
     borderRadius: radius.lg,
-    padding: spacing.lg,
-    gap: spacing.md,
+    padding: spacing.sm,
+    gap: spacing.xs,
   },
   chartHeader: {
-    marginBottom: spacing.xs,
+    marginBottom: 2,
   },
   chartTitle: {
-    fontSize: 18,
-    fontWeight: '700',
+    fontSize: 14,
+    fontWeight: '800',
     color: colors.text.primary,
   },
   chartSubtitle: {
-    fontSize: 12,
+    fontSize: 10,
     color: colors.text.tertiary,
-    marginTop: 2,
+    marginTop: 1,
   },
 
   emptyCard: {

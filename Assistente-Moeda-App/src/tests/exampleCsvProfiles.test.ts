@@ -75,7 +75,7 @@ describe('Example CSV Profiles & Fictitious Templates Suite', () => {
     const parsedInvestor = parseCSVText(investor.fullBackupV3Csv);
     const invMetrics = computeInvestorMetrics(
       parsedInvestor.rows as TableRow[],
-      parsedInvestor.metadata?.investorProfile,
+      parsedInvestor.metadata!.investorProfile!,
       62000
     );
     expect(invMetrics.totalNetWorth).toBeGreaterThan(50000);
@@ -140,7 +140,6 @@ describe('Example CSV Profiles & Fictitious Templates Suite', () => {
       const compactExport = serializeGranularCSV(parsed.rows as TableRow[], {
         scope: 'all',
         format: 'agent_compact',
-        includeMetadataHeader: false,
       });
       expect(compactExport.length).toBeGreaterThan(20);
     }

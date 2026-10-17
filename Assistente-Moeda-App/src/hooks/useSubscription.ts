@@ -57,10 +57,11 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
   const auth = useAuthContext();
 
   const isReviewer = useMemo(() => {
-    return !!(
-      auth.user?.email && auth.user.email.toLowerCase() === 'augustotester@gmail.com'
+    return Boolean(
+      (auth.profile as any)?.is_reviewer === true ||
+      process.env.EXPO_PUBLIC_REVIEWER_MODE === 'true'
     );
-  }, [auth.user]);
+  }, [auth.profile]);
 
   const isPremiumUser = auth.profile?.premiumTier === 'premium';
   const effectiveIsPro = isReviewer ? true : (isPro || isPremiumUser);

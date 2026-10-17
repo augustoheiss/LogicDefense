@@ -60,11 +60,29 @@ const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 const SPRING_CONFIG = { damping: 15, stiffness: 300, mass: 0.8 };
 
+export type SettingsStationId =
+  | 'account_license'
+  | 'sheets_backup'
+  | 'goals_sectors'
+  | 'api_agents'
+  | 'sync_audit'
+  | 'all';
+
+const SETTINGS_STATIONS: Array<{ id: SettingsStationId; icon: string; label: string }> = [
+  { id: 'account_license', icon: '👤', label: 'Conta & Licença' },
+  { id: 'sheets_backup', icon: '🗂️', label: 'Planilhas & Backup' },
+  { id: 'goals_sectors', icon: '🎯', label: 'Metas & Setores' },
+  { id: 'api_agents', icon: '🔌', label: 'API & Agentes IA' },
+  { id: 'sync_audit', icon: '⚡', label: 'Auditoria & Sync' },
+  { id: 'all', icon: '📋', label: 'Tudo' },
+];
+
 export default function SettingsScreen() {
   const router = useRouter();
   const auth = useAuthContext();
   const db = useCoinDB();
   const { impact } = useHaptics();
+  const [activeStation, setActiveStation] = useState<SettingsStationId>('account_license');
   const [isSyncing, setIsSyncing] = useState(false);
   const [isMigrating, setIsMigrating] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -563,497 +581,560 @@ export default function SettingsScreen() {
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
 
       <View style={styles.header}>
-        <Text style={styles.title}>⚙️ Ajustes</Text>
-        <Text style={styles.subtitle}>Conta, metas e preferências</Text>
+        <View style={styles.headerTopRow}>
+          <Text style={styles.title}>⚙️ Ajustes</Text>
+          <Text style={styles.subtitle}>Bancada de Controle CAD</Text>
+        </View>
+      </View>
+
+      {/* CAD Workbench Station Selector Bar */}
+      <View style={styles.stationBarWrapper} testID="settings-station-bar">
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.stationBarScroll}
+        >
+          {SETTINGS_STATIONS.map((station) => {
+            const active = activeStation === station.id;
+            return (
+              <Pressable
+                key={station.id}
+                testID={`settings-station-${station.id}`}
+                style={[styles.stationPill, active && styles.stationPillActive]}
+                onPress={() => setActiveStation(station.id)}
+              >
+                <Text style={styles.stationPillIcon}>{station.icon}</Text>
+                <Text style={[styles.stationPillText, active && styles.stationPillTextActive]}>
+                  {station.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
       </View>
 
       <ScrollView style={styles.content} contentContainerStyle={styles.contentInner}>
-        {/* ── Account & License Section ──────────────────────────────── */}
-        <Section title="🔑 Licença & Armazenamento">
-          <Card>
-            <View style={styles.profileRow}>
-              <View style={styles.avatar}>
-                <Text style={styles.avatarText}>
-                  {auth.isPremium ? '⭐' : '🔒'}
-                </Text>
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.profileName}>
-                  {auth.isPremium ? 'Licença Pro Ativa' : 'Plano Gratuito (Local)'}
-                </Text>
-                <Text style={styles.profileEmail}>
-                  {auth.profile?.licenseKey 
-                    ? `Chave: ${auth.profile.licenseKey}` 
-                    : 'Dados salvos 100% no dispositivo local'}
-                </Text>
-                <Text style={styles.tierText}>
-                  {auth.isPremium ? '⭐ Motor de IA e Consultor Liberados' : '🔒 Insira uma Chave Pro para ativar o Assistente de IA'}
-                </Text>
-              </View>
-            </View>
+        {/* ════════════════════════════════════════════════════════════════════ */}
+        {/* STATION 1: CONTA, LICENÇA & CRÉDITOS DE IA                         */}
+        {/* ════════════════════════════════════════════════════════════════════ */}
+        {(activeStation === 'account_license' || activeStation === 'all') && (
+          <>
+            {/* ── Account & License Section ──────────────────────────────── */}
+            <Section title="🔑 Licença & Armazenamento">
+              <Card>
+                <View style={styles.profileRow}>
+                  <View style={styles.avatar}>
+                    <Text style={styles.avatarText}>
+                      {auth.isPremium ? '⭐' : '🔒'}
+                    </Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.profileName}>
+                      {auth.isPremium ? 'Licença Pro Ativa' : 'Plano Gratuito (Local)'}
+                    </Text>
+                    <Text style={styles.profileEmail}>
+                      {auth.profile?.licenseKey 
+                        ? `Chave: ${auth.profile.licenseKey}` 
+                        : 'Dados salvos 100% no dispositivo local'}
+                    </Text>
+                    <Text style={styles.tierText}>
+                      {auth.isPremium ? '⭐ Motor de IA e Consultor Liberados' : '🔒 Insira uma Chave Pro para ativar o Assistente de IA'}
+                    </Text>
+                  </View>
+                </View>
 
-            {/* License Key input / activation */}
-            <View style={styles.licenseInputContainer}>
-              <Text style={styles.licenseInputLabel}>Ativar Nova Chave de Licença</Text>
-              <View style={styles.licenseInputRow}>
-                <TextInput
-                  style={styles.licenseInput}
-                  value={inputLicenseKey}
-                  onChangeText={setInputLicenseKey}
-                  placeholder="am_pro_..."
-                  placeholderTextColor={colors.text.disabled}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                />
-                <Pressable
-                  style={({ pressed }) => [
-                    styles.licenseBtn,
-                    isValidatingKey && { opacity: 0.6 },
-                    pressed && styles.pressed,
-                  ]}
-                  onPress={handleValidateKey}
-                  disabled={isValidatingKey}
-                >
-                  <Text style={styles.licenseBtnText}>
-                    {isValidatingKey ? '⏳' : 'Ativar'}
+                {/* License Key input / activation */}
+                <View style={styles.licenseInputContainer}>
+                  <Text style={styles.licenseInputLabel}>Ativar Nova Chave de Licença</Text>
+                  <View style={styles.licenseInputRow}>
+                    <TextInput
+                      style={styles.licenseInput}
+                      value={inputLicenseKey}
+                      onChangeText={setInputLicenseKey}
+                      placeholder="am_pro_..."
+                      placeholderTextColor={colors.text.disabled}
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                    />
+                    <Pressable
+                      style={({ pressed }) => [
+                        styles.licenseBtn,
+                        isValidatingKey && { opacity: 0.6 },
+                        pressed && styles.pressed,
+                      ]}
+                      onPress={handleValidateKey}
+                      disabled={isValidatingKey}
+                    >
+                      <Text style={styles.licenseBtnText}>
+                        {isValidatingKey ? '⏳' : 'Ativar'}
+                      </Text>
+                    </Pressable>
+                  </View>
+                </View>
+
+                {/* Email License Recovery Box */}
+                <View style={styles.recoveryBox}>
+                  <Text style={styles.recoveryTitle}>📩 Perdeu sua Chave de Licença?</Text>
+                  <Text style={styles.recoveryText}>
+                    Digite o e-mail utilizado no Checkout do Stripe para receber todas as suas chaves cadastradas na sua caixa de entrada.
                   </Text>
-                </Pressable>
-              </View>
-            </View>
+                  <View style={styles.licenseInputRow}>
+                    <TextInput
+                      style={styles.licenseInput}
+                      value={recoveryEmail}
+                      onChangeText={setRecoveryEmail}
+                      placeholder="seu-email@exemplo.com"
+                      placeholderTextColor={colors.text.disabled}
+                      keyboardType="email-address"
+                      autoCapitalize="none"
+                    />
+                    <Pressable
+                      style={({ pressed }) => [
+                        styles.recoveryBtn,
+                        isRecoveringKey && { opacity: 0.6 },
+                        pressed && styles.pressed,
+                      ]}
+                      onPress={handleRecoverKey}
+                      disabled={isRecoveringKey}
+                    >
+                      <Text style={styles.licenseBtnText}>
+                        {isRecoveringKey ? '⏳ Enviando...' : 'Enviar Chave'}
+                      </Text>
+                    </Pressable>
+                  </View>
+                </View>
+              </Card>
+            </Section>
 
-            {/* Email License Recovery Box */}
-            <View style={styles.recoveryBox}>
-              <Text style={styles.recoveryTitle}>📩 Perdeu sua Chave de Licença?</Text>
-              <Text style={styles.recoveryText}>
-                Digite o e-mail utilizado no Checkout do Stripe para receber todas as suas chaves cadastradas na sua caixa de entrada.
-              </Text>
-              <View style={styles.licenseInputRow}>
-                <TextInput
-                  style={styles.licenseInput}
-                  value={recoveryEmail}
-                  onChangeText={setRecoveryEmail}
-                  placeholder="seu-email@exemplo.com"
-                  placeholderTextColor={colors.text.disabled}
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                />
-                <Pressable
-                  style={({ pressed }) => [
-                    styles.recoveryBtn,
-                    isRecoveringKey && { opacity: 0.6 },
-                    pressed && styles.pressed,
-                  ]}
-                  onPress={handleRecoverKey}
-                  disabled={isRecoveringKey}
-                >
-                  <Text style={styles.licenseBtnText}>
-                    {isRecoveringKey ? '⏳ Enviando...' : 'Enviar Chave'}
+            {/* ── AI Engine Section (Fuel Gauge) ───────────────── */}
+            <Section title="⚡ Motor de Inteligência Artificial">
+              <Card glow>
+                <Text style={styles.gaugeTitle}>Consumo de Tokens da IA</Text>
+                <Text style={styles.gaugeSubtitle}>
+                  {!hasActiveLicense ? (
+                    <Text style={styles.gaugeBalanceHighlight}>Sem licença Pro ativa (Acesso Gratuito Local)</Text>
+                  ) : isGodMode ? (
+                    <Text style={styles.gaugeBalanceHighlight}>Saldo: ∞ (God Mode / Ilimitado)</Text>
+                  ) : (
+                    <>Saldo: <Text style={styles.gaugeBalanceHighlight}>{tokenBalance.toLocaleString('pt-BR')}</Text> / {maxTokens.toLocaleString('pt-BR')} tokens</>
+                  )}
+                </Text>
+                
+                <View style={styles.progressBarWrapper}>
+                  <TokenProgressBar current={tokenBalance} max={maxTokens} />
+                </View>
+                
+                <Text style={styles.gaugeHelperText}>
+                  O aplicativo e o Módulo Preditivo são 100% gratuitos e open-source. A Chave PRO recarrega créditos exclusivamente para interagir com o Consultor de IA Gemini no nosso servidor. Você também pode integrar agentes externos de graça usando Chaves de API de Planilhas.
+                </Text>
+
+                {isPro && expirationDate && (
+                  <Text style={styles.gaugeProStatus}>
+                    ⭐ Assinatura Pro ativa até {(() => {
+                      try {
+                        return new Date(expirationDate).toLocaleDateString('pt-BR');
+                      } catch (e) {
+                        return expirationDate;
+                      }
+                    })()}
                   </Text>
-                </Pressable>
-              </View>
-            </View>
-          </Card>
-        </Section>
+                )}
 
-        {/* ── Backup & Safety Advice (Golden Warning) ─────────────── */}
-        <Section title="🛡️ Segurança & Backups (.csv)">
-          <Card style={styles.backupAdviceCard}>
-            <View style={styles.backupHeaderRow}>
-              <Text style={styles.backupIcon}>💡</Text>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.backupTitle}>Dica de Ouro: Exporte seus Backups em .CSV</Text>
-                <Text style={styles.backupSubtitle}>Sua máquina do tempo pessoal contra imprevistos</Text>
-              </View>
-            </View>
-
-            <Text style={styles.backupBodyText}>
-              Se você gostou da organização atual da sua planilha, <Text style={styles.boldWhite}>baixe um backup em .csv agora mesmo</Text>.
-            </Text>
-
-            <Text style={styles.backupBodyText}>
-              Uma faísca ou comando da IA pode alterar ou reestruturar pequenas planilhas em milésimos de segundos, criando novas fórmulas ou visões diferentes — e, às vezes, até alucinações. Se algum imprevisto acontecer, um backup <Text style={styles.backupCode}>.csv</Text> salvo no seu computador é a sua <Text style={styles.boldWhite}>garantia mais segura</Text> para retornar no tempo e restaurar exatamente o que estava funcionando perfeitamente.
-            </Text>
-
-            {db.activeTable && (
-              <View style={{ gap: spacing.xs }}>
-                <Pressable
-                  style={({ pressed }) => [
-                    styles.backupDownloadBtn,
-                    pressed && styles.pressed,
-                  ]}
-                  onPress={handleDownloadBackup}
+                <HapticButton
+                  style={styles.storefrontButton}
+                  onPress={() => {
+                    impact(ImpactFeedbackStyle.Light);
+                    setShowStoreModal(true);
+                  }}
                 >
-                  <Text style={styles.backupDownloadBtnText}>
-                    📥 Baixar Backup .CSV de "{db.activeTable.name}" ({db.activeTable.rows.length} itens)
-                  </Text>
-                </Pressable>
+                  <Text style={styles.storefrontButtonText}>🪙 Recarregar Créditos (Loja)</Text>
+                </HapticButton>
+              </Card>
+            </Section>
 
-                <Pressable
-                  style={({ pressed }) => [
-                    styles.backupDownloadBtn,
-                    { backgroundColor: 'rgba(168, 85, 247, 0.14)', borderColor: colors.accent.purple, borderWidth: 1 },
-                    pressed && styles.pressed,
-                  ]}
-                  onPress={handleDownloadJSONBackup}
-                >
-                  <Text style={[styles.backupDownloadBtnText, { color: colors.accent.purple }]}>
-                    🏛️ Baixar Backup Soberano .JSON (Todas as {db.tables.length} Planilhas + OpLog)
-                  </Text>
-                </Pressable>
+            {/* ── Danger Zone ────────────────────────────────── */}
+            <Section title="Zona de Perigo">
+              <Card style={{ borderColor: colors.danger.main, borderWidth: 1 }}>
+                <Text style={{ fontSize: 13, color: colors.text.secondary, marginBottom: spacing.md }}>
+                  Ações irreversíveis. Tenha cuidado ao prosseguir.
+                </Text>
+                <View style={{ gap: spacing.md }}>
+                  <Pressable
+                    style={({ pressed }) => [
+                      {
+                        backgroundColor: 'transparent',
+                        borderWidth: 1,
+                        borderColor: colors.danger.main,
+                        paddingVertical: spacing.sm,
+                        borderRadius: radius.sm,
+                        alignItems: 'center',
+                      },
+                      pressed && styles.pressed,
+                    ]}
+                    onPress={handleClearLocalCache}
+                  >
+                    <Text style={{ color: colors.danger.main, fontSize: 13, fontWeight: '600' }}>
+                      🗑️ Limpar Planilhas do Navegador
+                    </Text>
+                  </Pressable>
+
+                  {!isVisitor && (
+                    <Pressable
+                      style={({ pressed }) => [
+                        {
+                          backgroundColor: colors.danger.main,
+                          paddingVertical: spacing.sm,
+                          borderRadius: radius.sm,
+                          alignItems: 'center',
+                        },
+                        isDeleting && { opacity: 0.5 },
+                        pressed && styles.pressed,
+                      ]}
+                      onPress={handleDeleteAccount}
+                      disabled={isDeleting}
+                    >
+                      <Text style={{ color: '#fff', fontSize: 13, fontWeight: '600' }}>
+                        {isDeleting ? '⏳ Excluindo Conta...' : '⚠️ Excluir Conta Permanentemente'}
+                      </Text>
+                    </Pressable>
+                  )}
+                </View>
+              </Card>
+            </Section>
+
+            {/* ── App Info ────────────────────────────────────── */}
+            <Section title="Sobre">
+              <Card>
+                <Text style={styles.infoRow}>Versão: 1.0.0</Text>
+                <Text style={styles.infoRow}>Plataforma: Expo SDK 56</Text>
+                <Text style={styles.infoRow}>Motor: React Native 0.85</Text>
+                <Text style={styles.infoRow}>Desenvolvido por: Logic Defense</Text>
+              </Card>
+            </Section>
+
+            {/* ── Collapsible Dev Mode Debugger ───────────────── */}
+            {showDebugger && (
+              <View style={{
+                marginHorizontal: spacing.md,
+                marginTop: spacing.md,
+                backgroundColor: '#1f2937',
+                borderRadius: radius.md,
+                borderWidth: 1,
+                borderColor: '#374151',
+                padding: spacing.md,
+                gap: spacing.xs
+              }}>
+                <Text style={{ color: '#ef4444', fontWeight: 'bold', fontSize: 13, marginBottom: 4 }}>🔍 X-RAY SUBSCRIPTION DEBUGGER</Text>
+                <Text style={{ color: '#9ca3af', fontSize: 11, fontFamily: 'monospace' }}>User ID: {auth.user?.id || 'null'}</Text>
+                <Text style={{ color: '#9ca3af', fontSize: 11, fontFamily: 'monospace' }}>Mode: {auth.mode}</Text>
+                <Text style={{ color: '#9ca3af', fontSize: 11, fontFamily: 'monospace' }}>Session: {auth.session ? 'Active' : 'None'}</Text>
+                <Text style={{ color: '#ef4444', fontSize: 11, fontFamily: 'monospace' }}>Fetch Error: {JSON.stringify(auth.profileFetchError || 'No error captured')}</Text>
+                <Text style={{ color: '#22d3ee', fontSize: 11, fontFamily: 'monospace' }}>profile is null: {JSON.stringify(!auth.profile)}</Text>
+                <Text style={{ color: '#facc15', fontSize: 11, fontFamily: 'monospace' }}>premiumTier: {JSON.stringify(auth.profile?.premiumTier)}</Text>
+                <Text style={{ color: '#facc15', fontSize: 11, fontFamily: 'monospace' }}>premium_tier (raw): {JSON.stringify((auth.profile as any)?.premium_tier)}</Text>
+                <Text style={{ color: '#c084fc', fontSize: 11, fontFamily: 'monospace' }}>subscriptionType: {JSON.stringify(auth.profile?.subscriptionType)}</Text>
+                <Text style={{ color: '#c084fc', fontSize: 11, fontFamily: 'monospace' }}>subscriptionType hook: {JSON.stringify(subscriptionType)}</Text>
+                <Text style={{ color: '#4ade80', fontSize: 11, fontFamily: 'monospace' }}>isPro hook: {JSON.stringify(isPro)}</Text>
+                <Text style={{ color: '#4ade80', fontSize: 11, fontFamily: 'monospace' }}>auth.isPremium: {JSON.stringify(auth.isPremium)}</Text>
+                <Text style={{ color: '#9ca3af', fontSize: 11, fontFamily: 'monospace' }}>auth.user: {JSON.stringify(auth.user?.email)}</Text>
               </View>
             )}
 
             <Pressable
-              style={({ pressed }) => [
-                styles.backupDownloadBtn,
-                { backgroundColor: 'rgba(99, 102, 241, 0.16)', borderColor: '#6366F1', borderWidth: 1 },
-                pressed && styles.pressed,
-              ]}
-              onPress={() => setShowExamplesModal(true)}
+              onPress={() => setShowDebugger(prev => !prev)}
+              style={{ alignSelf: 'center', marginVertical: spacing.md, opacity: 0.3 }}
             >
-              <Text style={[styles.backupDownloadBtnText, { color: '#A5B4FC' }]}>
-                📚 Planilhas CSV de Exemplo & Modelos Prontos p/ Sua IA (8 Perfis Fictícios)
+              <Text style={{ color: colors.text.tertiary, fontSize: 11, fontFamily: 'monospace' }}>
+                {showDebugger ? 'Hide Developer Tools 🐛' : '🐛 Modo Dev'}
               </Text>
             </Pressable>
 
-            <Text style={styles.backupFooterText}>
-              ℹ️ Você pode importar este arquivo .csv a qualquer momento na tela inicial para restaurar sua planilha intacta, ou usar nossos modelos 100% fictícios para montar seu próprio CSV com sua IA.
-            </Text>
-          </Card>
-
-          <ExampleCSVGalleryModal
-            visible={showExamplesModal}
-            onClose={() => setShowExamplesModal(false)}
-            onImportExample={db.importSpreadsheet}
-          />
-        </Section>
-
-        {/* ── AI Engine Section (Fuel Gauge) ───────────────── */}
-        <Section title="⚡ Motor de Inteligência Artificial">
-          <Card glow>
-            <Text style={styles.gaugeTitle}>Consumo de Tokens da IA</Text>
-            <Text style={styles.gaugeSubtitle}>
-              {!hasActiveLicense ? (
-                <Text style={styles.gaugeBalanceHighlight}>Sem licença Pro ativa (Acesso Gratuito Local)</Text>
-              ) : isGodMode ? (
-                <Text style={styles.gaugeBalanceHighlight}>Saldo: ∞ (God Mode / Ilimitado)</Text>
-              ) : (
-                <>Saldo: <Text style={styles.gaugeBalanceHighlight}>{tokenBalance.toLocaleString('pt-BR')}</Text> / {maxTokens.toLocaleString('pt-BR')} tokens</>
-              )}
-            </Text>
-            
-            <View style={styles.progressBarWrapper}>
-              <TokenProgressBar current={tokenBalance} max={maxTokens} />
-            </View>
-            
-            <Text style={styles.gaugeHelperText}>
-              O aplicativo e o Módulo Preditivo são 100% gratuitos e open-source. A Chave PRO recarrega créditos exclusivamente para interagir com o Consultor de IA Gemini no nosso servidor. Você também pode integrar agentes externos de graça usando Chaves de API de Planilhas.
-            </Text>
-
-            {isPro && expirationDate && (
-              <Text style={styles.gaugeProStatus}>
-                ⭐ Assinatura Pro ativa até {(() => {
-                  try {
-                    return new Date(expirationDate).toLocaleDateString('pt-BR');
-                  } catch (e) {
-                    return expirationDate;
-                  }
-                })()}
-              </Text>
-            )}
-
-            <HapticButton
-              style={styles.storefrontButton}
-              onPress={() => {
-                impact(ImpactFeedbackStyle.Light);
-                setShowStoreModal(true);
-              }}
-            >
-              <Text style={styles.storefrontButtonText}>🪙 Recarregar Créditos (Loja)</Text>
-            </HapticButton>
-          </Card>
-        </Section>
-
-        {/* ── Migration Section ───────────────────────────── */}
-        {!isVisitor && (
-          <Section title="Migração de Dados">
-            <Card>
-              <Text style={styles.migrationTitle}>📤 Migrar Planilhas Locais</Text>
-              <Text style={styles.migrationText}>
-                Você tem {db.tables.length} planilhas salvas na memória local. Você pode migrá-las e enviá-las para sua conta em nuvem agora.
-              </Text>
+            {/* ── Logout ─────────────────────────────────────── */}
+            {!isVisitor && (
               <Pressable
-                style={({ pressed }) => [
-                  styles.migrationButton,
-                  isMigrating && styles.syncButtonDisabled,
-                  pressed && styles.pressed,
-                ]}
-                onPress={handleLocalMigration}
-                disabled={isMigrating}
+                style={({ pressed }) => [styles.logoutButton, pressed && styles.pressed]}
+                onPress={handleLogout}
               >
-                <Text style={styles.migrationButtonText}>
-                  {isMigrating ? '⏳ Migrando...' : '📤 Subir Planilhas Locais para a Nuvem'}
-                </Text>
+                <Text style={styles.logoutText}>Sair da Conta</Text>
               </Pressable>
-            </Card>
-          </Section>
+            )}
+          </>
         )}
 
-        {/* ── Goals Accordion ─────────────────────────────── */}
-        {db.activeTable && (
-          <Section title="🎯 Metas Semanais">
-            <GoalsAccordion
-              key={db.activeTable.id}
-              goals={db.activeTable.goals}
-              onUpdate={db.updateGoals}
-            />
-          </Section>
-        )}
-
-        {/* ── Sector Configurations ───────────────────────── */}
-        {db.activeTable && (
-          <Section title="⚙️ Módulos / Setores">
-            <SectorSettingsPanel />
-          </Section>
-        )}
-
-        {/* ── Real-Time Sync & Audit Panel ─────────────────── */}
-        <Section title="⚡ Auditoria & Sincronismo em Tempo Real">
-          <SyncAuditPanel />
-        </Section>
-
-        {/* ── API Integration ─────────────────────────────── */}
-        {db.activeTable && (
-          <Section title="🔌 Integração via API (IA)">
-            <SpreadsheetApiSection 
-              tableId={db.activeTable.id} 
-              activeTable={db.activeTable}
-              onShowStore={() => setShowStoreModal(true)} 
-            />
-          </Section>
-        )}
-
-        {/* ── Table Management ────────────────────────────── */}
-        <Section title="📋 Tabelas">
-          <Card>
-            {db.activeTables.length === 0 ? (
-              <Text style={styles.emptyText}>Nenhuma tabela criada</Text>
-            ) : (
-              db.activeTables.map((t, index) => {
-                const isActive = t.id === db.activeTable?.id;
-                const isEditing = t.id === editingTableId;
-
-                return (
-                  <View key={t.id} style={[styles.tableRowContainer, isActive && styles.tableRowActive]}>
-                    {isEditing ? (
-                      <View style={styles.renameRow}>
-                        <TextInput
-                          style={styles.renameInput}
-                          value={renameValue}
-                          onChangeText={setRenameValue}
-                          autoFocus
-                        />
-                        <Pressable
-                          style={[styles.actionBtn, styles.saveBtn]}
-                          onPress={() => handleSaveRenameTable(t.id)}
-                        >
-                          <Text style={styles.actionBtnText}>✓</Text>
-                        </Pressable>
-                        <Pressable
-                          style={[styles.actionBtn, styles.cancelBtn]}
-                          onPress={() => setEditingTableId(null)}
-                        >
-                          <Text style={styles.actionBtnText}>✕</Text>
-                        </Pressable>
-                      </View>
-                    ) : (
-                      <View style={styles.tableCardContent}>
-                        <Pressable
-                          style={styles.tableSelectArea}
-                          onPress={() => db.setActiveTableIndex(index)}
-                        >
-                          <Text style={[styles.tableName, isActive && styles.tableNameActive]}>
-                            {isActive ? '● ' : '○ '}
-                            {t.name}
-                          </Text>
-                          <Text style={styles.tableRowCount}>{t.rows.length} entradas</Text>
-                        </Pressable>
-
-                        <View style={styles.cardActions}>
-                          {/* Reorder Up/Down */}
-                          <View style={styles.reorderGroup}>
-                            <Pressable
-                              style={[styles.iconBtn, index === 0 && styles.disabledBtn]}
-                              onPress={() => db.reorderTables(index, index - 1)}
-                              disabled={index === 0}
-                              accessibilityLabel="Mover para cima"
-                            >
-                              <Text style={[styles.iconText, index === 0 && styles.disabledText]}>▲</Text>
-                            </Pressable>
-                            <Pressable
-                              style={[styles.iconBtn, index === db.activeTables.length - 1 && styles.disabledBtn]}
-                              onPress={() => db.reorderTables(index, index + 1)}
-                              disabled={index === db.activeTables.length - 1}
-                              accessibilityLabel="Mover para baixo"
-                            >
-                              <Text style={[styles.iconText, index === db.activeTables.length - 1 && styles.disabledText]}>▼</Text>
-                            </Pressable>
-                          </View>
-
-                          <Pressable
-                            style={styles.iconBtn}
-                            onPress={() => handleStartRenameTable(t)}
-                            accessibilityLabel="Renomear"
-                          >
-                            <Text style={styles.iconText}>✏️</Text>
-                          </Pressable>
-                          <Pressable
-                            style={styles.iconBtn}
-                            onPress={() => handleDeleteTable(t)}
-                            accessibilityLabel="Excluir"
-                          >
-                            <Text style={[styles.iconText, styles.dangerText]}>🗑️</Text>
-                          </Pressable>
-                        </View>
-                      </View>
-                    )}
+        {/* ════════════════════════════════════════════════════════════════════ */}
+        {/* STATION 2: PLANILHAS, BACKUPS & MODELOS CSV                        */}
+        {/* ════════════════════════════════════════════════════════════════════ */}
+        {(activeStation === 'sheets_backup' || activeStation === 'all') && (
+          <>
+            {/* ── Backup & Safety Advice (Golden Warning) ─────────────── */}
+            <Section title="🛡️ Segurança & Backups (.csv)">
+              <Card style={styles.backupAdviceCard}>
+                <View style={styles.backupHeaderRow}>
+                  <Text style={styles.backupIcon}>💡</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.backupTitle}>Dica de Ouro: Exporte seus Backups em .CSV</Text>
+                    <Text style={styles.backupSubtitle}>Sua máquina do tempo pessoal contra imprevistos</Text>
                   </View>
-                );
-              })
-            )}
+                </View>
 
-            {/* Criar Nova Planilha form directly in Settings */}
-            <View style={styles.addTableSection}>
-              <Text style={styles.addTableLabel}>Criar Nova Planilha</Text>
-              <View style={styles.addTableInputRow}>
-                <TextInput
-                  style={styles.addTableInput}
-                  value={newTableName}
-                  onChangeText={setNewTableName}
-                  placeholder="Nome da planilha..."
-                  placeholderTextColor={colors.text.disabled}
-                  onSubmitEditing={handleAddTable}
-                  returnKeyType="done"
-                />
-                <Pressable
-                  style={({ pressed }) => [
-                    styles.addTableBtn,
-                    pressed && styles.pressed,
-                  ]}
-                  onPress={handleAddTable}
-                >
-                  <Text style={styles.addTableBtnText}>+ Criar</Text>
-                </Pressable>
-              </View>
-            </View>
-          </Card>
-        </Section>
-
-        {/* ── Danger Zone ────────────────────────────────── */}
-        <Section title="Zona de Perigo">
-          <Card style={{ borderColor: colors.danger.main, borderWidth: 1 }}>
-            <Text style={{ fontSize: 13, color: colors.text.secondary, marginBottom: spacing.md }}>
-              Ações irreversíveis. Tenha cuidado ao prosseguir.
-            </Text>
-            <View style={{ gap: spacing.md }}>
-              <Pressable
-                style={({ pressed }) => [
-                  {
-                    backgroundColor: 'transparent',
-                    borderWidth: 1,
-                    borderColor: colors.danger.main,
-                    paddingVertical: spacing.sm,
-                    borderRadius: radius.sm,
-                    alignItems: 'center',
-                  },
-                  pressed && styles.pressed,
-                ]}
-                onPress={handleClearLocalCache}
-              >
-                <Text style={{ color: colors.danger.main, fontSize: 13, fontWeight: '600' }}>
-                  🗑️ Limpar Planilhas do Navegador
+                <Text style={styles.backupBodyText}>
+                  Se você gostou da organização atual da sua planilha, <Text style={styles.boldWhite}>baixe um backup em .csv agora mesmo</Text>.
                 </Text>
-              </Pressable>
 
-              {!isVisitor && (
+                <Text style={styles.backupBodyText}>
+                  Uma faísca ou comando da IA pode alterar ou reestruturar pequenas planilhas em milésimos de segundos, criando novas fórmulas ou visões diferentes — e, às vezes, até alucinações. Se algum imprevisto acontecer, um backup <Text style={styles.backupCode}>.csv</Text> salvo no seu computador é a sua <Text style={styles.boldWhite}>garantia mais segura</Text> para retornar no tempo e restaurar exatamente o que estava funcionando perfeitamente.
+                </Text>
+
+                {db.activeTable && (
+                  <View style={{ gap: spacing.xs }}>
+                    <Pressable
+                      style={({ pressed }) => [
+                        styles.backupDownloadBtn,
+                        pressed && styles.pressed,
+                      ]}
+                      onPress={handleDownloadBackup}
+                    >
+                      <Text style={styles.backupDownloadBtnText}>
+                        📥 Baixar Backup .CSV de "{db.activeTable.name}" ({db.activeTable.rows.length} itens)
+                      </Text>
+                    </Pressable>
+
+                    <Pressable
+                      style={({ pressed }) => [
+                        styles.backupDownloadBtn,
+                        { backgroundColor: 'rgba(168, 85, 247, 0.14)', borderColor: colors.accent.purple, borderWidth: 1 },
+                        pressed && styles.pressed,
+                      ]}
+                      onPress={handleDownloadJSONBackup}
+                    >
+                      <Text style={[styles.backupDownloadBtnText, { color: colors.accent.purple }]}>
+                        🏛️ Baixar Backup Soberano .JSON (Todas as {db.tables.length} Planilhas + OpLog)
+                      </Text>
+                    </Pressable>
+                  </View>
+                )}
+
                 <Pressable
                   style={({ pressed }) => [
-                    {
-                      backgroundColor: colors.danger.main,
-                      paddingVertical: spacing.sm,
-                      borderRadius: radius.sm,
-                      alignItems: 'center',
-                    },
-                    isDeleting && { opacity: 0.5 },
+                    styles.backupDownloadBtn,
+                    { backgroundColor: 'rgba(99, 102, 241, 0.16)', borderColor: '#6366F1', borderWidth: 1 },
                     pressed && styles.pressed,
                   ]}
-                  onPress={handleDeleteAccount}
-                  disabled={isDeleting}
+                  onPress={() => setShowExamplesModal(true)}
                 >
-                  <Text style={{ color: '#fff', fontSize: 13, fontWeight: '600' }}>
-                    {isDeleting ? '⏳ Excluindo Conta...' : '⚠️ Excluir Conta Permanentemente'}
+                  <Text style={[styles.backupDownloadBtnText, { color: '#A5B4FC' }]}>
+                    📚 Planilhas CSV de Exemplo & Modelos Prontos p/ Sua IA (8 Perfis Fictícios)
                   </Text>
                 </Pressable>
-              )}
-            </View>
-          </Card>
-        </Section>
 
-        {/* ── App Info ────────────────────────────────────── */}
-        <Section title="Sobre">
-          <Card>
-            <Text style={styles.infoRow}>Versão: 1.0.0</Text>
-            <Text style={styles.infoRow}>Plataforma: Expo SDK 56</Text>
-            <Text style={styles.infoRow}>Motor: React Native 0.85</Text>
-            <Text style={styles.infoRow}>Desenvolvido por: Logic Defense</Text>
-          </Card>
-        </Section>
+                <Text style={styles.backupFooterText}>
+                  ℹ️ Você pode importar este arquivo .csv a qualquer momento na tela inicial para restaurar sua planilha intacta, ou usar nossos modelos 100% fictícios para montar seu próprio CSV com sua IA.
+                </Text>
+              </Card>
 
-        {/* ── Collapsible Dev Mode Debugger ───────────────── */}
-        {showDebugger && (
-          <View style={{
-            marginHorizontal: spacing.md,
-            marginTop: spacing.md,
-            backgroundColor: '#1f2937',
-            borderRadius: radius.md,
-            borderWidth: 1,
-            borderColor: '#374151',
-            padding: spacing.md,
-            gap: spacing.xs
-          }}>
-            <Text style={{ color: '#ef4444', fontWeight: 'bold', fontSize: 13, marginBottom: 4 }}>🔍 X-RAY SUBSCRIPTION DEBUGGER</Text>
-            <Text style={{ color: '#9ca3af', fontSize: 11, fontFamily: 'monospace' }}>User ID: {auth.user?.id || 'null'}</Text>
-            <Text style={{ color: '#9ca3af', fontSize: 11, fontFamily: 'monospace' }}>Mode: {auth.mode}</Text>
-            <Text style={{ color: '#9ca3af', fontSize: 11, fontFamily: 'monospace' }}>Session: {auth.session ? 'Active' : 'None'}</Text>
-            <Text style={{ color: '#ef4444', fontSize: 11, fontFamily: 'monospace' }}>Fetch Error: {JSON.stringify(auth.profileFetchError || 'No error captured')}</Text>
-            <Text style={{ color: '#22d3ee', fontSize: 11, fontFamily: 'monospace' }}>profile is null: {JSON.stringify(!auth.profile)}</Text>
-            <Text style={{ color: '#facc15', fontSize: 11, fontFamily: 'monospace' }}>premiumTier: {JSON.stringify(auth.profile?.premiumTier)}</Text>
-            <Text style={{ color: '#facc15', fontSize: 11, fontFamily: 'monospace' }}>premium_tier (raw): {JSON.stringify((auth.profile as any)?.premium_tier)}</Text>
-            <Text style={{ color: '#c084fc', fontSize: 11, fontFamily: 'monospace' }}>subscriptionType: {JSON.stringify(auth.profile?.subscriptionType)}</Text>
-            <Text style={{ color: '#c084fc', fontSize: 11, fontFamily: 'monospace' }}>subscriptionType hook: {JSON.stringify(subscriptionType)}</Text>
-            <Text style={{ color: '#4ade80', fontSize: 11, fontFamily: 'monospace' }}>isPro hook: {JSON.stringify(isPro)}</Text>
-            <Text style={{ color: '#4ade80', fontSize: 11, fontFamily: 'monospace' }}>auth.isPremium: {JSON.stringify(auth.isPremium)}</Text>
-            <Text style={{ color: '#9ca3af', fontSize: 11, fontFamily: 'monospace' }}>auth.user: {JSON.stringify(auth.user?.email)}</Text>
-          </View>
+              <ExampleCSVGalleryModal
+                visible={showExamplesModal}
+                onClose={() => setShowExamplesModal(false)}
+                onImportExample={db.importSpreadsheet}
+              />
+            </Section>
+
+            {/* ── Table Management ────────────────────────────── */}
+            <Section title="📋 Tabelas">
+              <Card>
+                {db.activeTables.length === 0 ? (
+                  <Text style={styles.emptyText}>Nenhuma tabela criada</Text>
+                ) : (
+                  db.activeTables.map((t, index) => {
+                    const isActive = t.id === db.activeTable?.id;
+                    const isEditing = t.id === editingTableId;
+
+                    return (
+                      <View key={t.id} style={[styles.tableRowContainer, isActive && styles.tableRowActive]}>
+                        {isEditing ? (
+                          <View style={styles.renameRow}>
+                            <TextInput
+                              style={styles.renameInput}
+                              value={renameValue}
+                              onChangeText={setRenameValue}
+                              autoFocus
+                            />
+                            <Pressable
+                              style={[styles.actionBtn, styles.saveBtn]}
+                              onPress={() => handleSaveRenameTable(t.id)}
+                            >
+                              <Text style={styles.actionBtnText}>✓</Text>
+                            </Pressable>
+                            <Pressable
+                              style={[styles.actionBtn, styles.cancelBtn]}
+                              onPress={() => setEditingTableId(null)}
+                            >
+                              <Text style={styles.actionBtnText}>✕</Text>
+                            </Pressable>
+                          </View>
+                        ) : (
+                          <View style={styles.tableCardContent}>
+                            <Pressable
+                              style={styles.tableSelectArea}
+                              onPress={() => db.setActiveTableIndex(index)}
+                            >
+                              <Text style={[styles.tableName, isActive && styles.tableNameActive]}>
+                                {isActive ? '● ' : '○ '}
+                                {t.name}
+                              </Text>
+                              <Text style={styles.tableRowCount}>{t.rows.length} entradas</Text>
+                            </Pressable>
+
+                            <View style={styles.cardActions}>
+                              {/* Reorder Up/Down */}
+                              <View style={styles.reorderGroup}>
+                                <Pressable
+                                  style={[styles.iconBtn, index === 0 && styles.disabledBtn]}
+                                  onPress={() => db.reorderTables(index, index - 1)}
+                                  disabled={index === 0}
+                                  accessibilityLabel="Mover para cima"
+                                >
+                                  <Text style={[styles.iconText, index === 0 && styles.disabledText]}>▲</Text>
+                                </Pressable>
+                                <Pressable
+                                  style={[styles.iconBtn, index === db.activeTables.length - 1 && styles.disabledBtn]}
+                                  onPress={() => db.reorderTables(index, index + 1)}
+                                  disabled={index === db.activeTables.length - 1}
+                                  accessibilityLabel="Mover para baixo"
+                                >
+                                  <Text style={[styles.iconText, index === db.activeTables.length - 1 && styles.disabledText]}>▼</Text>
+                                </Pressable>
+                              </View>
+
+                              <Pressable
+                                style={styles.iconBtn}
+                                onPress={() => handleStartRenameTable(t)}
+                                accessibilityLabel="Renomear"
+                              >
+                                <Text style={styles.iconText}>✏️</Text>
+                              </Pressable>
+                              <Pressable
+                                style={styles.iconBtn}
+                                onPress={() => handleDeleteTable(t)}
+                                accessibilityLabel="Excluir"
+                              >
+                                <Text style={[styles.iconText, styles.dangerText]}>🗑️</Text>
+                              </Pressable>
+                            </View>
+                          </View>
+                        )}
+                      </View>
+                    );
+                  })
+                )}
+
+                {/* Criar Nova Planilha form directly in Settings */}
+                <View style={styles.addTableSection}>
+                  <Text style={styles.addTableLabel}>Criar Nova Planilha</Text>
+                  <View style={styles.addTableInputRow}>
+                    <TextInput
+                      style={styles.addTableInput}
+                      value={newTableName}
+                      onChangeText={setNewTableName}
+                      placeholder="Nome da planilha..."
+                      placeholderTextColor={colors.text.disabled}
+                      onSubmitEditing={handleAddTable}
+                      returnKeyType="done"
+                    />
+                    <Pressable
+                      style={({ pressed }) => [
+                        styles.addTableBtn,
+                        pressed && styles.pressed,
+                      ]}
+                      onPress={handleAddTable}
+                    >
+                      <Text style={styles.addTableBtnText}>+ Criar</Text>
+                    </Pressable>
+                  </View>
+                </View>
+              </Card>
+            </Section>
+
+            {/* ── Migration Section ───────────────────────────── */}
+            {!isVisitor && (
+              <Section title="Migração de Dados">
+                <Card>
+                  <Text style={styles.migrationTitle}>📤 Migrar Planilhas Locais</Text>
+                  <Text style={styles.migrationText}>
+                    Você tem {db.tables.length} planilhas salvas na memória local. Você pode migrá-las e enviá-las para sua conta em nuvem agora.
+                  </Text>
+                  <Pressable
+                    style={({ pressed }) => [
+                      styles.migrationButton,
+                      isMigrating && styles.syncButtonDisabled,
+                      pressed && styles.pressed,
+                    ]}
+                    onPress={handleLocalMigration}
+                    disabled={isMigrating}
+                  >
+                    <Text style={styles.migrationButtonText}>
+                      {isMigrating ? '⏳ Migrando...' : '📤 Subir Planilhas Locais para a Nuvem'}
+                    </Text>
+                  </Pressable>
+                </Card>
+              </Section>
+            )}
+          </>
         )}
 
-        <Pressable
-          onPress={() => setShowDebugger(prev => !prev)}
-          style={{ alignSelf: 'center', marginVertical: spacing.md, opacity: 0.3 }}
-        >
-          <Text style={{ color: colors.text.tertiary, fontSize: 11, fontFamily: 'monospace' }}>
-            {showDebugger ? 'Hide Developer Tools 🐛' : '🐛 Modo Dev'}
-          </Text>
-        </Pressable>
+        {/* ════════════════════════════════════════════════════════════════════ */}
+        {/* STATION 3: METAS SEMANAIS & MÓDULOS SETORIAIS                      */}
+        {/* ════════════════════════════════════════════════════════════════════ */}
+        {(activeStation === 'goals_sectors' || activeStation === 'all') && (
+          <>
+            {/* ── Sector Configurations (AutoCAD Matrix at Center Top) ── */}
+            {db.activeTable && (
+              <Section title="📐 Matriz AutoCAD de Módulos / Setores">
+                <SectorSettingsPanel />
+              </Section>
+            )}
 
-        {/* ── Logout ─────────────────────────────────────── */}
-        {!isVisitor && (
-          <Pressable
-            style={({ pressed }) => [styles.logoutButton, pressed && styles.pressed]}
-            onPress={handleLogout}
-          >
-            <Text style={styles.logoutText}>Sair da Conta</Text>
-          </Pressable>
+            {/* ── Goals Accordion ─────────────────────────────── */}
+            {db.activeTable && (
+              <Section title="🎯 Metas Semanais">
+                <GoalsAccordion
+                  key={db.activeTable.id}
+                  goals={db.activeTable.goals}
+                  onUpdate={db.updateGoals}
+                />
+              </Section>
+            )}
+          </>
+        )}
+
+        {/* ════════════════════════════════════════════════════════════════════ */}
+        {/* STATION 4: INTEGRAÇÃO VIA API, SÍNTESE AI-ANALYST & AGENTES IA      */}
+        {/* ════════════════════════════════════════════════════════════════════ */}
+        {(activeStation === 'api_agents' || activeStation === 'all') && (
+          <>
+            {/* ── API Integration ─────────────────────────────── */}
+            {db.activeTable && (
+              <Section title="🔌 Integração via API (IA)">
+                <SpreadsheetApiSection 
+                  tableId={db.activeTable.id} 
+                  activeTable={db.activeTable}
+                  onShowStore={() => setShowStoreModal(true)} 
+                />
+              </Section>
+            )}
+          </>
+        )}
+
+        {/* ════════════════════════════════════════════════════════════════════ */}
+        {/* STATION 5: AUDITORIA & SINCRONISMO EM TEMPO REAL                   */}
+        {/* ════════════════════════════════════════════════════════════════════ */}
+        {(activeStation === 'sync_audit' || activeStation === 'all') && (
+          <>
+            {/* ── Real-Time Sync & Audit Panel ─────────────────── */}
+            <Section title="⚡ Auditoria & Sincronismo em Tempo Real">
+              <SyncAuditPanel />
+            </Section>
+          </>
         )}
 
         <View style={{ height: spacing.huge }} />
@@ -3165,6 +3246,8 @@ const GoalsAccordion = React.memo(function GoalsAccordion({
     });
   };
 
+  const [goalTab, setGoalTab] = useState<'global' | 'yearly' | 'monthly' | 'weekly'>('global');
+
   return (
     <Card>
       <Pressable
@@ -3172,7 +3255,7 @@ const GoalsAccordion = React.memo(function GoalsAccordion({
         onPress={() => setExpanded(!expanded)}
       >
         <Text style={styles.accordionTitle}>
-          {expanded ? '▼' : '▶'} Níveis de Metas
+          {expanded ? '▼' : '▶'} Calibrador AutoCAD de Metas
         </Text>
         <Text style={styles.accordionCount}>
           {weeklyOverrides.length} Sem. / {Object.keys(monthlyGoals).length} Mens. / {Object.keys(yearlyGoals).length} Anual
@@ -3181,176 +3264,184 @@ const GoalsAccordion = React.memo(function GoalsAccordion({
 
       {expanded && (
         <View style={styles.accordionBody}>
-          
-          {/* 1. WEEKLY GOALS OVERRIDES (Priority 1) */}
-          <View style={styles.goalSection}>
-            <Text style={styles.subSectionTitle}>🚀 Sobrescrita por Semana</Text>
-            <Text style={styles.sectionDesc}>Prioridade máxima. Substitui todas as metas para a semana específica (AAAA-WSS).</Text>
-            
-            {weeklyOverrides.map((item: { key: string; value: number }) => (
-              <View key={item.key} style={styles.goalRow}>
-                <Text style={[styles.goalYear, { width: 90 }]}>{item.key}</Text>
-                <Text style={styles.goalValue}>
-                  {formatCurrencySmart(item.value)} /sem
-                </Text>
+          {/* Barra de Botões Somente-Ícone para Níveis de Meta */}
+          <View style={{ flexDirection: 'row', gap: 8, justifyContent: 'center', paddingVertical: 4 }}>
+            {([
+              { id: 'global', icon: '🌍', title: 'Meta Global Padrão', desc: 'Usada como base geral quando não há meta específica de ano, mês ou semana.' },
+              { id: 'yearly', icon: '📅', title: 'Meta por Ano', desc: 'Substitui a meta global para todos os meses do ano escolhido.' },
+              { id: 'monthly', icon: '🗓️', title: 'Meta por Mês (AAAA-MM)', desc: 'Substitui a meta anual e global para um mês específico.' },
+              { id: 'weekly', icon: '🚀', title: 'Sprint Semanal (AAAA-WSS)', desc: 'Prioridade máxima. Define a meta exata de uma semana específica.' },
+            ] as const).map((gNode) => {
+              const active = goalTab === gNode.id;
+              return (
                 <Pressable
-                  onPress={() => handleDeleteWeekly(item.key)}
-                  style={styles.goalDelete}
+                  key={gNode.id}
+                  onPress={() => setGoalTab(gNode.id)}
+                  style={{
+                    width: 44,
+                    height: 40,
+                    borderRadius: radius.sm,
+                    borderWidth: 1.5,
+                    borderColor: active ? colors.accent.purple : colors.border.default,
+                    backgroundColor: active ? 'rgba(139, 92, 246, 0.22)' : colors.background.tertiary,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
                 >
-                  <Text style={styles.goalDeleteText}>✕</Text>
+                  <Text style={{ fontSize: 18 }}>{gNode.icon}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+
+          {goalTab === 'global' && (
+            <View style={styles.goalSection}>
+              <Text style={styles.subSectionTitle}>🌍 Meta Global (Padrão)</Text>
+              <Text style={styles.sectionDesc}>🧭 Define sua meta semanal base na ausência de metas anuais, mensais ou semanais.</Text>
+              <View style={styles.addGoalRow}>
+                <TextInput
+                  style={[styles.goalInput, { flex: 1 }]}
+                  value={globalWeekly}
+                  onChangeText={setGlobalWeekly}
+                  placeholder="Meta Semanal Global (R$)"
+                  placeholderTextColor={colors.text.disabled}
+                  keyboardType="decimal-pad"
+                />
+                <Pressable
+                  style={({ pressed }) => [styles.goalSaveBtn, pressed && styles.pressed]}
+                  onPress={handleSaveGlobal}
+                >
+                  <Text style={styles.goalAddBtnText}>Salvar</Text>
                 </Pressable>
               </View>
-            ))}
-
-            {/* Add new weekly override */}
-            <View style={styles.addGoalRow}>
-              <TextInput
-                style={[styles.goalInput, { flex: 0.4 }]}
-                value={newWeek}
-                onChangeText={setNewWeek}
-                placeholder="AAAA-WSS"
-                placeholderTextColor={colors.text.disabled}
-                keyboardType="numbers-and-punctuation"
-              />
-              <TextInput
-                style={[styles.goalInput, { flex: 0.6 }]}
-                value={newWeekWeekly}
-                onChangeText={setNewWeekWeekly}
-                placeholder="Meta semanal (R$)"
-                placeholderTextColor={colors.text.disabled}
-                keyboardType="decimal-pad"
-              />
-              <Pressable
-                style={({ pressed }) => [styles.goalAddBtn, pressed && styles.pressed]}
-                onPress={handleAddWeekly}
-              >
-                <Text style={styles.goalAddBtnText}>+</Text>
-              </Pressable>
             </View>
-          </View>
+          )}
 
-          <View style={styles.subSectionDivider} />
-
-          {/* 2. GLOBAL GOAL */}
-          <View style={styles.goalSection}>
-            <Text style={styles.subSectionTitle}>🌍 Meta Global (Padrão)</Text>
-            <Text style={styles.sectionDesc}>Usada como fallback geral na ausência de metas anuais ou mensais.</Text>
-            <View style={styles.addGoalRow}>
-              <TextInput
-                style={[styles.goalInput, { flex: 1 }]}
-                value={globalWeekly}
-                onChangeText={setGlobalWeekly}
-                placeholder="Meta Semanal Global (R$)"
-                placeholderTextColor={colors.text.disabled}
-                keyboardType="decimal-pad"
-              />
-              <Pressable
-                style={({ pressed }) => [styles.goalSaveBtn, pressed && styles.pressed]}
-                onPress={handleSaveGlobal}
-              >
-                <Text style={styles.goalAddBtnText}>Salvar</Text>
-              </Pressable>
-            </View>
-          </View>
-
-          <View style={styles.subSectionDivider} />
-
-          {/* 3. YEARLY GOALS */}
-          <View style={styles.goalSection}>
-            <Text style={styles.subSectionTitle}>📅 Sobrescrita por Ano</Text>
-            <Text style={styles.sectionDesc}>Substitui a meta global para todo o ano selecionado.</Text>
-            
-            {years.map((yr) => (
-              <View key={yr} style={styles.goalRow}>
-                <Text style={styles.goalYear}>{yr}</Text>
-                <Text style={styles.goalValue}>
-                  {formatCurrencySmart(yearlyGoals[yr].weeklyGoal)} /sem
-                </Text>
+          {goalTab === 'yearly' && (
+            <View style={styles.goalSection}>
+              <Text style={styles.subSectionTitle}>📅 Sobrescrita por Ano</Text>
+              <Text style={styles.sectionDesc}>🧭 Substitui a meta global para todo o ano selecionado.</Text>
+              {years.map((yr) => (
+                <View key={yr} style={styles.goalRow}>
+                  <Text style={styles.goalYear}>{yr}</Text>
+                  <Text style={styles.goalValue}>
+                    {formatCurrencySmart(yearlyGoals[yr].weeklyGoal)} /sem
+                  </Text>
+                  <Pressable onPress={() => handleDeleteYearly(yr)} style={styles.goalDelete}>
+                    <Text style={styles.goalDeleteText}>✕</Text>
+                  </Pressable>
+                </View>
+              ))}
+              <View style={styles.addGoalRow}>
+                <TextInput
+                  style={[styles.goalInput, { flex: 0.4 }]}
+                  value={newYear}
+                  onChangeText={setNewYear}
+                  placeholder="Ano"
+                  placeholderTextColor={colors.text.disabled}
+                  keyboardType="number-pad"
+                />
+                <TextInput
+                  style={[styles.goalInput, { flex: 0.6 }]}
+                  value={newYearWeekly}
+                  onChangeText={setNewYearWeekly}
+                  placeholder="Meta semanal (R$)"
+                  placeholderTextColor={colors.text.disabled}
+                  keyboardType="decimal-pad"
+                />
                 <Pressable
-                  onPress={() => handleDeleteYearly(yr)}
-                  style={styles.goalDelete}
+                  style={({ pressed }) => [styles.goalAddBtn, pressed && styles.pressed]}
+                  onPress={handleAddYearly}
                 >
-                  <Text style={styles.goalDeleteText}>✕</Text>
+                  <Text style={styles.goalAddBtnText}>+</Text>
                 </Pressable>
               </View>
-            ))}
-
-            {/* Add new yearly override */}
-            <View style={styles.addGoalRow}>
-              <TextInput
-                style={[styles.goalInput, { flex: 0.4 }]}
-                value={newYear}
-                onChangeText={setNewYear}
-                placeholder="Ano"
-                placeholderTextColor={colors.text.disabled}
-                keyboardType="number-pad"
-              />
-              <TextInput
-                style={[styles.goalInput, { flex: 0.6 }]}
-                value={newYearWeekly}
-                onChangeText={setNewYearWeekly}
-                placeholder="Meta semanal (R$)"
-                placeholderTextColor={colors.text.disabled}
-                keyboardType="decimal-pad"
-              />
-              <Pressable
-                style={({ pressed }) => [styles.goalAddBtn, pressed && styles.pressed]}
-                onPress={handleAddYearly}
-              >
-                <Text style={styles.goalAddBtnText}>+</Text>
-              </Pressable>
             </View>
-          </View>
+          )}
 
-          <View style={styles.subSectionDivider} />
-
-          {/* 4. MONTHLY GOALS */}
-          <View style={styles.goalSection}>
-            <Text style={styles.subSectionTitle}>🗓️ Sobrescrita por Mês</Text>
-            <Text style={styles.sectionDesc}>Substitui a meta anual e global para o mês específico (AAAA-MM).</Text>
-            
-            {months.map((monthKey) => (
-              <View key={monthKey} style={styles.goalRow}>
-                <Text style={[styles.goalYear, { width: 75 }]}>{monthKey}</Text>
-                <Text style={styles.goalValue}>
-                  {formatCurrencySmart(monthlyGoals[monthKey].weeklyGoal)} /sem
-                </Text>
+          {goalTab === 'monthly' && (
+            <View style={styles.goalSection}>
+              <Text style={styles.subSectionTitle}>🗓️ Sobrescrita por Mês</Text>
+              <Text style={styles.sectionDesc}>🧭 Substitui a meta anual e global para o mês específico (AAAA-MM).</Text>
+              {months.map((monthKey) => (
+                <View key={monthKey} style={styles.goalRow}>
+                  <Text style={[styles.goalYear, { width: 75 }]}>{monthKey}</Text>
+                  <Text style={styles.goalValue}>
+                    {formatCurrencySmart(monthlyGoals[monthKey].weeklyGoal)} /sem
+                  </Text>
+                  <Pressable onPress={() => handleDeleteMonthly(monthKey)} style={styles.goalDelete}>
+                    <Text style={styles.goalDeleteText}>✕</Text>
+                  </Pressable>
+                </View>
+              ))}
+              <View style={styles.addGoalRow}>
+                <TextInput
+                  style={[styles.goalInput, { flex: 0.4 }]}
+                  value={newMonth}
+                  onChangeText={setNewMonth}
+                  placeholder="AAAA-MM"
+                  placeholderTextColor={colors.text.disabled}
+                  keyboardType="numbers-and-punctuation"
+                />
+                <TextInput
+                  style={[styles.goalInput, { flex: 0.6 }]}
+                  value={newMonthWeekly}
+                  onChangeText={setNewMonthWeekly}
+                  placeholder="Meta semanal (R$)"
+                  placeholderTextColor={colors.text.disabled}
+                  keyboardType="decimal-pad"
+                />
                 <Pressable
-                  onPress={() => handleDeleteMonthly(monthKey)}
-                  style={styles.goalDelete}
+                  style={({ pressed }) => [styles.goalAddBtn, pressed && styles.pressed]}
+                  onPress={handleAddMonthly}
                 >
-                  <Text style={styles.goalDeleteText}>✕</Text>
+                  <Text style={styles.goalAddBtnText}>+</Text>
                 </Pressable>
               </View>
-            ))}
-
-            {/* Add new monthly override */}
-            <View style={styles.addGoalRow}>
-              <TextInput
-                style={[styles.goalInput, { flex: 0.4 }]}
-                value={newMonth}
-                onChangeText={setNewMonth}
-                placeholder="AAAA-MM"
-                placeholderTextColor={colors.text.disabled}
-                keyboardType="numbers-and-punctuation"
-              />
-              <TextInput
-                style={[styles.goalInput, { flex: 0.6 }]}
-                value={newMonthWeekly}
-                onChangeText={setNewMonthWeekly}
-                placeholder="Meta semanal (R$)"
-                placeholderTextColor={colors.text.disabled}
-                keyboardType="decimal-pad"
-              />
-              <Pressable
-                style={({ pressed }) => [styles.goalAddBtn, pressed && styles.pressed]}
-                onPress={handleAddMonthly}
-              >
-                <Text style={styles.goalAddBtnText}>+</Text>
-              </Pressable>
             </View>
-          </View>
+          )}
 
+          {goalTab === 'weekly' && (
+            <View style={styles.goalSection}>
+              <Text style={styles.subSectionTitle}>🚀 Sobrescrita por Semana</Text>
+              <Text style={styles.sectionDesc}>🧭 Prioridade máxima. Substitui todas as metas para a semana específica (AAAA-WSS).</Text>
+              {weeklyOverrides.map((item: { key: string; value: number }) => (
+                <View key={item.key} style={styles.goalRow}>
+                  <Text style={[styles.goalYear, { width: 90 }]}>{item.key}</Text>
+                  <Text style={styles.goalValue}>
+                    {formatCurrencySmart(item.value)} /sem
+                  </Text>
+                  <Pressable onPress={() => handleDeleteWeekly(item.key)} style={styles.goalDelete}>
+                    <Text style={styles.goalDeleteText}>✕</Text>
+                  </Pressable>
+                </View>
+              ))}
+              <View style={styles.addGoalRow}>
+                <TextInput
+                  style={[styles.goalInput, { flex: 0.4 }]}
+                  value={newWeek}
+                  onChangeText={setNewWeek}
+                  placeholder="AAAA-WSS"
+                  placeholderTextColor={colors.text.disabled}
+                  keyboardType="numbers-and-punctuation"
+                />
+                <TextInput
+                  style={[styles.goalInput, { flex: 0.6 }]}
+                  value={newWeekWeekly}
+                  onChangeText={setNewWeekWeekly}
+                  placeholder="Meta semanal (R$)"
+                  placeholderTextColor={colors.text.disabled}
+                  keyboardType="decimal-pad"
+                />
+                <Pressable
+                  style={({ pressed }) => [styles.goalAddBtn, pressed && styles.pressed]}
+                  onPress={handleAddWeekly}
+                >
+                  <Text style={styles.goalAddBtnText}>+</Text>
+                </Pressable>
+              </View>
+            </View>
+          )}
         </View>
       )}
     </Card>
@@ -3365,25 +3456,71 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background.primary,
   },
   header: {
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 8,
     borderBottomWidth: 1,
     borderBottomColor: colors.border.default,
   },
+  headerTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+  },
   title: {
-    ...typography.h2,
+    fontSize: 16,
+    fontWeight: '800',
     color: colors.text.primary,
-  } as any,
+  },
   subtitle: {
-    ...typography.bodySmall,
+    fontSize: 11,
     color: colors.text.tertiary,
-    marginTop: spacing.xxs,
-  } as any,
+  },
+
+  /* CAD Workbench Station Bar */
+  stationBarWrapper: {
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border.default,
+    backgroundColor: colors.background.secondary,
+  },
+  stationBarScroll: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 6,
+    gap: 6,
+  },
+  stationPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: radius.sm,
+    borderWidth: 1,
+    borderColor: colors.border.subtle,
+    backgroundColor: colors.background.tertiary,
+  },
+  stationPillActive: {
+    borderColor: colors.accent.purple,
+    backgroundColor: 'rgba(139, 92, 246, 0.2)',
+  },
+  stationPillIcon: {
+    fontSize: 12,
+  },
+  stationPillText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.text.secondary,
+  },
+  stationPillTextActive: {
+    color: '#fff',
+  },
 
   content: { flex: 1 },
   contentInner: {
-    padding: spacing.lg,
-    gap: spacing.xl,
+    padding: spacing.md,
+    gap: spacing.lg,
     maxWidth: 960,
     width: '100%',
     alignSelf: 'center',

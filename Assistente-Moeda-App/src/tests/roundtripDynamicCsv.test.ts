@@ -166,7 +166,7 @@ describe('Roundtrip Dynamic CSV & Backup v3 Fidelity', () => {
       description,
       goals,
       tableId,
-      'am_sheet_live_testkey_123',
+      'am_sheet_live_test_key_123',
       42,
       schema,
       investorProfile

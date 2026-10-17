@@ -68,6 +68,7 @@ export default function HojeScreen() {
   const [showAppBuilder, setShowAppBuilder] = useState(false);
   const [showExamplesModal, setShowExamplesModal] = useState(false);
   const [showLiveSynthesisModal, setShowLiveSynthesisModal] = useState(false);
+  const [healthSubTab, setHealthSubTab] = useState<'score' | 'pillars' | 'insights'>('score');
 
   useWebKeyboardShortcuts({
     onQuickAdd: () => setShowAddModal(true),
@@ -533,10 +534,46 @@ export default function HojeScreen() {
         );
       case 'health_pillars':
         return (
-          <View style={{ gap: spacing.md }}>
-            {renderWidgetById('health_score')}
-            {renderWidgetById('pillars')}
-            {renderWidgetById('insights')}
+          <View style={{ gap: spacing.sm }}>
+            <View style={{ flexDirection: 'row', gap: 6, marginBottom: 4 }}>
+              {([
+                { id: 'score', label: '🩺 Score & Resumo' },
+                { id: 'pillars', label: '🏛️ 4 Pilares' },
+                { id: 'insights', label: '💡 Insights' },
+              ] as const).map((tab) => {
+                const active = healthSubTab === tab.id;
+                return (
+                  <Pressable
+                    key={tab.id}
+                    style={{
+                      flex: 1,
+                      paddingVertical: 8,
+                      paddingHorizontal: 8,
+                      borderRadius: radius.md,
+                      alignItems: 'center',
+                      backgroundColor: active ? colors.accent.purpleLight : colors.background.primary,
+                      borderWidth: 1,
+                      borderColor: active ? colors.accent.purple : colors.border.default,
+                    }}
+                    onPress={() => setHealthSubTab(tab.id)}
+                    testID={`cad-health-subtab-${tab.id}`}
+                  >
+                    <Text
+                      style={{
+                        fontSize: 11,
+                        fontWeight: '800',
+                        color: active ? colors.accent.purple : colors.text.secondary,
+                      }}
+                    >
+                      {tab.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+            {healthSubTab === 'score' && renderWidgetById('health_score')}
+            {healthSubTab === 'pillars' && renderWidgetById('pillars')}
+            {healthSubTab === 'insights' && renderWidgetById('insights')}
           </View>
         );
       case 'investor_fire':
@@ -609,9 +646,12 @@ export default function HojeScreen() {
             healthLevelLabel={String(healthReport.level)}
             nextActionTitle={healthReport.nextBestAction?.title}
             nextActionDesc={healthReport.nextBestAction?.description}
+            nextActionType={healthReport.nextBestAction?.actionType}
             dashboardConfig={effectiveConfig}
             canUndo={db.canUndo}
             lastUndoDescription={db.lastUndoDescription}
+            isPrivacyMode={db.isPrivacyMode}
+            onTogglePrivacyMode={db.togglePrivacyMode}
             formatCurrency={(val) => formatCurrencySmart(val)}
             onUndo={() => db.undo()}
             onOpenAddModal={() => setShowAddModal(true)}
@@ -624,6 +664,7 @@ export default function HojeScreen() {
             onNavigateMetrics={() => router.push('/(app)/(tabs)/metrics' as any)}
             onNavigateSettings={() => router.push('/(app)/(tabs)/settings' as any)}
             onNavigateChat={() => router.push('/chat')}
+            onNextActionPress={handleNextActionPress}
             onUpdateDashboardConfig={db.updateDashboardConfig}
             renderToolContent={renderCadToolContent}
             onSwitchToClassicList={() => handleSetViewMode('cards')}

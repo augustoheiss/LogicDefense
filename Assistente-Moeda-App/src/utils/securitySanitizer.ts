@@ -131,3 +131,49 @@ export function sanitizeTransactionsForAI(
     customValues: undefined,
   }));
 }
+
+export const CLEAN_ROOM_MIGRATION_VERSION = 'app:clean_room_migration_v2';
+
+/**
+ * Versioned Clean-Room storage reset on boot.
+ * Purges legacy or unverified API key caches without embedding a PII blacklist in the client bundle.
+ */
+export function enforceCleanRoomStorageOnBoot(
+  storage?: Pick<Storage, 'getItem' | 'setItem' | 'removeItem' | 'key' | 'length'> | null
+): { migrated: boolean; purgedKeys: string[] } {
+  const targetStorage =
+    storage ?? (typeof window !== 'undefined' && window.localStorage ? window.localStorage : null);
+  if (!targetStorage) {
+    return { migrated: false, purgedKeys: [] };
+  }
+
+  try {
+    if (targetStorage.getItem(CLEAN_ROOM_MIGRATION_VERSION) === 'done') {
+      return { migrated: false, purgedKeys: [] };
+    }
+
+    const keysToScan: string[] = [];
+    for (let i = 0; i < targetStorage.length; i++) {
+      const k = targetStorage.key(i);
+      if (k) keysToScan.push(k);
+    }
+
+    const purgedKeys: string[] = [];
+    for (const key of keysToScan) {
+      if (key === 'coin_active_api_key' || key.startsWith('coin_api_key_')) {
+        const val = targetStorage.getItem(key) || '';
+        // Purge any legacy key that is not a valid local/synthetic/session key
+        if (val && !val.startsWith('am_sheet_live_local') && !val.startsWith('am_sheet_live_e2e_') && !val.startsWith('am_sheet_live_test_')) {
+          targetStorage.removeItem(key);
+          purgedKeys.push(key);
+        }
+      }
+    }
+
+    targetStorage.setItem(CLEAN_ROOM_MIGRATION_VERSION, 'done');
+    return { migrated: true, purgedKeys };
+  } catch {
+    return { migrated: false, purgedKeys: [] };
+  }
+}
+
