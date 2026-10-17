@@ -28,6 +28,7 @@ import { getMondayOf, toLocalKey, getWeeklyGoalForDate, resolveGoalForYear, getE
 import { generateNewApiKey, getApiStorageItem, setApiStorageItem } from './apiKeyService';
 import { getStoredLicenseKey } from '../storage/authService';
 import { serializeDynamicCSV, serializeGranularCSV } from '../core/dynamicCsvSerializer';
+import { escapeHtml, generateSecureLocalApiKey, redactApiKeyForExport } from '../utils/securitySanitizer';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -498,12 +499,15 @@ export function buildReportHTML(
   // Survival goals
   const survival = computeGlobalSurvivalGoals(rows, selectedMonth);
 
+  const safeTableName = escapeHtml(tableName);
+  const safeMonthName = escapeHtml(monthName);
+
   return `
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
-  <title>Relatório — ${tableName} — ${monthName}</title>
+  <title>Relatório — ${safeTableName} — ${safeMonthName}</title>
   <style>
     @page {
       size: A4;
@@ -723,11 +727,11 @@ export function buildReportHTML(
   <div class="header">
     <div>
       <div class="header-title-label">💰 Assistente Moeda — Relatório Financeiro</div>
-      <h1>${tableName}</h1>
+      <h1>${safeTableName}</h1>
     </div>
     <div class="header-meta">
       <div class="label">Referência</div>
-      <div class="value">${monthName}</div>
+      <div class="value">${safeMonthName}</div>
     </div>
   </div>
 
@@ -837,6 +841,7 @@ export function buildReportHTML(
           </tr>
         ` : monthRows.map((r) => {
           const type = r.entryType || 'revenue';
+          const safeTypeClass = escapeHtml(type);
           const isNeg = type === 'expense' || type === 'partner_out';
           const typeLabel =
             type === 'revenue' ? 'Receita' :
@@ -845,26 +850,26 @@ export function buildReportHTML(
             type === 'waiver' ? 'Abono' :
             type === 'partner_in' ? 'Sócio ↓' :
             type === 'partner_out' ? 'Sócio ↑' :
-            type === 'unresolved' ? '⚠️ Quarentena' : type;
+            type === 'unresolved' ? '⚠️ Quarentena' : escapeHtml(type);
 
           const customMetaHtml = r.customValues && Object.keys(r.customValues).length > 0
-            ? `<br><small style="color: #64748b; font-size: 9px;">${Object.entries(r.customValues).map(([k, v]) => `${k}: ${v}`).join(' · ')}</small>`
+            ? `<br><small style="color: #64748b; font-size: 9px;">${Object.entries(r.customValues).map(([k, v]) => `${escapeHtml(k)}: ${escapeHtml(v)}`).join(' · ')}</small>`
             : '';
           const investHtml = r.ticker
-            ? `<br><small style="color: #2563eb; font-size: 9px;">Ativo: ${r.ticker}${r.quantity ? ` (${r.quantity} un × ${fmtBRL(r.unitPrice || 0)})` : ''}</small>`
+            ? `<br><small style="color: #2563eb; font-size: 9px;">Ativo: ${escapeHtml(r.ticker)}${r.quantity ? ` (${escapeHtml(r.quantity)} un × ${fmtBRL(r.unitPrice || 0)})` : ''}</small>`
             : '';
           const catHtml = r.category && r.category !== 'Geral'
-            ? ` <small style="color: #64748b; font-size: 9px;">[${r.category}]</small>`
+            ? ` <small style="color: #64748b; font-size: 9px;">[${escapeHtml(r.category)}]</small>`
             : '';
 
           return `
             <tr>
-              <td class="monospace">${fmtDay(r.date)}</td>
-              <td><span class="badge badge-${type}">${typeLabel}</span></td>
+              <td class="monospace">${escapeHtml(fmtDay(r.date))}</td>
+              <td><span class="badge badge-${safeTypeClass}">${typeLabel}</span></td>
               <td>
-                ${r.description || 'Sem descrição'}${catHtml}
-                ${r.periodStart && r.periodEnd ? `<br><small style="color: #64748b; font-size: 9px;">Período: ${fmtDay(r.periodStart)} → ${fmtDay(r.periodEnd)}</small>` : ''}
-                ${r.monthlyValue && r.monthCount ? `<br><small style="color: #64748b; font-size: 9px;">Fator Mensal: ${fmtBRL(r.monthlyValue)} × ${r.monthCount} meses</small>` : ''}
+                ${escapeHtml(r.description || 'Sem descrição')}${catHtml}
+                ${r.periodStart && r.periodEnd ? `<br><small style="color: #64748b; font-size: 9px;">Período: ${escapeHtml(fmtDay(r.periodStart))} → ${escapeHtml(fmtDay(r.periodEnd))}</small>` : ''}
+                ${r.monthlyValue && r.monthCount ? `<br><small style="color: #64748b; font-size: 9px;">Fator Mensal: ${fmtBRL(r.monthlyValue)} × ${escapeHtml(r.monthCount)} meses</small>` : ''}
                 ${investHtml}
                 ${customMetaHtml}
               </td>
@@ -977,10 +982,7 @@ export async function sharePDFReport(
 // ── CSV Export ────────────────────────────────────────────────────────────────
 
 export function generateLocalApiKey(tableId?: string): string {
-  const cleanId = (tableId || 'default').replace(/[^a-zA-Z0-9]/g, '');
-  const rand = Math.random().toString(36).slice(2, 12) + Math.random().toString(36).slice(2, 12);
-  const hex = (cleanId + rand + Date.now().toString(16)).padEnd(48, '0').slice(0, 48);
-  return `am_sheet_live_${hex}`;
+  return generateSecureLocalApiKey(tableId);
 }
 
 export async function ensureApiKeyForTable(tableId: string): Promise<string> {
@@ -1037,12 +1039,14 @@ export function buildCSV(
   investorProfile?: InvestorProfileConfig,
   activeSectors?: string[],
   dashboardConfig?: DashboardConfig,
-  sectorParams?: SectorSimulationParams
+  sectorParams?: SectorSimulationParams,
+  includeSecretApiKey: boolean = false
 ): string {
-  let effectiveApiKey = apiKey;
-  if (!effectiveApiKey && tableId && typeof window !== 'undefined' && window.localStorage) {
-    effectiveApiKey = window.localStorage.getItem(`coin_api_key_${tableId}`) || window.localStorage.getItem('coin_active_api_key');
-  }
+  const explicitKeyProvided = typeof apiKey === 'string' && apiKey.trim().length > 0;
+  const effectiveApiKey = redactApiKeyForExport(
+    apiKey,
+    includeSecretApiKey || explicitKeyProvided
+  );
   return serializeDynamicCSV(
     rows,
     tableName,
@@ -1055,7 +1059,8 @@ export function buildCSV(
     investorProfile,
     activeSectors,
     dashboardConfig,
-    sectorParams
+    sectorParams,
+    includeSecretApiKey || explicitKeyProvided
   );
 }
 
@@ -1145,12 +1150,14 @@ export function buildGranularCSV(
   investorProfile?: InvestorProfileConfig,
   activeSectors?: string[],
   dashboardConfig?: DashboardConfig,
-  sectorParams?: SectorSimulationParams
+  sectorParams?: SectorSimulationParams,
+  includeSecretApiKey: boolean = false
 ): string {
-  let effectiveApiKey = apiKey;
-  if (!effectiveApiKey && tableId && typeof window !== 'undefined' && window.localStorage) {
-    effectiveApiKey = window.localStorage.getItem(`coin_api_key_${tableId}`) || window.localStorage.getItem('coin_active_api_key');
-  }
+  const explicitKeyProvided = typeof apiKey === 'string' && apiKey.trim().length > 0;
+  const effectiveApiKey = redactApiKeyForExport(
+    apiKey,
+    includeSecretApiKey || explicitKeyProvided
+  );
   return serializeGranularCSV(
     rows,
     options,
@@ -1426,8 +1433,8 @@ export function buildTabularAuditHTML(
     return `
       <tr>
         <td>
-          <div style="font-weight: 600; color: #0f172a;">Semana ${w.weekNumber} de ${weekYear}</div>
-          <div style="font-size: 10px; color: #64748b;">${w.weekLabel}</div>
+          <div style="font-weight: 600; color: #0f172a;">Semana ${escapeHtml(w.weekNumber)} de ${escapeHtml(weekYear)}</div>
+          <div style="font-size: 10px; color: #64748b;">${escapeHtml(w.weekLabel)}</div>
         </td>
         <td class="align-right monospace">${fmtBRL(w.weeklyGoal)}</td>
         <td class="align-right monospace">
@@ -1450,13 +1457,14 @@ export function buildTabularAuditHTML(
   const deltaTotalSign = totalDelta >= 0 ? '+' : '';
   const accumTotalSign = finalAccumulated >= 0 ? '+' : '';
   const partnerTotalSign = totalPartner > 0 ? '+' : '';
+  const safeAuditTableName = escapeHtml(tableName);
 
   return `
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
-  <title>Demonstrativo de Saldo Acumulado — ${tableName}</title>
+  <title>Demonstrativo de Saldo Acumulado — ${safeAuditTableName}</title>
   <style>
     @page {
       size: A4;
@@ -1586,8 +1594,8 @@ export function buildTabularAuditHTML(
   <div class="header">
     <div>
       <div class="header-title-label">Demonstrativo de Saldo Acumulado</div>
-      <h1>${tableName}</h1>
-      <div class="header-span">${spanText}</div>
+      <h1>${safeAuditTableName}</h1>
+      <div class="header-span">${escapeHtml(spanText)}</div>
     </div>
     <div class="header-meta">
       <div class="status-badge ${isSuperavit ? 'status-superavit' : 'status-inadimplencia'}">

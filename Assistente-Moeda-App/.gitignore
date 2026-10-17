@@ -51,7 +51,15 @@ example
 # Testes locais de QA (Contêm credenciais e tokens)
 backend/test_stripe_webhook.py
 test_web_subscription.js
+print_keys.js
 scripts/test_public_api.js
 scripts/push_july_data.py
 api_workspace/
 .api_workspace/
+playwright-report/
+test-results/
+final_page_error.png
+login_after_typing.png
+page_crash.png
+welcome_after_skip.png
+welcome_screen.png

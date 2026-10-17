@@ -53,7 +53,8 @@ import {
   GranularExportModal,
 } from '@/components/ui';
 import { useWebKeyboardShortcuts } from '@/hooks/useWebKeyboardShortcuts';
-import type { TableRow, DashboardWidgetId, WorkspacePresetType } from '@/core/types';
+import { CadWorkspaceShell } from '@/components/cad/CadWorkspaceShell';
+import type { TableRow, DashboardWidgetId, WorkspacePresetType, CadToolNodeId } from '@/core/types';
 
 export default function HojeScreen() {
   const router = useRouter();
@@ -437,9 +438,197 @@ export default function HojeScreen() {
     [effectiveConfig]
   );
 
+  // Instant local view mode state so toggling CAD <-> Classic List works even before a table is created
+  const [localViewMode, setLocalViewMode] = useState<'cad_canvas' | 'cards' | null>(null);
+  const currentViewMode = localViewMode ?? effectiveConfig.preferredViewMode;
+  const isCadMode = currentViewMode !== 'cards';
+
+  const handleSetViewMode = (mode: 'cad_canvas' | 'cards') => {
+    setLocalViewMode(mode);
+    db.updateDashboardConfig({
+      ...effectiveConfig,
+      preferredViewMode: mode,
+    });
+  };
+
+  const renderCadToolContent = (toolId: CadToolNodeId): React.ReactNode => {
+    switch (toolId) {
+      case 'quick_entry':
+        return (
+          <View style={{ gap: spacing.md }}>
+            <View style={{ flexDirection: 'row', gap: spacing.sm, flexWrap: 'wrap' }}>
+              <Pressable
+                style={[styles.emptyAddButton, { flex: 1, alignItems: 'center', paddingVertical: 12 }]}
+                onPress={() => setShowAddModal(true)}
+              >
+                <Text style={styles.emptyAddButtonText}>＋ Novo Lançamento Agora</Text>
+              </Pressable>
+              <Pressable
+                style={[
+                  styles.emptyAddButton,
+                  {
+                    flex: 1,
+                    alignItems: 'center',
+                    paddingVertical: 12,
+                    backgroundColor: colors.background.primary,
+                    borderWidth: 1,
+                    borderColor: colors.border.strong,
+                  },
+                ]}
+                onPress={() => router.push('/(app)/(tabs)/transactions' as any)}
+              >
+                <Text style={[styles.emptyAddButtonText, { color: colors.text.primary }]}>
+                  📋 Abrir Planilha Completa
+                </Text>
+              </Pressable>
+            </View>
+            {renderWidgetById('recent_activity')}
+          </View>
+        );
+      case 'mini_grid':
+        return (
+          <View style={{ gap: spacing.md }}>
+            {renderWidgetById('month_summary')}
+            {renderWidgetById('recent_activity')}
+          </View>
+        );
+      case 'what_if':
+        return renderWidgetById('what_if');
+      case 'goals_timebank':
+        return (
+          <View style={{ gap: spacing.md }}>
+            <View style={styles.summarySection}>
+              <View style={styles.summaryCard}>
+                <Text style={styles.summaryLabel}>Sobrevivência / Dia</Text>
+                <Text style={[styles.summaryValue, { color: '#C084FC' }]}>
+                  {formatCurrencySmart(db.metrics.survivalDaily)}
+                </Text>
+              </View>
+              <View style={styles.summaryCard}>
+                <Text style={styles.summaryLabel}>Sobrevivência / Semana</Text>
+                <Text style={[styles.summaryValue, { color: '#F59E0B' }]}>
+                  {formatCurrencySmart(db.metrics.survivalWeekly)}
+                </Text>
+              </View>
+              <View style={styles.summaryCard}>
+                <Text style={styles.summaryLabel}>Banco de Tempo</Text>
+                <Text
+                  style={[
+                    styles.summaryValue,
+                    { color: db.metrics.timeBankBalance >= 0 ? colors.success.main : colors.danger.main },
+                  ]}
+                >
+                  {db.metrics.timeBankBalance >= 0 ? '+' : ''}
+                  {db.metrics.timeBankBalance.toFixed(1)} sem.
+                </Text>
+              </View>
+            </View>
+            <Pressable
+              style={[styles.emptyAddButton, { alignSelf: 'flex-start' }]}
+              onPress={() => router.push('/(app)/(tabs)/metrics' as any)}
+            >
+              <Text style={styles.emptyAddButtonText}>🎯 Configurar Metas & Sprints ›</Text>
+            </Pressable>
+          </View>
+        );
+      case 'health_pillars':
+        return (
+          <View style={{ gap: spacing.md }}>
+            {renderWidgetById('health_score')}
+            {renderWidgetById('pillars')}
+            {renderWidgetById('insights')}
+          </View>
+        );
+      case 'investor_fire':
+        return renderWidgetById('investor_summary');
+      case 'sector_pfm':
+        return <PersonalFinanceSectorWidget />;
+      case 'sector_smb':
+        return <SMBSectorWidget />;
+      case 'sector_real_estate':
+        return <RealEstateSectorWidget />;
+      case 'sector_vehicles':
+        return <VehiclesSectorWidget />;
+      case 'sector_legal_taxes':
+        return <LegalTaxesSectorWidget />;
+      case 'export_import':
+        return (
+          <View style={{ gap: spacing.sm }}>
+            <Text style={styles.sectionTitle}>🔌 Central de Dados, Exportação & IA</Text>
+            <View style={styles.quickActionsGrid}>
+              <Pressable
+                style={styles.quickActionButton}
+                onPress={() => setShowLiveSynthesisModal(true)}
+                testID="cad-io-synthesis-btn"
+              >
+                <Text style={styles.quickActionIcon}>🧠</Text>
+                <Text style={styles.quickActionText}>Exportar Granular / Síntese IA</Text>
+              </Pressable>
+              <Pressable
+                style={styles.quickActionButton}
+                onPress={() => setShowExamplesModal(true)}
+                testID="cad-io-examples-btn"
+              >
+                <Text style={styles.quickActionIcon}>📚</Text>
+                <Text style={styles.quickActionText}>Importar Modelos CSV Prontos</Text>
+              </Pressable>
+              <Pressable
+                style={styles.quickActionButton}
+                onPress={() => router.push('/(app)/(tabs)/transactions' as any)}
+                testID="cad-io-spreadsheet-btn"
+              >
+                <Text style={styles.quickActionIcon}>📥</Text>
+                <Text style={styles.quickActionText}>Importar / Exportar na Planilha</Text>
+              </Pressable>
+              <Pressable
+                style={styles.quickActionButton}
+                onPress={() => setShowAppBuilder(true)}
+                testID="cad-io-builder-btn"
+              >
+                <Text style={styles.quickActionIcon}>🧩</Text>
+                <Text style={styles.quickActionText}>Perfis & Setores do App</Text>
+              </Pressable>
+            </View>
+          </View>
+        );
+      default:
+        return null;
+    }
+  };
+
   return (
     <ErrorBoundary fallbackTitle="Erro ao carregar Painel Hoje" componentName="HojeScreen">
       <View style={styles.container}>
+        {isCadMode ? (
+          <CadWorkspaceShell
+            tableName={db.activeTable?.name || 'Planilha Principal'}
+            rows={activeRows}
+            metrics={db.metrics}
+            goals={db.activeTable?.goals || { dailyGoals: {}, weeklyGoals: {}, annualCosts: {} }}
+            healthScore={healthReport.score}
+            healthLevelLabel={String(healthReport.level)}
+            nextActionTitle={healthReport.nextBestAction?.title}
+            nextActionDesc={healthReport.nextBestAction?.description}
+            dashboardConfig={effectiveConfig}
+            canUndo={db.canUndo}
+            lastUndoDescription={db.lastUndoDescription}
+            formatCurrency={(val) => formatCurrencySmart(val)}
+            onUndo={() => db.undo()}
+            onOpenAddModal={() => setShowAddModal(true)}
+            onOpenTableSwitcher={() => setShowTableSwitcher(true)}
+            onOpenAppBuilder={() => setShowAppBuilder(true)}
+            onOpenExamplesModal={() => setShowExamplesModal(true)}
+            onOpenLiveSynthesisModal={() => setShowLiveSynthesisModal(true)}
+            onNavigateTransactions={() => router.push('/(app)/(tabs)/transactions' as any)}
+            onNavigateCharts={() => router.push('/(app)/(tabs)/charts' as any)}
+            onNavigateMetrics={() => router.push('/(app)/(tabs)/metrics' as any)}
+            onNavigateSettings={() => router.push('/(app)/(tabs)/settings' as any)}
+            onNavigateChat={() => router.push('/chat')}
+            onUpdateDashboardConfig={db.updateDashboardConfig}
+            renderToolContent={renderCadToolContent}
+            onSwitchToClassicList={() => handleSetViewMode('cards')}
+          />
+        ) : (
         <ScrollView
           style={styles.scroll}
           contentContainerStyle={[styles.scrollContent, isDesktop && styles.scrollContentDesktop]}
@@ -463,6 +652,15 @@ export default function HojeScreen() {
             </View>
 
             <View style={styles.topHeaderActions}>
+              <Pressable
+                style={[styles.builderHeaderButton, { borderColor: colors.accent.purple, backgroundColor: 'rgba(168, 85, 247, 0.18)' }]}
+                onPress={() => handleSetViewMode('cad_canvas')}
+                testID="switch-to-cad-mode-btn"
+              >
+                <Text style={styles.builderButtonEmoji}>📐</Text>
+                <Text style={[styles.builderButtonText, { color: '#E9D5FF', fontWeight: '800' }]}>Modo CAD (Sem Rolagem)</Text>
+              </Pressable>
+
               <Pressable
                 style={[styles.builderHeaderButton, { borderColor: 'rgba(16, 185, 129, 0.55)', backgroundColor: 'rgba(16, 185, 129, 0.14)' }]}
                 onPress={() => setShowLiveSynthesisModal(true)}
@@ -570,19 +768,22 @@ export default function HojeScreen() {
           {/* Extra bottom padding for tab bar and FAB */}
           <View style={{ height: 80 }} />
         </ScrollView>
+        )}
 
-        {/* ── Thumb-Zone Quick Register FAB (Mobile & Street Ergonomics) ── */}
-        <View style={styles.homeFabContainer}>
-          <Pressable
-            style={({ pressed }) => [
-              styles.homeQuickAddFab,
-              pressed && { opacity: 0.85 },
-            ]}
-            onPress={() => setShowAddModal(true)}
-          >
-            <Text style={styles.homeQuickAddFabText}>＋ Registrar Gasto / Receita</Text>
-          </Pressable>
-        </View>
+        {/* ── Thumb-Zone Quick Register FAB (Classic List Mode only) ── */}
+        {!isCadMode && (
+          <View style={styles.homeFabContainer}>
+            <Pressable
+              style={({ pressed }) => [
+                styles.homeQuickAddFab,
+                pressed && { opacity: 0.85 },
+              ]}
+              onPress={() => setShowAddModal(true)}
+            >
+              <Text style={styles.homeQuickAddFabText}>＋ Registrar Gasto / Receita</Text>
+            </Pressable>
+          </View>
+        )}
 
         {/* ── Modals ── */}
         <AddRowModal

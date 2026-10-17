@@ -311,14 +311,30 @@ export type DashboardWidgetId =
   | 'recent_transactions'
   | 'sector_highlights';
 
+export type CadToolNodeId =
+  | 'quick_entry'
+  | 'mini_grid'
+  | 'what_if'
+  | 'goals_timebank'
+  | 'health_pillars'
+  | 'investor_fire'
+  | 'sector_pfm'
+  | 'sector_smb'
+  | 'sector_real_estate'
+  | 'sector_vehicles'
+  | 'sector_legal_taxes'
+  | 'export_import';
+
 export interface DashboardConfig {
   preset: WorkspacePresetType;
   visibleWidgets?: DashboardWidgetId[];
   hiddenWidgets: DashboardWidgetId[];
   widgetOrder: DashboardWidgetId[];
-  preferredViewMode?: 'auto' | 'cards' | 'spreadsheet';
+  preferredViewMode?: 'auto' | 'cards' | 'spreadsheet' | 'cad_canvas';
   compactStreetMode?: boolean;
   defaultTransactionView?: 'cards' | 'spreadsheet';
+  activeCadTool?: CadToolNodeId | null;
+  pinnedCadNodes?: CadToolNodeId[];
 }
 
 export type WorkspaceDashboardConfig = DashboardConfig;

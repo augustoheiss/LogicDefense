@@ -298,6 +298,8 @@ export function resolveEffectiveDashboardConfig(config?: DashboardConfig): Dashb
     widgetOrder: [...existingOrder, ...missingIds],
     hiddenWidgets: Array.isArray(config.hiddenWidgets) ? config.hiddenWidgets : [],
     preferredViewMode: config.preferredViewMode || 'auto',
+    activeCadTool: config.activeCadTool ?? null,
+    pinnedCadNodes: config.pinnedCadNodes,
   };
 }
 

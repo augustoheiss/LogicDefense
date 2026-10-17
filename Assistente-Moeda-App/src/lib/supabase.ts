@@ -30,12 +30,30 @@ function getStorage() {
     };
   }
 
-  // Importação lazy segura para o build de produção do Metro (iOS/Android)
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const AsyncStorageModule = require('@react-native-async-storage/async-storage');
+  if (typeof require === 'function') {
+    try {
+      // Importação lazy segura para o build de produção do Metro (iOS/Android)
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const AsyncStorageModule = require('@react-native-async-storage/async-storage');
+      return AsyncStorageModule.default || AsyncStorageModule;
+    } catch {
+      // Fallback below
+    }
+  }
 
-  // Se o módulo tiver .default (Babel), usa ele. Se não (Metro Prod), usa o módulo direto.
-  return AsyncStorageModule.default || AsyncStorageModule;
+  if (typeof window !== 'undefined' && window.localStorage) {
+    return {
+      getItem: async (key: string) => window.localStorage.getItem(key),
+      setItem: async (key: string, value: string) => window.localStorage.setItem(key, value),
+      removeItem: async (key: string) => window.localStorage.removeItem(key),
+    };
+  }
+
+  return {
+    getItem: async (_key: string) => null,
+    setItem: async (_key: string, _value: string) => { },
+    removeItem: async (_key: string) => { },
+  };
 }
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {

@@ -140,6 +140,7 @@ export function sanitizeRowsForAI(rows: TableRow[], allowRaw = false): TableRow[
 // ── API Call ──────────────────────────────────────────────────────────────────
 
 import { getStoredLicenseKey } from '../storage/authService';
+import { sanitizeTablesForAI, sanitizeTransactionsForAI } from '../utils/securitySanitizer';
 
 export async function sendChatMessage(
   message: string,
@@ -164,6 +165,8 @@ export async function sendChatMessage(
     }
 
     const sanitizedRows = sanitizeRowsForAI(rows, allowRawData);
+    const sanitizedTables = sanitizeTablesForAI(tables, allowRawData);
+    const sanitizedTransactions = sanitizeTransactionsForAI(transactions, allowRawData);
 
     const response = await fetch(`${API_URL}/api/coin/ai-analyst`, {
       method: 'POST',
@@ -175,8 +178,8 @@ export async function sendChatMessage(
         asOfDate: asOfDate || null,
         tableName,
         totalWaiverCredits,
-        tables: tables || [],
-        transactions: transactions || [],
+        tables: sanitizedTables,
+        transactions: sanitizedTransactions,
         userSettings: userSettings || null,
         privacyMode: allowRawData ? 'full_rows' : 'aggregated',
       }),

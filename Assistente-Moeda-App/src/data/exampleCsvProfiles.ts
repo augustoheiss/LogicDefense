@@ -1,5 +1,5 @@
-import { WorkspacePresetType, InvestorProfileType } from '../core/types';
-import { SectorId } from '../core/sectorRegistry';
+import type { WorkspacePresetType, InvestorProfileType } from '../core/types';
+import type { SectorId } from '../core/sectors/sectorRegistry';
 
 export interface ExampleCSVProfile {
   id: string;
