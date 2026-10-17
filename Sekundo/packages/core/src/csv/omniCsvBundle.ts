@@ -18,10 +18,16 @@
  */
 
 import type { FlatSkeletonEntry, NodeType } from '../skeleton/types';
-import type { ParticipantProfile } from '../roster/participantDirectory';
+import {
+  type ParticipantProfile,
+  normalizePersonKey,
+} from '../roster/participantDirectory';
 import {
   DEFAULT_PRIVILEGE_MATRIX_PARTICIPANTS,
+  createEmptyCapabilitiesMap,
   ensureParticipantPrivilegeMatrix,
+  getEffectiveCapabilityColumns,
+  resolveCapabilityKeyOrCustom,
 } from '../roster/privilegeRotationEngine';
 import {
   PROGRAMACAO_UNIT_NAME,
@@ -333,7 +339,7 @@ export function exportOmniCsvBundle(input?: Partial<SekundoOmniStateBundle>): st
       status_or_readiness: 'ready',
       capabilities_or_tags: 'yaml|pdf|4up|mm',
       contact_or_location: 'Estúdio Documental',
-      notes_or_payload: doc.sdocYaml,
+      notes_or_payload: String(doc.sdocYaml || '').replace(/\r?\n/g, '\\n'),
       _meta_json: JSON.stringify(doc),
     });
   }
@@ -354,7 +360,7 @@ export function exportOmniCsvBundle(input?: Partial<SekundoOmniStateBundle>): st
     status_or_readiness: 'active',
     capabilities_or_tags: 'hoje|compositor|yaml',
     contact_or_location: 'Cockpit Hoje',
-    notes_or_payload: hojeManifestYaml,
+    notes_or_payload: String(hojeManifestYaml || '').replace(/\r?\n/g, '\\n'),
     _meta_json: JSON.stringify({ kind: 'manifest', yaml: hojeManifestYaml }),
   });
 
@@ -411,6 +417,69 @@ export function exportOmniCsvBundle(input?: Partial<SekundoOmniStateBundle>): st
  * Demultiplexes an Omni-CSV string (or a single-engine / Schedule Hub CSV string)
  * back into a complete `SekundoOmniStateBundle`.
  */
+const STANDARD_OMNI_HEADER_SET = new Set<string>(OMNI_CSV_HEADERS as unknown as string[]);
+
+/**
+ * Parses a participant's exact privilege map from a CSV row.
+ * Guarantees that `capabilities_or_tags` (and any extra privilege columns in the CSV)
+ * is the Single Source of Truth — never reviving deselected privileges from `_meta_json`
+ * or `buildPresetCapabilities`.
+ */
+export function parseParticipantPrivilegesFromCsvRow(
+  row: Record<string, string>,
+  headers: string[] = [],
+  meta: Record<string, any> = {}
+): Record<string, boolean> {
+  const capMap: Record<string, boolean> = createEmptyCapabilitiesMap();
+  const hasCapabilitiesColumn =
+    headers.length === 0 ||
+    headers.includes('capabilities_or_tags') ||
+    'capabilities_or_tags' in row;
+
+  if (!hasCapabilitiesColumn && meta.capabilities && typeof meta.capabilities === 'object') {
+    Object.assign(capMap, meta.capabilities);
+  }
+
+  const rawCapCell = (row.capabilities_or_tags || row.privilegios || row.privileges || '').trim();
+  if (rawCapCell) {
+    const delimiter = rawCapCell.includes('|')
+      ? '|'
+      : rawCapCell.includes(';')
+      ? ';'
+      : ',';
+    const tokens = rawCapCell
+      .split(delimiter)
+      .map((s) => s.trim())
+      .filter(Boolean);
+
+    for (const token of tokens) {
+      const resolved = resolveCapabilityKeyOrCustom(token);
+      if (resolved.key) {
+        capMap[resolved.key] = resolved.enabled;
+      }
+    }
+  }
+
+  // Support extra privilege columns added directly in the spreadsheet
+  for (const h of headers) {
+    if (!h || STANDARD_OMNI_HEADER_SET.has(h)) continue;
+    const rawVal = (row[h] ?? '').trim();
+    if (!rawVal) continue;
+    const cleanHeader = h.replace(/^(priv|privilegio|cap|capability)\s*[:_-]\s*/i, '').trim();
+    if (!cleanHeader) continue;
+    const resolved = resolveCapabilityKeyOrCustom(`${cleanHeader}=${rawVal}`);
+    if (resolved.key) {
+      capMap[resolved.key] = resolved.enabled;
+    }
+  }
+
+  return capMap;
+}
+
+/**
+ * Demultiplexes an Omni-CSV string (or a single-engine / Schedule Hub CSV string)
+ * back into a complete `SekundoOmniStateBundle`.
+ */
 export function importOmniCsvBundle(csvText: string): SekundoOmniStateBundle {
   const { headers, rows } = parseRawOmniCsvTable(csvText);
 
@@ -453,14 +522,8 @@ export function importOmniCsvBundle(csvText: string): SekundoOmniStateBundle {
     if (kind === 'participant_privilege') {
       if (containerId) unitName = containerId;
       const [groupPart, tierPart] = (row.group_or_tier || 'Grupo 1|operador_base').split('|');
-      const activeCapList = (row.capabilities_or_tags || '')
-        .split('|')
-        .map((s) => s.trim())
-        .filter(Boolean);
-      const capMap: Record<string, boolean> = { ...(meta.capabilities || {}) };
-      for (const capKey of activeCapList) {
-        capMap[capKey] = true;
-      }
+      const capMap = parseParticipantPrivilegesFromCsvRow(row, headers, meta);
+
       const statusFlags = (row.status_or_readiness || '')
         .split('|')
         .map((s) => s.trim())
@@ -472,7 +535,13 @@ export function importOmniCsvBundle(csvText: string): SekundoOmniStateBundle {
           id: key || meta.id || `p-${participants.length + 1}`,
           name: title || primary || meta.name || `Participante ${participants.length + 1}`,
           groupTag: groupPart || meta.groupTag || 'Grupo 1',
-          profileCategory: (row._type === 'perfil_b' ? 'perfil_b' : 'perfil_a') as any,
+          profileCategory: (
+            row._type === 'perfil_b'
+              ? 'perfil_b'
+              : row._type === 'perfil_a'
+              ? 'perfil_a'
+              : meta.profileCategory || 'perfil_a'
+          ) as any,
           roleTier: (tierPart || meta.roleTier || 'operador_base') as any,
           statusFlags: statusFlags.length > 0 ? statusFlags : meta.statusFlags,
           capabilities: capMap,
@@ -483,13 +552,18 @@ export function importOmniCsvBundle(csvText: string): SekundoOmniStateBundle {
           lastAssignedIsoDate: row.date_or_cycle || meta.lastAssignedIsoDate || '',
           assignmentCount: parseInt(row.time_or_duration || '0', 10) || meta.assignmentCount || 0,
           lastPartnerId: secondary || meta.lastPartnerId || undefined,
+          preserveExplicitCapabilities: true,
         },
-        participants.length
+        participants.length,
+        { preserveExplicitCapabilities: true }
       );
       participants.push(profile);
     } else if (kind === 'hub_schedule_slot') {
       if (containerId) unitName = containerId;
-      const mergedMeta: Record<string, any> = { ...meta };
+      const mergedMeta: Record<string, any> = {
+        ...meta,
+        _enginePartition: 'roster_assignments',
+      };
       if (row.group_or_tier) mergedMeta.groupTag = row.group_or_tier;
       if (row.date_or_cycle) mergedMeta.sessionDate = row.date_or_cycle;
       if (row.time_or_duration) {
@@ -529,7 +603,10 @@ export function importOmniCsvBundle(csvText: string): SekundoOmniStateBundle {
       });
     } else if (kind === 'hub_territory_cycle') {
       if (containerId) unitName = containerId;
-      const mergedMeta: Record<string, any> = { ...meta };
+      const mergedMeta: Record<string, any> = {
+        ...meta,
+        _enginePartition: 'territory_logistics',
+      };
       if (primary) mergedMeta.workerName = primary;
       if (row.group_or_tier) mergedMeta.groupTag = row.group_or_tier;
       if (row.date_or_cycle) mergedMeta.assignedAt = row.date_or_cycle;
@@ -547,15 +624,20 @@ export function importOmniCsvBundle(csvText: string): SekundoOmniStateBundle {
         meta: mergedMeta,
       });
     } else if (kind === 'studio_document') {
+      const rawYaml = row.notes_or_payload
+        ? row.notes_or_payload.replace(/\\n/g, '\n')
+        : meta.sdocYaml || '';
       studioDocuments.push({
         id: key || containerId || `doc-${studioDocuments.length + 1}`,
         title: title || 'Documento SDOC',
         format: row.group_or_tier || 'A4-Portrait-mm',
-        sdocYaml: row.notes_or_payload || meta.sdocYaml || '',
+        sdocYaml: rawYaml,
       });
     } else if (kind === 'cockpit_hoje') {
       if (key === 'manifest' || containerId === 'sekundo.app.yaml') {
-        hojeManifestYaml = row.notes_or_payload || meta.yaml || DEFAULT_SEKUNDO_APP_YAML;
+        hojeManifestYaml = row.notes_or_payload
+          ? row.notes_or_payload.replace(/\\n/g, '\n')
+          : meta.yaml || DEFAULT_SEKUNDO_APP_YAML;
       } else {
         hojeRituals.push({
           id: key || `ritual-${hojeRituals.length + 1}`,
@@ -597,6 +679,19 @@ export function importOmniCsvBundle(csvText: string): SekundoOmniStateBundle {
     }
   }
 
+  // Synchronize all discovered custom capabilities across all imported participants
+  // so every participant has an explicit boolean (`true` or `false`) for every custom privilege
+  if (participants.length > 0) {
+    const allEffectiveCols = getEffectiveCapabilityColumns(participants);
+    for (const p of participants) {
+      const nextCaps: Record<string, boolean> = { ...(p.capabilities || {}) };
+      for (const col of allEffectiveCols) {
+        nextCaps[col.key] = Boolean(nextCaps[col.key]);
+      }
+      p.capabilities = nextCaps;
+    }
+  }
+
   return {
     unitName,
     participants:
@@ -617,6 +712,160 @@ export function importOmniCsvBundle(csvText: string): SekundoOmniStateBundle {
     hojeManifestYaml,
     hojeRituals,
   };
+}
+
+/**
+ * Builds a single partitioned `FlatSkeletonEntry[]` from a Multi-Engine Omni-CSV bundle
+ * so that a single imported Event Container holds both `roster_assignments` (Schedule)
+ * and `territory_logistics` (Territories) without key collisions.
+ */
+export function buildCombinedMultiEngineSkeleton(
+  bundle: Partial<SekundoOmniStateBundle>
+): FlatSkeletonEntry[] {
+  const schedulePart = (bundle.scheduleRegistry || []).map((entry) => ({
+    ...entry,
+    meta: {
+      ...(entry.meta || {}),
+      _enginePartition: 'roster_assignments',
+    },
+  }));
+
+  const territoryPart = (bundle.territoryRegistry || []).map((entry, idx) => {
+    const rawOrig = (entry.meta as any)?._originalKey || entry.key.replace(/^(T::|90-)/, '');
+    const numericSuffix = /^\d+(-\d+)*$/.test(rawOrig)
+      ? rawOrig
+      : String(idx + 1).padStart(2, '0');
+    const prefixedKey = `90-${numericSuffix}`;
+    return {
+      ...entry,
+      key: prefixedKey,
+      type: entry.type || 'territory',
+      meta: {
+        ...(entry.meta || {}),
+        _enginePartition: 'territory_logistics',
+        _originalKey: rawOrig,
+      },
+    };
+  });
+
+  return [...schedulePart, ...territoryPart];
+}
+
+/**
+ * Selects only the `FlatSkeletonEntry[]` belonging to a target Engine partition
+ * (`'territory_logistics'` or `'roster_assignments'`).
+ * Prevents Territory views from rendering meeting blocks as streets/houses and
+ * prevents Schedule views from rendering territory blocks as meeting parts.
+ */
+export function selectEnginePartitionNodes(
+  registry: FlatSkeletonEntry[],
+  engineId: 'territory_logistics' | 'roster_assignments' | string
+): FlatSkeletonEntry[] {
+  if (!Array.isArray(registry) || registry.length === 0) return [];
+
+  if (engineId === 'territory_logistics') {
+    const partitionedTerritoryNodes = registry.filter((e) => {
+      const meta = (e.meta || {}) as Record<string, any>;
+      return (
+        meta._enginePartition === 'territory_logistics' ||
+        e.key.startsWith('90-') ||
+        e.key.startsWith('T::')
+      );
+    });
+
+    if (partitionedTerritoryNodes.length > 0) {
+      return partitionedTerritoryNodes.map((e) => {
+        const meta = { ...(e.meta || {}) } as Record<string, any>;
+        const cleanKey = meta._originalKey || e.key.replace(/^(T::|90-)/, '');
+        return {
+          ...e,
+          key: cleanKey,
+          meta,
+        };
+      });
+    }
+
+    const nonScheduleNodes = registry.filter((e) => {
+      const meta = (e.meta || {}) as Record<string, any>;
+      return meta._enginePartition !== 'roster_assignments';
+    });
+
+    const hasTerritoryLeafOrPolygon = nonScheduleNodes.some((e) => {
+      const meta = (e.meta || {}) as Record<string, any>;
+      return (
+        e.type === 'territory' ||
+        Boolean(meta.boundary_polygon) ||
+        Boolean(meta.territory_number)
+      );
+    });
+
+    if (hasTerritoryLeafOrPolygon) {
+      return nonScheduleNodes;
+    }
+
+    // Check if the unpartitioned registry actually consists of Schedule/Meeting nodes
+    const looksLikeSchedule = nonScheduleNodes.some((e) => {
+      const meta = (e.meta || {}) as Record<string, any>;
+      return (
+        Boolean(meta.chairPerson) ||
+        Boolean(meta.openingPrayer) ||
+        Boolean(meta.sessionDate) ||
+        /BLOCO\s+[123]\s+—|SEMANA\s+\d+/i.test(e.label || '')
+      );
+    });
+
+    if (looksLikeSchedule) {
+      return [];
+    }
+
+    return nonScheduleNodes;
+  }
+
+  if (engineId === 'roster_assignments') {
+    const filtered = registry.filter((e) => {
+      const meta = (e.meta || {}) as Record<string, any>;
+      if (meta._enginePartition === 'territory_logistics') return false;
+      if (e.key.startsWith('90-') || e.key.startsWith('T::')) return false;
+      if (e.type === 'territory') return false;
+      return true;
+    });
+    return filtered;
+  }
+
+  return registry;
+}
+
+/**
+ * Automatically derives all active Engine IDs contained in an imported `SekundoOmniStateBundle`.
+ */
+export function deriveActiveEnginesFromOmniBundle(
+  bundle: Partial<SekundoOmniStateBundle>
+): string[] {
+  const engines = new Set<string>();
+  if ((bundle.scheduleRegistry?.length || 0) > 0 || (bundle.participants?.length || 0) > 0) {
+    engines.add('roster_assignments');
+  }
+  if ((bundle.territoryRegistry?.length || 0) > 0) {
+    engines.add('territory_logistics');
+  }
+  for (const ev of bundle.events || []) {
+    for (const eng of ev.engines || []) {
+      if (eng && eng.trim()) {
+        engines.add(eng.trim());
+      }
+    }
+  }
+  if ((bundle.studioDocuments?.length || 0) > 0) {
+    engines.add('DocumentEngine');
+  }
+  if ((bundle.hojeRituals?.length || 0) > 0) {
+    engines.add('action_tracker');
+  }
+  if (engines.size === 0) {
+    engines.add('roster_assignments');
+    engines.add('territory_logistics');
+  }
+  return Array.from(engines);
 }
 
 /**

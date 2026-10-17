@@ -37,7 +37,8 @@ export type CapabilityDomainId =
   | 'bloco_analitico'
   | 'bloco_praticas_duplas'
   | 'bloco_operacional_sintese'
-  | 'logistica_plenaria_campo';
+  | 'logistica_plenaria_campo'
+  | 'custom_csv';
 
 export type CapabilityKey =
   // Domain 1: Coordenação & Abertura (2)
@@ -70,7 +71,9 @@ export type CapabilityKey =
   | 'cap_plenaria_condutor'
   | 'cap_plenaria_leitor'
   | 'cap_lider_equipe_campo'
-  | 'cap_manutencao_instalacoes';
+  | 'cap_manutencao_instalacoes'
+  // Domain 6: Dynamic CSV / Custom Privileges
+  | (string & {});
 
 export interface CapabilityColumnMeta {
   key: CapabilityKey;
@@ -79,6 +82,7 @@ export interface CapabilityColumnMeta {
   domainId: CapabilityDomainId;
   domainLabel: string;
   accentColor: string;
+  isCustom?: boolean;
 }
 
 export const CAPABILITY_COLUMNS: CapabilityColumnMeta[] = [
@@ -468,12 +472,170 @@ export function deriveSummaryTagsFromCapabilities(
 }
 
 /**
- * Ensures any ParticipantProfile has a complete 26-key `capabilities` matrix,
- * `profileCategory`, `roleTier`, and `statusFlags` populated.
+ * Resolves any raw privilege string from a CSV spreadsheet (either a canonical `cap_*` key,
+ * a localized label like "Presidência" / "Microfones" / "Leitura", or an arbitrary user-created
+ * privilege like "Privilegio_Custom_Audio_HD" or "Som Volante") into a canonical or custom key.
+ * Also supports explicit boolean assignment syntax (`Privilegio=0`, `Privilegio=nao`, `!Privilegio`).
+ */
+export function resolveCapabilityKeyOrCustom(rawToken: string): {
+  key: CapabilityKey;
+  enabled: boolean;
+  isCustom: boolean;
+  label: string;
+} {
+  let clean = (rawToken || '').trim();
+  if (!clean) {
+    return { key: '', enabled: false, isCustom: false, label: '' };
+  }
+
+  let enabled = true;
+  if (clean.startsWith('!') || clean.startsWith('-')) {
+    enabled = false;
+    clean = clean.slice(1).trim();
+  } else {
+    const eqMatch = clean.match(/^(.+?)\s*[=:]\s*(.+)$/);
+    if (eqMatch) {
+      clean = eqMatch[1].trim();
+      const valNorm = normalizePersonKey(eqMatch[2]);
+      if (
+        valNorm === '0' ||
+        valNorm === 'false' ||
+        valNorm === 'nao' ||
+        valNorm === 'n' ||
+        valNorm === 'inativo' ||
+        valNorm === 'no' ||
+        valNorm === 'off'
+      ) {
+        enabled = false;
+      } else {
+        enabled = true;
+      }
+    }
+  }
+
+  // 1. Direct match by canonical key
+  const direct = CAPABILITY_COLUMNS.find((c) => c.key.toLowerCase() === clean.toLowerCase());
+  if (direct) {
+    return {
+      key: direct.key,
+      enabled,
+      isCustom: false,
+      label: direct.shortLabel,
+    };
+  }
+
+  // 2. Match by normalized shortLabel or fullLabel (only when not a custom identifier with underscores)
+  const normToken = normalizePersonKey(clean);
+  if (normToken && !clean.includes('_')) {
+    const byLabel = CAPABILITY_COLUMNS.find(
+      (c) =>
+        normalizePersonKey(c.shortLabel) === normToken ||
+        normalizePersonKey(c.fullLabel) === normToken
+    );
+    if (byLabel) {
+      return {
+        key: byLabel.key,
+        enabled,
+        isCustom: false,
+        label: byLabel.shortLabel,
+      };
+    }
+  }
+
+  // 3. Arbitrary custom privilege defined by the user in the CSV spreadsheet
+  const sanitizedKey = clean.replace(/^[=+@]+/, '').trim();
+  const forbiddenProtoKeys = new Set([
+    '__proto__',
+    'constructor',
+    'prototype',
+    'tostring',
+    'valueof',
+    'hasownproperty',
+  ]);
+  if (!sanitizedKey || forbiddenProtoKeys.has(sanitizedKey.toLowerCase())) {
+    return null;
+  }
+
+  return {
+    key: sanitizedKey,
+    enabled,
+    isCustom: true,
+    label: sanitizedKey,
+  };
+}
+
+/**
+ * Returns the 26 standard `CAPABILITY_COLUMNS` plus any dynamic/custom privilege columns
+ * discovered across the participants' `capabilities` maps (Domain 6: `custom_csv`).
+ */
+export function getEffectiveCapabilityColumns(
+  participants: ParticipantProfile[] = [],
+  extraCustomKeys: string[] = []
+): CapabilityColumnMeta[] {
+  const builtinKeySet = new Set<string>(CAPABILITY_COLUMNS.map((c) => c.key));
+  const forbiddenProtoKeys = new Set([
+    '__proto__',
+    'constructor',
+    'prototype',
+    'tostring',
+    'valueof',
+    'hasownproperty',
+  ]);
+  const discoveredCustomKeys = new Set<string>();
+
+  for (const k of extraCustomKeys) {
+    const trimmed = (k || '').trim();
+    if (
+      trimmed &&
+      !builtinKeySet.has(trimmed) &&
+      !forbiddenProtoKeys.has(trimmed.toLowerCase())
+    ) {
+      discoveredCustomKeys.add(trimmed);
+    }
+  }
+
+  for (const p of participants) {
+    if (!p || !p.capabilities) continue;
+    for (const k of Object.keys(p.capabilities)) {
+      const trimmed = (k || '').trim();
+      if (
+        trimmed &&
+        !builtinKeySet.has(trimmed) &&
+        !forbiddenProtoKeys.has(trimmed.toLowerCase())
+      ) {
+        discoveredCustomKeys.add(trimmed);
+      }
+    }
+  }
+
+  const customColumns: CapabilityColumnMeta[] = Array.from(discoveredCustomKeys).map((customKey) => ({
+    key: customKey,
+    shortLabel: customKey,
+    fullLabel: `Privilégio da Planilha: ${customKey}`,
+    domainId: 'custom_csv',
+    domainLabel: 'Planilha / Customizados',
+    accentColor: '#EC4899',
+    isCustom: true,
+  }));
+
+  return [...CAPABILITY_COLUMNS, ...customColumns];
+}
+
+export const discoverDynamicCapabilityColumns = getEffectiveCapabilityColumns;
+export const discoverDynamicPrivilegeCatalog = getEffectiveCapabilityColumns;
+
+/**
+ * Ensures any ParticipantProfile has a complete 26-key `capabilities` matrix
+ * (plus any custom CSV privileges), `profileCategory`, `roleTier`, and `statusFlags` populated.
+ *
+ * When `profile.preserveExplicitCapabilities` or `options.preserveExplicitCapabilities` is true,
+ * NEVER injects `buildPresetCapabilities(...)` — only the privileges explicitly marked `true`
+ * in `profile.capabilities` remain `true`, and all other standard privileges are `false`.
  */
 export function ensureParticipantPrivilegeMatrix(
   profile: ParticipantProfile,
-  index: number = 0
+  index: number = 0,
+  options?: { preserveExplicitCapabilities?: boolean }
 ): ParticipantProfile {
   const hasCoord = profile.capabilityTags?.includes('Coordenação');
   const hasApresentador = profile.capabilityTags?.includes('Apresentador');
@@ -491,9 +653,16 @@ export function ensureParticipantPrivilegeMatrix(
       ? 'assistente_tecnico'
       : 'operador_base');
 
-  const preset = buildPresetCapabilities(inferredCategory, inferredTier, index);
+  const preserveExplicit =
+    Boolean(profile.preserveExplicitCapabilities) ||
+    Boolean(options?.preserveExplicitCapabilities);
+
+  const baseCaps = preserveExplicit
+    ? createEmptyCapabilitiesMap()
+    : buildPresetCapabilities(inferredCategory, inferredTier, index);
+
   const mergedCaps: Record<string, boolean> = {
-    ...preset,
+    ...baseCaps,
     ...(profile.capabilities || {}),
   };
 
@@ -507,7 +676,19 @@ export function ensureParticipantPrivilegeMatrix(
       : ['em_qualificacao'];
 
   const updatedTags = deriveSummaryTagsFromCapabilities(mergedCaps, inferredTier);
-  const mergedTags = Array.from(new Set([...(profile.capabilityTags || []), ...updatedTags]));
+  // Also include any active custom privilege keys in capabilityTags for easy visibility
+  const builtinKeySet = new Set<string>(ALL_CAPABILITY_KEYS);
+  const customActiveTags = Object.entries(mergedCaps)
+    .filter(([k, v]) => Boolean(v) && !builtinKeySet.has(k))
+    .map(([k]) => k);
+
+  const mergedTags = Array.from(
+    new Set([
+      ...(preserveExplicit ? [] : profile.capabilityTags || []),
+      ...updatedTags,
+      ...customActiveTags,
+    ])
+  );
 
   return {
     ...profile,
@@ -519,6 +700,7 @@ export function ensureParticipantPrivilegeMatrix(
     assignmentCount: profile.assignmentCount ?? 0,
     lastAssignedIsoDate: profile.lastAssignedIsoDate ?? '',
     active: profile.active ?? true,
+    preserveExplicitCapabilities: preserveExplicit || profile.preserveExplicitCapabilities,
   };
 }
 

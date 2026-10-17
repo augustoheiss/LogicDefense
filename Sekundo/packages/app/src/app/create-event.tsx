@@ -1,16 +1,12 @@
 /**
  * Page: create-event
  *
- * Sekundo — AutoCAD-Style Event & Engine Station (`100dvh`, Zero Vertical Roll-Down).
+ * Sekundo — AutoCAD Icon-Only Event & Multi-Engine Station (`100dvh`, Zero Roll-Down).
  *
  * Features:
- * - Compact CAD Button Grid for all 9 Universal Engines (clicking any button toggles it
- *   and displays its description + per-Engine sample `.csv` download in the Inspector).
- * - Direct Download & Import of the **CSV GERAL de todo o App (`sekundo_omni_geral.csv`)**
- *   covering all 9 Engines + 📅 Programação & WhatsApp + 🖋️ Estúdio Documental YAML ⇄ PDF
- *   + ☀️ Cockpit Hoje + 🛡️ Matriz de Privilégios.
- * - Automated Fair-Rotation Assignment (`⚡ Auto-Preencher com Privilégios & Rotatividade`)
- *   when creating a schedule/roster event (zero same-day collisions, FIFO rotation).
+ * - Compact Icon Grid (`58x54px`) for all Universal Engines (click to toggle & inspect)
+ * - Direct Download & Import of the **CSV GERAL (`sekundo_omni_geral.csv`)** via `omniStorageBridge`
+ * - Zero clipped controls on Mobile (`390x844`) and minimal static text
  */
 
 import React, { useState } from 'react';
@@ -37,24 +33,53 @@ import {
   generateOmniMasterSampleCsv,
   importOmniCsvBundle,
   buildProgramacaoReuniaoRegistry,
-  DEFAULT_PRIVILEGE_MATRIX_PARTICIPANTS,
+  buildTerritoriosS13HistoricalRegistry,
+  buildCombinedMultiEngineSkeleton,
   autoAssignScheduleRegistry,
   type Frequency,
   type EngineId,
 } from '@sekundo/core';
+import {
+  commitOmniCsvBundleToStorage,
+  exportFullSiteOmniCsvFromStorage,
+  loadSavedPrivilegeParticipants,
+  savePrivilegeParticipants,
+  saveScheduleRegistry,
+  saveTerritoryRegistry,
+} from '../storage/omniStorageBridge';
+import { deliverFile } from '../utils/deliverFile';
+
+const ENGINE_ICONS: Record<string, string> = {
+  territory_logistics: '🗺️',
+  roster_assignments: '📅',
+  study_synthesis: '📖',
+  financial_ledger: '💰',
+  inventory_assets: '📦',
+  action_tracker: '✅',
+  live_production_ros: '⏱️',
+  incident_command: '🚨',
+  tournament_pairings: '🏆',
+  CheckInEngine: '🚪',
+  DocumentEngine: '🖋️',
+  custom: '🎛️',
+};
 
 export default function CreateEvent() {
   const router = useRouter();
   const { width } = useWindowDimensions();
   const isDesktop = width >= 860;
-  const { addEvent } = useLocalEvent();
+  const { addEvent, refreshEvents } = useLocalEvent();
 
   const [name, setName] = useState('');
   const [frequency, setFrequency] = useState<Frequency>('weekly');
-  const [selectedEngines, setSelectedEngines] = useState<EngineId[]>(['roster_assignments']);
+  const [selectedEngines, setSelectedEngines] = useState<EngineId[]>([
+    'roster_assignments',
+    'territory_logistics',
+  ]);
   const [inspectedEngineId, setInspectedEngineId] = useState<EngineId>('roster_assignments');
   const [autoFillWithPrivileges, setAutoFillWithPrivileges] = useState<boolean>(true);
   const [strictSameCategoryPairing, setStrictSameCategoryPairing] = useState<boolean>(true);
+  const [showInfoBox, setShowInfoBox] = useState<boolean>(false);
 
   const [autoDetectNotice, setAutoDetectNotice] = useState<string | null>(null);
   const [uploadedCsvText, setUploadedCsvText] = useState<string | null>(null);
@@ -77,37 +102,27 @@ export default function CreateEvent() {
     }
   };
 
-  // Download specific Engine sample CSV
-  const handleDownloadEngineSampleCsv = (engineId: EngineId) => {
-    if (Platform.OS === 'web' && typeof document !== 'undefined') {
-      const tpl = getEngineTemplate(engineId);
-      const csv = exportTemplateCSV(engineId, 'canonical');
-      const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = tpl.suggestedFilename || `exemplo_${engineId}.csv`;
-      a.click();
-      URL.revokeObjectURL(url);
-      setAutoDetectNotice(`📥 Exemplo CSV da Engine "${tpl.name}" baixado!`);
-    }
+  const handleDownloadEngineSampleCsv = async (engineId: EngineId) => {
+    const tpl = getEngineTemplate(engineId);
+    const csv = exportTemplateCSV(engineId, 'canonical');
+    await deliverFile(
+      csv,
+      tpl.suggestedFilename || `exemplo_${engineId}.csv`,
+      'text/csv;charset=utf-8'
+    );
+    setAutoDetectNotice(`📥 Exemplo "${tpl.name}" baixado!`);
   };
 
-  // Download Unified Master CSV ("CSV GERAL de todo o App")
-  const handleDownloadOmniMasterCsv = () => {
-    if (Platform.OS === 'web' && typeof document !== 'undefined') {
-      const csv = generateOmniMasterSampleCsv();
-      const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'sekundo_omni_geral.csv';
-      a.click();
-      URL.revokeObjectURL(url);
-      setAutoDetectNotice(
-        '🌐 CSV GERAL do App Sekundo baixado (inclui 9 Engines + Programação/WhatsApp + Estúdio YAML/PDF + Hoje + Matriz de Privilégios)!'
-      );
-    }
+  const handleDownloadSavedOmniCsv = async () => {
+    const csv = await exportFullSiteOmniCsvFromStorage();
+    await deliverFile(csv, 'sekundo_omni_geral.csv', 'text/csv;charset=utf-8');
+    setAutoDetectNotice('🌐 CSV Geral (Estado Salvo no Site) baixado!');
+  };
+
+  const handleDownloadSampleOmniCsv = async () => {
+    const csv = generateOmniMasterSampleCsv();
+    await deliverFile(csv, 'sekundo_omni_exemplo.csv', 'text/csv;charset=utf-8');
+    setAutoDetectNotice('🧪 CSV Geral de Exemplo baixado!');
   };
 
   const handlePickCsvFile = () => {
@@ -124,9 +139,9 @@ export default function CreateEvent() {
 
         if (text.trim().startsWith('_record_kind,')) {
           const bundle = importOmniCsvBundle(text);
-          if (!name.trim()) setName(`${bundle.unitName} — Pacote Omni CSV`);
+          if (!name.trim()) setName(`${bundle.unitName} — Multi-Engine`);
           setAutoDetectNotice(
-            `🌐 CSV GERAL "${file.name}" reconhecido (${bundle.participants.length} participantes, ${bundle.scheduleRegistry.length} itens de programação, ${bundle.territoryRegistry.length} territórios, ${bundle.events.length} eventos)!`
+            `🌐 "${file.name}": ${bundle.participants.length} 👤 • ${bundle.scheduleRegistry.length} 📅 • ${bundle.territoryRegistry.length} 🗺️`
           );
           setValidationError(null);
           return;
@@ -141,7 +156,7 @@ export default function CreateEvent() {
           const cleanName = file.name.replace(/\.[^/.]+$/, '').replace(/[_-]/g, ' ');
           setName(cleanName.charAt(0).toUpperCase() + cleanName.slice(1));
         }
-        setAutoDetectNotice(`✅ CSV "${file.name}" carregado! ${report.summary}`);
+        setAutoDetectNotice(`✅ CSV "${file.name}" pronto!`);
         setValidationError(null);
       };
       input.click();
@@ -162,17 +177,11 @@ export default function CreateEvent() {
 
     // 1. Check if uploaded CSV is an Omni-CSV Bundle
     if (uploadedCsvText && uploadedCsvText.trim().startsWith('_record_kind,')) {
-      const bundle = importOmniCsvBundle(uploadedCsvText);
-      if (Platform.OS === 'web' && typeof window !== 'undefined') {
-        window.localStorage.setItem('sekundo:loaded_schedule_bundle_v1', uploadedCsvText);
-        window.localStorage.setItem(
-          'sekundo:privilege_directory_v1',
-          JSON.stringify(bundle.participants)
-        );
-      }
-      const state = await addEvent(finalName, frequency, ['01', '02', '03'], selectedEngines);
-      await storage.saveSkeleton(state.config.id, bundle.scheduleRegistry);
-      router.replace(`/schedule-hub?id=${state.config.id}` as any);
+      const { primaryEventId } = await commitOmniCsvBundleToStorage(uploadedCsvText, {
+        customEventName: finalName,
+      });
+      await refreshEvents();
+      router.replace(`/schedule-hub?id=${primaryEventId}` as any);
       return;
     }
 
@@ -191,33 +200,25 @@ export default function CreateEvent() {
       }
     }
 
-    // 3. If Auto-Fill with Privilege Matrix & Fair Rotation is enabled, generate auto-assigned schedule!
+    // 3. Auto-Fill Multi-Engine Workspace (Schedule + Territory + Privileges)
     if (autoFillWithPrivileges) {
-      let directory = DEFAULT_PRIVILEGE_MATRIX_PARTICIPANTS;
-      if (Platform.OS === 'web' && typeof window !== 'undefined') {
-        const savedDir = window.localStorage.getItem('sekundo:privilege_directory_v1');
-        if (savedDir) {
-          try {
-            const parsed = JSON.parse(savedDir);
-            if (Array.isArray(parsed) && parsed.length > 0) directory = parsed;
-          } catch {
-            // use default
-          }
-        }
-      }
+      const directory = await loadSavedPrivilegeParticipants();
       const baseSchedule = buildProgramacaoReuniaoRegistry(undefined, directory);
       const { updatedRegistry, updatedParticipants } = autoAssignScheduleRegistry(
         baseSchedule,
         directory,
         { strictSameCategoryPairing }
       );
-      if (Platform.OS === 'web' && typeof window !== 'undefined') {
-        window.localStorage.setItem(
-          'sekundo:privilege_directory_v1',
-          JSON.stringify(updatedParticipants)
-        );
-      }
-      await storage.saveSkeleton(state.config.id, updatedRegistry);
+      const territoryRegistry = buildTerritoriosS13HistoricalRegistry();
+      await savePrivilegeParticipants(updatedParticipants);
+      await saveScheduleRegistry(updatedRegistry);
+      await saveTerritoryRegistry(territoryRegistry);
+
+      const combinedSkeleton = buildCombinedMultiEngineSkeleton({
+        scheduleRegistry: updatedRegistry,
+        territoryRegistry,
+      });
+      await storage.saveSkeleton(state.config.id, combinedSkeleton);
       router.replace(`/schedule-hub?id=${state.config.id}` as any);
       return;
     }
@@ -225,50 +226,96 @@ export default function CreateEvent() {
     router.replace(`/skeleton-editor?id=${state.config.id}`);
   };
 
-  const frequencies: { key: Frequency; label: string }[] = [
-    { key: 'weekly', label: '🔄 Semanal' },
-    { key: 'monthly', label: '📅 Mensal' },
-    { key: 'annual', label: '🗓️ Anual' },
-    { key: 'once', label: '📌 Único' },
+  const frequencies: { key: Frequency; icon: string; title: string }[] = [
+    { key: 'weekly', icon: '🔄', title: 'Semanal' },
+    { key: 'monthly', icon: '📅', title: 'Mensal' },
+    { key: 'annual', icon: '🗓️', title: 'Anual' },
+    { key: 'once', icon: '📌', title: 'Único' },
   ];
+
+  const webTitle = (title: string) => (Platform.OS === 'web' ? ({ title } as any) : {});
 
   return (
     <SafeAreaView style={styles.cadViewport}>
-      {/* Top AutoCAD Command Ribbon */}
+      {/* Top Icon-Only AutoCAD Command Ribbon */}
       <View style={styles.topRibbon}>
         <View style={styles.brandRow}>
-          <Pressable onPress={() => router.push('/')} style={styles.cadBtn}>
-            <Text style={[styles.cadBtnText, { color: '#FFB800' }]}>← Painel</Text>
+          <Pressable
+            testID="create-event-back-btn"
+            accessibilityRole="button"
+            accessibilityLabel="Painel Inicial"
+            {...webTitle('Voltar ao Painel Inicial')}
+            onPress={() => router.push('/')}
+            style={styles.iconBtn}
+          >
+            <Text style={styles.iconGlyph}>🏠</Text>
           </Pressable>
-          <Text style={styles.ribbonTitle}>📐 ESTAÇÃO CAD — NOVO EVENTO, ENGINES & CSV GERAL</Text>
+          <Text style={styles.ribbonTitle}>📐 NOVO EVENTO MULTI-ENGINE</Text>
         </View>
 
         <View style={styles.topActions}>
           <Pressable
-            onPress={handleDownloadOmniMasterCsv}
-            style={[styles.cadBtn, styles.cadBtnPurple]}
+            testID="create-event-pick-csv-btn"
+            accessibilityRole="button"
+            accessibilityLabel="Importar CSV"
+            {...webTitle('Selecionar Arquivo .CSV (Geral ou Engine)')}
+            onPress={handlePickCsvFile}
+            style={[styles.iconBtn, styles.cadBtnBlue]}
           >
-            <Text style={styles.cadBtnText}>🌐 Baixar CSV GERAL do App</Text>
-          </Pressable>
-
-          <Pressable onPress={handlePickCsvFile} style={[styles.cadBtn, styles.cadBtnBlue]}>
-            <Text style={styles.cadBtnText}>📥 Importar .CSV (Geral ou Engine)</Text>
+            <Text style={styles.iconGlyph}>📥</Text>
           </Pressable>
 
           <Pressable
-            onPress={() => router.push('/csv-import')}
-            style={styles.cadBtn}
+            testID="create-event-download-saved-omni-btn"
+            accessibilityRole="button"
+            accessibilityLabel="Baixar CSV Geral Salvo"
+            {...webTitle('Baixar CSV Geral (Salvo no Site)')}
+            onPress={handleDownloadSavedOmniCsv}
+            style={[styles.iconBtn, styles.cadBtnPurple]}
           >
-            <Text style={styles.cadBtnText}>📚 Central de Modelos CSV</Text>
+            <Text style={styles.iconGlyph}>🌐</Text>
+          </Pressable>
+
+          <Pressable
+            testID="create-event-download-sample-omni-btn"
+            accessibilityRole="button"
+            accessibilityLabel="Baixar CSV Geral de Exemplo"
+            {...webTitle('Baixar CSV Geral de Exemplo')}
+            onPress={handleDownloadSampleOmniCsv}
+            style={styles.iconBtn}
+          >
+            <Text style={styles.iconGlyph}>🧪</Text>
+          </Pressable>
+
+          <Pressable
+            testID="create-event-open-csv-station-btn"
+            accessibilityRole="button"
+            accessibilityLabel="Central de Modelos CSV"
+            {...webTitle('Abrir Central de Modelos CSV')}
+            onPress={() => router.push('/csv-import')}
+            style={styles.iconBtn}
+          >
+            <Text style={styles.iconGlyph}>📚</Text>
+          </Pressable>
+
+          <Pressable
+            testID="create-event-info-btn"
+            accessibilityRole="button"
+            accessibilityLabel="Informações"
+            {...webTitle('Mostrar/Ocultar Detalhes da Engine')}
+            onPress={() => setShowInfoBox((prev) => !prev)}
+            style={[styles.iconBtn, showInfoBox && styles.cadBtnBlue]}
+          >
+            <Text style={styles.iconGlyph}>ℹ️</Text>
           </Pressable>
         </View>
       </View>
 
-      {/* Sub-Ribbon: Event Name Input + Frequency Pills + Auto-Fill Privilege Toggle + Create CTA */}
+      {/* Compact Sub-Ribbon: Event Name Input + Icon Toggles + Launch Button */}
       <View style={styles.configRibbon}>
         <TextInput
           style={styles.nameInput}
-          placeholder="Nome do Evento (ex: Programação Técnica Out/Nov)..."
+          placeholder="Nome do Evento..."
           placeholderTextColor="#64748B"
           value={name}
           onChangeText={setName}
@@ -280,74 +327,94 @@ export default function CreateEvent() {
             return (
               <Pressable
                 key={f.key}
+                accessibilityRole="button"
+                accessibilityLabel={f.title}
+                {...webTitle(`Frequência: ${f.title}`)}
                 onPress={() => setFrequency(f.key)}
-                style={[styles.freqPill, active && styles.freqPillActive]}
+                style={[styles.iconBtn, active && styles.freqPillActive]}
               >
-                <Text style={[styles.freqPillText, active && { color: '#090D16' }]}>
-                  {f.label}
-                </Text>
+                <Text style={styles.iconGlyph}>{f.icon}</Text>
               </Pressable>
             );
           })}
         </View>
 
         <Pressable
+          testID="create-event-toggle-autofill-btn"
+          accessibilityRole="button"
+          accessibilityLabel="Auto-Designar c/ Privilégios"
+          {...webTitle(
+            autoFillWithPrivileges
+              ? 'Auto-Designar com Privilégios: ATIVO'
+              : 'Auto-Designar com Privilégios: INATIVO'
+          )}
           onPress={() => setAutoFillWithPrivileges((prev) => !prev)}
           style={[
-            styles.cadBtn,
+            styles.iconBtn,
             autoFillWithPrivileges ? styles.cadBtnEmerald : styles.cadBtnMuted,
           ]}
         >
-          <Text style={styles.cadBtnText}>
-            {autoFillWithPrivileges
-              ? '⚡ Auto-Designar c/ Privilégios: ATIVO'
-              : '⚡ Auto-Designar: INATIVO'}
-          </Text>
+          <Text style={styles.iconGlyph}>⚡</Text>
         </Pressable>
 
         {autoFillWithPrivileges && (
           <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Alternar Pareamento de Duplas"
+            {...webTitle(
+              strictSameCategoryPairing ? 'Duplas: Mesma Grade' : 'Duplas: Misto Livre'
+            )}
             onPress={() => setStrictSameCategoryPairing((prev) => !prev)}
-            style={styles.cadBtn}
+            style={styles.iconBtn}
           >
-            <Text style={styles.cadBtnText}>
-              {strictSameCategoryPairing ? '🔗 Duplas: Mesma Grade' : '🔗 Duplas: Misto'}
-            </Text>
+            <Text style={styles.iconGlyph}>🔗</Text>
           </Pressable>
         )}
 
-        <Pressable onPress={handleCreate} style={[styles.cadBtn, styles.cadBtnGold]}>
-          <Text style={[styles.cadBtnText, { color: '#090D16', fontWeight: '900' }]}>
-            🚀 CRIAR EVENTO ({selectedEngines.length} Engine{selectedEngines.length > 1 ? 's' : ''})
-          </Text>
+        <Pressable
+          testID="create-event-submit-btn"
+          accessibilityRole="button"
+          accessibilityLabel="Criar Evento"
+          {...webTitle(`Criar Evento (${selectedEngines.length} Engines)`)}
+          onPress={handleCreate}
+          style={[styles.iconBtn, styles.cadBtnGold]}
+        >
+          <Text style={styles.iconGlyph}>🚀</Text>
         </Pressable>
       </View>
 
       {(autoDetectNotice || validationError) && (
         <View style={styles.noticeStrip}>
-          <Text style={styles.noticeText}>{validationError || autoDetectNotice}</Text>
+          <Text style={styles.noticeText} numberOfLines={1}>
+            {validationError || autoDetectNotice}
+          </Text>
         </View>
       )}
 
-      {/* Main Split Workspace (Zero Vertical Roll-Down!) */}
+      {/* Main Split Workspace */}
       <View
         style={[
           styles.workspaceSplit,
           { flexDirection: isDesktop ? 'row' : 'column' },
         ]}
       >
-        {/* Left: Compact Grid of Engine Buttons */}
-        <View style={[styles.matrixPanel, { flex: isDesktop ? 1.25 : undefined }]}>
+        {/* Left: Compact Icon Grid of Engines (`58x54px`) */}
+        <View style={[styles.matrixPanel, { flex: isDesktop ? 1 : undefined }]}>
           <Text style={styles.panelHeaderLabel}>
-            🎛️ SELECIONE AS ENGINES ATIVAS (Clique no botão para ativar e ver o CSV de exemplo):
+            🎛️ ENGINES ({selectedEngines.length})
           </Text>
           <View style={styles.enginesGrid}>
             {availableEngines.map((eng, idx) => {
               const isChecked = selectedEngines.includes(eng.id);
               const isInspected = inspectedEngineId === eng.id;
+              const icon = ENGINE_ICONS[eng.id] || '⚙️';
               return (
                 <Pressable
                   key={eng.id}
+                  testID={`engine-select-btn-${eng.id}`}
+                  accessibilityRole="button"
+                  accessibilityLabel={eng.name}
+                  {...webTitle(`${eng.name} (${isChecked ? 'Ativa' : 'Inativa'})`)}
                   onPress={() => handleEngineClick(eng.id)}
                   style={[
                     styles.engineButton,
@@ -355,13 +422,9 @@ export default function CreateEvent() {
                     isInspected && { borderColor: '#38BDF8', borderWidth: 1.5 },
                   ]}
                 >
-                  <View style={styles.engineBtnHeader}>
-                    <Text style={styles.engineBtnCode}>
-                      [E0{idx + 1}] {isChecked ? '☑ ATIVA' : '☐'}
-                    </Text>
-                  </View>
-                  <Text style={styles.engineBtnTitle} numberOfLines={1}>
-                    {eng.name}
+                  <Text style={styles.engineIcon}>{icon}</Text>
+                  <Text style={styles.engineBtnCode}>
+                    E0{idx + 1} {isChecked ? '☑' : '☐'}
                   </Text>
                 </Pressable>
               );
@@ -369,55 +432,71 @@ export default function CreateEvent() {
           </View>
         </View>
 
-        {/* Right: On-Demand Engine & CSV Inspector */}
-        <View style={[styles.inspectorPanel, { flex: isDesktop ? 1 : undefined }]}>
+        {/* Right: Compact Inspector */}
+        <View style={[styles.inspectorPanel, { flex: isDesktop ? 1.1 : undefined }]}>
           <View style={styles.inspectorHeader}>
-            <Text style={styles.inspectorHeaderTitle}>
-              🔍 INSPETOR DA ENGINE: {inspectedEngine?.name}
+            <Text style={styles.inspectorHeaderTitle} numberOfLines={1}>
+              {ENGINE_ICONS[inspectedEngineId] || '🔍'} {inspectedEngine?.name}
             </Text>
           </View>
 
-          <Text style={styles.inspectorDesc}>{inspectedEngine?.description}</Text>
+          <Text style={styles.inspectorCsvMeta} numberOfLines={1}>
+            📄 {inspectedTemplate?.suggestedFilename}
+          </Text>
 
-          <View style={styles.inspectorCsvBox}>
-            <Text style={styles.inspectorCsvTitle}>
-              📄 Modelo CSV Específico desta Engine ({inspectedTemplate?.suggestedFilename}):
-            </Text>
-            <Text style={styles.inspectorCsvMeta}>
-              {inspectedTemplate?.keyConventions}
-            </Text>
+          <View style={styles.inspectorBtnRow}>
+            <Pressable
+              testID="inspector-download-engine-csv-btn"
+              accessibilityRole="button"
+              accessibilityLabel="Baixar CSV de Exemplo desta Engine"
+              {...webTitle('Baixar .CSV de Exemplo desta Engine')}
+              onPress={() => handleDownloadEngineSampleCsv(inspectedEngineId)}
+              style={[styles.iconBtn, styles.cadBtnBlue]}
+            >
+              <Text style={styles.iconGlyph}>📥</Text>
+            </Pressable>
 
-            <View style={styles.inspectorBtnRow}>
-              <Pressable
-                onPress={() => handleDownloadEngineSampleCsv(inspectedEngineId)}
-                style={[styles.cadBtn, styles.cadBtnBlue]}
-              >
-                <Text style={styles.cadBtnText}>
-                  📥 Baixar .CSV de Exemplo desta Engine
-                </Text>
-              </Pressable>
+            <Pressable
+              testID="inspector-download-saved-omni-btn"
+              accessibilityRole="button"
+              accessibilityLabel="Baixar CSV Geral Salvo"
+              {...webTitle('Baixar .CSV GERAL (Salvo no Site)')}
+              onPress={handleDownloadSavedOmniCsv}
+              style={[styles.iconBtn, styles.cadBtnPurple]}
+            >
+              <Text style={styles.iconGlyph}>🌐</Text>
+            </Pressable>
 
-              <Pressable
-                onPress={handleDownloadOmniMasterCsv}
-                style={[styles.cadBtn, styles.cadBtnPurple]}
-              >
-                <Text style={styles.cadBtnText}>
-                  🌐 Baixar .CSV GERAL de Todo o App
-                </Text>
-              </Pressable>
+            <Pressable
+              testID="inspector-download-sample-omni-btn"
+              accessibilityRole="button"
+              accessibilityLabel="Baixar CSV Geral de Exemplo"
+              {...webTitle('Baixar .CSV GERAL de Exemplo')}
+              onPress={handleDownloadSampleOmniCsv}
+              style={styles.iconBtn}
+            >
+              <Text style={styles.iconGlyph}>🧪</Text>
+            </Pressable>
+
+            <Pressable
+              testID="inspector-submit-create-btn"
+              accessibilityRole="button"
+              accessibilityLabel="Criar e Abrir Evento"
+              {...webTitle('Criar e Abrir Evento Agora')}
+              onPress={handleCreate}
+              style={[styles.iconBtn, styles.cadBtnGold]}
+            >
+              <Text style={styles.iconGlyph}>🚀</Text>
+            </Pressable>
+          </View>
+
+          {showInfoBox && (
+            <View style={styles.privilegeInfoBox}>
+              <Text style={styles.privilegeInfoDesc}>
+                {inspectedEngine?.description}
+              </Text>
             </View>
-          </View>
-
-          <View style={styles.privilegeInfoBox}>
-            <Text style={styles.privilegeInfoTitle}>
-              🛡️ Auto-Preenchimento com Privilégios & Rotatividade Justa
-            </Text>
-            <Text style={styles.privilegeInfoDesc}>
-              Com o botão &quot;⚡ Auto-Designar c/ Privilégios&quot; ativo, o Sekundo preenche
-              automaticamente cada parte do novo evento respeitando as 26 colunas de privilégio,
-              sem repetir a mesma pessoa no mesmo dia e revezando por antiguidade (FIFO).
-            </Text>
-          </View>
+          )}
         </View>
       </View>
     </SafeAreaView>
@@ -437,12 +516,12 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 7,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
     backgroundColor: '#0F172A',
     borderBottomWidth: 1,
     borderBottomColor: '#1E293B',
-    gap: 8,
+    gap: 6,
   },
   brandRow: {
     flexDirection: 'row',
@@ -453,20 +532,25 @@ const styles = StyleSheet.create({
     color: '#F8FAFC',
     fontSize: 12,
     fontWeight: '900',
-    letterSpacing: 0.4,
   },
   topActions: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 6,
+    gap: 5,
   },
-  cadBtn: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 6,
+  iconBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
     backgroundColor: '#1E293B',
     borderWidth: 1,
     borderColor: '#334155',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  iconGlyph: {
+    fontSize: 16,
+    color: '#F8FAFC',
   },
   cadBtnBlue: {
     backgroundColor: '#1D4ED8',
@@ -488,30 +572,25 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFB800',
     borderColor: '#FDE68A',
   },
-  cadBtnText: {
-    color: '#F8FAFC',
-    fontSize: 11,
-    fontWeight: '800',
-  },
   configRibbon: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
     backgroundColor: '#0B1120',
     borderBottomWidth: 1,
     borderBottomColor: '#1E293B',
   },
   nameInput: {
     flex: 1,
-    minWidth: 210,
+    minWidth: 130,
     backgroundColor: '#060A12',
     borderWidth: 1,
     borderColor: '#334155',
     borderRadius: 6,
-    paddingHorizontal: 10,
+    paddingHorizontal: 8,
     paddingVertical: 5,
     color: '#F8FAFC',
     fontSize: 12,
@@ -520,26 +599,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 4,
   },
-  freqPill: {
-    paddingHorizontal: 8,
-    paddingVertical: 5,
-    borderRadius: 5,
-    backgroundColor: '#1E293B',
-    borderWidth: 1,
-    borderColor: '#334155',
-  },
   freqPillActive: {
-    backgroundColor: '#38BDF8',
-    borderColor: '#BAE6FD',
-  },
-  freqPillText: {
-    color: '#E2E8F0',
-    fontSize: 10.5,
-    fontWeight: '800',
+    backgroundColor: '#0284C7',
+    borderColor: '#7DD3FC',
   },
   noticeStrip: {
     backgroundColor: '#064E3B',
-    paddingHorizontal: 12,
+    paddingHorizontal: 10,
     paddingVertical: 4,
     borderBottomWidth: 1,
     borderBottomColor: '#10B981',
@@ -551,8 +617,8 @@ const styles = StyleSheet.create({
   },
   workspaceSplit: {
     flex: 1,
-    padding: 10,
-    gap: 10,
+    padding: 8,
+    gap: 8,
     overflow: 'hidden',
   },
   matrixPanel: {
@@ -560,47 +626,42 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
     borderColor: '#1E293B',
-    padding: 10,
+    padding: 8,
     overflow: 'hidden',
   },
   panelHeaderLabel: {
     color: '#94A3B8',
-    fontSize: 10.5,
+    fontSize: 10,
     fontWeight: '800',
-    marginBottom: 8,
+    marginBottom: 6,
   },
   enginesGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 7,
+    gap: 6,
   },
   engineButton: {
-    width: '48.5%',
-    minWidth: 150,
+    width: 60,
+    height: 54,
     backgroundColor: '#0B1120',
-    borderRadius: 6,
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: '#1E293B',
-    padding: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 2,
   },
   engineButtonActive: {
-    backgroundColor: '#172554',
-    borderColor: '#3B82F6',
+    backgroundColor: '#064E3B',
+    borderColor: '#10B981',
   },
-  engineBtnHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  engineIcon: {
+    fontSize: 18,
   },
   engineBtnCode: {
-    color: '#38BDF8',
-    fontSize: 10,
+    color: '#34D399',
+    fontSize: 9,
     fontWeight: '900',
-  },
-  engineBtnTitle: {
-    color: '#F8FAFC',
-    fontSize: 11.5,
-    fontWeight: '800',
-    marginTop: 2,
   },
   inspectorPanel: {
     backgroundColor: '#0F172A',
@@ -617,56 +678,32 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 5,
     borderLeftWidth: 3,
-    borderLeftColor: '#FFB800',
+    borderLeftColor: '#38BDF8',
   },
   inspectorHeaderTitle: {
     color: '#F8FAFC',
-    fontSize: 11.5,
+    fontSize: 12,
     fontWeight: '900',
   },
-  inspectorDesc: {
-    color: '#CBD5E1',
-    fontSize: 11.5,
-    lineHeight: 16,
-  },
-  inspectorCsvBox: {
-    backgroundColor: '#0B1120',
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: '#1E293B',
-    padding: 9,
-    gap: 6,
-  },
-  inspectorCsvTitle: {
-    color: '#38BDF8',
-    fontSize: 11,
-    fontWeight: '800',
-  },
   inspectorCsvMeta: {
-    color: '#94A3B8',
+    color: '#38BDF8',
     fontSize: 10.5,
+    fontWeight: '700',
   },
   inspectorBtnRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 6,
-    marginTop: 4,
   },
   privilegeInfoBox: {
-    backgroundColor: '#064E3B',
+    backgroundColor: '#0B1120',
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: '#10B981',
-    padding: 9,
-    gap: 4,
-  },
-  privilegeInfoTitle: {
-    color: '#A7F3D0',
-    fontSize: 11,
-    fontWeight: '800',
+    borderColor: '#1E293B',
+    padding: 8,
   },
   privilegeInfoDesc: {
-    color: '#D1FAE5',
+    color: '#94A3B8',
     fontSize: 10.5,
     lineHeight: 15,
   },

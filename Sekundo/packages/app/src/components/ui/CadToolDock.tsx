@@ -35,6 +35,8 @@ export interface CadToolDefinition {
   onConfirm?: () => void;
   /** Mantém o Popover aberto após clicar em confirmar (útil para toggles de inspeção) */
   keepOpenOnConfirm?: boolean;
+  /** Executa onConfirm imediatamente no 1º clique no ícone (ex: abrir modal ou seletor de arquivo direto) */
+  immediateOnClick?: boolean;
   /** Controles interativos rápidos renderizados dentro do Popover antes do botão de confirmação */
   renderCustomControls?: (closePopover: () => void) => React.ReactNode;
 }
@@ -55,7 +57,7 @@ export interface CadToolDockProps {
  *
  * Implementa o paradigma AutoCAD / Photoshop de barra de ferramentas enxuta:
  * - Botões na barra exibem SOMENTE o ícone (40x40px no Desktop, 42x42px no Mobile), sem rótulos de texto.
- * - Fluxo interativo estrito em 2 tempos:
+ * - Fluxo interativo estrito em 2 tempos (ou 1 clique quando immediateOnClick=true):
  *   1º Clique no ícone -> abre o `<ToolActionPopover />` ancorado e contido nos limites da viewport,
  *      exibindo título, atalho, explicação didática, parâmetros rápidos e botão de confirmação.
  *   2º Clique no botão de ação do Popover -> confirma e executa a funcionalidade.
@@ -80,6 +82,11 @@ export function CadToolDock({
 
   const handleIconPress = useCallback(
     (tool: CadToolDefinition, index: number, event?: any) => {
+      if (tool.immediateOnClick && !tool.disabled && tool.onConfirm) {
+        setActiveToolId(null);
+        tool.onConfirm();
+        return;
+      }
       if (activeToolId === tool.id) {
         setActiveToolId(null);
         return;
@@ -120,6 +127,8 @@ export function CadToolDock({
           {tools.map((tool, index) => {
             const isPopoverOpen = activeToolId === tool.id;
             const accent = tool.accentColor || '#38BDF8';
+            const webTitleProps =
+              Platform.OS === 'web' ? ({ title: tool.label } as any) : {};
             return (
               <Pressable
                 key={tool.id}
@@ -127,6 +136,7 @@ export function CadToolDock({
                 accessibilityRole="button"
                 accessibilityLabel={tool.label}
                 onPress={(e) => handleIconPress(tool, index, e)}
+                {...webTitleProps}
                 style={[
                   styles.iconBtn,
                   isMobile && styles.iconBtnMobile,

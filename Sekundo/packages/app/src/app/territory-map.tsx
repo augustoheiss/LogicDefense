@@ -48,6 +48,7 @@ import {
   validateBoundary,
   roundRing,
   buildTerritoriosS13HistoricalRegistry,
+  selectEnginePartitionNodes,
 } from '@sekundo/core';
 import type {
   FlatSkeletonEntry,
@@ -76,6 +77,7 @@ import {
   buildSymbologyLegend,
   type MapSymbologyConfig,
 } from '../components/territory/mapSymbologyEngine';
+import { loadSavedTerritoryRegistry } from '../storage/omniStorageBridge';
 
 const BUFFER_OPTIONS_METERS = [-5, 0, 3, 6, 10, 20, 40];
 
@@ -141,6 +143,7 @@ export default function TerritoryMapScreen() {
   const fallbackEvent =
     events.find((e) => e.config.id === rawEventId) ||
     events.find((e) => e.config.id === 'seed-territorios-s13') ||
+    events.find((e) => (e.config.engines || []).includes('territory_logistics')) ||
     events[0] ||
     null;
   const eventId = rawEventId || fallbackEvent?.config.id || 'seed-territorios-s13';
@@ -153,11 +156,22 @@ export default function TerritoryMapScreen() {
     saveSkeleton,
     loading,
   } = useSkeleton(eventId);
+  const [savedTerritoryRegistry, setSavedTerritoryRegistry] = useState<FlatSkeletonEntry[]>([]);
+  useEffect(() => {
+    loadSavedTerritoryRegistry()
+      .then((reg) => {
+        if (reg && reg.length > 0) setSavedTerritoryRegistry(reg);
+      })
+      .catch(() => undefined);
+  }, [rawRegistry]);
 
   const flatRegistry = useMemo<FlatSkeletonEntry[]>(() => {
-    if (rawRegistry && rawRegistry.length > 0) return rawRegistry;
+    const partitioned = selectEnginePartitionNodes(rawRegistry || [], 'territory_logistics');
+    if (partitioned.length > 0) return partitioned;
+    const savedPartitioned = selectEnginePartitionNodes(savedTerritoryRegistry, 'territory_logistics');
+    if (savedPartitioned.length > 0) return savedPartitioned;
     return buildTerritoriosS13HistoricalRegistry();
-  }, [rawRegistry]);
+  }, [rawRegistry, savedTerritoryRegistry]);
 
   const [filterMode, setFilterMode] = useState<'all' | 'pending' | 'worked'>('all');
   const [selectedTerritory, setSelectedTerritory] = useState<string>(initialTerritory);

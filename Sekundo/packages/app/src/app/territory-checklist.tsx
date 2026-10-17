@@ -32,10 +32,13 @@ import {
   buildWorkedMeta,
   resolveTerritoryNumber,
   buildTerritoriosS13HistoricalRegistry,
+  selectEnginePartitionNodes,
 } from '@sekundo/core';
 import type { FlatSkeletonEntry } from '@sekundo/core';
 import { AddressEditModal } from '../components/territory/AddressEditModal';
 import { TerritoryAccordionHeader } from '../components/territory/TerritoryAccordionHeader';
+import { MultiEngineSwitcherBar } from '../components/ui/MultiEngineSwitcherBar';
+import { loadSavedTerritoryRegistry } from '../storage/omniStorageBridge';
 
 interface ChecklistGroup {
   groupKey: string;
@@ -60,21 +63,41 @@ export default function TerritoryChecklistScreen() {
     if (rawEventId) {
       return events.find((e) => e.config.id === rawEventId) || events[0];
     }
-    return events[0];
+    return events.find((e) => (e.config.engines || []).includes('territory_logistics')) || events[0];
   }, [events, rawEventId]);
   const eventId = event?.config.id || rawEventId;
   const { flatRegistry: rawFlatRegistry, updateNode, updateNodes, loading } = useSkeleton(eventId);
+  const [savedTerritoryRegistry, setSavedTerritoryRegistry] = useState<FlatSkeletonEntry[]>([]);
+  useEffect(() => {
+    loadSavedTerritoryRegistry()
+      .then((reg) => {
+        if (reg && reg.length > 0) setSavedTerritoryRegistry(reg);
+      })
+      .catch(() => undefined);
+  }, [rawFlatRegistry]);
+
   const fallbackRegistry = useMemo(() => buildTerritoriosS13HistoricalRegistry(), []);
-  const flatRegistry = useMemo(
-    () => (rawFlatRegistry && rawFlatRegistry.length > 0 ? rawFlatRegistry : fallbackRegistry),
-    [rawFlatRegistry, fallbackRegistry]
-  );
+  const flatRegistry = useMemo(() => {
+    const partitioned = selectEnginePartitionNodes(rawFlatRegistry || [], 'territory_logistics');
+    if (partitioned.length > 0) return partitioned;
+    const savedPartitioned = selectEnginePartitionNodes(savedTerritoryRegistry, 'territory_logistics');
+    if (savedPartitioned.length > 0) return savedPartitioned;
+    return fallbackRegistry;
+  }, [rawFlatRegistry, savedTerritoryRegistry, fallbackRegistry]);
+
+  const resolveRawKey = (cleanKey: string): string => {
+    if (rawFlatRegistry && rawFlatRegistry.some((n) => n.key === `T::${cleanKey}`)) {
+      return `T::${cleanKey}`;
+    }
+    return cleanKey;
+  };
 
   // Accordion state: everything collapsed by default. Keys: `T:<territory>` / `G:<groupKey>`.
   const [expandedKeys, setExpandedKeys] = useState<Set<string>>(() => new Set());
   const focusAppliedRef = useRef(false);
 
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [showFiltersPanel, setShowFiltersPanel] = useState<boolean>(false);
   const [filterMode, setFilterMode] = useState<'all' | 'pending' | 'worked'>('all');
   const [sortOrder, setSortOrder] = useState<'hierarchical' | 'priority_oldest_first' | 'recent_first'>('hierarchical');
   const [activeNoteKey, setActiveNoteKey] = useState<string | null>(null);
@@ -327,7 +350,7 @@ export default function TerritoryChecklistScreen() {
     const meta = (target.meta || {}) as Record<string, any>;
     const nextWorked = Number(meta.worked) === 1 ? 0 : 1;
 
-    await updateNode(targetKey, {
+    await updateNode(resolveRawKey(targetKey), {
       value: nextWorked === 1 ? (meta.workerName || 'Trabalhado') : '',
       meta: buildWorkedMeta(meta, nextWorked),
     });
@@ -342,7 +365,7 @@ export default function TerritoryChecklistScreen() {
       group.items.map((item) => {
         const meta = (item.meta || {}) as Record<string, any>;
         return {
-          key: item.key,
+          key: resolveRawKey(item.key),
           updates: {
             value: targetStatus === 1 ? (meta.workerName || 'Trabalhado') : '',
             meta: buildWorkedMeta(meta, targetStatus, now),
@@ -369,7 +392,7 @@ export default function TerritoryChecklistScreen() {
       allItems.map((item) => {
         const meta = (item.meta || {}) as Record<string, any>;
         return {
-          key: item.key,
+          key: resolveRawKey(item.key),
           updates: {
             value: targetStatus === 1 ? (meta.workerName || 'Trabalhado') : '',
             meta: buildWorkedMeta(meta, targetStatus, now),
@@ -392,7 +415,7 @@ export default function TerritoryChecklistScreen() {
     if (!target) return;
     const meta = (target.meta || {}) as Record<string, any>;
 
-    await updateNode(activeNoteKey, {
+    await updateNode(resolveRawKey(activeNoteKey), {
       meta: {
         ...meta,
         notes: noteDraft.trim(),
@@ -411,16 +434,41 @@ export default function TerritoryChecklistScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Top Header */}
+      {/* Top Header (Icon-Only Click-to-Reveal) */}
       <View style={styles.header}>
         <View style={styles.headerTopRow}>
-          <Pressable
-            onPress={() => router.replace(eventId ? `/skeleton-editor?id=${eventId}` : '/')}
-            style={styles.backBtn}
-          >
-            <Text style={styles.backBtnText}>← Voltar</Text>
-          </Pressable>
-          <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
+          <MultiEngineSwitcherBar activeEngine="checklist" eventId={eventId} />
+          <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+            <Pressable
+              onPress={() => setShowFiltersPanel((prev) => !prev)}
+              style={[
+                styles.mapLinkBtn,
+                (showFiltersPanel || searchQuery.trim().length > 0 || filterMode !== 'all') && {
+                  borderColor: '#FFB800',
+                  backgroundColor: 'rgba(255, 184, 0, 0.16)',
+                },
+              ]}
+              accessibilityLabel="Filtrar e Ordenar Territórios"
+              {...({ title: 'Filtrar e Ordenar Territórios' } as any)}
+            >
+              <Text style={styles.mapLinkBtnText}>🔍</Text>
+            </Pressable>
+            <Pressable
+              onPress={expandAll}
+              style={styles.mapLinkBtn}
+              accessibilityLabel="Expandir Todos os Territórios"
+              {...({ title: 'Expandir Todos os Territórios' } as any)}
+            >
+              <Text style={styles.mapLinkBtnText}>▾</Text>
+            </Pressable>
+            <Pressable
+              onPress={collapseAll}
+              style={styles.mapLinkBtn}
+              accessibilityLabel="Recolher Todos os Territórios"
+              {...({ title: 'Recolher Todos os Territórios' } as any)}
+            >
+              <Text style={styles.mapLinkBtnText}>▸</Text>
+            </Pressable>
             <Pressable
               onPress={() =>
                 router.push(
@@ -428,8 +476,10 @@ export default function TerritoryChecklistScreen() {
                 )
               }
               style={styles.mapLinkBtn}
+              accessibilityLabel="Modo Operador de Campo"
+              {...({ title: 'Modo Operador de Campo' } as any)}
             >
-              <Text style={styles.mapLinkBtnText}>📱 Modo Operador de Campo</Text>
+              <Text style={styles.mapLinkBtnText}>📱</Text>
             </Pressable>
             <Pressable
               onPress={() =>
@@ -438,22 +488,23 @@ export default function TerritoryChecklistScreen() {
                 )
               }
               style={styles.mapLinkBtn}
+              accessibilityLabel="Ver no Mapa"
+              {...({ title: 'Ver no Mapa' } as any)}
             >
-              <Text style={styles.mapLinkBtnText}>🗺️ Ver no Mapa</Text>
+              <Text style={styles.mapLinkBtnText}>🗺️</Text>
             </Pressable>
           </View>
         </View>
 
-        <Text style={styles.title}>📋 Prancheta de Campo</Text>
-        <Text style={styles.subtitle}>{event?.config.name ?? 'Malha Territorial Sintética'}</Text>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Text style={styles.title}>📋 {territorySections.length} Territórios</Text>
+          <Text style={styles.progressText}>
+            {overallStats.worked}/{overallStats.total} ({overallStats.percent}%)
+          </Text>
+        </View>
 
         {/* Progress Bar */}
         <View style={styles.progressBarWrapper}>
-          <View style={styles.progressLabels}>
-            <Text style={styles.progressText}>
-              Progresso do Território: {overallStats.worked} de {overallStats.total} unidades ({overallStats.percent}%)
-            </Text>
-          </View>
           <View style={styles.progressBarTrack}>
             <View
               style={[styles.progressBarFill, { width: `${overallStats.percent}%` }]}
@@ -462,93 +513,80 @@ export default function TerritoryChecklistScreen() {
         </View>
       </View>
 
-      {/* Search and Filters */}
-      <View style={styles.filterSection}>
-        <TextInput
-          style={styles.searchInput}
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-          placeholder="🔍 Buscar rua, número ou anotação..."
-          placeholderTextColor="#6F7E94"
-        />
+      {/* Search and Filters (Click-to-Reveal via 🔍) */}
+      {showFiltersPanel ? (
+        <View style={styles.filterSection}>
+          <TextInput
+            style={styles.searchInput}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            placeholder="🔍 Rua, número ou anotação..."
+            placeholderTextColor="#6F7E94"
+          />
 
-        <View style={styles.filterTabs}>
-          <Pressable
-            onPress={() => setFilterMode('all')}
-            style={[styles.tabBtn, filterMode === 'all' && styles.tabBtnActive]}
-          >
-            <Text style={[styles.tabText, filterMode === 'all' && styles.tabTextActive]}>
-              Todas ({overallStats.total})
-            </Text>
-          </Pressable>
-          <Pressable
-            onPress={() => setFilterMode('pending')}
-            style={[styles.tabBtn, filterMode === 'pending' && styles.tabBtnActive]}
-          >
-            <Text style={[styles.tabText, filterMode === 'pending' && styles.tabTextActive]}>
-              Pendentes ({overallStats.pending})
-            </Text>
-          </Pressable>
-          <Pressable
-            onPress={() => setFilterMode('worked')}
-            style={[styles.tabBtn, filterMode === 'worked' && styles.tabBtnActive]}
-          >
-            <Text style={[styles.tabText, filterMode === 'worked' && styles.tabTextActive]}>
-              Trabalhadas ({overallStats.worked})
-            </Text>
-          </Pressable>
-        </View>
-
-        {/* Recency Sort Selector */}
-        <View style={styles.sortRow}>
-          <Text style={styles.sortLabel}>ORDENAÇÃO:</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+          <View style={styles.filterTabs}>
             <Pressable
-              onPress={() => setSortOrder('hierarchical')}
-              style={[styles.sortChip, sortOrder === 'hierarchical' && styles.sortChipActive]}
+              onPress={() => setFilterMode('all')}
+              style={[styles.tabBtn, filterMode === 'all' && styles.tabBtnActive]}
             >
-              <Text style={[styles.sortChipText, sortOrder === 'hierarchical' && styles.sortChipTextActive]}>
-                📌 Padrão (Código)
+              <Text style={[styles.tabText, filterMode === 'all' && styles.tabTextActive]}>
+                🌐 ({overallStats.total})
               </Text>
             </Pressable>
             <Pressable
-              onPress={() => setSortOrder('priority_oldest_first')}
-              style={[styles.sortChip, sortOrder === 'priority_oldest_first' && styles.sortChipActive]}
+              onPress={() => setFilterMode('pending')}
+              style={[styles.tabBtn, filterMode === 'pending' && styles.tabBtnActive]}
             >
-              <Text style={[styles.sortChipText, sortOrder === 'priority_oldest_first' && styles.sortChipTextActive]}>
-                ⏳ Prioridade (Pendentes & Antigos)
+              <Text style={[styles.tabText, filterMode === 'pending' && styles.tabTextActive]}>
+                ⬜ ({overallStats.pending})
               </Text>
             </Pressable>
             <Pressable
-              onPress={() => setSortOrder('recent_first')}
-              style={[styles.sortChip, sortOrder === 'recent_first' && styles.sortChipActive]}
+              onPress={() => setFilterMode('worked')}
+              style={[styles.tabBtn, filterMode === 'worked' && styles.tabBtnActive]}
             >
-              <Text style={[styles.sortChipText, sortOrder === 'recent_first' && styles.sortChipTextActive]}>
-                ⚡ Mais Recentes (Menos dias)
+              <Text style={[styles.tabText, filterMode === 'worked' && styles.tabTextActive]}>
+                ✅ ({overallStats.worked})
               </Text>
             </Pressable>
-          </ScrollView>
-        </View>
-      </View>
+          </View>
 
-      {/* Checklist Groups */}
-      <ScrollView style={styles.scrollList} contentContainerStyle={styles.scrollContent}>
-        {groups.length > 0 ? (
-          <View style={styles.accordionToolbar}>
-            <Text style={styles.accordionToolbarText}>
-              {territorySections.length} {territorySections.length === 1 ? 'território' : 'territórios'} • {groups.length} grupos
-              {searchActive ? ' • busca ativa' : ''}
-            </Text>
-            <View style={styles.accordionToolbarActions}>
-              <Pressable onPress={expandAll} style={styles.accordionToolbarBtn}>
-                <Text style={styles.accordionToolbarBtnText}>▾ Expandir tudo</Text>
+          <View style={styles.sortRow}>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+              <Pressable
+                onPress={() => setSortOrder('hierarchical')}
+                style={[styles.sortChip, sortOrder === 'hierarchical' && styles.sortChipActive]}
+                accessibilityLabel="Ordenar por Código"
+              >
+                <Text style={[styles.sortChipText, sortOrder === 'hierarchical' && styles.sortChipTextActive]}>
+                  📌 Código
+                </Text>
               </Pressable>
-              <Pressable onPress={collapseAll} style={styles.accordionToolbarBtn}>
-                <Text style={styles.accordionToolbarBtnText}>▸ Recolher tudo</Text>
+              <Pressable
+                onPress={() => setSortOrder('priority_oldest_first')}
+                style={[styles.sortChip, sortOrder === 'priority_oldest_first' && styles.sortChipActive]}
+                accessibilityLabel="Ordenar por Prioridade"
+              >
+                <Text style={[styles.sortChipText, sortOrder === 'priority_oldest_first' && styles.sortChipTextActive]}>
+                  ⏳ Prioridade
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={() => setSortOrder('recent_first')}
+                style={[styles.sortChip, sortOrder === 'recent_first' && styles.sortChipActive]}
+                accessibilityLabel="Ordenar por Mais Recentes"
+              >
+                <Text style={[styles.sortChipText, sortOrder === 'recent_first' && styles.sortChipTextActive]}>
+                  ⚡ Recentes
+                </Text>
               </Pressable>
             </View>
           </View>
-        ) : null}
+        </View>
+      ) : null}
+
+      {/* Checklist Groups */}
+      <ScrollView style={styles.scrollList} contentContainerStyle={styles.scrollContent}>
         {groups.length === 0 ? (
           <View style={styles.emptyCard}>
             <Text style={styles.emptyTitle}>Nenhum endereço encontrado</Text>
@@ -776,14 +814,16 @@ export default function TerritoryChecklistScreen() {
                           onPress={() => setEditingAddressItem(item)}
                           style={styles.editAddressBtn}
                           accessibilityLabel="Editar Endereço Completo"
+                          {...({ title: 'Editar Endereço Completo' } as any)}
                         >
-                          <Text style={styles.editAddressBtnText}>✏️ Editar</Text>
+                          <Text style={styles.editAddressBtnText}>✏️</Text>
                         </Pressable>
 
                         <Pressable
                           onPress={() => openNoteEditor(item)}
                           style={styles.addNoteBtn}
                           accessibilityLabel="Anotação Rápida"
+                          {...({ title: 'Anotação Rápida' } as any)}
                         >
                           <Text style={styles.addNoteBtnIcon}>📝</Text>
                         </Pressable>
@@ -808,7 +848,7 @@ export default function TerritoryChecklistScreen() {
         item={editingAddressItem}
         onClose={() => setEditingAddressItem(null)}
         onSave={async (key, updates) => {
-          await updateNode(key, updates);
+          await updateNode(resolveRawKey(key), updates);
         }}
       />
 

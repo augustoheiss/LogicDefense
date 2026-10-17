@@ -5,7 +5,7 @@
  * Provides controls for adding sibling/child nodes, editing values, and exporting to CSV.
  */
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   StyleSheet,
   Text,
@@ -26,18 +26,66 @@ import { GranularExportModal } from '../components/csv/GranularExportModal';
 import { TransformerStudioModal } from '../components/transformer/TransformerStudioModal';
 import { AddressEditModal } from '../components/territory/AddressEditModal';
 import { CadToolDock, type CadToolDefinition } from '../components/ui/CadToolDock';
-import { serializeCSV, engineRegistry, pathKey } from '@sekundo/core';
-import type { NodeType, SkeletonNode, FlatSkeletonEntry } from '@sekundo/core';
+import { MultiEngineSwitcherBar } from '../components/ui/MultiEngineSwitcherBar';
+import {
+  serializeCSV,
+  engineRegistry,
+  pathKey,
+  skeletonTree,
+  buildProgramacaoReuniaoRegistry,
+} from '@sekundo/core';
+import type { NodeType, SkeletonNode, FlatSkeletonEntry, EventState } from '@sekundo/core';
 
 export default function SkeletonEditor() {
   const router = useRouter();
   const { id } = useLocalSearchParams();
-  const eventId = typeof id === 'string' ? id : '';
+  const rawEventId = typeof id === 'string' ? id : '';
 
   const { events, updateEventState } = useLocalEvent();
-  const event = events.find((e) => e.config.id === eventId);
+  const fallbackEvent = useMemo<EventState>(() => {
+    const matched = rawEventId
+      ? events.find((e) => e.config.id === rawEventId) || events[0]
+      : events[0];
+    if (matched) return matched;
+    return {
+      config: {
+        id: 'seed-programacao-reuniao',
+        name: 'Unidade Operacional Central',
+        frequency: 'weekly',
+        startDate: '2026-10-01',
+        skeletonRoots: ['01', '02', '03'],
+        autoRollover: true,
+        engineId: 'roster_assignments',
+        activeEngines: ['roster_assignments', 'territory_logistics'],
+        createdAt: '2026-10-17T00:00:00.000Z',
+        updatedAt: '2026-10-17T00:00:00.000Z',
+      },
+      lifecycle: 'active',
+      archive: [],
+    };
+  }, [events, rawEventId]);
 
-  const { flatRegistry, tree, loading, addNode, updateNode, deleteNode } = useSkeleton(eventId);
+  const event = fallbackEvent;
+  const eventId = event.config.id;
+
+  const {
+    flatRegistry: rawFlatRegistry,
+    tree: rawTree,
+    loading,
+    addNode,
+    updateNode,
+    deleteNode,
+  } = useSkeleton(eventId);
+
+  const flatRegistry = useMemo(() => {
+    if (rawFlatRegistry && rawFlatRegistry.length > 0) return rawFlatRegistry;
+    return buildProgramacaoReuniaoRegistry();
+  }, [rawFlatRegistry]);
+
+  const tree = useMemo(() => {
+    if (rawTree && rawTree.length > 0) return rawTree;
+    return skeletonTree.buildTree(flatRegistry);
+  }, [rawTree, flatRegistry]);
 
   // Engine & Metrics
   const engine = engineRegistry.get(event?.config?.engineId);
@@ -59,7 +107,7 @@ export default function SkeletonEditor() {
   const [nodeValue, setNodeValue] = useState('');
   const [nodeEmail, setNodeEmail] = useState('');
 
-  if (loading || !event) {
+  if (loading && flatRegistry.length === 0) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#FFB800" />
@@ -275,12 +323,7 @@ export default function SkeletonEditor() {
         tools={skeletonCadTools}
         leftSlot={
           <View style={styles.actionLeft}>
-            <Pressable onPress={() => router.replace('/')} style={styles.backBtn}>
-              <Text style={styles.backBtnText}>← Painel</Text>
-            </Pressable>
-            <Text style={styles.eventTitle} numberOfLines={1}>
-              {event.config.name}
-            </Text>
+            <MultiEngineSwitcherBar activeEngine="skeleton" eventId={eventId} />
           </View>
         }
       />
@@ -291,144 +334,105 @@ export default function SkeletonEditor() {
           <View style={styles.engineBadge}>
             <Text style={styles.engineBadgeText}>{engine.name}</Text>
           </View>
-          {metrics.engineId === 'territory_logistics' && (
-            <Text style={styles.metricsSummary}>
-              Cobertura: {metrics.data.coveragePercent}% ({metrics.data.workedUnits}/{metrics.data.totalUnits} trabalhados) • {metrics.data.quadrasCount} quadras
-            </Text>
-          )}
-          {metrics.engineId === 'study_synthesis' && (
-            <Text style={styles.metricsSummary}>
-              Sínteses: {metrics.data.completionPercent}% ({metrics.data.submittedCount}/{metrics.data.totalTopics} concluídos)
-            </Text>
-          )}
-          {metrics.engineId === 'roster_assignments' && (
-            <Text style={styles.metricsSummary}>
-              Preenchimento: {metrics.data.fulfillmentPercent}% ({metrics.data.assignedSlots}/{metrics.data.totalSlots} designados • {metrics.data.confirmedSlots} confirmados)
-            </Text>
-          )}
-          {metrics.engineId === 'incident_command' && (
-            <Text style={styles.metricsSummary}>
-              ICS: {metrics.data.totalUnits} unidades • {metrics.data.totalPersonnel} efetivo • {metrics.data.spanOfControlBreaches > 0 ? `⚠️ ${metrics.data.spanOfControlBreaches} Sobrecargas de Graicunas` : '✅ Amplitude Saudável'}
-            </Text>
-          )}
-          {metrics.engineId === 'live_production_ros' && (
-            <Text style={styles.metricsSummary}>
-              Run-of-Show: Drift {metrics.data.cumulativeDriftSec > 0 ? `+${metrics.data.cumulativeDriftSec}s` : `${metrics.data.cumulativeDriftSec}s`} • {metrics.data.hardOutThreatened ? '⚠️ HARD_OUT Ameaçado!' : '✅ No Horário'}
-            </Text>
-          )}
-          {metrics.engineId === 'tournament_pairings' && (
-            <Text style={styles.metricsSummary}>
-              Torneio: Rodada {metrics.data.currentRound}/{metrics.data.totalRounds} • {metrics.data.completedMatches} partidas • {metrics.data.rematchesDetected > 0 ? `⚠️ ${metrics.data.rematchesDetected} Revanches` : '✅ Sem Revanches'}
-            </Text>
-          )}
-          {metrics.engineId === 'canvassing_logistics' && (
-            <Text style={styles.metricsSummary}>
-              Canvassing: {metrics.data.contactRatePercent}% contato • {metrics.data.contactedCount} atendidos / {metrics.data.totalDoors} portas
-            </Text>
-          )}
-          {metrics.engineId === 'transformer' && (
-            <Text style={styles.metricsSummary}>
-              Transformer: {metrics.data.activeModules.length} leis ativas • {metrics.data.alerts.length > 0 ? `⚠️ ${metrics.data.alerts.length} alertas` : '✅ Sem alertas'}
-            </Text>
-          )}
+          <Text style={styles.eventTitle} numberOfLines={1}>
+            {event.config.name}
+          </Text>
         </View>
 
-        {metrics.engineId === 'territory_logistics' && (
-          <View style={{ flexDirection: 'row', gap: 8 }}>
+        <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap' }}>
+          {(metrics.engineId === 'territory_logistics' ||
+            (event.config.engines || []).includes('territory_logistics')) && (
+            <>
+              <Pressable
+                onPress={() => router.push(`/territory-checklist?id=${eventId}`)}
+                style={styles.summaryBtn}
+                accessibilityLabel="Prancheta de Campo"
+                {...({ title: 'Prancheta de Campo' } as any)}
+              >
+                <Text style={styles.summaryBtnText}>📋</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => router.push(`/territory-map?id=${eventId}`)}
+                style={[
+                  styles.summaryBtn,
+                  { backgroundColor: 'rgba(59, 130, 246, 0.2)', borderColor: '#3B82F6' },
+                ]}
+                accessibilityLabel="Mapa Tático"
+                {...({ title: 'Mapa Tático' } as any)}
+              >
+                <Text style={[styles.summaryBtnText, { color: '#60A5FA' }]}>🗺️</Text>
+              </Pressable>
+            </>
+          )}
+
+          {metrics.engineId === 'study_synthesis' && (
             <Pressable
-              onPress={() => router.push(`/territory-checklist?id=${eventId}`)}
+              onPress={() => setSummaryModalVisible(true)}
               style={styles.summaryBtn}
+              accessibilityLabel="Resumo Executivo"
+              {...({ title: 'Resumo Executivo' } as any)}
             >
-              <Text style={styles.summaryBtnText}>📋 Prancheta de Campo</Text>
+              <Text style={styles.summaryBtnText}>📖</Text>
             </Pressable>
+          )}
+
+          {(metrics.engineId === 'roster_assignments' ||
+            (event.config.engines || []).includes('roster_assignments')) && (
             <Pressable
-              onPress={() => router.push(`/territory-map?id=${eventId}`)}
+              onPress={() => router.push(`/roster-swap?id=${eventId}`)}
+              style={[
+                styles.summaryBtn,
+                { backgroundColor: 'rgba(16, 185, 129, 0.2)', borderColor: '#10B981' },
+              ]}
+              accessibilityLabel="Reservas e Trocas"
+              {...({ title: 'Reservas & Trocas' } as any)}
+            >
+              <Text style={[styles.summaryBtnText, { color: '#6EE7B7' }]}>🔄</Text>
+            </Pressable>
+          )}
+
+          {metrics.engineId === 'live_production_ros' && (
+            <Pressable
+              onPress={() => router.push(`/run-of-show?id=${eventId}`)}
+              style={[
+                styles.summaryBtn,
+                { backgroundColor: 'rgba(239, 68, 68, 0.2)', borderColor: '#EF4444' },
+              ]}
+              accessibilityLabel="Mesa de Corte ROS"
+              {...({ title: 'Mesa de Corte (ROS)' } as any)}
+            >
+              <Text style={[styles.summaryBtnText, { color: '#FCA5A5' }]}>⏱️</Text>
+            </Pressable>
+          )}
+
+          {metrics.engineId === 'tournament_pairings' && (
+            <Pressable
+              onPress={() => router.push(`/tournament-bracket?id=${eventId}`)}
+              style={[
+                styles.summaryBtn,
+                { backgroundColor: 'rgba(245, 158, 11, 0.2)', borderColor: '#F59E0B' },
+              ]}
+              accessibilityLabel="Chaves e Suíço"
+              {...({ title: 'Chaves & Suíço' } as any)}
+            >
+              <Text style={[styles.summaryBtnText, { color: '#FCD34D' }]}>🏆</Text>
+            </Pressable>
+          )}
+
+          {metrics.engineId === 'incident_command' && (
+            <Pressable
+              onPress={() => router.push(`/ics-command?id=${eventId}`)}
               style={[
                 styles.summaryBtn,
                 { backgroundColor: 'rgba(59, 130, 246, 0.2)', borderColor: '#3B82F6' },
               ]}
+              accessibilityLabel="Comando ICS"
+              {...({ title: 'Comando ICS' } as any)}
             >
-              <Text style={[styles.summaryBtnText, { color: '#60A5FA' }]}>🗺️ Mapa Tático</Text>
+              <Text style={[styles.summaryBtnText, { color: '#93C5FD' }]}>🛡️</Text>
             </Pressable>
-          </View>
-        )}
-
-        {metrics.engineId === 'canvassing_logistics' && (
-          <View style={{ flexDirection: 'row', gap: 8 }}>
-            <Pressable
-              onPress={() => router.push(`/territory-checklist?id=${eventId}`)}
-              style={styles.summaryBtn}
-            >
-              <Text style={styles.summaryBtnText}>📋 Prancheta 8-Codes</Text>
-            </Pressable>
-            <Pressable
-              onPress={() => router.push(`/territory-map?id=${eventId}`)}
-              style={[
-                styles.summaryBtn,
-                { backgroundColor: 'rgba(59, 130, 246, 0.2)', borderColor: '#3B82F6' },
-              ]}
-            >
-              <Text style={[styles.summaryBtnText, { color: '#60A5FA' }]}>🗺️ Rota eLOT</Text>
-            </Pressable>
-          </View>
-        )}
-
-        {metrics.engineId === 'study_synthesis' && (
-          <Pressable
-            onPress={() => setSummaryModalVisible(true)}
-            style={styles.summaryBtn}
-          >
-            <Text style={styles.summaryBtnText}>📖 Resumo Executivo</Text>
-          </Pressable>
-        )}
-
-        {metrics.engineId === 'roster_assignments' && (
-          <Pressable
-            onPress={() => router.push(`/roster-swap?id=${eventId}`)}
-            style={[
-              styles.summaryBtn,
-              { backgroundColor: 'rgba(16, 185, 129, 0.2)', borderColor: '#10B981' },
-            ]}
-          >
-            <Text style={[styles.summaryBtnText, { color: '#6EE7B7' }]}>🔄 Reservas & Trocas</Text>
-          </Pressable>
-        )}
-
-        {metrics.engineId === 'live_production_ros' && (
-          <Pressable
-            onPress={() => router.push(`/run-of-show?id=${eventId}`)}
-            style={[
-              styles.summaryBtn,
-              { backgroundColor: 'rgba(239, 68, 68, 0.2)', borderColor: '#EF4444' },
-            ]}
-          >
-            <Text style={[styles.summaryBtnText, { color: '#FCA5A5' }]}>⏱️ Mesa de Corte (ROS)</Text>
-          </Pressable>
-        )}
-
-        {metrics.engineId === 'tournament_pairings' && (
-          <Pressable
-            onPress={() => router.push(`/tournament-bracket?id=${eventId}`)}
-            style={[
-              styles.summaryBtn,
-              { backgroundColor: 'rgba(245, 158, 11, 0.2)', borderColor: '#F59E0B' },
-            ]}
-          >
-            <Text style={[styles.summaryBtnText, { color: '#FCD34D' }]}>🏆 Chaves & Suíço</Text>
-          </Pressable>
-        )}
-
-        {metrics.engineId === 'incident_command' && (
-          <Pressable
-            onPress={() => router.push(`/ics-command?id=${eventId}`)}
-            style={[
-              styles.summaryBtn,
-              { backgroundColor: 'rgba(59, 130, 246, 0.2)', borderColor: '#3B82F6' },
-            ]}
-          >
-            <Text style={[styles.summaryBtnText, { color: '#93C5FD' }]}>🛡️ Comando ICS</Text>
-          </Pressable>
-        )}
+          )}
+        </View>
 
         {metrics.engineId === 'transformer' && (
           <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>

@@ -7,6 +7,7 @@ import {
   TextInput,
   ScrollView,
   StyleSheet,
+  Platform,
 } from 'react-native';
 import {
   type ParticipantProfile,
@@ -15,14 +16,13 @@ import {
   type ParticipantStatusFlag,
   type CapabilityDomainId,
   type CapabilityKey,
-  CAPABILITY_COLUMNS,
   ROLE_TIER_LABELS,
-  PROFILE_CATEGORY_LABELS,
   STATUS_FLAG_LABELS,
   ensureParticipantPrivilegeMatrix,
   deriveSummaryTagsFromCapabilities,
   filterParticipantsByMatrixCriteria,
   buildPresetCapabilities,
+  getEffectiveCapabilityColumns,
 } from '@sekundo/core';
 
 export interface PrivilegeMatrixModalProps {
@@ -34,15 +34,6 @@ export interface PrivilegeMatrixModalProps {
   onAutoAssignAllWeeks?: (strictSameCategoryPairing: boolean) => void;
   lastAutoAssignSummaryText?: string | null;
 }
-
-const DOMAIN_TABS: Array<{ id: CapabilityDomainId | 'ALL'; label: string; color: string }> = [
-  { id: 'coordenacao_abertura', label: '1. Coord. & Abertura (2)', color: '#2563EB' },
-  { id: 'bloco_analitico', label: '2. Bloco 1 Analítico (3)', color: '#0D9488' },
-  { id: 'bloco_praticas_duplas', label: '3. Bloco 2 Práticas/Duplas (5)', color: '#D97706' },
-  { id: 'bloco_operacional_sintese', label: '4. Bloco 3 Síntese (4)', color: '#BE123C' },
-  { id: 'logistica_plenaria_campo', label: '5. Logística & Plenária (12)', color: '#16A34A' },
-  { id: 'ALL', label: 'Todas as 26 Colunas', color: '#6366F1' },
-];
 
 export function PrivilegeMatrixModal({
   visible,
@@ -57,23 +48,56 @@ export function PrivilegeMatrixModal({
   const [selectedRoleTier, setSelectedRoleTier] = useState<ParticipantRoleTier | 'ALL'>('ALL');
   const [selectedStatusFlag, setSelectedStatusFlag] = useState<ParticipantStatusFlag | 'ALL'>('ALL');
   const [selectedGroup, setSelectedGroup] = useState<string>('ALL');
-  const [selectedDomain, setSelectedDomain] = useState<CapabilityDomainId | 'ALL'>(
-    'bloco_praticas_duplas'
-  );
+  const [selectedDomain, setSelectedDomain] = useState<CapabilityDomainId | 'ALL'>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
   const [strictSameCategoryPairing, setStrictSameCategoryPairing] = useState(true);
 
-  // Inline "New User" form state
+  // Click-to-reveal panels (Icon-Only principle)
   const [showAddUserBar, setShowAddUserBar] = useState(false);
+  const [showAddPrivilegeBar, setShowAddPrivilegeBar] = useState(false);
+  const [showFilterBar, setShowFilterBar] = useState(false);
+
   const [newUserName, setNewUserName] = useState('');
   const [newUserGroup, setNewUserGroup] = useState('Grupo 1');
   const [newUserCategory, setNewUserCategory] = useState<ParticipantCategory>('perfil_a');
   const [newUserTier, setNewUserTier] = useState<ParticipantRoleTier>('operador_base');
+  const [newPrivilegeName, setNewPrivilegeName] = useState('');
+  const [extraCustomKeys, setExtraCustomKeys] = useState<string[]>([]);
 
   const normalizedParticipants = useMemo(
     () => participants.map((p, idx) => ensureParticipantPrivilegeMatrix(p, idx)),
     [participants]
   );
+
+  const allEffectiveColumns = useMemo(
+    () => getEffectiveCapabilityColumns(normalizedParticipants, extraCustomKeys),
+    [normalizedParticipants, extraCustomKeys]
+  );
+
+  const customColumnsCount = useMemo(
+    () => allEffectiveColumns.filter((c) => c.domainId === 'custom_csv').length,
+    [allEffectiveColumns]
+  );
+
+  const domainTabs = useMemo(() => {
+    const base: Array<{ id: CapabilityDomainId | 'ALL'; icon: string; label: string; color: string }> = [
+      { id: 'ALL', icon: '🌐', label: `Todos (${allEffectiveColumns.length})`, color: '#6366F1' },
+      { id: 'coordenacao_abertura', icon: '🎙️', label: '1. Coord.', color: '#2563EB' },
+      { id: 'bloco_analitico', icon: '📊', label: '2. Bloco 1', color: '#0D9488' },
+      { id: 'bloco_praticas_duplas', icon: '🤝', label: '3. Bloco 2', color: '#D97706' },
+      { id: 'bloco_operacional_sintese', icon: '⚙️', label: '4. Bloco 3', color: '#BE123C' },
+      { id: 'logistica_plenaria_campo', icon: '🔊', label: '5. Logística', color: '#16A34A' },
+    ];
+    if (customColumnsCount > 0) {
+      base.push({
+        id: 'custom_csv',
+        icon: '✨',
+        label: `6. Planilha (${customColumnsCount})`,
+        color: '#EC4899',
+      });
+    }
+    return base;
+  }, [allEffectiveColumns.length, customColumnsCount]);
 
   const filteredParticipants = useMemo(() => {
     return filterParticipantsByMatrixCriteria(normalizedParticipants, {
@@ -93,14 +117,20 @@ export function PrivilegeMatrixModal({
   ]);
 
   const visibleColumns = useMemo(() => {
-    if (selectedDomain === 'ALL') return CAPABILITY_COLUMNS;
-    return CAPABILITY_COLUMNS.filter((c) => c.domainId === selectedDomain);
-  }, [selectedDomain]);
+    if (selectedDomain === 'ALL') return allEffectiveColumns;
+    const domainFiltered = allEffectiveColumns.filter((c) => c.domainId === selectedDomain);
+    // Always keep custom CSV columns visible alongside any selected domain so imported privileges are never hidden
+    const customCols = allEffectiveColumns.filter((c) => c.domainId === 'custom_csv');
+    if (selectedDomain !== 'custom_csv' && customCols.length > 0) {
+      return [...domainFiltered, ...customCols];
+    }
+    return domainFiltered;
+  }, [allEffectiveColumns, selectedDomain]);
 
   const handleToggleCapability = (participantId: string, capKey: CapabilityKey) => {
     const updated = normalizedParticipants.map((p) => {
       if (p.id !== participantId) return p;
-      const nextCaps = {
+      const nextCaps: Record<string, boolean> = {
         ...(p.capabilities || {}),
         [capKey]: !p.capabilities?.[capKey],
       };
@@ -109,6 +139,7 @@ export function PrivilegeMatrixModal({
         ...p,
         capabilities: nextCaps,
         capabilityTags: nextTags,
+        preserveExplicitCapabilities: true,
       };
     });
     onChangeParticipants(updated);
@@ -124,11 +155,9 @@ export function PrivilegeMatrixModal({
       if (p.id !== participantId) return p;
       const currentIdx = order.indexOf(p.roleTier || 'operador_base');
       const nextTier = order[(currentIdx + 1) % order.length];
-      const nextCaps = buildPresetCapabilities(
-        p.profileCategory || 'perfil_a',
-        nextTier,
-        idx
-      );
+      const nextCaps = p.preserveExplicitCapabilities
+        ? { ...(p.capabilities || {}) }
+        : buildPresetCapabilities(p.profileCategory || 'perfil_a', nextTier, idx);
       return {
         ...p,
         roleTier: nextTier,
@@ -147,6 +176,12 @@ export function PrivilegeMatrixModal({
       newUserTier,
       normalizedParticipants.length
     );
+    // Ensure custom keys exist as false by default on new user
+    for (const col of allEffectiveColumns) {
+      if (!(col.key in caps)) {
+        (caps as Record<string, boolean>)[col.key] = false;
+      }
+    }
     const created: ParticipantProfile = {
       id: newId,
       name: cleanName,
@@ -159,10 +194,28 @@ export function PrivilegeMatrixModal({
       assignmentCount: 0,
       lastAssignedIsoDate: '',
       active: true,
+      preserveExplicitCapabilities: true,
     };
     onChangeParticipants([...normalizedParticipants, created]);
     setNewUserName('');
     setShowAddUserBar(false);
+  };
+
+  const handleCreateCustomPrivilege = () => {
+    const cleanKey = newPrivilegeName.trim();
+    if (!cleanKey) return;
+    setExtraCustomKeys((prev) => (prev.includes(cleanKey) ? prev : [...prev, cleanKey]));
+    const updated = normalizedParticipants.map((p) => ({
+      ...p,
+      capabilities: {
+        ...(p.capabilities || {}),
+        [cleanKey]: Boolean(p.capabilities?.[cleanKey]),
+      },
+      preserveExplicitCapabilities: true,
+    }));
+    onChangeParticipants(updated);
+    setNewPrivilegeName('');
+    setShowAddPrivilegeBar(false);
   };
 
   const handleResetRotationLedger = () => {
@@ -175,70 +228,131 @@ export function PrivilegeMatrixModal({
     onChangeParticipants(reset);
   };
 
+  const webTitle = (title: string) => (Platform.OS === 'web' ? ({ title } as any) : {});
+
   return (
     <Modal visible={visible} animationType="fade" transparent onRequestClose={onClose}>
       <View style={styles.backdrop}>
         <View style={styles.cadModalContainer}>
-          {/* Top AutoCAD Ribbon */}
+          {/* Top Compact Icon-Only CAD Ribbon */}
           <View style={styles.topRibbon}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.modalTitle}>
-                🛡️ MATRIZ DE PRIVILÉGIOS & AUTO-DESIGNAÇÃO (CLEAN-ROOM CAD)
-              </Text>
-              <Text style={styles.modalSubtitle}>
-                {filteredParticipants.length}/{normalizedParticipants.length} usuários filtrados • 26
-                colunas de habilitação • Zero repetição no mesmo dia
-              </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 1 }}>
+              <Text style={styles.modalTitle}>🛡️ PRIVILÉGIOS</Text>
+              <View style={styles.countPill}>
+                <Text style={styles.countPillText}>
+                  {filteredParticipants.length}/{normalizedParticipants.length} 👤 •{' '}
+                  {allEffectiveColumns.length} col
+                </Text>
+              </View>
             </View>
 
             <View style={styles.topActionsRow}>
               <Pressable
-                style={[styles.cadBtn, showAddUserBar && styles.cadBtnActive]}
-                onPress={() => setShowAddUserBar((prev) => !prev)}
+                testID="priv-modal-btn-search"
+                accessibilityRole="button"
+                accessibilityLabel="Filtrar Usuários"
+                {...webTitle('Filtrar Usuários por Nome, Grade, Escalão ou Grupo')}
+                style={[styles.iconActionBtn, showFilterBar && styles.cadBtnActive]}
+                onPress={() => setShowFilterBar((prev) => !prev)}
               >
-                <Text style={styles.cadBtnText}>➕ Novo Usuário</Text>
+                <Text style={styles.iconActionGlyph}>🔍</Text>
               </Pressable>
 
               <Pressable
+                testID="priv-modal-btn-add-user"
+                accessibilityRole="button"
+                accessibilityLabel="Novo Usuário"
+                {...webTitle('Adicionar Novo Usuário')}
+                style={[styles.iconActionBtn, showAddUserBar && styles.cadBtnActive]}
+                onPress={() => {
+                  setShowAddUserBar((prev) => !prev);
+                  setShowAddPrivilegeBar(false);
+                }}
+              >
+                <Text style={styles.iconActionGlyph}>➕</Text>
+              </Pressable>
+
+              <Pressable
+                testID="priv-modal-btn-add-priv"
+                accessibilityRole="button"
+                accessibilityLabel="Novo Privilégio Customizado"
+                {...webTitle('Criar Novo Privilégio Customizado na Planilha')}
+                style={[styles.iconActionBtn, showAddPrivilegeBar && styles.cadBtnActive]}
+                onPress={() => {
+                  setShowAddPrivilegeBar((prev) => !prev);
+                  setShowAddUserBar(false);
+                }}
+              >
+                <Text style={styles.iconActionGlyph}>🏷️</Text>
+              </Pressable>
+
+              <Pressable
+                testID="priv-modal-btn-pairing"
+                accessibilityRole="button"
+                accessibilityLabel={
+                  strictSameCategoryPairing ? 'Duplas: Mesma Grade' : 'Duplas: Misto Livre'
+                }
+                {...webTitle(
+                  strictSameCategoryPairing ? 'Duplas: Mesma Grade (A/B)' : 'Duplas: Misto Livre'
+                )}
                 style={[
-                  styles.cadBtn,
-                  strictSameCategoryPairing && { borderColor: '#38BDF8', backgroundColor: '#0C4A6E' },
+                  styles.iconActionBtn,
+                  strictSameCategoryPairing && {
+                    borderColor: '#38BDF8',
+                    backgroundColor: '#0C4A6E',
+                  },
                 ]}
                 onPress={() => setStrictSameCategoryPairing((prev) => !prev)}
               >
-                <Text style={styles.cadBtnText}>
-                  {strictSameCategoryPairing ? '🔗 Duplas: Mesma Grade' : '🔗 Duplas: Misto Livre'}
-                </Text>
+                <Text style={styles.iconActionGlyph}>🔗</Text>
               </Pressable>
 
               {onAutoAssignCurrentWeek && (
                 <Pressable
-                  style={[styles.cadBtn, styles.cadBtnEmerald]}
+                  testID="priv-modal-btn-auto-week"
+                  accessibilityRole="button"
+                  accessibilityLabel="Auto-Designar Semana"
+                  {...webTitle('Auto-Designar Semana Atual')}
+                  style={[styles.iconActionBtn, styles.cadBtnEmerald]}
                   onPress={() => onAutoAssignCurrentWeek(strictSameCategoryPairing)}
                 >
-                  <Text style={[styles.cadBtnText, { color: '#ECFDF5' }]}>
-                    ⚡ Auto-Designar Semana
-                  </Text>
+                  <Text style={styles.iconActionGlyph}>⚡</Text>
                 </Pressable>
               )}
 
               {onAutoAssignAllWeeks && (
                 <Pressable
-                  style={[styles.cadBtn, styles.cadBtnGold]}
+                  testID="priv-modal-btn-auto-all"
+                  accessibilityRole="button"
+                  accessibilityLabel="Auto-Designar 9 Semanas"
+                  {...webTitle('Auto-Designar Todas as 9 Semanas')}
+                  style={[styles.iconActionBtn, styles.cadBtnGold]}
                   onPress={() => onAutoAssignAllWeeks(strictSameCategoryPairing)}
                 >
-                  <Text style={[styles.cadBtnText, { color: '#0F172A' }]}>
-                    ⚡ Auto-Designar 9 Semanas
-                  </Text>
+                  <Text style={styles.iconActionGlyph}>🪄</Text>
                 </Pressable>
               )}
 
-              <Pressable style={styles.cadBtn} onPress={handleResetRotationLedger}>
-                <Text style={styles.cadBtnText}>↺ Zerar Rotação</Text>
+              <Pressable
+                testID="priv-modal-btn-reset"
+                accessibilityRole="button"
+                accessibilityLabel="Zerar Rotação"
+                {...webTitle('Zerar Contadores de Rotação')}
+                style={styles.iconActionBtn}
+                onPress={handleResetRotationLedger}
+              >
+                <Text style={styles.iconActionGlyph}>↺</Text>
               </Pressable>
 
-              <Pressable style={[styles.cadBtn, styles.cadBtnDanger]} onPress={onClose}>
-                <Text style={[styles.cadBtnText, { color: '#FECACA' }]}>✕ Fechar</Text>
+              <Pressable
+                testID="priv-modal-btn-close"
+                accessibilityRole="button"
+                accessibilityLabel="Fechar"
+                {...webTitle('Fechar Matriz de Privilégios')}
+                style={[styles.iconActionBtn, styles.cadBtnDanger]}
+                onPress={onClose}
+              >
+                <Text style={[styles.iconActionGlyph, { color: '#FECACA' }]}>✕</Text>
               </Pressable>
             </View>
           </View>
@@ -249,12 +363,12 @@ export function PrivilegeMatrixModal({
             </View>
           ) : null}
 
-          {/* Optional Inline Add New User Strip */}
+          {/* Click-to-Reveal: Add New User Strip */}
           {showAddUserBar && (
             <View style={styles.addUserStrip}>
               <TextInput
                 style={styles.addUserInput}
-                placeholder="Nome do novo participante..."
+                placeholder="Nome do participante..."
                 placeholderTextColor="#64748B"
                 value={newUserName}
                 onChangeText={setNewUserName}
@@ -275,108 +389,110 @@ export function PrivilegeMatrixModal({
                   onPress={() => setNewUserCategory(cat)}
                 >
                   <Text style={styles.filterChipText}>
-                    {cat === 'perfil_a' ? 'Grade A' : 'Grade B'}
+                    {cat === 'perfil_a' ? 'A' : 'B'}
                   </Text>
                 </Pressable>
               ))}
-              {(
-                ['operador_base', 'assistente_tecnico', 'coordenador_senior'] as ParticipantRoleTier[]
-              ).map((tier) => (
-                <Pressable
-                  key={tier}
-                  style={[styles.filterChip, newUserTier === tier && styles.filterChipActive]}
-                  onPress={() => setNewUserTier(tier)}
-                >
-                  <Text style={styles.filterChipText}>{ROLE_TIER_LABELS[tier]}</Text>
-                </Pressable>
-              ))}
               <Pressable style={[styles.cadBtn, styles.cadBtnEmerald]} onPress={handleCreateUser}>
-                <Text style={[styles.cadBtnText, { color: '#ECFDF5' }]}>💾 Salvar Usuário</Text>
+                <Text style={[styles.cadBtnText, { color: '#ECFDF5' }]}>💾</Text>
               </Pressable>
             </View>
           )}
 
-          {/* Multi-Facet Filter Bar (5 Dimensions from Clean-Room Specification) */}
-          <View style={styles.filterRibbon}>
-            <TextInput
-              style={styles.searchInput}
-              placeholder="🔍 Filtrar nome..."
-              placeholderTextColor="#64748B"
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-            />
-
-            {/* Category Filter (Grade A / Grade B) */}
-            {(['ALL', 'perfil_a', 'perfil_b'] as const).map((cat) => (
+          {/* Click-to-Reveal: Add New Custom Privilege Strip */}
+          {showAddPrivilegeBar && (
+            <View style={styles.addUserStrip}>
+              <TextInput
+                style={styles.addUserInput}
+                placeholder="Nome de qualquer privilégio (ex: Som_HD, Indicador_B)..."
+                placeholderTextColor="#64748B"
+                value={newPrivilegeName}
+                onChangeText={setNewPrivilegeName}
+              />
               <Pressable
-                key={cat}
-                style={[styles.filterChip, selectedCategory === cat && styles.filterChipActive]}
-                onPress={() => setSelectedCategory(cat)}
+                style={[styles.cadBtn, styles.cadBtnEmerald]}
+                onPress={handleCreateCustomPrivilege}
               >
-                <Text style={styles.filterChipText}>
-                  {cat === 'ALL'
-                    ? 'Todas Grades'
-                    : cat === 'perfil_a'
-                    ? 'Grade A (Coord/Geral)'
-                    : 'Grade B (Práticas/Duplas)'}
-                </Text>
+                <Text style={[styles.cadBtnText, { color: '#ECFDF5' }]}>🏷️ Criar</Text>
               </Pressable>
-            ))}
+            </View>
+          )}
 
-            {/* Role Tier Filter */}
-            {(
-              ['ALL', 'coordenador_senior', 'assistente_tecnico', 'operador_base'] as const
-            ).map((tier) => (
-              <Pressable
-                key={tier}
-                style={[styles.filterChip, selectedRoleTier === tier && styles.filterChipActive]}
-                onPress={() => setSelectedRoleTier(tier)}
-              >
-                <Text style={styles.filterChipText}>
-                  {tier === 'ALL' ? 'Todos Escalões' : ROLE_TIER_LABELS[tier]}
-                </Text>
-              </Pressable>
-            ))}
+          {/* Click-to-Reveal: Multi-Facet Filter Bar */}
+          {showFilterBar && (
+            <View style={styles.filterRibbon}>
+              <TextInput
+                style={styles.searchInput}
+                placeholder="🔍 Nome/Grupo..."
+                placeholderTextColor="#64748B"
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+              />
 
-            {/* Group Filter */}
-            {(['ALL', 'Grupo 1', 'Grupo 2', 'Grupo 3'] as const).map((grp) => (
-              <Pressable
-                key={grp}
-                style={[styles.filterChip, selectedGroup === grp && styles.filterChipActive]}
-                onPress={() => setSelectedGroup(grp)}
-              >
-                <Text style={styles.filterChipText}>
-                  {grp === 'ALL' ? 'Todos Grupos' : grp}
-                </Text>
-              </Pressable>
-            ))}
+              {(['ALL', 'perfil_a', 'perfil_b'] as const).map((cat) => (
+                <Pressable
+                  key={cat}
+                  style={[styles.filterChip, selectedCategory === cat && styles.filterChipActive]}
+                  onPress={() => setSelectedCategory(cat)}
+                >
+                  <Text style={styles.filterChipText}>
+                    {cat === 'ALL' ? 'Grades' : cat === 'perfil_a' ? 'Grade A' : 'Grade B'}
+                  </Text>
+                </Pressable>
+              ))}
 
-            {/* Status Flag Filter */}
-            {(
-              [
-                'ALL',
-                'integral_regular',
-                'integral_continuo',
-                'capacitador',
-                'em_qualificacao',
-                'recem_designado',
-              ] as const
-            ).map((st) => (
-              <Pressable
-                key={st}
-                style={[styles.filterChip, selectedStatusFlag === st && styles.filterChipActive]}
-                onPress={() => setSelectedStatusFlag(st)}
-              >
-                <Text style={styles.filterChipText}>
-                  {st === 'ALL' ? 'Todos Status' : STATUS_FLAG_LABELS[st]}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
+              {(
+                ['ALL', 'coordenador_senior', 'assistente_tecnico', 'operador_base'] as const
+              ).map((tier) => (
+                <Pressable
+                  key={tier}
+                  style={[styles.filterChip, selectedRoleTier === tier && styles.filterChipActive]}
+                  onPress={() => setSelectedRoleTier(tier)}
+                >
+                  <Text style={styles.filterChipText}>
+                    {tier === 'ALL' ? 'Escalões' : ROLE_TIER_LABELS[tier]}
+                  </Text>
+                </Pressable>
+              ))}
 
-          {/* Capability Domain Selector Ribbon */}
+              {(['ALL', 'Grupo 1', 'Grupo 2', 'Grupo 3'] as const).map((grp) => (
+                <Pressable
+                  key={grp}
+                  style={[styles.filterChip, selectedGroup === grp && styles.filterChipActive]}
+                  onPress={() => setSelectedGroup(grp)}
+                >
+                  <Text style={styles.filterChipText}>
+                    {grp === 'ALL' ? 'Grupos' : grp}
+                  </Text>
+                </Pressable>
+              ))}
+
+              {(
+                [
+                  'ALL',
+                  'integral_regular',
+                  'integral_continuo',
+                  'capacitador',
+                  'em_qualificacao',
+                  'recem_designado',
+                ] as const
+              ).map((st) => (
+                <Pressable
+                  key={st}
+                  style={[styles.filterChip, selectedStatusFlag === st && styles.filterChipActive]}
+                  onPress={() => setSelectedStatusFlag(st)}
+                >
+                  <Text style={styles.filterChipText}>
+                    {st === 'ALL' ? 'Status' : STATUS_FLAG_LABELS[st]}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          )}
+
+          {/* Compact Domain Selector Tabs */}
           <View style={styles.domainRibbon}>
-            {DOMAIN_TABS.map((tab) => {
+            {domainTabs.map((tab) => {
               const active = selectedDomain === tab.id;
               return (
                 <Pressable
@@ -388,7 +504,7 @@ export function PrivilegeMatrixModal({
                   onPress={() => setSelectedDomain(tab.id)}
                 >
                   <Text style={[styles.domainTabText, active && { color: '#FFFFFF' }]}>
-                    {tab.label}
+                    {tab.icon} {tab.label}
                   </Text>
                 </Pressable>
               );
@@ -401,13 +517,13 @@ export function PrivilegeMatrixModal({
               {/* Sticky Column Headers */}
               <View style={styles.matrixHeaderRow}>
                 <View style={styles.participantNameCol}>
-                  <Text style={styles.matrixHeaderCellText}>PARTICIPANTE / GRUPO</Text>
+                  <Text style={styles.matrixHeaderCellText}>USUÁRIO / GRUPO</Text>
                 </View>
                 <View style={styles.tierCol}>
-                  <Text style={styles.matrixHeaderCellText}>ESCALÃO / GRADE</Text>
+                  <Text style={styles.matrixHeaderCellText}>ESCALÃO</Text>
                 </View>
                 <View style={styles.rotationCol}>
-                  <Text style={styles.matrixHeaderCellText}>ROTAÇÃO</Text>
+                  <Text style={styles.matrixHeaderCellText}>ROT.</Text>
                 </View>
                 {visibleColumns.map((col) => (
                   <View
@@ -463,6 +579,7 @@ export function PrivilegeMatrixModal({
                       return (
                         <Pressable
                           key={col.key}
+                          testID={`priv-cell-${p.id}-${col.key}`}
                           style={[
                             styles.capCell,
                             enabled && {
@@ -500,7 +617,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(2, 6, 23, 0.88)',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 8,
+    padding: 6,
   },
   cadModalContainer: {
     width: '100%',
@@ -517,12 +634,12 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
     backgroundColor: '#0F172A',
     borderBottomWidth: 1,
     borderBottomColor: '#1E293B',
-    gap: 8,
+    gap: 6,
   },
   modalTitle: {
     color: '#F8FAFC',
@@ -530,14 +647,37 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: 0.4,
   },
-  modalSubtitle: {
+  countPill: {
+    backgroundColor: '#1E293B',
+    borderRadius: 6,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderWidth: 1,
+    borderColor: '#334155',
+  },
+  countPillText: {
     color: '#94A3B8',
-    fontSize: 11,
+    fontSize: 10,
+    fontWeight: '700',
   },
   topActionsRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 6,
+    gap: 5,
+  },
+  iconActionBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 7,
+    backgroundColor: '#1E293B',
+    borderWidth: 1,
+    borderColor: '#334155',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  iconActionGlyph: {
+    fontSize: 15,
+    color: '#F8FAFC',
   },
   cadBtn: {
     paddingHorizontal: 10,
@@ -585,14 +725,15 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     alignItems: 'center',
     gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
     backgroundColor: '#111827',
     borderBottomWidth: 1,
     borderBottomColor: '#1E293B',
   },
   addUserInput: {
     minWidth: 180,
+    flex: 1,
     backgroundColor: '#090D16',
     borderWidth: 1,
     borderColor: '#334155',
@@ -607,14 +748,14 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     alignItems: 'center',
     gap: 5,
-    paddingHorizontal: 12,
+    paddingHorizontal: 10,
     paddingVertical: 6,
     backgroundColor: '#0B1120',
     borderBottomWidth: 1,
     borderBottomColor: '#1E293B',
   },
   searchInput: {
-    width: 140,
+    width: 130,
     backgroundColor: '#090D16',
     borderWidth: 1,
     borderColor: '#334155',
@@ -625,8 +766,8 @@ const styles = StyleSheet.create({
     fontSize: 11,
   },
   filterChip: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
     borderRadius: 5,
     backgroundColor: '#1E293B',
     borderWidth: 1,
@@ -644,15 +785,15 @@ const styles = StyleSheet.create({
   domainRibbon: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
     backgroundColor: '#090D16',
     borderBottomWidth: 1,
     borderBottomColor: '#1E293B',
   },
   domainTab: {
-    paddingHorizontal: 10,
+    paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 5,
     backgroundColor: '#1E293B',
@@ -661,7 +802,7 @@ const styles = StyleSheet.create({
   },
   domainTabText: {
     color: '#CBD5E1',
-    fontSize: 11,
+    fontSize: 10.5,
     fontWeight: '700',
   },
   matrixHeaderRow: {
@@ -684,14 +825,14 @@ const styles = StyleSheet.create({
     borderRightColor: '#1E293B',
   },
   tierCol: {
-    width: 140,
+    width: 125,
     paddingHorizontal: 6,
     paddingVertical: 6,
     borderRightWidth: 1,
     borderRightColor: '#1E293B',
   },
   rotationCol: {
-    width: 68,
+    width: 58,
     paddingHorizontal: 4,
     paddingVertical: 6,
     alignItems: 'center',
@@ -699,7 +840,7 @@ const styles = StyleSheet.create({
     borderRightColor: '#1E293B',
   },
   capColHeader: {
-    width: 78,
+    width: 86,
     height: 38,
     paddingHorizontal: 4,
     justifyContent: 'center',
@@ -744,7 +885,7 @@ const styles = StyleSheet.create({
     fontSize: 9,
   },
   capCell: {
-    width: 78,
+    width: 86,
     height: 36,
     justifyContent: 'center',
     alignItems: 'center',

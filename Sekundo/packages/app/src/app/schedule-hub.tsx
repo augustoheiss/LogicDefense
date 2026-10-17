@@ -37,6 +37,15 @@ import { useSkeleton } from '../hooks/useSkeleton';
 import { useLocalEvent } from '../hooks/useLocalEvent';
 import * as storage from '../storage/localStorage';
 import { PrivilegeMatrixModal } from '../components/PrivilegeMatrixModal';
+import { MultiEngineSwitcherBar } from '../components/ui/MultiEngineSwitcherBar';
+import {
+  exportFullSiteOmniCsvFromStorage,
+  commitOmniCsvBundleToStorage,
+  loadSavedPrivilegeParticipants,
+  savePrivilegeParticipants,
+  loadSavedScheduleRegistry,
+  loadSavedTerritoryRegistry,
+} from '../storage/omniStorageBridge';
 import {
   PROGRAMACAO_UNIT_NAME,
   DEFAULT_PRIVILEGE_MATRIX_PARTICIPANTS,
@@ -64,9 +73,11 @@ import {
   importScheduleHubFromCsv,
   exportOmniCsvBundle,
   importOmniCsvBundle,
+  selectEnginePartitionNodes,
   autoAssignScheduleRegistry,
   inferSlotRequiredCapability,
   ensureParticipantPrivilegeMatrix,
+  getEffectiveCapabilityColumns,
   type FlatSkeletonEntry,
   type ParticipantProfile,
   type StructuredProgramSession,
@@ -165,10 +176,18 @@ export default function ScheduleHubConsole() {
   );
 
   const activeScheduleRegistry = useMemo(() => {
-    const extracted = extractStructuredSessions(flatRegistry);
-    if (extracted.length > 0) return flatRegistry;
+    const partitioned = selectEnginePartitionNodes(flatRegistry, 'roster_assignments');
+    const extracted = extractStructuredSessions(partitioned);
+    if (extracted.length > 0) return partitioned;
     return localScheduleRegistry;
   }, [flatRegistry, localScheduleRegistry]);
+
+  useEffect(() => {
+    const partitionedTerritories = selectEnginePartitionNodes(flatRegistry, 'territory_logistics');
+    if (partitionedTerritories.length > 0) {
+      setTerritoryRegistry(partitionedTerritories);
+    }
+  }, [flatRegistry]);
 
   const sessions = useMemo(
     () => extractStructuredSessions(activeScheduleRegistry),
@@ -258,8 +277,31 @@ export default function ScheduleHubConsole() {
     return found || currentSessionSlotsFlat[0];
   }, [currentSessionSlotsFlat, selectedSlotKey]);
 
-  // Restore persisted state from localStorage
+  // Restore persisted state from storage & localStorage
   useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const [savedPrivs, savedSched, savedTerr] = await Promise.all([
+          loadSavedPrivilegeParticipants(),
+          loadSavedScheduleRegistry(),
+          loadSavedTerritoryRegistry(),
+        ]);
+        if (!mounted) return;
+        if (savedPrivs && savedPrivs.length > 0) {
+          setActiveDirectory(savedPrivs);
+        }
+        if (savedSched && savedSched.length > 0) {
+          setLocalScheduleRegistry(savedSched);
+        }
+        if (savedTerr && savedTerr.length > 0) {
+          setTerritoryRegistry(savedTerr);
+        }
+      } catch {
+        // ignore
+      }
+    })();
+
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
       const savedName = window.localStorage.getItem(MY_PARTICIPANT_STORAGE_KEY);
       if (savedName) setMyParticipantName(sanitizeLegacySensitiveText(savedName).text);
@@ -272,50 +314,30 @@ export default function ScheduleHubConsole() {
           const parsedDir = JSON.parse(savedPrivDir) as ParticipantProfile[];
           if (Array.isArray(parsedDir) && parsedDir.length > 0) {
             setActiveDirectory(
-              parsedDir.map((p, idx) => ensureParticipantPrivilegeMatrix(p, idx))
+              parsedDir.map((p, idx) =>
+                ensureParticipantPrivilegeMatrix(p, idx, { preserveExplicitCapabilities: true })
+              )
             );
           }
         } catch {
           // ignore
         }
       }
-
-      const savedBundle = window.localStorage.getItem(LOCAL_BUNDLE_STORAGE_KEY);
-      if (savedBundle) {
-        try {
-          const trimmed = savedBundle.trim();
-          if (trimmed.startsWith('_record_kind,') || trimmed.startsWith('_key,')) {
-            const csvLoaded = importScheduleHubFromCsv(trimmed);
-            setActiveUnitName(csvLoaded.unitName);
-            setActiveDirectory(csvLoaded.participants);
-            setLocalScheduleRegistry(csvLoaded.scheduleRegistry);
-            setTerritoryRegistry(csvLoaded.territoryRegistry);
-          } else {
-            const loaded = parseSekundoScheduleBundle(
-              sanitizeLegacySensitiveText(savedBundle).text
-            );
-            setActiveUnitName(loaded.unitName);
-            setActiveDirectory(
-              loaded.participants.map((p, idx) => ensureParticipantPrivilegeMatrix(p, idx))
-            );
-            setLocalScheduleRegistry(loaded.scheduleRegistry);
-            setTerritoryRegistry(loaded.territoryRegistry);
-          }
-        } catch (err) {
-          console.warn('[Sekundo] Failed to restore schedule bundle:', err);
-        }
-      }
     }
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   const handleUpdateParticipants = (updated: ParticipantProfile[]) => {
     setActiveDirectory(updated);
+    savePrivilegeParticipants(updated).catch(() => undefined);
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
       window.localStorage.setItem(PRIVILEGE_DIRECTORY_STORAGE_KEY, JSON.stringify(updated));
     }
   };
 
-  // Auto-Assign Designations using the 26-Column Privilege Matrix & FIFO Rotation
+  // Auto-Assign Designations using the Privilege Matrix & FIFO Rotation
   const handleRunAutoAssign = async (
     scope: 'current_week' | 'all_weeks',
     strictSameCategoryPairing: boolean = true
@@ -338,11 +360,11 @@ export default function ScheduleHubConsole() {
       await saveSkeleton(updatedRegistry);
     }
 
-    const msg = `⚡ Auto-Designação concluída (${
+    const msg = `⚡ Auto-Designação (${
       scope === 'current_week' ? 'Semana Atual' : `${summary.sessionsAssigned} Semanas`
-    }): ${summary.slotsAssigned} funções alocadas • ${summary.sameDayCollisions} colisões no mesmo dia • ${
+    }): ${summary.slotsAssigned} funções • ${summary.sameDayCollisions} colisões • ${
       summary.privilegeViolations
-    } violações de privilégio!`;
+    } violações`;
     setLastAutoAssignSummaryText(msg);
     setStatusBanner(msg);
   };
@@ -360,28 +382,27 @@ export default function ScheduleHubConsole() {
           const text = await file.text();
           const lower = file.name.toLowerCase();
           if (lower.endsWith('.csv') || text.trim().startsWith('_record_kind,')) {
-            const loaded = importScheduleHubFromCsv(text);
-            setActiveUnitName(loaded.unitName);
-            handleUpdateParticipants(loaded.participants);
-            setLocalScheduleRegistry(loaded.scheduleRegistry);
-            setTerritoryRegistry(loaded.territoryRegistry);
-            if (typeof window !== 'undefined') {
-              window.localStorage.setItem(LOCAL_BUNDLE_STORAGE_KEY, text);
-            }
-            if (eventId) {
-              await saveSkeleton(loaded.scheduleRegistry);
-            }
+            const loadedOmni = importOmniCsvBundle(text);
+            setActiveUnitName(loadedOmni.unitName);
+            handleUpdateParticipants(loadedOmni.participants);
+            setLocalScheduleRegistry(loadedOmni.scheduleRegistry);
+            setTerritoryRegistry(loadedOmni.territoryRegistry);
+            await commitOmniCsvBundleToStorage(text, {
+              targetEventId: eventId || undefined,
+            });
             setSelectedSessionIdx(0);
             setStatusBanner(
-              `✅ CSV "${file.name}" importado (${loaded.participants.length} usuários c/ privilégios, ${
-                extractStructuredSessions(loaded.scheduleRegistry).length
-              } semanas, ${loaded.territoryRegistry.length} territórios)!`
+              `✅ CSV "${file.name}" importado (${loadedOmni.participants.length} usuários, ${
+                extractStructuredSessions(loadedOmni.scheduleRegistry).length
+              } semanas, ${loadedOmni.territoryRegistry.length} territórios)!`
             );
           } else if (lower.endsWith('.json')) {
             const loaded = parseSekundoScheduleBundle(text);
             setActiveUnitName(loaded.unitName);
             handleUpdateParticipants(
-              loaded.participants.map((p, idx) => ensureParticipantPrivilegeMatrix(p, idx))
+              loaded.participants.map((p, idx) =>
+                ensureParticipantPrivilegeMatrix(p, idx, { preserveExplicitCapabilities: true })
+              )
             );
             setLocalScheduleRegistry(loaded.scheduleRegistry);
             setTerritoryRegistry(loaded.territoryRegistry);
@@ -392,7 +413,7 @@ export default function ScheduleHubConsole() {
               await saveSkeleton(loaded.scheduleRegistry);
             }
             setSelectedSessionIdx(0);
-            setStatusBanner(`✅ JSON "${file.name}" importado com sucesso!`);
+            setStatusBanner(`✅ JSON "${file.name}" importado!`);
           } else {
             const parsed = parseProgramScheduleText(text, {
               unitName: activeUnitName,
@@ -413,27 +434,32 @@ export default function ScheduleHubConsole() {
     }
   };
 
-  // Export updated Schedule Hub CSV (or Full Omni-CSV Geral)
-  const handleExportCsvBackup = (mode: 'hub_csv' | 'omni_csv') => {
-    const csvContent =
-      mode === 'hub_csv'
-        ? exportScheduleHubToCsv({
-            unitName: activeUnitName,
-            participants: activeDirectory,
-            scheduleRegistry: activeScheduleRegistry,
-            territoryRegistry,
-          })
-        : exportOmniCsvBundle({
-            unitName: activeUnitName,
-            participants: activeDirectory,
-            scheduleRegistry: activeScheduleRegistry,
-            territoryRegistry,
-          });
+  // Export updated Schedule Hub CSV, Full Saved Site Omni-CSV Geral, or Sample Omni-CSV
+  const handleExportCsvBackup = async (mode: 'hub_csv' | 'omni_csv' | 'sample_omni_csv') => {
+    let csvContent = '';
+    let filename = '';
+    const dateStamp = new Date().toISOString().slice(0, 10);
 
-    const filename =
-      mode === 'hub_csv'
-        ? `sekundo_programacao_whatsapp_${new Date().toISOString().slice(0, 10)}.csv`
-        : `sekundo_omni_geral_${new Date().toISOString().slice(0, 10)}.csv`;
+    if (mode === 'hub_csv') {
+      csvContent = exportScheduleHubToCsv({
+        unitName: activeUnitName,
+        participants: activeDirectory,
+        scheduleRegistry: activeScheduleRegistry,
+        territoryRegistry,
+      });
+      filename = `sekundo_programacao_whatsapp_${dateStamp}.csv`;
+    } else if (mode === 'sample_omni_csv') {
+      csvContent = exportOmniCsvBundle();
+      filename = `sekundo_omni_exemplo_limpo_${dateStamp}.csv`;
+    } else {
+      csvContent = await exportFullSiteOmniCsvFromStorage({
+        unitName: activeUnitName,
+        participants: activeDirectory,
+        scheduleRegistry: activeScheduleRegistry,
+        territoryRegistry,
+      });
+      filename = `sekundo_omni_geral_salvo_${dateStamp}.csv`;
+    }
 
     if (Platform.OS === 'web' && typeof document !== 'undefined') {
       const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8' });
@@ -444,9 +470,7 @@ export default function ScheduleHubConsole() {
       a.click();
       URL.revokeObjectURL(url);
     }
-    setStatusBanner(
-      `📤 Arquivo "${filename}" exportado! Você pode re-importar este mesmo CSV a qualquer momento.`
-    );
+    setStatusBanner(`📤 Arquivo "${filename}" exportado!`);
   };
 
   // Print Full Event Sheet to PDF (The only place where full vertical roll-down happens!)
@@ -600,11 +624,14 @@ export default function ScheduleHubConsole() {
     const trimmed = customScheduleText.trim();
     if (!trimmed) return;
     if (trimmed.startsWith('_record_kind,') || trimmed.startsWith('_key,')) {
-      const loaded = importScheduleHubFromCsv(trimmed);
-      setActiveUnitName(loaded.unitName);
-      handleUpdateParticipants(loaded.participants);
-      setLocalScheduleRegistry(loaded.scheduleRegistry);
-      setTerritoryRegistry(loaded.territoryRegistry);
+      const loadedOmni = importOmniCsvBundle(trimmed);
+      setActiveUnitName(loadedOmni.unitName);
+      handleUpdateParticipants(loadedOmni.participants);
+      setLocalScheduleRegistry(loadedOmni.scheduleRegistry);
+      setTerritoryRegistry(loadedOmni.territoryRegistry);
+      await commitOmniCsvBundleToStorage(trimmed, {
+        targetEventId: eventId || undefined,
+      });
       setShowImportModal(false);
       setCustomScheduleText('');
       setStatusBanner('✅ CSV colado e importado com sucesso!');
@@ -764,7 +791,7 @@ export default function ScheduleHubConsole() {
   return (
     <SafeAreaView style={[styles.cadViewport, { backgroundColor: theme.bg }]}>
       {/* ================================================================= */}
-      {/* RIBBON 1: AUTOCAD TOP COMMAND DOCK (Import/Export CSV, Privileges) */}
+      {/* RIBBON 1: AUTOCAD ICON-ONLY TOP COMMAND DOCK                      */}
       {/* ================================================================= */}
       <View
         style={[
@@ -772,86 +799,126 @@ export default function ScheduleHubConsole() {
           { backgroundColor: theme.panelBg, borderBottomColor: theme.border },
         ]}
       >
-        <View style={styles.brandCluster}>
-          <Pressable onPress={() => router.push('/')} style={styles.cadCommandBtn}>
-            <Text style={[styles.cadCommandBtnText, { color: theme.accent }]}>← Painel</Text>
-          </Pressable>
-          <Text style={[styles.cadRibbonTitle, { color: theme.textPrimary }]} numberOfLines={1}>
-            📐 CAD PROGRAMAÇÃO & WHATSAPP
-          </Text>
-        </View>
+        <MultiEngineSwitcherBar
+          activeEngine="schedule"
+          eventId={eventId}
+          onOpenPrivileges={() => setShowPrivilegeMatrixModal(true)}
+        />
 
         <View style={styles.cadRibbonTools}>
           <Pressable
+            testID="schedule-btn-import"
             onPress={handlePickLocalScheduleFile}
             style={[styles.cadCommandBtn, styles.cadBtnBlue]}
+            accessibilityLabel="Importar CSV, JSON ou TXT"
+            {...({ title: 'Importar (.csv/.json/.txt)' } as any)}
           >
-            <Text style={styles.cadCommandBtnText}>📥 Importar (.csv/.json/.txt)</Text>
+            <Text style={styles.cadCommandBtnText}>📥</Text>
           </Pressable>
 
           <Pressable
+            testID="schedule-btn-export-hub"
             onPress={() => handleExportCsvBackup('hub_csv')}
             style={[styles.cadCommandBtn, styles.cadBtnEmerald]}
+            accessibilityLabel="Exportar CSV da Programação"
+            {...({ title: 'Exportar CSV da Programação' } as any)}
           >
-            <Text style={styles.cadCommandBtnText}>📤 Exportar CSV</Text>
+            <Text style={styles.cadCommandBtnText}>📤</Text>
           </Pressable>
 
           <Pressable
+            testID="schedule-btn-export-omni"
             onPress={() => handleExportCsvBackup('omni_csv')}
             style={[styles.cadCommandBtn, styles.cadBtnPurple]}
+            accessibilityLabel="Baixar CSV Geral"
+            {...({ title: 'Baixar CSV Geral (Estado Salvo no Site)' } as any)}
           >
-            <Text style={styles.cadCommandBtnText}>🌐 Baixar CSV Geral</Text>
+            <Text style={styles.cadCommandBtnText}>🌐</Text>
           </Pressable>
 
           <Pressable
+            testID="schedule-btn-sample-omni"
+            onPress={() => handleExportCsvBackup('sample_omni_csv')}
+            style={styles.cadCommandBtn}
+            accessibilityLabel="Baixar CSV Geral de Exemplo"
+            {...({ title: 'Baixar CSV Geral de Exemplo Limpo' } as any)}
+          >
+            <Text style={styles.cadCommandBtnText}>🧪</Text>
+          </Pressable>
+
+          <Pressable
+            testID="schedule-btn-privileges"
             onPress={() => setShowPrivilegeMatrixModal(true)}
             style={[styles.cadCommandBtn, styles.cadBtnAmber]}
+            accessibilityLabel="Privilégios"
+            {...({ title: `Matriz de Privilégios (${activeDirectory.length})` } as any)}
           >
-            <Text style={[styles.cadCommandBtnText, { color: '#090D16' }]}>
-              🛡️ Privilégios ({activeDirectory.length})
-            </Text>
+            <Text style={[styles.cadCommandBtnText, { color: '#090D16' }]}>🛡️</Text>
           </Pressable>
 
           <Pressable
+            testID="schedule-btn-auto-assign"
             onPress={() => handleRunAutoAssign('current_week', true)}
             style={[styles.cadCommandBtn, styles.cadBtnCyan]}
+            accessibilityLabel="Auto-Designar Semana"
+            {...({ title: 'Auto-Designar Semana Atual' } as any)}
           >
-            <Text style={styles.cadCommandBtnText}>⚡ Auto-Designar</Text>
+            <Text style={styles.cadCommandBtnText}>⚡</Text>
           </Pressable>
 
           <Pressable
+            testID="schedule-btn-whatsapp"
             onPress={() => {
               setWaMode('full_week');
               setShowWhatsAppModal(true);
             }}
             style={[styles.cadCommandBtn, styles.cadBtnEmerald]}
+            accessibilityLabel="Exportador WhatsApp"
+            {...({ title: 'Exportador WhatsApp (5 Modos)' } as any)}
           >
-            <Text style={styles.cadCommandBtnText}>📲 WhatsApp (5)</Text>
+            <Text style={styles.cadCommandBtnText}>📲</Text>
           </Pressable>
 
           <Pressable
+            testID="schedule-btn-pdf"
             onPress={
               activeTab === 'schedule' ? handlePrintFullEventPdf : handleDownloadS13PDF
             }
             disabled={generatingPdf}
             style={[styles.cadCommandBtn, styles.cadBtnRose]}
+            accessibilityLabel="Folha PDF Completa"
+            {...({ title: 'Gerar Folha PDF Completa (A4)' } as any)}
           >
             <Text style={styles.cadCommandBtnText}>
-              {generatingPdf ? '⏳ PDF...' : '🖨️ Folha PDF Completa'}
+              {generatingPdf ? '⏳' : '🖨️'}
             </Text>
           </Pressable>
 
-          <Pressable onPress={() => setShowImportModal(true)} style={styles.cadCommandBtn}>
-            <Text style={styles.cadCommandBtnText}>📋 Colar</Text>
+          <Pressable
+            testID="schedule-btn-paste"
+            onPress={() => setShowImportModal(true)}
+            style={styles.cadCommandBtn}
+            accessibilityLabel="Colar Programação ou CSV"
+            {...({ title: 'Colar Texto ou CSV' } as any)}
+          >
+            <Text style={styles.cadCommandBtnText}>📋</Text>
           </Pressable>
 
-          <Pressable onPress={handleSaveSeedToAppEvents} style={styles.cadCommandBtn}>
-            <Text style={styles.cadCommandBtnText}>💾 Salvar</Text>
+          <Pressable
+            testID="schedule-btn-save"
+            onPress={handleSaveSeedToAppEvents}
+            style={styles.cadCommandBtn}
+            accessibilityLabel="Salvar no App Sekundo"
+            {...({ title: 'Salvar no App Sekundo' } as any)}
+          >
+            <Text style={styles.cadCommandBtnText}>💾</Text>
           </Pressable>
 
           <Pressable
             onPress={() => setSunlightMode((s) => !s)}
             style={styles.cadCommandBtn}
+            accessibilityLabel="Alternar Modo Sol"
+            {...({ title: 'Alternar Alto Contraste' } as any)}
           >
             <Text style={styles.cadCommandBtnText}>{sunlightMode ? '🌙' : '☀️'}</Text>
           </Pressable>
@@ -867,7 +934,6 @@ export default function ScheduleHubConsole() {
           { backgroundColor: theme.bg, borderBottomColor: theme.border },
         ]}
       >
-        {/* Tab Switcher: Schedule vs Territories */}
         <View style={styles.compactRow}>
           <Pressable
             onPress={() => setActiveTab('schedule')}
@@ -878,6 +944,8 @@ export default function ScheduleHubConsole() {
                 borderColor: theme.accent,
               },
             ]}
+            accessibilityLabel="Aba Designações"
+            {...({ title: `Designações (${sessions.length} Semanas)` } as any)}
           >
             <Text
               style={[
@@ -885,7 +953,7 @@ export default function ScheduleHubConsole() {
                 { color: activeTab === 'schedule' ? '#090D16' : theme.textPrimary },
               ]}
             >
-              📅 Designações ({sessions.length} Sem.)
+              📅 {sessions.length}
             </Text>
           </Pressable>
 
@@ -898,6 +966,8 @@ export default function ScheduleHubConsole() {
                 borderColor: '#34D399',
               },
             ]}
+            accessibilityLabel="Aba Territórios"
+            {...({ title: `Territórios (${territoryRegistry.length})` } as any)}
           >
             <Text
               style={[
@@ -905,7 +975,7 @@ export default function ScheduleHubConsole() {
                 { color: activeTab === 'territories' ? '#090D16' : theme.textPrimary },
               ]}
             >
-              🗺️ Territórios ({territoryRegistry.length})
+              🗺️ {territoryRegistry.length}
             </Text>
           </Pressable>
 
@@ -920,9 +990,11 @@ export default function ScheduleHubConsole() {
                   styles.microChip,
                   active && { backgroundColor: '#2563EB', borderColor: '#93C5FD' },
                 ]}
+                accessibilityLabel={grp === 'ALL' ? 'Todos os Grupos' : grp}
+                {...({ title: grp === 'ALL' ? 'Todos os Grupos' : grp } as any)}
               >
                 <Text style={styles.microChipText}>
-                  {grp === 'ALL' ? '👥 Todos' : grp.replace('Grupo ', 'G')}
+                  {grp === 'ALL' ? '👥' : grp.replace('Grupo ', 'G')}
                 </Text>
               </Pressable>
             );
@@ -937,25 +1009,18 @@ export default function ScheduleHubConsole() {
                 borderColor: '#FBBF24',
               },
             ]}
+            accessibilityLabel="Filtrar Meu Compromisso"
+            {...({ title: myParticipantName ? `Filtro: ${myParticipantName}` : 'Filtrar Meu Compromisso' } as any)}
           >
             <Text style={styles.microChipText}>
-              🎯 {myParticipantName || 'Meu Nome'}
+              🎯{myParticipantName ? '•' : ''}
             </Text>
           </Pressable>
-        </View>
 
-        {/* Week Selector Buttons (Compact 1-Click Pills) */}
-        {activeTab === 'schedule' && (
-          <View style={styles.compactRow}>
-            {sessions.map((sess, idx) => {
+          {/* Week Selector Buttons (Compact 1-Click Pills) */}
+          {activeTab === 'schedule' &&
+            sessions.map((sess, idx) => {
               const active = idx === selectedSessionIdx;
-              const shortDate =
-                sess.label
-                  .split('|')[0]
-                  ?.replace(/de outubro de 2026/i, 'Out')
-                  .replace(/de novembro de 2026/i, 'Nov')
-                  .replace(/de dezembro de 2026/i, 'Dez')
-                  .trim() || `Sem ${idx + 1}`;
               return (
                 <Pressable
                   key={sess.key}
@@ -967,6 +1032,8 @@ export default function ScheduleHubConsole() {
                     styles.weekMicroBtn,
                     active && { backgroundColor: '#38BDF8', borderColor: '#BAE6FD' },
                   ]}
+                  accessibilityLabel={sess.label}
+                  {...({ title: sess.label } as any)}
                 >
                   <Text
                     style={[
@@ -974,13 +1041,12 @@ export default function ScheduleHubConsole() {
                       active && { color: '#090D16', fontWeight: '900' },
                     ]}
                   >
-                    {shortDate}
+                    S{idx + 1}
                   </Text>
                 </Pressable>
               );
             })}
-          </View>
-        )}
+        </View>
       </View>
 
       {/* Optional Status Toast Strip */}
@@ -989,7 +1055,7 @@ export default function ScheduleHubConsole() {
           <Text style={styles.compactStatusText} numberOfLines={1}>
             {statusBanner}
           </Text>
-          <Pressable onPress={() => setStatusBanner(null)}>
+          <Pressable onPress={() => setStatusBanner(null)} accessibilityLabel="Fechar Aviso">
             <Text style={{ color: '#94A3B8', fontSize: 11, fontWeight: '800' }}>✕</Text>
           </Pressable>
         </View>
@@ -1019,30 +1085,26 @@ export default function ScheduleHubConsole() {
             {/* Session Coordination Strip (Chair, Opening, Closing) */}
             <View style={styles.sessionCoordStrip}>
               <Text style={[styles.sessionCoordTitle, { color: theme.textPrimary }]} numberOfLines={1}>
-                📅 {currentSession.label}
+                📅 {currentSession.label.split('|')[0]?.trim() || currentSession.label}
               </Text>
               <View style={styles.coordPillsRow}>
                 <View style={styles.coordBadge}>
                   <Text style={styles.coordBadgeText}>
-                    👑 Pres.: {currentSession.chairPerson || '—'}
+                    👑 {currentSession.chairPerson || '—'}
                   </Text>
                 </View>
                 <View style={styles.coordBadge}>
                   <Text style={styles.coordBadgeText}>
-                    🔹 Abert.: {currentSession.openingPrayer || '—'}
+                    🔹 {currentSession.openingPrayer || '—'}
                   </Text>
                 </View>
                 <View style={styles.coordBadge}>
                   <Text style={styles.coordBadgeText}>
-                    🔸 Encerr.: {currentSession.closingPrayer || '—'}
+                    🔸 {currentSession.closingPrayer || '—'}
                   </Text>
                 </View>
               </View>
             </View>
-
-            <Text style={styles.matrixHintText}>
-              🎛️ MATRIZ AUTOCAD DE DESIGNAÇÕES (Clique em um botão para inspecionar e editar sem rolar a página):
-            </Text>
 
             {/* All Designation Buttons in a Compact Grid */}
             <View style={styles.slotButtonsGrid}>
@@ -1059,7 +1121,7 @@ export default function ScheduleHubConsole() {
                   const mine = isSlotMine(item.slot);
                   const shortLabel = item.slot.label
                     .replace(/^\d+\.\s*/, '')
-                    .slice(0, 22);
+                    .slice(0, isDesktop ? 22 : 14);
 
                   return (
                     <Pressable
@@ -1070,6 +1132,12 @@ export default function ScheduleHubConsole() {
                       }}
                       style={[
                         styles.cadSlotButton,
+                        !isDesktop && {
+                          width: '31.5%',
+                          minWidth: 96,
+                          paddingHorizontal: 5,
+                          paddingVertical: 3,
+                        },
                         {
                           borderLeftColor: item.sectionColor,
                           backgroundColor: isSelected ? '#1E3A8A' : '#0B1120',
@@ -1080,6 +1148,8 @@ export default function ScheduleHubConsole() {
                             : '#1E293B',
                         },
                       ]}
+                      accessibilityLabel={`${item.buttonNumber} ${item.slot.label}`}
+                      {...({ title: `${item.slot.label} — ${primary}` } as any)}
                     >
                       <View style={styles.cadSlotBtnHeader}>
                         <Text style={styles.cadSlotBtnNumber}>[{item.buttonNumber}]</Text>
@@ -1096,8 +1166,8 @@ export default function ScheduleHubConsole() {
                         {shortLabel}
                       </Text>
                       <Text style={styles.cadSlotBtnAssignee} numberOfLines={1}>
-                        👤 {primary}
-                        {assistant ? ` + ${assistant}` : ''}
+                        {primary}
+                        {assistant ? `+${assistant}` : ''}
                       </Text>
                     </Pressable>
                   );
@@ -1134,7 +1204,8 @@ export default function ScheduleHubConsole() {
                 const assistantGroup =
                   meta.assistantGroupTag ||
                   findParticipantProfile(assistant, activeDirectory)?.groupTag;
-                const capMeta = CAPABILITY_COLUMNS.find(
+                const allCols = getEffectiveCapabilityColumns(activeDirectory);
+                const capMeta = allCols.find(
                   (c) => c.key === inspectedRequirement?.primaryCapability
                 );
 
@@ -1147,19 +1218,15 @@ export default function ScheduleHubConsole() {
                       ]}
                     >
                       <Text style={styles.inspectorBannerText} numberOfLines={1}>
-                        🔍 INSPETOR TÉCNICO [{buttonNumber}] — {sectionLabel}
+                        🔍 [{buttonNumber}] {slot.label}
                       </Text>
-                      <Text style={styles.inspectorBannerTime}>⏱️ {durMin} min</Text>
+                      <Text style={styles.inspectorBannerTime}>⏱️ {durMin}m</Text>
                     </View>
-
-                    <Text style={[styles.inspectorSlotTitle, { color: theme.textPrimary }]}>
-                      {slot.label}
-                    </Text>
 
                     {capMeta && (
                       <View style={styles.capabilityTagRow}>
-                        <Text style={styles.capabilityTagText}>
-                          🛡️ Privilégio Requerido: {capMeta.fullLabel}
+                        <Text style={styles.capabilityTagText} numberOfLines={1}>
+                          🛡️ {capMeta.shortLabel} — {capMeta.fullLabel}
                         </Text>
                       </View>
                     )}
@@ -1167,13 +1234,10 @@ export default function ScheduleHubConsole() {
                     {/* Assignees Boxes with 1-Click Reassignment */}
                     <View style={styles.inspectorAssigneesRow}>
                       <View style={styles.inspectorPersonBox}>
-                        <Text style={styles.inspectorRoleLabel}>
-                          {inspectedRequirement?.requiresPartner
-                            ? 'TITULAR DESIGNADO'
-                            : 'RESPONSÁVEL DESIGNADO'}
-                        </Text>
-                        <Text style={styles.inspectorPersonName}>👤 {primary}</Text>
                         <View style={styles.inspectorPersonFooter}>
+                          <Text style={styles.inspectorPersonName} numberOfLines={1}>
+                            👤 {primary}
+                          </Text>
                           <Text style={styles.inspectorGroupBadge}>{primaryGroup}</Text>
                           <Pressable
                             onPress={() =>
@@ -1182,21 +1246,20 @@ export default function ScheduleHubConsole() {
                               )
                             }
                             style={styles.miniSwapBtn}
+                            accessibilityLabel="Trocar Titular"
+                            {...({ title: 'Trocar Titular' } as any)}
                           >
-                            <Text style={styles.miniSwapBtnText}>🔄 Trocar</Text>
+                            <Text style={styles.miniSwapBtnText}>🔄</Text>
                           </Pressable>
                         </View>
                       </View>
 
                       {(assistant || inspectedRequirement?.requiresPartner) && (
                         <View style={styles.inspectorPersonBox}>
-                          <Text style={styles.inspectorRoleLabel}>
-                            AJUDANTE / LEITOR
-                          </Text>
-                          <Text style={styles.inspectorPersonName}>
-                            🤝 {assistant || 'A designar'}
-                          </Text>
                           <View style={styles.inspectorPersonFooter}>
+                            <Text style={styles.inspectorPersonName} numberOfLines={1}>
+                              🤝 {assistant || '—'}
+                            </Text>
                             {assistantGroup && (
                               <Text style={styles.inspectorGroupBadge}>
                                 {assistantGroup}
@@ -1209,8 +1272,10 @@ export default function ScheduleHubConsole() {
                                 )
                               }
                               style={styles.miniSwapBtn}
+                              accessibilityLabel="Trocar Par"
+                              {...({ title: 'Trocar Par / Ajudante' } as any)}
                             >
-                              <Text style={styles.miniSwapBtnText}>🔄 Trocar Par</Text>
+                              <Text style={styles.miniSwapBtnText}>🔄</Text>
                             </Pressable>
                           </View>
                         </View>
@@ -1220,9 +1285,6 @@ export default function ScheduleHubConsole() {
                     {/* Compact Privilege-Filtered Reassignment Strip */}
                     {showReassignList && (
                       <View style={styles.reassignPickerStrip}>
-                        <Text style={styles.reassignStripTitle}>
-                          Habilitados na Matriz para esta função ({eligibleCandidatesForInspector.length}):
-                        </Text>
                         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                           <View style={{ flexDirection: 'row', gap: 6 }}>
                             {eligibleCandidatesForInspector.map((cand) => (
@@ -1244,7 +1306,7 @@ export default function ScheduleHubConsole() {
                       </View>
                     )}
 
-                    {/* Direct Action Buttons in Inspector */}
+                    {/* Direct Icon-Only Action Buttons in Inspector */}
                     <View style={styles.inspectorActionsGrid}>
                       <Pressable
                         onPress={() => handleCycleReadiness(slot)}
@@ -1256,6 +1318,8 @@ export default function ScheduleHubConsole() {
                             ? styles.cadBtnAmber
                             : styles.cadBtnBlue,
                         ]}
+                        accessibilityLabel="Alternar Status de Prontidão"
+                        {...({ title: 'Alternar Status (Recebido / Preparando / Pronto)' } as any)}
                       >
                         <Text
                           style={[
@@ -1264,10 +1328,10 @@ export default function ScheduleHubConsole() {
                           ]}
                         >
                           {readiness === 'ready'
-                            ? '✨ Status: Pronto!'
+                            ? '✨'
                             : readiness === 'preparing'
-                            ? '📖 Status: Preparando'
-                            : '📩 Status: Recebido'}
+                            ? '📖'
+                            : '📩'}
                         </Text>
                       </Pressable>
 
@@ -1279,8 +1343,10 @@ export default function ScheduleHubConsole() {
                           setShowWhatsAppModal(true);
                         }}
                         style={styles.inspectorActionBtn}
+                        accessibilityLabel="Ficha WhatsApp Individual"
+                        {...({ title: 'Ficha WhatsApp Individual' } as any)}
                       >
-                        <Text style={styles.inspectorActionBtnText}>📲 Ficha WhatsApp</Text>
+                        <Text style={styles.inspectorActionBtnText}>📲</Text>
                       </Pressable>
 
                       {assistant && (
@@ -1297,34 +1363,38 @@ export default function ScheduleHubConsole() {
                             handleOpenWhatsAppExternal(msg);
                           }}
                           style={[styles.inspectorActionBtn, styles.cadBtnEmerald]}
+                          accessibilityLabel="Combinar com Par no WhatsApp"
+                          {...({ title: 'Combinar com Par no WhatsApp' } as any)}
                         >
-                          <Text style={styles.inspectorActionBtnText}>🤝 Combinar c/ Par</Text>
+                          <Text style={styles.inspectorActionBtnText}>🤝</Text>
                         </Pressable>
                       )}
 
                       <Pressable
                         onPress={() => startRehearsal(slot)}
                         style={styles.inspectorActionBtn}
+                        accessibilityLabel="Cronômetro de Ensaio"
+                        {...({ title: `Ensaiar (${durMin} min)` } as any)}
                       >
-                        <Text style={styles.inspectorActionBtnText}>
-                          ⏱️ Ensaiar ({durMin}m)
-                        </Text>
+                        <Text style={styles.inspectorActionBtnText}>⏱️</Text>
                       </Pressable>
 
                       <Pressable
                         onPress={() => handleDownloadICS(slot)}
                         style={styles.inspectorActionBtn}
+                        accessibilityLabel="Baixar Alerta de Calendário ICS"
+                        {...({ title: 'Baixar Alerta .ics' } as any)}
                       >
-                        <Text style={styles.inspectorActionBtnText}>📅 Alerta .ics</Text>
+                        <Text style={styles.inspectorActionBtnText}>📅</Text>
                       </Pressable>
 
                       <Pressable
                         onPress={handlePrintFullEventPdf}
                         style={[styles.inspectorActionBtn, styles.cadBtnRose]}
+                        accessibilityLabel="Imprimir Evento em PDF"
+                        {...({ title: 'Imprimir Folha PDF Completa' } as any)}
                       >
-                        <Text style={styles.inspectorActionBtnText}>
-                          🖨️ Imprimir Evento (PDF)
-                        </Text>
+                        <Text style={styles.inspectorActionBtnText}>🖨️</Text>
                       </Pressable>
                     </View>
 
@@ -1332,14 +1402,15 @@ export default function ScheduleHubConsole() {
                     {rehearsalSlot && (
                       <View style={styles.inlineRehearsalBox}>
                         <Text style={styles.inlineRehearsalLabel}>
-                          🎙️ Ensaio: {formatTimerMMSS(rehearsalRemainingSec)}
+                          🎙️ {formatTimerMMSS(rehearsalRemainingSec)}
                         </Text>
                         <Pressable
                           onPress={() => setRehearsalRunning((r) => !r)}
                           style={styles.miniSwapBtn}
+                          accessibilityLabel={rehearsalRunning ? 'Pausar' : 'Retomar'}
                         >
                           <Text style={styles.miniSwapBtnText}>
-                            {rehearsalRunning ? '⏸ Pausar' : '▶ Retomar'}
+                            {rehearsalRunning ? '⏸' : '▶'}
                           </Text>
                         </Pressable>
                         <Pressable
@@ -1348,6 +1419,7 @@ export default function ScheduleHubConsole() {
                             setRehearsalSlot(null);
                           }}
                           style={styles.miniSwapBtn}
+                          accessibilityLabel="Encerrar Ensaio"
                         >
                           <Text style={styles.miniSwapBtnText}>✕</Text>
                         </Pressable>
@@ -1358,7 +1430,7 @@ export default function ScheduleHubConsole() {
               })()
             ) : (
               <Text style={{ color: theme.textMuted, padding: 12 }}>
-                Selecione um botão de designação na matriz ao lado.
+                Selecione um botão na matriz.
               </Text>
             )}
           </View>
@@ -1385,7 +1457,7 @@ export default function ScheduleHubConsole() {
           >
             <View style={styles.sessionCoordStrip}>
               <Text style={[styles.sessionCoordTitle, { color: theme.textPrimary }]}>
-                🗺️ MATRIZ AUTOCAD DE TERRITÓRIOS (16 SETORES MULTI-CICLO)
+                🗺️ {territoryRegistry.length} Setores
               </Text>
               <View style={styles.coordPillsRow}>
                 {(['all', '2027', '2026'] as const).map((yr) => (
@@ -1401,7 +1473,7 @@ export default function ScheduleHubConsole() {
                     ]}
                   >
                     <Text style={styles.microChipText}>
-                      {yr === 'all' ? 'Ciclos 2026+2027' : `Ciclo ${yr}`}
+                      {yr === 'all' ? '🌐' : yr}
                     </Text>
                   </Pressable>
                 ))}
@@ -1426,6 +1498,12 @@ export default function ScheduleHubConsole() {
                     onPress={() => setSelectedTerritoryIdx(idx)}
                     style={[
                       styles.cadSlotButton,
+                      !isDesktop && {
+                        width: '23%',
+                        minWidth: 72,
+                        paddingHorizontal: 4,
+                        paddingVertical: 3,
+                      },
                       {
                         borderLeftColor: isOpen ? '#10B981' : '#3B82F6',
                         backgroundColor: isSelected ? '#064E3B' : '#0B1120',
@@ -1436,14 +1514,14 @@ export default function ScheduleHubConsole() {
                     <View style={styles.cadSlotBtnHeader}>
                       <Text style={styles.cadSlotBtnNumber}>[{code}]</Text>
                       <Text style={styles.cadSlotBtnDuration}>
-                        {isOpen ? '🟢 Campo' : '✅ Concl.'}
+                        {isOpen ? '🟢' : '✅'}
                       </Text>
                     </View>
                     <Text style={styles.cadSlotBtnTitle} numberOfLines={1}>
                       {tMeta.locality || t.label}
                     </Text>
                     <Text style={styles.cadSlotBtnAssignee} numberOfLines={1}>
-                      👤 {latest?.assignedTo || 'Livre'}
+                      {latest?.assignedTo || 'Livre'}
                     </Text>
                   </Pressable>
                 );
@@ -1481,28 +1559,24 @@ export default function ScheduleHubConsole() {
                       ]}
                     >
                       <Text style={styles.inspectorBannerText}>
-                        🔍 INSPETOR TERRITORIAL [{code}]
+                        🔍 [{code}] {tMeta.locality || inspectedTerritory.label}
                       </Text>
                       <Text style={styles.inspectorBannerTime}>
-                        {history.length} ciclos
+                        {history.length}x
                       </Text>
                     </View>
-
-                    <Text style={[styles.inspectorSlotTitle, { color: theme.textPrimary }]}>
-                      {tMeta.locality || inspectedTerritory.label}
-                    </Text>
 
                     <View style={styles.cyclesCompactGrid}>
                       {history.map((cyc, cIdx) => (
                         <View key={cIdx} style={styles.cycleCompactCard}>
                           <Text style={styles.cycleCompactYear}>
-                            Ciclo {cyc.serviceYear || 2026}
+                            {cyc.serviceYear || 2026}
                           </Text>
                           <Text style={styles.cycleCompactWho} numberOfLines={1}>
                             👤 {cyc.assignedTo}
                           </Text>
                           <Text style={styles.cycleCompactDates}>
-                            {cyc.assignedAt} → {cyc.completedAt || 'Em campo'}
+                            {cyc.assignedAt} → {cyc.completedAt || 'Campo'}
                           </Text>
                         </View>
                       ))}
@@ -1516,19 +1590,19 @@ export default function ScheduleHubConsole() {
                           setShowWhatsAppModal(true);
                         }}
                         style={[styles.inspectorActionBtn, styles.cadBtnEmerald]}
+                        accessibilityLabel="Enviar Cartão WhatsApp"
+                        {...({ title: 'Enviar Cartão WhatsApp' } as any)}
                       >
-                        <Text style={styles.inspectorActionBtnText}>
-                          📲 Enviar Cartão WhatsApp
-                        </Text>
+                        <Text style={styles.inspectorActionBtnText}>📲</Text>
                       </Pressable>
 
                       <Pressable
                         onPress={handleDownloadS13PDF}
                         style={[styles.inspectorActionBtn, styles.cadBtnRose]}
+                        accessibilityLabel="Folha PDF 4 Colunas"
+                        {...({ title: 'Folha PDF 4 Colunas' } as any)}
                       >
-                        <Text style={styles.inspectorActionBtnText}>
-                          🖨️ Folha PDF 4 Colunas
-                        </Text>
+                        <Text style={styles.inspectorActionBtnText}>🖨️</Text>
                       </Pressable>
                     </View>
                   </View>
@@ -1745,11 +1819,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     alignItems: 'center',
-    gap: 5,
+    gap: 4,
+    maxWidth: '100%',
+    flexShrink: 1,
   },
   cadCommandBtn: {
-    paddingHorizontal: 8,
-    paddingVertical: 5,
+    paddingHorizontal: 6,
+    paddingVertical: 4,
     borderRadius: 5,
     backgroundColor: '#1E293B',
     borderWidth: 1,

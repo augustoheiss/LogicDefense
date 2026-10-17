@@ -1,9 +1,10 @@
 /**
- * Landing Dashboard — Sekundo (AutoCAD Technical Command Station)
+ * Landing Dashboard — Sekundo (AutoCAD Icon-Only Command Station)
  *
  * Fixed 100dvh Zero-Roll-Down viewport:
- * - Dense command buttons for all Hubs, Engines, Privilege Matrix, and Unified Master CSV (CSV Geral)
- * - Click any module or event button to inspect and launch actions without vertical page scrolling
+ * - Icon-only command buttons (`Click-to-Reveal`) for all Hubs, Engines, Privilege Matrix,
+ *   and Unified Master CSV ("CSV Geral" saved state + sample)
+ * - Zero clipped controls on Mobile (`390x844`) and Desktop (`1280x720`)
  */
 
 import React, { useEffect, useState } from 'react';
@@ -25,18 +26,16 @@ import {
   engineRegistry,
   getActiveEngines,
   DEFAULT_PRIVILEGE_MATRIX_PARTICIPANTS,
-  exportOmniCsvBundle,
   generateOmniMasterSampleCsv,
-  buildProgramacaoReuniaoRegistry,
-  buildTerritoriosS13HistoricalRegistry,
-  S89_4UP_SDOC_YAML,
-  S13S_MULTICYCLE_SDOC_YAML,
   type ParticipantProfile,
 } from '@sekundo/core';
 import { deliverFile } from '../utils/deliverFile';
 import { PrivilegeMatrixModal } from '../components/PrivilegeMatrixModal';
-
-const PRIVILEGE_DIRECTORY_STORAGE_KEY = 'sekundo:privilege_directory_v1';
+import {
+  loadSavedPrivilegeParticipants,
+  savePrivilegeParticipants,
+  exportFullSiteOmniCsvFromStorage,
+} from '../storage/omniStorageBridge';
 
 export default function Dashboard() {
   const router = useRouter();
@@ -45,6 +44,7 @@ export default function Dashboard() {
 
   const { events, loading, deleteEventState } = useLocalEvent();
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
+  const [showInspector, setShowInspector] = useState<boolean>(false);
   const [selectedToolInfo, setSelectedToolInfo] = useState<{
     code: string;
     title: string;
@@ -53,10 +53,10 @@ export default function Dashboard() {
     badge: string;
   }>({
     code: 'CAD-01',
-    title: '📅 Programação & WhatsApp (Hub)',
-    desc: 'Compromissos, Grupos 1–3, Exportador WhatsApp, Registro de Territórios, Importação/Exportação CSV e Folha PDF Completa.',
+    title: '📅 Programação & WhatsApp',
+    desc: 'Compromissos, Grupos 1–3, WhatsApp, Territórios, CSV Geral e PDF.',
     route: '/schedule-hub',
-    badge: 'HUB OPERACIONAL',
+    badge: 'HUB',
   });
 
   const [participants, setParticipants] = useState<ParticipantProfile[]>(
@@ -66,19 +66,11 @@ export default function Dashboard() {
   const [statusToast, setStatusToast] = useState<string | null>(null);
 
   useEffect(() => {
-    if (Platform.OS === 'web' && typeof window !== 'undefined') {
-      try {
-        const raw = window.localStorage.getItem(PRIVILEGE_DIRECTORY_STORAGE_KEY);
-        if (raw) {
-          const parsed = JSON.parse(raw) as ParticipantProfile[];
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            setParticipants(parsed);
-          }
-        }
-      } catch {
-        // ignore
+    loadSavedPrivilegeParticipants().then((loaded) => {
+      if (loaded && loaded.length > 0) {
+        setParticipants(loaded);
       }
-    }
+    });
   }, []);
 
   const showToast = (msg: string) => {
@@ -88,46 +80,27 @@ export default function Dashboard() {
 
   const handleSaveParticipants = async (next: ParticipantProfile[]) => {
     setParticipants(next);
-    if (Platform.OS === 'web' && typeof window !== 'undefined') {
-      window.localStorage.setItem(PRIVILEGE_DIRECTORY_STORAGE_KEY, JSON.stringify(next));
-    }
-    showToast(`🛡️ Matriz salva (${next.length} participantes).`);
+    await savePrivilegeParticipants(next);
+    showToast(`🛡️ ${next.length} usuários salvos.`);
   };
 
   const handleDownloadOmniCsvGeral = async () => {
     try {
-      const csv =
-        events.length > 0
-          ? exportOmniCsvBundle({
-              events: events.map((ev) => ({
-                id: ev.config.id,
-                name: ev.config.name,
-                engines: getActiveEngines(ev.config),
-                registry: [],
-              })),
-              scheduleRegistry: buildProgramacaoReuniaoRegistry(),
-              territoryRegistry: buildTerritoriosS13HistoricalRegistry(),
-              participants,
-              studioDocuments: [
-                {
-                  id: 'fichas-4up',
-                  title: 'Fichas de Designação 4-Up',
-                  format: 'a4',
-                  sdocYaml: S89_4UP_SDOC_YAML,
-                },
-                {
-                  id: 'territorios-multiciclo',
-                  title: 'Registro de Territórios Multi-Ciclo',
-                  format: 'a4',
-                  sdocYaml: S13S_MULTICYCLE_SDOC_YAML,
-                },
-              ],
-            })
-          : generateOmniMasterSampleCsv();
+      const csv = await exportFullSiteOmniCsvFromStorage({ participants });
       await deliverFile(csv, 'sekundo_omni_geral.csv', 'text/csv;charset=utf-8');
-      showToast('🌐 CSV GERAL exportado (sekundo_omni_geral.csv).');
+      showToast('🌐 CSV Geral (Estado Salvo no Site) exportado!');
     } catch (e: any) {
-      showToast(`Erro ao exportar CSV Geral: ${e?.message ?? e}`);
+      showToast(`Erro: ${e?.message ?? e}`);
+    }
+  };
+
+  const handleDownloadSampleOmniCsv = async () => {
+    try {
+      const csv = generateOmniMasterSampleCsv();
+      await deliverFile(csv, 'sekundo_omni_exemplo.csv', 'text/csv;charset=utf-8');
+      showToast('🧪 CSV Geral de Exemplo baixado!');
+    } catch (e: any) {
+      showToast(`Erro: ${e?.message ?? e}`);
     }
   };
 
@@ -142,57 +115,91 @@ export default function Dashboard() {
   const activeSelectedEvent =
     events.find((e) => e.config.id === selectedEventId) || events[0] || null;
 
+  const webTitle = (title: string) => (Platform.OS === 'web' ? ({ title } as any) : {});
+
   return (
     <SafeAreaView style={styles.container}>
-      {/* Top AutoCAD Command Ribbon */}
+      {/* Top Icon-Only AutoCAD Command Ribbon */}
       <View style={styles.topRibbon}>
         <View style={styles.brandRow}>
           <Image
             source={require('../../assets/images/app-icon.png')}
             style={styles.brandIcon}
           />
-          <View style={{ flexShrink: 1 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              <Text style={styles.logo}>Sekundo</Text>
-              <View style={styles.cadModePill}>
-                <Text style={styles.cadModePillText}>CAD ZERO-SCROLL</Text>
-              </View>
-            </View>
-            <Text style={styles.tagline} numberOfLines={1}>
-              Estação técnica agnóstica • Clique nos comandos para inspecionar ou executar
-            </Text>
+          <Text style={styles.logo}>Sekundo</Text>
+          <View style={styles.cadModePill}>
+            <Text style={styles.cadModePillText}>CAD</Text>
           </View>
         </View>
 
         <View style={styles.topRibbonActions}>
           <Pressable
             testID="home-open-privileges-btn"
+            accessibilityRole="button"
+            accessibilityLabel={`Privilégios (${participants.length})`}
+            {...webTitle(`Matriz de Privilégios (${participants.length} usuários)`)}
             onPress={() => setPrivilegeModalOpen(true)}
-            style={[styles.ribbonBtn, styles.ribbonBtnPurple]}
+            style={[styles.iconRibbonBtn, styles.ribbonBtnPurple]}
           >
-            <Text style={[styles.ribbonBtnText, { color: '#DDD6FE' }]}>
-              🛡️ Privilégios ({participants.length})
-            </Text>
+            <Text style={styles.iconRibbonGlyph}>🛡️</Text>
+            <View style={styles.miniBadge}>
+              <Text style={styles.miniBadgeText}>{participants.length}</Text>
+            </View>
           </Pressable>
 
           <Pressable
             testID="home-download-omni-csv-btn"
+            accessibilityRole="button"
+            accessibilityLabel="Baixar CSV Geral"
+            {...webTitle('Baixar CSV Geral (Inclui tudo salvo no site)')}
             onPress={handleDownloadOmniCsvGeral}
-            style={[styles.ribbonBtn, styles.ribbonBtnGold]}
+            style={[styles.iconRibbonBtn, styles.ribbonBtnGold]}
           >
-            <Text style={[styles.ribbonBtnText, { color: '#FDE68A' }]}>
-              🌐 Baixar CSV Geral
-            </Text>
+            <Text style={styles.iconRibbonGlyph}>🌐</Text>
+          </Pressable>
+
+          <Pressable
+            testID="home-download-sample-csv-btn"
+            accessibilityRole="button"
+            accessibilityLabel="Baixar CSV Geral de Exemplo"
+            {...webTitle('Baixar CSV Geral de Exemplo')}
+            onPress={handleDownloadSampleOmniCsv}
+            style={styles.iconRibbonBtn}
+          >
+            <Text style={styles.iconRibbonGlyph}>🧪</Text>
           </Pressable>
 
           <Pressable
             testID="home-import-omni-csv-btn"
+            accessibilityRole="button"
+            accessibilityLabel="Importar CSV Geral"
+            {...webTitle('Importar CSV Geral ou Planilha')}
             onPress={() => router.push('/csv-import')}
-            style={[styles.ribbonBtn, styles.ribbonBtnEmerald]}
+            style={[styles.iconRibbonBtn, styles.ribbonBtnEmerald]}
           >
-            <Text style={[styles.ribbonBtnText, { color: '#6EE7B7' }]}>
-              📥 Importar CSV Geral
-            </Text>
+            <Text style={styles.iconRibbonGlyph}>📥</Text>
+          </Pressable>
+
+          <Pressable
+            testID="home-create-event-btn"
+            accessibilityRole="button"
+            accessibilityLabel="Novo Evento Multi-Engine"
+            {...webTitle('Criar Novo Evento Multi-Engine')}
+            onPress={() => router.push('/create-event')}
+            style={styles.iconRibbonBtn}
+          >
+            <Text style={styles.iconRibbonGlyph}>➕</Text>
+          </Pressable>
+
+          <Pressable
+            testID="home-toggle-info-btn"
+            accessibilityRole="button"
+            accessibilityLabel="Informações do Módulo"
+            {...webTitle('Mostrar/Ocultar Detalhes do Módulo')}
+            onPress={() => setShowInspector((prev) => !prev)}
+            style={[styles.iconRibbonBtn, showInspector && styles.ribbonBtnActive]}
+          >
+            <Text style={styles.iconRibbonGlyph}>ℹ️</Text>
           </Pressable>
         </View>
       </View>
@@ -205,21 +212,24 @@ export default function Dashboard() {
 
       {/* Main Fixed Viewport Split Workspace */}
       <View style={[styles.mainLayout, isLargeScreen && styles.rowLayout]}>
-        {/* Left Dock: Quick Actions & Hubs Matrix */}
+        {/* Left Dock: Icon-Centric Quick Actions Matrix */}
         <View style={[styles.column, isLargeScreen && styles.leftColumn]}>
           <View style={styles.dockHeader}>
-            <Text style={styles.sectionTitle}>1. Módulos & Ferramentas (Quick Actions)</Text>
-            <Text style={styles.dockMeta}>6 comandos</Text>
+            <Text style={styles.sectionTitle}>⚡ Módulos</Text>
+            <Text style={styles.dockMeta}>6</Text>
           </View>
 
           <View style={styles.commandGrid}>
             <Pressable
               testID="quick-action-create-event"
+              accessibilityRole="button"
+              accessibilityLabel="Create New Event"
+              {...webTitle('Criar Novo Evento (9 Engines)')}
               onPress={() => {
                 setSelectedToolInfo({
-                  code: 'CMD-NEW',
-                  title: 'Create New Event (Novo Evento / Engine)',
-                  desc: 'Cria um evento com qualquer uma das 9 Engines universais, baixa CSV de exemplo e aplica Auto-Designação com Privilégios.',
+                  code: 'E01-09',
+                  title: '➕ Novo Evento Multi-Engine',
+                  desc: 'Cria evento com qualquer uma das 9 Engines e Auto-Designação.',
                   route: '/create-event',
                   badge: '9 ENGINES',
                 });
@@ -227,193 +237,196 @@ export default function Dashboard() {
               }}
               style={({ pressed }) => [styles.actionButton, pressed && styles.buttonPressed]}
             >
-              <View style={styles.actionRowTop}>
-                <Text style={styles.actionCode}>[01]</Text>
-                <Text style={styles.actionBadge}>ENGINE</Text>
-              </View>
-              <Text style={styles.actionButtonText} numberOfLines={1}>
-                ➕ Create New Event
-              </Text>
-              <Text style={styles.actionButtonSub} numberOfLines={1}>
-                9 Engines + Auto-Designar Privilégios
+              <Text style={styles.actionBigIcon}>➕</Text>
+              <Text style={styles.actionShortLabel} numberOfLines={1}>
+                Novo
               </Text>
             </Pressable>
 
             <Pressable
               testID="quick-action-csv-import"
+              accessibilityRole="button"
+              accessibilityLabel="Import CSV Template"
+              {...webTitle('Importar / Exportar CSV Geral')}
               onPress={() => {
                 setSelectedToolInfo({
-                  code: 'CMD-CSV',
-                  title: 'Import CSV Template (Central Omni-CSV)',
-                  desc: 'Importa ou exporta um único arquivo .CSV GERAL contendo todas as Engines, Programação WhatsApp, Estúdio YAML e Cockpit Hoje.',
+                  code: 'CSV',
+                  title: '📥 Central Omni-CSV',
+                  desc: 'Abre múltiplas Engines (Territórios + Programação + Privilégios) com 1 único CSV.',
                   route: '/csv-import',
                   badge: 'OMNI-CSV',
                 });
                 router.push('/csv-import');
               }}
-              style={({ pressed }) => [styles.actionButton, pressed && styles.buttonPressed]}
+              style={({ pressed }) => [
+                styles.actionButton,
+                { borderColor: '#10B981' },
+                pressed && styles.buttonPressed,
+              ]}
             >
-              <View style={styles.actionRowTop}>
-                <Text style={styles.actionCode}>[02]</Text>
-                <Text style={[styles.actionBadge, { color: '#34D399' }]}>OMNI-CSV</Text>
-              </View>
-              <Text style={styles.actionButtonText} numberOfLines={1}>
-                📥 Import CSV Template
-              </Text>
-              <Text style={styles.actionButtonSub} numberOfLines={1}>
-                CSV Único p/ Todo o App ou por Engine
+              <Text style={styles.actionBigIcon}>📥</Text>
+              <Text style={[styles.actionShortLabel, { color: '#34D399' }]} numberOfLines={1}>
+                CSV Geral
               </Text>
             </Pressable>
 
             <Pressable
               testID="quick-action-schedule-hub"
+              accessibilityRole="button"
+              accessibilityLabel="Programação & WhatsApp"
+              {...webTitle('Engine de Programação, WhatsApp & Territórios')}
               onPress={() => {
                 setSelectedToolInfo({
-                  code: 'HUB-ZAP',
-                  title: '📅 Programação & WhatsApp (Hub)',
-                  desc: 'Compromissos, Grupos 1–3, Exportador WhatsApp, Registro de Territórios, Importar/Exportar CSV e Impressão PDF Completa.',
+                  code: 'HUB',
+                  title: '📅 Programação & WhatsApp',
+                  desc: 'Designações, Grupos 1–3, WhatsApp, Territórios, CSV e PDF.',
                   route: '/schedule-hub',
-                  badge: 'HUB + CSV + PDF',
+                  badge: 'ZAP + CSV',
                 });
                 router.push('/schedule-hub' as any);
               }}
               style={({ pressed }) => [
                 styles.actionButton,
-                { borderColor: '#10B981', backgroundColor: 'rgba(16, 185, 129, 0.08)' },
+                { borderColor: '#38BDF8', backgroundColor: 'rgba(56, 189, 248, 0.08)' },
                 pressed && styles.buttonPressed,
               ]}
             >
-              <View style={styles.actionRowTop}>
-                <Text style={[styles.actionCode, { color: '#34D399' }]}>[03]</Text>
-                <Text style={[styles.actionBadge, { color: '#34D399' }]}>ZAP + CSV</Text>
-              </View>
-              <Text style={[styles.actionButtonText, { color: '#34D399' }]} numberOfLines={1}>
-                📅 Programação & WhatsApp (Hub)
-              </Text>
-              <Text style={styles.actionButtonSub} numberOfLines={1}>
-                Compromissos, Grupos 1–3, CSV e PDF
+              <Text style={styles.actionBigIcon}>📅</Text>
+              <Text style={[styles.actionShortLabel, { color: '#38BDF8' }]} numberOfLines={1}>
+                Agenda
               </Text>
             </Pressable>
 
             <Pressable
               testID="quick-action-studio"
+              accessibilityRole="button"
+              accessibilityLabel="Estúdio Documental YAML PDF"
+              {...webTitle('Estúdio Documental YAML ⇄ PDF')}
               onPress={() => {
                 setSelectedToolInfo({
-                  code: 'STUDIO-MM',
-                  title: '🖋️ Estúdio Documental YAML ⇄ PDF',
-                  desc: 'Canvas em mm, Fichas 4-Up, Territórios Multi-Ciclo, Ingestão de PDF e Exportação CSV/PDF.',
+                  code: 'SDOC',
+                  title: '🖋️ Estúdio YAML ⇄ PDF',
+                  desc: 'Canvas em mm, Fichas 4-Up e Registro Multi-Ciclo.',
                   route: '/studio',
-                  badge: 'YAML ⇄ PDF',
+                  badge: 'PDF MM',
                 });
                 router.push('/studio' as any);
               }}
               style={({ pressed }) => [
                 styles.actionButton,
-                { borderColor: '#3B82F6', backgroundColor: 'rgba(59, 130, 246, 0.10)' },
+                { borderColor: '#3B82F6', backgroundColor: 'rgba(59, 130, 246, 0.08)' },
                 pressed && styles.buttonPressed,
               ]}
             >
-              <View style={styles.actionRowTop}>
-                <Text style={[styles.actionCode, { color: '#60A5FA' }]}>[04]</Text>
-                <Text style={[styles.actionBadge, { color: '#60A5FA' }]}>ESTÚDIO MM</Text>
-              </View>
-              <Text style={[styles.actionButtonText, { color: '#60A5FA' }]} numberOfLines={1}>
-                🖋️ Estúdio Documental YAML ⇄ PDF
-              </Text>
-              <Text style={styles.actionButtonSub} numberOfLines={1}>
-                Canvas em mm, Fichas 4-Up e Multi-Ciclo
+              <Text style={styles.actionBigIcon}>🖋️</Text>
+              <Text style={[styles.actionShortLabel, { color: '#60A5FA' }]} numberOfLines={1}>
+                Estúdio
               </Text>
             </Pressable>
 
             <Pressable
               testID="quick-action-hoje"
+              accessibilityRole="button"
+              accessibilityLabel="Cockpit Hoje"
+              {...webTitle('Cockpit Hoje & Rituais')}
               onPress={() => {
                 setSelectedToolInfo({
-                  code: 'COCKPIT-HOJE',
-                  title: '☀️ Cockpit Hoje & Compositor',
-                  desc: 'Compromissos do dia, Rituais governados, sekundo.app.yaml e Importação/Exportação CSV Geral.',
+                  code: 'HOJE',
+                  title: '☀️ Cockpit Hoje',
+                  desc: 'Compromissos do dia, Rituais e sekundo.app.yaml.',
                   route: '/hoje',
-                  badge: 'COCKPIT CAD',
+                  badge: 'HOJE',
                 });
                 router.push('/hoje' as any);
               }}
               style={({ pressed }) => [
                 styles.actionButton,
-                { borderColor: '#F59E0B', backgroundColor: 'rgba(245, 158, 11, 0.10)' },
+                { borderColor: '#F59E0B', backgroundColor: 'rgba(245, 158, 11, 0.08)' },
                 pressed && styles.buttonPressed,
               ]}
             >
-              <View style={styles.actionRowTop}>
-                <Text style={[styles.actionCode, { color: '#FBBF24' }]}>[05]</Text>
-                <Text style={[styles.actionBadge, { color: '#FBBF24' }]}>HOJE + YAML</Text>
-              </View>
-              <Text style={[styles.actionButtonText, { color: '#FBBF24' }]} numberOfLines={1}>
-                ☀️ Cockpit Hoje & Compositor
-              </Text>
-              <Text style={styles.actionButtonSub} numberOfLines={1}>
-                Compromissos do dia, Rituais e YAML
+              <Text style={styles.actionBigIcon}>☀️</Text>
+              <Text style={[styles.actionShortLabel, { color: '#FBBF24' }]} numberOfLines={1}>
+                Hoje
               </Text>
             </Pressable>
 
             <Pressable
               testID="quick-action-privileges"
+              accessibilityRole="button"
+              accessibilityLabel="Matriz de Privilégios"
+              {...webTitle('Matriz de Privilégios Dinâmica & Auto-Designação')}
               onPress={() => {
                 setSelectedToolInfo({
-                  code: 'PRIV-26',
-                  title: '🛡️ Matriz de Privilégios & Rotatividade',
-                  desc: 'Configura 26 colunas de competências por usuário (Perfil A/B, Nível de Função e Grupos) para auto-preenchimento justo sem colisões.',
-                  badge: '26 COLUNAS',
+                  code: 'PRIV',
+                  title: '🛡️ Matriz de Privilégios',
+                  desc: 'Lê qualquer privilégio do CSV e executa rotação justa FIFO.',
+                  badge: `${participants.length} USUÁRIOS`,
                 });
                 setPrivilegeModalOpen(true);
               }}
               style={({ pressed }) => [
                 styles.actionButton,
-                { borderColor: '#8B5CF6', backgroundColor: 'rgba(139, 92, 246, 0.12)' },
+                { borderColor: '#8B5CF6', backgroundColor: 'rgba(139, 92, 246, 0.10)' },
                 pressed && styles.buttonPressed,
               ]}
             >
-              <View style={styles.actionRowTop}>
-                <Text style={[styles.actionCode, { color: '#C4B5FD' }]}>[06]</Text>
-                <Text style={[styles.actionBadge, { color: '#C4B5FD' }]}>26 PRIVILÉGIOS</Text>
-              </View>
-              <Text style={[styles.actionButtonText, { color: '#DDD6FE' }]} numberOfLines={1}>
-                🛡️ Matriz de Privilégios & Rotação
-              </Text>
-              <Text style={styles.actionButtonSub} numberOfLines={1}>
-                {participants.length} participantes • Auto-Designar FIFO
+              <Text style={styles.actionBigIcon}>🛡️</Text>
+              <Text style={[styles.actionShortLabel, { color: '#C4B5FD' }]} numberOfLines={1}>
+                Privilégios
               </Text>
             </Pressable>
           </View>
 
-          {/* Compact CAD Inspector Box for Selected Module */}
-          <View style={styles.inspectorBar}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Text style={styles.inspectorCode}>
-                [{selectedToolInfo.code}] {selectedToolInfo.title}
+          {/* Click-to-Reveal Inspector Box (hidden unless user clicks ℹ️) */}
+          {showInspector && (
+            <View style={styles.inspectorBar}>
+              <View
+                style={{
+                  flexDirection: 'row',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                }}
+              >
+                <Text style={styles.inspectorCode}>
+                  [{selectedToolInfo.code}] {selectedToolInfo.title}
+                </Text>
+                <Text style={styles.inspectorBadge}>{selectedToolInfo.badge}</Text>
+              </View>
+              <Text style={styles.inspectorDesc} numberOfLines={2}>
+                {selectedToolInfo.desc}
               </Text>
-              <Text style={styles.inspectorBadge}>{selectedToolInfo.badge}</Text>
             </View>
-            <Text style={styles.inspectorDesc} numberOfLines={2}>
-              {selectedToolInfo.desc}
-            </Text>
-          </View>
+          )}
         </View>
 
-        {/* Right Dock: Active Events Matrix & Selected Event Command Inspector */}
+        {/* Right Dock: Active Events Matrix with Icon-Only Engine Launchers */}
         <View style={[styles.column, isLargeScreen && styles.rightColumn]}>
           <View style={styles.dockHeader}>
-            <Text style={styles.sectionTitle}>2. Your Active Skeletons ({events.length})</Text>
-            <Text style={styles.dockMeta}>Clique no evento p/ comandos</Text>
+            <Text style={styles.sectionTitle}>🗂️ Eventos ({events.length})</Text>
+            <Text style={styles.dockMeta}>Ícones abrem as Engines</Text>
           </View>
 
           {events.length === 0 ? (
             <View style={styles.emptyCard}>
-              <Text style={styles.emptyText}>No events configured yet.</Text>
-              <Text style={styles.emptySub}>Click "Create New Event" or "Import CSV Template".</Text>
+              <Text style={styles.emptyText}>Nenhum evento salvo.</Text>
+              <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
+                <Pressable
+                  onPress={() => router.push('/create-event')}
+                  style={[styles.iconRibbonBtn, styles.ribbonBtnGold]}
+                >
+                  <Text style={styles.iconRibbonGlyph}>➕</Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => router.push('/csv-import')}
+                  style={[styles.iconRibbonBtn, styles.ribbonBtnEmerald]}
+                >
+                  <Text style={styles.iconRibbonGlyph}>📥</Text>
+                </Pressable>
+              </View>
             </View>
           ) : (
             <View style={styles.eventsContainer}>
-              {/* Compact Event Selector Buttons */}
               <ScrollView
                 style={styles.eventsMatrixScroll}
                 contentContainerStyle={styles.eventsMatrixGrid}
@@ -430,7 +443,14 @@ export default function Dashboard() {
                         onPress={() => setSelectedEventId(event.config.id)}
                         style={styles.eventHeaderRow}
                       >
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
+                        <View
+                          style={{
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            gap: 6,
+                            flex: 1,
+                          }}
+                        >
                           <Text style={styles.eventIndexCode}>
                             [{String(idx + 1).padStart(2, '0')}]
                           </Text>
@@ -439,161 +459,173 @@ export default function Dashboard() {
                           </Text>
                         </View>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                          {activeEngines.slice(0, 2).map((engId) => {
+                          {activeEngines.slice(0, 3).map((engId) => {
                             const eng = engineRegistry.get(engId);
                             return (
                               <View key={engId} style={styles.engineBadge}>
-                                <Text style={styles.engineBadgeText}>{eng.name}</Text>
+                                <Text style={styles.engineBadgeText}>
+                                  {eng ? eng.name.slice(0, 10) : engId}
+                                </Text>
                               </View>
                             );
                           })}
                         </View>
                       </Pressable>
 
-                      {/* Compact CAD Command Buttons for the Event */}
+                      {/* Icon-Only Multi-Engine Action Bar for the Event */}
                       <View style={styles.cardActions}>
                         {activeEngines.includes('territory_logistics') && (
                           <>
                             <Pressable
-                              onPress={() => router.push(`/territory-checklist?id=${event.config.id}`)}
-                              style={[
-                                styles.openButton,
-                                {
-                                  backgroundColor: 'rgba(16, 185, 129, 0.15)',
-                                  borderWidth: 1,
-                                  borderColor: '#10B981',
-                                },
-                              ]}
+                              testID={`event-open-territory-${event.config.id}`}
+                              accessibilityRole="button"
+                              accessibilityLabel="📋 Campo"
+                              {...webTitle('📋 Campo (Engine de Territórios)')}
+                              onPress={() =>
+                                router.push(`/territory-checklist?id=${event.config.id}`)
+                              }
+                              style={[styles.eventIconBtn, { borderColor: '#10B981' }]}
                             >
-                              <Text style={[styles.openButtonText, { color: '#10B981' }]}>📋 Campo</Text>
+                              <Text style={styles.eventIconGlyph}>📋</Text>
                             </Pressable>
                             <Pressable
-                              onPress={() => router.push(`/territory-map?id=${event.config.id}`)}
-                              style={[
-                                styles.openButton,
-                                {
-                                  backgroundColor: 'rgba(59, 130, 246, 0.15)',
-                                  borderWidth: 1,
-                                  borderColor: '#3B82F6',
-                                },
-                              ]}
+                              testID={`event-open-map-${event.config.id}`}
+                              accessibilityRole="button"
+                              accessibilityLabel="🗺️ Mapa"
+                              {...webTitle('🗺️ Mapa CAD 2D (Engine de Territórios)')}
+                              onPress={() =>
+                                router.push(`/territory-map?id=${event.config.id}`)
+                              }
+                              style={[styles.eventIconBtn, { borderColor: '#3B82F6' }]}
                             >
-                              <Text style={[styles.openButtonText, { color: '#60A5FA' }]}>🗺️ Mapa</Text>
+                              <Text style={styles.eventIconGlyph}>🗺️</Text>
                             </Pressable>
                           </>
                         )}
+
                         {activeEngines.includes('roster_assignments') && (
                           <>
                             <Pressable
-                              onPress={() => router.push(`/schedule-hub?id=${event.config.id}` as any)}
-                              style={[
-                                styles.openButton,
-                                {
-                                  backgroundColor: 'rgba(255, 184, 0, 0.16)',
-                                  borderWidth: 1,
-                                  borderColor: '#FFB800',
-                                },
-                              ]}
+                              testID={`event-open-schedule-${event.config.id}`}
+                              accessibilityRole="button"
+                              accessibilityLabel="📲 Programação"
+                              {...webTitle('📅 Programação & WhatsApp')}
+                              onPress={() =>
+                                router.push(`/schedule-hub?id=${event.config.id}` as any)
+                              }
+                              style={[styles.eventIconBtn, { borderColor: '#FFB800' }]}
                             >
-                              <Text style={[styles.openButtonText, { color: '#FFB800' }]}>
-                                📲 Programação
-                              </Text>
+                              <Text style={styles.eventIconGlyph}>📅</Text>
                             </Pressable>
                             <Pressable
-                              onPress={() => router.push(`/roster-swap?id=${event.config.id}`)}
-                              style={[
-                                styles.openButton,
-                                {
-                                  backgroundColor: 'rgba(16, 185, 129, 0.15)',
-                                  borderWidth: 1,
-                                  borderColor: '#10B981',
-                                },
-                              ]}
+                              testID={`event-open-privileges-${event.config.id}`}
+                              accessibilityRole="button"
+                              accessibilityLabel="🛡️ Privilégios"
+                              {...webTitle('🛡️ Matriz de Privilégios')}
+                              onPress={() => setPrivilegeModalOpen(true)}
+                              style={[styles.eventIconBtn, { borderColor: '#A855F7' }]}
                             >
-                              <Text style={[styles.openButtonText, { color: '#10B981' }]}>🔄 Trocas</Text>
+                              <Text style={styles.eventIconGlyph}>🛡️</Text>
+                            </Pressable>
+                            <Pressable
+                              testID={`event-open-swap-${event.config.id}`}
+                              accessibilityRole="button"
+                              accessibilityLabel="🔄 Trocas"
+                              {...webTitle('🔄 Trocas de Designação')}
+                              onPress={() =>
+                                router.push(`/roster-swap?id=${event.config.id}`)
+                              }
+                              style={[styles.eventIconBtn, { borderColor: '#10B981' }]}
+                            >
+                              <Text style={styles.eventIconGlyph}>🔄</Text>
                             </Pressable>
                           </>
                         )}
+
                         {activeEngines.includes('live_production_ros') && (
                           <Pressable
-                            onPress={() => router.push(`/run-of-show?id=${event.config.id}`)}
-                            style={[
-                              styles.openButton,
-                              {
-                                backgroundColor: 'rgba(239, 68, 68, 0.15)',
-                                borderWidth: 1,
-                                borderColor: '#EF4444',
-                              },
-                            ]}
+                            accessibilityRole="button"
+                            accessibilityLabel="⏱️ Régie"
+                            {...webTitle('⏱️ Run-of-Show / Régie')}
+                            onPress={() =>
+                              router.push(`/run-of-show?id=${event.config.id}`)
+                            }
+                            style={[styles.eventIconBtn, { borderColor: '#EF4444' }]}
                           >
-                            <Text style={[styles.openButtonText, { color: '#FCA5A5' }]}>⏱️ Régie</Text>
+                            <Text style={styles.eventIconGlyph}>⏱️</Text>
                           </Pressable>
                         )}
+
                         {activeEngines.includes('tournament_pairings') && (
                           <Pressable
-                            onPress={() => router.push(`/tournament-bracket?id=${event.config.id}`)}
-                            style={[
-                              styles.openButton,
-                              {
-                                backgroundColor: 'rgba(245, 158, 11, 0.15)',
-                                borderWidth: 1,
-                                borderColor: '#F59E0B',
-                              },
-                            ]}
+                            accessibilityRole="button"
+                            accessibilityLabel="🏆 Torneio"
+                            {...webTitle('🏆 Chaveamento de Torneio')}
+                            onPress={() =>
+                              router.push(`/tournament-bracket?id=${event.config.id}`)
+                            }
+                            style={[styles.eventIconBtn, { borderColor: '#F59E0B' }]}
                           >
-                            <Text style={[styles.openButtonText, { color: '#FCD34D' }]}>🏆 Torneio</Text>
+                            <Text style={styles.eventIconGlyph}>🏆</Text>
                           </Pressable>
                         )}
+
                         {activeEngines.includes('incident_command') && (
                           <Pressable
-                            onPress={() => router.push(`/ics-command?id=${event.config.id}`)}
-                            style={[
-                              styles.openButton,
-                              {
-                                backgroundColor: 'rgba(59, 130, 246, 0.15)',
-                                borderWidth: 1,
-                                borderColor: '#3B82F6',
-                              },
-                            ]}
+                            accessibilityRole="button"
+                            accessibilityLabel="🚨 ICS"
+                            {...webTitle('🚨 Comando de Incidente ICS')}
+                            onPress={() =>
+                              router.push(`/ics-command?id=${event.config.id}`)
+                            }
+                            style={[styles.eventIconBtn, { borderColor: '#3B82F6' }]}
                           >
-                            <Text style={[styles.openButtonText, { color: '#93C5FD' }]}>🛡️ ICS</Text>
+                            <Text style={styles.eventIconGlyph}>🚨</Text>
                           </Pressable>
                         )}
+
                         <Pressable
-                          onPress={() => router.push(`/pdf-forms?id=${event.config.id}`)}
-                          style={[
-                            styles.openButton,
-                            {
-                              backgroundColor: 'rgba(255, 184, 0, 0.12)',
-                              borderWidth: 1,
-                              borderColor: '#FFB800',
-                            },
-                          ]}
+                          accessibilityRole="button"
+                          accessibilityLabel="📄 PDF"
+                          {...webTitle('📄 Formulários PDF')}
+                          onPress={() =>
+                            router.push(`/pdf-forms?id=${event.config.id}`)
+                          }
+                          style={[styles.eventIconBtn, { borderColor: '#FFB800' }]}
                         >
-                          <Text style={[styles.openButtonText, { color: '#FFB800' }]}>📄 PDF</Text>
+                          <Text style={styles.eventIconGlyph}>📄</Text>
                         </Pressable>
+
                         <Pressable
-                          onPress={() => router.push(`/studio?id=${event.config.id}` as any)}
-                          style={[
-                            styles.openButton,
-                            {
-                              backgroundColor: 'rgba(59, 130, 246, 0.15)',
-                              borderWidth: 1,
-                              borderColor: '#3B82F6',
-                            },
-                          ]}
+                          accessibilityRole="button"
+                          accessibilityLabel="🖋️ Estúdio"
+                          {...webTitle('🖋️ Estúdio Documental YAML ⇄ PDF')}
+                          onPress={() =>
+                            router.push(`/studio?id=${event.config.id}` as any)
+                          }
+                          style={[styles.eventIconBtn, { borderColor: '#3B82F6' }]}
                         >
-                          <Text style={[styles.openButtonText, { color: '#60A5FA' }]}>🖋️ Estúdio</Text>
+                          <Text style={styles.eventIconGlyph}>🖋️</Text>
                         </Pressable>
+
                         <Pressable
-                          onPress={() => router.push(`/skeleton-editor?id=${event.config.id}`)}
-                          style={styles.openButton}
+                          accessibilityRole="button"
+                          accessibilityLabel="Editar"
+                          {...webTitle('🌳 Editor de Esqueleto Multi-Engine')}
+                          onPress={() =>
+                            router.push(`/skeleton-editor?id=${event.config.id}`)
+                          }
+                          style={styles.eventIconBtn}
                         >
-                          <Text style={styles.openButtonText}>Editar</Text>
+                          <Text style={styles.eventIconGlyph}>🌳</Text>
                         </Pressable>
+
                         <Pressable
+                          accessibilityRole="button"
+                          accessibilityLabel="Excluir Evento"
+                          {...webTitle('🗑️ Excluir Evento')}
                           onPress={() => deleteEventState(event.config.id)}
-                          style={styles.deleteButton}
+                          style={[styles.eventIconBtn, styles.deleteButton]}
                         >
                           <Text style={styles.deleteButtonText}>✕</Text>
                         </Pressable>
@@ -607,7 +639,7 @@ export default function Dashboard() {
         </View>
       </View>
 
-      {/* Clean-Room 26-Column Privilege Matrix Modal */}
+      {/* Dynamic Clean-Room Privilege Matrix Modal */}
       <PrivilegeMatrixModal
         visible={privilegeModalOpen}
         onClose={() => setPrivilegeModalOpen(false)}
@@ -627,8 +659,8 @@ const styles = StyleSheet.create({
     maxHeight: Platform.OS === 'web' ? ('100dvh' as any) : '100%',
     overflow: 'hidden',
     backgroundColor: 'transparent',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
   },
   loadingContainer: {
     flex: 1,
@@ -641,83 +673,100 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     flexWrap: 'wrap',
-    gap: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    backgroundColor: 'rgba(15, 23, 42, 0.9)',
-    borderRadius: 12,
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    backgroundColor: 'rgba(15, 23, 42, 0.92)',
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: '#1E293B',
-    marginBottom: 8,
+    marginBottom: 6,
   },
   brandRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    flexShrink: 1,
+    gap: 6,
   },
   brandIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 8,
-    borderWidth: 1.5,
-    borderColor: '#FFB800',
+    width: 24,
+    height: 24,
+    borderRadius: 6,
   },
   logo: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '900',
-    color: '#FFFFFF',
-    letterSpacing: -0.5,
+    color: '#F8FAFC',
   },
   cadModePill: {
-    backgroundColor: 'rgba(245, 158, 11, 0.16)',
+    backgroundColor: 'rgba(255, 184, 0, 0.16)',
     borderWidth: 1,
-    borderColor: '#F59E0B',
+    borderColor: '#FFB800',
     borderRadius: 4,
     paddingHorizontal: 5,
     paddingVertical: 1,
   },
   cadModePillText: {
-    color: '#FBBF24',
-    fontSize: 8.5,
+    fontSize: 8,
     fontWeight: '900',
-  },
-  tagline: {
-    fontSize: 10.5,
-    color: '#94A3B8',
+    color: '#FFB800',
   },
   topRibbonActions: {
     flexDirection: 'row',
     alignItems: 'center',
     flexWrap: 'wrap',
-    gap: 6,
+    gap: 5,
   },
-  ribbonBtn: {
-    paddingHorizontal: 9,
-    paddingVertical: 5,
-    borderRadius: 7,
+  iconRibbonBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
     borderWidth: 1,
+    borderColor: '#334155',
+    backgroundColor: '#1E293B',
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
   },
-  ribbonBtnPurple: {
-    backgroundColor: 'rgba(139, 92, 246, 0.16)',
-    borderColor: '#8B5CF6',
+  iconRibbonGlyph: {
+    fontSize: 16,
   },
-  ribbonBtnGold: {
-    backgroundColor: 'rgba(245, 158, 11, 0.16)',
-    borderColor: '#F59E0B',
+  miniBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    backgroundColor: '#0F172A',
+    borderWidth: 1,
+    borderColor: '#A855F7',
+    borderRadius: 7,
+    paddingHorizontal: 3,
+    minWidth: 14,
+    alignItems: 'center',
   },
-  ribbonBtnEmerald: {
-    backgroundColor: 'rgba(16, 185, 129, 0.16)',
-    borderColor: '#10B981',
-  },
-  ribbonBtnText: {
-    fontSize: 10.5,
+  miniBadgeText: {
+    color: '#DDD6FE',
+    fontSize: 8,
     fontWeight: '800',
   },
-  toastBanner: {
-    backgroundColor: 'rgba(16, 185, 129, 0.18)',
-    borderWidth: 1,
+  ribbonBtnPurple: {
+    borderColor: '#8B5CF6',
+    backgroundColor: 'rgba(139, 92, 246, 0.22)',
+  },
+  ribbonBtnGold: {
+    borderColor: '#F59E0B',
+    backgroundColor: 'rgba(245, 158, 11, 0.22)',
+  },
+  ribbonBtnEmerald: {
     borderColor: '#10B981',
+    backgroundColor: 'rgba(16, 185, 129, 0.22)',
+  },
+  ribbonBtnActive: {
+    borderColor: '#38BDF8',
+    backgroundColor: 'rgba(56, 189, 248, 0.25)',
+  },
+  toastBanner: {
+    backgroundColor: '#064E3B',
+    borderColor: '#10B981',
+    borderWidth: 1,
     borderRadius: 8,
     paddingHorizontal: 10,
     paddingVertical: 4,
@@ -730,10 +779,8 @@ const styles = StyleSheet.create({
   },
   mainLayout: {
     flex: 1,
-    minHeight: 0,
-    flexDirection: 'column',
     gap: 8,
-    overflow: 'hidden',
+    minHeight: 0,
   },
   rowLayout: {
     flexDirection: 'row',
@@ -742,33 +789,27 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 0,
     backgroundColor: 'rgba(15, 23, 42, 0.78)',
-    borderRadius: 12,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: '#1E293B',
-    padding: 10,
-    overflow: 'hidden',
+    padding: 8,
   },
   leftColumn: {
-    flex: 1.05,
+    flex: 1,
   },
   rightColumn: {
-    flex: 1,
+    flex: 1.35,
   },
   dockHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
-    paddingBottom: 5,
-    borderBottomWidth: 1,
-    borderBottomColor: '#1E293B',
+    marginBottom: 6,
   },
   sectionTitle: {
     fontSize: 12,
-    fontWeight: '900',
+    fontWeight: '800',
     color: '#F8FAFC',
-    textTransform: 'uppercase',
-    letterSpacing: 0.4,
   },
   dockMeta: {
     fontSize: 10,
@@ -781,88 +822,52 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   actionButton: {
-    width: '48.8%',
+    width: '31.5%',
+    minWidth: 88,
     flexGrow: 1,
-    backgroundColor: 'rgba(255, 255, 255, 0.03)',
-    borderRadius: 9,
-    paddingHorizontal: 9,
-    paddingVertical: 7,
+    backgroundColor: 'rgba(30, 41, 59, 0.85)',
+    paddingVertical: 10,
+    paddingHorizontal: 6,
+    borderRadius: 8,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: '#334155',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
   },
   buttonPressed: {
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    opacity: 0.8,
   },
-  actionRowTop: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 2,
+  actionBigIcon: {
+    fontSize: 20,
   },
-  actionCode: {
-    color: '#FFB800',
-    fontSize: 9.5,
-    fontWeight: '900',
-    fontFamily: 'monospace',
-  },
-  actionBadge: {
-    color: '#94A3B8',
-    fontSize: 8.5,
+  actionShortLabel: {
+    color: '#F8FAFC',
+    fontSize: 11,
     fontWeight: '800',
-  },
-  actionButtonText: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: '#FFFFFF',
-  },
-  actionButtonSub: {
-    fontSize: 10,
-    color: '#94A3B8',
-    marginTop: 2,
   },
   inspectorBar: {
-    marginTop: 'auto',
-    paddingTop: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 6,
+    marginTop: 6,
     backgroundColor: '#090D16',
     borderRadius: 8,
     borderWidth: 1,
     borderColor: '#1E293B',
+    padding: 8,
   },
   inspectorCode: {
-    color: '#F8FAFC',
+    color: '#38BDF8',
     fontSize: 11,
     fontWeight: '800',
   },
   inspectorBadge: {
     color: '#FFB800',
     fontSize: 9,
-    fontWeight: '900',
+    fontWeight: '800',
   },
   inspectorDesc: {
     color: '#94A3B8',
     fontSize: 10,
     marginTop: 2,
-    lineHeight: 14,
-  },
-  emptyCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.02)',
-    borderRadius: 10,
-    padding: 18,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.05)',
-  },
-  emptyText: {
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  emptySub: {
-    color: '#6F7E94',
-    fontSize: 11,
-    marginTop: 4,
   },
   eventsContainer: {
     flex: 1,
@@ -870,24 +875,22 @@ const styles = StyleSheet.create({
   },
   eventsMatrixScroll: {
     flex: 1,
-    minHeight: 0,
   },
   eventsMatrixGrid: {
     gap: 6,
-    paddingBottom: 4,
+    paddingBottom: 6,
   },
   eventCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.03)',
-    borderRadius: 9,
-    paddingHorizontal: 10,
-    paddingVertical: 7,
+    backgroundColor: 'rgba(30, 41, 59, 0.72)',
+    borderRadius: 8,
+    padding: 8,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.07)',
+    borderColor: '#334155',
     gap: 6,
   },
   eventCardActive: {
     borderColor: '#FFB800',
-    backgroundColor: 'rgba(255, 184, 0, 0.05)',
+    backgroundColor: 'rgba(30, 41, 59, 0.95)',
   },
   eventHeaderRow: {
     flexDirection: 'row',
@@ -899,56 +902,66 @@ const styles = StyleSheet.create({
     color: '#FFB800',
     fontSize: 10,
     fontWeight: '900',
-    fontFamily: 'monospace',
   },
   eventName: {
-    fontSize: 12.5,
+    fontSize: 12,
     fontWeight: '800',
-    color: '#FFFFFF',
-    flexShrink: 1,
+    color: '#F8FAFC',
+    flex: 1,
   },
   engineBadge: {
-    backgroundColor: 'rgba(255, 184, 0, 0.12)',
-    paddingHorizontal: 6,
+    backgroundColor: 'rgba(255, 184, 0, 0.14)',
+    paddingHorizontal: 5,
     paddingVertical: 1,
     borderRadius: 4,
     borderWidth: 1,
-    borderColor: 'rgba(255, 184, 0, 0.3)',
+    borderColor: 'rgba(255, 184, 0, 0.35)',
   },
   engineBadgeText: {
     color: '#FFB800',
     fontSize: 8.5,
     fontWeight: '800',
-    textTransform: 'uppercase',
   },
   cardActions: {
     flexDirection: 'row',
-    alignItems: 'center',
     flexWrap: 'wrap',
     gap: 5,
   },
-  openButton: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 6,
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-  },
-  openButtonText: {
-    color: '#12151C',
-    fontWeight: '700',
-    fontSize: 10.5,
-  },
-  deleteButton: {
-    backgroundColor: 'rgba(239, 68, 68, 0.12)',
-    borderRadius: 6,
-    paddingVertical: 4,
-    paddingHorizontal: 7,
+  eventIconBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 7,
+    backgroundColor: 'rgba(15, 23, 42, 0.9)',
+    borderWidth: 1,
+    borderColor: '#475569',
     alignItems: 'center',
     justifyContent: 'center',
   },
+  eventIconGlyph: {
+    fontSize: 15,
+  },
+  deleteButton: {
+    borderColor: 'rgba(239, 68, 68, 0.45)',
+    backgroundColor: 'rgba(239, 68, 68, 0.12)',
+  },
   deleteButtonText: {
     color: '#EF4444',
-    fontSize: 10.5,
-    fontWeight: '800',
+    fontWeight: '900',
+    fontSize: 13,
+  },
+  emptyCard: {
+    flex: 1,
+    backgroundColor: 'rgba(30, 41, 59, 0.45)',
+    borderRadius: 8,
+    padding: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#1E293B',
+  },
+  emptyText: {
+    color: '#CBD5E1',
+    fontSize: 12,
+    fontWeight: '700',
   },
 });

@@ -35,6 +35,12 @@ import {
 } from '@sekundo/core';
 import { loadAppManifestYaml, saveAppManifestYaml } from '../storage/localStorage';
 import { deliverFile } from '../utils/deliverFile';
+import { useLocalEvent } from '../hooks/useLocalEvent';
+import { MultiEngineSwitcherBar } from '../components/ui/MultiEngineSwitcherBar';
+import {
+  exportFullSiteOmniCsvFromStorage,
+  commitOmniCsvBundleToStorage,
+} from '../storage/omniStorageBridge';
 
 type HojeCadToolId =
   | 'compromissos'
@@ -48,6 +54,7 @@ export default function HojeCockpitScreen() {
   const router = useRouter();
   const { width } = useWindowDimensions();
   const isDesktop = width >= 860;
+  const { events, addEvent } = useLocalEvent();
 
   const [manifestYaml, setManifestYaml] = useState<string>(DEFAULT_SEKUNDO_APP_YAML);
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
@@ -145,17 +152,32 @@ export default function HojeCockpitScreen() {
     await handleRunOutput(kind, tplRaw);
   };
 
-  const handleExportOmniCsv = () => {
+  const handleExportOmniCsv = async () => {
+    if (Platform.OS === 'web' && typeof document !== 'undefined') {
+      await saveAppManifestYaml(manifestYaml);
+      const csv = await exportFullSiteOmniCsvFromStorage(events);
+      const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `sekundo_omni_geral_salvo_${new Date().toISOString().slice(0, 10)}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+      setStatusMsg('🌐 CSV Geral salvo no site exportado!');
+    }
+  };
+
+  const handleExportSampleOmniCsv = () => {
     if (Platform.OS === 'web' && typeof document !== 'undefined') {
       const csv = exportOmniCsvBundle({ hojeManifestYaml: manifestYaml });
       const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = 'sekundo_omni_geral.csv';
+      a.download = 'sekundo_omni_exemplo.csv';
       a.click();
       URL.revokeObjectURL(url);
-      setStatusMsg('🌐 CSV Geral exportado com manifesto Hoje e Rituais!');
+      setStatusMsg('🧪 CSV Geral de Exemplo baixado!');
     }
   };
 
@@ -172,7 +194,12 @@ export default function HojeCockpitScreen() {
         if (bundle.hojeManifestYaml) {
           handleYamlChange(bundle.hojeManifestYaml);
         }
-        setStatusMsg(`✅ CSV Geral "${file.name}" importado no Cockpit Hoje!`);
+        await commitOmniCsvBundleToStorage(bundle, {
+          rawCsvText: text,
+          existingEvents: events,
+          addEvent,
+        });
+        setStatusMsg(`✅ CSV Geral "${file.name}" importado em todas as Engines!`);
       };
       input.click();
     }
@@ -188,90 +215,98 @@ export default function HojeCockpitScreen() {
     {
       id: 'compromissos',
       code: '01',
-      label: '📅 Compromissos do Dia',
-      count: `${summary.compromissosDoDia.length} partes`,
+      label: '📅 Dia',
+      count: `${summary.compromissosDoDia.length}`,
       color: '#2563EB',
     },
     {
       id: 'mensagens',
       code: '02',
-      label: '💬 Mensagens WhatsApp',
-      count: `${summary.mensagensAEnviar.length} envios`,
+      label: '💬 WhatsApp',
+      count: `${summary.mensagensAEnviar.length}`,
       color: '#10B981',
     },
     {
       id: 'documentos',
       code: '03',
-      label: '📄 Documentos & PDF',
-      count: `${summary.documentosAImprimir.length} saídas`,
+      label: '📄 PDF',
+      count: `${summary.documentosAImprimir.length}`,
       color: '#D97706',
     },
     {
       id: 'territorios',
       code: '04',
-      label: '🗺️ Territórios Vencendo',
-      count: `${summary.territoriosVencendo.length} setores`,
+      label: '🗺️ Setores',
+      count: `${summary.territoriosVencendo.length}`,
       color: '#0D9488',
     },
     {
       id: 'rituais',
       code: '05',
-      label: '🛡️ Rituais Governados',
-      count: `${manifest.rituais.length} rituais`,
+      label: '🛡️ Rituais',
+      count: `${manifest.rituais.length}`,
       color: '#7C3AED',
     },
     {
       id: 'compositor',
       code: '06',
-      label: '🧩 Compositor YAML',
-      count: 'sekundo.app.yaml',
+      label: '🧩 YAML',
+      count: 'app.yaml',
       color: '#BE123C',
     },
   ];
 
   return (
     <SafeAreaView style={styles.cadViewport}>
-      {/* Top AutoCAD Ribbon (Zero Horizontal Overflow on 390px Mobile!) */}
+      {/* Top AutoCAD Icon-Only Ribbon (Zero Horizontal Overflow on 390px Mobile!) */}
       <View style={styles.topRibbon}>
-        <View style={styles.headerLeft}>
-          <TouchableOpacity
-            testID="hoje-back-btn"
-            style={styles.cadBtn}
-            onPress={() => (router.canGoBack() ? router.back() : router.push('/'))}
-          >
-            <Text style={[styles.cadBtnText, { color: '#FFB800' }]}>← Painel</Text>
-          </TouchableOpacity>
-          <Text style={styles.title} testID="hoje-app-title" numberOfLines={1}>
-            ☀️ COCKPIT HOJE & COMPOSITOR
-          </Text>
-        </View>
+        <MultiEngineSwitcherBar activeEngine="hoje" />
 
         <View style={styles.headerActions}>
           <TouchableOpacity
+            testID="hoje-export-omni-btn"
             style={[styles.cadBtn, styles.cadBtnPurple]}
             onPress={handleExportOmniCsv}
+            accessibilityLabel="Baixar CSV Geral"
+            {...({ title: 'Baixar CSV Geral (Estado Salvo no Site)' } as any)}
           >
-            <Text style={styles.cadBtnText}>📤 Exportar CSV Geral</Text>
+            <Text style={styles.cadBtnText}>🌐</Text>
           </TouchableOpacity>
           <TouchableOpacity
+            testID="hoje-sample-omni-btn"
+            style={styles.cadBtn}
+            onPress={handleExportSampleOmniCsv}
+            accessibilityLabel="Baixar CSV Geral de Exemplo"
+            {...({ title: 'Baixar CSV Geral de Exemplo' } as any)}
+          >
+            <Text style={styles.cadBtnText}>🧪</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            testID="hoje-import-omni-btn"
             style={[styles.cadBtn, styles.cadBtnBlue]}
             onPress={handleImportOmniCsv}
+            accessibilityLabel="Importar CSV Geral"
+            {...({ title: 'Importar CSV Geral' } as any)}
           >
-            <Text style={styles.cadBtnText}>📥 Importar CSV</Text>
+            <Text style={styles.cadBtnText}>📥</Text>
           </TouchableOpacity>
           <TouchableOpacity
             testID="hoje-quick-any-pdf-btn"
             style={styles.cadBtn}
             onPress={() => router.push('/pdf-forms' as any)}
+            accessibilityLabel="Central de Formulários PDF"
+            {...({ title: 'Central de Formulários PDF' } as any)}
           >
-            <Text style={styles.cadBtnText}>📄 PDF Avulso</Text>
+            <Text style={styles.cadBtnText}>📄</Text>
           </TouchableOpacity>
           <TouchableOpacity
             testID="hoje-open-studio-btn"
             style={[styles.cadBtn, styles.cadBtnEmerald]}
             onPress={() => router.push('/studio' as any)}
+            accessibilityLabel="Estúdio YAML PDF"
+            {...({ title: 'Estúdio YAML ⇄ PDF' } as any)}
           >
-            <Text style={styles.cadBtnText}>🖋️ Estúdio YAML ⇄ PDF</Text>
+            <Text style={styles.cadBtnText}>🖋️</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -293,9 +328,6 @@ export default function HojeCockpitScreen() {
       >
         {/* Left: Compact Matrix of 6 CAD Buttons */}
         <View style={[styles.matrixPanel, { flex: isDesktop ? 1 : undefined }]}>
-          <Text style={styles.panelHint}>
-            🎛️ MÓDULOS DO COCKPIT HOJE (Clique em um botão para abrir no Inspetor):
-          </Text>
           <View style={styles.toolsGrid}>
             {cadTools.map((tool) => {
               const active = activeTool === tool.id;

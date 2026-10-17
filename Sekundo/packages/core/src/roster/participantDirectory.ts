@@ -43,6 +43,7 @@ export interface ParticipantProfile {
   assignmentCount?: number;
   lastPartnerId?: string;
   active?: boolean;
+  preserveExplicitCapabilities?: boolean;
 }
 
 /**

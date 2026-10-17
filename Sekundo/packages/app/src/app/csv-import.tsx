@@ -1,15 +1,13 @@
 /**
  * Page: csv-import
  *
- * Sekundo — AutoCAD-Style Central CSV & Omni-Bundle Station (`100dvh`, Zero Roll-Down).
+ * Sekundo — AutoCAD Icon-Only Central CSV & Multi-Engine Omni-Bundle Station (`100dvh`, Zero Roll-Down).
  *
  * Features:
- * - Unified Master CSV ("CSV GERAL de todo o App"): Download & Import a single `.csv`
- *   containing all 9 Engines + 📅 Programação & WhatsApp + 🖋️ Estúdio Documental YAML ⇄ PDF
- *   + ☀️ Cockpit Hoje + 🛡️ Matriz de Privilégios.
- * - Per-Engine Sample CSV Selector: Click any Engine button in the compact CAD matrix
- *   to inspect its schema and download its sample `.csv` (Canônico or Limpo Humano).
- * - Granular LEGO Ingestion & Quarantine Staging without vertical page scrolling.
+ * - Opens multiple Engines (Territory + Schedule + Privileges + embedded events) from a single CSV Geral
+ *   via `commitOmniCsvBundleToStorage`.
+ * - Exports either the full saved site workspace (`🌐`) or the clean sample template (`🧪`).
+ * - Icon-Only Click-to-Reveal controls (`0` clipped controls on Mobile `390x844`).
  */
 
 import React, { useState } from 'react';
@@ -38,6 +36,7 @@ import {
   importGranularCSV,
   generateOmniMasterSampleCsv,
   importOmniCsvBundle,
+  getEffectiveCapabilityColumns,
   type CSVDiffResult,
   type CSVRow,
   type EngineId,
@@ -46,6 +45,26 @@ import {
   type GranularImportMode,
   type SekundoOmniStateBundle,
 } from '@sekundo/core';
+import {
+  commitOmniCsvBundleToStorage,
+  exportFullSiteOmniCsvFromStorage,
+} from '../storage/omniStorageBridge';
+import { deliverFile } from '../utils/deliverFile';
+
+const ENGINE_ICONS: Record<string, string> = {
+  territory_logistics: '🗺️',
+  roster_assignments: '📅',
+  study_synthesis: '📖',
+  financial_ledger: '💰',
+  inventory_assets: '📦',
+  action_tracker: '✅',
+  live_production_ros: '⏱️',
+  incident_command: '🚨',
+  tournament_pairings: '🏆',
+  CheckInEngine: '🚪',
+  DocumentEngine: '🖋️',
+  custom: '🎛️',
+};
 
 export default function CSVImport() {
   const router = useRouter();
@@ -54,9 +73,10 @@ export default function CSVImport() {
   const { id } = useLocalSearchParams();
   const eventId = typeof id === 'string' ? id : '';
 
-  const { events, addEvent, loading: eventsLoading } = useLocalEvent();
+  const { events, addEvent, refreshEvents, loading: eventsLoading } = useLocalEvent();
   const [targetEventId] = useState<string>(eventId);
   const [newEventName, setNewEventName] = useState<string>('');
+  const [showInfoBox, setShowInfoBox] = useState<boolean>(false);
 
   const currentEvent = eventId
     ? events.find((e) => e.config.id === eventId)
@@ -91,38 +111,34 @@ export default function CSVImport() {
     );
   }
 
-  const handleDownloadOmniGeneralCsv = () => {
-    if (Platform.OS === 'web' && typeof document !== 'undefined') {
-      const content = generateOmniMasterSampleCsv();
-      const blob = new Blob(['\uFEFF' + content], { type: 'text/csv;charset=utf-8;' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'sekundo_omni_geral.csv';
-      a.click();
-      URL.revokeObjectURL(url);
-      setStatusMessage(
-        '🌐 CSV GERAL baixado! Inclui 9 Engines + 📅 Programação & WhatsApp + 🖋️ Estúdio YAML/PDF + ☀️ Hoje + 🛡️ Matriz de Privilégios.'
-      );
+  const handleDownloadSavedOmniCsv = async () => {
+    try {
+      const content = await exportFullSiteOmniCsvFromStorage();
+      await deliverFile(content, 'sekundo_omni_geral.csv', 'text/csv;charset=utf-8');
+      setStatusMessage('🌐 CSV Geral (Estado Salvo no Site) baixado!');
+    } catch (e: any) {
+      setStatusMessage(`Erro: ${e?.message ?? e}`);
     }
   };
 
-  const handleDownloadTemplate = (format: 'canonical' | 'clean_human') => {
-    if (Platform.OS === 'web' && typeof document !== 'undefined') {
-      const content = exportTemplateCSV(activeTemplateEngine, format);
-      const filename =
-        format === 'canonical'
-          ? `canonico_${currentTemplate.suggestedFilename}`
-          : `limpo_${currentTemplate.suggestedFilename}`;
-      const blob = new Blob(['\uFEFF' + content], { type: 'text/csv;charset=utf-8;' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = filename;
-      a.click();
-      URL.revokeObjectURL(url);
-      setStatusMessage(`📥 Modelo "${filename}" baixado com sucesso!`);
+  const handleDownloadSampleOmniCsv = async () => {
+    try {
+      const content = generateOmniMasterSampleCsv();
+      await deliverFile(content, 'sekundo_omni_exemplo.csv', 'text/csv;charset=utf-8');
+      setStatusMessage('🧪 CSV Geral de Exemplo baixado!');
+    } catch (e: any) {
+      setStatusMessage(`Erro: ${e?.message ?? e}`);
     }
+  };
+
+  const handleDownloadTemplate = async (format: 'canonical' | 'clean_human') => {
+    const content = exportTemplateCSV(activeTemplateEngine, format);
+    const filename =
+      format === 'canonical'
+        ? `canonico_${currentTemplate.suggestedFilename}`
+        : `limpo_${currentTemplate.suggestedFilename}`;
+    await deliverFile(content, filename, 'text/csv;charset=utf-8');
+    setStatusMessage(`📥 Modelo "${filename}" baixado!`);
   };
 
   const handlePickCsvFile = () => {
@@ -141,9 +157,10 @@ export default function CSVImport() {
           setOmniBundlePreview(bundle);
           setRawOmniText(text);
           setParsedRows(null);
-          if (!newEventName) setNewEventName(`${bundle.unitName} — Importação Geral`);
+          if (!newEventName) setNewEventName(`${bundle.unitName} — Geral`);
+          const effectiveCols = getEffectiveCapabilityColumns(bundle.participants);
           setStatusMessage(
-            `🌐 CSV GERAL "${file.name}" pronto para importar: ${bundle.participants.length} usuários c/ privilégios, ${bundle.scheduleRegistry.length} slots WhatsApp, ${bundle.territoryRegistry.length} territórios, ${bundle.studioDocuments.length} docs YAML/PDF, ${bundle.hojeRituals.length} rituais Hoje e ${bundle.events.length} eventos!`
+            `🌐 "${file.name}": ${bundle.participants.length} 👤 (${effectiveCols.length} priv.) • ${bundle.scheduleRegistry.length} 📅 • ${bundle.territoryRegistry.length} 🗺️`
           );
           return;
         }
@@ -164,38 +181,30 @@ export default function CSVImport() {
         if (!newEventName) {
           setNewEventName(file.name.replace(/\.[^/.]+$/, '').replace(/[_-]/g, ' '));
         }
-        setStatusMessage(
-          `✅ CSV "${file.name}" analisado (${importRes.validRows.length} linhas válidas)!`
-        );
+        setStatusMessage(`✅ "${file.name}" (${importRes.validRows.length} linhas)`);
       };
       input.click();
     }
   };
 
-  const handleCommit = async () => {
-    // 1. Commit Omni-CSV Bundle across ALL Sekundo Hubs & Engines
+  const handleCommit = async (targetDestination: 'schedule' | 'territory' | 'map' = 'schedule') => {
+    // 1. Commit Omni-CSV Bundle across ALL Sekundo Hubs & Engines (Territory + Schedule + Privileges + Events)
     if (omniBundlePreview && rawOmniText) {
-      if (Platform.OS === 'web' && typeof window !== 'undefined') {
-        window.localStorage.setItem('sekundo:loaded_schedule_bundle_v1', rawOmniText);
-        window.localStorage.setItem(
-          'sekundo:privilege_directory_v1',
-          JSON.stringify(omniBundlePreview.participants)
-        );
-        if (omniBundlePreview.hojeManifestYaml) {
-          window.localStorage.setItem(
-            'sekundo_app_manifest_v1',
-            omniBundlePreview.hojeManifestYaml
-          );
+      try {
+        const { primaryEventId } = await commitOmniCsvBundleToStorage(rawOmniText, {
+          customEventName: newEventName.trim() || `${omniBundlePreview.unitName} — Geral`,
+          targetEventId: currentEvent?.config.id,
+        });
+        if (targetDestination === 'territory') {
+          router.replace(`/territory-checklist?id=${primaryEventId}` as any);
+        } else if (targetDestination === 'map') {
+          router.replace(`/territory-map?id=${primaryEventId}` as any);
+        } else {
+          router.replace(`/schedule-hub?id=${primaryEventId}` as any);
         }
+      } catch (err: any) {
+        setStatusMessage(`❌ Erro ao aplicar CSV Geral: ${err?.message ?? err}`);
       }
-      const evState = await addEvent(
-        newEventName.trim() || `${omniBundlePreview.unitName} — Geral`,
-        'weekly',
-        ['01', '02', '03'],
-        ['roster_assignments', 'territory_logistics']
-      );
-      await storage.saveSkeleton(evState.config.id, omniBundlePreview.scheduleRegistry);
-      router.replace(`/schedule-hub?id=${evState.config.id}` as any);
       return;
     }
 
@@ -225,36 +234,83 @@ export default function CSVImport() {
     }
   };
 
+  const webTitle = (title: string) => (Platform.OS === 'web' ? ({ title } as any) : {});
+
   return (
     <SafeAreaView style={styles.cadViewport}>
-      {/* Top AutoCAD Command Ribbon */}
+      {/* Top Icon-Only AutoCAD Command Ribbon */}
       <View style={styles.topRibbon}>
         <View style={styles.brandRow}>
-          <Pressable onPress={() => router.push('/')} style={styles.cadBtn}>
-            <Text style={[styles.cadBtnText, { color: '#FFB800' }]}>← Painel</Text>
+          <Pressable
+            testID="csv-import-back-btn"
+            accessibilityRole="button"
+            accessibilityLabel="Painel Inicial"
+            {...webTitle('Voltar ao Painel Inicial')}
+            onPress={() => router.push('/')}
+            style={styles.iconBtn}
+          >
+            <Text style={styles.iconGlyph}>🏠</Text>
           </Pressable>
-          <Text style={styles.ribbonTitle}>
-            📐 CENTRAL CAD DE IMPORTAÇÃO & EXPORTAÇÃO CSV (GERAL + 9 ENGINES)
-          </Text>
+          <Text style={styles.ribbonTitle}>📐 CSV GERAL & ENGINES</Text>
         </View>
 
         <View style={styles.topActions}>
           <Pressable
-            onPress={handleDownloadOmniGeneralCsv}
-            style={[styles.cadBtn, styles.cadBtnPurple]}
+            testID="csv-import-pick-file-btn"
+            accessibilityRole="button"
+            accessibilityLabel="Selecionar Arquivo .CSV p/ Importar"
+            {...webTitle('Selecionar Arquivo .CSV p/ Importar')}
+            onPress={handlePickCsvFile}
+            style={[styles.iconBtn, styles.cadBtnBlue]}
           >
-            <Text style={styles.cadBtnText}>🌐 Baixar .CSV GERAL de Todo o App</Text>
+            <Text style={styles.iconGlyph}>📂</Text>
           </Pressable>
 
-          <Pressable onPress={handlePickCsvFile} style={[styles.cadBtn, styles.cadBtnBlue]}>
-            <Text style={styles.cadBtnText}>📂 Selecionar Arquivo .CSV p/ Importar</Text>
+          <Pressable
+            testID="csv-import-download-saved-omni-btn"
+            accessibilityRole="button"
+            accessibilityLabel="Baixar CSV Geral Salvo no Site"
+            {...webTitle('Baixar CSV Geral do que está salvo no site')}
+            onPress={handleDownloadSavedOmniCsv}
+            style={[styles.iconBtn, styles.cadBtnPurple]}
+          >
+            <Text style={styles.iconGlyph}>🌐</Text>
+          </Pressable>
+
+          <Pressable
+            testID="csv-import-download-sample-omni-btn"
+            accessibilityRole="button"
+            accessibilityLabel="Baixar CSV Geral de Exemplo"
+            {...webTitle('Baixar CSV Geral de Exemplo')}
+            onPress={handleDownloadSampleOmniCsv}
+            style={styles.iconBtn}
+          >
+            <Text style={styles.iconGlyph}>🧪</Text>
           </Pressable>
 
           {(parsedRows || omniBundlePreview) && (
-            <Pressable onPress={handleCommit} style={[styles.cadBtn, styles.cadBtnEmerald]}>
-              <Text style={styles.cadBtnText}>⚡ Confirmar e Aplicar Importação</Text>
+            <Pressable
+              testID="csv-import-commit-btn"
+              accessibilityRole="button"
+              accessibilityLabel="Confirmar e Aplicar Importação"
+              {...webTitle('Confirmar e Abrir Todas as Funcionalidades')}
+              onPress={() => handleCommit('schedule')}
+              style={[styles.iconBtn, styles.cadBtnEmerald]}
+            >
+              <Text style={styles.iconGlyph}>🚀</Text>
             </Pressable>
           )}
+
+          <Pressable
+            testID="csv-import-info-btn"
+            accessibilityRole="button"
+            accessibilityLabel="Informações do CSV Geral"
+            {...webTitle('Mostrar/Ocultar Resumo do CSV Geral')}
+            onPress={() => setShowInfoBox((prev) => !prev)}
+            style={[styles.iconBtn, showInfoBox && styles.cadBtnBlue]}
+          >
+            <Text style={styles.iconGlyph}>ℹ️</Text>
+          </Pressable>
         </View>
       </View>
 
@@ -266,48 +322,46 @@ export default function CSVImport() {
         </View>
       )}
 
-      {/* Main Split Workspace (Zero Vertical Roll-Down!) */}
+      {/* Main Split Workspace */}
       <View
         style={[
           styles.workspaceSplit,
           { flexDirection: isDesktop ? 'row' : 'column' },
         ]}
       >
-        {/* Left: Compact Matrix of Engine CSV Buttons + Omni-CSV Hub Card */}
-        <View style={[styles.matrixPanel, { flex: isDesktop ? 1.2 : undefined }]}>
-          <Text style={styles.sectionLabel}>
-            🎛️ ESCOLHA UM MODELO DE ENGINE OU O PACOTE GERAL (Clique no botão):
-          </Text>
+        {/* Left: Compact Icon Grid of Engine CSV Templates */}
+        <View style={[styles.matrixPanel, { flex: isDesktop ? 1 : undefined }]}>
+          <Text style={styles.sectionLabel}>🎛️ MODELOS POR ENGINE</Text>
 
           <View style={styles.engineButtonsGrid}>
             {allTemplates.map((tpl, idx) => {
               const active = activeTemplateEngine === tpl.engineId;
+              const icon = ENGINE_ICONS[tpl.engineId] || '⚙️';
               return (
                 <Pressable
                   key={tpl.engineId}
+                  testID={`csv-tpl-btn-${tpl.engineId}`}
+                  accessibilityRole="button"
+                  accessibilityLabel={tpl.name}
+                  {...webTitle(`${tpl.name} (${tpl.suggestedFilename})`)}
                   onPress={() => setActiveTemplateEngine(tpl.engineId)}
                   style={[styles.engineCadBtn, active && styles.engineCadBtnActive]}
                 >
-                  <Text style={styles.engineCadCode}>[CSV-0{idx + 1}]</Text>
-                  <Text style={styles.engineCadTitle} numberOfLines={1}>
-                    {tpl.name}
-                  </Text>
-                  <Text style={styles.engineCadSub} numberOfLines={1}>
-                    {tpl.suggestedFilename}
-                  </Text>
+                  <Text style={styles.engineCadIcon}>{icon}</Text>
+                  <Text style={styles.engineCadCode}>E0{idx + 1}</Text>
                 </Pressable>
               );
             })}
           </View>
         </View>
 
-        {/* Right: On-Demand Inspector for Selected CSV Template or Uploaded CSV Diff */}
-        <View style={[styles.inspectorPanel, { flex: isDesktop ? 1 : undefined }]}>
+        {/* Right: On-Demand Inspector for Selected CSV Template or Uploaded Multi-Engine CSV */}
+        <View style={[styles.inspectorPanel, { flex: isDesktop ? 1.2 : undefined }]}>
           {omniBundlePreview ? (
             <View style={{ gap: 8 }}>
               <View style={styles.inspectorBanner}>
                 <Text style={styles.inspectorBannerTitle}>
-                  🌐 RESUMO DO CSV GERAL CARREGADO
+                  🌐 PACOTE MULTI-ENGINE PRONTO
                 </Text>
               </View>
               <TextInput
@@ -322,39 +376,71 @@ export default function CSVImport() {
                   <Text style={styles.metricValue}>
                     {omniBundlePreview.participants.length}
                   </Text>
-                  <Text style={styles.metricLabel}>🛡️ Usuários & Privilégios</Text>
+                  <Text style={styles.metricLabel}>
+                    🛡️ Usuários ({getEffectiveCapabilityColumns(omniBundlePreview.participants).length} priv.)
+                  </Text>
                 </View>
                 <View style={styles.metricPill}>
                   <Text style={styles.metricValue}>
                     {omniBundlePreview.scheduleRegistry.length}
                   </Text>
-                  <Text style={styles.metricLabel}>📅 Slots WhatsApp Hub</Text>
+                  <Text style={styles.metricLabel}>📅 Programação</Text>
                 </View>
                 <View style={styles.metricPill}>
                   <Text style={styles.metricValue}>
                     {omniBundlePreview.territoryRegistry.length}
                   </Text>
-                  <Text style={styles.metricLabel}>🗺️ Territórios Multi-Ciclo</Text>
+                  <Text style={styles.metricLabel}>🗺️ Territórios</Text>
                 </View>
                 <View style={styles.metricPill}>
                   <Text style={styles.metricValue}>
-                    {omniBundlePreview.studioDocuments.length}
+                    {omniBundlePreview.events.length}
                   </Text>
-                  <Text style={styles.metricLabel}>🖋️ Docs Estúdio YAML/PDF</Text>
+                  <Text style={styles.metricLabel}>🗂️ Eventos</Text>
                 </View>
               </View>
-              <Pressable onPress={handleCommit} style={[styles.cadBtn, styles.cadBtnEmerald]}>
-                <Text style={styles.cadBtnText}>
-                  🚀 Importar Todas as Funcionalidades Agora
-                </Text>
-              </Pressable>
+
+              {/* Multi-Engine Launch Bar: Open directly into Schedule, Territory, or Map */}
+              <View style={styles.actionRow}>
+                <Pressable
+                  testID="omni-commit-open-schedule"
+                  accessibilityRole="button"
+                  accessibilityLabel="Importar Todas as Funcionalidades Agora"
+                  {...webTitle('Importar e Abrir Programação & Privilégios')}
+                  onPress={() => handleCommit('schedule')}
+                  style={[styles.cadBtn, styles.cadBtnEmerald]}
+                >
+                  <Text style={styles.cadBtnText}>🚀 Importar Todas as Funcionalidades Agora</Text>
+                </Pressable>
+
+                <Pressable
+                  testID="omni-commit-open-territory"
+                  accessibilityRole="button"
+                  accessibilityLabel="Importar e Abrir Territórios"
+                  {...webTitle('Importar e Abrir Prancheta de Territórios')}
+                  onPress={() => handleCommit('territory')}
+                  style={styles.iconBtn}
+                >
+                  <Text style={styles.iconGlyph}>📋</Text>
+                </Pressable>
+
+                <Pressable
+                  testID="omni-commit-open-map"
+                  accessibilityRole="button"
+                  accessibilityLabel="Importar e Abrir Mapa CAD"
+                  {...webTitle('Importar e Abrir Mapa CAD 2D')}
+                  onPress={() => handleCommit('map')}
+                  style={styles.iconBtn}
+                >
+                  <Text style={styles.iconGlyph}>🗺️</Text>
+                </Pressable>
+              </View>
             </View>
           ) : parsedRows ? (
             <View style={{ gap: 8 }}>
               <View style={styles.inspectorBanner}>
                 <Text style={styles.inspectorBannerTitle}>
-                  📊 PRÉVIA DE IMPORTAÇÃO ({parsedRows.length} linhas válidas •{' '}
-                  {quarantinedRows.length} em quarentena)
+                  📊 {parsedRows.length} LINHAS ({quarantinedRows.length} quarentena)
                 </Text>
               </View>
               <TextInput
@@ -366,24 +452,28 @@ export default function CSVImport() {
               />
               {diff && (
                 <Text style={styles.inspectorDesc}>
-                  Diff: +{diff.added} novos | ↻ {diff.modified} atualizados | ={' '}
-                  {diff.unchanged} inalterados
+                  +{diff.added} | ↻ {diff.modified} | = {diff.unchanged}
                 </Text>
               )}
               <View style={styles.actionRow}>
                 <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Alternar Preservar Histórico"
+                  {...webTitle(preserveHistory ? 'Preservar Histórico: SIM' : 'Sobrescrever Tudo')}
                   onPress={() => setPreserveHistory((p) => !p)}
-                  style={styles.cadBtn}
+                  style={styles.iconBtn}
                 >
-                  <Text style={styles.cadBtnText}>
-                    {preserveHistory ? '🔒 Preservar Histórico: SIM' : '🔓 Sobrescrever Tudo'}
-                  </Text>
+                  <Text style={styles.iconGlyph}>{preserveHistory ? '🔒' : '🔓'}</Text>
                 </Pressable>
                 <Pressable
-                  onPress={handleCommit}
-                  style={[styles.cadBtn, styles.cadBtnEmerald]}
+                  testID="single-csv-commit-btn"
+                  accessibilityRole="button"
+                  accessibilityLabel="Confirmar Importação"
+                  {...webTitle('Confirmar Importação')}
+                  onPress={() => handleCommit('schedule')}
+                  style={[styles.iconBtn, styles.cadBtnEmerald]}
                 >
-                  <Text style={styles.cadBtnText}>⚡ Confirmar Importação</Text>
+                  <Text style={styles.iconGlyph}>⚡</Text>
                 </Pressable>
               </View>
             </View>
@@ -391,46 +481,78 @@ export default function CSVImport() {
             <View style={{ gap: 8 }}>
               <View style={styles.inspectorBanner}>
                 <Text style={styles.inspectorBannerTitle}>
-                  🔍 INSPETOR DE MODELO: {currentTemplate.name}
+                  {ENGINE_ICONS[currentTemplate.engineId] || '🔍'} {currentTemplate.name}
                 </Text>
               </View>
-              <Text style={styles.inspectorDesc}>{currentTemplate.description}</Text>
-              <Text style={styles.conventionText}>
-                Convenção de Chaves: {currentTemplate.keyConventions}
+              <Text style={styles.conventionText} numberOfLines={1}>
+                {currentTemplate.suggestedFilename} • {currentTemplate.keyConventions}
               </Text>
 
+              {/* Icon-Only Action Row for Template & Omni Downloads */}
               <View style={styles.actionRow}>
                 <Pressable
+                  testID="tpl-download-canonical-btn"
+                  accessibilityRole="button"
+                  accessibilityLabel="Baixar CSV Canônico"
+                  {...webTitle('Baixar CSV Canônico desta Engine')}
                   onPress={() => handleDownloadTemplate('canonical')}
-                  style={[styles.cadBtn, styles.cadBtnBlue]}
+                  style={[styles.iconBtn, styles.cadBtnBlue]}
                 >
-                  <Text style={styles.cadBtnText}>📥 Baixar CSV Canônico</Text>
+                  <Text style={styles.iconGlyph}>📥</Text>
                 </Pressable>
+
                 <Pressable
+                  testID="tpl-download-human-btn"
+                  accessibilityRole="button"
+                  accessibilityLabel="Baixar CSV Humano"
+                  {...webTitle('Baixar CSV Limpo Humano desta Engine')}
                   onPress={() => handleDownloadTemplate('clean_human')}
-                  style={[styles.cadBtn, styles.cadBtnEmerald]}
+                  style={[styles.iconBtn, styles.cadBtnEmerald]}
                 >
-                  <Text style={styles.cadBtnText}>📥 Baixar CSV Humano</Text>
+                  <Text style={styles.iconGlyph}>📄</Text>
                 </Pressable>
+
                 <Pressable
-                  onPress={handleDownloadOmniGeneralCsv}
-                  style={[styles.cadBtn, styles.cadBtnPurple]}
+                  testID="tpl-download-saved-omni-btn"
+                  accessibilityRole="button"
+                  accessibilityLabel="Baixar CSV Geral Salvo no Site"
+                  {...webTitle('Baixar CSV Geral (Salvo no Site)')}
+                  onPress={handleDownloadSavedOmniCsv}
+                  style={[styles.iconBtn, styles.cadBtnPurple]}
                 >
-                  <Text style={styles.cadBtnText}>🌐 Baixar CSV GERAL do App</Text>
+                  <Text style={styles.iconGlyph}>🌐</Text>
+                </Pressable>
+
+                <Pressable
+                  testID="tpl-download-sample-omni-btn"
+                  accessibilityRole="button"
+                  accessibilityLabel="Baixar CSV Geral de Exemplo"
+                  {...webTitle('Baixar CSV Geral de Exemplo')}
+                  onPress={handleDownloadSampleOmniCsv}
+                  style={styles.iconBtn}
+                >
+                  <Text style={styles.iconGlyph}>🧪</Text>
+                </Pressable>
+
+                <Pressable
+                  testID="tpl-pick-file-inline-btn"
+                  accessibilityRole="button"
+                  accessibilityLabel="Selecionar Arquivo CSV"
+                  {...webTitle('Selecionar Arquivo .CSV do Computador')}
+                  onPress={handlePickCsvFile}
+                  style={[styles.iconBtn, styles.cadBtnBlue]}
+                >
+                  <Text style={styles.iconGlyph}>📂</Text>
                 </Pressable>
               </View>
 
-              <View style={styles.omniExplainBox}>
-                <Text style={styles.omniExplainTitle}>
-                  💡 O que está incluído no .CSV GERAL de todo o App?
-                </Text>
-                <Text style={styles.omniExplainText}>
-                  • 📅 Programação & WhatsApp (Compromissos, Grupos 1–3, Territórios){'\n'}
-                  • 🖋️ Estúdio Documental YAML ⇄ PDF (Canvas mm, Fichas 4-Up, Multi-Ciclo){'\n'}
-                  • ☀️ Cockpit Hoje & Compositor (Rituais governados e sekundo.app.yaml){'\n'}
-                  • 🛡️ Matriz de 26 Privilégios & Rotatividade + Todas as 9 Engines!
-                </Text>
-              </View>
+              {showInfoBox && (
+                <View style={styles.omniExplainBox}>
+                  <Text style={styles.omniExplainText}>
+                    🌐 Abre Territórios + Programação + Privilégios Dinâmicos + Eventos salvos em 1 único CSV.
+                  </Text>
+                </View>
+              )}
             </View>
           )}
         </View>
@@ -458,12 +580,12 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
     backgroundColor: '#0F172A',
     borderBottomWidth: 1,
     borderBottomColor: '#1E293B',
-    gap: 8,
+    gap: 6,
   },
   brandRow: {
     flexDirection: 'row',
@@ -478,15 +600,30 @@ const styles = StyleSheet.create({
   topActions: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 6,
+    gap: 5,
   },
-  cadBtn: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 6,
+  iconBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
     backgroundColor: '#1E293B',
     borderWidth: 1,
     borderColor: '#334155',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  iconGlyph: {
+    fontSize: 16,
+    color: '#F8FAFC',
+  },
+  cadBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 7,
+    backgroundColor: '#1E293B',
+    borderWidth: 1,
+    borderColor: '#334155',
+    justifyContent: 'center',
   },
   cadBtnBlue: {
     backgroundColor: '#1D4ED8',
@@ -507,7 +644,7 @@ const styles = StyleSheet.create({
   },
   statusStrip: {
     backgroundColor: '#064E3B',
-    paddingHorizontal: 12,
+    paddingHorizontal: 10,
     paddingVertical: 4,
     borderBottomWidth: 1,
     borderBottomColor: '#10B981',
@@ -519,8 +656,8 @@ const styles = StyleSheet.create({
   },
   workspaceSplit: {
     flex: 1,
-    padding: 10,
-    gap: 10,
+    padding: 8,
+    gap: 8,
     overflow: 'hidden',
   },
   matrixPanel: {
@@ -528,48 +665,42 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
     borderColor: '#1E293B',
-    padding: 10,
+    padding: 8,
     overflow: 'hidden',
   },
   sectionLabel: {
     color: '#94A3B8',
-    fontSize: 10.5,
+    fontSize: 10,
     fontWeight: '800',
-    marginBottom: 8,
+    marginBottom: 6,
   },
   engineButtonsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 7,
+    gap: 6,
   },
   engineCadBtn: {
-    width: '48.5%',
-    minWidth: 145,
+    width: 58,
+    height: 52,
     backgroundColor: '#0B1120',
-    borderRadius: 6,
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: '#1E293B',
-    padding: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 2,
   },
   engineCadBtnActive: {
     backgroundColor: '#1E3A8A',
     borderColor: '#60A5FA',
   },
+  engineCadIcon: {
+    fontSize: 18,
+  },
   engineCadCode: {
     color: '#38BDF8',
-    fontSize: 9.5,
+    fontSize: 9,
     fontWeight: '900',
-  },
-  engineCadTitle: {
-    color: '#F8FAFC',
-    fontSize: 11.5,
-    fontWeight: '800',
-    marginTop: 2,
-  },
-  engineCadSub: {
-    color: '#64748B',
-    fontSize: 9.5,
-    marginTop: 1,
   },
   inspectorPanel: {
     backgroundColor: '#0F172A',
@@ -594,18 +725,18 @@ const styles = StyleSheet.create({
   },
   inspectorDesc: {
     color: '#CBD5E1',
-    fontSize: 11.5,
-    lineHeight: 16,
+    fontSize: 11,
   },
   conventionText: {
     color: '#38BDF8',
-    fontSize: 10.5,
+    fontSize: 10,
     fontWeight: '700',
   },
   actionRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 6,
+    alignItems: 'center',
   },
   nameInput: {
     backgroundColor: '#060A12',
@@ -613,7 +744,7 @@ const styles = StyleSheet.create({
     borderColor: '#334155',
     borderRadius: 6,
     paddingHorizontal: 10,
-    paddingVertical: 6,
+    paddingVertical: 5,
     color: '#F8FAFC',
     fontSize: 12,
   },
@@ -628,16 +759,16 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     borderWidth: 1,
     borderColor: '#1E293B',
-    padding: 8,
+    padding: 6,
   },
   metricValue: {
     color: '#38BDF8',
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '900',
   },
   metricLabel: {
     color: '#94A3B8',
-    fontSize: 10,
+    fontSize: 9.5,
     fontWeight: '700',
   },
   omniExplainBox: {
@@ -645,18 +776,10 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     borderWidth: 1,
     borderColor: '#334155',
-    padding: 9,
-    gap: 4,
-    marginTop: 4,
-  },
-  omniExplainTitle: {
-    color: '#A78BFA',
-    fontSize: 11,
-    fontWeight: '800',
+    padding: 8,
   },
   omniExplainText: {
     color: '#CBD5E1',
     fontSize: 10.5,
-    lineHeight: 16,
   },
 });
