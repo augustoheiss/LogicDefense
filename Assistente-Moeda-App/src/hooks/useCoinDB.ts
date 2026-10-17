@@ -205,7 +205,11 @@ function useCoinDBInternal(): CoinDBState {
         if (db.tables.length > 0) {
           // Auto-purge any historical tombstoned/zombie tables
           const cleaned = db.tables.filter((t) => !t.isDeleted);
-          setTables(ensureActiveSectors(cleaned));
+          const ensured = ensureActiveSectors(cleaned);
+          setTables(ensured);
+          if (typeof db.activeTableIndex === 'number' && db.activeTableIndex >= 0) {
+            setActiveTableIndex(Math.min(db.activeTableIndex, Math.max(0, ensured.length - 1)));
+          }
         }
         setAiCostCurrentMonth(db.aiCostCurrentMonth ?? 0);
         setAiCostLastReset(db.aiCostLastReset ?? '');
@@ -227,12 +231,13 @@ function useCoinDBInternal(): CoinDBState {
     loadDB().then((currentDB) => {
       saveDB({
         tables: currentDB?.tables || tablesRef.current,
+        activeTableIndex: currentDB?.activeTableIndex ?? activeTableIndex,
         aiCostCurrentMonth: currentDB?.aiCostCurrentMonth ?? aiCostCurrentMonth,
         aiCostLastReset: currentDB?.aiCostLastReset ?? aiCostLastReset,
         isPrivacyMode: enabled,
       }).catch(() => {});
     }).catch(() => {});
-  }, [aiCostCurrentMonth, aiCostLastReset]);
+  }, [aiCostCurrentMonth, aiCostLastReset, activeTableIndex]);
 
   const togglePrivacyMode = useCallback(() => {
     setPrivacyMode(!isPrivacyMode);
@@ -388,6 +393,7 @@ function useCoinDBInternal(): CoinDBState {
     const currentDB = await loadDB();
     await saveDB({
       tables: mainTables,
+      activeTableIndex,
       aiCostCurrentMonth: currentDB?.aiCostCurrentMonth ?? 0,
       aiCostLastReset: currentDB?.aiCostLastReset ?? '',
       isPrivacyMode: currentDB?.isPrivacyMode ?? isPrivacyMode,
@@ -481,15 +487,17 @@ function useCoinDBInternal(): CoinDBState {
     const currentDB = await loadDB();
     await saveDB({
       tables: currentDB?.tables || tables,
+      activeTableIndex: currentDB?.activeTableIndex ?? activeTableIndex,
       aiCostCurrentMonth: newCost,
       aiCostLastReset: newResetMonth,
+      isPrivacyMode: currentDB?.isPrivacyMode ?? isPrivacyMode,
     });
     if (auth.mode === 'authenticated' && auth.user) {
       fullSync().catch((err) => {
         console.error('Cloud background sync failed:', err);
       });
     }
-  }, [auth.mode, auth.user, tables]);
+  }, [auth.mode, auth.user, tables, activeTableIndex, isPrivacyMode]);
 
   const addAICost = useCallback((costInBRL: number) => {
     const currentMonthStr = new Date().toISOString().slice(0, 7); // YYYY-MM
@@ -1219,7 +1227,16 @@ function useCoinDBInternal(): CoinDBState {
   const changeActiveTableIndex = useCallback((index: number) => {
     setActiveTableIndex(index);
     setSelectedMonth('all');
-  }, []);
+    loadDB().then((currentDB) => {
+      saveDB({
+        tables: currentDB?.tables || tablesRef.current,
+        activeTableIndex: index,
+        aiCostCurrentMonth: currentDB?.aiCostCurrentMonth ?? aiCostCurrentMonth,
+        aiCostLastReset: currentDB?.aiCostLastReset ?? aiCostLastReset,
+        isPrivacyMode: currentDB?.isPrivacyMode ?? isPrivacyMode,
+      }).catch(() => {});
+    }).catch(() => {});
+  }, [aiCostCurrentMonth, aiCostLastReset, isPrivacyMode]);
 
   const importSpreadsheet = useCallback(async (payload: {
     rows: (TableRow | Omit<TableRow, 'id'>)[];
@@ -1310,9 +1327,12 @@ function useCoinDBInternal(): CoinDBState {
     // 2. Tratar Chave API com Validação & Auto-Renovação no Import
     let activeApiKey = payload.apiKey || '';
     let keyWasAutoRenewed = false;
+    const isRedactedPlaceholder =
+      activeApiKey === 'am_sheet_example_fictitious' ||
+      activeApiKey === 'am_sheet_live_local';
 
     if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
-      if (activeApiKey && activeApiKey !== 'am_sheet_example_fictitious') {
+      if (activeApiKey && !isRedactedPlaceholder) {
         const valCheck = await validateApiKey(activeApiKey);
         if (!valCheck.valid) {
           console.warn(`[CSV Import] Chave API no CSV (${activeApiKey.slice(0, 15)}...) está ${valCheck.expired ? 'EXPIRADA' : 'INVÁLIDA'}. Gerando nova chave API para a planilha ${effectiveTableId}...`);

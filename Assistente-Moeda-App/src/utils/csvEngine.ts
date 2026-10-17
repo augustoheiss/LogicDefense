@@ -1,6 +1,7 @@
 import type { TableRow, TableGoals, DynamicTableSchema, InvestorProfileConfig } from '../core/types';
 import { detectSectorsFromRows } from './sectorTagDetector';
 import { parseDynamicCSV } from '../core/dynamicCsvParser';
+import { neutralizeCsvFormula } from './securitySanitizer';
 
 // Delimiter detection helper
 export function detectDelimiter(line: string): string {
@@ -772,15 +773,25 @@ export function exportRowsToCSV(rows: TableRow[]): string {
   const lines = [headers.join(',')];
 
   rows.forEach((row) => {
+    const safeId = neutralizeCsvFormula(row.id || '');
+    const safeDate = neutralizeCsvFormula(row.date || '');
+    const safeDesc = neutralizeCsvFormula(row.description || '').replace(/"/g, '""');
+    const safeType = neutralizeCsvFormula(row.entryType || 'revenue');
+    const rawCat = row.category && row.category.trim() ? row.category : 'Geral';
+    const safeCat = neutralizeCsvFormula(rawCat).replace(/"/g, '""');
+    const safeTags = row.tags ? neutralizeCsvFormula(row.tags).replace(/"/g, '""') : '';
+    const rawMeta = row.metadataJson && row.metadataJson.trim() ? row.metadataJson : '{}';
+    const safeMeta = neutralizeCsvFormula(rawMeta).replace(/"/g, '""');
+
     const cols = [
-      row.id || '',
-      row.date || '',
+      safeId,
+      safeDate,
       row.value.toFixed(2),
-      `"${(row.description || '').replace(/"/g, '""')}"`,
-      row.entryType || 'revenue',
-      row.category && row.category.trim() ? `"${row.category.replace(/"/g, '""')}"` : '"Geral"',
-      row.tags ? `"${row.tags.replace(/"/g, '""')}"` : '""',
-      row.metadataJson && row.metadataJson.trim() ? `"${row.metadataJson.replace(/"/g, '""')}"` : '"{}"',
+      `"${safeDesc}"`,
+      safeType,
+      `"${safeCat}"`,
+      `"${safeTags}"`,
+      `"${safeMeta}"`,
     ];
     lines.push(cols.join(','));
   });

@@ -631,6 +631,11 @@ def revoke_spreadsheet_api_key(table_id: str, raw_key: str | None = None, key_ha
             
         rows = cursor.fetchall()
         if not rows:
+            if target_hash:
+                cursor.execute("DELETE FROM pending_sync_queue WHERE key_hash = ? OR table_id = ?", (target_hash, table_id))
+            else:
+                cursor.execute("DELETE FROM pending_sync_queue WHERE table_id = ?", (table_id,))
+            conn.commit()
             return True, False  # Idempotent: already revoked/inactive
             
         for r in rows:
@@ -648,11 +653,13 @@ def revoke_spreadsheet_api_key(table_id: str, raw_key: str | None = None, key_ha
             except Exception:
                 pass
                 
-        # Delete from active spreadsheet_api_keys table
+        # Delete from active spreadsheet_api_keys table AND purge pending_sync_queue
         if target_hash:
             cursor.execute("DELETE FROM spreadsheet_api_keys WHERE key_hash = ? OR table_id = ?", (target_hash, table_id))
+            cursor.execute("DELETE FROM pending_sync_queue WHERE key_hash = ? OR table_id = ?", (target_hash, table_id))
         else:
             cursor.execute("DELETE FROM spreadsheet_api_keys WHERE table_id = ?", (table_id,))
+            cursor.execute("DELETE FROM pending_sync_queue WHERE table_id = ?", (table_id,))
             
         conn.commit()
         return True, True

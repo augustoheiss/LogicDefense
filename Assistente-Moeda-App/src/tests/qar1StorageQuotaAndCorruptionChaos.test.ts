@@ -20,13 +20,100 @@ import {
   getUIViewModeSync,
   setUIViewModeSync,
 } from '../storage/asyncStorageAdapter';
+import {
+  loadDBFromIndexedDB,
+  saveDBToIndexedDB,
+  clearIndexedDB,
+  saveOpLogToIndexedDB,
+  loadOpLogFromIndexedDB,
+  resetIndexedDBConnectionForTests,
+} from '../storage/indexedDBAdapter';
+import { exportRowsToCSV } from '../utils/csvEngine';
 import type { DB } from '../core/types';
 
 declare const describe: (name: string, fn: () => void) => void;
 declare const it: (name: string, fn: () => void | Promise<void>) => void;
 declare const expect: (actual: any) => any;
 
-describe('QAR1 Storage Quota, Rolling Backup & Quarantine Chaos Suite (QAR1-STOR-01 to 04)', () => {
+function createInMemoryIDBHarness() {
+  const stores = new Map<string, Map<string, any>>();
+  const storeKeyPaths = new Map<string, string>();
+
+  const fakeDB: any = {
+    objectStoreNames: {
+      contains: (name: string) => stores.has(name),
+    },
+    createObjectStore: (name: string, opts?: { keyPath?: string }) => {
+      const map = new Map<string, any>();
+      stores.set(name, map);
+      storeKeyPaths.set(name, opts?.keyPath || 'id');
+      return {
+        createIndex: () => {},
+      };
+    },
+    transaction: (storeNames: string[], _mode: string) => {
+      const tx: any = {
+        oncomplete: null as (() => void) | null,
+        onerror: null as (() => void) | null,
+        error: null,
+        objectStore: (name: string) => {
+          const map = stores.get(name)!;
+          const kp = storeKeyPaths.get(name) || 'id';
+          return {
+            clear: () => {
+              map.clear();
+              return { result: undefined };
+            },
+            put: (val: any) => {
+              const key = String(val[kp]);
+              map.set(key, JSON.parse(JSON.stringify(val)));
+              return { result: key };
+            },
+            get: (key: string) => {
+              const req = { result: map.get(String(key)) };
+              return req;
+            },
+            getAll: () => {
+              const req = { result: Array.from(map.values()) };
+              return req;
+            },
+          };
+        },
+      };
+      Promise.resolve().then(() => {
+        if (typeof tx.oncomplete === 'function') {
+          tx.oncomplete();
+        }
+      });
+      return tx;
+    },
+  };
+
+  const indexedDBMock: any = {
+    open: (_name: string, _version: number) => {
+      const req: any = {
+        result: fakeDB,
+        error: null,
+        onupgradeneeded: null,
+        onsuccess: null,
+        onerror: null,
+      };
+      Promise.resolve().then(() => {
+        if (stores.size === 0 && typeof req.onupgradeneeded === 'function') {
+          req.onupgradeneeded({ target: req });
+        }
+        if (typeof req.onsuccess === 'function') {
+          req.onsuccess({ target: req });
+        }
+      });
+      return req;
+    },
+  };
+
+  return { stores, indexedDBMock };
+}
+
+describe('QAR1 Storage Quota, Rolling Backup & Quarantine Chaos Suite (QAR1-STOR-01 to 08)', () => {
   const sampleDB: DB = {
     tables: [
       {
@@ -223,6 +310,157 @@ describe('QAR1 Storage Quota, Rolling Backup & Quarantine Chaos Suite (QAR1-STOR
     expect(triggerSql).toContain('ADD COLUMN IF NOT EXISTS active_sectors');
     expect(schemaSql).toContain('ADD COLUMN IF NOT EXISTS email');
     expect(schemaSql).toContain('ADD COLUMN IF NOT EXISTS active_sectors');
+  });
+
+  it('QAR1-STOR-05 (QAR1-V5-01/02): saveDBToIndexedDB e loadDBFromIndexedDB devem preservar activeTableIndex, isPrivacyMode, múltiplas tabelas e OpLog nas 4 Object Stores', async () => {
+    const { indexedDBMock } = createInMemoryIDBHarness();
+    const origIDB = (globalThis as any).window?.indexedDB;
+    resetIndexedDBConnectionForTests();
+    (globalThis as any).window.indexedDB = indexedDBMock;
+
+    try {
+      const multiTableDB: DB = {
+        tables: [
+          {
+            ...sampleDB.tables[0],
+            id: 'tbl_idx_0',
+            name: 'Planilha Setor 01',
+          },
+          {
+            ...sampleDB.tables[0],
+            id: 'tbl_idx_1',
+            name: 'Planilha Setor 02',
+            rows: [
+              {
+                id: 'row_s2_1',
+                date: '2026-08-01',
+                value: 4200,
+                description: 'Operação Sintética Beta',
+                entryType: 'revenue',
+                category: 'Operacional',
+              },
+            ],
+          },
+          {
+            ...sampleDB.tables[0],
+            id: 'tbl_idx_2',
+            name: 'Planilha Setor 03 (Ativa)',
+          },
+        ],
+        activeTableIndex: 2,
+        aiCostCurrentMonth: 14.75,
+        aiCostLastReset: '2026-10',
+        isPrivacyMode: true,
+      };
+
+      await saveDBToIndexedDB(multiTableDB);
+      const loaded = await loadDBFromIndexedDB();
+      expect(loaded).toBeDefined();
+      expect(loaded?.tables.length).toBe(3);
+      expect(loaded?.activeTableIndex).toBe(2);
+      expect(loaded?.isPrivacyMode).toBe(true);
+      expect(loaded?.aiCostCurrentMonth).toBe(14.75);
+      expect(loaded?.tables[1].rows[0].description).toBe('Operação Sintética Beta');
+
+      await saveOpLogToIndexedDB(
+        [{ action: { type: 'ADD_ROW' } as any, inverseAction: { type: 'DELETE_ROW' } as any, timestamp: '2026-10-17T00:00:00.000Z' }],
+        []
+      );
+      const opLog = await loadOpLogFromIndexedDB();
+      expect(opLog).toBeDefined();
+      expect(opLog?.undoStack.length).toBe(1);
+    } finally {
+      (globalThis as any).window.indexedDB = origIDB;
+      resetIndexedDBConnectionForTests();
+    }
+  });
+
+  it('QAR1-STOR-06 (QAR1-V5-02): loadDBFromIndexedDB deve recuperar automaticamente o estado íntegro a partir de snapshots_store quando tables_meta sofrer perda/corrupção', async () => {
+    const { stores, indexedDBMock } = createInMemoryIDBHarness();
+    const origIDB = (globalThis as any).window?.indexedDB;
+    resetIndexedDBConnectionForTests();
+    (globalThis as any).window.indexedDB = indexedDBMock;
+
+    try {
+      const dbWithActiveTab: DB = {
+        ...sampleDB,
+        activeTableIndex: 0,
+        isPrivacyMode: true,
+      };
+      await saveDBToIndexedDB(dbWithActiveTab);
+
+      // Simulate primary STORE_META ('tables_meta') corruption/wipe while STORE_SNAPSHOTS remains intact
+      const metaMap = stores.get('tables_meta');
+      expect(metaMap).toBeDefined();
+      metaMap!.clear();
+
+      const recovered = await loadDBFromIndexedDB();
+      expect(recovered).toBeDefined();
+      expect(recovered?.tables.length).toBe(1);
+      expect(recovered?.tables[0].id).toBe('tbl_safe_1');
+      expect(recovered?.tables[0].description).toBe('Snapshot íntegro');
+      expect(recovered?.isPrivacyMode).toBe(true);
+    } finally {
+      (globalThis as any).window.indexedDB = origIDB;
+      resetIndexedDBConnectionForTests();
+    }
+  });
+
+  it('QAR1-STOR-07 (QAR1-V5-02): saveDBToIndexedDB deve expurgar a chave monolítica legada do localStorage quando o payload atingir >= 2 MB', async () => {
+    const { indexedDBMock } = createInMemoryIDBHarness();
+    const origIDB = (globalThis as any).window?.indexedDB;
+    resetIndexedDBConnectionForTests();
+    (globalThis as any).window.indexedDB = indexedDBMock;
+
+    try {
+      // First write a small payload (< 2 MB) -> mirrored in localStorage('coin_assistant_db')
+      await saveDBToIndexedDB(sampleDB);
+      expect((globalThis as any).window.localStorage.getItem('coin_assistant_db')).toBeDefined();
+
+      // Now write a large payload (>= 2 MB) -> legacy localStorage key must be evicted to prevent stale rollback
+      const largeDB: DB = {
+        ...sampleDB,
+        tables: [
+          {
+            ...sampleDB.tables[0],
+            description: 'L'.repeat(2_100_000),
+          },
+        ],
+      };
+      await saveDBToIndexedDB(largeDB);
+      expect((globalThis as any).window.localStorage.getItem('coin_assistant_db')).toBeNull();
+
+      const loadedLarge = await loadDBFromIndexedDB();
+      expect(loadedLarge?.tables[0].description?.length).toBe(2_100_000);
+      await clearIndexedDB();
+    } finally {
+      (globalThis as any).window.indexedDB = origIDB;
+      resetIndexedDBConnectionForTests();
+    }
+  });
+
+  it('QAR1-STOR-08 (QAR1-V5-03): exportRowsToCSV deve neutralizar fórmulas maliciosas CWE-1236 (=, +, -, @, \\t, \\r) preservando valores monetários negativos', () => {
+    const csv = exportRowsToCSV([
+      {
+        id: '=HYPERLINK("http://evil.invalid")',
+        date: '2026-10-17',
+        value: -250.5,
+        description: '+cmd|\' /C calc\'!A0',
+        entryType: 'expense',
+        category: '-2+3+cmd',
+        tags: '@SUM(1,1)',
+        metadataJson: '\t{"evil":true}',
+      },
+    ]);
+
+    const lines = csv.split('\n');
+    expect(lines.length).toBe(2);
+    expect(lines[1]).toContain("'=HYPERLINK");
+    expect(lines[1]).toContain(',-250.50,');
+    expect(lines[1]).toContain('"\'+cmd|');
+    expect(lines[1]).toContain('"\'-2+3+cmd"');
+    expect(lines[1]).toContain('"\'@SUM(1,1)"');
+    expect(lines[1]).toContain('"\'\t{""evil"":true}"');
   });
 });
 

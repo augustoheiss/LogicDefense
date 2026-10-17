@@ -45,10 +45,84 @@ interface HarnessKeyRecord {
 function createStatefulBackendHarness() {
   const keys = new Map<string, HarnessKeyRecord>();
   const tableStorage = new Map<string, any[]>();
+  const pendingSyncQueue = new Map<string, any[]>();
   let keyCounter = 0;
 
   const registerKey = (record: HarnessKeyRecord) => {
     keys.set(record.apiKey, record);
+  };
+
+  const parsePublicCsvContent = (csvText: string): any[] => {
+    const parsed: any[] = [];
+    const lines = csvText
+      .trim()
+      .split(/\r?\n/)
+      .map((l) => l.trim())
+      .filter(Boolean);
+    let inData = false;
+    let delimiter = ',';
+    for (const line of lines) {
+      if (line.startsWith('## ROWS ##') || line.startsWith('id,date,') || line.startsWith('Data;Valor;')) {
+        inData = true;
+        delimiter = line.includes(';') && !line.startsWith('id,date,') ? ';' : ',';
+        continue;
+      }
+      if (line.startsWith('#')) continue;
+      const semiParts = line.split(';').map((p) => p.trim());
+      const commaParts = line.split(',').map((p) => p.trim());
+      if (!inData && semiParts.length >= 2 && /^\d{4}-\d{2}-\d{2}$/.test(semiParts[0])) {
+        inData = true;
+        delimiter = ';';
+      } else if (!inData && commaParts.length >= 2 && /^\d{4}-\d{2}-\d{2}$/.test(commaParts[0])) {
+        inData = true;
+        delimiter = ',';
+      }
+      if (!inData) continue;
+
+      if (delimiter === ';') {
+        if (semiParts.length >= 2 && /^\d{4}-\d{2}-\d{2}$/.test(semiParts[0])) {
+          const val = Number(semiParts[1].replace(',', '.'));
+          if (!Number.isNaN(val)) {
+            parsed.push({
+              date: semiParts[0],
+              value: val,
+              description: semiParts[2] || 'Via CSV',
+              entryType: semiParts[3] || (val < 0 ? 'expense' : 'revenue'),
+              category: semiParts[4] || 'Geral',
+              tags: semiParts[5] ? semiParts[5].split(',').map((t) => t.trim()).filter(Boolean) : [],
+              externalId: semiParts[6] || undefined,
+            });
+          }
+        }
+      } else {
+        if (commaParts.length >= 4 && /^\d{4}-\d{2}-\d{2}$/.test(commaParts[1])) {
+          const val = Number(commaParts[2]);
+          if (!Number.isNaN(val)) {
+            parsed.push({
+              externalId: commaParts[7] || commaParts[0] || undefined,
+              date: commaParts[1],
+              value: val,
+              description: commaParts[3] || 'Via CSV',
+              entryType: commaParts[4] || (val < 0 ? 'expense' : 'revenue'),
+              category: commaParts[5] || 'Geral',
+            });
+          }
+        } else if (commaParts.length >= 2 && /^\d{4}-\d{2}-\d{2}$/.test(commaParts[0])) {
+          const val = Number(commaParts[1]);
+          if (!Number.isNaN(val)) {
+            parsed.push({
+              date: commaParts[0],
+              value: val,
+              description: commaParts[2] || 'Via CSV',
+              entryType: commaParts[3] || (val < 0 ? 'expense' : 'revenue'),
+              category: commaParts[4] || 'Geral',
+              externalId: commaParts[6] || undefined,
+            });
+          }
+        }
+      }
+    }
+    return parsed;
   };
 
   const fetchMock = async (input: any, init?: any) => {
@@ -70,7 +144,10 @@ function createStatefulBackendHarness() {
     });
 
     // 1. API Keys Management Endpoints
-    if (urlObj.pathname.endsWith('/api/v1/api-keys/generate') && method === 'POST') {
+    if (
+      (urlObj.pathname.endsWith('/api/v1/api-keys/generate') || urlObj.pathname.endsWith('/api/v1/keys/generate')) &&
+      method === 'POST'
+    ) {
       const body = init?.body ? JSON.parse(init.body) : {};
       keyCounter++;
       const newKey = `am_sheet_live_test_harness_key_${keyCounter}`;
@@ -105,7 +182,10 @@ function createStatefulBackendHarness() {
       });
     }
 
-    if (urlObj.pathname.endsWith('/api/v1/api-keys/validate') && method === 'POST') {
+    if (
+      (urlObj.pathname.endsWith('/api/v1/api-keys/validate') || urlObj.pathname.endsWith('/api/v1/keys/validate')) &&
+      method === 'POST'
+    ) {
       const body = init?.body ? JSON.parse(init.body) : {};
       const keyToVal = body.apiKey || body.api_key || '';
       const rec = keys.get(keyToVal);
@@ -123,7 +203,10 @@ function createStatefulBackendHarness() {
       });
     }
 
-    if (urlObj.pathname.endsWith('/api/v1/api-keys/revoke') && method === 'POST') {
+    if (
+      (urlObj.pathname.endsWith('/api/v1/api-keys/revoke') || urlObj.pathname.endsWith('/api/v1/keys/revoke')) &&
+      method === 'POST'
+    ) {
       const body = init?.body ? JSON.parse(init.body) : {};
       const tableId = body.tableId || body.table_id || '';
       const rawKey = body.apiKey || body.api_key || apiKeyHeader;
@@ -135,6 +218,7 @@ function createStatefulBackendHarness() {
         }
       }
       tableStorage.delete(tableId);
+      pendingSyncQueue.delete(tableId);
       return jsonResponse(200, {
         success: true,
         alreadyInactive: !wasActive,
@@ -211,24 +295,41 @@ function createStatefulBackendHarness() {
 
     const tableId = keyRec.tableId;
 
+    if (urlObj.pathname.endsWith('/api/v1/public/sync/pending') && method === 'GET') {
+      const events = pendingSyncQueue.get(tableId) || [];
+      pendingSyncQueue.delete(tableId);
+      return jsonResponse(200, {
+        status: 'success',
+        table_id: tableId,
+        pending_events: events,
+        count: events.length,
+      });
+    }
+
     if (urlObj.pathname.endsWith('/api/v1/public/spreadsheet/append') && method === 'POST') {
       const body = JSON.parse(init.body);
       const mode = (body.mode || 'merge').toLowerCase();
-      const incoming: any[] = body.transactions || [];
-      if (incoming.length === 0 && !body.csv_content) {
+      let incoming: any[] = body.transactions ? [...body.transactions] : [];
+      const csvInput = body.csvContent || body.csv_content;
+      if (csvInput) {
+        incoming = [...incoming, ...parsePublicCsvContent(csvInput)];
+      }
+      if (incoming.length === 0) {
         return jsonResponse(400, { detail: 'Nenhuma transação válida foi fornecida.' });
       }
 
       const merged: any[] = mode === 'merge' ? [...(tableStorage.get(tableId) || [])] : [];
       const extIndex = new Map<string, number>();
       merged.forEach((it, idx) => {
-        extIndex.set(it.externalId || `tx_api_${idx + 1}`, idx);
+        extIndex.set(it.externalId || `tx_api_${String(idx + 1).padStart(4, '0')}`, idx);
       });
 
       let insertedCount = 0;
       let updatedCount = 0;
+      const processedNormItems: any[] = [];
       for (const item of incoming) {
-        const extId = item.externalId || item.external_id || `tx_api_${merged.length + 1}`;
+        const extId =
+          item.externalId || item.external_id || `tx_api_${String(merged.length + 1).padStart(4, '0')}`;
         const normItem = {
           ...item,
           externalId: extId,
@@ -242,9 +343,31 @@ function createStatefulBackendHarness() {
           merged.push(normItem);
           insertedCount++;
         }
+        processedNormItems.push(normItem);
       }
 
       tableStorage.set(tableId, merged);
+
+      // Push to offline sync queue with monotonic IDs matching processedNormItems
+      const q = pendingSyncQueue.get(tableId) || [];
+      q.push({
+        type: 'PUBLIC_API_SYNC',
+        mode,
+        tableId,
+        insertedCount,
+        totalCount: merged.length,
+        rows: processedNormItems.map((it) => ({
+          id: it.externalId,
+          date: it.date,
+          value: it.value,
+          description: it.description,
+          entryType: it.entryType,
+          category: it.category || 'Geral',
+          tags: it.tags || [],
+          externalId: it.externalId,
+        })),
+      });
+      pendingSyncQueue.set(tableId, q);
 
       const csvLines = [
         '## COIN_BACKUP_V2 ##',
@@ -331,10 +454,10 @@ function createStatefulBackendHarness() {
     return jsonResponse(404, { detail: 'Route not found' });
   };
 
-  return { registerKey, fetchMock, tableStorage, keys };
+  return { registerKey, fetchMock, tableStorage, pendingSyncQueue, keys };
 }
 
-describe('QAR1 System Integration Testing (SIT) Suite (SIT-01 to SIT-11)', () => {
+describe('QAR1 System Integration Testing (SIT) Suite (SIT-01 to SIT-15)', () => {
   it('SIT-01: OPENAPI_SPEC_V1 e getAgentPrompt devem validar todos os 5 perfis executivos (native, cfo, operational, goals, dev)', async () => {
     expect(OPENAPI_SPEC_V1.openapi).toBe('3.1.0');
     expect(OPENAPI_SPEC_V1.paths).toHaveProperty('/api/v1/public/agent-prompt');
@@ -811,6 +934,140 @@ describe('QAR1 System Integration Testing (SIT) Suite (SIT-01 to SIT-11)', () =>
       );
       expect(aiRes.success).toBe(true);
       expect(aiRes.data?.content).toContain('2 lançamentos analisados');
+    } finally {
+      globalThis.fetch = origFetch;
+    }
+  });
+
+  it('SIT-12 (SIT-V5-02): appendToSpreadsheet deve ingerir preset CSV separado por ponto-e-vírgula (;) do APIManagementTester', async () => {
+    const harness = createStatefulBackendHarness();
+    const apiKey = 'am_sheet_live_test_key_sit12';
+    harness.registerKey({
+      apiKey,
+      tableId: 'tbl_sit12_semi',
+      permissions: 'read:write',
+      isActive: true,
+      isExpired: false,
+      ttlDays: 7,
+    });
+
+    const origFetch = globalThis.fetch;
+    globalThis.fetch = harness.fetchMock as any;
+
+    try {
+      const presetCsv = [
+        'Data;Valor;Descrição;Tipo;Categoria;Tags;ID_Externo',
+        '2026-06-16;2800.00;Consultoria Estratégica via CSV;revenue;Consultoria;csv,api;csv_001',
+        '2026-06-17;-320.00;Licença Software Anual;expense;Tecnologia;saas,anual;csv_002',
+      ].join('\n');
+
+      const res = await appendToSpreadsheet(
+        {
+          mode: 'merge',
+          csvContent: presetCsv,
+        },
+        apiKey,
+        'http://localhost:8000'
+      );
+
+      expect(res.success).toBe(true);
+      expect(res.data?.insertedCount).toBe(2);
+      expect(res.data?.totalCount).toBe(2);
+      expect(res.data?.csvContent).toContain('Consultoria Estratégica via CSV');
+      expect(res.data?.csvContent).toContain('csv_001');
+      expect(res.data?.csvContent).toContain('csv_002');
+    } finally {
+      globalThis.fetch = origFetch;
+    }
+  });
+
+  it('SIT-13 & SIT-14 (SIT-V5-03): Fila offline /sync/pending deve gerar IDs monotônicos tx_api_0001..N sem colisão entre múltiplos lotes', async () => {
+    const harness = createStatefulBackendHarness();
+    const apiKey = 'am_sheet_live_test_key_sit13';
+    harness.registerKey({
+      apiKey,
+      tableId: 'tbl_sit13_queue',
+      permissions: 'read:write',
+      isActive: true,
+      isExpired: false,
+      ttlDays: 7,
+    });
+
+    const origFetch = globalThis.fetch;
+    globalThis.fetch = harness.fetchMock as any;
+
+    try {
+      // Lote 1 sem externalId -> deve atribuir tx_api_0001 e tx_api_0002
+      await appendToSpreadsheet(
+        {
+          mode: 'merge',
+          transactions: [
+            { date: '2026-10-01', value: 1000, description: 'Lote 1 Item A', entryType: 'revenue' },
+            { date: '2026-10-02', value: -200, description: 'Lote 1 Item B', entryType: 'expense' },
+          ],
+        },
+        apiKey,
+        'http://localhost:8000'
+      );
+
+      // Lote 2 sem externalId -> deve atribuir tx_api_0003 e tx_api_0004 (sem colidir com tx_api_0001!)
+      await appendToSpreadsheet(
+        {
+          mode: 'merge',
+          transactions: [
+            { date: '2026-10-03', value: 1500, description: 'Lote 2 Item C', entryType: 'revenue' },
+            { date: '2026-10-04', value: -350, description: 'Lote 2 Item D', entryType: 'expense' },
+          ],
+        },
+        apiKey,
+        'http://localhost:8000'
+      );
+
+      const syncRes = await fetch('http://localhost:8000/api/v1/public/sync/pending', {
+        method: 'GET',
+        headers: { [PUBLIC_API_HEADER_NAME]: apiKey },
+      });
+      const syncBody = await syncRes.json();
+      expect(syncBody.count).toBe(2);
+      const batch1Ids = syncBody.pending_events[0].rows.map((r: any) => r.id);
+      const batch2Ids = syncBody.pending_events[1].rows.map((r: any) => r.id);
+      expect(batch1Ids).toEqual(['tx_api_0001', 'tx_api_0002']);
+      expect(batch2Ids).toEqual(['tx_api_0003', 'tx_api_0004']);
+    } finally {
+      globalThis.fetch = origFetch;
+    }
+  });
+
+  it('SIT-15 (SIT-V5-04): Kill-Switch revokeApiKey deve purgar tanto a RAM quanto os eventos órfãos da pending_sync_queue', async () => {
+    const harness = createStatefulBackendHarness();
+    const apiKey = 'am_sheet_live_test_key_sit15';
+    harness.registerKey({
+      apiKey,
+      tableId: 'tbl_sit15_killqueue',
+      permissions: 'read:write',
+      isActive: true,
+      isExpired: false,
+      ttlDays: 7,
+    });
+
+    const origFetch = globalThis.fetch;
+    globalThis.fetch = harness.fetchMock as any;
+
+    try {
+      await appendToSpreadsheet(
+        {
+          mode: 'merge',
+          transactions: [{ date: '2026-10-10', value: 750, description: 'Evento Órfão Antes do Kill-Switch' }],
+        },
+        apiKey,
+        'http://localhost:8000'
+      );
+      expect(harness.pendingSyncQueue.get('tbl_sit15_killqueue')?.length).toBe(1);
+
+      const revRes = await revokeApiKey('tbl_sit15_killqueue', apiKey);
+      expect(revRes.success).toBe(true);
+      expect(harness.tableStorage.has('tbl_sit15_killqueue')).toBe(false);
+      expect(harness.pendingSyncQueue.has('tbl_sit15_killqueue')).toBe(false);
     } finally {
       globalThis.fetch = origFetch;
     }

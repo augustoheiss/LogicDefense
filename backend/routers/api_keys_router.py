@@ -173,6 +173,14 @@ async def revoke_api_key_endpoint(
         from routers.public_api_router import TABLE_IN_MEMORY_STORAGE
         TABLE_IN_MEMORY_STORAGE.pop(table_id, None)
 
+        # Notify any open SSE subscribers immediately
+        if raw_key:
+            from db.license_db import hash_key
+            from services.sync_broadcaster import broadcaster
+            kh = hash_key(raw_key.strip())
+            if kh and broadcaster.has_subscribers(kh):
+                broadcaster.broadcast(kh, {"event": "KEY_ROTATED", "tableId": table_id})
+
         msg = "Chave de API revogada e desativada com sucesso." if was_active else "Nenhuma chave ativa encontrada (já revogada ou expirada)."
 
         return RevokeKeyResponse(

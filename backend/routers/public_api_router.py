@@ -242,6 +242,87 @@ class PublicAnalysisContextResponse(BaseModel):
 
 # ── Endpoints (100% Stateless / In-Memory) ───────────────────────────────────
 
+def parse_public_csv_content(csv_text: str) -> List[AppendTransactionItem]:
+    """
+    Autodetects semicolon (;) vs comma (,) delimiter per line and parses both:
+      - Standard 7-column preset (Data;Valor;Descrição;Tipo;Categoria;Tags;ID_Externo)
+      - Expo Backup v2/v3 rows (id,date,value,description,entryType,...)
+    """
+    parsed_items: List[AppendTransactionItem] = []
+    if not csv_text or not csv_text.strip():
+        return parsed_items
+
+    raw_lines = csv_text.strip().split("\n")
+    for line in raw_lines:
+        line_str = line.strip()
+        if not line_str or line_str.startswith("##"):
+            continue
+
+        delimiter = ";" if line_str.count(";") >= 2 else ","
+        parts = [p.strip().strip('"') for p in line_str.split(delimiter)]
+        if len(parts) < 2:
+            continue
+
+        first_col_lower = parts[0].lower().strip()
+        if first_col_lower in (
+            "id", "date", "data", "table_id", "table_name", "api_key",
+            "last_event_seq", "exported_at", "name", "description",
+            "active_sectors", "dashboard_config", "sector_params",
+            "key", "column_id"
+        ) or first_col_lower.startswith(("goal_", "meta_", "custo_")):
+            continue
+
+        try:
+            # Case A: Col 1 is YYYY-MM-DD (v2/v3 export with id in Col 0)
+            if len(parts) >= 4 and re.search(r"^\d{4}-\d{2}-\d{2}$", parts[1].strip()):
+                ext_id = parts[0] or None
+                dt = parts[1].strip()
+                val_raw = parts[2].replace("R$", "").strip()
+                if "," in val_raw and "." not in val_raw:
+                    val_raw = val_raw.replace(",", ".")
+                val = float(val_raw)
+                desc = parts[3] if len(parts) > 3 and parts[3] else "Transação CSV"
+                raw_et = parts[4].lower().strip() if len(parts) > 4 and parts[4] else ""
+                entry_type = raw_et if raw_et else ("expense" if val < 0 else "revenue")
+                cat = (
+                    parts[9] if len(parts) > 9 and parts[9]
+                    else (parts[5] if len(parts) > 5 and parts[5] else "Geral")
+                )
+                tag = (
+                    parts[10] if len(parts) > 10
+                    else (parts[6] if len(parts) > 6 else "")
+                )
+            # Case B: Col 0 is YYYY-MM-DD (Data;Valor;Descrição;Tipo;Categoria;Tags;ID_Externo)
+            elif re.search(r"^\d{4}-\d{2}-\d{2}$", parts[0].strip()):
+                dt = parts[0].strip()
+                val_raw = parts[1].replace("R$", "").strip()
+                if "," in val_raw and "." not in val_raw:
+                    val_raw = val_raw.replace(",", ".")
+                val = float(val_raw)
+                desc = parts[2] if len(parts) > 2 and parts[2] else "Transação CSV"
+                raw_et = parts[3].lower().strip() if len(parts) > 3 and parts[3] else ""
+                entry_type = raw_et if raw_et else ("expense" if val < 0 else "revenue")
+                cat = parts[4] if len(parts) > 4 and parts[4] else "Geral"
+                tag = parts[5] if len(parts) > 5 else ""
+                ext_id = parts[6] if len(parts) > 6 and parts[6] else None
+            else:
+                continue
+
+            parsed_items.append(AppendTransactionItem(
+                date=dt,
+                value=val,
+                description=desc,
+                entryType=entry_type,
+                category=cat,
+                tags=tag,
+                externalId=ext_id
+            ))
+        except Exception as parse_err:
+            log.warning(f"Ignorando linha CSV no parse_public_csv_content: {line} ({parse_err})")
+
+    return parsed_items
+
+
 @router.post("/spreadsheet/append", response_model=AppendSpreadsheetResponse)
 async def append_to_spreadsheet(
     payload: AppendSpreadsheetPayload,
@@ -259,47 +340,9 @@ async def append_to_spreadsheet(
     if payload.transactions:
         items_to_process.extend(payload.transactions)
 
-    # 2. Texto CSV bruto
+    # 2. Texto CSV bruto (suporta ';' e ',')
     if payload.csv_content and payload.csv_content.strip():
-        raw_lines = payload.csv_content.strip().split("\n")
-        for line in raw_lines:
-            if line.startswith("##") or not line.strip():
-                continue
-            parts = [p.strip().strip('"') for p in line.split(",")]
-            if len(parts) >= 3:
-                line_lower = line.lower()
-                if "date" in line_lower or "data" in line_lower or "description" in line_lower or "entrytype" in line_lower:
-                    continue
-                try:
-                    # Detect if col 1 is date (standard Expo export v3)
-                    if len(parts) >= 4 and re.search(r"\d{4}-\d{2}-\d{2}", parts[1]):
-                        dt = parts[1]
-                        val = float(parts[2])
-                        desc = parts[3]
-                        entry_type = parts[4] if len(parts) > 4 and parts[4] else ("expense" if val < 0 else "revenue")
-                        cat = parts[9] if len(parts) > 9 and parts[9] else "Geral"
-                        tag = parts[10] if len(parts) > 10 else ""
-                        ext_id = parts[0]
-                    else:
-                        dt = parts[0]
-                        val = float(parts[1])
-                        desc = parts[2]
-                        entry_type = parts[3] if len(parts) > 3 and parts[3] else ("expense" if val < 0 else "revenue")
-                        cat = parts[4] if len(parts) > 4 else "Geral"
-                        tag = parts[5] if len(parts) > 5 else ""
-                        ext_id = parts[6] if len(parts) > 6 else None
-
-                    items_to_process.append(AppendTransactionItem(
-                        date=dt,
-                        value=val,
-                        description=desc,
-                        entryType=entry_type,
-                        category=cat,
-                        tags=tag,
-                        externalId=ext_id
-                    ))
-                except Exception as parse_err:
-                    log.warning(f"Ignorando linha CSV no append: {line} ({parse_err})")
+        items_to_process.extend(parse_public_csv_content(payload.csv_content))
 
     if not items_to_process:
         raise HTTPException(
@@ -330,11 +373,12 @@ async def append_to_spreadsheet(
     inserted_count = 0
     updated_count = 0
     auto_seq = len(merged_items)
+    processed_norm_items: List[AppendTransactionItem] = []
 
     for item in items_to_process:
         auto_seq += 1
         tx_id = item.external_id or f"tx_api_{auto_seq:04d}"
-        entry_type = item.entry_type or ("expense" if item.value < 0 else "revenue")
+        entry_type = (item.entry_type or ("expense" if item.value < 0 else "revenue")).lower()
         norm_item = item.model_copy(update={
             "external_id": tx_id,
             "entry_type": entry_type,
@@ -342,6 +386,7 @@ async def append_to_spreadsheet(
             "tags": item.tags or "",
             "description": item.description or "Transação API",
         })
+        processed_norm_items.append(norm_item)
 
         if tx_id in ext_id_to_index:
             merged_items[ext_id_to_index[tx_id]] = norm_item
@@ -439,7 +484,7 @@ async def append_to_spreadsheet(
     seq_number = get_next_table_sequence(table_id)
     key_h = hash_key(api_key)
 
-    # Build payload object for sync
+    # Build payload object for sync using processed_norm_items so IDs are monotonic across offline batches
     sync_event = {
         "event": "MUTATION",
         "tableId": table_id,
@@ -447,7 +492,7 @@ async def append_to_spreadsheet(
         "mode": mode,
         "rows": [
             {
-                "id": item.external_id or f"tx_api_{idx+1:04d}",
+                "id": item.external_id,
                 "date": item.date,
                 "value": abs(item.value),
                 "description": item.description or "Transação API",
@@ -465,7 +510,7 @@ async def append_to_spreadsheet(
                 "unitPrice": getattr(item, "unit_price", None),
                 "customValues": getattr(item, "custom_values", None),
             }
-            for idx, item in enumerate(items_to_process)
+            for item in processed_norm_items
         ]
     }
 
@@ -635,16 +680,19 @@ async def sync_stream_sse(
 
 @router.get("/sync/pending")
 async def sync_pending_queue(
-    api_key: str = Query(..., description="Chave API da planilha am_sheet_live_..."),
+    request: Request,
+    api_key: Optional[str] = Query(None, description="Chave API da planilha am_sheet_live_..."),
     since_seq: int = Query(0, description="Última versão da sequência (seq_number) já aplicada localmente")
 ):
     """
     Drena mutações offline da fila pending_sync_queue com seq_number > since_seq.
+    Aceita chave tanto via query param (?api_key=...) quanto via header X-Spreadsheet-Key.
     """
-    if not api_key.startswith("am_sheet_live_"):
+    effective_key = (api_key or request.headers.get("X-Spreadsheet-Key") or request.headers.get("x-spreadsheet-key") or "").strip()
+    if not effective_key.startswith("am_sheet_live_"):
         raise HTTPException(status_code=401, detail="Chave API inválida.")
         
-    key_h = hashlib.sha256(api_key.encode("utf-8")).hexdigest()
+    key_h = hashlib.sha256(effective_key.encode("utf-8")).hexdigest()
     from db.license_db import get_spreadsheet_api_key, pop_pending_sync
     record = get_spreadsheet_api_key(key_h)
     if not record or not record.get("is_active", 1):
@@ -665,8 +713,12 @@ async def sync_pending_queue(
 
     return {
         "success": True,
+        "status": "success",
+        "table_id": record["table_id"],
         "pendingCount": len(parsed_events),
-        "events": parsed_events
+        "count": len(parsed_events),
+        "events": parsed_events,
+        "pending_events": parsed_events
     }
 
 @router.get("/agent-prompt", response_model=PublicAgentPromptResponse, summary="[ROTA OBRIGATÓRIA #0] Ingestão de Prompt & Habilidades Financeiras")
@@ -774,44 +826,7 @@ async def generate_analysis_context_in_memory(
             items_to_process.extend(payload.transactions)
 
         if payload.csv_content and payload.csv_content.strip():
-            raw_lines = payload.csv_content.strip().split("\n")
-            for line in raw_lines:
-                if line.startswith("##") or not line.strip():
-                    continue
-                parts = [p.strip().strip('"') for p in line.split(",")]
-                if len(parts) >= 3:
-                    line_lower = line.lower()
-                    if "date" in line_lower or "data" in line_lower or "description" in line_lower or "entrytype" in line_lower:
-                        continue
-                    try:
-                        if len(parts) >= 4 and re.search(r"\d{4}-\d{2}-\d{2}", parts[1]):
-                            dt = parts[1]
-                            val = float(parts[2])
-                            desc = parts[3]
-                            entry_type = parts[4] if len(parts) > 4 and parts[4] else ("expense" if val < 0 else "revenue")
-                            cat = parts[9] if len(parts) > 9 and parts[9] else "Geral"
-                            tag = parts[10] if len(parts) > 10 else ""
-                            ext_id = parts[0]
-                        else:
-                            dt = parts[0]
-                            val = float(parts[1])
-                            desc = parts[2]
-                            entry_type = parts[3] if len(parts) > 3 and parts[3] else ("expense" if val < 0 else "revenue")
-                            cat = parts[4] if len(parts) > 4 else "Geral"
-                            tag = parts[5] if len(parts) > 5 else ""
-                            ext_id = parts[6] if len(parts) > 6 else None
-
-                        items_to_process.append(AppendTransactionItem(
-                            date=dt,
-                            value=abs(val),
-                            description=desc,
-                            entryType=entry_type,
-                            category=cat,
-                            tags=tag,
-                            externalId=ext_id
-                        ))
-                    except Exception:
-                        pass
+            items_to_process.extend(parse_public_csv_content(payload.csv_content))
 
     # Fallback ao armazenamento em memória do table_id se não veio payload de itens
     if not items_to_process and table_id in TABLE_IN_MEMORY_STORAGE:

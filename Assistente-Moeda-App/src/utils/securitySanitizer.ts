@@ -34,6 +34,9 @@ export function escapeHtml(input: unknown): string {
  */
 export function neutralizeCsvFormula(cellValue: string): string {
   if (!cellValue) return '';
+  if (cellValue[0] === '\t' || cellValue[0] === '\r') {
+    return `'${cellValue}`;
+  }
   const trimmed = cellValue.trimStart();
   if (!trimmed) return cellValue;
 

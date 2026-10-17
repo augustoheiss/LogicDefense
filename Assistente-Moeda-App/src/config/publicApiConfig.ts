@@ -34,6 +34,7 @@ export interface AppendSpreadsheetResponse {
   updatedCount: number;
   totalCount: number;
   message: string;
+  csvContent?: string;
 }
 
 export interface PublicAnalysisContextParams {

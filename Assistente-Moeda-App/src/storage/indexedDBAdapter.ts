@@ -49,6 +49,11 @@ export function isIndexedDBAvailable(): boolean {
   );
 }
 
+export function resetIndexedDBConnectionForTests(): void {
+  dbInstancePromise = null;
+  writeQueue = Promise.resolve();
+}
+
 function openDatabase(): Promise<IDBDatabase> {
   if (dbInstancePromise) return dbInstancePromise;
 

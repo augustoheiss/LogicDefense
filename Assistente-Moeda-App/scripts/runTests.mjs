@@ -9,10 +9,91 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { register, createRequire } from 'node:module';
+import Module, { register, createRequire } from 'node:module';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 globalThis.require = createRequire(import.meta.url);
+
+// Intercept CommonJS Module._load so both `node` and `npx tsx` receive clean headless stubs
+// without attempting to parse React Native's Flow syntax (`import typeof`) in node_modules.
+const asyncStorageMem = new Map();
+const secureStoreMem = new Map();
+
+const CJS_STUB_OBJECTS = {
+  'react-native': {
+    Platform: { OS: 'web', select: (obj) => obj.web ?? obj.default },
+    Share: { share: async () => ({ action: 'sharedAction' }) },
+    Alert: { alert: () => {} },
+    Dimensions: { get: () => ({ width: 390, height: 844 }) },
+    StyleSheet: { create: (s) => s, flatten: (s) => s },
+  },
+  'expo-file-system': {
+    cacheDirectory: '/tmp/',
+    documentDirectory: '/tmp/',
+    EncodingType: { UTF8: 'utf8', Base64: 'base64' },
+    writeAsStringAsync: async () => {},
+    readAsStringAsync: async () => '',
+  },
+  'expo-file-system/legacy': {
+    cacheDirectory: '/tmp/',
+    documentDirectory: '/tmp/',
+    EncodingType: { UTF8: 'utf8', Base64: 'base64' },
+    writeAsStringAsync: async () => {},
+    readAsStringAsync: async () => '',
+  },
+  'expo-sharing': {
+    isAvailableAsync: async () => true,
+    shareAsync: async () => {},
+  },
+  'expo-print': {
+    printToFileAsync: async () => ({ uri: 'file:///tmp/report.pdf' }),
+    printAsync: async () => {},
+  },
+  'expo-document-picker': {
+    getDocumentAsync: async () => ({ canceled: true, assets: null }),
+  },
+  'expo-secure-store': {
+    getItemAsync: async (k) => secureStoreMem.get(k) ?? null,
+    setItemAsync: async (k, v) => {
+      secureStoreMem.set(k, v);
+    },
+    deleteItemAsync: async (k) => {
+      secureStoreMem.delete(k);
+    },
+  },
+  '@react-native-async-storage/async-storage': {
+    getItem: async (k) => asyncStorageMem.get(k) ?? null,
+    setItem: async (k, v) => {
+      asyncStorageMem.set(k, String(v));
+    },
+    removeItem: async (k) => {
+      asyncStorageMem.delete(k);
+    },
+    clear: async () => {
+      asyncStorageMem.clear();
+    },
+    getAllKeys: async () => Array.from(asyncStorageMem.keys()),
+    multiGet: async (keys) => keys.map((k) => [k, asyncStorageMem.get(k) ?? null]),
+    multiSet: async (pairs) => {
+      pairs.forEach(([k, v]) => asyncStorageMem.set(k, String(v)));
+    },
+    multiRemove: async (keys) => {
+      keys.forEach((k) => asyncStorageMem.delete(k));
+    },
+  },
+};
+
+for (const obj of Object.values(CJS_STUB_OBJECTS)) {
+  if (!obj.default) obj.default = obj;
+}
+
+const origLoad = Module._load;
+Module._load = function (request, parent, isMain) {
+  if (Object.prototype.hasOwnProperty.call(CJS_STUB_OBJECTS, request)) {
+    return CJS_STUB_OBJECTS[request];
+  }
+  return origLoad.apply(this, arguments);
+};
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);

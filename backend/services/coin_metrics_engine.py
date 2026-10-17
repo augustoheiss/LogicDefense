@@ -392,15 +392,45 @@ def compute_metrics(
 
     if not revenue_rows:
         m = _empty_metrics()
+        gross_with_p = _round2(total_partner_in)
+        exp_with_p = _round2(total_expenses + total_partner_out)
         return TableMetrics(
-            **{**m.model_dump(by_alias=True), "totalExpenses": total_expenses, "annualExpenses": annual_expenses, **survival_fields, **invest_fields, **stats_fields}
+            **{
+                **m.model_dump(by_alias=True),
+                "totalExpenses": total_expenses,
+                "annualExpenses": annual_expenses,
+                "netBalance": _round2(-total_expenses),
+                "totalPartnerIn": total_partner_in,
+                "totalPartnerOut": total_partner_out,
+                "grossWithPartner": gross_with_p,
+                "expensesWithPartner": exp_with_p,
+                "netWithPartner": _round2(gross_with_p - exp_with_p),
+                **survival_fields,
+                **invest_fields,
+                **stats_fields,
+            }
         )
 
     active_rows = [r for r in revenue_rows if r.value > 0]
     if not active_rows:
         m = _empty_metrics()
+        gross_with_p = _round2(total_partner_in)
+        exp_with_p = _round2(total_expenses + total_partner_out)
         return TableMetrics(
-            **{**m.model_dump(by_alias=True), "totalExpenses": total_expenses, "annualExpenses": annual_expenses, **survival_fields, **invest_fields, **stats_fields}
+            **{
+                **m.model_dump(by_alias=True),
+                "totalExpenses": total_expenses,
+                "annualExpenses": annual_expenses,
+                "netBalance": _round2(-total_expenses),
+                "totalPartnerIn": total_partner_in,
+                "totalPartnerOut": total_partner_out,
+                "grossWithPartner": gross_with_p,
+                "expensesWithPartner": exp_with_p,
+                "netWithPartner": _round2(gross_with_p - exp_with_p),
+                **survival_fields,
+                **invest_fields,
+                **stats_fields,
+            }
         )
 
     # ── Global date span — uses periodStart/periodEnd when present ───────
@@ -551,22 +581,38 @@ def compute_metrics(
         _parse_date(as_of_date) if as_of_date else None,
     )
 
-    # ── Waiver days (for billable weeks calculation) ──────────────────────────
+    # ── Waiver days & credits (100% parity with TS metricsEngine.ts:433-458) ──
     total_waived_days = 0.0
-    # ── Waiver credits ───────────────────────────────────────────────
-    waiver_total_weeks = 0.0  # historically-accumulated week equivalent for waivers
-    waiver_rows = [r for r in rows if r.entry_type == EntryType.WAIVER and r.value > 0]
+    waiver_total_weeks = 0.0
+    fixed_waiver_from_rows = 0.0
+    period_waiver_from_rows = 0.0
+    waiver_rows = [r for r in rows if r.entry_type == EntryType.WAIVER]
     for row in waiver_rows:
         active_weekly_goal = get_weekly_goal_for_date(row.date, goals)
-        if active_weekly_goal > 0:
-            waiver_weeks_equiv = row.value / active_weekly_goal
-            waiver_total_weeks += waiver_weeks_equiv
-            total_waived_days += waiver_weeks_equiv * 7.0
-        elif row.period_start and row.period_end:
-            total_waived_days += max(1, _calendar_day_span(row.period_start, row.period_end))
+        if row.value > 0:
+            fixed_waiver_from_rows += row.value
+            if active_weekly_goal > 0:
+                waiver_weeks_equiv = row.value / active_weekly_goal
+                waiver_total_weeks += waiver_weeks_equiv
+                total_waived_days += waiver_weeks_equiv * 7.0
+        else:
+            span_days = (
+                max(1, _calendar_day_span(row.period_start, row.period_end))
+                if (row.period_start and row.period_end)
+                else 1
+            )
+            w_weeks = span_days / 7.0
+            waiver_total_weeks += w_weeks
+            total_waived_days += span_days
+            if active_weekly_goal > 0:
+                period_waiver_from_rows += w_weeks * active_weekly_goal
+
+    effective_waiver_credits = (
+        total_waiver_credits if total_waiver_credits > 0 else fixed_waiver_from_rows
+    ) + period_waiver_from_rows
 
     # FIREWALL Goal Balance: add partner_in credit since it no longer flows through rawStrictBalance
-    global_goal_balance = round((raw_strict_balance + total_waiver_credits + total_partner_in - total_partner_out) * 100) / 100
+    global_goal_balance = round((raw_strict_balance + effective_waiver_credits + total_partner_in - total_partner_out) * 100) / 100
     waived_weeks = round((total_waived_days / 7) * 100) / 100
     billable_weeks = round(max(0.0, total_elapsed_weeks - waived_weeks) * 100) / 100
 
@@ -606,7 +652,7 @@ def compute_metrics(
         totalElapsedWeeks=total_elapsed_weeks,
         waivedWeeks=waived_weeks,
         billableWeeks=billable_weeks,
-        totalWaiverCredit=round(total_waiver_credits * 100) / 100,
+        totalWaiverCredit=round(effective_waiver_credits * 100) / 100,
         timeBankBalance=time_bank_balance,
         byYear=by_year,
         byMonth=by_month,

@@ -238,17 +238,17 @@ def build_category_summaries(rows: list, globalDaySpan: int = 1) -> str:
             continue
 
         section_label = _TYPE_SECTION_LABELS.get(entry_type, str(entry_type))
-        all_values = [r.value for desc_rows in cats.values() for r in desc_rows]
+        all_values = [abs(r.value) for desc_rows in cats.values() for r in desc_rows]
         type_total = sum(all_values)
         n_categories = len(cats)
 
         lines: list[str] = [f"\n── {section_label} por Categoria ({n_categories} categorias, total R$ {type_total:,.2f}) ──"]
 
-        # Sort by total descending
-        sorted_cats = sorted(cats.items(), key=lambda kv: sum(r.value for r in kv[1]), reverse=True)
+        # Sort by magnitude total descending
+        sorted_cats = sorted(cats.items(), key=lambda kv: sum(abs(r.value) for r in kv[1]), reverse=True)
 
         for desc, cat_rows in sorted_cats:
-            values = [r.value for r in cat_rows]
+            values = [abs(r.value) for r in cat_rows]
             count = len(values)
             total = sum(values)
             mean = total / count if count > 0 else 0
@@ -261,7 +261,7 @@ def build_category_summaries(rows: list, globalDaySpan: int = 1) -> str:
             for r in cat_rows:
                 period_start = getattr(r, "period_start", None) or getattr(r, "periodStart", None)
                 period_end = getattr(r, "period_end", None) or getattr(r, "periodEnd", None)
-                val = getattr(r, "value", 0.0)
+                val = abs(getattr(r, "value", 0.0))
                 if period_start and period_end:
                     tx_days = max(1, _calendar_day_span(period_start, period_end))
                     total_daily_rate += (val / tx_days)
@@ -376,11 +376,11 @@ def build_ai_scenario_context(rows: list[TableRow]) -> str:
         # Compute metrics
         revenue = sum(
             r.value for r in group_rows
-            if r.entry_type not in (EntryType.EXPENSE, EntryType.DEPOSIT, EntryType.WAIVER, EntryType.PARTNER_IN, EntryType.PARTNER_OUT)
+            if r.entry_type not in (EntryType.EXPENSE, EntryType.DEPOSIT, EntryType.WAIVER, EntryType.PARTNER_IN, EntryType.PARTNER_OUT, EntryType.UNRESOLVED)
         )
 
         expenses = sum(
-            r.value for r in group_rows
+            abs(r.value) for r in group_rows
             if r.entry_type == EntryType.EXPENSE
         )
 
@@ -408,7 +408,10 @@ def build_weekly_performance_context(
     and temporal isolation boundary clamping.
     """
     # 1. Temporal boundary identification
-    active_rows = [r for r in payload.rows if r.value > 0]
+    active_rows = [
+        r for r in payload.rows
+        if r.value > 0 and r.entry_type != EntryType.UNRESOLVED
+    ]
     if not active_rows:
         return ""
 
@@ -429,10 +432,10 @@ def build_weekly_performance_context(
 
     # Filter operational revenue rows only
     # Same filter as YearlyHeatmap and metrics engine:
-    # Exclude deposit, waiver, expense, partner_in, partner_out
+    # Exclude deposit, waiver, expense, partner_in, partner_out, unresolved
     revenue_rows = [
         r for r in payload.rows
-        if r.entry_type not in (EntryType.DEPOSIT, EntryType.WAIVER, EntryType.EXPENSE, EntryType.PARTNER_OUT, EntryType.PARTNER_IN)
+        if r.entry_type not in (EntryType.DEPOSIT, EntryType.WAIVER, EntryType.EXPENSE, EntryType.PARTNER_OUT, EntryType.PARTNER_IN, EntryType.UNRESOLVED)
     ]
 
     weeks_list = []

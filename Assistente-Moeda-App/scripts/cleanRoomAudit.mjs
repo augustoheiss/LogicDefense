@@ -77,7 +77,7 @@ function walkFiles(dir, acc = []) {
     const fullPath = path.join(dir, entry.name);
     if (entry.isDirectory()) {
       walkFiles(fullPath, acc);
-    } else if (/\.(ts|tsx|js|mjs|py|json|csv|md|txt|sql)$/i.test(entry.name)) {
+    } else if (/\.(ts|tsx|js|mjs|py|json|csv|md|txt|sql|yaml|yml|html|sh)$/i.test(entry.name) || entry.name === '.env.example') {
       acc.push(fullPath);
     }
   }
@@ -89,11 +89,31 @@ function checkRootArtifacts(dir, label, findings) {
   const entries = fs.readdirSync(dir, { withFileTypes: true });
   for (const entry of entries) {
     if (!entry.isFile()) continue;
-    if (/\.(png|db|sqlite|sqlite3)$/i.test(entry.name) || /^ts_errors.*\.txt$/i.test(entry.name)) {
+    if (/\.(png|pdf|db|sqlite|sqlite3)$/i.test(entry.name) || /^ts_errors.*\.txt$/i.test(entry.name)) {
       findings.push({
         file: `${label}/${entry.name}`,
         ruleId: 'PROHIBITED_ROOT_ARTIFACT',
-        description: 'Prohibited root screenshot, SQLite DB, or compiler log artifact',
+        description: 'Prohibited root screenshot, PDF, SQLite DB, or compiler log artifact',
+        sample: entry.name,
+      });
+    }
+  }
+}
+
+function checkSubdirBinaryArtifacts(dir, baseDir, findings) {
+  if (!fs.existsSync(dir)) return;
+  const entries = fs.readdirSync(dir, { withFileTypes: true });
+  for (const entry of entries) {
+    if (IGNORED_DIRS.has(entry.name)) continue;
+    const fullPath = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      checkSubdirBinaryArtifacts(fullPath, baseDir, findings);
+    } else if (/\.(pdf|db|sqlite|sqlite3)$/i.test(entry.name)) {
+      const rel = path.relative(baseDir, fullPath);
+      findings.push({
+        file: rel,
+        ruleId: 'PROHIBITED_BUNDLED_BINARY_OR_DB',
+        description: 'Prohibited bundled reference PDF or SQLite database in repository tree',
         sample: entry.name,
       });
     }
@@ -101,7 +121,7 @@ function checkRootArtifacts(dir, label, findings) {
 }
 
 function runAudit() {
-  console.log('\x1b[1m\x1b[36m=== CLEAN-ROOM DATA HYGIENE & SECRET LEAK GATE v3 (CROSS-REPO ZERO-EXEMPTION QAR1) ===\x1b[0m\n');
+  console.log('\x1b[1m\x1b[36m=== CLEAN-ROOM DATA HYGIENE & SECRET LEAK GATE v5 (CROSS-REPO ZERO-EXEMPTION QAR1) ===\x1b[0m\n');
   const files = [...walkFiles(rootDir), ...walkFiles(backendDir)];
   const findings = [];
 
@@ -124,6 +144,8 @@ function runAudit() {
 
   checkRootArtifacts(rootDir, '.', findings);
   checkRootArtifacts(backendDir, '../backend', findings);
+  checkSubdirBinaryArtifacts(rootDir, rootDir, findings);
+  checkSubdirBinaryArtifacts(backendDir, rootDir, findings);
 
   // Verify .gitignore protections
   const gitignorePath = path.join(rootDir, '.gitignore');

@@ -27,9 +27,14 @@ if str(BACKEND_ROOT) not in sys.path:
 
 from fastapi.testclient import TestClient
 from main import app
-from db.license_db import init_db
+from db.license_db import init_db, pop_pending_sync, hash_key
 from models.coin_models import TableRow, TableGoals, EntryType
 from services.coin_metrics_engine import compute_metrics
+from services.context_builder import (
+    build_category_summaries,
+    build_ai_scenario_context,
+    build_weekly_performance_context,
+)
 from routers.public_api_router import TABLE_IN_MEMORY_STORAGE
 
 init_db()
@@ -365,6 +370,211 @@ def test_sit06_export_json_vs_download_and_signed_numeric_formula_preservation()
     assert exp_raw.text.startswith("## COIN_BACKUP_V2 ##")
 
 
+def test_sit07_semicolon_csv_ingestion_and_analysis_context_parity():
+    """SIT-V5-02 / SIT-PY-09: Semicolon-delimited CSV preset from APIManagementTester must be parsed by /spreadsheet/append and /analysis-context."""
+    gen_res = client.post(
+        "/api/v1/api-keys/generate",
+        json={"table_id": "tbl_sit07_semi_csv", "permissions": "read:write", "ttl_days": 1},
+    )
+    assert gen_res.status_code == 200
+    api_key = gen_res.json()["apiKey"]
+    headers = {"X-Spreadsheet-Key": api_key}
+
+    preset_csv = (
+        "Data;Valor;Descrição;Tipo;Categoria;Tags;ID_Externo\n"
+        "2026-06-16;2800.00;Consultoria Estratégica via CSV;revenue;Consultoria;csv,api;csv_001\n"
+        "2026-06-17;-320.00;Licença Software Anual;expense;Tecnologia;saas,anual;csv_002"
+    )
+
+    app_res = client.post(
+        "/api/v1/public/spreadsheet/append",
+        headers=headers,
+        json={"mode": "merge", "csvContent": preset_csv},
+    )
+    assert app_res.status_code == 200
+    app_data = app_res.json()
+    assert app_data["insertedCount"] == 2
+    assert app_data["totalCount"] == 2
+    assert "Consultoria Estratégica via CSV" in app_data["csvContent"]
+    assert "csv_001" in app_data["csvContent"]
+    assert "csv_002" in app_data["csvContent"]
+
+    sum_res = client.get("/api/v1/public/summary", headers=headers)
+    assert sum_res.status_code == 200
+    sum_data = sum_res.json()
+    assert sum_data["total_income"] == 2800.0
+    assert sum_data["total_expense"] == 320.0
+    assert sum_data["net_balance"] == 2480.0
+
+
+def test_sit08_offline_sync_queue_monotonic_ids_without_collision():
+    """SIT-V5-03 / SIT-PY-10: Multiple consecutive offline /spreadsheet/append batches without externalId must generate monotonic tx_api_0001..N IDs in /sync/pending."""
+    gen_res = client.post(
+        "/api/v1/api-keys/generate",
+        json={"table_id": "tbl_sit08_monotonic_queue", "permissions": "read:write", "ttl_days": 1},
+    )
+    assert gen_res.status_code == 200
+    api_key = gen_res.json()["apiKey"]
+    headers = {"X-Spreadsheet-Key": api_key}
+
+    # Batch 1 without externalId (2 rows -> tx_api_0001, tx_api_0002)
+    b1 = client.post(
+        "/api/v1/public/spreadsheet/append",
+        headers=headers,
+        json={
+            "mode": "merge",
+            "transactions": [
+                {"date": "2026-10-01", "value": 1000.0, "description": "Offline Batch 1A", "entryType": "revenue"},
+                {"date": "2026-10-02", "value": -200.0, "description": "Offline Batch 1B", "entryType": "expense"},
+            ],
+        },
+    )
+    assert b1.status_code == 200
+
+    # Batch 2 without externalId (2 rows -> must be tx_api_0003, tx_api_0004, NOT tx_api_0001!)
+    b2 = client.post(
+        "/api/v1/public/spreadsheet/append",
+        headers=headers,
+        json={
+            "mode": "merge",
+            "transactions": [
+                {"date": "2026-10-03", "value": 1500.0, "description": "Offline Batch 2A", "entryType": "revenue"},
+                {"date": "2026-10-04", "value": -300.0, "description": "Offline Batch 2B", "entryType": "expense"},
+            ],
+        },
+    )
+    assert b2.status_code == 200
+
+    sync_res = client.get("/api/v1/public/sync/pending", headers=headers)
+    assert sync_res.status_code == 200
+    sync_data = sync_res.json()
+    assert sync_data["count"] == 2
+    batch1_ids = [r["id"] for r in sync_data["pending_events"][0]["rows"]]
+    batch2_ids = [r["id"] for r in sync_data["pending_events"][1]["rows"]]
+    assert batch1_ids == ["tx_api_0001", "tx_api_0002"]
+    assert batch2_ids == ["tx_api_0003", "tx_api_0004"]
+
+
+def test_sit09_kill_switch_purges_pending_sync_queue():
+    """SIT-V5-04 / SIT-PY-11: Revoking an API key via Kill-Switch must purge orphaned events in pending_sync_queue."""
+    gen_res = client.post(
+        "/api/v1/api-keys/generate",
+        json={"table_id": "tbl_sit09_kill_queue", "permissions": "read:write", "ttl_days": 1},
+    )
+    assert gen_res.status_code == 200
+    api_key = gen_res.json()["apiKey"]
+    headers = {"X-Spreadsheet-Key": api_key}
+
+    app_res = client.post(
+        "/api/v1/public/spreadsheet/append",
+        headers=headers,
+        json={
+            "mode": "merge",
+            "transactions": [{"date": "2026-10-10", "value": 900.0, "description": "Orphan Event Before Revoke"}],
+        },
+    )
+    assert app_res.status_code == 200
+
+    # Trigger Kill-Switch
+    rev_res = client.post(
+        "/api/v1/api-keys/revoke",
+        headers=headers,
+        json={"tableId": "tbl_sit09_kill_queue", "apiKey": api_key},
+    )
+    assert rev_res.status_code == 200
+
+    # Verify SQLite pending_sync_queue was purged for tbl_sit09_kill_queue
+    remaining_events = pop_pending_sync(hash_key(api_key))
+    assert remaining_events == []
+
+
+def test_sit10_zero_value_period_waivers_parity():
+    """QAR1-V5-04 / SIT-PY-12: Zero-value period waivers (value=0 with periodStart/periodEnd) must credit global_goal_balance and total_waiver_credit."""
+    goals = TableGoals(dailyGoals={2026: 200.0}, weeklyGoals={2026: 1400.0}, annualCosts={2026: 24000.0})
+    rows_without_waiver = [
+        TableRow(id="r1", date="2026-10-01", value=1400.0, entryType=EntryType.REVENUE),
+    ]
+    rows_with_period_waiver = [
+        TableRow(id="r1", date="2026-10-01", value=1400.0, entryType=EntryType.REVENUE),
+        TableRow(
+            id="w1",
+            date="2026-10-08",
+            value=0.0,
+            entryType=EntryType.WAIVER,
+            periodStart="2026-10-08",
+            periodEnd="2026-10-14",
+            description="Abono Ferias 7 Dias",
+        ),
+    ]
+
+    m_no_w = compute_metrics(rows_without_waiver, goals, as_of_date="2026-10-14")
+    m_with_w = compute_metrics(rows_with_period_waiver, goals, as_of_date="2026-10-14")
+
+    # 7 days of waiver at weeklyGoal=1400 (200/day) = 1400.0 BRL credit
+    assert m_with_w.total_waiver_credit == 1400.0
+    assert m_with_w.waived_weeks == 1.0
+    assert m_with_w.global_goal_balance == m_no_w.global_goal_balance + 1400.0
+
+
+def test_sit11_zero_revenue_expense_only_and_empty_active_rows_parity():
+    """QAR1-V5-04 / SIT-PY-13: Tables with zero revenue (expenses only) or partner-only rows must preserve net_balance = -total_expenses and partner metrics."""
+    goals = TableGoals(dailyGoals={2026: 200.0}, weeklyGoals={2026: 1400.0}, annualCosts={2026: 24000.0})
+
+    expense_and_partner_rows = [
+        TableRow(id="e1", date="2026-10-05", value=-650.0, entryType=EntryType.EXPENSE),
+        TableRow(id="p1", date="2026-10-06", value=2000.0, entryType=EntryType.PARTNER_IN),
+        TableRow(id="p2", date="2026-10-07", value=-350.0, entryType=EntryType.PARTNER_OUT),
+    ]
+    m_exp = compute_metrics(expense_and_partner_rows, goals, as_of_date="2026-10-10")
+    assert m_exp.gross_total == 0.0
+    assert m_exp.total_expenses == 650.0
+    assert m_exp.net_balance == -650.0
+    assert m_exp.total_partner_in == 2000.0
+    assert m_exp.total_partner_out == 350.0
+    assert m_exp.gross_with_partner == 2000.0
+    assert m_exp.expenses_with_partner == 1000.0
+    assert m_exp.net_with_partner == 1000.0
+
+    partner_only_rows = [
+        TableRow(id="p1", date="2026-10-06", value=1500.0, entryType=EntryType.PARTNER_IN),
+    ]
+    m_part = compute_metrics(partner_only_rows, goals, as_of_date="2026-10-10")
+    assert m_part.total_partner_in == 1500.0
+    assert m_part.gross_with_partner == 1500.0
+    assert m_part.net_with_partner == 1500.0
+
+
+def test_sit12_context_builder_negative_expenses_and_unresolved_firewall():
+    """SIT-V5-05 / SIT-PY-14: context_builder must normalize negative expenses for category percentages and exclude EntryType.UNRESOLVED."""
+    from models.coin_models import AIAnalystPayload
+
+    goals = TableGoals(dailyGoals={2026: 200.0}, weeklyGoals={2026: 1400.0}, annualCosts={2026: 24000.0})
+    rows = [
+        TableRow(id="r1", date="2026-10-01", value=3000.0, entryType=EntryType.REVENUE, description="Consultoria", generatedBy="predicted"),
+        TableRow(id="e1", date="2026-10-02", value=-600.0, entryType=EntryType.EXPENSE, description="Infra Cloud", generatedBy="predicted"),
+        TableRow(id="e2", date="2026-10-03", value=-400.0, entryType=EntryType.EXPENSE, description="SaaS", generatedBy="predicted"),
+        TableRow(id="u1", date="2026-10-04", value=99999.0, entryType=EntryType.UNRESOLVED, description="Suspeito", generatedBy="predicted"),
+    ]
+
+    cat_summary = build_category_summaries(rows)
+    assert "INFRA CLOUD (1x): Total R$ 600.00" in cat_summary
+    assert "60.0%" in cat_summary
+    assert "SAAS (1x): Total R$ 400.00" in cat_summary
+    assert "40.0%" in cat_summary
+    assert "SUSPEITO" not in cat_summary
+    assert "Suspeito" not in cat_summary
+
+    scenario_ctx = build_ai_scenario_context(rows)
+    assert "Receita R$ 3.000 | Custos: R$ 1.000 | Saldo: R$ 2.000" in scenario_ctx
+    assert "99.999" not in scenario_ctx
+
+    metrics = compute_metrics(rows, goals, as_of_date="2026-10-10")
+    payload = AIAnalystPayload(rows=rows, goals=goals, as_of_date="2026-10-10", user_prompt="Auditoria Clean-Room")
+    weekly_ctx = build_weekly_performance_context(payload, metrics)
+    assert "99,999" not in weekly_ctx
+    assert "99.999" not in weekly_ctx
+
+
 if __name__ == "__main__":
     suite = [
         test_sit01_agent_prompt_profiles_and_openapi,
@@ -373,8 +583,14 @@ if __name__ == "__main__":
         test_sit04_csv_formula_injection_neutralization,
         test_sit05_permission_matrix_and_kill_switch_revocation,
         test_sit06_export_json_vs_download_and_signed_numeric_formula_preservation,
+        test_sit07_semicolon_csv_ingestion_and_analysis_context_parity,
+        test_sit08_offline_sync_queue_monotonic_ids_without_collision,
+        test_sit09_kill_switch_purges_pending_sync_queue,
+        test_sit10_zero_value_period_waivers_parity,
+        test_sit11_zero_revenue_expense_only_and_empty_active_rows_parity,
+        test_sit12_context_builder_negative_expenses_and_unresolved_firewall,
     ]
-    print("\n=== QAR1 & SIT BACKEND FASTAPI TESTCLIENT SUITE ===")
+    print("\n=== QAR1 & SIT BACKEND FASTAPI TESTCLIENT SUITE (v5) ===")
     for fn in suite:
         fn()
         print(f"  [OK] {fn.__name__} PASSED")
