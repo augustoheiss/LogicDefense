@@ -381,6 +381,8 @@ export interface CoinTable {
   id: string;
   name: string;
   description?: string;
+  apiKey?: string;
+  lastEventSeq?: number;
   createdAt: string;   // ISO timestamp
   updatedAt: string;   // ISO timestamp
   rows: TableRow[];
@@ -395,6 +397,7 @@ export interface CoinTable {
 
 export type DB = {
   tables: CoinTable[];
+  activeTableIndex?: number;
   aiCostCurrentMonth?: number;
   aiCostLastReset?: string;
   isPrivacyMode?: boolean;

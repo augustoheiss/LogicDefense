@@ -188,8 +188,14 @@ def neutralize_csv_formula(val: str) -> str:
     if not val:
         return ""
     trimmed = val.lstrip()
-    if trimmed and trimmed[0] in ("=", "+", "-", "@", "\t", "\r"):
+    if not trimmed:
+        return val
+    first_char = trimmed[0]
+    if first_char in ("=", "@", "\t", "\r"):
         return f"'{val}"
+    if first_char in ("+", "-"):
+        if not re.match(r"^[+-]?\d+([.,]\d+)?$", trimmed):
+            return f"'{val}"
     return val
 
 
@@ -358,12 +364,12 @@ async def append_to_spreadsheet(
     ]
 
     for idx, item in enumerate(merged_items):
-        tx_id = neutralize_csv_formula(item.external_id or f"tx_api_{idx+1:04d}")
+        tx_id = neutralize_csv_formula(re.sub(r"[\r\n,]+", "_", item.external_id or f"tx_api_{idx+1:04d}"))
         entry_type = item.entry_type or ("expense" if item.value < 0 else "revenue")
-        cat = neutralize_csv_formula((item.category or "Geral").replace(",", " "))
-        tag = neutralize_csv_formula((item.tags or "").replace(",", " "))
-        desc = neutralize_csv_formula((item.description or "Transação API").replace(",", " "))
-        ext_id = neutralize_csv_formula(item.external_id or tx_id)
+        cat = neutralize_csv_formula(re.sub(r"[\r\n,]+", " ", item.category or "Geral"))
+        tag = neutralize_csv_formula(re.sub(r"[\r\n,]+", " ", item.tags or ""))
+        desc = neutralize_csv_formula(re.sub(r"[\r\n,]+", " ", item.description or "Transação API"))
+        ext_id = neutralize_csv_formula(re.sub(r"[\r\n,]+", "_", item.external_id or tx_id))
 
         csv_lines.append(f"{tx_id},{item.date},{abs(item.value):.2f},{desc},{entry_type},{cat},{tag},{ext_id}")
 
@@ -907,8 +913,18 @@ async def public_ai_analyst(
         )
 
     stored = TABLE_IN_MEMORY_STORAGE.get(table_id, {})
-    stored_items: List[AppendTransactionItem] = stored.get("items", [])
+    stored_items: List[AppendTransactionItem] = list(stored.get("items", []))
     goals = stored.get("goals", TableGoals())
+
+    if payload.start_date or payload.end_date:
+        filtered_items = []
+        for it in stored_items:
+            if payload.start_date and it.date < payload.start_date:
+                continue
+            if payload.end_date and it.date > payload.end_date:
+                continue
+            filtered_items.append(it)
+        stored_items = filtered_items
 
     rows: List[TableRow] = []
     for idx, it in enumerate(stored_items):

@@ -23,6 +23,7 @@ import {
   resolveGoalForYear,
 } from './dateUtils';
 import { buildAIScenarioContext } from './aiContextBuilder';
+import { neutralizeCsvFormula } from '../utils/securitySanitizer';
 import type {
   TableRow,
   TableGoals,
@@ -222,6 +223,8 @@ export function sanitizeRowsForManualSynthesis(
       category: cat,
       description: `[${cat.toUpperCase()}]`,
       tags: undefined,
+      ticker: undefined,
+      clonedFrom: undefined,
       metadataJson: undefined,
       customValues: undefined,
     };
@@ -1415,8 +1418,8 @@ function buildApiRoutesBundleJson(
     'Data;Valor;Descrição;Tipo;Categoria;Início;Fim',
     ...analysis.effectiveRows.map((r) => {
       const signed = r.entryType === 'expense' || r.entryType === 'partner_out' ? -Math.abs(r.value) : r.value;
-      const desc = (r.description || '').replace(/;/g, ',').replace(/\r?\n/g, ' ');
-      const cat = normalizeCategoryName(r, Boolean(options.anonymizeDescriptions));
+      const desc = neutralizeCsvFormula((r.description || '').replace(/;/g, ',').replace(/\r?\n/g, ' '));
+      const cat = neutralizeCsvFormula(normalizeCategoryName(r, Boolean(options.anonymizeDescriptions)));
       return `${r.date};${signed.toFixed(2)};${desc};${r.entryType || 'revenue'};${cat};${r.periodStart || ''};${r.periodEnd || ''}`;
     }),
   ];

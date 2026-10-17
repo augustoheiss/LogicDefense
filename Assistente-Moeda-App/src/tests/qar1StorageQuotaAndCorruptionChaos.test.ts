@@ -160,4 +160,69 @@ describe('QAR1 Storage Quota, Rolling Backup & Quarantine Chaos Suite (QAR1-STOR
     setUIViewModeSync('cards');
     expect(getUIViewModeSync()).toBe('cards');
   });
+
+  it('QAR1-STOR-05 (CR-V4-06): loadDB no mobile deve expurgar chaves não verificadas no AsyncStorage via enforceCleanRoomAsyncStorageOnBoot', async () => {
+    await clearDB();
+    await AsyncStorage.removeItem('app:clean_room_migration_v2');
+    await AsyncStorage.setItem('coin_active_api_key', 'legacy_mobile_contaminated_token');
+    await AsyncStorage.setItem('coin_api_key_tbl_m1', 'am_sheet_live_local');
+
+    await loadDB();
+
+    const purgedActive = await AsyncStorage.getItem('coin_active_api_key');
+    const preservedLocal = await AsyncStorage.getItem('coin_api_key_tbl_m1');
+    const migFlag = await AsyncStorage.getItem('app:clean_room_migration_v2');
+
+    expect(purgedActive).toBeNull();
+    expect(preservedLocal).toBe('am_sheet_live_local');
+    expect(migFlag).toBe('done');
+  });
+
+  it('QAR1-STOR-06 (QAR1-DEF-03): saveDB sob falha simultânea em BACKUP_KEY e STORAGE_KEY deve preservar o snapshot anterior', async () => {
+    await clearDB();
+    await saveDB(sampleDB);
+
+    const origSetItem = AsyncStorage.setItem;
+    AsyncStorage.setItem = async (key: string, value: string) => {
+      if ((key === 'coin_assistant_db' || key === 'coin_assistant_db.bak') && value.length > 5_000) {
+        const err = new Error('QuotaExceededError: Storage full');
+        err.name = 'QuotaExceededError';
+        throw err;
+      }
+      return origSetItem(key, value);
+    };
+
+    try {
+      await saveDB({
+        ...sampleDB,
+        tables: [{ ...sampleDB.tables[0], description: 'Y'.repeat(15_000) }],
+      });
+
+      const intact = await loadDB();
+      expect(intact).toBeDefined();
+      expect(intact?.tables[0].description).toBe('Snapshot íntegro');
+    } finally {
+      AsyncStorage.setItem = origSetItem;
+    }
+  });
+
+  it('QAR1-SQL-01 (QAR1-DEF-05): Migrações SQL de profiles devem declarar ALTER TABLE ADD COLUMN IF NOT EXISTS de forma idempotente', async () => {
+    const proc = (globalThis as any).process;
+    const fs = proc.getBuiltinModule('fs');
+    const path = proc.getBuiltinModule('path');
+    const triggerSql = fs.readFileSync(
+      path.resolve(proc.cwd(), 'supabase/migrations/20260721_auth_trigger.sql'),
+      'utf8'
+    );
+    const schemaSql = fs.readFileSync(
+      path.resolve(proc.cwd(), 'supabase/migrations/20260721_master_sectors_schema.sql'),
+      'utf8'
+    );
+
+    expect(triggerSql).toContain('ADD COLUMN IF NOT EXISTS email');
+    expect(triggerSql).toContain('ADD COLUMN IF NOT EXISTS active_sectors');
+    expect(schemaSql).toContain('ADD COLUMN IF NOT EXISTS email');
+    expect(schemaSql).toContain('ADD COLUMN IF NOT EXISTS active_sectors');
+  });
 });
+

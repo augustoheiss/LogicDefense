@@ -125,7 +125,7 @@ export function buildFinancialContext(
 export function sanitizeRowsForAI(rows: TableRow[], allowRaw = false): TableRow[] {
   if (allowRaw) return rows;
 
-  // Aggregated & anonymized mode: strip specific personal notes/payees
+  // Aggregated & anonymized mode: strip specific personal notes/payees/tags
   return rows.map(r => ({
     id: r.id,
     date: r.date,
@@ -133,7 +133,7 @@ export function sanitizeRowsForAI(rows: TableRow[], allowRaw = false): TableRow[
     entryType: r.entryType,
     category: r.category || 'Geral',
     description: r.category ? `[${r.category}]` : (r.entryType === 'revenue' ? 'Receita' : 'Despesa'),
-    tags: r.tags,
+    tags: '',
   }));
 }
 
@@ -210,7 +210,7 @@ export async function sendChatMessage(
     const content = data.content || data.analysis || 'Sem resposta';
     const tokensUsed = data.tokens_used !== undefined ? Number(data.tokens_used) : (data.tokensUsed !== undefined ? Number(data.tokensUsed) : 0);
 
-    const promptTokens = Math.ceil((message.length + JSON.stringify(rows).length + JSON.stringify(goals).length) / 4);
+    const promptTokens = Math.ceil((message.length + JSON.stringify(sanitizedRows).length + JSON.stringify(goals).length) / 4);
     const completionTokens = Math.ceil(content.length / 4);
 
     return { 

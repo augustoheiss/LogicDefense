@@ -39,6 +39,7 @@ export function useLocalSync() {
   const [apiKey, setApiKeyState] = useState<string | null>(null);
 
   const eventSourceRef = useRef<any>(null);
+  const hasDrainedPendingRef = useRef<boolean>(false);
 
   // Helper: Read API key from localStorage for a specific tableId
   const getStoredApiKey = useCallback((tid?: string): string | null => {
@@ -132,6 +133,7 @@ export function useLocalSync() {
 
   // Reactive state reset & reload on tableId change
   useEffect(() => {
+    hasDrainedPendingRef.current = false;
     if (!tableId) {
       setAuditLogs([]);
       setLastSeqNumber(0);
@@ -153,6 +155,7 @@ export function useLocalSync() {
   const forceSyncPending = useCallback(async () => {
     const activeKey = getStoredApiKey(tableId) || apiKey;
     if (!activeKey || !tableId) {
+      hasDrainedPendingRef.current = true;
       setStatus('disconnected');
       return;
     }
@@ -182,7 +185,11 @@ export function useLocalSync() {
               mode: evt.mode || 'merge',
             });
 
-            const totalValue = evt.rows.reduce((acc: number, r: TableRow) => acc + (Number(r.value) || 0), 0);
+            const totalValue = evt.rows.reduce((acc: number, r: TableRow) => {
+              const rawVal = Math.abs(Number(r.value) || 0);
+              const signed = r.entryType === 'expense' || r.entryType === 'partner_out' ? -rawVal : rawVal;
+              return acc + signed;
+            }, 0);
             const formattedVal = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalValue);
 
             pushAuditLog({
@@ -207,6 +214,8 @@ export function useLocalSync() {
     } catch (err) {
       console.warn('Failed to drain pending sync queue:', err);
       setStatus('error');
+    } finally {
+      hasDrainedPendingRef.current = true;
     }
   }, [apiKey, getStoredApiKey, lastSeqNumber, db, pushAuditLog, tableId, saveLastSeqNumber]);
 
@@ -251,8 +260,9 @@ export function useLocalSync() {
     }
   }, [getStoredApiKey, tableId, apiKey, activeTable?.rows]);
 
-  // Push snapshot whenever activeTable rows change or table is loaded
+  // Push snapshot whenever activeTable rows change, AFTER initial offline queue drain completes (SIT-DEF-04)
   useEffect(() => {
+    if (!hasDrainedPendingRef.current) return;
     if (activeTable?.rows && activeTable.rows.length > 0) {
       pushActiveTableSnapshot();
     }
@@ -273,9 +283,9 @@ export function useLocalSync() {
         if (detail.lastEventSeq !== undefined) {
           saveLastSeqNumber(detail.lastEventSeq, targetTableId);
         }
-        setTimeout(() => {
-          forceSyncPending();
-          pushActiveTableSnapshot();
+        setTimeout(async () => {
+          await forceSyncPending();
+          await pushActiveTableSnapshot();
         }, 100);
       }
     };
@@ -290,6 +300,7 @@ export function useLocalSync() {
   useEffect(() => {
     const activeKey = getStoredApiKey(tableId);
     if (Platform.OS !== 'web' || typeof window === 'undefined' || !activeKey || !tableId || !window.EventSource) {
+      hasDrainedPendingRef.current = true;
       setStatus('disconnected');
       return;
     }
@@ -325,7 +336,11 @@ export function useLocalSync() {
             saveLastSeqNumber(payload.seqNumber, tableId);
           }
 
-          const totalValue = payload.rows.reduce((acc: number, r: TableRow) => acc + (Number(r.value) || 0), 0);
+          const totalValue = payload.rows.reduce((acc: number, r: TableRow) => {
+            const rawVal = Math.abs(Number(r.value) || 0);
+            const signed = r.entryType === 'expense' || r.entryType === 'partner_out' ? -rawVal : rawVal;
+            return acc + signed;
+          }, 0);
           const formattedVal = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalValue);
 
           pushAuditLog({
@@ -346,13 +361,15 @@ export function useLocalSync() {
       setStatus('disconnected');
     };
 
-    // Initial queue drain on connection
-    forceSyncPending();
+    // Initial queue drain on connection, followed by initial snapshot push
+    forceSyncPending().then(() => {
+      pushActiveTableSnapshot();
+    });
 
     return () => {
       es.close();
     };
-  }, [tableId, getStoredApiKey, forceSyncPending, db, pushAuditLog, saveLastSeqNumber, lastSeqNumber]);
+  }, [tableId, getStoredApiKey, forceSyncPending, pushActiveTableSnapshot, db, pushAuditLog, saveLastSeqNumber, lastSeqNumber]);
 
   // 3. Safe undo audit log event with strict tableId validation
   const undoAuditLog = useCallback(async (logId: string) => {

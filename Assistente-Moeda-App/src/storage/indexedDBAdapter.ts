@@ -30,6 +30,7 @@ interface TableMetaRecord {
 
 interface GlobalSettingsRecord {
   id: '__global_settings__';
+  activeTableIndex?: number;
   aiCostCurrentMonth?: number;
   aiCostLastReset?: string;
   isPrivacyMode?: boolean;
@@ -93,23 +94,26 @@ function openDatabase(): Promise<IDBDatabase> {
 
 /**
  * Reads the entire DB from IndexedDB.
- * If IndexedDB is empty and legacy localStorage has 'coin_assistant_db',
- * automatically migrates it into IndexedDB.
+ * If primary stores (tables_meta/rows_store) are empty or damaged, attempts automatic
+ * recovery from snapshots_store ('latest_rolling_backup') before falling back to legacy localStorage.
  */
 export async function loadDBFromIndexedDB(): Promise<DB | null> {
   const idb = await openDatabase();
 
   const existing = await new Promise<DB | null>((resolve, reject) => {
-    const tx = idb.transaction([STORE_META, STORE_ROWS], 'readonly');
+    const tx = idb.transaction([STORE_META, STORE_ROWS, STORE_SNAPSHOTS], 'readonly');
     const metaStore = tx.objectStore(STORE_META);
     const rowsStore = tx.objectStore(STORE_ROWS);
+    const snapshotsStore = tx.objectStore(STORE_SNAPSHOTS);
 
     const metaReq = metaStore.getAll();
     const rowsReq = rowsStore.getAll();
+    const snapReq = snapshotsStore.get('latest_rolling_backup');
 
     tx.oncomplete = () => {
       const allMeta = metaReq.result || [];
       const allRows = rowsReq.result || [];
+      const snapshotRec = snapReq.result as { db?: DB } | undefined;
 
       const tableRecords = allMeta.filter(
         (m: any): m is TableMetaRecord => m && m.id !== '__global_settings__' && m.tableWithoutRows
@@ -118,9 +122,18 @@ export async function loadDBFromIndexedDB(): Promise<DB | null> {
         (m: any): m is GlobalSettingsRecord => m && m.id === '__global_settings__'
       );
 
-      if (tableRecords.length === 0 && !settings) {
-        resolve(null);
-        return;
+      if (tableRecords.length === 0) {
+        if (snapshotRec && snapshotRec.db && Array.isArray(snapshotRec.db.tables) && snapshotRec.db.tables.length > 0) {
+          resolve({
+            ...snapshotRec.db,
+            activeTableIndex: snapshotRec.db.activeTableIndex ?? 0,
+          });
+          return;
+        }
+        if (!settings) {
+          resolve(null);
+          return;
+        }
       }
 
       const rowsByTable = new Map<string, TableRow[]>();
@@ -143,8 +156,16 @@ export async function loadDBFromIndexedDB(): Promise<DB | null> {
         };
       });
 
+      const resolvedIdx =
+        typeof settings?.activeTableIndex === 'number' &&
+        settings.activeTableIndex >= 0 &&
+        (tables.length === 0 || settings.activeTableIndex < tables.length)
+          ? settings.activeTableIndex
+          : 0;
+
       resolve({
         tables,
+        activeTableIndex: resolvedIdx,
         aiCostCurrentMonth: settings?.aiCostCurrentMonth ?? 0,
         aiCostLastReset: settings?.aiCostLastReset ?? '',
         isPrivacyMode: settings?.isPrivacyMode ?? false,
@@ -201,6 +222,7 @@ export function saveDBToIndexedDB(db: DB): Promise<void> {
 
         const settingsRecord: GlobalSettingsRecord = {
           id: '__global_settings__',
+          activeTableIndex: db.activeTableIndex ?? 0,
           aiCostCurrentMonth: db.aiCostCurrentMonth ?? 0,
           aiCostLastReset: db.aiCostLastReset ?? '',
           isPrivacyMode: db.isPrivacyMode ?? false,
@@ -234,7 +256,10 @@ export function saveDBToIndexedDB(db: DB): Promise<void> {
           id: 'latest_rolling_backup',
           savedAt: new Date().toISOString(),
           tableCount: tables.length,
-          db,
+          db: {
+            ...db,
+            activeTableIndex: db.activeTableIndex ?? 0,
+          },
         });
 
         tx.oncomplete = () => resolve();
@@ -249,13 +274,16 @@ export function saveDBToIndexedDB(db: DB): Promise<void> {
             tableCount: (db.tables || []).length,
             totalRows: (db.tables || []).reduce((acc, t) => acc + (t.rows?.length || 0), 0),
             activeTableIds: (db.tables || []).filter((t) => !t.isDeleted).map((t) => t.id),
+            activeTableIndex: db.activeTableIndex ?? 0,
             isPrivacyMode: !!db.isPrivacyMode,
           };
           window.localStorage.setItem(L1_SUMMARY_KEY, JSON.stringify(l1Summary));
-          // Keep legacy key mirrored only if payload is small (< 2MB) for backward-compat tools
+          // Keep legacy key mirrored only if payload is small (< 2MB); otherwise purge stale copy
           const serialized = JSON.stringify(db);
           if (serialized.length < 2_000_000) {
             window.localStorage.setItem(LEGACY_STORAGE_KEY, serialized);
+          } else {
+            window.localStorage.removeItem(LEGACY_STORAGE_KEY);
           }
         } catch {
           // If localStorage is full, IndexedDB already succeeded transactionally!

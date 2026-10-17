@@ -129,10 +129,24 @@ export async function exportSpreadsheetCsv(
       };
     }
 
+    let extractedCsv = text;
+    if (!download) {
+      try {
+        const parsed = JSON.parse(text);
+        if (parsed && typeof parsed.csv_content === 'string') {
+          extractedCsv = parsed.csv_content;
+        } else if (parsed && typeof parsed.csvContent === 'string') {
+          extractedCsv = parsed.csvContent;
+        }
+      } catch {
+        // Response is already raw CSV text
+      }
+    }
+
     return {
       success: true,
       status: res.status,
-      data: text,
+      data: extractedCsv,
       latencyMs,
       rawResponse: text,
     };

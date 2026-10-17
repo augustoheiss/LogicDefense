@@ -97,7 +97,7 @@ export function GranularExportModal({
   // AI-Analyst Manual Synthesis states
   const [synthFormat, setSynthFormat] = useState<ManualSynthesisFormat>('ai_analyst_full_md');
   const [synthProfile, setSynthProfile] = useState<ManualSynthesisProfile>('native');
-  const [anonymizeDescriptions, setAnonymizeDescriptions] = useState<boolean>(false);
+  const [anonymizeDescriptions, setAnonymizeDescriptions] = useState<boolean>(true);
   const [userCustomPrompt, setUserCustomPrompt] = useState<string>('');
 
   // Granular CSV states

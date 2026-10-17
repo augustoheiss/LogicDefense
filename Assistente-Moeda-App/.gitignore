@@ -60,6 +60,11 @@ playwright-report/
 test-results/
 final_page_error.png
 login_after_typing.png
+login_before_typing.png
+store_modal_processing.png
+store_modal_not_visible.png
 page_crash.png
 welcome_after_skip.png
 welcome_screen.png
+/*.png
+ts_errors*.txt

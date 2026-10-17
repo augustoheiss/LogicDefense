@@ -14,7 +14,10 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { DB } from '../core/types';
-import { enforceCleanRoomStorageOnBoot } from '../utils/securitySanitizer';
+import {
+  enforceCleanRoomStorageOnBoot,
+  enforceCleanRoomAsyncStorageOnBoot,
+} from '../utils/securitySanitizer';
 import {
   isIndexedDBAvailable,
   loadDBFromIndexedDB,
@@ -38,6 +41,7 @@ let _nativeViewMode: 'cards' | 'grid' | null = null;
  */
 export async function loadDB(): Promise<DB | null> {
   enforceCleanRoomStorageOnBoot();
+  await enforceCleanRoomAsyncStorageOnBoot(AsyncStorage);
   // Hydrate native synchronous preference cache on mobile
   if (typeof window === 'undefined' || !window.localStorage) {
     try {
@@ -103,7 +107,7 @@ export async function loadDB(): Promise<DB | null> {
 
 /**
  * Save the full DB to IndexedDB (Web) and AsyncStorage (Native / fallback).
- * Protects against QuotaExceededError on Web localStorage.
+ * Protects against QuotaExceededError on Web localStorage / AsyncStorage.
  */
 export async function saveDB(db: DB): Promise<void> {
   if (isIndexedDBAvailable()) {
@@ -116,10 +120,11 @@ export async function saveDB(db: DB): Promise<void> {
   }
 
   const serialized = JSON.stringify(db);
+  let previousSnapshot: string | null = null;
   try {
-    const current = await AsyncStorage.getItem(STORAGE_KEY);
-    if (current && current.length > 10) {
-      await AsyncStorage.setItem(BACKUP_KEY, current);
+    previousSnapshot = await AsyncStorage.getItem(STORAGE_KEY);
+    if (previousSnapshot && previousSnapshot.length > 10) {
+      await AsyncStorage.setItem(BACKUP_KEY, previousSnapshot);
     }
   } catch (bakErr) {
     console.warn('Could not rotate rolling backup:', bakErr);
@@ -129,6 +134,17 @@ export async function saveDB(db: DB): Promise<void> {
     await AsyncStorage.setItem(STORAGE_KEY, serialized);
   } catch (writeErr) {
     console.error('Failed to write DB to AsyncStorage:', writeErr);
+    // Ensure previous valid snapshot remains intact if primary key was clobbered during quota pressure
+    if (previousSnapshot && previousSnapshot.length > 10) {
+      try {
+        const checkAfterFail = await AsyncStorage.getItem(STORAGE_KEY);
+        if (!checkAfterFail) {
+          await AsyncStorage.setItem(STORAGE_KEY, previousSnapshot);
+        }
+      } catch {
+        // ignore secondary recovery error
+      }
+    }
   }
 }
 

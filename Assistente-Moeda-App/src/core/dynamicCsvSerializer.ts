@@ -36,15 +36,14 @@ export function serializeDynamicCSV(
   if (tableName || goals || tableId || schema || investorProfile || activeSectors || dashboardConfig || sectorParams) {
     const meta: string[] = ['## COIN ASSISTANT BACKUP v3 ##'];
     if (tableId) {
-      meta.push(`table_id,${tableId}`);
+      meta.push(`table_id,${neutralizeCsvFormula(tableId.replace(/[\r\n,]/g, '_'))}`);
     }
 
-    // Security Gate (SEC-03): Never exfiltrate localStorage live API keys into shared CSV files
-    // unless explicitly requested (includeSecretApiKey === true) or an explicit non-default apiKey was passed by a test/migration caller.
-    const explicitKeyProvided = typeof apiKey === 'string' && apiKey.trim().length > 0;
+    // Security Gate (SEC-03 / CR-V4-04): Never exfiltrate live API keys into shared CSV files
+    // unless explicitly requested (includeSecretApiKey === true).
     const effectiveApiKey = redactApiKeyForExport(
       apiKey,
-      includeSecretApiKey || explicitKeyProvided
+      includeSecretApiKey
     );
     meta.push(`api_key,${effectiveApiKey}`);
 
@@ -61,10 +60,10 @@ export function serializeDynamicCSV(
     meta.push(`exported_at,${new Date().toISOString()}`);
 
     if (tableName) {
-      meta.push(`name,${neutralizeCsvFormula(tableName)}`);
+      meta.push(`name,${neutralizeCsvFormula(tableName.replace(/[\r\n,]/g, ' '))}`);
     }
     if (description) {
-      meta.push(`description,${neutralizeCsvFormula(description)}`);
+      meta.push(`description,${neutralizeCsvFormula(description.replace(/[\r\n,]/g, ' '))}`);
     }
     if (activeSectors && activeSectors.length > 0) {
       meta.push(`active_sectors,${encodeURIComponent(JSON.stringify(activeSectors))}`);
@@ -141,9 +140,10 @@ export function serializeDynamicCSV(
       meta.push('## SCHEMA_COLUMNS ##');
       meta.push('id,label,originalHeader,dataType,role,invertSign,visible');
       schema.columns.forEach((c) => {
-        const id = c.id || c.key || '';
-        const label = (c.label || c.originalHeader || id).replace(/,/g, ' ');
-        const orig = (c.originalHeader || c.label || id).replace(/,/g, ' ');
+        const rawId = c.id || c.key || '';
+        const id = neutralizeCsvFormula(rawId.replace(/[\r\n,]/g, '_'));
+        const label = neutralizeCsvFormula((c.label || c.originalHeader || rawId).replace(/[\r\n,]/g, ' '));
+        const orig = neutralizeCsvFormula((c.originalHeader || c.label || rawId).replace(/[\r\n,]/g, ' '));
         const dataType = c.dataType || 'text';
         const role = c.role || c.semanticRole || 'custom_attribute';
         const invertSign = (c.invertSign || c.transformRule?.invertSign) ? 'true' : 'false';
@@ -193,7 +193,7 @@ export function serializeDynamicCSV(
       header += ',generatedBy,clonedFrom';
     }
     if (customCols.length > 0) {
-      header += ',' + customCols.map((c) => c.key || c.id).join(',');
+      header += ',' + customCols.map((c) => neutralizeCsvFormula((c.key || c.id || '').replace(/[\r\n,]/g, '_'))).join(',');
     }
 
     const lines = rows.map((r) => {
@@ -214,9 +214,10 @@ export function serializeDynamicCSV(
         ? `"${neutralizeCsvFormula(r.category).replace(/"/g, '""')}"`
         : '"Geral"';
       const safeTags = r.tags ? `"${neutralizeCsvFormula(r.tags).replace(/"/g, '""')}"` : '""';
+      const safeMeta = neutralizeCsvFormula(mergedMetaStr).replace(/"/g, '""');
 
       const cols = [
-        r.id || '',
+        neutralizeCsvFormula(r.id || ''),
         r.date,
         r.value,
         `"${safeDesc}"`,
@@ -227,7 +228,7 @@ export function serializeDynamicCSV(
         r.periodEnd || '',
         safeCat,
         safeTags,
-        `"${mergedMetaStr.replace(/"/g, '""')}"`,
+        `"${safeMeta}"`,
       ];
 
       if (hasInvestCols) {
@@ -240,8 +241,8 @@ export function serializeDynamicCSV(
 
       if (hasGeneratedCols) {
         cols.push(
-          r.generatedBy ? `"${r.generatedBy.replace(/"/g, '""')}"` : '',
-          r.clonedFrom ? `"${r.clonedFrom.replace(/"/g, '""')}"` : ''
+          r.generatedBy ? `"${neutralizeCsvFormula(r.generatedBy).replace(/"/g, '""')}"` : '',
+          r.clonedFrom ? `"${neutralizeCsvFormula(r.clonedFrom).replace(/"/g, '""')}"` : ''
         );
       }
 
@@ -263,7 +264,7 @@ export function serializeDynamicCSV(
   const header = 'ID;Data;Tipo;Valor;Descrição;Período Início;Período Fim;Valor Mensal;Meses;Gerado Por;Categoria;Tags;Metadados';
   const lines = rows.map((r) => {
     const cols = [
-      r.id || '',
+      neutralizeCsvFormula(r.id || ''),
       r.date,
       r.entryType || 'revenue',
       r.value.toString().replace('.', ','),
@@ -272,10 +273,10 @@ export function serializeDynamicCSV(
       r.periodEnd || '',
       r.monthlyValue?.toString().replace('.', ',') || '',
       r.monthCount?.toString() || '',
-      r.generatedBy || '',
+      r.generatedBy ? neutralizeCsvFormula(r.generatedBy) : '',
       r.category ? `"${neutralizeCsvFormula(r.category).replace(/"/g, '""')}"` : '',
       r.tags ? `"${neutralizeCsvFormula(r.tags).replace(/"/g, '""')}"` : '',
-      r.metadataJson ? `"${r.metadataJson.replace(/"/g, '""')}"` : '',
+      r.metadataJson ? `"${neutralizeCsvFormula(r.metadataJson).replace(/"/g, '""')}"` : '',
     ];
     return cols.join(';');
   });
@@ -299,7 +300,8 @@ export function serializeGranularCSV(
   investorProfile?: InvestorProfileConfig,
   activeSectors?: string[],
   dashboardConfig?: DashboardConfig,
-  sectorParams?: SectorSimulationParams
+  sectorParams?: SectorSimulationParams,
+  includeSecretApiKey: boolean = false
 ): string {
   // 1. Filter rows by Scope
   let filtered = [...rows];
@@ -349,7 +351,8 @@ export function serializeGranularCSV(
       investorProfile,
       activeSectors,
       dashboardConfig,
-      sectorParams
+      sectorParams,
+      includeSecretApiKey
     );
   }
 

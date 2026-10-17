@@ -194,7 +194,11 @@ export default function SettingsScreen() {
     }
     setIsRecoveringKey(true);
     try {
-      const apiBaseUrl = process.env.EXPO_PUBLIC_API_URL || 'https://logicdefense-api.onrender.com';
+      const apiBaseUrl = (
+        process.env.EXPO_PUBLIC_AI_BACKEND_URL ||
+        process.env.EXPO_PUBLIC_API_URL ||
+        'https://ocorrencias-pdf-writer.onrender.com'
+      ).replace(/\/+$/, '');
       const response = await fetch(`${apiBaseUrl}/api/license/recover`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

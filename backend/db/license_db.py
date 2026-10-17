@@ -431,7 +431,7 @@ def get_license_by_raw_key(raw_key: str) -> dict | None:
             "id": 999999,
             "license_key": clean_k,
             "key_hash": hash_key(clean_k),
-            "email": "augustoheiss@heisslab.com.br",
+            "email": os.getenv("GODMODE_OWNER_EMAIL", "owner@example.com"),
             "tier": "godmode_owner",
             "token_balance": 999_999_999,
             "token_cap": -1,
@@ -591,7 +591,7 @@ def create_spreadsheet_api_key(
             cursor.execute("""
                 INSERT OR IGNORE INTO license_keys (license_key, key_hash, email, tier, token_balance, token_cap, expires_at, created_at, updated_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (lic_key_str, license_key_hash, "user@heisslab.com.br", tier_name, tokens, cap, "2099-12-31T23:59:59Z", now, now))
+            """, (lic_key_str, license_key_hash, "user@example.com", tier_name, tokens, cap, "2099-12-31T23:59:59Z", now, now))
 
         # Key Rotation Rule: Deactivate & replace old keys for this table_id
         cursor.execute("DELETE FROM spreadsheet_api_keys WHERE table_id = ?", (table_id,))

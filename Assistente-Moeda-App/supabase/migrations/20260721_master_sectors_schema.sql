@@ -8,6 +8,12 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+ALTER TABLE public.profiles
+  ADD COLUMN IF NOT EXISTS email TEXT,
+  ADD COLUMN IF NOT EXISTS active_sectors TEXT[] DEFAULT '{personal_finance}',
+  ADD COLUMN IF NOT EXISTS zero_knowledge_enabled BOOLEAN DEFAULT false,
+  ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW();
+
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Permitir leitura do próprio perfil"

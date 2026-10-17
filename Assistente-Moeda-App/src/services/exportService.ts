@@ -436,7 +436,7 @@ export function buildWhatsAppReport(
   lines.push(
     tbLine,
     '',
-    `_Gerado pelo Assistente Moeda · Heiss-Lab 🪙_`
+    `_Gerado localmente pelo Assistente Moeda 🪙_`
   );
 
   return lines.join('\n');
@@ -925,8 +925,8 @@ export function buildReportHTML(
     </div>
 
     <div class="footer">
-      <div>Relatório oficial gerado localmente pelo Heiss-Lab Assistente Moeda.</div>
-      <div style="font-weight: 700; margin-top: 2px; color: #a855f7;">heisslab.com.br/laboratorio/assistente-moeda</div>
+      <div>Relatório oficial gerado localmente pelo Assistente Moeda.</div>
+      <div style="font-weight: 700; margin-top: 2px; color: #a855f7;">Motor Financeiro Local-First · Assistente Moeda</div>
     </div>
   </div>
 
@@ -1042,11 +1042,7 @@ export function buildCSV(
   sectorParams?: SectorSimulationParams,
   includeSecretApiKey: boolean = false
 ): string {
-  const explicitKeyProvided = typeof apiKey === 'string' && apiKey.trim().length > 0;
-  const effectiveApiKey = redactApiKeyForExport(
-    apiKey,
-    includeSecretApiKey || explicitKeyProvided
-  );
+  const effectiveApiKey = redactApiKeyForExport(apiKey, includeSecretApiKey);
   return serializeDynamicCSV(
     rows,
     tableName,
@@ -1060,7 +1056,7 @@ export function buildCSV(
     activeSectors,
     dashboardConfig,
     sectorParams,
-    includeSecretApiKey || explicitKeyProvided
+    includeSecretApiKey
   );
 }
 
@@ -1132,7 +1128,8 @@ export async function shareCSV(
     investorProfile,
     activeSectors,
     dashboardConfig,
-    sectorParams
+    sectorParams,
+    false
   );
   return shareCSVText(csv, tableName);
 }
@@ -1153,11 +1150,7 @@ export function buildGranularCSV(
   sectorParams?: SectorSimulationParams,
   includeSecretApiKey: boolean = false
 ): string {
-  const explicitKeyProvided = typeof apiKey === 'string' && apiKey.trim().length > 0;
-  const effectiveApiKey = redactApiKeyForExport(
-    apiKey,
-    includeSecretApiKey || explicitKeyProvided
-  );
+  const effectiveApiKey = redactApiKeyForExport(apiKey, includeSecretApiKey);
   return serializeGranularCSV(
     rows,
     options,
@@ -1171,7 +1164,8 @@ export function buildGranularCSV(
     investorProfile,
     activeSectors,
     dashboardConfig,
-    sectorParams
+    sectorParams,
+    includeSecretApiKey
   );
 }
 
@@ -1207,13 +1201,23 @@ export async function shareGranularCSV(
   return shareCSVText(csv, filePrefix);
 }
 
-export function buildJSONBackup(tableOrTables: CoinTable | CoinTable[]): string {
+export function buildJSONBackup(
+  tableOrTables: CoinTable | CoinTable[],
+  includeSecretApiKey: boolean = false
+): string {
+  const sanitizeTable = (t: CoinTable): CoinTable => ({
+    ...t,
+    apiKey: t.apiKey !== undefined ? redactApiKeyForExport(t.apiKey, includeSecretApiKey) : undefined,
+  });
   const isArray = Array.isArray(tableOrTables);
+  const sanitizedPayload = isArray
+    ? { tables: tableOrTables.map(sanitizeTable) }
+    : { table: sanitizeTable(tableOrTables) };
   return JSON.stringify(
     {
       version: '3.1',
       exportedAt: new Date().toISOString(),
-      ...(isArray ? { tables: tableOrTables } : { table: tableOrTables }),
+      ...sanitizedPayload,
     },
     null,
     2
@@ -1638,8 +1642,8 @@ export function buildTabularAuditHTML(
   </table>
 
   <div class="footer">
-    <div>Demonstrativo gerado localmente pelo Heiss-Lab Assistente Moeda.</div>
-    <div style="font-weight: 700; margin-top: 2px; color: #7c3aed;">heisslab.com.br/laboratorio/assistente-moeda</div>
+    <div>Demonstrativo gerado localmente pelo Assistente Moeda.</div>
+    <div style="font-weight: 700; margin-top: 2px; color: #7c3aed;">Motor Financeiro Local-First · Assistente Moeda</div>
   </div>
 
 </body>

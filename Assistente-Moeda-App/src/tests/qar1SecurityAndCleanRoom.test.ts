@@ -22,19 +22,24 @@ import {
 import {
   buildCSV,
   buildGranularCSV,
+  buildJSONBackup,
   buildReportHTML,
   buildTabularAuditHTML,
   generateLocalApiKey,
 } from '../services/exportService';
 import { sendChatMessage, buildFinancialContext } from '../services/aiChatService';
+import {
+  sanitizeRowsForManualSynthesis,
+  generateManualAiAnalystSynthesis,
+} from '../core/localAiAnalystSynthesizer';
 import { computeMetrics as calculateMetrics } from '../core/metricsEngine';
-import type { TableRow, TableGoals } from '../core/types';
+import type { TableRow, TableGoals, CoinTable } from '../core/types';
 
 declare const describe: (name: string, fn: () => void) => void;
 declare const it: (name: string, fn: () => void | Promise<void>) => void;
 declare const expect: (actual: any) => any;
 
-describe('QAR1 Security & Clean-Room Hygiene Suite (SEC-01 to SEC-09)', () => {
+describe('QAR1 Security & Clean-Room Hygiene Suite (SEC-01 to SEC-12)', () => {
   const sampleGoals: TableGoals = {
     dailyGoals: { 2026: 150 },
     weeklyGoals: { 2026: 1050 },
@@ -68,7 +73,7 @@ describe('QAR1 Security & Clean-Room Hygiene Suite (SEC-01 to SEC-09)', () => {
     );
     expect(granularCsv).not.toContain(secretLiveKey);
 
-    // Apenas quando o usuário passar explicitamente a chave ou includeSecretApiKey=true
+    // Apenas quando o usuário passar explicitamente includeSecretApiKey=true
     const sovereignCsv = buildCSV(
       rows,
       'Planilha Auditada',
@@ -268,5 +273,132 @@ describe('QAR1 Security & Clean-Room Hygiene Suite (SEC-01 to SEC-09)', () => {
     const res2 = enforceCleanRoomStorageOnBoot(mockStorage);
     expect(res2.migrated).toBe(false);
   });
+
+  it('SEC-10 (CR-V4-04): buildCSV, buildGranularCSV e buildJSONBackup devem redigir apiKey mesmo quando passada como argumento se includeSecretApiKey=false', () => {
+    const liveKey = 'am_sheet_live_test_explicit_arg_secret_1234567890';
+    const rows: TableRow[] = [
+      { id: 'r1', date: '2026-07-10', value: 500, description: 'Consultoria', entryType: 'revenue' },
+    ];
+
+    const csvWithExplicitKeyButDefaultRedact = buildCSV(
+      rows,
+      'Planilha Compartilhada',
+      'Desc',
+      sampleGoals,
+      'tbl_sec10',
+      liveKey
+    );
+    expect(csvWithExplicitKeyButDefaultRedact).not.toContain(liveKey);
+    expect(csvWithExplicitKeyButDefaultRedact).toContain('api_key,am_sheet_live_local');
+
+    const granularWithExplicitKey = buildGranularCSV(
+      rows,
+      { scope: 'all', format: 'backup_v3' },
+      'Planilha Compartilhada',
+      'Desc',
+      sampleGoals,
+      'tbl_sec10',
+      liveKey
+    );
+    expect(granularWithExplicitKey).not.toContain(liveKey);
+    expect(granularWithExplicitKey).toContain('api_key,am_sheet_live_local');
+
+    const tableWithKey: CoinTable = {
+      id: 'tbl_json_sec10',
+      name: 'Vault Sec10',
+      apiKey: liveKey,
+      createdAt: '2026-07-01T00:00:00.000Z',
+      updatedAt: '2026-07-20T00:00:00.000Z',
+      rows,
+      goals: sampleGoals,
+    };
+    const jsonDefault = buildJSONBackup(tableWithKey);
+    expect(jsonDefault).not.toContain(liveKey);
+    expect(jsonDefault).toContain('am_sheet_live_local');
+
+    const jsonSovereign = buildJSONBackup(tableWithKey, true);
+    expect(jsonSovereign).toContain(liveKey);
+  });
+
+  it('SEC-11 (CR-V4-05): sanitizeTablesForAI, sanitizeTransactionsForAI e sanitizeRowsForManualSynthesis devem expurgar tags, ticker, clonedFrom e apiKey', () => {
+    const rawRows: TableRow[] = [
+      {
+        id: 'tx_pii_1',
+        date: '2026-07-15',
+        value: 1500,
+        description: 'Transferencia Nominativa Secreta',
+        category: 'Investimentos',
+        tags: 'cpf_titular_secreto,conta_privada',
+        ticker: 'PRIV11',
+        clonedFrom: 'nota_confidencial_99',
+        metadataJson: '{"chave_pix":"secreta"}',
+        customValues: { beneficiario: 'Titular Confidencial' },
+        entryType: 'deposit',
+      },
+    ];
+
+    const sanitizedManual = sanitizeRowsForManualSynthesis(rawRows, true);
+    expect(sanitizedManual[0].description).toBe('[INVESTIMENTOS]');
+    expect(sanitizedManual[0].tags).toBeUndefined();
+    expect(sanitizedManual[0].ticker).toBeUndefined();
+    expect(sanitizedManual[0].clonedFrom).toBeUndefined();
+    expect(sanitizedManual[0].customValues).toBeUndefined();
+
+    const sanitizedTables = sanitizeTablesForAI(
+      [
+        {
+          id: 'tbl_pii',
+          name: 'Carteira',
+          apiKey: 'am_sheet_live_test_table_secret_9999',
+          rows: rawRows,
+        },
+      ],
+      false
+    );
+    expect(sanitizedTables[0].apiKey).toBe('am_sheet_live_local');
+    expect(sanitizedTables[0].rows[0].tags).toBe('');
+    expect(sanitizedTables[0].rows[0].ticker).toBeUndefined();
+    expect(sanitizedTables[0].rows[0].clonedFrom).toBeUndefined();
+
+    const sanitizedTxs = sanitizeTransactionsForAI(rawRows, false);
+    expect(sanitizedTxs[0].tags).toBe('');
+    expect(sanitizedTxs[0].ticker).toBeUndefined();
+    expect(sanitizedTxs[0].clonedFrom).toBeUndefined();
+  });
+
+  it('SEC-12 (QAR1-DEF-04): buildCSV e api_routes_bundle_json devem neutralizar fórmulas CSV em metadados, schema e bundle JSON', () => {
+    const formulaRows: TableRow[] = [
+      {
+        id: '=ROW_FORMULA',
+        date: '2026-07-10',
+        value: 250,
+        description: '=HYPERLINK("http://evil.example")',
+        category: '@SUM(1+1)',
+        entryType: 'expense',
+        metadataJson: '=IMPORTXML("http://evil.example")',
+      },
+    ];
+
+    const csv = buildCSV(
+      formulaRows,
+      '=SUM(A1:A2),Injetado',
+      '+CMD|calc\nLinha2',
+      sampleGoals,
+      '=TBL_ID'
+    );
+    expect(csv).toContain("table_id,'=TBL_ID");
+    expect(csv).toContain("name,'=SUM(A1:A2) Injetado");
+    expect(csv).toContain("description,'+CMD|calc Linha2");
+
+    const bundleRes = generateManualAiAnalystSynthesis(formulaRows, sampleGoals, 'Tabela Sec12', {
+      format: 'api_routes_bundle_json',
+      asOfDate: '2026-07-15',
+    });
+    const parsedBundle = JSON.parse(bundleRes.content);
+    const bundleCsv: string = parsedBundle.routes['/api/v1/public/spreadsheet/export'].csvContent;
+    expect(bundleCsv).toContain("'=HYPERLINK");
+    expect(bundleCsv).toContain("'@SUM(1+1)");
+  });
 });
+
 

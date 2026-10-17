@@ -22,10 +22,12 @@ import {
 } from '../services/publicApiService';
 import { validateApiKey, generateNewApiKey, revokeApiKey } from '../services/apiKeyService';
 import { OPENAPI_SPEC_V1, PUBLIC_API_HEADER_NAME } from '../config/publicApiConfig';
-import type { PublicAgentPromptResponse, AgentPromptProfile } from '../config/publicApiConfig';
+import type { PublicAgentPromptResponse } from '../config/publicApiConfig';
 import { generateManualAiAnalystSynthesis } from '../core/localAiAnalystSynthesizer';
 import { neutralizeCsvFormula } from '../utils/securitySanitizer';
 import type { TableRow, TableGoals } from '../core/types';
+
+type AgentPromptProfile = 'native' | 'cfo' | 'operational' | 'goals' | 'dev';
 
 declare const describe: (name: string, fn: () => void) => void;
 declare const it: (name: string, fn: () => void | Promise<void>) => void;
@@ -144,6 +146,14 @@ function createStatefulBackendHarness() {
     // 2. Public Agent-Prompt Endpoint (allows anonymous or authenticated)
     if (urlObj.pathname.endsWith('/api/v1/public/agent-prompt') && method === 'GET') {
       const profile = urlObj.searchParams.get('profile') || 'native';
+      const profileMap: Record<string, string> = {
+        native: 'agent_native_master',
+        cfo: 'cfo_fpa',
+        operational: 'operational_godmode',
+        goals: 'goals_timebank',
+        dev: 'developer_script',
+      };
+      const profileUsed = profileMap[profile] || 'agent_native_master';
       const format = urlObj.searchParams.get('format') || 'json';
       const rec = keys.get(apiKeyHeader);
       const keyStatus = rec && rec.isActive && !rec.isExpired ? 'active' : 'anonymous';
@@ -158,8 +168,8 @@ function createStatefulBackendHarness() {
           { skill: 'dre', name: 'DRE Regime de Caixa', focus: 'Cashflow' },
           { skill: 'pfm', name: 'PFM Retenção', focus: 'Runway' },
         ],
-        prompt: `Prompt executivo para perfil [${profile}]`,
-        profile_used: profile,
+        prompt: `Prompt executivo para perfil [${profileUsed}]`,
+        profile_used: profileUsed,
         mandatory_next_route: 'POST /api/v1/public/ai-analyst',
         api_key_status: keyStatus,
       };
@@ -305,7 +315,13 @@ function createStatefulBackendHarness() {
 
     if (urlObj.pathname.endsWith('/api/v1/public/ai-analyst') && method === 'POST') {
       const body = JSON.parse(init.body);
-      const rows = tableStorage.get(tableId) || [];
+      const start = body.startDate || body.start_date;
+      const end = body.endDate || body.end_date;
+      const rows = (tableStorage.get(tableId) || []).filter((r) => {
+        if (start && r.date < start) return false;
+        if (end && r.date > end) return false;
+        return true;
+      });
       return jsonResponse(200, {
         content: `Diagnóstico IA para "${body.userPrompt}" (${rows.length} lançamentos analisados).`,
         modelUsed: 'gemini-3.7-flash',
@@ -318,7 +334,7 @@ function createStatefulBackendHarness() {
   return { registerKey, fetchMock, tableStorage, keys };
 }
 
-describe('QAR1 System Integration Testing (SIT) Suite (SIT-01 to SIT-08)', () => {
+describe('QAR1 System Integration Testing (SIT) Suite (SIT-01 to SIT-11)', () => {
   it('SIT-01: OPENAPI_SPEC_V1 e getAgentPrompt devem validar todos os 5 perfis executivos (native, cfo, operational, goals, dev)', async () => {
     expect(OPENAPI_SPEC_V1.openapi).toBe('3.1.0');
     expect(OPENAPI_SPEC_V1.paths).toHaveProperty('/api/v1/public/agent-prompt');
@@ -341,6 +357,13 @@ describe('QAR1 System Integration Testing (SIT) Suite (SIT-01 to SIT-08)', () =>
     globalThis.fetch = harness.fetchMock as any;
 
     try {
+      const expectedProfileMap: Record<AgentPromptProfile, string> = {
+        native: 'agent_native_master',
+        cfo: 'cfo_fpa',
+        operational: 'operational_godmode',
+        goals: 'goals_timebank',
+        dev: 'developer_script',
+      };
       const profiles: AgentPromptProfile[] = ['native', 'cfo', 'operational', 'goals', 'dev'];
       for (const profile of profiles) {
         const res = await getAgentPrompt(
@@ -351,7 +374,7 @@ describe('QAR1 System Integration Testing (SIT) Suite (SIT-01 to SIT-08)', () =>
         );
         expect(res.success).toBe(true);
         const data = res.data as PublicAgentPromptResponse;
-        expect(data.profile_used).toBe(profile);
+        expect(data.profile_used).toBe(expectedProfileMap[profile]);
         expect(data.api_key_status).toBe('active');
         expect(data.mandatory_next_route).toBe('POST /api/v1/public/ai-analyst');
       }
@@ -685,4 +708,112 @@ describe('QAR1 System Integration Testing (SIT) Suite (SIT-01 to SIT-08)', () =>
       globalThis.fetch = origFetch;
     }
   });
+
+  it('SIT-09 (SIT-DEF-02): exportSpreadsheetCsv(false) deve desempacotar csv_content do envelope JSON', async () => {
+    const harness = createStatefulBackendHarness();
+    const apiKey = 'am_sheet_live_test_key_sit09';
+    harness.registerKey({
+      apiKey,
+      tableId: 'tbl_sit09',
+      permissions: 'read:write',
+      isActive: true,
+      isExpired: false,
+      ttlDays: 7,
+    });
+
+    const origFetch = globalThis.fetch;
+    globalThis.fetch = harness.fetchMock as any;
+
+    try {
+      await appendToSpreadsheet(
+        {
+          mode: 'replace',
+          transactions: [
+            { date: '2026-10-03', value: 3200, description: 'Consultoria SIT09', entryType: 'revenue', externalId: 'sit09_1' },
+          ],
+        },
+        apiKey,
+        'http://localhost:8000'
+      );
+
+      const expJsonMode = await exportSpreadsheetCsv(false, apiKey, 'http://localhost:8000');
+      expect(expJsonMode.success).toBe(true);
+      expect(expJsonMode.data?.startsWith('## COIN_BACKUP_V2 ##')).toBe(true);
+      expect(expJsonMode.data).toContain('Consultoria SIT09');
+    } finally {
+      globalThis.fetch = origFetch;
+    }
+  });
+
+  it('SIT-10 (SIT-DEF-03): generateNewApiKey deve respeitar permissão read-only quando passada no segundo ou quarto parâmetro', async () => {
+    const harness = createStatefulBackendHarness();
+    const origFetch = globalThis.fetch;
+    globalThis.fetch = harness.fetchMock as any;
+
+    try {
+      const roGen = await generateNewApiKey('tbl_sit10_ro', 'read-only', 7);
+      expect(roGen).toBeDefined();
+      const roKey = roGen!.apiKey;
+
+      const postAttempt = await appendToSpreadsheet(
+        {
+          mode: 'merge',
+          transactions: [{ date: '2026-10-01', value: 100, description: 'Deve Bloquear 403' }],
+        },
+        roKey,
+        'http://localhost:8000'
+      );
+      expect(postAttempt.success).toBe(false);
+      expect(postAttempt.status).toBe(403);
+    } finally {
+      globalThis.fetch = origFetch;
+    }
+  });
+
+  it('SIT-11 (SIT-DEF-06): publicAiAnalyst deve filtrar transações por startDate e endDate quando informados', async () => {
+    const harness = createStatefulBackendHarness();
+    const apiKey = 'am_sheet_live_test_key_sit11';
+    harness.registerKey({
+      apiKey,
+      tableId: 'tbl_sit11',
+      permissions: 'read:write',
+      isActive: true,
+      isExpired: false,
+      ttlDays: 7,
+    });
+
+    const origFetch = globalThis.fetch;
+    globalThis.fetch = harness.fetchMock as any;
+
+    try {
+      await appendToSpreadsheet(
+        {
+          mode: 'replace',
+          transactions: [
+            { date: '2026-09-10', value: 1000, description: 'Setembro', entryType: 'revenue', externalId: 's1' },
+            { date: '2026-10-05', value: 2000, description: 'Outubro 1', entryType: 'revenue', externalId: 'o1' },
+            { date: '2026-10-20', value: -500, description: 'Outubro 2', entryType: 'expense', externalId: 'o2' },
+            { date: '2026-11-02', value: 3000, description: 'Novembro', entryType: 'revenue', externalId: 'n1' },
+          ],
+        },
+        apiKey,
+        'http://localhost:8000'
+      );
+
+      const aiRes = await publicAiAnalyst(
+        {
+          userPrompt: 'Analise apenas Outubro',
+          startDate: '2026-10-01',
+          endDate: '2026-10-31',
+        },
+        apiKey,
+        'http://localhost:8000'
+      );
+      expect(aiRes.success).toBe(true);
+      expect(aiRes.data?.content).toContain('2 lançamentos analisados');
+    } finally {
+      globalThis.fetch = origFetch;
+    }
+  });
 });
+

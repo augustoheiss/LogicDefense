@@ -103,10 +103,14 @@ export function sanitizeTablesForAI(
 
   return tables.map((t) => ({
     ...t,
+    apiKey: t.apiKey ? 'am_sheet_live_local' : undefined,
     rows: Array.isArray(t.rows)
       ? t.rows.map((r: TableRow) => ({
           ...r,
           description: r.category ? `[${r.category}]` : '[Transação Anonimizada]',
+          tags: '',
+          ticker: undefined,
+          clonedFrom: undefined,
           metadataJson: '{}',
           customValues: undefined,
         }))
@@ -127,6 +131,9 @@ export function sanitizeTransactionsForAI(
   return transactions.map((tx) => ({
     ...tx,
     description: tx.category ? `[${tx.category}]` : '[Transação Anonimizada]',
+    tags: '',
+    ticker: undefined,
+    clonedFrom: undefined,
     metadataJson: '{}',
     customValues: undefined,
   }));
@@ -134,8 +141,16 @@ export function sanitizeTransactionsForAI(
 
 export const CLEAN_ROOM_MIGRATION_VERSION = 'app:clean_room_migration_v2';
 
+function isCleanRoomAllowedApiKey(val: string): boolean {
+  return (
+    val.startsWith('am_sheet_live_local') ||
+    val.startsWith('am_sheet_live_e2e_') ||
+    val.startsWith('am_sheet_live_test_')
+  );
+}
+
 /**
- * Versioned Clean-Room storage reset on boot.
+ * Versioned Clean-Room storage reset on boot (Web synchronous storage).
  * Purges legacy or unverified API key caches without embedding a PII blacklist in the client bundle.
  */
 export function enforceCleanRoomStorageOnBoot(
@@ -163,7 +178,7 @@ export function enforceCleanRoomStorageOnBoot(
       if (key === 'coin_active_api_key' || key.startsWith('coin_api_key_')) {
         const val = targetStorage.getItem(key) || '';
         // Purge any legacy key that is not a valid local/synthetic/session key
-        if (val && !val.startsWith('am_sheet_live_local') && !val.startsWith('am_sheet_live_e2e_') && !val.startsWith('am_sheet_live_test_')) {
+        if (val && !isCleanRoomAllowedApiKey(val)) {
           targetStorage.removeItem(key);
           purgedKeys.push(key);
         }
@@ -176,4 +191,43 @@ export function enforceCleanRoomStorageOnBoot(
     return { migrated: false, purgedKeys: [] };
   }
 }
+
+/**
+ * Versioned Clean-Room storage reset on boot for React Native AsyncStorage (CR-V4-06).
+ */
+export async function enforceCleanRoomAsyncStorageOnBoot(asyncStorage: {
+  getItem(key: string): Promise<string | null>;
+  setItem(key: string, value: string): Promise<void>;
+  removeItem(key: string): Promise<void>;
+  getAllKeys?(): Promise<readonly string[] | string[]>;
+}): Promise<{ migrated: boolean; purgedKeys: string[] }> {
+  try {
+    const status = await asyncStorage.getItem(CLEAN_ROOM_MIGRATION_VERSION);
+    if (status === 'done') {
+      return { migrated: false, purgedKeys: [] };
+    }
+
+    const allKeys =
+      typeof asyncStorage.getAllKeys === 'function'
+        ? await asyncStorage.getAllKeys()
+        : ['coin_active_api_key'];
+
+    const purgedKeys: string[] = [];
+    for (const key of allKeys) {
+      if (key === 'coin_active_api_key' || key.startsWith('coin_api_key_')) {
+        const val = (await asyncStorage.getItem(key)) || '';
+        if (val && !isCleanRoomAllowedApiKey(val)) {
+          await asyncStorage.removeItem(key);
+          purgedKeys.push(key);
+        }
+      }
+    }
+
+    await asyncStorage.setItem(CLEAN_ROOM_MIGRATION_VERSION, 'done');
+    return { migrated: true, purgedKeys };
+  } catch {
+    return { migrated: false, purgedKeys: [] };
+  }
+}
+
 

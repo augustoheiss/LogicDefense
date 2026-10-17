@@ -317,6 +317,54 @@ def test_sit05_permission_matrix_and_kill_switch_revocation():
     assert client.post("/api/v1/api-keys/validate", json={"apiKey": rw_key}).status_code == 401
 
 
+def test_sit06_export_json_vs_download_and_signed_numeric_formula_preservation():
+    """SIT-DEF-02 & SIT-DEF-06: Verify download=false JSON envelope, pure signed numbers without quote prefix, and newline stripping."""
+    gen_res = client.post(
+        "/api/v1/api-keys/generate",
+        json={"table_id": "tbl_sit06_export_parity", "permissions": "read:write", "ttl_days": 1},
+    )
+    assert gen_res.status_code == 200
+    api_key = gen_res.json()["apiKey"]
+    headers = {"X-Spreadsheet-Key": api_key}
+
+    app_res = client.post(
+        "/api/v1/public/spreadsheet/append",
+        headers=headers,
+        json={
+            "mode": "replace",
+            "transactions": [
+                {
+                    "date": "2026-10-15",
+                    "value": -250.0,
+                    "description": "-150.50",
+                    "category": "Linha1\nLinha2,ComVirgula",
+                    "tags": "+cmd|calc\r\nInjetado",
+                    "entryType": "expense",
+                    "externalId": "row_num_1",
+                }
+            ],
+        },
+    )
+    assert app_res.status_code == 200
+    csv_text = app_res.json()["csvContent"]
+    # Pure signed number "-150.50" must NOT be prefixed with single quote
+    assert ",-150.50," in csv_text
+    # Newlines and commas inside category/tags must be stripped to spaces and formula prefixed
+    assert "Linha1 Linha2 ComVirgula" in csv_text
+    assert "'+cmd|calc Injetado" in csv_text
+
+    # Verify GET /spreadsheet/export?download=false returns JSON with csv_content
+    exp_json = client.get("/api/v1/public/spreadsheet/export?download=false", headers=headers)
+    assert exp_json.status_code == 200
+    assert exp_json.json()["status"] == "success"
+    assert "## COIN_BACKUP_V2 ##" in exp_json.json()["csv_content"]
+
+    # Verify GET /spreadsheet/export?download=true returns raw text/csv
+    exp_raw = client.get("/api/v1/public/spreadsheet/export?download=true", headers=headers)
+    assert exp_raw.status_code == 200
+    assert exp_raw.text.startswith("## COIN_BACKUP_V2 ##")
+
+
 if __name__ == "__main__":
     suite = [
         test_sit01_agent_prompt_profiles_and_openapi,
@@ -324,9 +372,11 @@ if __name__ == "__main__":
         test_sit03_stateful_merge_upsert_replace_and_partner_firewall,
         test_sit04_csv_formula_injection_neutralization,
         test_sit05_permission_matrix_and_kill_switch_revocation,
+        test_sit06_export_json_vs_download_and_signed_numeric_formula_preservation,
     ]
     print("\n=== QAR1 & SIT BACKEND FASTAPI TESTCLIENT SUITE ===")
     for fn in suite:
         fn()
         print(f"  [OK] {fn.__name__} PASSED")
     print(f"\n[OK] All {len(suite)}/{len(suite)} Backend SIT tests PASSED!\n")
+

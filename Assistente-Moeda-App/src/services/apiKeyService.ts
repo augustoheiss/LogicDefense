@@ -105,17 +105,26 @@ export async function validateApiKey(apiKey: string): Promise<KeyValidationResul
 
 /**
  * Generates a new API Key for a given tableId via POST /api/v1/api-keys/generate
- * Accepts custom ttlDays (1, 7, 30 — default: 1 day / 24h)
+ * Accepts custom ttlDays (1, 7, 30 — default: 1 day / 24h) and optional permissions ('read:write' | 'read-only').
+ * Supports calling with either (tableId, licenseKey, ttlDays, permissions) or (tableId, permissions, ttlDays).
  */
 export async function generateNewApiKey(
   tableId: string,
-  licenseKey?: string,
-  ttlDays: number = 1
+  licenseKeyOrPermissions?: string,
+  ttlDays: number = 1,
+  permissions?: 'read:write' | 'read-only'
 ): Promise<GeneratedKeyResult | null> {
   try {
+    const isPermArg =
+      licenseKeyOrPermissions === 'read:write' || licenseKeyOrPermissions === 'read-only';
+    const resolvedLicenseKey = isPermArg ? undefined : licenseKeyOrPermissions;
+    const resolvedPermissions: 'read:write' | 'read-only' = isPermArg
+      ? licenseKeyOrPermissions
+      : permissions || 'read:write';
+
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-    if (licenseKey) {
-      headers['X-License-Key'] = licenseKey;
+    if (resolvedLicenseKey) {
+      headers['X-License-Key'] = resolvedLicenseKey;
     }
 
     const res = await fetch(`${API_URL}/api/v1/api-keys/generate`, {
@@ -123,8 +132,8 @@ export async function generateNewApiKey(
       headers,
       body: JSON.stringify({
         table_id: tableId,
-        license_key: licenseKey || undefined,
-        permissions: 'read:write',
+        license_key: resolvedLicenseKey || undefined,
+        permissions: resolvedPermissions,
         ttl_days: ttlDays,
       }),
     });
