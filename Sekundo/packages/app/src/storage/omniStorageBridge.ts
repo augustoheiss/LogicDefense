@@ -174,16 +174,47 @@ export async function loadSavedCoinLedgerRows(): Promise<OmniCoinLedgerRowItem[]
   try {
     const db = await loadDB();
     const collected: OmniCoinLedgerRowItem[] = [];
+    const validEntryTypes = new Set<string>([
+      'revenue',
+      'income',
+      'deposit',
+      'investment',
+      'waiver',
+      'partner_in',
+      'partner_out',
+      'unresolved',
+      'expense',
+    ]);
+
     for (const table of db?.tables || []) {
       if (table.isDeleted) continue;
-      for (const r of table.rows || []) {
-        const rawEntry = (r.entryType || 'revenue').toLowerCase();
-        const entryType: 'income' | 'expense' | 'investment' =
-          rawEntry === 'revenue' || rawEntry === 'partner_in' || rawEntry === 'income'
-            ? 'income'
-            : rawEntry === 'deposit' || rawEntry === 'investment'
-            ? 'investment'
-            : 'expense';
+      const tableEnvelope: Record<string, any> = {};
+      if (table.goals) tableEnvelope.goals = table.goals;
+      if (table.investorProfile) tableEnvelope.investorProfile = table.investorProfile;
+      if (table.schema) tableEnvelope.schema = table.schema;
+      if (table.activeSectors) tableEnvelope.activeSectors = table.activeSectors;
+      if (table.dashboardConfig) tableEnvelope.dashboardConfig = table.dashboardConfig;
+      if (table.sectorParams) tableEnvelope.sectorParams = table.sectorParams;
+      if (table.description) tableEnvelope.description = table.description;
+      const hasTableEnvelope = Object.keys(tableEnvelope).length > 0;
+
+      (table.rows || []).forEach((r, rowIdx) => {
+        const rawEntry = (r.entryType || 'revenue').toLowerCase().trim();
+        const entryType = (
+          validEntryTypes.has(rawEntry) ? rawEntry : 'expense'
+        ) as OmniCoinLedgerRowItem['entryType'];
+
+        const recurrence =
+          r.monthCount && r.monthCount > 1 ? `rateio_${r.monthCount}m` : 'unico';
+
+        const extraPayload: Record<string, any> = {};
+        if (r.customValues && Object.keys(r.customValues).length > 0) {
+          extraPayload.customValues = r.customValues;
+        }
+        if (rowIdx === 0 && hasTableEnvelope) {
+          extraPayload.tableEnvelope = tableEnvelope;
+        }
+
         collected.push({
           id: r.id,
           date: r.date,
@@ -193,10 +224,23 @@ export async function loadSavedCoinLedgerRows(): Promise<OmniCoinLedgerRowItem[]
           entryType,
           paymentMethod: r.tags || 'PIX',
           status: 'paid',
-          recurrence: r.monthCount && r.monthCount > 1 ? `rateio_${r.monthCount}m` : 'unico',
+          recurrence,
           tableId: table.id || 'coin-default',
+          tableName: table.name || '🪙 Assistente Moeda — Geral',
+          monthlyValue: typeof r.monthlyValue === 'number' ? r.monthlyValue : undefined,
+          monthCount: typeof r.monthCount === 'number' ? r.monthCount : undefined,
+          periodStart: r.periodStart,
+          periodEnd: r.periodEnd,
+          tags: r.tags || 'PIX',
+          ticker: r.ticker,
+          quantity: typeof r.quantity === 'number' ? r.quantity : undefined,
+          unitPrice: typeof r.unitPrice === 'number' ? r.unitPrice : undefined,
+          customValues: r.customValues,
+          tableEnvelope: rowIdx === 0 && hasTableEnvelope ? tableEnvelope : undefined,
+          metadataJson:
+            Object.keys(extraPayload).length > 0 ? JSON.stringify(extraPayload) : undefined,
         });
-      }
+      });
     }
     if (collected.length > 0) {
       return collected;
@@ -209,7 +253,7 @@ export async function loadSavedCoinLedgerRows(): Promise<OmniCoinLedgerRowItem[]
 
 /**
  * Persists imported `OmniCoinLedgerRowItem[]` into Assistente Moeda's `@sekundo/coin-engine` DB
- * so opening `/coin` immediately reflects the imported Planilha Financeira.
+ * so opening `/coin` immediately reflects the imported Planilha Financeira with zero data loss.
  */
 export async function saveCoinLedgerRowsToCoinDB(
   coinRows: OmniCoinLedgerRowItem[]
@@ -220,44 +264,113 @@ export async function saveCoinLedgerRowsToCoinDB(
     const nowIso = new Date().toISOString();
     const currentYear = new Date().getFullYear();
 
-    const mappedRows: TableRow[] = coinRows.map((item, idx) => ({
-      id: item.id || `coin-row-${idx + 1}`,
-      date: item.date || nowIso.slice(0, 10),
-      value: Number(item.amount) || 0,
-      description: item.description || item.category || 'Lançamento Importado',
-      category: item.category || 'Operacional',
-      tags: item.paymentMethod || 'PIX',
-      entryType:
-        item.entryType === 'income'
+    let discoveredEnvelope: Record<string, any> | undefined;
+    for (const item of coinRows) {
+      if (item.tableEnvelope && typeof item.tableEnvelope === 'object') {
+        discoveredEnvelope = item.tableEnvelope;
+        break;
+      }
+      if (item.metadataJson) {
+        try {
+          const parsedMeta = JSON.parse(item.metadataJson);
+          if (parsedMeta?.tableEnvelope && typeof parsedMeta.tableEnvelope === 'object') {
+            discoveredEnvelope = parsedMeta.tableEnvelope;
+            break;
+          }
+        } catch {
+          // ignore invalid json
+        }
+      }
+    }
+
+    const mappedRows: TableRow[] = coinRows.map((item, idx) => {
+      const rawType = (item.entryType || 'revenue').toLowerCase().trim();
+      const normalizedEntryType: TableRow['entryType'] =
+        rawType === 'income' || rawType === 'revenue'
           ? 'revenue'
-          : item.entryType === 'investment'
+          : rawType === 'investment' || rawType === 'deposit'
           ? 'deposit'
-          : 'expense',
-      createdAt: nowIso,
-    }));
+          : rawType === 'waiver'
+          ? 'waiver'
+          : rawType === 'partner_in'
+          ? 'partner_in'
+          : rawType === 'partner_out'
+          ? 'partner_out'
+          : rawType === 'unresolved'
+          ? 'unresolved'
+          : 'expense';
+
+      let customValues = item.customValues;
+      if (!customValues && item.metadataJson) {
+        try {
+          const parsedMeta = JSON.parse(item.metadataJson);
+          if (parsedMeta?.customValues && typeof parsedMeta.customValues === 'object') {
+            customValues = parsedMeta.customValues;
+          }
+        } catch {
+          // ignore
+        }
+      }
+
+      const row: TableRow = {
+        id: item.id || `coin-row-${idx + 1}`,
+        date: item.date || nowIso.slice(0, 10),
+        value: Number(item.amount) || 0,
+        description: item.description || item.category || 'Lançamento Importado',
+        category: item.category || 'Operacional',
+        tags: item.tags || item.paymentMethod || 'PIX',
+        entryType: normalizedEntryType,
+        createdAt: nowIso,
+      };
+
+      if (typeof item.monthlyValue === 'number') row.monthlyValue = item.monthlyValue;
+      if (typeof item.monthCount === 'number') row.monthCount = item.monthCount;
+      if (item.periodStart) row.periodStart = item.periodStart;
+      if (item.periodEnd) row.periodEnd = item.periodEnd;
+      if (item.ticker) row.ticker = item.ticker;
+      if (typeof item.quantity === 'number') row.quantity = item.quantity;
+      if (typeof item.unitPrice === 'number') row.unitPrice = item.unitPrice;
+      if (customValues && Object.keys(customValues).length > 0) row.customValues = customValues;
+
+      return row;
+    });
 
     const existingTables = Array.isArray(db?.tables) ? [...db.tables] : [];
     const targetTableId = coinRows[0]?.tableId || 'coin-default';
+    const targetTableName = coinRows[0]?.tableName || '🪙 Assistente Moeda — Geral';
     const existingIdx = existingTables.findIndex(
       (t) => !t.isDeleted && (t.id === targetTableId || t.id === 'coin-default')
     );
 
+    const applyEnvelope = (base: CoinTable): CoinTable => ({
+      ...base,
+      name: coinRows[0]?.tableName || base.name || targetTableName,
+      description:
+        discoveredEnvelope?.description ||
+        base.description ||
+        'Planilha importada via Sekundo Multi-Planilha CSV',
+      updatedAt: nowIso,
+      rows: mappedRows,
+      goals: discoveredEnvelope?.goals || base.goals || {
+        dailyGoals: { [currentYear]: 150 },
+        weeklyGoals: { [currentYear]: 1050 },
+        annualCosts: { [currentYear]: 36000 },
+      },
+      investorProfile: discoveredEnvelope?.investorProfile || base.investorProfile,
+      schema: discoveredEnvelope?.schema || base.schema,
+      activeSectors: discoveredEnvelope?.activeSectors || base.activeSectors,
+      dashboardConfig: discoveredEnvelope?.dashboardConfig || base.dashboardConfig,
+      sectorParams: discoveredEnvelope?.sectorParams || base.sectorParams,
+    });
+
     if (existingIdx >= 0) {
-      existingTables[existingIdx] = {
-        ...existingTables[existingIdx],
-        updatedAt: nowIso,
-        rows: mappedRows,
-      };
+      existingTables[existingIdx] = applyEnvelope(existingTables[existingIdx]);
     } else if (existingTables.length > 0 && !existingTables[0].isDeleted) {
-      existingTables[0] = {
-        ...existingTables[0],
-        updatedAt: nowIso,
-        rows: mappedRows,
-      };
+      existingTables[0] = applyEnvelope(existingTables[0]);
     } else {
-      const newTable: CoinTable = {
+      const newTable: CoinTable = applyEnvelope({
         id: targetTableId,
-        name: '🪙 Assistente Moeda — Geral',
+        name: targetTableName,
         description: 'Planilha importada via Sekundo Multi-Planilha CSV',
         createdAt: nowIso,
         updatedAt: nowIso,
@@ -267,19 +380,23 @@ export async function saveCoinLedgerRowsToCoinDB(
           weeklyGoals: { [currentYear]: 1050 },
           annualCosts: { [currentYear]: 36000 },
         },
-      };
+      });
       existingTables.unshift(newTable);
     }
 
     await saveDB({
       ...(db || { tables: [] }),
+      activeTableId: existingTables[0]?.id || targetTableId,
       tables: existingTables,
       activeTableIndex: 0,
-    });
+    } as any);
   } catch {
     // ignore storage errors
   }
 }
+
+const HUB_PRIMARY_EVENT_ID = 'evt-sekundo-hub-primary';
+const LEGACY_EVENTS_V1_STORAGE_KEY = 'sekundo:events:v1';
 
 /**
  * Collects the COMPLETE saved state of the Sekundo site across all local storage keys,
@@ -293,6 +410,7 @@ export async function collectFullSiteOmniBundleFromStorage(
   // 1. Load all saved Event Containers and their real skeletons from storage
   const eventIds = await localStore.getEventIds();
   const hydratedEvents: OmniEventBundleItem[] = [];
+  const seenEventIds = new Set<string>();
   let fallbackScheduleFromEvent: FlatSkeletonEntry[] | null = null;
   let fallbackTerritoryFromEvent: FlatSkeletonEntry[] | null = null;
 
@@ -312,7 +430,13 @@ export async function collectFullSiteOmniBundleFromStorage(
       fallbackTerritoryFromEvent = terrNodes;
     }
 
-    // Ensure every saved event has non-empty registry rows exported into `event_node`
+    // Do not duplicate the synthetic Hub primary event into `event_node`, because its
+    // schedule and territory rows are already exported in `hub_schedule_slot` and `hub_territory_cycle`
+    if (id === HUB_PRIMARY_EVENT_ID || (state.config as any)?.isHubPrimaryContainer) {
+      seenEventIds.add(id);
+      continue;
+    }
+
     const effectiveRegistry =
       rawSkeleton.length > 0
         ? rawSkeleton
@@ -327,12 +451,69 @@ export async function collectFullSiteOmniBundleFromStorage(
             },
           ];
 
+    seenEventIds.add(state.config.id);
     hydratedEvents.push({
       id: state.config.id,
       name: state.config.name,
       engines,
       registry: effectiveRegistry,
     });
+  }
+
+  // Also check `sekundo:events:v1` for any events stored in tree/legacy format
+  try {
+    const rawLegacyEvents =
+      readWebLocalStorage(LEGACY_EVENTS_V1_STORAGE_KEY) ??
+      (await localStore.storage.getItem(LEGACY_EVENTS_V1_STORAGE_KEY));
+    if (rawLegacyEvents) {
+      const parsedLegacy = JSON.parse(rawLegacyEvents);
+      if (Array.isArray(parsedLegacy)) {
+        for (const item of parsedLegacy) {
+          if (!item || !item.id || seenEventIds.has(item.id) || item.id === HUB_PRIMARY_EVENT_ID) {
+            continue;
+          }
+          const itemEngines: string[] = Array.isArray(item.engines) && item.engines.length > 0
+            ? item.engines
+            : item.engineId
+            ? [item.engineId]
+            : ['generic_wbs'];
+          let registry: FlatSkeletonEntry[] = [];
+          if (Array.isArray(item.registry) && item.registry.length > 0) {
+            registry = item.registry;
+          } else if (item.root) {
+            const rootLabel = item.root.label || item.title || item.name || item.id;
+            registry.push({
+              key: '01',
+              type: (item.root.type || 'group') as any,
+              label: rootLabel,
+              value: item.root.value || '',
+              email: '',
+              meta: item.root.meta || {},
+            });
+            const children = Array.isArray(item.root.children) ? item.root.children : [];
+            children.forEach((ch: any, idx: number) => {
+              registry.push({
+                key: ch.key || `01-${String(idx + 1).padStart(2, '0')}`,
+                type: (ch.type || 'leaf') as any,
+                label: ch.label || ch.title || `Item ${idx + 1}`,
+                value: ch.value !== undefined ? String(ch.value) : '',
+                email: ch.email || '',
+                meta: ch.meta || {},
+              });
+            });
+          }
+          seenEventIds.add(item.id);
+          hydratedEvents.push({
+            id: item.id,
+            name: item.title || item.name || item.id,
+            engines: itemEngines,
+            registry,
+          });
+        }
+      }
+    }
+  } catch {
+    // ignore legacy events parse error
   }
 
   const savedSchedule = await loadSavedScheduleRegistry();
@@ -441,7 +622,7 @@ export async function exportSingleEngineOmniCsvFromStorage(
 /**
  * Commits an imported Multi-Planilha Omni-CSV string or bundle across Sekundo's stores.
  * Respects `bundle.presentSheets`: if the user deleted a Planilha from the CSV before importing,
- * only the Planilhas present in the file are updated in storage!
+ * or imported a Single-Engine spreadsheet, only the Planilhas present in the file are updated in storage!
  */
 export async function commitOmniCsvBundleToStorage(
   csvTextOrBundle: string | SekundoOmniStateBundle,
@@ -471,13 +652,13 @@ export async function commitOmniCsvBundleToStorage(
       : exportOmniCsvBundle(bundle);
 
   // 1. Persist only the Planilhas that are present in the imported CSV
-  if (hasAllOrSheet('participant_privilege')) {
+  if (hasAllOrSheet('participant_privilege') && bundle.participants.length > 0) {
     await savePrivilegeParticipants(bundle.participants);
   }
-  if (hasAllOrSheet('hub_schedule_slot')) {
+  if (hasAllOrSheet('hub_schedule_slot') && bundle.scheduleRegistry.length > 0) {
     await saveScheduleRegistry(bundle.scheduleRegistry);
   }
-  if (hasAllOrSheet('hub_territory_cycle')) {
+  if (hasAllOrSheet('hub_territory_cycle') && bundle.territoryRegistry.length > 0) {
     await saveTerritoryRegistry(bundle.territoryRegistry);
   }
   if (hasAllOrSheet('coin_ledger_row') && bundle.coinLedgerRows && bundle.coinLedgerRows.length > 0) {
@@ -492,71 +673,88 @@ export async function commitOmniCsvBundleToStorage(
     await localStore.storage.setItem(HOJE_MANIFEST_STORAGE_KEY, bundle.hojeManifestYaml);
   }
 
-  // 2. Derive all active engines present in this CSV
+  // 2. Derive all active engines present in this CSV (including all 12 Universal Engines)
   const rawEngines = deriveActiveEnginesFromOmniBundle(bundle);
   const validEngineSet = new Set<string>([
     'territory_logistics',
     'roster_assignments',
     'study_synthesis',
+    'generic_wbs',
+    'incident_command',
+    'live_production_ros',
+    'tournament_pairings',
+    'canvassing_logistics',
     'financial_ledger',
+    'transformer',
     'inventory_assets',
     'action_tracker',
     'custom',
-    'live_production_ros',
-    'incident_command',
-    'tournament_pairings',
     'CheckInEngine',
     'DocumentEngine',
   ]);
   const activeEngines = rawEngines.filter((e) => validEngineSet.has(e)) as EngineId[];
-  if (!activeEngines.includes('roster_assignments')) {
+
+  const hasScheduleSheet =
+    hasAllOrSheet('hub_schedule_slot') || hasAllOrSheet('participant_privilege');
+  const hasTerritorySheet = hasAllOrSheet('hub_territory_cycle');
+
+  if (hasScheduleSheet && !activeEngines.includes('roster_assignments')) {
     activeEngines.unshift('roster_assignments');
   }
-  if (!activeEngines.includes('territory_logistics')) {
+  if (hasTerritorySheet && !activeEngines.includes('territory_logistics')) {
     activeEngines.push('territory_logistics');
   }
+  if (activeEngines.length === 0) {
+    activeEngines.push('roster_assignments', 'territory_logistics');
+  }
 
-  // 3. Build the combined Multi-Engine Partitioned Skeleton (Schedule + Territory)
-  const combinedSkeleton = buildCombinedMultiEngineSkeleton(bundle);
-
-  // 4. Create or update the primary Multi-Engine Event Container
+  // 3. Build the combined Multi-Engine Partitioned Skeleton (Schedule + Territory) when applicable
+  const shouldCreateHubContainer =
+    hasScheduleSheet || hasTerritorySheet || Boolean(options?.targetEventId);
   let primaryEventId = options?.targetEventId || '';
-  const eventName =
-    options?.customEventName?.trim() || `${bundle.unitName} — Multi-Engine`;
 
-  if (primaryEventId) {
-    const existingState = await localStore.loadEventState(primaryEventId);
+  if (shouldCreateHubContainer) {
+    const combinedSkeleton = buildCombinedMultiEngineSkeleton(bundle);
+    const eventName =
+      options?.customEventName?.trim() || `${bundle.unitName} — Multi-Engine`;
+    const targetHubId = primaryEventId || HUB_PRIMARY_EVENT_ID;
+    const existingState = await localStore.loadEventState(targetHubId);
+
     if (existingState) {
       const updatedConfig = {
         ...existingState.config,
+        id: targetHubId,
         name: options?.customEventName?.trim() || existingState.config.name,
         engineId: activeEngines[0],
         engines: activeEngines,
-      };
-      await localStore.saveEventState(primaryEventId, {
+        isHubPrimaryContainer: !options?.targetEventId,
+      } as any;
+      await localStore.saveEventState(targetHubId, {
         ...existingState,
         config: updatedConfig,
       });
-      await localStore.saveSkeleton(primaryEventId, combinedSkeleton);
+      await localStore.saveSkeleton(targetHubId, combinedSkeleton);
+      primaryEventId = targetHubId;
     } else {
-      primaryEventId = '';
+      const config = eventContainer.createEvent(
+        eventName,
+        'weekly',
+        ['01', '02', '03'],
+        activeEngines
+      );
+      const finalConfig = {
+        ...config,
+        id: targetHubId,
+        isHubPrimaryContainer: !options?.targetEventId,
+      } as any;
+      const state = eventContainer.createEventState(finalConfig);
+      primaryEventId = targetHubId;
+      await localStore.saveEventState(primaryEventId, state);
+      await localStore.saveSkeleton(primaryEventId, combinedSkeleton);
     }
   }
 
-  if (!primaryEventId) {
-    const config = eventContainer.createEvent(
-      eventName,
-      'weekly',
-      ['01', '02', '03'],
-      activeEngines
-    );
-    const state = eventContainer.createEventState(config);
-    primaryEventId = config.id;
-    await localStore.saveEventState(primaryEventId, state);
-    await localStore.saveSkeleton(primaryEventId, combinedSkeleton);
-  }
-
-  // 5. Restore embedded user-saved events (`event_node`) if present and not sample placeholders
+  // 4. Restore embedded events (`event_node`) if present in the CSV
   const restoredEventIds: string[] = [];
   if (
     hasAllOrSheet('event_node') &&
@@ -565,31 +763,96 @@ export async function commitOmniCsvBundleToStorage(
   ) {
     const existingIds = await localStore.getEventIds();
     for (const ev of bundle.events) {
-      // Skip synthetic sample placeholders (`evt-sample-*`) unless explicitly requested
-      if (ev.id.startsWith('evt-sample-')) continue;
-      if (ev.id === primaryEventId) continue;
+      if (ev.id === primaryEventId || ev.id === HUB_PRIMARY_EVENT_ID) continue;
 
       const evEngines = (ev.engines.filter((e) => validEngineSet.has(e)) as EngineId[]) || [
         'custom',
       ];
-      if (!existingIds.includes(ev.id)) {
+      const normalizedEvEngines: EngineId[] = evEngines.length > 0 ? evEngines : ['custom'];
+      const finalId = ev.id || `evt-${normalizedEvEngines[0]}`;
+
+      if (!existingIds.includes(finalId)) {
         const cfg = eventContainer.createEvent(
           ev.name,
           'weekly',
           ['01'],
-          evEngines.length > 0 ? evEngines : ['custom']
+          normalizedEvEngines
         );
-        const finalId = ev.id || cfg.id;
-        const finalConfig = { ...cfg, id: finalId };
+        const finalConfig = {
+          ...cfg,
+          id: finalId,
+          engineId: normalizedEvEngines[0],
+          engines: normalizedEvEngines,
+        };
         const st = eventContainer.createEventState(finalConfig);
         await localStore.saveEventState(finalId, st);
         await localStore.saveSkeleton(finalId, ev.registry);
         restoredEventIds.push(finalId);
       } else {
-        await localStore.saveSkeleton(ev.id, ev.registry);
-        restoredEventIds.push(ev.id);
+        const existingEvState = await localStore.loadEventState(finalId);
+        if (existingEvState) {
+          await localStore.saveEventState(finalId, {
+            ...existingEvState,
+            config: {
+              ...existingEvState.config,
+              name: ev.name || existingEvState.config.name,
+              engineId: normalizedEvEngines[0],
+              engines: normalizedEvEngines,
+            },
+          });
+        }
+        await localStore.saveSkeleton(finalId, ev.registry);
+        restoredEventIds.push(finalId);
       }
     }
+  }
+
+  if (!primaryEventId && restoredEventIds.length > 0) {
+    primaryEventId = restoredEventIds[0];
+  }
+
+  // 5. Synchronize `sekundo:events:v1` mirror for tree/event consumers & SIT diagnostics
+  try {
+    const allIds = await localStore.getEventIds();
+    const mirrorList: any[] = [];
+    for (const id of allIds) {
+      const st = await localStore.loadEventState(id);
+      if (!st) continue;
+      const skel = (await localStore.loadSkeleton(id)) || [];
+      const engs = getActiveEngines(st.config);
+      const childNodes =
+        skel.length > 1 &&
+        (skel[0].type === 'group' || skel[0].type === 'root' || skel[0].type === 'header')
+          ? skel.slice(1)
+          : skel;
+      mirrorList.push({
+        id: st.config.id,
+        title: st.config.name,
+        name: st.config.name,
+        engineId: st.config.engineId || engs[0] || 'custom',
+        engines: engs,
+        registry: skel,
+        root: {
+          id: `root-${st.config.id}`,
+          type: 'group',
+          label: skel[0]?.label || st.config.name,
+          children: childNodes.map((n) => ({
+            id: n.key,
+            key: n.key,
+            type: n.type,
+            label: n.label,
+            value: n.value,
+            email: n.email || '',
+            meta: n.meta || {},
+          })),
+        },
+      });
+    }
+    const serializedMirror = JSON.stringify(mirrorList);
+    writeWebLocalStorage(LEGACY_EVENTS_V1_STORAGE_KEY, serializedMirror);
+    await localStore.storage.setItem(LEGACY_EVENTS_V1_STORAGE_KEY, serializedMirror);
+  } catch {
+    // ignore mirror error
   }
 
   return {
@@ -599,3 +862,4 @@ export async function commitOmniCsvBundleToStorage(
     restoredEventIds,
   };
 }
+

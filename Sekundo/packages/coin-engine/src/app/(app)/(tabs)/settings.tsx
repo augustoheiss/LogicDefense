@@ -54,7 +54,7 @@ import {
 } from '@coin/core/localAiAnalystSynthesizer';
 import type { TableGoals, CoinTable } from '@coin/core/types';
 
-const API_URL = process.env.EXPO_PUBLIC_AI_BACKEND_URL || process.env.EXPO_PUBLIC_API_URL || 'https://ocorrencias-pdf-writer.onrender.com';
+const API_URL = process.env.EXPO_PUBLIC_AI_BACKEND_URL || process.env.EXPO_PUBLIC_API_URL || 'https://api.sekundo.local';
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 

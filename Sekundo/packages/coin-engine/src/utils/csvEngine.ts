@@ -517,15 +517,238 @@ export function parseCSVText(
     };
   }
 
+  const todayStr = new Date().toISOString().slice(0, 10);
+
+  // --- Sekundo Cross-Engine Router: Multi-Planilha Omni-CSV (`#PLANILHA,coin_ledger_row`) & Canonical E09 (`_key,_type,label,value,email,_meta_json`) ---
+  const firstRawLine = allLines[0] || '';
+  const isSekundoOmniCsv =
+    /^#?(PLANILHA|ABA_PLANILHA)[,:]/i.test(firstRawLine) ||
+    allLines.some((l) => /^_container_id,_key,_type,_engines/i.test(l) || /^_record_kind,_container_id/i.test(l));
+  const isSekundoCanonicalTree =
+    !isSekundoOmniCsv &&
+    allLines.some((l) => /^_?key,_?type,label,value/i.test(l));
+
+  if (isSekundoOmniCsv) {
+    let currentSheet = '';
+    let activeOmniHeaders: string[] = [];
+    const hasSheetMarkers = allLines.some((l) => /^#?PLANILHA[,:]/i.test(l));
+
+    for (let i = 0; i < allLines.length; i++) {
+      const line = allLines[i];
+      if (/^#?PLANILHA[,:]/i.test(line)) {
+        const parts = splitCSVLine(line, ',');
+        currentSheet = (parts[1] || '').trim().toLowerCase();
+        continue;
+      }
+      if (/^#?(ABA_PLANILHA|FIM_PLANILHA)[,:]/i.test(line)) {
+        currentSheet = '';
+        continue;
+      }
+      if (/^(_container_id,_key|_record_kind,_container_id)/i.test(line)) {
+        activeOmniHeaders = splitCSVLine(line, ',').map((h) => cleanCell(h).toLowerCase());
+        continue;
+      }
+      if (activeOmniHeaders.length === 0) continue;
+
+      const cols = splitCSVLine(line, ',');
+      const rowMap: Record<string, string> = {};
+      activeOmniHeaders.forEach((h, idx) => {
+        rowMap[h] = cols[idx] !== undefined ? cleanCell(cols[idx]) : '';
+      });
+
+      const isCoinRow =
+        currentSheet === 'coin_ledger_row' ||
+        currentSheet === 'financial_ledger' ||
+        rowMap._record_kind === 'coin_ledger_row' ||
+        (!hasSheetMarkers && rowMap._engines === 'financial_ledger');
+
+      if (!isCoinRow) continue;
+
+      let meta: Record<string, any> = {};
+      if (rowMap._meta_json) {
+        try {
+          meta = JSON.parse(rowMap._meta_json);
+        } catch {
+          meta = {};
+        }
+      }
+
+      if (meta.tableName && (!metaObj.name || metaObj.name === 'Minha Planilha')) {
+        metaObj.name = String(meta.tableName);
+      }
+      if ((rowMap._container_id || meta.tableId) && !metaObj.tableId) {
+        metaObj.tableId = String(rowMap._container_id || meta.tableId);
+      }
+      if (meta.tableEnvelope && typeof meta.tableEnvelope === 'object') {
+        const env = meta.tableEnvelope;
+        if (env.goals) metaObj.tableGoals = env.goals;
+        if (env.investorProfile) metaObj.investorProfile = env.investorProfile;
+        if (env.schema) metaObj.schema = env.schema;
+        if (env.activeSectors) metaObj.activeSectors = env.activeSectors;
+        if (env.dashboardConfig) metaObj.dashboardConfig = env.dashboardConfig;
+        if (env.sectorParams) metaObj.sectorParams = env.sectorParams;
+      }
+
+      const parsedVal =
+        parseValue(
+          rowMap.primary_assignee ||
+            rowMap.notes_or_payload ||
+            String(meta.amount ?? meta.amountBRL ?? meta.value ?? 0)
+        ) ?? 0;
+      const normalizedDate =
+        parseAndNormalizeDate(rowMap.date_or_cycle || meta.date || '') || todayStr;
+      const entryType = options?.forceEntryType
+        ? options.forceEntryType
+        : normalizeEntryType(
+            rowMap.secondary_assignee || meta.entryType || options?.fallbackEntryType || 'revenue'
+          );
+
+      const newRow: TableRow = {
+        id: rowMap._key || meta.id || `coin-omni-${rows.length + 1}`,
+        date: normalizedDate,
+        value: parsedVal,
+        description: neutralizeCsvFormula(
+          rowMap.title_or_name || meta.description || 'Lançamento Importado'
+        ),
+        category: neutralizeCsvFormula(rowMap.group_or_tier || meta.category || 'Geral'),
+        tags: neutralizeCsvFormula(
+          rowMap.capabilities_or_tags ||
+            (Array.isArray(meta.tags) ? meta.tags.join(',') : meta.tags) ||
+            meta.paymentMethod ||
+            'PIX'
+        ),
+        entryType,
+        createdAt: new Date().toISOString(),
+      };
+
+      if (typeof meta.monthlyValue === 'number') newRow.monthlyValue = meta.monthlyValue;
+      if (typeof meta.monthCount === 'number') newRow.monthCount = meta.monthCount;
+      if (meta.periodStart || meta.period_start) {
+        newRow.periodStart = String(meta.periodStart || meta.period_start);
+      }
+      if (meta.periodEnd || meta.period_end) {
+        newRow.periodEnd = String(meta.periodEnd || meta.period_end);
+      }
+      if (meta.ticker) newRow.ticker = String(meta.ticker);
+      if (typeof meta.quantity === 'number') newRow.quantity = meta.quantity;
+      if (typeof meta.unitPrice === 'number') newRow.unitPrice = meta.unitPrice;
+      if (meta.customValues && typeof meta.customValues === 'object') {
+        newRow.customValues = meta.customValues;
+      }
+
+      rows.push(newRow);
+    }
+
+    const rowSectors = detectSectorsFromRows(rows as TableRow[]);
+    const detectedSectors = Array.from(
+      new Set(['personal_finance', ...(metaObj.activeSectors || []), ...rowSectors])
+    );
+    return {
+      rows,
+      errors,
+      skippedCount,
+      detectedSectors,
+      metadata: metaObj,
+    };
+  }
+
+  if (isSekundoCanonicalTree) {
+    const canonHeaderIdx = allLines.findIndex((l) => /^_?key,_?type,label,value/i.test(l));
+    const canonDelim = detectDelimiter(allLines[canonHeaderIdx]);
+    const canonHeaders = splitCSVLine(allLines[canonHeaderIdx], canonDelim).map((h) =>
+      cleanCell(h).toLowerCase()
+    );
+    const kIdx = findHeaderIdx(canonHeaders, ['_key', 'key']);
+    const tIdx = findHeaderIdx(canonHeaders, ['_type', 'type', 'tipo']);
+    const lIdx = findHeaderIdx(canonHeaders, ['label', 'descricao', 'description', 'nome']);
+    const vIdx = findHeaderIdx(canonHeaders, ['value', 'valor', 'amount']);
+    const mIdx = findHeaderIdx(canonHeaders, ['_meta_json', 'meta_json', 'metadata_json']);
+
+    for (let i = canonHeaderIdx + 1; i < allLines.length; i++) {
+      const cols = splitCSVLine(allLines[i], canonDelim);
+      const rawKey = kIdx !== -1 && cols[kIdx] ? cleanCell(cols[kIdx]) : '';
+      const rawNodeType = tIdx !== -1 && cols[tIdx] ? cleanCell(cols[tIdx]).toLowerCase() : '';
+      const rawLabel = lIdx !== -1 && cols[lIdx] ? cleanCell(cols[lIdx]) : '';
+      const rawVal = vIdx !== -1 && cols[vIdx] ? cleanCell(cols[vIdx]) : '';
+      const rawMeta = mIdx !== -1 && cols[mIdx] ? cleanCell(cols[mIdx]) : '';
+
+      if (
+        rawNodeType === 'header' ||
+        rawNodeType === 'root' ||
+        rawNodeType === 'branch' ||
+        rawNodeType === 'group' ||
+        rawNodeType === 'raiz' ||
+        rawNodeType === 'bloco'
+      ) {
+        if (rawKey === '01' && rawLabel) {
+          metaObj.name = rawLabel;
+        }
+        continue;
+      }
+
+      let meta: Record<string, any> = {};
+      if (rawMeta) {
+        try {
+          meta = JSON.parse(rawMeta);
+        } catch {
+          meta = {};
+        }
+      }
+
+      const parsedVal =
+        parseValue(rawVal || String(meta.amountBRL ?? meta.amount ?? meta.value ?? 0)) ?? 0;
+      const normalizedDate =
+        parseAndNormalizeDate(meta.date || meta.data || '') || todayStr;
+      const entryType = options?.forceEntryType
+        ? options.forceEntryType
+        : normalizeEntryType(
+            meta.entryType || meta.entry_type || options?.fallbackEntryType || 'revenue'
+          );
+
+      const newRow: TableRow = {
+        id: rawKey || meta.id || `coin-canon-${rows.length + 1}`,
+        date: normalizedDate,
+        value: parsedVal,
+        description: neutralizeCsvFormula(rawLabel || meta.description || 'Lançamento Importado'),
+        category: neutralizeCsvFormula(meta.category || meta.categoria || 'Geral'),
+        tags: neutralizeCsvFormula(meta.paymentMethod || meta.tags || 'PIX'),
+        entryType,
+        createdAt: new Date().toISOString(),
+      };
+
+      if (typeof meta.monthlyValue === 'number') newRow.monthlyValue = meta.monthlyValue;
+      if (typeof meta.monthCount === 'number') newRow.monthCount = meta.monthCount;
+      if (meta.ticker) newRow.ticker = String(meta.ticker);
+      if (typeof meta.quantity === 'number') newRow.quantity = meta.quantity;
+      if (typeof meta.unitPrice === 'number') newRow.unitPrice = meta.unitPrice;
+
+      rows.push(newRow);
+    }
+
+    const rowSectors = detectSectorsFromRows(rows as TableRow[]);
+    const detectedSectors = Array.from(
+      new Set(['personal_finance', ...(metaObj.activeSectors || []), ...rowSectors])
+    );
+    return {
+      rows,
+      errors,
+      skippedCount,
+      detectedSectors,
+      metadata: metaObj,
+    };
+  }
+
   const delimiter = detectDelimiter(transactionLines[0]);
   const headers = splitCSVLine(transactionLines[0], delimiter).map((h) => cleanCell(h).toLowerCase());
 
-  const idAliases = ['id', 'uuid', 'transaction_id', 'id_transacao', 'external_id'];
-  const descriptionAliases = ['description', 'descricao', 'descrição', 'historico', 'memo', 'title'];
+  const idAliases = ['id', 'uuid', 'transaction_id', 'id_transacao', 'external_id', '_key', 'key'];
+  const descriptionAliases = ['description', 'descricao', 'descrição', 'historico', 'memo', 'title', 'label'];
   const categoryAliases = ['category', 'categoria'];
-  const tagsAliases = ['tags', 'sector_tags', 'etiquetas'];
-  const metadataAliases = ['metadata_json', 'metadatajson', 'metadata', 'metadados'];
+  const tagsAliases = ['tags', 'sector_tags', 'etiquetas', 'metodo_pagamento', 'payment_method'];
+  const metadataAliases = ['metadata_json', 'metadatajson', 'metadata', 'metadados', '_meta_json'];
   const typeAliases = ['entrytype', 'entry_type', 'tipo', 'type'];
+  const nodeKindIdx = findHeaderIdx(headers, ['_type', 'tipo']);
+  const explicitEntryTypeIdx = findHeaderIdx(headers, ['entry_type', 'entrytype']);
   const monthlyValueAliases = ['monthlyvalue', 'valor_mensal', 'monthly_value', 'valor mensal'];
   const monthCountAliases = ['monthcount', 'qtd_meses', 'month_count', 'months', 'meses'];
   const periodStartAliases = ['period_start', 'periodstart', 'inicio_periodo', 'period_inicio', 'período início'];
@@ -543,7 +766,7 @@ export function parseCSVText(
   const categoryIdx = findHeaderIdx(headers, categoryAliases);
   const tagsIdx = findHeaderIdx(headers, tagsAliases);
   const metadataIdx = findHeaderIdx(headers, metadataAliases);
-  const typeIdx = findHeaderIdx(headers, typeAliases);
+  const typeIdx = explicitEntryTypeIdx !== -1 ? explicitEntryTypeIdx : findHeaderIdx(headers, typeAliases);
   const monthlyValueIdx = findHeaderIdx(headers, monthlyValueAliases);
   const monthCountIdx = findHeaderIdx(headers, monthCountAliases);
   const periodStartIdx = findHeaderIdx(headers, periodStartAliases);
@@ -584,14 +807,30 @@ export function parseCSVText(
     }
   });
 
-  const todayStr = new Date().toISOString().slice(0, 10);
-
   for (let i = 1; i < transactionLines.length; i++) {
     const lineNum = i + 1;
     const cols = splitCSVLine(transactionLines[i], delimiter);
     if (cols.length === 0 || (cols.length === 1 && cols[0] === '')) {
       skippedCount++;
       continue;
+    }
+
+    // Skip Sekundo Clean-Human structural tree header rows (e.g. `01,header,🪙 Assistente Moeda...`)
+    if (nodeKindIdx !== -1 && cols[nodeKindIdx]) {
+      const nk = cleanCell(cols[nodeKindIdx]).toLowerCase();
+      if (
+        nk === 'header' ||
+        nk === 'root' ||
+        nk === 'branch' ||
+        nk === 'group' ||
+        nk === 'raiz' ||
+        nk === 'bloco'
+      ) {
+        if (descriptionIdx !== -1 && cols[descriptionIdx]) {
+          metaObj.name = cleanCell(cols[descriptionIdx]);
+        }
+        continue;
+      }
     }
 
     try {

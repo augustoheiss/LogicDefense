@@ -138,7 +138,43 @@ export function parseCSVWithQuarantine(csvText: string): {
   }
 
   // Map header aliases
-  const rawHeaders = rawGrid[0];
+  // First check if this is an Assistente Moeda Backup v3 (## COIN ASSISTANT BACKUP ... ## ROWS ##)
+  let tableHeaderRowIdx = 0;
+  let coinBackupTableName = '🪙 Assistente Moeda — Planilha Financeira';
+  let coinBackupTableId = 'coin-default';
+  let isCoinBackupBanner = false;
+  const hasRowsMarker = rawGrid.some((row) =>
+    /^##\s*ROWS\s*##$/i.test((row[0] || '').trim())
+  );
+
+  for (let r = 0; r < rawGrid.length; r++) {
+    const firstCell = (rawGrid[r][0] || '').trim();
+    const secondCell = (rawGrid[r][1] || '').trim();
+    if (firstCell.startsWith('## COIN ASSISTANT BACKUP')) {
+      isCoinBackupBanner = true;
+    } else if (firstCell.startsWith('## TABLE_NAME:')) {
+      coinBackupTableName = firstCell.replace(/^##\s*TABLE_NAME:\s*/i, '').replace(/\s*##$/, '').trim() || coinBackupTableName;
+    } else if (firstCell.startsWith('## TABLE_ID:')) {
+      coinBackupTableId = firstCell.replace(/^##\s*TABLE_ID:\s*/i, '').replace(/\s*##$/, '').trim() || coinBackupTableId;
+    } else if (isCoinBackupBanner && /^name$/i.test(firstCell) && secondCell) {
+      coinBackupTableName = secondCell;
+    } else if (isCoinBackupBanner && /^table_id$/i.test(firstCell) && secondCell) {
+      coinBackupTableId = secondCell;
+    } else if (firstCell === '## ROWS ##' || /^##\s*ROWS\s*##$/i.test(firstCell)) {
+      isCoinBackupBanner = true;
+      tableHeaderRowIdx = r + 1;
+      break;
+    } else if (!firstCell.startsWith('##') && isCoinBackupBanner && !hasRowsMarker) {
+      tableHeaderRowIdx = r;
+      break;
+    }
+  }
+
+  if (tableHeaderRowIdx >= rawGrid.length) {
+    return { validRows, quarantinedRows };
+  }
+
+  const rawHeaders = rawGrid[tableHeaderRowIdx];
   let keyIdx = -1;
   let typeIdx = -1;
   let labelIdx = -1;
@@ -154,18 +190,114 @@ export function parseCSVWithQuarantine(csvText: string): {
       keyIdx = idx;
     } else if (typeIdx === -1 && ['type', 'tipo'].includes(norm)) {
       typeIdx = idx;
-    } else if (labelIdx === -1 && ['label', 'rotulo', 'nome', 'name', 'titulo', 'title', 'parte', 'tema', 'endereco_porta'].includes(norm)) {
+    } else if (
+      labelIdx === -1 &&
+      [
+        'label',
+        'rotulo',
+        'nome',
+        'name',
+        'titulo',
+        'title',
+        'parte',
+        'tema',
+        'endereco_porta',
+        'descricao',
+        'description',
+      ].includes(norm)
+    ) {
       labelIdx = idx;
     } else if (valueIdx === -1 && ['value', 'valor', 'trabalhado', 'status', 'designado', 'duracao_seg'].includes(norm)) {
       valueIdx = idx;
     } else if (emailIdx === -1 && ['email', 'e-mail', 'contato'].includes(norm)) {
       emailIdx = idx;
-    } else if (metaIdx === -1 && ['meta_json', 'meta'].includes(norm)) {
+    } else if (metaIdx === -1 && ['meta_json', 'meta', 'metadata_json'].includes(norm)) {
       metaIdx = idx;
     } else {
       extraHeaders.push({ name: h.trim(), idx });
     }
   });
+
+  // Check if this is an Assistente Moeda CSV (Backup v3 or Tabular) that has date+value+description instead of hierarchical _key
+  const normHeaderSet = new Set(rawHeaders.map((h) => normalizeHeaderName(h)));
+  const isCoinTabularWithoutKey =
+    isCoinBackupBanner ||
+    (!normHeaderSet.has('key') &&
+      !normHeaderSet.has('chave') &&
+      (normHeaderSet.has('date') || normHeaderSet.has('data')) &&
+      (normHeaderSet.has('value') || normHeaderSet.has('valor')));
+
+  if (isCoinTabularWithoutKey) {
+    validRows.push({
+      _key: '01',
+      _type: 'header',
+      label: coinBackupTableName,
+      value: '',
+      email: '',
+      _meta_json: JSON.stringify({ tableId: coinBackupTableId, tableName: coinBackupTableName }),
+    });
+
+    let seq = 0;
+    for (let r = tableHeaderRowIdx + 1; r < rawGrid.length; r++) {
+      const rowData = rawGrid[r];
+      const firstCell = (rowData[0] || '').trim();
+      if (!firstCell || firstCell.startsWith('##')) continue;
+      seq++;
+      const itemKey = `01-${String(seq).padStart(2, '0')}`;
+      const labelVal =
+        labelIdx !== -1 && rowData[labelIdx] !== undefined
+          ? rowData[labelIdx].trim()
+          : `Lançamento ${seq}`;
+      const valueVal =
+        valueIdx !== -1 && rowData[valueIdx] !== undefined ? rowData[valueIdx].trim() : '0';
+
+      const metaObj: Record<string, any> = {
+        amountBRL: Number(valueVal) || 0,
+        tableId: coinBackupTableId,
+      };
+      if (metaIdx !== -1 && rowData[metaIdx]) {
+        try {
+          Object.assign(metaObj, JSON.parse(rowData[metaIdx]));
+        } catch {
+          // ignore
+        }
+      }
+      for (const extra of extraHeaders) {
+        const cellVal = rowData[extra.idx] !== undefined ? rowData[extra.idx].trim() : '';
+        if (cellVal !== '') {
+          const normKey = normalizeHeaderName(extra.name);
+          if (normKey === 'entry_type' || normKey === 'entrytype') {
+            metaObj.entryType = cellVal;
+          } else if (normKey === 'category' || normKey === 'categoria') {
+            metaObj.category = cellVal;
+          } else if (normKey === 'tags' || normKey === 'metodo_pagamento') {
+            metaObj.paymentMethod = cellVal;
+            metaObj.tags = cellVal;
+          } else if (normKey === 'monthly_value') {
+            metaObj.monthlyValue = Number(cellVal) || 0;
+          } else if (normKey === 'month_count') {
+            metaObj.monthCount = Number(cellVal) || 1;
+          } else if (normKey === 'quantity') {
+            metaObj.quantity = Number(cellVal) || 0;
+          } else if (normKey === 'unit_price') {
+            metaObj.unitPrice = Number(cellVal) || 0;
+          } else {
+            metaObj[extra.name] = cellVal;
+          }
+        }
+      }
+
+      validRows.push({
+        _key: itemKey,
+        _type: 'item',
+        label: labelVal,
+        value: valueVal,
+        email: '',
+        _meta_json: JSON.stringify(metaObj),
+      });
+    }
+    return { validRows, quarantinedRows };
+  }
 
   if (keyIdx === -1) {
     // If no key header found at all, quarantine the entire file as invalid schema
@@ -178,7 +310,7 @@ export function parseCSVWithQuarantine(csvText: string): {
   }
 
   // Process rows
-  for (let r = 1; r < rawGrid.length; r++) {
+  for (let r = tableHeaderRowIdx + 1; r < rawGrid.length; r++) {
     const rowData = rawGrid[r];
     const rawLine = rowData.join(delimiter);
     const lineNum = r + 1;

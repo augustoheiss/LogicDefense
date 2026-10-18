@@ -46,7 +46,11 @@ const NAV_ITEMS = [
 
 function CoinEngineShell() {
   const { width } = useWindowDimensions();
-  const isDesktop = width >= 1024;
+  const [isHydrated, setIsHydrated] = React.useState(false);
+  React.useEffect(() => {
+    setIsHydrated(true);
+  }, []);
+  const isDesktop = isHydrated && width >= 1024;
   const pathname = usePathname();
   const router = useRouter();
   const db = useCoinDB();
@@ -149,10 +153,11 @@ function CoinEngineShell() {
           </View>
         )}
 
-        <View style={{ flex: 1 }}>
+        <View style={{ flex: 1, minHeight: 0 }}>
           <Tabs
             screenOptions={{
               headerShown: false,
+              sceneStyle: { flex: 1, backgroundColor: colors.background.primary },
               tabBarStyle: isDesktop ? { display: 'none' } : styles.tabBar,
               tabBarActiveTintColor: colors.accent.purple,
               tabBarInactiveTintColor: colors.text.disabled,

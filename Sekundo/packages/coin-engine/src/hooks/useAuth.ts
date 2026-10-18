@@ -9,7 +9,7 @@
 import { useState, useEffect, useCallback, createContext, useContext, useMemo } from 'react';
 import { getStoredLicenseKey, validateMobileLicenseKey, type UserProfile } from '../storage/authService';
 
-const API_URL = process.env.EXPO_PUBLIC_AI_BACKEND_URL || process.env.EXPO_PUBLIC_API_URL || 'https://ocorrencias-pdf-writer.onrender.com';
+const API_URL = process.env.EXPO_PUBLIC_AI_BACKEND_URL || process.env.EXPO_PUBLIC_API_URL || 'https://api.sekundo.local';
 
 export type AuthMode = 'guest' | 'authenticated';
 

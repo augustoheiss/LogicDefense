@@ -211,7 +211,11 @@ export function CadWorkspaceShell({
   onSwitchToClassicList,
 }: CadWorkspaceShellProps) {
   const { width, height } = useWindowDimensions();
-  const isDesktop = width >= 768;
+  const [isHydrated, setIsHydrated] = useState(false);
+  React.useEffect(() => {
+    setIsHydrated(true);
+  }, []);
+  const isDesktop = isHydrated && width >= 768;
 
   const [activeTool, setActiveTool] = useState<CadToolNodeId | null>(
     dashboardConfig?.activeCadTool ?? null
@@ -317,7 +321,14 @@ export function CadWorkspaceShell({
 
   return (
     <View
-      style={[styles.viewportShell, Platform.OS === 'web' && ({ height: '100%', maxHeight: height } as any)]}
+      style={[
+        styles.viewportShell,
+        Platform.OS === 'web' &&
+          ({
+            minHeight: 560,
+            ...(isHydrated && height > 300 ? { maxHeight: height } : {}),
+          } as any),
+      ]}
       testID="cad-workspace-shell"
     >
       {/* ── 1. UNIFIED TOP CAD HUD BAR (Zero Duplicate Header) ── */}

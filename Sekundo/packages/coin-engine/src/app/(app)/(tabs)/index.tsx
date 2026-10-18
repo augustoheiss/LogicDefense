@@ -61,7 +61,11 @@ export default function HojeScreen() {
   const db = useCoinDB();
   const { activeSectors } = useSectorRegistry();
   const { width } = useWindowDimensions();
-  const isDesktop = width >= 1024;
+  const [isHydrated, setIsHydrated] = useState(false);
+  React.useEffect(() => {
+    setIsHydrated(true);
+  }, []);
+  const isDesktop = isHydrated && width >= 1024;
 
   const [showAddModal, setShowAddModal] = useState(false);
   const [showTableSwitcher, setShowTableSwitcher] = useState(false);
@@ -75,13 +79,14 @@ export default function HojeScreen() {
     onOpenBuilder: () => setShowAppBuilder(true),
   });
 
-  // ── Greeting based on current time ──────────────────────
+  // ── Greeting based on current time (hydrated client only) ──────────────────────
   const greeting = useMemo(() => {
+    if (!isHydrated) return 'Olá';
     const hour = new Date().getHours();
     if (hour >= 5 && hour < 12) return 'Bom dia';
     if (hour >= 12 && hour < 18) return 'Boa tarde';
     return 'Boa noite';
-  }, []);
+  }, [isHydrated]);
 
   // ── Financial Health Diagnostic ────────────────────────
   const healthReport = useMemo(() => {

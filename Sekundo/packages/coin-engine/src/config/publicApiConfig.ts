@@ -7,7 +7,7 @@
 
 export const DEFAULT_PUBLIC_API_KEY = '';
 export const PUBLIC_API_HEADER_NAME = 'X-Spreadsheet-Key';
-export const DEFAULT_PUBLIC_API_URL = process.env.EXPO_PUBLIC_AI_BACKEND_URL || process.env.EXPO_PUBLIC_API_URL || 'https://ocorrencias-pdf-writer.onrender.com';
+export const DEFAULT_PUBLIC_API_URL = process.env.EXPO_PUBLIC_AI_BACKEND_URL || process.env.EXPO_PUBLIC_API_URL || 'https://api.sekundo.local';
 export const LOCAL_PUBLIC_API_URL = 'http://localhost:8000';
 
 export interface AppendTransactionItem {
@@ -93,7 +93,7 @@ export const OPENAPI_SPEC_V1 = {
   },
   "servers": [
     {
-      "url": "https://ocorrencias-pdf-writer.onrender.com",
+      "url": "https://api.sekundo.local",
       "description": "Active API Server"
     }
   ],

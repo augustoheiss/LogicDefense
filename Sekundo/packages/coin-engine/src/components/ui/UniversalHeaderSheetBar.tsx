@@ -5,7 +5,7 @@
  * Allows instant spreadsheet switching, reordering, and table management anywhere in the app.
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, Pressable, StyleSheet, Platform, useWindowDimensions } from 'react-native';
 import { colors } from '@coin/theme/colors';
 import { spacing, radius } from '@coin/theme/spacing';
@@ -16,7 +16,11 @@ export function UniversalHeaderSheetBar() {
   const db = useCoinDB();
   const [modalVisible, setModalVisible] = useState(false);
   const { width } = useWindowDimensions();
-  const isDesktop = width >= 768;
+  const [isHydrated, setIsHydrated] = useState(false);
+  useEffect(() => {
+    setIsHydrated(true);
+  }, []);
+  const isDesktop = isHydrated && width >= 768;
 
   const activeTable = db.activeTable;
   const rowCount = activeTable?.rows?.length ?? 0;

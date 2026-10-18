@@ -82,15 +82,17 @@ describe('Clean-Room Hygiene Gate & Sanitizer Paradox Shield (Bloco 1)', () => {
     }
   });
 
-  it('enforces zero Sanitizer Paradox dictionaries or personal fallback names across core and app source files', () => {
+  it('enforces zero Sanitizer Paradox dictionaries, personal fallback names, or legacy external URLs across core, coin-engine, and app source files', () => {
     const repoRoot = path.resolve(__dirname, '../../../..');
     const coreFiles = collectSourceFiles(path.join(repoRoot, 'packages/core/src'));
+    const coinFiles = collectSourceFiles(path.join(repoRoot, 'packages/coin-engine/src'));
     const appFiles = collectSourceFiles(path.join(repoRoot, 'packages/app/src'));
-    const allFiles = [...coreFiles, ...appFiles];
-    expect(allFiles.length).toBeGreaterThan(20);
+    const allFiles = [...coreFiles, ...coinFiles, ...appFiles];
+    expect(allFiles.length).toBeGreaterThan(80);
 
     // Build patterns dynamically so this test file itself contains zero literal proprietary tokens
     const legacyArrayIdentifier = ['LEGACY', 'SENSITIVE', 'REPLACEMENTS'].join('_');
+    const legacyRenderHost = ['ocorrencias', 'pdf', 'writer'].join('-');
     const forbiddenPiiPattern = new RegExp(
       '\\b(' + ['Jo\\u00e3o', 'Bruno', 'Carlos', 'Marcos', 'Andr\\u00e9'].join('|') + ')\\b'
     );
@@ -101,6 +103,9 @@ describe('Clean-Room Hygiene Gate & Sanitizer Paradox Shield (Bloco 1)', () => {
       const rel = path.relative(repoRoot, file);
       if (content.includes(legacyArrayIdentifier)) {
         violations.push(`${rel}: contains ${legacyArrayIdentifier}`);
+      }
+      if (content.includes(legacyRenderHost)) {
+        violations.push(`${rel}: contains legacy external host ${legacyRenderHost}`);
       }
       const piiMatch = content.match(forbiddenPiiPattern);
       if (piiMatch) {

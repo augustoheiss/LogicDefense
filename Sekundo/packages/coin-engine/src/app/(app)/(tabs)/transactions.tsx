@@ -87,21 +87,23 @@ export default function TransactionsScreen() {
   const [stagingRows, setStagingRows] = useState<TableRow[]>([]);
   const [isAmbiguousImport, setIsAmbiguousImport] = useState(false);
   const { width } = useWindowDimensions();
-  const isDesktop = width >= 1024;
+  const [isHydrated, setIsHydrated] = useState(false);
+  useEffect(() => {
+    setIsHydrated(true);
+  }, []);
+  const isDesktop = isHydrated && width >= 1024;
 
   // ── Search & View Mode States ──────────────────────────
   const [searchQuery, setSearchQuery] = useState('');
   const searchInputRef = useRef<TextInput>(null);
-  const [viewMode, setViewMode] = useState<'cards' | 'grid'>(() =>
-    getUIViewModeSync(width >= 1024 ? 'grid' : 'cards')
-  );
+  const [viewMode, setViewMode] = useState<'cards' | 'grid'>('cards');
   const [hasUserChosenViewMode, setHasUserChosenViewMode] = useState(false);
 
   useEffect(() => {
-    if (!hasUserChosenViewMode) {
+    if (isHydrated && !hasUserChosenViewMode) {
       setViewMode(getUIViewModeSync(isDesktop ? 'grid' : 'cards'));
     }
-  }, [isDesktop, hasUserChosenViewMode]);
+  }, [isHydrated, isDesktop, hasUserChosenViewMode]);
 
   const handleSelectViewMode = useCallback((mode: 'cards' | 'grid') => {
     setHasUserChosenViewMode(true);

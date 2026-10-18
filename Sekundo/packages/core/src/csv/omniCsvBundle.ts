@@ -127,13 +127,18 @@ export interface OmniCoinLedgerRowItem {
   tableName?: string;
   monthlyValue?: number;
   monthCount?: number;
+  periodStart?: string;
+  periodEnd?: string;
   period_start?: string;
   period_end?: string;
-  tags?: string[];
+  tags?: string | string[];
   ticker?: string;
   quantity?: number;
   unitPrice?: number;
+  metadataJson?: string;
   metadata_json?: string;
+  customValues?: Record<string, string | number | boolean>;
+  tableEnvelope?: Record<string, any>;
 }
 
 export const DEFAULT_COIN_LEDGER_ROWS: OmniCoinLedgerRowItem[] = [
@@ -428,8 +433,11 @@ export function isOmniCsvText(csvText: string): boolean {
     clean.startsWith('PLANILHA,') ||
     clean.startsWith('_record_kind,') ||
     clean.startsWith('_container_id,_key,') ||
+    clean.startsWith('## COIN ASSISTANT BACKUP') ||
     /^#?PLANILHA[,:]/im.test(clean) ||
-    /^#?ABA_PLANILHA[,:]/im.test(clean)
+    /^#?ABA_PLANILHA[,:]/im.test(clean) ||
+    /^##\s*COIN ASSISTANT BACKUP/im.test(clean) ||
+    /^##\s*ROWS\s*##/im.test(clean)
   );
 }
 
@@ -524,12 +532,114 @@ export function parseRawOmniCsvTable(csvText: string): {
   const rows: Record<string, string>[] = [];
   let unassignedBatch: Record<string, string>[] = [];
 
+  // Assistente Moeda Backup v3 header envelope state
+  let coinBackupTableId = '';
+  let coinBackupTableName = '';
+  const coinBackupEnvelope: Record<string, any> = {};
+  let coinEnvelopeAttached = false;
+  const rowsMarkerIdx = matrix.findIndex((row) =>
+    /^##\s*ROWS\s*##$/i.test((row[0] || '').trim())
+  );
+
   for (let r = 0; r < matrix.length; r++) {
     const line = matrix[r];
     if (line.every((cell) => cell.trim() === '')) continue;
 
     const firstCell = (line[0] || '').trim();
     const secondCell = (line[1] || '').trim();
+
+    // 0a. If the file has a `## ROWS ##` marker (Assistente Moeda Backup v3), everything before `rowsMarkerIdx` is envelope metadata/schema
+    if (rowsMarkerIdx !== -1 && r <= rowsMarkerIdx) {
+      currentSheetKind = 'coin_ledger_row';
+      presentSheetsSet.add('coin_ledger_row');
+      if (!firstCell.startsWith('##') && secondCell) {
+        const k = firstCell.toLowerCase();
+        if (k === 'table_id' || k === 'tableid') coinBackupTableId = secondCell;
+        else if (k === 'name' || k === 'nome') coinBackupTableName = secondCell;
+        else if (k === 'description' || k === 'descricao') coinBackupEnvelope.description = secondCell;
+        else if (k === 'active_sectors') {
+          try {
+            coinBackupEnvelope.activeSectors = JSON.parse(decodeURIComponent(secondCell));
+          } catch {}
+        } else if (k === 'dashboard_config') {
+          try {
+            coinBackupEnvelope.dashboardConfig = JSON.parse(decodeURIComponent(secondCell));
+          } catch {}
+        } else if (k === 'sector_params') {
+          try {
+            coinBackupEnvelope.sectorParams = JSON.parse(decodeURIComponent(secondCell));
+          } catch {}
+        } else if (k === 'profile_type') {
+          coinBackupEnvelope.investorProfile = {
+            ...(coinBackupEnvelope.investorProfile || {
+              emergencyFundMonthsGoal: 6,
+              fireTargetAnnualExpensesMultiplier: 25,
+            }),
+            profileType: secondCell,
+          };
+        } else if (k === 'emergency_fund_goal_months' && coinBackupEnvelope.investorProfile) {
+          coinBackupEnvelope.investorProfile.emergencyFundMonthsGoal = parseInt(secondCell, 10) || 6;
+        } else if (k === 'fire_annual_multiplier' && coinBackupEnvelope.investorProfile) {
+          coinBackupEnvelope.investorProfile.fireTargetAnnualExpensesMultiplier =
+            parseInt(secondCell, 10) || 25;
+        } else if (k === 'monthly_contribution_goal' && coinBackupEnvelope.investorProfile) {
+          coinBackupEnvelope.investorProfile.monthlyContributionGoal =
+            parseFloat(secondCell) || undefined;
+        }
+      } else if (firstCell.startsWith('##')) {
+        const fullBannerLine = line.join(',').trim();
+        const match = fullBannerLine.match(/^##\s*([A-Z0-9_]+):\s*(.*?)\s*##$/i);
+        if (match) {
+          const key = match[1].toUpperCase();
+          const val = match[2].trim();
+          if (key === 'TABLE_ID') coinBackupTableId = val;
+          else if (key === 'TABLE_NAME') coinBackupTableName = val;
+          else if (key === 'TABLE_DESCRIPTION') coinBackupEnvelope.description = val;
+          else if (key === 'GOALS_JSON') coinBackupEnvelope.goals = safeJsonParse(val, undefined);
+          else if (key === 'INVESTOR_PROFILE_JSON')
+            coinBackupEnvelope.investorProfile = safeJsonParse(val, undefined);
+          else if (key === 'SCHEMA_JSON') coinBackupEnvelope.schema = safeJsonParse(val, undefined);
+          else if (key === 'ACTIVE_SECTORS_JSON')
+            coinBackupEnvelope.activeSectors = safeJsonParse(val, undefined);
+          else if (key === 'DASHBOARD_CONFIG_JSON')
+            coinBackupEnvelope.dashboardConfig = safeJsonParse(val, undefined);
+          else if (key === 'SECTOR_PARAMS_JSON')
+            coinBackupEnvelope.sectorParams = safeJsonParse(val, undefined);
+        }
+      }
+      continue;
+    }
+
+    // 0b. Check if this line is an Assistente Moeda Backup v3 (`## ... ##`) banner/metadata line
+    if (firstCell.startsWith('##')) {
+      const fullBannerLine = line.join(',').trim();
+      if (/^##\s*(COIN ASSISTANT BACKUP|ROWS)/i.test(fullBannerLine)) {
+        currentSheetKind = 'coin_ledger_row';
+        presentSheetsSet.add('coin_ledger_row');
+      } else {
+        const match = fullBannerLine.match(/^##\s*([A-Z0-9_]+):\s*(.*?)\s*##$/i);
+        if (match) {
+          const key = match[1].toUpperCase();
+          const val = match[2].trim();
+          currentSheetKind = 'coin_ledger_row';
+          presentSheetsSet.add('coin_ledger_row');
+          if (key === 'TABLE_ID') coinBackupTableId = val;
+          else if (key === 'TABLE_NAME') coinBackupTableName = val;
+          else if (key === 'TABLE_DESCRIPTION') coinBackupEnvelope.description = val;
+          else if (key === 'GOALS_JSON') coinBackupEnvelope.goals = safeJsonParse(val, undefined);
+          else if (key === 'INVESTOR_PROFILE_JSON')
+            coinBackupEnvelope.investorProfile = safeJsonParse(val, undefined);
+          else if (key === 'SCHEMA_JSON') coinBackupEnvelope.schema = safeJsonParse(val, undefined);
+          else if (key === 'ACTIVE_SECTORS_JSON')
+            coinBackupEnvelope.activeSectors = safeJsonParse(val, undefined);
+          else if (key === 'DASHBOARD_CONFIG_JSON')
+            coinBackupEnvelope.dashboardConfig = safeJsonParse(val, undefined);
+          else if (key === 'SECTOR_PARAMS_JSON')
+            coinBackupEnvelope.sectorParams = safeJsonParse(val, undefined);
+        }
+      }
+      continue;
+    }
 
     // 1. Check if this line is a Top or Bottom Planilha Marker (`#PLANILHA,<engine>` or `#ABA_PLANILHA,<engine>`)
     if (
@@ -558,11 +668,14 @@ export function parseRawOmniCsvTable(csvText: string): {
       continue;
     }
 
-    // 2. Check if this line is a Column Header row (either at top of file or start of a Planilha block)
+    // 2. Check if this line is a Column Header row (either at top of file, start of a Planilha block, or immediately after ## ROWS ##)
     if (
+      (rowsMarkerIdx !== -1 && r === rowsMarkerIdx + 1) ||
       firstCell === '_container_id' ||
       firstCell === '_record_kind' ||
       (firstCell === '_key' && secondCell === '_type') ||
+      (firstCell === 'id' && secondCell === 'date') ||
+      (firstCell === 'date' && secondCell === 'value') ||
       (r === 0 && !VALID_RECORD_KINDS.has(firstCell as OmniRecordKind))
     ) {
       activeHeaders = line.map((h) => h.trim());
@@ -594,6 +707,15 @@ export function parseRawOmniCsvTable(csvText: string): {
         presentSheetsSet.add(currentSheetKind);
       } else {
         unassignedBatch.push(obj);
+      }
+    }
+
+    if (obj._record_kind === 'coin_ledger_row') {
+      if (coinBackupTableId && !obj._container_id) obj._container_id = coinBackupTableId;
+      if (coinBackupTableName && !obj._table_name) obj._table_name = coinBackupTableName;
+      if (!coinEnvelopeAttached && Object.keys(coinBackupEnvelope).length > 0) {
+        obj._table_envelope_json = JSON.stringify(coinBackupEnvelope);
+        coinEnvelopeAttached = true;
       }
     }
 
@@ -1232,25 +1354,137 @@ export function importOmniCsvBundle(csvText: string): SekundoOmniStateBundle {
         });
       }
     } else if (kind === 'coin_ledger_row') {
-      const parsedAmount = parseFloat(primary || row.notes_or_payload || String(meta.amount ?? 0));
-      const rawEntryType = (secondary || meta.entryType || 'expense').toLowerCase();
-      const entryType: 'income' | 'expense' | 'investment' =
-        rawEntryType === 'income' || rawEntryType === 'investment' ? rawEntryType : 'expense';
+      const parsedAmount = parseFloat(
+        primary || row.value || row.valor || row.notes_or_payload || String(meta.amount ?? 0)
+      );
+      const rawEntryType = (
+        secondary ||
+        row.entryType ||
+        row.entry_type ||
+        row.tipo ||
+        row.type ||
+        meta.entryType ||
+        'expense'
+      )
+        .trim()
+        .toLowerCase();
+      let entryType: CoinLedgerEntryType = 'expense';
+      if (rawEntryType === 'revenue' || rawEntryType === 'receita' || rawEntryType === 'entrada') {
+        entryType = 'revenue';
+      } else if (rawEntryType === 'income') {
+        entryType = 'income';
+      } else if (rawEntryType === 'deposit' || rawEntryType === 'aporte') {
+        entryType = 'deposit';
+      } else if (rawEntryType === 'investment' || rawEntryType === 'investimento') {
+        entryType = 'investment';
+      } else if (rawEntryType === 'waiver' || rawEntryType === 'abono') {
+        entryType = 'waiver';
+      } else if (rawEntryType === 'partner_in') {
+        entryType = 'partner_in';
+      } else if (rawEntryType === 'partner_out') {
+        entryType = 'partner_out';
+      } else if (rawEntryType === 'unresolved') {
+        entryType = 'unresolved';
+      }
+
       const rawStatus = (row.status_or_readiness || meta.status || 'paid').toLowerCase();
       const status: 'paid' | 'pending' | 'scheduled' =
         rawStatus === 'pending' || rawStatus === 'scheduled' ? rawStatus : 'paid';
 
+      const monthlyValueStr = row.monthlyValue ?? row.monthly_value;
+      const monthlyValueRaw =
+        monthlyValueStr !== undefined && monthlyValueStr !== ''
+          ? Number(monthlyValueStr)
+          : meta.monthlyValue !== undefined
+          ? Number(meta.monthlyValue)
+          : undefined;
+      const monthCountStr = row.monthCount ?? row.month_count;
+      const monthCountRaw =
+        monthCountStr !== undefined && monthCountStr !== ''
+          ? Number(monthCountStr)
+          : meta.monthCount !== undefined
+          ? Number(meta.monthCount)
+          : undefined;
+      const periodStartVal =
+        row.periodStart || row.period_start || meta.periodStart || meta.period_start || undefined;
+      const periodEndVal =
+        row.periodEnd || row.period_end || meta.periodEnd || meta.period_end || undefined;
+      const tickerVal = row.ticker || meta.ticker || undefined;
+      const quantityRaw =
+        row.quantity !== undefined && row.quantity !== ''
+          ? Number(row.quantity)
+          : meta.quantity !== undefined
+          ? Number(meta.quantity)
+          : undefined;
+      const unitPriceStr = row.unitPrice ?? row.unit_price;
+      const unitPriceRaw =
+        unitPriceStr !== undefined && unitPriceStr !== ''
+          ? Number(unitPriceStr)
+          : meta.unitPrice !== undefined
+          ? Number(meta.unitPrice)
+          : undefined;
+      const metadataJsonVal =
+        row.metadata_json || meta.metadataJson || meta.metadata_json || undefined;
+      const customValuesVal =
+        meta.customValues && typeof meta.customValues === 'object'
+          ? meta.customValues
+          : metadataJsonVal
+          ? safeJsonParse<Record<string, any>>(metadataJsonVal, {}).customValues ||
+            safeJsonParse<Record<string, any>>(metadataJsonVal, undefined)
+          : undefined;
+      const tableEnvelopeVal =
+        meta.tableEnvelope && typeof meta.tableEnvelope === 'object'
+          ? meta.tableEnvelope
+          : row._table_envelope_json
+          ? safeJsonParse<Record<string, any>>(row._table_envelope_json, undefined)
+          : undefined;
+
       coinLedgerRows.push({
-        id: key || meta.id || `coin-${coinLedgerRows.length + 1}`,
-        date: row.date_or_cycle || meta.date || '',
-        category: row.group_or_tier || meta.category || 'Outros',
-        description: title || meta.description || '',
+        id: key || row.id || meta.id || `coin-${coinLedgerRows.length + 1}`,
+        date: row.date_or_cycle || row.date || row.data || meta.date || '',
+        category: row.group_or_tier || row.category || row.categoria || meta.category || 'Outros',
+        description: title || row.description || row.descricao || meta.description || '',
         amount: Number.isFinite(parsedAmount) ? parsedAmount : 0,
         entryType,
-        paymentMethod: row.capabilities_or_tags || meta.paymentMethod || 'PIX',
+        paymentMethod: row.capabilities_or_tags || row.tags || meta.paymentMethod || 'PIX',
         status,
-        recurrence: row.time_or_duration || meta.recurrence || 'unico',
+        recurrence:
+          row.time_or_duration ||
+          meta.recurrence ||
+          (monthCountRaw && monthCountRaw > 1 ? `rateio_${monthCountRaw}m` : 'unico'),
         tableId: containerId || meta.tableId || 'coin-default',
+        ...(row._table_name || meta.tableName
+          ? { tableName: String(row._table_name || meta.tableName) }
+          : {}),
+        ...(monthlyValueRaw !== undefined && Number.isFinite(monthlyValueRaw)
+          ? { monthlyValue: monthlyValueRaw }
+          : {}),
+        ...(monthCountRaw !== undefined && Number.isFinite(monthCountRaw)
+          ? { monthCount: monthCountRaw }
+          : {}),
+        ...(periodStartVal
+          ? { periodStart: String(periodStartVal), period_start: String(periodStartVal) }
+          : {}),
+        ...(periodEndVal
+          ? { periodEnd: String(periodEndVal), period_end: String(periodEndVal) }
+          : {}),
+        ...(row.tags || meta.tags ? { tags: row.tags || meta.tags } : {}),
+        ...(tickerVal ? { ticker: String(tickerVal) } : {}),
+        ...(quantityRaw !== undefined && Number.isFinite(quantityRaw)
+          ? { quantity: quantityRaw }
+          : {}),
+        ...(unitPriceRaw !== undefined && Number.isFinite(unitPriceRaw)
+          ? { unitPrice: unitPriceRaw }
+          : {}),
+        ...(metadataJsonVal
+          ? { metadataJson: String(metadataJsonVal), metadata_json: String(metadataJsonVal) }
+          : {}),
+        ...(customValuesVal && typeof customValuesVal === 'object'
+          ? { customValues: customValuesVal }
+          : {}),
+        ...(tableEnvelopeVal && typeof tableEnvelopeVal === 'object'
+          ? { tableEnvelope: tableEnvelopeVal }
+          : {}),
       });
     } else if (kind === 'event_node') {
       const [rawId, rawName] = containerId.includes('::')
@@ -1297,21 +1531,43 @@ export function importOmniCsvBundle(csvText: string): SekundoOmniStateBundle {
     }
   }
 
+  const hasAllSheets = presentSheets.length === 0;
+  const shouldFallbackParticipants =
+    hasAllSheets ||
+    presentSheets.includes('participant_privilege') ||
+    presentSheets.includes('hub_schedule_slot');
+  const shouldFallbackSchedule =
+    hasAllSheets || presentSheets.includes('hub_schedule_slot');
+  const shouldFallbackTerritory =
+    hasAllSheets || presentSheets.includes('hub_territory_cycle');
+
+  const resolvedParticipants =
+    participants.length > 0
+      ? participants
+      : shouldFallbackParticipants
+      ? DEFAULT_PRIVILEGE_MATRIX_PARTICIPANTS
+      : [];
+
   return {
     unitName,
-    participants:
-      participants.length > 0 ? participants : DEFAULT_PRIVILEGE_MATRIX_PARTICIPANTS,
+    participants: resolvedParticipants,
     scheduleRegistry:
       scheduleRegistry.length > 0
         ? scheduleRegistry
-        : buildProgramacaoReuniaoRegistry(
+        : shouldFallbackSchedule
+        ? buildProgramacaoReuniaoRegistry(
             undefined,
-            participants.length > 0 ? participants : DEFAULT_PRIVILEGE_MATRIX_PARTICIPANTS
-          ),
+            resolvedParticipants.length > 0
+              ? resolvedParticipants
+              : DEFAULT_PRIVILEGE_MATRIX_PARTICIPANTS
+          )
+        : [],
     territoryRegistry:
       territoryRegistry.length > 0
         ? territoryRegistry
-        : buildTerritoriosS13HistoricalRegistry(),
+        : shouldFallbackTerritory
+        ? buildTerritoriosS13HistoricalRegistry()
+        : [],
     events: Array.from(eventsMap.values()),
     studioDocuments,
     hojeManifestYaml,
