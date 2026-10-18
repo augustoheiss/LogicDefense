@@ -73,6 +73,7 @@ import {
   importScheduleHubFromCsv,
   exportOmniCsvBundle,
   importOmniCsvBundle,
+  isOmniCsvText,
   selectEnginePartitionNodes,
   autoAssignScheduleRegistry,
   inferSlotRequiredCapability,
@@ -381,20 +382,28 @@ export default function ScheduleHubConsole() {
         try {
           const text = await file.text();
           const lower = file.name.toLowerCase();
-          if (lower.endsWith('.csv') || text.trim().startsWith('_record_kind,')) {
+          if (lower.endsWith('.csv') || isOmniCsvText(text)) {
             const loadedOmni = importOmniCsvBundle(text);
+            const presentSet = new Set(loadedOmni.presentSheets || []);
+            const hasAllOrSheet = (k: NonNullable<typeof loadedOmni.presentSheets>[number]) =>
+              presentSet.size === 0 || presentSet.has(k);
+
             setActiveUnitName(loadedOmni.unitName);
-            handleUpdateParticipants(loadedOmni.participants);
-            setLocalScheduleRegistry(loadedOmni.scheduleRegistry);
-            setTerritoryRegistry(loadedOmni.territoryRegistry);
+            if (hasAllOrSheet('participant_privilege')) {
+              handleUpdateParticipants(loadedOmni.participants);
+            }
+            if (hasAllOrSheet('hub_schedule_slot')) {
+              setLocalScheduleRegistry(loadedOmni.scheduleRegistry);
+            }
+            if (hasAllOrSheet('hub_territory_cycle')) {
+              setTerritoryRegistry(loadedOmni.territoryRegistry);
+            }
             await commitOmniCsvBundleToStorage(text, {
               targetEventId: eventId || undefined,
             });
             setSelectedSessionIdx(0);
             setStatusBanner(
-              `✅ CSV "${file.name}" importado (${loadedOmni.participants.length} usuários, ${
-                extractStructuredSessions(loadedOmni.scheduleRegistry).length
-              } semanas, ${loadedOmni.territoryRegistry.length} territórios)!`
+              `✅ CSV "${file.name}" (${presentSet.size || 1} planilhas) importado!`
             );
           } else if (lower.endsWith('.json')) {
             const loaded = parseSekundoScheduleBundle(text);
@@ -434,20 +443,28 @@ export default function ScheduleHubConsole() {
     }
   };
 
-  // Export updated Schedule Hub CSV, Full Saved Site Omni-CSV Geral, or Sample Omni-CSV
+  // Export ONLY active tab Planilha ('hub_csv'), Full Saved Site Multi-Planilha CSV ('omni_csv'), or Sample Multi-Planilha CSV ('sample_omni_csv')
   const handleExportCsvBackup = async (mode: 'hub_csv' | 'omni_csv' | 'sample_omni_csv') => {
     let csvContent = '';
     let filename = '';
     const dateStamp = new Date().toISOString().slice(0, 10);
 
     if (mode === 'hub_csv') {
+      const onlySheets =
+        activeTab === 'territories'
+          ? (['hub_territory_cycle'] as const)
+          : (['participant_privilege', 'hub_schedule_slot'] as const);
       csvContent = exportScheduleHubToCsv({
         unitName: activeUnitName,
         participants: activeDirectory,
         scheduleRegistry: activeScheduleRegistry,
         territoryRegistry,
+        onlySheets: [...onlySheets],
       });
-      filename = `sekundo_programacao_whatsapp_${dateStamp}.csv`;
+      filename =
+        activeTab === 'territories'
+          ? `sekundo_planilha_territorios_${dateStamp}.csv`
+          : `sekundo_planilha_programacao_${dateStamp}.csv`;
     } else if (mode === 'sample_omni_csv') {
       csvContent = exportOmniCsvBundle();
       filename = `sekundo_omni_exemplo_limpo_${dateStamp}.csv`;

@@ -31,6 +31,8 @@ import {
   exportTemplateCSV,
   getEngineTemplate,
   generateOmniMasterSampleCsv,
+  exportSingleEngineSampleCsv,
+  isOmniCsvText,
   importOmniCsvBundle,
   buildProgramacaoReuniaoRegistry,
   buildTerritoriosS13HistoricalRegistry,
@@ -42,6 +44,7 @@ import {
 import {
   commitOmniCsvBundleToStorage,
   exportFullSiteOmniCsvFromStorage,
+  exportSingleEngineOmniCsvFromStorage,
   loadSavedPrivilegeParticipants,
   savePrivilegeParticipants,
   saveScheduleRegistry,
@@ -53,7 +56,7 @@ const ENGINE_ICONS: Record<string, string> = {
   territory_logistics: '🗺️',
   roster_assignments: '📅',
   study_synthesis: '📖',
-  financial_ledger: '💰',
+  financial_ledger: '🪙',
   inventory_assets: '📦',
   action_tracker: '✅',
   live_production_ros: '⏱️',
@@ -113,16 +116,34 @@ export default function CreateEvent() {
     setAutoDetectNotice(`📥 Exemplo "${tpl.name}" baixado!`);
   };
 
+  // Top Ribbon: Downloads ALL Planilhas (Geral de Tudo)
   const handleDownloadSavedOmniCsv = async () => {
     const csv = await exportFullSiteOmniCsvFromStorage();
     await deliverFile(csv, 'sekundo_omni_geral.csv', 'text/csv;charset=utf-8');
-    setAutoDetectNotice('🌐 CSV Geral (Estado Salvo no Site) baixado!');
+    setAutoDetectNotice('🌐 CSV Geral Multi-Planilhas (Todas as Engines) baixado!');
   };
 
   const handleDownloadSampleOmniCsv = async () => {
     const csv = generateOmniMasterSampleCsv();
     await deliverFile(csv, 'sekundo_omni_exemplo.csv', 'text/csv;charset=utf-8');
-    setAutoDetectNotice('🧪 CSV Geral de Exemplo baixado!');
+    setAutoDetectNotice('🧪 CSV Geral Multi-Planilhas de Exemplo baixado!');
+  };
+
+  // Inspector Panel: Downloads ONLY the selected Engine's Planilha!
+  const handleDownloadSavedInspectedEngineCsv = async () => {
+    const csv = await exportSingleEngineOmniCsvFromStorage(inspectedEngineId);
+    await deliverFile(csv, `planilha_${inspectedEngineId}.csv`, 'text/csv;charset=utf-8');
+    setAutoDetectNotice(`🌐 Planilha somente da Engine "${inspectedEngine?.name}" baixada!`);
+  };
+
+  const handleDownloadSampleInspectedEngineCsv = async () => {
+    const csv = exportSingleEngineSampleCsv(inspectedEngineId);
+    await deliverFile(
+      csv,
+      `exemplo_planilha_${inspectedEngineId}.csv`,
+      'text/csv;charset=utf-8'
+    );
+    setAutoDetectNotice(`🧪 Exemplo somente da Planilha "${inspectedEngine?.name}" baixado!`);
   };
 
   const handlePickCsvFile = () => {
@@ -137,11 +158,11 @@ export default function CreateEvent() {
         setUploadedCsvText(text);
         setUploadedFileName(file.name);
 
-        if (text.trim().startsWith('_record_kind,')) {
+        if (isOmniCsvText(text)) {
           const bundle = importOmniCsvBundle(text);
           if (!name.trim()) setName(`${bundle.unitName} — Multi-Engine`);
           setAutoDetectNotice(
-            `🌐 "${file.name}": ${bundle.participants.length} 👤 • ${bundle.scheduleRegistry.length} 📅 • ${bundle.territoryRegistry.length} 🗺️`
+            `🌐 "${file.name}" (${bundle.presentSheets?.length || 1} planilhas): ${bundle.participants.length} 👤 • ${bundle.scheduleRegistry.length} 📅 • ${bundle.territoryRegistry.length} 🗺️ • ${(bundle.coinLedgerRows || []).length} 🪙`
           );
           setValidationError(null);
           return;
@@ -175,8 +196,8 @@ export default function CreateEvent() {
 
     setValidationError(null);
 
-    // 1. Check if uploaded CSV is an Omni-CSV Bundle
-    if (uploadedCsvText && uploadedCsvText.trim().startsWith('_record_kind,')) {
+    // 1. Check if uploaded CSV is a Multi-Planilha Omni-CSV Bundle
+    if (uploadedCsvText && isOmniCsvText(uploadedCsvText)) {
       const { primaryEventId } = await commitOmniCsvBundleToStorage(uploadedCsvText, {
         customEventName: finalName,
       });
@@ -237,7 +258,7 @@ export default function CreateEvent() {
 
   return (
     <SafeAreaView style={styles.cadViewport}>
-      {/* Top Icon-Only AutoCAD Command Ribbon */}
+      {/* Top Icon-Only AutoCAD Command Ribbon (Downloads ALL Planilhas / Geral de Tudo) */}
       <View style={styles.topRibbon}>
         <View style={styles.brandRow}>
           <Pressable
@@ -268,8 +289,8 @@ export default function CreateEvent() {
           <Pressable
             testID="create-event-download-saved-omni-btn"
             accessibilityRole="button"
-            accessibilityLabel="Baixar CSV Geral Salvo"
-            {...webTitle('Baixar CSV Geral (Salvo no Site)')}
+            accessibilityLabel="Baixar CSV Geral Salvo (Todas as Planilhas)"
+            {...webTitle('TODOS: Baixar CSV Geral com Todas as Planilhas Salvas no Site')}
             onPress={handleDownloadSavedOmniCsv}
             style={[styles.iconBtn, styles.cadBtnPurple]}
           >
@@ -279,8 +300,8 @@ export default function CreateEvent() {
           <Pressable
             testID="create-event-download-sample-omni-btn"
             accessibilityRole="button"
-            accessibilityLabel="Baixar CSV Geral de Exemplo"
-            {...webTitle('Baixar CSV Geral de Exemplo')}
+            accessibilityLabel="Baixar CSV Geral de Exemplo (Todas as Planilhas)"
+            {...webTitle('TODOS: Baixar CSV Geral de Exemplo com Todas as Planilhas')}
             onPress={handleDownloadSampleOmniCsv}
             style={styles.iconBtn}
           >
@@ -432,7 +453,7 @@ export default function CreateEvent() {
           </View>
         </View>
 
-        {/* Right: Compact Inspector */}
+        {/* Right: Compact Inspector for Selected Engine ONLY */}
         <View style={[styles.inspectorPanel, { flex: isDesktop ? 1.1 : undefined }]}>
           <View style={styles.inspectorHeader}>
             <Text style={styles.inspectorHeaderTitle} numberOfLines={1}>
@@ -449,7 +470,7 @@ export default function CreateEvent() {
               testID="inspector-download-engine-csv-btn"
               accessibilityRole="button"
               accessibilityLabel="Baixar CSV de Exemplo desta Engine"
-              {...webTitle('Baixar .CSV de Exemplo desta Engine')}
+              {...webTitle('Baixar .CSV Canônico desta Engine')}
               onPress={() => handleDownloadEngineSampleCsv(inspectedEngineId)}
               style={[styles.iconBtn, styles.cadBtnBlue]}
             >
@@ -459,9 +480,9 @@ export default function CreateEvent() {
             <Pressable
               testID="inspector-download-saved-omni-btn"
               accessibilityRole="button"
-              accessibilityLabel="Baixar CSV Geral Salvo"
-              {...webTitle('Baixar .CSV GERAL (Salvo no Site)')}
-              onPress={handleDownloadSavedOmniCsv}
+              accessibilityLabel="Baixar Planilha Salva Somente Desta Engine"
+              {...webTitle(`Baixar Planilha Salva Somente desta Engine (${inspectedEngine?.name})`)}
+              onPress={handleDownloadSavedInspectedEngineCsv}
               style={[styles.iconBtn, styles.cadBtnPurple]}
             >
               <Text style={styles.iconGlyph}>🌐</Text>
@@ -470,9 +491,9 @@ export default function CreateEvent() {
             <Pressable
               testID="inspector-download-sample-omni-btn"
               accessibilityRole="button"
-              accessibilityLabel="Baixar CSV Geral de Exemplo"
-              {...webTitle('Baixar .CSV GERAL de Exemplo')}
-              onPress={handleDownloadSampleOmniCsv}
+              accessibilityLabel="Baixar Planilha Exemplo Somente Desta Engine"
+              {...webTitle(`Baixar Planilha Exemplo Somente desta Engine (${inspectedEngine?.name})`)}
+              onPress={handleDownloadSampleInspectedEngineCsv}
               style={styles.iconBtn}
             >
               <Text style={styles.iconGlyph}>🧪</Text>

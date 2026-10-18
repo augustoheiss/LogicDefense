@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   OMNI_CSV_HEADERS,
   exportOmniCsvBundle,
+  exportSingleEngineSampleCsv,
   importOmniCsvBundle,
   buildCombinedMultiEngineSkeleton,
   selectEnginePartitionNodes,
@@ -21,25 +22,89 @@ import {
 } from '../schedule/programacaoReuniaoSeed';
 import { buildTree } from '../skeleton/skeletonTree';
 
-describe('Sekundo Unified Master CSV ("CSV Geral" / Omni-CSV Bundle) & Schedule Hub CSV Round-Trip', () => {
-  it('generates a complete Master Omni-CSV covering all 9 Engines + 3 Flagship Hubs + Privilege Matrix', () => {
+describe('Sekundo Multi-Planilha Master CSV ("CSV Geral") & Single-Engine Planilha Export/Import', () => {
+  it('generates a complete Multi-Planilha Master CSV covering all 7 Planilhas including Assistente Moeda (coin_ledger_row) with #PLANILHA and #ABA_PLANILHA markers', () => {
     const masterCsv = generateOmniMasterSampleCsv();
+    expect(OMNI_CSV_HEADERS[0]).toBe('_container_id');
+    expect(OMNI_CSV_HEADERS).not.toContain('_record_kind');
     expect(masterCsv).toContain(OMNI_CSV_HEADERS.join(','));
-    expect(masterCsv).toContain('participant_privilege');
-    expect(masterCsv).toContain('hub_schedule_slot');
-    expect(masterCsv).toContain('hub_territory_cycle');
-    expect(masterCsv).toContain('studio_document');
-    expect(masterCsv).toContain('cockpit_hoje');
-    expect(masterCsv).toContain('event_node');
+
+    // Every Planilha has #PLANILHA,<engine> at the top and #ABA_PLANILHA,<engine> at the bottom
+    for (const kind of [
+      'participant_privilege',
+      'hub_schedule_slot',
+      'hub_territory_cycle',
+      'coin_ledger_row',
+      'studio_document',
+      'cockpit_hoje',
+      'event_node',
+    ]) {
+      expect(masterCsv).toContain(`#PLANILHA,${kind},`);
+      expect(masterCsv).toContain(`#ABA_PLANILHA,${kind},`);
+    }
 
     const reimported = importOmniCsvBundle(masterCsv);
     expect(reimported.participants.length).toBe(24);
     expect(reimported.scheduleRegistry.length).toBeGreaterThan(80);
     expect(reimported.territoryRegistry.length).toBe(16);
+    expect(reimported.coinLedgerRows?.length).toBe(10);
     expect(reimported.studioDocuments.length).toBeGreaterThanOrEqual(2);
     expect(reimported.hojeManifestYaml).toContain('sekundo.app.yaml');
     expect(reimported.hojeRituals.length).toBeGreaterThanOrEqual(2);
     expect(reimported.events.length).toBeGreaterThanOrEqual(8);
+    expect(reimported.presentSheets).toEqual(
+      expect.arrayContaining([
+        'participant_privilege',
+        'hub_schedule_slot',
+        'hub_territory_cycle',
+        'coin_ledger_row',
+        'studio_document',
+        'cockpit_hoje',
+        'event_node',
+      ])
+    );
+  });
+
+  it('exports a single Engine Planilha with a much smaller file size than TODOS (Global Master CSV)', () => {
+    const fullMasterCsv = generateOmniMasterSampleCsv();
+    const onlyCoinCsv = exportSingleEngineSampleCsv('financial_ledger');
+    const onlyTerritoryCsv = exportSingleEngineSampleCsv('territory_logistics');
+    const onlyScheduleCsv = exportSingleEngineSampleCsv('roster_assignments');
+
+    expect(onlyCoinCsv.length).toBeLessThan(fullMasterCsv.length / 4);
+    expect(onlyTerritoryCsv.length).toBeLessThan(fullMasterCsv.length / 3);
+    expect(onlyScheduleCsv.length).toBeLessThan(fullMasterCsv.length);
+
+    expect(onlyCoinCsv).toContain('#PLANILHA,coin_ledger_row,');
+    expect(onlyCoinCsv).toContain('#ABA_PLANILHA,coin_ledger_row,');
+    expect(onlyCoinCsv).not.toContain('#PLANILHA,hub_territory_cycle,');
+    expect(onlyCoinCsv).not.toContain('#PLANILHA,participant_privilege,');
+
+    const parsedCoinOnly = importOmniCsvBundle(onlyCoinCsv);
+    expect(parsedCoinOnly.presentSheets).toEqual(['coin_ledger_row']);
+    expect(parsedCoinOnly.coinLedgerRows?.length).toBe(10);
+  });
+
+  it('allows the user to delete an entire Planilha block (#PLANILHA ... #ABA_PLANILHA) if they do not want to share it, importing only the remaining Planilhas', () => {
+    const masterCsv = generateOmniMasterSampleCsv();
+    const blocks = masterCsv.split('\n\n');
+    expect(blocks.length).toBe(7);
+
+    // User deletes the Assistente Moeda (`coin_ledger_row`) and Territory (`hub_territory_cycle`) Planilhas before sharing
+    const filteredCsv = blocks
+      .filter(
+        (b) =>
+          !b.includes('#PLANILHA,coin_ledger_row,') &&
+          !b.includes('#PLANILHA,hub_territory_cycle,')
+      )
+      .join('\n\n');
+
+    const imported = importOmniCsvBundle(filteredCsv);
+    expect(imported.presentSheets).not.toContain('coin_ledger_row');
+    expect(imported.presentSheets).not.toContain('hub_territory_cycle');
+    expect(imported.presentSheets).toContain('participant_privilege');
+    expect(imported.presentSheets).toContain('hub_schedule_slot');
+    expect(imported.coinLedgerRows?.length).toBe(0);
   });
 
   it('performs lossless Round-Trip (Export -> Modify -> Import) for 📅 Programação & WhatsApp CSV', () => {
@@ -49,7 +114,6 @@ describe('Sekundo Unified Master CSV ("CSV Geral" / Omni-CSV Bundle) & Schedule 
     );
     const initialTerritories = buildTerritoriosS13HistoricalRegistry();
 
-    // Simulate user modifying a slot readiness and assignee in the app, then exporting CSV backup
     const modifiedSchedule = initialSchedule.map((entry) => {
       if (entry.key === '01-01-01') {
         return {
@@ -73,6 +137,10 @@ describe('Sekundo Unified Master CSV ("CSV Geral" / Omni-CSV Bundle) & Schedule 
       territoryRegistry: initialTerritories,
     });
 
+    // Must not include unrelated global sheets
+    expect(csvBackup).not.toContain('#PLANILHA,studio_document,');
+    expect(csvBackup).not.toContain('#PLANILHA,event_node,');
+
     const restored = importScheduleHubFromCsv(csvBackup);
     expect(restored.unitName).toBe('Unidade Técnica Alfa');
     expect(restored.participants.length).toBe(24);
@@ -87,26 +155,28 @@ describe('Sekundo Unified Master CSV ("CSV Geral" / Omni-CSV Bundle) & Schedule 
   });
 
   it('SIT-01: loads exact privileges selected in CSV (never reviving deselected preset/_meta_json privileges) and registers any custom privilege dynamically', () => {
-    const sampleCsv = generateOmniMasterSampleCsv();
+    const sampleCsv = exportSingleEngineSampleCsv('roster_assignments');
     const lines = sampleCsv.split('\n');
 
     // Modify p-01 to ONLY have `cap_leitura_tecnica|Privilegio_Custom_Audio_HD` even though its _meta_json still has `cap_presidencia_sessao: true`
     const modifiedLines = lines.map((line) => {
-      if (line.startsWith('participant_privilege,') && line.includes(',p-01,')) {
+      if (line.includes(',p-01,perfil_')) {
         const p01MetaJson = JSON.stringify({
           id: 'p-01',
           name: 'Participante 01 Editado CSV',
           capabilities: { cap_presidencia_sessao: true, cap_tema_central: true },
         }).replace(/"/g, '""');
-        return `participant_privilege,Unidade Central,p-01,perfil_a,roster_assignments,Grupo 1|coordenador_senior,2026-10-01,1,Participante 01 Editado CSV,Participante 01 Editado CSV,,integral_regular,cap_leitura_tecnica|Privilegio_Custom_Audio_HD,,,"${p01MetaJson}"`;
+        return `Unidade Central,p-01,perfil_a,roster_assignments,Grupo 1|coordenador_senior,2026-10-01,1,Participante 01 Editado CSV,Participante 01 Editado CSV,,integral_regular,cap_leitura_tecnica|Privilegio_Custom_Audio_HD,,,"${p01MetaJson}"`;
+      }
+      if (line.startsWith('#ABA_PLANILHA,participant_privilege,')) {
+        // Insert a brand new participant p-99 right before the bottom #ABA_PLANILHA tab marker!
+        return [
+          'Unidade Central,p-99,perfil_b,roster_assignments,Grupo 2|operador_base,,0,Participante 99 (Planilha),Participante 99 (Planilha),,integral_regular,Privilegio_Custom_Audio_HD|Privilegio_Drone_Mapa,,{},"{}"',
+          line,
+        ].join('\n');
       }
       return line;
     });
-
-    // Add a brand new participant p-99 with ONLY custom privileges
-    modifiedLines.push(
-      'participant_privilege,Unidade Central,p-99,perfil_b,roster_assignments,Grupo 2|operador_base,,0,Participante 99 (Planilha),Participante 99 (Planilha),,integral_regular,Privilegio_Custom_Audio_HD|Privilegio_Drone_Mapa,,{},"{}"'
-    );
 
     const bundle = importOmniCsvBundle(modifiedLines.join('\n'));
     const p01 = bundle.participants.find((p) => p.id === 'p-01')!;
@@ -120,19 +190,16 @@ describe('Sekundo Unified Master CSV ("CSV Geral" / Omni-CSV Bundle) & Schedule 
     expect(p01.capabilities?.Privilegio_Drone_Mapa).toBe(false);
 
     expect(p99).toBeDefined();
-    // Must NOT have preset privileges injected!
     expect(p99.capabilities?.cap_pratica_1_titular).toBe(false);
     expect(p99.capabilities?.cap_pratica_2_titular).toBe(false);
     expect(p99.capabilities?.cap_pratica_ajudante).toBe(false);
     expect(p99.capabilities?.Privilegio_Custom_Audio_HD).toBe(true);
     expect(p99.capabilities?.Privilegio_Drone_Mapa).toBe(true);
 
-    // Even if ensureParticipantPrivilegeMatrix is called again by UI components, it must preserve exact CSV capabilities
     const rehydratedP99 = ensureParticipantPrivilegeMatrix(p99);
     expect(rehydratedP99.capabilities?.cap_pratica_1_titular).toBe(false);
     expect(rehydratedP99.capabilities?.Privilegio_Custom_Audio_HD).toBe(true);
 
-    // Dynamic column discovery must include both custom privileges from the spreadsheet
     const effectiveCols = getEffectiveCapabilityColumns(bundle.participants);
     const colKeys = effectiveCols.map((c) => c.key);
     expect(colKeys).toContain('Privilegio_Custom_Audio_HD');
@@ -146,13 +213,13 @@ describe('Sekundo Unified Master CSV ("CSV Geral" / Omni-CSV Bundle) & Schedule 
     const activeEngines = deriveActiveEnginesFromOmniBundle(bundle);
     expect(activeEngines).toContain('roster_assignments');
     expect(activeEngines).toContain('territory_logistics');
+    expect(activeEngines).toContain('financial_ledger');
 
     const combinedSkeleton = buildCombinedMultiEngineSkeleton(bundle);
     expect(combinedSkeleton.length).toBe(
       bundle.scheduleRegistry.length + bundle.territoryRegistry.length
     );
 
-    // Must also be a 100% valid integer PathKey tree for useSkeleton / skeletonTree.buildTree
     const treeRoots = buildTree(combinedSkeleton);
     expect(treeRoots.length).toBeGreaterThan(0);
 

@@ -18,6 +18,7 @@
 import { Platform } from 'react-native';
 import {
   DEFAULT_PRIVILEGE_MATRIX_PARTICIPANTS,
+  DEFAULT_COIN_LEDGER_ROWS,
   PROGRAMACAO_UNIT_NAME,
   FICHAS_4UP_SDOC_YAML,
   TERRITORIOS_MULTICYCLE_SDOC_YAML,
@@ -26,6 +27,8 @@ import {
   buildTerritoriosS13HistoricalRegistry,
   ensureParticipantPrivilegeMatrix,
   exportOmniCsvBundle,
+  exportSingleEngineSampleCsv,
+  getSheetsForEngineId,
   importOmniCsvBundle,
   buildCombinedMultiEngineSkeleton,
   selectEnginePartitionNodes,
@@ -34,10 +37,12 @@ import {
   eventContainer,
   type SekundoOmniStateBundle,
   type OmniEventBundleItem,
+  type OmniCoinLedgerRowItem,
   type ParticipantProfile,
   type FlatSkeletonEntry,
   type EngineId,
 } from '@sekundo/core';
+import { loadDB, saveDB, type CoinTable, type TableRow } from '@sekundo/coin-engine';
 import * as localStore from './localStorage';
 
 export const PRIVILEGE_DIRECTORY_STORAGE_KEY = 'sekundo:privilege_directory_v1';
@@ -161,8 +166,124 @@ export async function saveScheduleRegistry(registry: FlatSkeletonEntry[]): Promi
 }
 
 /**
- * Collects the COMPLETE saved state of the Sekundo site across all local storage keys
- * and all saved Event Containers (`loadSkeleton(ev.id)` for every saved event!).
+ * Loads the persisted Assistente Moeda (`coin_ledger_row`) rows from `@sekundo/coin-engine` storage.
+ * Falls back to `DEFAULT_COIN_LEDGER_ROWS` if no financial rows have been created yet so
+ * the Assistente Moeda spreadsheet is always available on export.
+ */
+export async function loadSavedCoinLedgerRows(): Promise<OmniCoinLedgerRowItem[]> {
+  try {
+    const db = await loadDB();
+    const collected: OmniCoinLedgerRowItem[] = [];
+    for (const table of db?.tables || []) {
+      if (table.isDeleted) continue;
+      for (const r of table.rows || []) {
+        const rawEntry = (r.entryType || 'revenue').toLowerCase();
+        const entryType: 'income' | 'expense' | 'investment' =
+          rawEntry === 'revenue' || rawEntry === 'partner_in' || rawEntry === 'income'
+            ? 'income'
+            : rawEntry === 'deposit' || rawEntry === 'investment'
+            ? 'investment'
+            : 'expense';
+        collected.push({
+          id: r.id,
+          date: r.date,
+          category: r.category || table.name || 'Operacional',
+          description: r.description || table.name || 'Lançamento Assistente Moeda',
+          amount: Number(r.value) || 0,
+          entryType,
+          paymentMethod: r.tags || 'PIX',
+          status: 'paid',
+          recurrence: r.monthCount && r.monthCount > 1 ? `rateio_${r.monthCount}m` : 'unico',
+          tableId: table.id || 'coin-default',
+        });
+      }
+    }
+    if (collected.length > 0) {
+      return collected;
+    }
+  } catch {
+    // fallback to default coin rows
+  }
+  return DEFAULT_COIN_LEDGER_ROWS;
+}
+
+/**
+ * Persists imported `OmniCoinLedgerRowItem[]` into Assistente Moeda's `@sekundo/coin-engine` DB
+ * so opening `/coin` immediately reflects the imported Planilha Financeira.
+ */
+export async function saveCoinLedgerRowsToCoinDB(
+  coinRows: OmniCoinLedgerRowItem[]
+): Promise<void> {
+  if (!Array.isArray(coinRows) || coinRows.length === 0) return;
+  try {
+    const db = await loadDB();
+    const nowIso = new Date().toISOString();
+    const currentYear = new Date().getFullYear();
+
+    const mappedRows: TableRow[] = coinRows.map((item, idx) => ({
+      id: item.id || `coin-row-${idx + 1}`,
+      date: item.date || nowIso.slice(0, 10),
+      value: Number(item.amount) || 0,
+      description: item.description || item.category || 'Lançamento Importado',
+      category: item.category || 'Operacional',
+      tags: item.paymentMethod || 'PIX',
+      entryType:
+        item.entryType === 'income'
+          ? 'revenue'
+          : item.entryType === 'investment'
+          ? 'deposit'
+          : 'expense',
+      createdAt: nowIso,
+    }));
+
+    const existingTables = Array.isArray(db?.tables) ? [...db.tables] : [];
+    const targetTableId = coinRows[0]?.tableId || 'coin-default';
+    const existingIdx = existingTables.findIndex(
+      (t) => !t.isDeleted && (t.id === targetTableId || t.id === 'coin-default')
+    );
+
+    if (existingIdx >= 0) {
+      existingTables[existingIdx] = {
+        ...existingTables[existingIdx],
+        updatedAt: nowIso,
+        rows: mappedRows,
+      };
+    } else if (existingTables.length > 0 && !existingTables[0].isDeleted) {
+      existingTables[0] = {
+        ...existingTables[0],
+        updatedAt: nowIso,
+        rows: mappedRows,
+      };
+    } else {
+      const newTable: CoinTable = {
+        id: targetTableId,
+        name: '🪙 Assistente Moeda — Geral',
+        description: 'Planilha importada via Sekundo Multi-Planilha CSV',
+        createdAt: nowIso,
+        updatedAt: nowIso,
+        rows: mappedRows,
+        goals: {
+          dailyGoals: { [currentYear]: 150 },
+          weeklyGoals: { [currentYear]: 1050 },
+          annualCosts: { [currentYear]: 36000 },
+        },
+      };
+      existingTables.unshift(newTable);
+    }
+
+    await saveDB({
+      ...(db || { tables: [] }),
+      tables: existingTables,
+      activeTableIndex: 0,
+    });
+  } catch {
+    // ignore storage errors
+  }
+}
+
+/**
+ * Collects the COMPLETE saved state of the Sekundo site across all local storage keys,
+ * Assistente Moeda DB (`loadDB`), and all saved Event Containers (`loadSkeleton(ev.id)`).
  */
 export async function collectFullSiteOmniBundleFromStorage(
   overrides?: Partial<SekundoOmniStateBundle>
@@ -216,6 +337,7 @@ export async function collectFullSiteOmniBundleFromStorage(
 
   const savedSchedule = await loadSavedScheduleRegistry();
   const savedTerritory = await loadSavedTerritoryRegistry();
+  const coinLedgerRows = overrides?.coinLedgerRows || (await loadSavedCoinLedgerRows());
 
   const scheduleRegistry =
     overrides?.scheduleRegistry ||
@@ -240,6 +362,7 @@ export async function collectFullSiteOmniBundleFromStorage(
     participants,
     scheduleRegistry,
     territoryRegistry,
+    coinLedgerRows,
     events: overrides?.events || hydratedEvents,
     studioDocuments: overrides?.studioDocuments || [
       {
@@ -276,7 +399,7 @@ export async function collectFullSiteOmniBundleFromStorage(
 }
 
 /**
- * Exports the complete saved site state as an RFC-4180 CSV Geral string.
+ * Exports the complete saved site state across ALL engines as a Multi-Planilha CSV Geral string.
  */
 export async function exportFullSiteOmniCsvFromStorage(
   overrides?: Partial<SekundoOmniStateBundle>
@@ -286,12 +409,39 @@ export async function exportFullSiteOmniCsvFromStorage(
 }
 
 /**
- * Commits an imported Omni-CSV string or bundle across ALL Sekundo engines and stores:
- * - Saves exact CSV participants & dynamic privileges to `sekundo:privilege_directory_v1`
- * - Saves Schedule & Territory registries
- * - Creates or updates a Multi-Engine Event Container with a partitioned skeleton
- *   (`roster_assignments` + `territory_logistics` + any other active engines in the CSV)
- * - Restores any additional user-saved events (`event_node`) contained in the CSV
+ * Exports ONLY the Planilha(s) belonging to a single selected `engineId` from saved storage.
+ * Guarantees that downloading a single Engine's spreadsheet never dumps the entire global bundle.
+ */
+export async function exportSingleEngineOmniCsvFromStorage(
+  engineId: string
+): Promise<string> {
+  const bundle = await collectFullSiteOmniBundleFromStorage();
+  const targetSheets = getSheetsForEngineId(engineId);
+
+  // If this engine maps to `event_node`, check if there are saved events for this engine
+  if (targetSheets.length === 1 && targetSheets[0] === 'event_node') {
+    const matchingEvents = (bundle.events || []).filter((ev) =>
+      ev.engines.includes(engineId)
+    );
+    if (matchingEvents.length === 0) {
+      return exportSingleEngineSampleCsv(engineId);
+    }
+    return exportOmniCsvBundle(
+      { ...bundle, events: matchingEvents },
+      { onlySheets: targetSheets, onlyEngineId: engineId }
+    );
+  }
+
+  return exportOmniCsvBundle(bundle, {
+    onlySheets: targetSheets,
+    onlyEngineId: engineId,
+  });
+}
+
+/**
+ * Commits an imported Multi-Planilha Omni-CSV string or bundle across Sekundo's stores.
+ * Respects `bundle.presentSheets`: if the user deleted a Planilha from the CSV before importing,
+ * only the Planilhas present in the file are updated in storage!
  */
 export async function commitOmniCsvBundleToStorage(
   csvTextOrBundle: string | SekundoOmniStateBundle,
@@ -311,24 +461,38 @@ export async function commitOmniCsvBundleToStorage(
       ? importOmniCsvBundle(csvTextOrBundle)
       : csvTextOrBundle;
 
+  const presentSet = new Set(bundle.presentSheets || []);
+  const hasAllOrSheet = (kind: NonNullable<SekundoOmniStateBundle['presentSheets']>[number]) =>
+    presentSet.size === 0 || presentSet.has(kind);
+
   const serializedCsv =
     typeof csvTextOrBundle === 'string'
       ? csvTextOrBundle
       : exportOmniCsvBundle(bundle);
 
-  // 1. Persist Participants + Dynamic Privileges, Schedule, Territory, and Hoje Manifest
-  await savePrivilegeParticipants(bundle.participants);
-  await saveScheduleRegistry(bundle.scheduleRegistry);
-  await saveTerritoryRegistry(bundle.territoryRegistry);
+  // 1. Persist only the Planilhas that are present in the imported CSV
+  if (hasAllOrSheet('participant_privilege')) {
+    await savePrivilegeParticipants(bundle.participants);
+  }
+  if (hasAllOrSheet('hub_schedule_slot')) {
+    await saveScheduleRegistry(bundle.scheduleRegistry);
+  }
+  if (hasAllOrSheet('hub_territory_cycle')) {
+    await saveTerritoryRegistry(bundle.territoryRegistry);
+  }
+  if (hasAllOrSheet('coin_ledger_row') && bundle.coinLedgerRows && bundle.coinLedgerRows.length > 0) {
+    await saveCoinLedgerRowsToCoinDB(bundle.coinLedgerRows);
+  }
+
   writeWebLocalStorage(LOADED_OMNI_BUNDLE_STORAGE_KEY, serializedCsv);
   await localStore.storage.setItem(LOADED_OMNI_BUNDLE_STORAGE_KEY, serializedCsv);
 
-  if (bundle.hojeManifestYaml) {
+  if (hasAllOrSheet('cockpit_hoje') && bundle.hojeManifestYaml) {
     writeWebLocalStorage(HOJE_MANIFEST_STORAGE_KEY, bundle.hojeManifestYaml);
     await localStore.storage.setItem(HOJE_MANIFEST_STORAGE_KEY, bundle.hojeManifestYaml);
   }
 
-  // 2. Derive all active engines present in this CSV Geral
+  // 2. Derive all active engines present in this CSV
   const rawEngines = deriveActiveEnginesFromOmniBundle(bundle);
   const validEngineSet = new Set<string>([
     'territory_logistics',
@@ -394,7 +558,11 @@ export async function commitOmniCsvBundleToStorage(
 
   // 5. Restore embedded user-saved events (`event_node`) if present and not sample placeholders
   const restoredEventIds: string[] = [];
-  if (options?.restoreEmbeddedEvents !== false && bundle.events.length > 0) {
+  if (
+    hasAllOrSheet('event_node') &&
+    options?.restoreEmbeddedEvents !== false &&
+    bundle.events.length > 0
+  ) {
     const existingIds = await localStore.getEventIds();
     for (const ev of bundle.events) {
       // Skip synthetic sample placeholders (`evt-sample-*`) unless explicitly requested

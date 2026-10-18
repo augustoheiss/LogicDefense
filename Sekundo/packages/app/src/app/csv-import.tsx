@@ -35,6 +35,8 @@ import {
   detectEnginesFromCSV,
   importGranularCSV,
   generateOmniMasterSampleCsv,
+  exportSingleEngineSampleCsv,
+  isOmniCsvText,
   importOmniCsvBundle,
   getEffectiveCapabilityColumns,
   type CSVDiffResult,
@@ -48,6 +50,7 @@ import {
 import {
   commitOmniCsvBundleToStorage,
   exportFullSiteOmniCsvFromStorage,
+  exportSingleEngineOmniCsvFromStorage,
 } from '../storage/omniStorageBridge';
 import { deliverFile } from '../utils/deliverFile';
 
@@ -55,7 +58,7 @@ const ENGINE_ICONS: Record<string, string> = {
   territory_logistics: '🗺️',
   roster_assignments: '📅',
   study_synthesis: '📖',
-  financial_ledger: '💰',
+  financial_ledger: '🪙',
   inventory_assets: '📦',
   action_tracker: '✅',
   live_production_ros: '⏱️',
@@ -111,11 +114,12 @@ export default function CSVImport() {
     );
   }
 
+  // Top Ribbon: Downloads ALL Planilhas (Geral de Tudo)
   const handleDownloadSavedOmniCsv = async () => {
     try {
       const content = await exportFullSiteOmniCsvFromStorage();
       await deliverFile(content, 'sekundo_omni_geral.csv', 'text/csv;charset=utf-8');
-      setStatusMessage('🌐 CSV Geral (Estado Salvo no Site) baixado!');
+      setStatusMessage('🌐 CSV Geral Multi-Planilhas (Todas as Engines) baixado!');
     } catch (e: any) {
       setStatusMessage(`Erro: ${e?.message ?? e}`);
     }
@@ -125,7 +129,30 @@ export default function CSVImport() {
     try {
       const content = generateOmniMasterSampleCsv();
       await deliverFile(content, 'sekundo_omni_exemplo.csv', 'text/csv;charset=utf-8');
-      setStatusMessage('🧪 CSV Geral de Exemplo baixado!');
+      setStatusMessage('🧪 CSV Geral Multi-Planilhas de Exemplo baixado!');
+    } catch (e: any) {
+      setStatusMessage(`Erro: ${e?.message ?? e}`);
+    }
+  };
+
+  // Selected Engine Inspector: Downloads ONLY the selected Engine's Planilha!
+  const handleDownloadSavedSingleEngineCsv = async () => {
+    try {
+      const content = await exportSingleEngineOmniCsvFromStorage(activeTemplateEngine);
+      const filename = `planilha_${activeTemplateEngine}.csv`;
+      await deliverFile(content, filename, 'text/csv;charset=utf-8');
+      setStatusMessage(`🌐 Planilha somente da Engine "${currentTemplate.name}" baixada!`);
+    } catch (e: any) {
+      setStatusMessage(`Erro: ${e?.message ?? e}`);
+    }
+  };
+
+  const handleDownloadSampleSingleEngineCsv = async () => {
+    try {
+      const content = exportSingleEngineSampleCsv(activeTemplateEngine);
+      const filename = `exemplo_planilha_${activeTemplateEngine}.csv`;
+      await deliverFile(content, filename, 'text/csv;charset=utf-8');
+      setStatusMessage(`🧪 Exemplo somente da Planilha "${currentTemplate.name}" baixado!`);
     } catch (e: any) {
       setStatusMessage(`Erro: ${e?.message ?? e}`);
     }
@@ -151,16 +178,17 @@ export default function CSVImport() {
         if (!file) return;
         const text = await file.text();
 
-        // Check if it is a Unified Master CSV ("CSV Geral")
-        if (text.trim().startsWith('_record_kind,')) {
+        // Check if it is a Multi-Planilha CSV (`#PLANILHA,<engine>`) or legacy Omni-CSV
+        if (isOmniCsvText(text)) {
           const bundle = importOmniCsvBundle(text);
           setOmniBundlePreview(bundle);
           setRawOmniText(text);
           setParsedRows(null);
           if (!newEventName) setNewEventName(`${bundle.unitName} — Geral`);
           const effectiveCols = getEffectiveCapabilityColumns(bundle.participants);
+          const sheetsCount = bundle.presentSheets?.length || 1;
           setStatusMessage(
-            `🌐 "${file.name}": ${bundle.participants.length} 👤 (${effectiveCols.length} priv.) • ${bundle.scheduleRegistry.length} 📅 • ${bundle.territoryRegistry.length} 🗺️`
+            `🌐 "${file.name}" (${sheetsCount} planilhas): ${bundle.participants.length} 👤 (${effectiveCols.length} priv.) • ${bundle.scheduleRegistry.length} 📅 • ${bundle.territoryRegistry.length} 🗺️ • ${(bundle.coinLedgerRows || []).length} 🪙`
           );
           return;
         }
@@ -188,7 +216,7 @@ export default function CSVImport() {
   };
 
   const handleCommit = async (targetDestination: 'schedule' | 'territory' | 'map' = 'schedule') => {
-    // 1. Commit Omni-CSV Bundle across ALL Sekundo Hubs & Engines (Territory + Schedule + Privileges + Events)
+    // 1. Commit Omni-CSV Bundle across Sekundo Hubs & Engines (only updating present Planilhas)
     if (omniBundlePreview && rawOmniText) {
       try {
         const { primaryEventId } = await commitOmniCsvBundleToStorage(rawOmniText, {
@@ -238,7 +266,7 @@ export default function CSVImport() {
 
   return (
     <SafeAreaView style={styles.cadViewport}>
-      {/* Top Icon-Only AutoCAD Command Ribbon */}
+      {/* Top Icon-Only AutoCAD Command Ribbon (Downloads ALL Planilhas / Geral de Tudo) */}
       <View style={styles.topRibbon}>
         <View style={styles.brandRow}>
           <Pressable
@@ -269,8 +297,8 @@ export default function CSVImport() {
           <Pressable
             testID="csv-import-download-saved-omni-btn"
             accessibilityRole="button"
-            accessibilityLabel="Baixar CSV Geral Salvo no Site"
-            {...webTitle('Baixar CSV Geral do que está salvo no site')}
+            accessibilityLabel="Baixar CSV Geral Salvo no Site (Todas as Planilhas)"
+            {...webTitle('TODOS: Baixar CSV Geral com Todas as Planilhas Salvas no Site')}
             onPress={handleDownloadSavedOmniCsv}
             style={[styles.iconBtn, styles.cadBtnPurple]}
           >
@@ -280,8 +308,8 @@ export default function CSVImport() {
           <Pressable
             testID="csv-import-download-sample-omni-btn"
             accessibilityRole="button"
-            accessibilityLabel="Baixar CSV Geral de Exemplo"
-            {...webTitle('Baixar CSV Geral de Exemplo')}
+            accessibilityLabel="Baixar CSV Geral de Exemplo (Todas as Planilhas)"
+            {...webTitle('TODOS: Baixar CSV Geral de Exemplo com Todas as Planilhas')}
             onPress={handleDownloadSampleOmniCsv}
             style={styles.iconBtn}
           >
@@ -361,7 +389,7 @@ export default function CSVImport() {
             <View style={{ gap: 8 }}>
               <View style={styles.inspectorBanner}>
                 <Text style={styles.inspectorBannerTitle}>
-                  🌐 PACOTE MULTI-ENGINE PRONTO
+                  🌐 PACOTE MULTI-PLANILHA ({omniBundlePreview.presentSheets?.length || 7} ABAS)
                 </Text>
               </View>
               <TextInput
@@ -394,9 +422,9 @@ export default function CSVImport() {
                 </View>
                 <View style={styles.metricPill}>
                   <Text style={styles.metricValue}>
-                    {omniBundlePreview.events.length}
+                    {(omniBundlePreview.coinLedgerRows || []).length}
                   </Text>
-                  <Text style={styles.metricLabel}>🗂️ Eventos</Text>
+                  <Text style={styles.metricLabel}>🪙 Moeda</Text>
                 </View>
               </View>
 
@@ -488,7 +516,7 @@ export default function CSVImport() {
                 {currentTemplate.suggestedFilename} • {currentTemplate.keyConventions}
               </Text>
 
-              {/* Icon-Only Action Row for Template & Omni Downloads */}
+              {/* Icon-Only Action Row for THIS Selected Engine ONLY */}
               <View style={styles.actionRow}>
                 <Pressable
                   testID="tpl-download-canonical-btn"
@@ -515,9 +543,9 @@ export default function CSVImport() {
                 <Pressable
                   testID="tpl-download-saved-omni-btn"
                   accessibilityRole="button"
-                  accessibilityLabel="Baixar CSV Geral Salvo no Site"
-                  {...webTitle('Baixar CSV Geral (Salvo no Site)')}
-                  onPress={handleDownloadSavedOmniCsv}
+                  accessibilityLabel="Baixar Planilha Salva Somente Desta Engine"
+                  {...webTitle(`Baixar Planilha Salva Somente desta Engine (${currentTemplate.name})`)}
+                  onPress={handleDownloadSavedSingleEngineCsv}
                   style={[styles.iconBtn, styles.cadBtnPurple]}
                 >
                   <Text style={styles.iconGlyph}>🌐</Text>
@@ -526,9 +554,9 @@ export default function CSVImport() {
                 <Pressable
                   testID="tpl-download-sample-omni-btn"
                   accessibilityRole="button"
-                  accessibilityLabel="Baixar CSV Geral de Exemplo"
-                  {...webTitle('Baixar CSV Geral de Exemplo')}
-                  onPress={handleDownloadSampleOmniCsv}
+                  accessibilityLabel="Baixar Planilha Exemplo Somente Desta Engine"
+                  {...webTitle(`Baixar Planilha Exemplo Somente desta Engine (${currentTemplate.name})`)}
+                  onPress={handleDownloadSampleSingleEngineCsv}
                   style={styles.iconBtn}
                 >
                   <Text style={styles.iconGlyph}>🧪</Text>
@@ -549,7 +577,7 @@ export default function CSVImport() {
               {showInfoBox && (
                 <View style={styles.omniExplainBox}>
                   <Text style={styles.omniExplainText}>
-                    🌐 Abre Territórios + Programação + Privilégios Dinâmicos + Eventos salvos em 1 único CSV.
+                    🌐 No topo baixa TODAS as planilhas. No painel desta Engine baixa SOMENTE a planilha {currentTemplate.name} (#PLANILHA / #ABA_PLANILHA).
                   </Text>
                 </View>
               )}

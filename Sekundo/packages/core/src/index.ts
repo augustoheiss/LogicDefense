@@ -562,13 +562,19 @@ export type {
   ParticipantStatusFlag,
 } from './roster/participantDirectory';
 
-// Unified Master CSV ("CSV Geral" / Omni-Bundle CSV)
+// Unified Master CSV ("CSV Geral" / Multi-Planilha Omni-Bundle CSV)
 export {
   OMNI_CSV_HEADERS,
+  OMNI_SHEET_TITLES,
+  DEFAULT_COIN_LEDGER_ROWS,
   neutralizeCsvFormula,
+  resolveSheetNameToRecordKind,
+  getSheetsForEngineId,
+  isOmniCsvText,
   parseRawOmniCsvTable,
   parseParticipantPrivilegesFromCsvRow,
   exportOmniCsvBundle,
+  exportSingleEngineSampleCsv,
   importOmniCsvBundle,
   buildCombinedMultiEngineSkeleton,
   selectEnginePartitionNodes,
@@ -585,4 +591,5 @@ export type {
   OmniHojeRitualItem,
   OmniCoinLedgerRowItem,
   SekundoOmniStateBundle,
+  ExportOmniCsvOptions,
 } from './csv/omniCsvBundle';

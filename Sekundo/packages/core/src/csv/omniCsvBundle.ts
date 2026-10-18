@@ -51,7 +51,6 @@ export type OmniRecordKind =
   | 'coin_ledger_row';
 
 export const OMNI_CSV_HEADERS = [
-  '_record_kind',
   '_container_id',
   '_key',
   '_type',
@@ -70,6 +69,16 @@ export const OMNI_CSV_HEADERS = [
 ] as const;
 
 export type OmniCsvHeader = (typeof OMNI_CSV_HEADERS)[number];
+
+export const OMNI_SHEET_TITLES: Record<OmniRecordKind, string> = {
+  participant_privilege: 'Matriz de Privilegios & Usuarios (roster_assignments)',
+  hub_schedule_slot: 'Programacao & WhatsApp (roster_assignments)',
+  hub_territory_cycle: 'Territorios Multi-Ciclo (territory_logistics)',
+  coin_ledger_row: 'Assistente Moeda — Engine Financeira (financial_ledger)',
+  studio_document: 'Estudio Documental YAML & PDF (DocumentEngine)',
+  cockpit_hoje: 'Cockpit Hoje & Rituais (action_tracker)',
+  event_node: 'Eventos Multi-Engine (multi_engine)',
+};
 
 export interface OmniEventBundleItem {
   id: string;
@@ -93,18 +102,192 @@ export interface OmniHojeRitualItem {
   notes?: string;
 }
 
+export type CoinLedgerEntryType =
+  | 'income'
+  | 'expense'
+  | 'investment'
+  | 'revenue'
+  | 'deposit'
+  | 'waiver'
+  | 'partner_in'
+  | 'partner_out'
+  | 'unresolved';
+
 export interface OmniCoinLedgerRowItem {
   id: string;
   date: string;
   category: string;
   description: string;
   amount: number;
-  entryType: 'income' | 'expense' | 'investment';
+  entryType: CoinLedgerEntryType;
   paymentMethod?: string;
   status?: 'paid' | 'pending' | 'scheduled';
   recurrence?: string;
   tableId?: string;
+  tableName?: string;
+  monthlyValue?: number;
+  monthCount?: number;
+  period_start?: string;
+  period_end?: string;
+  tags?: string[];
+  ticker?: string;
+  quantity?: number;
+  unitPrice?: number;
+  metadata_json?: string;
 }
+
+export const DEFAULT_COIN_LEDGER_ROWS: OmniCoinLedgerRowItem[] = [
+  {
+    id: 'coin-01',
+    date: '2026-10-01',
+    category: 'Receitas Operacionais',
+    description: 'Receita Mensal Principal / Honorários (Fictício)',
+    amount: 6800,
+    entryType: 'revenue',
+    paymentMethod: 'PIX',
+    status: 'paid',
+    recurrence: 'mensal',
+    tableId: 'coin-main-01',
+    tableName: 'Planilha Principal — Assistente Moeda',
+    tags: ['renda_fixa', 'fator_r'],
+  },
+  {
+    id: 'coin-02',
+    date: '2026-10-03',
+    category: 'Moradia & Base',
+    description: 'Aluguel e Condomínio Residencial (Fictício)',
+    amount: 1750,
+    entryType: 'expense',
+    paymentMethod: 'Boleto',
+    status: 'paid',
+    recurrence: 'mensal',
+    tableId: 'coin-main-01',
+    tableName: 'Planilha Principal — Assistente Moeda',
+    tags: ['custo_fixo', 'essencial'],
+  },
+  {
+    id: 'coin-03',
+    date: '2026-10-05',
+    category: 'Alimentação & Suprimentos',
+    description: 'Supermercado Atacadista Mensal (Fictício)',
+    amount: 920.5,
+    entryType: 'expense',
+    paymentMethod: 'Cartão',
+    status: 'paid',
+    recurrence: 'mensal',
+    tableId: 'coin-main-01',
+    tableName: 'Planilha Principal — Assistente Moeda',
+    tags: ['mercado', 'essencial'],
+  },
+  {
+    id: 'coin-04',
+    date: '2026-10-07',
+    category: 'Utilidades & Conectividade',
+    description: 'Energia Elétrica + Fibra Óptica (Fictício)',
+    amount: 310.4,
+    entryType: 'expense',
+    paymentMethod: 'Débito Automático',
+    status: 'paid',
+    recurrence: 'mensal',
+    tableId: 'coin-main-01',
+    tableName: 'Planilha Principal — Assistente Moeda',
+    tags: ['luz', 'internet'],
+  },
+  {
+    id: 'coin-05',
+    date: '2026-10-10',
+    category: 'Reserva de Emergência',
+    description: 'Aporte Tesouro Selic Liquidez Diária (100% CDI)',
+    amount: 1200,
+    entryType: 'deposit',
+    paymentMethod: 'TED',
+    status: 'paid',
+    recurrence: 'mensal',
+    tableId: 'coin-main-01',
+    tableName: 'Planilha Principal — Assistente Moeda',
+    ticker: 'SELIC',
+    quantity: 1,
+    unitPrice: 1200,
+    tags: ['reserva', 'liquidez', 'sankey'],
+  },
+  {
+    id: 'coin-06',
+    date: '2026-10-12',
+    category: 'Carteira FIRE & FIIs',
+    description: 'Compra de Cotas Fundo Imobiliário Logístico',
+    amount: 820,
+    entryType: 'deposit',
+    paymentMethod: 'Corretora',
+    status: 'paid',
+    recurrence: 'mensal',
+    tableId: 'coin-main-01',
+    tableName: 'Planilha Principal — Assistente Moeda',
+    ticker: 'HGLG11',
+    quantity: 5,
+    unitPrice: 164,
+    tags: ['fii', 'renda_passiva'],
+  },
+  {
+    id: 'coin-07',
+    date: '2026-10-14',
+    category: 'Frota & Mobilidade',
+    description: 'Combustível e Manutenção Preventiva Veículo',
+    amount: 480,
+    entryType: 'expense',
+    paymentMethod: 'PIX',
+    status: 'paid',
+    recurrence: 'mensal',
+    tableId: 'coin-main-01',
+    tableName: 'Planilha Principal — Assistente Moeda',
+    tags: ['veiculo', 'combustivel'],
+  },
+  {
+    id: 'coin-08',
+    date: '2026-10-15',
+    category: 'Seguros & Anuidades (12m)',
+    description: 'Seguro Anual e IPVA Rateado (12 Meses)',
+    amount: 1800,
+    monthlyValue: 150,
+    monthCount: 12,
+    period_start: '2026-01-01',
+    period_end: '2026-12-31',
+    entryType: 'expense',
+    paymentMethod: 'Cartão',
+    status: 'paid',
+    recurrence: 'anual',
+    tableId: 'coin-main-01',
+    tableName: 'Planilha Principal — Assistente Moeda',
+    tags: ['anual', 'seguro'],
+  },
+  {
+    id: 'coin-09',
+    date: '2026-10-16',
+    category: 'Banco de Tempo',
+    description: 'Abono de Meta / Dia de Estudo & Planejamento (Waiver)',
+    amount: 250,
+    entryType: 'waiver',
+    paymentMethod: 'Banco de Tempo',
+    status: 'paid',
+    recurrence: 'unico',
+    tableId: 'coin-main-01',
+    tableName: 'Planilha Principal — Assistente Moeda',
+    tags: ['abono', 'banco_de_tempo'],
+  },
+  {
+    id: 'coin-10',
+    date: '2026-10-17',
+    category: 'Parcerias & Sócios',
+    description: 'Reembolso Operacional Recebido de Parceiro',
+    amount: 650,
+    entryType: 'partner_in',
+    paymentMethod: 'PIX',
+    status: 'paid',
+    recurrence: 'unico',
+    tableId: 'coin-main-01',
+    tableName: 'Planilha Principal — Assistente Moeda',
+    tags: ['socio', 'reembolso'],
+  },
+];
 
 export interface SekundoOmniStateBundle {
   unitName: string;
@@ -115,7 +298,139 @@ export interface SekundoOmniStateBundle {
   studioDocuments: OmniStudioDocItem[];
   hojeManifestYaml: string;
   hojeRituals: OmniHojeRitualItem[];
-  coinLedgerRows?: OmniCoinLedgerRowItem[];
+  coinLedgerRows: OmniCoinLedgerRowItem[];
+  /** Exact list of Planilhas (sheet kinds) present in the parsed CSV */
+  presentSheets?: OmniRecordKind[];
+}
+
+export interface ExportOmniCsvOptions {
+  /** If provided, exports ONLY the specified Planilhas (sheets) instead of all 7 sheets */
+  onlySheets?: OmniRecordKind[];
+  /** If provided, exports ONLY the Planilha(s) corresponding to this single EngineId */
+  onlyEngineId?: string;
+}
+
+const VALID_RECORD_KINDS = new Set<OmniRecordKind>([
+  'participant_privilege',
+  'hub_schedule_slot',
+  'hub_territory_cycle',
+  'coin_ledger_row',
+  'studio_document',
+  'cockpit_hoje',
+  'event_node',
+]);
+
+/**
+ * Resolves any sheet tab name / engine alias (from `#PLANILHA,<name>` or `#ABA_PLANILHA,<name>`)
+ * into its canonical `OmniRecordKind` as if it were the first column (`_record_kind`).
+ */
+export function resolveSheetNameToRecordKind(rawName: string): OmniRecordKind | null {
+  const clean = (rawName || '')
+    .trim()
+    .replace(/^#?(PLANILHA|ABA_PLANILHA|FIM_PLANILHA|SHEET)[:\s-]*/i, '')
+    .replace(/^\[|\]$/g, '')
+    .trim()
+    .toLowerCase();
+  if (!clean) return null;
+
+  if (VALID_RECORD_KINDS.has(clean as OmniRecordKind)) {
+    return clean as OmniRecordKind;
+  }
+  if (
+    clean.includes('participant_privilege') ||
+    clean.includes('privilegio') ||
+    clean.includes('privilégio') ||
+    clean.includes('usuario') ||
+    clean.includes('usuário')
+  ) {
+    return 'participant_privilege';
+  }
+  if (
+    clean.includes('hub_schedule_slot') ||
+    clean.includes('programacao') ||
+    clean.includes('programação') ||
+    clean.includes('roster_assignments') ||
+    clean.includes('escala')
+  ) {
+    return 'hub_schedule_slot';
+  }
+  if (
+    clean.includes('hub_territory_cycle') ||
+    clean.includes('territory_logistics') ||
+    clean.includes('territorio') ||
+    clean.includes('território')
+  ) {
+    return 'hub_territory_cycle';
+  }
+  if (
+    clean.includes('coin_ledger_row') ||
+    clean.includes('financial_ledger') ||
+    clean.includes('assistente_moeda') ||
+    clean.includes('assistente moeda') ||
+    clean.includes('financ') ||
+    clean.includes('moeda')
+  ) {
+    return 'coin_ledger_row';
+  }
+  if (
+    clean.includes('studio_document') ||
+    clean.includes('documentengine') ||
+    clean.includes('estudio') ||
+    clean.includes('estúdio') ||
+    clean.includes('sdoc')
+  ) {
+    return 'studio_document';
+  }
+  if (
+    clean.includes('cockpit_hoje') ||
+    clean.includes('action_tracker') ||
+    clean.includes('hoje') ||
+    clean.includes('rituais')
+  ) {
+    return 'cockpit_hoje';
+  }
+  if (clean.includes('event_node') || clean.includes('evento')) {
+    return 'event_node';
+  }
+  return null;
+}
+
+/**
+ * Maps a single `EngineId` to the specific `OmniRecordKind` Planilhas that belong to it.
+ */
+export function getSheetsForEngineId(engineId: string): OmniRecordKind[] {
+  switch (engineId) {
+    case 'financial_ledger':
+      return ['coin_ledger_row'];
+    case 'territory_logistics':
+      return ['hub_territory_cycle'];
+    case 'roster_assignments':
+      return ['participant_privilege', 'hub_schedule_slot'];
+    case 'DocumentEngine':
+      return ['studio_document'];
+    case 'action_tracker':
+      return ['cockpit_hoje'];
+    default:
+      return ['event_node'];
+  }
+}
+
+/**
+ * Detects whether a CSV string is a Sekundo Multi-Planilha CSV (`#PLANILHA,...` / `#ABA_PLANILHA,...`)
+ * or a legacy Omni-CSV (`_record_kind,...` / `_container_id,_key,...`).
+ */
+export function isOmniCsvText(csvText: string): boolean {
+  const clean = (csvText || '').replace(/^\uFEFF/, '').trim();
+  if (!clean) return false;
+  return (
+    clean.startsWith('#PLANILHA,') ||
+    clean.startsWith('#ABA_PLANILHA,') ||
+    clean.startsWith('PLANILHA,') ||
+    clean.startsWith('_record_kind,') ||
+    clean.startsWith('_container_id,_key,') ||
+    /^#?PLANILHA[,:]/im.test(clean) ||
+    /^#?ABA_PLANILHA[,:]/im.test(clean)
+  );
 }
 
 /**
@@ -142,14 +457,17 @@ function escapeCsvCell(value: unknown): string {
 }
 
 /**
- * RFC-4180 compliant multi-line CSV parser returning header names and row objects.
+ * RFC-4180 compliant multi-line & Multi-Planilha CSV parser returning header names,
+ * normalized row objects (with `_record_kind` resolved from the Planilha name or legacy column 1),
+ * and the list of `presentSheets`.
  */
 export function parseRawOmniCsvTable(csvText: string): {
   headers: string[];
   rows: Record<string, string>[];
+  presentSheets: OmniRecordKind[];
 } {
   const clean = (csvText || '').replace(/^\uFEFF/, '').trim();
-  if (!clean) return { headers: [], rows: [] };
+  if (!clean) return { headers: [], rows: [], presentSheets: [] };
 
   const matrix: string[][] = [];
   let currentRow: string[] = [];
@@ -197,21 +515,99 @@ export function parseRawOmniCsvTable(csvText: string): {
     matrix.push(currentRow);
   }
 
-  if (matrix.length === 0) return { headers: [], rows: [] };
-  const headers = matrix[0].map((h) => h.trim());
-  const rows: Record<string, string>[] = [];
+  if (matrix.length === 0) return { headers: [], rows: [], presentSheets: [] };
 
-  for (let r = 1; r < matrix.length; r++) {
+  let activeHeaders: string[] = [...OMNI_CSV_HEADERS];
+  const discoveredHeaderSet = new Set<string>();
+  let currentSheetKind: OmniRecordKind | null = null;
+  const presentSheetsSet = new Set<OmniRecordKind>();
+  const rows: Record<string, string>[] = [];
+  let unassignedBatch: Record<string, string>[] = [];
+
+  for (let r = 0; r < matrix.length; r++) {
     const line = matrix[r];
     if (line.every((cell) => cell.trim() === '')) continue;
-    const obj: Record<string, string> = {};
-    for (let c = 0; c < headers.length; c++) {
-      obj[headers[c]] = line[c] ?? '';
+
+    const firstCell = (line[0] || '').trim();
+    const secondCell = (line[1] || '').trim();
+
+    // 1. Check if this line is a Top or Bottom Planilha Marker (`#PLANILHA,<engine>` or `#ABA_PLANILHA,<engine>`)
+    if (
+      /^#?(PLANILHA|ABA_PLANILHA|FIM_PLANILHA|SHEET)$/i.test(firstCell) ||
+      /^#?(PLANILHA|ABA_PLANILHA|FIM_PLANILHA|SHEET)[:\s]/i.test(firstCell)
+    ) {
+      const candidate = secondCell || firstCell;
+      const resolved = resolveSheetNameToRecordKind(candidate) || resolveSheetNameToRecordKind(line[2] || '');
+      if (resolved) {
+        presentSheetsSet.add(resolved);
+        if (/^#?(ABA_PLANILHA|FIM_PLANILHA)/i.test(firstCell)) {
+          // Bottom sheet tab marker ("nome da planilha em baixo"): assign any unassigned rows above it
+          for (const pending of unassignedBatch) {
+            if (!pending._record_kind) {
+              pending._record_kind = resolved;
+            }
+          }
+          unassignedBatch = [];
+          currentSheetKind = null;
+        } else {
+          // Top sheet marker
+          currentSheetKind = resolved;
+          unassignedBatch = [];
+        }
+      }
+      continue;
     }
+
+    // 2. Check if this line is a Column Header row (either at top of file or start of a Planilha block)
+    if (
+      firstCell === '_container_id' ||
+      firstCell === '_record_kind' ||
+      (firstCell === '_key' && secondCell === '_type') ||
+      (r === 0 && !VALID_RECORD_KINDS.has(firstCell as OmniRecordKind))
+    ) {
+      activeHeaders = line.map((h) => h.trim());
+      for (const h of activeHeaders) {
+        if (h) discoveredHeaderSet.add(h);
+      }
+      continue;
+    }
+
+    // 3. Parse Data Row
+    const obj: Record<string, string> = {};
+    const firstCellIsLegacyKind = VALID_RECORD_KINDS.has(firstCell as OmniRecordKind);
+
+    if (firstCellIsLegacyKind && activeHeaders[0] !== '_record_kind') {
+      // Legacy 16-column row where column 0 is `_record_kind` and columns 1..15 map to `activeHeaders`
+      obj._record_kind = firstCell;
+      presentSheetsSet.add(firstCell as OmniRecordKind);
+      for (let c = 0; c < activeHeaders.length; c++) {
+        obj[activeHeaders[c]] = line[c + 1] ?? '';
+      }
+    } else {
+      for (let c = 0; c < activeHeaders.length; c++) {
+        obj[activeHeaders[c]] = line[c] ?? '';
+      }
+      if (obj._record_kind && VALID_RECORD_KINDS.has(obj._record_kind.trim() as OmniRecordKind)) {
+        presentSheetsSet.add(obj._record_kind.trim() as OmniRecordKind);
+      } else if (currentSheetKind) {
+        obj._record_kind = currentSheetKind;
+        presentSheetsSet.add(currentSheetKind);
+      } else {
+        unassignedBatch.push(obj);
+      }
+    }
+
     rows.push(obj);
   }
 
-  return { headers, rows };
+  const finalHeaders =
+    discoveredHeaderSet.size > 0 ? Array.from(discoveredHeaderSet) : [...OMNI_CSV_HEADERS];
+
+  return {
+    headers: finalHeaders,
+    rows,
+    presentSheets: Array.from(presentSheetsSet),
+  };
 }
 
 function safeJsonParse<T>(raw: string | undefined, fallback: T): T {
@@ -224,19 +620,44 @@ function safeJsonParse<T>(raw: string | undefined, fallback: T): T {
 }
 
 /**
- * Serializes a complete or partial `SekundoOmniStateBundle` into a single RFC-4180 CSV string.
+ * Serializes a complete or single-engine `SekundoOmniStateBundle` into a Multi-Planilha RFC-4180 CSV string.
+ * Each Engine is emitted as its own Planilha section (`#PLANILHA,<engine>` ... `#ABA_PLANILHA,<engine>`)
+ * without repeating `_record_kind` as the first column of every row.
  */
-export function exportOmniCsvBundle(input?: Partial<SekundoOmniStateBundle>): string {
+export function exportOmniCsvBundle(
+  input?: Partial<SekundoOmniStateBundle>,
+  options?: ExportOmniCsvOptions
+): string {
   const unitName = input?.unitName || PROGRAMACAO_UNIT_NAME;
-  const participants = (input?.participants || DEFAULT_PRIVILEGE_MATRIX_PARTICIPANTS).map(
+
+  // Determine which Planilhas (sheets) should be included
+  let targetSheets: Set<OmniRecordKind>;
+  if (options?.onlySheets && options.onlySheets.length > 0) {
+    targetSheets = new Set(options.onlySheets);
+  } else if (options?.onlyEngineId) {
+    targetSheets = new Set(getSheetsForEngineId(options.onlyEngineId));
+  } else {
+    targetSheets = new Set<OmniRecordKind>([
+      'participant_privilege',
+      'hub_schedule_slot',
+      'hub_territory_cycle',
+      'coin_ledger_row',
+      'studio_document',
+      'cockpit_hoje',
+      'event_node',
+    ]);
+  }
+
+  const participants = (input?.participants ?? DEFAULT_PRIVILEGE_MATRIX_PARTICIPANTS).map(
     (p, idx) => ensureParticipantPrivilegeMatrix(p, idx)
   );
   const scheduleRegistry =
-    input?.scheduleRegistry || buildProgramacaoReuniaoRegistry(undefined, participants);
+    input?.scheduleRegistry ?? buildProgramacaoReuniaoRegistry(undefined, participants);
   const territoryRegistry =
-    input?.territoryRegistry || buildTerritoriosS13HistoricalRegistry();
-  const events = input?.events || [];
-  const studioDocuments = input?.studioDocuments || [
+    input?.territoryRegistry ?? buildTerritoriosS13HistoricalRegistry();
+  const coinLedgerRows = input?.coinLedgerRows ?? DEFAULT_COIN_LEDGER_ROWS;
+  const events = input?.events ?? [];
+  const studioDocuments = input?.studioDocuments ?? [
     {
       id: 'fichas-4up',
       title: 'Fichas de Designação 4-Up (A4)',
@@ -251,7 +672,7 @@ export function exportOmniCsvBundle(input?: Partial<SekundoOmniStateBundle>): st
     },
   ];
   const hojeManifestYaml = input?.hojeManifestYaml ?? DEFAULT_SEKUNDO_APP_YAML;
-  const hojeRituals: OmniHojeRitualItem[] = input?.hojeRituals || [
+  const hojeRituals: OmniHojeRitualItem[] = input?.hojeRituals ?? [
     {
       id: 'ritual-01',
       title: 'Auditoria de Prontidão Semanal & Envio WhatsApp',
@@ -268,204 +689,313 @@ export function exportOmniCsvBundle(input?: Partial<SekundoOmniStateBundle>): st
     },
   ];
 
-  const lines: string[] = [OMNI_CSV_HEADERS.join(',')];
+  const sheetBlocks: string[] = [];
 
-  const pushRow = (record: Record<OmniCsvHeader, unknown>) => {
-    const cells = OMNI_CSV_HEADERS.map((h) => escapeCsvCell(record[h]));
-    lines.push(cells.join(','));
+  const buildSheetBlock = (
+    kind: OmniRecordKind,
+    records: Array<Record<OmniCsvHeader, unknown>>
+  ) => {
+    if (!targetSheets.has(kind) || records.length === 0) return;
+    const sheetTitle = OMNI_SHEET_TITLES[kind] || kind;
+    const blockLines: string[] = [
+      `#PLANILHA,${kind},${escapeCsvCell(sheetTitle)}`,
+      OMNI_CSV_HEADERS.join(','),
+    ];
+    for (const rec of records) {
+      const cells = OMNI_CSV_HEADERS.map((h) => escapeCsvCell(rec[h]));
+      blockLines.push(cells.join(','));
+    }
+    blockLines.push(`#ABA_PLANILHA,${kind},${escapeCsvCell(sheetTitle)}`);
+    sheetBlocks.push(blockLines.join('\n'));
   };
 
-  // 1. Participant & Privilege Matrix rows (`participant_privilege`)
-  for (const p of participants) {
-    const activeCapKeys = Object.entries(p.capabilities || {})
-      .filter(([, enabled]) => Boolean(enabled))
-      .map(([k]) => k);
-    pushRow({
-      _record_kind: 'participant_privilege',
-      _container_id: unitName,
-      _key: p.id,
-      _type: p.profileCategory || 'perfil_a',
-      _engines: 'roster_assignments',
-      group_or_tier: `${p.groupTag}|${p.roleTier || 'operador_base'}`,
-      date_or_cycle: p.lastAssignedIsoDate || '',
-      time_or_duration: String(p.assignmentCount ?? 0),
-      title_or_name: p.name,
-      primary_assignee: p.name,
-      secondary_assignee: p.lastPartnerId || '',
-      status_or_readiness: (p.statusFlags || []).join('|'),
-      capabilities_or_tags: activeCapKeys.join('|'),
-      contact_or_location: p.phone || p.email || '',
-      notes_or_payload: (p.capabilityTags || []).join('|'),
-      _meta_json: JSON.stringify(p),
-    });
+  // 1. Planilha: Participant & Privilege Matrix (`participant_privilege`)
+  if (targetSheets.has('participant_privilege')) {
+    const rows: Array<Record<OmniCsvHeader, unknown>> = [];
+    for (const p of participants) {
+      const activeCapKeys = Object.entries(p.capabilities || {})
+        .filter(([, enabled]) => Boolean(enabled))
+        .map(([k]) => k);
+      rows.push({
+        _container_id: unitName,
+        _key: p.id,
+        _type: p.profileCategory || 'perfil_a',
+        _engines: 'roster_assignments',
+        group_or_tier: `${p.groupTag}|${p.roleTier || 'operador_base'}`,
+        date_or_cycle: p.lastAssignedIsoDate || '',
+        time_or_duration: String(p.assignmentCount ?? 0),
+        title_or_name: p.name,
+        primary_assignee: p.name,
+        secondary_assignee: p.lastPartnerId || '',
+        status_or_readiness: (p.statusFlags || []).join('|'),
+        capabilities_or_tags: activeCapKeys.join('|'),
+        contact_or_location: p.phone || p.email || '',
+        notes_or_payload: (p.capabilityTags || []).join('|'),
+        _meta_json: JSON.stringify(p),
+      });
+    }
+    buildSheetBlock('participant_privilege', rows);
   }
 
-  // 2. Schedule & WhatsApp Hub rows (`hub_schedule_slot`)
-  for (const entry of scheduleRegistry) {
-    const meta = (entry.meta || {}) as Record<string, any>;
-    pushRow({
-      _record_kind: 'hub_schedule_slot',
-      _container_id: unitName,
-      _key: entry.key,
-      _type: entry.type,
-      _engines: 'roster_assignments',
-      group_or_tier: meta.groupTag || '',
-      date_or_cycle: meta.sessionDate || '',
-      time_or_duration: meta.durationMinutes ? `${meta.durationMinutes} min` : '',
-      title_or_name: entry.label,
-      primary_assignee: meta.assignedTo || meta.chairPerson || entry.value || '',
-      secondary_assignee: meta.assistantTo || meta.openingPrayer || '',
-      status_or_readiness: meta.readinessState || (meta.confirmed ? 'ready' : 'pending'),
-      capabilities_or_tags: Array.isArray(meta.capabilityTags)
-        ? meta.capabilityTags.join('|')
-        : meta.requiredCapability || '',
-      contact_or_location: meta.room || 'Auditório Principal',
-      notes_or_payload: meta.closingPrayer || meta.sessionTheme || '',
-      _meta_json: JSON.stringify(meta),
-    });
-  }
-
-  // 3. Territory Multi-Cycle rows (`hub_territory_cycle`)
-  for (const entry of territoryRegistry) {
-    const meta = (entry.meta || {}) as Record<string, any>;
-    pushRow({
-      _record_kind: 'hub_territory_cycle',
-      _container_id: unitName,
-      _key: entry.key,
-      _type: entry.type,
-      _engines: 'territory_logistics',
-      group_or_tier: meta.groupTag || '',
-      date_or_cycle: meta.assignedAt || '',
-      time_or_duration: meta.completedAt || meta.lastCompletedDate || '',
-      title_or_name: entry.label,
-      primary_assignee: meta.workerName || entry.value || '',
-      secondary_assignee: '',
-      status_or_readiness: meta.worked === 1 ? 'concluido' : 'em_campo',
-      capabilities_or_tags: meta.property_type || 'residencial',
-      contact_or_location: meta.locality || meta.neighborhood || '',
-      notes_or_payload: meta.territoryNumber || '',
-      _meta_json: JSON.stringify(meta),
-    });
-  }
-
-  // 4. Studio Document YAML ⇄ PDF rows (`studio_document`)
-  for (const doc of studioDocuments) {
-    pushRow({
-      _record_kind: 'studio_document',
-      _container_id: doc.id,
-      _key: doc.id,
-      _type: 'document',
-      _engines: 'DocumentEngine',
-      group_or_tier: doc.format,
-      date_or_cycle: '2026-10-17',
-      time_or_duration: 'A4-mm',
-      title_or_name: doc.title,
-      primary_assignee: '',
-      secondary_assignee: '',
-      status_or_readiness: 'ready',
-      capabilities_or_tags: 'yaml|pdf|4up|mm',
-      contact_or_location: 'Estúdio Documental',
-      notes_or_payload: String(doc.sdocYaml || '').replace(/\r?\n/g, '\\n'),
-      _meta_json: JSON.stringify(doc),
-    });
-  }
-
-  // 5. Cockpit Hoje & Composer rows (`cockpit_hoje`)
-  pushRow({
-    _record_kind: 'cockpit_hoje',
-    _container_id: 'sekundo.app.yaml',
-    _key: 'manifest',
-    _type: 'root',
-    _engines: 'custom',
-    group_or_tier: 'compositor',
-    date_or_cycle: '2026-10-17',
-    time_or_duration: 'daily',
-    title_or_name: 'Manifesto Declarativo sekundo.app.yaml',
-    primary_assignee: '',
-    secondary_assignee: '',
-    status_or_readiness: 'active',
-    capabilities_or_tags: 'hoje|compositor|yaml',
-    contact_or_location: 'Cockpit Hoje',
-    notes_or_payload: String(hojeManifestYaml || '').replace(/\r?\n/g, '\\n'),
-    _meta_json: JSON.stringify({ kind: 'manifest', yaml: hojeManifestYaml }),
-  });
-
-  for (const ritual of hojeRituals) {
-    pushRow({
-      _record_kind: 'cockpit_hoje',
-      _container_id: 'hoje-rituals',
-      _key: ritual.id,
-      _type: 'slot',
-      _engines: 'action_tracker',
-      group_or_tier: ritual.frequency,
-      date_or_cycle: '',
-      time_or_duration: ritual.frequency,
-      title_or_name: ritual.title,
-      primary_assignee: '',
-      secondary_assignee: '',
-      status_or_readiness: ritual.status,
-      capabilities_or_tags: 'ritual_governado',
-      contact_or_location: 'Cockpit Hoje',
-      notes_or_payload: ritual.notes || '',
-      _meta_json: JSON.stringify(ritual),
-    });
-  }
-
-  // 6. Events across all 10 Universal Engines (`event_node`)
-  for (const ev of events) {
-    for (const node of ev.registry) {
-      const meta = (node.meta || {}) as Record<string, any>;
-      pushRow({
-        _record_kind: 'event_node',
-        _container_id: `${ev.id}::${ev.name}`,
-        _key: node.key,
-        _type: node.type,
-        _engines: ev.engines.join('|'),
-        group_or_tier: meta.groupTag || meta.category || '',
-        date_or_cycle: meta.date || meta.assignedAt || '',
-        time_or_duration: meta.durationMinutes ? String(meta.durationMinutes) : '',
-        title_or_name: node.label,
-        primary_assignee: meta.assignedTo || meta.workerName || node.value || '',
-        secondary_assignee: meta.assistantTo || '',
-        status_or_readiness: meta.status || (meta.worked === 1 ? 'worked' : ''),
-        capabilities_or_tags: '',
-        contact_or_location: node.email || meta.address || meta.room || '',
-        notes_or_payload: node.value || '',
+  // 2. Planilha: Schedule & WhatsApp Hub (`hub_schedule_slot`)
+  if (targetSheets.has('hub_schedule_slot')) {
+    const rows: Array<Record<OmniCsvHeader, unknown>> = [];
+    for (const entry of scheduleRegistry) {
+      const meta = (entry.meta || {}) as Record<string, any>;
+      rows.push({
+        _container_id: unitName,
+        _key: entry.key,
+        _type: entry.type,
+        _engines: 'roster_assignments',
+        group_or_tier: meta.groupTag || '',
+        date_or_cycle: meta.sessionDate || '',
+        time_or_duration: meta.durationMinutes ? `${meta.durationMinutes} min` : '',
+        title_or_name: entry.label,
+        primary_assignee: meta.assignedTo || meta.chairPerson || entry.value || '',
+        secondary_assignee: meta.assistantTo || meta.openingPrayer || '',
+        status_or_readiness: meta.readinessState || (meta.confirmed ? 'ready' : 'pending'),
+        capabilities_or_tags: Array.isArray(meta.capabilityTags)
+          ? meta.capabilityTags.join('|')
+          : meta.requiredCapability || '',
+        contact_or_location: meta.room || 'Auditório Principal',
+        notes_or_payload: meta.closingPrayer || meta.sessionTheme || '',
         _meta_json: JSON.stringify(meta),
       });
     }
+    buildSheetBlock('hub_schedule_slot', rows);
   }
 
-  // 7. Coin Ledger rows (`coin_ledger_row` — Engine Financeira / Assistente Moeda)
-  for (const row of input?.coinLedgerRows || []) {
-    pushRow({
-      _record_kind: 'coin_ledger_row',
-      _container_id: row.tableId || 'coin-default',
-      _key: row.id,
-      _type: 'leaf',
-      _engines: 'financial_ledger',
-      group_or_tier: neutralizeCsvFormula(row.category || 'Outros'),
-      date_or_cycle: row.date || '',
-      time_or_duration: row.recurrence || 'unico',
-      title_or_name: neutralizeCsvFormula(row.description || ''),
-      primary_assignee: String(row.amount ?? 0),
-      secondary_assignee: row.entryType || 'expense',
-      status_or_readiness: row.status || 'paid',
-      capabilities_or_tags: row.paymentMethod || 'PIX',
-      contact_or_location: 'Engine Financeira',
-      notes_or_payload: String(row.amount ?? 0),
-      _meta_json: JSON.stringify(row),
+  // 3. Planilha: Territory Multi-Cycle (`hub_territory_cycle`)
+  if (targetSheets.has('hub_territory_cycle')) {
+    const rows: Array<Record<OmniCsvHeader, unknown>> = [];
+    for (const entry of territoryRegistry) {
+      const meta = (entry.meta || {}) as Record<string, any>;
+      rows.push({
+        _container_id: unitName,
+        _key: entry.key,
+        _type: entry.type,
+        _engines: 'territory_logistics',
+        group_or_tier: meta.groupTag || '',
+        date_or_cycle: meta.assignedAt || '',
+        time_or_duration: meta.completedAt || meta.lastCompletedDate || '',
+        title_or_name: entry.label,
+        primary_assignee: meta.workerName || entry.value || '',
+        secondary_assignee: '',
+        status_or_readiness: meta.worked === 1 ? 'concluido' : 'em_campo',
+        capabilities_or_tags: meta.property_type || 'residencial',
+        contact_or_location: meta.locality || meta.neighborhood || '',
+        notes_or_payload: meta.territoryNumber || '',
+        _meta_json: JSON.stringify(meta),
+      });
+    }
+    buildSheetBlock('hub_territory_cycle', rows);
+  }
+
+  // 4. Planilha: Assistente Moeda / Engine Financeira (`coin_ledger_row`)
+  if (targetSheets.has('coin_ledger_row')) {
+    const effectiveCoinRows =
+      coinLedgerRows.length > 0 ? coinLedgerRows : DEFAULT_COIN_LEDGER_ROWS;
+    const rows: Array<Record<OmniCsvHeader, unknown>> = [];
+    for (const row of effectiveCoinRows) {
+      rows.push({
+        _container_id: row.tableId || 'coin-default',
+        _key: row.id,
+        _type: 'leaf',
+        _engines: 'financial_ledger',
+        group_or_tier: neutralizeCsvFormula(row.category || 'Outros'),
+        date_or_cycle: row.date || '',
+        time_or_duration: row.recurrence || 'unico',
+        title_or_name: neutralizeCsvFormula(row.description || ''),
+        primary_assignee: String(row.amount ?? 0),
+        secondary_assignee: row.entryType || 'expense',
+        status_or_readiness: row.status || 'paid',
+        capabilities_or_tags: row.paymentMethod || 'PIX',
+        contact_or_location: 'Assistente Moeda',
+        notes_or_payload: String(row.amount ?? 0),
+        _meta_json: JSON.stringify(row),
+      });
+    }
+    buildSheetBlock('coin_ledger_row', rows);
+  }
+
+  // 5. Planilha: Studio Document YAML ⇄ PDF (`studio_document`)
+  if (targetSheets.has('studio_document')) {
+    const rows: Array<Record<OmniCsvHeader, unknown>> = [];
+    for (const doc of studioDocuments) {
+      rows.push({
+        _container_id: doc.id,
+        _key: doc.id,
+        _type: 'document',
+        _engines: 'DocumentEngine',
+        group_or_tier: doc.format,
+        date_or_cycle: '2026-10-17',
+        time_or_duration: 'A4-mm',
+        title_or_name: doc.title,
+        primary_assignee: '',
+        secondary_assignee: '',
+        status_or_readiness: 'ready',
+        capabilities_or_tags: 'yaml|pdf|4up|mm',
+        contact_or_location: 'Estúdio Documental',
+        notes_or_payload: String(doc.sdocYaml || '').replace(/\r?\n/g, '\\n'),
+        _meta_json: JSON.stringify(doc),
+      });
+    }
+    buildSheetBlock('studio_document', rows);
+  }
+
+  // 6. Planilha: Cockpit Hoje & Composer (`cockpit_hoje`)
+  if (targetSheets.has('cockpit_hoje')) {
+    const rows: Array<Record<OmniCsvHeader, unknown>> = [];
+    rows.push({
+      _container_id: 'sekundo.app.yaml',
+      _key: 'manifest',
+      _type: 'root',
+      _engines: 'custom',
+      group_or_tier: 'compositor',
+      date_or_cycle: '2026-10-17',
+      time_or_duration: 'daily',
+      title_or_name: 'Manifesto Declarativo sekundo.app.yaml',
+      primary_assignee: '',
+      secondary_assignee: '',
+      status_or_readiness: 'active',
+      capabilities_or_tags: 'hoje|compositor|yaml',
+      contact_or_location: 'Cockpit Hoje',
+      notes_or_payload: String(hojeManifestYaml || '').replace(/\r?\n/g, '\\n'),
+      _meta_json: JSON.stringify({ kind: 'manifest', yaml: hojeManifestYaml }),
     });
+
+    for (const ritual of hojeRituals) {
+      rows.push({
+        _container_id: 'hoje-rituals',
+        _key: ritual.id,
+        _type: 'slot',
+        _engines: 'action_tracker',
+        group_or_tier: ritual.frequency,
+        date_or_cycle: '',
+        time_or_duration: ritual.frequency,
+        title_or_name: ritual.title,
+        primary_assignee: '',
+        secondary_assignee: '',
+        status_or_readiness: ritual.status,
+        capabilities_or_tags: 'ritual_governado',
+        contact_or_location: 'Cockpit Hoje',
+        notes_or_payload: ritual.notes || '',
+        _meta_json: JSON.stringify(ritual),
+      });
+    }
+    buildSheetBlock('cockpit_hoje', rows);
   }
 
-  return lines.join('\n');
+  // 7. Planilha: Events across Universal Engines (`event_node`)
+  if (targetSheets.has('event_node')) {
+    const rows: Array<Record<OmniCsvHeader, unknown>> = [];
+    const filteredEvents = options?.onlyEngineId
+      ? events.filter((ev) => ev.engines.includes(options.onlyEngineId!))
+      : events;
+
+    for (const ev of filteredEvents) {
+      for (const node of ev.registry) {
+        const meta = (node.meta || {}) as Record<string, any>;
+        rows.push({
+          _container_id: `${ev.id}::${ev.name}`,
+          _key: node.key,
+          _type: node.type,
+          _engines: ev.engines.join('|'),
+          group_or_tier: meta.groupTag || meta.category || '',
+          date_or_cycle: meta.date || meta.assignedAt || '',
+          time_or_duration: meta.durationMinutes ? String(meta.durationMinutes) : '',
+          title_or_name: node.label,
+          primary_assignee: meta.assignedTo || meta.workerName || node.value || '',
+          secondary_assignee: meta.assistantTo || '',
+          status_or_readiness: meta.status || (meta.worked === 1 ? 'worked' : ''),
+          capabilities_or_tags: '',
+          contact_or_location: node.email || meta.address || meta.room || '',
+          notes_or_payload: node.value || '',
+          _meta_json: JSON.stringify(meta),
+        });
+      }
+    }
+    buildSheetBlock('event_node', rows);
+  }
+
+  return sheetBlocks.join('\n\n');
+}
+
+/**
+ * Generates a Single-Engine Multi-Planilha CSV containing ONLY the Planilha(s)
+ * belonging to the specified `engineId` (dramatically smaller than the global Omni-CSV).
+ */
+export function exportSingleEngineSampleCsv(engineId: string): string {
+  const sheets = getSheetsForEngineId(engineId);
+  if (engineId === 'financial_ledger' || engineId === 'coin_ledger_row') {
+    return exportOmniCsvBundle(
+      { coinLedgerRows: DEFAULT_COIN_LEDGER_ROWS },
+      { onlySheets: ['coin_ledger_row'] }
+    );
+  }
+  if (engineId === 'territory_logistics' || engineId === 'hub_territory_cycle') {
+    return exportOmniCsvBundle(
+      { territoryRegistry: buildTerritoriosS13HistoricalRegistry() },
+      { onlySheets: ['hub_territory_cycle'] }
+    );
+  }
+  if (engineId === 'roster_assignments') {
+    return exportOmniCsvBundle(
+      {
+        participants: DEFAULT_PRIVILEGE_MATRIX_PARTICIPANTS,
+        scheduleRegistry: buildProgramacaoReuniaoRegistry(
+          undefined,
+          DEFAULT_PRIVILEGE_MATRIX_PARTICIPANTS
+        ),
+      },
+      { onlySheets: ['participant_privilege', 'hub_schedule_slot'] }
+    );
+  }
+  if (engineId === 'DocumentEngine' || engineId === 'studio_document') {
+    return exportOmniCsvBundle(undefined, { onlySheets: ['studio_document'] });
+  }
+  if (engineId === 'action_tracker' || engineId === 'cockpit_hoje') {
+    return exportOmniCsvBundle(undefined, { onlySheets: ['cockpit_hoje'] });
+  }
+
+  // Fallback for event-driven engines (`study_synthesis`, `inventory_assets`, `custom_generic`, etc.)
+  const tpl = ENGINE_TEMPLATES[engineId];
+  if (tpl) {
+    const { rows } = parseRawOmniCsvTable(tpl.canonicalCsv);
+    const registry: FlatSkeletonEntry[] = rows.map((r) => ({
+      key: r._key || '01',
+      type: (r._type as NodeType) || 'leaf',
+      label: r.label || tpl.name,
+      value: r.value || '',
+      email: r.email || '',
+      meta: safeJsonParse<Record<string, any>>(r._meta_json, {}),
+    }));
+    return exportOmniCsvBundle(
+      {
+        events: [
+          {
+            id: `evt-${engineId}`,
+            name: tpl.name,
+            engines: [engineId],
+            registry,
+          },
+        ],
+      },
+      { onlySheets: sheets, onlyEngineId: engineId }
+    );
+  }
+
+  return exportOmniCsvBundle(undefined, { onlySheets: sheets, onlyEngineId: engineId });
 }
 
 /**
  * Demultiplexes an Omni-CSV string (or a single-engine / Schedule Hub CSV string)
  * back into a complete `SekundoOmniStateBundle`.
  */
-const STANDARD_OMNI_HEADER_SET = new Set<string>(OMNI_CSV_HEADERS as unknown as string[]);
+const STANDARD_OMNI_HEADER_SET = new Set<string>([
+  ...(OMNI_CSV_HEADERS as unknown as string[]),
+  '_record_kind',
+]);
 
 /**
  * Parses a participant's exact privilege map from a CSV row.
@@ -525,11 +1055,11 @@ export function parseParticipantPrivilegesFromCsvRow(
 }
 
 /**
- * Demultiplexes an Omni-CSV string (or a single-engine / Schedule Hub CSV string)
- * back into a complete `SekundoOmniStateBundle`.
+ * Demultiplexes a Multi-Planilha Omni-CSV string (or legacy 16-column Omni-CSV or single-engine CSV)
+ * back into a `SekundoOmniStateBundle`.
  */
 export function importOmniCsvBundle(csvText: string): SekundoOmniStateBundle {
-  const { headers, rows } = parseRawOmniCsvTable(csvText);
+  const { headers, rows, presentSheets } = parseRawOmniCsvTable(csvText);
 
   let unitName = PROGRAMACAO_UNIT_NAME;
   const participants: ParticipantProfile[] = [];
@@ -541,7 +1071,10 @@ export function importOmniCsvBundle(csvText: string): SekundoOmniStateBundle {
   const hojeRituals: OmniHojeRitualItem[] = [];
   const coinLedgerRows: OmniCoinLedgerRowItem[] = [];
 
-  const isOmniSchema = headers.includes('_record_kind');
+  const isOmniSchema =
+    presentSheets.length > 0 ||
+    headers.includes('_record_kind') ||
+    headers.includes('_container_id');
 
   if (!isOmniSchema) {
     // Fallback for standard single-engine or Schedule Hub simplified CSV
@@ -556,6 +1089,7 @@ export function importOmniCsvBundle(csvText: string): SekundoOmniStateBundle {
       hojeManifestYaml,
       hojeRituals: [],
       coinLedgerRows: [],
+      presentSheets: ['hub_schedule_slot'],
     };
   }
 
@@ -783,6 +1317,7 @@ export function importOmniCsvBundle(csvText: string): SekundoOmniStateBundle {
     hojeManifestYaml,
     hojeRituals,
     coinLedgerRows,
+    presentSheets,
   };
 }
 
@@ -945,30 +1480,36 @@ export function deriveActiveEnginesFromOmniBundle(
 
 /**
  * Dedicated CSV export for `📅 Programação & WhatsApp` (`schedule-hub.tsx`).
- * Exports participants + privileges, weekly schedule slots, and territory cycles
- * in the exact Omni-CSV format so re-importing is 100% lossless.
+ * Exports ONLY the requested Hub Planilhas (by default `participant_privilege`,
+ * `hub_schedule_slot`, and `hub_territory_cycle`) without unrelated global sheets.
  */
 export function exportScheduleHubToCsv(params: {
   unitName: string;
   participants: ParticipantProfile[];
   scheduleRegistry: FlatSkeletonEntry[];
   territoryRegistry: FlatSkeletonEntry[];
+  onlySheets?: OmniRecordKind[];
 }): string {
-  return exportOmniCsvBundle({
-    unitName: params.unitName,
-    participants: params.participants,
-    scheduleRegistry: params.scheduleRegistry,
-    territoryRegistry: params.territoryRegistry,
-    events: [],
-    studioDocuments: [],
-    hojeRituals: [],
-  });
+  const onlySheets: OmniRecordKind[] = params.onlySheets || [
+    'participant_privilege',
+    'hub_schedule_slot',
+    'hub_territory_cycle',
+  ];
+  return exportOmniCsvBundle(
+    {
+      unitName: params.unitName,
+      participants: params.participants,
+      scheduleRegistry: params.scheduleRegistry,
+      territoryRegistry: params.territoryRegistry,
+    },
+    { onlySheets }
+  );
 }
 
 /**
  * Dedicated CSV import for `📅 Programação & WhatsApp` (`schedule-hub.tsx`).
  * Accepts either:
- * 1. An Omni-CSV / Schedule Hub CSV (`_record_kind` header)
+ * 1. A Multi-Planilha Omni-CSV / Schedule Hub CSV (`#PLANILHA,...` or `_record_kind`)
  * 2. A canonical `_key,_type,label,value` CSV
  */
 export function importScheduleHubFromCsv(csvText: string): {
@@ -977,8 +1518,12 @@ export function importScheduleHubFromCsv(csvText: string): {
   scheduleRegistry: FlatSkeletonEntry[];
   territoryRegistry: FlatSkeletonEntry[];
 } {
-  const { headers, rows } = parseRawOmniCsvTable(csvText);
-  if (headers.includes('_record_kind')) {
+  const { headers, rows, presentSheets } = parseRawOmniCsvTable(csvText);
+  if (
+    presentSheets.length > 0 ||
+    headers.includes('_record_kind') ||
+    headers.includes('_container_id')
+  ) {
     const bundle = importOmniCsvBundle(csvText);
     return {
       unitName: bundle.unitName,
@@ -1031,13 +1576,13 @@ export function importScheduleHubFromCsv(csvText: string): {
 
 /**
  * Generates the complete sample **CSV GERAL (`sekundo_omni_geral.csv`)** containing:
- * - All 24 Clean-Room Participants with their 26-column Privilege Matrix
- * - The 9-Week Schedule & WhatsApp Hub (`📅 Programação & WhatsApp`)
- * - The 16 Multi-Cycle Territories (`🗺️ Registro de Territórios`)
- * - Document Studio YAML ⇄ PDF Templates (`🖋️ Estúdio Documental`)
- * - Cockpit Hoje & Composer (`☀️ Cockpit Hoje`)
- * - Sample Events across all Universal Engines (`territory_logistics`, `roster_assignments`,
- *   `study_synthesis`, `financial_ledger`, `inventory_assets`, `action_tracker`, `custom_generic`, `DocumentEngine`)
+ * - All 24 Clean-Room Participants with their 26-column Privilege Matrix (`participant_privilege`)
+ * - The 9-Week Schedule & WhatsApp Hub (`hub_schedule_slot`)
+ * - The 16 Multi-Cycle Territories (`hub_territory_cycle`)
+ * - Assistente Moeda / Engine Financeira (`coin_ledger_row` — 10 complete financial rows)
+ * - Document Studio YAML ⇄ PDF Templates (`studio_document`)
+ * - Cockpit Hoje & Composer (`cockpit_hoje`)
+ * - Sample Events across all Universal Engines (`event_node`)
  */
 export function generateOmniMasterSampleCsv(): string {
   const sampleEvents: OmniEventBundleItem[] = Object.values(ENGINE_TEMPLATES).map(
@@ -1068,6 +1613,7 @@ export function generateOmniMasterSampleCsv(): string {
       DEFAULT_PRIVILEGE_MATRIX_PARTICIPANTS
     ),
     territoryRegistry: buildTerritoriosS13HistoricalRegistry(),
+    coinLedgerRows: DEFAULT_COIN_LEDGER_ROWS,
     events: sampleEvents,
   });
 }

@@ -155,7 +155,7 @@ export default function HojeCockpitScreen() {
   const handleExportOmniCsv = async () => {
     if (Platform.OS === 'web' && typeof document !== 'undefined') {
       await saveAppManifestYaml(manifestYaml);
-      const csv = await exportFullSiteOmniCsvFromStorage(events);
+      const csv = await exportFullSiteOmniCsvFromStorage({ hojeManifestYaml: manifestYaml });
       const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -163,21 +163,24 @@ export default function HojeCockpitScreen() {
       a.download = `sekundo_omni_geral_salvo_${new Date().toISOString().slice(0, 10)}.csv`;
       a.click();
       URL.revokeObjectURL(url);
-      setStatusMsg('🌐 CSV Geral salvo no site exportado!');
+      setStatusMsg('🌐 CSV Geral Multi-Planilhas salvo no site exportado!');
     }
   };
 
   const handleExportSampleOmniCsv = () => {
     if (Platform.OS === 'web' && typeof document !== 'undefined') {
-      const csv = exportOmniCsvBundle({ hojeManifestYaml: manifestYaml });
+      const csv = exportOmniCsvBundle(
+        { hojeManifestYaml: manifestYaml },
+        { onlySheets: ['cockpit_hoje'] }
+      );
       const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = 'sekundo_omni_exemplo.csv';
+      a.download = 'sekundo_planilha_cockpit_hoje.csv';
       a.click();
       URL.revokeObjectURL(url);
-      setStatusMsg('🧪 CSV Geral de Exemplo baixado!');
+      setStatusMsg('🧪 Planilha somente do Cockpit Hoje baixada!');
     }
   };
 
@@ -191,15 +194,17 @@ export default function HojeCockpitScreen() {
         if (!file) return;
         const text = await file.text();
         const bundle = importOmniCsvBundle(text);
-        if (bundle.hojeManifestYaml) {
+        const presentSet = new Set(bundle.presentSheets || []);
+        if (
+          (presentSet.size === 0 || presentSet.has('cockpit_hoje')) &&
+          bundle.hojeManifestYaml
+        ) {
           handleYamlChange(bundle.hojeManifestYaml);
         }
-        await commitOmniCsvBundleToStorage(bundle, {
-          rawCsvText: text,
-          existingEvents: events,
-          addEvent,
-        });
-        setStatusMsg(`✅ CSV Geral "${file.name}" importado em todas as Engines!`);
+        await commitOmniCsvBundleToStorage(text);
+        setStatusMsg(
+          `✅ CSV "${file.name}" (${presentSet.size || 1} planilhas) importado!`
+        );
       };
       input.click();
     }
